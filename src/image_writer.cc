@@ -58,7 +58,7 @@ bool ImageWriter::Write(const std::string& image_filename,
                         uintptr_t image_begin,
                         const std::string& oat_filename,
                         const std::string& oat_location,
-                        const CompilerDriver& compiler_driver) {
+                        const compiler::driver::CompilerDriver& compiler_driver) {
   CHECK(!image_filename.empty());
 
   CHECK_NE(image_begin, 0U);
@@ -101,12 +101,10 @@ bool ImageWriter::Write(const std::string& image_filename,
   if (!AllocMemory()) {
     return false;
   }
-#ifndef NDEBUG
-  {
+  if (kIsDebugBuild) {
     ScopedObjectAccess soa(Thread::Current());
     CheckNonImageClassesRemoved();
   }
-#endif
   Thread::Current()->TransitionFromSuspendedToRunnable();
   size_t oat_loaded_size = 0;
   size_t oat_data_offset = 0;
@@ -582,7 +580,7 @@ void ImageWriter::FixupFields(const Object* orig,
   }
 }
 
-static AbstractMethod* GetTargetMethod(const CompilerDriver::PatchInformation* patch)
+static AbstractMethod* GetTargetMethod(const compiler::driver::CompilerDriver::PatchInformation* patch)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   DexCache* dex_cache = class_linker->FindDexCache(patch->GetDexFile());
@@ -603,15 +601,15 @@ static AbstractMethod* GetTargetMethod(const CompilerDriver::PatchInformation* p
   return method;
 }
 
-void ImageWriter::PatchOatCodeAndMethods(const CompilerDriver& compiler) {
+void ImageWriter::PatchOatCodeAndMethods(const compiler::driver::CompilerDriver& compiler) {
   Thread* self = Thread::Current();
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   const char* old_cause = self->StartAssertNoThreadSuspension("ImageWriter");
 
-  typedef std::vector<const CompilerDriver::PatchInformation*> Patches;
+  typedef std::vector<const compiler::driver::CompilerDriver::PatchInformation*> Patches;
   const Patches& code_to_patch = compiler.GetCodeToPatch();
   for (size_t i = 0; i < code_to_patch.size(); i++) {
-    const CompilerDriver::PatchInformation* patch = code_to_patch[i];
+    const compiler::driver::CompilerDriver::PatchInformation* patch = code_to_patch[i];
     AbstractMethod* target = GetTargetMethod(patch);
     uint32_t code = reinterpret_cast<uint32_t>(class_linker->GetOatCodeFor(target));
     uint32_t code_base = reinterpret_cast<uint32_t>(&oat_file_->GetOatHeader());
@@ -621,7 +619,7 @@ void ImageWriter::PatchOatCodeAndMethods(const CompilerDriver& compiler) {
 
   const Patches& methods_to_patch = compiler.GetMethodsToPatch();
   for (size_t i = 0; i < methods_to_patch.size(); i++) {
-    const CompilerDriver::PatchInformation* patch = methods_to_patch[i];
+    const compiler::driver::CompilerDriver::PatchInformation* patch = methods_to_patch[i];
     AbstractMethod* target = GetTargetMethod(patch);
     SetPatchLocation(patch, reinterpret_cast<uint32_t>(GetImageAddress(target)));
   }
@@ -632,7 +630,8 @@ void ImageWriter::PatchOatCodeAndMethods(const CompilerDriver& compiler) {
   self->EndAssertNoThreadSuspension(old_cause);
 }
 
-void ImageWriter::SetPatchLocation(const CompilerDriver::PatchInformation* patch, uint32_t value) {
+void ImageWriter::SetPatchLocation(const compiler::driver::CompilerDriver::PatchInformation* patch,
+                                   uint32_t value) {
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   const void* oat_code = class_linker->GetOatCodeFor(patch->GetDexFile(),
                                                      patch->GetReferrerMethodIdx());
@@ -640,15 +639,15 @@ void ImageWriter::SetPatchLocation(const CompilerDriver::PatchInformation* patch
   // TODO: make this Thumb2 specific
   uint8_t* base = reinterpret_cast<uint8_t*>(reinterpret_cast<uint32_t>(oat_code) & ~0x1);
   uint32_t* patch_location = reinterpret_cast<uint32_t*>(base + patch->GetLiteralOffset());
-#ifndef NDEBUG
-  const DexFile::MethodId& id = patch->GetDexFile().GetMethodId(patch->GetTargetMethodIdx());
-  uint32_t expected = reinterpret_cast<uint32_t>(&id);
-  uint32_t actual = *patch_location;
-  CHECK(actual == expected || actual == value) << std::hex
-    << "actual=" << actual
-    << "expected=" << expected
-    << "value=" << value;
-#endif
+  if (kIsDebugBuild) {
+    const DexFile::MethodId& id = patch->GetDexFile().GetMethodId(patch->GetTargetMethodIdx());
+    uint32_t expected = reinterpret_cast<uint32_t>(&id);
+    uint32_t actual = *patch_location;
+    CHECK(actual == expected || actual == value) << std::hex
+        << "actual=" << actual
+        << "expected=" << expected
+        << "value=" << value;
+  }
   *patch_location = value;
   oat_header.UpdateChecksum(patch_location, sizeof(value));
 }

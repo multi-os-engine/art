@@ -38,6 +38,9 @@
 #define __ jni_asm->
 
 namespace art {
+namespace compiler {
+namespace jni {
+namespace quick {
 
 static void CopyParameter(Assembler* jni_asm,
                           ManagedRuntimeCallingConvention* mr_conv,
@@ -52,15 +55,15 @@ static void SetNativeParameter(Assembler* jni_asm,
 //   registers, a reference to the method object is supplied as part of this
 //   convention.
 //
-CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver& compiler,
-                                            uint32_t access_flags, uint32_t method_idx,
-                                            const DexFile& dex_file) {
+CompiledMethod* JniCompileQuick(art::compiler::driver::CompilerDriver* compiler_driver,
+                                uint32_t access_flags, uint32_t method_idx,
+                                const DexFile& dex_file) {
   const bool is_native = (access_flags & kAccNative) != 0;
   CHECK(is_native);
   const bool is_static = (access_flags & kAccStatic) != 0;
   const bool is_synchronized = (access_flags & kAccSynchronized) != 0;
   const char* shorty = dex_file.GetMethodShorty(dex_file.GetMethodId(method_idx));
-  InstructionSet instruction_set = compiler.GetInstructionSet();
+  InstructionSet instruction_set = compiler_driver->GetInstructionSet();
   if (instruction_set == kThumb2) {
     instruction_set = kArm;
   }
@@ -480,10 +483,7 @@ static void SetNativeParameter(Assembler* jni_asm,
   }
 }
 
+}  // namespace quick
+}  // namespace jni
+}  // namespace compiler
 }  // namespace art
-
-extern "C" art::CompiledMethod* ArtQuickJniCompileMethod(art::CompilerDriver& compiler,
-                                                         uint32_t access_flags, uint32_t method_idx,
-                                                         const art::DexFile& dex_file) {
-  return ArtJniCompileMethodInternal(compiler, access_flags, method_idx, dex_file);
-}

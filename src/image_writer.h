@@ -47,7 +47,7 @@ class ImageWriter {
              uintptr_t image_begin,
              const std::string& oat_filename,
              const std::string& oat_location,
-             const CompilerDriver& compiler_driver)
+             const compiler::driver::CompilerDriver& compiler_driver)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   uintptr_t GetOatDataBegin() {
@@ -158,9 +158,10 @@ class ImageWriter {
                    bool is_static)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void PatchOatCodeAndMethods(const CompilerDriver& compiler)
+  void PatchOatCodeAndMethods(const compiler::driver::CompilerDriver& compiler)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void SetPatchLocation(const CompilerDriver::PatchInformation* patch, uint32_t value)
+  void SetPatchLocation(const compiler::driver::CompilerDriver::PatchInformation* patch,
+                        uint32_t value)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   SafeMap<const mirror::Object*, size_t> offsets_;

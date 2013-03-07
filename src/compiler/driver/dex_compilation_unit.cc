@@ -22,6 +22,8 @@
 #include "utils.h"
 
 namespace art {
+namespace compiler {
+namespace driver  {
 
 DexCompilationUnit::DexCompilationUnit(CompilationUnit* cu)
     : cu_(cu),
@@ -54,4 +56,6 @@ DexCompilationUnit:: DexCompilationUnit(CompilationUnit* cu,
       symbol_(StringPrintf("dex_%s", MangleForJni(PrettyMethod(dex_method_idx_, *dex_file_)).c_str())) {
 }
 
-} // namespace art
+}  // namespace driver
+}  // namespace compiler
+}  // namespace art

@@ -199,10 +199,14 @@ struct SSARepresentation {
  * wrapper around a Dalvik byte code.
  */
 struct MIR {
+  uint32_t GetDexPc() const {
+    return offset;
+  }
+
   DecodedInstruction dalvikInsn;
-  unsigned int width;
-  unsigned int offset;
-  int m_unit_index;               // From which method was this MIR included
+  unsigned int width;             // Size of dalvik instruction in code units.
+  unsigned int offset;            // Code unit sized offset from beginning of method (aka dex pc).
+  int m_unit_index;               // From which method was this MIR included.
   MIR* prev;
   MIR* next;
   SSARepresentation* ssa_rep;
@@ -388,7 +392,7 @@ class MIRGraph {
 
   void ShowOpcodeStats();
 
-  DexCompilationUnit* GetCurrentDexCompilationUnit() const {
+  compiler::driver::DexCompilationUnit* GetCurrentDexCompilationUnit() const {
     return m_units_[current_method_];
   }
 
@@ -573,8 +577,6 @@ class MIRGraph {
    void CompilerInitializeSSAConversion();
    bool DoSSAConversion(BasicBlock* bb);
    bool InvokeUsesMethodStar(MIR* mir);
-   int ParseInsn(const uint16_t* code_ptr, DecodedInstruction* decoded_instruction);
-   bool ContentIsInsn(const uint16_t* code_ptr);
    BasicBlock* SplitBlock(unsigned int code_offset, BasicBlock* orig_block,
                           BasicBlock** immed_pred_block_p);
    BasicBlock* FindBlock(unsigned int code_offset, bool split, bool create,
@@ -655,7 +657,7 @@ class MIRGraph {
    int num_blocks_;
    const DexFile::CodeItem* current_code_item_;
    SafeMap<unsigned int, BasicBlock*> block_map_; // FindBlock lookup cache.
-   std::vector<DexCompilationUnit*> m_units_;     // List of methods included in this graph
+   std::vector<compiler::driver::DexCompilationUnit*> m_units_;  // List of methods included in this graph
    typedef std::pair<int, int> MIRLocation;       // Insert point, (m_unit_ index, offset)
    std::vector<MIRLocation> method_stack_;        // Include stack
    int current_method_;

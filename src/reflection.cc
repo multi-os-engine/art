@@ -16,7 +16,7 @@
 
 #include "reflection.h"
 
-#include "class_linker.h"
+#include "class_linker-inl.h"
 #include "common_throws.h"
 #include "dex_file-inl.h"
 #include "invoke_arg_array_builder.h"

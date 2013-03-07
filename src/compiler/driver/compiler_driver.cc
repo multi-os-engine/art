@@ -16,16 +16,14 @@
 
 #include "compiler_driver.h"
 
-#include <vector>
-
-#include <dlfcn.h>
-#include <unistd.h>
-
 #include "base/stl_util.h"
 #include "base/timing_logger.h"
 #include "class_linker.h"
+#include "compiler/llvm/md_builder.h"
+#include "compiled_method.h"
 #include "dex_compilation_unit.h"
 #include "dex_file-inl.h"
+#include "elf_writer.h"
 #include "jni_internal.h"
 #include "oat_file.h"
 #include "object_utils.h"
@@ -46,11 +44,44 @@
 #include "thread_pool.h"
 #include "verifier/method_verifier.h"
 
-#if defined(__APPLE__)
-#include <mach-o/dyld.h>
-#endif
+#include <llvm/IR/DataLayout.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
+#include <llvm/PassManager.h>
+#include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
+
+#include <vector>
+#include <unistd.h>
 
 namespace art {
+namespace compiler {
+namespace driver {
+
+// Thread-local storage compiler worker threads.
+class CompilerTls {
+  public:
+    CompilerTls() : llvm_context_(NULL), llvm_md_builder_(NULL), llvm_module_(NULL) {}
+    ~CompilerTls() {}
+
+    llvm::LLVMContext* GetLlvmContext() const { return llvm_context_; }
+    void SetLlvmContext(llvm::LLVMContext* llvm_context) { llvm_context_ = llvm_context; }
+
+    llvm::Module* GetLlvmModule() const { return llvm_module_; }
+    void SetLlvmModule(llvm::Module* llvm_module) { llvm_module_ = llvm_module; }
+
+    art::compiler::Llvm::ArtMDBuilder* GetLlvmMdBuilder() const { return llvm_md_builder_; }
+    void SetLlvmMdBuilder(art::compiler::Llvm::ArtMDBuilder* llvm_md_builder) { llvm_md_builder_ = llvm_md_builder; }
+
+  private:
+    llvm::LLVMContext* llvm_context_;
+    art::compiler::Llvm::ArtMDBuilder* llvm_md_builder_;
+    llvm::Module* llvm_module_;
+};
 
 static double Percentage(size_t x, size_t y) {
   return 100.0 * (static_cast<double>(x)) / (static_cast<double>(x + y));
@@ -257,108 +288,26 @@ class AOTCompilationStats {
   DISALLOW_COPY_AND_ASSIGN(AOTCompilationStats);
 };
 
-static std::string MakeCompilerSoName(CompilerBackend compiler_backend) {
-
-  // Bad things happen if we pull in the libartd-compiler to a libart dex2oat or vice versa,
-  // because we end up with both libart and libartd in the same address space!
-  const char* suffix = (kIsDebugBuild ? "d" : "");
-
-  // Work out the filename for the compiler library.
-  std::string library_name(StringPrintf("art%s-compiler", suffix));
-  std::string filename(StringPrintf(OS_SHARED_LIB_FORMAT_STR, library_name.c_str()));
-
-#if defined(__APPLE__)
-  // On Linux, dex2oat will have been built with an RPATH of $ORIGIN/../lib, so dlopen(3) will find
-  // the .so by itself. On Mac OS, there isn't really an equivalent, so we have to manually do the
-  // same work.
-  uint32_t executable_path_length = 0;
-  _NSGetExecutablePath(NULL, &executable_path_length);
-  std::string path(executable_path_length, static_cast<char>(0));
-  CHECK_EQ(_NSGetExecutablePath(&path[0], &executable_path_length), 0);
-
-  // Strip the "/dex2oat".
-  size_t last_slash = path.find_last_of('/');
-  CHECK_NE(last_slash, std::string::npos) << path;
-  path.resize(last_slash);
-
-  // Strip the "/bin".
-  last_slash = path.find_last_of('/');
-  path.resize(last_slash);
-
-  filename = path + "/lib/" + filename;
-#endif
-  return filename;
-}
-
-template<typename Fn>
-static Fn FindFunction(const std::string& compiler_so_name, void* library, const char* name) {
-  Fn fn = reinterpret_cast<Fn>(dlsym(library, name));
-  if (fn == NULL) {
-    LOG(FATAL) << "Couldn't find \"" << name << "\" in compiler library " << compiler_so_name << ": " << dlerror();
-  }
-  VLOG(compiler) << "Found \"" << name << "\" at " << reinterpret_cast<void*>(fn);
-  return fn;
-}
-
 CompilerDriver::CompilerDriver(CompilerBackend compiler_backend, InstructionSet instruction_set,
-                               bool image, size_t thread_count, bool support_debugging,
-                               const std::set<std::string>* image_classes,
-                               bool dump_stats, bool dump_timings)
+                               bool image, size_t thread_count,
+                               const std::set<std::string>* image_classes, bool dump_stats,
+                               bool dump_timings)
     : compiler_backend_(compiler_backend),
       instruction_set_(instruction_set),
+      llvm_compilation_mode_(kMethodAtATime),
       freezing_constructor_lock_("freezing constructor lock"),
       compiled_classes_lock_("compiled classes lock"),
       compiled_methods_lock_("compiled method lock"),
       image_(image),
       thread_count_(thread_count),
-      support_debugging_(support_debugging),
       start_ns_(0),
       stats_(new AOTCompilationStats),
       dump_stats_(dump_stats),
       dump_timings_(dump_timings),
-      image_classes_(image_classes),
-      compiler_library_(NULL),
-      compiler_(NULL),
-      compiler_context_(NULL),
-      jni_compiler_(NULL),
-      compiler_enable_auto_elf_loading_(NULL),
-      compiler_get_method_code_addr_(NULL)
-{
-  std::string compiler_so_name(MakeCompilerSoName(compiler_backend_));
-  compiler_library_ = dlopen(compiler_so_name.c_str(), RTLD_LAZY);
-  if (compiler_library_ == NULL) {
-    LOG(FATAL) << "Couldn't find compiler library " << compiler_so_name << ": " << dlerror();
-  }
-  VLOG(compiler) << "dlopen(\"" << compiler_so_name << "\", RTLD_LAZY) returned " << compiler_library_;
-
-  CHECK_PTHREAD_CALL(pthread_key_create, (&tls_key_, NULL), "compiler tls key");
-
-  // TODO: more work needed to combine initializations and allow per-method backend selection
-  typedef void (*InitCompilerContextFn)(CompilerDriver&);
-  InitCompilerContextFn init_compiler_context;
-  if (compiler_backend_ == kPortable){
-    // Initialize compiler_context_
-    init_compiler_context = FindFunction<void (*)(CompilerDriver&)>(compiler_so_name,
-                                                  compiler_library_, "ArtInitCompilerContext");
-    compiler_ = FindFunction<CompilerFn>(compiler_so_name, compiler_library_, "ArtCompileMethod");
-  } else {
-    init_compiler_context = FindFunction<void (*)(CompilerDriver&)>(compiler_so_name,
-                                                  compiler_library_, "ArtInitQuickCompilerContext");
-    compiler_ = FindFunction<CompilerFn>(compiler_so_name, compiler_library_, "ArtQuickCompileMethod");
-  }
-
-  init_compiler_context(*this);
-
-  if (compiler_backend_ == kPortable) {
-    jni_compiler_ = FindFunction<JniCompilerFn>(compiler_so_name, compiler_library_, "ArtLLVMJniCompileMethod");
-  } else {
-    jni_compiler_ = FindFunction<JniCompilerFn>(compiler_so_name, compiler_library_, "ArtQuickJniCompileMethod");
-  }
-
+      image_classes_(image_classes) {
   CHECK(!Runtime::Current()->IsStarted());
-  if (!image_) {
-    CHECK(image_classes_ == NULL);
-  }
+  CHECK(image_ || image_classes_ == NULL);
+  CHECK_PTHREAD_CALL(pthread_key_create, (&tls_key_, NULL), "compiler driver tls key");
 }
 
 CompilerDriver::~CompilerDriver() {
@@ -380,40 +329,155 @@ CompilerDriver::~CompilerDriver() {
     STLDeleteElements(&methods_to_patch_);
   }
   CHECK_PTHREAD_CALL(pthread_key_delete, (tls_key_), "delete tls key");
-  typedef void (*UninitCompilerContextFn)(CompilerDriver&);
-  std::string compiler_so_name(MakeCompilerSoName(compiler_backend_));
-  UninitCompilerContextFn uninit_compiler_context;
-  // Uninitialize compiler_context_
-  // TODO: rework to combine initialization/uninitialization
-  if (compiler_backend_ == kPortable) {
-    uninit_compiler_context = FindFunction<void (*)(CompilerDriver&)>(compiler_so_name,
-                                                    compiler_library_, "ArtUnInitCompilerContext");
-  } else {
-    uninit_compiler_context = FindFunction<void (*)(CompilerDriver&)>(compiler_so_name,
-                                                    compiler_library_, "ArtUnInitQuickCompilerContext");
+}
+
+llvm::LLVMContext* CompilerDriver::GetLlvmContext() {
+  llvm::LLVMContext* context = GetTls()->GetLlvmContext();
+  if (context == NULL) {
+    context = new llvm::LLVMContext();
+    GetTls()->SetLlvmContext(context);
   }
-  uninit_compiler_context(*this);
-#if 0
-  if (compiler_library_ != NULL) {
-    VLOG(compiler) << "dlclose(" << compiler_library_ << ")";
-    /*
-     * FIXME: Temporary workaround
-     * Apparently, llvm is adding dctors to atexit, but if we unload
-     * the library here the code will no longer be around at exit time
-     * and we die a flaming death in __cxa_finalize().  Apparently, some
-     * dlclose() implementations will scan the atexit list on unload and
-     * handle any associated with the soon-to-be-unloaded library.
-     * However, this is not required by POSIX and we don't do it.
-     * See: http://b/issue?id=4998315
-     * What's the right thing to do here?
-     *
-     * This has now been completely disabled because mclinker was
-     * closing stdout on exit, which was affecting both quick and
-     * portable.
-     */
-    dlclose(compiler_library_);
+  return context;
+}
+
+art::compiler::Llvm::ArtMDBuilder* CompilerDriver::GetLlvmMdBuilder() {
+  art::compiler::Llvm::ArtMDBuilder* md_builder = GetTls()->GetLlvmMdBuilder();
+  if (md_builder == NULL) {
+    md_builder = new art::compiler::Llvm::ExactArtMDBuilder(*GetLlvmContext());
+    GetTls()->SetLlvmMdBuilder(md_builder);
   }
-#endif
+  return md_builder;
+}
+
+llvm::Module* CompilerDriver::GetLlvmModuleAtStartOfCompile() {
+  llvm::LLVMContext* context = GetLlvmContext();
+  llvm::Module* module;
+  switch (llvm_compilation_mode_) {
+    case kMethodAtATime:
+      module = new llvm::Module("art", *context);
+      GetTls()->SetLlvmModule(module);
+      break;
+    case kMethodAtATimeWithModuleRecycling:
+    case kManyMethodsInAModule:
+      module = GetTls()->GetLlvmModule();
+      if (module == NULL) {
+        module = new llvm::Module("art", *context);
+        GetTls()->SetLlvmModule(module);
+      }
+      break;
+    default:
+      LOG(FATAL) << "Unreachable";
+      module = NULL;
+  }
+  return module;
+}
+
+CompiledMethod* CompilerDriver::MaterializeLlvmCode(llvm::Function* function,
+                                                    DexCompilationUnit* dex_compilation_unit,
+                                                    const std::string& symbol) {
+  if (llvm_compilation_mode_ == kManyMethodsInAModule) {
+    // TODO: return some kind of lazy thing..
+    return NULL;
+  }
+  // Lookup the LLVM target
+  std::string target_triple;
+  std::string target_cpu;
+  std::string target_attr;
+  InstructionSetToLLVMTarget(GetInstructionSet(), target_triple, target_cpu, target_attr);
+
+  std::string errmsg;
+  const llvm::Target* target =
+    llvm::TargetRegistry::lookupTarget(target_triple, errmsg);
+
+  CHECK(target != NULL) << errmsg;
+
+  // Target options
+  llvm::TargetOptions target_options;
+  target_options.FloatABIType = llvm::FloatABI::Soft;
+  target_options.NoFramePointerElim = true;
+  target_options.NoFramePointerElimNonLeaf = true;
+  target_options.UseSoftFloat = false;
+  target_options.EnableFastISel = false;
+
+  // Create the llvm::TargetMachine
+  // TODO: We should do this only once.
+  llvm::OwningPtr<llvm::TargetMachine> target_machine(
+    target->createTargetMachine(target_triple, target_cpu, target_attr, target_options,
+                                llvm::Reloc::Static, llvm::CodeModel::Small,
+                                llvm::CodeGenOpt::Aggressive));
+
+  CHECK(target_machine.get() != NULL) << "Failed to create target machine";
+
+  // Add target data
+  const llvm::DataLayout* target_data = target_machine->getDataLayout();
+
+  // PassManager for code generation passes
+  llvm::PassManager pm;
+  pm.add(new llvm::DataLayout(*target_data));
+
+  // FunctionPassManager for optimization pass
+  llvm::Module* module = GetTls()->GetLlvmModule();
+  llvm::FunctionPassManager fpm(module);
+  fpm.add(new llvm::DataLayout(*target_data));
+
+  // Add optimization pass
+  llvm::PassManagerBuilder pm_builder;
+  // TODO: Use inliner after we can do IPO.
+  pm_builder.Inliner = NULL;
+  //pm_builder.Inliner = llvm::createFunctionInliningPass();
+  //pm_builder.Inliner = llvm::createAlwaysInlinerPass();
+  //pm_builder.Inliner = llvm::createPartialInliningPass();
+  pm_builder.OptLevel = 3;
+  pm_builder.DisableSimplifyLibCalls = 1;
+  pm_builder.DisableUnitAtATime = 1;
+  pm_builder.populateFunctionPassManager(fpm);
+  pm_builder.populateModulePassManager(pm);
+  //pm.add(llvm::createStripDeadPrototypesPass());
+
+  // Emit ELF image.
+  CompiledMethod* result;
+  {
+    std::string str_buffer;
+    llvm::raw_string_ostream out_stream(str_buffer);
+
+    llvm::formatted_raw_ostream formatted_os(out_stream, false);
+
+    // Ask the target to add backend passes as necessary.
+    if (target_machine->addPassesToEmitFile(pm,
+                                            formatted_os,
+                                            llvm::TargetMachine::CGFT_ObjectFile,
+                                            true)) {
+      LOG(FATAL) << "Unable to generate ELF for this target";
+      return NULL;
+    }
+
+    // Run the per-function optimization
+    fpm.doInitialization();
+    for (llvm::Module::iterator F = module->begin(), E = module->end(); F != E; ++F) {
+      fpm.run(*F);
+    }
+    fpm.doFinalization();
+
+    // Run the code generation passes
+    pm.run(*module);
+
+    if (dex_compilation_unit != NULL) {
+      CompilerDriver::MethodReference mref(dex_compilation_unit->GetDexFile(),
+                                           dex_compilation_unit->GetDexMethodIndex());
+      result = new CompiledMethod(GetInstructionSet(),
+                                  str_buffer,
+                                  *verifier::MethodVerifier::GetDexGcMap(mref),
+                                  symbol);
+    } else {
+      result = new CompiledMethod(GetInstructionSet(), str_buffer, symbol);
+    }
+  }
+
+  if (llvm_compilation_mode_ == kMethodAtATimeWithModuleRecycling) {
+    function->eraseFromParent();
+  }
+
+  return result;
 }
 
 CompilerTls* CompilerDriver::GetTls() {
@@ -688,13 +752,15 @@ bool CompilerDriver::ComputeInstanceFieldInfo(uint32_t field_idx, const DexCompi
 bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit,
                                             int& field_offset, int& ssb_index,
                                             bool& is_referrers_class, bool& is_volatile,
-                                            bool is_put) {
+                                            bool& is_const, bool is_put) {
   ScopedObjectAccess soa(Thread::Current());
   // Conservative defaults.
   field_offset = -1;
   ssb_index = -1;
+  bool kEnableFinalToConstOptimization = false;
   is_referrers_class = false;
   is_volatile = true;
+  is_const = false;
   // Try to resolve field and ignore if an Incompatible Class Change Error (ie isn't static).
   mirror::Field* resolved_field = ComputeFieldReferencedFromCompilingMethod(soa, mUnit, field_idx);
   if (resolved_field != NULL && resolved_field->IsStatic()) {
@@ -705,6 +771,10 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
         is_referrers_class = true;  // implies no worrying about class initialization
         field_offset = resolved_field->GetOffset().Int32Value();
         is_volatile = resolved_field->IsVolatile();
+        if (kEnableFinalToConstOptimization) {
+          bool referrer_is_constructor = (mUnit->GetAccessFlags() & kAccConstructor) != 0;
+          is_const = !is_put && resolved_field->IsFinal() && !referrer_is_constructor;
+        }
         stats_->ResolvedLocalStaticField();
         return true;  // fast path
       } else {
@@ -738,6 +808,10 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
             ssb_index = fields_class->GetDexTypeIndex();
             field_offset = resolved_field->GetOffset().Int32Value();
             is_volatile = resolved_field->IsVolatile();
+            if (kEnableFinalToConstOptimization) {
+              bool referrer_is_constructor = (mUnit->GetAccessFlags() & kAccConstructor) != 0;
+              is_const = !is_put && resolved_field->IsFinal() && !referrer_is_constructor;
+            }
             stats_->ResolvedStaticField();
             return true;
           }
@@ -754,6 +828,10 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
               ssb_index = mUnit->GetDexFile()->GetIndexForTypeId(*type_id);
               field_offset = resolved_field->GetOffset().Int32Value();
               is_volatile = resolved_field->IsVolatile();
+              if (kEnableFinalToConstOptimization) {
+                bool referrer_is_constructor = (mUnit->GetAccessFlags() & kAccConstructor) != 0;
+                is_const = !is_put && resolved_field->IsFinal() && !referrer_is_constructor;
+              }
               stats_->ResolvedStaticField();
               return true;
             }
@@ -1725,17 +1803,29 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
                                    const DexFile& dex_file) {
   CompiledMethod* compiled_method = NULL;
   uint64_t start_ns = NanoTime();
+  bool is_abstract = (access_flags & kAccAbstract) != 0;
 
   if ((access_flags & kAccNative) != 0) {
-    compiled_method = (*jni_compiler_)(*this, access_flags, method_idx, dex_file);
-    CHECK(compiled_method != NULL);
-  } else if ((access_flags & kAccAbstract) != 0) {
-  } else {
-    // In small mode we only compile image classes.
-    bool dont_compile = Runtime::Current()->IsSmallMode() && ((image_classes_ == NULL) || (image_classes_->size() == 0));
+    switch (compiler_backend_) {
+      case kQuick:
+        compiled_method = art::compiler::jni::quick::JniCompileQuick(this, access_flags,
+                                                                     method_idx, dex_file);
+        break;
+      case kPortable:
+        compiled_method = art::compiler::jni::portable::JniCompilePortable(this, access_flags,
+                                                                           method_idx, dex_file);
+        break;
+      default:
+        UNIMPLEMENTED(FATAL) << "JNI compilation for " << compiler_backend_;
+    }
+    CHECK(compiled_method != NULL) << PrettyMethod(method_idx, dex_file);
+  } else if (!is_abstract) {
+    bool dont_compile = Runtime::Current()->IsSmallMode() &&
+        ((image_classes_ == NULL) || (image_classes_->size() == 0));
 
-    // Don't compile class initializers, ever.
-    if (((access_flags & kAccConstructor) != 0) && ((access_flags & kAccStatic) != 0)) {
+    // Disable compilation of class initializers.
+    if (!dont_compile && light_mode_ && ((access_flags & kAccConstructor) != 0) &&
+        ((access_flags & kAccStatic) != 0)) {
       dont_compile = true;
     } else if (code_item->insns_size_in_code_units_ < Runtime::Current()->GetSmallModeMethodDexSizeLimit()) {
     // Do compile small methods.
@@ -1743,17 +1833,15 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
     }
 
     if (!dont_compile) {
-      compiled_method = (*compiler_)(*this, code_item, access_flags, invoke_type, class_def_idx,
-                                     method_idx, class_loader, dex_file);
-      CHECK(compiled_method != NULL) << PrettyMethod(method_idx, dex_file);
+      compiled_method = art::compiler::dex::CompileMethod(this, code_item, access_flags, invoke_type,
+                                                          class_def_idx, method_idx, class_loader,
+                                                          dex_file);
+      CHECK(compiled_method != NULL) << "Dex compilation for " << PrettyMethod(method_idx, dex_file)
+          << " failed with backend " << compiler_backend_;
     }
   }
   uint64_t duration_ns = NanoTime() - start_ns;
-#ifdef ART_USE_PORTABLE_COMPILER
-  const uint64_t kWarnMilliSeconds = 1000;
-#else
-  const uint64_t kWarnMilliSeconds = 100;
-#endif
+  const uint64_t kWarnMilliSeconds = (compiler_backend_ == kPortable) ? 1000 : 100;
   if (duration_ns > MsToNs(kWarnMilliSeconds)) {
     LOG(WARNING) << "Compilation of " << PrettyMethod(method_idx, dex_file)
                  << " took " << PrettyDuration(duration_ns);
@@ -1797,17 +1885,6 @@ CompiledMethod* CompilerDriver::GetCompiledMethod(MethodReference ref) const {
   return it->second;
 }
 
-void CompilerDriver::SetBitcodeFileName(std::string const& filename) {
-  typedef void (*SetBitcodeFileNameFn)(CompilerDriver&, std::string const&);
-
-  SetBitcodeFileNameFn set_bitcode_file_name =
-    FindFunction<SetBitcodeFileNameFn>(MakeCompilerSoName(compiler_backend_), compiler_library_,
-                                       "compilerLLVMSetBitcodeFileName");
-
-  set_bitcode_file_name(*this, filename);
-}
-
-
 void CompilerDriver::AddRequiresConstructorBarrier(Thread* self, const DexFile* dex_file,
                                              size_t class_def_index) {
   MutexLock mu(self, freezing_constructor_lock_);
@@ -1825,40 +1902,21 @@ bool CompilerDriver::WriteElf(const std::string& android_root,
                               const std::vector<const DexFile*>& dex_files,
                               std::vector<uint8_t>& oat_contents,
                               File* file) {
-  typedef bool (*WriteElfFn)(CompilerDriver&,
-                             const std::string& android_root,
-                             bool is_host,
-                             const std::vector<const DexFile*>& dex_files,
-                             std::vector<uint8_t>&,
-                             File*);
-  WriteElfFn WriteElf =
-    FindFunction<WriteElfFn>(MakeCompilerSoName(compiler_backend_), compiler_library_, "WriteElf");
-  Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
-  return WriteElf(*this, android_root, is_host, dex_files, oat_contents, file);
+  return ElfWriter::Create(file, oat_contents, dex_files, android_root, is_host, *this);
 }
 
 bool CompilerDriver::FixupElf(File* file, uintptr_t oat_data_begin) const {
-  typedef bool (*FixupElfFn)(File*, uintptr_t oat_data_begin);
-  FixupElfFn FixupElf =
-    FindFunction<FixupElfFn>(MakeCompilerSoName(compiler_backend_), compiler_library_, "FixupElf");
-  return FixupElf(file, oat_data_begin);
+  return art::ElfWriter::Fixup(file, oat_data_begin);
 }
 
 void CompilerDriver::GetOatElfInformation(File* file,
                                           size_t& oat_loaded_size,
                                           size_t& oat_data_offset) const {
-  typedef bool (*GetOatElfInformationFn)(File*, size_t& oat_loaded_size, size_t& oat_data_offset);
-  GetOatElfInformationFn GetOatElfInformation =
-    FindFunction<GetOatElfInformationFn>(MakeCompilerSoName(compiler_backend_), compiler_library_,
-                                         "GetOatElfInformation");
-  GetOatElfInformation(file, oat_loaded_size, oat_data_offset);
+  art::ElfWriter::GetOatElfInformation(file, oat_loaded_size, oat_data_offset);
 }
 
 bool CompilerDriver::StripElf(File* file) const {
-  typedef bool (*StripElfFn)(File*);
-  StripElfFn StripElf =
-    FindFunction<StripElfFn>(MakeCompilerSoName(compiler_backend_), compiler_library_, "StripElf");
-  return StripElf(file);
+  return art::ElfWriter::Strip(file);
 }
 
 void CompilerDriver::InstructionSetToLLVMTarget(InstructionSet instruction_set,
@@ -1892,6 +1950,9 @@ void CompilerDriver::InstructionSetToLLVMTarget(InstructionSet instruction_set,
 
     default:
       LOG(FATAL) << "Unknown instruction set: " << instruction_set;
-    }
   }
+}
+
+}  // namespace driver
+}  // namespace compiler
 }  // namespace art

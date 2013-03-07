@@ -32,11 +32,9 @@
 #include "object_utils.h"
 #include "reflection.h"
 #include "runtime_support.h"
-#include "runtime_support_func_list.h"
 #include "scoped_thread_state_change.h"
 #include "thread.h"
 #include "thread_list.h"
-#include "utils_llvm.h"
 #include "verifier/dex_gc_map.h"
 #include "verifier/method_verifier.h"
 #include "well_known_classes.h"
@@ -51,102 +49,40 @@ using namespace art;
 
 extern "C" {
 
-class ShadowFrameCopyVisitor : public StackVisitor {
- public:
-  explicit ShadowFrameCopyVisitor(Thread* self) : StackVisitor(self, NULL), prev_frame_(NULL),
-      top_frame_(NULL) {}
-
-  bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    if (IsShadowFrame()) {
-      ShadowFrame* cur_frame = GetCurrentShadowFrame();
-      size_t num_regs = cur_frame->NumberOfVRegs();
-      mirror::AbstractMethod* method = cur_frame->GetMethod();
-      uint32_t dex_pc = cur_frame->GetDexPC();
-      ShadowFrame* new_frame = ShadowFrame::Create(num_regs, NULL, method, dex_pc);
-
-      const uint8_t* gc_map = method->GetNativeGcMap();
-      uint32_t gc_map_length = static_cast<uint32_t>((gc_map[0] << 24) |
-                                                     (gc_map[1] << 16) |
-                                                     (gc_map[2] << 8) |
-                                                     (gc_map[3] << 0));
-      verifier::DexPcToReferenceMap dex_gc_map(gc_map + 4, gc_map_length);
-      const uint8_t* reg_bitmap = dex_gc_map.FindBitMap(dex_pc);
-      for (size_t reg = 0; reg < num_regs; ++reg) {
-        if (TestBitmap(reg, reg_bitmap)) {
-          new_frame->SetVRegReference(reg, cur_frame->GetVRegReference(reg));
-        } else {
-          new_frame->SetVReg(reg, cur_frame->GetVReg(reg));
-        }
-      }
-
-      if (prev_frame_ != NULL) {
-        prev_frame_->SetLink(new_frame);
-      } else {
-        top_frame_ = new_frame;
-      }
-      prev_frame_ = new_frame;
-    }
-    return true;
-  }
-
-  ShadowFrame* GetShadowFrameCopy() {
-    return top_frame_;
-  }
-
- private:
-  static bool TestBitmap(int reg, const uint8_t* reg_vector) {
-    return ((reg_vector[reg / 8] >> (reg % 8)) & 0x01) != 0;
-  }
-
-  ShadowFrame* prev_frame_;
-  ShadowFrame* top_frame_;
-};
-
 //----------------------------------------------------------------------------
 // Thread
 //----------------------------------------------------------------------------
 
-Thread* art_portable_get_current_thread_from_code() {
+Thread* art_portable_get_current_thread() {
 #if defined(__arm__) || defined(__i386__)
   LOG(FATAL) << "UNREACHABLE";
 #endif
   return Thread::Current();
 }
 
-void* art_portable_set_current_thread_from_code(void* thread_object_addr) {
+void* art_portable_set_current_thread(void* thread_object_addr) {
   // Hijacked to set r9 on ARM.
   LOG(FATAL) << "UNREACHABLE";
   return NULL;
 }
 
-void art_portable_lock_object_from_code(mirror::Object* obj, Thread* thread)
+void art_portable_lock_object(Thread* self, mirror::Object* obj)
     EXCLUSIVE_LOCK_FUNCTION(monitor_lock_) {
   DCHECK(obj != NULL);        // Assumed to have been checked before entry
-  obj->MonitorEnter(thread);  // May block
-  DCHECK(thread->HoldsLock(obj));
+  obj->MonitorEnter(self);  // May block
+  DCHECK(self->HoldsLock(obj));
   // Only possible exception is NPE and is handled before entry
-  DCHECK(!thread->IsExceptionPending());
+  DCHECK(!self->IsExceptionPending());
 }
 
-void art_portable_unlock_object_from_code(mirror::Object* obj, Thread* thread)
+void art_portable_unlock_object_from_code(Thread* self, mirror::Object* obj)
     UNLOCK_FUNCTION(monitor_lock_) {
   DCHECK(obj != NULL);  // Assumed to have been checked before entry
   // MonitorExit may throw exception
-  obj->MonitorExit(thread);
+  obj->MonitorExit(self);
 }
 
-void art_portable_test_suspend_from_code(Thread* self)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  CheckSuspend(self);
-  if (Runtime::Current()->GetInstrumentation()->ShouldPortableCodeDeoptimize()) {
-    // Save out the shadow frame to the heap
-    ShadowFrameCopyVisitor visitor(self);
-    visitor.WalkStack(true);
-    self->SetDeoptimizationShadowFrame(visitor.GetShadowFrameCopy());
-    self->SetDeoptimizationReturnValue(JValue());
-    self->SetException(ThrowLocation(), reinterpret_cast<mirror::Throwable*>(-1));
-  }
-}
+
 
 ShadowFrame* art_portable_push_shadow_frame_from_code(Thread* thread,
                                               ShadowFrame* new_shadow_frame,
@@ -211,15 +147,6 @@ void art_portable_throw_exception_from_code(mirror::Throwable* exception)
   } else {
     self->SetException(throw_location, exception);
   }
-}
-
-void* art_portable_get_and_clear_exception(Thread* self)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  DCHECK(self->IsExceptionPending());
-  // TODO: make this inline.
-  mirror::Throwable* exception = self->GetException(NULL);
-  self->ClearException();
-  return exception;
 }
 
 int32_t art_portable_find_catch_block_from_code(mirror::AbstractMethod* current_method, uint32_t ti_offset)
@@ -399,9 +326,9 @@ mirror::Object* art_portable_find_interface_method_from_code(uint32_t method_idx
   return FindMethodHelper(method_idx, this_object, referrer, false, kInterface, thread);
 }
 
-mirror::Object* art_portable_initialize_static_storage_from_code(uint32_t type_idx,
-                                                         mirror::AbstractMethod* referrer,
-                                                         Thread* thread)
+mirror::Object* art_portable_initialize_static_storage(Thread* thread,
+                                                       mirror::AbstractMethod* referrer,
+                                                       uint32_t type_idx)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   return ResolveVerifyAndClinit(type_idx, referrer, thread, true, false);
 }
@@ -475,47 +402,6 @@ int32_t art_portable_set_obj_static_from_code(uint32_t field_idx, mirror::Abstra
   return -1;
 }
 
-int32_t art_portable_get32_static_from_code(uint32_t field_idx, mirror::AbstractMethod* referrer)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::Field* field = FindFieldFast(field_idx, referrer, StaticPrimitiveRead, sizeof(uint32_t));
-  if (LIKELY(field != NULL)) {
-    return field->Get32(field->GetDeclaringClass());
-  }
-  field = FindFieldFromCode(field_idx, referrer, Thread::Current(),
-                            StaticPrimitiveRead, sizeof(uint32_t));
-  if (LIKELY(field != NULL)) {
-    return field->Get32(field->GetDeclaringClass());
-  }
-  return 0;
-}
-
-int64_t art_portable_get64_static_from_code(uint32_t field_idx, mirror::AbstractMethod* referrer)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::Field* field = FindFieldFast(field_idx, referrer, StaticPrimitiveRead, sizeof(uint64_t));
-  if (LIKELY(field != NULL)) {
-    return field->Get64(field->GetDeclaringClass());
-  }
-  field = FindFieldFromCode(field_idx, referrer, Thread::Current(),
-                            StaticPrimitiveRead, sizeof(uint64_t));
-  if (LIKELY(field != NULL)) {
-    return field->Get64(field->GetDeclaringClass());
-  }
-  return 0;
-}
-
-mirror::Object* art_portable_get_obj_static_from_code(uint32_t field_idx, mirror::AbstractMethod* referrer)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::Field* field = FindFieldFast(field_idx, referrer, StaticObjectRead, sizeof(mirror::Object*));
-  if (LIKELY(field != NULL)) {
-    return field->GetObj(field->GetDeclaringClass());
-  }
-  field = FindFieldFromCode(field_idx, referrer, Thread::Current(),
-                            StaticObjectRead, sizeof(mirror::Object*));
-  if (LIKELY(field != NULL)) {
-    return field->GetObj(field->GetDeclaringClass());
-  }
-  return 0;
-}
 
 int32_t art_portable_set32_instance_from_code(uint32_t field_idx, mirror::AbstractMethod* referrer,
                                      mirror::Object* obj, uint32_t new_value)
@@ -682,82 +568,6 @@ void art_portable_check_put_array_element_from_code(const mirror::Object* elemen
     ThrowArrayStoreException(element_class, array_class);
   }
   return;
-}
-
-//----------------------------------------------------------------------------
-// JNI
-//----------------------------------------------------------------------------
-
-// Called on entry to JNI, transition out of Runnable and release share of mutator_lock_.
-uint32_t art_portable_jni_method_start(Thread* self)
-    UNLOCK_FUNCTION(GlobalSynchronizatio::mutator_lock_) {
-  JNIEnvExt* env = self->GetJniEnv();
-  uint32_t saved_local_ref_cookie = env->local_ref_cookie;
-  env->local_ref_cookie = env->locals.GetSegmentState();
-  self->TransitionFromRunnableToSuspended(kNative);
-  return saved_local_ref_cookie;
-}
-
-uint32_t art_portable_jni_method_start_synchronized(jobject to_lock, Thread* self)
-    UNLOCK_FUNCTION(Locks::mutator_lock_) {
-  self->DecodeJObject(to_lock)->MonitorEnter(self);
-  return art_portable_jni_method_start(self);
-}
-
-static inline void PopLocalReferences(uint32_t saved_local_ref_cookie, Thread* self) {
-  JNIEnvExt* env = self->GetJniEnv();
-  env->locals.SetSegmentState(env->local_ref_cookie);
-  env->local_ref_cookie = saved_local_ref_cookie;
-}
-
-void art_portable_jni_method_end(uint32_t saved_local_ref_cookie, Thread* self)
-    SHARED_LOCK_FUNCTION(Locks::mutator_lock_) {
-  self->TransitionFromSuspendedToRunnable();
-  PopLocalReferences(saved_local_ref_cookie, self);
-}
-
-
-void art_portable_jni_method_end_synchronized(uint32_t saved_local_ref_cookie,
-                                      jobject locked,
-                                      Thread* self)
-    SHARED_LOCK_FUNCTION(Locks::mutator_lock_) {
-  self->TransitionFromSuspendedToRunnable();
-  UnlockJniSynchronizedMethod(locked, self);  // Must decode before pop.
-  PopLocalReferences(saved_local_ref_cookie, self);
-}
-
-mirror::Object* art_portable_jni_method_end_with_reference(jobject result, uint32_t saved_local_ref_cookie,
-                                                   Thread* self)
-    SHARED_LOCK_FUNCTION(Locks::mutator_lock_) {
-  self->TransitionFromSuspendedToRunnable();
-  mirror::Object* o = self->DecodeJObject(result);  // Must decode before pop.
-  PopLocalReferences(saved_local_ref_cookie, self);
-  // Process result.
-  if (UNLIKELY(self->GetJniEnv()->check_jni)) {
-    if (self->IsExceptionPending()) {
-      return NULL;
-    }
-    CheckReferenceResult(o, self);
-  }
-  return o;
-}
-
-mirror::Object* art_portable_jni_method_end_with_reference_synchronized(jobject result,
-                                                                uint32_t saved_local_ref_cookie,
-                                                                jobject locked, Thread* self)
-    SHARED_LOCK_FUNCTION(Locks::mutator_lock_) {
-  self->TransitionFromSuspendedToRunnable();
-  UnlockJniSynchronizedMethod(locked, self);  // Must decode before pop.
-  mirror::Object* o = self->DecodeJObject(result);
-  PopLocalReferences(saved_local_ref_cookie, self);
-  // Process result.
-  if (UNLIKELY(self->GetJniEnv()->check_jni)) {
-    if (self->IsExceptionPending()) {
-      return NULL;
-    }
-    CheckReferenceResult(o, self);
-  }
-  return o;
 }
 
 // Handler for invocation on proxy methods. Create a boxed argument array and invoke the invocation

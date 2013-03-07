@@ -143,6 +143,7 @@ enum AssemblerStatus {
   kRetryAll,
 };
 
+// TODO: is this redundant with the types in art::Primitive?
 enum OpSize {
   kWord,
   kLong,

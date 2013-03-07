@@ -50,7 +50,7 @@ define build-art-test
   endif
   LOCAL_SRC_FILES := $$(art_gtest_filename) src/common_test.cc
   LOCAL_C_INCLUDES += $(ART_C_INCLUDES)
-  LOCAL_SHARED_LIBRARIES := libartd
+  LOCAL_SHARED_LIBRARIES := libartd libartd-compiler
 
   # Mac OS linker doesn't understand --export-dynamic.
   ifneq ($(HOST_OS)-$$(art_target_or_host),darwin-host)

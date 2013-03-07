@@ -109,6 +109,8 @@ class Primitive {
         return "D";
       case kPrimVoid:
         return "V";
+      case kPrimNot:
+        return "L";
       default:
         LOG(FATAL) << "Primitive char conversion on invalid type " << static_cast<int>(type);
         return NULL;

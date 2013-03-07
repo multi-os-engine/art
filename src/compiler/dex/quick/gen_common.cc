@@ -346,9 +346,10 @@ void Mir2Lir::GenSput(uint32_t field_idx, RegLocation rl_src, bool is_long_or_do
   int ssb_index;
   bool is_volatile;
   bool is_referrers_class;
+  bool is_const;  // Currently unused.
   bool fast_path = cu_->compiler_driver->ComputeStaticFieldInfo(
-      field_idx, mir_graph_->GetCurrentDexCompilationUnit(), field_offset, ssb_index,
-      is_referrers_class, is_volatile, true);
+      field_idx, cu_->mir_graph->GetCurrentDexCompilationUnit(), field_offset, ssb_index,
+      is_referrers_class, is_volatile, is_const, true);
   if (fast_path && !SLOW_FIELD_PATH) {
     DCHECK_GE(field_offset, 0);
     int rBase;
@@ -432,9 +433,10 @@ void Mir2Lir::GenSget(uint32_t field_idx, RegLocation rl_dest,
   int ssb_index;
   bool is_volatile;
   bool is_referrers_class;
+  bool is_const;  // Currently unused.
   bool fast_path = cu_->compiler_driver->ComputeStaticFieldInfo(
-      field_idx, mir_graph_->GetCurrentDexCompilationUnit(), field_offset, ssb_index,
-      is_referrers_class, is_volatile, false);
+      field_idx, cu_->mir_graph->GetCurrentDexCompilationUnit(), field_offset, ssb_index,
+      is_referrers_class, is_volatile, is_const, false);
   if (fast_path && !SLOW_FIELD_PATH) {
     DCHECK_GE(field_offset, 0);
     int rBase;

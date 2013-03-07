@@ -184,11 +184,12 @@ class MethodVerifier {
   // information
   void Dump(std::ostream& os) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  static const std::vector<uint8_t>* GetDexGcMap(CompilerDriver::MethodReference ref)
+  static const std::vector<uint8_t>*
+      GetDexGcMap(compiler::driver::CompilerDriver::MethodReference ref)
       LOCKS_EXCLUDED(dex_gc_maps_lock_);
 
-  static const CompilerDriver::MethodReference* GetDevirtMap(const CompilerDriver::MethodReference& ref,
-                                                             uint32_t dex_pc)
+  static const compiler::driver::CompilerDriver::MethodReference*
+      GetDevirtMap(const compiler::driver::CompilerDriver::MethodReference& ref, uint32_t dex_pc)
       LOCKS_EXCLUDED(devirt_maps_lock_);
 
   // Fills 'monitor_enter_dex_pcs' with the dex pcs of the monitor-enter instructions corresponding
@@ -200,7 +201,7 @@ class MethodVerifier {
   static void Init() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static void Shutdown();
 
-  static bool IsClassRejected(CompilerDriver::ClassReference ref)
+  static bool IsClassRejected(compiler::driver::CompilerDriver::ClassReference ref)
       LOCKS_EXCLUDED(rejected_classes_lock_);
 
   bool CanLoadClasses() const {
@@ -575,30 +576,34 @@ class MethodVerifier {
   InstructionFlags* CurrentInsnFlags();
 
   // All the GC maps that the verifier has created
-  typedef SafeMap<const CompilerDriver::MethodReference, const std::vector<uint8_t>*,
-      CompilerDriver::MethodReferenceComparator> DexGcMapTable;
+  typedef SafeMap<const compiler::driver::CompilerDriver::MethodReference,
+                  const std::vector<uint8_t>*> DexGcMapTable;
   static Mutex* dex_gc_maps_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   static DexGcMapTable* dex_gc_maps_ GUARDED_BY(dex_gc_maps_lock_);
-  static void SetDexGcMap(CompilerDriver::MethodReference ref, const std::vector<uint8_t>& dex_gc_map)
+  static void SetDexGcMap(compiler::driver::CompilerDriver::MethodReference ref,
+                          const std::vector<uint8_t>& dex_gc_map)
       LOCKS_EXCLUDED(dex_gc_maps_lock_);
 
 
   // Devirtualization map.
-  typedef SafeMap<const uint32_t, CompilerDriver::MethodReference> PcToConreteMethod;
-  typedef SafeMap<const CompilerDriver::MethodReference, const PcToConreteMethod*,
-      CompilerDriver::MethodReferenceComparator> DevirtualizationMapTable;
-  MethodVerifier::PcToConreteMethod* GenerateDevirtMap()
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  typedef SafeMap<const uint32_t, compiler::driver::CompilerDriver::MethodReference>
+      PcToConcreteMethod;
+  typedef SafeMap<const compiler::driver::CompilerDriver::MethodReference,
+                  const PcToConcreteMethod*>
+      DevirtualizationMapTable;
+  MethodVerifier::PcToConcreteMethod* GenerateDevirtMap();
 
   static Mutex* devirt_maps_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   static DevirtualizationMapTable* devirt_maps_ GUARDED_BY(devirt_maps_lock_);
-  static void SetDevirtMap(CompilerDriver::MethodReference ref, const PcToConreteMethod* pc_method_map);
+  static void SetDevirtMap(compiler::driver::CompilerDriver::MethodReference ref,
+                           const PcToConcreteMethod* pc_method_map);
         LOCKS_EXCLUDED(devirt_maps_lock_);
-  typedef std::set<CompilerDriver::ClassReference> RejectedClassesTable;
+
+  typedef std::set<compiler::driver::CompilerDriver::ClassReference> RejectedClassesTable;
   static Mutex* rejected_classes_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   static RejectedClassesTable* rejected_classes_;
 
-  static void AddRejectedClass(CompilerDriver::ClassReference ref)
+  static void AddRejectedClass(compiler::driver::CompilerDriver::ClassReference ref)
       LOCKS_EXCLUDED(rejected_classes_lock_);
 
   RegTypeCache reg_types_;

@@ -162,9 +162,6 @@ LIBART_COMMON_SRC_FILES := \
 	src/check_jni.cc \
 	src/class_linker.cc \
 	src/common_throws.cc \
-	src/compiled_method.cc \
-	src/compiler/driver/compiler_driver.cc \
-	src/compiler/llvm/runtime_support_llvm.cc \
 	src/debugger.cc \
 	src/dex_file.cc \
 	src/dex_file_verifier.cc \
@@ -189,7 +186,6 @@ LIBART_COMMON_SRC_FILES := \
 	src/heap.cc \
 	src/hprof/hprof.cc \
 	src/image.cc \
-	src/image_writer.cc \
 	src/indirect_reference_table.cc \
 	src/instrumentation.cc \
 	src/intern_table.cc \
@@ -247,12 +243,30 @@ LIBART_COMMON_SRC_FILES := \
 	src/oat/utils/x86/assembler_x86.cc \
 	src/oat/utils/x86/managed_register_x86.cc \
 	src/oat_file.cc \
-	src/oat_writer.cc \
 	src/offsets.cc \
 	src/os_linux.cc \
 	src/primitive.cc \
 	src/reference_table.cc \
 	src/reflection.cc \
+	src/runtime/entrypoints/portable/support_field.cc \
+	src/runtime/entrypoints/portable/support_jni.cc \
+	src/runtime/entrypoints/portable/support_thread.cc \
+	src/runtime/entrypoints/quick/support_alloc.cc \
+	src/runtime/entrypoints/quick/support_cast.cc \
+	src/runtime/entrypoints/quick/support_deoptimize.cc \
+	src/runtime/entrypoints/quick/support_dexcache.cc \
+	src/runtime/entrypoints/quick/support_field.cc \
+	src/runtime/entrypoints/quick/support_fillarray.cc \
+	src/runtime/entrypoints/quick/support_instrumentation.cc \
+	src/runtime/entrypoints/quick/support_invoke.cc \
+	src/runtime/entrypoints/quick/support_jni.cc \
+	src/runtime/entrypoints/quick/support_locks.cc \
+	src/runtime/entrypoints/quick/support_math.cc \
+	src/runtime/entrypoints/quick/support_proxy.cc \
+	src/runtime/entrypoints/quick/support_stubs.cc \
+	src/runtime/entrypoints/quick/support_thread.cc \
+	src/runtime/entrypoints/quick/support_throw.cc \
+	src/runtime/entrypoints/quick/support_interpreter.cc \
 	src/runtime.cc \
 	src/runtime_support.cc \
 	src/signal_catcher.cc \
@@ -275,23 +289,7 @@ LIBART_COMMON_SRC_FILES := \
 	src/zip_archive.cc
 
 LIBART_COMMON_SRC_FILES += \
-	src/oat/runtime/context.cc \
-	src/oat/runtime/support_alloc.cc \
-	src/oat/runtime/support_cast.cc \
-	src/oat/runtime/support_deoptimize.cc \
-	src/oat/runtime/support_dexcache.cc \
-	src/oat/runtime/support_field.cc \
-	src/oat/runtime/support_fillarray.cc \
-	src/oat/runtime/support_instrumentation.cc \
-	src/oat/runtime/support_invoke.cc \
-	src/oat/runtime/support_jni.cc \
-	src/oat/runtime/support_locks.cc \
-	src/oat/runtime/support_math.cc \
-	src/oat/runtime/support_proxy.cc \
-	src/oat/runtime/support_stubs.cc \
-	src/oat/runtime/support_thread.cc \
-	src/oat/runtime/support_throw.cc \
-	src/oat/runtime/support_interpreter.cc
+	src/oat/runtime/context.cc
 
 LIBART_TARGET_SRC_FILES := \
 	$(LIBART_COMMON_SRC_FILES) \

@@ -23,13 +23,12 @@
 namespace llvm {
   class Module;
   class LLVMContext;
-}
+}  // namespace llvm
 
 namespace art {
-namespace llvm {
-  class IntrinsicHelper;
-  class IRBuilder;
-}
+namespace Llvm {
+  class DexIRBuilder;
+} // namespace Llvm
 
 /*
  * Assembly is an iterative process, and usually terminates within
@@ -74,46 +73,9 @@ enum debugControlVector {
   kDebugShowSummaryMemoryUsage,
 };
 
-class LLVMInfo {
-  public:
-    LLVMInfo();
-    ~LLVMInfo();
-
-    ::llvm::LLVMContext* GetLLVMContext() {
-      return llvm_context_.get();
-    }
-
-    ::llvm::Module* GetLLVMModule() {
-      return llvm_module_;
-    }
-
-    art::llvm::IntrinsicHelper* GetIntrinsicHelper() {
-      return intrinsic_helper_.get();
-    }
-
-    art::llvm::IRBuilder* GetIRBuilder() {
-      return ir_builder_.get();
-    }
-
-  private:
-    UniquePtr< ::llvm::LLVMContext> llvm_context_;
-    ::llvm::Module* llvm_module_; // Managed by context_.
-    UniquePtr<art::llvm::IntrinsicHelper> intrinsic_helper_;
-    UniquePtr<art::llvm::IRBuilder> ir_builder_;
-};
-
 struct CompilationUnit;
 struct BasicBlock;
 
 }  // namespace art
-
-extern "C" art::CompiledMethod* ArtCompileMethod(art::CompilerDriver& driver,
-                                                 const art::DexFile::CodeItem* code_item,
-                                                 uint32_t access_flags,
-                                                 art::InvokeType invoke_type,
-                                                 uint32_t class_dex_idx,
-                                                 uint32_t method_idx,
-                                                 jobject class_loader,
-                                                 const art::DexFile& dex_file);
 
 #endif // ART_SRC_COMPILER_DEX_COMPILER_H_

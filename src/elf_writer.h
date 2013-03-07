@@ -29,9 +29,12 @@
 #include "os.h"
 
 namespace art {
-
-class CompilerDriver;
-class DexFile;
+namespace compiler {
+namespace driver {
+  class CompilerDriver;
+}  // namespace driver
+}  // namespace compiler
+class CompiledCode;
 class ElfFile;
 
 class ElfWriter {
@@ -46,7 +49,7 @@ class ElfWriter {
   static llvm::ELF::Elf32_Addr GetOatDataAddress(ElfFile* elf_file);
 
  protected:
-  ElfWriter(const CompilerDriver& driver, File* elf_file);
+  ElfWriter(const compiler::driver::CompilerDriver& driver, File* elf_file);
   ~ElfWriter();
 
   virtual bool Write(std::vector<uint8_t>& oat_contents,
@@ -56,8 +59,8 @@ class ElfWriter {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
 
   // Setup by constructor
-  const CompilerDriver* compiler_driver_;
-  File* elf_file_;
+  const compiler::driver::CompilerDriver* const compiler_driver_;
+  File* const elf_file_;
 };
 
 }  // namespace art

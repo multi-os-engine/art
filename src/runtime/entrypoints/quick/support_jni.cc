@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "class_linker-inl.h"
 #include "dex_file-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/abstract_method-inl.h"

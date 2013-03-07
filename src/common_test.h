@@ -27,6 +27,7 @@
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
 #include "compiler/driver/compiler_driver.h"
+#include "compiled_method.h"
 #include "dex_file-inl.h"
 #include "gtest/gtest.h"
 #include "heap.h"
@@ -188,8 +189,9 @@ class CommonTest : public testing::Test {
       const mirror::DexCache* dex_cache = method->GetDeclaringClass()->GetDexCache();
       const DexFile& dex_file = *dex_cache->GetDexFile();
       compiled_method =
-          compiler_driver_->GetCompiledMethod(CompilerDriver::MethodReference(&dex_file,
-                                                                              method->GetDexMethodIndex()));
+          compiler_driver_->GetCompiledMethod(
+              compiler::driver::CompilerDriver::MethodReference(&dex_file,
+                                                                method->GetDexMethodIndex()));
 
 #ifndef ART_LIGHT_MODE
       CHECK(compiled_method != NULL) << PrettyMethod(method);
@@ -330,9 +332,9 @@ class CommonTest : public testing::Test {
 
     // TODO: make selectable
 #if defined(ART_USE_PORTABLE_COMPILER)
-    CompilerBackend compiler_backend = kPortable;
+    compiler::driver::CompilerBackend compiler_backend = kPortable;
 #else
-    CompilerBackend compiler_backend = kQuick;
+    compiler::driver::CompilerBackend compiler_backend = compiler::driver::kQuick;
 #endif
 
     if (!runtime_->HasResolutionMethod()) {
@@ -347,8 +349,10 @@ class CommonTest : public testing::Test {
     }
     class_linker_->FixupDexCaches(runtime_->GetResolutionMethod());
     image_classes_.reset(new std::set<std::string>);
-    compiler_driver_.reset(new CompilerDriver(compiler_backend, instruction_set, true, 2, false,
-                                              image_classes_.get(), true, true));
+    compiler_driver_.reset(new compiler::driver::CompilerDriver(compiler_backend, instruction_set,
+                                                                true, 2, false,
+                                                                image_classes_.get(),
+                                                                true, true));
 
     // Create the heap thread pool so that the GC runs in parallel for tests. Normally, the thread
     // pool is created by the runtime.
@@ -521,7 +525,7 @@ class CommonTest : public testing::Test {
   UniquePtr<Runtime> runtime_;
   // Owned by the runtime
   ClassLinker* class_linker_;
-  UniquePtr<CompilerDriver> compiler_driver_;
+  UniquePtr<compiler::driver::CompilerDriver> compiler_driver_;
   UniquePtr<std::set<std::string> > image_classes_;
 
  private:

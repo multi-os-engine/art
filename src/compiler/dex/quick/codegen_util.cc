@@ -799,7 +799,7 @@ void Mir2Lir::CreateNativeGcMap() {
       max_native_offset = native_offset;
     }
   }
-  CompilerDriver::MethodReference method_ref(cu_->dex_file, cu_->method_idx);
+  compiler::driver::CompilerDriver::MethodReference method_ref(cu_->dex_file, cu_->method_idx);
   const std::vector<uint8_t>* gc_map_raw = verifier::MethodVerifier::GetDexGcMap(method_ref);
   verifier::DexPcToReferenceMap dex_gc_map(&(*gc_map_raw)[4], gc_map_raw->size() - 4);
   // Compute native offset to references size.
@@ -1139,7 +1139,7 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       fp_spill_mask_(0),
       first_lir_insn_(NULL),
       last_lir_insn_(NULL)
- {
+{
   promotion_map_ = static_cast<PromotionMap*>
       (arena_->NewMem((cu_->num_dalvik_registers  + cu_->num_compiler_temps + 1) *
                       sizeof(promotion_map_[0]), true, ArenaAllocator::kAllocRegAlloc));

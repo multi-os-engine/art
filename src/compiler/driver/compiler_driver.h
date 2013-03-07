@@ -23,7 +23,6 @@
 
 #include "base/mutex.h"
 #include "compiled_class.h"
-#include "compiled_method.h"
 #include "dex_file.h"
 #include "instruction_set.h"
 #include "invoke_type.h"
@@ -32,12 +31,29 @@
 #include "safe_map.h"
 #include "thread_pool.h"
 
+namespace llvm {
+class Function;
+class LLVMContext;
+class Module;
+}  // namespace llvm
+
 namespace art {
+
+class CompiledInvokeStub;
+class CompiledMethod;
+class TimingLogger;
+
+namespace compiler {
+
+namespace Llvm {
+class ArtMDBuilder;
+}  // namespace Llvm
+
+namespace driver {
 
 class AOTCompilationStats;
 class ParallelCompilationManager;
 class DexCompilationUnit;
-class TimingLogger;
 
 enum CompilerBackend {
   kQuick,
@@ -45,19 +61,13 @@ enum CompilerBackend {
   kNoBackend
 };
 
-// Thread-local storage compiler worker threads
-class CompilerTls {
-  public:
-    CompilerTls() : llvm_info_(NULL) {}
-    ~CompilerTls() {}
-
-    void* GetLLVMInfo() { return llvm_info_; }
-
-    void SetLLVMInfo(void* llvm_info) { llvm_info_ = llvm_info; }
-
-  private:
-    void* llvm_info_;
+enum LlvmCompilationMode {
+  kMethodAtATime,
+  kMethodAtATimeWithModuleRecycling,
+  kManyMethodsInAModule
 };
+
+class CompilerTls;
 
 class CompilerDriver {
  public:
@@ -66,10 +76,10 @@ class CompilerDriver {
   // enabled.  "image_classes" lets the compiler know what classes it
   // can assume will be in the image, with NULL implying all available
   // classes.
-  explicit CompilerDriver(CompilerBackend compiler_backend, InstructionSet instruction_set, bool image,
-                          size_t thread_count, bool support_debugging,
-                          const std::set<std::string>* image_classes, 
-                          bool dump_stats, bool dump_timings);
+  explicit CompilerDriver(CompilerBackend compiler_backend, InstructionSet instruction_set,
+                          bool image, size_t thread_count,
+                          const std::set<std::string>* image_classes, bool dump_stats,
+                          bool dump_timings);
 
   ~CompilerDriver();
 
@@ -79,10 +89,6 @@ class CompilerDriver {
   // Compile a single Method
   void CompileOne(const mirror::AbstractMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  bool IsDebuggingSupported() {
-    return support_debugging_;
-  }
 
   InstructionSet GetInstructionSet() const {
     return instruction_set_;
@@ -96,7 +102,13 @@ class CompilerDriver {
     return image_;
   }
 
-  CompilerTls* GetTls();
+  // Get the LLVM module for generating code into. This value should be cached by any compiler
+  // using it. It will be found via TLS in materialization.
+  llvm::Module* GetLlvmModuleAtStartOfCompile();
+  art::compiler::Llvm::ArtMDBuilder* GetLlvmMdBuilder();
+  CompiledMethod* MaterializeLlvmCode(llvm::Function* function,
+                                      DexCompilationUnit* dex_compilation_unit,
+                                      const std::string& symbol);
 
   // A class is uniquely located by its DexFile and the class_defs_ table index into that DexFile
   typedef std::pair<const DexFile*, uint32_t> ClassReference;
@@ -155,7 +167,8 @@ class CompilerDriver {
   // field is within the referrer (which can avoid checking class initialization).
   bool ComputeStaticFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit,
                               int& field_offset, int& ssb_index,
-                              bool& is_referrers_class, bool& is_volatile, bool is_put)
+                              bool& is_referrers_class, bool& is_volatile, bool& is_final,
+                              bool is_put)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   // Can we fastpath a interface, super class or virtual method call? Computes method's vtable
@@ -188,7 +201,7 @@ class CompilerDriver {
                 bool is_host,
                 const std::vector<const DexFile*>& dex_files,
                 std::vector<uint8_t>& oat_contents,
-                File* file);
+                File* file) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool FixupElf(File* file, uintptr_t oat_data_begin) const;
   void GetOatElfInformation(File* file, size_t& oat_loaded_size, size_t& oat_data_offset) const;
   bool StripElf(File* file) const;
@@ -198,14 +211,6 @@ class CompilerDriver {
                                          std::string& target_triple,
                                          std::string& target_cpu,
                                          std::string& target_attr);
-
-  void SetCompilerContext(void* compiler_context) {
-    compiler_context_ = compiler_context;
-  }
-
-  void* GetCompilerContext() const {
-    return compiler_context_;
-  }
 
   size_t GetThreadCount() const {
     return thread_count_;
@@ -248,12 +253,12 @@ class CompilerDriver {
       CHECK(dex_file_ != NULL);
     }
 
-    const DexFile* dex_file_;
-    uint32_t referrer_method_idx_;
-    InvokeType referrer_invoke_type_;
-    uint32_t target_method_idx_;
-    InvokeType target_invoke_type_;
-    size_t literal_offset_;
+    const DexFile* const dex_file_;
+    const uint32_t referrer_method_idx_;
+    const InvokeType referrer_invoke_type_;
+    const uint32_t target_method_idx_;
+    const InvokeType target_invoke_type_;
+    const size_t literal_offset_;
 
     friend class CompilerDriver;
     DISALLOW_COPY_AND_ASSIGN(PatchInformation);
@@ -272,6 +277,9 @@ class CompilerDriver {
   void RecordClassStatus(ClassReference ref, CompiledClass* compiled_class);
 
  private:
+  CompilerTls* GetTls();
+  llvm::LLVMContext* GetLlvmContext();
+
   // Compute constant code and method pointers when possible
   void GetCodeAndMethodForDirectCall(InvokeType type, InvokeType sharp_type,
                                      mirror::Class* referrer_class,
@@ -317,74 +325,52 @@ class CompilerDriver {
                      jobject class_loader, const DexFile& dex_file)
       LOCKS_EXCLUDED(compiled_methods_lock_);
 
-  static void CompileClass(const ParallelCompilationManager* context, size_t class_def_index)
+  static void CompileClass(const ParallelCompilationManager* manager, size_t class_def_index)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   std::vector<const PatchInformation*> code_to_patch_;
   std::vector<const PatchInformation*> methods_to_patch_;
 
-  CompilerBackend compiler_backend_;
+  const CompilerBackend compiler_backend_;
 
-  InstructionSet instruction_set_;
+  const InstructionSet instruction_set_;
 
-  // All class references that require
+  const LlvmCompilationMode llvm_compilation_mode_;
+
+  // All class references that require constructor barriers at the end of their constructors.
+  // TODO: ReaderWriterMutex ?
   mutable Mutex freezing_constructor_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   std::set<ClassReference> freezing_constructor_classes_ GUARDED_BY(freezing_constructor_lock_);
 
-  typedef SafeMap<const ClassReference, CompiledClass*> ClassTable;
   // All class references that this compiler has compiled.
+  typedef SafeMap<const ClassReference, CompiledClass*> ClassTable;
   mutable Mutex compiled_classes_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   ClassTable compiled_classes_ GUARDED_BY(compiled_classes_lock_);
 
-  typedef SafeMap<const MethodReference, CompiledMethod*, MethodReferenceComparator> MethodTable;
   // All method references that this compiler has compiled.
+  typedef SafeMap<const MethodReference, CompiledMethod*> MethodTable;
   mutable Mutex compiled_methods_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   MethodTable compiled_methods_ GUARDED_BY(compiled_methods_lock_);
 
-  bool image_;
-  size_t thread_count_;
-  bool support_debugging_;
-  uint64_t start_ns_;
+  const bool image_;
+  const size_t thread_count_;
+  const uint64_t start_ns_;
 
   UniquePtr<AOTCompilationStats> stats_;
 
-  bool dump_stats_;
-  bool dump_timings_;
+  const bool dump_stats_;
+  const bool dump_timings_;
 
-  const std::set<std::string>* image_classes_;
+  const std::set<std::string>* const image_classes_;
 
-  typedef void (*CompilerCallbackFn)(CompilerDriver& driver);
-  typedef MutexLock* (*CompilerMutexLockFn)(CompilerDriver& driver);
-
-  void* compiler_library_;
-
-  typedef CompiledMethod* (*CompilerFn)(CompilerDriver& driver,
-                                        const DexFile::CodeItem* code_item,
-                                        uint32_t access_flags, InvokeType invoke_type,
-                                        uint32_t class_dex_idx, uint32_t method_idx,
-                                        jobject class_loader, const DexFile& dex_file);
-  CompilerFn compiler_;
-
-  void* compiler_context_;
-
-  typedef CompiledMethod* (*JniCompilerFn)(CompilerDriver& driver,
-                                           uint32_t access_flags, uint32_t method_idx,
-                                           const DexFile& dex_file);
-  JniCompilerFn jni_compiler_;
-
+  // Key for accessing CompilerTls for the current thread.
   pthread_key_t tls_key_;
-
-  typedef void (*CompilerEnableAutoElfLoadingFn)(CompilerDriver& driver);
-  CompilerEnableAutoElfLoadingFn compiler_enable_auto_elf_loading_;
-
-  typedef const void* (*CompilerGetMethodCodeAddrFn)
-      (const CompilerDriver& driver, const CompiledMethod* cm, const mirror::AbstractMethod* method);
-  CompilerGetMethodCodeAddrFn compiler_get_method_code_addr_;
 
   DISALLOW_COPY_AND_ASSIGN(CompilerDriver);
 };
 
-inline bool operator<(const CompilerDriver::ClassReference& lhs, const CompilerDriver::ClassReference& rhs) {
+inline bool operator<(const CompilerDriver::ClassReference& lhs,
+                      const CompilerDriver::ClassReference& rhs) {
   if (lhs.second < rhs.second) {
     return true;
   } else if (lhs.second > rhs.second) {
@@ -394,6 +380,32 @@ inline bool operator<(const CompilerDriver::ClassReference& lhs, const CompilerD
   }
 }
 
+}  // namespace driver
+
+namespace dex {
+// Compiles a method with dex code returning the generated compiled method.
+CompiledMethod* CompileMethod(compiler::driver::CompilerDriver* driver,
+                              const DexFile::CodeItem* code_item,
+                              uint32_t access_flags, InvokeType invoke_type,
+                              uint32_t class_def_idx, uint32_t method_idx,
+                              jobject class_loader, const DexFile& dex_file);
+} // namespace dex
+
+namespace jni {
+namespace portable {
+// Compiles a native method using LLVM and return the generated compiled method.
+extern CompiledMethod* JniCompilePortable(compiler::driver::CompilerDriver* compiler_driver,
+                                          uint32_t access_flags, uint32_t method_idx,
+                                          const DexFile& dex_file);
+}  // namespace portable
+namespace quick {
+extern CompiledMethod* JniCompileQuick(compiler::driver::CompilerDriver* compiler_driver,
+                                       uint32_t access_flags, uint32_t method_idx,
+                                       const DexFile& dex_file);
+}  // namespace quick
+}  // namespace jni
+
+}  // namespace compiler
 }  // namespace art
 
 #endif  // ART_SRC_COMPILER_DRIVER_COMPILER_DRIVER_H_

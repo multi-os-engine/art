@@ -80,9 +80,9 @@ define build-art-executable
   endif
 
   ifeq ($$(art_ndebug_or_debug),ndebug)
-    LOCAL_SHARED_LIBRARIES += libart
+    LOCAL_SHARED_LIBRARIES += libart libart-compiler
   else # debug
-    LOCAL_SHARED_LIBRARIES += libartd
+    LOCAL_SHARED_LIBRARIES += libartd libartd-compiler
   endif
 
   ifeq ($$(art_target_or_host),target)

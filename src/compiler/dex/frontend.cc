@@ -29,46 +29,7 @@
 #include "backend.h"
 #include "base/logging.h"
 
-namespace {
-#if !defined(ART_USE_PORTABLE_COMPILER)
-  pthread_once_t llvm_multi_init = PTHREAD_ONCE_INIT;
-#endif
-  void InitializeLLVMForQuick() {
-    ::llvm::llvm_start_multithreaded();
-  }
-}
-
 namespace art {
-namespace llvm {
-::llvm::Module* makeLLVMModuleContents(::llvm::Module* module);
-}
-
-LLVMInfo::LLVMInfo() {
-#if !defined(ART_USE_PORTABLE_COMPILER)
-  pthread_once(&llvm_multi_init, InitializeLLVMForQuick);
-#endif
-  // Create context, module, intrinsic helper & ir builder
-  llvm_context_.reset(new ::llvm::LLVMContext());
-  llvm_module_ = new ::llvm::Module("art", *llvm_context_);
-  ::llvm::StructType::create(*llvm_context_, "JavaObject");
-  art::llvm::makeLLVMModuleContents(llvm_module_);
-  intrinsic_helper_.reset( new art::llvm::IntrinsicHelper(*llvm_context_, *llvm_module_));
-  ir_builder_.reset(new art::llvm::IRBuilder(*llvm_context_, *llvm_module_, *intrinsic_helper_));
-}
-
-LLVMInfo::~LLVMInfo() {
-}
-
-extern "C" void ArtInitQuickCompilerContext(art::CompilerDriver& compiler) {
-  CHECK(compiler.GetCompilerContext() == NULL);
-  LLVMInfo* llvm_info = new LLVMInfo();
-  compiler.SetCompilerContext(llvm_info);
-}
-
-extern "C" void ArtUnInitQuickCompilerContext(art::CompilerDriver& compiler) {
-  delete reinterpret_cast<LLVMInfo*>(compiler.GetCompilerContext());
-  compiler.SetCompilerContext(NULL);
-}
 
 /* Default optimizer/debug setting for the compiler. */
 static uint32_t kCompilerOptimizerDisableFlags = 0 | // Disable specific optimizations
@@ -104,26 +65,22 @@ static uint32_t kCompilerDebugFlags = 0 |     // Enable debug/testing modes
   //(1 << kDebugShowSummaryMemoryUsage) |
   0;
 
-static CompiledMethod* CompileMethod(CompilerDriver& compiler,
-                                     const CompilerBackend compiler_backend,
+static CompiledMethod* CompileMethod(compiler::driver::CompilerDriver* driver,
                                      const DexFile::CodeItem* code_item,
                                      uint32_t access_flags, InvokeType invoke_type,
                                      uint32_t class_def_idx, uint32_t method_idx,
-                                     jobject class_loader, const DexFile& dex_file
-#if defined(ART_USE_PORTABLE_COMPILER)
-                                     , llvm::LlvmCompilationUnit* llvm_compilation_unit
-#endif
-)
+                                     jobject class_loader, const DexFile& dex_file)
 {
-  VLOG(compiler) << "Compiling " << PrettyMethod(method_idx, dex_file) << "...";
+  VLOG(compiler) << "Compiling " << PrettyMethod(method_idx, dex_file) << " using"
+    << driver->GetCompilerBackend() << " codegen";
 
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   UniquePtr<CompilationUnit> cu(new CompilationUnit);
 
-  cu->compiler_driver = &compiler;
+  cu->compiler_driver = driver;
   cu->class_linker = class_linker;
-  cu->instruction_set = compiler.GetInstructionSet();
-  cu->compiler_backend = compiler_backend;
+  cu->instruction_set = driver->GetInstructionSet();
+  cu->compiler_backend = driver->GetCompilerBackend();
   DCHECK((cu->instruction_set == kThumb2) ||
          (cu->instruction_set == kX86) ||
          (cu->instruction_set == kMips));
@@ -148,11 +105,6 @@ static CompiledMethod* CompileMethod(CompilerDriver& compiler,
    * TODO: rework handling of optimization and debug flags.  Should we split out
    * MIR and backend flags?  Need command-line setting as well.
    */
-
-  if (compiler_backend == kPortable) {
-    // Fused long branches not currently usseful in bitcode.
-    cu->disable_opt |= (1 << kBranchFusing);
-  }
 
   if (cu->instruction_set == kMips) {
     // Disable some optimizations for mips for now
@@ -216,12 +168,11 @@ static CompiledMethod* CompileMethod(CompilerDriver& compiler,
 
 #if defined(ART_USE_PORTABLE_COMPILER)
   if (compiler_backend == kPortable) {
-    cu->cg.reset(PortableCodeGenerator(cu.get(), cu->mir_graph.get(), &cu->arena,
-                                       llvm_compilation_unit));
+    cu->cg.reset(PortableCodeGenerator(cu.get(), cu->mir_graph.get(), &cu->arena));
   } else
 #endif
   {
-    switch (compiler.GetInstructionSet()) {
+    switch (driver->GetInstructionSet()) {
       case kThumb2:
         cu->cg.reset(ArmCodeGenerator(cu.get(), cu->mir_graph.get(), &cu->arena)); break;
       case kMips:
@@ -229,7 +180,7 @@ static CompiledMethod* CompileMethod(CompilerDriver& compiler,
       case kX86:
         cu->cg.reset(X86CodeGenerator(cu.get(), cu->mir_graph.get(), &cu->arena)); break;
       default:
-        LOG(FATAL) << "Unexpected instruction set: " << compiler.GetInstructionSet();
+        LOG(FATAL) << "Unexpected instruction set: " << driver->GetInstructionSet();
     }
   }
 
@@ -258,37 +209,17 @@ static CompiledMethod* CompileMethod(CompilerDriver& compiler,
   return result;
 }
 
-CompiledMethod* CompileOneMethod(CompilerDriver& compiler,
-                                 const CompilerBackend backend,
-                                 const DexFile::CodeItem* code_item,
-                                 uint32_t access_flags,
-                                 InvokeType invoke_type,
-                                 uint32_t class_def_idx,
-                                 uint32_t method_idx,
-                                 jobject class_loader,
-                                 const DexFile& dex_file,
-                                 llvm::LlvmCompilationUnit* llvm_compilation_unit)
-{
-  return CompileMethod(compiler, backend, code_item, access_flags, invoke_type, class_def_idx,
-                       method_idx, class_loader, dex_file
-#if defined(ART_USE_PORTABLE_COMPILER)
-                       , llvm_compilation_unit
-#endif
-                       );
+namespace compiler {
+namespace dex {
+CompiledMethod* CompileMethod(compiler::driver::CompilerDriver* driver,
+                              const DexFile::CodeItem* code_item,
+                              uint32_t access_flags, InvokeType invoke_type,
+                              uint32_t class_def_idx, uint32_t method_idx,
+                              jobject class_loader, const DexFile& dex_file) {
+  return art::CompileMethod(driver, code_item, access_flags, invoke_type, class_def_idx, method_idx,
+                            class_loader, dex_file);
+}
+}
 }
 
 }  // namespace art
-
-extern "C" art::CompiledMethod*
-    ArtQuickCompileMethod(art::CompilerDriver& compiler,
-                          const art::DexFile::CodeItem* code_item,
-                          uint32_t access_flags, art::InvokeType invoke_type,
-                          uint32_t class_def_idx, uint32_t method_idx, jobject class_loader,
-                          const art::DexFile& dex_file)
-{
-  // TODO: check method fingerprint here to determine appropriate backend type.  Until then, use build default
-  art::CompilerBackend backend = compiler.GetCompilerBackend();
-  return art::CompileOneMethod(compiler, backend, code_item, access_flags, invoke_type,
-                               class_def_idx, method_idx, class_loader, dex_file,
-                               NULL /* use thread llvm_info */);
-}

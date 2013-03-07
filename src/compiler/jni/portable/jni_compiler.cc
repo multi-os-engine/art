@@ -14,19 +14,15 @@
  * limitations under the License.
  */
 
-#include "jni_compiler.h"
-
 #include "base/logging.h"
 #include "class_linker.h"
 #include "compiled_method.h"
 #include "compiler/driver/compiler_driver.h"
 #include "compiler/driver/dex_compilation_unit.h"
-#include "compiler/llvm/compiler_llvm.h"
-#include "compiler/llvm/ir_builder.h"
-#include "compiler/llvm/llvm_compilation_unit.h"
-#include "compiler/llvm/runtime_support_func.h"
-#include "compiler/llvm/utils_llvm.h"
+#include "compiler/llvm/art_ir_builder.h"
+#include "compiler/llvm/runtime_support_builder.h"
 #include "dex_file-inl.h"
+#include "jni_ir_builder.h"
 #include "mirror/abstract_method.h"
 #include "runtime.h"
 #include "stack.h"
@@ -39,257 +35,167 @@
 #include <llvm/IR/Type.h>
 
 namespace art {
-namespace llvm {
+namespace compiler {
+namespace jni {
+namespace portable {
 
-using namespace runtime_support;
+enum JniFunctionType {
+  kManagedAbi,
+  kJniAbi
+};
 
-JniCompiler::JniCompiler(LlvmCompilationUnit* cunit,
-                         const CompilerDriver& driver,
-                         const DexCompilationUnit* dex_compilation_unit)
-: cunit_(cunit), driver_(&driver), module_(cunit_->GetModule()),
-  context_(cunit_->GetLLVMContext()), irb_(*cunit_->GetIRBuilder()),
-  dex_compilation_unit_(dex_compilation_unit),
-  func_(NULL), elf_func_idx_(0) {
-
-  // Check: Ensure that JNI compiler will only get "native" method
-  CHECK(dex_compilation_unit->IsNative());
-}
-
-
-CompiledMethod* JniCompiler::Compile() {
-  const bool is_static = dex_compilation_unit_->IsStatic();
-  const bool is_synchronized = dex_compilation_unit_->IsSynchronized();
-  const DexFile* dex_file = dex_compilation_unit_->GetDexFile();
-  DexFile::MethodId const& method_id =
-      dex_file->GetMethodId(dex_compilation_unit_->GetDexMethodIndex());
-  char const return_shorty = dex_file->GetMethodShorty(method_id)[0];
-  ::llvm::Value* this_object_or_class_object;
-
-  uint32_t method_idx = dex_compilation_unit_->GetDexMethodIndex();
-  std::string func_name(StringPrintf("jni_%s",
-                                     MangleForJni(PrettyMethod(method_idx, *dex_file)).c_str()));
-  CreateFunction(func_name);
-
-  // Set argument name
-  ::llvm::Function::arg_iterator arg_begin(func_->arg_begin());
-  ::llvm::Function::arg_iterator arg_end(func_->arg_end());
-  ::llvm::Function::arg_iterator arg_iter(arg_begin);
-
-  DCHECK_NE(arg_iter, arg_end);
-  arg_iter->setName("method");
-  ::llvm::Value* method_object_addr = arg_iter++;
-
-  if (!is_static) {
-    // Non-static, the second argument is "this object"
-    this_object_or_class_object = arg_iter++;
-  } else {
-    // Load class object
-    this_object_or_class_object =
-        irb_.LoadFromObjectOffset(method_object_addr,
-                                  mirror::AbstractMethod::DeclaringClassOffset().Int32Value(),
-                                  irb_.getJObjectTy(),
-                                  kTBAAConstJObject);
-  }
-  // Actual argument (ignore method and this object)
-  arg_begin = arg_iter;
-
-  // Count the number of Object* arguments
-  uint32_t sirt_size = 1;
-  // "this" object pointer for non-static
-  // "class" object pointer for static
-  for (unsigned i = 0; arg_iter != arg_end; ++i, ++arg_iter) {
-#if !defined(NDEBUG)
-    arg_iter->setName(StringPrintf("a%u", i));
-#endif
-    if (arg_iter->getType() == irb_.getJObjectTy()) {
-      ++sirt_size;
-    }
-  }
-
-  // Shadow stack
-  ::llvm::StructType* shadow_frame_type = irb_.getShadowFrameTy(sirt_size);
-  ::llvm::AllocaInst* shadow_frame_ = irb_.CreateAlloca(shadow_frame_type);
-
-  // Store the dex pc
-  irb_.StoreToObjectOffset(shadow_frame_,
-                           ShadowFrame::DexPCOffset(),
-                           irb_.getInt32(DexFile::kDexNoIndex),
-                           kTBAAShadowFrame);
-
-  // Push the shadow frame
-  ::llvm::Value* shadow_frame_upcast = irb_.CreateConstGEP2_32(shadow_frame_, 0, 0);
-  ::llvm::Value* old_shadow_frame =
-      irb_.Runtime().EmitPushShadowFrame(shadow_frame_upcast, method_object_addr, sirt_size);
-
-  // Get JNIEnv
-  ::llvm::Value* jni_env_object_addr =
-      irb_.Runtime().EmitLoadFromThreadOffset(Thread::JniEnvOffset().Int32Value(),
-                                              irb_.getJObjectTy(),
-                                              kTBAARuntimeInfo);
-
-  // Get callee code_addr
-  ::llvm::Value* code_addr =
-      irb_.LoadFromObjectOffset(method_object_addr,
-                                mirror::AbstractMethod::NativeMethodOffset().Int32Value(),
-                                GetFunctionType(dex_compilation_unit_->GetDexMethodIndex(),
-                                                is_static, true)->getPointerTo(),
-                                kTBAARuntimeInfo);
-
-  // Load actual parameters
-  std::vector< ::llvm::Value*> args;
-
-  // The 1st parameter: JNIEnv*
-  args.push_back(jni_env_object_addr);
-
-  // Variables for GetElementPtr
-  ::llvm::Value* gep_index[] = {
-    irb_.getInt32(0), // No displacement for shadow frame pointer
-    irb_.getInt32(1), // SIRT
-    NULL,
-  };
-
-  size_t sirt_member_index = 0;
-
-  // Store the "this object or class object" to SIRT
-  gep_index[2] = irb_.getInt32(sirt_member_index++);
-  ::llvm::Value* sirt_field_addr = irb_.CreateBitCast(irb_.CreateGEP(shadow_frame_, gep_index),
-                                                    irb_.getJObjectTy()->getPointerTo());
-  irb_.CreateStore(this_object_or_class_object, sirt_field_addr, kTBAAShadowFrame);
-  // Push the "this object or class object" to out args
-  this_object_or_class_object = irb_.CreateBitCast(sirt_field_addr, irb_.getJObjectTy());
-  args.push_back(this_object_or_class_object);
-  // Store arguments to SIRT, and push back to args
-  for (arg_iter = arg_begin; arg_iter != arg_end; ++arg_iter) {
-    if (arg_iter->getType() == irb_.getJObjectTy()) {
-      // Store the reference type arguments to SIRT
-      gep_index[2] = irb_.getInt32(sirt_member_index++);
-      ::llvm::Value* sirt_field_addr = irb_.CreateBitCast(irb_.CreateGEP(shadow_frame_, gep_index),
-                                                        irb_.getJObjectTy()->getPointerTo());
-      irb_.CreateStore(arg_iter, sirt_field_addr, kTBAAShadowFrame);
-      // Note null is placed in the SIRT but the jobject passed to the native code must be null
-      // (not a pointer into the SIRT as with regular references).
-      ::llvm::Value* equal_null = irb_.CreateICmpEQ(arg_iter, irb_.getJNull());
-      ::llvm::Value* arg =
-          irb_.CreateSelect(equal_null,
-                            irb_.getJNull(),
-                            irb_.CreateBitCast(sirt_field_addr, irb_.getJObjectTy()));
-      args.push_back(arg);
-    } else {
-      args.push_back(arg_iter);
-    }
-  }
-
-  ::llvm::Value* saved_local_ref_cookie;
-  { // JniMethodStart
-    RuntimeId func_id = is_synchronized ? JniMethodStartSynchronized
-                                        : JniMethodStart;
-    ::llvm::SmallVector< ::llvm::Value*, 2> args;
-    if (is_synchronized) {
-      args.push_back(this_object_or_class_object);
-    }
-    args.push_back(irb_.Runtime().EmitGetCurrentThread());
-    saved_local_ref_cookie =
-        irb_.CreateCall(irb_.GetRuntime(func_id), args);
-  }
-
-  // Call!!!
-  ::llvm::Value* retval = irb_.CreateCall(code_addr, args);
-
-  { // JniMethodEnd
-    bool is_return_ref = return_shorty == 'L';
-    RuntimeId func_id =
-        is_return_ref ? (is_synchronized ? JniMethodEndWithReferenceSynchronized
-                                         : JniMethodEndWithReference)
-                      : (is_synchronized ? JniMethodEndSynchronized
-                                         : JniMethodEnd);
-    ::llvm::SmallVector< ::llvm::Value*, 4> args;
-    if (is_return_ref) {
-      args.push_back(retval);
-    }
-    args.push_back(saved_local_ref_cookie);
-    if (is_synchronized) {
-      args.push_back(this_object_or_class_object);
-    }
-    args.push_back(irb_.Runtime().EmitGetCurrentThread());
-
-    ::llvm::Value* decoded_jobject =
-        irb_.CreateCall(irb_.GetRuntime(func_id), args);
-
-    // Return decoded jobject if return reference.
-    if (is_return_ref) {
-      retval = decoded_jobject;
-    }
-  }
-
-  // Pop the shadow frame
-  irb_.Runtime().EmitPopShadowFrame(old_shadow_frame);
-
-  // Return!
-  if (return_shorty != 'V') {
-    irb_.CreateRet(retval);
-  } else {
-    irb_.CreateRetVoid();
-  }
-
-  // Verify the generated bitcode
-  VERIFY_LLVM_FUNCTION(*func_);
-
-  cunit_->Materialize();
-
-  return new CompiledMethod(cunit_->GetInstructionSet(),
-                            cunit_->GetElfObject(),
-                            func_name);
-}
-
-
-void JniCompiler::CreateFunction(const std::string& func_name) {
-  CHECK_NE(0U, func_name.size());
-
-  const bool is_static = dex_compilation_unit_->IsStatic();
-
-  // Get function type
-  ::llvm::FunctionType* func_type =
-    GetFunctionType(dex_compilation_unit_->GetDexMethodIndex(), is_static, false);
-
-  // Create function
-  func_ = ::llvm::Function::Create(func_type, ::llvm::Function::InternalLinkage,
-                                   func_name, module_);
-
-  // Create basic block
-  ::llvm::BasicBlock* basic_block = ::llvm::BasicBlock::Create(*context_, "B0", func_);
-
-  // Set insert point
-  irb_.SetInsertPoint(basic_block);
-}
-
-
-::llvm::FunctionType* JniCompiler::GetFunctionType(uint32_t method_idx,
-                                                   bool is_static, bool is_native_function) {
-  // Get method signature
-  uint32_t shorty_size;
-  const char* shorty = dex_compilation_unit_->GetShorty(&shorty_size);
-  CHECK_GE(shorty_size, 1u);
-
+// Create a FunctionType for either the JNI bridge method or the native method to be called.
+static llvm::FunctionType* GetFunctionType(JniIRBuilder* irb,
+                                           bool is_static, const char* shorty, uint32_t shorty_len,
+                                           JniFunctionType type) {
   // Get return type
-  ::llvm::Type* ret_type = irb_.getJType(shorty[0]);
+  llvm::Type* ret_type = irb->GetJavaType(Primitive::GetType(shorty[0]));
 
   // Get argument type
-  std::vector< ::llvm::Type*> args_type;
+  std::vector<llvm::Type*> args_type;
 
-  args_type.push_back(irb_.getJObjectTy()); // method object pointer
-
-  if (!is_static || is_native_function) {
-    // "this" object pointer for non-static
-    // "class" object pointer for static naitve
-    args_type.push_back(irb_.getJType('L'));
+  if (type == kManagedAbi) {
+    args_type.push_back(irb->GetJavaMethodTy());  // AbstractMethod*.
+    if (!is_static) {
+      args_type.push_back(irb->GetJavaObjectTy());  // "this".
+    }
+    for (uint32_t i = 1; i < shorty_len; ++i) {
+      args_type.push_back(irb->GetJavaType(Primitive::GetType(shorty[i])));
+    }
+  } else {
+    args_type.push_back(irb->GetJniEnvTy());  // JNIEnv*.
+    args_type.push_back(irb->GetJniObjectTy());  // jobject (this) or jclass (declaring class).
+    for (uint32_t i = 1; i < shorty_len; ++i) {
+      args_type.push_back(irb->GetJniType(Primitive::GetType(shorty[i])));
+    }
   }
-
-  for (uint32_t i = 1; i < shorty_size; ++i) {
-    args_type.push_back(irb_.getJType(shorty[i]));
-  }
-
   return ::llvm::FunctionType::get(ret_type, args_type, false);
 }
 
-} // namespace llvm
-} // namespace art
+// Create a bridge from portable code to native code, handshaking with the GC and marshaling
+// arguments.
+using art::compiler::Llvm::RuntimeSupportBuilder;
+CompiledMethod* JniCompilePortable(art::compiler::driver::CompilerDriver* compiler_driver,
+                                   uint32_t access_flags, uint32_t method_idx,
+                                   const DexFile& dex_file) {
+  VLOG(compiler) << "JNI compiling " << PrettyMethod(method_idx, dex_file)
+      << " using portable codegen.";
+
+  const bool is_static = (access_flags & kAccStatic) != 0;
+  const bool is_synchronized = (access_flags & kAccSynchronized) != 0;
+  DexFile::MethodId const& method_id = dex_file.GetMethodId(method_idx);
+  uint32_t shorty_len;
+  const char* shorty = dex_file.GetMethodShorty(method_id, &shorty_len);
+  // There will always be 1 reference in the JNI bridge's shadow frame for the jclass (declaring
+  // class) or jobject ("this") argument.
+  uint32_t num_vregs = 1;
+  for (uint32_t i = 1; i < shorty_len; ++i) {
+    if (shorty[i] == 'L') {
+      num_vregs++;
+    }
+  }
+  JniIRBuilder irb(compiler_driver->GetLlvmModuleAtStartOfCompile(),
+                   compiler_driver->GetLlvmMdBuilder(),
+                   num_vregs,
+                   compiler_driver->GetInstructionSet());
+
+  // Create the function as called from by the managed ABI.
+  std::string func_name(StringPrintf("jni_%s",
+                                     MangleForJni(PrettyMethod(method_idx, dex_file)).c_str()));
+
+  llvm::FunctionType* func_type = GetFunctionType(&irb, is_static, shorty, shorty_len, kManagedAbi);
+
+  // Create function and set up IR builder.
+  llvm::Function* func = llvm::Function::Create(func_type, llvm::Function::InternalLinkage,
+                                                func_name, irb.GetModule());
+  llvm::BasicBlock* basic_block = ::llvm::BasicBlock::Create(irb.getContext(), "entry", func);
+  irb.SetInsertPoint(basic_block);
+
+  llvm::Function::arg_iterator arg_begin(func->arg_begin());
+  llvm::Function::arg_iterator arg_end(func->arg_end());
+  llvm::Function::arg_iterator arg_iter(arg_begin);
+
+  DCHECK_NE(arg_iter, arg_end);
+
+  uint32_t cur_vreg = 0;  // Current shadow frame vreg being assigned.
+  // Skip method argument.
+  arg_iter++;
+  // Add "this" or declaring class to shadow frame, remember the value for synchronized methods.
+  llvm::Value* this_or_class;
+  if (!is_static) {
+    this_or_class = arg_iter;
+    arg_iter++;
+  } else {
+    this_or_class = irb.LoadFieldFromCurMethod(Primitive::kPrimNot,
+                                               "Ljava/lang/Class;",
+                                               "declaringClass",
+                                               mirror::AbstractMethod::DeclaringClassOffset(),
+                                               true);
+  }
+  irb.RememberShadowFrameVReg(cur_vreg, this_or_class);
+  cur_vreg++;
+  // Add reference parameters to shadow frame.
+  for (uint32_t i = 1; i < shorty_len; i++) {
+    if (shorty[i] == 'L') {
+      irb.RememberShadowFrameVReg(cur_vreg, arg_iter);
+      cur_vreg++;
+    }
+    arg_iter++;
+  }
+  // Flush all the reference arguments onto the stack which will cause the shadow frame to be
+  // pushed.
+  irb.FlushShadowFrameVRegsAndSetDexPc(DexFile::kDexNoIndex);
+
+  // Build the outgoing arguments.
+  cur_vreg = 0;
+  arg_iter = arg_begin;
+  std::vector<llvm::Value*> jni_args;  // Arguments being set up for call to native code.
+  jni_args.push_back(irb.LoadJniEnv());  // Place JNI env into outgoing native arguments.
+  jni_args.push_back(irb.GetShadowFrameVRegPtrForSlot(cur_vreg));  // Place "this"/declaring class.
+  cur_vreg++;
+  for (uint32_t i = 1; i < shorty_len; i++) {
+    if (shorty[i] == 'L') {
+      // Compare reference arguments with null, push the vreg address if non-null.
+      llvm::Value* java_null = irb.GetJavaNull();
+      llvm::Value* equal_null = irb.CreateICmpEQ(arg_iter, java_null);
+      llvm::Value* arg = irb.CreateSelect(equal_null, java_null,
+                                          irb.GetShadowFrameVRegPtrForSlot(cur_vreg));
+      jni_args.push_back(arg);
+      cur_vreg++;
+    } else {
+      jni_args.push_back(arg_iter);
+    }
+    arg_iter++;
+  }
+
+  llvm::Value* saved_local_ref_cookie = irb.JniMethodStart(is_synchronized, this_or_class);
+
+  // Call!!!
+  llvm::Value* code_addr = irb.LoadFieldFromCurMethod(Primitive::kPrimInt,
+                                                      "I",
+                                                      "nativeMethod",
+                                                      mirror::AbstractMethod::NativeMethodOffset(),
+                                                      true);
+  llvm::Value* ret_val = irb.CreateCall(code_addr, jni_args);
+
+  bool is_return_ref = (shorty[0] == 'L');
+  ret_val = irb.JniMethodEnd(is_return_ref, is_synchronized, ret_val, saved_local_ref_cookie,
+                             this_or_class);
+
+  // Pop the shadow frame
+  irb.PopShadowFrame();
+
+  // Return!
+  if (shorty[0] == 'V') {
+    irb.CreateRetVoid();
+  } else {
+    irb.CreateRet(ret_val);
+  }
+
+  return compiler_driver->MaterializeLlvmCode(func, NULL, func_name);
+}
+
+}  // namespace portable
+}  // namespace jni
+}  // namespace compiler
+}  // namespace art

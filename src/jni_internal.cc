@@ -26,7 +26,7 @@
 #include "base/mutex.h"
 #include "base/stl_util.h"
 #include "base/stringpiece.h"
-#include "class_linker.h"
+#include "class_linker-inl.h"
 #include "dex_file-inl.h"
 #include "gc/card_table-inl.h"
 #include "invoke_arg_array_builder.h"

@@ -23,13 +23,20 @@
 #include "jni.h"
 
 namespace art {
-namespace mirror {
-class ClassLoader;
-class DexCache;
-}  // namespace mirror
+
 class ClassLinker;
 struct CompilationUnit;
 
+namespace mirror {
+  class ClassLoader;
+  class DexCache;
+}  // namespace mirror
+
+namespace compiler {
+namespace driver {
+
+// TODO: this is a dumping ground of dex related information. It should be removed and the APIs
+//       that use it cleaned up.
 class DexCompilationUnit {
  public:
   DexCompilationUnit(CompilationUnit* cu);
@@ -113,6 +120,9 @@ class DexCompilationUnit {
   const std::string symbol_;
 };
 
-} // namespace art
+
+}  // namespace driver
+}  // namespace compiler
+}  // namespace art
 
 #endif  // ART_SRC_COMPILER_DEX_DEX_COMPILATION_UNIT_H_

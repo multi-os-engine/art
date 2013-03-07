@@ -33,8 +33,9 @@ class OatTest : public CommonTest {
                    const DexFile* dex_file)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const CompiledMethod* compiled_method =
-        compiler_driver_->GetCompiledMethod(CompilerDriver::MethodReference(dex_file,
-                                                               method->GetDexMethodIndex()));
+        compiler_driver_->GetCompiledMethod(
+            compiler::driver::CompilerDriver::MethodReference(dex_file,
+                                                              method->GetDexMethodIndex()));
 
     if (compiled_method == NULL) {
       EXPECT_TRUE(oat_method.GetCode() == NULL) << PrettyMethod(method) << " "
@@ -72,12 +73,12 @@ TEST_F(OatTest, WriteRead) {
   if (compile) {
     // TODO: make selectable
 #if defined(ART_USE_PORTABLE_COMPILER)
-    CompilerBackend compiler_backend = kPortable;
+    compiler::driver::CompilerBackend compiler_backend = compiler::driver::kPortable;
 #else
-    CompilerBackend compiler_backend = kQuick;
+    compiler::driver::CompilerBackend compiler_backend = compiler::driver::kQuick;
 #endif
-    compiler_driver_.reset(new CompilerDriver(compiler_backend, kThumb2, false, 2, false,
-                                              NULL, true, true));
+    compiler_driver_.reset(new compiler::driver::CompilerDriver(compiler_backend, kThumb2, false, 2,
+                                                                false, NULL, true, true));
     compiler_driver_->CompileAll(class_loader, class_linker->GetBootClassPath());
   }
 

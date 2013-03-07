@@ -15,6 +15,7 @@
 #
 
 LIBART_COMPILER_SRC_FILES := \
+	src/compiled_method.cc \
 	src/compiler/dex/local_value_numbering.cc \
 	src/compiler/dex/arena_allocator.cc \
 	src/compiler/dex/arena_bit_vector.cc \
@@ -43,7 +44,6 @@ LIBART_COMPILER_SRC_FILES := \
 	src/compiler/dex/quick/x86/int_x86.cc \
 	src/compiler/dex/quick/x86/target_x86.cc \
 	src/compiler/dex/quick/x86/utility_x86.cc \
-	src/compiler/dex/portable/mir_to_gbc.cc \
 	src/compiler/dex/mir_dataflow.cc \
 	src/compiler/dex/dataflow_iterator.cc \
 	src/compiler/dex/mir_optimization.cc \
@@ -51,30 +51,26 @@ LIBART_COMPILER_SRC_FILES := \
 	src/compiler/dex/mir_graph.cc \
 	src/compiler/dex/vreg_analysis.cc \
 	src/compiler/dex/ssa_transformation.cc \
-	src/compiler/dex/write_elf.cc \
+	src/compiler/driver/compiler_driver.cc \
 	src/compiler/driver/dex_compilation_unit.cc \
+	src/compiler/llvm/arm/runtime_support_builder_arm.cc \
+	src/compiler/llvm/art_ir_builder.cc \
+	src/compiler/llvm/md_builder.cc \
+	src/compiler/llvm/runtime_support_builder.cc \
+	src/compiler/llvm/x86/runtime_support_builder_x86.cc \
 	src/compiler/jni/portable/jni_compiler.cc \
 	src/compiler/jni/quick/arm/calling_convention_arm.cc \
 	src/compiler/jni/quick/mips/calling_convention_mips.cc \
 	src/compiler/jni/quick/x86/calling_convention_x86.cc \
 	src/compiler/jni/quick/calling_convention.cc \
 	src/compiler/jni/quick/jni_compiler.cc \
-	src/compiler/llvm/compiler_llvm.cc \
-	src/compiler/llvm/gbc_expander.cc \
-	src/compiler/llvm/generated/art_module.cc \
-	src/compiler/llvm/intrinsic_helper.cc \
-	src/compiler/llvm/ir_builder.cc \
-	src/compiler/llvm/llvm_compilation_unit.cc \
-	src/compiler/llvm/md_builder.cc \
-	src/compiler/llvm/runtime_support_builder.cc \
-	src/compiler/llvm/runtime_support_builder_arm.cc \
-	src/compiler/llvm/runtime_support_builder_thumb2.cc \
-	src/compiler/llvm/runtime_support_builder_x86.cc \
-	src/compiler/llvm/runtime_support_llvm.cc \
 	src/elf_fixup.cc \
 	src/elf_stripper.cc \
 	src/elf_writer.cc \
-	src/elf_writer_quick.cc
+	src/elf_writer_quick.cc \
+	src/image_writer.cc \
+	src/oat_writer.cc \
+	src/compiler/dex/portable/mir_to_llvm.cc
 
 LIBART_COMPILER_CFLAGS :=
 ifeq ($(ART_USE_PORTABLE_COMPILER),true)

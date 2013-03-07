@@ -19,7 +19,6 @@
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
 #include "compiler/driver/compiler_driver.h"
-#include "compiler/llvm/utils_llvm.h"
 #include "dex_file-inl.h"
 #include "dex_method_iterator.h"
 #include "elf_file.h"
@@ -32,7 +31,7 @@
 
 namespace art {
 
-ElfWriter::ElfWriter(const CompilerDriver& driver, File* elf_file)
+ElfWriter::ElfWriter(const compiler::driver::CompilerDriver& driver, File* elf_file)
   : compiler_driver_(&driver), elf_file_(elf_file) {}
 
 ElfWriter::~ElfWriter() {}

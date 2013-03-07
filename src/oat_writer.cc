@@ -21,6 +21,7 @@
 #include "base/stl_util.h"
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
+#include "compiled_method.h"
 #include "dex_file-inl.h"
 #include "mirror/abstract_method-inl.h"
 #include "mirror/array.h"
@@ -40,7 +41,7 @@ bool OatWriter::Create(OutputStream& output_stream,
                        uint32_t image_file_location_oat_checksum,
                        uint32_t image_file_location_oat_begin,
                        const std::string& image_file_location,
-                       const CompilerDriver& driver) {
+                       const compiler::driver::CompilerDriver& driver) {
   OatWriter oat_writer(dex_files,
                        image_file_location_oat_checksum,
                        image_file_location_oat_begin,
@@ -53,7 +54,7 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
                      uint32_t image_file_location_oat_checksum,
                      uint32_t image_file_location_oat_begin,
                      const std::string& image_file_location,
-                     const CompilerDriver* compiler)
+                     const compiler::driver::CompilerDriver* compiler)
     : compiler_driver_(compiler) {
   image_file_location_oat_checksum_ = image_file_location_oat_checksum;
   image_file_location_oat_begin_ = image_file_location_oat_begin;
@@ -136,7 +137,8 @@ size_t OatWriter::InitOatClasses(size_t offset) {
         num_methods = num_direct_methods + num_virtual_methods;
       }
 
-      CompilerDriver::ClassReference class_ref = CompilerDriver::ClassReference(dex_file, class_def_index);
+      compiler::driver::CompilerDriver::ClassReference class_ref =
+          compiler::driver::CompilerDriver::ClassReference(dex_file, class_def_index);
       CompiledClass* compiled_class = compiler_driver_->GetCompiledClass(class_ref);
       mirror::Class::Status status;
       if (compiled_class != NULL) {
@@ -252,7 +254,7 @@ size_t OatWriter::InitOatCodeMethod(size_t offset, size_t oat_class_index,
 #endif
 
   CompiledMethod* compiled_method =
-      compiler_driver_->GetCompiledMethod(CompilerDriver::MethodReference(dex_file, method_idx));
+      compiler_driver_->GetCompiledMethod(compiler::driver::CompilerDriver::MethodReference(dex_file, method_idx));
   if (compiled_method != NULL) {
 #if defined(ART_USE_PORTABLE_COMPILER)
     compiled_method->AddOatdataOffsetToCompliledCodeOffset(
@@ -315,7 +317,8 @@ size_t OatWriter::InitOatCodeMethod(size_t offset, size_t oat_class_index,
 
 #if !defined(NDEBUG)
     // We expect GC maps except when the class hasn't been verified or the method is native
-    CompilerDriver::ClassReference class_ref = CompilerDriver::ClassReference(dex_file, class_def_index);
+    compiler::driver::CompilerDriver::ClassReference class_ref =
+        compiler::driver::CompilerDriver::ClassReference(dex_file, class_def_index);
     CompiledClass* compiled_class = compiler_driver_->GetCompiledClass(class_ref);
     mirror::Class::Status status;
     if (compiled_class != NULL) {
@@ -535,7 +538,7 @@ size_t OatWriter::WriteCodeMethod(OutputStream& out, size_t offset, size_t oat_c
                                   size_t class_def_method_index, bool is_static,
                                   uint32_t method_idx, const DexFile& dex_file) {
   const CompiledMethod* compiled_method =
-      compiler_driver_->GetCompiledMethod(CompilerDriver::MethodReference(&dex_file, method_idx));
+      compiler_driver_->GetCompiledMethod(compiler::driver::CompilerDriver::MethodReference(&dex_file, method_idx));
 
   OatMethodOffsets method_offsets =
       oat_classes_[oat_class_index]->method_offsets_[class_def_method_index];

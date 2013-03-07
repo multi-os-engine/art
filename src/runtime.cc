@@ -1049,6 +1049,7 @@ bool Runtime::AttachCurrentThread(const char* thread_name, bool as_daemon, jobje
   if (thread_name == NULL) {
     LOG(WARNING) << *Thread::Current() << " attached without supplying a name";
   }
+  CHECK(!success || (Thread::Current() != NULL));
   return success;
 }
 

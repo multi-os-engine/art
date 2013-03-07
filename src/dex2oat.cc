@@ -49,6 +49,7 @@
 #include "zip_archive.h"
 
 namespace art {
+using namespace compiler::driver;
 
 static void UsageErrorV(const char* fmt, va_list ap) {
   std::string error;
@@ -144,14 +145,13 @@ static void Usage(const char* fmt, ...) {
 class Dex2Oat {
  public:
   static bool Create(Dex2Oat** p_dex2oat, Runtime::Options& options, CompilerBackend compiler_backend,
-                     InstructionSet instruction_set, size_t thread_count, bool support_debugging)
+                     InstructionSet instruction_set, size_t thread_count)
       SHARED_TRYLOCK_FUNCTION(true, Locks::mutator_lock_) {
     if (!CreateRuntime(options, instruction_set)) {
       *p_dex2oat = NULL;
       return false;
     }
-    *p_dex2oat = new Dex2Oat(Runtime::Current(), compiler_backend, instruction_set, thread_count,
-                             support_debugging);
+    *p_dex2oat = new Dex2Oat(Runtime::Current(), compiler_backend, instruction_set, thread_count);
     return true;
   }
 
@@ -261,13 +261,13 @@ class Dex2Oat {
                                                         instruction_set_,
                                                         image,
                                                         thread_count_,
-                                                        support_debugging_,
                                                         image_classes,
                                                         dump_stats,
                                                         dump_timings));
 
     if (compiler_backend_ == kPortable) {
-      driver->SetBitcodeFileName(bitcode_filename);
+      UNUSED(bitcode_filename);
+      //driver->SetBitcodeFileName(bitcode_filename);
     }
 
 
@@ -298,7 +298,7 @@ class Dex2Oat {
                            image_file_location_oat_checksum,
                            image_file_location_oat_data_begin,
                            image_file_location,
-                           *driver.get())) {
+                           *driver)) {
       LOG(ERROR) << "Failed to create oat file " << oat_file->GetPath();
       return NULL;
     }
@@ -316,13 +316,13 @@ class Dex2Oat {
                        const std::set<std::string>* image_classes,
                        const std::string& oat_filename,
                        const std::string& oat_location,
-                       const CompilerDriver& compiler)
+                       const CompilerDriver& driver)
       LOCKS_EXCLUDED(Locks::mutator_lock_) {
     uintptr_t oat_data_begin;
     {
       // ImageWriter is scoped so it can free memory before doing FixupElf
       ImageWriter image_writer(image_classes);
-      if (!image_writer.Write(image_filename, image_base, oat_filename, oat_location, compiler)) {
+      if (!image_writer.Write(image_filename, image_base, oat_filename, oat_location, driver)) {
         LOG(ERROR) << "Failed to create image file " << image_filename;
         return false;
       }
@@ -334,7 +334,7 @@ class Dex2Oat {
       PLOG(ERROR) << "Failed to open ELF file: " << oat_filename;
       return false;
     }
-    if (!compiler.FixupElf(oat_file.get(), oat_data_begin)) {
+    if (!driver.FixupElf(oat_file.get(), oat_data_begin)) {
       LOG(ERROR) << "Failed to fixup ELF file " << oat_file->GetPath();
       return false;
     }
@@ -342,13 +342,12 @@ class Dex2Oat {
   }
 
  private:
-  explicit Dex2Oat(Runtime* runtime, CompilerBackend compiler_backend, InstructionSet instruction_set,
-                   size_t thread_count, bool support_debugging)
+  explicit Dex2Oat(Runtime* runtime, CompilerBackend compiler_backend,
+                   InstructionSet instruction_set, size_t thread_count)
       : compiler_backend_(compiler_backend),
         instruction_set_(instruction_set),
         runtime_(runtime),
         thread_count_(thread_count),
-        support_debugging_(support_debugging),
         start_ns_(NanoTime()) {
   }
 
@@ -473,10 +472,9 @@ class Dex2Oat {
 
   const InstructionSet instruction_set_;
 
-  Runtime* runtime_;
-  size_t thread_count_;
-  bool support_debugging_;
-  uint64_t start_ns_;
+  Runtime* const runtime_;
+  const size_t thread_count_;
+  const uint64_t start_ns_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(Dex2Oat);
 };
@@ -508,6 +506,15 @@ static size_t OpenDexFiles(const std::vector<const char*>& dex_filenames,
   }
   return failure_count;
 }
+
+// When setting timeouts, keep in mind that the build server may not be as fast as your desktop.
+#if ART_USE_PORTABLE_COMPILER
+static const unsigned int kWatchDogWarningSeconds =  2 * 60;  // 2 minutes.
+static const unsigned int kWatchDogTimeoutSeconds = 30 * 60;  // 25 minutes + buffer.
+#else
+static const unsigned int kWatchDogWarningSeconds =  1 * 60;  // 1 minute.
+static const unsigned int kWatchDogTimeoutSeconds =  6 * 60;  // 5 minutes + buffer.
+#endif
 
 // The primary goal of the watchdog is to prevent stuck build servers
 // during development when fatal aborts lead to a cascade of failures
@@ -616,15 +623,6 @@ class WatchDog {
     CHECK_WATCH_DOG_PTHREAD_CALL(pthread_mutex_unlock, (&mutex_), reason);
   }
 
-  // When setting timeouts, keep in mind that the build server may not be as fast as your desktop.
-#if ART_USE_PORTABLE_COMPILER
-  static const unsigned int kWatchDogWarningSeconds =  2 * 60;  // 2 minutes.
-  static const unsigned int kWatchDogTimeoutSeconds = 30 * 60;  // 25 minutes + buffer.
-#else
-  static const unsigned int kWatchDogWarningSeconds =  1 * 60;  // 1 minute.
-  static const unsigned int kWatchDogTimeoutSeconds =  6 * 60;  // 5 minutes + buffer.
-#endif
-
   bool is_watch_dog_enabled_;
   bool shutting_down_;
   // TODO: Switch to Mutex when we can guarantee it won't prevent shutdown in error cases
@@ -662,7 +660,6 @@ static int dex2oat(int argc, char** argv) {
   std::string android_root;
   std::vector<const char*> runtime_args;
   int thread_count = sysconf(_SC_NPROCESSORS_CONF);
-  bool support_debugging = false;
 #if defined(ART_USE_PORTABLE_COMPILER)
   CompilerBackend compiler_backend = kPortable;
 #else
@@ -709,8 +706,6 @@ static int dex2oat(int argc, char** argv) {
       if (!ParseInt(oat_fd_str, &oat_fd)) {
         Usage("could not parse --oat-fd argument '%s' as an integer", oat_fd_str);
       }
-    } else if (option == "-g") {
-      support_debugging = true;
     } else if (option == "--watch-dog") {
       watch_dog_enabled = true;
     } else if (option == "--no-watch-dog") {
@@ -920,8 +915,7 @@ static int dex2oat(int argc, char** argv) {
 #endif // ART_SMALL_MODE
 
   Dex2Oat* p_dex2oat;
-  if (!Dex2Oat::Create(&p_dex2oat, options, compiler_backend, instruction_set, thread_count, 
-                       support_debugging)) {
+  if (!Dex2Oat::Create(&p_dex2oat, options, compiler_backend, instruction_set, thread_count)) {
     LOG(ERROR) << "Failed to create dex2oat";
     return EXIT_FAILURE;
   }
@@ -984,19 +978,19 @@ static int dex2oat(int argc, char** argv) {
     }
   }
 
-  UniquePtr<const CompilerDriver> compiler(dex2oat->CreateOatFile(boot_image_option,
-                                                                  host_prefix.get(),
-                                                                  android_root,
-                                                                  is_host,
-                                                                  dex_files,
-                                                                  oat_file.get(),
-                                                                  bitcode_filename,
-                                                                  image,
-                                                                  image_classes.get(),
-                                                                  dump_stats,
-                                                                  dump_timings));
+  UniquePtr<const CompilerDriver> driver(dex2oat->CreateOatFile(boot_image_option,
+                                                                host_prefix.get(),
+                                                                android_root,
+                                                                is_host,
+                                                                dex_files,
+                                                                oat_file.get(),
+                                                                bitcode_filename,
+                                                                image,
+                                                                image_classes.get(),
+                                                                dump_stats,
+                                                                dump_timings));
 
-  if (compiler.get() == NULL) {
+  if (driver.get() == NULL) {
     LOG(ERROR) << "Failed to create oat file: " << oat_location;
     return EXIT_FAILURE;
   }
@@ -1060,7 +1054,7 @@ static int dex2oat(int argc, char** argv) {
                                                            image_classes.get(),
                                                            oat_unstripped,
                                                            oat_location,
-                                                           *compiler.get());
+                                                           *driver.get());
     Thread::Current()->TransitionFromSuspendedToRunnable();
     LOG(INFO) << "Image written successfully: " << image_filename;
     if (!image_creation_success) {
@@ -1095,7 +1089,7 @@ static int dex2oat(int argc, char** argv) {
   // Strip unneeded sections for target
   off_t seek_actual = lseek(oat_file->Fd(), 0, SEEK_SET);
   CHECK_EQ(0, seek_actual);
-  compiler->StripElf(oat_file.get());
+  driver->StripElf(oat_file.get());
 
   // We wrote the oat file successfully, and want to keep it.
   LOG(INFO) << "Oat file written successfully (stripped): " << oat_location;
