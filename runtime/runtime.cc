@@ -59,6 +59,7 @@
 #include "thread.h"
 #include "thread_list.h"
 #include "trace.h"
+#include "profiler.h"
 #include "UniquePtr.h"
 #include "verifier/method_verifier.h"
 #include "well_known_classes.h"
@@ -76,7 +77,8 @@ Runtime::Runtime()
       is_explicit_gc_disabled_(false),
       default_stack_size_(0),
       heap_(NULL),
-      max_spins_before_thin_lock_inflation_(Monitor::kDefaultMaxSpinsBeforeThinLockInflation),
+      max_spins_before_thin_lock_inflation_(
+          Monitor::kDefaultMaxSpinsBeforeThinLockInflation),
       monitor_list_(NULL),
       thread_list_(NULL),
       intern_table_(NULL),
@@ -89,7 +91,9 @@ Runtime::Runtime()
       default_imt_(NULL),
       method_verifiers_lock_("Method verifiers lock"),
       threads_being_born_(0),
-      shutdown_cond_(new ConditionVariable("Runtime shutdown", *Locks::runtime_shutdown_lock_)),
+      shutdown_cond_(
+          new ConditionVariable("Runtime shutdown",
+                                *Locks::runtime_shutdown_lock_)),
       shutting_down_(false),
       shutting_down_started_(false),
       started_(false),
@@ -177,22 +181,21 @@ struct AbortState {
       if (self->IsExceptionPending()) {
         ThrowLocation throw_location;
         mirror::Throwable* exception = self->GetException(&throw_location);
-        os << "Pending exception " << PrettyTypeOf(exception)
-            << " thrown by '" << throw_location.Dump() << "'\n"
-            << exception->Dump();
+        os << "Pending exception " << PrettyTypeOf(exception) << " thrown by '"
+           << throw_location.Dump() << "'\n" << exception->Dump();
       }
     }
     DumpAllThreads(os, self);
   }
 
-  void DumpAllThreads(std::ostream& os, Thread* self) NO_THREAD_SAFETY_ANALYSIS {
+  void DumpAllThreads(std::ostream& os, Thread* self)
+      NO_THREAD_SAFETY_ANALYSIS {
     bool tll_already_held = Locks::thread_list_lock_->IsExclusiveHeld(self);
     bool ml_already_held = Locks::mutator_lock_->IsSharedHeld(self);
     if (!tll_already_held || !ml_already_held) {
       os << "Dumping all threads without appropriate locks held:"
-          << (!tll_already_held ? " thread list lock" : "")
-          << (!ml_already_held ? " mutator lock" : "")
-          << "\n";
+         << (!tll_already_held ? " thread list lock" : "")
+         << (!ml_already_held ? " mutator lock" : "") << "\n";
     }
     os << "All threads:\n";
     Runtime::Current()->GetThreadList()->DumpLocked(os);
@@ -212,11 +215,11 @@ void Runtime::Abort() {
   // Many people have difficulty distinguish aborts from crashes,
   // so be explicit.
   AbortState state;
-  LOG(INTERNAL_FATAL) << Dumpable<AbortState>(state);
+  LOG(INTERNAL_FATAL)<< Dumpable<AbortState>(state);
 
   // Call the abort hook if we have one.
   if (Runtime::Current() != NULL && Runtime::Current()->abort_ != NULL) {
-    LOG(INTERNAL_FATAL) << "Calling abort hook...";
+    LOG(INTERNAL_FATAL)<< "Calling abort hook...";
     Runtime::Current()->abort_();
     // notreached
     LOG(INTERNAL_FATAL) << "Unexpectedly returned from abort hook!";
@@ -247,7 +250,7 @@ void Runtime::CallExitHook(jint status) {
   if (exit_ != NULL) {
     ScopedThreadStateChange tsc(Thread::Current(), kNative);
     exit_(status);
-    LOG(WARNING) << "Exit hook returned instead of exiting!";
+    LOG(WARNING)<< "Exit hook returned instead of exiting!";
   }
 }
 
@@ -301,7 +304,7 @@ size_t ParseMemoryOption(const char* s, size_t div) {
             val *= mul;
           } else {
             // Clamp to a multiple of 1024.
-            val = std::numeric_limits<size_t>::max() & ~(1024-1);
+            val = std::numeric_limits<size_t>::max() & ~(1024 - 1);
           }
         } else {
           // There's more than one character after the numeric part.
@@ -320,15 +323,33 @@ size_t ParseMemoryOption(const char* s, size_t div) {
 size_t ParseIntegerOrDie(const std::string& s) {
   std::string::size_type colon = s.find(':');
   if (colon == std::string::npos) {
-    LOG(FATAL) << "Missing integer: " << s;
+    LOG(FATAL)<< "Missing integer: " << s;
   }
   const char* begin = &s[colon + 1];
   char* end;
   size_t result = strtoul(begin, &end, 10);
   if (begin == end || *end != '\0') {
-    LOG(FATAL) << "Failed to parse integer in: " << s;
+    LOG(FATAL)<< "Failed to parse integer in: " << s;
   }
   return result;
+}
+
+double ParseDoubleOrDie(const std::string& option, const char* prefix,
+                        double min, double max, bool ignore_unrecognized,
+                        double defval) {
+  std::istringstream iss(option.substr(strlen(prefix)));
+  double value;
+  iss >> value;
+  // Ensure that we have a value, there was no cruft after it and it satisfies a sensible range.
+  const bool sane_val = iss.eof() && (value >= min) && (value <= max);
+  if (!sane_val) {
+    if (ignore_unrecognized) {
+      return defval;
+    }
+    LOG(FATAL)<< "Invalid option '" << option << "'";
+    return defval;
+  }
+  return value;
 }
 
 void Runtime::SweepSystemWeaks(RootVisitor* visitor, void* arg) {
@@ -337,7 +358,8 @@ void Runtime::SweepSystemWeaks(RootVisitor* visitor, void* arg) {
   GetJavaVM()->SweepJniWeakGlobals(visitor, arg);
 }
 
-Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, bool ignore_unrecognized) {
+Runtime::ParsedOptions* Runtime::ParsedOptions::Create(
+    const Options& options, bool ignore_unrecognized) {
   UniquePtr<ParsedOptions> parsed(new ParsedOptions());
   const char* boot_class_path_string = getenv("BOOTCLASSPATH");
   if (boot_class_path_string != NULL) {
@@ -363,7 +385,8 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   // Default is CMS which is Sticky + Partial + Full CMS GC.
   parsed->collector_type_ = gc::kCollectorTypeCMS;
   parsed->stack_size_ = 0;  // 0 means default.
-  parsed->max_spins_before_thin_lock_inflation_ = Monitor::kDefaultMaxSpinsBeforeThinLockInflation;
+  parsed->max_spins_before_thin_lock_inflation_ =
+      Monitor::kDefaultMaxSpinsBeforeThinLockInflation;
   parsed->low_memory_mode_ = false;
   parsed->use_tlab_ = false;
 
@@ -408,35 +431,43 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   parsed->method_trace_file_ = "/data/method-trace-file.bin";
   parsed->method_trace_file_size_ = 10 * MB;
 
+  parsed->profile_ = false;
+  parsed->profile_period_ = 10;           // Seconds.
+  parsed->profile_duration_ = 20;          // Seconds.
+  parsed->profile_interval_ = 500;       // Microseconds.
+  parsed->profile_backoff_coefficient_ = 2.0;
+
   for (size_t i = 0; i < options.size(); ++i) {
     const std::string option(options[i].first);
     if (true && options[0].first == "-Xzygote") {
-      LOG(INFO) << "option[" << i << "]=" << option;
+      LOG(INFO)<< "option[" << i << "]=" << option;
     }
     if (StartsWith(option, "-Xbootclasspath:")) {
-      parsed->boot_class_path_string_ = option.substr(strlen("-Xbootclasspath:")).data();
+      parsed->boot_class_path_string_ = option.substr(
+          strlen("-Xbootclasspath:")).data();
     } else if (option == "-classpath" || option == "-cp") {
       // TODO: support -Djava.class.path
       i++;
       if (i == options.size()) {
         // TODO: usage
-        LOG(FATAL) << "Missing required class path value for " << option;
+        LOG(FATAL)<< "Missing required class path value for " << option;
         return NULL;
       }
       const StringPiece& value = options[i].first;
       parsed->class_path_string_ = value.data();
     } else if (option == "bootclasspath") {
-      parsed->boot_class_path_
-          = reinterpret_cast<const std::vector<const DexFile*>*>(options[i].second);
+      parsed->boot_class_path_ = reinterpret_cast<const std::vector<
+          const DexFile*>*>(options[i].second);
     } else if (StartsWith(option, "-Ximage:")) {
       parsed->image_ = option.substr(strlen("-Ximage:")).data();
     } else if (StartsWith(option, "-Xcheck:jni")) {
       parsed->check_jni_ = true;
-    } else if (StartsWith(option, "-Xrunjdwp:") || StartsWith(option, "-agentlib:jdwp=")) {
+    } else if (StartsWith(option, "-Xrunjdwp:")
+        || StartsWith(option, "-agentlib:jdwp=")) {
       std::string tail(option.substr(option[1] == 'X' ? 10 : 15));
       if (tail == "help" || !Dbg::ParseJdwpOptions(tail)) {
-        LOG(FATAL) << "Example: -Xrunjdwp:transport=dt_socket,address=8000,server=y\n"
-                   << "Example: -Xrunjdwp:transport=dt_socket,address=localhost:6500,server=n";
+        LOG(FATAL)<< "Example: -Xrunjdwp:transport=dt_socket,address=8000,server=y\n"
+        << "Example: -Xrunjdwp:transport=dt_socket,address=localhost:6500,server=n";
         return NULL;
       }
     } else if (StartsWith(option, "-Xms")) {
@@ -495,25 +526,15 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
       }
       parsed->heap_max_free_ = size;
     } else if (StartsWith(option, "-XX:HeapTargetUtilization=")) {
-      std::istringstream iss(option.substr(strlen("-XX:HeapTargetUtilization=")));
-      double value;
-      iss >> value;
-      // Ensure that we have a value, there was no cruft after it and it satisfies a sensible range.
-      const bool sane_val = iss.eof() && (value >= 0.1) && (value <= 0.9);
-      if (!sane_val) {
-        if (ignore_unrecognized) {
-          continue;
-        }
-        LOG(FATAL) << "Invalid option '" << option << "'";
-        return NULL;
-      }
-      parsed->heap_target_utilization_ = value;
+      parsed->heap_target_utilization_ = ParseDoubleOrDie(option, "-XX:HeapTargetUtilization=",
+          0.1, 0.9, ignore_unrecognized,
+          parsed->heap_target_utilization_);
     } else if (StartsWith(option, "-XX:ParallelGCThreads=")) {
       parsed->parallel_gc_threads_ =
-          ParseMemoryOption(option.substr(strlen("-XX:ParallelGCThreads=")).c_str(), 1024);
+      ParseMemoryOption(option.substr(strlen("-XX:ParallelGCThreads=")).c_str(), 1024);
     } else if (StartsWith(option, "-XX:ConcGCThreads=")) {
       parsed->conc_gc_threads_ =
-          ParseMemoryOption(option.substr(strlen("-XX:ConcGCThreads=")).c_str(), 1024);
+      ParseMemoryOption(option.substr(strlen("-XX:ConcGCThreads=")).c_str(), 1024);
     } else if (StartsWith(option, "-Xss")) {
       size_t size = ParseMemoryOption(option.substr(strlen("-Xss")).c_str(), 1);
       if (size == 0) {
@@ -527,11 +548,11 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
       parsed->stack_size_ = size;
     } else if (StartsWith(option, "-XX:MaxSpinsBeforeThinLockInflation=")) {
       parsed->max_spins_before_thin_lock_inflation_ =
-          strtoul(option.substr(strlen("-XX:MaxSpinsBeforeThinLockInflation=")).c_str(),
-                  nullptr, 10);
+      strtoul(option.substr(strlen("-XX:MaxSpinsBeforeThinLockInflation=")).c_str(),
+          nullptr, 10);
     } else if (option == "-XX:LongPauseLogThreshold") {
       parsed->long_pause_log_threshold_ =
-          ParseMemoryOption(option.substr(strlen("-XX:LongPauseLogThreshold=")).c_str(), 1024);
+      ParseMemoryOption(option.substr(strlen("-XX:LongPauseLogThreshold=")).c_str(), 1024);
     } else if (option == "-XX:LongGCLogThreshold") {
           parsed->long_gc_log_threshold_ =
               ParseMemoryOption(option.substr(strlen("-XX:LongGCLogThreshold")).c_str(), 1024);
@@ -610,7 +631,7 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
       parsed->hook_is_sensitive_thread_ = reinterpret_cast<bool (*)()>(const_cast<void*>(options[i].second));
     } else if (option == "vfprintf") {
       parsed->hook_vfprintf_ =
-          reinterpret_cast<int (*)(FILE *, const char*, va_list)>(const_cast<void*>(options[i].second));
+      reinterpret_cast<int (*)(FILE *, const char*, va_list)>(const_cast<void*>(options[i].second));
     } else if (option == "exit") {
       parsed->hook_exit_ = reinterpret_cast<void(*)(jint)>(const_cast<void*>(options[i].second));
     } else if (option == "abort") {
@@ -631,6 +652,19 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
       Trace::SetDefaultClockSource(kProfilerClockSourceWall);
     } else if (option == "-Xprofile:dualclock") {
       Trace::SetDefaultClockSource(kProfilerClockSourceDual);
+    } else if (StartsWith(option, "-Xprofile:")) {
+      parsed->profile_output_filename_ = option.substr(strlen("-Xprofile:"));
+      parsed->profile_ = true;
+    } else if (StartsWith(option, "-Xprofile-period:")) {
+      parsed->profile_period_ = ParseIntegerOrDie(option);
+    } else if (StartsWith(option, "-Xprofile-duration:")) {
+      parsed->profile_duration_ = ParseIntegerOrDie(option);
+    } else if (StartsWith(option, "-Xprofile-interval:")) {
+      parsed->profile_interval_ = ParseIntegerOrDie(option);
+    } else if (StartsWith(option, "-Xprofile-backoff:")) {
+      parsed->profile_backoff_coefficient_ = ParseDoubleOrDie(option, "-Xprofile-backoff:",
+          1.0, 10.0, ignore_unrecognized,
+          parsed->profile_backoff_coefficient_);
     } else if (option == "-compiler-filter:interpret-only") {
       parsed->compiler_filter_ = kInterpretOnly;
     } else if (option == "-compiler-filter:space") {
@@ -670,7 +704,8 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   std::string core_jar("/core.jar");
   size_t core_jar_pos = parsed->boot_class_path_string_.find(core_jar);
   if (core_jar_pos != std::string::npos) {
-    parsed->boot_class_path_string_.replace(core_jar_pos, core_jar.size(), "/core-libart.jar");
+    parsed->boot_class_path_string_.replace(core_jar_pos, core_jar.size(),
+                                            "/core-libart.jar");
   }
 
   if (parsed->compiler_callbacks_ == nullptr && parsed->image_.empty()) {
@@ -712,7 +747,8 @@ jobject CreateSystemClassLoader() {
   CHECK(cl->EnsureInitialized(class_loader_class, true, true));
 
   mirror::ArtMethod* getSystemClassLoader =
-      class_loader_class->FindDirectMethod("getSystemClassLoader", "()Ljava/lang/ClassLoader;");
+      class_loader_class->FindDirectMethod("getSystemClassLoader",
+                                           "()Ljava/lang/ClassLoader;");
   CHECK(getSystemClassLoader != NULL);
 
   JValue result;
@@ -779,10 +815,16 @@ bool Runtime::Start() {
 
   finished_starting_ = true;
 
+  if (profile_) {
+    // User has asked for a profile using -Xprofile
+    StartProfiler(profile_output_filename_.c_str(), true);
+  }
+
   return true;
 }
 
-void Runtime::EndThreadBirth() EXCLUSIVE_LOCKS_REQUIRED(Locks::runtime_shutdown_lock_) {
+void Runtime::EndThreadBirth()
+    EXCLUSIVE_LOCKS_REQUIRED(Locks::runtime_shutdown_lock_) {
   DCHECK_GT(threads_being_born_, 0U);
   threads_being_born_--;
   if (shutting_down_started_ && threads_being_born_ == 0) {
@@ -798,14 +840,14 @@ bool Runtime::InitZygote() {
   // See storage config details at http://source.android.com/tech/storage/
   // Create private mount namespace shared by all children
   if (unshare(CLONE_NEWNS) == -1) {
-    PLOG(WARNING) << "Failed to unshare()";
+    PLOG(WARNING)<< "Failed to unshare()";
     return false;
   }
 
   // Mark rootfs as being a slave so that changes from default
   // namespace only flow into our children.
   if (mount("rootfs", "/", NULL, (MS_SLAVE | MS_REC), NULL) == -1) {
-    PLOG(WARNING) << "Failed to mount() rootfs as MS_SLAVE";
+    PLOG(WARNING)<< "Failed to mount() rootfs as MS_SLAVE";
     return false;
   }
 
@@ -816,7 +858,7 @@ bool Runtime::InitZygote() {
   if (target_base != NULL) {
     if (mount("tmpfs", target_base, "tmpfs", MS_NOSUID | MS_NODEV,
               "uid=0,gid=1028,mode=0751") == -1) {
-      LOG(WARNING) << "Failed to mount tmpfs to " << target_base;
+      LOG(WARNING)<< "Failed to mount tmpfs to " << target_base;
       return false;
     }
   }
@@ -861,7 +903,7 @@ void Runtime::StartDaemonThreads() {
                             WellKnownClasses::java_lang_Daemons_start);
   if (env->ExceptionCheck()) {
     env->ExceptionDescribe();
-    LOG(FATAL) << "Error starting java.lang.Daemons";
+    LOG(FATAL)<< "Error starting java.lang.Daemons";
   }
 
   VLOG(startup) << "Runtime::StartDaemonThreads exiting";
@@ -870,16 +912,18 @@ void Runtime::StartDaemonThreads() {
 bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   CHECK_EQ(sysconf(_SC_PAGE_SIZE), kPageSize);
 
-  UniquePtr<ParsedOptions> options(ParsedOptions::Create(raw_options, ignore_unrecognized));
+  UniquePtr<ParsedOptions> options(
+      ParsedOptions::Create(raw_options, ignore_unrecognized));
   if (options.get() == NULL) {
-    LOG(ERROR) << "Failed to parse options";
+    LOG(ERROR)<< "Failed to parse options";
     return false;
   }
   VLOG(startup) << "Runtime::Init -verbose:startup enabled";
 
   QuasiAtomic::Startup();
 
-  Monitor::Init(options->lock_profiling_threshold_, options->hook_is_sensitive_thread_);
+  Monitor::Init(options->lock_profiling_threshold_,
+                options->hook_is_sensitive_thread_);
 
   host_prefix_ = options->host_prefix_;
   boot_class_path_string_ = options->boot_class_path_string_;
@@ -905,21 +949,19 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   default_stack_size_ = options->stack_size_;
   stack_trace_file_ = options->stack_trace_file_;
 
-  max_spins_before_thin_lock_inflation_ = options->max_spins_before_thin_lock_inflation_;
+  max_spins_before_thin_lock_inflation_ = options
+      ->max_spins_before_thin_lock_inflation_;
 
   monitor_list_ = new MonitorList;
   thread_list_ = new ThreadList;
   intern_table_ = new InternTable;
 
-
   if (options->interpreter_only_) {
     GetInstrumentation()->ForceInterpretOnly();
   }
 
-  heap_ = new gc::Heap(options->heap_initial_size_,
-                       options->heap_growth_limit_,
-                       options->heap_min_free_,
-                       options->heap_max_free_,
+  heap_ = new gc::Heap(options->heap_initial_size_, options->heap_growth_limit_,
+                       options->heap_min_free_, options->heap_max_free_,
                        options->heap_target_utilization_,
                        options->heap_maximum_size_,
                        options->image_,
@@ -970,14 +1012,24 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   method_trace_file_ = options->method_trace_file_;
   method_trace_file_size_ = options->method_trace_file_size_;
 
+  // Extract the profile options.
+  profile_period_ = options->profile_period_;
+  profile_duration_ = options->profile_duration_;
+  profile_interval_ = options->profile_interval_;
+  profile_backoff_coefficient_ = options->profile_backoff_coefficient_;
+  profile_ = options->profile_;
+  profile_output_filename_ = options->profile_output_filename_;
+
   if (options->method_trace_) {
-    Trace::Start(options->method_trace_file_.c_str(), -1, options->method_trace_file_size_, 0,
-                 false, false, 0);
+    Trace::Start(options->method_trace_file_.c_str(), -1,
+                 options->method_trace_file_size_, 0, false, false, 0);
   }
 
   // Pre-allocate an OutOfMemoryError for the double-OOME case.
-  self->ThrowNewException(ThrowLocation(), "Ljava/lang/OutOfMemoryError;",
-                          "OutOfMemoryError thrown while trying to throw OutOfMemoryError; no stack available");
+  self->ThrowNewException(
+      ThrowLocation(),
+      "Ljava/lang/OutOfMemoryError;",
+      "OutOfMemoryError thrown while trying to throw OutOfMemoryError; no stack available");
   pre_allocated_OutOfMemoryError_ = self->GetException(NULL);
   self->ClearException();
 
@@ -1009,7 +1061,7 @@ void Runtime::InitNativeMethods() {
     std::string reason;
     self->TransitionFromSuspendedToRunnable();
     if (!instance_->java_vm_->LoadNativeLibrary(mapped_name, NULL, &reason)) {
-      LOG(FATAL) << "LoadNativeLibrary failed for \"" << mapped_name << "\": " << reason;
+      LOG(FATAL)<< "LoadNativeLibrary failed for \"" << mapped_name << "\": " << reason;
     }
     self->TransitionFromRunnableToSuspended(kNative);
   }
@@ -1023,13 +1075,15 @@ void Runtime::InitNativeMethods() {
 void Runtime::InitThreadGroups(Thread* self) {
   JNIEnvExt* env = self->GetJniEnv();
   ScopedJniEnvLocalRefState env_state(env);
-  main_thread_group_ =
-      env->NewGlobalRef(env->GetStaticObjectField(WellKnownClasses::java_lang_ThreadGroup,
-                                                  WellKnownClasses::java_lang_ThreadGroup_mainThreadGroup));
+  main_thread_group_ = env->NewGlobalRef(
+      env->GetStaticObjectField(
+          WellKnownClasses::java_lang_ThreadGroup,
+          WellKnownClasses::java_lang_ThreadGroup_mainThreadGroup));
   CHECK(main_thread_group_ != NULL || IsCompiler());
-  system_thread_group_ =
-      env->NewGlobalRef(env->GetStaticObjectField(WellKnownClasses::java_lang_ThreadGroup,
-                                                  WellKnownClasses::java_lang_ThreadGroup_systemThreadGroup));
+  system_thread_group_ = env->NewGlobalRef(
+      env->GetStaticObjectField(
+          WellKnownClasses::java_lang_ThreadGroup,
+          WellKnownClasses::java_lang_ThreadGroup_systemThreadGroup));
   CHECK(system_thread_group_ != NULL || IsCompiler());
 }
 
@@ -1121,38 +1175,38 @@ void Runtime::ResetStats(int kinds) {
 
 int32_t Runtime::GetStat(int kind) {
   RuntimeStats* stats;
-  if (kind < (1<<16)) {
+  if (kind < (1 << 16)) {
     stats = GetStats();
   } else {
     stats = Thread::Current()->GetStats();
     kind >>= 16;
   }
   switch (kind) {
-  case KIND_ALLOCATED_OBJECTS:
-    return stats->allocated_objects;
-  case KIND_ALLOCATED_BYTES:
-    return stats->allocated_bytes;
-  case KIND_FREED_OBJECTS:
-    return stats->freed_objects;
-  case KIND_FREED_BYTES:
-    return stats->freed_bytes;
-  case KIND_GC_INVOCATIONS:
-    return stats->gc_for_alloc_count;
-  case KIND_CLASS_INIT_COUNT:
-    return stats->class_init_count;
-  case KIND_CLASS_INIT_TIME:
-    // Convert ns to us, reduce to 32 bits.
-    return static_cast<int>(stats->class_init_time_ns / 1000);
-  case KIND_EXT_ALLOCATED_OBJECTS:
-  case KIND_EXT_ALLOCATED_BYTES:
-  case KIND_EXT_FREED_OBJECTS:
-  case KIND_EXT_FREED_BYTES:
-    return 0;  // backward compatibility
-  default:
-    LOG(FATAL) << "Unknown statistic " << kind;
-    return -1;  // unreachable
+    case KIND_ALLOCATED_OBJECTS:
+      return stats->allocated_objects;
+    case KIND_ALLOCATED_BYTES:
+      return stats->allocated_bytes;
+    case KIND_FREED_OBJECTS:
+      return stats->freed_objects;
+    case KIND_FREED_BYTES:
+      return stats->freed_bytes;
+    case KIND_GC_INVOCATIONS:
+      return stats->gc_for_alloc_count;
+    case KIND_CLASS_INIT_COUNT:
+      return stats->class_init_count;
+    case KIND_CLASS_INIT_TIME:
+      // Convert ns to us, reduce to 32 bits.
+      return static_cast<int>(stats->class_init_time_ns / 1000);
+    case KIND_EXT_ALLOCATED_OBJECTS:
+    case KIND_EXT_ALLOCATED_BYTES:
+    case KIND_EXT_FREED_OBJECTS:
+    case KIND_EXT_FREED_BYTES:
+      return 0;  // backward compatibility
+    default:
+      LOG(FATAL)<< "Unknown statistic " << kind;
+      return -1;  // unreachable
+    }
   }
-}
 
 void Runtime::BlockSignals() {
   SignalSet signals;
@@ -1164,11 +1218,12 @@ void Runtime::BlockSignals() {
   signals.Block();
 }
 
-bool Runtime::AttachCurrentThread(const char* thread_name, bool as_daemon, jobject thread_group,
-                                  bool create_peer) {
-  bool success = Thread::Attach(thread_name, as_daemon, thread_group, create_peer) != NULL;
+bool Runtime::AttachCurrentThread(const char* thread_name, bool as_daemon,
+                                  jobject thread_group, bool create_peer) {
+  bool success = Thread::Attach(thread_name, as_daemon, thread_group,
+                                create_peer) != NULL;
   if (thread_name == NULL) {
-    LOG(WARNING) << *Thread::Current() << " attached without supplying a name";
+    LOG(WARNING)<< *Thread::Current() << " attached without supplying a name";
   }
   return success;
 }
@@ -1176,23 +1231,23 @@ bool Runtime::AttachCurrentThread(const char* thread_name, bool as_daemon, jobje
 void Runtime::DetachCurrentThread() {
   Thread* self = Thread::Current();
   if (self == NULL) {
-    LOG(FATAL) << "attempting to detach thread that is not attached";
+    LOG(FATAL)<< "attempting to detach thread that is not attached";
   }
   if (self->HasManagedStack()) {
-    LOG(FATAL) << *Thread::Current() << " attempting to detach while still running code";
+    LOG(FATAL)<< *Thread::Current() << " attempting to detach while still running code";
   }
   thread_list_->Unregister(self);
 }
 
-  mirror::Throwable* Runtime::GetPreAllocatedOutOfMemoryError() const {
+mirror::Throwable* Runtime::GetPreAllocatedOutOfMemoryError() const {
   if (pre_allocated_OutOfMemoryError_ == NULL) {
-    LOG(ERROR) << "Failed to return pre-allocated OOME";
+    LOG(ERROR)<< "Failed to return pre-allocated OOME";
   }
   return pre_allocated_OutOfMemoryError_;
 }
 
-void Runtime::VisitConcurrentRoots(RootVisitor* visitor, void* arg, bool only_dirty,
-                                   bool clean_dirty) {
+void Runtime::VisitConcurrentRoots(RootVisitor* visitor, void* arg,
+                                   bool only_dirty, bool clean_dirty) {
   intern_table_->VisitRoots(visitor, arg, only_dirty, clean_dirty);
   class_linker_->VisitRoots(visitor, arg, only_dirty, clean_dirty);
 }
@@ -1220,13 +1275,16 @@ void Runtime::VisitNonThreadRoots(RootVisitor* visitor, void* arg) {
         visitor(pre_allocated_OutOfMemoryError_, arg));
     DCHECK(pre_allocated_OutOfMemoryError_ != nullptr);
   }
-  resolution_method_ = down_cast<mirror::ArtMethod*>(visitor(resolution_method_, arg));
+  resolution_method_ = down_cast<mirror::ArtMethod*>(
+      visitor(resolution_method_, arg));
   DCHECK(resolution_method_ != nullptr);
   if (HasImtConflictMethod()) {
-    imt_conflict_method_ = down_cast<mirror::ArtMethod*>(visitor(imt_conflict_method_, arg));
+    imt_conflict_method_ = down_cast<mirror::ArtMethod*>(
+        visitor(imt_conflict_method_, arg));
   }
   if (HasDefaultImt()) {
-    default_imt_ = down_cast<mirror::ObjectArray<mirror::ArtMethod>*>(visitor(default_imt_, arg));
+    default_imt_ = down_cast<mirror::ObjectArray<mirror::ArtMethod>*>(
+        visitor(default_imt_, arg));
   }
 
   for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
@@ -1248,15 +1306,19 @@ void Runtime::VisitNonConcurrentRoots(RootVisitor* visitor, void* arg) {
   VisitNonThreadRoots(visitor, arg);
 }
 
-void Runtime::VisitRoots(RootVisitor* visitor, void* arg, bool only_dirty, bool clean_dirty) {
+void Runtime::VisitRoots(RootVisitor* visitor, void* arg, bool only_dirty,
+                         bool clean_dirty) {
   VisitConcurrentRoots(visitor, arg, only_dirty, clean_dirty);
   VisitNonConcurrentRoots(visitor, arg);
 }
 
-mirror::ObjectArray<mirror::ArtMethod>* Runtime::CreateDefaultImt(ClassLinker* cl) {
+mirror::ObjectArray<mirror::ArtMethod>* Runtime::CreateDefaultImt(
+    ClassLinker* cl) {
   Thread* self = Thread::Current();
-  SirtRef<mirror::ObjectArray<mirror::ArtMethod> > imtable(self, cl->AllocArtMethodArray(self, 64));
-  mirror::ArtMethod* imt_conflict_method = Runtime::Current()->GetImtConflictMethod();
+  SirtRef<mirror::ObjectArray<mirror::ArtMethod> > imtable(
+      self, cl->AllocArtMethodArray(self, 64));
+  mirror::ArtMethod* imt_conflict_method = Runtime::Current()
+      ->GetImtConflictMethod();
   for (size_t i = 0; i < static_cast<size_t>(imtable->GetLength()); i++) {
     imtable->Set(i, imt_conflict_method);
   }
@@ -1272,7 +1334,8 @@ mirror::ArtMethod* Runtime::CreateImtConflictMethod() {
   // TODO: use a special method for imt conflict method saves
   method->SetDexMethodIndex(DexFile::kDexNoIndex);
   // When compiling, the code pointer will get set later when the image is loaded.
-  method->SetEntryPointFromCompiledCode(r->IsCompiler() ? NULL : GetImtConflictTrampoline(cl));
+  method->SetEntryPointFromCompiledCode(
+      r->IsCompiler() ? NULL : GetImtConflictTrampoline(cl));
   return method.get();
 }
 
@@ -1285,12 +1348,13 @@ mirror::ArtMethod* Runtime::CreateResolutionMethod() {
   // TODO: use a special method for resolution method saves
   method->SetDexMethodIndex(DexFile::kDexNoIndex);
   // When compiling, the code pointer will get set later when the image is loaded.
-  method->SetEntryPointFromCompiledCode(r->IsCompiler() ? NULL : GetResolutionTrampoline(cl));
+  method->SetEntryPointFromCompiledCode(
+      r->IsCompiler() ? NULL : GetResolutionTrampoline(cl));
   return method.get();
 }
 
-mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(InstructionSet instruction_set,
-                                                   CalleeSaveType type) {
+mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(
+    InstructionSet instruction_set, CalleeSaveType type) {
   Thread* self = Thread::Current();
   Runtime* r = Runtime::Current();
   ClassLinker* cl = r->GetClassLinker();
@@ -1300,51 +1364,61 @@ mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(InstructionSet instruction_se
   method->SetDexMethodIndex(DexFile::kDexNoIndex);
   method->SetEntryPointFromCompiledCode(NULL);
   if ((instruction_set == kThumb2) || (instruction_set == kArm)) {
-    uint32_t ref_spills = (1 << art::arm::R5) | (1 << art::arm::R6)  | (1 << art::arm::R7) |
-                          (1 << art::arm::R8) | (1 << art::arm::R10) | (1 << art::arm::R11);
-    uint32_t arg_spills = (1 << art::arm::R1) | (1 << art::arm::R2) | (1 << art::arm::R3);
+    uint32_t ref_spills = (1 << art::arm::R5) | (1 << art::arm::R6)
+        | (1 << art::arm::R7) | (1 << art::arm::R8) | (1 << art::arm::R10)
+        | (1 << art::arm::R11);
+    uint32_t arg_spills = (1 << art::arm::R1) | (1 << art::arm::R2)
+        | (1 << art::arm::R3);
     uint32_t all_spills = (1 << art::arm::R4) | (1 << art::arm::R9);
-    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0) |
-                           (type == kSaveAll ? all_spills : 0) | (1 << art::arm::LR);
-    uint32_t fp_all_spills = (1 << art::arm::S0)  | (1 << art::arm::S1)  | (1 << art::arm::S2) |
-                             (1 << art::arm::S3)  | (1 << art::arm::S4)  | (1 << art::arm::S5) |
-                             (1 << art::arm::S6)  | (1 << art::arm::S7)  | (1 << art::arm::S8) |
-                             (1 << art::arm::S9)  | (1 << art::arm::S10) | (1 << art::arm::S11) |
-                             (1 << art::arm::S12) | (1 << art::arm::S13) | (1 << art::arm::S14) |
-                             (1 << art::arm::S15) | (1 << art::arm::S16) | (1 << art::arm::S17) |
-                             (1 << art::arm::S18) | (1 << art::arm::S19) | (1 << art::arm::S20) |
-                             (1 << art::arm::S21) | (1 << art::arm::S22) | (1 << art::arm::S23) |
-                             (1 << art::arm::S24) | (1 << art::arm::S25) | (1 << art::arm::S26) |
-                             (1 << art::arm::S27) | (1 << art::arm::S28) | (1 << art::arm::S29) |
-                             (1 << art::arm::S30) | (1 << art::arm::S31);
+    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0)
+        | (type == kSaveAll ? all_spills : 0) | (1 << art::arm::LR);
+    uint32_t fp_all_spills = (1 << art::arm::S0) | (1 << art::arm::S1)
+        | (1 << art::arm::S2) | (1 << art::arm::S3) | (1 << art::arm::S4)
+        | (1 << art::arm::S5) | (1 << art::arm::S6) | (1 << art::arm::S7)
+        | (1 << art::arm::S8) | (1 << art::arm::S9) | (1 << art::arm::S10)
+        | (1 << art::arm::S11) | (1 << art::arm::S12) | (1 << art::arm::S13)
+        | (1 << art::arm::S14) | (1 << art::arm::S15) | (1 << art::arm::S16)
+        | (1 << art::arm::S17) | (1 << art::arm::S18) | (1 << art::arm::S19)
+        | (1 << art::arm::S20) | (1 << art::arm::S21) | (1 << art::arm::S22)
+        | (1 << art::arm::S23) | (1 << art::arm::S24) | (1 << art::arm::S25)
+        | (1 << art::arm::S26) | (1 << art::arm::S27) | (1 << art::arm::S28)
+        | (1 << art::arm::S29) | (1 << art::arm::S30) | (1 << art::arm::S31);
     uint32_t fp_spills = type == kSaveAll ? fp_all_spills : 0;
-    size_t frame_size = RoundUp((__builtin_popcount(core_spills) /* gprs */ +
-                                 __builtin_popcount(fp_spills) /* fprs */ +
-                                 1 /* Method* */) * kPointerSize, kStackAlignment);
+    size_t frame_size = RoundUp(
+        (__builtin_popcount(core_spills) /* gprs */
+            + __builtin_popcount(fp_spills) /* fprs */+ 1 /* Method* */)
+            * kPointerSize,
+        kStackAlignment);
     method->SetFrameSizeInBytes(frame_size);
     method->SetCoreSpillMask(core_spills);
     method->SetFpSpillMask(fp_spills);
   } else if (instruction_set == kMips) {
-    uint32_t ref_spills = (1 << art::mips::S2) | (1 << art::mips::S3) | (1 << art::mips::S4) |
-                          (1 << art::mips::S5) | (1 << art::mips::S6) | (1 << art::mips::S7) |
-                          (1 << art::mips::GP) | (1 << art::mips::FP);
-    uint32_t arg_spills = (1 << art::mips::A1) | (1 << art::mips::A2) | (1 << art::mips::A3);
+    uint32_t ref_spills = (1 << art::mips::S2) | (1 << art::mips::S3)
+        | (1 << art::mips::S4) | (1 << art::mips::S5) | (1 << art::mips::S6)
+        | (1 << art::mips::S7) | (1 << art::mips::GP) | (1 << art::mips::FP);
+    uint32_t arg_spills = (1 << art::mips::A1) | (1 << art::mips::A2)
+        | (1 << art::mips::A3);
     uint32_t all_spills = (1 << art::mips::S0) | (1 << art::mips::S1);
-    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0) |
-                           (type == kSaveAll ? all_spills : 0) | (1 << art::mips::RA);
-    size_t frame_size = RoundUp((__builtin_popcount(core_spills) /* gprs */ +
-                                (type == kRefsAndArgs ? 0 : 3) + 1 /* Method* */) *
-                                kPointerSize, kStackAlignment);
+    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0)
+        | (type == kSaveAll ? all_spills : 0) | (1 << art::mips::RA);
+    size_t frame_size = RoundUp(
+        (__builtin_popcount(core_spills) /* gprs */
+            + (type == kRefsAndArgs ? 0 : 3) + 1 /* Method* */) * kPointerSize,
+        kStackAlignment);
     method->SetFrameSizeInBytes(frame_size);
     method->SetCoreSpillMask(core_spills);
     method->SetFpSpillMask(0);
   } else if (instruction_set == kX86) {
-    uint32_t ref_spills = (1 << art::x86::EBP) | (1 << art::x86::ESI) | (1 << art::x86::EDI);
-    uint32_t arg_spills = (1 << art::x86::ECX) | (1 << art::x86::EDX) | (1 << art::x86::EBX);
-    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0) |
-                         (1 << art::x86::kNumberOfCpuRegisters);  // fake return address callee save
-    size_t frame_size = RoundUp((__builtin_popcount(core_spills) /* gprs */ +
-                                 1 /* Method* */) * kPointerSize, kStackAlignment);
+    uint32_t ref_spills = (1 << art::x86::EBP) | (1 << art::x86::ESI)
+        | (1 << art::x86::EDI);
+    uint32_t arg_spills = (1 << art::x86::ECX) | (1 << art::x86::EDX)
+        | (1 << art::x86::EBX);
+    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0)
+        | (1 << art::x86::kNumberOfCpuRegisters);  // fake return address callee save
+    size_t frame_size = RoundUp(
+        (__builtin_popcount(core_spills) /* gprs */+ 1 /* Method* */)
+            * kPointerSize,
+        kStackAlignment);
     method->SetFrameSizeInBytes(frame_size);
     method->SetCoreSpillMask(core_spills);
     method->SetFpSpillMask(0);
@@ -1366,22 +1440,26 @@ void Runtime::AllowNewSystemWeaks() {
   java_vm_->AllowNewWeakGlobals();
 }
 
-void Runtime::SetCalleeSaveMethod(mirror::ArtMethod* method, CalleeSaveType type) {
+void Runtime::SetCalleeSaveMethod(mirror::ArtMethod* method,
+                                  CalleeSaveType type) {
   DCHECK_LT(static_cast<int>(type), static_cast<int>(kLastCalleeSaveType));
   callee_save_methods_[type] = method;
 }
 
-const std::vector<const DexFile*>& Runtime::GetCompileTimeClassPath(jobject class_loader) {
+const std::vector<const DexFile*>& Runtime::GetCompileTimeClassPath(
+    jobject class_loader) {
   if (class_loader == NULL) {
     return GetClassLinker()->GetBootClassPath();
   }
   CHECK(UseCompileTimeClassPath());
-  CompileTimeClassPaths::const_iterator it = compile_time_class_paths_.find(class_loader);
+  CompileTimeClassPaths::const_iterator it = compile_time_class_paths_.find(
+      class_loader);
   CHECK(it != compile_time_class_paths_.end());
   return it->second;
 }
 
-void Runtime::SetCompileTimeClassPath(jobject class_loader, std::vector<const DexFile*>& class_path) {
+void Runtime::SetCompileTimeClassPath(jobject class_loader,
+                                      std::vector<const DexFile*>& class_path) {
   CHECK(!IsStarted());
   use_compile_time_class_path_ = true;
   compile_time_class_paths_.Put(class_loader, class_path);
@@ -1401,4 +1479,8 @@ void Runtime::RemoveMethodVerifier(verifier::MethodVerifier* verifier) {
   method_verifiers_.erase(it);
 }
 
-}  // namespace art
+void Runtime::StartProfiler(const char *appDir, bool startImmediately) {
+  Profiler::Start(profile_period_, profile_duration_, appDir, profile_interval_,
+      profile_backoff_coefficient_, startImmediately);
+}
+}   // namespace art

@@ -41,6 +41,11 @@ class Barrier {
   // Increment the count by delta, wait on condition if count is non zero.
   void Increment(Thread* self, int delta);
 
+  // Increment the count by delta, wait on condition if count is non zero, with a timeout
+  void Increment(Thread* self, int delta, uint32_t timeout_ms);
+
+  std::string DebugString();
+
  private:
   void SetCountLocked(Thread* self, int count) EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
