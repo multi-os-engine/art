@@ -139,6 +139,12 @@ class Runtime {
     size_t tiny_method_threshold_;
     size_t num_dex_methods_threshold_;
     bool sea_ir_mode_;
+    bool profile_;
+    std::string profile_output_filename_;
+    int profile_period_;
+    int profile_duration_;
+    int profile_interval_;
+    double profile_backoff_coefficient_;
 
    private:
     ParsedOptions() {}
@@ -455,6 +461,8 @@ class Runtime {
   const std::vector<const DexFile*>& GetCompileTimeClassPath(jobject class_loader);
   void SetCompileTimeClassPath(jobject class_loader, std::vector<const DexFile*>& class_path);
 
+  void StartProfiler(const char *appDir, bool startImmediately = false);
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -565,6 +573,14 @@ class Runtime {
 
   bool stats_enabled_;
   RuntimeStats stats_;
+
+  // Runtime profile support.
+  bool profile_;
+  std::string profile_output_filename_;
+  int profile_period_;                  // Generate profile every n seconds.
+  int profile_duration_;                // Run profile for n seconds.
+  int profile_interval_;                // Microseconds between samples.
+  double profile_backoff_coefficient_;  // Coefficient to exponential backoff.
 
   bool method_trace_;
   std::string method_trace_file_;
