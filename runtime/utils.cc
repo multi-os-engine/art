@@ -923,6 +923,9 @@ void SetThreadName(const char* thread_name) {
   int hasAt = 0;
   int hasDot = 0;
   const char* s = thread_name;
+  if (!thread_name) {
+    return NULL;
+  }
   while (*s) {
     if (*s == '.') {
       hasDot = 1;

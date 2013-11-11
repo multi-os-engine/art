@@ -36,6 +36,7 @@
 #include "ScopedPrimitiveArray.h"
 #include "ScopedUtfChars.h"
 #include "thread.h"
+#include "utils.h"
 
 #if defined(HAVE_PRCTL)
 #include <sys/prctl.h>
@@ -496,6 +497,10 @@ static pid_t ForkAndSpecializeCommon(JNIEnv* env, uid_t uid, gid_t gid, jintArra
                     << (is_system_server ? "true" : "false") << ", "
                     << "\"" << se_info_c_str << "\", \"" << se_name_c_str << "\") failed";
       }
+
+      // Set the comm field to the nice name rather than app_process
+      se_name_c_str = (is_system_server && !niceName) ? "system_server" : se_name_c_str;
+      SetThreadName(se_name_c_str);
     }
 #else
     UNUSED(is_system_server);
