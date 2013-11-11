@@ -920,6 +920,9 @@ bool EndsWith(const std::string& s, const char* suffix) {
 }
 
 void SetThreadName(const char* thread_name) {
+  if (thread_name == NULL) {
+    return;
+  }
   int hasAt = 0;
   int hasDot = 0;
   const char* s = thread_name;
