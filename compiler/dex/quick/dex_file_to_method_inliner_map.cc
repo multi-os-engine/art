@@ -30,9 +30,9 @@
 
 namespace art {
 
-DexFileToMethodInlinerMap::DexFileToMethodInlinerMap(const CompilerDriver* compiler)
-    : compiler_(compiler),
-      mutex_("inline_helper_mutex") {
+DexFileToMethodInlinerMap::DexFileToMethodInlinerMap(const CompilerDriver* driver)
+    : driver_(driver),
+      lock_("DexFileToMethodInlinerMap lock", kDexFileToMethodInlinerMapLock) {
 }
 
 DexFileToMethodInlinerMap::~DexFileToMethodInlinerMap() {
@@ -41,38 +41,49 @@ DexFileToMethodInlinerMap::~DexFileToMethodInlinerMap() {
   }
 }
 
-const DexFileMethodInliner& DexFileToMethodInlinerMap::GetMethodInliner(const DexFile* dex_file) {
+DexFileMethodInliner* DexFileToMethodInlinerMap::GetMethodInliner(const DexFile* dex_file) {
   Thread* self = Thread::Current();
   {
-    ReaderMutexLock lock(self, mutex_);
+    ReaderMutexLock mu(self, lock_);
     auto it = inliners_.find(dex_file);
     if (it != inliners_.end()) {
-      return *it->second;
+      return it->second;
     }
   }
 
-  WriterMutexLock lock(self, mutex_);
-  DexFileMethodInliner** inliner = &inliners_[dex_file];  // inserts new entry if not found
-  if (*inliner) {
-    return **inliner;
+  // We need to acquire our lock_ to modify inliners_ but we want to release it
+  // before we initialize the new inliner. However, we need to acquire the
+  // new inliner's lock_ before we release our lock_ to prevent another thread
+  // from using the uninitialized inliner. This requires explicit calls to
+  // ExclusiveLock()/ExclusiveUnlock() on one of the locks, the other one
+  // can use WriterMutexLock.
+  DexFileMethodInliner* locked_inliner;
+  {
+    WriterMutexLock mu(self, lock_);
+    DexFileMethodInliner** inliner = &inliners_[dex_file];  // inserts new entry if not found
+    if (*inliner) {
+      return *inliner;
+    }
+    switch (driver_->GetInstructionSet()) {
+      case kThumb2:
+        *inliner = new ArmDexFileMethodInliner;
+        break;
+      case kX86:
+        *inliner = new X86DexFileMethodInliner;
+        break;
+      case kMips:
+        *inliner = new MipsDexFileMethodInliner;
+        break;
+      default:
+        LOG(FATAL) << "Unexpected instruction set: " << driver_->GetInstructionSet();
+    }
+    DCHECK(*inliner != nullptr);
+    locked_inliner = *inliner;
+    locked_inliner->lock_.ExclusiveLock(self);  // Acquire inliner's lock_ before releasing lock_.
   }
-  switch (compiler_->GetInstructionSet()) {
-    case kThumb2:
-      *inliner = new ArmDexFileMethodInliner;
-      break;
-    case kX86:
-      *inliner = new X86DexFileMethodInliner;
-      break;
-    case kMips:
-      *inliner = new MipsDexFileMethodInliner;
-      break;
-    default:
-      LOG(FATAL) << "Unexpected instruction set: " << compiler_->GetInstructionSet();
-  }
-  DCHECK(*inliner != nullptr);
-  // TODO: per-dex file locking for the intrinsics container filling.
-  (*inliner)->FindIntrinsics(dex_file);
-  return **inliner;
+  locked_inliner->FindIntrinsics(dex_file);
+  locked_inliner->lock_.ExclusiveUnlock(self);
+  return locked_inliner;
 }
 
 }  // namespace art

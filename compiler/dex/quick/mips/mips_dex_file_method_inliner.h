@@ -26,9 +26,9 @@ class MipsDexFileMethodInliner : public DexFileMethodInliner {
     MipsDexFileMethodInliner();
     ~MipsDexFileMethodInliner();
 
-    void FindIntrinsics(const DexFile* dex_file);
-
   private:
+    void FindIntrinsics(const DexFile* dex_file) EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
     static const IntrinsicDef kIntrinsicMethods[];
 };
 
