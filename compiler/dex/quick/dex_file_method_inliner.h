@@ -19,6 +19,9 @@
 
 #include <stdint.h>
 #include <map>
+#include "base/mutex.h"
+#include "base/macros.h"
+#include "locks.h"
 
 namespace art {
 
@@ -92,14 +95,9 @@ class DexFileMethodInliner {
     virtual ~DexFileMethodInliner();
 
     /**
-     * Find all known intrinsic methods in the dex_file and cache their indices.
-     */
-    virtual void FindIntrinsics(const DexFile* dex_file) = 0;
-
-    /**
      * Check whether a particular method index corresponds to an intrinsic function.
      */
-    bool IsIntrinsic(uint32_t method_index) const;
+    bool IsIntrinsic(uint32_t method_index) LOCKS_EXCLUDED(lock_);
 
     /**
      * Generate code for an intrinsic function invocation.
@@ -107,7 +105,7 @@ class DexFileMethodInliner {
      * TODO: This should be target-specific. For the time being,
      * it's shared since it dispatches everything to backend.
      */
-    bool GenIntrinsic(Mir2Lir* backend, CallInfo* info) const;
+    bool GenIntrinsic(Mir2Lir* backend, CallInfo* info) LOCKS_EXCLUDED(lock_);
 
   protected:
     DexFileMethodInliner();
@@ -304,13 +302,25 @@ class DexFileMethodInliner {
                                     const MethodDef& method_def);
 
     void DoFindIntrinsics(const DexFile* dex_file, IndexCache* cache,
-                          const IntrinsicDef* defs, uint32_t def_count);
+                          const IntrinsicDef* defs, uint32_t def_count)
+                          EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
+    ReaderWriterMutex lock_;
     /*
      * Maps method indexes (for the particular DexFile) to Intrinsic defintions.
      */
-    std::map<uint32_t, Intrinsic> intrinsics_;
+    std::map<uint32_t, Intrinsic> intrinsics_ GUARDED_BY(lock_);
     const DexFile* dex_file_;
+
+  private:
+    /**
+     * Find all known intrinsic methods in the dex_file and cache their indices.
+     *
+     * Only DexFileToMethodInlinerMap may call this function to initialize the inliner.
+     */
+    virtual void FindIntrinsics(const DexFile* dex_file) EXCLUSIVE_LOCKS_REQUIRED(lock_) = 0;
+
+    friend class DexFileToMethodInlinerMap;
 };
 
 }  // namespace art

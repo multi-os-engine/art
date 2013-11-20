@@ -26,9 +26,9 @@ class X86DexFileMethodInliner : public DexFileMethodInliner {
     X86DexFileMethodInliner();
     ~X86DexFileMethodInliner();
 
-    void FindIntrinsics(const DexFile* dex_file);
-
   private:
+    void FindIntrinsics(const DexFile* dex_file) EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
     static const IntrinsicDef kIntrinsicMethods[];
 };
 

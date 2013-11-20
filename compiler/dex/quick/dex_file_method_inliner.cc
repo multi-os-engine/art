@@ -16,6 +16,10 @@
 
 #include <algorithm>
 #include "base/macros.h"
+#include "base/mutex.h"
+#include "base/mutex-inl.h"
+#include "thread.h"
+#include "thread-inl.h"
 #include "dex/mir_graph.h"
 
 #include "dex_file_method_inliner.h"
@@ -161,7 +165,8 @@ DexFileMethodInliner::~DexFileMethodInliner() {
 }
 
 DexFileMethodInliner::DexFileMethodInliner()
-    : dex_file_(NULL) {
+    : lock_("DexFileMethodInliner lock", kDexFileMethodInlinerLock),
+      dex_file_(NULL) {
   COMPILE_ASSERT(kClassCacheFirst == 0, kClassCacheFirst_not_0);
   COMPILE_ASSERT(arraysize(kClassCacheNames) == kClassCacheLast, bad_arraysize_kClassCacheNames);
   COMPILE_ASSERT(kNameCacheFirst == 0, kNameCacheFirst_not_0);
@@ -170,16 +175,21 @@ DexFileMethodInliner::DexFileMethodInliner()
   COMPILE_ASSERT(arraysize(kProtoCacheDefs) == kProtoCacheLast, bad_arraysize_kProtoCacheNames);
 }
 
-bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index) const {
+bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index) {
+  ReaderMutexLock mu(Thread::Current(), lock_);
   return intrinsics_.find(method_index) != intrinsics_.end();
 }
 
-bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) const {
-  auto it = intrinsics_.find(info->index);
-  if (it == intrinsics_.end()) {
-    return false;
+bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
+  Intrinsic intrinsic;
+  {
+    ReaderMutexLock mu(Thread::Current(), lock_);
+    auto it = intrinsics_.find(info->index);
+    if (it == intrinsics_.end()) {
+      return false;
+    }
+    intrinsic = it->second;
   }
-  const Intrinsic& intrinsic = it->second;
   switch (intrinsic.opcode) {
     case kIntrinsicDoubleCvt:
       return backend->GenInlinedDoubleCvt(info);
