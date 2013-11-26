@@ -149,6 +149,13 @@ class MANAGED PrimitiveArray : public Array {
     array_class_ = NULL;
   }
 
+  static void VisitRoots(RootVisitor* visitor, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (array_class_ != nullptr) {
+      array_class_ = down_cast<Class*>(visitor(reinterpret_cast<Object*>(array_class_), arg));
+    }
+  }
+
  private:
   static Class* array_class_;
 
