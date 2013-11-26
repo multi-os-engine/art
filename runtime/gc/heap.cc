@@ -286,6 +286,10 @@ void Heap::ChangeAllocator(AllocatorType allocator) {
     current_allocator_ = allocator;
     SetQuickAllocEntryPointsAllocator(current_allocator_);
     Runtime::Current()->GetInstrumentation()->ResetQuickAllocEntryPoints();
+    if (AllocatorHasConcurrentGC(allocator)) {
+      // Make sure that we don't get stuck in a state where we don't trigger concurrent GC.
+      concurrent_start_bytes_ = max_allowed_footprint_;
+    }
   }
 }
 
@@ -880,8 +884,11 @@ void Heap::RecordFree(size_t freed_objects, size_t freed_bytes) {
 }
 
 mirror::Object* Heap::AllocateInternalWithGc(Thread* self, AllocatorType allocator,
-                                             size_t alloc_size, size_t* bytes_allocated) {
+                                             size_t alloc_size, size_t* bytes_allocated,
+                                             mirror::Class** klass) {
   mirror::Object* ptr = nullptr;
+  DCHECK(klass != nullptr);
+  SirtRef<mirror::Class> sirt_klass(self, *klass);
   // The allocation failed. If the GC is running, block until it completes, and then retry the
   // allocation.
   collector::GcType last_gc = WaitForGcToComplete(self);
@@ -922,6 +929,7 @@ mirror::Object* Heap::AllocateInternalWithGc(Thread* self, AllocatorType allocat
       ThrowOutOfMemoryError(self, alloc_size, false);
     }
   }
+  *klass = sirt_klass.get();
   return ptr;
 }
 

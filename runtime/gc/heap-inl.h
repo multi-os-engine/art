@@ -51,14 +51,10 @@ inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self, mirror::Clas
   } else {
     obj = TryToAllocate<kInstrumented>(self, allocator, byte_count, false, &bytes_allocated);
   }
-
   if (UNLIKELY(obj == nullptr)) {
-    SirtRef<mirror::Class> sirt_c(self, klass);
-    obj = AllocateInternalWithGc(self, allocator, byte_count, &bytes_allocated);
+    obj = AllocateInternalWithGc(self, allocator, byte_count, &bytes_allocated, &klass);
     if (obj == nullptr) {
       return nullptr;
-    } else {
-      klass = sirt_c.get();
     }
   }
   obj->SetClass(klass);
