@@ -880,8 +880,11 @@ void Heap::RecordFree(size_t freed_objects, size_t freed_bytes) {
 }
 
 mirror::Object* Heap::AllocateInternalWithGc(Thread* self, AllocatorType allocator,
-                                             size_t alloc_size, size_t* bytes_allocated) {
+                                             size_t alloc_size, size_t* bytes_allocated,
+                                             mirror::Class** klass) {
   mirror::Object* ptr = nullptr;
+  DCHECK(klass != nullptr);
+  SirtRef<mirror::Class> sirt_klass(self, *klass);
   // The allocation failed. If the GC is running, block until it completes, and then retry the
   // allocation.
   collector::GcType last_gc = WaitForGcToComplete(self);
@@ -922,6 +925,7 @@ mirror::Object* Heap::AllocateInternalWithGc(Thread* self, AllocatorType allocat
       ThrowOutOfMemoryError(self, alloc_size, false);
     }
   }
+  *klass = sirt_klass.get();
   return ptr;
 }
 

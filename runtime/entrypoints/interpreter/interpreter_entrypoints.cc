@@ -33,9 +33,9 @@ extern "C" void artInterpreterToCompiledCodeBridge(Thread* self, MethodHelper& m
   if (method->IsStatic()) {
     mirror::Class* declaringClass = method->GetDeclaringClass();
     if (UNLIKELY(!declaringClass->IsInitializing())) {
-      if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(declaringClass,
-                                                                            true, true))) {
-        DCHECK(Thread::Current()->IsExceptionPending());
+      SirtRef<mirror::Class> sirt_c(self, declaringClass);
+      if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(sirt_c, true, true))) {
+        DCHECK(self->IsExceptionPending());
         return;
       }
       CHECK(declaringClass->IsInitializing());
