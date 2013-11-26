@@ -320,14 +320,16 @@ class Runtime {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Visit all of the roots we can do safely do concurrently.
-  void VisitConcurrentRoots(RootVisitor* visitor, void* arg, bool only_dirty, bool clean_dirty);
+  void VisitConcurrentRoots(RootVisitor* visitor, void* arg, bool only_dirty, bool clean_dirty)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Visit all of the non thread roots, we can do this with mutators unpaused.
-  void VisitNonThreadRoots(RootVisitor* visitor, void* arg);
+  void VisitNonThreadRoots(RootVisitor* visitor, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Visit all other roots which must be done with mutators suspended.
   void VisitNonConcurrentRoots(RootVisitor* visitor, void* arg)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Sweep system weaks, the system weak is deleted if the visitor return nullptr. Otherwise, the
   // system weak is updated to be the visitor's returned value.
