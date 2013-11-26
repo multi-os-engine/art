@@ -31,8 +31,8 @@ static bool GetFieldValue(const ScopedFastNativeObjectAccess& soa, mirror::Objec
                           mirror::ArtField* f, JValue& value, bool allow_references)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   DCHECK_EQ(value.GetJ(), 0LL);
-  if (!Runtime::Current()->GetClassLinker()->EnsureInitialized(f->GetDeclaringClass(),
-                                                               true, true)) {
+  if (!Runtime::Current()->GetClassLinker()->EnsureInitialized(f->GetDeclaringClass(), true,
+                                                               true)) {
     return false;
   }
   switch (FieldHelper(f).GetTypeAsPrimitiveType()) {

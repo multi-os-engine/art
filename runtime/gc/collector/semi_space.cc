@@ -183,6 +183,10 @@ void SemiSpace::MarkingPhase() {
   UpdateAndMarkModUnion();
   // Recursively mark remaining objects.
   MarkReachableObjects();
+  // Clear the whole card table since we can not get any additional dirty cards during the
+  // paused GC. This saves memory.
+  timings_.NewSplit("ClearCardTable");
+  GetHeap()->GetCardTable()->ClearCardTable();
 }
 
 bool SemiSpace::IsImmuneSpace(const space::ContinuousSpace* space) const {
@@ -318,8 +322,6 @@ Object* SemiSpace::MarkObject(Object* obj) {
         memcpy(reinterpret_cast<void*>(forward_address), obj, object_size);
         // Make sure to only update the forwarding address AFTER you copy the object so that the
         // monitor word doesn't get stomped over.
-        COMPILE_ASSERT(sizeof(uint32_t) == sizeof(mirror::Object*),
-                       monitor_size_must_be_same_as_object);
         obj->SetLockWord(LockWord::FromForwardingAddress(reinterpret_cast<size_t>(forward_address)));
         MarkStackPush(forward_address);
       }
