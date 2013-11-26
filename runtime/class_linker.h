@@ -45,7 +45,7 @@ namespace mirror {
 }  // namespace mirror
 
 class InternTable;
-class ObjectLock;
+template<class T> class ObjectLock;
 class ScopedObjectAccess;
 template<class T> class SirtRef;
 
@@ -204,6 +204,8 @@ class ClassLinker {
   // Returns true on success, false if there's an exception pending.
   // can_run_clinit=false allows the compiler to attempt to init a class,
   // given the restriction that no <clinit> execution is possible.
+  bool EnsureInitialized(SirtRef<mirror::Class>& c, bool can_run_clinit, bool can_init_fields)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool EnsureInitialized(mirror::Class* c, bool can_run_clinit, bool can_init_fields)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -303,11 +305,12 @@ class ClassLinker {
                                                                               size_t length)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void VerifyClass(mirror::Class* klass) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void VerifyClass(SirtRef<mirror::Class>& klass) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool VerifyClassUsingOatFile(const DexFile& dex_file, mirror::Class* klass,
                                mirror::Class::Status& oat_file_class_status)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void ResolveClassExceptionHandlerTypes(const DexFile& dex_file, mirror::Class* klass)
+  void ResolveClassExceptionHandlerTypes(const DexFile& dex_file,
+                                         SirtRef<mirror::Class>& klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void ResolveMethodExceptionHandlerTypes(const DexFile& dex_file, mirror::ArtMethod* klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -433,15 +436,16 @@ class ClassLinker {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool IsDexFileRegisteredLocked(const DexFile& dex_file) const SHARED_LOCKS_REQUIRED(dex_lock_);
 
-  bool InitializeClass(mirror::Class* klass, bool can_run_clinit, bool can_init_parents)
+  bool InitializeClass(SirtRef<mirror::Class>& klass, bool can_run_clinit, bool can_init_parents)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  bool WaitForInitializeClass(mirror::Class* klass, Thread* self, ObjectLock& lock);
-  bool ValidateSuperClassDescriptors(const mirror::Class* klass)
+  bool WaitForInitializeClass(SirtRef<mirror::Class>& klass, Thread* self,
+                              ObjectLock<mirror::Class>& lock);
+  bool ValidateSuperClassDescriptors(SirtRef<mirror::Class>& klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool IsSameDescriptorInDifferentClassContexts(const char* descriptor,
-                                                const mirror::Class* klass1,
-                                                const mirror::Class* klass2)
+                                                SirtRef<mirror::ClassLoader>& class_loader1,
+                                                SirtRef<mirror::ClassLoader>& class_loader2)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool IsSameMethodSignatureInDifferentClassContexts(const mirror::ArtMethod* method,

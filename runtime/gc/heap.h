@@ -126,11 +126,6 @@ enum ProcessState {
   kProcessStateJankImperceptible = 1,
 };
 
-// If true, measure the total allocation time.
-static constexpr bool kMeasureAllocationTime = false;
-// Primitive arrays larger than this size are put in the large object space.
-static constexpr size_t kLargeObjectThreshold = 3 * kPageSize;
-
 class Heap {
  public:
   // If true, measure the total allocation time.

@@ -230,8 +230,13 @@ static jmethodID FindMethodID(ScopedObjectAccess& soa, jclass jni_class,
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   Class* c = soa.Decode<Class*>(jni_class);
   DCHECK(c != nullptr);
-  if (!Runtime::Current()->GetClassLinker()->EnsureInitialized(c, true, true)) {
-    return NULL;
+
+  if (UNLIKELY(!c->IsInitialized())) {
+    SirtRef<mirror::Class> sirt_c(soa.Self(), c);
+    if (!Runtime::Current()->GetClassLinker()->EnsureInitialized(sirt_c, true, true)) {
+      return nullptr;
+    }
+    c = sirt_c.get();
   }
 
   ArtMethod* method = NULL;

@@ -95,8 +95,10 @@ class ClassLinkerTest : public CommonTest {
                         const std::string& component_type,
                         mirror::ClassLoader* class_loader)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    SirtRef<mirror::ClassLoader> loader(Thread::Current(), class_loader);
-    mirror::Class* array = class_linker_->FindClass(array_descriptor.c_str(), loader);
+    Thread* self = Thread::Current();
+    SirtRef<mirror::ClassLoader> loader(self, class_loader);
+    SirtRef<mirror::Class> array(self,
+                                 class_linker_->FindClass(array_descriptor.c_str(), loader));
     ClassHelper array_component_ch(array->GetComponentType());
     EXPECT_STREQ(component_type.c_str(), array_component_ch.GetDescriptor());
     EXPECT_EQ(class_loader, array->GetClassLoader());
@@ -104,10 +106,10 @@ class ClassLinkerTest : public CommonTest {
     AssertArrayClass(array_descriptor, array);
   }
 
-  void AssertArrayClass(const std::string& array_descriptor, mirror::Class* array)
+  void AssertArrayClass(const std::string& array_descriptor, SirtRef<mirror::Class>& array)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    ClassHelper kh(array);
-    ASSERT_TRUE(array != NULL);
+    ClassHelper kh(array.get());
+    ASSERT_TRUE(array.get() != NULL);
     ASSERT_TRUE(array->GetClass() != NULL);
     ASSERT_EQ(array->GetClass(), array->GetClass()->GetClass());
     EXPECT_TRUE(array->GetClass()->GetSuperClass() != NULL);
@@ -135,15 +137,14 @@ class ClassLinkerTest : public CommonTest {
     EXPECT_EQ(0U, array->NumVirtualMethods());
     EXPECT_EQ(0U, array->NumInstanceFields());
     EXPECT_EQ(0U, array->NumStaticFields());
-    kh.ChangeClass(array);
+    kh.ChangeClass(array.get());
     EXPECT_EQ(2U, kh.NumDirectInterfaces());
     EXPECT_TRUE(array->GetVTable() != NULL);
     EXPECT_EQ(2, array->GetIfTableCount());
-    mirror::IfTable* iftable = array->GetIfTable();
-    ASSERT_TRUE(iftable != NULL);
+    ASSERT_TRUE(array->GetIfTable() != NULL);
     kh.ChangeClass(kh.GetDirectInterface(0));
     EXPECT_STREQ(kh.GetDescriptor(), "Ljava/lang/Cloneable;");
-    kh.ChangeClass(array);
+    kh.ChangeClass(array.get());
     kh.ChangeClass(kh.GetDirectInterface(1));
     EXPECT_STREQ(kh.GetDescriptor(), "Ljava/io/Serializable;");
   }
@@ -179,9 +180,9 @@ class ClassLinkerTest : public CommonTest {
     EXPECT_TRUE(fh.GetType() != NULL);
   }
 
-  void AssertClass(const std::string& descriptor, mirror::Class* klass)
+  void AssertClass(const std::string& descriptor, SirtRef<mirror::Class>& klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    ClassHelper kh(klass);
+    ClassHelper kh(klass.get());
     EXPECT_STREQ(descriptor.c_str(), kh.GetDescriptor());
     if (descriptor == "Ljava/lang/Object;") {
       EXPECT_FALSE(klass->HasSuperClass());
@@ -197,7 +198,7 @@ class ClassLinkerTest : public CommonTest {
     EXPECT_FALSE(klass->IsErroneous());
     EXPECT_FALSE(klass->IsArrayClass());
     EXPECT_TRUE(klass->GetComponentType() == NULL);
-    EXPECT_TRUE(klass->IsInSamePackage(klass));
+    EXPECT_TRUE(klass->IsInSamePackage(klass.get()));
     EXPECT_TRUE(mirror::Class::IsInSamePackage(kh.GetDescriptor(), kh.GetDescriptor()));
     if (klass->IsInterface()) {
       EXPECT_TRUE(klass->IsAbstract());
@@ -239,31 +240,31 @@ class ClassLinkerTest : public CommonTest {
     }
 
     EXPECT_FALSE(klass->IsPrimitive());
-    EXPECT_TRUE(klass->CanAccess(klass));
+    EXPECT_TRUE(klass->CanAccess(klass.get()));
 
     for (size_t i = 0; i < klass->NumDirectMethods(); i++) {
       mirror::ArtMethod* method = klass->GetDirectMethod(i);
       AssertMethod(method);
       EXPECT_TRUE(method->IsDirect());
-      EXPECT_EQ(klass, method->GetDeclaringClass());
+      EXPECT_EQ(klass.get(), method->GetDeclaringClass());
     }
 
     for (size_t i = 0; i < klass->NumVirtualMethods(); i++) {
       mirror::ArtMethod* method = klass->GetVirtualMethod(i);
       AssertMethod(method);
       EXPECT_FALSE(method->IsDirect());
-      EXPECT_TRUE(method->GetDeclaringClass()->IsAssignableFrom(klass));
+      EXPECT_TRUE(method->GetDeclaringClass()->IsAssignableFrom(klass.get()));
     }
 
     for (size_t i = 0; i < klass->NumInstanceFields(); i++) {
       mirror::ArtField* field = klass->GetInstanceField(i);
-      AssertField(klass, field);
+      AssertField(klass.get(), field);
       EXPECT_FALSE(field->IsStatic());
     }
 
     for (size_t i = 0; i < klass->NumStaticFields(); i++) {
       mirror::ArtField* field = klass->GetStaticField(i);
-      AssertField(klass, field);
+      AssertField(klass.get(), field);
       EXPECT_TRUE(field->IsStatic());
     }
 
@@ -291,24 +292,24 @@ class ClassLinkerTest : public CommonTest {
     }
 
     size_t total_num_reference_instance_fields = 0;
-    mirror::Class* k = klass;
+    mirror::Class* k = klass.get();
     while (k != NULL) {
       total_num_reference_instance_fields += k->NumReferenceInstanceFields();
       k = k->GetSuperClass();
     }
-    EXPECT_EQ(klass->GetReferenceInstanceOffsets() == 0,
-              total_num_reference_instance_fields == 0);
+    EXPECT_EQ(klass->GetReferenceInstanceOffsets() == 0, total_num_reference_instance_fields == 0);
   }
 
   void AssertDexFileClass(mirror::ClassLoader* class_loader, const std::string& descriptor)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     ASSERT_TRUE(descriptor != NULL);
-    mirror::Class* klass = class_linker_->FindSystemClass(descriptor.c_str());
-    ASSERT_TRUE(klass != NULL);
-    EXPECT_STREQ(descriptor.c_str(), ClassHelper(klass).GetDescriptor());
+    SirtRef<mirror::Class> klass(Thread::Current(),
+                                 class_linker_->FindSystemClass(descriptor.c_str()));
+    ASSERT_TRUE(klass.get() != nullptr);
+    EXPECT_STREQ(descriptor.c_str(), ClassHelper(klass.get()).GetDescriptor());
     EXPECT_EQ(class_loader, klass->GetClassLoader());
     if (klass->IsPrimitive()) {
-      AssertPrimitiveClass(descriptor, klass);
+      AssertPrimitiveClass(descriptor, klass.get());
     } else if (klass->IsArrayClass()) {
       AssertArrayClass(descriptor, klass);
     } else {

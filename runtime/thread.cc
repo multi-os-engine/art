@@ -985,8 +985,9 @@ void Thread::Destroy() {
     mirror::Object* lock =
         soa.DecodeField(WellKnownClasses::java_lang_Thread_lock)->GetObject(opeer_);
     // (This conditional is only needed for tests, where Thread.lock won't have been set.)
-    if (lock != NULL) {
-      ObjectLock locker(self, lock);
+    if (lock != nullptr) {
+      SirtRef<mirror::Object> sirt_obj(self, lock);
+      ObjectLock<mirror::Object> locker(self, &sirt_obj);
       locker.Notify();
     }
   }
