@@ -20,6 +20,9 @@
 #include "leb128.h"
 #include "mir_graph.h"
 
+#include "dex/quick/dex_file_to_method_inliner_map.h"
+#include "dex/quick/dex_file_method_inliner.h"
+
 namespace art {
 
 #define MAX_PATTERN_LEN 5
@@ -736,6 +739,18 @@ void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_
       cur_block = next_block;
     }
   }
+
+  DexFileMethodInliner* inliner =
+      cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file);
+  bool is_special = special_case_ != kNoHandler;
+  bool inliner_is_special = inliner->IsSpecial(cu_->method_idx);
+  if (is_special != inliner_is_special) {
+    LOG(INFO) << "Special mismatch for " << PrettyMethod(cu_->method_idx, *cu_->dex_file)
+        << ", inliner: " << inliner_is_special << "; const/high16: "
+        << (Instruction::At(code_item->insns_)->Opcode() == Instruction::CONST_HIGH16
+            ? "yes" : "no");
+  }
+
   if (cu_->enable_debug & (1 << kDebugDumpCFG)) {
     DumpCFG("/sdcard/1_post_parse_cfg/", true);
   }

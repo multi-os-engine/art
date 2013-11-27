@@ -1240,9 +1240,7 @@ bool Mir2Lir::GenInlinedUnsafePut(CallInfo* info, bool is_long,
 void Mir2Lir::GenInvoke(CallInfo* info) {
   if (!(info->opt_flags & MIR_INLINED)) {
     if (inliner_ == nullptr) {
-      QuickCompilerContext* context = reinterpret_cast<QuickCompilerContext*>(
-          cu_->compiler_driver->GetCompilerContext());
-      inliner_ = context->GetInlinerMap()->GetMethodInliner(cu_->dex_file);
+      inliner_ = cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file);
     }
     if (inliner_->GenIntrinsic(this, info)) {
       return;

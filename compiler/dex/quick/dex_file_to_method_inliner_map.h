@@ -24,6 +24,8 @@
 
 #include "dex/quick/dex_file_method_inliner.h"
 
+#include "dex_file.h"
+
 namespace art {
 
 class CompilerDriver;
