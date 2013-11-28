@@ -213,10 +213,8 @@ class Dex2Oat {
     if (zip_archive.get() == NULL) {
       return NULL;
     }
-    UniquePtr<ZipEntry> zip_entry(zip_archive->Find(image_classes_filename));
+    UniquePtr<ZipEntry> zip_entry(zip_archive->Find(image_classes_filename, error_msg));
     if (zip_entry.get() == NULL) {
-      *error_msg = StringPrintf("Failed to find '%s' within '%s': %s", image_classes_filename,
-                                zip_filename, error_msg->c_str());
       return NULL;
     }
     UniquePtr<MemMap> image_classes_file(zip_entry->ExtractToMemMap(image_classes_filename,
