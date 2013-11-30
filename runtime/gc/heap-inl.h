@@ -109,7 +109,7 @@ template <const bool kInstrumented>
 inline mirror::Object* Heap::TryToAllocate(Thread* self, AllocatorType allocator_type,
                                            size_t alloc_size, bool grow,
                                            size_t* bytes_allocated) {
-  if (UNLIKELY(IsOutOfMemoryOnAllocation(alloc_size, grow))) {
+  if (UNLIKELY(IsOutOfMemoryOnAllocation(allocator_type, alloc_size, grow))) {
     return nullptr;
   }
   if (kInstrumented) {
@@ -144,6 +144,24 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self, AllocatorType allocator
       // the other continuous spaces like the non-moving alloc space or
       // the zygote space.
       DCHECK(ret == nullptr || large_object_space_->Contains(ret));
+      break;
+    }
+    case kAllocatorTypeTLAB: {
+      alloc_size = RoundUp(alloc_size, space::BumpPointerSpace::kAlignment);
+      ret = self->AllocTLAB(alloc_size);
+      if (UNLIKELY(ret == nullptr)) {
+        // TODO: Use a variable constant of constant for TLAB size?
+        size_t block_size = alloc_size + kDefaultTLABSize;
+        bump_pointer_space_->RevokeThreadLocalBuffers(self);
+        byte* start = bump_pointer_space_->AllocBlock(block_size);
+        if (LIKELY(start != nullptr)) {
+          self->SetTLAB(start, start + block_size);
+          ret = self->AllocTLAB(alloc_size);
+        }
+      }
+      if (LIKELY(ret != nullptr)) {
+        *bytes_allocated = alloc_size;
+      }
       break;
     }
     default: {
@@ -187,13 +205,14 @@ inline bool Heap::ShouldAllocLargeObject(mirror::Class* c, size_t byte_count) co
   return byte_count >= kLargeObjectThreshold && have_zygote_space_ && c->IsPrimitiveArray();
 }
 
-inline bool Heap::IsOutOfMemoryOnAllocation(size_t alloc_size, bool grow) {
+inline bool Heap::IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t alloc_size,
+                                            bool grow) {
   size_t new_footprint = num_bytes_allocated_ + alloc_size;
   if (UNLIKELY(new_footprint > max_allowed_footprint_)) {
     if (UNLIKELY(new_footprint > growth_limit_)) {
       return true;
     }
-    if (!concurrent_gc_) {
+    if (!AllocatorHasConcurrentGC(allocator_type)) {
       if (!grow) {
         return true;
       } else {

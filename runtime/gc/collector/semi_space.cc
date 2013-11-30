@@ -14,22 +14,6 @@
  * limitations under the License.
  */
 
-/*
- * Copyright (C) 2011 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #include "semi_space.h"
 
 #include <functional>
@@ -311,8 +295,8 @@ Object* SemiSpace::MarkObject(Object* obj) {
       if (!to_space_->HasAddress(forward_address)) {
         // Otherwise, we need to move the object and add it to the markstack for processing.
         size_t object_size = obj->SizeOf();
-        size_t dummy = 0;
-        forward_address = to_space_->Alloc(self_, object_size, &dummy);
+        size_t bytes_allocated = 0;
+        forward_address = to_space_->Alloc(self_, object_size, &bytes_allocated);
         // Copy over the object and add it to the mark stack since we still need to update it's
         // references.
         memcpy(reinterpret_cast<void*>(forward_address), obj, object_size);

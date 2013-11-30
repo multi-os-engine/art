@@ -151,6 +151,17 @@ inline void Thread::VerifyStack() {
   }
 }
 
+inline mirror::Object* Thread::AllocTLAB(size_t bytes) {
+  byte* new_pos = thread_local_pos_ + bytes;
+  if (LIKELY(new_pos <= thread_local_end_)) {
+    ++thread_local_objects_;
+    mirror::Object* ret = reinterpret_cast<mirror::Object*>(thread_local_pos_);
+    thread_local_pos_ = new_pos;
+    return ret;
+  }
+  return nullptr;
+}
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_THREAD_INL_H_

@@ -91,6 +91,7 @@ class AgeCardVisitor {
 // Different types of allocators.
 enum AllocatorType {
   kAllocatorTypeBumpPointer,
+  kAllocatorTypeTLAB,
   kAllocatorTypeFreeList,  // ROSAlloc / dlmalloc
   kAllocatorTypeLOS,  // Large object space.
 };
@@ -144,6 +145,7 @@ class Heap {
   static constexpr size_t kDefaultMinFree = kDefaultMaxFree / 4;
   static constexpr size_t kDefaultLongPauseLogThreshold = MsToNs(5);
   static constexpr size_t kDefaultLongGCLogThreshold = MsToNs(100);
+  static constexpr size_t kDefaultTLABSize = 256 * KB;
 
   // Default target utilization.
   static constexpr double kDefaultTargetUtilization = 0.5;
@@ -512,11 +514,13 @@ class Heap {
   void Compact(space::ContinuousMemMapAllocSpace* target_space,
                space::ContinuousMemMapAllocSpace* source_space);
 
-  static bool AllocatorHasAllocationStack(AllocatorType allocator_type) {
-    return allocator_type != kAllocatorTypeBumpPointer;
+  static ALWAYS_INLINE bool AllocatorHasAllocationStack(AllocatorType allocator_type) {
+    return
+        allocator_type != kAllocatorTypeBumpPointer &&
+        allocator_type != kAllocatorTypeTLAB;
   }
-  static bool AllocatorHasConcurrentGC(AllocatorType allocator_type) {
-    return allocator_type != kAllocatorTypeBumpPointer;
+  static ALWAYS_INLINE bool AllocatorHasConcurrentGC(AllocatorType allocator_type) {
+    return AllocatorHasAllocationStack(allocator_type);
   }
   bool ShouldAllocLargeObject(mirror::Class* c, size_t byte_count) const;
   ALWAYS_INLINE void CheckConcurrentGC(Thread* self, size_t new_num_bytes_allocated,
@@ -544,7 +548,7 @@ class Heap {
 
   void ThrowOutOfMemoryError(Thread* self, size_t byte_count, bool large_object_allocation)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  bool IsOutOfMemoryOnAllocation(size_t alloc_size, bool grow);
+  bool IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t alloc_size, bool grow);
 
   // Pushes a list of cleared references out to the managed heap.
   void SetReferenceReferent(mirror::Object* reference, mirror::Object* referent)
@@ -717,13 +721,6 @@ class Heap {
 
   // Whether or not we need to run finalizers in the next native allocation.
   bool native_need_to_run_finalization_;
-
-  // Activity manager members.
-  jclass activity_thread_class_;
-  jclass application_thread_class_;
-  jobject activity_thread_;
-  jobject application_thread_;
-  jfieldID last_process_state_id_;
 
   // Whether or not we currently care about pause times.
   ProcessState process_state_;
