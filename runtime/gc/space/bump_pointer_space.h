@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_GC_SPACE_BUMP_POINTER_SPACE_H_
 #define ART_RUNTIME_GC_SPACE_BUMP_POINTER_SPACE_H_
 
+#include "root_visitor.h"
 #include "space.h"
 
 namespace art {
@@ -46,11 +47,14 @@ class BumpPointerSpace : public ContinuousMemMapAllocSpace {
   virtual mirror::Object* Alloc(Thread* self, size_t num_bytes, size_t* bytes_allocated);
   mirror::Object* AllocNonvirtual(size_t num_bytes);
 
+  // Allocate a raw block of bytes.
+  byte* AllocBlock(size_t bytes);
+
   // Return the storage space required by obj.
   virtual size_t AllocationSize(const mirror::Object* obj)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Nos unless we support free lists.
+  // NOPS unless we support free lists.
   virtual size_t Free(Thread*, mirror::Object*) {
     return 0;
   }
@@ -92,6 +96,9 @@ class BumpPointerSpace : public ContinuousMemMapAllocSpace {
 
   void Dump(std::ostream& os) const;
 
+  void RevokeThreadLocalBuffers(Thread* thread);
+  void RevokeAllThreadLocalBuffers();
+
   uint64_t GetBytesAllocated() {
     return Size();
   }
@@ -123,6 +130,10 @@ class BumpPointerSpace : public ContinuousMemMapAllocSpace {
   virtual BumpPointerSpace* AsBumpPointerSpace() {
     return this;
   }
+
+  // Go through all of the blocks and visit the continuous objects.
+  void Walk(ObjectVisitorCallback callback, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Object alignment within the space.
   static constexpr size_t kAlignment = 8;

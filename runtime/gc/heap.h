@@ -91,6 +91,7 @@ class AgeCardVisitor {
 // Different types of allocators.
 enum AllocatorType {
   kAllocatorTypeBumpPointer,
+  kAllocatorTypeTLAB,
   kAllocatorTypeFreeList,  // ROSAlloc / dlmalloc
   kAllocatorTypeLOS,  // Large object space.
 };
@@ -144,6 +145,7 @@ class Heap {
   static constexpr size_t kDefaultMinFree = kDefaultMaxFree / 4;
   static constexpr size_t kDefaultLongPauseLogThreshold = MsToNs(5);
   static constexpr size_t kDefaultLongGCLogThreshold = MsToNs(100);
+  static constexpr size_t kDefaultTLABSize = 256 * KB;
 
   // Default target utilization.
   static constexpr double kDefaultTargetUtilization = 0.5;

@@ -146,6 +146,22 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self, AllocatorType allocator
       DCHECK(ret == nullptr || large_object_space_->Contains(ret));
       break;
     }
+    case kAllocatorTypeTLAB: {
+      alloc_size = RoundUp(alloc_size, space::BumpPointerSpace::kAlignment);
+      ret = self->AllocTLAB(alloc_size);
+      if (UNLIKELY(ret == nullptr)) {
+        // TODO: Add a variable TLAB size?
+        byte* start = bump_pointer_space_->AllocBlock(alloc_size + kDefaultTLABSize);
+        if (LIKELY(start != nullptr)) {
+          self->SetTLAB(start, start + alloc_size);
+          ret = self->AllocTLAB(alloc_size);
+        }
+      }
+      if (LIKELY(ret != nullptr)) {
+        *bytes_allocated = alloc_size;
+      }
+      break;
+    }
     default: {
       LOG(FATAL) << "Invalid allocator type";
       ret = nullptr;

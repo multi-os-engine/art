@@ -18,6 +18,7 @@
 #include "bump_pointer_space-inl.h"
 #include "mirror/object-inl.h"
 #include "mirror/class-inl.h"
+#include "thread_list.h"
 
 namespace art {
 namespace gc {
@@ -81,6 +82,34 @@ void BumpPointerSpace::Dump(std::ostream& os) const {
 mirror::Object* BumpPointerSpace::GetNextObject(mirror::Object* obj) {
   const uintptr_t position = reinterpret_cast<uintptr_t>(obj) + obj->SizeOf();
   return reinterpret_cast<mirror::Object*>(RoundUp(position, kAlignment));
+}
+
+void BumpPointerSpace::RevokeThreadLocalBuffers(Thread* thread) {
+  thread->thread_local_pos_ = nullptr;
+  thread->thread_local_end_ = nullptr;
+}
+
+void BumpPointerSpace::RevokeAllThreadLocalBuffers() {
+  MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
+  // TODO: Not do a copy of the thread list?
+  std::list<Thread*> thread_list = Runtime::Current()->GetThreadList()->GetList();
+  for (Thread* thread : thread_list) {
+    RevokeThreadLocalBuffers(thread);
+  }
+}
+
+byte* BumpPointerSpace::AllocBlock(size_t bytes) {
+  return reinterpret_cast<byte*>(AllocNonvirtual(bytes));
+}
+
+void BumpPointerSpace::Walk(ObjectVisitorCallback callback, void* arg) {
+  // Only one block for now.
+  mirror::Object* obj = reinterpret_cast<mirror::Object*>(Begin());
+  const mirror::Object* end = reinterpret_cast<const mirror::Object*>(End());
+  while (obj < end) {
+    callback(obj, arg);
+    obj = space::BumpPointerSpace::GetNextObject(obj);
+  }
 }
 
 }  // namespace space

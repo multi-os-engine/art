@@ -336,36 +336,21 @@ void Heap::CreateThreadPool() {
 }
 
 void Heap::VisitObjects(ObjectVisitorCallback callback, void* arg) {
-  // Visit objects in bump pointer space.
   Thread* self = Thread::Current();
-  // TODO: Use reference block.
-  std::vector<SirtRef<mirror::Object>*> saved_refs;
+  // GCs can move objects, so don't allow this.
+  const char* old_cause = self->StartAssertNoThreadSuspension("Visiting objects");
   if (bump_pointer_space_ != nullptr) {
-    // Need to put all these in sirts since the callback may trigger a GC. TODO: Use a better data
-    // structure.
-    mirror::Object* obj = reinterpret_cast<mirror::Object*>(bump_pointer_space_->Begin());
-    const mirror::Object* end = reinterpret_cast<const mirror::Object*>(
-        bump_pointer_space_->End());
-    while (obj < end) {
-      saved_refs.push_back(new SirtRef<mirror::Object>(self, obj));
-      obj = space::BumpPointerSpace::GetNextObject(obj);
-    }
+    // Visit objects in bump pointer space.
+    bump_pointer_space_->Walk(callback, arg);
   }
   // TODO: Switch to standard begin and end to use ranged a based loop.
   for (mirror::Object** it = allocation_stack_->Begin(), **end = allocation_stack_->End();
       it < end; ++it) {
     mirror::Object* obj = *it;
-    // Objects in the allocation stack might be in a movable space.
-    saved_refs.push_back(new SirtRef<mirror::Object>(self, obj));
+    callback(obj, arg);
   }
   GetLiveBitmap()->Walk(callback, arg);
-  for (const auto& ref : saved_refs) {
-    callback(ref->get(), arg);
-  }
-  // Need to free the sirts in reverse order they were allocated.
-  for (size_t i = saved_refs.size(); i != 0; --i) {
-    delete saved_refs[i - 1];
-  }
+  self->EndAssertNoThreadSuspension(old_cause);
 }
 
 void Heap::MarkAllocStackAsLive(accounting::ObjectStack* stack) {
@@ -1276,7 +1261,8 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
 
   collector::GarbageCollector* collector = nullptr;
   // TODO: Clean this up.
-  if (current_allocator_ == kAllocatorTypeBumpPointer) {
+  if (current_allocator_ == kAllocatorTypeBumpPointer ||
+      current_allocator_ == kAllocatorTypeTLAB) {
     gc_type = semi_space_collector_->GetGcType();
     CHECK_EQ(temp_space_->GetObjectsAllocated(), 0U);
     semi_space_collector_->SetFromSpace(bump_pointer_space_);
@@ -2041,11 +2027,15 @@ void Heap::RequestHeapTrim() {
 }
 
 void Heap::RevokeThreadLocalBuffers(Thread* thread) {
-  non_moving_space_->RevokeThreadLocalBuffers(thread);
+  for (space::AllocSpace* alloc_space : alloc_spaces_) {
+    alloc_space->RevokeThreadLocalBuffers(thread);
+  }
 }
 
 void Heap::RevokeAllThreadLocalBuffers() {
-  non_moving_space_->RevokeAllThreadLocalBuffers();
+  for (space::AllocSpace* alloc_space : alloc_spaces_) {
+    alloc_space->RevokeAllThreadLocalBuffers();
+  }
 }
 
 bool Heap::IsGCRequestPending() const {
