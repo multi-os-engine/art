@@ -32,7 +32,7 @@
 namespace art {
 namespace gc {
 
-template <bool kInstrumented, typename PreFenceVisitor>
+template <bool kInstrumented, bool kCheckLargeObject, typename PreFenceVisitor>
 inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self, mirror::Class* klass,
                                                       size_t byte_count, AllocatorType allocator,
                                                       const PreFenceVisitor& pre_fence_visitor) {
@@ -43,13 +43,13 @@ inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self, mirror::Clas
   self->AssertThreadSuspensionIsAllowable();
   // Need to check that we arent the large object allocator since the large object allocation code
   // path this function. If we didn't check we would have an infinite loop.
-  if (allocator != kAllocatorTypeLOS && UNLIKELY(ShouldAllocLargeObject(klass, byte_count))) {
+  if (kCheckLargeObject && UNLIKELY(ShouldAllocLargeObject(klass, byte_count))) {
     return AllocLargeObject<kInstrumented, PreFenceVisitor>(self, klass, byte_count,
                                                             pre_fence_visitor);
   }
   mirror::Object* obj;
-  size_t bytes_allocated;
   AllocationTimer alloc_timer(this, &obj);
+  size_t bytes_allocated;
   obj = TryToAllocate<kInstrumented, false>(self, allocator, byte_count, &bytes_allocated);
   if (UNLIKELY(obj == nullptr)) {
     obj = AllocateInternalWithGc(self, allocator, byte_count, &bytes_allocated, &klass);
@@ -89,7 +89,7 @@ inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self, mirror::Clas
   } else {
     DCHECK(!Dbg::IsAllocTrackingEnabled());
   }
-  if (concurrent_gc_) {
+  if (AllocatorMayHaveConcurrentGC(allocator) && concurrent_gc_) {
     CheckConcurrentGC(self, new_num_bytes_allocated, obj);
   }
   if (kIsDebugBuild) {
@@ -105,15 +105,15 @@ template <bool kInstrumented, typename PreFenceVisitor>
 inline mirror::Object* Heap::AllocLargeObject(Thread* self, mirror::Class* klass,
                                               size_t byte_count,
                                               const PreFenceVisitor& pre_fence_visitor) {
-  return AllocObjectWithAllocator<kInstrumented, PreFenceVisitor>(self, klass, byte_count,
-                                                                  kAllocatorTypeLOS,
-                                                                  pre_fence_visitor);
+  return AllocObjectWithAllocator<kInstrumented, false, PreFenceVisitor>(self, klass, byte_count,
+                                                                         kAllocatorTypeLOS,
+                                                                         pre_fence_visitor);
 }
 
 template <const bool kInstrumented, const bool kGrow>
 inline mirror::Object* Heap::TryToAllocate(Thread* self, AllocatorType allocator_type,
                                            size_t alloc_size, size_t* bytes_allocated) {
-  if (UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(alloc_size))) {
+  if (UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(allocator_type, alloc_size))) {
     return nullptr;
   }
   if (kInstrumented) {
@@ -151,6 +151,24 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self, AllocatorType allocator
       // the other continuous spaces like the non-moving alloc space or
       // the zygote space.
       DCHECK(ret == nullptr || large_object_space_->Contains(ret));
+      break;
+    }
+    case kAllocatorTypeTLAB: {
+      alloc_size = RoundUp(alloc_size, space::BumpPointerSpace::kAlignment);
+      if (UNLIKELY(self->TLABSize() < alloc_size)) {
+        // TODO: Use a variable constant of constant for TLAB size?
+        size_t block_size = alloc_size + kDefaultTLABSize;
+        bump_pointer_space_->RevokeThreadLocalBuffers(self);
+        byte* start = bump_pointer_space_->AllocBlock(block_size);
+        if (UNLIKELY(start == nullptr)) {
+         return nullptr;
+        }
+        self->SetTLAB(start, start + block_size);
+      }
+      // The allocation can't fail.
+      ret = self->AllocTLAB(alloc_size);
+      DCHECK(ret != nullptr);
+      *bytes_allocated = alloc_size;
       break;
     }
     default: {
@@ -194,14 +212,14 @@ inline bool Heap::ShouldAllocLargeObject(mirror::Class* c, size_t byte_count) co
   return byte_count >= kLargeObjectThreshold && have_zygote_space_ && c->IsPrimitiveArray();
 }
 
-template <const bool kGrow>
-inline bool Heap::IsOutOfMemoryOnAllocation(size_t alloc_size) {
+template <bool kGrow>
+inline bool Heap::IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t alloc_size) {
   size_t new_footprint = num_bytes_allocated_ + alloc_size;
   if (UNLIKELY(new_footprint > max_allowed_footprint_)) {
     if (UNLIKELY(new_footprint > growth_limit_)) {
       return true;
     }
-    if (!concurrent_gc_) {
+    if (!AllocatorMayHaveConcurrentGC(allocator_type) || !concurrent_gc_) {
       if (!kGrow) {
         return true;
       }
