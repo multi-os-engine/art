@@ -94,6 +94,31 @@ static inline int32_t DecodeSignedLeb128(const uint8_t** data) {
   return result;
 }
 
+static inline uint8_t* EncodeUnsignedLeb128(uint8_t* dest, uint32_t value) {
+  uint8_t out = value & 0x7f;
+  value >>= 7;
+  while (value != 0) {
+    *dest++ = out | 0x80;
+    out = value & 0x7f;
+    value >>= 7;
+  }
+  *dest++ = out;
+  return dest;
+}
+
+static inline uint8_t* EncodeSignedLeb128(uint8_t* dest, int32_t value) {
+  uint32_t extra_bits = static_cast<uint32_t>(value ^ (value >> 31)) >> 6;
+  uint8_t out = value & 0x7f;
+  while (extra_bits != 0u) {
+    *dest++ = out | 0x80;
+    value >>= 7;
+    out = value & 0x7f;
+    extra_bits >>= 7;
+  }
+  *dest++ = out;
+  return dest;
+}
+
 // Returns the number of bytes needed to encode the value in unsigned LEB128.
 static inline uint32_t UnsignedLeb128Size(uint32_t data) {
   // bits_to_encode = (data != 0) ? 32 - CLZ(x) : 1  // 32 - CLZ(data | 1)
