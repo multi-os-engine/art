@@ -147,7 +147,8 @@ class PACKED(4) Thread {
   }
 
   bool IsSuspended() const {
-    union StateAndFlags state_and_flags = state_and_flags_;
+    union StateAndFlags state_and_flags;
+    state_and_flags.as_int = state_and_flags_.as_int;
     return state_and_flags.as_struct.state != kRunnable &&
         (state_and_flags.as_struct.flags & kSuspendRequest) != 0;
   }
