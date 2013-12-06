@@ -118,6 +118,8 @@ void SignalCatcher::HandleSigQuit() {
   Runtime* runtime = Runtime::Current();
   ThreadList* thread_list = runtime->GetThreadList();
 
+  runtime->GetHeap()->DumpForSigQuit(LOG(INFO));
+
   // Grab exclusively the mutator lock, set state to Runnable without checking for a pending
   // suspend request as we're going to suspend soon anyway. We set the state to Runnable to avoid
   // giving away the mutator lock.

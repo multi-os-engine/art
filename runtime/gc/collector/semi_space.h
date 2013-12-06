@@ -281,6 +281,9 @@ class SemiSpace : public GarbageCollector {
 
   Thread* self_;
 
+  byte* last_gc_to_space_end_;
+  uint64_t bytes_promoted_;
+
  private:
   DISALLOW_COPY_AND_ASSIGN(SemiSpace);
 };

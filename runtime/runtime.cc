@@ -359,7 +359,8 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   // Only the main GC thread, no workers.
   parsed->conc_gc_threads_ = 0;
   // Default is CMS which is Sticky + Partial + Full CMS GC.
-  parsed->collector_type_ = gc::kCollectorTypeCMS;
+  // parsed->collector_type_ = gc::kCollectorTypeCMS;
+  parsed->collector_type_ = gc::kCollectorTypeSS;
   parsed->stack_size_ = 0;  // 0 means default.
   parsed->max_spins_before_thin_lock_inflation_ = Monitor::kDefaultMaxSpinsBeforeThinLockInflation;
   parsed->low_memory_mode_ = false;
