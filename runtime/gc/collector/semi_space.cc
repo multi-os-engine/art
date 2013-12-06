@@ -78,6 +78,7 @@ namespace collector {
 
 static constexpr bool kProtectFromSpace = true;
 static constexpr bool kResetFromSpace = true;
+static constexpr bool kEnableSimplePromo = false;
 
 // TODO: Unduplicate logic.
 void SemiSpace::ImmuneSpace(space::ContinuousSpace* space) {
@@ -134,7 +135,9 @@ SemiSpace::SemiSpace(Heap* heap, const std::string& name_prefix)
       finalizer_reference_list_(nullptr),
       phantom_reference_list_(nullptr),
       cleared_reference_list_(nullptr),
-      self_(nullptr) {
+      self_(nullptr),
+      last_gc_to_space_end_(nullptr),
+      bytes_promoted_(0) {
 }
 
 void SemiSpace::InitializePhase() {
@@ -169,6 +172,18 @@ void SemiSpace::MarkingPhase() {
   // Need to do this with mutators paused so that somebody doesn't accidentally allocate into the
   // wrong space.
   heap_->SwapSemiSpaces();
+  if (kEnableSimplePromo) {
+    // If last_gc_to_space_end_ is out of the bounds of the from-space
+    // (the to-space from last GC), then point it to the beginning of
+    // the from-space. For example, the very first GC or the
+    // pre-zygote compaction.
+    if (from_space_->Begin() > last_gc_to_space_end_ &&
+        last_gc_to_space_end_ < from_space_->End()) {
+      last_gc_to_space_end_ = from_space_->Begin();
+    }
+    // Reset this before the marking starts below.
+    bytes_promoted_ = 0;
+  }
   // Assume the cleared space is already empty.
   BindBitmaps();
   // Process dirty cards and add dirty cards to mod-union tables.
@@ -268,6 +283,13 @@ void SemiSpace::ReclaimPhase() {
   } else {
     mprotect(from_space_->Begin(), from_space_->Capacity(), PROT_READ);
   }
+
+  if (kEnableSimplePromo) {
+    // Record the end (top) of the to space so we can distinguish
+    // between objects that were allocated since the last GC and the
+    // older objects.
+    last_gc_to_space_end_ = to_space_->End();
+  }
 }
 
 void SemiSpace::ResizeMarkStack(size_t new_size) {
@@ -307,12 +329,42 @@ Object* SemiSpace::MarkObject(Object* obj) {
   if (obj != nullptr && !IsImmune(obj)) {
     if (from_space_->HasAddress(obj)) {
       mirror::Object* forward_address = GetForwardingAddressInFromSpace(obj);
+      DCHECK(forward_address == nullptr || to_space_->HasAddress(forward_address) ||
+             (kEnableSimplePromo && GetHeap()->GetNonMovingSpace()->HasAddress(forward_address)));
       // If the object has already been moved, return the new forward address.
-      if (!to_space_->HasAddress(forward_address)) {
+      if (forward_address == nullptr) {
         // Otherwise, we need to move the object and add it to the markstack for processing.
         size_t object_size = obj->SizeOf();
         size_t dummy = 0;
-        forward_address = to_space_->Alloc(self_, object_size, &dummy);
+        if (kEnableSimplePromo && reinterpret_cast<byte*>(obj) < last_gc_to_space_end_) {
+          // If it's allocated before the last GC (older), move (pseudo-promote) it to
+          // the non-moving space (as sort of an old generation.)
+          size_t bytes_promoted;
+          forward_address = GetHeap()->GetNonMovingSpace()->Alloc(self_, object_size, &bytes_promoted);
+          if (forward_address == nullptr) {
+            // If out of space, fall back to the to-space.
+            forward_address = to_space_->Alloc(self_, object_size, &dummy);
+          } else {
+            GetHeap()->num_bytes_allocated_.fetch_add(bytes_promoted);
+            bytes_promoted_ += bytes_promoted;
+            // Mark forward_address on the live bit map.
+            accounting::SpaceBitmap* live_bitmap =
+                heap_->GetLiveBitmap()->GetContinuousSpaceBitmap(forward_address);
+            DCHECK(live_bitmap != nullptr);
+            DCHECK(!live_bitmap->Test(forward_address));
+            live_bitmap->Set(forward_address);
+            // Mark forward_address on the mark bit map.
+            accounting::SpaceBitmap* mark_bitmap =
+                heap_->GetMarkBitmap()->GetContinuousSpaceBitmap(forward_address);
+            DCHECK(mark_bitmap != nullptr);
+            DCHECK(!mark_bitmap->Test(forward_address));
+            mark_bitmap->Set(forward_address);
+          }
+          DCHECK(forward_address != nullptr);
+        } else {
+          // If it's allocated after the last GC (younger), copy it to the to-space.
+          forward_address = to_space_->Alloc(self_, object_size, &dummy);
+        }
         // Copy over the object and add it to the mark stack since we still need to update it's
         // references.
         memcpy(reinterpret_cast<void*>(forward_address), obj, object_size);
@@ -535,7 +587,9 @@ inline Object* SemiSpace::GetMarkedForwardAddress(mirror::Object* obj) const
   if (from_space_->HasAddress(obj)) {
     mirror::Object* forwarding_address = GetForwardingAddressInFromSpace(const_cast<Object*>(obj));
     // If the object is forwarded then it MUST be marked.
-    if (to_space_->HasAddress(forwarding_address)) {
+    DCHECK(forwarding_address == nullptr || to_space_->HasAddress(forwarding_address) ||
+           (kEnableSimplePromo && GetHeap()->GetNonMovingSpace()->HasAddress(forwarding_address)));
+    if (forwarding_address != nullptr) {
       return forwarding_address;
     }
     // Must not be marked, return nullptr;
