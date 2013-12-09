@@ -303,6 +303,11 @@ build-art-target: $(ART_TARGET_EXECUTABLES) $(ART_TARGET_TEST_EXECUTABLES) $(TAR
 
 ART_DUMP_OAT_PATH ?= $(OUT_DIR)
 
+OATDUMP := $(HOST_OUT_EXECUTABLES)/oatdump$(HOST_EXECUTABLE_SUFFIX)
+OATDUMPD := $(HOST_OUT_EXECUTABLES)/oatdumpd$(HOST_EXECUTABLE_SUFFIX)
+# TODO: for now, override with debug version for better error reporting
+OATDUMP := $(OATDUMPD)
+
 .PHONY: dump-oat
 dump-oat: dump-oat-core dump-oat-boot
 
