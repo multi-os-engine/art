@@ -14,31 +14,14 @@
 # limitations under the License.
 #
 
-# DEX2OAT defined in build/core/config.mk
-DEX2OATD := $(HOST_OUT_EXECUTABLES)/dex2oatd$(HOST_EXECUTABLE_SUFFIX)
-
-LIBART_COMPILER := $(HOST_OUT_SHARED_LIBRARIES)/libart-compiler$(HOST_SHLIB_SUFFIX)
-LIBARTD_COMPILER := $(HOST_OUT_SHARED_LIBRARIES)/libartd-compiler$(HOST_SHLIB_SUFFIX)
-
-# TODO: for now, override with debug version for better error reporting
-DEX2OAT := $(DEX2OATD)
-LIBART_COMPILER := $(LIBARTD_COMPILER)
-
-# By default, do not run rerun dex2oat if the tool changes.
-# Comment out the | to force dex2oat to rerun on after all changes.
-DEX2OAT_DEPENDENCY := |
-DEX2OAT_DEPENDENCY += $(DEX2OAT)
-DEX2OAT_DEPENDENCY += $(LIBART_COMPILER)
-
-OATDUMP := $(HOST_OUT_EXECUTABLES)/oatdump$(HOST_EXECUTABLE_SUFFIX)
-OATDUMPD := $(HOST_OUT_EXECUTABLES)/oatdumpd$(HOST_EXECUTABLE_SUFFIX)
-# TODO: for now, override with debug version for better error reporting
-OATDUMP := $(OATDUMPD)
-
 PRELOADED_CLASSES := frameworks/base/preloaded-classes
 
 ########################################################################
-# A smaller libcore only oat file
+# Rules to build a smaller "core" image to support core libraries
+# (that is, non-Android frameworks) testing on the host and target
+#
+# The main rules to build the default "boot" image are in
+# build/core/dex_preopt_libart.mk
 TARGET_CORE_JARS := core-libart conscrypt okhttp core-junit bouncycastle
 HOST_CORE_JARS := $(addsuffix -hostdex,$(TARGET_CORE_JARS))
 
@@ -104,8 +87,8 @@ endif
 
 ########################################################################
 # The full system boot classpath
-TARGET_BOOT_JARS := $(subst :, ,$(DEXPREOPT_BOOT_JARS))
-TARGET_BOOT_JARS := $(foreach jar,$(TARGET_BOOT_JARS),$(patsubst core, core-libart,$(jar)))
+# note we use core-libart.jar in place of core.jar for ART.
+TARGET_BOOT_JARS := $(patsubst core, core-libart,$(DEXPREOPT_BOOT_JARS_MODULES))
 TARGET_BOOT_DEX_LOCATIONS := $(foreach jar,$(TARGET_BOOT_JARS),/$(DEXPREOPT_BOOT_JAR_DIR)/$(jar).jar)
 TARGET_BOOT_DEX_FILES := $(foreach jar,$(TARGET_BOOT_JARS),$(call intermediates-dir-for,JAVA_LIBRARIES,$(jar),,COMMON)/javalib.jar)
 
