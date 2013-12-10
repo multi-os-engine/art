@@ -31,15 +31,18 @@ extern "C" void artInterpreterToCompiledCodeBridge(Thread* self, MethodHelper& m
   mirror::ArtMethod* method = shadow_frame->GetMethod();
   // Ensure static methods are initialized.
   if (method->IsStatic()) {
+    self->PushShadowFrame(shadow_frame);
     mirror::Class* declaringClass = method->GetDeclaringClass();
     if (UNLIKELY(!declaringClass->IsInitializing())) {
       if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(declaringClass,
                                                                             true, true))) {
-        DCHECK(Thread::Current()->IsExceptionPending());
+        self->PopShadowFrame();
+        DCHECK(self->IsExceptionPending());
         return;
       }
       CHECK(declaringClass->IsInitializing());
     }
+    self->PopShadowFrame();
   }
   uint16_t arg_offset = (code_item == NULL) ? 0 : code_item->registers_size_ - code_item->ins_size_;
 #if defined(ART_USE_PORTABLE_COMPILER)
