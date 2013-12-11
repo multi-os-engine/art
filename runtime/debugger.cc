@@ -795,18 +795,33 @@ JDWP::JdwpError Dbg::GetReferringObjects(JDWP::ObjectId object_id, int32_t max_c
 
 JDWP::JdwpError Dbg::DisableCollection(JDWP::ObjectId object_id)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::Object* o = gRegistry->Get<mirror::Object*>(object_id);
+  if (o == NULL || o == ObjectRegistry::kInvalidObject) {
+    return JDWP::ERR_INVALID_OBJECT;
+  }
   gRegistry->DisableCollection(object_id);
   return JDWP::ERR_NONE;
 }
 
 JDWP::JdwpError Dbg::EnableCollection(JDWP::ObjectId object_id)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  gRegistry->EnableCollection(object_id);
+  mirror::Object* o = gRegistry->Get<mirror::Object*>(object_id);
+  // Contrary to DisableCollection, JDWP specs do not state an invalid object causes an error.
+  if (o != nullptr && o != ObjectRegistry::kInvalidObject) {
+    gRegistry->EnableCollection(object_id);
+  }
   return JDWP::ERR_NONE;
 }
 
 JDWP::JdwpError Dbg::IsCollected(JDWP::ObjectId object_id, bool& is_collected)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::Object* o = gRegistry->Get<mirror::Object*>(object_id);
+  // JDWP specs states an INVALID_OBJECT error is returned if the object ID is not valid. However
+  // the RI seems to ignore this and does not return any error in this case. Let's comply with
+  // JDWP specs here.
+  if (o == NULL || o == ObjectRegistry::kInvalidObject) {
+    return JDWP::ERR_INVALID_OBJECT;
+  }
   is_collected = gRegistry->IsCollected(object_id);
   return JDWP::ERR_NONE;
 }
