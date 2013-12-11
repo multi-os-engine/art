@@ -18,6 +18,8 @@
 #define ART_DISASSEMBLER_DISASSEMBLER_H_
 
 #include <stdint.h>
+#include <stdarg.h>
+#include <sstream>
 
 #include <iosfwd>
 
@@ -41,12 +43,20 @@ class DisassemblerOptions {
   DISALLOW_COPY_AND_ASSIGN(DisassemblerOptions);
 };
 
+class DisassemblerAnnotator {
+ public:
+  virtual ~DisassemblerAnnotator() {}
+
+  virtual void Annotate(std::ostringstream& str, va_list ap) = 0;
+};
+
 class Disassembler {
  public:
   // Creates a Disassembler for the given InstructionSet with the
   // non-null DisassemblerOptions which become owned by the
   // Disassembler.
-  static Disassembler* Create(InstructionSet instruction_set, DisassemblerOptions* options);
+  static Disassembler* Create(InstructionSet instruction_set, DisassemblerOptions* options,
+    DisassemblerAnnotator* ann);
 
   virtual ~Disassembler() {
     delete disassembler_options_;
@@ -57,16 +67,20 @@ class Disassembler {
   // Dump instructions within a range.
   virtual void Dump(std::ostream& os, const uint8_t* begin, const uint8_t* end) = 0;
 
+  void Annotate(std::ostringstream* str, ...);
+
  protected:
-  explicit Disassembler(DisassemblerOptions* disassembler_options)
-      : disassembler_options_(disassembler_options) {
-    CHECK(disassembler_options_ != nullptr);
+  Disassembler(DisassemblerOptions* disassembler_options,
+        DisassemblerAnnotator* ann)
+      : disassembler_options_(disassembler_options), annotator_(ann) {
+    // CHECK(disassembler_options_ != nullptr);
   }
 
   std::string FormatInstructionPointer(const uint8_t* begin);
 
  private:
   DisassemblerOptions* disassembler_options_;
+  DisassemblerAnnotator* annotator_;
   DISALLOW_COPY_AND_ASSIGN(Disassembler);
 };
 
@@ -74,6 +88,16 @@ static inline bool HasBitSet(uint32_t value, uint32_t bit) {
   return (value & (1 << bit)) != 0;
 }
 
+// Returns a string corresponding to printf-like formatting of the arguments.
+std::string StringPrintf(const char* fmt, ...)
+        __attribute__((__format__(__printf__, 1, 2)));
+
+// Appends a printf-like formatting of the arguments to 'dst'.
+void StringAppendF(std::string* dst, const char* fmt, ...)
+        __attribute__((__format__(__printf__, 2, 3)));
+
+// Appends a printf-like formatting of the arguments to 'dst'.
+void StringAppendV(std::string* dst, const char* format, va_list ap);
 }  // namespace art
 
 #endif  // ART_DISASSEMBLER_DISASSEMBLER_H_

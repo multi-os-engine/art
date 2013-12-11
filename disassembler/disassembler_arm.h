@@ -18,7 +18,6 @@
 #define ART_DISASSEMBLER_DISASSEMBLER_ARM_H_
 
 #include <vector>
-
 #include "disassembler.h"
 
 namespace art {
@@ -26,7 +25,8 @@ namespace arm {
 
 class DisassemblerArm FINAL : public Disassembler {
  public:
-  explicit DisassemblerArm(DisassemblerOptions* options) : Disassembler(options) {}
+  DisassemblerArm(DisassemblerOptions* options, DisassemblerAnnotator* annotator)
+    : Disassembler(options, annotator) {}
 
   size_t Dump(std::ostream& os, const uint8_t* begin) OVERRIDE;
   void Dump(std::ostream& os, const uint8_t* begin, const uint8_t* end) OVERRIDE;

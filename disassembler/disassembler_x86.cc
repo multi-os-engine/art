@@ -15,13 +15,8 @@
  */
 
 #include "disassembler_x86.h"
-
-#include <iostream>
-
-#include "base/logging.h"
-#include "base/stringprintf.h"
-#include "thread.h"
 #include <inttypes.h>
+#include <iostream>
 
 namespace art {
 namespace x86 {
@@ -65,7 +60,7 @@ constexpr uint8_t REX_B = 0b0001;
 
 static void DumpReg0(std::ostream& os, uint8_t rex, size_t reg,
                      bool byte_operand, uint8_t size_override) {
-  DCHECK_LT(reg, (rex == 0) ? 8u : 16u);
+  // DCHECK_LT(reg, (rex == 0) ? 8u : 16u);
   bool rex_w = (rex & REX_W) != 0;
   if (byte_operand) {
     os << ((rex == 0) ? gReg8Names[reg] : gExtReg8Names[reg]);
@@ -201,6 +196,7 @@ size_t DisassemblerX86::DumpInstruction(std::ostream& os, const uint8_t* instr) 
   size_t branch_bytes = 0;
   std::ostringstream opcode;
   bool store = false;  // stores to memory (ie rm is on the left)
+  (void)store;      // Work around cpp-lint problem.
   bool load = false;  // loads from memory (ie rm is on the right)
   bool byte_operand = false;  // true when the opcode is dealing with byte operands
   bool byte_second_operand = false;  // true when the source operand is a byte register but the target register isn't (ie movsxb/movzxb).
@@ -506,7 +502,7 @@ DISASSEMBLER_ENTRY(cmp,
           case 0x5D: opcode << "min"; break;
           case 0x5E: opcode << "div"; break;
           case 0x5F: opcode << "max"; break;
-          default: LOG(FATAL) << "Unreachable";
+          default: std::cerr << "Unreachable"; exit(1);
         }
         if (prefix[2] == 0x66) {
           opcode << "pd";
@@ -1068,7 +1064,7 @@ DISASSEMBLER_ENTRY(cmp,
   // REX.W should be forced for 64-target and target-specific instructions (i.e., push or pop).
   uint8_t rex_w = (supports_rex_ && target_specific) ? (rex | 0x48) : rex;
   if (reg_in_opcode) {
-    DCHECK(!has_modrm);
+    // DCHECK(!has_modrm);
     DumpOpcodeReg(args, rex_w, *instr & 0x7, byte_operand, prefix[2]);
   }
   instr++;
@@ -1167,7 +1163,7 @@ DISASSEMBLER_ENTRY(cmp,
       DumpSegmentOverride(args, prefix[1]);
       args << address.str();
     } else {
-      DCHECK(store);
+      // DCHECK(store);
       DumpSegmentOverride(args, prefix[1]);
       args << address.str();
       if (!reg_is_opcode) {
@@ -1200,18 +1196,18 @@ DISASSEMBLER_ENTRY(cmp,
         instr += 4;
       }
     } else {
-      CHECK_EQ(immediate_bytes, 8u);
+      // CHECK_EQ(immediate_bytes, 8u);
       args << StringPrintf("%" PRId64, *reinterpret_cast<const int64_t*>(instr));
       instr += 8;
     }
   } else if (branch_bytes > 0) {
-    DCHECK(!has_modrm);
+    // DCHECK(!has_modrm);
     int32_t displacement;
     if (branch_bytes == 1) {
       displacement = *reinterpret_cast<const int8_t*>(instr);
       instr++;
     } else {
-      CHECK_EQ(branch_bytes, 4u);
+      // CHECK_EQ(branch_bytes, 4u);
       displacement = *reinterpret_cast<const int32_t*>(instr);
       instr += 4;
     }
@@ -1221,11 +1217,11 @@ DISASSEMBLER_ENTRY(cmp,
   }
   if (prefix[1] == kFs && !supports_rex_) {
     args << "  ; ";
-    Thread::DumpThreadOffset<4>(args, address_bits);
+    Annotate(&args, address_bits, 4);
   }
   if (prefix[1] == kGs && supports_rex_) {
     args << "  ; ";
-    Thread::DumpThreadOffset<8>(args, address_bits);
+    Annotate(&args, address_bits, 4);
   }
   std::stringstream hex;
   for (size_t i = 0; begin_instr + i < instr; ++i) {
@@ -1237,7 +1233,7 @@ DISASSEMBLER_ENTRY(cmp,
     case 0xF2: prefixed_opcode << "repne "; break;
     case 0xF3: prefixed_opcode << "repe "; break;
     case 0: break;
-    default: LOG(FATAL) << "Unreachable";
+    default: std::cerr << "Unreachable"; exit(1);
   }
   prefixed_opcode << opcode.str();
   os << FormatInstructionPointer(begin_instr)

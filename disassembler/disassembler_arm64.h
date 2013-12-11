@@ -27,7 +27,8 @@ namespace arm64 {
 
 class DisassemblerArm64 FINAL : public Disassembler {
  public:
-  explicit DisassemblerArm64(DisassemblerOptions* options) : Disassembler(options) {
+  DisassemblerArm64(DisassemblerOptions* options, DisassemblerAnnotator* ann) :
+    Disassembler(options, ann) {
     decoder.AppendVisitor(&disasm);
   }
 

@@ -26,7 +26,8 @@ namespace mips {
 
 class DisassemblerMips FINAL : public Disassembler {
  public:
-  explicit DisassemblerMips(DisassemblerOptions* options) : Disassembler(options) {}
+  DisassemblerMips(DisassemblerOptions* options, DisassemblerAnnotator* annotator)
+    : Disassembler(options, annotator) {}
 
   size_t Dump(std::ostream& os, const uint8_t* begin) OVERRIDE;
   void Dump(std::ostream& os, const uint8_t* begin, const uint8_t* end) OVERRIDE;

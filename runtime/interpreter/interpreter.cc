@@ -23,6 +23,8 @@
 namespace art {
 namespace interpreter {
 
+#define USE_TRANSLATOR 1
+
 // Hand select a number of methods to be run in a not yet started runtime without using JNI.
 static void UnstartedRuntimeJni(Thread* self, ArtMethod* method,
                                 Object* receiver, uint32_t* args, JValue* result)
@@ -313,14 +315,15 @@ static void InterpreterJni(Thread* self, ArtMethod* method, const StringPiece& s
 
 enum InterpreterImplKind {
   kSwitchImpl,            // Switch-based interpreter implementation.
-  kComputedGotoImplKind   // Computed-goto-based interpreter implementation.
+  kComputedGotoImplKind,  // Computed-goto-based interpreter implementation.
+  kTranslatorImplKind,    // translator based interpreter implementation
 };
 
 #if !defined(__clang__)
-static constexpr InterpreterImplKind kInterpreterImplKind = kComputedGotoImplKind;
+static constexpr InterpreterImplKind kInterpreterImplKind = kTranslatorImplKind;
 #else
 // Clang 3.4 fails to build the goto interpreter implementation.
-static constexpr InterpreterImplKind kInterpreterImplKind = kSwitchImpl;
+static constexpr InterpreterImplKind kInterpreterImplKind = kTranslatorImplKind;
 template<bool do_access_check, bool transaction_active>
 JValue ExecuteGotoImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem* code_item,
                        ShadowFrame& shadow_frame, JValue result_register) {
@@ -367,12 +370,42 @@ static inline JValue Execute(Thread* self, MethodHelper& mh, const DexFile::Code
       } else {
         return ExecuteSwitchImpl<false, false>(self, mh, code_item, shadow_frame, result_register);
       }
-    } else {
-      DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
-      if (transaction_active) {
-        return ExecuteGotoImpl<false, true>(self, mh, code_item, shadow_frame, result_register);
+#if USE_TRANSLATOR && defined(__arm__)
+    } else if (kInterpreterImplKind == kTranslatorImplKind) {
+      uint32_t access = const_cast<mirror::ArtMethod*>(mh.GetMethod())->GetAccessFlags();
+      if (transaction_active || ((access & kAccConstructor) != 0 && (access & kAccStatic) != 0)) {
+        // Don't translate static constructors.
+        if (transaction_active) {
+#ifdef __clang__
+          return ExecuteSwitchImpl<false, true>(self, mh, code_item, shadow_frame, result_register);
+#else
+          return ExecuteGotoImpl<false, true>(self, mh, code_item, shadow_frame, result_register);
+#endif
+        } else {
+#ifdef __clang__
+          return ExecuteSwitchImpl<false, false>(self, mh, code_item, shadow_frame, result_register);
+#else
+          return ExecuteGotoImpl<false, false>(self, mh, code_item, shadow_frame, result_register);
+#endif
+        }
       } else {
+        return ExecuteTranslatorImpl(self, mh, code_item, shadow_frame, result_register);
+      }
+#endif    // defined(__arm__)
+    } else {
+      // DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
+      if (transaction_active) {
+#ifdef __clang__
+        return ExecuteSwitchImpl<false, true>(self, mh, code_item, shadow_frame, result_register);
+#else
+        return ExecuteGotoImpl<false, true>(self, mh, code_item, shadow_frame, result_register);
+#endif
+      } else {
+#ifdef __clang__
+        return ExecuteSwitchImpl<false, false>(self, mh, code_item, shadow_frame, result_register);
+#else
         return ExecuteGotoImpl<false, false>(self, mh, code_item, shadow_frame, result_register);
+#endif
       }
     }
   } else {
@@ -384,11 +417,19 @@ static inline JValue Execute(Thread* self, MethodHelper& mh, const DexFile::Code
         return ExecuteSwitchImpl<true, false>(self, mh, code_item, shadow_frame, result_register);
       }
     } else {
-      DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
+      // DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
       if (transaction_active) {
+#ifdef __clang__
+        return ExecuteSwitchImpl<true, true>(self, mh, code_item, shadow_frame, result_register);
+#else
         return ExecuteGotoImpl<true, true>(self, mh, code_item, shadow_frame, result_register);
+#endif
       } else {
+#ifdef __clang__
+        return ExecuteSwitchImpl<true, false>(self, mh, code_item, shadow_frame, result_register);
+#else
         return ExecuteGotoImpl<true, false>(self, mh, code_item, shadow_frame, result_register);
+#endif
       }
     }
   }
@@ -546,6 +587,10 @@ extern "C" void artInterpreterToInterpreterBridge(Thread* self, MethodHelper& mh
     }
   }
 
+  if (UNLIKELY(self->TestAllFlags())) {
+    self->CheckSuspend();
+  }
+
   if (LIKELY(!method->IsNative())) {
     result->SetJ(Execute(self, mh, code_item, *shadow_frame, JValue()).GetJ());
   } else {
@@ -560,5 +605,10 @@ extern "C" void artInterpreterToInterpreterBridge(Thread* self, MethodHelper& mh
   self->PopShadowFrame();
 }
 
+void ResetInterpreter() {
+#if USE_TRANSLATOR && defined(__arm__)
+  ResetTranslator();
+#endif
+}
 }  // namespace interpreter
 }  // namespace art

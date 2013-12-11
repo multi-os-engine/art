@@ -18,10 +18,6 @@
 
 #include <iostream>
 
-#include "base/logging.h"
-#include "base/stringprintf.h"
-#include "thread.h"
-
 namespace art {
 namespace mips {
 
@@ -238,7 +234,7 @@ size_t DisassemblerMips::Dump(std::ostream& os, const uint8_t* instr_ptr) {
               args << StringPrintf("%+d(r%d)", offset, rs);
               if (rs == 17) {
                 args << "  ; ";
-                Thread::DumpThreadOffset<4>(args, offset);
+                Annotate(&args, offset, 4);
               }
             }
             break;

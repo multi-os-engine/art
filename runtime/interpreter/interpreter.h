@@ -52,6 +52,7 @@ extern "C" void artInterpreterToInterpreterBridge(Thread* self, MethodHelper& mh
                                                   ShadowFrame* shadow_frame, JValue* result)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+extern void ResetInterpreter();
 }  // namespace interpreter
 
 extern "C" void artInterpreterToCompiledCodeBridge(Thread* self, MethodHelper& mh,
