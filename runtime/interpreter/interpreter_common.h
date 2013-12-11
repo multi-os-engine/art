@@ -78,6 +78,13 @@ extern JValue ExecuteGotoImpl(Thread* self, MethodHelper& mh,
 
 void ThrowNullPointerExceptionFromInterpreter(const ShadowFrame& shadow_frame)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+#if defined(__arm__)
+extern JValue ExecuteTranslatorImpl(Thread* self, MethodHelper& mh,
+                                    const DexFile::CodeItem* code_item,
+                                    ShadowFrame& shadow_frame, JValue result_register);
+extern void ResetTranslator();
+
+#endif    // defined(__arm__)
 
 static inline void DoMonitorEnter(Thread* self, Object* ref) NO_THREAD_SAFETY_ANALYSIS {
   ref->MonitorEnter(self);
@@ -135,7 +142,7 @@ static inline bool DoInvokeVirtualQuick(Thread* self, ShadowFrame& shadow_frame,
   Object* const receiver = shadow_frame.GetVRegReference(vregC);
   if (UNLIKELY(receiver == nullptr)) {
     // We lost the reference to the method index so we cannot get a more
-    // precised exception message.
+    // precise exception message.
     ThrowNullPointerExceptionFromDexPC(shadow_frame.GetCurrentLocationForThrow());
     return false;
   }
@@ -338,6 +345,9 @@ static inline int32_t DoSparseSwitch(const Instruction* inst, const ShadowFrame&
 uint32_t FindNextInstructionFollowingException(Thread* self, ShadowFrame& shadow_frame,
     uint32_t dex_pc, const instrumentation::Instrumentation* instrumentation)
         SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+uint32_t FindNextInstructionFollowingException(Thread* self, ShadowFrame& shadow_frame,
+    uint32_t dex_pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
 void UnexpectedOpcode(const Instruction* inst, MethodHelper& mh)
   __attribute__((cold, noreturn))

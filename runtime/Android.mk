@@ -81,6 +81,7 @@ LIBART_COMMON_SRC_FILES := \
   interpreter/interpreter.cc \
   interpreter/interpreter_common.cc \
   interpreter/interpreter_switch_impl.cc \
+  interpreter/interpreter_translator_impl.cc \
   java_vm_ext.cc \
   jdwp/jdwp_event.cc \
   jdwp/jdwp_expand_buf.cc \
@@ -224,6 +225,9 @@ LIBART_TARGET_SRC_FILES_arm := \
   arch/arm/quick_entrypoints_arm.S \
   arch/arm/arm_sdiv.S \
   arch/arm/thread_arm.cc \
+  arch/arm/xlator/xlate.S \
+  arch/arm/xlator/translator.cc \
+  arch/arm/xlator/asm_helpers.cc \
   arch/arm/fault_handler_arm.cc
 
 LIBART_TARGET_SRC_FILES_arm64 := \
@@ -420,6 +424,11 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
   LOCAL_SHARED_LIBRARIES += liblog libnativehelper libnativebridge
   include external/libcxx/libcxx.mk
   LOCAL_SHARED_LIBRARIES += libbacktrace_libc++
+
+  # For debug builds, include the disassembler
+  ifeq ($(2),debug)
+    LOCAL_SHARED_LIBRARIES += libart-disassembler
+  endif
   ifeq ($$(art_target_or_host),target)
     LOCAL_SHARED_LIBRARIES += libcutils libdl libselinux libutils libsigchain
     LOCAL_STATIC_LIBRARIES := libziparchive libz

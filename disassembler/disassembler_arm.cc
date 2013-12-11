@@ -20,12 +20,19 @@
 
 #include <iostream>
 
-#include "base/logging.h"
-#include "base/stringprintf.h"
-#include "thread.h"
-
 namespace art {
 namespace arm {
+
+// For rounding integers.
+template<typename T>
+static inline T RoundDown(T x, int n) {
+  return (x & -n);
+}
+
+#define CTZ(x) __builtin_ctz(x)
+
+DisassemblerArm::DisassemblerArm(DisassemblerAnnotator* annotator) : Disassembler(annotator) {
+}
 
 size_t DisassemblerArm::Dump(std::ostream& os, const uint8_t* begin) {
   if ((reinterpret_cast<intptr_t>(begin) & 1) == 0) {
@@ -124,8 +131,8 @@ static const char* kThumbReverseOperations[] = {
 };
 
 struct ArmRegister {
-  explicit ArmRegister(uint32_t r) : r(r) { CHECK_LE(r, 15U); }
-  ArmRegister(uint32_t instruction, uint32_t at_bit) : r((instruction >> at_bit) & 0xf) { CHECK_LE(r, 15U); }
+  explicit ArmRegister(uint32_t r) : r(r) { /* CHECK_LE(r, 15U); */ }
+  ArmRegister(uint32_t instruction, uint32_t at_bit) : r((instruction >> at_bit) & 0xf) { /* CHECK_LE(r, 15U); */ }
   uint32_t r;
 };
 std::ostream& operator<<(std::ostream& os, const ArmRegister& r) {
@@ -264,6 +271,21 @@ void DisassemblerArm::DumpArm(std::ostream& os, const uint8_t* instr_ptr) {
           args << ArmRegister(instruction & 0xf);
           break;
         }
+
+        // MOVW
+        if (((instruction >> 20) & 0xff) == 0x30) {
+          opcode = "movw";
+          uint16_t imm = (instruction & 0xfff) | ((instruction & 0xf0000) >> 4);
+          args << ArmRegister(instruction, 12) << ", #" << imm;
+          break;
+        }
+        // MOVT
+        if (((instruction >> 20) & 0xff) == 0x34) {
+          opcode = "movt";
+          uint16_t imm = (instruction & 0xfff) | ((instruction & 0xf0000) >> 4);
+          args << ArmRegister(instruction, 16) << ", #" << imm;
+          break;
+        }
         bool i = (instruction & (1 << 25)) != 0;
         bool s = (instruction & (1 << 20)) != 0;
         uint32_t op = (instruction >> 21) & 0xf;
@@ -310,7 +332,8 @@ void DisassemblerArm::DumpArm(std::ostream& os, const uint8_t* instr_ptr) {
         args << ArmRegister(instruction, 12) << ", ";
         ArmRegister rn(instruction, 16);
         if (rn.r == 0xf) {
-          UNIMPLEMENTED(FATAL) << "literals";
+          // std::cerr << "Unimplemented: literals";
+          // exit(1);
         } else {
           bool wback = !p || w;
           uint32_t offset = (instruction & 0xfff);
@@ -321,11 +344,12 @@ void DisassemblerArm::DumpArm(std::ostream& os, const uint8_t* instr_ptr) {
           } else if (!p && wback) {
             args << "[" << rn << "], #" << offset;
           } else {
-            LOG(FATAL) << p << " " << w;
+            std::cerr << p << " " << w;
+            exit(1);
           }
           if (rn.r == 9) {
             args << "  ; ";
-            Thread::DumpThreadOffset<4>(args, offset);
+            Annotate(&args, offset, 4);
           }
         }
       }
@@ -380,7 +404,7 @@ int32_t ThumbExpand(int32_t imm12) {
 }
 
 uint32_t VFPExpand32(uint32_t imm8) {
-  CHECK_EQ(imm8 & 0xffu, imm8);
+  // CHECK_EQ(imm8 & 0xffu, imm8);
   uint32_t bit_a = (imm8 >> 7) & 1;
   uint32_t bit_b = (imm8 >> 6) & 1;
   uint32_t slice = imm8 & 0x3f;
@@ -388,7 +412,7 @@ uint32_t VFPExpand32(uint32_t imm8) {
 }
 
 uint64_t VFPExpand64(uint32_t imm8) {
-  CHECK_EQ(imm8 & 0xffu, imm8);
+  // CHECK_EQ(imm8 & 0xffu, imm8);
   uint64_t bit_a = (imm8 >> 7) & 1;
   uint64_t bit_b = (imm8 >> 6) & 1;
   uint64_t slice = imm8 & 0x3f;
@@ -396,9 +420,9 @@ uint64_t VFPExpand64(uint32_t imm8) {
 }
 
 uint64_t AdvSIMDExpand(uint32_t op, uint32_t cmode, uint32_t imm8) {
-  CHECK_EQ(op & 1, op);
-  CHECK_EQ(cmode & 0xf, cmode);
-  CHECK_EQ(imm8 & 0xff, imm8);
+  // CHECK_EQ(op & 1, op);
+  // CHECK_EQ(cmode & 0xf, cmode);
+  // CHECK_EQ(imm8 & 0xff, imm8);
   int32_t cmode321 = cmode >> 1;
   if (imm8 == 0 && cmode321 != 0 && cmode321 != 4 && cmode321 != 7) {
     return INT64_C(0x00000000deadbeef);  // UNPREDICTABLE
@@ -415,7 +439,7 @@ uint64_t AdvSIMDExpand(uint32_t op, uint32_t cmode, uint32_t imm8) {
       imm = ((imm + 1u) << ((cmode & 1) != 0 ? 16 : 8)) - 1u;  // Add 8 or 16 ones.
       return static_cast<int64_t>((imm << 32) | imm);
     default:
-      CHECK_EQ(cmode321, 7);
+      // CHECK_EQ(cmode321, 7);
       if ((cmode & 1) == 0 && op == 0) {
         imm = (imm << 8) | imm;
         return static_cast<int64_t>((imm << 48) | (imm << 32) | (imm << 16) | imm);
@@ -1400,7 +1424,7 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
               args << Rt << ", [" << Rn << ", #" << imm12 << "]";
               if (Rn.r == 9) {
                 args << "  ; ";
-                Thread::DumpThreadOffset<4>(args, imm12);
+                Annotate(&args, imm12, 4);
               } else if (Rn.r == 15) {
                 intptr_t lit_adr = reinterpret_cast<intptr_t>(instr_ptr);
                 lit_adr = RoundDown(lit_adr, 4) + 4 + imm12;
@@ -1414,7 +1438,7 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
               args << Rt << ", [" << Rn << ", #" << imm12 << "]";
               if (Rn.r == 9) {
                 args << "  ; ";
-                Thread::DumpThreadOffset<4>(args, imm12);
+                Annotate(&args, imm12, 4);
               } else if (Rn.r == 15) {
                 intptr_t lit_adr = reinterpret_cast<intptr_t>(instr_ptr);
                 lit_adr = RoundDown(lit_adr, 4) + 4 + imm12;
@@ -1471,7 +1495,7 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
             args << Rt << ", [" << Rn << ", #" << imm12 << "]";
             if (Rn.r == 9) {
               args << "  ; ";
-              Thread::DumpThreadOffset<4>(args, imm12);
+              Annotate(&args, imm12, 4);
             } else if (Rn.r == 15) {
               intptr_t lit_adr = reinterpret_cast<intptr_t>(instr_ptr);
               lit_adr = RoundDown(lit_adr, 4) + 4 + imm12;
@@ -1512,7 +1536,9 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
               } else if (!p && wback) {
                 args << "[" << Rn << "], #" << offset;
               } else {
-                LOG(FATAL) << p << " " << w;
+                // LOG(FATAL) << p << " " << w;
+                std::cerr << p << " " << w << "\n";
+                abort();
               }
             }
           }

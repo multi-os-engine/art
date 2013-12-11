@@ -64,6 +64,9 @@ namespace interpreter {
 #define HANDLE_INSTRUCTION_START(opcode) op_##opcode:  // NOLINT(whitespace/labels)
 #define HANDLE_INSTRUCTION_END() UNREACHABLE_CODE_CHECK()
 
+extern "C" void davebreak(int i) {
+  LOG(INFO) << "dave break " << i;
+}
 /**
  * Interpreter based on computed goto tables.
  *

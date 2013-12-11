@@ -24,9 +24,7 @@ namespace x86 {
 
 class DisassemblerX86 FINAL : public Disassembler {
  public:
-  explicit DisassemblerX86(bool supports_rex) : supports_rex_(supports_rex) {
-  }
-
+  explicit DisassemblerX86(bool supports_rex, DisassemblerAnnotator* annotator = nullptr);
   size_t Dump(std::ostream& os, const uint8_t* begin) OVERRIDE;
   void Dump(std::ostream& os, const uint8_t* begin, const uint8_t* end) OVERRIDE;
 
