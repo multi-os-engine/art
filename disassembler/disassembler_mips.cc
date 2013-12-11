@@ -18,10 +18,6 @@
 
 #include <iostream>
 
-#include "base/logging.h"
-#include "base/stringprintf.h"
-#include "thread.h"
-
 namespace art {
 namespace mips {
 
@@ -168,7 +164,7 @@ static uint32_t ReadU32(const uint8_t* ptr) {
   return ptr[0] | (ptr[1] << 8) | (ptr[2] << 16) | (ptr[3] << 24);
 }
 
-static void DumpMips(std::ostream& os, const uint8_t* instr_ptr) {
+static void DumpMips(Disassembler* dasm, std::ostream& os, const uint8_t* instr_ptr) {
   uint32_t instruction = ReadU32(instr_ptr);
 
   uint32_t rs = (instruction >> 21) & 0x1f;  // I-type, R-type.
@@ -237,7 +233,7 @@ static void DumpMips(std::ostream& os, const uint8_t* instr_ptr) {
               args << StringPrintf("%+d(r%d)", offset, rs);
               if (rs == 17) {
                 args << "  ; ";
-                Thread::DumpThreadOffset<4>(args, offset);
+                dasm->Annotate(&args, offset, 4);
               }
             }
             break;
@@ -257,14 +253,17 @@ static void DumpMips(std::ostream& os, const uint8_t* instr_ptr) {
   os << StringPrintf("%p: %08x\t%-7s ", instr_ptr, instruction, opcode.c_str()) << args.str() << '\n';
 }
 
+DisassemblerMips::DisassemblerMips(DisassemblerAnnotator* annotator) : Disassembler(annotator) {
+}
+
 size_t DisassemblerMips::Dump(std::ostream& os, const uint8_t* begin) {
-  DumpMips(os, begin);
+  DumpMips(this, os, begin);
   return 4;
 }
 
 void DisassemblerMips::Dump(std::ostream& os, const uint8_t* begin, const uint8_t* end) {
   for (const uint8_t* cur = begin; cur < end; cur += 4) {
-    DumpMips(os, cur);
+    DumpMips(this, os, cur);
   }
 }
 

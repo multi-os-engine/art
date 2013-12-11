@@ -306,6 +306,7 @@ static inline mirror::ArtField* FindFieldFromCode(uint32_t field_idx, mirror::Ar
     default:                     is_primitive = true;  is_set = true;  is_static = true;  break;
   }
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+  CHECK(class_linker != nullptr);
   mirror::ArtField* resolved_field = class_linker->ResolveField(field_idx, referrer, is_static);
   if (UNLIKELY(resolved_field == nullptr)) {
     DCHECK(self->IsExceptionPending());  // Throw exception and unwind.
@@ -603,6 +604,8 @@ static inline mirror::ArtMethod* FindMethodFast(uint32_t method_idx,
     return this_object->GetClass()->GetVTable()->Get(resolved_method->GetMethodIndex());
   }
 }
+
+
 
 static inline mirror::Class* ResolveVerifyAndClinit(uint32_t type_idx,
                                                     mirror::ArtMethod* referrer,

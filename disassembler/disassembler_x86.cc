@@ -18,12 +18,12 @@
 
 #include <iostream>
 
-#include "base/logging.h"
-#include "base/stringprintf.h"
-#include "thread.h"
 
 namespace art {
 namespace x86 {
+
+DisassemblerX86::DisassemblerX86(bool supports_rex, DisassemblerAnnotator* annotator)
+  : Disassembler(annotator), supports_rex_(supports_rex) {}
 
 size_t DisassemblerX86::Dump(std::ostream& os, const uint8_t* begin) {
   return DumpInstruction(os, begin);
@@ -46,7 +46,7 @@ static const char* gReg64Names[] = {
 
 static void DumpReg0(std::ostream& os, uint8_t rex, size_t reg,
                      bool byte_operand, uint8_t size_override) {
-  DCHECK_LT(reg, (rex == 0) ? 8u : 16u);
+  // DCHECK_LT(reg, (rex == 0) ? 8u : 16u);
   bool rex_w = (rex & 0b1000) != 0;
   size_t size = byte_operand ? 1 : (size_override == 0x66 ? 2 : (rex_w ? 8 :4));
   switch (size) {
@@ -54,7 +54,7 @@ static void DumpReg0(std::ostream& os, uint8_t rex, size_t reg,
     case 2: os << gReg16Names[reg]; break;
     case 4: os << gReg32Names[reg]; break;
     case 8: os << gReg64Names[reg]; break;
-    default: LOG(FATAL) << "unexpected size " << size;
+    default: os << "unexpected size " << size; abort();
   }
 }
 
@@ -154,6 +154,7 @@ size_t DisassemblerX86::DumpInstruction(std::ostream& os, const uint8_t* instr) 
   size_t branch_bytes = 0;
   std::ostringstream opcode;
   bool store = false;  // stores to memory (ie rm is on the left)
+  (void)store;      // Work around cpp-lint problem.
   bool load = false;  // loads from memory (ie rm is on the right)
   bool byte_operand = false;
   bool ax = false;  // implicit use of ax
@@ -391,7 +392,7 @@ DISASSEMBLER_ENTRY(cmp,
           case 0x5D: opcode << "min"; break;
           case 0x5E: opcode << "div"; break;
           case 0x5F: opcode << "max"; break;
-          default: LOG(FATAL) << "Unreachable";
+          default: std::cerr << "Unreachable"; exit(1);
         }
         if (prefix[2] == 0x66) {
           opcode << "pd";
@@ -737,7 +738,7 @@ DISASSEMBLER_ENTRY(cmp,
   }
   std::ostringstream args;
   if (reg_in_opcode) {
-    DCHECK(!has_modrm);
+    // DCHECK(!has_modrm);
     DumpBaseReg(args, rex, *instr & 0x7);
   }
   instr++;
@@ -825,7 +826,7 @@ DISASSEMBLER_ENTRY(cmp,
       DumpSegmentOverride(args, prefix[1]);
       args << address.str();
     } else {
-      DCHECK(store);
+      // DCHECK(store);
       DumpSegmentOverride(args, prefix[1]);
       args << address.str();
       if (!reg_is_opcode) {
@@ -850,18 +851,18 @@ DISASSEMBLER_ENTRY(cmp,
       args << StringPrintf("%d", *reinterpret_cast<const int8_t*>(instr));
       instr++;
     } else {
-      CHECK_EQ(immediate_bytes, 4u);
+      // CHECK_EQ(immediate_bytes, 4u);
       args << StringPrintf("%d", *reinterpret_cast<const int32_t*>(instr));
       instr += 4;
     }
   } else if (branch_bytes > 0) {
-    DCHECK(!has_modrm);
+    // DCHECK(!has_modrm);
     int32_t displacement;
     if (branch_bytes == 1) {
       displacement = *reinterpret_cast<const int8_t*>(instr);
       instr++;
     } else {
-      CHECK_EQ(branch_bytes, 4u);
+      // CHECK_EQ(branch_bytes, 4u);
       displacement = *reinterpret_cast<const int32_t*>(instr);
       instr += 4;
     }
@@ -869,11 +870,11 @@ DISASSEMBLER_ENTRY(cmp,
   }
   if (prefix[1] == kFs && !supports_rex_) {
     args << "  ; ";
-    Thread::DumpThreadOffset<4>(args, address_bits);
+    Annotate(&args, address_bits, 4);
   }
   if (prefix[1] == kGs && supports_rex_) {
     args << "  ; ";
-    Thread::DumpThreadOffset<8>(args, address_bits);
+    Annotate(&args, address_bits, 4);
   }
   std::stringstream hex;
   for (size_t i = 0; begin_instr + i < instr; ++i) {
@@ -885,7 +886,7 @@ DISASSEMBLER_ENTRY(cmp,
     case 0xF2: prefixed_opcode << "repne "; break;
     case 0xF3: prefixed_opcode << "repe "; break;
     case 0: break;
-    default: LOG(FATAL) << "Unreachable";
+    default: std::cerr << "Unreachable"; exit(1);
   }
   prefixed_opcode << opcode.str();
   os << StringPrintf("%p: %22s    \t%-7s ", begin_instr, hex.str().c_str(),

@@ -73,14 +73,14 @@ define build-libart-disassembler
     else # host
       LOCAL_CFLAGS += $(ART_HOST_DEBUG_CFLAGS)
     endif
-    LOCAL_SHARED_LIBRARIES += libartd
+    # LOCAL_SHARED_LIBRARIES += libartd
   else
     ifeq ($$(art_target_or_host),target)
       LOCAL_CFLAGS += $(ART_TARGET_NON_DEBUG_CFLAGS)
     else # host
       LOCAL_CFLAGS += $(ART_HOST_NON_DEBUG_CFLAGS)
     endif
-    LOCAL_SHARED_LIBRARIES += libart
+    # LOCAL_SHARED_LIBRARIES += libart
   endif
 
   LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime

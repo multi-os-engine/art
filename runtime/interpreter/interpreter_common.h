@@ -84,6 +84,14 @@ extern JValue ExecuteGotoImpl(Thread* self, MethodHelper& mh,
                               const DexFile::CodeItem* code_item,
                               ShadowFrame& shadow_frame, JValue result_register);
 
+#if defined(__arm__)
+extern JValue ExecuteTranslatorImpl(Thread* self, MethodHelper& mh,
+                                    const DexFile::CodeItem* code_item,
+                                    ShadowFrame& shadow_frame, JValue result_register);
+extern void ResetTranslator();
+
+#endif    // defined(__arm__)
+
 static inline void DoMonitorEnter(Thread* self, Object* ref) NO_THREAD_SAFETY_ANALYSIS {
   ref->MonitorEnter(self);
 }
@@ -140,7 +148,7 @@ static inline bool DoInvokeVirtualQuick(Thread* self, ShadowFrame& shadow_frame,
   Object* const receiver = shadow_frame.GetVRegReference(vregC);
   if (UNLIKELY(receiver == nullptr)) {
     // We lost the reference to the method index so we cannot get a more
-    // precised exception message.
+    // precise exception message.
     ThrowNullPointerExceptionFromDexPC(shadow_frame.GetCurrentLocationForThrow());
     return false;
   }
@@ -597,13 +605,15 @@ static inline uint32_t FindNextInstructionFollowingException(Thread* self,
     // Update the exception.
     exception = self->GetException(&throw_location);
   }
-  if (found_dex_pc == DexFile::kDexNoIndex) {
+  if (instrumentation != nullptr && found_dex_pc == DexFile::kDexNoIndex) {
     instrumentation->MethodUnwindEvent(self, this_object,
                                        shadow_frame.GetMethod(), dex_pc);
   } else {
-    instrumentation->ExceptionCaughtEvent(self, throw_location,
-                                          shadow_frame.GetMethod(),
-                                          found_dex_pc, exception);
+    if (instrumentation != nullptr) {
+      instrumentation->ExceptionCaughtEvent(self, throw_location,
+                                            shadow_frame.GetMethod(),
+                                            found_dex_pc, exception);
+    }
     if (clear_exception) {
       self->ClearException();
     }
