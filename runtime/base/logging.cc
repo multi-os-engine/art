@@ -161,5 +161,4 @@ LogMessage::~LogMessage() {
     Runtime::Abort();
   }
 }
-
 }  // namespace art

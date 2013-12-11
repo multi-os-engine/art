@@ -23,6 +23,7 @@
 
 namespace art {
 
+
 static jobject DexCache_getDexNative(JNIEnv* env, jobject javaDexCache) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::DexCache* dex_cache = soa.Decode<mirror::DexCache*>(javaDexCache);

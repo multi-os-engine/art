@@ -72,11 +72,6 @@ define build-libart-disassembler
   endif
 
   LOCAL_SHARED_LIBRARIES += liblog
-  ifeq ($$(art_ndebug_or_debug),debug)
-    LOCAL_SHARED_LIBRARIES += libartd
-  else
-    LOCAL_SHARED_LIBRARIES += libart
-  endif
 
   LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime
 

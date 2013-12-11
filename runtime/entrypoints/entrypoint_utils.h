@@ -155,6 +155,8 @@ static inline mirror::ArtMethod* FindMethodFast(uint32_t method_idx,
                                                 bool access_check, InvokeType type)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+
+
 static inline mirror::Class* ResolveVerifyAndClinit(uint32_t type_idx,
                                                     mirror::ArtMethod* referrer,
                                                     Thread* self, bool can_run_clinit,
