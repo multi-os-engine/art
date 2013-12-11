@@ -501,6 +501,29 @@ uint32_t FindNextInstructionFollowingException(Thread* self,
   return found_dex_pc;
 }
 
+uint32_t FindNextInstructionFollowingException(Thread* self,
+                                               ShadowFrame& shadow_frame,
+                                               uint32_t dex_pc) {
+  self->VerifyStack();
+  ThrowLocation throw_location;
+  StackHandleScope<3> hs(self);
+  Handle<mirror::Throwable> exception(hs.NewHandle(self->GetException(&throw_location)));
+  bool clear_exception = false;
+  uint32_t found_dex_pc;
+  {
+    Handle<mirror::Class> exception_class(hs.NewHandle(exception->GetClass()));
+    Handle<mirror::ArtMethod> h_method(hs.NewHandle(shadow_frame.GetMethod()));
+    found_dex_pc = mirror::ArtMethod::FindCatchBlock(h_method, exception_class, dex_pc,
+                                                     &clear_exception);
+  }
+  if (found_dex_pc != DexFile::kDexNoIndex) {
+    if (clear_exception) {
+      self->ClearException();
+    }
+  }
+  return found_dex_pc;
+}
+
 void UnexpectedOpcode(const Instruction* inst, MethodHelper& mh) {
   LOG(FATAL) << "Unexpected instruction: " << inst->DumpString(mh.GetMethod()->GetDexFile());
   exit(0);  // Unreachable, keep GCC happy.

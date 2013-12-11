@@ -397,6 +397,8 @@ class MANAGED LOCKABLE Object {
         field_offset, reinterpret_cast<int64_t>(new_value));
 #endif
   }
+  // Write barrier called post update to a reference bearing field.
+  static void WriteBarrierField(const Object* dst, MemberOffset offset, const Object* new_value);
 
   // TODO fix thread safety analysis broken by the use of template. This should be
   // SHARED_LOCKS_REQUIRED(Locks::mutator_lock_).
