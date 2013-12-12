@@ -239,6 +239,9 @@ class MethodVerifier {
 
   void VisitRoots(RootVisitor* visitor, void* arg) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  static void AddRejectedClass(ClassReference ref)
+      LOCKS_EXCLUDED(rejected_classes_lock_);
+
  private:
   // Adds the given string to the beginning of the last failure message.
   void PrependToLastFailMessage(std::string);
@@ -662,8 +665,6 @@ class MethodVerifier {
   static ReaderWriterMutex* rejected_classes_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   static RejectedClassesTable* rejected_classes_ GUARDED_BY(rejected_classes_lock_);
 
-  static void AddRejectedClass(ClassReference ref)
-      LOCKS_EXCLUDED(rejected_classes_lock_);
 
   RegTypeCache reg_types_;
 

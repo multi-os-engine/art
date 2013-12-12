@@ -1678,6 +1678,8 @@ static void VerifyClass(const ParallelCompilationManager* manager, size_t class_
       // ClassLinker::VerifyClass throws, which isn't useful in the compiler.
       CHECK(soa.Self()->IsExceptionPending());
       soa.Self()->ClearException();
+      verifier::MethodVerifier::AddRejectedClass(ClassReference(&dex_file,
+                                                                dex_file.GetIndexForClassDef(class_def)));
     }
 
     CHECK(klass->IsCompileTimeVerified() || klass->IsErroneous())

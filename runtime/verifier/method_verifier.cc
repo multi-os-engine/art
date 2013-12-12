@@ -91,10 +91,18 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(const mirror::Class* kla
     return kNoFailure;
   }
   mirror::Class* super = klass->GetSuperClass();
+  ClassHelper kh(klass);
+  const DexFile& dex_file = kh.GetDexFile();
+  const DexFile::ClassDef* class_def = kh.GetClassDef();
   if (super == NULL && strcmp("Ljava/lang/Object;", ClassHelper(klass).GetDescriptor()) != 0) {
     *error = "Verifier rejected class ";
     *error += PrettyDescriptor(klass);
     *error += " that has no super class";
+
+    if (Runtime::Current()->IsCompiler()) {
+      ClassReference ref(&dex_file, dex_file.GetIndexForClassDef(*class_def));
+      AddRejectedClass(ref);
+    }
     return kHardFailure;
   }
   if (super != NULL && super->IsFinal()) {
@@ -102,16 +110,24 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(const mirror::Class* kla
     *error += PrettyDescriptor(klass);
     *error += " that attempts to sub-class final class ";
     *error += PrettyDescriptor(super);
+
+    if (Runtime::Current()->IsCompiler()) {
+      ClassReference ref(&dex_file, dex_file.GetIndexForClassDef(*class_def));
+      AddRejectedClass(ref);
+    }
     return kHardFailure;
   }
-  ClassHelper kh(klass);
-  const DexFile& dex_file = kh.GetDexFile();
-  const DexFile::ClassDef* class_def = kh.GetClassDef();
+
   if (class_def == NULL) {
     *error = "Verifier rejected class ";
     *error += PrettyDescriptor(klass);
     *error += " that isn't present in dex file ";
     *error += dex_file.GetLocation();
+
+    if (Runtime::Current()->IsCompiler()) {
+      ClassReference ref(&dex_file, dex_file.GetIndexForClassDef(*class_def));
+      AddRejectedClass(ref);
+    }
     return kHardFailure;
   }
   Thread* self = Thread::Current();
