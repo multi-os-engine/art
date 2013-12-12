@@ -559,7 +559,7 @@ static inline bool IsBackwardBranch(int32_t branch_offset) {
 // Explicitly instantiate all DoInvoke functions.
 #define EXPLICIT_DO_INVOKE_TEMPLATE_DECL(_type, _is_range, _do_check)                             \
   template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) ALWAYS_INLINE                              \
-  static bool DoInvoke<_type, _is_range, _do_check>(Thread* self, ShadowFrame& shadow_frame,      \
+  bool DoInvoke<_type, _is_range, _do_check>(Thread* self, ShadowFrame& shadow_frame,      \
                                                     const Instruction* inst, uint16_t inst_data,  \
                                                     JValue* result)
 
@@ -580,7 +580,7 @@ EXPLICIT_DO_INVOKE_ALL_TEMPLATE_DECL(kInterface);   // invoke-interface/range.
 // Explicitly instantiate all DoFieldGet functions.
 #define EXPLICIT_DO_FIELD_GET_TEMPLATE_DECL(_find_type, _field_type, _do_check)                       \
   template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) ALWAYS_INLINE                                  \
-  static bool DoFieldGet<_find_type, _field_type, _do_check>(Thread* self, ShadowFrame& shadow_frame, \
+  bool DoFieldGet<_find_type, _field_type, _do_check>(Thread* self, ShadowFrame& shadow_frame, \
                                                              const Instruction* inst, uint16_t inst_data)
 
 #define EXPLICIT_DO_FIELD_GET_ALL_TEMPLATE_DECL(_find_type, _field_type)  \
@@ -611,7 +611,7 @@ EXPLICIT_DO_FIELD_GET_ALL_TEMPLATE_DECL(StaticObjectRead, Primitive::kPrimNot);
 // Explicitly instantiate all DoFieldPut functions.
 #define EXPLICIT_DO_FIELD_PUT_TEMPLATE_DECL(_find_type, _field_type, _do_check)                             \
   template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) ALWAYS_INLINE                                        \
-  static bool DoFieldPut<_find_type, _field_type, _do_check>(Thread* self, const ShadowFrame& shadow_frame, \
+  bool DoFieldPut<_find_type, _field_type, _do_check>(Thread* self, const ShadowFrame& shadow_frame, \
                                                              const Instruction* inst, uint16_t inst_data)
 
 #define EXPLICIT_DO_FIELD_PUT_ALL_TEMPLATE_DECL(_find_type, _field_type)  \
@@ -642,7 +642,7 @@ EXPLICIT_DO_FIELD_PUT_ALL_TEMPLATE_DECL(StaticObjectWrite, Primitive::kPrimNot);
 // Explicitly instantiate all DoInvokeVirtualQuick functions.
 #define EXPLICIT_DO_INVOKE_VIRTUAL_QUICK_TEMPLATE_DECL(_is_range)                       \
   template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) ALWAYS_INLINE                    \
-  static bool DoInvokeVirtualQuick<_is_range>(Thread* self, ShadowFrame& shadow_frame,  \
+  bool DoInvokeVirtualQuick<_is_range>(Thread* self, ShadowFrame& shadow_frame,  \
                                           const Instruction* inst, uint16_t inst_data,  \
                                           JValue* result)
 
@@ -653,7 +653,7 @@ EXPLICIT_DO_INVOKE_VIRTUAL_QUICK_TEMPLATE_DECL(true);   // invoke-virtual-quick-
 // Explicitly instantiate all DoIGetQuick functions.
 #define EXPLICIT_DO_IGET_QUICK_TEMPLATE_DECL(_field_type)                                   \
   template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) ALWAYS_INLINE                        \
-  static bool DoIGetQuick<_field_type>(ShadowFrame& shadow_frame, const Instruction* inst,  \
+  bool DoIGetQuick<_field_type>(ShadowFrame& shadow_frame, const Instruction* inst,  \
                                        uint16_t inst_data)
 
 EXPLICIT_DO_IGET_QUICK_TEMPLATE_DECL(Primitive::kPrimInt);    // iget-quick.
@@ -664,7 +664,7 @@ EXPLICIT_DO_IGET_QUICK_TEMPLATE_DECL(Primitive::kPrimNot);    // iget-object-qui
 // Explicitly instantiate all DoIPutQuick functions.
 #define EXPLICIT_DO_IPUT_QUICK_TEMPLATE_DECL(_field_type)                                         \
   template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) ALWAYS_INLINE                              \
-  static bool DoIPutQuick<_field_type>(const ShadowFrame& shadow_frame, const Instruction* inst,  \
+  bool DoIPutQuick<_field_type>(const ShadowFrame& shadow_frame, const Instruction* inst,  \
                                        uint16_t inst_data)
 
 EXPLICIT_DO_IPUT_QUICK_TEMPLATE_DECL(Primitive::kPrimInt);    // iget-quick.
