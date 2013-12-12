@@ -48,7 +48,7 @@ static mirror::ArtMethod* FindMethodHelper(uint32_t method_idx, mirror::Object* 
 // Explicit template declarations of FindMethodHelper for all invoke types.
 #define EXPLICIT_FIND_METHOD_HELPER_TEMPLATE_DECL(_type, _access_check)                               \
   template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)                                                \
-  static mirror::ArtMethod* FindMethodHelper<_type, _access_check>(uint32_t method_idx,               \
+  mirror::ArtMethod* FindMethodHelper<_type, _access_check>(uint32_t method_idx,               \
                                                                    mirror::Object* this_object,       \
                                                                    mirror::ArtMethod* caller_method,  \
                                                                    Thread* thread)
