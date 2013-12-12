@@ -185,7 +185,7 @@ ArenaAllocator::~ArenaAllocator() {
 
 void ArenaAllocator::ObtainNewArenaForAllocation(size_t allocation_size) {
   UpdateBytesAllocated();
-  Arena* new_arena = pool_->AllocArena(std::max(Arena::kDefaultSize, allocation_size));
+  Arena* new_arena = pool_->AllocArena(std::max(128 * KB /*Arena::kDefaultSize*/, allocation_size));
   new_arena->next_ = arena_head_;
   arena_head_ = new_arena;
   // Update our internal data structures.

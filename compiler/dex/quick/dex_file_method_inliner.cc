@@ -398,9 +398,9 @@ uint32_t DexFileMethodInliner::FindMethodIndex(const DexFile* dex_file, IndexCac
 }
 
 DexFileMethodInliner::IndexCache::IndexCache() {
-  std::fill_n(class_indexes, arraysize(class_indexes), kIndexUnresolved);
-  std::fill_n(name_indexes, arraysize(name_indexes), kIndexUnresolved);
-  std::fill_n(proto_indexes, arraysize(proto_indexes), kIndexUnresolved);
+  std::fill_n(class_indexes, arraysize(class_indexes), static_cast<uint32_t>(-2));
+  std::fill_n(name_indexes, arraysize(name_indexes), static_cast<uint32_t>(-2));
+  std::fill_n(proto_indexes, arraysize(proto_indexes), static_cast<uint32_t>(-2));
 }
 
 void DexFileMethodInliner::FindIntrinsics(const DexFile* dex_file) {
