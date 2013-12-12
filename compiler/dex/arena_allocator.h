@@ -20,61 +20,13 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "base/mutex.h"
+#include "arena.h"
 #include "compiler_enums.h"
-#include "mem_map.h"
 
 namespace art {
 
 class Arena;
 class ArenaPool;
-class ArenaAllocator;
-
-class Arena {
- public:
-  static constexpr size_t kDefaultSize = 128 * KB;
-  explicit Arena(size_t size = kDefaultSize);
-  ~Arena();
-  void Reset();
-  uint8_t* Begin() {
-    return memory_;
-  }
-
-  uint8_t* End() {
-    return memory_ + size_;
-  }
-
-  size_t Size() const {
-    return size_;
-  }
-
-  size_t RemainingSpace() const {
-    return Size() - bytes_allocated_;
-  }
-
- private:
-  size_t bytes_allocated_;
-  uint8_t* memory_;
-  size_t size_;
-  MemMap* map_;
-  Arena* next_;
-  friend class ArenaPool;
-  friend class ArenaAllocator;
-  DISALLOW_COPY_AND_ASSIGN(Arena);
-};
-
-class ArenaPool {
- public:
-  ArenaPool();
-  ~ArenaPool();
-  Arena* AllocArena(size_t size);
-  void FreeArena(Arena* arena);
-
- private:
-  Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
-  Arena* free_arenas_ GUARDED_BY(lock_);
-  DISALLOW_COPY_AND_ASSIGN(ArenaPool);
-};
 
 class ArenaAllocator {
  public:

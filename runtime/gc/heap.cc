@@ -23,6 +23,7 @@
 #include <vector>
 #include <valgrind.h>
 
+#include "arena.h"
 #include "base/histogram-inl.h"
 #include "base/stl_util.h"
 #include "common_throws.h"
@@ -97,6 +98,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       long_gc_log_threshold_(long_gc_log_threshold),
       ignore_max_footprint_(ignore_max_footprint),
       have_zygote_space_(false),
+      arena_pool_(new ArenaPool),
       soft_reference_queue_(this),
       weak_reference_queue_(this),
       finalizer_reference_queue_(this),
@@ -245,7 +247,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   // Card cache for now since it makes it easier for us to update the references to the copying
   // spaces.
   accounting::ModUnionTable* mod_union_table =
-      new accounting::ModUnionTableCardCache("Image mod-union table", this, GetImageSpace());
+      new accounting::ModUnionTableToZygoteAllocspace("Image mod-union table", this, GetImageSpace());
   CHECK(mod_union_table != nullptr) << "Failed to create image mod-union table";
   AddModUnionTable(mod_union_table);
 
@@ -310,14 +312,7 @@ void Heap::ChangeAllocator(AllocatorType allocator) {
 }
 
 bool Heap::IsCompilingBoot() const {
-  for (const auto& space : continuous_spaces_) {
-    if (space->IsImageSpace()) {
-      return false;
-    } else if (space->IsZygoteSpace()) {
-      return false;
-    }
-  }
-  return true;
+  return !HasImageSpace() && !have_zygote_space_;
 }
 
 bool Heap::HasImageSpace() const {
@@ -602,41 +597,51 @@ space::Space* Heap::FindSpaceFromObject(const mirror::Object* obj, bool fail_ok)
 
 struct SoftReferenceArgs {
   RootVisitor* is_marked_callback_;
-  RootVisitor* recursive_mark_callback_;
+  RootVisitor* mark_object_callback_;
   void* arg_;
 };
 
-mirror::Object* Heap::PreserveSoftReferenceCallback(mirror::Object* obj, void* arg) {
-  SoftReferenceArgs* args = reinterpret_cast<SoftReferenceArgs*>(arg);
-  // TODO: Not preserve all soft references.
-  return args->recursive_mark_callback_(obj, args->arg_);
+mirror::Object* Heap::PreserveSoftReferenceCallback(mirror::Object* obj, void* /*arg*/) {
+  return nullptr;
+}
+
+void Heap::PreProcessReferences(TimingLogger& timings, MarkObjectVisitor* is_marked_callback,
+                                void* arg) {
+  timings.StartSplit("PreProcessReferences");
+  // Removed references with marked referents.
+  finalizer_reference_queue_.RemovedMarkedReferences(is_marked_callback, arg);
+  timings.EndSplit();
 }
 
 // Process reference class instances and schedule finalizations.
-void Heap::ProcessReferences(TimingLogger& timings, bool clear_soft,
-                             RootVisitor* is_marked_callback,
-                             RootVisitor* recursive_mark_object_callback, void* arg) {
+void Heap::ProcessReferences(TimingLogger& timings, bool clear_soft_references,
+                             MarkObjectVisitor* is_marked_callback,
+                             MarkObjectVisitor* mark_object_callback,
+                             ProcessMarkStackVisitor* process_mark_stack_callback, void* arg) {
+  CHECK(cleared_references_.IsEmpty());
+  timings.StartSplit("(Paused)ProcessReferences");
   // Unless we are in the zygote or required to clear soft references with white references,
   // preserve some white referents.
-  if (!clear_soft && !Runtime::Current()->IsZygote()) {
+  if (!clear_soft_references && !Runtime::Current()->IsZygote()) {
     SoftReferenceArgs soft_reference_args;
     soft_reference_args.is_marked_callback_ = is_marked_callback;
-    soft_reference_args.recursive_mark_callback_ = recursive_mark_object_callback;
+    soft_reference_args.mark_object_callback_ = mark_object_callback;
     soft_reference_args.arg_ = arg;
     soft_reference_queue_.PreserveSomeSoftReferences(&PreserveSoftReferenceCallback,
                                                      &soft_reference_args);
+    process_mark_stack_callback(arg);
   }
-  timings.StartSplit("ProcessReferences");
   // Clear all remaining soft and weak references with white referents.
   soft_reference_queue_.ClearWhiteReferences(cleared_references_, is_marked_callback, arg);
   weak_reference_queue_.ClearWhiteReferences(cleared_references_, is_marked_callback, arg);
   timings.EndSplit();
   // Preserve all white objects with finalize methods and schedule them for finalization.
-  timings.StartSplit("EnqueueFinalizerReferences");
-  finalizer_reference_queue_.EnqueueFinalizerReferences(cleared_references_, is_marked_callback,
-                                                        recursive_mark_object_callback, arg);
+  timings.StartSplit("(Paused)EnqueueFinalizerReferences");
+  finalizer_reference_queue_.ProcessFinalizerReferences(cleared_references_, is_marked_callback,
+                                                        mark_object_callback, arg);
+  process_mark_stack_callback(arg);
   timings.EndSplit();
-  timings.StartSplit("ProcessReferences");
+  timings.StartSplit("(Paused)ProcessReferences");
   // Clear all f-reachable soft and weak references with white referents.
   soft_reference_queue_.ClearWhiteReferences(cleared_references_, is_marked_callback, arg);
   weak_reference_queue_.ClearWhiteReferences(cleared_references_, is_marked_callback, arg);
@@ -645,7 +650,7 @@ void Heap::ProcessReferences(TimingLogger& timings, bool clear_soft,
   // At this point all reference queues other than the cleared references should be empty.
   DCHECK(soft_reference_queue_.IsEmpty());
   DCHECK(weak_reference_queue_.IsEmpty());
-  DCHECK(finalizer_reference_queue_.IsEmpty());
+  // DCHECK(finalizer_reference_queue_.IsEmpty());
   DCHECK(phantom_reference_queue_.IsEmpty());
   timings.EndSplit();
 }
@@ -681,12 +686,18 @@ void Heap::DelayReferenceReferent(mirror::Class* klass, mirror::Object* obj,
       // TODO: Remove these locks, and use atomic stacks for storing references?
       // We need to check that the references haven't already been enqueued since we can end up
       // scanning the same reference multiple times due to dirty cards.
-      if (klass->IsSoftReferenceClass()) {
+      if (klass->IsFinalizerReferenceClass()) {
+        if (!IsEnqueued(obj)) {
+          // This is racy but it can only cause the same reference being enqueued twice which is
+          // properly handled by ProcessFinalizerReferences.
+          finalizer_reference_queue_.PushBack(self, obj);
+          // Mark the reference as enqueued by making it point to itself.
+          obj->SetFieldPtr<mirror::Object*>(GetReferencePendingNextOffset(), obj, false);
+        }
+      } else if (klass->IsSoftReferenceClass()) {
         soft_reference_queue_.AtomicEnqueueIfNotEnqueued(self, obj);
       } else if (klass->IsWeakReferenceClass()) {
         weak_reference_queue_.AtomicEnqueueIfNotEnqueued(self, obj);
-      } else if (klass->IsFinalizerReferenceClass()) {
-        finalizer_reference_queue_.AtomicEnqueueIfNotEnqueued(self, obj);
       } else if (klass->IsPhantomReferenceClass()) {
         phantom_reference_queue_.AtomicEnqueueIfNotEnqueued(self, obj);
       } else {
@@ -695,7 +706,7 @@ void Heap::DelayReferenceReferent(mirror::Class* klass, mirror::Object* obj,
       }
     } else if (referent != forward_address) {
       // Referent is already marked and we need to update it.
-      SetReferenceReferent(obj, forward_address);
+      UpdateReferenceReferent(obj, forward_address);
     }
   }
 }
@@ -1199,17 +1210,15 @@ void Heap::TransitionCollector(CollectorType collector_type) {
   const bool copying_transition =
       IsCompactingGC(background_collector_type_) || IsCompactingGC(post_zygote_collector_type_);
   // Busy wait until we can GC (StartGC can fail if we have a non-zero
-  // compacting_gc_disable_count_, this should rarely occurs).
+  // disable_moving_gc_count_, this should rarely occurs).
   for (;;) {
     {
       ScopedThreadStateChange tsc(self, kWaitingForGcToComplete);
       MutexLock mu(self, *gc_complete_lock_);
       // Ensure there is only one GC at a time.
       WaitForGcToCompleteLocked(self);
-      // GC can be disabled if someone has a used GetPrimitiveArrayCritical but not yet released.
-      if (!copying_transition || disable_moving_gc_count_ == 0) {
-        // TODO: Not hard code in semi-space collector?
-        collector_type_running_ = copying_transition ? kCollectorTypeSS : collector_type;
+      // TODO: Not hard code in semi-space collector?
+      if (StartGCLocked(copying_transition ? kCollectorTypeSS : collector_type)) {
         break;
       }
     }
@@ -1454,9 +1463,18 @@ void Heap::PreZygoteFork() {
                                          non_moving_space_->Limit());
     // Compact the bump pointer space to a new zygote bump pointer space.
     temp_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
+    {
+      ScopedThreadStateChange tsc(self, kWaitingForGcToComplete);
+      MutexLock mu(self, *gc_complete_lock_);
+      // Ensure there is only one GC at a time.
+      WaitForGcToCompleteLocked(self);
+      // TODO: Not hard code in semi-space collector?
+      CHECK(StartGCLocked(kCollectorTypeSS));
+    }
     zygote_collector.SetFromSpace(bump_pointer_space_);
     zygote_collector.SetToSpace(&target_space);
     zygote_collector.Run(kGcCauseCollectorTransition, false);
+    FinishGC(self, collector::kGcTypeFull);
     CHECK(temp_space_->IsEmpty());
     total_objects_freed_ever_ += semi_space_collector_->GetFreedObjects();
     total_bytes_freed_ever_ += semi_space_collector_->GetFreedBytes();
@@ -1579,12 +1597,9 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
     // Ensure there is only one GC at a time.
     WaitForGcToCompleteLocked(self);
     compacting_gc = IsCompactingGC(collector_type_);
-    // GC can be disabled if someone has a used GetPrimitiveArrayCritical.
-    if (compacting_gc && disable_moving_gc_count_ != 0) {
-      LOG(WARNING) << "Skipping GC due to disable moving GC count " << disable_moving_gc_count_;
+    if (!StartGCLocked(collector_type_)) {
       return collector::kGcTypeNone;
     }
-    collector_type_running_ = collector_type_;
   }
 
   if (gc_cause == kGcCauseForAlloc && runtime->HasStatsEnabled()) {
@@ -1643,33 +1658,35 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
     const size_t duration = collector->GetDurationNs();
     std::vector<uint64_t> pauses = collector->GetPauseTimes();
     // GC for alloc pauses the allocating thread, so consider it as a pause.
-    bool was_slow = duration > long_gc_log_threshold_ ||
-        (gc_cause == kGcCauseForAlloc && duration > long_pause_log_threshold_);
-    if (!was_slow) {
-      for (uint64_t pause : pauses) {
-        was_slow = was_slow || pause > long_pause_log_threshold_;
+    bool was_slow = duration > long_gc_log_threshold_;
+    uint64_t longest_pause = gc_cause == kGcCauseForAlloc ? duration : 0U;
+    for (uint64_t pause : pauses) {
+      longest_pause  = std::max(longest_pause, pause);
+    }
+    was_slow = was_slow || longest_pause > long_pause_log_threshold_;
+    if (was_slow) {
+      const size_t percent_free = GetPercentFree();
+      const size_t current_heap_size = GetBytesAllocated();
+      const size_t total_memory = GetTotalMemory();
+      std::ostringstream pause_string;
+      for (size_t i = 0; i < pauses.size(); ++i) {
+          pause_string << PrettyDuration((pauses[i] / 1000) * 1000)
+                       << ((i != pauses.size() - 1) ? ", " : "");
+      }
+      LOG(INFO) << gc_cause << " " << collector->GetName()
+                << " GC freed "  <<  collector->GetFreedObjects() << "("
+                << PrettySize(collector->GetFreedBytes()) << ") AllocSpace objects, "
+                << collector->GetFreedLargeObjects() << "("
+                << PrettySize(collector->GetFreedLargeObjectBytes()) << ") LOS objects, "
+                << percent_free << "% free, " << PrettySize(current_heap_size) << "/"
+                << PrettySize(total_memory) << ", " << "paused " << pause_string.str()
+                << " total " << PrettyDuration((duration / 1000) * 1000);
+      if (VLOG_IS_ON(heap)) {
+          LOG(INFO) << Dumpable<TimingLogger>(collector->GetTimings());
       }
     }
-    if (was_slow) {
-        const size_t percent_free = GetPercentFree();
-        const size_t current_heap_size = GetBytesAllocated();
-        const size_t total_memory = GetTotalMemory();
-        std::ostringstream pause_string;
-        for (size_t i = 0; i < pauses.size(); ++i) {
-            pause_string << PrettyDuration((pauses[i] / 1000) * 1000)
-                         << ((i != pauses.size() - 1) ? ", " : "");
-        }
-        LOG(INFO) << gc_cause << " " << collector->GetName()
-                  << " GC freed "  <<  collector->GetFreedObjects() << "("
-                  << PrettySize(collector->GetFreedBytes()) << ") AllocSpace objects, "
-                  << collector->GetFreedLargeObjects() << "("
-                  << PrettySize(collector->GetFreedLargeObjectBytes()) << ") LOS objects, "
-                  << percent_free << "% free, " << PrettySize(current_heap_size) << "/"
-                  << PrettySize(total_memory) << ", " << "paused " << pause_string.str()
-                  << " total " << PrettyDuration((duration / 1000) * 1000);
-        if (VLOG_IS_ON(heap)) {
-            LOG(INFO) << Dumpable<TimingLogger>(collector->GetTimings());
-        }
+    if (longest_pause > MsToNs(20)) {
+      DumpGcPerformanceInfo(LOG(ERROR));
     }
   }
   FinishGC(self, gc_type);
@@ -1680,12 +1697,30 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
   return gc_type;
 }
 
+bool Heap::StartGCLocked(CollectorType collector_type) {
+  // GC can be disabled if someone has a used GetPrimitiveArrayCritical but not yet released.
+  if (IsCompactingGC(collector_type) && disable_moving_gc_count_ != 0) {
+    LOG(WARNING) << "Skipping GC due to disable moving GC count " << disable_moving_gc_count_;
+    return false;
+  }
+  collector_type_running_ = collector_type;
+  DCHECK(arena_pool_.get() != nullptr);
+  arena_allocator_.Init(arena_pool_.get());
+  finalizer_reference_queue_.Init();
+  return true;
+}
+
 void Heap::FinishGC(Thread* self, collector::GcType gc_type) {
   MutexLock mu(self, *gc_complete_lock_);
   collector_type_running_ = kCollectorTypeNone;
   if (gc_type != collector::kGcTypeNone) {
     last_gc_type_ = gc_type;
   }
+  // Release all arena allocated memory.
+  arena_pool_->FreeAllArenas();
+  // Invalidated allocator means it shoudl segfault if we attempt to allocate.
+  arena_allocator_.Invalidate();
+
   // Wake anyone who may have been waiting for the GC to complete.
   gc_complete_cond_->Broadcast(self);
 }
@@ -2275,6 +2310,12 @@ void Heap::SetReferenceReferent(mirror::Object* reference, mirror::Object* refer
   reference->SetFieldObject(reference_referent_offset_, referent, true);
 }
 
+void Heap::UpdateReferenceReferent(mirror::Object* reference, mirror::Object* referent) {
+  DCHECK(reference != NULL);
+  DCHECK_NE(reference_referent_offset_.Uint32Value(), 0U);
+  reference->SetFieldPtr(reference_referent_offset_, referent, true);
+}
+
 mirror::Object* Heap::GetReferenceReferent(mirror::Object* reference) {
   DCHECK(reference != NULL);
   DCHECK_NE(reference_referent_offset_.Uint32Value(), 0U);
@@ -2292,6 +2333,12 @@ void Heap::AddFinalizerReference(Thread* self, mirror::Object* object) {
 
 void Heap::EnqueueClearedReferences() {
   Thread* self = Thread::Current();
+  {
+    ReaderMutexLock mu(self, *Locks::mutator_lock_);
+    // Enqueue cleared finalizer references with mutators unpaused as an optimization.
+    finalizer_reference_queue_.EnqueueFinalizerReferences(cleared_references_);
+  }
+  // Can't call into java with mutator lock held.
   Locks::mutator_lock_->AssertNotHeld(self);
   if (!cleared_references_.IsEmpty()) {
     // When a runtime isn't started there are no reference queues to care about so ignore.
@@ -2300,8 +2347,11 @@ void Heap::EnqueueClearedReferences() {
       JValue result;
       ArgArray arg_array(NULL, 0);
       arg_array.Append(reinterpret_cast<uint32_t>(cleared_references_.GetList()));
-      soa.DecodeMethod(WellKnownClasses::java_lang_ref_ReferenceQueue_add)->Invoke(soa.Self(),
-          arg_array.GetArray(), arg_array.GetNumBytes(), &result, 'V');
+      LOG(INFO) << "Enqueueing " << cleared_references_.GetLength() << " references!";
+      soa.DecodeMethod(WellKnownClasses::java_lang_ref_ReferenceQueue_add)->Invoke(
+          soa.Self(), arg_array.GetArray(), arg_array.GetNumBytes(), &result, 'V');
+    } else {
+      LOG(WARNING) << "Not enqueueing references due to not started runtime!";
     }
     cleared_references_.Clear();
   }
@@ -2310,7 +2360,7 @@ void Heap::EnqueueClearedReferences() {
 void Heap::RequestConcurrentGC(Thread* self) {
   // Make sure that we can do a concurrent GC.
   Runtime* runtime = Runtime::Current();
-  if (runtime == NULL || !runtime->IsFinishedStarting() || runtime->IsShuttingDown(self) ||
+  if (runtime == nullptr || !runtime->IsFinishedStarting() || runtime->IsShuttingDown(self) ||
       self->IsHandlingStackOverflow()) {
     return;
   }

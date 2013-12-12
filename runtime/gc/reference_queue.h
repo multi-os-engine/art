@@ -32,6 +32,9 @@
 #include "thread_pool.h"
 
 namespace art {
+
+class Arena;
+
 namespace gc {
 
 class Heap;
@@ -57,7 +60,7 @@ class ReferenceQueue {
   // zombie field, and the referent field is cleared.
   void EnqueueFinalizerReferences(ReferenceQueue& cleared_references,
                                   RootVisitor is_marked_callback,
-                                  RootVisitor recursive_mark_callback, void* arg)
+                                  RootVisitor mark_callback, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   // Walks the reference list marking any references subject to the reference clearing policy.
   // References with a black referent are removed from the list.  References with white referents
@@ -79,6 +82,7 @@ class ReferenceQueue {
   mirror::Object* GetList() {
     return list_;
   }
+  size_t GetLength() const;
 
  private:
   // Lock, used for parallel GC reference enqueuing. It allows for multiple threads simultaneously
@@ -88,6 +92,142 @@ class ReferenceQueue {
   Heap* const heap_;
   // The actual reference list. Not a root since it will be nullptr when the GC is not running.
   mirror::Object* list_;
+};
+
+class ReferenceBlock {
+ public:
+  ALWAYS_INLINE bool PushBack(mirror::Object* ref) {
+    // Integer overflow shouldn't be able to happen as this would require around max int number
+    // of threads.
+    size_t old_pos = static_cast<size_t>(pos_.FetchAndAdd(1));
+    if (LIKELY(old_pos < capacity_)) {
+      references_[old_pos] = ref;
+      return true;
+    }
+    return false;
+  }
+  explicit ReferenceBlock(size_t capacity);
+  static ReferenceBlock* Create(void* mem, size_t bytes);
+  size_t Capacity() const {
+    return capacity_;
+  }
+  mirror::Object*& operator[](size_t index) {
+    DCHECK_LT(index, capacity_);
+    return references_[index];
+  }
+  ReferenceBlock* GetNext() {
+    return next_;
+  }
+  size_t GetSize() const {
+    return pos_;
+  }
+
+ private:
+  size_t capacity_;
+  AtomicInteger pos_;  // TODO: Use atomic pointer instead?
+  ReferenceBlock* next_;
+  mirror::Object* references_[0];
+  friend class ReferenceBlockList;
+};
+
+// TODO: Investigate using this to replace atomic stack?
+class ReferenceBlockList {
+ public:
+  class Iterator {
+   public:
+    Iterator(ReferenceBlock* block, size_t pos = 0) : block_(block), pos_(pos) {
+    }
+    // Iterator currently doesn't support decrement.
+    void operator++() {
+      ++pos_;
+      if (LIKELY(pos_ >= block_->Capacity())) {
+        block_ = block_->GetNext();
+        pos_ = 0;
+      }
+    }
+    mirror::Object*& operator*() {
+      DCHECK(block_ != nullptr);
+      return (*block_)[pos_];
+    }
+    bool operator==(const Iterator& it) const {
+      return Compare(it) == 0;
+    }
+    bool operator!=(const Iterator& it) const {
+      return Compare(it) != 0;
+    }
+
+   private:
+    int Compare(const Iterator& it) const {
+      if (block_ < it.block_) {
+        return -1;
+      } else if (block_ > it.block_) {
+        return 1;
+      }
+      if (pos_ < it.pos_) {
+        return -1;
+      } else if (pos_ > it.pos_) {
+        return 1;
+      }
+      return 0;
+    }
+
+    ReferenceBlock* block_;
+    size_t pos_;
+  };
+
+  // Lower case to allow ranged base loops.
+  // TODO: Worth adding const variants?
+  Iterator begin() {
+    if (head_ == nullptr || head_->GetSize() == 0) {
+      return end();
+    } else {
+      return Iterator(head_, 0);
+    }
+  }
+  Iterator end() {
+    if (cur_ == nullptr || cur_->GetSize() >= cur_->Capacity()) {
+      return Iterator(nullptr, 0);
+    } else {
+      return Iterator(cur_, cur_->GetSize());
+    }
+  }
+  bool IsEmpty() {
+    return begin() == end();
+  }
+
+  void Init();
+  explicit ReferenceBlockList(Heap* heap);
+  virtual ~ReferenceBlockList();
+  // Adds a reference to the reference block list. Thread safe.
+  ALWAYS_INLINE void PushBack(Thread* self, mirror::Object* ref) {
+    if (UNLIKELY(!cur_->PushBack(ref))) {
+      // Block is full, need to go slow path and use a lock to prevent race conditions.
+      PushBackSlowPath(self, ref);
+    }
+  }
+  void PushBackSlowPath(Thread* self, mirror::Object* ref);
+  ReferenceBlock* AllocateBlock(size_t bytes);
+  // Process the finalizer references, defers enqueueing to EnqueueFinalizerReferences which can be
+  // done with mutators unpaused.
+  void ProcessFinalizerReferences(ReferenceQueue& cleared_references,
+                                  RootVisitor is_marked_callback,
+                                  RootVisitor mark_callback, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void EnqueueFinalizerReferences(ReferenceQueue& cleared_reference)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  // Filtering the references nulls elements in the reference list which are marked (since these
+  // are not interesting).
+  void RemovedMarkedReferences(RootVisitor is_marked_callback, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void Clear() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+ private:
+  static constexpr size_t kDefaultArenaSize = 512 * KB;
+
+  Mutex lock_;
+  Heap* const heap_;
+  ReferenceBlock* head_;
+  ReferenceBlock* cur_;
 };
 
 }  // namespace gc

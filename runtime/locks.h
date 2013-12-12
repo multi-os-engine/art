@@ -40,7 +40,7 @@ enum LockLevel {
   kRosAllocGlobalLock,
   kRosAllocBracketLock,
   kRosAllocBulkFreeLock,
-  kAllocSpaceLock,
+  kAllocatorLock,
   kDexFileMethodInlinerLock,
   kDexFileToMethodInlinerMapLock,
   kMarkSweepMarkStackLock,

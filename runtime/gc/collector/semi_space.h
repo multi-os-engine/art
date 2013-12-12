@@ -145,7 +145,10 @@ class SemiSpace : public GarbageCollector {
   static mirror::Object* MarkRootCallback(mirror::Object* root, void* arg)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
-  static mirror::Object* RecursiveMarkObjectCallback(mirror::Object* root, void* arg)
+  static mirror::Object* MarkObjectCallback(mirror::Object* root, void* arg)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
+
+  static void ProcessMarkStackCallback(void* arg)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
   virtual mirror::Object* MarkNonForwardedObject(mirror::Object* obj)

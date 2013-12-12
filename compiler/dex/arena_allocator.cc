@@ -24,11 +24,7 @@
 
 namespace art {
 
-// Memmap is a bit slower than malloc according to my measurements.
-static constexpr bool kUseMemMap = false;
-static constexpr bool kUseMemSet = true && kUseMemMap;
 static constexpr size_t kValgrindRedZoneBytes = 8;
-constexpr size_t Arena::kDefaultSize;
 
 static const char* alloc_names[ArenaAllocator::kNumAllocKinds] = {
   "Misc       ",
@@ -45,83 +41,6 @@ static const char* alloc_names[ArenaAllocator::kNumAllocKinds] = {
   "Data       ",
   "Preds      ",
 };
-
-Arena::Arena(size_t size)
-    : bytes_allocated_(0),
-      map_(nullptr),
-      next_(nullptr) {
-  if (kUseMemMap) {
-    std::string error_msg;
-    map_ = MemMap::MapAnonymous("dalvik-arena", NULL, size, PROT_READ | PROT_WRITE, &error_msg);
-    CHECK(map_ != nullptr) << error_msg;
-    memory_ = map_->Begin();
-    size_ = map_->Size();
-  } else {
-    memory_ = reinterpret_cast<uint8_t*>(calloc(1, size));
-    size_ = size;
-  }
-}
-
-Arena::~Arena() {
-  if (kUseMemMap) {
-    delete map_;
-  } else {
-    free(reinterpret_cast<void*>(memory_));
-  }
-}
-
-void Arena::Reset() {
-  if (bytes_allocated_) {
-    if (kUseMemSet || !kUseMemMap) {
-      memset(Begin(), 0, bytes_allocated_);
-    } else {
-      madvise(Begin(), bytes_allocated_, MADV_DONTNEED);
-    }
-    bytes_allocated_ = 0;
-  }
-}
-
-ArenaPool::ArenaPool()
-    : lock_("Arena pool lock"),
-      free_arenas_(nullptr) {
-}
-
-ArenaPool::~ArenaPool() {
-  while (free_arenas_ != nullptr) {
-    auto* arena = free_arenas_;
-    free_arenas_ = free_arenas_->next_;
-    delete arena;
-  }
-}
-
-Arena* ArenaPool::AllocArena(size_t size) {
-  Thread* self = Thread::Current();
-  Arena* ret = nullptr;
-  {
-    MutexLock lock(self, lock_);
-    if (free_arenas_ != nullptr && LIKELY(free_arenas_->Size() >= size)) {
-      ret = free_arenas_;
-      free_arenas_ = free_arenas_->next_;
-    }
-  }
-  if (ret == nullptr) {
-    ret = new Arena(size);
-  }
-  ret->Reset();
-  return ret;
-}
-
-void ArenaPool::FreeArena(Arena* arena) {
-  Thread* self = Thread::Current();
-  if (UNLIKELY(RUNNING_ON_VALGRIND)) {
-    VALGRIND_MAKE_MEM_UNDEFINED(arena->memory_, arena->bytes_allocated_);
-  }
-  {
-    MutexLock lock(self, lock_);
-    arena->next_ = free_arenas_;
-    free_arenas_ = arena;
-  }
-}
 
 size_t ArenaAllocator::BytesAllocated() const {
   size_t total = 0;
@@ -146,7 +65,7 @@ void ArenaAllocator::UpdateBytesAllocated() {
   if (arena_head_ != nullptr) {
     // Update how many bytes we have allocated into the arena so that the arena pool knows how
     // much memory to zero out.
-    arena_head_->bytes_allocated_ = ptr_ - begin_;
+    arena_head_->SetBytesAllocated(ptr_ - begin_);
   }
 }
 
@@ -178,7 +97,7 @@ ArenaAllocator::~ArenaAllocator() {
   UpdateBytesAllocated();
   while (arena_head_ != nullptr) {
     Arena* arena = arena_head_;
-    arena_head_ = arena_head_->next_;
+    arena_head_ = arena_head_->GetNext();
     pool_->FreeArena(arena);
   }
 }
@@ -186,7 +105,7 @@ ArenaAllocator::~ArenaAllocator() {
 void ArenaAllocator::ObtainNewArenaForAllocation(size_t allocation_size) {
   UpdateBytesAllocated();
   Arena* new_arena = pool_->AllocArena(std::max(Arena::kDefaultSize, allocation_size));
-  new_arena->next_ = arena_head_;
+  new_arena->SetNext(arena_head_);
   arena_head_ = new_arena;
   // Update our internal data structures.
   ptr_ = begin_ = new_arena->Begin();
@@ -199,7 +118,7 @@ void ArenaAllocator::DumpMemStats(std::ostream& os) const {
   // Start out with how many lost bytes we have in the arena we are currently allocating into.
   size_t lost_bytes(end_ - ptr_);
   size_t num_arenas = 0;
-  for (Arena* arena = arena_head_; arena != nullptr; arena = arena->next_) {
+  for (Arena* arena = arena_head_; arena != nullptr; arena = arena->GetNext()) {
     malloc_bytes += arena->Size();
     if (arena != arena_head_) {
       lost_bytes += arena->RemainingSpace();

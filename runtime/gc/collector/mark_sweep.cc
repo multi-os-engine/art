@@ -179,7 +179,7 @@ void MarkSweep::ProcessReferences(Thread* self) {
   TimingLogger::ScopedSplit split("ProcessReferences", &timings_);
   WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
   GetHeap()->ProcessReferences(timings_, clear_soft_references_, &IsMarkedCallback,
-                               &RecursiveMarkObjectCallback, this);
+                               &MarkObjectCallback, &ProcessMarkStackCallback, this);
 }
 
 bool MarkSweep::HandleDirtyObjectsPhase() {
@@ -256,6 +256,7 @@ void MarkSweep::MarkingPhase() {
   MarkConcurrentRoots();
   UpdateAndMarkModUnion();
   MarkReachableObjects();
+  heap_->PreProcessReferences(timings_, &IsMarkedCallback, this);
 }
 
 void MarkSweep::UpdateAndMarkModUnion() {
@@ -393,11 +394,15 @@ inline void MarkSweep::MarkObjectNonNullParallel(const Object* obj) {
   }
 }
 
-mirror::Object* MarkSweep::RecursiveMarkObjectCallback(mirror::Object* obj, void* arg) {
+mirror::Object* MarkSweep::MarkObjectCallback(mirror::Object* obj, void* arg) {
   MarkSweep* mark_sweep = reinterpret_cast<MarkSweep*>(arg);
   mark_sweep->MarkObject(obj);
-  mark_sweep->ProcessMarkStack(true);
   return obj;
+}
+
+void MarkSweep::ProcessMarkStackCallback(void* arg) {
+  MarkSweep* mark_sweep = reinterpret_cast<MarkSweep*>(arg);
+  mark_sweep->ProcessMarkStack(true);
 }
 
 inline void MarkSweep::UnMarkObjectNonNull(const Object* obj) {
@@ -514,13 +519,13 @@ inline bool MarkSweep::MarkObjectParallel(const Object* obj) {
 // the finger won't be visited by the bitmap scan, so those objects
 // need to be added to the mark stack.
 inline void MarkSweep::MarkObject(const Object* obj) {
-  if (obj != NULL) {
+  if (obj != nullptr) {
     MarkObjectNonNull(obj);
   }
 }
 
 void MarkSweep::MarkRoot(const Object* obj) {
-  if (obj != NULL) {
+  if (obj != nullptr) {
     MarkObjectNonNull(obj);
   }
 }
@@ -1208,7 +1213,7 @@ void MarkSweep::ProcessMarkStackParallel(size_t thread_count) {
 
 // Scan anything that's on the mark stack.
 void MarkSweep::ProcessMarkStack(bool paused) {
-  timings_.StartSplit("ProcessMarkStack");
+  timings_.StartSplit(paused ? "(Paused)ProcessMarkStack" : "ProcessMarkStack");
   size_t thread_count = GetThreadCount(paused);
   if (kParallelProcessMarkStack && thread_count > 1 &&
       mark_stack_->Size() >= kMinimumParallelMarkStackSize) {
@@ -1250,7 +1255,7 @@ inline bool MarkSweep::IsMarked(const Object* object) const
     return true;
   }
   DCHECK(current_mark_bitmap_ != NULL);
-  if (current_mark_bitmap_->HasAddress(object)) {
+  if (LIKELY(current_mark_bitmap_->HasAddress(object))) {
     return current_mark_bitmap_->Test(object);
   }
   return heap_->GetMarkBitmap()->Test(object);

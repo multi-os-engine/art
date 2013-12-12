@@ -50,7 +50,7 @@ void LargeObjectSpace::CopyLiveToMarked() {
 
 LargeObjectMapSpace::LargeObjectMapSpace(const std::string& name)
     : LargeObjectSpace(name),
-      lock_("large object map space lock", kAllocSpaceLock) {}
+      lock_("large object map space lock", kAllocatorLock) {}
 
 LargeObjectMapSpace* LargeObjectMapSpace::Create(const std::string& name) {
   return new LargeObjectMapSpace(name);
@@ -144,7 +144,7 @@ FreeListSpace::FreeListSpace(const std::string& name, MemMap* mem_map, byte* beg
       begin_(begin),
       end_(end),
       mem_map_(mem_map),
-      lock_("free list space lock", kAllocSpaceLock) {
+      lock_("free list space lock", kAllocatorLock) {
   free_end_ = end - begin;
 }
 

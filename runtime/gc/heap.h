@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "arena.h"
 #include "atomic_integer.h"
 #include "base/timing_logger.h"
 #include "gc/accounting/atomic_stack.h"
@@ -40,6 +41,7 @@
 
 namespace art {
 
+class ArenaPool;
 class ConditionVariable;
 class Mutex;
 class StackVisitor;
@@ -327,8 +329,16 @@ class Heap {
     return finalizer_reference_zombie_offset_;
   }
   static mirror::Object* PreserveSoftReferenceCallback(mirror::Object* obj, void* arg);
-  void ProcessReferences(TimingLogger& timings, bool clear_soft, RootVisitor* is_marked_callback,
-                         RootVisitor* recursive_mark_object_callback, void* arg)
+  // PreProcess references can be called with the mutators running to removed marked references and
+  // reduce the pause time.
+  void PreProcessReferences(TimingLogger& timings, MarkObjectVisitor* is_marked_callback,
+                            void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
+  void ProcessReferences(TimingLogger& timings, bool clear_soft_references,
+                         MarkObjectVisitor* is_marked_callback,
+                         MarkObjectVisitor* mark_object_callback,
+                         ProcessMarkStackVisitor* process_mark_stack_callback, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
@@ -533,10 +543,19 @@ class Heap {
   bool IsCompilingBoot() const;
   bool HasImageSpace() const;
 
+  ArenaPool* GetArenaPool() {
+    return arena_pool_.get();
+  }
+  // Can only be used when the GC is running.
+  ALWAYS_INLINE void* ArenaAllocate(size_t bytes) {
+    return arena_allocator_.Alloc(bytes);
+  }
+
  private:
   void Compact(space::ContinuousMemMapAllocSpace* target_space,
                space::ContinuousMemMapAllocSpace* source_space);
 
+  bool StartGCLocked(CollectorType collector_type) EXCLUSIVE_LOCKS_REQUIRED(gc_complete_lock_);
   void FinishGC(Thread* self, collector::GcType gc_type) LOCKS_EXCLUDED(gc_complete_lock_);
 
   static ALWAYS_INLINE bool AllocatorHasAllocationStack(AllocatorType allocator_type) {
@@ -587,6 +606,8 @@ class Heap {
 
   // Pushes a list of cleared references out to the managed heap.
   void SetReferenceReferent(mirror::Object* reference, mirror::Object* referent)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void UpdateReferenceReferent(mirror::Object* reference, mirror::Object* referent)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   mirror::Object* GetReferenceReferent(mirror::Object* reference)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -733,10 +754,14 @@ class Heap {
   Mutex* gc_complete_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   UniquePtr<ConditionVariable> gc_complete_cond_ GUARDED_BY(gc_complete_lock_);
 
+  // Arena pool for enabling arena allocation by the GCs.
+  UniquePtr<ArenaPool> arena_pool_;
+  AtomicArenaAllocator arena_allocator_;
+
   // Reference queues.
   ReferenceQueue soft_reference_queue_;
   ReferenceQueue weak_reference_queue_;
-  ReferenceQueue finalizer_reference_queue_;
+  ReferenceBlockList finalizer_reference_queue_;
   ReferenceQueue phantom_reference_queue_;
   ReferenceQueue cleared_references_;
 
@@ -880,6 +905,7 @@ class Heap {
 
   friend class collector::MarkSweep;
   friend class collector::SemiSpace;
+  friend class ReferenceBlockList;
   friend class ReferenceQueue;
   friend class VerifyReferenceCardVisitor;
   friend class VerifyReferenceVisitor;

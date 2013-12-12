@@ -38,7 +38,7 @@ MallocSpace::MallocSpace(const std::string& name, MemMap* mem_map,
                          byte* begin, byte* end, byte* limit, size_t growth_limit,
                          bool create_bitmaps)
     : ContinuousMemMapAllocSpace(name, mem_map, begin, end, limit, kGcRetentionPolicyAlwaysCollect),
-      recent_free_pos_(0), lock_("allocation space lock", kAllocSpaceLock),
+      recent_free_pos_(0), lock_("allocation space lock", kAllocatorLock),
       growth_limit_(growth_limit) {
   if (create_bitmaps) {
     size_t bitmap_index = bitmap_index_++;
@@ -96,6 +96,7 @@ MemMap* MallocSpace::CreateMemMap(const std::string& name, size_t starting_size,
 }
 
 mirror::Class* MallocSpace::FindRecentFreedObject(const mirror::Object* obj) {
+  LOG(FATAL) << "Turds";
   size_t pos = recent_free_pos_;
   // Start at the most recently freed object and work our way back since there may be duplicates
   // caused by dlmalloc reusing memory.
