@@ -70,7 +70,7 @@ namespace art {
 Runtime* Runtime::instance_ = NULL;
 
 Runtime::Runtime()
-    : is_compiler_(false),
+    : compiler_callbacks_(nullptr),
       is_zygote_(false),
       is_concurrent_gc_enabled_(true),
       is_explicit_gc_disabled_(false),
@@ -366,7 +366,7 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   parsed->max_spins_before_thin_lock_inflation_ = Monitor::kDefaultMaxSpinsBeforeThinLockInflation;
   parsed->low_memory_mode_ = false;
 
-  parsed->is_compiler_ = false;
+  parsed->compiler_callbacks_ = nullptr;
   parsed->is_zygote_ = false;
   parsed->interpreter_only_ = false;
   parsed->is_explicit_gc_disabled_ = false;
@@ -544,8 +544,9 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
       parsed->properties_.push_back(option.substr(strlen("-D")));
     } else if (StartsWith(option, "-Xjnitrace:")) {
       parsed->jni_trace_ = option.substr(strlen("-Xjnitrace:"));
-    } else if (option == "compiler") {
-      parsed->is_compiler_ = true;
+    } else if (option == "compilercallbacks") {
+      parsed->compiler_callbacks_ =
+          reinterpret_cast<CompilerCallbacks*>(const_cast<void*>(options[i].second));
     } else if (option == "-Xzygote") {
       parsed->is_zygote_ = true;
     } else if (option == "-Xint") {
@@ -669,7 +670,7 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
     parsed->boot_class_path_string_.replace(core_jar_pos, core_jar.size(), "/core-libart.jar");
   }
 
-  if (!parsed->is_compiler_ && parsed->image_.empty()) {
+  if (parsed->compiler_callbacks_ == nullptr && parsed->image_.empty()) {
     parsed->image_ += GetAndroidRoot();
     parsed->image_ += "/framework/boot.art";
   }
@@ -882,7 +883,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   class_path_string_ = options->class_path_string_;
   properties_ = options->properties_;
 
-  is_compiler_ = options->is_compiler_;
+  compiler_callbacks_ = options->compiler_callbacks_;
   is_zygote_ = options->is_zygote_;
   is_explicit_gc_disabled_ = options->is_explicit_gc_disabled_;
 
