@@ -369,8 +369,40 @@ void X86Mir2Lir::GenNegDouble(RegLocation rl_dest, RegLocation rl_src) {
 }
 
 bool X86Mir2Lir::GenInlinedSqrt(CallInfo* info) {
-  DCHECK_NE(cu_->instruction_set, kThumb2);
-  return false;
+  DCHECK_EQ(cu_->instruction_set, kX86);
+  LIR *branch;
+  RegLocation rl_src = info->args[0];
+  RegLocation rl_dest = InlineTargetWide(info);  // double place for result
+  rl_src = LoadValueWide(rl_src, kFPReg);
+  RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
+  NewLIR2(kX86SqrtsdRR, S2d(rl_result.low_reg, rl_result.high_reg),
+          S2d(rl_src.low_reg, rl_src.high_reg));
+  NewLIR2(kX86UcomisdRR, S2d(rl_result.low_reg, rl_result.high_reg),
+          S2d(rl_result.low_reg, rl_result.high_reg));
+  branch = NewLIR2(kX86Jcc8, 0, kX86CondNp);
+  // 32 bit calling convention
+  //  store FP value on the stack
+  // Why do I need to  do the clobber?  Is there a better way to force a reload?
+  // If I don't do this, xmm0 is used for both the destination and the source of
+  // the sqrt, and the reload gets the NaN result, rather than the original source
+  ClobberSReg(rl_dest.s_reg_low);
+  rl_src = LoadValueWide(info->args[0], kFPReg);
+  OpRegImm(kOpSub, rX86_SP, 16);
+  NewLIR3 (kX86MovsdMR, rX86_SP, 0, rl_src.low_reg);
+
+  ClobberCallerSave();
+  CallHelper (0, QUICK_ENTRYPOINT_OFFSET(pSqrt), false);
+
+  // store FP result onto stack
+  NewLIR2 (kX86FSTPdM, rX86_SP, 0);
+
+  // And load it into the result XMM, and fix the stack
+  NewLIR3 (kX86MovsdRM, rl_result.low_reg, rX86_SP, 0);
+  OpRegImm(kOpAdd, rX86_SP, 16);
+
+  branch->target = NewLIR0(kPseudoTargetLabel);
+  StoreValueWide(rl_dest, rl_result);
+  return true;
 }
 
 
