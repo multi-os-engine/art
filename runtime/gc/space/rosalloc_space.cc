@@ -216,10 +216,18 @@ size_t RosAllocSpace::AllocationSize(const mirror::Object* obj) {
 }
 
 size_t RosAllocSpace::Trim() {
-  MutexLock mu(Thread::Current(), lock_);
-  // Trim to release memory at the end of the space.
-  rosalloc_->Trim();
-  // No inspect_all necessary here as trimming of pages is built-in.
+  {
+    MutexLock mu(Thread::Current(), lock_);
+    // Trim to release memory at the end of the space.
+    rosalloc_->Trim();
+  }
+  // Attempt to release pages if it does not release all empty pages.
+  if (!rosalloc_->DoesReleaseAllPages()) {
+    VLOG(heap) << "RosAllocSpace::Trim() ";
+    size_t reclaimed = 0;
+    InspectAllRosAlloc(DlmallocMadviseCallback, &reclaimed);
+    return reclaimed;
+  }
   return 0;
 }
 

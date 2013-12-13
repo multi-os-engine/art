@@ -91,18 +91,32 @@ class RosAlloc {
       byte* end = fpr_base + ByteSize(rosalloc);
       return end;
     }
+    bool ShouldReleasePages(RosAlloc* rosalloc) EXCLUSIVE_LOCKS_REQUIRED(rosalloc->lock_) {
+      size_t byte_size = ByteSize(rosalloc);
+      bool is_larger_than_threshold = byte_size >= kReleasePageSizeThreshold;
+      bool is_at_end = reinterpret_cast<byte*>(this) + byte_size == rosalloc->base_ + rosalloc->footprint_;
+      return kReleasePageMode == kReleasePageModeAll ||
+          (kReleasePageMode == kReleasePageModeEnd && is_at_end) ||
+          (kReleasePageMode == kReleasePageModeSize && is_larger_than_threshold) ||
+          (kReleasePageMode == kReleasePageModeSizeAndEnd && (is_larger_than_threshold || is_at_end));
+    }
     void ReleasePages(RosAlloc* rosalloc) EXCLUSIVE_LOCKS_REQUIRED(rosalloc->lock_) {
       size_t byte_size = ByteSize(rosalloc);
       DCHECK_EQ(byte_size % kPageSize, static_cast<size_t>(0));
+      bool release_pages = ShouldReleasePages(rosalloc);
       if (kIsDebugBuild) {
         // Exclude the first page that stores the magic number.
         DCHECK_GE(byte_size, static_cast<size_t>(kPageSize));
         byte_size -= kPageSize;
         if (byte_size > 0) {
-          madvise(reinterpret_cast<byte*>(this) + kPageSize, byte_size, MADV_DONTNEED);
+          if (release_pages) {
+            madvise(reinterpret_cast<byte*>(this) + kPageSize, byte_size, MADV_DONTNEED);
+          }
         }
       } else {
-        madvise(this, byte_size, MADV_DONTNEED);
+        if (release_pages) {
+          madvise(this, byte_size, MADV_DONTNEED);
+        }
       }
     }
   };
@@ -351,6 +365,23 @@ class RosAlloc {
   // If true, log verbose details of operations.
   static constexpr bool kTraceRosAlloc = false;
 
+  // Different page release modes.
+  enum ReleasePageMode {
+    kReleasePageModeNone,         // Release no empty pages.
+    kReleasePageModeEnd,          // Release empty pages at the end of the space.
+    kReleasePageModeSize,         // Release empty pages that are larger than the threshold.
+    kReleasePageModeSizeAndEnd,   // Release empty pages that are larger than the threshold or
+                                  // at the end of the space.
+    kReleasePageModeAll,          // Release all empty pages.
+  };
+
+  // The page release mode.
+  static constexpr ReleasePageMode kReleasePageMode = kReleasePageModeSizeAndEnd;
+
+  // Under kReleasePageModeSize(AndEnd), if the free page run size is
+  // greater than or equal to this value, release pages.
+  static constexpr size_t kReleasePageSizeThreshold = 4 * MB;
+
   struct hash_run {
     size_t operator()(const RosAlloc::Run* r) const {
       return reinterpret_cast<size_t>(r);
@@ -480,6 +511,10 @@ class RosAlloc {
   // allocated and objects allocated, respectively.
   static void BytesAllocatedCallback(void* start, void* end, size_t used_bytes, void* arg);
   static void ObjectsAllocatedCallback(void* start, void* end, size_t used_bytes, void* arg);
+
+  static bool DoesReleaseAllPages() {
+    return kReleasePageMode == kReleasePageModeAll;
+  }
 };
 
 }  // namespace allocator
