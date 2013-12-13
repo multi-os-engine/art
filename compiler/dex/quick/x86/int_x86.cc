@@ -293,6 +293,8 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   // If is_long, high half is in info->args[7]
 
   if (is_long) {
+    return false;
+    /*
     FlushAllRegs();
     LockCallTemps();
     NewLIR1(kX86Push32R, rDI);
@@ -313,6 +315,7 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     UnmarkTemp(rDI);
     NewLIR1(kX86Pop32R, rDI);
     FreeCallTemps();
+    */
   } else {
     // EAX must hold expected for CMPXCHG. Neither rl_new_value, nor r_ptr may be in EAX.
     FlushReg(r0);
