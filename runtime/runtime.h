@@ -119,6 +119,7 @@ class Runtime {
     size_t parallel_gc_threads_;
     size_t conc_gc_threads_;
     gc::CollectorType collector_type_;
+    gc::CollectorType background_collector_type_;
     size_t stack_size_;
     size_t max_spins_before_thin_lock_inflation_;
     bool low_memory_mode_;
