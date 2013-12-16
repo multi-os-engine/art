@@ -100,11 +100,6 @@ class MarkSweep : public GarbageCollector {
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Verify that image roots point to only marked objects within the alloc space.
-  void VerifyImageRoots()
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   // Builds a mark stack and recursively mark until it empties.
   void RecursiveMark()
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
