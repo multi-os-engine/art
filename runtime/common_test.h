@@ -158,7 +158,7 @@ class ScratchFile {
 
 #include <signal.h>
 #include <asm/sigcontext.h>
-#include <asm/ucontext.h>
+#include <asm-generic/ucontext.h>
 
 
 // A signal handler called when have an illegal instruction.  We record the fact in
@@ -220,8 +220,13 @@ static InstructionSetFeatures GuessInstructionFeatures() {
   sa.sa_sigaction = baddivideinst;
   sigaction(SIGILL, &sa, &osa);
 
+  LOG(WARNING) << "Testing for sdiv instruction.";
+
   if (CheckForARMSDIVInstruction()) {
+    LOG(WARNING) << " Has sdiv";
     f.SetHasDivideInstruction(true);
+  } else {
+    LOG(WARNING) << " Does not have sdiv";
   }
 
   // Restore the signal handler.
