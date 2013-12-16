@@ -351,13 +351,13 @@ static bool MountEmulatedStorage(uid_t uid, jint mount_mode) {
 
     if (mount_mode == MOUNT_EXTERNAL_MULTIUSER_ALL) {
       // Mount entire external storage tree for all users
-      if (mount(source, target, NULL, MS_BIND, NULL) == -1) {
+      if (TEMP_FAILURE_RETRY(mount(source, target, NULL, MS_BIND, NULL)) == -1) {
         PLOG(WARNING) << "Failed to mount " << source << " to " << target;
         return false;
       }
     } else {
       // Only mount user-specific external storage
-      if (mount(source_user.c_str(), target_user.c_str(), NULL, MS_BIND, NULL) == -1) {
+      if (TEMP_FAILURE_RETRY(mount(source_user.c_str(), target_user.c_str(), NULL, MS_BIND, NULL)) == -1) {
         PLOG(WARNING) << "Failed to mount " << source_user << " to " << target_user;
         return false;
       }
@@ -368,7 +368,7 @@ static bool MountEmulatedStorage(uid_t uid, jint mount_mode) {
     }
 
     // Finally, mount user-specific path into place for legacy users
-    if (mount(target_user.c_str(), legacy, NULL, MS_BIND | MS_REC, NULL) == -1) {
+    if (TEMP_FAILURE_RETRY(mount(target_user.c_str(), legacy, NULL, MS_BIND | MS_REC, NULL)) == -1) {
       PLOG(WARNING) << "Failed to mount " << target_user << " to " << legacy;
       return false;
     }
