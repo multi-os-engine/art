@@ -32,8 +32,10 @@ THREE_ARG_DOWNCALL art_quick_check_and_alloc_array_with_access_check\c_suffix, a
 .endm
 
 .macro GENERATE_ALL_ALLOC_ENTRYPOINTS
-GENERATE_ALLOC_ENTRYPOINTS
-GENERATE_ALLOC_ENTRYPOINTS _instrumented, Instrumented
+GENERATE_ALLOC_ENTRYPOINTS _dlmalloc, DLMalloc
+GENERATE_ALLOC_ENTRYPOINTS _dlmalloc_instrumented, DLMallocInstrumented
+GENERATE_ALLOC_ENTRYPOINTS _rosalloc, RosAlloc
+GENERATE_ALLOC_ENTRYPOINTS _rosalloc_instrumented, RosAllocInstrumented
 GENERATE_ALLOC_ENTRYPOINTS _bump_pointer, BumpPointer
 GENERATE_ALLOC_ENTRYPOINTS _bump_pointer_instrumented, BumpPointerInstrumented
 GENERATE_ALLOC_ENTRYPOINTS _tlab, TLAB
