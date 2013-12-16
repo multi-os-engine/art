@@ -90,10 +90,12 @@ class AgeCardVisitor {
 
 // Different types of allocators.
 enum AllocatorType {
-  kAllocatorTypeBumpPointer,
-  kAllocatorTypeTLAB,
-  kAllocatorTypeFreeList,  // ROSAlloc / dlmalloc
-  kAllocatorTypeLOS,  // Large object space.
+  kAllocatorTypeBumpPointer,  // Use BumpPointer allocator, has entrypoints.
+  kAllocatorTypeTLAB,  // Use TLAB allocator, has entrypoints.
+  kAllocatorTypeRosAlloc,  // Use RosAlloc allocations, has entrypoints.
+  kAllocatorTypeDLMalloc,  // Use dlmalloc allocator, has entrypoints.
+  kAllocatorTypeNonMoving,  // Special allocator for non moving objects, doesn't have entrypoints.
+  kAllocatorTypeLOS,  // Large object space, also doesn't have entrypoints.
 };
 
 // What caused the GC?
@@ -203,6 +205,9 @@ class Heap {
 
   // Change the allocator, updates entrypoints.
   void ChangeAllocator(AllocatorType allocator);
+
+  // Transition the garbage collector during runtime, may copy objects from one space to another.
+  void TransitionCollector(CollectorType collector_type);
 
   // Change the collector to be one of the possible options (MS, CMS, SS).
   void ChangeCollector(CollectorType collector_type);
@@ -358,7 +363,9 @@ class Heap {
     return low_memory_mode_;
   }
 
-  void RecordFree(size_t freed_objects, size_t freed_bytes);
+  // Freed bytes can be negative in cases where we copy objects from a compacted space to a
+  // free-list backed space.
+  void RecordFree(int32_t freed_objects, int32_t freed_bytes);
 
   // Must be called if a field of an Object in the heap changes, and before any GC safe-point.
   // The call is not needed if NULL is stored in the field.
@@ -458,8 +465,8 @@ class Heap {
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
   // Mark all the objects in the allocation stack in the specified bitmap.
-  void MarkAllocStack(accounting::SpaceBitmap* bitmap, accounting::SpaceSetMap* large_objects,
-                      accounting::ObjectStack* stack)
+  void MarkAllocStack(accounting::SpaceBitmap* bitmap1, accounting::SpaceBitmap* bitmap2,
+                      accounting::SpaceSetMap* large_objects, accounting::ObjectStack* stack)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
   // Mark the specified allocation stack as live.
@@ -469,6 +476,14 @@ class Heap {
   // DEPRECATED: Should remove in "near" future when support for multiple image spaces is added.
   // Assumes there is only one image space.
   space::ImageSpace* GetImageSpace() const;
+
+  space::DlMallocSpace* GetDlMallocSpace() const {
+    return dlmalloc_space_;
+  }
+
+  space::RosAllocSpace* GetROSAllocSpace() const {
+    return rosalloc_space_;
+  }
 
   space::MallocSpace* GetNonMovingSpace() const {
     return non_moving_space_;
@@ -509,6 +524,9 @@ class Heap {
  private:
   void Compact(space::ContinuousMemMapAllocSpace* target_space,
                space::ContinuousMemMapAllocSpace* source_space);
+
+  bool StartGC(Thread* self);
+  void FinishGC(Thread* self, collector::GcType gc_type);
 
   static ALWAYS_INLINE bool AllocatorHasAllocationStack(AllocatorType allocator_type) {
     return
@@ -615,6 +633,7 @@ class Heap {
   size_t GetPercentFree();
 
   void AddSpace(space::Space* space) LOCKS_EXCLUDED(Locks::heap_bitmap_lock_);
+  void RemoveSpace(space::Space* space) LOCKS_EXCLUDED(Locks::heap_bitmap_lock_);
 
   // No thread saftey analysis since we call this everywhere and it is impossible to find a proper
   // lock ordering for it.
@@ -642,6 +661,12 @@ class Heap {
   // Classes, ArtMethods, ArtFields, and non moving objects.
   space::MallocSpace* non_moving_space_;
 
+  // Space which we use for the kAllocatorTypeROSAlloc.
+  space::RosAllocSpace* rosalloc_space_;
+
+  // Space which we use for the kAllocatorTypeDLMalloc.
+  space::DlMallocSpace* dlmalloc_space_;
+
   // The large object space we are currently allocating into.
   space::LargeObjectSpace* large_object_space_;
 
@@ -650,6 +675,10 @@ class Heap {
 
   // A mod-union table remembers all of the references from the it's space to other spaces.
   SafeMap<space::Space*, accounting::ModUnionTable*> mod_union_tables_;
+
+  // Keep the rosalloc mem map lying around when we transition to background so that we don't
+  // have to worry about virtual address space fragmentation.
+  UniquePtr<MemMap> rosalloc_mem_map_;
 
   // What kind of concurrency behavior is the runtime after? Currently true for concurrent mark
   // sweep GC, false for other GC types.

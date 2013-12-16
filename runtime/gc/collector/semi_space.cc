@@ -99,9 +99,13 @@ void SemiSpace::BindBitmaps() {
   WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
   // Mark all of the spaces we never collect as immune.
   for (const auto& space : GetHeap()->GetContinuousSpaces()) {
-    if (space->GetGcRetentionPolicy() == space::kGcRetentionPolicyNeverCollect
-        || space->GetGcRetentionPolicy() == space::kGcRetentionPolicyFullCollect) {
-      ImmuneSpace(space);
+    if (space->GetLiveBitmap() != nullptr) {
+      if (space == to_space_) {
+        BindLiveToMarkBitmap(to_space_);
+      } else if (space->GetGcRetentionPolicy() == space::kGcRetentionPolicyNeverCollect
+          || space->GetGcRetentionPolicy() == space::kGcRetentionPolicyFullCollect) {
+        ImmuneSpace(space);
+      }
     }
   }
   timings_.EndSplit();
@@ -115,11 +119,6 @@ SemiSpace::SemiSpace(Heap* heap, const std::string& name_prefix)
       immune_end_(nullptr),
       to_space_(nullptr),
       from_space_(nullptr),
-      soft_reference_list_(nullptr),
-      weak_reference_list_(nullptr),
-      finalizer_reference_list_(nullptr),
-      phantom_reference_list_(nullptr),
-      cleared_reference_list_(nullptr),
       self_(nullptr),
       last_gc_to_space_end_(nullptr),
       bytes_promoted_(0) {
@@ -132,15 +131,13 @@ void SemiSpace::InitializePhase() {
   DCHECK(mark_stack_ != nullptr);
   immune_begin_ = nullptr;
   immune_end_ = nullptr;
-  soft_reference_list_ = nullptr;
-  weak_reference_list_ = nullptr;
-  finalizer_reference_list_ = nullptr;
-  phantom_reference_list_ = nullptr;
-  cleared_reference_list_ = nullptr;
+  copied_bytes_ = 0;
   self_ = Thread::Current();
   // Do any pre GC verification.
   timings_.NewSplit("PreGcVerification");
   heap_->PreGcVerification(this);
+  // Set the initial bitmap.
+  to_space_live_bitmap_ = to_space_->GetLiveBitmap();
 }
 
 void SemiSpace::ProcessReferences(Thread* self) {
@@ -233,12 +230,17 @@ void SemiSpace::ReclaimPhase() {
   int to_bytes = to_space_->GetBytesAllocated();
   int from_objects = from_space_->GetObjectsAllocated();
   int to_objects = to_space_->GetObjectsAllocated();
+  CHECK_LE(to_objects, from_objects);
+  CHECK_EQ(copied_bytes_, to_bytes);
+  LOG(INFO) << "Bytes: " << from_bytes << "->" << to_bytes;
+  LOG(INFO) << "Objects: " << from_objects << "->" << to_objects;
   int freed_bytes = from_bytes - to_bytes;
   int freed_objects = from_objects - to_objects;
-  CHECK_GE(freed_bytes, 0);
   freed_bytes_.fetch_add(freed_bytes);
   freed_objects_.fetch_add(freed_objects);
-  heap_->RecordFree(static_cast<size_t>(freed_objects), static_cast<size_t>(freed_bytes));
+  // Note: Freed bytes can be negative if we copy form a compacted space to a free-list backed
+  // space.
+  heap_->RecordFree(freed_objects, freed_bytes);
 
   timings_.StartSplit("PreSweepingGcVerification");
   heap_->PreSweepingGcVerification(this);
@@ -349,6 +351,7 @@ Object* SemiSpace::MarkObject(Object* obj) {
         } else {
           // If it's allocated after the last GC (younger), copy it to the to-space.
           forward_address = to_space_->Alloc(self_, object_size, &bytes_allocated);
+          copied_bytes_ += bytes_allocated;
         }
         // Copy over the object and add it to the mark stack since we still need to update it's
         // references.
@@ -356,6 +359,9 @@ Object* SemiSpace::MarkObject(Object* obj) {
         // Make sure to only update the forwarding address AFTER you copy the object so that the
         // monitor word doesn't get stomped over.
         obj->SetLockWord(LockWord::FromForwardingAddress(reinterpret_cast<size_t>(forward_address)));
+        if (to_space_live_bitmap_ != nullptr) {
+          to_space_live_bitmap_->Set(forward_address);
+        }
         MarkStackPush(forward_address);
       } else {
         DCHECK(to_space_->HasAddress(forward_address) ||
@@ -471,7 +477,7 @@ void SemiSpace::Sweep(bool swap_bitmaps) {
   scc.mark_sweep = this;
   scc.self = Thread::Current();
   for (const auto& space : GetHeap()->GetContinuousSpaces()) {
-    if (!space->IsMallocSpace()) {
+    if (!space->IsMallocSpace() || space == to_space_ || space == from_space_) {
       continue;
     }
     // We always sweep always collect spaces.

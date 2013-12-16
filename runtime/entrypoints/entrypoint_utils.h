@@ -76,6 +76,7 @@ ALWAYS_INLINE static inline mirror::Class* CheckObjectAlloc(uint32_t type_idx,
       DCHECK(self->IsExceptionPending());
       return nullptr;  // Failure
     }
+    // TODO: Check that the allocator type didn't change.
     return sirt_klass.get();
   }
   return klass;
