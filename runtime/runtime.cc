@@ -966,6 +966,8 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   method_trace_file_size_ = options->method_trace_file_size_;
 
   if (options->method_trace_) {
+    // TODO: add a new thread state for this case and use it here.
+    ScopedThreadStateChange tsc(self, kSuspended);
     Trace::Start(options->method_trace_file_.c_str(), -1, options->method_trace_file_size_, 0,
                  false, false, 0);
   }
