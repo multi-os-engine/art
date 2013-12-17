@@ -83,7 +83,7 @@ class VerifiedMethodsData {
         LOCKS_EXCLUDED(dex_gc_maps_lock_);
 
     // Cast elision types.
-    typedef std::set<uint32_t> MethodSafeCastSet;
+    typedef std::vector<uint32_t> MethodSafeCastSet;
     typedef SafeMap<MethodReference, const MethodSafeCastSet*,
         MethodReferenceComparator> SafeCastMap;
     MethodSafeCastSet* GenerateSafeCastSet(verifier::MethodVerifier* method_verifier)
