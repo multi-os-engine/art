@@ -62,8 +62,12 @@ namespace collector {
 
 static constexpr bool kProtectFromSpace = true;
 static constexpr bool kResetFromSpace = true;
-// TODO: move this to a new file as a new garbage collector?
+// TODO: move these to a new file as a new garbage collector?
+// If true, 'promote' some objects from the bump pointer spaces to the non-moving space.
 static constexpr bool kEnableSimplePromo = false;
+// If true, collect the bump pointer spaces only, as opposed to the
+// whole heap in some collections.
+static constexpr bool kEnableBumpPointerSpacesOnlyCollection = false;
 
 // TODO: Unduplicate logic.
 void SemiSpace::ImmuneSpace(space::ContinuousSpace* space) {
@@ -100,9 +104,16 @@ void SemiSpace::BindBitmaps() {
   // Mark all of the spaces we never collect as immune.
   for (const auto& space : GetHeap()->GetContinuousSpaces()) {
     if (space->GetGcRetentionPolicy() == space::kGcRetentionPolicyNeverCollect
-        || space->GetGcRetentionPolicy() == space::kGcRetentionPolicyFullCollect) {
+        || space->GetGcRetentionPolicy() == space::kGcRetentionPolicyFullCollect
+        // Add the non-moving space to the immune space if a bump pointer space only collection.
+        || (kEnableBumpPointerSpacesOnlyCollection &&
+            !whole_heap_collection_ && space == GetHeap()->GetNonMovingSpace())) {
       ImmuneSpace(space);
     }
+  }
+  if (kEnableBumpPointerSpacesOnlyCollection && !whole_heap_collection_) {
+    // We won't collect the large object space if a bump pointer space only collection.
+    GetHeap()->GetLargeObjectsSpace()->CopyLiveToMarked();
   }
   timings_.EndSplit();
 }
@@ -122,7 +133,9 @@ SemiSpace::SemiSpace(Heap* heap, const std::string& name_prefix)
       cleared_reference_list_(nullptr),
       self_(nullptr),
       last_gc_to_space_end_(nullptr),
-      bytes_promoted_(0) {
+      bytes_promoted_(0),
+      whole_heap_collection_(true),
+      whole_heap_collection_interval_counter_(0) {
 }
 
 void SemiSpace::InitializePhase() {
@@ -151,6 +164,13 @@ void SemiSpace::ProcessReferences(Thread* self) {
 }
 
 void SemiSpace::MarkingPhase() {
+  if (kEnableBumpPointerSpacesOnlyCollection) {
+    if (whole_heap_collection_) {
+      VLOG(heap) << "Whole heap collection";
+    } else {
+      VLOG(heap) << "Bump pointer space only collection";
+    }
+  }
   Thread* self = Thread::Current();
   Locks::mutator_lock_->AssertExclusiveHeld(self);
   TimingLogger::ScopedSplit split("MarkingPhase", &timings_);
@@ -199,6 +219,13 @@ void SemiSpace::UpdateAndMarkModUnion() {
     // If the space is immune then we need to mark the references to other spaces.
     if (IsImmuneSpace(space)) {
       accounting::ModUnionTable* table = heap_->FindModUnionTableFromSpace(space);
+      if (kEnableBumpPointerSpacesOnlyCollection && !whole_heap_collection_ &&
+          table == nullptr) {
+        // If a bump pointer space only collection, the non-moving
+        // space is added to the immune space. But since the
+        // non-moving space doesn't have a mod union table, skip it.
+        continue;
+      }
       CHECK(table != nullptr);
       // TODO: Improve naming.
       TimingLogger::ScopedSplit split(
@@ -210,12 +237,42 @@ void SemiSpace::UpdateAndMarkModUnion() {
   }
 }
 
+class SemiSpaceScanObjectVisitor {
+ public:
+  explicit SemiSpaceScanObjectVisitor(SemiSpace* ss) : semi_space_(ss) {}
+  void operator()(Object* obj) const NO_THREAD_SAFETY_ANALYSIS {
+    // TODO: fix NO_THREAD_SAFETY_ANALYSIS. ScanObject() requires an
+    // exclusive lock on the mutator lock, but
+    // SpaceBitmap::VisitMarkedRange() only requires the shared lock.
+    DCHECK(obj != nullptr);
+    semi_space_->ScanObject(obj);
+  }
+ private:
+  SemiSpace* semi_space_;
+};
+
 void SemiSpace::MarkReachableObjects() {
   timings_.StartSplit("MarkStackAsLive");
   accounting::ObjectStack* live_stack = heap_->GetLiveStack();
   heap_->MarkAllocStackAsLive(live_stack);
   live_stack->Reset();
   timings_.EndSplit();
+
+  if (kEnableBumpPointerSpacesOnlyCollection && !whole_heap_collection_) {
+    // Scan the (live) objects in the non-moving space (including the
+    // objects on the live stack which have just marked in the live
+    // bitmap above (in the MarkAllocStackAsLive() call.))
+    space::MallocSpace* non_moving_space = GetHeap()->GetNonMovingSpace();
+    accounting::SpaceBitmap* live_bitmap = non_moving_space->GetLiveBitmap();
+    SemiSpaceScanObjectVisitor visitor(this);
+    live_bitmap->VisitMarkedRange(reinterpret_cast<uintptr_t>(non_moving_space->Begin()),
+                                  reinterpret_cast<uintptr_t>(non_moving_space->End()),
+                                  visitor);
+    // No need to scan the large object space as they don't contain
+    // references other than to their classes (primitive array
+    // classes) which won't become garbage.
+  }
+
   // Recursively process the mark stack.
   ProcessMarkStack(true);
 }
@@ -246,8 +303,13 @@ void SemiSpace::ReclaimPhase() {
 
   {
     WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
-    // Reclaim unmarked objects.
-    Sweep(false);
+    if (kEnableBumpPointerSpacesOnlyCollection && !whole_heap_collection_) {
+      // No sweep in a bump pointer space only collection (neither the
+      // non-moving space or the large object space.)
+    } else {
+      // Reclaim unmarked objects.
+      Sweep(false);
+    }
     // Swap the live and mark bitmaps for each space which we modified space. This is an
     // optimization that enables us to not clear live bits inside of the sweep. Only swaps unbound
     // bitmaps.
@@ -301,6 +363,7 @@ inline void SemiSpace::MarkStackPush(Object* obj) {
 bool SemiSpace::MarkLargeObject(const Object* obj) {
   // TODO: support >1 discontinuous space.
   space::LargeObjectSpace* large_object_space = GetHeap()->GetLargeObjectsSpace();
+  DCHECK(large_object_space->Contains(obj));
   accounting::SpaceSetMap* large_objects = large_object_space->GetMarkObjects();
   if (UNLIKELY(!large_objects->Test(obj))) {
     large_objects->Set(obj);
@@ -334,16 +397,41 @@ Object* SemiSpace::MarkObject(Object* obj) {
           } else {
             GetHeap()->num_bytes_allocated_.fetch_add(bytes_promoted);
             bytes_promoted_ += bytes_promoted;
-            // Mark forward_address on the live bit map.
+            // Handle the bitmaps marking.
             accounting::SpaceBitmap* live_bitmap = non_moving_space->GetLiveBitmap();
             DCHECK(live_bitmap != nullptr);
-            DCHECK(!live_bitmap->Test(forward_address));
-            live_bitmap->Set(forward_address);
-            // Mark forward_address on the mark bit map.
             accounting::SpaceBitmap* mark_bitmap = non_moving_space->GetMarkBitmap();
             DCHECK(mark_bitmap != nullptr);
-            DCHECK(!mark_bitmap->Test(forward_address));
-            mark_bitmap->Set(forward_address);
+            DCHECK(!live_bitmap->Test(forward_address));
+            if (kEnableBumpPointerSpacesOnlyCollection && !whole_heap_collection_) {
+              // If collecting the bump pointer spaces only, live_bitmap == mark_bitmap.
+              DCHECK_EQ(live_bitmap, mark_bitmap);
+
+              // If a bump pointer space only collection (and the
+              // promotion is enabled,) delay the live bitmap marking
+              // of the promoted object until it's popped off the mark
+              // stack (ProcessMarkStack()). The rationale: we may be
+              // in the middle of scanning the objects in the
+              // non-moving space for
+              // non-moving-space-to-bump-pointer-space references by
+              // iterating over the marked bits of the live bitmap
+              // (MarkReachableObjects()). If we don't delay it (and
+              // instead mark the promoted object here), the above
+              // non-moving space scan could encounter the
+              // just-promoted object and forward the references in
+              // the promoted object's fields even through it is
+              // pushed onto the mark stack. If this happens, the
+              // promoted object would be in an inconsistent state,
+              // that is, it's on the mark stack (gray) but its fields
+              // are already forwarded (black), which would cause a
+              // DCHECK(!to_space_->HasAddress(obj)) failure below.
+            } else {
+              // Mark forward_address on the live bit map.
+              live_bitmap->Set(forward_address);
+              // Mark forward_address on the mark bit map.
+              DCHECK(!mark_bitmap->Test(forward_address));
+              mark_bitmap->Set(forward_address);
+            }
           }
           DCHECK(forward_address != nullptr);
         } else {
@@ -366,6 +454,13 @@ Object* SemiSpace::MarkObject(Object* obj) {
     } else {
       accounting::SpaceBitmap* object_bitmap = heap_->GetMarkBitmap()->GetContinuousSpaceBitmap(obj);
       if (LIKELY(object_bitmap != nullptr)) {
+        if (kEnableBumpPointerSpacesOnlyCollection) {
+          // If a bump pointer space only collection, we should not
+          // reach here as we don't/won't mark the objects in the
+          // non-moving space (except for the promoted objects.)  Note
+          // the non-moving space is added to the immune space.
+          DCHECK(whole_heap_collection_);
+        }
         // This object was not previously marked.
         if (!object_bitmap->Test(obj)) {
           object_bitmap->Set(obj);
@@ -560,9 +655,30 @@ void SemiSpace::ScanObject(Object* obj) {
 
 // Scan anything that's on the mark stack.
 void SemiSpace::ProcessMarkStack(bool paused) {
+  space::MallocSpace* non_moving_space = NULL;
+  accounting::SpaceBitmap* live_bitmap = NULL;
+  if (kEnableSimplePromo && kEnableBumpPointerSpacesOnlyCollection && !whole_heap_collection_) {
+    // If a bump pointer space only collection (and the promotion is
+    // enabled,) we delay the live-bitmap marking of promoted objects
+    // from MarkObject() until this function.
+    non_moving_space = GetHeap()->GetNonMovingSpace();
+    live_bitmap = non_moving_space->GetLiveBitmap();
+    DCHECK(live_bitmap != nullptr);
+    accounting::SpaceBitmap* mark_bitmap = non_moving_space->GetMarkBitmap();
+    DCHECK(mark_bitmap != nullptr);
+    DCHECK_EQ(live_bitmap, mark_bitmap);
+  }
   timings_.StartSplit(paused ? "(paused)ProcessMarkStack" : "ProcessMarkStack");
   while (!mark_stack_->IsEmpty()) {
-    ScanObject(mark_stack_->PopBack());
+    Object* obj = mark_stack_->PopBack();
+    if (kEnableSimplePromo && kEnableBumpPointerSpacesOnlyCollection && !whole_heap_collection_ &&
+        non_moving_space->HasAddress(obj)) {
+      // obj has just been promoted. Mark the live bitmap for it,
+      // which is delayed from MarkObject().
+      DCHECK(!live_bitmap->Test(obj));
+      live_bitmap->Set(obj);
+    }
+    ScanObject(obj);
   }
   timings_.EndSplit();
 }
@@ -651,6 +767,24 @@ void SemiSpace::FinishPhase() {
   // Reset the marked large objects.
   space::LargeObjectSpace* large_objects = GetHeap()->GetLargeObjectsSpace();
   large_objects->GetMarkObjects()->Clear();
+
+  if (kEnableBumpPointerSpacesOnlyCollection) {
+    // Decide whether to do a whole heap collection or a bump pointer
+    // only space collection at the next collection by updating
+    // whole_heap_collection. Enable whole_heap_collection once every
+    // kDefaultWholeHeapCollectionInterval collections.
+    if (!whole_heap_collection_) {
+      --whole_heap_collection_interval_counter_;
+      DCHECK_GE(whole_heap_collection_interval_counter_, 0);
+      if (whole_heap_collection_interval_counter_ == 0) {
+        whole_heap_collection_ = true;
+      }
+    } else {
+      DCHECK_EQ(whole_heap_collection_interval_counter_, 0);
+      whole_heap_collection_interval_counter_ = kDefaultWholeHeapCollectionInterval;
+      whole_heap_collection_ = false;
+    }
+  }
 }
 
 }  // namespace collector

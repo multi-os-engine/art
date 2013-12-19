@@ -290,6 +290,18 @@ class SemiSpace : public GarbageCollector {
   // pointer space to the non-moving space.
   uint64_t bytes_promoted_;
 
+  // When true, collect the whole heap. When false, collect only the
+  // bump pointer spaces.
+  bool whole_heap_collection_;
+
+  // A counter used to enable whole_heap_collection_ once per
+  // interval.
+  int whole_heap_collection_interval_counter_;
+
+  // The default interval of the whole heap collection. If N, the
+  // whole heap collection occurs every N collections.
+  static constexpr int kDefaultWholeHeapCollectionInterval = 5;
+
  private:
   DISALLOW_COPY_AND_ASSIGN(SemiSpace);
 };
