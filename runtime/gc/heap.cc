@@ -182,6 +182,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     non_moving_space_ = space::RosAllocSpace::Create(name, initial_size, growth_limit, capacity,
                                                      requested_alloc_space_begin, low_memory_mode_);
   }
+  VLOG(heap) << "non_moving_space : " << reinterpret_cast<void*>(non_moving_space_->Begin()) << "-"
+             << reinterpret_cast<void*>(non_moving_space_->Limit());
   if (kMovingCollector) {
     // TODO: Place bump-pointer spaces somewhere to minimize size of card table.
     // TODO: Having 3+ spaces as big as the large heap size can cause virtual memory fragmentation
@@ -195,6 +197,11 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
                                                   nullptr);
     CHECK(temp_space_ != nullptr) << "Failed to create bump pointer space";
     AddSpace(temp_space_);
+
+    VLOG(heap) << "bump_pointer_space : " << reinterpret_cast<void*>(bump_pointer_space_->Begin()) << "-"
+               << reinterpret_cast<void*>(bump_pointer_space_->Limit());
+    VLOG(heap) << "temp_space : " << reinterpret_cast<void*>(temp_space_->Begin()) << "-"
+               << reinterpret_cast<void*>(temp_space_->Limit());
   }
 
   CHECK(non_moving_space_ != NULL) << "Failed to create non-moving space";
