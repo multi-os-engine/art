@@ -152,7 +152,7 @@ void ArmMir2Lir::GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
     case kCondLt:
       OpCmpImmBranch(kCondLt, high_reg, val_hi, taken);
       OpCmpImmBranch(kCondGt, high_reg, val_hi, not_taken);
-      ccode = kCondCc;
+      ccode = kCondUlt;
       break;
     case kCondLe:
       OpCmpImmBranch(kCondLt, high_reg, val_hi, taken);
@@ -167,7 +167,7 @@ void ArmMir2Lir::GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
     case kCondGe:
       OpCmpImmBranch(kCondGt, high_reg, val_hi, taken);
       OpCmpImmBranch(kCondLt, high_reg, val_hi, not_taken);
-      ccode = kCondCs;
+      ccode = kCondUge;
       break;
     default:
       LOG(FATAL) << "Unexpected ccode: " << ccode;
