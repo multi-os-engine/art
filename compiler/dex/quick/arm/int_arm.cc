@@ -128,46 +128,42 @@ void ArmMir2Lir::GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
   int32_t low_reg = rl_src1.low_reg;
   int32_t high_reg = rl_src1.high_reg;
 
+  if (val == 0 && (ccode == kCondEq || ccode == kCondNe)) {
+    int t_reg = AllocTemp();
+    NewLIR4(kThumb2OrrRRRs, t_reg, low_reg, high_reg, 0);
+    FreeTemp(t_reg);
+    OpCondBranch(ccode, taken);
+    return;
+  }
+
   switch (ccode) {
     case kCondEq:
     case kCondNe:
-      LIR* target;
-      ConditionCode condition;
-      if (ccode == kCondEq) {
-        target = not_taken;
-        condition = kCondEq;
-      } else {
-        target = taken;
-        condition = kCondNe;
-      }
-      if (val == 0) {
-        int t_reg = AllocTemp();
-        NewLIR4(kThumb2OrrRRRs, t_reg, low_reg, high_reg, 0);
-        FreeTemp(t_reg);
-        OpCondBranch(condition, taken);
-        return;
-      }
-      OpCmpImmBranch(kCondNe, high_reg, val_hi, target);
+      OpCmpImmBranch(kCondNe, high_reg, val_hi, (ccode == kCondEq) ? not_taken : taken);
       break;
     case kCondLt:
-      OpCmpImmBranch(kCondLt, high_reg, val_hi, taken);
-      OpCmpImmBranch(kCondGt, high_reg, val_hi, not_taken);
-      ccode = kCondCc;
+      OpRegImm(kOpCmp, high_reg, val_hi);
+      OpCondBranch(kCondLt, taken);
+      OpCondBranch(kCondGt, not_taken);
+      ccode = kCondUlt;
       break;
     case kCondLe:
-      OpCmpImmBranch(kCondLt, high_reg, val_hi, taken);
-      OpCmpImmBranch(kCondGt, high_reg, val_hi, not_taken);
+      OpRegImm(kOpCmp, high_reg, val_hi);
+      OpCondBranch(kCondLt, taken);
+      OpCondBranch(kCondGt, not_taken);
       ccode = kCondLs;
       break;
     case kCondGt:
-      OpCmpImmBranch(kCondGt, high_reg, val_hi, taken);
-      OpCmpImmBranch(kCondLt, high_reg, val_hi, not_taken);
+      OpRegImm(kOpCmp, high_reg, val_hi);
+      OpCondBranch(kCondGt, taken);
+      OpCondBranch(kCondLt, not_taken);
       ccode = kCondHi;
       break;
     case kCondGe:
-      OpCmpImmBranch(kCondGt, high_reg, val_hi, taken);
-      OpCmpImmBranch(kCondLt, high_reg, val_hi, not_taken);
-      ccode = kCondCs;
+      OpRegImm(kOpCmp, high_reg, val_hi);
+      OpCondBranch(kCondGt, taken);
+      OpCondBranch(kCondLt, not_taken);
+      ccode = kCondUge;
       break;
     default:
       LOG(FATAL) << "Unexpected ccode: " << ccode;
@@ -238,9 +234,7 @@ void ArmMir2Lir::GenFusedLongCmpBranch(BasicBlock* bb, MIR* mir) {
   // Normalize such that if either operand is constant, src2 will be constant.
   ConditionCode ccode = static_cast<ConditionCode>(mir->dalvikInsn.arg[0]);
   if (rl_src1.is_const) {
-    RegLocation rl_temp = rl_src1;
-    rl_src1 = rl_src2;
-    rl_src2 = rl_temp;
+    std::swap(rl_src1, rl_src2);
     ccode = FlipComparisonOrder(ccode);
   }
   if (rl_src2.is_const) {
@@ -1172,9 +1166,7 @@ void ArmMir2Lir::GenArithImmOpLong(Instruction::Code opcode,
     // Normalize
     if (!rl_src2.is_const) {
       DCHECK(rl_src1.is_const);
-      RegLocation rl_temp = rl_src1;
-      rl_src1 = rl_src2;
-      rl_src2 = rl_temp;
+      std::swap(rl_src1, rl_src2);
     }
   }
   if (BadOverlap(rl_src1, rl_dest)) {

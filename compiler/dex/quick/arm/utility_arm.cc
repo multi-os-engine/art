@@ -210,7 +210,7 @@ LIR* ArmMir2Lir::OpUnconditionalBranch(LIR* target) {
 }
 
 LIR* ArmMir2Lir::OpCondBranch(ConditionCode cc, LIR* target) {
-  LIR* branch = NewLIR2(kThumb2BCond, 0 /* offset to be patched */,
+  LIR* branch = NewLIR2(kThumbBCond, 0 /* offset to be patched */,
                         ArmConditionEncoding(cc));
   branch->target = target;
   return branch;
