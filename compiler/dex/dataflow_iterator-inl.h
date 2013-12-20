@@ -24,65 +24,125 @@ namespace art {
 // Single forward pass over the nodes.
 inline BasicBlock* DataflowIterator::ForwardSingleNext() {
   BasicBlock* res = NULL;
+
+  // Are we not yet at the end?
   if (idx_ < end_idx_) {
-    BasicBlockId bb_id = block_id_list_->Get(idx_++);
+    // Get the next index.
+    BasicBlockId bb_id = block_id_list_->Get(idx_);
+
+    // Increment the index.
+    idx_++;
+
+    // Get the BasicBlock.
     res = mir_graph_->GetBasicBlock(bb_id);
   }
+
   return res;
 }
 
 // Repeat full forward passes over all nodes until no change occurs during a complete pass.
-inline BasicBlock* DataflowIterator::ForwardRepeatNext(bool had_change) {
-  changed_ |= had_change;
+inline BasicBlock* DataflowIterator::ForwardRepeatNext() {
   BasicBlock* res = NULL;
-  if ((idx_ >= end_idx_) && changed_) {
+
+  // Are we at the end and have we changed something?
+  if ((idx_ >= end_idx_) && changed_ == true) {
+    // If so, let's start again.
     idx_ = start_idx_;
+
+    // Increment the number of repetitions.
     repeats_++;
+
+    // Reset changed_.
     changed_ = false;
   }
+
+  // Are we not yet at the end?
   if (idx_ < end_idx_) {
-    BasicBlockId bb_id = block_id_list_->Get(idx_++);
+    // Get the BasicBlockId.
+    BasicBlockId bb_id = block_id_list_->Get(idx_);
+
+    // Increment the index.
+    idx_++;
+
+    // Get the BasicBlock.
     res = mir_graph_->GetBasicBlock(bb_id);
   }
+
   return res;
 }
 
 // Single reverse pass over the nodes.
 inline BasicBlock* DataflowIterator::ReverseSingleNext() {
   BasicBlock* res = NULL;
+
+  //Are we not yet at the end?
   if (idx_ >= 0) {
-    BasicBlockId bb_id = block_id_list_->Get(idx_--);
+    // Get the BasicBlockId.
+    BasicBlockId bb_id = block_id_list_->Get(idx_);
+
+    // Decrement the index.
+    idx_--;
+
+    // Get the BasicBlock.
     res = mir_graph_->GetBasicBlock(bb_id);
   }
+
   return res;
 }
 
 // Repeat full backwards passes over all nodes until no change occurs during a complete pass.
-inline BasicBlock* DataflowIterator::ReverseRepeatNext(bool had_change) {
-  changed_ |= had_change;
+inline BasicBlock* DataflowIterator::ReverseRepeatNext() {
   BasicBlock* res = NULL;
+
+  // Are we done and we changed something during the last iteration?
   if ((idx_ < 0) && changed_) {
+    // Reset the index.
     idx_ = start_idx_;
+
+    // Increment the repetition counter.
     repeats_++;
+
+    // Reset the changed_ boolean.
     changed_ = false;
   }
+
+  // Are we not yet done?
   if (idx_ >= 0) {
-    BasicBlockId bb_id = block_id_list_->Get(idx_--);
+    // Get the BasicBlockId.
+    BasicBlockId bb_id = block_id_list_->Get(idx_);
+
+    // Decrement the index.
+    idx_--;
+
+    // Get the BasicBlock.
     res = mir_graph_->GetBasicBlock(bb_id);
   }
+
   return res;
 }
 
 // AllNodes uses the existing GrowableArray iterator, and should be considered unordered.
-inline BasicBlock* AllNodesIterator::Next() {
+inline BasicBlock* AllNodesIterator::Next(bool had_change) {
   BasicBlock* res = NULL;
+
+  // Suppose we want to keep looking.
   bool keep_looking = true;
-  while (keep_looking) {
+
+  // Find the next BasicBlock.
+  while (keep_looking == true) {
+    // Get next BasicBlock.
     res = all_nodes_iterator_->Next();
-    if ((res == NULL) || (!res->hidden)) {
+
+    // Are we done or is the BasicBlock not hidden?
+    if ((res == NULL) || (res->hidden == false)) {
+      // We are done.
       keep_looking = false;
     }
   }
+
+  // Update changed: if had_changed is true, we remember it for the whole iteration.
+  changed_ |= had_change;
+
   return res;
 }
 
