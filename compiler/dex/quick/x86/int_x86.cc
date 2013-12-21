@@ -296,20 +296,26 @@ RegLocation X86Mir2Lir::GenDivRem(RegLocation rl_dest, int reg_lo,
 
 bool X86Mir2Lir::GenInlinedMinMaxInt(CallInfo* info, bool is_min) {
   DCHECK_EQ(cu_->instruction_set, kX86);
+
+  // Get the two arguments to the invoke and place them in GP registers.
   RegLocation rl_src1 = info->args[0];
   RegLocation rl_src2 = info->args[1];
   rl_src1 = LoadValue(rl_src1, kCoreReg);
   rl_src2 = LoadValue(rl_src2, kCoreReg);
+
   RegLocation rl_dest = InlineTarget(info);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  OpRegReg(kOpCmp, rl_src1.low_reg, rl_src2.low_reg);
-  DCHECK_EQ(cu_->instruction_set, kX86);
-  LIR* branch = NewLIR2(kX86Jcc8, 0, is_min ? kX86CondG : kX86CondL);
+
+  // Pick the first integer as min/max.
   OpRegReg(kOpMov, rl_result.low_reg, rl_src1.low_reg);
-  LIR* branch2 = NewLIR1(kX86Jmp8, 0);
-  branch->target = NewLIR0(kPseudoTargetLabel);
-  OpRegReg(kOpMov, rl_result.low_reg, rl_src2.low_reg);
-  branch2->target = NewLIR0(kPseudoTargetLabel);
+
+  // It is possible we didn't pick correctly so do the actual comparison now.
+  OpRegReg(kOpCmp, rl_src1.low_reg, rl_src2.low_reg);
+
+  // Conditionally move the other integer into the destination register.
+  ConditionCode condition_code = is_min ? kCondGt : kCondLt;
+  OpCondRegReg(kOpCmov, condition_code, rl_result.low_reg, rl_src2.low_reg);
+
   StoreValue(rl_dest, rl_result);
   return true;
 }
