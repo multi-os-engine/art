@@ -203,6 +203,20 @@ LIR* X86Mir2Lir::OpRegReg(OpKind op, int r_dest_src1, int r_src2) {
     return NewLIR2(opcode, r_dest_src1, r_src2);
 }
 
+LIR* X86Mir2Lir::OpCondRegReg(OpKind op, ConditionCode cc, int r_dest, int r_src) {
+    switch (op) {
+      case kOpCmov:
+        return NewLIR3 (kX86Cmov32RRC, r_dest, r_src, X86ConditionEncoding(cc));
+      default:
+        LOG(FATAL) << "Bad case in OpCondRegReg " << op;
+        break;
+    }
+    // Normally this should be unreachable. Returning null is sane behavior, and alternatives
+    // would be to pass the burden to another function that may create an invalid LIR or to
+    // signal via an error framework that we failed to generate requested LIR.
+    return NULL;
+}
+
 LIR* X86Mir2Lir::OpRegMem(OpKind op, int r_dest, int rBase,
               int offset) {
   X86OpCode opcode = kX86Nop;
