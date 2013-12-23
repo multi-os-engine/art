@@ -353,19 +353,19 @@ include $(art_build_path)/Android.cpplint.mk
 .PHONY: use-art
 use-art:
 	adb root && sleep 3
-	adb shell setprop persist.sys.dalvik.vm.lib libart.so
+	adb shell su system setprop persist.sys.dalvik.vm.lib libart.so
 	adb reboot
 
 .PHONY: use-artd
 use-artd:
 	adb root && sleep 3
-	adb shell setprop persist.sys.dalvik.vm.lib libartd.so
+	adb shell su system setprop persist.sys.dalvik.vm.lib libartd.so
 	adb reboot
 
 .PHONY: use-dalvik
 use-dalvik:
 	adb root && sleep 3
-	adb shell setprop persist.sys.dalvik.vm.lib libdvm.so
+	adb shell su system setprop persist.sys.dalvik.vm.lib libdvm.so
 	adb reboot
 
 ########################################################################
