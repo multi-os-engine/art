@@ -1001,7 +1001,7 @@ bool MIRGraph::DoSSAConversion(BasicBlock* bb) {
         static_cast<int>(kNumPackedOpcodes)) {
       int flags = Instruction::FlagsOf(mir->dalvikInsn.opcode);
 
-      if (flags & Instruction::kInvoke) {
+      if ((flags & Instruction::kInvoke) && !(mir->optimization_flags & MIR_INLINED_PRED)) {
         attributes_ &= ~METHOD_IS_LEAF;
       }
     }

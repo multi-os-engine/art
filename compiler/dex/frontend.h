@@ -57,6 +57,7 @@ enum opt_control_vector {
   kPromoteCompilerTemps,
   kBranchFusing,
   kSuppressExceptionEdges,
+  kSuppressMethodInlining,
 };
 
 // Force code generation paths for testing.
