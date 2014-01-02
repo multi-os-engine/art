@@ -609,6 +609,7 @@ class MIRGraph {
   void BasicBlockCombine();
   void CodeLayout();
   void DumpCheckStats();
+  void InlineCalls();
   void PropagateConstants();
   MIR* FindMoveResult(BasicBlock* bb, MIR* mir);
   int SRegToVReg(int ssa_reg) const;

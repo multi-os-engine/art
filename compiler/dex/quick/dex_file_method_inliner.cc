@@ -258,7 +258,8 @@ bool DexFileMethodInliner::AnalyseMethodCode(uint32_t method_idx,
 
   switch (opcode) {
     case Instruction::RETURN_VOID:
-      return AddInlineMethod(method_idx, kInlineOpNop, kInlineSpecial, 0);
+      return AddInlineMethod(method_idx, kInlineOpNop,
+                             static_cast<InlineMethodFlags>(kInline | kInlineSpecial), 0);
     case Instruction::RETURN:
     case Instruction::RETURN_OBJECT:
       return AnalyseReturnMethod(method_idx, code_item, kWord);
@@ -381,6 +382,34 @@ bool DexFileMethodInliner::GenSpecial(Mir2Lir* backend, uint32_t method_idx) {
   }
   // TODO: Return true only if special implementation is emitted.
   backend->SpecialMIR2LIR(special);
+  return true;
+}
+
+bool DexFileMethodInliner::GenInline(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                                     uint32_t method_idx) {
+  InlineMethod method;
+  {
+    ReaderMutexLock mu(Thread::Current(), lock_);
+    auto it = inline_methods_.find(method_idx);
+    if (it == inline_methods_.end() || (it->second.flags & kInline) == 0) {
+      return false;
+    }
+    method = it->second;
+  }
+
+  invoke->optimization_flags |= MIR_INLINED_PRED;
+  switch (method.opcode) {
+    case kInlineOpNop:
+      break;
+    case kInlineOpConst:
+      GenInlineConst(mir_graph, bb, invoke, method);
+      break;
+    case kInlineOpReturnArg:
+      GenInlineReturnArg(mir_graph, bb, invoke, method);
+      break;
+    default:
+      LOG(FATAL) << "Unexpected inline op: " << method.opcode;
+  }
   return true;
 }
 
@@ -537,7 +566,8 @@ bool DexFileMethodInliner::AnalyseReturnMethod(int32_t method_idx,
   data.d.arg = reg - arg_start;
   data.d.op_size = size;
   data.d.reserved = 0;
-  return AddInlineMethod(method_idx, kInlineOpReturnArg, kInlineSpecial, data.data);
+  return AddInlineMethod(method_idx, kInlineOpReturnArg,
+                         static_cast<InlineMethodFlags>(kInline | kInlineSpecial), data.data);
 }
 
 bool DexFileMethodInliner::AnalyseConstMethod(int32_t method_idx,
@@ -566,7 +596,8 @@ bool DexFileMethodInliner::AnalyseConstMethod(int32_t method_idx,
   if (return_opcode == Instruction::RETURN_OBJECT && vB != 0) {
     return false;  // Returning non-null reference constant?
   }
-  return AddInlineMethod(method_idx, kInlineOpConst, kInlineSpecial, vB);
+  return AddInlineMethod(method_idx, kInlineOpConst,
+                         static_cast<InlineMethodFlags>(kInline | kInlineSpecial), vB);
 }
 
 bool DexFileMethodInliner::AnalyseIGetMethod(int32_t method_idx, const DexFile::CodeItem* code_item,
@@ -640,6 +671,80 @@ bool DexFileMethodInliner::AnalyseIPutMethod(int32_t method_idx, const DexFile::
   data.d.src_arg = vA - arg_start;
   data.d.reserved = 0;
   return AddInlineMethod(method_idx, kInlineOpIPut, kInlineSpecial, data.data);
+}
+
+void DexFileMethodInliner::GenInlineConst(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                                          const InlineMethod& method) {
+  MIR* move_result = mir_graph->FindMoveResult(bb, invoke);
+  if (move_result == nullptr) {
+    // Result is unused.
+    return;
+  }
+
+  // Check the opcode and for MOVE_RESULT_OBJECT check also that the constant is null.
+  DCHECK(move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT ||
+         (move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT_OBJECT && method.data == 0));
+
+  // Mark MOVE_RESULT as inlined.
+  move_result->optimization_flags |= MIR_INLINED_PRED;
+
+  // Insert the CONST instruction.
+  MIR* insn = AllocInlineMIR(mir_graph, invoke);
+  insn->dalvikInsn.opcode = Instruction::CONST;
+  insn->dalvikInsn.vA = move_result->dalvikInsn.vA;
+  insn->dalvikInsn.vB = method.data;
+  mir_graph->InsertMIRAfter(bb, move_result, insn);
+}
+
+void DexFileMethodInliner::GenInlineReturnArg(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                                              const InlineMethod& method) {
+  MIR* move_result = mir_graph->FindMoveResult(bb, invoke);
+  if (move_result == nullptr) {
+    // Result is unused.
+    return;
+  }
+
+  // Select opcode and argument.
+  InlineReturnArgData data;
+  data.data = method.data;
+  Instruction::Code opcode = Instruction::MOVE_FROM16;
+  if (move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT_OBJECT) {
+    DCHECK_EQ(data.d.op_size, kWord);
+    opcode = Instruction::MOVE_OBJECT_FROM16;
+  } else if (move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT_WIDE) {
+    DCHECK_EQ(data.d.op_size, kLong);
+    opcode = Instruction::MOVE_WIDE_FROM16;
+  } else {
+    DCHECK(move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT);
+    DCHECK_EQ(data.d.op_size, kWord);
+  }
+  DCHECK_LT(data.d.op_size == kLong ? data.d.arg + 1u : data.d.arg, invoke->dalvikInsn.vA);
+  int arg;
+  if (Instruction::FormatOf(invoke->dalvikInsn.opcode) == Instruction::k35c) {
+    arg = invoke->dalvikInsn.arg[data.d.arg];  // Non-range invoke.
+  } else {
+    DCHECK_EQ(Instruction::FormatOf(invoke->dalvikInsn.opcode), Instruction::k3rc);
+    arg = invoke->dalvikInsn.vC + data.d.arg;  // Range invoke.
+  }
+
+  // Mark MOVE_RESULT as inlined.
+  move_result->optimization_flags |= MIR_INLINED_PRED;
+
+  // Insert the move instruction
+  MIR* insn = AllocInlineMIR(mir_graph, move_result);
+  insn->dalvikInsn.opcode = opcode;
+  insn->dalvikInsn.vA = move_result->dalvikInsn.vA;
+  insn->dalvikInsn.vB = arg;
+  mir_graph->InsertMIRAfter(bb, move_result, insn);
+}
+
+MIR* DexFileMethodInliner::AllocInlineMIR(MIRGraph* mir_graph, MIR* replaced_mir) {
+  ArenaAllocator* arena = mir_graph->GetArena();
+  MIR* insn = static_cast<MIR*>(arena->Alloc(sizeof(MIR), ArenaAllocator::kAllocMIR));
+  insn->width = replaced_mir->width;
+  insn->offset = replaced_mir->offset;
+  insn->optimization_flags = MIR_CALLEE;
+  return insn;
 }
 
 }  // namespace art

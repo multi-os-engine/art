@@ -27,7 +27,10 @@
 
 namespace art {
 
+struct BasicBlock;
+struct MIR;
 class CallInfo;
+class MIRGraph;
 class Mir2Lir;
 
 enum InlineMethodOpcode : uint16_t {
@@ -60,6 +63,7 @@ enum InlineMethodFlags : uint16_t {
   kNoInlineMethodFlags = 0x0000,
   kInlineIntrinsic     = 0x0001,
   kInlineSpecial       = 0x0002,
+  kInline              = 0x0004,
 };
 
 struct InlineMethod {
@@ -166,6 +170,11 @@ class DexFileMethodInliner {
      * Generate code for a special function.
      */
     bool GenSpecial(Mir2Lir* backend, uint32_t method_idx);
+
+    /**
+     * Try to inline an invoke.
+     */
+    bool GenInline(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke, uint32_t method_idx);
 
   private:
     /**
@@ -380,6 +389,12 @@ class DexFileMethodInliner {
                            OpSize size, bool is_object) LOCKS_EXCLUDED(lock_);
     bool AnalyseIPutMethod(int32_t method_idx, const DexFile::CodeItem* code_item,
                            OpSize size, bool is_object) LOCKS_EXCLUDED(lock_);
+
+    void GenInlineConst(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                        const InlineMethod& method);
+    void GenInlineReturnArg(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                            const InlineMethod& method);
+    MIR* AllocInlineMIR(MIRGraph* mir_graph, MIR* replaced_mir);
 
     ReaderWriterMutex lock_;
     /*

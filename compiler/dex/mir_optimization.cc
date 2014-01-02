@@ -17,6 +17,8 @@
 #include "compiler_internals.h"
 #include "local_value_numbering.h"
 #include "dataflow_iterator-inl.h"
+#include "dex/quick/dex_file_method_inliner.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
 
 namespace art {
 
@@ -836,6 +838,67 @@ void MIRGraph::BasicBlockCombine() {
     }
     if (cu_->enable_debug & (1 << kDebugDumpCFG)) {
       DumpCFG("/sdcard/5_post_bbcombine_cfg/", false);
+    }
+  }
+}
+
+void MIRGraph::InlineCalls() {
+  if (cu_->disable_opt & (1 << kSuppressMethodInlining)) {
+    return;
+  }
+  DexCompilationUnit* dex_cu = GetCurrentDexCompilationUnit();
+  CompilerDriver* compiler = cu_->compiler_driver;
+  DexFileToMethodInlinerMap* inliner_map = compiler->GetMethodInlinerMap();
+  if (inliner_map == nullptr) {
+    // This isn't the Quick compiler.
+    return;
+  }
+  AllNodesIterator iter(this);
+  for (BasicBlock* bb = iter.Next(); bb != NULL; bb = iter.Next()) {
+    if (bb->block_type != kDalvikByteCode) {
+      continue;
+    }
+    for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+      if (!(Instruction::FlagsOf(mir->dalvikInsn.opcode) & Instruction::kInvoke)) {
+        continue;
+      }
+      InvokeType type;
+      switch (mir->dalvikInsn.opcode) {
+        case Instruction::INVOKE_STATIC:
+        case Instruction::INVOKE_STATIC_RANGE:
+          type = kStatic;
+          break;
+        case Instruction::INVOKE_DIRECT:
+        case Instruction::INVOKE_DIRECT_RANGE:
+          type = kDirect;
+          break;
+        case Instruction::INVOKE_VIRTUAL:
+        case Instruction::INVOKE_VIRTUAL_QUICK:
+        case Instruction::INVOKE_VIRTUAL_RANGE:
+        case Instruction::INVOKE_VIRTUAL_RANGE_QUICK:
+          type = kVirtual;
+          break;
+        case Instruction::INVOKE_SUPER:
+        case Instruction::INVOKE_SUPER_RANGE:
+          type = kSuper;
+          break;
+        case Instruction::INVOKE_INTERFACE:
+        case Instruction::INVOKE_INTERFACE_RANGE:
+          type = kInterface;
+          break;
+        default:
+          LOG(FATAL) << "Unexpected opcode: " << mir->dalvikInsn.opcode;
+      }
+      MethodReference target_method(cu_->dex_file, mir->dalvikInsn.vB);
+      int vtable_idx;
+      uintptr_t direct_code, direct_method;
+      bool fast_path = compiler->ComputeInvokeInfo(dex_cu, mir->offset, false, true,
+                                                   &type, &target_method, &vtable_idx,
+                                                   &direct_code, &direct_method);
+      if (fast_path && (type == kDirect || type == kStatic)) {
+        inliner_map->GetMethodInliner(target_method.dex_file)
+            ->GenInline(this, bb, mir, target_method.dex_method_index);
+      }
     }
   }
 }
