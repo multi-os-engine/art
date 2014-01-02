@@ -51,6 +51,20 @@ class AnnotateCalledMethods : public Pass {
 };
 
 /**
+ * @class InlineCalls
+ * @brief Perform method inlining pass.
+ */
+class InlineCalls : public Pass {
+ public:
+  InlineCalls():Pass("InlineCalls") {
+  }
+
+  bool WalkBasicBlocks(CompilationUnit *cUnit, BasicBlock *bb) const;
+
+  bool Gate(const CompilationUnit *cUnit) const;
+};
+
+/**
  * @class CodeLayout
  * @brief Perform the code layout pass.
  */
