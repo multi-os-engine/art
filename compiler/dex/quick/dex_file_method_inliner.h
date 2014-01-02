@@ -31,7 +31,10 @@ namespace verifier {
 class MethodVerifier;
 }  // namespace verifier
 
+struct BasicBlock;
 struct CallInfo;
+struct MIR;
+class MIRGraph;
 class Mir2Lir;
 
 enum InlineMethodOpcode : uint16_t {
@@ -187,6 +190,11 @@ class DexFileMethodInliner {
      * Generate code for a special function.
      */
     bool GenSpecial(Mir2Lir* backend, uint32_t method_idx);
+
+    /**
+     * Try to inline an invoke.
+     */
+    bool GenInline(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke, uint32_t method_idx);
 
     /**
      * To avoid multiple lookups of a class by its descriptor, we cache its
@@ -399,6 +407,15 @@ class DexFileMethodInliner {
         SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
     static bool AnalyseIPutMethod(verifier::MethodVerifier* verifier, InlineMethod* result)
         SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+    static bool GenInlineConst(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                               MIR* move_result, const InlineMethod& method);
+    static bool GenInlineReturnArg(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                                   MIR* move_result, const InlineMethod& method);
+    static bool GenInlineIGet(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                              MIR* move_result, const InlineMethod& method, uint32_t method_idx);
+    static bool GenInlineIPut(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                              const InlineMethod& method, uint32_t method_idx);
 
     ReaderWriterMutex lock_;
     /*

@@ -691,7 +691,7 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
                       bool is_object) {
   const MirIFieldLoweringInfo& field_info = mir_graph_->GetIFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedInstanceField(field_info.FastGet());
-  if (field_info.FastGet() && !SLOW_FIELD_PATH) {
+  if (((mir->optimization_flags & MIR_CALLEE) != 0 || field_info.FastGet()) && !SLOW_FIELD_PATH) {
     RegLocation rl_result;
     RegisterClass reg_class = oat_reg_class_by_size(size);
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
@@ -750,7 +750,7 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
                       bool is_object) {
   const MirIFieldLoweringInfo& field_info = mir_graph_->GetIFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedInstanceField(field_info.FastPut());
-  if (field_info.FastPut() && !SLOW_FIELD_PATH) {
+  if (((mir->optimization_flags & MIR_CALLEE) != 0 || field_info.FastPut()) && !SLOW_FIELD_PATH) {
     RegisterClass reg_class = oat_reg_class_by_size(size);
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
     rl_obj = LoadValue(rl_obj, kCoreReg);

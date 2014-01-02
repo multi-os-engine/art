@@ -504,6 +504,9 @@ class MIRGraph {
     return method_lowering_infos_.GetRawStorage()[mir->meta.method_lowering_info];
   }
 
+  size_t InlineIFieldLoweringInfo(MIR* invoke, uint16_t field_idx, uint32_t field_offset,
+                                  bool is_volatile);
+
   void InitRegLocations();
 
   void RemapRegLocations();
@@ -789,6 +792,11 @@ class MIRGraph {
   bool LayoutBlocks(BasicBlock* bb);
 
   /**
+   * @brief Perform the method inlining.
+   */
+  void DoInlineCalls(BasicBlock* bb);
+
+  /**
    * @brief Perform the initial preparation for the Method Uses.
    */
   void InitializeMethodUses();
@@ -964,6 +972,7 @@ class MIRGraph {
   GrowableArray<MirIFieldLoweringInfo> ifield_lowering_infos_;
   GrowableArray<MirSFieldLoweringInfo> sfield_lowering_infos_;
   GrowableArray<MirMethodLoweringInfo> method_lowering_infos_;
+  size_t inline_ifield_lowering_infos_start_;
 
   friend class LocalValueNumberingTest;
 };

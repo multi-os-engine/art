@@ -17,6 +17,8 @@
 #include "compiler_internals.h"
 #include "local_value_numbering.h"
 #include "dataflow_iterator-inl.h"
+#include "dex/quick/dex_file_method_inliner.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
 
 namespace art {
 
@@ -874,6 +876,24 @@ bool MIRGraph::EliminateNullChecksAndInferTypes(BasicBlock* bb) {
     bb->data_flow_info->ending_null_check_v->Copy(temp_ssa_register_v_);
   }
   return infer_changed | nce_changed;
+}
+
+void MIRGraph::DoInlineCalls(BasicBlock* bb) {
+  if (bb->block_type != kDalvikByteCode) {
+    return;
+  }
+  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+    if (!(Instruction::FlagsOf(mir->dalvikInsn.opcode) & Instruction::kInvoke)) {
+      continue;
+    }
+    const MirMethodLoweringInfo& method_info = GetMethodLoweringInfo(mir);
+    // TODO: Allow inlining static calls. (Need to preserve static initialization check.)
+    if (method_info.FastPath() && method_info.GetSharpType() == kDirect) {
+      DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
+      cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
+          ->GenInline(this, bb, mir, method_info.MethodIndex());
+    }
+  }
 }
 
 void MIRGraph::DumpCheckStats() {
