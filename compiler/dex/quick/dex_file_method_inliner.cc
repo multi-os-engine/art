@@ -18,6 +18,7 @@
 #include "base/macros.h"
 #include "base/mutex.h"
 #include "base/mutex-inl.h"
+#include "dex/frontend.h"
 #include "locks.h"
 #include "thread.h"
 #include "thread-inl.h"
@@ -384,6 +385,43 @@ bool DexFileMethodInliner::GenSpecial(Mir2Lir* backend, uint32_t method_idx) {
   return true;
 }
 
+bool DexFileMethodInliner::GenInline(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                                     uint32_t method_idx) {
+  InlineMethod method;
+  {
+    ReaderMutexLock mu(Thread::Current(), lock_);
+    auto it = inline_methods_.find(method_idx);
+    if (it == inline_methods_.end() || (it->second.flags & kInlineSpecial) == 0) {
+      return false;
+    }
+    method = it->second;
+  }
+
+  bool result = true;
+  switch (method.opcode) {
+    case kInlineOpNop:
+      break;
+    case kInlineOpConst:
+      result = false;  // GenInlineConst(mir_graph, bb, invoke, method);
+      break;
+    case kInlineOpReturnArg:
+      result = false;  // GenInlineReturnArg(mir_graph, bb, invoke, method);
+      break;
+    case kInlineOpIGet:
+      result = GenInlineIGet(mir_graph, bb, invoke, method, method_idx);
+      break;
+    case kInlineOpIPut:
+      result = false;  // GenInlineIPut(mir_graph, bb, invoke, method, method_idx);
+      break;
+    default:
+      LOG(FATAL) << "Unexpected inline op: " << method.opcode;
+  }
+  if (result) {
+    invoke->optimization_flags |= MIR_INLINED_PRED;
+  }
+  return result;
+}
+
 uint32_t DexFileMethodInliner::FindClassIndex(const DexFile* dex_file, IndexCache* cache,
                                               ClassCacheIndex index) {
   uint32_t* class_index = &cache->class_indexes[index];
@@ -640,6 +678,211 @@ bool DexFileMethodInliner::AnalyseIPutMethod(int32_t method_idx, const DexFile::
   data.d.src_arg = vA - arg_start;
   data.d.reserved = 0;
   return AddInlineMethod(method_idx, kInlineOpIPut, kInlineSpecial, data.data);
+}
+
+bool DexFileMethodInliner::GenInlineConst(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                                          const InlineMethod& method) {
+  MIR* move_result = mir_graph->FindMoveResult(bb, invoke);
+  if (move_result == nullptr) {
+    // Result is unused.
+    return true;
+  }
+
+  // Check the opcode and for MOVE_RESULT_OBJECT check also that the constant is null.
+  DCHECK(move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT ||
+         (move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT_OBJECT && method.data == 0));
+
+  // Insert the CONST instruction.
+  MIR* insn = AllocReplacementMIR(mir_graph, invoke);
+  insn->dalvikInsn.opcode = Instruction::CONST;
+  insn->dalvikInsn.vA = move_result->dalvikInsn.vA;
+  insn->dalvikInsn.vB = method.data;
+  mir_graph->InsertMIRAfter(bb, move_result, insn);
+  return true;
+}
+
+bool DexFileMethodInliner::GenInlineReturnArg(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                                              const InlineMethod& method) {
+  MIR* move_result = mir_graph->FindMoveResult(bb, invoke);
+  if (move_result == nullptr) {
+    // Result is unused.
+    return true;
+  }
+
+  // Select opcode and argument.
+  InlineReturnArgData data;
+  data.data = method.data;
+  Instruction::Code opcode = Instruction::MOVE_FROM16;
+  if (move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT_OBJECT) {
+    DCHECK_EQ(data.d.op_size, kWord);
+    opcode = Instruction::MOVE_OBJECT_FROM16;
+  } else if (move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT_WIDE) {
+    DCHECK_EQ(data.d.op_size, kLong);
+    opcode = Instruction::MOVE_WIDE_FROM16;
+  } else {
+    DCHECK(move_result->dalvikInsn.opcode == Instruction::MOVE_RESULT);
+    DCHECK_EQ(data.d.op_size, kWord);
+  }
+  DCHECK_LT(data.d.op_size == kLong ? data.d.arg + 1u : data.d.arg, invoke->dalvikInsn.vA);
+  int arg;
+  if (Instruction::FormatOf(invoke->dalvikInsn.opcode) == Instruction::k35c) {
+    arg = invoke->dalvikInsn.arg[data.d.arg];  // Non-range invoke.
+  } else {
+    DCHECK_EQ(Instruction::FormatOf(invoke->dalvikInsn.opcode), Instruction::k3rc);
+    arg = invoke->dalvikInsn.vC + data.d.arg;  // Range invoke.
+  }
+
+  // Insert the move instruction
+  MIR* insn = AllocReplacementMIR(mir_graph, move_result);
+  insn->dalvikInsn.opcode = opcode;
+  insn->dalvikInsn.vA = move_result->dalvikInsn.vA;
+  insn->dalvikInsn.vB = arg;
+  mir_graph->InsertMIRAfter(bb, move_result, insn);
+  return true;
+}
+
+bool DexFileMethodInliner::GenInlineIGet(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                                         const InlineMethod& method, uint32_t method_idx) {
+  DexCompilationUnit* invoke_cu = mir_graph->GetCurrentDexCompilationUnit();
+  if (invoke_cu->GetCompilationUnit()->enable_debug & (1 << kDebugSlowFieldPath)) {
+    return false;
+  }
+
+  InlineIGetIPutData data;
+  data.data = method.data;
+  if (invoke->dalvikInsn.opcode == Instruction::INVOKE_STATIC ||
+      invoke->dalvikInsn.opcode == Instruction::INVOKE_STATIC_RANGE ||
+      data.d.object_arg != 0) {
+    // TODO: Implement inlining of IGET on non-"this" registers (needs correct stack trace for NPE).
+    return false;
+  }
+
+  DexCompilationUnit my_cu(invoke_cu->GetCompilationUnit(), invoke_cu->GetClassLoader(),
+                           invoke_cu->GetClassLinker(), *dex_file_, nullptr, 0u, method_idx, 0u,
+                           nullptr);
+  CompilerDriver* compiler = my_cu.GetCompilationUnit()->compiler_driver;
+  int field_offset;
+  bool is_volatile;
+  bool fast_path =
+      compiler->ComputeInstanceFieldInfo(data.d.field, &my_cu, false, &field_offset, &is_volatile);
+  if (!fast_path || (my_cu.GetCompilationUnit()->enable_debug & (1 << kDebugSlowFieldPath))) {
+    // Do not inline slow path
+    return false;
+  }
+
+  MIR* move_result = mir_graph->FindMoveResult(bb, invoke);
+  if (move_result == nullptr) {
+    // Result is unused. If volatile, we still need to emit the IGET but we have no destination.
+    return !is_volatile;
+  }
+
+  Instruction::Code opcode = Instruction::IGET;
+  switch (data.d.op_size) {
+    case kWord:
+      opcode = data.d.is_object ? Instruction::IGET_OBJECT : Instruction::IGET;
+      break;
+    case kLong:
+      opcode = Instruction::IGET_WIDE;
+      break;
+    case kSignedByte:
+      opcode = Instruction::IGET_BYTE;
+      break;
+    case kUnsignedHalf:
+      opcode = Instruction::IGET_CHAR;
+      break;
+    case kSignedHalf:
+      opcode = Instruction::IGET_SHORT;
+      break;
+    default:
+      LOG(FATAL) << "Unexpected op_size: " << data.d.op_size;
+      break;
+  }
+
+  MIR* insn = move_result;  // AllocReplacementMIR(mir_graph, invoke);
+  insn->dalvikInsn.opcode = opcode;
+  // insn->dalvikInsn.vA = move_result->dalvikInsn.vA;
+  insn->dalvikInsn.vB = invoke->dalvikInsn.vC;  // "this"
+  insn->meta.ifield_annotation = mir_graph->InlineIFieldAnnotation(field_offset, is_volatile);
+  insn->width += insn->offset - invoke->offset;
+  insn->offset = invoke->offset;
+  insn->optimization_flags |= MIR_CALLEE;
+  // mir_graph->InsertMIRAfter(bb, move_result, insn);
+  return true;
+}
+
+bool DexFileMethodInliner::GenInlineIPut(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
+                                         const InlineMethod& method, uint32_t method_idx) {
+  DexCompilationUnit* invoke_cu = mir_graph->GetCurrentDexCompilationUnit();
+  if (invoke_cu->GetCompilationUnit()->enable_debug & (1 << kDebugSlowFieldPath)) {
+    return false;
+  }
+
+  InlineIGetIPutData data;
+  data.data = method.data;
+  if (invoke->dalvikInsn.opcode == Instruction::INVOKE_STATIC ||
+      invoke->dalvikInsn.opcode == Instruction::INVOKE_STATIC_RANGE ||
+      data.d.object_arg != 0) {
+    // TODO: Implement inlining of IPUT on non-"this" registers (needs correct stack trace for NPE).
+    return false;
+  }
+
+  DexCompilationUnit my_cu(invoke_cu->GetCompilationUnit(), invoke_cu->GetClassLoader(),
+                           invoke_cu->GetClassLinker(), *dex_file_, nullptr, 0u, method_idx, 0u,
+                           nullptr);
+  CompilerDriver* compiler = my_cu.GetCompilationUnit()->compiler_driver;
+  int field_offset;
+  bool is_volatile;
+  bool fast_path =
+      compiler->ComputeInstanceFieldInfo(data.d.field, &my_cu, true, &field_offset, &is_volatile);
+  if (!fast_path || (my_cu.GetCompilationUnit()->enable_debug & (1 << kDebugSlowFieldPath))) {
+    // Do not inline slow path
+    return false;
+  }
+
+  Instruction::Code opcode = Instruction::IPUT;
+  switch (data.d.op_size) {
+    case kWord:
+      opcode = data.d.is_object ? Instruction::IPUT_OBJECT : Instruction::IPUT;
+      break;
+    case kLong:
+      opcode = Instruction::IPUT_WIDE;
+      break;
+    case kSignedByte:
+      opcode = Instruction::IPUT_BYTE;
+      break;
+    case kUnsignedHalf:
+      opcode = Instruction::IPUT_CHAR;
+      break;
+    case kSignedHalf:
+      opcode = Instruction::IPUT_SHORT;
+      break;
+    default:
+      LOG(FATAL) << "Unexpected op_size: " << data.d.op_size;
+      break;
+  }
+
+  MIR* insn = AllocReplacementMIR(mir_graph, invoke);
+  insn->dalvikInsn.opcode = opcode;
+  if (Instruction::FormatOf(invoke->dalvikInsn.opcode) == Instruction::k3rc) {
+    insn->dalvikInsn.vA = invoke->dalvikInsn.vC + data.d.src_arg;
+  } else {
+    insn->dalvikInsn.vA = invoke->dalvikInsn.arg[data.d.src_arg];
+  }
+  insn->dalvikInsn.vB = invoke->dalvikInsn.vC;  // "this"
+  insn->meta.ifield_annotation = mir_graph->InlineIFieldAnnotation(field_offset, is_volatile);
+  mir_graph->InsertMIRAfter(bb, invoke, insn);
+  return true;
+}
+
+MIR* DexFileMethodInliner::AllocReplacementMIR(MIRGraph* mir_graph, MIR* replaced_mir) {
+  ArenaAllocator* arena = mir_graph->GetArena();
+  MIR* insn = static_cast<MIR*>(arena->Alloc(sizeof(MIR), ArenaAllocator::kAllocMIR));
+  insn->width = replaced_mir->width;
+  insn->offset = replaced_mir->offset;
+  insn->optimization_flags = MIR_CALLEE;
+  // Mark the replaced MIR as inlined
+  replaced_mir->optimization_flags |= MIR_INLINED_PRED;
+  return insn;
 }
 
 }  // namespace art

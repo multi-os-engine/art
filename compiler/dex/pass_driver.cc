@@ -93,6 +93,7 @@ void PassDriver::CreatePasses() {
   static const Pass* const passes[] = {
       GetPassInstance<AnnotateUsedFields>(),
       GetPassInstance<AnnotateCalledMethods>(),
+      GetPassInstance<InlineCalls>(),
       GetPassInstance<CodeLayout>(),
       GetPassInstance<SSATransformation>(),
       GetPassInstance<ConstantPropagation>(),

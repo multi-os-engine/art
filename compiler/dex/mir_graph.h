@@ -493,6 +493,8 @@ class MIRGraph {
     return sfield_annotations_.GetRawStorage()[mir->meta.sfield_annotation];
   }
 
+  size_t InlineIFieldAnnotation(int field_offset, bool is_volatile);
+
   void DoAnnotateCalledMethods();
 
   const MethodAnnotation& GetMethodAnnotation(MIR* mir) {
@@ -769,6 +771,11 @@ class MIRGraph {
   bool LayoutBlocks(BasicBlock* bb);
 
   /**
+   * @brief Perform the method inlining.
+   */
+  void DoInlineCalls(BasicBlock* bb);
+
+  /**
    * @brief Perform the initial preparation for the Method Uses.
    */
   void InitializeMethodUses();
@@ -941,6 +948,7 @@ class MIRGraph {
   size_t max_available_non_special_compiler_temps_;
   size_t max_available_special_compiler_temps_;
   GrowableArray<IFieldAnnotation> ifield_annotations_;
+  size_t inline_ifield_annotations_start_;
   GrowableArray<SFieldAnnotation> sfield_annotations_;
   GrowableArray<MethodAnnotation> invoke_annotations_;
 };

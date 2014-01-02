@@ -1087,6 +1087,20 @@ bool MIRGraph::SkipCompilation(Runtime::CompilerFilter compiler_filter) {
   return ComputeSkipCompilation(&stats, skip_compilation);
 }
 
+size_t MIRGraph::InlineIFieldAnnotation(int field_offset, bool is_volatile) {
+  size_t size = ifield_annotations_.Size();
+  uint16_t is_vol = is_volatile ? 1u : 0u;
+  for (size_t i = inline_ifield_annotations_start_; i != size; ++i) {
+    const IFieldAnnotation& annotation = ifield_annotations_.GetRawStorage()[i];
+    if (annotation.field_offset == field_offset && annotation.is_volatile == is_vol) {
+      return i;
+    }
+  }
+  IFieldAnnotation annotation = { 0xffffu, 1u, 1u, is_vol, 0u, field_offset };
+  ifield_annotations_.Insert(annotation);
+  return size;
+}
+
 void MIRGraph::DoAnnotateUsedFields() {
   // Try to use stack-allocated array, resort to heap if we exceed the initial size.
   static constexpr size_t kInitialSize = 32;
@@ -1178,6 +1192,8 @@ void MIRGraph::DoAnnotateUsedFields() {
     cu_->compiler_driver->ComputeInstanceFieldAnnotations(GetCurrentDexCompilationUnit(),
                                                           ifield_annotations_.GetRawStorage(),
                                                           ifield_pos);
+    DCHECK_EQ(inline_ifield_annotations_start_, 0u);
+    inline_ifield_annotations_start_ = ifield_pos;
   }
 
   if (sfield_pos != size) {
