@@ -78,13 +78,15 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::CONST_STRING:
     case Instruction::CONST_STRING_JUMBO:
     case Instruction::CONST_CLASS:
-    case Instruction::NEW_ARRAY: {
+    case Instruction::NEW_ARRAY:
+      if (!(mir->optimization_flags & MIR_INLINED_PRED)) {
         // 1 result, treat as unique each time, use result s_reg - will be unique.
         uint16_t res = GetOperandValue(mir->ssa_rep->defs[0]);
         SetOperandValue(mir->ssa_rep->defs[0], res);
       }
       break;
-    case Instruction::MOVE_RESULT_WIDE: {
+    case Instruction::MOVE_RESULT_WIDE:
+      if (!(mir->optimization_flags & MIR_INLINED_PRED)) {
         // 1 wide result, treat as unique each time, use result s_reg - will be unique.
         uint16_t res = GetOperandValueWide(mir->ssa_rep->defs[0]);
         SetOperandValueWide(mir->ssa_rep->defs[0], res);

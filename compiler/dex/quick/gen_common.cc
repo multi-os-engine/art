@@ -688,8 +688,7 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
                       RegLocation rl_dest, RegLocation rl_obj, bool is_long_or_double,
                       bool is_object) {
   const IFieldAnnotation& annotation = mir_graph_->GetIFieldAnnotation(mir);
-
-  if (annotation.fast_get && !SLOW_FIELD_PATH) {
+  if (((mir->optimization_flags & MIR_CALLEE) != 0 || annotation.fast_get) && !SLOW_FIELD_PATH) {
     RegLocation rl_result;
     RegisterClass reg_class = oat_reg_class_by_size(size);
     DCHECK_GE(annotation.field_offset, 0);
@@ -746,8 +745,7 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
                       RegLocation rl_src, RegLocation rl_obj, bool is_long_or_double,
                       bool is_object) {
   const IFieldAnnotation& annotation = mir_graph_->GetIFieldAnnotation(mir);
-
-  if (annotation.fast_put && !SLOW_FIELD_PATH) {
+  if (((mir->optimization_flags & MIR_CALLEE) != 0 || annotation.fast_put) && !SLOW_FIELD_PATH) {
     RegisterClass reg_class = oat_reg_class_by_size(size);
     DCHECK_GE(annotation.field_offset, 0);
     rl_obj = LoadValue(rl_obj, kCoreReg);
