@@ -1093,6 +1093,32 @@ bool MIRGraph::SkipCompilation() {
   return ComputeSkipCompilation(&stats, skip_compilation);
 }
 
+size_t MIRGraph::InlineIFieldLoweringInfo(MIR* invoke, uint16_t field_idx, uint32_t field_offset,
+                                          bool is_volatile) {
+  const MirMethodInfo& method_info = GetMethodLoweringInfo(invoke);
+  DexCompilationUnit inlined_unit(
+      cu_, cu_->class_loader, cu_->class_linker, *method_info.DeclaringDexFile(),
+      nullptr /* code_item not used */, 0u /* class_def_idx not used */, method_info.MethodIndex(),
+      0u /* access_flags not used */, nullptr /* verified_method not used */);
+  MirIFieldLoweringInfo inlined_field_info(field_idx);
+  MirIFieldLoweringInfo::Resolve(cu_->compiler_driver, &inlined_unit, &inlined_field_info, 1u);
+  DCHECK_EQ(inlined_field_info.FieldOffset().Uint32Value(), field_offset);
+  DCHECK_EQ(inlined_field_info.IsVolatile(), is_volatile);
+  size_t size = ifield_lowering_infos_.Size();
+  for (size_t i = 0; i != size; ++i) {
+    const MirIFieldLoweringInfo& field_info = ifield_lowering_infos_.GetRawStorage()[i];
+    if (field_info.DeclaringDexFile() == inlined_field_info.DeclaringDexFile() &&
+        field_info.DeclaringFieldIndex() == inlined_field_info.DeclaringFieldIndex()) {
+      DCHECK_EQ(field_info.DeclaringClassIndex(), inlined_field_info.DeclaringClassIndex());
+      DCHECK_EQ(field_info.FieldOffset().Uint32Value(), field_offset);
+      DCHECK_EQ(field_info.IsVolatile(), is_volatile);
+      return i;
+    }
+  }
+  ifield_lowering_infos_.Insert(inlined_field_info);
+  return size;
+}
+
 void MIRGraph::DoCacheFieldLoweringInfo() {
   // All IGET/IPUT/SGET/SPUT instructions take 2 code units and there must also be a RETURN.
   const uint32_t max_refs = (current_code_item_->insns_size_in_code_units_ - 1u) / 2u;
@@ -1154,6 +1180,8 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
     }
     MirIFieldLoweringInfo::Resolve(cu_->compiler_driver, GetCurrentDexCompilationUnit(),
                                 ifield_lowering_infos_.GetRawStorage(), ifield_pos);
+    DCHECK_EQ(inline_ifield_lowering_infos_start_, 0u);
+    inline_ifield_lowering_infos_start_ = ifield_pos;
   }
 
   if (sfield_pos != max_refs) {

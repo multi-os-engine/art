@@ -21,6 +21,26 @@
 namespace art {
 
 /*
+ * InlineCalls pass implementation start
+ */
+bool InlineCalls::WalkBasicBlocks(CompilationUnit *cUnit, BasicBlock *bb) const {
+  cUnit->mir_graph->DoInlineCalls(bb);
+  // No need of repeating, so just return false.
+  return false;
+}
+
+bool InlineCalls::Gate(const CompilationUnit *cUnit) const {
+  if (cUnit->disable_opt & (1 << kSuppressMethodInlining)) {
+    return false;
+  }
+  if (cUnit->compiler_driver->GetMethodInlinerMap() == nullptr) {
+    // This isn't the Quick compiler.
+    return false;
+  }
+  return true;
+}
+
+/*
  * Code Layout pass implementation start.
  */
 bool CodeLayout::WalkBasicBlocks(CompilationUnit* cUnit, BasicBlock* bb) const {

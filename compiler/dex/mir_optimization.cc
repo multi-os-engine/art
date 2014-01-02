@@ -17,6 +17,8 @@
 #include "compiler_internals.h"
 #include "local_value_numbering.h"
 #include "dataflow_iterator-inl.h"
+#include "dex/quick/dex_file_method_inliner.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
 
 namespace art {
 
@@ -874,6 +876,42 @@ bool MIRGraph::EliminateNullChecksAndInferTypes(BasicBlock* bb) {
     bb->data_flow_info->ending_null_check_v->Copy(temp_ssa_register_v_);
   }
   return infer_changed | nce_changed;
+}
+
+void MIRGraph::DoInlineCalls(BasicBlock* bb) {
+  if (bb->block_type != kDalvikByteCode) {
+    return;
+  }
+  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+    if (!(Instruction::FlagsOf(mir->dalvikInsn.opcode) & Instruction::kInvoke)) {
+      continue;
+    }
+    const MirMethodLoweringInfo& method_info = GetMethodLoweringInfo(mir);
+    if (!method_info.FastPath()) {
+      continue;
+    }
+    if (method_info.GetSharpType() == kStatic) {
+      MethodReference target = method_info.GetTargetMethod();
+      uint16_t class_idx = target.dex_file->GetMethodId(target.dex_method_index).class_idx_;
+      // TODO: Relax this check. It's not really necessary for the type to be
+      // in the dex cache in order to be initialized.
+      if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*target.dex_file, class_idx)) {
+        continue;
+      }
+    } else if (method_info.GetSharpType() != kDirect) {
+      continue;
+    }
+    DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
+    if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
+            ->GenInline(this, bb, mir, method_info.MethodIndex())) {
+      // TODO: Remove this debug output before submitting.
+      if (method_info.GetSharpType() == kStatic) {
+        MethodReference target = method_info.GetTargetMethod();
+        LOG(INFO) << "Inlining static " << PrettyMethod(target.dex_method_index, *target.dex_file)
+            << " in " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+      }
+    }
+  }
 }
 
 void MIRGraph::DumpCheckStats() {

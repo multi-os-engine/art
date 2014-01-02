@@ -91,7 +91,8 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       merged_df_flags_(0u),
       ifield_lowering_infos_(arena, 0u),
       sfield_lowering_infos_(arena, 0u),
-      method_lowering_infos_(arena, 0u) {
+      method_lowering_infos_(arena, 0u),
+      inline_ifield_lowering_infos_start_(0u) {
   try_block_addr_ = new (arena_) ArenaBitVector(arena_, 0, true /* expandable */);
   max_available_special_compiler_temps_ = std::abs(static_cast<int>(kVRegNonSpecialTempBaseReg))
       - std::abs(static_cast<int>(kVRegTempBaseReg));
