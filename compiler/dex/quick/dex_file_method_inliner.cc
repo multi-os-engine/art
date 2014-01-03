@@ -191,10 +191,10 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
 
     INTRINSIC(JavaLangString, CharAt, I_C, kIntrinsicCharAt, 0),
     INTRINSIC(JavaLangString, CompareTo, String_I, kIntrinsicCompareTo, 0),
-    INTRINSIC(JavaLangString, IsEmpty, _Z, kIntrinsicIsEmptyOrLength, kIntrinsicFlagIsEmpty),
+    INTRINSIC(JavaLangString, IsEmpty, _Z, kIntrinsicIsEmpty, 0),
     INTRINSIC(JavaLangString, IndexOf, II_I, kIntrinsicIndexOf, kIntrinsicFlagNone),
     INTRINSIC(JavaLangString, IndexOf, I_I, kIntrinsicIndexOf, kIntrinsicFlagBase0),
-    INTRINSIC(JavaLangString, Length, _I, kIntrinsicIsEmptyOrLength, kIntrinsicFlagLength),
+    INTRINSIC(JavaLangString, Length, _I, kIntrinsicLength, 0),
 
     INTRINSIC(JavaLangThread, CurrentThread, _Thread, kIntrinsicCurrentThread, 0),
 
@@ -336,8 +336,10 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
       return backend->GenInlinedCharAt(info);
     case kIntrinsicCompareTo:
       return backend->GenInlinedStringCompareTo(info);
-    case kIntrinsicIsEmptyOrLength:
-      return backend->GenInlinedStringIsEmptyOrLength(info, intrinsic.data & kIntrinsicFlagIsEmpty);
+    case kIntrinsicIsEmpty:
+      return backend->GenInlinedStringIsEmptyOrLength(info, true);
+    case kIntrinsicLength:
+      return backend->GenInlinedStringIsEmptyOrLength(info, false);
     case kIntrinsicIndexOf:
       return backend->GenInlinedIndexOf(info, intrinsic.data & kIntrinsicFlagBase0);
     case kIntrinsicCurrentThread:
@@ -378,6 +380,10 @@ bool DexFileMethodInliner::GenSpecial(Mir2Lir* backend, uint32_t method_idx) {
       return false;
     }
     special = it->second;
+  }
+  // String.length() is both kInlineIntrinsic and kInlineSpecial.
+  if (special.opcode == kIntrinsicLength) {
+    special.opcode = kInlineOpIGet;
   }
   // TODO: Return true only if special implementation is emitted.
   backend->SpecialMIR2LIR(special);
@@ -508,16 +514,23 @@ void DexFileMethodInliner::FindIntrinsics(const DexFile* dex_file) {
 bool DexFileMethodInliner::AddInlineMethod(int32_t method_idx, InlineMethodOpcode opcode,
                                            InlineMethodFlags flags, uint32_t data) {
   WriterMutexLock mu(Thread::Current(), lock_);
-  if (LIKELY(inline_methods_.find(method_idx) == inline_methods_.end())) {
+  auto it = inline_methods_.find(method_idx);
+  if (LIKELY(it == inline_methods_.end())) {
     InlineMethod im = {opcode, flags, data};
     inline_methods_.Put(method_idx, im);
     return true;
+  } else if (it->second.opcode == kIntrinsicLength && !(it->second.flags & flags)) {
+    // String.length() is both kInlineIntrinsic and kInlineSpecial, intrinsics are detected first.
+    DCHECK_EQ(it->second.flags, kInlineIntrinsic);
+    DCHECK_EQ(it->second.data, 0u);
+    DCHECK_EQ(opcode, kInlineOpIGet);
+    DCHECK_EQ(flags, kInlineSpecial);
+    // Directly modify the SafeMap entry.
+    it->second.flags = static_cast<InlineMethodFlags>(it->second.flags | flags);
+    it->second.data = data;
+    return true;
   } else {
-    if (PrettyMethod(method_idx, *dex_file_) == "int java.lang.String.length()") {
-      // TODO: String.length is both kIntrinsicIsEmptyOrLength and kInlineOpIGet.
-    } else {
-      LOG(ERROR) << "Inliner: " << PrettyMethod(method_idx, *dex_file_) << " already inline";
-    }
+    LOG(ERROR) << "Inliner: " << PrettyMethod(method_idx, *dex_file_) << " already inline";
     return false;
   }
 }

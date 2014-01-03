@@ -40,7 +40,8 @@ enum InlineMethodOpcode : uint16_t {
   kIntrinsicSqrt,
   kIntrinsicCharAt,
   kIntrinsicCompareTo,
-  kIntrinsicIsEmptyOrLength,
+  kIntrinsicLength,
+  kIntrinsicIsEmpty,
   kIntrinsicIndexOf,
   kIntrinsicCurrentThread,
   kIntrinsicPeek,
@@ -75,10 +76,6 @@ enum IntrinsicFlags {
   // kIntrinsicMinMaxInt
   kIntrinsicFlagMax = kIntrinsicFlagNone,
   kIntrinsicFlagMin = 1,
-
-  // kIntrinsicIsEmptyOrLength
-  kIntrinsicFlagLength  = kIntrinsicFlagNone,
-  kIntrinsicFlagIsEmpty = 1,
 
   // kIntrinsicIndexOf
   kIntrinsicFlagBase0 = 1,
