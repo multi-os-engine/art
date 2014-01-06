@@ -69,7 +69,7 @@ mirror::Object* BumpPointerSpace::Alloc(Thread*, size_t num_bytes, size_t* bytes
   return ret;
 }
 
-size_t BumpPointerSpace::AllocationSize(const mirror::Object* obj) {
+size_t BumpPointerSpace::AllocationSize(mirror::Object* obj) {
   return AllocationSizeNonvirtual(obj);
 }
 

@@ -113,7 +113,6 @@ void Thread::InitCpu() {
   uint16_t table_indicator = 1 << 2;  // LDT
   uint16_t rpl = 3;  // Requested privilege level
   uint16_t selector = (entry_number << 3) | table_indicator | rpl;
-  // TODO: use our assembler to generate code
   __asm__ __volatile__("movw %w0, %%fs"
       :    // output
       : "q"(selector)  // input
@@ -124,7 +123,6 @@ void Thread::InitCpu() {
 
   // Sanity check that reads from %fs point to this Thread*.
   Thread* self_check;
-  // TODO: use our assembler to generate code
   CHECK_EQ(THREAD_SELF_OFFSET, OFFSETOF_MEMBER(Thread, self_));
   __asm__ __volatile__("movl %%fs:(%1), %0"
       : "=r"(self_check)  // output
