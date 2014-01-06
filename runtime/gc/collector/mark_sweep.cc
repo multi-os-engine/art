@@ -442,6 +442,7 @@ inline void MarkSweep::MarkObjectNonNull(const Object* obj) {
 
   // This object was not previously marked.
   if (!object_bitmap->Test(obj)) {
+    // LOG(INFO) << "Marking: " << reinterpret_cast<const void*>(obj);
     object_bitmap->Set(obj);
     if (UNLIKELY(mark_stack_->Size() >= mark_stack_->Capacity())) {
       // Lock is not needed but is here anyways to please annotalysis.
@@ -449,7 +450,10 @@ inline void MarkSweep::MarkObjectNonNull(const Object* obj) {
       ExpandMarkStack();
     }
     // The object must be pushed on to the mark stack.
+    // LOG(INFO) << "Pushing onto mark stack: " << reinterpret_cast<const void*>(obj);
     mark_stack_->PushBack(const_cast<Object*>(obj));
+  } else {
+    // LOG(INFO) << "Already marked: " << reinterpret_cast<const void*>(obj);
   }
 }
 
