@@ -1343,40 +1343,53 @@ mirror::ObjectArray<mirror::ArtMethod>* Runtime::CreateDefaultImt(ClassLinker* c
 
 mirror::ArtMethod* Runtime::CreateImtConflictMethod() {
   Thread* self = Thread::Current();
-  Runtime* r = Runtime::Current();
-  ClassLinker* cl = r->GetClassLinker();
-  SirtRef<mirror::ArtMethod> method(self, cl->AllocArtMethod(self));
+  Runtime* runtime = Runtime::Current();
+  ClassLinker* class_linker = runtime->GetClassLinker();
+  SirtRef<mirror::ArtMethod> method(self, class_linker->AllocArtMethod(self));
   method->SetDeclaringClass(mirror::ArtMethod::GetJavaLangReflectArtMethod());
-  // TODO: use a special method for imt conflict method saves
+  // TODO: use a special method for imt conflict method saves.
   method->SetDexMethodIndex(DexFile::kDexNoIndex);
   // When compiling, the code pointer will get set later when the image is loaded.
-  method->SetEntryPointFromCompiledCode(r->IsCompiler() ? NULL : GetImtConflictTrampoline(cl));
+  if (runtime->IsCompiler()) {
+    method->SetEntryPointFromPortableCompiledCode(nullptr);
+    method->SetEntryPointFromQuickCompiledCode(nullptr);
+  } else {
+    method->SetEntryPointFromPortableCompiledCode(GetPortableImtConflictTrampoline(class_linker));
+    method->SetEntryPointFromQuickCompiledCode(GetQuickImtConflictTrampoline(class_linker));
+  }
   return method.get();
 }
 
 mirror::ArtMethod* Runtime::CreateResolutionMethod() {
   Thread* self = Thread::Current();
-  Runtime* r = Runtime::Current();
-  ClassLinker* cl = r->GetClassLinker();
-  SirtRef<mirror::ArtMethod> method(self, cl->AllocArtMethod(self));
+  Runtime* runtime = Runtime::Current();
+  ClassLinker* class_linker = runtime->GetClassLinker();
+  SirtRef<mirror::ArtMethod> method(self, class_linker->AllocArtMethod(self));
   method->SetDeclaringClass(mirror::ArtMethod::GetJavaLangReflectArtMethod());
   // TODO: use a special method for resolution method saves
   method->SetDexMethodIndex(DexFile::kDexNoIndex);
   // When compiling, the code pointer will get set later when the image is loaded.
-  method->SetEntryPointFromCompiledCode(r->IsCompiler() ? NULL : GetResolutionTrampoline(cl));
+  if (runtime->IsCompiler()) {
+    method->SetEntryPointFromPortableCompiledCode(nullptr);
+    method->SetEntryPointFromQuickCompiledCode(nullptr);
+  } else {
+    method->SetEntryPointFromPortableCompiledCode(GetPortableResolutionTrampoline(class_linker));
+    method->SetEntryPointFromQuickCompiledCode(GetQuickResolutionTrampoline(class_linker));
+  }
   return method.get();
 }
 
 mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(InstructionSet instruction_set,
                                                    CalleeSaveType type) {
   Thread* self = Thread::Current();
-  Runtime* r = Runtime::Current();
-  ClassLinker* cl = r->GetClassLinker();
-  SirtRef<mirror::ArtMethod> method(self, cl->AllocArtMethod(self));
+  Runtime* runtime = Runtime::Current();
+  ClassLinker* class_linker = runtime->GetClassLinker();
+  SirtRef<mirror::ArtMethod> method(self, class_linker->AllocArtMethod(self));
   method->SetDeclaringClass(mirror::ArtMethod::GetJavaLangReflectArtMethod());
   // TODO: use a special method for callee saves
   method->SetDexMethodIndex(DexFile::kDexNoIndex);
-  method->SetEntryPointFromCompiledCode(NULL);
+  method->SetEntryPointFromPortableCompiledCode(nullptr);
+  method->SetEntryPointFromQuickCompiledCode(nullptr);
   if ((instruction_set == kThumb2) || (instruction_set == kArm)) {
     uint32_t ref_spills = (1 << art::arm::R5) | (1 << art::arm::R6)  | (1 << art::arm::R7) |
                           (1 << art::arm::R8) | (1 << art::arm::R10) | (1 << art::arm::R11);

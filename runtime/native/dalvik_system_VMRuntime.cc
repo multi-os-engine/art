@@ -90,7 +90,7 @@ static jlong VMRuntime_addressOf(JNIEnv* env, jobject, jobject javaArray) {
     ThrowRuntimeException("Trying to get address of movable array object");
     return 0;
   }
-  return reinterpret_cast<uintptr_t>(array->GetRawData(array->GetClass()->GetComponentSize()));
+  return reinterpret_cast<uintptr_t>(array->GetRawData(array->GetClass()->GetComponentSize(), 0));
 }
 
 static void VMRuntime_clearGrowthLimit(JNIEnv*, jobject) {

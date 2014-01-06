@@ -26,7 +26,7 @@
 namespace art {
 
 extern "C" uint32_t artGet32StaticFromCode(uint32_t field_idx,
-                                           const mirror::ArtMethod* referrer,
+                                           mirror::ArtMethod* referrer,
                                            Thread* self, mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, StaticPrimitiveRead,
@@ -43,7 +43,7 @@ extern "C" uint32_t artGet32StaticFromCode(uint32_t field_idx,
 }
 
 extern "C" uint64_t artGet64StaticFromCode(uint32_t field_idx,
-                                           const mirror::ArtMethod* referrer,
+                                           mirror::ArtMethod* referrer,
                                            Thread* self, mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, StaticPrimitiveRead,
@@ -60,7 +60,7 @@ extern "C" uint64_t artGet64StaticFromCode(uint32_t field_idx,
 }
 
 extern "C" mirror::Object* artGetObjStaticFromCode(uint32_t field_idx,
-                                                   const mirror::ArtMethod* referrer,
+                                                   mirror::ArtMethod* referrer,
                                                    Thread* self, mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, StaticObjectRead,
@@ -78,7 +78,7 @@ extern "C" mirror::Object* artGetObjStaticFromCode(uint32_t field_idx,
 }
 
 extern "C" uint32_t artGet32InstanceFromCode(uint32_t field_idx, mirror::Object* obj,
-                                             const mirror::ArtMethod* referrer, Thread* self,
+                                             mirror::ArtMethod* referrer, Thread* self,
                                              mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, InstancePrimitiveRead,
@@ -101,7 +101,7 @@ extern "C" uint32_t artGet32InstanceFromCode(uint32_t field_idx, mirror::Object*
 }
 
 extern "C" uint64_t artGet64InstanceFromCode(uint32_t field_idx, mirror::Object* obj,
-                                             const mirror::ArtMethod* referrer, Thread* self,
+                                             mirror::ArtMethod* referrer, Thread* self,
                                              mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, InstancePrimitiveRead,
@@ -124,7 +124,7 @@ extern "C" uint64_t artGet64InstanceFromCode(uint32_t field_idx, mirror::Object*
 }
 
 extern "C" mirror::Object* artGetObjInstanceFromCode(uint32_t field_idx, mirror::Object* obj,
-                                                     const mirror::ArtMethod* referrer,
+                                                     mirror::ArtMethod* referrer,
                                                      Thread* self,
                                                      mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -148,7 +148,7 @@ extern "C" mirror::Object* artGetObjInstanceFromCode(uint32_t field_idx, mirror:
 }
 
 extern "C" int artSet32StaticFromCode(uint32_t field_idx, uint32_t new_value,
-                                      const mirror::ArtMethod* referrer, Thread* self,
+                                      mirror::ArtMethod* referrer, Thread* self,
                                       mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, StaticPrimitiveWrite,
@@ -166,7 +166,7 @@ extern "C" int artSet32StaticFromCode(uint32_t field_idx, uint32_t new_value,
   return -1;  // failure
 }
 
-extern "C" int artSet64StaticFromCode(uint32_t field_idx, const mirror::ArtMethod* referrer,
+extern "C" int artSet64StaticFromCode(uint32_t field_idx, mirror::ArtMethod* referrer,
                                       uint64_t new_value, Thread* self, mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, StaticPrimitiveWrite,
@@ -185,7 +185,7 @@ extern "C" int artSet64StaticFromCode(uint32_t field_idx, const mirror::ArtMetho
 }
 
 extern "C" int artSetObjStaticFromCode(uint32_t field_idx, mirror::Object* new_value,
-                                       const mirror::ArtMethod* referrer, Thread* self,
+                                       mirror::ArtMethod* referrer, Thread* self,
                                        mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, StaticObjectWrite,
@@ -207,7 +207,7 @@ extern "C" int artSetObjStaticFromCode(uint32_t field_idx, mirror::Object* new_v
 }
 
 extern "C" int artSet32InstanceFromCode(uint32_t field_idx, mirror::Object* obj, uint32_t new_value,
-                                        const mirror::ArtMethod* referrer, Thread* self,
+                                        mirror::ArtMethod* referrer, Thread* self,
                                         mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, InstancePrimitiveWrite,
@@ -261,7 +261,7 @@ extern "C" int artSet64InstanceFromCode(uint32_t field_idx, mirror::Object* obj,
 
 extern "C" int artSetObjInstanceFromCode(uint32_t field_idx, mirror::Object* obj,
                                          mirror::Object* new_value,
-                                         const mirror::ArtMethod* referrer, Thread* self,
+                                         mirror::ArtMethod* referrer, Thread* self,
                                          mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtField* field = FindFieldFast(field_idx, referrer, InstanceObjectWrite,

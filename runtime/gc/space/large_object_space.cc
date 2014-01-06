@@ -92,9 +92,9 @@ size_t LargeObjectMapSpace::Free(Thread* self, mirror::Object* ptr) {
   return allocation_size;
 }
 
-size_t LargeObjectMapSpace::AllocationSize(const mirror::Object* obj) {
+size_t LargeObjectMapSpace::AllocationSize(mirror::Object* obj) {
   MutexLock mu(Thread::Current(), lock_);
-  MemMaps::iterator found = mem_maps_.find(const_cast<mirror::Object*>(obj));
+  MemMaps::iterator found = mem_maps_.find(obj);
   CHECK(found != mem_maps_.end()) << "Attempted to get size of a large object which is not live";
   return found->second->Size();
 }
@@ -244,7 +244,7 @@ bool FreeListSpace::Contains(const mirror::Object* obj) const {
   return mem_map_->HasAddress(obj);
 }
 
-size_t FreeListSpace::AllocationSize(const mirror::Object* obj) {
+size_t FreeListSpace::AllocationSize(mirror::Object* obj) {
   AllocationHeader* header = GetAllocationHeader(obj);
   DCHECK(Contains(obj));
   DCHECK(!header->IsFree());

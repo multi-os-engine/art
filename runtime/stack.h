@@ -19,8 +19,10 @@
 
 #include "dex_file.h"
 #include "instrumentation.h"
+#include "base/casts.h"
 #include "base/macros.h"
 #include "arch/context.h"
+#include "mirror/object_reference.h"
 
 #include <stdint.h>
 #include <string>
@@ -50,6 +52,23 @@ enum VRegKind {
   kConstant,
   kImpreciseConstant,
   kUndefined,
+};
+
+// A reference from the shadow stack to a MirrorType object within the Java heap.
+template<class MirrorType>
+class MANAGED StackReference : public mirror::ObjectReference<false, MirrorType> {
+ public:
+  StackReference<MirrorType>() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      : mirror::ObjectReference<false, MirrorType>(nullptr) {}
+
+  static StackReference<MirrorType> FromMirrorPtr(MirrorType* p)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return StackReference<MirrorType>(p);
+  }
+
+ private:
+  StackReference<MirrorType>(MirrorType* p) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      : mirror::ObjectReference<false, MirrorType>(p) {}
 };
 
 // ShadowFrame has 3 possible layouts:
@@ -151,22 +170,19 @@ class ShadowFrame {
   }
 
   template <bool kChecked = false>
-  mirror::Object* GetVRegReference(size_t i) const {
+  mirror::Object* GetVRegReference(size_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK_LT(i, NumberOfVRegs());
     if (HasReferenceArray()) {
-      mirror::Object* ref = References()[i];
+      mirror::Object* ref = References()[i].AsMirrorPtr();
       if (kChecked) {
         CHECK(VerifyReference(ref)) << "VReg " << i << "(" << ref
                                     << ") is in protected space, reference array " << true;
       }
-      // If the vreg reference is not equal to the vreg then the vreg reference is stale.
-      if (UNLIKELY(reinterpret_cast<uint32_t>(ref) != vregs_[i])) {
-        return nullptr;
-      }
       return ref;
     } else {
-      const uint32_t* vreg = &vregs_[i];
-      mirror::Object* ref = *reinterpret_cast<mirror::Object* const*>(vreg);
+      const uint32_t* vreg_ptr = &vregs_[i];
+      mirror::Object* ref =
+          reinterpret_cast<const StackReference<mirror::Object>*>(vreg_ptr)->AsMirrorPtr();
       if (kChecked) {
         CHECK(VerifyReference(ref)) << "VReg " << i
             << "(" << ref << ") is in protected space, reference array " << false;
@@ -187,7 +203,7 @@ class ShadowFrame {
     // This is needed for moving collectors since these can update the vreg references if they
     // happen to agree with references in the reference array.
     if (kMovingCollector && HasReferenceArray()) {
-      References()[i] = nullptr;
+      References()[i].Clear();
     }
   }
 
@@ -198,7 +214,7 @@ class ShadowFrame {
     // This is needed for moving collectors since these can update the vreg references if they
     // happen to agree with references in the reference array.
     if (kMovingCollector && HasReferenceArray()) {
-      References()[i] = nullptr;
+      References()[i].Clear();
     }
   }
 
@@ -211,8 +227,8 @@ class ShadowFrame {
     // This is needed for moving collectors since these can update the vreg references if they
     // happen to agree with references in the reference array.
     if (kMovingCollector && HasReferenceArray()) {
-      References()[i] = nullptr;
-      References()[i + 1] = nullptr;
+      References()[i].Clear();
+      References()[i + 1].Clear();
     }
   }
 
@@ -225,24 +241,24 @@ class ShadowFrame {
     // This is needed for moving collectors since these can update the vreg references if they
     // happen to agree with references in the reference array.
     if (kMovingCollector && HasReferenceArray()) {
-      References()[i] = nullptr;
-      References()[i + 1] = nullptr;
+      References()[i].Clear();
+      References()[i + 1].Clear();
     }
   }
 
-  void SetVRegReference(size_t i, mirror::Object* val) {
+  void SetVRegReference(size_t i, mirror::Object* val) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK_LT(i, NumberOfVRegs());
     DCHECK(!kMovingCollector || VerifyReference(val))
         << "VReg " << i << "(" << val << ") is in protected space";
     uint32_t* vreg = &vregs_[i];
     *reinterpret_cast<mirror::Object**>(vreg) = val;
     if (HasReferenceArray()) {
-      References()[i] = val;
+      References()[i].Assign(val);
     }
   }
 
-  mirror::ArtMethod* GetMethod() const {
-    DCHECK_NE(method_, static_cast<void*>(NULL));
+  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK(method_ != nullptr);
     return method_;
   }
 
@@ -254,7 +270,7 @@ class ShadowFrame {
 
   void SetMethod(mirror::ArtMethod* method) {
 #if defined(ART_USE_PORTABLE_COMPILER)
-    DCHECK_NE(method, static_cast<void*>(NULL));
+    DCHECK(method != nullptr);
     method_ = method;
 #else
     UNUSED(method);
@@ -262,7 +278,7 @@ class ShadowFrame {
 #endif
   }
 
-  bool Contains(mirror::Object** shadow_frame_entry_obj) const {
+  bool Contains(StackReference<mirror::Object>* shadow_frame_entry_obj) const {
     if (HasReferenceArray()) {
       return ((&References()[0] <= shadow_frame_entry_obj) &&
               (shadow_frame_entry_obj <= (&References()[NumberOfVRegs() - 1])));
@@ -308,16 +324,16 @@ class ShadowFrame {
     }
   }
 
-  mirror::Object* const* References() const {
+  const StackReference<mirror::Object>* References() const {
     DCHECK(HasReferenceArray());
     const uint32_t* vreg_end = &vregs_[NumberOfVRegs()];
-    return reinterpret_cast<mirror::Object* const*>(vreg_end);
+    return reinterpret_cast<const StackReference<mirror::Object>*>(vreg_end);
   }
 
   bool VerifyReference(const mirror::Object* val) const;
 
-  mirror::Object** References() {
-    return const_cast<mirror::Object**>(const_cast<const ShadowFrame*>(this)->References());
+  StackReference<mirror::Object>* References() {
+    return const_cast<StackReference<mirror::Object>*>(const_cast<const ShadowFrame*>(this)->References());
   }
 
 #if defined(ART_USE_PORTABLE_COMPILER)
@@ -426,9 +442,9 @@ class PACKED(4) ManagedStack {
     return OFFSETOF_MEMBER(ManagedStack, top_shadow_frame_);
   }
 
-  size_t NumJniShadowFrameReferences() const;
+  size_t NumJniShadowFrameReferences() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool ShadowFramesContain(mirror::Object** shadow_frame_entry) const;
+  bool ShadowFramesContain(StackReference<mirror::Object>* shadow_frame_entry) const;
 
  private:
   ManagedStack* link_;
@@ -450,18 +466,18 @@ class StackVisitor {
   void WalkStack(bool include_transitions = false)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  mirror::ArtMethod* GetMethod() const {
-    if (cur_shadow_frame_ != NULL) {
+  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (cur_shadow_frame_ != nullptr) {
       return cur_shadow_frame_->GetMethod();
-    } else if (cur_quick_frame_ != NULL) {
+    } else if (cur_quick_frame_ != nullptr) {
       return *cur_quick_frame_;
     } else {
-      return NULL;
+      return nullptr;
     }
   }
 
   bool IsShadowFrame() const {
-    return cur_shadow_frame_ != NULL;
+    return cur_shadow_frame_ != nullptr;
   }
 
   uint32_t GetDexPc() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -470,9 +486,10 @@ class StackVisitor {
 
   size_t GetNativePcOffset() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  uintptr_t* CalleeSaveAddress(int num, size_t frame_size) const {
+  uintptr_t* CalleeSaveAddress(int num, size_t frame_size) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // Callee saves are held at the top of the frame
-    DCHECK(GetMethod() != NULL);
+    DCHECK(GetMethod() != nullptr);
     byte* save_addr =
         reinterpret_cast<byte*>(cur_quick_frame_) + frame_size - ((num + 1) * kPointerSize);
 #if defined(__i386__)
@@ -509,17 +526,17 @@ class StackVisitor {
 
   // This is a fast-path for getting/setting values in a quick frame.
   uint32_t* GetVRegAddr(mirror::ArtMethod** cur_quick_frame, const DexFile::CodeItem* code_item,
-                   uint32_t core_spills, uint32_t fp_spills, size_t frame_size,
-                   uint16_t vreg) const {
+                        uint32_t core_spills, uint32_t fp_spills, size_t frame_size,
+                        uint16_t vreg) const {
     int offset = GetVRegOffset(code_item, core_spills, fp_spills, frame_size, vreg);
     DCHECK_EQ(cur_quick_frame, GetCurrentQuickFrame());
     byte* vreg_addr = reinterpret_cast<byte*>(cur_quick_frame) + offset;
     return reinterpret_cast<uint32_t*>(vreg_addr);
   }
 
-  uintptr_t GetReturnPc() const;
+  uintptr_t GetReturnPc() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void SetReturnPc(uintptr_t new_ret_pc);
+  void SetReturnPc(uintptr_t new_ret_pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   /*
    * Return sp-relative offset for a Dalvik virtual register, compiler

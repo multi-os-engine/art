@@ -85,7 +85,8 @@ TEST_F(ObjectTest, AsmConstants) {
   EXPECT_EQ(STRING_DATA_OFFSET, Array::DataOffset(sizeof(uint16_t)).Int32Value());
 
   EXPECT_EQ(METHOD_DEX_CACHE_METHODS_OFFSET, ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
-  EXPECT_EQ(METHOD_CODE_OFFSET, ArtMethod::EntryPointFromCompiledCodeOffset().Int32Value());
+  EXPECT_EQ(METHOD_PORTABLE_CODE_OFFSET, ArtMethod::EntryPointFromPortableCompiledCodeOffset().Int32Value());
+  EXPECT_EQ(METHOD_QUICK_CODE_OFFSET, ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value());
 }
 
 TEST_F(ObjectTest, IsInSamePackage) {

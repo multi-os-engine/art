@@ -487,23 +487,23 @@ class PACKED(4) Thread {
                         ManagedStack::TopShadowFrameOffset());
   }
 
-  // Number of references allocated in JNI ShadowFrames on this thread
-  size_t NumJniShadowFrameReferences() const {
+  // Number of references allocated in JNI ShadowFrames on this thread.
+  size_t NumJniShadowFrameReferences() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return managed_stack_.NumJniShadowFrameReferences();
   }
 
-  // Number of references in SIRTs on this thread
+  // Number of references in SIRTs on this thread.
   size_t NumSirtReferences();
 
-  // Number of references allocated in SIRTs & JNI shadow frames on this thread
-  size_t NumStackReferences() {
+  // Number of references allocated in SIRTs & JNI shadow frames on this thread.
+  size_t NumStackReferences() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return NumSirtReferences() + NumJniShadowFrameReferences();
   };
 
   // Is the given obj in this thread's stack indirect reference table?
   bool SirtContains(jobject obj) const;
 
-  void SirtVisitRoots(RootVisitor* visitor, void* arg);
+  void SirtVisitRoots(RootVisitor* visitor, void* arg) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void PushSirt(StackIndirectReferenceTable* sirt) {
     sirt->SetLink(top_sirt_);

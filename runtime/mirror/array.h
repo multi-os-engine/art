@@ -49,13 +49,13 @@ class MANAGED Array : public Object {
   static Array* CreateMultiArray(Thread* self, Class* element_class, IntArray* dimensions)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  size_t SizeOf() const;
+  size_t SizeOf() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  int32_t GetLength() const {
+  int32_t GetLength() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return GetField32(OFFSET_OF_OBJECT_MEMBER(Array, length_), false);
   }
 
-  void SetLength(int32_t length) {
+  void SetLength(int32_t length) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     CHECK_GE(length, 0);
     SetField32(OFFSET_OF_OBJECT_MEMBER(Array, length_), length, false);
   }
@@ -73,18 +73,20 @@ class MANAGED Array : public Object {
     }
   }
 
-  void* GetRawData(size_t component_size) {
-    intptr_t data = reinterpret_cast<intptr_t>(this) + DataOffset(component_size).Int32Value();
+  void* GetRawData(size_t component_size, int32_t index)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    intptr_t data = reinterpret_cast<intptr_t>(this) + DataOffset(component_size).Int32Value() +
+        + (index * component_size);
     return reinterpret_cast<void*>(data);
   }
 
-  const void* GetRawData(size_t component_size) const {
-    intptr_t data = reinterpret_cast<intptr_t>(this) + DataOffset(component_size).Int32Value();
-    return reinterpret_cast<const void*>(data);
+  const void* GetRawData(size_t component_size, int32_t index) const {
+    intptr_t data = reinterpret_cast<intptr_t>(this) + DataOffset(component_size).Int32Value() +
+        + (index * component_size);
+    return reinterpret_cast<void*>(data);
   }
 
-  bool IsValidIndex(int32_t index) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  bool IsValidIndex(int32_t index) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (UNLIKELY(static_cast<uint32_t>(index) >= static_cast<uint32_t>(GetLength()))) {
       ThrowArrayIndexOutOfBoundsException(index);
       return false;
@@ -93,10 +95,9 @@ class MANAGED Array : public Object {
   }
 
  protected:
-  void ThrowArrayIndexOutOfBoundsException(int32_t index) const
+  void ThrowArrayIndexOutOfBoundsException(int32_t index)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void ThrowArrayStoreException(Object* object) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void ThrowArrayStoreException(Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
   // The number of array elements.
@@ -125,7 +126,7 @@ class MANAGED PrimitiveArray : public Array {
     return reinterpret_cast<T*>(data);
   }
 
-  T Get(int32_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  T Get(int32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (!IsValidIndex(i)) {
       return T(0);
     }
@@ -137,6 +138,22 @@ class MANAGED PrimitiveArray : public Array {
       GetData()[i] = value;
     }
   }
+
+  /*
+   * Works like memmove(), except we guarantee not to allow tearing of array values (ie using
+   * smaller than element size copies). Arguments are assumed to be within the bounds of the array
+   * and the arrays non-null.
+   */
+  void Memmove(int32_t dst_pos, PrimitiveArray<T>* src, int32_t src_pos, int32_t count)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  /*
+   * Works like memcpy(), except we guarantee not to allow tearing of array values (ie using
+   * smaller than element size copies). Arguments are assumed to be within the bounds of the array
+   * and the arrays non-null.
+   */
+  void Memcpy(int32_t dst_pos, PrimitiveArray<T>* src, int32_t src_pos, int32_t count)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static void SetArrayClass(Class* array_class) {
     CHECK(array_class_ == NULL);

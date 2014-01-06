@@ -219,7 +219,7 @@ void Monitor::Lock(Thread* self) {
     // Contended.
     const bool log_contention = (lock_profiling_threshold_ != 0);
     uint64_t wait_start_ms = log_contention ? 0 : MilliTime();
-    const mirror::ArtMethod* owners_method = locking_method_;
+    mirror::ArtMethod* owners_method = locking_method_;
     uint32_t owners_dex_pc = locking_dex_pc_;
     monitor_lock_.Unlock(self);  // Let go of locks in order.
     {
@@ -411,7 +411,7 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   if (ms < 0 || ns < 0 || ns > 999999) {
     ThrowLocation throw_location = self->GetCurrentLocationForThrow();
     self->ThrowNewExceptionF(throw_location, "Ljava/lang/IllegalArgumentException;",
-                             "timeout arguments out of range: ms=%lld ns=%d", ms, ns);
+                             "timeout arguments out of range: ms=%" PRId64 " ns=%d", ms, ns);
     monitor_lock_.Unlock(self);
     return;
   }
@@ -430,7 +430,7 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   int prev_lock_count = lock_count_;
   lock_count_ = 0;
   owner_ = NULL;
-  const mirror::ArtMethod* saved_method = locking_method_;
+  mirror::ArtMethod* saved_method = locking_method_;
   locking_method_ = NULL;
   uintptr_t saved_dex_pc = locking_dex_pc_;
   locking_dex_pc_ = 0;
@@ -1008,7 +1008,7 @@ bool Monitor::IsLocked() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   return owner_ != nullptr;
 }
 
-void Monitor::TranslateLocation(const mirror::ArtMethod* method, uint32_t dex_pc,
+void Monitor::TranslateLocation(mirror::ArtMethod* method, uint32_t dex_pc,
                                 const char** source_file, uint32_t* line_number) const {
   // If method is null, location is unknown
   if (method == NULL) {

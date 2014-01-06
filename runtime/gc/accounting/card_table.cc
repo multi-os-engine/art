@@ -72,11 +72,11 @@ CardTable* CardTable::Create(const byte* heap_begin, size_t heap_capacity) {
   byte* biased_begin = reinterpret_cast<byte*>(reinterpret_cast<uintptr_t>(cardtable_begin) -
       (reinterpret_cast<uintptr_t>(heap_begin) >> kCardShift));
   if (((uintptr_t)biased_begin & 0xff) != kCardDirty) {
-    int delta = kCardDirty - (reinterpret_cast<int>(biased_begin) & 0xff);
+    int delta = kCardDirty - (reinterpret_cast<uintptr_t>(biased_begin) & 0xff);
     offset = delta + (delta < 0 ? 0x100 : 0);
     biased_begin += offset;
   }
-  CHECK_EQ(reinterpret_cast<int>(biased_begin) & 0xff, kCardDirty);
+  CHECK_EQ(reinterpret_cast<uintptr_t>(biased_begin) & 0xff, kCardDirty);
 
   return new CardTable(mem_map.release(), biased_begin, offset);
 }
