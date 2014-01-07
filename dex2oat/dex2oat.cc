@@ -59,6 +59,13 @@
 #include "well_known_classes.h"
 #include "zip_archive.h"
 
+#include "dex/quick/dex_file_to_method_inliner_map.h"
+
+extern "C" uint64_t vmarko_sum_time;
+extern "C" uint32_t vmarko_count;
+extern "C" uint32_t vmarko_count_simple;
+extern "C" uint32_t vmarko_hist_unsigned[33];
+
 namespace art {
 
 static int original_argc;
@@ -1360,6 +1367,25 @@ static int dex2oat(int argc, char** argv) {
   if (dump_passes) {
     LOG(INFO) << Dumpable<CumulativeLogger>(compiler_phases_timings);
   }
+  LOG(INFO) << "AssembleLIR: timing = " << vmarko_sum_time << "/" << vmarko_count
+      << " (" << vmarko_count_simple << ")";
+  LOG(INFO) << "UHist: <" << vmarko_hist_unsigned[0] << ">,"
+      << vmarko_hist_unsigned[1] << "," << vmarko_hist_unsigned[2] << ","
+      << vmarko_hist_unsigned[3] << "," << vmarko_hist_unsigned[4] << ","
+      << vmarko_hist_unsigned[5] << "," << vmarko_hist_unsigned[6] << ","
+      << vmarko_hist_unsigned[7] << "," << vmarko_hist_unsigned[8] << ","
+      << vmarko_hist_unsigned[9] << "," << vmarko_hist_unsigned[10] << ","
+      << vmarko_hist_unsigned[11] << "," << vmarko_hist_unsigned[12] << ","
+      << vmarko_hist_unsigned[13] << "," << vmarko_hist_unsigned[14] << ","
+      << vmarko_hist_unsigned[15] << "," << vmarko_hist_unsigned[16] << ","
+      << vmarko_hist_unsigned[17] << "," << vmarko_hist_unsigned[18] << ","
+      << vmarko_hist_unsigned[19] << "," << vmarko_hist_unsigned[20] << ","
+      << vmarko_hist_unsigned[21] << "," << vmarko_hist_unsigned[22] << ","
+      << vmarko_hist_unsigned[23] << "," << vmarko_hist_unsigned[24] << ","
+      << vmarko_hist_unsigned[25] << "," << vmarko_hist_unsigned[26] << ","
+      << vmarko_hist_unsigned[27] << "," << vmarko_hist_unsigned[28] << ","
+      << vmarko_hist_unsigned[29] << "," << vmarko_hist_unsigned[30] << ","
+      << vmarko_hist_unsigned[31] << "," << vmarko_hist_unsigned[32];
 
   // Everything was successfully written, do an explicit exit here to avoid running Runtime
   // destructors that take time (bug 10645725) unless we're a debug build or running on valgrind.

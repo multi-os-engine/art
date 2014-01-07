@@ -339,7 +339,7 @@ class Mir2Lir : public Backend {
       return code_buffer_.size() / sizeof(code_buffer_[0]);
     }
 
-    bool IsPseudoLirOp(int opcode) {
+    static bool IsPseudoLirOp(int opcode) {
       return (opcode < 0);
     }
 
