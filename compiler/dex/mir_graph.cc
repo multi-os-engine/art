@@ -46,7 +46,6 @@ const char* MIRGraph::extended_mir_op_names_[kMirOpLast - kMirOpFirst] = {
 
 MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
     : reg_location_(NULL),
-      compiler_temps_(arena, 6, kGrowableArrayMisc),
       cu_(cu),
       ssa_base_vregs_(NULL),
       ssa_subscripts_(NULL),
@@ -82,7 +81,9 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       checkstats_(NULL),
       arena_(arena),
       backward_branches_(0),
-      forward_branches_(0) {
+      forward_branches_(0),
+      compiler_temps_(arena, 6, kGrowableArrayMisc),
+      num_non_special_compiler_temps_(0) {
   try_block_addr_ = new (arena_) ArenaBitVector(arena_, 0, true /* expandable */);
 }
 

@@ -251,7 +251,7 @@ void Mir2Lir::DumpLIRInsn(LIR* lir, unsigned char* base_addr) {
 }
 
 void Mir2Lir::DumpPromotionMap() {
-  int num_regs = cu_->num_dalvik_registers + cu_->num_compiler_temps + 1;
+  int num_regs = cu_->num_dalvik_registers + mir_graph_->GetNumCompilerTemps();
   for (int i = 0; i < num_regs; i++) {
     PromotionMap v_reg_map = promotion_map_[i];
     std::string buf;
@@ -288,7 +288,7 @@ void Mir2Lir::CodegenDump() {
   LOG(INFO) << "Outs         : " << cu_->num_outs;
   LOG(INFO) << "CoreSpills       : " << num_core_spills_;
   LOG(INFO) << "FPSpills       : " << num_fp_spills_;
-  LOG(INFO) << "CompilerTemps    : " << cu_->num_compiler_temps;
+  LOG(INFO) << "CompilerTemps    : " << mir_graph_->GetNumCompilerTemps();
   LOG(INFO) << "Frame size       : " << frame_size_;
   LOG(INFO) << "code size is " << total_size_ <<
     " bytes, Dalvik size is " << insns_size * 2;
@@ -987,7 +987,7 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       first_lir_insn_(NULL),
       last_lir_insn_(NULL) {
   promotion_map_ = static_cast<PromotionMap*>
-      (arena_->Alloc((cu_->num_dalvik_registers  + cu_->num_compiler_temps + 1) *
+      (arena_->Alloc((cu_->num_dalvik_registers  + mir_graph_->GetNumCompilerTemps()) *
                       sizeof(promotion_map_[0]), ArenaAllocator::kAllocRegAlloc));
   // Reserve pointer id 0 for NULL.
   size_t null_idx = WrapPointer(NULL);
@@ -1069,7 +1069,7 @@ int Mir2Lir::ComputeFrameSize() {
   static const uint32_t kAlignMask = kStackAlignment - 1;
   uint32_t size = (num_core_spills_ + num_fp_spills_ +
                    1 /* filler word */ + cu_->num_regs + cu_->num_outs +
-                   cu_->num_compiler_temps + 1 /* cur_method* */)
+                   mir_graph_->GetNumCompilerTemps())
                    * sizeof(uint32_t);
   /* Align and set */
   return (size + kAlignMask) & ~(kAlignMask);

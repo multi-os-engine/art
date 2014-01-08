@@ -129,7 +129,6 @@ CompilationUnit::CompilationUnit(ArenaPool* pool)
     num_ins(0),
     num_outs(0),
     num_regs(0),
-    num_compiler_temps(0),
     compiler_flip_match(false),
     arena(pool),
     mir_graph(NULL),

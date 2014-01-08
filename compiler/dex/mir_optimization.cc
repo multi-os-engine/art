@@ -209,13 +209,58 @@ int MIRGraph::GetSSAUseCount(int s_reg) {
   return raw_use_counts_.Get(s_reg);
 }
 
+size_t MIRGraph::GetNumAvailableCompilerTemps() {
+  if (num_non_special_compiler_temps_ >= CTEMP_TOTAL_AVAILABLE) {
+    return 0;
+  } else {
+    return CTEMP_TOTAL_AVAILABLE - num_non_special_compiler_temps_;
+  }
+}
+
+CompilerTemp* MIRGraph::GetNewCompilerTemp(CompilerTempType ct_type, bool wide) {
+  // There is a limit to the number of non-special temps so check to make sure it wasn't exceeded.
+  if (ct_type == kCompilerTempVR) {
+    size_t available_temps = GetNumAvailableCompilerTemps();
+    if (available_temps <= 0 || (available_temps <= 1 && wide)) {
+      return 0;
+    }
+  }
+
+  CompilerTemp *compiler_temp = static_cast<CompilerTemp *>(arena_->Alloc(sizeof(CompilerTemp),
+                                                            ArenaAllocator::kAllocRegAlloc));
+
+  // Create the type of temp requested. Special temps need special handling because
+  // they have a specific virtual register assignment.
+  if (ct_type == kCompilerTempSpecialMethodPtr) {
+    DCHECK_EQ(wide, false);
+    compiler_temp->s_reg_low = AddNewSReg(CTEMP_METHOD_BASEREG);
+
+    // The MIR graph keeps track of the sreg for method pointer specially, so record that now.
+    method_sreg_ = compiler_temp->s_reg_low;
+  } else {
+    DCHECK_EQ(ct_type, kCompilerTempVR);
+
+    // The new non-special compiler temp must receive a unique v_reg with a negative value.
+    int32_t v_reg = CTEMP_BASE_REG - CTEMP_NUM_SPECIAL - num_non_special_compiler_temps_;
+    compiler_temp->s_reg_low = AddNewSReg(v_reg);
+    num_non_special_compiler_temps_++;
+
+    if (wide) {
+      // Ensure that the two registers are consecutive
+      AddNewSReg(v_reg - 1);
+      num_non_special_compiler_temps_++;
+    }
+  }
+
+  compiler_temps_.Insert(compiler_temp);
+  return compiler_temp;
+}
 
 /* Do some MIR-level extended basic block optimizations */
 bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
   if (bb->block_type == kDead) {
     return true;
   }
-  int num_temps = 0;
   bool use_lvn = bb->use_lvn;
   UniquePtr<LocalValueNumbering> local_valnum;
   if (use_lvn) {
@@ -472,9 +517,6 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
     bb = ((cu_->disable_opt & (1 << kSuppressExceptionEdges)) != 0) ? NextDominatedBlock(bb) : NULL;
   }
 
-  if (num_temps > cu_->num_compiler_temps) {
-    cu_->num_compiler_temps = num_temps;
-  }
   return true;
 }
 
@@ -912,7 +954,6 @@ bool MIRGraph::BuildExtendedBBList(struct BasicBlock* bb) {
 
 void MIRGraph::BasicBlockOptimization() {
   if (!(cu_->disable_opt & (1 << kBBOpt))) {
-    DCHECK_EQ(cu_->num_compiler_temps, 0);
     if ((cu_->disable_opt & (1 << kSuppressExceptionEdges)) != 0) {
       ClearAllVisitedFlags();
       PreOrderDfsIterator iter2(this);
