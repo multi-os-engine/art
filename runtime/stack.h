@@ -521,11 +521,44 @@ class StackVisitor {
 
   void SetReturnPc(uintptr_t new_ret_pc);
 
+  /**
+   * @brief Provides the special virtual register number used to refer to compiler temporary
+   * that holds the Method pointer.
+   * @return Returns the base register number of method pointer.
+   */
+  static int GetMethodPtrTempBaseReg() {
+    return -2;
+  }
+
+  /**
+   * @brief Provides the first virtual register number that represents a compiler temporary.
+   * @details Any register number smaller or equal to the base register is qualified as compiler temporary.
+   * @return Returns the first compiler temporary base register.
+   */
+  static int GetCompilerTempBaseReg() {
+    // The method pointer is stored in the first temporary by design.
+    return GetMethodPtrTempBaseReg();
+  }
+
+  /**
+   * @brief Provides the first virtual register number that represents a non-special compiler temporary.
+   * @details Any register number smaller or equal to the base register is qualified as non-special
+   * compiler temporary.
+   * @return Returns the first non-special compiler temporary base register.
+   */
+  static int GetCompilerTempNonSpecialBaseReg() {
+    const int base_reg = -3;
+    DCHECK_LT(base_reg, GetMethodPtrTempBaseReg());
+    DCHECK_LE(base_reg, GetCompilerTempBaseReg());
+    return base_reg;
+  }
+
   /*
    * Return sp-relative offset for a Dalvik virtual register, compiler
    * spill or Method* in bytes using Method*.
-   * Note that (reg >= 0) refers to a Dalvik register, (reg == -2)
-   * denotes Method* and (reg <= -3) denotes a compiler temp.
+   * Note that (reg >= 0) refers to a Dalvik register, (reg == -1)
+   * denotes an invalid Dalvik register, (reg == -2) denotes Method*
+   * and (reg <= -3) denotes a compiler temp.
    *
    *     +------------------------+
    *     | IN[ins-1]              |  {Note: resides in caller's frame}
@@ -546,9 +579,9 @@ class StackVisitor {
    *     | V[1]                   |  ... (reg == 1)
    *     | V[0]                   |  ... (reg == 0) <---- "locals_start"
    *     +------------------------+
-   *     | Compiler temps         |  ... (reg == -2)
-   *     |                        |  ... (reg == -3)
+   *     | Compiler temps         |  ... (reg == -3)
    *     |                        |  ... (reg == -4)
+   *     |                        |  ... (reg == -5)
    *     +------------------------+
    *     | stack alignment padding|  {0 to (kStackAlignWords-1) of padding}
    *     +------------------------+
@@ -556,23 +589,31 @@ class StackVisitor {
    *     | OUT[outs-2]            |
    *     |       .                |
    *     | OUT[0]                 |
-   *     | curMethod*             |  ... (reg == -1) <<== sp, 16-byte aligned
+   *     | curMethod*             |  ... (reg == -2) <<== sp, 16-byte aligned
    *     +========================+
    */
   static int GetVRegOffset(const DexFile::CodeItem* code_item,
                            uint32_t core_spills, uint32_t fp_spills,
                            size_t frame_size, int reg) {
     DCHECK_EQ(frame_size & (kStackAlignment - 1), 0U);
+    DCHECK_NE(reg, -1);
+
     int num_spills = __builtin_popcount(core_spills) + __builtin_popcount(fp_spills) + 1;  // Filler.
     int num_ins = code_item->ins_size_;
     int num_regs = code_item->registers_size_ - num_ins;
     int locals_start = frame_size - ((num_spills + num_regs) * sizeof(uint32_t));
-    if (reg == -2) {
-      return 0;  // Method*
-    } else if (reg <= -3) {
-      return locals_start - ((reg + 1) * sizeof(uint32_t));  // Compiler temp.
-    } else if (reg < num_regs) {
-      return locals_start + (reg * sizeof(uint32_t));        // Dalvik local reg.
+    if (reg == GetMethodPtrTempBaseReg()) {
+      // The current method pointer corresponds to special location on stack.
+      return 0;
+    } else if (reg <= GetCompilerTempNonSpecialBaseReg()) {
+      /*
+       * Special temporaries may have custom locations and the logic above deals with that.
+       * Thus, we take into account the number of special temps when figuring out the offset.
+       * The offset is correctly computed because reg is always negative for temporaries.
+       */
+      return locals_start + ((reg + std::abs(GetCompilerTempNonSpecialBaseReg()) - 1) * sizeof(uint32_t));
+    }  else if (reg < num_regs) {
+      return locals_start + (reg * sizeof(uint32_t));
     } else {
       return frame_size + ((reg - num_regs) * sizeof(uint32_t)) + sizeof(uint32_t);  // Dalvik in.
     }
