@@ -188,7 +188,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
                                                 requested_alloc_space_begin);
     CHECK(malloc_space != nullptr) << "Failed to create dlmalloc space";
   }
-
+  VLOG(heap) << "malloc_space : " << reinterpret_cast<void*>(malloc_space->Begin()) << "-"
+             << reinterpret_cast<void*>(malloc_space->Limit());
   if (kMovingCollector) {
     // TODO: Place bump-pointer spaces somewhere to minimize size of card table.
     // TODO: Having 3+ spaces as big as the large heap size can cause virtual memory fragmentation
@@ -202,6 +203,11 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
                                                   nullptr);
     CHECK(temp_space_ != nullptr) << "Failed to create bump pointer space";
     AddSpace(temp_space_);
+
+    VLOG(heap) << "bump_pointer_space : " << reinterpret_cast<void*>(bump_pointer_space_->Begin()) << "-"
+               << reinterpret_cast<void*>(bump_pointer_space_->Limit());
+    VLOG(heap) << "temp_space : " << reinterpret_cast<void*>(temp_space_->Begin()) << "-"
+               << reinterpret_cast<void*>(temp_space_->Limit());
   }
   non_moving_space_ = malloc_space;
   malloc_space->SetFootprintLimit(malloc_space->Capacity());

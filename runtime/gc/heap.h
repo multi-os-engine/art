@@ -495,6 +495,30 @@ class Heap {
     return large_object_space_;
   }
 
+  space::MallocSpace* GetMainFreeListSpace() {
+    if (kUseRosAlloc) {
+      DCHECK(rosalloc_space_ != nullptr);
+      // reinterpret_cast is necessary as the space class hierarchy
+      // isn't known (#included) yet here.
+      return reinterpret_cast<space::MallocSpace*>(rosalloc_space_);
+    } else {
+      DCHECK(dlmalloc_space_ != nullptr);
+      return reinterpret_cast<space::MallocSpace*>(dlmalloc_space_);
+    }
+  }
+
+  bool IsMainFreeListSpace(space::Space* space) const {
+    if (kUseRosAlloc) {
+      DCHECK(rosalloc_space_ != nullptr);
+      // reinterpret_cast is necessary as the space class hierarchy
+      // isn't known (#included) yet here.
+      return space == reinterpret_cast<space::Space*>(rosalloc_space_);
+    } else {
+      DCHECK(dlmalloc_space_ != nullptr);
+      return space == reinterpret_cast<space::Space*>(dlmalloc_space_);
+    }
+  }
+
   void DumpSpaces(std::ostream& stream = LOG(INFO));
 
   // GC performance measuring
