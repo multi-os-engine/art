@@ -958,23 +958,26 @@ bool CompilerDriver::ComputeInstanceFieldInfo(uint32_t field_idx, const DexCompi
         ComputeCompilingMethodsClass(soa, dex_cache, mUnit);
     if (referrer_class != NULL) {
       mirror::Class* fields_class = resolved_field->GetDeclaringClass();
-      bool access_ok = referrer_class->CanAccess(fields_class) &&
-                       referrer_class->CanAccessMember(fields_class,
-                                                       resolved_field->GetAccessFlags());
-      if (!access_ok) {
-        // The referring class can't access the resolved field, this may occur as a result of a
-        // protected field being made public by a sub-class. Resort to the dex file to determine
-        // the correct class for the access check.
-        const DexFile& dex_file = *referrer_class->GetDexCache()->GetDexFile();
-        mirror::Class* dex_fields_class = mUnit->GetClassLinker()->ResolveType(dex_file,
-                                                         dex_file.GetFieldId(field_idx).class_idx_,
-                                                         referrer_class);
-        access_ok = referrer_class->CanAccess(dex_fields_class) &&
-                    referrer_class->CanAccessMember(dex_fields_class,
-                                                    resolved_field->GetAccessFlags());
-      }
       bool is_write_to_final_from_wrong_class = is_put && resolved_field->IsFinal() &&
           fields_class != referrer_class;
+      bool access_ok = referrer_class->CanAccess(fields_class);
+      if (LIKELY(access_ok)) {
+        access_ok = referrer_class->CanAccessMember(fields_class,
+                                                    resolved_field->GetAccessFlags());
+      } else {
+        // The referrer class can't access the field's declaring class but may still be able
+        // to access the field if the declaring class is an indirect base class. In that case,
+        // the dex file's FieldId specifies an accessible class rather than the declaring class.
+        SirtRef<mirror::DexCache> dex_cache(
+            soa.Self(), mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile()));
+        // The referenced class has already been resolved, get it from the dex cache.
+        fields_class = dex_cache->GetResolvedType(
+            mUnit->GetDexFile()->GetFieldId(field_idx).class_idx_);
+        CHECK(fields_class != nullptr);
+        access_ok = referrer_class->CanAccess(fields_class) &&
+                    referrer_class->CanAccessMember(fields_class,
+                                                    resolved_field->GetAccessFlags());
+      }
       if (access_ok && !is_write_to_final_from_wrong_class) {
         *field_offset = resolved_field->GetOffset().Int32Value();
         *is_volatile = resolved_field->IsVolatile();
