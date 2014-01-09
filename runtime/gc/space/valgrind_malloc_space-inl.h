@@ -38,6 +38,7 @@ mirror::Object* ValgrindMallocSpace<S, A>::AllocWithGrowth(Thread* self, size_t 
   if (obj_with_rdz == nullptr) {
     return nullptr;
   }
+  *bytes_allocated -= 2 * kValgrindRedZoneBytes;
   if (usable_size != nullptr) {
     *usable_size -= 2 * kValgrindRedZoneBytes;
   }
@@ -58,6 +59,7 @@ mirror::Object* ValgrindMallocSpace<S, A>::Alloc(Thread* self, size_t num_bytes,
   if (obj_with_rdz == nullptr) {
     return nullptr;
   }
+  *bytes_allocated -= 2 * kValgrindRedZoneBytes;
   if (usable_size != nullptr) {
     *usable_size -= 2 * kValgrindRedZoneBytes;
   }
@@ -84,9 +86,9 @@ size_t ValgrindMallocSpace<S, A>::Free(Thread* self, mirror::Object* ptr) {
   void* obj_after_rdz = reinterpret_cast<void*>(ptr);
   void* obj_with_rdz = reinterpret_cast<byte*>(obj_after_rdz) - kValgrindRedZoneBytes;
   // Make redzones undefined.
-  size_t allocation_size =
-      AllocationSize(reinterpret_cast<mirror::Object*>(obj_with_rdz), nullptr);
-  VALGRIND_MAKE_MEM_UNDEFINED(obj_with_rdz, allocation_size);
+  size_t usable_size = 0;
+  AllocationSize(ptr, &usable_size);
+  VALGRIND_MAKE_MEM_UNDEFINED(obj_with_rdz, usable_size + 2 * kValgrindRedZoneBytes);
   size_t freed = S::Free(self, reinterpret_cast<mirror::Object*>(obj_with_rdz));
   return freed - 2 * kValgrindRedZoneBytes;
 }
@@ -96,6 +98,7 @@ size_t ValgrindMallocSpace<S, A>::FreeList(Thread* self, size_t num_ptrs, mirror
   size_t freed = 0;
   for (size_t i = 0; i < num_ptrs; i++) {
     freed += Free(self, ptrs[i]);
+    ptrs[i] = nullptr;
   }
   return freed;
 }
