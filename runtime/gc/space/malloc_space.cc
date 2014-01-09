@@ -28,6 +28,8 @@
 #include "thread_list.h"
 #include "utils.h"
 
+#include <valgrind.h>
+
 namespace art {
 namespace gc {
 namespace space {
