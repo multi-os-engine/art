@@ -265,9 +265,15 @@ void Mir2Lir::StoreValueWide(RegLocation rl_dest, RegLocation rl_src) {
 
   // Dest is now live and dirty (until/if we flush it to home location)
   MarkLive(rl_dest.low_reg, rl_dest.s_reg_low);
-  MarkLive(rl_dest.high_reg, GetSRegHi(rl_dest.s_reg_low));
-  MarkDirty(rl_dest);
-  MarkPair(rl_dest.low_reg, rl_dest.high_reg);
+  if (rl_dest.low_reg != rl_dest.high_reg) {
+    MarkLive(rl_dest.high_reg, GetSRegHi(rl_dest.s_reg_low));
+    MarkDirty(rl_dest);
+    MarkPair(rl_dest.low_reg, rl_dest.high_reg);
+  } else {
+    // x86 FP double
+    assert(rl_dest.fp && (cu_->instruction_set == kX86));
+    MarkDirty(rl_dest);
+  }
 
 
   ResetDefLocWide(rl_dest);

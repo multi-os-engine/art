@@ -330,6 +330,10 @@ struct RegLocation {
   int16_t s_reg_low;    // SSA name for low Dalvik word.
   int16_t orig_sreg;    // TODO: remove after Bitcode gen complete
                         // and consolidate usage w/ s_reg_low.
+  VectorLengthType vec_len:3;  // Is this value in a vector register, and how big is it?
+
+  // Helper functions for assertions, etc
+  bool IsVectorScalar() const { return vec_len == kVectorLength4 || vec_len == kVectorLength8;}
 };
 
 /*
@@ -355,7 +359,8 @@ struct CallInfo {
 
 
 const RegLocation bad_loc = {kLocDalvikFrame, 0, 0, 0, 0, 0, 0, 0, 0,
-                             INVALID_REG, INVALID_REG, INVALID_SREG, INVALID_SREG};
+                             INVALID_REG, INVALID_REG, INVALID_SREG, INVALID_SREG,
+                             kVectorNotUsed};
 
 class MIRGraph {
  public:

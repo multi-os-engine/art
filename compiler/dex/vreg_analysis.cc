@@ -406,7 +406,7 @@ void MIRGraph::DumpRegLocTable(RegLocation* table, int count) {
 
 static const RegLocation fresh_loc = {kLocDalvikFrame, 0, 0, 0, 0, 0, 0, 0, 0,
                                      INVALID_REG, INVALID_REG, INVALID_SREG,
-                                     INVALID_SREG};
+                                     INVALID_SREG, kVectorNotUsed};
 
 void MIRGraph::InitRegLocations() {
   /* Allocate the location map */

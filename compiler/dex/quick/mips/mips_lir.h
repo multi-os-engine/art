@@ -143,13 +143,13 @@ namespace art {
 
 // RegisterLocation templates return values (r_V0, or r_V0/r_V1).
 #define MIPS_LOC_C_RETURN {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, r_V0, INVALID_REG, \
-                           INVALID_SREG, INVALID_SREG}
+                           INVALID_SREG, INVALID_SREG, kVectorNotUsed}
 #define MIPS_LOC_C_RETURN_FLOAT {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, r_FRESULT0, \
-                                 INVALID_REG, INVALID_SREG, INVALID_SREG}
+                                 INVALID_REG, INVALID_SREG, INVALID_SREG, kVectorNotUsed}
 #define MIPS_LOC_C_RETURN_WIDE {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, r_RESULT0, \
-                                r_RESULT1, INVALID_SREG, INVALID_SREG}
+                                r_RESULT1, INVALID_SREG, INVALID_SREG, kVectorNotUsed}
 #define MIPS_LOC_C_RETURN_DOUBLE {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, r_FRESULT0, \
-                                  r_FRESULT1, INVALID_SREG, INVALID_SREG}
+                                  r_FRESULT1, INVALID_SREG, INVALID_SREG, kVectorNotUsed}
 
 enum MipsResourceEncodingPos {
   kMipsGPReg0   = 0,
