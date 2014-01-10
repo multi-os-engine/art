@@ -100,4 +100,18 @@ VAR(name, 0):
     .size \name, .-\name
 END_MACRO
 
+MACRO0(SETUP_GOT_NOSAVE)
+    call  __get_pc
+    addl    $_GLOBAL_OFFSET_TABLE_, %ebx
+END_MACRO
+
+MACRO0(SETUP_GOT)
+    PUSH  ebx
+    SETUP_GOT_NOSAVE
+END_MACRO
+
+MACRO0(UNDO_SETUP_GOT)
+    POP  ebx
+END_MACRO
+
 #endif  // ART_RUNTIME_ARCH_X86_ASM_SUPPORT_X86_S_
