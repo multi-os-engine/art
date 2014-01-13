@@ -18,6 +18,7 @@
 #include "base/macros.h"
 #include "base/mutex.h"
 #include "base/mutex-inl.h"
+#include "leb128_encoder.h"
 #include "locks.h"
 #include "thread.h"
 #include "thread-inl.h"
@@ -236,7 +237,8 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
 
 DexFileMethodInliner::DexFileMethodInliner()
     : lock_("DexFileMethodInliner lock", kDexFileMethodInlinerLock),
-      dex_file_(NULL) {
+      dex_file_(NULL),
+      inline_refs_lock_("DexFileMethodInliner inline refs lock", kDexFileMethodInlinerLock) {
   COMPILE_ASSERT(kClassCacheFirst == 0, kClassCacheFirst_not_0);
   COMPILE_ASSERT(arraysize(kClassCacheNames) == kClassCacheLast, bad_arraysize_kClassCacheNames);
   COMPILE_ASSERT(kNameCacheFirst == 0, kNameCacheFirst_not_0);
@@ -417,6 +419,11 @@ bool DexFileMethodInliner::GenInline(MIRGraph* mir_graph, BasicBlock* bb, MIR* i
   }
   if (result) {
     invoke->optimization_flags |= MIR_INLINED_PRED;
+    MutexLock mu(Thread::Current(), inline_refs_lock_);
+    DexCompilationUnit* dex_cu = mir_graph->GetCurrentDexCompilationUnit();
+    auto it1 = inline_refs_.FindOrPutDefault(method_idx);
+    auto it2 = it1->second.FindOrPutDefault(dex_cu->GetDexFile());
+    it2->second.insert(dex_cu->GetDexMethodIndex());  // No change if already present in the set.
   }
   return result;
 }
@@ -761,6 +768,51 @@ MIR* DexFileMethodInliner::AllocReplacementMIR(MIRGraph* mir_graph, MIR* replace
   // Mark the replaced MIR as inlined
   replaced_mir->optimization_flags |= MIR_INLINED_PRED;
   return insn;
+}
+
+void DexFileMethodInliner::WriteInlinedMethodRefs(std::vector<InlinedMethodEntry>* entries,
+                                                  Leb128EncodingVector* reference_data,
+                                                  const std::vector<const DexFile*>& dex_files) {
+  MutexLock mu(Thread::Current(), inline_refs_lock_);
+  if (inline_refs_.empty()) {
+    return;
+  }
+
+  // Find the dex file index.
+  auto dex_it = std::find(dex_files.begin(), dex_files.end(), dex_file_);
+  DCHECK(dex_it != dex_files.end());
+  size_t dex_index = static_cast<size_t>(std::distance(dex_files.begin(), dex_it));
+  DCHECK_LE(dex_index, 0xffffu);
+
+  for (const auto& method_to_refs : inline_refs_) {
+    // Store method entry.
+    uint32_t method_idx = method_to_refs.first;
+    DCHECK_LE(method_idx, 0xffffu);
+    entries->push_back(InlinedMethodEntry {
+        static_cast<uint16_t>(dex_index),
+        static_cast<uint16_t>(method_idx),
+        reference_data->GetData().size()
+    });
+
+    reference_data->PushBackUnsigned(method_to_refs.second.size());
+    for (const auto& dex_refs : method_to_refs.second) {
+      // Store referrer dex file index.
+      auto ref_dex_it = std::find(dex_files.begin(), dex_files.end(), dex_refs.first);
+      DCHECK(ref_dex_it != dex_files.end());
+      size_t ref_dex_index = static_cast<size_t>(std::distance(dex_files.begin(), ref_dex_it));
+      DCHECK_LE(ref_dex_index, 0xffffu);
+      reference_data->PushBackUnsigned(ref_dex_index);
+
+      // Store delta-encoded referrer method indexes.
+      reference_data->PushBackUnsigned(dex_refs.second.size());
+      uint32_t last_ref_method_idx = 0u;
+      for (uint32_t ref_method_idx : dex_refs.second) {
+        DCHECK_GE(ref_method_idx, last_ref_method_idx);
+        reference_data->PushBackUnsigned(ref_method_idx - last_ref_method_idx);
+        last_ref_method_idx = ref_method_idx;
+      }
+    }
+  }
 }
 
 }  // namespace art

@@ -16,12 +16,14 @@
 
 #include <algorithm>
 #include <utility>
+#include "leb128_encoder.h"
 #include "thread.h"
 #include "thread-inl.h"
 #include "base/mutex.h"
 #include "base/mutex-inl.h"
 #include "base/logging.h"
 #include "driver/compiler_driver.h"
+#include "UniquePtr.h"
 
 #include "dex_file_to_method_inliner_map.h"
 
@@ -68,6 +70,41 @@ DexFileMethodInliner* DexFileToMethodInlinerMap::GetMethodInliner(const DexFile*
   locked_inliner->FindIntrinsics(dex_file);
   locked_inliner->lock_.ExclusiveUnlock(self);
   return locked_inliner;
+}
+
+const std::vector<uint8_t>* DexFileToMethodInlinerMap::CreateInlineRefs(
+    const std::vector<const DexFile*>& dex_files) {
+  CHECK_LE(dex_files.size(), 0xffffu);  // We've got only 16 bits for dex file index.
+  std::vector<DexFileMethodInliner::InlinedMethodEntry> inlined_methods;
+  inlined_methods.reserve(128);
+
+  ReaderMutexLock mu(Thread::Current(), lock_);
+  Leb128EncodingVector reference_data;
+  reference_data.Reserve(1024);
+  for (const auto& dex_to_inliner : inliners_) {
+    dex_to_inliner.second->WriteInlinedMethodRefs(&inlined_methods, &reference_data, dex_files);
+  }
+  if (inlined_methods.empty()) {
+    return nullptr;
+  }
+
+  size_t header_size = sizeof(uint32_t) + 8u * inlined_methods.size();
+  UniquePtr<std::vector<uint8_t> > result(new std::vector<uint8_t>());
+  result->reserve(header_size + reference_data.GetData().size());
+  for (const DexFileMethodInliner::InlinedMethodEntry& entry : inlined_methods) {
+    result->push_back(entry.dex_file_index & 0xffu);
+    result->push_back((entry.dex_file_index >> 8) & 0xffu);
+    result->push_back(entry.method_index & 0xffu);
+    result->push_back((entry.method_index >> 8) & 0xffu);
+    // Adjust offset by the header size
+    size_t offset =  header_size + entry.refs_offset;
+    result->push_back(offset & 0xffu);
+    result->push_back((offset >> 8) & 0xffu);
+    result->push_back((offset >> 16) & 0xffu);
+    result->push_back((offset >> 24) & 0xffu);
+  }
+  result->insert(result->end(), reference_data.GetData().begin(), reference_data.GetData().end());
+  return result.release();
 }
 
 }  // namespace art
