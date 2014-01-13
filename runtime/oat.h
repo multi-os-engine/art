@@ -46,6 +46,8 @@ class PACKED(4) OatHeader {
     DCHECK(IsValid());
     return dex_file_count_;
   }
+  uint32_t GetInlineRefsOffset() const;
+  void SetInlineRefsOffset(uint32_t offset);
   uint32_t GetExecutableOffset() const;
   void SetExecutableOffset(uint32_t executable_offset);
 
@@ -97,6 +99,7 @@ class PACKED(4) OatHeader {
   InstructionSetFeatures instruction_set_features_;
   uint32_t dex_file_count_;
   uint32_t executable_offset_;
+  uint32_t inline_refs_offset_;
   uint32_t interpreter_to_interpreter_bridge_offset_;
   uint32_t interpreter_to_compiled_code_bridge_offset_;
   uint32_t jni_dlsym_lookup_offset_;

@@ -18,6 +18,8 @@
 #define ART_COMPILER_DEX_QUICK_DEX_FILE_METHOD_INLINER_H_
 
 #include <stdint.h>
+#include <set>
+#include <vector>
 #include "base/mutex.h"
 #include "base/macros.h"
 #include "safe_map.h"
@@ -30,6 +32,7 @@ namespace art {
 struct BasicBlock;
 struct MIR;
 class CallInfo;
+class Leb128EncodingVector;
 class MIRGraph;
 class Mir2Lir;
 
@@ -399,12 +402,34 @@ class DexFileMethodInliner {
                               const InlineMethod& method);
     static MIR* AllocReplacementMIR(MIRGraph* mir_graph, MIR* replaced_mir);
 
-    ReaderWriterMutex lock_;
+    struct InlinedMethodEntry {
+      uint16_t dex_file_index;
+      uint16_t method_index;
+      uint32_t refs_offset;
+    };
+
+    /**
+     * Write inlined methods references.
+     *
+     * Only DexFileToMethodInlinerMap may call this function and only after the compilation
+     * has been completed.
+     */
+    void WriteInlinedMethodRefs(std::vector<InlinedMethodEntry>* entries,
+                                Leb128EncodingVector* reference_data,
+                                const std::vector<const DexFile*>& dex_files);
+
+    ReaderWriterMutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
     /*
      * Maps method indexes (for the particular DexFile) to Intrinsic defintions.
      */
     SafeMap<uint32_t, InlineMethod> inline_methods_ GUARDED_BY(lock_);
     const DexFile* dex_file_;
+
+    Mutex inline_refs_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
+    /*
+     * Maps each inlined method to the set of methods where it was actually inlined.
+     */
+    SafeMap<uint32_t, SafeMap<const DexFile*, std::set<uint32_t> > > inline_refs_;
 
     DISALLOW_COPY_AND_ASSIGN(DexFileMethodInliner);
 };

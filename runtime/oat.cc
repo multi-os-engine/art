@@ -22,7 +22,7 @@
 namespace art {
 
 const uint8_t OatHeader::kOatMagic[] = { 'o', 'a', 't', '\n' };
-const uint8_t OatHeader::kOatVersion[] = { '0', '1', '3', '\0' };
+const uint8_t OatHeader::kOatVersion[] = { '0', '1', '4', '\0' };
 
 OatHeader::OatHeader() {
   memset(this, 0, sizeof(*this));
@@ -61,6 +61,7 @@ OatHeader::OatHeader(InstructionSet instruction_set,
   UpdateChecksum(image_file_location.data(), image_file_location_size_);
 
   executable_offset_ = 0;
+  inline_refs_offset_ = 0;
   interpreter_to_interpreter_bridge_offset_ = 0;
   interpreter_to_compiled_code_bridge_offset_ = 0;
   jni_dlsym_lookup_offset_ = 0;
@@ -108,6 +109,20 @@ const InstructionSetFeatures& OatHeader::GetInstructionSetFeatures() const {
   return instruction_set_features_;
 }
 
+uint32_t OatHeader::GetInlineRefsOffset() const {
+  DCHECK(IsValid());
+  return inline_refs_offset_;
+}
+
+void OatHeader::SetInlineRefsOffset(uint32_t offset) {
+  CHECK(offset == 0 || offset >= sizeof(OatHeader));
+  DCHECK(IsValid());
+  DCHECK_EQ(inline_refs_offset_, 0u) << offset;
+
+  inline_refs_offset_ = offset;
+  UpdateChecksum(&inline_refs_offset_, sizeof(inline_refs_offset_));
+}
+
 uint32_t OatHeader::GetExecutableOffset() const {
   DCHECK(IsValid());
   DCHECK_ALIGNED(executable_offset_, kPageSize);
@@ -131,12 +146,12 @@ const void* OatHeader::GetInterpreterToInterpreterBridge() const {
 
 uint32_t OatHeader::GetInterpreterToInterpreterBridgeOffset() const {
   DCHECK(IsValid());
-  CHECK_GE(interpreter_to_interpreter_bridge_offset_, executable_offset_);
+  CHECK_GE(interpreter_to_interpreter_bridge_offset_, inline_refs_offset_);
   return interpreter_to_interpreter_bridge_offset_;
 }
 
 void OatHeader::SetInterpreterToInterpreterBridgeOffset(uint32_t offset) {
-  CHECK(offset == 0 || offset >= executable_offset_);
+  CHECK(offset == 0 || offset >= inline_refs_offset_);
   DCHECK(IsValid());
   DCHECK_EQ(interpreter_to_interpreter_bridge_offset_, 0U) << offset;
 
