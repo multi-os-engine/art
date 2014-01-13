@@ -84,6 +84,16 @@ class SafeMap {
     }
   }
 
+  // Used to find a value for key, inserting a default value for the key if none was in the map.
+  // Requires the value type to be default constructible.
+  iterator FindOrPutDefault(const K& k) {
+    iterator lb = map_.lower_bound(k);
+    if (lb != map_.end() && !map_.key_comp()(lb->first, k)) {
+      return lb;
+    }
+    return map_.insert(lb, std::make_pair(k, V()));
+  }
+
   bool Equals(const Self& rhs) const {
     return map_ == rhs.map_;
   }

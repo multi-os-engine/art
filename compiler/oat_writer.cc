@@ -24,6 +24,7 @@
 #include "class_linker.h"
 #include "dex_file-inl.h"
 #include "dex/verified_methods_data.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "gc/space/space.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/array.h"
@@ -64,6 +65,7 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     size_quick_resolution_trampoline_(0),
     size_quick_to_interpreter_bridge_(0),
     size_trampoline_alignment_(0),
+    size_inline_refs_(0),
     size_code_size_(0),
     size_code_(0),
     size_code_alignment_(0),
@@ -95,6 +97,10 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
   {
     TimingLogger::ScopedSplit split("InitOatClasses", timings);
     offset = InitOatClasses(offset);
+  }
+  {
+    TimingLogger::ScopedSplit split("InitInlineRefs", timings);
+    offset = InitInlineRefs(offset);
   }
   {
     TimingLogger::ScopedSplit split("InitOatCode", timings);
@@ -230,6 +236,20 @@ size_t OatWriter::InitOatClasses(size_t offset) {
       offset += oat_class->SizeOf();
     }
     oat_dex_files_[i]->UpdateChecksum(*oat_header_);
+  }
+  return offset;
+}
+
+size_t OatWriter::InitInlineRefs(size_t offset) {
+  DexFileToMethodInlinerMap* inliner_map = compiler_driver_->GetMethodInlinerMap();
+  if (inliner_map != nullptr) {
+    inlined_method_refs_.reset(inliner_map->CreateInlineRefs(*dex_files_));
+  }
+  if (inlined_method_refs_.get() == nullptr) {
+    oat_header_->SetInlineRefsOffset(0);
+  } else {
+    oat_header_->SetInlineRefsOffset(offset);
+    offset += inlined_method_refs_->size();
   }
   return offset;
 }
@@ -555,6 +575,7 @@ bool OatWriter::Write(OutputStream& out) {
     DO_STAT(size_quick_resolution_trampoline_);
     DO_STAT(size_quick_to_interpreter_bridge_);
     DO_STAT(size_trampoline_alignment_);
+    DO_STAT(size_inline_refs_)
     DO_STAT(size_code_size_);
     DO_STAT(size_code_);
     DO_STAT(size_code_alignment_);
@@ -612,6 +633,13 @@ bool OatWriter::WriteTables(OutputStream& out, const size_t file_offset) {
       PLOG(ERROR) << "Failed to write oat methods information to " << out.GetLocation();
       return false;
     }
+  }
+  if (inlined_method_refs_. get() != nullptr) {
+    if (!out.WriteFully(&(*inlined_method_refs_)[0], inlined_method_refs_->size())) {
+      PLOG(ERROR) << "Failed to write inlined method references to " << out.GetLocation();
+      return false;
+    }
+    size_inline_refs_ += inlined_method_refs_->size();
   }
   return true;
 }

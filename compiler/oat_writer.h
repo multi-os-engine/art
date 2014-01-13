@@ -50,6 +50,8 @@ class OutputStream;
 // ...
 // OatClass[C]
 //
+// InlineRefs        if any methods have been inlined, record the references for debugging.
+//
 // padding           if necessary so that the following code will be page aligned
 //
 // CompiledMethod    one variable sized blob with the contents of each CompiledMethod
@@ -87,6 +89,7 @@ class OatWriter {
   size_t InitOatDexFiles(size_t offset);
   size_t InitDexFiles(size_t offset);
   size_t InitOatClasses(size_t offset);
+  size_t InitInlineRefs(size_t offset);
   size_t InitOatCode(size_t offset)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   size_t InitOatCodeDexFiles(size_t offset)
@@ -224,6 +227,7 @@ class OatWriter {
   OatHeader* oat_header_;
   std::vector<OatDexFile*> oat_dex_files_;
   std::vector<OatClass*> oat_classes_;
+  UniquePtr<const std::vector<uint8_t> > inlined_method_refs_;
   UniquePtr<const std::vector<uint8_t> > interpreter_to_interpreter_bridge_;
   UniquePtr<const std::vector<uint8_t> > interpreter_to_compiled_code_bridge_;
   UniquePtr<const std::vector<uint8_t> > jni_dlsym_lookup_;
@@ -250,6 +254,7 @@ class OatWriter {
   uint32_t size_quick_resolution_trampoline_;
   uint32_t size_quick_to_interpreter_bridge_;
   uint32_t size_trampoline_alignment_;
+  uint32_t size_inline_refs_;
   uint32_t size_code_size_;
   uint32_t size_code_;
   uint32_t size_code_alignment_;

@@ -44,6 +44,15 @@ class DexFileToMethodInlinerMap {
         // TODO: There is an irregular non-scoped use of locks that defeats annotalysis with -O0.
         // Fix the NO_THREAD_SAFETY_ANALYSIS when this works and add the appropriate LOCKS_EXCLUDED.
 
+    /**
+     * Create raw data for inline references.
+     * This should be called after all methods have been compiled and we need to record
+     * the inline references in the oat file for the debugger.
+     *
+     * @param dex_files dex files vector for conversion of DexFile pointers into indexes.
+     */
+    const std::vector<uint8_t>* CreateInlineRefs(const std::vector<const DexFile*>& dex_files);
+
   private:
     ReaderWriterMutex lock_;
     std::map<const DexFile*, DexFileMethodInliner*> inliners_ GUARDED_BY(lock_);
