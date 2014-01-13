@@ -25,6 +25,7 @@
 #include "base/timing_logger.h"
 #include "gc/accounting/atomic_stack.h"
 #include "gc/accounting/card_table.h"
+#include "gc/gc_cause.h"
 #include "gc/collector/gc_type.h"
 #include "gc/collector_type.h"
 #include "globals.h"
@@ -98,18 +99,6 @@ enum AllocatorType {
   kAllocatorTypeLOS,  // Large object space, also doesn't have entrypoints.
 };
 
-// What caused the GC?
-enum GcCause {
-  // GC triggered by a failed allocation. Thread doing allocation is blocked waiting for GC before
-  // retrying allocation.
-  kGcCauseForAlloc,
-  // A background GC trying to ensure there is free memory ahead of allocations.
-  kGcCauseBackground,
-  // An explicit System.gc() call.
-  kGcCauseExplicit,
-};
-std::ostream& operator<<(std::ostream& os, const GcCause& policy);
-
 // How we want to sanity check the heap's correctness.
 enum HeapVerificationMode {
   kHeapVerificationNotPermitted,  // Too early in runtime start-up for heap to be verified.
@@ -160,7 +149,7 @@ class Heap {
                 CollectorType post_zygote_collector_type, CollectorType background_collector_type,
                 size_t parallel_gc_threads, size_t conc_gc_threads, bool low_memory_mode,
                 size_t long_pause_threshold, size_t long_gc_threshold,
-                bool ignore_max_footprint, bool use_tlab);
+                bool ignore_max_footprint, bool use_tlab, bool generational_gc);
 
   ~Heap();
 
