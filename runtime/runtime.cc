@@ -399,7 +399,8 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   // Only the main GC thread, no workers.
   parsed->conc_gc_threads_ = 0;
   // Default is CMS which is Sticky + Partial + Full CMS GC.
-  parsed->collector_type_ = gc::kCollectorTypeCMS;
+  // parsed->collector_type_ = gc::kCollectorTypeCMS;
+  parsed->collector_type_ = gc::kCollectorTypeSS;
   // If background_collector_type_ is kCollectorTypeNone, it defaults to the collector_type_ after
   // parsing options.
   parsed->background_collector_type_ = gc::kCollectorTypeNone;
@@ -407,6 +408,8 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   parsed->max_spins_before_thin_lock_inflation_ = Monitor::kDefaultMaxSpinsBeforeThinLockInflation;
   parsed->low_memory_mode_ = false;
   parsed->use_tlab_ = false;
+  // parsed->generational_gc_ = false;
+  parsed->generational_gc_ = true;
 
   parsed->compiler_callbacks_ = nullptr;
   parsed->is_zygote_ = false;
@@ -580,6 +583,8 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
       parsed->low_memory_mode_ = true;
     } else if (option == "-XX:UseTLAB") {
       parsed->use_tlab_ = true;
+    } else if (option == "-XX:GenerationalGC") {
+      parsed->generational_gc_ = true;
     } else if (StartsWith(option, "-D")) {
       parsed->properties_.push_back(option.substr(strlen("-D")));
     } else if (StartsWith(option, "-Xjnitrace:")) {
@@ -985,7 +990,8 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
                        options->long_pause_log_threshold_,
                        options->long_gc_log_threshold_,
                        options->ignore_max_footprint_,
-                       options->use_tlab_);
+                       options->use_tlab_,
+                       options->generational_gc_);
 
   dump_gc_performance_on_shutdown_ = options->dump_gc_performance_on_shutdown_;
 

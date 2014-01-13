@@ -78,7 +78,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
            CollectorType post_zygote_collector_type, CollectorType background_collector_type,
            size_t parallel_gc_threads, size_t conc_gc_threads, bool low_memory_mode,
            size_t long_pause_log_threshold, size_t long_gc_log_threshold,
-           bool ignore_max_footprint, bool use_tlab)
+           bool ignore_max_footprint, bool use_tlab, bool generational_gc)
     : non_moving_space_(nullptr),
       rosalloc_space_(nullptr),
       dlmalloc_space_(nullptr),
@@ -273,7 +273,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   }
   if (kMovingCollector) {
     // TODO: Clean this up.
-    semi_space_collector_ = new collector::SemiSpace(this);
+    semi_space_collector_ = new collector::SemiSpace(this, generational_gc);
     garbage_collectors_.push_back(semi_space_collector_);
   }
 
@@ -1388,7 +1388,7 @@ void Heap::PreZygoteFork() {
     temp_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
     zygote_collector.SetFromSpace(bump_pointer_space_);
     zygote_collector.SetToSpace(&target_space);
-    zygote_collector.Run(false);
+    zygote_collector.Run(kGcCauseForAlloc, false);
     CHECK(temp_space_->IsEmpty());
     total_objects_freed_ever_ += semi_space_collector_->GetFreedObjects();
     total_bytes_freed_ever_ += semi_space_collector_->GetFreedBytes();
@@ -1460,17 +1460,6 @@ void Heap::MarkAllocStack(accounting::SpaceBitmap* bitmap1,
   }
 }
 
-const char* PrettyCause(GcCause cause) {
-  switch (cause) {
-    case kGcCauseForAlloc: return "Alloc";
-    case kGcCauseBackground: return "Background";
-    case kGcCauseExplicit: return "Explicit";
-    default:
-      LOG(FATAL) << "Unreachable";
-  }
-  return "";
-}
-
 void Heap::SwapSemiSpaces() {
   // Swap the spaces so we allocate into the space which we just evacuated.
   std::swap(bump_pointer_space_, temp_space_);
@@ -1483,7 +1472,7 @@ void Heap::Compact(space::ContinuousMemMapAllocSpace* target_space,
   if (target_space != source_space) {
     semi_space_collector_->SetFromSpace(source_space);
     semi_space_collector_->SetToSpace(target_space);
-    semi_space_collector_->Run(false);
+    semi_space_collector_->Run(kGcCauseForAlloc, false);
   }
 }
 
@@ -1560,7 +1549,7 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
 
   ATRACE_BEGIN(StringPrintf("%s %s GC", PrettyCause(gc_cause), collector->GetName()).c_str());
 
-  collector->Run(clear_soft_references);
+  collector->Run(gc_cause, clear_soft_references);
   total_objects_freed_ever_ += collector->GetFreedObjects();
   total_bytes_freed_ever_ += collector->GetFreedBytes();
 
@@ -2374,7 +2363,7 @@ void Heap::RegisterNativeAllocation(JNIEnv* env, int bytes) {
       }
       // If we still are over the watermark, attempt a GC for alloc and run finalizers.
       if (static_cast<size_t>(native_bytes_allocated_) > native_footprint_limit_) {
-        CollectGarbageInternal(gc_type, kGcCauseForAlloc, false);
+        CollectGarbageInternal(gc_type, kGcCauseForNativeAlloc, false);
         RunFinalization(env);
         native_need_to_run_finalization_ = false;
         CHECK(!env->ExceptionCheck());
