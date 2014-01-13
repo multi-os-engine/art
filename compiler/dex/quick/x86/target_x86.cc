@@ -561,11 +561,10 @@ RegLocation X86Mir2Lir::UpdateLocWide(RegLocation loc) {
          (loc.location == kLocCompilerTemp));
     // Are the dalvik regs already live in physical registers?
     RegisterInfo* info_lo = AllocLive(loc.s_reg_low, kAnyReg);
-    if (loc.fp) {
-      bool match = (info_lo != NULL);
 
-      // Is it FP?
-      match = match && IsFpReg(info_lo->reg);
+    // Handle FP registers specially on x86.
+    if (info_lo && IsFpReg(info_lo->reg)) {
+      bool match = true;
 
       // We can't match a FP register with a pair of Core registers.
       match = match && (info_lo->pair == 0);
@@ -645,7 +644,9 @@ RegLocation X86Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update)
     DCHECK_EQ(IsFpReg(loc.low_reg), loc.IsVectorScalar());
     if (!RegClassMatches(reg_class, loc.low_reg)) {
       /* It is the wrong register class.  Reallocate and copy. */
-      if (IsFpReg(loc.low_reg) && reg_class != kCoreReg) {
+      if (!IsFpReg(loc.low_reg)) {
+        // We want this in a FP reg, and it is in core registers.
+        DCHECK(reg_class != kCoreReg);
         // Allocate this into any FP reg, and mark it with the right size.
         low_reg = AllocTypedTemp(true, reg_class);
         OpVectorRegCopyWide(low_reg, loc.low_reg, loc.high_reg);
@@ -656,9 +657,13 @@ RegLocation X86Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update)
         loc.high_reg = low_reg;  // Play nice with existing code.
         loc.vec_len = kVectorLength8;
       } else {
-        new_regs = AllocTypedTempPair(loc.fp, reg_class);
+        // The value is in a FP register, and we want it in a pair of core registers.
+        DCHECK_EQ(reg_class, kCoreReg);
+        DCHECK_EQ(loc.low_reg, loc.high_reg);
+        new_regs = AllocTypedTempPair(false, kCoreReg);  // Force to core registers.
         low_reg = new_regs & 0xff;
         high_reg = (new_regs >> 8) & 0xff;
+        DCHECK_NE(low_reg, high_reg);
         OpRegCopyWide(low_reg, high_reg, loc.low_reg, loc.high_reg);
         CopyRegInfo(low_reg, loc.low_reg);
         CopyRegInfo(high_reg, loc.high_reg);
