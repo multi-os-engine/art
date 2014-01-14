@@ -51,6 +51,7 @@ class DlMallocSpace;
 class RosAllocSpace;
 class ImageSpace;
 class LargeObjectSpace;
+class ZygoteSpace;
 
 static constexpr bool kDebugSpaces = kIsDebugBuild;
 
@@ -68,7 +69,7 @@ std::ostream& operator<<(std::ostream& os, const GcRetentionPolicy& policy);
 
 enum SpaceType {
   kSpaceTypeImageSpace,
-  kSpaceTypeAllocSpace,
+  kSpaceTypeMallocSpace,
   kSpaceTypeZygoteSpace,
   kSpaceTypeBumpPointerSpace,
   kSpaceTypeLargeObjectSpace,
@@ -91,11 +92,6 @@ class Space {
     return gc_retention_policy_;
   }
 
-  // Does the space support allocation?
-  virtual bool CanAllocateInto() const {
-    return true;
-  }
-
   // Is the given object contained within this space?
   virtual bool Contains(const mirror::Object* obj) const = 0;
 
@@ -111,7 +107,7 @@ class Space {
   // Is this a dlmalloc backed allocation space?
   bool IsMallocSpace() const {
     SpaceType type = GetType();
-    return type == kSpaceTypeAllocSpace || type == kSpaceTypeZygoteSpace;
+    return type == kSpaceTypeMallocSpace || type == kSpaceTypeZygoteSpace;
   }
   MallocSpace* AsMallocSpace();
 
@@ -120,19 +116,23 @@ class Space {
   }
   virtual DlMallocSpace* AsDlMallocSpace() {
     LOG(FATAL) << "Unreachable";
-    return NULL;
+    return nullptr;
   }
   virtual bool IsRosAllocSpace() const {
     return false;
   }
   virtual RosAllocSpace* AsRosAllocSpace() {
     LOG(FATAL) << "Unreachable";
-    return NULL;
+    return nullptr;
   }
 
   // Is this the space allocated into by the Zygote and no-longer in use?
   bool IsZygoteSpace() const {
     return GetType() == kSpaceTypeZygoteSpace;
+  }
+  virtual ZygoteSpace* AsZygoteSpace() {
+    LOG(FATAL) << "Unreachable";
+    return nullptr;
   }
 
   // Is this space a bump pointer space?
@@ -141,7 +141,7 @@ class Space {
   }
   virtual BumpPointerSpace* AsBumpPointerSpace() {
     LOG(FATAL) << "Unreachable";
-    return NULL;
+    return nullptr;
   }
 
   // Does this space hold large objects and implement the large object space abstraction?
@@ -168,6 +168,10 @@ class Space {
     return nullptr;
   }
 
+  virtual void Sweep(bool /* swap_bitmaps */, size_t* /* freed_objects */,
+                     size_t* /* freed_bytes */) {
+  }
+
   virtual ~Space() {}
 
  protected:
@@ -181,6 +185,15 @@ class Space {
   std::string name_;
 
  protected:
+  struct SweepCallbackContext {
+    bool swap_bitmaps;
+    Heap* heap;
+    space::Space* space;
+    Thread* self;
+    size_t freed_objects;
+    size_t freed_bytes;
+  };
+
   // When should objects within this space be reclaimed? Not constant as we vary it in the case
   // of Zygote forking.
   GcRetentionPolicy gc_retention_policy_;
@@ -290,10 +303,17 @@ class ContinuousSpace : public Space {
 
   virtual ~ContinuousSpace() {}
 
+  void Sweep(bool swap_bitmaps, size_t* freed_objects, size_t* freed_bytes);
+
  protected:
   ContinuousSpace(const std::string& name, GcRetentionPolicy gc_retention_policy,
                   byte* begin, byte* end, byte* limit) :
       Space(name, gc_retention_policy), begin_(begin), end_(end), limit_(limit) {
+  }
+
+  virtual accounting::SpaceBitmap::SweepCallback* GetSweepCallback() {
+    LOG(FATAL) << "Unimplemented";
+    return nullptr;
   }
 
   // The beginning of the storage for fast access.

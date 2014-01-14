@@ -591,9 +591,9 @@ void MarkSweep::MarkConcurrentRoots() {
 
 void MarkSweep::BindLiveToMarkBitmap(space::ContinuousSpace* space) {
   CHECK(space->IsMallocSpace());
-  space::MallocSpace* alloc_space = space->AsMallocSpace();
+  space::MallocSpace* malloc_space = space->AsMallocSpace();
   accounting::SpaceBitmap* live_bitmap = space->GetLiveBitmap();
-  accounting::SpaceBitmap* mark_bitmap = alloc_space->BindLiveToMarkBitmap();
+  accounting::SpaceBitmap* mark_bitmap = malloc_space->BindLiveToMarkBitmap();
   GetHeap()->GetMarkBitmap()->ReplaceBitmap(mark_bitmap, live_bitmap);
 }
 
@@ -1146,17 +1146,14 @@ void MarkSweep::Sweep(bool swap_bitmaps) {
   DCHECK(mark_stack_->IsEmpty());
   TimingLogger::ScopedSplit("Sweep", &timings_);
   for (const auto& space : GetHeap()->GetContinuousSpaces()) {
-    if (space->IsMallocSpace()) {
-      space::MallocSpace* malloc_space = space->AsMallocSpace();
-      TimingLogger::ScopedSplit split(
-          malloc_space->IsZygoteSpace() ? "SweepZygoteSpace" : "SweepAllocSpace", &timings_);
-      size_t freed_objects = 0;
-      size_t freed_bytes = 0;
-      malloc_space->Sweep(swap_bitmaps, &freed_objects, &freed_bytes);
-      heap_->RecordFree(freed_objects, freed_bytes);
-      freed_objects_.FetchAndAdd(freed_objects);
-      freed_bytes_.FetchAndAdd(freed_bytes);
-    }
+    TimingLogger::ScopedSplit split(
+        space->IsZygoteSpace() ? "SweepZygoteSpace" : "SweepMallocSpace", &timings_);
+    size_t freed_objects = 0;
+    size_t freed_bytes = 0;
+    space->Sweep(swap_bitmaps, &freed_objects, &freed_bytes);
+    heap_->RecordFree(freed_objects, freed_bytes);
+    freed_objects_.FetchAndAdd(freed_objects);
+    freed_bytes_.FetchAndAdd(freed_bytes);
   }
   SweepLargeObjects(swap_bitmaps);
 }
