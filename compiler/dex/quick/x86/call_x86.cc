@@ -19,6 +19,7 @@
 #include "codegen_x86.h"
 
 #include "base/logging.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
@@ -327,7 +328,7 @@ static int X86NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
                              uint32_t,
                              uintptr_t direct_code, uintptr_t direct_method,
                              InvokeType type) {
-  UNUSED(info, direct_code);
+  UNUSED(direct_code);
   Mir2Lir* cg = static_cast<Mir2Lir*>(cu->cg.get());
   if (direct_method != 0) {
     switch (state) {
@@ -343,6 +344,20 @@ static int X86NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
         cg->LoadMethodAddress(target_method, type, kArg0);
       }
       break;
+    default:
+      return -1;
+    }
+  } else if (info->string_init) {
+    RegStorage arg0_ref = cg->TargetReg(kArg0, kRef);
+    switch (state) {
+    case 0: {  // Grab target method* from thread pointer
+      size_t pointer_size = GetInstructionSetPointerSize(cu->instruction_set);
+      uint32_t offset = cu->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu->dex_file)->GetOffsetForStringInit(target_method.dex_method_index);
+      uint32_t string_init_base_offset = Thread::QuickEntryPointOffsetWithSize(OFFSETOF_MEMBER(QuickEntryPoints, pNewEmptyString), pointer_size);
+      int string_init_offset = string_init_base_offset + offset * pointer_size;
+      cg->NewLIR2(kX86Mov32RT, arg0_ref.GetReg(), string_init_offset);
+      break;
+    }
     default:
       return -1;
     }

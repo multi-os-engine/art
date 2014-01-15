@@ -574,7 +574,7 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   const char* descriptor = dex_file_->StringDataByIdx(proto_id.shorty_idx_);
   Primitive::Type return_type = Primitive::GetType(descriptor[0]);
   bool is_instance_call = invoke_type != kStatic;
-  const size_t number_of_arguments = strlen(descriptor) - (is_instance_call ? 0 : 1);
+  size_t number_of_arguments = strlen(descriptor) - (is_instance_call ? 0 : 1);
 
   MethodReference target_method(dex_file_, method_idx);
   uintptr_t direct_code;
@@ -591,6 +591,16 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
     return false;
   }
   DCHECK(optimized_invoke_type != kSuper);
+
+  // Replace calls to String.<init> with StringFactory.
+  bool string_init = PrettyMethod(method_idx, *dex_file_, false) == "java.lang.String.<init>";
+  if (string_init) {
+    return_type = Primitive::kPrimNot;
+    is_instance_call = false;
+    number_of_arguments--;
+    invoke_type = kStatic;
+    optimized_invoke_type = kStatic;
+  }
 
   HInvoke* invoke = nullptr;
   if (optimized_invoke_type == kVirtual) {
@@ -609,7 +619,7 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
     DCHECK(!is_recursive || (target_method.dex_file == dex_compilation_unit_->GetDexFile()));
     invoke = new (arena_) HInvokeStaticOrDirect(
         arena_, number_of_arguments, return_type, dex_pc, target_method.dex_method_index,
-        is_recursive, invoke_type, optimized_invoke_type);
+        is_recursive, string_init, invoke_type, optimized_invoke_type);
   }
 
   size_t start_index = 0;
@@ -625,6 +635,9 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
 
   uint32_t descriptor_index = 1;
   uint32_t argument_index = start_index;
+  if (string_init) {
+    start_index = 1;
+  }
   for (size_t i = start_index; i < number_of_vreg_arguments; i++, argument_index++) {
     Primitive::Type type = Primitive::GetType(descriptor[descriptor_index++]);
     bool is_wide = (type == Primitive::kPrimLong) || (type == Primitive::kPrimDouble);
@@ -645,8 +658,14 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   DCHECK_EQ(argument_index, number_of_arguments);
   current_block_->AddInstruction(invoke);
   latest_result_ = invoke;
+
+  // Add move-result for StringFactory method.
+  if (string_init) {
+    UpdateLocal(string_reg_, invoke);
+  }
   return true;
 }
+
 
 bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
                                              uint32_t dex_pc,
@@ -1822,12 +1841,20 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
 
     case Instruction::NEW_INSTANCE: {
       uint16_t type_index = instruction.VRegB_21c();
-      QuickEntrypointEnum entrypoint = NeedsAccessCheck(type_index)
-          ? kQuickAllocObjectWithAccessCheck
-          : kQuickAllocObject;
+      if (PrettyType(type_index, *dex_file_) == "java.lang.String") {
+        int32_t register_index = instruction.VRegA();
+        HIntConstant* constant = graph_->GetIntConstant(0);
+        UpdateLocal(register_index, constant);
+        string_reg_ = register_index;
+        // TODO: Try NOP later...
+      } else {
+        QuickEntrypointEnum entrypoint = NeedsAccessCheck(type_index)
+            ? kQuickAllocObjectWithAccessCheck
+            : kQuickAllocObject;
 
-      current_block_->AddInstruction(new (arena_) HNewInstance(dex_pc, type_index, entrypoint));
-      UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+        current_block_->AddInstruction(new (arena_) HNewInstance(dex_pc, type_index, entrypoint));
+        UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+      }
       break;
     }
 

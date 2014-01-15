@@ -48,6 +48,7 @@ jclass WellKnownClasses::java_lang_reflect_Proxy;
 jclass WellKnownClasses::java_lang_RuntimeException;
 jclass WellKnownClasses::java_lang_StackOverflowError;
 jclass WellKnownClasses::java_lang_String;
+jclass WellKnownClasses::java_lang_StringFactory;
 jclass WellKnownClasses::java_lang_System;
 jclass WellKnownClasses::java_lang_Thread;
 jclass WellKnownClasses::java_lang_Thread__UncaughtExceptionHandler;
@@ -78,6 +79,38 @@ jmethodID WellKnownClasses::java_lang_ref_ReferenceQueue_add;
 jmethodID WellKnownClasses::java_lang_reflect_Proxy_invoke;
 jmethodID WellKnownClasses::java_lang_Runtime_nativeLoad;
 jmethodID WellKnownClasses::java_lang_Short_valueOf;
+jmethodID WellKnownClasses::java_lang_String_init;
+jmethodID WellKnownClasses::java_lang_String_init_B;
+jmethodID WellKnownClasses::java_lang_String_init_BI;
+jmethodID WellKnownClasses::java_lang_String_init_BII;
+jmethodID WellKnownClasses::java_lang_String_init_BIII;
+jmethodID WellKnownClasses::java_lang_String_init_BIIString;
+jmethodID WellKnownClasses::java_lang_String_init_BString;
+jmethodID WellKnownClasses::java_lang_String_init_BIICharset;
+jmethodID WellKnownClasses::java_lang_String_init_BCharset;
+jmethodID WellKnownClasses::java_lang_String_init_C;
+jmethodID WellKnownClasses::java_lang_String_init_CII;
+jmethodID WellKnownClasses::java_lang_String_init_IIC;
+jmethodID WellKnownClasses::java_lang_String_init_String;
+jmethodID WellKnownClasses::java_lang_String_init_StringBuffer;
+jmethodID WellKnownClasses::java_lang_String_init_III;
+jmethodID WellKnownClasses::java_lang_String_init_StringBuilder;
+jmethodID WellKnownClasses::java_lang_StringFactory_newEmptyString;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromBytes_B;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BI;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BII;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BIII;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BIIString;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BString;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BIICharset;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BCharset;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromChars_C;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromChars_CII;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromChars_IIC;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromString;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromStringBuffer;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromCodePoints;
+jmethodID WellKnownClasses::java_lang_StringFactory_newStringFromStringBuilder;
 jmethodID WellKnownClasses::java_lang_System_runFinalization = NULL;
 jmethodID WellKnownClasses::java_lang_Thread_init;
 jmethodID WellKnownClasses::java_lang_Thread_run;
@@ -91,6 +124,7 @@ jfieldID WellKnownClasses::dalvik_system_DexFile_cookie;
 jfieldID WellKnownClasses::dalvik_system_PathClassLoader_pathList;
 jfieldID WellKnownClasses::dalvik_system_DexPathList_dexElements;
 jfieldID WellKnownClasses::dalvik_system_DexPathList__Element_dexFile;
+
 jfieldID WellKnownClasses::java_lang_Thread_daemon;
 jfieldID WellKnownClasses::java_lang_Thread_group;
 jfieldID WellKnownClasses::java_lang_Thread_lock;
@@ -186,6 +220,7 @@ void WellKnownClasses::Init(JNIEnv* env) {
   java_lang_RuntimeException = CacheClass(env, "java/lang/RuntimeException");
   java_lang_StackOverflowError = CacheClass(env, "java/lang/StackOverflowError");
   java_lang_String = CacheClass(env, "java/lang/String");
+  java_lang_StringFactory = CacheClass(env, "java/lang/StringFactory");
   java_lang_System = CacheClass(env, "java/lang/System");
   java_lang_Thread = CacheClass(env, "java/lang/Thread");
   java_lang_Thread__UncaughtExceptionHandler = CacheClass(env,
@@ -221,10 +256,44 @@ void WellKnownClasses::Init(JNIEnv* env) {
   org_apache_harmony_dalvik_ddmc_DdmServer_broadcast = CacheMethod(env, org_apache_harmony_dalvik_ddmc_DdmServer, true, "broadcast", "(I)V");
   org_apache_harmony_dalvik_ddmc_DdmServer_dispatch = CacheMethod(env, org_apache_harmony_dalvik_ddmc_DdmServer, true, "dispatch", "(I[BII)Lorg/apache/harmony/dalvik/ddmc/Chunk;");
 
+  java_lang_String_init = CacheMethod(env, java_lang_String, false, "<init>", "()V");
+  java_lang_String_init_B = CacheMethod(env, java_lang_String, false, "<init>", "([B)V");
+  java_lang_String_init_BI = CacheMethod(env, java_lang_String, false, "<init>", "([BI)V");
+  java_lang_String_init_BII = CacheMethod(env, java_lang_String, false, "<init>", "([BII)V");
+  java_lang_String_init_BIII = CacheMethod(env, java_lang_String, false, "<init>", "([BIII)V");
+  java_lang_String_init_BIIString = CacheMethod(env, java_lang_String, false, "<init>", "([BIILjava/lang/String;)V");
+  java_lang_String_init_BString = CacheMethod(env, java_lang_String, false, "<init>", "([BLjava/lang/String;)V");
+  java_lang_String_init_BIICharset = CacheMethod(env, java_lang_String, false, "<init>", "([BIILjava/nio/charset/Charset;)V");
+  java_lang_String_init_BCharset = CacheMethod(env, java_lang_String, false, "<init>", "([BLjava/nio/charset/Charset;)V");
+  java_lang_String_init_C = CacheMethod(env, java_lang_String, false, "<init>", "([C)V");
+  java_lang_String_init_CII = CacheMethod(env, java_lang_String, false, "<init>", "([CII)V");
+  java_lang_String_init_IIC = CacheMethod(env, java_lang_String, false, "<init>", "(II[C)V");
+  java_lang_String_init_String = CacheMethod(env, java_lang_String, false, "<init>", "(Ljava/lang/String;)V");
+  java_lang_String_init_StringBuffer = CacheMethod(env, java_lang_String, false, "<init>", "(Ljava/lang/StringBuffer;)V");
+  java_lang_String_init_III = CacheMethod(env, java_lang_String, false, "<init>", "([III)V");
+  java_lang_String_init_StringBuilder = CacheMethod(env, java_lang_String, false, "<init>", "(Ljava/lang/StringBuilder;)V");
+  java_lang_StringFactory_newEmptyString = CacheMethod(env, java_lang_StringFactory, true, "newEmptyString", "()Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromBytes_B = CacheMethod(env, java_lang_StringFactory, true, "newStringFromBytes", "([B)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromBytes_BI = CacheMethod(env, java_lang_StringFactory, true, "newStringFromBytes", "([BI)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromBytes_BII = CacheMethod(env, java_lang_StringFactory, true, "newStringFromBytes", "([BII)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromBytes_BIII = CacheMethod(env, java_lang_StringFactory, true, "newStringFromBytes", "([BIII)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromBytes_BIIString = CacheMethod(env, java_lang_StringFactory, true, "newStringFromBytes", "([BIILjava/lang/String;)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromBytes_BString = CacheMethod(env, java_lang_StringFactory, true, "newStringFromBytes", "([BLjava/lang/String;)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromBytes_BIICharset = CacheMethod(env, java_lang_StringFactory, true, "newStringFromBytes", "([BIILjava/nio/charset/Charset;)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromBytes_BCharset = CacheMethod(env, java_lang_StringFactory, true, "newStringFromBytes", "([BLjava/nio/charset/Charset;)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromChars_C = CacheMethod(env, java_lang_StringFactory, true, "newStringFromChars", "([C)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromChars_CII = CacheMethod(env, java_lang_StringFactory, true, "newStringFromChars", "([CII)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromChars_IIC = CacheMethod(env, java_lang_StringFactory, true, "newStringFromChars", "(II[C)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromString = CacheMethod(env, java_lang_StringFactory, true, "newStringFromString", "(Ljava/lang/String;)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromStringBuffer = CacheMethod(env, java_lang_StringFactory, true, "newStringFromStringBuffer", "(Ljava/lang/StringBuffer;)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromCodePoints = CacheMethod(env, java_lang_StringFactory, true, "newStringFromCodePoints", "([III)Ljava/lang/String;");
+  java_lang_StringFactory_newStringFromStringBuilder = CacheMethod(env, java_lang_StringFactory, true, "newStringFromStringBuilder", "(Ljava/lang/StringBuilder;)Ljava/lang/String;");
+
   dalvik_system_DexFile_cookie = CacheField(env, dalvik_system_DexFile, false, "mCookie", "Ljava/lang/Object;");
   dalvik_system_PathClassLoader_pathList = CacheField(env, dalvik_system_PathClassLoader, false, "pathList", "Ldalvik/system/DexPathList;");
   dalvik_system_DexPathList_dexElements = CacheField(env, dalvik_system_DexPathList, false, "dexElements", "[Ldalvik/system/DexPathList$Element;");
   dalvik_system_DexPathList__Element_dexFile = CacheField(env, dalvik_system_DexPathList__Element, false, "dexFile", "Ldalvik/system/DexFile;");
+
   java_lang_Thread_daemon = CacheField(env, java_lang_Thread, false, "daemon", "Z");
   java_lang_Thread_group = CacheField(env, java_lang_Thread, false, "group", "Ljava/lang/ThreadGroup;");
   java_lang_Thread_lock = CacheField(env, java_lang_Thread, false, "lock", "Ljava/lang/Object;");
@@ -263,6 +332,8 @@ void WellKnownClasses::Init(JNIEnv* env) {
   java_lang_Integer_valueOf = CachePrimitiveBoxingMethod(env, 'I', "java/lang/Integer");
   java_lang_Long_valueOf = CachePrimitiveBoxingMethod(env, 'J', "java/lang/Long");
   java_lang_Short_valueOf = CachePrimitiveBoxingMethod(env, 'S', "java/lang/Short");
+
+  Thread::Current()->InitStringEntryPoints();
 }
 
 void WellKnownClasses::LateInit(JNIEnv* env) {
@@ -272,6 +343,85 @@ void WellKnownClasses::LateInit(JNIEnv* env) {
 
 mirror::Class* WellKnownClasses::ToClass(jclass global_jclass) {
   return reinterpret_cast<mirror::Class*>(Thread::Current()->DecodeJObject(global_jclass));
+}
+
+jmethodID WellKnownClasses::StringInitToStringFactoryMethodID(jmethodID string_init) {
+  // TODO: Prioritize ordering.
+  if (string_init == java_lang_String_init) {
+    return java_lang_StringFactory_newEmptyString;
+  } else if (string_init == java_lang_String_init_B) {
+    return java_lang_StringFactory_newStringFromBytes_B;
+  } else if (string_init == java_lang_String_init_BI) {
+    return java_lang_StringFactory_newStringFromBytes_BI;
+  } else if (string_init == java_lang_String_init_BII) {
+    return java_lang_StringFactory_newStringFromBytes_BII;
+  } else if (string_init == java_lang_String_init_BIII) {
+    return java_lang_StringFactory_newStringFromBytes_BIII;
+  } else if (string_init == java_lang_String_init_BIIString) {
+    return java_lang_StringFactory_newStringFromBytes_BIIString;
+  } else if (string_init == java_lang_String_init_BString) {
+    return java_lang_StringFactory_newStringFromBytes_BString;
+  } else if (string_init == java_lang_String_init_BIICharset) {
+    return java_lang_StringFactory_newStringFromBytes_BIICharset;
+  } else if (string_init == java_lang_String_init_BCharset) {
+    return java_lang_StringFactory_newStringFromBytes_BCharset;
+  } else if (string_init == java_lang_String_init_C) {
+    return java_lang_StringFactory_newStringFromChars_C;
+  } else if (string_init == java_lang_String_init_CII) {
+    return java_lang_StringFactory_newStringFromChars_CII;
+  } else if (string_init == java_lang_String_init_IIC) {
+    return java_lang_StringFactory_newStringFromChars_IIC;
+  } else if (string_init == java_lang_String_init_String) {
+    return java_lang_StringFactory_newStringFromString;
+  } else if (string_init == java_lang_String_init_StringBuffer) {
+    return java_lang_StringFactory_newStringFromStringBuffer;
+  } else if (string_init == java_lang_String_init_III) {
+    return java_lang_StringFactory_newStringFromCodePoints;
+  } else if (string_init == java_lang_String_init_StringBuilder) {
+    return java_lang_StringFactory_newStringFromStringBuilder;
+  }
+  LOG(FATAL) << "Could not find StringFactory method for String.<init>";
+  return nullptr;
+}
+
+template<size_t pointer_size>
+int32_t WellKnownClasses::EntryPointOffsetForStringInit(jmethodID string_init) {
+  // TODO: Prioritize ordering.
+  if (string_init == java_lang_String_init) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewEmptyString)).Int32Value();
+  } else if (string_init == java_lang_String_init_B) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromBytes_B)).Int32Value();
+  } else if (string_init == java_lang_String_init_BI) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromBytes_BI)).Int32Value();
+  } else if (string_init == java_lang_String_init_BII) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromBytes_BII)).Int32Value();
+  } else if (string_init == java_lang_String_init_BIII) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromBytes_BIII)).Int32Value();
+  } else if (string_init == java_lang_String_init_BIIString) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromBytes_BIIString)).Int32Value();
+  } else if (string_init == java_lang_String_init_BString) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromBytes_BString)).Int32Value();
+  } else if (string_init == java_lang_String_init_BIICharset) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromBytes_BIICharset)).Int32Value();
+  } else if (string_init == java_lang_String_init_BCharset) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromBytes_BCharset)).Int32Value();
+  } else if (string_init == java_lang_String_init_C) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromChars_C)).Int32Value();
+  } else if (string_init == java_lang_String_init_CII) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromChars_CII)).Int32Value();
+  } else if (string_init == java_lang_String_init_IIC) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromChars_IIC)).Int32Value();
+  } else if (string_init == java_lang_String_init_String) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromString)).Int32Value();
+  } else if (string_init == java_lang_String_init_StringBuffer) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromStringBuffer)).Int32Value();
+  } else if (string_init == java_lang_String_init_III) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromCodePoints)).Int32Value();
+  } else if (string_init == java_lang_String_init_StringBuilder) {
+    return Thread::QuickEntryPointOffset<pointer_size>(OFFSETOF_MEMBER(QuickEntryPoints, pNewStringFromStringBuilder)).Int32Value();
+  }
+  LOG(FATAL) << "Could not find thread entrypoint offset for String.<init>";
+  return 0;
 }
 
 }  // namespace art

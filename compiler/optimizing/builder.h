@@ -265,6 +265,8 @@ class HGraphBuilder : public ValueObject {
 
   OptimizingCompilerStats* compilation_stats_;
 
+  uint32_t string_reg_;
+
   DISALLOW_COPY_AND_ASSIGN(HGraphBuilder);
 };
 

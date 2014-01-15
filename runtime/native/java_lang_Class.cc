@@ -191,7 +191,7 @@ ALWAYS_INLINE static inline mirror::ArtField* FindFieldByName(
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   uint32_t low = 0;
   uint32_t high = fields->GetLength();
-  const uint16_t* const data = name->GetCharArray()->GetData() + name->GetOffset();
+  const uint16_t* const data = name->GetValue();
   const size_t length = name->GetLength();
   while (low < high) {
     auto mid = (low + high) / 2;
