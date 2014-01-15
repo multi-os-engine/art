@@ -17,5 +17,20 @@
 public class Main {
   public static void main(String[] args) {
     System.out.println("Hello, world!");
+    String hwuc = "HELLOWORLD";
+    String hwlc = "helloworld";
+
+    if (!hwuc.toLowerCase().equals(hwlc)) {
+      System.out.println(" FAIL 1");
+    }
+    if ("\u03c3" != "\u03a3".toLowerCase()) {
+      System.out.println(" FAIL 2: \u03c3 " + "\u03a3".toLowerCase());
+    }
+    if ("a\u03c2" != "a\u03a3".toLowerCase()) {
+      System.out.println(" FAIL 3: a\u03c2 " + "a\u03a3".toLowerCase());
+    }
+    if ("\uD801\uDC44" != "\uD801\uDC1C".toLowerCase()) {
+      System.out.println(" FAIL 4: \uD801\uDC44 " + "\uD801\uDC1C".toLowerCase());
+    }
   }
 }
