@@ -184,10 +184,10 @@ void ReferenceTable::Dump(std::ostream& os, const Table& entries) {
     } else if (ref->GetClass()->IsStringClass()) {
       mirror::String* s = const_cast<mirror::Object*>(ref)->AsString();
       std::string utf8(s->ToModifiedUtf8());
-      if (s->GetLength() <= 16) {
+      if (s->GetCount() <= 16) {
         StringAppendF(&extras, " \"%s\"", utf8.c_str());
       } else {
-        StringAppendF(&extras, " \"%.16s... (%d chars)", utf8.c_str(), s->GetLength());
+        StringAppendF(&extras, " \"%.16s... (%d chars)", utf8.c_str(), s->GetCount());
       }
     }
     os << StringPrintf("    %5d: ", idx) << ref << " " << className << extras << "\n";
