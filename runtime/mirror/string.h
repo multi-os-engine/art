@@ -115,17 +115,20 @@ class MANAGED String : public Object {
  private:
   void SetHashCode(int32_t new_hash_code) {
     DCHECK_EQ(0u, GetField32(OFFSET_OF_OBJECT_MEMBER(String, hash_code_), false));
+    // TODO default transaction support, use template ?
     SetField32(OFFSET_OF_OBJECT_MEMBER(String, hash_code_), new_hash_code, false);
   }
 
   void SetCount(int32_t new_count) {
     DCHECK_LE(0, new_count);
+    // TODO default transaction support, use template ?
     SetField32(OFFSET_OF_OBJECT_MEMBER(String, count_), new_count, false);
   }
 
   void SetOffset(int32_t new_offset) {
     DCHECK_LE(0, new_offset);
     DCHECK_GE(GetLength(), new_offset);
+    // TODO default transaction support, use template ?
     SetField32(OFFSET_OF_OBJECT_MEMBER(String, offset_), new_offset, false);
   }
 

@@ -46,6 +46,7 @@ namespace gc {
 namespace mirror {
   class ArtMethod;
   class ClassLoader;
+  class Array;
   template<class T> class ObjectArray;
   template<class T> class PrimitiveArray;
   typedef PrimitiveArray<int8_t> ByteArray;
@@ -64,6 +65,7 @@ class MonitorList;
 class SignalCatcher;
 class ThreadList;
 class Trace;
+class Transaction;
 
 class Runtime {
  public:
@@ -467,6 +469,26 @@ class Runtime {
 
   void StartProfiler(const char *appDir, bool startImmediately = false);
 
+  // Transaction support.
+  bool IsActiveTransaction() const;
+  void EnterTransactionMode(Transaction* transaction);
+  void ExitTransactionMode();
+  void RecordWriteField32(mirror::Object* obj, MemberOffset field_offset, uint32_t value,
+                          bool is_volatile) const;
+  void RecordWriteField64(mirror::Object* obj, MemberOffset field_offset, uint64_t value,
+                          bool is_volatile) const;
+  void RecordWriteFieldReference(mirror::Object* obj, MemberOffset field_offset,
+                                 mirror::Object* value, bool is_volatile) const;
+  void RecordWriteArray(mirror::Array* array, size_t index, uint64_t value) const;
+  void RecordStrongStringInsertion(const mirror::String* s, uint32_t hash_code) const
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_);
+  void RecordWeakStringInsertion(const mirror::String* s, uint32_t hash_code) const
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_);
+  void RecordStrongStringRemoval(const mirror::String* s, uint32_t hash_code) const
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_);
+  void RecordWeakStringRemoval(const mirror::String* s, uint32_t hash_code) const
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_);
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -603,6 +625,9 @@ class Runtime {
 
   // If true, then we dump the GC cumulative timings on shutdown.
   bool dump_gc_performance_on_shutdown_;
+
+  // Simulate transaction mode.
+  Transaction* preinitialization_transaction;
 
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };

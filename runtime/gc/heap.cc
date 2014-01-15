@@ -2241,6 +2241,7 @@ void Heap::SetReferenceOffsets(MemberOffset reference_referent_offset,
 void Heap::SetReferenceReferent(mirror::Object* reference, mirror::Object* referent) {
   DCHECK(reference != NULL);
   DCHECK_NE(reference_referent_offset_.Uint32Value(), 0U);
+  // TODO default transaction support, use template ?
   reference->SetFieldObject(reference_referent_offset_, referent, true);
 }
 

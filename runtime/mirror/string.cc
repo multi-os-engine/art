@@ -65,6 +65,7 @@ int32_t String::FastIndexOf(int32_t ch, int32_t start) const {
 
 void String::SetArray(CharArray* new_array) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   DCHECK(new_array != NULL);
+  // TODO default transaction support, use template ?
   SetFieldObject(OFFSET_OF_OBJECT_MEMBER(String, array_), new_array, false);
 }
 

@@ -59,6 +59,7 @@
 #include "thread.h"
 #include "thread_list.h"
 #include "trace.h"
+#include "transaction.h"
 #include "profiler.h"
 #include "UniquePtr.h"
 #include "verifier/method_verifier.h"
@@ -105,7 +106,8 @@ Runtime::Runtime()
       use_compile_time_class_path_(false),
       main_thread_group_(NULL),
       system_thread_group_(NULL),
-      system_class_loader_(NULL) {
+      system_class_loader_(NULL),
+      preinitialization_transaction(nullptr) {
   for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
     callee_save_methods_[i] = NULL;
   }
@@ -798,7 +800,8 @@ jobject CreateSystemClassLoader() {
       thread_class->FindDeclaredInstanceField("contextClassLoader", "Ljava/lang/ClassLoader;");
   CHECK(contextClassLoader != NULL);
 
-  contextClassLoader->SetObject(soa.Self()->GetPeer(), class_loader.get());
+  // We can't run in a transaction yet.
+  contextClassLoader->SetObjectNonTransactional(soa.Self()->GetPeer(), class_loader.get());
 
   return env->NewGlobalRef(system_class_loader.get());
 }
@@ -1273,6 +1276,10 @@ void Runtime::VisitConcurrentRoots(RootVisitor* visitor, void* arg, bool only_di
                                    bool clean_dirty) {
   intern_table_->VisitRoots(visitor, arg, only_dirty, clean_dirty);
   class_linker_->VisitRoots(visitor, arg, only_dirty, clean_dirty);
+  // TODO: is it the right place ?
+  if (preinitialization_transaction != nullptr) {
+    preinitialization_transaction->VisitRoots(visitor, arg);
+  }
 }
 
 void Runtime::VisitNonThreadRoots(RootVisitor* visitor, void* arg) {
@@ -1482,5 +1489,75 @@ void Runtime::RemoveMethodVerifier(verifier::MethodVerifier* verifier) {
 void Runtime::StartProfiler(const char *appDir, bool startImmediately) {
   BackgroundMethodSamplingProfiler::Start(profile_period_s_, profile_duration_s_, appDir, profile_interval_us_,
       profile_backoff_coefficient_, startImmediately);
+}
+
+// Transaction support.
+// TODO move them to header file for inlining.
+bool Runtime::IsActiveTransaction() const {
+  return preinitialization_transaction != nullptr;
+}
+
+void Runtime::EnterTransactionMode(Transaction* transaction) {
+  DCHECK(IsCompiler());
+  DCHECK(transaction != nullptr);
+  DCHECK(!IsActiveTransaction());
+  preinitialization_transaction = transaction;
+}
+
+void Runtime::ExitTransactionMode() {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction = nullptr;
+}
+
+void Runtime::RecordWriteField32(mirror::Object* obj, MemberOffset field_offset,
+                                 uint32_t value, bool is_volatile) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction->RecordWriteField32(obj, field_offset, value, is_volatile);
+}
+
+void Runtime::RecordWriteField64(mirror::Object* obj, MemberOffset field_offset,
+                                 uint64_t value, bool is_volatile) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction->RecordWriteField64(obj, field_offset, value, is_volatile);
+}
+
+void Runtime::RecordWriteFieldReference(mirror::Object* obj, MemberOffset field_offset,
+                                        mirror::Object* value, bool is_volatile) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction->RecordWriteFieldReference(obj, field_offset, value, is_volatile);
+}
+
+void Runtime::RecordWriteArray(mirror::Array* array, size_t index, uint64_t value) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction->RecordWriteArray(array, index, value);
+}
+
+void Runtime::RecordStrongStringInsertion(const mirror::String* s, uint32_t hash_code) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction->RecordStrongStringInsertion(s, hash_code);
+}
+
+void Runtime::RecordWeakStringInsertion(const mirror::String* s, uint32_t hash_code) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction->RecordWeakStringInsertion(s, hash_code);
+}
+
+void Runtime::RecordStrongStringRemoval(const mirror::String* s, uint32_t hash_code) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction->RecordStrongStringRemoval(s, hash_code);
+}
+
+void Runtime::RecordWeakStringRemoval(const mirror::String* s, uint32_t hash_code) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction->RecordWeakStringRemoval(s, hash_code);
 }
 }  // namespace art
