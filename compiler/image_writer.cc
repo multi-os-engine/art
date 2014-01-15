@@ -670,7 +670,7 @@ void ImageWriter::FixupMethod(const ArtMethod* orig, ArtMethod* copy) {
 void ImageWriter::FixupObjectArray(const ObjectArray<Object>* orig, ObjectArray<Object>* copy) {
   for (int32_t i = 0; i < orig->GetLength(); ++i) {
     const Object* element = orig->Get(i);
-    copy->SetPtrWithoutChecks(i, GetImageAddress(element));
+    copy->SetPtrWithoutChecksNonTransactional(i, GetImageAddress(element));
   }
 }
 
@@ -699,7 +699,7 @@ void ImageWriter::FixupFields(const Object* orig,
       MemberOffset byte_offset = CLASS_OFFSET_FROM_CLZ(right_shift);
       const Object* ref = orig->GetFieldObject<const Object*>(byte_offset, false);
       // Use SetFieldPtr to avoid card marking since we are writing to the image.
-      copy->SetFieldPtr(byte_offset, GetImageAddress(ref), false);
+      copy->SetFieldPtrNonTransactional(byte_offset, GetImageAddress(ref), false);
       ref_offsets &= ~(CLASS_HIGH_BIT >> right_shift);
     }
   } else {
@@ -720,7 +720,7 @@ void ImageWriter::FixupFields(const Object* orig,
         MemberOffset field_offset = field->GetOffset();
         const Object* ref = orig->GetFieldObject<const Object*>(field_offset, false);
         // Use SetFieldPtr to avoid card marking since we are writing to the image.
-        copy->SetFieldPtr(field_offset, GetImageAddress(ref), false);
+        copy->SetFieldPtrNonTransactional(field_offset, GetImageAddress(ref), false);
       }
     }
   }
@@ -730,7 +730,7 @@ void ImageWriter::FixupFields(const Object* orig,
     MemberOffset field_offset = field->GetOffset();
     const Object* ref = orig->GetFieldObject<const Object*>(field_offset, false);
     // Use SetFieldPtr to avoid card marking since we are writing to the image.
-    copy->SetFieldPtr(field_offset, GetImageAddress(ref), false);
+    copy->SetFieldPtrNonTransactional(field_offset, GetImageAddress(ref), false);
   }
 }
 

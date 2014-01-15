@@ -44,6 +44,8 @@ enum LockLevel {
   kDexFileMethodInlinerLock,
   kDexFileToMethodInlinerMapLock,
   kMarkSweepMarkStackLock,
+  kTransactionLogLock,
+  kInternTableLock,
   kDefaultMutexLevel,
   kMarkSweepLargeObjectLock,
   kPinTableLock,

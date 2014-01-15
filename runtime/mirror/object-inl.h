@@ -41,6 +41,8 @@ inline void Object::SetClass(Class* new_klass) {
   // We don't mark the card since the class is guaranteed to be referenced from another location.
   // Proxy classes are held live by the class loader, and other classes are roots of the class
   // linker.
+  // TODO we could use non transactional version since we can't undo this write without checking
+  // we're actually in a transaction.
   SetFieldPtr(OFFSET_OF_OBJECT_MEMBER(Object, klass_), new_klass, false, false);
 }
 
@@ -49,6 +51,7 @@ inline LockWord Object::GetLockWord() const {
 }
 
 inline void Object::SetLockWord(LockWord new_val) {
+  // TODO default transaction support, use template ?
   SetField32(OFFSET_OF_OBJECT_MEMBER(Object, monitor_), new_val.GetValue(), true);
 }
 
@@ -266,8 +269,21 @@ inline uint32_t Object::GetField32(MemberOffset field_offset, bool is_volatile) 
   }
 }
 
-inline void Object::SetField32(MemberOffset field_offset, uint32_t new_value, bool is_volatile,
-                               bool this_is_valid) {
+inline void Object::SetField32Transactional(MemberOffset field_offset, uint32_t new_value,
+                                            bool is_volatile, bool this_is_valid) {
+  Runtime::Current()->RecordWriteField32(this, field_offset, GetField32(field_offset, is_volatile),
+                                       is_volatile);
+  SetField32Impl(field_offset, new_value, is_volatile, this_is_valid);
+}
+
+inline void Object::SetField32NonTransactional(MemberOffset field_offset, uint32_t new_value,
+                                               bool is_volatile, bool this_is_valid) {
+  DCHECK(!Runtime::Current()->IsActiveTransaction()) << "Attempt to write to a field without log in a transaction";
+  SetField32Impl(field_offset, new_value, is_volatile, this_is_valid);
+}
+
+inline void Object::SetField32Impl(MemberOffset field_offset, uint32_t new_value, bool is_volatile,
+                                   bool this_is_valid) {
   if (this_is_valid) {
     VerifyObject(this);
   }
@@ -282,7 +298,19 @@ inline void Object::SetField32(MemberOffset field_offset, uint32_t new_value, bo
   }
 }
 
-inline bool Object::CasField32(MemberOffset field_offset, uint32_t old_value, uint32_t new_value) {
+inline bool Object::CasField32Transactional(MemberOffset field_offset, uint32_t old_value,
+                                            uint32_t new_value) {
+  Runtime::Current()->RecordWriteField32(this, field_offset, old_value, true);
+  return CasField32Impl(field_offset, old_value, new_value);
+}
+
+inline bool Object::CasField32NonTransactional(MemberOffset field_offset, uint32_t old_value,
+                                               uint32_t new_value) {
+  DCHECK(!Runtime::Current()->IsActiveTransaction()) << "Attempt to write to a field without log in a transaction";
+  return CasField32Impl(field_offset, old_value, new_value);
+}
+
+inline bool Object::CasField32Impl(MemberOffset field_offset, uint32_t old_value, uint32_t new_value) {
   VerifyObject(this);
   byte* raw_addr = reinterpret_cast<byte*>(this) + field_offset.Int32Value();
   volatile uint32_t* addr = reinterpret_cast<volatile uint32_t*>(raw_addr);
@@ -302,7 +330,18 @@ inline uint64_t Object::GetField64(MemberOffset field_offset, bool is_volatile) 
   }
 }
 
-inline void Object::SetField64(MemberOffset field_offset, uint64_t new_value, bool is_volatile) {
+inline void Object::SetField64Transactional(MemberOffset field_offset, uint64_t new_value, bool is_volatile) {
+  Runtime::Current()->RecordWriteField64(this, field_offset, GetField64(field_offset, is_volatile),
+                                       is_volatile);
+  SetField64Impl(field_offset, new_value, is_volatile);
+}
+
+inline void Object::SetField64NonTransactional(MemberOffset field_offset, uint64_t new_value, bool is_volatile) {
+  DCHECK(!Runtime::Current()->IsActiveTransaction()) << "Attempt to write to a field without log in a transaction";
+  SetField64Impl(field_offset, new_value, is_volatile);
+}
+
+inline void Object::SetField64Impl(MemberOffset field_offset, uint64_t new_value, bool is_volatile) {
   VerifyObject(this);
   byte* raw_addr = reinterpret_cast<byte*>(this) + field_offset.Int32Value();
   int64_t* addr = reinterpret_cast<int64_t*>(raw_addr);
@@ -316,6 +355,31 @@ inline void Object::SetField64(MemberOffset field_offset, uint64_t new_value, bo
     }
   } else {
     *addr = new_value;
+  }
+}
+
+inline void Object::SetFieldObjectTransactional(MemberOffset field_offset, const Object* new_value,
+                                                bool is_volatile, bool this_is_valid) {
+  VerifyObject(new_value);
+  Runtime::Current()->RecordWriteFieldReference(this, field_offset,
+                                        GetFieldObject<mirror::Object*>(field_offset, is_volatile),
+                                        is_volatile);
+  SetFieldObjectImpl(field_offset, new_value, is_volatile, this_is_valid);
+}
+
+inline void Object::SetFieldObjectNonTransactional(MemberOffset field_offset, const Object* new_value,
+                                                   bool is_volatile, bool this_is_valid) {
+  DCHECK(!Runtime::Current()->IsActiveTransaction()) << "Attempt to write to a field without log in a transaction";
+  SetFieldObjectImpl(field_offset, new_value, is_volatile, this_is_valid);
+}
+
+inline void Object::SetFieldObjectImpl(MemberOffset field_offset, const Object* new_value,
+                                       bool is_volatile, bool this_is_valid) {
+  VerifyObject(new_value);
+  SetField32Impl(field_offset, reinterpret_cast<uint32_t>(new_value), is_volatile, this_is_valid);
+  if (new_value != NULL) {
+    CheckFieldAssignment(field_offset, new_value);
+    WriteBarrierField(this, field_offset, new_value);
   }
 }
 

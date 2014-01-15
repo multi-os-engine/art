@@ -398,6 +398,7 @@ void Thread::CreatePeer(const char* name, bool as_daemon, jobject thread_group) 
     // non-null value. However, because we can run without code
     // available (in the compiler, in tests), we manually assign the
     // fields the constructor should have set.
+    // TODO default transaction support testing if transaction is enabled or not.
     soa.DecodeField(WellKnownClasses::java_lang_Thread_daemon)->
         SetBoolean(opeer_, thread_is_daemon);
     soa.DecodeField(WellKnownClasses::java_lang_Thread_group)->

@@ -40,14 +40,18 @@ class MANAGED ObjectArray : public Array {
   bool CheckAssignable(T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void Set(int32_t i, T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetNonTransactional(int32_t i, T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Set element without bound and element type checks, to be used in limited
   // circumstances, such as during boot image writing
   void SetWithoutChecks(int32_t i, T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetWithoutChecksTransactional(int32_t i, T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetWithoutChecksNonTransactional(int32_t i, T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Set element without bound and element type checks, to be used in limited circumstances, such
   // as during boot image writing. Does not do write barrier.
-  void SetPtrWithoutChecks(int32_t i, T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetPtrWithoutChecksNonTransactional(int32_t i, T* object)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   T* GetWithoutChecks(int32_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

@@ -44,12 +44,12 @@ void DexCache::Init(const DexFile* dex_file,
   CHECK(resolved_methods != nullptr);
   CHECK(resolved_fields != nullptr);
 
-  SetFieldPtr(OFFSET_OF_OBJECT_MEMBER(DexCache, dex_file_), dex_file, false);
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(DexCache, location_), location, false);
-  SetFieldObject(StringsOffset(), strings, false);
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(DexCache, resolved_types_), resolved_types, false);
-  SetFieldObject(ResolvedMethodsOffset(), resolved_methods, false);
-  SetFieldObject(ResolvedFieldsOffset(), resolved_fields, false);
+  SetFieldPtrNonTransactional(OFFSET_OF_OBJECT_MEMBER(DexCache, dex_file_), dex_file, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(DexCache, location_), location, false);
+  SetFieldObjectNonTransactional(StringsOffset(), strings, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(DexCache, resolved_types_), resolved_types, false);
+  SetFieldObjectNonTransactional(ResolvedMethodsOffset(), resolved_methods, false);
+  SetFieldObjectNonTransactional(ResolvedFieldsOffset(), resolved_fields, false);
 
   Runtime* runtime = Runtime::Current();
   if (runtime->HasResolutionMethod()) {
@@ -57,7 +57,7 @@ void DexCache::Init(const DexFile* dex_file,
     ArtMethod* trampoline = runtime->GetResolutionMethod();
     size_t length = resolved_methods->GetLength();
     for (size_t i = 0; i < length; i++) {
-      resolved_methods->SetWithoutChecks(i, trampoline);
+      resolved_methods->SetWithoutChecksNonTransactional(i, trampoline);
     }
   }
 }

@@ -65,8 +65,8 @@ inline void Class::SetDirectMethods(ObjectArray<ArtMethod>* new_direct_methods)
   DCHECK(NULL == GetFieldObject<ObjectArray<ArtMethod>*>(
       OFFSET_OF_OBJECT_MEMBER(Class, direct_methods_), false));
   DCHECK_NE(0, new_direct_methods->GetLength());
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, direct_methods_),
-                 new_direct_methods, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(Class, direct_methods_),
+                                 new_direct_methods, false);
 }
 
 inline ArtMethod* Class::GetDirectMethod(int32_t i) const
@@ -97,8 +97,8 @@ inline void Class::SetVirtualMethods(ObjectArray<ArtMethod>* new_virtual_methods
   // TODO: we reassign virtual methods to grow the table for miranda
   // methods.. they should really just be assigned once
   DCHECK_NE(0, new_virtual_methods->GetLength());
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, virtual_methods_),
-                 new_virtual_methods, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(Class, virtual_methods_),
+                                 new_virtual_methods, false);
 }
 
 inline size_t Class::NumVirtualMethods() const {
@@ -137,7 +137,7 @@ inline ObjectArray<ArtMethod>* Class::GetVTableDuringLinking() const {
 
 inline void Class::SetVTable(ObjectArray<ArtMethod>* new_vtable)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, vtable_), new_vtable, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(Class, vtable_), new_vtable, false);
 }
 
 inline ObjectArray<ArtMethod>* Class::GetImTable() const {
@@ -145,7 +145,7 @@ inline ObjectArray<ArtMethod>* Class::GetImTable() const {
 }
 
 inline void Class::SetImTable(ObjectArray<ArtMethod>* new_imtable) {
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, imtable_), new_imtable, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(Class, imtable_), new_imtable, false);
 }
 
 inline bool Class::Implements(const Class* klass) const {
@@ -330,7 +330,7 @@ inline int32_t Class::GetIfTableCount() const {
 }
 
 inline void Class::SetIfTable(IfTable* new_iftable) {
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, iftable_), new_iftable, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(Class, iftable_), new_iftable, false);
 }
 
 inline ObjectArray<ArtField>* Class::GetIFields() const {
@@ -342,7 +342,7 @@ inline void Class::SetIFields(ObjectArray<ArtField>* new_ifields)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   DCHECK(NULL == GetFieldObject<ObjectArray<ArtField>*>(
       OFFSET_OF_OBJECT_MEMBER(Class, ifields_), false));
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, ifields_), new_ifields, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(Class, ifields_), new_ifields, false);
 }
 
 inline ObjectArray<ArtField>* Class::GetSFields() const {
@@ -354,7 +354,7 @@ inline void Class::SetSFields(ObjectArray<ArtField>* new_sfields)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   DCHECK(NULL == GetFieldObject<ObjectArray<ArtField>*>(
       OFFSET_OF_OBJECT_MEMBER(Class, sfields_), false));
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, sfields_), new_sfields, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(Class, sfields_), new_sfields, false);
 }
 
 inline size_t Class::NumStaticFields() const {
@@ -392,6 +392,7 @@ inline void Class::SetInstanceField(uint32_t i, ArtField* f)  // TODO: uint16_t
 
 inline void Class::SetVerifyErrorClass(Class* klass) {
   CHECK(klass != NULL) << PrettyClass(this);
+  // TODO default transaction support, use template ?
   SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, verify_error_class_), klass, false);
 }
 
@@ -409,6 +410,7 @@ inline String* Class::GetName() const {
   return GetFieldObject<String*>(OFFSET_OF_OBJECT_MEMBER(Class, name_), false);
 }
 inline void Class::SetName(String* name) {
+  // TODO default transaction support, use template ?
   SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, name_), name, false);
 }
 

@@ -49,7 +49,9 @@ void ArtField::SetOffset(MemberOffset num_bytes) {
     DCHECK_ALIGNED(num_bytes.Uint32Value(), 8);
   }
 #endif
-  SetField32(OFFSET_OF_OBJECT_MEMBER(ArtField, offset_), num_bytes.Uint32Value(), false);
+  // Not called within a transaction.
+  SetField32NonTransactional(OFFSET_OF_OBJECT_MEMBER(ArtField, offset_), num_bytes.Uint32Value(),
+                             false);
 }
 
 void ArtField::VisitRoots(RootVisitor* visitor, void* arg) {

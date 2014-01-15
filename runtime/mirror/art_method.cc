@@ -72,18 +72,18 @@ void ArtMethod::ResetClass() {
 }
 
 void ArtMethod::SetDexCacheStrings(ObjectArray<String>* new_dex_cache_strings) {
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_strings_),
-                 new_dex_cache_strings, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_strings_),
+                                 new_dex_cache_strings, false);
 }
 
 void ArtMethod::SetDexCacheResolvedMethods(ObjectArray<ArtMethod>* new_dex_cache_methods) {
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_resolved_methods_),
-                 new_dex_cache_methods, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_resolved_methods_),
+                                 new_dex_cache_methods, false);
 }
 
 void ArtMethod::SetDexCacheResolvedTypes(ObjectArray<Class>* new_dex_cache_classes) {
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_resolved_types_),
-                 new_dex_cache_classes, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_resolved_types_),
+                                 new_dex_cache_classes, false);
 }
 
 size_t ArtMethod::NumArgRegisters(const StringPiece& shorty) {
@@ -328,7 +328,7 @@ void ArtMethod::RegisterNative(Thread* self, const void* native_method, bool is_
 #else
     SetNativeMethod(reinterpret_cast<void*>(art_work_around_app_jni_bugs));
 #endif
-    SetFieldPtr<const uint8_t*>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, gc_map_),
+    SetFieldPtrNonTransactional<const uint8_t*>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, gc_map_),
         reinterpret_cast<const uint8_t*>(native_method), false);
   }
 }
@@ -340,7 +340,7 @@ void ArtMethod::UnregisterNative(Thread* self) {
 }
 
 void ArtMethod::SetNativeMethod(const void* native_method) {
-  SetFieldPtr<const void*>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, native_method_),
+  SetFieldPtrNonTransactional<const void*>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, native_method_),
       native_method, false);
 }
 
