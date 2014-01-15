@@ -515,6 +515,7 @@ struct CallInfo {
   bool is_range;
   DexOffset offset;       // Offset in code units.
   MIR* mir;
+  int32_t string_init_offset;
 };
 
 
@@ -706,6 +707,8 @@ class MIRGraph {
   void BasicBlockOptimizationStart();
   void BasicBlockOptimization();
   void BasicBlockOptimizationEnd();
+
+  void StringChange();
 
   const ArenaVector<BasicBlockId>& GetTopologicalSortOrder() {
     DCHECK(!topological_order_.empty());

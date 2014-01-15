@@ -669,6 +669,18 @@ ENTRY art_quick_aput_obj
 END art_quick_aput_obj
 
 // Macro to facilitate adding new allocation entrypoints.
+.macro ONE_ARG_DOWNCALL name, entrypoint, return
+    .extern \entrypoint
+ENTRY \name
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r1, r2  @ save callee saves in case of GC
+    mov    r1, r9                     @ pass Thread::Current
+    bl     \entrypoint     @ (uint32_t type_idx, Method* method, Thread*)
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
+    \return
+END \name
+.endm
+
+// Macro to facilitate adding new allocation entrypoints.
 .macro TWO_ARG_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
@@ -688,6 +700,22 @@ ENTRY \name
     mov    r3, r9                     @ pass Thread::Current
     @ (uint32_t type_idx, Method* method, int32_t component_count, Thread*)
     bl     \entrypoint
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
+    \return
+END \name
+.endm
+
+// Macro to facilitate adding new allocation entrypoints.
+.macro FOUR_ARG_DOWNCALL name, entrypoint, return
+    .extern \entrypoint
+ENTRY \name
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r3, r12  @ save callee saves in case of GC
+    str    r9, [sp, #-16]!            @ expand the frame and pass Thread::Current
+    .pad #16
+    .cfi_adjust_cfa_offset 16
+    bl     \entrypoint
+    add    sp, #16                    @ strip the extra frame
+    .cfi_adjust_cfa_offset -16
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
@@ -1178,8 +1206,7 @@ ENTRY art_quick_indexof
     .cfi_rel_offset r11, 8
     .cfi_rel_offset lr, 12
     ldr   r3, [r0, #MIRROR_STRING_COUNT_OFFSET]
-    ldr   r12, [r0, #MIRROR_STRING_OFFSET_OFFSET]
-    ldr   r0, [r0, #MIRROR_STRING_VALUE_OFFSET]
+    add   r0, #MIRROR_STRING_VALUE_OFFSET
 
     /* Clamp start to [0..count] */
     cmp   r2, #0
@@ -1188,10 +1215,6 @@ ENTRY art_quick_indexof
     cmp   r2, r3
     it    gt
     movgt r2, r3
-
-    /* Build a pointer to the start of string data */
-    add   r0, #MIRROR_CHAR_ARRAY_DATA_OFFSET
-    add   r0, r0, r12, lsl #1
 
     /* Save a copy in r12 to later compute result */
     mov   r12, r0
@@ -1298,12 +1321,10 @@ ENTRY art_quick_string_compareto
     .cfi_rel_offset r12, 24
     .cfi_rel_offset lr, 28
 
-    ldr    r4, [r2, #MIRROR_STRING_OFFSET_OFFSET]
-    ldr    r9, [r1, #MIRROR_STRING_OFFSET_OFFSET]
     ldr    r7, [r2, #MIRROR_STRING_COUNT_OFFSET]
     ldr    r10, [r1, #MIRROR_STRING_COUNT_OFFSET]
-    ldr    r2, [r2, #MIRROR_STRING_VALUE_OFFSET]
-    ldr    r1, [r1, #MIRROR_STRING_VALUE_OFFSET]
+    add    r2, #MIRROR_STRING_VALUE_OFFSET
+    add    r1, #MIRROR_STRING_VALUE_OFFSET
 
     /*
      * At this point, we have:
@@ -1318,15 +1339,12 @@ ENTRY art_quick_string_compareto
      it    ls
      movls r10, r7
 
-     /* Now, build pointers to the string data */
-     add   r2, r2, r4, lsl #1
-     add   r1, r1, r9, lsl #1
      /*
       * Note: data pointers point to previous element so we can use pre-index
       * mode with base writeback.
       */
-     add   r2, #MIRROR_CHAR_ARRAY_DATA_OFFSET-2   @ offset to contents[-1]
-     add   r1, #MIRROR_CHAR_ARRAY_DATA_OFFSET-2   @ offset to contents[-1]
+     subs  r2, #2   @ offset to contents[-1]
+     subs  r1, #2   @ offset to contents[-1]
 
      /*
       * At this point we have:
