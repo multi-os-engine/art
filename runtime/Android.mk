@@ -122,6 +122,7 @@ LIBART_COMMON_SRC_FILES := \
   native/java_lang_Object.cc \
   native/java_lang_Runtime.cc \
   native/java_lang_String.cc \
+  native/java_lang_StringFactory.cc \
   native/java_lang_System.cc \
   native/java_lang_Thread.cc \
   native/java_lang_Throwable.cc \
@@ -133,6 +134,7 @@ LIBART_COMMON_SRC_FILES := \
   native/java_lang_reflect_Field.cc \
   native/java_lang_reflect_Method.cc \
   native/java_lang_reflect_Proxy.cc \
+  native/java_nio_charset_Charsets.cc \
   native/java_util_concurrent_atomic_AtomicLong.cc \
   native/org_apache_harmony_dalvik_ddmc_DdmServer.cc \
   native/org_apache_harmony_dalvik_ddmc_DdmVmInternal.cc \
