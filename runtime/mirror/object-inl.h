@@ -27,8 +27,9 @@
 #include "lock_word-inl.h"
 #include "monitor.h"
 #include "read_barrier-inl.h"
-#include "runtime.h"
 #include "reference.h"
+#include "runtime.h"
+#include "string-inl.h"
 #include "throwable.h"
 
 namespace art {
@@ -331,7 +332,12 @@ inline DoubleArray* Object::AsDoubleArray() {
   return down_cast<DoubleArray*>(this);
 }
 
-template<VerifyObjectFlags kVerifyFlags>
+template<VerifyObjectFlags kVerifyFlags, bool kDoReadBarrier>
+inline bool Object::IsString() {
+  return GetClass<kVerifyFlags>() == String::GetJavaLangString();
+}
+
+template<VerifyObjectFlags kVerifyFlags, bool kDoReadBarrier>
 inline String* Object::AsString() {
   DCHECK(GetClass<kVerifyFlags>()->IsStringClass());
   return down_cast<String*>(this);
@@ -377,6 +383,8 @@ inline size_t Object::SizeOf() {
     result = AsArray<kNewFlags, kDoReadBarrier>()->template SizeOf<kNewFlags, kDoReadBarrier>();
   } else if (IsClass<kNewFlags, kDoReadBarrier>()) {
     result = AsClass<kNewFlags, kDoReadBarrier>()->template SizeOf<kNewFlags, kDoReadBarrier>();
+  } else if (IsString<kNewFlags, kDoReadBarrier>()) {
+    result = AsString<kNewFlags, kDoReadBarrier>()->template SizeOf<kNewFlags, kDoReadBarrier>();
   } else {
     result = GetClass<kNewFlags, kDoReadBarrier>()->GetObjectSize();
   }
