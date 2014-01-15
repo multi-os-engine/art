@@ -187,6 +187,7 @@ ART_HOST_SHLIB_EXTENSION ?= .so
 
 ART_C_INCLUDES := \
 	external/gtest/include \
+	external/icu4c/common/ \
 	external/valgrind/main/include \
 	external/valgrind/main \
 	external/vixl/src \

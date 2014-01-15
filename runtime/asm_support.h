@@ -37,10 +37,8 @@
 #define OBJECT_ARRAY_DATA_OFFSET 12
 
 // Offsets within java.lang.String.
-#define STRING_VALUE_OFFSET 8
-#define STRING_COUNT_OFFSET 12
-#define STRING_OFFSET_OFFSET 20
-#define STRING_DATA_OFFSET 12
+#define STRING_COUNT_OFFSET 8
+#define STRING_VALUE_OFFSET 16
 
 // Offsets within java.lang.Method.
 #define METHOD_DEX_CACHE_METHODS_OFFSET 12
@@ -57,10 +55,8 @@
 #define OBJECT_ARRAY_DATA_OFFSET 20
 
 // Offsets within java.lang.String.
-#define STRING_VALUE_OFFSET 16
-#define STRING_COUNT_OFFSET 20
-#define STRING_OFFSET_OFFSET 28
-#define STRING_DATA_OFFSET 20
+#define STRING_COUNT_OFFSET 16
+#define STRING_VALUE_OFFSET 24
 
 // Offsets within java.lang.Method.
 #define METHOD_DEX_CACHE_METHODS_OFFSET 20

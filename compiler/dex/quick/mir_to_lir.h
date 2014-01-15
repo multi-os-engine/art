@@ -914,6 +914,10 @@ class Mir2Lir : public Backend {
                                                             RegLocation arg0, RegLocation arg1,
                                                             RegLocation arg2,
                                                             bool safepoint_pc);
+    template <size_t pointer_size>
+    void CallRuntimeHelperRegLocationRegLocationRegLocationRegLocation(
+        ThreadOffset<pointer_size> helper_offset, RegLocation arg0, RegLocation arg1,
+        RegLocation arg2, RegLocation arg3, bool safepoint_pc);
     void GenInvoke(CallInfo* info);
     void GenInvokeNoInline(CallInfo* info);
     virtual void FlushIns(RegLocation* ArgLocs, RegLocation rl_method);
@@ -949,7 +953,11 @@ class Mir2Lir : public Backend {
     RegLocation InlineTargetWide(CallInfo* info);
 
     bool GenInlinedCharAt(CallInfo* info);
+    bool GenInlinedStringGetCharsNoCheck(CallInfo* info);
     bool GenInlinedStringIsEmptyOrLength(CallInfo* info, bool is_empty);
+    bool GenInlinedStringFactoryNewStringFromBytes(CallInfo* info);
+    bool GenInlinedStringFactoryNewStringFromChars(CallInfo* info);
+    bool GenInlinedStringFactoryNewStringFromString(CallInfo* info);
     bool GenInlinedReverseBytes(CallInfo* info, OpSize size);
     bool GenInlinedAbsInt(CallInfo* info);
     virtual bool GenInlinedAbsLong(CallInfo* info);

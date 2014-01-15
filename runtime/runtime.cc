@@ -768,6 +768,7 @@ void Runtime::RegisterRuntimeNativeMethods(JNIEnv* env) {
   REGISTER(register_java_lang_Object);
   REGISTER(register_java_lang_Runtime);
   REGISTER(register_java_lang_String);
+  REGISTER(register_java_lang_StringFactory);
   REGISTER(register_java_lang_System);
   REGISTER(register_java_lang_Thread);
   REGISTER(register_java_lang_VMClassLoader);
@@ -777,6 +778,7 @@ void Runtime::RegisterRuntimeNativeMethods(JNIEnv* env) {
   REGISTER(register_java_lang_reflect_Field);
   REGISTER(register_java_lang_reflect_Method);
   REGISTER(register_java_lang_reflect_Proxy);
+  REGISTER(register_java_nio_charset_Charsets);
   REGISTER(register_java_util_concurrent_atomic_AtomicLong);
   REGISTER(register_org_apache_harmony_dalvik_ddmc_DdmServer);
   REGISTER(register_org_apache_harmony_dalvik_ddmc_DdmVmInternal);

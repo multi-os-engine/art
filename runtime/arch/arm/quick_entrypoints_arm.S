@@ -893,20 +893,34 @@ ENTRY art_quick_resolve_string
 END art_quick_resolve_string
 
 // Macro to facilitate adding new allocation entrypoints.
-.macro TWO_ARG_DOWNCALL name, entrypoint, return
+.macro ONE_ARG_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  @ save callee saves in case of GC
-    mov    r2, r9                     @ pass Thread::Current
-    mov    r3, sp                     @ pass SP
-    bl     \entrypoint     @ (uint32_t type_idx, Method* method, Thread*, SP)
+    mov    r1, r9                     @ pass Thread::Current
+    mov    r2, sp                     @ pass SP
+    bl     \entrypoint                @ (arg1, Thread*, SP)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     \return
     DELIVER_PENDING_EXCEPTION
 END \name
 .endm
 
-// Macro to facilitate adding new array allocation entrypoints.
+// Macro to facilitate adding new allocation entrypoints.
+.macro TWO_ARG_DOWNCALL name, entrypoint, return
+    .extern \entrypoint
+ENTRY \name
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  @ save callee saves in case of GC
+    mov    r2, r9                     @ pass Thread::Current
+    mov    r3, sp                     @ pass SP
+    bl     \entrypoint                @ (arg1, arg2, Thread*, SP)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    \return
+    DELIVER_PENDING_EXCEPTION
+END \name
+.endm
+
+// Macro to facilitate adding new allocation entrypoints.
 .macro THREE_ARG_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
@@ -916,8 +930,26 @@ ENTRY \name
     str    r12, [sp, #-16]!           @ expand the frame and pass SP
     .pad #16
     .cfi_adjust_cfa_offset 16
-    @ (uint32_t type_idx, Method* method, int32_t component_count, Thread*, SP)
-    bl     \entrypoint
+    bl     \entrypoint                @ (arg1, arg2, arg3, Thread*, SP)
+    add    sp, #16                    @ strip the extra frame
+    .cfi_adjust_cfa_offset -16
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    \return
+    DELIVER_PENDING_EXCEPTION
+END \name
+.endm
+
+// Macro to facilitate adding new allocation entrypoints.
+.macro FOUR_ARG_DOWNCALL name, entrypoint, return
+    .extern \entrypoint
+ENTRY \name
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  @ save callee saves in case of GC
+    mov    r12, sp
+    str    r9, [sp, #-16]!            @ expand the frame and pass Thread::Current
+    str    r12, [sp, #-12]!           @ expand the frame and pass SP
+    .pad #16
+    .cfi_adjust_cfa_offset 16
+    bl     \entrypoint                @ (arg1, arg2, arg3, arg4, Thread*, SP)
     add    sp, #16                    @ strip the extra frame
     .cfi_adjust_cfa_offset -16
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
@@ -1216,8 +1248,7 @@ ENTRY art_quick_indexof
     .cfi_rel_offset r11, 8
     .cfi_rel_offset lr, 12
     ldr   r3, [r0, #STRING_COUNT_OFFSET]
-    ldr   r12, [r0, #STRING_OFFSET_OFFSET]
-    ldr   r0, [r0, #STRING_VALUE_OFFSET]
+    add   r0, #STRING_VALUE_OFFSET
 
     /* Clamp start to [0..count] */
     cmp   r2, #0
@@ -1226,10 +1257,6 @@ ENTRY art_quick_indexof
     cmp   r2, r3
     it    gt
     movgt r2, r3
-
-    /* Build a pointer to the start of string data */
-    add   r0, #STRING_DATA_OFFSET
-    add   r0, r0, r12, lsl #1
 
     /* Save a copy in r12 to later compute result */
     mov   r12, r0
@@ -1337,12 +1364,10 @@ ENTRY art_quick_string_compareto
     .cfi_rel_offset r12, 24
     .cfi_rel_offset lr, 28
 
-    ldr    r4, [r2, #STRING_OFFSET_OFFSET]
-    ldr    r9, [r1, #STRING_OFFSET_OFFSET]
     ldr    r7, [r2, #STRING_COUNT_OFFSET]
     ldr    r10, [r1, #STRING_COUNT_OFFSET]
-    ldr    r2, [r2, #STRING_VALUE_OFFSET]
-    ldr    r1, [r1, #STRING_VALUE_OFFSET]
+    add    r2, #STRING_VALUE_OFFSET
+    add    r1, #STRING_VALUE_OFFSET
 
     /*
      * At this point, we have:
@@ -1357,15 +1382,12 @@ ENTRY art_quick_string_compareto
      it    ls
      movls r10, r7
 
-     /* Now, build pointers to the string data */
-     add   r2, r2, r4, lsl #1
-     add   r1, r1, r9, lsl #1
      /*
       * Note: data pointers point to previous element so we can use pre-index
       * mode with base writeback.
       */
-     add   r2, #STRING_DATA_OFFSET-2   @ offset to contents[-1]
-     add   r1, #STRING_DATA_OFFSET-2   @ offset to contents[-1]
+     subs  r2, #2   @ offset to contents[-1]
+     subs  r1, #2   @ offset to contents[-1]
 
      /*
       * At this point we have:
