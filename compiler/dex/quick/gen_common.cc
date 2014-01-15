@@ -19,6 +19,7 @@
 #include "dex/quick/mir_to_lir-inl.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "mirror/array.h"
+#include "mirror/object-inl.h"
 #include "verifier/method_verifier.h"
 
 namespace art {
@@ -883,13 +884,76 @@ void Mir2Lir::GenNewInstance(uint32_t type_idx, RegLocation rl_dest) {
   // alloc will always check for resolution, do we also need to verify
   // access because the verifier was unable to?
   ThreadOffset func_offset(-1);
-  if (cu_->compiler_driver->CanAccessInstantiableTypeWithoutChecks(
-      cu_->method_idx, *cu_->dex_file, type_idx)) {
-    func_offset = QUICK_ENTRYPOINT_OFFSET(pAllocObject);
+  const DexFile* dex_file = cu_->dex_file;
+  CompilerDriver* driver = cu_->compiler_driver;
+  if (driver->CanAccessInstantiableTypeWithoutChecks(
+      cu_->method_idx, *dex_file, type_idx)) {
+    bool slow_path = false;
+    if (kEmbedClassInCode) {
+      mirror::Class* resolved_class = driver->GetResolvedClass(*dex_file, type_idx);
+      if (resolved_class != nullptr) {
+        const bool compiling_boot = Runtime::Current()->GetHeap()->IsCompilingBoot();
+        if (compiling_boot) {
+          // boot -> boot klass pointers.
+          // True if the klass is in the image at boot compiling time.
+          const bool is_image_klass = driver->IsImage() && driver->IsImageClass(
+              dex_file->StringDataByIdx(dex_file->GetTypeId(type_idx).descriptor_idx_));
+          // True if pc relative load works.
+          const bool support_boot_image_fixup = driver->GetSupportBootImageFixup();
+          if (is_image_klass && support_boot_image_fixup) {
+            LIR* data_target = ScanLiteralPool(klass_literal_list_, type_idx, 0);
+            if (data_target == nullptr) {
+              data_target = AddWordData(&klass_literal_list_, type_idx);
+            }
+            LIR* load_pc_rel = OpPcRelLoad(TargetReg(kArg0), data_target);
+            AppendLIR(load_pc_rel);
+            DCHECK_EQ(cu_->instruction_set, kThumb2) << reinterpret_cast<void*>(data_target);
+            if (!resolved_class->IsInitialized()) {
+              func_offset = QUICK_ENTRYPOINT_OFFSET(pAllocObjectResolved);
+              CallRuntimeHelperRegMethod(func_offset, TargetReg(kArg0), true);
+            } else {
+              func_offset = QUICK_ENTRYPOINT_OFFSET(pAllocObjectInitialized);
+              CallRuntimeHelperRegMethod(func_offset, TargetReg(kArg0), true);
+            }
+          } else {
+            slow_path = true;
+          }
+        } else {
+          // True if the klass is in the image at app compiling time.
+          const bool klass_in_image =
+              Runtime::Current()->GetHeap()->FindSpaceFromObject(resolved_class, false)->IsImageSpace();
+          if (klass_in_image) {
+            // boot -> app klass pointers.
+            intptr_t resolved_class_imm = reinterpret_cast<intptr_t>(resolved_class);
+            if (!resolved_class->IsInitialized()) {
+              func_offset = QUICK_ENTRYPOINT_OFFSET(pAllocObjectResolved);
+              CallRuntimeHelperImmMethod(func_offset, resolved_class_imm, true);
+            } else {
+              func_offset = QUICK_ENTRYPOINT_OFFSET(pAllocObjectInitialized);
+              CallRuntimeHelperImmMethod(func_offset, resolved_class_imm, true);
+            }
+          } else {
+            // app -> app klass pointers.
+            // Give up because app does not have an image and klass
+            // isn't created at compile time.  TODO: implement this
+            // if/when each app gets an image.
+            slow_path = true;
+          }
+        }
+      }
+    } else {
+      slow_path = true;
+    }
+    if (slow_path) {
+      DCHECK_EQ(func_offset.Int32Value(), -1);
+      func_offset = QUICK_ENTRYPOINT_OFFSET(pAllocObject);
+      CallRuntimeHelperImmMethod(func_offset, type_idx, true);
+    }
+    DCHECK_NE(func_offset.Int32Value(), -1);
   } else {
     func_offset = QUICK_ENTRYPOINT_OFFSET(pAllocObjectWithAccessCheck);
+    CallRuntimeHelperImmMethod(func_offset, type_idx, true);
   }
-  CallRuntimeHelperImmMethod(func_offset, type_idx, true);
   RegLocation rl_result = GetReturn(false);
   StoreValue(rl_dest, rl_result);
 }

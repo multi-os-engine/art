@@ -439,6 +439,10 @@ CompilerDriver::~CompilerDriver() {
     MutexLock mu(self, compiled_methods_lock_);
     STLDeleteElements(&methods_to_patch_);
   }
+  {
+    MutexLock mu(self, compiled_methods_lock_);
+    STLDeleteElements(&klasses_to_patch_);
+  }
   CHECK_PTHREAD_CALL(pthread_key_delete, (tls_key_), "delete tls key");
   typedef void (*UninitCompilerContextFn)(CompilerDriver&);
   UninitCompilerContextFn uninit_compiler_context;
@@ -906,6 +910,13 @@ bool CompilerDriver::CanAccessInstantiableTypeWithoutChecks(uint32_t referrer_id
   return result;
 }
 
+mirror::Class* CompilerDriver::GetResolvedClass(const DexFile& dex_file, uint32_t type_idx) {
+  ScopedObjectAccess soa(Thread::Current());
+  mirror::DexCache* dex_cache = Runtime::Current()->GetClassLinker()->FindDexCache(dex_file);
+  mirror::Class* resolved_class = dex_cache->GetResolvedType(type_idx);
+  return resolved_class;
+}
+
 static mirror::Class* ComputeCompilingMethodsClass(ScopedObjectAccess& soa,
                                                    SirtRef<mirror::DexCache>& dex_cache,
                                                    const DexCompilationUnit* mUnit)
@@ -1331,13 +1342,13 @@ void CompilerDriver::AddCodePatch(const DexFile* dex_file,
                                   InvokeType target_invoke_type,
                                   size_t literal_offset) {
   MutexLock mu(Thread::Current(), compiled_methods_lock_);
-  code_to_patch_.push_back(new PatchInformation(dex_file,
-                                                referrer_class_def_idx,
-                                                referrer_method_idx,
-                                                referrer_invoke_type,
-                                                target_method_idx,
-                                                target_invoke_type,
-                                                literal_offset));
+  code_to_patch_.push_back(new CallPatchInformation(dex_file,
+                                                    referrer_class_def_idx,
+                                                    referrer_method_idx,
+                                                    referrer_invoke_type,
+                                                    target_method_idx,
+                                                    target_invoke_type,
+                                                    literal_offset));
 }
 void CompilerDriver::AddMethodPatch(const DexFile* dex_file,
                                     uint16_t referrer_class_def_idx,
@@ -1347,13 +1358,25 @@ void CompilerDriver::AddMethodPatch(const DexFile* dex_file,
                                     InvokeType target_invoke_type,
                                     size_t literal_offset) {
   MutexLock mu(Thread::Current(), compiled_methods_lock_);
-  methods_to_patch_.push_back(new PatchInformation(dex_file,
-                                                   referrer_class_def_idx,
-                                                   referrer_method_idx,
-                                                   referrer_invoke_type,
-                                                   target_method_idx,
-                                                   target_invoke_type,
-                                                   literal_offset));
+  methods_to_patch_.push_back(new CallPatchInformation(dex_file,
+                                                       referrer_class_def_idx,
+                                                       referrer_method_idx,
+                                                       referrer_invoke_type,
+                                                       target_method_idx,
+                                                       target_invoke_type,
+                                                       literal_offset));
+}
+void CompilerDriver::AddKlassPatch(const DexFile* dex_file,
+                                    uint16_t referrer_class_def_idx,
+                                    uint32_t referrer_method_idx,
+                                    uint32_t target_type_idx,
+                                    size_t literal_offset) {
+  MutexLock mu(Thread::Current(), compiled_methods_lock_);
+  klasses_to_patch_.push_back(new TypePatchInformation(dex_file,
+                                                       referrer_class_def_idx,
+                                                       referrer_method_idx,
+                                                       target_type_idx,
+                                                       literal_offset));
 }
 
 class ParallelCompilationManager {
