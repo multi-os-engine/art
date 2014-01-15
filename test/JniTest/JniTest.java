@@ -28,6 +28,7 @@ class JniTest {
         testShortMethod();
         testBooleanMethod();
         testCharMethod();
+        testNewStringObject();
     }
 
     private static native void testFindClassOnAttachedNativeThread();
@@ -146,4 +147,6 @@ class JniTest {
         }
       }
     }
+
+    private static native void testNewStringObject();
 }

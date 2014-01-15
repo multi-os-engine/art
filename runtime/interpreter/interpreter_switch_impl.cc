@@ -440,10 +440,18 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
       }
       case Instruction::NEW_INSTANCE: {
         PREAMBLE();
-        Runtime* runtime = Runtime::Current();
-        Object* obj = AllocObjectFromCode<do_access_check, true>(
-            inst->VRegB_21c(), shadow_frame.GetMethod(), self,
-            runtime->GetHeap()->GetCurrentAllocator());
+        Object* obj = NULL;
+        Class* c = Runtime::Current()->GetClassLinker()->ResolveType(inst->VRegB_21c(), shadow_frame.GetMethod());
+        if (LIKELY(c != NULL)) {
+          if (UNLIKELY(c->IsStringClass())) {
+            gc::AllocatorType allocator_type = Runtime::Current()->GetHeap()->GetCurrentAllocator();
+            obj = String::Alloc<true>(self, 0, allocator_type);
+          } else {
+            obj = AllocObjectFromCode<do_access_check, true>(
+              inst->VRegB_21c(), shadow_frame.GetMethod(), self,
+              Runtime::Current()->GetHeap()->GetCurrentAllocator());
+          }
+        }
         if (UNLIKELY(obj == NULL)) {
           HANDLE_PENDING_EXCEPTION();
         } else {

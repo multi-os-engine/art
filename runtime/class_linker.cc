@@ -250,7 +250,6 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   Handle<mirror::Class> java_lang_String(hs.NewHandle(AllocClass(self, java_lang_Class.Get(),
                                                                  sizeof(mirror::StringClass))));
   mirror::String::SetClass(java_lang_String.Get());
-  java_lang_String->SetObjectSize(sizeof(mirror::String));
   java_lang_String->SetStatus(mirror::Class::kStatusResolved, self);
 
   // Create storage for root classes, save away our work so far (requires descriptors).
@@ -309,7 +308,6 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   java_lang_reflect_ArtMethod->SetObjectSize(sizeof(mirror::ArtMethod));
   SetClassRoot(kJavaLangReflectArtMethod, java_lang_reflect_ArtMethod.Get());
   java_lang_reflect_ArtMethod->SetStatus(mirror::Class::kStatusResolved, self);
-
   mirror::ArtMethod::SetClass(java_lang_reflect_ArtMethod.Get());
 
   // Set up array classes for string, field, method
@@ -362,7 +360,6 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   java_lang_String->SetStatus(mirror::Class::kStatusNotReady, self);
   mirror::Class* String_class = FindSystemClass(self, "Ljava/lang/String;");
   CHECK_EQ(java_lang_String.Get(), String_class);
-  CHECK_EQ(java_lang_String->GetObjectSize(), sizeof(mirror::String));
   java_lang_DexCache->SetStatus(mirror::Class::kStatusNotReady, self);
   mirror::Class* DexCache_class = FindSystemClass(self, "Ljava/lang/DexCache;");
   CHECK_EQ(java_lang_String.Get(), String_class);
@@ -1053,10 +1050,6 @@ void ClassLinker::InitFromImage() {
           AsObjectArray<mirror::Class>()));
   class_roots_ = class_roots.Get();
 
-  // Special case of setting up the String class early so that we can test arbitrary objects
-  // as being Strings or not
-  mirror::String::SetClass(GetClassRoot(kJavaLangString));
-
   CHECK_EQ(oat_file.GetOatHeader().GetDexFileCount(),
            static_cast<uint32_t>(dex_caches->GetLength()));
   for (int32_t i = 0; i < dex_caches->GetLength(); i++) {
@@ -1082,6 +1075,7 @@ void ClassLinker::InitFromImage() {
   // Set classes on AbstractMethod early so that IsMethod tests can be performed during the live
   // bitmap walk.
   mirror::ArtMethod::SetClass(GetClassRoot(kJavaLangReflectArtMethod));
+  mirror::String::SetClass(GetClassRoot(kJavaLangString));
 
   // Set entry point to interpreter if in InterpretOnly mode.
   if (Runtime::Current()->GetInstrumentation()->InterpretOnly()) {

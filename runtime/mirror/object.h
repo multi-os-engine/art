@@ -165,7 +165,10 @@ class MANAGED LOCKABLE Object {
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   DoubleArray* AsDoubleArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kDoReadBarrier = true>
+  bool IsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kDoReadBarrier = true>
   String* AsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>

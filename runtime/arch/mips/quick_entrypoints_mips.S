@@ -926,6 +926,18 @@ END art_quick_resolve_string
 
 
 // Macro to facilitate adding new allocation entrypoints.
+.macro ONE_ARG_DOWNCALL name, entrypoint, return
+    .extern \entrypoint
+ENTRY \name
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case of GC
+    move    $a1, rSELF                # pass Thread::Current
+    jal     \entrypoint
+    move    $a2, $sp                  # pass $sp
+    \return
+END \name
+.endm
+
 .macro TWO_ARG_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
@@ -946,6 +958,18 @@ ENTRY \name
     move    $a3, rSELF                # pass Thread::Current
     jal     \entrypoint
     sw      $sp, 16($sp)              # pass $sp
+    \return
+END \name
+.endm
+
+.macro FOUR_ARG_DOWNCALL name, entrypoint, return
+    .extern \entrypoint
+ENTRY \name
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case of GC
+    sw      rSELF, 16($sp)            # pass Thread::Current
+    jal     \entrypoint
+    sw      $sp, 20($sp)              # pass $sp
     \return
 END \name
 .endm

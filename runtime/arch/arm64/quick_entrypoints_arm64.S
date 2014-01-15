@@ -1205,27 +1205,55 @@ ENTRY art_quick_aput_obj
 END art_quick_aput_obj
 
 // Macro to facilitate adding new allocation entrypoints.
-.macro TWO_ARG_DOWNCALL name, entrypoint, return
+.macro ONE_ARG_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
-    mov    x2, xSELF                  // pass Thread::Current
-    mov    x3, sp                     // pass SP
-    bl     \entrypoint                // (uint32_t type_idx, Method* method, Thread*, SP)
+    mov    x1, xSELF                  // pass Thread::Current
+    mov    x2, sp                     // pass SP
+    bl     \entrypoint                // (arg1, Thread*, SP)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     \return
     DELIVER_PENDING_EXCEPTION
 END \name
 .endm
 
-// Macro to facilitate adding new array allocation entrypoints.
+// Macro to facilitate adding new allocation entrypoints.
+.macro TWO_ARG_DOWNCALL name, entrypoint, return
+    .extern \entrypoint
+ENTRY \name
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
+    mov    x2, xSELF                  // pass Thread::Current
+    mov    x3, sp                     // pass SP
+    bl     \entrypoint                // (arg1, arg2, Thread*, SP)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    \return
+    DELIVER_PENDING_EXCEPTION
+END \name
+.endm
+
+// Macro to facilitate adding new allocation entrypoints.
 .macro THREE_ARG_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
     mov    x3, xSELF                  // pass Thread::Current
     mov    x4, sp                     // pass SP
-    bl     \entrypoint
+    bl     \entrypoint                // (arg1, arg2, arg3, Thread*, SP)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    \return
+    DELIVER_PENDING_EXCEPTION
+END \name
+.endm
+
+// Macro to facilitate adding new allocation entrypoints.
+.macro FOUR_ARG_DOWNCALL name, entrypoint, return
+    .extern \entrypoint
+ENTRY \name
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
+    mov    x4, xSELF                  // pass Thread::Current
+    mov    x5, sp                     // pass SP
+    bl     \entrypoint                // (arg1, arg2, arg3, arg4, Thread*, SP)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     \return
     DELIVER_PENDING_EXCEPTION
