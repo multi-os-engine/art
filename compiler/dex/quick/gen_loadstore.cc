@@ -145,7 +145,7 @@ void Mir2Lir::LoadValueDirectWideFixed(RegLocation rl_src, RegStorage r_dest) {
 }
 
 RegLocation Mir2Lir::LoadValue(RegLocation rl_src, RegisterClass op_kind) {
-  DCHECK(!rl_src.ref || op_kind == kRefReg);
+  DCHECK(!rl_src.ref || op_kind == kRefReg) << rl_src.ref << " " << op_kind;
   rl_src = UpdateLoc(rl_src);
   if (rl_src.location == kLocPhysReg) {
     if (!RegClassMatches(op_kind, rl_src.reg)) {

@@ -63,6 +63,11 @@ static jobject Constructor_newInstance(JNIEnv* env, jobject javaMethod, jobjectA
   } else if (!kMovingClasses && c->IsClassClass()) {
     movable = false;
   }
+
+  if (c->IsStringClass()) {
+    return InvokeMethod(soa, javaMethod, nullptr, javaArgs, (accessible == JNI_TRUE));
+  }
+
   mirror::Object* receiver =
       movable ? c->AllocObject(soa.Self()) : c->AllocNonMovableObject(soa.Self());
   if (receiver == nullptr) {

@@ -950,10 +950,6 @@ void IntrinsicCodeGeneratorARM64::VisitStringCharAt(HInvoke* invoke) {
   const MemberOffset value_offset = mirror::String::ValueOffset();
   // Location of count
   const MemberOffset count_offset = mirror::String::CountOffset();
-  // Starting offset within data array
-  const MemberOffset offset_offset = mirror::String::OffsetOffset();
-  // Start of char data with array_
-  const MemberOffset data_offset = mirror::Array::DataOffset(sizeof(uint16_t));
 
   Register obj = WRegisterFrom(locations->InAt(0));  // String object pointer.
   Register idx = WRegisterFrom(locations->InAt(1));  // Index of character.
@@ -976,15 +972,10 @@ void IntrinsicCodeGeneratorARM64::VisitStringCharAt(HInvoke* invoke) {
   __ Cmp(idx, temp);
   __ B(hs, slow_path->GetEntryLabel());
 
-  // Index computation.
-  __ Ldr(temp, HeapOperand(obj, offset_offset));         // temp := str.offset.
   __ Ldr(array_temp, HeapOperand(obj, value_offset));    // array_temp := str.offset.
-  __ Add(temp, temp, idx);
-  DCHECK_EQ(data_offset.Int32Value() % 2, 0);            // We'll compensate by shifting.
-  __ Add(temp, temp, Operand(data_offset.Int32Value() / 2));
 
   // Load the value.
-  __ Ldrh(out, MemOperand(array_temp.X(), temp, UXTW, 1));  // out := array_temp[temp].
+  __ Ldrh(out, MemOperand(array_temp.X(), idx, UXTW, 1));  // out := array_temp[idx].
 
   __ Bind(slow_path->GetExitLabel());
 }
@@ -1004,6 +995,10 @@ UNIMPLEMENTED_INTRINSIC(StringLength)   // be good enough here.
 UNIMPLEMENTED_INTRINSIC(StringIndexOf)
 UNIMPLEMENTED_INTRINSIC(StringIndexOfAfter)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
+UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
+UNIMPLEMENTED_INTRINSIC(StringNewStringFromBytes)
+UNIMPLEMENTED_INTRINSIC(StringNewStringFromChars)
+UNIMPLEMENTED_INTRINSIC(StringNewStringFromString)
 
 }  // namespace arm64
 }  // namespace art

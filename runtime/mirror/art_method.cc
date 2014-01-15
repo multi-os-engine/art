@@ -395,6 +395,7 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
     CHECK_EQ(kRunnable, self->GetState());
     CHECK_STREQ(GetShorty(), shorty);
   }
+  // LOG(INFO) << "  ARTMETHOD INVOKE ON " << PrettyMethod(this);
 
   // Push a transition back into managed code onto the linked list in thread.
   ManagedStack fragment;

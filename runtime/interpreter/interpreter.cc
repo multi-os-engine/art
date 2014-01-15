@@ -63,6 +63,8 @@ static void UnstartedRuntimeJni(Thread* self, ArtMethod* method,
     result->SetL(receiver->Clone(self));
   } else if (name == "void java.lang.Object.notifyAll()") {
     receiver->NotifyAll(self);
+  } else if (name == "char java.lang.String.charAt(int)") {
+    result->SetI(receiver->AsString()->CharAt(args[0]));
   } else if (name == "int java.lang.String.compareTo(java.lang.String)") {
     String* rhs = reinterpret_cast<Object*>(args[0])->AsString();
     CHECK(rhs != NULL);
@@ -71,6 +73,26 @@ static void UnstartedRuntimeJni(Thread* self, ArtMethod* method,
     result->SetL(receiver->AsString()->Intern());
   } else if (name == "int java.lang.String.fastIndexOf(int, int)") {
     result->SetI(receiver->AsString()->FastIndexOf(args[0], args[1]));
+  } else if (name == "java.lang.String java.lang.String.fastSubstring(int, int)") {
+    StackHandleScope<1> hs(self);
+    auto string(hs.NewHandle(receiver->AsString()));
+    gc::AllocatorType allocator_type = Runtime::Current()->GetHeap()->GetCurrentAllocator();
+    result->SetL(mirror::String::AllocFromString<true>(self, args[1], string, args[0],
+                                                       allocator_type));
+  } else if (name == "char[] java.lang.String.toCharArray()") {
+    result->SetL(receiver->AsString()->ToCharArray(self));
+  } else if (name == "java.lang.String java.lang.StringFactory.newStringFromChars(int, int, char[])") {
+    StackHandleScope<1> hs(self);
+    auto char_array(hs.NewHandle(reinterpret_cast<mirror::CharArray*>(args[2])->AsCharArray()));
+    gc::AllocatorType allocator_type = Runtime::Current()->GetHeap()->GetCurrentAllocator();
+    result->SetL(mirror::String::AllocFromCharArray<true>(self, args[1], char_array, args[0],
+                                                          allocator_type));
+  } else if (name == "java.lang.String java.lang.StringFactory.newStringFromString(java.lang.String)") {
+    StackHandleScope<1> hs(self);
+    auto string(hs.NewHandle(reinterpret_cast<mirror::String*>(args[0])->AsString()));
+    gc::AllocatorType allocator_type = Runtime::Current()->GetHeap()->GetCurrentAllocator();
+    result->SetL(mirror::String::AllocFromString<true>(self, string->GetLength(), string, 0,
+                                                       allocator_type));
   } else if (name == "java.lang.Object java.lang.reflect.Array.createMultiArray(java.lang.Class, int[])") {
     StackHandleScope<2> hs(self);
     auto h_class(hs.NewHandle(reinterpret_cast<mirror::Class*>(args[0])->AsClass()));

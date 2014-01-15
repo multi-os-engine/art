@@ -65,6 +65,7 @@
 #include "utils/swap_space.h"
 #include "verifier/method_verifier.h"
 #include "verifier/method_verifier-inl.h"
+#include "well_known_classes.h"
 
 namespace art {
 
@@ -1287,6 +1288,9 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
   // an address for the Method* being invoked and an address of the code for that Method*.
   // For interface calls compute a value for direct_method that is the interface method being
   // invoked, so this can be passed to the out-of-line runtime support code.
+  // LOG(INFO) << "method:" << PrettyMethod(method) << " " << method->GetDexFile()->GetLocation();
+  // LOG(INFO) << "target:" << PrettyMethod(target_method->dex_method_index, *target_method->dex_file) << " "
+  //           << target_method->dex_file->GetLocation();
   *direct_code = 0;
   *direct_method = 0;
   Runtime* const runtime = Runtime::Current();
@@ -1366,6 +1370,8 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
       }
     }
   }
+  // LOG(INFO) << " UseDexCache=" << use_dex_cache << " MustUseDirectPointers=" << must_use_direct_pointers
+  //           << " ForceRelocations=" << force_relocations << " NoGuaranteeOfDexCacheEntry=" << no_guarantee_of_dex_cache_entry;
   if (use_dex_cache) {
     if (must_use_direct_pointers) {
       // Fail. Test above showed the only safe dispatch was via the dex cache, however, the direct
@@ -1379,6 +1385,8 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
     if (method_in_image || compiling_boot) {
       // We know we must be able to get to the method in the image, so use that pointer.
       CHECK(!method->IsAbstract());
+      target_method->dex_method_index = method->GetDexMethodIndex();
+      target_method->dex_file = method->GetDeclaringClass()->GetDexCache()->GetDexFile();
       *type = sharp_type;
       *direct_method = force_relocations ? -1 : reinterpret_cast<uintptr_t>(method);
       *direct_code = force_relocations ? -1 : compiler_->GetEntryPointOf(method);

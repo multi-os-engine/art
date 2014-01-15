@@ -1741,8 +1741,13 @@ CallInfo* MIRGraph::NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bo
     const auto& method_info = GetMethodLoweringInfo(mir);
     info->method_ref = method_info.GetTargetMethod();
   } else {
-    info->method_ref = MethodReference(GetCurrentDexCompilationUnit()->GetDexFile(),
-                                       mir->dalvikInsn.vB);
+    if (PrettyMethod(mir->dalvikInsn.vB, *GetCurrentDexCompilationUnit()->GetDexFile()).find("java.lang.String.<init>") != std::string::npos) {
+      const auto& method_info = GetMethodLoweringInfo(mir);
+      info->method_ref = method_info.GetTargetMethod();
+    } else {
+      info->method_ref = MethodReference(GetCurrentDexCompilationUnit()->GetDexFile(),
+                                         mir->dalvikInsn.vB);
+    }
   }
   info->index = mir->dalvikInsn.vB;
   info->offset = mir->offset;

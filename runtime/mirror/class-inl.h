@@ -282,6 +282,7 @@ inline bool Class::ResolvedMethodAccessTest(Class* access_to, ArtMethod* method,
   static_assert(throw_on_failure || throw_invoke_type == kStatic, "Non-default throw invoke type");
   DCHECK_EQ(use_referrers_cache, dex_cache == nullptr);
   if (UNLIKELY(!this->CanAccess(access_to))) {
+    // LOG(INFO) << "RESOLVEMETHODACCESSTEST " << PrettyClass(this) << " can't access " << PrettyClass(access_to);
     // The referrer class can't access the method's declaring class but may still be able
     // to access the method if the MethodId specifies an accessible subclass of the declaring
     // class rather than the declaring class itself.
@@ -521,8 +522,8 @@ inline uint32_t Class::GetAccessFlags() {
           IsErroneous<static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis)>()
       << " IsString=" << (this == String::GetJavaLangString())
       << " IsArtField=" << (this == ArtField::GetJavaLangReflectArtField())
-      << " IsArtMethod=" << (this == ArtMethod::GetJavaLangReflectArtMethod())
-      << " descriptor=" << PrettyDescriptor(this);
+      << " IsArtMethod=" << (this == ArtMethod::GetJavaLangReflectArtMethod());
+      // << " descriptor=" << PrettyDescriptor(this);
   return GetField32<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_));
 }
 
@@ -563,6 +564,10 @@ inline void Class::CheckObjectAlloc() {
   DCHECK(!IsClassClass())
       << PrettyClass(this)
       << "A class object shouldn't be allocated through this "
+      << "as it requires a pre-fence visitor that sets the class size.";
+  DCHECK(!IsStringClass())
+      << PrettyClass(this)
+      << "A string shouldn't be allocated through this "
       << "as it requires a pre-fence visitor that sets the class size.";
   DCHECK(IsInstantiable()) << PrettyClass(this);
   // TODO: decide whether we want this check. It currently fails during bootstrap.

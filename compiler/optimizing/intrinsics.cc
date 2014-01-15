@@ -190,12 +190,20 @@ static Intrinsics GetIntrinsic(InlineMethod method) {
       return Intrinsics::kStringCharAt;
     case kIntrinsicCompareTo:
       return Intrinsics::kStringCompareTo;
+    case kIntrinsicGetCharsNoCheck:
+      return Intrinsics::kStringGetCharsNoCheck;
     case kIntrinsicIsEmptyOrLength:
       return ((method.d.data & kIntrinsicFlagIsEmpty) == 0) ?
           Intrinsics::kStringLength : Intrinsics::kStringIsEmpty;
     case kIntrinsicIndexOf:
       return ((method.d.data & kIntrinsicFlagBase0) == 0) ?
           Intrinsics::kStringIndexOfAfter : Intrinsics::kStringIndexOf;
+    case kIntrinsicNewStringFromBytes:
+      return Intrinsics::kStringNewStringFromBytes;
+    case kIntrinsicNewStringFromChars:
+      return Intrinsics::kStringNewStringFromChars;
+    case kIntrinsicNewStringFromString:
+      return Intrinsics::kStringNewStringFromString;
 
     case kIntrinsicCas:
       switch (GetType(method.d.data, false)) {
