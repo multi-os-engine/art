@@ -23,32 +23,30 @@
 #include "object-inl.h"
 #include "runtime.h"
 #include "sirt_ref.h"
+#include "string-inl.h"
 #include "thread.h"
 #include "utf-inl.h"
+#include "well_known_classes.h"
 
 namespace art {
 namespace mirror {
 
-CharArray* String::GetCharArray() {
-  return GetFieldObject<CharArray>(ValueOffset(), false);
-}
-
 void String::ComputeHashCode() {
-  SetHashCode(ComputeUtf16Hash(GetCharArray(), GetOffset(), GetLength()));
+  SetHashCode(ComputeUtf16Hash(GetValue(), GetCount()));
 }
 
 int32_t String::GetUtfLength() {
-  return CountUtf8Bytes(GetCharArray()->GetData() + GetOffset(), GetLength());
+  return CountUtf8Bytes(GetValue(), GetCount());
 }
 
 int32_t String::FastIndexOf(int32_t ch, int32_t start) {
-  int32_t count = GetLength();
+  int32_t count = GetCount();
   if (start < 0) {
     start = 0;
   } else if (start > count) {
     start = count;
   }
-  const uint16_t* chars = GetCharArray()->GetData() + GetOffset();
+  const uint16_t* chars = GetValue();
   const uint16_t* p = chars + start;
   const uint16_t* end = chars + count;
   while (p < end) {
@@ -57,12 +55,6 @@ int32_t String::FastIndexOf(int32_t ch, int32_t start) {
     }
   }
   return -1;
-}
-
-template<bool kTransactionActive>
-void String::SetArray(CharArray* new_array) {
-  DCHECK(new_array != NULL);
-  SetFieldObject<kTransactionActive>(OFFSET_OF_OBJECT_MEMBER(String, array_), new_array, false);
 }
 
 // TODO: get global references for these
@@ -89,14 +81,8 @@ int32_t String::GetHashCode() {
     ComputeHashCode();
   }
   result = GetField32(OFFSET_OF_OBJECT_MEMBER(String, hash_code_), false);
-  DCHECK(result != 0 || ComputeUtf16Hash(GetCharArray(), GetOffset(), GetLength()) == 0)
+  DCHECK(result != 0 || ComputeUtf16Hash(GetValue(), GetCount()) == 0)
           << ToModifiedUtf8() << " " << result;
-  return result;
-}
-
-int32_t String::GetLength() {
-  int32_t result = GetField32(OFFSET_OF_OBJECT_MEMBER(String, count_), false);
-  DCHECK(result >= 0 && result <= GetCharArray()->GetLength());
   return result;
 }
 
@@ -111,25 +97,76 @@ uint16_t String::CharAt(int32_t index) {
                              "length=%i; index=%i", count_, index);
     return 0;
   }
-  return GetCharArray()->Get(index + GetOffset());
+  return GetValue()[index];
 }
 
-String* String::AllocFromUtf16(Thread* self,
-                               int32_t utf16_length,
-                               const uint16_t* utf16_data_in,
+String* String::AllocFromString(Thread* self, int32_t string_length, SirtRef<String>& string,
+                                int32_t offset, int32_t hash_code) {
+  String* new_string = Alloc<true>(self, string_length);
+  if (UNLIKELY(new_string == nullptr)) {
+    return nullptr;
+  }
+  uint16_t* data = const_cast<uint16_t*>(string->GetValue()) + offset;
+  uint16_t* new_value = const_cast<uint16_t*>(new_string->GetValue());
+  memcpy(new_value, data, string_length * sizeof(uint16_t));
+  if (hash_code != 0) {
+    DCHECK_EQ(hash_code, ComputeUtf16Hash(data, string_length));
+    new_string->SetHashCode(hash_code);
+  } else {
+    new_string->ComputeHashCode();
+  }
+  return new_string;
+}
+
+String* String::AllocFromCharArray(Thread* self, int32_t array_length, SirtRef<CharArray>& array,
+                                   int32_t offset, int32_t hash_code) {
+  String* new_string = Alloc<true>(self, array_length);
+  if (UNLIKELY(new_string == nullptr)) {
+    return nullptr;
+  }
+  uint16_t* data = array->GetData() + offset;
+  uint16_t* new_value = const_cast<uint16_t*>(new_string->GetValue());
+  memcpy(new_value, data, array_length * sizeof(uint16_t));
+  if (hash_code != 0) {
+    DCHECK_EQ(hash_code, ComputeUtf16Hash(data, array_length));
+    new_string->SetHashCode(hash_code);
+  } else {
+    new_string->ComputeHashCode();
+  }
+  return new_string;
+}
+
+String* String::AllocFromUtf16(Thread* self, int32_t utf16_length, const uint16_t* utf16_data_in,
                                int32_t hash_code) {
   CHECK(utf16_data_in != nullptr || utf16_length == 0);
-  String* string = Alloc(self, utf16_length);
+  String* string = Alloc<true>(self, utf16_length);
   if (UNLIKELY(string == nullptr)) {
     return nullptr;
   }
-  CharArray* array = const_cast<CharArray*>(string->GetCharArray());
-  if (UNLIKELY(array == nullptr)) {
-    return nullptr;
-  }
-  memcpy(array->GetData(), utf16_data_in, utf16_length * sizeof(uint16_t));
+  uint16_t* array = const_cast<uint16_t*>(string->GetValue());
+  memcpy(array, utf16_data_in, utf16_length * sizeof(uint16_t));
   if (hash_code != 0) {
     DCHECK_EQ(hash_code, ComputeUtf16Hash(utf16_data_in, utf16_length));
+    string->SetHashCode(hash_code);
+  } else {
+    string->ComputeHashCode();
+  }
+  return string;
+}
+
+String* String::AllocFromByteArray(Thread* self, int32_t byte_length, SirtRef<ByteArray>& array,
+                                   int32_t offset, int32_t high_byte, int32_t hash_code) {
+  String* string = Alloc<true>(self, byte_length);
+  if (UNLIKELY(string == nullptr)) {
+    return nullptr;
+  }
+  uint8_t* data = reinterpret_cast<uint8_t*>(array->GetData()) + offset;
+  uint16_t* new_value = const_cast<uint16_t*>(string->GetValue());
+  high_byte <<= 8;
+  for (int i = 0; i < byte_length; i++) {
+    new_value[i] = high_byte + (data[i] & 0xFF);
+  }
+  if (hash_code != 0) {
     string->SetHashCode(hash_code);
   } else {
     string->ComputeHashCode();
@@ -147,37 +184,13 @@ String* String::AllocFromModifiedUtf8(Thread* self, const char* utf) {
 
 String* String::AllocFromModifiedUtf8(Thread* self, int32_t utf16_length,
                                       const char* utf8_data_in) {
-  String* string = Alloc(self, utf16_length);
+  String* string = Alloc<true>(self, utf16_length);
   if (UNLIKELY(string == nullptr)) {
     return nullptr;
   }
-  uint16_t* utf16_data_out =
-      const_cast<uint16_t*>(string->GetCharArray()->GetData());
+  uint16_t* utf16_data_out = const_cast<uint16_t*>(string->GetValue());
   ConvertModifiedUtf8ToUtf16(utf16_data_out, utf8_data_in);
   string->ComputeHashCode();
-  return string;
-}
-
-String* String::Alloc(Thread* self, int32_t utf16_length) {
-  SirtRef<CharArray> array(self, CharArray::Alloc(self, utf16_length));
-  if (UNLIKELY(array.get() == nullptr)) {
-    return nullptr;
-  }
-  return Alloc(self, array);
-}
-
-String* String::Alloc(Thread* self, const SirtRef<CharArray>& array) {
-  // Hold reference in case AllocObject causes GC.
-  String* string = down_cast<String*>(GetJavaLangString()->AllocObject(self));
-  if (LIKELY(string != nullptr)) {
-    if (Runtime::Current()->IsActiveTransaction()) {
-      string->SetArray<true>(array.get());
-      string->SetCount<true>(array->GetLength());
-    } else {
-      string->SetArray<false>(array.get());
-      string->SetCount<false>(array->GetLength());
-    }
-  }
   return string;
 }
 
@@ -188,13 +201,13 @@ bool String::Equals(String* that) {
   } else if (that == NULL) {
     // Null isn't an instanceof anything
     return false;
-  } else if (this->GetLength() != that->GetLength()) {
+  } else if (this->GetCount() != that->GetCount()) {
     // Quick length inequality test
     return false;
   } else {
     // Note: don't short circuit on hash code as we're presumably here as the
     // hash code was already equal
-    for (int32_t i = 0; i < that->GetLength(); ++i) {
+    for (int32_t i = 0; i < that->GetCount(); ++i) {
       if (this->CharAt(i) != that->CharAt(i)) {
         return false;
       }
@@ -204,7 +217,7 @@ bool String::Equals(String* that) {
 }
 
 bool String::Equals(const uint16_t* that_chars, int32_t that_offset, int32_t that_length) {
-  if (this->GetLength() != that_length) {
+  if (this->GetCount() != that_length) {
     return false;
   } else {
     for (int32_t i = 0; i < that_length; ++i) {
@@ -217,7 +230,7 @@ bool String::Equals(const uint16_t* that_chars, int32_t that_offset, int32_t tha
 }
 
 bool String::Equals(const char* modified_utf8) {
-  for (int32_t i = 0; i < GetLength(); ++i) {
+  for (int32_t i = 0; i < GetCount(); ++i) {
     uint16_t ch = GetUtf16FromUtf8(&modified_utf8);
     if (ch == '\0' || ch != CharAt(i)) {
       return false;
@@ -228,7 +241,7 @@ bool String::Equals(const char* modified_utf8) {
 
 bool String::Equals(const StringPiece& modified_utf8) {
   const char* p = modified_utf8.data();
-  for (int32_t i = 0; i < GetLength(); ++i) {
+  for (int32_t i = 0; i < GetCount(); ++i) {
     uint16_t ch = GetUtf16FromUtf8(&p);
     if (ch != CharAt(i)) {
       return false;
@@ -239,10 +252,10 @@ bool String::Equals(const StringPiece& modified_utf8) {
 
 // Create a modified UTF-8 encoded std::string from a java/lang/String object.
 std::string String::ToModifiedUtf8() {
-  const uint16_t* chars = GetCharArray()->GetData() + GetOffset();
+  const uint16_t* chars = GetValue();
   size_t byte_count = GetUtfLength();
   std::string result(byte_count, static_cast<char>(0));
-  ConvertUtf16ToModifiedUtf8(&result[0], chars, GetLength());
+  ConvertUtf16ToModifiedUtf8(&result[0], chars, GetCount());
   return result;
 }
 
@@ -273,12 +286,12 @@ int32_t String::CompareTo(String* rhs) {
   // *without* sign extension before it subtracts them (which makes some
   // sense since "char" is unsigned).  So what we get is the result of
   // 0x000000e9 - 0x0000ffff, which is 0xffff00ea.
-  int lhsCount = lhs->GetLength();
-  int rhsCount = rhs->GetLength();
+  int lhsCount = lhs->GetCount();
+  int rhsCount = rhs->GetCount();
   int countDiff = lhsCount - rhsCount;
   int minCount = (countDiff < 0) ? lhsCount : rhsCount;
-  const uint16_t* lhsChars = lhs->GetCharArray()->GetData() + lhs->GetOffset();
-  const uint16_t* rhsChars = rhs->GetCharArray()->GetData() + rhs->GetOffset();
+  const uint16_t* lhsChars = lhs->GetValue();
+  const uint16_t* rhsChars = rhs->GetValue();
   int otherRes = MemCmp16(lhsChars, rhsChars, minCount);
   if (otherRes != 0) {
     return otherRes;
@@ -290,6 +303,13 @@ void String::VisitRoots(RootCallback* callback, void* arg) {
   if (java_lang_String_ != nullptr) {
     callback(reinterpret_cast<mirror::Object**>(&java_lang_String_), arg, 0, kRootStickyClass);
   }
+}
+
+CharArray* String::ToCharArray(Thread* self) {
+  SirtRef<String> sirt_this(self, this);
+  CharArray* result = CharArray::Alloc(self, GetCount());
+  memcpy(result->GetData(), sirt_this->GetValue(), sirt_this->GetCount() * sizeof(uint16_t));
+  return result;
 }
 
 }  // namespace mirror

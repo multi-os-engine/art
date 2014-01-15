@@ -451,6 +451,7 @@ inline void Class::CheckObjectAlloc() {
 
 template <bool kIsInstrumented>
 inline Object* Class::Alloc(Thread* self, gc::AllocatorType allocator_type) {
+  CHECK(!IsStringClass());
   CheckObjectAlloc();
   gc::Heap* heap = Runtime::Current()->GetHeap();
   return heap->AllocObjectWithAllocator<kIsInstrumented, false>(self, this, this->object_size_,

@@ -252,6 +252,14 @@ ImageSpace* ImageSpace::Init(const char* image_file_name, bool validate_oat_file
   runtime->SetCalleeSaveMethod(down_cast<mirror::ArtMethod*>(callee_save_method), Runtime::kRefsAndArgs);
 
   UniquePtr<ImageSpace> space(new ImageSpace(image_file_name, map.release(), bitmap.release()));
+
+  // Special case of setting up the String class early so that we can test arbitrary objects
+  // as being Strings or not.
+  mirror::Object* obj = space->GetImageHeader().GetImageRoot(ImageHeader::kClassRoots);
+  mirror::Class* string = obj->GetClass()->GetClass()->GetName()->GetClass();
+  CHECK(string != NULL);
+  mirror::String::SetClass(string);
+
   if (kIsDebugBuild) {
     space->VerifyImageAllocations();
   }

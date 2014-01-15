@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <string.h>
 #include <vector>
 
 #include "jni.h"
@@ -128,7 +129,7 @@ extern "C" JNIEXPORT jobject JNICALL Java_JniTest_testGetMirandaMethodNative(JNI
 }
 
 // https://code.google.com/p/android/issues/detail?id=63055
-extern "C" void JNICALL Java_JniTest_testZeroLengthByteBuffers(JNIEnv* env, jclass) {
+extern "C" JNIEXPORT void JNICALL Java_JniTest_testZeroLengthByteBuffers(JNIEnv* env, jclass) {
   std::vector<uint8_t> buffer(1);
   jobject byte_buffer = env->NewDirectByteBuffer(&buffer[0], 0);
   assert(byte_buffer != NULL);
@@ -136,4 +137,24 @@ extern "C" void JNICALL Java_JniTest_testZeroLengthByteBuffers(JNIEnv* env, jcla
 
   assert(env->GetDirectBufferAddress(byte_buffer) == &buffer[0]);
   assert(env->GetDirectBufferCapacity(byte_buffer) == 0);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_JniTest_testNewStringObject(JNIEnv* env, jclass) {
+  const char* string = "Jeff";
+  int length = strlen(string);
+  jclass c = env->FindClass("java/lang/String");
+  assert(c != NULL);
+  jmethodID method = env->GetMethodID(c, "<init>", "([B)V");
+  assert(method != NULL);
+  assert(!env->ExceptionCheck());
+  jbyteArray array = env->NewByteArray(length);
+  env->SetByteArrayRegion(array, 0, length, reinterpret_cast<const jbyte*>(string));
+  jobject o = env->NewObject(c, method, array);
+  assert(o != NULL);
+  jstring s = reinterpret_cast<jstring>(o);
+  assert(env->GetStringLength(s) == length);
+  assert(env->GetStringUTFLength(s) == length);
+  const char* chars = env->GetStringUTFChars(s, NULL);
+  assert(strcmp(string, chars) == 0);
+  env->ReleaseStringUTFChars(s, chars);
 }

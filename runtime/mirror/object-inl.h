@@ -26,8 +26,9 @@
 #include "class.h"
 #include "lock_word-inl.h"
 #include "monitor.h"
-#include "runtime.h"
 #include "reference.h"
+#include "runtime.h"
+#include "string-inl.h"
 #include "throwable.h"
 
 namespace art {
@@ -294,6 +295,11 @@ inline DoubleArray* Object::AsDoubleArray() {
 }
 
 template<VerifyObjectFlags kVerifyFlags>
+inline bool Object::IsString() {
+  return GetClass<kVerifyFlags>() == String::GetJavaLangString();
+}
+
+template<VerifyObjectFlags kVerifyFlags>
 inline String* Object::AsString() {
   DCHECK(GetClass<kVerifyFlags>()->IsStringClass());
   return down_cast<String*>(this);
@@ -339,6 +345,8 @@ inline size_t Object::SizeOf() {
     result = AsArray<kNewFlags>()->template SizeOf<kNewFlags>();
   } else if (IsClass<kNewFlags>()) {
     result = AsClass<kNewFlags>()->template SizeOf<kNewFlags>();
+  } else if (IsString<kNewFlags>()) {
+    result = AsString<kNewFlags>()->template SizeOf<kNewFlags>();
   } else {
     result = GetClass<kNewFlags>()->GetObjectSize();
   }

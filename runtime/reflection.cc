@@ -475,7 +475,12 @@ jobject InvokeMethod(const ScopedObjectAccess& soa, jobject javaMethod,
   }
 
   mirror::Object* receiver = nullptr;
-  if (!m->IsStatic()) {
+  // Replace calls to String.<init> with equivalent StringFactory call.
+  if (declaring_class->IsStringClass() && m->IsConstructor()) {
+    mid = WellKnownClasses::StringInitToStringFactoryMethodID(mid);
+    m = soa.DecodeMethod(mid);
+    CHECK(javaReceiver == nullptr);
+  } else if (!m->IsStatic()) {
     // Check that the receiver is non-null and an instance of the field's declaring class.
     receiver = soa.Decode<mirror::Object*>(javaReceiver);
     if (!VerifyObjectIsClass(receiver, declaring_class)) {
