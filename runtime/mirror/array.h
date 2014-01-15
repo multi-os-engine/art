@@ -19,6 +19,7 @@
 
 #include "object.h"
 #include "gc/heap.h"
+#include "runtime.h"
 
 namespace art {
 namespace mirror {
@@ -57,6 +58,7 @@ class MANAGED Array : public Object {
 
   void SetLength(int32_t length) {
     CHECK_GE(length, 0);
+    // TODO we could use non transactional version since we can't undo this write.
     SetField32(OFFSET_OF_OBJECT_MEMBER(Array, length_), length, false);
   }
 
@@ -129,13 +131,38 @@ class MANAGED PrimitiveArray : public Array {
     if (!IsValidIndex(i)) {
       return T(0);
     }
+    return GetWithoutChecks(i);
+  }
+
+  T GetWithoutChecks(int32_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK(IsValidIndex(i));
     return GetData()[i];
   }
 
   void Set(int32_t i, T value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (IsValidIndex(i)) {
-      GetData()[i] = value;
+      SetWithoutChecks(i, value);
     }
+  }
+
+  void SetWithoutChecks(int32_t i, T value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (Runtime::Current()->IsActiveTransaction()) {
+      SetWithoutChecksTransactional(i, value);
+    } else {
+      SetWithoutChecksNonTransactional(i, value);
+    }
+  }
+
+  void SetWithoutChecksTransactional(int32_t i, T value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK(IsValidIndex(i));
+    Runtime::Current()->RecordWriteArray(this, i, value);
+    SetWithoutChecksImpl(i, value);
+  }
+
+  void SetWithoutChecksNonTransactional(int32_t i, T value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK(IsValidIndex(i));
+    CHECK(!Runtime::Current()->IsActiveTransaction());
+    SetWithoutChecksImpl(i, value);
   }
 
   static void SetArrayClass(Class* array_class) {
@@ -153,6 +180,10 @@ class MANAGED PrimitiveArray : public Array {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
+  void SetWithoutChecksImpl(int32_t i, T value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    GetData()[i] = value;
+  }
+
   static Class* array_class_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(PrimitiveArray);

@@ -87,6 +87,20 @@ inline void ObjectArray<T>::SetWithoutChecks(int32_t i, T* object) {
 }
 
 template<class T>
+inline void ObjectArray<T>::SetWithoutChecksTransactional(int32_t i, T* object) {
+  DCHECK(IsValidIndex(i));
+  MemberOffset data_offset(DataOffset(sizeof(Object*)).Int32Value() + i * sizeof(Object*));
+  SetFieldObjectTransactional(data_offset, object, false);
+}
+
+template<class T>
+inline void ObjectArray<T>::SetWithoutChecksNonTransactional(int32_t i, T* object) {
+  DCHECK(IsValidIndex(i));
+  MemberOffset data_offset(DataOffset(sizeof(Object*)).Int32Value() + i * sizeof(Object*));
+  SetFieldObjectNonTransactional(data_offset, object, false);
+}
+
+template<class T>
 inline void ObjectArray<T>::SetPtrWithoutChecks(int32_t i, T* object) {
   DCHECK(IsValidIndex(i));
   MemberOffset data_offset(DataOffset(sizeof(Object*)).Int32Value() + i * sizeof(Object*));

@@ -44,6 +44,8 @@ class MANAGED ObjectArray : public Array {
   // Set element without bound and element type checks, to be used in limited
   // circumstances, such as during boot image writing
   void SetWithoutChecks(int32_t i, T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetWithoutChecksTransactional(int32_t i, T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetWithoutChecksNonTransactional(int32_t i, T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Set element without bound and element type checks, to be used in limited circumstances, such
   // as during boot image writing. Does not do write barrier.
