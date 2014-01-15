@@ -144,10 +144,10 @@ void SignalCatcher::HandleSigQuit() {
     }
   }
   os << "----- end " << getpid() << " -----\n";
-  CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
   if (self->ReadFlag(kCheckpointRequest)) {
     self->RunCheckpointFunction();
   }
+  CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
   self->EndAssertNoThreadSuspension(old_cause);
   thread_list->ResumeAll();
 
