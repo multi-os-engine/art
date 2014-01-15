@@ -64,6 +64,7 @@
 #include "transaction.h"
 #include "verifier/method_verifier.h"
 #include "verifier/method_verifier-inl.h"
+#include "well_known_classes.h"
 
 namespace art {
 
@@ -1295,6 +1296,13 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
     // TODO: support patching on all architectures.
     use_dex_cache = use_dex_cache || (force_relocations && !support_boot_image_fixup_);
   }
+  if (method->GetDeclaringClass()->IsStringClass() && method->IsConstructor()) {
+    // Replace calls to String.<init> with equivalent StringFactory call.
+    // TODO: Perform a similar rewrite for dex-to-dex.
+    ScopedObjectAccessUnchecked soa(Thread::Current());
+    jmethodID mid = soa.EncodeMethod(method);
+    method = soa.DecodeMethod(WellKnownClasses::StringInitToStringFactoryMethodID(mid));
+  }
   bool method_code_in_boot = (method->GetDeclaringClass()->GetClassLoader() == nullptr);
   if (!use_dex_cache) {
     if (!method_code_in_boot) {
@@ -1355,6 +1363,8 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
     if (method_in_image || compiling_boot) {
       // We know we must be able to get to the method in the image, so use that pointer.
       CHECK(!method->IsAbstract());
+      target_method->dex_method_index = method->GetDexMethodIndex();
+      target_method->dex_file = method->GetDeclaringClass()->GetDexCache()->GetDexFile();
       *type = sharp_type;
       *direct_method = force_relocations ? -1 : reinterpret_cast<uintptr_t>(method);
       *direct_code = force_relocations ? -1 : compiler_->GetEntryPointOf(method);

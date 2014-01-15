@@ -58,8 +58,12 @@ static constexpr bool kIntrinsicIsStatic[] = {
     false,  // kIntrinsicReferenceGetReferent
     false,  // kIntrinsicCharAt
     false,  // kIntrinsicCompareTo
+    false,  // kIntrinsicGetCharsNoCheck
     false,  // kIntrinsicIsEmptyOrLength
     false,  // kIntrinsicIndexOf
+    true,   // kIntrinsicNewStringFromBytes
+    true,   // kIntrinsicNewStringFromChars
+    true,   // kIntrinsicNewStringFromString
     true,   // kIntrinsicCurrentThread
     true,   // kIntrinsicPeek
     true,   // kIntrinsicPoke
@@ -91,8 +95,12 @@ static_assert(kIntrinsicIsStatic[kIntrinsicRoundDouble], "RoundDouble must be st
 static_assert(!kIntrinsicIsStatic[kIntrinsicReferenceGetReferent], "Get must not be static");
 static_assert(!kIntrinsicIsStatic[kIntrinsicCharAt], "CharAt must not be static");
 static_assert(!kIntrinsicIsStatic[kIntrinsicCompareTo], "CompareTo must not be static");
+static_assert(!kIntrinsicIsStatic[kIntrinsicGetCharsNoCheck], "GetCharsNoCheck must not be static");
 static_assert(!kIntrinsicIsStatic[kIntrinsicIsEmptyOrLength], "IsEmptyOrLength must not be static");
 static_assert(!kIntrinsicIsStatic[kIntrinsicIndexOf], "IndexOf must not be static");
+static_assert(kIntrinsicIsStatic[kIntrinsicNewStringFromBytes], "NewStringFromBytes must be static");
+static_assert(kIntrinsicIsStatic[kIntrinsicNewStringFromChars], "NewStringFromChars must be static");
+static_assert(kIntrinsicIsStatic[kIntrinsicNewStringFromString], "NewStringFromString must be static");
 static_assert(kIntrinsicIsStatic[kIntrinsicCurrentThread], "CurrentThread must be static");
 static_assert(kIntrinsicIsStatic[kIntrinsicPeek], "Peek must be static");
 static_assert(kIntrinsicIsStatic[kIntrinsicPoke], "Poke must be static");
@@ -140,9 +148,12 @@ const char* const DexFileMethodInliner::kClassCacheNames[] = {
     "F",                       // kClassCacheFloat
     "D",                       // kClassCacheDouble
     "V",                       // kClassCacheVoid
+    "[B",                      // kClassCacheJavaLangByteArray
+    "[C",                      // kClassCacheJavaLangCharArray
     "Ljava/lang/Object;",      // kClassCacheJavaLangObject
     "Ljava/lang/ref/Reference;",  // kClassCacheJavaLangRefReference
     "Ljava/lang/String;",      // kClassCacheJavaLangString
+    "Ljava/lang/StringFactory;",  // kClassCacheJavaLangStringFactory
     "Ljava/lang/Double;",      // kClassCacheJavaLangDouble
     "Ljava/lang/Float;",       // kClassCacheJavaLangFloat
     "Ljava/lang/Integer;",     // kClassCacheJavaLangInteger
@@ -154,7 +165,6 @@ const char* const DexFileMethodInliner::kClassCacheNames[] = {
     "Llibcore/io/Memory;",     // kClassCacheLibcoreIoMemory
     "Lsun/misc/Unsafe;",       // kClassCacheSunMiscUnsafe
     "Ljava/lang/System;",      // kClassCacheJavaLangSystem
-    "[C"                       // kClassCacheJavaLangCharArray
 };
 
 const char* const DexFileMethodInliner::kNameCacheNames[] = {
@@ -175,9 +185,14 @@ const char* const DexFileMethodInliner::kNameCacheNames[] = {
     "getReferent",           // kNameCacheReferenceGet
     "charAt",                // kNameCacheCharAt
     "compareTo",             // kNameCacheCompareTo
+    "getCharsNoCheck",       // kNameCacheGetCharsNoCheck
     "isEmpty",               // kNameCacheIsEmpty
     "indexOf",               // kNameCacheIndexOf
     "length",                // kNameCacheLength
+    "<init>",                // kNameCacheInit
+    "newStringFromBytes",    // kNameCacheNewStringFromBytes
+    "newStringFromChars",    // kNameCacheNewStringFromChars
+    "newStringFromString",   // kNameCacheNewStringFromString
     "currentThread",         // kNameCacheCurrentThread
     "peekByte",              // kNameCachePeekByte
     "peekIntNative",         // kNameCachePeekIntNative
@@ -285,7 +300,22 @@ const DexFileMethodInliner::ProtoDef DexFileMethodInliner::kProtoCacheDefs[] = {
         kClassCacheJavaLangObject } },
     // kProtoCacheCharArrayICharArrayII_V
     { kClassCacheVoid, 5, {kClassCacheJavaLangCharArray, kClassCacheInt,
-                kClassCacheJavaLangCharArray, kClassCacheInt, kClassCacheInt}}
+        kClassCacheJavaLangCharArray, kClassCacheInt, kClassCacheInt} },
+    // kProtoCacheIICharArrayI_V
+    { kClassCacheVoid, 4, { kClassCacheInt, kClassCacheInt, kClassCacheJavaLangCharArray, kClassCacheInt } },
+    // kProtoCacheByteArrayIII_V
+    { kClassCacheVoid, 4, { kClassCacheJavaLangByteArray, kClassCacheInt, kClassCacheInt, kClassCacheInt } },
+    // kProtoCacheIICharArray_V
+    { kClassCacheVoid, 3, { kClassCacheInt, kClassCacheInt, kClassCacheJavaLangCharArray } },
+    // kProtoCacheString_V
+    { kClassCacheVoid, 1, { kClassCacheJavaLangString } },
+    // kProtoCacheByteArrayIII_String
+    { kClassCacheJavaLangString, 4, { kClassCacheJavaLangByteArray, kClassCacheInt, kClassCacheInt,
+        kClassCacheInt } },
+    // kProtoCacheIICharArray_String
+    { kClassCacheJavaLangString, 3, { kClassCacheInt, kClassCacheInt, kClassCacheJavaLangCharArray } },
+    // kProtoCacheString_String
+    { kClassCacheJavaLangString, 1, { kClassCacheJavaLangString } },
 };
 
 const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods[] = {
@@ -346,10 +376,22 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
 
     INTRINSIC(JavaLangString, CharAt, I_C, kIntrinsicCharAt, 0),
     INTRINSIC(JavaLangString, CompareTo, String_I, kIntrinsicCompareTo, 0),
+    INTRINSIC(JavaLangString, GetCharsNoCheck, IICharArrayI_V, kIntrinsicGetCharsNoCheck, 0),
     INTRINSIC(JavaLangString, IsEmpty, _Z, kIntrinsicIsEmptyOrLength, kIntrinsicFlagIsEmpty),
     INTRINSIC(JavaLangString, IndexOf, II_I, kIntrinsicIndexOf, kIntrinsicFlagNone),
     INTRINSIC(JavaLangString, IndexOf, I_I, kIntrinsicIndexOf, kIntrinsicFlagBase0),
     INTRINSIC(JavaLangString, Length, _I, kIntrinsicIsEmptyOrLength, kIntrinsicFlagLength),
+
+    INTRINSIC(JavaLangString, Init, ByteArrayIII_V, kIntrinsicNewStringFromBytes, 0),
+    INTRINSIC(JavaLangString, Init, IICharArray_V, kIntrinsicNewStringFromChars, 0),
+    INTRINSIC(JavaLangString, Init, String_V, kIntrinsicNewStringFromString, 0),
+
+    INTRINSIC(JavaLangStringFactory, NewStringFromBytes, ByteArrayIII_String,
+              kIntrinsicNewStringFromBytes, 0),
+    INTRINSIC(JavaLangStringFactory, NewStringFromChars, IICharArray_String,
+              kIntrinsicNewStringFromChars, 0),
+    INTRINSIC(JavaLangStringFactory, NewStringFromString, String_String,
+              kIntrinsicNewStringFromString, 0),
 
     INTRINSIC(JavaLangThread, CurrentThread, _Thread, kIntrinsicCurrentThread, 0),
 
@@ -483,11 +525,19 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
       return backend->GenInlinedCharAt(info);
     case kIntrinsicCompareTo:
       return backend->GenInlinedStringCompareTo(info);
+    case kIntrinsicGetCharsNoCheck:
+      return backend->GenInlinedStringGetCharsNoCheck(info);
     case kIntrinsicIsEmptyOrLength:
       return backend->GenInlinedStringIsEmptyOrLength(
           info, intrinsic.d.data & kIntrinsicFlagIsEmpty);
     case kIntrinsicIndexOf:
       return backend->GenInlinedIndexOf(info, intrinsic.d.data & kIntrinsicFlagBase0);
+    case kIntrinsicNewStringFromBytes:
+      return backend->GenInlinedStringFactoryNewStringFromBytes(info);
+    case kIntrinsicNewStringFromChars:
+      return backend->GenInlinedStringFactoryNewStringFromChars(info);
+    case kIntrinsicNewStringFromString:
+      return backend->GenInlinedStringFactoryNewStringFromString(info);
     case kIntrinsicCurrentThread:
       return backend->GenInlinedCurrentThread(info);
     case kIntrinsicPeek:

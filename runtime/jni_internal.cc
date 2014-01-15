@@ -602,6 +602,12 @@ class JNI {
     if (c == nullptr) {
       return nullptr;
     }
+    if (c->IsStringClass()) {
+      gc::AllocatorType allocator_type = Runtime::Current()->GetHeap()->GetCurrentAllocator();
+      mirror::SetStringCountVisitor visitor(0);
+      return soa.AddLocalReference<jobject>(mirror::String::Alloc<true>(soa.Self(), 0,
+                                                                        allocator_type, visitor));
+    }
     return soa.AddLocalReference<jobject>(c->AllocObject(soa.Self()));
   }
 
@@ -623,6 +629,11 @@ class JNI {
     if (c == nullptr) {
       return nullptr;
     }
+    if (c->IsStringClass()) {
+      // Replace calls to String.<init> with equivalent StringFactory call.
+      jmethodID sf_mid = WellKnownClasses::StringInitToStringFactoryMethodID(mid);
+      return CallStaticObjectMethodV(env, WellKnownClasses::java_lang_StringFactory, sf_mid, args);
+    }
     mirror::Object* result = c->AllocObject(soa.Self());
     if (result == nullptr) {
       return nullptr;
@@ -642,6 +653,11 @@ class JNI {
     mirror::Class* c = EnsureInitialized(soa.Self(), soa.Decode<mirror::Class*>(java_class));
     if (c == nullptr) {
       return nullptr;
+    }
+    if (c->IsStringClass()) {
+      // Replace calls to String.<init> with equivalent StringFactory call.
+      jmethodID sf_mid = WellKnownClasses::StringInitToStringFactoryMethodID(mid);
+      return CallStaticObjectMethodA(env, WellKnownClasses::java_lang_StringFactory, sf_mid, args);
     }
     mirror::Object* result = c->AllocObject(soa.Self());
     if (result == nullptr) {
@@ -1678,7 +1694,7 @@ class JNI {
       ThrowSIOOBE(soa, start, length, s->GetLength());
     } else {
       CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
-      const jchar* chars = s->GetCharArray()->GetData() + s->GetOffset();
+      const jchar* chars = s->GetValue();
       memcpy(buf, chars + start, length * sizeof(jchar));
     }
   }
@@ -1692,7 +1708,7 @@ class JNI {
       ThrowSIOOBE(soa, start, length, s->GetLength());
     } else {
       CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
-      const jchar* chars = s->GetCharArray()->GetData() + s->GetOffset();
+      const jchar* chars = s->GetValue();
       ConvertUtf16ToModifiedUtf8(buf, chars + start, length);
     }
   }
@@ -1701,33 +1717,26 @@ class JNI {
     CHECK_NON_NULL_ARGUMENT(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
-    mirror::CharArray* chars = s->GetCharArray();
     gc::Heap* heap = Runtime::Current()->GetHeap();
-    if (heap->IsMovableObject(chars)) {
+    if (heap->IsMovableObject(s)) {
+      jchar* chars = new jchar[s->GetLength()];
+      memcpy(chars, s->GetValue(), sizeof(jchar) * s->GetLength());
       if (is_copy != nullptr) {
         *is_copy = JNI_TRUE;
       }
-      int32_t char_count = s->GetLength();
-      int32_t offset = s->GetOffset();
-      jchar* bytes = new jchar[char_count];
-      for (int32_t i = 0; i < char_count; i++) {
-        bytes[i] = chars->Get(i + offset);
-      }
-      return bytes;
-    } else {
-      if (is_copy != nullptr) {
-        *is_copy = JNI_FALSE;
-      }
-      return static_cast<jchar*>(chars->GetData() + s->GetOffset());
+      return chars;
     }
+    if (is_copy != nullptr) {
+      *is_copy = JNI_FALSE;
+    }
+    return static_cast<jchar*>(s->GetValue());
   }
 
   static void ReleaseStringChars(JNIEnv* env, jstring java_string, const jchar* chars) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
-    mirror::CharArray* s_chars = s->GetCharArray();
-    if (chars != (s_chars->GetData() + s->GetOffset())) {
+    if (chars != s->GetValue()) {
       delete[] chars;
     }
   }
@@ -1736,18 +1745,16 @@ class JNI {
     CHECK_NON_NULL_ARGUMENT(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
-    mirror::CharArray* chars = s->GetCharArray();
-    int32_t offset = s->GetOffset();
     gc::Heap* heap = Runtime::Current()->GetHeap();
-    if (heap->IsMovableObject(chars)) {
+    if (heap->IsMovableObject(s)) {
       StackHandleScope<1> hs(soa.Self());
-      HandleWrapper<mirror::CharArray> h(hs.NewHandleWrapper(&chars));
+      HandleWrapper<mirror::String> h(hs.NewHandleWrapper(&s));
       heap->IncrementDisableMovingGC(soa.Self());
     }
     if (is_copy != nullptr) {
       *is_copy = JNI_FALSE;
     }
-    return static_cast<jchar*>(chars->GetData() + offset);
+    return static_cast<jchar*>(s->GetValue());
   }
 
   static void ReleaseStringCritical(JNIEnv* env, jstring java_string, const jchar* chars) {
@@ -1756,8 +1763,7 @@ class JNI {
     ScopedObjectAccess soa(env);
     gc::Heap* heap = Runtime::Current()->GetHeap();
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
-    mirror::CharArray* s_chars = s->GetCharArray();
-    if (heap->IsMovableObject(s_chars)) {
+    if (heap->IsMovableObject(s)) {
       heap->DecrementDisableMovingGC(soa.Self());
     }
   }
@@ -1774,7 +1780,7 @@ class JNI {
     size_t byte_count = s->GetUtfLength();
     char* bytes = new char[byte_count + 1];
     CHECK(bytes != nullptr);  // bionic aborts anyway.
-    const uint16_t* chars = s->GetCharArray()->GetData() + s->GetOffset();
+    const uint16_t* chars = s->GetValue();
     ConvertUtf16ToModifiedUtf8(bytes, chars, s->GetLength());
     bytes[byte_count] = '\0';
     return bytes;

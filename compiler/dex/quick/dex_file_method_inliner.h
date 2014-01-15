@@ -106,9 +106,12 @@ class DexFileMethodInliner {
       kClassCacheFloat,
       kClassCacheDouble,
       kClassCacheVoid,
+      kClassCacheJavaLangByteArray,
+      kClassCacheJavaLangCharArray,
       kClassCacheJavaLangObject,
       kClassCacheJavaLangRefReference,
       kClassCacheJavaLangString,
+      kClassCacheJavaLangStringFactory,
       kClassCacheJavaLangDouble,
       kClassCacheJavaLangFloat,
       kClassCacheJavaLangInteger,
@@ -120,7 +123,6 @@ class DexFileMethodInliner {
       kClassCacheLibcoreIoMemory,
       kClassCacheSunMiscUnsafe,
       kClassCacheJavaLangSystem,
-      kClassCacheJavaLangCharArray,
       kClassCacheLast
     };
 
@@ -148,9 +150,14 @@ class DexFileMethodInliner {
       kNameCacheReferenceGetReferent,
       kNameCacheCharAt,
       kNameCacheCompareTo,
+      kNameCacheGetCharsNoCheck,
       kNameCacheIsEmpty,
       kNameCacheIndexOf,
       kNameCacheLength,
+      kNameCacheInit,
+      kNameCacheNewStringFromBytes,
+      kNameCacheNewStringFromChars,
+      kNameCacheNewStringFromString,
       kNameCacheCurrentThread,
       kNameCachePeekByte,
       kNameCachePeekIntNative,
@@ -225,6 +232,13 @@ class DexFileMethodInliner {
       kProtoCacheObjectJ_Object,
       kProtoCacheObjectJObject_V,
       kProtoCacheCharArrayICharArrayII_V,
+      kProtoCacheIICharArrayI_V,
+      kProtoCacheByteArrayIII_V,
+      kProtoCacheIICharArray_V,
+      kProtoCacheString_V,
+      kProtoCacheByteArrayIII_String,
+      kProtoCacheIICharArray_String,
+      kProtoCacheString_String,
       kProtoCacheLast
     };
 

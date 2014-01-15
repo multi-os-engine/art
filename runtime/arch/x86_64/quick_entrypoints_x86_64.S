@@ -718,6 +718,17 @@ MACRO3(THREE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     END_FUNCTION VAR(c_name, 0)
 END_MACRO
 
+MACRO3(FOUR_ARG_DOWNCALL, c_name, cxx_name, return_macro)
+    DEFINE_FUNCTION VAR(c_name, 0)
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME   // save ref containing registers for GC
+    // Outgoing argument set up
+    movq %gs:THREAD_SELF_OFFSET, %r8    // pass Thread::Current()
+    call VAR(cxx_name, 1)               // cxx_name(arg1, arg2, arg3, arg4, Thread*)
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME // restore frame up to return address
+    CALL_MACRO(return_macro, 2)         // return or deliver exception
+    END_FUNCTION VAR(c_name, 0)
+END_MACRO
+
 MACRO3(ONE_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION VAR(c_name, 0)
     movl 8(%rsp), %esi                  // pass referrer
@@ -802,6 +813,12 @@ END_MACRO
   THREE_ARG_DOWNCALL art_quick_check_and_alloc_array ## c_suffix, artCheckAndAllocArrayFromCode ## cxx_suffix, RETURN_IF_RESULT_IS_NON_ZERO
 #define GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY_WITH_ACCESS_CHECK(c_suffix, cxx_suffix) \
   THREE_ARG_DOWNCALL art_quick_check_and_alloc_array_with_access_check ## c_suffix, artCheckAndAllocArrayFromCodeWithAccessCheck ## cxx_suffix, RETURN_IF_RESULT_IS_NON_ZERO
+#define GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_BYTES(c_suffix, cxx_suffix) \
+  FOUR_ARG_DOWNCALL art_quick_alloc_string_from_bytes ## c_suffix, artAllocStringFromBytesFromCode ## cxx_suffix, RETURN_IF_RESULT_IS_NON_ZERO
+#define GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_CHARS(c_suffix, cxx_suffix) \
+  THREE_ARG_DOWNCALL art_quick_alloc_string_from_chars ## c_suffix, artAllocStringFromCharsFromCode ## cxx_suffix, RETURN_IF_RESULT_IS_NON_ZERO
+#define GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_STRING(c_suffix, cxx_suffix) \
+  ONE_ARG_DOWNCALL art_quick_alloc_string_from_string ## c_suffix, artAllocStringFromStringFromCode ## cxx_suffix, RETURN_IF_RESULT_IS_NON_ZERO
 
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_dlmalloc, DlMalloc)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT_RESOLVED(_dlmalloc, DlMalloc)
@@ -812,6 +829,9 @@ GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_RESOLVED(_dlmalloc, DlMalloc)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_WITH_ACCESS_CHECK(_dlmalloc, DlMalloc)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY(_dlmalloc, DlMalloc)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY_WITH_ACCESS_CHECK(_dlmalloc, DlMalloc)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_BYTES(_dlmalloc, DlMalloc)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_CHARS(_dlmalloc, DlMalloc)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_STRING(_dlmalloc, DlMalloc)
 
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_dlmalloc_instrumented, DlMallocInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT_RESOLVED(_dlmalloc_instrumented, DlMallocInstrumented)
@@ -822,6 +842,9 @@ GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_RESOLVED(_dlmalloc_instrumented, DlMalloc
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_WITH_ACCESS_CHECK(_dlmalloc_instrumented, DlMallocInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY(_dlmalloc_instrumented, DlMallocInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY_WITH_ACCESS_CHECK(_dlmalloc_instrumented, DlMallocInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_BYTES(_dlmalloc_instrumented, DlMallocInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_CHARS(_dlmalloc_instrumented, DlMallocInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_STRING(_dlmalloc_instrumented, DlMallocInstrumented)
 
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_rosalloc, RosAlloc)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT_RESOLVED(_rosalloc, RosAlloc)
@@ -832,6 +855,9 @@ GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_RESOLVED(_rosalloc, RosAlloc)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_WITH_ACCESS_CHECK(_rosalloc, RosAlloc)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY(_rosalloc, RosAlloc)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY_WITH_ACCESS_CHECK(_rosalloc, RosAlloc)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_BYTES(_rosalloc, RosAlloc)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_CHARS(_rosalloc, RosAlloc)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_STRING(_rosalloc, RosAlloc)
 
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_rosalloc_instrumented, RosAllocInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT_RESOLVED(_rosalloc_instrumented, RosAllocInstrumented)
@@ -842,6 +868,9 @@ GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_RESOLVED(_rosalloc_instrumented, RosAlloc
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_WITH_ACCESS_CHECK(_rosalloc_instrumented, RosAllocInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY(_rosalloc_instrumented, RosAllocInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY_WITH_ACCESS_CHECK(_rosalloc_instrumented, RosAllocInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_BYTES(_rosalloc_instrumented, RosAllocInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_CHARS(_rosalloc_instrumented, RosAllocInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_STRING(_rosalloc_instrumented, RosAllocInstrumented)
 
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_bump_pointer, BumpPointer)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT_RESOLVED(_bump_pointer, BumpPointer)
@@ -852,6 +881,9 @@ GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_RESOLVED(_bump_pointer, BumpPointer)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_WITH_ACCESS_CHECK(_bump_pointer, BumpPointer)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY(_bump_pointer, BumpPointer)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY_WITH_ACCESS_CHECK(_bump_pointer, BumpPointer)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_BYTES(_bump_pointer, BumpPointer)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_CHARS(_bump_pointer, BumpPointer)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_STRING(_bump_pointer, BumpPointer)
 
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_bump_pointer_instrumented, BumpPointerInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT_RESOLVED(_bump_pointer_instrumented, BumpPointerInstrumented)
@@ -862,6 +894,9 @@ GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_RESOLVED(_bump_pointer_instrumented, Bump
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_WITH_ACCESS_CHECK(_bump_pointer_instrumented, BumpPointerInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY(_bump_pointer_instrumented, BumpPointerInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY_WITH_ACCESS_CHECK(_bump_pointer_instrumented, BumpPointerInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_BYTES(_bump_pointer_instrumented, BumpPointerInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_CHARS(_bump_pointer_instrumented, BumpPointerInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_STRING(_bump_pointer_instrumented, BumpPointerInstrumented)
 
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_tlab, TLAB)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT_RESOLVED(_tlab, TLAB)
@@ -872,6 +907,9 @@ GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_RESOLVED(_tlab, TLAB)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_WITH_ACCESS_CHECK(_tlab, TLAB)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY(_tlab, TLAB)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY_WITH_ACCESS_CHECK(_tlab, TLAB)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_BYTES(_tlab, TLAB)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_CHARS(_tlab, TLAB)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_STRING(_tlab, TLAB)
 
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_tlab_instrumented, TLABInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT_RESOLVED(_tlab_instrumented, TLABInstrumented)
@@ -882,6 +920,9 @@ GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_RESOLVED(_tlab_instrumented, TLABInstrume
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY_WITH_ACCESS_CHECK(_tlab_instrumented, TLABInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY(_tlab_instrumented, TLABInstrumented)
 GENERATE_ALLOC_ENTRYPOINTS_CHECK_AND_ALLOC_ARRAY_WITH_ACCESS_CHECK(_tlab_instrumented, TLABInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_BYTES(_tlab_instrumented, TLABInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_CHARS(_tlab_instrumented, TLABInstrumented)
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_STRING_FROM_STRING(_tlab_instrumented, TLABInstrumented)
 
 TWO_ARG_DOWNCALL art_quick_resolve_string, artResolveStringFromCode, RETURN_IF_RESULT_IS_NON_ZERO
 TWO_ARG_DOWNCALL art_quick_initialize_static_storage, artInitializeStaticStorageFromCode, RETURN_IF_RESULT_IS_NON_ZERO
@@ -1521,13 +1562,9 @@ END_FUNCTION art_quick_deoptimize
 DEFINE_FUNCTION art_quick_string_compareto
     movl MIRROR_STRING_COUNT_OFFSET(%edi), %r8d
     movl MIRROR_STRING_COUNT_OFFSET(%esi), %r9d
-    movl MIRROR_STRING_VALUE_OFFSET(%edi), %r10d
-    movl MIRROR_STRING_VALUE_OFFSET(%esi), %r11d
-    movl MIRROR_STRING_OFFSET_OFFSET(%edi), %eax
-    movl MIRROR_STRING_OFFSET_OFFSET(%esi), %ecx
     /* Build pointers to the start of string data */
-    leal MIRROR_CHAR_ARRAY_DATA_OFFSET(%r10d, %eax, 2), %esi
-    leal MIRROR_CHAR_ARRAY_DATA_OFFSET(%r11d, %ecx, 2), %edi
+    leal MIRROR_STRING_VALUE_OFFSET(%edi), %edi
+    leal MIRROR_STRING_VALUE_OFFSET(%esi), %esi
     /* Calculate min length and count diff */
     movl  %r8d, %ecx
     movl  %r8d, %eax
@@ -1537,8 +1574,8 @@ DEFINE_FUNCTION art_quick_string_compareto
      * At this point we have:
      *   eax: value to return if first part of strings are equal
      *   ecx: minimum among the lengths of the two strings
-     *   esi: pointer to this string data
-     *   edi: pointer to comp string data
+     *   esi: pointer to comp string data
+     *   edi: pointer to this string data
      */
     jecxz .Lkeep_length
     repe cmpsw                    // find nonmatching chars in [%esi] and [%edi], up to length %ecx
@@ -1547,8 +1584,8 @@ DEFINE_FUNCTION art_quick_string_compareto
     ret
     .balign 16
 .Lnot_equal:
-    movzwl  -2(%esi), %eax        // get last compared char from this string
-    movzwl  -2(%edi), %ecx        // get last compared char from comp string
+    movzwl  -2(%edi), %eax        // get last compared char from this string
+    movzwl  -2(%esi), %ecx        // get last compared char from comp string
     subl  %ecx, %eax              // return the difference
     ret
 END_FUNCTION art_quick_string_compareto

@@ -1042,6 +1042,7 @@ class MIRGraph {
 
   void DumpCheckStats();
   MIR* FindMoveResult(BasicBlock* bb, MIR* mir);
+  MIR* FindStringInit(BasicBlock** p_bb, MIR* mir);
   int SRegToVReg(int ssa_reg) const;
   void VerifyDataflow();
   void CheckForDominanceFrontier(BasicBlock* dom_bb, const BasicBlock* succ_bb);
@@ -1117,7 +1118,7 @@ class MIRGraph {
   CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range);
   BasicBlock* NewMemBB(BBType block_type, int block_id);
   MIR* NewMIR();
-  MIR* AdvanceMIR(BasicBlock** p_bb, MIR* mir);
+  MIR* AdvanceMIR(BasicBlock** p_bb, MIR* mir, bool disallow_predecessors);
   BasicBlock* NextDominatedBlock(BasicBlock* bb);
   bool LayoutBlocks(BasicBlock* bb);
   void ComputeTopologicalSortOrder();

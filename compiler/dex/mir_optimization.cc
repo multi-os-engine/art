@@ -20,6 +20,7 @@
 #include "global_value_numbering.h"
 #include "local_value_numbering.h"
 #include "mir_field_info.h"
+#include "mirror/string.h"
 #include "quick/dex_file_method_inliner.h"
 #include "quick/dex_file_to_method_inliner_map.h"
 #include "stack.h"
@@ -106,17 +107,17 @@ void MIRGraph::DoConstantPropagation(BasicBlock* bb) {
 }
 
 /* Advance to next strictly dominated MIR node in an extended basic block */
-MIR* MIRGraph::AdvanceMIR(BasicBlock** p_bb, MIR* mir) {
+MIR* MIRGraph::AdvanceMIR(BasicBlock** p_bb, MIR* mir, bool disallow_predecessors) {
   BasicBlock* bb = *p_bb;
   if (mir != NULL) {
     mir = mir->next;
     if (mir == NULL) {
       bb = GetBasicBlock(bb->fall_through);
-      if ((bb == NULL) || Predecessors(bb) != 1) {
+      if ((bb == NULL) || (disallow_predecessors && (Predecessors(bb) != 1))) {
         mir = NULL;
       } else {
-      *p_bb = bb;
-      mir = bb->first_mir_insn;
+        *p_bb = bb;
+        mir = bb->first_mir_insn;
       }
     }
   }
@@ -132,7 +133,7 @@ MIR* MIRGraph::AdvanceMIR(BasicBlock** p_bb, MIR* mir) {
  */
 MIR* MIRGraph::FindMoveResult(BasicBlock* bb, MIR* mir) {
   BasicBlock* tbb = bb;
-  mir = AdvanceMIR(&tbb, mir);
+  mir = AdvanceMIR(&tbb, mir, true);
   while (mir != NULL) {
     if ((mir->dalvikInsn.opcode == Instruction::MOVE_RESULT) ||
         (mir->dalvikInsn.opcode == Instruction::MOVE_RESULT_OBJECT) ||
@@ -141,10 +142,32 @@ MIR* MIRGraph::FindMoveResult(BasicBlock* bb, MIR* mir) {
     }
     // Keep going if pseudo op, otherwise terminate
     if (MIR::DecodedInstruction::IsPseudoMirOp(mir->dalvikInsn.opcode)) {
-      mir = AdvanceMIR(&tbb, mir);
+      mir = AdvanceMIR(&tbb, mir, true);
     } else {
       mir = NULL;
     }
+  }
+  return mir;
+}
+
+MIR* MIRGraph::FindStringInit(BasicBlock** p_bb, MIR* mir) {
+  int instance_def = mir->ssa_rep->defs[0];
+  mir = AdvanceMIR(p_bb, mir, false);
+  while (mir != NULL) {
+    if ((mir->dalvikInsn.opcode == Instruction::INVOKE_DIRECT) ||
+        (mir->dalvikInsn.opcode == Instruction::INVOKE_DIRECT_RANGE)) {
+      uint32_t method_idx = mir->dalvikInsn.vB;
+      if (PrettyMethod(method_idx, *cu_->dex_file, false) == "java.lang.String.<init>") {
+        return mir;
+      }
+    } else {
+      if (mir->ssa_rep->num_uses > 0 && mir->ssa_rep->uses[0] == instance_def) {
+        mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+        mir->ssa_rep->num_uses = 0;
+        mir->ssa_rep->num_defs = 0;
+      }
+    }
+    mir = AdvanceMIR(p_bb, mir, false);
   }
   return mir;
 }
@@ -561,6 +584,65 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
             }
           }
           break;
+        case Instruction::NEW_INSTANCE: {
+          uint32_t type_idx = mir->dalvikInsn.vB;
+          if (PrettyType(type_idx, *cu_->dex_file) == "java.lang.String") {
+            BasicBlock* string_bb = bb;
+            MIR* string_mir = FindStringInit(&string_bb, mir);
+            if (string_mir == NULL) {
+              LOG(FATAL) << " DID NOT FIND STRING INIT FOR NEW INSTANCE";
+            }
+            // Remove this pointer arg and change to static call of StringFactory.
+            string_mir->dalvikInsn.vA--;
+            if (string_mir->dalvikInsn.opcode == Instruction::INVOKE_DIRECT) {
+              string_mir->dalvikInsn.opcode = Instruction::INVOKE_STATIC;
+              for (uint32_t i = 0; i < string_mir->dalvikInsn.vA; i++) {
+                string_mir->dalvikInsn.arg[i] = string_mir->dalvikInsn.arg[i + 1];
+              }
+            } else {
+              string_mir->dalvikInsn.opcode = Instruction::INVOKE_STATIC_RANGE;
+              string_mir->dalvikInsn.vC++;
+            }
+            string_mir->ssa_rep->num_uses--;
+            for (int16_t i = 0; i < string_mir->ssa_rep->num_uses; i++) {
+              string_mir->ssa_rep->uses[i] = string_mir->ssa_rep->uses[i + 1];
+            }
+            // Copy new register values to throwing half of invoke instruction if it exists.
+            if (string_bb->predecessors.size() == 1) {
+              MIR* check_mir = GetBasicBlock(string_bb->predecessors[0])->last_mir_insn;
+              if (check_mir != NULL && static_cast<int>(check_mir->dalvikInsn.opcode) == kMirOpCheck) {
+                check_mir->dalvikInsn.vA = string_mir->dalvikInsn.vA;
+                check_mir->dalvikInsn.vB = string_mir->dalvikInsn.vB;
+                check_mir->dalvikInsn.vC = string_mir->dalvikInsn.vC;
+                check_mir->dalvikInsn.arg[0] = string_mir->dalvikInsn.arg[0];
+                check_mir->dalvikInsn.arg[1] = string_mir->dalvikInsn.arg[1];
+                check_mir->dalvikInsn.arg[2] = string_mir->dalvikInsn.arg[2];
+                check_mir->dalvikInsn.arg[3] = string_mir->dalvikInsn.arg[3];
+              }
+            }
+            MIR* move_result_mir = static_cast<MIR *>(arena_->Alloc(sizeof(MIR), kArenaAllocMIR));
+            move_result_mir->dalvikInsn.opcode = Instruction::MOVE_RESULT_OBJECT;
+            move_result_mir->dalvikInsn.vA = mir->dalvikInsn.vA;
+            move_result_mir->offset = string_mir->offset;
+            move_result_mir->m_unit_index = string_mir->m_unit_index;
+            move_result_mir->ssa_rep = static_cast<struct SSARepresentation *>(arena_->Alloc(sizeof(SSARepresentation), kArenaAllocDFInfo));
+            move_result_mir->ssa_rep->num_uses = 0;
+            move_result_mir->ssa_rep->num_defs = 1;
+            move_result_mir->ssa_rep->defs = mir->ssa_rep->defs;
+            string_bb->InsertMIRAfter(string_mir, move_result_mir);
+
+            // Change NEW_INSTANCE and throwing half of the insn (if it exists) into CONST_4 of 0
+            mir->dalvikInsn.opcode = Instruction::CONST_4;
+            mir->dalvikInsn.vB = 0;
+            mir->ssa_rep->num_uses = 0;
+            MIR* check_mir = GetBasicBlock(bb->predecessors[0])->last_mir_insn;
+            if (check_mir != NULL && static_cast<int>(check_mir->dalvikInsn.opcode) == kMirOpCheck) {
+              check_mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+              check_mir->dalvikInsn.vB = 0;
+            }
+          }
+          break;
+        }
         default:
           break;
       }

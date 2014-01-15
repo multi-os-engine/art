@@ -313,7 +313,6 @@ void ClassLinker::InitWithoutImage(const std::vector<const DexFile*>& boot_class
   Handle<mirror::Class> java_lang_String(hs.NewHandle(
       AllocClass(self, java_lang_Class.Get(), mirror::String::ClassSize())));
   mirror::String::SetClass(java_lang_String.Get());
-  java_lang_String->SetObjectSize(mirror::String::InstanceSize());
   java_lang_String->SetStatus(mirror::Class::kStatusResolved, self);
 
   // Setup Reference.
@@ -445,7 +444,6 @@ void ClassLinker::InitWithoutImage(const std::vector<const DexFile*>& boot_class
   java_lang_String->DumpClass(os1, mirror::Class::kDumpClassFullDetail);
   String_class->DumpClass(os2, mirror::Class::kDumpClassFullDetail);
   CHECK_EQ(java_lang_String.Get(), String_class) << os1.str() << "\n\n" << os2.str();
-  CHECK_EQ(java_lang_String->GetObjectSize(), mirror::String::InstanceSize());
   java_lang_DexCache->SetStatus(mirror::Class::kStatusNotReady, self);
   mirror::Class* DexCache_class = FindSystemClass(self, "Ljava/lang/DexCache;");
   CHECK_EQ(java_lang_String.Get(), String_class);
@@ -1651,10 +1649,6 @@ void ClassLinker::InitFromImage() {
           AsObjectArray<mirror::Class>()));
   class_roots_ = GcRoot<mirror::ObjectArray<mirror::Class>>(class_roots.Get());
 
-  // Special case of setting up the String class early so that we can test arbitrary objects
-  // as being Strings or not
-  mirror::String::SetClass(GetClassRoot(kJavaLangString));
-
   CHECK_EQ(oat_file.GetOatHeader().GetDexFileCount(),
            static_cast<uint32_t>(dex_caches->GetLength()));
   for (int32_t i = 0; i < dex_caches->GetLength(); i++) {
@@ -1681,6 +1675,7 @@ void ClassLinker::InitFromImage() {
   // Set classes on AbstractMethod early so that IsMethod tests can be performed during the live
   // bitmap walk.
   mirror::ArtMethod::SetClass(GetClassRoot(kJavaLangReflectArtMethod));
+  mirror::String::SetClass(GetClassRoot(kJavaLangString));
   size_t art_method_object_size = mirror::ArtMethod::GetJavaLangReflectArtMethod()->GetObjectSize();
   if (!Runtime::Current()->IsCompiler()) {
     // Compiler supports having an image with a different pointer size than the runtime. This

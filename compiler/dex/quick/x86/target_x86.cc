@@ -1277,10 +1277,6 @@ bool X86Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
   int value_offset = mirror::String::ValueOffset().Int32Value();
   // Location of count within the String object.
   int count_offset = mirror::String::CountOffset().Int32Value();
-  // Starting offset within data array.
-  int offset_offset = mirror::String::OffsetOffset().Int32Value();
-  // Start of char data with array_.
-  int data_offset = mirror::Array::DataOffset(sizeof(uint16_t)).Int32Value();
 
   // Compute the number of words to search in to rCX.
   Load32Disp(rs_rDX, count_offset, rs_rCX);
@@ -1357,16 +1353,14 @@ bool X86Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
   }
 
   // Load the address of the string into EDI.
-  // In case of start index we have to add the address to existing value in EDI.
-  // The string starts at VALUE(String) + 2 * OFFSET(String) + DATA_OFFSET.
-  if (zero_based || (!zero_based && rl_start.is_const && start_value == 0)) {
-    Load32Disp(rs_rDX, offset_offset, rs_rDI);
-  } else {
-    OpRegMem(kOpAdd, rs_rDI, rs_rDX, offset_offset);
+  OpRegRegImm(kOpAdd, rs_rDI, rs_rDX, value_offset);
+
+  // Now compute into EDI where the search will start.
+  if (zero_based || rl_start.is_const) {
+    if (start_value != 0) {
+      NewLIR3(kX86Lea32RM, rs_rDI.GetReg(), rs_rDI.GetReg(), 2 * start_value);
+    }
   }
-  OpRegImm(kOpLsl, rs_rDI, 1);
-  OpRegMem(kOpAdd, rs_rDI, rs_rDX, value_offset);
-  OpRegImm(kOpAdd, rs_rDI, data_offset);
 
   // EDI now contains the start of the string to be searched.
   // We are all prepared to do the search for the character.
@@ -2858,8 +2852,6 @@ bool X86Mir2Lir::GenInlinedCharAt(CallInfo* info) {
   int value_offset = mirror::String::ValueOffset().Int32Value();
   // Location of count
   int count_offset = mirror::String::CountOffset().Int32Value();
-  // Starting offset within data array
-  int offset_offset = mirror::String::OffsetOffset().Int32Value();
   // Start of char data with array_
   int data_offset = mirror::Array::DataOffset(sizeof(uint16_t)).Int32Value();
 
@@ -2874,7 +2866,6 @@ bool X86Mir2Lir::GenInlinedCharAt(CallInfo* info) {
   GenNullCheck(rl_obj.reg, info->opt_flags);
   bool range_check = (!(info->opt_flags & MIR_IGNORE_RANGE_CHECK));
   LIR* range_check_branch = nullptr;
-  RegStorage reg_off;
   RegStorage reg_ptr;
   if (range_check) {
     // On x86, we can compare to memory directly
@@ -2891,23 +2882,15 @@ bool X86Mir2Lir::GenInlinedCharAt(CallInfo* info) {
       range_check_branch = OpCondBranch(kCondUge, nullptr);
     }
   }
-  reg_off = AllocTemp();
   reg_ptr = AllocTempRef();
-  Load32Disp(rl_obj.reg, offset_offset, reg_off);
   LoadRefDisp(rl_obj.reg, value_offset, reg_ptr, kNotVolatile);
-  if (rl_idx.is_const) {
-    OpRegImm(kOpAdd, reg_off, mir_graph_->ConstantValue(rl_idx.orig_sreg));
-  } else {
-    OpRegReg(kOpAdd, reg_off, rl_idx.reg);
-  }
   FreeTemp(rl_obj.reg);
   if (rl_idx.location == kLocPhysReg) {
     FreeTemp(rl_idx.reg);
   }
   RegLocation rl_dest = InlineTarget(info);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  LoadBaseIndexedDisp(reg_ptr, reg_off, 1, data_offset, rl_result.reg, kUnsignedHalf);
-  FreeTemp(reg_off);
+  LoadBaseIndexedDisp(reg_ptr, rl_idx.reg, 1, data_offset, rl_result.reg, kUnsignedHalf);
   FreeTemp(reg_ptr);
   StoreValue(rl_dest, rl_result);
   if (range_check) {

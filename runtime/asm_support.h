@@ -134,14 +134,11 @@ ADD_TEST_EQ(MIRROR_OBJECT_ARRAY_DATA_OFFSET,
         sizeof(art::mirror::HeapReference<art::mirror::Object>)).Int32Value())
 
 // Offsets within java.lang.String.
-#define MIRROR_STRING_VALUE_OFFSET  MIRROR_OBJECT_HEADER_SIZE
-ADD_TEST_EQ(MIRROR_STRING_VALUE_OFFSET, art::mirror::String::ValueOffset().Int32Value())
-
-#define MIRROR_STRING_COUNT_OFFSET  (4 + MIRROR_OBJECT_HEADER_SIZE)
+#define MIRROR_STRING_COUNT_OFFSET  MIRROR_OBJECT_HEADER_SIZE
 ADD_TEST_EQ(MIRROR_STRING_COUNT_OFFSET, art::mirror::String::CountOffset().Int32Value())
 
-#define MIRROR_STRING_OFFSET_OFFSET (12 + MIRROR_OBJECT_HEADER_SIZE)
-ADD_TEST_EQ(MIRROR_STRING_OFFSET_OFFSET, art::mirror::String::OffsetOffset().Int32Value())
+#define MIRROR_STRING_VALUE_OFFSET (8 + MIRROR_OBJECT_HEADER_SIZE)
+ADD_TEST_EQ(MIRROR_STRING_VALUE_OFFSET, art::mirror::String::ValueOffset().Int32Value())
 
 // Offsets within java.lang.reflect.ArtMethod.
 #define MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET (4 + MIRROR_OBJECT_HEADER_SIZE)

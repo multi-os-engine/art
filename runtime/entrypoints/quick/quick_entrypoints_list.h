@@ -29,6 +29,9 @@
   V(AllocObjectWithAccessCheck, void*, uint32_t, void*) \
   V(CheckAndAllocArray, void*, uint32_t, void*, int32_t) \
   V(CheckAndAllocArrayWithAccessCheck, void*, uint32_t, void*, int32_t) \
+  V(AllocStringFromBytes, void*, void*, int32_t, int32_t, int32_t) \
+  V(AllocStringFromChars, void*, int32_t, int32_t, void*) \
+  V(AllocStringFromString, void*, void*) \
 \
   V(InstanceofNonTrivial, uint32_t, const mirror::Class*, const mirror::Class*) \
   V(CheckCast, void , void*, void*) \
