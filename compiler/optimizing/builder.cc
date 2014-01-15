@@ -19,6 +19,9 @@
 #include "art_field-inl.h"
 #include "base/logging.h"
 #include "class_linker.h"
+#include "dex/quick/dex_file_method_inliner.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
+#include "dex/verified_method.h"
 #include "dex_file-inl.h"
 #include "dex_instruction-inl.h"
 #include "dex/verified_method.h"
@@ -612,6 +615,21 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
       HInvokeStaticOrDirect::ClinitCheckRequirement::kImplicit;
   // Potential class initialization check, in the case of a static method call.
   HClinitCheck* clinit_check = nullptr;
+  // Replace calls to String.<init> with StringFactory.
+  DexFileMethodInliner* inliner =
+      compiler_driver_->GetMethodInlinerMap()->GetMethodInliner(dex_file_);
+  int32_t string_init_offset = 0;
+  bool is_string_init = inliner->IsStringInitMethodIndex(method_idx);
+  if (is_string_init) {
+    return_type = Primitive::kPrimNot;
+    is_instance_call = false;
+    number_of_arguments--;
+    invoke_type = kStatic;
+    optimized_invoke_type = kStatic;
+
+    size_t pointer_size = InstructionSetPointerSize(compiler_driver_->GetInstructionSet());
+    string_init_offset = inliner->GetOffsetForStringInit(method_idx, pointer_size);
+  }
 
   HInvoke* invoke = nullptr;
 
@@ -698,7 +716,8 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
 
     invoke = new (arena_) HInvokeStaticOrDirect(
         arena_, number_of_arguments, return_type, dex_pc, target_method.dex_method_index,
-        is_recursive, invoke_type, optimized_invoke_type, clinit_check_requirement);
+        is_recursive, string_init_offset, invoke_type, optimized_invoke_type,
+        clinit_check_requirement);
   }
 
   size_t start_index = 0;
@@ -714,6 +733,9 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
 
   uint32_t descriptor_index = 1;
   uint32_t argument_index = start_index;
+  if (is_string_init) {
+    start_index = 1;
+  }
   for (size_t i = start_index; i < number_of_vreg_arguments; i++, argument_index++) {
     Primitive::Type type = Primitive::GetType(descriptor[descriptor_index++]);
     bool is_wide = (type == Primitive::kPrimLong) || (type == Primitive::kPrimDouble);
@@ -740,6 +762,28 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   DCHECK_EQ(argument_index, number_of_arguments);
   current_block_->AddInstruction(invoke);
   latest_result_ = invoke;
+
+  // Add move-result for StringFactory method.
+  if (is_string_init) {
+    uint32_t orig_this_reg = is_range ? register_index : args[0];
+    const VerifiedMethod* verified_method =
+        compiler_driver_->GetVerifiedMethod(dex_file_, dex_compilation_unit_->GetDexMethodIndex());
+    if (verified_method == nullptr) {
+      LOG(WARNING) << "No verified method for method calling String.<init>: "
+                   << PrettyMethod(dex_compilation_unit_->GetDexMethodIndex(), *dex_file_);
+      return false;
+    }
+    const SafeMap<uint32_t, std::set<uint32_t>>& string_init_map =
+        verified_method->GetStringInitPcRegMap();
+    auto map_it = string_init_map.find(dex_pc);
+    if (map_it != string_init_map.end()) {
+      std::set<uint32_t> reg_set = map_it->second;
+      for (auto set_it = reg_set.begin(); set_it != reg_set.end(); ++set_it) {
+        UpdateLocal(*set_it, invoke);
+      }
+    }
+    UpdateLocal(orig_this_reg, invoke);
+  }
   return true;
 }
 
@@ -1916,12 +1960,19 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
 
     case Instruction::NEW_INSTANCE: {
       uint16_t type_index = instruction.VRegB_21c();
-      QuickEntrypointEnum entrypoint = NeedsAccessCheck(type_index)
-          ? kQuickAllocObjectWithAccessCheck
-          : kQuickAllocObject;
+      if (compiler_driver_->IsStringTypeIndex(type_index, dex_file_)) {
+        // Turn new-instance of string into a const 0.
+        int32_t register_index = instruction.VRegA();
+        HIntConstant* constant = graph_->GetIntConstant(0);
+        UpdateLocal(register_index, constant);
+      } else {
+        QuickEntrypointEnum entrypoint = NeedsAccessCheck(type_index)
+            ? kQuickAllocObjectWithAccessCheck
+            : kQuickAllocObject;
 
-      current_block_->AddInstruction(new (arena_) HNewInstance(dex_pc, type_index, entrypoint));
-      UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+        current_block_->AddInstruction(new (arena_) HNewInstance(dex_pc, type_index, entrypoint));
+        UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+      }
       break;
     }
 

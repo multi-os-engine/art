@@ -54,6 +54,12 @@ static ALWAYS_INLINE inline jobject NewInstanceHelper(
   } else if (!kMovingClasses && c->IsClassClass()) {
     movable = false;
   }
+
+  // String constructor is replaced by a StringFactory method in InvokeMethod.
+  if (c->IsStringClass()) {
+    return InvokeMethod(soa, javaMethod, nullptr, javaArgs, num_frames);
+  }
+
   mirror::Object* receiver =
       movable ? c->AllocObject(soa.Self()) : c->AllocNonMovableObject(soa.Self());
   if (receiver == nullptr) {
