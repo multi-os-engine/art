@@ -50,6 +50,13 @@ class IntrinsicVisitor : public ValueObject {
   // Dispatch logic.
 
   void Dispatch(HInvoke* invoke) {
+    if (invoke->GetIntrinsic() == Intrinsics::kStringNewStringFromBytes) {
+      LOG(INFO) << " TRYING TO INTRINSIFY NEWSTRINGFROMBYTES";
+    } else if (invoke->GetIntrinsic() == Intrinsics::kStringNewStringFromChars) {
+      LOG(INFO) << " TRYING TO INTRINSIFY NEWSTRINGFROMCHARS";
+    } else if (invoke->GetIntrinsic() == Intrinsics::kStringNewStringFromString) {
+      LOG(INFO) << " TRYING TO INTRINSIFY NEWSTRINGFROMSTRING";
+    }
     switch (invoke->GetIntrinsic()) {
       case Intrinsics::kNone:
         return;
