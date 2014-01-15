@@ -866,10 +866,6 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
   int value_offset = mirror::String::ValueOffset().Int32Value();
   // Location of count
   int count_offset = mirror::String::CountOffset().Int32Value();
-  // Starting offset within data array
-  int offset_offset = mirror::String::OffsetOffset().Int32Value();
-  // Start of char data with array_
-  int data_offset = mirror::Array::DataOffset(sizeof(uint16_t)).Int32Value();
 
   RegLocation rl_obj = info->args[0];
   RegLocation rl_idx = info->args[1];
@@ -879,16 +875,13 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
   GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, info->opt_flags);
   bool range_check = (!(info->opt_flags & MIR_IGNORE_RANGE_CHECK));
   LIR* launch_pad = NULL;
-  int reg_off = INVALID_REG;
   int reg_ptr = INVALID_REG;
   if (cu_->instruction_set != kX86) {
-    reg_off = AllocTemp();
     reg_ptr = AllocTemp();
     if (range_check) {
       reg_max = AllocTemp();
       LoadWordDisp(rl_obj.low_reg, count_offset, reg_max);
     }
-    LoadWordDisp(rl_obj.low_reg, offset_offset, reg_off);
     LoadWordDisp(rl_obj.low_reg, value_offset, reg_ptr);
     if (range_check) {
       // Set up a launch pad to allow retry in case of bounds violation */
@@ -909,19 +902,14 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
       FreeTemp(reg_max);
       OpCondBranch(kCondUge, launch_pad);
     }
-    reg_off = AllocTemp();
     reg_ptr = AllocTemp();
-    LoadWordDisp(rl_obj.low_reg, offset_offset, reg_off);
     LoadWordDisp(rl_obj.low_reg, value_offset, reg_ptr);
   }
-  OpRegImm(kOpAdd, reg_ptr, data_offset);
-  OpRegReg(kOpAdd, reg_off, rl_idx.low_reg);
   FreeTemp(rl_obj.low_reg);
-  FreeTemp(rl_idx.low_reg);
   RegLocation rl_dest = InlineTarget(info);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  LoadBaseIndexed(reg_ptr, reg_off, rl_result.low_reg, 1, kUnsignedHalf);
-  FreeTemp(reg_off);
+  LoadBaseIndexed(reg_ptr, rl_idx.low_reg, rl_result.low_reg, 1, kUnsignedHalf);
+  FreeTemp(rl_idx.low_reg);
   FreeTemp(reg_ptr);
   StoreValue(rl_dest, rl_result);
   if (range_check) {

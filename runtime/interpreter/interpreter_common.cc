@@ -40,6 +40,15 @@ static inline void AssignRegister(ShadowFrame& new_shadow_frame, const ShadowFra
 template<bool is_range, bool do_assignability_check>
 bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
             const Instruction* inst, uint16_t inst_data, JValue* result) {
+  bool string_init = false;
+  if (method->GetDeclaringClass()->IsStringClass() && method->IsConstructor()) {
+    // TODO: Make this faster.
+    string_init = true;
+    std::string signature = MethodHelper(method).GetSignature();
+    method = String::GetStringfactoryMethodForStringInit(signature);
+    CHECK(method != NULL) << " Got null method for string initializer with signature " << signature;
+  }
+
   // Compute method information.
   MethodHelper mh(method);
   const DexFile::CodeItem* code_item = mh.GetCodeItem();
@@ -82,6 +91,8 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
       size_t receiver_reg = (is_range) ? vregC : arg[0];
       new_shadow_frame->SetVRegReference(dest_reg, shadow_frame.GetVRegReference(receiver_reg));
       ++dest_reg;
+      ++arg_offset;
+    } else if (string_init) {
       ++arg_offset;
     }
     for (size_t shorty_pos = 0; dest_reg < num_regs; ++shorty_pos, ++dest_reg, ++arg_offset) {
@@ -157,6 +168,17 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
   } else {
     UnstartedRuntimeInvoke(self, mh, code_item, new_shadow_frame, result, first_dest_reg);
   }
+
+  if (string_init) {
+    // Overwrite all instances of the old string with the new result.
+    mirror::Object* old_string = shadow_frame.GetVRegReference(vregC);
+    for (uint32_t i = 0; i < shadow_frame.NumberOfVRegs(); i++) {
+      if (shadow_frame.GetVRegReference(i) == old_string) {
+        shadow_frame.SetVRegReference(i, result->GetL());
+      }
+    }
+  }
+
   return !self->IsExceptionPending();
 }
 

@@ -1186,13 +1186,11 @@ DEFINE_FUNCTION art_quick_indexof
     PUSH edi                      // push callee save reg
     mov STRING_COUNT_OFFSET(%eax), %ebx
     mov STRING_VALUE_OFFSET(%eax), %edi
-    mov STRING_OFFSET_OFFSET(%eax), %eax
     testl %edx, %edx              // check if start < 0
     jl   clamp_min
 clamp_done:
     cmpl %ebx, %edx               // check if start >= count
     jge  not_found
-    lea  STRING_DATA_OFFSET(%edi, %eax, 2), %edi  // build a pointer to the start of string data
     mov  %edi, %eax               // save a copy in eax to later compute result
     lea  (%edi, %edx, 2), %edi    // build pointer to start of data to compare
     subl  %edx, %ebx              // compute iteration count
@@ -1238,11 +1236,6 @@ DEFINE_FUNCTION art_quick_string_compareto
     mov STRING_COUNT_OFFSET(%ecx), %ebx
     mov STRING_VALUE_OFFSET(%eax), %esi
     mov STRING_VALUE_OFFSET(%ecx), %edi
-    mov STRING_OFFSET_OFFSET(%eax), %eax
-    mov STRING_OFFSET_OFFSET(%ecx), %ecx
-    /* Build pointers to the start of string data */
-    lea  STRING_DATA_OFFSET(%esi, %eax, 2), %esi
-    lea  STRING_DATA_OFFSET(%edi, %ecx, 2), %edi
     /* Calculate min length and count diff */
     mov   %edx, %ecx
     mov   %edx, %eax

@@ -212,9 +212,18 @@ inline LongArray* Object::AsLongArray() {
   return down_cast<LongArray*>(this);
 }
 
+inline bool Object::IsString() const {
+  return GetClass() == String::GetJavaLangString();
+}
+
 inline String* Object::AsString() {
   DCHECK(GetClass()->IsStringClass());
   return down_cast<String*>(this);
+}
+
+inline const String* Object::AsString() const {
+  DCHECK(GetClass()->IsStringClass());
+  return down_cast<const String*>(this);
 }
 
 inline Throwable* Object::AsThrowable() {
@@ -244,6 +253,8 @@ inline size_t Object::SizeOf() const {
     result = AsArray()->SizeOf();
   } else if (IsClass()) {
     result = AsClass()->SizeOf();
+  } else if (IsString()) {
+    result = AsString()->SizeOf();
   } else {
     result = GetClass()->GetObjectSize();
   }

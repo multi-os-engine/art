@@ -337,18 +337,18 @@ static jfieldID FindFieldID(const ScopedObjectAccess& soa, jclass jni_class, con
   return soa.EncodeField(field);
 }
 
-static void PinPrimitiveArray(const ScopedObjectAccess& soa, Array* array)
+static void PinObject(const ScopedObjectAccess& soa, const mirror::Object* object)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   JavaVMExt* vm = soa.Vm();
   MutexLock mu(soa.Self(), vm->pins_lock);
-  vm->pin_table.Add(array);
+  vm->pin_table.Add(object);
 }
 
-static void UnpinPrimitiveArray(const ScopedObjectAccess& soa, Array* array)
+static void UnpinObject(const ScopedObjectAccess& soa, const mirror::Object* object)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   JavaVMExt* vm = soa.Vm();
   MutexLock mu(soa.Self(), vm->pins_lock);
-  vm->pin_table.Remove(array);
+  vm->pin_table.Remove(object);
 }
 
 static void ThrowAIOOBE(ScopedObjectAccess& soa, Array* array, jsize start,
@@ -1997,7 +1997,7 @@ class JNI {
       ThrowSIOOBE(soa, start, length, s->GetLength());
     } else {
       CHECK_NON_NULL_MEMCPY_ARGUMENT(GetStringRegion, length, buf);
-      const jchar* chars = s->GetCharArray()->GetData() + s->GetOffset();
+      const jchar* chars = s->GetValue();
       memcpy(buf, chars + start, length * sizeof(jchar));
     }
   }
@@ -2011,7 +2011,7 @@ class JNI {
       ThrowSIOOBE(soa, start, length, s->GetLength());
     } else {
       CHECK_NON_NULL_MEMCPY_ARGUMENT(GetStringUTFRegion, length, buf);
-      const jchar* chars = s->GetCharArray()->GetData() + s->GetOffset();
+      const jchar* chars = s->GetValue();
       ConvertUtf16ToModifiedUtf8(buf, chars + start, length);
     }
   }
@@ -2020,26 +2020,18 @@ class JNI {
     CHECK_NON_NULL_ARGUMENT(GetStringUTFRegion, java_string);
     ScopedObjectAccess soa(env);
     String* s = soa.Decode<String*>(java_string);
-    CharArray* chars = s->GetCharArray();
-    PinPrimitiveArray(soa, chars);
+    PinObject(soa, s);
     if (is_copy != nullptr) {
       *is_copy = JNI_TRUE;
     }
-    int32_t char_count = s->GetLength();
-    int32_t offset = s->GetOffset();
-    jchar* bytes = new jchar[char_count + 1];
-    for (int32_t i = 0; i < char_count; i++) {
-      bytes[i] = chars->Get(i + offset);
-    }
-    bytes[char_count] = '\0';
-    return bytes;
+    return s->GetValue();
   }
 
   static void ReleaseStringChars(JNIEnv* env, jstring java_string, const jchar* chars) {
     CHECK_NON_NULL_ARGUMENT(GetStringUTFRegion, java_string);
     delete[] chars;
     ScopedObjectAccess soa(env);
-    UnpinPrimitiveArray(soa, soa.Decode<String*>(java_string)->GetCharArray());
+    UnpinObject(soa, soa.Decode<String*>(java_string));
   }
 
   static const jchar* GetStringCritical(JNIEnv* env, jstring java_string, jboolean* is_copy) {
@@ -2062,7 +2054,7 @@ class JNI {
     size_t byte_count = s->GetUtfLength();
     char* bytes = new char[byte_count + 1];
     CHECK(bytes != NULL);  // bionic aborts anyway.
-    const uint16_t* chars = s->GetCharArray()->GetData() + s->GetOffset();
+    const uint16_t* chars = s->GetValue();
     ConvertUtf16ToModifiedUtf8(bytes, chars, s->GetLength());
     bytes[byte_count] = '\0';
     return bytes;
@@ -2199,7 +2191,7 @@ class JNI {
       // Re-decode in case the object moved since IncrementDisableGC waits for GC to complete.
       array = soa.Decode<Array*>(java_array);
     }
-    PinPrimitiveArray(soa, array);
+    PinObject(soa, array);
     if (is_copy != nullptr) {
       *is_copy = JNI_FALSE;
     }
@@ -2609,7 +2601,7 @@ class JNI {
                                    jboolean* is_copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     ArtArrayT* array = soa.Decode<ArtArrayT*>(java_array);
-    PinPrimitiveArray(soa, array);
+    PinObject(soa, array);
     // Only make a copy if necessary.
     if (Runtime::Current()->GetHeap()->IsMovableObject(array)) {
       if (is_copy != nullptr) {
@@ -2651,8 +2643,8 @@ class JNI {
         delete[] reinterpret_cast<uint64_t*>(elements);
       }
     }
-    // TODO: Do we always unpin primitive array?
-    UnpinPrimitiveArray(soa, array);
+    // TODO: Do we always unpin array?
+    UnpinObject(soa, array);
   }
 
   template <typename JavaArrayT, typename JavaT, typename ArrayT>

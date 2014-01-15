@@ -37,20 +37,16 @@ class MANAGED String : public Object {
   }
 
   static MemberOffset ValueOffset() {
-    return OFFSET_OF_OBJECT_MEMBER(String, array_);
+    return OFFSET_OF_OBJECT_MEMBER(String, value_);
   }
 
-  static MemberOffset OffsetOffset() {
-    return OFFSET_OF_OBJECT_MEMBER(String, offset_);
+  const uint16_t* GetValue() const {
+    const byte* raw_addr = reinterpret_cast<const byte*>(this) + ValueOffset().Int32Value();
+    return reinterpret_cast<const uint16_t*>(raw_addr);
   }
 
-  const CharArray* GetCharArray() const;
-  CharArray* GetCharArray();
-
-  int32_t GetOffset() const {
-    int32_t result = GetField32(OffsetOffset(), false);
-    DCHECK_LE(0, result);
-    return result;
+  inline size_t SizeOf() const {
+    return sizeof(String) + (sizeof(uint16_t) * GetLength());
   }
 
   int32_t GetLength() const;
@@ -71,11 +67,21 @@ class MANAGED String : public Object {
                                 int32_t hash_code = 0)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  static String* AllocFromBytes(Thread* self,
+                               int32_t byte_length,
+                               const uint8_t* byte_data_in,
+                               int32_t high_byte = 0,
+                               int32_t hash_code = 0)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   static String* AllocFromModifiedUtf8(Thread* self, const char* utf)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static String* AllocFromModifiedUtf8(Thread* self, int32_t utf16_length,
                                        const char* utf8_data_in)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static String* Alloc(Thread* self, Class* java_lang_String, int32_t utf16_length)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool Equals(const char* modified_utf8) const
@@ -102,6 +108,8 @@ class MANAGED String : public Object {
 
   int32_t CompareTo(String* other) const;
 
+  CharArray* ToCharArray(Thread* self) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   static Class* GetJavaLangString() {
     DCHECK(java_lang_String_ != NULL);
     return java_lang_String_;
@@ -110,6 +118,9 @@ class MANAGED String : public Object {
   static void SetClass(Class* java_lang_String);
   static void ResetClass();
   static void VisitRoots(RootVisitor* visitor, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static ArtMethod* GetStringFactoryMethodForStringInit(std::string signature)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
@@ -123,28 +134,12 @@ class MANAGED String : public Object {
     SetField32(OFFSET_OF_OBJECT_MEMBER(String, count_), new_count, false);
   }
 
-  void SetOffset(int32_t new_offset) {
-    DCHECK_LE(0, new_offset);
-    DCHECK_GE(GetLength(), new_offset);
-    SetField32(OFFSET_OF_OBJECT_MEMBER(String, offset_), new_offset, false);
-  }
-
-  static String* Alloc(Thread* self, int32_t utf16_length)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  static String* Alloc(Thread* self, const SirtRef<CharArray>& array)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  void SetArray(CharArray* new_array) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
-  CharArray* array_;
-
   int32_t count_;
 
   uint32_t hash_code_;
 
-  int32_t offset_;
+  int32_t value_[0];
 
   static Class* java_lang_String_;
 

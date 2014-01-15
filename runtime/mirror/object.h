@@ -138,7 +138,11 @@ class MANAGED Object {
   IntArray* AsIntArray();
   LongArray* AsLongArray();
 
+  bool IsString() const;
+
   String* AsString();
+
+  const String* AsString() const;
 
   Throwable* AsThrowable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

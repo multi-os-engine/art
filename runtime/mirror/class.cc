@@ -125,6 +125,19 @@ void Class::SetDexCache(DexCache* new_dex_cache) {
   SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, dex_cache_), new_dex_cache, false);
 }
 
+Object* Class::AllocObject(Thread* self) {
+  DCHECK(!IsArrayClass()) << PrettyClass(this);
+  DCHECK(IsInstantiable()) << PrettyClass(this);
+  // TODO: decide whether we want this check. It currently fails during bootstrap.
+  // DCHECK(!Runtime::Current()->IsStarted() || IsInitializing()) << PrettyClass(this);
+  if (IsStringClass()) {
+    return Runtime::Current()->GetHeap()->AllocObject(self, this, sizeof(mirror::String));
+  } else {
+    DCHECK_GE(this->object_size_, sizeof(Object));
+    return Runtime::Current()->GetHeap()->AllocObject(self, this, this->object_size_);
+  }
+}
+
 void Class::SetClassSize(size_t new_class_size) {
   if (kIsDebugBuild && (new_class_size < GetClassSize())) {
     DumpClass(LOG(ERROR), kDumpClassFullDetail);

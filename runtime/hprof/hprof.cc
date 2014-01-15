@@ -871,8 +871,8 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
     // allocated which hasn't been initialized yet.
   } else {
     if (obj->IsClass()) {
-      mirror::Class* thisClass = obj->AsClass();
       // obj is a ClassObject.
+      mirror::Class* thisClass = obj->AsClass();
       size_t sFieldCount = thisClass->NumStaticFields();
       if (sFieldCount != 0) {
         int byteLength = sFieldCount*sizeof(JValue);  // TODO bogus; fields are packed
@@ -903,6 +903,8 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
         rec->AddU4(sizeof(mirror::Class));  // instance size
       } else if (thisClass->IsArrayClass() || thisClass->IsPrimitive()) {
         rec->AddU4(0);
+      } else if (thisClass->IsStringClass()) {
+        rec->AddU4(sizeof(mirror::String) - sizeof(mirror::Object));
       } else {
         rec->AddU4(thisClass->GetObjectSize());  // instance size
       }
@@ -945,12 +947,19 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
       // Instance fields for this class (no superclass fields)
       int iFieldCount = thisClass->IsObjectClass() ? 0 : thisClass->NumInstanceFields();
       rec->AddU2((uint16_t)iFieldCount);
+      if (thisClass->IsStringClass()) {
+        iFieldCount--;
+      }
       for (int i = 0; i < iFieldCount; ++i) {
         mirror::ArtField* f = thisClass->GetInstanceField(i);
         fh.ChangeField(f);
         HprofBasicType t = SignatureToBasicTypeAndSize(fh.GetTypeDescriptor(), NULL);
         rec->AddId(LookupStringId(fh.GetName()));
         rec->AddU1(t);
+      }
+      if (thisClass->IsStringClass()) {
+        rec->AddId(LookupStringId("value"));
+        rec->AddU1(hprof_basic_object);
       }
     } else if (c->IsArrayClass()) {
       const mirror::Array* aobj = obj->AsArray();
@@ -990,6 +999,23 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
           rec->AddU8List((const uint64_t*)aobj->GetRawData(sizeof(uint64_t)), length);
         }
       }
+    } else if (c->IsStringClass()) {
+      mirror::String* s = obj->AsString();
+      rec->AddU1(HPROF_INSTANCE_DUMP);
+      rec->AddId((HprofObjectId)obj);
+      rec->AddU4(StackTraceSerialNumber(obj));
+      rec->AddId(LookupClassId(c));
+      rec->AddU4(sizeof(mirror::String) - sizeof(mirror::Object));
+      rec->AddU4(s->GetLength());
+      HprofObjectId char_array_id = (HprofObjectId)obj + 3 * sizeof(uintptr_t);
+      rec->AddId(char_array_id);
+
+      rec->AddU1(HPROF_PRIMITIVE_ARRAY_DUMP);
+      rec->AddId(char_array_id);
+      rec->AddU4(StackTraceSerialNumber(obj));
+      rec->AddU4(s->GetLength());
+      rec->AddU1(hprof_basic_char);
+      rec->AddU2List(s->GetValue(), s->GetLength());
     } else {
       // obj is an instance object.
       rec->AddU1(HPROF_INSTANCE_DUMP);

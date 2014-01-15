@@ -607,6 +607,7 @@ void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_
     if (df_flags & DF_LVN) {
       cur_block->use_lvn = true;  // Run local value numbering on this basic block.
     }
+    int string_factory_result_reg = -1;
 
     // Check for inline data block signatures
     if (opcode == Instruction::NOP) {
@@ -629,6 +630,34 @@ void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_
         // Unreachable instruction, mark for no continuation.
         flags &= ~Instruction::kContinue;
       }
+    } else if (opcode == Instruction::NEW_INSTANCE) {
+      const Instruction* instruction = Instruction::At(code_ptr);
+      uint32_t type_idx = insn->dalvikInsn.vB;
+      // Change new-instance of Strings to be nop.
+      if (PrettyType(type_idx, dex_file) == "java.lang.String") {
+        // LOG(INFO) << "NEW " << std::hex << instruction->GetDexPc(code_item->insns_) << std::dec
+                  // << " : " << instruction->DumpString(&dex_file) << " in " << PrettyMethod(method_idx, dex_file);
+        // insn->meta.original_opcode = insn->dalvikInsn.opcode;
+        // insn->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+      }
+      AppendMIR(cur_block, insn);
+    } else if (opcode == Instruction::INVOKE_DIRECT) {
+      const Instruction* instruction = Instruction::At(code_ptr);
+      uint32_t invoked_method_idx = insn->dalvikInsn.vB;
+      // Change invocations of String.<init> to call StringFactory instead.
+      if (PrettyMethod(invoked_method_idx, dex_file, false) == "java.lang.String.<init>") {
+        string_factory_result_reg = insn->dalvikInsn.arg[0];
+        // LOG(INFO) << "INVOKE " << std::hex << instruction->GetDexPc(code_item->insns_) << std::dec
+                  // << " : " << instruction->DumpString(&dex_file) << " in " << PrettyMethod(method_idx, dex_file);;
+        // insn->dalvikInsn.opcode = Instruction::INVOKE_STATIC;
+        // const DexFile::MethodId& invoked_method_id = dex_file.GetMethodId(invoked_method_idx);
+        // insn->dalvikInsn.vB = mirror::String::GetStringFactoryMethodForStringInit(dex_file.GetMethodSignature(invoked_method_id))->GetDexMethodIndex();
+        // insn->dalvikInsn.vA -= 1;
+        // for (uint32_t i = 0; i < insn->dalvikInsn.vA; i++) {
+          // insn->dalvikInsn.arg[i] = insn->dalvikInsn.arg[i + 1];
+        // }
+      }
+      AppendMIR(cur_block, insn);
     } else {
       AppendMIR(cur_block, insn);
     }
@@ -682,6 +711,12 @@ void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_
         next_block->predecessors->Insert(cur_block->id);
       }
       cur_block = next_block;
+    }
+
+    if (string_factory_result_reg != -1) {
+      // MIR* new_insn = static_cast<MIR*>(arena_->Alloc(sizeof(MIR), ArenaAllocator::kAllocMIR));
+      // new_insn->dalvikInsn = insn->dalvikInsn;
+      // new_insn->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpStringFactoryMoveResult);
     }
   }
 

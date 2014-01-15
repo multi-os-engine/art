@@ -57,8 +57,7 @@ class ObjectTest : public CommonTest {
     Thread* self = Thread::Current();
     SirtRef<String> string(self, String::AllocFromModifiedUtf8(self, expected_utf16_length, utf8_in));
     ASSERT_EQ(expected_utf16_length, string->GetLength());
-    ASSERT_TRUE(string->GetCharArray() != NULL);
-    ASSERT_TRUE(string->GetCharArray()->GetData() != NULL);
+    ASSERT_TRUE(string->GetValue() != NULL);
     // strlen is necessary because the 1-character string "\x00\x00" is interpreted as ""
     ASSERT_TRUE(string->Equals(utf8_in) || (expected_utf16_length == 1 && strlen(utf8_in) == 0));
     ASSERT_TRUE(string->Equals(StringPiece(utf8_in)) || (expected_utf16_length == 1 && strlen(utf8_in) == 0));
@@ -73,6 +72,8 @@ class ObjectTest : public CommonTest {
 TEST_F(ObjectTest, AsmConstants) {
   EXPECT_EQ(CLASS_OFFSET, Object::ClassOffset().Int32Value());
   EXPECT_EQ(LOCK_WORD_OFFSET, Object::MonitorOffset().Int32Value());
+  ASSERT_EQ(STRING_VALUE_OFFSET, String::ValueOffset().Int32Value());
+  ASSERT_EQ(STRING_COUNT_OFFSET, String::CountOffset().Int32Value());
 
   EXPECT_EQ(CLASS_COMPONENT_TYPE_OFFSET, Class::ComponentTypeOffset().Int32Value());
 
@@ -385,12 +386,6 @@ TEST_F(ObjectTest, StringLength) {
   SirtRef<String> string(soa.Self(), String::AllocFromModifiedUtf8(soa.Self(), "android"));
   EXPECT_EQ(string->GetLength(), 7);
   EXPECT_EQ(string->GetUtfLength(), 7);
-
-  string->SetOffset(2);
-  string->SetCount(5);
-  EXPECT_TRUE(string->Equals("droid"));
-  EXPECT_EQ(string->GetLength(), 5);
-  EXPECT_EQ(string->GetUtfLength(), 5);
 }
 
 TEST_F(ObjectTest, DescriptorCompare) {

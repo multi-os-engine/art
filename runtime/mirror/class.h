@@ -385,9 +385,9 @@ class MANAGED Class : public Object {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool IsVariableSize() const {
-    // Classes and arrays vary in size, and so the object_size_ field cannot
+    // Classes, arrays, and strings vary in size, and so the object_size_ field cannot
     // be used to get their instance size
-    return IsClassClass() || IsArrayClass();
+    return IsClassClass() || IsArrayClass() || IsStringClass();
   }
 
   size_t SizeOf() const {

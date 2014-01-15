@@ -86,7 +86,14 @@ ALWAYS_INLINE static inline mirror::Class* CheckObjectAlloc(uint32_t type_idx,
     *slow_path = true;
     return sirt_klass.get();
   }
+  CHECK(!klass->IsStringClass());
   return klass;
+  // if (klass->IsStringClass()) {
+    // TODO: Should this ever happen?
+    // Allocate an empty string as a placeholder.
+    // return Runtime::Current()->GetHeap()->AllocObject(self, klass, sizeof(mirror::String));
+  // }
+  // return klass->AllocObject(self);
 }
 
 // Given the context of a calling Method, use its DexCache to resolve a type to a Class. If it
