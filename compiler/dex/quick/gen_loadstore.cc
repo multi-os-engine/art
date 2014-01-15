@@ -303,4 +303,27 @@ RegLocation Mir2Lir::LoadCurrMethod() {
   return LoadValue(mir_graph_->GetMethodLoc(), kCoreReg);
 }
 
+RegLocation Mir2Lir::ForceTempWide(RegLocation loc) {
+  DCHECK(loc.location == kLocPhysReg);
+  DCHECK(!IsFpReg(loc.low_reg));
+  DCHECK(!IsFpReg(loc.high_reg));
+  if (IsTemp(loc.low_reg)) {
+    Clobber(loc.low_reg);
+  } else {
+    int temp_low = AllocTemp();
+    OpRegCopy(temp_low, loc.low_reg);
+    loc.low_reg = temp_low;
+  }
+  if (loc.wide) {
+    if (IsTemp(loc.high_reg)) {
+      Clobber(loc.high_reg);
+    } else {
+      int temp_high = AllocTemp();
+      OpRegCopy(temp_high, loc.high_reg);
+      loc.high_reg = temp_high;
+    }
+  }
+  return loc;
+}
+
 }  // namespace art

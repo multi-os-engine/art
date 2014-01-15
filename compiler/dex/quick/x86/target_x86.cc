@@ -679,7 +679,7 @@ RegLocation X86Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update)
   }
 
   DCHECK_NE(loc.s_reg_low, INVALID_SREG);
-  if (IsFpReg(loc.low_reg) && reg_class != kCoreReg) {
+  if (loc.location == kLocPhysReg && IsFpReg(loc.low_reg) && reg_class != kCoreReg) {
     // Need a wide vector register.
     low_reg = AllocTypedTemp(true, reg_class);
     loc.low_reg = low_reg;
@@ -697,13 +697,16 @@ RegLocation X86Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update)
     loc.low_reg = new_regs & 0xff;
     loc.high_reg = (new_regs >> 8) & 0xff;
 
-    MarkPair(loc.low_reg, loc.high_reg);
+    if (loc.low_reg != loc.high_reg) {
+      MarkPair(loc.low_reg, loc.high_reg);
+    }
     if (update) {
       loc.location = kLocPhysReg;
       MarkLive(loc.low_reg, loc.s_reg_low);
-      MarkLive(loc.high_reg, GetSRegHi(loc.s_reg_low));
+      if (loc.low_reg != loc.high_reg) {
+        MarkLive(loc.high_reg, GetSRegHi(loc.s_reg_low));
+      }
     }
-    DCHECK(!IsFpReg(loc.low_reg) || ((loc.low_reg & 0x1) == 0));
   }
   return loc;
 }
@@ -796,4 +799,23 @@ void X86Mir2Lir::GenConstWide(RegLocation rl_dest, int64_t value) {
   // Just use the standard code to do the generation.
   Mir2Lir::GenConstWide(rl_dest, value);
 }
+
+void X86Mir2Lir::DumpRegLocation(RegLocation& loc) {
+  printf("location: %d, %c %c %c %c %c %c %c %c vec_len: %d, low: %d, high: %d, s_reg: %d, orig: %d\n",
+         loc.location,
+         loc.wide ? 'w' : ' ',
+         loc.defined ? 'D' : ' ',
+         loc.is_const ? 'c' : ' ',
+         loc.fp ? 'F' : ' ',
+         loc.core ? 'C' : ' ',
+         loc.ref ? 'r' : ' ',
+         loc.high_word ? 'h' : ' ',
+         loc.home ? 'H' : ' ',
+         loc.vec_len,
+         loc.low_reg,
+         loc.high_reg,
+         loc.s_reg_low,
+         loc.orig_sreg);
+}
+
 }  // namespace art

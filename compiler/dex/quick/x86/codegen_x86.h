@@ -136,6 +136,28 @@ class X86Mir2Lir : public Mir2Lir {
     void GenPackedSwitch(MIR* mir, DexOffset table_offset, RegLocation rl_src);
     void GenSparseSwitch(MIR* mir, DexOffset table_offset, RegLocation rl_src);
     void GenSpecialCase(BasicBlock* bb, MIR* mir, const InlineMethod& special);
+    /*
+     * @brief Generate a two address long operation with a constant value
+     * @param rl_dest location of result
+     * @param rl_src constant source operand
+     * @param op Opcode to be generated
+     */
+    void GenLongImm(RegLocation rl_dest, RegLocation rl_src, Instruction::Code op);
+    /*
+     * @brief Generate a three address long operation with a constant value
+     * @param rl_dest location of result
+     * @param rl_src1 source operand
+     * @param rl_src2 constant source operand
+     * @param op Opcode to be generated
+     */
+    void GenLongLongImm(RegLocation rl_dest, RegLocation rl_src1,
+                        RegLocation rl_src2, Instruction::Code op);
+    /*
+     * @brief Force a location (in register(s)) into temporary register(s)
+     * @param loc location of result
+     * @returns update location
+     */
+    RegLocation ForceTemp(RegLocation loc);
 
     // Single operation generators.
     LIR* OpUnconditionalBranch(LIR* target);
@@ -230,6 +252,30 @@ class X86Mir2Lir : public Mir2Lir {
                                   int64_t val, ConditionCode ccode);
     void OpVectorRegCopyWide(uint8_t fp_reg, uint8_t low_reg, uint8_t high_reg);
     void GenConstWide(RegLocation rl_dest, int64_t value);
+
+    /*
+     * @brief Return the correct x86 opcode for the Dex operation
+     * @param op Dex opcode for the operation
+     * @param loc Register location of the operand
+     * @param is_high_op 'true' if this is an operation on the high word
+     * @param value Immediate value for the operation.  Used for byte variants
+     * @returns the correct x86 opcode to perform the operation
+     */
+    X86OpCode GetOpcode(Instruction::Code op, RegLocation loc, bool is_high_op, int32_t value);
+
+    /*
+     * @brief Is this operation a no-op for this opcode and value
+     * @param op Dex opcode for the operation
+     * @param value Immediate value for the operation.
+     * @returns 'true' if the operation will have no effect
+     */
+    bool IsNoOp(Instruction::Code op, int32_t value);
+
+    /*
+     * @brief Dump a RegLocation using printf
+     * @param loc Register location to dump
+     */
+    static void DumpRegLocation(RegLocation& loc);
 };
 
 }  // namespace art

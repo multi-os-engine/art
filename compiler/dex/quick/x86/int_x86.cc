@@ -748,8 +748,195 @@ void X86Mir2Lir::GenShiftImmOpLong(Instruction::Code opcode, RegLocation rl_dest
 
 void X86Mir2Lir::GenArithImmOpLong(Instruction::Code opcode,
                                    RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) {
-  // Default - bail to non-const handler.
-  GenArithOpLong(opcode, rl_dest, rl_src1, rl_src2);
+  switch (opcode) {
+    case Instruction::ADD_LONG:
+    case Instruction::AND_LONG:
+    case Instruction::OR_LONG:
+    case Instruction::XOR_LONG:
+      if (rl_src2.is_const) {
+        GenLongLongImm(rl_dest, rl_src1, rl_src2, opcode);
+      } else {
+        DCHECK(rl_src1.is_const);
+        GenLongLongImm(rl_dest, rl_src2, rl_src1, opcode);
+      }
+      break;
+    case Instruction::SUB_LONG:
+    case Instruction::SUB_LONG_2ADDR:
+      if (rl_src2.is_const) {
+        GenLongLongImm(rl_dest, rl_src1, rl_src2, opcode);
+      } else {
+        GenSubLong(rl_dest, rl_src1, rl_src2);
+      }
+      break;
+    case Instruction::ADD_LONG_2ADDR:
+    case Instruction::OR_LONG_2ADDR:
+    case Instruction::XOR_LONG_2ADDR:
+    case Instruction::AND_LONG_2ADDR:
+      if (rl_src2.is_const) {
+        GenLongImm(rl_dest, rl_src2, opcode);
+      } else {
+        DCHECK(rl_src1.is_const);
+        GenLongLongImm(rl_dest, rl_src2, rl_src1, opcode);
+      }
+      break;
+    default:
+      // Default - bail to non-const handler.
+      GenArithOpLong(opcode, rl_dest, rl_src1, rl_src2);
+  }
+}
+
+bool X86Mir2Lir::IsNoOp(Instruction::Code op, int32_t value) {
+  switch (op) {
+    case Instruction::AND_LONG_2ADDR:
+    case Instruction::AND_LONG:
+      return value == -1;
+    case Instruction::OR_LONG:
+    case Instruction::OR_LONG_2ADDR:
+    case Instruction::XOR_LONG:
+    case Instruction::XOR_LONG_2ADDR:
+      return value == 0;
+    default:
+      return false;
+  }
+}
+
+X86OpCode X86Mir2Lir::GetOpcode(Instruction::Code op, RegLocation loc, bool is_high_op,
+                                int32_t value) {
+  bool inMem = loc.location != kLocPhysReg;
+  bool byte_imm = IS_SIMM8(value);
+  DCHECK(inMem || !IsFpReg(loc.low_reg));
+  switch (op) {
+    case Instruction::ADD_LONG:
+    case Instruction::ADD_LONG_2ADDR:
+      if (byte_imm) {
+        if (inMem) {
+          return is_high_op ? kX86Adc32MI8 : kX86Add32MI8;
+        }
+        return is_high_op ? kX86Adc32RI8 : kX86Add32RI8;
+      }
+      if (inMem) {
+        return is_high_op ? kX86Adc32MI : kX86Add32MI;
+      }
+      return is_high_op ? kX86Adc32RI : kX86Add32RI;
+    case Instruction::SUB_LONG:
+    case Instruction::SUB_LONG_2ADDR:
+      if (byte_imm) {
+        if (inMem) {
+          return is_high_op ? kX86Sbb32MI8 : kX86Sub32MI8;
+        }
+        return is_high_op ? kX86Sbb32RI8 : kX86Sub32RI8;
+      }
+      if (inMem) {
+        return is_high_op ? kX86Sbb32MI : kX86Sub32MI;
+      }
+      return is_high_op ? kX86Sbb32RI : kX86Sub32RI;
+    case Instruction::AND_LONG_2ADDR:
+    case Instruction::AND_LONG:
+      if (byte_imm) {
+        return inMem ? kX86And32MI8 : kX86And32RI8;
+      }
+      return inMem ? kX86And32MI : kX86And32RI;
+    case Instruction::OR_LONG:
+    case Instruction::OR_LONG_2ADDR:
+      if (byte_imm) {
+        return inMem ? kX86Or32MI8 : kX86Or32RI8;
+      }
+      return inMem ? kX86Or32MI : kX86Or32RI;
+    case Instruction::XOR_LONG:
+    case Instruction::XOR_LONG_2ADDR:
+      if (byte_imm) {
+        return inMem ? kX86Xor32MI8 : kX86Xor32RI8;
+      }
+      return inMem ? kX86Xor32MI : kX86Xor32RI;
+    default:
+      LOG(FATAL) << "Unexpected opcode: " << op;
+      return kX86Add32MI;
+  }
+}
+
+void X86Mir2Lir::GenLongImm(RegLocation rl_dest, RegLocation rl_src, Instruction::Code op) {
+  DCHECK(rl_src.is_const);
+  int64_t val = mir_graph_->ConstantValueWide(rl_src);
+  int32_t val_lo = Low32Bits(val);
+  int32_t val_hi = High32Bits(val);
+  rl_dest = UpdateLocWide(rl_dest);
+
+  // Can we just do this into memory?
+  X86OpCode x86op;
+  if ((rl_dest.location == kLocDalvikFrame) ||
+      (rl_dest.location == kLocCompilerTemp)) {
+    int rBase = TargetReg(kSp);
+    int displacement = SRegOffset(rl_dest.s_reg_low);
+
+    LIR * lir;
+    if (!IsNoOp(op, val_lo)) {
+      x86op = GetOpcode(op, rl_dest, false, val_lo);
+      lir = NewLIR3(x86op, rBase, displacement + LOWORD_OFFSET, val_lo);
+      AnnotateDalvikRegAccess(lir, (displacement + LOWORD_OFFSET) >> 2,
+                              false /* is_load */, true /* is64bit */);
+    }
+    if (!IsNoOp(op, val_hi)) {
+      x86op = GetOpcode(op, rl_dest, true, val_hi);
+      lir = NewLIR3(x86op, rBase, displacement + HIWORD_OFFSET, val_hi);
+      AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
+                                false /* is_load */, true /* is64bit */);
+    }
+    return;
+  }
+
+  rl_dest = EvalLocWide(rl_dest, kCoreReg, true);
+  DCHECK_EQ(rl_dest.location, kLocPhysReg);
+  DCHECK(!IsFpReg(rl_dest.low_reg));
+
+  if (!IsNoOp(op, val_lo)) {
+    x86op = GetOpcode(op, rl_dest, false, val_lo);
+    NewLIR2(x86op, rl_dest.low_reg, val_lo);
+  }
+  if (!IsNoOp(op, val_hi)) {
+    x86op = GetOpcode(op, rl_dest, true, val_hi);
+    NewLIR2(x86op, rl_dest.high_reg, val_hi);
+  }
+}
+
+void X86Mir2Lir::GenLongLongImm(RegLocation rl_dest, RegLocation rl_src1,
+                                RegLocation rl_src2, Instruction::Code op) {
+  DCHECK(rl_src2.is_const);
+  int64_t val = mir_graph_->ConstantValueWide(rl_src2);
+  int32_t val_lo = Low32Bits(val);
+  int32_t val_hi = High32Bits(val);
+  rl_dest = UpdateLocWide(rl_dest);
+  rl_src1 = UpdateLocWide(rl_src1);
+
+  // Can we do this directly into the destination registers?
+  X86OpCode x86op;
+  if (rl_dest.location == kLocPhysReg && rl_src1.location == kLocPhysReg &&
+      rl_dest.low_reg == rl_src1.low_reg && rl_dest.high_reg == rl_src1.high_reg) {
+    if (!IsNoOp(op, val_lo)) {
+      x86op = GetOpcode(op, rl_dest, false, val_lo);
+      NewLIR2(x86op, rl_dest.low_reg, val_lo);
+    }
+    if (!IsNoOp(op, val_hi)) {
+      x86op = GetOpcode(op, rl_dest, true, val_hi);
+      NewLIR2(x86op, rl_dest.high_reg, val_hi);
+    }
+    return;
+  }
+
+  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
+  DCHECK_EQ(rl_src1.location, kLocPhysReg);
+
+  // We need the values to be in a temporary
+  RegLocation rl_result = ForceTempWide(rl_src1);
+  if (!IsNoOp(op, val_lo)) {
+    x86op = GetOpcode(op, rl_result, false, val_lo);
+    NewLIR2(x86op, rl_result.low_reg, val_lo);
+  }
+  if (!IsNoOp(op, val_hi)) {
+    x86op = GetOpcode(op, rl_result, true, val_hi);
+    NewLIR2(x86op, rl_result.high_reg, val_hi);
+  }
+
+  StoreValueWide(rl_dest, rl_result);
 }
 
 }  // namespace art
