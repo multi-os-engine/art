@@ -24,6 +24,7 @@ class JniTest {
         testCallStaticVoidMethodOnSubClass();
         testGetMirandaMethod();
         testZeroLengthByteBuffers();
+        testNewStringObject();
     }
 
     private static native void testFindClassOnAttachedNativeThread();
@@ -79,4 +80,6 @@ class JniTest {
     private static interface testGetMirandaMethod_MirandaInterface {
         public boolean inInterface();
     }
+
+    private static native void testNewStringObject();
 }
