@@ -76,6 +76,9 @@ Object* Object::Clone(Thread* self) {
   Object* copy;
   if (heap->IsMovableObject(this)) {
     copy = heap->AllocObject<true>(self, GetClass(), num_bytes);
+    if (GetClass()->IsStringClass()) {
+      LOG(INFO) << " CLONE STRING? " << std::hex << copy;
+    }
   } else {
     copy = heap->AllocNonMovableObject<true>(self, GetClass(), num_bytes);
   }

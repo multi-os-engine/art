@@ -32,27 +32,53 @@ namespace mirror {
 // C++ mirror of java.lang.String
 class MANAGED String : public Object {
  public:
+  enum StringFactoryMethodIndex {
+    kEmptyString                = 0xfffffff0,
+    kStringFromBytes_B          = 0xfffffff1,
+    kStringFromBytes_BI         = 0xfffffff2,
+    kStringFromBytes_BII        = 0xfffffff3,
+    kStringFromBytes_BIII       = 0xfffffff4,
+    kStringFromBytes_BIIString  = 0xfffffff5,
+    kStringFromBytes_BString    = 0xfffffff6,
+    kStringFromBytes_BIICharset = 0xfffffff7,
+    kStringFromBytes_BCharset   = 0xfffffff8,
+    kStringFromChars_C          = 0xfffffff9,
+    kStringFromChars_CII        = 0xfffffffa,
+    kStringFromCharsNoCheck     = 0xfffffffb,
+    kStringFromString           = 0xfffffffc,
+    kStringFromStringBuffer     = 0xfffffffd,
+    kStringFromCodePoints       = 0xfffffffe,
+    kStringFromStringBuilder    = 0xffffffff,
+  };
+
   static MemberOffset CountOffset() {
     return OFFSET_OF_OBJECT_MEMBER(String, count_);
   }
 
   static MemberOffset ValueOffset() {
-    return OFFSET_OF_OBJECT_MEMBER(String, array_);
+    return OFFSET_OF_OBJECT_MEMBER(String, value_);
   }
 
-  static MemberOffset OffsetOffset() {
-    return OFFSET_OF_OBJECT_MEMBER(String, offset_);
+  const uint16_t* GetValue() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    const byte* raw_addr = reinterpret_cast<const byte*>(this) + ValueOffset().Int32Value();
+    return reinterpret_cast<const uint16_t*>(raw_addr);
   }
 
-  CharArray* GetCharArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  int32_t GetOffset() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    int32_t result = GetField32(OffsetOffset(), false);
-    DCHECK_LE(0, result);
-    return result;
+  inline size_t SizeOf() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return sizeof(String) + (sizeof(uint16_t) * GetCount());
   }
 
-  int32_t GetLength() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  int32_t GetCount() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetField32(OFFSET_OF_OBJECT_MEMBER(String, count_), false);
+  }
+
+  void SetCount(int32_t new_count) {
+    DCHECK_LE(0, new_count);
+    // We use non transactional version since we can't undo this write. We also disable checking
+    // since it would fail during a transaction.
+    SetField32<false, false>(OFFSET_OF_OBJECT_MEMBER(String, count_), new_count, false);
+  }
+
 
   int32_t GetHashCode() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -64,17 +90,30 @@ class MANAGED String : public Object {
 
   String* Intern() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  static String* AllocFromUtf16(Thread* self,
-                                int32_t utf16_length,
-                                const uint16_t* utf16_data_in,
+  static String* AllocFromString(Thread* self, int32_t string_length, SirtRef<String>& string,
+                                int32_t offset, int32_t hash_code = 0)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static String* AllocFromCharArray(Thread* self, int32_t array_length, SirtRef<CharArray>& array,
+                                    int32_t offset, int32_t hash_code = 0)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static String* AllocFromUtf16(Thread* self, int32_t utf16_length, const uint16_t* utf16_data_in,
                                 int32_t hash_code = 0)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static String* AllocFromByteArray(Thread* self, int32_t byte_length, SirtRef<ByteArray>& array,
+                                    int32_t offset, int32_t high_byte = 0, int32_t hash_code = 0)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static String* AllocFromModifiedUtf8(Thread* self, const char* utf)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  static String* AllocFromModifiedUtf8(Thread* self, int32_t utf16_length,
-                                       const char* utf8_data_in)
+  static String* AllocFromModifiedUtf8(Thread* self, int32_t utf16_length, const char* utf8_data_in)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  template <bool kIsInstrumented>
+  static String* Alloc(Thread* self, int32_t utf16_length)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool Equals(const char* modified_utf8) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -100,6 +139,8 @@ class MANAGED String : public Object {
 
   int32_t CompareTo(String* other) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  CharArray* ToCharArray(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   static Class* GetJavaLangString() {
     DCHECK(java_lang_String_ != NULL);
     return java_lang_String_;
@@ -110,6 +151,12 @@ class MANAGED String : public Object {
   static void VisitRoots(RootCallback* callback, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  static uint32_t GetStringFactoryMethodIndex(std::string signature);
+  static std::string GetStringFactoryMethodSignature(uint32_t index);
+  static const char* GetStringFactoryMethodName(std::string signature);
+  static ArtMethod* GetStringFactoryMethodForStringInit(std::string signature)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
  private:
   void SetHashCode(int32_t new_hash_code) {
     // Hash code is invariant so use non-transactional mode. Also disable check as we may run inside
@@ -118,36 +165,12 @@ class MANAGED String : public Object {
     SetField32<false, false>(OFFSET_OF_OBJECT_MEMBER(String, hash_code_), new_hash_code, false);
   }
 
-  template<bool kTransactionActive>
-  void SetCount(int32_t new_count) {
-    DCHECK_LE(0, new_count);
-    SetField32<kTransactionActive>(OFFSET_OF_OBJECT_MEMBER(String, count_), new_count, false);
-  }
-
-  template<bool kTransactionActive>
-  void SetOffset(int32_t new_offset) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK_LE(0, new_offset);
-    DCHECK_GE(GetLength(), new_offset);
-    SetField32<kTransactionActive>(OFFSET_OF_OBJECT_MEMBER(String, offset_), new_offset, false);
-  }
-
-  static String* Alloc(Thread* self, int32_t utf16_length)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  static String* Alloc(Thread* self, const SirtRef<CharArray>& array)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  template<bool kTransactionActive>
-  void SetArray(CharArray* new_array) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
-  HeapReference<CharArray> array_;
-
   int32_t count_;
 
   uint32_t hash_code_;
 
-  int32_t offset_;
+  int32_t value_[0];
 
   static Class* java_lang_String_;
 

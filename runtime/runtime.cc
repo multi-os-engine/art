@@ -437,7 +437,7 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
 
   parsed->compiler_callbacks_ = nullptr;
   parsed->is_zygote_ = false;
-  parsed->interpreter_only_ = false;
+  parsed->interpreter_only_ = true;
   parsed->is_explicit_gc_disabled_ = false;
 
   parsed->long_pause_log_threshold_ = gc::Heap::kDefaultLongPauseLogThreshold;
@@ -1175,6 +1175,7 @@ void Runtime::RegisterRuntimeNativeMethods(JNIEnv* env) {
   REGISTER(register_java_lang_Object);
   REGISTER(register_java_lang_Runtime);
   REGISTER(register_java_lang_String);
+  REGISTER(register_java_lang_StringFactory);
   REGISTER(register_java_lang_System);
   REGISTER(register_java_lang_Thread);
   REGISTER(register_java_lang_VMClassLoader);

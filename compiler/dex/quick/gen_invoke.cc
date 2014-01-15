@@ -966,37 +966,27 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
     // TODO - add Mips implementation
     return false;
   }
-  // Location of reference to data array
+  // Location of char array data
   int value_offset = mirror::String::ValueOffset().Int32Value();
   // Location of count
   int count_offset = mirror::String::CountOffset().Int32Value();
-  // Starting offset within data array
-  int offset_offset = mirror::String::OffsetOffset().Int32Value();
-  // Start of char data with array_
-  int data_offset = mirror::Array::DataOffset(sizeof(uint16_t)).Int32Value();
 
   RegLocation rl_obj = info->args[0];
   RegLocation rl_idx = info->args[1];
   rl_obj = LoadValue(rl_obj, kCoreReg);
   // X86 wants to avoid putting a constant index into a register.
-  if (!(cu_->instruction_set == kX86 && rl_idx.is_const)) {
-    rl_idx = LoadValue(rl_idx, kCoreReg);
-  }
+  // if (!(cu_->instruction_set == kX86 && rl_idx.is_const)) {
+  rl_idx = LoadValue(rl_idx, kCoreReg);
+  // }
   int reg_max;
   GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, info->opt_flags);
   bool range_check = (!(info->opt_flags & MIR_IGNORE_RANGE_CHECK));
   LIR* launch_pad = NULL;
-  int reg_off = INVALID_REG;
-  int reg_ptr = INVALID_REG;
   if (cu_->instruction_set != kX86) {
-    reg_off = AllocTemp();
-    reg_ptr = AllocTemp();
     if (range_check) {
       reg_max = AllocTemp();
       LoadWordDisp(rl_obj.low_reg, count_offset, reg_max);
     }
-    LoadWordDisp(rl_obj.low_reg, offset_offset, reg_off);
-    LoadWordDisp(rl_obj.low_reg, value_offset, reg_ptr);
     if (range_check) {
       // Set up a launch pad to allow retry in case of bounds violation */
       launch_pad = RawLIR(0, kPseudoIntrinsicRetry, WrapPointer(info));
@@ -1005,7 +995,6 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
       FreeTemp(reg_max);
       OpCondBranch(kCondUge, launch_pad);
     }
-    OpRegImm(kOpAdd, reg_ptr, data_offset);
   } else {
     if (range_check) {
       // On x86, we can compare to memory directly
@@ -1020,29 +1009,16 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
         OpCondBranch(kCondUge, launch_pad);
       }
     }
-    reg_off = AllocTemp();
-    reg_ptr = AllocTemp();
-    LoadWordDisp(rl_obj.low_reg, offset_offset, reg_off);
-    LoadWordDisp(rl_obj.low_reg, value_offset, reg_ptr);
   }
-  if (rl_idx.is_const) {
-    OpRegImm(kOpAdd, reg_off, mir_graph_->ConstantValue(rl_idx.orig_sreg));
-  } else {
-    OpRegReg(kOpAdd, reg_off, rl_idx.low_reg);
-  }
+  int reg_ptr = AllocTemp();
+  OpRegRegImm(kOpAdd, reg_ptr, rl_obj.low_reg, value_offset);
   FreeTemp(rl_obj.low_reg);
-  if (rl_idx.low_reg != INVALID_REG) {
-    FreeTemp(rl_idx.low_reg);
-  }
   RegLocation rl_dest = InlineTarget(info);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  if (cu_->instruction_set != kX86) {
-    LoadBaseIndexed(reg_ptr, reg_off, rl_result.low_reg, 1, kUnsignedHalf);
-  } else {
-    LoadBaseIndexedDisp(reg_ptr, reg_off, 1, data_offset, rl_result.low_reg,
-                        INVALID_REG, kUnsignedHalf, INVALID_SREG);
-  }
-  FreeTemp(reg_off);
+  LoadBaseIndexed(reg_ptr, rl_idx.low_reg, rl_result.low_reg, 1, kUnsignedHalf);
+  // if (rl_idx.low_reg != INVALID_REG) {
+  FreeTemp(rl_idx.low_reg);
+  // }
   FreeTemp(reg_ptr);
   StoreValue(rl_dest, rl_result);
   if (range_check) {
