@@ -632,16 +632,10 @@ void IntrinsicCodeGeneratorX86_64::VisitStringCharAt(HInvoke* invoke) {
   const int32_t value_offset = mirror::String::ValueOffset().Int32Value();
   // Location of count
   const int32_t count_offset = mirror::String::CountOffset().Int32Value();
-  // Starting offset within data array
-  const int32_t offset_offset = mirror::String::OffsetOffset().Int32Value();
-  // Start of char data with array_
-  const int32_t data_offset = mirror::Array::DataOffset(sizeof(uint16_t)).Int32Value();
 
   CpuRegister obj = locations->InAt(0).AsRegister<CpuRegister>();
   CpuRegister idx = locations->InAt(1).AsRegister<CpuRegister>();
   CpuRegister out = locations->Out().AsRegister<CpuRegister>();
-  Location temp_loc = locations->GetTemp(0);
-  CpuRegister temp = temp_loc.AsRegister<CpuRegister>();
 
   // TODO: Maybe we can support range check elimination. Overall, though, I think it's not worth
   //       the cost.
@@ -657,12 +651,8 @@ void IntrinsicCodeGeneratorX86_64::VisitStringCharAt(HInvoke* invoke) {
   codegen_->MaybeRecordImplicitNullCheck(invoke);
   __ j(kAboveEqual, slow_path->GetEntryLabel());
 
-  // Get the actual element.
-  __ movl(temp, idx);                          // temp := idx.
-  __ addl(temp, Address(obj, offset_offset));  // temp := offset + idx.
-  __ movl(out, Address(obj, value_offset));    // obj := obj.array.
-  // out = out[2*temp].
-  __ movzxw(out, Address(out, temp, ScaleFactor::TIMES_2, data_offset));
+  // out = out[2*idx].
+  __ movzxw(out, Address(out, idx, ScaleFactor::TIMES_2, value_offset));
 
   __ Bind(slow_path->GetExitLabel());
 }
@@ -989,8 +979,12 @@ UNIMPLEMENTED_INTRINSIC(MathRoundFloat)
 UNIMPLEMENTED_INTRINSIC(StringIsEmpty)  // Might not want to do these two anyways, inlining should
 UNIMPLEMENTED_INTRINSIC(StringLength)   // be good enough here.
 UNIMPLEMENTED_INTRINSIC(StringCompareTo)
+UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
 UNIMPLEMENTED_INTRINSIC(StringIndexOf)
 UNIMPLEMENTED_INTRINSIC(StringIndexOfAfter)
+UNIMPLEMENTED_INTRINSIC(StringNewStringFromBytes)
+UNIMPLEMENTED_INTRINSIC(StringNewStringFromChars)
+UNIMPLEMENTED_INTRINSIC(StringNewStringFromString)
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
 UNIMPLEMENTED_INTRINSIC(UnsafeCASInt)
 UNIMPLEMENTED_INTRINSIC(UnsafeCASLong)

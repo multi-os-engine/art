@@ -515,6 +515,7 @@ struct CallInfo {
   bool is_range;
   DexOffset offset;       // Offset in code units.
   MIR* mir;
+  bool string_init;
 };
 
 
@@ -706,6 +707,8 @@ class MIRGraph {
   void BasicBlockOptimizationStart();
   void BasicBlockOptimization();
   void BasicBlockOptimizationEnd();
+
+  void StringChange();
 
   const ArenaVector<BasicBlockId>& GetTopologicalSortOrder() {
     DCHECK(!topological_order_.empty());
@@ -1056,6 +1059,7 @@ class MIRGraph {
 
   void DumpCheckStats();
   MIR* FindMoveResult(BasicBlock* bb, MIR* mir);
+  MIR* FindStringInit(BasicBlock** p_bb, MIR* mir);
 
   /* Return the base virtual register for a SSA name */
   int SRegToVReg(int ssa_reg) const {
@@ -1140,7 +1144,7 @@ class MIRGraph {
   CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range);
   BasicBlock* NewMemBB(BBType block_type, int block_id);
   MIR* NewMIR();
-  MIR* AdvanceMIR(BasicBlock** p_bb, MIR* mir);
+  MIR* AdvanceMIR(BasicBlock** p_bb, MIR* mir, bool disallow_predecessors);
   BasicBlock* NextDominatedBlock(BasicBlock* bb);
   bool LayoutBlocks(BasicBlock* bb);
   void ComputeTopologicalSortOrder();

@@ -65,6 +65,7 @@
 #include "utils/swap_space.h"
 #include "verifier/method_verifier.h"
 #include "verifier/method_verifier-inl.h"
+#include "well_known_classes.h"
 
 namespace art {
 
