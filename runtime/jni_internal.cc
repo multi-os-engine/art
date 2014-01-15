@@ -221,18 +221,18 @@ static jfieldID FindFieldID(const ScopedObjectAccess& soa, jclass jni_class, con
   return soa.EncodeField(field);
 }
 
-static void PinPrimitiveArray(const ScopedObjectAccess& soa, mirror::Array* array)
+static void PinObject(const ScopedObjectAccess& soa, mirror::Object* object)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   JavaVMExt* vm = soa.Vm();
   MutexLock mu(soa.Self(), vm->pins_lock);
-  vm->pin_table.Add(array);
+  vm->pin_table.Add(object);
 }
 
-static void UnpinPrimitiveArray(const ScopedObjectAccess& soa, mirror::Array* array)
+static void UnpinObject(const ScopedObjectAccess& soa, mirror::Object* object)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   JavaVMExt* vm = soa.Vm();
   MutexLock mu(soa.Self(), vm->pins_lock);
-  vm->pin_table.Remove(array);
+  vm->pin_table.Remove(object);
 }
 
 static void ThrowAIOOBE(ScopedObjectAccess& soa, mirror::Array* array, jsize start,
@@ -806,6 +806,9 @@ class JNI {
     if (c == nullptr) {
       return nullptr;
     }
+    if (c->IsStringClass()) {
+      return soa.AddLocalReference<jobject>(mirror::String::Alloc<true>(soa.Self(), 0));
+    }
     return soa.AddLocalReference<jobject>(c->AllocObject(soa.Self()));
   }
 
@@ -827,6 +830,11 @@ class JNI {
     if (c == nullptr) {
       return nullptr;
     }
+    if (c->IsStringClass()) {
+      // Replace calls to String.<init> with equivalent StringFactory call.
+      jmethodID sf_mid = WellKnownClasses::StringInitToStringFactoryMethodID(mid);
+      return CallStaticObjectMethodV(env, WellKnownClasses::java_lang_StringFactory, sf_mid, args);
+    }
     mirror::Object* result = c->AllocObject(soa.Self());
     if (result == nullptr) {
       return nullptr;
@@ -846,6 +854,11 @@ class JNI {
     mirror::Class* c = EnsureInitialized(soa.Self(), soa.Decode<mirror::Class*>(java_class));
     if (c == nullptr) {
       return nullptr;
+    }
+    if (c->IsStringClass()) {
+      // Replace calls to String.<init> with equivalent StringFactory call.
+      jmethodID sf_mid = WellKnownClasses::StringInitToStringFactoryMethodID(mid);
+      return CallStaticObjectMethodA(env, WellKnownClasses::java_lang_StringFactory, sf_mid, args);
     }
     mirror::Object* result = c->AllocObject(soa.Self());
     if (result == nullptr) {
@@ -1864,7 +1877,7 @@ class JNI {
   static jsize GetStringLength(JNIEnv* env, jstring java_string) {
     CHECK_NON_NULL_ARGUMENT(java_string);
     ScopedObjectAccess soa(env);
-    return soa.Decode<mirror::String*>(java_string)->GetLength();
+    return soa.Decode<mirror::String*>(java_string)->GetCount();
   }
 
   static jsize GetStringUTFLength(JNIEnv* env, jstring java_string) {
@@ -1878,11 +1891,11 @@ class JNI {
     CHECK_NON_NULL_ARGUMENT(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
-    if (start < 0 || length < 0 || start + length > s->GetLength()) {
-      ThrowSIOOBE(soa, start, length, s->GetLength());
+    if (start < 0 || length < 0 || start + length > s->GetCount()) {
+      ThrowSIOOBE(soa, start, length, s->GetCount());
     } else {
       CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
-      const jchar* chars = s->GetCharArray()->GetData() + s->GetOffset();
+      const jchar* chars = s->GetValue();
       memcpy(buf, chars + start, length * sizeof(jchar));
     }
   }
@@ -1892,11 +1905,11 @@ class JNI {
     CHECK_NON_NULL_ARGUMENT(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
-    if (start < 0 || length < 0 || start + length > s->GetLength()) {
-      ThrowSIOOBE(soa, start, length, s->GetLength());
+    if (start < 0 || length < 0 || start + length > s->GetCount()) {
+      ThrowSIOOBE(soa, start, length, s->GetCount());
     } else {
       CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
-      const jchar* chars = s->GetCharArray()->GetData() + s->GetOffset();
+      const jchar* chars = s->GetValue();
       ConvertUtf16ToModifiedUtf8(buf, chars + start, length);
     }
   }
@@ -1905,26 +1918,17 @@ class JNI {
     CHECK_NON_NULL_ARGUMENT(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
-    mirror::CharArray* chars = s->GetCharArray();
-    PinPrimitiveArray(soa, chars);
+    PinObject(soa, s);
     if (is_copy != nullptr) {
       *is_copy = JNI_TRUE;
     }
-    int32_t char_count = s->GetLength();
-    int32_t offset = s->GetOffset();
-    jchar* bytes = new jchar[char_count + 1];
-    for (int32_t i = 0; i < char_count; i++) {
-      bytes[i] = chars->Get(i + offset);
-    }
-    bytes[char_count] = '\0';
-    return bytes;
+    return s->GetValue();
   }
 
   static void ReleaseStringChars(JNIEnv* env, jstring java_string, const jchar* chars) {
     CHECK_NON_NULL_ARGUMENT(java_string);
-    delete[] chars;
     ScopedObjectAccess soa(env);
-    UnpinPrimitiveArray(soa, soa.Decode<mirror::String*>(java_string)->GetCharArray());
+    UnpinObject(soa, soa.Decode<mirror::String*>(java_string));
   }
 
   static const jchar* GetStringCritical(JNIEnv* env, jstring java_string, jboolean* is_copy) {
@@ -1947,8 +1951,8 @@ class JNI {
     size_t byte_count = s->GetUtfLength();
     char* bytes = new char[byte_count + 1];
     CHECK(bytes != nullptr);  // bionic aborts anyway.
-    const uint16_t* chars = s->GetCharArray()->GetData() + s->GetOffset();
-    ConvertUtf16ToModifiedUtf8(bytes, chars, s->GetLength());
+    const uint16_t* chars = s->GetValue();
+    ConvertUtf16ToModifiedUtf8(bytes, chars, s->GetCount());
     bytes[byte_count] = '\0';
     return bytes;
   }
@@ -2082,7 +2086,7 @@ class JNI {
       // Re-decode in case the object moved since IncrementDisableGC waits for GC to complete.
       array = soa.Decode<mirror::Array*>(java_array);
     }
-    PinPrimitiveArray(soa, array);
+    PinObject(soa, array);
     if (is_copy != nullptr) {
       *is_copy = JNI_FALSE;
     }
@@ -2487,7 +2491,7 @@ class JNI {
                                    jboolean* is_copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     ArtArrayT* array = soa.Decode<ArtArrayT*>(java_array);
-    PinPrimitiveArray(soa, array);
+    PinObject(soa, array);
     // Only make a copy if necessary.
     if (Runtime::Current()->GetHeap()->IsMovableObject(array)) {
       if (is_copy != nullptr) {
@@ -2538,7 +2542,7 @@ class JNI {
         // Non copy to a movable object must means that we had disabled the moving GC.
         heap->DecrementDisableMovingGC(soa.Self());
       }
-      UnpinPrimitiveArray(soa, array);
+      UnpinObject(soa, array);
     }
   }
 

@@ -95,8 +95,6 @@ TEST_F(JniInternalTest, AllocObject) {
   // ...whose fields haven't been initialized because
   // we didn't call a constructor.
   ASSERT_EQ(0, env_->GetIntField(o, env_->GetFieldID(c, "count", "I")));
-  ASSERT_EQ(0, env_->GetIntField(o, env_->GetFieldID(c, "offset", "I")));
-  ASSERT_TRUE(env_->GetObjectField(o, env_->GetFieldID(c, "value", "[C")) == NULL);
 }
 
 TEST_F(JniInternalTest, GetVersion) {

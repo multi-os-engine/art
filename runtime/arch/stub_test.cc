@@ -802,33 +802,14 @@ TEST_F(StubTest, StringCompareTo) {
   // Use array so we can index into it and use a matrix for expected results
   // Setup: The first half is standard. The second half uses a non-zero offset.
   // TODO: Shared backing arrays.
-  constexpr size_t base_string_count = 7;
-  const char* c[base_string_count] = { "", "", "a", "aa", "ab", "aac", "aac" , };
-
-  constexpr size_t string_count = 2 * base_string_count;
+  constexpr size_t string_count = 7;
+  const char* c[string_count] = { "", "", "a", "aa", "ab", "aac", "aac" , };
 
   SirtRef<mirror::String>* s[string_count];
 
-  for (size_t i = 0; i < base_string_count; ++i) {
+  for (size_t i = 0; i < string_count; ++i) {
     s[i] = new SirtRef<mirror::String>(soa.Self(), mirror::String::AllocFromModifiedUtf8(soa.Self(),
                                                                                          c[i]));
-  }
-
-  RandGen r(0x1234);
-
-  for (size_t i = base_string_count; i < string_count; ++i) {
-    s[i] = new SirtRef<mirror::String>(soa.Self(), mirror::String::AllocFromModifiedUtf8(soa.Self(),
-                                                                         c[i - base_string_count]));
-    int32_t length = s[i]->get()->GetLength();
-    if (length > 1) {
-      // Set a random offset and length.
-      int32_t new_offset = 1 + (r.next() % (length - 1));
-      int32_t rest = length - new_offset - 1;
-      int32_t new_length = 1 + (rest > 0 ? r.next() % rest : 0);
-
-      s[i]->get()->SetField32<false>(mirror::String::CountOffset(), new_length);
-      s[i]->get()->SetField32<false>(mirror::String::OffsetOffset(), new_offset);
-    }
   }
 
   // TODO: wide characters
