@@ -483,10 +483,10 @@ class MANAGED Class FINAL : public Object {
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   bool IsVariableSize() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    // Classes and arrays vary in size, and so the object_size_ field cannot
+    // Classes, arrays, and strings vary in size, and so the object_size_ field cannot
     // be used to Get their instance size
     return IsClassClass<kVerifyFlags, kReadBarrierOption>() ||
-        IsArrayClass<kVerifyFlags, kReadBarrierOption>();
+        IsArrayClass<kVerifyFlags, kReadBarrierOption>() || IsStringClass();
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,

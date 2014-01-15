@@ -70,6 +70,13 @@ class VerifiedMethod {
   // by using the check-cast elision peephole optimization in the verifier.
   bool IsSafeCast(uint32_t pc) const;
 
+  void SetStringInitPcRegMap(SafeMap<uint32_t, std::set<uint32_t>>& string_init_pc_reg_map) {
+    string_init_pc_reg_map_ = string_init_pc_reg_map;
+  }
+  const SafeMap<uint32_t, std::set<uint32_t>>& GetStringInitPcRegMap() const {
+    return string_init_pc_reg_map_;
+  }
+
  private:
   VerifiedMethod() = default;
 
@@ -107,6 +114,7 @@ class VerifiedMethod {
   // dex PC to dex method index or dex field index based on the instruction.
   DequickenMap dequicken_map_;
   SafeCastSet safe_cast_set_;
+  SafeMap<uint32_t, std::set<uint32_t>> string_init_pc_reg_map_;
 };
 
 }  // namespace art
