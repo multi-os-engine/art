@@ -46,6 +46,7 @@ enum InlineMethodOpcode : uint16_t {
   kIntrinsicSqrt,
   kIntrinsicCharAt,
   kIntrinsicCompareTo,
+  kIntrinsicGetCharsNoCheck,
   kIntrinsicIsEmptyOrLength,
   kIntrinsicIndexOf,
   kIntrinsicCurrentThread,

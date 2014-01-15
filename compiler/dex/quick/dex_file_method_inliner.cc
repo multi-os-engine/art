@@ -76,6 +76,7 @@ const char* const DexFileMethodInliner::kClassCacheNames[] = {
     "F",                       // kClassCacheFloat
     "D",                       // kClassCacheDouble
     "V",                       // kClassCacheVoid
+    "[C",                      // kClassCacheCharArray
     "Ljava/lang/Object;",      // kClassCacheJavaLangObject
     "Ljava/lang/String;",      // kClassCacheJavaLangString
     "Ljava/lang/Double;",      // kClassCacheJavaLangDouble
@@ -102,6 +103,7 @@ const char* const DexFileMethodInliner::kNameCacheNames[] = {
     "sqrt",                  // kNameCacheSqrt
     "charAt",                // kNameCacheCharAt
     "compareTo",             // kNameCacheCompareTo
+    "getCharsNoCheck",       // kNameCacheGetCharsNoCheck
     "isEmpty",               // kNameCacheIsEmpty
     "indexOf",               // kNameCacheIndexOf
     "length",                // kNameCacheLength
@@ -201,6 +203,8 @@ const DexFileMethodInliner::ProtoDef DexFileMethodInliner::kProtoCacheDefs[] = {
     // kProtoCacheObjectJObject_V
     { kClassCacheVoid, 3, { kClassCacheJavaLangObject, kClassCacheLong,
         kClassCacheJavaLangObject } },
+    // kProtoCacheIICharArrayI_V
+    { kClassCacheVoid, 4, { kClassCacheInt, kClassCacheInt, kClassCacheCharArray, kClassCacheInt } },
 };
 
 const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods[] = {
@@ -233,6 +237,7 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
 
     INTRINSIC(JavaLangString, CharAt, I_C, kIntrinsicCharAt, 0),
     INTRINSIC(JavaLangString, CompareTo, String_I, kIntrinsicCompareTo, 0),
+    INTRINSIC(JavaLangString, GetCharsNoCheck, IICharArrayI_V, kIntrinsicGetCharsNoCheck, 0),
     INTRINSIC(JavaLangString, IsEmpty, _Z, kIntrinsicIsEmptyOrLength, kIntrinsicFlagIsEmpty),
     INTRINSIC(JavaLangString, IndexOf, II_I, kIntrinsicIndexOf, kIntrinsicFlagNone),
     INTRINSIC(JavaLangString, IndexOf, I_I, kIntrinsicIndexOf, kIntrinsicFlagBase0),
@@ -335,6 +340,8 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
       return backend->GenInlinedCharAt(info);
     case kIntrinsicCompareTo:
       return backend->GenInlinedStringCompareTo(info);
+    case kIntrinsicGetCharsNoCheck:
+      return backend->GenInlinedStringGetCharsNoCheck(info);
     case kIntrinsicIsEmptyOrLength:
       return backend->GenInlinedStringIsEmptyOrLength(
           info, intrinsic.d.data & kIntrinsicFlagIsEmpty);

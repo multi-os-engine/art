@@ -1061,46 +1061,34 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
     // TODO - add Mips implementation
     return false;
   }
-  // Location of reference to data array
+  // Location of char array data
   int value_offset = mirror::String::ValueOffset().Int32Value();
   // Location of count
   int count_offset = mirror::String::CountOffset().Int32Value();
-  // Starting offset within data array
-  int offset_offset = mirror::String::OffsetOffset().Int32Value();
-  // Start of char data with array_
-  int data_offset = mirror::Array::DataOffset(sizeof(uint16_t)).Int32Value();
 
   RegLocation rl_obj = info->args[0];
   RegLocation rl_idx = info->args[1];
   rl_obj = LoadValue(rl_obj, kCoreReg);
   // X86 wants to avoid putting a constant index into a register.
-  if (!((cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64)&& rl_idx.is_const)) {
+  if (!((cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) && rl_idx.is_const)) {
     rl_idx = LoadValue(rl_idx, kCoreReg);
   }
   RegStorage reg_max;
   GenNullCheck(rl_obj.reg, info->opt_flags);
   bool range_check = (!(info->opt_flags & MIR_IGNORE_RANGE_CHECK));
   LIR* range_check_branch = nullptr;
-  RegStorage reg_off;
-  RegStorage reg_ptr;
   if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
-    reg_off = AllocTemp();
-    reg_ptr = AllocTemp();
     if (range_check) {
       reg_max = AllocTemp();
       Load32Disp(rl_obj.reg, count_offset, reg_max);
       MarkPossibleNullPointerException(info->opt_flags);
     }
-    Load32Disp(rl_obj.reg, offset_offset, reg_off);
-    MarkPossibleNullPointerException(info->opt_flags);
-    Load32Disp(rl_obj.reg, value_offset, reg_ptr);
     if (range_check) {
       // Set up a slow path to allow retry in case of bounds violation */
       OpRegReg(kOpCmp, rl_idx.reg, reg_max);
       FreeTemp(reg_max);
       range_check_branch = OpCondBranch(kCondUge, nullptr);
     }
-    OpRegImm(kOpAdd, reg_ptr, data_offset);
   } else {
     if (range_check) {
       // On x86, we can compare to memory directly
@@ -1114,28 +1102,21 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
         range_check_branch = OpCondBranch(kCondUge, nullptr);
       }
     }
-    reg_off = AllocTemp();
-    reg_ptr = AllocTemp();
-    Load32Disp(rl_obj.reg, offset_offset, reg_off);
-    Load32Disp(rl_obj.reg, value_offset, reg_ptr);
   }
-  if (rl_idx.is_const) {
-    OpRegImm(kOpAdd, reg_off, mir_graph_->ConstantValue(rl_idx.orig_sreg));
-  } else {
-    OpRegReg(kOpAdd, reg_off, rl_idx.reg);
-  }
+  RegStorage reg_ptr = AllocTemp();
+  OpRegRegImm(kOpAdd, reg_ptr, rl_obj.reg, value_offset);
   FreeTemp(rl_obj.reg);
+  RegLocation rl_dest = InlineTarget(info);
+  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
+  if (!((cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) && rl_idx.is_const)) {
+    LoadBaseIndexed(reg_ptr, rl_idx.reg, rl_result.reg, 1, kUnsignedHalf);
+  } else {
+    LoadBaseDisp(reg_ptr, mir_graph_->ConstantValue(rl_idx.orig_sreg) * sizeof(int16_t),
+                 rl_result.reg, kUnsignedHalf);
+  }
   if (rl_idx.location == kLocPhysReg) {
     FreeTemp(rl_idx.reg);
   }
-  RegLocation rl_dest = InlineTarget(info);
-  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
-    LoadBaseIndexed(reg_ptr, reg_off, rl_result.reg, 1, kUnsignedHalf);
-  } else {
-    LoadBaseIndexedDisp(reg_ptr, reg_off, 1, data_offset, rl_result.reg, kUnsignedHalf);
-  }
-  FreeTemp(reg_off);
   FreeTemp(reg_ptr);
   StoreValue(rl_dest, rl_result);
   if (range_check) {
@@ -1143,6 +1124,57 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
     info->opt_flags |= MIR_IGNORE_NULL_CHECK;  // Record that we've already null checked.
     AddIntrinsicSlowPath(info, range_check_branch);
   }
+  return true;
+}
+
+bool Mir2Lir::GenInlinedStringGetCharsNoCheck(CallInfo* info) {
+  if (cu_->instruction_set == kMips) {
+    // TODO - add Mips implementation
+    return false;
+  }
+  size_t char_component_size = Primitive::ComponentSize(Primitive::kPrimChar);
+  // Location of data in char array buffer
+  int data_offset = mirror::Array::DataOffset(char_component_size).Int32Value();
+  // Location of char array data in string
+  int value_offset = mirror::String::ValueOffset().Int32Value();
+
+  RegLocation rl_obj = info->args[0];
+  RegLocation rl_start = info->args[1];
+  RegLocation rl_end = info->args[2];
+  RegLocation rl_buffer = info->args[3];
+  RegLocation rl_index = info->args[4];
+
+  ClobberCallerSave();
+  LockCallTemps();  // Using fixed registers
+  RegStorage reg_dst_ptr = TargetReg(kArg0);
+  RegStorage reg_src_ptr = TargetReg(kArg1);
+  RegStorage reg_length = TargetReg(kArg2);
+  RegStorage reg_tmp = TargetReg(kArg3);
+
+  LoadValueDirectFixed(rl_buffer, reg_dst_ptr);
+  OpRegImm(kOpAdd, reg_dst_ptr, data_offset);
+  LoadValueDirectFixed(rl_index, reg_tmp);
+  OpRegImm(kOpLsl, reg_tmp, 1);
+  OpRegReg(kOpAdd, reg_dst_ptr, reg_tmp);
+
+  LoadValueDirectFixed(rl_obj, reg_src_ptr);
+  OpRegImm(kOpAdd, reg_src_ptr, value_offset);
+  LoadValueDirectFixed(rl_start, reg_tmp);
+  OpRegRegImm(kOpLsl, reg_length, reg_tmp, 1);
+  OpRegReg(kOpAdd, reg_src_ptr, reg_length);
+
+  LoadValueDirectFixed(rl_end, reg_length);
+  OpRegReg(kOpSub, reg_length, reg_tmp);
+  OpRegImm(kOpLsl, reg_length, 1);
+
+  // NOTE: not a safepoint
+  if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
+    RegStorage r_tgt = LoadHelper(QUICK_ENTRYPOINT_OFFSET(4, pMemcpy));
+    OpReg(kOpBlx, r_tgt);
+  } else {
+    OpThreadMem(kOpBlx, QUICK_ENTRYPOINT_OFFSET(4, pMemcpy));
+  }
+
   return true;
 }
 

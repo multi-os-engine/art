@@ -106,6 +106,7 @@ class DexFileMethodInliner {
       kClassCacheFloat,
       kClassCacheDouble,
       kClassCacheVoid,
+      kClassCacheCharArray,
       kClassCacheJavaLangObject,
       kClassCacheJavaLangString,
       kClassCacheJavaLangDouble,
@@ -139,6 +140,7 @@ class DexFileMethodInliner {
       kNameCacheSqrt,
       kNameCacheCharAt,
       kNameCacheCompareTo,
+      kNameCacheGetCharsNoCheck,
       kNameCacheIsEmpty,
       kNameCacheIndexOf,
       kNameCacheLength,
@@ -210,6 +212,7 @@ class DexFileMethodInliner {
       kProtoCacheObjectJJ_V,
       kProtoCacheObjectJ_Object,
       kProtoCacheObjectJObject_V,
+      kProtoCacheIICharArrayI_V,
       kProtoCacheLast
     };
 

@@ -35,6 +35,7 @@ struct WellKnownClasses {
  public:
   static void Init(JNIEnv* env);  // Run before native methods are registered.
   static void LateInit(JNIEnv* env);  // Run after native methods are registered.
+  static jmethodID StringInitToStringFactoryMethodID(jmethodID string_init);
 
   static mirror::Class* ToClass(jclass global_jclass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -54,6 +55,7 @@ struct WellKnownClasses {
   static jclass java_lang_reflect_Proxy;
   static jclass java_lang_RuntimeException;
   static jclass java_lang_StackOverflowError;
+  static jclass java_lang_StringFactory;
   static jclass java_lang_System;
   static jclass java_lang_Thread;
   static jclass java_lang_ThreadGroup;
@@ -89,6 +91,39 @@ struct WellKnownClasses {
   static jmethodID java_nio_DirectByteBuffer_init;
   static jmethodID org_apache_harmony_dalvik_ddmc_DdmServer_broadcast;
   static jmethodID org_apache_harmony_dalvik_ddmc_DdmServer_dispatch;
+
+  static jmethodID java_lang_String_init;
+  static jmethodID java_lang_String_init_B;
+  static jmethodID java_lang_String_init_BI;
+  static jmethodID java_lang_String_init_BII;
+  static jmethodID java_lang_String_init_BIII;
+  static jmethodID java_lang_String_init_BIIString;
+  static jmethodID java_lang_String_init_BString;
+  static jmethodID java_lang_String_init_BIICharset;
+  static jmethodID java_lang_String_init_BCharset;
+  static jmethodID java_lang_String_init_C;
+  static jmethodID java_lang_String_init_CII;
+  static jmethodID java_lang_String_init_IIC;
+  static jmethodID java_lang_String_init_String;
+  static jmethodID java_lang_String_init_StringBuffer;
+  static jmethodID java_lang_String_init_III;
+  static jmethodID java_lang_String_init_StringBuilder;
+  static jmethodID java_lang_StringFactory_newEmptyString;
+  static jmethodID java_lang_StringFactory_newStringFromBytes_B;
+  static jmethodID java_lang_StringFactory_newStringFromBytes_BI;
+  static jmethodID java_lang_StringFactory_newStringFromBytes_BII;
+  static jmethodID java_lang_StringFactory_newStringFromBytes_BIII;
+  static jmethodID java_lang_StringFactory_newStringFromBytes_BIIString;
+  static jmethodID java_lang_StringFactory_newStringFromBytes_BString;
+  static jmethodID java_lang_StringFactory_newStringFromBytes_BIICharset;
+  static jmethodID java_lang_StringFactory_newStringFromBytes_BCharset;
+  static jmethodID java_lang_StringFactory_newStringFromChars_C;
+  static jmethodID java_lang_StringFactory_newStringFromChars_CII;
+  static jmethodID java_lang_StringFactory_newStringFromCharsNoCheck;
+  static jmethodID java_lang_StringFactory_newStringFromString;
+  static jmethodID java_lang_StringFactory_newStringFromStringBuffer;
+  static jmethodID java_lang_StringFactory_newStringFromCodePoints;
+  static jmethodID java_lang_StringFactory_newStringFromStringBuilder;
 
   static jfieldID java_lang_reflect_AbstractMethod_artMethod;
   static jfieldID java_lang_reflect_Field_artField;

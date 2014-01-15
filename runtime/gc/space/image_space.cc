@@ -262,6 +262,14 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
 
   UniquePtr<ImageSpace> space(new ImageSpace(image_filename, image_location,
                                              map.release(), bitmap.release()));
+
+  // Special case of setting up the String class early so that we can test arbitrary objects
+  // as being Strings or not.
+  mirror::Object* obj = space->GetImageHeader().GetImageRoot(ImageHeader::kClassRoots);
+  mirror::Class* string = obj->GetClass()->GetClass()->GetName()->GetClass();
+  CHECK(string != NULL);
+  mirror::String::SetClass(string);
+
   if (kIsDebugBuild) {
     space->VerifyImageAllocations();
   }
