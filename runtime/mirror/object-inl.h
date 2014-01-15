@@ -199,6 +199,10 @@ inline LongArray* Object::AsLongArray() {
   return down_cast<LongArray*>(this);
 }
 
+inline bool Object::IsString() {
+  return GetClass() == String::GetJavaLangString();
+}
+
 inline String* Object::AsString() {
   DCHECK(GetClass()->IsStringClass());
   return down_cast<String*>(this);
@@ -231,6 +235,8 @@ inline size_t Object::SizeOf() {
     result = AsArray()->SizeOf();
   } else if (IsClass()) {
     result = AsClass()->SizeOf();
+  } else if (IsString()) {
+    result = AsString()->SizeOf();
   } else {
     result = GetClass()->GetObjectSize();
   }

@@ -365,7 +365,7 @@ struct CheckOffsets {
 
     bool error = false;
 
-    if (!klass->IsClassClass() && !is_static) {
+    if (!klass->IsClassClass() && !klass->IsStringClass() && !is_static) {
       size_t expected_size = is_static ? klass->GetClassSize(): klass->GetObjectSize();
       if (sizeof(T) != expected_size) {
         LOG(ERROR) << "Class size mismatch:"
@@ -524,13 +524,9 @@ struct ClassOffsets : public CheckOffsets<mirror::Class> {
 
 struct StringOffsets : public CheckOffsets<mirror::String> {
   StringOffsets() : CheckOffsets<mirror::String>(false, "Ljava/lang/String;") {
-    // alphabetical references
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::String, array_),     "value"));
-
     // alphabetical 32-bit
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::String, count_),     "count"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::String, hash_code_), "hashCode"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::String, offset_),    "offset"));
   };
 };
 

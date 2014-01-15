@@ -509,9 +509,18 @@ JValue ExecuteGotoImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem* 
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(NEW_INSTANCE) {
-    Object* obj = AllocObjectFromCode<do_access_check, true>(
-        inst->VRegB_21c(), shadow_frame.GetMethod(), self,
-        Runtime::Current()->GetHeap()->GetCurrentAllocator());
+    Object* obj = NULL;
+    Class* c = Runtime::Current()->GetClassLinker()->ResolveType(inst->VRegB_21c(), shadow_frame.GetMethod());
+    if (LIKELY(c != NULL)) {
+      if (UNLIKELY(c->IsStringClass())) {
+        // TODO: Don't allocate dummy string.
+        obj = String::Alloc(self, 0);
+      } else {
+        obj = AllocObjectFromCode<do_access_check, true>(
+            inst->VRegB_21c(), shadow_frame.GetMethod(), self,
+            Runtime::Current()->GetHeap()->GetCurrentAllocator());
+      }
+    }
     if (UNLIKELY(obj == NULL)) {
       HANDLE_PENDING_EXCEPTION();
     } else {

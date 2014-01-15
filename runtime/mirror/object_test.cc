@@ -57,8 +57,7 @@ class ObjectTest : public CommonTest {
     Thread* self = Thread::Current();
     SirtRef<String> string(self, String::AllocFromModifiedUtf8(self, expected_utf16_length, utf8_in));
     ASSERT_EQ(expected_utf16_length, string->GetLength());
-    ASSERT_TRUE(string->GetCharArray() != NULL);
-    ASSERT_TRUE(string->GetCharArray()->GetData() != NULL);
+    ASSERT_TRUE(string->GetValue() != NULL);
     // strlen is necessary because the 1-character string "\x00\x00" is interpreted as ""
     ASSERT_TRUE(string->Equals(utf8_in) || (expected_utf16_length == 1 && strlen(utf8_in) == 0));
     ASSERT_TRUE(string->Equals(StringPiece(utf8_in)) || (expected_utf16_length == 1 && strlen(utf8_in) == 0));
@@ -81,8 +80,6 @@ TEST_F(ObjectTest, AsmConstants) {
 
   EXPECT_EQ(STRING_VALUE_OFFSET, String::ValueOffset().Int32Value());
   EXPECT_EQ(STRING_COUNT_OFFSET, String::CountOffset().Int32Value());
-  EXPECT_EQ(STRING_OFFSET_OFFSET, String::OffsetOffset().Int32Value());
-  EXPECT_EQ(STRING_DATA_OFFSET, Array::DataOffset(sizeof(uint16_t)).Int32Value());
 
   EXPECT_EQ(METHOD_DEX_CACHE_METHODS_OFFSET, ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
   EXPECT_EQ(METHOD_PORTABLE_CODE_OFFSET, ArtMethod::EntryPointFromPortableCompiledCodeOffset().Int32Value());
@@ -386,12 +383,6 @@ TEST_F(ObjectTest, StringLength) {
   SirtRef<String> string(soa.Self(), String::AllocFromModifiedUtf8(soa.Self(), "android"));
   EXPECT_EQ(string->GetLength(), 7);
   EXPECT_EQ(string->GetUtfLength(), 7);
-
-  string->SetOffset(2);
-  string->SetCount(5);
-  EXPECT_TRUE(string->Equals("droid"));
-  EXPECT_EQ(string->GetLength(), 5);
-  EXPECT_EQ(string->GetUtfLength(), 5);
 }
 
 TEST_F(ObjectTest, DescriptorCompare) {

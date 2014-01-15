@@ -257,7 +257,7 @@ void ImageWriter::ComputeEagerResolvedStringsCallback(Object* obj, void* arg) {
     return;
   }
   mirror::String* string = obj->AsString();
-  const uint16_t* utf16_string = string->GetCharArray()->GetData() + string->GetOffset();
+  const uint16_t* utf16_string = string->GetValue();
   for (DexCache* dex_cache : Runtime::Current()->GetClassLinker()->GetDexCaches()) {
     const DexFile& dex_file = *dex_cache->GetDexFile();
     const DexFile::StringId* string_id;

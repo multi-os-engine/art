@@ -881,8 +881,8 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
     // allocated which hasn't been initialized yet.
   } else {
     if (obj->IsClass()) {
-      mirror::Class* thisClass = obj->AsClass();
       // obj is a ClassObject.
+      mirror::Class* thisClass = obj->AsClass();
       size_t sFieldCount = thisClass->NumStaticFields();
       if (sFieldCount != 0) {
         int byteLength = sFieldCount * sizeof(JValue);  // TODO bogus; fields are packed
@@ -911,7 +911,8 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
         // ClassObjects have their static fields appended, so aren't all the same size.
         // But they're at least this size.
         rec->AddU4(sizeof(mirror::Class));  // instance size
-      } else if (thisClass->IsArrayClass() || thisClass->IsPrimitive()) {
+      } else if (thisClass->IsArrayClass() || thisClass->IsStringClass() ||
+                 thisClass->IsPrimitive()) {
         rec->AddU4(0);
       } else {
         rec->AddU4(thisClass->GetObjectSize());  // instance size
@@ -1000,6 +1001,14 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
           rec->AddU8List((const uint64_t*)aobj->GetRawData(sizeof(uint64_t), 0), length);
         }
       }
+    } else if (c->IsStringClass()) {
+      mirror::String* s = obj->AsString();
+      rec->AddU1(HPROF_INSTANCE_DUMP);
+      rec->AddObjectId(obj);
+      rec->AddU4(StackTraceSerialNumber(obj));
+      rec->AddClassId(LookupClassId(c));
+      rec->AddU4(s->SizeOf());
+      rec->AddU4(s->GetLength());
     } else {
       // obj is an instance object.
       rec->AddU1(HPROF_INSTANCE_DUMP);

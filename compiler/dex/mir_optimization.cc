@@ -17,6 +17,7 @@
 #include "compiler_internals.h"
 #include "local_value_numbering.h"
 #include "dataflow_iterator-inl.h"
+#include "mirror/string.h"
 
 namespace art {
 
@@ -135,6 +136,42 @@ MIR* MIRGraph::FindMoveResult(BasicBlock* bb, MIR* mir) {
     }
   }
   return mir;
+}
+
+MIR* MIRGraph::FindStringInit(BasicBlock** p_bb, MIR* mir) {
+  int instance_def = mir->ssa_rep->defs[0];
+  mir = AdvanceMIR(p_bb, mir);
+  while (mir != NULL) {
+    int opcode = mir->dalvikInsn.opcode;
+    if ((mir->dalvikInsn.opcode == Instruction::INVOKE_DIRECT) ||
+        (mir->dalvikInsn.opcode == Instruction::INVOKE_DIRECT_RANGE)) {
+      uint32_t method_idx = mir->dalvikInsn.vB;
+      if (PrettyMethod(method_idx, *cu_->dex_file, false) == "java.lang.String.<init>") {
+        LOG(INFO) << "INVOKE @ " << std::hex << mir->offset << " "
+                  << PrettyMethod(cu_->method_idx, *cu_->dex_file)
+                  << " " << (*p_bb)->id;
+        return mir;
+      }
+    } else {
+      if (mir->ssa_rep->num_uses > 0 && mir->ssa_rep->uses[0] == instance_def) {
+        LOG(INFO) << "EXTRA USE " << opcode << " @ " << std::hex << mir->offset << " "
+                  << PrettyMethod(cu_->method_idx, *cu_->dex_file)
+                  << " " << (*p_bb)->id;
+        mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+        mir->ssa_rep->num_uses = 0;
+        mir->ssa_rep->num_defs = 0;
+      }
+    }
+    mir = AdvanceMIR(p_bb, mir);
+  }
+  return mir;
+}
+
+uint32_t MIRGraph::GetStringFactoryMethodIdx(uint32_t string_idx) {
+  const DexFile* dex_file = cu_->dex_file;
+  const DexFile::MethodId& string_method_id = dex_file->GetMethodId(string_idx);
+  std::string signature(dex_file->GetMethodSignature(string_method_id).ToString());
+  return mirror::String::GetStringFactoryMethodIndex(signature);
 }
 
 BasicBlock* MIRGraph::NextDominatedBlock(BasicBlock* bb) {
@@ -400,6 +437,54 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
             }
           }
           break;
+        /*
+        case Instruction::NEW_INSTANCE: {
+          uint32_t type_idx = mir->dalvikInsn.vB;
+          if (PrettyType(type_idx, *cu_->dex_file) == "java.lang.String") {
+            LOG(INFO) << "NEW v" << mir->dalvikInsn.vA << " @ " << std::hex << mir->offset
+                      << " " << PrettyMethod(cu_->method_idx, *cu_->dex_file)
+                      << " " << std::hex << bb->id;
+            BasicBlock* string_bb = bb;
+            MIR* string_mir = FindStringInit(&string_bb, mir);
+            if (string_mir == NULL) {
+              LOG(FATAL) << " DID NOT FIND STRING INIT FOR NEW INSTANCE";
+            }
+            // Remove this pointer arg and change to static call of StringFactory.
+            string_mir->dalvikInsn.vA--;
+            string_mir->dalvikInsn.vB = GetStringFactoryMethodIdx(string_mir->dalvikInsn.vB);
+            if (string_mir->dalvikInsn.opcode == Instruction::INVOKE_DIRECT) {
+              string_mir->dalvikInsn.opcode = Instruction::INVOKE_STATIC;
+              for (uint32_t i = 0; i < string_mir->dalvikInsn.vA; i++) {
+                string_mir->dalvikInsn.arg[i] = string_mir->dalvikInsn.arg[i + 1];
+              }
+            } else {
+              string_mir->dalvikInsn.opcode = Instruction::INVOKE_STATIC_RANGE;
+              string_mir->dalvikInsn.vC++;
+            }
+            string_mir->ssa_rep->num_uses--;
+            for (int16_t i = 0; i < string_mir->ssa_rep->num_uses; i++) {
+              string_mir->ssa_rep->uses[i] = string_mir->ssa_rep->uses[i + 1];
+            }
+            MIR* move_result_mir = static_cast<MIR *>(arena_->Alloc(sizeof(MIR), ArenaAllocator::kAllocMIR));
+            move_result_mir->dalvikInsn.opcode = Instruction::MOVE_RESULT_OBJECT;
+            move_result_mir->dalvikInsn.vA = mir->dalvikInsn.vA;
+            move_result_mir->width = 1;
+            move_result_mir->offset = string_mir->offset;
+            move_result_mir->m_unit_index = string_mir->m_unit_index;
+            move_result_mir->ssa_rep = static_cast<struct SSARepresentation *>(arena_->Alloc(sizeof(SSARepresentation), ArenaAllocator::kAllocDFInfo));
+            move_result_mir->ssa_rep->num_uses = 0;
+            move_result_mir->ssa_rep->num_defs = 1;
+            move_result_mir->ssa_rep->defs = mir->ssa_rep->defs;
+            // Does this need to go into a new block???
+            InsertMIRAfter(string_bb, string_mir, move_result_mir);
+
+            mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+            mir->ssa_rep->num_uses = 0;
+            mir->ssa_rep->num_defs = 0;
+          }
+          break;
+        }
+        */
         default:
           break;
       }

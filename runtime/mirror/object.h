@@ -130,6 +130,8 @@ class MANAGED Object {
   IntArray* AsIntArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   LongArray* AsLongArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  bool IsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   String* AsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   Throwable* AsThrowable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
