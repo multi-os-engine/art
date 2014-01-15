@@ -182,6 +182,10 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
         (cu.enable_debug & (1 << kDebugVerbose));
   }
 
+  if (PrettyMethod(method_idx, dex_file).find("SharedPreferencesImpl.writeToFile") != std::string::npos) {
+    cu.verbose = true;
+  }
+
   /*
    * TODO: rework handling of optimization and debug flags.  Should we split out
    * MIR and backend flags?  Need command-line setting as well.

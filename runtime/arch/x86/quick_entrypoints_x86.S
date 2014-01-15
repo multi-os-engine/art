@@ -1293,13 +1293,8 @@ DEFINE_FUNCTION art_quick_string_compareto
     PUSH edi                    // push callee save reg
     mov STRING_COUNT_OFFSET(%eax), %edx
     mov STRING_COUNT_OFFSET(%ecx), %ebx
-    mov STRING_VALUE_OFFSET(%eax), %esi
-    mov STRING_VALUE_OFFSET(%ecx), %edi
-    mov STRING_OFFSET_OFFSET(%eax), %eax
-    mov STRING_OFFSET_OFFSET(%ecx), %ecx
-    /* Build pointers to the start of string data */
-    lea  STRING_DATA_OFFSET(%esi, %eax, 2), %esi
-    lea  STRING_DATA_OFFSET(%edi, %ecx, 2), %edi
+    lea STRING_VALUE_OFFSET(%eax), %esi
+    lea STRING_VALUE_OFFSET(%ecx), %edi
     /* Calculate min length and count diff */
     mov   %edx, %ecx
     mov   %edx, %eax
