@@ -317,7 +317,6 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   Handle<mirror::Class> java_lang_String(hs.NewHandle(
       AllocClass(self, java_lang_Class.Get(), mirror::String::ClassSize())));
   mirror::String::SetClass(java_lang_String.Get());
-  java_lang_String->SetObjectSize(mirror::String::InstanceSize());
   mirror::Class::SetStatus(java_lang_String, mirror::Class::kStatusResolved, self);
 
   // Setup java.lang.ref.Reference.
@@ -445,7 +444,6 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   java_lang_String->DumpClass(os1, mirror::Class::kDumpClassFullDetail);
   String_class->DumpClass(os2, mirror::Class::kDumpClassFullDetail);
   CHECK_EQ(java_lang_String.Get(), String_class) << os1.str() << "\n\n" << os2.str();
-  CHECK_EQ(java_lang_String->GetObjectSize(), mirror::String::InstanceSize());
   mirror::Class::SetStatus(java_lang_DexCache, mirror::Class::kStatusNotReady, self);
   mirror::Class* DexCache_class = FindSystemClass(self, "Ljava/lang/DexCache;");
   CHECK_EQ(java_lang_String.Get(), String_class);
