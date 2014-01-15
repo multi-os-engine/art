@@ -215,6 +215,126 @@ inline void ArtField::SetObject(Object* object, const Object* l) const {
   SetObj(object, l);
 }
 
+// Transaction field accesses.
+inline void ArtField::SetBooleanTransactional(Object* object, bool z) const {
+  DCHECK_EQ(Primitive::kPrimBoolean, FieldHelper(this).GetTypeAsPrimitiveType())
+      << PrettyField(this);
+  Set32Transactional(object, z);
+}
+
+inline void ArtField::SetByteTransactional(Object* object, int8_t b) const {
+  DCHECK_EQ(Primitive::kPrimByte, FieldHelper(this).GetTypeAsPrimitiveType())
+      << PrettyField(this);
+  Set32Transactional(object, b);
+}
+
+inline void ArtField::SetCharTransactional(Object* object, uint16_t c) const {
+  DCHECK_EQ(Primitive::kPrimChar, FieldHelper(this).GetTypeAsPrimitiveType())
+       << PrettyField(this);
+  Set32Transactional(object, c);
+}
+
+inline void ArtField::SetShortTransactional(Object* object, int16_t s) const {
+  DCHECK_EQ(Primitive::kPrimShort, FieldHelper(this).GetTypeAsPrimitiveType())
+       << PrettyField(this);
+  Set32Transactional(object, s);
+}
+
+inline void ArtField::SetIntTransactional(Object* object, int32_t i) const {
+  if (kIsDebugBuild) {
+    Primitive::Type type = FieldHelper(this).GetTypeAsPrimitiveType();
+    CHECK(type == Primitive::kPrimInt || type == Primitive::kPrimFloat) << PrettyField(this);
+  }
+  Set32Transactional(object, i);
+}
+
+inline void ArtField::SetLongTransactional(Object* object, int64_t j) const {
+  if (kIsDebugBuild) {
+    Primitive::Type type = FieldHelper(this).GetTypeAsPrimitiveType();
+    CHECK(type == Primitive::kPrimLong || type == Primitive::kPrimDouble) << PrettyField(this);
+  }
+  Set64Transactional(object, j);
+}
+
+// Transactional raw field access.
+inline void ArtField::Set32Transactional(Object* object, uint32_t new_value) const {
+  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
+  object->SetField32Transactional(GetOffset(), new_value, IsVolatile());
+}
+
+inline void ArtField::Set64Transactional(Object* object, uint64_t new_value) const {
+  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
+  object->SetField64Transactional(GetOffset(), new_value, IsVolatile());
+}
+
+inline void ArtField::SetObjTransactional(Object* object, const Object* new_value) const {
+  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
+  object->SetFieldObjectTransactional(GetOffset(), new_value, IsVolatile());
+}
+
+// Non transaction field accesses.
+inline void ArtField::SetBooleanNonTransactional(Object* object, bool z) const {
+  DCHECK_EQ(Primitive::kPrimBoolean, FieldHelper(this).GetTypeAsPrimitiveType())
+      << PrettyField(this);
+  Set32NonTransactional(object, z);
+}
+
+inline void ArtField::SetByteNonTransactional(Object* object, int8_t b) const {
+  DCHECK_EQ(Primitive::kPrimByte, FieldHelper(this).GetTypeAsPrimitiveType())
+      << PrettyField(this);
+  Set32NonTransactional(object, b);
+}
+
+inline void ArtField::SetCharNonTransactional(Object* object, uint16_t c) const {
+  DCHECK_EQ(Primitive::kPrimChar, FieldHelper(this).GetTypeAsPrimitiveType())
+       << PrettyField(this);
+  Set32NonTransactional(object, c);
+}
+
+inline void ArtField::SetShortNonTransactional(Object* object, int16_t s) const {
+  DCHECK_EQ(Primitive::kPrimShort, FieldHelper(this).GetTypeAsPrimitiveType())
+       << PrettyField(this);
+  Set32NonTransactional(object, s);
+}
+
+inline void ArtField::SetIntNonTransactional(Object* object, int32_t i) const {
+  if (kIsDebugBuild) {
+    Primitive::Type type = FieldHelper(this).GetTypeAsPrimitiveType();
+    CHECK(type == Primitive::kPrimInt || type == Primitive::kPrimFloat) << PrettyField(this);
+  }
+  Set32NonTransactional(object, i);
+}
+
+inline void ArtField::SetLongNonTransactional(Object* object, int64_t j) const {
+  if (kIsDebugBuild) {
+    Primitive::Type type = FieldHelper(this).GetTypeAsPrimitiveType();
+    CHECK(type == Primitive::kPrimLong || type == Primitive::kPrimDouble) << PrettyField(this);
+  }
+  Set64NonTransactional(object, j);
+}
+
+// Non transactional raw field access.
+inline void ArtField::Set32NonTransactional(Object* object, uint32_t new_value) const {
+  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
+  object->SetField32NonTransactional(GetOffset(), new_value, IsVolatile());
+}
+
+inline void ArtField::Set64NonTransactional(Object* object, uint64_t new_value) const {
+  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
+  object->SetField64NonTransactional(GetOffset(), new_value, IsVolatile());
+}
+
+inline void ArtField::SetObjNonTransactional(Object* object, const Object* new_value) const {
+  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
+  object->SetFieldObjectNonTransactional(GetOffset(), new_value, IsVolatile());
+}
+
 }  // namespace mirror
 }  // namespace art
 

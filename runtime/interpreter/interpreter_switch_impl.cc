@@ -50,7 +50,7 @@ namespace interpreter {
 // Code to run before each dex instruction.
 #define PREAMBLE()
 
-template<bool do_access_check>
+template<bool do_access_check, bool transaction_active>
 JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem* code_item,
                                 ShadowFrame& shadow_frame, JValue result_register) {
   bool do_assignability_check = do_access_check;
@@ -449,15 +449,17 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
       }
       case Instruction::FILLED_NEW_ARRAY: {
         PREAMBLE();
-        bool success = DoFilledNewArray<false, do_access_check>(inst, shadow_frame,
-                                                                self, &result_register);
+        bool success =
+            DoFilledNewArray<false, do_access_check, transaction_active>(inst, shadow_frame, self,
+                                                                         &result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::FILLED_NEW_ARRAY_RANGE: {
         PREAMBLE();
-        bool success = DoFilledNewArray<true, do_access_check>(inst, shadow_frame,
-                                                               self, &result_register);
+        bool success =
+            DoFilledNewArray<true, do_access_check, transaction_active>(inst, shadow_frame,
+                                                                        self, &result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
@@ -958,7 +960,11 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
         int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
         BooleanArray* array = a->AsBooleanArray();
         if (LIKELY(array->CheckIsValidIndex(index))) {
-          array->SetWithoutChecks(index, val);
+          if (transaction_active) {
+            array->SetWithoutChecksTransactional(index, val);
+          } else {
+            array->SetWithoutChecksNonTransactional(index, val);
+          }
           inst = inst->Next_2xx();
         } else {
           HANDLE_PENDING_EXCEPTION();
@@ -977,7 +983,11 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
         int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
         ByteArray* array = a->AsByteArray();
         if (LIKELY(array->CheckIsValidIndex(index))) {
-          array->SetWithoutChecks(index, val);
+          if (transaction_active) {
+            array->SetWithoutChecksTransactional(index, val);
+          } else {
+            array->SetWithoutChecksNonTransactional(index, val);
+          }
           inst = inst->Next_2xx();
         } else {
           HANDLE_PENDING_EXCEPTION();
@@ -996,7 +1006,11 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
         int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
         CharArray* array = a->AsCharArray();
         if (LIKELY(array->CheckIsValidIndex(index))) {
-          array->SetWithoutChecks(index, val);
+          if (transaction_active) {
+            array->SetWithoutChecksTransactional(index, val);
+          } else {
+            array->SetWithoutChecksNonTransactional(index, val);
+          }
           inst = inst->Next_2xx();
         } else {
           HANDLE_PENDING_EXCEPTION();
@@ -1015,7 +1029,11 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
         int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
         ShortArray* array = a->AsShortArray();
         if (LIKELY(array->CheckIsValidIndex(index))) {
-          array->SetWithoutChecks(index, val);
+          if (transaction_active) {
+            array->SetWithoutChecksTransactional(index, val);
+          } else {
+            array->SetWithoutChecksNonTransactional(index, val);
+          }
           inst = inst->Next_2xx();
         } else {
           HANDLE_PENDING_EXCEPTION();
@@ -1034,7 +1052,11 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
         int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
         IntArray* array = a->AsIntArray();
         if (LIKELY(array->CheckIsValidIndex(index))) {
-          array->SetWithoutChecks(index, val);
+          if (transaction_active) {
+            array->SetWithoutChecksTransactional(index, val);
+          } else {
+            array->SetWithoutChecksNonTransactional(index, val);
+          }
           inst = inst->Next_2xx();
         } else {
           HANDLE_PENDING_EXCEPTION();
@@ -1053,7 +1075,11 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
         int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
         LongArray* array = a->AsLongArray();
         if (LIKELY(array->CheckIsValidIndex(index))) {
-          array->SetWithoutChecks(index, val);
+          if (transaction_active) {
+            array->SetWithoutChecksTransactional(index, val);
+          } else {
+            array->SetWithoutChecksNonTransactional(index, val);
+          }
           inst = inst->Next_2xx();
         } else {
           HANDLE_PENDING_EXCEPTION();
@@ -1072,7 +1098,11 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
         Object* val = shadow_frame.GetVRegReference(inst->VRegA_23x(inst_data));
         ObjectArray<Object>* array = a->AsObjectArray<Object>();
         if (LIKELY(array->CheckIsValidIndex(index) && array->CheckAssignable(val))) {
-          array->SetWithoutChecks(index, val);
+          if (transaction_active) {
+            array->SetWithoutChecksTransactional(index, val);
+          } else {
+            array->SetWithoutChecksNonTransactional(index, val);
+          }
           inst = inst->Next_2xx();
         } else {
           HANDLE_PENDING_EXCEPTION();
@@ -1183,103 +1213,103 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
       }
       case Instruction::IPUT_BOOLEAN: {
         PREAMBLE();
-        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimBoolean, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimBoolean, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::IPUT_BYTE: {
         PREAMBLE();
-        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimByte, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimByte, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::IPUT_CHAR: {
         PREAMBLE();
-        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimChar, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimChar, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::IPUT_SHORT: {
         PREAMBLE();
-        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimShort, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimShort, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::IPUT: {
         PREAMBLE();
-        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimInt, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimInt, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::IPUT_WIDE: {
         PREAMBLE();
-        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimLong, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<InstancePrimitiveWrite, Primitive::kPrimLong, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::IPUT_OBJECT: {
         PREAMBLE();
-        bool success = DoFieldPut<InstanceObjectWrite, Primitive::kPrimNot, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<InstanceObjectWrite, Primitive::kPrimNot, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::IPUT_QUICK: {
         PREAMBLE();
-        bool success = DoIPutQuick<Primitive::kPrimInt>(shadow_frame, inst, inst_data);
+        bool success = DoIPutQuick<Primitive::kPrimInt, transaction_active>(shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::IPUT_WIDE_QUICK: {
         PREAMBLE();
-        bool success = DoIPutQuick<Primitive::kPrimLong>(shadow_frame, inst, inst_data);
+        bool success = DoIPutQuick<Primitive::kPrimLong, transaction_active>(shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::IPUT_OBJECT_QUICK: {
         PREAMBLE();
-        bool success = DoIPutQuick<Primitive::kPrimNot>(shadow_frame, inst, inst_data);
+        bool success = DoIPutQuick<Primitive::kPrimNot, transaction_active>(shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::SPUT_BOOLEAN: {
         PREAMBLE();
-        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimBoolean, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimBoolean, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::SPUT_BYTE: {
         PREAMBLE();
-        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimByte, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimByte, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::SPUT_CHAR: {
         PREAMBLE();
-        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimChar, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimChar, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::SPUT_SHORT: {
         PREAMBLE();
-        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimShort, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimShort, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::SPUT: {
         PREAMBLE();
-        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimInt, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimInt, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::SPUT_WIDE: {
         PREAMBLE();
-        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimLong, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<StaticPrimitiveWrite, Primitive::kPrimLong, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
       case Instruction::SPUT_OBJECT: {
         PREAMBLE();
-        bool success = DoFieldPut<StaticObjectWrite, Primitive::kPrimNot, do_access_check>(self, shadow_frame, inst, inst_data);
+        bool success = DoFieldPut<StaticObjectWrite, Primitive::kPrimNot, do_access_check, transaction_active>(self, shadow_frame, inst, inst_data);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
@@ -2137,13 +2167,21 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
 
 // Explicit definitions of ExecuteSwitchImpl.
 template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR
-JValue ExecuteSwitchImpl<true>(Thread* self, MethodHelper& mh,
-                               const DexFile::CodeItem* code_item,
-                               ShadowFrame& shadow_frame, JValue result_register);
+JValue ExecuteSwitchImpl<true, false>(Thread* self, MethodHelper& mh,
+                                      const DexFile::CodeItem* code_item,
+                                      ShadowFrame& shadow_frame, JValue result_register);
 template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR
-JValue ExecuteSwitchImpl<false>(Thread* self, MethodHelper& mh,
-                                const DexFile::CodeItem* code_item,
-                                ShadowFrame& shadow_frame, JValue result_register);
+JValue ExecuteSwitchImpl<false, false>(Thread* self, MethodHelper& mh,
+                                       const DexFile::CodeItem* code_item,
+                                       ShadowFrame& shadow_frame, JValue result_register);
+template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+JValue ExecuteSwitchImpl<true, true>(Thread* self, MethodHelper& mh,
+                                     const DexFile::CodeItem* code_item,
+                                     ShadowFrame& shadow_frame, JValue result_register);
+template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+JValue ExecuteSwitchImpl<false, true>(Thread* self, MethodHelper& mh,
+                                      const DexFile::CodeItem* code_item,
+                                      ShadowFrame& shadow_frame, JValue result_register);
 
 }  // namespace interpreter
 }  // namespace art

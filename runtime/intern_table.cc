@@ -28,8 +28,8 @@
 namespace art {
 
 InternTable::InternTable()
-    : intern_table_lock_("InternTable lock"), is_dirty_(false), allow_new_interns_(true),
-      new_intern_condition_("New intern condition", intern_table_lock_) {
+    : intern_table_lock_("InternTable lock", kInternTableLock), is_dirty_(false),
+      allow_new_interns_(true), new_intern_condition_("New intern condition", intern_table_lock_) {
 }
 
 size_t InternTable::Size() const {
@@ -70,14 +70,37 @@ mirror::String* InternTable::Lookup(Table& table, mirror::String* s, uint32_t ha
   return NULL;
 }
 
+mirror::String* InternTable::InsertStrong(mirror::String* s, uint32_t hash_code) {
+  Runtime* runtime = Runtime::Current();
+  if (runtime->IsActiveTransaction()) {
+    runtime->RecordStrongStringInsertion(s, hash_code);
+  }
+  return Insert(strong_interns_, s, hash_code);
+}
+
+mirror::String* InternTable::InsertWeak(mirror::String* s, uint32_t hash_code) {
+  Runtime* runtime = Runtime::Current();
+  if (runtime->IsActiveTransaction()) {
+    runtime->RecordWeakStringInsertion(s, hash_code);
+  }
+  return Insert(weak_interns_, s, hash_code);
+}
+
 mirror::String* InternTable::Insert(Table& table, mirror::String* s, uint32_t hash_code) {
   intern_table_lock_.AssertHeld(Thread::Current());
   table.insert(std::make_pair(hash_code, s));
   return s;
 }
 
-void InternTable::Remove(Table& table, const mirror::String* s,
-                         uint32_t hash_code) {
+void InternTable::RemoveWeak(const mirror::String* s, uint32_t hash_code) {
+  Runtime* runtime = Runtime::Current();
+  if (runtime->IsActiveTransaction()) {
+    runtime->RecordWeakStringRemoval(s, hash_code);
+  }
+  Remove(weak_interns_, s, hash_code);
+}
+
+void InternTable::Remove(Table& table, const mirror::String* s, uint32_t hash_code) {
   intern_table_lock_.AssertHeld(Thread::Current());
   for (auto it = table.find(hash_code), end = table.end(); it != end; ++it) {
     if (it->second == s) {
@@ -85,6 +108,28 @@ void InternTable::Remove(Table& table, const mirror::String* s,
       return;
     }
   }
+}
+
+// Insert/remove methods used to undo changes made during an aborted transaction.
+mirror::String* InternTable::InsertStrongFromTransaction(mirror::String* s, uint32_t hash_code) {
+  DCHECK(!Runtime::Current()->IsActiveTransaction());
+  MutexLock mu(Thread::Current(), intern_table_lock_);
+  return InsertStrong(s, hash_code);
+}
+mirror::String* InternTable::InsertWeakFromTransaction(mirror::String* s, uint32_t hash_code) {
+  DCHECK(!Runtime::Current()->IsActiveTransaction());
+  MutexLock mu(Thread::Current(), intern_table_lock_);
+  return InsertWeak(s, hash_code);
+}
+void InternTable::RemoveStrongFromTransaction(const mirror::String* s, uint32_t hash_code) {
+  DCHECK(!Runtime::Current()->IsActiveTransaction());
+  MutexLock mu(Thread::Current(), intern_table_lock_);
+  Remove(strong_interns_, s, hash_code);
+}
+void InternTable::RemoveWeakFromTransaction(const mirror::String* s, uint32_t hash_code) {
+  DCHECK(!Runtime::Current()->IsActiveTransaction());
+  MutexLock mu(Thread::Current(), intern_table_lock_);
+  Remove(weak_interns_, s, hash_code);
 }
 
 static mirror::String* LookupStringFromImage(mirror::String* s)
@@ -149,20 +194,20 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong) {
     // Check the image for a match.
     mirror::String* image = LookupStringFromImage(s);
     if (image != NULL) {
-      return Insert(strong_interns_, image, hash_code);
+      return InsertStrong(image, hash_code);
     }
 
     // There is no match in the strong table, check the weak table.
     mirror::String* weak = Lookup(weak_interns_, s, hash_code);
     if (weak != NULL) {
       // A match was found in the weak table. Promote to the strong table.
-      Remove(weak_interns_, weak, hash_code);
-      return Insert(strong_interns_, weak, hash_code);
+      RemoveWeak(weak, hash_code);
+      return InsertStrong(weak, hash_code);
     }
 
     // No match in the strong table or the weak table. Insert into the strong
     // table.
-    return Insert(strong_interns_, s, hash_code);
+    return InsertStrong(s, hash_code);
   }
 
   // Check the strong table for a match.
@@ -173,7 +218,7 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong) {
   // Check the image for a match.
   mirror::String* image = LookupStringFromImage(s);
   if (image != NULL) {
-    return Insert(weak_interns_, image, hash_code);
+    return InsertWeak(image, hash_code);
   }
   // Check the weak table for a match.
   mirror::String* weak = Lookup(weak_interns_, s, hash_code);
@@ -181,7 +226,7 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong) {
     return weak;
   }
   // Insert into the weak table.
-  return Insert(weak_interns_, s, hash_code);
+  return InsertWeak(s, hash_code);
 }
 
 mirror::String* InternTable::InternStrong(int32_t utf16_length,

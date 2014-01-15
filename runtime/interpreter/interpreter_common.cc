@@ -160,7 +160,7 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
   return !self->IsExceptionPending();
 }
 
-template <bool is_range, bool do_access_check>
+template <bool is_range, bool do_access_check, bool transaction_active>
 bool DoFilledNewArray(const Instruction* inst, const ShadowFrame& shadow_frame,
                       Thread* self, JValue* result) {
   DCHECK(inst->Opcode() == Instruction::FILLED_NEW_ARRAY ||
@@ -211,9 +211,17 @@ bool DoFilledNewArray(const Instruction* inst, const ShadowFrame& shadow_frame,
   for (int32_t i = 0; i < length; ++i) {
     size_t src_reg = is_range ? vregC + i : arg[i];
     if (is_primitive_int_component) {
-      newArray->AsIntArray()->SetWithoutChecks(i, shadow_frame.GetVReg(src_reg));
+      if (transaction_active) {
+        newArray->AsIntArray()->SetWithoutChecksTransactional(i, shadow_frame.GetVReg(src_reg));
+      } else {
+        newArray->AsIntArray()->SetWithoutChecksNonTransactional(i, shadow_frame.GetVReg(src_reg));
+      }
     } else {
-      newArray->AsObjectArray<Object>()->SetWithoutChecks(i, shadow_frame.GetVRegReference(src_reg));
+      if (transaction_active) {
+        newArray->AsObjectArray<Object>()->SetWithoutChecksTransactional(i, shadow_frame.GetVRegReference(src_reg));
+      } else {
+        newArray->AsObjectArray<Object>()->SetWithoutChecksNonTransactional(i, shadow_frame.GetVRegReference(src_reg));
+      }
     }
   }
 
@@ -340,15 +348,19 @@ EXPLICIT_DO_CALL_TEMPLATE_DECL(true, true);
 #undef EXPLICIT_DO_CALL_TEMPLATE_DECL
 
 // Explicit DoFilledNewArray template function declarations.
-#define EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(_is_range_, _check)                \
-  template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)                                \
-  bool DoFilledNewArray<_is_range_, _check>(const Instruction* inst,                  \
-                                                     const ShadowFrame& shadow_frame, \
-                                                     Thread* self, JValue* result)
-EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(false, false);
-EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(false, true);
-EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(true, false);
-EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(true, true);
+#define EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(_is_range_, _check, _transaction_active)       \
+  template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)                                            \
+  bool DoFilledNewArray<_is_range_, _check, _transaction_active>(const Instruction* inst,         \
+                                                                 const ShadowFrame& shadow_frame, \
+                                                                 Thread* self, JValue* result)
+#define EXPLICIT_DO_FILLED_NEW_ARRAY_ALL_TEMPLATE_DECL(_transaction_active)       \
+  EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(false, false, _transaction_active);  \
+  EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(false, true, _transaction_active);   \
+  EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(true, false, _transaction_active);   \
+  EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL(true, true, _transaction_active)
+EXPLICIT_DO_FILLED_NEW_ARRAY_ALL_TEMPLATE_DECL(false);
+EXPLICIT_DO_FILLED_NEW_ARRAY_ALL_TEMPLATE_DECL(true);
+#undef EXPLICIT_DO_FILLED_NEW_ARRAY_ALL_TEMPLATE_DECL
 #undef EXPLICIT_DO_FILLED_NEW_ARRAY_TEMPLATE_DECL
 
 }  // namespace interpreter

@@ -85,6 +85,7 @@ ALWAYS_INLINE static inline mirror::Class* CheckObjectAlloc(uint32_t type_idx,
     *slow_path = true;
     if (!Runtime::Current()->GetClassLinker()->EnsureInitialized(sirt_klass, true, true)) {
       DCHECK(self->IsExceptionPending());
+      *slow_path = true;
       return nullptr;  // Failure
     }
     return sirt_klass.get();
@@ -136,6 +137,7 @@ ALWAYS_INLINE static inline mirror::Object* AllocObjectFromCode(uint32_t type_id
     gc::Heap* heap = Runtime::Current()->GetHeap();
     return klass->Alloc<kInstrumented>(self, heap->GetCurrentAllocator());
   }
+  DCHECK(klass != nullptr);
   return klass->Alloc<kInstrumented>(self, allocator_type);
 }
 
