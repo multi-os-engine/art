@@ -84,7 +84,11 @@ class ModUnionUpdateObjectReferencesVisitor {
       if (new_ref != ref) {
         // Use SetFieldPtr to avoid card mark as an optimization which reduces dirtied pages and
         // improves performance.
-        obj->SetFieldPtr(offset, new_ref, true);
+        if (Runtime::Current()->IsActiveTransaction()) {
+          obj->SetFieldPtr<true>(offset, new_ref, true);
+        } else {
+          obj->SetFieldPtr<false>(offset, new_ref, true);
+        }
       }
     }
   }

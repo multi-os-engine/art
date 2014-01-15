@@ -37,7 +37,8 @@ class MANAGED ArtField : public Object {
   uint32_t GetAccessFlags() const;
 
   void SetAccessFlags(uint32_t new_access_flags) {
-    SetField32(OFFSET_OF_OBJECT_MEMBER(ArtField, access_flags_), new_access_flags, false);
+    // Not called within a transaction.
+    SetField32<false, false>(OFFSET_OF_OBJECT_MEMBER(ArtField, access_flags_), new_access_flags, false);
   }
 
   bool IsPublic() const {
@@ -57,7 +58,8 @@ class MANAGED ArtField : public Object {
   }
 
   void SetDexFieldIndex(uint32_t new_idx) {
-    SetField32(OFFSET_OF_OBJECT_MEMBER(ArtField, field_dex_idx_), new_idx, false);
+    // Not called within a transaction.
+    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(ArtField, field_dex_idx_), new_idx, false);
   }
 
   // Offset to field within an Object
@@ -74,52 +76,64 @@ class MANAGED ArtField : public Object {
   // field access, null object for static fields
   bool GetBoolean(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetBoolean(Object* object, bool z) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   int8_t GetByte(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetByte(Object* object, int8_t b) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   uint16_t GetChar(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetChar(Object* object, uint16_t c) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   int16_t GetShort(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetShort(Object* object, int16_t s) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   int32_t GetInt(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetInt(Object* object, int32_t i) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   int64_t GetLong(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetLong(Object* object, int64_t j) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   float GetFloat(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetFloat(Object* object, float f) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   double GetDouble(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetDouble(Object* object, double d) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   Object* GetObject(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetObject(Object* object, const Object* l) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // raw field accesses
   uint32_t Get32(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void Set32(Object* object, uint32_t new_value) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   uint64_t Get64(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void Set64(Object* object, uint64_t new_value) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   Object* GetObj(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
   void SetObj(Object* object, const Object* new_value) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

@@ -26,7 +26,7 @@ inline void IfTable::SetInterface(int32_t i, Class* interface) {
   DCHECK(interface != NULL);
   DCHECK(interface->IsInterface());
   DCHECK(Get((i * kMax) + kInterface) == NULL);
-  Set((i * kMax) + kInterface, interface);
+  Set<false>((i * kMax) + kInterface, interface);
 }
 
 }  // namespace mirror

@@ -31,6 +31,7 @@ namespace mirror {
 class MANAGED Throwable : public Object {
  public:
   void SetDetailMessage(String* new_detail_message) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // TODO default transaction support, use template ?
     SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Throwable, detail_message_), new_detail_message, false);
   }
   String* GetDetailMessage() const {

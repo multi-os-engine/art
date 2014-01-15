@@ -71,28 +71,38 @@ inline bool ObjectArray<T>::CheckAssignable(T* object) {
 
 template<class T>
 inline void ObjectArray<T>::Set(int32_t i, T* object) {
+  if (Runtime::Current()->IsActiveTransaction()) {
+    Set<true>(i, object);
+  } else {
+    Set<false>(i, object);
+  }
+}
+
+template<class T>
+template<bool kTransactionActive, bool kCheckTransaction>
+inline void ObjectArray<T>::Set(int32_t i, T* object) {
   if (LIKELY(CheckIsValidIndex(i) && CheckAssignable(object))) {
-    SetWithoutChecks(i, object);
+    SetWithoutChecks<kTransactionActive, kCheckTransaction>(i, object);
   } else {
     DCHECK(Thread::Current()->IsExceptionPending());
   }
 }
 
 template<class T>
+template<bool kTransactionActive, bool kCheckTransaction>
 inline void ObjectArray<T>::SetWithoutChecks(int32_t i, T* object) {
-  DCHECK(CheckIsValidIndex(i));
-  DCHECK(CheckAssignable(object));
   MemberOffset data_offset(DataOffset(sizeof(Object*)).Int32Value() + i * sizeof(Object*));
-  SetFieldObject(data_offset, object, false);
+  SetFieldObject<kTransactionActive, kCheckTransaction>(data_offset, object, false);
 }
 
 template<class T>
+template<bool kTransactionActive, bool kCheckTransaction>
 inline void ObjectArray<T>::SetPtrWithoutChecks(int32_t i, T* object) {
   DCHECK(CheckIsValidIndex(i));
   // TODO enable this check. It fails when writing the image in ImageWriter::FixupObjectArray.
   // DCHECK(CheckAssignable(object));
   MemberOffset data_offset(DataOffset(sizeof(Object*)).Int32Value() + i * sizeof(Object*));
-  SetFieldPtr(data_offset, object, false);
+  SetFieldPtr<kTransactionActive, kCheckTransaction>(data_offset, object, false);
 }
 
 template<class T>
@@ -120,7 +130,7 @@ inline void ObjectArray<T>::Copy(const ObjectArray<T>* src, int src_pos,
         Object* object = src->GetFieldObject<Object*>(src_offset, false);
         heap->VerifyObject(object);
         // directly set field, we do a bulk write barrier at the end
-        dst->SetField32(dst_offset, reinterpret_cast<uint32_t>(object), false, true);
+        dst->SetField32<false>(dst_offset, reinterpret_cast<uint32_t>(object), false, true);
         src_offset = MemberOffset(src_offset.Uint32Value() + sizeof(Object*));
         dst_offset = MemberOffset(dst_offset.Uint32Value() + sizeof(Object*));
       }
@@ -135,7 +145,7 @@ inline void ObjectArray<T>::Copy(const ObjectArray<T>* src, int src_pos,
         }
         heap->VerifyObject(object);
         // directly set field, we do a bulk write barrier at the end
-        dst->SetField32(dst_offset, reinterpret_cast<uint32_t>(object), false, true);
+        dst->SetField32<false>(dst_offset, reinterpret_cast<uint32_t>(object), false, true);
         src_offset = MemberOffset(src_offset.Uint32Value() + sizeof(Object*));
         dst_offset = MemberOffset(dst_offset.Uint32Value() + sizeof(Object*));
       }

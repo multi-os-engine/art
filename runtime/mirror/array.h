@@ -19,6 +19,7 @@
 
 #include "object.h"
 #include "gc/heap.h"
+#include "runtime.h"
 #include "thread.h"
 
 namespace art {
@@ -58,7 +59,9 @@ class MANAGED Array : public Object {
 
   void SetLength(int32_t length) {
     CHECK_GE(length, 0);
-    SetField32(OFFSET_OF_OBJECT_MEMBER(Array, length_), length, false);
+    // We use non transactional version since we can't undo this write. We also disable checking
+    // since it would fail during a transaction.
+    SetField32<false, false>(OFFSET_OF_OBJECT_MEMBER(Array, length_), length, false);
   }
 
   static MemberOffset LengthOffset() {
@@ -143,14 +146,32 @@ class MANAGED PrimitiveArray : public Array {
   }
 
   void Set(int32_t i, T value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (Runtime::Current()->IsActiveTransaction()) {
+      Set<true>(i, value);
+    } else {
+      Set<false>(i, value);
+    }
+  }
+
+  // TODO fix thread safety analysis: should be SHARED_LOCKS_REQUIRED(Locks::mutator_lock_).
+  template<bool kTransactionActive, bool kCheckTransaction = true>
+  void Set(int32_t i, T value) NO_THREAD_SAFETY_ANALYSIS {
     if (LIKELY(CheckIsValidIndex(i))) {
-      SetWithoutChecks(i, value);
+      SetWithoutChecks<kTransactionActive, kCheckTransaction>(i, value);
     } else {
       DCHECK(Thread::Current()->IsExceptionPending());
     }
   }
 
-  void SetWithoutChecks(int32_t i, T value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  // TODO fix thread safety analysis: should be SHARED_LOCKS_REQUIRED(Locks::mutator_lock_).
+  template<bool kTransactionActive, bool kCheckTransaction = true>
+  void SetWithoutChecks(int32_t i, T value) NO_THREAD_SAFETY_ANALYSIS {
+    if (kCheckTransaction) {
+      CHECK_EQ(kTransactionActive, Runtime::Current()->IsActiveTransaction());
+    }
+    if (kTransactionActive) {
+      Runtime::Current()->RecordWriteArray(this, i, value);
+    }
     DCHECK(CheckIsValidIndex(i));
     GetData()[i] = value;
   }

@@ -38,7 +38,11 @@ CharArray* String::GetCharArray() {
 }
 
 void String::ComputeHashCode() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  SetHashCode(ComputeUtf16Hash(GetCharArray(), GetOffset(), GetLength()));
+  if (Runtime::Current()->IsActiveTransaction()) {
+    SetHashCode<true>(ComputeUtf16Hash(GetCharArray(), GetOffset(), GetLength()));
+  } else {
+    SetHashCode<false>(ComputeUtf16Hash(GetCharArray(), GetOffset(), GetLength()));
+  }
 }
 
 int32_t String::GetUtfLength() const {
@@ -63,9 +67,10 @@ int32_t String::FastIndexOf(int32_t ch, int32_t start) const {
   return -1;
 }
 
-void String::SetArray(CharArray* new_array) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+template<bool kTransactionActive>
+void String::SetArray(CharArray* new_array) {
   DCHECK(new_array != NULL);
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(String, array_), new_array, false);
+  SetFieldObject<kTransactionActive>(OFFSET_OF_OBJECT_MEMBER(String, array_), new_array, false);
 }
 
 // TODO: get global references for these
@@ -133,7 +138,8 @@ String* String::AllocFromUtf16(Thread* self,
   memcpy(array->GetData(), utf16_data_in, utf16_length * sizeof(uint16_t));
   if (hash_code != 0) {
     DCHECK_EQ(hash_code, ComputeUtf16Hash(utf16_data_in, utf16_length));
-    string->SetHashCode(hash_code);
+    // Only called from JNI: use non-transactional mode.
+    string->SetHashCode<false>(hash_code);
   } else {
     string->ComputeHashCode();
   }
@@ -173,8 +179,13 @@ String* String::Alloc(Thread* self, const SirtRef<CharArray>& array) {
   // Hold reference in case AllocObject causes GC.
   String* string = down_cast<String*>(GetJavaLangString()->AllocObject(self));
   if (LIKELY(string != nullptr)) {
-    string->SetArray(array.get());
-    string->SetCount(array->GetLength());
+    if (Runtime::Current()->IsActiveTransaction()) {
+      string->SetArray<true>(array.get());
+      string->SetCount<true>(array->GetLength());
+    } else {
+      string->SetArray<false>(array.get());
+      string->SetCount<false>(array->GetLength());
+    }
   }
   return string;
 }

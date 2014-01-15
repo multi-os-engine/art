@@ -605,7 +605,11 @@ void SemiSpace::ScanObject(Object* obj) {
       // Don't need to mark the card since we updating the object address and not changing the
       // actual objects its pointing to. Using SetFieldPtr is better in this case since it does not
       // dirty cards and use additional memory.
-      obj->SetFieldPtr(offset, new_address, false);
+      if (Runtime::Current()->IsActiveTransaction()) {
+        obj->SetFieldPtr<true>(offset, new_address, false);
+      } else {
+        obj->SetFieldPtr<false>(offset, new_address, false);
+      }
     }
   }, kMovingClasses);
   mirror::Class* klass = obj->GetClass();

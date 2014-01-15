@@ -174,7 +174,8 @@ class MANAGED Class : public Object {
   uint32_t GetAccessFlags() const;
 
   void SetAccessFlags(uint32_t new_access_flags) {
-    SetField32(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_), new_access_flags, false);
+    // Not called within a transaction.
+    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_), new_access_flags, false);
   }
 
   // Returns true if the class is an interface.
@@ -275,7 +276,7 @@ class MANAGED Class : public Object {
 
   void SetPrimitiveType(Primitive::Type new_type) {
     DCHECK_EQ(sizeof(Primitive::Type), sizeof(int32_t));
-    SetField32(OFFSET_OF_OBJECT_MEMBER(Class, primitive_type_), new_type, false);
+    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, primitive_type_), new_type, false);
   }
 
   // Returns true if the class is a primitive type.
@@ -357,7 +358,11 @@ class MANAGED Class : public Object {
   void SetComponentType(Class* new_component_type) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK(GetComponentType() == NULL);
     DCHECK(new_component_type != NULL);
-    SetFieldObject(ComponentTypeOffset(), new_component_type, false);
+    if (Runtime::Current()->IsActiveTransaction()) {
+      SetFieldObject<true>(ComponentTypeOffset(), new_component_type, false);
+    } else {
+      SetFieldObject<false>(ComponentTypeOffset(), new_component_type, false);
+    }
   }
 
   size_t GetComponentSize() const {
@@ -409,7 +414,8 @@ class MANAGED Class : public Object {
   void SetObjectSize(size_t new_object_size) {
     DCHECK(!IsVariableSize());
     DCHECK_EQ(sizeof(size_t), sizeof(int32_t));
-    return SetField32(OFFSET_OF_OBJECT_MEMBER(Class, object_size_), new_object_size, false);
+    // Not called within a transaction.
+    return SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, object_size_), new_object_size, false);
   }
 
   // Returns true if this class is in the same packages as that class.
@@ -497,7 +503,7 @@ class MANAGED Class : public Object {
         OFFSET_OF_OBJECT_MEMBER(Class, super_class_), false);
     DCHECK(old_super_class == NULL || old_super_class == new_super_class);
     DCHECK(new_super_class != NULL);
-    SetFieldObject(OFFSET_OF_OBJECT_MEMBER(Class, super_class_), new_super_class, false);
+    SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(Class, super_class_), new_super_class, false);
   }
 
   bool HasSuperClass() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -676,7 +682,9 @@ class MANAGED Class : public Object {
 
   void SetNumReferenceInstanceFields(size_t new_num) {
     DCHECK_EQ(sizeof(size_t), sizeof(int32_t));
-    SetField32(OFFSET_OF_OBJECT_MEMBER(Class, num_reference_instance_fields_), new_num, false);
+    // Not called within a transaction.
+    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, num_reference_instance_fields_), new_num,
+                      false);
   }
 
   uint32_t GetReferenceInstanceOffsets() const {
@@ -707,7 +715,8 @@ class MANAGED Class : public Object {
 
   void SetNumReferenceStaticFields(size_t new_num) {
     DCHECK_EQ(sizeof(size_t), sizeof(int32_t));
-    SetField32(OFFSET_OF_OBJECT_MEMBER(Class, num_reference_static_fields_), new_num, false);
+    // Not called within a transaction.
+    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, num_reference_static_fields_), new_num, false);
   }
 
   // Gets the static fields of the class.
@@ -767,7 +776,11 @@ class MANAGED Class : public Object {
   }
 
   void SetClinitThreadId(pid_t new_clinit_thread_id) {
-    SetField32(OFFSET_OF_OBJECT_MEMBER(Class, clinit_thread_id_), new_clinit_thread_id, false);
+    if (Runtime::Current()->IsActiveTransaction()) {
+      SetField32<true>(OFFSET_OF_OBJECT_MEMBER(Class, clinit_thread_id_), new_clinit_thread_id, false);
+    } else {
+      SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, clinit_thread_id_), new_clinit_thread_id, false);
+    }
   }
 
   Class* GetVerifyErrorClass() const {
@@ -780,7 +793,8 @@ class MANAGED Class : public Object {
   }
 
   void SetDexClassDefIndex(uint16_t class_def_idx) {
-    SetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_), class_def_idx, false);
+    // Not called within a transaction.
+    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_), class_def_idx, false);
   }
 
   uint16_t GetDexTypeIndex() const {
@@ -788,7 +802,8 @@ class MANAGED Class : public Object {
   }
 
   void SetDexTypeIndex(uint16_t type_idx) {
-    SetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_), type_idx, false);
+    // Not called within a transaction.
+    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_), type_idx, false);
   }
 
   static Class* GetJavaLangClass() {

@@ -22,6 +22,7 @@
 #include "base/macros.h"
 #include "cutils/atomic-inline.h"
 #include "offsets.h"
+#include "runtime.h"
 
 namespace art {
 
@@ -173,14 +174,11 @@ class MANAGED Object {
   }
 
   void SetFieldObject(MemberOffset field_offset, const Object* new_value, bool is_volatile,
-                      bool this_is_valid = true) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    VerifyObject(new_value);
-    SetField32(field_offset, reinterpret_cast<uint32_t>(new_value), is_volatile, this_is_valid);
-    if (new_value != NULL) {
-      CheckFieldAssignment(field_offset, new_value);
-      WriteBarrierField(this, field_offset, new_value);
-    }
-  }
+                      bool this_is_valid = true) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  template<bool kTransactionActive, bool kCheckTransaction = true>
+  void SetFieldObject(MemberOffset field_offset, const Object* new_value, bool is_volatile,
+                      bool this_is_valid = true) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   Object** GetFieldObjectAddr(MemberOffset field_offset) ALWAYS_INLINE {
     VerifyObject(this);
@@ -189,19 +187,21 @@ class MANAGED Object {
 
   uint32_t GetField32(MemberOffset field_offset, bool is_volatile) const;
 
+  template<bool kTransactionActive, bool kCheckTransaction = true>
   void SetField32(MemberOffset field_offset, uint32_t new_value, bool is_volatile,
                   bool this_is_valid = true);
 
+  template<bool kTransactionActive, bool kCheckTransaction = true>
   bool CasField32(MemberOffset field_offset, uint32_t old_value, uint32_t new_value);
 
   uint64_t GetField64(MemberOffset field_offset, bool is_volatile) const;
 
+  template<bool kTransactionActive, bool kCheckTransaction = true>
   void SetField64(MemberOffset field_offset, uint64_t new_value, bool is_volatile);
 
-  template<typename T>
-  void SetFieldPtr(MemberOffset field_offset, T new_value, bool is_volatile, bool this_is_valid = true) {
-    SetField32(field_offset, reinterpret_cast<uint32_t>(new_value), is_volatile, this_is_valid);
-  }
+  template<bool kTransactionActive, bool kCheckTransaction = true, typename T>
+  void SetFieldPtr(MemberOffset field_offset, T new_value, bool is_volatile,
+                   bool this_is_valid = true);
 
  protected:
   // Accessors for non-Java type fields

@@ -49,11 +49,13 @@ void ReferenceQueue::EnqueuePendingReference(mirror::Object* ref) {
   DCHECK_NE(pending_next_offset.Uint32Value(), 0U);
   if (IsEmpty()) {
     // 1 element cyclic queue, ie: Reference ref = ..; ref.pendingNext = ref;
+    // TODO default transaction support, use template ?
     ref->SetFieldObject(pending_next_offset, ref, false);
     list_ = ref;
   } else {
     mirror::Object* head =
         list_->GetFieldObject<mirror::Object*>(pending_next_offset, false);
+    // TODO default transaction support, use template ?
     ref->SetFieldObject(pending_next_offset, head, false);
     list_->SetFieldObject(pending_next_offset, ref, false);
   }
@@ -72,9 +74,11 @@ mirror::Object* ReferenceQueue::DequeuePendingReference() {
     list_ = nullptr;
   } else {
     mirror::Object* next = head->GetFieldObject<mirror::Object*>(pending_next_offset, false);
+    // TODO default transaction support, use template ?
     list_->SetFieldObject(pending_next_offset, next, false);
     ref = head;
   }
+  // TODO default transaction support, use template ?
   ref->SetFieldObject(pending_next_offset, nullptr, false);
   return ref;
 }
@@ -130,6 +134,7 @@ void ReferenceQueue::EnqueueFinalizerReferences(ReferenceQueue& cleared_referenc
         // If the referent is non-null the reference must queuable.
         DCHECK(heap_->IsEnqueuable(ref));
         // Move the updated referent to the zombie field.
+        // TODO default transaction support, use template ?
         ref->SetFieldObject(heap_->GetFinalizerReferenceZombieOffset(), forward_address, false);
         heap_->ClearReferenceReferent(ref);
         cleared_references.EnqueueReference(ref);
