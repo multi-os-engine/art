@@ -394,7 +394,8 @@ struct CheckOffsets {
     bool error = false;
 
     // Art method have a different size due to the padding field.
-    if (!klass->IsArtMethodClass() && !klass->IsClassClass() && !is_static) {
+    if (!klass->IsArtMethodClass() && !klass->IsClassClass() && !klass->IsStringClass() &&
+        !is_static) {
       // Currently only required for AccessibleObject since of the padding fields. The class linker
       // says AccessibleObject is 9 bytes but sizeof(AccessibleObject) is 12 bytes due to padding.
       // The RoundUp is to get around this case.
@@ -528,8 +529,6 @@ struct StringOffsets : public CheckOffsets<mirror::String> {
   StringOffsets() : CheckOffsets<mirror::String>(false, "Ljava/lang/String;") {
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::String, count_),     "count"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::String, hash_code_), "hashCode"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::String, offset_),    "offset"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::String, array_),     "value"));
   };
 };
 

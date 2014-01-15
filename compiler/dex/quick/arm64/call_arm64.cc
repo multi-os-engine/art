@@ -21,6 +21,7 @@
 #include "arm64_lir.h"
 #include "base/logging.h"
 #include "dex/mir_graph.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
@@ -474,6 +475,30 @@ int Arm64Mir2Lir::Arm64NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
         cg->LoadConstantWide(cg->TargetReg(kArg0, kRef), direct_method);
       } else {
         cg->LoadMethodAddress(target_method, type, kArg0);
+      }
+      break;
+    default:
+      return -1;
+    }
+  } else if (info->string_init) {
+    RegStorage arg0_ref = cg->TargetReg(kArg0, kRef);
+    switch (state) {
+    case 0: {  // Grab target method* from thread pointer
+      DexFileMethodInliner* inliner =
+          cu->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu->dex_file);
+      uint32_t offset = inliner->GetOffsetForStringInit(target_method.dex_method_index);
+      uint32_t string_init_base_offset = Thread::QuickEntryPointOffsetWithSize(
+          OFFSETOF_MEMBER(QuickEntryPoints, pNewEmptyString), kArm64PointerSize);
+      int string_init_offset = string_init_base_offset + offset * kArm64PointerSize;
+      cg->LoadRefDisp(rs_xSELF, string_init_offset, arg0_ref, kNotVolatile);
+      break;
+    }
+    case 1:  // Grab the code from the method*
+      if (direct_code == 0) {
+        // kInvokeTgt := arg0_ref->entrypoint
+        cg->LoadWordDisp(arg0_ref,
+                         mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                             kArm64PointerSize).Int32Value(), cg->TargetPtrReg(kInvokeTgt));
       }
       break;
     default:
