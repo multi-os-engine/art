@@ -836,6 +836,20 @@ class Mir2Lir : public Backend {
       return cu_;
     }
 
+    /*
+     * @brief Force a location (in a register) into a temporary register
+     * @param loc location of result
+     * @returns update location
+     */
+    RegLocation ForceTemp(RegLocation loc);
+
+    /*
+     * @brief Force a wide location (in registers) into temporary registers
+     * @param loc location of result
+     * @returns update location
+     */
+    RegLocation ForceTempWide(RegLocation loc);
+
   private:
     void GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx, RegLocation rl_dest,
                             RegLocation rl_src);
