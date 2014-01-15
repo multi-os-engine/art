@@ -3697,8 +3697,8 @@ void Dbg::DdmSendThreadNotification(Thread* t, uint32_t type) {
     ScopedObjectAccessUnchecked soa(Thread::Current());
     StackHandleScope<1> hs(soa.Self());
     Handle<mirror::String> name(hs.NewHandle(t->GetThreadName(soa)));
-    size_t char_count = (name.Get() != NULL) ? name->GetLength() : 0;
-    const jchar* chars = (name.Get() != NULL) ? name->GetCharArray()->GetData() : NULL;
+    size_t char_count = (name.Get() != NULL) ? name->GetCount() : 0;
+    const jchar* chars = (name.Get() != NULL) ? name->GetValue() : NULL;
 
     std::vector<uint8_t> bytes;
     JDWP::Append4BE(bytes, t->GetThreadId());

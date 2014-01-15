@@ -47,6 +47,9 @@ struct PACKED(4) QuickEntryPoints {
   void* (*pAllocObjectWithAccessCheck)(uint32_t, void*);
   void* (*pCheckAndAllocArray)(uint32_t, void*, int32_t);
   void* (*pCheckAndAllocArrayWithAccessCheck)(uint32_t, void*, int32_t);
+  void* (*pAllocStringFromBytes)(void*, int32_t, int32_t, int32_t);
+  void* (*pAllocStringFromChars)(int32_t, int32_t, void*);
+  void* (*pAllocStringFromString)(void*);
 
   // Cast
   uint32_t (*pInstanceofNonTrivial)(const mirror::Class*, const mirror::Class*);

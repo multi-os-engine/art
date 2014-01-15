@@ -27,8 +27,9 @@
 #include "lock_word-inl.h"
 #include "monitor.h"
 #include "read_barrier-inl.h"
-#include "runtime.h"
 #include "reference.h"
+#include "runtime.h"
+#include "string-inl.h"
 #include "throwable.h"
 
 namespace art {
@@ -338,7 +339,12 @@ inline DoubleArray* Object::AsDoubleArray() {
   return down_cast<DoubleArray*>(this);
 }
 
-template<VerifyObjectFlags kVerifyFlags>
+template<VerifyObjectFlags kVerifyFlags, bool kDoReadBarrier>
+inline bool Object::IsString() {
+  return GetClass<kVerifyFlags>() == String::GetJavaLangString();
+}
+
+template<VerifyObjectFlags kVerifyFlags, bool kDoReadBarrier>
 inline String* Object::AsString() {
   DCHECK(GetClass<kVerifyFlags>()->IsStringClass());
   return down_cast<String*>(this);
@@ -385,6 +391,9 @@ inline size_t Object::SizeOf() {
         template SizeOf<kNewFlags, kReadBarrierOption>();
   } else if (IsClass<kNewFlags, kReadBarrierOption>()) {
     result = AsClass<kNewFlags, kReadBarrierOption>()->
+        template SizeOf<kNewFlags, kReadBarrierOption>();
+  } else if (IsString<kNewFlags, kReadBarrierOption>()) {
+    result = AsString<kNewFlags, kReadBarrierOption>()->
         template SizeOf<kNewFlags, kReadBarrierOption>();
   } else {
     result = GetClass<kNewFlags, kReadBarrierOption>()->
@@ -697,7 +706,7 @@ inline void Object::VisitReferences(const Visitor& visitor,
     if (klass->IsClassClass()) {
       AsClass<kVerifyNone>()->VisitReferences<kVisitClass>(klass, visitor);
     } else {
-      DCHECK(klass->IsArrayClass<kVerifyFlags>());
+      DCHECK(klass->IsArrayClass<kVerifyFlags>() || klass->IsStringClass());
       if (klass->IsObjectArrayClass<kVerifyNone>()) {
         AsObjectArray<mirror::Object, kVerifyNone>()->VisitReferences<kVisitClass>(visitor);
       } else if (kVisitClass) {
