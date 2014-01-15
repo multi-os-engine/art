@@ -16,6 +16,7 @@
 
 # include "mir_method_info.h"
 
+#include "dex/compiler_ir.h"
 #include "dex/quick/dex_file_method_inliner.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/verified_method.h"
@@ -83,6 +84,13 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
     MethodReference* devirt_target = (it->target_dex_file_ != nullptr) ? &devirt_ref : nullptr;
     InvokeType invoke_type = it->GetInvokeType();
     mirror::ArtMethod* resolved_method = nullptr;
+
+    bool string_init = false;
+    if (default_inliner->IsStringInitMethodIdx(it->MethodIndex())) {
+      string_init = true;
+      invoke_type = kDirect;
+    }
+
     if (!it->IsQuickened()) {
       it->target_dex_file_ = dex_file;
       it->target_method_idx_ = it->MethodIndex();
@@ -128,6 +136,12 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
       continue;
     }
 
+    // Replace calls to String.<init> with equivalent StringFactory call.
+    if (string_init) {
+      invoke_type = kStatic;
+      jmethodID mid = soa.EncodeMethod(resolved_method);
+      resolved_method = soa.DecodeMethod(WellKnownClasses::StringInitToStringFactoryMethodID(mid));
+    }
     compiler_driver->GetResolvedMethodDexFileLocation(resolved_method,
         &it->declaring_dex_file_, &it->declaring_class_idx_, &it->declaring_method_idx_);
     if (!it->IsQuickened()) {
@@ -141,8 +155,21 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
     }
 
     MethodReference target_method(it->target_dex_file_, it->target_method_idx_);
+    mirror::Class* referrer_class_ptr = referrer_class.Get();
+    if (string_init) {
+      if (referrer_class.Get() == nullptr) {
+        referrer_class_ptr = soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_String);
+      }
+      // Patching does not work for x86 or PIC mode, so reset the target_method to the original
+      // string init call.
+      if (!compiler_driver->GetCompilerOptions().GetCompilePic() &&
+          mUnit->GetCompilationUnit()->instruction_set != kX86 &&
+          mUnit->GetCompilationUnit()->instruction_set != kX86_64) {
+        target_method = resolved_method->ToMethodReference();
+      }
+    }
     int fast_path_flags = compiler_driver->IsFastInvoke(
-        soa, current_dex_cache, class_loader, mUnit, referrer_class.Get(), resolved_method,
+        soa, current_dex_cache, class_loader, mUnit, referrer_class_ptr, resolved_method,
         &invoke_type, &target_method, devirt_target, &it->direct_code_, &it->direct_method_);
     const bool is_referrers_class = referrer_class.Get() == resolved_method->GetDeclaringClass();
     const bool is_class_initialized =

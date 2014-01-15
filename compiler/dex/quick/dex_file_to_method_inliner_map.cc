@@ -66,6 +66,7 @@ DexFileMethodInliner* DexFileToMethodInlinerMap::GetMethodInliner(const DexFile*
     locked_inliner->lock_.ExclusiveLock(self);  // Acquire inliner's lock_ before releasing lock_.
   }
   locked_inliner->FindIntrinsics(dex_file);
+  locked_inliner->FindStringInits(dex_file);
   locked_inliner->lock_.ExclusiveUnlock(self);
   return locked_inliner;
 }

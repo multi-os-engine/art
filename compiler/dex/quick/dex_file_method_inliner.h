@@ -95,6 +95,9 @@ class DexFileMethodInliner {
     bool GenInline(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke, uint32_t method_idx)
         LOCKS_EXCLUDED(lock_);
 
+    uint32_t GetOffsetForStringInit(uint32_t method_idx);
+    bool IsStringInitMethodIdx(uint32_t method_idx);
+
     /**
      * To avoid multiple lookups of a class by its descriptor, we cache its
      * type index in the IndexCache. These are the indexes into the IndexCache
@@ -111,9 +114,15 @@ class DexFileMethodInliner {
       kClassCacheFloat,
       kClassCacheDouble,
       kClassCacheVoid,
+      kClassCacheJavaLangByteArray,
+      kClassCacheJavaLangCharArray,
+      kClassCacheJavaLangIntArray,
       kClassCacheJavaLangObject,
       kClassCacheJavaLangRefReference,
       kClassCacheJavaLangString,
+      kClassCacheJavaLangStringBuffer,
+      kClassCacheJavaLangStringBuilder,
+      kClassCacheJavaLangStringFactory,
       kClassCacheJavaLangDouble,
       kClassCacheJavaLangFloat,
       kClassCacheJavaLangInteger,
@@ -122,10 +131,10 @@ class DexFileMethodInliner {
       kClassCacheJavaLangMath,
       kClassCacheJavaLangStrictMath,
       kClassCacheJavaLangThread,
+      kClassCacheJavaNioCharsetCharset,
       kClassCacheLibcoreIoMemory,
       kClassCacheSunMiscUnsafe,
       kClassCacheJavaLangSystem,
-      kClassCacheJavaLangCharArray,
       kClassCacheLast
     };
 
@@ -153,9 +162,14 @@ class DexFileMethodInliner {
       kNameCacheReferenceGetReferent,
       kNameCacheCharAt,
       kNameCacheCompareTo,
+      kNameCacheGetCharsNoCheck,
       kNameCacheIsEmpty,
       kNameCacheIndexOf,
       kNameCacheLength,
+      kNameCacheInit,
+      kNameCacheNewStringFromBytes,
+      kNameCacheNewStringFromChars,
+      kNameCacheNewStringFromString,
       kNameCacheCurrentThread,
       kNameCachePeekByte,
       kNameCachePeekIntNative,
@@ -230,6 +244,13 @@ class DexFileMethodInliner {
       kProtoCacheObjectJ_Object,
       kProtoCacheObjectJObject_V,
       kProtoCacheCharArrayICharArrayII_V,
+      kProtoCacheIICharArrayI_V,
+      kProtoCacheByteArrayIII_V,
+      kProtoCacheIICharArray_V,
+      kProtoCacheString_V,
+      kProtoCacheByteArrayIII_String,
+      kProtoCacheIICharArray_String,
+      kProtoCacheString_String,
       kProtoCacheLast
     };
 
@@ -291,6 +312,7 @@ class DexFileMethodInliner {
     static const char* const kNameCacheNames[];
     static const ProtoDef kProtoCacheDefs[];
     static const IntrinsicDef kIntrinsicMethods[];
+    static const ProtoDef kStringInitProtoDefs[];
 
     static const uint32_t kIndexNotFound = static_cast<uint32_t>(-1);
     static const uint32_t kIndexUnresolved = static_cast<uint32_t>(-2);
@@ -311,6 +333,8 @@ class DexFileMethodInliner {
      */
     void FindIntrinsics(const DexFile* dex_file) EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
+    void FindStringInits(const DexFile* dex_file) EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
     friend class DexFileToMethodInlinerMap;
 
     bool AddInlineMethod(int32_t method_idx, const InlineMethod& method) LOCKS_EXCLUDED(lock_);
@@ -329,6 +353,7 @@ class DexFileMethodInliner {
      * Maps method indexes (for the particular DexFile) to Intrinsic defintions.
      */
     SafeMap<uint32_t, InlineMethod> inline_methods_ GUARDED_BY(lock_);
+    SafeMap<uint32_t, uint32_t> string_init_offsets_;
     const DexFile* dex_file_;
 
     DISALLOW_COPY_AND_ASSIGN(DexFileMethodInliner);

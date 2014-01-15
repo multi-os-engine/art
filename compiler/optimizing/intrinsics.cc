@@ -186,6 +186,8 @@ static Intrinsics GetIntrinsic(InlineMethod method) {
       return Intrinsics::kStringCharAt;
     case kIntrinsicCompareTo:
       return Intrinsics::kStringCompareTo;
+    case kIntrinsicGetCharsNoCheck:
+      return Intrinsics::kStringGetCharsNoCheck;
     case kIntrinsicIsEmptyOrLength:
       // The inliner can handle these two cases - and this is the preferred approach
       // since after inlining the call is no longer visible (as opposed to waiting
@@ -194,6 +196,12 @@ static Intrinsics GetIntrinsic(InlineMethod method) {
     case kIntrinsicIndexOf:
       return ((method.d.data & kIntrinsicFlagBase0) == 0) ?
           Intrinsics::kStringIndexOfAfter : Intrinsics::kStringIndexOf;
+    case kIntrinsicNewStringFromBytes:
+      return Intrinsics::kStringNewStringFromBytes;
+    case kIntrinsicNewStringFromChars:
+      return Intrinsics::kStringNewStringFromChars;
+    case kIntrinsicNewStringFromString:
+      return Intrinsics::kStringNewStringFromString;
 
     case kIntrinsicCas:
       switch (GetType(method.d.data, false)) {
@@ -324,7 +332,14 @@ void IntrinsicsRecognizer::Run() {
       if (inst->IsInvoke()) {
         HInvoke* invoke = inst->AsInvoke();
         InlineMethod method;
-        if (inliner->IsIntrinsic(invoke->GetDexMethodIndex(), &method)) {
+        if (invoke->IsInvokeStaticOrDirect() && invoke->AsInvokeStaticOrDirect()->IsStringInit()) {
+          size_t pointer_size = InstructionSetPointerSize(driver_->GetInstructionSet());
+          uint32_t offset = inliner->GetOffsetForStringInit(invoke->GetDexMethodIndex());
+          uint32_t string_init_base_offset = Thread::QuickEntryPointOffsetWithSize(
+              OFFSETOF_MEMBER(QuickEntryPoints, pNewEmptyString), pointer_size);
+          int32_t string_init_offset = string_init_base_offset + offset * pointer_size;
+          invoke->AsInvokeStaticOrDirect()->SetStringInitOffset(string_init_offset);
+        } else if (inliner->IsIntrinsic(invoke->GetDexMethodIndex(), &method)) {
           Intrinsics intrinsic = GetIntrinsic(method);
 
           if (intrinsic != Intrinsics::kNone) {

@@ -625,8 +625,6 @@ TEST_F(JniInternalTest, AllocObject) {
   // ...whose fields haven't been initialized because
   // we didn't call a constructor.
   ASSERT_EQ(0, env_->GetIntField(o, env_->GetFieldID(c, "count", "I")));
-  ASSERT_EQ(0, env_->GetIntField(o, env_->GetFieldID(c, "offset", "I")));
-  ASSERT_TRUE(env_->GetObjectField(o, env_->GetFieldID(c, "value", "[C")) == nullptr);
 }
 
 TEST_F(JniInternalTest, GetVersion) {
@@ -1538,7 +1536,7 @@ TEST_F(JniInternalTest, GetStringChars_ReleaseStringChars) {
 
   jboolean is_copy = JNI_FALSE;
   chars = env_->GetStringChars(s, &is_copy);
-  if (Runtime::Current()->GetHeap()->IsMovableObject(s_m->GetCharArray())) {
+  if (Runtime::Current()->GetHeap()->IsMovableObject(s_m)) {
     EXPECT_EQ(JNI_TRUE, is_copy);
   } else {
     EXPECT_EQ(JNI_FALSE, is_copy);
