@@ -619,6 +619,8 @@ class MIRGraph {
 
   void DumpCheckStats();
   MIR* FindMoveResult(BasicBlock* bb, MIR* mir);
+  MIR* FindStringInit(BasicBlock* bb, MIR* mir);
+  uint32_t GetStringFactoryMethodIdx(uint32_t string_idx);
   int SRegToVReg(int ssa_reg) const;
   void VerifyDataflow();
   void CheckForDominanceFrontier(BasicBlock* dom_bb, const BasicBlock* succ_bb);

@@ -25,24 +25,17 @@
 #include "sirt_ref.h"
 #include "thread.h"
 #include "utf-inl.h"
+#include "well_known_classes.h"
 
 namespace art {
 namespace mirror {
 
-const CharArray* String::GetCharArray() const {
-  return GetFieldObject<const CharArray*>(ValueOffset(), false);
-}
-
-CharArray* String::GetCharArray() {
-  return GetFieldObject<CharArray*>(ValueOffset(), false);
-}
-
 void String::ComputeHashCode() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  SetHashCode(ComputeUtf16Hash(GetCharArray(), GetOffset(), GetLength()));
+  SetHashCode(ComputeUtf16Hash(GetValue(), GetLength()));
 }
 
 int32_t String::GetUtfLength() const {
-  return CountUtf8Bytes(GetCharArray()->GetData() + GetOffset(), GetLength());
+  return CountUtf8Bytes(GetValue(), GetLength());
 }
 
 int32_t String::FastIndexOf(int32_t ch, int32_t start) const {
@@ -52,7 +45,7 @@ int32_t String::FastIndexOf(int32_t ch, int32_t start) const {
   } else if (start > count) {
     start = count;
   }
-  const uint16_t* chars = GetCharArray()->GetData() + GetOffset();
+  const uint16_t* chars = GetValue();
   const uint16_t* p = chars + start;
   const uint16_t* end = chars + count;
   while (p < end) {
@@ -61,11 +54,6 @@ int32_t String::FastIndexOf(int32_t ch, int32_t start) const {
     }
   }
   return -1;
-}
-
-void String::SetArray(CharArray* new_array) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  DCHECK(new_array != NULL);
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(String, array_), new_array, false);
 }
 
 // TODO: get global references for these
@@ -92,14 +80,14 @@ int32_t String::GetHashCode() {
     ComputeHashCode();
   }
   result = GetField32(OFFSET_OF_OBJECT_MEMBER(String, hash_code_), false);
-  DCHECK(result != 0 || ComputeUtf16Hash(GetCharArray(), GetOffset(), GetLength()) == 0)
+  DCHECK(result != 0 || ComputeUtf16Hash(GetValue(), GetLength()) == 0)
           << ToModifiedUtf8() << " " << result;
   return result;
 }
 
 int32_t String::GetLength() const {
   int32_t result = GetField32(OFFSET_OF_OBJECT_MEMBER(String, count_), false);
-  DCHECK(result >= 0 && result <= GetCharArray()->GetLength());
+  DCHECK_GE(result, 0);
   return result;
 }
 
@@ -114,7 +102,7 @@ uint16_t String::CharAt(int32_t index) const {
                              "length=%i; index=%i", count_, index);
     return 0;
   }
-  return GetCharArray()->Get(index + GetOffset());
+  return GetValue()[index];
 }
 
 String* String::AllocFromUtf16(Thread* self,
@@ -126,13 +114,39 @@ String* String::AllocFromUtf16(Thread* self,
   if (UNLIKELY(string == nullptr)) {
     return nullptr;
   }
-  CharArray* array = const_cast<CharArray*>(string->GetCharArray());
+  uint16_t* array = const_cast<uint16_t*>(string->GetValue());
   if (UNLIKELY(array == nullptr)) {
     return nullptr;
   }
-  memcpy(array->GetData(), utf16_data_in, utf16_length * sizeof(uint16_t));
+  memcpy(array, utf16_data_in, utf16_length * sizeof(uint16_t));
   if (hash_code != 0) {
     DCHECK_EQ(hash_code, ComputeUtf16Hash(utf16_data_in, utf16_length));
+    string->SetHashCode(hash_code);
+  } else {
+    string->ComputeHashCode();
+  }
+  return string;
+}
+
+String* String::AllocFromBytes(Thread* self,
+                              int32_t byte_length,
+                              const uint8_t* byte_data_in,
+                              int32_t high_byte,
+                              int32_t hash_code) {
+  CHECK(byte_data_in != nullptr || byte_length == 0);
+  String* string = Alloc(self, byte_length);
+  if (UNLIKELY(string == nullptr)) {
+    return nullptr;
+  }
+  uint16_t* array = const_cast<uint16_t*>(string->GetValue());
+  if (UNLIKELY(array == nullptr)) {
+    return nullptr;
+  }
+  high_byte <<= 8;
+  for (int i = 0; i < byte_length; i++) {
+    array[i] = high_byte + (byte_data_in[i] & 0xFF);
+  }
+  if (hash_code != 0) {
     string->SetHashCode(hash_code);
   } else {
     string->ComputeHashCode();
@@ -154,27 +168,30 @@ String* String::AllocFromModifiedUtf8(Thread* self, int32_t utf16_length,
   if (UNLIKELY(string == nullptr)) {
     return nullptr;
   }
-  uint16_t* utf16_data_out =
-      const_cast<uint16_t*>(string->GetCharArray()->GetData());
+  uint16_t* utf16_data_out = const_cast<uint16_t*>(string->GetValue());
   ConvertModifiedUtf8ToUtf16(utf16_data_out, utf8_data_in);
   string->ComputeHashCode();
   return string;
 }
 
 String* String::Alloc(Thread* self, int32_t utf16_length) {
-  SirtRef<CharArray> array(self, CharArray::Alloc(self, utf16_length));
-  if (UNLIKELY(array.get() == nullptr)) {
-    return nullptr;
-  }
-  return Alloc(self, array);
-}
+  size_t header_size = sizeof(String);
+  size_t data_size = sizeof(uint16_t) * utf16_length;
+  size_t size = header_size + data_size;
+  Class* java_lang_String = GetJavaLangString();
 
-String* String::Alloc(Thread* self, const SirtRef<CharArray>& array) {
-  // Hold reference in case AllocObject causes GC.
-  String* string = down_cast<String*>(GetJavaLangString()->AllocObject(self));
-  if (LIKELY(string != nullptr)) {
-    string->SetArray(array.get());
-    string->SetCount(array->GetLength());
+  // Check for overflow and throw OutOfMemoryError if this was an unreasonable request.
+  if (UNLIKELY(size < data_size)) {
+    self->ThrowOutOfMemoryError(StringPrintf("%s of length %d would overflow",
+                                             PrettyDescriptor(java_lang_String).c_str(),
+                                             utf16_length).c_str());
+    return NULL;
+  }
+
+  gc::Heap* heap = Runtime::Current()->GetHeap();
+  String* string = down_cast<String*>(heap->AllocObject<true>(self, java_lang_String, size));
+  if (string != NULL) {
+    string->SetCount(utf16_length);
   }
   return string;
 }
@@ -237,7 +254,7 @@ bool String::Equals(const StringPiece& modified_utf8) const {
 
 // Create a modified UTF-8 encoded std::string from a java/lang/String object.
 std::string String::ToModifiedUtf8() const {
-  const uint16_t* chars = GetCharArray()->GetData() + GetOffset();
+  const uint16_t* chars = GetValue();
   size_t byte_count = GetUtfLength();
   std::string result(byte_count, static_cast<char>(0));
   ConvertUtf16ToModifiedUtf8(&result[0], chars, GetLength());
@@ -275,8 +292,8 @@ int32_t String::CompareTo(String* rhs) const {
   int rhsCount = rhs->GetLength();
   int countDiff = lhsCount - rhsCount;
   int minCount = (countDiff < 0) ? lhsCount : rhsCount;
-  const uint16_t* lhsChars = lhs->GetCharArray()->GetData() + lhs->GetOffset();
-  const uint16_t* rhsChars = rhs->GetCharArray()->GetData() + rhs->GetOffset();
+  const uint16_t* lhsChars = lhs->GetValue();
+  const uint16_t* rhsChars = rhs->GetValue();
   int otherRes = MemCmp16(lhsChars, rhsChars, minCount);
   if (otherRes != 0) {
     return otherRes;
@@ -288,6 +305,54 @@ void String::VisitRoots(RootVisitor* visitor, void* arg) {
   if (java_lang_String_ != nullptr) {
     java_lang_String_ = down_cast<Class*>(visitor(java_lang_String_, arg));
   }
+}
+
+CharArray* String::ToCharArray(Thread* self) const {
+  CharArray* result = CharArray::Alloc(self, GetLength());
+  memcpy(result->GetData(), GetValue(), GetLength() * sizeof(uint16_t));
+  return result;
+}
+
+const char* String::GetStringFactoryMethodName(std::string signature) {
+  if (signature == "()V") {
+    return "newEmptyString";
+  }
+  if (signature == "([B)V" || signature == "([BI)V" || signature == "([BII)V" ||
+      signature == "([BIII)V" || signature == "([BIILjava/lang/String;)V" ||
+      signature == "([BLjava/lang/String;)V" || signature == "([BIILjava/nio/charset/Charset;)V" ||
+      signature == "([BLjava/nio/charset/Charset;)V") {
+    return "newStringFromBytes";
+  }
+  if (signature == "([C)V" || signature == "([CII)V") {
+    return "newStringFromChars";
+  }
+  if (signature == "(II[C)V") {
+    return "newStringFromCharsNoCheck";
+  }
+  if (signature == "(Ljava/lang/String;)V") {
+    return "newStringFromString";
+  }
+  if (signature == "(Ljava/lang/StringBuffer;)V") {
+    return "newStringFromStringBuffer";
+  }
+  if (signature == "([III)V") {
+    return "newStringFromCodePoints";
+  }
+  if (signature == "(Ljava/lang/StringBuilder;)V") {
+    return "newStringFromStringBuilder";
+  }
+  return NULL;
+}
+
+std::string String::GetStringFactoryMethodSignature(std::string signature) {
+  return signature.substr(0, signature.length() - 1).append("Ljava/lang/String;");
+}
+
+ArtMethod* String::GetStringFactoryMethodForStringInit(std::string signature) {
+  mirror::Class* sf_class = WellKnownClasses::ToClass(WellKnownClasses::java_lang_StringFactory);
+  StringPiece method_name(GetStringFactoryMethodName(signature));
+  signature = GetStringFactoryMethodSignature(signature);
+  return sf_class->FindDirectMethod(method_name, signature);
 }
 
 }  // namespace mirror

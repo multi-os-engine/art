@@ -549,6 +549,8 @@ class DexFile {
   }
 
   // Looks up a method by its declaring class, name and proto_id
+  const MethodId* FindMethodId(const char* declaring_klass, const char* name,
+                               const char* signature) const;
   const MethodId* FindMethodId(const DexFile::TypeId& declaring_klass,
                                const DexFile::StringId& name,
                                const DexFile::ProtoId& signature) const;

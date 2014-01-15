@@ -419,6 +419,16 @@ const DexFile::FieldId* DexFile::FindFieldId(const DexFile::TypeId& declaring_kl
   return NULL;
 }
 
+const DexFile::MethodId* DexFile::FindMethodId(const char* declaring_klass, const char* name,
+                                               const char* signature) const {
+  const DexFile::StringId* klass_string_id = FindStringId(declaring_klass);
+  const DexFile::TypeId* klass_type_id = FindTypeId(GetIndexForStringId(*klass_string_id));
+  const DexFile::StringId* name_string_id = FindStringId(name);
+  const DexFile::ProtoId* signature_proto_id = CreateSignature(signature).proto_id_;
+
+  return FindMethodId(*klass_type_id, *name_string_id, *signature_proto_id);
+}
+
 const DexFile::MethodId* DexFile::FindMethodId(const DexFile::TypeId& declaring_klass,
                                                const DexFile::StringId& name,
                                                const DexFile::ProtoId& signature) const {

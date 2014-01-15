@@ -1146,7 +1146,6 @@ ENTRY art_quick_indexof
     .cfi_rel_offset r11, 8
     .cfi_rel_offset lr, 12
     ldr   r3, [r0, #STRING_COUNT_OFFSET]
-    ldr   r12, [r0, #STRING_OFFSET_OFFSET]
     ldr   r0, [r0, #STRING_VALUE_OFFSET]
 
     /* Clamp start to [0..count] */
@@ -1156,10 +1155,6 @@ ENTRY art_quick_indexof
     cmp   r2, r3
     it    gt
     movgt r2, r3
-
-    /* Build a pointer to the start of string data */
-    add   r0, #STRING_DATA_OFFSET
-    add   r0, r0, r12, lsl #1
 
     /* Save a copy in r12 to later compute result */
     mov   r12, r0
@@ -1267,8 +1262,6 @@ ENTRY art_quick_string_compareto
     .cfi_rel_offset r12, 24
     .cfi_rel_offset lr, 28
 
-    ldr    r4, [r2, #STRING_OFFSET_OFFSET]
-    ldr    r9, [r1, #STRING_OFFSET_OFFSET]
     ldr    r7, [r2, #STRING_COUNT_OFFSET]
     ldr    r10, [r1, #STRING_COUNT_OFFSET]
     ldr    r2, [r2, #STRING_VALUE_OFFSET]
@@ -1287,15 +1280,12 @@ ENTRY art_quick_string_compareto
      it    ls
      movls r10, r7
 
-     /* Now, build pointers to the string data */
-     add   r2, r2, r4, lsl #1
-     add   r1, r1, r9, lsl #1
      /*
       * Note: data pointers point to previous element so we can use pre-index
       * mode with base writeback.
       */
-     add   r2, #STRING_DATA_OFFSET-2   @ offset to contents[-1]
-     add   r1, #STRING_DATA_OFFSET-2   @ offset to contents[-1]
+     subs  r2, #2   @ offset to contents[-1]
+     subs  r1, #2   @ offset to contents[-1]
 
      /*
       * At this point we have:

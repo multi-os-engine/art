@@ -17,6 +17,7 @@
 #include "compiler_internals.h"
 #include "local_value_numbering.h"
 #include "dataflow_iterator-inl.h"
+#include "mirror/string.h"
 
 namespace art {
 
@@ -135,6 +136,44 @@ MIR* MIRGraph::FindMoveResult(BasicBlock* bb, MIR* mir) {
     }
   }
   return mir;
+}
+
+MIR* MIRGraph::FindStringInit(BasicBlock* bb, MIR* mir) {
+  BasicBlock* tbb = bb;
+  int instance_def = mir->ssa_rep->defs[0];
+  mir = AdvanceMIR(&tbb, mir);
+  while (mir != NULL) {
+    int opcode = mir->dalvikInsn.opcode;
+    if ((mir->dalvikInsn.opcode == Instruction::INVOKE_DIRECT) ||
+        (mir->dalvikInsn.opcode == Instruction::INVOKE_DIRECT_RANGE)) {
+      uint32_t method_idx = mir->dalvikInsn.vB;
+      if (PrettyMethod(method_idx, *cu_->dex_file, false) == "java.lang.String.<init>") {
+        LOG(INFO) << "INVOKE @ " << std::hex << mir->offset << " "
+                  << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+        break;
+      }
+    } else {
+      if (mir->ssa_rep->num_uses > 0 && mir->ssa_rep->uses[0] == instance_def) {
+        LOG(INFO) << "EXTRA USE " << opcode << " @ " << std::hex << mir->offset << " "
+                  << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+        mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+        mir->ssa_rep->num_uses = 0;
+        mir->ssa_rep->num_defs = 0;
+      }
+    }
+    mir = AdvanceMIR(&tbb, mir);
+  }
+  return mir;
+}
+
+uint32_t MIRGraph::GetStringFactoryMethodIdx(uint32_t string_idx) {
+  const DexFile* dex_file = cu_->dex_file;
+  const DexFile::MethodId& string_method_id = dex_file->GetMethodId(string_idx);
+  std::string signature(dex_file->GetMethodSignature(string_method_id).ToString());
+  const char* factory_name = mirror::String::GetStringFactoryMethodName(signature);
+  std::string factory_sig(mirror::String::GetStringFactoryMethodSignature(signature));
+  const DexFile::MethodId* factory_method_id = dex_file->FindMethodId("Ljava/lang/StringFactory;", factory_name, factory_sig.c_str());
+  return dex_file->GetIndexForMethodId(*factory_method_id);
 }
 
 BasicBlock* MIRGraph::NextDominatedBlock(BasicBlock* bb) {
@@ -319,6 +358,39 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
             }
           }
           break;
+        case Instruction::NEW_INSTANCE: {
+          uint32_t type_idx = mir->dalvikInsn.vB;
+          if (PrettyType(type_idx, *cu_->dex_file) == "java.lang.String") {
+            LOG(INFO) << "NEW v" << mir->dalvikInsn.vA << " @ " << std::hex << mir->offset
+                      << " " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+            MIR* string_mir = FindStringInit(bb, mir);
+            if (string_mir == NULL) {
+              LOG(FATAL) << " DID NOT FIND STRING INIT FOR NEW INSTANCE";
+            }
+            // Remove this pointer arg and change to static call of StringFactory.
+            string_mir->dalvikInsn.vA--;
+            string_mir->dalvikInsn.vB = GetStringFactoryMethodIdx(string_mir->dalvikInsn.vB);
+            LOG(INFO) << " METHOD " << PrettyMethod(string_mir->dalvikInsn.vB, *cu_->dex_file);
+            if (string_mir->dalvikInsn.opcode == Instruction::INVOKE_DIRECT) {
+              string_mir->dalvikInsn.opcode = Instruction::INVOKE_STATIC;
+              for (uint32_t i = 0; i < string_mir->dalvikInsn.vA; i++) {
+                string_mir->dalvikInsn.arg[i] = string_mir->dalvikInsn.arg[i + 1];
+              }
+            } else {
+              string_mir->dalvikInsn.opcode = Instruction::INVOKE_STATIC_RANGE;
+              string_mir->dalvikInsn.vC++;
+            }
+            string_mir->ssa_rep->num_uses--;
+            for (int16_t i = 0; i < string_mir->ssa_rep->num_uses; i++) {
+              string_mir->ssa_rep->uses[i] = string_mir->ssa_rep->uses[i + 1];
+            }
+
+            mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+            mir->ssa_rep->num_uses = 0;
+            mir->ssa_rep->num_defs = 0;
+          }
+          break;
+        }
         default:
           break;
       }
