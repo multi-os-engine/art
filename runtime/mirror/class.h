@@ -424,9 +424,9 @@ class MANAGED Class : public Object {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool IsVariableSize() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    // Classes and arrays vary in size, and so the object_size_ field cannot
+    // Classes, arrays, and strings vary in size, and so the object_size_ field cannot
     // be used to get their instance size
-    return IsClassClass() || IsArrayClass();
+    return IsClassClass() || IsArrayClass() || IsStringClass();
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>

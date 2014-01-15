@@ -235,7 +235,6 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   // Setup String.
   SirtRef<mirror::Class> java_lang_String(self, AllocClass(self, java_lang_Class.get(), sizeof(mirror::StringClass)));
   mirror::String::SetClass(java_lang_String.get());
-  java_lang_String->SetObjectSize(sizeof(mirror::String));
   java_lang_String->SetStatus(mirror::Class::kStatusResolved, self);
 
   // Create storage for root classes, save away our work so far (requires descriptors).
@@ -341,7 +340,6 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   java_lang_String->SetStatus(mirror::Class::kStatusNotReady, self);
   mirror::Class* String_class = FindSystemClass(self, "Ljava/lang/String;");
   CHECK_EQ(java_lang_String.get(), String_class);
-  CHECK_EQ(java_lang_String->GetObjectSize(), sizeof(mirror::String));
   java_lang_DexCache->SetStatus(mirror::Class::kStatusNotReady, self);
   mirror::Class* DexCache_class = FindSystemClass(self, "Ljava/lang/DexCache;");
   CHECK_EQ(java_lang_String.get(), String_class);
@@ -992,10 +990,6 @@ void ClassLinker::InitFromImage() {
       self,
       space->GetImageHeader().GetImageRoot(ImageHeader::kClassRoots)->AsObjectArray<mirror::Class>());
   class_roots_ = class_roots.get();
-
-  // Special case of setting up the String class early so that we can test arbitrary objects
-  // as being Strings or not
-  mirror::String::SetClass(GetClassRoot(kJavaLangString));
 
   CHECK_EQ(oat_file.GetOatHeader().GetDexFileCount(),
            static_cast<uint32_t>(dex_caches->GetLength()));

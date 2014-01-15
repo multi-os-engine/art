@@ -257,11 +257,11 @@ void ImageWriter::ComputeEagerResolvedStringsCallback(Object* obj, void* arg) {
     return;
   }
   mirror::String* string = obj->AsString();
-  const uint16_t* utf16_string = string->GetCharArray()->GetData() + string->GetOffset();
+  const uint16_t* utf16_string = string->GetValue();
   for (DexCache* dex_cache : Runtime::Current()->GetClassLinker()->GetDexCaches()) {
     const DexFile& dex_file = *dex_cache->GetDexFile();
     const DexFile::StringId* string_id;
-    if (UNLIKELY(string->GetLength() == 0)) {
+    if (UNLIKELY(string->GetCount() == 0)) {
       string_id = dex_file.FindStringId("");
     } else {
       string_id = dex_file.FindStringId(utf16_string);

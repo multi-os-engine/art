@@ -148,6 +148,9 @@ class MANAGED Object {
   DoubleArray* AsDoubleArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  bool IsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   String* AsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>

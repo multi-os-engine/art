@@ -1177,9 +1177,20 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
   *vtable_idx = -1;
   *direct_code = 0;
   *direct_method = 0;
-  mirror::ArtMethod* resolved_method =
-      ComputeMethodReferencedFromCompilingMethod(soa, mUnit, target_method->dex_method_index,
-                                                 *invoke_type);
+  mirror::ArtMethod* resolved_method;
+  if (target_method->dex_method_index >= mirror::String::kEmptyString) {
+    LOG(INFO) << "ComputeInvokeInfo on StringFactory: " << std::hex << target_method->dex_method_index << " " << *invoke_type;
+    std::string signature(mirror::String::GetStringFactoryMethodSignature(target_method->dex_method_index));
+    resolved_method = mirror::String::GetStringFactoryMethodForStringInit(signature);
+    target_method->dex_method_index = resolved_method->GetDexMethodIndex();
+    GetCodeAndMethodForDirectCall(invoke_type, kDirect, false, NULL, resolved_method,
+                                  update_stats, target_method, direct_code, direct_method);
+    LOG(INFO) << "Direct code & method: " << std::hex << *direct_code << " " << *direct_method;
+    return true;
+  }
+  resolved_method = ComputeMethodReferencedFromCompilingMethod(soa, mUnit,
+                                                               target_method->dex_method_index,
+                                                               *invoke_type);
   if (resolved_method != NULL) {
     if (*invoke_type == kVirtual || *invoke_type == kSuper) {
       *vtable_idx = resolved_method->GetMethodIndex();

@@ -53,6 +53,8 @@ static void UnstartedRuntimeJni(Thread* self, ArtMethod* method,
     result->SetL(receiver->Clone(self));
   } else if (name == "void java.lang.Object.notifyAll()") {
     receiver->NotifyAll(self);
+  } else if (name == "char java.lang.String.charAt(int)") {
+    result->SetI(receiver->AsString()->CharAt(args[0]));
   } else if (name == "int java.lang.String.compareTo(java.lang.String)") {
     String* rhs = reinterpret_cast<Object*>(args[0])->AsString();
     CHECK(rhs != NULL);
@@ -61,6 +63,21 @@ static void UnstartedRuntimeJni(Thread* self, ArtMethod* method,
     result->SetL(receiver->AsString()->Intern());
   } else if (name == "int java.lang.String.fastIndexOf(int, int)") {
     result->SetI(receiver->AsString()->FastIndexOf(args[0], args[1]));
+  } else if (name == "java.lang.String java.lang.String.fastSubstring(int, int)") {
+    SirtRef<mirror::String> string(self, receiver->AsString());
+    result->SetL(mirror::String::AllocFromString(self, args[1], string, args[0]));
+  } else if (name == "char[] java.lang.String.toCharArray()") {
+    result->SetL(receiver->AsString()->ToCharArray(self));
+  } else if (name == "java.lang.String java.lang.StringFactory.newStringFromChars(char[], int, int)") {
+    // TODO: length check...
+    SirtRef<mirror::CharArray> char_array(self, reinterpret_cast<Object*>(args[0])->AsCharArray());
+    result->SetL(mirror::String::AllocFromCharArray(self, args[2], char_array, args[1]));
+  } else if (name == "java.lang.String java.lang.StringFactory.newStringFromCharsNoCheck(int, int, char[])") {
+    SirtRef<mirror::CharArray> char_array(self, reinterpret_cast<Object*>(args[2])->AsCharArray());
+    result->SetL(mirror::String::AllocFromCharArray(self, args[1], char_array, args[0]));
+  } else if (name == "java.lang.String java.lang.StringFactory.newStringFromString(java.lang.String)") {
+    SirtRef<mirror::String> string(self, reinterpret_cast<Object*>(args[0])->AsString());
+    result->SetL(mirror::String::AllocFromString(self, string->GetCount(), string, 0));
   } else if (name == "java.lang.Object java.lang.reflect.Array.createMultiArray(java.lang.Class, int[])") {
     SirtRef<mirror::Class> sirt_class(self, reinterpret_cast<Object*>(args[0])->AsClass());
     SirtRef<mirror::IntArray> sirt_dimensions(self,
@@ -304,6 +321,11 @@ static inline JValue Execute(Thread* self, MethodHelper& mh, const DexFile::Code
   DCHECK(!shadow_frame.GetMethod()->IsNative());
 
   bool transaction_active = Runtime::Current()->IsActiveTransaction();
+  if (shadow_frame.GetMethod()->GetDeclaringClass()->IsStringClass() &&
+      shadow_frame.GetMethod()->IsConstructor() && !shadow_frame.GetMethod()->IsStatic()) {
+    LOG(FATAL) << "DON'T INVOKE STRING <INIT>!";
+  }
+
   if (LIKELY(shadow_frame.GetMethod()->IsPreverified())) {
     // Enter the "without access check" interpreter.
     if (kInterpreterImplKind == kSwitchImpl) {

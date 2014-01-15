@@ -56,6 +56,10 @@ static jobject Constructor_newInstance(JNIEnv* env, jobject javaMethod, jobjectA
     return nullptr;
   }
 
+  if (c->IsStringClass()) {
+    return InvokeMethod(soa, javaMethod, nullptr, javaArgs);
+  }
+
   mirror::Object* receiver = c->AllocNonMovableObject(soa.Self());
   if (receiver == nullptr) {
     return nullptr;
