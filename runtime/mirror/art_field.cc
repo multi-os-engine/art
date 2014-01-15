@@ -42,14 +42,17 @@ void ArtField::ResetClass() {
 
 void ArtField::SetOffset(MemberOffset num_bytes) {
   DCHECK(GetDeclaringClass()->IsLoaded() || GetDeclaringClass()->IsErroneous());
-#if 0  // TODO enable later in boot and under !NDEBUG
-  FieldHelper fh(this);
-  Primitive::Type type = fh.GetTypeAsPrimitiveType();
-  if (type == Primitive::kPrimDouble || type == Primitive::kPrimLong) {
-    DCHECK_ALIGNED(num_bytes.Uint32Value(), 8);
+  // TODO enable later in boot and under !NDEBUG
+  if (false) {
+    FieldHelper fh(this);
+    Primitive::Type type = fh.GetTypeAsPrimitiveType();
+    if (type == Primitive::kPrimDouble || type == Primitive::kPrimLong) {
+      DCHECK_ALIGNED(num_bytes.Uint32Value(), 8);
+    }
   }
-#endif
-  SetField32(OFFSET_OF_OBJECT_MEMBER(ArtField, offset_), num_bytes.Uint32Value(), false);
+  // Not called within a transaction.
+  SetField32<false>(OFFSET_OF_OBJECT_MEMBER(ArtField, offset_), num_bytes.Uint32Value(),
+                             false);
 }
 
 void ArtField::VisitRoots(RootVisitor* visitor, void* arg) {
