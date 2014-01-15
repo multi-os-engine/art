@@ -2304,7 +2304,11 @@ void Heap::SetReferenceOffsets(MemberOffset reference_referent_offset,
 void Heap::SetReferenceReferent(mirror::Object* reference, mirror::Object* referent) {
   DCHECK(reference != NULL);
   DCHECK_NE(reference_referent_offset_.Uint32Value(), 0U);
-  reference->SetFieldObject(reference_referent_offset_, referent, true);
+  if (Runtime::Current()->IsActiveTransaction()) {
+    reference->SetFieldObject<true>(reference_referent_offset_, referent, true);
+  } else {
+    reference->SetFieldObject<false>(reference_referent_offset_, referent, true);
+  }
 }
 
 mirror::Object* Heap::GetReferenceReferent(mirror::Object* reference) {
