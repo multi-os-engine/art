@@ -144,10 +144,12 @@ void SignalCatcher::HandleSigQuit() {
     }
   }
   os << "----- end " << getpid() << " -----\n";
-  CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
   if (self->ReadFlag(kCheckpointRequest)) {
     self->RunCheckpointFunction();
   }
+  // Change to the old thread state after running the checkpoints so that we don't deadlock if they
+  // use a ScopedObjectAccess.
+  CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
   self->EndAssertNoThreadSuspension(old_cause);
   thread_list->ResumeAll();
 
