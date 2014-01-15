@@ -474,8 +474,16 @@ jobject InvokeMethod(const ScopedObjectAccess& soa, jobject javaMethod,
     declaring_class = sirt_c.get();
   }
 
+  MethodHelper mh(m);
   mirror::Object* receiver = nullptr;
-  if (!m->IsStatic()) {
+  // Replace calls to String.<init> with equivalent StringFactory call.
+  if (declaring_class->IsStringClass() && m->IsConstructor()) {
+    m = mirror::String::GetStringFactoryMethodForStringInit(mh.GetSignature().ToString());
+    CHECK(m != nullptr) << " Got null method for string initializer with signature " << mh.GetSignature();
+    CHECK(javaReceiver == nullptr);
+    mh.ChangeMethod(m);
+    mid = soa.EncodeMethod(m);
+  } else if (!m->IsStatic()) {
     // Check that the receiver is non-null and an instance of the field's declaring class.
     receiver = soa.Decode<mirror::Object*>(javaReceiver);
     if (!VerifyObjectIsClass(receiver, declaring_class)) {
@@ -489,7 +497,6 @@ jobject InvokeMethod(const ScopedObjectAccess& soa, jobject javaMethod,
   // Get our arrays of arguments and their types, and check they're the same size.
   mirror::ObjectArray<mirror::Object>* objects =
       soa.Decode<mirror::ObjectArray<mirror::Object>*>(javaArgs);
-  MethodHelper mh(m);
   const DexFile::TypeList* classes = mh.GetParameterTypeList();
   uint32_t classes_size = (classes == nullptr) ? 0 : classes->Size();
   uint32_t arg_count = (objects != nullptr) ? objects->GetLength() : 0;

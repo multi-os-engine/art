@@ -3261,8 +3261,8 @@ void Dbg::DdmSendThreadNotification(Thread* t, uint32_t type) {
     CHECK(type == CHUNK_TYPE("THCR") || type == CHUNK_TYPE("THNM")) << type;
     ScopedObjectAccessUnchecked soa(Thread::Current());
     SirtRef<mirror::String> name(soa.Self(), t->GetThreadName(soa));
-    size_t char_count = (name.get() != NULL) ? name->GetLength() : 0;
-    const jchar* chars = (name.get() != NULL) ? name->GetCharArray()->GetData() : NULL;
+    size_t char_count = (name.get() != NULL) ? name->GetCount() : 0;
+    const jchar* chars = (name.get() != NULL) ? name->GetValue() : NULL;
 
     std::vector<uint8_t> bytes;
     JDWP::Append4BE(bytes, t->GetThreadId());

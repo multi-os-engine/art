@@ -1066,6 +1066,10 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
     // TODO: support patching on all architectures.
     use_dex_cache = compiling_boot && !support_boot_image_fixup_;
   }
+  if (method->GetDeclaringClass()->IsStringClass() && method->IsConstructor()) {
+    std::string signature = MethodHelper(method).GetSignature().ToString();
+    method = mirror::String::GetStringFactoryMethodForStringInit(signature);
+  }
   bool method_code_in_boot = (method->GetDeclaringClass()->GetClassLoader() == nullptr);
   if (!use_dex_cache) {
     if (!method_code_in_boot) {

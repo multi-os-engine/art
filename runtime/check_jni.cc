@@ -1492,7 +1492,7 @@ CALL(void, Void, , , VOID_RETURN, "V");
     const jchar* result = baseEnv(env)->GetStringChars(env, java_string, isCopy);
     if (sc.ForceCopy() && result != nullptr) {
       mirror::String* s = sc.soa().Decode<mirror::String*>(java_string);
-      int byteCount = s->GetLength() * 2;
+      int byteCount = s->GetCount() * 2;
       result = (const jchar*) GuardedCopy::Create(result, byteCount, false);
       if (isCopy != nullptr) {
         *isCopy = JNI_TRUE;
@@ -1717,7 +1717,7 @@ PRIMITIVE_ARRAY_FUNCTIONS(jdouble, Double, 'D');
     const jchar* result = baseEnv(env)->GetStringCritical(env, java_string, isCopy);
     if (sc.ForceCopy() && result != nullptr) {
       mirror::String* s = sc.soa().Decode<mirror::String*>(java_string);
-      int byteCount = s->GetLength() * 2;
+      int byteCount = s->GetCount() * 2;
       result = (const jchar*) GuardedCopy::Create(result, byteCount, false);
       if (isCopy != nullptr) {
         *isCopy = JNI_TRUE;
