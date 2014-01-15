@@ -445,6 +445,8 @@ class CompilerDriver {
   // Get memory usage during compilation.
   std::string GetMemoryUsageString(bool extended) const;
 
+  bool IsStringTypeIdx(uint16_t type_index, const DexFile* dex_file);
+
   void SetHadHardVerifierFailure() {
     had_hard_verifier_failure_ = true;
   }

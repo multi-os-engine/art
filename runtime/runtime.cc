@@ -90,6 +90,7 @@
 #include "native/java_lang_Object.h"
 #include "native/java_lang_Runtime.h"
 #include "native/java_lang_String.h"
+#include "native/java_lang_StringFactory.h"
 #include "native/java_lang_System.h"
 #include "native/java_lang_Thread.h"
 #include "native/java_lang_Throwable.h"
@@ -101,6 +102,7 @@
 #include "native/java_lang_reflect_Field.h"
 #include "native/java_lang_reflect_Method.h"
 #include "native/java_lang_reflect_Proxy.h"
+#include "native/java_nio_charset_Charsets.h"
 #include "native/java_util_concurrent_atomic_AtomicLong.h"
 #include "native/org_apache_harmony_dalvik_ddmc_DdmServer.h"
 #include "native/org_apache_harmony_dalvik_ddmc_DdmVmInternal.h"
@@ -1169,10 +1171,12 @@ void Runtime::RegisterRuntimeNativeMethods(JNIEnv* env) {
   register_java_lang_ref_Reference(env);
   register_java_lang_Runtime(env);
   register_java_lang_String(env);
+  register_java_lang_StringFactory(env);
   register_java_lang_System(env);
   register_java_lang_Thread(env);
   register_java_lang_Throwable(env);
   register_java_lang_VMClassLoader(env);
+  register_java_nio_charset_Charsets(env);
   register_java_util_concurrent_atomic_AtomicLong(env);
   register_org_apache_harmony_dalvik_ddmc_DdmServer(env);
   register_org_apache_harmony_dalvik_ddmc_DdmVmInternal(env);

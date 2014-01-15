@@ -2459,4 +2459,9 @@ std::string CompilerDriver::GetMemoryUsageString(bool extended) const {
   return oss.str();
 }
 
+bool CompilerDriver::IsStringTypeIdx(uint16_t type_index, const DexFile* dex_file) {
+  const char* type = dex_file->GetTypeDescriptor(dex_file->GetTypeId(type_index));
+  return strcmp(type, "Ljava/lang/String;") == 0;
+}
+
 }  // namespace art
