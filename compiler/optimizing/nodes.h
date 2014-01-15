@@ -2228,12 +2228,14 @@ class HInvokeStaticOrDirect : public HInvoke {
                         uint32_t dex_pc,
                         uint32_t dex_method_index,
                         bool is_recursive,
+                        int32_t string_init_offset,
                         InvokeType original_invoke_type,
                         InvokeType invoke_type)
       : HInvoke(arena, number_of_arguments, return_type, dex_pc, dex_method_index),
         original_invoke_type_(original_invoke_type),
         invoke_type_(invoke_type),
-        is_recursive_(is_recursive) {}
+        is_recursive_(is_recursive),
+        string_init_offset_(string_init_offset) {}
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
     UNUSED(obj);
@@ -2246,6 +2248,8 @@ class HInvokeStaticOrDirect : public HInvoke {
   InvokeType GetInvokeType() const { return invoke_type_; }
   bool IsRecursive() const { return is_recursive_; }
   bool NeedsDexCache() const OVERRIDE { return !IsRecursive(); }
+  bool IsStringInit() const { return string_init_offset_ != 0; }
+  int32_t GetStringInitOffset() const { return string_init_offset_; }
 
   DECLARE_INSTRUCTION(InvokeStaticOrDirect);
 
@@ -2253,6 +2257,8 @@ class HInvokeStaticOrDirect : public HInvoke {
   const InvokeType original_invoke_type_;
   const InvokeType invoke_type_;
   const bool is_recursive_;
+  // Thread entrypoint offset for string init method if this is a string init invoke.
+  int32_t string_init_offset_;
 
   DISALLOW_COPY_AND_ASSIGN(HInvokeStaticOrDirect);
 };
