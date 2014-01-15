@@ -881,8 +881,8 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
     // allocated which hasn't been initialized yet.
   } else {
     if (obj->IsClass()) {
-      mirror::Class* thisClass = obj->AsClass();
       // obj is a ClassObject.
+      mirror::Class* thisClass = obj->AsClass();
       size_t sFieldCount = thisClass->NumStaticFields();
       if (sFieldCount != 0) {
         int byteLength = sFieldCount * sizeof(JValue);  // TODO bogus; fields are packed
@@ -911,7 +911,8 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
         // ClassObjects have their static fields appended, so aren't all the same size.
         // But they're at least this size.
         rec->AddU4(sizeof(mirror::Class));  // instance size
-      } else if (thisClass->IsArrayClass() || thisClass->IsPrimitive()) {
+      } else if (thisClass->IsArrayClass() || thisClass->IsStringClass() ||
+                 thisClass->IsPrimitive()) {
         rec->AddU4(0);
       } else {
         rec->AddU4(thisClass->GetObjectSize());  // instance size
@@ -954,13 +955,23 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
 
       // Instance fields for this class (no superclass fields)
       int iFieldCount = thisClass->IsObjectClass() ? 0 : thisClass->NumInstanceFields();
-      rec->AddU2((uint16_t)iFieldCount);
+      if (thisClass->IsStringClass()) {
+        rec->AddU2(static_cast<uint16_t>(iFieldCount + 1));
+      } else {
+        rec->AddU2(static_cast<uint16_t>(iFieldCount));
+      }
       for (int i = 0; i < iFieldCount; ++i) {
         mirror::ArtField* f = thisClass->GetInstanceField(i);
         fh.ChangeField(f);
         HprofBasicType t = SignatureToBasicTypeAndSize(fh.GetTypeDescriptor(), NULL);
         rec->AddStringId(LookupStringId(fh.GetName()));
         rec->AddU1(t);
+      }
+
+      // Add native value character array for strings.
+      if (thisClass->IsStringClass()) {
+        rec->AddStringId(LookupStringId("value"));
+        rec->AddU1(hprof_basic_object);
       }
     } else if (c->IsArrayClass()) {
       mirror::Array* aobj = obj->AsArray();
@@ -1038,8 +1049,24 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
         sclass = sclass->GetSuperClass();
       }
 
-      // Patch the instance field length.
-      rec->UpdateU4(size_patch_offset, rec->Size() - (size_patch_offset + 4));
+      // Output native value character array for strings.
+      if (c->IsStringClass()) {
+        mirror::String* s = obj->AsString();
+        rec->AddObjectId(reinterpret_cast<mirror::Object*>(s->GetValue()));
+
+        // Patch the instance field length.
+        rec->UpdateU4(size_patch_offset, rec->Size() - (size_patch_offset + 4));
+
+        rec->AddU1(HPROF_PRIMITIVE_ARRAY_DUMP);
+        rec->AddObjectId(reinterpret_cast<mirror::Object*>(s->GetValue()));
+        rec->AddU4(StackTraceSerialNumber(obj));
+        rec->AddU4(s->GetCount());
+        rec->AddU1(hprof_basic_char);
+        rec->AddU2List(s->GetValue(), s->GetCount());
+      } else {
+        // Patch the instance field length.
+        rec->UpdateU4(size_patch_offset, rec->Size() - (size_patch_offset + 4));
+      }
     }
   }
 
