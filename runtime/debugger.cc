@@ -1556,10 +1556,12 @@ static JDWP::JdwpError SetFieldValueImpl(JDWP::ObjectId object_id, JDWP::FieldId
   if (IsPrimitiveTag(tag)) {
     if (tag == JDWP::JT_DOUBLE || tag == JDWP::JT_LONG) {
       CHECK_EQ(width, 8);
-      f->Set64(o, value);
+      // Debugging can't use transactional mode (runtime only).
+      f->Set64NonTransactional(o, value);
     } else {
       CHECK_LE(width, 4);
-      f->Set32(o, value);
+      // Debugging can't use transactional mode (runtime only).
+      f->Set32NonTransactional(o, value);
     }
   } else {
     mirror::Object* v = gRegistry->Get<mirror::Object*>(value);
@@ -1572,7 +1574,8 @@ static JDWP::JdwpError SetFieldValueImpl(JDWP::ObjectId object_id, JDWP::FieldId
         return JDWP::ERR_INVALID_OBJECT;
       }
     }
-    f->SetObject(o, v);
+    // Debugging can't use transactional mode (runtime only).
+    f->SetObjectNonTransactional(o, v);
   }
 
   return JDWP::ERR_NONE;

@@ -1067,6 +1067,7 @@ void EncodedStaticFieldValueIterator::Next() {
   ptr_ += width;
 }
 
+// TODO support transactional and non-transactional mode, maybe use a template ?
 void EncodedStaticFieldValueIterator::ReadValueToField(mirror::ArtField* field) const {
   switch (type_) {
     case kBoolean: field->SetBoolean(field->GetDeclaringClass(), jval_.z); break;

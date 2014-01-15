@@ -37,7 +37,8 @@ class MANAGED ArtField : public Object {
   uint32_t GetAccessFlags() const;
 
   void SetAccessFlags(uint32_t new_access_flags) {
-    SetField32(OFFSET_OF_OBJECT_MEMBER(ArtField, access_flags_), new_access_flags, false);
+    // Not called within a transaction.
+    SetField32NonTransactional(OFFSET_OF_OBJECT_MEMBER(ArtField, access_flags_), new_access_flags, false);
   }
 
   bool IsPublic() const {
@@ -57,7 +58,8 @@ class MANAGED ArtField : public Object {
   }
 
   void SetDexFieldIndex(uint32_t new_idx) {
-    SetField32(OFFSET_OF_OBJECT_MEMBER(ArtField, field_dex_idx_), new_idx, false);
+    // Not called within a transaction.
+    SetField32NonTransactional(OFFSET_OF_OBJECT_MEMBER(ArtField, field_dex_idx_), new_idx, false);
   }
 
   // Offset to field within an Object
@@ -121,6 +123,56 @@ class MANAGED ArtField : public Object {
   Object* GetObj(const Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void SetObj(Object* object, const Object* new_value) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Transactional field access, null object for static fields.
+  void SetBooleanTransactional(Object* object, bool z) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetByteTransactional(Object* object, int8_t b) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetCharTransactional(Object* object, uint16_t c) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetShortTransactional(Object* object, int16_t s) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetIntTransactional(Object* object, int32_t i) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetLongTransactional(Object* object, int64_t j) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Transactional raw field accesses.
+  void Set32Transactional(Object* object, uint32_t new_value) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void Set64Transactional(Object* object, uint64_t new_value) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetObjTransactional(Object* object, const Object* new_value) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Non transactional field access, null object for static fields.
+  void SetBooleanNonTransactional(Object* object, bool z) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetByteNonTransactional(Object* object, int8_t b) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetCharNonTransactional(Object* object, uint16_t c) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetShortNonTransactional(Object* object, int16_t s) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetIntNonTransactional(Object* object, int32_t i) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetLongNonTransactional(Object* object, int64_t j) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetFloatNonTransactional(Object* object, float f) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetDoubleNonTransactional(Object* object, double d) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetObjectNonTransactional(Object* object, const Object* l) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Non transactional raw field accesses.
+  void Set32NonTransactional(Object* object, uint32_t new_value) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void Set64NonTransactional(Object* object, uint64_t new_value) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetObjNonTransactional(Object* object, const Object* new_value) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static Class* GetJavaLangReflectArtField() {

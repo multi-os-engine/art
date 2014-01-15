@@ -1,0 +1,398 @@
+/*
+ * Copyright (C) 2014 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "transaction.h"
+
+#include "base/stl_util.h"
+#include "base/logging.h"
+#include "gc/accounting/card_table-inl.h"
+#include "intern_table.h"
+#include "mirror/object-inl.h"
+#include "mirror/object_array-inl.h"
+
+namespace art {
+
+// TODO: remove (only used for debugging purpose).
+static constexpr bool kEnableTransactionStats = false;
+
+Transaction::Transaction() : log_lock_("transaction log lock", kTransactionLogLock) {
+  CHECK(Runtime::Current()->IsCompiler());
+}
+
+Transaction::~Transaction() {
+  if (kEnableTransactionStats) {
+    MutexLock mu(Thread::Current(), log_lock_);
+    size_t objects_count = object_logs_.size();
+    size_t field_values_count = 0;
+    for (auto it : object_logs_) {
+      field_values_count += it.second.Size();
+    }
+    size_t array_count = array_logs_.size();
+    size_t array_values_count = 0;
+    for (auto it : array_logs_) {
+      array_values_count += it.second.Size();
+    }
+    size_t string_count = intern_string_logs_.size();
+    LOG(INFO) << "Transaction::~Transaction"
+              << ": objects_count=" << objects_count
+              << ", field_values_count=" << field_values_count
+              << ", array_count=" << array_count
+              << ", array_values_count=" << array_values_count
+              << ", string_count=" << string_count;
+  }
+}
+
+void Transaction::RecordWriteField32(mirror::Object* obj, MemberOffset field_offset, uint32_t value,
+                                     bool is_volatile) {
+  DCHECK(obj != nullptr);
+  MutexLock mu(Thread::Current(), log_lock_);
+  ObjectLog& object_log = object_logs_[obj];
+  object_log.Log32BitsValue(field_offset, value, is_volatile);
+}
+
+void Transaction::RecordWriteField64(mirror::Object* obj, MemberOffset field_offset, uint64_t value,
+                                     bool is_volatile) {
+  DCHECK(obj != nullptr);
+  MutexLock mu(Thread::Current(), log_lock_);
+  ObjectLog& object_log = object_logs_[obj];
+  object_log.Log64BitsValue(field_offset, value, is_volatile);
+}
+
+void Transaction::RecordWriteFieldReference(mirror::Object* obj, MemberOffset field_offset,
+                                            mirror::Object* value, bool is_volatile) {
+  DCHECK(obj != nullptr);
+  MutexLock mu(Thread::Current(), log_lock_);
+  ObjectLog& object_log = object_logs_[obj];
+  object_log.LogReferenceValue(field_offset, value, is_volatile);
+}
+
+void Transaction::RecordWriteArray(mirror::Array* array, size_t index, uint64_t value) {
+  DCHECK(array != nullptr);
+  DCHECK(array->IsArrayInstance());
+  MutexLock mu(Thread::Current(), log_lock_);
+  ArrayLog& array_log = array_logs_[array];
+  array_log.Log64BitsValue(index, value);
+}
+
+void Transaction::RecordStrongStringInsertion(const mirror::String* s, uint32_t hash_code) {
+  DCHECK(s != nullptr);
+  InternStringLog log(s, hash_code, InternStringLog::kStrongString, InternStringLog::kInsert);
+  LogInternedString(log);
+}
+
+void Transaction::RecordWeakStringInsertion(const mirror::String* s, uint32_t hash_code) {
+  DCHECK(s != nullptr);
+  InternStringLog log(s, hash_code, InternStringLog::kWeakString, InternStringLog::kInsert);
+  LogInternedString(log);
+}
+
+void Transaction::RecordStrongStringRemoval(const mirror::String* s, uint32_t hash_code) {
+  InternStringLog log(s, hash_code, InternStringLog::kStrongString, InternStringLog::kRemove);
+  LogInternedString(log);
+}
+
+void Transaction::RecordWeakStringRemoval(const mirror::String* s, uint32_t hash_code) {
+  InternStringLog log(s, hash_code, InternStringLog::kWeakString, InternStringLog::kRemove);
+  LogInternedString(log);
+}
+
+void Transaction::LogInternedString(InternStringLog& log) {
+  intern_string_logs_.push_front(log);
+}
+
+void Transaction::Abort() {
+  UndoObjectModifications();
+  UndoArrayModifications();
+  UndoInternStringTableModifications();
+}
+
+void Transaction::UndoObjectModifications() {
+  // TODO we may not need to restore objects allocated during this transaction. Or we could directly
+  // remove them from the heap.
+  MutexLock mu(Thread::Current(), log_lock_);
+  for (auto it : object_logs_) {
+    it.second.Undo(it.first);
+  }
+  object_logs_.clear();
+}
+
+void Transaction::UndoArrayModifications() {
+  // TODO we may not need to restore array allocated during this transaction. Or we could directly
+  // remove them from the heap.
+  MutexLock mu(Thread::Current(), log_lock_);
+  for (auto it : array_logs_) {
+    it.second.Undo(it.first);
+  }
+  array_logs_.clear();
+}
+
+void Transaction::UndoInternStringTableModifications() {
+  InternTable* const intern_table = Runtime::Current()->GetInternTable();
+  // We want to undo each operation from the most recent to the oldest. List has been filled so the
+  // most recent operation is at list begin so just have to iterate over it.
+  for (InternStringLog& string_log : intern_string_logs_) {
+    string_log.Undo(intern_table);
+  }
+  intern_string_logs_.clear();
+}
+
+void Transaction::VisitRoots(RootVisitor* visitor, void* arg) {
+  LOG(INFO) << "Transaction::VisitRoots";
+  VisitObjectLogs(visitor, arg);
+  VisitArrayLogs(visitor, arg);
+  VisitStringLogs(visitor, arg);
+}
+
+void Transaction::VisitObjectLogs(RootVisitor* visitor, void* arg) {
+  MutexLock mu(Thread::Current(), log_lock_);
+  for (auto it : object_logs_) {
+    it.second.VisitRoots(visitor, arg);
+    mirror::Object* old_root = it.first;
+    mirror::Object* new_root = visitor(old_root, arg);
+    // TODO: support moving objects. Fail if this case happens.
+    CHECK_EQ(old_root, new_root) << "Object has been moved: need to update the log";
+  }
+}
+
+void Transaction::VisitArrayLogs(RootVisitor* visitor, void* arg) {
+  MutexLock mu(Thread::Current(), log_lock_);
+  for (auto it : array_logs_) {
+    mirror::Array* old_root = it.first;
+    if (old_root->IsObjectArray()) {
+      it.second.VisitRoots(visitor, arg);
+    }
+    mirror::Array* new_root = down_cast<mirror::Array*>(visitor(old_root, arg));
+    // TODO: support moving objects. Fail if this case happens.
+    CHECK_EQ(old_root, new_root) << "Array has been moved: need to update the log";
+  }
+}
+
+void Transaction::VisitStringLogs(RootVisitor* visitor, void* arg) {
+  for (InternStringLog& log : intern_string_logs_) {
+    log.VisitRoots(visitor, arg);
+  }
+}
+
+void Transaction::ObjectLog::Log32BitsValue(MemberOffset offset, uint32_t value, bool is_volatile) {
+  auto it = field_values_.find(offset.Uint32Value());
+  if (it == field_values_.end()) {
+    ObjectLog::FieldValue field_value;
+    field_value.value = value;
+    field_value.is_volatile = is_volatile;
+    field_value.kind = ObjectLog::k32Bits;
+    field_values_.insert(std::make_pair(offset.Uint32Value(), field_value));
+  }
+}
+
+void Transaction::ObjectLog::Log64BitsValue(MemberOffset offset, uint64_t value, bool is_volatile) {
+  auto it = field_values_.find(offset.Uint32Value());
+  if (it == field_values_.end()) {
+    ObjectLog::FieldValue field_value;
+    field_value.value = value;
+    field_value.is_volatile = is_volatile;
+    field_value.kind = ObjectLog::k64Bits;
+    field_values_.insert(std::make_pair(offset.Uint32Value(), field_value));
+  }
+}
+
+void Transaction::ObjectLog::LogReferenceValue(MemberOffset offset, mirror::Object* obj, bool is_volatile) {
+  auto it = field_values_.find(offset.Uint32Value());
+  if (it == field_values_.end()) {
+    ObjectLog::FieldValue field_value;
+    field_value.value = reinterpret_cast<uintptr_t>(obj);
+    field_value.is_volatile = is_volatile;
+    field_value.kind = ObjectLog::kReference;
+    field_values_.insert(std::make_pair(offset.Uint32Value(), field_value));
+  }
+}
+
+void Transaction::ObjectLog::Undo(mirror::Object* obj) {
+  for (auto& it : field_values_) {
+    // TODO garbage collector needs to access object's class and array's length. So we don't rollback
+    // these values.
+    MemberOffset field_offset(it.first);
+    if (field_offset.Uint32Value() == mirror::Class::ClassOffset().Uint32Value()) {
+      // Skip Object::class field.
+      continue;
+    }
+    if (obj->IsArrayInstance() &&
+        field_offset.Uint32Value() == mirror::Array::LengthOffset().Uint32Value()) {
+      // Skip Array::length field.
+      continue;
+    }
+    FieldValue& field_value = it.second;
+    UndoFieldWrite(obj, field_offset, field_value);
+  }
+}
+
+void Transaction::ObjectLog::UndoFieldWrite(mirror::Object* obj, MemberOffset field_offset,
+                                            const FieldValue& field_value) {
+  switch (field_value.kind) {
+    case k32Bits:
+      obj->SetField32NonTransactional(field_offset, static_cast<uint32_t>(field_value.value),
+                                      field_value.is_volatile);
+      break;
+    case k64Bits:
+      obj->SetField64NonTransactional(field_offset, field_value.value, field_value.is_volatile);
+      break;
+    case kReference:
+      obj->SetFieldObjectNonTransactional(field_offset,
+                                          reinterpret_cast<mirror::Object*>(field_value.value),
+                                          field_value.is_volatile);
+      break;
+    default:
+      LOG(FATAL) << "Unknown value kind " << field_value.kind;
+      break;
+  }
+}
+
+void Transaction::ObjectLog::VisitRoots(RootVisitor* visitor, void* arg) {
+  for (auto it : field_values_) {
+    FieldValue& field_value = it.second;
+    if (field_value.kind == ObjectLog::kReference) {
+      mirror::Object* obj = reinterpret_cast<mirror::Object*>(static_cast<uintptr_t>(field_value.value));
+      field_value.value = reinterpret_cast<uintptr_t>(visitor(obj, arg));
+    }
+  }
+}
+
+void Transaction::InternStringLog::Undo(InternTable* intern_table) {
+  DCHECK(intern_table != nullptr);
+  switch (string_op_) {
+      case InternStringLog::kInsert: {
+        switch (string_kind_) {
+          case InternStringLog::kStrongString:
+            intern_table->RemoveStrongFromTransaction(str_, hash_code_);
+            break;
+          case InternStringLog::kWeakString:
+            intern_table->RemoveWeakFromTransaction(str_, hash_code_);
+            break;
+          default:
+            LOG(FATAL) << "Unknown interned string kind";
+            break;
+        }
+        break;
+      }
+      case InternStringLog::kRemove: {
+        switch (string_kind_) {
+          case InternStringLog::kStrongString:
+            // TODO cleanup to remove const_cast.
+            intern_table->InsertStrongFromTransaction(const_cast<mirror::String*>(str_), hash_code_);
+            break;
+          case InternStringLog::kWeakString:
+            // TODO cleanup to remove const_cast.
+            intern_table->InsertWeakFromTransaction(const_cast<mirror::String*>(str_), hash_code_);
+            break;
+          default:
+            LOG(FATAL) << "Unknown interned string kind";
+            break;
+        }
+        break;
+      }
+      default:
+        LOG(FATAL) << "Unknown interned string op";
+        break;
+    }
+}
+
+void Transaction::InternStringLog::VisitRoots(RootVisitor* visitor, void* arg) {
+  // TODO cleanup to remove const_cast.
+  str_ = down_cast<mirror::String*>(visitor(const_cast<mirror::String*>(str_), arg));
+}
+
+
+void Transaction::ArrayLog::Log32BitsValue(size_t index, uint32_t value) {
+  auto it = array_values_.find(index);
+  if (it == array_values_.end()) {
+    array_values_.insert(std::make_pair(index, static_cast<uint64_t>(value)));
+  }
+}
+
+void Transaction::ArrayLog::Log64BitsValue(size_t index, uint64_t value) {
+  auto it = array_values_.find(index);
+  if (it == array_values_.end()) {
+    array_values_.insert(std::make_pair(index, value));
+  }
+}
+
+void Transaction::ArrayLog::LogReferenceValue(size_t index, mirror::Object* obj) {
+  auto it = array_values_.find(index);
+  if (it == array_values_.end()) {
+    array_values_.insert(std::make_pair(index, reinterpret_cast<uintptr_t>(obj)));
+  }
+}
+
+void Transaction::ArrayLog::Undo(mirror::Array* array) {
+  DCHECK(array != nullptr);
+  DCHECK(array->IsArrayInstance());
+  Primitive::Type type = array->GetClass()->GetComponentType()->GetPrimitiveType();
+  for (auto it : array_values_) {
+    UndoArrayWrite(array, type, it.first, it.second);
+  }
+}
+
+void Transaction::ArrayLog::UndoArrayWrite(mirror::Array* array, Primitive::Type array_type,
+                                           size_t index, uint64_t value) {
+  switch (array_type) {
+    case Primitive::kPrimBoolean:
+      array->AsBooleanArray()->SetWithoutChecksNonTransactional(index, static_cast<uint8_t>(value));
+      break;
+    case Primitive::kPrimByte:
+      array->AsByteArray()->SetWithoutChecksNonTransactional(index, static_cast<int8_t>(value));
+      break;
+    case Primitive::kPrimChar:
+      array->AsCharArray()->SetWithoutChecksNonTransactional(index, static_cast<uint16_t>(value));
+      break;
+    case Primitive::kPrimShort:
+      array->AsShortArray()->SetWithoutChecksNonTransactional(index, static_cast<int16_t>(value));
+      break;
+    case Primitive::kPrimInt:
+      array->AsIntArray()->SetWithoutChecksNonTransactional(index, static_cast<int32_t>(value));
+      break;
+    case Primitive::kPrimFloat: {
+      mirror::FloatArray* float_array = down_cast<mirror::FloatArray*>(array);
+      DCHECK(float_array != nullptr);
+      float_array->SetWithoutChecksNonTransactional(index, static_cast<float>(value));
+      break;
+    }
+    case Primitive::kPrimLong:
+      array->AsLongArray()->SetWithoutChecksNonTransactional(index, static_cast<int64_t>(value));
+      break;
+    case Primitive::kPrimDouble: {
+      mirror::DoubleArray* double_array = down_cast<mirror::DoubleArray*>(array);
+      DCHECK(double_array != nullptr);
+      double_array->SetWithoutChecksNonTransactional(index, static_cast<double>(value));
+      break;
+    }
+    case Primitive::kPrimNot: {
+      mirror::ObjectArray<mirror::Object>* obj_array = array->AsObjectArray<mirror::Object>();
+      obj_array->SetWithoutChecksNonTransactional(index, reinterpret_cast<mirror::Object*>(
+          static_cast<uintptr_t>(value)));
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unsupport type " << array_type;
+  }
+}
+
+void Transaction::ArrayLog::VisitRoots(RootVisitor* visitor, void* arg) {
+  for (auto& it : array_values_) {
+    mirror::Object* root = reinterpret_cast<mirror::Object*>(static_cast<uintptr_t>(it.second));
+    it.second = reinterpret_cast<uintptr_t>(visitor(root, arg));
+  }
+}
+
+}  // namespace art

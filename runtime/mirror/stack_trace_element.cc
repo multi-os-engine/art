@@ -46,6 +46,7 @@ StackTraceElement* StackTraceElement::Alloc(Thread* self,
   StackTraceElement* trace =
       down_cast<StackTraceElement*>(GetStackTraceElement()->AllocObject(self));
   if (LIKELY(trace != NULL)) {
+    // TODO default transaction support, use template ?
     trace->SetFieldObject(OFFSET_OF_OBJECT_MEMBER(StackTraceElement, declaring_class_),
                           declaring_class.get(), false);
     trace->SetFieldObject(OFFSET_OF_OBJECT_MEMBER(StackTraceElement, method_name_),

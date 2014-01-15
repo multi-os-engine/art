@@ -300,10 +300,10 @@ TEST_F(ObjectTest, StaticFieldFromCode) {
   EXPECT_TRUE(s0 != NULL);
 
   SirtRef<CharArray> char_array(soa.Self(), CharArray::Alloc(soa.Self(), 0));
-  field->SetObj(field->GetDeclaringClass(), char_array.get());
+  field->SetObjNonTransactional(field->GetDeclaringClass(), char_array.get());
   EXPECT_EQ(char_array.get(), field->GetObj(klass));
 
-  field->SetObj(field->GetDeclaringClass(), NULL);
+  field->SetObjNonTransactional(field->GetDeclaringClass(), NULL);
   EXPECT_EQ(NULL, field->GetObj(klass));
 
   // TODO: more exhaustive tests of all 6 cases of ArtField::*FromCode

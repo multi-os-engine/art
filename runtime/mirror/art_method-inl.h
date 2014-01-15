@@ -35,7 +35,8 @@ inline Class* ArtMethod::GetDeclaringClass() const {
 }
 
 inline void ArtMethod::SetDeclaringClass(Class *new_declaring_class) {
-  SetFieldObject(OFFSET_OF_OBJECT_MEMBER(ArtMethod, declaring_class_), new_declaring_class, false);
+  SetFieldObjectNonTransactional(OFFSET_OF_OBJECT_MEMBER(ArtMethod, declaring_class_),
+                                 new_declaring_class, false);
 }
 
 inline uint32_t ArtMethod::GetAccessFlags() const {

@@ -22,6 +22,7 @@
 #include "base/macros.h"
 #include "cutils/atomic-inline.h"
 #include "offsets.h"
+#include "runtime.h"
 
 namespace art {
 
@@ -174,13 +175,20 @@ class MANAGED Object {
 
   void SetFieldObject(MemberOffset field_offset, const Object* new_value, bool is_volatile,
                       bool this_is_valid = true) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    VerifyObject(new_value);
-    SetField32(field_offset, reinterpret_cast<uint32_t>(new_value), is_volatile, this_is_valid);
-    if (new_value != NULL) {
-      CheckFieldAssignment(field_offset, new_value);
-      WriteBarrierField(this, field_offset, new_value);
+    if (Runtime::Current()->IsActiveTransaction()) {
+      SetFieldObjectTransactional(field_offset, new_value, is_volatile, this_is_valid);
+    } else {
+      SetFieldObjectNonTransactional(field_offset, new_value, is_volatile, this_is_valid);
     }
   }
+
+  void SetFieldObjectTransactional(MemberOffset field_offset, const Object* new_value,
+                                   bool is_volatile, bool this_is_valid = true)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void SetFieldObjectNonTransactional(MemberOffset field_offset, const Object* new_value,
+                                      bool is_volatile, bool this_is_valid = true)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   Object** GetFieldObjectAddr(MemberOffset field_offset) ALWAYS_INLINE {
     VerifyObject(this);
@@ -190,18 +198,55 @@ class MANAGED Object {
   uint32_t GetField32(MemberOffset field_offset, bool is_volatile) const;
 
   void SetField32(MemberOffset field_offset, uint32_t new_value, bool is_volatile,
-                  bool this_is_valid = true);
+                  bool this_is_valid = true) {
+    if (Runtime::Current()->IsActiveTransaction()) {
+      SetField32Transactional(field_offset, new_value, is_volatile, this_is_valid);
+    } else {
+      SetField32NonTransactional(field_offset, new_value, is_volatile, this_is_valid);
+    }
+  }
 
-  bool CasField32(MemberOffset field_offset, uint32_t old_value, uint32_t new_value);
+  bool CasField32(MemberOffset field_offset, uint32_t old_value, uint32_t new_value) {
+    if (Runtime::Current()->IsActiveTransaction()) {
+      return CasField32Transactional(field_offset, old_value, new_value);
+    } else {
+      return CasField32NonTransactional(field_offset, old_value, new_value);
+    }
+  }
 
   uint64_t GetField64(MemberOffset field_offset, bool is_volatile) const;
 
-  void SetField64(MemberOffset field_offset, uint64_t new_value, bool is_volatile);
+  void SetField64(MemberOffset field_offset, uint64_t new_value, bool is_volatile) {
+    if (Runtime::Current()->IsActiveTransaction()) {
+      SetField64Transactional(field_offset, new_value, is_volatile);
+    } else {
+      SetField64NonTransactional(field_offset, new_value, is_volatile);
+    }
+  }
 
   template<typename T>
   void SetFieldPtr(MemberOffset field_offset, T new_value, bool is_volatile, bool this_is_valid = true) {
     SetField32(field_offset, reinterpret_cast<uint32_t>(new_value), is_volatile, this_is_valid);
   }
+
+  template<typename T>
+  void SetFieldPtrNonTransactional(MemberOffset field_offset, T new_value, bool is_volatile,
+                                   bool this_is_valid = true) {
+    SetField32NonTransactional(field_offset, reinterpret_cast<uint32_t>(new_value), is_volatile,
+                               this_is_valid);
+  }
+
+  void SetField32Transactional(MemberOffset field_offset, uint32_t new_value, bool is_volatile,
+                               bool this_is_valid = true);
+
+  void SetField32NonTransactional(MemberOffset field_offset, uint32_t new_value, bool is_volatile,
+                               bool this_is_valid = true);
+
+  bool CasField32Transactional(MemberOffset field_offset, uint32_t old_value, uint32_t new_value);
+  bool CasField32NonTransactional(MemberOffset field_offset, uint32_t old_value, uint32_t new_value);
+
+  void SetField64Transactional(MemberOffset field_offset, uint64_t new_value, bool is_volatile);
+  void SetField64NonTransactional(MemberOffset field_offset, uint64_t new_value, bool is_volatile);
 
  protected:
   // Accessors for non-Java type fields
@@ -221,6 +266,14 @@ class MANAGED Object {
       CheckFieldAssignmentImpl(field_offset, new_value);
     }
   }
+
+  void SetField32Impl(MemberOffset field_offset, uint32_t new_value, bool is_volatile,
+                      bool this_is_valid);
+  bool CasField32Impl(MemberOffset field_offset, uint32_t old_value, uint32_t new_value);
+  void SetField64Impl(MemberOffset field_offset, uint64_t new_value, bool is_volatile);
+  void SetFieldObjectImpl(MemberOffset field_offset, const Object* new_value,
+                          bool is_volatile, bool this_is_valid)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Generate an identity hash code.
   static int32_t GenerateIdentityHashCode();
