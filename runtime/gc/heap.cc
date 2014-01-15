@@ -82,6 +82,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     : non_moving_space_(nullptr),
       rosalloc_space_(nullptr),
       dlmalloc_space_(nullptr),
+      main_space_(nullptr),
       concurrent_gc_(false),
       collector_type_(kCollectorTypeNone),
       post_zygote_collector_type_(post_zygote_collector_type),
@@ -188,7 +189,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
                                                 requested_alloc_space_begin);
     CHECK(malloc_space != nullptr) << "Failed to create dlmalloc space";
   }
-
+  VLOG(heap) << "malloc_space : " << malloc_space;
   if (kMovingCollector) {
     // TODO: Place bump-pointer spaces somewhere to minimize size of card table.
     // TODO: Having 3+ spaces as big as the large heap size can cause virtual memory fragmentation
@@ -202,6 +203,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
                                                   nullptr);
     CHECK(temp_space_ != nullptr) << "Failed to create bump pointer space";
     AddSpace(temp_space_);
+    VLOG(heap) << "bump_pointer_space : " << bump_pointer_space_;
+    VLOG(heap) << "temp_space : " << temp_space_;
   }
   non_moving_space_ = malloc_space;
   malloc_space->SetFootprintLimit(malloc_space->Capacity());
@@ -451,6 +454,9 @@ void Heap::RemoveSpace(space::Space* space) {
     } else if (continuous_space == rosalloc_space_) {
       rosalloc_space_ = nullptr;
     }
+    if (continuous_space == main_space_) {
+      main_space_ = nullptr;
+    }
   } else {
     DCHECK(space->IsDiscontinuousSpace());
     space::DiscontinuousSpace* discontinuous_space = space->AsDiscontinuousSpace();
@@ -468,6 +474,7 @@ void Heap::RemoveSpace(space::Space* space) {
     DCHECK(it != alloc_spaces_.end());
     alloc_spaces_.erase(it);
   }
+  delete space;
 }
 
 void Heap::RegisterGCAllocation(size_t bytes) {
@@ -1160,19 +1167,13 @@ void Heap::TransitionCollector(CollectorType collector_type) {
   switch (collector_type) {
     case kCollectorTypeSS: {
       mprotect(temp_space_->Begin(), temp_space_->Capacity(), PROT_READ | PROT_WRITE);
-      space::MallocSpace* main_space;
-      if (rosalloc_space_ != nullptr) {
-        DCHECK(kUseRosAlloc);
-        main_space = rosalloc_space_;
-      } else {
-        DCHECK(dlmalloc_space_ != nullptr);
-        main_space = dlmalloc_space_;
-      }
-      Compact(temp_space_, main_space);
+      CHECK(main_space_ != nullptr);
+      Compact(temp_space_, main_space_);
       DCHECK(allocator_mem_map_.get() == nullptr);
-      allocator_mem_map_.reset(main_space->ReleaseMemMap());
-      madvise(main_space->Begin(), main_space->Size(), MADV_DONTNEED);
-      RemoveSpace(main_space);
+      allocator_mem_map_.reset(main_space_->ReleaseMemMap());
+      madvise(main_space_->Begin(), main_space_->Size(), MADV_DONTNEED);
+      // RemoveSpace deletes the removed space.
+      RemoveSpace(main_space_);
       break;
     }
     case kCollectorTypeMS:
@@ -1184,21 +1185,21 @@ void Heap::TransitionCollector(CollectorType collector_type) {
         CHECK(mem_map != nullptr);
         size_t initial_size = kDefaultInitialSize;
         mprotect(mem_map->Begin(), initial_size, PROT_READ | PROT_WRITE);
-        space::MallocSpace* malloc_space;
+        CHECK(main_space_ == nullptr);
         if (kUseRosAlloc) {
-          malloc_space =
+          main_space_ =
               space::RosAllocSpace::CreateFromMemMap(mem_map, "alloc space", kPageSize,
                                                      initial_size, mem_map->Size(),
                                                      mem_map->Size(), low_memory_mode_);
         } else {
-          malloc_space =
+          main_space_ =
               space::DlMallocSpace::CreateFromMemMap(mem_map, "alloc space", kPageSize,
                                                      initial_size, mem_map->Size(),
                                                      mem_map->Size());
         }
-        malloc_space->SetFootprintLimit(malloc_space->Capacity());
-        AddSpace(malloc_space);
-        Compact(malloc_space, bump_pointer_space_);
+        main_space_->SetFootprintLimit(main_space_->Capacity());
+        AddSpace(main_space_);
+        Compact(main_space_, bump_pointer_space_);
       }
       break;
     }
@@ -1275,6 +1276,92 @@ static void MarkInBitmapCallback(mirror::Object* obj, void* arg) {
   reinterpret_cast<accounting::SpaceBitmap*>(arg)->Set(obj);
 }
 
+// Special compacting collector which uses sub-optimal bin packing to reduce zygote space size.
+class ZygoteCompactingCollector : public collector::SemiSpace {
+ public:
+  explicit ZygoteCompactingCollector(gc::Heap* heap) : SemiSpace(heap, "zygote collector") {
+  }
+
+  void BuildBins(space::ContinuousSpace* space) {
+    bin_live_bitmap_ = space->GetLiveBitmap();
+    bin_mark_bitmap_ = space->GetMarkBitmap();
+    BinContext context;
+    context.prev_ = reinterpret_cast<uintptr_t>(space->Begin());
+    context.collector_ = this;
+    WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
+    // Note: This requires traversing the space in increasing order of object addresses.
+    bin_live_bitmap_->Walk(Callback, reinterpret_cast<void*>(&context));
+    // Add the last bin which spans after the last object to the end of the space.
+    AddBin(reinterpret_cast<uintptr_t>(space->End()) - context.prev_, context.prev_);
+  }
+
+ private:
+  struct BinContext {
+    uintptr_t prev_;  // The end of the previous object.
+    ZygoteCompactingCollector* collector_;
+  };
+  // Maps from bin sizes to locations.
+  std::multimap<size_t, uintptr_t> bins_;
+  // Live bitmap of the space which contains the bins.
+  accounting::SpaceBitmap* bin_live_bitmap_;
+  // Mark bitmap of the space which contains the bins.
+  accounting::SpaceBitmap* bin_mark_bitmap_;
+
+  static void Callback(mirror::Object* obj, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK(arg != nullptr);
+    BinContext* context = reinterpret_cast<BinContext*>(arg);
+    ZygoteCompactingCollector* collector = context->collector_;
+    uintptr_t object_addr = reinterpret_cast<uintptr_t>(obj);
+    size_t bin_size = object_addr - context->prev_;
+    // Add the bin consisting of the end of the previous object to the start of the current object.
+    collector->AddBin(bin_size, context->prev_);
+    context->prev_ = object_addr + RoundUp(obj->SizeOf(), kObjectAlignment);
+  }
+
+  void AddBin(size_t size, uintptr_t position) {
+    if (size != 0) {
+      bins_.insert(std::make_pair(size, position));
+    }
+  }
+
+  virtual bool ShouldSweepSpace(space::MallocSpace* space) const {
+    // Don't sweep any spaces since we probably blasted the internal accounting of the free list
+    // allocator.
+    return false;
+  }
+
+  virtual mirror::Object* MarkNonForwardedObject(mirror::Object* obj)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_) {
+    size_t object_size = RoundUp(obj->SizeOf(), kObjectAlignment);
+    mirror::Object* forward_address;
+    // Find the smallest bin which we can move obj in.
+    auto it = bins_.lower_bound(object_size);
+    if (it == bins_.end()) {
+      // No available space in the bins, place it in the target space instead (grows the zygote
+      // space).
+      size_t bytes_allocated;
+      forward_address = to_space_->Alloc(self_, object_size, &bytes_allocated);
+      if (to_space_live_bitmap_ != nullptr) {
+        to_space_live_bitmap_->Set(forward_address);
+      }
+    } else {
+      size_t size = it->first;
+      uintptr_t pos = it->second;
+      bins_.erase(it);  // Erase the old bin which we replace with the new smaller bin.
+      forward_address = reinterpret_cast<mirror::Object*>(pos);
+      // Set the live and mark bits so that sweeping system weaks works properly.
+      bin_live_bitmap_->Set(forward_address);
+      bin_mark_bitmap_->Set(forward_address);
+      DCHECK_GE(size, object_size);
+      AddBin(size - object_size, pos + object_size);  // Add a new bin with the remaining space.
+    }
+    // Copy the object over to its new location.
+    memcpy(reinterpret_cast<void*>(forward_address), obj, object_size);
+    return forward_address;
+  }
+};
+
 void Heap::PreZygoteFork() {
   static Mutex zygote_creation_lock_("zygote creation lock", kZygoteCreationLock);
   Thread* self = Thread::Current();
@@ -1292,12 +1379,16 @@ void Heap::PreZygoteFork() {
   ChangeCollector(post_zygote_collector_type_);
   // TODO: Delete bump_pointer_space_ and temp_pointer_space_?
   if (semi_space_collector_ != nullptr) {
+    ZygoteCompactingCollector zygote_collector(this);
+    zygote_collector.BuildBins(non_moving_space_);
     // Create a new bump pointer space which we will compact into.
     space::BumpPointerSpace target_space("zygote bump space", non_moving_space_->End(),
                                          non_moving_space_->Limit());
     // Compact the bump pointer space to a new zygote bump pointer space.
     temp_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
-    Compact(&target_space, bump_pointer_space_);
+    zygote_collector.SetFromSpace(bump_pointer_space_);
+    zygote_collector.SetToSpace(&target_space);
+    zygote_collector.Run(false);
     CHECK(temp_space_->IsEmpty());
     total_objects_freed_ever_ += semi_space_collector_->GetFreedObjects();
     total_bytes_freed_ever_ += semi_space_collector_->GetFreedBytes();
@@ -1306,25 +1397,33 @@ void Heap::PreZygoteFork() {
     non_moving_space_->SetLimit(target_space.Limit());
     accounting::SpaceBitmap* bitmap = non_moving_space_->GetLiveBitmap();
     // Record the allocations in the bitmap.
-    VLOG(heap) << "Recording zygote allocations";
+    VLOG(heap) << "Zygote size " << non_moving_space_->Size() << " bytes";
     target_space.Walk(MarkInBitmapCallback, bitmap);
   }
   // Turn the current alloc space into a zygote space and obtain the new alloc space composed of
   // the remaining available heap memory.
   space::MallocSpace* zygote_space = non_moving_space_;
-  non_moving_space_ = non_moving_space_->CreateZygoteSpace("alloc space", low_memory_mode_);
-  if (non_moving_space_->IsRosAllocSpace()) {
-    rosalloc_space_ = non_moving_space_->AsRosAllocSpace();
-  } else if (non_moving_space_->IsDlMallocSpace()) {
-    dlmalloc_space_ = non_moving_space_->AsDlMallocSpace();
+  main_space_ = non_moving_space_->CreateZygoteSpace("alloc space", low_memory_mode_);
+  if (main_space_->IsRosAllocSpace()) {
+    rosalloc_space_ = main_space_->AsRosAllocSpace();
+  } else if (main_space_->IsDlMallocSpace()) {
+    dlmalloc_space_ = main_space_->AsDlMallocSpace();
   }
-  // Can't use RosAlloc for non moving space due to thread local buffers.
-  non_moving_space_->SetFootprintLimit(non_moving_space_->Capacity());
+  main_space_->SetFootprintLimit(main_space_->Capacity());
   // Change the GC retention policy of the zygote space to only collect when full.
   zygote_space->SetGcRetentionPolicy(space::kGcRetentionPolicyFullCollect);
-  AddSpace(non_moving_space_);
+  AddSpace(main_space_);
   have_zygote_space_ = true;
-  zygote_space->InvalidateAllocator();
+  // Remove the zygote space from alloc_spaces_ array since not doing so causes crashes in
+  // GetObjectsAllocated. This happens because the bin packing blows away the internal accounting
+  // stored in between objects.
+  if (zygote_space->IsAllocSpace()) {
+    // TODO: Refactor zygote spaces to be a new space type to avoid more of these types of issues.
+    auto it = std::find(alloc_spaces_.begin(), alloc_spaces_.end(), zygote_space->AsAllocSpace());
+    CHECK(it != alloc_spaces_.end());
+    alloc_spaces_.erase(it);
+    zygote_space->InvalidateAllocator();
+  }
   // Create the zygote space mod union table.
   accounting::ModUnionTable* mod_union_table =
       new accounting::ModUnionTableCardCache("zygote space mod-union table", this, zygote_space);
@@ -1334,7 +1433,8 @@ void Heap::PreZygoteFork() {
   for (const auto& collector : garbage_collectors_) {
     collector->ResetCumulativeStatistics();
   }
-  // TODO: Not limited space for non-movable objects?
+  // Can't use RosAlloc for non moving space due to thread local buffers.
+  // TODO: Non limited space for non-movable objects?
   space::MallocSpace* new_non_moving_space
       = space::DlMallocSpace::Create("Non moving dlmalloc space", 2 * MB, 64 * MB, 64 * MB,
                                      nullptr);
@@ -1351,7 +1451,7 @@ void Heap::FlushAllocStack() {
 
 void Heap::MarkAllocStack(accounting::SpaceBitmap* bitmap1,
                           accounting::SpaceBitmap* bitmap2,
-                          accounting::SpaceSetMap* large_objects,
+                          accounting::ObjectSet* large_objects,
                           accounting::ObjectStack* stack) {
   DCHECK(bitmap1 != nullptr);
   DCHECK(bitmap2 != nullptr);
@@ -2000,6 +2100,9 @@ bool Heap::IsMovableObject(const mirror::Object* obj) const {
   if (kMovingCollector) {
     DCHECK(!IsInTempSpace(obj));
     if (bump_pointer_space_->HasAddress(obj)) {
+      return true;
+    }
+    if (main_space_ != nullptr && main_space_->HasAddress(obj)) {
       return true;
     }
   }

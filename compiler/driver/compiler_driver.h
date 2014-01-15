@@ -98,7 +98,7 @@ class CompilerDriver {
                           CompilerBackend compiler_backend, InstructionSet instruction_set,
                           InstructionSetFeatures instruction_set_features,
                           bool image, DescriptorSet* image_classes,
-                          size_t thread_count, bool dump_stats, bool dump_timing,
+                          size_t thread_count, bool dump_stats, bool dump_passes,
                           CumulativeLogger* timer);
 
   ~CompilerDriver();
@@ -269,8 +269,8 @@ class CompilerDriver {
     return thread_count_;
   }
 
-  bool GetDumpTiming() const {
-    return dump_timing_;
+  bool GetDumpPasses() const {
+    return dump_passes_;
   }
 
   CumulativeLogger& GetTimingsLogger() const {
@@ -446,7 +446,7 @@ class CompilerDriver {
   UniquePtr<AOTCompilationStats> stats_;
 
   bool dump_stats_;
-  bool dump_timing_;
+  bool dump_passes_;
 
   CumulativeLogger* timings_logger_;
 

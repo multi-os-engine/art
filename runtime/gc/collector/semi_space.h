@@ -54,6 +54,7 @@ namespace space {
   class BumpPointerSpace;
   class ContinuousMemMapAllocSpace;
   class ContinuousSpace;
+  class MallocSpace;
 }  // namespace space
 
 class Heap;
@@ -149,6 +150,9 @@ class SemiSpace : public GarbageCollector {
   static mirror::Object* RecursiveMarkObjectCallback(mirror::Object* root, void* arg)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
+  virtual mirror::Object* MarkNonForwardedObject(mirror::Object* obj)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
+
  protected:
   // Returns null if the object is not marked, otherwise returns the forwarding address (same as
   // object for non movable things).
@@ -162,15 +166,11 @@ class SemiSpace : public GarbageCollector {
   bool MarkLargeObject(const mirror::Object* obj)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
-  static void SweepCallback(size_t num_ptrs, mirror::Object** ptrs, void* arg)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
-
-  // Special sweep for zygote that just marks objects / dirties cards.
-  static void ZygoteSweepCallback(size_t num_ptrs, mirror::Object** ptrs, void* arg)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
-
   // Expand mark stack to 2x its current size.
   void ResizeMarkStack(size_t new_size);
+
+  // Returns true if we should sweep the space.
+  virtual bool ShouldSweepSpace(space::MallocSpace* space) const;
 
   // Returns how many threads we should use for the current GC phase based on if we are paused,
   // whether or not we care about pauses.
@@ -255,8 +255,6 @@ class SemiSpace : public GarbageCollector {
 
   inline mirror::Object* GetForwardingAddressInFromSpace(mirror::Object* obj) const;
 
-  mirror::Object* GetForwardingAddress(mirror::Object* obj);
-
   // Current space, we check this space first to avoid searching for the appropriate space for an
   // object.
   accounting::ObjectStack* mark_stack_;
@@ -264,6 +262,9 @@ class SemiSpace : public GarbageCollector {
   // Immune range, every object inside the immune range is assumed to be marked.
   mirror::Object* immune_begin_;
   mirror::Object* immune_end_;
+
+  // If true, the large object space is immune.
+  bool is_large_object_space_immune_;
 
   // Destination and source spaces (can be any type of ContinuousMemMapAllocSpace which either has
   // a live bitmap or doesn't).
@@ -281,6 +282,18 @@ class SemiSpace : public GarbageCollector {
   // how many bytes of objects have been copied so far from the bump
   // pointer space to the non-moving space.
   uint64_t bytes_promoted_;
+
+  // When true, collect the whole heap. When false, collect only the
+  // bump pointer spaces.
+  bool whole_heap_collection_;
+
+  // A counter used to enable whole_heap_collection_ once per
+  // interval.
+  int whole_heap_collection_interval_counter_;
+
+  // The default interval of the whole heap collection. If N, the
+  // whole heap collection occurs every N collections.
+  static constexpr int kDefaultWholeHeapCollectionInterval = 5;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SemiSpace);

@@ -21,6 +21,7 @@
 #include "dataflow_iterator-inl.h"
 #include "leb128.h"
 #include "mirror/object.h"
+#include "pass_driver.h"
 #include "runtime.h"
 #include "backend.h"
 #include "base/logging.h"
@@ -141,19 +142,19 @@ CompilationUnit::~CompilationUnit() {
 }
 
 void CompilationUnit::StartTimingSplit(const char* label) {
-  if (compiler_driver->GetDumpTiming()) {
+  if (compiler_driver->GetDumpPasses()) {
     timings.StartSplit(label);
   }
 }
 
 void CompilationUnit::NewTimingSplit(const char* label) {
-  if (compiler_driver->GetDumpTiming()) {
+  if (compiler_driver->GetDumpPasses()) {
     timings.NewSplit(label);
   }
 }
 
 void CompilationUnit::EndTiming() {
-  if (compiler_driver->GetDumpTiming()) {
+  if (compiler_driver->GetDumpPasses()) {
     timings.EndSplit();
     if (enable_debug & (1 << kDebugTimings)) {
       LOG(INFO) << "TIMINGS " << PrettyMethod(method_idx, *dex_file);
@@ -252,36 +253,9 @@ static CompiledMethod* CompileMethod(CompilerDriver& compiler,
   }
 #endif
 
-  /* Do a code layout pass */
-  cu.NewTimingSplit("MIROpt:CodeLayout");
-  cu.mir_graph->CodeLayout();
-
-  /* Perform SSA transformation for the whole method */
-  cu.NewTimingSplit("MIROpt:SSATransform");
-  cu.mir_graph->SSATransformation();
-
-  /* Do constant propagation */
-  cu.NewTimingSplit("MIROpt:ConstantProp");
-  cu.mir_graph->PropagateConstants();
-
-  cu.NewTimingSplit("MIROpt:InitRegLoc");
-  cu.mir_graph->InitRegLocations();
-
-  /* Count uses */
-  cu.NewTimingSplit("MIROpt:UseCount");
-  cu.mir_graph->MethodUseCount();
-
-  /* Perform null check elimination and type inference*/
-  cu.NewTimingSplit("MIROpt:NCE_TypeInference");
-  cu.mir_graph->NullCheckEliminationAndTypeInference();
-
-  /* Combine basic blocks where possible */
-  cu.NewTimingSplit("MIROpt:BBCombine");
-  cu.mir_graph->BasicBlockCombine();
-
-  /* Do some basic block optimizations */
-  cu.NewTimingSplit("MIROpt:BBOpt");
-  cu.mir_graph->BasicBlockOptimization();
+  /* Create the pass driver and launch it */
+  PassDriver driver(&cu);
+  driver.Launch();
 
   if (cu.enable_debug & (1 << kDebugDumpCheckStats)) {
     cu.mir_graph->DumpCheckStats();

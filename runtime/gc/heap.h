@@ -54,7 +54,7 @@ namespace gc {
 namespace accounting {
   class HeapBitmap;
   class ModUnionTable;
-  class SpaceSetMap;
+  class ObjectSet;
 }  // namespace accounting
 
 namespace collector {
@@ -468,7 +468,7 @@ class Heap {
 
   // Mark all the objects in the allocation stack in the specified bitmap.
   void MarkAllocStack(accounting::SpaceBitmap* bitmap1, accounting::SpaceBitmap* bitmap2,
-                      accounting::SpaceSetMap* large_objects, accounting::ObjectStack* stack)
+                      accounting::ObjectSet* large_objects, accounting::ObjectStack* stack)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
   // Mark the specified allocation stack as live.
@@ -493,6 +493,21 @@ class Heap {
 
   space::LargeObjectSpace* GetLargeObjectsSpace() const {
     return large_object_space_;
+  }
+
+  // Returns the free list space that may contain movable objects (the
+  // one that's not the non-moving space), either rosalloc_space_ or
+  // dlmalloc_space_.
+  space::MallocSpace* GetPrimaryFreeListSpace() {
+    if (kUseRosAlloc) {
+      DCHECK(rosalloc_space_ != nullptr);
+      // reinterpret_cast is necessary as the space class hierarchy
+      // isn't known (#included) yet here.
+      return reinterpret_cast<space::MallocSpace*>(rosalloc_space_);
+    } else {
+      DCHECK(dlmalloc_space_ != nullptr);
+      return reinterpret_cast<space::MallocSpace*>(dlmalloc_space_);
+    }
   }
 
   void DumpSpaces(std::ostream& stream = LOG(INFO));
@@ -669,6 +684,10 @@ class Heap {
 
   // Space which we use for the kAllocatorTypeDlMalloc.
   space::DlMallocSpace* dlmalloc_space_;
+
+  // The main space is the space which the GC copies to and from on process state updates. This
+  // space is typically either the dlmalloc_space_ or the rosalloc_space_.
+  space::MallocSpace* main_space_;
 
   // The large object space we are currently allocating into.
   space::LargeObjectSpace* large_object_space_;

@@ -249,7 +249,7 @@ class Dex2Oat {
                                       bool image,
                                       UniquePtr<CompilerDriver::DescriptorSet>& image_classes,
                                       bool dump_stats,
-                                      bool dump_timing,
+                                      bool dump_passes,
                                       TimingLogger& timings,
                                       CumulativeLogger& compiler_phases_timings) {
     // SirtRef and ClassLoader creation needs to come after Runtime::Create
@@ -279,7 +279,7 @@ class Dex2Oat {
                                                         image_classes.release(),
                                                         thread_count_,
                                                         dump_stats,
-                                                        dump_timing,
+                                                        dump_passes,
                                                         &compiler_phases_timings));
 
     if (compiler_backend_ == kPortable) {
@@ -706,6 +706,7 @@ static int dex2oat(int argc, char** argv) {
   bool is_host = false;
   bool dump_stats = false;
   bool dump_timing = false;
+  bool dump_passes = false;
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = !kIsTargetBuild;
 
@@ -799,6 +800,8 @@ static int dex2oat(int argc, char** argv) {
       runtime_args.push_back(argv[i]);
     } else if (option == "--dump-timing") {
       dump_timing = true;
+    } else if (option == "--dump-passes") {
+      dump_passes = true;
     } else if (option == "--dump-stats") {
       dump_stats = true;
     } else {
@@ -1068,7 +1071,7 @@ static int dex2oat(int argc, char** argv) {
                                                                   image,
                                                                   image_classes,
                                                                   dump_stats,
-                                                                  dump_timing,
+                                                                  dump_passes,
                                                                   timings,
                                                                   compiler_phases_timings));
 
@@ -1145,6 +1148,8 @@ static int dex2oat(int argc, char** argv) {
   if (is_host) {
     if (dump_timing || (dump_slow_timing && timings.GetTotalNs() > MsToNs(1000))) {
       LOG(INFO) << Dumpable<TimingLogger>(timings);
+    }
+    if (dump_passes) {
       LOG(INFO) << Dumpable<CumulativeLogger>(compiler.get()->GetTimingsLogger());
     }
     return EXIT_SUCCESS;
@@ -1188,6 +1193,8 @@ static int dex2oat(int argc, char** argv) {
 
   if (dump_timing || (dump_slow_timing && timings.GetTotalNs() > MsToNs(1000))) {
     LOG(INFO) << Dumpable<TimingLogger>(timings);
+  }
+  if (dump_passes) {
     LOG(INFO) << Dumpable<CumulativeLogger>(compiler_phases_timings);
   }
 

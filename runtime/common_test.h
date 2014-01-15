@@ -474,7 +474,7 @@ class CommonTest : public testing::Test {
         }
       }
       class_linker_->FixupDexCaches(runtime_->GetResolutionMethod());
-      CumulativeTimer timer("Compilation times");
+      CumulativeLogger timer("Compilation times");
       compiler_driver_.reset(new CompilerDriver(verified_methods_data_.get(),
                                                 method_inliner_map_.get(),
                                                 compiler_backend, instruction_set,
