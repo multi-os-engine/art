@@ -42,7 +42,7 @@ class PassDriver {
    * @param new_pass the new Pass to insert in the map and list.
    * @param warn_override warn if the name of the Pass is already used.
    */
-  void InsertPass(Pass *new_pass, bool warn_override = true);
+  void InsertPass(const Pass* const new_pass, bool warn_override = true);
 
   /**
    * @brief Run a pass using the name as key.
@@ -50,32 +50,32 @@ class PassDriver {
    * @param pass_name the Pass name.
    * @return whether the pass was applied.
    */
-  bool RunPass(CompilationUnit* c_unit, const std::string& pass_name);
+  bool RunPass(CompilationUnit* const c_unit, const std::string& pass_name);
 
   /**
    * @brief Run a pass using the Pass itself.
    * @param time_split do we want a time split request(default: false)?
    * @return whether the pass was applied.
    */
-  bool RunPass(CompilationUnit* c_unit, Pass* pass, bool time_split = false);
+  bool RunPass(CompilationUnit* const c_unit, const Pass* const pass, bool time_split = false);
 
   void Launch();
 
-  void HandlePassFlag(CompilationUnit* c_unit, Pass* pass);
+  void HandlePassFlag(CompilationUnit* const c_unit, const Pass* const pass);
 
   /**
    * @brief Apply a patch: perform start/work/end functions.
    */
-  void ApplyPass(CompilationUnit* c_unit, Pass* pass);
+  void ApplyPass(CompilationUnit* const c_unit, const Pass* const pass);
 
   /**
    * @brief Dispatch a patch: walk the BasicBlocks depending on the traversal mode
    */
-  void DispatchPass(CompilationUnit* c_unit, Pass* pass);
+  void DispatchPass(CompilationUnit* const c_unit, const Pass* const pass);
 
   void PrintPassNames() const;
 
-  Pass* GetPass(const std::string& name) const;
+  const Pass* GetPass(const std::string& name) const;
 
   const char *GetDumpCFGFolder() const {
     return dump_cfg_folder_;
@@ -85,10 +85,10 @@ class PassDriver {
   void CreatePasses();
 
   /** @brief The Pass Map: contains name -> pass for quick lookup. */
-  SafeMap<std::string, Pass*> pass_map_;
+  SafeMap<std::string, const Pass*> pass_map_;
 
   /** @brief List of passes: provides the order to execute the passes. */
-  std::list<Pass*> pass_list_;
+  std::list<const Pass*> pass_list_;
 
   /** @brief The CompilationUnit on which to execute the passes on. */
   CompilationUnit* const cu_;
