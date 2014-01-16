@@ -827,6 +827,20 @@ const DexFile* ClassLinker::FindOrCreateOatFileForDexLocation(const char* dex_lo
       << oat_location << "': " << *error_msg;
   error_msg->clear();
 
+  {
+    // We might have registered an outdated OatFile in FindDexFileInOatLocation().
+    // Get rid of it as its MAP_PRIVATE mapping may not reflect changes we're about to do.
+    WriterMutexLock mu(Thread::Current(), dex_lock_);
+    for (size_t i = 0; i < oat_files_.size(); ++i) {
+      if (oat_location == oat_files_[i]->GetLocation()) {
+        VLOG(class_linker) << "De-registering old OatFile: " << oat_location;
+        delete oat_files_[i];
+        oat_files_.erase(oat_files_.begin() + i);
+        break;
+      }
+    }
+  }
+
   // Generate the output oat file for the dex file
   VLOG(class_linker) << "Generating oat file " << oat_location << " for " << dex_location;
   if (!GenerateOatFile(dex_location, scoped_flock.GetFile().Fd(), oat_location)) {
