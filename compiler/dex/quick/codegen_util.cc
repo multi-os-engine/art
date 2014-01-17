@@ -1002,7 +1002,8 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       core_spill_mask_(0),
       fp_spill_mask_(0),
       first_lir_insn_(NULL),
-      last_lir_insn_(NULL) {
+      last_lir_insn_(NULL),
+      slow_paths_(arena, 32, kGrowableArraySlowPaths) {
   promotion_map_ = static_cast<PromotionMap*>
       (arena_->Alloc((cu_->num_dalvik_registers  + cu_->num_compiler_temps + 1) *
                       sizeof(promotion_map_[0]), ArenaAllocator::kAllocRegAlloc));
@@ -1160,6 +1161,10 @@ bool Mir2Lir::BadOverlap(RegLocation rl_src, RegLocation rl_dest) {
   DCHECK(rl_src.wide);
   DCHECK(rl_dest.wide);
   return (abs(mir_graph_->SRegToVReg(rl_src.s_reg_low) - mir_graph_->SRegToVReg(rl_dest.s_reg_low)) == 1);
+}
+
+void Mir2Lir::AddSlowPath(LIRSlowPath* slowpath) {
+  slow_paths_.Insert(slowpath);
 }
 
 }  // namespace art
