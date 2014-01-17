@@ -837,6 +837,8 @@ void Mir2Lir::MethodMIR2LIR() {
       next_bb = iter.Next();
     } while ((next_bb != NULL) && (next_bb->block_type == kDead));
   }
+  HandleSlowPaths();
+
   cu_->NewTimingSplit("Launchpads");
   HandleSuspendLaunchPads();
 
@@ -845,4 +847,15 @@ void Mir2Lir::MethodMIR2LIR() {
   HandleIntrinsicLaunchPads();
 }
 
+//
+// LIR Slow Path
+//
+
+LIR* LIRSlowPath::GenerateTargetLabel() {
+  LIR* target = m2l_->RawLIR(current_dex_pc_, kPseudoTargetLabel);
+  m2l_->AppendLIR(target);
+  fromfast_->target = target;
+  m2l_->SetCurrentDexPc(current_dex_pc_);
+  return target;
+}
 }  // namespace art

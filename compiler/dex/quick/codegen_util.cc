@@ -985,7 +985,9 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       core_spill_mask_(0),
       fp_spill_mask_(0),
       first_lir_insn_(NULL),
-      last_lir_insn_(NULL) {
+      last_lir_insn_(NULL),
+      slow_paths_(NULL),
+      last_slow_path_(NULL) {
   promotion_map_ = static_cast<PromotionMap*>
       (arena_->Alloc((cu_->num_dalvik_registers  + cu_->num_compiler_temps + 1) *
                       sizeof(promotion_map_[0]), ArenaAllocator::kAllocRegAlloc));
@@ -1119,6 +1121,15 @@ void Mir2Lir::InsertLIRAfter(LIR* current_lir, LIR* new_lir) {
   new_lir->next = current_lir->next;
   current_lir->next = new_lir;
   new_lir->next->prev = new_lir;
+}
+
+void Mir2Lir::AddSlowPath(LIRSlowPath* slowpath) {
+  if (last_slow_path_ == nullptr) {
+    slow_paths_ = last_slow_path_ = slowpath;
+  } else {
+    last_slow_path_->next_ = slowpath;
+    last_slow_path_ = slowpath;
+  }
 }
 
 }  // namespace art
