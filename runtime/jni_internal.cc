@@ -76,9 +76,6 @@ static const size_t kMonitorsMax = 4096;  // Arbitrary sanity check.
 static const size_t kLocalsInitial = 64;  // Arbitrary.
 static const size_t kLocalsMax = 512;  // Arbitrary sanity check.
 
-static const size_t kPinTableInitial = 16;  // Arbitrary.
-static const size_t kPinTableMax = 1024;  // Arbitrary sanity check.
-
 static size_t gGlobalsInitial = 512;  // Arbitrary.
 static size_t gGlobalsMax = 51200;  // Arbitrary sanity check. (Must fit in 16 bits.)
 
@@ -335,20 +332,6 @@ static jfieldID FindFieldID(const ScopedObjectAccess& soa, jclass jni_class, con
     return NULL;
   }
   return soa.EncodeField(field);
-}
-
-static void PinPrimitiveArray(const ScopedObjectAccess& soa, Array* array)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  JavaVMExt* vm = soa.Vm();
-  MutexLock mu(soa.Self(), vm->pins_lock);
-  vm->pin_table.Add(array);
-}
-
-static void UnpinPrimitiveArray(const ScopedObjectAccess& soa, Array* array)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  JavaVMExt* vm = soa.Vm();
-  MutexLock mu(soa.Self(), vm->pins_lock);
-  vm->pin_table.Remove(array);
 }
 
 static void ThrowAIOOBE(ScopedObjectAccess& soa, Array* array, jsize start,
@@ -2021,7 +2004,6 @@ class JNI {
     ScopedObjectAccess soa(env);
     String* s = soa.Decode<String*>(java_string);
     CharArray* chars = s->GetCharArray();
-    PinPrimitiveArray(soa, chars);
     if (is_copy != nullptr) {
       *is_copy = JNI_TRUE;
     }
@@ -2038,8 +2020,6 @@ class JNI {
   static void ReleaseStringChars(JNIEnv* env, jstring java_string, const jchar* chars) {
     CHECK_NON_NULL_ARGUMENT(GetStringUTFRegion, java_string);
     delete[] chars;
-    ScopedObjectAccess soa(env);
-    UnpinPrimitiveArray(soa, soa.Decode<String*>(java_string)->GetCharArray());
   }
 
   static const jchar* GetStringCritical(JNIEnv* env, jstring java_string, jboolean* is_copy) {
@@ -2199,12 +2179,10 @@ class JNI {
       // Re-decode in case the object moved since IncrementDisableGC waits for GC to complete.
       array = soa.Decode<Array*>(java_array);
     }
-    PinPrimitiveArray(soa, array);
     if (is_copy != nullptr) {
       *is_copy = JNI_FALSE;
     }
-    void* address = array->GetRawData(array->GetClass()->GetComponentSize());;
-    return address;
+    return array->GetRawData(array->GetClass()->GetComponentSize());
   }
 
   static void ReleasePrimitiveArrayCritical(JNIEnv* env, jarray array, void* elements, jint mode) {
@@ -2609,7 +2587,6 @@ class JNI {
                                    jboolean* is_copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     ArtArrayT* array = soa.Decode<ArtArrayT*>(java_array);
-    PinPrimitiveArray(soa, array);
     // Only make a copy if necessary.
     if (Runtime::Current()->GetHeap()->IsMovableObject(array)) {
       if (is_copy != nullptr) {
@@ -2639,20 +2616,19 @@ class JNI {
     size_t bytes = array->GetLength() * component_size;
     VLOG(heap) << "Release primitive array " << env << " array_data " << array_data
                << " elements " << reinterpret_cast<void*>(elements);
-    if (!is_copy && heap->IsMovableObject(array)) {
-      heap->DecrementDisableGC(soa.Self());
-    }
     // Don't need to copy if we had a direct pointer.
     if (mode != JNI_ABORT && is_copy) {
       memcpy(array_data, elements, bytes);
     }
     if (mode != JNI_COMMIT) {
+      // JNI commit doesn't release the backing array, don't decrement the GC count.
+      if (!is_copy && heap->IsMovableObject(array)) {
+        heap->DecrementDisableGC(soa.Self());
+      }
       if (is_copy) {
         delete[] reinterpret_cast<uint64_t*>(elements);
       }
     }
-    // TODO: Do we always unpin primitive array?
-    UnpinPrimitiveArray(soa, array);
   }
 
   template <typename JavaArrayT, typename JavaT, typename ArrayT>
@@ -3097,8 +3073,6 @@ JavaVMExt::JavaVMExt(Runtime* runtime, Runtime::ParsedOptions* options)
       force_copy(false),  // TODO: add a way to enable this
       trace(options->jni_trace_),
       work_around_app_jni_bugs(false),
-      pins_lock("JNI pin table lock", kPinTableLock),
-      pin_table("pin table", kPinTableInitial, kPinTableMax),
       globals_lock("JNI global reference table lock"),
       globals(gGlobalsInitial, gGlobalsMax, kGlobal),
       libraries_lock("JNI shared libraries map lock", kLoadLibraryLock),
@@ -3150,10 +3124,6 @@ void JavaVMExt::DumpForSigQuit(std::ostream& os) {
   os << "; workarounds are " << (work_around_app_jni_bugs ? "on" : "off");
   Thread* self = Thread::Current();
   {
-    MutexLock mu(self, pins_lock);
-    os << "; pins=" << pin_table.Size();
-  }
-  {
     ReaderMutexLock mu(self, globals_lock);
     os << "; globals=" << globals.Capacity();
   }
@@ -3200,10 +3170,6 @@ void JavaVMExt::DumpReferenceTables(std::ostream& os) {
   {
     MutexLock mu(self, weak_globals_lock_);
     weak_globals_.Dump(os);
-  }
-  {
-    MutexLock mu(self, pins_lock);
-    pin_table.Dump(os);
   }
 }
 
@@ -3382,10 +3348,6 @@ void JavaVMExt::VisitRoots(RootVisitor* visitor, void* arg) {
   {
     ReaderMutexLock mu(self, globals_lock);
     globals.VisitRoots(visitor, arg);
-  }
-  {
-    MutexLock mu(self, pins_lock);
-    pin_table.VisitRoots(visitor, arg);
   }
   // The weak_globals table is visited by the GC itself (because it mutates the table).
 }
