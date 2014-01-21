@@ -906,56 +906,24 @@ bool CompilerDriver::CanAccessInstantiableTypeWithoutChecks(uint32_t referrer_id
   return result;
 }
 
-static mirror::Class* ComputeCompilingMethodsClass(ScopedObjectAccess& soa,
-                                                   SirtRef<mirror::DexCache>& dex_cache,
-                                                   const DexCompilationUnit* mUnit)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  // The passed dex_cache is a hint, sanity check before asking the class linker that will take a
-  // lock.
-  if (dex_cache->GetDexFile() != mUnit->GetDexFile()) {
-    dex_cache.reset(mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile()));
-  }
-  SirtRef<mirror::ClassLoader>
-      class_loader(soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
-  const DexFile::MethodId& referrer_method_id =
-      mUnit->GetDexFile()->GetMethodId(mUnit->GetDexMethodIndex());
-  return mUnit->GetClassLinker()->ResolveType(*mUnit->GetDexFile(), referrer_method_id.class_idx_,
-                                              dex_cache, class_loader);
-}
-
-static mirror::ArtField* ComputeFieldReferencedFromCompilingMethod(
-    ScopedObjectAccess& soa, const DexCompilationUnit* mUnit, uint32_t field_idx)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  SirtRef<mirror::DexCache> dex_cache(soa.Self(), mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile()));
-  SirtRef<mirror::ClassLoader> class_loader(soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
-  return mUnit->GetClassLinker()->ResolveField(*mUnit->GetDexFile(), field_idx, dex_cache,
-                                               class_loader, false);
-}
-
-static mirror::ArtMethod* ComputeMethodReferencedFromCompilingMethod(ScopedObjectAccess& soa,
-                                                                     const DexCompilationUnit* mUnit,
-                                                                     uint32_t method_idx,
-                                                                     InvokeType type)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  SirtRef<mirror::DexCache> dex_cache(soa.Self(), mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile()));
-  SirtRef<mirror::ClassLoader> class_loader(soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
-  return mUnit->GetClassLinker()->ResolveMethod(*mUnit->GetDexFile(), method_idx, dex_cache,
-                                                class_loader, NULL, type);
-}
-
 bool CompilerDriver::ComputeInstanceFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit,
                                               bool is_put, int* field_offset, bool* is_volatile) {
   ScopedObjectAccess soa(Thread::Current());
+  const DexFile* dex_file = mUnit->GetDexFile();
+  ClassLinker* class_linker = mUnit->GetClassLinker();
+  SirtRef<mirror::DexCache> dex_cache(soa.Self(), class_linker->FindDexCache(*dex_file));
+  SirtRef<mirror::ClassLoader> class_loader(
+      soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
   // Conservative defaults.
   *field_offset = -1;
   *is_volatile = true;
   // Try to resolve field and ignore if an Incompatible Class Change Error (ie is static).
-  mirror::ArtField* resolved_field = ComputeFieldReferencedFromCompilingMethod(soa, mUnit, field_idx);
+  mirror::ArtField* resolved_field =
+      class_linker->ResolveField(*dex_file, field_idx, dex_cache, class_loader, false);
   if (resolved_field != NULL && !resolved_field->IsStatic()) {
-    SirtRef<mirror::DexCache> dex_cache(soa.Self(),
-                                        resolved_field->GetDeclaringClass()->GetDexCache());
+    uint32_t referrer_class_idx = dex_file->GetMethodId(mUnit->GetDexMethodIndex()).class_idx_;
     mirror::Class* referrer_class =
-        ComputeCompilingMethodsClass(soa, dex_cache, mUnit);
+        class_linker->ResolveType(*dex_file, referrer_class_idx, dex_cache, class_loader);
     if (referrer_class != NULL) {
       mirror::Class* fields_class = resolved_field->GetDeclaringClass();
       bool access_ok = referrer_class->CanAccess(fields_class) &&
@@ -996,6 +964,11 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
                                             bool* is_referrers_class, bool* is_volatile,
                                             bool* is_initialized) {
   ScopedObjectAccess soa(Thread::Current());
+  const DexFile* dex_file = mUnit->GetDexFile();
+  ClassLinker* class_linker = mUnit->GetClassLinker();
+  SirtRef<mirror::DexCache> dex_cache(soa.Self(), class_linker->FindDexCache(*dex_file));
+  SirtRef<mirror::ClassLoader> class_loader(
+      soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
   // Conservative defaults.
   *field_offset = -1;
   *storage_index = -1;
@@ -1003,11 +976,12 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
   *is_volatile = true;
   *is_initialized = false;
   // Try to resolve field and ignore if an Incompatible Class Change Error (ie isn't static).
-  mirror::ArtField* resolved_field = ComputeFieldReferencedFromCompilingMethod(soa, mUnit, field_idx);
+  mirror::ArtField* resolved_field =
+      class_linker->ResolveField(*dex_file, field_idx, dex_cache, class_loader, false);
   if (resolved_field != NULL && resolved_field->IsStatic()) {
-    SirtRef<mirror::DexCache> dex_cache(soa.Self(), resolved_field->GetDeclaringClass()->GetDexCache());
+    uint32_t referrer_class_idx = dex_file->GetMethodId(mUnit->GetDexMethodIndex()).class_idx_;
     mirror::Class* referrer_class =
-        ComputeCompilingMethodsClass(soa, dex_cache, mUnit);
+        class_linker->ResolveType(*dex_file, referrer_class_idx, dex_cache, class_loader);
     if (referrer_class != NULL) {
       mirror::Class* fields_class = resolved_field->GetDeclaringClass();
       if (fields_class == referrer_class) {
@@ -1041,32 +1015,31 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
           // in its static storage (which may fail if it doesn't have a slot for it)
           // TODO: for images we can elide the static storage base null check
           // if we know there's a non-null entry in the image
-          mirror::DexCache* dex_cache = mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile());
-          if (fields_class->GetDexCache() == dex_cache) {
+          if (fields_class->GetDexCache() == dex_cache.get()) {
             // common case where the dex cache of both the referrer and the field are the same,
             // no need to search the dex file
             *storage_index = fields_class->GetDexTypeIndex();
             *field_offset = resolved_field->GetOffset().Int32Value();
             *is_volatile = resolved_field->IsVolatile();
             *is_initialized = fields_class->IsInitialized() &&
-                CanAssumeTypeIsPresentInDexCache(*mUnit->GetDexFile(), *storage_index);
+                CanAssumeTypeIsPresentInDexCache(*dex_file, *storage_index);
             stats_->ResolvedStaticField();
             return true;
           }
           // Search dex file for localized ssb index, may fail if field's class is a parent
           // of the class mentioned in the dex file and there is no dex cache entry.
           const DexFile::StringId* string_id =
-              mUnit->GetDexFile()->FindStringId(FieldHelper(resolved_field).GetDeclaringClassDescriptor());
+              dex_file->FindStringId(FieldHelper(resolved_field).GetDeclaringClassDescriptor());
           if (string_id != NULL) {
             const DexFile::TypeId* type_id =
-               mUnit->GetDexFile()->FindTypeId(mUnit->GetDexFile()->GetIndexForStringId(*string_id));
+                dex_file->FindTypeId(dex_file->GetIndexForStringId(*string_id));
             if (type_id != NULL) {
               // medium path, needs check of static storage base being initialized
-              *storage_index = mUnit->GetDexFile()->GetIndexForTypeId(*type_id);
+              *storage_index = dex_file->GetIndexForTypeId(*type_id);
               *field_offset = resolved_field->GetOffset().Int32Value();
               *is_volatile = resolved_field->IsVolatile();
               *is_initialized = fields_class->IsInitialized() &&
-                  CanAssumeTypeIsPresentInDexCache(*mUnit->GetDexFile(), *storage_index);
+                  CanAssumeTypeIsPresentInDexCache(*dex_file, *storage_index);
               stats_->ResolvedStaticField();
               return true;
             }
@@ -1197,12 +1170,19 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
                                        int* vtable_idx, uintptr_t* direct_code,
                                        uintptr_t* direct_method) {
   ScopedObjectAccess soa(Thread::Current());
+  const DexFile* dex_file = mUnit->GetDexFile();
+  ClassLinker* class_linker = mUnit->GetClassLinker();
+  SirtRef<mirror::DexCache> dex_cache(soa.Self(), class_linker->FindDexCache(*dex_file));
+  SirtRef<mirror::ClassLoader> class_loader(
+      soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
+  // Conservative defaults.
   *vtable_idx = -1;
   *direct_code = 0;
   *direct_method = 0;
+  uint32_t method_idx = target_method->dex_method_index;
   mirror::ArtMethod* resolved_method =
-      ComputeMethodReferencedFromCompilingMethod(soa, mUnit, target_method->dex_method_index,
-                                                 *invoke_type);
+      class_linker->ResolveMethod(*dex_file, method_idx, dex_cache, class_loader, NULL,
+                                  *invoke_type);
   if (resolved_method != NULL) {
     if (*invoke_type == kVirtual || *invoke_type == kSuper) {
       *vtable_idx = resolved_method->GetMethodIndex();
@@ -1211,9 +1191,9 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
     }
     // Don't try to fast-path if we don't understand the caller's class or this appears to be an
     // Incompatible Class Change Error.
-    SirtRef<mirror::DexCache> dex_cache(soa.Self(), resolved_method->GetDeclaringClass()->GetDexCache());
+    uint32_t referrer_class_idx = dex_file->GetMethodId(mUnit->GetDexMethodIndex()).class_idx_;
     mirror::Class* referrer_class =
-        ComputeCompilingMethodsClass(soa, dex_cache, mUnit);
+        class_linker->ResolveType(*dex_file, referrer_class_idx, dex_cache, class_loader);
     bool icce = resolved_method->CheckIncompatibleClassChange(*invoke_type);
     if (referrer_class != NULL && !icce) {
       mirror::Class* methods_class = resolved_method->GetDeclaringClass();
@@ -1263,17 +1243,16 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
         if (enableVerifierBasedSharpening && (*invoke_type == kVirtual ||
                                               *invoke_type == kInterface)) {
           // Did the verifier record a more precise invoke target based on its type information?
-          const MethodReference caller_method(mUnit->GetDexFile(), mUnit->GetDexMethodIndex());
+          const MethodReference caller_method(dex_file, mUnit->GetDexMethodIndex());
           const MethodReference* devirt_map_target =
               verified_methods_data_->GetDevirtMap(caller_method, dex_pc);
           if (devirt_map_target != NULL) {
             SirtRef<mirror::DexCache> target_dex_cache(soa.Self(), mUnit->GetClassLinker()->FindDexCache(*devirt_map_target->dex_file));
-            SirtRef<mirror::ClassLoader> class_loader(soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
             mirror::ArtMethod* called_method =
-                mUnit->GetClassLinker()->ResolveMethod(*devirt_map_target->dex_file,
-                                                       devirt_map_target->dex_method_index,
-                                                       target_dex_cache, class_loader, NULL,
-                                                       kVirtual);
+                class_linker->ResolveMethod(*devirt_map_target->dex_file,
+                                            devirt_map_target->dex_method_index,
+                                            target_dex_cache, class_loader, NULL,
+                                            kVirtual);
             CHECK(called_method != NULL);
             CHECK(!called_method->IsAbstract());
             InvokeType orig_invoke_type = *invoke_type;
