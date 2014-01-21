@@ -36,6 +36,15 @@
     #define CALL_MACRO(name,index) $index
     #define LITERAL(value) $value
     #define MACRO_LITERAL(value) $$value
+
+    // Macx OS' doesn't like cfi_* directives
+    #define CFI_STARTPROC
+    #define CFI_ENDPROC
+    #define CFI_ADJUST_CFA_OFFSET(size)
+    #define CFI_DEF_CFA(reg,size)
+    #define CFI_DEF_CFA_REGISTER(reg)
+    #define CFI_RESTORE(reg)
+    #define CFI_REL_OFFSET(reg,size)
 #else
     // Regular gas(1) lets you name macro parameters.
     #define MACRO0(macro_name) .macro macro_name
@@ -56,6 +65,15 @@
     #define CALL_MACRO(name,index) name&
     #define LITERAL(value) $value
     #define MACRO_LITERAL(value) $value
+
+    // CFI support
+    #define CFI_STARTPROC .cfi_startproc
+    #define CFI_ENDPROC .cfi_endproc
+    #define CFI_ADJUST_CFA_OFFSET(size) .cfi_adjust_cfa_offset size
+    #define CFI_DEF_CFA(reg,size) .cfi_def_cfa reg,size
+    #define CFI_DEF_CFA_REGISTER(reg) .cfi_def_cfa_register reg
+    #define CFI_RESTORE(reg) .cfi_restore reg
+    #define CFI_REL_OFFSET(reg,size) .cfi_rel_offset reg,size
 #endif
 
     /* Cache alignment for function entry */
@@ -68,24 +86,24 @@ MACRO1(DEFINE_FUNCTION, c_name)
     .globl VAR(c_name, 0)
     ALIGN_FUNCTION_ENTRY
 VAR(c_name, 0):
-    .cfi_startproc
+    CFI_STARTPROC
 END_MACRO
 
 MACRO1(END_FUNCTION, c_name)
-    .cfi_endproc
+    CFI_ENDPROC
     .size \c_name, .-\c_name
 END_MACRO
 
 MACRO1(PUSH, reg)
     pushl REG_VAR(reg, 0)
-    .cfi_adjust_cfa_offset 4
-    .cfi_rel_offset REG_VAR(reg, 0), 0
+    CFI_ADJUST_CFA_OFFSET(4)
+    CFI_REL_OFFSET(REG_VAR(reg, 0), 0)
 END_MACRO
 
 MACRO1(POP, reg)
     popl REG_VAR(reg,0)
-    .cfi_adjust_cfa_offset -4
-    .cfi_restore REG_VAR(reg,0)
+    CFI_ADJUST_CFA_OFFSET(-4)
+    CFI_RESTORE(REG_VAR(reg,0))
 END_MACRO
 
 MACRO1(UNIMPLEMENTED,name)
@@ -93,10 +111,10 @@ MACRO1(UNIMPLEMENTED,name)
     .globl VAR(name, 0)
     ALIGN_FUNCTION_ENTRY
 VAR(name, 0):
-    .cfi_startproc
+    CFI_STARTPROC
     int3
     int3
-    .cfi_endproc
+    CFI_ENDPROC
     .size \name, .-\name
 END_MACRO
 

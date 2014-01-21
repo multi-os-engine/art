@@ -31,7 +31,7 @@ DEFINE_FUNCTION art_portable_invoke_stub
     PUSH ebp                      // save ebp
     PUSH ebx                      // save ebx
     mov %esp, %ebp                // copy value of stack pointer into base pointer
-    .cfi_def_cfa_register ebp
+    CFI_DEF_CFA_REGISTER(ebp)
     mov 20(%ebp), %ebx            // get arg array size
     addl LITERAL(28), %ebx        // reserve space for return addr, method*, ebx, and ebp in frame
     andl LITERAL(0xFFFFFFF0), %ebx    // align frame size to 16 bytes
@@ -69,7 +69,7 @@ END_FUNCTION art_portable_invoke_stub
 DEFINE_FUNCTION art_portable_proxy_invoke_handler
     PUSH ebp                        // Set up frame.
     movl %esp, %ebp
-    .cfi_def_cfa_register %ebp
+    CFI_DEF_CFA_REGISTER(%ebp)
     subl LITERAL(4), %esp           // Align stack
     SETUP_GOT                       // pushes ebx
     leal 8(%ebp), %edx              // %edx = ArtMethod** called_addr
@@ -82,8 +82,8 @@ DEFINE_FUNCTION art_portable_proxy_invoke_handler
     call SYMBOL(artPortableProxyInvokeHandler)@PLT  // (called, receiver, Thread*, &called)
     UNDO_SETUP_GOT
     leave
-    .cfi_restore %ebp
-    .cfi_def_cfa %esp, 4
+    CFI_RESTORE(%ebp)
+    CFI_DEF_CFA(%esp, 4)
     movd %eax, %xmm0              // Place return value also into floating point return value.
     movd %edx, %xmm1
     punpckldq %xmm1, %xmm0
@@ -93,7 +93,7 @@ END_FUNCTION art_portable_proxy_invoke_handler
 DEFINE_FUNCTION art_portable_resolution_trampoline
   PUSH ebp                        // Set up frame.
   movl %esp, %ebp
-  .cfi_def_cfa_register %ebp
+  CFI_DEF_CFA_REGISTER(%ebp)
   subl LITERAL(4), %esp           // Align stack
   SETUP_GOT                       // pushes ebx
   leal 8(%ebp), %edx              // %edx = ArtMethod** called_addr
@@ -106,8 +106,8 @@ DEFINE_FUNCTION art_portable_resolution_trampoline
   call SYMBOL(artPortableResolutionTrampoline)@PLT  // (called, receiver, Thread*, &called)
   UNDO_SETUP_GOT
   leave
-  .cfi_restore %ebp
-  .cfi_def_cfa %esp, 4
+  CFI_RESTORE(%ebp)
+  CFI_DEF_CFA(%esp, 4)
   testl %eax, %eax
   jz  resolve_fail
   jmp * %eax
@@ -118,7 +118,7 @@ END_FUNCTION art_portable_resolution_trampoline
 DEFINE_FUNCTION art_portable_to_interpreter_bridge
   PUSH ebp                        // Set up frame.
   movl %esp, %ebp
-  .cfi_def_cfa_register %ebp
+  CFI_DEF_CFA_REGISTER(%ebp)
   subl LITERAL(8), %esp           // Align stack
   SETUP_GOT
   leal 8(%ebp), %edx              // %edx = ArtMethod** called_addr
@@ -129,7 +129,7 @@ DEFINE_FUNCTION art_portable_to_interpreter_bridge
   call SYMBOL(artPortableToInterpreterBridge)@PLT  // (called, Thread*, &called)
   UNDO_SETUP_GOT
   leave
-  .cfi_restore %ebp
-  .cfi_def_cfa %esp, 4
+  CFI_RESTORE(%ebp)
+  CFI_DEF_CFA(%esp, 4)
   ret
 END_FUNCTION art_portable_to_interpreter_bridge

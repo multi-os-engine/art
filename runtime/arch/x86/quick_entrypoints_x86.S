@@ -29,7 +29,7 @@ MACRO0(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME)
     PUSH esi
     PUSH ebp
     subl  MACRO_LITERAL(16), %esp  // Grow stack by 4 words, bottom word will hold Method*
-    .cfi_adjust_cfa_offset 16
+    CFI_ADJUST_CFA_OFFSET(16)
 END_MACRO
 
     /*
@@ -41,7 +41,7 @@ MACRO0(SETUP_REF_ONLY_CALLEE_SAVE_FRAME)
     PUSH esi
     PUSH ebp
     subl  MACRO_LITERAL(16), %esp  // Grow stack by 4 words, bottom word will hold Method*
-    .cfi_adjust_cfa_offset 16
+    CFI_ADJUST_CFA_OFFSET(16)
 END_MACRO
 
 MACRO0(RESTORE_REF_ONLY_CALLEE_SAVE_FRAME)
@@ -49,7 +49,7 @@ MACRO0(RESTORE_REF_ONLY_CALLEE_SAVE_FRAME)
     POP ebp  // Restore callee saves (ebx is saved/restored by the upcall)
     POP esi
     POP edi
-    .cfi_adjust_cfa_offset -28
+    CFI_ADJUST_CFA_OFFSET(-28)
 END_MACRO
 
     /*
@@ -68,7 +68,7 @@ END_MACRO
 
 MACRO0(RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME)
     addl MACRO_LITERAL(4), %esp  // Remove padding
-    .cfi_adjust_cfa_offset -4
+    CFI_ADJUST_CFA_OFFSET(-4)
     POP ecx  // Restore args except eax
     POP edx
     POP ebx
@@ -86,10 +86,10 @@ MACRO0(DELIVER_PENDING_EXCEPTION)
     mov %esp, %ecx
     // Outgoing argument set up
     subl  MACRO_LITERAL(8), %esp             // Alignment padding
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     PUSH ecx                                 // pass SP
     pushl %fs:THREAD_SELF_OFFSET             // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     SETUP_GOT_NOSAVE                         // clobbers ebx (harmless here)
     call SYMBOL(artDeliverPendingExceptionFromCode)@PLT  // artDeliverPendingExceptionFromCode(Thread*, SP)
     int3                                     // unreached
@@ -101,10 +101,10 @@ MACRO2(NO_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
     mov %esp, %ecx
     // Outgoing argument set up
     subl  MACRO_LITERAL(8), %esp  // alignment padding
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     PUSH ecx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     SETUP_GOT_NOSAVE              // clobbers ebx (harmless here)
     call VAR(cxx_name, 1)@PLT     // cxx_name(Thread*, SP)
     int3                          // unreached
@@ -119,7 +119,7 @@ MACRO2(ONE_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
     PUSH eax                      // alignment padding
     PUSH ecx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                      // pass arg1
     SETUP_GOT_NOSAVE              // clobbers ebx (harmless here)
     call VAR(cxx_name, 1)@PLT     // cxx_name(arg1, Thread*, SP)
@@ -134,7 +134,7 @@ MACRO2(TWO_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
     // Outgoing argument set up
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass arg2
     PUSH eax                      // pass arg1
     SETUP_GOT_NOSAVE              // clobbers ebx (harmless here)
@@ -206,18 +206,18 @@ MACRO2(INVOKE_TRAMPOLINE, c_name, cxx_name)
     // Outgoing argument set up
     SETUP_GOT_NOSAVE
     subl MACRO_LITERAL(12), %esp  // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     pushl 32(%edx)                // pass caller Method*
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass arg2
     PUSH eax                      // pass arg1
     call VAR(cxx_name, 1)@PLT     // cxx_name(arg1, arg2, arg3, Thread*, SP)
     movl %edx, %edi               // save code pointer in EDI
     addl MACRO_LITERAL(36), %esp  // Pop arguments skip eax
-    .cfi_adjust_cfa_offset -36
+    CFI_ADJUST_CFA_OFFSET(-36)
     POP ecx  // Restore args except eax
     POP edx
     POP ebx
@@ -231,7 +231,7 @@ MACRO2(INVOKE_TRAMPOLINE, c_name, cxx_name)
     ret
 1:
     addl MACRO_LITERAL(4), %esp   // Pop code pointer off stack
-    .cfi_adjust_cfa_offset -4
+    CFI_ADJUST_CFA_OFFSET(-4)
     DELIVER_PENDING_EXCEPTION
     END_FUNCTION VAR(c_name, 0)
 END_MACRO
@@ -259,7 +259,7 @@ DEFINE_FUNCTION art_quick_invoke_stub
     PUSH ebp                      // save ebp
     PUSH ebx                      // save ebx
     mov %esp, %ebp                // copy value of stack pointer into base pointer
-    .cfi_def_cfa_register ebp
+    CFI_DEF_CFA_REGISTER(ebp)
     mov 20(%ebp), %ebx            // get arg array size
     addl LITERAL(28), %ebx        // reserve space for return addr, method*, ebx, and ebp in frame
     andl LITERAL(0xFFFFFFF0), %ebx    // align frame size to 16 bytes
@@ -279,7 +279,7 @@ DEFINE_FUNCTION art_quick_invoke_stub
     mov 12(%esp), %ebx            // copy arg3 into ebx
     call *METHOD_CODE_OFFSET(%eax) // call the method
     mov %ebp, %esp                // restore stack pointer
-    .cfi_def_cfa_register esp
+    CFI_DEF_CFA_REGISTER(esp)
     POP ebx                       // pop ebx
     POP ebp                       // pop ebp
     mov 20(%esp), %ecx            // get result pointer
@@ -303,13 +303,13 @@ MACRO3(NO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     SETUP_GOT_NOSAVE              // clobbers ebx (harmless here)
     // Outgoing argument set up
     subl MACRO_LITERAL(8), %esp   // push padding
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     call VAR(cxx_name, 1)@PLT     // cxx_name(Thread*, SP)
     addl MACRO_LITERAL(16), %esp  // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     CALL_MACRO(return_macro, 2)   // return or deliver exception
     END_FUNCTION VAR(c_name, 0)
@@ -324,11 +324,11 @@ MACRO3(ONE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     PUSH eax                      // push padding
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                      // pass arg1
     call VAR(cxx_name, 1)@PLT     // cxx_name(arg1, Thread*, SP)
     addl MACRO_LITERAL(16), %esp  // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     CALL_MACRO(return_macro, 2)   // return or deliver exception
     END_FUNCTION VAR(c_name, 0)
@@ -342,12 +342,12 @@ MACRO3(TWO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     // Outgoing argument set up
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass arg2
     PUSH eax                      // pass arg1
     call VAR(cxx_name, 1)@PLT     // cxx_name(arg1, arg2, Thread*, SP)
     addl MACRO_LITERAL(16), %esp  // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     CALL_MACRO(return_macro, 2)   // return or deliver exception
     END_FUNCTION VAR(c_name, 0)
@@ -359,17 +359,17 @@ MACRO3(THREE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     mov %esp, %ebx                // remember SP
     // Outgoing argument set up
     subl MACRO_LITERAL(12), %esp  // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH ebx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                      // pass arg3
     PUSH ecx                      // pass arg2
     PUSH eax                      // pass arg1
     SETUP_GOT_NOSAVE              // clobbers EBX
     call VAR(cxx_name, 1)@PLT     // cxx_name(arg1, arg2, arg3, Thread*, SP)
     addl MACRO_LITERAL(32), %esp  // pop arguments
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     CALL_MACRO(return_macro, 2)   // return or deliver exception
     END_FUNCTION VAR(c_name, 0)
@@ -445,11 +445,11 @@ slow_lock:
     PUSH eax                      // push padding
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                      // pass object
     call artLockObjectFromCode@PLT  // artLockObjectFromCode(object, Thread*, SP)
     addl MACRO_LITERAL(16), %esp  // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     RETURN_IF_EAX_ZERO
 END_FUNCTION art_quick_lock_object
@@ -479,11 +479,11 @@ slow_unlock:
     PUSH eax                      // push padding
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                      // pass object
     call artUnlockObjectFromCode@PLT  // artUnlockObjectFromCode(object, Thread*, SP)
     addl MACRO_LITERAL(16), %esp  // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     RETURN_IF_EAX_ZERO
 END_FUNCTION art_quick_unlock_object
@@ -495,7 +495,7 @@ DEFINE_FUNCTION art_quick_is_assignable
     PUSH eax                     // pass arg1 - checked class
     call SYMBOL(artIsAssignableFromCode)@PLT  // (Class* klass, Class* ref_klass)
     addl LITERAL(12), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -12
+    CFI_ADJUST_CFA_OFFSET(-12)
     ret
 END_FUNCTION art_quick_is_assignable
 
@@ -508,19 +508,19 @@ DEFINE_FUNCTION art_quick_check_cast
     testl %eax, %eax
     jz 1f                         // jump forward if not assignable
     addl LITERAL(12), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -12
+    CFI_ADJUST_CFA_OFFSET(-12)
     ret
 1:
     POP eax                       // pop arguments
     POP ecx
     addl LITERAL(4), %esp
-    .cfi_adjust_cfa_offset -12
+    CFI_ADJUST_CFA_OFFSET(-12)
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
     mov %esp, %edx
     // Outgoing argument set up
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass arg2
     PUSH eax                      // pass arg1
     call SYMBOL(artThrowClassCastException)@PLT // (Class* a, Class* b, Thread*, SP)
@@ -568,14 +568,14 @@ check_assignability:
     PUSH ecx
     PUSH edx
     subl LITERAL(8), %esp        // alignment padding
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     pushl CLASS_OFFSET(%edx)     // pass arg2 - type of the value to be stored
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ebx                     // pass arg1 - component type of the array
     SETUP_GOT_NOSAVE             // clobbers EBX
     call SYMBOL(artIsAssignableFromCode)@PLT  // (Class* a, Class* b)
     addl LITERAL(16), %esp       // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     testl %eax, %eax
     jz   throw_array_store_exception
     POP  edx
@@ -595,7 +595,7 @@ throw_array_store_exception:
     // Outgoing argument set up
     PUSH ecx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                      // pass arg2 - value
     PUSH eax                      // pass arg1 - array
     call SYMBOL(artThrowArrayStoreException)@PLT // (array, value, Thread*, SP)
@@ -609,7 +609,7 @@ DEFINE_FUNCTION art_quick_memcpy
     PUSH eax                      // pass arg1
     call SYMBOL(memcpy)@PLT       // (void*, const void*, size_t)
     addl LITERAL(12), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -12
+    CFI_ADJUST_CFA_OFFSET(-12)
     ret
 END_FUNCTION art_quick_memcpy
 
@@ -617,7 +617,7 @@ NO_ARG_DOWNCALL art_quick_test_suspend, artTestSuspendFromCode, ret
 
 DEFINE_FUNCTION art_quick_fmod
     subl LITERAL(12), %esp        // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH ebx                      // pass arg4 b.hi
     PUSH edx                      // pass arg3 b.lo
     PUSH ecx                      // pass arg2 a.hi
@@ -627,7 +627,7 @@ DEFINE_FUNCTION art_quick_fmod
     fstpl (%esp)                  // pop return value off fp stack
     movsd (%esp), %xmm0           // place into %xmm0
     addl LITERAL(28), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -28
+    CFI_ADJUST_CFA_OFFSET(-28)
     ret
 END_FUNCTION art_quick_fmod
 
@@ -640,7 +640,7 @@ DEFINE_FUNCTION art_quick_fmodf
     fstps (%esp)                  // pop return value off fp stack
     movss (%esp), %xmm0           // place into %xmm0
     addl LITERAL(12), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -12
+    CFI_ADJUST_CFA_OFFSET(-12)
     ret
 END_FUNCTION art_quick_fmodf
 
@@ -651,7 +651,7 @@ DEFINE_FUNCTION art_quick_l2d
     fstpl (%esp)                  // pop value off fp stack as double
     movsd (%esp), %xmm0           // place into %xmm0
     addl LITERAL(8), %esp         // pop arguments
-    .cfi_adjust_cfa_offset -8
+    CFI_ADJUST_CFA_OFFSET(-8)
     ret
 END_FUNCTION art_quick_l2d
 
@@ -662,7 +662,7 @@ DEFINE_FUNCTION art_quick_l2f
     fstps (%esp)                  // pop value off fp stack as a single
     movss (%esp), %xmm0           // place into %xmm0
     addl LITERAL(8), %esp         // pop argument
-    .cfi_adjust_cfa_offset -8
+    CFI_ADJUST_CFA_OFFSET(-8)
     ret
 END_FUNCTION art_quick_l2f
 
@@ -673,18 +673,18 @@ DEFINE_FUNCTION art_quick_d2l
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(art_d2l)@PLT      // (jdouble a)
     addl LITERAL(12), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -12
+    CFI_ADJUST_CFA_OFFSET(-12)
     ret
 END_FUNCTION art_quick_d2l
 
 DEFINE_FUNCTION art_quick_f2l
     subl LITERAL(8), %esp         // alignment padding
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     SETUP_GOT_NOSAVE              // clobbers EBX
     PUSH eax                      // pass arg1 a
     call SYMBOL(art_f2l)@PLT      // (jfloat a)
     addl LITERAL(12), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -12
+    CFI_ADJUST_CFA_OFFSET(-12)
     ret
 END_FUNCTION art_quick_f2l
 
@@ -704,7 +704,7 @@ END_FUNCTION art_quick_idivmod
 
 DEFINE_FUNCTION art_quick_ldiv
     subl LITERAL(12), %esp       // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH ebx                     // pass arg4 b.hi
     PUSH edx                     // pass arg3 b.lo
     PUSH ecx                     // pass arg2 a.hi
@@ -712,13 +712,13 @@ DEFINE_FUNCTION art_quick_ldiv
     SETUP_GOT_NOSAVE             // clobbers EBX
     call SYMBOL(artLdiv)@PLT     // (jlong a, jlong b)
     addl LITERAL(28), %esp       // pop arguments
-    .cfi_adjust_cfa_offset -28
+    CFI_ADJUST_CFA_OFFSET(-28)
     ret
 END_FUNCTION art_quick_ldiv
 
 DEFINE_FUNCTION art_quick_lmod
     subl LITERAL(12), %esp       // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH ebx                     // pass arg4 b.hi
     PUSH edx                     // pass arg3 b.lo
     PUSH ecx                     // pass arg2 a.hi
@@ -726,7 +726,7 @@ DEFINE_FUNCTION art_quick_lmod
     SETUP_GOT_NOSAVE             // clobbers EBX
     call SYMBOL(artLmod)@PLT     // (jlong a, jlong b)
     addl LITERAL(28), %esp       // pop arguments
-    .cfi_adjust_cfa_offset -28
+    CFI_ADJUST_CFA_OFFSET(-28)
     ret
 END_FUNCTION art_quick_lmod
 
@@ -782,10 +782,10 @@ DEFINE_FUNCTION art_quick_set32_instance
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     subl LITERAL(8), %esp         // alignment padding
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     PUSH ebx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     mov 32(%ebx), %ebx            // get referrer
     PUSH ebx                      // pass referrer
     PUSH edx                      // pass new_val
@@ -794,7 +794,7 @@ DEFINE_FUNCTION art_quick_set32_instance
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artSet32InstanceFromCode)@PLT  // (field_idx, Object*, new_val, referrer, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
     RETURN_IF_EAX_ZERO            // return or deliver exception
 END_FUNCTION art_quick_set32_instance
@@ -802,11 +802,11 @@ END_FUNCTION art_quick_set32_instance
 DEFINE_FUNCTION art_quick_set64_instance
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
     subl LITERAL(8), %esp         // alignment padding
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     PUSH esp                      // pass SP-8
     addl LITERAL(8), (%esp)       // fix SP on stack by adding 8
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ebx                      // pass high half of new_val
     PUSH edx                      // pass low half of new_val
     PUSH ecx                      // pass object
@@ -814,7 +814,7 @@ DEFINE_FUNCTION art_quick_set64_instance
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artSet64InstanceFromCode)@PLT  // (field_idx, Object*, new_val, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     RETURN_IF_EAX_ZERO            // return or deliver exception
 END_FUNCTION art_quick_set64_instance
@@ -823,10 +823,10 @@ DEFINE_FUNCTION art_quick_set_obj_instance
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     subl LITERAL(8), %esp         // alignment padding
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     PUSH ebx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     mov 32(%ebx), %ebx            // get referrer
     PUSH ebx                      // pass referrer
     PUSH edx                      // pass new_val
@@ -835,7 +835,7 @@ DEFINE_FUNCTION art_quick_set_obj_instance
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artSetObjInstanceFromCode)@PLT // (field_idx, Object*, new_val, referrer, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
     RETURN_IF_EAX_ZERO            // return or deliver exception
 END_FUNCTION art_quick_set_obj_instance
@@ -845,17 +845,17 @@ DEFINE_FUNCTION art_quick_get32_instance
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH ebx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                      // pass referrer
     PUSH ecx                      // pass object
     PUSH eax                      // pass field_idx
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artGet32InstanceFromCode)@PLT  // (field_idx, Object*, referrer, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_get32_instance
@@ -865,17 +865,17 @@ DEFINE_FUNCTION art_quick_get64_instance
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH ebx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                      // pass referrer
     PUSH ecx                      // pass object
     PUSH eax                      // pass field_idx
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artGet64InstanceFromCode)@PLT  // (field_idx, Object*, referrer, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_get64_instance
@@ -885,17 +885,17 @@ DEFINE_FUNCTION art_quick_get_obj_instance
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH ebx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                      // pass referrer
     PUSH ecx                      // pass object
     PUSH eax                      // pass field_idx
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artGetObjInstanceFromCode)@PLT // (field_idx, Object*, referrer, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_get_obj_instance
@@ -905,17 +905,17 @@ DEFINE_FUNCTION art_quick_set32_static
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH ebx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                      // pass referrer
     PUSH ecx                      // pass new_val
     PUSH eax                      // pass field_idx
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artSet32StaticFromCode)@PLT  // (field_idx, new_val, referrer, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
     RETURN_IF_EAX_ZERO            // return or deliver exception
 END_FUNCTION art_quick_set32_static
@@ -924,10 +924,10 @@ DEFINE_FUNCTION art_quick_set64_static
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     subl LITERAL(8), %esp         // alignment padding
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     PUSH ebx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     mov 32(%ebx), %ebx            // get referrer
     PUSH edx                      // pass high half of new_val
     PUSH ecx                      // pass low half of new_val
@@ -936,7 +936,7 @@ DEFINE_FUNCTION art_quick_set64_static
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artSet64StaticFromCode)@PLT  // (field_idx, referrer, new_val, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     RETURN_IF_EAX_ZERO            // return or deliver exception
 END_FUNCTION art_quick_set64_static
@@ -946,10 +946,10 @@ DEFINE_FUNCTION art_quick_set_obj_static
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
-    .cfi_adjust_cfa_offset 12
+    CFI_ADJUST_CFA_OFFSET(12)
     PUSH ebx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                      // pass referrer
     PUSH ecx                      // pass new_val
     PUSH eax                      // pass field_idx
@@ -966,13 +966,13 @@ DEFINE_FUNCTION art_quick_get32_static
     mov 32(%esp), %ecx            // get referrer
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass referrer
     PUSH eax                      // pass field_idx
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artGet32StaticFromCode)@PLT    // (field_idx, referrer, Thread*, SP)
     addl LITERAL(16), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_get32_static
@@ -983,13 +983,13 @@ DEFINE_FUNCTION art_quick_get64_static
     mov 32(%esp), %ecx            // get referrer
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass referrer
     PUSH eax                      // pass field_idx
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artGet64StaticFromCode)@PLT    // (field_idx, referrer, Thread*, SP)
     addl LITERAL(16), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_get64_static
@@ -1000,13 +1000,13 @@ DEFINE_FUNCTION art_quick_get_obj_static
     mov 32(%esp), %ecx            // get referrer
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass referrer
     PUSH eax                      // pass field_idx
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artGetObjStaticFromCode)@PLT   // (field_idx, referrer, Thread*, SP)
     addl LITERAL(16), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_get_obj_static
@@ -1015,7 +1015,7 @@ DEFINE_FUNCTION art_quick_proxy_invoke_handler
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME   // save frame and Method*
     PUSH esp                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass receiver
     PUSH eax                      // pass proxy method
     SETUP_GOT_NOSAVE              // clobbers EBX
@@ -1024,7 +1024,7 @@ DEFINE_FUNCTION art_quick_proxy_invoke_handler
     movd %edx, %xmm1
     punpckldq %xmm1, %xmm0
     addl LITERAL(44), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -44
+    CFI_ADJUST_CFA_OFFSET(-44)
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_proxy_invoke_handler
 
@@ -1046,7 +1046,7 @@ DEFINE_FUNCTION art_quick_resolution_trampoline
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
     PUSH esp                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass receiver
     PUSH eax                      // pass method
     SETUP_GOT_NOSAVE              // clobbers EBX
@@ -1074,7 +1074,7 @@ DEFINE_FUNCTION art_quick_to_interpreter_bridge
     PUSH eax                      // alignment padding
     PUSH edx                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                      // pass  method
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artQuickToInterpreterBridge)@PLT  // (method, Thread*, SP)
@@ -1082,7 +1082,7 @@ DEFINE_FUNCTION art_quick_to_interpreter_bridge
     movd %edx, %xmm1
     punpckldq %xmm1, %xmm0
     addl LITERAL(16), %esp        // pop arguments
-    .cfi_adjust_cfa_offset -16
+    CFI_ADJUST_CFA_OFFSET(-16)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_to_interpreter_bridge
@@ -1095,12 +1095,12 @@ DEFINE_FUNCTION art_quick_instrumentation_entry
     movl  %esp, %edx              // Save SP.
     PUSH eax                      // Save eax which will be clobbered by the callee-save method.
     subl LITERAL(8), %esp         // Align stack.
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     pushl 40(%esp)                // Pass LR.
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                      // Pass SP.
     pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // Pass receiver.
     PUSH eax                      // Pass Method*.
     SETUP_GOT_NOSAVE              // clobbers EBX
@@ -1125,32 +1125,32 @@ DEFINE_FUNCTION art_quick_instrumentation_exit
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME
     mov  %esp, %ecx               // Remember SP
     subl LITERAL(8), %esp         // Save float return value.
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     movd %xmm0, (%esp)
     PUSH edx                      // Save gpr return value.
     PUSH eax
     subl LITERAL(8), %esp         // Align stack
     movd %xmm0, (%esp)
     subl LITERAL(8), %esp         // Pass float return value.
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     movd %xmm0, (%esp)
     PUSH edx                      // Pass gpr return value.
     PUSH eax
     PUSH ecx                      // Pass SP.
     pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current.
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     SETUP_GOT_NOSAVE              // clobbers EBX
     call  SYMBOL(artInstrumentationMethodExitFromCode)@PLT  // (Thread*, SP, gpr_result, fpr_result)
     mov   %eax, %ecx              // Move returned link register.
     addl LITERAL(32), %esp        // Pop arguments.
-    .cfi_adjust_cfa_offset -32
+    CFI_ADJUST_CFA_OFFSET(-32)
     movl %edx, %ebx               // Move returned link register for deopt
                                   // (ebx is pretending to be our LR).
     POP eax                       // Restore gpr return value.
     POP edx
     movd (%esp), %xmm0            // Restore fpr return value.
     addl LITERAL(8), %esp
-    .cfi_adjust_cfa_offset -8
+    CFI_ADJUST_CFA_OFFSET(-8)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     addl LITERAL(4), %esp         // Remove fake return pc.
     jmp   *%ecx                   // Return.
@@ -1165,10 +1165,10 @@ DEFINE_FUNCTION art_quick_deoptimize
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
     mov  %esp, %ecx               // Remember SP.
     subl LITERAL(8), %esp         // Align stack.
-    .cfi_adjust_cfa_offset 8
+    CFI_ADJUST_CFA_OFFSET(8)
     PUSH ecx                      // Pass SP.
     pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
-    .cfi_adjust_cfa_offset 4
+    CFI_ADJUST_CFA_OFFSET(4)
     SETUP_GOT_NOSAVE              // clobbers EBX
     call SYMBOL(artDeoptimize)@PLT    // artDeoptimize(Thread*, SP)
     int3                          // Unreachable.
