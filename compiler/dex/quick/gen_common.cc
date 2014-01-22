@@ -1694,7 +1694,7 @@ void Mir2Lir::GenArithOpLong(Instruction::Code opcode, RegLocation rl_dest,
       break;
     case Instruction::MUL_LONG:
     case Instruction::MUL_LONG_2ADDR:
-      if (cu_->instruction_set == kThumb2) {
+      if (cu_->instruction_set != kMips) {
         GenMulLong(rl_dest, rl_src1, rl_src2);
         return;
       } else {
