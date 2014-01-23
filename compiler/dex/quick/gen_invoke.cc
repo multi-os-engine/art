@@ -1256,7 +1256,6 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
       return;
     }
   }
-  InvokeType original_type = info->type;  // avoiding mutation by ComputeInvokeInfo
   int call_state = 0;
   LIR* null_ck;
   LIR** p_null_ck = NULL;
@@ -1265,12 +1264,19 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
   // Explicit register usage
   LockCallTemps();
 
+  const MethodAnnotation& annotation = mir_graph_->GetMethodAnnotation(info->mir);
+#if 1
+  InvokeType original_type = static_cast<InvokeType>(annotation.invoke_type);
+  info->type = static_cast<InvokeType>(annotation.sharp_type);
+  MethodReference target_method(annotation.called_dex_file, annotation.called_method_idx);
+  bool fast_path = annotation.fast_path;
+#else
+  InvokeType original_type = info->type;  // avoiding mutation by ComputeInvoke
   DexCompilationUnit* cUnit = mir_graph_->GetCurrentDexCompilationUnit();
   MethodReference target_method(cUnit->GetDexFile(), info->index);
   int vtable_idx;
   uintptr_t direct_code;
   uintptr_t direct_method;
-  bool skip_this;
   bool fast_path =
       cu_->compiler_driver->ComputeInvokeInfo(mir_graph_->GetCurrentDexCompilationUnit(),
                                               current_dalvik_offset_,
@@ -1278,6 +1284,18 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
                                               &info->type, &target_method,
                                               &vtable_idx,
                                               &direct_code, &direct_method) && !SLOW_INVOKE_PATH;
+  CHECK_EQ(annotation.fast_path, fast_path ? 1u : 0u);
+  CHECK_EQ(annotation.invoke_type, static_cast<uint16_t>(original_type));
+  CHECK_EQ(annotation.sharp_type, static_cast<uint16_t>(info->type));
+  CHECK_EQ(annotation.vtable_idx, (vtable_idx == -1) ? 0u : static_cast<uint32_t>(vtable_idx));
+  CHECK_EQ(annotation.direct_code, direct_code);
+  CHECK_EQ(annotation.direct_method, direct_method);
+  CHECK(annotation.called_dex_file == target_method.dex_file);
+  CHECK(annotation.called_method_idx == target_method.dex_method_index);
+#endif
+
+  bool skip_this;
+  // TODO: Use method annotations.
   if (info->type == kInterface) {
     next_call_insn = fast_path ? NextInterfaceCallInsn : NextInterfaceCallInsnWithAccessCheck;
     skip_this = fast_path;
@@ -1301,20 +1319,19 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
   }
   if (!info->is_range) {
     call_state = GenDalvikArgsNoRange(info, call_state, p_null_ck,
-                                      next_call_insn, target_method,
-                                      vtable_idx, direct_code, direct_method,
+                                      next_call_insn, target_method, annotation.vtable_idx,
+                                      annotation.direct_code, annotation.direct_method,
                                       original_type, skip_this);
   } else {
     call_state = GenDalvikArgsRange(info, call_state, p_null_ck,
-                                    next_call_insn, target_method, vtable_idx,
-                                    direct_code, direct_method, original_type,
-                                    skip_this);
+                                    next_call_insn, target_method, annotation.vtable_idx,
+                                    annotation.direct_code, annotation.direct_method,
+                                    original_type, skip_this);
   }
   // Finish up any of the call sequence not interleaved in arg loading
   while (call_state >= 0) {
-    call_state = next_call_insn(cu_, info, call_state, target_method,
-                                vtable_idx, direct_code, direct_method,
-                                original_type);
+    call_state = next_call_insn(cu_, info, call_state, target_method, annotation.vtable_idx,
+                                annotation.direct_code, annotation.direct_method, original_type);
   }
   LIR* call_inst;
   if (cu_->instruction_set != kX86) {

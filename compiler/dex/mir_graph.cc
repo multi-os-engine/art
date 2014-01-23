@@ -1136,6 +1136,7 @@ CallInfo* MIRGraph::NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type,
   info->is_range = is_range;
   info->index = mir->dalvikInsn.vB;
   info->offset = mir->offset;
+  info->mir = mir;
   return info;
 }
 

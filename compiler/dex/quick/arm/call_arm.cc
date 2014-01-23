@@ -129,11 +129,8 @@ void ArmMir2Lir::GenPrintLabel(MIR* mir) {
 
 MIR* ArmMir2Lir::SpecialIGet(BasicBlock** bb, MIR* mir,
                              OpSize size, bool long_or_double, bool is_object) {
-  int32_t field_offset;
-  bool is_volatile;
-  uint32_t field_idx = mir->dalvikInsn.vC;
-  bool fast_path = FastInstance(field_idx, false, &field_offset, &is_volatile);
-  if (!fast_path || !(mir->optimization_flags & MIR_IGNORE_NULL_CHECK)) {
+  const IFieldAnnotation& annotation = mir_graph_->GetIFieldAnnotation(mir);
+  if (!annotation.fast_get || !(mir->optimization_flags & MIR_IGNORE_NULL_CHECK)) {
     return NULL;
   }
   RegLocation rl_obj = mir_graph_->GetSrc(mir, 0);
@@ -148,17 +145,14 @@ MIR* ArmMir2Lir::SpecialIGet(BasicBlock** bb, MIR* mir,
   // Point of no return - no aborts after this
   ArmMir2Lir::GenPrintLabel(mir);
   rl_obj = LoadArg(rl_obj);
-  GenIGet(field_idx, mir->optimization_flags, size, rl_dest, rl_obj, long_or_double, is_object);
+  GenIGet(mir, mir->optimization_flags, size, rl_dest, rl_obj, long_or_double, is_object);
   return GetNextMir(bb, mir);
 }
 
 MIR* ArmMir2Lir::SpecialIPut(BasicBlock** bb, MIR* mir,
                              OpSize size, bool long_or_double, bool is_object) {
-  int32_t field_offset;
-  bool is_volatile;
-  uint32_t field_idx = mir->dalvikInsn.vC;
-  bool fast_path = FastInstance(field_idx, false, &field_offset, &is_volatile);
-  if (!fast_path || !(mir->optimization_flags & MIR_IGNORE_NULL_CHECK)) {
+  const IFieldAnnotation& annotation = mir_graph_->GetIFieldAnnotation(mir);
+  if (!annotation.fast_put || !(mir->optimization_flags & MIR_IGNORE_NULL_CHECK)) {
     return NULL;
   }
   RegLocation rl_src;
@@ -182,7 +176,7 @@ MIR* ArmMir2Lir::SpecialIPut(BasicBlock** bb, MIR* mir,
   ArmMir2Lir::GenPrintLabel(mir);
   rl_obj = LoadArg(rl_obj);
   rl_src = LoadArg(rl_src);
-  GenIPut(field_idx, mir->optimization_flags, size, rl_src, rl_obj, long_or_double, is_object);
+  GenIPut(mir, mir->optimization_flags, size, rl_src, rl_obj, long_or_double, is_object);
   return GetNextMir(bb, mir);
 }
 

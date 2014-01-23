@@ -14,8 +14,12 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include "compiler_internals.h"
 #include "dataflow_iterator-inl.h"
+#include "dex_instruction.h"
+#include "dex_instruction-inl.h"
+#include "dex/verified_method.h"
 #include "dex/quick/dex_file_method_inliner.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 
@@ -1080,6 +1084,213 @@ bool MIRGraph::SkipCompilation(Runtime::CompilerFilter compiler_filter) {
   }
 
   return ComputeSkipCompilation(&stats, skip_compilation);
+}
+
+void MIRGraph::DoAnnotateUsedFields() {
+  // All IGET/IPUT/SGET/SPUT instructions take 2 code units and there must be a RETURN as well.
+  uint32_t max_refs = (current_code_item_->insns_size_in_code_units_ - 1u) / 2u;
+
+  // Find IGET/IPUT/SGET/SPUT insns, store IGET/IPUT at the beginning, SGET/SPUT at the end.
+  std::vector<MIR*> field_refs;
+  size_t ifield_pos = 0u;
+  size_t sfield_pos = max_refs;
+  AllNodesIterator iter(this);
+  for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
+    if (bb->block_type != kDalvikByteCode) {
+      continue;
+    }
+    for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+      if (mir->dalvikInsn.opcode >= Instruction::IGET &&
+          mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) {
+        if (UNLIKELY(field_refs.empty())) {
+          field_refs.resize(max_refs, nullptr);
+        }
+        const Instruction* insn = Instruction::At(current_code_item_->insns_ + mir->offset);
+        if (mir->dalvikInsn.opcode <= Instruction::IPUT_SHORT) {
+          field_refs[ifield_pos++] = mir;
+          mir->meta.field_idx = insn->VRegC_22c();
+        } else {
+          field_refs[--sfield_pos] = mir;
+          mir->meta.field_idx = insn->VRegB_21c();
+        }
+        DCHECK_LE(ifield_pos, sfield_pos);
+      }
+    }
+  }
+
+  // Sort MIRs by field index.
+  struct Comparator {
+    bool operator()(MIR* lhs, MIR* rhs) const {
+      return lhs->meta.field_idx < rhs->meta.field_idx;
+    }
+  };
+
+  if (ifield_pos != 0u) {
+    // Find and count unique references, set annotation indexes for duplicates.
+    std::sort(field_refs.begin(), field_refs.begin() + ifield_pos, Comparator());
+    MIR* last_unique_mir = field_refs[0];
+    size_t count = 1u;
+    for (size_t pos = 1u; pos != ifield_pos; ++pos) {
+      MIR* mir = field_refs[pos];
+      if (Comparator()(last_unique_mir, mir)) {
+        last_unique_mir = mir;
+        field_refs[count] = mir;
+        ++count;
+      } else {
+        mir->meta.ifield_annotation = count - 1u;
+      }
+    }
+
+    // Prepare unique annotations, set annotation indexes for their MIRs.
+    DCHECK(ifield_annotations_.empty());
+    ifield_annotations_.reserve(count);
+    for (size_t pos = 0u; pos != count; ++pos) {
+      MIR* mir = field_refs[pos];
+      ifield_annotations_.push_back(IFieldAnnotation::Unresolved(mir->meta.field_idx));
+      mir->meta.ifield_annotation = pos;
+    }
+
+    // Annotate fields.
+    cu_->compiler_driver->ComputeInstanceFieldAnnotations(GetCurrentDexCompilationUnit(),
+                                                          &ifield_annotations_[0], count);
+  }
+
+  if (sfield_pos != max_refs) {
+    // Find and count unique references, set annotation indexes for duplicates.
+    std::sort(field_refs.begin() + sfield_pos, field_refs.end(), Comparator());
+    MIR* last_unique_mir = field_refs[sfield_pos];
+    size_t count = 1u;
+    for (size_t pos = sfield_pos + 1u; pos != max_refs; ++pos) {
+      MIR* mir = field_refs[pos];
+      if (Comparator()(last_unique_mir, mir)) {
+        last_unique_mir = mir;
+        field_refs[sfield_pos + count] = mir;
+        ++count;
+      } else {
+        mir->meta.ifield_annotation = count - 1u;
+      }
+    }
+
+    // Prepare unique annotations, set annotation indexes for their MIRs.
+    DCHECK(sfield_annotations_.empty());
+    sfield_annotations_.reserve(count);
+    for (size_t pos = sfield_pos; pos != sfield_pos + count; ++pos) {
+      MIR* mir = field_refs[pos];
+      sfield_annotations_.push_back(SFieldAnnotation::Unresolved(mir->meta.field_idx));
+      mir->meta.ifield_annotation = pos - sfield_pos;
+    }
+
+    // Annotate fields.
+    cu_->compiler_driver->ComputeStaticFieldAnnotations(GetCurrentDexCompilationUnit(),
+                                                        &sfield_annotations_[0], count);
+  }
+}
+
+void MIRGraph::DoAnnotateCalledMethods() {
+  // All INVOKE instructions take 3 code units and there must be a RETURN as well.
+  uint32_t max_refs = (current_code_item_->insns_size_in_code_units_ - 1u) / 3u;
+
+  // Find INVOKE insns and their devirtualization targets.
+  std::vector<MIR*> method_refs;
+  size_t invoke_count = 0u;
+  AllNodesIterator iter(this);
+  for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
+    if (bb->block_type != kDalvikByteCode) {
+      continue;
+    }
+    for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+      if (mir->dalvikInsn.opcode >= Instruction::INVOKE_VIRTUAL &&
+          mir->dalvikInsn.opcode <= Instruction::INVOKE_INTERFACE_RANGE &&
+          mir->dalvikInsn.opcode != Instruction::RETURN_VOID_BARRIER) {
+        if (UNLIKELY(method_refs.empty())) {
+          method_refs.resize(max_refs, nullptr);
+        }
+        method_refs[invoke_count++] = mir;
+
+        // Decode target method index and invoke type.
+        const Instruction* insn = Instruction::At(current_code_item_->insns_ + mir->offset);
+        uint16_t target_method_idx;
+        uint16_t invoke_type_idx;
+        if (mir->dalvikInsn.opcode <= Instruction::INVOKE_INTERFACE) {
+          target_method_idx = insn->VRegB_35c();
+          invoke_type_idx = mir->dalvikInsn.opcode - Instruction::INVOKE_VIRTUAL;
+        } else {
+          target_method_idx = insn->VRegB_3rc();
+          invoke_type_idx = mir->dalvikInsn.opcode - Instruction::INVOKE_VIRTUAL_RANGE;
+        }
+        static const uint16_t invoke_types[] = { kVirtual, kSuper, kDirect, kStatic, kInterface };
+        mir->meta.invoke_order.target_method_idx = target_method_idx;
+        mir->meta.invoke_order.invoke_type = invoke_types[invoke_type_idx];
+
+        // Find devirtualization target.
+        // TODO: Both the devirt map and MIRs are ordered by the dex pc here. Keep an iterator
+        // to devirt targets and increment it as needed instead of making O(log n) lookups.
+        const VerifiedMethod* verified_method = GetCurrentDexCompilationUnit()->GetVerifiedMethod();
+        mir->meta.invoke_order.devirt_target = verified_method->GetDevirtTarget(mir->offset);
+      }
+    }
+  }
+
+  if (method_refs.empty()) {
+    return;
+  }
+
+  // Sort INVOKEs by method index, then by opcode, then by devirtualization target.
+  struct Comparator {
+    bool operator()(const MIR* lhs, const MIR* rhs) const {
+      if (lhs->meta.invoke_order.target_method_idx != rhs->meta.invoke_order.target_method_idx) {
+        return lhs->meta.invoke_order.target_method_idx < rhs->meta.invoke_order.target_method_idx;
+      }
+      if (lhs->dalvikInsn.opcode != rhs->dalvikInsn.opcode) {
+        return lhs->dalvikInsn.opcode < rhs->dalvikInsn.opcode;
+      }
+      const MethodReference* lhs_devirt_target = lhs->meta.invoke_order.devirt_target;
+      const MethodReference* rhs_devirt_target = rhs->meta.invoke_order.devirt_target;
+      if (lhs_devirt_target != rhs_devirt_target) {
+        if (lhs_devirt_target == nullptr) {
+          return true;
+        }
+        if (rhs_devirt_target == nullptr) {
+          return false;
+        }
+        return devirt_cmp(*lhs_devirt_target, *rhs_devirt_target);
+      }
+      return false;
+    }
+    MethodReferenceComparator devirt_cmp;
+  };
+
+  // Find and count unique references, set annotation indexes for duplicates.
+  std::sort(method_refs.begin(), method_refs.begin() + invoke_count, Comparator());
+  MIR* last_unique_mir = method_refs[0];
+  size_t count = 1u;
+  for (size_t pos = 1u; pos != invoke_count; ++pos) {
+    MIR* mir = method_refs[pos];
+    if (Comparator()(last_unique_mir, mir)) {
+      last_unique_mir = mir;
+      method_refs[count] = mir;
+      ++count;
+    } else {
+      mir->meta.invoke_annotation = count - 1u;
+    }
+  }
+
+  // Prepare unique annotations, set annotation indexes for their MIRs.
+  DCHECK(invoke_annotations_.empty());
+  invoke_annotations_.reserve(count);
+  for (size_t pos = 0u; pos != count; ++pos) {
+    MIR* mir = method_refs[pos];
+    invoke_annotations_.push_back(MethodAnnotation::Unresolved(
+        mir->meta.invoke_order.target_method_idx, mir->meta.invoke_order.invoke_type));
+    if (mir->meta.invoke_order.devirt_target != nullptr) {
+      MethodAnnotation* annotation = &invoke_annotations_.back();
+      annotation->called_dex_file = mir->meta.invoke_order.devirt_target->dex_file;
+      annotation->called_method_idx = mir->meta.invoke_order.devirt_target->dex_method_index;
+    }
+    mir->meta.invoke_annotation = pos;
+  }
+  cu_->compiler_driver->ComputeMethodAnnotations(GetCurrentDexCompilationUnit(),
+                                                 &invoke_annotations_[0], count);
 }
 
 }  // namespace art

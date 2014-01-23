@@ -22,6 +22,8 @@
 #include "compiler_ir.h"
 #include "arena_bit_vector.h"
 #include "growable_array.h"
+#include "invoke_type.h"
+#include "mir_annotations.h"
 
 namespace art {
 
@@ -257,6 +259,20 @@ struct MIR {
     MIR* throw_insn;
     // Fused cmp branch condition.
     ConditionCode ccode;
+    // Annotation temporary for sorting field references.
+    uint32_t field_idx;
+    // IGET/IPUT annotation index, points to MIRGraph::ifield_annotations_.
+    uint32_t ifield_annotation;
+    // SGET/SPUT annotation index, points to MIRGraph::sfield_annotations_.
+    uint32_t sfield_annotation;
+    // Annotation temporary for sorting invokes.
+    struct {
+      uint16_t target_method_idx;
+      uint16_t invoke_type;
+      const MethodReference* devirt_target;
+    } invoke_order;
+    // INVOKE data index, points to MIRGraph::invoke_annotations_.
+    uint32_t invoke_annotation;
   } meta;
 };
 
@@ -356,6 +372,7 @@ struct CallInfo {
   bool skip_this;
   bool is_range;
   DexOffset offset;      // Offset in code units.
+  MIR* mir;
 };
 
 
@@ -464,6 +481,26 @@ class MIRGraph {
    * @param suffix does the filename require a suffix or not (default = nullptr).
    */
   void DumpCFG(const char* dir_prefix, bool all_blocks, const char* suffix = nullptr);
+
+  void DoAnnotateUsedFields();
+
+
+  const IFieldAnnotation& GetIFieldAnnotation(MIR* mir) {
+    DCHECK_LT(mir->meta.ifield_annotation, ifield_annotations_.size());
+    return ifield_annotations_[mir->meta.ifield_annotation];
+  }
+
+  const SFieldAnnotation& GetSFieldAnnotation(MIR* mir) {
+    DCHECK_LT(mir->meta.sfield_annotation, sfield_annotations_.size());
+    return sfield_annotations_[mir->meta.sfield_annotation];
+  }
+
+  void DoAnnotateCalledMethods();
+
+  const MethodAnnotation& GetMethodAnnotation(MIR* mir) {
+    DCHECK_LT(mir->meta.invoke_annotation, invoke_annotations_.size());
+    return invoke_annotations_[mir->meta.invoke_annotation];
+  }
 
   void InitRegLocations();
 
@@ -836,6 +873,9 @@ class MIRGraph {
   ArenaAllocator* arena_;
   int backward_branches_;
   int forward_branches_;
+  std::vector<IFieldAnnotation> ifield_annotations_;
+  std::vector<SFieldAnnotation> sfield_annotations_;
+  std::vector<MethodAnnotation> invoke_annotations_;
 };
 
 }  // namespace art

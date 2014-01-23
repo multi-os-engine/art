@@ -32,6 +32,7 @@
 #include "jni_internal.h"
 #include "object_utils.h"
 #include "runtime.h"
+#include "dex/mir_annotations.h"
 #include "gc/accounting/card_table-inl.h"
 #include "gc/accounting/heap_bitmap.h"
 #include "gc/space/space.h"
@@ -182,6 +183,12 @@ class AOTCompilationStats {
     unresolved_instance_fields_++;
   }
 
+  void ResolvedInstanceFields(size_t resolved, size_t total) {
+    STATS_LOCK();
+    resolved_instance_fields_ += resolved;
+    unresolved_instance_fields_ += total - resolved;
+  }
+
   void ResolvedLocalStaticField() {
     STATS_LOCK();
     resolved_local_static_fields_++;
@@ -195,6 +202,13 @@ class AOTCompilationStats {
   void UnresolvedStaticField() {
     STATS_LOCK();
     unresolved_static_fields_++;
+  }
+
+  void ResolvedStaticFields(size_t local, size_t resolved, size_t total) {
+    STATS_LOCK();
+    resolved_local_static_fields_ += local;
+    resolved_static_fields_ += resolved;
+    unresolved_static_fields_ += total - local - resolved;
   }
 
   // Indicate that type information from the verifier led to devirtualization.
@@ -224,6 +238,24 @@ class AOTCompilationStats {
     DCHECK(type == kVirtual || type == kInterface || type == kSuper);
     STATS_LOCK();
     virtual_made_direct_[type]++;
+  }
+
+  void ResolvedMethods(const size_t (&devirtualized)[kMaxInvokeType + 1],
+                       const size_t (&other_resolved)[kMaxInvokeType + 1],
+                       const size_t (&total)[kMaxInvokeType + 1],
+                       size_t precise_type_devirtualized) {
+    DCHECK_EQ(devirtualized[kStatic], 0u);
+    DCHECK_EQ(devirtualized[kDirect], 0u);
+    STATS_LOCK();
+    for (size_t type = 0; type <= kMaxInvokeType; ++type) {
+      size_t devirt = devirtualized[type];
+      size_t resolved = devirt + other_resolved[type];
+      size_t unresolved = total[type] - resolved;
+      virtual_made_direct_[type] += devirt;
+      resolved_methods_[type] += resolved;
+      unresolved_methods_[type] += unresolved;
+    }
+    type_based_devirtualization_ += precise_type_devirtualized;
   }
 
   // Indicate that a method of the given type was able to call directly into boot.
@@ -1028,6 +1060,63 @@ bool CompilerDriver::ComputeInstanceFieldInfo(uint32_t field_idx, const DexCompi
   return false;  // Incomplete knowledge needs slow path.
 }
 
+void CompilerDriver::ComputeInstanceFieldAnnotations(const DexCompilationUnit* mUnit,
+                                                     IFieldAnnotation* annotations, size_t count) {
+  if (kIsDebugBuild) {
+    CHECK(annotations != nullptr);
+    CHECK_NE(count, 0u);
+    for (auto it = annotations, end = annotations + count; it != end; ++it) {
+      IFieldAnnotation unresolved = IFieldAnnotation::Unresolved(it->field_idx);
+      DCHECK_EQ(memcmp(&unresolved, &*it, sizeof(*it)), 0);
+    }
+  }
+
+  const DexFile* dex_file = mUnit->GetDexFile();
+  ClassLinker* class_linker = mUnit->GetClassLinker();
+  uint32_t referrer_class_idx = dex_file->GetMethodId(mUnit->GetDexMethodIndex()).class_idx_;
+
+  // We're going to resolve fields and check access in a tight loop. It's better to hold
+  // the lock and needed references once than re-acquiring them again and again.
+  ScopedObjectAccess soa(Thread::Current());
+  SirtRef<mirror::DexCache> dex_cache(soa.Self(), class_linker->FindDexCache(*dex_file));
+  SirtRef<mirror::ClassLoader> class_loader(
+      soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
+  SirtRef<mirror::Class> referrer_class(soa.Self(),
+      class_linker->ResolveType(*dex_file, referrer_class_idx, dex_cache, class_loader));
+  if (UNLIKELY(referrer_class.get() == nullptr)) {
+    // Clean up any exception left by type resolution
+    DCHECK(soa.Self()->IsExceptionPending());
+    soa.Self()->ClearException();
+    stats_->ResolvedInstanceFields(0u, count);
+    return;
+  }
+
+  size_t resolved = 0u;
+  for (auto it = annotations, end = annotations + count; it != end; ++it) {
+    uint32_t field_idx = it->field_idx;
+    mirror::ArtField* resolved_field =
+        class_linker->ResolveField(*dex_file, field_idx, dex_cache, class_loader, false);
+    if (UNLIKELY(resolved_field == nullptr)) {
+      DCHECK(soa.Self()->IsExceptionPending());
+      soa.Self()->ClearException();
+      continue;
+    }
+    DCHECK(!soa.Self()->IsExceptionPending());
+    if (UNLIKELY(resolved_field->IsStatic())) {
+      continue;
+    }
+    mirror::Class* fields_class = resolved_field->GetDeclaringClass();
+    if (referrer_class->CanAccessResolvedField<false>(fields_class, resolved_field, field_idx)) {
+      it->fast_get = 1u;
+      it->is_volatile = resolved_field->IsVolatile() ? 1u : 0u;
+      it->field_offset = resolved_field->GetOffset().Int32Value();
+      it->fast_put = (!resolved_field->IsFinal() || fields_class == referrer_class.get()) ? 1u : 0u;
+      ++resolved;
+    }
+  }
+  stats_->ResolvedInstanceFields(resolved, count);
+}
+
 bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit,
                                             bool is_put, int* field_offset, int* storage_index,
                                             bool* is_referrers_class, bool* is_volatile,
@@ -1103,6 +1192,102 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
   }
   stats_->UnresolvedStaticField();
   return false;  // Incomplete knowledge needs slow path.
+}
+
+void CompilerDriver::ComputeStaticFieldAnnotations(const DexCompilationUnit* mUnit,
+                                                   SFieldAnnotation* annotations, size_t count) {
+  if (kIsDebugBuild) {
+    CHECK(annotations != nullptr);
+    CHECK_NE(count, 0u);
+    for (auto it = annotations, end = annotations + count; it != end; ++it) {
+      SFieldAnnotation unresolved = SFieldAnnotation::Unresolved(it->field_idx);
+      DCHECK_EQ(memcmp(&unresolved, &*it, sizeof(*it)), 0);
+    }
+  }
+
+  const DexFile* dex_file = mUnit->GetDexFile();
+  ClassLinker* class_linker = mUnit->GetClassLinker();
+  uint32_t referrer_class_idx = dex_file->GetMethodId(mUnit->GetDexMethodIndex()).class_idx_;
+
+  // We're going to resolve fields and check access in a tight loop. It's better to hold
+  // the lock and needed references once than re-acquiring them again and again.
+  ScopedObjectAccess soa(Thread::Current());
+  SirtRef<mirror::DexCache> dex_cache(soa.Self(), class_linker->FindDexCache(*dex_file));
+  SirtRef<mirror::ClassLoader> class_loader(
+      soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
+  SirtRef<mirror::Class> referrer_class(soa.Self(),
+      class_linker->ResolveType(*dex_file, referrer_class_idx, dex_cache, class_loader));
+  if (UNLIKELY(referrer_class.get() == nullptr)) {
+    DCHECK(soa.Self()->IsExceptionPending());
+    soa.Self()->ClearException();
+    stats_->ResolvedStaticFields(0u, 0u, count);
+    return;
+  }
+
+  size_t local = 0u;
+  size_t resolved = 0u;
+  for (auto it = annotations, end = annotations + count; it != end; ++it) {
+    uint32_t field_idx = it->field_idx;
+    mirror::ArtField* resolved_field =
+        class_linker->ResolveField(*dex_file, field_idx, dex_cache, class_loader, false);
+    if (UNLIKELY(resolved_field == nullptr)) {
+      // Clean up the exception left by field resolution
+      DCHECK(soa.Self()->IsExceptionPending());
+      soa.Self()->ClearException();
+      continue;
+    }
+    DCHECK(!soa.Self()->IsExceptionPending());
+    if (UNLIKELY(!resolved_field->IsStatic())) {
+      continue;
+    }
+    mirror::Class* fields_class = resolved_field->GetDeclaringClass();
+    if (fields_class == referrer_class.get()) {
+      it->fast_get = 1u;
+      it->fast_put = 1u;
+      it->is_referrers_class = 1u;  // implies no worrying about class initialization
+      it->is_initialized = 1u;
+      it->is_volatile = resolved_field->IsVolatile() ? 1u : 0u;
+      it->field_offset = resolved_field->GetOffset().Int32Value();
+      it->storage_index = fields_class->GetDexTypeIndex();  // Not needed but store anyway.
+      ++local;
+      continue;
+    }
+    if (referrer_class->CanAccessResolvedField<false>(fields_class, resolved_field, field_idx)) {
+      // We have the resolved field, we must make it into a index for the referrer
+      // in its static storage (which may fail if it doesn't have a slot for it)
+      // TODO: for images we can elide the static storage base null check
+      // if we know there's a non-null entry in the image
+      if (LIKELY(fields_class->GetDexCache() == dex_cache.get())) {
+        // common case where the dex cache of both the referrer and the field are the same,
+        // no need to search the dex file
+        it->storage_index = fields_class->GetDexTypeIndex();
+      } else {
+        // Search dex file for localized ssb index, may fail if field's class is a parent
+        // of the class mentioned in the dex file and there is no dex cache entry.
+        const DexFile::StringId* string_id =
+            dex_file->FindStringId(FieldHelper(resolved_field).GetDeclaringClassDescriptor());
+        if (string_id == nullptr) {
+          continue;
+        }
+        const DexFile::TypeId* type_id =
+           dex_file->FindTypeId(dex_file->GetIndexForStringId(*string_id));
+        if (type_id == nullptr) {
+          continue;
+        }
+        // medium path, needs check of static storage base being initialized
+        it->storage_index = dex_file->GetIndexForTypeId(*type_id);
+      }
+      it->fast_get = 1u;
+      it->fast_put = resolved_field->IsFinal() ? 0u : 1u;
+      DCHECK_EQ(it->is_referrers_class, 0u);
+      it->is_volatile = resolved_field->IsVolatile() ? 1u : 0u;
+      it->field_offset = resolved_field->GetOffset().Int32Value();
+      it->is_initialized = fields_class->IsInitialized() &&
+          CanAssumeTypeIsPresentInDexCache(*dex_file, it->storage_index);
+      ++resolved;
+    }
+  }
+  stats_->ResolvedStaticFields(local, resolved, count);
 }
 
 void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType sharp_type,
@@ -1211,6 +1396,22 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
       }
     }
   }
+}
+
+void CompilerDriver::GetCodeAndMethodForDirectCall(const DexFile* dex_file, InvokeType sharp_type,
+                                                   bool no_guarantee_of_dex_cache_entry,
+                                                   mirror::Class* referrer_class,
+                                                   mirror::ArtMethod* method,
+                                                   MethodAnnotation* annotation) {
+  MethodReference target_method(dex_file, annotation->method_idx);
+  InvokeType invoke_type = static_cast<InvokeType>(annotation->invoke_type);
+  GetCodeAndMethodForDirectCall(&invoke_type, sharp_type, no_guarantee_of_dex_cache_entry,
+                                referrer_class, method, true, &target_method,
+                                &annotation->direct_code, &annotation->direct_method);
+  annotation->called_dex_file = target_method.dex_file;
+  annotation->called_method_idx = target_method.dex_method_index;
+  annotation->sharp_type = invoke_type;
+  annotation->fast_path = 1u;  // Always fast path.
 }
 
 bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const uint32_t dex_pc,
@@ -1322,6 +1523,148 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
   return false;  // Incomplete knowledge needs slow path.
 }
 
+void CompilerDriver::ComputeMethodAnnotations(const DexCompilationUnit* mUnit,
+                                              MethodAnnotation* annotations, size_t count) {
+  if (kIsDebugBuild) {
+    CHECK(annotations != nullptr);
+    CHECK_NE(count, 0u);
+    for (auto it = annotations, end = annotations + count; it != end; ++it) {
+      MethodAnnotation unresolved = MethodAnnotation::Unresolved(it->method_idx, it->invoke_type);
+      if (it->called_dex_file != nullptr) {
+        unresolved.called_dex_file = it->called_dex_file;
+        unresolved.called_method_idx = it->called_method_idx;
+      }
+      DCHECK_EQ(memcmp(&unresolved, &*it, sizeof(*it)), 0);
+    }
+  }
+
+  // Collect statistics.
+  size_t devirtualized[kMaxInvokeType + 1];
+  std::fill_n(devirtualized, arraysize(devirtualized), 0u);
+  size_t other_resolved[kMaxInvokeType + 1];
+  std::fill_n(other_resolved, arraysize(other_resolved), 0u);
+  size_t total[kMaxInvokeType + 1];
+  std::fill_n(total, arraysize(total), 0u);
+  size_t precise_type_devirtualized = 0u;
+
+  const DexFile* dex_file = mUnit->GetDexFile();
+  ClassLinker* class_linker = mUnit->GetClassLinker();
+  uint32_t referrer_class_idx = dex_file->GetMethodId(mUnit->GetDexMethodIndex()).class_idx_;
+
+  // We're going to resolve fields and check access in a tight loop. It's better to hold
+  // the lock and needed references once than re-acquiring them again and again.
+  ScopedObjectAccess soa(Thread::Current());
+  SirtRef<mirror::DexCache> dex_cache(soa.Self(), class_linker->FindDexCache(*dex_file));
+  SirtRef<mirror::ClassLoader> class_loader(
+      soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
+  SirtRef<mirror::Class> referrer_class(soa.Self(),
+      class_linker->ResolveType(*dex_file, referrer_class_idx, dex_cache, class_loader));
+
+  if (UNLIKELY(referrer_class.get() == nullptr)) {
+    DCHECK(soa.Self()->IsExceptionPending());
+    soa.Self()->ClearException();
+    for (auto it = annotations, end = annotations + count; it != end; ++it) {
+      total[it->invoke_type] += 1u;
+    }
+    stats_->ResolvedMethods(devirtualized, other_resolved, total, 0u);
+    return;
+  }
+
+  for (auto it = annotations, end = annotations + count; it != end; ++it) {
+    // Remember devirtualized invoke target and set the called method to the default.
+    const DexFile* devirt_dex_file = it->called_dex_file;
+    uint16_t devirt_method_idx = it->called_method_idx;
+    it->called_dex_file = dex_file;
+    it->called_method_idx = it->method_idx;
+
+    InvokeType invoke_type = static_cast<InvokeType>(it->invoke_type);
+    ++total[invoke_type];
+    mirror::ArtMethod* resolved_method =
+        class_linker->ResolveMethod(*dex_file, it->method_idx, dex_cache, class_loader, nullptr,
+                                    invoke_type);
+    if (UNLIKELY(resolved_method == nullptr)) {
+      // Clean up the exception left by field resolution
+      DCHECK(soa.Self()->IsExceptionPending());
+      soa.Self()->ClearException();
+      continue;
+    }
+    DCHECK(!soa.Self()->IsExceptionPending());
+    if (invoke_type == kVirtual || invoke_type == kSuper) {
+      it->vtable_idx = resolved_method->GetMethodIndex();
+    } else if (invoke_type == kInterface) {
+      it->vtable_idx = resolved_method->GetDexMethodIndex();
+    }
+    // Don't try to fast-path if this appears to be an Incompatible Class Change Error.
+    if (UNLIKELY(resolved_method->CheckIncompatibleClassChange(invoke_type))) {
+      continue;
+    }
+    mirror::Class* methods_class = resolved_method->GetDeclaringClass();
+    if (UNLIKELY(!referrer_class->CanAccessResolvedMethod<false>(methods_class, resolved_method,
+                                                                 it->method_idx))) {
+      continue;
+    }
+
+    // Sharpen a virtual call into a direct call when the target is known not to have been
+    // overridden (ie is final).
+    bool can_sharpen_virtual_based_on_type =
+        (invoke_type == kVirtual) && (resolved_method->IsFinal() || methods_class->IsFinal());
+    // For invoke-super, ensure the vtable index will be correct to dispatch in the vtable of
+    // the super class.
+    bool can_sharpen_super_based_on_type = (invoke_type == kSuper) &&
+        (referrer_class.get() != methods_class) && referrer_class->IsSubClass(methods_class) &&
+        resolved_method->GetMethodIndex() < methods_class->GetVTable()->GetLength() &&
+        (methods_class->GetVTable()->Get(resolved_method->GetMethodIndex()) == resolved_method);
+
+    if (can_sharpen_virtual_based_on_type || can_sharpen_super_based_on_type) {
+      // Sharpen a virtual call into a direct call. The method_idx is into referrer's
+      // dex cache, check that this resolved method is where we expect it.
+      CHECK(referrer_class->GetDexCache()->GetResolvedMethod(it->method_idx) == resolved_method)
+          << PrettyMethod(resolved_method);
+      GetCodeAndMethodForDirectCall(dex_file, kDirect, false, referrer_class.get(),
+                                    resolved_method, it);
+      if (it->sharp_type == kDirect) {
+        ++devirtualized[it->invoke_type];
+      }
+      DCHECK_NE(it->sharp_type, kSuper) << PrettyMethod(resolved_method);
+      continue;
+    }
+
+    if ((invoke_type == kVirtual || invoke_type == kInterface) && devirt_dex_file != nullptr) {
+      // Post-verification callback recorded a more precise invoke target based on its type info.
+      mirror::ArtMethod* called_method;
+      if (LIKELY(devirt_dex_file == dex_file)) {
+        called_method = class_linker->ResolveMethod(*devirt_dex_file, devirt_method_idx,
+                                                    dex_cache, class_loader, NULL, kVirtual);
+      } else {
+        SirtRef<mirror::DexCache> target_dex_cache(soa.Self(),
+            mUnit->GetClassLinker()->FindDexCache(*devirt_dex_file));
+        called_method = class_linker->ResolveMethod(*devirt_dex_file, devirt_method_idx,
+                                                    target_dex_cache, class_loader, NULL, kVirtual);
+      }
+      CHECK(called_method != NULL);
+      CHECK(!called_method->IsAbstract());
+      GetCodeAndMethodForDirectCall(dex_file, kDirect, true, referrer_class.get(),
+                                    called_method, it);
+      // TODO: Collect stats.
+      if (it->sharp_type == kDirect) {
+        ++devirtualized[it->invoke_type];
+        ++precise_type_devirtualized;
+      }
+      DCHECK_NE(it->sharp_type, kSuper);
+      continue;
+    }
+    if (UNLIKELY(invoke_type == kSuper)) {
+      // Unsharpened super calls are suspicious so go slow-path.
+      continue;
+    }
+    // Sharpening failed so generate a regular resolved method dispatch.
+    ++other_resolved[it->invoke_type];
+    GetCodeAndMethodForDirectCall(dex_file, invoke_type, false, referrer_class.get(),
+                                  resolved_method, it);
+  }
+  stats_->ResolvedMethods(devirtualized, other_resolved, total, precise_type_devirtualized);
+}
+
 const VerifiedMethod* CompilerDriver::GetVerifiedMethod(const DexFile* dex_file,
                                                         uint32_t method_idx) const {
   MethodReference ref(dex_file, method_idx);
@@ -1338,7 +1681,6 @@ bool CompilerDriver::IsSafeCast(const DexCompilationUnit* mUnit, uint32_t dex_pc
   }
   return result;
 }
-
 
 void CompilerDriver::AddCodePatch(const DexFile* dex_file,
                                   uint16_t referrer_class_def_idx,

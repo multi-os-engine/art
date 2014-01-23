@@ -23,6 +23,34 @@
 namespace art {
 
 /**
+ * @class AnnotateUsedFields
+ * @brief Perform the annotation of fields for IGET/IPUT/SGET/SPUT insns.
+ */
+class AnnotateUsedFields : public Pass {
+ public:
+  AnnotateUsedFields() : Pass("AnnotateInstanceFields") {
+  }
+
+  void Start(CompilationUnit* cUnit) const {
+    cUnit->mir_graph->DoAnnotateUsedFields();
+  }
+};
+
+/**
+ * @class AnnotateCalledMethods
+ * @brief Perform the annotation of methods for INVOKE insns.
+ */
+class AnnotateCalledMethods : public Pass {
+ public:
+  AnnotateCalledMethods() : Pass("AnnotateMethodCalls") {
+  }
+
+  void Start(CompilationUnit* cUnit) const {
+    cUnit->mir_graph->DoAnnotateCalledMethods();
+  }
+};
+
+/**
  * @class CodeLayout
  * @brief Perform the code layout pass.
  */

@@ -42,6 +42,9 @@ class AOTCompilationStats;
 class ParallelCompilationManager;
 class DexCompilationUnit;
 class DexFileToMethodInlinerMap;
+class IFieldAnnotation;
+class MethodAnnotation;
+class SFieldAnnotation;
 class OatWriter;
 class TimingLogger;
 class VerificationResults;
@@ -199,11 +202,24 @@ class CompilerDriver {
                                 int* field_offset, bool* is_volatile)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
+  // For each requested instance field compute whether we can fast path the access with IGET/IPUT.
+  // If yes (at least for IGET), computes the offset and volatility.
+  void ComputeInstanceFieldAnnotations(const DexCompilationUnit* mUnit,
+                                       IFieldAnnotation* annotations, size_t count)
+      LOCKS_EXCLUDED(Locks::mutator_lock_);
+
   // Can we fastpath static field access? Computes field's offset, volatility and whether the
   // field is within the referrer (which can avoid checking class initialization).
   bool ComputeStaticFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit, bool is_put,
                               int* field_offset, int* storage_index,
                               bool* is_referrers_class, bool* is_volatile, bool* is_initialized)
+      LOCKS_EXCLUDED(Locks::mutator_lock_);
+
+  // For each requested static field compute whether we can fast path the access with SGET/SPUT.
+  // If yes (at least for SGET), computes the offset and volatility, storage index, and whether
+  // the access is from the same class or the class can be assumed initialized.
+  void ComputeStaticFieldAnnotations(const DexCompilationUnit* mUnit,
+                                     SFieldAnnotation* annotations, size_t count)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   // Can we fastpath a interface, super class or virtual method call? Computes method's vtable
@@ -212,6 +228,12 @@ class CompilerDriver {
                          bool update_stats, bool enable_devirtualization,
                          InvokeType* type, MethodReference* target_method, int* vtable_idx,
                          uintptr_t* direct_code, uintptr_t* direct_method)
+      LOCKS_EXCLUDED(Locks::mutator_lock_);
+
+  // For each requested method compute whether we can fast path the method call. Computes
+  // method's vtable index and direct code and method when when applicable.
+  void ComputeMethodAnnotations(const DexCompilationUnit* mUnit,
+                                MethodAnnotation* annotations, size_t count)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   const VerifiedMethod* GetVerifiedMethod(const DexFile* dex_file, uint32_t method_idx) const;
@@ -426,7 +448,7 @@ class CompilerDriver {
   std::vector<uint8_t>* DeduplicateGCMap(const std::vector<uint8_t>& code);
 
  private:
-  // Compute constant code and method pointers when possible
+  // Compute constant code and method pointers when possible.
   void GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType sharp_type,
                                      bool no_guarantee_of_dex_cache_entry,
                                      mirror::Class* referrer_class,
@@ -434,6 +456,14 @@ class CompilerDriver {
                                      bool update_stats,
                                      MethodReference* target_method,
                                      uintptr_t* direct_code, uintptr_t* direct_method)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Compute constant code and method pointers when possible.
+  void GetCodeAndMethodForDirectCall(const DexFile* dex_file, InvokeType sharp_type,
+                                     bool no_guarantee_of_dex_cache_entry,
+                                     mirror::Class* referrer_class,
+                                     mirror::ArtMethod* method,
+                                     MethodAnnotation* annotation)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void PreCompile(jobject class_loader, const std::vector<const DexFile*>& dex_files,
