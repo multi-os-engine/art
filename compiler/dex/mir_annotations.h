@@ -52,6 +52,27 @@ struct SFieldAnnotation {
   }
 };
 
+struct MethodAnnotation {
+  // On entry to CompilerDriver::ComputeMethodAnnotations(), either called_dex_file
+  // is nullptr, or together with called_method_idx it contains the MethodReference to
+  // the verification-based devirtualized invoke target.
+  const DexFile* called_dex_file;
+  uint16_t called_method_idx;
+  uint16_t method_idx;
+  uint16_t invoke_type : 3;  // InvokeType
+  uint16_t sharp_type : 3;  // InvokeType
+  uint16_t fast_path : 1;
+  uint16_t reserved : 9;
+  uint16_t vtable_idx;
+  uintptr_t direct_code;
+  uintptr_t direct_method;
+
+  static constexpr MethodAnnotation Unresolved(uint16_t method_idx, uint16_t type) {
+    // Slow path.
+    return MethodAnnotation { nullptr, 0u, method_idx, type, type, 0u, 0u, 0u, 0u, 0u };  // NOLINT(readability/braces)
+  }
+};
+
 }  // namespace art
 
 #endif  // ART_COMPILER_DEX_MIR_ANNOTATIONS_H_

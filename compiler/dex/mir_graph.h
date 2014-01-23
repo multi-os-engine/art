@@ -263,6 +263,14 @@ struct MIR {
     uint32_t ifield_annotation;
     // SGET/SPUT annotation index, points to MIRGraph::sfield_annotations_.
     uint32_t sfield_annotation;
+    // Annotation temporary for sorting invokes.
+    struct {
+      uint16_t target_method_idx;
+      uint16_t invoke_type;
+      const MethodReference* devirt_target;
+    } invoke_order;
+    // INVOKE data index, points to MIRGraph::invoke_annotations_.
+    uint32_t invoke_annotation;
   } meta;
 };
 
@@ -362,6 +370,7 @@ struct CallInfo {
   bool skip_this;
   bool is_range;
   DexOffset offset;      // Offset in code units.
+  MIR* mir;
 };
 
 
@@ -481,6 +490,13 @@ class MIRGraph {
   const SFieldAnnotation& GetSFieldAnnotation(MIR* mir) {
     DCHECK_LT(mir->meta.sfield_annotation, sfield_annotations_.Size());
     return sfield_annotations_.GetRawStorage()[mir->meta.sfield_annotation];
+  }
+
+  void DoAnnotateCalledMethods();
+
+  const MethodAnnotation& GetMethodAnnotation(MIR* mir) {
+    DCHECK_LT(mir->meta.invoke_annotation, invoke_annotations_.Size());
+    return invoke_annotations_.GetRawStorage()[mir->meta.invoke_annotation];
   }
 
   void InitRegLocations();
@@ -856,6 +872,7 @@ class MIRGraph {
   int forward_branches_;
   GrowableArray<IFieldAnnotation> ifield_annotations_;
   GrowableArray<SFieldAnnotation> sfield_annotations_;
+  GrowableArray<MethodAnnotation> invoke_annotations_;
 };
 
 }  // namespace art

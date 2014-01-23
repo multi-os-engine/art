@@ -84,7 +84,8 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       backward_branches_(0),
       forward_branches_(0),
       ifield_annotations_(arena, 0u),
-      sfield_annotations_(arena, 0u) {
+      sfield_annotations_(arena, 0u),
+      invoke_annotations_(arena, 0u) {
   try_block_addr_ = new (arena_) ArenaBitVector(arena_, 0, true /* expandable */);
 }
 
@@ -1138,6 +1139,7 @@ CallInfo* MIRGraph::NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type,
   info->is_range = is_range;
   info->index = mir->dalvikInsn.vB;
   info->offset = mir->offset;
+  info->mir = mir;
   return info;
 }
 
