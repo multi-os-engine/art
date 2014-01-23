@@ -242,6 +242,24 @@ class AOTCompilationStats {
     virtual_made_direct_[type]++;
   }
 
+  void ResolvedMethods(const size_t (&devirtualized)[kMaxInvokeType + 1],
+                       const size_t (&other_resolved)[kMaxInvokeType + 1],
+                       const size_t (&total)[kMaxInvokeType + 1],
+                       size_t precise_type_devirtualized) {
+    DCHECK_EQ(devirtualized[kStatic], 0u);
+    DCHECK_EQ(devirtualized[kDirect], 0u);
+    STATS_LOCK();
+    for (size_t type = 0; type <= kMaxInvokeType; ++type) {
+      size_t devirt = devirtualized[type];
+      size_t resolved = devirt + other_resolved[type];
+      size_t unresolved = total[type] - resolved;
+      virtual_made_direct_[type] += devirt;
+      resolved_methods_[type] += resolved;
+      unresolved_methods_[type] += unresolved;
+    }
+    type_based_devirtualization_ += precise_type_devirtualized;
+  }
+
   // Indicate that a method of the given type was able to call directly into boot.
   void DirectCallsToBoot(InvokeType type) {
     DCHECK_LE(type, kMaxInvokeType);
@@ -1420,6 +1438,22 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
   }
 }
 
+void CompilerDriver::GetCodeAndMethodForDirectCall(const DexFile* dex_file, InvokeType sharp_type,
+                                                   bool no_guarantee_of_dex_cache_entry,
+                                                   mirror::Class* referrer_class,
+                                                   mirror::ArtMethod* method,
+                                                   MethodAnnotation* annotation) {
+  MethodReference target_method(dex_file, annotation->method_idx);
+  InvokeType invoke_type = static_cast<InvokeType>(annotation->invoke_type);
+  GetCodeAndMethodForDirectCall(&invoke_type, sharp_type, no_guarantee_of_dex_cache_entry,
+                                referrer_class, method, true, &target_method,
+                                &annotation->direct_code, &annotation->direct_method);
+  annotation->called_dex_file = target_method.dex_file;
+  annotation->called_method_idx = target_method.dex_method_index;
+  annotation->sharp_type = invoke_type;
+  annotation->fast_path = 1u;  // Always fast path.
+}
+
 bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const uint32_t dex_pc,
                                        bool update_stats, bool enable_devirtualization,
                                        InvokeType* invoke_type, MethodReference* target_method,
@@ -1531,6 +1565,147 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
   return false;  // Incomplete knowledge needs slow path.
 }
 
+void CompilerDriver::ComputeMethodAnnotations(const DexCompilationUnit* mUnit,
+                                              MethodAnnotation* annotations, size_t count) {
+  if (kIsDebugBuild) {
+    CHECK(annotations != nullptr);
+    CHECK_NE(count, 0u);
+    for (auto it = annotations, end = annotations + count; it != end; ++it) {
+      MethodAnnotation unresolved = MethodAnnotation::Unresolved(it->method_idx, it->invoke_type);
+      if (it->called_dex_file != nullptr) {
+        unresolved.called_dex_file = it->called_dex_file;
+        unresolved.called_method_idx = it->called_method_idx;
+      }
+      DCHECK_EQ(memcmp(&unresolved, &*it, sizeof(*it)), 0);
+    }
+  }
+
+  // Collect statistics.
+  size_t devirtualized[kMaxInvokeType + 1];
+  std::fill_n(devirtualized, arraysize(devirtualized), 0u);
+  size_t other_resolved[kMaxInvokeType + 1];
+  std::fill_n(other_resolved, arraysize(other_resolved), 0u);
+  size_t total[kMaxInvokeType + 1];
+  std::fill_n(total, arraysize(total), 0u);
+  size_t precise_type_devirtualized = 0u;
+
+  const DexFile* dex_file = mUnit->GetDexFile();
+  ClassLinker* class_linker = mUnit->GetClassLinker();
+  uint32_t referrer_class_idx = dex_file->GetMethodId(mUnit->GetDexMethodIndex()).class_idx_;
+
+  // We're going to resolve methods and check access in a tight loop. It's better to hold
+  // the lock and needed references once than re-acquiring them again and again.
+  ScopedObjectAccess soa(Thread::Current());
+  SirtRef<mirror::DexCache> dex_cache(soa.Self(), class_linker->FindDexCache(*dex_file));
+  SirtRef<mirror::ClassLoader> class_loader(
+      soa.Self(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
+  SirtRef<mirror::Class> referrer_class(soa.Self(),
+      class_linker->ResolveType(*dex_file, referrer_class_idx, dex_cache, class_loader));
+
+  if (UNLIKELY(referrer_class.get() == nullptr)) {
+    DCHECK(soa.Self()->IsExceptionPending());
+    soa.Self()->ClearException();
+    // We're compiling a method without class definition. We still need to resolve invoked methods
+    // and update vtable_idx and called method, so fall through and check again in the loop.
+  }
+
+  for (auto it = annotations, end = annotations + count; it != end; ++it) {
+    // Remember devirtualized invoke target and set the called method to the default.
+    const DexFile* devirt_dex_file = it->called_dex_file;
+    uint16_t devirt_method_idx = it->called_method_idx;
+    it->called_dex_file = dex_file;
+    it->called_method_idx = it->method_idx;
+
+    InvokeType invoke_type = static_cast<InvokeType>(it->invoke_type);
+    ++total[invoke_type];
+    mirror::ArtMethod* resolved_method =
+        class_linker->ResolveMethod(*dex_file, it->method_idx, dex_cache, class_loader, nullptr,
+                                    invoke_type);
+    if (UNLIKELY(resolved_method == nullptr)) {
+      // Clean up the exception left by field resolution
+      DCHECK(soa.Self()->IsExceptionPending());
+      soa.Self()->ClearException();
+      continue;
+    }
+    DCHECK(!soa.Self()->IsExceptionPending());
+    if (invoke_type == kVirtual || invoke_type == kSuper) {
+      it->vtable_idx = resolved_method->GetMethodIndex();
+    } else if (invoke_type == kInterface) {
+      it->vtable_idx = resolved_method->GetDexMethodIndex();
+    }
+    // Don't try to fast-path if we don't understand the caller's class or this appears to be an
+    // Incompatible Class Change Error.
+    if (UNLIKELY(referrer_class.get() == nullptr) ||
+        UNLIKELY(resolved_method->CheckIncompatibleClassChange(invoke_type))) {
+      continue;
+    }
+    mirror::Class* methods_class = resolved_method->GetDeclaringClass();
+    if (UNLIKELY(!referrer_class->CanAccessResolvedMethod(methods_class, resolved_method,
+                                                          dex_cache.get(), it->method_idx))) {
+      continue;
+    }
+
+    // Sharpen a virtual call into a direct call when the target is known not to have been
+    // overridden (ie is final).
+    bool can_sharpen_virtual_based_on_type =
+        (invoke_type == kVirtual) && (resolved_method->IsFinal() || methods_class->IsFinal());
+    // For invoke-super, ensure the vtable index will be correct to dispatch in the vtable of
+    // the super class.
+    bool can_sharpen_super_based_on_type = (invoke_type == kSuper) &&
+        (referrer_class.get() != methods_class) && referrer_class->IsSubClass(methods_class) &&
+        resolved_method->GetMethodIndex() < methods_class->GetVTable()->GetLength() &&
+        (methods_class->GetVTable()->Get(resolved_method->GetMethodIndex()) == resolved_method);
+
+    if (can_sharpen_virtual_based_on_type || can_sharpen_super_based_on_type) {
+      // Sharpen a virtual call into a direct call. The method_idx is into referrer's
+      // dex cache, check that this resolved method is where we expect it.
+      CHECK(referrer_class->GetDexCache()->GetResolvedMethod(it->method_idx) == resolved_method)
+          << PrettyMethod(resolved_method);
+      GetCodeAndMethodForDirectCall(dex_file, kDirect, false, referrer_class.get(),
+                                    resolved_method, it);
+      if (it->sharp_type == kDirect) {
+        ++devirtualized[it->invoke_type];
+      }
+      DCHECK_NE(it->sharp_type, kSuper) << PrettyMethod(resolved_method);
+      continue;
+    }
+
+    if ((invoke_type == kVirtual || invoke_type == kInterface) && devirt_dex_file != nullptr) {
+      // Post-verification callback recorded a more precise invoke target based on its type info.
+      mirror::ArtMethod* called_method;
+      if (LIKELY(devirt_dex_file == dex_file)) {
+        called_method = class_linker->ResolveMethod(*devirt_dex_file, devirt_method_idx,
+                                                    dex_cache, class_loader, NULL, kVirtual);
+      } else {
+        SirtRef<mirror::DexCache> target_dex_cache(soa.Self(),
+            mUnit->GetClassLinker()->FindDexCache(*devirt_dex_file));
+        called_method = class_linker->ResolveMethod(*devirt_dex_file, devirt_method_idx,
+                                                    target_dex_cache, class_loader, NULL, kVirtual);
+      }
+      CHECK(called_method != NULL);
+      CHECK(!called_method->IsAbstract());
+      GetCodeAndMethodForDirectCall(dex_file, kDirect, true, referrer_class.get(),
+                                    called_method, it);
+      // TODO: Collect stats.
+      if (it->sharp_type == kDirect) {
+        ++devirtualized[it->invoke_type];
+        ++precise_type_devirtualized;
+      }
+      DCHECK_NE(it->sharp_type, kSuper);
+      continue;
+    }
+    if (UNLIKELY(invoke_type == kSuper)) {
+      // Unsharpened super calls are suspicious so go slow-path.
+      continue;
+    }
+    // Sharpening failed so generate a regular resolved method dispatch.
+    ++other_resolved[it->invoke_type];
+    GetCodeAndMethodForDirectCall(dex_file, invoke_type, false, referrer_class.get(),
+                                  resolved_method, it);
+  }
+  stats_->ResolvedMethods(devirtualized, other_resolved, total, precise_type_devirtualized);
+}
+
 const VerifiedMethod* CompilerDriver::GetVerifiedMethod(const DexFile* dex_file,
                                                         uint32_t method_idx) const {
   MethodReference ref(dex_file, method_idx);
@@ -1547,7 +1722,6 @@ bool CompilerDriver::IsSafeCast(const DexCompilationUnit* mUnit, uint32_t dex_pc
   }
   return result;
 }
-
 
 void CompilerDriver::AddCodePatch(const DexFile* dex_file,
                                   uint16_t referrer_class_def_idx,

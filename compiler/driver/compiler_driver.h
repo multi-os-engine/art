@@ -48,6 +48,7 @@ class DexCompilationUnit;
 class DexFileToMethodInlinerMap;
 class InlineIGetIPutData;
 class IFieldAnnotation;
+class MethodAnnotation;
 class SFieldAnnotation;
 class OatWriter;
 class TimingLogger;
@@ -239,6 +240,12 @@ class CompilerDriver {
                          bool update_stats, bool enable_devirtualization,
                          InvokeType* type, MethodReference* target_method, int* vtable_idx,
                          uintptr_t* direct_code, uintptr_t* direct_method)
+      LOCKS_EXCLUDED(Locks::mutator_lock_);
+
+  // For each requested method compute whether we can fast path the method call. Computes
+  // method's vtable index and direct code and method when when applicable.
+  void ComputeMethodAnnotations(const DexCompilationUnit* mUnit,
+                                MethodAnnotation* annotations, size_t count)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   const VerifiedMethod* GetVerifiedMethod(const DexFile* dex_file, uint32_t method_idx) const;
@@ -453,7 +460,7 @@ class CompilerDriver {
   std::vector<uint8_t>* DeduplicateGCMap(const std::vector<uint8_t>& code);
 
  private:
-  // Compute constant code and method pointers when possible
+  // Compute constant code and method pointers when possible.
   void GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType sharp_type,
                                      bool no_guarantee_of_dex_cache_entry,
                                      mirror::Class* referrer_class,
@@ -461,6 +468,14 @@ class CompilerDriver {
                                      bool update_stats,
                                      MethodReference* target_method,
                                      uintptr_t* direct_code, uintptr_t* direct_method)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Compute constant code and method pointers when possible.
+  void GetCodeAndMethodForDirectCall(const DexFile* dex_file, InvokeType sharp_type,
+                                     bool no_guarantee_of_dex_cache_entry,
+                                     mirror::Class* referrer_class,
+                                     mirror::ArtMethod* method,
+                                     MethodAnnotation* annotation)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void PreCompile(jobject class_loader, const std::vector<const DexFile*>& dex_files,
