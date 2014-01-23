@@ -230,6 +230,32 @@ class X86Mir2Lir : public Mir2Lir {
                                   int64_t val, ConditionCode ccode);
     void OpVectorRegCopyWide(uint8_t fp_reg, uint8_t low_reg, uint8_t high_reg);
     void GenConstWide(RegLocation rl_dest, int64_t value);
+
+    /**
+     * @brief Calculate magic number and shift for a given divisor
+     * @param divisor divisor number for calculation
+     * @param magic hold calculated magic number
+     * @param shift hold calculated shift
+     */
+    void calculateMagicAndShift(int divisor, int& magic, int& shift);
+    /*
+     * @brief Generate an integer div or rem operation.
+     * @param rl_dest Destination Location.
+     * @param rl_src1 Numerator Location.
+     * @param rl_src2 Divisor Location.
+     * @param is_div 'true' if this is a division, 'false' for a remainder.
+     * @param check_zero 'true' if an exception should be generated if the divisor is 0.
+     */
+    RegLocation GenDivRem(RegLocation rl_dest, RegLocation rl_src1,
+                                  RegLocation rl_src2, bool is_div, bool check_zero);
+    /*
+     * @brief Generate an integer div or rem operation by a literal.
+     * @param rl_dest Destination Location.
+     * @param rl_src Numerator Location.
+     * @param lit Divisor.
+     * @param is_div 'true' if this is a division, 'false' for a remainder.
+     */
+    RegLocation GenDivRemLit(RegLocation rl_dest, RegLocation rl_src, int lit, bool is_div);
 };
 
 }  // namespace art
