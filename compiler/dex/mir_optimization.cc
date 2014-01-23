@@ -323,9 +323,10 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
           break;
       }
       // Is this the select pattern?
-      // TODO: flesh out support for Mips and X86.  NOTE: llvm's select op doesn't quite work here.
+      // TODO: flesh out support for Mips.  NOTE: llvm's select op doesn't quite work here.
       // TUNING: expand to support IF_xx compare & branches
-      if (!(cu_->compiler_backend == kPortable) && (cu_->instruction_set == kThumb2) &&
+      if ((cu_->compiler_backend != kPortable) &&
+          (cu_->instruction_set == kThumb2 || cu_->instruction_set == kX86) &&
           ((mir->dalvikInsn.opcode == Instruction::IF_EQZ) ||
           (mir->dalvikInsn.opcode == Instruction::IF_NEZ))) {
         BasicBlock* ft = GetBasicBlock(bb->fall_through);
@@ -380,7 +381,7 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
                 if_true = if_false;
                 if_false = tmp_mir;
               }
-              mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpSelect);
+
               bool const_form = (SelectKind(if_true) == kSelectConst);
               if ((SelectKind(if_true) == kSelectMove)) {
                 if (IsConst(if_true->ssa_rep->uses[0]) &&
@@ -391,13 +392,33 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
                 }
               }
               if (const_form) {
-                // "true" set val in vB
-                mir->dalvikInsn.vB = if_true->dalvikInsn.vB;
-                // "false" set val in vC
-                mir->dalvikInsn.vC = if_false->dalvikInsn.vB;
+                uint32_t true_val = if_true->dalvikInsn.vB;
+                uint32_t false_val = if_false->dalvikInsn.vB;
+
+                /*
+                 * If both values are the same constant, then instead of a select we just
+                 * need a const bytecode.
+                 */
+                if (true_val == false_val) {
+                  mir->dalvikInsn.opcode = Instruction::CONST;
+
+                  // vA contains the destination register and vB contains the constant.
+                  mir->dalvikInsn.vA = if_true->dalvikInsn.vA;
+                  mir->dalvikInsn.vB = true_val;
+
+                  // Manually fix the SSA now that we have a const bytecode which has no register uses.
+                  mir->ssa_rep->num_uses = 0;
+                } else {
+                  mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpSelect);
+                  // "true" set val in vB
+                  mir->dalvikInsn.vB = true_val;
+                  // "false" set val in vC
+                  mir->dalvikInsn.vC = false_val;
+                }
               } else {
                 DCHECK_EQ(SelectKind(if_true), kSelectMove);
                 DCHECK_EQ(SelectKind(if_false), kSelectMove);
+                mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpSelect);
                 int* src_ssa =
                     static_cast<int*>(arena_->Alloc(sizeof(int) * 3, ArenaAllocator::kAllocDFInfo));
                 src_ssa[0] = mir->ssa_rep->uses[0];
