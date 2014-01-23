@@ -19,6 +19,7 @@
 #include "dataflow_iterator-inl.h"
 #include "dex_instruction.h"
 #include "dex_instruction-inl.h"
+#include "dex/verified_method.h"
 #include "dex/quick/dex_file_method_inliner.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "UniquePtr.h"
@@ -1191,6 +1192,121 @@ void MIRGraph::DoAnnotateUsedFields() {
                                                         sfield_annotations_.GetRawStorage(),
                                                         size - sfield_pos);
   }
+}
+
+void MIRGraph::DoAnnotateCalledMethods() {
+  // Try to use stack-allocated array, resort to heap if we exceed the initial size.
+  static constexpr size_t kInitialSize = 32;
+  MIR* stack_refs[kInitialSize];
+  UniquePtr<MIR*[]> allocated_refs;
+  MIR** method_refs = stack_refs;
+
+  // Find INVOKE insns and their devirtualization targets.
+  size_t invoke_count = 0u;
+  AllNodesIterator iter(this);
+  for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
+    if (bb->block_type != kDalvikByteCode) {
+      continue;
+    }
+    for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+      if (mir->dalvikInsn.opcode >= Instruction::INVOKE_VIRTUAL &&
+          mir->dalvikInsn.opcode <= Instruction::INVOKE_INTERFACE_RANGE &&
+          mir->dalvikInsn.opcode != Instruction::RETURN_VOID_BARRIER) {
+        if (UNLIKELY(invoke_count == kInitialSize)) {
+          DCHECK(method_refs == stack_refs);
+          // All INVOKE instructions take 3 code units and there must also be a RETURN.
+          uint32_t max_refs = (current_code_item_->insns_size_in_code_units_ - 1u) / 3u;
+          allocated_refs.reset(new MIR*[max_refs]);
+          method_refs = allocated_refs.get();
+          memcpy(method_refs, stack_refs, kInitialSize * sizeof(method_refs[0]));
+        }
+        method_refs[invoke_count++] = mir;
+
+        // Decode target method index and invoke type.
+        const Instruction* insn = Instruction::At(current_code_item_->insns_ + mir->offset);
+        uint16_t target_method_idx;
+        uint16_t invoke_type_idx;
+        if (mir->dalvikInsn.opcode <= Instruction::INVOKE_INTERFACE) {
+          target_method_idx = insn->VRegB_35c();
+          invoke_type_idx = mir->dalvikInsn.opcode - Instruction::INVOKE_VIRTUAL;
+        } else {
+          target_method_idx = insn->VRegB_3rc();
+          invoke_type_idx = mir->dalvikInsn.opcode - Instruction::INVOKE_VIRTUAL_RANGE;
+        }
+        static const uint16_t invoke_types[] = { kVirtual, kSuper, kDirect, kStatic, kInterface };
+        mir->meta.invoke_order.target_method_idx = target_method_idx;
+        mir->meta.invoke_order.invoke_type = invoke_types[invoke_type_idx];
+
+        // Find devirtualization target.
+        // TODO: The devirt map is ordered by the dex pc here. Is there a way to get INVOKEs
+        // ordered by dex pc as well? That would allow us to keep an iterator to devirt targets
+        // and increment it as needed instead of making O(log n) lookups.
+        const VerifiedMethod* verified_method = GetCurrentDexCompilationUnit()->GetVerifiedMethod();
+        mir->meta.invoke_order.devirt_target = verified_method->GetDevirtTarget(mir->offset);
+      }
+    }
+  }
+
+  if (invoke_count == 0u) {
+    return;
+  }
+
+  // Sort INVOKEs by method index, then by opcode, then by devirtualization target.
+  struct Comparator {
+    bool operator()(const MIR* lhs, const MIR* rhs) const {
+      if (lhs->meta.invoke_order.target_method_idx != rhs->meta.invoke_order.target_method_idx) {
+        return lhs->meta.invoke_order.target_method_idx < rhs->meta.invoke_order.target_method_idx;
+      }
+      if (lhs->meta.invoke_order.invoke_type != rhs->meta.invoke_order.invoke_type) {
+        return lhs->meta.invoke_order.invoke_type < rhs->meta.invoke_order.invoke_type;
+      }
+      const MethodReference* lhs_devirt_target = lhs->meta.invoke_order.devirt_target;
+      const MethodReference* rhs_devirt_target = rhs->meta.invoke_order.devirt_target;
+      if (lhs_devirt_target != rhs_devirt_target) {
+        if (lhs_devirt_target == nullptr) {
+          return true;
+        }
+        if (rhs_devirt_target == nullptr) {
+          return false;
+        }
+        return devirt_cmp(*lhs_devirt_target, *rhs_devirt_target);
+      }
+      return false;
+    }
+    MethodReferenceComparator devirt_cmp;
+  };
+
+  // Find and count unique references, set annotation indexes for duplicates.
+  std::sort(method_refs, method_refs + invoke_count, Comparator());
+  MIR* last_unique_mir = method_refs[0];
+  size_t count = 1u;
+  for (size_t pos = 1u; pos != invoke_count; ++pos) {
+    MIR* mir = method_refs[pos];
+    if (Comparator()(last_unique_mir, mir)) {
+      last_unique_mir = mir;
+      method_refs[count] = mir;
+      ++count;
+    } else {
+      mir->meta.invoke_annotation = count - 1u;
+    }
+  }
+
+  // Prepare unique annotations, set annotation indexes for their MIRs.
+  DCHECK_EQ(invoke_annotations_.Size(), 0u);
+  invoke_annotations_.Resize(count);
+  for (size_t pos = 0u; pos != count; ++pos) {
+    MIR* mir = method_refs[pos];
+    MethodAnnotation annotation = MethodAnnotation::Unresolved(
+        mir->meta.invoke_order.target_method_idx, mir->meta.invoke_order.invoke_type);
+    if (mir->meta.invoke_order.devirt_target != nullptr) {
+      annotation.called_dex_file = mir->meta.invoke_order.devirt_target->dex_file;
+      annotation.called_method_idx = mir->meta.invoke_order.devirt_target->dex_method_index;
+    }
+    invoke_annotations_.Insert(annotation);
+    mir->meta.invoke_annotation = pos;
+  }
+  cu_->compiler_driver->ComputeMethodAnnotations(GetCurrentDexCompilationUnit(),
+                                                 invoke_annotations_.GetRawStorage(), count);
 }
 
 }  // namespace art

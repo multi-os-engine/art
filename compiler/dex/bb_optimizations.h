@@ -37,6 +37,20 @@ class AnnotateUsedFields : public Pass {
 };
 
 /**
+ * @class AnnotateCalledMethods
+ * @brief Perform the annotation of methods for INVOKE insns.
+ */
+class AnnotateCalledMethods : public Pass {
+ public:
+  AnnotateCalledMethods() : Pass("AnnotateMethodCalls", kNoNodes) {
+  }
+
+  void Start(CompilationUnit* cUnit) const {
+    cUnit->mir_graph->DoAnnotateCalledMethods();
+  }
+};
+
+/**
  * @class CodeLayout
  * @brief Perform the code layout pass.
  */
