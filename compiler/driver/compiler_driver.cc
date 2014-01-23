@@ -69,7 +69,7 @@ static void DumpStat(size_t x, size_t y, const char* str) {
   LOG(INFO) << Percentage(x, y) << "% of " << str << " for " << (x + y) << " cases";
 }
 
-class AOTCompilationStats {
+class CompilerDriver::AOTCompilationStats {
  public:
   AOTCompilationStats()
       : stats_lock_("AOT compilation statistics lock"),
@@ -238,6 +238,30 @@ class AOTCompilationStats {
     DCHECK_LE(type, kMaxInvokeType);
     STATS_LOCK();
     direct_methods_to_boot_[type]++;
+  }
+
+  void ProcessedInvoke(InvokeType type, int flags) {
+    STATS_LOCK();
+    if (flags == 0) {
+      unresolved_methods_[type]++;
+    } else {
+      DCHECK_NE((flags & kMethodResolved), 0);
+      resolved_methods_[type]++;
+      if ((flags & kVirtualMadeDirect) != 0) {
+        virtual_made_direct_[type]++;
+        if ((flags & kPreciseTypeDevirtualization) != 0) {
+          type_based_devirtualization_++;
+        }
+      } else {
+        DCHECK_EQ((flags & kPreciseTypeDevirtualization), 0);
+      }
+      if ((flags & kDirectCallToBoot) != 0) {
+        direct_calls_to_boot_[type]++;
+      }
+      if ((flags & kDirectMethodToBoot) != 0) {
+        direct_methods_to_boot_[type]++;
+      }
+    }
   }
 
   // A check-cast could be eliminated due to verifier type analysis.
@@ -925,6 +949,10 @@ void CompilerDriver::ProcessedStaticField(bool resolved, bool local) {
   }
 }
 
+void CompilerDriver::ProcessedInvoke(InvokeType invoke_type, int flags) {
+  stats_->ProcessedInvoke(invoke_type, flags);
+}
+
 static mirror::Class* ComputeCompilingMethodsClass(ScopedObjectAccess& soa,
                                                    SirtRef<mirror::DexCache>& dex_cache,
                                                    const DexCompilationUnit* mUnit)
@@ -1057,7 +1085,7 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
                                                    bool no_guarantee_of_dex_cache_entry,
                                                    mirror::Class* referrer_class,
                                                    mirror::ArtMethod* method,
-                                                   bool update_stats,
+                                                   int* stats_flags,
                                                    MethodReference* target_method,
                                                    uintptr_t* direct_code,
                                                    uintptr_t* direct_method) {
@@ -1095,9 +1123,8 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
       }
     }
   }
-  if (update_stats && method_code_in_boot) {
-    stats_->DirectCallsToBoot(*type);
-    stats_->DirectMethodsToBoot(*type);
+  if (method_code_in_boot) {
+    *stats_flags |= kDirectCallToBoot | kDirectMethodToBoot;
   }
   if (!use_dex_cache && compiling_boot) {
     MethodHelper mh(method);
@@ -1187,6 +1214,7 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
     bool icce = resolved_method->CheckIncompatibleClassChange(*invoke_type);
     if (referrer_class != NULL && !icce) {
       mirror::Class* methods_class = resolved_method->GetDeclaringClass();
+      InvokeType orig_invoke_type = *invoke_type;
       if (referrer_class->CanAccessResolvedMethod(methods_class, resolved_method, dex_cache.get(),
                                                   target_method->dex_method_index)) {
         const bool enableFinalBasedSharpening = enable_devirtualization;
@@ -1209,12 +1237,11 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
           DCHECK(dex_cache.get() == mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile()));
           CHECK(dex_cache->GetResolvedMethod(target_method->dex_method_index) ==
                 resolved_method) << PrettyMethod(resolved_method);
-          InvokeType orig_invoke_type = *invoke_type;
+          int stats_flags = kMethodResolvedVirtualMadeDirect;
           GetCodeAndMethodForDirectCall(invoke_type, kDirect, false, referrer_class, resolved_method,
-                                        update_stats, target_method, direct_code, direct_method);
+                                        &stats_flags, target_method, direct_code, direct_method);
           if (update_stats && (*invoke_type == kDirect)) {
-            stats_->ResolvedMethod(orig_invoke_type);
-            stats_->VirtualMadeDirect(orig_invoke_type);
+            stats_->ProcessedInvoke(orig_invoke_type, stats_flags);
           }
           DCHECK_NE(*invoke_type, kSuper) << PrettyMethod(resolved_method);
           return true;
@@ -1236,13 +1263,11 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
                                                        kVirtual);
             CHECK(called_method != NULL);
             CHECK(!called_method->IsAbstract());
-            InvokeType orig_invoke_type = *invoke_type;
+            int stats_flags = kMethodResolvedPreciseTypeDevirtualization;
             GetCodeAndMethodForDirectCall(invoke_type, kDirect, true, referrer_class, called_method,
-                                          update_stats, target_method, direct_code, direct_method);
+                                          &stats_flags, target_method, direct_code, direct_method);
             if (update_stats && (*invoke_type == kDirect)) {
-              stats_->ResolvedMethod(orig_invoke_type);
-              stats_->VirtualMadeDirect(orig_invoke_type);
-              stats_->PreciseTypeDevirtualization();
+              stats_->ProcessedInvoke(orig_invoke_type, stats_flags);
             }
             DCHECK_NE(*invoke_type, kSuper);
             return true;
@@ -1252,11 +1277,12 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
           // Unsharpened super calls are suspicious so go slow-path.
         } else {
           // Sharpening failed so generate a regular resolved method dispatch.
-          if (update_stats) {
-            stats_->ResolvedMethod(*invoke_type);
-          }
+          int stats_flags = kMethodResolved;
           GetCodeAndMethodForDirectCall(invoke_type, *invoke_type, false, referrer_class, resolved_method,
-                                        update_stats, target_method, direct_code, direct_method);
+                                        &stats_flags, target_method, direct_code, direct_method);
+          if (update_stats) {
+            stats_->ProcessedInvoke(orig_invoke_type, stats_flags);
+          }
           return true;
         }
       }
@@ -1288,7 +1314,6 @@ bool CompilerDriver::IsSafeCast(const DexCompilationUnit* mUnit, uint32_t dex_pc
   }
   return result;
 }
-
 
 void CompilerDriver::AddCodePatch(const DexFile* dex_file,
                                   uint16_t referrer_class_def_idx,

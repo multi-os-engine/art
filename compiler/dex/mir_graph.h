@@ -20,8 +20,9 @@
 #include "dex_file.h"
 #include "dex_instruction.h"
 #include "compiler_ir.h"
-#include "mir_field_info.h"
 #include "invoke_type.h"
+#include "mir_field_info.h"
+#include "mir_method_info.h"
 #include "utils/arena_bit_vector.h"
 #include "utils/growable_array.h"
 #include "reg_storage.h"
@@ -267,6 +268,15 @@ struct MIR {
     // SGET/SPUT lowering info index, points to MIRGraph::sfield_lowering_infos_. Due to limit on
     // the number of code points (64K) and size of SGET/SPUT insn (2), this will never exceed 32K.
     uint32_t sfield_lowering_info;
+    // INVOKE data index, points to MIRGraph::method_lowering_infos_.
+    uint32_t method_lowering_info;
+
+    // TODO: remove. Annotation temporary for sorting invokes.
+    struct {
+      uint16_t target_method_idx;
+      uint16_t invoke_type;
+      const MethodReference* devirt_target;
+    } invoke_order;
   } meta;
 };
 
@@ -365,6 +375,7 @@ struct CallInfo {
   bool skip_this;
   bool is_range;
   DexOffset offset;      // Offset in code units.
+  MIR* mir;
 };
 
 
@@ -484,6 +495,13 @@ class MIRGraph {
   const MirSFieldLoweringInfo& GetSFieldLoweringInfo(MIR* mir) {
     DCHECK_LT(mir->meta.sfield_lowering_info, sfield_lowering_infos_.Size());
     return sfield_lowering_infos_.GetRawStorage()[mir->meta.sfield_lowering_info];
+  }
+
+  void DoCacheMethodLoweringInfo();
+
+  const MirMethodLoweringInfo& GetMethodLoweringInfo(MIR* mir) {
+    DCHECK_LT(mir->meta.method_lowering_info, method_lowering_infos_.Size());
+    return method_lowering_infos_.GetRawStorage()[mir->meta.method_lowering_info];
   }
 
   void InitRegLocations();
@@ -945,6 +963,7 @@ class MIRGraph {
   bool punt_to_interpreter_;                    // Difficult or not worthwhile - just interpret.
   GrowableArray<MirIFieldLoweringInfo> ifield_lowering_infos_;
   GrowableArray<MirSFieldLoweringInfo> sfield_lowering_infos_;
+  GrowableArray<MirMethodLoweringInfo> method_lowering_infos_;
 
   friend class LocalValueNumberingTest;
 };

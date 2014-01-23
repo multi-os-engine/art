@@ -44,7 +44,6 @@ namespace verifier {
 class MethodVerifier;
 }  // namespace verifier
 
-class AOTCompilationStats;
 class CompilerOptions;
 class DexCompilationUnit;
 class DexFileToMethodInlinerMap;
@@ -250,8 +249,37 @@ class CompilerDriver {
       uint32_t* storage_index, bool* is_referrers_class, bool* is_initialized)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Resolve a method. Returns nullptr on failure, including incompatible class change.
+  mirror::ArtMethod* ResolveMethod(
+      ScopedObjectAccess& soa, const SirtRef<mirror::DexCache>& dex_cache,
+      const SirtRef<mirror::ClassLoader>& class_loader, const DexCompilationUnit* mUnit,
+      uint32_t method_idx, InvokeType invoke_type)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Get declaration location of a resolved field.
+  void GetResolvedMethodDexFileLocation(
+      mirror::ArtMethod* resolved_method, const DexFile** declaring_dex_file,
+      uint16_t* declaring_class_idx, uint16_t* declaring_method_idx)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Get declaration location of a resolved field.
+  uint16_t GetResolvedMethodVTableIndex(
+      mirror::ArtMethod* resolved_method, InvokeType type)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Can we fast-path an INVOKE? If no, returns 0. If yes, returns a non-zero opaque flags value
+  // for ProcessedInvoke() and computes the necessary lowering info.
+  int IsFastInvoke(
+      ScopedObjectAccess& soa, const SirtRef<mirror::DexCache>& dex_cache,
+      const SirtRef<mirror::ClassLoader>& class_loader, const DexCompilationUnit* mUnit,
+      mirror::Class* referrer_class,
+      mirror::ArtMethod* resolved_method, InvokeType* invoke_type, MethodReference* target_method,
+      MethodReference* devirt_target, uintptr_t* direct_method, uintptr_t* direct_code)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   void ProcessedInstanceField(bool resolved);
   void ProcessedStaticField(bool resolved, bool local);
+  void ProcessedInvoke(InvokeType invoke_type, int flags);
 
   // Can we fast path instance field access in a verified accessor?
   // If yes, computes field's offset and volatility and whether the method is static or not.
@@ -554,16 +582,27 @@ class CompilerDriver {
   }
 
  private:
-  // Compute constant code and method pointers when possible
+  static constexpr int kMethodResolved              = 0x01;
+  static constexpr int kVirtualMadeDirect           = 0x02;
+  static constexpr int kPreciseTypeDevirtualization = 0x04;
+  static constexpr int kDirectCallToBoot            = 0x08;
+  static constexpr int kDirectMethodToBoot          = 0x10;
+  static constexpr int kMethodResolvedVirtualMadeDirect = kMethodResolved | kVirtualMadeDirect;
+  static constexpr int kMethodResolvedPreciseTypeDevirtualization =
+      kMethodResolvedVirtualMadeDirect | kPreciseTypeDevirtualization;
+
+ public:  // TODO make private or eliminate.
+  // Compute constant code and method pointers when possible.
   void GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType sharp_type,
                                      bool no_guarantee_of_dex_cache_entry,
                                      mirror::Class* referrer_class,
                                      mirror::ArtMethod* method,
-                                     bool update_stats,
+                                     int* stats_flags,
                                      MethodReference* target_method,
                                      uintptr_t* direct_code, uintptr_t* direct_method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+ private:
   void PreCompile(jobject class_loader, const std::vector<const DexFile*>& dex_files,
                   ThreadPool* thread_pool, TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
@@ -648,6 +687,7 @@ class CompilerDriver {
   size_t thread_count_;
   uint64_t start_ns_;
 
+  class AOTCompilationStats;
   UniquePtr<AOTCompilationStats> stats_;
 
   bool dump_stats_;
