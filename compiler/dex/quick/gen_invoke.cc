@@ -1401,7 +1401,6 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
       return;
     }
   }
-  InvokeType original_type = info->type;  // avoiding mutation by ComputeInvokeInfo
   int call_state = 0;
   LIR* null_ck;
   LIR** p_null_ck = NULL;
@@ -1410,19 +1409,12 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
   // Explicit register usage
   LockCallTemps();
 
-  DexCompilationUnit* cUnit = mir_graph_->GetCurrentDexCompilationUnit();
-  MethodReference target_method(cUnit->GetDexFile(), info->index);
-  int vtable_idx;
-  uintptr_t direct_code;
-  uintptr_t direct_method;
+  const MethodAnnotation& annotation = mir_graph_->GetMethodAnnotation(info->mir);
+  InvokeType original_type = static_cast<InvokeType>(annotation.invoke_type);
+  info->type = static_cast<InvokeType>(annotation.sharp_type);
+  MethodReference target_method(annotation.called_dex_file, annotation.called_method_idx);
+  bool fast_path = annotation.fast_path;
   bool skip_this;
-  bool fast_path =
-      cu_->compiler_driver->ComputeInvokeInfo(mir_graph_->GetCurrentDexCompilationUnit(),
-                                              current_dalvik_offset_,
-                                              true, true,
-                                              &info->type, &target_method,
-                                              &vtable_idx,
-                                              &direct_code, &direct_method) && !SLOW_INVOKE_PATH;
   if (info->type == kInterface) {
     next_call_insn = fast_path ? NextInterfaceCallInsn : NextInterfaceCallInsnWithAccessCheck;
     skip_this = fast_path;
@@ -1446,27 +1438,26 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
   }
   if (!info->is_range) {
     call_state = GenDalvikArgsNoRange(info, call_state, p_null_ck,
-                                      next_call_insn, target_method,
-                                      vtable_idx, direct_code, direct_method,
+                                      next_call_insn, target_method, annotation.vtable_idx,
+                                      annotation.direct_code, annotation.direct_method,
                                       original_type, skip_this);
   } else {
     call_state = GenDalvikArgsRange(info, call_state, p_null_ck,
-                                    next_call_insn, target_method, vtable_idx,
-                                    direct_code, direct_method, original_type,
-                                    skip_this);
+                                    next_call_insn, target_method, annotation.vtable_idx,
+                                    annotation.direct_code, annotation.direct_method,
+                                    original_type, skip_this);
   }
   // Finish up any of the call sequence not interleaved in arg loading
   while (call_state >= 0) {
-    call_state = next_call_insn(cu_, info, call_state, target_method,
-                                vtable_idx, direct_code, direct_method,
-                                original_type);
+    call_state = next_call_insn(cu_, info, call_state, target_method, annotation.vtable_idx,
+                                annotation.direct_code, annotation.direct_method, original_type);
   }
   LIR* call_inst;
   if (cu_->instruction_set != kX86) {
     call_inst = OpReg(kOpBlx, TargetReg(kInvokeTgt));
   } else {
     if (fast_path) {
-      if (direct_code == static_cast<unsigned int>(-1)) {
+      if (annotation.direct_code == static_cast<uintptr_t>(-1)) {
         // We can have the linker fixup a call relative.
         call_inst =
           reinterpret_cast<X86Mir2Lir*>(this)->CallWithLinkerFixup(
