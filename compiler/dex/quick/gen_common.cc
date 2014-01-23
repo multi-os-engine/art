@@ -642,18 +642,15 @@ void Mir2Lir::HandleThrowLaunchPads() {
   }
 }
 
-void Mir2Lir::GenIGet(uint32_t field_idx, int opt_flags, OpSize size,
+void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
                       RegLocation rl_dest, RegLocation rl_obj, bool is_long_or_double,
                       bool is_object) {
-  int field_offset;
-  bool is_volatile;
+  const IFieldAnnotation& annotation = mir_graph_->GetIFieldAnnotation(mir);
 
-  bool fast_path = FastInstance(field_idx, false, &field_offset, &is_volatile);
-
-  if (fast_path && !SLOW_FIELD_PATH) {
+  if (annotation.fast_get && !SLOW_FIELD_PATH) {
     RegLocation rl_result;
     RegisterClass reg_class = oat_reg_class_by_size(size);
-    DCHECK_GE(field_offset, 0);
+    DCHECK_GE(annotation.field_offset, 0);
     rl_obj = LoadValue(rl_obj, kCoreReg);
     if (is_long_or_double) {
       DCHECK(rl_dest.wide);
@@ -661,17 +658,17 @@ void Mir2Lir::GenIGet(uint32_t field_idx, int opt_flags, OpSize size,
       if (cu_->instruction_set == kX86) {
         rl_result = EvalLoc(rl_dest, reg_class, true);
         GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
-        LoadBaseDispWide(rl_obj.low_reg, field_offset, rl_result.low_reg,
+        LoadBaseDispWide(rl_obj.low_reg, annotation.field_offset, rl_result.low_reg,
                          rl_result.high_reg, rl_obj.s_reg_low);
-        if (is_volatile) {
+        if (annotation.is_volatile) {
           GenMemBarrier(kLoadLoad);
         }
       } else {
         int reg_ptr = AllocTemp();
-        OpRegRegImm(kOpAdd, reg_ptr, rl_obj.low_reg, field_offset);
+        OpRegRegImm(kOpAdd, reg_ptr, rl_obj.low_reg, annotation.field_offset);
         rl_result = EvalLoc(rl_dest, reg_class, true);
         LoadBaseDispWide(reg_ptr, 0, rl_result.low_reg, rl_result.high_reg, INVALID_SREG);
-        if (is_volatile) {
+        if (annotation.is_volatile) {
           GenMemBarrier(kLoadLoad);
         }
         FreeTemp(reg_ptr);
@@ -680,9 +677,9 @@ void Mir2Lir::GenIGet(uint32_t field_idx, int opt_flags, OpSize size,
     } else {
       rl_result = EvalLoc(rl_dest, reg_class, true);
       GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
-      LoadBaseDisp(rl_obj.low_reg, field_offset, rl_result.low_reg,
+      LoadBaseDisp(rl_obj.low_reg, annotation.field_offset, rl_result.low_reg,
                    kWord, rl_obj.s_reg_low);
-      if (is_volatile) {
+      if (annotation.is_volatile) {
         GenMemBarrier(kLoadLoad);
       }
       StoreValue(rl_dest, rl_result);
@@ -692,7 +689,7 @@ void Mir2Lir::GenIGet(uint32_t field_idx, int opt_flags, OpSize size,
         is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pGet64Instance)
                           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pGetObjInstance)
                                        : QUICK_ENTRYPOINT_OFFSET(pGet32Instance));
-    CallRuntimeHelperImmRegLocation(getterOffset, field_idx, rl_obj, true);
+    CallRuntimeHelperImmRegLocation(getterOffset, annotation.field_idx, rl_obj, true);
     if (is_long_or_double) {
       RegLocation rl_result = GetReturnWide(rl_dest.fp);
       StoreValueWide(rl_dest, rl_result);
@@ -703,39 +700,37 @@ void Mir2Lir::GenIGet(uint32_t field_idx, int opt_flags, OpSize size,
   }
 }
 
-void Mir2Lir::GenIPut(uint32_t field_idx, int opt_flags, OpSize size,
+void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
                       RegLocation rl_src, RegLocation rl_obj, bool is_long_or_double,
                       bool is_object) {
-  int field_offset;
-  bool is_volatile;
+  const IFieldAnnotation& annotation = mir_graph_->GetIFieldAnnotation(mir);
 
-  bool fast_path = FastInstance(field_idx, true, &field_offset, &is_volatile);
-  if (fast_path && !SLOW_FIELD_PATH) {
+  if (annotation.fast_put && !SLOW_FIELD_PATH) {
     RegisterClass reg_class = oat_reg_class_by_size(size);
-    DCHECK_GE(field_offset, 0);
+    DCHECK_GE(annotation.field_offset, 0);
     rl_obj = LoadValue(rl_obj, kCoreReg);
     if (is_long_or_double) {
       int reg_ptr;
       rl_src = LoadValueWide(rl_src, kAnyReg);
       GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
       reg_ptr = AllocTemp();
-      OpRegRegImm(kOpAdd, reg_ptr, rl_obj.low_reg, field_offset);
-      if (is_volatile) {
+      OpRegRegImm(kOpAdd, reg_ptr, rl_obj.low_reg, annotation.field_offset);
+      if (annotation.is_volatile) {
         GenMemBarrier(kStoreStore);
       }
       StoreBaseDispWide(reg_ptr, 0, rl_src.low_reg, rl_src.high_reg);
-      if (is_volatile) {
+      if (annotation.is_volatile) {
         GenMemBarrier(kLoadLoad);
       }
       FreeTemp(reg_ptr);
     } else {
       rl_src = LoadValue(rl_src, reg_class);
       GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
-      if (is_volatile) {
+      if (annotation.is_volatile) {
         GenMemBarrier(kStoreStore);
       }
-      StoreBaseDisp(rl_obj.low_reg, field_offset, rl_src.low_reg, kWord);
-      if (is_volatile) {
+      StoreBaseDisp(rl_obj.low_reg, annotation.field_offset, rl_src.low_reg, kWord);
+      if (annotation.is_volatile) {
         GenMemBarrier(kLoadLoad);
       }
       if (is_object && !mir_graph_->IsConstantNullRef(rl_src)) {
@@ -747,7 +742,8 @@ void Mir2Lir::GenIPut(uint32_t field_idx, int opt_flags, OpSize size,
         is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pSet64Instance)
                           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pSetObjInstance)
                                        : QUICK_ENTRYPOINT_OFFSET(pSet32Instance));
-    CallRuntimeHelperImmRegLocationRegLocation(setter_offset, field_idx, rl_obj, rl_src, true);
+    CallRuntimeHelperImmRegLocationRegLocation(setter_offset, annotation.field_idx, rl_obj, rl_src,
+                                               true);
   }
 }
 

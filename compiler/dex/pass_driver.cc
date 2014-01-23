@@ -85,6 +85,8 @@ void PassDriver::CreatePasses() {
    *   - This is not yet an issue: no current pass would require it.
    */
   static const Pass* passes[] = {
+      GetPassInstance<AnnotateUsedFields>(),
+      GetPassInstance<AnnotateCalledMethods>(),
       GetPassInstance<CodeLayout>(),
       GetPassInstance<SSATransformation>(),
       GetPassInstance<ConstantPropagation>(),

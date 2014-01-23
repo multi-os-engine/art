@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include "compiler_internals.h"
 #include "dataflow_iterator-inl.h"
+#include "dex_instruction.h"
+#include "dex_instruction-inl.h"
 #include "dex/quick/dex_file_method_inliner.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 
@@ -1080,6 +1083,112 @@ bool MIRGraph::SkipCompilation(Runtime::CompilerFilter compiler_filter) {
   }
 
   return ComputeSkipCompilation(&stats, skip_compilation);
+}
+
+void MIRGraph::DoAnnotateUsedFields() {
+  // All IGET/IPUT/SGET/SPUT instructions take 2 code units and there must be a RETURN as well.
+  uint32_t max_refs = (current_code_item_->insns_size_in_code_units_ - 1u) / 2u;
+
+  // Find IGET/IPUT/SGET/SPUT insns, store IGET/IPUT at the beginning, SGET/SPUT at the end.
+  std::vector<MIR*> field_refs;
+  size_t ifield_pos = 0u;
+  size_t sfield_pos = max_refs;
+  AllNodesIterator iter(this);
+  for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
+    if (bb->block_type != kDalvikByteCode) {
+      continue;
+    }
+    for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+      if (mir->dalvikInsn.opcode >= Instruction::IGET &&
+          mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) {
+        if (UNLIKELY(field_refs.empty())) {
+          field_refs.resize(max_refs, nullptr);
+        }
+        const Instruction* insn = Instruction::At(current_code_item_->insns_ + mir->offset);
+        if (mir->dalvikInsn.opcode <= Instruction::IPUT_SHORT) {
+          field_refs[ifield_pos++] = mir;
+          // Temporarily store the field index in meta.ifield_annotation
+          mir->meta.field_idx = insn->VRegC_22c();
+        } else {
+          field_refs[--sfield_pos] = mir;
+          // Temporarily store the field index in meta.sfield_annotation
+          mir->meta.field_idx = insn->VRegB_21c();
+        }
+        DCHECK_LE(ifield_pos, sfield_pos);
+      }
+    }
+  }
+
+  // Sort MIRs by field index.
+  struct Comparator {
+    bool operator()(MIR* lhs, MIR* rhs) const {
+      return lhs->meta.field_idx < rhs->meta.field_idx;
+    }
+  };
+
+  if (ifield_pos != 0u) {
+    // Find and count unique references, set annotation indexes for duplicates.
+    std::sort(field_refs.begin(), field_refs.begin() + ifield_pos, Comparator());
+    MIR* last_unique_mir = field_refs[0];
+    size_t count = 1u;
+    for (size_t pos = 1u; pos != ifield_pos; ++pos) {
+      MIR* mir = field_refs[pos];
+      if (Comparator()(last_unique_mir, mir)) {
+        last_unique_mir = mir;
+        field_refs[count] = mir;
+        ++count;
+      } else {
+        mir->meta.ifield_annotation = count - 1u;
+      }
+    }
+
+    // Prepare unique annotations, set annotation indexes for their MIRs.
+    DCHECK(ifield_annotations_.empty());
+    ifield_annotations_.resize(count, IFieldAnnotation::Unresolved(0u));
+    for (size_t pos = 0u; pos != count; ++pos) {
+      MIR* mir = field_refs[pos];
+      ifield_annotations_[pos].field_idx = mir->meta.field_idx;
+      mir->meta.ifield_annotation = pos;
+    }
+
+    // Annotate fields.
+    cu_->compiler_driver->ComputeInstanceFieldAnnotations(GetCurrentDexCompilationUnit(),
+                                                          &ifield_annotations_[0], count);
+  }
+
+  if (sfield_pos != max_refs) {
+    // Find and count unique references, set annotation indexes for duplicates.
+    std::sort(field_refs.begin() + sfield_pos, field_refs.end(), Comparator());
+    MIR* last_unique_mir = field_refs[sfield_pos];
+    size_t count = 1u;
+    for (size_t pos = sfield_pos + 1u; pos != max_refs; ++pos) {
+      MIR* mir = field_refs[pos];
+      if (Comparator()(last_unique_mir, mir)) {
+        last_unique_mir = mir;
+        field_refs[sfield_pos + count] = mir;
+        ++count;
+      } else {
+        mir->meta.ifield_annotation = count - 1u;
+      }
+    }
+
+    // Prepare unique annotations, set annotation indexes for their MIRs.
+    DCHECK(sfield_annotations_.empty());
+    sfield_annotations_.resize(count, SFieldAnnotation::Unresolved(0u));
+    for (size_t pos = sfield_pos; pos != sfield_pos + count; ++pos) {
+      MIR* mir = field_refs[pos];
+      sfield_annotations_[pos - sfield_pos].field_idx = mir->meta.field_idx;
+      mir->meta.ifield_annotation = pos - sfield_pos;
+    }
+
+    // Annotate fields.
+    cu_->compiler_driver->ComputeStaticFieldAnnotations(GetCurrentDexCompilationUnit(),
+                                                        &sfield_annotations_[0], count);
+  }
+}
+
+void MIRGraph::DoAnnotateCalledMethods() {
+  // TODO
 }
 
 }  // namespace art

@@ -364,53 +364,53 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       break;
 
     case Instruction::IGET_OBJECT:
-      GenIGet(vC, opt_flags, kWord, rl_dest, rl_src[0], false, true);
+      GenIGet(mir, opt_flags, kWord, rl_dest, rl_src[0], false, true);
       break;
 
     case Instruction::IGET_WIDE:
-      GenIGet(vC, opt_flags, kLong, rl_dest, rl_src[0], true, false);
+      GenIGet(mir, opt_flags, kLong, rl_dest, rl_src[0], true, false);
       break;
 
     case Instruction::IGET:
-      GenIGet(vC, opt_flags, kWord, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kWord, rl_dest, rl_src[0], false, false);
       break;
 
     case Instruction::IGET_CHAR:
-      GenIGet(vC, opt_flags, kUnsignedHalf, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kUnsignedHalf, rl_dest, rl_src[0], false, false);
       break;
 
     case Instruction::IGET_SHORT:
-      GenIGet(vC, opt_flags, kSignedHalf, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kSignedHalf, rl_dest, rl_src[0], false, false);
       break;
 
     case Instruction::IGET_BOOLEAN:
     case Instruction::IGET_BYTE:
-      GenIGet(vC, opt_flags, kUnsignedByte, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kUnsignedByte, rl_dest, rl_src[0], false, false);
       break;
 
     case Instruction::IPUT_WIDE:
-      GenIPut(vC, opt_flags, kLong, rl_src[0], rl_src[1], true, false);
+      GenIPut(mir, opt_flags, kLong, rl_src[0], rl_src[1], true, false);
       break;
 
     case Instruction::IPUT_OBJECT:
-      GenIPut(vC, opt_flags, kWord, rl_src[0], rl_src[1], false, true);
+      GenIPut(mir, opt_flags, kWord, rl_src[0], rl_src[1], false, true);
       break;
 
     case Instruction::IPUT:
-      GenIPut(vC, opt_flags, kWord, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, kWord, rl_src[0], rl_src[1], false, false);
       break;
 
     case Instruction::IPUT_BOOLEAN:
     case Instruction::IPUT_BYTE:
-      GenIPut(vC, opt_flags, kUnsignedByte, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, kUnsignedByte, rl_src[0], rl_src[1], false, false);
       break;
 
     case Instruction::IPUT_CHAR:
-      GenIPut(vC, opt_flags, kUnsignedHalf, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, kUnsignedHalf, rl_src[0], rl_src[1], false, false);
       break;
 
     case Instruction::IPUT_SHORT:
-      GenIPut(vC, opt_flags, kSignedHalf, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, kSignedHalf, rl_src[0], rl_src[1], false, false);
       break;
 
     case Instruction::SGET_OBJECT:

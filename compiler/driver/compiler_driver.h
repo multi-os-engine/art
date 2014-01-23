@@ -42,6 +42,8 @@ class AOTCompilationStats;
 class ParallelCompilationManager;
 class DexCompilationUnit;
 class DexFileToMethodInlinerMap;
+class IFieldAnnotation;
+class SFieldAnnotation;
 class OatWriter;
 class TimingLogger;
 class VerifiedMethodsData;
@@ -194,11 +196,24 @@ class CompilerDriver {
                                 int* field_offset, bool* is_volatile)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
+  // For each requested instance field compute whether we can fast path the access with IGET/IPUT.
+  // If yes (at least for IGET), computes the offset and volatility.
+  void ComputeInstanceFieldAnnotations(const DexCompilationUnit* mUnit,
+                                       IFieldAnnotation* annotations, size_t count)
+      LOCKS_EXCLUDED(Locks::mutator_lock_);
+
   // Can we fastpath static field access? Computes field's offset, volatility and whether the
   // field is within the referrer (which can avoid checking class initialization).
   bool ComputeStaticFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit, bool is_put,
                               int* field_offset, int* storage_index,
                               bool* is_referrers_class, bool* is_volatile, bool* is_initialized)
+      LOCKS_EXCLUDED(Locks::mutator_lock_);
+
+  // For each requested static field compute whether we can fast path the access with SGET/SPUT.
+  // If yes (at least for SGET), computes the offset and volatility, storage index, and whether
+  // the access is from the same class or the class can be assumed initialized.
+  void ComputeStaticFieldAnnotations(const DexCompilationUnit* mUnit,
+                                     SFieldAnnotation* annotations, size_t count)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   // Can we fastpath a interface, super class or virtual method call? Computes method's vtable
