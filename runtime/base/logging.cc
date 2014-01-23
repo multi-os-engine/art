@@ -178,10 +178,10 @@ void HexDump::Dump(std::ostream& os) const {
   static const char gHexDigit[] = "0123456789abcdef";
   const unsigned char* addr = reinterpret_cast<const unsigned char*>(address_);
   char out[76];           /* exact fit */
-  unsigned int offset;    /* offset to show while printing */
+  size_t offset;    /* offset to show while printing */
 
   if (show_actual_addresses_) {
-    offset = reinterpret_cast<int>(addr);
+    offset = reinterpret_cast<size_t>(addr);
   } else {
     offset = 0;
   }
@@ -190,9 +190,9 @@ void HexDump::Dump(std::ostream& os) const {
   out[sizeof(out)-1] = '\0';
 
   size_t byte_count = byte_count_;
-  int gap = static_cast<int>(offset & 0x0f);
+  size_t gap = offset & 0x0f;
   while (byte_count) {
-    unsigned int line_offset = offset & ~0x0f;
+    size_t line_offset = offset & ~0x0f;
 
     char* hex = out;
     char* asc = out + 59;
@@ -204,9 +204,9 @@ void HexDump::Dump(std::ostream& os) const {
     hex++;
     hex++;
 
-    int count = std::min(static_cast<int>(byte_count), 16 - gap);
-    CHECK_NE(count, 0);
-    CHECK_LE(count + gap, 16);
+    size_t count = std::min(byte_count, 16 - gap);
+    CHECK_NE(count, 0U);
+    CHECK_LE(count + gap, 16U);
 
     if (gap) {
       /* only on first line */
@@ -214,8 +214,8 @@ void HexDump::Dump(std::ostream& os) const {
       asc += gap;
     }
 
-    int i;
-    for (i = gap ; i < count+gap; i++) {
+    size_t i;
+    for (i = gap ; i < count + gap; i++) {
       *hex++ = gHexDigit[*addr >> 4];
       *hex++ = gHexDigit[*addr & 0x0f];
       hex++;
