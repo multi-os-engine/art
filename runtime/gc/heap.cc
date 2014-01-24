@@ -223,11 +223,13 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   // Compute heap capacity. Continuous spaces are sorted in order of Begin().
   CHECK(!continuous_spaces_.empty());
 
-  std::string error_str;
-  post_zygote_non_moving_space_mem_map_.reset(
-      MemMap::MapAnonymous("post zygote non-moving space", nullptr, 64 * MB,
-                           PROT_READ | PROT_WRITE, &error_str));
-  CHECK(post_zygote_non_moving_space_mem_map_.get() != nullptr) << error_str;
+  if (Runtime::Current()->IsZygote()) {
+    std::string error_str;
+    post_zygote_non_moving_space_mem_map_.reset(
+        MemMap::MapAnonymous("post zygote non-moving space", nullptr, 64 * MB,
+                             PROT_READ | PROT_WRITE, &error_str));
+    CHECK(post_zygote_non_moving_space_mem_map_.get() != nullptr) << error_str;
+  }
   // Relies on the spaces being sorted.
   byte* heap_begin = std::min(post_zygote_non_moving_space_mem_map_->Begin(),
                               continuous_spaces_.front()->Begin());
@@ -795,6 +797,7 @@ bool Heap::IsLiveObjectLocked(const mirror::Object* obj, bool search_allocation_
   if (bump_pointer_space_ != nullptr && bump_pointer_space_->HasAddress(obj)) {
     mirror::Class* klass = obj->GetClass();
     if (obj == klass) {
+      // This case happens for java.lang.Class.
       return true;
     }
     return VerifyClassClass(klass) && IsLiveObjectLocked(klass);
@@ -2119,7 +2122,10 @@ bool Heap::IsMovableObject(const mirror::Object* obj) const {
       return true;
     }
     if (main_space_ != nullptr && main_space_->HasAddress(obj)) {
-      return true;
+      // TODO: Refactor this logic into the space itself?
+      // Objects in the main space are only copied during background -> foreground transitions or
+      // visa versa.
+      return IsCompactingGC(background_collector_type_) || IsCompactingGC(collector_type_);
     }
   }
   return false;
