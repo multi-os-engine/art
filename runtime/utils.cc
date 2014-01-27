@@ -50,7 +50,9 @@
 #include <sys/syscall.h>
 #endif
 
-#include <backtrace/Backtrace.h>  // For DumpNativeStack.
+// For DumpNativeStack.
+#include <backtrace/Backtrace.h>
+#include <backtrace/BacktraceMap.h>
 
 #if defined(__linux__)
 #include <linux/unistd.h>
@@ -1049,8 +1051,14 @@ static std::string CleanMapName(const backtrace_map_t* map) {
   return map->name.substr(last_slash);
 }
 
-void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix, bool include_count) {
-  UniquePtr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid));
+void DumpNativeStack(std::ostream& os, pid_t tid, BacktraceMap* map,
+                     const char* prefix, bool include_count) {
+  UniquePtr<BacktraceMap> new_map;
+  if (map == NULL) {
+    new_map.reset(BacktraceMap::Create(tid));
+    map = new_map.get();
+  }
+  UniquePtr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid, map));
   if (!backtrace->Unwind(0)) {
     os << prefix << "(backtrace::Unwind failed for thread " << tid << ")\n";
     return;

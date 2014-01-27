@@ -28,6 +28,8 @@
 #include "globals.h"
 #include "primitive.h"
 
+class BacktraceMap;
+
 namespace art {
 
 class DexFile;
@@ -352,7 +354,7 @@ std::string GetSchedulerGroupName(pid_t tid);
 void SetThreadName(const char* thread_name);
 
 // Dumps the native stack for thread 'tid' to 'os'.
-void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix = "", bool include_count = true);
+void DumpNativeStack(std::ostream& os, pid_t tid, BacktraceMap* map, const char* prefix = "", bool include_count = true);
 
 // Dumps the kernel stack for thread 'tid' to 'os'. Note that this is only available on linux-x86.
 void DumpKernelStack(std::ostream& os, pid_t tid, const char* prefix = "", bool include_count = true);

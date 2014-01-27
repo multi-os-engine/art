@@ -30,7 +30,7 @@ namespace art {
 
 struct Backtrace {
   void Dump(std::ostream& os) {
-    DumpNativeStack(os, GetTid(), "\t", true);
+    DumpNativeStack(os, GetTid(), NULL, "\t", true);
   }
 };
 
