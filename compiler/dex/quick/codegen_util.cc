@@ -1137,4 +1137,12 @@ void Mir2Lir::InsertLIRAfter(LIR* current_lir, LIR* new_lir) {
   new_lir->next->prev = new_lir;
 }
 
+LIR *Mir2Lir::OpCmpMemImmBranch(ConditionCode cond, int temp_reg, int base_reg,
+                                int offset, int check_value, LIR* target) {
+  // Handle this for architectures that can't compare to memory.
+  LoadWordDisp(base_reg, offset, temp_reg);
+  LIR* branch = OpCmpImmBranch(kCondGe, temp_reg, check_value, target);
+  return branch;
+}
+
 }  // namespace art
