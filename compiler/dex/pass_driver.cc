@@ -16,6 +16,7 @@
 
 #include <dlfcn.h>
 
+#include "base/logging.h"
 #include "bb_optimizations.h"
 #include "compiler_internals.h"
 #include "dataflow_iterator.h"
@@ -34,6 +35,22 @@ template <typename PassType>
 const Pass* GetPassInstance() {
   static const PassType pass;
   return &pass;
+}
+
+void DoWalkBasicBlocks(CompilationUnit* c_unit, const Pass* curPass, DataflowIterator* iterator) {
+  // Paranoid: Check the iterator before walking the BasicBlocks.
+  DCHECK(iterator != nullptr);
+
+  bool change = false;
+  for (BasicBlock *bb = iterator->Next(change); bb != 0; bb = iterator->Next(change)) {
+    change = curPass->WalkBasicBlocks(c_unit, bb);
+  }
+}
+
+template <typename Iterator>
+inline void DoWalkBasicBlocks(CompilationUnit* c_unit, const Pass* curPass) {
+  Iterator iterator(c_unit->mir_graph.get());
+  DoWalkBasicBlocks(c_unit, curPass, &iterator);
 }
 
 }  // anonymous namespace
@@ -114,49 +131,35 @@ void PassDriver::HandlePassFlag(CompilationUnit* c_unit, const Pass* pass) {
 }
 
 void PassDriver::DispatchPass(CompilationUnit* c_unit, const Pass* curPass) {
-  DataflowIterator* iterator = 0;
-
   LOG(DEBUG) << "Dispatching " << curPass->GetName();
 
-  MIRGraph* mir_graph = c_unit->mir_graph.get();
-  ArenaAllocator *arena = &(c_unit->arena);
-
-  // Let us start by getting the right iterator.
   DataFlowAnalysisMode mode = curPass->GetTraversal();
 
   switch (mode) {
     case kPreOrderDFSTraversal:
-      iterator = new (arena) PreOrderDfsIterator(mir_graph);
+      DoWalkBasicBlocks<PreOrderDfsIterator>(c_unit, curPass);
       break;
     case kRepeatingPreOrderDFSTraversal:
-      iterator = new (arena) RepeatingPreOrderDfsIterator(mir_graph);
+      DoWalkBasicBlocks<RepeatingPreOrderDfsIterator>(c_unit, curPass);
       break;
     case kRepeatingPostOrderDFSTraversal:
-      iterator = new (arena) RepeatingPostOrderDfsIterator(mir_graph);
+      DoWalkBasicBlocks<RepeatingPostOrderDfsIterator>(c_unit, curPass);
       break;
     case kReversePostOrderDFSTraversal:
-      iterator = new (arena) ReversePostOrderDfsIterator(mir_graph);
+      DoWalkBasicBlocks<ReversePostOrderDfsIterator>(c_unit, curPass);
       break;
     case kRepeatingReversePostOrderDFSTraversal:
-      iterator = new (arena) RepeatingReversePostOrderDfsIterator(mir_graph);
+      DoWalkBasicBlocks<RepeatingReversePostOrderDfsIterator>(c_unit, curPass);
       break;
     case kPostOrderDOMTraversal:
-      iterator = new (arena) PostOrderDOMIterator(mir_graph);
+      DoWalkBasicBlocks<PostOrderDOMIterator>(c_unit, curPass);
       break;
     case kAllNodes:
-      iterator = new (arena) AllNodesIterator(mir_graph);
+      DoWalkBasicBlocks<AllNodesIterator>(c_unit, curPass);
       break;
     default:
       LOG(DEBUG) << "Iterator mode not handled in dispatcher: " << mode;
       return;
-  }
-
-  // Paranoid: Check the iterator before walking the BasicBlocks.
-  assert(iterator != 0);
-
-  bool change = false;
-  for (BasicBlock *bb = iterator->Next(change); bb != 0; bb = iterator->Next(change)) {
-    change = curPass->WalkBasicBlocks(c_unit, bb);
   }
 }
 
