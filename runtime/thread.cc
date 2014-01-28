@@ -992,7 +992,8 @@ void Thread::AssertNoPendingException() const {
   }
 }
 
-static mirror::Object* MonitorExitVisitor(mirror::Object* object, void* arg)
+static mirror::Object* MonitorExitVisitor(mirror::Object* object, void* arg, pid_t /*tid*/,
+                                          RootType /*root_type*/)
     NO_THREAD_SAFETY_ANALYSIS {
   Thread* self = reinterpret_cast<Thread*>(arg);
   mirror::Object* entered_monitor = object;
@@ -1034,7 +1035,7 @@ void Thread::Destroy() {
 
   // On thread detach, all monitors entered with JNI MonitorEnter are automatically exited.
   if (jni_env_ != nullptr) {
-    jni_env_->monitors.VisitRoots(MonitorExitVisitor, self);
+    jni_env_->monitors.VisitRoots(MonitorExitVisitor, self, 0, kRootVMInternal);
   }
 }
 
@@ -1144,16 +1145,17 @@ bool Thread::SirtContains(jobject obj) const {
   return managed_stack_.ShadowFramesContain(sirt_entry);
 }
 
-void Thread::SirtVisitRoots(RootVisitor* visitor, void* arg) {
+void Thread::SirtVisitRoots(RootCallback* visitor, void* arg) {
+  uint32_t tid = GetTid();
   for (StackIndirectReferenceTable* cur = top_sirt_; cur; cur = cur->GetLink()) {
     size_t num_refs = cur->NumberOfReferences();
     for (size_t j = 0; j < num_refs; ++j) {
       mirror::Object* object = cur->GetReference(j);
       if (object != nullptr) {
-        const mirror::Object* new_obj = visitor(object, arg);
+        mirror::Object* new_obj = visitor(object, arg, tid, kRootNativeStack);
         DCHECK(new_obj != nullptr);
         if (new_obj != object) {
-          cur->SetReference(j, const_cast<mirror::Object*>(new_obj));
+          cur->SetReference(j, new_obj);
         }
       }
     }
@@ -1954,31 +1956,17 @@ class ReferenceMapVisitor : public StackVisitor {
 
 class RootCallbackVisitor {
  public:
-  RootCallbackVisitor(RootVisitor* visitor, void* arg) : visitor_(visitor), arg_(arg) {}
+  RootCallbackVisitor(RootCallback* callback, void* arg, uint32_t tid)
+     : callback_(callback), arg_(arg), tid_(tid) {}
 
   mirror::Object* operator()(mirror::Object* obj, size_t, const StackVisitor*) const {
-    return visitor_(obj, arg_);
+    return callback_(obj, arg_, tid_, kRootJavaFrame);
   }
 
  private:
-  RootVisitor* visitor_;
+  RootCallback* callback_;
   void* arg_;
-};
-
-class VerifyCallbackVisitor {
- public:
-  VerifyCallbackVisitor(VerifyRootVisitor* visitor, void* arg)
-      : visitor_(visitor),
-        arg_(arg) {
-  }
-
-  void operator()(const mirror::Object* obj, size_t vreg, const StackVisitor* visitor) const {
-    visitor_(obj, arg_, vreg, visitor);
-  }
-
- private:
-  VerifyRootVisitor* const visitor_;
-  void* const arg_;
+  uint32_t tid_;
 };
 
 void Thread::SetClassLoaderOverride(mirror::ClassLoader* class_loader_override) {
@@ -1988,39 +1976,41 @@ void Thread::SetClassLoaderOverride(mirror::ClassLoader* class_loader_override) 
   class_loader_override_ = class_loader_override;
 }
 
-void Thread::VisitRoots(RootVisitor* visitor, void* arg) {
+void Thread::VisitRoots(RootCallback* visitor, void* arg) {
+  uint32_t tid = GetTid();
   if (opeer_ != nullptr) {
-    opeer_ = visitor(opeer_, arg);
+    opeer_ = visitor(opeer_, arg, tid, kRootThreadObject);
   }
   if (exception_ != nullptr) {
-    exception_ = down_cast<mirror::Throwable*>(visitor(exception_, arg));
+    exception_ = down_cast<mirror::Throwable*>(visitor(exception_, arg, tid, kRootNativeStack));
   }
   throw_location_.VisitRoots(visitor, arg);
   if (class_loader_override_ != nullptr) {
-    class_loader_override_ = down_cast<mirror::ClassLoader*>(visitor(class_loader_override_, arg));
+    class_loader_override_ =
+        down_cast<mirror::ClassLoader*>(visitor(class_loader_override_, arg, tid,
+                                                kRootNativeStack));
   }
-  jni_env_->locals.VisitRoots(visitor, arg);
-  jni_env_->monitors.VisitRoots(visitor, arg);
-
+  jni_env_->locals.VisitRoots(visitor, arg, tid, kRootJNILocal);
+  jni_env_->monitors.VisitRoots(visitor, arg, tid, kRootJNIMonitor);
   SirtVisitRoots(visitor, arg);
-
   // Visit roots on this thread's stack
   Context* context = GetLongJumpContext();
-  RootCallbackVisitor visitorToCallback(visitor, arg);
+  RootCallbackVisitor visitorToCallback(visitor, arg, tid);
   ReferenceMapVisitor<RootCallbackVisitor> mapper(this, context, visitorToCallback);
   mapper.WalkStack();
   ReleaseLongJumpContext(context);
-
   for (instrumentation::InstrumentationStackFrame& frame : *GetInstrumentationStack()) {
     if (frame.this_object_ != nullptr) {
-      frame.this_object_ = visitor(frame.this_object_, arg);
+      frame.this_object_ = visitor(frame.this_object_, arg, tid, kRootJavaFrame);
     }
     DCHECK(frame.method_ != nullptr);
-    frame.method_ = down_cast<mirror::ArtMethod*>(visitor(frame.method_, arg));
+    frame.method_ = down_cast<mirror::ArtMethod*>(visitor(frame.method_, arg, tid,
+                                                          kRootJavaFrame));
   }
 }
 
-static mirror::Object* VerifyRoot(mirror::Object* root, void* arg) {
+static mirror::Object* VerifyRoot(mirror::Object* root, void* arg, pid_t /*tid*/,
+                                  RootType /*root_type*/) {
   DCHECK(root != nullptr);
   DCHECK(arg != nullptr);
   reinterpret_cast<gc::Heap*>(arg)->VerifyObject(root);
@@ -2029,7 +2019,7 @@ static mirror::Object* VerifyRoot(mirror::Object* root, void* arg) {
 
 void Thread::VerifyStackImpl() {
   UniquePtr<Context> context(Context::Create());
-  RootCallbackVisitor visitorToCallback(VerifyRoot, Runtime::Current()->GetHeap());
+  RootCallbackVisitor visitorToCallback(VerifyRoot, Runtime::Current()->GetHeap(), GetTid());
   ReferenceMapVisitor<RootCallbackVisitor> mapper(this, context.get(), visitorToCallback);
   mapper.WalkStack();
 }

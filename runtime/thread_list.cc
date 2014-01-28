@@ -756,28 +756,29 @@ void ThreadList::ForEach(void (*callback)(Thread*, void*), void* context) {
   }
 }
 
-void ThreadList::VisitRoots(RootVisitor* visitor, void* arg) const {
+void ThreadList::VisitRoots(RootCallback* callback, void* arg) const {
   MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
   for (const auto& thread : list_) {
-    thread->VisitRoots(visitor, arg);
+    thread->VisitRoots(callback, arg);
   }
 }
 
 struct VerifyRootWrapperArg {
-  VerifyRootVisitor* visitor;
-  void* arg;
+  VerifyRootCallback* callback_;
+  void* arg_;
 };
 
-static mirror::Object* VerifyRootWrapperCallback(mirror::Object* root, void* arg) {
+static mirror::Object* VerifyRootWrapperCallback(mirror::Object* root, void* arg,
+                                                 pid_t /*pid*/, RootType /*root_type*/) {
   VerifyRootWrapperArg* wrapperArg = reinterpret_cast<VerifyRootWrapperArg*>(arg);
-  wrapperArg->visitor(root, wrapperArg->arg, 0, NULL);
+  wrapperArg->callback_(root, wrapperArg->arg_, 0, NULL);
   return root;
 }
 
-void ThreadList::VerifyRoots(VerifyRootVisitor* visitor, void* arg) const {
+void ThreadList::VerifyRoots(VerifyRootCallback* callback, void* arg) const {
   VerifyRootWrapperArg wrapper;
-  wrapper.visitor = visitor;
-  wrapper.arg = arg;
+  wrapper.callback_ = callback;
+  wrapper.arg_ = arg;
   MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
   for (const auto& thread : list_) {
     thread->VisitRoots(VerifyRootWrapperCallback, &wrapper);
