@@ -32,7 +32,7 @@
 
 namespace art {
 
-#if !defined(NDEBUG)
+#if !defined(NDEBUG) && 0
 
 static std::ostream& operator<<(
     std::ostream& os,
