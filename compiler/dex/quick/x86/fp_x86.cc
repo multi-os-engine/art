@@ -130,6 +130,45 @@ void X86Mir2Lir::GenArithOpDouble(Instruction::Code opcode,
   StoreValueWide(rl_dest, rl_result);
 }
 
+void X86Mir2Lir::GenLongToFP(RegLocation rl_dest, RegLocation rl_src, bool is_double) {
+  // Compute offsets to the source and destination VRs on stack
+  int src_v_reg_offset = SRegOffset(rl_src.s_reg_low);
+  int dest_v_reg_offset = SRegOffset(rl_dest.s_reg_low);
+
+  // Update the in-register state of source and destination.
+  rl_src = UpdateLocWide(rl_src);
+  RegLocation rl_result = is_double ? UpdateLocWide(rl_dest) : UpdateLoc(rl_dest);
+
+  // If the source is in physical register, then put it in its location on stack.
+  if (rl_src.location == kLocPhysReg) {
+    StoreBaseDispWide(TargetReg(kSp), src_v_reg_offset, rl_src.low_reg, rl_src.high_reg);
+  }
+
+  // Push the source virtual register onto the x87 stack.
+  LIR *fild64 = NewLIR2NoDest(kX86Fild64M, TargetReg(kSp), src_v_reg_offset + LOWORD_OFFSET);
+  AnnotateDalvikRegAccess(fild64, (src_v_reg_offset + LOWORD_OFFSET) >> 2,
+      true /* is_load */, true /* is64bit */);
+
+  // Now pop off x87 stack and store it in the destination VR's stack location.
+  int opcode = is_double ? kX86Fstp64M : kX86Fstp32M;
+  int displacement = is_double ? dest_v_reg_offset + LOWORD_OFFSET : dest_v_reg_offset;
+  LIR *fstp = NewLIR2NoDest(opcode, TargetReg(kSp), displacement);
+  AnnotateDalvikRegAccess(fstp, displacement >> 2, false /* is_load */, is_double);
+
+  // If the destination was register promoted, then we must load it from stack.
+  if (rl_result.location == kLocPhysReg) {
+    if (is_double) {
+      LoadBaseDispWide(TargetReg(kSp), dest_v_reg_offset, rl_result.low_reg, rl_result.high_reg, INVALID_SREG);
+
+      StoreValueWide(rl_dest, rl_result);
+    } else {
+      LoadWordDisp(TargetReg(kSp), dest_v_reg_offset, rl_result.low_reg);
+
+      StoreValue(rl_dest, rl_result);
+    }
+  }
+}
+
 void X86Mir2Lir::GenConversion(Instruction::Code opcode, RegLocation rl_dest,
                                RegLocation rl_src) {
   RegisterClass rcSrc = kFPReg;
@@ -198,11 +237,10 @@ void X86Mir2Lir::GenConversion(Instruction::Code opcode, RegLocation rl_dest,
       return;
     }
     case Instruction::LONG_TO_DOUBLE:
-      GenConversionCall(QUICK_ENTRYPOINT_OFFSET(pL2d), rl_dest, rl_src);
+      GenLongToFP(rl_dest, rl_src, true /* is_double */);
       return;
     case Instruction::LONG_TO_FLOAT:
-      // TODO: inline by using memory as a 64-bit source. Be careful about promoted registers.
-      GenConversionCall(QUICK_ENTRYPOINT_OFFSET(pL2f), rl_dest, rl_src);
+      GenLongToFP(rl_dest, rl_src, false /* is_double */);
       return;
     case Instruction::FLOAT_TO_LONG:
       GenConversionCall(QUICK_ENTRYPOINT_OFFSET(pF2l), rl_dest, rl_src);

@@ -327,6 +327,7 @@ class Mir2Lir : public Backend {
     LIR* NewLIR0(int opcode);
     LIR* NewLIR1(int opcode, int dest);
     LIR* NewLIR2(int opcode, int dest, int src1);
+    LIR* NewLIR2NoDest(int opcode, int src, int info);
     LIR* NewLIR3(int opcode, int dest, int src1, int src2);
     LIR* NewLIR4(int opcode, int dest, int src1, int src2, int info);
     LIR* NewLIR5(int opcode, int dest, int src1, int src2, int info1, int info2);
