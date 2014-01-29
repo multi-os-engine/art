@@ -104,7 +104,7 @@ bool VerificationResults::IsCandidateForCompilation(MethodReference& method_ref,
   if (((access_flags & kAccConstructor) != 0) && ((access_flags & kAccStatic) != 0)) {
     return false;
   }
-  return (Runtime::Current()->GetCompilerFilter() != Runtime::kInterpretOnly);
+  return true;
 }
 
 }  // namespace art

@@ -278,14 +278,24 @@ static CompiledMethod* CompileMethod(CompilerDriver& compiler,
     cu.mir_graph->EnableOpcodeCounting();
   }
 
+  // Check early if we should skip this compilation.
+  if (Runtime::Current()->GetCompilerFilter() == Runtime::kInterpretOnly) {
+    std::string methodname = PrettyMethod(method_idx, dex_file);
+    if (cu.mir_graph->SkipCompilation(methodname)) {
+      return NULL;
+    }
+  }
+
   /* Build the raw MIR graph */
   cu.mir_graph->InlineMethod(code_item, access_flags, invoke_type, class_def_idx, method_idx,
                               class_loader, dex_file);
 
   cu.NewTimingSplit("MIROpt:CheckFilters");
 #if !defined(ART_USE_PORTABLE_COMPILER)
-  if (cu.mir_graph->SkipCompilation(Runtime::Current()->GetCompilerFilter())) {
-    return NULL;
+  if (Runtime::Current()->GetCompilerFilter() != Runtime::kInterpretOnly) {
+    if (cu.mir_graph->SkipCompilation(Runtime::Current()->GetCompilerFilter())) {
+      return NULL;
+    }
   }
 #endif
 

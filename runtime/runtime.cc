@@ -67,6 +67,10 @@
 
 #include "JniConstants.h"  // Last to avoid LOG redefinition in ics-mr1-plus-art.
 
+#ifdef HAVE_ANDROID_OS
+#include "cutils/properties.h"
+#endif
+
 namespace art {
 
 Runtime* Runtime::instance_ = NULL;
@@ -474,11 +478,12 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   parsed->method_trace_file_ = "/data/method-trace-file.bin";
   parsed->method_trace_file_size_ = 10 * MB;
 
+  // These will be set by command line options.
   parsed->profile_ = false;
-  parsed->profile_period_s_ = 10;           // Seconds.
-  parsed->profile_duration_s_ = 20;          // Seconds.
-  parsed->profile_interval_us_ = 500;       // Microseconds.
-  parsed->profile_backoff_coefficient_ = 2.0;
+  parsed->profile_period_s_ = 0;             // Seconds.
+  parsed->profile_duration_s_ = 0;           // Seconds.
+  parsed->profile_interval_us_ = 0;        // uSeconds.
+  parsed->profile_backoff_coefficient_ = 0;
 
   for (size_t i = 0; i < options.size(); ++i) {
     const std::string option(options[i].first);
@@ -871,7 +876,7 @@ bool Runtime::Start() {
 
   if (profile_) {
     // User has asked for a profile using -Xprofile
-    StartProfiler(profile_output_filename_.c_str(), true);
+    StartProfiler(profile_output_filename_.c_str(), "", true);
   }
 
   return true;
@@ -1544,8 +1549,13 @@ void Runtime::RemoveMethodVerifier(verifier::MethodVerifier* verifier) {
   method_verifiers_.erase(it);
 }
 
-void Runtime::StartProfiler(const char *appDir, bool startImmediately) {
-  BackgroundMethodSamplingProfiler::Start(profile_period_s_, profile_duration_s_, appDir, profile_interval_us_,
+void Runtime::StartProfiler(const char* appDir, const char* procName, bool startImmediately) {
+  BackgroundMethodSamplingProfiler::Start(profile_period_s_, profile_duration_s_, appDir,
+      procName, profile_interval_us_,
       profile_backoff_coefficient_, startImmediately);
+}
+
+void Runtime::UpdateProfilerState(int state) {
+  LOG(DEBUG) << "Profiler state updated to " << state;
 }
 }  // namespace art
