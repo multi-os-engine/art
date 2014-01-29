@@ -21,6 +21,7 @@
 
 #include <vector>
 #include <unistd.h>
+#include <fstream>
 
 #include "base/stl_util.h"
 #include "base/timing_logger.h"
@@ -302,7 +303,8 @@ CompilerDriver::CompilerDriver(VerificationResults* verification_results,
                                InstructionSet instruction_set,
                                InstructionSetFeatures instruction_set_features,
                                bool image, DescriptorSet* image_classes, size_t thread_count,
-                               bool dump_stats, bool dump_passes, CumulativeLogger* timer)
+                               bool dump_stats, bool dump_passes, CumulativeLogger* timer,
+                               std::string profile_file)
     : verification_results_(verification_results),
       method_inliner_map_(method_inliner_map),
       compiler_backend_(CompilerBackend::Create(compiler_backend_kind)),
@@ -330,6 +332,11 @@ CompilerDriver::CompilerDriver(VerificationResults* verification_results,
       dedupe_gc_map_("dedupe gc map") {
 
   CHECK_PTHREAD_CALL(pthread_key_create, (&tls_key_, NULL), "compiler tls key");
+
+  // Read the profile file if one is provided.
+  if (profile_file != "") {
+    ReadProfile(profile_file);
+  }
 
   dex_to_dex_compiler_ = reinterpret_cast<DexToDexCompilerFn>(ArtCompileDEX);
 
@@ -1933,7 +1940,6 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
   } else {
     MethodReference method_ref(&dex_file, method_idx);
     bool compile = VerificationResults::IsCandidateForCompilation(method_ref, access_flags);
-
     if (compile) {
       // NOTE: if compiler declines to compile this method, it will return NULL.
       compiled_method = compiler_backend_->Compile(
@@ -2080,4 +2086,83 @@ void CompilerDriver::InstructionSetToLLVMTarget(InstructionSet instruction_set,
       LOG(FATAL) << "Unknown instruction set: " << instruction_set;
     }
   }
+
+void CompilerDriver::ReadProfile(const std::string& filename) {
+  VLOG(compiler) << "reading profile file " << filename;
+  struct stat st;
+  int err = stat(filename.c_str(), &st);
+  if (err == -1) {
+    VLOG(compiler) << "not found";
+    return;
+  }
+  std::ifstream in(filename.c_str());
+  if (!in) {
+    VLOG(compiler) << "profile file " << filename << " exists but can't be opened";
+    VLOG(compiler) << "file owner: " << st.st_uid << ":" << st.st_gid;
+    VLOG(compiler) << "me: " << getuid() << ":" << getgid();
+    VLOG(compiler) << "file permissions: " << std::oct << st.st_mode;
+    VLOG(compiler) << "errno: " << errno;
+    return;
+  }
+  // The first line contains summary information.
+  std::string line;
+  std::getline(in, line);
+  if (in.eof()) {
+    return;
+  }
+  std::vector<std::string> summary_info;
+  Split(line, '/', summary_info);
+  if (summary_info.size() != 3) {
+    // Bad summary info.  It should be count/total/bootpath
+    return;
+  }
+  // This is the number of hits in all methods.
+  uint32_t total_count = 0;
+  for (int i = 0 ; i < 3; ++i) {
+    total_count += atoi(summary_info[0].c_str());
+  }
+
+  // Now read each line until the end of file.  Each line consists of 3 fields separated by /
+  while (!in.eof()) {
+    std::getline(in, line);
+    if (in.eof()) {
+      break;
+    }
+    std::vector<std::string> info;
+    Split(line, '/', info);
+    if (info.size() != 3) {
+      // Malformed.
+      break;
+    }
+    const std::string& methodname = info[0];
+    uint32_t count = atoi(info[1].c_str());
+    uint32_t size = atoi(info[2].c_str());
+    double percent = (count * 100.0) / total_count;
+    // Add it to the profile map
+    profile_map_[methodname] = ProfileData(methodname, count, size, percent);
+  }
+}
+
+bool CompilerDriver::SkipCompilation(const std::string& method_name) {
+  constexpr double kThresholdPercent = 2.0;      // Anything above this threshold will be compiled.
+
+  // First find the method in the profile map.
+  ProfileMap::iterator i = profile_map_.find(method_name);
+  if (i == profile_map_.end()) {
+    // Not in profile, no information can be determined.   This will be called in SMART mode
+    // so we don't want to compile anything that is not in the profile.
+    VLOG(compiler) << "not compiling " << method_name << " because it's not in the profile";
+    return true;
+  }
+  const ProfileData& data = i->second;
+  bool compile = data.IsAbove(kThresholdPercent);
+  if (compile) {
+    LOG(INFO) << "compiling method " << method_name << " because its usage is " <<
+        data.GetPercent() << "%";
+  } else {
+    VLOG(compiler) << "not compiling method " << method_name << " because usage is too low ("
+        << data.GetPercent() << "%)";
+  }
+  return !compile;
+}
 }  // namespace art

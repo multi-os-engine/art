@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <limits>
 #include <vector>
+#include <fcntl.h>
 
 #include "arch/arm/registers_arm.h"
 #include "arch/mips/registers_mips.h"
@@ -67,6 +68,10 @@
 #include "well_known_classes.h"
 
 #include "JniConstants.h"  // Last to avoid LOG redefinition in ics-mr1-plus-art.
+
+#ifdef HAVE_ANDROID_OS
+#include "cutils/properties.h"
+#endif
 
 namespace art {
 
@@ -476,10 +481,11 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   parsed->method_trace_file_ = "/data/method-trace-file.bin";
   parsed->method_trace_file_size_ = 10 * MB;
 
+  // These will be set by command line options.
   parsed->profile_ = false;
-  parsed->profile_period_s_ = 10;           // Seconds.
-  parsed->profile_duration_s_ = 20;          // Seconds.
-  parsed->profile_interval_us_ = 500;       // Microseconds.
+  parsed->profile_period_s_ = 10;             // Seconds.
+  parsed->profile_duration_s_ = 30;           // Seconds.
+  parsed->profile_interval_us_ = 10000;        // uSeconds.
   parsed->profile_backoff_coefficient_ = 2.0;
 
   for (size_t i = 0; i < options.size(); ++i) {
@@ -710,7 +716,7 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
     } else if (option == "-Xprofile:dualclock") {
       Trace::SetDefaultClockSource(kProfilerClockSourceDual);
     } else if (StartsWith(option, "-Xprofile:")) {
-      parsed->profile_output_filename_ = StringAfterChar(option, ';');
+      parsed->profile_output_filename_ = StringAfterChar(option, ':');
       parsed->profile_ = true;
     } else if (StartsWith(option, "-Xprofile-period:")) {
       parsed->profile_period_s_ = ParseIntegerOrDie(option, ':');
@@ -723,6 +729,8 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
           option, ':', 1.0, 10.0, ignore_unrecognized, parsed->profile_backoff_coefficient_);
     } else if (option == "-compiler-filter:interpret-only") {
       parsed->compiler_filter_ = kInterpretOnly;
+    } else if (option == "-compiler-filter:profiled") {
+      parsed->compiler_filter_ = kProfiled;
     } else if (option == "-compiler-filter:space") {
       parsed->compiler_filter_ = kSpace;
     } else if (option == "-compiler-filter:balanced") {
@@ -874,7 +882,12 @@ bool Runtime::Start() {
 
   if (profile_) {
     // User has asked for a profile using -Xprofile
-    StartProfiler(profile_output_filename_.c_str(), true);
+    // Create the profile file if it doesn't exist.
+    int fd = open(profile_output_filename_.c_str(), O_RDWR|O_CREAT|O_EXCL, 0660);
+    if (fd >= 0) {
+      close(fd);
+    }
+    StartProfiler(profile_output_filename_.c_str(), "", true);
   }
 
   return true;
@@ -1547,8 +1560,9 @@ void Runtime::RemoveMethodVerifier(verifier::MethodVerifier* verifier) {
   method_verifiers_.erase(it);
 }
 
-void Runtime::StartProfiler(const char *appDir, bool startImmediately) {
-  BackgroundMethodSamplingProfiler::Start(profile_period_s_, profile_duration_s_, appDir, profile_interval_us_,
+void Runtime::StartProfiler(const char* appDir, const char* procName, bool startImmediately) {
+  BackgroundMethodSamplingProfiler::Start(profile_period_s_, profile_duration_s_, appDir,
+      procName, profile_interval_us_,
       profile_backoff_coefficient_, startImmediately);
 }
 
@@ -1620,5 +1634,9 @@ void Runtime::RecordWeakStringRemoval(mirror::String* s, uint32_t hash_code) con
   DCHECK(IsCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction->RecordWeakStringRemoval(s, hash_code);
+}
+
+void Runtime::UpdateProfilerState(int state) {
+  LOG(DEBUG) << "Profiler state updated to " << state;
 }
 }  // namespace art

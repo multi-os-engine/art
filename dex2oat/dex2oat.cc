@@ -155,6 +155,8 @@ static void Usage(const char* fmt, ...) {
   UsageError("      such as initial heap size, maximum heap size, and verbose output.");
   UsageError("      Use a separate --runtime-arg switch for each argument.");
   UsageError("      Example: --runtime-arg -Xms256m");
+    UsageError("");
+    UsageError("  --profile-file=<filename>: specify profiler output file to use for compilation.");
   UsageError("");
   std::cerr << "See log for usage error information\n";
   exit(EXIT_FAILURE);
@@ -256,7 +258,8 @@ class Dex2Oat {
                                       bool dump_stats,
                                       bool dump_passes,
                                       TimingLogger& timings,
-                                      CumulativeLogger& compiler_phases_timings) {
+                                      CumulativeLogger& compiler_phases_timings,
+                                      std::string profile_file) {
     // SirtRef and ClassLoader creation needs to come after Runtime::Create
     jobject class_loader = NULL;
     Thread* self = Thread::Current();
@@ -285,7 +288,8 @@ class Dex2Oat {
                                                         thread_count_,
                                                         dump_stats,
                                                         dump_passes,
-                                                        &compiler_phases_timings));
+                                                        &compiler_phases_timings,
+                                                        profile_file));
 
     if (compiler_backend_ == CompilerBackend::kPortable) {
       driver->SetBitcodeFileName(bitcode_filename);
@@ -707,6 +711,8 @@ static int dex2oat(int argc, char** argv) {
   InstructionSet instruction_set = kNone;
 #endif
 
+  // Profile file to use
+  std::string profile_file;
 
   bool is_host = false;
   bool dump_stats = false;
@@ -811,6 +817,12 @@ static int dex2oat(int argc, char** argv) {
       dump_passes = true;
     } else if (option == "--dump-stats") {
       dump_stats = true;
+    } else if (option.starts_with("--profile-file=")) {
+      profile_file = option.substr(strlen("--profile-file=")).data();
+      VLOG(compiler) << "dex2oat: profile file is " << profile_file;
+    } else if (option == "--no-profile-file") {
+      LOG(INFO) << "dex2oat: no profile file supplied (explictly)";
+      // No profile
     } else {
       Usage("Unknown argument %s", option.data());
     }
@@ -1057,7 +1069,7 @@ static int dex2oat(int argc, char** argv) {
    * If we're not in interpret-only mode, go ahead and compile small applications. Don't
    * bother to check if we're doing the image.
    */
-  if (!image && (Runtime::Current()->GetCompilerFilter() != Runtime::kInterpretOnly)) {
+  if (!image && Runtime::Current()->GetCompilerFilter() != Runtime::kInterpretOnly) {
     size_t num_methods = 0;
     for (size_t i = 0; i != dex_files.size(); ++i) {
       const DexFile* dex_file = dex_files[i];
@@ -1065,6 +1077,7 @@ static int dex2oat(int argc, char** argv) {
       num_methods += dex_file->NumMethodIds();
     }
     if (num_methods <= Runtime::Current()->GetNumDexMethodsThreshold()) {
+      LOG(INFO) << "setting compiler filter to kSpeed";
       Runtime::Current()->SetCompilerFilter(Runtime::kSpeed);
       VLOG(compiler) << "Below method threshold, compiling anyways";
     }
@@ -1082,7 +1095,8 @@ static int dex2oat(int argc, char** argv) {
                                                                   dump_stats,
                                                                   dump_passes,
                                                                   timings,
-                                                                  compiler_phases_timings));
+                                                                  compiler_phases_timings,
+                                                                  profile_file));
 
   if (compiler.get() == NULL) {
     LOG(ERROR) << "Failed to create oat file: " << oat_location;

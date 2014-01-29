@@ -572,6 +572,9 @@ bool ClassLinker::GenerateOatFile(const char* dex_filename,
     case Runtime::kInterpretOnly:
       oat_compiler_filter_string += "interpret-only";
       break;
+    case Runtime::kProfiled:
+      oat_compiler_filter_string += "profiled";
+      break;
     case Runtime::kSpace:
       oat_compiler_filter_string += "space";
       break;

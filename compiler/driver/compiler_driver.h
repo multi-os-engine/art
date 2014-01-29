@@ -101,7 +101,8 @@ class CompilerDriver {
                           InstructionSetFeatures instruction_set_features,
                           bool image, DescriptorSet* image_classes,
                           size_t thread_count, bool dump_stats, bool dump_passes,
-                          CumulativeLogger* timer);
+                          CumulativeLogger* timer,
+                          std::string profile_file = "");
 
   ~CompilerDriver();
 
@@ -489,6 +490,35 @@ class CompilerDriver {
   std::vector<uint8_t>* DeduplicateMappingTable(const std::vector<uint8_t>& code);
   std::vector<uint8_t>* DeduplicateVMapTable(const std::vector<uint8_t>& code);
   std::vector<uint8_t>* DeduplicateGCMap(const std::vector<uint8_t>& code);
+
+  // Profile data.  This is generated from previous runs of the program and stored
+  // in a file.  It is used to determine whether to compile a particular method or not.
+  class ProfileData {
+   public:
+    ProfileData() : count_(0), method_size_(0), percent_(0) {}
+    ProfileData(std::string method_name, uint32_t count, uint32_t method_size, double percent) :
+      method_name_(method_name), count_(count), method_size_(method_size), percent_(percent) {
+    }
+
+    bool IsAbove(double v) const { return percent_ >= v; }
+    double GetPercent() const { return percent_; }
+
+   private:
+    std::string method_name_;   // Method name.
+    uint32_t count_;            // Number number of times it has been called.
+    uint32_t method_size_;      // Size of the method on dex instructions.
+    double percent_;            // Percentage of time spent in this method.
+  };
+
+  // Profile data is stored in a map, indexed by the full method name.
+  typedef std::map<const std::string, ProfileData> ProfileMap;
+  ProfileMap profile_map_;
+
+  // Read the profile data from the given file.  Calculates the percentage for each method.
+  void ReadProfile(const std::string& filename);
+
+  // Should the compiler run on this method given profile information?
+  bool SkipCompilation(const std::string& method_name);
 
  private:
   // Compute constant code and method pointers when possible

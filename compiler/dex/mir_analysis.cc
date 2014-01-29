@@ -994,15 +994,13 @@ bool MIRGraph::ComputeSkipCompilation(MethodStats* stats, bool skip_default) {
 
  /*
   * Will eventually want this to be a bit more sophisticated and happen at verification time.
-  * Ultimate goal is to drive with profile data.
   */
 bool MIRGraph::SkipCompilation(Runtime::CompilerFilter compiler_filter) {
   if (compiler_filter == Runtime::kEverything) {
     return false;
   }
 
-  if (compiler_filter == Runtime::kInterpretOnly) {
-    LOG(WARNING) << "InterpretOnly should ideally be filtered out prior to parsing.";
+  if (compiler_filter == Runtime::kInterpretOnly || compiler_filter == Runtime::kProfiled) {
     return true;
   }
 
@@ -1080,6 +1078,10 @@ bool MIRGraph::SkipCompilation(Runtime::CompilerFilter compiler_filter) {
   }
 
   return ComputeSkipCompilation(&stats, skip_compilation);
+}
+
+bool MIRGraph::SkipCompilation(const std::string& methodname) {
+  return cu_->compiler_driver->SkipCompilation(methodname);
 }
 
 }  // namespace art
