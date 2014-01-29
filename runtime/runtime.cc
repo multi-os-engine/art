@@ -544,10 +544,10 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
           parsed->heap_target_utilization_);
     } else if (StartsWith(option, "-XX:ParallelGCThreads=")) {
       parsed->parallel_gc_threads_ =
-          ParseMemoryOption(option.substr(strlen("-XX:ParallelGCThreads=")).c_str(), 1024);
+          ParseMemoryOption(option.substr(strlen("-XX:ParallelGCThreads=")).c_str(), 1);
     } else if (StartsWith(option, "-XX:ConcGCThreads=")) {
       parsed->conc_gc_threads_ =
-          ParseMemoryOption(option.substr(strlen("-XX:ConcGCThreads=")).c_str(), 1024);
+          ParseMemoryOption(option.substr(strlen("-XX:ConcGCThreads=")).c_str(), 1);
     } else if (StartsWith(option, "-Xss")) {
       size_t size = ParseMemoryOption(option.substr(strlen("-Xss")).c_str(), 1);
       if (size == 0) {
@@ -565,10 +565,10 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
                   nullptr, 10);
     } else if (option == "-XX:LongPauseLogThreshold") {
       parsed->long_pause_log_threshold_ =
-          ParseMemoryOption(option.substr(strlen("-XX:LongPauseLogThreshold=")).c_str(), 1024);
+          MsToNs(ParseMemoryOption(option.substr(strlen("-XX:LongPauseLogThreshold=")).c_str(), 1));
     } else if (option == "-XX:LongGCLogThreshold") {
           parsed->long_gc_log_threshold_ =
-              ParseMemoryOption(option.substr(strlen("-XX:LongGCLogThreshold")).c_str(), 1024);
+              MsToNs(ParseMemoryOption(option.substr(strlen("-XX:LongGCLogThreshold")).c_str(), 1));
     } else if (option == "-XX:DumpGCPerformanceOnShutdown") {
       parsed->dump_gc_performance_on_shutdown_ = true;
     } else if (option == "-XX:IgnoreMaxFootprint") {
