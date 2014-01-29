@@ -82,7 +82,9 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       checkstats_(NULL),
       arena_(arena),
       backward_branches_(0),
-      forward_branches_(0) {
+      forward_branches_(0),
+      ifield_annotations_(arena, 0u),
+      sfield_annotations_(arena, 0u) {
   try_block_addr_ = new (arena_) ArenaBitVector(arena_, 0, true /* expandable */);
 }
 
