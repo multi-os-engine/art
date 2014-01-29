@@ -386,6 +386,14 @@ class X86Mir2Lir : public Mir2Lir {
      */
     LIR* OpCmpMemImmBranch(ConditionCode cond, int temp_reg, int base_reg,
                            int offset, int check_value, LIR* target);
+
+    /**
+     * @brief Generates inline code for conversion of long to FP by using x87/
+     * @param rl_dest The destination of the FP.
+     * @param rl_src The source of the long.
+     * @param is_double 'true' if dealing with double, 'false' for float.
+     */
+    void GenLongToFP(RegLocation rl_dest, RegLocation rl_src, bool is_double);
 };
 
 }  // namespace art
