@@ -874,7 +874,7 @@ inline bool RosAlloc::Run::MergeThreadLocalFreeBitMapToAllocBitMap(bool* is_all_
   return changed;
 }
 
-inline void RosAlloc::Run::MergeBulkFreeBitMapIntoAllocBitMap() {
+inline bool RosAlloc::Run::MergeBulkFreeBitMapIntoAllocBitMap() {
   DCHECK_EQ(is_thread_local_, 0);
   // Free slots in the alloc bit map based on the bulk free bit map.
   byte idx = size_bracket_idx_;
@@ -882,14 +882,17 @@ inline void RosAlloc::Run::MergeBulkFreeBitMapIntoAllocBitMap() {
   size_t num_vec = RoundUp(num_slots, 32) / 32;
   uint32_t* vecp = &alloc_bit_map_[0];
   uint32_t* free_vecp = &bulk_free_bit_map()[0];
+  bool changed = false;
   for (size_t v = 0; v < num_vec; v++, vecp++, free_vecp++) {
     uint32_t free_vec = *free_vecp;
     if (free_vec != 0) {
       *vecp &= ~free_vec;
       *free_vecp = 0;  // clear the bulk free bit map.
+      changed = true;
     }
     DCHECK_EQ(*free_vecp, static_cast<uint32_t>(0));
   }
+  return changed;
 }
 
 inline void RosAlloc::Run::UnionBulkFreeBitMapToThreadLocalFreeBitMap() {
@@ -1067,7 +1070,12 @@ void RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
       if (LIKELY(free_from_run)) {
         DCHECK(run != NULL);
         // Set the bit in the bulk free bit map.
-        run->MarkBulkFreeBitMap(ptr);
+        // We should use lock to not intersect with RevokeThreadLocalRuns
+        {
+          size_t idx = run->size_bracket_idx_;
+          MutexLock mu(self, *size_bracket_locks_[idx]);
+          run->MarkBulkFreeBitMap(ptr);
+        }
 #ifdef HAVE_ANDROID_OS
         if (!run->to_be_bulk_freed_) {
           run->to_be_bulk_freed_ = true;
@@ -1111,7 +1119,10 @@ void RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
       // it's become all free.
     } else {
       bool run_was_full = run->IsFull();
-      run->MergeBulkFreeBitMapIntoAllocBitMap();
+      if (!run->MergeBulkFreeBitMapIntoAllocBitMap()) {
+        // We did not change anything, so skip this run
+        continue;
+      }
       if (kTraceRosAlloc) {
         LOG(INFO) << "RosAlloc::BulkFree() : Freed slot(s) in a run 0x" << std::hex
                   << reinterpret_cast<intptr_t>(run);

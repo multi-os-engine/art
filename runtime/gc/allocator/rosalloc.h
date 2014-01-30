@@ -228,7 +228,7 @@ class RosAlloc {
     bool MergeThreadLocalFreeBitMapToAllocBitMap(bool* is_all_free_after_out);
     // Frees slots in the allocation bit map with regard to the bulk
     // free bit map. Used in a bulk free.
-    void MergeBulkFreeBitMapIntoAllocBitMap();
+    bool MergeBulkFreeBitMapIntoAllocBitMap();
     // Unions the slots to be freed in the free bit map into the
     // thread-local free bit map. In a bulk free, as a two-step
     // process, GC will first record all the slots to free in a run in
