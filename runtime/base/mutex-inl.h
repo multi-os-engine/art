@@ -98,8 +98,13 @@ class ScopedContentionRecorder {
         blocked_tid_(kLogLockContentions ? blocked_tid : 0),
         owner_tid_(kLogLockContentions ? owner_tid : 0),
         start_nano_time_(kLogLockContentions ? NanoTime() : 0) {
+#if defined(__BIONIC__)
     std::string msg = StringPrintf("Lock contention on %s (owner tid: %" PRIu64 ")",
                                    mutex->GetName(), owner_tid);
+#else
+    std::string msg = StringPrintf("Lock contention on %s (owner tid: %llu)",
+                                   mutex->GetName(), owner_tid);
+#endif
     ATRACE_BEGIN(msg.c_str());
   }
 

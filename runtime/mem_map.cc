@@ -56,7 +56,7 @@ static void CheckMapRequest(byte* addr, size_t byte_count) {
   uintptr_t base = reinterpret_cast<uintptr_t>(addr);
   uintptr_t limit = base + byte_count;
 
-  UniquePtr<BacktraceMap> map(BacktraceMap::Create(getpid()));
+  UniquePtr<BacktraceMap> map(new BacktraceMap(getpid()));
   if (!map->Build()) {
     PLOG(WARNING) << "Failed to build process map";
     return;
