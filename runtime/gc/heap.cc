@@ -743,6 +743,12 @@ void Heap::ThrowOutOfMemoryError(Thread* self, size_t byte_count, bool large_obj
 }
 
 void Heap::Trim() {
+  Thread* self = Thread::Current();
+  // Pretend we are doing a GC to prevent background compaction from deleting the space we are
+  // trimming.
+  if (!StartGC(self, false)) {
+    return;
+  }
   uint64_t start_ns = NanoTime();
   // Trim the managed spaces.
   uint64_t total_alloc_space_allocated = 0;
@@ -760,6 +766,8 @@ void Heap::Trim() {
   const float managed_utilization = static_cast<float>(total_alloc_space_allocated) /
       static_cast<float>(total_alloc_space_size);
   uint64_t gc_heap_end_ns = NanoTime();
+  // We never move things in the native heap, so we can finish the GC at this point.
+  FinishGC(self, collector::kGcTypeNone);
   // Trim the native heap.
   dlmalloc_trim(0);
   size_t native_reclaimed = 0;
@@ -1654,7 +1662,9 @@ bool Heap::StartGC(Thread* self, bool is_compacting) {
 void Heap::FinishGC(Thread* self, collector::GcType gc_type) {
   MutexLock mu(self, *gc_complete_lock_);
   is_gc_running_ = false;
-  last_gc_type_ = gc_type;
+  if (gc_type != collector::kGcTypeNone) {
+    last_gc_type_ = gc_type;
+  }
   // Wake anyone who may have been waiting for the GC to complete.
   gc_complete_cond_->Broadcast(self);
 }
