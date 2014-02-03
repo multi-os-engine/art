@@ -1065,6 +1065,8 @@ Thread::~Thread() {
     delete long_jump_context_;
   }
 
+  CleanupCpu();
+
   delete debug_invoke_req_;
   delete single_step_control_;
   delete instrumentation_stack_;

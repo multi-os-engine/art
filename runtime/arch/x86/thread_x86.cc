@@ -40,8 +40,9 @@ struct descriptor_table_entry_t {
 
 namespace art {
 
+static Mutex modify_ldt_lock("modify_ldt lock");
+
 void Thread::InitCpu() {
-  static Mutex modify_ldt_lock("modify_ldt lock");
   MutexLock mu(Thread::Current(), modify_ldt_lock);
 
   const uintptr_t base = reinterpret_cast<uintptr_t>(this);
@@ -136,6 +137,40 @@ void Thread::InitCpu() {
   CHECK_EQ(THREAD_EXCEPTION_OFFSET, OFFSETOF_MEMBER(Thread, exception_));
   CHECK_EQ(THREAD_CARD_TABLE_OFFSET, OFFSETOF_MEMBER(Thread, card_table_));
   CHECK_EQ(THREAD_ID_OFFSET, OFFSETOF_MEMBER(Thread, thin_lock_thread_id_));
+}
+
+void Thread::CleanupCpu() {
+  MutexLock mu(Thread::Current(), modify_ldt_lock);
+
+  // Sanity check that reads from %fs point to this Thread*.
+  Thread* self_check;
+  // TODO: use our assembler to generate code.
+  __asm__ __volatile__("movl %%fs:(%1), %0"
+      : "=r"(self_check)  // output
+      : "r"(THREAD_SELF_OFFSET)  // input
+      :);  // clobber
+  CHECK_EQ(self_check, this);
+
+  // Extract the LDT entry number from the FS register.
+  uint16_t selector;
+  // TODO: use our assembler to generate code.
+  __asm__ __volatile__("movw %%fs, %w0"
+      : "=q"(selector)  // output
+      :  // input
+      :);  // clobber
+
+  // Free LDT entry.
+#if defined(__APPLE__)
+  i386_set_ldt(selector >> 3, 0, 1);
+#else
+  user_desc ldt_entry;
+  memset(&ldt_entry, 0, sizeof(ldt_entry));
+  ldt_entry.entry_number = selector >> 3;
+  ldt_entry.contents = MODIFY_LDT_CONTENTS_DATA;
+  ldt_entry.seg_not_present = 1;
+
+  syscall(__NR_modify_ldt, 1, &ldt_entry, sizeof(ldt_entry));
+#endif
 }
 
 }  // namespace art
