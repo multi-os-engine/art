@@ -561,9 +561,12 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
         caller->GetDexCacheResolvedMethods()->Set(called->GetDexMethodIndex(), called);
       } else {
         // Calling from one dex file to another, need to compute the method index appropriate to
-        // the caller's dex file.
+        // the caller's dex file. Since we get here only if called->IsRuntimeMethod(), we've got
+        // the correct dex_file and a hint dex_method_idx from above.
+        DCHECK(called->IsRuntimeMethod());
+        DCHECK(&MethodHelper(caller).GetDexFile() == dex_file);
         uint32_t method_index =
-            MethodHelper(called).FindDexMethodIndexInOtherDexFile(MethodHelper(caller).GetDexFile());
+            MethodHelper(called).FindDexMethodIndexInOtherDexFile(*dex_file, dex_method_idx);
         if (method_index != DexFile::kDexNoIndex) {
           caller->GetDexCacheResolvedMethods()->Set(method_index, called);
         }
