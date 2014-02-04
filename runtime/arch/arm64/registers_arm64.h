@@ -61,7 +61,7 @@ enum Register {
   IP1 = 17,     // Used as scratch by ART JNI Assembler.
   FP  = 29,
   LR  = 30,
-  XZR = 31,
+  XZR = 31,     // SRDM TODO SP can be saved and loaded. XRZ cannot. Swap the two.
   SP  = 32,     // SP is X31 and overlaps with XRZ but we encode it as a
                 // special register, due to the different instruction semantics.
   kNumberOfCoreRegisters = 33,

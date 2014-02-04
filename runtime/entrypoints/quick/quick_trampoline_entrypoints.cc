@@ -168,6 +168,38 @@ class QuickArgumentVisitor {
         return 0;
     }
   }
+#elif defined(__aarch64__)
+  // The callee save frame is pointed to by SP.
+  // | argN       |  |
+  // | ...        |  |
+  // | arg4       |  |
+  // | arg3 spill |  |  Caller's frame
+  // | arg2 spill |  |
+  // | arg1 spill |  |
+  // | Method*    | ---
+  // | LR         |
+  // | X28        |
+  // |  :         |
+  // | X19        |
+  // | X7         |
+  // | :          |
+  // | X1         |
+  // | D15        |
+  // |  :         |
+  // | D0         |
+  // |            |    padding
+  // | Method*    |  <- sp
+  static constexpr bool kSoftFloatAbi = false;  // This is a hard float ABI.
+  static constexpr size_t kNumGprArgs = 8;  // 7 arguments passed in GPRs.
+  static constexpr size_t kNumFprArgs = 8;  // 8 arguments passed in FPRs.
+  static constexpr size_t kBytesPerFprSpillLocation = 8;  // FPR spill size is 8 bytes.
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset = 16;  // Offset of first FPR arg.
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Gpr1Offset = 144;  // Offset of first GPR arg.
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_LrOffset = 272;  // Offset of return address.
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_FrameSize = 288;  // Frame size.
+  static size_t GprIndexToGprOffset(uint32_t gpr_index) {
+    return gpr_index * kBytesPerGprSpillLocation;
+  }
 #else
 #error "Unsupported architecture"
 #endif
