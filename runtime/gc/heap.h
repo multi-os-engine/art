@@ -150,7 +150,8 @@ class Heap {
                 size_t parallel_gc_threads, size_t conc_gc_threads, bool low_memory_mode,
                 size_t long_pause_threshold, size_t long_gc_threshold,
                 bool ignore_max_footprint, bool use_tlab, bool verify_pre_gc_heap,
-                bool verify_post_gc_heap);
+                bool verify_post_gc_heap, bool verify_pre_gc_rosalloc,
+                bool verify_post_gc_rosalloc);
 
   ~Heap();
 
@@ -627,6 +628,11 @@ class Heap {
   void PostGcVerification(collector::GarbageCollector* gc)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  void PreGcRosAllocVerification()
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void PostGcRosAllocVerification()
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Update the watermark for the native allocated bytes based on the current number of native
   // bytes allocated and the target utilization ratio.
   void UpdateMaxNativeFootprint();
@@ -795,6 +801,29 @@ class Heap {
   const bool verify_pre_gc_heap_;
   const bool verify_post_gc_heap_;
   const bool verify_mod_union_table_;
+  bool verify_pre_gc_rosalloc_;
+  bool verify_post_gc_rosalloc_;
+
+  // RAII that temporarily disables the rosalloc verification during
+  // the zygote fork.
+  class DisableRosAllocVerification {
+   private:
+    Heap* heap_;
+    bool orig_verify_pre_gc_;
+    bool orig_verify_post_gc_;
+   public:
+    explicit DisableRosAllocVerification(Heap* heap)
+        : heap_(heap),
+          orig_verify_pre_gc_(heap_->verify_pre_gc_rosalloc_),
+          orig_verify_post_gc_(heap_->verify_post_gc_rosalloc_) {
+      heap_->verify_pre_gc_rosalloc_ = false;
+      heap_->verify_post_gc_rosalloc_ = false;
+    }
+    ~DisableRosAllocVerification() {
+      heap_->verify_pre_gc_rosalloc_ = orig_verify_pre_gc_;
+      heap_->verify_post_gc_rosalloc_ = orig_verify_post_gc_;
+    }
+  };
 
   // Parallel GC data structures.
   UniquePtr<ThreadPool> thread_pool_;

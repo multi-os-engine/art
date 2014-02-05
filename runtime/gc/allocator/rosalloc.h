@@ -248,16 +248,26 @@ class RosAlloc {
     bool IsAllFree();
     // Returns true if all the slots in the run are in use.
     bool IsFull();
+    // Returns true if the bulk free bit map is clean.
+    bool IsBulkFreeBitmapClean();
+    // Returns true if the thread local free bit map is clean.
+    bool IsThreadLocalFreeBitmapClean();
     // Clear all the bit maps.
     void ClearBitMaps();
     // Iterate over all the slots and apply the given function.
     void InspectAllSlots(void (*handler)(void* start, void* end, size_t used_bytes, void* callback_arg), void* arg);
     // Dump the run metadata for debugging.
-    void Dump();
+    std::string Dump();
+    // Verify for debugging.
+    void Verify(Thread* self, RosAlloc* rosalloc)
+        EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_)
+        EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_list_lock_);
 
    private:
     // The common part of MarkFreeBitMap() and MarkThreadLocalFreeBitMap().
     void MarkFreeBitMapShared(void* ptr, uint32_t* free_bit_map_base, const char* caller_name);
+    // Turns the bit map into a string for debugging.
+    static std::string BitMapToStr(uint32_t* bit_map_base, size_t num_vec);
   };
 
   // The magic number for a run.
@@ -531,7 +541,7 @@ class RosAlloc {
   // Releases the thread-local runs assigned to all the threads back to the common set of runs.
   void RevokeAllThreadLocalRuns() LOCKS_EXCLUDED(Locks::thread_list_lock_);
   // Dumps the page map for debugging.
-  void DumpPageMap(Thread* self);
+  std::string DumpPageMap() EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Callbacks for InspectAll that will count the number of bytes
   // allocated and objects allocated, respectively.
@@ -541,6 +551,9 @@ class RosAlloc {
   bool DoesReleaseAllPages() const {
     return page_release_mode_ == kPageReleaseModeAll;
   }
+
+  // Verify for debugging.
+  void Verify() EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
 };
 
 }  // namespace allocator

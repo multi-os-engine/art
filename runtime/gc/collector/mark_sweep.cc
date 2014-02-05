@@ -199,6 +199,11 @@ bool MarkSweep::HandleDirtyObjectsPhase() {
 
   ProcessReferences(self);
 
+  // This must run during a pause.
+  timings_.StartSplit("PreGcRosAllocVerification");
+  heap_->PreGcRosAllocVerification();
+  timings_.EndSplit();
+
   // Only need to do this if we have the card mark verification on, and only during concurrent GC.
   if (GetHeap()->verify_missing_card_marks_ || GetHeap()->verify_pre_gc_heap_||
       GetHeap()->verify_post_gc_heap_) {

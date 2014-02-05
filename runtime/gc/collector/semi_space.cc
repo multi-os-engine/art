@@ -182,6 +182,12 @@ void SemiSpace::MarkingPhase() {
     }
   }
   Locks::mutator_lock_->AssertExclusiveHeld(self_);
+
+  // This must run during a pause.
+  timings_.StartSplit("PreGcRosAllocVerification");
+  heap_->PreGcRosAllocVerification();
+  timings_.EndSplit();
+
   TimingLogger::ScopedSplit split("MarkingPhase", &timings_);
   // Need to do this with mutators paused so that somebody doesn't accidentally allocate into the
   // wrong space.
@@ -360,6 +366,11 @@ void SemiSpace::ReclaimPhase() {
   } else {
     mprotect(from_space_->Begin(), from_space_->Capacity(), PROT_READ);
   }
+
+  // This must run during a pause.
+  timings_.StartSplit("PostGcRosAllocVerification");
+  heap_->PostGcRosAllocVerification();
+  timings_.EndSplit();
 
   if (generational_) {
     // Record the end (top) of the to space so we can distinguish
