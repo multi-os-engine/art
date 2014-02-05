@@ -162,9 +162,7 @@ $(error Required DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES is not set)
 endif
 ART_TARGET_CFLAGS += -DART_DEFAULT_INSTRUCTION_SET_FEATURES=$(DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES)
 
-ifeq ($(TARGET_ARCH),x86)
-ART_TARGET_CFLAGS += -msse2
-endif
+ART_TARGET_CFLAGS_x86 := -msse2
 
 # Enable thread-safety for GCC 4.6 on the target but not for GCC 4.7 where this feature was removed.
 ifneq ($(filter 4.6 4.6.%, $(TARGET_GCC_VERSION)),)

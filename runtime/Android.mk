@@ -18,6 +18,8 @@ LOCAL_PATH := $(call my-dir)
 
 include art/build/Android.common.mk
 
+libart_supported_archs := arm arm64 mips x86 x86_64
+
 LIBART_COMMON_SRC_FILES := \
 	atomic.cc.arm \
 	barrier.cc \
@@ -192,9 +194,7 @@ LIBART_TARGET_SRC_FILES := \
 	runtime_android.cc \
 	thread_android.cc
 
-LIBART_LDFLAGS :=
-ifeq ($(TARGET_ARCH),arm)
-LIBART_TARGET_SRC_FILES += \
+LIBART_TARGET_SRC_FILES_arm += \
 	arch/arm/context_arm.cc.arm \
 	arch/arm/entrypoints_init_arm.cc \
 	arch/arm/jni_entrypoints_arm.S \
@@ -202,46 +202,40 @@ LIBART_TARGET_SRC_FILES += \
 	arch/arm/quick_entrypoints_arm.S \
 	arch/arm/arm_sdiv.S \
 	arch/arm/thread_arm.cc
-else # TARGET_ARCH != arm
-ifeq ($(TARGET_ARCH),x86)
-LIBART_TARGET_SRC_FILES += \
+
+LIBART_TARGET_SRC_FILES_x86 += \
 	arch/x86/context_x86.cc \
 	arch/x86/entrypoints_init_x86.cc \
 	arch/x86/jni_entrypoints_x86.S \
 	arch/x86/portable_entrypoints_x86.S \
 	arch/x86/quick_entrypoints_x86.S \
 	arch/x86/thread_x86.cc
-LIBART_LDFLAGS += -Wl,--no-fatal-warnings
-else # TARGET_ARCH != x86
-ifeq ($(TARGET_ARCH),x86_64)
-LIBART_TARGET_SRC_FILES += \
+LIBART_LDFLAGS_x86 := -Wl,--no-fatal-warnings
+
+LIBART_TARGET_SRC_FILES_x86_64 += \
 	arch/x86/context_x86.cc \
 	arch/x86/entrypoints_init_x86.cc \
 	arch/x86/jni_entrypoints_x86.S \
 	arch/x86/portable_entrypoints_x86.S \
 	arch/x86/quick_entrypoints_x86.S \
 	arch/x86/thread_x86.cc
-LIBART_LDFLAGS += -Wl,--no-fatal-warnings
-else # TARGET_ARCH != x86_64
-ifeq ($(TARGET_ARCH),mips)
-LIBART_TARGET_SRC_FILES += \
+LIBART_LDFLAGS_x86_64 += -Wl,--no-fatal-warnings
+
+LIBART_TARGET_SRC_FILES_mips += \
 	arch/mips/context_mips.cc \
 	arch/mips/entrypoints_init_mips.cc \
 	arch/mips/jni_entrypoints_mips.S \
 	arch/mips/portable_entrypoints_mips.S \
 	arch/mips/quick_entrypoints_mips.S \
 	arch/mips/thread_mips.cc
-else # TARGET_ARCH != mips
+
 ifeq ($(TARGET_ARCH),arm64)
 $(info TODOArm64: $(LOCAL_PATH)/Android.mk Add Arm64 specific runtime files)
-else
-$(error unsupported TARGET_ARCH=$(TARGET_ARCH))
 endif # TARGET_ARCH != arm64
-endif # TARGET_ARCH != mips
-endif # TARGET_ARCH != x86_64
-endif # TARGET_ARCH != x86
-endif # TARGET_ARCH != arm
 
+ifeq (,$(filter $(TARGET_ARCH),$(libart_supported_archs)))
+$(error unsupported TARGET_ARCH=$(TARGET_ARCH))
+endif
 
 LIBART_HOST_SRC_FILES := \
 	$(LIBART_COMMON_SRC_FILES) \
@@ -321,6 +315,8 @@ define build-libart
 
   ifeq ($$(art_target_or_host),target)
     LOCAL_SRC_FILES := $(LIBART_TARGET_SRC_FILES)
+    $(foreach arch,$(libart_supported_archs),
+      LOCAL_SRC_FILES_$(arch) := $$(LIBART_TARGET_SRC_FILES_$(arch))))
   else # host
     LOCAL_SRC_FILES := $(LIBART_HOST_SRC_FILES)
     LOCAL_IS_HOST_MODULE := true
@@ -339,6 +335,9 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
 
   LOCAL_CFLAGS := $(LIBART_CFLAGS)
   LOCAL_LDFLAGS := $(LIBART_LDFLAGS)
+  $(foreach arch,$(libart_supported_archs),
+    LOCAL_LDFLAGS_$(arch) := $$(LIBART_TARGET_LDFLAGS_$(arch))))
+
   ifeq ($$(art_target_or_host),target)
     LOCAL_CLANG := $(ART_TARGET_CLANG)
     LOCAL_CFLAGS += $(ART_TARGET_CFLAGS)

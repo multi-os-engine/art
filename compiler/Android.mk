@@ -198,27 +198,13 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
   ifeq ($(ART_USE_PORTABLE_COMPILER),true)
     LOCAL_CFLAGS += -DART_USE_PORTABLE_COMPILER=1
     ifeq ($$(art_target_or_host),target)
-      ifeq ($(TARGET_ARCH),arm)
-        LOCAL_STATIC_LIBRARIES += libmcldARMInfo libmcldARMTarget
-      else # TARGET_ARCH != arm
-      ifeq ($(TARGET_ARCH),x86)
-        LOCAL_STATIC_LIBRARIES += libmcldX86Info libmcldX86Target
-      else # TARGET_ARCH != x86
-      ifeq ($(TARGET_ARCH),x86_64)
-        LOCAL_STATIC_LIBRARIES += libmcldX86Info libmcldX86Target
-      else # TARGET_ARCH != x86_64
-      ifeq ($(TARGET_ARCH),mips)
-        LOCAL_STATIC_LIBRARIES += libmcldMipsInfo libmcldMipsTarget
-      else # TARGET_ARCH != mips
-      ifeq ($(TARGET_ARCH),aarch64)
-         $$(info TODOAArch64: $$(LOCAL_PATH)/Android.mk Add AArch64 specific MCLinker libraries)
-      else # TARGET_ARCH != aarch64
-        $$(error unsupported TARGET_ARCH=$(TARGET_ARCH))
-      endif # TARGET_ARCH != aarch64
-      endif # TARGET_ARCH != mips
-      endif # TARGET_ARCH != x86_64
-      endif # TARGET_ARCH != x86
-      endif # TARGET_ARCH != arm
+      LOCAL_STATIC_LIBRARIES_arm += libmcldARMInfo libmcldARMTarget
+      LOCAL_STATIC_LIBRARIES_x86 += libmcldX86Info libmcldX86Target
+      LOCAL_STATIC_LIBRARIES_x86_64 += libmcldX86Info libmcldX86Target
+      LOCAL_STATIC_LIBRARIES_mips += libmcldMipsInfo libmcldMipsTarget
+      ifeq ($(TARGET_ARCH),arm64)
+         $$(info TODOAArch64: $$(LOCAL_PATH)/Android.mk Add Arm64 specific MCLinker libraries)
+      endif # TARGET_ARCH != arm64
     else # host
       LOCAL_STATIC_LIBRARIES += libmcldARMInfo libmcldARMTarget
       LOCAL_STATIC_LIBRARIES += libmcldX86Info libmcldX86Target
