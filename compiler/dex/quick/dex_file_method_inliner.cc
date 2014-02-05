@@ -24,10 +24,51 @@
 #include "dex/mir_graph.h"
 #include "dex_instruction.h"
 #include "dex_instruction-inl.h"
+#include "mirror/art_field.h"
+#include "mirror/art_field-inl.h"
+#include "mirror/art_method.h"
+#include "mirror/art_method-inl.h"
+#include "mirror/dex_cache.h"
+#include "mirror/dex_cache-inl.h"
+#include "verifier/method_verifier.h"
+#include "verifier/method_verifier-inl.h"
 
 #include "dex_file_method_inliner.h"
 
 namespace art {
+
+namespace {  // anonymous namespace
+
+constexpr uint8_t kIGetIPutOpSizes[] = {
+    kWord,          // IGET, IPUT
+    kLong,          // IGET_WIDE, IPUT_WIDE
+    kWord,          // IGET_OBJECT, IPUT_OBJECT
+    kSignedByte,    // IGET_BOOLEAN, IPUT_BOOLEAN
+    kSignedByte,    // IGET_BYTE, IPUT_BYTE
+    kUnsignedHalf,  // IGET_CHAR, IPUT_CHAR
+    kSignedHalf,    // IGET_SHORT, IPUT_SHORT
+};
+
+inline bool FastInstance(const mirror::DexCache* dex_cache, uint32_t method_idx,
+                         uint32_t field_idx, bool is_put, int* field_offset, bool* is_volatile)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::ArtMethod* method = dex_cache->GetResolvedMethod(method_idx);
+  mirror::ArtField* field = dex_cache->GetResolvedField(field_idx);
+  if (method == nullptr || field == nullptr) {
+    return false;
+  }
+  mirror::Class* method_class = method->GetDeclaringClass();
+  mirror::Class* field_class = field->GetDeclaringClass();
+  if (!method_class->CanAccessResolvedField(field_class, field, *dex_cache, field_idx) ||
+      (is_put && field->IsFinal() && method_class != field_class)) {
+    return false;
+  }
+  *field_offset = field->GetOffset().Int32Value();
+  *is_volatile = field->IsVolatile();
+  return true;
+}
+
+}  // anonymous namespace
 
 const uint32_t DexFileMethodInliner::kIndexUnresolved;
 const char* const DexFileMethodInliner::kClassCacheNames[] = {
@@ -167,7 +208,7 @@ const DexFileMethodInliner::ProtoDef DexFileMethodInliner::kProtoCacheDefs[] = {
 
 const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods[] = {
 #define INTRINSIC(c, n, p, o, d) \
-    { { kClassCache ## c, kNameCache ## n, kProtoCache ## p }, { o, kInlineIntrinsic, d } }
+    { { kClassCache ## c, kNameCache ## n, kProtoCache ## p }, { o, kInlineIntrinsic, { d } } }
 
     INTRINSIC(JavaLangDouble, DoubleToRawLongBits, D_J, kIntrinsicDoubleCvt, 0),
     INTRINSIC(JavaLangDouble, LongBitsToDouble, J_D, kIntrinsicDoubleCvt, 0),
@@ -248,57 +289,64 @@ DexFileMethodInliner::DexFileMethodInliner()
 DexFileMethodInliner::~DexFileMethodInliner() {
 }
 
-bool DexFileMethodInliner::AnalyseMethodCode(uint32_t method_idx,
-                                             const DexFile::CodeItem* code_item) {
+bool DexFileMethodInliner::AnalyseMethodCode(verifier::MethodVerifier* verifier) {
   // We currently support only plain return or 2-instruction methods.
 
+  uint32_t method_idx = verifier->GetMethodReference().dex_method_index;
+  const mirror::DexCache* dex_cache = verifier->GetDexCache();
+  const DexFile::CodeItem* code_item = verifier->CodeItem();
   DCHECK_NE(code_item->insns_size_in_code_units_, 0u);
   const Instruction* instruction = Instruction::At(code_item->insns_);
   Instruction::Code opcode = instruction->Opcode();
 
+  InlineMethod method;
+  bool success;
   switch (opcode) {
     case Instruction::RETURN_VOID:
-      return AddInlineMethod(method_idx, kInlineOpNop, kInlineSpecial, 0);
+      method.opcode = kInlineOpNop;
+      method.flags = kInlineSpecial;
+      method.d.data = 0u;
+      success = true;
+      break;
     case Instruction::RETURN:
+      success = AnalyseReturnMethod(code_item, kWord, false, &method);
+      break;
     case Instruction::RETURN_OBJECT:
-      return AnalyseReturnMethod(method_idx, code_item, kWord);
+      success = AnalyseReturnMethod(code_item, kWord, true, &method);
+      break;
     case Instruction::RETURN_WIDE:
-      return AnalyseReturnMethod(method_idx, code_item, kLong);
+      success = AnalyseReturnMethod(code_item, kLong, false, &method);
+      break;
     case Instruction::CONST:
     case Instruction::CONST_4:
     case Instruction::CONST_16:
     case Instruction::CONST_HIGH16:
       // TODO: Support wide constants (RETURN_WIDE).
-      return AnalyseConstMethod(method_idx, code_item);
+      success = AnalyseConstMethod(code_item, &method);
+      break;
     case Instruction::IGET:
-      return AnalyseIGetMethod(method_idx, code_item, kWord, false);
     case Instruction::IGET_OBJECT:
-      return AnalyseIGetMethod(method_idx, code_item, kWord, true);
     case Instruction::IGET_BOOLEAN:
     case Instruction::IGET_BYTE:
-      return AnalyseIGetMethod(method_idx, code_item, kSignedByte, false);
     case Instruction::IGET_CHAR:
-      return AnalyseIGetMethod(method_idx, code_item, kUnsignedHalf, false);
     case Instruction::IGET_SHORT:
-      return AnalyseIGetMethod(method_idx, code_item, kSignedHalf, false);
     case Instruction::IGET_WIDE:
-      return AnalyseIGetMethod(method_idx, code_item, kLong, false);
+      success = AnalyseIGetMethod(code_item, dex_cache, method_idx, &method);
+      break;
     case Instruction::IPUT:
-      return AnalyseIPutMethod(method_idx, code_item, kWord, false);
     case Instruction::IPUT_OBJECT:
-      return AnalyseIPutMethod(method_idx, code_item, kWord, true);
     case Instruction::IPUT_BOOLEAN:
     case Instruction::IPUT_BYTE:
-      return AnalyseIPutMethod(method_idx, code_item, kSignedByte, false);
     case Instruction::IPUT_CHAR:
-      return AnalyseIPutMethod(method_idx, code_item, kUnsignedHalf, false);
     case Instruction::IPUT_SHORT:
-      return AnalyseIPutMethod(method_idx, code_item, kSignedHalf, false);
     case Instruction::IPUT_WIDE:
-      return AnalyseIPutMethod(method_idx, code_item, kLong, false);
+      success = AnalyseIPutMethod(code_item, dex_cache, method_idx, &method);
+      break;
     default:
-      return false;
-    }
+      success = false;
+      break;
+  }
+  return success && AddInlineMethod(verifier->GetMethodReference().dex_method_index, method);
 }
 
 bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index) {
@@ -323,13 +371,13 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
     case kIntrinsicFloatCvt:
       return backend->GenInlinedFloatCvt(info);
     case kIntrinsicReverseBytes:
-      return backend->GenInlinedReverseBytes(info, static_cast<OpSize>(intrinsic.data));
+      return backend->GenInlinedReverseBytes(info, static_cast<OpSize>(intrinsic.d.data));
     case kIntrinsicAbsInt:
       return backend->GenInlinedAbsInt(info);
     case kIntrinsicAbsLong:
       return backend->GenInlinedAbsLong(info);
     case kIntrinsicMinMaxInt:
-      return backend->GenInlinedMinMaxInt(info, intrinsic.data & kIntrinsicFlagMin);
+      return backend->GenInlinedMinMaxInt(info, intrinsic.d.data & kIntrinsicFlagMin);
     case kIntrinsicSqrt:
       return backend->GenInlinedSqrt(info);
     case kIntrinsicCharAt:
@@ -337,26 +385,27 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
     case kIntrinsicCompareTo:
       return backend->GenInlinedStringCompareTo(info);
     case kIntrinsicIsEmptyOrLength:
-      return backend->GenInlinedStringIsEmptyOrLength(info, intrinsic.data & kIntrinsicFlagIsEmpty);
+      return backend->GenInlinedStringIsEmptyOrLength(
+          info, intrinsic.d.data & kIntrinsicFlagIsEmpty);
     case kIntrinsicIndexOf:
-      return backend->GenInlinedIndexOf(info, intrinsic.data & kIntrinsicFlagBase0);
+      return backend->GenInlinedIndexOf(info, intrinsic.d.data & kIntrinsicFlagBase0);
     case kIntrinsicCurrentThread:
       return backend->GenInlinedCurrentThread(info);
     case kIntrinsicPeek:
-      return backend->GenInlinedPeek(info, static_cast<OpSize>(intrinsic.data));
+      return backend->GenInlinedPeek(info, static_cast<OpSize>(intrinsic.d.data));
     case kIntrinsicPoke:
-      return backend->GenInlinedPoke(info, static_cast<OpSize>(intrinsic.data));
+      return backend->GenInlinedPoke(info, static_cast<OpSize>(intrinsic.d.data));
     case kIntrinsicCas:
-      return backend->GenInlinedCas(info, intrinsic.data & kIntrinsicFlagIsLong,
-                                    intrinsic.data & kIntrinsicFlagIsObject);
+      return backend->GenInlinedCas(info, intrinsic.d.data & kIntrinsicFlagIsLong,
+                                    intrinsic.d.data & kIntrinsicFlagIsObject);
     case kIntrinsicUnsafeGet:
-      return backend->GenInlinedUnsafeGet(info, intrinsic.data & kIntrinsicFlagIsLong,
-                                          intrinsic.data & kIntrinsicFlagIsVolatile);
+      return backend->GenInlinedUnsafeGet(info, intrinsic.d.data & kIntrinsicFlagIsLong,
+                                          intrinsic.d.data & kIntrinsicFlagIsVolatile);
     case kIntrinsicUnsafePut:
-      return backend->GenInlinedUnsafePut(info, intrinsic.data & kIntrinsicFlagIsLong,
-                                          intrinsic.data & kIntrinsicFlagIsObject,
-                                          intrinsic.data & kIntrinsicFlagIsVolatile,
-                                          intrinsic.data & kIntrinsicFlagIsOrdered);
+      return backend->GenInlinedUnsafePut(info, intrinsic.d.data & kIntrinsicFlagIsLong,
+                                          intrinsic.d.data & kIntrinsicFlagIsObject,
+                                          intrinsic.d.data & kIntrinsicFlagIsVolatile,
+                                          intrinsic.d.data & kIntrinsicFlagIsOrdered);
     default:
       LOG(FATAL) << "Unexpected intrinsic opcode: " << intrinsic.opcode;
       return false;  // avoid warning "control reaches end of non-void function"
@@ -505,12 +554,10 @@ void DexFileMethodInliner::FindIntrinsics(const DexFile* dex_file) {
   dex_file_ = dex_file;
 }
 
-bool DexFileMethodInliner::AddInlineMethod(int32_t method_idx, InlineMethodOpcode opcode,
-                                           InlineMethodFlags flags, uint32_t data) {
+bool DexFileMethodInliner::AddInlineMethod(int32_t method_idx, const InlineMethod& method) {
   WriterMutexLock mu(Thread::Current(), lock_);
   if (LIKELY(inline_methods_.find(method_idx) == inline_methods_.end())) {
-    InlineMethod im = {opcode, flags, data};
-    inline_methods_.Put(method_idx, im);
+    inline_methods_.Put(method_idx, method);
     return true;
   } else {
     if (PrettyMethod(method_idx, *dex_file_) == "int java.lang.String.length()") {
@@ -522,26 +569,27 @@ bool DexFileMethodInliner::AddInlineMethod(int32_t method_idx, InlineMethodOpcod
   }
 }
 
-bool DexFileMethodInliner::AnalyseReturnMethod(int32_t method_idx,
-                                               const DexFile::CodeItem* code_item, OpSize size) {
+bool DexFileMethodInliner::AnalyseReturnMethod(const DexFile::CodeItem* code_item,
+                                               OpSize size, bool is_object, InlineMethod* result) {
   const Instruction* return_instruction = Instruction::At(code_item->insns_);
-  if (return_instruction->Opcode() == Instruction::RETURN_VOID) {
-    return AddInlineMethod(method_idx, kInlineOpNop, kInlineSpecial, 0);
-  }
   uint32_t reg = return_instruction->VRegA_11x();
   uint32_t arg_start = code_item->registers_size_ - code_item->ins_size_;
   DCHECK_GE(reg, arg_start);
   DCHECK_LT(size == kLong ? reg + 1 : reg, code_item->registers_size_);
 
-  InlineReturnArgData data;
-  data.d.arg = reg - arg_start;
-  data.d.op_size = size;
-  data.d.reserved = 0;
-  return AddInlineMethod(method_idx, kInlineOpReturnArg, kInlineSpecial, data.data);
+  result->opcode = kInlineOpReturnArg;
+  result->flags = kInlineSpecial;
+  InlineReturnArgData* data = &result->d.return_data;
+  data->arg = reg - arg_start;
+  data->op_size = size;
+  data->is_object = is_object ? 1u : 0u;
+  data->reserved = 0u;
+  data->reserved2 = 0u;
+  return true;
 }
 
-bool DexFileMethodInliner::AnalyseConstMethod(int32_t method_idx,
-                                              const DexFile::CodeItem* code_item) {
+bool DexFileMethodInliner::AnalyseConstMethod(const DexFile::CodeItem* code_item,
+                                              InlineMethod* result) {
   const Instruction* instruction = Instruction::At(code_item->insns_);
   const Instruction* return_instruction = instruction->Next();
   Instruction::Code return_opcode = return_instruction->Opcode();
@@ -566,13 +614,20 @@ bool DexFileMethodInliner::AnalyseConstMethod(int32_t method_idx,
   if (return_opcode == Instruction::RETURN_OBJECT && vB != 0) {
     return false;  // Returning non-null reference constant?
   }
-  return AddInlineMethod(method_idx, kInlineOpConst, kInlineSpecial, vB);
+  result->opcode = kInlineOpConst;
+  result->flags = kInlineSpecial;
+  result->d.data = static_cast<uint64_t>(vB);
+  return true;
 }
 
-bool DexFileMethodInliner::AnalyseIGetMethod(int32_t method_idx, const DexFile::CodeItem* code_item,
-                                             OpSize size, bool is_object) {
+bool DexFileMethodInliner::AnalyseIGetMethod(const DexFile::CodeItem* code_item,
+                                             const mirror::DexCache* dex_cache, uint32_t method_idx,
+                                             InlineMethod* result) {
   const Instruction* instruction = Instruction::At(code_item->insns_);
   Instruction::Code opcode = instruction->Opcode();
+  DCHECK_LT(static_cast<size_t>(opcode - Instruction::IGET), arraysize(kIGetIPutOpSizes));
+  uint16_t size = kIGetIPutOpSizes[opcode - Instruction::IGET];
+
   const Instruction* return_instruction = instruction->Next();
   Instruction::Code return_opcode = return_instruction->Opcode();
   if (!(return_opcode == Instruction::RETURN && size != kLong) &&
@@ -585,61 +640,84 @@ bool DexFileMethodInliner::AnalyseIGetMethod(int32_t method_idx, const DexFile::
   DCHECK_LT(return_opcode == Instruction::RETURN_WIDE ? return_reg + 1 : return_reg,
             code_item->registers_size_);
 
-  uint32_t vA, vB, vC;
-  uint64_t dummy_wide;
-  instruction->Decode(vA, vB, dummy_wide, vC, nullptr);
+  uint32_t dst_reg = instruction->VRegA_22c();
+  uint32_t object_reg = instruction->VRegB_22c();
+  uint32_t field_idx = instruction->VRegC_22c();
   uint32_t arg_start = code_item->registers_size_ - code_item->ins_size_;
-  DCHECK_GE(vB, arg_start);
-  DCHECK_LT(vB, code_item->registers_size_);
-  DCHECK_LT(size == kLong ? vA + 1 : vA, code_item->registers_size_);
-  if (vA != return_reg) {
-    return false;  // Not returning the value retrieved by iget?
+  DCHECK_GE(object_reg, arg_start);
+  DCHECK_LT(object_reg, code_item->registers_size_);
+  DCHECK_LT(size == kLong ? dst_reg + 1 : dst_reg, code_item->registers_size_);
+  if (dst_reg != return_reg) {
+    return false;  // Not returning the value retrieved by IGET?
   }
 
-  // TODO: Check that the field is FastInstance().
+  int field_offset;
+  bool is_volatile;
+  if (!FastInstance(dex_cache, method_idx, field_idx, false, &field_offset, &is_volatile)) {
+    return false;
+  }
+  CHECK_GE(field_offset, 0);
 
-  InlineIGetIPutData data;
-  data.d.field = vC;
-  data.d.op_size = size;
-  data.d.is_object = is_object;
-  data.d.object_arg = vB - arg_start;  // Allow iget on any register, not just "this"
-  data.d.src_arg = 0;
-  data.d.reserved = 0;
-  return AddInlineMethod(method_idx, kInlineOpIGet, kInlineSpecial, data.data);
+  result->opcode = kInlineOpIGet;
+  result->flags = kInlineSpecial;
+  InlineIGetIPutData* data = &result->d.ifield_data;
+  data->field = field_idx;
+  data->op_size = size;
+  data->is_object = (opcode == Instruction::IGET_OBJECT) ? 1u : 0u;
+  data->object_arg = object_reg - arg_start;  // Allow IGET on any register, not just "this".
+  data->src_arg = 0;
+  data->reserved = 0;
+  data->is_volatile = is_volatile ? 1u : 0u;
+  data->field_offset = field_offset;
+  return true;
 }
 
-bool DexFileMethodInliner::AnalyseIPutMethod(int32_t method_idx, const DexFile::CodeItem* code_item,
-                                             OpSize size, bool is_object) {
+bool DexFileMethodInliner::AnalyseIPutMethod(const DexFile::CodeItem* code_item,
+                                             const mirror::DexCache* dex_cache, uint32_t method_idx,
+                                             InlineMethod* result) {
   const Instruction* instruction = Instruction::At(code_item->insns_);
+  Instruction::Code opcode = instruction->Opcode();
+  DCHECK_LT(static_cast<size_t>(opcode - Instruction::IPUT), arraysize(kIGetIPutOpSizes));
+  uint16_t size = kIGetIPutOpSizes[opcode - Instruction::IPUT];
+
   const Instruction* return_instruction = instruction->Next();
   if (return_instruction->Opcode() != Instruction::RETURN_VOID) {
     // TODO: Support returning an argument.
     // This is needed by builder classes and generated accessor setters.
     //    builder.setX(value): iput value, this, fieldX; return-object this;
     //    object.access$nnn(value): iput value, this, fieldX; return value;
-    // Use InlineIGetIPutData::d::reserved to hold the information.
+    // Use InlineIGetIPutData::reserved to hold the information.
     return false;
   }
 
-  uint32_t vA, vB, vC;
-  uint64_t dummy_wide;
-  instruction->Decode(vA, vB, dummy_wide, vC, nullptr);
+  uint32_t src_reg = instruction->VRegA_22c();
+  uint32_t object_reg = instruction->VRegB_22c();
+  uint32_t field_idx = instruction->VRegC_22c();
   uint32_t arg_start = code_item->registers_size_ - code_item->ins_size_;
-  DCHECK_GE(vB, arg_start);
-  DCHECK_GE(vA, arg_start);
-  DCHECK_LT(vB, code_item->registers_size_);
-  DCHECK_LT(size == kLong ? vA + 1 : vA, code_item->registers_size_);
+  DCHECK_GE(object_reg, arg_start);
+  DCHECK_LT(object_reg, code_item->registers_size_);
+  DCHECK_GE(src_reg, arg_start);
+  DCHECK_LT(size == kLong ? src_reg + 1 : src_reg, code_item->registers_size_);
 
-  // TODO: Check that the field (vC) is FastInstance().
+  int field_offset;
+  bool is_volatile;
+  if (!FastInstance(dex_cache, method_idx, field_idx, true, &field_offset, &is_volatile)) {
+    return false;
+  }
+  CHECK_GE(field_offset, 0);
 
-  InlineIGetIPutData data;
-  data.d.field = vC;
-  data.d.op_size = size;
-  data.d.is_object = is_object;
-  data.d.object_arg = vB - arg_start;  // Allow iput on any register, not just "this"
-  data.d.src_arg = vA - arg_start;
-  data.d.reserved = 0;
-  return AddInlineMethod(method_idx, kInlineOpIPut, kInlineSpecial, data.data);
+  result->opcode = kInlineOpIPut;
+  result->flags = kInlineSpecial;
+  InlineIGetIPutData* data = &result->d.ifield_data;
+  data->field = field_idx;
+  data->op_size = size;
+  data->is_object = (opcode == Instruction::IPUT_OBJECT) ? 1u : 0u;
+  data->object_arg = object_reg - arg_start;  // Allow IPUT on any register, not just "this".
+  data->src_arg = src_reg - arg_start;
+  data->reserved = 0;
+  data->is_volatile = is_volatile ? 1u : 0u;
+  data->field_offset = field_offset;
+  return true;
 }
 
 }  // namespace art
