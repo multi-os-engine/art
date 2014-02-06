@@ -1059,6 +1059,13 @@ int Mir2Lir::SRegOffset(int s_reg) {
   return VRegOffset(mir_graph_->SRegToVReg(s_reg));
 }
 
+/* Returns the position of an ssa name within the argument list */
+int Mir2Lir::InPosition(int s_reg) {
+  int v_reg = mir_graph_->SRegToVReg(s_reg);
+  CHECK_GE(v_reg, cu_->num_regs);
+  return v_reg - cu_->num_regs;
+}
+
 /* Mark register usage state and return long retloc */
 RegLocation Mir2Lir::GetReturnWide(bool is_double) {
   RegLocation gpr_res = LocCReturnWide();
