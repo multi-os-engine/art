@@ -35,6 +35,7 @@ static int FpRegs[] = {fr0, fr1, fr2, fr3, fr4, fr5, fr6, fr7,
 static int core_temps[] = {r0, r1, r2, r3, r12};
 static int fp_temps[] = {fr0, fr1, fr2, fr3, fr4, fr5, fr6, fr7,
                         fr8, fr9, fr10, fr11, fr12, fr13, fr14, fr15};
+static int vr_arg_regs[] = { rARM_ARG1, rARM_ARG2, rARM_ARG3 };
 
 RegLocation ArmMir2Lir::LocCReturn() {
   RegLocation res = ARM_LOC_C_RETURN;
@@ -716,6 +717,14 @@ void ArmMir2Lir::FreeCallTemps() {
   FreeTemp(r1);
   FreeTemp(r2);
   FreeTemp(r3);
+}
+
+uint32_t ArmMir2Lir::GetNumVRPassedViaReg() {
+  return sizeof(vr_arg_regs)/sizeof(*vr_arg_regs);
+}
+
+const int* ArmMir2Lir::GetArgPhysicalRegs() {
+  return vr_arg_regs;
 }
 
 int ArmMir2Lir::LoadHelper(ThreadOffset offset) {

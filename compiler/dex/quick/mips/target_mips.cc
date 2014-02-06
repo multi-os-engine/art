@@ -38,6 +38,7 @@ static int FpRegs[] = {r_F0, r_F1, r_F2, r_F3, r_F4, r_F5, r_F6, r_F7,
                        r_F8, r_F9, r_F10, r_F11, r_F12, r_F13, r_F14, r_F15};
 static int fp_temps[] = {r_F0, r_F1, r_F2, r_F3, r_F4, r_F5, r_F6, r_F7,
                          r_F8, r_F9, r_F10, r_F11, r_F12, r_F13, r_F14, r_F15};
+static int vr_arg_regs[] = { rMIPS_ARG1, rMIPS_ARG2, rMIPS_ARG3 };
 
 RegLocation MipsMir2Lir::LocCReturn() {
   RegLocation res = MIPS_LOC_C_RETURN;
@@ -419,6 +420,14 @@ void MipsMir2Lir::FreeCallTemps() {
   FreeTemp(rMIPS_ARG1);
   FreeTemp(rMIPS_ARG2);
   FreeTemp(rMIPS_ARG3);
+}
+
+uint32_t MipsMir2Lir::GetNumVRPassedViaReg() {
+  return sizeof(vr_arg_regs)/sizeof(*vr_arg_regs);
+}
+
+const int* MipsMir2Lir::GetArgPhysicalRegs() {
+  return vr_arg_regs;
 }
 
 void MipsMir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {

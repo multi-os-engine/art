@@ -44,6 +44,7 @@ namespace art {
   fr8, fr9, fr10, fr11, fr12, fr13, fr14, fr15
 #endif
 };
+static int vr_arg_regs[] = { rX86_ARG1, rX86_ARG2, rX86_ARG3 };
 
 RegLocation X86Mir2Lir::LocCReturn() {
   RegLocation res = X86_LOC_C_RETURN;
@@ -396,6 +397,14 @@ void X86Mir2Lir::FreeCallTemps() {
   FreeTemp(rX86_ARG1);
   FreeTemp(rX86_ARG2);
   FreeTemp(rX86_ARG3);
+}
+
+uint32_t X86Mir2Lir::GetNumVRPassedViaReg() {
+  return sizeof(vr_arg_regs)/sizeof(*vr_arg_regs);
+}
+
+const int* X86Mir2Lir::GetArgPhysicalRegs() {
+  return vr_arg_regs;
 }
 
 void X86Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {

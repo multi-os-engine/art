@@ -736,7 +736,7 @@ class Mir2Lir : public Backend {
     void CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list);
     void HandleExtendedMethodMIR(BasicBlock* bb, MIR* mir);
     bool MethodBlockCodeGen(BasicBlock* bb);
-    void SpecialMIR2LIR(const InlineMethod& special);
+    bool SpecialMIR2LIR(const InlineMethod& special);
     void MethodMIR2LIR();
 
     /*
@@ -824,6 +824,8 @@ class Mir2Lir : public Backend {
     virtual void LockCallTemps() = 0;
     virtual void MarkPreservedSingle(int v_reg, int reg) = 0;
     virtual void CompilerInitializeRegAlloc() = 0;
+    virtual uint32_t GetNumVRPassedViaReg() = 0;
+    virtual const int* GetArgPhysicalRegs() = 0;
 
     // Required for target - miscellaneous.
     virtual void AssembleLIR() = 0;
@@ -947,8 +949,6 @@ class Mir2Lir : public Backend {
                                  RegLocation rl_src) = 0;
     virtual void GenSparseSwitch(MIR* mir, DexOffset table_offset,
                                  RegLocation rl_src) = 0;
-    virtual void GenSpecialCase(BasicBlock* bb, MIR* mir,
-                                const InlineMethod& special) = 0;
     virtual void GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
                              RegLocation rl_index, RegLocation rl_dest, int scale) = 0;
     virtual void GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
@@ -1082,6 +1082,30 @@ class Mir2Lir : public Backend {
                                             uint32_t type_idx, RegLocation rl_dest,
                                             RegLocation rl_src);
 
+    /**
+     * @brief Used to insert marker that can be used to associate MIR with LIR.
+     * @details Only inserts marker if verbosity is enabled.
+     * @param mir The mir that is currently being generated.
+     */
+    void GenPrintLabel(MIR* mir);
+
+    /**
+     * @brief Used to generate return sequence when there is no frame.
+     * @details Assumes that the return registers have already been populated.
+     */
+    virtual void GenSpecialExitSequence() = 0;
+
+    /**
+     * @brief Used to generate code for special methods that are known to be
+     * small enough to work in frameless mode.
+     * @param bb The basic block of the first MIR.
+     * @param mir The first MIR of the special method.
+     * @param special Information about the special method.
+     * @return Returns whether or not this was handled successfully. Returns false
+     * if caller should punt to normal MIR2LIR conversion.
+     */
+    virtual bool GenSpecialCase(BasicBlock* bb, MIR* mir, const InlineMethod& special);
+
   private:
     void ClobberBody(RegisterInfo* p);
     void ResetDefBody(RegisterInfo* p) {
@@ -1092,6 +1116,63 @@ class Mir2Lir : public Backend {
     void SetCurrentDexPc(DexOffset dexpc) {
       current_dalvik_offset_ = dexpc;
     }
+
+    /**
+     * @brief Returns the position of an ssa reg within the argument list.
+     * @details For example, if v3 is first in-reg, then for that it will return 0.
+     * @param s_reg The ssa register whose argument list position needs determined.
+     * @return Returns the position in argument list.
+     */
+    int InPosition(int s_reg);
+
+    /**
+     * @brief Used to describe the location of an argument.
+     * @details All live arg registers must be locked prior to this call
+     * to avoid having them allocated as a temp by downstream utilities.
+     * @param loc The location describing the VR but not necessarily knowing location.
+     * @return Returns the updated location whether VR is in register or on stack.
+     * May also return kLocInvalid in case location cannot be determined or is in bad
+     * state.
+     */
+    RegLocation SpecialArgLoc(RegLocation loc);
+
+    /**
+     * @brief Used to load an argument when generating frameless special methods.
+     * @details If already in a register, just return. If in frame, load to register.
+     * @param loc The location representing the virtual register.
+     * @return Returns the updated in-register location.
+     */
+    RegLocation SpecialLoadArg(RegLocation loc);
+
+    /**
+     * @brief Used to lock any referenced arguments that arrive in registers.
+     * @param mir The MIR whose uses should be checked and possibly locked.
+     */
+    void SpecialLockLiveArgs(MIR* mir);
+
+    /**
+     * @brief Used to generate LIR for special getter method.
+     * @param mir The mir that represents the iget.
+     * @param special Information about the special getter method.
+     * @return Returns whether LIR was successfully generated.
+     */
+    bool GenSpecialIGet(MIR* mir, const InlineMethod& special);
+
+    /**
+     * @brief Used to generate LIR for special setter method.
+     * @param mir The mir that represents the iput.
+     * @param special Information about the special setter method.
+     * @return Returns whether LIR was successfully generated.
+     */
+    bool GenSpecialIPut(MIR* mir, const InlineMethod& special);
+
+    /**
+     * @brief Used to generate LIR for special return-args method.
+     * @param mir The mir that represents the return of argument.
+     * @param special Information about the special return-args method.
+     * @return Returns whether LIR was successfully generated.
+     */
+    bool GenSpecialIdentity(MIR* mir, const InlineMethod& special);
 
 
   public:
