@@ -849,29 +849,10 @@ class DexFile {
   DexFile(const byte* base, size_t size,
           const std::string& location,
           uint32_t location_checksum,
-          MemMap* mem_map)
-      : begin_(base),
-        size_(size),
-        location_(location),
-        location_checksum_(location_checksum),
-        mem_map_(mem_map),
-        modification_lock("DEX modification lock"),
-        header_(0),
-        string_ids_(0),
-        type_ids_(0),
-        field_ids_(0),
-        method_ids_(0),
-        proto_ids_(0),
-        class_defs_(0) {
-    CHECK(begin_ != NULL) << GetLocation();
-    CHECK_GT(size_, 0U) << GetLocation();
-  }
+          MemMap* mem_map);
 
   // Top-level initializer that calls other Init methods.
   bool Init(std::string* error_msg);
-
-  // Caches pointers into to the various file sections.
-  void InitMembers();
 
   // Returns true if the header magic and version numbers are of the expected values.
   bool CheckMagicAndVersion(std::string* error_msg) const;
@@ -923,6 +904,7 @@ class DexFile {
   // Points to the base of the class definition list.
   const ClassDef* class_defs_;
 };
+std::ostream& operator<<(std::ostream& os, const DexFile& dex_file);
 
 // Iterate over a dex file's ProtoId's paramters
 class DexFileParameterIterator {
