@@ -245,6 +245,23 @@ class X86Mir2Lir : public Mir2Lir {
     void GenArithOpInt(Instruction::Code opcode, RegLocation rl_dest,
                        RegLocation rl_lhs, RegLocation rl_rhs);
 
+    /*
+     * @brief Dump a RegLocation using printf
+     * @param loc Register location to dump
+     */
+    static void DumpRegLocation(RegLocation loc);
+
+
+    /*
+     * @brief Dump a RegLocation using printf
+     * @param bb Basic Block
+     * @param mir Current instruction.
+     * @param type Invocation type.
+     * @returns Call information.
+     * @note This must preserve damage done to return by NewMemCallInfo.
+     */
+    CallInfo *GetCallInfo(BasicBlock* bb, MIR* mir, InvokeType type);
+
   private:
     void EmitPrefix(const X86EncodingMap* entry);
     void EmitOpcode(const X86EncodingMap* entry);
@@ -329,12 +346,6 @@ class X86Mir2Lir : public Mir2Lir {
      * @returns 'true' if the operation will have no effect
      */
     bool IsNoOp(Instruction::Code op, int32_t value);
-
-    /*
-     * @brief Dump a RegLocation using printf
-     * @param loc Register location to dump
-     */
-    static void DumpRegLocation(RegLocation loc);
 
     /**
      * @brief Calculate magic number and shift for a given divisor
@@ -444,6 +455,19 @@ class X86Mir2Lir : public Mir2Lir {
     void AnalyzeMIR(int opcode, BasicBlock * bb, MIR *mir);
 
     /*
+     * @brief Analyze one MIR INVOKE instruction
+     * @param mir Current MIR operation.
+     * @param info Collected information about the INVOKE call.
+     */
+      void AnalyzeInvokeInstruction(MIR *mir, CallInfo *info);
+
+    /*
+     * @brief Analyze NEW_ARRAY or NEW_INSTANCE.
+     * @param type_index Type index for array or type.
+     */
+    void AnalyzeNewInstruction(uint32_t type_index);
+
+    /*
      * @brief Analyze one MIR float/double instruction
      * @param opcode MIR instruction opcode.
      * @param bb Basic block containing instruction.
@@ -459,11 +483,20 @@ class X86Mir2Lir : public Mir2Lir {
 
     // Information derived from analysis of MIR
 
+    // The compiler temporary for the code address of the method.
+    CompilerTemp *base_of_code_;
+
     // Have we decided to compute a ptr to code and store in temporary VR?
     bool store_method_addr_;
 
-    // The compiler temporary for the code address of the method.
-    CompilerTemp *base_of_code_;
+    // Are we compiling the boot image?
+    bool compiling_boot_;
+
+    // Have we used the stored method address?
+    bool store_method_addr_used_;
+
+    // Instructions to remove if we didn't use the stored method address.
+    LIR *setup_method_address_[2];
 };
 
 }  // namespace art

@@ -1375,6 +1375,13 @@ void X86Mir2Lir::AssignOffsets() {
  */
 void X86Mir2Lir::AssembleLIR() {
   cu_->NewTimingSplit("Assemble");
+
+  // We will remove the method address if we never ended up using it
+  if (store_method_addr_ && !store_method_addr_used_) {
+    setup_method_address_[0]->flags.is_nop = true;
+    setup_method_address_[1]->flags.is_nop = true;
+  }
+
   AssignOffsets();
   int assembler_retries = 0;
   /*

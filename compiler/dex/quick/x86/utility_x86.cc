@@ -518,8 +518,7 @@ LIR* X86Mir2Lir::LoadConstantWide(int r_dest_lo, int r_dest_hi, int64_t value) {
         res->target = data_target;
         res->flags.fixup = kFixupLoad;
         SetMemRefType(res, true, kLiteral);
-        // Redo after we assign target to ensure size is correct.
-        SetupResourceMasks(res);
+        store_method_addr_used_ = true;
       } else {
         if (val_lo == 0) {
           res = NewLIR2(kX86XorpsRR, r_dest_lo, r_dest_lo);
@@ -839,6 +838,64 @@ void X86Mir2Lir::AnalyzeExtendedMIR(int opcode, BasicBlock * bb, MIR *mir) {
   }
 }
 
+CallInfo *X86Mir2Lir::GetCallInfo(BasicBlock* bb, MIR* mir, InvokeType type) {
+  // opcode may be clobbered by NewMemCallInfo.
+  Instruction::Code result_opcode;
+  MIR* move_result_mir = mir_graph_->FindMoveResult(bb, mir);
+  if (move_result_mir) {
+    result_opcode = move_result_mir->dalvikInsn.opcode;
+  }
+  CallInfo *info = mir_graph_->NewMemCallInfo(bb, mir, type, false);
+  // Undo clobbering.
+  if (move_result_mir) {
+    move_result_mir->dalvikInsn.opcode = result_opcode;
+  }
+  return info;
+}
+
+void X86Mir2Lir::AnalyzeInvokeInstruction(MIR *mir, CallInfo *info) {
+  // Ignore inlined invokes.
+  if (info->opt_flags & MIR_INLINED) {
+    return;
+  }
+  int vtable_idx;
+  uintptr_t direct_code;
+  uintptr_t direct_method;
+
+  DexCompilationUnit* cUnit = mir_graph_->GetCurrentDexCompilationUnit();
+  MethodReference target_method(cUnit->GetDexFile(), info->index);
+
+  cu_->compiler_driver->ComputeInvokeInfo(mir_graph_->GetCurrentDexCompilationUnit(),
+                                          mir->offset, false, true,
+                                          &info->type, &target_method, &vtable_idx,
+                                          &direct_code, &direct_method);
+
+  if (direct_method == static_cast<uintptr_t>(-1) ||
+      direct_code == static_cast<uintptr_t>(-1)) {
+    store_method_addr_ = true;
+  }
+}
+
+void X86Mir2Lir::AnalyzeNewInstruction(uint32_t type_idx) {
+  const DexFile* dex_file = cu_->dex_file;
+  CompilerDriver* driver = cu_->compiler_driver;
+  if (cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx, *dex_file,
+                                                       type_idx)) {
+    bool is_type_initialized;
+    bool use_direct_type_ptr;
+    uintptr_t direct_type_ptr;
+    if (kEmbedClassInCode &&
+        driver->CanEmbedTypeInCode(*dex_file, type_idx,
+                                   &is_type_initialized, &use_direct_type_ptr,
+                                   &direct_type_ptr)) {
+      // The fast path.
+      if (!use_direct_type_ptr) {
+        store_method_addr_ = true;
+      }
+    }
+  }
+}
+
 void X86Mir2Lir::AnalyzeMIR(int opcode, BasicBlock * bb, MIR *mir) {
   // Looking for
   // - Do we need a pointer to the code (used for packed switches and double lits)?
@@ -860,6 +917,55 @@ void X86Mir2Lir::AnalyzeMIR(int opcode, BasicBlock * bb, MIR *mir) {
     case Instruction::REM_DOUBLE_2ADDR:
       AnalyzeFPInstruction(opcode, bb, mir);
       break;
+
+    // Can we optimize the invoke in core.oat?
+    case Instruction::INVOKE_STATIC_RANGE:
+    case Instruction::INVOKE_STATIC:
+      if (!store_method_addr_ && compiling_boot_) {
+        AnalyzeInvokeInstruction(mir, GetCallInfo(bb, mir, kStatic));
+      }
+      break;
+
+    case Instruction::INVOKE_DIRECT:
+    case Instruction::INVOKE_DIRECT_RANGE:
+      if (!store_method_addr_ && compiling_boot_) {
+        AnalyzeInvokeInstruction(mir, GetCallInfo(bb, mir, kDirect));
+      }
+      break;
+
+    case Instruction::INVOKE_VIRTUAL:
+    case Instruction::INVOKE_VIRTUAL_RANGE:
+      if (!store_method_addr_ && compiling_boot_) {
+        AnalyzeInvokeInstruction(mir, GetCallInfo(bb, mir, kVirtual));
+      }
+      break;
+
+    case Instruction::INVOKE_SUPER:
+    case Instruction::INVOKE_SUPER_RANGE:
+      if (!store_method_addr_ && compiling_boot_) {
+        AnalyzeInvokeInstruction(mir, GetCallInfo(bb, mir, kSuper));
+      }
+      break;
+
+    case Instruction::INVOKE_INTERFACE:
+    case Instruction::INVOKE_INTERFACE_RANGE:
+      if (!store_method_addr_ && compiling_boot_) {
+        AnalyzeInvokeInstruction(mir, GetCallInfo(bb, mir, kInterface));
+      }
+      break;
+
+    case Instruction::NEW_ARRAY:
+      if (!store_method_addr_) {
+        AnalyzeNewInstruction(mir->dalvikInsn.vC);
+      }
+      break;
+    case Instruction::NEW_INSTANCE:
+      if (!store_method_addr_) {
+        AnalyzeNewInstruction(mir->dalvikInsn.vB);
+      }
+      break;
+
+
     // Packed switches and array fills need a pointer to the base of the method.
     case Instruction::FILL_ARRAY_DATA:
     case Instruction::PACKED_SWITCH:

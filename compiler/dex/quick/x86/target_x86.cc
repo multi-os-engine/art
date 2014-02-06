@@ -511,6 +511,8 @@ bool X86Mir2Lir::IsUnconditionalBranch(LIR* lir) {
 
 X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
     : Mir2Lir(cu, mir_graph, arena) {
+  compiling_boot_ = Runtime::Current()->GetHeap()->IsCompilingBoot();
+  store_method_addr_used_ = false;
   for (int i = 0; i < kX86Last; i++) {
     if (X86Mir2Lir::EncodingMap[i].opcode != i) {
       LOG(FATAL) << "Encoding order for " << X86Mir2Lir::EncodingMap[i].name
