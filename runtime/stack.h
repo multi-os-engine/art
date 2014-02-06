@@ -658,6 +658,11 @@ class StackVisitor {
     }
   }
 
+  static int GetOutVROffset(int out_num) {
+    // According to stack model, the first out is above the Method ptr.
+    return sizeof(StackReference<mirror::ArtMethod>) + (out_num * sizeof(uint32_t));
+  }
+
   uintptr_t GetCurrentQuickFramePc() const {
     return cur_quick_frame_pc_;
   }
