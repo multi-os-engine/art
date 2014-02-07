@@ -300,6 +300,9 @@ build-art-host:   $(ART_HOST_EXECUTABLES)   $(ART_HOST_TEST_EXECUTABLES)   $(HOS
 .PHONY: build-art-target
 build-art-target: $(ART_TARGET_EXECUTABLES) $(ART_TARGET_TEST_EXECUTABLES) $(TARGET_CORE_IMG_OUT) $(TARGET_OUT)/lib/libjavacore.so
 
+.PHONY: art-host
+art-host:   art dalvikvm libart dex2oat $(HOST_OUT_JAVA_LIBRARIES)/core.art $(HOST_OUT)/lib/libjavacore.so
+
 ########################################################################
 # oatdump targets
 
