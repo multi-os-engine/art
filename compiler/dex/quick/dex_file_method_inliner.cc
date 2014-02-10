@@ -608,6 +608,11 @@ bool DexFileMethodInliner::AnalyseIGetMethod(verifier::MethodVerifier* verifier,
     return false;
   }
 
+  if (return_instruction->Next() != instruction->RelativeAt(code_item->insns_size_in_code_units_)) {
+    // Is there any other code, maybe a catch handler?
+    return false;
+  }
+
   uint32_t return_reg = return_instruction->VRegA_11x();
   DCHECK_LT(return_opcode == Instruction::RETURN_WIDE ? return_reg + 1 : return_reg,
             code_item->registers_size_);
@@ -654,6 +659,11 @@ bool DexFileMethodInliner::AnalyseIPutMethod(verifier::MethodVerifier* verifier,
     //    builder.setX(value): iput value, this, fieldX; return-object this;
     //    object.access$nnn(value): iput value, this, fieldX; return value;
     // Use InlineIGetIPutData::reserved to hold the information.
+    return false;
+  }
+
+  if (return_instruction->Next() != instruction->RelativeAt(code_item->insns_size_in_code_units_)) {
+    // Is there any other code, maybe a catch handler?
     return false;
   }
 
