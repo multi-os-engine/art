@@ -90,7 +90,7 @@ static uint32_t kCompilerOptimizerDisableFlags = 0 |  // Disable specific optimi
 static uint32_t kCompilerDebugFlags = 0 |     // Enable debug/testing modes
   // (1 << kDebugDisplayMissingTargets) |
   // (1 << kDebugVerbose) |
-  // (1 << kDebugDumpCFG) |
+  (1 << kDebugDumpCFG) |
   // (1 << kDebugSlowFieldPath) |
   // (1 << kDebugSlowInvokePath) |
   // (1 << kDebugSlowStringPath) |

@@ -77,10 +77,6 @@ class PassDriver {
 
   const Pass* GetPass(const char* name) const;
 
-  const char* GetDumpCFGFolder() const {
-    return dump_cfg_folder_;
-  }
-
  protected:
   void CreatePasses();
 
@@ -89,9 +85,6 @@ class PassDriver {
 
   /** @brief The CompilationUnit on which to execute the passes on. */
   CompilationUnit* const cu_;
-
-  /** @brief Dump CFG base folder: where is the base folder for dumping CFGs. */
-  const char* dump_cfg_folder_;
 };
 
 }  // namespace art
