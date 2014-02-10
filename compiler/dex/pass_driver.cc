@@ -57,8 +57,7 @@ inline void DoWalkBasicBlocks(CompilationUnit* c_unit, const Pass* pass) {
 
 }  // anonymous namespace
 
-PassDriver::PassDriver(CompilationUnit* cu, bool create_default_passes)
-    : cu_(cu), dump_cfg_folder_("/sdcard/") {
+PassDriver::PassDriver(CompilationUnit* cu, bool create_default_passes) : cu_(cu) {
   DCHECK(cu != nullptr);
 
   // If need be, create the default passes.
@@ -184,12 +183,7 @@ bool PassDriver::RunPass(CompilationUnit* c_unit, const Pass* pass, bool time_sp
       DCHECK(passFolder != nullptr);
 
       if (passFolder[0] != 0) {
-        // Create directory prefix.
-        std::string prefix = GetDumpCFGFolder();
-        prefix += passFolder;
-        prefix += "/";
-
-        c_unit->mir_graph->DumpCFG(prefix.c_str(), false);
+        c_unit->mir_graph->DumpCFG(passFolder, false);
       }
     }
   }

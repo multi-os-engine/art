@@ -464,7 +464,8 @@ class MIRGraph {
    * @param all_blocks does the dumper use all the basic blocks or use the reachable blocks.
    * @param suffix does the filename require a suffix or not (default = nullptr).
    */
-  void DumpCFG(const char* dir_prefix, bool all_blocks, const char* suffix = nullptr);
+  void DumpCFG(const char* pass_name, bool all_blocks, const char* suffix = nullptr);
+  void DumpC1visualizerCFG(const char* pass_name, bool all_blocks);
 
   void InitRegLocations();
 

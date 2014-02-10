@@ -58,6 +58,7 @@ LIBART_COMPILER_SRC_FILES := \
 	dex/bb_optimizations.cc \
 	dex/frontend.cc \
 	dex/mir_graph.cc \
+	dex/mir_tracer.cc \
 	dex/mir_analysis.cc \
 	dex/verified_method.cc \
 	dex/verification_results.cc \

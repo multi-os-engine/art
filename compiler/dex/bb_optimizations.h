@@ -151,7 +151,7 @@ class BBCombine : public Pass {
  */
 class BBOptimizations : public Pass {
  public:
-  BBOptimizations() : Pass("BBOptimizations", kNoNodes, "5_post_bbo_cfg") {
+  BBOptimizations() : Pass("BBOptimizations", kNoNodes, "6_post_bbo_cfg") {
   }
 
   bool Gate(const CompilationUnit* cUnit) const {
