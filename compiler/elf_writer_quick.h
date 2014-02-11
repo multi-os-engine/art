@@ -43,6 +43,16 @@ class ElfWriterQuick : public ElfWriter {
   ElfWriterQuick(const CompilerDriver& driver, File* elf_file);
   ~ElfWriterQuick();
 
+  /*
+   * @brief Generate the DWARF debug_info and debug_abbrev sections
+   * @param oat_writer The Oat file Writer.
+   * @param dbg_info Compilation unit information.
+   * @param dbg_abbrev Abbreviations used to generate dbg_info.
+   * @param dbg_str Debug strings.
+   */
+  void FillInCFIInformation(OatWriter& oat_writer, std::vector<uint8_t>& dbg_info,
+                            std::vector<uint8_t>& dbg_abbrev, std::vector<uint8_t>& dbg_str);
+
   DISALLOW_IMPLICIT_CONSTRUCTORS(ElfWriterQuick);
 };
 

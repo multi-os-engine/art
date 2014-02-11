@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <cstddef>
+#include <llvm/Support/Dwarf.h>
 #include <string>
 #include <vector>
 
