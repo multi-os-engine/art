@@ -56,6 +56,9 @@
 
 namespace art {
 
+// Hack for CFI CIE initialization
+extern std::vector<uint8_t>* X86CFIInitialization();
+
 static double Percentage(size_t x, size_t y) {
   return 100.0 * (static_cast<double>(x)) / (static_cast<double>(x + y));
 }
@@ -321,10 +324,12 @@ CompilerDriver::CompilerDriver(VerificationResults* verification_results,
       compiler_enable_auto_elf_loading_(NULL),
       compiler_get_method_code_addr_(NULL),
       support_boot_image_fixup_(instruction_set != kMips),
+      cfi_info_(nullptr),
       dedupe_code_("dedupe code"),
       dedupe_mapping_table_("dedupe mapping table"),
       dedupe_vmap_table_("dedupe vmap table"),
-      dedupe_gc_map_("dedupe gc map") {
+      dedupe_gc_map_("dedupe gc map"),
+      dedupe_cfi_info_("dedupe cfi info") {
 
   CHECK_PTHREAD_CALL(pthread_key_create, (&tls_key_, NULL), "compiler tls key");
 
@@ -335,6 +340,17 @@ CompilerDriver::CompilerDriver(VerificationResults* verification_results,
   CHECK(!Runtime::Current()->IsStarted());
   if (!image_) {
     CHECK(image_classes_.get() == NULL);
+  }
+
+  // Are we generating CFI information?
+  if (kIsDebugBuild && compiler_backend_->IsPortable()) {
+    switch (instruction_set_) {
+      case kX86:
+        cfi_info_.reset(X86CFIInitialization());
+        break;
+      default:
+        break;
+    }
   }
 }
 
@@ -352,6 +368,13 @@ std::vector<uint8_t>* CompilerDriver::DeduplicateVMapTable(const std::vector<uin
 
 std::vector<uint8_t>* CompilerDriver::DeduplicateGCMap(const std::vector<uint8_t>& code) {
   return dedupe_gc_map_.Add(Thread::Current(), code);
+}
+
+std::vector<uint8_t>* CompilerDriver::DeduplicateCFIInfo(const std::vector<uint8_t>* cfi_info) {
+  if (cfi_info == nullptr) {
+    return nullptr;
+  }
+  return dedupe_cfi_info_.Add(Thread::Current(), *cfi_info);
 }
 
 CompilerDriver::~CompilerDriver() {
