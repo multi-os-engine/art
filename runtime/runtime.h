@@ -89,6 +89,10 @@ class Runtime {
   static bool Create(const RuntimeOptions& options, bool ignore_unrecognized)
       SHARED_TRYLOCK_FUNCTION(true, Locks::mutator_lock_);
 
+  bool IsAotCompiler() const {
+    return jit_handle_ == nullptr && compiler_callbacks_ != nullptr;
+  }
+
   bool IsCompiler() const {
     return compiler_callbacks_ != nullptr;
   }
@@ -360,6 +364,9 @@ class Runtime {
   mirror::ArtMethod* CreateCalleeSaveMethod(CalleeSaveType type)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  void JitCompileMethod(mirror::ArtMethod* method, Thread* self)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   int32_t GetStat(int kind);
 
   RuntimeStats* GetStats() {
@@ -373,6 +380,12 @@ class Runtime {
   void ResetStats(int kinds);
 
   void SetStatsEnabled(bool new_state);
+
+  void JitLoad();
+
+  bool UseJit() const {
+    return jit_handle_ != NULL;
+  }
 
   void PreZygoteFork();
   bool InitZygote();
@@ -533,6 +546,12 @@ class Runtime {
   std::string stack_trace_file_;
 
   JavaVMExt* java_vm_;
+
+  // JIT
+  void* jit_library_handle_;
+  void* jit_handle_;
+  void* (*jit_load_)(CompilerCallbacks**);
+  bool (*jit_compile_method_)(void*, mirror::ArtMethod*, Thread*);
 
   // Fault message, printed when we get a SIGSEGV.
   Mutex fault_message_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;

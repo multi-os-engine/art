@@ -53,6 +53,7 @@ class ParsedOptions {
   bool interpreter_only_;
   bool is_explicit_gc_disabled_;
   bool use_tlab_;
+  bool use_jit_;
   bool verify_pre_gc_heap_;
   bool verify_pre_sweeping_heap_;
   bool verify_post_gc_heap_;

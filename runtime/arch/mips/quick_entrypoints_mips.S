@@ -1028,6 +1028,7 @@ ENTRY art_quick_resolution_trampoline
 END art_quick_resolution_trampoline
 
 UNIMPLEMENTED art_quick_generic_jni_trampoline
+UNIMPLEMENTED art_quick_to_compiler_bridge
 
     .extern artQuickToInterpreterBridge
 ENTRY art_quick_to_interpreter_bridge

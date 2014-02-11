@@ -24,6 +24,7 @@
 #include "jni_internal.h"
 #include "mem_map.h"
 #include "mirror/art_method-inl.h"
+#include "mirror/art_method.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
 #include "mirror/object_array-inl.h"

@@ -243,6 +243,10 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
   hook_exit_ = exit;
   hook_abort_ = NULL;  // We don't call abort(3) by default; see Runtime::Abort.
 
+#if ART_JIT
+  use_jit_ = true;
+#endif
+
 //  gLogVerbosity.class_linker = true;  // TODO: don't check this in!
 //  gLogVerbosity.compiler = true;  // TODO: don't check this in!
 //  gLogVerbosity.gc = true;  // TODO: don't check this in!
@@ -420,6 +424,11 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
       must_relocate_ = false;
     } else if (option == "-Xint") {
       interpreter_only_ = true;
+    } else if (option == "-Xjit") {
+      use_jit_ = true;
+    } else if (option == "use_jit") {
+      use_jit_ = static_cast<bool>(const_cast<void*>(options[i].second));
+      LG << "use_jit set to " << use_jit_;
     } else if (StartsWith(option, "-Xgc:")) {
       if (!ParseXGcOption(option)) {
         return false;

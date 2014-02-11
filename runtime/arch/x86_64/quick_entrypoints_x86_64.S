@@ -1189,6 +1189,8 @@ DEFINE_FUNCTION art_quick_resolution_trampoline
     DELIVER_PENDING_EXCEPTION
 END_FUNCTION art_quick_resolution_trampoline
 
+UNIMPLEMENTED art_quick_to_compiler_bridge
+
 /* Generic JNI frame layout:
  *
  * #-------------------#

@@ -465,7 +465,7 @@ std::ostream& MethodVerifier::Fail(VerifyError error) {
     case VERIFY_ERROR_ACCESS_METHOD:
     case VERIFY_ERROR_INSTANTIATION:
     case VERIFY_ERROR_CLASS_CHANGE:
-      if (Runtime::Current()->IsCompiler() || !can_load_classes_) {
+      if (Runtime::Current()->IsAotCompiler() || !can_load_classes_) {
         // If we're optimistically running verification at compile time, turn NO_xxx, ACCESS_xxx,
         // class change and instantiation errors into soft verification errors so that we re-verify
         // at runtime. We may fail to find or to agree on access because of not yet available class
@@ -2673,7 +2673,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
   }  // end - switch (dec_insn.opcode)
 
   if (have_pending_hard_failure_) {
-    if (Runtime::Current()->IsCompiler()) {
+    if (Runtime::Current()->IsAotCompiler()) {
       /* When compiling, check that the last failure is a hard failure */
       CHECK_EQ(failures_[failures_.size() - 1], VERIFY_ERROR_BAD_CLASS_HARD);
     }

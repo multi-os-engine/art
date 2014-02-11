@@ -209,6 +209,11 @@ static inline const void* GetPortableToQuickBridge() {
   return GetPortableToInterpreterBridge();
 }
 
+extern "C" void art_quick_to_compiler_bridge(mirror::ArtMethod*);
+static inline const void* GetQuickToCompilerBridge() {
+  return reinterpret_cast<void*>(art_quick_to_compiler_bridge);
+}
+
 extern "C" void art_quick_to_interpreter_bridge(mirror::ArtMethod*);
 static inline const void* GetQuickToInterpreterBridge() {
   return reinterpret_cast<void*>(art_quick_to_interpreter_bridge);

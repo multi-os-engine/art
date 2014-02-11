@@ -1250,6 +1250,9 @@ static int dex2oat(int argc, char** argv) {
       std::make_pair("imageinstructionset",
                      reinterpret_cast<const void*>(GetInstructionSetString(instruction_set))));
 
+  // No JIT in dex2oat
+  runtime_options.push_back(std::make_pair("use_jit", reinterpret_cast<void*>(false)));
+
   Dex2Oat* p_dex2oat;
   if (!Dex2Oat::Create(&p_dex2oat,
                        runtime_options,

@@ -22,6 +22,8 @@
 #include <linux/fs.h>
 #endif
 
+#include <dlfcn.h>
+
 #include <signal.h>
 #include <sys/syscall.h>
 #include <valgrind.h>
@@ -54,6 +56,7 @@
 #include "image.h"
 #include "instrumentation.h"
 #include "intern_table.h"
+#include "interpreter/interpreter.h"
 #include "jni_internal.h"
 #include "mirror/art_field-inl.h"
 #include "mirror/art_method-inl.h"
@@ -111,6 +114,10 @@ Runtime::Runtime()
       class_linker_(nullptr),
       signal_catcher_(nullptr),
       java_vm_(nullptr),
+      jit_library_handle_(nullptr),
+      jit_handle_(nullptr),
+      jit_load_(nullptr),
+      jit_compile_method_(nullptr),
       fault_message_lock_("Fault message lock"),
       fault_message_(""),
       method_verifier_lock_("Method verifiers lock"),
@@ -612,6 +619,10 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   dump_gc_performance_on_shutdown_ = options->dump_gc_performance_on_shutdown_;
 
+  if (options->use_jit_) {
+    JitLoad();
+  }
+
   BlockSignals();
   InitPlatformSignalHandlers();
 
@@ -1111,6 +1122,50 @@ void Runtime::SetInstructionSet(InstructionSet instruction_set) {
 void Runtime::SetCalleeSaveMethod(mirror::ArtMethod* method, CalleeSaveType type) {
   DCHECK_LT(static_cast<int>(type), static_cast<int>(kLastCalleeSaveType));
   callee_save_methods_[type] = GcRoot<mirror::ArtMethod>(method);
+}
+
+void Runtime::JitLoad() {
+  jit_handle_ = dlopen(
+      kIsDebugBuild ? "libartd-compiler.so" : "libart-compiler.so", RTLD_NOW);
+  if (jit_handle_ == NULL) {
+    LOG(WARNING) << "JIT could now load libart-compiler: " << dlerror();
+    return;
+  }
+  jit_load_ = reinterpret_cast<void* (*)(CompilerCallbacks**)>(dlsym(jit_handle_, "jit_load"));
+  if (jit_load_ == NULL) {
+    LOG(WARNING) << "JIT couldn't find entry point";
+    return;
+  }
+  jit_compile_method_ = reinterpret_cast<bool (*)(void*, mirror::ArtMethod*, Thread*)>(dlsym(jit_handle_, "jit_compile_method"));
+  if (jit_compile_method_ == NULL) {
+    LOG(WARNING) << "JIT couldn't find compile method";
+    return;
+  }
+
+  CompilerCallbacks* callbacks;
+  jit_handle_ = (jit_load_)(&callbacks);
+  if (jit_handle_ == NULL) {
+    LOG(ERROR) << "JIT couldn't load";
+    return;
+  }
+  if (callbacks == nullptr) {
+    LOG(ERROR) << "JIT compiler callbacks were not set";
+    jit_handle_ = NULL;
+    return;
+  }
+  compiler_callbacks_ = callbacks;
+  LOG(INFO) << "JIT loaded";
+}
+
+void Runtime::JitCompileMethod(mirror::ArtMethod* method, Thread* self) {
+  if (!(jit_compile_method_)(jit_handle_, method, self)) {
+    LOG(WARNING) << "JIT could not call compile method";
+    method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
+    method->SetEntryPointFromInterpreter(interpreter::artInterpreterToInterpreterBridge);
+  } else {
+    method->SetEntryPointFromInterpreter(artInterpreterToCompiledCodeBridge);
+  }
+  LOG(WARNING) << "JIT trampoline: new quick_code=" << reinterpret_cast<const void*>(method->GetEntryPointFromQuickCompiledCode());
 }
 
 const std::vector<const DexFile*>& Runtime::GetCompileTimeClassPath(jobject class_loader) {

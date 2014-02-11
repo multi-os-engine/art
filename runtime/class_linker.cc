@@ -91,7 +91,7 @@ static void ThrowEarlierClassFailure(mirror::Class* c)
   // a NoClassDefFoundError (v2 2.17.5).  The exception to this rule is if we
   // failed in verification, in which case v2 5.4.1 says we need to re-throw
   // the previous error.
-  if (!Runtime::Current()->IsCompiler()) {  // Give info if this occurs at runtime.
+  if (!Runtime::Current()->IsAotCompiler()) {  // Give info if this occurs at runtime.
     LOG(INFO) << "Rejecting re-init on previously-failed class " << PrettyClass(c);
   }
 
@@ -200,7 +200,7 @@ extern "C" void art_quick_generic_jni_trampoline(mirror::ArtMethod*);
 
 void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class_path) {
   VLOG(startup) << "ClassLinker::Init";
-  CHECK(Runtime::Current()->IsCompiler());
+  CHECK(Runtime::Current()->IsAotCompiler());
 
   CHECK(!init_done_);
 
@@ -914,7 +914,7 @@ const OatFile* ClassLinker::FindOatFileInOatLocationForDexFile(const char* dex_l
                                                                const char* oat_location,
                                                                std::string* error_msg) {
   std::unique_ptr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, NULL,
-                                            !Runtime::Current()->IsCompiler(),
+                                            !Runtime::Current()->IsAotCompiler(),
                                             error_msg));
   if (oat_file.get() == nullptr) {
     *error_msg = StringPrintf("Failed to find existing oat file at %s: %s", oat_location,
@@ -2221,7 +2221,11 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
         portable_code = GetPortableToQuickBridge();
       } else {
         portable_code = GetPortableToInterpreterBridge();
-        quick_code = GetQuickToInterpreterBridge();
+        if (Runtime::Current()->UseJit()) {
+          quick_code = GetQuickToCompilerBridge();
+        } else {
+          quick_code = GetQuickToInterpreterBridge();
+        }
       }
     } else {
       if (portable_code == nullptr) {
@@ -2277,7 +2281,11 @@ void ClassLinker::LinkCode(Handle<mirror::ArtMethod> method, const OatFile::OatC
   } else if (enter_interpreter) {
     if (!method->IsNative()) {
       // Set entry point from compiled code if there's no code or in interpreter only mode.
-      method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
+      if (Runtime::Current()->UseJit()) {
+        method->SetEntryPointFromQuickCompiledCode(GetQuickToCompilerBridge());
+      } else {
+        method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
+      }
       method->SetEntryPointFromPortableCompiledCode(GetPortableToInterpreterBridge());
     } else {
       method->SetEntryPointFromQuickCompiledCode(GetQuickGenericJniTrampoline());
@@ -3070,7 +3078,7 @@ void ClassLinker::VerifyClass(Handle<mirror::Class> klass) {
 
   // Don't attempt to re-verify if already sufficiently verified.
   if (klass->IsVerified() ||
-      (klass->IsCompileTimeVerified() && Runtime::Current()->IsCompiler())) {
+      (klass->IsCompileTimeVerified() && Runtime::Current()->IsAotCompiler())) {
     return;
   }
 
@@ -3086,7 +3094,7 @@ void ClassLinker::VerifyClass(Handle<mirror::Class> klass) {
   } else {
     CHECK_EQ(klass->GetStatus(), mirror::Class::kStatusRetryVerificationAtRuntime)
         << PrettyClass(klass.Get());
-    CHECK(!Runtime::Current()->IsCompiler());
+    CHECK(!Runtime::Current()->IsAotCompiler());
     klass->SetStatus(mirror::Class::kStatusVerifyingAtRuntime, self);
   }
 
@@ -3146,7 +3154,7 @@ void ClassLinker::VerifyClass(Handle<mirror::Class> klass) {
   std::string error_msg;
   if (!preverified) {
     verifier_failure = verifier::MethodVerifier::VerifyClass(klass.Get(),
-                                                             Runtime::Current()->IsCompiler(),
+                                                             Runtime::Current()->IsAotCompiler(),
                                                              &error_msg);
   }
   if (preverified || verifier_failure != verifier::MethodVerifier::kHardFailure) {
@@ -3174,7 +3182,7 @@ void ClassLinker::VerifyClass(Handle<mirror::Class> klass) {
       // Soft failures at compile time should be retried at runtime. Soft
       // failures at runtime will be handled by slow paths in the generated
       // code. Set status accordingly.
-      if (Runtime::Current()->IsCompiler()) {
+      if (Runtime::Current()->IsAotCompiler()) {
         klass->SetStatus(mirror::Class::kStatusRetryVerificationAtRuntime, self);
       } else {
         klass->SetStatus(mirror::Class::kStatusVerified, self);
@@ -3674,7 +3682,7 @@ bool ClassLinker::InitializeClass(Handle<mirror::Class> klass, bool can_init_sta
         if (klass->IsErroneous()) {
           CHECK(self->IsExceptionPending());
         } else {
-          CHECK(Runtime::Current()->IsCompiler());
+          CHECK(Runtime::Current()->IsAotCompiler());
           CHECK_EQ(klass->GetStatus(), mirror::Class::kStatusRetryVerificationAtRuntime);
         }
         return false;
@@ -3819,7 +3827,7 @@ bool ClassLinker::WaitForInitializeClass(Handle<mirror::Class> klass, Thread* se
     if (klass->GetStatus() == mirror::Class::kStatusInitializing) {
       continue;
     }
-    if (klass->GetStatus() == mirror::Class::kStatusVerified && Runtime::Current()->IsCompiler()) {
+    if (klass->GetStatus() == mirror::Class::kStatusVerified && Runtime::Current()->IsAotCompiler()) {
       // Compile time initialization failed.
       return false;
     }

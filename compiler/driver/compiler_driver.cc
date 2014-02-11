@@ -19,6 +19,8 @@
 #define ATRACE_TAG ATRACE_TAG_DALVIK
 #include <utils/Trace.h>
 
+#define NO_DEX_TO_DEX
+
 #include <vector>
 #include <unistd.h>
 
@@ -490,6 +492,10 @@ const std::vector<uint8_t>* CompilerDriver::CreateQuickResolutionTrampoline() co
   CREATE_TRAMPOLINE(QUICK, kQuickAbi, pQuickResolutionTrampoline)
 }
 
+const std::vector<uint8_t>* CompilerDriver::CreateQuickToCompilerBridge() const {
+  CREATE_TRAMPOLINE(QUICK, kQuickAbi, pQuickToCompilerBridge);
+}
+
 const std::vector<uint8_t>* CompilerDriver::CreateQuickToInterpreterBridge() const {
   CREATE_TRAMPOLINE(QUICK, kQuickAbi, pQuickToInterpreterBridge)
 }
@@ -507,6 +513,7 @@ void CompilerDriver::CompileAll(jobject class_loader,
   }
 }
 
+#ifndef NO_DEX_TO_DEX
 static DexToDexCompilationLevel GetDexToDexCompilationlevel(
     Thread* self, Handle<mirror::ClassLoader> class_loader, const DexFile& dex_file,
     const DexFile::ClassDef& class_def) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -538,6 +545,7 @@ static DexToDexCompilationLevel GetDexToDexCompilationlevel(
     return kDontDexToDexCompile;
   }
 }
+#endif
 
 void CompilerDriver::CompileOne(mirror::ArtMethod* method, TimingLogger* timings) {
   DCHECK(!Runtime::Current()->IsStarted());
@@ -569,6 +577,7 @@ void CompilerDriver::CompileOne(mirror::ArtMethod* method, TimingLogger* timings
 
   // Can we run DEX-to-DEX compiler on this class ?
   DexToDexCompilationLevel dex_to_dex_compilation_level = kDontDexToDexCompile;
+#ifndef NO_DEX_TO_DEX
   {
     ScopedObjectAccess soa(Thread::Current());
     const DexFile::ClassDef& class_def = dex_file->GetClassDef(class_def_idx);
@@ -578,6 +587,49 @@ void CompilerDriver::CompileOne(mirror::ArtMethod* method, TimingLogger* timings
     dex_to_dex_compilation_level = GetDexToDexCompilationlevel(self, class_loader, *dex_file,
                                                                class_def);
   }
+#endif
+  CompileMethod(code_item, access_flags, invoke_type, class_def_idx, method_idx, jclass_loader,
+                *dex_file, dex_to_dex_compilation_level);
+
+  self->GetJniEnv()->DeleteGlobalRef(jclass_loader);
+
+  self->TransitionFromSuspendedToRunnable();
+}
+
+void CompilerDriver::CompileMethod(Thread* self, mirror::ArtMethod* method) {
+  jobject jclass_loader;
+  const DexFile* dex_file;
+  uint16_t class_def_idx;
+  uint32_t method_idx = method->GetDexMethodIndex();
+  uint32_t access_flags = method->GetAccessFlags();
+  DexToDexCompilationLevel dex_to_dex_compilation_level = kDontDexToDexCompile;
+  InvokeType invoke_type = method->GetInvokeType();
+  {
+    ScopedObjectAccessUnchecked soa(self);
+    ScopedLocalRef<jobject>
+      local_class_loader(soa.Env(),
+                    soa.AddLocalReference<jobject>(method->GetDeclaringClass()->GetClassLoader()));
+    jclass_loader = soa.Env()->NewGlobalRef(local_class_loader.get());
+    // Find the dex_file
+    StackHandleScope<1> hs(self);
+    MethodHelper mh(hs.NewHandle(method));
+    dex_file = mh.GetMethod()->GetDexFile();
+    class_def_idx = mh.GetMethod()->GetClassDefIndex();
+#ifndef NO_DEX_TO_DEX
+    // See if we need dex_to_dex
+    const DexFile::ClassDef& class_def = dex_file->GetClassDef(class_def_idx);
+    SirtRef<mirror::ClassLoader> class_loader(soa.Self(),
+                                              soa.Decode<mirror::ClassLoader*>(jclass_loader));
+    dex_to_dex_compilation_level = GetDexToDexCompilationlevel(soa.Self(), class_loader, *dex_file,
+                                                               class_def);
+#endif
+  }
+  const DexFile::CodeItem* code_item = dex_file->GetCodeItem(method->GetCodeItemOffset());
+  std::vector<const DexFile*> dex_files;
+  dex_files.push_back(dex_file);
+
+  self->TransitionFromRunnableToSuspended(kNative);
+
   CompileMethod(code_item, access_flags, invoke_type, class_def_idx, method_idx, jclass_loader,
                 *dex_file, dex_to_dex_compilation_level);
 
@@ -1924,6 +1976,7 @@ void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, siz
 
   // Can we run DEX-to-DEX compiler on this class ?
   DexToDexCompilationLevel dex_to_dex_compilation_level = kDontDexToDexCompile;
+#ifndef NO_DEX_TO_DEX
   {
     ScopedObjectAccess soa(Thread::Current());
     StackHandleScope<1> hs(soa.Self());
@@ -1932,6 +1985,7 @@ void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, siz
     dex_to_dex_compilation_level = GetDexToDexCompilationlevel(soa.Self(), class_loader, dex_file,
                                                                class_def);
   }
+#endif
   ClassDataItemIterator it(dex_file, class_data);
   // Skip fields
   while (it.HasNextStaticField()) {
@@ -1993,6 +2047,13 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
   CompiledMethod* compiled_method = NULL;
   uint64_t start_ns = NanoTime();
 
+  MethodReference method_ref(&dex_file, method_idx);
+#if 0
+  if (GetCompiledMethod(method_ref) == compiling_sentinel_) {
+    return;
+  }
+#endif
+
   if ((access_flags & kAccNative) != 0) {
     // Are we interpreting only and have support for generic JNI down calls?
     if (!compiler_options_->IsCompilationEnabled() &&
@@ -2004,13 +2065,14 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
     }
   } else if ((access_flags & kAccAbstract) != 0) {
   } else {
-    MethodReference method_ref(&dex_file, method_idx);
+    // MethodReference method_ref(&dex_file, method_idx);
     bool compile = verification_results_->IsCandidateForCompilation(method_ref, access_flags);
     if (compile) {
       // NOTE: if compiler declines to compile this method, it will return NULL.
       compiled_method = compiler_->Compile(code_item, access_flags, invoke_type, class_def_idx,
                                            method_idx, class_loader, dex_file);
     }
+#ifndef NO_DEX_TO_DEX
     if (compiled_method == nullptr && dex_to_dex_compilation_level != kDontDexToDexCompile) {
       // TODO: add a command-line option to disable DEX-to-DEX compilation ?
       (*dex_to_dex_compiler_)(*this, code_item, access_flags,
@@ -2018,6 +2080,7 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
                               method_idx, class_loader, dex_file,
                               dex_to_dex_compilation_level);
     }
+#endif
   }
   uint64_t duration_ns = NanoTime() - start_ns;
   if (duration_ns > MsToNs(compiler_->GetMaximumCompilationTimeBeforeWarning()) && !kIsDebugBuild) {
@@ -2027,13 +2090,13 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
 
   Thread* self = Thread::Current();
   if (compiled_method != NULL) {
-    MethodReference ref(&dex_file, method_idx);
-    DCHECK(GetCompiledMethod(ref) == NULL) << PrettyMethod(method_idx, dex_file);
+    // MethodReference ref(&dex_file, method_idx);
+    DCHECK(GetCompiledMethod(method_ref) == NULL) << PrettyMethod(method_idx, dex_file);
     {
       MutexLock mu(self, compiled_methods_lock_);
-      compiled_methods_.Put(ref, compiled_method);
+      compiled_methods_.Put(method_ref, compiled_method);
     }
-    DCHECK(GetCompiledMethod(ref) != NULL) << PrettyMethod(method_idx, dex_file);
+    DCHECK(GetCompiledMethod(method_ref) != NULL) << PrettyMethod(method_idx, dex_file);
   }
 
   if (self->IsExceptionPending()) {

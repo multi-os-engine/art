@@ -29,8 +29,13 @@
 namespace art {
 namespace optimizer {
 
+#if ART_JIT
+// Controls quickening activation.
+const bool kEnableQuickening = false;
+#else
 // Controls quickening activation.
 const bool kEnableQuickening = true;
+#endif
 // Control check-cast elision.
 const bool kEnableCheckCastEllision = true;
 

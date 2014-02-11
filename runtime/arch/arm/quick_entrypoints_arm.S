@@ -1111,6 +1111,22 @@ ENTRY art_quick_to_interpreter_bridge
     DELIVER_PENDING_EXCEPTION
 END art_quick_to_interpreter_bridge
 
+    .extern artQuickToCompilerBridge
+ENTRY art_quick_to_compiler_bridge
+    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    mov     r1, r9                 @ pass Thread::Current
+    mov     r2, sp                 @ pass SP
+    blx     artQuickToCompilerBridge    @ (Method* method, Thread*, SP)
+    cbz     r0, 1f                 @ is code pointer null? goto exception
+    mov     r12, r0
+    ldr  r0, [sp, #0]              @ load resolved method in r0
+    RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    bx      r12                    @ tail-call into actual code
+1:
+    RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    DELIVER_PENDING_EXCEPTION
+END art_quick_to_compiler_bridge
+
     /*
      * Routine that intercepts method calls and returns.
      */

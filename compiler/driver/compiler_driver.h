@@ -115,6 +115,9 @@ class CompilerDriver {
                   TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
+  void CompileMethod(Thread* self, mirror::ArtMethod*)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Compile a single Method.
   void CompileOne(mirror::ArtMethod* method, TimingLogger* timings)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -176,6 +179,8 @@ class CompilerDriver {
   const std::vector<uint8_t>* CreateQuickImtConflictTrampoline() const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   const std::vector<uint8_t>* CreateQuickResolutionTrampoline() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const std::vector<uint8_t>* CreateQuickToCompilerBridge() const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   const std::vector<uint8_t>* CreateQuickToInterpreterBridge() const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

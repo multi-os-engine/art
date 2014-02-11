@@ -93,6 +93,7 @@
 \
   V(QuickImtConflictTrampoline, void, mirror::ArtMethod*) \
   V(QuickResolutionTrampoline, void, mirror::ArtMethod*) \
+  V(QuickToCompilerBridge, void, mirror::ArtMethod*) \
   V(QuickToInterpreterBridge, void, mirror::ArtMethod*) \
   V(InvokeDirectTrampolineWithAccessCheck, void, uint32_t, void*) \
   V(InvokeInterfaceTrampolineWithAccessCheck, void, uint32_t, void*) \

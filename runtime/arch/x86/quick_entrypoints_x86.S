@@ -1219,6 +1219,33 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     DELIVER_PENDING_EXCEPTION
 END_FUNCTION art_quick_generic_jni_trampoline
 
+DEFINE_FUNCTION art_quick_to_compiler_bridge
+    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME   // save frame
+    mov %esp, %edx                // remember SP
+    PUSH eax                      // alignment padding
+    PUSH edx                      // pass SP
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH eax                      // pass  method
+    SETUP_GOT_NOSAVE              // clobbers EBX
+    call PLT_SYMBOL(artQuickToCompilerBridge)  // (method, Thread*, SP)
+    movl %eax, %edi               // remember code pointer in EDI
+    addl LITERAL(16), %esp        // pop arguments
+    test %eax, %eax               // if code pointer is NULL goto deliver pending exception
+    jz 1f
+    POP eax                       // called method
+    POP ecx                       // restore args
+    POP edx
+    POP ebx
+    POP ebp                       // restore callee saves except EDI
+    POP esi
+    xchgl 0(%esp),%edi            // restore EDI and place code pointer as only value on stack
+    ret                           // tail call into method
+1:
+    RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    DELIVER_PENDING_EXCEPTION
+END_FUNCTION art_quick_to_compiler_bridge
+
 DEFINE_FUNCTION art_quick_to_interpreter_bridge
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME   // save frame
     mov %esp, %edx                // remember SP

@@ -460,6 +460,16 @@ void BuildQuickShadowFrameVisitor::Visit() {
   ++cur_reg_;
 }
 
+extern "C" const void* artQuickToCompilerBridge(mirror::ArtMethod* method, Thread* self,
+                                             StackReference<mirror::ArtMethod>* sp)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsAndArgs);
+
+  Runtime::Current()->JitCompileMethod(method, self);
+  *sp = StackReference<mirror::ArtMethod>::FromMirrorPtr(method);
+  return method->GetEntryPointFromQuickCompiledCode();
+}
+
 extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Thread* self,
                                                 StackReference<mirror::ArtMethod>* sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
