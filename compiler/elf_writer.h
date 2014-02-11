@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include <llvm/Support/Dwarf.h>
 #include <llvm/Support/ELF.h>
 
 #include "base/macros.h"
