@@ -371,7 +371,8 @@ CompilerDriver::CompilerDriver(VerificationResults* verification_results,
       dedupe_code_("dedupe code"),
       dedupe_mapping_table_("dedupe mapping table"),
       dedupe_vmap_table_("dedupe vmap table"),
-      dedupe_gc_map_("dedupe gc map") {
+      dedupe_gc_map_("dedupe gc map"),
+      dedupe_cfi_info_("dedupe cfi info") {
 
   CHECK_PTHREAD_CALL(pthread_key_create, (&tls_key_, NULL), "compiler tls key");
 
@@ -424,6 +425,10 @@ std::vector<uint8_t>* CompilerDriver::DeduplicateVMapTable(const std::vector<uin
 
 std::vector<uint8_t>* CompilerDriver::DeduplicateGCMap(const std::vector<uint8_t>& code) {
   return dedupe_gc_map_.Add(Thread::Current(), code);
+}
+
+std::vector<uint8_t>* CompilerDriver::DeduplicateCFIInfo(const std::vector<uint8_t>& cfi_info) {
+  return dedupe_gc_map_.Add(Thread::Current(), cfi_info);
 }
 
 CompilerDriver::~CompilerDriver() {

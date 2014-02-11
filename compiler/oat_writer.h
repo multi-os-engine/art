@@ -68,7 +68,8 @@ class OatWriter {
             uintptr_t image_file_location_oat_begin,
             const std::string& image_file_location,
             const CompilerDriver* compiler,
-            TimingLogger* timings);
+            TimingLogger* timings,
+            std::vector<uint8_t>& cfi_info);
 
   const OatHeader& GetOatHeader() const {
     return *oat_header_;
@@ -78,9 +79,26 @@ class OatWriter {
     return size_;
   }
 
+  const std::vector<uint8_t>& GetCFIInfo() const {
+    return cfi_info_;
+  }
+
   bool Write(OutputStream& out);
 
   ~OatWriter();
+
+  struct DebugInfo {
+    DebugInfo(const std::string& method_name, uint32_t low_pc, uint32_t high_pc)
+      : method_name_(method_name), low_pc_(low_pc), high_pc_(high_pc) {
+    }
+    std::string method_name_;
+    uint32_t    low_pc_;
+    uint32_t    high_pc_;
+  };
+
+  const std::vector<DebugInfo>& GetCFIMethodInfo() const {
+    return method_info_;
+  }
 
  private:
   size_t InitOatHeader();
@@ -205,6 +223,8 @@ class OatWriter {
     DISALLOW_COPY_AND_ASSIGN(OatClass);
   };
 
+  std::vector<DebugInfo> method_info_;
+
   const CompilerDriver* const compiler_driver_;
 
   // note OatFile does not take ownership of the DexFiles
@@ -270,6 +290,9 @@ class OatWriter {
   SafeMap<const std::vector<uint8_t>*, uint32_t> vmap_table_offsets_;
   SafeMap<const std::vector<uint8_t>*, uint32_t> mapping_table_offsets_;
   SafeMap<const std::vector<uint8_t>*, uint32_t> gc_map_offsets_;
+
+  // A Reference to the cfi_info to be filled in with FDE CFI information.
+  std::vector<uint8_t>& cfi_info_;
 
   DISALLOW_COPY_AND_ASSIGN(OatWriter);
 };

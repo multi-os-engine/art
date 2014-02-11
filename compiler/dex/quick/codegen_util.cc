@@ -1073,10 +1073,14 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
   for (uint16_t cur : raw_vmap_table) {
     vmap_encoder.PushBackUnsigned(cur);
   }
+
+  std::vector<uint8_t> cfi_info;
+  bool have_cfi = ReturnCallFrameInformation(cfi_info);
   CompiledMethod* result =
       new CompiledMethod(*cu_->compiler_driver, cu_->instruction_set, code_buffer_, frame_size_,
                          core_spill_mask_, fp_spill_mask_, encoded_mapping_table_,
-                         vmap_encoder.GetData(), native_gc_map_);
+                         vmap_encoder.GetData(), native_gc_map_,
+                         have_cfi ? &cfi_info : nullptr);
   return result;
 }
 
@@ -1217,6 +1221,11 @@ void Mir2Lir::LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic_re
   }
   LIR* load_pc_rel = OpPcRelLoad(TargetReg(symbolic_reg), data_target);
   AppendLIR(load_pc_rel);
+}
+
+bool Mir2Lir::ReturnCallFrameInformation(std::vector<uint8_t>& cfi_info) {
+  // Default case is to do nothing.
+  return false;
 }
 
 }  // namespace art

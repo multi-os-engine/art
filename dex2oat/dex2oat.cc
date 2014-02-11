@@ -62,6 +62,9 @@
 
 namespace art {
 
+// Hack for CFI CIE initialization
+extern void X86CFIInitialization(std::vector<uint8_t>&);
+
 static void UsageErrorV(const char* fmt, va_list ap) {
   std::string error;
   StringAppendV(&error, fmt, ap);
@@ -308,12 +311,24 @@ class Dex2Oat {
       }
     }
 
+    std::vector<uint8_t> cfi_info;
+    if (compiler_backend_ == kQuick) {
+      switch (instruction_set_) {
+        case kX86:
+          X86CFIInitialization(cfi_info);
+          break;
+        default:
+          break;
+      }
+    }
+
     OatWriter oat_writer(dex_files,
                          image_file_location_oat_checksum,
                          image_file_location_oat_data_begin,
                          image_file_location,
                          driver.get(),
-                         &timings);
+                         &timings,
+                         cfi_info);
 
     TimingLogger::ScopedSplit split("Writing ELF", &timings);
     if (!driver->WriteElf(android_root, is_host, dex_files, oat_writer, oat_file)) {

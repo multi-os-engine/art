@@ -161,6 +161,9 @@ Mir2Lir* MipsCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
 Mir2Lir* X86CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
                           ArenaAllocator* const arena);
 
+// Target Specific CFI Support
+void X86CFIInitialization(std::vector<uint8_t>& cfi_info);
+
 // Utility macros to traverse the LIR list.
 #define NEXT_LIR(lir) (lir->next)
 #define PREV_LIR(lir) (lir->prev)
@@ -1083,6 +1086,13 @@ class Mir2Lir : public Backend {
                                             bool can_assume_type_is_in_dex_cache,
                                             uint32_t type_idx, RegLocation rl_dest,
                                             RegLocation rl_src);
+    /*
+     * @brief Generate the debug_frame FDE information if possible.
+     * @param cfi_info Container for FDE information.
+     * @returns 'true' if the information was successfully generated.
+     * @note cfi_info will not be changed if the return code is 'false'
+     */
+    virtual bool ReturnCallFrameInformation(std::vector<uint8_t>& cfi_info);
 
   private:
     void ClobberBody(RegisterInfo* p);

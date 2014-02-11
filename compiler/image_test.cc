@@ -59,8 +59,9 @@ TEST_F(ImageTest, WriteRead) {
       compiler_driver_->CompileAll(class_loader, class_linker->GetBootClassPath(), timings);
 
       ScopedObjectAccess soa(Thread::Current());
+      std::vector<uint8_t> cfi_info;
       OatWriter oat_writer(class_linker->GetBootClassPath(),
-                           0, 0, "", compiler_driver_.get(), &timings);
+                           0, 0, "", compiler_driver_.get(), &timings, cfi_info);
       bool success = compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                                 !kIsTargetBuild,
                                                 class_linker->GetBootClassPath(),

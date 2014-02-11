@@ -493,6 +493,7 @@ class CompilerDriver {
   std::vector<uint8_t>* DeduplicateMappingTable(const std::vector<uint8_t>& code);
   std::vector<uint8_t>* DeduplicateVMapTable(const std::vector<uint8_t>& code);
   std::vector<uint8_t>* DeduplicateGCMap(const std::vector<uint8_t>& code);
+  std::vector<uint8_t>* DeduplicateCFIInfo(const std::vector<uint8_t>& cfi_info);
 
  private:
   // Compute constant code and method pointers when possible
@@ -679,6 +680,7 @@ class CompilerDriver {
   DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_mapping_table_;
   DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_vmap_table_;
   DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_gc_map_;
+  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_cfi_info_;
 
   DISALLOW_COPY_AND_ASSIGN(CompilerDriver);
 };

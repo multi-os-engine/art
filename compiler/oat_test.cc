@@ -105,12 +105,14 @@ TEST_F(OatTest, WriteRead) {
 
   ScopedObjectAccess soa(Thread::Current());
   ScratchFile tmp;
+  std::vector<uint8_t> cfi_info;
   OatWriter oat_writer(class_linker->GetBootClassPath(),
                        42U,
                        4096U,
                        "lue.art",
                        compiler_driver_.get(),
-                       &timings);
+                       &timings,
+                       cfi_info);
   bool success = compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                             !kIsTargetBuild,
                                             class_linker->GetBootClassPath(),

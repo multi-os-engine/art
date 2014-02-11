@@ -42,7 +42,8 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
                      uintptr_t image_file_location_oat_begin,
                      const std::string& image_file_location,
                      const CompilerDriver* compiler,
-                     TimingLogger* timings)
+                     TimingLogger* timings,
+                     std::vector<uint8_t>& cfi_info)
   : compiler_driver_(compiler),
     dex_files_(&dex_files),
     image_file_location_oat_checksum_(image_file_location_oat_checksum),
@@ -78,7 +79,8 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     size_oat_class_type_(0),
     size_oat_class_status_(0),
     size_oat_class_method_bitmaps_(0),
-    size_oat_class_method_offsets_(0) {
+    size_oat_class_method_offsets_(0),
+    cfi_info_(cfi_info) {
   size_t offset;
   {
     TimingLogger::ScopedSplit split("InitOatHeader", timings);
@@ -377,6 +379,24 @@ size_t OatWriter::InitOatCodeMethod(size_t offset, size_t oat_class_index,
       CHECK_NE(code_size, 0U);
       uint32_t thumb_offset = compiled_method->CodeDelta();
       quick_code_offset = offset + sizeof(code_size) + thumb_offset;
+
+      // Copy in the FDE, if present
+      const std::vector<uint8_t>* fde = compiled_method->GetCFIInfo();
+      if (fde != nullptr) {
+        // Copy the information into cfi_info_ and then fix the address in the new copy.
+        int cur_offset = cfi_info_.size();
+        cfi_info_.insert(cfi_info_.end(), fde->begin(), fde->end());
+
+        // Set the 'initial_location' field to address the start of the method.
+        uint32_t new_value = quick_code_offset - oat_header_->GetExecutableOffset();
+        uint32_t offset_to_update = cur_offset + 2*sizeof(uint32_t);
+        cfi_info_[offset_to_update+0] = new_value;
+        cfi_info_[offset_to_update+1] = new_value >> 8;
+        cfi_info_[offset_to_update+2] = new_value >> 16;
+        cfi_info_[offset_to_update+3] = new_value >> 24;
+        method_info_.push_back(DebugInfo(PrettyMethod(class_def_method_index, dex_file, false),
+                                         new_value, new_value + code_size));
+      }
 
       // Deduplicate code arrays
       SafeMap<const std::vector<uint8_t>*, uint32_t>::iterator code_iter =

@@ -30,6 +30,12 @@
 
 namespace art {
 
+// Interface to GDB JIT for backtrace information.
+extern "C" {
+  struct JITCodeEntry;
+}
+
+
 // Used for compile time and runtime for ElfFile access. Because of
 // the need for use at runtime, cannot directly use LLVM classes such as
 // ELFObjectFile.
@@ -168,6 +174,11 @@ class ElfFile {
 
   SymbolTable* symtab_symbol_table_;
   SymbolTable* dynsym_symbol_table_;
+
+  // Support for GDB JIT
+  char *jit_elf_image_;
+  JITCodeEntry *jit_gdb_entry_;
+  void GdbJITSupport();
 };
 
 }  // namespace art
