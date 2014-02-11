@@ -84,6 +84,8 @@ LIBART_COMPILER_SRC_FILES := \
 	trampolines/trampoline_compiler.cc \
 	utils/arm/assembler_arm.cc \
 	utils/arm/managed_register_arm.cc \
+	utils/arm64/assembler_arm64.cc \
+	utils/arm64/managed_register_arm64.cc \
 	utils/assembler.cc \
 	utils/mips/assembler_mips.cc \
 	utils/mips/managed_register_mips.cc \
@@ -235,12 +237,12 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
   LOCAL_ADDITIONAL_DEPENDENCIES := art/build/Android.common.mk
   LOCAL_ADDITIONAL_DEPENDENCIES += $(LOCAL_PATH)/Android.mk
   ifeq ($$(art_target_or_host),target)
-    LOCAL_SHARED_LIBRARIES += libcutils
+    LOCAL_SHARED_LIBRARIES += libcutils libvixl
     include $(LLVM_GEN_INTRINSICS_MK)
     include $(LLVM_DEVICE_BUILD_MK)
     include $(BUILD_SHARED_LIBRARY)
   else # host
-    LOCAL_STATIC_LIBRARIES += libcutils
+    LOCAL_STATIC_LIBRARIES += libcutils libvixl
     include $(LLVM_GEN_INTRINSICS_MK)
     include $(LLVM_HOST_BUILD_MK)
     include $(BUILD_HOST_SHARED_LIBRARY)
