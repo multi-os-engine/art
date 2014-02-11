@@ -151,6 +151,7 @@ LIBART_COMMON_SRC_FILES := \
 LIBART_COMMON_SRC_FILES += \
 	arch/context.cc \
 	arch/arm/registers_arm.cc \
+	arch/arm64/registers_arm64.cc \
 	arch/x86/registers_x86.cc \
 	arch/mips/registers_mips.cc \
 	arch/quick_alloc_entrypoints.cc \
