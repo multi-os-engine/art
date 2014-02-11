@@ -88,6 +88,19 @@ class CompilerBackend {
 
   virtual ~CompilerBackend() {}
 
+  /*
+   * @brief Generate and return Dwarf CFI initialization, if supported by the
+   * backend.
+   * @param driver CompilerDriver for this compile.
+   * @returns nullptr if not supported by backend or a vector of bytes for CFI DWARF
+   * information.
+   * @note This is used for backtrace information in generated code.
+   */
+  virtual std::vector<uint8_t>* GetCallFrameInformationInitialization(
+                                  CompilerDriver& driver) const {
+    return nullptr;
+  }
+
  private:
   uint64_t maximum_compilation_time_before_warning_;
 
