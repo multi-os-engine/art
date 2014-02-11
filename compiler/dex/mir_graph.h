@@ -20,10 +20,15 @@
 #include "dex_file.h"
 #include "dex_instruction.h"
 #include "compiler_ir.h"
+#include "ir_structures.h"
 #include "arena_bit_vector.h"
 #include "utils/growable_array.h"
 
 namespace art {
+
+// Forward declarations.
+struct BasicBlock;
+struct MIR;
 
 enum InstructionAnalysisAttributePos {
   kUninterestingOp = 0,
@@ -180,9 +185,6 @@ enum OatMethodAttributes {
 
 #define BLOCK_NAME_LEN 80
 
-typedef uint16_t BasicBlockId;
-static const BasicBlockId NullBasicBlockId = 0;
-
 /*
  * In general, vreg/sreg describe Dalvik registers that originated with dx.  However,
  * it is useful to have compiler-generated temporary registers and have them treated
@@ -205,100 +207,6 @@ struct Checkstats {
   int32_t null_checks_eliminated;
   int32_t range_checks;
   int32_t range_checks_eliminated;
-};
-
-// Dataflow attributes of a basic block.
-struct BasicBlockDataFlow {
-  ArenaBitVector* use_v;
-  ArenaBitVector* def_v;
-  ArenaBitVector* live_in_v;
-  ArenaBitVector* phi_v;
-  int32_t* vreg_to_ssa_map;
-  ArenaBitVector* ending_null_check_v;
-};
-
-/*
- * Normalized use/def for a MIR operation using SSA names rather than vregs.  Note that
- * uses/defs retain the Dalvik convention that long operations operate on a pair of 32-bit
- * vregs.  For example, "ADD_LONG v0, v2, v3" would have 2 defs (v0/v1) and 4 uses (v2/v3, v4/v5).
- * Following SSA renaming, this is the primary struct used by code generators to locate
- * operand and result registers.  This is a somewhat confusing and unhelpful convention that
- * we may want to revisit in the future.
- */
-struct SSARepresentation {
-  int16_t num_uses;
-  int16_t num_defs;
-  int32_t* uses;
-  bool* fp_use;
-  int32_t* defs;
-  bool* fp_def;
-};
-
-/*
- * The Midlevel Intermediate Representation node, which may be largely considered a
- * wrapper around a Dalvik byte code.
- */
-struct MIR {
-  /*
-   * TODO: remove embedded DecodedInstruction to save space, keeping only opcode.  Recover
-   * additional fields on as-needed basis.  Question: how to support MIR Pseudo-ops; probably
-   * need to carry aux data pointer.
-   */
-  DecodedInstruction dalvikInsn;
-  uint16_t width;                 // Note: width can include switch table or fill array data.
-  NarrowDexOffset offset;         // Offset of the instruction in code units.
-  uint16_t optimization_flags;
-  int16_t m_unit_index;           // From which method was this MIR included
-  MIR* next;
-  SSARepresentation* ssa_rep;
-  union {
-    // Incoming edges for phi node.
-    BasicBlockId* phi_incoming;
-    // Establish link from check instruction (kMirOpCheck) to the actual throwing instruction.
-    MIR* throw_insn;
-    // Fused cmp branch condition.
-    ConditionCode ccode;
-  } meta;
-};
-
-struct SuccessorBlockInfo;
-
-struct BasicBlock {
-  BasicBlockId id;
-  BasicBlockId dfs_id;
-  NarrowDexOffset start_offset;     // Offset in code units.
-  BasicBlockId fall_through;
-  BasicBlockId taken;
-  BasicBlockId i_dom;               // Immediate dominator.
-  uint16_t nesting_depth;
-  BBType block_type:4;
-  BlockListType successor_block_list_type:4;
-  bool visited:1;
-  bool hidden:1;
-  bool catch_entry:1;
-  bool explicit_throw:1;
-  bool conditional_branch:1;
-  bool terminated_by_return:1;  // Block ends with a Dalvik return opcode.
-  bool dominates_return:1;      // Is a member of return extended basic block.
-  bool use_lvn:1;               // Run local value numbering on this block.
-  MIR* first_mir_insn;
-  MIR* last_mir_insn;
-  BasicBlockDataFlow* data_flow_info;
-  ArenaBitVector* dominators;
-  ArenaBitVector* i_dominated;      // Set nodes being immediately dominated.
-  ArenaBitVector* dom_frontier;     // Dominance frontier.
-  GrowableArray<BasicBlockId>* predecessors;
-  GrowableArray<SuccessorBlockInfo*>* successor_blocks;
-};
-
-/*
- * The "blocks" field in "successor_block_list" points to an array of elements with the type
- * "SuccessorBlockInfo".  For catch blocks, key is type index for the exception.  For swtich
- * blocks, key is the case value.
- */
-struct SuccessorBlockInfo {
-  BasicBlockId block;
-  int key;
 };
 
 /*

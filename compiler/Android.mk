@@ -53,6 +53,7 @@ LIBART_COMPILER_SRC_FILES := \
 	dex/mir_dataflow.cc \
 	dex/mir_optimization.cc \
 	dex/pass_driver.cc \
+	dex/ir_structures.cc \
 	dex/bb_optimizations.cc \
 	dex/frontend.cc \
 	dex/mir_graph.cc \
