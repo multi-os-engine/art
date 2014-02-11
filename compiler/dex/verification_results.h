@@ -33,11 +33,12 @@ namespace verifier {
 class MethodVerifier;
 }  // namespace verifier
 
+class CompilerOptions;
 class VerifiedMethod;
 
 class VerificationResults {
   public:
-    VerificationResults();
+    explicit VerificationResults(const CompilerOptions& compiler_options);
     ~VerificationResults();
 
     bool ProcessVerifiedMethod(verifier::MethodVerifier* method_verifier)
@@ -50,10 +51,12 @@ class VerificationResults {
     void AddRejectedClass(ClassReference ref) LOCKS_EXCLUDED(rejected_classes_lock_);
     bool IsClassRejected(ClassReference ref) LOCKS_EXCLUDED(rejected_classes_lock_);
 
-    static bool IsCandidateForCompilation(MethodReference& method_ref,
-                                          const uint32_t access_flags);
+    bool IsCandidateForCompilation(MethodReference& method_ref,
+                                   const uint32_t access_flags);
 
   private:
+    const CompilerOptions& compiler_options_;
+
     // Verified methods.
     typedef SafeMap<MethodReference, const VerifiedMethod*,
         MethodReferenceComparator> VerifiedMethodMap;

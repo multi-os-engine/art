@@ -71,6 +71,48 @@ enum DexToDexCompilationLevel {
   kOptimize               // Perform required transformation and peep-hole optimizations.
 };
 
+class CompilerOptions {
+ public:
+  enum CompilerFilter {
+    kInterpretOnly,       // Compile nothing.
+    kSpace,               // Maximize space savings.
+    kBalanced,            // Try to get the best performance return on compilation investment.
+    kSpeed,               // Maximize runtime performance.
+    kEverything           // Force compilation (Note: excludes compilaton of class initializers).
+  };
+
+  // Guide heuristics to determine whether to compile method if profile data not available.
+  static const CompilerFilter kDefaultCompilerFilter = kSpeed;
+  static const size_t kDefaultHugeMethodThreshold = 10000;
+  static const size_t kDefaultLargeMethodThreshold = 600;
+  static const size_t kDefaultSmallMethodThreshold = 60;
+  static const size_t kDefaultTinyMethodThreshold = 20;
+  static const size_t kDefaultNumDexMethodsThreshold = 900;
+
+  CompilerOptions() :
+    compiler_filter_(kSpeed),
+    huge_method_threshold_(kDefaultHugeMethodThreshold),
+    large_method_threshold_(kDefaultLargeMethodThreshold),
+    small_method_threshold_(kDefaultSmallMethodThreshold),
+    tiny_method_threshold_(kDefaultTinyMethodThreshold),
+    num_dex_methods_threshold_(kDefaultNumDexMethodsThreshold)
+#ifdef ART_SEA_IR_MODE
+    , sea_ir_mode_(false)
+#endif
+    {}
+
+  CompilerFilter compiler_filter_;
+  size_t huge_method_threshold_;
+  size_t large_method_threshold_;
+  size_t small_method_threshold_;
+  size_t tiny_method_threshold_;
+  size_t num_dex_methods_threshold_;
+
+#ifdef ART_SEA_IR_MODE
+  bool sea_ir_mode_;
+#endif
+};
+
 // Thread-local storage compiler worker threads
 class CompilerTls {
   public:
@@ -94,7 +136,8 @@ class CompilerDriver {
   // enabled.  "image_classes" lets the compiler know what classes it
   // can assume will be in the image, with NULL implying all available
   // classes.
-  explicit CompilerDriver(VerificationResults* verification_results,
+  explicit CompilerDriver(const CompilerOptions& compiler_options,
+                          VerificationResults* verification_results,
                           DexFileToMethodInlinerMap* method_inliner_map,
                           CompilerBackend::Kind compiler_backend_kind,
                           InstructionSet instruction_set,
@@ -127,6 +170,10 @@ class CompilerDriver {
 
   const InstructionSetFeatures& GetInstructionSetFeatures() const {
     return instruction_set_features_;
+  }
+
+  const CompilerOptions& GetCompilerOptions() const {
+    return compiler_options_;
   }
 
   CompilerBackend* GetCompilerBackend() const {
@@ -551,6 +598,7 @@ class CompilerDriver {
   std::vector<const CallPatchInformation*> methods_to_patch_;
   std::vector<const TypePatchInformation*> classes_to_patch_;
 
+  const CompilerOptions& compiler_options_;
   VerificationResults* verification_results_;
   DexFileToMethodInlinerMap* method_inliner_map_;
 

@@ -458,7 +458,8 @@ class CommonTest : public testing::Test {
         ? CompilerBackend::kPortable
         : CompilerBackend::kQuick;
 
-    verification_results_.reset(new VerificationResults);
+    compiler_options_.reset(new CompilerOptions);
+    verification_results_.reset(new VerificationResults(*compiler_options_.get()));
     method_inliner_map_.reset(new DexFileToMethodInlinerMap);
     callbacks_.Reset(verification_results_.get(), method_inliner_map_.get());
     Runtime::Options options;
@@ -512,7 +513,8 @@ class CommonTest : public testing::Test {
       }
       class_linker_->FixupDexCaches(runtime_->GetResolutionMethod());
       timer_.reset(new CumulativeLogger("Compilation times"));
-      compiler_driver_.reset(new CompilerDriver(verification_results_.get(),
+      compiler_driver_.reset(new CompilerDriver(*compiler_options_.get(),
+                                                verification_results_.get(),
                                                 method_inliner_map_.get(),
                                                 compiler_backend, instruction_set,
                                                 instruction_set_features,
@@ -566,6 +568,7 @@ class CommonTest : public testing::Test {
     callbacks_.Reset(nullptr, nullptr);
     method_inliner_map_.reset();
     verification_results_.reset();
+    compiler_options_.reset();
     STLDeleteElements(&opened_dex_files_);
 
     Runtime::Current()->GetHeap()->VerifyHeap();  // Check for heap corruption after the test
@@ -730,6 +733,7 @@ class CommonTest : public testing::Test {
   UniquePtr<Runtime> runtime_;
   // Owned by the runtime
   ClassLinker* class_linker_;
+  UniquePtr<CompilerOptions> compiler_options_;
   UniquePtr<VerificationResults> verification_results_;
   UniquePtr<DexFileToMethodInlinerMap> method_inliner_map_;
   TestCompilerCallbacks callbacks_;
