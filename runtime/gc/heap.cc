@@ -381,7 +381,13 @@ void Heap::VisitObjects(ObjectCallback callback, void* arg) {
   for (mirror::Object** it = allocation_stack_->Begin(), **end = allocation_stack_->End();
       it < end; ++it) {
     mirror::Object* obj = *it;
-    callback(obj, arg);
+    if (kUseThreadLocalAllocationStack) {
+      if (obj != nullptr) {
+        callback(obj, arg);
+      }
+    } else {
+      callback(obj, arg);
+    }
   }
   GetLiveBitmap()->Walk(callback, arg);
   self->EndAssertNoThreadSuspension(old_cause);
@@ -1529,13 +1535,25 @@ void Heap::MarkAllocStack(accounting::SpaceBitmap* bitmap1,
   mirror::Object** limit = stack->End();
   for (mirror::Object** it = stack->Begin(); it != limit; ++it) {
     const mirror::Object* obj = *it;
-    DCHECK(obj != nullptr);
-    if (bitmap1->HasAddress(obj)) {
-      bitmap1->Set(obj);
-    } else if (bitmap2->HasAddress(obj)) {
-      bitmap2->Set(obj);
+    if (kUseThreadLocalAllocationStack) {
+      if (obj != nullptr) {
+        if (bitmap1->HasAddress(obj)) {
+          bitmap1->Set(obj);
+        } else if (bitmap2->HasAddress(obj)) {
+          bitmap2->Set(obj);
+        } else {
+          large_objects->Set(obj);
+        }
+      }
     } else {
-      large_objects->Set(obj);
+      DCHECK(obj != nullptr);
+      if (bitmap1->HasAddress(obj)) {
+        bitmap1->Set(obj);
+      } else if (bitmap2->HasAddress(obj)) {
+        bitmap2->Set(obj);
+      } else {
+        large_objects->Set(obj);
+      }
     }
   }
 }
@@ -2000,7 +2018,13 @@ bool Heap::VerifyMissingCardMarks() {
 
   // We can verify objects in the live stack since none of these should reference dead objects.
   for (mirror::Object** it = live_stack_->Begin(); it != live_stack_->End(); ++it) {
-    visitor(*it);
+    if (kUseThreadLocalAllocationStack) {
+      if (*it != nullptr) {
+        visitor(*it);
+      }
+    } else {
+      visitor(*it);
+    }
   }
 
   if (visitor.Failed()) {
@@ -2010,8 +2034,29 @@ bool Heap::VerifyMissingCardMarks() {
   return true;
 }
 
-void Heap::SwapStacks() {
+void Heap::SwapStacks(Thread* self) {
+  if (kUseThreadLocalAllocationStack) {
+    live_stack_.get()->AssertAllZero();
+  }
   allocation_stack_.swap(live_stack_);
+}
+
+void Heap::RevokeAllThreadLocalAllocationStacks(Thread* self) {
+  if (!Runtime::Current()->IsStarted()) {
+    // There's no thread list if the runtime hasn't started (eg
+    // dex2oat or a test). Just revoke for self.
+    self->RevokeThreadLocalAllocationStack();
+    return;
+  }
+  // This must be called only during the pause.
+  CHECK(Locks::mutator_lock_->IsExclusiveHeld(self));
+  MutexLock mu(self, *Locks::runtime_shutdown_lock_);
+  MutexLock mu2(self, *Locks::thread_list_lock_);
+  std::list<Thread*> thread_list = Runtime::Current()->GetThreadList()->GetList();
+  for (auto it = thread_list.begin(); it != thread_list.end(); ++it) {
+    Thread* t = *it;
+    t->RevokeThreadLocalAllocationStack();
+  }
 }
 
 accounting::ModUnionTable* Heap::FindModUnionTableFromSpace(space::Space* space) {
@@ -2068,12 +2113,12 @@ void Heap::PreGcVerification(collector::GarbageCollector* gc) {
     thread_list->SuspendAll();
     {
       ReaderMutexLock mu(self, *Locks::heap_bitmap_lock_);
-      SwapStacks();
+      SwapStacks(self);
       // Sort the live stack so that we can quickly binary search it later.
       if (!VerifyMissingCardMarks()) {
         LOG(FATAL) << "Pre " << gc->GetName() << " missing card mark verification failed";
       }
-      SwapStacks();
+      SwapStacks(self);
     }
     thread_list->ResumeAll();
   }
