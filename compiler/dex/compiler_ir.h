@@ -28,6 +28,7 @@
 #include "llvm/intrinsic_helper.h"
 #include "llvm/ir_builder.h"
 #include "safe_map.h"
+#include "scoped_arena_allocator.h"
 #include "base/timing_logger.h"
 
 namespace art {
@@ -88,6 +89,7 @@ struct CompilationUnit {
 
   // TODO: move memory management to mir_graph, or just switch to using standard containers.
   ArenaAllocator arena;
+  ArenaStack arena_stack;  // Arenas for ScopedArenaAllocator.
 
   UniquePtr<MIRGraph> mir_graph;   // MIR container.
   UniquePtr<Backend> cg;           // Target-specific codegen.
