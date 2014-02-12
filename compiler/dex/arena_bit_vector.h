@@ -33,7 +33,7 @@ class ArenaBitVector : public BitVector {
     ~ArenaBitVector() {}
 
   static void* operator new(size_t size, ArenaAllocator* arena) {
-     return arena->Alloc(sizeof(ArenaBitVector), ArenaAllocator::kAllocGrowableBitMap);
+     return arena->Alloc(sizeof(ArenaBitVector), kArenaAllocGrowableBitMap);
   }
   static void operator delete(void* p) {}  // Nop.
 

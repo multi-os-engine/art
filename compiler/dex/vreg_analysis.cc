@@ -412,7 +412,7 @@ void MIRGraph::InitRegLocations() {
   /* Allocate the location map */
   int max_regs = GetNumSSARegs() + GetMaxPossibleCompilerTemps();
   RegLocation* loc = static_cast<RegLocation*>(arena_->Alloc(max_regs * sizeof(*loc),
-                                                             ArenaAllocator::kAllocRegAlloc));
+                                                             kArenaAllocRegAlloc));
   for (int i = 0; i < GetNumSSARegs(); i++) {
     loc[i] = fresh_loc;
     loc[i].s_reg_low = i;

@@ -310,7 +310,7 @@ class Mir2Lir : public Backend {
       virtual void Compile() = 0;
 
       static void* operator new(size_t size, ArenaAllocator* arena) {
-        return arena->Alloc(size, ArenaAllocator::kAllocData);
+        return arena->Alloc(size, kArenaAllocData);
       }
 
      protected:
@@ -362,7 +362,7 @@ class Mir2Lir : public Backend {
     // strdup(), but allocates from the arena.
     char* ArenaStrdup(const char* str) {
       size_t len = strlen(str) + 1;
-      char* res = reinterpret_cast<char*>(arena_->Alloc(len, ArenaAllocator::kAllocMisc));
+      char* res = reinterpret_cast<char*>(arena_->Alloc(len, kArenaAllocMisc));
       if (res != NULL) {
         strncpy(res, str, len);
       }
