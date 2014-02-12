@@ -28,6 +28,8 @@ namespace art {
 class Arena;
 class ArenaPool;
 class ArenaAllocator;
+class ArenaStack;
+class ScopedArenaAllocator;
 
 class Arena {
  public:
@@ -59,6 +61,8 @@ class Arena {
   Arena* next_;
   friend class ArenaPool;
   friend class ArenaAllocator;
+  friend class ArenaStack;
+  friend class ScopedArenaAllocator;
   DISALLOW_COPY_AND_ASSIGN(Arena);
 };
 

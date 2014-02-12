@@ -18,6 +18,7 @@
 #define ART_COMPILER_DEX_LOCAL_VALUE_NUMBERING_H_
 
 #include "compiler_internals.h"
+#include "utils/scoped_arena_allocator.h"
 
 #define NO_VALUE 0xffff
 #define ARRAY_REF 0xfffe
@@ -68,26 +69,31 @@ class LocalValueNumbering {
   };
 
   // Key is s_reg, value is value name.
-  typedef SafeMap<uint16_t, uint16_t> SregValueMap;
+  typedef SafeMap<uint16_t, uint16_t, std::less<uint16_t>,
+      ScopedArenaAllocatorAdapter<std::pair<uint16_t, uint16_t> > > SregValueMap;
   // Key is concatenation of opcode, operand1, operand2 and modifier, value is value name.
-  typedef SafeMap<uint64_t, uint16_t> ValueMap;
+  typedef SafeMap<uint64_t, uint16_t, std::less<uint64_t>,
+      ScopedArenaAllocatorAdapter<std::pair<uint64_t, uint16_t> > > ValueMap;
   // Key represents a memory address, value is generation.
-  typedef SafeMap<MemoryVersionKey, uint16_t, MemoryVersionKeyComparator> MemoryVersionMap;
+  typedef SafeMap<MemoryVersionKey, uint16_t, MemoryVersionKeyComparator,
+      ScopedArenaAllocatorAdapter<std::pair<MemoryVersionKey, uint16_t> > > MemoryVersionMap;
   // Maps field key to field id for resolved fields.
-  typedef SafeMap<FieldReference, uint32_t, FieldReferenceComparator> FieldIndexMap;
+  typedef SafeMap<FieldReference, uint32_t, FieldReferenceComparator,
+      ScopedArenaAllocatorAdapter<std::pair<FieldReference, uint16_t> > > FieldIndexMap;
 
  public:
   explicit LocalValueNumbering(CompilationUnit* cu)
       : cu_(cu),
-        sreg_value_map_(),
-        sreg_wide_value_map_(),
-        value_map_(),
+        allocator_(&cu->arena_stack),
+        sreg_value_map_(std::less<uint16_t>(), allocator_.Adapter()),
+        sreg_wide_value_map_(std::less<uint16_t>(), allocator_.Adapter()),
+        value_map_(std::less<uint64_t>(), allocator_.Adapter()),
         next_memory_version_(1u),
         global_memory_version_(0u),
-        memory_version_map_(),
-        field_index_map_(),
-        unique_objects_(),
-        null_checked_() {
+        memory_version_map_(MemoryVersionKeyComparator(), allocator_.Adapter()),
+        field_index_map_(FieldReferenceComparator(), allocator_.Adapter()),
+        unique_objects_(std::less<uint16_t>(), allocator_.Adapter()),
+        null_checked_(std::less<uint16_t>(), allocator_.Adapter()) {
     std::fill_n(unresolved_sfield_version_, kFieldTypeCount, 0u);
     std::fill_n(unresolved_ifield_version_, kFieldTypeCount, 0u);
   }
@@ -174,6 +180,7 @@ class LocalValueNumbering {
   void HandlePutObject(MIR* mir);
 
   CompilationUnit* const cu_;
+  ScopedArenaAllocator allocator_;
   SregValueMap sreg_value_map_;
   SregValueMap sreg_wide_value_map_;
   ValueMap value_map_;
@@ -183,8 +190,8 @@ class LocalValueNumbering {
   uint16_t unresolved_ifield_version_[kFieldTypeCount];
   MemoryVersionMap memory_version_map_;
   FieldIndexMap field_index_map_;
-  std::set<uint16_t> unique_objects_;
-  std::set<uint16_t> null_checked_;
+  std::set<uint16_t, std::less<uint16_t>, ScopedArenaAllocatorAdapter<uint16_t> > unique_objects_;
+  std::set<uint16_t, std::less<uint16_t>, ScopedArenaAllocatorAdapter<uint16_t> > null_checked_;
 };
 
 }  // namespace art
