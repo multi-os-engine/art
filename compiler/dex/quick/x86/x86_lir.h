@@ -22,36 +22,35 @@
 namespace art {
 
 /*
- * Runtime register conventions. We consider both x86, x86-64 and x32 (32bit mode x86-64), although
- * we currently only target x86. The ABI has different conventions and we hope to have a single
- * convention to simplify code generation. Changing something that is callee save and making it
- * caller save places a burden on up-calls to save/restore the callee save register, however, there
- * are few registers that are callee save in the ABI. Changing something that is caller save and
- * making it callee save places a burden on down-calls to save/restore the callee save register.
- * For these reasons we aim to match native conventions for caller and callee save. The first 4
- * registers can be used for byte operations, for this reason they are preferred for temporary
- * scratch registers.
+ * Runtime register conventions. We consider both x86, x86-64 and x32 (32bit mode x86-64). The ABI
+ * has different conventions and we capture those here. Changing something that is callee save and
+ * making it caller save places a burden on up-calls to save/restore the callee save register,
+ * however, there are few registers that are callee save in the ABI. Changing something that is
+ * caller save and making it callee save places a burden on down-calls to save/restore the callee
+ * save register. For these reasons we aim to match native conventions for caller and callee save.
+ * On x86 only the first 4 registers can be used for byte operations, for this reason they are
+ * preferred for temporary scratch registers.
  *
  * General Purpose Register:
- *  Native: x86         | x86-64 / x32      | ART
- *  r0/eax: caller save | caller save       | caller, Method*, scratch, return value
- *  r1/ecx: caller save | caller save, arg4 | caller, arg1, scratch
- *  r2/edx: caller save | caller save, arg3 | caller, arg2, scratch, high half of long return
- *  r3/ebx: callEE save | callEE save       | callER, arg3, scratch
+ *  Native: x86    | x86-64 / x32 | ART x86                                         | ART x86-64
+ *  r0/eax: caller | caller       | caller, Method*, scratch, return value          | caller, scratch, return value
+ *  r1/ecx: caller | caller, arg4 | caller, arg1, scratch                           | caller, arg3, scratch
+ *  r2/edx: caller | caller, arg3 | caller, arg2, scratch, high half of long return | caller, arg2, scratch
+ *  r3/ebx: callEE | callEE       | callER, arg3, scratch                           | callee, promotable
  *  r4/esp: stack pointer
- *  r5/ebp: callee save | callee save       | callee, available for dalvik register promotion
- *  r6/esi: callEE save | callER save, arg2 | callee, available for dalvik register promotion
- *  r7/edi: callEE save | callER save, arg1 | callee, available for dalvik register promotion
+ *  r5/ebp: callee | callee       | callee, promotable                              | callee, promotable
+ *  r6/esi: callEE | callER, arg2 | callee, promotable                              | caller, arg1, scratch
+ *  r7/edi: callEE | callER, arg1 | callee, promotable                              | caller, Method*, scratch
  *  ---  x86-64/x32 registers
  *  Native: x86-64 / x32      | ART
- *  r8:     caller save, arg5 | caller, scratch
- *  r9:     caller save, arg6 | caller, scratch
+ *  r8:     caller save, arg5 | caller, arg4, scratch
+ *  r9:     caller save, arg6 | caller, arg5, scratch
  *  r10:    caller save       | caller, scratch
  *  r11:    caller save       | caller, scratch
- *  r12:    callee save       | callee, available for dalvik register promotion
- *  r13:    callee save       | callee, available for dalvik register promotion
- *  r14:    callee save       | callee, available for dalvik register promotion
- *  r15:    callee save       | callee, available for dalvik register promotion
+ *  r12:    callee save       | callee, available for register promotion (promotable)
+ *  r13:    callee save       | callee, available for register promotion (promotable)
+ *  r14:    callee save       | callee, available for register promotion (promotable)
+ *  r15:    callee save       | callee, available for register promotion (promotable)
  *
  * There is no rSELF, instead on x86 fs: has a base address of Thread::Current, whereas on
  * x86-64/x32 gs: holds it.
