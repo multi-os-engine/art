@@ -132,6 +132,7 @@ CompilationUnit::CompilationUnit(ArenaPool* pool)
     num_regs(0),
     compiler_flip_match(false),
     arena(pool),
+    arena_stack(pool),
     mir_graph(NULL),
     cg(NULL),
     timings("QuickCompiler", true, false) {

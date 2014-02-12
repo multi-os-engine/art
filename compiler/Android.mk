@@ -23,6 +23,7 @@ LIBART_COMPILER_SRC_FILES := \
 	dex/local_value_numbering.cc \
 	dex/arena_allocator.cc \
 	dex/arena_bit_vector.cc \
+	dex/scoped_arena_allocator.cc \
 	dex/quick/arm/assemble_arm.cc \
 	dex/quick/arm/call_arm.cc \
 	dex/quick/arm/fp_arm.cc \
