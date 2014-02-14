@@ -525,7 +525,7 @@ class SharedLibrary {
 
   void VisitRoots(RootCallback* visitor, void* arg) {
     if (class_loader_ != nullptr) {
-      class_loader_ = visitor(class_loader_, arg, 0, kRootVMInternal);
+      visitor(&class_loader_, arg, 0, kRootVMInternal);
     }
   }
 
