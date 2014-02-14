@@ -682,7 +682,9 @@ JDWP::JdwpError Dbg::GetModifiers(JDWP::RefTypeId id, JDWP::ExpandBuf* pReply) {
 
   // Set ACC_SUPER; dex files don't contain this flag, but all classes are supposed to have it set.
   // Class.getModifiers doesn't return it, but JDWP does, so we set it here.
-  access_flags |= kAccSuper;
+  if ((access_flags & kAccInterface) == 0) {
+    access_flags |= kAccSuper;
+  }
 
   expandBufAdd4BE(pReply, access_flags);
 
