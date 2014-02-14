@@ -37,6 +37,8 @@ namespace mirror {
 extern "C" void art_portable_invoke_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*, char);
 extern "C" void art_quick_invoke_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*,
                                       const char*);
+extern "C" void art_quick_invoke_static_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*,
+                                             const char*);
 
 // TODO: get global references for these
 Class* ArtMethod::java_lang_reflect_ArtMethod_ = NULL;
@@ -276,7 +278,11 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
                                                   : GetEntryPointFromPortableCompiledCode());
       }
       if (!IsPortableCompiled()) {
-        (*art_quick_invoke_stub)(this, args, args_size, self, result, shorty);
+        if (!IsStatic()) {
+          (*art_quick_invoke_stub)(this, args, args_size, self, result, shorty);
+        } else {
+          (*art_quick_invoke_static_stub)(this, args, args_size, self, result, shorty);
+        }
       } else {
         (*art_portable_invoke_stub)(this, args, args_size, self, result, shorty[0]);
       }
