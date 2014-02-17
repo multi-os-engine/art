@@ -157,6 +157,16 @@ class DexFileMethodInliner {
         SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) LOCKS_EXCLUDED(lock_);
 
     /**
+     * Analyse method code to determine if the method is a candidate for inlining.
+     * If it is, record the inlining data.
+     *
+     * @param method_idx the index of the inlining candidate.
+     * @param code_item a previously verified code item of the method.
+     */
+    bool AnalyseMethodCode(verifier::MethodVerifier* verifier, InlineMethod* method)
+        SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) LOCKS_EXCLUDED(lock_);
+
+    /**
      * Check whether a particular method index corresponds to an intrinsic function.
      */
     bool IsIntrinsic(uint32_t method_index) LOCKS_EXCLUDED(lock_);
