@@ -1133,7 +1133,7 @@ class ReferringObjectsFinder {
   // TODO: Fix lock analysis to not use NO_THREAD_SAFETY_ANALYSIS, requires support for
   // annotalysis on visitors.
   void operator()(const mirror::Object* o) const NO_THREAD_SAFETY_ANALYSIS {
-    collector::MarkSweep::VisitObjectReferences(const_cast<mirror::Object*>(o), *this, true);
+    const_cast<mirror::Object*>(o)->VisitReferences<true>(*this);
   }
 
   // For MarkSweep::VisitObjectReferences.
@@ -1552,6 +1552,9 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
       }
       break;
     }
+    case collector::kGcTypeSticky: {
+      // return collector::kGcTypeNone;
+    }
     default: {
       // Other GC types don't have any special cases which makes them not runnable. The main case
       // here is full GC.
@@ -1830,9 +1833,9 @@ class VerifyObjectVisitor {
     // be live or else how did we find it in the live bitmap?
     VerifyReferenceVisitor visitor(heap_);
     // The class doesn't count as a reference but we should verify it anyways.
-    collector::MarkSweep::VisitObjectReferences(obj, visitor, true);
+    obj->VisitReferences<true>(visitor);
     if (obj->GetClass()->IsReferenceClass()) {
-      visitor(obj, heap_->GetReferenceReferent(obj), MemberOffset(0), false);
+      visitor(obj, heap_->GetReferenceReferent(obj), heap_->GetReferenceReferentOffset(), false);
     }
     failed_ = failed_ || visitor.Failed();
   }
@@ -1964,7 +1967,7 @@ class VerifyLiveStackReferences {
   void operator()(mirror::Object* obj) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
     VerifyReferenceCardVisitor visitor(heap_, const_cast<bool*>(&failed_));
-    collector::MarkSweep::VisitObjectReferences(const_cast<mirror::Object*>(obj), visitor, true);
+    obj->VisitReferences<true>(visitor);
   }
 
   bool Failed() const {

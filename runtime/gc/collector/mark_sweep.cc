@@ -1164,9 +1164,7 @@ void MarkSweep::SweepLargeObjects(bool swap_bitmaps) {
 // referent has not yet been marked, put it on the appropriate list in
 // the heap for later processing.
 void MarkSweep::DelayReferenceReferent(mirror::Class* klass, Object* obj) {
-  DCHECK(klass != nullptr);
   DCHECK(klass->IsReferenceClass());
-  DCHECK(obj != NULL);
   heap_->DelayReferenceReferent(klass, obj, IsMarkedCallback, this);
 }
 

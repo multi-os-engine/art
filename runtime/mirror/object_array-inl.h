@@ -233,6 +233,20 @@ inline MemberOffset ObjectArray<T>::OffsetOfElement(int32_t i) {
                       (i * sizeof(HeapReference<Object>)));
 }
 
+template<class T> template<const bool kVisitClass, typename Visitor>
+void ObjectArray<T>::VisitReferences(const Visitor& visitor) {
+  if (kVisitClass) {
+    visitor(this, GetClass(), ClassOffset(), false);
+  }
+  const size_t length = static_cast<size_t>(GetLength());
+  for (size_t i = 0; i < length; ++i) {
+    mirror::Object* element = GetWithoutChecks(static_cast<int32_t>(i));
+    const size_t width = sizeof(mirror::HeapReference<mirror::Object>);
+    MemberOffset offset(i * width + mirror::Array::DataOffset(width).Int32Value());
+    visitor(this, element, offset, false);
+  }
+}
+
 }  // namespace mirror
 }  // namespace art
 

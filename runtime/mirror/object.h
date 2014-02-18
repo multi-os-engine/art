@@ -230,6 +230,25 @@ class MANAGED Object {
 #endif
   }
 
+  // TODO fix thread safety analysis broken by the use of template. This should be
+  // SHARED_LOCKS_REQUIRED(Locks::mutator_lock_).
+  template <const bool kVisitClass, typename Visitor, typename JavaLangRefVisitor = VoidFunctor>
+  inline void VisitReferences(const Visitor& visitor,
+                              const JavaLangRefVisitor& ref_visitor = VoidFunctor())
+      NO_THREAD_SAFETY_ANALYSIS;
+
+  template<bool kVisitClass, bool kIsStatic, typename Visitor>
+  inline void VisitFieldsReferences(uint32_t ref_offsets, const Visitor& visitor)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  template<bool kVisitClass, typename Visitor>
+  inline void VisitInstanceFieldsReferences(mirror::Class* klass, const Visitor& visitor)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  template<bool kVisitClass, typename Visitor>
+  inline void VisitStaticFieldsReferences(mirror::Class* klass, const Visitor& visitor)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
  protected:
   // Accessors for non-Java type fields
   template<class T, VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>

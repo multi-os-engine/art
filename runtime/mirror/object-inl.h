@@ -513,6 +513,77 @@ inline bool Object::CasFieldObject(MemberOffset field_offset, Object* old_value,
   return success;
 }
 
+template<bool kVisitClass, bool kIsStatic, typename Visitor>
+inline void Object::VisitFieldsReferences(uint32_t ref_offsets, const Visitor& visitor) {
+  if (LIKELY(ref_offsets != CLASS_WALK_SUPER)) {
+    if (!kVisitClass) {
+     // Mask out the class from the reference offsets.
+      ref_offsets &= static_cast<uint32_t>(-1) >> 1;
+    }
+    // Found a reference offset bitmap.  Mark the specified offsets.
+    while (ref_offsets != 0) {
+      size_t right_shift = CLZ(ref_offsets);
+      MemberOffset field_offset = CLASS_OFFSET_FROM_CLZ(right_shift);
+      mirror::Object* ref = GetFieldObject<mirror::Object>(field_offset, false);
+      visitor(this, ref, field_offset, kIsStatic);
+      ref_offsets &= ~(CLASS_HIGH_BIT >> right_shift);
+    }
+  } else {
+    // There is no reference offset bitmap.  In the non-static case, walk up the class
+    // inheritance hierarchy and find reference offsets the hard way. In the static case, just
+    // consider this class.
+    for (mirror::Class* klass = kIsStatic ? AsClass() : GetClass(); klass != nullptr;
+        klass = kIsStatic ? nullptr : klass->GetSuperClass()) {
+      size_t num_reference_fields =
+          kIsStatic ? klass->NumReferenceStaticFields() : klass->NumReferenceInstanceFields();
+      for (size_t i = 0; i < num_reference_fields; ++i) {
+        mirror::ArtField* field = kIsStatic ? klass->GetStaticField(i)
+            : klass->GetInstanceField(i);
+        MemberOffset field_offset = field->GetOffset();
+        mirror::Object* ref = GetFieldObject<mirror::Object>(field_offset, false);
+        if (!kVisitClass && ref == GetClass()) {
+          // TODO: Optimize?
+          continue;
+        }
+        visitor(this, ref, field_offset, kIsStatic);
+      }
+    }
+  }
+}
+
+template<bool kVisitClass, typename Visitor>
+inline void Object::VisitInstanceFieldsReferences(mirror::Class* klass, const Visitor& visitor) {
+  DCHECK(klass != NULL);
+  VisitFieldsReferences<kVisitClass, false>(klass->GetReferenceInstanceOffsets(), visitor);
+}
+
+template<bool kVisitClass, typename Visitor>
+inline void Object::VisitStaticFieldsReferences(mirror::Class* klass, const Visitor& visitor) {
+  DCHECK(klass != nullptr);
+  klass->VisitFieldsReferences<kVisitClass, true>(klass->GetReferenceStaticOffsets(), visitor);
+}
+
+template <const bool kVisitClass, typename Visitor, typename JavaLangRefVisitor>
+inline void Object::VisitReferences(const Visitor& visitor,
+                                    const JavaLangRefVisitor& ref_visitor) {
+  mirror::Class* klass = GetClass();
+  if (klass == mirror::Class::GetJavaLangClass()) {
+    DCHECK_EQ(klass->GetClass(), mirror::Class::GetJavaLangClass());
+    AsClass()->VisitReferences<kVisitClass>(klass, visitor);
+  } else if (klass->IsArrayClass()) {
+    if (klass->IsObjectArrayClass()) {
+      AsObjectArray<mirror::Object>()->VisitReferences<kVisitClass>(visitor);
+    } else if (kVisitClass) {
+      visitor(this, klass, mirror::Object::ClassOffset(), false);
+    }
+  } else {
+    VisitFieldsReferences<kVisitClass, false>(klass->GetReferenceInstanceOffsets(), visitor);
+    if (UNLIKELY(klass->IsReferenceClass())) {
+      ref_visitor(klass, this);
+    }
+  }
+}
+
 }  // namespace mirror
 }  // namespace art
 

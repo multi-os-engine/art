@@ -84,11 +84,7 @@ class ModUnionUpdateObjectReferencesVisitor {
       if (new_ref != ref) {
         // Use SetFieldObjectWithoutWriteBarrier to avoid card mark as an optimization which
         // reduces dirtied pages and improves performance.
-        if (Runtime::Current()->IsActiveTransaction()) {
-          obj->SetFieldObjectWithoutWriteBarrier<true>(offset, new_ref, true);
-        } else {
-          obj->SetFieldObjectWithoutWriteBarrier<false>(offset, new_ref, true);
-        }
+        obj->SetFieldObjectWithoutWriteBarrier<false>(offset, new_ref, true);
       }
     }
   }
@@ -108,7 +104,7 @@ class ModUnionScanImageRootVisitor {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK(root != NULL);
     ModUnionUpdateObjectReferencesVisitor ref_visitor(callback_, arg_);
-    collector::MarkSweep::VisitObjectReferences(root, ref_visitor, true);
+    root->VisitReferences<true>(ref_visitor);
   }
 
  private:
@@ -159,7 +155,7 @@ class ModUnionReferenceVisitor {
     // We don't have an early exit since we use the visitor pattern, an early
     // exit should significantly speed this up.
     AddToReferenceArrayVisitor visitor(mod_union_table_, references_);
-    collector::MarkSweep::VisitObjectReferences(obj, visitor, true);
+    obj->VisitReferences<true>(visitor);
   }
  private:
   ModUnionTableReferenceCache* const mod_union_table_;
@@ -178,7 +174,7 @@ class CheckReferenceVisitor {
   // TODO: Fixme when anotatalysis works with visitors.
   void operator()(Object* obj, Object* ref,
                   const MemberOffset& /* offset */, bool /* is_static */) const
-      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_) {
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     Heap* heap = mod_union_table_->GetHeap();
     if (ref != NULL && mod_union_table_->AddReference(obj, ref) &&
         references_.find(ref) == references_.end()) {
@@ -209,9 +205,9 @@ class ModUnionCheckReferences {
 
   void operator()(Object* obj) const NO_THREAD_SAFETY_ANALYSIS {
     Locks::heap_bitmap_lock_->AssertSharedHeld(Thread::Current());
-    DCHECK(obj != NULL);
+    DCHECK(obj != nullptr);
     CheckReferenceVisitor visitor(mod_union_table_, references_);
-    collector::MarkSweep::VisitObjectReferences(obj, visitor, true);
+    obj->VisitReferences<true>(visitor);
   }
 
  private:

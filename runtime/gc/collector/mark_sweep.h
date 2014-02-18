@@ -171,11 +171,6 @@ class MarkSweep : public GarbageCollector {
   void VerifyIsLive(const mirror::Object* obj)
       SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
-  template <typename Visitor>
-  static void VisitObjectReferences(mirror::Object* obj, const Visitor& visitor, bool visit_class)
-      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_,
-                            Locks::mutator_lock_);
-
   static mirror::Object* MarkObjectCallback(mirror::Object* obj, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
@@ -204,6 +199,10 @@ class MarkSweep : public GarbageCollector {
   Barrier& GetBarrier() {
     return *gc_barrier_;
   }
+
+  // Schedules an unmarked object for reference processing.
+  void DelayReferenceReferent(mirror::Class* klass, mirror::Object* reference)
+      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
  protected:
   // Returns true if the object has its bit set in the mark bitmap.
@@ -267,47 +266,14 @@ class MarkSweep : public GarbageCollector {
       NO_THREAD_SAFETY_ANALYSIS;
 
   template <typename Visitor>
-  static void VisitInstanceFieldsReferences(mirror::Class* klass, mirror::Object* obj,
-                                            const Visitor& visitor)
-      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
-
-  // Visit the header, static field references, and interface pointers of a class object.
-  template <typename Visitor>
-  static void VisitClassReferences(mirror::Class* klass, mirror::Object* obj,
-                                   const Visitor& visitor)
-      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
-
-  template <typename Visitor>
-  static void VisitStaticFieldsReferences(mirror::Class* klass, const Visitor& visitor)
-      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
-
-  template <typename Visitor>
   static void VisitFieldsReferences(mirror::Object* obj, uint32_t ref_offsets, bool is_static,
                                     const Visitor& visitor)
       SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
-
-  // Visit all of the references in an object array.
-  template <typename Visitor>
-  static void VisitObjectArrayReferences(mirror::ObjectArray<mirror::Object>* array,
-                                         const Visitor& visitor)
-      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
-
-  // Visits the header and field references of a data object.
-  template <typename Visitor>
-  static void VisitOtherReferences(mirror::Class* klass, mirror::Object* obj,
-                                   const Visitor& visitor)
-      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_) {
-    return VisitInstanceFieldsReferences(klass, obj, visitor);
-  }
 
   // Blackens objects grayed during a garbage collection.
   void ScanGrayObjects(bool paused, byte minimum_age)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  // Schedules an unmarked object for reference processing.
-  void DelayReferenceReferent(mirror::Class* klass, mirror::Object* reference)
-      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
   // Recursively blackens objects on the mark stack.
   void ProcessMarkStack(bool paused)

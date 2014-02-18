@@ -654,10 +654,10 @@ void SemiSpace::DelayReferenceReferent(mirror::Class* klass, Object* obj) {
 
 // Visit all of the references of an object and update.
 void SemiSpace::ScanObject(Object* obj) {
-  DCHECK(obj != NULL);
   DCHECK(!from_space_->HasAddress(obj)) << "Scanning object " << obj << " in from space";
-  MarkSweep::VisitObjectReferences(obj, [this](Object* obj, Object* ref, const MemberOffset& offset,
-     bool /* is_static */) ALWAYS_INLINE_LAMBDA NO_THREAD_SAFETY_ANALYSIS {
+  obj->VisitReferences<kMovingClasses>([this](Object* obj, Object* ref,
+      const MemberOffset& offset, bool /* is_static */) ALWAYS_INLINE_LAMBDA
+      NO_THREAD_SAFETY_ANALYSIS {
     mirror::Object* new_address = MarkObject(ref);
     if (new_address != ref) {
       DCHECK(new_address != nullptr);
@@ -668,11 +668,9 @@ void SemiSpace::ScanObject(Object* obj) {
       // disable check as we could run inside a transaction.
       obj->SetFieldObjectWithoutWriteBarrier<false, false, kVerifyNone>(offset, new_address, false);
     }
-  }, kMovingClasses);
-  mirror::Class* klass = obj->GetClass<kVerifyNone>();
-  if (UNLIKELY(klass->IsReferenceClass<kVerifyNone>())) {
+  }, [this](mirror::Class* klass, mirror::Object* obj) {
     DelayReferenceReferent(klass, obj);
-  }
+  });
 }
 
 // Scan anything that's on the mark stack.
