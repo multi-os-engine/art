@@ -98,7 +98,7 @@ class SemiSpace : public GarbageCollector {
   void FindDefaultMarkBitmap();
 
   // Returns the new address of the object.
-  mirror::Object* MarkObject(mirror::Object* object)
+  void MarkObject(mirror::HeapReference<mirror::Object>* obj_ptr)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
   void ScanObject(mirror::Object* obj)
@@ -138,11 +138,18 @@ class SemiSpace : public GarbageCollector {
   static mirror::Object* MarkObjectCallback(mirror::Object* root, void* arg)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
+  static void MarkHeapReferenceCallback(mirror::HeapReference<mirror::Object>* obj_ptr, void* arg)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
+
   static void ProcessMarkStackCallback(void* arg)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::heap_bitmap_lock_);
 
   virtual mirror::Object* MarkNonForwardedObject(mirror::Object* obj)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
+
+  // Schedules an unmarked object for reference processing.
+  void DelayReferenceReferent(mirror::Class* klass, mirror::Reference* reference)
+      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
  protected:
   // Returns null if the object is not marked, otherwise returns the forwarding address (same as
@@ -172,10 +179,6 @@ class SemiSpace : public GarbageCollector {
   void UpdateAndMarkModUnion()
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  // Schedules an unmarked object for reference processing.
-  void DelayReferenceReferent(mirror::Class* klass, mirror::Object* reference)
-      SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
   // Recursively blackens objects on the mark stack.
   void ProcessMarkStack()
