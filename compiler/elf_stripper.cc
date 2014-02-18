@@ -18,7 +18,7 @@
 
 #include <vector>
 
-#include <llvm/Support/ELF.h>
+#include "ELF.h"
 
 #include "UniquePtr.h"
 #include "base/logging.h"

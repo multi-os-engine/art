@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 
-#include <llvm/Support/ELF.h>
+#include "ELF.h"
 
 #include "base/macros.h"
 #include "os.h"
