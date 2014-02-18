@@ -559,6 +559,8 @@ struct DecodedInstruction {
     inst->Decode(vA, vB, vB_wide, vC, arg);
     opcode = inst->Opcode();
   }
+
+  DecodedInstruction() { }
 };
 
 }  // namespace art
