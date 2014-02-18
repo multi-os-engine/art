@@ -176,7 +176,7 @@ class MarkSweep : public GarbageCollector {
       SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_,
                             Locks::mutator_lock_);
 
-  static mirror::Object* RecursiveMarkObjectCallback(mirror::Object* obj, void* arg)
+  static mirror::Object* MarkObjectCallback(mirror::Object* obj, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
@@ -309,6 +309,8 @@ class MarkSweep : public GarbageCollector {
   void ProcessMarkStack(bool paused)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  static void ProcessMarkStackPausedCallback(void* arg)
+    EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
   void ProcessMarkStackParallel(size_t thread_count)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
