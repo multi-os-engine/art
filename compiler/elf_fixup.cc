@@ -22,6 +22,8 @@
 #include "elf_writer.h"
 #include "UniquePtr.h"
 
+#include <inttypes.h>
+
 namespace art {
 
 static const bool DEBUG_FIXUP = false;
