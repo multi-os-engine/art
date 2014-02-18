@@ -20,6 +20,7 @@
 #include "x86_lir.h"
 
 #include <string>
+#include <inttypes.h>
 
 namespace art {
 
