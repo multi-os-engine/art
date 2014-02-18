@@ -20,7 +20,7 @@
 #include <map>
 #include <vector>
 
-#include <llvm/Support/ELF.h>
+#include "ELF.h"
 
 #include "base/unix_file/fd_file.h"
 #include "globals.h"
