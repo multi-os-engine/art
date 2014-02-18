@@ -81,6 +81,8 @@ LIBART_COMPILER_SRC_FILES := \
 	llvm/runtime_support_builder.cc \
 	llvm/runtime_support_builder_arm.cc \
 	llvm/runtime_support_builder_x86.cc \
+  optimizing/builder.cc \
+  optimizing/nodes.cc \
 	trampolines/trampoline_compiler.cc \
 	utils/arm/assembler_arm.cc \
 	utils/arm/managed_register_arm.cc \

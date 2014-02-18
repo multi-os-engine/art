@@ -93,6 +93,7 @@ class ArenaAllocator {
     kAllocRegAlloc,
     kAllocData,
     kAllocPredecessors,
+    kOptimizerAlloc,
     kNumAllocKinds
   };
 
