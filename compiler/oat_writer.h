@@ -95,6 +95,10 @@ class OatWriter {
     return method_info_;
   }
 
+  uint32_t GetCurrentTrampolineIsland() const {
+    return current_trampoline_island_;
+  }
+
  private:
   size_t InitOatHeader();
   size_t InitOatDexFiles(size_t offset);
@@ -133,6 +137,9 @@ class OatWriter {
 
   void ReportWriteFailure(const char* what, uint32_t method_idx, const DexFile& dex_file,
                           const OutputStream& out) const;
+
+  uint32_t AllocateTrampolineIslandIfNecessary(uint32_t offset);
+  uint32_t WriteTrampolineIslandIfNecessary(OutputStream* out, uint32_t offset);
 
   class OatDexFile {
    public:
@@ -287,6 +294,9 @@ class OatWriter {
   SafeMap<const std::vector<uint8_t>*, uint32_t> vmap_table_offsets_;
   SafeMap<const std::vector<uint8_t>*, uint32_t> mapping_table_offsets_;
   SafeMap<const std::vector<uint8_t>*, uint32_t> gc_map_offsets_;
+
+  uint32_t current_trampoline_island_;
+  std::vector<uint32_t> trampoline_islands_;
 
   DISALLOW_COPY_AND_ASSIGN(OatWriter);
 };

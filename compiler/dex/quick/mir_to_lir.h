@@ -1243,6 +1243,7 @@ class Mir2Lir : public Backend {
     LIR* last_lir_insn_;
 
     GrowableArray<LIRSlowPath*> slow_paths_;
+    std::vector<uint64_t> trampoline_calls_;
 };  // Class Mir2Lir
 
 }  // namespace art
