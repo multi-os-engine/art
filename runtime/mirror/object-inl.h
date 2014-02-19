@@ -32,8 +32,9 @@
 namespace art {
 namespace mirror {
 
+template<bool kVerifyThis>
 inline Class* Object::GetClass() {
-  return GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(Object, klass_), false);
+  return GetFieldObject<Class, kVerifyThis>(OFFSET_OF_OBJECT_MEMBER(Object, klass_), false);
 }
 
 inline void Object::SetClass(Class* new_klass) {
@@ -42,8 +43,8 @@ inline void Object::SetClass(Class* new_klass) {
   // backing cards, such as large objects.
   // We use non transactional version since we can't undo this write. We also disable checking as
   // we may run in transaction mode here.
-  SetFieldObjectWithoutWriteBarrier<false, false>(OFFSET_OF_OBJECT_MEMBER(Object, klass_),
-                                                  new_klass, false, false);
+  SetFieldObjectWithoutWriteBarrier<false, false, false, kVerifyObjectOnWrites>(
+      OFFSET_OF_OBJECT_MEMBER(Object, klass_), new_klass, false);
 }
 
 inline LockWord Object::GetLockWord() {
@@ -89,176 +90,208 @@ inline void Object::Wait(Thread* self, int64_t ms, int32_t ns) {
   Monitor::Wait(self, this, ms, ns, true, kTimedWaiting);
 }
 
+template<bool kVerifyThis>
 inline bool Object::VerifierInstanceOf(Class* klass) {
   DCHECK(klass != NULL);
-  DCHECK(GetClass() != NULL);
+  DCHECK(GetClass<kVerifyThis>() != NULL);
   return klass->IsInterface() || InstanceOf(klass);
 }
 
+template<bool kVerifyThis>
 inline bool Object::InstanceOf(Class* klass) {
   DCHECK(klass != NULL);
-  DCHECK(GetClass() != NULL);
-  return klass->IsAssignableFrom(GetClass());
+  DCHECK(GetClass<kVerifyThis>() != NULL);
+  return klass->IsAssignableFrom(GetClass<false>());
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsClass() {
-  Class* java_lang_Class = GetClass()->GetClass();
-  return GetClass() == java_lang_Class;
+  Class* java_lang_Class = GetClass<kVerifyThis>()->GetClass();
+  return GetClass<false>() == java_lang_Class;
 }
 
+template<bool kVerifyThis>
 inline Class* Object::AsClass() {
-  DCHECK(IsClass());
+  DCHECK(IsClass<kVerifyThis>());
   return down_cast<Class*>(this);
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsObjectArray() {
-  return IsArrayInstance() && !GetClass()->GetComponentType()->IsPrimitive();
+  return IsArrayInstance<kVerifyThis>() && !GetClass<false>()->GetComponentType()->IsPrimitive();
 }
 
-template<class T>
+template<class T, bool kVerifyThis>
 inline ObjectArray<T>* Object::AsObjectArray() {
-  DCHECK(IsObjectArray());
+  DCHECK(IsObjectArray<kVerifyThis>());
   return down_cast<ObjectArray<T>*>(this);
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsArrayInstance() {
-  return GetClass()->IsArrayClass();
+  return GetClass<kVerifyThis>()->IsArrayClass();
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsArtField() {
-  return GetClass()->IsArtFieldClass();
+  return GetClass<kVerifyThis>()->IsArtFieldClass();
 }
 
+template<bool kVerifyThis>
 inline ArtField* Object::AsArtField() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  DCHECK(IsArtField());
+  DCHECK(IsArtField<kVerifyThis>());
   return down_cast<ArtField*>(this);
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsArtMethod() {
-  return GetClass()->IsArtMethodClass();
+  return GetClass<kVerifyThis>()->IsArtMethodClass();
 }
 
+template<bool kVerifyThis>
 inline ArtMethod* Object::AsArtMethod() {
-  DCHECK(IsArtMethod());
+  DCHECK(IsArtMethod<kVerifyThis>());
   return down_cast<ArtMethod*>(this);
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsReferenceInstance() {
-  return GetClass()->IsReferenceClass();
+  return GetClass<kVerifyThis>()->IsReferenceClass();
 }
 
+template<bool kVerifyThis>
 inline Array* Object::AsArray() {
-  DCHECK(IsArrayInstance());
+  DCHECK(IsArrayInstance<kVerifyThis>());
   return down_cast<Array*>(this);
 }
 
+template<bool kVerifyThis>
 inline BooleanArray* Object::AsBooleanArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveBoolean());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveBoolean());
   return down_cast<BooleanArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline ByteArray* Object::AsByteArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveByte());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveByte());
   return down_cast<ByteArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline ByteArray* Object::AsByteSizedArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveByte() ||
-         GetClass()->GetComponentType()->IsPrimitiveBoolean());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveByte() ||
+         GetClass<false>()->GetComponentType()->IsPrimitiveBoolean());
   return down_cast<ByteArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline CharArray* Object::AsCharArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveChar());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveChar());
   return down_cast<CharArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline ShortArray* Object::AsShortArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveShort());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveShort());
   return down_cast<ShortArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline ShortArray* Object::AsShortSizedArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveShort() ||
-         GetClass()->GetComponentType()->IsPrimitiveChar());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveShort() ||
+         GetClass<false>()->GetComponentType()->IsPrimitiveChar());
   return down_cast<ShortArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline IntArray* Object::AsIntArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveInt() ||
-         GetClass()->GetComponentType()->IsPrimitiveFloat());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveInt() ||
+         GetClass<false>()->GetComponentType()->IsPrimitiveFloat());
   return down_cast<IntArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline LongArray* Object::AsLongArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveLong() ||
-         GetClass()->GetComponentType()->IsPrimitiveDouble());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveLong() ||
+         GetClass<false>()->GetComponentType()->IsPrimitiveDouble());
   return down_cast<LongArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline FloatArray* Object::AsFloatArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveFloat());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveFloat());
   return down_cast<FloatArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline DoubleArray* Object::AsDoubleArray() {
-  DCHECK(GetClass()->IsArrayClass());
-  DCHECK(GetClass()->GetComponentType()->IsPrimitiveDouble());
+  DCHECK(GetClass<kVerifyThis>()->IsArrayClass());
+  DCHECK(GetClass<false>()->GetComponentType()->IsPrimitiveDouble());
   return down_cast<DoubleArray*>(this);
 }
 
+template<bool kVerifyThis>
 inline String* Object::AsString() {
-  DCHECK(GetClass()->IsStringClass());
+  DCHECK(GetClass<kVerifyThis>()->IsStringClass());
   return down_cast<String*>(this);
 }
 
+template<bool kVerifyThis>
 inline Throwable* Object::AsThrowable() {
-  DCHECK(GetClass()->IsThrowableClass());
+  DCHECK(GetClass<kVerifyThis>()->IsThrowableClass());
   return down_cast<Throwable*>(this);
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsWeakReferenceInstance() {
-  return GetClass()->IsWeakReferenceClass();
+  return GetClass<kVerifyThis>()->IsWeakReferenceClass();
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsSoftReferenceInstance() {
-  return GetClass()->IsSoftReferenceClass();
+  return GetClass<kVerifyThis>()->IsSoftReferenceClass();
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsFinalizerReferenceInstance() {
-  return GetClass()->IsFinalizerReferenceClass();
+  return GetClass<kVerifyThis>()->IsFinalizerReferenceClass();
 }
 
+template<bool kVerifyThis>
 inline bool Object::IsPhantomReferenceInstance() {
-  return GetClass()->IsPhantomReferenceClass();
+  return GetClass<kVerifyThis>()->IsPhantomReferenceClass();
 }
 
+template<bool kVerifyThis>
 inline size_t Object::SizeOf() {
   size_t result;
-  if (IsArrayInstance()) {
-    result = AsArray()->SizeOf();
-  } else if (IsClass()) {
-    result = AsClass()->SizeOf();
+  if (IsArrayInstance<kVerifyThis>()) {
+    result = AsArray<false>()->SizeOf<false>();
+  } else if (IsClass<false>()) {
+    result = AsClass<false>()->SizeOf<false>();
   } else {
-    result = GetClass()->GetObjectSize();
+    result = GetClass<false>()->GetObjectSize();
   }
-  DCHECK_GE(result, sizeof(Object)) << " class=" << PrettyTypeOf(GetClass());
-  DCHECK(!IsArtField()  || result == sizeof(ArtField));
-  DCHECK(!IsArtMethod() || result == sizeof(ArtMethod));
+  DCHECK_GE(result, sizeof(Object)) << " class=" << PrettyTypeOf(GetClass<false>());
+  DCHECK(!IsArtField<false>()  || result == sizeof(ArtField));
+  DCHECK(!IsArtMethod<false>() || result == sizeof(ArtMethod));
   return result;
 }
 
+template<bool kVerifyThis>
 inline int32_t Object::GetField32(MemberOffset field_offset, bool is_volatile) {
-  VerifyObject(this);
+  if (kVerifyThis) {
+    VerifyObject(this);
+  }
   const byte* raw_addr = reinterpret_cast<const byte*>(this) + field_offset.Int32Value();
   const int32_t* word_addr = reinterpret_cast<const int32_t*>(raw_addr);
   if (UNLIKELY(is_volatile)) {
@@ -363,9 +396,11 @@ inline bool Object::CasField64(MemberOffset field_offset, int64_t old_value, int
   return QuasiAtomic::Cas64(old_value, new_value, addr);
 }
 
-template<class T>
+template<class T, bool kVerifyThis, bool kVerifyResult>
 inline T* Object::GetFieldObject(MemberOffset field_offset, bool is_volatile) {
-  VerifyObject(this);
+  if (kVerifyThis) {
+    VerifyObject(this);
+  }
   byte* raw_addr = reinterpret_cast<byte*>(this) + field_offset.Int32Value();
   HeapReference<T>* objref_addr = reinterpret_cast<HeapReference<T>*>(raw_addr);
   HeapReference<T> objref = *objref_addr;
@@ -374,13 +409,15 @@ inline T* Object::GetFieldObject(MemberOffset field_offset, bool is_volatile) {
     QuasiAtomic::MembarLoadLoad();  // Ensure loads don't re-order.
   }
   T* result = objref.AsMirrorPtr();
-  VerifyObject(result);
+  if (kVerifyResult && result != nullptr) {
+    VerifyObject(result);
+  }
   return result;
 }
 
-template<bool kTransactionActive, bool kCheckTransaction>
+template<bool kTransactionActive, bool kCheckTransaction, bool kVerifyThis, bool kVerifyReference>
 inline void Object::SetFieldObjectWithoutWriteBarrier(MemberOffset field_offset, Object* new_value,
-                                                      bool is_volatile, bool this_is_valid) {
+                                                      bool is_volatile) {
   if (kCheckTransaction) {
     DCHECK_EQ(kTransactionActive, Runtime::Current()->IsActiveTransaction());
   }
@@ -389,10 +426,12 @@ inline void Object::SetFieldObjectWithoutWriteBarrier(MemberOffset field_offset,
                                                   GetFieldObject<Object>(field_offset, is_volatile),
                                                   true);
   }
-  if (this_is_valid) {
+  if (kVerifyThis) {
     VerifyObject(this);
   }
-  VerifyObject(new_value);
+  if (kVerifyReference && new_value != nullptr) {
+    VerifyObject(new_value);
+  }
   HeapReference<Object> objref(HeapReference<Object>::FromMirrorPtr(new_value));
   byte* raw_addr = reinterpret_cast<byte*>(this) + field_offset.Int32Value();
   HeapReference<Object>* objref_addr = reinterpret_cast<HeapReference<Object>*>(raw_addr);
@@ -405,12 +444,10 @@ inline void Object::SetFieldObjectWithoutWriteBarrier(MemberOffset field_offset,
   }
 }
 
-template<bool kTransactionActive, bool kCheckTransaction>
-inline void Object::SetFieldObject(MemberOffset field_offset, Object* new_value, bool is_volatile,
-                                   bool this_is_valid) {
-  SetFieldObjectWithoutWriteBarrier<kTransactionActive, kCheckTransaction>(field_offset, new_value,
-                                                                           is_volatile,
-                                                                           this_is_valid);
+template<bool kTransactionActive, bool kCheckTransaction, bool kVerifyThis, bool kVerifyReference>
+inline void Object::SetFieldObject(MemberOffset field_offset, Object* new_value, bool is_volatile) {
+  SetFieldObjectWithoutWriteBarrier<kTransactionActive, kCheckTransaction, kVerifyThis,
+      kVerifyReference>(field_offset, new_value, is_volatile);
   if (new_value != nullptr) {
     CheckFieldAssignment(field_offset, new_value);
     Runtime::Current()->GetHeap()->WriteBarrierField(this, field_offset, new_value);
@@ -438,7 +475,7 @@ inline bool Object::CasFieldObject(MemberOffset field_offset, Object* old_value,
 }
 
 inline void Object::VerifyObject(Object* obj) {
-  if (kIsDebugBuild) {
+  if (kVerifyObjectOnReads || kVerifyObjectOnWrites) {
     Runtime::Current()->GetHeap()->VerifyObject(obj);
   }
 }

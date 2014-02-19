@@ -425,19 +425,19 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   parsed->collector_type_ = gc::kCollectorTypeCMS;
   // If background_collector_type_ is kCollectorTypeNone, it defaults to the collector_type_ after
   // parsing options.
-  parsed->background_collector_type_ = gc::kCollectorTypeNone;
+  parsed->background_collector_type_ = gc::kCollectorTypeSS;
   parsed->stack_size_ = 0;  // 0 means default.
   parsed->max_spins_before_thin_lock_inflation_ = Monitor::kDefaultMaxSpinsBeforeThinLockInflation;
   parsed->low_memory_mode_ = false;
   parsed->use_tlab_ = false;
   parsed->verify_pre_gc_heap_ = false;
-  parsed->verify_post_gc_heap_ = kIsDebugBuild;
-  parsed->verify_pre_gc_rosalloc_ = kIsDebugBuild;
+  parsed->verify_post_gc_heap_ = false && kIsDebugBuild;
+  parsed->verify_pre_gc_rosalloc_ = false && kIsDebugBuild;
   parsed->verify_post_gc_rosalloc_ = false;
 
   parsed->compiler_callbacks_ = nullptr;
   parsed->is_zygote_ = false;
-  parsed->interpreter_only_ = false;
+  parsed->interpreter_only_ = true;
   parsed->is_explicit_gc_disabled_ = false;
 
   parsed->long_pause_log_threshold_ = gc::Heap::kDefaultLongPauseLogThreshold;

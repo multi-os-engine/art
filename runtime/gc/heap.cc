@@ -820,14 +820,16 @@ bool Heap::IsLiveObjectLocked(mirror::Object* obj, bool search_allocation_stack,
     return false;
   }
   if (bump_pointer_space_ != nullptr && bump_pointer_space_->HasAddress(obj)) {
-    mirror::Class* klass = obj->GetClass();
+    mirror::Class* klass = obj->GetClass<false>();
     if (obj == klass) {
       // This case happens for java.lang.Class.
       return true;
     }
     return VerifyClassClass(klass) && IsLiveObjectLocked(klass);
   } else if (temp_space_ != nullptr && temp_space_->HasAddress(obj)) {
-    return false;
+    // If we are in the allocated region of the temp space, then we are probably live (e.g. during
+    // a GC). When a GC isn't running End() - Begin() is 0 which means no objects are contained.
+    return temp_space_->Contains(obj);
   }
   space::ContinuousSpace* c_space = FindContinuousSpaceFromObject(obj, true);
   space::DiscontinuousSpace* d_space = NULL;
@@ -884,22 +886,14 @@ bool Heap::IsLiveObjectLocked(mirror::Object* obj, bool search_allocation_stack,
 }
 
 void Heap::VerifyObjectImpl(mirror::Object* obj) {
-  if (Thread::Current() == NULL ||
-      Runtime::Current()->GetThreadList()->GetLockOwner() == Thread::Current()->GetTid()) {
-    return;
-  }
   VerifyObjectBody(obj);
 }
 
-bool Heap::VerifyClassClass(const mirror::Class* c) const {
-  // Note: we don't use the accessors here as they have internal sanity checks that we don't want
-  // to run
-  const byte* raw_addr =
-      reinterpret_cast<const byte*>(c) + mirror::Object::ClassOffset().Int32Value();
-  mirror::Class* c_c = reinterpret_cast<mirror::HeapReference<mirror::Class> const *>(raw_addr)->AsMirrorPtr();
-  raw_addr = reinterpret_cast<const byte*>(c_c) + mirror::Object::ClassOffset().Int32Value();
-  mirror::Class* c_c_c = reinterpret_cast<mirror::HeapReference<mirror::Class> const *>(raw_addr)->AsMirrorPtr();
-  return c_c == c_c_c;
+bool Heap::VerifyClassClass(mirror::Class* c) const {
+  // Note: We pass in flags to ensure that the accessors don't call VerifyObject.
+  const MemberOffset offset = mirror::Object::ClassOffset();
+  mirror::Class* c_c = c->GetFieldObject<mirror::Class, false, false>(offset, false);
+  return c_c == c_c->GetFieldObject<mirror::Class, false, false>(offset, false);
 }
 
 void Heap::DumpSpaces(std::ostream& stream) {
@@ -925,9 +919,8 @@ void Heap::VerifyObjectBody(mirror::Object* obj) {
   if (UNLIKELY(static_cast<size_t>(num_bytes_allocated_.Load()) < 10 * KB)) {
     return;
   }
-  const byte* raw_addr = reinterpret_cast<const byte*>(obj) +
-      mirror::Object::ClassOffset().Int32Value();
-  mirror::Class* c = reinterpret_cast<mirror::HeapReference<mirror::Class> const *>(raw_addr)->AsMirrorPtr();
+  mirror::Class* c = obj->GetFieldObject<mirror::Class, false, false>(mirror::Object::ClassOffset(),
+                                                                      false);
   if (UNLIKELY(c == NULL)) {
     LOG(FATAL) << "Null class in object: " << obj;
   } else if (UNLIKELY(!IsAligned<kObjectAlignment>(c))) {
@@ -941,9 +934,6 @@ void Heap::VerifyObjectBody(mirror::Object* obj) {
     if (!IsLiveObjectLocked(obj)) {
       DumpSpaces();
       LOG(FATAL) << "Object is dead: " << obj;
-    }
-    if (!IsLiveObjectLocked(c)) {
-      LOG(FATAL) << "Class of object is dead: " << c << " in object: " << obj;
     }
   }
 }

@@ -29,8 +29,8 @@
 
 namespace art {
 
-bool ShadowFrame::VerifyReference(const mirror::Object* val) const {
-  return !Runtime::Current()->GetHeap()->IsInTempSpace(val);
+void ShadowFrame::VerifyObject(mirror::Object* obj) const {
+  Runtime::Current()->GetHeap()->VerifyObject(obj);
 }
 
 mirror::Object* ShadowFrame::GetThisObject() const {

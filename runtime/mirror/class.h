@@ -120,9 +120,11 @@ class MANAGED Class : public Object {
     kStatusMax = 10,
   };
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   Status GetStatus() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK_EQ(sizeof(Status), sizeof(uint32_t));
-    return static_cast<Status>(GetField32(OFFSET_OF_OBJECT_MEMBER(Class, status_), true));
+    COMPILE_ASSERT(sizeof(Status) == sizeof(uint32_t), size_of_status_not_uint32);
+    return static_cast<Status>(GetField32<kVerifyThis>(OFFSET_OF_OBJECT_MEMBER(Class, status_),
+                                                       true));
   }
 
   void SetStatus(Status new_status, Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -132,45 +134,54 @@ class MANAGED Class : public Object {
   }
 
   // Returns true if the class has failed to link.
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsErroneous() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus() == kStatusError;
+    return GetStatus<kVerifyThis>() == kStatusError;
   }
 
   // Returns true if the class has been loaded.
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsIdxLoaded() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus() >= kStatusIdx;
+    return GetStatus<kVerifyThis>() >= kStatusIdx;
   }
 
   // Returns true if the class has been loaded.
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsLoaded() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus() >= kStatusLoaded;
+    return GetStatus<kVerifyThis>() >= kStatusLoaded;
   }
 
   // Returns true if the class has been linked.
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsResolved() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus() >= kStatusResolved;
+    return GetStatus<kVerifyThis>() >= kStatusResolved;
   }
 
   // Returns true if the class was compile-time verified.
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsCompileTimeVerified() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus() >= kStatusRetryVerificationAtRuntime;
+    return GetStatus<kVerifyThis>() >= kStatusRetryVerificationAtRuntime;
   }
 
   // Returns true if the class has been verified.
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsVerified() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus() >= kStatusVerified;
+    return GetStatus<kVerifyThis>() >= kStatusVerified;
   }
 
   // Returns true if the class is initializing.
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsInitializing() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus() >= kStatusInitializing;
+    return GetStatus<kVerifyThis>() >= kStatusInitializing;
   }
 
   // Returns true if the class is initialized.
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsInitialized() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus() == kStatusInitialized;
+    return GetStatus<kVerifyThis>() == kStatusInitialized;
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   uint32_t GetAccessFlags() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetAccessFlags(uint32_t new_access_flags) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -217,24 +228,29 @@ class MANAGED Class : public Object {
     return (GetAccessFlags() & kAccSynthetic) != 0;
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsReferenceClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return (GetAccessFlags() & kAccClassIsReference) != 0;
+    return (GetAccessFlags<kVerifyThis>() & kAccClassIsReference) != 0;
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsWeakReferenceClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return (GetAccessFlags() & kAccClassIsWeakReference) != 0;
+    return (GetAccessFlags<kVerifyThis>() & kAccClassIsWeakReference) != 0;
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsSoftReferenceClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return (GetAccessFlags() & kAccReferenceFlagsMask) == kAccClassIsReference;
+    return (GetAccessFlags<kVerifyThis>() & kAccReferenceFlagsMask) == kAccClassIsReference;
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsFinalizerReferenceClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return (GetAccessFlags() & kAccClassIsFinalizerReference) != 0;
+    return (GetAccessFlags<kVerifyThis>() & kAccClassIsFinalizerReference) != 0;
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsPhantomReferenceClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return (GetAccessFlags() & kAccClassIsPhantomReference) != 0;
+    return (GetAccessFlags<kVerifyThis>() & kAccClassIsPhantomReference) != 0;
   }
 
   // Can references of this type be assigned to by things of another type? For non-array types
@@ -333,8 +349,9 @@ class MANAGED Class : public Object {
     return depth;
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsArrayClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetComponentType() != NULL;
+    return GetComponentType<kVerifyThis>() != NULL;
   }
 
   bool IsClassClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -351,8 +368,9 @@ class MANAGED Class : public Object {
     return OFFSET_OF_OBJECT_MEMBER(Class, component_type_);
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   Class* GetComponentType() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<Class>(ComponentTypeOffset(), false);
+    return GetFieldObject<Class, kVerifyThis>(ComponentTypeOffset(), false);
   }
 
   void SetComponentType(Class* new_component_type) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -376,8 +394,9 @@ class MANAGED Class : public Object {
     return (!IsPrimitive() && !IsInterface() && !IsAbstract()) || ((IsAbstract()) && IsArrayClass());
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsObjectArrayClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetComponentType() != NULL && !GetComponentType()->IsPrimitive();
+    return GetComponentType<kVerifyThis>() != nullptr && !GetComponentType<kVerifyThis>()->IsPrimitive();
   }
 
   // Creates a raw object instance but does not invoke the default constructor.
@@ -396,12 +415,14 @@ class MANAGED Class : public Object {
     return IsClassClass() || IsArrayClass();
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   uint32_t SizeOf() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, class_size_), false);
+    return GetField32<kVerifyThis>(OFFSET_OF_OBJECT_MEMBER(Class, class_size_), false);
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   uint32_t GetClassSize() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, class_size_), false);
+    return GetField32<kVerifyThis>(OFFSET_OF_OBJECT_MEMBER(Class, class_size_), false);
   }
 
   void SetClassSize(uint32_t new_class_size)
@@ -549,6 +570,7 @@ class MANAGED Class : public Object {
   // Returns the number of static, private, and constructor methods.
   uint32_t NumDirectMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   ObjectArray<ArtMethod>* GetVirtualMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetVirtualMethods(ObjectArray<ArtMethod>* new_virtual_methods)
@@ -557,6 +579,7 @@ class MANAGED Class : public Object {
   // Returns the number of non-inherited virtual methods.
   uint32_t NumVirtualMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   ArtMethod* GetVirtualMethod(uint32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   ArtMethod* GetVirtualMethodDuringLinking(uint32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -683,9 +706,11 @@ class MANAGED Class : public Object {
                       false);
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   uint32_t GetReferenceInstanceOffsets() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK(IsResolved() || IsErroneous());
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, reference_instance_offsets_), false);
+    DCHECK(IsResolved<kVerifyThis>() || IsErroneous<kVerifyThis>());
+    return GetField32<kVerifyThis>(OFFSET_OF_OBJECT_MEMBER(Class, reference_instance_offsets_),
+                                   false);
   }
 
   void SetReferenceInstanceOffsets(uint32_t new_reference_offsets)
@@ -725,8 +750,10 @@ class MANAGED Class : public Object {
   // TODO: uint16_t
   void SetStaticField(uint32_t i, ArtField* f) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   uint32_t GetReferenceStaticOffsets() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, reference_static_offsets_), false);
+    return GetField32<kVerifyThis>(OFFSET_OF_OBJECT_MEMBER(Class, reference_static_offsets_),
+                                   false);
   }
 
   void SetReferenceStaticOffsets(uint32_t new_reference_offsets)

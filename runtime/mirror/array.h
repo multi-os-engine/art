@@ -53,10 +53,11 @@ class MANAGED Array : public Object {
                                  const SirtRef<IntArray>& dimensions)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   size_t SizeOf() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   int32_t GetLength() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Array, length_), false);
+    return GetField32<kVerifyThis>(OFFSET_OF_OBJECT_MEMBER(Array, length_), false);
   }
 
   void SetLength(int32_t length) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {

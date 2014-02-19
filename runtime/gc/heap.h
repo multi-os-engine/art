@@ -106,7 +106,7 @@ enum HeapVerificationMode {
   kVerifyAllFast,  // Sanity check all heap accesses with quick(er) tests.
   kVerifyAll  // Sanity check all heap accesses.
 };
-static constexpr HeapVerificationMode kDesiredHeapVerification = kNoHeapVerification;
+static constexpr HeapVerificationMode kDesiredHeapVerification = kVerifyAllFast;
 
 // If true, use rosalloc/RosAllocSpace instead of dlmalloc/DlMallocSpace
 static constexpr bool kUseRosAlloc = true;
@@ -215,7 +215,7 @@ class Heap {
     }
   }
   // Check that c.getClass() == c.getClass().getClass().
-  bool VerifyClassClass(const mirror::Class* c) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  bool VerifyClassClass(mirror::Class* c) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Check sanity of all live references.
   void VerifyHeap() LOCKS_EXCLUDED(Locks::heap_bitmap_lock_);

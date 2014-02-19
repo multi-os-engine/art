@@ -59,7 +59,9 @@ class Throwable;
 #define OFFSET_OF_OBJECT_MEMBER(type, field) \
     MemberOffset(OFFSETOF_MEMBER(type, field))
 
-constexpr bool kCheckFieldAssignments = false;
+static constexpr bool kCheckFieldAssignments = false;
+static constexpr bool kVerifyObjectOnReads = false;
+static constexpr bool kVerifyObjectOnWrites = true;
 
 // C++ mirror of java.lang.Object
 class MANAGED Object {
@@ -68,16 +70,19 @@ class MANAGED Object {
     return OFFSET_OF_OBJECT_MEMBER(Object, klass_);
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   Class* GetClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetClass(Class* new_klass) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // The verifier treats all interfaces as java.lang.Object and relies on runtime checks in
   // invoke-interface to detect incompatible interface types.
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool VerifierInstanceOf(Class* klass) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool InstanceOf(Class* klass) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   size_t SizeOf() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   Object* Clone(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -95,77 +100,91 @@ class MANAGED Object {
 
   mirror::Object* MonitorEnter(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCK_FUNCTION(monitor_lock_);
-
   bool MonitorExit(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       UNLOCK_FUNCTION(monitor_lock_);
-
   void Notify(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   void NotifyAll(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   void Wait(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   void Wait(Thread* self, int64_t timeout, int32_t nanos) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   Class* AsClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsObjectArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  template<class T>
+  template<class T, bool kVerifyThis = kVerifyObjectOnReads>
   ObjectArray<T>* AsObjectArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsArrayInstance() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   Array* AsArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   BooleanArray* AsBooleanArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   ByteArray* AsByteArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   ByteArray* AsByteSizedArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   CharArray* AsCharArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   ShortArray* AsShortArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   ShortArray* AsShortSizedArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   IntArray* AsIntArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   LongArray* AsLongArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   FloatArray* AsFloatArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   DoubleArray* AsDoubleArray() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   String* AsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   Throwable* AsThrowable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsArtMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   ArtMethod* AsArtMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsArtField() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   ArtField* AsArtField() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsReferenceInstance() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsWeakReferenceInstance() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsSoftReferenceInstance() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsFinalizerReferenceInstance() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   bool IsPhantomReferenceInstance() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Accessor for Java type fields.
-  template<class T> T* GetFieldObject(MemberOffset field_offset, bool is_volatile)
+  template<class T, bool kVerifyThis = kVerifyObjectOnReads, bool kVerifyResult = true>
+  T* GetFieldObject(MemberOffset field_offset, bool is_volatile)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  template<bool kTransactionActive, bool kCheckTransaction = true>
+  template<bool kTransactionActive, bool kCheckTransaction = true,
+      bool kVerifyThis = kVerifyObjectOnWrites, bool kVerifyReference = true>
   void SetFieldObjectWithoutWriteBarrier(MemberOffset field_offset, Object* new_value,
-                                         bool is_volatile, bool this_is_valid = true)
+                                         bool is_volatile)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  template<bool kTransactionActive, bool kCheckTransaction = true>
-  void SetFieldObject(MemberOffset field_offset, Object* new_value, bool is_volatile,
-                      bool this_is_valid = true)
+  template<bool kTransactionActive, bool kCheckTransaction = true,
+      bool kVerifyThis = kVerifyObjectOnWrites, bool kVerifyReference = true>
+  void SetFieldObject(MemberOffset field_offset, Object* new_value, bool is_volatile)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   template<bool kTransactionActive, bool kCheckTransaction = true>
   bool CasFieldObject(MemberOffset field_offset, Object* old_value, Object* new_value)
@@ -177,6 +196,7 @@ class MANAGED Object {
         field_offset.Int32Value());
   }
 
+  template<bool kVerifyThis = kVerifyObjectOnReads>
   int32_t GetField32(MemberOffset field_offset, bool is_volatile);
 
   template<bool kTransactionActive, bool kCheckTransaction = true>
