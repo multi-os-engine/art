@@ -151,11 +151,15 @@ bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
     LOG(DEBUG) << "arm lr: " << std::hex << sc->arm_lr;
     LOG(DEBUG) << "arm pc: " << std::hex << sc->arm_pc;
     sc->arm_lr = sc->arm_pc + 3;      // +2 + 1 (for thumb)
+    LOG(DEBUG) << "setting LR to " << std::hex << sc->arm_lr;
     sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_test_suspend);
 
     // Now remove the suspend trigger that caused this fault.
-    Thread::Current()->RemoveSuspendTrigger();
-    LOG(DEBUG) << "removed suspend trigger invoking test suspend";
+    Thread* thread = reinterpret_cast<Thread*>(sc->arm_r9);
+    DCHECK_EQ(thread, Thread::Current());
+
+    LOG(DEBUG) << "removed suspend trigger invoking test suspend on thread " << thread;
+    thread->RemoveSuspendTrigger();
     return true;
   }
   return false;
