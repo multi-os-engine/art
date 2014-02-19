@@ -1030,6 +1030,11 @@ const ArmEncodingMap ArmMir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 7, 0,
                  IS_QUAD_OP | REG_USE0 | REG_USE1 | REG_USE2 | IS_STORE,
                  "strd", "!0C, !1C, [!2C, #!3E]", 4, kFixupNone),
+    ENCODING_MAP(kThumb2BlTramp, 0xf000d000,
+                 kFmtUnused, -1, -1, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_UNARY_OP | IS_BRANCH | REG_DEF_LR | NEEDS_FIXUP,
+                 "bl", "!0t", 4, kFixupTrampCall),
 };
 
 // new_lir replaces orig_lir in the pcrel_fixup list.
@@ -1211,6 +1216,7 @@ void ArmMir2Lir::AssembleLIR() {
   while (true) {
     offset_adjustment = 0;
     AssemblerStatus res = kSuccess;  // Assume success
+
     generation ^= 1;
     // Note: nodes requring possible fixup linked in ascending order.
     lir = first_fixup_;
@@ -1567,6 +1573,17 @@ void ArmMir2Lir::AssembleLIR() {
           }
           break;
         }
+        case kFixupTrampCall: {
+          // This is a call to a trampoline.  The value for the trampoline call needs
+          // both the offset into the code and the trampoline to call.  It will be
+          // added to the list of calls when we actually insert this instruction into
+          // the code_buffer (when we have a stable instruction stream).
+          uint32_t instoffset = lir->offset;
+           // LOG(INFO) << "adding trampoline call: offset: " << instoffset <<
+             //  " entrypoint: " << lir->operands[0];
+          trampoline_calls_.push_back(TrampolineCall(instoffset, lir->operands[0]));
+          break;
+        }
         default:
           LOG(FATAL) << "Unexpected case " << lir->flags.fixup;
       }
@@ -1584,6 +1601,7 @@ void ArmMir2Lir::AssembleLIR() {
           }
         }
       }
+
       prev_lir = lir;
       lir = lir->u.a.pcrel_next;
     }
@@ -1599,6 +1617,7 @@ void ArmMir2Lir::AssembleLIR() {
       starting_offset += offset_adjustment;
       data_offset_ = (starting_offset + 0x3) & ~0x3;
       AssignDataOffsets();
+      trampoline_calls_.clear();            // These are invalid now.
     }
   }
 
@@ -1651,6 +1670,8 @@ uint32_t ArmMir2Lir::EncodeRange(LIR* head_lir, LIR* tail_lir, uint32_t offset) 
    * this work - but if not, we're ready to go.
    */
   code_buffer_.reserve(estimated_native_code_size_ + 256);  // Add a little slop.
+  trampoline_calls_.clear();
+
   LIR* last_fixup = NULL;
   for (LIR* lir = head_lir; lir != end_lir; lir = NEXT_LIR(lir)) {
     lir->offset = offset;
@@ -1697,5 +1718,4 @@ void ArmMir2Lir::AssignDataOffsets() {
 
   total_size_ = AssignFillArrayDataOffset(offset);
 }
-
 }  // namespace art

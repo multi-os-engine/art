@@ -20,6 +20,9 @@ include art/build/Android.common.mk
 
 LIBART_COMPILER_SRC_FILES := \
 	compiled_method.cc \
+	final_relocations.cc \
+	arch/arm/final_relocations_arm.cc \
+	arch/arm/entrypoint_trampoline.cc \
 	dex/local_value_numbering.cc \
 	dex/quick/arm/assemble_arm.cc \
 	dex/quick/arm/call_arm.cc \

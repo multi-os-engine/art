@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 The Android Open Source Project
+ * Copyright (C) 2011 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_TRAMPOLINES_TRAMPOLINE_COMPILER_H_
-#define ART_COMPILER_TRAMPOLINES_TRAMPOLINE_COMPILER_H_
-
-#include <stdint.h>
-#include <vector>
-
-#include "driver/compiler_driver.h"
+#include "final_relocations.h"
 
 namespace art {
 
-// Create code that will invoke the function held in thread local storage.
-const std::vector<uint8_t>* CreateTrampoline(InstructionSet isa, EntryPointCallingConvention abi,
-                                             ThreadOffset entry_point_offset);
-}  // namespace art
+class OatWriter;
 
-#endif  // ART_COMPILER_TRAMPOLINES_TRAMPOLINE_COMPILER_H_
+void FinalRelocations::Apply(uint8_t* code, const OatWriter* writer, uint32_t address) const {
+  for (const auto& s : *this) {
+    s->Apply(code, writer, address);
+  }
+}
+
+void FinalEntrypointRelocationSet::Add(uint32_t offset, uint32_t entrypoint_offset) {
+  relocations_.push_back(Relocation(kRelocationCall, offset, entrypoint_offset));
+}
+}  // namespace art
