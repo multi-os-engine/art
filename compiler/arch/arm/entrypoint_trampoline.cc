@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 The Android Open Source Project
+ * Copyright (C) 2011 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,17 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_TRAMPOLINES_TRAMPOLINE_COMPILER_H_
-#define ART_COMPILER_TRAMPOLINES_TRAMPOLINE_COMPILER_H_
-
-#include <stdint.h>
-#include <vector>
-
 #include "driver/compiler_driver.h"
 
 namespace art {
+  void CompilerDriver::BuildArmEntrypointTrampolineCall(uint32_t offset) {
+    // Thumb2 instruction encoding of:
+    // ldr pc,[r9,#offset]
 
-// Create code that will invoke the function held in thread local storage.
-const std::vector<uint8_t>* CreateTrampoline(InstructionSet isa, EntryPointCallingConvention abi,
-                                             ThreadOffset entry_point_offset);
-}  // namespace art
-
-#endif  // ART_COMPILER_TRAMPOLINES_TRAMPOLINE_COMPILER_H_
+    uint32_t instruction = 0xf8d0f000 | (9 << 16) | (offset & 0xfff);
+    entrypoint_trampoline_code_.push_back((instruction >> 16) & 0xff);
+    entrypoint_trampoline_code_.push_back((instruction >> 24) & 0xff);
+    entrypoint_trampoline_code_.push_back((instruction >> 0) & 0xff);
+    entrypoint_trampoline_code_.push_back((instruction >> 8) & 0xff);
+  }
+}   // namespace art

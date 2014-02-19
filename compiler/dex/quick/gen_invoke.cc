@@ -25,6 +25,7 @@
 #include "mirror/string.h"
 #include "mir_to_lir-inl.h"
 #include "x86/codegen_x86.h"
+#include "driver/compiler_options.h"
 
 namespace art {
 
@@ -67,7 +68,16 @@ void Mir2Lir::AddIntrinsicLaunchpad(CallInfo* info, LIR* branch, LIR* resume) {
  * load arguments between the two parts.
  */
 int Mir2Lir::CallHelperSetup(ThreadOffset helper_offset) {
-  return (cu_->instruction_set == kX86) ? 0 : LoadHelper(helper_offset);
+  if (cu_->instruction_set == kX86) {
+    return 0;
+  }
+  if (cu_->instruction_set == kThumb2) {
+    const CompilerOptions& compiler_options = cu_->compiler_driver->GetCompilerOptions();
+    if (compiler_options.GetGenerateHelperTrampolines()) {
+      return 0;
+    }
+  }
+  return LoadHelper(helper_offset);
 }
 
 /* NOTE: if r_tgt is a temp, it will be freed following use */
@@ -76,6 +86,14 @@ LIR* Mir2Lir::CallHelper(int r_tgt, ThreadOffset helper_offset, bool safepoint_p
   OpKind op = use_link ? kOpBlx : kOpBx;
   if (cu_->instruction_set == kX86) {
     call_inst = OpThreadMem(op, helper_offset);
+  } else if (op == kOpBlx && cu_->instruction_set == kThumb2) {
+    const CompilerOptions& compiler_options = cu_->compiler_driver->GetCompilerOptions();
+    if (compiler_options.GetGenerateHelperTrampolines()) {
+      call_inst = OpThreadMem(kOpBlx, helper_offset);
+    } else {
+      call_inst = OpReg(kOpBlx, r_tgt);
+      FreeTemp(r_tgt);
+    }
   } else {
     call_inst = OpReg(op, r_tgt);
     FreeTemp(r_tgt);
