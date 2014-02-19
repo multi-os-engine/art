@@ -628,6 +628,106 @@ class CompilerDriver {
   // Should the compiler run on this method given profile information?
   bool SkipCompilation(const std::string& method_name);
 
+  // Entrypoint trampolines.
+  //
+  // The idea here is that we can save code size by collecting the branches
+  // to the entrypoints (helper functions called by the generated code) into a
+  // table and then branching relative to that table from the code.  On ARM 32 this
+  // will save 2 bytes per call.  Only the entrypoints used by the program (the whole
+  // program - these are global) are in this table and are in no particular order.
+  //
+  // The trampolines will be placed right at the start of the .text section in the file
+  // and will consist of a table of instructions, each of which will branch relative to
+  // the thread register (r9 on ARM) to an entrypoint.  On ARM this would look like:
+  //
+  // trampolines:
+  // 1: ldr pc, [r9, #40]
+  // 2: ldr pc, [r9, #8]
+  //    ...
+  //
+  // Then a call to an entrypoint would be an immediate BL instruction to the appropriate
+  // label (1 or 2 in the above example).  Because the entrypoint table has the lower bit
+  // of the address already set, the ldr pc will switch from ARM to Thumb for the entrypoint as
+  // necessary.
+  //
+  // On ARM, the range of a BL instruction is +-32M to this is more than enough for an
+  // immediate BL instruction in the generated code.
+  //
+  // The actual address of the trampoline for a particular entrypoint is not known until
+  // the OAT file is written and we know the addresses of all the branch instructions in
+  // the program.  At this point we can rewrite the BL instruction to have the correct relative
+  // offset.
+  class EntrypointTrampolines {
+   public:
+    EntrypointTrampolines() : current_offset_(0), lock_("Entrypoint Trampolines") {}
+    ~EntrypointTrampolines() {}
+
+    // Add a trampoline and return the offset added.  If it already exists
+    // return the offset it was added at previously.
+    uint32_t AddEntrypoint(Thread* self, ThreadOffset ep) LOCKS_EXCLUDED(lock_) {
+      MutexLock mu(self, lock_);
+      uint32_t epi = ep.Int32Value();
+      Trampolines::iterator tramp = trampolines_.find(epi);
+      if (tramp == trampolines_.end()) {
+        trampolines_[epi] = current_offset_;
+        trampoline_vector_.push_back(epi);
+        LOG(DEBUG) << "adding new trampoline for " << epi << " at offset " << current_offset_;
+        return current_offset_++;
+      } else {
+        return tramp->second;
+      }
+    }
+
+    const std::vector<uint32_t>& GetTrampolines() const {
+      return trampoline_vector_;
+    }
+
+    uint32_t GetTrampolineSize() const {
+      return current_offset_;
+    }
+
+   private:
+    uint32_t current_offset_;
+    // Mapping of entrypoint offset vs offset into trampoline table.
+    typedef std::map<uint32_t, uint32_t> Trampolines;
+    Trampolines trampolines_;
+
+    std::vector<uint32_t> trampoline_vector_;
+    Mutex lock_;
+  };
+
+  uint32_t AddEntrypointTrampoline(ThreadOffset entrypoint);
+
+  const std::vector<uint32_t>& GetEntrypointTrampolines() const {
+    return entrypoint_trampolines_.GetTrampolines();
+  }
+
+  uint32_t GetEntrypointTrampolineSize() const {
+    uint32_t size = entrypoint_trampolines_.GetTrampolineSize();
+    if (instruction_set_ == kThumb2) {
+      return size * 4;
+    }
+    return size;
+  }
+
+  size_t GetMaxEntrypointTrampolineOffset() const {
+    if (instruction_set_ == kThumb2) {
+      return 15*MB;
+    }
+    return 0;
+  }
+
+  void BuildEntrypointTrampolineCode();
+
+  // Architecture specific Entrypoint trampoline builder.
+  void BuildArmEntrypointTrampolineCall(uint32_t offset);
+
+  const std::vector<uint8_t>& GetEntrypointTrampolineCode() const {
+    return entrypoint_trampoline_code_;
+  }
+
+  FinalEntrypointRelocationSet* AllocateFinalEntrypointRelocationSet(CompilationUnit* cu) const;
+
  private:
   // These flags are internal to CompilerDriver for collecting INVOKE resolution statistics.
   // The only external contract is that unresolved method has flags 0 and resolved non-0.
@@ -665,6 +765,7 @@ class CompilerDriver {
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   void LoadImageClasses(TimingLogger* timings);
+  void PostCompile() LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   // Attempt to resolve all type, methods, fields, and strings
   // referenced from code in the dex file following PathClassLoader
@@ -823,6 +924,10 @@ class CompilerDriver {
   DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_vmap_table_;
   DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_gc_map_;
   DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_cfi_info_;
+
+  EntrypointTrampolines entrypoint_trampolines_;
+
+  std::vector<uint8_t> entrypoint_trampoline_code_;
 
   DISALLOW_COPY_AND_ASSIGN(CompilerDriver);
 };

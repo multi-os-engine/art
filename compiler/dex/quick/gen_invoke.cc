@@ -19,6 +19,7 @@
 #include "dex/quick/dex_file_method_inliner.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex_file-inl.h"
+#include "driver/compiler_options.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "invoke_type.h"
 #include "mirror/array.h"
@@ -67,7 +68,16 @@ void Mir2Lir::AddIntrinsicLaunchpad(CallInfo* info, LIR* branch, LIR* resume) {
  * load arguments between the two parts.
  */
 RegStorage Mir2Lir::CallHelperSetup(ThreadOffset helper_offset) {
-  return (cu_->instruction_set == kX86) ? RegStorage::InvalidReg() : LoadHelper(helper_offset);
+  if (cu_->instruction_set == kX86) {
+    return RegStorage::InvalidReg();
+  }
+  if (cu_->instruction_set == kThumb2) {
+    const CompilerOptions& compiler_options = cu_->compiler_driver->GetCompilerOptions();
+    if (compiler_options.GetGenerateHelperTrampolines()) {
+      return RegStorage::InvalidReg();
+    }
+  }
+  return LoadHelper(helper_offset);
 }
 
 /* NOTE: if r_tgt is a temp, it will be freed following use */
@@ -77,6 +87,14 @@ LIR* Mir2Lir::CallHelper(RegStorage r_tgt, ThreadOffset helper_offset, bool safe
   OpKind op = use_link ? kOpBlx : kOpBx;
   if (cu_->instruction_set == kX86) {
     call_inst = OpThreadMem(op, helper_offset);
+  } else if (op == kOpBlx && cu_->instruction_set == kThumb2) {
+    const CompilerOptions& compiler_options = cu_->compiler_driver->GetCompilerOptions();
+    if (compiler_options.GetGenerateHelperTrampolines()) {
+      call_inst = OpThreadMem(kOpBlx, helper_offset);
+    } else {
+      call_inst = OpReg(kOpBlx, r_tgt);
+      FreeTemp(r_tgt);
+    }
   } else {
     call_inst = OpReg(op, r_tgt);
     FreeTemp(r_tgt);
