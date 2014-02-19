@@ -27,10 +27,11 @@
 namespace art {
 namespace mirror {
 
+template<size_t kVerifyFlags>
 inline size_t Array::SizeOf() {
   // This is safe from overflow because the array was already allocated, so we know it's sane.
-  size_t component_size = GetClass()->GetComponentSize();
-  int32_t component_count = GetLength();
+  size_t component_size = GetClass<kVerifyFlags>()->GetComponentSize();
+  int32_t component_count = GetLength<0>();
   size_t header_size = sizeof(Object) + (component_size == sizeof(int64_t) ? 8 : 4);
   size_t data_size = component_count * component_size;
   return header_size + data_size;

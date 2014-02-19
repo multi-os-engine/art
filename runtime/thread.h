@@ -375,7 +375,8 @@ class PACKED(4) Thread {
     return class_loader_override_;
   }
 
-  void SetClassLoaderOverride(mirror::ClassLoader* class_loader_override);
+  void SetClassLoaderOverride(mirror::ClassLoader* class_loader_override)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Create the internal representation of a stack trace, that is more time
   // and space efficient to compute than the StackTraceElement[]

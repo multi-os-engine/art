@@ -581,14 +581,14 @@ void ImageWriter::CopyAndFixupObjectsCallback(Object* obj, void* arg) {
 void ImageWriter::FixupObject(Object* orig, Object* copy) {
   DCHECK(orig != NULL);
   DCHECK(copy != NULL);
-  copy->SetClass(down_cast<Class*>(GetImageAddress(orig->GetClass())));
+  copy->SetClass<0>(down_cast<Class*>(GetImageAddress(orig->GetClass())));
   // TODO: special case init of pointers to malloc data (or removal of these pointers)
-  if (orig->IsClass()) {
-    FixupClass(orig->AsClass(), down_cast<Class*>(copy));
-  } else if (orig->IsObjectArray()) {
-    FixupObjectArray(orig->AsObjectArray<Object>(), down_cast<ObjectArray<Object>*>(copy));
-  } else if (orig->IsArtMethod()) {
-    FixupMethod(orig->AsArtMethod(), down_cast<ArtMethod*>(copy));
+  if (orig->IsClass<0>()) {
+    FixupClass(orig->AsClass<0>(), down_cast<Class*>(copy));
+  } else if (orig->IsObjectArray<0>()) {
+    FixupObjectArray(orig->AsObjectArray<Object, 0>(), down_cast<ObjectArray<Object>*>(copy));
+  } else if (orig->IsArtMethod<0>()) {
+    FixupMethod(orig->AsArtMethod<0>(), down_cast<ArtMethod*>(copy));
   } else {
     FixupInstanceFields(orig, copy);
   }
@@ -607,54 +607,54 @@ void ImageWriter::FixupMethod(ArtMethod* orig, ArtMethod* copy) {
 
   // The resolution method has a special trampoline to call.
   if (UNLIKELY(orig == Runtime::Current()->GetResolutionMethod())) {
-    copy->SetEntryPointFromPortableCompiledCode(GetOatAddress(portable_resolution_trampoline_offset_));
-    copy->SetEntryPointFromQuickCompiledCode(GetOatAddress(quick_resolution_trampoline_offset_));
+    copy->SetEntryPointFromPortableCompiledCode<0>(GetOatAddress(portable_resolution_trampoline_offset_));
+    copy->SetEntryPointFromQuickCompiledCode<0>(GetOatAddress(quick_resolution_trampoline_offset_));
   } else if (UNLIKELY(orig == Runtime::Current()->GetImtConflictMethod())) {
-    copy->SetEntryPointFromPortableCompiledCode(GetOatAddress(portable_imt_conflict_trampoline_offset_));
-    copy->SetEntryPointFromQuickCompiledCode(GetOatAddress(quick_imt_conflict_trampoline_offset_));
+    copy->SetEntryPointFromPortableCompiledCode<0>(GetOatAddress(portable_imt_conflict_trampoline_offset_));
+    copy->SetEntryPointFromQuickCompiledCode<0>(GetOatAddress(quick_imt_conflict_trampoline_offset_));
   } else {
     // We assume all methods have code. If they don't currently then we set them to the use the
     // resolution trampoline. Abstract methods never have code and so we need to make sure their
     // use results in an AbstractMethodError. We use the interpreter to achieve this.
     if (UNLIKELY(orig->IsAbstract())) {
-      copy->SetEntryPointFromPortableCompiledCode(GetOatAddress(portable_to_interpreter_bridge_offset_));
-      copy->SetEntryPointFromQuickCompiledCode(GetOatAddress(quick_to_interpreter_bridge_offset_));
-      copy->SetEntryPointFromInterpreter(reinterpret_cast<EntryPointFromInterpreter*>
+      copy->SetEntryPointFromPortableCompiledCode<0>(GetOatAddress(portable_to_interpreter_bridge_offset_));
+      copy->SetEntryPointFromQuickCompiledCode<0>(GetOatAddress(quick_to_interpreter_bridge_offset_));
+      copy->SetEntryPointFromInterpreter<0>(reinterpret_cast<EntryPointFromInterpreter*>
           (const_cast<byte*>(GetOatAddress(interpreter_to_interpreter_bridge_offset_))));
     } else {
-      copy->SetEntryPointFromInterpreter(reinterpret_cast<EntryPointFromInterpreter*>
+      copy->SetEntryPointFromInterpreter<0>(reinterpret_cast<EntryPointFromInterpreter*>
           (const_cast<byte*>(GetOatAddress(interpreter_to_compiled_code_bridge_offset_))));
       // Use original code if it exists. Otherwise, set the code pointer to the resolution
       // trampoline.
       const byte* quick_code = GetOatAddress(orig->GetQuickOatCodeOffset());
       if (quick_code != nullptr) {
-        copy->SetEntryPointFromQuickCompiledCode(quick_code);
+        copy->SetEntryPointFromQuickCompiledCode<0>(quick_code);
       } else {
-        copy->SetEntryPointFromQuickCompiledCode(GetOatAddress(quick_resolution_trampoline_offset_));
+        copy->SetEntryPointFromQuickCompiledCode<0>(GetOatAddress(quick_resolution_trampoline_offset_));
       }
       const byte* portable_code = GetOatAddress(orig->GetPortableOatCodeOffset());
       if (portable_code != nullptr) {
-        copy->SetEntryPointFromPortableCompiledCode(portable_code);
+        copy->SetEntryPointFromPortableCompiledCode<0>(portable_code);
       } else {
-        copy->SetEntryPointFromPortableCompiledCode(GetOatAddress(portable_resolution_trampoline_offset_));
+        copy->SetEntryPointFromPortableCompiledCode<0>(GetOatAddress(portable_resolution_trampoline_offset_));
       }
       if (orig->IsNative()) {
         // The native method's pointer is set to a stub to lookup via dlsym.
         // Note this is not the code_ pointer, that is handled above.
-        copy->SetNativeMethod(GetOatAddress(jni_dlsym_lookup_offset_));
+        copy->SetNativeMethod<0>(GetOatAddress(jni_dlsym_lookup_offset_));
       } else {
         // Normal (non-abstract non-native) methods have various tables to relocate.
         uint32_t mapping_table_off = orig->GetOatMappingTableOffset();
         const byte* mapping_table = GetOatAddress(mapping_table_off);
-        copy->SetMappingTable(mapping_table);
+        copy->SetMappingTable<0>(mapping_table);
 
         uint32_t vmap_table_offset = orig->GetOatVmapTableOffset();
         const byte* vmap_table = GetOatAddress(vmap_table_offset);
-        copy->SetVmapTable(vmap_table);
+        copy->SetVmapTable<0>(vmap_table);
 
         uint32_t native_gc_map_offset = orig->GetOatNativeGcMapOffset();
         const byte* native_gc_map = GetOatAddress(native_gc_map_offset);
-        copy->SetNativeGcMap(reinterpret_cast<const uint8_t*>(native_gc_map));
+        copy->SetNativeGcMap<0>(reinterpret_cast<const uint8_t*>(native_gc_map));
       }
     }
   }
@@ -663,7 +663,7 @@ void ImageWriter::FixupMethod(ArtMethod* orig, ArtMethod* copy) {
 void ImageWriter::FixupObjectArray(ObjectArray<Object>* orig, ObjectArray<Object>* copy) {
   for (int32_t i = 0; i < orig->GetLength(); ++i) {
     Object* element = orig->Get(i);
-    copy->SetWithoutChecksAndWriteBarrier<false>(i, GetImageAddress(element));
+    copy->SetWithoutChecksAndWriteBarrier<false, true, 0>(i, GetImageAddress(element));
   }
 }
 
@@ -690,10 +690,11 @@ void ImageWriter::FixupFields(Object* orig,
     while (ref_offsets != 0) {
       size_t right_shift = CLZ(ref_offsets);
       MemberOffset byte_offset = CLASS_OFFSET_FROM_CLZ(right_shift);
-      Object* ref = orig->GetFieldObject<Object>(byte_offset, false);
+      Object* ref = orig->GetFieldObject<Object, 0>(byte_offset, false);
       // Use SetFieldObjectWithoutWriteBarrier to avoid card marking since we are writing to the
       // image.
-      copy->SetFieldObjectWithoutWriteBarrier<false>(byte_offset, GetImageAddress(ref), false);
+      copy->SetFieldObjectWithoutWriteBarrier<false, true, 0>(byte_offset, GetImageAddress(ref),
+                                                              false);
       ref_offsets &= ~(CLASS_HIGH_BIT >> right_shift);
     }
   } else {
@@ -712,10 +713,11 @@ void ImageWriter::FixupFields(Object* orig,
                            ? klass->GetStaticField(i)
                            : klass->GetInstanceField(i));
         MemberOffset field_offset = field->GetOffset();
-        Object* ref = orig->GetFieldObject<Object>(field_offset, false);
+        Object* ref = orig->GetFieldObject<Object, 0>(field_offset, false);
         // Use SetFieldObjectWithoutWriteBarrier to avoid card marking since we are writing to the
         // image.
-        copy->SetFieldObjectWithoutWriteBarrier<false>(field_offset, GetImageAddress(ref), false);
+        copy->SetFieldObjectWithoutWriteBarrier<false, true, 0>(field_offset,
+                                                                GetImageAddress(ref), false);
       }
     }
   }
@@ -726,7 +728,8 @@ void ImageWriter::FixupFields(Object* orig,
     Object* ref = orig->GetFieldObject<Object>(field_offset, false);
     // Use SetFieldObjectWithoutWriteBarrier to avoid card marking since we are writing to the
     // image.
-    copy->SetFieldObjectWithoutWriteBarrier<false>(field_offset, GetImageAddress(ref), false);
+    copy->SetFieldObjectWithoutWriteBarrier<false, true, 0>(field_offset, GetImageAddress(ref),
+                                                            false);
   }
 }
 

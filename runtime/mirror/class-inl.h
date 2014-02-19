@@ -85,6 +85,7 @@ inline uint32_t Class::NumDirectMethods() {
   return (GetDirectMethods() != NULL) ? GetDirectMethods()->GetLength() : 0;
 }
 
+template<size_t kVerifyFlags>
 inline ObjectArray<ArtMethod>* Class::GetVirtualMethods() {
   DCHECK(IsLoaded() || IsErroneous());
   return GetFieldObject<ObjectArray<ArtMethod> >(
@@ -103,8 +104,9 @@ inline uint32_t Class::NumVirtualMethods() {
   return (GetVirtualMethods() != NULL) ? GetVirtualMethods()->GetLength() : 0;
 }
 
+template<size_t kVerifyFlags>
 inline ArtMethod* Class::GetVirtualMethod(uint32_t i) {
-  DCHECK(IsResolved() || IsErroneous());
+  DCHECK(IsResolved<kVerifyThis>() || IsErroneous<kVerifyThis>());
   return GetVirtualMethods()->Get(i);
 }
 
@@ -415,14 +417,15 @@ inline void Class::SetVerifyErrorClass(Class* klass) {
   }
 }
 
+template<size_t kVerifyFlags>
 inline uint32_t Class::GetAccessFlags() {
   // Check class is loaded or this is java.lang.String that has a
   // circularity issue during loading the names of its members
-  DCHECK(IsLoaded() || IsErroneous() ||
+  DCHECK(IsLoaded<kVerifyFlags>() || IsErroneous<0>() ||
          this == String::GetJavaLangString() ||
          this == ArtField::GetJavaLangReflectArtField() ||
          this == ArtMethod::GetJavaLangReflectArtMethod());
-  return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_), false);
+  return GetField32<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_), false);
 }
 
 inline String* Class::GetName() {
