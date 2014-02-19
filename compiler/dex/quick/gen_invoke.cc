@@ -67,13 +67,18 @@ void Mir2Lir::AddIntrinsicLaunchpad(CallInfo* info, LIR* branch, LIR* resume) {
  * load arguments between the two parts.
  */
 int Mir2Lir::CallHelperSetup(ThreadOffset helper_offset) {
-  return (cu_->instruction_set == kX86) ? 0 : LoadHelper(helper_offset);
+  if (cu_->instruction_set == kX86 || cu_->instruction_set == kThumb2) {
+    return 0;
+  }
+  return LoadHelper(helper_offset);
 }
 
 /* NOTE: if r_tgt is a temp, it will be freed following use */
 LIR* Mir2Lir::CallHelper(int r_tgt, ThreadOffset helper_offset, bool safepoint_pc) {
   LIR* call_inst;
   if (cu_->instruction_set == kX86) {
+    call_inst = OpThreadMem(kOpBlx, helper_offset);
+  } else if (cu_->instruction_set == kThumb2) {
     call_inst = OpThreadMem(kOpBlx, helper_offset);
   } else {
     call_inst = OpReg(kOpBlx, r_tgt);

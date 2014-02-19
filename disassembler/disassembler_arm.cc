@@ -1164,9 +1164,9 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
             uint32_t imm10 = (instr >> 16) & 0x3FF;
             uint32_t imm11 = instr & 0x7FF;
             if (L == 0) {
-              opcode << "bx";
-            } else {
               opcode << "blx";
+            } else {
+              opcode << "bl";
             }
             uint32_t I1 = ~(J1 ^ S);
             uint32_t I2 = ~(J2 ^ S);

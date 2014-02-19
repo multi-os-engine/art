@@ -31,16 +31,73 @@ namespace llvm {
 namespace art {
 
 class CompilerDriver;
+struct CompilationUnit;     // TODO: Why struct?
+class OatWriter;
+
+class FinalRelocationSet {
+ public:
+  FinalRelocationSet(const CompilerDriver* driver,
+    const CompilationUnit* cu) : driver_(driver), cu_(cu) {}
+  virtual ~FinalRelocationSet() {}
+
+  void AddRelocation(uint32_t type, uint32_t offset, uintptr_t value) {
+    relocations_.push_back(Relocation(type, offset, value));
+  }
+
+  // Apply this relocation set to the given code.
+  virtual void Apply(uint8_t* code, const OatWriter* writer, uint32_t address) const = 0;
+
+  virtual void ShowDebug() const = 0;
+
+ protected:
+  struct Relocation {
+    Relocation() : type_(0), code_offset_(0), value_(0) {}
+    Relocation(uint32_t type, uint32_t offset, uintptr_t value) :
+      type_(type), code_offset_(offset), value_(value) {}
+    uint32_t type_;
+    uint32_t code_offset_;
+    uintptr_t value_;
+  };
+
+  const CompilerDriver* driver_;
+  const CompilationUnit* cu_;
+  typedef std::vector<Relocation> Relocations;
+  Relocations relocations_;
+};
+
+typedef std::vector<const FinalRelocationSet*> FinalRelocations;
+
+
+/* abstract */
+class FinalEntrypointRelocationSet : public FinalRelocationSet {
+ public:
+  FinalEntrypointRelocationSet(const CompilerDriver* driver,
+    const CompilationUnit* cu) : FinalRelocationSet(driver, cu) {}
+  ~FinalEntrypointRelocationSet() {}
+
+  void Add(uint32_t offset, uint32_t entrypoint_offset);
+
+  void ShowDebug() const;
+
+ protected:
+  static constexpr uint32_t REL_CALL = 1;
+};
+
 
 class CompiledCode {
  public:
   // For Quick to supply an code blob
   CompiledCode(CompilerDriver* compiler_driver, InstructionSet instruction_set,
-               const std::vector<uint8_t>& quick_code);
+               const std::vector<uint8_t>& quick_code,
+               const FinalRelocations* relocations = nullptr);
 
   // For Portable to supply an ELF object
   CompiledCode(CompilerDriver* compiler_driver, InstructionSet instruction_set,
                const std::string& elf_object, const std::string &symbol);
+
+  ~CompiledCode() {
+    delete final_relocations_;
+  }
 
   InstructionSet GetInstructionSet() const {
     return instruction_set_;
@@ -78,6 +135,17 @@ class CompiledCode {
   const std::vector<uint32_t>& GetOatdataOffsetsToCompliledCodeOffset() const;
   void AddOatdataOffsetToCompliledCodeOffset(uint32_t offset);
 
+  // Apply all the final relocations to the quick code sequence.
+  void ApplyFinalRelocations(const OatWriter *writer, uint32_t address) {
+    if (final_relocations_ != nullptr) {
+      for (auto& set : *final_relocations_) {
+        set->Apply(&(*quick_code_)[0], writer, address);
+      }
+    }
+  }
+
+  void ShowDebug();
+
  private:
   CompilerDriver* const compiler_driver_;
 
@@ -97,6 +165,10 @@ class CompiledCode {
   // OatWriter and then used by the ElfWriter to add relocations so
   // that MCLinker can update the values to the location in the linked .so.
   std::vector<uint32_t> oatdata_offsets_to_compiled_code_offset_;
+
+  // Set of relocations to apply as the final pass.  This happens
+  // only when the the final addresses are known.
+  const FinalRelocations* final_relocations_;
 };
 
 class CompiledMethod : public CompiledCode {
@@ -111,7 +183,8 @@ class CompiledMethod : public CompiledCode {
                  const std::vector<uint8_t>& mapping_table,
                  const std::vector<uint8_t>& vmap_table,
                  const std::vector<uint8_t>& native_gc_map,
-                 const std::vector<uint8_t>* cfi_info);
+                 const std::vector<uint8_t>* cfi_info,
+                 const FinalRelocations* relocations = nullptr);
 
   // Constructs a CompiledMethod for the QuickJniCompiler.
   CompiledMethod(CompilerDriver& driver,
