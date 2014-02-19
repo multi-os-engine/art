@@ -23,9 +23,9 @@
 #include <string>
 #include <vector>
 
-#include <llvm/Support/ELF.h>
 
 #include "base/macros.h"
+#include "elf.h"
 #include "os.h"
 
 namespace art {
@@ -44,7 +44,7 @@ class ElfWriter {
                                    size_t& oat_data_offset);
 
   // Returns runtime oat_data runtime address for an opened ElfFile.
-  static ::llvm::ELF::Elf32_Addr GetOatDataAddress(ElfFile* elf_file);
+  static Elf32_Addr GetOatDataAddress(ElfFile* elf_file);
 
  protected:
   ElfWriter(const CompilerDriver& driver, File* elf_file);
