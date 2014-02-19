@@ -325,6 +325,18 @@ class Mir2Lir : public Backend {
       LIR* const cont_;
     };
 
+    // This holds the data for a call to a trampoline.  An instruction is making a call
+    // to something through a trampoline and this holds the offset into the code containing
+    // the instruction, and which trampoline offset to call.
+    struct TrampolineCall {
+      TrampolineCall(uint32_t code_offset, uint32_t trampoline_offset) : code_offset_(code_offset),
+         trampoline_offset_(trampoline_offset) {
+      }
+
+      uint32_t code_offset_;          // Offset into code stream.
+      uint32_t trampoline_offset_;    // Which trampoline to call.
+    };
+
     virtual ~Mir2Lir() {}
 
     int32_t s4FromSwitchData(const void* switch_data) {
@@ -1267,6 +1279,7 @@ class Mir2Lir : public Backend {
     LIR* last_lir_insn_;
 
     GrowableArray<LIRSlowPath*> slow_paths_;
+    std::vector<TrampolineCall> trampoline_calls_;
 };  // Class Mir2Lir
 
 }  // namespace art
