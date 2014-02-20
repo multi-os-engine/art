@@ -32,9 +32,11 @@ public class Main {
 
     public static void main(String[] args) {
         ServerSocket socket;
+        int port;
 
         try {
-            socket = new ServerSocket(7890);
+            socket = new ServerSocket(0);
+            port = socket.getLocalPort();
         } catch (IOException ioe) {
             System.out.println("couldn't open socket " + ioe.getMessage());
             return;
@@ -54,7 +56,7 @@ public class Main {
         snooze(1);
 
         try {
-            socket = new ServerSocket(7890);
+            socket = new ServerSocket(port);
         } catch (IOException ioe) {
             System.out.println("couldn't reopen socket " + ioe.getMessage());
             return;
