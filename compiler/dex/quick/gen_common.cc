@@ -66,12 +66,39 @@ LIR* Mir2Lir::GenImmedCheck(ConditionCode c_code, int reg, int imm_val, ThrowKin
   return branch;
 }
 
+
 /* Perform null-check on a register.  */
-LIR* Mir2Lir::GenNullCheck(int s_reg, int m_reg, int opt_flags) {
-  if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
-    return NULL;
+LIR* Mir2Lir::GenNullCheck(int m_reg, int opt_flags) {
+  if (Runtime::Current()->ExplicitChecks()) {
+    if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
+      return NULL;
+    }
+    return GenImmedCheck(kCondEq, m_reg, 0, kThrowNullPointer);
   }
-  return GenImmedCheck(kCondEq, m_reg, 0, kThrowNullPointer);
+  return NULL;
+}
+
+void Mir2Lir::MarkPossibleNullPointerException(int opt_flags) {
+  if (!Runtime::Current()->ExplicitChecks()) {
+    if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
+      return;
+    }
+    MarkSafepointPC(last_lir_insn_);
+  }
+}
+
+void Mir2Lir::ForceImplicitNullCheck(int reg, int opt_flags) {
+  if (!Runtime::Current()->ExplicitChecks()) {
+    if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
+      return;
+    }
+    // Force an implicit null check by performing a memory operation (load) from the given
+    // register with offset 0.  This will cause a signal if the register contains 0 (null).
+    int tmp = AllocTemp();
+    LIR* load = LoadWordDisp(reg, 0, tmp);
+    FreeTemp(tmp);
+    MarkSafepointPC(load);
+  }
 }
 
 /* Perform check on two registers */
@@ -713,12 +740,13 @@ void Mir2Lir::GenIGet(uint32_t field_idx, int opt_flags, OpSize size,
     rl_obj = LoadValue(rl_obj, kCoreReg);
     if (is_long_or_double) {
       DCHECK(rl_dest.wide);
-      GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
+      GenNullCheck(rl_obj.low_reg, opt_flags);
       if (cu_->instruction_set == kX86) {
         rl_result = EvalLoc(rl_dest, reg_class, true);
-        GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
+        GenNullCheck(rl_obj.low_reg, opt_flags);
         LoadBaseDispWide(rl_obj.low_reg, field_offset, rl_result.low_reg,
                          rl_result.high_reg, rl_obj.s_reg_low);
+        MarkPossibleNullPointerException(opt_flags);
         if (is_volatile) {
           GenMemBarrier(kLoadLoad);
         }
@@ -735,9 +763,10 @@ void Mir2Lir::GenIGet(uint32_t field_idx, int opt_flags, OpSize size,
       StoreValueWide(rl_dest, rl_result);
     } else {
       rl_result = EvalLoc(rl_dest, reg_class, true);
-      GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
+      GenNullCheck(rl_obj.low_reg, opt_flags);
       LoadBaseDisp(rl_obj.low_reg, field_offset, rl_result.low_reg,
                    kWord, rl_obj.s_reg_low);
+      MarkPossibleNullPointerException(opt_flags);
       if (is_volatile) {
         GenMemBarrier(kLoadLoad);
       }
@@ -773,24 +802,26 @@ void Mir2Lir::GenIPut(uint32_t field_idx, int opt_flags, OpSize size,
     if (is_long_or_double) {
       int reg_ptr;
       rl_src = LoadValueWide(rl_src, kAnyReg);
-      GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
+      GenNullCheck(rl_obj.low_reg, opt_flags);
       reg_ptr = AllocTemp();
       OpRegRegImm(kOpAdd, reg_ptr, rl_obj.low_reg, field_offset);
       if (is_volatile) {
         GenMemBarrier(kStoreStore);
       }
       StoreBaseDispWide(reg_ptr, 0, rl_src.low_reg, rl_src.high_reg);
+      MarkPossibleNullPointerException(opt_flags);
       if (is_volatile) {
         GenMemBarrier(kLoadLoad);
       }
       FreeTemp(reg_ptr);
     } else {
       rl_src = LoadValue(rl_src, reg_class);
-      GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
+      GenNullCheck(rl_obj.low_reg, opt_flags);
       if (is_volatile) {
         GenMemBarrier(kStoreStore);
       }
       StoreBaseDisp(rl_obj.low_reg, field_offset, rl_src.low_reg, kWord);
+      MarkPossibleNullPointerException(opt_flags);
       if (is_volatile) {
         GenMemBarrier(kLoadLoad);
       }
@@ -1961,31 +1992,53 @@ void Mir2Lir::GenConversionCall(ThreadOffset func_offset,
 
 /* Check if we need to check for pending suspend request */
 void Mir2Lir::GenSuspendTest(int opt_flags) {
-  if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
-    return;
+  if (Runtime::Current()->ExplicitChecks()) {
+    if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
+      return;
+    }
+    FlushAllRegs();
+    LIR* branch = OpTestSuspend(NULL);
+    LIR* ret_lab = NewLIR0(kPseudoTargetLabel);
+    LIR* target = RawLIR(current_dalvik_offset_, kPseudoSuspendTarget, WrapPointer(ret_lab),
+                         current_dalvik_offset_);
+    branch->target = target;
+    suspend_launchpads_.Insert(target);
+  } else {
+    if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
+      return;
+    }
+    FlushAllRegs();     // TODO: needed?
+    LIR* inst = LoadSuspendTrigger();
+    MarkSafepointPC(inst);
   }
-  FlushAllRegs();
-  LIR* branch = OpTestSuspend(NULL);
-  LIR* ret_lab = NewLIR0(kPseudoTargetLabel);
-  LIR* target = RawLIR(current_dalvik_offset_, kPseudoSuspendTarget, WrapPointer(ret_lab),
-                       current_dalvik_offset_);
-  branch->target = target;
-  suspend_launchpads_.Insert(target);
 }
 
 /* Check if we need to check for pending suspend request */
 void Mir2Lir::GenSuspendTestAndBranch(int opt_flags, LIR* target) {
-  if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
+  if (Runtime::Current()->ExplicitChecks()) {
+    if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
+      OpUnconditionalBranch(target);
+      return;
+    }
+    OpTestSuspend(target);
+    LIR* launch_pad =
+        RawLIR(current_dalvik_offset_, kPseudoSuspendTarget, WrapPointer(target),
+               current_dalvik_offset_);
+    FlushAllRegs();
+    OpUnconditionalBranch(launch_pad);
+    suspend_launchpads_.Insert(launch_pad);
+  } else {
+    // For the implicit suspend check, just perform the trigger
+    // load and branch to the target.
+    if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
+      OpUnconditionalBranch(target);
+      return;
+    }
+    FlushAllRegs();
+    LIR* inst = LoadSuspendTrigger();
+    MarkSafepointPC(inst);
     OpUnconditionalBranch(target);
-    return;
   }
-  OpTestSuspend(target);
-  LIR* launch_pad =
-      RawLIR(current_dalvik_offset_, kPseudoSuspendTarget, WrapPointer(target),
-             current_dalvik_offset_);
-  FlushAllRegs();
-  OpUnconditionalBranch(launch_pad);
-  suspend_launchpads_.Insert(launch_pad);
 }
 
 /* Call out to helper assembly routine that will null check obj and then lock it. */

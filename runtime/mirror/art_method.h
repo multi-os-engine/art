@@ -404,7 +404,7 @@ class MANAGED ArtMethod : public Object {
   uintptr_t NativePcOffset(const uintptr_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Converts a native PC to a dex PC.
-  uint32_t ToDexPc(const uintptr_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  uint32_t ToDexPc(const uintptr_t pc, bool abort = true) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Converts a dex PC to a native PC.
   uintptr_t ToNativePc(const uint32_t dex_pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
