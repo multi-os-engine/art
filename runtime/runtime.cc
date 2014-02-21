@@ -1141,11 +1141,6 @@ void Runtime::StartProfiler(const char* appDir, const char* procName, bool start
 }
 
 // Transaction support.
-// TODO move them to header file for inlining.
-bool Runtime::IsActiveTransaction() const {
-  return preinitialization_transaction != nullptr;
-}
-
 void Runtime::EnterTransactionMode(Transaction* transaction) {
   DCHECK(IsCompiler());
   DCHECK(transaction != nullptr);

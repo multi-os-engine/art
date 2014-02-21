@@ -378,7 +378,9 @@ class Runtime {
   void UpdateProfilerState(int state);
 
   // Transaction support.
-  bool IsActiveTransaction() const;
+  bool IsActiveTransaction() const {
+    return preinitialization_transaction != nullptr;
+  }
   void EnterTransactionMode(Transaction* transaction);
   void ExitTransactionMode();
   void RecordWriteField32(mirror::Object* obj, MemberOffset field_offset, uint32_t value,
