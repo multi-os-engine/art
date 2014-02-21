@@ -431,7 +431,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       int len_offset;
       len_offset = mirror::Array::LengthOffset().Int32Value();
       rl_src[0] = LoadValue(rl_src[0], kCoreReg);
-      GenNullCheck(rl_src[0].s_reg_low, rl_src[0].low_reg, opt_flags);
+      GenNullCheck(rl_src[0].low_reg, opt_flags);
       rl_result = EvalLoc(rl_dest, kCoreReg, true);
       LoadWordDisp(rl_src[0].low_reg, len_offset, rl_result.low_reg);
       StoreValue(rl_dest, rl_result);

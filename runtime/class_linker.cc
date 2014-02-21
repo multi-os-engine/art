@@ -572,6 +572,15 @@ bool ClassLinker::GenerateOatFile(const char* dex_filename,
   argv.push_back("-classpath");
   argv.push_back("--runtime-arg");
   argv.push_back(Runtime::Current()->GetClassPathString());
+
+  if (Runtime::Current()->ExplicitChecks()) {
+    argv.push_back("--runtime-arg");
+    argv.push_back("-explicit-checks");
+  } else {
+    argv.push_back("--runtime-arg");
+    argv.push_back("-implicit-checks");
+  }
+
   if (!kIsTargetBuild) {
     argv.push_back("--host");
   }

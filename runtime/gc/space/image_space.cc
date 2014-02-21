@@ -67,6 +67,14 @@ static bool GenerateImage(const std::string& image_file_name, std::string* error
   arg_vector.push_back("--runtime-arg");
   arg_vector.push_back("-Xmx64m");
 
+  if (Runtime::Current()->ExplicitChecks()) {
+    arg_vector.push_back("--runtime-arg");
+    arg_vector.push_back("-explicit-checks");
+  } else {
+    arg_vector.push_back("--runtime-arg");
+    arg_vector.push_back("-implicit-checks");
+  }
+
   for (size_t i = 0; i < boot_class_path.size(); i++) {
     arg_vector.push_back(std::string("--dex-file=") + boot_class_path[i]);
   }

@@ -213,8 +213,9 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
     GenMemBarrier(kLoadLoad);
   } else {
     // Explicit null-check as slow-path is entered using an IT.
-    GenNullCheck(rl_src.s_reg_low, r0, opt_flags);
+    GenNullCheck(r0, opt_flags);
     LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset().Int32Value(), r2);
+    MarkPossibleNullPointerException(opt_flags);
     NewLIR3(kThumb2Ldrex, r1, r0, mirror::Object::MonitorOffset().Int32Value() >> 2);
     OpRegImm(kOpCmp, r1, 0);
     OpIT(kCondEq, "");
@@ -272,8 +273,9 @@ void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
     GenMemBarrier(kStoreLoad);
   } else {
     // Explicit null-check as slow-path is entered using an IT.
-    GenNullCheck(rl_src.s_reg_low, r0, opt_flags);
+    GenNullCheck(r0, opt_flags);
     LoadWordDisp(r0, mirror::Object::MonitorOffset().Int32Value(), r1);  // Get lock
+    MarkPossibleNullPointerException(opt_flags);
     LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset().Int32Value(), r2);
     LoadConstantNoClobber(r3, 0);
     // Is lock unheld on lock or held by us (==thread_id) on unlock?

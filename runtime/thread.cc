@@ -303,6 +303,7 @@ void Thread::Init(ThreadList* thread_list, JavaVMExt* java_vm) {
   SetUpAlternateSignalStack();
   InitCpu();
   InitTlsEntryPoints();
+  RemoveSuspendTrigger();
   InitCardTable();
   InitTid();
   // Set pthread_self_ ahead of pthread_setspecific, that makes Thread::Current function, this
@@ -317,6 +318,20 @@ void Thread::Init(ThreadList* thread_list, JavaVMExt* java_vm) {
 
   jni_env_ = new JNIEnvExt(this, java_vm);
   thread_list->Register(this);
+}
+
+// Remove the suspend trigger for this thread by making the suspend_trigger_ TLS value
+// equal to a valid pointer.
+// TODO: does this need to atomic?  I don't think so.
+void Thread::RemoveSuspendTrigger() {
+  suspend_trigger_ = reinterpret_cast<uintptr_t*>(&suspend_trigger_);
+}
+
+// Trigger a suspend check by making the suspend_trigger_ TLS value an invalid pointer.
+// The next time a suspend check is done, it will load from the value at this address
+// and trigger a SIGSEGV.
+void Thread::TriggerSuspend() {
+  suspend_trigger_ = nullptr;
 }
 
 Thread* Thread::Attach(const char* thread_name, bool as_daemon, jobject thread_group,
@@ -577,6 +592,7 @@ void Thread::ModifySuspendCount(Thread* self, int delta, bool for_debugger) {
     AtomicClearFlag(kSuspendRequest);
   } else {
     AtomicSetFlag(kSuspendRequest);
+    TriggerSuspend();
   }
 }
 
@@ -644,6 +660,7 @@ bool Thread::RequestCheckpoint(Closure* function) {
     checkpoint_functions_[available_checkpoint] = nullptr;
   } else {
     CHECK_EQ(ReadFlag(kCheckpointRequest), true);
+    TriggerSuspend();
   }
   return succeeded == 0;
 }
@@ -1775,6 +1792,7 @@ void Thread::DumpThreadOffset(std::ostream& os, uint32_t offset, size_t size_of_
   // DO_THREAD_OFFSET(top_of_managed_stack_);
   // DO_THREAD_OFFSET(top_of_managed_stack_pc_);
   DO_THREAD_OFFSET(top_sirt_);
+  DO_THREAD_OFFSET(suspend_trigger_);
 #undef DO_THREAD_OFFSET
 
   size_t entry_point_count = arraysize(gThreadEntryPointInfo);
