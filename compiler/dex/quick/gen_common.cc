@@ -66,13 +66,27 @@ LIR* Mir2Lir::GenImmedCheck(ConditionCode c_code, int reg, int imm_val, ThrowKin
   return branch;
 }
 
+
 /* Perform null-check on a register.  */
 LIR* Mir2Lir::GenNullCheck(int s_reg, int m_reg, int opt_flags) {
-  if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
-    return NULL;
+  if (Runtime::Current()->ExplicitNullChecks()) {
+    if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
+      return NULL;
+    }
+    return GenImmedCheck(kCondEq, m_reg, 0, kThrowNullPointer);
   }
-  return GenImmedCheck(kCondEq, m_reg, 0, kThrowNullPointer);
+  return NULL;
 }
+
+void Mir2Lir::MarkPossibleNullPointerException(int opt_flags) {
+  if (!Runtime::Current()->ExplicitNullChecks()) {
+    if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
+      return;
+    }
+    MarkSafepointPC(last_lir_insn_);
+  }
+}
+#undef NULLCHECK
 
 /* Perform check on two registers */
 LIR* Mir2Lir::GenRegRegCheck(ConditionCode c_code, int reg1, int reg2,
@@ -719,6 +733,7 @@ void Mir2Lir::GenIGet(uint32_t field_idx, int opt_flags, OpSize size,
         GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
         LoadBaseDispWide(rl_obj.low_reg, field_offset, rl_result.low_reg,
                          rl_result.high_reg, rl_obj.s_reg_low);
+        MarkPossibleNullPointerException(opt_flags);
         if (is_volatile) {
           GenMemBarrier(kLoadLoad);
         }
@@ -738,6 +753,7 @@ void Mir2Lir::GenIGet(uint32_t field_idx, int opt_flags, OpSize size,
       GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, opt_flags);
       LoadBaseDisp(rl_obj.low_reg, field_offset, rl_result.low_reg,
                    kWord, rl_obj.s_reg_low);
+      MarkPossibleNullPointerException(opt_flags);
       if (is_volatile) {
         GenMemBarrier(kLoadLoad);
       }
@@ -780,6 +796,7 @@ void Mir2Lir::GenIPut(uint32_t field_idx, int opt_flags, OpSize size,
         GenMemBarrier(kStoreStore);
       }
       StoreBaseDispWide(reg_ptr, 0, rl_src.low_reg, rl_src.high_reg);
+      MarkPossibleNullPointerException(opt_flags);
       if (is_volatile) {
         GenMemBarrier(kLoadLoad);
       }
@@ -791,6 +808,7 @@ void Mir2Lir::GenIPut(uint32_t field_idx, int opt_flags, OpSize size,
         GenMemBarrier(kStoreStore);
       }
       StoreBaseDisp(rl_obj.low_reg, field_offset, rl_src.low_reg, kWord);
+      MarkPossibleNullPointerException(opt_flags);
       if (is_volatile) {
         GenMemBarrier(kLoadLoad);
       }

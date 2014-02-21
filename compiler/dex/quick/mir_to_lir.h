@@ -546,6 +546,7 @@ class Mir2Lir : public Backend {
     LIR* GenImmedCheck(ConditionCode c_code, int reg, int imm_val,
                        ThrowKind kind);
     LIR* GenNullCheck(int s_reg, int m_reg, int opt_flags);
+    void MarkPossibleNullPointerException(int opt_flags);
     LIR* GenRegRegCheck(ConditionCode c_code, int reg1, int reg2,
                         ThrowKind kind);
     void GenCompareAndBranch(Instruction::Code opcode, RegLocation rl_src1,

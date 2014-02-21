@@ -138,6 +138,7 @@ LIBART_COMMON_SRC_FILES := \
 	trace.cc \
 	transaction.cc \
 	profiler.cc \
+	fault_handler.cc \
 	utf.cc \
 	utils.cc \
 	verifier/dex_gc_map.cc \

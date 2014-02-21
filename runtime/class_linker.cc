@@ -587,6 +587,12 @@ bool ClassLinker::GenerateOatFile(const char* dex_filename,
     default:
       LOG(FATAL) << "Unexpected case: " << filter;
   }
+
+  const char* null_check_option = "-explicit-null-checks";
+  if (!Runtime::Current()->ExplicitNullChecks()) {
+    null_check_option = "-implicit-null-checks";
+  }
+
   const char* oat_compiler_filter_option = oat_compiler_filter_string.c_str();
 
   // fork and exec dex2oat
@@ -610,7 +616,8 @@ bool ClassLinker::GenerateOatFile(const char* dex_filename,
                        << " " << boot_image_option
                        << " " << dex_file_option
                        << " " << oat_fd_option
-                       << " " << oat_location_option;
+                       << " " << oat_location_option
+                       << " " << "--runtime-arg " << null_check_option;
 
     execl(dex2oat, dex2oat,
           "--runtime-arg", "-Xms64m",
@@ -625,6 +632,7 @@ bool ClassLinker::GenerateOatFile(const char* dex_filename,
           dex_file_option,
           oat_fd_option,
           oat_location_option,
+          "--runtime-arg", null_check_option,
           NULL);
 
     PLOG(FATAL) << "execl(" << dex2oat << ") failed";

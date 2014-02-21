@@ -68,6 +68,10 @@
 
 #include "JniConstants.h"  // Last to avoid LOG redefinition in ics-mr1-plus-art.
 
+#ifdef HAVE_ANDROID_OS
+#include "cutils/properties.h"
+#endif
+
 namespace art {
 
 Runtime* Runtime::instance_ = NULL;
@@ -122,7 +126,8 @@ Runtime::Runtime()
       system_thread_group_(nullptr),
       system_class_loader_(nullptr),
       dump_gc_performance_on_shutdown_(false),
-      preinitialization_transaction(nullptr) {
+      preinitialization_transaction(nullptr),
+      null_pointer_handler_(nullptr) {
   for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
     callee_save_methods_[i] = nullptr;
   }
@@ -482,6 +487,18 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
   parsed->profile_interval_us_ = 500;       // Microseconds.
   parsed->profile_backoff_coefficient_ = 2.0;
 
+  // Default to explicit null checks.  Switch off with -implicit-null-checks.
+  // or setprop dalvik.vm.implicit_null_checks 1
+#ifdef HAVE_ANDROID_OS
+  {
+    char buf[PROP_VALUE_MAX];
+    property_get("dalvik.vm.implicit_null_checks", buf, "0");
+    parsed->explicit_null_checks_ = strcmp(buf, "0") == 0;
+  }
+#else
+  parsed->explicit_null_checks_ = true;
+#endif
+
   for (size_t i = 0; i < options.size(); ++i) {
     const std::string option(options[i].first);
     if (true && options[0].first == "-Xzygote") {
@@ -743,6 +760,10 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
       parsed->tiny_method_threshold_ = ParseIntegerOrDie(option, ':');
     } else if (StartsWith(option, "-num-dex-methods-max:")) {
       parsed->num_dex_methods_threshold_ = ParseIntegerOrDie(option, ':');
+    } else if (StartsWith(option, "-implicit-null-checks")) {
+      parsed->explicit_null_checks_ = false;
+    } else if (StartsWith(option, "-explicit-null-checks")) {
+      parsed->explicit_null_checks_ = true;
     } else {
       if (!ignore_unrecognized) {
         // TODO: print usage via vfprintf
@@ -1040,6 +1061,13 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
 
   BlockSignals();
   InitPlatformSignalHandlers();
+
+  if (!options->explicit_null_checks_) {
+    // Initialize the fault manager and allocate the Null pointer handler
+    fault_manager.Init();
+
+    null_pointer_handler_ = new NullPointerHandler(&fault_manager);
+  }
 
   java_vm_ = new JavaVMExt(this, options.get());
 

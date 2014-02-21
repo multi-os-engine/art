@@ -95,11 +95,11 @@ StackVisitor::StackVisitor(Thread* thread, Context* context)
   DCHECK(thread == Thread::Current() || thread->IsSuspended()) << *thread;
 }
 
-uint32_t StackVisitor::GetDexPc() const {
+uint32_t StackVisitor::GetDexPc(bool abort) const {
   if (cur_shadow_frame_ != NULL) {
     return cur_shadow_frame_->GetDexPC();
   } else if (cur_quick_frame_ != NULL) {
-    return GetMethod()->ToDexPc(cur_quick_frame_pc_);
+    return GetMethod()->ToDexPc(cur_quick_frame_pc_, abort);
   } else {
     return 0;
   }

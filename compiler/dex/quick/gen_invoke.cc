@@ -470,6 +470,7 @@ static int NextVCallInsn(CompilationUnit* cu, CallInfo* info,
       // get this->klass_ [use kArg1, set kInvokeTgt]
       cg->LoadWordDisp(cg->TargetReg(kArg1), mirror::Object::ClassOffset().Int32Value(),
                        cg->TargetReg(kInvokeTgt));
+      cg->MarkPossibleNullPointerException(info->opt_flags);
       break;
     case 2:  // Get this->klass_->vtable [usr kInvokeTgt, set kInvokeTgt]
       cg->LoadWordDisp(cg->TargetReg(kInvokeTgt), mirror::Class::VTableOffset().Int32Value(),
@@ -525,6 +526,7 @@ static int NextInterfaceCallInsn(CompilationUnit* cu, CallInfo* info, int state,
       // Get this->klass_ [use kArg1, set kInvokeTgt]
       cg->LoadWordDisp(cg->TargetReg(kArg1), mirror::Object::ClassOffset().Int32Value(),
                        cg->TargetReg(kInvokeTgt));
+      cg->MarkPossibleNullPointerException(info->opt_flags);
       break;
     case 3:  // Get this->klass_->imtable [use kInvokeTgt, set kInvokeTgt]
       cg->LoadWordDisp(cg->TargetReg(kInvokeTgt), mirror::Class::ImTableOffset().Int32Value(),
@@ -994,9 +996,12 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
     if (range_check) {
       reg_max = AllocTemp();
       LoadWordDisp(rl_obj.low_reg, count_offset, reg_max);
+      MarkPossibleNullPointerException(info->opt_flags);
     }
     LoadWordDisp(rl_obj.low_reg, offset_offset, reg_off);
+    MarkPossibleNullPointerException(info->opt_flags);
     LoadWordDisp(rl_obj.low_reg, value_offset, reg_ptr);
+    MarkPossibleNullPointerException(info->opt_flags);
     if (range_check) {
       // Set up a launch pad to allow retry in case of bounds violation */
       launch_pad = RawLIR(0, kPseudoIntrinsicRetry, WrapPointer(info));
@@ -1066,6 +1071,7 @@ bool Mir2Lir::GenInlinedStringIsEmptyOrLength(CallInfo* info, bool is_empty) {
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   GenNullCheck(rl_obj.s_reg_low, rl_obj.low_reg, info->opt_flags);
   LoadWordDisp(rl_obj.low_reg, mirror::String::CountOffset().Int32Value(), rl_result.low_reg);
+  MarkPossibleNullPointerException(info->opt_flags);
   if (is_empty) {
     // dst = (dst == 0);
     if (cu_->instruction_set == kThumb2) {

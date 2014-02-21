@@ -37,6 +37,7 @@
 #include "object_callbacks.h"
 #include "runtime_stats.h"
 #include "safe_map.h"
+#include "fault_handler.h"
 
 namespace art {
 
@@ -153,6 +154,8 @@ class Runtime {
     int profile_duration_s_;
     int profile_interval_us_;
     double profile_backoff_coefficient_;
+
+    bool explicit_null_checks_;
 
    private:
     ParsedOptions() {}
@@ -501,6 +504,10 @@ class Runtime {
   void RecordWeakStringRemoval(mirror::String* s, uint32_t hash_code) const
       EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_);
 
+  bool ExplicitNullChecks() const {
+    return null_pointer_handler_ == nullptr;
+  }
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -641,6 +648,7 @@ class Runtime {
 
   // Transaction used for pre-initializing classes at compilation time.
   Transaction* preinitialization_transaction;
+  NullPointerHandler* null_pointer_handler_;
 
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };
