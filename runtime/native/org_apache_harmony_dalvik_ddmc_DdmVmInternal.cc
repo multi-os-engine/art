@@ -52,7 +52,7 @@ static jobjectArray DdmVmInternal_getStackTraceById(JNIEnv* env, jclass, jint th
     jobject trace;
     {
       ScopedObjectAccess soa(env);
-      trace = thread->CreateInternalStackTrace(soa);
+      trace = thread->CreateInternalStackTrace<false>(soa);
     }
     // Restart suspended thread.
     thread_list->Resume(thread, false);

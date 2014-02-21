@@ -30,7 +30,7 @@ static jobject GetThreadStack(JNIEnv* env, jobject peer) {
   {
     ScopedObjectAccess soa(env);
     if (soa.Decode<mirror::Object*>(peer) == soa.Self()->GetPeer()) {
-      return soa.Self()->CreateInternalStackTrace(soa);
+      return soa.Self()->CreateInternalStackTrace<false>(soa);
     }
   }
   // Suspend thread to build stack trace.
@@ -40,7 +40,7 @@ static jobject GetThreadStack(JNIEnv* env, jobject peer) {
     jobject trace;
     {
       ScopedObjectAccess soa(env);
-      trace = thread->CreateInternalStackTrace(soa);
+      trace = thread->CreateInternalStackTrace<false>(soa);
     }
     // Restart suspended thread.
     Runtime::Current()->GetThreadList()->Resume(thread, false);
