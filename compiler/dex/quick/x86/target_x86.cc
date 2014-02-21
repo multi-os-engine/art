@@ -552,6 +552,11 @@ int X86Mir2Lir::LoadHelper(ThreadOffset offset) {
   return INVALID_REG;
 }
 
+LIR* X86Mir2Lir::LoadSuspendTrigger() {
+  LOG(FATAL) << "Unexpected use of LoadSuspendTrigger in x86";
+  return NULL;
+}
+
 uint64_t X86Mir2Lir::GetTargetInstFlags(int opcode) {
   DCHECK(!IsPseudoLirOp(opcode));
   return X86Mir2Lir::EncodingMap[opcode].flags;
@@ -964,7 +969,7 @@ bool X86Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
 
   // Is the string non-NULL?
   LoadValueDirectFixed(rl_obj, rDX);
-  GenNullCheck(rl_obj.s_reg_low, rDX, info->opt_flags);
+  GenNullCheck(rDX, info->opt_flags);
 
   // Record that we have inlined & null checked the object.
   info->opt_flags |= (MIR_INLINED | MIR_IGNORE_NULL_CHECK);

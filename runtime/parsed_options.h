@@ -81,6 +81,10 @@ class ParsedOptions {
   double profile_backoff_coefficient_;
   ProfilerClockSource profile_clock_source_;
 
+  static constexpr uint32_t kExplicitNullCheck = 1;
+  static constexpr uint32_t kExplicitSuspendCheck = 2;
+  uint32_t explicit_checks_;
+
  private:
   ParsedOptions() {}
 

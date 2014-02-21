@@ -123,7 +123,9 @@ Runtime::Runtime()
       system_thread_group_(nullptr),
       system_class_loader_(nullptr),
       dump_gc_performance_on_shutdown_(false),
-      preinitialization_transaction(nullptr) {
+      preinitialization_transaction(nullptr),
+      null_pointer_handler_(nullptr),
+      suspend_handler_(nullptr) {
   for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
     callee_save_methods_[i] = nullptr;
   }
@@ -513,6 +515,23 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
 
   if (options->interpreter_only_) {
     GetInstrumentation()->ForceInterpretOnly();
+  }
+
+  LOG(INFO)  << "explicit_checks: " << options->explicit_checks_;
+
+  if (options->explicit_checks_ != 0) {
+    // Initialize the fault manager.
+    fault_manager.Init();
+
+    // These need to be in a specific order.  The null point check must be
+    // the last in the list.
+    if ((options->explicit_checks_ & ParsedOptions::kExplicitSuspendCheck) == 0) {
+      suspend_handler_ = new SuspensionHandler(&fault_manager);
+    }
+
+    if ((options->explicit_checks_ & ParsedOptions::kExplicitNullCheck) == 0) {
+      null_pointer_handler_ = new NullPointerHandler(&fault_manager);
+    }
   }
 
   heap_ = new gc::Heap(options->heap_initial_size_,
