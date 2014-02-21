@@ -29,8 +29,6 @@
 #include "object_utils.h"
 #include "runtime.h"
 
-
-
 namespace art {
 
 // Visits the arguments as saved to the stack by a Runtime::kRefAndArgs callee save frame.
@@ -448,8 +446,11 @@ class BuildQuickShadowFrameVisitor : public QuickArgumentVisitor {
         }
         ++cur_reg_;
         break;
-      case Primitive::kPrimNot:
-        sf_->SetVRegReference(cur_reg_, *reinterpret_cast<mirror::Object**>(GetParamAddress()));
+      case Primitive::kPrimNot: {
+          mirror::Object** param_address = reinterpret_cast<mirror::Object**>(GetParamAddress());
+          sf_->SetVRegReference(cur_reg_, *param_address);
+          shadow_frame_references_.push_back(std::make_pair(cur_reg_, param_address));
+        }
         break;
       case Primitive::kPrimBoolean:  // Fall-through.
       case Primitive::kPrimByte:     // Fall-through.
@@ -466,9 +467,17 @@ class BuildQuickShadowFrameVisitor : public QuickArgumentVisitor {
     ++cur_reg_;
   }
 
+  void FixupReferences() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // Fixup any references which may have changed.
+    for (const auto& pair : shadow_frame_references_) {
+      *pair.second = sf_->GetVRegReference(pair.first);
+    }
+  }
+
  private:
   ShadowFrame* const sf_;
   uint32_t cur_reg_;
+  std::vector<std::pair<size_t, mirror::Object**> > shadow_frame_references_;
 
   DISALLOW_COPY_AND_ASSIGN(BuildQuickShadowFrameVisitor);
 };
@@ -515,6 +524,8 @@ extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Threa
     JValue result = interpreter::EnterInterpreterFromStub(self, mh, code_item, *shadow_frame);
     // Pop transition.
     self->PopManagedStackFragment(fragment);
+    // Restore references which might have moved.
+    shadow_frame_builder.FixupReferences();
     return result.GetJ();
   }
 }
@@ -533,8 +544,9 @@ class BuildQuickArgumentVisitor : public QuickArgumentVisitor {
     Primitive::Type type = GetParamPrimitiveType();
     switch (type) {
       case Primitive::kPrimNot: {
-        mirror::Object* obj = *reinterpret_cast<mirror::Object**>(GetParamAddress());
-        val.l = soa_->AddLocalReference<jobject>(obj);
+        mirror::Object** param_address = reinterpret_cast<mirror::Object**>(GetParamAddress());
+        val.l = soa_->AddLocalReference<jobject>(*param_address);
+        references_.push_back(std::make_pair(val.l, param_address));
         break;
       }
       case Primitive::kPrimLong:  // Fall-through.
@@ -551,7 +563,7 @@ class BuildQuickArgumentVisitor : public QuickArgumentVisitor {
       case Primitive::kPrimShort:    // Fall-through.
       case Primitive::kPrimInt:      // Fall-through.
       case Primitive::kPrimFloat:
-        val.i =  *reinterpret_cast<jint*>(GetParamAddress());
+        val.i = *reinterpret_cast<jint*>(GetParamAddress());
         break;
       case Primitive::kPrimVoid:
         LOG(FATAL) << "UNREACHABLE";
@@ -561,10 +573,18 @@ class BuildQuickArgumentVisitor : public QuickArgumentVisitor {
     args_->push_back(val);
   }
 
+  void FixupReferences() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // Fixup any references which may have changed.
+    for (const auto& pair : references_) {
+      *pair.second = soa_->Decode<mirror::Object*>(pair.first);
+    }
+  }
+
  private:
   ScopedObjectAccessUnchecked* soa_;
   std::vector<jvalue>* args_;
-
+  // References which we must update when exiting in case the GC moved the objects.
+  std::vector<std::pair<jobject, mirror::Object**> > references_;
   DISALLOW_COPY_AND_ASSIGN(BuildQuickArgumentVisitor);
 };
 
@@ -617,6 +637,8 @@ extern "C" uint64_t artQuickProxyInvokeHandler(mirror::ArtMethod* proxy_method,
   self->EndAssertNoThreadSuspension(old_cause);
   JValue result = InvokeProxyInvocationHandler(soa, proxy_mh.GetShorty(),
                                                rcvr_jobj, interface_method_jobj, args);
+  // Restore references which might have moved.
+  local_ref_visitor.FixupReferences();
   return result.GetJ();
 }
 
@@ -639,13 +661,14 @@ class RememberForGcArgumentVisitor : public QuickArgumentVisitor {
 
   void FixupReferences() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // Fixup any references which may have changed.
-    for (std::pair<jobject, mirror::Object**>& it : references_) {
-      *it.second = soa_->Decode<mirror::Object*>(it.first);
+    for (const auto& pair : references_) {
+      *pair.second = soa_->Decode<mirror::Object*>(pair.first);
     }
   }
 
  private:
   ScopedObjectAccessUnchecked* soa_;
+  // References which we must update when exiting in case the GC moved the objects.
   std::vector<std::pair<jobject, mirror::Object**> > references_;
   DISALLOW_COPY_AND_ASSIGN(RememberForGcArgumentVisitor);
 };
