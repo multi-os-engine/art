@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-#include "dlmalloc_space.h"
+#ifndef ART_RUNTIME_GC_SPACE_SPACE_TEST_H_
+#define ART_RUNTIME_GC_SPACE_SPACE_TEST_H_
+
 #include "large_object_space.h"
 #include "zygote_space.h"
 
@@ -56,16 +58,6 @@ class SpaceTest : public CommonTest {
     return mirror::Array::DataOffset(Primitive::ComponentSize(Primitive::kPrimByte)).Uint32Value();
   }
 
-  static MallocSpace* CreateDlMallocSpace(const std::string& name, size_t initial_size, size_t growth_limit,
-                                          size_t capacity, byte* requested_begin) {
-    return DlMallocSpace::Create(name, initial_size, growth_limit, capacity, requested_begin);
-  }
-  static MallocSpace* CreateRosAllocSpace(const std::string& name, size_t initial_size, size_t growth_limit,
-                                          size_t capacity, byte* requested_begin) {
-    return RosAllocSpace::Create(name, initial_size, growth_limit, capacity, requested_begin,
-                                 Runtime::Current()->GetHeap()->IsLowMemoryMode());
-  }
-
   typedef MallocSpace* (*CreateSpaceFn)(const std::string& name, size_t initial_size, size_t growth_limit,
                                         size_t capacity, byte* requested_begin);
   void InitTestBody(CreateSpaceFn create_space);
@@ -76,6 +68,8 @@ class SpaceTest : public CommonTest {
   void SizeFootPrintGrowthLimitAndTrimBody(MallocSpace* space, intptr_t object_size,
                                            int round, size_t growth_limit);
   void SizeFootPrintGrowthLimitAndTrimDriver(size_t object_size, CreateSpaceFn create_space);
+
+  void LargeObjectTest();
 };
 
 static size_t test_rand(size_t* seed) {
@@ -119,13 +113,6 @@ void SpaceTest::InitTestBody(CreateSpaceFn create_space) {
     UniquePtr<Space> space(create_space("test", 8 * MB, 32 * MB, 16 * MB, NULL));
     EXPECT_TRUE(space.get() == NULL);
   }
-}
-
-TEST_F(SpaceTest, Init_DlMallocSpace) {
-  InitTestBody(SpaceTest::CreateDlMallocSpace);
-}
-TEST_F(SpaceTest, Init_RosAllocSpace) {
-  InitTestBody(SpaceTest::CreateRosAllocSpace);
 }
 
 // TODO: This test is not very good, we should improve it.
@@ -219,14 +206,6 @@ void SpaceTest::ZygoteSpaceTestBody(CreateSpaceFn create_space) {
   EXPECT_LE(1U * MB, free1);
 }
 
-TEST_F(SpaceTest, ZygoteSpace_DlMallocSpace) {
-  ZygoteSpaceTestBody(SpaceTest::CreateDlMallocSpace);
-}
-
-TEST_F(SpaceTest, ZygoteSpace_RosAllocSpace) {
-  ZygoteSpaceTestBody(SpaceTest::CreateRosAllocSpace);
-}
-
 void SpaceTest::AllocAndFreeTestBody(CreateSpaceFn create_space) {
   size_t dummy = 0;
   MallocSpace* space(create_space("test", 4 * MB, 16 * MB, 16 * MB, NULL));
@@ -278,14 +257,7 @@ void SpaceTest::AllocAndFreeTestBody(CreateSpaceFn create_space) {
   EXPECT_LE(1U * MB, free1);
 }
 
-TEST_F(SpaceTest, AllocAndFree_DlMallocSpace) {
-  AllocAndFreeTestBody(SpaceTest::CreateDlMallocSpace);
-}
-TEST_F(SpaceTest, AllocAndFree_RosAllocSpace) {
-  AllocAndFreeTestBody(SpaceTest::CreateRosAllocSpace);
-}
-
-TEST_F(SpaceTest, LargeObjectTest) {
+void SpaceTest::LargeObjectTest() {
   size_t rand_seed = 0;
   for (size_t i = 0; i < 2; ++i) {
     LargeObjectSpace* los = NULL;
@@ -391,13 +363,6 @@ void SpaceTest::AllocAndFreeListTestBody(CreateSpaceFn create_space) {
       EXPECT_TRUE(lots_of_objects[i] == nullptr);
     }
   }
-}
-
-TEST_F(SpaceTest, AllocAndFreeList_DlMallocSpace) {
-  AllocAndFreeListTestBody(SpaceTest::CreateDlMallocSpace);
-}
-TEST_F(SpaceTest, AllocAndFreeList_RosAllocSpace) {
-  AllocAndFreeListTestBody(SpaceTest::CreateRosAllocSpace);
 }
 
 void SpaceTest::SizeFootPrintGrowthLimitAndTrimBody(MallocSpace* space, intptr_t object_size,
@@ -594,38 +559,43 @@ void SpaceTest::SizeFootPrintGrowthLimitAndTrimDriver(size_t object_size, Create
   SizeFootPrintGrowthLimitAndTrimBody(space, object_size, 3, capacity);
 }
 
-#define TEST_SizeFootPrintGrowthLimitAndTrim(name, size) \
-  TEST_F(SpaceTest, SizeFootPrintGrowthLimitAndTrim_AllocationsOf_##name##_DlMallocSpace) { \
-    SizeFootPrintGrowthLimitAndTrimDriver(size, SpaceTest::CreateDlMallocSpace); \
+#define TEST_SizeFootPrintGrowthLimitAndTrim(name, spaceName, spaceFn, size) \
+  TEST_F(SpaceTest, SizeFootPrintGrowthLimitAndTrim_AllocationsOf_##name##_##spaceName) { \
+    SizeFootPrintGrowthLimitAndTrimDriver(size, spaceFn); \
   } \
-  TEST_F(SpaceTest, SizeFootPrintGrowthLimitAndTrim_RandomAllocationsWithMax_##name##_DlMallocSpace) { \
-    SizeFootPrintGrowthLimitAndTrimDriver(-size, SpaceTest::CreateDlMallocSpace); \
-  } \
-  TEST_F(SpaceTest, SizeFootPrintGrowthLimitAndTrim_AllocationsOf_##name##_RosAllocSpace) { \
-    SizeFootPrintGrowthLimitAndTrimDriver(size, SpaceTest::CreateRosAllocSpace); \
-  } \
-  TEST_F(SpaceTest, SizeFootPrintGrowthLimitAndTrim_RandomAllocationsWithMax_##name##_RosAllocSpace) { \
-    SizeFootPrintGrowthLimitAndTrimDriver(-size, SpaceTest::CreateRosAllocSpace); \
+  TEST_F(SpaceTest, SizeFootPrintGrowthLimitAndTrim_RandomAllocationsWithMax_##name##_##spaceName) { \
+    SizeFootPrintGrowthLimitAndTrimDriver(-size, spaceFn); \
   }
 
-// Each size test is its own test so that we get a fresh heap each time
-TEST_F(SpaceTest, SizeFootPrintGrowthLimitAndTrim_AllocationsOf_12B_DlMallocSpace) {
-  SizeFootPrintGrowthLimitAndTrimDriver(12, SpaceTest::CreateDlMallocSpace);
-}
-TEST_F(SpaceTest, SizeFootPrintGrowthLimitAndTrim_AllocationsOf_12B_RosAllocSpace) {
-  SizeFootPrintGrowthLimitAndTrimDriver(12, SpaceTest::CreateRosAllocSpace);
-}
-TEST_SizeFootPrintGrowthLimitAndTrim(16B, 16)
-TEST_SizeFootPrintGrowthLimitAndTrim(24B, 24)
-TEST_SizeFootPrintGrowthLimitAndTrim(32B, 32)
-TEST_SizeFootPrintGrowthLimitAndTrim(64B, 64)
-TEST_SizeFootPrintGrowthLimitAndTrim(128B, 128)
-TEST_SizeFootPrintGrowthLimitAndTrim(1KB, 1 * KB)
-TEST_SizeFootPrintGrowthLimitAndTrim(4KB, 4 * KB)
-TEST_SizeFootPrintGrowthLimitAndTrim(1MB, 1 * MB)
-TEST_SizeFootPrintGrowthLimitAndTrim(4MB, 4 * MB)
-TEST_SizeFootPrintGrowthLimitAndTrim(8MB, 8 * MB)
+#define TEST_SPACE_CREATE_FN(spaceName, spaceFn) \
+  TEST_F(SpaceTest, Init_##spaceName) { \
+    InitTestBody(spaceFn); \
+  } \
+  TEST_F(SpaceTest, ZygoteSpace_##spaceName) { \
+    ZygoteSpaceTestBody(spaceFn); \
+  } \
+  TEST_F(SpaceTest, AllocAndFree_##spaceName) { \
+    AllocAndFreeTestBody(spaceFn); \
+  } \
+  TEST_F(SpaceTest, AllocAndFreeList_##spaceName) { \
+    AllocAndFreeListTestBody(spaceFn); \
+  } \
+  TEST_F(SpaceTest, SizeFootPrintGrowthLimitAndTrim_AllocationsOf_12B_##spaceName) { \
+    SizeFootPrintGrowthLimitAndTrimDriver(12, spaceFn); \
+  } \
+  TEST_SizeFootPrintGrowthLimitAndTrim(16B, spaceName, spaceFn, 16) \
+  TEST_SizeFootPrintGrowthLimitAndTrim(24B, spaceName, spaceFn, 24) \
+  TEST_SizeFootPrintGrowthLimitAndTrim(32B, spaceName, spaceFn, 32) \
+  TEST_SizeFootPrintGrowthLimitAndTrim(64B, spaceName, spaceFn, 64) \
+  TEST_SizeFootPrintGrowthLimitAndTrim(128B, spaceName, spaceFn, 128) \
+  TEST_SizeFootPrintGrowthLimitAndTrim(1KB, spaceName, spaceFn, 1 * KB) \
+  TEST_SizeFootPrintGrowthLimitAndTrim(4KB, spaceName, spaceFn, 4 * KB) \
+  TEST_SizeFootPrintGrowthLimitAndTrim(1MB, spaceName, spaceFn, 1 * MB) \
+  TEST_SizeFootPrintGrowthLimitAndTrim(4MB, spaceName, spaceFn, 4 * MB) \
+  TEST_SizeFootPrintGrowthLimitAndTrim(8MB, spaceName, spaceFn, 8 * MB)
 
 }  // namespace space
 }  // namespace gc
 }  // namespace art
+
+#endif  // ART_RUNTIME_GC_SPACE_SPACE_TEST_H_
