@@ -423,7 +423,8 @@ class Dbg {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static void UpdateDebugger(Thread* thread, mirror::Object* this_object,
-                             mirror::ArtMethod* method, uint32_t new_dex_pc)
+                             mirror::ArtMethod* method, uint32_t new_dex_pc,
+                             int event_flags, const JValue* return_value)
       LOCKS_EXCLUDED(Locks::breakpoint_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
