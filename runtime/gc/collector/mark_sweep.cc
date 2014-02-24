@@ -232,6 +232,14 @@ bool MarkSweep::IsConcurrent() const {
   return is_concurrent_;
 }
 
+void MarkSweep::RevokeAllThreadLocalAllocationStacks() {
+  if (kUseThreadLocalAllocationStack) {
+    Thread* self = Thread::Current();
+    Locks::mutator_lock_->AssertExclusiveHeld(self);
+    heap_->RevokeAllThreadLocalAllocationStacks(self);
+  }
+}
+
 void MarkSweep::MarkingPhase() {
   TimingLogger::ScopedSplit split("MarkingPhase", &timings_);
   Thread* self = Thread::Current();
@@ -251,9 +259,7 @@ void MarkSweep::MarkingPhase() {
   if (Locks::mutator_lock_->IsExclusiveHeld(self)) {
     // If we exclusively hold the mutator lock, all threads must be suspended.
     MarkRoots();
-    if (kUseThreadLocalAllocationStack) {
-      heap_->RevokeAllThreadLocalAllocationStacks(self);
-    }
+    RevokeAllThreadLocalAllocationStacks();
   } else {
     MarkThreadRoots(self);
     // At this point the live stack should no longer have any mutators which push into it.
