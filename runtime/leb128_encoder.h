@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_LEB128_ENCODER_H_
-#define ART_COMPILER_LEB128_ENCODER_H_
+#ifndef ART_RUNTIME_LEB128_ENCODER_H_
+#define ART_RUNTIME_LEB128_ENCODER_H_
 
 #include "base/macros.h"
 #include "leb128.h"
@@ -106,4 +106,4 @@ class Leb128EncodingVector {
 
 }  // namespace art
 
-#endif  // ART_COMPILER_LEB128_ENCODER_H_
+#endif  // ART_RUNTIME_LEB128_ENCODER_H_

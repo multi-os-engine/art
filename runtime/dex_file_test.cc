@@ -17,11 +17,11 @@
 #include "dex_file.h"
 
 #include "UniquePtr.h"
-#include "common_test.h"
+#include "common_runtime_test.h"
 
 namespace art {
 
-class DexFileTest : public CommonTest {};
+class DexFileTest : public CommonRuntimeTest {};
 
 TEST_F(DexFileTest, Open) {
   ScopedObjectAccess soa(Thread::Current());
