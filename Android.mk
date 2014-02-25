@@ -111,9 +111,9 @@ include $(art_build_path)/Android.gtest.mk
 
 # The ART_*_TEST_DEPENDENCIES definitions:
 # - depend on Android.oattest.mk above for ART_TEST_*_DEX_FILES
-# - depend on Android.gtest.mk above for ART_*_TEST_EXECUTABLES
-ART_HOST_TEST_DEPENDENCIES   := $(ART_HOST_DEPENDENCIES)   $(ART_HOST_TEST_EXECUTABLES)   $(ART_TEST_HOST_DEX_FILES)   $(HOST_CORE_IMG_OUT)
-ART_TARGET_TEST_DEPENDENCIES := $(ART_TARGET_DEPENDENCIES) $(ART_TARGET_TEST_EXECUTABLES) $(ART_TEST_TARGET_DEX_FILES) $(TARGET_CORE_IMG_OUT)
+# - depend on Android.gtest.mk above for ART_*_GTEST_EXECUTABLES
+ART_HOST_TEST_DEPENDENCIES   := $(ART_HOST_DEPENDENCIES)   $(ART_HOST_GTEST_EXECUTABLES)   $(ART_TEST_HOST_DEX_FILES)   $(HOST_CORE_IMG_OUT)
+ART_TARGET_TEST_DEPENDENCIES := $(ART_TARGET_DEPENDENCIES) $(ART_TARGET_GTEST_EXECUTABLES) $(ART_TEST_TARGET_DEX_FILES) $(TARGET_CORE_IMG_OUT)
 
 include $(art_build_path)/Android.libarttest.mk
 
@@ -299,10 +299,10 @@ oat-target-sync: oat-target
 build-art: build-art-host build-art-target
 
 .PHONY: build-art-host
-build-art-host:   $(ART_HOST_EXECUTABLES)   $(ART_HOST_TEST_EXECUTABLES)   $(HOST_CORE_IMG_OUT)   $(HOST_OUT)/lib/libjavacore.so
+build-art-host:   $(ART_HOST_EXECUTABLES)   $(ART_HOST_GTEST_EXECUTABLES)   $(HOST_CORE_IMG_OUT)   $(HOST_OUT)/lib/libjavacore.so
 
 .PHONY: build-art-target
-build-art-target: $(ART_TARGET_EXECUTABLES) $(ART_TARGET_TEST_EXECUTABLES) $(TARGET_CORE_IMG_OUT) $(TARGET_OUT)/lib/libjavacore.so
+build-art-target: $(ART_TARGET_EXECUTABLES) $(ART_TARGET_GTEST_EXECUTABLES) $(TARGET_CORE_IMG_OUT) $(TARGET_OUT)/lib/libjavacore.so
 
 ########################################################################
 # oatdump targets
