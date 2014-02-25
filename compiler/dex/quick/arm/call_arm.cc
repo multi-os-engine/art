@@ -148,6 +148,7 @@ void ArmMir2Lir::GenPackedSwitch(MIR* mir, uint32_t table_offset,
  * Total size is 4+(width * size + 1)/2 16-bit code units.
  */
 void ArmMir2Lir::GenFillArrayData(uint32_t table_offset, RegLocation rl_src) {
+  /*
   const uint16_t* table = cu_->insns + current_dalvik_offset_ + table_offset;
   // Add the table to the list - we'll process it later
   FillArrayData *tab_rec =
@@ -159,6 +160,7 @@ void ArmMir2Lir::GenFillArrayData(uint32_t table_offset, RegLocation rl_src) {
   tab_rec->size = (size * width) + 8;
 
   fill_array_data_.Insert(tab_rec);
+  */
 
   // Making a call - use explicit registers
   FlushAllRegs();   /* Everything to home location */
@@ -166,7 +168,7 @@ void ArmMir2Lir::GenFillArrayData(uint32_t table_offset, RegLocation rl_src) {
   LoadWordDisp(rARM_SELF, QUICK_ENTRYPOINT_OFFSET(pHandleFillArrayData).Int32Value(),
                rARM_LR);
   // Materialize a pointer to the fill data image
-  NewLIR3(kThumb2Adr, r1, 0, WrapPointer(tab_rec));
+  // NewLIR3(kThumb2Adr, r1, 0, WrapPointer(tab_rec));
   ClobberCallerSave();
   LIR* call_inst = OpReg(kOpBlx, rARM_LR);
   MarkSafepointPC(call_inst);

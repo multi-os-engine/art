@@ -17,8 +17,18 @@
 #include "callee_save_frame.h"
 #include "common_throws.h"
 #include "dex_instruction.h"
+#include "dex_instruction-inl.h"
+#include "dex_file.h"
 #include "mirror/array.h"
+#include "mirror/art_method.h"
+#include "mirror/art_method-inl.h"
+#include "mirror/class.h"
+#include "mirror/class-inl.h"
+#include "mirror/dex_cache.h"
+#include "mirror/dex_cache-inl.h"
 #include "mirror/object-inl.h"
+#include "mirror/art_method.h"
+#include "object_utils.h"
 
 namespace art {
 
@@ -42,6 +52,16 @@ extern "C" int artHandleFillArrayDataFromCode(mirror::Array* array,
                                               Thread* self, mirror::ArtMethod** sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsOnly);
+
+  uint32_t dex_pc;
+  mirror::ArtMethod* method = self->GetCurrentMethod(&dex_pc);
+  const DexFile::CodeItem* code_item = MethodHelper(method).GetCodeItem();
+  CHECK_LT(dex_pc, code_item->insns_size_in_code_units_);
+  const Instruction* insn = Instruction::At(code_item->insns_ + dex_pc);
+  uint32_t data_pc = dex_pc + insn->VRegB_31t();
+  CHECK_LT(data_pc, code_item->insns_size_in_code_units_);
+  payload = reinterpret_cast<const Instruction::ArrayDataPayload*>(code_item->insns_ + data_pc);
+
   DCHECK_EQ(payload->ident, static_cast<uint16_t>(Instruction::kArrayDataSignature));
   if (UNLIKELY(array == NULL)) {
     ThrowNullPointerException(NULL, "null array in FILL_ARRAY_DATA");
