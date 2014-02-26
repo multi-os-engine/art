@@ -291,9 +291,9 @@ inline size_t Object::SizeOf() {
   size_t result;
   constexpr auto kNewFlags = static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis);
   if (IsArrayInstance<kVerifyFlags>()) {
-    result = AsArray<kNewFlags>()->SizeOf<>();
+    result = AsArray<kNewFlags>()->template SizeOf<>();
   } else if (IsClass<kNewFlags>()) {
-    result = AsClass<kNewFlags>()->SizeOf<kNewFlags>();
+    result = AsClass<kNewFlags>()->template SizeOf<kNewFlags>();
   } else {
     result = GetClass<kNewFlags>()->GetObjectSize();
   }
@@ -454,6 +454,7 @@ inline void Object::SetFieldObjectWithoutWriteBarrier(MemberOffset field_offset,
     VerifyObject(new_value);
   }
   HeapReference<Object> objref(HeapReference<Object>::FromMirrorPtr(new_value));
+  (void)objref; // Get rid of clang warning about unused variable
   byte* raw_addr = reinterpret_cast<byte*>(this) + field_offset.Int32Value();
   HeapReference<Object>* objref_addr = reinterpret_cast<HeapReference<Object>*>(raw_addr);
   if (UNLIKELY(is_volatile)) {

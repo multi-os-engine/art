@@ -384,7 +384,7 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
                                           intrinsic.d.data & kIntrinsicFlagIsVolatile,
                                           intrinsic.d.data & kIntrinsicFlagIsOrdered);
     default:
-      LOG(FATAL) << "Unexpected intrinsic opcode: " << intrinsic.opcode;
+      LOG(FATAL) << "Unexpected intrinsic opcode: " << (int)intrinsic.opcode;
       return false;  // avoid warning "control reaches end of non-void function"
   }
 }
