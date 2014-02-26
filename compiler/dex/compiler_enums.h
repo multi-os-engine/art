@@ -339,7 +339,16 @@ enum DividePattern {
 
 std::ostream& operator<<(std::ostream& os, const DividePattern& pattern);
 
-// Memory barrier types (see "The JSR-133 Cookbook for Compiler Writers").
+/**
+ * @brief Memory barrier types (see "The JSR-133 Cookbook for Compiler Writers").
+ * @details Without context sensitive analysis, the most conservative set of barriers
+ * must be issued to ensure the Java Memory Model. Thus the recipe is as follows:
+ * -# Use StoreStore barrier before volatile store.
+ * -# Use StoreLoad barrier after volatile store.
+ * -# Use LoadLoad and LoadStore barrier after each volatile load.
+ * -# Use StoreStore barrier after all stores but before return from any constructor whose
+ * class has final fields.
+ */
 enum MemBarrierKind {
   kLoadStore,
   kLoadLoad,
