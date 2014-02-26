@@ -23,6 +23,20 @@
 namespace art {
 
 /**
+ * @class AnnotateUsedFields
+ * @brief Cache the lowering info for fields used by IGET/IPUT/SGET/SPUT insns.
+ */
+class CacheFieldLoweringInfo : public Pass {
+ public:
+  CacheFieldLoweringInfo() : Pass("CacheFieldLoweringInfo", kNoNodes) {
+  }
+
+  void Start(CompilationUnit* cUnit) const {
+    cUnit->mir_graph->DoAnnotateUsedFields();
+  }
+};
+
+/**
  * @class CodeLayout
  * @brief Perform the code layout pass.
  */
