@@ -61,11 +61,6 @@ void StickyMarkSweep::Sweep(bool swap_bitmaps) {
   SweepArray(GetHeap()->GetLiveStack(), false);
 }
 
-void StickyMarkSweep::MarkThreadRoots(Thread* self) {
-  MarkRootsCheckpoint(self);
-}
-
-
 }  // namespace collector
 }  // namespace gc
 }  // namespace art

@@ -571,7 +571,8 @@ class Heap {
   // Handles Allocate()'s slow allocation path with GC involved after
   // an initial allocation attempt failed.
   mirror::Object* AllocateInternalWithGc(Thread* self, AllocatorType allocator, size_t num_bytes,
-                                         size_t* bytes_allocated, mirror::Class** klass)
+                                         size_t* bytes_allocated, size_t* usable_size,
+                                         mirror::Class** klass)
       LOCKS_EXCLUDED(Locks::thread_suspend_count_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -584,7 +585,8 @@ class Heap {
   // that the switch statement is constant optimized in the entrypoints.
   template <const bool kInstrumented, const bool kGrow>
   ALWAYS_INLINE mirror::Object* TryToAllocate(Thread* self, AllocatorType allocator_type,
-                                              size_t alloc_size, size_t* bytes_allocated)
+                                              size_t alloc_size, size_t* bytes_allocated,
+                                              size_t* usable_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void ThrowOutOfMemoryError(Thread* self, size_t byte_count, bool large_object_allocation)

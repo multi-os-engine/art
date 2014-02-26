@@ -1068,7 +1068,7 @@ void MarkSweep::SweepArray(accounting::ObjectStack* allocations, bool swap_bitma
   space::ContinuousSpace* non_moving_space = nullptr;
   for (space::ContinuousSpace* space : heap_->GetContinuousSpaces()) {
     if (space->IsAllocSpace() && !IsImmuneSpace(space) && space->GetLiveBitmap() != nullptr) {
-      if (space == heap_->GetNonMovingSpace()) {
+      if (space->AsAllocSpace() == heap_->GetNonMovingSpace()) {
         non_moving_space = space;
       } else {
         sweep_spaces.push_back(space);

@@ -50,14 +50,17 @@ static jobject Array_createObjectArray(JNIEnv* env, jclass, jclass javaElementCl
     ThrowNegativeArraySizeException(length);
     return NULL;
   }
-  ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+  Runtime* runtime = Runtime::Current();
+  ClassLinker* class_linker = runtime->GetClassLinker();
   mirror::Class* array_class = class_linker->FindArrayClass(soa.Self(), element_class);
   if (UNLIKELY(array_class == NULL)) {
     CHECK(soa.Self()->IsExceptionPending());
     return NULL;
   }
   DCHECK(array_class->IsArrayClass());
-  mirror::Array* new_array = mirror::Array::Alloc<true>(soa.Self(), array_class, length);
+  mirror::Array* new_array = mirror::Array::Alloc<true>(soa.Self(), array_class, length,
+                                                        array_class->GetComponentSize(),
+                                                        runtime->GetHeap()->GetCurrentAllocator());
   return soa.AddLocalReference<jobject>(new_array);
 }
 
