@@ -51,6 +51,7 @@ class DexFileToMethodInlinerMap;
 class InlineIGetIPutData;
 class OatWriter;
 class ParallelCompilationManager;
+class ScopedObjectAccess;
 class TimingLogger;
 class VerificationResults;
 class VerifiedMethod;
@@ -203,6 +204,52 @@ class CompilerDriver {
   bool CanEmbedTypeInCode(const DexFile& dex_file, uint32_t type_idx,
                           bool* is_type_initialized, bool* use_direct_type_ptr,
                           uintptr_t* direct_type_ptr);
+
+  // Get the DexCache for the
+  mirror::DexCache* GetDexCache(const DexCompilationUnit* mUnit)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  mirror::ClassLoader* GetClassLoader(ScopedObjectAccess& soa, const DexCompilationUnit* mUnit)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Resolve compiling method's class. Returns nullptr on failure.
+  mirror::Class* ResolveCompilingMethodsClass(
+      ScopedObjectAccess& soa, const SirtRef<mirror::DexCache>& dex_cache,
+      const SirtRef<mirror::ClassLoader>& class_loader, const DexCompilationUnit* mUnit)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Resolve a field. Returns nullptr on failure, including incompatible class change.
+  // NOTE: Unlike ClassLinker's ResolveField(), this method enforces is_static.
+  mirror::ArtField* ResolveField(
+      ScopedObjectAccess& soa, const SirtRef<mirror::DexCache>& dex_cache,
+      const SirtRef<mirror::ClassLoader>& class_loader, const DexCompilationUnit* mUnit,
+      uint32_t field_idx, bool is_static)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Get declaration location of a resolved field.
+  void GetResolvedFieldDexFileLocation(
+      mirror::ArtField* resolved_field, const DexFile** declaring_dex_file,
+      uint16_t* declaring_class_idx, uint16_t* declaring_field_idx)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  bool IsFieldVolatile(mirror::ArtField* field) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Can we fast-path an IGET/IPUT access to an instance field? If yes, compute the field offset.
+  std::pair<bool, bool> IsFastInstanceField(
+      mirror::DexCache* dex_cache, mirror::Class* referrer_class,
+      mirror::ArtField* resolved_field, uint16_t field_idx, MemberOffset* field_offset)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Can we fast-path an SGET/SPUT access to a static field? If yes, compute the field offset,
+  // etc...
+  std::pair<bool, bool> IsFastStaticField(
+      mirror::DexCache* dex_cache, mirror::Class* referrer_class,
+      mirror::ArtField* resolved_field, uint16_t field_idx, MemberOffset* field_offset,
+      uint32_t* storage_index, bool* is_referrers_class, bool* is_initialized)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void ProcessedInstanceField(bool resolved);
+  void ProcessedStaticField(bool resolved, bool local);
 
   // Can we fast path instance field access in a verified accessor?
   // If yes, computes field's offset and volatility and whether the method is static or not.
