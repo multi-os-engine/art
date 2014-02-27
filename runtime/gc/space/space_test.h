@@ -33,6 +33,21 @@ namespace space {
 
 class SpaceTest : public CommonRuntimeTest {
  public:
+  explicit SpaceTest(size_t allocation_overhead) : allocation_overhead_(allocation_overhead) {}
+
+  typedef MallocSpace* (*CreateSpaceFn)(const std::string& name, size_t initial_size, size_t growth_limit,
+                                        size_t capacity, byte* requested_begin);
+  void InitTestBody(CreateSpaceFn create_space);
+  void ZygoteSpaceTestBody(CreateSpaceFn create_space);
+  void AllocAndFreeTestBody(CreateSpaceFn create_space);
+  void AllocAndFreeListTestBody(CreateSpaceFn create_space);
+  void PowerOf2TestBody(CreateSpaceFn create_space);
+
+  void SizeFootPrintGrowthLimitAndTrimBody(MallocSpace* space, intptr_t object_size,
+                                           int round, size_t growth_limit);
+  void SizeFootPrintGrowthLimitAndTrimDriver(size_t object_size, CreateSpaceFn create_space);
+
+ private:
   void AddSpace(ContinuousSpace* space) {
     // For RosAlloc, revoke the thread local runs before moving onto a
     // new alloc space.
@@ -63,16 +78,9 @@ class SpaceTest : public CommonRuntimeTest {
     return mirror::Array::DataOffset(Primitive::ComponentSize(Primitive::kPrimByte)).Uint32Value();
   }
 
-  typedef MallocSpace* (*CreateSpaceFn)(const std::string& name, size_t initial_size, size_t growth_limit,
-                                        size_t capacity, byte* requested_begin);
-  void InitTestBody(CreateSpaceFn create_space);
-  void ZygoteSpaceTestBody(CreateSpaceFn create_space);
-  void AllocAndFreeTestBody(CreateSpaceFn create_space);
-  void AllocAndFreeListTestBody(CreateSpaceFn create_space);
+  const size_t allocation_overhead_;
 
-  void SizeFootPrintGrowthLimitAndTrimBody(MallocSpace* space, intptr_t object_size,
-                                           int round, size_t growth_limit);
-  void SizeFootPrintGrowthLimitAndTrimDriver(size_t object_size, CreateSpaceFn create_space);
+  DISALLOW_COPY_AND_ASSIGN(SpaceTest);
 };
 
 static size_t test_rand(size_t* seed) {
@@ -235,7 +243,7 @@ void SpaceTest::AllocAndFreeTestBody(CreateSpaceFn create_space) {
   Thread* self = Thread::Current();
   ScopedObjectAccess soa(self);
 
-  // Make space findable to the heap, will also delete space when runtime is cleaned up
+  // Make space findable to the heap, will also delete space when runtime is cleaned up.
   AddSpace(space);
 
   // Succeeds, fits without adjusting the footprint limit.
@@ -296,7 +304,7 @@ void SpaceTest::AllocAndFreeListTestBody(CreateSpaceFn create_space) {
   MallocSpace* space(create_space("test", 4 * MB, 16 * MB, 16 * MB, nullptr));
   ASSERT_TRUE(space != nullptr);
 
-  // Make space findable to the heap, will also delete space when runtime is cleaned up
+  // Make space findable to the heap, will also delete space when runtime is cleaned up.
   AddSpace(space);
   Thread* self = Thread::Current();
   ScopedObjectAccess soa(self);
@@ -336,11 +344,60 @@ void SpaceTest::AllocAndFreeListTestBody(CreateSpaceFn create_space) {
     EXPECT_EQ(usable_size, computed_usable_size);
   }
 
-  // Release memory and check pointers are nullptr
+  // Release memory and check pointers are nullptr.
   // TODO: This isn't compaction safe, fix.
   space->FreeList(self, arraysize(lots_of_objects), lots_of_objects);
   for (size_t i = 0; i < arraysize(lots_of_objects); i++) {
     EXPECT_TRUE(lots_of_objects[i] == nullptr);
+  }
+}
+
+void SpaceTest::PowerOf2TestBody(CreateSpaceFn create_space) {
+  MallocSpace* space(create_space("test", 4 * MB, 16 * MB, 16 * MB, nullptr));
+  ASSERT_TRUE(space != nullptr);
+  Thread* self = Thread::Current();
+  ScopedObjectAccess soa(self);
+
+  // Make space findable to the heap, will also delete space when runtime is cleaned up.
+  AddSpace(space);
+  constexpr size_t kMaxSize = 1 * MB;
+  for (size_t i = SizeOfZeroLengthByteArray(); i < kMaxSize; ++i) {
+    size_t ptr1_bytes_allocated, ptr1_usable_size;
+    SirtRef<mirror::Object> ptr1(self, space->Alloc(self, i, &ptr1_bytes_allocated,
+                                                    &ptr1_usable_size));
+    EXPECT_TRUE(ptr1.get() != nullptr);
+    EXPECT_LE(i, ptr1_bytes_allocated);
+    EXPECT_LE(i, ptr1_usable_size);
+    EXPECT_EQ(ptr1_usable_size + allocation_overhead_, ptr1_bytes_allocated);
+    InstallClass(ptr1, i);
+
+    if (true) {
+      if (ptr1_usable_size != i) {
+        EXPECT_NE(((i + allocation_overhead_) / 16) * 16,
+                  i + allocation_overhead_);
+      } else {
+        EXPECT_EQ(((i + allocation_overhead_) / 16) * 16,
+                  i + allocation_overhead_);
+      }
+#if 0
+      if (ptr1_usable_size != i) {
+        EXPECT_NE(CountOneBits(i + allocation_overhead_), 1) << i;
+      } else {
+        EXPECT_EQ(CountOneBits(i + allocation_overhead_), 1) << i;
+      }
+#endif
+    } else {
+      if (ptr1_usable_size != i) {
+        EXPECT_NE(((i + allocation_overhead_) / kObjectAlignment) * kObjectAlignment,
+                  i + allocation_overhead_);
+      } else {
+        EXPECT_EQ(((i + allocation_overhead_) / kObjectAlignment) * kObjectAlignment,
+                  i + allocation_overhead_);
+      }
+    }
+    size_t free1 = space->AllocationSize(ptr1.get(), nullptr);
+    space->Free(self, ptr1.reset(nullptr));
+    EXPECT_LE(i, free1);
   }
 }
 
@@ -547,8 +604,10 @@ void SpaceTest::SizeFootPrintGrowthLimitAndTrimDriver(size_t object_size, Create
     SizeFootPrintGrowthLimitAndTrimDriver(-size, spaceFn); \
   }
 
-#define TEST_SPACE_CREATE_FN(spaceName, spaceFn) \
+#define TEST_SPACE_CREATE_FN(spaceName, spaceFn, overhead) \
   class spaceName##Test : public SpaceTest { \
+    public: \
+      spaceName##Test() : SpaceTest(overhead) {} \
   }; \
   \
   TEST_F(spaceName##Test, Init) { \
@@ -562,6 +621,9 @@ void SpaceTest::SizeFootPrintGrowthLimitAndTrimDriver(size_t object_size, Create
   } \
   TEST_F(spaceName##Test, AllocAndFreeList) { \
     AllocAndFreeListTestBody(spaceFn); \
+  } \
+  TEST_F(spaceName##Test, PowerOf2) { \
+    PowerOf2TestBody(spaceFn); \
   } \
   TEST_F(spaceName##Test, SizeFootPrintGrowthLimitAndTrim_AllocationsOf_12B) { \
     SizeFootPrintGrowthLimitAndTrimDriver(12, spaceFn); \

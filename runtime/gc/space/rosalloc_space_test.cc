@@ -26,7 +26,7 @@ MallocSpace* CreateRosAllocSpace(const std::string& name, size_t initial_size, s
                                Runtime::Current()->GetHeap()->IsLowMemoryMode());
 }
 
-TEST_SPACE_CREATE_FN(RosAllocSpace, CreateRosAllocSpace)
+TEST_SPACE_CREATE_FN(RosAllocSpace, CreateRosAllocSpace, 0)
 
 
 }  // namespace space

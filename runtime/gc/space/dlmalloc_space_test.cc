@@ -26,7 +26,7 @@ MallocSpace* CreateDlMallocSpace(const std::string& name, size_t initial_size, s
   return DlMallocSpace::Create(name, initial_size, growth_limit, capacity, requested_begin);
 }
 
-TEST_SPACE_CREATE_FN(DlMallocSpace, CreateDlMallocSpace)
+TEST_SPACE_CREATE_FN(DlMallocSpace, CreateDlMallocSpace, kPointerSize)
 
 
 }  // namespace space

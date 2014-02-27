@@ -23,6 +23,7 @@ namespace space {
 
 class LargeObjectSpaceTest : public SpaceTest {
  public:
+  LargeObjectSpaceTest() : SpaceTest(0) {}
   void LargeObjectTest();
 };
 
