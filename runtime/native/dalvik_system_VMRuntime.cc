@@ -76,6 +76,30 @@ static jobject VMRuntime_newNonMovableArray(JNIEnv* env, jobject, jclass javaEle
   return soa.AddLocalReference<jobject>(result);
 }
 
+static jobject VMRuntime_newUnpaddedArray(JNIEnv* env, jobject, jclass javaElementClass,
+                                          jint length) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Class* element_class = soa.Decode<mirror::Class*>(javaElementClass);
+  if (UNLIKELY(element_class == nullptr)) {
+    ThrowNullPointerException(NULL, "element class == null");
+    return nullptr;
+  }
+  if (UNLIKELY(length < 0)) {
+    ThrowNegativeArraySizeException(length);
+    return nullptr;
+  }
+  Runtime* runtime = Runtime::Current();
+  mirror::Class* array_class = runtime->GetClassLinker()->FindArrayClass(soa.Self(), element_class);
+  if (UNLIKELY(array_class == nullptr)) {
+    return nullptr;
+  }
+  gc::AllocatorType allocator = runtime->GetHeap()->GetCurrentAllocator();
+  mirror::Array* result = mirror::Array::Alloc<true>(soa.Self(), array_class, length,
+                                                     array_class->GetComponentSize(), allocator,
+                                                     true);
+  return soa.AddLocalReference<jobject>(result);
+}
+
 static jlong VMRuntime_addressOf(JNIEnv* env, jobject, jobject javaArray) {
   if (javaArray == NULL) {  // Most likely allocation failed
     return 0;
@@ -497,6 +521,7 @@ static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(VMRuntime, isDebuggerActive, "()Z"),
   NATIVE_METHOD(VMRuntime, nativeSetTargetHeapUtilization, "(F)V"),
   NATIVE_METHOD(VMRuntime, newNonMovableArray, "!(Ljava/lang/Class;I)Ljava/lang/Object;"),
+  NATIVE_METHOD(VMRuntime, newUnpaddedArray, "!(Ljava/lang/Class;I)Ljava/lang/Object;"),
   NATIVE_METHOD(VMRuntime, properties, "()[Ljava/lang/String;"),
   NATIVE_METHOD(VMRuntime, setTargetSdkVersionNative, "(I)V"),
   NATIVE_METHOD(VMRuntime, registerNativeAllocation, "(I)V"),
