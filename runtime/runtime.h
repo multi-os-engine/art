@@ -161,11 +161,6 @@ class Runtime {
     return image_compiler_options_;
   }
 
-  const std::string& GetHostPrefix() const {
-    DCHECK(!IsStarted());
-    return host_prefix_;
-  }
-
   // Starts a runtime, which may cause threads to be started and code to run.
   bool Start() UNLOCK_FUNCTION(Locks::mutator_lock_);
 
