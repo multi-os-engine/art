@@ -59,7 +59,7 @@ namespace art {
 static void usage() {
   fprintf(stderr,
           "Usage: oatdump [options] ...\n"
-          "    Example: oatdump --image=$ANDROID_PRODUCT_OUT/system/framework/boot.art --host-prefix=$ANDROID_PRODUCT_OUT\n"
+          "    Example: oatdump --image=$ANDROID_PRODUCT_OUT/system/framework/boot.art\n"
           "    Example: adb shell oatdump --image=/system/framework/boot.art\n"
           "\n");
   fprintf(stderr,
@@ -73,12 +73,6 @@ static void usage() {
   fprintf(stderr,
           "  --boot-image=<file.art>: provide the image file for the boot class path.\n"
           "      Example: --boot-image=/system/framework/boot.art\n"
-          "\n");
-  fprintf(stderr,
-          "  --host-prefix may be used to translate host paths to target paths during\n"
-          "      cross compilation.\n"
-          "      Example: --host-prefix=out/target/product/crespo\n"
-          "      Default: $ANDROID_PRODUCT_OUT\n"
           "\n");
   fprintf(stderr,
           "  --output=<file> may be used to send the output to a file.\n"
@@ -99,7 +93,6 @@ const char* image_roots_descriptions_[] = {
   "kCalleeSaveMethod",
   "kRefsOnlySaveMethod",
   "kRefsAndArgsSaveMethod",
-  "kOatLocation",
   "kDexCaches",
   "kClassRoots",
 };
@@ -784,8 +777,7 @@ class ImageDumper {
     os << "\n";
 
     ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-    mirror::Object* oat_location_object = image_header_.GetImageRoot(ImageHeader::kOatLocation);
-    std::string oat_location(oat_location_object->AsString()->ToModifiedUtf8());
+    std::string oat_location = ImageHeader::GetOatLocationFromImageLocation(image_filename_);
     os << "OAT LOCATION: " << oat_location;
     if (!host_prefix_.empty()) {
       oat_location = host_prefix_ + oat_location;
@@ -1463,8 +1455,6 @@ static int oatdump(int argc, char** argv) {
       image_filename = option.substr(strlen("--image=")).data();
     } else if (option.starts_with("--boot-image=")) {
       boot_image_filename = option.substr(strlen("--boot-image=")).data();
-    } else if (option.starts_with("--host-prefix=")) {
-      host_prefix.reset(new std::string(option.substr(strlen("--host-prefix=")).data()));
     } else if (option.starts_with("--dump:")) {
         if (option == "--dump:raw_mapping_table") {
           dump_raw_mapping_table = true;
@@ -1543,10 +1533,6 @@ static int oatdump(int argc, char** argv) {
     image_option += "-Ximage:";
     image_option += image_filename;
     options.push_back(std::make_pair(image_option.c_str(), reinterpret_cast<void*>(NULL)));
-  }
-
-  if (!host_prefix->empty()) {
-    options.push_back(std::make_pair("host-prefix", host_prefix->c_str()));
   }
 
   if (!Runtime::Create(options, false)) {

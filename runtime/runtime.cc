@@ -678,8 +678,6 @@ Runtime::ParsedOptions* Runtime::ParsedOptions::Create(const Options& options, b
       parsed->hook_exit_ = reinterpret_cast<void(*)(jint)>(const_cast<void*>(options[i].second));
     } else if (option == "abort") {
       parsed->hook_abort_ = reinterpret_cast<void(*)()>(const_cast<void*>(options[i].second));
-    } else if (option == "host-prefix") {
-      parsed->host_prefix_ = reinterpret_cast<const char*>(options[i].second);
     } else if (option == "-Xgenregmap" || option == "-Xgc:precise") {
       // We silently ignore these for backwards compatibility.
     } else if (option == "-Xmethod-trace") {
@@ -815,8 +813,6 @@ jobject CreateSystemClassLoader() {
 
 bool Runtime::Start() {
   VLOG(startup) << "Runtime::Start entering";
-
-  CHECK(host_prefix_.empty()) << host_prefix_;
 
   // Restore main thread state to kNative as expected by native code.
   Thread* self = Thread::Current();
@@ -958,7 +954,6 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
 
   Monitor::Init(options->lock_profiling_threshold_, options->hook_is_sensitive_thread_);
 
-  host_prefix_ = options->host_prefix_;
   boot_class_path_string_ = options->boot_class_path_string_;
   class_path_string_ = options->class_path_string_;
   properties_ = options->properties_;
