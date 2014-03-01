@@ -25,7 +25,6 @@
 #include <fstream>
 
 #include "../../external/icu4c/common/unicode/uvernum.h"
-#include "../compiler/compiler_backend.h"
 #include "../compiler/dex/quick/dex_file_to_method_inliner_map.h"
 #include "../compiler/dex/verification_results.h"
 #include "../compiler/driver/compiler_driver.h"
@@ -440,12 +439,10 @@ class CommonTest : public testing::Test {
     std::string max_heap_string(StringPrintf("-Xmx%zdm", gc::Heap::kDefaultMaximumSize / MB));
 
     // TODO: make selectable
-    CompilerBackend::Kind compiler_backend = kUsePortableCompiler
-        ? CompilerBackend::kPortable
-        : CompilerBackend::kQuick;
+    CompilerBackend compiler_backend = kUsePortableCompiler ? kPortable : kQuick;
 
     verification_results_.reset(new VerificationResults);
-    method_inliner_map_.reset(new DexFileToMethodInlinerMap);
+    method_inliner_map_.reset(compiler_backend == kQuick ? new DexFileToMethodInlinerMap : nullptr);
     callbacks_.Reset(verification_results_.get(), method_inliner_map_.get());
     Runtime::Options options;
     options.push_back(std::make_pair("compilercallbacks", static_cast<CompilerCallbacks*>(&callbacks_)));
