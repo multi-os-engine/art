@@ -65,7 +65,8 @@
 
 namespace art {
 
-extern void SetQuickAllocEntryPointsAllocator(gc::AllocatorType allocator);
+extern void SetQuickAllocEntryPointsAllocator(gc::AllocatorType allocator)
+    EXCLUSIVE_LOCKS_REQUIRED(Locks::runtime_shutdown_lock_);
 
 namespace gc {
 
@@ -308,11 +309,12 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
 }
 
 void Heap::ChangeAllocator(AllocatorType allocator) {
-  // These two allocators are only used internally and don't have any entrypoints.
-  DCHECK_NE(allocator, kAllocatorTypeLOS);
-  DCHECK_NE(allocator, kAllocatorTypeNonMoving);
   if (current_allocator_ != allocator) {
+    // These two allocators are only used internally and don't have any entrypoints.
+    CHECK_NE(allocator, kAllocatorTypeLOS);
+    CHECK_NE(allocator, kAllocatorTypeNonMoving);
     current_allocator_ = allocator;
+    MutexLock mu(nullptr, *Locks::runtime_shutdown_lock_);
     SetQuickAllocEntryPointsAllocator(current_allocator_);
     Runtime::Current()->GetInstrumentation()->ResetQuickAllocEntryPoints();
   }
