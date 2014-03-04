@@ -119,7 +119,7 @@ class Heap {
   // If true, measure the total allocation time.
   static constexpr bool kMeasureAllocationTime = false;
   // Primitive arrays larger than this size are put in the large object space.
-  static constexpr size_t kDefaultLargeObjectThreshold = 3 * kPageSize;
+  static constexpr size_t kLargeObjectThreshold = 3 * kPageSize;
 
   static constexpr size_t kDefaultInitialSize = 2 * MB;
   static constexpr size_t kDefaultMaximumSize = 32 * MB;
@@ -754,8 +754,8 @@ class Heap {
   // If we have a zygote space.
   bool have_zygote_space_;
 
-  // Minimum allocation size of large object.
-  size_t large_object_threshold_;
+  // True if the large object space is enabled.
+  bool is_large_object_space_enabled_;
 
   // Guards access to the state of GC, associated conditional variable is used to signal when a GC
   // completes.

@@ -97,7 +97,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       long_gc_log_threshold_(long_gc_log_threshold),
       ignore_max_footprint_(ignore_max_footprint),
       have_zygote_space_(false),
-      large_object_threshold_(std::numeric_limits<size_t>::max()),  // Starts out disabled.
+      is_large_object_space_enabled_(false),  // Starts out disabled.
       soft_reference_queue_(this),
       weak_reference_queue_(this),
       finalizer_reference_queue_(this),
@@ -161,7 +161,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   // entrypoints.
   if (!Runtime::Current()->IsZygote()) {
     ChangeCollector(post_zygote_collector_type_);
-    large_object_threshold_ = kDefaultLargeObjectThreshold;
+    // Enable the large object space right away for the non-zygote case (command line apps, etc.)
+    is_large_object_space_enabled_ = true;
   } else {
     if (kMovingCollector) {
       // We are the zygote, use bump pointer allocation + semi space collector.
@@ -169,6 +170,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     } else {
       ChangeCollector(post_zygote_collector_type_);
     }
+    // Will enable the large object space for the zygote case later in PreZygoteFork().
   }
 
   live_bitmap_.reset(new accounting::HeapBitmap(this));
@@ -1584,7 +1586,7 @@ void Heap::PreZygoteFork() {
   AddSpace(main_space_);
   have_zygote_space_ = true;
   // Enable large object space allocations.
-  large_object_threshold_ = kDefaultLargeObjectThreshold;
+  is_large_object_space_enabled_ = true;
   // Create the zygote space mod union table.
   accounting::ModUnionTable* mod_union_table =
       new accounting::ModUnionTableCardCache("zygote space mod-union table", this, zygote_space);
