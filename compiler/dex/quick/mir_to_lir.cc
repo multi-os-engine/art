@@ -331,6 +331,13 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       }
       break;
 
+    case Instruction::RETURN_VOID_BARRIER:
+      GenMemBarrier(kStoreStore);
+      if (!mir_graph_->MethodIsLeaf()) {
+        GenSuspendTest(opt_flags);
+      }
+      break;
+
     case Instruction::RETURN:
     case Instruction::RETURN_OBJECT:
       if (!mir_graph_->MethodIsLeaf()) {
