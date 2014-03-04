@@ -180,8 +180,10 @@ else
     $(info Using target GCC $(TARGET_GCC_VERSION) disables thread-safety checks.)
   endif
 endif
-# We build with GCC 4.6 on the host.
+# We build with GCC 4.6 or later on the host. -Wthread-safety was removed in 4.7
+ifneq (,$(filter 4.6 4.6.%, $(HOST_GCC_VERSION)))
 ART_HOST_CFLAGS += -Wthread-safety
+endif
 
 # Make host builds easier to debug and profile by not omitting the frame pointer.
 ART_HOST_CFLAGS += -fno-omit-frame-pointer
