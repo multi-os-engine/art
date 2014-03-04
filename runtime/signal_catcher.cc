@@ -38,7 +38,12 @@
 
 namespace art {
 
-static void DumpCmdLine(std::ostream& os) {
+namespace {
+
+extern "C" void __gcov_flush() __attribute((weak));
+static void (*coverage_flush)() = __gcov_flush;
+
+void DumpCmdLine(std::ostream& os) {
 #if defined(__linux__)
   // Show the original command line, and the current command line too if it's changed.
   // On Android, /proc/self/cmdline will have been rewritten to something like "system_server".
@@ -58,6 +63,22 @@ static void DumpCmdLine(std::ostream& os) {
   os << "Cmdline: " << GetCmdLine() << "\n";
 #endif
 }
+
+void DumpCoverageData() {
+  if (coverage_flush) {
+    const char* gcov_prefix_value = getenv("GCOV_PREFIX");
+    if (!gcov_prefix_value) {
+        gcov_prefix_value = "/sdcard/gcov-default";
+        setenv("GCOV_PREFIX", gcov_prefix_value, 0);
+    }
+    LOG(INFO) << "Dumping coverage data... " << "(GCOV_PREFIX='" << gcov_prefix_value << "')";
+    coverage_flush();
+  } else {
+    LOG(INFO) << "No coverage data (libart was compiled without --coverage)";
+  }
+}
+
+}  // anonymous namespace
 
 SignalCatcher::SignalCatcher(const std::string& stack_trace_file)
     : stack_trace_file_(stack_trace_file),
@@ -160,6 +181,11 @@ void SignalCatcher::HandleSigUsr1() {
   Runtime::Current()->GetHeap()->CollectGarbage(false);
 }
 
+void SignalCatcher::HandleSigUsr2() {
+  LOG(INFO) << "SIGUSR2 forcing Gcov dump";
+  DumpCoverageData();
+}
+
 int SignalCatcher::WaitForSignal(Thread* self, SignalSet& signals) {
   ScopedThreadStateChange tsc(self, kWaitingInMainSignalCatcherLoop);
 
@@ -200,6 +226,7 @@ void* SignalCatcher::Run(void* arg) {
   SignalSet signals;
   signals.Add(SIGQUIT);
   signals.Add(SIGUSR1);
+  signals.Add(SIGUSR2);
 
   while (true) {
     int signal_number = signal_catcher->WaitForSignal(self, signals);
@@ -214,6 +241,9 @@ void* SignalCatcher::Run(void* arg) {
       break;
     case SIGUSR1:
       signal_catcher->HandleSigUsr1();
+      break;
+    case SIGUSR2:
+      signal_catcher->HandleSigUsr2();
       break;
     default:
       LOG(ERROR) << "Unexpected signal %d" << signal_number;
