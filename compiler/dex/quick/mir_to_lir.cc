@@ -447,6 +447,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       DCHECK(rl_src[0].ref);
       // Intentional fallthrough.
     case Instruction::RETURN:
+    case Instruction::RETURN_VOID_BARRIER:
       if (!kLeafOptimization || !mir_graph_->MethodIsLeaf()) {
         GenSuspendTest(opt_flags);
       }
