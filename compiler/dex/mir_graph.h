@@ -834,7 +834,14 @@ class MIRGraph {
   void GetBlockName(BasicBlock* bb, char* name);
   const char* GetShortyFromTargetIdx(int);
   void DumpMIRGraph();
-  CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range);
+  /*
+   * @brief Build an array of location records for the incoming arguments.
+   * @param set_move_result_nop set to true by default to optimize away the move-result
+   *  which followed the invoke bytecode when handling invoke bytecode. When set to
+   *  false, move-result which followed invoke will not be optimized away as a nop.
+   */
+  CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range,
+                           bool set_move_result_nop = true);
   BasicBlock* NewMemBB(BBType block_type, int block_id);
   MIR* AdvanceMIR(BasicBlock** p_bb, MIR* mir);
   BasicBlock* NextDominatedBlock(BasicBlock* bb);

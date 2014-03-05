@@ -409,6 +409,7 @@ enum X86OpCode {
   Binary0fOpCode(kX86Comiss),   // float compare
   Binary0fOpCode(kX86Orps),     // or of floating point registers
   Binary0fOpCode(kX86Xorps),    // xor of floating point registers
+  Binary0fOpCode(kX86Pand),     // logical and of xmm2/m128 and xmm1
   Binary0fOpCode(kX86Addsd),    // double add
   Binary0fOpCode(kX86Addss),    // float add
   Binary0fOpCode(kX86Mulsd),    // double multiply

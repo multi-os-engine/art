@@ -302,6 +302,22 @@ bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index) {
   return it != inline_methods_.end() && (it->second.flags & kInlineIntrinsic) != 0;
 }
 
+bool DexFileMethodInliner::DoesIntrinsicUseDoubleArgument(uint32_t method_index) {
+  InlineMethod intrinsic;
+  ReaderMutexLock mu(Thread::Current(), lock_);
+  auto it = inline_methods_.find(method_index);
+  if (it != inline_methods_.end() && (it->second.flags & kInlineIntrinsic) != 0) {
+    intrinsic = it->second;
+    switch (intrinsic.opcode) {
+      case kIntrinsicAbsDouble:
+          return true;
+      default:
+          return false;
+    }
+  }
+  return false;
+}
+
 bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
   InlineMethod intrinsic;
   {

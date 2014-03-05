@@ -1179,7 +1179,7 @@ void MIRGraph::DumpMIRGraph() {
  * MOVE_RESULT and incorporate it into the invoke.
  */
 CallInfo* MIRGraph::NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type,
-                                  bool is_range) {
+                                  bool is_range, bool set_move_result_nop) {
   CallInfo* info = static_cast<CallInfo*>(arena_->Alloc(sizeof(CallInfo),
                                                         kArenaAllocMisc));
   MIR* move_result_mir = FindMoveResult(bb, mir);
@@ -1187,7 +1187,9 @@ CallInfo* MIRGraph::NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type,
     info->result.location = kLocInvalid;
   } else {
     info->result = GetRawDest(move_result_mir);
-    move_result_mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+    if (set_move_result_nop == true) {
+      move_result_mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+    }
   }
   info->num_arg_words = mir->ssa_rep->num_uses;
   info->args = (info->num_arg_words == 0) ? NULL : static_cast<RegLocation*>

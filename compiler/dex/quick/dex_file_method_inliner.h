@@ -70,6 +70,11 @@ class DexFileMethodInliner {
     bool IsIntrinsic(uint32_t method_index) LOCKS_EXCLUDED(lock_);
 
     /**
+     * Check whether a particular method is an intrinsic function which use double literal.
+     */
+    bool DoesIntrinsicUseDoubleArgument(uint32_t method_index) LOCKS_EXCLUDED(lock_);
+
+    /**
      * Generate code for an intrinsic function invocation.
      */
     bool GenIntrinsic(Mir2Lir* backend, CallInfo* info) LOCKS_EXCLUDED(lock_);
