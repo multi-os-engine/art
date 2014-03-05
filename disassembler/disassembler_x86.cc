@@ -614,6 +614,17 @@ DISASSEMBLER_ENTRY(cmp,
         opcode << "bswap";
         reg_in_opcode = true;
         break;
+      case 0xDB:
+        if (prefix[2] == 0x66) {
+          src_reg_file = dst_reg_file = SSE;
+          prefix[2] = 0;  // clear prefix now it's served its purpose as part of the opcode
+        } else {
+          src_reg_file = dst_reg_file = MMX;
+        }
+        opcode << "pand";
+        load = true;
+        has_modrm = true;
+        break;
       default:
         opcode << StringPrintf("unknown opcode '0F %02X'", *instr);
         break;

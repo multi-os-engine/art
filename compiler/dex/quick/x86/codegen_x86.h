@@ -119,6 +119,8 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     bool GenInlinedCas(CallInfo* info, bool is_long, bool is_object);
     bool GenInlinedMinMaxInt(CallInfo* info, bool is_min);
     bool GenInlinedSqrt(CallInfo* info);
+    bool GenInlinedAbsFloat(CallInfo* info);
+    bool GenInlinedAbsDouble(CallInfo* info);
     bool GenInlinedPeek(CallInfo* info, OpSize size);
     bool GenInlinedPoke(CallInfo* info, OpSize size);
     void GenNegLong(RegLocation rl_dest, RegLocation rl_src);
@@ -577,6 +579,14 @@ class X86Mir2Lir FINAL : public Mir2Lir {
      * @param rl_use Double RegLocation for the operand.
      */
     void AnalyzeDoubleUse(RegLocation rl_use);
+
+    /*
+     * @brief Analyze one invoke-static MIR instruction
+     * @param opcode MIR instruction opcode.
+     * @param bb Basic block containing instruction.
+     * @param mir Instruction to analyze.
+     */
+    void AnalyzeInvokeStatic(int opcode, BasicBlock * bb, MIR *mir);
 
     // Information derived from analysis of MIR
 

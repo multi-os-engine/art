@@ -834,7 +834,7 @@ class MIRGraph {
   void GetBlockName(BasicBlock* bb, char* name);
   const char* GetShortyFromTargetIdx(int);
   void DumpMIRGraph();
-  CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range);
+  CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range, bool set_move_result_nop = true);
   BasicBlock* NewMemBB(BBType block_type, int block_id);
   MIR* AdvanceMIR(BasicBlock** p_bb, MIR* mir);
   BasicBlock* NextDominatedBlock(BasicBlock* bb);
