@@ -832,7 +832,7 @@ struct StackDumpVisitor : public StackVisitor {
   int frame_count;
 };
 
-static bool ShouldShowNativeStack(const Thread* thread)
+static bool ShouldShowNativeStack(const Thread* thread, mirror::ArtMethod** out_method)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   ThreadState state = thread->GetState();
 
@@ -851,6 +851,9 @@ static bool ShouldShowNativeStack(const Thread* thread)
   // calling back into the VM, or kBlocked if they're blocked on a monitor, or one of the
   // thread-startup states if it's early enough in their life cycle (http://b/7432159).
   mirror::ArtMethod* current_method = thread->GetCurrentMethod(nullptr);
+  if (out_method != nullptr) {
+    *out_method = current_method;
+  }
   return current_method != nullptr && current_method->IsNative();
 }
 
@@ -862,9 +865,10 @@ void Thread::DumpStack(std::ostream& os) const {
   bool dump_for_abort = (gAborting > 0) && !kIsDebugBuild;
   if (this == Thread::Current() || IsSuspended() || dump_for_abort) {
     // If we're currently in native code, dump that stack before dumping the managed stack.
-    if (dump_for_abort || ShouldShowNativeStack(this)) {
+    mirror::ArtMethod* current_method = nullptr;
+    if (dump_for_abort || ShouldShowNativeStack(this, &current_method)) {
       DumpKernelStack(os, GetTid(), "  kernel: ", false);
-      DumpNativeStack(os, GetTid(), "  native: ", false);
+      DumpNativeStack(os, GetTid(), current_method, "  native: ", false);
     }
     UniquePtr<Context> context(Context::Create());
     StackDumpVisitor dumper(os, const_cast<Thread*>(this), context.get(), !throwing_OutOfMemoryError_);
