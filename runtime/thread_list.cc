@@ -78,7 +78,7 @@ void ThreadList::DumpNativeStacks(std::ostream& os) {
   MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
   for (const auto& thread : list_) {
     os << "DUMPING THREAD " << thread->tid_ << "\n";
-    DumpNativeStack(os, thread->tid_, "\t", true);
+    DumpNativeStack(os, thread->tid_, nullptr, "\t", true);
     os << "\n";
   }
 }
@@ -99,7 +99,7 @@ static void DumpUnattachedThread(std::ostream& os, pid_t tid) NO_THREAD_SAFETY_A
   // TODO: Reenable this when the native code in system_server can handle it.
   // Currently "adb shell kill -3 `pid system_server`" will cause it to exit.
   if (false) {
-    DumpNativeStack(os, tid, "  native: ", false);
+    DumpNativeStack(os, tid, nullptr, "  native: ", false);
   }
   os << "\n";
 }
