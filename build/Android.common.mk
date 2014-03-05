@@ -167,9 +167,11 @@ endif
 
 # DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES is set in ../build/core/dex_preopt.mk based on
 # the TARGET_CPU_VARIANT
-ifeq ($(DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES),)
-$(error Required DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES is not set)
-endif
+#ifeq (true,$(WITH_DEXPREOPT))
+  ifeq ($(DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES),)
+    $(error Required DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES is not set)
+  endif
+#endif
 ART_TARGET_CFLAGS += -DART_DEFAULT_INSTRUCTION_SET_FEATURES=$(DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES)
 
 # Enable thread-safety for GCC 4.6 on the target but not for GCC 4.7 where this feature was removed.
