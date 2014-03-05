@@ -1052,7 +1052,8 @@ static std::string CleanMapName(const backtrace_map_t* map) {
   return map->name.substr(last_slash + 1);
 }
 
-void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix, bool include_count) {
+void DumpNativeStack(std::ostream& os, pid_t tid, mirror::ArtMethod* current_method,
+    const char* prefix, bool include_count) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   UniquePtr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid));
   if (!backtrace->Unwind(0)) {
     os << prefix << "(backtrace::Unwind failed for thread " << tid << ")\n";
@@ -1072,6 +1073,8 @@ void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix, bool inclu
     }
     if (!it->func_name.empty()) {
       os << it->func_name;
+    } else if (current_method != nullptr && current_method->IsWithinQuickCode(it->pc)) {
+      os << JniLongName(current_method) << "+" << (it->pc - current_method->GetQuickOatCodeOffset());
     } else {
       os << "???";
     }
