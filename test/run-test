@@ -33,7 +33,7 @@ cd "${progdir}"
 progdir=`pwd`
 prog="${progdir}"/`basename "${prog}"`
 test_dir="test-$$"
-tmp_dir="/tmp/${test_dir}"
+tmp_dir="/tmp/$USER/${test_dir}"
 
 export JAVA="java"
 export JAVAC="javac -g"
@@ -163,6 +163,7 @@ while true; do
         break
     fi
 done
+mkdir -p $tmp_dir
 
 if [ ! "$runtime" = "jvm" ]; then
   run_args="${run_args} --lib $lib"
