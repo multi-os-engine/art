@@ -897,6 +897,8 @@ static int dex2oat(int argc, char** argv) {
       dump_passes = true;
     } else if (option == "--dump-stats") {
       dump_stats = true;
+    } else if (option == "") {
+      // Ignore an empty option.
     } else {
       Usage("Unknown argument %s", option.data());
     }
