@@ -373,7 +373,8 @@ std::string GetSchedulerGroupName(pid_t tid);
 void SetThreadName(const char* thread_name);
 
 // Dumps the native stack for thread 'tid' to 'os'.
-void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix = "", bool include_count = true);
+void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix = "",
+    bool include_count = true, mirror::ArtMethod* current_method = nullptr);
 
 // Dumps the kernel stack for thread 'tid' to 'os'. Note that this is only available on linux-x86.
 void DumpKernelStack(std::ostream& os, pid_t tid, const char* prefix = "", bool include_count = true);
