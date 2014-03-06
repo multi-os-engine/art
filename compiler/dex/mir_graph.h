@@ -96,6 +96,8 @@ enum DataFlowAttributePos {
   kRefB,
   kRefC,
   kUsesMethodStar,       // Implicit use of Method*.
+  kUsesIField,           // Accesses an instance field (IGET/IPUT).
+  kUsesSField,           // Accesses a static field (SGET/SPUT).
   kDoLVN,                // Worth computing local value numbers.
 };
 
@@ -132,6 +134,8 @@ enum DataFlowAttributePos {
 #define DF_REF_B                (1ULL << kRefB)
 #define DF_REF_C                (1ULL << kRefC)
 #define DF_UMS                  (1ULL << kUsesMethodStar)
+#define DF_IFIELD               (1ULL << kUsesIField)
+#define DF_SFIELD               (1ULL << kUsesSField)
 #define DF_LVN                  (1ULL << kDoLVN)
 
 #define DF_HAS_USES             (DF_UA | DF_UB | DF_UC)
@@ -483,14 +487,23 @@ class MIRGraph {
    */
   void DumpCFG(const char* dir_prefix, bool all_blocks, const char* suffix = nullptr);
 
+  bool HasFieldAccess() const {
+    return (merged_df_flags_ & (DF_IFIELD | DF_SFIELD)) != 0u;
+  }
+
+  bool HasInvokes() const {
+    // NOTE: These formats include the rare filled-new-array/range.
+    return (merged_df_flags_ & (DF_FORMAT_35C | DF_FORMAT_3RC)) != 0u;
+  }
+
   void DoCacheFieldLoweringInfo();
 
-  const MirIFieldLoweringInfo& GetIFieldLoweringInfo(MIR* mir) {
+  const MirIFieldLoweringInfo& GetIFieldLoweringInfo(MIR* mir) const {
     DCHECK_LT(mir->meta.ifield_lowering_info, ifield_lowering_infos_.Size());
     return ifield_lowering_infos_.GetRawStorage()[mir->meta.ifield_lowering_info];
   }
 
-  const MirSFieldLoweringInfo& GetSFieldLoweringInfo(MIR* mir) {
+  const MirSFieldLoweringInfo& GetSFieldLoweringInfo(MIR* mir) const {
     DCHECK_LT(mir->meta.sfield_lowering_info, sfield_lowering_infos_.Size());
     return sfield_lowering_infos_.GetRawStorage()[mir->meta.sfield_lowering_info];
   }
@@ -959,6 +972,7 @@ class MIRGraph {
   size_t max_available_non_special_compiler_temps_;
   size_t max_available_special_compiler_temps_;
   bool punt_to_interpreter_;                    // Difficult or not worthwhile - just interpret.
+  uint64_t merged_df_flags_;
   GrowableArray<MirIFieldLoweringInfo> ifield_lowering_infos_;
   GrowableArray<MirSFieldLoweringInfo> sfield_lowering_infos_;
   GrowableArray<MirMethodLoweringInfo> method_lowering_infos_;
