@@ -34,6 +34,10 @@ class CacheFieldLoweringInfo : public Pass {
   void Start(CompilationUnit* cUnit) const {
     cUnit->mir_graph->DoCacheFieldLoweringInfo();
   }
+
+  bool Gate(const CompilationUnit *cUnit) const {
+    return cUnit->mir_graph->HasFieldAccess();
+  }
 };
 
 /**
