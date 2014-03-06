@@ -843,6 +843,8 @@ static int dex2oat(int argc, char** argv) {
         instruction_set = kX86;
       } else if (instruction_set_str == "x86_64") {
         instruction_set = kX86_64;
+      } else if (instruction_set_str == "arm64") {
+        instruction_set = kArm64;
       }
     } else if (option.starts_with("--instruction-set-features=")) {
       StringPiece str = option.substr(strlen("--instruction-set-features=")).data();

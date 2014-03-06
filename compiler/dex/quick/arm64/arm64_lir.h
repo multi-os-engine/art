@@ -93,18 +93,17 @@ namespace art {
  * +========================+
  */
 
-// Offset to distingish FP regs.
+// Offset to distinguish FP regs.
 #define ARM_FP_REG_OFFSET 32
 // Offset to distinguish DP FP regs.
-#define ARM_FP_DOUBLE 64
+#define ARM_FP_DOUBLE (32 | 64)
 // First FP callee save.
 #define ARM_FP_CALLEE_SAVE_BASE 16
 // Reg types.
-#define ARM_REGTYPE(x) (x & (ARM_FP_REG_OFFSET | ARM_FP_DOUBLE))
-#define ARM_FPREG(x) ((x & ARM_FP_REG_OFFSET) == ARM_FP_REG_OFFSET)
-#define ARM_LOWREG(x) ((x & 0x7) == x)
-#define ARM_DOUBLEREG(x) ((x & ARM_FP_DOUBLE) == ARM_FP_DOUBLE)
-#define ARM_SINGLEREG(x) (ARM_FPREG(x) && !ARM_DOUBLEREG(x))
+#define ARM_REGTYPE(x) ((x) & ARM_FP_DOUBLE)
+#define ARM_FPREG(x) (ARM_REGTYPE(x) != 0)
+#define ARM_DOUBLEREG(x) (ARM_REGTYPE(x) == ARM_FP_DOUBLE)
+#define ARM_SINGLEREG(x) (ARM_REGTYPE(x) == ARM_FP_REG_OFFSET)
 
 /*
  * Note: the low register of a floating point pair is sufficient to
@@ -119,21 +118,23 @@ namespace art {
 
 enum ArmResourceEncodingPos {
   kArmGPReg0   = 0,
-  kArmRegSP    = 13,
-  kArmRegLR    = 14,
-  kArmRegPC    = 15,
-  kArmFPReg0   = 16,
-  kArmFPReg16  = 32,
-  kArmRegEnd   = 48,
+  kArmRegLR    = 30,
+  kArmRegSP    = 31,
+  kArmFPReg0   = 32,
+  kArmRegEnd   = 64,
 };
 
-#define ENCODE_ARM_REG_LIST(N)      (static_cast<uint64_t>(N))
 #define ENCODE_ARM_REG_SP           (1ULL << kArmRegSP)
 #define ENCODE_ARM_REG_LR           (1ULL << kArmRegLR)
-#define ENCODE_ARM_REG_PC           (1ULL << kArmRegPC)
-#define ENCODE_ARM_REG_FPCS_LIST(N) (static_cast<uint64_t>(N) << kArmFPReg16)
+
+#define IS_SIGNED_IMM(size, value) \
+  ((value) >= -(1 << ((size) - 1)) && (value) < (1 << ((size) - 1)))
+#define IS_SIGNED_IMM7(value) IS_SIGNED_IMM(7, value)
+#define IS_SIGNED_IMM12(value) IS_SIGNED_IMM(12, value)
+#define IS_SIGNED_IMM19(value) IS_SIGNED_IMM(19, value)
 
 enum ArmNativeRegisterPool {
+  rARM_ZR = -1,  // Note: we rely on (rARM_ZR & 31) == 31
   r0   = 0,
   r1   = 1,
   r2   = 2,
@@ -147,12 +148,12 @@ enum ArmNativeRegisterPool {
   r10  = 10,
   r11  = 11,
   r12  = 12,
-  r13sp  = 13,
-  rARM_SP  = 13,
-  r14lr  = 14,
-  rARM_LR  = 14,
-  r15pc  = 15,
-  rARM_PC  = 15,
+  r31sp   = 31,
+  rARM_SP = 31,
+  r30lr   = 30,
+  rARM_LR = 30,
+  r15pc   = 15,
+  rARM_PC = 15,
   fr0  =  0 + ARM_FP_REG_OFFSET,
   fr1  =  1 + ARM_FP_REG_OFFSET,
   fr2  =  2 + ARM_FP_REG_OFFSET,
@@ -231,17 +232,36 @@ const RegLocation arm_loc_c_return_double
     {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, kVectorNotUsed,
      RegStorage(RegStorage::k64BitPair, r0, r1), INVALID_SREG, INVALID_SREG};
 
-enum ArmShiftEncodings {
-  kArmLsl = 0x0,
-  kArmLsr = 0x1,
-  kArmAsr = 0x2,
-  kArmRor = 0x3
+/**
+ * @brief Shift-type to be applied to a register via EncodeShift().
+ */
+enum A64ShiftEncodings {
+  kA64Lsl = 0x0,
+  kA64Lsr = 0x1,
+  kA64Asr = 0x2,
+  kA64Ror = 0x3
 };
 
+/**
+ * @brief Extend-type to be applied to a register via EncodeExtend().
+ */
+enum A64RegExtEncodings {
+  kA64Uxtb = 0x0,
+  kA64Uxth = 0x1,
+  kA64Uxtw = 0x2,
+  kA64Uxtx = 0x3,
+  kA64Sxtb = 0x4,
+  kA64Sxth = 0x5,
+  kA64Sxtw = 0x6,
+  kA64Sxtx = 0x7
+};
+
+#define ENCODE_NO_SHIFT (EncodeShift(kA64Lsl, 0))
+
 /*
- * The following enum defines the list of supported Thumb instructions by the
+ * The following enum defines the list of supported A64 instructions by the
  * assembler. Their corresponding EncodingMap positions will be defined in
- * Assemble.cc.
+ * assemble_arm64.cc.
  */
 enum ArmOpcode {
   kArmFirst = 0,
@@ -249,75 +269,38 @@ enum ArmOpcode {
   kThumbAdcRR,       // adc   [0100000101] rm[5..3] rd[2..0].
   kThumbAddRRI3,     // add(1)  [0001110] imm_3[8..6] rn[5..3] rd[2..0].
   kThumbAddRI8,      // add(2)  [00110] rd[10..8] imm_8[7..0].
-  kThumbAddRRR,      // add(3)  [0001100] rm[8..6] rn[5..3] rd[2..0].
   kThumbAddRRLH,     // add(4)  [01000100] H12[01] rm[5..3] rd[2..0].
   kThumbAddRRHL,     // add(4)  [01001000] H12[10] rm[5..3] rd[2..0].
   kThumbAddRRHH,     // add(4)  [01001100] H12[11] rm[5..3] rd[2..0].
   kThumbAddPcRel,    // add(5)  [10100] rd[10..8] imm_8[7..0].
-  kThumbAddSpRel,    // add(6)  [10101] rd[10..8] imm_8[7..0].
   kThumbAddSpI7,     // add(7)  [101100000] imm_7[6..0].
   kThumbAndRR,       // and   [0100000000] rm[5..3] rd[2..0].
   kThumbAsrRRI5,     // asr(1)  [00010] imm_5[10..6] rm[5..3] rd[2..0].
   kThumbAsrRR,       // asr(2)  [0100000100] rs[5..3] rd[2..0].
   kThumbBCond,       // b(1)  [1101] cond[11..8] offset_8[7..0].
-  kThumbBUncond,     // b(2)  [11100] offset_11[10..0].
   kThumbBicRR,       // bic   [0100001110] rm[5..3] rd[2..0].
   kThumbBkpt,        // bkpt  [10111110] imm_8[7..0].
-  kThumbBlx1,        // blx(1)  [111] H[10] offset_11[10..0].
-  kThumbBlx2,        // blx(1)  [111] H[01] offset_11[10..0].
-  kThumbBl1,         // blx(1)  [111] H[10] offset_11[10..0].
-  kThumbBl2,         // blx(1)  [111] H[11] offset_11[10..0].
-  kThumbBlxR,        // blx(2)  [010001111] rm[6..3] [000].
-  kThumbBx,          // bx    [010001110] H2[6..6] rm[5..3] SBZ[000].
-  kThumbCmnRR,       // cmn   [0100001011] rm[5..3] rd[2..0].
-  kThumbCmpRI8,      // cmp(1)  [00101] rn[10..8] imm_8[7..0].
-  kThumbCmpRR,       // cmp(2)  [0100001010] rm[5..3] rd[2..0].
-  kThumbCmpLH,       // cmp(3)  [01000101] H12[01] rm[5..3] rd[2..0].
-  kThumbCmpHL,       // cmp(3)  [01000110] H12[10] rm[5..3] rd[2..0].
-  kThumbCmpHH,       // cmp(3)  [01000111] H12[11] rm[5..3] rd[2..0].
   kThumbEorRR,       // eor   [0100000001] rm[5..3] rd[2..0].
-  kThumbLdmia,       // ldmia   [11001] rn[10..8] reglist [7..0].
-  kThumbLdrRRI5,     // ldr(1)  [01101] imm_5[10..6] rn[5..3] rd[2..0].
   kThumbLdrRRR,      // ldr(2)  [0101100] rm[8..6] rn[5..3] rd[2..0].
   kThumbLdrPcRel,    // ldr(3)  [01001] rd[10..8] imm_8[7..0].
-  kThumbLdrSpRel,    // ldr(4)  [10011] rd[10..8] imm_8[7..0].
   kThumbLdrbRRI5,    // ldrb(1) [01111] imm_5[10..6] rn[5..3] rd[2..0].
   kThumbLdrbRRR,     // ldrb(2) [0101110] rm[8..6] rn[5..3] rd[2..0].
   kThumbLdrhRRI5,    // ldrh(1) [10001] imm_5[10..6] rn[5..3] rd[2..0].
   kThumbLdrhRRR,     // ldrh(2) [0101101] rm[8..6] rn[5..3] rd[2..0].
   kThumbLdrsbRRR,    // ldrsb   [0101011] rm[8..6] rn[5..3] rd[2..0].
   kThumbLdrshRRR,    // ldrsh   [0101111] rm[8..6] rn[5..3] rd[2..0].
-  kThumbLslRRI5,     // lsl(1)  [00000] imm_5[10..6] rm[5..3] rd[2..0].
-  kThumbLslRR,       // lsl(2)  [0100000010] rs[5..3] rd[2..0].
-  kThumbLsrRRI5,     // lsr(1)  [00001] imm_5[10..6] rm[5..3] rd[2..0].
-  kThumbLsrRR,       // lsr(2)  [0100000011] rs[5..3] rd[2..0].
-  kThumbMovImm,      // mov(1)  [00100] rd[10..8] imm_8[7..0].
-  kThumbMovRR,       // mov(2)  [0001110000] rn[5..3] rd[2..0].
-  kThumbMovRR_H2H,   // mov(3)  [01000111] H12[11] rm[5..3] rd[2..0].
-  kThumbMovRR_H2L,   // mov(3)  [01000110] H12[01] rm[5..3] rd[2..0].
-  kThumbMovRR_L2H,   // mov(3)  [01000101] H12[10] rm[5..3] rd[2..0].
   kThumbMul,         // mul   [0100001101] rm[5..3] rd[2..0].
   kThumbMvn,         // mvn   [0100001111] rm[5..3] rd[2..0].
   kThumbNeg,         // neg   [0100001001] rm[5..3] rd[2..0].
   kThumbOrr,         // orr   [0100001100] rm[5..3] rd[2..0].
-  kThumbPop,         // pop   [1011110] r[8..8] rl[7..0].
-  kThumbPush,        // push  [1011010] r[8..8] rl[7..0].
   kThumbRev,         // rev   [1011101000] rm[5..3] rd[2..0]
   kThumbRevsh,       // revsh   [1011101011] rm[5..3] rd[2..0]
-  kThumbRorRR,       // ror   [0100000111] rs[5..3] rd[2..0].
-  kThumbSbc,         // sbc   [0100000110] rm[5..3] rd[2..0].
-  kThumbStmia,       // stmia   [11000] rn[10..8] reglist [7.. 0].
-  kThumbStrRRI5,     // str(1)  [01100] imm_5[10..6] rn[5..3] rd[2..0].
   kThumbStrRRR,      // str(2)  [0101000] rm[8..6] rn[5..3] rd[2..0].
-  kThumbStrSpRel,    // str(3)  [10010] rd[10..8] imm_8[7..0].
   kThumbStrbRRI5,    // strb(1) [01110] imm_5[10..6] rn[5..3] rd[2..0].
   kThumbStrbRRR,     // strb(2) [0101010] rm[8..6] rn[5..3] rd[2..0].
   kThumbStrhRRI5,    // strh(1) [10000] imm_5[10..6] rn[5..3] rd[2..0].
   kThumbStrhRRR,     // strh(2) [0101001] rm[8..6] rn[5..3] rd[2..0].
   kThumbSubRRI3,     // sub(1)  [0001111] imm_3[8..6] rn[5..3] rd[2..0]*/
-  kThumbSubRI8,      // sub(2)  [00111] rd[10..8] imm_8[7..0].
-  kThumbSubRRR,      // sub(3)  [0001101] rm[8..6] rn[5..3] rd[2..0].
-  kThumbSubSpI7,     // sub(4)  [101100001] imm_7[6..0].
   kThumbSwi,         // swi   [11011111] imm_8[7..0].
   kThumbTst,         // tst   [0100001000] rm[5..3] rn[2..0].
   kThumb2Vldrs,      // vldr low  sx [111011011001] rn[19..16] rd[15-12] [1010] imm_8[7..0].
@@ -344,23 +327,14 @@ enum ArmOpcode {
   kThumb2Vsqrts,     // vsqrt.f32 vd, vm [1110111010110001] vd[15..12] [10101100] vm[3..0].
   kThumb2Vsqrtd,     // vsqrt.f64 vd, vm [1110111010110001] vd[15..12] [10111100] vm[3..0].
   kThumb2MovI8M,     // mov(T2) rd, #<const> [11110] i [00001001111] imm3 rd[11..8] imm8.
-  kThumb2MovImm16,   // mov(T3) rd, #<const> [11110] i [0010100] imm4 [0] imm3 rd[11..8] imm8.
   kThumb2StrRRI12,   // str(Imm,T3) rd,[rn,#imm12] [111110001100] rn[19..16] rt[15..12] imm12[11..0].
   kThumb2LdrRRI12,   // str(Imm,T3) rd,[rn,#imm12] [111110001100] rn[19..16] rt[15..12] imm12[11..0].
   kThumb2StrRRI8Predec,  // str(Imm,T4) rd,[rn,#-imm8] [111110000100] rn[19..16] rt[15..12] [1100] imm[7..0].
   kThumb2LdrRRI8Predec,  // ldr(Imm,T4) rd,[rn,#-imm8] [111110000101] rn[19..16] rt[15..12] [1100] imm[7..0].
-  kThumb2Cbnz,       // cbnz rd,<label> [101110] i [1] imm5[7..3] rn[2..0].
-  kThumb2Cbz,        // cbn rd,<label> [101100] i [1] imm5[7..3] rn[2..0].
   kThumb2AddRRI12,   // add rd, rn, #imm12 [11110] i [100000] rn[19..16] [0] imm3[14..12] rd[11..8] imm8[7..0].
-  kThumb2MovRR,      // mov rd, rm [11101010010011110000] rd[11..8] [0000] rm[3..0].
   kThumb2Vmovs,      // vmov.f32 vd, vm [111011101] D [110000] vd[15..12] 101001] M [0] vm[3..0].
   kThumb2Vmovd,      // vmov.f64 vd, vm [111011101] D [110000] vd[15..12] 101101] M [0] vm[3..0].
-  kThumb2Ldmia,      // ldmia  [111010001001] rn[19..16] mask[15..0].
-  kThumb2Stmia,      // stmia  [111010001000] rn[19..16] mask[15..0].
   kThumb2AddRRR,     // add [111010110000] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
-  kThumb2SubRRR,     // sub [111010111010] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
-  kThumb2SbcRRR,     // sbc [111010110110] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
-  kThumb2CmpRR,      // cmp [111010111011] rn[19..16] [0000] [1111] [0000] rm[3..0].
   kThumb2SubRRI12,   // sub rd, rn, #imm12 [11110] i [101010] rn[19..16] [0] imm3[14..12] rd[11..8] imm8[7..0].
   kThumb2MvnI8M,     // mov(T2) rd, #<const> [11110] i [00011011110] imm3 rd[11..8] imm8.
   kThumb2Sel,        // sel rd, rn, rm [111110101010] rn[19-16] rd[11-8] rm[3-0].
@@ -371,7 +345,6 @@ enum ArmOpcode {
   kThumb2LdrshRRR,   // ldrsh rt,[rn,rm,LSL #imm] [111110000101] rn[19-16] rt[15-12] [000000] imm[5-4] rm[3-0].
   kThumb2LdrbRRR,    // ldrb rt,[rn,rm,LSL #imm] [111110000101] rn[19-16] rt[15-12] [000000] imm[5-4] rm[3-0].
   kThumb2LdrsbRRR,   // ldrsb rt,[rn,rm,LSL #imm] [111110000101] rn[19-16] rt[15-12] [000000] imm[5-4] rm[3-0].
-  kThumb2StrRRR,     // str rt,[rn,rm,LSL #imm] [111110000100] rn[19-16] rt[15-12] [000000] imm[5-4] rm[3-0].
   kThumb2StrhRRR,    // str rt,[rn,rm,LSL #imm] [111110000010] rn[19-16] rt[15-12] [000000] imm[5-4] rm[3-0].
   kThumb2StrbRRR,    // str rt,[rn,rm,LSL #imm] [111110000000] rn[19-16] rt[15-12] [000000] imm[5-4] rm[3-0].
   kThumb2LdrhRRI12,  // ldrh rt,[rn,#imm12] [111110001011] rt[15..12] rn[19..16] imm12[11..0].
@@ -380,30 +353,14 @@ enum ArmOpcode {
   kThumb2LdrsbRRI12,  // ldrsb rt,[rn,#imm12] [111110011001] rt[15..12] rn[19..16] imm12[11..0].
   kThumb2StrhRRI12,  // strh rt,[rn,#imm12] [111110001010] rt[15..12] rn[19..16] imm12[11..0].
   kThumb2StrbRRI12,  // strb rt,[rn,#imm12] [111110001000] rt[15..12] rn[19..16] imm12[11..0].
-  kThumb2Pop,        // pop   [1110100010111101] list[15-0]*/
-  kThumb2Push,       // push  [1110100100101101] list[15-0]*/
-  kThumb2CmpRI8M,    // cmp rn, #<const> [11110] i [011011] rn[19-16] [0] imm3 [1111] imm8[7..0].
-  kThumb2CmnRI8M,    // cmn rn, #<const> [11110] i [010001] rn[19-16] [0] imm3 [1111] imm8[7..0].
-  kThumb2AdcRRR,     // adc [111010110101] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
-  kThumb2AndRRR,     // and [111010100000] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
   kThumb2BicRRR,     // bic [111010100010] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
-  kThumb2CmnRR,      // cmn [111010110001] rn[19..16] [0000] [1111] [0000] rm[3..0].
-  kThumb2EorRRR,     // eor [111010101000] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
-  kThumb2MulRRR,     // mul [111110110000] rn[19..16] [1111] rd[11..8] [0000] rm[3..0].
-  kThumb2SdivRRR,    // sdiv [111110111001] rn[19..16] [1111] rd[11..8] [1111] rm[3..0].
   kThumb2UdivRRR,    // udiv [111110111011] rn[19..16] [1111] rd[11..8] [1111] rm[3..0].
   kThumb2MnvRR,      // mvn [11101010011011110] rd[11-8] [0000] rm[3..0].
   kThumb2RsubRRI8M,  // rsb rd, rn, #<const> [11110] i [011101] rn[19..16] [0] imm3[14..12] rd[11..8] imm8[7..0].
   kThumb2NegRR,      // actually rsub rd, rn, #0.
-  kThumb2OrrRRR,     // orr [111010100100] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
   kThumb2TstRR,      // tst [111010100001] rn[19..16] [0000] [1111] [0000] rm[3..0].
-  kThumb2LslRRR,     // lsl [111110100000] rn[19..16] [1111] rd[11..8] [0000] rm[3..0].
-  kThumb2LsrRRR,     // lsr [111110100010] rn[19..16] [1111] rd[11..8] [0000] rm[3..0].
-  kThumb2AsrRRR,     // asr [111110100100] rn[19..16] [1111] rd[11..8] [0000] rm[3..0].
-  kThumb2RorRRR,     // ror [111110100110] rn[19..16] [1111] rd[11..8] [0000] rm[3..0].
   kThumb2LslRRI5,    // lsl [11101010010011110] imm[14.12] rd[11..8] [00] rm[3..0].
   kThumb2LsrRRI5,    // lsr [11101010010011110] imm[14.12] rd[11..8] [01] rm[3..0].
-  kThumb2AsrRRI5,    // asr [11101010010011110] imm[14.12] rd[11..8] [10] rm[3..0].
   kThumb2RorRRI5,    // ror [11101010010011110] imm[14.12] rd[11..8] [11] rm[3..0].
   kThumb2BicRRI8M,   // bic rd, rn, #<const> [11110] i [000010] rn[19..16] [0] imm3[14..12] rd[11..8] imm8[7..0].
   kThumb2AndRRI8M,   // and rd, rn, #<const> [11110] i [000000] rn[19..16] [0] imm3[14..12] rd[11..8] imm8[7..0].
@@ -420,7 +377,6 @@ enum ArmOpcode {
   kThumb2Vcmpd,      // vcmp [111011101] D [11011] rd[15-12] [1011] E [1] M [0] rm[3-0].
   kThumb2Vcmps,      // vcmp [111011101] D [11010] rd[15-12] [1011] E [1] M [0] rm[3-0].
   kThumb2LdrPcRel12,  // ldr rd,[pc,#imm12] [1111100011011111] rt[15-12] imm12[11-0].
-  kThumb2BCond,      // b<c> [1110] S cond[25-22] imm6[21-16] [10] J1 [0] J2 imm11[10..0].
   kThumb2Vmovd_RR,   // vmov [111011101] D [110000] vd[15-12 [101101] M [0] vm[3-0].
   kThumb2Vmovs_RR,   // vmov [111011101] D [110000] vd[15-12 [101001] M [0] vm[3-0].
   kThumb2Fmrs,       // vmov [111011100000] vn[19-16] rt[15-12] [1010] N [0010000].
@@ -444,29 +400,114 @@ enum ArmOpcode {
   kThumb2Bfc,        // bfc [11110011011011110] [0] imm3[14-12] rd[11-8] imm2[7-6] [0] msb[4-0].
   kThumb2Dmb,        // dmb [1111001110111111100011110101] option[3-0].
   kThumb2LdrPcReln12,  // ldr rd,[pc,-#imm12] [1111100011011111] rt[15-12] imm12[11-0].
-  kThumb2Stm,        // stm <list> [111010010000] rn[19-16] 000 rl[12-0].
   kThumbUndefined,   // undefined [11011110xxxxxxxx].
   kThumb2VPopCS,     // vpop <list of callee save fp singles (s16+).
   kThumb2VPushCS,    // vpush <list callee save fp singles (s16+).
   kThumb2Vldms,      // vldms rd, <list>.
   kThumb2Vstms,      // vstms rd, <list>.
-  kThumb2BUncond,    // b <label>.
-  kThumb2MovImm16H,  // similar to kThumb2MovImm16, but target high hw.
   kThumb2AddPCR,     // Thumb2 2-operand add with hard-coded PC target.
   kThumb2Adr,        // Special purpose encoding of ADR for switch tables.
   kThumb2MovImm16LST,  // Special purpose version for switch table use.
   kThumb2MovImm16HST,  // Special purpose version for switch table use.
   kThumb2LdmiaWB,    // ldmia  [111010011001[ rn[19..16] mask[15..0].
   kThumb2OrrRRRs,    // orrs [111010100101] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
-  kThumb2Push1,      // t3 encoding of push.
-  kThumb2Pop1,       // t3 encoding of pop.
   kThumb2RsubRRR,    // rsb [111010111101] rn[19..16] [0000] rd[11..8] [0000] rm[3..0].
   kThumb2Smull,      // smull [111110111000] rn[19-16], rdlo[15-12] rdhi[11-8] [0000] rm[3-0].
   kThumb2LdrdPcRel8,  // ldrd rt, rt2, pc +-/1024.
   kThumb2LdrdI8,     // ldrd rt, rt2, [rn +-/1024].
-  kThumb2StrdI8,     // strd rt, rt2, [rn +-/1024].
+
+  // A64 instruction set begins here
+#if WITH_A64_HOST_SIMULATOR == 1
+  kA64x86Trampoline,  // 8-bytes reserved for a x86 trampoline call.
+  kA64x86BlR,        // 8-bytes to call x86 native code in the host simulator.
+#endif
+  kA64AdcWWW,        // adc [00011010000] rm[20-16] [000000] rn[9-5] rd[4-0].
+  kA64AddWWI12,      // add [0001000100] imm_12[21-10] rn[9-5] rd[4-0].
+  kA64AddWWW,        // add [00001011001] rm[20-16] option[15-13] imm_3[12-10] rn[9-5] rd[4-0].
+  kA64AndWWW,        // and [00001010] shift[23-22] [N=0] rm[20-16] imm_6[15-10] rn[9-5] rd[4-0].
+  kA64AsrWWI6,       // asr [0001001100] immr[21-16] imms[15-10] rn[9-5] rd[4-0].
+  kA64AsrWWW,        // asr [00011010110] rm[20-16] [001010] rn[9-5] rd[4-0].
+  kA64BCond,         // b.cond [01010100] imm_19[23-5] [0] cond[3-0].
+  kA64BlR,           // blr [1101011000111111000000] rn[9-5] [00000].
+  kA64BR,            // br  [1101011000011111000000] rn[9-5] [00000].
+  kA64BrkI16,        // brk [11010100001] imm_16[20-5] [00000].
+  kA64BUncond,       // b   [00010100] offset_26[25-0].
+  kA64CbnzW,         // cbnz[00110101] imm_19[23-5] rt[4-0].
+  kA64CbzW,          // cbz [00110100] imm_19[23-5] rt[4-0].
+  kA64CmnWW,         // cmn [00101011001] rm[20-16] option[15-13] imm_3[12-10] rn[9-5] [11111].
+  kA64CmnWI12,       // cmn [00110001] shift[23-22] imm_12[21-10] rn[9-5] [11111].
+  kA64CmpWW,         // cmp [01101011001] rm[20-16] option[15-13] imm_3[12-10] rn[9-5] [11111].
+  kA64CmpWI12,       // cmp [01110001] shift[23-22] imm_12[21-10] rn[9-5] [11111].
+  kA64EorWWW,        // eor [01001010] shift[23-22] [0] rm[20-16] imm_6[15-10] rn[9-5] rd[4-0].
+  kA64LdrWXI12,      // ldr [10111000010] imm_9[20-12] [01] rn[9-5] rt[4-0].
+  kA64LdrXXI12,      // ldr [11111000010] imm_9[20-12] [01] rn[9-5] rt[4-0].
+  kA64LdrPostWXI9,   // ldr [10111000010] imm_9[20-12] [01] rn[9-5] rt[4-0].
+  kA64LdrPostXXI9,   // ldr [11111000010] imm_9[20-12] [01] rn[9-5] rt[4-0].
+  kA64LdpWWXI7,      // ldp [0010100101] imm_7[21-15] rt2[14-10] rn[9-5] rt[4-0].
+  kA64LdpPostWWXI7,  // ldp [0010100011] imm_7[21-15] rt2[14-10] rn[9-5] rt[4-0].
+  kA64LdpPostXXXI7,  // ldp [1010100011] imm_7[21-15] rt2[14-10] rn[9-5] rt[4-0].
+  kA64LslWWW,        // lsl [00011010110] rm[20-16] [001000] rn[9-5] rd[4-0].
+  kA64LsrWWW,        // lsl [00011010110] rm[20-16] [001001] rn[9-5] rd[4-0].
+  kA64MovkWI16,      // mov [010100101] hw[22-21] imm_16[20-5] rd[4-0].
+  kA64MovnWI16,      // mov [000100101] hw[22-21] imm_16[20-5] rd[4-0].
+  kA64MovzWI16,      // mov [011100101] hw[22-21] imm_16[20-5] rd[4-0].
+  kA64MovWW,         // mov [00101010000] rm[20-16] [000000] [11111] rd[4-0].
+  kA64MulWWW,        // mul [00011011000] rm[20-16] [011111] rn[9-5] rd[4-0].
+  kA64OrrWWW,        // orr [00101010] shift[23-22] [0] rm[20-16] imm_6[15-10] rn[9-5] rd[4-0].
+  kA64Ret,           // ret [11010110010111110000001111000000].
+  kA64RorWWW,        // lsl [00011010110] rm[20-16] [001011] rn[9-5] rd[4-0].
+  kA64SbcWWW,        // sbc [00011010000] rm[20-16] [000000] rn[9-5] rd[4-0].
+  kA64SdivWWW,       // sdiv[00011010110] rm[20-16] [000011] rn[9-5] rd[4-0].
+  kA64StpWWXI7,      // stp [0010100101] imm_7[21-15] rt2[14-10] rn[9-5] rt[4-0].
+  kA64StpPostWWXI7,  // stp [0010100010] imm_7[21-15] rt2[14-10] rn[9-5] rt[4-0].
+  kA64StpPostXXXI7,  // stp [1010100010] imm_7[21-15] rt2[14-10] rn[9-5] rt[4-0].
+  kA64StpPreWWXI7,   // stp [0010100110] imm_7[21-15] rt2[14-10] rn[9-5] rt[4-0].
+  kA64StpPreXXXI7,   // stp [1010100110] imm_7[21-15] rt2[14-10] rn[9-5] rt[4-0].
+  kA64StrWXI12,      // str [1011100100] imm_12[21-10] rn[9-5] rt[4-0].
+  kA64StrXXI12,      // str [1111100100] imm_12[20-12] rn[9-5] rt[4-0].
+  kA64StrWXX,        // str [10111000001] rm[20-16] option[15-13] S[12-12] [10] rn[9-5] rt[4-0].
+  kA64StrPostWXI9,   // str [10111000000] imm_9[20-12] [01] rn[9-5] rt[4-0].
+  kA64StxrWXX,       // stxr [11001000000] rs[20-16] [011111] rn[9-5] rt[4-0].
+  kA64SubWWI12,      // sub [0101000100] imm_12[21-10] rn[9-5] rd[4-0].
+  kA64SubWWW,        // sub [01001011001] rm[20-16] option[15-13] imm_3[12-10] rn[9-5] rd[4-0].
+  kA64SubsWWI12,     // subs [0111000100] imm_12[21-10] rn[9-5] rd[4-0].
   kArmLast,
+
+#if 0
+  // TODO(Arm64): implement this.
+  // Instruction aliases.
+  kA64AliasFirst,
+  kA64CmnWW,         // adds  rzr, arg0, arg1, arg2
+  kA64CmpWW,         // subs  rzr, arg0, arg1, arg2
+  kA64MovWW,         // orr   arg0, rzr, arg1
+  kA64MulWWW,        // madd  arg0, arg1, arg2, rzr
+  kA64NegWW,         // sub   arg0, rzr, arg1
+  kA64AliasLast,
+#endif
+
+  kA64Wide = 0x8000  // Flag used to select the 64-bit variant of the instruction.
 };
+
+/*
+ * TODO(Arm64): implement this.
+ *
+ * The A64 instruction set provides two variants for many instructions: a
+ * 32-bit variant and a 64-bit variant. The 32-bit variant operates on w
+ * registers, while the 64-bit variant operates on x registers. The encodings
+ * for the two variants are often almost identical and differ only in the top
+ * (most significant bit), which is set to 1 for 64-bit and to 0 for 32-bit.
+ * It definitely makes sense to exploit this symmetry of the instruction set.
+ * We do this via the WIDE, UNWIDE macros. For opcodes that allow it, the wide
+ * variant can be obtained by applying the WIDE macro to the non-wide opcode.
+ * E.g. WIDE(kA64SubRRI12).
+ */
+
+// Return the wide and no-wide variants of the given opcode.
+#define WIDE(op) ((op) | kA64Wide)
+#define UNWIDE(op) ((op) & ~kA64Wide)
+
+// Whether the given opcode is wide.
+#define IS_WIDE(op) (((op) & kA64Wide) != 0)
 
 enum ArmOpDmbOptions {
   kSY = 0xf,
@@ -487,7 +528,8 @@ enum ArmEncodingKind {
   kFmtImm16,     // Zero-extended immed using [26,19..16,14..12,7..0].
   kFmtImm6,      // Encoded branch target using [9,7..3]0.
   kFmtImm12,     // Zero-extended immediate using [26,14..12,7..0].
-  kFmtShift,     // Shift descriptor, [14..12,7..4].
+  kFmtShift,     // Identical to kFmtExtShift, but restricted to shift.
+  kFmtExtShift,  // Register extend or shift, 9-bit at [23..21, 15..10].
   kFmtLsb,       // least significant bit using [14..12][7..6].
   kFmtBWidth,    // bit-field width, encoded as width-1.
   kFmtShift5,    // Shift count, [14..12,7..6].
@@ -502,14 +544,14 @@ struct ArmEncodingMap {
   uint32_t skeleton;
   struct {
     ArmEncodingKind kind;
-    int end;   // end for kFmtBitBlt, 1-bit slice end for FP regs.
-    int start;  // start for kFmtBitBlt, 4-bit slice end for FP regs.
+    int end;         // end for kFmtBitBlt, 1-bit slice end for FP regs.
+    int start;       // start for kFmtBitBlt, 4-bit slice end for FP regs.
   } field_loc[4];
-  ArmOpcode opcode;
+  ArmOpcode opcode;  // can be WIDE()-ned to indicate it has a wide variant.
   uint64_t flags;
   const char* name;
   const char* fmt;
-  int size;   // Note: size is in bytes.
+  int size;          // Note: size is in bytes.
   FixupKind fixup;
 };
 

@@ -88,7 +88,9 @@ uint32_t CompiledCode::AlignCode(uint32_t offset, InstructionSet instruction_set
       return RoundUp(offset, kArmAlignment);
     case kMips:
       return RoundUp(offset, kMipsAlignment);
-    case kX86:  // Fall-through.
+    case kArm64:
+      // TODO(Arm64): For now we use x86 alignment, as we run through the Vixl simulator.
+    case kX86:   // Fall-through.
     case kX86_64:
       return RoundUp(offset, kX86Alignment);
     default:
@@ -100,6 +102,7 @@ uint32_t CompiledCode::AlignCode(uint32_t offset, InstructionSet instruction_set
 size_t CompiledCode::CodeDelta() const {
   switch (instruction_set_) {
     case kArm:
+    case kArm64:
     case kMips:
     case kX86:
       return 0;
@@ -117,6 +120,7 @@ const void* CompiledCode::CodePointer(const void* code_pointer,
                                       InstructionSet instruction_set) {
   switch (instruction_set) {
     case kArm:
+    case kArm64:
     case kMips:
     case kX86:
       return code_pointer;

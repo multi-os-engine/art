@@ -14,9 +14,15 @@
  * limitations under the License.
  */
 
+#ifndef __STDC_CONSTANT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
+#include <stdint.h>
+
 #include "arm64_lir.h"
 #include "codegen_arm64.h"
 #include "dex/quick/mir_to_lir-inl.h"
+
 
 namespace art {
 
@@ -171,15 +177,18 @@ bool Arm64Mir2Lir::InexpensiveConstantDouble(int64_t value) {
  */
 LIR* Arm64Mir2Lir::LoadConstantNoClobber(int r_dest, int value) {
   LIR* res;
-  int mod_imm;
 
   if (ARM_FPREG(r_dest)) {
     return LoadFPConstantValue(r_dest, value);
   }
 
+  // TODO(Arm64): complete/optimise immediate load.
+#if 0
+  int mod_imm;
+
   /* See if the value can be constructed cheaply */
-  if (ARM_LOWREG(r_dest) && (value >= 0) && (value <= 255)) {
-    return NewLIR2(kThumbMovImm, r_dest, value);
+  if (value >= 0 && value <= 255) {
+    return NewLIR2(kA64MovWI16, r_dest, value);
   }
   /* Check Modified immediate special cases */
   mod_imm = ModifiedImmediate(value);
@@ -197,33 +206,50 @@ LIR* Arm64Mir2Lir::LoadConstantNoClobber(int r_dest, int value) {
     res = NewLIR2(kThumb2MovImm16, r_dest, value);
     return res;
   }
-  /* Do a low/high pair */
-  res = NewLIR2(kThumb2MovImm16, r_dest, Low16Bits(value));
-  NewLIR2(kThumb2MovImm16H, r_dest, High16Bits(value));
+#endif
+
+  /* Do a low/high pair. */
+  uint16_t high_bits = High16Bits(value);
+  uint16_t low_bits = Low16Bits(value);
+
+  if (LIKELY(low_bits != 0)) {
+    res = NewLIR3(kA64MovzWI16, r_dest, low_bits, 0);
+    if (UNLIKELY(high_bits != 0)) {
+      NewLIR3(kA64MovkWI16, r_dest, high_bits, 1);
+    }
+  } else {
+    if (LIKELY(high_bits == 0)) {
+      res = NewLIR2(kA64MovWW, r_dest, 31);
+    } else {
+      res = NewLIR3(kA64MovzWI16, r_dest, high_bits, 1);
+    }
+  }
+
   return res;
 }
 
 LIR* Arm64Mir2Lir::OpUnconditionalBranch(LIR* target) {
-  LIR* res = NewLIR1(kThumbBUncond, 0 /* offset to be patched  during assembly*/);
+  LIR* res = NewLIR1(kA64BUncond, 0 /* offset to be patched  during assembly*/);
   res->target = target;
   return res;
 }
 
 LIR* Arm64Mir2Lir::OpCondBranch(ConditionCode cc, LIR* target) {
-  // This is kThumb2BCond instead of kThumbBCond for performance reasons. The assembly
-  // time required for a new pass after kThumbBCond is fixed up to kThumb2BCond is
-  // substantial.
-  LIR* branch = NewLIR2(kThumb2BCond, 0 /* offset to be patched */,
-                        ArmConditionEncoding(cc));
+  LIR* branch = NewLIR2(kA64BCond, ArmConditionEncoding(cc),
+                        0 /* offset to be patched */);
   branch->target = target;
   return branch;
 }
 
 LIR* Arm64Mir2Lir::OpReg(OpKind op, int r_dest_src) {
-  ArmOpcode opcode = kThumbBkpt;
+  ArmOpcode opcode = kA64BrkI16;
   switch (op) {
     case kOpBlx:
-      opcode = kThumbBlxR;
+#if WITH_A64_HOST_SIMULATOR == 1
+      opcode = kA64x86BlR;
+#else
+      opcode = kA64BlR;
+#endif
       break;
     default:
       LOG(FATAL) << "Bad opcode " << op;
@@ -232,139 +258,73 @@ LIR* Arm64Mir2Lir::OpReg(OpKind op, int r_dest_src) {
 }
 
 LIR* Arm64Mir2Lir::OpRegRegShift(OpKind op, int r_dest_src1, int r_src2,
-                               int shift) {
-  bool thumb_form = ((shift == 0) && ARM_LOWREG(r_dest_src1) && ARM_LOWREG(r_src2));
-  ArmOpcode opcode = kThumbBkpt;
+                                 int shift) {
+  ArmOpcode opcode = kA64BrkI16;
   switch (op) {
-    case kOpAdc:
-      opcode = (thumb_form) ? kThumbAdcRR : kThumb2AdcRRR;
-      break;
-    case kOpAnd:
-      opcode = (thumb_form) ? kThumbAndRR : kThumb2AndRRR;
-      break;
-    case kOpBic:
-      opcode = (thumb_form) ? kThumbBicRR : kThumb2BicRRR;
-      break;
     case kOpCmn:
-      DCHECK_EQ(shift, 0);
-      opcode = (thumb_form) ? kThumbCmnRR : kThumb2CmnRR;
+      opcode = kA64CmnWW;
       break;
     case kOpCmp:
-      if (thumb_form)
-        opcode = kThumbCmpRR;
-      else if ((shift == 0) && !ARM_LOWREG(r_dest_src1) && !ARM_LOWREG(r_src2))
-        opcode = kThumbCmpHH;
-      else if ((shift == 0) && ARM_LOWREG(r_dest_src1))
-        opcode = kThumbCmpLH;
-      else if (shift == 0)
-        opcode = kThumbCmpHL;
-      else
-        opcode = kThumb2CmpRR;
-      break;
-    case kOpXor:
-      opcode = (thumb_form) ? kThumbEorRR : kThumb2EorRRR;
+      opcode = kA64CmpWW;
       break;
     case kOpMov:
-      DCHECK_EQ(shift, 0);
-      if (ARM_LOWREG(r_dest_src1) && ARM_LOWREG(r_src2))
-        opcode = kThumbMovRR;
-      else if (!ARM_LOWREG(r_dest_src1) && !ARM_LOWREG(r_src2))
-        opcode = kThumbMovRR_H2H;
-      else if (ARM_LOWREG(r_dest_src1))
-        opcode = kThumbMovRR_H2L;
-      else
-        opcode = kThumbMovRR_L2H;
-      break;
-    case kOpMul:
-      DCHECK_EQ(shift, 0);
-      opcode = (thumb_form) ? kThumbMul : kThumb2MulRRR;
+      opcode = kA64MovWW;
       break;
     case kOpMvn:
-      opcode = (thumb_form) ? kThumbMvn : kThumb2MnvRR;
+      // opcode = kA64MvnWW;
       break;
     case kOpNeg:
       DCHECK_EQ(shift, 0);
-      opcode = (thumb_form) ? kThumbNeg : kThumb2NegRR;
-      break;
-    case kOpOr:
-      opcode = (thumb_form) ? kThumbOrr : kThumb2OrrRRR;
-      break;
-    case kOpSbc:
-      opcode = (thumb_form) ? kThumbSbc : kThumb2SbcRRR;
+      opcode = kThumb2NegRR;
       break;
     case kOpTst:
-      opcode = (thumb_form) ? kThumbTst : kThumb2TstRR;
-      break;
-    case kOpLsl:
-      DCHECK_EQ(shift, 0);
-      opcode = (thumb_form) ? kThumbLslRR : kThumb2LslRRR;
-      break;
-    case kOpLsr:
-      DCHECK_EQ(shift, 0);
-      opcode = (thumb_form) ? kThumbLsrRR : kThumb2LsrRRR;
-      break;
-    case kOpAsr:
-      DCHECK_EQ(shift, 0);
-      opcode = (thumb_form) ? kThumbAsrRR : kThumb2AsrRRR;
-      break;
-    case kOpRor:
-      DCHECK_EQ(shift, 0);
-      opcode = (thumb_form) ? kThumbRorRR : kThumb2RorRRR;
-      break;
-    case kOpAdd:
-      opcode = (thumb_form) ? kThumbAddRRR : kThumb2AddRRR;
-      break;
-    case kOpSub:
-      opcode = (thumb_form) ? kThumbSubRRR : kThumb2SubRRR;
+      opcode = kThumb2TstRR;
       break;
     case kOpRev:
       DCHECK_EQ(shift, 0);
-      if (!thumb_form) {
+      if (0) {
         // Binary, but rm is encoded twice.
         return NewLIR3(kThumb2RevRR, r_dest_src1, r_src2, r_src2);
       }
       opcode = kThumbRev;
       break;
     case kOpRevsh:
-      DCHECK_EQ(shift, 0);
-      if (!thumb_form) {
+      if (0) {
         // Binary, but rm is encoded twice.
         return NewLIR3(kThumb2RevshRR, r_dest_src1, r_src2, r_src2);
       }
       opcode = kThumbRevsh;
       break;
     case kOp2Byte:
-      DCHECK_EQ(shift, 0);
+      DCHECK_EQ(shift, ENCODE_NO_SHIFT);
       return NewLIR4(kThumb2Sbfx, r_dest_src1, r_src2, 0, 8);
     case kOp2Short:
-      DCHECK_EQ(shift, 0);
+      DCHECK_EQ(shift, ENCODE_NO_SHIFT);
       return NewLIR4(kThumb2Sbfx, r_dest_src1, r_src2, 0, 16);
     case kOp2Char:
-      DCHECK_EQ(shift, 0);
+      DCHECK_EQ(shift, ENCODE_NO_SHIFT);
       return NewLIR4(kThumb2Ubfx, r_dest_src1, r_src2, 0, 16);
     default:
-      LOG(FATAL) << "Bad opcode: " << op;
-      break;
+      return OpRegRegRegShift(op, r_dest_src1, r_dest_src1, r_src2, shift);
   }
+
   DCHECK(!IsPseudoLirOp(opcode));
   if (EncodingMap[opcode].flags & IS_BINARY_OP) {
+    DCHECK_EQ(shift, ENCODE_NO_SHIFT);
     return NewLIR2(opcode, r_dest_src1, r_src2);
   } else if (EncodingMap[opcode].flags & IS_TERTIARY_OP) {
-    if (EncodingMap[opcode].field_loc[2].kind == kFmtShift) {
+    ArmEncodingKind kind = EncodingMap[opcode].field_loc[2].kind;
+    if (kind == kFmtExtShift || kind == kFmtShift) {
       return NewLIR3(opcode, r_dest_src1, r_src2, shift);
-    } else {
-      return NewLIR3(opcode, r_dest_src1, r_dest_src1, r_src2);
     }
-  } else if (EncodingMap[opcode].flags & IS_QUAD_OP) {
-    return NewLIR4(opcode, r_dest_src1, r_dest_src1, r_src2, shift);
-  } else {
-    LOG(FATAL) << "Unexpected encoding operand count";
-    return NULL;
   }
+
+  LOG(FATAL) << "Unexpected encoding operand count";
+  return NULL;
 }
 
 LIR* Arm64Mir2Lir::OpRegReg(OpKind op, int r_dest_src1, int r_src2) {
-  return OpRegRegShift(op, r_dest_src1, r_src2, 0);
+  return OpRegRegShift(op, r_dest_src1, r_src2, ENCODE_NO_SHIFT);
 }
 
 LIR* Arm64Mir2Lir::OpMovRegMem(int r_dest, int r_base, int offset, MoveType move_type) {
@@ -383,111 +343,114 @@ LIR* Arm64Mir2Lir::OpCondRegReg(OpKind op, ConditionCode cc, int r_dest, int r_s
 }
 
 LIR* Arm64Mir2Lir::OpRegRegRegShift(OpKind op, int r_dest, int r_src1,
-                                  int r_src2, int shift) {
-  ArmOpcode opcode = kThumbBkpt;
-  bool thumb_form = (shift == 0) && ARM_LOWREG(r_dest) && ARM_LOWREG(r_src1) &&
-      ARM_LOWREG(r_src2);
+                                    int r_src2, int shift) {
+  ArmOpcode opcode = kA64BrkI16;
   switch (op) {
     case kOpAdd:
-      opcode = (thumb_form) ? kThumbAddRRR : kThumb2AddRRR;
+      opcode = kA64AddWWW;
       break;
     case kOpSub:
-      opcode = (thumb_form) ? kThumbSubRRR : kThumb2SubRRR;
+      opcode = kA64SubWWW;
       break;
     case kOpRsub:
-      opcode = kThumb2RsubRRR;
+      // opcode = kA64RsubWWW;
       break;
     case kOpAdc:
-      opcode = kThumb2AdcRRR;
+      opcode = kA64AdcWWW;
       break;
     case kOpAnd:
-      opcode = kThumb2AndRRR;
-      break;
-    case kOpBic:
-      opcode = kThumb2BicRRR;
+      opcode = kA64AndWWW;
       break;
     case kOpXor:
-      opcode = kThumb2EorRRR;
+      opcode = kA64EorWWW;
       break;
     case kOpMul:
-      DCHECK_EQ(shift, 0);
-      opcode = kThumb2MulRRR;
+      opcode = kA64MulWWW;
       break;
     case kOpDiv:
-      DCHECK_EQ(shift, 0);
-      opcode = kThumb2SdivRRR;
+      opcode = kA64SdivWWW;
       break;
     case kOpOr:
-      opcode = kThumb2OrrRRR;
+      opcode = kA64OrrWWW;
       break;
     case kOpSbc:
-      opcode = kThumb2SbcRRR;
+      opcode = kA64SbcWWW;
       break;
     case kOpLsl:
-      DCHECK_EQ(shift, 0);
-      opcode = kThumb2LslRRR;
+      opcode = kA64LslWWW;
       break;
     case kOpLsr:
-      DCHECK_EQ(shift, 0);
-      opcode = kThumb2LsrRRR;
+      opcode = kA64LsrWWW;
       break;
     case kOpAsr:
-      DCHECK_EQ(shift, 0);
-      opcode = kThumb2AsrRRR;
+      opcode = kA64AsrWWW;
       break;
     case kOpRor:
-      DCHECK_EQ(shift, 0);
-      opcode = kThumb2RorRRR;
+      opcode = kA64RorWWW;
       break;
     default:
       LOG(FATAL) << "Bad opcode: " << op;
       break;
   }
+
+  // Check correct usage of the sp register.
+  DCHECK(IsExtendEncoding(shift) || r_dest != rARM_SP);
+  DCHECK(IsExtendEncoding(shift) || r_src1 != rARM_SP);
+  DCHECK_NE(r_src2, rARM_SP);
+
+  // The instructions above belong to two kinds:
+  // - 4-operands instructions, where the last operand is a shift/extend immediate,
+  // - 3-operands instructions with no shift/extend.
   DCHECK(!IsPseudoLirOp(opcode));
   if (EncodingMap[opcode].flags & IS_QUAD_OP) {
     return NewLIR4(opcode, r_dest, r_src1, r_src2, shift);
   } else {
     DCHECK(EncodingMap[opcode].flags & IS_TERTIARY_OP);
+    DCHECK_EQ(shift, ENCODE_NO_SHIFT);
     return NewLIR3(opcode, r_dest, r_src1, r_src2);
   }
 }
 
 LIR* Arm64Mir2Lir::OpRegRegReg(OpKind op, int r_dest, int r_src1, int r_src2) {
-  return OpRegRegRegShift(op, r_dest, r_src1, r_src2, 0);
+  return OpRegRegRegShift(op, r_dest, r_src1, r_src2, ENCODE_NO_SHIFT);
 }
 
 LIR* Arm64Mir2Lir::OpRegRegImm(OpKind op, int r_dest, int r_src1, int value) {
   LIR* res;
   bool neg = (value < 0);
   int32_t abs_value = (neg) ? -value : value;
-  ArmOpcode opcode = kThumbBkpt;
-  ArmOpcode alt_opcode = kThumbBkpt;
-  bool all_low_regs = (ARM_LOWREG(r_dest) && ARM_LOWREG(r_src1));
+  ArmOpcode opcode = kA64BrkI16;
+  ArmOpcode alt_opcode = kA64BrkI16;
   int32_t mod_imm = ModifiedImmediate(value);
 
   switch (op) {
     case kOpLsl:
-      if (all_low_regs)
-        return NewLIR3(kThumbLslRRI5, r_dest, r_src1, value);
-      else
-        return NewLIR3(kThumb2LslRRI5, r_dest, r_src1, value);
+      return NewLIR3(kThumb2LslRRI5, r_dest, r_src1, value);
     case kOpLsr:
-      if (all_low_regs)
-        return NewLIR3(kThumbLsrRRI5, r_dest, r_src1, value);
-      else
-        return NewLIR3(kThumb2LsrRRI5, r_dest, r_src1, value);
+      return NewLIR3(kThumb2LsrRRI5, r_dest, r_src1, value);
     case kOpAsr:
-      if (all_low_regs)
-        return NewLIR3(kThumbAsrRRI5, r_dest, r_src1, value);
-      else
-        return NewLIR3(kThumb2AsrRRI5, r_dest, r_src1, value);
+      return NewLIR3(kA64AsrWWI6, r_dest, r_src1, value);
     case kOpRor:
       return NewLIR3(kThumb2RorRRI5, r_dest, r_src1, value);
+#if 1
     case kOpAdd:
-      if (ARM_LOWREG(r_dest) && (r_src1 == r13sp) &&
+      neg = !neg;
+      // Note: intentional fallthrough
+    case kOpSub:
+      if (abs_value < 0x1000) {
+        opcode = (neg) ? kA64AddWWI12 : kA64SubWWI12;
+        return NewLIR3(opcode, r_dest, r_src1, abs_value);
+      } else {
+        mod_imm = -1;
+        alt_opcode = (neg) ? kA64AddWWW : kA64SubWWW;
+      }
+      break;
+#else
+    case kOpAdd:
+      if ((r_src1 == r31sp) &&
         (value <= 1020) && ((value & 0x3) == 0)) {
         return NewLIR3(kThumbAddSpRel, r_dest, r_src1, value >> 2);
-      } else if (ARM_LOWREG(r_dest) && (r_src1 == r15pc) &&
+      } else if ((r_src1 == r15pc) &&
           (value <= 1020) && ((value & 0x3) == 0)) {
         return NewLIR3(kThumbAddPcRel, r_dest, r_src1, value >> 2);
       }
@@ -523,21 +486,22 @@ LIR* Arm64Mir2Lir::OpRegRegImm(OpKind op, int r_dest, int r_src1, int value) {
         alt_opcode = kThumb2AddRRR;
       }
       break;
+#endif
     case kOpRsub:
       opcode = kThumb2RsubRRI8M;
       alt_opcode = kThumb2RsubRRR;
       break;
     case kOpAdc:
       opcode = kThumb2AdcRRI8M;
-      alt_opcode = kThumb2AdcRRR;
+      alt_opcode = kA64AdcWWW;
       break;
     case kOpSbc:
       opcode = kThumb2SbcRRI8M;
-      alt_opcode = kThumb2SbcRRR;
+      alt_opcode = kA64SbcWWW;
       break;
     case kOpOr:
       opcode = kThumb2OrrRRI8M;
-      alt_opcode = kThumb2OrrRRR;
+      alt_opcode = kA64OrrWWW;
       break;
     case kOpAnd:
       if (mod_imm < 0) {
@@ -547,34 +511,17 @@ LIR* Arm64Mir2Lir::OpRegRegImm(OpKind op, int r_dest, int r_src1, int value) {
         }
       }
       opcode = kThumb2AndRRI8M;
-      alt_opcode = kThumb2AndRRR;
+      alt_opcode = kA64AndWWW;
       break;
     case kOpXor:
       opcode = kThumb2EorRRI8M;
-      alt_opcode = kThumb2EorRRR;
+      alt_opcode = kA64EorWWW;
       break;
     case kOpMul:
       // TUNING: power of 2, shift & add
       mod_imm = -1;
-      alt_opcode = kThumb2MulRRR;
+      alt_opcode = kA64MulWWW;
       break;
-    case kOpCmp: {
-      LIR* res;
-      if (mod_imm >= 0) {
-        res = NewLIR2(kThumb2CmpRI8M, r_src1, mod_imm);
-      } else {
-        mod_imm = ModifiedImmediate(-value);
-        if (mod_imm >= 0) {
-          res = NewLIR2(kThumb2CmnRI8M, r_src1, mod_imm);
-        } else {
-          int r_tmp = AllocTemp();
-          res = LoadConstant(r_tmp, value);
-          OpRegReg(kOpCmp, r_src1, r_tmp);
-          FreeTemp(r_tmp);
-        }
-      }
-      return res;
-    }
     default:
       LOG(FATAL) << "Bad opcode: " << op;
   }
@@ -593,46 +540,53 @@ LIR* Arm64Mir2Lir::OpRegRegImm(OpKind op, int r_dest, int r_src1, int value) {
   }
 }
 
-/* Handle Thumb-only variants here - otherwise punt to OpRegRegImm */
-LIR* Arm64Mir2Lir::OpRegImm(OpKind op, int r_dest_src1, int value) {
+LIR* Arm64Mir2Lir::OpRegImm(OpKind op, int r_dest_src1, intptr_t value) {
+  ArmOpcode opcode = kA64BrkI16;
+  ArmOpcode neg_opcode = kA64BrkI16;
+  bool shift;
   bool neg = (value < 0);
-  int32_t abs_value = (neg) ? -value : value;
-  bool short_form = (((abs_value & 0xff) == abs_value) && ARM_LOWREG(r_dest_src1));
-  ArmOpcode opcode = kThumbBkpt;
+  uint64_t abs_value = (neg) ? -value : value;
+
+  if (LIKELY(abs_value < 0x1000)) {
+    // abs_value is a 12-bit immediate.
+    shift = false;
+  } else if ((abs_value & UINT64_C(0xfff)) == 0 && ((abs_value >> 12) < 0x1000)) {
+    // abs_value is a shifted 12-bit immediate.
+    shift = true;
+    abs_value >>= 12;
+  } else {
+    int r_tmp = AllocTemp();
+    LIR* res = LoadConstant(r_tmp, value);
+    OpRegReg(op, r_dest_src1, r_tmp);
+    FreeTemp(r_tmp);
+    return res;
+  }
+
   switch (op) {
     case kOpAdd:
-      if (!neg && (r_dest_src1 == r13sp) && (value <= 508)) { /* sp */
-        DCHECK_EQ((value & 0x3), 0);
-        return NewLIR1(kThumbAddSpI7, value >> 2);
-      } else if (short_form) {
-        opcode = (neg) ? kThumbSubRI8 : kThumbAddRI8;
-      }
+      neg_opcode = kA64SubWWI12;
+      opcode = kA64AddWWI12;
       break;
     case kOpSub:
-      if (!neg && (r_dest_src1 == r13sp) && (value <= 508)) { /* sp */
-        DCHECK_EQ((value & 0x3), 0);
-        return NewLIR1(kThumbSubSpI7, value >> 2);
-      } else if (short_form) {
-        opcode = (neg) ? kThumbAddRI8 : kThumbSubRI8;
-      }
+      neg_opcode = kA64AddWWI12;
+      opcode = kA64SubWWI12;
       break;
     case kOpCmp:
-      if (!neg && short_form) {
-        opcode = kThumbCmpRI8;
-      } else {
-        short_form = false;
-      }
+      neg_opcode = kA64CmnWI12;
+      opcode = kA64CmpWI12;
       break;
     default:
-      /* Punt to OpRegRegImm - if bad case catch it there */
-      short_form = false;
+      LOG(FATAL) << "Bad op-kind in OpRegImm: " << op;
       break;
   }
-  if (short_form) {
-    return NewLIR2(opcode, r_dest_src1, abs_value);
-  } else {
-    return OpRegRegImm(op, r_dest_src1, r_dest_src1, value);
-  }
+
+  if (UNLIKELY(neg))
+    opcode = neg_opcode;
+
+  if (EncodingMap[opcode].flags & IS_QUAD_OP)
+    return NewLIR4(opcode, r_dest_src1, r_dest_src1, abs_value, (shift) ? 1 : 0);
+  else
+    return NewLIR3(opcode, r_dest_src1, abs_value, (shift) ? 1 : 0);
 }
 
 LIR* Arm64Mir2Lir::LoadConstantWide(int r_dest_lo, int r_dest_hi, int64_t value) {
@@ -679,13 +633,21 @@ LIR* Arm64Mir2Lir::LoadConstantWide(int r_dest_lo, int r_dest_hi, int64_t value)
   return res;
 }
 
-int Arm64Mir2Lir::EncodeShift(int code, int amount) {
-  return ((amount & 0x1f) << 2) | code;
+int Arm64Mir2Lir::EncodeShift(int shift_type, int amount) {
+  return ((shift_type & 0x3) << 7) | (amount & 0x1f);
+}
+
+int Arm64Mir2Lir::EncodeExtend(int extend_type, int amount) {
+  return  (1 << 6) | ((extend_type & 0x7) << 3) | (amount & 0x7);
+}
+
+bool Arm64Mir2Lir::IsExtendEncoding(int encoded_value) {
+  return (1 << 6) & encoded_value;
 }
 
 LIR* Arm64Mir2Lir::LoadBaseIndexed(int rBase, int r_index, int r_dest,
                                  int scale, OpSize size) {
-  bool all_low_regs = ARM_LOWREG(rBase) && ARM_LOWREG(r_index) && ARM_LOWREG(r_dest);
+  bool all_low_regs = true;
   LIR* load;
   ArmOpcode opcode = kThumbBkpt;
   bool thumb_form = (all_low_regs && (scale == 0));
@@ -714,7 +676,7 @@ LIR* Arm64Mir2Lir::LoadBaseIndexed(int rBase, int r_index, int r_dest,
       reg_ptr = AllocTemp();
       if (scale) {
         NewLIR4(kThumb2AddRRR, reg_ptr, rBase, r_index,
-                EncodeShift(kArmLsl, scale));
+                EncodeShift(kA64Lsl, scale));
       } else {
         OpRegRegReg(kOpAdd, reg_ptr, rBase, r_index);
       }
@@ -749,10 +711,8 @@ LIR* Arm64Mir2Lir::LoadBaseIndexed(int rBase, int r_index, int r_dest,
 
 LIR* Arm64Mir2Lir::StoreBaseIndexed(int rBase, int r_index, int r_src,
                                   int scale, OpSize size) {
-  bool all_low_regs = ARM_LOWREG(rBase) && ARM_LOWREG(r_index) && ARM_LOWREG(r_src);
-  LIR* store = NULL;
+  LIR* store;
   ArmOpcode opcode = kThumbBkpt;
-  bool thumb_form = (all_low_regs && (scale == 0));
   int reg_ptr;
 
   if (ARM_FPREG(r_src)) {
@@ -778,7 +738,7 @@ LIR* Arm64Mir2Lir::StoreBaseIndexed(int rBase, int r_index, int r_src,
       reg_ptr = AllocTemp();
       if (scale) {
         NewLIR4(kThumb2AddRRR, reg_ptr, rBase, r_index,
-                EncodeShift(kArmLsl, scale));
+                EncodeShift(kA64Lsl, scale));
       } else {
         OpRegRegReg(kOpAdd, reg_ptr, rBase, r_index);
       }
@@ -786,25 +746,21 @@ LIR* Arm64Mir2Lir::StoreBaseIndexed(int rBase, int r_index, int r_src,
       FreeTemp(reg_ptr);
       return store;
     case kWord:
-      opcode = (thumb_form) ? kThumbStrRRR : kThumb2StrRRR;
+      opcode = kA64StrWXX;
       break;
     case kUnsignedHalf:
     case kSignedHalf:
-      opcode = (thumb_form) ? kThumbStrhRRR : kThumb2StrhRRR;
+      opcode = kThumb2StrhRRR;
       break;
     case kUnsignedByte:
     case kSignedByte:
-      opcode = (thumb_form) ? kThumbStrbRRR : kThumb2StrbRRR;
+      opcode = kThumb2StrbRRR;
       break;
     default:
       LOG(FATAL) << "Bad size: " << size;
   }
-  if (thumb_form)
-    store = NewLIR3(opcode, r_src, rBase, r_index);
-  else
-    store = NewLIR4(opcode, r_src, rBase, r_index, scale);
 
-  return store;
+  return NewLIR4(opcode, r_src, rBase, r_index, scale);
 }
 
 /*
@@ -818,7 +774,7 @@ LIR* Arm64Mir2Lir::LoadBaseDispBody(int rBase, int displacement, int r_dest,
   ArmOpcode opcode = kThumbBkpt;
   bool short_form = false;
   bool thumb2Form = (displacement < 4092 && displacement >= 0);
-  bool all_low_regs = (ARM_LOWREG(rBase) && ARM_LOWREG(r_dest));
+  bool all_low_regs = true;
   int encoded_disp = displacement;
   bool is64bit = false;
   bool already_generated = false;
@@ -826,6 +782,7 @@ LIR* Arm64Mir2Lir::LoadBaseDispBody(int rBase, int displacement, int r_dest,
     case kDouble:
     case kLong:
       is64bit = true;
+      DCHECK_EQ(encoded_disp & 0x3, 0);
       if (ARM_FPREG(r_dest)) {
         if (ARM_SINGLEREG(r_dest)) {
           DCHECK(ARM_FPREG(r_dest_hi));
@@ -838,11 +795,11 @@ LIR* Arm64Mir2Lir::LoadBaseDispBody(int rBase, int displacement, int r_dest,
         }
         break;
       } else {
-        if (displacement <= 1020) {
-          load = NewLIR4(kThumb2LdrdI8, r_dest, r_dest_hi, rBase, displacement >> 2);
+        encoded_disp >>= 2;
+        if (IS_SIGNED_IMM7(encoded_disp)) {
+          load = NewLIR4(kA64LdpWWXI7, r_dest, r_dest_hi, rBase, encoded_disp);
         } else {
-          load = LoadBaseDispBody(rBase, displacement, r_dest,
-                                 -1, kWord, s_reg);
+          load = LoadBaseDispBody(rBase, displacement, r_dest, -1, kWord, s_reg);
           LoadBaseDispBody(rBase, displacement + 4, r_dest_hi,
                            -1, kWord, INVALID_SREG);
         }
@@ -858,24 +815,16 @@ LIR* Arm64Mir2Lir::LoadBaseDispBody(int rBase, int displacement, int r_dest,
         }
         break;
       }
-      if (ARM_LOWREG(r_dest) && (rBase == r15pc) &&
+      if ((rBase == r15pc) &&
           (displacement <= 1020) && (displacement >= 0)) {
         short_form = true;
         encoded_disp >>= 2;
         opcode = kThumbLdrPcRel;
-      } else if (ARM_LOWREG(r_dest) && (rBase == r13sp) &&
-          (displacement <= 1020) && (displacement >= 0)) {
-        short_form = true;
-        encoded_disp >>= 2;
-        opcode = kThumbLdrSpRel;
-      } else if (all_low_regs && displacement < 128 && displacement >= 0) {
+      } else if (displacement <= 16380 && displacement >= 0) {
         DCHECK_EQ((displacement & 0x3), 0);
         short_form = true;
         encoded_disp >>= 2;
-        opcode = kThumbLdrRRI5;
-      } else if (thumb2Form) {
-        short_form = true;
-        opcode = kThumb2LdrRRI12;
+        opcode = kA64LdrWXI12;
       }
       break;
     case kUnsignedHalf:
@@ -944,12 +893,11 @@ LIR* Arm64Mir2Lir::LoadBaseDispWide(int rBase, int displacement, int r_dest_lo,
 
 
 LIR* Arm64Mir2Lir::StoreBaseDispBody(int rBase, int displacement,
-                                   int r_src, int r_src_hi, OpSize size) {
+                                     int r_src, int r_src_hi, OpSize size) {
   LIR* store = NULL;
-  ArmOpcode opcode = kThumbBkpt;
+  ArmOpcode opcode = kA64BrkI16;
   bool short_form = false;
   bool thumb2Form = (displacement < 4092 && displacement >= 0);
-  bool all_low_regs = (ARM_LOWREG(rBase) && ARM_LOWREG(r_src));
   int encoded_disp = displacement;
   bool is64bit = false;
   bool already_generated = false;
@@ -957,9 +905,11 @@ LIR* Arm64Mir2Lir::StoreBaseDispBody(int rBase, int displacement,
     case kLong:
     case kDouble:
       is64bit = true;
+      DCHECK_EQ(encoded_disp & 0x3, 0);
       if (!ARM_FPREG(r_src)) {
-        if (displacement <= 1020) {
-          store = NewLIR4(kThumb2StrdI8, r_src, r_src_hi, rBase, displacement >> 2);
+        encoded_disp >>= 2;
+        if (IS_SIGNED_IMM7(encoded_disp)) {
+          store = NewLIR4(kA64StpWWXI7, r_src, r_src_hi, rBase, encoded_disp);
         } else {
           store = StoreBaseDispBody(rBase, displacement, r_src, -1, kWord);
           StoreBaseDispBody(rBase, displacement + 4, r_src_hi, -1, kWord);
@@ -988,24 +938,17 @@ LIR* Arm64Mir2Lir::StoreBaseDispBody(int rBase, int displacement,
         }
         break;
       }
-      if (ARM_LOWREG(r_src) && (rBase == r13sp) &&
-          (displacement <= 1020) && (displacement >= 0)) {
-        short_form = true;
-        encoded_disp >>= 2;
-        opcode = kThumbStrSpRel;
-      } else if (all_low_regs && displacement < 128 && displacement >= 0) {
+
+      if (displacement <= 16380 && displacement >= 0) {
         DCHECK_EQ((displacement & 0x3), 0);
         short_form = true;
         encoded_disp >>= 2;
-        opcode = kThumbStrRRI5;
-      } else if (thumb2Form) {
-        short_form = true;
-        opcode = kThumb2StrRRI12;
+        opcode = kA64StrWXI12;
       }
       break;
     case kUnsignedHalf:
     case kSignedHalf:
-      if (all_low_regs && displacement < 64 && displacement >= 0) {
+      if (displacement < 64 && displacement >= 0) {
         DCHECK_EQ((displacement & 0x1), 0);
         short_form = true;
         encoded_disp >>= 1;
@@ -1017,7 +960,7 @@ LIR* Arm64Mir2Lir::StoreBaseDispBody(int rBase, int displacement,
       break;
     case kUnsignedByte:
     case kSignedByte:
-      if (all_low_regs && displacement < 32 && displacement >= 0) {
+      if (displacement < 32 && displacement >= 0) {
         short_form = true;
         opcode = kThumbStrbRRI5;
       } else if (thumb2Form) {
@@ -1028,6 +971,7 @@ LIR* Arm64Mir2Lir::StoreBaseDispBody(int rBase, int displacement,
     default:
       LOG(FATAL) << "Bad size: " << size;
   }
+
   if (!already_generated) {
     if (short_form) {
       store = NewLIR3(opcode, r_src, rBase, encoded_disp);

@@ -390,7 +390,8 @@ enum OpFeatureFlags {
   kRegUsePC,
   kRegUseSP,
   kSetsCCodes,
-  kUsesCCodes
+  kUsesCCodes,
+  kRegDef2
 };
 
 enum SelectInstructionKind {

@@ -37,6 +37,10 @@ ART_BUILD_TARGET_DEBUG ?= true
 ART_BUILD_HOST_NDEBUG ?= $(WITH_HOST_DALVIK)
 ART_BUILD_HOST_DEBUG ?= $(WITH_HOST_DALVIK)
 
+# TODOArm64: hack momentarily used for Arm64 development (to be removed).
+# Enable simulation via VIXL on the x86 host.
+ART_HOST_SIMULATOR_ARCH = arm64
+
 ifeq ($(BUILD_HOST_64bit),)
 ART_HOST_ARCH := x86
 else
@@ -145,6 +149,7 @@ ART_C_INCLUDES := \
 	external/valgrind/main \
 	external/vixl/src \
 	external/zlib \
+	external/vixl/src \
 	frameworks/compile/mclinker/include
 
 art_cflags := \
@@ -182,6 +187,10 @@ art_debug_cflags := \
 
 ART_HOST_CFLAGS := $(art_cflags) -DANDROID_SMP=1 -DART_BASE_ADDRESS=$(LIBART_IMG_HOST_BASE_ADDRESS)
 ART_HOST_CFLAGS += -DART_DEFAULT_INSTRUCTION_SET_FEATURES=default
+
+ifeq ($(ART_HOST_SIMULATOR_ARCH),arm64)
+  ART_HOST_CFLAGS += -DWITH_HOST_SIMULATOR=1 -DWITH_A64_HOST_SIMULATOR=1
+endif
 
 ART_TARGET_CFLAGS := $(art_cflags) -DART_TARGET -DART_BASE_ADDRESS=$(LIBART_IMG_TARGET_BASE_ADDRESS)
 ifeq ($(TARGET_CPU_SMP),true)

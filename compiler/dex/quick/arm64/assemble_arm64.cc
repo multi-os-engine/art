@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#ifndef __STDC_CONSTANT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
+#include <stdint.h>
+
 #include "arm64_lir.h"
 #include "codegen_arm64.h"
 #include "dex/quick/mir_to_lir-inl.h"
@@ -41,6 +46,15 @@ namespace art {
         {skeleton, {{k0, ds, de}, {k1, s1s, s1e}, {k2, s2s, s2e}, \
                     {k3, k3s, k3e}}, opcode, flags, name, fmt, size, fixup}
 
+/*
+ * TODOArm64: It would be desirable to find a good way to tabulate information about what register
+ *   types are allowed for every instruction (e.g. whether a given argument interprets r31 as rsp
+ *   rather than rzr, whether a register is wide (w), extended (x) or has the same "wideness" as the
+ *   instruction). For now this information is only provided in the arguments disassemble string.
+ *   This information - in practice - turns out not to be very useful when emitting the code. It
+ *   will - however - make it easier to detect certain types of encoding-related issues.
+ */
+
 /* Instruction dump string format keys: !pf, where "!" is the start
  * of the key, "p" is which numeric operand to use and "f" is the
  * print format.
@@ -60,22 +74,28 @@ namespace art {
  *     t -> pc-relative target
  *     u -> 1st half of bl[x] target
  *     v -> 2nd half ob bl[x] target
- *     R -> register list
  *     s -> single precision floating point register
  *     S -> double precision floating point register
  *     m -> Thumb2 modified immediate
  *     n -> complimented Thumb2 modified immediate
- *     M -> Thumb2 16-bit zero-extended immediate
+ *     M -> 16-bit shift expression ("" or ", lsl #16" or ", lsl #32"...)
  *     b -> 4-digit binary
  *     B -> dmb option string (sy, st, ish, ishst, nsh, hshst)
  *     H -> operand shift
+ *     T -> register shift (either ", lsl #0" or ", lsl #12")
+ *     o -> register extend (e.g. uxtb #1) for Word registers
+ *     O -> register extend (e.g. uxtb #1) for eXtended registers
  *     C -> core register name
+ *     w -> word (32-bit) register wn, or wzr
+ *     W -> word (32-bit) register wn, or wsp
+ *     x -> extended (64-bit) register xn, or xzr
+ *     X -> extended (64-bit) register xn, or sp
  *     P -> fp cs register list (base of s16)
  *     Q -> fp cs register list (base of s0)
  *
  *  [!] escape.  To insert "!", use "!!"
  */
-/* NOTE: must be kept in sync with enum ArmOpcode from LIR.h */
+/* NOTE: must be kept in sync with enum ArmOpcode from arm64_lir.h */
 const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
     ENCODING_MAP(kArm16BitData,    0x0000,
                  kFmtBitBlt, 15, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
@@ -95,11 +115,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtUnused, -1, -1,
                  IS_BINARY_OP | REG_DEF0_USE0 | SETS_CCODES,
                  "adds", "!0C, !0C, #!1d", 2, kFixupNone),
-    ENCODING_MAP(kThumbAddRRR,       0x1800,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 8, 6,
-                 kFmtUnused, -1, -1,
-                 IS_TERTIARY_OP | REG_DEF0_USE12 | SETS_CCODES,
-                 "adds", "!0C, !1C, !2C", 2, kFixupNone),
     ENCODING_MAP(kThumbAddRRLH,     0x4440,
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE01,
@@ -116,10 +131,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 10, 8, kFmtBitBlt, 7, 0, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | IS_BRANCH | NEEDS_FIXUP,
                  "add", "!0C, pc, #!1E", 2, kFixupLoad),
-    ENCODING_MAP(kThumbAddSpRel,    0xa800,
-                 kFmtBitBlt, 10, 8, kFmtSkip, -1, -1, kFmtBitBlt, 7, 0,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF_SP | REG_USE_SP,
-                 "add", "!0C, sp, #!2E", 2, kFixupNone),
     ENCODING_MAP(kThumbAddSpI7,      0xb000,
                  kFmtBitBlt, 6, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_UNARY_OP | REG_DEF_SP | REG_USE_SP,
@@ -143,10 +154,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 7, 0, kFmtBitBlt, 11, 8, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_BINARY_OP | IS_BRANCH | USES_CCODES |
                  NEEDS_FIXUP, "b!1c", "!0t", 2, kFixupCondBranch),
-    ENCODING_MAP(kThumbBUncond,      0xe000,
-                 kFmtBitBlt, 10, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_UNARY_OP | IS_BRANCH | NEEDS_FIXUP,
-                 "b", "!0t", 2, kFixupT1Branch),
     ENCODING_MAP(kThumbBicRR,        0x4380,
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,
@@ -156,69 +163,11 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 7, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_UNARY_OP | IS_BRANCH,
                  "bkpt", "!0d", 2, kFixupNone),
-    ENCODING_MAP(kThumbBlx1,         0xf000,
-                 kFmtBitBlt, 10, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | IS_BRANCH | REG_DEF_LR |
-                 NEEDS_FIXUP, "blx_1", "!0u", 2, kFixupBlx1),
-    ENCODING_MAP(kThumbBlx2,         0xe800,
-                 kFmtBitBlt, 10, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | IS_BRANCH | REG_DEF_LR |
-                 NEEDS_FIXUP, "blx_2", "!0v", 2, kFixupLabel),
-    ENCODING_MAP(kThumbBl1,          0xf000,
-                 kFmtBitBlt, 10, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_UNARY_OP | IS_BRANCH | REG_DEF_LR | NEEDS_FIXUP,
-                 "bl_1", "!0u", 2, kFixupBl1),
-    ENCODING_MAP(kThumbBl2,          0xf800,
-                 kFmtBitBlt, 10, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_UNARY_OP | IS_BRANCH | REG_DEF_LR | NEEDS_FIXUP,
-                 "bl_2", "!0v", 2, kFixupLabel),
-    ENCODING_MAP(kThumbBlxR,         0x4780,
-                 kFmtBitBlt, 6, 3, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_UNARY_OP | REG_USE0 | IS_BRANCH | REG_DEF_LR,
-                 "blx", "!0C", 2, kFixupNone),
-    ENCODING_MAP(kThumbBx,            0x4700,
-                 kFmtBitBlt, 6, 3, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_UNARY_OP | IS_BRANCH,
-                 "bx", "!0C", 2, kFixupNone),
-    ENCODING_MAP(kThumbCmnRR,        0x42c0,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_USE01 | SETS_CCODES,
-                 "cmn", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbCmpRI8,       0x2800,
-                 kFmtBitBlt, 10, 8, kFmtBitBlt, 7, 0, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_USE0 | SETS_CCODES,
-                 "cmp", "!0C, #!1d", 2, kFixupNone),
-    ENCODING_MAP(kThumbCmpRR,        0x4280,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_USE01 | SETS_CCODES,
-                 "cmp", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbCmpLH,        0x4540,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_USE01 | SETS_CCODES,
-                 "cmp", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbCmpHL,        0x4580,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_USE01 | SETS_CCODES,
-                 "cmp", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbCmpHH,        0x45c0,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_USE01 | SETS_CCODES,
-                 "cmp", "!0C, !1C", 2, kFixupNone),
     ENCODING_MAP(kThumbEorRR,        0x4040,
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,
                  IS_BINARY_OP | REG_DEF0_USE01 | SETS_CCODES,
                  "eors", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbLdmia,         0xc800,
-                 kFmtBitBlt, 10, 8, kFmtBitBlt, 7, 0, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0_USE0 | REG_DEF_LIST1 | IS_LOAD,
-                 "ldmia", "!0C!!, <!1R>", 2, kFixupNone),
-    ENCODING_MAP(kThumbLdrRRI5,      0x6800,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 10, 6,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE1 | IS_LOAD,
-                 "ldr", "!0C, [!1C, #!2E]", 2, kFixupNone),
     ENCODING_MAP(kThumbLdrRRR,       0x5800,
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 8, 6,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12 | IS_LOAD,
@@ -227,10 +176,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 10, 8, kFmtBitBlt, 7, 0, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0 | REG_USE_PC
                  | IS_LOAD | NEEDS_FIXUP, "ldr", "!0C, [pc, #!1E]", 2, kFixupLoad),
-    ENCODING_MAP(kThumbLdrSpRel,    0x9800,
-                 kFmtBitBlt, 10, 8, kFmtSkip, -1, -1, kFmtBitBlt, 7, 0,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0 | REG_USE_SP
-                 | IS_LOAD, "ldr", "!0C, [sp, #!2E]", 2, kFixupNone),
     ENCODING_MAP(kThumbLdrbRRI5,     0x7800,
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 10, 6,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE1 | IS_LOAD,
@@ -255,48 +200,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 8, 6,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12 | IS_LOAD,
                  "ldrsh", "!0C, [!1C, !2C]", 2, kFixupNone),
-    ENCODING_MAP(kThumbLslRRI5,      0x0000,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 10, 6,
-                 kFmtUnused, -1, -1,
-                 IS_TERTIARY_OP | REG_DEF0_USE1 | SETS_CCODES,
-                 "lsls", "!0C, !1C, #!2d", 2, kFixupNone),
-    ENCODING_MAP(kThumbLslRR,        0x4080,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0_USE01 | SETS_CCODES,
-                 "lsls", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbLsrRRI5,      0x0800,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 10, 6,
-                 kFmtUnused, -1, -1,
-                 IS_TERTIARY_OP | REG_DEF0_USE1 | SETS_CCODES,
-                 "lsrs", "!0C, !1C, #!2d", 2, kFixupNone),
-    ENCODING_MAP(kThumbLsrRR,        0x40c0,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0_USE01 | SETS_CCODES,
-                 "lsrs", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbMovImm,       0x2000,
-                 kFmtBitBlt, 10, 8, kFmtBitBlt, 7, 0, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0 | SETS_CCODES,
-                 "movs", "!0C, #!1d", 2, kFixupNone),
-    ENCODING_MAP(kThumbMovRR,        0x1c00,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0_USE1 | SETS_CCODES,
-                 "movs", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbMovRR_H2H,    0x46c0,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE1,
-                 "mov", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbMovRR_H2L,    0x4640,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE1,
-                 "mov", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbMovRR_L2H,    0x4680,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE1,
-                 "mov", "!0C, !1C", 2, kFixupNone),
     ENCODING_MAP(kThumbMul,           0x4340,
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,
@@ -317,16 +220,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtUnused, -1, -1,
                  IS_BINARY_OP | REG_DEF0_USE01 | SETS_CCODES,
                  "orrs", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbPop,           0xbc00,
-                 kFmtBitBlt, 8, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_UNARY_OP | REG_DEF_SP | REG_USE_SP | REG_DEF_LIST0
-                 | IS_LOAD, "pop", "<!0R>", 2, kFixupNone),
-    ENCODING_MAP(kThumbPush,          0xb400,
-                 kFmtBitBlt, 8, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_UNARY_OP | REG_DEF_SP | REG_USE_SP | REG_USE_LIST0
-                 | IS_STORE, "push", "<!0R>", 2, kFixupNone),
     ENCODING_MAP(kThumbRev,           0xba00,
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,
@@ -337,33 +230,10 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtUnused, -1, -1,
                  IS_BINARY_OP | REG_DEF0_USE1,
                  "rev", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbRorRR,        0x41c0,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0_USE01 | SETS_CCODES,
-                 "rors", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbSbc,           0x4180,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0_USE01 | USES_CCODES | SETS_CCODES,
-                 "sbcs", "!0C, !1C", 2, kFixupNone),
-    ENCODING_MAP(kThumbStmia,         0xc000,
-                 kFmtBitBlt, 10, 8, kFmtBitBlt, 7, 0, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0 | REG_USE0 | REG_USE_LIST1 | IS_STORE,
-                 "stmia", "!0C!!, <!1R>", 2, kFixupNone),
-    ENCODING_MAP(kThumbStrRRI5,      0x6000,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 10, 6,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_USE01 | IS_STORE,
-                 "str", "!0C, [!1C, #!2E]", 2, kFixupNone),
     ENCODING_MAP(kThumbStrRRR,       0x5000,
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 8, 6,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_USE012 | IS_STORE,
                  "str", "!0C, [!1C, !2C]", 2, kFixupNone),
-    ENCODING_MAP(kThumbStrSpRel,    0x9000,
-                 kFmtBitBlt, 10, 8, kFmtSkip, -1, -1, kFmtBitBlt, 7, 0,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_USE0 | REG_USE_SP
-                 | IS_STORE, "str", "!0C, [sp, #!2E]", 2, kFixupNone),
     ENCODING_MAP(kThumbStrbRRI5,     0x7000,
                  kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 10, 6,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_USE01 | IS_STORE,
@@ -385,21 +255,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtUnused, -1, -1,
                  IS_TERTIARY_OP | REG_DEF0_USE1 | SETS_CCODES,
                  "subs", "!0C, !1C, #!2d", 2, kFixupNone),
-    ENCODING_MAP(kThumbSubRI8,       0x3800,
-                 kFmtBitBlt, 10, 8, kFmtBitBlt, 7, 0, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0_USE0 | SETS_CCODES,
-                 "subs", "!0C, #!1d", 2, kFixupNone),
-    ENCODING_MAP(kThumbSubRRR,       0x1a00,
-                 kFmtBitBlt, 2, 0, kFmtBitBlt, 5, 3, kFmtBitBlt, 8, 6,
-                 kFmtUnused, -1, -1,
-                 IS_TERTIARY_OP | REG_DEF0_USE12 | SETS_CCODES,
-                 "subs", "!0C, !1C, !2C", 2, kFixupNone),
-    ENCODING_MAP(kThumbSubSpI7,      0xb080,
-                 kFmtBitBlt, 6, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_UNARY_OP | REG_DEF_SP | REG_USE_SP,
-                 "sub", "sp, #!0d*4", 2, kFixupNone),
     ENCODING_MAP(kThumbSwi,           0xdf00,
                  kFmtBitBlt, 7, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_UNARY_OP | IS_BRANCH,
@@ -505,10 +360,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 11, 8, kFmtModImm, -1, -1, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0,
                  "mov", "!0C, #!1m", 4, kFixupNone),
-    ENCODING_MAP(kThumb2MovImm16,       0xf2400000,
-                 kFmtBitBlt, 11, 8, kFmtImm16, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0,
-                 "mov", "!0C, #!1M", 4, kFixupNone),
     ENCODING_MAP(kThumb2StrRRI12,       0xf8c00000,
                  kFmtBitBlt, 15, 12, kFmtBitBlt, 19, 16, kFmtBitBlt, 11, 0,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_USE01 | IS_STORE,
@@ -525,23 +376,11 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 15, 12, kFmtBitBlt, 19, 16, kFmtBitBlt, 8, 0,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE1 | IS_LOAD,
                  "ldr", "!0C, [!1C, #-!2d]", 4, kFixupNone),
-    ENCODING_MAP(kThumb2Cbnz,       0xb900, /* Note: does not affect flags */
-                 kFmtBitBlt, 2, 0, kFmtImm6, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_USE0 | IS_BRANCH |
-                 NEEDS_FIXUP, "cbnz", "!0C,!1t", 2, kFixupCBxZ),
-    ENCODING_MAP(kThumb2Cbz,       0xb100, /* Note: does not affect flags */
-                 kFmtBitBlt, 2, 0, kFmtImm6, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_USE0 | IS_BRANCH |
-                 NEEDS_FIXUP, "cbz", "!0C,!1t", 2, kFixupCBxZ),
     ENCODING_MAP(kThumb2AddRRI12,       0xf2000000,
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtImm12, -1, -1,
                  kFmtUnused, -1, -1,
                  IS_TERTIARY_OP | REG_DEF0_USE1,/* Note: doesn't affect flags */
                  "add", "!0C,!1C,#!2d", 4, kFixupNone),
-    ENCODING_MAP(kThumb2MovRR,       0xea4f0000, /* no setflags encoding */
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 3, 0, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE1,
-                 "mov", "!0C, !1C", 4, kFixupNone),
     ENCODING_MAP(kThumb2Vmovs,       0xeeb00a40,
                  kFmtSfp, 22, 12, kFmtSfp, 5, 0, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE1,
@@ -550,36 +389,11 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtDfp, 22, 12, kFmtDfp, 5, 0, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE1,
                  "vmov.f64 ", " !0S, !1S", 4, kFixupNone),
-    ENCODING_MAP(kThumb2Ldmia,         0xe8900000,
-                 kFmtBitBlt, 19, 16, kFmtBitBlt, 15, 0, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0_USE0 | REG_DEF_LIST1 | IS_LOAD,
-                 "ldmia", "!0C!!, <!1R>", 4, kFixupNone),
-    ENCODING_MAP(kThumb2Stmia,         0xe8800000,
-                 kFmtBitBlt, 19, 16, kFmtBitBlt, 15, 0, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_DEF0_USE0 | REG_USE_LIST1 | IS_STORE,
-                 "stmia", "!0C!!, <!1R>", 4, kFixupNone),
     ENCODING_MAP(kThumb2AddRRR,  0xeb100000, /* setflags encoding */
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
                  kFmtShift, -1, -1,
                  IS_QUAD_OP | REG_DEF0_USE12 | SETS_CCODES,
                  "adds", "!0C, !1C, !2C!3H", 4, kFixupNone),
-    ENCODING_MAP(kThumb2SubRRR,       0xebb00000, /* setflags enconding */
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtShift, -1, -1,
-                 IS_QUAD_OP | REG_DEF0_USE12 | SETS_CCODES,
-                 "subs", "!0C, !1C, !2C!3H", 4, kFixupNone),
-    ENCODING_MAP(kThumb2SbcRRR,       0xeb700000, /* setflags encoding */
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtShift, -1, -1,
-                 IS_QUAD_OP | REG_DEF0_USE12 | USES_CCODES | SETS_CCODES,
-                 "sbcs", "!0C, !1C, !2C!3H", 4, kFixupNone),
-    ENCODING_MAP(kThumb2CmpRR,       0xebb00f00,
-                 kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0, kFmtShift, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_TERTIARY_OP | REG_USE01 | SETS_CCODES,
-                 "cmp", "!0C, !1C", 4, kFixupNone),
     ENCODING_MAP(kThumb2SubRRI12,       0xf2a00000,
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtImm12, -1, -1,
                  kFmtUnused, -1, -1,
@@ -622,10 +436,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 15, 12, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
                  kFmtBitBlt, 5, 4, IS_QUAD_OP | REG_DEF0_USE12 | IS_LOAD,
                  "ldrsb", "!0C, [!1C, !2C, LSL #!3d]", 4, kFixupNone),
-    ENCODING_MAP(kThumb2StrRRR,    0xf8400000,
-                 kFmtBitBlt, 15, 12, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtBitBlt, 5, 4, IS_QUAD_OP | REG_USE012 | IS_STORE,
-                 "str", "!0C, [!1C, !2C, LSL #!3d]", 4, kFixupNone),
     ENCODING_MAP(kThumb2StrhRRR,    0xf8200000,
                  kFmtBitBlt, 15, 12, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
                  kFmtBitBlt, 5, 4, IS_QUAD_OP | REG_USE012 | IS_STORE,
@@ -658,56 +468,10 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 15, 12, kFmtBitBlt, 19, 16, kFmtBitBlt, 11, 0,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_USE01 | IS_STORE,
                  "strb", "!0C, [!1C, #!2d]", 4, kFixupNone),
-    ENCODING_MAP(kThumb2Pop,           0xe8bd0000,
-                 kFmtBitBlt, 15, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_UNARY_OP | REG_DEF_SP | REG_USE_SP | REG_DEF_LIST0
-                 | IS_LOAD | NEEDS_FIXUP, "pop", "<!0R>", 4, kFixupPushPop),
-    ENCODING_MAP(kThumb2Push,          0xe92d0000,
-                 kFmtBitBlt, 15, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_UNARY_OP | REG_DEF_SP | REG_USE_SP | REG_USE_LIST0
-                 | IS_STORE | NEEDS_FIXUP, "push", "<!0R>", 4, kFixupPushPop),
-    ENCODING_MAP(kThumb2CmpRI8M, 0xf1b00f00,
-                 kFmtBitBlt, 19, 16, kFmtModImm, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_USE0 | SETS_CCODES,
-                 "cmp", "!0C, #!1m", 4, kFixupNone),
-    ENCODING_MAP(kThumb2CmnRI8M, 0xf1100f00,
-                 kFmtBitBlt, 19, 16, kFmtModImm, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_USE0 | SETS_CCODES,
-                 "cmn", "!0C, #!1m", 4, kFixupNone),
-    ENCODING_MAP(kThumb2AdcRRR,  0xeb500000, /* setflags encoding */
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtShift, -1, -1,
-                 IS_QUAD_OP | REG_DEF0_USE12 | SETS_CCODES,
-                 "adcs", "!0C, !1C, !2C!3H", 4, kFixupNone),
-    ENCODING_MAP(kThumb2AndRRR,  0xea000000,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtShift, -1, -1, IS_QUAD_OP | REG_DEF0_USE12,
-                 "and", "!0C, !1C, !2C!3H", 4, kFixupNone),
     ENCODING_MAP(kThumb2BicRRR,  0xea200000,
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
                  kFmtShift, -1, -1, IS_QUAD_OP | REG_DEF0_USE12,
                  "bic", "!0C, !1C, !2C!3H", 4, kFixupNone),
-    ENCODING_MAP(kThumb2CmnRR,  0xeb000000,
-                 kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0, kFmtShift, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_TERTIARY_OP | REG_DEF0_USE1 | SETS_CCODES,
-                 "cmn", "!0C, !1C, shift !2d", 4, kFixupNone),
-    ENCODING_MAP(kThumb2EorRRR,  0xea800000,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtShift, -1, -1, IS_QUAD_OP | REG_DEF0_USE12,
-                 "eor", "!0C, !1C, !2C!3H", 4, kFixupNone),
-    ENCODING_MAP(kThumb2MulRRR,  0xfb00f000,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
-                 "mul", "!0C, !1C, !2C", 4, kFixupNone),
-    ENCODING_MAP(kThumb2SdivRRR,  0xfb90f0f0,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
-                 "sdiv", "!0C, !1C, !2C", 4, kFixupNone),
     ENCODING_MAP(kThumb2UdivRRR,  0xfbb0f0f0,
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
@@ -726,31 +490,11 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtUnused, -1, -1,
                  IS_BINARY_OP | REG_DEF0_USE1 | SETS_CCODES,
                  "neg", "!0C,!1C", 4, kFixupNone),
-    ENCODING_MAP(kThumb2OrrRRR,  0xea400000,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtShift, -1, -1, IS_QUAD_OP | REG_DEF0_USE12,
-                 "orr", "!0C, !1C, !2C!3H", 4, kFixupNone),
     ENCODING_MAP(kThumb2TstRR,       0xea100f00,
                  kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0, kFmtShift, -1, -1,
                  kFmtUnused, -1, -1,
                  IS_TERTIARY_OP | REG_USE01 | SETS_CCODES,
                  "tst", "!0C, !1C, shift !2d", 4, kFixupNone),
-    ENCODING_MAP(kThumb2LslRRR,  0xfa00f000,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
-                 "lsl", "!0C, !1C, !2C", 4, kFixupNone),
-    ENCODING_MAP(kThumb2LsrRRR,  0xfa20f000,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
-                 "lsr", "!0C, !1C, !2C", 4, kFixupNone),
-    ENCODING_MAP(kThumb2AsrRRR,  0xfa40f000,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
-                 "asr", "!0C, !1C, !2C", 4, kFixupNone),
-    ENCODING_MAP(kThumb2RorRRR,  0xfa60f000,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
-                 "ror", "!0C, !1C, !2C", 4, kFixupNone),
     ENCODING_MAP(kThumb2LslRRI5,  0xea4f0000,
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 3, 0, kFmtShift5, -1, -1,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE1,
@@ -759,10 +503,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 3, 0, kFmtShift5, -1, -1,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE1,
                  "lsr", "!0C, !1C, #!2d", 4, kFixupNone),
-    ENCODING_MAP(kThumb2AsrRRI5,  0xea4f0020,
-                 kFmtBitBlt, 11, 8, kFmtBitBlt, 3, 0, kFmtShift5, -1, -1,
-                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE1,
-                 "asr", "!0C, !1C, #!2d", 4, kFixupNone),
     ENCODING_MAP(kThumb2RorRRI5,  0xea4f0030,
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 3, 0, kFmtShift5, -1, -1,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE1,
@@ -834,11 +574,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtUnused, -1, -1,
                  IS_TERTIARY_OP | REG_DEF0 | REG_USE_PC | IS_LOAD | NEEDS_FIXUP,
                  "ldr", "!0C, [r15pc, #!1d]", 4, kFixupLoad),
-    ENCODING_MAP(kThumb2BCond,        0xf0008000,
-                 kFmtBrOffset, -1, -1, kFmtBitBlt, 25, 22, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | IS_BRANCH | USES_CCODES | NEEDS_FIXUP,
-                 "b!1c", "!0t", 4, kFixupCondBranch),
     ENCODING_MAP(kThumb2Vmovd_RR,       0xeeb00b40,
                  kFmtDfp, 22, 12, kFmtDfp, 5, 0, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE1,
@@ -933,11 +668,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtUnused, -1, -1,
                  IS_BINARY_OP | REG_DEF0 | REG_USE_PC | IS_LOAD,
                  "ldr", "!0C, [r15pc, -#!1d]", 4, kFixupNone),
-    ENCODING_MAP(kThumb2Stm,          0xe9000000,
-                 kFmtBitBlt, 19, 16, kFmtBitBlt, 12, 0, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_BINARY_OP | REG_USE0 | REG_USE_LIST1 | IS_STORE,
-                 "stm", "!0C, <!1R>", 4, kFixupNone),
     ENCODING_MAP(kThumbUndefined,       0xde00,
                  kFmtUnused, -1, -1, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, NO_OPERAND,
@@ -963,14 +693,6 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtUnused, -1, -1,
                  IS_TERTIARY_OP | REG_USE0 | REG_USE_FPCS_LIST2
                  | IS_STORE, "vstms", "!0C, <!2Q>", 4, kFixupNone),
-    ENCODING_MAP(kThumb2BUncond,      0xf0009000,
-                 kFmtOff24, -1, -1, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, NO_OPERAND | IS_BRANCH,
-                 "b", "!0t", 4, kFixupT2Branch),
-    ENCODING_MAP(kThumb2MovImm16H,       0xf2c00000,
-                 kFmtBitBlt, 11, 8, kFmtImm16, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0 | REG_USE0,
-                 "movt", "!0C, #!1M", 4, kFixupNone),
     ENCODING_MAP(kThumb2AddPCR,      0x4487,
                  kFmtBitBlt, 6, 3, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,
@@ -994,21 +716,11 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 19, 16, kFmtBitBlt, 15, 0, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,
                  IS_BINARY_OP | REG_DEF0_USE0 | REG_DEF_LIST1 | IS_LOAD,
-                 "ldmia", "!0C!!, <!1R>", 4, kFixupNone),
+                 "ldmia", "!0C!!, ???", 4, kFixupNone),
     ENCODING_MAP(kThumb2OrrRRRs,  0xea500000,
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
                  kFmtShift, -1, -1, IS_QUAD_OP | REG_DEF0_USE12 | SETS_CCODES,
                  "orrs", "!0C, !1C, !2C!3H", 4, kFixupNone),
-    ENCODING_MAP(kThumb2Push1,    0xf84d0d04,
-                 kFmtBitBlt, 15, 12, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_UNARY_OP | REG_DEF_SP | REG_USE_SP | REG_USE0
-                 | IS_STORE, "push1", "!0C", 4, kFixupNone),
-    ENCODING_MAP(kThumb2Pop1,    0xf85d0b04,
-                 kFmtBitBlt, 15, 12, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
-                 kFmtUnused, -1, -1,
-                 IS_UNARY_OP | REG_DEF_SP | REG_USE_SP | REG_DEF0
-                 | IS_LOAD, "pop1", "!0C", 4, kFixupNone),
     ENCODING_MAP(kThumb2RsubRRR,  0xebd00000, /* setflags encoding */
                  kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16, kFmtBitBlt, 3, 0,
                  kFmtShift, -1, -1,
@@ -1029,11 +741,250 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kArmLast] = {
                  kFmtBitBlt, 7, 0,
                  IS_QUAD_OP | REG_DEF0 | REG_DEF1 | REG_USE2 | IS_LOAD,
                  "ldrd", "!0C, !1C, [!2C, #!3E]", 4, kFixupNone),
-    ENCODING_MAP(kThumb2StrdI8, 0xe9c00000,
-                 kFmtBitBlt, 15, 12, kFmtBitBlt, 11, 8, kFmtBitBlt, 19, 16,
-                 kFmtBitBlt, 7, 0,
-                 IS_QUAD_OP | REG_USE0 | REG_USE1 | REG_USE2 | IS_STORE,
-                 "strd", "!0C, !1C, [!2C, #!3E]", 4, kFixupNone),
+
+    // A64 instruction set begins here
+#if WITH_A64_HOST_SIMULATOR == 1
+    ENCODING_MAP(kA64x86Trampoline, 0x00000000,
+                 kFmtUnused, -1, -1, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1, NO_OPERAND,
+                 "X86-TRAMPOLINE", "", 12, kFixupNone),
+    ENCODING_MAP(kA64x86BlR, 0x00000000,
+                 kFmtUnused, -1, -1, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_UNARY_OP | REG_USE0 | IS_BRANCH | REG_DEF_LR,
+                 "blr/x86", "!0x", 8, kFixupNone),
+#endif
+    ENCODING_MAP(kA64AdcWWW, 0x1a000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE1,
+                 "adc", "!0w, !1w, !2w", 4, kFixupNone),
+    ENCODING_MAP(kA64AddWWI12, 0x11000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 10,
+                 kFmtBitBlt, 23, 22,
+                 IS_QUAD_OP | REG_DEF0_USE1,
+                 "add", "!0W, !1W, #!2d!3T", 4, kFixupNone),
+    ENCODING_MAP(kA64AddWWW, 0x0b200000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtExtShift, -1, -1,
+                 IS_QUAD_OP | REG_DEF0_USE1,
+                 "add", "!0W, !1W, !2w!3o", 4, kFixupNone),
+    ENCODING_MAP(kA64AndWWW, 0x0a000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtShift, -1, -1, IS_QUAD_OP | REG_DEF0_USE12,
+                 "and", "!0w, !1w, !2w!3o", 4, kFixupNone),
+    ENCODING_MAP(kA64AsrWWI6, 0x13007c00,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 16,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_DEF0_USE1,
+                 "asr", "!0w, !1w, #!2d", 4, kFixupNone),
+    ENCODING_MAP(kA64AsrWWW, 0x1ac02800,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
+                 "asr", "!0w, !1w, !2w", 4, kFixupNone),
+    ENCODING_MAP(kA64BCond, 0x54000000,
+                 kFmtBitBlt, 3, 0, kFmtBitBlt, 23, 5, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1, IS_BINARY_OP | IS_BRANCH | USES_CCODES |
+                 NEEDS_FIXUP, "b.!0c", "!1t", 4, kFixupCondBranch),
+    ENCODING_MAP(kA64BlR, 0xd63f0000,
+                 kFmtBitBlt, 9, 5, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_UNARY_OP | REG_USE0 | IS_BRANCH | REG_DEF_LR,
+                 "blr", "!0x", 4, kFixupNone),
+    ENCODING_MAP(kA64BR, 0xd61f0000,
+                 kFmtBitBlt, 9, 5, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_UNARY_OP | REG_USE0 | IS_BRANCH,
+                 "br", "!0x", 4, kFixupNone),
+    ENCODING_MAP(kA64BrkI16, 0xd4200000,
+                 kFmtBitBlt, 20, 5, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1, IS_UNARY_OP | IS_BRANCH,
+                 "brk", "!0d", 4, kFixupNone),
+    ENCODING_MAP(kA64BUncond, 0x14000000,
+                 kFmtBitBlt, 25, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1, NO_OPERAND | IS_BRANCH | NEEDS_FIXUP,
+                 "b", "!0t", 4, kFixupT1Branch),
+    ENCODING_MAP(kA64CbnzW, 0x35000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 23, 5, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_BINARY_OP | REG_USE0 | IS_BRANCH | NEEDS_FIXUP,
+                 "cbnz", "!0w, !1t", 4, kFixupCBxZ),
+    ENCODING_MAP(kA64CbzW, 0x34000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 23, 5, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_BINARY_OP | REG_USE0 | IS_BRANCH  | NEEDS_FIXUP,
+                 "cbz", "!0w, !1t", 4, kFixupCBxZ),
+    ENCODING_MAP(kA64CmnWW, 0x6b20001f,
+                 kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16, kFmtExtShift, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_USE01 | SETS_CCODES,
+                 "cmn", "!0W, !1w!2o", 4, kFixupNone),
+    ENCODING_MAP(kA64CmnWI12, 0x3100001f,
+                 kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 10, kFmtBitBlt, 23, 22,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_USE0 | SETS_CCODES,
+                 "cmn", "!0W, #!1d!2T", 4, kFixupNone),
+    ENCODING_MAP(kA64CmpWW, 0x6b20001f,
+                 kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16, kFmtExtShift, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_USE01 | SETS_CCODES,
+                 "cmp", "!0W, !1w!2o", 4, kFixupNone),
+    ENCODING_MAP(kA64CmpWI12, 0x7100001f,
+                 kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 10, kFmtBitBlt, 23, 22,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_USE0 | SETS_CCODES,
+                 "cmp", "!0W, #!1d!2T", 4, kFixupNone),
+    ENCODING_MAP(kA64EorWWW, 0x4a000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
+                 "eor", "!0w, !1w, !2w", 4, kFixupNone),
+    ENCODING_MAP(kA64LdrWXI12, 0xb9400000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 10,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_DEF0_USE1 | IS_LOAD,
+                 "ldr", "!0w, [!1X, #!2E]", 4, kFixupNone),
+    ENCODING_MAP(kA64LdrXXI12, 0xf9400000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 10,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_DEF0_USE1 | IS_LOAD,
+                 "ldr", "!0x, [!1X, #!2D]", 4, kFixupNone),
+    ENCODING_MAP(kA64LdrPostWXI9,  0xb8400400,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 12,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_DEF01 | REG_USE1 | IS_LOAD,
+                 "ldr", "!0w, [!1X], #!2d", 4, kFixupNone),
+    ENCODING_MAP(kA64LdrPostXXI9, 0xf8400400,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 12,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_DEF01 | REG_USE1 | IS_LOAD,
+                 "ldr", "!0x, [!1X], #!2d", 4, kFixupNone),
+    ENCODING_MAP(kA64LdpWWXI7, 0x29400000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 14, 10, kFmtBitBlt, 9, 5,
+                 kFmtBitBlt, 21, 15,
+                 IS_QUAD_OP | REG_USE2 | REG_DEF012 | IS_LOAD,
+                 "ldp", "!0w, !1w, [!2X, #!3E]", 4, kFixupNone),
+    ENCODING_MAP(kA64LdpPostWWXI7, 0x28c00000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 14, 10, kFmtBitBlt, 9, 5,
+                 kFmtBitBlt, 21, 15,
+                 IS_QUAD_OP | REG_USE2 | REG_DEF012 | IS_LOAD,
+                 "ldp", "!0w, !1w, [!2X], #!3E", 4, kFixupNone),
+    ENCODING_MAP(kA64LdpPostXXXI7, 0xa8c00000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 14, 10, kFmtBitBlt, 9, 5,
+                 kFmtBitBlt, 21, 15,
+                 IS_QUAD_OP | REG_USE2 | REG_DEF012 | IS_LOAD,
+                 "ldp", "!0x, !1x, [!2X], #!3D", 4, kFixupNone),
+    ENCODING_MAP(kA64LslWWW, 0x1ac02000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
+                 "lsl", "!0w, !1w, !2w", 4, kFixupNone),
+    ENCODING_MAP(kA64LsrWWW, 0x1ac02400,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
+                 "lsr", "!0w, !1w, !2w", 4, kFixupNone),
+    ENCODING_MAP(kA64MovkWI16, 0x72800000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 20, 5, kFmtBitBlt, 22, 21,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE0,
+                 "movk", "!0w, #!1d!2M", 4, kFixupNone),
+    ENCODING_MAP(kA64MovnWI16, 0x12800000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 20, 5, kFmtBitBlt, 22, 21,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0,
+                 "movn", "!0w, #!1d!2M", 4, kFixupNone),
+    ENCODING_MAP(kA64MovzWI16, 0x52800000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 20, 5, kFmtBitBlt, 22, 21,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0,
+                 "movz", "!0w, #!1d!2M", 4, kFixupNone),
+    ENCODING_MAP(kA64MovWW, 0x2a0003e0,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 20, 16, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE1,
+                 "mov", "!0w, !1w", 4, kFixupNone),
+    ENCODING_MAP(kA64MulWWW, 0x1b007c00,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
+                 "mul", "!0w, !1w, !2w", 4, kFixupNone),
+    ENCODING_MAP(kA64OrrWWW, 0x2a000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtShift, -1, -1, IS_QUAD_OP | REG_DEF0_USE12,
+                 "orr", "!0w, !1w, !2w!3o", 4, kFixupNone),
+    ENCODING_MAP(kA64Ret, 0xd65f03c0,
+                 kFmtUnused, -1, -1, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1, NO_OPERAND | IS_BRANCH,
+                 "ret", "", 4, kFixupNone),
+    ENCODING_MAP(kA64RorWWW, 0x1ac02c00,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
+                 "ror", "!0w, !1w, !2w", 4, kFixupNone),
+    ENCODING_MAP(kA64SbcWWW, 0x5a000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
+                 "sbc", "!0w, !1w, !2w", 4, kFixupNone),
+    ENCODING_MAP(kA64SdivWWW, 0x1ac00c00,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0_USE12,
+                 "sdiv", "!0w, !1w, !2w", 4, kFixupNone),
+    ENCODING_MAP(kA64StpWWXI7, 0x29000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 14, 10, kFmtBitBlt, 9, 5,
+                 kFmtBitBlt, 21, 15,
+                 IS_QUAD_OP | REG_DEF2 | REG_USE012 | IS_STORE,
+                 "stp", "!0w, !1w, [!2X, #!3E]", 4, kFixupNone),
+    ENCODING_MAP(kA64StpPostWWXI7, 0x28800000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 14, 10, kFmtBitBlt, 9, 5,
+                 kFmtBitBlt, 21, 15,
+                 IS_QUAD_OP | REG_DEF2 | REG_USE012 | IS_STORE,
+                 "stp", "!0w, !1w, [!2X], #!3E", 4, kFixupNone),
+    ENCODING_MAP(kA64StpPostXXXI7, 0xa8800000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 14, 10, kFmtBitBlt, 9, 5,
+                 kFmtBitBlt, 21, 15,
+                 IS_QUAD_OP | REG_DEF2 | REG_USE012 | IS_STORE,
+                 "stp", "!0x, !1x, [!2X], #!3D", 4, kFixupNone),
+    ENCODING_MAP(kA64StpPreWWXI7,  0x29800000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 14, 10, kFmtBitBlt, 9, 5,
+                 kFmtBitBlt, 21, 15,
+                 IS_QUAD_OP | REG_DEF2 | REG_USE012 | IS_STORE,
+                 "stp", "!0w, !1w, [!2X, #!3E]!!", 4, kFixupNone),
+    ENCODING_MAP(kA64StpPreXXXI7,  0xa9800000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 14, 10, kFmtBitBlt, 9, 5,
+                 kFmtBitBlt, 21, 15,
+                 IS_QUAD_OP | REG_DEF2 | REG_USE012 | IS_STORE,
+                 "stp", "!0x, !1x, [!2X, #!3D]!!", 4, kFixupNone),
+    ENCODING_MAP(kA64StrWXI12, 0xb9000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 10,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_USE01 | IS_STORE,
+                 "str", "!0w, [!1X, #!2E]", 4, kFixupNone),
+    ENCODING_MAP(kA64StrXXI12, 0xf9000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 10,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_USE01 | IS_STORE,
+                 "str", "!0x, [!1X, #!2D]", 4, kFixupNone),
+    ENCODING_MAP(kA64StrWXX, 0xb8206800,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtBitBlt, 12, 12,
+                 IS_QUAD_OP | REG_USE012 | IS_STORE,
+                 "str", "!0w, [!1X, !2x, lsl #!3F]", 4, kFixupNone),
+    ENCODING_MAP(kA64StrPostWXI9, 0xb8000400,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 12,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_USE01 | REG_DEF1 | IS_STORE,
+                 "str", "!0w, [!1X], #!2d", 4, kFixupNone),
+    ENCODING_MAP(kA64StxrWXX, 0xc8007c00,
+                 kFmtBitBlt, 20, 16, kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_DEF0_USE12 | IS_STORE,
+                 "stxr", "!0w, !1x, [!2X]", 4, kFixupNone),
+    ENCODING_MAP(kA64SubWWI12, 0x51000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 10,
+                 kFmtBitBlt, 23, 22,
+                 IS_QUAD_OP | REG_DEF0_USE1,
+                 "sub", "!0W, !1W, #!2d!3T", 4, kFixupNone),
+    ENCODING_MAP(kA64SubWWW, 0x4b000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 20, 16,
+                 kFmtExtShift, -1, -1,
+                 IS_QUAD_OP | REG_DEF0_USE12,
+                 "sub", "!0w, !1w, !2w!3o", 4, kFixupNone),
+    ENCODING_MAP(kA64SubsWWI12, 0x71000000,
+                 kFmtBitBlt, 4, 0, kFmtBitBlt, 9, 5, kFmtBitBlt, 21, 10,
+                 kFmtUnused, -1, -1,
+                 IS_TERTIARY_OP | REG_DEF0_USE1,
+                 "subs", "!0w, !1W, #!2d", 4, kFixupNone),
 };
 
 // new_lir replaces orig_lir in the pcrel_fixup list.
@@ -1066,6 +1017,9 @@ void Arm64Mir2Lir::InsertFixupBefore(LIR* prev_lir, LIR* orig_lir, LIR* new_lir)
  */
 #define PADDING_MOV_R5_R5               0x1C2D
 
+/* Nop, used for aligning code. Nop is an alias for hint #0. */
+#define PADDING_NOP (UINT32_C(0xd503201f))
+
 void Arm64Mir2Lir::EncodeLIR(LIR* lir) {
   int opcode = lir->opcode;
   if (IsPseudoLirOp(opcode)) {
@@ -1075,6 +1029,34 @@ void Arm64Mir2Lir::EncodeLIR(LIR* lir) {
       lir->u.a.bytes[1] = ((PADDING_MOV_R5_R5 >> 8) & 0xff);
       lir->flags.size = (lir->offset & 0x2);
     }
+#if WITH_A64_HOST_SIMULATOR == 1
+  } else if (UNLIKELY(opcode == kA64x86Trampoline)) {
+    uintptr_t addr = QUICK_ENTRYPOINT_OFFSET(pForeignCodeCall).Uint32Value();
+    lir->u.a.bytes[0] = 0x90;       // nop
+    lir->u.a.bytes[1] = 0x64;       // call *%fs:addr
+    lir->u.a.bytes[2] = 0xff;
+    lir->u.a.bytes[3] = 0x15;
+    lir->u.a.bytes[4] = addr;
+    lir->u.a.bytes[5] = addr >> 8;
+    lir->u.a.bytes[6] = addr >> 16;
+    lir->u.a.bytes[7] = addr >> 24;
+    lir->u.a.bytes[8] = frame_size_;
+    lir->u.a.bytes[9] = frame_size_ >> 8;
+    lir->u.a.bytes[10] = frame_size_ >> 16;
+    lir->u.a.bytes[11] = frame_size_ >> 24;
+    lir->flags.size = 12;
+  } else if (UNLIKELY(opcode == kA64x86BlR)) {
+    uint32_t operand0 = lir->operands[0];
+    lir->u.a.bytes[0] = operand0 << 5;  // brk #(0x8000 + operand[0])
+    lir->u.a.bytes[1] = operand0 >> 3;
+    lir->u.a.bytes[2] = 0x30;
+    lir->u.a.bytes[3] = 0xd4;
+    lir->u.a.bytes[4] = 0xe0;           // blr xzr
+    lir->u.a.bytes[5] = 0x03;
+    lir->u.a.bytes[6] = 0x3f;
+    lir->u.a.bytes[7] = 0xd6;
+    lir->flags.size = 8;
+#endif
   } else if (LIKELY(!lir->flags.is_nop)) {
     const ArmEncodingMap *encoder = &EncodingMap[lir->opcode];
     uint32_t bits = encoder->skeleton;
@@ -1113,8 +1095,11 @@ void Arm64Mir2Lir::EncodeLIR(LIR* lir) {
             bits |= value;
             break;
           case kFmtShift:
-            value = ((operand & 0x70) >> 4) << 12;
-            value |= (operand & 0x0f) << 4;
+            DCHECK_EQ(operand & (1 << 6), 0U);
+            // Intentional fallthrough.
+          case kFmtExtShift:
+            value = (operand & 0x3f) << 10;
+            value |= ((operand & 0x1c0) >> 6) << 21;
             bits |= value;
             break;
           case kFmtBWidth:
@@ -1182,17 +1167,21 @@ void Arm64Mir2Lir::EncodeLIR(LIR* lir) {
         }
       }
     }
-    if (encoder->size == 4) {
-      lir->u.a.bytes[0] = ((bits >> 16) & 0xff);
-      lir->u.a.bytes[1] = ((bits >> 24) & 0xff);
-      lir->u.a.bytes[2] = (bits & 0xff);
-      lir->u.a.bytes[3] = ((bits >> 8) & 0xff);
-    } else {
-      DCHECK_EQ(encoder->size, 2);
+
+#if WITH_A64_HOST_SIMULATOR == 1
+    // TODO: temporary code to catch unported instructions (to be removed).
+    if (opcode < kA64x86Trampoline) {
+      LOG(WARNING) << "Instruction " << encoder->name  << " not ported to A64?";
+    }
+#endif
+
+    if (LIKELY(encoder->size == 4)) {
       lir->u.a.bytes[0] = (bits & 0xff);
       lir->u.a.bytes[1] = ((bits >> 8) & 0xff);
+      lir->u.a.bytes[2] = ((bits >> 16) & 0xff);
+      lir->u.a.bytes[3] = ((bits >> 24) & 0xff);
+      lir->flags.size = encoder->size;
     }
-    lir->flags.size = encoder->size;
   }
 }
 
@@ -1326,170 +1315,34 @@ void Arm64Mir2Lir::AssembleLIR() {
           }
           break;
         }
-        case kFixupCBxZ: {
-          LIR *target_lir = lir->target;
-          CodeOffset pc = lir->offset + 4;
-          CodeOffset target = target_lir->offset +
-              ((target_lir->flags.generation == lir->flags.generation) ? 0 : offset_adjustment);
-          int32_t delta = target - pc;
-          if (delta > 126 || delta < 0) {
-            /*
-             * Convert to cmp rx,#0 / b[eq/ne] tgt pair
-             * Make new branch instruction and insert after
-             */
-            LIR* new_inst =
-              RawLIR(lir->dalvik_offset, kThumbBCond, 0,
-                     (lir->opcode == kThumb2Cbz) ? kArmCondEq : kArmCondNe,
-                     0, 0, 0, lir->target);
-            InsertLIRAfter(lir, new_inst);
-
-            /* Convert the cb[n]z to a cmp rx, #0 ] */
-            // Subtract the old size.
-            offset_adjustment -= lir->flags.size;
-            lir->opcode = kThumbCmpRI8;
-            /* operand[0] is src1 in both cb[n]z & CmpRI8 */
-            lir->operands[1] = 0;
-            lir->target = 0;
-            EncodeLIR(lir);   // NOTE: sets flags.size.
-            // Add back the new size.
-            DCHECK_EQ(lir->flags.size, static_cast<uint32_t>(EncodingMap[lir->opcode].size));
-            offset_adjustment += lir->flags.size;
-            // Set up the new following inst.
-            new_inst->offset = lir->offset + lir->flags.size;
-            new_inst->flags.fixup = kFixupCondBranch;
-            new_inst->flags.size = EncodingMap[new_inst->opcode].size;
-            offset_adjustment += new_inst->flags.size;
-
-            // lir no longer pcrel, unlink and link in new_inst.
-            ReplaceFixup(prev_lir, lir, new_inst);
-            prev_lir = new_inst;  // Continue with the new instruction.
-            lir = new_inst->u.a.pcrel_next;
-            res = kRetryAll;
-            continue;
-          } else {
-            lir->operands[1] = delta >> 1;
-          }
-          break;
-        }
-        case kFixupPushPop: {
-          if (__builtin_popcount(lir->operands[0]) == 1) {
-            /*
-             * The standard push/pop multiple instruction
-             * requires at least two registers in the list.
-             * If we've got just one, switch to the single-reg
-             * encoding.
-             */
-            lir->opcode = (lir->opcode == kThumb2Push) ? kThumb2Push1 :
-                kThumb2Pop1;
-            int reg = 0;
-            while (lir->operands[0]) {
-              if (lir->operands[0] & 0x1) {
-                break;
-              } else {
-                reg++;
-                lir->operands[0] >>= 1;
-              }
-            }
-            lir->operands[0] = reg;
-            // This won't change again, don't bother unlinking, just reset fixup kind
-            lir->flags.fixup = kFixupNone;
-          }
-          break;
-        }
-        case kFixupCondBranch: {
-          LIR *target_lir = lir->target;
-          int32_t delta = 0;
-          DCHECK(target_lir);
-          CodeOffset pc = lir->offset + 4;
-          CodeOffset target = target_lir->offset +
-              ((target_lir->flags.generation == lir->flags.generation) ? 0 : offset_adjustment);
-          delta = target - pc;
-          if ((lir->opcode == kThumbBCond) && (delta > 254 || delta < -256)) {
-            offset_adjustment -= lir->flags.size;
-            lir->opcode = kThumb2BCond;
-            lir->flags.size = EncodingMap[lir->opcode].size;
-            // Fixup kind remains the same.
-            offset_adjustment += lir->flags.size;
-            res = kRetryAll;
-          }
-          lir->operands[0] = delta >> 1;
-          break;
-        }
-        case kFixupT2Branch: {
-          LIR *target_lir = lir->target;
-          CodeOffset pc = lir->offset + 4;
-          CodeOffset target = target_lir->offset +
-              ((target_lir->flags.generation == lir->flags.generation) ? 0 : offset_adjustment);
-          int32_t delta = target - pc;
-          lir->operands[0] = delta >> 1;
-          if (!(cu_->disable_opt & (1 << kSafeOptimizations)) && lir->operands[0] == 0) {
-            // Useless branch
-            offset_adjustment -= lir->flags.size;
-            lir->flags.is_nop = true;
-            // Don't unlink - just set to do-nothing.
-            lir->flags.fixup = kFixupNone;
-            res = kRetryAll;
-          }
-          break;
-        }
         case kFixupT1Branch: {
           LIR *target_lir = lir->target;
-          CodeOffset pc = lir->offset + 4;
-          CodeOffset target = target_lir->offset +
+          DCHECK(target_lir);
+          intptr_t pc = lir->offset;
+          intptr_t target = target_lir->offset +
               ((target_lir->flags.generation == lir->flags.generation) ? 0 : offset_adjustment);
-          int32_t delta = target - pc;
-          if (delta > 2046 || delta < -2048) {
-            // Convert to Thumb2BCond w/ kArmCondAl
-            offset_adjustment -= lir->flags.size;
-            lir->opcode = kThumb2BUncond;
-            lir->operands[0] = 0;
-            lir->flags.size = EncodingMap[lir->opcode].size;
-            lir->flags.fixup = kFixupT2Branch;
-            offset_adjustment += lir->flags.size;
-            res = kRetryAll;
-          } else {
-            lir->operands[0] = delta >> 1;
-            if (!(cu_->disable_opt & (1 << kSafeOptimizations)) && lir->operands[0] == -1) {
-              // Useless branch
-              offset_adjustment -= lir->flags.size;
-              lir->flags.is_nop = true;
-              // Don't unlink - just set to do-nothing.
-              lir->flags.fixup = kFixupNone;
-              res = kRetryAll;
-            }
-          }
+          int delta = target - pc;
+          DCHECK((delta & 0x3) == 0 && IS_SIGNED_IMM19(delta >> 2));
+          lir->operands[0] = delta >> 2;
           break;
         }
-        case kFixupBlx1: {
-          DCHECK(NEXT_LIR(lir)->opcode == kThumbBlx2);
-          /* cur_pc is Thumb */
-          CodeOffset cur_pc = (lir->offset + 4) & ~3;
-          CodeOffset target = lir->operands[1];
-
-          /* Match bit[1] in target with base */
-          if (cur_pc & 0x2) {
-            target |= 0x2;
-          }
-          int32_t delta = target - cur_pc;
-          DCHECK((delta >= -(1<<22)) && (delta <= ((1<<22)-2)));
-
-          lir->operands[0] = (delta >> 12) & 0x7ff;
-          NEXT_LIR(lir)->operands[0] = (delta>> 1) & 0x7ff;
+        case kFixupCBxZ:
+        case kFixupCondBranch: {
+          LIR *target_lir = lir->target;
+          DCHECK(target_lir);
+          intptr_t pc = lir->offset;
+          intptr_t target = target_lir->offset +
+              ((target_lir->flags.generation == lir->flags.generation) ? 0 : offset_adjustment);
+          int delta = target - pc;
+          DCHECK((delta & 0x3) == 0 && IS_SIGNED_IMM19(delta >> 2));
+          lir->operands[1] = delta >> 2;
           break;
         }
-        case kFixupBl1: {
-          DCHECK(NEXT_LIR(lir)->opcode == kThumbBl2);
-          /* Both cur_pc and target are Thumb */
-          CodeOffset cur_pc = lir->offset + 4;
-          CodeOffset target = lir->operands[1];
-
-          int32_t delta = target - cur_pc;
-          DCHECK((delta >= -(1<<22)) && (delta <= ((1<<22)-2)));
-
-          lir->operands[0] = (delta >> 12) & 0x7ff;
-          NEXT_LIR(lir)->operands[0] = (delta>> 1) & 0x7ff;
-          break;
-        }
+        case kFixupPushPop:
+        case kFixupT2Branch:
+        case kFixupBlx1:
+        case kFixupBl1:
+          LOG(FATAL) << "Unexpected case " << lir->flags.fixup;
         case kFixupAdr: {
           EmbeddedData *tab_rec = reinterpret_cast<EmbeddedData*>(UnwrapPointer(lir->operands[2]));
           LIR* target = lir->target;
@@ -1527,11 +1380,7 @@ void Arm64Mir2Lir::AssembleLIR() {
             prev_lir = new_mov16H;  // Now we've got a new prev.
 
             offset_adjustment -= lir->flags.size;
-            if (ARM_LOWREG(lir->operands[0])) {
-              lir->opcode = kThumbAddRRLH;
-            } else {
-              lir->opcode = kThumbAddRRHH;
-            }
+            lir->opcode = kThumbAddRRLH;
             lir->operands[1] = rARM_PC;
             lir->flags.size = EncodingMap[lir->opcode].size;
             offset_adjustment += lir->flags.size;

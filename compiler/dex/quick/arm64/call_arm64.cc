@@ -319,7 +319,6 @@ void Arm64Mir2Lir::MarkGCCard(int val_reg, int tgt_addr_reg) {
 }
 
 void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
-  int spill_count = num_core_spills_ + num_fp_spills_;
   /*
    * On entry, r0, r1, r2 & r3 are live.  Let the register allocation
    * mechanism know so it doesn't try to use any of them when
@@ -331,6 +330,12 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
   LockTemp(r2);
   LockTemp(r3);
 
+#if WITH_A64_HOST_SIMULATOR == 1
+  /* Call the trampoline function to launch the A64 simulator. */
+  NewLIR0(kA64x86Trampoline);
+  NewLIR1(kA64BrkI16, 0);
+#endif
+
   /*
    * We can safely skip the stack overflow check if we're
    * a leaf *and* our frame size < fudge factor.
@@ -339,12 +344,20 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
                             (static_cast<size_t>(frame_size_) <
                             Thread::kStackOverflowReservedBytes));
   NewLIR0(kPseudoMethodEntry);
+
   if (!skip_overflow_check) {
     /* Load stack limit */
     LoadWordDisp(rARM_SELF, Thread::StackEndOffset().Int32Value(), r12);
+    OpRegImm(kOpSub, rARM_SP, frame_size_);
+    GenRegRegCheck(kCondUlt, rARM_SP, r12, kThrowStackOverflow);
+  } else if (frame_size_ > 0) {
+    OpRegImm(kOpSub, rARM_SP, frame_size_);
   }
+
   /* Spill core callee saves */
-  NewLIR1(kThumb2Push, core_spill_mask_);
+  if (core_spill_mask_) {
+    SpillCoreRegs(rARM_SP, frame_size_, core_spill_mask_);
+  }
   /* Need to spill any FP regs? */
   if (num_fp_spills_) {
     /*
@@ -353,13 +366,6 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
      * the fp set, we must allocate all singles from s16..highest-promoted
      */
     NewLIR1(kThumb2VPushCS, num_fp_spills_);
-  }
-  if (!skip_overflow_check) {
-    OpRegRegImm(kOpSub, rARM_LR, rARM_SP, frame_size_ - (spill_count * 4));
-    GenRegRegCheck(kCondUlt, rARM_LR, r12, kThrowStackOverflow);
-    OpRegCopy(rARM_SP, rARM_LR);     // Establish stack
-  } else {
-    OpRegImm(kOpSub, rARM_SP, frame_size_ - (spill_count * 4));
   }
 
   FlushIns(ArgLocs, rl_method);
@@ -371,7 +377,6 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
 }
 
 void Arm64Mir2Lir::GenExitSequence() {
-  int spill_count = num_core_spills_ + num_fp_spills_;
   /*
    * In the exit path, r0/r1 are live - make sure they aren't
    * allocated by the register utilities as temps.
@@ -380,25 +385,20 @@ void Arm64Mir2Lir::GenExitSequence() {
   LockTemp(r1);
 
   NewLIR0(kPseudoMethodExit);
-  OpRegImm(kOpAdd, rARM_SP, frame_size_ - (spill_count * 4));
   /* Need to restore any FP callee saves? */
   if (num_fp_spills_) {
     NewLIR1(kThumb2VPopCS, num_fp_spills_);
   }
-  if (core_spill_mask_ & (1 << rARM_LR)) {
-    /* Unspill rARM_LR to rARM_PC */
-    core_spill_mask_ &= ~(1 << rARM_LR);
-    core_spill_mask_ |= (1 << rARM_PC);
+  if (core_spill_mask_) {
+    UnSpillCoreRegs(rARM_SP, frame_size_, core_spill_mask_);
   }
-  NewLIR1(kThumb2Pop, core_spill_mask_);
-  if (!(core_spill_mask_ & (1 << rARM_PC))) {
-    /* We didn't pop to rARM_PC, so must do a bv rARM_LR */
-    NewLIR1(kThumbBx, rARM_LR);
-  }
+
+  OpRegImm(kOpAdd, rARM_SP, frame_size_);
+  NewLIR0(kA64Ret);
 }
 
 void Arm64Mir2Lir::GenSpecialExitSequence() {
-  NewLIR1(kThumbBx, rARM_LR);
+  NewLIR0(kA64Ret);
 }
 
 }  // namespace art

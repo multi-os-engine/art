@@ -29,6 +29,10 @@
 #include "object_utils.h"
 #include "runtime.h"
 
+#ifdef WITH_A64_HOST_SIMULATOR
+extern "C" int art_is_arm64_trampoline(uintptr_t pc);
+#endif
+
 namespace art {
 
 // Visits the arguments as saved to the stack by a Runtime::kRefAndArgs callee save frame.
@@ -185,7 +189,22 @@ class QuickArgumentVisitor {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK((*sp)->IsCalleeSaveMethod());
     byte* lr = reinterpret_cast<byte*>(sp) + kQuickCalleeSaveFrame_RefAndArgs_LrOffset;
-    return *reinterpret_cast<uintptr_t*>(lr);
+    uintptr_t pc = *reinterpret_cast<uintptr_t*>(lr);
+#ifdef WITH_A64_HOST_SIMULATOR
+    // FIXME: refactor and clean this up! This code contains hard-coded numbers
+    //   that make assumptions on the stack layout. We should move these
+    //   assumptions closer to the code they refer to.
+    if (!art_is_arm64_trampoline(pc))
+      return pc;
+
+    byte *ebp_ptr = (reinterpret_cast<byte*>(sp)
+                     + kQuickCalleeSaveFrame_RefAndArgs_FrameSize
+                     + GetCallingMethod(sp)->GetFrameSizeInBytes());
+    uintptr_t ebp = *reinterpret_cast<uintptr_t*>(ebp_ptr);
+    return *reinterpret_cast<uintptr_t*>(ebp + 8);
+#else
+    return pc;
+#endif
   }
 
   QuickArgumentVisitor(mirror::ArtMethod** sp, bool is_static,

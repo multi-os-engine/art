@@ -139,6 +139,10 @@ class Arm64Mir2Lir : public Mir2Lir {
     void GenPackedSwitch(MIR* mir, DexOffset table_offset, RegLocation rl_src);
     void GenSparseSwitch(MIR* mir, DexOffset table_offset, RegLocation rl_src);
 
+    uint32_t GenPairWise(uint32_t reg_mask, int* reg1, int* reg2);
+    void UnSpillCoreRegs(int base, int offset, uint32_t reg_mask, bool use_x_regs = false);
+    void SpillCoreRegs(int base, int offset, uint32_t reg_mask, bool use_x_regs = false);
+
     // Required for target - single operation generators.
     LIR* OpUnconditionalBranch(LIR* target);
     LIR* OpCmpBranch(ConditionCode cond, int src1, int src2, LIR* target);
@@ -175,6 +179,8 @@ class Arm64Mir2Lir : public Mir2Lir {
     LIR* OpRegRegShift(OpKind op, int r_dest_src1, int r_src2, int shift);
     static const ArmEncodingMap EncodingMap[kArmLast];
     int EncodeShift(int code, int amount);
+    int EncodeExtend(int extend_type, int amount);
+    bool IsExtendEncoding(int encoded_value);
     int ModifiedImmediate(uint32_t value);
     ArmConditionCode ArmConditionEncoding(ConditionCode code);
     bool InexpensiveConstantInt(int32_t value);

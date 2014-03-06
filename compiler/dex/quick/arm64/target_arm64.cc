@@ -14,10 +14,14 @@
  * limitations under the License.
  */
 
+#ifndef __STDC_CONSTANT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
+#include <stdint.h>
+
 #include "codegen_arm64.h"
 
 #include <inttypes.h>
-
 #include <string>
 
 #include "dex/compiler_internals.h"
@@ -112,36 +116,27 @@ bool Arm64Mir2Lir::SameRegType(int reg1, int reg2) {
  * Decode the register id.
  */
 uint64_t Arm64Mir2Lir::GetRegMaskCommon(int reg) {
-  uint64_t seed;
-  int shift;
-  int reg_id;
-
-
-  reg_id = reg & 0x1f;
-  /* Each double register is equal to a pair of single-precision FP registers */
-  seed = ARM_DOUBLEREG(reg) ? 3 : 1;
-  /* FP register starts at bit position 16 */
-  shift = ARM_FPREG(reg) ? kArmFPReg0 : 0;
-  /* Expand the double register id into single offset */
-  shift += reg_id;
-  return (seed << shift);
+  if (LIKELY(reg >= 0)) {
+    return UINT64_C(1) << (reg & 0x3f);
+  } else {
+    // Pseudo register xzr/wzr: it is more an immediate rather than a true register.
+    DCHECK_EQ(reg, rARM_ZR);
+    return 0;
+  }
 }
 
 uint64_t Arm64Mir2Lir::GetPCUseDefEncoding() {
-  return ENCODE_ARM_REG_PC;
+  LOG(FATAL) << "Unexpected call to GetPCUseDefEncoding for Arm64";
+  return 0ULL;
 }
 
-// Thumb2 specific setup.  TODO: inline?:
+// Arm64 specific setup.  TODO: inline?:
 void Arm64Mir2Lir::SetupTargetResourceMasks(LIR* lir, uint64_t flags) {
-  DCHECK_EQ(cu_->instruction_set, kThumb2);
+  DCHECK_EQ(cu_->instruction_set, kArm64);
   DCHECK(!lir->flags.use_def_invalid);
 
-  int opcode = lir->opcode;
-
   // These flags are somewhat uncommon - bypass if we can.
-  if ((flags & (REG_DEF_SP | REG_USE_SP | REG_DEF_LIST0 | REG_DEF_LIST1 |
-                REG_DEF_FPCS_LIST0 | REG_DEF_FPCS_LIST2 | REG_USE_PC | IS_IT | REG_USE_LIST0 |
-                REG_USE_LIST1 | REG_USE_FPCS_LIST0 | REG_USE_FPCS_LIST2 | REG_DEF_LR)) != 0) {
+  if ((flags & (REG_DEF_SP | REG_USE_SP | REG_DEF_LR)) != 0) {
     if (flags & REG_DEF_SP) {
       lir->u.m.def_mask |= ENCODE_ARM_REG_SP;
     }
@@ -150,61 +145,6 @@ void Arm64Mir2Lir::SetupTargetResourceMasks(LIR* lir, uint64_t flags) {
       lir->u.m.use_mask |= ENCODE_ARM_REG_SP;
     }
 
-    if (flags & REG_DEF_LIST0) {
-      lir->u.m.def_mask |= ENCODE_ARM_REG_LIST(lir->operands[0]);
-    }
-
-    if (flags & REG_DEF_LIST1) {
-      lir->u.m.def_mask |= ENCODE_ARM_REG_LIST(lir->operands[1]);
-    }
-
-    if (flags & REG_DEF_FPCS_LIST0) {
-      lir->u.m.def_mask |= ENCODE_ARM_REG_FPCS_LIST(lir->operands[0]);
-    }
-
-    if (flags & REG_DEF_FPCS_LIST2) {
-      for (int i = 0; i < lir->operands[2]; i++) {
-        SetupRegMask(&lir->u.m.def_mask, lir->operands[1] + i);
-      }
-    }
-
-    if (flags & REG_USE_PC) {
-      lir->u.m.use_mask |= ENCODE_ARM_REG_PC;
-    }
-
-    /* Conservatively treat the IT block */
-    if (flags & IS_IT) {
-      lir->u.m.def_mask = ENCODE_ALL;
-    }
-
-    if (flags & REG_USE_LIST0) {
-      lir->u.m.use_mask |= ENCODE_ARM_REG_LIST(lir->operands[0]);
-    }
-
-    if (flags & REG_USE_LIST1) {
-      lir->u.m.use_mask |= ENCODE_ARM_REG_LIST(lir->operands[1]);
-    }
-
-    if (flags & REG_USE_FPCS_LIST0) {
-      lir->u.m.use_mask |= ENCODE_ARM_REG_FPCS_LIST(lir->operands[0]);
-    }
-
-    if (flags & REG_USE_FPCS_LIST2) {
-      for (int i = 0; i < lir->operands[2]; i++) {
-        SetupRegMask(&lir->u.m.use_mask, lir->operands[1] + i);
-      }
-    }
-    /* Fixup for kThumbPush/lr and kThumbPop/pc */
-    if (opcode == kThumbPush || opcode == kThumbPop) {
-      uint64_t r8Mask = GetRegMaskCommon(r8);
-      if ((opcode == kThumbPush) && (lir->u.m.use_mask & r8Mask)) {
-        lir->u.m.use_mask &= ~r8Mask;
-        lir->u.m.use_mask |= ENCODE_ARM_REG_LR;
-      } else if ((opcode == kThumbPop) && (lir->u.m.def_mask & r8Mask)) {
-        lir->u.m.def_mask &= ~r8Mask;
-        lir->u.m.def_mask |= ENCODE_ARM_REG_PC;
-      }
-    }
     if (flags & REG_DEF_LR) {
       lir->u.m.def_mask |= ENCODE_ARM_REG_LR;
     }
@@ -258,12 +198,40 @@ static const char* core_reg_names[16] = {
   "pc",
 };
 
-
-static const char* shift_names[4] = {
+static const char *shift_names[4] = {
   "lsl",
   "lsr",
   "asr",
-  "ror"};
+  "ror"
+};
+
+static const char* extend_names[8] = {
+  "uxtb",
+  "uxth",
+  "uxtw",
+  "uxtx",
+  "sxtb",
+  "sxth",
+  "sxtw",
+  "sxtx",
+};
+
+/* Decode and print a register extension (e.g. ", uxtb #1") */
+static void DecodeRegExtendOrShift(int operand, char *buf, size_t buf_size) {
+  if ((operand & (1 << 6)) == 0) {
+    const char *shift_name = shift_names[(operand >> 7) & 0x3];
+    int amount = operand & 0x3f;
+    snprintf(buf, buf_size, ", %s #%d", shift_name, amount);
+  } else {
+    const char *extend_name = extend_names[(operand >> 3) & 0x7];
+    int amount = operand & 0x7;
+    if (amount == 0) {
+      snprintf(buf, buf_size, ", %s", extend_name);
+    } else {
+      snprintf(buf, buf_size, ", %s #%d", extend_name, amount);
+    }
+  }
+}
 
 /* Decode and print a ARM register name */
 static char* DecodeRegList(int opcode, int vector, char* buf, size_t buf_size) {
@@ -273,11 +241,6 @@ static char* DecodeRegList(int opcode, int vector, char* buf, size_t buf_size) {
   for (i = 0; i < 16; i++, vector >>= 1) {
     if (vector & 0x1) {
       int reg_id = i;
-      if (opcode == kThumbPush && i == 8) {
-        reg_id = r14lr;
-      } else if (opcode == kThumbPop && i == 8) {
-        reg_id = r15pc;
-      }
       if (printed) {
         snprintf(buf + strlen(buf), buf_size - strlen(buf), ", r%d", reg_id);
       } else {
@@ -316,8 +279,8 @@ static int32_t ExpandImmediate(int value) {
   return bits >> (((value & 0xf80) >> 7) - 8);
 }
 
-const char* cc_names[] = {"eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
-                         "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"};
+static const char* cc_names[] = {"eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
+                                 "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"};
 /*
  * Interpret a format string and build a string no longer than size
  * See format key in Assemble.c.
@@ -347,6 +310,25 @@ std::string Arm64Mir2Lir::BuildInsnString(const char* fmt, LIR* lir, unsigned ch
                snprintf(tbuf, arraysize(tbuf), ", %s %d", shift_names[operand & 0x3], operand >> 2);
              } else {
                strcpy(tbuf, "");
+             }
+             break;
+           case 'o':
+             // Omit ", uxtw #0" in strings like "add w0, w1, w3, uxtw #0".
+             // Similarly, omit ", lsl #0"
+             if (LIKELY(operand == EncodeExtend(kA64Uxtw, 0) ||
+                        operand == EncodeShift(kA64Lsl, 0))) {
+               strcpy(tbuf, "");
+             } else {
+               DecodeRegExtendOrShift(operand, tbuf, arraysize(tbuf));
+             }
+             break;
+           case 'O':
+             // Omit ", uxtw #0" in strings like "add w0, w1, w3, uxtw #0"
+             if (LIKELY(operand == EncodeExtend(kA64Uxtx, 0) ||
+                        operand == EncodeShift(kA64Lsl, 0))) {
+               strcpy(tbuf, "");
+             } else {
+               DecodeRegExtendOrShift(operand, tbuf, arraysize(tbuf));
              }
              break;
            case 'B':
@@ -400,6 +382,11 @@ std::string Arm64Mir2Lir::BuildInsnString(const char* fmt, LIR* lir, unsigned ch
              snprintf(tbuf, arraysize(tbuf), "%04x", operand);
              break;
            case 'M':
+             if (LIKELY(operand == 0))
+               strcpy(tbuf, "");
+             else
+               snprintf(tbuf, arraysize(tbuf), ", lsl #%d", 16*operand);
+             break;
            case 'd':
              snprintf(tbuf, arraysize(tbuf), "%d", operand);
              break;
@@ -407,6 +394,30 @@ std::string Arm64Mir2Lir::BuildInsnString(const char* fmt, LIR* lir, unsigned ch
              DCHECK_LT(operand, static_cast<int>(
                  sizeof(core_reg_names)/sizeof(core_reg_names[0])));
              snprintf(tbuf, arraysize(tbuf), "%s", core_reg_names[operand]);
+             break;
+           case 'w':
+             if (LIKELY(operand != 31))
+               snprintf(tbuf, arraysize(tbuf), "w%d", operand);
+             else
+               strcpy(tbuf, "wzr");
+             break;
+           case 'W':
+             if (LIKELY(operand != 31))
+               snprintf(tbuf, arraysize(tbuf), "w%d", operand);
+             else
+               strcpy(tbuf, "wsp");
+             break;
+           case 'x':
+             if (LIKELY(operand != 31))
+               snprintf(tbuf, arraysize(tbuf), "x%d", operand);
+             else
+               strcpy(tbuf, "xzr");
+             break;
+           case 'X':
+             if (LIKELY(operand != 31))
+               snprintf(tbuf, arraysize(tbuf), "x%d", operand);
+             else
+               strcpy(tbuf, "sp");
              break;
            case 'E':
              snprintf(tbuf, arraysize(tbuf), "%d", operand*4);
@@ -419,7 +430,7 @@ std::string Arm64Mir2Lir::BuildInsnString(const char* fmt, LIR* lir, unsigned ch
              break;
            case 't':
              snprintf(tbuf, arraysize(tbuf), "0x%08" PRIxPTR " (L%p)",
-                 reinterpret_cast<uintptr_t>(base_addr) + lir->offset + 4 + (operand << 1),
+                 reinterpret_cast<uintptr_t>(base_addr) + lir->offset + (operand << 2),
                  lir->target);
              break;
            case 'u': {
@@ -445,6 +456,14 @@ std::string Arm64Mir2Lir::BuildInsnString(const char* fmt, LIR* lir, unsigned ch
              break;
            case 'Q':
              DecodeFPCSRegList(operand, 0, tbuf, arraysize(tbuf));
+             break;
+           case 'T':
+             if (LIKELY(operand == 0))
+               strcpy(tbuf, "");
+             else if (operand == 1)
+               strcpy(tbuf, ", lsl #12");
+             else
+               strcpy(tbuf, ", DecodeError3");
              break;
            default:
              strcpy(tbuf, "DecodeError1");
@@ -506,7 +525,7 @@ void Arm64Mir2Lir::DumpResourceMask(LIR* arm_lir, uint64_t mask, const char* pre
 }
 
 bool Arm64Mir2Lir::IsUnconditionalBranch(LIR* lir) {
-  return ((lir->opcode == kThumbBUncond) || (lir->opcode == kThumb2BUncond));
+  return (lir->opcode == kA64BUncond);
 }
 
 Arm64Mir2Lir::Arm64Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
@@ -521,8 +540,8 @@ Arm64Mir2Lir::Arm64Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAlloca
   }
 }
 
-Mir2Lir* ArmCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
-                          ArenaAllocator* const arena) {
+Mir2Lir* Arm64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
+                            ArenaAllocator* const arena) {
   return new Arm64Mir2Lir(cu, mir_graph, arena);
 }
 
@@ -667,7 +686,7 @@ void Arm64Mir2Lir::ClobberCallerSave() {
   Clobber(r2);
   Clobber(r3);
   Clobber(r12);
-  Clobber(r14lr);
+  Clobber(r30lr);
   Clobber(fr0);
   Clobber(fr1);
   Clobber(fr2);

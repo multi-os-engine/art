@@ -1831,7 +1831,7 @@ void Mir2Lir::GenArithOpLong(Instruction::Code opcode, RegLocation rl_dest,
       break;
     case Instruction::SUB_LONG:
     case Instruction::SUB_LONG_2ADDR:
-      if (cu_->instruction_set != kThumb2) {
+      if (cu_->instruction_set != kThumb2 && cu_->instruction_set != kArm64) {
         GenSubLong(opcode, rl_dest, rl_src1, rl_src2);
         return;
       }

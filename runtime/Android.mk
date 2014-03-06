@@ -271,6 +271,11 @@ LIBART_HOST_SRC_FILES += \
 	arch/x86/portable_entrypoints_x86.S \
 	arch/x86/quick_entrypoints_x86.S \
 	arch/x86/thread_x86.cc
+ifeq ($(ART_HOST_SIMULATOR_ARCH),arm64)
+LIBART_HOST_SRC_FILES += \
+	arch/x86/arm64_simulator.cc \
+	arch/x86/arm64_trampolines.S
+endif
 endif
 else # HOST_ARCH != x86
 $(error unsupported HOST_ARCH=$(HOST_ARCH))
@@ -398,6 +403,9 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     LOCAL_STATIC_LIBRARIES := libziparchive libz
   else # host
     LOCAL_STATIC_LIBRARIES += libcutils libziparchive-host libz libutils
+    ifeq ($(ART_HOST_SIMULATOR_ARCH),arm64)
+      LOCAL_STATIC_LIBRARIES += libvixl
+    endif
     LOCAL_LDLIBS += -ldl -lpthread
     ifeq ($(HOST_OS),linux)
       LOCAL_LDLIBS += -lrt

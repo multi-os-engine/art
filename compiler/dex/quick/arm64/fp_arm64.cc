@@ -329,12 +329,12 @@ bool Arm64Mir2Lir::GenInlinedSqrt(CallInfo* info) {
   NewLIR2(kThumb2Vcmpd, S2d(rl_result.reg.GetReg(), rl_result.reg.GetHighReg()),
           S2d(rl_result.reg.GetReg(), rl_result.reg.GetHighReg()));
   NewLIR0(kThumb2Fmstat);
-  branch = NewLIR2(kThumbBCond, 0, kArmCondEq);
+  branch = NewLIR2(kA64BCond, kArmCondEq, 0);
   ClobberCallerSave();
   LockCallTemps();  // Using fixed registers
   int r_tgt = LoadHelper(QUICK_ENTRYPOINT_OFFSET(pSqrt));
   NewLIR3(kThumb2Fmrrd, r0, r1, S2d(rl_src.reg.GetReg(), rl_src.reg.GetHighReg()));
-  NewLIR1(kThumbBlxR, r_tgt);
+  NewLIR1(kA64BlR, r_tgt);
   NewLIR3(kThumb2Fmdrr, S2d(rl_result.reg.GetReg(), rl_result.reg.GetHighReg()), r0, r1);
   branch->target = NewLIR0(kPseudoTargetLabel);
   StoreValueWide(rl_dest, rl_result);

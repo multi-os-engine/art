@@ -102,6 +102,9 @@ Backend* QuickCompiler::GetCodeGenerator(CompilationUnit* cu, void* compilation_
     case kThumb2:
       mir_to_lir = ArmCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
       break;
+    case kArm64:
+      mir_to_lir = Arm64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+      break;
     case kMips:
       mir_to_lir = MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
       break;

@@ -56,6 +56,7 @@ typedef uint32_t CodeOffset;         // Native code offset in bytes.
 #define NO_OPERAND           (1ULL << kNoOperand)
 #define REG_DEF0             (1ULL << kRegDef0)
 #define REG_DEF1             (1ULL << kRegDef1)
+#define REG_DEF2             (1ULL << kRegDef2)
 #define REG_DEFA             (1ULL << kRegDefA)
 #define REG_DEFD             (1ULL << kRegDefD)
 #define REG_DEF_FPCS_LIST0   (1ULL << kRegDefFPCSList0)
@@ -85,6 +86,7 @@ typedef uint32_t CodeOffset;         // Native code offset in bytes.
 
 // Common combo register usage patterns.
 #define REG_DEF01            (REG_DEF0 | REG_DEF1)
+#define REG_DEF012           (REG_DEF0 | REG_DEF1 | REG_DEF2)
 #define REG_DEF01_USE2       (REG_DEF0 | REG_DEF1 | REG_USE2)
 #define REG_DEF0_USE01       (REG_DEF0 | REG_USE01)
 #define REG_DEF0_USE0        (REG_DEF0 | REG_USE0)
@@ -157,6 +159,8 @@ struct LIR {
 // Target-specific initialization.
 Mir2Lir* ArmCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
                           ArenaAllocator* const arena);
+Mir2Lir* Arm64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
+                            ArenaAllocator* const arena);
 Mir2Lir* MipsCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
                           ArenaAllocator* const arena);
 Mir2Lir* X86CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
