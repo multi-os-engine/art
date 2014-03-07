@@ -93,11 +93,7 @@ LLVM_ROOT_PATH := external/llvm
 
 # Clang build support.
 ART_TARGET_CLANG := false
-ifeq ($(HOST_OS),darwin)
-  ART_HOST_CLANG := true
-else
-  ART_HOST_CLANG := false
-endif
+ART_HOST_CLANG := true
 
 # directory used for dalvik-cache on device
 ART_DALVIK_CACHE_DIR := /data/dalvik-cache
@@ -188,7 +184,7 @@ else
     endif
   endif
 endif
-# We compile with GCC 4.6 or clang on the host, both of which support -Wthread-safety.
+# We compile with clang or GCC 4.6 on the host, both of which support -Wthread-safety.
 ART_HOST_CFLAGS += -Wthread-safety
 
 # To use oprofile_android --callgraph, uncomment this and recompile with "mmm art -B -j16"
