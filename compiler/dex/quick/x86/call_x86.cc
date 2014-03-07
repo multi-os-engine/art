@@ -90,7 +90,7 @@ void X86Mir2Lir::GenPackedSwitch(MIR* mir, DexOffset table_offset,
     start_of_method_reg = rl_method.reg.GetReg();
     store_method_addr_used_ = true;
   } else {
-    start_of_method_reg = AllocTemp();
+    start_of_method_reg = AllocTemp().GetReg();
     NewLIR1(kX86StartOfMethod, start_of_method_reg);
   }
   int low_key = s4FromSwitchData(&table[2]);
@@ -99,7 +99,7 @@ void X86Mir2Lir::GenPackedSwitch(MIR* mir, DexOffset table_offset,
   if (low_key == 0) {
     keyReg = rl_src.reg.GetReg();
   } else {
-    keyReg = AllocTemp();
+    keyReg = AllocTemp().GetReg();
     OpRegRegImm(kOpSub, keyReg, rl_src.reg.GetReg(), low_key);
   }
   // Bounds check - if < 0 or >= size continue following switch
@@ -107,7 +107,7 @@ void X86Mir2Lir::GenPackedSwitch(MIR* mir, DexOffset table_offset,
   LIR* branch_over = OpCondBranch(kCondHi, NULL);
 
   // Load the displacement from the switch table
-  int disp_reg = AllocTemp();
+  int disp_reg = AllocTemp().GetReg();
   NewLIR5(kX86PcRelLoadRA, disp_reg, start_of_method_reg, keyReg, 2, WrapPointer(tab_rec));
   // Add displacement to start of method
   OpRegReg(kOpAdd, start_of_method_reg, disp_reg);
@@ -157,8 +157,9 @@ void X86Mir2Lir::GenFillArrayData(DexOffset table_offset, RegLocation rl_src) {
   }
   NewLIR2(kX86PcRelAdr, rX86_ARG1, WrapPointer(tab_rec));
   NewLIR2(kX86Add32RR, rX86_ARG1, rX86_ARG2);
-  CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(pHandleFillArrayData), rX86_ARG0,
-                          rX86_ARG1, true);
+  CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(pHandleFillArrayData),
+                          RegStorage(RegStorage::k32BitSolo, rX86_ARG0),
+                          RegStorage(RegStorage::k32BitSolo, rX86_ARG1), true);
 }
 
 void X86Mir2Lir::GenMoveException(RegLocation rl_dest) {
@@ -173,8 +174,8 @@ void X86Mir2Lir::GenMoveException(RegLocation rl_dest) {
  * Mark garbage collection card. Skip if the value we're storing is null.
  */
 void X86Mir2Lir::MarkGCCard(int val_reg, int tgt_addr_reg) {
-  int reg_card_base = AllocTemp();
-  int reg_card_no = AllocTemp();
+  int reg_card_base = AllocTemp().GetReg();
+  int reg_card_no = AllocTemp().GetReg();
   LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, NULL);
   NewLIR2(kX86Mov32RT, reg_card_base, Thread::CardTableOffset().Int32Value());
   OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
@@ -184,6 +185,10 @@ void X86Mir2Lir::MarkGCCard(int val_reg, int tgt_addr_reg) {
   branch_over->target = target;
   FreeTemp(reg_card_base);
   FreeTemp(reg_card_no);
+}
+// FIXME: temp.
+void X86Mir2Lir::MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) {
+  MarkGCCard(val_reg.GetReg(), tgt_addr_reg.GetReg());
 }
 
 void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {

@@ -459,28 +459,36 @@ class Mir2Lir : public Backend {
     void Clobber(int reg) {
       ClobberBody(GetRegInfo(reg));
     }
+    void Clobber(RegStorage reg);
     void ClobberSRegBody(RegisterInfo* p, int num_regs, int s_reg);
     void ClobberSReg(int s_reg);
     int SRegToPMap(int s_reg);
-    void RecordCorePromotion(int reg, int s_reg);
-    int AllocPreservedCoreReg(int s_reg);
-    void RecordFpPromotion(int reg, int s_reg);
-    int AllocPreservedSingle(int s_reg);
-    int AllocPreservedDouble(int s_reg);
-    int AllocTempBody(RegisterInfo* p, int num_regs, int* next_temp, bool required);
+    void RecordCorePromotion(RegStorage reg, int s_reg);
+    RegStorage AllocPreservedCoreReg(int s_reg);
+    void RecordFpPromotion(RegStorage reg, int s_reg);
+    RegStorage AllocPreservedSingle(int s_reg);
+    RegStorage AllocPreservedDouble(int s_reg);
+    RegStorage AllocTempBody(RegisterInfo* p, int num_regs, int* next_temp, bool required);
     virtual int AllocTempDouble();
-    int AllocFreeTemp();
-    int AllocTemp();
-    int AllocTempFloat();
+    RegStorage AllocFreeTemp();
+    RegStorage AllocTemp();
+    RegStorage AllocTempFloat();
     RegisterInfo* AllocLiveBody(RegisterInfo* p, int num_regs, int s_reg);
     RegisterInfo* AllocLive(int s_reg, int reg_class);
     void FreeTemp(int reg);
+    void FreeTemp(RegStorage reg);
     RegisterInfo* IsLive(int reg);
+    RegisterInfo* IsLive(RegStorage reg);
     RegisterInfo* IsTemp(int reg);
+    RegisterInfo* IsTemp(RegStorage reg);
     RegisterInfo* IsPromoted(int reg);
+    RegisterInfo* IsPromoted(RegStorage reg);
     bool IsDirty(int reg);
+    bool IsDirty(RegStorage reg);
     void LockTemp(int reg);
+    void LockTemp(RegStorage reg);
     void ResetDef(int reg);
+    void ResetDef(RegStorage reg);
     void NullifyRange(LIR *start, LIR *finish, int s_reg1, int s_reg2);
     void MarkDef(RegLocation rl, LIR *start, LIR *finish);
     void MarkDefWide(RegLocation rl, LIR *start, LIR *finish);
@@ -494,13 +502,18 @@ class Mir2Lir : public Backend {
     void FlushAllRegs();
     bool RegClassMatches(int reg_class, int reg);
     void MarkLive(int reg, int s_reg);
+    void MarkLive(RegStorage reg, int s_reg);
     void MarkTemp(int reg);
+    void MarkTemp(RegStorage reg);
     void UnmarkTemp(int reg);
+    void UnmarkTemp(RegStorage reg);
     void MarkPair(int low_reg, int high_reg);
     void MarkClean(RegLocation loc);
     void MarkDirty(RegLocation loc);
     void MarkInUse(int reg);
+    void MarkInUse(RegStorage reg);
     void CopyRegInfo(int new_reg, int old_reg);
+    void CopyRegInfo(RegStorage new_reg, RegStorage old_reg);
     bool CheckCorePoolSanity();
     RegLocation UpdateLoc(RegLocation loc);
     virtual RegLocation UpdateLocWide(RegLocation loc);
@@ -547,6 +560,7 @@ class Mir2Lir : public Backend {
     LIR* GenImmedCheck(ConditionCode c_code, int reg, int imm_val,
                        ThrowKind kind);
     LIR* GenNullCheck(int s_reg, int m_reg, int opt_flags);
+    LIR* GenNullCheck(int s_reg, RegStorage m_reg, int opt_flags);
     LIR* GenRegRegCheck(ConditionCode c_code, int reg1, int reg2,
                         ThrowKind kind);
     void GenCompareAndBranch(Instruction::Code opcode, RegLocation rl_src1,
@@ -600,7 +614,7 @@ class Mir2Lir : public Backend {
     int CallHelperSetup(ThreadOffset helper_offset);
     LIR* CallHelper(int r_tgt, ThreadOffset helper_offset, bool safepoint_pc);
     void CallRuntimeHelperImm(ThreadOffset helper_offset, int arg0, bool safepoint_pc);
-    void CallRuntimeHelperReg(ThreadOffset helper_offset, int arg0, bool safepoint_pc);
+    void CallRuntimeHelperReg(ThreadOffset helper_offset, RegStorage arg0, bool safepoint_pc);
     void CallRuntimeHelperRegLocation(ThreadOffset helper_offset, RegLocation arg0,
                                       bool safepoint_pc);
     void CallRuntimeHelperImmImm(ThreadOffset helper_offset, int arg0, int arg1,
@@ -609,21 +623,21 @@ class Mir2Lir : public Backend {
                                          RegLocation arg1, bool safepoint_pc);
     void CallRuntimeHelperRegLocationImm(ThreadOffset helper_offset, RegLocation arg0,
                                          int arg1, bool safepoint_pc);
-    void CallRuntimeHelperImmReg(ThreadOffset helper_offset, int arg0, int arg1,
+    void CallRuntimeHelperImmReg(ThreadOffset helper_offset, int arg0, RegStorage arg1,
                                  bool safepoint_pc);
-    void CallRuntimeHelperRegImm(ThreadOffset helper_offset, int arg0, int arg1,
+    void CallRuntimeHelperRegImm(ThreadOffset helper_offset, RegStorage arg0, int arg1,
                                  bool safepoint_pc);
     void CallRuntimeHelperImmMethod(ThreadOffset helper_offset, int arg0,
                                     bool safepoint_pc);
-    void CallRuntimeHelperRegMethod(ThreadOffset helper_offset, int arg0, bool safepoint_pc);
-    void CallRuntimeHelperRegMethodRegLocation(ThreadOffset helper_offset, int arg0,
+    void CallRuntimeHelperRegMethod(ThreadOffset helper_offset, RegStorage arg0, bool safepoint_pc);
+    void CallRuntimeHelperRegMethodRegLocation(ThreadOffset helper_offset, RegStorage arg0,
                                                RegLocation arg2, bool safepoint_pc);
     void CallRuntimeHelperRegLocationRegLocation(ThreadOffset helper_offset,
                                                  RegLocation arg0, RegLocation arg1,
                                                  bool safepoint_pc);
-    void CallRuntimeHelperRegReg(ThreadOffset helper_offset, int arg0, int arg1,
+    void CallRuntimeHelperRegReg(ThreadOffset helper_offset, RegStorage arg0, RegStorage arg1,
                                  bool safepoint_pc);
-    void CallRuntimeHelperRegRegImm(ThreadOffset helper_offset, int arg0, int arg1,
+    void CallRuntimeHelperRegRegImm(ThreadOffset helper_offset, RegStorage arg0, RegStorage arg1,
                                     int arg2, bool safepoint_pc);
     void CallRuntimeHelperImmMethodRegLocation(ThreadOffset helper_offset, int arg0,
                                                RegLocation arg2, bool safepoint_pc);
@@ -693,15 +707,21 @@ class Mir2Lir : public Backend {
     // Shared by all targets - implemented in gen_loadstore.cc.
     RegLocation LoadCurrMethod();
     void LoadCurrMethodDirect(int r_tgt);
+    void LoadCurrMethodDirect(RegStorage r_tgt);
     LIR* LoadConstant(int r_dest, int value);
-    LIR* LoadWordDisp(int rBase, int displacement, int r_dest);
+    LIR* LoadConstant(RegStorage r_dest, int value);
+    LIR* LoadWordDisp(int r_base, int displacement, int r_dest);
+    LIR* LoadWordDisp(RegStorage r_base, int displacement, RegStorage r_dest);
     RegLocation LoadValue(RegLocation rl_src, RegisterClass op_kind);
     RegLocation LoadValueWide(RegLocation rl_src, RegisterClass op_kind);
     void LoadValueDirect(RegLocation rl_src, int r_dest);
+    void LoadValueDirect(RegLocation rl_src, RegStorage r_dest);
     void LoadValueDirectFixed(RegLocation rl_src, int r_dest);
+    void LoadValueDirectFixed(RegLocation rl_src, RegStorage r_dest);
     void LoadValueDirectWide(RegLocation rl_src, int reg_lo, int reg_hi);
     void LoadValueDirectWideFixed(RegLocation rl_src, int reg_lo, int reg_hi);
-    LIR* StoreWordDisp(int rBase, int displacement, int r_src);
+    LIR* StoreWordDisp(int r_base, int displacement, int r_src);
+    LIR* StoreWordDisp(RegStorage r_base, int displacement, RegStorage r_src);
 
     /**
      * @brief Used to do the final store in the destination as per bytecode semantics.
@@ -795,28 +815,36 @@ class Mir2Lir : public Backend {
     virtual bool SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div,
                                     RegLocation rl_src, RegLocation rl_dest, int lit) = 0;
     virtual int LoadHelper(ThreadOffset offset) = 0;
-    virtual LIR* LoadBaseDisp(int rBase, int displacement, int r_dest, OpSize size, int s_reg) = 0;
-    virtual LIR* LoadBaseDispWide(int rBase, int displacement, int r_dest_lo, int r_dest_hi,
+    virtual LIR* LoadBaseDisp(int r_base, int displacement, int r_dest, OpSize size, int s_reg) = 0;
+    virtual LIR* LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_dest, OpSize size,
+                              int s_reg) = 0;
+    virtual LIR* LoadBaseDispWide(int r_base, int displacement, int r_dest_lo, int r_dest_hi,
                                   int s_reg) = 0;
-    virtual LIR* LoadBaseIndexed(int rBase, int r_index, int r_dest, int scale, OpSize size) = 0;
-    virtual LIR* LoadBaseIndexedDisp(int rBase, int r_index, int scale, int displacement,
+    virtual LIR* LoadBaseIndexed(int r_base, int r_index, int r_dest, int scale, OpSize size) = 0;
+    virtual LIR* LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_dest,
+                                 int scale, OpSize size) = 0;
+    virtual LIR* LoadBaseIndexedDisp(int r_base, int r_index, int scale, int displacement,
                                      int r_dest, int r_dest_hi, OpSize size, int s_reg) = 0;
     virtual LIR* LoadConstantNoClobber(int r_dest, int value) = 0;
     virtual LIR* LoadConstantWide(int r_dest_lo, int r_dest_hi, int64_t value) = 0;
-    virtual LIR* StoreBaseDisp(int rBase, int displacement, int r_src, OpSize size) = 0;
-    virtual LIR* StoreBaseDispWide(int rBase, int displacement, int r_src_lo, int r_src_hi) = 0;
-    virtual LIR* StoreBaseIndexed(int rBase, int r_index, int r_src, int scale, OpSize size) = 0;
-    virtual LIR* StoreBaseIndexedDisp(int rBase, int r_index, int scale, int displacement,
+    virtual LIR* StoreBaseDisp(int r_base, int displacement, int r_src, OpSize size) = 0;
+    virtual LIR* StoreBaseDisp(RegStorage r_base, int displacement, RegStorage r_src,
+                               OpSize size) = 0;
+    virtual LIR* StoreBaseDispWide(int r_base, int displacement, int r_src_lo, int r_src_hi) = 0;
+    virtual LIR* StoreBaseIndexed(int r_base, int r_index, int r_src, int scale, OpSize size) = 0;
+    virtual LIR* StoreBaseIndexedDisp(int r_base, int r_index, int scale, int displacement,
                                       int r_src, int r_src_hi, OpSize size, int s_reg) = 0;
     virtual void MarkGCCard(int val_reg, int tgt_addr_reg) = 0;
+    virtual void MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) = 0;
 
     // Required for target - register utilities.
     virtual bool IsFpReg(int reg) = 0;
+    virtual bool IsFpReg(RegStorage reg) = 0;
     virtual bool SameRegType(int reg1, int reg2) = 0;
-    virtual int AllocTypedTemp(bool fp_hint, int reg_class) = 0;
+    virtual RegStorage AllocTypedTemp(bool fp_hint, int reg_class) = 0;
     virtual RegStorage AllocTypedTempWide(bool fp_hint, int reg_class) = 0;
     virtual int S2d(int low_reg, int high_reg) = 0;
-    virtual int TargetReg(SpecialTargetRegister reg) = 0;
+    virtual RegStorage TargetReg(SpecialTargetRegister reg) = 0;
     virtual int GetArgMappingToPhysicalReg(int arg_num) = 0;
     virtual RegLocation GetReturnAlt() = 0;
     virtual RegLocation GetReturnWideAlt() = 0;
@@ -829,6 +857,7 @@ class Mir2Lir : public Backend {
     virtual void AdjustSpillMask() = 0;
     virtual void ClobberCallerSave() = 0;
     virtual void FlushReg(int reg) = 0;
+    virtual void FlushReg(RegStorage reg) = 0;
     virtual void FlushRegWide(int reg1, int reg2) = 0;
     virtual void FreeCallTemps() = 0;
     virtual void FreeRegLocTemps(RegLocation rl_keep, RegLocation rl_free) = 0;
@@ -975,13 +1004,14 @@ class Mir2Lir : public Backend {
     virtual LIR* OpDecAndBranch(ConditionCode c_code, int reg, LIR* target) = 0;
     virtual LIR* OpFpRegCopy(int r_dest, int r_src) = 0;
     virtual LIR* OpIT(ConditionCode cond, const char* guide) = 0;
-    virtual LIR* OpMem(OpKind op, int rBase, int disp) = 0;
+    virtual LIR* OpMem(OpKind op, int r_base, int disp) = 0;
     virtual LIR* OpPcRelLoad(int reg, LIR* target) = 0;
     virtual LIR* OpReg(OpKind op, int r_dest_src) = 0;
     virtual LIR* OpRegCopy(int r_dest, int r_src) = 0;
+    virtual LIR* OpRegCopy(RegStorage r_dest, RegStorage r_src) = 0;
     virtual LIR* OpRegCopyNoInsert(int r_dest, int r_src) = 0;
     virtual LIR* OpRegImm(OpKind op, int r_dest_src1, int value) = 0;
-    virtual LIR* OpRegMem(OpKind op, int r_dest, int rBase, int offset) = 0;
+    virtual LIR* OpRegMem(OpKind op, int r_dest, int r_base, int offset) = 0;
     virtual LIR* OpRegReg(OpKind op, int r_dest_src1, int r_src2) = 0;
 
     /**
@@ -1019,9 +1049,9 @@ class Mir2Lir : public Backend {
     virtual LIR* OpRegRegReg(OpKind op, int r_dest, int r_src1, int r_src2) = 0;
     virtual LIR* OpTestSuspend(LIR* target) = 0;
     virtual LIR* OpThreadMem(OpKind op, ThreadOffset thread_offset) = 0;
-    virtual LIR* OpVldm(int rBase, int count) = 0;
-    virtual LIR* OpVstm(int rBase, int count) = 0;
-    virtual void OpLea(int rBase, int reg1, int reg2, int scale, int offset) = 0;
+    virtual LIR* OpVldm(int r_base, int count) = 0;
+    virtual LIR* OpVstm(int r_base, int count) = 0;
+    virtual void OpLea(int r_base, int reg1, int reg2, int scale, int offset) = 0;
     virtual void OpRegCopyWide(int dest_lo, int dest_hi, int src_lo, int src_hi) = 0;
     virtual void OpTlsCmp(ThreadOffset offset, int val) = 0;
     virtual bool InexpensiveConstantInt(int32_t value) = 0;
@@ -1034,7 +1064,7 @@ class Mir2Lir : public Backend {
     virtual void GenMonitorExit(int opt_flags, RegLocation rl_src);
 
     // Temp workaround
-    void Workaround7250540(RegLocation rl_dest, int value);
+    void Workaround7250540(RegLocation rl_dest, RegStorage zero_reg);
 
   protected:
     Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);

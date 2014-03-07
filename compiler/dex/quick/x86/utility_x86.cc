@@ -81,7 +81,7 @@ LIR* X86Mir2Lir::LoadConstantNoClobber(int r_dest, int value) {
       return NewLIR2(kX86XorpsRR, r_dest, r_dest);
     }
     DCHECK(X86_SINGLEREG(r_dest));
-    r_dest = AllocTemp();
+    r_dest = AllocTemp().GetReg();
   }
 
   LIR *res;
@@ -321,7 +321,7 @@ LIR* X86Mir2Lir::OpCondRegReg(OpKind op, ConditionCode cc, int r_dest, int r_src
   return NewLIR3(kX86Cmov32RRC, r_dest, r_src, X86ConditionEncoding(cc));
 }
 
-LIR* X86Mir2Lir::OpRegMem(OpKind op, int r_dest, int rBase,
+LIR* X86Mir2Lir::OpRegMem(OpKind op, int r_dest, int r_base,
               int offset) {
   X86OpCode opcode = kX86Nop;
   switch (op) {
@@ -341,8 +341,8 @@ LIR* X86Mir2Lir::OpRegMem(OpKind op, int r_dest, int rBase,
       LOG(FATAL) << "Bad case in OpRegMem " << op;
       break;
   }
-  LIR *l = NewLIR3(opcode, r_dest, rBase, offset);
-  if (rBase == rX86_SP) {
+  LIR *l = NewLIR3(opcode, r_dest, r_base, offset);
+  if (r_base == rX86_SP) {
     AnnotateDalvikRegAccess(l, offset >> 2, true /* is_load */, false /* is_64bit */);
   }
   return l;
@@ -422,7 +422,7 @@ LIR* X86Mir2Lir::OpRegRegReg(OpKind op, int r_dest, int r_src1,
         break;
       case kOpSbc:
       case kOpLsl: case kOpLsr: case kOpAsr: case kOpRor: {
-        int t_reg = AllocTemp();
+        int t_reg = AllocTemp().GetReg();
         OpRegCopy(t_reg, r_src1);
         OpRegReg(op, t_reg, r_src2);
         LIR* res = OpRegCopy(r_dest, t_reg);
@@ -479,7 +479,7 @@ LIR* X86Mir2Lir::OpThreadMem(OpKind op, ThreadOffset thread_offset) {
   return NewLIR1(opcode, thread_offset.Int32Value());
 }
 
-LIR* X86Mir2Lir::OpMem(OpKind op, int rBase, int disp) {
+LIR* X86Mir2Lir::OpMem(OpKind op, int r_base, int disp) {
   X86OpCode opcode = kX86Bkpt;
   switch (op) {
     case kOpBlx: opcode = kX86CallM;  break;
@@ -487,7 +487,7 @@ LIR* X86Mir2Lir::OpMem(OpKind op, int rBase, int disp) {
       LOG(FATAL) << "Bad opcode: " << op;
       break;
   }
-  return NewLIR2(opcode, rBase, disp);
+  return NewLIR2(opcode, r_base, disp);
 }
 
 LIR* X86Mir2Lir::LoadConstantWide(int r_dest_lo, int r_dest_hi, int64_t value) {
@@ -539,7 +539,7 @@ LIR* X86Mir2Lir::LoadConstantWide(int r_dest_lo, int r_dest_hi, int64_t value) {
     return res;
 }
 
-LIR* X86Mir2Lir::LoadBaseIndexedDisp(int rBase, int r_index, int scale,
+LIR* X86Mir2Lir::LoadBaseIndexedDisp(int r_base, int r_index, int scale,
                                      int displacement, int r_dest, int r_dest_hi, OpSize size,
                                      int s_reg) {
   LIR *load = NULL;
@@ -590,19 +590,19 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(int rBase, int r_index, int scale,
 
   if (!is_array) {
     if (!pair) {
-      load = NewLIR3(opcode, r_dest, rBase, displacement + LOWORD_OFFSET);
+      load = NewLIR3(opcode, r_dest, r_base, displacement + LOWORD_OFFSET);
     } else {
-      if (rBase == r_dest) {
-        load2 = NewLIR3(opcode, r_dest_hi, rBase,
+      if (r_base == r_dest) {
+        load2 = NewLIR3(opcode, r_dest_hi, r_base,
                         displacement + HIWORD_OFFSET);
-        load = NewLIR3(opcode, r_dest, rBase, displacement + LOWORD_OFFSET);
+        load = NewLIR3(opcode, r_dest, r_base, displacement + LOWORD_OFFSET);
       } else {
-        load = NewLIR3(opcode, r_dest, rBase, displacement + LOWORD_OFFSET);
-        load2 = NewLIR3(opcode, r_dest_hi, rBase,
+        load = NewLIR3(opcode, r_dest, r_base, displacement + LOWORD_OFFSET);
+        load2 = NewLIR3(opcode, r_dest_hi, r_base,
                         displacement + HIWORD_OFFSET);
       }
     }
-    if (rBase == rX86_SP) {
+    if (r_base == rX86_SP) {
       AnnotateDalvikRegAccess(load, (displacement + (pair ? LOWORD_OFFSET : 0)) >> 2,
                               true /* is_load */, is64bit);
       if (pair) {
@@ -612,39 +612,39 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(int rBase, int r_index, int scale,
     }
   } else {
     if (!pair) {
-      load = NewLIR5(opcode, r_dest, rBase, r_index, scale,
+      load = NewLIR5(opcode, r_dest, r_base, r_index, scale,
                      displacement + LOWORD_OFFSET);
     } else {
-      if (rBase == r_dest) {
+      if (r_base == r_dest) {
         if (r_dest_hi == r_index) {
           // We can't use either register for the first load.
-          int temp = AllocTemp();
-          load2 = NewLIR5(opcode, temp, rBase, r_index, scale,
+          int temp = AllocTemp().GetReg();
+          load2 = NewLIR5(opcode, temp, r_base, r_index, scale,
                           displacement + HIWORD_OFFSET);
-          load = NewLIR5(opcode, r_dest, rBase, r_index, scale,
+          load = NewLIR5(opcode, r_dest, r_base, r_index, scale,
                          displacement + LOWORD_OFFSET);
           OpRegCopy(r_dest_hi, temp);
           FreeTemp(temp);
         } else {
-          load2 = NewLIR5(opcode, r_dest_hi, rBase, r_index, scale,
+          load2 = NewLIR5(opcode, r_dest_hi, r_base, r_index, scale,
                           displacement + HIWORD_OFFSET);
-          load = NewLIR5(opcode, r_dest, rBase, r_index, scale,
+          load = NewLIR5(opcode, r_dest, r_base, r_index, scale,
                          displacement + LOWORD_OFFSET);
         }
       } else {
         if (r_dest == r_index) {
           // We can't use either register for the first load.
-          int temp = AllocTemp();
-          load = NewLIR5(opcode, temp, rBase, r_index, scale,
+          int temp = AllocTemp().GetReg();
+          load = NewLIR5(opcode, temp, r_base, r_index, scale,
                          displacement + LOWORD_OFFSET);
-          load2 = NewLIR5(opcode, r_dest_hi, rBase, r_index, scale,
+          load2 = NewLIR5(opcode, r_dest_hi, r_base, r_index, scale,
                           displacement + HIWORD_OFFSET);
           OpRegCopy(r_dest, temp);
           FreeTemp(temp);
         } else {
-          load = NewLIR5(opcode, r_dest, rBase, r_index, scale,
+          load = NewLIR5(opcode, r_dest, r_base, r_index, scale,
                          displacement + LOWORD_OFFSET);
-          load2 = NewLIR5(opcode, r_dest_hi, rBase, r_index, scale,
+          load2 = NewLIR5(opcode, r_dest_hi, r_base, r_index, scale,
                           displacement + HIWORD_OFFSET);
         }
       }
@@ -655,25 +655,35 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(int rBase, int r_index, int scale,
 }
 
 /* Load value from base + scaled index. */
-LIR* X86Mir2Lir::LoadBaseIndexed(int rBase,
+LIR* X86Mir2Lir::LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_dest,
+                                 int scale, OpSize size) {
+  return LoadBaseIndexed(r_base.GetReg(), r_index.GetReg(), r_dest.GetReg(), scale, size);
+}
+LIR* X86Mir2Lir::LoadBaseIndexed(int r_base,
                      int r_index, int r_dest, int scale, OpSize size) {
-  return LoadBaseIndexedDisp(rBase, r_index, scale, 0,
+  return LoadBaseIndexedDisp(r_base, r_index, scale, 0,
                              r_dest, INVALID_REG, size, INVALID_SREG);
 }
 
-LIR* X86Mir2Lir::LoadBaseDisp(int rBase, int displacement,
+LIR* X86Mir2Lir::LoadBaseDisp(int r_base, int displacement,
                   int r_dest, OpSize size, int s_reg) {
-  return LoadBaseIndexedDisp(rBase, INVALID_REG, 0, displacement,
+  return LoadBaseIndexedDisp(r_base, INVALID_REG, 0, displacement,
                              r_dest, INVALID_REG, size, s_reg);
 }
+// FIXME: temp.
+LIR* X86Mir2Lir::LoadBaseDisp(RegStorage r_base, int displacement,
+                  RegStorage r_dest, OpSize size, int s_reg) {
+  return LoadBaseIndexedDisp(r_base.GetReg(), INVALID_REG, 0, displacement,
+                             r_dest.GetReg(), INVALID_REG, size, s_reg);
+}
 
-LIR* X86Mir2Lir::LoadBaseDispWide(int rBase, int displacement,
+LIR* X86Mir2Lir::LoadBaseDispWide(int r_base, int displacement,
                       int r_dest_lo, int r_dest_hi, int s_reg) {
-  return LoadBaseIndexedDisp(rBase, INVALID_REG, 0, displacement,
+  return LoadBaseIndexedDisp(r_base, INVALID_REG, 0, displacement,
                              r_dest_lo, r_dest_hi, kLong, s_reg);
 }
 
-LIR* X86Mir2Lir::StoreBaseIndexedDisp(int rBase, int r_index, int scale,
+LIR* X86Mir2Lir::StoreBaseIndexedDisp(int r_base, int r_index, int scale,
                                       int displacement, int r_src, int r_src_hi, OpSize size,
                                       int s_reg) {
   LIR *store = NULL;
@@ -719,12 +729,12 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(int rBase, int r_index, int scale,
 
   if (!is_array) {
     if (!pair) {
-      store = NewLIR3(opcode, rBase, displacement + LOWORD_OFFSET, r_src);
+      store = NewLIR3(opcode, r_base, displacement + LOWORD_OFFSET, r_src);
     } else {
-      store = NewLIR3(opcode, rBase, displacement + LOWORD_OFFSET, r_src);
-      store2 = NewLIR3(opcode, rBase, displacement + HIWORD_OFFSET, r_src_hi);
+      store = NewLIR3(opcode, r_base, displacement + LOWORD_OFFSET, r_src);
+      store2 = NewLIR3(opcode, r_base, displacement + HIWORD_OFFSET, r_src_hi);
     }
-    if (rBase == rX86_SP) {
+    if (r_base == rX86_SP) {
       AnnotateDalvikRegAccess(store, (displacement + (pair ? LOWORD_OFFSET : 0)) >> 2,
                               false /* is_load */, is64bit);
       if (pair) {
@@ -734,12 +744,12 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(int rBase, int r_index, int scale,
     }
   } else {
     if (!pair) {
-      store = NewLIR5(opcode, rBase, r_index, scale,
+      store = NewLIR5(opcode, r_base, r_index, scale,
                       displacement + LOWORD_OFFSET, r_src);
     } else {
-      store = NewLIR5(opcode, rBase, r_index, scale,
+      store = NewLIR5(opcode, r_base, r_index, scale,
                       displacement + LOWORD_OFFSET, r_src);
-      store2 = NewLIR5(opcode, rBase, r_index, scale,
+      store2 = NewLIR5(opcode, r_base, r_index, scale,
                        displacement + HIWORD_OFFSET, r_src_hi);
     }
   }
@@ -748,22 +758,30 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(int rBase, int r_index, int scale,
 }
 
 /* store value base base + scaled index. */
-LIR* X86Mir2Lir::StoreBaseIndexed(int rBase, int r_index, int r_src,
+LIR* X86Mir2Lir::StoreBaseIndexed(int r_base, int r_index, int r_src,
                       int scale, OpSize size) {
-  return StoreBaseIndexedDisp(rBase, r_index, scale, 0,
+  return StoreBaseIndexedDisp(r_base, r_index, scale, 0,
                               r_src, INVALID_REG, size, INVALID_SREG);
 }
 
-LIR* X86Mir2Lir::StoreBaseDisp(int rBase, int displacement,
+LIR* X86Mir2Lir::StoreBaseDisp(int r_base, int displacement,
                                int r_src, OpSize size) {
-    return StoreBaseIndexedDisp(rBase, INVALID_REG, 0,
+    return StoreBaseIndexedDisp(r_base, INVALID_REG, 0,
                                 displacement, r_src, INVALID_REG, size,
                                 INVALID_SREG);
 }
 
-LIR* X86Mir2Lir::StoreBaseDispWide(int rBase, int displacement,
+// FIXME: temp.
+LIR* X86Mir2Lir::StoreBaseDisp(RegStorage r_base, int displacement,
+                               RegStorage r_src, OpSize size) {
+    return StoreBaseIndexedDisp(r_base.GetReg(), INVALID_REG, 0,
+                                displacement, r_src.GetReg(), INVALID_REG, size,
+                                INVALID_SREG);
+}
+
+LIR* X86Mir2Lir::StoreBaseDispWide(int r_base, int displacement,
                                    int r_src_lo, int r_src_hi) {
-  return StoreBaseIndexedDisp(rBase, INVALID_REG, 0, displacement,
+  return StoreBaseIndexedDisp(r_base, INVALID_REG, 0, displacement,
                               r_src_lo, r_src_hi, kLong, INVALID_SREG);
 }
 

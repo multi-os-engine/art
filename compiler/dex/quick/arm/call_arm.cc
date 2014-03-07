@@ -31,11 +31,11 @@ namespace art {
  *
  * The test loop will look something like:
  *
- *   adr   rBase, <table>
+ *   adr   r_base, <table>
  *   ldr   r_val, [rARM_SP, v_reg_off]
  *   mov   r_idx, #table_size
  * lp:
- *   ldmia rBase!, {r_key, r_disp}
+ *   ldmia r_base!, {r_key, r_disp}
  *   sub   r_idx, #1
  *   cmp   r_val, r_key
  *   ifeq
@@ -60,10 +60,10 @@ void ArmMir2Lir::GenSparseSwitch(MIR* mir, uint32_t table_offset,
 
   // Get the switch value
   rl_src = LoadValue(rl_src, kCoreReg);
-  int rBase = AllocTemp();
+  int r_base = AllocTemp().GetReg();
   /* Allocate key and disp temps */
-  int r_key = AllocTemp();
-  int r_disp = AllocTemp();
+  int r_key = AllocTemp().GetReg();
+  int r_disp = AllocTemp().GetReg();
   // Make sure r_key's register number is less than r_disp's number for ldmia
   if (r_key > r_disp) {
     int tmp = r_disp;
@@ -71,14 +71,14 @@ void ArmMir2Lir::GenSparseSwitch(MIR* mir, uint32_t table_offset,
     r_key = tmp;
   }
   // Materialize a pointer to the switch table
-  NewLIR3(kThumb2Adr, rBase, 0, WrapPointer(tab_rec));
+  NewLIR3(kThumb2Adr, r_base, 0, WrapPointer(tab_rec));
   // Set up r_idx
-  int r_idx = AllocTemp();
+  int r_idx = AllocTemp().GetReg();
   LoadConstant(r_idx, size);
   // Establish loop branch target
   LIR* target = NewLIR0(kPseudoTargetLabel);
   // Load next key/disp
-  NewLIR2(kThumb2LdmiaWB, rBase, (1 << r_key) | (1 << r_disp));
+  NewLIR2(kThumb2LdmiaWB, r_base, (1 << r_key) | (1 << r_disp));
   OpRegReg(kOpCmp, r_key, rl_src.reg.GetReg());
   // Go if match. NOTE: No instruction set switch here - must stay Thumb2
   OpIT(kCondEq, "");
@@ -109,7 +109,7 @@ void ArmMir2Lir::GenPackedSwitch(MIR* mir, uint32_t table_offset,
 
   // Get the switch value
   rl_src = LoadValue(rl_src, kCoreReg);
-  int table_base = AllocTemp();
+  int table_base = AllocTemp().GetReg();
   // Materialize a pointer to the switch table
   NewLIR3(kThumb2Adr, table_base, 0, WrapPointer(tab_rec));
   int low_key = s4FromSwitchData(&table[2]);
@@ -118,7 +118,7 @@ void ArmMir2Lir::GenPackedSwitch(MIR* mir, uint32_t table_offset,
   if (low_key == 0) {
     keyReg = rl_src.reg.GetReg();
   } else {
-    keyReg = AllocTemp();
+    keyReg = AllocTemp().GetReg();
     OpRegRegImm(kOpSub, keyReg, rl_src.reg.GetReg(), low_key);
   }
   // Bounds check - if < 0 or >= size continue following switch
@@ -126,7 +126,7 @@ void ArmMir2Lir::GenPackedSwitch(MIR* mir, uint32_t table_offset,
   LIR* branch_over = OpCondBranch(kCondHi, NULL);
 
   // Load the displacement from the switch table
-  int disp_reg = AllocTemp();
+  int disp_reg = AllocTemp().GetReg();
   LoadBaseIndexed(table_base, keyReg, disp_reg, 2, kWord);
 
   // ..and go! NOTE: No instruction set switch here - must stay Thumb2
@@ -293,7 +293,7 @@ void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
 void ArmMir2Lir::GenMoveException(RegLocation rl_dest) {
   int ex_offset = Thread::ExceptionOffset().Int32Value();
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  int reset_reg = AllocTemp();
+  int reset_reg = AllocTemp().GetReg();
   LoadWordDisp(rARM_SELF, ex_offset, rl_result.reg.GetReg());
   LoadConstant(reset_reg, 0);
   StoreWordDisp(rARM_SELF, ex_offset, reset_reg);
@@ -305,8 +305,8 @@ void ArmMir2Lir::GenMoveException(RegLocation rl_dest) {
  * Mark garbage collection card. Skip if the value we're storing is null.
  */
 void ArmMir2Lir::MarkGCCard(int val_reg, int tgt_addr_reg) {
-  int reg_card_base = AllocTemp();
-  int reg_card_no = AllocTemp();
+  int reg_card_base = AllocTemp().GetReg();
+  int reg_card_no = AllocTemp().GetReg();
   LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, NULL);
   LoadWordDisp(rARM_SELF, Thread::CardTableOffset().Int32Value(), reg_card_base);
   OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
@@ -316,6 +316,10 @@ void ArmMir2Lir::MarkGCCard(int val_reg, int tgt_addr_reg) {
   branch_over->target = target;
   FreeTemp(reg_card_base);
   FreeTemp(reg_card_no);
+}
+// FIXME: temp.
+void ArmMir2Lir::MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) {
+  MarkGCCard(val_reg.GetReg(), tgt_addr_reg.GetReg());
 }
 
 void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {

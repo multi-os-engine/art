@@ -92,6 +92,14 @@ class RegStorage {
   RegStorage() : reg_(kInvalid) {}
   ~RegStorage() {}
 
+  bool operator==(const RegStorage rhs) const {
+    return (reg_ == rhs.GetRawBits());
+  }
+
+  bool operator!=(const RegStorage rhs) const {
+    return (reg_ != rhs.GetRawBits());
+  }
+
   bool IsInvalid() const {
     return ((reg_ & kShapeMask) == kInvalid);
   }

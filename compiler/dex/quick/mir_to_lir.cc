@@ -56,18 +56,18 @@ int Mir2Lir::LoadArg(int in_position, bool wide) {
       RegStorage new_regs = AllocTypedTempWide(false, kAnyReg);
       reg_arg_low = new_regs.GetReg();
       reg_arg_high = new_regs.GetHighReg();
-      LoadBaseDispWide(TargetReg(kSp), offset, reg_arg_low, reg_arg_high, INVALID_SREG);
+      LoadBaseDispWide(TargetReg(kSp).GetReg(), offset, reg_arg_low, reg_arg_high, INVALID_SREG);
     } else {
-      reg_arg_high = AllocTemp();
+      reg_arg_high = AllocTemp().GetReg();
       int offset_high = offset + sizeof(uint32_t);
-      LoadWordDisp(TargetReg(kSp), offset_high, reg_arg_high);
+      LoadWordDisp(TargetReg(kSp).GetReg(), offset_high, reg_arg_high);
     }
   }
 
   // If the low part is not in a register yet, we need to load it.
   if (reg_arg_low == INVALID_REG) {
-    reg_arg_low = AllocTemp();
-    LoadWordDisp(TargetReg(kSp), offset, reg_arg_low);
+    reg_arg_low = AllocTemp().GetReg();
+    LoadWordDisp(TargetReg(kSp).GetReg(), offset, reg_arg_low);
   }
 
   if (wide) {
@@ -94,7 +94,7 @@ void Mir2Lir::LoadArgDirect(int in_position, RegLocation rl_dest) {
     if (reg != INVALID_REG) {
       OpRegCopy(rl_dest.reg.GetReg(), reg);
     } else {
-      LoadWordDisp(TargetReg(kSp), offset, rl_dest.reg.GetReg());
+      LoadWordDisp(TargetReg(kSp).GetReg(), offset, rl_dest.reg.GetReg());
     }
   } else {
     int reg_arg_low = GetArgMappingToPhysicalReg(in_position);
@@ -105,12 +105,12 @@ void Mir2Lir::LoadArgDirect(int in_position, RegLocation rl_dest) {
     } else if (reg_arg_low != INVALID_REG && reg_arg_high == INVALID_REG) {
       OpRegCopy(rl_dest.reg.GetReg(), reg_arg_low);
       int offset_high = offset + sizeof(uint32_t);
-      LoadWordDisp(TargetReg(kSp), offset_high, rl_dest.reg.GetHighReg());
+      LoadWordDisp(TargetReg(kSp).GetReg(), offset_high, rl_dest.reg.GetHighReg());
     } else if (reg_arg_low == INVALID_REG && reg_arg_high != INVALID_REG) {
       OpRegCopy(rl_dest.reg.GetHighReg(), reg_arg_high);
-      LoadWordDisp(TargetReg(kSp), offset, rl_dest.reg.GetReg());
+      LoadWordDisp(TargetReg(kSp).GetReg(), offset, rl_dest.reg.GetReg());
     } else {
-      LoadBaseDispWide(TargetReg(kSp), offset, rl_dest.reg.GetReg(), rl_dest.reg.GetHighReg(), INVALID_SREG);
+      LoadBaseDispWide(TargetReg(kSp).GetReg(), offset, rl_dest.reg.GetReg(), rl_dest.reg.GetHighReg(), INVALID_SREG);
     }
   }
 }
@@ -381,7 +381,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       LoadConstantNoClobber(rl_result.reg.GetReg(), vB);
       StoreValue(rl_dest, rl_result);
       if (vB == 0) {
-        Workaround7250540(rl_dest, rl_result.reg.GetReg());
+        Workaround7250540(rl_dest, rl_result.reg);
       }
       break;
 
@@ -390,7 +390,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       LoadConstantNoClobber(rl_result.reg.GetReg(), vB << 16);
       StoreValue(rl_dest, rl_result);
       if (vB == 0) {
-        Workaround7250540(rl_dest, rl_result.reg.GetReg());
+        Workaround7250540(rl_dest, rl_result.reg);
       }
       break;
 
@@ -438,7 +438,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       int len_offset;
       len_offset = mirror::Array::LengthOffset().Int32Value();
       rl_src[0] = LoadValue(rl_src[0], kCoreReg);
-      GenNullCheck(rl_src[0].s_reg_low, rl_src[0].reg.GetReg(), opt_flags);
+      GenNullCheck(rl_src[0].s_reg_low, rl_src[0].reg, opt_flags);
       rl_result = EvalLoc(rl_dest, kCoreReg, true);
       LoadWordDisp(rl_src[0].reg.GetReg(), len_offset, rl_result.reg.GetReg());
       StoreValue(rl_dest, rl_result);

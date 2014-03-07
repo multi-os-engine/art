@@ -53,30 +53,30 @@ RegLocation ArmMir2Lir::LocCReturnDouble() {
 }
 
 // Return a target-dependent special register.
-int ArmMir2Lir::TargetReg(SpecialTargetRegister reg) {
-  int res = INVALID_REG;
+RegStorage ArmMir2Lir::TargetReg(SpecialTargetRegister reg) {
+  int res_reg = INVALID_REG;
   switch (reg) {
-    case kSelf: res = rARM_SELF; break;
-    case kSuspend: res =  rARM_SUSPEND; break;
-    case kLr: res =  rARM_LR; break;
-    case kPc: res =  rARM_PC; break;
-    case kSp: res =  rARM_SP; break;
-    case kArg0: res = rARM_ARG0; break;
-    case kArg1: res = rARM_ARG1; break;
-    case kArg2: res = rARM_ARG2; break;
-    case kArg3: res = rARM_ARG3; break;
-    case kFArg0: res = rARM_FARG0; break;
-    case kFArg1: res = rARM_FARG1; break;
-    case kFArg2: res = rARM_FARG2; break;
-    case kFArg3: res = rARM_FARG3; break;
-    case kRet0: res = rARM_RET0; break;
-    case kRet1: res = rARM_RET1; break;
-    case kInvokeTgt: res = rARM_INVOKE_TGT; break;
-    case kHiddenArg: res = r12; break;
-    case kHiddenFpArg: res = INVALID_REG; break;
-    case kCount: res = rARM_COUNT; break;
+    case kSelf: res_reg = rARM_SELF; break;
+    case kSuspend: res_reg =  rARM_SUSPEND; break;
+    case kLr: res_reg =  rARM_LR; break;
+    case kPc: res_reg =  rARM_PC; break;
+    case kSp: res_reg =  rARM_SP; break;
+    case kArg0: res_reg = rARM_ARG0; break;
+    case kArg1: res_reg = rARM_ARG1; break;
+    case kArg2: res_reg = rARM_ARG2; break;
+    case kArg3: res_reg = rARM_ARG3; break;
+    case kFArg0: res_reg = rARM_FARG0; break;
+    case kFArg1: res_reg = rARM_FARG1; break;
+    case kFArg2: res_reg = rARM_FARG2; break;
+    case kFArg3: res_reg = rARM_FARG3; break;
+    case kRet0: res_reg = rARM_RET0; break;
+    case kRet1: res_reg = rARM_RET1; break;
+    case kInvokeTgt: res_reg = rARM_INVOKE_TGT; break;
+    case kHiddenArg: res_reg = r12; break;
+    case kHiddenFpArg: res_reg = INVALID_REG; break;
+    case kCount: res_reg = rARM_COUNT; break;
   }
-  return res;
+  return RegStorage(RegStorage::k32BitSolo, res_reg);
 }
 
 int ArmMir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
@@ -535,13 +535,13 @@ RegStorage ArmMir2Lir::AllocTypedTempWide(bool fp_hint, int reg_class) {
     low_reg = AllocTempDouble();
     high_reg = low_reg + 1;
   } else {
-    low_reg = AllocTemp();
-    high_reg = AllocTemp();
+    low_reg = AllocTemp().GetReg();
+    high_reg = AllocTemp().GetReg();
   }
   return RegStorage(RegStorage::k64BitPair, low_reg, high_reg);
 }
 
-int ArmMir2Lir::AllocTypedTemp(bool fp_hint, int reg_class) {
+RegStorage ArmMir2Lir::AllocTypedTemp(bool fp_hint, int reg_class) {
   if (((reg_class == kAnyReg) && fp_hint) || (reg_class == kFPReg))
     return AllocTempFloat();
   return AllocTemp();
@@ -654,10 +654,19 @@ void ArmMir2Lir::FlushReg(int reg) {
     StoreBaseDisp(rARM_SP, VRegOffset(v_reg), reg, kWord);
   }
 }
+// FIXME: temp.
+void ArmMir2Lir::FlushReg(RegStorage reg) {
+  FlushReg(reg.GetReg());
+}
 
 /* Give access to the target-dependent FP register encoding to common code */
 bool ArmMir2Lir::IsFpReg(int reg) {
   return ARM_FPREG(reg);
+}
+
+// FIXME: temp.
+bool ArmMir2Lir::IsFpReg(RegStorage reg) {
+  return IsFpReg(reg.GetReg());
 }
 
 /* Clobber all regs that might be used by an external C call */

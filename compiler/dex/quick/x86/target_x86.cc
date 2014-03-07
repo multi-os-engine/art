@@ -65,30 +65,30 @@ RegLocation X86Mir2Lir::LocCReturnDouble() {
 }
 
 // Return a target-dependent special register.
-int X86Mir2Lir::TargetReg(SpecialTargetRegister reg) {
-  int res = INVALID_REG;
+RegStorage X86Mir2Lir::TargetReg(SpecialTargetRegister reg) {
+  int res_reg = INVALID_REG;
   switch (reg) {
-    case kSelf: res = rX86_SELF; break;
-    case kSuspend: res =  rX86_SUSPEND; break;
-    case kLr: res =  rX86_LR; break;
-    case kPc: res =  rX86_PC; break;
-    case kSp: res =  rX86_SP; break;
-    case kArg0: res = rX86_ARG0; break;
-    case kArg1: res = rX86_ARG1; break;
-    case kArg2: res = rX86_ARG2; break;
-    case kArg3: res = rX86_ARG3; break;
-    case kFArg0: res = rX86_FARG0; break;
-    case kFArg1: res = rX86_FARG1; break;
-    case kFArg2: res = rX86_FARG2; break;
-    case kFArg3: res = rX86_FARG3; break;
-    case kRet0: res = rX86_RET0; break;
-    case kRet1: res = rX86_RET1; break;
-    case kInvokeTgt: res = rX86_INVOKE_TGT; break;
-    case kHiddenArg: res = rAX; break;
-    case kHiddenFpArg: res = fr0; break;
-    case kCount: res = rX86_COUNT; break;
+    case kSelf: res_reg = rX86_SELF; break;
+    case kSuspend: res_reg =  rX86_SUSPEND; break;
+    case kLr: res_reg =  rX86_LR; break;
+    case kPc: res_reg =  rX86_PC; break;
+    case kSp: res_reg =  rX86_SP; break;
+    case kArg0: res_reg = rX86_ARG0; break;
+    case kArg1: res_reg = rX86_ARG1; break;
+    case kArg2: res_reg = rX86_ARG2; break;
+    case kArg3: res_reg = rX86_ARG3; break;
+    case kFArg0: res_reg = rX86_FARG0; break;
+    case kFArg1: res_reg = rX86_FARG1; break;
+    case kFArg2: res_reg = rX86_FARG2; break;
+    case kFArg3: res_reg = rX86_FARG3; break;
+    case kRet0: res_reg = rX86_RET0; break;
+    case kRet1: res_reg = rX86_RET1; break;
+    case kInvokeTgt: res_reg = rX86_INVOKE_TGT; break;
+    case kHiddenArg: res_reg = rAX; break;
+    case kHiddenFpArg: res_reg = fr0; break;
+    case kCount: res_reg = rX86_COUNT; break;
   }
-  return res;
+  return RegStorage(RegStorage::k32BitSolo, res_reg);
 }
 
 int X86Mir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
@@ -370,10 +370,19 @@ void X86Mir2Lir::FlushReg(int reg) {
     StoreBaseDisp(rX86_SP, VRegOffset(v_reg), reg, kWord);
   }
 }
+// FIXME: temp.
+void X86Mir2Lir::FlushReg(RegStorage reg) {
+  FlushReg(reg.GetReg());
+}
 
 /* Give access to the target-dependent FP register encoding to common code */
 bool X86Mir2Lir::IsFpReg(int reg) {
   return X86_FPREG(reg);
+}
+
+// FIXME: temp.
+bool X86Mir2Lir::IsFpReg(RegStorage reg) {
+  return IsFpReg(reg.GetReg());
 }
 
 /* Clobber all regs that might be used by an external C call */
@@ -438,12 +447,12 @@ RegStorage X86Mir2Lir::AllocTypedTempWide(bool fp_hint, int reg_class) {
     // TODO: take advantage of 64-bit notation.
     return RegStorage(RegStorage::k64BitPair, low_reg, high_reg);
   }
-  low_reg = AllocTemp();
-  high_reg = AllocTemp();
+  low_reg = AllocTemp().GetReg();
+  high_reg = AllocTemp().GetReg();
   return RegStorage(RegStorage::k64BitPair, low_reg, high_reg);
 }
 
-int X86Mir2Lir::AllocTypedTemp(bool fp_hint, int reg_class) {
+RegStorage X86Mir2Lir::AllocTypedTemp(bool fp_hint, int reg_class) {
   if (((reg_class == kAnyReg) && fp_hint) || (reg_class == kFPReg)) {
     return AllocTempFloat();
   }
@@ -667,7 +676,7 @@ RegLocation X86Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update)
         // We want this in a FP reg, and it is in core registers.
         DCHECK(reg_class != kCoreReg);
         // Allocate this into any FP reg, and mark it with the right size.
-        low_reg = AllocTypedTemp(true, reg_class);
+        low_reg = AllocTypedTemp(true, reg_class).GetReg();
         OpVectorRegCopyWide(low_reg, loc.reg.GetReg(), loc.reg.GetHighReg());
         CopyRegInfo(low_reg, loc.reg.GetReg());
         Clobber(loc.reg.GetReg());
@@ -720,8 +729,6 @@ RegLocation X86Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update)
 
 // TODO: Reunify with common code after 'pair mess' has been fixed
 RegLocation X86Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
-  int new_reg;
-
   if (loc.wide)
     return EvalLocWide(loc, reg_class, update);
 
@@ -730,11 +737,11 @@ RegLocation X86Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
   if (loc.location == kLocPhysReg) {
     if (!RegClassMatches(reg_class, loc.reg.GetReg())) {
       /* Wrong register class.  Realloc, copy and transfer ownership. */
-      new_reg = AllocTypedTemp(loc.fp, reg_class);
-      OpRegCopy(new_reg, loc.reg.GetReg());
-      CopyRegInfo(new_reg, loc.reg.GetReg());
-      Clobber(loc.reg.GetReg());
-      loc.reg.SetReg(new_reg);
+      RegStorage new_reg = AllocTypedTemp(loc.fp, reg_class);
+      OpRegCopy(new_reg, loc.reg);
+      CopyRegInfo(new_reg, loc.reg);
+      Clobber(loc.reg);
+      loc.reg = new_reg;
       if (IsFpReg(loc.reg.GetReg()) && reg_class != kCoreReg)
         loc.vec_len = kVectorLength4;
     }
@@ -743,7 +750,7 @@ RegLocation X86Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
 
   DCHECK_NE(loc.s_reg_low, INVALID_SREG);
 
-  loc.reg = RegStorage(RegStorage::k32BitSolo, AllocTypedTemp(loc.fp, reg_class));
+  loc.reg = AllocTypedTemp(loc.fp, reg_class);
   if (IsFpReg(loc.reg.GetReg()) && reg_class != kCoreReg)
     loc.vec_len = kVectorLength4;
 
@@ -756,7 +763,8 @@ RegLocation X86Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
 
 int X86Mir2Lir::AllocTempDouble() {
   // We really don't need a pair of registers.
-  return AllocTempFloat();
+  // FIXME - update to double storage
+  return AllocTempFloat().GetReg();
 }
 
 // TODO: Reunify with common code after 'pair mess' has been fixed
@@ -790,13 +798,13 @@ void X86Mir2Lir::GenConstWide(RegLocation rl_dest, int64_t value) {
       (rl_dest.location == kLocCompilerTemp)) {
     int32_t val_lo = Low32Bits(value);
     int32_t val_hi = High32Bits(value);
-    int rBase = TargetReg(kSp);
+    int r_base = TargetReg(kSp).GetReg();
     int displacement = SRegOffset(rl_dest.s_reg_low);
 
-    LIR * store = NewLIR3(kX86Mov32MI, rBase, displacement + LOWORD_OFFSET, val_lo);
+    LIR * store = NewLIR3(kX86Mov32MI, r_base, displacement + LOWORD_OFFSET, val_lo);
     AnnotateDalvikRegAccess(store, (displacement + LOWORD_OFFSET) >> 2,
                               false /* is_load */, true /* is64bit */);
-    store = NewLIR3(kX86Mov32MI, rBase, displacement + HIWORD_OFFSET, val_hi);
+    store = NewLIR3(kX86Mov32MI, r_base, displacement + HIWORD_OFFSET, val_hi);
     AnnotateDalvikRegAccess(store, (displacement + HIWORD_OFFSET) >> 2,
                               false /* is_load */, true /* is64bit */);
     return;
@@ -843,7 +851,7 @@ void X86Mir2Lir::LoadMethodAddress(int dex_method_index, InvokeType type,
   uintptr_t ptr = reinterpret_cast<uintptr_t>(&id);
 
   // Generate the move instruction with the unique pointer and save index and type.
-  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg),
+  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg).GetReg(),
                      static_cast<int>(ptr), dex_method_index, type);
   AppendLIR(move);
   method_address_insns_.Insert(move);
@@ -859,7 +867,7 @@ void X86Mir2Lir::LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic
   uintptr_t ptr = reinterpret_cast<uintptr_t>(&id);
 
   // Generate the move instruction with the unique pointer and save index and type.
-  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg),
+  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg).GetReg(),
                      static_cast<int>(ptr), type_idx);
   AppendLIR(move);
   class_type_address_insns_.Insert(move);

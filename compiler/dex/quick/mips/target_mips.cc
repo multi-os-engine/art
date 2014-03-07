@@ -56,30 +56,30 @@ RegLocation MipsMir2Lir::LocCReturnDouble() {
 }
 
 // Return a target-dependent special register.
-int MipsMir2Lir::TargetReg(SpecialTargetRegister reg) {
-  int res = INVALID_REG;
+RegStorage MipsMir2Lir::TargetReg(SpecialTargetRegister reg) {
+  int res_reg = INVALID_REG;
   switch (reg) {
-    case kSelf: res = rMIPS_SELF; break;
-    case kSuspend: res =  rMIPS_SUSPEND; break;
-    case kLr: res =  rMIPS_LR; break;
-    case kPc: res =  rMIPS_PC; break;
-    case kSp: res =  rMIPS_SP; break;
-    case kArg0: res = rMIPS_ARG0; break;
-    case kArg1: res = rMIPS_ARG1; break;
-    case kArg2: res = rMIPS_ARG2; break;
-    case kArg3: res = rMIPS_ARG3; break;
-    case kFArg0: res = rMIPS_FARG0; break;
-    case kFArg1: res = rMIPS_FARG1; break;
-    case kFArg2: res = rMIPS_FARG2; break;
-    case kFArg3: res = rMIPS_FARG3; break;
-    case kRet0: res = rMIPS_RET0; break;
-    case kRet1: res = rMIPS_RET1; break;
-    case kInvokeTgt: res = rMIPS_INVOKE_TGT; break;
-    case kHiddenArg: res = r_T0; break;
-    case kHiddenFpArg: res = INVALID_REG; break;
-    case kCount: res = rMIPS_COUNT; break;
+    case kSelf: res_reg = rMIPS_SELF; break;
+    case kSuspend: res_reg =  rMIPS_SUSPEND; break;
+    case kLr: res_reg =  rMIPS_LR; break;
+    case kPc: res_reg =  rMIPS_PC; break;
+    case kSp: res_reg =  rMIPS_SP; break;
+    case kArg0: res_reg = rMIPS_ARG0; break;
+    case kArg1: res_reg = rMIPS_ARG1; break;
+    case kArg2: res_reg = rMIPS_ARG2; break;
+    case kArg3: res_reg = rMIPS_ARG3; break;
+    case kFArg0: res_reg = rMIPS_FARG0; break;
+    case kFArg1: res_reg = rMIPS_FARG1; break;
+    case kFArg2: res_reg = rMIPS_FARG2; break;
+    case kFArg3: res_reg = rMIPS_FARG3; break;
+    case kRet0: res_reg = rMIPS_RET0; break;
+    case kRet1: res_reg = rMIPS_RET1; break;
+    case kInvokeTgt: res_reg = rMIPS_INVOKE_TGT; break;
+    case kHiddenArg: res_reg = r_T0; break;
+    case kHiddenFpArg: res_reg = INVALID_REG; break;
+    case kCount: res_reg = rMIPS_COUNT; break;
   }
-  return res;
+  return RegStorage(RegStorage::k32BitSolo, res_reg);
 }
 
 int MipsMir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
@@ -354,10 +354,19 @@ void MipsMir2Lir::FlushReg(int reg) {
     StoreBaseDisp(rMIPS_SP, VRegOffset(v_reg), reg, kWord);
   }
 }
+// FIXME: temp.
+void MipsMir2Lir::FlushReg(RegStorage reg) {
+  FlushReg(reg.GetReg());
+}
 
 /* Give access to the target-dependent FP register encoding to common code */
 bool MipsMir2Lir::IsFpReg(int reg) {
   return MIPS_FPREG(reg);
+}
+
+// FIXME: temp.
+bool MipsMir2Lir::IsFpReg(RegStorage reg) {
+  return IsFpReg(reg.GetReg());
 }
 
 /* Clobber all regs that might be used by an external C call */
@@ -448,12 +457,12 @@ RegStorage MipsMir2Lir::AllocTypedTempWide(bool fp_hint, int reg_class) {
     return RegStorage(RegStorage::k64BitPair, low_reg, high_reg);
   }
 
-  low_reg = AllocTemp();
-  high_reg = AllocTemp();
+  low_reg = AllocTemp().GetReg();
+  high_reg = AllocTemp().GetReg();
   return RegStorage(RegStorage::k64BitPair, low_reg, high_reg);
 }
 
-int MipsMir2Lir::AllocTypedTemp(bool fp_hint, int reg_class) {
+RegStorage MipsMir2Lir::AllocTypedTemp(bool fp_hint, int reg_class) {
   if (((reg_class == kAnyReg) && fp_hint) || (reg_class == kFPReg)) {
     return AllocTempFloat();
 }
