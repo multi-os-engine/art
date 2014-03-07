@@ -24,6 +24,7 @@
 #include "dataflow_iterator-inl.h"
 #include "pass.h"
 #include "pass_driver.h"
+#include "driver/compiler_options.h"
 
 namespace art {
 
@@ -82,30 +83,30 @@ void PassDriver::InsertPass(const Pass* new_pass) {
   pass_list_.push_back(new_pass);
 }
 
-void PassDriver::CreatePasses() {
-  /*
-   * Create the pass list. These passes are immutable and are shared across the threads.
-   *
-   * Advantage is that there will be no race conditions here.
-   * Disadvantage is the passes can't change their internal states depending on CompilationUnit:
-   *   - This is not yet an issue: no current pass would require it.
-   */
-  static const Pass* const passes[] = {
-      GetPassInstance<CacheFieldLoweringInfo>(),
-      GetPassInstance<CodeLayout>(),
-      GetPassInstance<SSATransformation>(),
-      GetPassInstance<ConstantPropagation>(),
-      GetPassInstance<InitRegLocations>(),
-      GetPassInstance<MethodUseCount>(),
-      GetPassInstance<NullCheckEliminationAndTypeInferenceInit>(),
-      GetPassInstance<NullCheckEliminationAndTypeInference>(),
-      GetPassInstance<BBCombine>(),
-      GetPassInstance<BBOptimizations>(),
-  };
+/*
+ * Create the pass list. These passes are immutable and are shared across the threads.
+ *
+ * Advantage is that there will be no race conditions here.
+ * Disadvantage is the passes can't change their internal states depending on CompilationUnit:
+ *   - This is not yet an issue: no current pass would require it.
+ */
+static const Pass* const Passes[] = {
+  GetPassInstance<CacheFieldLoweringInfo>(),
+  GetPassInstance<CodeLayout>(),
+  GetPassInstance<SSATransformation>(),
+  GetPassInstance<ConstantPropagation>(),
+  GetPassInstance<InitRegLocations>(),
+  GetPassInstance<MethodUseCount>(),
+  GetPassInstance<NullCheckEliminationAndTypeInferenceInit>(),
+  GetPassInstance<NullCheckEliminationAndTypeInference>(),
+  GetPassInstance<BBCombine>(),
+  GetPassInstance<BBOptimizations>(),
+};
 
+void PassDriver::CreatePasses() {
   // Insert each pass into the list via the InsertPass method.
-  pass_list_.reserve(arraysize(passes));
-  for (const Pass* pass : passes) {
+  pass_list_.reserve(arraysize(Passes));
+  for (const Pass* pass : Passes) {
     InsertPass(pass);
   }
 }
@@ -168,6 +169,12 @@ bool PassDriver::RunPass(CompilationUnit* c_unit, const Pass* pass, bool time_sp
     c_unit->NewTimingSplit(pass->GetName());
   }
 
+  // Check if we should disable this pass.
+  if (c_unit->compiler_driver->GetCompilerOptions().GetDisablePasses().find(pass->GetName()) != std::string::npos) {
+    VLOG(compiler) << "Skipping " << pass->GetName();
+    return false;
+  }
+
   // Check the pass gate first.
   bool should_apply_pass = pass->Gate(c_unit);
 
@@ -220,10 +227,10 @@ void PassDriver::Launch() {
   }
 }
 
-void PassDriver::PrintPassNames() const {
+void PassDriver::PrintPassNames() {
   LOG(INFO) << "Loop Passes are:";
 
-  for (const Pass* cur_pass : pass_list_) {
+  for (const Pass* cur_pass : Passes) {
     LOG(INFO) << "\t-" << cur_pass->GetName();
   }
 }
