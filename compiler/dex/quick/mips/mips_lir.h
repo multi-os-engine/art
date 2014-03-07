@@ -253,9 +253,44 @@ enum MipsNativeRegisterPool {
   r_PC,
 };
 
+const RegStorage rs_ZERO(RegStorage::k32BitSolo, r_ZERO);
+const RegStorage rs_AT(RegStorage::k32BitSolo, r_AT);
+const RegStorage rs_V0(RegStorage::k32BitSolo, r_V0);
+const RegStorage rs_V1(RegStorage::k32BitSolo, r_V1);
+const RegStorage rs_A0(RegStorage::k32BitSolo, r_A0);
+const RegStorage rs_A1(RegStorage::k32BitSolo, r_A1);
+const RegStorage rs_A2(RegStorage::k32BitSolo, r_A2);
+const RegStorage rs_A3(RegStorage::k32BitSolo, r_A3);
+const RegStorage rs_T0(RegStorage::k32BitSolo, r_T0);
+const RegStorage rs_T1(RegStorage::k32BitSolo, r_T1);
+const RegStorage rs_T2(RegStorage::k32BitSolo, r_T2);
+const RegStorage rs_T3(RegStorage::k32BitSolo, r_T3);
+const RegStorage rs_T4(RegStorage::k32BitSolo, r_T4);
+const RegStorage rs_T5(RegStorage::k32BitSolo, r_T5);
+const RegStorage rs_T6(RegStorage::k32BitSolo, r_T6);
+const RegStorage rs_T7(RegStorage::k32BitSolo, r_T7);
+const RegStorage rs_S0(RegStorage::k32BitSolo, r_S0);
+const RegStorage rs_S1(RegStorage::k32BitSolo, r_S1);
+const RegStorage rs_S2(RegStorage::k32BitSolo, r_S2);
+const RegStorage rs_S3(RegStorage::k32BitSolo, r_S3);
+const RegStorage rs_S4(RegStorage::k32BitSolo, r_S4);
+const RegStorage rs_S5(RegStorage::k32BitSolo, r_S5);
+const RegStorage rs_S6(RegStorage::k32BitSolo, r_S6);
+const RegStorage rs_S7(RegStorage::k32BitSolo, r_S7);
+const RegStorage rs_T8(RegStorage::k32BitSolo, r_T8);
+const RegStorage rs_T9(RegStorage::k32BitSolo, r_T9);
+const RegStorage rs_K0(RegStorage::k32BitSolo, r_K0);
+const RegStorage rs_K1(RegStorage::k32BitSolo, r_K1);
+const RegStorage rs_GP(RegStorage::k32BitSolo, r_GP);
+const RegStorage rs_SP(RegStorage::k32BitSolo, r_SP);
+const RegStorage rs_FP(RegStorage::k32BitSolo, r_FP);
+const RegStorage rs_RA(RegStorage::k32BitSolo, r_RA);
+
 #define rMIPS_SUSPEND r_S0
 #define rMIPS_SELF r_S1
+#define rs_MIPS_SELF rs_S1
 #define rMIPS_SP r_SP
+#define rs_MIPS_SP rs_SP
 #define rMIPS_ARG0 r_ARG0
 #define rMIPS_ARG1 r_ARG1
 #define rMIPS_ARG2 r_ARG2

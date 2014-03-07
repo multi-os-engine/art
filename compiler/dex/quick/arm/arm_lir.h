@@ -203,6 +203,26 @@ enum ArmNativeRegisterPool {
   dr15 = fr30 + ARM_FP_DOUBLE,
 };
 
+const RegStorage rs_r0(RegStorage::k32BitSolo, r0);
+const RegStorage rs_r1(RegStorage::k32BitSolo, r1);
+const RegStorage rs_r2(RegStorage::k32BitSolo, r2);
+const RegStorage rs_r3(RegStorage::k32BitSolo, r3);
+const RegStorage rs_rARM_SUSPEND(RegStorage::k32BitSolo, rARM_SUSPEND);
+const RegStorage rs_r5(RegStorage::k32BitSolo, r5);
+const RegStorage rs_r6(RegStorage::k32BitSolo, r6);
+const RegStorage rs_r7(RegStorage::k32BitSolo, r7);
+const RegStorage rs_r8(RegStorage::k32BitSolo, r8);
+const RegStorage rs_rARM_SELF(RegStorage::k32BitSolo, rARM_SELF);
+const RegStorage rs_r10(RegStorage::k32BitSolo, r10);
+const RegStorage rs_r11(RegStorage::k32BitSolo, r11);
+const RegStorage rs_r12(RegStorage::k32BitSolo, r12);
+const RegStorage rs_r13sp(RegStorage::k32BitSolo, r13sp);
+const RegStorage rs_rARM_SP(RegStorage::k32BitSolo, rARM_SP);
+const RegStorage rs_r14lr(RegStorage::k32BitSolo, r14lr);
+const RegStorage rs_rARM_LR(RegStorage::k32BitSolo, rARM_LR);
+const RegStorage rs_r15pc(RegStorage::k32BitSolo, r15pc);
+const RegStorage rs_rARM_PC(RegStorage::k32BitSolo, rARM_PC);
+
 // Target-independent aliases.
 #define rARM_ARG0 r0
 #define rARM_ARG1 r1

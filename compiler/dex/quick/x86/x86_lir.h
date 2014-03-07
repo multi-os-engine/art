@@ -187,6 +187,23 @@ enum X86NativeRegisterPool {
   fr15 = 15 + X86_FP_REG_OFFSET,
 };
 
+const RegStorage rs_r0(RegStorage::k32BitSolo, r0);
+const RegStorage rs_rAX(RegStorage::k32BitSolo, rAX);
+const RegStorage rs_r1(RegStorage::k32BitSolo, r1);
+const RegStorage rs_rCX(RegStorage::k32BitSolo, rCX);
+const RegStorage rs_r2(RegStorage::k32BitSolo, r2);
+const RegStorage rs_rDX(RegStorage::k32BitSolo, rDX);
+const RegStorage rs_r3(RegStorage::k32BitSolo, r3);
+const RegStorage rs_rBX(RegStorage::k32BitSolo, rBX);
+const RegStorage rs_r4sp(RegStorage::k32BitSolo, r4sp);
+const RegStorage rs_rX86_SP(RegStorage::k32BitSolo, r4sp);
+const RegStorage rs_r5(RegStorage::k32BitSolo, r5);
+const RegStorage rs_rBP(RegStorage::k32BitSolo, rBP);
+const RegStorage rs_r6(RegStorage::k32BitSolo, r6);
+const RegStorage rs_rSI(RegStorage::k32BitSolo, rSI);
+const RegStorage rs_r7(RegStorage::k32BitSolo, r7);
+const RegStorage rs_rDI(RegStorage::k32BitSolo, rDI);
+
 #define rX86_ARG0 rAX
 #define rX86_ARG1 rCX
 #define rX86_ARG2 rDX

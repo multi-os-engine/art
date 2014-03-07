@@ -30,28 +30,35 @@ class ArmMir2Lir : public Mir2Lir {
     bool SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div, RegLocation rl_src,
                                     RegLocation rl_dest, int lit);
     int LoadHelper(ThreadOffset offset);
-    LIR* LoadBaseDisp(int rBase, int displacement, int r_dest, OpSize size, int s_reg);
-    LIR* LoadBaseDispWide(int rBase, int displacement, int r_dest_lo, int r_dest_hi,
+    LIR* LoadBaseDisp(int r_base, int displacement, int r_dest, OpSize size, int s_reg);
+    LIR* LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_dest, OpSize size,
+                      int s_reg);
+    LIR* LoadBaseDispWide(int r_base, int displacement, int r_dest_lo, int r_dest_hi,
                           int s_reg);
-    LIR* LoadBaseIndexed(int rBase, int r_index, int r_dest, int scale, OpSize size);
-    LIR* LoadBaseIndexedDisp(int rBase, int r_index, int scale, int displacement,
+    LIR* LoadBaseIndexed(int r_base, int r_index, int r_dest, int scale, OpSize size);
+    LIR* LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_dest, int scale,
+                         OpSize size);
+    LIR* LoadBaseIndexedDisp(int r_base, int r_index, int scale, int displacement,
                              int r_dest, int r_dest_hi, OpSize size, int s_reg);
-    LIR* LoadConstantNoClobber(int r_dest, int value);
+    LIR* LoadConstantNoClobber(RegStorage r_dest, int value);
     LIR* LoadConstantWide(int r_dest_lo, int r_dest_hi, int64_t value);
-    LIR* StoreBaseDisp(int rBase, int displacement, int r_src, OpSize size);
-    LIR* StoreBaseDispWide(int rBase, int displacement, int r_src_lo, int r_src_hi);
-    LIR* StoreBaseIndexed(int rBase, int r_index, int r_src, int scale, OpSize size);
-    LIR* StoreBaseIndexedDisp(int rBase, int r_index, int scale, int displacement,
+    LIR* StoreBaseDisp(int r_base, int displacement, int r_src, OpSize size);
+    LIR* StoreBaseDisp(RegStorage r_base, int displacement, RegStorage r_src, OpSize size);
+    LIR* StoreBaseDispWide(int r_base, int displacement, int r_src_lo, int r_src_hi);
+    LIR* StoreBaseIndexed(int r_base, int r_index, int r_src, int scale, OpSize size);
+    LIR* StoreBaseIndexedDisp(int r_base, int r_index, int scale, int displacement,
                               int r_src, int r_src_hi, OpSize size, int s_reg);
     void MarkGCCard(int val_reg, int tgt_addr_reg);
+    void MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg);
 
     // Required for target - register utilities.
     bool IsFpReg(int reg);
+    bool IsFpReg(RegStorage reg);
     bool SameRegType(int reg1, int reg2);
-    int AllocTypedTemp(bool fp_hint, int reg_class);
+    RegStorage AllocTypedTemp(bool fp_hint, int reg_class);
     RegStorage AllocTypedTempWide(bool fp_hint, int reg_class);
     int S2d(int low_reg, int high_reg);
-    int TargetReg(SpecialTargetRegister reg);
+    RegStorage TargetReg(SpecialTargetRegister reg);
     int GetArgMappingToPhysicalReg(int arg_num);
     RegLocation GetReturnAlt();
     RegLocation GetReturnWideAlt();
@@ -64,6 +71,7 @@ class ArmMir2Lir : public Mir2Lir {
     void AdjustSpillMask();
     void ClobberCallerSave();
     void FlushReg(int reg);
+    void FlushReg(RegStorage reg);
     void FlushRegWide(int reg1, int reg2);
     void FreeCallTemps();
     void FreeRegLocTemps(RegLocation rl_keep, RegLocation rl_free);
@@ -141,36 +149,36 @@ class ArmMir2Lir : public Mir2Lir {
 
     // Required for target - single operation generators.
     LIR* OpUnconditionalBranch(LIR* target);
-    LIR* OpCmpBranch(ConditionCode cond, int src1, int src2, LIR* target);
-    LIR* OpCmpImmBranch(ConditionCode cond, int reg, int check_value, LIR* target);
+    LIR* OpCmpBranch(ConditionCode cond, RegStorage src1, RegStorage src2, LIR* target);
+    LIR* OpCmpImmBranch(ConditionCode cond, RegStorage reg, int check_value, LIR* target);
     LIR* OpCondBranch(ConditionCode cc, LIR* target);
-    LIR* OpDecAndBranch(ConditionCode c_code, int reg, LIR* target);
-    LIR* OpFpRegCopy(int r_dest, int r_src);
+    LIR* OpDecAndBranch(ConditionCode c_code, RegStorage reg, LIR* target);
+    LIR* OpFpRegCopy(RegStorage r_dest, RegStorage r_src);
     LIR* OpIT(ConditionCode cond, const char* guide);
-    LIR* OpMem(OpKind op, int rBase, int disp);
-    LIR* OpPcRelLoad(int reg, LIR* target);
-    LIR* OpReg(OpKind op, int r_dest_src);
-    LIR* OpRegCopy(int r_dest, int r_src);
-    LIR* OpRegCopyNoInsert(int r_dest, int r_src);
-    LIR* OpRegImm(OpKind op, int r_dest_src1, int value);
-    LIR* OpRegMem(OpKind op, int r_dest, int rBase, int offset);
-    LIR* OpRegReg(OpKind op, int r_dest_src1, int r_src2);
-    LIR* OpMovRegMem(int r_dest, int r_base, int offset, MoveType move_type);
-    LIR* OpMovMemReg(int r_base, int offset, int r_src, MoveType move_type);
-    LIR* OpCondRegReg(OpKind op, ConditionCode cc, int r_dest, int r_src);
-    LIR* OpRegRegImm(OpKind op, int r_dest, int r_src1, int value);
-    LIR* OpRegRegReg(OpKind op, int r_dest, int r_src1, int r_src2);
+    LIR* OpMem(OpKind op, RegStorage r_base, int disp);
+    LIR* OpPcRelLoad(RegStorage reg, LIR* target);
+    LIR* OpReg(OpKind op, RegStorage r_dest_src);
+    LIR* OpRegCopy(RegStorage r_dest, RegStorage r_src);
+    LIR* OpRegCopyNoInsert(RegStorage r_dest, RegStorage r_src);
+    LIR* OpRegImm(OpKind op, RegStorage r_dest_src1, int value);
+    LIR* OpRegMem(OpKind op, RegStorage r_dest, RegStorage r_base, int offset);
+    LIR* OpRegReg(OpKind op, RegStorage r_dest_src1, RegStorage r_src2);
+    LIR* OpMovRegMem(RegStorage r_dest, RegStorage r_base, int offset, MoveType move_type);
+    LIR* OpMovMemReg(RegStorage r_base, int offset, RegStorage r_src, MoveType move_type);
+    LIR* OpCondRegReg(OpKind op, ConditionCode cc, RegStorage r_dest, RegStorage r_src);
+    LIR* OpRegRegImm(OpKind op, RegStorage r_dest, RegStorage r_src1, int value);
+    LIR* OpRegRegReg(OpKind op, RegStorage r_dest, RegStorage r_src1, RegStorage r_src2);
     LIR* OpTestSuspend(LIR* target);
     LIR* OpThreadMem(OpKind op, ThreadOffset thread_offset);
-    LIR* OpVldm(int rBase, int count);
-    LIR* OpVstm(int rBase, int count);
-    void OpLea(int rBase, int reg1, int reg2, int scale, int offset);
+    LIR* OpVldm(RegStorage r_base, int count);
+    LIR* OpVstm(RegStorage r_base, int count);
+    void OpLea(RegStorage r_base, RegStorage reg1, RegStorage reg2, int scale, int offset);
     void OpRegCopyWide(int dest_lo, int dest_hi, int src_lo, int src_hi);
     void OpTlsCmp(ThreadOffset offset, int val);
 
-    LIR* LoadBaseDispBody(int rBase, int displacement, int r_dest, int r_dest_hi, OpSize size,
+    LIR* LoadBaseDispBody(int r_base, int displacement, int r_dest, int r_dest_hi, OpSize size,
                           int s_reg);
-    LIR* StoreBaseDispBody(int rBase, int displacement, int r_src, int r_src_hi, OpSize size);
+    LIR* StoreBaseDispBody(int r_base, int displacement, int r_src, int r_src_hi, OpSize size);
     LIR* OpRegRegRegShift(OpKind op, int r_dest, int r_src1, int r_src2, int shift);
     LIR* OpRegRegShift(OpKind op, int r_dest_src1, int r_src2, int shift);
     static const ArmEncodingMap EncodingMap[kArmLast];

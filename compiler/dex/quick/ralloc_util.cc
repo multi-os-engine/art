@@ -81,6 +81,15 @@ void Mir2Lir::DumpFpRegPool() {
   DumpRegPool(reg_pool_->FPRegs, reg_pool_->num_fp_regs);
 }
 
+void Mir2Lir::Clobber(RegStorage reg) {
+  if (reg.IsPair()) {
+    ClobberBody(GetRegInfo(reg.GetLowReg()));
+    ClobberBody(GetRegInfo(reg.GetHighReg()));
+  } else {
+    ClobberBody(GetRegInfo(reg.GetReg()));
+  }
+}
+
 void Mir2Lir::ClobberSRegBody(RegisterInfo* p, int num_regs, int s_reg) {
   for (int i = 0; i< num_regs; i++) {
     if (p[i].s_reg == s_reg) {
@@ -144,25 +153,26 @@ int Mir2Lir::SRegToPMap(int s_reg) {
   }
 }
 
-void Mir2Lir::RecordCorePromotion(int reg, int s_reg) {
+void Mir2Lir::RecordCorePromotion(RegStorage reg, int s_reg) {
   int p_map_idx = SRegToPMap(s_reg);
   int v_reg = mir_graph_->SRegToVReg(s_reg);
-  GetRegInfo(reg)->in_use = true;
-  core_spill_mask_ |= (1 << reg);
+  int reg_num = reg.GetReg();
+  GetRegInfo(reg_num)->in_use = true;
+  core_spill_mask_ |= (1 << reg_num);
   // Include reg for later sort
-  core_vmap_table_.push_back(reg << VREG_NUM_WIDTH | (v_reg & ((1 << VREG_NUM_WIDTH) - 1)));
+  core_vmap_table_.push_back(reg_num << VREG_NUM_WIDTH | (v_reg & ((1 << VREG_NUM_WIDTH) - 1)));
   num_core_spills_++;
   promotion_map_[p_map_idx].core_location = kLocPhysReg;
-  promotion_map_[p_map_idx].core_reg = reg;
+  promotion_map_[p_map_idx].core_reg = reg_num;
 }
 
 /* Reserve a callee-save register.  Return -1 if none available */
-int Mir2Lir::AllocPreservedCoreReg(int s_reg) {
-  int res = -1;
+RegStorage Mir2Lir::AllocPreservedCoreReg(int s_reg) {
+  RegStorage res(RegStorage::kInvalid);
   RegisterInfo* core_regs = reg_pool_->core_regs;
   for (int i = 0; i < reg_pool_->num_core_regs; i++) {
     if (!core_regs[i].is_temp && !core_regs[i].in_use) {
-      res = core_regs[i].reg;
+      res = RegStorage(RegStorage::k32BitSolo, core_regs[i].reg);
       RecordCorePromotion(res, s_reg);
       break;
     }
@@ -170,22 +180,23 @@ int Mir2Lir::AllocPreservedCoreReg(int s_reg) {
   return res;
 }
 
-void Mir2Lir::RecordFpPromotion(int reg, int s_reg) {
+void Mir2Lir::RecordFpPromotion(RegStorage reg, int s_reg) {
   int p_map_idx = SRegToPMap(s_reg);
   int v_reg = mir_graph_->SRegToVReg(s_reg);
-  GetRegInfo(reg)->in_use = true;
-  MarkPreservedSingle(v_reg, reg);
+  int reg_num = reg.GetReg();
+  GetRegInfo(reg_num)->in_use = true;
+  MarkPreservedSingle(v_reg, reg_num);
   promotion_map_[p_map_idx].fp_location = kLocPhysReg;
-  promotion_map_[p_map_idx].FpReg = reg;
+  promotion_map_[p_map_idx].FpReg = reg_num;
 }
 
 // Reserve a callee-save fp single register.
-int Mir2Lir::AllocPreservedSingle(int s_reg) {
-  int res = -1;  // Return code if none available.
+RegStorage Mir2Lir::AllocPreservedSingle(int s_reg) {
+  RegStorage res(RegStorage::kInvalid);
   RegisterInfo* FPRegs = reg_pool_->FPRegs;
   for (int i = 0; i < reg_pool_->num_fp_regs; i++) {
     if (!FPRegs[i].is_temp && !FPRegs[i].in_use) {
-      res = FPRegs[i].reg;
+      res = RegStorage(RegStorage::k32BitSolo, FPRegs[i].reg);
       RecordFpPromotion(res, s_reg);
       break;
     }
@@ -201,8 +212,9 @@ int Mir2Lir::AllocPreservedSingle(int s_reg) {
  * allocate if we can't meet the requirements for the pair of
  * s_reg<=sX[even] & (s_reg+1)<= sX+1.
  */
-int Mir2Lir::AllocPreservedDouble(int s_reg) {
-  int res = -1;  // Assume failure
+// TODO: needs rewrite to support non-backed 64-bit float regs.
+RegStorage Mir2Lir::AllocPreservedDouble(int s_reg) {
+  RegStorage res(RegStorage::kInvalid);
   int v_reg = mir_graph_->SRegToVReg(s_reg);
   int p_map_idx = SRegToPMap(s_reg);
   if (promotion_map_[p_map_idx+1].fp_location == kLocPhysReg) {
@@ -210,19 +222,19 @@ int Mir2Lir::AllocPreservedDouble(int s_reg) {
     int high_reg = promotion_map_[p_map_idx+1].FpReg;
     if ((high_reg & 1) == 0) {
       // High reg is even - fail.
-      return res;
+      return res;  // Invalid.
     }
     // Is the low reg of the pair free?
     RegisterInfo* p = GetRegInfo(high_reg-1);
     if (p->in_use || p->is_temp) {
       // Already allocated or not preserved - fail.
-      return res;
+      return res;  // Invalid.
     }
     // OK - good to go.
-    res = p->reg;
+    res = RegStorage(RegStorage::k64BitPair, p->reg, p->reg + 1);
     p->in_use = true;
-    DCHECK_EQ((res & 1), 0);
-    MarkPreservedSingle(v_reg, res);
+    DCHECK_EQ((res.GetReg() & 1), 0);
+    MarkPreservedSingle(v_reg, res.GetReg());
   } else {
     RegisterInfo* FPRegs = reg_pool_->FPRegs;
     for (int i = 0; i < reg_pool_->num_fp_regs; i++) {
@@ -231,27 +243,27 @@ int Mir2Lir::AllocPreservedDouble(int s_reg) {
         !FPRegs[i+1].is_temp && !FPRegs[i+1].in_use &&
         ((FPRegs[i+1].reg & 0x1) == 0x1) &&
         (FPRegs[i].reg + 1) == FPRegs[i+1].reg) {
-        res = FPRegs[i].reg;
+        res = RegStorage(RegStorage::k64BitPair, FPRegs[i].reg, FPRegs[i].reg+1);
         FPRegs[i].in_use = true;
-        MarkPreservedSingle(v_reg, res);
+        MarkPreservedSingle(v_reg, res.GetLowReg());
         FPRegs[i+1].in_use = true;
-        DCHECK_EQ(res + 1, FPRegs[i+1].reg);
-        MarkPreservedSingle(v_reg+1, res+1);
+        DCHECK_EQ(res.GetLowReg() + 1, FPRegs[i+1].reg);
+        MarkPreservedSingle(v_reg+1, res.GetLowReg() + 1);
         break;
       }
     }
   }
-  if (res != -1) {
+  if (!res.IsInvalid()) {
     promotion_map_[p_map_idx].fp_location = kLocPhysReg;
-    promotion_map_[p_map_idx].FpReg = res;
+    promotion_map_[p_map_idx].FpReg = res.GetLowReg();
     promotion_map_[p_map_idx+1].fp_location = kLocPhysReg;
-    promotion_map_[p_map_idx+1].FpReg = res + 1;
+    promotion_map_[p_map_idx+1].FpReg = res.GetLowReg() + 1;
   }
   return res;
 }
 
-int Mir2Lir::AllocTempBody(RegisterInfo* p, int num_regs, int* next_temp,
-                           bool required) {
+RegStorage Mir2Lir::AllocTempBody(RegisterInfo* p, int num_regs, int* next_temp,
+                                  bool required) {
   int next = *next_temp;
   for (int i = 0; i< num_regs; i++) {
     if (next >= num_regs)
@@ -261,7 +273,7 @@ int Mir2Lir::AllocTempBody(RegisterInfo* p, int num_regs, int* next_temp,
       p[next].in_use = true;
       p[next].pair = false;
       *next_temp = next + 1;
-      return p[next].reg;
+      return RegStorage(RegStorage::k32BitSolo, p[next].reg);
     }
     next++;
   }
@@ -274,7 +286,7 @@ int Mir2Lir::AllocTempBody(RegisterInfo* p, int num_regs, int* next_temp,
       p[next].in_use = true;
       p[next].pair = false;
       *next_temp = next + 1;
-      return p[next].reg;
+      return RegStorage(RegStorage::k32BitSolo, p[next].reg);
     }
     next++;
   }
@@ -284,11 +296,12 @@ int Mir2Lir::AllocTempBody(RegisterInfo* p, int num_regs, int* next_temp,
           reg_pool_->num_core_regs);
     LOG(FATAL) << "No free temp registers";
   }
-  return -1;  // No register available
+  return RegStorage(RegStorage::kInvalid);  // No register available
 }
 
 // REDO: too many assumptions.
-int Mir2Lir::AllocTempDouble() {
+// Virtualize - this is target dependent.
+RegStorage Mir2Lir::AllocTempDouble() {
   RegisterInfo* p = reg_pool_->FPRegs;
   int num_regs = reg_pool_->num_fp_regs;
   /* Start looking at an even reg */
@@ -310,7 +323,8 @@ int Mir2Lir::AllocTempDouble() {
       if (reg_pool_->next_fp_reg >= num_regs) {
         reg_pool_->next_fp_reg = 0;
       }
-      return p[next].reg;
+      // FIXME: should return k64BitSolo.
+      return RegStorage(RegStorage::k64BitPair, p[next].reg, p[next+1].reg);
     }
     next += 2;
   }
@@ -332,28 +346,29 @@ int Mir2Lir::AllocTempDouble() {
       if (reg_pool_->next_fp_reg >= num_regs) {
         reg_pool_->next_fp_reg = 0;
       }
-      return p[next].reg;
+      return RegStorage(RegStorage::k64BitPair, p[next].reg, p[next+1].reg);
     }
     next += 2;
   }
   LOG(FATAL) << "No free temp registers (pair)";
-  return -1;
+  RegStorage invalid_reg;
+  return invalid_reg;
 }
 
 /* Return a temp if one is available, -1 otherwise */
-int Mir2Lir::AllocFreeTemp() {
+RegStorage Mir2Lir::AllocFreeTemp() {
   return AllocTempBody(reg_pool_->core_regs,
              reg_pool_->num_core_regs,
              &reg_pool_->next_core_reg, false);
 }
 
-int Mir2Lir::AllocTemp() {
+RegStorage Mir2Lir::AllocTemp() {
   return AllocTempBody(reg_pool_->core_regs,
              reg_pool_->num_core_regs,
              &reg_pool_->next_core_reg, true);
 }
 
-int Mir2Lir::AllocTempFloat() {
+RegStorage Mir2Lir::AllocTempFloat() {
   return AllocTempBody(reg_pool_->FPRegs,
              reg_pool_->num_fp_regs,
              &reg_pool_->next_fp_reg, true);
@@ -403,9 +418,27 @@ void Mir2Lir::FreeTemp(int reg) {
   p->pair = false;
 }
 
+void Mir2Lir::FreeTemp(RegStorage reg) {
+  /*
+   * Note: we could free both in a pair - but DCHECK for now to catch such uses.  So far,
+   * I believe all register freeing is done 32-bits at a time.
+   */
+  DCHECK(!reg.IsPair());
+  FreeTemp(reg.GetReg());
+}
+
 Mir2Lir::RegisterInfo* Mir2Lir::IsLive(int reg) {
   RegisterInfo* p = GetRegInfo(reg);
   return p->live ? p : NULL;
+}
+
+Mir2Lir::RegisterInfo* Mir2Lir::IsLive(RegStorage reg) {
+  if (reg.IsPair()) {
+    DCHECK_EQ(IsLive(reg.GetLowReg()) == nullptr, IsLive(reg.GetHighReg()) == nullptr);
+    return IsLive(reg.GetLowReg());
+  } else {
+    return IsLive(reg.GetReg());
+  }
 }
 
 Mir2Lir::RegisterInfo* Mir2Lir::IsTemp(int reg) {
@@ -413,14 +446,41 @@ Mir2Lir::RegisterInfo* Mir2Lir::IsTemp(int reg) {
   return (p->is_temp) ? p : NULL;
 }
 
+Mir2Lir::RegisterInfo* Mir2Lir::IsTemp(RegStorage reg) {
+  if (reg.IsPair()) {
+    DCHECK_EQ(IsTemp(reg.GetLowReg()) == nullptr, IsTemp(reg.GetHighReg()) == nullptr);
+    return IsTemp(reg.GetLowReg());
+  } else {
+    return IsTemp(reg.GetReg());
+  }
+}
+
 Mir2Lir::RegisterInfo* Mir2Lir::IsPromoted(int reg) {
   RegisterInfo* p = GetRegInfo(reg);
   return (p->is_temp) ? NULL : p;
 }
 
+Mir2Lir::RegisterInfo* Mir2Lir::IsPromoted(RegStorage reg) {
+  if (reg.IsPair()) {
+    DCHECK_EQ(IsPromoted(reg.GetLowReg()) == nullptr, IsPromoted(reg.GetHighReg()) == nullptr);
+    return IsPromoted(reg.GetLowReg());
+  } else {
+    return IsPromoted(reg.GetReg());
+  }
+}
+
 bool Mir2Lir::IsDirty(int reg) {
   RegisterInfo* p = GetRegInfo(reg);
   return p->dirty;
+}
+
+bool Mir2Lir::IsDirty(RegStorage reg) {
+  if (reg.IsPair()) {
+    DCHECK_EQ(IsDirty(reg.GetLowReg()), IsDirty(reg.GetHighReg()));
+    return IsDirty(reg.GetLowReg());
+  } else {
+    return IsDirty(reg.GetReg());
+  }
 }
 
 /*
@@ -435,8 +495,18 @@ void Mir2Lir::LockTemp(int reg) {
   p->live = false;
 }
 
+void Mir2Lir::LockTemp(RegStorage reg) {
+  DCHECK(!reg.IsPair());
+  LockTemp(reg.GetReg());
+}
+
 void Mir2Lir::ResetDef(int reg) {
   ResetDefBody(GetRegInfo(reg));
+}
+
+void Mir2Lir::ResetDef(RegStorage reg) {
+  DCHECK(!reg.IsPair());  // Is this done?  If so, do on both low and high.
+  ResetDef(reg.GetReg());
 }
 
 void Mir2Lir::NullifyRange(LIR *start, LIR *finish, int s_reg1, int s_reg2) {
@@ -474,7 +544,7 @@ void Mir2Lir::MarkDefWide(RegLocation rl, LIR *start, LIR *finish) {
   DCHECK(rl.wide);
   DCHECK(start && start->next);
   DCHECK(finish);
-  RegisterInfo* p = GetRegInfo(rl.reg.GetReg());
+  RegisterInfo* p = GetRegInfo(rl.reg.GetLowReg());
   ResetDef(rl.reg.GetHighReg());  // Only track low of pair
   p->def_start = start->next;
   p->def_end = finish;
@@ -483,7 +553,7 @@ void Mir2Lir::MarkDefWide(RegLocation rl, LIR *start, LIR *finish) {
 RegLocation Mir2Lir::WideToNarrow(RegLocation rl) {
   DCHECK(rl.wide);
   if (rl.location == kLocPhysReg) {
-    RegisterInfo* info_lo = GetRegInfo(rl.reg.GetReg());
+    RegisterInfo* info_lo = GetRegInfo(rl.reg.GetLowReg());
     RegisterInfo* info_hi = GetRegInfo(rl.reg.GetHighReg());
     if (info_lo->is_temp) {
       info_lo->pair = false;
@@ -495,6 +565,7 @@ RegLocation Mir2Lir::WideToNarrow(RegLocation rl) {
       info_hi->def_start = NULL;
       info_hi->def_end = NULL;
     }
+    rl.reg = RegStorage(RegStorage::k32BitSolo, rl.reg.GetLowReg());
   }
   rl.wide = false;
   return rl;
@@ -512,7 +583,7 @@ void Mir2Lir::ResetDefLoc(RegLocation rl) {
 
 void Mir2Lir::ResetDefLocWide(RegLocation rl) {
   DCHECK(rl.wide);
-  RegisterInfo* p_low = IsTemp(rl.reg.GetReg());
+  RegisterInfo* p_low = IsTemp(rl.reg.GetLowReg());
   RegisterInfo* p_high = IsTemp(rl.reg.GetHighReg());
   if (p_low && !(cu_->disable_opt & (1 << kSuppressLoads))) {
     DCHECK(p_low->pair);
@@ -521,7 +592,7 @@ void Mir2Lir::ResetDefLocWide(RegLocation rl) {
   if (p_high && !(cu_->disable_opt & (1 << kSuppressLoads))) {
     DCHECK(p_high->pair);
   }
-  ResetDef(rl.reg.GetReg());
+  ResetDef(rl.reg.GetLowReg());
   ResetDef(rl.reg.GetHighReg());
 }
 
@@ -584,7 +655,8 @@ bool Mir2Lir::RegClassMatches(int reg_class, int reg) {
 
 void Mir2Lir::MarkLive(int reg, int s_reg) {
   RegisterInfo* info = GetRegInfo(reg);
-  if ((info->reg == reg) && (info->s_reg == s_reg) && info->live) {
+  DCHECK_EQ(info->reg, reg);
+  if ((info->s_reg == s_reg) && info->live) {
     return;  /* already live */
   } else if (s_reg != INVALID_SREG) {
     ClobberSReg(s_reg);
@@ -599,16 +671,31 @@ void Mir2Lir::MarkLive(int reg, int s_reg) {
   info->s_reg = s_reg;
 }
 
+void Mir2Lir::MarkLive(RegStorage reg, int s_reg) {
+  DCHECK(!reg.IsPair());   // Could be done - how is this used?
+  MarkLive(reg.GetReg(), s_reg);
+}
+
 void Mir2Lir::MarkTemp(int reg) {
   RegisterInfo* info = GetRegInfo(reg);
   tempreg_info_.Insert(info);
   info->is_temp = true;
 }
 
+void Mir2Lir::MarkTemp(RegStorage reg) {
+  DCHECK(!reg.IsPair());
+  MarkTemp(reg.GetReg());
+}
+
 void Mir2Lir::UnmarkTemp(int reg) {
   RegisterInfo* info = GetRegInfo(reg);
   tempreg_info_.Delete(info);
   info->is_temp = false;
+}
+
+void Mir2Lir::UnmarkTemp(RegStorage reg) {
+  DCHECK(!reg.IsPair());
+  UnmarkTemp(reg.GetReg());
 }
 
 void Mir2Lir::MarkPair(int low_reg, int high_reg) {
@@ -621,10 +708,13 @@ void Mir2Lir::MarkPair(int low_reg, int high_reg) {
 }
 
 void Mir2Lir::MarkClean(RegLocation loc) {
-  RegisterInfo* info = GetRegInfo(loc.reg.GetReg());
-  info->dirty = false;
   if (loc.wide) {
+    RegisterInfo* info = GetRegInfo(loc.reg.GetLowReg());
+    info->dirty = false;
     info = GetRegInfo(loc.reg.GetHighReg());
+    info->dirty = false;
+  } else {
+    RegisterInfo* info = GetRegInfo(loc.reg.GetReg());
     info->dirty = false;
   }
 }
@@ -634,10 +724,13 @@ void Mir2Lir::MarkDirty(RegLocation loc) {
     // If already home, can't be dirty
     return;
   }
-  RegisterInfo* info = GetRegInfo(loc.reg.GetReg());
-  info->dirty = true;
   if (loc.wide) {
+    RegisterInfo* info = GetRegInfo(loc.reg.GetLowReg());
+    info->dirty = true;
     info = GetRegInfo(loc.reg.GetHighReg());
+    info->dirty = true;
+  } else {
+    RegisterInfo* info = GetRegInfo(loc.reg.GetReg());
     info->dirty = true;
   }
 }
@@ -645,6 +738,11 @@ void Mir2Lir::MarkDirty(RegLocation loc) {
 void Mir2Lir::MarkInUse(int reg) {
     RegisterInfo* info = GetRegInfo(reg);
     info->in_use = true;
+}
+
+void Mir2Lir::MarkInUse(RegStorage reg) {
+  DCHECK(!reg.IsPair());
+  MarkInUse(reg.GetReg());
 }
 
 void Mir2Lir::CopyRegInfo(int new_reg, int old_reg) {
@@ -656,6 +754,12 @@ void Mir2Lir::CopyRegInfo(int new_reg, int old_reg) {
   // Restore target's temp status
   new_info->is_temp = is_temp;
   new_info->reg = new_reg;
+}
+
+void Mir2Lir::CopyRegInfo(RegStorage new_reg, RegStorage old_reg) {
+  DCHECK(!new_reg.IsPair());
+  DCHECK(!old_reg.IsPair());
+  CopyRegInfo(new_reg.GetReg(), old_reg.GetReg());
 }
 
 bool Mir2Lir::CheckCorePoolSanity() {
@@ -712,7 +816,6 @@ RegLocation Mir2Lir::UpdateLoc(RegLocation loc) {
       }
     }
   }
-
   return loc;
 }
 
@@ -746,8 +849,8 @@ RegLocation Mir2Lir::UpdateLocWide(RegLocation loc) {
       // Can reuse - update the register usage info
       loc.location = kLocPhysReg;
       loc.reg = RegStorage(RegStorage::k64BitPair, info_lo->reg, info_hi->reg);
-      MarkPair(loc.reg.GetReg(), loc.reg.GetHighReg());
-      DCHECK(!IsFpReg(loc.reg.GetReg()) || ((loc.reg.GetReg() & 0x1) == 0));
+      MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
+      DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
       return loc;
     }
     // Can't easily reuse - clobber and free any overlaps
@@ -785,21 +888,21 @@ RegLocation Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update) {
 
   /* If already in registers, we can assume proper form.  Right reg class? */
   if (loc.location == kLocPhysReg) {
-    DCHECK_EQ(IsFpReg(loc.reg.GetReg()), IsFpReg(loc.reg.GetHighReg()));
-    DCHECK(!IsFpReg(loc.reg.GetReg()) || ((loc.reg.GetReg() & 0x1) == 0));
-    if (!RegClassMatches(reg_class, loc.reg.GetReg())) {
+    DCHECK_EQ(IsFpReg(loc.reg.GetLowReg()), IsFpReg(loc.reg.GetHighReg()));
+    DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
+    if (!RegClassMatches(reg_class, loc.reg.GetLowReg())) {
       /* Wrong register class.  Reallocate and copy */
       RegStorage new_regs = AllocTypedTempWide(loc.fp, reg_class);
-      low_reg = new_regs.GetReg();
+      low_reg = new_regs.GetLowReg();
       high_reg = new_regs.GetHighReg();
-      OpRegCopyWide(low_reg, high_reg, loc.reg.GetReg(), loc.reg.GetHighReg());
-      CopyRegInfo(low_reg, loc.reg.GetReg());
+      OpRegCopyWide(low_reg, high_reg, loc.reg.GetLowReg(), loc.reg.GetHighReg());
+      CopyRegInfo(low_reg, loc.reg.GetLowReg());
       CopyRegInfo(high_reg, loc.reg.GetHighReg());
-      Clobber(loc.reg.GetReg());
+      Clobber(loc.reg.GetLowReg());
       Clobber(loc.reg.GetHighReg());
       loc.reg = new_regs;
-      MarkPair(loc.reg.GetReg(), loc.reg.GetHighReg());
-      DCHECK(!IsFpReg(loc.reg.GetReg()) || ((loc.reg.GetReg() & 0x1) == 0));
+      MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
+      DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
     }
     return loc;
   }
@@ -809,22 +912,20 @@ RegLocation Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update) {
 
   loc.reg = AllocTypedTempWide(loc.fp, reg_class);
 
-  MarkPair(loc.reg.GetReg(), loc.reg.GetHighReg());
+  MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
   if (update) {
     loc.location = kLocPhysReg;
-    MarkLive(loc.reg.GetReg(), loc.s_reg_low);
+    MarkLive(loc.reg.GetLowReg(), loc.s_reg_low);
     // Does this wide value live in two registers or one vector register?
-    if (loc.reg.GetReg() != loc.reg.GetHighReg()) {
+    if (loc.reg.GetLowReg() != loc.reg.GetHighReg()) {
       MarkLive(loc.reg.GetHighReg(), GetSRegHi(loc.s_reg_low));
     }
   }
-  DCHECK(!IsFpReg(loc.reg.GetReg()) || ((loc.reg.GetReg() & 0x1) == 0));
+  DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
   return loc;
 }
 
 RegLocation Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
-  int new_reg;
-
   if (loc.wide)
     return EvalLocWide(loc, reg_class, update);
 
@@ -833,19 +934,18 @@ RegLocation Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
   if (loc.location == kLocPhysReg) {
     if (!RegClassMatches(reg_class, loc.reg.GetReg())) {
       /* Wrong register class.  Realloc, copy and transfer ownership */
-      new_reg = AllocTypedTemp(loc.fp, reg_class);
-      OpRegCopy(new_reg, loc.reg.GetReg());
-      CopyRegInfo(new_reg, loc.reg.GetReg());
-      Clobber(loc.reg.GetReg());
-      loc.reg = RegStorage(RegStorage::k32BitSolo, new_reg);
+      RegStorage new_reg = AllocTypedTemp(loc.fp, reg_class);
+      OpRegCopy(new_reg, loc.reg);
+      CopyRegInfo(new_reg, loc.reg);
+      Clobber(loc.reg);
+      loc.reg = new_reg;
     }
     return loc;
   }
 
   DCHECK_NE(loc.s_reg_low, INVALID_SREG);
 
-  new_reg = AllocTypedTemp(loc.fp, reg_class);
-  loc.reg = RegStorage(RegStorage::k32BitSolo, new_reg);
+  loc.reg = AllocTypedTemp(loc.fp, reg_class);
 
   if (update) {
     loc.location = kLocPhysReg;
@@ -972,8 +1072,8 @@ void Mir2Lir::DoPromotion() {
           AllocPreservedDouble(low_sreg);
         }
       } else if (promotion_map_[p_map_idx].fp_location != kLocPhysReg) {
-        int reg = AllocPreservedSingle(FpRegs[i].s_reg);
-        if (reg < 0) {
+        RegStorage reg = AllocPreservedSingle(FpRegs[i].s_reg);
+        if (reg.IsInvalid() < 0) {
           break;  // No more left.
         }
       }
@@ -985,8 +1085,8 @@ void Mir2Lir::DoPromotion() {
       int p_map_idx = SRegToPMap(core_regs[i].s_reg);
       if (promotion_map_[p_map_idx].core_location !=
           kLocPhysReg) {
-        int reg = AllocPreservedCoreReg(core_regs[i].s_reg);
-        if (reg < 0) {
+        RegStorage reg = AllocPreservedCoreReg(core_regs[i].s_reg);
+        if (reg.IsInvalid()) {
            break;  // No more left
         }
       }
@@ -1060,13 +1160,13 @@ RegLocation Mir2Lir::GetReturnWide(bool is_double) {
   RegLocation gpr_res = LocCReturnWide();
   RegLocation fpr_res = LocCReturnDouble();
   RegLocation res = is_double ? fpr_res : gpr_res;
-  Clobber(res.reg.GetReg());
+  Clobber(res.reg.GetLowReg());
   Clobber(res.reg.GetHighReg());
-  LockTemp(res.reg.GetReg());
+  LockTemp(res.reg.GetLowReg());
   LockTemp(res.reg.GetHighReg());
   // Does this wide value live in two registers or one vector register?
-  if (res.reg.GetReg() != res.reg.GetHighReg()) {
-    MarkPair(res.reg.GetReg(), res.reg.GetHighReg());
+  if (res.reg.GetLowReg() != res.reg.GetHighReg()) {
+    MarkPair(res.reg.GetLowReg(), res.reg.GetHighReg());
   }
   return res;
 }
