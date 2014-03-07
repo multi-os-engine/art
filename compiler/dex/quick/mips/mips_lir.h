@@ -109,33 +109,35 @@ namespace art {
 // Mask to strip off fp flags.
 #define MIPS_FP_REG_MASK (MIPS_FP_REG_OFFSET-1)
 
-#ifdef HAVE_LITTLE_ENDIAN
+// FIXME: align naming convention w/ Arm & x86
 #define LOWORD_OFFSET 0
 #define HIWORD_OFFSET 4
 #define r_ARG0 r_A0
+#define rs_ARG0 rs_A0
 #define r_ARG1 r_A1
+#define rs_ARG1 rs_A1
 #define r_ARG2 r_A2
+#define rs_ARG2 rs_A2
 #define r_ARG3 r_A3
+#define rs_ARG3 rs_A3
 #define r_RESULT0 r_V0
+#define rs_RESULT0 rs_V0
 #define r_RESULT1 r_V1
-#else
-#define LOWORD_OFFSET 4
-#define HIWORD_OFFSET 0
-#define r_ARG0 r_A1
-#define r_ARG1 r_A0
-#define r_ARG2 r_A3
-#define r_ARG3 r_A2
-#define r_RESULT0 r_V1
-#define r_RESULT1 r_V0
-#endif
+#define rs_RESULT1 rs_V1
 
 // These are the same for both big and little endian.
 #define r_FARG0 r_F12
+#define rs_FARG0 rs_F12
 #define r_FARG1 r_F13
+#define rs_FARG1 rs_F13
 #define r_FARG2 r_F14
+#define rs_FARG2 rs_F14
 #define r_FARG3 r_F15
+#define rs_FARG3 rs_F15
 #define r_FRESULT0 r_F0
+#define rs_FRESULT0 rs_F0
 #define r_FRESULT1 r_F1
+#define rs_FRESULT1 rs_F1
 
 // Regs not used for Mips.
 #define rMIPS_LR INVALID_REG
@@ -253,20 +255,75 @@ enum MipsNativeRegisterPool {
   r_PC,
 };
 
+const RegStorage rs_ZERO(RegStorage::k32BitSolo, r_ZERO);
+const RegStorage rs_AT(RegStorage::k32BitSolo, r_AT);
+const RegStorage rs_V0(RegStorage::k32BitSolo, r_V0);
+const RegStorage rs_V1(RegStorage::k32BitSolo, r_V1);
+const RegStorage rs_A0(RegStorage::k32BitSolo, r_A0);
+const RegStorage rs_A1(RegStorage::k32BitSolo, r_A1);
+const RegStorage rs_A2(RegStorage::k32BitSolo, r_A2);
+const RegStorage rs_A3(RegStorage::k32BitSolo, r_A3);
+const RegStorage rs_T0(RegStorage::k32BitSolo, r_T0);
+const RegStorage rs_T1(RegStorage::k32BitSolo, r_T1);
+const RegStorage rs_T2(RegStorage::k32BitSolo, r_T2);
+const RegStorage rs_T3(RegStorage::k32BitSolo, r_T3);
+const RegStorage rs_T4(RegStorage::k32BitSolo, r_T4);
+const RegStorage rs_T5(RegStorage::k32BitSolo, r_T5);
+const RegStorage rs_T6(RegStorage::k32BitSolo, r_T6);
+const RegStorage rs_T7(RegStorage::k32BitSolo, r_T7);
+const RegStorage rs_S0(RegStorage::k32BitSolo, r_S0);
+const RegStorage rs_S1(RegStorage::k32BitSolo, r_S1);
+const RegStorage rs_S2(RegStorage::k32BitSolo, r_S2);
+const RegStorage rs_S3(RegStorage::k32BitSolo, r_S3);
+const RegStorage rs_S4(RegStorage::k32BitSolo, r_S4);
+const RegStorage rs_S5(RegStorage::k32BitSolo, r_S5);
+const RegStorage rs_S6(RegStorage::k32BitSolo, r_S6);
+const RegStorage rs_S7(RegStorage::k32BitSolo, r_S7);
+const RegStorage rs_T8(RegStorage::k32BitSolo, r_T8);
+const RegStorage rs_T9(RegStorage::k32BitSolo, r_T9);
+const RegStorage rs_K0(RegStorage::k32BitSolo, r_K0);
+const RegStorage rs_K1(RegStorage::k32BitSolo, r_K1);
+const RegStorage rs_GP(RegStorage::k32BitSolo, r_GP);
+const RegStorage rs_SP(RegStorage::k32BitSolo, r_SP);
+const RegStorage rs_FP(RegStorage::k32BitSolo, r_FP);
+const RegStorage rs_RA(RegStorage::k32BitSolo, r_RA);
+const RegStorage rs_F12(RegStorage::k32BitSolo, r_F12);
+const RegStorage rs_F13(RegStorage::k32BitSolo, r_F13);
+const RegStorage rs_F14(RegStorage::k32BitSolo, r_F14);
+const RegStorage rs_F15(RegStorage::k32BitSolo, r_F15);
+const RegStorage rs_F0(RegStorage::k32BitSolo, r_F0);
+const RegStorage rs_F1(RegStorage::k32BitSolo, r_F1);
+
+// Regs not used for Mips.
+
 #define rMIPS_SUSPEND r_S0
+#define rs_MIPS_SUSPEND rs_S0
 #define rMIPS_SELF r_S1
+#define rs_MIPS_SELF rs_S1
 #define rMIPS_SP r_SP
+#define rs_MIPS_SP rs_SP
 #define rMIPS_ARG0 r_ARG0
+#define rs_MIPS_ARG0 rs_ARG0
 #define rMIPS_ARG1 r_ARG1
+#define rs_MIPS_ARG1 rs_ARG1
 #define rMIPS_ARG2 r_ARG2
+#define rs_MIPS_ARG2 rs_ARG2
 #define rMIPS_ARG3 r_ARG3
+#define rs_MIPS_ARG3 rs_ARG3
 #define rMIPS_FARG0 r_FARG0
+#define rs_MIPS_FARG0 rs_FARG0
 #define rMIPS_FARG1 r_FARG1
+#define rs_MIPS_FARG1 rs_FARG1
 #define rMIPS_FARG2 r_FARG2
+#define rs_MIPS_FARG2 rs_FARG2
 #define rMIPS_FARG3 r_FARG3
+#define rs_MIPS_FARG3 rs_FARG3
 #define rMIPS_RET0 r_RESULT0
+#define rs_MIPS_RET0 rs_RESULT0
 #define rMIPS_RET1 r_RESULT1
+#define rs_MIPS_RET1 rs_RESULT1
 #define rMIPS_INVOKE_TGT r_T9
+#define rs_MIPS_INVOKE_TGT rs_T9
 #define rMIPS_COUNT INVALID_REG
 
 // RegisterLocation templates return values (r_V0, or r_V0/r_V1).
