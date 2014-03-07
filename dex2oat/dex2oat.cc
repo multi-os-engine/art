@@ -33,6 +33,7 @@
 #include "compiler_backend.h"
 #include "compiler_callbacks.h"
 #include "dex_file-inl.h"
+#include "dex/pass_driver.h"
 #include "dex/verification_results.h"
 #include "driver/compiler_callbacks_impl.h"
 #include "driver/compiler_driver.h"
@@ -201,6 +202,11 @@ static void Usage(const char* fmt, ...) {
   UsageError("      such as initial heap size, maximum heap size, and verbose output.");
   UsageError("      Use a separate --runtime-arg switch for each argument.");
   UsageError("      Example: --runtime-arg -Xms256m");
+  UsageError("");
+  UsageError("  --print-pass-names: print a list of pass names");
+  UsageError("");
+  UsageError("  --disable-passes=<pass-names>:  disable one or more passes separated by comma.");
+  UsageError("      Example: --disable-passes=UseCount,BBOptimizations");
   UsageError("");
   std::cerr << "See log for usage error information\n";
   exit(EXIT_FAILURE);
@@ -751,6 +757,7 @@ static int dex2oat(int argc, char** argv) {
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = !kIsTargetBuild;
   bool generate_gdb_information = kIsDebugBuild;
+  std::string disable_passes("");
 
   for (int i = 0; i < argc; i++) {
     const StringPiece option(argv[i]);
@@ -897,6 +904,10 @@ static int dex2oat(int argc, char** argv) {
       dump_passes = true;
     } else if (option == "--dump-stats") {
       dump_stats = true;
+    } else if (option == "--print-pass-names") {
+      PassDriver::PrintPassNames();
+    } else if (option.starts_with("--disable-passes=")) {
+      disable_passes = option.substr(strlen("--disable-passes=")).data();
     } else {
       Usage("Unknown argument %s", option.data());
     }
@@ -1027,7 +1038,8 @@ static int dex2oat(int argc, char** argv) {
                                    small_method_threshold,
                                    tiny_method_threshold,
                                    num_dex_methods_threshold,
-                                   generate_gdb_information
+                                   generate_gdb_information,
+                                   disable_passes
 #ifdef ART_SEA_IR_MODE
                                    , compiler_options.sea_ir_ = true;
 #endif

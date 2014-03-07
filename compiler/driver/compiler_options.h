@@ -44,7 +44,8 @@ class CompilerOptions {
     small_method_threshold_(kDefaultSmallMethodThreshold),
     tiny_method_threshold_(kDefaultTinyMethodThreshold),
     num_dex_methods_threshold_(kDefaultNumDexMethodsThreshold),
-    generate_gdb_information_(false)
+    generate_gdb_information_(false),
+    disable_passes_("")
 #ifdef ART_SEA_IR_MODE
     , sea_ir_mode_(false)
 #endif
@@ -56,7 +57,8 @@ class CompilerOptions {
                   size_t small_method_threshold,
                   size_t tiny_method_threshold,
                   size_t num_dex_methods_threshold,
-                  bool generate_gdb_information
+                  bool generate_gdb_information,
+                  std::string disable_passes
 #ifdef ART_SEA_IR_MODE
                   , bool sea_ir_mode
 #endif
@@ -67,7 +69,8 @@ class CompilerOptions {
     small_method_threshold_(small_method_threshold),
     tiny_method_threshold_(tiny_method_threshold),
     num_dex_methods_threshold_(num_dex_methods_threshold),
-    generate_gdb_information_(generate_gdb_information)
+    generate_gdb_information_(generate_gdb_information),
+    disable_passes_(disable_passes)
 #ifdef ART_SEA_IR_MODE
     , sea_ir_mode_(sea_ir_mode)
 #endif
@@ -125,6 +128,10 @@ class CompilerOptions {
     return generate_gdb_information_;
   }
 
+  const std::string& GetDisablePasses() const {
+    return disable_passes_;
+  }
+
  private:
   CompilerFilter compiler_filter_;
   size_t huge_method_threshold_;
@@ -133,6 +140,7 @@ class CompilerOptions {
   size_t tiny_method_threshold_;
   size_t num_dex_methods_threshold_;
   bool generate_gdb_information_;
+  std::string disable_passes_;
 
 #ifdef ART_SEA_IR_MODE
   bool sea_ir_mode_;

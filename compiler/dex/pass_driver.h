@@ -73,7 +73,7 @@ class PassDriver {
    */
   void DispatchPass(CompilationUnit* c_unit, const Pass* pass);
 
-  void PrintPassNames() const;
+  static void PrintPassNames();
 
   const Pass* GetPass(const char* name) const;
 
