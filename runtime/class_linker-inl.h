@@ -23,8 +23,8 @@
 #include "mirror/dex_cache.h"
 #include "mirror/iftable.h"
 #include "mirror/object_array.h"
-#include "object_utils.h"
-#include "sirt_ref.h"
+#include "object_utils-inl.h"
+#include "sirt_ref-inl.h"
 
 namespace art {
 

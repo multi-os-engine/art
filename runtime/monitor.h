@@ -27,10 +27,11 @@
 #include "atomic.h"
 #include "base/mutex.h"
 #include "object_callbacks.h"
-#include "sirt_ref.h"
 #include "thread_state.h"
 
 namespace art {
+
+template<class T> class SirtRef;
 
 namespace mirror {
   class ArtMethod;

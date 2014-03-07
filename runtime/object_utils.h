@@ -28,38 +28,23 @@
 #include "mirror/string.h"
 
 #include "runtime.h"
-#include "sirt_ref.h"
 
 #include <string>
 
 namespace art {
 
-template <typename T>
+template<class T>
+class SirtRef;
+
+template<class T>
 class ObjectLock {
  public:
-  explicit ObjectLock(Thread* self, const SirtRef<T>* object)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : self_(self), obj_(object) {
-    CHECK(object != nullptr);
-    CHECK(object->get() != nullptr);
-    obj_->get()->MonitorEnter(self_);
-  }
-
-  ~ObjectLock() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    obj_->get()->MonitorExit(self_);
-  }
-
-  void WaitIgnoringInterrupts() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    Monitor::Wait(self_, obj_->get(), 0, 0, false, kWaiting);
-  }
-
-  void Notify() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    obj_->get()->Notify(self_);
-  }
-
-  void NotifyAll() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    obj_->get()->NotifyAll(self_);
-  }
+  inline explicit ObjectLock(Thread* self, const SirtRef<T>* object)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  inline ~ObjectLock() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  inline void WaitIgnoringInterrupts() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  inline void Notify() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  inline void NotifyAll() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
   Thread* const self_;
@@ -368,13 +353,7 @@ class MethodHelper {
     }
   }
 
-  mirror::String* GetNameAsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    const DexFile& dex_file = GetDexFile();
-    uint32_t dex_method_idx = method_->GetDexMethodIndex();
-    const DexFile::MethodId& method_id = dex_file.GetMethodId(dex_method_idx);
-    SirtRef<mirror::DexCache> dex_cache(Thread::Current(), GetDexCache());
-    return GetClassLinker()->ResolveString(dex_file, method_id.name_idx_, dex_cache);
-  }
+  inline mirror::String* GetNameAsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   const char* GetShorty() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const char* result = shorty_;
@@ -558,14 +537,7 @@ class MethodHelper {
     return method_->GetDeclaringClass()->GetDexCache();
   }
 
-  mirror::String* ResolveString(uint32_t string_idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::String* s = method_->GetDexCacheStrings()->Get(string_idx);
-    if (UNLIKELY(s == nullptr)) {
-      SirtRef<mirror::DexCache> dex_cache(Thread::Current(), GetDexCache());
-      s = GetClassLinker()->ResolveString(GetDexFile(), string_idx, dex_cache);
-    }
-    return s;
-  }
+  inline mirror::String* ResolveString(uint32_t string_idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   uint32_t FindDexMethodIndexInOtherDexFile(const DexFile& other_dexfile)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
