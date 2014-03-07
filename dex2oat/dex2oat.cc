@@ -148,7 +148,7 @@ static void Usage(const char* fmt, ...) {
   UsageError("      Example: --instruction-set-features=div");
   UsageError("      Default: default");
   UsageError("");
-  UsageError("  --compiler-backend=(Quick|QuickGBC|Portable): select compiler backend");
+  UsageError("  --compiler-backend=(Quick|Optimizing|Portable): select compiler backend");
   UsageError("      set.");
   UsageError("      Example: --compiler-backend=Portable");
   UsageError("      Default: Quick");
@@ -836,6 +836,8 @@ static int dex2oat(int argc, char** argv) {
       StringPiece backend_str = option.substr(strlen("--compiler-backend=")).data();
       if (backend_str == "Quick") {
         compiler_backend = CompilerBackend::kQuick;
+      } else if (backend_str == "Optimizing") {
+        compiler_backend = CompilerBackend::kOptimizing;
       } else if (backend_str == "Portable") {
         compiler_backend = CompilerBackend::kPortable;
       }

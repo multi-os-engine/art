@@ -74,6 +74,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/code_generator_arm.cc \
 	optimizing/code_generator_x86.cc \
 	optimizing/nodes.cc \
+	optimizing/optimizing_backend.cc \
 	trampolines/trampoline_compiler.cc \
 	utils/arena_allocator.cc \
 	utils/arena_bit_vector.cc \
@@ -88,6 +89,7 @@ LIBART_COMPILER_SRC_FILES := \
 	utils/x86/managed_register_x86.cc \
 	utils/scoped_arena_allocator.cc \
 	buffered_output_stream.cc \
+	backends.cc \
 	compiler_backend.cc \
 	elf_fixup.cc \
 	elf_stripper.cc \
