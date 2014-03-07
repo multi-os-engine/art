@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_VERIFY_OBJECT_H_
 #define ART_RUNTIME_VERIFY_OBJECT_H_
 
+#include "globals.h"
 #include "locks.h"
 
 #include <stdint.h>
