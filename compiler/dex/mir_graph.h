@@ -169,7 +169,8 @@ enum OatMethodAttributes {
 
 #define INVALID_SREG (-1)
 #define INVALID_VREG (0xFFFFU)
-#define INVALID_REG (0x7F)
+// TODO: replace uses of INVALID_REG w/ reg_storage.
+#define INVALID_REG (RegStorage::kInvalidRegVal)
 #define INVALID_OFFSET (0xDEADF00FU)
 
 #define MIR_IGNORE_NULL_CHECK           (1 << kMIRIgnoreNullCheck)
