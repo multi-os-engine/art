@@ -91,14 +91,16 @@ LLVM_ROOT_PATH := external/llvm
 # Don't fail a dalvik minimal host build.
 -include $(LLVM_ROOT_PATH)/llvm.mk
 
-# Clang build support. By default, host builds use clang for better warnings.
+# Clang build support. 
 # Target builds use GCC by default.
-# TODO: work out why arm64 target builds need GCC on the host.
 ART_TARGET_CLANG := false
-ifneq ($(TARGET_ARCH),arm64)
-  ART_HOST_CLANG := true
-else
-  ART_HOST_CLANG := false
+ART_HOST_CLANG := false
+ifneq ($(WITHOUT_CLANG),true)
+  # By default, host builds use clang for better warnings.
+  # TODO: work out why arm64 target builds need GCC on the host.
+  ifneq ($(TARGET_ARCH),arm64)
+    ART_HOST_CLANG := true
+  endif
 endif
 
 # directory used for dalvik-cache on device
