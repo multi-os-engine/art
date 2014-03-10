@@ -674,6 +674,13 @@ END_FUNCTION art_quick_resolution_trampoline
  * |                   |
  * | caller method...  |
  * #-------------------#    <--- SP on entry
+ *
+ *          |
+ *          V
+ *
+ * #-------------------#
+ * | caller method...  |
+ * #-------------------#
  * | Return            |
  * | R15               |    callee save
  * | R14               |    callee save
@@ -697,22 +704,7 @@ END_FUNCTION art_quick_resolution_trampoline
  * | Padding           |
  * | RDI/Method*       |  <- sp
  * #-------------------#
- * | local ref cookie  | // 4B
- * |   padding         | // 4B
- * #----------#--------#
- * |          |      | |
- * | Temp/    | SIRT | |    Scratch frame is 4k
- * | Scratch  |      v |
- * | Frame    #--------|
- * |                   |
- * |          #--------|
- * |          |      ^ |
- * |          | JNI  | |
- * |          | Stack| |
- * #----------#--------#    <--- SP on native call (needs alignment?)
- * |                   |
- * | Stack for Regs    |    The trampoline assembly will pop these values
- * |                   |    into registers for native call
+ * | Scratch Alloca    |    5K scratch space
  * #---------#---------#
  * |         | sp*     |
  * | Tramp.  #---------#
@@ -720,6 +712,35 @@ END_FUNCTION art_quick_resolution_trampoline
  * | Tramp.  #---------#
  * |         | method  |
  * #-------------------#    <--- SP on artQuickGenericJniTrampoline
+ *
+ *           |
+ *           v              artQuickGenericJniTrampoline
+ *
+ * #-------------------#
+ * | caller method...  |
+ * #-------------------#
+ * | Return            |
+ * | Callee-Save Data  |
+ * #-------------------#
+ * | SIRT              |
+ * #-------------------#
+ * | Method*           |    <--- (1)
+ * #-------------------#
+ * | local ref cookie  | // 4B
+ * | SIRT size         | // 4B   TODO: roll into call stack alignment?
+ * #-------------------#
+ * | JNI Call Stack    |
+ * #-------------------#    <--- SP on native call
+ * |                   |
+ * | Stack for Regs    |    The trampoline assembly will pop these values
+ * |                   |    into registers for native call
+ * #-------------------#
+ * | Native code ptr   |
+ * #-------------------#
+ * | Free scratch      |
+ * #-------------------#
+ * | Ptr to (1)        |    <--- RSP
+ * #-------------------#
  */
     /*
      * Called to do a generic JNI down-call
@@ -778,12 +799,19 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     movq %gs:THREAD_SELF_OFFSET, %rdi
     movq %rbp, %rsi
     call PLT_SYMBOL(artQuickGenericJniTrampoline)  // (Thread*, sp)
-    test %rax, %rax                 // Check for error, negative value.
+
+    // At the bottom of the alloca we now have the name pointer to the method=bottom of callee-save
+    // get the adjusted frame pointer
+    popq %rbp   // TODO: CFI???
+
+    // Check for error, negative value.
+    test %rax, %rax
     js .Lentry_error
-    // release part of the alloca
+
+    // release part of the alloca, get the code pointer
     addq %rax, %rsp
-    // get the code pointer
     popq %rax
+
     // pop from the register-passing alloca region
     // what's the right layout?
     popq %rdi
@@ -818,6 +846,11 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     // Tear down the alloca.
     movq %rbp, %rsp
     CFI_DEF_CFA_REGISTER(rsp)
+
+    // read Sirt size and skip it
+    xorq %rcx, %rcx
+    movl -8(%rsp), %ecx
+    addq %rcx, %rsp                 // skip Sirt
 
     // Pending exceptions possible.
     // TODO: use cmpq, needs direct encoding because of gas bug

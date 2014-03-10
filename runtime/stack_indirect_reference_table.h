@@ -51,6 +51,19 @@ class StackIndirectReferenceTable {
     return header_size + data_size;
   }
 
+  static uint32_t GetNumberOfEntriesAfterPadding(uint32_t non_padded_count) {
+    // Add padding entries if necessary for alignment.
+    if (sizeof(uintptr_t) < sizeof(uint64_t)) {
+      uint32_t size = sizeof(uintptr_t) * non_padded_count;
+      uint32_t rem = size % 8;
+      if (rem != 0) {
+        DCHECK_EQ(rem, 4U);
+        non_padded_count++;
+      }
+    }
+    return non_padded_count;
+  }
+
   // Link to previous SIRT or NULL
   StackIndirectReferenceTable* GetLink() const {
     return link_;
@@ -70,6 +83,12 @@ class StackIndirectReferenceTable {
   mirror::Object* GetReference(size_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK_LT(i, number_of_references_);
     return references_[i].AsMirrorPtr();
+  }
+
+  StackReference<mirror::Object>* GetStackReference(size_t i)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK_LT(i, number_of_references_);
+    return &references_[i];
   }
 
   void SetReference(size_t i, mirror::Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {

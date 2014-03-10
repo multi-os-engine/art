@@ -491,6 +491,39 @@ size_t OatWriter::InitOatCodeMethod(size_t offset, size_t oat_class_index,
                          vmap_table_offset,
                          gc_map_offset);
     (*method_offsets_index)++;
+  } else if (is_native) {
+    mirror::ArtMethod* callee_save_method = Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs);
+
+    // Compute Sirt size as putting _every_ reference into it, even null ones
+    // TODO: possible without going through linker, ArtMethod and MethodHelper?
+    ClassLinker* linker = Runtime::Current()->GetClassLinker();
+    // Unchecked as we hold mutator_lock_ on entry.
+    ScopedObjectAccessUnchecked soa(Thread::Current());
+    SirtRef<mirror::DexCache> dex_cache(soa.Self(), linker->FindDexCache(dex_file));
+    SirtRef<mirror::ClassLoader> class_loader(soa.Self(), nullptr);
+    mirror::ArtMethod* method = linker->ResolveMethod(dex_file, method_idx, dex_cache,
+                                                      class_loader, nullptr, invoke_type);
+    MethodHelper mh(method);
+    uint32_t sirt_refs = StackIndirectReferenceTable::GetNumberOfEntriesAfterPadding(
+                                                                mh.GetNumberOfReferenceArgs() + 1);
+    uint32_t sirt_size = StackIndirectReferenceTable::SizeOf(sirt_refs);
+
+    frame_size_in_bytes = callee_save_method->GetFrameSizeInBytes() + sirt_size;
+    core_spill_mask = callee_save_method->GetCoreSpillMask();
+    fp_spill_mask = callee_save_method->GetFpSpillMask();
+    mapping_table_offset = 0;
+    vmap_table_offset = 0;
+    gc_map_offset = 0;
+
+    oat_class->method_offsets_[*method_offsets_index] =
+        OatMethodOffsets(0,   // TODO: is that equal to nullptr?
+                         frame_size_in_bytes,
+                         core_spill_mask,
+                         fp_spill_mask,
+                         mapping_table_offset,
+                         vmap_table_offset,
+                         gc_map_offset);
+    (*method_offsets_index)++;
   }
 
 

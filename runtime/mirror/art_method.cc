@@ -324,7 +324,7 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
 size_t ArtMethod::GetSirtOffsetInBytes() {
   CHECK(IsNative());
   // TODO: support Sirt access from generic JNI trampoline.
-  CHECK_NE(GetEntryPointFromQuickCompiledCode(), GetQuickGenericJniTrampoline());
+  // CHECK_NE(GetEntryPointFromQuickCompiledCode(), GetQuickGenericJniTrampoline());
   return kPointerSize;
 }
 #endif
