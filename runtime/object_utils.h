@@ -394,6 +394,21 @@ class MethodHelper {
     return shorty_len_;
   }
 
+  uint32_t GetNumberOfReferenceArgs() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (shorty_ == nullptr) {
+      GetShorty();
+    }
+
+    uint32_t refs = 0;
+    for (uint32_t i = 1; i < shorty_len_ ; ++i) {
+      if (shorty_[i] == 'L') {
+        refs++;
+      }
+    }
+
+    return refs;
+  }
+
   const Signature GetSignature() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const DexFile& dex_file = GetDexFile();
     uint32_t dex_method_idx = method_->GetDexMethodIndex();
