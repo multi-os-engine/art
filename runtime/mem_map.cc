@@ -106,6 +106,9 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* addr, size_t byte_count, in
     flags |= MAP_32BIT;
   }
 #endif
+  if (addr != nullptr) {
+    flags |= MAP_FIXED;
+  }
   byte* actual = reinterpret_cast<byte*>(mmap(addr, page_aligned_byte_count, prot, flags, fd.get(), 0));
   if (actual == MAP_FAILED) {
     std::string maps;
@@ -114,6 +117,9 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* addr, size_t byte_count, in
                               addr, page_aligned_byte_count, prot, flags, fd.get(),
                               maps.c_str());
     return nullptr;
+  }
+  if (addr != nullptr) {
+    CHECK_EQ(addr, actual);
   }
   return new MemMap(name, actual, byte_count, actual, page_aligned_byte_count, prot);
 }
