@@ -17,6 +17,7 @@
 #ifndef ART_COMPILER_OPTIMIZING_CODE_GENERATOR_H_
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_H_
 
+#include "globals.h"
 #include "instruction_set.h"
 #include "memory_region.h"
 #include "nodes.h"
@@ -33,6 +34,77 @@ class CodeAllocator {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(CodeAllocator);
+};
+
+/**
+ * A Location is an abstraction over the potential location
+ * of an instruction. It could be in register or stack.
+ */
+class Location : public ValueObject {
+ public:
+  template<typename T>
+  T reg() const { return static_cast<T>(reg_); }
+
+  Location() : reg_(kInvalid) { }
+  Location(uword reg) : reg_(reg) { }
+
+  static Location RegisterLocation(uword reg) {
+    return Location(reg);
+  }
+
+  bool IsValid() const { return reg_ != kInvalid; }
+
+  Location(const Location& other) : reg_(other.reg_) { }
+
+  Location& operator=(const Location& other) {
+    reg_ = other.reg_;
+    return *this;
+  }  
+
+ private:
+  // The register for that location.
+  // TODO: Support stack location.
+  uword reg_;
+  static const uword kInvalid = -1;
+};
+
+/**
+ * The code generator computes LocationSummary for each instruction so that
+ * the instruction itself knows what code to generate: where to find the inputs
+ * and where to place the result.
+ *
+ * The intent is to have the code for generating the instruction independent of
+ * register allocation. A register allocator just has to provide a LocationSummary.
+ */
+class LocationSummary : public ArenaObject {
+ public:
+  LocationSummary(HInstruction* instruction)
+      : inputs(instruction->block()->graph()->arena(), instruction->InputCount()) {
+    inputs.SetSize(instruction->InputCount());
+    for (int i = 0; i < instruction->InputCount(); i++) {
+      inputs.Put(i, Location());
+    }
+  }
+
+  void SetInAt(uint32_t at, uword reg) {
+    inputs.Put(at, Location(reg));
+  }
+
+  Location InAt(uint32_t at) const {
+    return inputs.Get(at);
+  }
+
+  void SetOut(uword reg) {
+    output = Location(reg);
+  }
+
+  Location Out() const { return output; }
+
+ private:
+  GrowableArray<Location> inputs;
+  Location output;
+
+  DISALLOW_COPY_AND_ASSIGN(LocationSummary);
 };
 
 class CodeGenerator : public HGraphVisitor {
@@ -54,20 +126,31 @@ class CodeGenerator : public HGraphVisitor {
 
  protected:
   CodeGenerator(Assembler* assembler, HGraph* graph)
-      : HGraphVisitor(graph), assembler_(assembler), block_labels_(graph->arena(), 0) {
+      : HGraphVisitor(graph),
+        frame_size_(0),
+        assembler_(assembler),
+        block_labels_(graph->arena(), 0) {
     block_labels_.SetSize(graph->blocks()->Size());
   }
 
   Label* GetLabelOf(HBasicBlock* block) const;
-  bool GoesToNextBlock(HGoto* got) const;
+  bool GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) const;
+
+  // Frame size required for this method.
+  uint32_t frame_size_;
 
  private:
   virtual void GenerateFrameEntry() = 0;
   virtual void GenerateFrameExit() = 0;
   virtual void Bind(Label* label) = 0;
+  virtual void Move(HInstruction* instruction, Location location) = 0;
+  virtual void Push(HInstruction* instruction, Location location) = 0;
+  virtual HGraphVisitor* GetLocationBuilder() = 0;
 
+  void InitLocations(HInstruction* instruction);
   void Compile(CodeAllocator* allocator);
   void CompileBlock(HBasicBlock* block);
+  void CompileEntryBlock();
 
   Assembler* const assembler_;
 

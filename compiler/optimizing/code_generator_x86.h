@@ -27,12 +27,26 @@ class Label;
 
 namespace x86 {
 
+class LocationsBuilderX86 : public HGraphVisitor {
+ public:
+  explicit LocationsBuilderX86(HGraph* graph) : HGraphVisitor(graph) { }
+
+#define DECLARE_VISIT_INSTRUCTION(name)     \
+  virtual void Visit##name(H##name* instr);
+
+  FOR_EACH_INSTRUCTION(DECLARE_VISIT_INSTRUCTION)
+
+#undef DECLARE_VISIT_INSTRUCTION
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(LocationsBuilderX86); 
+};
+
 class CodeGeneratorX86 : public CodeGenerator {
  public:
   CodeGeneratorX86(Assembler* assembler, HGraph* graph)
-      : CodeGenerator(assembler, graph) { }
+      : CodeGenerator(assembler, graph), location_builder_(graph) { }
 
-  // Visit functions for instruction classes.
 #define DECLARE_VISIT_INSTRUCTION(name)     \
   virtual void Visit##name(H##name* instr);
 
@@ -44,6 +58,14 @@ class CodeGeneratorX86 : public CodeGenerator {
   virtual void GenerateFrameEntry();
   virtual void GenerateFrameExit();
   virtual void Bind(Label* label);
+  virtual void Move(HInstruction* instruction, Location location);
+  virtual void Push(HInstruction* instruction, Location location);
+
+  virtual HGraphVisitor* GetLocationBuilder() {
+    return &location_builder_;
+  }
+
+  LocationsBuilderX86 location_builder_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorX86);
 };

@@ -58,6 +58,7 @@ class HGraphBuilder : public ValueObject {
   HBasicBlock* FindBlockStartingAt(int32_t index) const;
 
   HIntConstant* GetConstant0();
+  HIntConstant* GetConstant1();
   HIntConstant* GetConstant(int constant);
   void InitializeLocals(int count);
   HLocal* GetLocalAt(int register_index) const;
@@ -79,6 +80,7 @@ class HGraphBuilder : public ValueObject {
   HGraph* graph_;
 
   HIntConstant* constant0_;
+  HIntConstant* constant1_;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphBuilder);
 };
