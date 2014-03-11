@@ -28,7 +28,7 @@ void HGraphBuilder::InitializeLocals(int count) {
   for (int i = 0; i < count; i++) {
     HLocal* local = new (arena_) HLocal(i);
     entry_block_->AddInstruction(local);
-    locals_.Put(0, local);
+    locals_.Put(i, local);
   }
 }
 
@@ -133,6 +133,7 @@ HBasicBlock* HGraphBuilder::FindBlockStartingAt(int32_t index) const {
 bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_t dex_offset) {
   if (current_block_ == nullptr) return true;  // Dead code
 
+  fprintf(stderr, "%s\n", instruction.DumpString(nullptr).c_str());
   switch (instruction.Opcode()) {
     case Instruction::CONST_4: {
       int32_t register_index = instruction.VRegA();
@@ -140,11 +141,14 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       UpdateLocal(register_index, constant);
       break;
     }
-    case Instruction::RETURN_VOID:
+
+    case Instruction::RETURN_VOID: {
       current_block_->AddInstruction(new (arena_) HReturnVoid());
       current_block_->AddSuccessor(exit_block_);
       current_block_ = nullptr;
       break;
+    }
+
     case Instruction::IF_EQ: {
       HInstruction* first = LoadLocal(instruction.VRegA());
       HInstruction* second = LoadLocal(instruction.VRegB());
@@ -159,6 +163,7 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       current_block_ = nullptr;
       break;
     }
+
     case Instruction::GOTO:
     case Instruction::GOTO_16:
     case Instruction::GOTO_32: {
@@ -169,8 +174,18 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       current_block_ = nullptr;
       break;
     }
+
+    case Instruction::RETURN : {
+      HInstruction* value = LoadLocal(instruction.VRegA());
+      current_block_->AddInstruction(new (arena_) HReturn(value));
+      current_block_->AddSuccessor(exit_block_);
+      current_block_ = nullptr;
+      break;
+    }
+
     case Instruction::NOP:
       break;
+
     default:
       return false;
   }
@@ -179,14 +194,22 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
 
 HIntConstant* HGraphBuilder::GetConstant0() {
   if (constant0_ != nullptr) return constant0_;
-  HIntConstant* constant = new(arena_) HIntConstant(0);
-  entry_block_->AddInstruction(constant);
-  return constant;
+  constant0_ = new(arena_) HIntConstant(0);
+  entry_block_->AddInstruction(constant0_);
+  return constant0_;
+}
+
+HIntConstant* HGraphBuilder::GetConstant1() {
+  if (constant1_ != nullptr) return constant1_;
+  constant1_ = new(arena_) HIntConstant(1);
+  entry_block_->AddInstruction(constant1_);
+  return constant1_;
 }
 
 HIntConstant* HGraphBuilder::GetConstant(int constant) {
   switch (constant) {
     case 0: return GetConstant0();
+    case 1: return GetConstant1();
     default: {
       HIntConstant* instruction = new (arena_) HIntConstant(constant);
       entry_block_->AddInstruction(instruction);
