@@ -79,7 +79,7 @@ static void CheckMapRequest(byte*, size_t) { }
 #endif
 
 MemMap* MemMap::MapAnonymous(const char* name, byte* addr, size_t byte_count, int prot,
-                             bool low_4gb, std::string* error_msg) {
+                             bool map_at_exact_addr, bool low_4gb, std::string* error_msg) {
   if (byte_count == 0) {
     return new MemMap(name, NULL, 0, NULL, 0, prot);
   }
@@ -106,8 +106,11 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* addr, size_t byte_count, in
     flags |= MAP_32BIT;
   }
 #endif
+  if (addr != nullptr && map_at_exact_addr) {
+    flags |= MAP_FIXED;
+  }
   byte* actual = reinterpret_cast<byte*>(mmap(addr, page_aligned_byte_count, prot, flags, fd.get(), 0));
-  if (actual == MAP_FAILED) {
+  if (actual == MAP_FAILED || (addr != nullptr && map_at_exact_addr && addr != actual)) {
     std::string maps;
     ReadFileToString("/proc/self/maps", &maps);
     *error_msg = StringPrintf("anonymous mmap(%p, %zd, 0x%x, 0x%x, %d, 0) failed\n%s",

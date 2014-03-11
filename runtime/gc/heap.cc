@@ -203,7 +203,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     std::string error_str;
     malloc_space_mem_map = MemMap::MapAnonymous(malloc_space_name, requested_alloc_space_begin,
                                                 non_moving_spaces_size, PROT_READ | PROT_WRITE,
-                                                true, &error_str);
+                                                true, true, &error_str);
     CHECK(malloc_space_mem_map != nullptr) << error_str;
     post_zygote_non_moving_space_mem_map_.reset(malloc_space_mem_map->RemapAtEnd(
         malloc_space_mem_map->Begin() + capacity, "post zygote non-moving space",
@@ -216,7 +216,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     // Allocate a mem map for the malloc space.
     std::string error_str;
     malloc_space_mem_map = MemMap::MapAnonymous(malloc_space_name, requested_alloc_space_begin,
-                                                capacity, PROT_READ | PROT_WRITE, true, &error_str);
+                                                capacity, PROT_READ | PROT_WRITE,
+                                                true, true, &error_str);
     CHECK(malloc_space_mem_map != nullptr) << error_str;
     VLOG(heap) << "malloc space mem map : " << malloc_space_mem_map;
   }

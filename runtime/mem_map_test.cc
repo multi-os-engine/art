@@ -39,6 +39,7 @@ class MemMapTest : public testing::Test {
                                       nullptr,
                                       2 * page_size,
                                       PROT_READ | PROT_WRITE,
+                                      false,
                                       low_4gb,
                                       &error_msg);
     // Check its state and write to it.
@@ -92,6 +93,7 @@ TEST_F(MemMapTest, MapAnonymousEmpty) {
                                              0,
                                              PROT_READ,
                                              false,
+                                             false,
                                              &error_msg));
   ASSERT_TRUE(map.get() != nullptr) << error_msg;
   ASSERT_TRUE(error_msg.empty());
@@ -99,6 +101,7 @@ TEST_F(MemMapTest, MapAnonymousEmpty) {
                                  nullptr,
                                  kPageSize,
                                  PROT_READ | PROT_WRITE,
+                                 false,
                                  false,
                                  &error_msg));
   ASSERT_TRUE(map.get() != nullptr) << error_msg;
@@ -112,6 +115,7 @@ TEST_F(MemMapTest, MapAnonymousEmpty32bit) {
                                              nullptr,
                                              kPageSize,
                                              PROT_READ | PROT_WRITE,
+                                             false,
                                              true,
                                              &error_msg));
   ASSERT_TRUE(map.get() != nullptr) << error_msg;
@@ -119,6 +123,20 @@ TEST_F(MemMapTest, MapAnonymousEmpty32bit) {
   ASSERT_LT(reinterpret_cast<uintptr_t>(BaseBegin(map.get())), 1ULL << 32);
 }
 #endif
+
+TEST_F(MemMapTest, MapAnonymousExactAddr) {
+  std::string error_msg;
+  UniquePtr<MemMap> map0(MemMap::MapAnonymous("MapAnonymous0",
+                                              reinterpret_cast<byte*>(ART_BASE_ADDRESS),
+                                              kPageSize,
+                                              PROT_READ | PROT_WRITE,
+                                              true,
+                                              false,
+                                              &error_msg));
+  ASSERT_TRUE(map0.get() != nullptr) << error_msg;
+  ASSERT_TRUE(error_msg.empty());
+  ASSERT_TRUE(map0->BaseBegin() == reinterpret_cast<void*>(ART_BASE_ADDRESS));
+}
 
 TEST_F(MemMapTest, RemapAtEnd) {
   RemapAtEndTest(false);

@@ -60,7 +60,7 @@ mirror::Object* LargeObjectMapSpace::Alloc(Thread* self, size_t num_bytes,
                                            size_t* bytes_allocated, size_t* usable_size) {
   std::string error_msg;
   MemMap* mem_map = MemMap::MapAnonymous("large object space allocation", NULL, num_bytes,
-                                         PROT_READ | PROT_WRITE, true, &error_msg);
+                                         PROT_READ | PROT_WRITE, false, true, &error_msg);
   if (UNLIKELY(mem_map == NULL)) {
     LOG(WARNING) << "Large object allocation failed: " << error_msg;
     return NULL;
@@ -137,7 +137,7 @@ FreeListSpace* FreeListSpace::Create(const std::string& name, byte* requested_be
   CHECK_EQ(size % kAlignment, 0U);
   std::string error_msg;
   MemMap* mem_map = MemMap::MapAnonymous(name.c_str(), requested_begin, size,
-                                         PROT_READ | PROT_WRITE, true, &error_msg);
+                                         PROT_READ | PROT_WRITE, true, true, &error_msg);
   CHECK(mem_map != NULL) << "Failed to allocate large object space mem map: " << error_msg;
   return new FreeListSpace(name, mem_map, mem_map->Begin(), mem_map->End());
 }

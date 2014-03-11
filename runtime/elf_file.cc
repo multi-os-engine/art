@@ -810,8 +810,8 @@ bool ElfFile::Load(bool executable, std::string* error_msg) {
       std::string reservation_name("ElfFile reservation for ");
       reservation_name += file_->GetPath();
       UniquePtr<MemMap> reserve(MemMap::MapAnonymous(reservation_name.c_str(),
-                                                     NULL, GetLoadedSize(), PROT_NONE, false,
-                                                     error_msg));
+                                                     NULL, GetLoadedSize(), PROT_NONE,
+                                                     false, false, error_msg));
       if (reserve.get() == nullptr) {
         *error_msg = StringPrintf("Failed to allocate %s: %s",
                                   reservation_name.c_str(), error_msg->c_str());

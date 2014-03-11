@@ -407,6 +407,7 @@ class CommonCompilerTest : public CommonRuntimeTest {
                                                   reinterpret_cast<byte*>(ART_BASE_ADDRESS),
                                                   (size_t)100 * 1024 * 1024,  // 100MB
                                                   PROT_NONE,
+                                                  true,
                                                   false /* no need for 4gb flag with fixed mmap*/,
                                                   &error_msg));
     CHECK(image_reservation_.get() != nullptr) << error_msg;
