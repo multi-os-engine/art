@@ -1290,6 +1290,7 @@ static uint32_t MangleAccessFlags(uint32_t accessFlags) {
 static uint16_t MangleSlot(uint16_t slot, mirror::ArtMethod* m)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   const DexFile::CodeItem* code_item = MethodHelper(m).GetCodeItem();
+  CHECK(code_item != nullptr);
   uint16_t ins_size = code_item->ins_size_;
   uint16_t locals_size = code_item->registers_size_ - ins_size;
   if (slot >= locals_size) {
@@ -1306,6 +1307,7 @@ static uint16_t MangleSlot(uint16_t slot, mirror::ArtMethod* m)
 static uint16_t DemangleSlot(uint16_t slot, mirror::ArtMethod* m)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   const DexFile::CodeItem* code_item = MethodHelper(m).GetCodeItem();
+  CHECK(code_item != nullptr);
   uint16_t ins_size = code_item->ins_size_;
   uint16_t locals_size = code_item->registers_size_ - ins_size;
   if (slot < ins_size) {
@@ -2118,14 +2120,14 @@ JDWP::JdwpError Dbg::GetThisObject(JDWP::ObjectId thread_id, JDWP::FrameId frame
   return JDWP::ERR_NONE;
 }
 
-void Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame_id, int slot,
+JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame_id, int slot,
                         JDWP::JdwpTag tag, uint8_t* buf, size_t width) {
   struct GetLocalVisitor : public StackVisitor {
     GetLocalVisitor(const ScopedObjectAccessUnchecked& soa, Thread* thread, Context* context,
                     JDWP::FrameId frame_id, int slot, JDWP::JdwpTag tag, uint8_t* buf, size_t width)
         SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
         : StackVisitor(thread, context), soa_(soa), frame_id_(frame_id), slot_(slot), tag_(tag),
-          buf_(buf), width_(width) {}
+          buf_(buf), width_(width), error_(JDWP::ERR_NONE) {}
 
     // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
     // annotalysis.
@@ -2134,7 +2136,13 @@ void Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame_id, int sl
         return true;  // Not our frame, carry on.
       }
       // TODO: check that the tag is compatible with the actual type of the slot!
+      // TODO: check slot is valid for this method or return INVALID_SLOT error.
       mirror::ArtMethod* m = GetMethod();
+      if (m->IsNative()) {
+        // We can't read local value from native method.
+        error_ = JDWP::ERR_OPAQUE_FRAME;
+        return false;
+      }
       uint16_t reg = DemangleSlot(slot_, m);
 
       switch (tag_) {
@@ -2242,6 +2250,7 @@ void Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame_id, int sl
     JDWP::JdwpTag tag_;
     uint8_t* const buf_;
     const size_t width_;
+    JDWP::JdwpError error_;
   };
 
   ScopedObjectAccessUnchecked soa(Thread::Current());
@@ -2249,11 +2258,14 @@ void Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame_id, int sl
   Thread* thread;
   JDWP::JdwpError error = DecodeThread(soa, thread_id, thread);
   if (error != JDWP::ERR_NONE) {
-    return;
+    return error;
   }
+  // TODO check thread is suspended by the debugger ?
   UniquePtr<Context> context(Context::Create());
   GetLocalVisitor visitor(soa, thread, context.get(), frame_id, slot, tag, buf, width);
   visitor.WalkStack();
+
+  return visitor.error_;
 }
 
 void Dbg::SetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame_id, int slot, JDWP::JdwpTag tag,
@@ -2273,7 +2285,9 @@ void Dbg::SetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame_id, int sl
         return true;  // Not our frame, carry on.
       }
       // TODO: check that the tag is compatible with the actual type of the slot!
+      // TODO: check slot is valid for this method or return INVALID_SLOT error.
       mirror::ArtMethod* m = GetMethod();
+      CHECK(!m->IsNative());
       uint16_t reg = DemangleSlot(slot_, m);
 
       switch (tag_) {

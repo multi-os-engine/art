@@ -1409,7 +1409,10 @@ static JdwpError SF_GetValues(JdwpState*, Request& request, ExpandBuf* pReply)
 
     size_t width = Dbg::GetTagWidth(reqSigByte);
     uint8_t* ptr = expandBufAddSpace(pReply, width+1);
-    Dbg::GetLocalValue(thread_id, frame_id, slot, reqSigByte, ptr, width);
+    JdwpError error = Dbg::GetLocalValue(thread_id, frame_id, slot, reqSigByte, ptr, width);
+    if (error != ERR_NONE) {
+      return error;
+    }
   }
 
   return ERR_NONE;
