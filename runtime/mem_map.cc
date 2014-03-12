@@ -101,12 +101,49 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* addr, size_t byte_count, in
   ScopedFd fd(-1);
   int flags = MAP_PRIVATE | MAP_ANONYMOUS;
 #endif
-#ifdef __LP64__
+
+#if defined(__aarch64__)
+  // MAP_32BIT only available on x86_64.
+  byte* actual = static_cast<byte*>(MAP_FAILED);
+  if (low_4gb && addr == nullptr) {
+    flags |= MAP_FIXED;
+
+    for (uintptr_t ptr = kPageSize * 2; ptr < 4 * GB; ptr += kPageSize) {
+      uintptr_t ptr2;
+
+      // Check pages are free.
+      bool safe = true;
+      for (ptr2 = ptr; ptr2 < ptr + page_aligned_byte_count; ptr2 += kPageSize) {
+        if (msync(reinterpret_cast<void*>(ptr2), kPageSize, 0) == 0) {
+          safe = false;
+          break;
+        }
+      }
+
+      if (safe == true) {
+        actual = reinterpret_cast<byte*>(mmap(reinterpret_cast<void*>(ptr),
+            page_aligned_byte_count, prot, flags, fd.get(), 0));
+        if (actual != MAP_FAILED) {
+          break;
+        }
+      } else {  // safe == true
+        // Skip over last page.
+        ptr = ptr2;
+      }
+    }
+  } else {  // low_4gb
+    actual = reinterpret_cast<byte*>(mmap(addr, page_aligned_byte_count, prot, flags, fd.get(), 0));
+  }
+
+#else
+#ifdef __x86_64__
   if (low_4gb) {
     flags |= MAP_32BIT;
   }
 #endif
   byte* actual = reinterpret_cast<byte*>(mmap(addr, page_aligned_byte_count, prot, flags, fd.get(), 0));
+#endif
+
   if (actual == MAP_FAILED) {
     std::string maps;
     ReadFileToString("/proc/self/maps", &maps);
@@ -218,7 +255,7 @@ MemMap* MemMap::RemapAtEnd(byte* new_end, const char* tail_name, int tail_prot,
   std::string debug_friendly_name("dalvik-");
   debug_friendly_name += tail_name;
   ScopedFd fd(ashmem_create_region(debug_friendly_name.c_str(), tail_base_size));
-  int flags = MAP_PRIVATE;
+  int flags = MAP_PRIVATE | MAP_FIXED;
   if (fd.get() == -1) {
     *error_msg = StringPrintf("ashmem_create_region failed for '%s': %s",
                               tail_name, strerror(errno));
