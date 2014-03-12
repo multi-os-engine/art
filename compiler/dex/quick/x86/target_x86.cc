@@ -832,19 +832,21 @@ void X86Mir2Lir::Materialize() {
   Mir2Lir::Materialize();
 }
 
-void X86Mir2Lir::LoadMethodAddress(int dex_method_index, InvokeType type,
+void X86Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeType type,
                                    SpecialTargetRegister symbolic_reg) {
   /*
    * For x86, just generate a 32 bit move immediate instruction, that will be filled
    * in at 'link time'.  For now, put a unique value based on target to ensure that
    * code deduplication works.
    */
-  const DexFile::MethodId& id = cu_->dex_file->GetMethodId(dex_method_index);
-  uintptr_t ptr = reinterpret_cast<uintptr_t>(&id);
+  int target_method_idx = target_method.dex_method_index;
+  const DexFile* target_dex_file = target_method.dex_file;
+  const DexFile::MethodId& target_method_id = target_dex_file->GetMethodId(target_method_idx);
 
-  // Generate the move instruction with the unique pointer and save index and type.
+  // Generate the move instruction with the unique pointer and save index, dex_file, and type.
   LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg),
-                     static_cast<int>(ptr), dex_method_index, type);
+                     reinterpret_cast<int>(&target_method_id), target_method_idx,
+                     reinterpret_cast<int>(target_dex_file), type);
   AppendLIR(move);
   method_address_insns_.Insert(move);
 }
@@ -865,18 +867,19 @@ void X86Mir2Lir::LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic
   class_type_address_insns_.Insert(move);
 }
 
-LIR *X86Mir2Lir::CallWithLinkerFixup(int dex_method_index, InvokeType type) {
+LIR *X86Mir2Lir::CallWithLinkerFixup(const MethodReference& target_method, InvokeType type) {
   /*
    * For x86, just generate a 32 bit call relative instruction, that will be filled
    * in at 'link time'.  For now, put a unique value based on target to ensure that
    * code deduplication works.
    */
-  const DexFile::MethodId& id = cu_->dex_file->GetMethodId(dex_method_index);
-  uintptr_t ptr = reinterpret_cast<uintptr_t>(&id);
+  int target_method_idx = target_method.dex_method_index;
+  const DexFile* target_dex_file = target_method.dex_file;
+  const DexFile::MethodId& target_method_id = target_dex_file->GetMethodId(target_method_idx);
 
-  // Generate the call instruction with the unique pointer and save index and type.
-  LIR *call = RawLIR(current_dalvik_offset_, kX86CallI, static_cast<int>(ptr), dex_method_index,
-                     type);
+  // Generate the call instruction with the unique pointer and save index, dex_file, and type.
+  LIR *call = RawLIR(current_dalvik_offset_, kX86CallI, reinterpret_cast<int>(&target_method_id),
+                     target_method_idx, reinterpret_cast<int>(target_dex_file), type);
   AppendLIR(call);
   call_method_insns_.Insert(call);
   return call;
@@ -897,8 +900,9 @@ void X86Mir2Lir::InstallLiteralPools() {
       // The offset to patch is the last 4 bytes of the instruction.
       int patch_offset = p->offset + p->flags.size - 4;
       cu_->compiler_driver->AddMethodPatch(cu_->dex_file, cu_->class_def_idx,
-                                           cu_->method_idx, cu_->invoke_type,
-                                           target, static_cast<InvokeType>(p->operands[3]),
+                                           cu_->method_idx, cu_->invoke_type, target,
+                                           reinterpret_cast<const DexFile*>(p->operands[3]),
+                                           static_cast<InvokeType>(p->operands[4]),
                                            patch_offset);
   }
 
@@ -924,7 +928,8 @@ void X86Mir2Lir::InstallLiteralPools() {
       int patch_offset = p->offset + p->flags.size - 4;
       cu_->compiler_driver->AddRelativeCodePatch(cu_->dex_file, cu_->class_def_idx,
                                                  cu_->method_idx, cu_->invoke_type, target,
-                                                 static_cast<InvokeType>(p->operands[2]),
+                                                 reinterpret_cast<const DexFile*>(p->operands[2]),
+                                                 static_cast<InvokeType>(p->operands[3]),
                                                  patch_offset, -4 /* offset */);
   }
 
