@@ -129,56 +129,77 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* expected, size_t byte_count
 #if defined(__LP64__) && !defined(__x86_64__)
   // MAP_32BIT only available on x86_64.
   void* actual = MAP_FAILED;
-  std::string strerr;
+
   if (low_4gb && expected == nullptr) {
     flags |= MAP_FIXED;
 
-    for (uintptr_t ptr = next_mem_pos_; ptr < 4 * GB; ptr += kPageSize) {
-      uintptr_t tail_ptr;
+    constexpr uintptr_t bottom = kPageSize * 2;
 
-      // Check pages are free.
+    // The location to start scanning is saved between executions.
+    // FIXME This is not thread-safe.
+    static uintptr_t old_start = bottom;
+
+    uintptr_t start = old_start;
+
+    // Normalised range of addresses to place start of allocation.
+    uintptr_t range = 4 * GB - bottom - page_aligned_byte_count - kPageSize;
+
+    // Ensure allocation doesn't stretch beyond 4GB.
+    if (start > (range+bottom)) {
+      start = bottom;
+    }
+
+    for (uintptr_t scanpos = 0; scanpos <= range; scanpos += kPageSize) {
+      uintptr_t scanptr = (scanpos + start) % range + bottom;
+      uintptr_t checkptr;
+
       bool safe = true;
-      for (tail_ptr = ptr; tail_ptr < ptr + page_aligned_byte_count; tail_ptr += kPageSize) {
-        if (msync(reinterpret_cast<void*>(tail_ptr), kPageSize, 0) == 0) {
+
+      // Check the run of pages here are not mapped.
+      for (checkptr = scanptr;
+           checkptr < scanptr + page_aligned_byte_count;
+           checkptr += kPageSize) {
+        // Skip over checked pages.
+        scanpos += kPageSize;
+
+        if (msync(reinterpret_cast<void*>(checkptr), kPageSize, 0) == 0) {
+          // Page is mapped.
           safe = false;
           break;
-        } else {
-          DCHECK_EQ(errno, ENOMEM);
         }
-      }
 
-      next_mem_pos_ = tail_ptr;  // update early, as we break out when we found and mapped a region
+        CHECK(errno == ENOMEM);
+      }  // for (checkptr = scanptr; checkptr < scanptr + page_aligned_byte_count...
 
       if (safe == true) {
-        actual = mmap(reinterpret_cast<void*>(ptr), page_aligned_byte_count, prot, flags, fd.get(),
-                      0);
+        actual = mmap(reinterpret_cast<void*>(scanptr), page_aligned_byte_count, prot, flags,
+            fd.get(), 0);
+
+        // Next scan will start after this allocation.
+        old_start = scanptr + page_aligned_byte_count;
+
         if (actual != MAP_FAILED) {
           break;
         }
-      } else {
-        // Skip over last page.
-        ptr = tail_ptr;
       }
-    }
-
-    if (actual == MAP_FAILED) {
-      strerr = "Could not find contiguous low-memory space.";
-    }
+    }  // for (uintptr_t scanpos = 0; scanpos <= range; scanpos += kPageSize)
   } else {
+    // !(low_4gb && addr == nullptr)
+
     actual = mmap(expected, page_aligned_byte_count, prot, flags, fd.get(), 0);
-    strerr = strerror(errno);
   }
 
 #else
-#ifdef __x86_64__
+#if defined(__x86_64__)
   if (low_4gb) {
     flags |= MAP_32BIT;
   }
 #endif
 
-  void* actual = mmap(expected, page_aligned_byte_count, prot, flags, fd.get(), 0);
-  std::string strerr(strerror(errno));
+  void *actual =  mmap(expected, page_aligned_byte_count, prot, flags, fd.get(), 0);
 #endif
+
+  std::string strerr(strerror(errno));
 
   if (actual == MAP_FAILED) {
     std::string maps;
