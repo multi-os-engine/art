@@ -2507,8 +2507,7 @@ class JNI {
       if (is_copy != nullptr) {
         *is_copy = JNI_TRUE;
       }
-      static const size_t component_size = array->GetClass()->GetComponentSize();
-      size_t size = array->GetLength() * component_size;
+      size_t size = array->GetLength() << array->GetClass()->GetComponentShift();
       void* data = new uint64_t[RoundUp(size, 8) / 8];
       memcpy(data, array->GetData(), size);
       return reinterpret_cast<CArrayT>(data);
@@ -2524,11 +2523,11 @@ class JNI {
   static void ReleasePrimitiveArray(JNIEnv* env, ArrayT java_array, ElementT* elements, jint mode) {
     ScopedObjectAccess soa(env);
     mirror::Array* array = soa.Decode<mirror::Array*>(java_array);
-    size_t component_size = array->GetClass()->GetComponentSize();
-    void* array_data = array->GetRawData(component_size, 0);
+    const size_t component_shift = array->GetClass()->GetComponentShift();
+    void* array_data = array->GetRawData(1U << component_shift, 0);
     gc::Heap* heap = Runtime::Current()->GetHeap();
     bool is_copy = array_data != reinterpret_cast<void*>(elements);
-    size_t bytes = array->GetLength() * component_size;
+    size_t bytes = array->GetLength() << component_shift;
     VLOG(heap) << "Release primitive array " << env << " array_data " << array_data
                << " elements " << reinterpret_cast<void*>(elements);
     if (is_copy) {

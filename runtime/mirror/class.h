@@ -395,7 +395,11 @@ class MANAGED Class : public Object {
     SetFieldObject<false, false>(ComponentTypeOffset(), new_component_type, false);
   }
 
-  size_t GetComponentSize() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  ALWAYS_INLINE size_t GetComponentShift() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return Primitive::ComponentShift(GetComponentType()->GetPrimitiveType());
+  }
+
+  ALWAYS_INLINE size_t GetComponentSize() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return Primitive::ComponentSize(GetComponentType()->GetPrimitiveType());
   }
 

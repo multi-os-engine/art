@@ -24,6 +24,11 @@
 #include "mirror/object_reference.h"
 
 namespace art {
+
+static constexpr size_t BitSize(size_t n) {
+  return n == 1 ? 0 : 1 + BitSize(n >> 1);
+}
+
 namespace mirror {
 class Object;
 }  // namespace mirror
@@ -65,6 +70,23 @@ class Primitive {
         return kPrimVoid;
       default:
         return kPrimNot;
+    }
+  }
+
+  static size_t ComponentShift(Type type) {
+    switch (type) {
+      case kPrimBoolean:
+      case kPrimByte:    return 0;
+      case kPrimChar:
+      case kPrimShort:   return 1;
+      case kPrimInt:
+      case kPrimFloat:   return 2;
+      case kPrimLong:
+      case kPrimDouble:  return 3;
+      case kPrimNot:     return BitSize(sizeof(mirror::HeapReference<mirror::Object>));
+      default:
+        LOG(FATAL) << "Invalid type " << static_cast<int>(type);
+        return 0;
     }
   }
 

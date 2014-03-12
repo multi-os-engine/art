@@ -32,9 +32,9 @@ class MANAGED Array : public Object {
   // least component_count size, however, if there's usable space at the end of the allocation the
   // array will fill it.
   template <bool kIsInstrumented>
-  static Array* Alloc(Thread* self, Class* array_class, int32_t component_count,
-                      size_t component_size, gc::AllocatorType allocator_type,
-                      bool fill_usable = false)
+  ALWAYS_INLINE static Array* Alloc(Thread* self, Class* array_class, int32_t component_count,
+                                    size_t component_shift, gc::AllocatorType allocator_type,
+                                    bool fill_usable = false)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static Array* CreateMultiArray(Thread* self, const SirtRef<Class>& element_class,

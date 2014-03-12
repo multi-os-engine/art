@@ -87,7 +87,7 @@ TEST_F(TransactionTest, Array_length) {
   SirtRef<mirror::Array> sirt_obj(soa.Self(),
                                   mirror::Array::Alloc<true>(soa.Self(), sirt_klass.get(),
                                                              kArraySize,
-                                                             sirt_klass->GetComponentSize(),
+                                                             sirt_klass->GetComponentShift(),
                                                              Runtime::Current()->GetHeap()->GetCurrentAllocator()));
   ASSERT_TRUE(sirt_obj.get() != nullptr);
   ASSERT_EQ(sirt_obj->GetClass(), sirt_klass.get());

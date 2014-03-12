@@ -146,7 +146,8 @@ extern "C" uint64_t artInvokeInterfaceTrampoline(mirror::ArtMethod* interface_me
 template<InvokeType type, bool access_check>
 uint64_t artInvokeCommon(uint32_t method_idx, mirror::Object* this_object,
                          mirror::ArtMethod* caller_method,
-                         Thread* self, mirror::ArtMethod** sp) {
+                         Thread* self, mirror::ArtMethod** sp)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   mirror::ArtMethod* method = FindMethodFast(method_idx, this_object, caller_method, access_check,
                                              type);
   if (UNLIKELY(method == NULL)) {

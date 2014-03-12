@@ -148,19 +148,19 @@ TEST_F(ObjectTest, AllocObjectArray) {
 TEST_F(ObjectTest, AllocArray) {
   ScopedObjectAccess soa(Thread::Current());
   Class* c = class_linker_->FindSystemClass(soa.Self(), "[I");
-  SirtRef<Array> a(soa.Self(), Array::Alloc<true>(soa.Self(), c, 1, c->GetComponentSize(),
+  SirtRef<Array> a(soa.Self(), Array::Alloc<true>(soa.Self(), c, 1, c->GetComponentShift(),
                                                   Runtime::Current()->GetHeap()->GetCurrentAllocator()));
   EXPECT_TRUE(c == a->GetClass());
   EXPECT_EQ(1, a->GetLength());
 
   c = class_linker_->FindSystemClass(soa.Self(), "[Ljava/lang/Object;");
-  a.reset(Array::Alloc<true>(soa.Self(), c, 1, c->GetComponentSize(),
+  a.reset(Array::Alloc<true>(soa.Self(), c, 1, c->GetComponentShift(),
                              Runtime::Current()->GetHeap()->GetCurrentAllocator()));
   EXPECT_TRUE(c == a->GetClass());
   EXPECT_EQ(1, a->GetLength());
 
   c = class_linker_->FindSystemClass(soa.Self(), "[[Ljava/lang/Object;");
-  a.reset(Array::Alloc<true>(soa.Self(), c, 1, c->GetComponentSize(),
+  a.reset(Array::Alloc<true>(soa.Self(), c, 1, c->GetComponentShift(),
                              Runtime::Current()->GetHeap()->GetCurrentAllocator()));
   EXPECT_TRUE(c == a->GetClass());
   EXPECT_EQ(1, a->GetLength());
@@ -169,28 +169,28 @@ TEST_F(ObjectTest, AllocArray) {
 TEST_F(ObjectTest, AllocArray_FillUsable) {
   ScopedObjectAccess soa(Thread::Current());
   Class* c = class_linker_->FindSystemClass(soa.Self(), "[B");
-  SirtRef<Array> a(soa.Self(), Array::Alloc<true>(soa.Self(), c, 1, c->GetComponentSize(),
+  SirtRef<Array> a(soa.Self(), Array::Alloc<true>(soa.Self(), c, 1, c->GetComponentShift(),
                                                   Runtime::Current()->GetHeap()->GetCurrentAllocator(),
                                                   true));
   EXPECT_TRUE(c == a->GetClass());
   EXPECT_LE(1, a->GetLength());
 
   c = class_linker_->FindSystemClass(soa.Self(), "[I");
-  a.reset(Array::Alloc<true>(soa.Self(), c, 2, c->GetComponentSize(),
+  a.reset(Array::Alloc<true>(soa.Self(), c, 2, c->GetComponentShift(),
                              Runtime::Current()->GetHeap()->GetCurrentAllocator(),
                              true));
   EXPECT_TRUE(c == a->GetClass());
   EXPECT_LE(2, a->GetLength());
 
   c = class_linker_->FindSystemClass(soa.Self(), "[Ljava/lang/Object;");
-  a.reset(Array::Alloc<true>(soa.Self(), c, 2, c->GetComponentSize(),
+  a.reset(Array::Alloc<true>(soa.Self(), c, 2, c->GetComponentShift(),
                              Runtime::Current()->GetHeap()->GetCurrentAllocator(),
                              true));
   EXPECT_TRUE(c == a->GetClass());
   EXPECT_LE(2, a->GetLength());
 
   c = class_linker_->FindSystemClass(soa.Self(), "[[Ljava/lang/Object;");
-  a.reset(Array::Alloc<true>(soa.Self(), c, 2, c->GetComponentSize(),
+  a.reset(Array::Alloc<true>(soa.Self(), c, 2, c->GetComponentShift(),
                              Runtime::Current()->GetHeap()->GetCurrentAllocator(), true));
   EXPECT_TRUE(c == a->GetClass());
   EXPECT_LE(2, a->GetLength());
