@@ -30,29 +30,27 @@ namespace mirror {
 template<VerifyObjectFlags kVerifyFlags>
 inline size_t Array::SizeOf() {
   // This is safe from overflow because the array was already allocated, so we know it's sane.
-  size_t component_size = GetClass<kVerifyFlags>()->GetComponentSize();
+  size_t component_shift = GetClass<kVerifyFlags>()->GetComponentShift();
   // Don't need to check this since we already check this in GetClass.
   int32_t component_count =
       GetLength<static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis)>();
-  size_t header_size = DataOffset(component_size).SizeValue();
-  size_t data_size = component_count * component_size;
+  size_t header_size = DataOffset(1U << component_shift).SizeValue();
+  size_t data_size = component_count << component_shift;
   return header_size + data_size;
 }
 
-static inline size_t ComputeArraySize(Thread* self, Class* array_class, int32_t component_count,
-                                      size_t component_size)
+ALWAYS_INLINE static inline size_t ComputeArraySize(Thread* self, Class* array_class,
+                                                    int32_t component_count, size_t component_shift)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   DCHECK(array_class != NULL);
   DCHECK_GE(component_count, 0);
   DCHECK(array_class->IsArrayClass());
-
-  size_t header_size = Array::DataOffset(component_size).SizeValue();
-  size_t data_size = component_count * component_size;
+  size_t header_size = Array::DataOffset(1U << component_shift).SizeValue();
+  size_t data_size = component_count << component_shift;
   size_t size = header_size + data_size;
-
   // Check for overflow and throw OutOfMemoryError if this was an unreasonable request.
-  size_t component_shift = sizeof(size_t) * 8 - 1 - CLZ(component_size);
-  if (UNLIKELY(data_size >> component_shift != size_t(component_count) || size < data_size)) {
+  if (UNLIKELY(data_size >> component_shift != static_cast<size_t>(component_count) ||
+               size < data_size)) {
     self->ThrowOutOfMemoryError(StringPrintf("%s of length %d would overflow",
                                              PrettyDescriptor(array_class).c_str(),
                                              component_count).c_str());
@@ -68,9 +66,8 @@ class SetLengthVisitor {
   explicit SetLengthVisitor(int32_t length) : length_(length) {
   }
 
-  void operator()(Object* obj, size_t usable_size) const
+  ALWAYS_INLINE void operator()(Object* obj, size_t /* usable_size */) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    UNUSED(usable_size);
     // Avoid AsArray as object is not yet in live bitmap or allocation stack.
     Array* array = down_cast<Array*>(obj);
     // DCHECK(array->IsArrayInstance());
@@ -87,8 +84,8 @@ class SetLengthVisitor {
 // array.
 class SetLengthToUsableSizeVisitor {
  public:
-  SetLengthToUsableSizeVisitor(int32_t min_length, size_t header_size, size_t component_size) :
-      minimum_length_(min_length), header_size_(header_size), component_size_(component_size) {
+  SetLengthToUsableSizeVisitor(int32_t min_length, size_t header_size, size_t component_shift) :
+      minimum_length_(min_length), header_size_(header_size), component_shift_(component_shift) {
   }
 
   void operator()(Object* obj, size_t usable_size) const
@@ -96,10 +93,11 @@ class SetLengthToUsableSizeVisitor {
     // Avoid AsArray as object is not yet in live bitmap or allocation stack.
     Array* array = down_cast<Array*>(obj);
     // DCHECK(array->IsArrayInstance());
-    int32_t length = (usable_size - header_size_) / component_size_;
+    int32_t length = (usable_size - header_size_) >> component_shift_;
     DCHECK_GE(length, minimum_length_);
-    byte* old_end = reinterpret_cast<byte*>(array->GetRawData(component_size_, minimum_length_));
-    byte* new_end = reinterpret_cast<byte*>(array->GetRawData(component_size_, length));
+    const size_t component_size = 1U << component_shift_;
+    byte* old_end = reinterpret_cast<byte*>(array->GetRawData(component_size, minimum_length_));
+    byte* new_end = reinterpret_cast<byte*>(array->GetRawData(component_size, length));
     // Ensure space beyond original allocation is zeroed.
     memset(old_end, 0, new_end - old_end);
     array->SetLength(length);
@@ -108,17 +106,17 @@ class SetLengthToUsableSizeVisitor {
  private:
   const int32_t minimum_length_;
   const size_t header_size_;
-  const size_t component_size_;
+  const size_t component_shift_;
 
   DISALLOW_COPY_AND_ASSIGN(SetLengthToUsableSizeVisitor);
 };
 
 template <bool kIsInstrumented>
 inline Array* Array::Alloc(Thread* self, Class* array_class, int32_t component_count,
-                           size_t component_size, gc::AllocatorType allocator_type,
+                           size_t component_shift, gc::AllocatorType allocator_type,
                            bool fill_usable) {
   DCHECK(allocator_type != gc::kAllocatorTypeLOS);
-  size_t size = ComputeArraySize(self, array_class, component_count, component_size);
+  size_t size = ComputeArraySize(self, array_class, component_count, component_shift);
   if (UNLIKELY(size == 0)) {
     return nullptr;
   }
@@ -130,15 +128,17 @@ inline Array* Array::Alloc(Thread* self, Class* array_class, int32_t component_c
         heap->AllocObjectWithAllocator<kIsInstrumented, true>(self, array_class, size,
                                                               allocator_type, visitor));
   } else {
-    SetLengthToUsableSizeVisitor visitor(component_count, DataOffset(component_size).SizeValue(),
-                                         component_size);
+    SetLengthToUsableSizeVisitor visitor(component_count,
+                                         DataOffset(1U << component_shift).SizeValue(),
+                                         component_shift);
     result = down_cast<Array*>(
         heap->AllocObjectWithAllocator<kIsInstrumented, true>(self, array_class, size,
                                                               allocator_type, visitor));
   }
   if (kIsDebugBuild && result != nullptr && Runtime::Current()->IsStarted()) {
     array_class = result->GetClass();  // In case the array class moved.
-    CHECK_EQ(array_class->GetComponentSize(), component_size);
+    CHECK_EQ(array_class->GetComponentShift(), component_shift);
+    CHECK_EQ(array_class->GetComponentSize(), 1U << component_shift);
     if (!fill_usable) {
       CHECK_EQ(result->SizeOf(), size);
     } else {
@@ -158,7 +158,7 @@ inline void PrimitiveArray<T>::VisitRoots(RootCallback* callback, void* arg) {
 template<typename T>
 inline PrimitiveArray<T>* PrimitiveArray<T>::Alloc(Thread* self, size_t length) {
   DCHECK(array_class_ != NULL);
-  Array* raw_array = Array::Alloc<true>(self, array_class_, length, sizeof(T),
+  Array* raw_array = Array::Alloc<true>(self, array_class_, length, BitSize(sizeof(T)),
                                         Runtime::Current()->GetHeap()->GetCurrentAllocator());
   return down_cast<PrimitiveArray<T>*>(raw_array);
 }

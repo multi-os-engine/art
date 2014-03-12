@@ -1271,7 +1271,7 @@ JDWP::JdwpError Dbg::CreateArrayObject(JDWP::RefTypeId array_class_id, uint32_t 
     return status;
   }
   new_array = gRegistry->Add(mirror::Array::Alloc<true>(Thread::Current(), c, length,
-                                                        c->GetComponentSize(),
+                                                        c->GetComponentShift(),
                                                         Runtime::Current()->GetHeap()->GetCurrentAllocator()));
   return JDWP::ERR_NONE;
 }

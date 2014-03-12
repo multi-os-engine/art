@@ -47,7 +47,7 @@ static Array* RecursiveCreateMultiArray(Thread* self,
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   int32_t array_length = dimensions->Get(current_dimension);
   SirtRef<Array> new_array(self, Array::Alloc<true>(self, array_class.get(), array_length,
-                                                    array_class->GetComponentSize(),
+                                                    array_class->GetComponentShift(),
                                                     Runtime::Current()->GetHeap()->GetCurrentAllocator()));
   if (UNLIKELY(new_array.get() == nullptr)) {
     CHECK(self->IsExceptionPending());
