@@ -410,14 +410,16 @@ void Mir2Lir::InstallLiteralPools() {
   data_lir = code_literal_list_;
   while (data_lir != NULL) {
     uint32_t target = data_lir->operands[0];
+    const DexFile* dex_file = reinterpret_cast<const DexFile*>(data_lir->operands[1]);
     cu_->compiler_driver->AddCodePatch(cu_->dex_file,
                                        cu_->class_def_idx,
                                        cu_->method_idx,
                                        cu_->invoke_type,
                                        target,
-                                       static_cast<InvokeType>(data_lir->operands[1]),
+                                       dex_file,
+                                       static_cast<InvokeType>(data_lir->operands[2]),
                                        code_buffer_.size());
-    const DexFile::MethodId& id = cu_->dex_file->GetMethodId(target);
+    const DexFile::MethodId& id = dex_file->GetMethodId(target);
     // unique value based on target to ensure code deduplication works
     PushPointer(code_buffer_, &id, cu_->target64);
     data_lir = NEXT_LIR(data_lir);
@@ -425,14 +427,16 @@ void Mir2Lir::InstallLiteralPools() {
   data_lir = method_literal_list_;
   while (data_lir != NULL) {
     uint32_t target = data_lir->operands[0];
+    const DexFile* dex_file = reinterpret_cast<const DexFile*>(data_lir->operands[1]);
     cu_->compiler_driver->AddMethodPatch(cu_->dex_file,
                                          cu_->class_def_idx,
                                          cu_->method_idx,
                                          cu_->invoke_type,
                                          target,
-                                         static_cast<InvokeType>(data_lir->operands[1]),
+                                         dex_file,
+                                         static_cast<InvokeType>(data_lir->operands[2]),
                                          code_buffer_.size());
-    const DexFile::MethodId& id = cu_->dex_file->GetMethodId(target);
+    const DexFile::MethodId& id = dex_file->GetMethodId(target);
     // unique value based on target to ensure code deduplication works
     PushPointer(code_buffer_, &id, cu_->target64);
     data_lir = NEXT_LIR(data_lir);
@@ -1197,22 +1201,28 @@ void Mir2Lir::AddSlowPath(LIRSlowPath* slowpath) {
   slow_paths_.Insert(slowpath);
 }
 
-void Mir2Lir::LoadCodeAddress(int dex_method_index, InvokeType type, SpecialTargetRegister symbolic_reg) {
+void Mir2Lir::LoadCodeAddress(const MethodReference& method, InvokeType type,
+                              SpecialTargetRegister symbolic_reg) {
+  int dex_method_index = method.dex_method_index;
   LIR* data_target = ScanLiteralPool(code_literal_list_, dex_method_index, 0);
   if (data_target == NULL) {
     data_target = AddWordData(&code_literal_list_, dex_method_index);
-    data_target->operands[1] = type;
+    data_target->operands[1] = reinterpret_cast<uint32_t>(method.dex_file);
+    data_target->operands[2] = type;
   }
   LIR* load_pc_rel = OpPcRelLoad(TargetReg(symbolic_reg), data_target);
   AppendLIR(load_pc_rel);
   DCHECK_NE(cu_->instruction_set, kMips) << reinterpret_cast<void*>(data_target);
 }
 
-void Mir2Lir::LoadMethodAddress(int dex_method_index, InvokeType type, SpecialTargetRegister symbolic_reg) {
+void Mir2Lir::LoadMethodAddress(const MethodReference& method, InvokeType type,
+                                SpecialTargetRegister symbolic_reg) {
+  int dex_method_index = method.dex_method_index;
   LIR* data_target = ScanLiteralPool(method_literal_list_, dex_method_index, 0);
   if (data_target == NULL) {
     data_target = AddWordData(&method_literal_list_, dex_method_index);
-    data_target->operands[1] = type;
+    data_target->operands[1] = reinterpret_cast<uint32_t>(method.dex_file);
+    data_target->operands[2] = type;
   }
   LIR* load_pc_rel = OpPcRelLoad(TargetReg(symbolic_reg), data_target);
   AppendLIR(load_pc_rel);
