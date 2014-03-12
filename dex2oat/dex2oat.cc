@@ -837,6 +837,8 @@ static int dex2oat(int argc, char** argv) {
       StringPiece instruction_set_str = option.substr(strlen("--instruction-set=")).data();
       if (instruction_set_str == "arm") {
         instruction_set = kThumb2;
+      } else if (instruction_set_str == "arm64") {
+        instruction_set = kArm64;
       } else if (instruction_set_str == "mips") {
         instruction_set = kMips;
       } else if (instruction_set_str == "x86") {
@@ -1020,7 +1022,7 @@ static int dex2oat(int argc, char** argv) {
   }
 
   if (compiler_filter_string == NULL) {
-    if (instruction_set == kX86_64) {
+    if (instruction_set == kX86_64 || instruction_set == kArm64) {
       // TODO: currently x86-64 is only interpreted.
       compiler_filter_string = "interpret-only";
     } else if (image) {

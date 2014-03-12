@@ -1869,11 +1869,14 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
   uint64_t start_ns = NanoTime();
 
   if ((access_flags & kAccNative) != 0) {
-#if defined(__x86_64__)
+#ifdef __LP64__
     // leaving this empty will trigger the generic JNI version
 #else
-    compiled_method = compiler_->JniCompile(*this, access_flags, method_idx, dex_file);
-    CHECK(compiled_method != NULL);
+    if (instruction_set_ != kArm64) {
+      // Disable ARM64 code generation. Will trigger generic JNI version.
+      compiled_method = compiler_->JniCompile(*this, access_flags, method_idx, dex_file);
+      CHECK(compiled_method != NULL);
+    }
 #endif
   } else if ((access_flags & kAccAbstract) != 0) {
   } else {

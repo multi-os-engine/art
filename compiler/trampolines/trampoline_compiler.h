@@ -17,6 +17,11 @@
 #ifndef ART_COMPILER_TRAMPOLINES_TRAMPOLINE_COMPILER_H_
 #define ART_COMPILER_TRAMPOLINES_TRAMPOLINE_COMPILER_H_
 
+// For vixl compiling on host.
+#ifndef __STDC_CONSTANT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
+
 #include <stdint.h>
 #include <vector>
 
