@@ -32,8 +32,6 @@
 
 namespace art {
 
-#if !defined(NDEBUG)
-
 static std::ostream& operator<<(
     std::ostream& os,
     std::pair<BacktraceMap::const_iterator, BacktraceMap::const_iterator> iters) {
@@ -48,9 +46,9 @@ static std::ostream& operator<<(
   return os;
 }
 
-static void CheckMapRequest(byte* addr, size_t byte_count) {
+static bool CheckMapRequest(byte* addr, size_t byte_count, std::ostringstream* error_msg) {
   if (addr == NULL) {
-    return;
+    return true;
   }
 
   uintptr_t base = reinterpret_cast<uintptr_t>(addr);
@@ -59,24 +57,24 @@ static void CheckMapRequest(byte* addr, size_t byte_count) {
   UniquePtr<BacktraceMap> map(BacktraceMap::Create(getpid()));
   if (!map->Build()) {
     PLOG(WARNING) << "Failed to build process map";
-    return;
+    return true;
   }
   for (BacktraceMap::const_iterator it = map->begin(); it != map->end(); ++it) {
-    CHECK(!(base >= it->start && base < it->end)     // start of new within old
-        && !(limit > it->start && limit < it->end)   // end of new within old
-        && !(base <= it->start && limit > it->end))  // start/end of new includes all of old
-        << StringPrintf("Requested region 0x%08" PRIxPTR "-0x%08" PRIxPTR " overlaps with "
-                        "existing map 0x%08" PRIxPTR "-0x%08" PRIxPTR " (%s)\n",
-                        base, limit,
-                        static_cast<uintptr_t>(it->start), static_cast<uintptr_t>(it->end),
-                        it->name.c_str())
-        << std::make_pair(it, map->end());
+    if ((base >= it->start && base < it->end)          // start of new within old
+        || (limit > it->start && limit < it->end)      // end of new within old
+        || (base <= it->start && limit > it->end)) {  // start/end of new includes all of old
+      *error_msg
+          << StringPrintf("Requested region 0x%08" PRIxPTR "-0x%08" PRIxPTR " overlaps with "
+                          "existing map 0x%08" PRIxPTR "-0x%08" PRIxPTR " (%s)\n",
+                          base, limit,
+                          static_cast<uintptr_t>(it->start), static_cast<uintptr_t>(it->end),
+                          it->name.c_str())
+          << std::make_pair(it, map->end());
+      return false;
+    }
   }
+  return true;
 }
-
-#else
-static void CheckMapRequest(byte*, size_t) { }
-#endif
 
 MemMap* MemMap::MapAnonymous(const char* name, byte* addr, size_t byte_count, int prot,
                              bool low_4gb, std::string* error_msg) {
@@ -84,7 +82,7 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* addr, size_t byte_count, in
     return new MemMap(name, NULL, 0, NULL, 0, prot);
   }
   size_t page_aligned_byte_count = RoundUp(byte_count, kPageSize);
-  CheckMapRequest(addr, page_aligned_byte_count);
+  bool map_fixed = addr != nullptr;
 
 #ifdef USE_ASHMEM
   // android_os_Debug.cpp read_mapinfo assumes all ashmem regions associated with the VM are
@@ -92,11 +90,11 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* addr, size_t byte_count, in
   std::string debug_friendly_name("dalvik-");
   debug_friendly_name += name;
   ScopedFd fd(ashmem_create_region(debug_friendly_name.c_str(), page_aligned_byte_count));
-  int flags = MAP_PRIVATE;
   if (fd.get() == -1) {
     *error_msg = StringPrintf("ashmem_create_region failed for '%s': %s", name, strerror(errno));
     return nullptr;
   }
+  int flags = MAP_PRIVATE;
 #else
   ScopedFd fd(-1);
   int flags = MAP_PRIVATE | MAP_ANONYMOUS;
@@ -106,6 +104,26 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* addr, size_t byte_count, in
     flags |= MAP_32BIT;
   }
 #endif
+  if (map_fixed) {
+    flags |= MAP_FIXED;
+  }
+
+  if (map_fixed) {
+    std::ostringstream check_map_request_error_msg;
+    if (!CheckMapRequest(addr, page_aligned_byte_count, &check_map_request_error_msg)) {
+      // Found an overlap problem.
+      std::string maps;
+      ReadFileToString("/proc/self/maps", &maps);
+      *error_msg = StringPrintf(
+          "anonymous mmap(%p, %zd, 0x%x, 0x%x, %d, 0) failed due to an overlap\n%s\n%s",
+          addr, page_aligned_byte_count, prot, flags, fd.get(),
+          check_map_request_error_msg.str().c_str(), maps.c_str());
+      return nullptr;
+    }
+  } else {
+    // Rely on the kernel for an overlap problem.
+  }
+
   byte* actual = reinterpret_cast<byte*>(mmap(addr, page_aligned_byte_count, prot, flags, fd.get(), 0));
   if (actual == MAP_FAILED) {
     std::string maps;
@@ -137,7 +155,13 @@ MemMap* MemMap::MapFileAtAddress(byte* addr, size_t byte_count, int prot, int fl
   if (!reuse) {
     // reuse means it is okay that it overlaps an existing page mapping.
     // Only use this if you actually made the page reservation yourself.
-    CheckMapRequest(page_aligned_addr, page_aligned_byte_count);
+    if (kIsDebugBuild) {
+      std::ostringstream check_map_request_error_msg;
+      if (!CheckMapRequest(page_aligned_addr, page_aligned_byte_count, &check_map_request_error_msg)) {
+        *error_msg = check_map_request_error_msg.str();
+        return nullptr;
+      }
+    }
   } else {
     CHECK(addr != NULL);
   }
