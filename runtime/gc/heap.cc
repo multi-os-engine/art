@@ -48,7 +48,6 @@
 #include "entrypoints/quick/quick_alloc_entrypoints.h"
 #include "heap-inl.h"
 #include "image.h"
-#include "invoke_arg_array_builder.h"
 #include "mirror/art_field-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/object.h"
@@ -56,6 +55,7 @@
 #include "mirror/object_array-inl.h"
 #include "object_utils.h"
 #include "os.h"
+#include "reflection.h"
 #include "runtime.h"
 #include "ScopedLocalRef.h"
 #include "scoped_thread_state_change.h"
@@ -2504,11 +2504,10 @@ mirror::Object* Heap::GetReferenceReferent(mirror::Object* reference) {
 
 void Heap::AddFinalizerReference(Thread* self, mirror::Object* object) {
   ScopedObjectAccess soa(self);
-  JValue result;
-  ArgArray arg_array("VL", 2);
-  arg_array.Append(object);
-  soa.DecodeMethod(WellKnownClasses::java_lang_ref_FinalizerReference_add)->Invoke(self,
-      arg_array.GetArray(), arg_array.GetNumBytes(), &result, "VL");
+  ScopedLocalRef<jobject> arg(self->GetJniEnv(), soa.AddLocalReference<jobject>(object));
+  jvalue args[1];
+  args[0].l = arg.get();
+  InvokeWithJValues(soa, nullptr, WellKnownClasses::java_lang_ref_FinalizerReference_add, args);
 }
 
 void Heap::EnqueueClearedReferences() {
@@ -2518,11 +2517,11 @@ void Heap::EnqueueClearedReferences() {
     // When a runtime isn't started there are no reference queues to care about so ignore.
     if (LIKELY(Runtime::Current()->IsStarted())) {
       ScopedObjectAccess soa(self);
-      JValue result;
-      ArgArray arg_array("VL", 2);
-      arg_array.Append(cleared_references_.GetList());
-      soa.DecodeMethod(WellKnownClasses::java_lang_ref_ReferenceQueue_add)->Invoke(soa.Self(),
-          arg_array.GetArray(), arg_array.GetNumBytes(), &result, "VL");
+      ScopedLocalRef<jobject> arg(self->GetJniEnv(),
+                                  soa.AddLocalReference<jobject>(cleared_references_.GetList()));
+      jvalue args[1];
+      args[0].l = arg.get();
+      InvokeWithJValues(soa, nullptr, WellKnownClasses::java_lang_ref_ReferenceQueue_add, args);
     }
     cleared_references_.Clear();
   }
