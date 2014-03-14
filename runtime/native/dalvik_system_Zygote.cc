@@ -54,6 +54,8 @@
 #endif
 #endif
 
+#include <sys/resource.h>
+
 namespace art {
 
 static pid_t gSystemServerPid = 0;
