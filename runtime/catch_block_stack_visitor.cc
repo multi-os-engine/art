@@ -65,7 +65,9 @@ bool CatchBlockStackVisitor::HandleTryItems(mirror::ArtMethod* method) {
   return true;  // Continue stack walk.
 }
 
+// TODO only for debugging purposes: remove the logs before submitting!
 bool CatchBlockStackVisitor::HandleDeoptimization(mirror::ArtMethod* m) {
+  LOG(INFO) << "Deoptimize method " << PrettyMethod(m);
   MethodHelper mh(m);
   const DexFile::CodeItem* code_item = mh.GetCodeItem();
   CHECK(code_item != nullptr);
@@ -80,23 +82,34 @@ bool CatchBlockStackVisitor::HandleDeoptimization(mirror::ArtMethod* m) {
                                     &mh.GetClassDef(), code_item, m->GetDexMethodIndex(), m,
                                     m->GetAccessFlags(), false, true);
   verifier.Verify();
+  verifier.Dump(LOG(INFO));
   std::vector<int32_t> kinds = verifier.DescribeVRegs(dex_pc);
+  CHECK_GE(kinds.size(), size_t(num_regs * 2));
   for (uint16_t reg = 0; reg < num_regs; ++reg) {
     VRegKind kind = static_cast<VRegKind>(kinds.at(reg * 2));
     switch (kind) {
       case kUndefined:
+        LOG(INFO) << "  kUndefined: v" << reg << " = 0xEBADDE09";
         new_frame->SetVReg(reg, 0xEBADDE09);
         break;
-      case kConstant:
-        new_frame->SetVReg(reg, kinds.at((reg * 2) + 1));
+      case kConstant: {
+        int32_t cst = kinds.at((reg * 2) + 1);
+        LOG(INFO) << "  kConstant: v" << reg << " = " << cst;
+        new_frame->SetVReg(reg, cst);
         break;
-      case kReferenceVReg:
-        new_frame->SetVRegReference(reg,
-                                    reinterpret_cast<mirror::Object*>(GetVReg(m, reg, kind)));
+      }
+      case kReferenceVReg: {
+        mirror::Object* obj = reinterpret_cast<mirror::Object*>(GetVReg(m, reg, kind));
+        LOG(INFO) << "  kReferenceVReg: v" << reg << " = " << obj;
+        new_frame->SetVRegReference(reg, obj);
         break;
-      default:
-        new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+      }
+      default: {
+        uint32_t val = GetVReg(m, reg, kind);
+        LOG(INFO) << "  kDefault: v" << reg << " = " << val;
+        new_frame->SetVReg(reg, val);
         break;
+      }
     }
   }
   if (prev_shadow_frame_ != nullptr) {
