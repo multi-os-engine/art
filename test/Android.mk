@@ -27,6 +27,7 @@ TEST_DEX_DIRECTORIES := \
 	GetMethodSignature \
 	Interfaces \
 	Main \
+	MethodVerifier \
 	MyClass \
 	MyClassNatives \
 	Nested \
