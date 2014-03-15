@@ -205,7 +205,8 @@ class Address : public Operand {
     return result;
   }
 
-  static Address Absolute(ThreadOffset addr, bool has_rip = false) {
+  template<size_t pointer_size>
+  static Address Absolute(ThreadOffset<pointer_size> addr, bool has_rip = false) {
     return Absolute(addr.Int32Value(), has_rip);
   }
 

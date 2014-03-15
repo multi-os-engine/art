@@ -468,7 +468,7 @@ LIR* X86Mir2Lir::OpRegRegImm(OpKind op, int r_dest, int r_src,
   return OpRegImm(op, r_dest, value);
 }
 
-LIR* X86Mir2Lir::OpThreadMem(OpKind op, ThreadOffset thread_offset) {
+LIR* X86Mir2Lir::OpThreadMem(OpKind op, ThreadOffset<4> thread_offset) {
   X86OpCode opcode = kX86Bkpt;
   switch (op) {
     case kOpBlx: opcode = kX86CallT;  break;

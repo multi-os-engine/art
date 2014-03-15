@@ -647,7 +647,7 @@ LIR* MipsMir2Lir::StoreBaseDispWide(int rBase, int displacement,
   return StoreBaseDispBody(rBase, displacement, r_src_lo, r_src_hi, kLong);
 }
 
-LIR* MipsMir2Lir::OpThreadMem(OpKind op, ThreadOffset thread_offset) {
+LIR* MipsMir2Lir::OpThreadMem(OpKind op, ThreadOffset<4> thread_offset) {
   LOG(FATAL) << "Unexpected use of OpThreadMem for MIPS";
   return NULL;
 }

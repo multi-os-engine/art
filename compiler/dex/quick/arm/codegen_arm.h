@@ -29,7 +29,7 @@ class ArmMir2Lir : public Mir2Lir {
     // Required for target - codegen helpers.
     bool SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div, RegLocation rl_src,
                                     RegLocation rl_dest, int lit);
-    int LoadHelper(ThreadOffset offset);
+    int LoadHelper(ThreadOffset<4> offset);
     LIR* CheckSuspendUsingLoad() OVERRIDE;
     LIR* LoadBaseDisp(int rBase, int displacement, int r_dest, OpSize size, int s_reg);
     LIR* LoadBaseDispWide(int rBase, int displacement, int r_dest_lo, int r_dest_hi,
@@ -162,12 +162,12 @@ class ArmMir2Lir : public Mir2Lir {
     LIR* OpRegRegImm(OpKind op, int r_dest, int r_src1, int value);
     LIR* OpRegRegReg(OpKind op, int r_dest, int r_src1, int r_src2);
     LIR* OpTestSuspend(LIR* target);
-    LIR* OpThreadMem(OpKind op, ThreadOffset thread_offset);
+    LIR* OpThreadMem(OpKind op, ThreadOffset<4> thread_offset);
     LIR* OpVldm(int rBase, int count);
     LIR* OpVstm(int rBase, int count);
     void OpLea(int rBase, int reg1, int reg2, int scale, int offset);
     void OpRegCopyWide(int dest_lo, int dest_hi, int src_lo, int src_hi);
-    void OpTlsCmp(ThreadOffset offset, int val);
+    void OpTlsCmp(ThreadOffset<4> offset, int val);
 
     LIR* LoadBaseDispBody(int rBase, int displacement, int r_dest, int r_dest_hi, OpSize size,
                           int s_reg);

@@ -36,11 +36,11 @@ void Thread::InitCpu() {
   arch_prctl(ARCH_SET_GS, this);
 
   // Allow easy indirection back to Thread*.
-  self_ = this;
+  tlsPtr_.self = this;
 
   // Sanity check that reads from %gs point to this Thread*.
   Thread* self_check;
-  CHECK_EQ(THREAD_SELF_OFFSET, OFFSETOF_MEMBER(Thread, self_));
+  CHECK_EQ(THREAD_SELF_OFFSET, OFFSETOF_MEMBER(Thread, tlsPtr_.self));
   __asm__ __volatile__("movq %%gs:(%1), %0"
       : "=r"(self_check)  // output
       : "r"(THREAD_SELF_OFFSET)  // input
@@ -54,15 +54,15 @@ void Thread::InitCpu() {
            Runtime::GetCalleeSaveMethodOffset(Runtime::kRefsOnly));
   CHECK_EQ(static_cast<size_t>(RUNTIME_REF_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET),
            Runtime::GetCalleeSaveMethodOffset(Runtime::kRefsAndArgs));
-  CHECK_EQ(THREAD_EXCEPTION_OFFSET, OFFSETOF_MEMBER(Thread, exception_));
-  CHECK_EQ(THREAD_CARD_TABLE_OFFSET, OFFSETOF_MEMBER(Thread, card_table_));
-  CHECK_EQ(THREAD_ID_OFFSET, OFFSETOF_MEMBER(Thread, thin_lock_thread_id_));
+  CHECK_EQ(THREAD_EXCEPTION_OFFSET, OFFSETOF_MEMBER(Thread, tlsPtr_.exception));
+  CHECK_EQ(THREAD_CARD_TABLE_OFFSET, OFFSETOF_MEMBER(Thread, tlsPtr_.card_table));
+  CHECK_EQ(THREAD_ID_OFFSET, OFFSETOF_MEMBER(Thread, tls32_.thin_lock_thread_id));
 }
 
 void Thread::CleanupCpu() {
   // Sanity check that reads from %gs point to this Thread*.
   Thread* self_check;
-  CHECK_EQ(THREAD_SELF_OFFSET, OFFSETOF_MEMBER(Thread, self_));
+  CHECK_EQ(THREAD_SELF_OFFSET, OFFSETOF_MEMBER(Thread, tlsPtr_.self));
   __asm__ __volatile__("movq %%gs:(%1), %0"
       : "=r"(self_check)  // output
       : "r"(THREAD_SELF_OFFSET)  // input

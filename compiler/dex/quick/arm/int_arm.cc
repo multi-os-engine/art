@@ -572,7 +572,7 @@ void ArmMir2Lir::OpLea(int rBase, int reg1, int reg2, int scale, int offset) {
   LOG(FATAL) << "Unexpected use of OpLea for Arm";
 }
 
-void ArmMir2Lir::OpTlsCmp(ThreadOffset offset, int val) {
+void ArmMir2Lir::OpTlsCmp(ThreadOffset<4> offset, int val) {
   LOG(FATAL) << "Unexpected use of OpTlsCmp for Arm";
 }
 
@@ -826,7 +826,7 @@ void ArmMir2Lir::GenMulLong(Instruction::Code opcode, RegLocation rl_dest,
      */
     RegLocation rl_result;
     if (BadOverlap(rl_src1, rl_dest) || (BadOverlap(rl_src2, rl_dest))) {
-      ThreadOffset func_offset = QUICK_ENTRYPOINT_OFFSET(pLmul);
+      ThreadOffset<4> func_offset = QUICK_ENTRYPOINT_OFFSET(pLmul);
       FlushAllRegs();
       CallRuntimeHelperRegLocationRegLocation(func_offset, rl_src1, rl_src2, false);
       rl_result = GetReturnWide(false);

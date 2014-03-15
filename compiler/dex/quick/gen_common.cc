@@ -240,7 +240,7 @@ void Mir2Lir::GenIntNarrowing(Instruction::Code opcode, RegLocation rl_dest,
 void Mir2Lir::GenNewArray(uint32_t type_idx, RegLocation rl_dest,
                           RegLocation rl_src) {
   FlushAllRegs();  /* Everything to home location */
-  ThreadOffset func_offset(-1);
+  ThreadOffset<4> func_offset(-1);
   const DexFile* dex_file = cu_->dex_file;
   CompilerDriver* driver = cu_->compiler_driver;
   if (cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx, *dex_file,
@@ -286,7 +286,7 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
   int elems = info->num_arg_words;
   int type_idx = info->index;
   FlushAllRegs();  /* Everything to home location */
-  ThreadOffset func_offset(-1);
+  ThreadOffset<4> func_offset(-1);
   if (cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx, *cu_->dex_file,
                                                        type_idx)) {
     func_offset = QUICK_ENTRYPOINT_OFFSET(pCheckAndAllocArray);
@@ -494,7 +494,7 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
     FreeTemp(r_base);
   } else {
     FlushAllRegs();  // Everything to home locations
-    ThreadOffset setter_offset =
+    ThreadOffset<4> setter_offset =
         is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pSet64Static)
                           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pSetObjStatic)
                                        : QUICK_ENTRYPOINT_OFFSET(pSet32Static));
@@ -573,7 +573,7 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
     }
   } else {
     FlushAllRegs();  // Everything to home locations
-    ThreadOffset getterOffset =
+    ThreadOffset<4> getterOffset =
         is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pGet64Static)
                           :(is_object ? QUICK_ENTRYPOINT_OFFSET(pGetObjStatic)
                                       : QUICK_ENTRYPOINT_OFFSET(pGet32Static));
@@ -600,7 +600,7 @@ void Mir2Lir::HandleSlowPaths() {
 
 void Mir2Lir::HandleSuspendLaunchPads() {
   int num_elems = suspend_launchpads_.Size();
-  ThreadOffset helper_offset = QUICK_ENTRYPOINT_OFFSET(pTestSuspend);
+  ThreadOffset<4> helper_offset = QUICK_ENTRYPOINT_OFFSET(pTestSuspend);
   for (int i = 0; i < num_elems; i++) {
     ResetRegPool();
     ResetDefTracking();
@@ -622,7 +622,7 @@ void Mir2Lir::HandleThrowLaunchPads() {
     LIR* lab = throw_launchpads_.Get(i);
     current_dalvik_offset_ = lab->operands[1];
     AppendLIR(lab);
-    ThreadOffset func_offset(-1);
+    ThreadOffset<4> func_offset(-1);
     int v1 = lab->operands[2];
     int v2 = lab->operands[3];
     bool target_x86 = (cu_->instruction_set == kX86);
@@ -748,7 +748,7 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
       StoreValue(rl_dest, rl_result);
     }
   } else {
-    ThreadOffset getterOffset =
+    ThreadOffset<4> getterOffset =
         is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pGet64Instance)
                           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pGetObjInstance)
                                        : QUICK_ENTRYPOINT_OFFSET(pGet32Instance));
@@ -804,7 +804,7 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
       }
     }
   } else {
-    ThreadOffset setter_offset =
+    ThreadOffset<4> setter_offset =
         is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pSet64Instance)
                           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pSetObjInstance)
                                        : QUICK_ENTRYPOINT_OFFSET(pSet32Instance));
@@ -818,7 +818,7 @@ void Mir2Lir::GenArrayObjPut(int opt_flags, RegLocation rl_array, RegLocation rl
   bool needs_range_check = !(opt_flags & MIR_IGNORE_RANGE_CHECK);
   bool needs_null_check = !((cu_->disable_opt & (1 << kNullCheckElimination)) &&
       (opt_flags & MIR_IGNORE_NULL_CHECK));
-  ThreadOffset helper = needs_range_check
+  ThreadOffset<4> helper = needs_range_check
       ? (needs_null_check ? QUICK_ENTRYPOINT_OFFSET(pAputObjectWithNullAndBoundCheck)
                           : QUICK_ENTRYPOINT_OFFSET(pAputObjectWithBoundCheck))
       : QUICK_ENTRYPOINT_OFFSET(pAputObject);
@@ -981,7 +981,7 @@ void Mir2Lir::GenNewInstance(uint32_t type_idx, RegLocation rl_dest) {
   FlushAllRegs();  /* Everything to home location */
   // alloc will always check for resolution, do we also need to verify
   // access because the verifier was unable to?
-  ThreadOffset func_offset(-1);
+  ThreadOffset<4> func_offset(-1);
   const DexFile* dex_file = cu_->dex_file;
   CompilerDriver* driver = cu_->compiler_driver;
   if (driver->CanAccessInstantiableTypeWithoutChecks(
@@ -1391,7 +1391,7 @@ void Mir2Lir::GenLong3Addr(OpKind first_op, OpKind second_op, RegLocation rl_des
 
 void Mir2Lir::GenShiftOpLong(Instruction::Code opcode, RegLocation rl_dest,
                              RegLocation rl_src1, RegLocation rl_shift) {
-  ThreadOffset func_offset(-1);
+  ThreadOffset<4> func_offset(-1);
 
   switch (opcode) {
     case Instruction::SHL_LONG:
@@ -1538,7 +1538,7 @@ void Mir2Lir::GenArithOpInt(Instruction::Code opcode, RegLocation rl_dest,
 
     // If we haven't already generated the code use the callout function.
     if (!done) {
-      ThreadOffset func_offset = QUICK_ENTRYPOINT_OFFSET(pIdivmod);
+      ThreadOffset<4> func_offset = QUICK_ENTRYPOINT_OFFSET(pIdivmod);
       FlushAllRegs();   /* Send everything to home location */
       LoadValueDirectFixed(rl_src2, TargetReg(kArg1));
       int r_tgt = CallHelperSetup(func_offset);
@@ -1789,7 +1789,7 @@ void Mir2Lir::GenArithOpIntLit(Instruction::Code opcode, RegLocation rl_dest, Re
         FlushAllRegs();   /* Everything to home location. */
         LoadValueDirectFixed(rl_src, TargetReg(kArg0));
         Clobber(TargetReg(kArg0));
-        ThreadOffset func_offset = QUICK_ENTRYPOINT_OFFSET(pIdivmod);
+        ThreadOffset<4> func_offset = QUICK_ENTRYPOINT_OFFSET(pIdivmod);
         CallRuntimeHelperRegImm(func_offset, TargetReg(kArg0), lit, false);
         if (is_div)
           rl_result = GetReturn(false);
@@ -1820,7 +1820,7 @@ void Mir2Lir::GenArithOpLong(Instruction::Code opcode, RegLocation rl_dest,
   OpKind second_op = kOpBkpt;
   bool call_out = false;
   bool check_zero = false;
-  ThreadOffset func_offset(-1);
+  ThreadOffset<4> func_offset(-1);
   int ret_reg = TargetReg(kRet0);
 
   switch (opcode) {
@@ -1940,7 +1940,7 @@ void Mir2Lir::GenArithOpLong(Instruction::Code opcode, RegLocation rl_dest,
   }
 }
 
-void Mir2Lir::GenConversionCall(ThreadOffset func_offset,
+void Mir2Lir::GenConversionCall(ThreadOffset<4> func_offset,
                                 RegLocation rl_dest, RegLocation rl_src) {
   /*
    * Don't optimize the register usage since it calls out to support

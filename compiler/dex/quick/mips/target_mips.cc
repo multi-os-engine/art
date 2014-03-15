@@ -507,14 +507,14 @@ void MipsMir2Lir::FreeRegLocTemps(RegLocation rl_keep, RegLocation rl_free) {
  * ensure that all branch instructions can be restarted if
  * there is a trap in the shadow.  Allocate a temp register.
  */
-int MipsMir2Lir::LoadHelper(ThreadOffset offset) {
+int MipsMir2Lir::LoadHelper(ThreadOffset<4> offset) {
   LoadWordDisp(rMIPS_SELF, offset.Int32Value(), r_T9);
   return r_T9;
 }
 
 LIR* MipsMir2Lir::CheckSuspendUsingLoad() {
   int tmp = AllocTemp();
-  LoadWordDisp(rMIPS_SELF, Thread::ThreadSuspendTriggerOffset().Int32Value(), tmp);
+  LoadWordDisp(rMIPS_SELF, Thread::ThreadSuspendTriggerOffset<4>().Int32Value(), tmp);
   LIR *inst = LoadWordDisp(tmp, 0, tmp);
   FreeTemp(tmp);
   return inst;

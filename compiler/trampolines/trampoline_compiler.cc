@@ -27,7 +27,7 @@ namespace art {
 
 namespace arm {
 static const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
-                                                    ThreadOffset offset) {
+                                                    ThreadOffset<4> offset) {
   UniquePtr<ArmAssembler> assembler(static_cast<ArmAssembler*>(Assembler::Create(kArm)));
 
   switch (abi) {
@@ -55,7 +55,7 @@ static const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention 
 
 namespace mips {
 static const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
-                                                    ThreadOffset offset) {
+                                                    ThreadOffset<4> offset) {
   UniquePtr<MipsAssembler> assembler(static_cast<MipsAssembler*>(Assembler::Create(kMips)));
 
   switch (abi) {
@@ -84,7 +84,7 @@ static const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention 
 }  // namespace mips
 
 namespace x86 {
-static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset offset) {
+static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<4> offset) {
   UniquePtr<X86Assembler> assembler(static_cast<X86Assembler*>(Assembler::Create(kX86)));
 
   // All x86 trampolines call via the Thread* held in fs.
@@ -101,7 +101,7 @@ static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset offset) {
 }  // namespace x86
 
 namespace x86_64 {
-static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset offset) {
+static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<8> offset) {
   UniquePtr<x86::X86Assembler> assembler(static_cast<x86::X86Assembler*>(Assembler::Create(kX86_64)));
 
   // All x86 trampolines call via the Thread* held in gs.
@@ -117,17 +117,22 @@ static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset offset) {
 }
 }  // namespace x86_64
 
+template<size_t pointer_size>
 const std::vector<uint8_t>* CreateTrampoline(InstructionSet isa, EntryPointCallingConvention abi,
-                                             ThreadOffset offset) {
+                                             ThreadOffset<pointer_size> offset) {
   switch (isa) {
     case kArm:
     case kThumb2:
+      CHECK_EQ(pointer_size, 4);
       return arm::CreateTrampoline(abi, offset);
     case kMips:
+      CHECK_EQ(pointer_size, 4);
       return mips::CreateTrampoline(abi, offset);
     case kX86:
+      CHECK_EQ(pointer_size, 4);
       return x86::CreateTrampoline(offset);
     case kX86_64:
+      CHECK_EQ(pointer_size, 8);
       return x86_64::CreateTrampoline(offset);
     default:
       LOG(FATAL) << "Unknown InstructionSet: " << isa;

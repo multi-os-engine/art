@@ -730,7 +730,7 @@ void X86Mir2Lir::OpLea(int rBase, int reg1, int reg2, int scale, int offset) {
   NewLIR5(kX86Lea32RA, rBase, reg1, reg2, scale, offset);
 }
 
-void X86Mir2Lir::OpTlsCmp(ThreadOffset offset, int val) {
+void X86Mir2Lir::OpTlsCmp(ThreadOffset<4> offset, int val) {
   NewLIR2(kX86Cmp16TI8, offset.Int32Value(), val);
 }
 
@@ -860,7 +860,7 @@ void X86Mir2Lir::GenDivZeroCheck(int reg_lo, int reg_hi) {
 
 // Test suspend flag, return target of taken suspend branch
 LIR* X86Mir2Lir::OpTestSuspend(LIR* target) {
-  OpTlsCmp(Thread::ThreadFlagsOffset(), 0);
+  OpTlsCmp(Thread::ThreadFlagsOffset<4>(), 0);
   return OpCondBranch((target == NULL) ? kCondNe : kCondEq, target);
 }
 
@@ -1256,7 +1256,7 @@ void X86Mir2Lir::GenNegLong(RegLocation rl_dest, RegLocation rl_src) {
   StoreValueWide(rl_dest, rl_result);
 }
 
-void X86Mir2Lir::OpRegThreadMem(OpKind op, int r_dest, ThreadOffset thread_offset) {
+void X86Mir2Lir::OpRegThreadMem(OpKind op, int r_dest, ThreadOffset<4> thread_offset) {
   X86OpCode opcode = kX86Bkpt;
   switch (op) {
   case kOpCmp: opcode = kX86Cmp32RT;  break;

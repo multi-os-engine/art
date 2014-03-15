@@ -190,7 +190,7 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
       // If the null-check fails its handled by the slow-path to reduce exception related meta-data.
       null_check_branch = OpCmpImmBranch(kCondEq, r0, 0, NULL);
     }
-    LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset().Int32Value(), r2);
+    LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset<4>().Int32Value(), r2);
     NewLIR3(kThumb2Ldrex, r1, r0, mirror::Object::MonitorOffset().Int32Value() >> 2);
     LIR* not_unlocked_branch = OpCmpImmBranch(kCondNe, r1, 0, NULL);
     NewLIR4(kThumb2Strex, r1, r2, r0, mirror::Object::MonitorOffset().Int32Value() >> 2);
@@ -215,7 +215,7 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
   } else {
     // Explicit null-check as slow-path is entered using an IT.
     GenNullCheck(r0, opt_flags);
-    LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset().Int32Value(), r2);
+    LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset<4>().Int32Value(), r2);
     MarkPossibleNullPointerException(opt_flags);
     NewLIR3(kThumb2Ldrex, r1, r0, mirror::Object::MonitorOffset().Int32Value() >> 2);
     OpRegImm(kOpCmp, r1, 0);
@@ -242,7 +242,7 @@ void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
   LoadValueDirectFixed(rl_src, r0);  // Get obj
   LockCallTemps();  // Prepare for explicit register usage
   LIR* null_check_branch;
-  LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset().Int32Value(), r2);
+  LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset<4>().Int32Value(), r2);
   constexpr bool kArchVariantHasGoodBranchPredictor = false;  // TODO: true if cortex-A15.
   if (kArchVariantHasGoodBranchPredictor) {
     if ((opt_flags & MIR_IGNORE_NULL_CHECK) && !(cu_->disable_opt & (1 << kNullCheckElimination))) {
@@ -277,7 +277,7 @@ void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
     GenNullCheck(r0, opt_flags);
     LoadWordDisp(r0, mirror::Object::MonitorOffset().Int32Value(), r1);  // Get lock
     MarkPossibleNullPointerException(opt_flags);
-    LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset().Int32Value(), r2);
+    LoadWordDisp(rARM_SELF, Thread::ThinLockIdOffset<4>().Int32Value(), r2);
     LoadConstantNoClobber(r3, 0);
     // Is lock unheld on lock or held by us (==thread_id) on unlock?
     OpRegReg(kOpCmp, r1, r2);
@@ -293,7 +293,7 @@ void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
 }
 
 void ArmMir2Lir::GenMoveException(RegLocation rl_dest) {
-  int ex_offset = Thread::ExceptionOffset().Int32Value();
+  int ex_offset = Thread::ExceptionOffset<4>().Int32Value();
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   int reset_reg = AllocTemp();
   LoadWordDisp(rARM_SELF, ex_offset, rl_result.reg.GetReg());
@@ -310,7 +310,7 @@ void ArmMir2Lir::MarkGCCard(int val_reg, int tgt_addr_reg) {
   int reg_card_base = AllocTemp();
   int reg_card_no = AllocTemp();
   LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, NULL);
-  LoadWordDisp(rARM_SELF, Thread::CardTableOffset().Int32Value(), reg_card_base);
+  LoadWordDisp(rARM_SELF, Thread::CardTableOffset<4>().Int32Value(), reg_card_base);
   OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
   StoreBaseIndexed(reg_card_base, reg_card_no, reg_card_base, 0,
                    kUnsignedByte);
@@ -344,7 +344,7 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   if (!skip_overflow_check) {
     if (Runtime::Current()->ExplicitStackOverflowChecks()) {
       /* Load stack limit */
-      LoadWordDisp(rARM_SELF, Thread::StackEndOffset().Int32Value(), r12);
+      LoadWordDisp(rARM_SELF, Thread::StackEndOffset<4>().Int32Value(), r12);
     }
   }
   /* Spill core callee saves */

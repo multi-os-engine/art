@@ -260,7 +260,7 @@ void MipsMir2Lir::GenFillArrayData(DexOffset table_offset, RegLocation rl_src) {
 }
 
 void MipsMir2Lir::GenMoveException(RegLocation rl_dest) {
-  int ex_offset = Thread::ExceptionOffset().Int32Value();
+  int ex_offset = Thread::ExceptionOffset<4>().Int32Value();
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   int reset_reg = AllocTemp();
   LoadWordDisp(rMIPS_SELF, ex_offset, rl_result.reg.GetReg());
@@ -277,7 +277,7 @@ void MipsMir2Lir::MarkGCCard(int val_reg, int tgt_addr_reg) {
   int reg_card_base = AllocTemp();
   int reg_card_no = AllocTemp();
   LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, NULL);
-  LoadWordDisp(rMIPS_SELF, Thread::CardTableOffset().Int32Value(), reg_card_base);
+  LoadWordDisp(rMIPS_SELF, Thread::CardTableOffset<4>().Int32Value(), reg_card_base);
   OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
   StoreBaseIndexed(reg_card_base, reg_card_no, reg_card_base, 0,
                    kUnsignedByte);
@@ -311,7 +311,7 @@ void MipsMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) 
   int new_sp = AllocTemp();
   if (!skip_overflow_check) {
     /* Load stack limit */
-    LoadWordDisp(rMIPS_SELF, Thread::StackEndOffset().Int32Value(), check_reg);
+    LoadWordDisp(rMIPS_SELF, Thread::StackEndOffset<4>().Int32Value(), check_reg);
   }
   /* Spill core callee saves */
   SpillCoreRegs();

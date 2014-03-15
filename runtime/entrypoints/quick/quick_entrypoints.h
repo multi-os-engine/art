@@ -23,8 +23,7 @@
 #include "offsets.h"
 
 #define QUICK_ENTRYPOINT_OFFSET(x) \
-    ThreadOffset(static_cast<uintptr_t>(OFFSETOF_MEMBER(Thread, quick_entrypoints_)) + \
-                 static_cast<uintptr_t>(OFFSETOF_MEMBER(QuickEntryPoints, x)))
+    Thread::QuickEntryPointOffset<4>(OFFSETOF_MEMBER(QuickEntryPoints, x))
 
 namespace art {
 

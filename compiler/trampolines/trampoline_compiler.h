@@ -25,8 +25,9 @@
 namespace art {
 
 // Create code that will invoke the function held in thread local storage.
+template<size_t pointer_size>
 const std::vector<uint8_t>* CreateTrampoline(InstructionSet isa, EntryPointCallingConvention abi,
-                                             ThreadOffset entry_point_offset)
+                                             ThreadOffset<pointer_size> entry_point_offset)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
 }  // namespace art

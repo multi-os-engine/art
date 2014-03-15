@@ -162,7 +162,7 @@ void X86Mir2Lir::GenFillArrayData(DexOffset table_offset, RegLocation rl_src) {
 }
 
 void X86Mir2Lir::GenMoveException(RegLocation rl_dest) {
-  int ex_offset = Thread::ExceptionOffset().Int32Value();
+  int ex_offset = Thread::ExceptionOffset<4>().Int32Value();
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   NewLIR2(kX86Mov32RT, rl_result.reg.GetReg(), ex_offset);
   NewLIR2(kX86Mov32TI, ex_offset, 0);
@@ -176,7 +176,7 @@ void X86Mir2Lir::MarkGCCard(int val_reg, int tgt_addr_reg) {
   int reg_card_base = AllocTemp();
   int reg_card_no = AllocTemp();
   LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, NULL);
-  NewLIR2(kX86Mov32RT, reg_card_base, Thread::CardTableOffset().Int32Value());
+  NewLIR2(kX86Mov32RT, reg_card_base, Thread::CardTableOffset<4>().Int32Value());
   OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
   StoreBaseIndexed(reg_card_base, reg_card_no, reg_card_base, 0,
                    kUnsignedByte);
@@ -215,7 +215,7 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   if (!skip_overflow_check) {
     // cmp rX86_SP, fs:[stack_end_]; jcc throw_launchpad
     LIR* tgt = RawLIR(0, kPseudoThrowTarget, kThrowStackOverflow, 0, 0, 0, 0);
-    OpRegThreadMem(kOpCmp, rX86_SP, Thread::StackEndOffset());
+    OpRegThreadMem(kOpCmp, rX86_SP, Thread::StackEndOffset<4>());
     OpCondBranch(kCondUlt, tgt);
     // Remember branch target - will process later
     throw_launchpads_.Insert(tgt);
