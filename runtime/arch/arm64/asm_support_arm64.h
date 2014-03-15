@@ -37,8 +37,6 @@
 // Define the intraprocedural linkage temporary registers.
 #define xIP0 x16
 #define xIP1 x17
-// Offset of field Thread::suspend_count_ verified in InitCpu
-#define THREAD_FLAGS_OFFSET 0
 // Offset of field Thread::card_table_ verified in InitCpu
 #define THREAD_CARD_TABLE_OFFSET 8
 // Offset of field Thread::exception_ verified in InitCpu

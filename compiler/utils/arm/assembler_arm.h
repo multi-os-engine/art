@@ -457,14 +457,14 @@ class ArmAssembler : public Assembler {
   virtual void StoreImmediateToFrame(FrameOffset dest, uint32_t imm,
                                      ManagedRegister scratch);
 
-  virtual void StoreImmediateToThread(ThreadOffset dest, uint32_t imm,
+  virtual void StoreImmediateToThread(ThreadOffset<4> dest, uint32_t imm,
                                       ManagedRegister scratch);
 
-  virtual void StoreStackOffsetToThread(ThreadOffset thr_offs,
+  virtual void StoreStackOffsetToThread(ThreadOffset<4> thr_offs,
                                         FrameOffset fr_offs,
                                         ManagedRegister scratch);
 
-  virtual void StoreStackPointerToThread(ThreadOffset thr_offs);
+  virtual void StoreStackPointerToThread(ThreadOffset<4> thr_offs);
 
   virtual void StoreSpanning(FrameOffset dest, ManagedRegister src,
                              FrameOffset in_off, ManagedRegister scratch);
@@ -472,7 +472,7 @@ class ArmAssembler : public Assembler {
   // Load routines
   virtual void Load(ManagedRegister dest, FrameOffset src, size_t size);
 
-  virtual void Load(ManagedRegister dest, ThreadOffset src, size_t size);
+  virtual void Load(ManagedRegister dest, ThreadOffset<4> src, size_t size);
 
   virtual void LoadRef(ManagedRegister dest, FrameOffset  src);
 
@@ -483,15 +483,15 @@ class ArmAssembler : public Assembler {
                           Offset offs);
 
   virtual void LoadRawPtrFromThread(ManagedRegister dest,
-                                    ThreadOffset offs);
+                                    ThreadOffset<4> offs);
 
   // Copying routines
   virtual void Move(ManagedRegister dest, ManagedRegister src, size_t size);
 
-  virtual void CopyRawPtrFromThread(FrameOffset fr_offs, ThreadOffset thr_offs,
+  virtual void CopyRawPtrFromThread(FrameOffset fr_offs, ThreadOffset<4> thr_offs,
                                     ManagedRegister scratch);
 
-  virtual void CopyRawPtrToThread(ThreadOffset thr_offs, FrameOffset fr_offs,
+  virtual void CopyRawPtrToThread(ThreadOffset<4> thr_offs, FrameOffset fr_offs,
                                   ManagedRegister scratch);
 
   virtual void CopyRef(FrameOffset dest, FrameOffset src,
@@ -554,7 +554,7 @@ class ArmAssembler : public Assembler {
                     ManagedRegister scratch);
   virtual void Call(FrameOffset base, Offset offset,
                     ManagedRegister scratch);
-  virtual void Call(ThreadOffset offset, ManagedRegister scratch);
+  virtual void Call(ThreadOffset<4> offset, ManagedRegister scratch);
 
   // Generate code to check if Thread::Current()->exception_ is non-null
   // and branch to a ExceptionSlowPath if it is.

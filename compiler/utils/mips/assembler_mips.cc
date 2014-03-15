@@ -633,7 +633,7 @@ void MipsAssembler::StoreImmediateToFrame(FrameOffset dest, uint32_t imm,
   StoreToOffset(kStoreWord, scratch.AsCoreRegister(), SP, dest.Int32Value());
 }
 
-void MipsAssembler::StoreImmediateToThread(ThreadOffset dest, uint32_t imm,
+void MipsAssembler::StoreImmediateToThread(ThreadOffset<4> dest, uint32_t imm,
                                            ManagedRegister mscratch) {
   MipsManagedRegister scratch = mscratch.AsMips();
   CHECK(scratch.IsCoreRegister()) << scratch;
@@ -641,7 +641,7 @@ void MipsAssembler::StoreImmediateToThread(ThreadOffset dest, uint32_t imm,
   StoreToOffset(kStoreWord, scratch.AsCoreRegister(), S1, dest.Int32Value());
 }
 
-void MipsAssembler::StoreStackOffsetToThread(ThreadOffset thr_offs,
+void MipsAssembler::StoreStackOffsetToThread(ThreadOffset<4> thr_offs,
                                              FrameOffset fr_offs,
                                              ManagedRegister mscratch) {
   MipsManagedRegister scratch = mscratch.AsMips();
@@ -651,7 +651,7 @@ void MipsAssembler::StoreStackOffsetToThread(ThreadOffset thr_offs,
                 S1, thr_offs.Int32Value());
 }
 
-void MipsAssembler::StoreStackPointerToThread(ThreadOffset thr_offs) {
+void MipsAssembler::StoreStackPointerToThread(ThreadOffset<4> thr_offs) {
   StoreToOffset(kStoreWord, SP, S1, thr_offs.Int32Value());
 }
 
@@ -668,7 +668,7 @@ void MipsAssembler::Load(ManagedRegister mdest, FrameOffset src, size_t size) {
   return EmitLoad(mdest, SP, src.Int32Value(), size);
 }
 
-void MipsAssembler::Load(ManagedRegister mdest, ThreadOffset src, size_t size) {
+void MipsAssembler::Load(ManagedRegister mdest, ThreadOffset<4> src, size_t size) {
   return EmitLoad(mdest, S1, src.Int32Value(), size);
 }
 
@@ -698,7 +698,7 @@ void MipsAssembler::LoadRawPtr(ManagedRegister mdest, ManagedRegister base,
 }
 
 void MipsAssembler::LoadRawPtrFromThread(ManagedRegister mdest,
-                                         ThreadOffset offs) {
+                                         ThreadOffset<4> offs) {
   MipsManagedRegister dest = mdest.AsMips();
   CHECK(dest.IsCoreRegister());
   LoadFromOffset(kLoadWord, dest.AsCoreRegister(), S1, offs.Int32Value());
@@ -749,7 +749,7 @@ void MipsAssembler::CopyRef(FrameOffset dest, FrameOffset src,
 }
 
 void MipsAssembler::CopyRawPtrFromThread(FrameOffset fr_offs,
-                                         ThreadOffset thr_offs,
+                                         ThreadOffset<4> thr_offs,
                                          ManagedRegister mscratch) {
   MipsManagedRegister scratch = mscratch.AsMips();
   CHECK(scratch.IsCoreRegister()) << scratch;
@@ -759,7 +759,7 @@ void MipsAssembler::CopyRawPtrFromThread(FrameOffset fr_offs,
                 SP, fr_offs.Int32Value());
 }
 
-void MipsAssembler::CopyRawPtrToThread(ThreadOffset thr_offs,
+void MipsAssembler::CopyRawPtrToThread(ThreadOffset<4> thr_offs,
                                        FrameOffset fr_offs,
                                        ManagedRegister mscratch) {
   MipsManagedRegister scratch = mscratch.AsMips();
@@ -923,7 +923,7 @@ void MipsAssembler::Call(FrameOffset base, Offset offset, ManagedRegister mscrat
   // TODO: place reference map on call
 }
 
-void MipsAssembler::Call(ThreadOffset /*offset*/, ManagedRegister /*mscratch*/) {
+void MipsAssembler::Call(ThreadOffset<4> /*offset*/, ManagedRegister /*mscratch*/) {
   UNIMPLEMENTED(FATAL) << "no mips implementation";
 }
 
@@ -941,7 +941,7 @@ void MipsAssembler::ExceptionPoll(ManagedRegister mscratch, size_t stack_adjust)
   MipsExceptionSlowPath* slow = new MipsExceptionSlowPath(scratch, stack_adjust);
   buffer_.EnqueueSlowPath(slow);
   LoadFromOffset(kLoadWord, scratch.AsCoreRegister(),
-                 S1, Thread::ExceptionOffset().Int32Value());
+                 S1, Thread::ExceptionOffset<4>().Int32Value());
   EmitBranch(scratch.AsCoreRegister(), ZERO, slow->Entry(), false);
 }
 
@@ -956,7 +956,7 @@ void MipsExceptionSlowPath::Emit(Assembler* sasm) {
   // Don't care about preserving A0 as this call won't return
   __ Move(A0, scratch_.AsCoreRegister());
   // Set up call to Thread::Current()->pDeliverException
-  __ LoadFromOffset(kLoadWord, T9, S1, QUICK_ENTRYPOINT_OFFSET(pDeliverException).Int32Value());
+  __ LoadFromOffset(kLoadWord, T9, S1, QUICK_ENTRYPOINT_OFFSET(4, pDeliverException).Int32Value());
   __ Jr(T9);
   // Call never returns
   __ Break();

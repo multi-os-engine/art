@@ -126,30 +126,30 @@ class Arm64Assembler : public Assembler {
   void StoreRawPtr(FrameOffset dest, ManagedRegister src);
   void StoreImmediateToFrame(FrameOffset dest, uint32_t imm,
                                      ManagedRegister scratch);
-  void StoreImmediateToThread(ThreadOffset dest, uint32_t imm,
+  void StoreImmediateToThread(ThreadOffset<4> dest, uint32_t imm,
                                       ManagedRegister scratch);
-  void StoreStackOffsetToThread(ThreadOffset thr_offs,
+  void StoreStackOffsetToThread(ThreadOffset<4> thr_offs,
                                         FrameOffset fr_offs,
                                         ManagedRegister scratch);
-  void StoreStackPointerToThread(ThreadOffset thr_offs);
+  void StoreStackPointerToThread(ThreadOffset<4> thr_offs);
   void StoreSpanning(FrameOffset dest, ManagedRegister src,
                              FrameOffset in_off, ManagedRegister scratch);
 
   // Load routines.
   void Load(ManagedRegister dest, FrameOffset src, size_t size);
-  void Load(ManagedRegister dest, ThreadOffset src, size_t size);
+  void Load(ManagedRegister dest, ThreadOffset<4> src, size_t size);
   void LoadRef(ManagedRegister dest, FrameOffset  src);
   void LoadRef(ManagedRegister dest, ManagedRegister base,
                MemberOffset offs);
   void LoadRawPtr(ManagedRegister dest, ManagedRegister base,
                   Offset offs);
   void LoadRawPtrFromThread(ManagedRegister dest,
-                            ThreadOffset offs);
+                            ThreadOffset<4> offs);
   // Copying routines.
   void Move(ManagedRegister dest, ManagedRegister src, size_t size);
-  void CopyRawPtrFromThread(FrameOffset fr_offs, ThreadOffset thr_offs,
+  void CopyRawPtrFromThread(FrameOffset fr_offs, ThreadOffset<4> thr_offs,
                             ManagedRegister scratch);
-  void CopyRawPtrToThread(ThreadOffset thr_offs, FrameOffset fr_offs,
+  void CopyRawPtrToThread(ThreadOffset<4> thr_offs, FrameOffset fr_offs,
                           ManagedRegister scratch);
   void CopyRef(FrameOffset dest, FrameOffset src,
                ManagedRegister scratch);
@@ -202,7 +202,7 @@ class Arm64Assembler : public Assembler {
   // Call to address held at [base+offset].
   void Call(ManagedRegister base, Offset offset, ManagedRegister scratch);
   void Call(FrameOffset base, Offset offset, ManagedRegister scratch);
-  void Call(ThreadOffset offset, ManagedRegister scratch);
+  void Call(ThreadOffset<4> offset, ManagedRegister scratch);
 
   // Jump to address (not setting link register)
   void JumpTo(ManagedRegister m_base, Offset offs, ManagedRegister m_scratch);
