@@ -14,9 +14,37 @@
  * limitations under the License.
  */
 
+#include <stdint.h>
+
+#include "builder.h"
+#include "code_generator.h"
 #include "compilers.h"
+#include "driver/compiler_driver.h"
+#include "nodes.h"
+#include "utils/arena_allocator.h"
 
 namespace art {
+
+class MemoryAllocator : public CodeAllocator {
+ public:
+  MemoryAllocator() { }
+
+  virtual uint8_t* Allocate(size_t size) {
+    size_ = size;
+    memory_ = new uint8_t[size];
+    return memory_;
+  }
+
+  uint8_t* GetMemory() const { return memory_; }
+  size_t GetSize() const { return size_; }
+
+ private:
+  uint8_t* memory_;
+  size_t size_;
+
+  DISALLOW_COPY_AND_ASSIGN(MemoryAllocator);
+};
+
 
 CompiledMethod* OptimizingCompiler::TryCompile(CompilerDriver& driver,
                                                const DexFile::CodeItem* code_item,
@@ -26,7 +54,41 @@ CompiledMethod* OptimizingCompiler::TryCompile(CompilerDriver& driver,
                                                uint32_t method_idx,
                                                jobject class_loader,
                                                const DexFile& dex_file) const {
-  return nullptr;
+  ArenaPool pool;
+  ArenaAllocator arena(&pool);
+  HGraphBuilder builder(&arena);
+  HGraph* graph = builder.BuildGraph(*code_item);
+  if (graph == nullptr) {
+    return nullptr;
+  }
+
+  InstructionSet instruction_set = driver.GetInstructionSet();
+  CodeGenerator* codegen = CodeGenerator::Create(&arena, graph, instruction_set);
+  if (codegen == nullptr) {
+    return nullptr;
+  }
+
+  MemoryAllocator allocator;
+  codegen->Compile(&allocator);
+
+  std::vector<uint8_t> mapping_table;
+  codegen->BuildMappingTable(&mapping_table);
+  std::vector<uint8_t> vmap_table;
+  codegen->BuildVMapTable(&vmap_table);
+  std::vector<uint8_t> gc_map;
+  codegen->BuildNativeGCMap(&gc_map);
+  std::vector<uint8_t> code(allocator.GetMemory(), allocator.GetMemory() + allocator.GetSize());
+
+  return new CompiledMethod(driver,
+                            instruction_set,
+                            code,
+                            codegen->GetFrameSize(),
+                            0,
+                            0,
+                            mapping_table,
+                            vmap_table,
+                            gc_map,
+                            nullptr);
 }
 
 }  // namespace art

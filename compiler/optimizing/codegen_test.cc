@@ -37,7 +37,7 @@ class ExecutableMemoryAllocator : public CodeAllocator {
     return memory_.get();
   }
 
-  uint8_t* memory() const { return memory_.get(); }
+  uint8_t* GetMemory() const { return memory_.get(); }
 
  private:
   UniquePtr<uint8_t[]> memory_;
@@ -53,17 +53,19 @@ static void TestCode(const uint16_t* data, bool has_result = false, int32_t expe
   HGraph* graph = builder.BuildGraph(*item);
   ASSERT_NE(graph, nullptr);
   ExecutableMemoryAllocator allocator;
-  CHECK(CodeGenerator::CompileGraph(graph, kX86, &allocator));
+  CodeGenerator* codegen = CodeGenerator::Create(&arena, graph, kX86);
+  codegen->Compile(&allocator);
   typedef int32_t (*fptr)();
 #if defined(__i386__)
-  int32_t result = reinterpret_cast<fptr>(allocator.memory())();
+  int32_t result = reinterpret_cast<fptr>(allocator.GetMemory())();
   if (has_result) {
     CHECK_EQ(result, expected);
   }
 #endif
-  CHECK(CodeGenerator::CompileGraph(graph, kArm, &allocator));
+  codegen = CodeGenerator::Create(&arena, graph, kArm);
+  codegen->Compile(&allocator);
 #if defined(__arm__)
-  int32_t result = reinterpret_cast<fptr>(allocator.memory())();
+  int32_t result = reinterpret_cast<fptr>(allocator.GetMemory())();
   if (has_result) {
     CHECK_EQ(result, expected);
   }
