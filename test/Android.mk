@@ -46,6 +46,7 @@ TEST_OAT_DIRECTORIES := \
 	HelloWorld \
 	InterfaceTest \
 	JniTest \
+	LongStackTrace \
 	NativeAllocations \
 	ParallelGC \
 	ReferenceMap \
