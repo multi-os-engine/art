@@ -734,6 +734,10 @@ void X86Mir2Lir::OpTlsCmp(ThreadOffset offset, int val) {
   NewLIR2(kX86Cmp16TI8, offset.Int32Value(), val);
 }
 
+static bool isInReg(X86Mir2Lir *pMir2Lir, const RegLocation &rl, int reg) {
+  return !rl.reg.IsInvalid() && rl.reg.GetReg() == reg && (pMir2Lir->IsLive(reg) || rl.home);
+}
+
 bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   DCHECK_EQ(cu_->instruction_set, kX86);
   // Unused - RegLocation rl_src_unsafe = info->args[0];
@@ -757,8 +761,14 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     MarkTemp(rSI);
     LockTemp(rSI);
     const int push_offset = 4 /* push edi */ + 4 /* push esi */;
-    LoadWordDisp(TargetReg(kSp), SRegOffset(rl_src_obj.s_reg_low) + push_offset, rDI);
-    LoadWordDisp(TargetReg(kSp), SRegOffset(rl_src_offset.s_reg_low) + push_offset, rSI);
+    int srcObjSp = isInReg(this, rl_src_obj, rSI) ? 0
+                : (isInReg(this, rl_src_obj, rDI) ? 4
+                : (SRegOffset(rl_src_obj.s_reg_low) + push_offset));
+    LoadWordDisp(TargetReg(kSp), srcObjSp, rDI);
+    int srcOffsetSp = isInReg(this, rl_src_offset, rSI) ? 0
+                   : (isInReg(this, rl_src_offset, rDI) ? 4
+                   : (SRegOffset(rl_src_offset.s_reg_low) + push_offset));
+    LoadWordDisp(TargetReg(kSp), srcOffsetSp, rSI);
     NewLIR4(kX86LockCmpxchg8bA, rDI, rSI, 0, 0);
     FreeTemp(rSI);
     UnmarkTemp(rSI);
