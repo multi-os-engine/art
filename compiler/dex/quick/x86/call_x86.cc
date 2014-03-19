@@ -213,12 +213,29 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   /* NOTE: promotion of FP regs currently unsupported, thus no FP spill */
   DCHECK_EQ(num_fp_spills_, 0);
   if (!skip_overflow_check) {
+    class StackOverflowSlowPath : public LIRSlowPath {
+     public:
+      StackOverflowSlowPath(Mir2Lir* m2l, LIR* branch, size_t sp_displace)
+          : LIRSlowPath(m2l, m2l->GetCurrentDexPc(), branch, nullptr), sp_displace_(sp_displace) {
+      }
+      void Compile() OVERRIDE {
+        m2l_->ResetRegPool();
+        m2l_->ResetDefTracking();
+        GenerateTargetLabel();
+        m2l_->OpRegImm(kOpAdd, kX86RegSP, sp_displace_);
+        m2l_->ClobberCallerSave();
+        ThreadOffset func_offset = QUICK_ENTRYPOINT_OFFSET(pThrowStackOverflow);
+        m2l_->CallHelper(0, func_offset, false /* MarkSafepointPC */, false /* UseLink */);
+      }
+
+     private:
+      size_t sp_displace_;
+    };
+
     // cmp rX86_SP, fs:[stack_end_]; jcc throw_launchpad
-    LIR* tgt = RawLIR(0, kPseudoThrowTarget, kThrowStackOverflow, 0, 0, 0, 0);
     OpRegThreadMem(kOpCmp, rX86_SP, Thread::StackEndOffset());
-    OpCondBranch(kCondUlt, tgt);
-    // Remember branch target - will process later
-    throw_launchpads_.Insert(tgt);
+    LIR* branch = OpCondBranch(kCondUlt, nullptr);
+    AddSlowPath(new(arena_)StackOverflowSlowPath(this, branch, frame_size_ - 4));
   }
 
   FlushIns(ArgLocs, rl_method);

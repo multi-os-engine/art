@@ -358,23 +358,57 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
      */
     NewLIR1(kThumb2VPushCS, num_fp_spills_);
   }
+
+  const int frame_sub = frame_size_ - spill_count * 4;  // TODO: 64 bit
   if (!skip_overflow_check) {
     if (Runtime::Current()->ExplicitStackOverflowChecks()) {
-      OpRegRegImm(kOpSub, rARM_LR, rARM_SP, frame_size_ - (spill_count * 4));
-      GenRegRegCheck(kCondUlt, rARM_LR, r12, kThrowStackOverflow);
-      OpRegCopy(rARM_SP, rARM_LR);     // Establish stack
+      class StackOverflowSlowPath : public LIRSlowPath {
+       public:
+        StackOverflowSlowPath(Mir2Lir* m2l, LIR* branch, bool restore_lr, size_t sp_displace)
+            : LIRSlowPath(m2l, m2l->GetCurrentDexPc(), branch, nullptr), restore_lr_(restore_lr),
+              sp_displace_(sp_displace) {
+        }
+        void Compile() OVERRIDE {
+          m2l_->ResetRegPool();
+          m2l_->ResetDefTracking();
+          GenerateTargetLabel();
+          if (restore_lr_) {
+            m2l_->LoadWordDisp(kArmRegSP, sp_displace_ - 4, kArmRegLR);
+          }
+          m2l_->OpRegImm(kOpAdd, kArmRegSP, sp_displace_);
+          m2l_->ClobberCallerSave();
+          ThreadOffset func_offset = QUICK_ENTRYPOINT_OFFSET(pThrowStackOverflow);
+          // Load the entrypoint directly into the pc instead of doing a load + branch.
+          m2l_->LoadWordDisp(rARM_SELF, func_offset.Int32Value(), rARM_PC);
+        }
+
+       private:
+        bool restore_lr_;
+        size_t sp_displace_;
+      };
+      if (static_cast<size_t>(frame_size_) > Thread::kStackOverflowReservedUsableBytes) {
+        OpRegRegImm(kOpSub, rARM_LR, rARM_SP, frame_sub);
+        LIR* branch = OpCmpBranch(kCondUlt, rARM_LR, r12, nullptr);
+        // Need to restore LR since we used it as a temp.
+        AddSlowPath(new(arena_)StackOverflowSlowPath(this, branch, true, frame_sub));
+        OpRegCopy(rARM_SP, rARM_LR);     // Establish stack
+      } else {
+        // If the frame is small enough we are guaranteed to have enough space that remains to
+        // handle signals on the user stack.
+        OpRegRegImm(kOpSub, rARM_SP, rARM_SP, frame_sub);
+        LIR* branch = OpCmpBranch(kCondUlt, rARM_SP, r12, nullptr);
+        AddSlowPath(new(arena_)StackOverflowSlowPath(this, branch, false, frame_size_));
+      }
     } else {
       // Implicit stack overflow check.
       // Generate a load from [sp, #-framesize].  If this is in the stack
       // redzone we will get a segmentation fault.
-      uint32_t full_frame_size = frame_size_ - (spill_count * 4);
-
-      OpRegImm(kOpSub, rARM_SP, full_frame_size);
+      OpRegImm(kOpSub, rARM_SP, frame_sub);
       LoadWordDisp(rARM_SP, 0, rARM_LR);
       MarkPossibleStackOverflowException();
     }
   } else {
-    OpRegImm(kOpSub, rARM_SP, frame_size_ - (spill_count * 4));
+    OpRegImm(kOpSub, rARM_SP, frame_sub);
   }
 
   FlushIns(ArgLocs, rl_method);
