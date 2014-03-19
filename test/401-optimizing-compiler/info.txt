@@ -1,0 +1,2 @@
+A set of tests for the optimizing compiler. They will incremetnally cover what the
+optimizing compiler covers.
