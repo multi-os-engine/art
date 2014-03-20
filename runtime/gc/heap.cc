@@ -276,7 +276,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   // Card cache for now since it makes it easier for us to update the references to the copying
   // spaces.
   accounting::ModUnionTable* mod_union_table =
-      new accounting::ModUnionTableCardCache("Image mod-union table", this, GetImageSpace());
+      new accounting::ModUnionTableToZygoteAllocspace("Image mod-union table", this,
+                                                      GetImageSpace());
   CHECK(mod_union_table != nullptr) << "Failed to create image mod-union table";
   AddModUnionTable(mod_union_table);
 
@@ -1301,8 +1302,8 @@ class ReferringObjectsFinder {
   // For bitmap Visit.
   // TODO: Fix lock analysis to not use NO_THREAD_SAFETY_ANALYSIS, requires support for
   // annotalysis on visitors.
-  void operator()(const mirror::Object* o) const NO_THREAD_SAFETY_ANALYSIS {
-    collector::MarkSweep::VisitObjectReferences(const_cast<mirror::Object*>(o), *this, true);
+  void operator()(mirror::Object* o) const NO_THREAD_SAFETY_ANALYSIS {
+    collector::MarkSweep::VisitObjectReferences<true>(o, *this);
   }
 
   // For MarkSweep::VisitObjectReferences.
@@ -2032,7 +2033,7 @@ class VerifyObjectVisitor {
     // be live or else how did we find it in the live bitmap?
     VerifyReferenceVisitor visitor(heap_);
     // The class doesn't count as a reference but we should verify it anyways.
-    collector::MarkSweep::VisitObjectReferences(obj, visitor, true);
+    collector::MarkSweep::VisitObjectReferences<true>(obj, visitor);
     if (obj->IsReferenceInstance()) {
       mirror::Reference* ref = obj->AsReference();
       visitor(obj, ref->GetReferent(), mirror::Reference::ReferentOffset(), false);
@@ -2172,7 +2173,7 @@ class VerifyLiveStackReferences {
   void operator()(mirror::Object* obj) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
     VerifyReferenceCardVisitor visitor(heap_, const_cast<bool*>(&failed_));
-    collector::MarkSweep::VisitObjectReferences(const_cast<mirror::Object*>(obj), visitor, true);
+    collector::MarkSweep::VisitObjectReferences<true>(obj, visitor);
   }
 
   bool Failed() const {
