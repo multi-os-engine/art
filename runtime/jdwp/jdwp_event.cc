@@ -147,6 +147,34 @@ static bool NeedsFullDeoptimization(JdwpEventKind eventKind) {
     }
 }
 
+void JdwpState::EnableFullDeoptimizationIfNeeded() {
+  MutexLock mu(Thread::Current(), event_list_lock_);
+  EnableFullDeoptimizationIfNeededLocked();
+}
+
+void JdwpState::DisableFullDeoptimizationIfNeeded() {
+  MutexLock mu(Thread::Current(), event_list_lock_);
+  DisableFullDeoptimizationIfNeededLocked();
+}
+
+void JdwpState::EnableFullDeoptimizationIfNeededLocked() {
+  if (full_deoptimization_requests_ == 0) {
+    // This is the first event that needs full deoptimization: enable it.
+    Dbg::EnableFullDeoptimization();
+  }
+  ++full_deoptimization_requests_;
+}
+
+void JdwpState::DisableFullDeoptimizationIfNeededLocked() {
+  event_list_lock_.AssertExclusiveHeld(Thread::Current());
+  DCHECK_GE(full_deoptimization_requests_, 0U);
+  --full_deoptimization_requests_;
+  if (full_deoptimization_requests_ == 0) {
+    // We no longer need full deoptimization.
+    Dbg::DisableFullDeoptimization();
+  }
+}
+
 /*
  * Add an event to the list.  Ordering is not important.
  *
@@ -198,11 +226,7 @@ JdwpError JdwpState::RegisterEvent(JdwpEvent* pEvent) {
      * Do we need to enable full deoptimization ?
      */
     if (NeedsFullDeoptimization(pEvent->eventKind)) {
-      if (full_deoptimization_requests_ == 0) {
-        // This is the first event that needs full deoptimization: enable it.
-        Dbg::EnableFullDeoptimization();
-      }
-      ++full_deoptimization_requests_;
+      EnableFullDeoptimizationIfNeededLocked();
     }
   }
 
@@ -257,11 +281,7 @@ void JdwpState::UnregisterEvent(JdwpEvent* pEvent) {
    * Can we disable full deoptimization ?
    */
   if (NeedsFullDeoptimization(pEvent->eventKind)) {
-    --full_deoptimization_requests_;
-    if (full_deoptimization_requests_ == 0) {
-      // We no longer need full deoptimization.
-      Dbg::DisableFullDeoptimization();
-    }
+    DisableFullDeoptimizationIfNeededLocked();
   }
 }
 

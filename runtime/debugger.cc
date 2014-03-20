@@ -38,6 +38,7 @@
 #include "mirror/object_array-inl.h"
 #include "mirror/throwable.h"
 #include "object_utils.h"
+#include "quick/inline_method_analyser.h"
 #include "reflection.h"
 #include "safe_map.h"
 #include "scoped_thread_state_change.h"
@@ -48,6 +49,7 @@
 #include "thread_list.h"
 #include "throw_location.h"
 #include "utf.h"
+#include "verifier/method_verifier-inl.h"
 #include "well_known_classes.h"
 
 #ifdef HAVE_ANDROID_OS
@@ -103,7 +105,9 @@ struct AllocRecord {
 struct Breakpoint {
   mirror::ArtMethod* method;
   uint32_t dex_pc;
-  Breakpoint(mirror::ArtMethod* method, uint32_t dex_pc) : method(method), dex_pc(dex_pc) {}
+  bool inlining_candidate;
+  Breakpoint(mirror::ArtMethod* method, uint32_t dex_pc, bool inlining_candidate)
+    : method(method), dex_pc(dex_pc), inlining_candidate(inlining_candidate) {}
 };
 
 static std::ostream& operator<<(std::ostream& os, const Breakpoint& rhs)
@@ -578,7 +582,7 @@ void Dbg::GoActive() {
   Thread* self = Thread::Current();
   ThreadState old_state = self->SetStateUnsafe(kRunnable);
   CHECK_NE(old_state, kRunnable);
-  runtime->GetInstrumentation()->EnableDeoptimization();
+  runtime->GetInstrumentation()->EnableDeoptimizationForDebugger();
   runtime->GetInstrumentation()->AddListener(&gDebugInstrumentationListener,
                                              instrumentation::Instrumentation::kMethodEntered |
                                              instrumentation::Instrumentation::kMethodExited |
@@ -618,7 +622,7 @@ void Dbg::Disconnected() {
                                                   instrumentation::Instrumentation::kMethodExited |
                                                   instrumentation::Instrumentation::kDexPcMoved |
                                                   instrumentation::Instrumentation::kExceptionCaught);
-    runtime->GetInstrumentation()->DisableDeoptimization();
+    runtime->GetInstrumentation()->DisableDeoptimizationForDebugger();
     gDebuggerActive = false;
   }
   gRegistry->Clear();
@@ -2578,41 +2582,81 @@ void Dbg::DisableFullDeoptimization() {
 
 void Dbg::WatchLocation(const JDWP::JdwpLocation* location) {
   bool need_deoptimization = true;
+  bool possibly_inlined = false;
+  Thread* self = Thread::Current();
   mirror::ArtMethod* m = FromMethodId(location->method_id);
   {
-    MutexLock mu(Thread::Current(), *Locks::breakpoint_lock_);
+    MutexLock mu(self, *Locks::breakpoint_lock_);
 
     // If there is no breakpoint on this method yet, we need to deoptimize it.
     for (const Breakpoint& breakpoint : gBreakpoints) {
       if (breakpoint.method == m) {
-        // We already set a breakpoint on this method, hence we deoptimized it.
-        DCHECK(Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
+        // We already set a breakpoint on this method so we already managed deoptimization.
         need_deoptimization = false;
+        if (breakpoint.inlining_candidate) {
+          // If this method can be inlined, we have deoptimized everything and this method has not
+          // been "selectively" deoptimized.
+          DCHECK(Runtime::Current()->GetInstrumentation()->IsDeoptimizationEnabledForDebugger());
+          DCHECK(!Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
+        } else {
+          // If this method can't be inlined, we have "selectively" deoptimized it. Note: while we
+          // have not deoptimized everything for this method, another event may have requested it.
+          DCHECK(Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
+        }
         break;
       }
     }
 
-    gBreakpoints.push_back(Breakpoint(m, location->dex_pc));
+    MethodHelper mh(m);
+    const DexFile::CodeItem* code_item = mh.GetCodeItem();
+    // TODO We should not be asked to watch location in a native or abstract method so the code item
+    // should never be null. We could just check we never encounter this case.
+    if (code_item != nullptr) {
+      SirtRef<mirror::DexCache> dex_cache(self, mh.GetDexCache());
+      SirtRef<mirror::ClassLoader> class_loader(self, mh.GetClassLoader());
+      verifier::MethodVerifier verifier(&mh.GetDexFile(), &dex_cache, &class_loader,
+                                        &mh.GetClassDef(), code_item, m->GetDexMethodIndex(), m,
+                                        m->GetAccessFlags(), false, true);
+      verifier.Verify();
+      InlineMethodAnalyser analyser;
+      InlineMethod unused_inline_method;
+      possibly_inlined = analyser.AnalyseMethodCode(&verifier, &unused_inline_method);
+    }
+
+    gBreakpoints.push_back(Breakpoint(m, location->dex_pc, possibly_inlined));
     VLOG(jdwp) << "Set breakpoint #" << (gBreakpoints.size() - 1) << ": " << gBreakpoints[gBreakpoints.size() - 1];
   }
 
   if (need_deoptimization) {
     // Request its deoptimization. This will be done after updating the JDWP event list.
-    MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-    gDeoptimizationRequests.push_back(MethodInstrumentationRequest(true, m));
-    VLOG(jdwp) << "Request deoptimization of " << PrettyMethod(m);
+    if (possibly_inlined) {
+      VLOG(jdwp) << "Request full deoptimization removing breakpoint on inlined method " << PrettyMethod(m);
+      gJdwpState->EnableFullDeoptimizationIfNeeded();
+    } else {
+      VLOG(jdwp) << "Request deoptimization of " << PrettyMethod(m);
+      MutexLock mu(self, *Locks::deoptimization_lock_);
+      gDeoptimizationRequests.push_back(MethodInstrumentationRequest(true, m));
+    }
   }
+}
+
+// Workaround thread safety analysis missing the fact we already hold the appropriate
+// JdwpState::event_list_lock_ getting here.
+static void DisableFullDeoptWithoutThreadSafetyAnalysis() NO_THREAD_SAFETY_ANALYSIS {
+  gJdwpState->DisableFullDeoptimizationIfNeededLocked();
 }
 
 void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location) {
   bool can_undeoptimize = true;
+  bool possibly_inlined = false;
   mirror::ArtMethod* m = FromMethodId(location->method_id);
-  DCHECK(Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
   {
     MutexLock mu(Thread::Current(), *Locks::breakpoint_lock_);
     for (size_t i = 0, e = gBreakpoints.size(); i < e; ++i) {
       if (gBreakpoints[i].method == m && gBreakpoints[i].dex_pc == location->dex_pc) {
         VLOG(jdwp) << "Removed breakpoint #" << i << ": " << gBreakpoints[i];
+        possibly_inlined = gBreakpoints[i].inlining_candidate;
+        DCHECK_NE(possibly_inlined, Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
         gBreakpoints.erase(gBreakpoints.begin() + i);
         break;
       }
@@ -2621,6 +2665,7 @@ void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location) {
     // If there is no breakpoint on this method, we can undeoptimize it.
     for (const Breakpoint& breakpoint : gBreakpoints) {
       if (breakpoint.method == m) {
+        DCHECK(breakpoint.inlining_candidate == possibly_inlined);
         can_undeoptimize = false;
         break;
       }
@@ -2629,9 +2674,14 @@ void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location) {
 
   if (can_undeoptimize) {
     // Request its undeoptimization. This will be done after updating the JDWP event list.
-    MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-    gDeoptimizationRequests.push_back(MethodInstrumentationRequest(false, m));
-    VLOG(jdwp) << "Request undeoptimization of " << PrettyMethod(m);
+    if (possibly_inlined) {
+      VLOG(jdwp) << "Request full undeoptimization removing breakpoint on inlined method " << PrettyMethod(m);
+      DisableFullDeoptWithoutThreadSafetyAnalysis();
+    } else {
+      VLOG(jdwp) << "Request undeoptimization of " << PrettyMethod(m);
+      MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
+      gDeoptimizationRequests.push_back(MethodInstrumentationRequest(false, m));
+    }
   }
 }
 

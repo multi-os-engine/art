@@ -179,6 +179,13 @@ bool InlineMethodAnalyser::AnalyseConstMethod(const DexFile::CodeItem* code_item
   return true;
 }
 
+static constexpr bool kEnableInliningLog = true;
+static void LogInlining(const std::string& msg) {
+  if (kEnableInliningLog) {
+    LOG(INFO) << "Not inlining: " << msg;
+  }
+}
+
 bool InlineMethodAnalyser::AnalyseIGetMethod(verifier::MethodVerifier* verifier,
                                              InlineMethod* result) {
   const DexFile::CodeItem* code_item = verifier->CodeItem();
@@ -192,6 +199,7 @@ bool InlineMethodAnalyser::AnalyseIGetMethod(verifier::MethodVerifier* verifier,
       !(return_opcode == Instruction::RETURN_OBJECT && opcode == Instruction::IGET_OBJECT) &&
       !(return_opcode == Instruction::RETURN && opcode != Instruction::IGET_WIDE &&
           opcode != Instruction::IGET_OBJECT)) {
+    LogInlining("iget and return types do not match");
     return false;
   }
 
@@ -207,11 +215,13 @@ bool InlineMethodAnalyser::AnalyseIGetMethod(verifier::MethodVerifier* verifier,
   DCHECK_LT(object_reg, code_item->registers_size_);
   DCHECK_LT(opcode == Instruction::IGET_WIDE ? dst_reg + 1 : dst_reg, code_item->registers_size_);
   if (dst_reg != return_reg) {
+    LogInlining("return does not use iget result.");
     return false;  // Not returning the value retrieved by IGET?
   }
 
   if ((verifier->GetAccessFlags() & kAccStatic) != 0 || object_reg != arg_start) {
     // TODO: Support inlining IGET on other register than "this".
+    LogInlining("iget is not using 'this' register.");
     return false;
   }
 
@@ -284,13 +294,23 @@ bool InlineMethodAnalyser::ComputeSpecialAccessorInfo(uint32_t field_idx, bool i
   uint32_t method_idx = verifier->GetMethodReference().dex_method_index;
   mirror::ArtMethod* method = dex_cache->GetResolvedMethod(method_idx);
   mirror::ArtField* field = dex_cache->GetResolvedField(field_idx);
-  if (method == nullptr || field == nullptr || field->IsStatic()) {
+  if (method == nullptr) {
+    LogInlining("method is not resolved in the dex cache");
+    return false;
+  }
+  if (field == nullptr) {
+    LogInlining("field is not resolved in the dex cache");
+    return false;
+  }
+  if (field->IsStatic()) {
+    LogInlining("field is static for instance access");
     return false;
   }
   mirror::Class* method_class = method->GetDeclaringClass();
   mirror::Class* field_class = field->GetDeclaringClass();
   if (!method_class->CanAccessResolvedField(field_class, field, dex_cache, field_idx) ||
       (is_put && field->IsFinal() && method_class != field_class)) {
+    LogInlining("Field access is not allowed");
     return false;
   }
   DCHECK_GE(field->GetOffset().Int32Value(), 0);
