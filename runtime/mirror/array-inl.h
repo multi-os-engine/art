@@ -254,7 +254,11 @@ inline void PrimitiveArray<T>::Memcpy(int32_t dst_pos, PrimitiveArray<T>* src, i
   void* dst_raw = GetRawData(sizeof(T), dst_pos);
   const void* src_raw = src->GetRawData(sizeof(T), src_pos);
   if (sizeof(T) == sizeof(uint8_t)) {
-    memcpy(dst_raw, src_raw, count);
+    if (LIKELY(src != this) || (std::abs(src_pos - dst_pos) >= count)) {
+      memcpy(dst_raw, src_raw, count);
+    } else {
+      memmove(dst_raw, src_raw, count);
+    }
   } else if (sizeof(T) == sizeof(uint16_t)) {
     uint16_t* d = reinterpret_cast<uint16_t*>(dst_raw);
     const uint16_t* s = reinterpret_cast<const uint16_t*>(src_raw);
