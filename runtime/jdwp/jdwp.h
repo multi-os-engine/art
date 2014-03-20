@@ -272,6 +272,27 @@ struct JdwpState {
       LOCKS_EXCLUDED(event_list_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  /*
+   * Deoptimization support.
+   */
+  void EnableFullDeoptimizationIfNeeded()
+      LOCKS_EXCLUDED(event_list_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void DisableFullDeoptimizationIfNeeded()
+      LOCKS_EXCLUDED(event_list_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void EnableFullDeoptimizationIfNeededLocked()
+      LOCKS_EXCLUDED(Locks::deoptimization_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(event_list_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void DisableFullDeoptimizationIfNeededLocked()
+      LOCKS_EXCLUDED(Locks::deoptimization_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(event_list_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
  private:
   explicit JdwpState(const JdwpOptions* options);
   size_t ProcessRequest(Request& request, ExpandBuf* pReply);
