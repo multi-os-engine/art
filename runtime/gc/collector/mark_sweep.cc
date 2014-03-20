@@ -146,9 +146,13 @@ void MarkSweep::ProcessReferences(Thread* self) {
 }
 
 void MarkSweep::PreProcessReferences(Thread* self) {
-  timings_.NewSplit("PreProcessReferences");
-  GetHeap()->ProcessSoftReferences(timings_, clear_soft_references_, &IsMarkedCallback,
-                                   &MarkObjectCallback, &ProcessMarkStackPausedCallback, this);
+  if (IsConcurrent()) {
+    // No reason to do this for non-concurrent GC since pre processing soft references only helps
+    // pauses.
+    timings_.NewSplit("PreProcessReferences");
+    GetHeap()->ProcessSoftReferences(timings_, clear_soft_references_, &IsMarkedCallback,
+                                     &MarkObjectCallback, &ProcessMarkStackPausedCallback, this);
+  }
 }
 
 bool MarkSweep::HandleDirtyObjectsPhase() {
@@ -261,11 +265,7 @@ void MarkSweep::MarkingPhase() {
   MarkReachableObjects();
   // Pre-clean dirtied cards to reduce pauses.
   PreCleanCards();
-  if (IsConcurrent()) {
-    // No reason to do this for non-concurrent GC since pre processing soft references only helps
-    // pauses.
-    PreProcessReferences(self);
-  }
+  PreProcessReferences(self);
 }
 
 void MarkSweep::UpdateAndMarkModUnion() {
