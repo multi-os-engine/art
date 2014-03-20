@@ -596,13 +596,13 @@ bool Instrumentation::IsDeoptimized(mirror::ArtMethod* method) const {
   return deoptimized_methods_.count(method);
 }
 
-void Instrumentation::EnableDeoptimization() {
+void Instrumentation::EnableDeoptimizationForDebugger() {
   CHECK(deoptimized_methods_.empty());
   CHECK_EQ(deoptimization_enabled_, false);
   deoptimization_enabled_ = true;
 }
 
-void Instrumentation::DisableDeoptimization() {
+void Instrumentation::DisableDeoptimizationForDebugger() {
   CHECK_EQ(deoptimization_enabled_, true);
   // If we deoptimized everything, undo it.
   if (interpreter_stubs_installed_) {
