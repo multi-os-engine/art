@@ -115,10 +115,11 @@ class Instrumentation {
       LOCKS_EXCLUDED(Locks::thread_list_lock_, Locks::classlinker_classes_lock_);
 
   // Deoptimization.
-  void EnableDeoptimization() EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_)
-      LOCKS_EXCLUDED(deoptimized_methods_lock_);
-  void DisableDeoptimization() EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_)
-      LOCKS_EXCLUDED(deoptimized_methods_lock_);
+  bool IsDeoptimizationEnabledForDebugger() const {
+    return deoptimization_enabled_;
+  }
+  void EnableDeoptimizationForDebugger() EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void DisableDeoptimizationForDebugger() EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool ShouldNotifyMethodEnterExitEvents() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Executes everything with interpreter.
