@@ -28,8 +28,13 @@ class Arm64ManagedRegister;
 namespace mips {
 class MipsManagedRegister;
 }
+
 namespace x86 {
 class X86ManagedRegister;
+}
+
+namespace x86_64 {
+class X86_64ManagedRegister;
 }
 
 class ManagedRegister {
@@ -48,6 +53,7 @@ class ManagedRegister {
   arm64::Arm64ManagedRegister AsArm64() const;
   mips::MipsManagedRegister AsMips() const;
   x86::X86ManagedRegister AsX86() const;
+  x86_64::X86_64ManagedRegister AsX86_64() const;
 
   // It is valid to invoke Equals on and with a NoRegister.
   bool Equals(const ManagedRegister& other) const {
