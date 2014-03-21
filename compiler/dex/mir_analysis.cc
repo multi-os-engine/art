@@ -859,7 +859,7 @@ struct MethodStats {
 };
 
 void MIRGraph::AnalyzeBlock(BasicBlock* bb, MethodStats* stats) {
-  if (bb->visited || (bb->block_type != kDalvikByteCode)) {
+  if (bb->visited_ || (bb->block_type_ != kDalvikByteCode)) {
     return;
   }
   bool computational_block = true;
@@ -870,11 +870,11 @@ void MIRGraph::AnalyzeBlock(BasicBlock* bb, MethodStats* stats) {
    * edges until we reach an explicit branch or return.
    */
   BasicBlock* ending_bb = bb;
-  if (ending_bb->last_mir_insn != NULL) {
-    uint32_t ending_flags = analysis_attributes_[ending_bb->last_mir_insn->dalvikInsn.opcode];
+  if (ending_bb->last_mir_insn_ != NULL) {
+    uint32_t ending_flags = analysis_attributes_[ending_bb->last_mir_insn_->dalvikInsn.opcode];
     while ((ending_flags & AN_BRANCH) == 0) {
-      ending_bb = GetBasicBlock(ending_bb->fall_through);
-      ending_flags = analysis_attributes_[ending_bb->last_mir_insn->dalvikInsn.opcode];
+      ending_bb = GetBasicBlock(ending_bb->fall_through_);
+      ending_flags = analysis_attributes_[ending_bb->last_mir_insn_->dalvikInsn.opcode];
     }
   }
   /*
@@ -885,22 +885,22 @@ void MIRGraph::AnalyzeBlock(BasicBlock* bb, MethodStats* stats) {
    */
   int loop_scale_factor = 1;
   // Simple for and while loops
-  if ((ending_bb->taken != NullBasicBlockId) && (ending_bb->fall_through == NullBasicBlockId)) {
-    if ((GetBasicBlock(ending_bb->taken)->taken == bb->id) ||
-        (GetBasicBlock(ending_bb->taken)->fall_through == bb->id)) {
+  if ((ending_bb->taken_ != NullBasicBlockId) && (ending_bb->fall_through_ == NullBasicBlockId)) {
+    if ((GetBasicBlock(ending_bb->taken_)->taken_ == bb->id_) ||
+        (GetBasicBlock(ending_bb->taken_)->fall_through_ == bb->id_)) {
       loop_scale_factor = 25;
     }
   }
   // Simple do-while loop
-  if ((ending_bb->taken != NullBasicBlockId) && (ending_bb->taken == bb->id)) {
+  if ((ending_bb->taken_ != NullBasicBlockId) && (ending_bb->taken_ == bb->id_)) {
     loop_scale_factor = 25;
   }
 
   BasicBlock* tbb = bb;
   bool done = false;
   while (!done) {
-    tbb->visited = true;
-    for (MIR* mir = tbb->first_mir_insn; mir != NULL; mir = mir->next) {
+    tbb->visited_ = true;
+    for (MIR* mir = tbb->first_mir_insn_; mir != NULL; mir = mir->next) {
       if (static_cast<uint32_t>(mir->dalvikInsn.opcode) >= kMirOpFirst) {
         // Skip any MIR pseudo-op.
         continue;
@@ -932,7 +932,7 @@ void MIRGraph::AnalyzeBlock(BasicBlock* bb, MethodStats* stats) {
     if (tbb == ending_bb) {
       done = true;
     } else {
-      tbb = GetBasicBlock(tbb->fall_through);
+      tbb = GetBasicBlock(tbb->fall_through_);
     }
   }
   if (has_math && computational_block && (loop_scale_factor > 1)) {
@@ -1106,10 +1106,10 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
   size_t sfield_pos = max_refs;
   AllNodesIterator iter(this);
   for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
-    if (bb->block_type != kDalvikByteCode) {
+    if (bb->block_type_ != kDalvikByteCode) {
       continue;
     }
-    for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+    for (MIR* mir = bb->first_mir_insn_; mir != nullptr; mir = mir->next) {
       if (mir->dalvikInsn.opcode >= Instruction::IGET &&
           mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) {
         const Instruction* insn = Instruction::At(current_code_item_->insns_ + mir->offset);
@@ -1222,10 +1222,10 @@ void MIRGraph::DoCacheMethodLoweringInfo() {
   // Find INVOKE insns and their devirtualization targets.
   AllNodesIterator iter(this);
   for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
-    if (bb->block_type != kDalvikByteCode) {
+    if (bb->block_type_ != kDalvikByteCode) {
       continue;
     }
-    for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+    for (MIR* mir = bb->first_mir_insn_; mir != nullptr; mir = mir->next) {
       if (mir->dalvikInsn.opcode >= Instruction::INVOKE_VIRTUAL &&
           mir->dalvikInsn.opcode <= Instruction::INVOKE_INTERFACE_RANGE &&
           mir->dalvikInsn.opcode != Instruction::RETURN_VOID_BARRIER) {

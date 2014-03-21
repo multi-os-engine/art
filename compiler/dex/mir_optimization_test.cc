@@ -110,15 +110,15 @@ class ClassInitCheckEliminationTest : public testing::Test {
       BasicBlock* bb = cu_.mir_graph->NewMemBB(def->type, i);
       cu_.mir_graph->block_list_.Insert(bb);
       if (def->num_successors <= 2) {
-        bb->successor_block_list_type = kNotUsed;
-        bb->successor_blocks = nullptr;
-        bb->fall_through = (def->num_successors >= 1) ? def->successors[0] : 0u;
-        bb->taken = (def->num_successors >= 2) ? def->successors[1] : 0u;
+        bb->SetSuccessorBlockListType(kNotUsed);
+        bb->successor_blocks_ = nullptr;
+        bb->SetFallThrough((def->num_successors >= 1) ? def->successors[0] : 0u);
+        bb->SetTaken((def->num_successors >= 2) ? def->successors[1] : 0u);
       } else {
-        bb->successor_block_list_type = kPackedSwitch;
-        bb->fall_through = 0u;
-        bb->taken = 0u;
-        bb->successor_blocks = new (&cu_.arena) GrowableArray<SuccessorBlockInfo*>(
+        bb->SetSuccessorBlockListType(kPackedSwitch);
+        bb->SetFallThrough(0u);
+        bb->SetTaken(0u);
+        bb->successor_blocks_ = new (&cu_.arena) GrowableArray<SuccessorBlockInfo*>(
             &cu_.arena, def->num_successors, kGrowableArraySuccessorBlocks);
         for (size_t j = 0u; j != def->num_successors; ++j) {
           SuccessorBlockInfo* successor_block_info =
@@ -126,26 +126,26 @@ class ClassInitCheckEliminationTest : public testing::Test {
                                                                kArenaAllocSuccessor));
           successor_block_info->block = j;
           successor_block_info->key = 0u;  // Not used by class init check elimination.
-          bb->successor_blocks->Insert(successor_block_info);
+          bb->successor_blocks_->Insert(successor_block_info);
         }
       }
-      bb->predecessors = new (&cu_.arena) GrowableArray<BasicBlockId>(
+      bb->predecessors_ = new (&cu_.arena) GrowableArray<BasicBlockId>(
           &cu_.arena, def->num_predecessors, kGrowableArrayPredecessors);
       for (size_t j = 0u; j != def->num_predecessors; ++j) {
         ASSERT_NE(0u, def->predecessors[j]);
-        bb->predecessors->Insert(def->predecessors[j]);
+        bb->predecessors_->Insert(def->predecessors[j]);
       }
       if (def->type == kDalvikByteCode || def->type == kEntryBlock || def->type == kExitBlock) {
-        bb->data_flow_info = static_cast<BasicBlockDataFlow*>(
+        bb->data_flow_info_ = static_cast<BasicBlockDataFlow*>(
             cu_.arena.Alloc(sizeof(BasicBlockDataFlow), kArenaAllocDFInfo));
       }
     }
     cu_.mir_graph->num_blocks_ = count;
     ASSERT_EQ(count, cu_.mir_graph->block_list_.Size());
     cu_.mir_graph->entry_block_ = cu_.mir_graph->block_list_.Get(1);
-    ASSERT_EQ(kEntryBlock, cu_.mir_graph->entry_block_->block_type);
+    ASSERT_EQ(kEntryBlock, cu_.mir_graph->entry_block_->GetBlockType());
     cu_.mir_graph->exit_block_ = cu_.mir_graph->block_list_.Get(2);
-    ASSERT_EQ(kExitBlock, cu_.mir_graph->exit_block_->block_type);
+    ASSERT_EQ(kExitBlock, cu_.mir_graph->exit_block_->GetBlockType());
   }
 
   template <size_t count>
@@ -393,7 +393,7 @@ TEST_F(ClassInitCheckEliminationTest, Catch) {
   PrepareSFields(sfields);
   PrepareBasicBlocks(bbs);
   BasicBlock* catch_handler = cu_.mir_graph->GetBasicBlock(4u);
-  catch_handler->catch_entry = true;
+  catch_handler->MarkAsCatchEntry();
   PrepareMIRs(mirs);
   PerformClassInitCheckElimination();
   ASSERT_EQ(arraysize(expected_ignore_clinit_check), mir_count_);

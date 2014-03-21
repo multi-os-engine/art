@@ -137,7 +137,7 @@ void MirConverter::InitIR() {
 ::llvm::BasicBlock* MirConverter::FindCaseTarget(uint32_t vaddr) {
   BasicBlock* bb = mir_graph_->FindBlock(vaddr);
   DCHECK(bb != NULL);
-  return GetLLVMBlock(bb->id);
+  return GetLLVMBlock(bb->GetId());
 }
 
 void MirConverter::ConvertPackedSwitch(BasicBlock* bb,
@@ -149,7 +149,7 @@ void MirConverter::ConvertPackedSwitch(BasicBlock* bb,
   ::llvm::Value* value = GetLLVMValue(rl_src.orig_sreg);
 
   ::llvm::SwitchInst* sw =
-    irb_->CreateSwitch(value, GetLLVMBlock(bb->fall_through),
+    irb_->CreateSwitch(value, GetLLVMBlock(bb->GetFallThroughId()),
                              payload->case_count);
 
   for (uint16_t i = 0; i < payload->case_count; ++i) {
@@ -160,8 +160,8 @@ void MirConverter::ConvertPackedSwitch(BasicBlock* bb,
   ::llvm::MDNode* switch_node =
       ::llvm::MDNode::get(*context_, irb_->getInt32(table_offset));
   sw->setMetadata("SwitchTable", switch_node);
-  bb->taken = NullBasicBlockId;
-  bb->fall_through = NullBasicBlockId;
+  bb->SetTaken(NullBasicBlockId);
+  bb->SetFallThrough(NullBasicBlockId);
 }
 
 void MirConverter::ConvertSparseSwitch(BasicBlock* bb,
@@ -176,7 +176,7 @@ void MirConverter::ConvertSparseSwitch(BasicBlock* bb,
   ::llvm::Value* value = GetLLVMValue(rl_src.orig_sreg);
 
   ::llvm::SwitchInst* sw =
-    irb_->CreateSwitch(value, GetLLVMBlock(bb->fall_through),
+    irb_->CreateSwitch(value, GetLLVMBlock(bb->GetFallThroughId()),
                              payload->case_count);
 
   for (size_t i = 0; i < payload->case_count; ++i) {
@@ -187,8 +187,8 @@ void MirConverter::ConvertSparseSwitch(BasicBlock* bb,
   ::llvm::MDNode* switch_node =
       ::llvm::MDNode::get(*context_, irb_->getInt32(table_offset));
   sw->setMetadata("SwitchTable", switch_node);
-  bb->taken = NullBasicBlockId;
-  bb->fall_through = NullBasicBlockId;
+  bb->SetTaken(NullBasicBlockId);
+  bb->SetFallThrough(NullBasicBlockId);
 }
 
 void MirConverter::ConvertSget(int32_t field_index,
@@ -328,22 +328,22 @@ void MirConverter::EmitSuspendCheck() {
 
 void MirConverter::ConvertCompareAndBranch(BasicBlock* bb, MIR* mir,
                                     ConditionCode cc, RegLocation rl_src1, RegLocation rl_src2) {
-  if (mir_graph_->GetBasicBlock(bb->taken)->start_offset <= mir->offset) {
+  if (mir_graph_->GetBasicBlock(bb->GetTakenId())->GetStartOffset() <= mir->offset) {
     EmitSuspendCheck();
   }
   ::llvm::Value* src1 = GetLLVMValue(rl_src1.orig_sreg);
   ::llvm::Value* src2 = GetLLVMValue(rl_src2.orig_sreg);
   ::llvm::Value* cond_value = ConvertCompare(cc, src1, src2);
   cond_value->setName(StringPrintf("t%d", temp_name_++));
-  irb_->CreateCondBr(cond_value, GetLLVMBlock(bb->taken),
-                           GetLLVMBlock(bb->fall_through));
+  irb_->CreateCondBr(cond_value, GetLLVMBlock(bb->GetTakenId()),
+                           GetLLVMBlock(bb->GetFallThroughId()));
   // Don't redo the fallthrough branch in the BB driver
-  bb->fall_through = NullBasicBlockId;
+  bb->SetFallThrough(NullBasicBlockId);
 }
 
 void MirConverter::ConvertCompareZeroAndBranch(BasicBlock* bb,
                                         MIR* mir, ConditionCode cc, RegLocation rl_src1) {
-  if (mir_graph_->GetBasicBlock(bb->taken)->start_offset <= mir->offset) {
+  if (mir_graph_->GetBasicBlock(bb->GetTakenId())->GetStartOffset() <= mir->offset) {
     EmitSuspendCheck();
   }
   ::llvm::Value* src1 = GetLLVMValue(rl_src1.orig_sreg);
@@ -354,10 +354,10 @@ void MirConverter::ConvertCompareZeroAndBranch(BasicBlock* bb,
     src2 = irb_->getInt32(0);
   }
   ::llvm::Value* cond_value = ConvertCompare(cc, src1, src2);
-  irb_->CreateCondBr(cond_value, GetLLVMBlock(bb->taken),
-                           GetLLVMBlock(bb->fall_through));
+  irb_->CreateCondBr(cond_value, GetLLVMBlock(bb->GetTakenId()),
+                           GetLLVMBlock(bb->GetFallThroughId()));
   // Don't redo the fallthrough branch in the BB driver
-  bb->fall_through = NullBasicBlockId;
+  bb->SetFallThrough(NullBasicBlockId);
 }
 
 ::llvm::Value* MirConverter::GenDivModOp(bool is_div, bool is_long,
@@ -898,7 +898,7 @@ bool MirConverter::ConvertMIRNode(MIR* mir, BasicBlock* bb,
         }
         EmitPopShadowFrame();
         irb_->CreateRet(GetLLVMValue(rl_src[0].orig_sreg));
-        DCHECK(bb->terminated_by_return);
+        DCHECK(bb->EndsWithReturn());
       }
       break;
 
@@ -914,7 +914,7 @@ bool MirConverter::ConvertMIRNode(MIR* mir, BasicBlock* bb,
         }
         EmitPopShadowFrame();
         irb_->CreateRetVoid();
-        DCHECK(bb->terminated_by_return);
+        DCHECK(bb->EndsWithReturn());
       }
       break;
 
@@ -958,10 +958,10 @@ bool MirConverter::ConvertMIRNode(MIR* mir, BasicBlock* bb,
     case Instruction::GOTO:
     case Instruction::GOTO_16:
     case Instruction::GOTO_32: {
-        if (mir_graph_->GetBasicBlock(bb->taken)->start_offset <= bb->start_offset) {
+        if (mir_graph_->GetBasicBlock(bb->GetTakenId())->GetStartOffset() <= bb->GetStartOffset()) {
           EmitSuspendCheck();
         }
-        irb_->CreateBr(GetLLVMBlock(bb->taken));
+        irb_->CreateBr(GetLLVMBlock(bb->GetTakenId()));
       }
       break;
 
@@ -1207,11 +1207,11 @@ bool MirConverter::ConvertMIRNode(MIR* mir, BasicBlock* bb,
        * If it might rethrow, force termination
        * of the following block.
        */
-      if (bb->fall_through == NullBasicBlockId) {
+      if (bb->GetFallThroughId() == NullBasicBlockId) {
         irb_->CreateUnreachable();
       } else {
-        mir_graph_->GetBasicBlock(bb->fall_through)->fall_through = NullBasicBlockId;
-        mir_graph_->GetBasicBlock(bb->fall_through)->taken = NullBasicBlockId;
+        mir_graph_->GetBasicBlock(bb->GetFallThroughId())->SetFallThrough(NullBasicBlockId);
+        mir_graph_->GetBasicBlock(bb->GetFallThroughId())->SetTaken(NullBasicBlockId);
       }
       break;
 
@@ -1547,8 +1547,8 @@ void MirConverter::SetMethodInfo() {
 }
 
 void MirConverter::HandlePhiNodes(BasicBlock* bb, ::llvm::BasicBlock* llvm_bb) {
-  SetDexOffset(bb->start_offset);
-  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  SetDexOffset(bb->GetStartOffset());
+  for (MIR* mir = bb->first_mir_insn_; mir != NULL; mir = mir->next) {
     int opcode = mir->dalvikInsn.opcode;
     if (opcode < kMirOpFirst) {
       // Stop after first non-pseudo MIR op.
@@ -1614,8 +1614,8 @@ void MirConverter::ConvertExtendedMIR(BasicBlock* bb, MIR* mir,
       break;
     }
     case kMirOpNop:
-      if ((mir == bb->last_mir_insn) && (bb->taken == NullBasicBlockId) &&
-          (bb->fall_through == NullBasicBlockId)) {
+      if ((mir == bb->last_mir_insn_) && (bb->GetTakenId() == NullBasicBlockId) &&
+          (bb->GetFallThroughId() == NullBasicBlockId)) {
         irb_->CreateUnreachable();
       }
       break;
@@ -1643,18 +1643,18 @@ void MirConverter::ConvertExtendedMIR(BasicBlock* bb, MIR* mir,
 
 /* Handle the content in each basic block */
 bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
-  if (bb->block_type == kDead) return false;
-  ::llvm::BasicBlock* llvm_bb = GetLLVMBlock(bb->id);
+  if (bb->GetBlockType() == kDead) return false;
+  ::llvm::BasicBlock* llvm_bb = GetLLVMBlock(bb->GetId());
   if (llvm_bb == NULL) {
-    CHECK(bb->block_type == kExitBlock);
+    CHECK(bb->GetBlockType() == kExitBlock);
   } else {
     irb_->SetInsertPoint(llvm_bb);
-    SetDexOffset(bb->start_offset);
+    SetDexOffset(bb->GetStartOffset());
   }
 
   if (cu_->verbose) {
     LOG(INFO) << "................................";
-    LOG(INFO) << "Block id " << bb->id;
+    LOG(INFO) << "Block id " << bb->GetId();
     if (llvm_bb != NULL) {
       LOG(INFO) << "label " << llvm_bb->getName().str().c_str();
     } else {
@@ -1662,7 +1662,7 @@ bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
     }
   }
 
-  if (bb->block_type == kEntryBlock) {
+  if (bb->GetBlockType() == kEntryBlock) {
     SetMethodInfo();
 
     {  // Allocate shadowframe.
@@ -1701,14 +1701,14 @@ bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
         }
       }
     }
-  } else if (bb->block_type == kExitBlock) {
+  } else if (bb->GetBlockType() == kExitBlock) {
     /*
      * Because of the differences between how MIR/LIR and llvm handle exit
      * blocks, we won't explicitly covert them.  On the llvm-to-lir
      * path, it will need to be regenereated.
      */
     return false;
-  } else if (bb->block_type == kExceptionHandling) {
+  } else if (bb->GetBlockType() == kExceptionHandling) {
     /*
      * Because we're deferring null checking, delete the associated empty
      * exception block.
@@ -1719,7 +1719,7 @@ bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
 
   HandlePhiNodes(bb, llvm_bb);
 
-  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (MIR* mir = bb->first_mir_insn_; mir != NULL; mir = mir->next) {
     SetDexOffset(mir->offset);
 
     int opcode = mir->dalvikInsn.opcode;
@@ -1735,17 +1735,17 @@ bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
       work_half->ssa_rep = mir->ssa_rep;
       mir->ssa_rep = ssa_rep;
       work_half->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
-      if (bb->successor_block_list_type == kCatch) {
+      if (bb->successor_block_list_type_ == kCatch) {
         ::llvm::Function* intr = intrinsic_helper_->GetIntrinsicFunction(
             art::llvm::IntrinsicHelper::CatchTargets);
         ::llvm::Value* switch_key =
             irb_->CreateCall(intr, irb_->getInt32(mir->offset));
-        GrowableArray<SuccessorBlockInfo*>::Iterator iter(bb->successor_blocks);
+        GrowableArray<SuccessorBlockInfo*>::Iterator iter(bb->successor_blocks_);
         // New basic block to use for work half
         ::llvm::BasicBlock* work_bb =
             ::llvm::BasicBlock::Create(*context_, "", func_);
         ::llvm::SwitchInst* sw =
-            irb_->CreateSwitch(switch_key, work_bb, bb->successor_blocks->Size());
+            irb_->CreateSwitch(switch_key, work_bb, bb->successor_blocks_->Size());
         while (true) {
           SuccessorBlockInfo *successor_block_info = iter.Next();
           if (successor_block_info == NULL) break;
@@ -1774,10 +1774,10 @@ bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
     }
   }
 
-  if (bb->block_type == kEntryBlock) {
-    entry_target_bb_ = GetLLVMBlock(bb->fall_through);
-  } else if ((bb->fall_through != NullBasicBlockId) && !bb->terminated_by_return) {
-    irb_->CreateBr(GetLLVMBlock(bb->fall_through));
+  if (bb->GetBlockType() == kEntryBlock) {
+    entry_target_bb_ = GetLLVMBlock(bb->GetFallThroughId());
+  } else if ((bb->GetFallThroughId() != NullBasicBlockId) && !bb->EndsWithReturn()) {
+    irb_->CreateBr(GetLLVMBlock(bb->GetFallThroughId()));
   }
 
   return false;
@@ -1855,22 +1855,22 @@ bool MirConverter::CreateFunction() {
 
 bool MirConverter::CreateLLVMBasicBlock(BasicBlock* bb) {
   // Skip the exit block
-  if ((bb->block_type == kDead) ||(bb->block_type == kExitBlock)) {
-    id_to_block_map_.Put(bb->id, NULL);
+  if ((bb->GetBlockType() == kDead) ||(bb->GetBlockType() == kExitBlock)) {
+    id_to_block_map_.Put(bb->GetId(), NULL);
   } else {
-    int offset = bb->start_offset;
-    bool entry_block = (bb->block_type == kEntryBlock);
+    int offset = bb->GetStartOffset();
+    bool entry_block = (bb->GetBlockType() == kEntryBlock);
     ::llvm::BasicBlock* llvm_bb =
         ::llvm::BasicBlock::Create(*context_, entry_block ? "entry" :
-                                 StringPrintf(kLabelFormat, bb->catch_entry ? kCatchBlock :
-                                              kNormalBlock, offset, bb->id), func_);
+                                 StringPrintf(kLabelFormat, bb->IsCatchEntry() ? kCatchBlock :
+                                              kNormalBlock, offset, bb->GetId()), func_);
     if (entry_block) {
         entry_bb_ = llvm_bb;
         placeholder_bb_ =
             ::llvm::BasicBlock::Create(*context_, "placeholder",
                                      func_);
     }
-    id_to_block_map_.Put(bb->id, llvm_bb);
+    id_to_block_map_.Put(bb->GetId(), llvm_bb);
   }
   return false;
 }

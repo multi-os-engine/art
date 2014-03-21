@@ -110,7 +110,7 @@ inline BasicBlock* AllNodesIterator::Next(bool had_change) {
     res = all_nodes_iterator_.Next();
 
     // Are we done or is the BasicBlock not hidden?
-    if ((res == NULL) || (res->hidden == false)) {
+    if ((res == NULL) || (res->IsHidden() == false)) {
       keep_looking = false;
     }
   }

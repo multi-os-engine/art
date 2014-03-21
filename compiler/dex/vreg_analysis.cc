@@ -342,7 +342,7 @@ bool MIRGraph::InferTypeAndSize(BasicBlock* bb, MIR* mir, bool changed) {
       if ((defined_fp && (defined_core | defined_ref)) &&
           ((cu_->disable_opt & (1 << kPromoteRegs)) == 0)) {
         LOG(WARNING) << PrettyMethod(cu_->method_idx, *cu_->dex_file)
-                     << " op at block " << bb->id
+                     << " op at block " << bb->id_
                      << " has both fp and core/ref uses for same def.";
         cu_->disable_opt |= (1 << kPromoteRegs);
       }

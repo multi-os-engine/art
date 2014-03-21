@@ -31,7 +31,7 @@ namespace verifier {
 class MethodVerifier;
 }  // namespace verifier
 
-struct BasicBlock;
+class BasicBlock;
 struct CallInfo;
 struct MIR;
 class MIRGraph;

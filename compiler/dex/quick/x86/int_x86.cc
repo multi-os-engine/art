@@ -270,7 +270,7 @@ void X86Mir2Lir::GenSelect(BasicBlock* bb, MIR* mir) {
 }
 
 void X86Mir2Lir::GenFusedLongCmpBranch(BasicBlock* bb, MIR* mir) {
-  LIR* taken = &block_label_list_[bb->taken];
+  LIR* taken = &block_label_list_[bb->GetTakenId()];
   RegLocation rl_src1 = mir_graph_->GetSrcWide(mir, 0);
   RegLocation rl_src2 = mir_graph_->GetSrcWide(mir, 2);
   ConditionCode ccode = mir->meta.ccode;
@@ -326,7 +326,7 @@ void X86Mir2Lir::GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
                                           int64_t val, ConditionCode ccode) {
   int32_t val_lo = Low32Bits(val);
   int32_t val_hi = High32Bits(val);
-  LIR* taken = &block_label_list_[bb->taken];
+  LIR* taken = &block_label_list_[bb->GetTakenId()];
   rl_src1 = LoadValueWide(rl_src1, kCoreReg);
   bool is_equality_test = ccode == kCondEq || ccode == kCondNe;
   if (is_equality_test && val != 0) {

@@ -115,7 +115,7 @@ typedef uint32_t CodeOffset;         // Native code offset in bytes.
 #define INVALID_SREG (-1)
 #endif
 
-struct BasicBlock;
+class BasicBlock;
 struct CallInfo;
 struct CompilationUnit;
 struct InlineMethod;

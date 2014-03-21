@@ -520,10 +520,10 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::GOTO:
     case Instruction::GOTO_16:
     case Instruction::GOTO_32:
-      if (mir_graph_->IsBackedge(bb, bb->taken)) {
-        GenSuspendTestAndBranch(opt_flags, &label_list[bb->taken]);
+      if (mir_graph_->IsBackedge(bb, bb->GetTakenId())) {
+        GenSuspendTestAndBranch(opt_flags, &label_list[bb->GetTakenId()]);
       } else {
-        OpUnconditionalBranch(&label_list[bb->taken]);
+        OpUnconditionalBranch(&label_list[bb->GetTakenId()]);
       }
       break;
 
@@ -552,13 +552,13 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::IF_GE:
     case Instruction::IF_GT:
     case Instruction::IF_LE: {
-      LIR* taken = &label_list[bb->taken];
-      LIR* fall_through = &label_list[bb->fall_through];
+      LIR* taken = &label_list[bb->GetTakenId()];
+      LIR* fall_through = &label_list[bb->GetFallThroughId()];
       // Result known at compile time?
       if (rl_src[0].is_const && rl_src[1].is_const) {
         bool is_taken = EvaluateBranch(opcode, mir_graph_->ConstantValue(rl_src[0].orig_sreg),
                                        mir_graph_->ConstantValue(rl_src[1].orig_sreg));
-        BasicBlockId target_id = is_taken ? bb->taken : bb->fall_through;
+        BasicBlockId target_id = is_taken ? bb->GetTakenId() : bb->GetFallThroughId();
         if (mir_graph_->IsBackedge(bb, target_id)) {
           GenSuspendTest(opt_flags);
         }
@@ -578,12 +578,12 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::IF_GEZ:
     case Instruction::IF_GTZ:
     case Instruction::IF_LEZ: {
-      LIR* taken = &label_list[bb->taken];
-      LIR* fall_through = &label_list[bb->fall_through];
+      LIR* taken = &label_list[bb->GetTakenId()];
+      LIR* fall_through = &label_list[bb->GetFallThroughId()];
       // Result known at compile time?
       if (rl_src[0].is_const) {
         bool is_taken = EvaluateBranch(opcode, mir_graph_->ConstantValue(rl_src[0].orig_sreg), 0);
-        BasicBlockId target_id = is_taken ? bb->taken : bb->fall_through;
+        BasicBlockId target_id = is_taken ? bb->GetTakenId() : bb->GetFallThroughId();
         if (mir_graph_->IsBackedge(bb, target_id)) {
           GenSuspendTest(opt_flags);
         }
@@ -990,12 +990,12 @@ void Mir2Lir::GenPrintLabel(MIR* mir) {
 
 // Handle the content in each basic block.
 bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
-  if (bb->block_type == kDead) return false;
-  current_dalvik_offset_ = bb->start_offset;
+  if (bb->GetBlockType() == kDead) return false;
+  current_dalvik_offset_ = bb->GetStartOffset();
   MIR* mir;
-  int block_id = bb->id;
+  int block_id = bb->GetId();
 
-  block_label_list_[block_id].operands[0] = bb->start_offset;
+  block_label_list_[block_id].operands[0] = bb->GetStartOffset();
 
   // Insert the block label.
   block_label_list_[block_id].opcode = kPseudoNormalBlockLabel;
@@ -1005,24 +1005,24 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
   LIR* head_lir = NULL;
 
   // If this is a catch block, export the start address.
-  if (bb->catch_entry) {
+  if (bb->IsCatchEntry()) {
     head_lir = NewLIR0(kPseudoExportedPC);
   }
 
   // Free temp registers and reset redundant store tracking.
   ClobberAllTemps();
 
-  if (bb->block_type == kEntryBlock) {
+  if (bb->GetBlockType() == kEntryBlock) {
     ResetRegPool();
     int start_vreg = cu_->num_dalvik_registers - cu_->num_ins;
     GenEntrySequence(&mir_graph_->reg_location_[start_vreg],
                          mir_graph_->reg_location_[mir_graph_->GetMethodSReg()]);
-  } else if (bb->block_type == kExitBlock) {
+  } else if (bb->GetBlockType() == kExitBlock) {
     ResetRegPool();
     GenExitSequence();
   }
 
-  for (mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (mir = bb->first_mir_insn_; mir != NULL; mir = mir->next) {
     ResetRegPool();
     if (cu_->disable_opt & (1 << kTrackLiveTemps)) {
       ClobberAllTemps();
@@ -1046,7 +1046,7 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
 
     // Remember the first LIR for this block.
     if (head_lir == NULL) {
-      head_lir = &block_label_list_[bb->id];
+      head_lir = &block_label_list_[bb->GetId()];
       // Set the first label as a scheduling barrier.
       DCHECK(!head_lir->flags.use_def_invalid);
       head_lir->u.m.def_mask = ENCODE_ALL;
@@ -1089,18 +1089,18 @@ bool Mir2Lir::SpecialMIR2LIR(const InlineMethod& special) {
     // TODO: no direct access of growable lists.
     int dfs_index = mir_graph_->GetDfsOrder()->Get(idx);
     bb = mir_graph_->GetBasicBlock(dfs_index);
-    if (bb->block_type == kDalvikByteCode) {
+    if (bb->GetBlockType() == kDalvikByteCode) {
       break;
     }
   }
   if (bb == NULL) {
     return false;
   }
-  DCHECK_EQ(bb->start_offset, 0);
-  DCHECK(bb->first_mir_insn != NULL);
+  DCHECK_EQ(bb->GetStartOffset(), 0);
+  DCHECK(bb->first_mir_insn_ != NULL);
 
   // Get the first instruction.
-  MIR* mir = bb->first_mir_insn;
+  MIR* mir = bb->first_mir_insn_;
 
   // Free temp registers and reset redundant store tracking.
   ResetRegPool();
@@ -1124,14 +1124,14 @@ void Mir2Lir::MethodMIR2LIR() {
   while (curr_bb != NULL) {
     MethodBlockCodeGen(curr_bb);
     // If the fall_through block is no longer laid out consecutively, drop in a branch.
-    BasicBlock* curr_bb_fall_through = mir_graph_->GetBasicBlock(curr_bb->fall_through);
+    BasicBlock* curr_bb_fall_through = mir_graph_->GetBasicBlock(curr_bb->GetFallThroughId());
     if ((curr_bb_fall_through != NULL) && (curr_bb_fall_through != next_bb)) {
-      OpUnconditionalBranch(&block_label_list_[curr_bb->fall_through]);
+      OpUnconditionalBranch(&block_label_list_[curr_bb->GetFallThroughId()]);
     }
     curr_bb = next_bb;
     do {
       next_bb = iter.Next();
-    } while ((next_bb != NULL) && (next_bb->block_type == kDead));
+    } while ((next_bb != NULL) && (next_bb->GetBlockType() == kDead));
   }
   HandleSlowPaths();
 }
