@@ -391,7 +391,8 @@ enum OpFeatureFlags {
   kRegUseSP,
   kSetsCCodes,
   kUsesCCodes,
-  kUseFpStack
+  kUseFpStack,
+  kRegDef2
 };
 
 enum SelectInstructionKind {

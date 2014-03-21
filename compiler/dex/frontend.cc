@@ -161,9 +161,35 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
   cu.compiler = compiler;
   // TODO: x86_64 & arm64 are not yet implemented.
   DCHECK((cu.instruction_set == kThumb2) ||
+         (cu.instruction_set == kArm64) ||
          (cu.instruction_set == kX86) ||
          (cu.instruction_set == kMips));
 
+  // TODO(Arm64): for now we restrict compilation for the Arm64 backend (to be removed).
+  if (cu.instruction_set == kArm64) {
+    bool compile_method = false;
+    const char *method_name = PrettyMethod(method_idx, dex_file).c_str();
+    const char *good_keywords[] = {"ArtA64Test"};
+    const char *bad_keywords[] = {"<init>", "____no"};
+
+    for (unsigned int i = 0; i < arraysize(good_keywords); i++) {
+      if (strstr(method_name, good_keywords[i])) {
+        compile_method = true;
+        for (unsigned int j = 0; j < arraysize(bad_keywords); j++) {
+          if (strstr(method_name, bad_keywords[j])) {
+            compile_method = false;
+            break;
+          }
+        }
+        break;
+      }
+    }
+
+    if (!compile_method) {
+      LOG(INFO) << "Skipping method " << method_name;
+      return NULL;
+    }
+  }
 
   /* Adjust this value accordingly once inlining is performed */
   cu.num_dalvik_registers = code_item->registers_size_;
@@ -200,6 +226,12 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
         (1 << kBBOpt) |
         (1 << kMatch) |
         (1 << kPromoteCompilerTemps));
+  }
+
+  if (cu.instruction_set == kArm64) {
+    // TODO(Arm64): enable optimizations once backend is mature enough.
+    LOG(INFO) << "Using experimental instruction set A64";
+    cu.disable_opt = ~(uint32_t)0;
   }
 
   cu.StartTimingSplit("BuildMIRGraph");

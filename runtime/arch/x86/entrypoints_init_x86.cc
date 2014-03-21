@@ -110,6 +110,13 @@ extern "C" void art_quick_throw_no_such_method(int32_t method_idx);
 extern "C" void art_quick_throw_null_pointer_exception();
 extern "C" void art_quick_throw_stack_overflow(void*);
 
+#ifdef WITH_HOST_SIMULATOR
+// Host foreign architecture simulation
+extern "C" void art_quick_foreign_code_call(void);
+extern "C" void art_quick_foreign_code_call_back(void *pc, void *sp, uint32_t frame_size,
+                                                   intptr_t* regs, void *callback);
+#endif
+
 // Generic JNI downcall
 extern "C" void art_quick_generic_jni_trampoline(mirror::ArtMethod*);
 
@@ -223,6 +230,12 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pThrowNoSuchMethod = art_quick_throw_no_such_method;
   qpoints->pThrowNullPointer = art_quick_throw_null_pointer_exception;
   qpoints->pThrowStackOverflow = art_quick_throw_stack_overflow;
+
+#ifdef WITH_HOST_SIMULATOR
+  // Foreign simulation
+  qpoints->pForeignCodeCall = art_quick_foreign_code_call;
+  qpoints->pForeignCodeCallBack = art_quick_foreign_code_call_back;
+#endif
 };
 
 }  // namespace art
