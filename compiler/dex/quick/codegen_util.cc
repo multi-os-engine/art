@@ -772,7 +772,7 @@ int Mir2Lir::AssignFillArrayDataOffset(CodeOffset offset) {
  * are set to prevent code motion.  KeyVal is just there for debugging.
  */
 LIR* Mir2Lir::InsertCaseLabel(DexOffset vaddr, int keyVal) {
-  LIR* boundary_lir = &block_label_list_[mir_graph_->FindBlock(vaddr)->id];
+  LIR* boundary_lir = &block_label_list_[mir_graph_->FindBlock(vaddr)->GetId()];
   LIR* res = boundary_lir;
   if (cu_->verbose) {
     // Only pay the expense if we're pretty-printing.

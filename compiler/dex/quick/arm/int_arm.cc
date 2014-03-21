@@ -129,8 +129,8 @@ void ArmMir2Lir::GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
   int32_t val_hi = High32Bits(val);
   DCHECK_GE(ModifiedImmediate(val_lo), 0);
   DCHECK_GE(ModifiedImmediate(val_hi), 0);
-  LIR* taken = &block_label_list_[bb->taken];
-  LIR* not_taken = &block_label_list_[bb->fall_through];
+  LIR* taken = &block_label_list_[bb->GetTakenId()];
+  LIR* not_taken = &block_label_list_[bb->GetStartOffset()];
   rl_src1 = LoadValueWide(rl_src1, kCoreReg);
   RegStorage low_reg = rl_src1.reg.GetLow();
   RegStorage high_reg = rl_src1.reg.GetHigh();
@@ -265,8 +265,8 @@ void ArmMir2Lir::GenFusedLongCmpBranch(BasicBlock* bb, MIR* mir) {
       return;
     }
   }
-  LIR* taken = &block_label_list_[bb->taken];
-  LIR* not_taken = &block_label_list_[bb->fall_through];
+  LIR* taken = &block_label_list_[bb->GetTakenId()];
+  LIR* not_taken = &block_label_list_[bb->GetFallThroughId()];
   rl_src1 = LoadValueWide(rl_src1, kCoreReg);
   rl_src2 = LoadValueWide(rl_src2, kCoreReg);
   OpRegReg(kOpCmp, rl_src1.reg.GetHigh(), rl_src2.reg.GetHigh());

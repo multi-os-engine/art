@@ -40,7 +40,7 @@ void X86Mir2Lir::GenSparseSwitch(MIR* mir, DexOffset table_offset,
     int key = keys[i];
     BasicBlock* case_block =
         mir_graph_->FindBlock(current_dalvik_offset_ + targets[i]);
-    OpCmpImmBranch(kCondEq, rl_src.reg, key, &block_label_list_[case_block->id]);
+    OpCmpImmBranch(kCondEq, rl_src.reg, key, &block_label_list_[case_block->GetId()]);
   }
 }
 

@@ -25,6 +25,7 @@
 #include "invoke_type.h"
 #include "mir_field_info.h"
 #include "mir_method_info.h"
+#include "utils/allocation.h"
 #include "utils/arena_bit_vector.h"
 #include "utils/growable_array.h"
 #include "reg_storage.h"
@@ -289,32 +290,225 @@ struct MIR {
 
 struct SuccessorBlockInfo;
 
-struct BasicBlock {
-  BasicBlockId id;
-  BasicBlockId dfs_id;
-  NarrowDexOffset start_offset;     // Offset in code units.
-  BasicBlockId fall_through;
-  BasicBlockId taken;
-  BasicBlockId i_dom;               // Immediate dominator.
-  uint16_t nesting_depth;
-  BBType block_type:4;
-  BlockListType successor_block_list_type:4;
-  bool visited:1;
-  bool hidden:1;
-  bool catch_entry:1;
-  bool explicit_throw:1;
-  bool conditional_branch:1;
-  bool terminated_by_return:1;  // Block ends with a Dalvik return opcode.
-  bool dominates_return:1;      // Is a member of return extended basic block.
-  bool use_lvn:1;               // Run local value numbering on this block.
-  MIR* first_mir_insn;
-  MIR* last_mir_insn;
-  BasicBlockDataFlow* data_flow_info;
-  ArenaBitVector* dominators;
-  ArenaBitVector* i_dominated;      // Set nodes being immediately dominated.
-  ArenaBitVector* dom_frontier;     // Dominance frontier.
-  GrowableArray<BasicBlockId>* predecessors;
-  GrowableArray<SuccessorBlockInfo*>* successor_blocks;
+class BasicBlock : public ArenaObject {
+ public:
+  explicit BasicBlock(ArenaAllocator* arena, BasicBlockId bb_id, BBType bb_type)
+      : first_mir_insn_(nullptr),
+        last_mir_insn_(nullptr),
+        data_flow_info_(nullptr),
+        dominators_(nullptr),
+        i_dominated_(nullptr),
+        dom_frontier_(nullptr),
+        successor_blocks_(nullptr),
+        id_(bb_id),
+        dfs_id_(NullBasicBlockId),
+        start_offset_(0),
+        fall_through_(NullBasicBlockId),
+        taken_(NullBasicBlockId),
+        i_dom_(NullBasicBlockId),
+        nesting_depth_(0),
+        block_type_(bb_type),
+        successor_block_list_type_(kNotUsed),
+        visited_(false),
+        hidden_(false),
+        catch_entry_(false),
+        explicit_throw_(false),
+        conditional_branch_(false),
+        terminated_by_return_(false),
+        dominates_return_(false),
+        use_lvn_(false) {
+    // TUNING: better estimate of the exit block predecessors?
+    predecessors_ = new (arena) GrowableArray<BasicBlockId>(arena, (block_type_ == kExitBlock) ? 2048 : 2,
+                                                           kGrowableArrayPredecessors);
+  }
+
+
+  MIR* first_mir_insn_;
+  MIR* last_mir_insn_;
+  BasicBlockDataFlow* data_flow_info_;
+  ArenaBitVector* dominators_;
+  ArenaBitVector* i_dominated_;      // Set nodes being immediately dominated.
+  ArenaBitVector* dom_frontier_;     // Dominance frontier.
+  GrowableArray<BasicBlockId>* predecessors_;
+  GrowableArray<SuccessorBlockInfo*>* successor_blocks_;
+
+  /**
+   * @return Returns the id of block.
+   */
+  BasicBlockId GetId() const {
+    return id_;
+  }
+
+  /**
+   * @return Returns the depth-first id of block.
+   */
+  BasicBlockId GetDfsId() const {
+    return dfs_id_;
+  }
+
+  /**
+   * @return Returns the start dex offset of the block.
+   */
+  NarrowDexOffset GetStartOffset() const {
+    return start_offset_;
+  }
+
+  /**
+   * @return Returns the id of the fall through block.
+   */
+  BasicBlockId GetFallThroughId() const {
+    return fall_through_;
+  }
+
+  /**
+   * @brief Used to record the id of the fall through block.
+   * @param new_fall_through_id The id of fall through.
+   */
+  void SetFallThrough(BasicBlockId new_fall_through_id) {
+    fall_through_ = new_fall_through_id;
+  }
+
+  /**
+   * @return Returns the id of the taken block.
+   */
+  BasicBlockId GetTakenId() const {
+    return taken_;
+  }
+
+  /**
+   * @brief Used to record the id of the taken block.
+   * @param new_taken_id The id of taken.
+   */
+  void SetTaken(BasicBlockId new_taken_id) {
+    taken_ = new_taken_id;
+  }
+
+  /**
+   * @return Returns the id of the immediate dominator.
+   */
+  BasicBlockId GetImmediateDominatorId() const {
+    return i_dom_;
+  }
+
+  /**
+   * @return Returns the loop nesting depth for this block.
+   */
+  uint16_t GetNestingDepth() const {
+    return nesting_depth_;
+  }
+
+  /**
+   * @return Returns the block type.
+   */
+  BBType GetBlockType() const {
+    return block_type_;
+  }
+
+  /**
+   * @return Returns the type of list of the successor blocks.
+   */
+  BlockListType GetSuccessorBlockListType() const {
+    return successor_block_list_type_;
+  }
+
+  /**
+   * @brief Used to set the type of the successor block list.
+   * @param new_type The new type to set for successor list.
+   */
+  void SetSuccessorBlockListType(BlockListType new_type) {
+    successor_block_list_type_ = new_type;
+  }
+
+  /**
+   * @return Returns whether this block is marked as visited.
+   */
+  bool IsVisited() const {
+    return visited_;
+  }
+
+  /**
+   * @brief Marks the current block as visited.
+   */
+  void MarkVisited() {
+    visited_ = true;
+  }
+
+  /**
+   * @brief Clears the visited flag of this block.
+   */
+  void ClearVisited() {
+    visited_ = false;
+  }
+
+  /**
+   * @return Returns whether this block is marked as hidden.
+   */
+  bool IsHidden() const {
+    return hidden_;
+  }
+
+  /**
+   * @brief Marks the current block as hidden.
+   */
+  void MarkHidden() {
+    hidden_ = true;
+  }
+
+  /**
+   * @brief Clears the hidden flag of this block.
+   */
+  void ClearHidden() {
+    hidden_ = false;
+  }
+
+  /**
+   * @return Returns whether this block is a catch block.
+   */
+  bool IsCatchEntry() const {
+    return catch_entry_;
+  }
+
+  /**
+   * @brief Marks this block as a catch block.
+   */
+  void MarkAsCatchEntry() {
+    catch_entry_ = true;
+  }
+
+  /**
+   * @return Returns whether this block ends with an explicit throw.
+   */
+  bool EndsWithExplicitThrow() const {
+    return explicit_throw_;
+  }
+
+  /**
+   * @return Returns whether this block ends with conditional branch.
+   */
+  bool EndsWithConditionalBranch() const {
+    return conditional_branch_;
+  }
+
+  /**
+   * @return Returns whether this block is terminated by a return.
+   */
+  bool EndsWithReturn() const {
+    return terminated_by_return_;
+  }
+
+  /**
+   * @return Returns whether this block dominates the return.
+   */
+  bool DominatesReturn() const {
+    return dominates_return_;
+  }
+
+  /**
+   * @return Returns whether local value numbering should be run on this block.
+   */
+  bool UseLVN() const {
+    return use_lvn_;
+  }
 
   void AppendMIR(MIR* mir);
   void PrependMIR(MIR* mir);
@@ -329,6 +523,30 @@ struct BasicBlock {
    * @return Returns the following MIR if one can be found.
    */
   MIR* GetNextUnconditionalMir(MIRGraph* mir_graph, MIR* current);
+
+ private:
+  BasicBlockId id_;
+  BasicBlockId dfs_id_;
+  NarrowDexOffset start_offset_;     // Offset in code units.
+  BasicBlockId fall_through_;
+  BasicBlockId taken_;
+  BasicBlockId i_dom_;               // Immediate dominator.
+  uint16_t nesting_depth_;
+  BBType block_type_:4;
+  BlockListType successor_block_list_type_:4;
+  bool visited_:1;
+  bool hidden_:1;
+  bool catch_entry_:1;
+  bool explicit_throw_:1;
+  bool conditional_branch_:1;
+  bool terminated_by_return_:1;  // Block ends with a Dalvik return opcode.
+  bool dominates_return_:1;      // Is a member of return extended basic block.
+  bool use_lvn_:1;               // Run local value numbering on this block.
+
+  // The MIRGraph needs to be able to manipulate fields in the BasicBlock
+  friend class MIRGraph;
+
+  DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
 
 /*
@@ -756,11 +974,11 @@ class MIRGraph {
 
   bool IsBackedge(BasicBlock* branch_bb, BasicBlockId target_bb_id) {
     return ((target_bb_id != NullBasicBlockId) &&
-            (GetBasicBlock(target_bb_id)->start_offset <= branch_bb->start_offset));
+            (GetBasicBlock(target_bb_id)->start_offset_ <= branch_bb->start_offset_));
   }
 
   bool IsBackwardsBranch(BasicBlock* branch_bb) {
-    return IsBackedge(branch_bb, branch_bb->taken) || IsBackedge(branch_bb, branch_bb->fall_through);
+    return IsBackedge(branch_bb, branch_bb->taken_) || IsBackedge(branch_bb, branch_bb->fall_through_);
   }
 
   void CountBranch(DexOffset target_offset) {
@@ -877,7 +1095,7 @@ class MIRGraph {
    * @brief Count the uses in the BasicBlock
    * @param bb the BasicBlock
    */
-  void CountUses(struct BasicBlock* bb);
+  void CountUses(BasicBlock* bb);
 
   static uint64_t GetDataFlowAttributes(Instruction::Code opcode);
   static uint64_t GetDataFlowAttributes(MIR* mir);
@@ -948,7 +1166,7 @@ class MIRGraph {
   void SetConstantWide(int ssa_reg, int64_t value);
   int GetSSAUseCount(int s_reg);
   bool BasicBlockOpt(BasicBlock* bb);
-  bool BuildExtendedBBList(struct BasicBlock* bb);
+  bool BuildExtendedBBList(BasicBlock* bb);
   bool FillDefBlockMatrix(BasicBlock* bb);
   void InitializeDominationInfo(BasicBlock* bb);
   bool ComputeblockIDom(BasicBlock* bb);

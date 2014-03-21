@@ -29,6 +29,10 @@ class ArenaObject {
     return allocator->Alloc(size, kArenaAllocMisc);
   }
 
+  void* operator new(size_t size, ArenaAllocator* allocator, ArenaAllocKind allocation_kind) {
+    return allocator->Alloc(size, allocation_kind);
+  }
+
   void operator delete(void*, size_t) {
     LOG(FATAL) << "UNREACHABLE";
   }

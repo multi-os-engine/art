@@ -869,16 +869,16 @@ bool MIRGraph::FindLocalLiveIn(BasicBlock* bb) {
   MIR* mir;
   ArenaBitVector *use_v, *def_v, *live_in_v;
 
-  if (bb->data_flow_info == NULL) return false;
+  if (bb->data_flow_info_ == NULL) return false;
 
-  use_v = bb->data_flow_info->use_v =
+  use_v = bb->data_flow_info_->use_v =
       new (arena_) ArenaBitVector(arena_, cu_->num_dalvik_registers, false, kBitMapUse);
-  def_v = bb->data_flow_info->def_v =
+  def_v = bb->data_flow_info_->def_v =
       new (arena_) ArenaBitVector(arena_, cu_->num_dalvik_registers, false, kBitMapDef);
-  live_in_v = bb->data_flow_info->live_in_v =
+  live_in_v = bb->data_flow_info_->live_in_v =
       new (arena_) ArenaBitVector(arena_, cu_->num_dalvik_registers, false, kBitMapLiveIn);
 
-  for (mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (mir = bb->first_mir_insn_; mir != NULL; mir = mir->next) {
     uint64_t df_attributes = GetDataFlowAttributes(mir);
     MIR::DecodedInstruction* d_insn = &mir->dalvikInsn;
 
@@ -993,9 +993,9 @@ void MIRGraph::DataFlowSSAFormat3RC(MIR* mir) {
 bool MIRGraph::DoSSAConversion(BasicBlock* bb) {
   MIR* mir;
 
-  if (bb->data_flow_info == NULL) return false;
+  if (bb->data_flow_info_ == NULL) return false;
 
-  for (mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (mir = bb->first_mir_insn_; mir != NULL; mir = mir->next) {
     mir->ssa_rep =
         static_cast<struct SSARepresentation *>(arena_->Alloc(sizeof(SSARepresentation),
                                                               kArenaAllocDFInfo));
@@ -1114,11 +1114,11 @@ bool MIRGraph::DoSSAConversion(BasicBlock* bb) {
    * input to PHI nodes can be derived from the snapshot of all
    * predecessor blocks.
    */
-  bb->data_flow_info->vreg_to_ssa_map =
+  bb->data_flow_info_->vreg_to_ssa_map =
       static_cast<int*>(arena_->Alloc(sizeof(int) * cu_->num_dalvik_registers,
                                       kArenaAllocDFInfo));
 
-  memcpy(bb->data_flow_info->vreg_to_ssa_map, vreg_to_ssa_map_,
+  memcpy(bb->data_flow_info_->vreg_to_ssa_map, vreg_to_ssa_map_,
          sizeof(int) * cu_->num_dalvik_registers);
   return true;
 }
@@ -1175,11 +1175,11 @@ void MIRGraph::CompilerInitializeSSAConversion() {
   while (true) {
     BasicBlock* bb = iterator.Next();
     if (bb == NULL) break;
-    if (bb->hidden == true) continue;
-    if (bb->block_type == kDalvikByteCode ||
-      bb->block_type == kEntryBlock ||
-      bb->block_type == kExitBlock) {
-      bb->data_flow_info =
+    if (bb->hidden_ == true) continue;
+    if (bb->block_type_ == kDalvikByteCode ||
+      bb->block_type_ == kEntryBlock ||
+      bb->block_type_ == kExitBlock) {
+      bb->data_flow_info_ =
           static_cast<BasicBlockDataFlow*>(arena_->Alloc(sizeof(BasicBlockDataFlow),
                                                          kArenaAllocDFInfo));
       }
@@ -1241,14 +1241,14 @@ bool MIRGraph::InvokeUsesMethodStar(MIR* mir) {
  * counts explicitly used s_regs.  A later phase will add implicit
  * counts for things such as Method*, null-checked references, etc.
  */
-void MIRGraph::CountUses(struct BasicBlock* bb) {
-  if (bb->block_type != kDalvikByteCode) {
+void MIRGraph::CountUses(BasicBlock* bb) {
+  if (bb->block_type_ != kDalvikByteCode) {
     return;
   }
   // Each level of nesting adds *100 to count, up to 3 levels deep.
-  uint32_t depth = std::min(3U, static_cast<uint32_t>(bb->nesting_depth));
+  uint32_t depth = std::min(3U, static_cast<uint32_t>(bb->nesting_depth_));
   uint32_t weight = std::max(1U, depth * 100);
-  for (MIR* mir = bb->first_mir_insn; (mir != NULL); mir = mir->next) {
+  for (MIR* mir = bb->first_mir_insn_; (mir != NULL); mir = mir->next) {
     if (mir->ssa_rep == NULL) {
       continue;
     }
@@ -1279,23 +1279,23 @@ void MIRGraph::CountUses(struct BasicBlock* bb) {
 
 /* Verify if all the successor is connected with all the claimed predecessors */
 bool MIRGraph::VerifyPredInfo(BasicBlock* bb) {
-  GrowableArray<BasicBlockId>::Iterator iter(bb->predecessors);
+  GrowableArray<BasicBlockId>::Iterator iter(bb->predecessors_);
 
   while (true) {
     BasicBlock *pred_bb = GetBasicBlock(iter.Next());
     if (!pred_bb) break;
     bool found = false;
-    if (pred_bb->taken == bb->id) {
+    if (pred_bb->taken_ == bb->id_) {
         found = true;
-    } else if (pred_bb->fall_through == bb->id) {
+    } else if (pred_bb->fall_through_ == bb->id_) {
         found = true;
-    } else if (pred_bb->successor_block_list_type != kNotUsed) {
-      GrowableArray<SuccessorBlockInfo*>::Iterator iterator(pred_bb->successor_blocks);
+    } else if (pred_bb->successor_block_list_type_ != kNotUsed) {
+      GrowableArray<SuccessorBlockInfo*>::Iterator iterator(pred_bb->successor_blocks_);
       while (true) {
         SuccessorBlockInfo *successor_block_info = iterator.Next();
         if (successor_block_info == NULL) break;
         BasicBlockId succ_bb = successor_block_info->block;
-        if (succ_bb == bb->id) {
+        if (succ_bb == bb->id_) {
             found = true;
             break;
         }

@@ -822,12 +822,12 @@ void X86Mir2Lir::AnalyzeMIR() {
 }
 
 void X86Mir2Lir::AnalyzeBB(BasicBlock * bb) {
-  if (bb->block_type == kDead) {
+  if (bb->GetBlockType() == kDead) {
     // Ignore dead blocks
     return;
   }
 
-  for (MIR *mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (MIR *mir = bb->first_mir_insn_; mir != NULL; mir = mir->next) {
     int opcode = mir->dalvikInsn.opcode;
     if (opcode >= kMirOpFirst) {
       AnalyzeExtendedMIR(opcode, bb, mir);
