@@ -163,11 +163,12 @@ JdwpError JdwpState::RegisterEvent(JdwpEvent* pEvent) {
    * If one or more "break"-type mods are used, register them with
    * the interpreter.
    */
+  DeoptimizeRequest req;
   for (int i = 0; i < pEvent->modCount; i++) {
     const JdwpEventMod* pMod = &pEvent->mods[i];
     if (pMod->modKind == MK_LOCATION_ONLY) {
       /* should only be for Breakpoint, Step, and Exception */
-      Dbg::WatchLocation(&pMod->locationOnly.loc);
+      Dbg::WatchLocation(&pMod->locationOnly.loc, &req);
     } else if (pMod->modKind == MK_STEP) {
       /* should only be for EK_SINGLE_STEP; should only be one */
       JdwpStepSize size = static_cast<JdwpStepSize>(pMod->step.size);
@@ -180,6 +181,11 @@ JdwpError JdwpState::RegisterEvent(JdwpEvent* pEvent) {
       /* should be for EK_FIELD_ACCESS or EK_FIELD_MODIFICATION */
       dumpEvent(pEvent);  /* TODO - need for field watches */
     }
+  }
+  if (NeedsFullDeoptimization(pEvent->eventKind)) {
+    CHECK_EQ(req.kind, DeoptimizeRequest::kNothing);
+    CHECK(req.method == nullptr);
+    req.kind = DeoptimizeRequest::kFullDeoptimization;
   }
 
   {
@@ -194,16 +200,7 @@ JdwpError JdwpState::RegisterEvent(JdwpEvent* pEvent) {
     event_list_ = pEvent;
     ++event_list_size_;
 
-    /**
-     * Do we need to enable full deoptimization ?
-     */
-    if (NeedsFullDeoptimization(pEvent->eventKind)) {
-      if (full_deoptimization_requests_ == 0) {
-        // This is the first event that needs full deoptimization: enable it.
-        Dbg::EnableFullDeoptimization();
-      }
-      ++full_deoptimization_requests_;
-    }
+    Dbg::PushRequest(&req);
   }
 
   Dbg::ManageDeoptimization();
@@ -238,31 +235,28 @@ void JdwpState::UnregisterEvent(JdwpEvent* pEvent) {
   /*
    * Unhook us from the interpreter, if necessary.
    */
+  DeoptimizeRequest req;
   for (int i = 0; i < pEvent->modCount; i++) {
     JdwpEventMod* pMod = &pEvent->mods[i];
     if (pMod->modKind == MK_LOCATION_ONLY) {
       /* should only be for Breakpoint, Step, and Exception */
-      Dbg::UnwatchLocation(&pMod->locationOnly.loc);
+      Dbg::UnwatchLocation(&pMod->locationOnly.loc, &req);
     }
     if (pMod->modKind == MK_STEP) {
       /* should only be for EK_SINGLE_STEP; should only be one */
       Dbg::UnconfigureStep(pMod->step.threadId);
     }
   }
+  if (NeedsFullDeoptimization(pEvent->eventKind)) {
+    CHECK_EQ(req.kind, DeoptimizeRequest::kNothing);
+    CHECK(req.method == nullptr);
+    req.kind = DeoptimizeRequest::kFullUndeoptimization;
+  }
 
   --event_list_size_;
   CHECK(event_list_size_ != 0 || event_list_ == NULL);
 
-  /**
-   * Can we disable full deoptimization ?
-   */
-  if (NeedsFullDeoptimization(pEvent->eventKind)) {
-    --full_deoptimization_requests_;
-    if (full_deoptimization_requests_ == 0) {
-      // We no longer need full deoptimization.
-      Dbg::DisableFullDeoptimization();
-    }
-  }
+  Dbg::PushRequest(&req);
 }
 
 /*

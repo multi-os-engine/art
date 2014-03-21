@@ -194,17 +194,9 @@ size_t Dbg::alloc_record_head_ = 0;
 size_t Dbg::alloc_record_count_ = 0;
 
 // Deoptimization support.
-struct MethodInstrumentationRequest {
-  bool deoptimize;
-
-  // Method for selective deoptimization. NULL means full deoptimization.
-  mirror::ArtMethod* method;
-
-  MethodInstrumentationRequest(bool deoptimize, mirror::ArtMethod* method)
-    : deoptimize(deoptimize), method(method) {}
-};
-// TODO we need to visit associated methods as roots.
-static std::vector<MethodInstrumentationRequest> gDeoptimizationRequests GUARDED_BY(Locks::deoptimization_lock_);
+Mutex* Dbg::deoptimization_lock_ = nullptr;
+std::vector<DeoptimizeRequest> Dbg::deoptimization_requests_;
+size_t Dbg::full_deoptimization_event_count_ = 0;
 
 // Breakpoints.
 static std::vector<Breakpoint> gBreakpoints GUARDED_BY(Locks::breakpoint_lock_);
@@ -473,6 +465,7 @@ void Dbg::StartJdwp() {
   gRegistry = new ObjectRegistry;
 
   alloc_tracker_lock_ = new Mutex("AllocTracker lock");
+  deoptimization_lock_ = new Mutex("deoptimization lock", kDeoptimizationLock);
   // Init JDWP if the debugger is enabled. This may connect out to a
   // debugger, passively listen for a debugger, or block waiting for a
   // debugger.
@@ -503,6 +496,9 @@ void Dbg::StopJdwp() {
   gRegistry = nullptr;
   delete alloc_tracker_lock_;
   alloc_tracker_lock_ = nullptr;
+  DCHECK(deoptimization_lock_ != nullptr);
+  delete deoptimization_lock_;
+  deoptimization_lock_ = nullptr;
 }
 
 void Dbg::GcDidFinish() {
@@ -569,8 +565,9 @@ void Dbg::GoActive() {
   }
 
   {
-    MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-    CHECK_EQ(gDeoptimizationRequests.size(), 0U);
+    MutexLock mu(Thread::Current(), *deoptimization_lock_);
+    CHECK_EQ(deoptimization_requests_.size(), 0U);
+    CHECK_EQ(full_deoptimization_event_count_, 0U);
   }
 
   Runtime* runtime = Runtime::Current();
@@ -610,8 +607,9 @@ void Dbg::Disconnected() {
       // Since we're going to disable deoptimization, we clear the deoptimization requests queue.
       // This prevents us from having any pending deoptimization request when the debugger attaches
       // to us again while no event has been requested yet.
-      MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-      gDeoptimizationRequests.clear();
+      MutexLock mu(Thread::Current(), *deoptimization_lock_);
+      deoptimization_requests_.clear();
+      full_deoptimization_event_count_ = 0U;
     }
     runtime->GetInstrumentation()->RemoveListener(&gDebugInstrumentationListener,
                                                   instrumentation::Instrumentation::kMethodEntered |
@@ -2510,44 +2508,92 @@ void Dbg::UpdateDebugger(Thread* thread, mirror::Object* this_object,
   }
 }
 
-static void ProcessDeoptimizationRequests()
-    LOCKS_EXCLUDED(Locks::deoptimization_lock_)
-    EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_) {
+// Process requests while all mutator threads are suspended.
+void Dbg::ProcessDeoptimizationRequests() {
   Locks::mutator_lock_->AssertExclusiveHeld(Thread::Current());
-  MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
+  MutexLock mu(Thread::Current(), *deoptimization_lock_);
   instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
-  for (const MethodInstrumentationRequest& request : gDeoptimizationRequests) {
-    mirror::ArtMethod* const method = request.method;
-    if (method != nullptr) {
-      // Selective deoptimization.
-      if (request.deoptimize) {
-        VLOG(jdwp) << "Deoptimize method " << PrettyMethod(method);
-        instrumentation->Deoptimize(method);
-      } else {
-        VLOG(jdwp) << "Undeoptimize method " << PrettyMethod(method);
-        instrumentation->Undeoptimize(method);
-      }
-    } else {
-      // Full deoptimization.
-      if (request.deoptimize) {
+  for (const DeoptimizeRequest& request : deoptimization_requests_) {
+    switch (request.kind) {
+      case DeoptimizeRequest::kNothing:
+        LOG(WARNING) << "Processing empty deoptimization request: ignore it.";
+        break;
+      case DeoptimizeRequest::kFullDeoptimization:
         VLOG(jdwp) << "Deoptimize the world";
         instrumentation->DeoptimizeEverything();
-      } else {
+        break;
+      case DeoptimizeRequest::kFullUndeoptimization:
         VLOG(jdwp) << "Undeoptimize the world";
         instrumentation->UndeoptimizeEverything();
-      }
+        break;
+      case DeoptimizeRequest::kSelectiveDeoptimization:
+        VLOG(jdwp) << "Deoptimize method " << PrettyMethod(request.method);
+        instrumentation->Deoptimize(request.method);
+        break;
+      case DeoptimizeRequest::kSelectiveUndeoptimization:
+        VLOG(jdwp) << "Undeoptimize method " << PrettyMethod(request.method);
+        instrumentation->Undeoptimize(request.method);
+        break;
+      default:
+        LOG(FATAL) << "Unsupported deoptimization request kind " << request.kind;
+        break;
     }
   }
-  gDeoptimizationRequests.clear();
+  deoptimization_requests_.clear();
 }
 
-// Process deoptimization requests after suspending all mutator threads.
+void Dbg::PushRequest(const DeoptimizeRequest* req) {
+  DCHECK(req != nullptr);
+  if (req->kind == DeoptimizeRequest::kNothing) {
+    // Nothing to do.
+    return;
+  }
+  MutexLock mu(Thread::Current(), *deoptimization_lock_);
+  switch (req->kind) {
+    case DeoptimizeRequest::kFullDeoptimization: {
+      DCHECK(req->method == nullptr);
+      if (full_deoptimization_event_count_ == 0) {
+        VLOG(jdwp) << "Request full deoptimization";
+        deoptimization_requests_.push_back(*req);
+      }
+      ++full_deoptimization_event_count_;
+      break;
+    }
+    case DeoptimizeRequest::kFullUndeoptimization: {
+      DCHECK(req->method == nullptr);
+      DCHECK_GT(full_deoptimization_event_count_, 0U);
+      --full_deoptimization_event_count_;
+      if (full_deoptimization_event_count_ == 0) {
+        VLOG(jdwp) << "Request full undeoptimization";
+        deoptimization_requests_.push_back(*req);
+      }
+      break;
+    }
+    case DeoptimizeRequest::kSelectiveDeoptimization: {
+      DCHECK(req->method != nullptr);
+      VLOG(jdwp) << "Request deoptimization of " << PrettyMethod(req->method);
+      deoptimization_requests_.push_back(*req);
+      break;
+    }
+    case DeoptimizeRequest::kSelectiveUndeoptimization: {
+      DCHECK(req->method != nullptr);
+      VLOG(jdwp) << "Request undeoptimization of " << PrettyMethod(req->method);
+      deoptimization_requests_.push_back(*req);
+      break;
+    }
+    default: {
+      LOG(FATAL) << "Unknown deoptimization request kind " << req->kind;
+      break;
+    }
+  }
+}
+
 void Dbg::ManageDeoptimization() {
   Thread* const self = Thread::Current();
   {
     // Avoid suspend/resume if there is no pending request.
-    MutexLock mu(self, *Locks::deoptimization_lock_);
-    if (gDeoptimizationRequests.empty()) {
+    MutexLock mu(self, *deoptimization_lock_);
+    if (deoptimization_requests_.empty()) {
       return;
     }
   }
@@ -2563,21 +2609,7 @@ void Dbg::ManageDeoptimization() {
   self->TransitionFromSuspendedToRunnable();
 }
 
-// Enable full deoptimization.
-void Dbg::EnableFullDeoptimization() {
-  MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-  VLOG(jdwp) << "Request full deoptimization";
-  gDeoptimizationRequests.push_back(MethodInstrumentationRequest(true, nullptr));
-}
-
-// Disable full deoptimization.
-void Dbg::DisableFullDeoptimization() {
-  MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-  VLOG(jdwp) << "Request full undeoptimization";
-  gDeoptimizationRequests.push_back(MethodInstrumentationRequest(false, nullptr));
-}
-
-void Dbg::WatchLocation(const JDWP::JdwpLocation* location) {
+void Dbg::WatchLocation(const JDWP::JdwpLocation* location, DeoptimizeRequest* req) {
   bool need_deoptimization = true;
   mirror::ArtMethod* m = FromMethodId(location->method_id);
   {
@@ -2594,18 +2626,17 @@ void Dbg::WatchLocation(const JDWP::JdwpLocation* location) {
     }
 
     gBreakpoints.push_back(Breakpoint(m, location->dex_pc));
-    VLOG(jdwp) << "Set breakpoint #" << (gBreakpoints.size() - 1) << ": " << gBreakpoints[gBreakpoints.size() - 1];
+    VLOG(jdwp) << "Set breakpoint #" << (gBreakpoints.size() - 1) << ": "
+               << gBreakpoints[gBreakpoints.size() - 1];
   }
 
   if (need_deoptimization) {
-    // Request its deoptimization. This will be done after updating the JDWP event list.
-    MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-    gDeoptimizationRequests.push_back(MethodInstrumentationRequest(true, m));
-    VLOG(jdwp) << "Request deoptimization of " << PrettyMethod(m);
+    req->kind = DeoptimizeRequest::kSelectiveDeoptimization;
+    req->method = m;
   }
 }
 
-void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location) {
+void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location, DeoptimizeRequest* req) {
   bool can_undeoptimize = true;
   mirror::ArtMethod* m = FromMethodId(location->method_id);
   DCHECK(Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
@@ -2630,9 +2661,8 @@ void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location) {
 
   if (can_undeoptimize) {
     // Request its undeoptimization. This will be done after updating the JDWP event list.
-    MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-    gDeoptimizationRequests.push_back(MethodInstrumentationRequest(false, m));
-    VLOG(jdwp) << "Request undeoptimization of " << PrettyMethod(m);
+    req->kind = DeoptimizeRequest::kSelectiveUndeoptimization;
+    req->method = m;
   }
 }
 
