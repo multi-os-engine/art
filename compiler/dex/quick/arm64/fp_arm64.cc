@@ -21,8 +21,8 @@
 namespace art {
 
 void Arm64Mir2Lir::GenArithOpFloat(Instruction::Code opcode, RegLocation rl_dest,
-                                 RegLocation rl_src1, RegLocation rl_src2) {
-  int op = kThumbBkpt;
+                                   RegLocation rl_src1, RegLocation rl_src2) {
+  int op = kA64Brk1d;
   RegLocation rl_result;
 
   /*
@@ -32,24 +32,24 @@ void Arm64Mir2Lir::GenArithOpFloat(Instruction::Code opcode, RegLocation rl_dest
   switch (opcode) {
     case Instruction::ADD_FLOAT_2ADDR:
     case Instruction::ADD_FLOAT:
-      op = kThumb2Vadds;
+      op = kA64Fadd3fff;
       break;
     case Instruction::SUB_FLOAT_2ADDR:
     case Instruction::SUB_FLOAT:
-      op = kThumb2Vsubs;
+      op = kA64Fsub3fff;
       break;
     case Instruction::DIV_FLOAT_2ADDR:
     case Instruction::DIV_FLOAT:
-      op = kThumb2Vdivs;
+      op = kA64Fdiv3fff;
       break;
     case Instruction::MUL_FLOAT_2ADDR:
     case Instruction::MUL_FLOAT:
-      op = kThumb2Vmuls;
+      op = kA64Fmul3fff;
       break;
     case Instruction::REM_FLOAT_2ADDR:
     case Instruction::REM_FLOAT:
       FlushAllRegs();   // Send everything to home location
-      CallRuntimeHelperRegLocationRegLocation(QUICK_ENTRYPOINT_OFFSET(pFmodf), rl_src1, rl_src2,
+      CallRuntimeHelperRegLocationRegLocation(A64_QUICK_ENTRYPOINT_OFFSET(pFmodf), rl_src1, rl_src2,
                                               false);
       rl_result = GetReturn(true);
       StoreValue(rl_dest, rl_result);
@@ -68,31 +68,31 @@ void Arm64Mir2Lir::GenArithOpFloat(Instruction::Code opcode, RegLocation rl_dest
 }
 
 void Arm64Mir2Lir::GenArithOpDouble(Instruction::Code opcode,
-                                  RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) {
-  int op = kThumbBkpt;
+                                    RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) {
+  int op = kA64Brk1d;
   RegLocation rl_result;
 
   switch (opcode) {
     case Instruction::ADD_DOUBLE_2ADDR:
     case Instruction::ADD_DOUBLE:
-      op = kThumb2Vaddd;
+      op = kA64Fadd3fff;
       break;
     case Instruction::SUB_DOUBLE_2ADDR:
     case Instruction::SUB_DOUBLE:
-      op = kThumb2Vsubd;
+      op = kA64Fsub3fff;
       break;
     case Instruction::DIV_DOUBLE_2ADDR:
     case Instruction::DIV_DOUBLE:
-      op = kThumb2Vdivd;
+      op = kA64Fdiv3fff;
       break;
     case Instruction::MUL_DOUBLE_2ADDR:
     case Instruction::MUL_DOUBLE:
-      op = kThumb2Vmuld;
+      op = kA64Fmul3fff;
       break;
     case Instruction::REM_DOUBLE_2ADDR:
     case Instruction::REM_DOUBLE:
       FlushAllRegs();   // Send everything to home location
-      CallRuntimeHelperRegLocationRegLocation(QUICK_ENTRYPOINT_OFFSET(pFmod), rl_src1, rl_src2,
+      CallRuntimeHelperRegLocationRegLocation(A64_QUICK_ENTRYPOINT_OFFSET(pFmod), rl_src1, rl_src2,
                                               false);
       rl_result = GetReturnWide(true);
       StoreValueWide(rl_dest, rl_result);
@@ -111,89 +111,49 @@ void Arm64Mir2Lir::GenArithOpDouble(Instruction::Code opcode,
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   DCHECK(rl_dest.wide);
   DCHECK(rl_result.wide);
-  NewLIR3(op, S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()), S2d(rl_src1.reg.GetLowReg(), rl_src1.reg.GetHighReg()),
+  NewLIR3(FWIDE(op), S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()),
+          S2d(rl_src1.reg.GetLowReg(), rl_src1.reg.GetHighReg()),
           S2d(rl_src2.reg.GetLowReg(), rl_src2.reg.GetHighReg()));
   StoreValueWide(rl_dest, rl_result);
 }
 
 void Arm64Mir2Lir::GenConversion(Instruction::Code opcode,
-                               RegLocation rl_dest, RegLocation rl_src) {
-  int op = kThumbBkpt;
+                                 RegLocation rl_dest, RegLocation rl_src) {
+  int op = kA64Brk1d;
   int src_reg;
   RegLocation rl_result;
 
   switch (opcode) {
     case Instruction::INT_TO_FLOAT:
-      op = kThumb2VcvtIF;
+      op = kA64Scvtf2fw;
       break;
     case Instruction::FLOAT_TO_INT:
-      op = kThumb2VcvtFI;
+      op = kA64Fcvtzs2wf;
       break;
     case Instruction::DOUBLE_TO_FLOAT:
-      op = kThumb2VcvtDF;
+      op = kA64Fcvt2sS;
       break;
     case Instruction::FLOAT_TO_DOUBLE:
-      op = kThumb2VcvtFd;
+      op = kA64Fcvt2Ss;
       break;
     case Instruction::INT_TO_DOUBLE:
-      op = kThumb2VcvtF64S32;
+      op = FWIDE(kA64Scvtf2fw);
       break;
     case Instruction::DOUBLE_TO_INT:
-      op = kThumb2VcvtDI;
+      op = FWIDE(kA64Fcvtzs2wf);
       break;
-    case Instruction::LONG_TO_DOUBLE: {
-      rl_src = LoadValueWide(rl_src, kFPReg);
-      src_reg = S2d(rl_src.reg.GetLowReg(), rl_src.reg.GetHighReg());
-      rl_result = EvalLoc(rl_dest, kFPReg, true);
-      // TODO: fix AllocTempDouble to return a k64BitSolo double reg and lose the ARM_FP_DOUBLE.
-      RegStorage tmp1 = AllocTempDouble();
-      RegStorage tmp2 = AllocTempDouble();
-
-      // FIXME: needs 64-bit register cleanup.
-      NewLIR2(kThumb2VcvtF64S32, tmp1.GetLowReg() | ARM_FP_DOUBLE, (src_reg & ~ARM_FP_DOUBLE) + 1);
-      NewLIR2(kThumb2VcvtF64U32, S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()),
-              (src_reg & ~ARM_FP_DOUBLE));
-      LoadConstantWide(tmp2, 0x41f0000000000000LL);
-      NewLIR3(kThumb2VmlaF64, S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()),
-              tmp1.GetLowReg() | ARM_FP_DOUBLE, tmp2.GetLowReg() | ARM_FP_DOUBLE);
-      FreeTemp(tmp1);
-      FreeTemp(tmp2);
-      StoreValueWide(rl_dest, rl_result);
-      return;
-    }
+    case Instruction::LONG_TO_DOUBLE:
+      op = FWIDE(kA64Scvtf2fx);
+      break;
     case Instruction::FLOAT_TO_LONG:
-      GenConversionCall(QUICK_ENTRYPOINT_OFFSET(pF2l), rl_dest, rl_src);
-      return;
-    case Instruction::LONG_TO_FLOAT: {
-      rl_src = LoadValueWide(rl_src, kFPReg);
-      src_reg = S2d(rl_src.reg.GetLowReg(), rl_src.reg.GetHighReg());
-      rl_result = EvalLoc(rl_dest, kFPReg, true);
-      // Allocate temp registers.
-      RegStorage high_val = AllocTempDouble();
-      RegStorage low_val = AllocTempDouble();
-      RegStorage const_val = AllocTempDouble();
-      // Long to double.
-      NewLIR2(kThumb2VcvtF64S32, high_val.GetLowReg() | ARM_FP_DOUBLE,
-              (src_reg & ~ARM_FP_DOUBLE) + 1);
-      NewLIR2(kThumb2VcvtF64U32, low_val.GetLowReg() | ARM_FP_DOUBLE,
-              (src_reg & ~ARM_FP_DOUBLE));
-      LoadConstantWide(const_val, INT64_C(0x41f0000000000000));
-      NewLIR3(kThumb2VmlaF64, low_val.GetLowReg() | ARM_FP_DOUBLE,
-              high_val.GetLowReg() | ARM_FP_DOUBLE,
-              const_val.GetLowReg() | ARM_FP_DOUBLE);
-      // Double to float.
-      NewLIR2(kThumb2VcvtDF, rl_result.reg.GetReg(), low_val.GetLowReg() | ARM_FP_DOUBLE);
-      // Free temp registers.
-      FreeTemp(high_val);
-      FreeTemp(low_val);
-      FreeTemp(const_val);
-      // Store result.
-      StoreValue(rl_dest, rl_result);
-      return;
-    }
+      op = kA64Fcvtzs2xf;
+      break;
+    case Instruction::LONG_TO_FLOAT:
+      op = kA64Scvtf2fx;
+      break;
     case Instruction::DOUBLE_TO_LONG:
-      GenConversionCall(QUICK_ENTRYPOINT_OFFSET(pD2l), rl_dest, rl_src);
-      return;
+      op = FWIDE(kA64Fcvtzs2xf);
+      break;
     default:
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
@@ -225,16 +185,15 @@ void Arm64Mir2Lir::GenFusedFPCmpBranch(BasicBlock* bb, MIR* mir, bool gt_bias,
     rl_src2 = mir_graph_->GetSrcWide(mir, 2);
     rl_src1 = LoadValueWide(rl_src1, kFPReg);
     rl_src2 = LoadValueWide(rl_src2, kFPReg);
-    NewLIR2(kThumb2Vcmpd, S2d(rl_src1.reg.GetLowReg(), rl_src2.reg.GetHighReg()),
+    NewLIR2(FWIDE(kA64Fcmp2ff), S2d(rl_src1.reg.GetLowReg(), rl_src2.reg.GetHighReg()),
             S2d(rl_src2.reg.GetLowReg(), rl_src2.reg.GetHighReg()));
   } else {
     rl_src1 = mir_graph_->GetSrc(mir, 0);
     rl_src2 = mir_graph_->GetSrc(mir, 1);
     rl_src1 = LoadValue(rl_src1, kFPReg);
     rl_src2 = LoadValue(rl_src2, kFPReg);
-    NewLIR2(kThumb2Vcmps, rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
+    NewLIR2(kA64Fcmp2ff, rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   }
-  NewLIR0(kThumb2Fmstat);
   ConditionCode ccode = mir->meta.ccode;
   switch (ccode) {
     case kCondEq:
@@ -268,7 +227,7 @@ void Arm64Mir2Lir::GenFusedFPCmpBranch(BasicBlock* bb, MIR* mir, bool gt_bias,
 
 
 void Arm64Mir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
-                          RegLocation rl_src1, RegLocation rl_src2) {
+                            RegLocation rl_src1, RegLocation rl_src2) {
   bool is_double = false;
   int default_result = -1;
   RegLocation rl_result;
@@ -300,7 +259,7 @@ void Arm64Mir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
     ClobberSReg(rl_dest.s_reg_low);
     rl_result = EvalLoc(rl_dest, kCoreReg, true);
     LoadConstant(rl_result.reg, default_result);
-    NewLIR2(kThumb2Vcmpd, S2d(rl_src1.reg.GetLowReg(), rl_src2.reg.GetHighReg()),
+    NewLIR2(FWIDE(kA64Fcmp2ff), S2d(rl_src1.reg.GetLowReg(), rl_src2.reg.GetHighReg()),
             S2d(rl_src2.reg.GetLowReg(), rl_src2.reg.GetHighReg()));
   } else {
     rl_src1 = LoadValue(rl_src1, kFPReg);
@@ -309,20 +268,20 @@ void Arm64Mir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
     ClobberSReg(rl_dest.s_reg_low);
     rl_result = EvalLoc(rl_dest, kCoreReg, true);
     LoadConstant(rl_result.reg, default_result);
-    NewLIR2(kThumb2Vcmps, rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
+    NewLIR2(kA64Fcmp2ff, rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   }
   DCHECK(!ARM_FPREG(rl_result.reg.GetReg()));
-  NewLIR0(kThumb2Fmstat);
 
-  OpIT((default_result == -1) ? kCondGt : kCondMi, "");
-  NewLIR2(kThumb2MovI8M, rl_result.reg.GetReg(),
-          ModifiedImmediate(-default_result));  // Must not alter ccodes
-  GenBarrier();
+  // TODO(Arm64): should we rather do this?
+  // csinc wD, wzr, wzr, eq
+  // csneg wD, wD, wD, le
+  // (which requires 2 instructions rather than 3)
 
-  OpIT(kCondEq, "");
-  LoadConstant(rl_result.reg, 0);
-  GenBarrier();
-
+  // Rd = if cond then Rd else -Rd.
+  NewLIR4(kA64Csneg4rrrc, rl_result.reg.GetReg(), rl_result.reg.GetReg(),
+          rl_result.reg.GetReg(), (default_result == 1) ? kArmCondPl : kArmCondLe);
+  NewLIR4(kA64Csel4rrrc, rl_result.reg.GetReg(), rARM_ZR, rl_result.reg.GetReg(),
+          kArmCondEq);
   StoreValue(rl_dest, rl_result);
 }
 
@@ -330,7 +289,7 @@ void Arm64Mir2Lir::GenNegFloat(RegLocation rl_dest, RegLocation rl_src) {
   RegLocation rl_result;
   rl_src = LoadValue(rl_src, kFPReg);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
-  NewLIR2(kThumb2Vnegs, rl_result.reg.GetReg(), rl_src.reg.GetReg());
+  NewLIR2(kA64Fneg2ff, rl_result.reg.GetReg(), rl_src.reg.GetReg());
   StoreValue(rl_dest, rl_result);
 }
 
@@ -338,31 +297,31 @@ void Arm64Mir2Lir::GenNegDouble(RegLocation rl_dest, RegLocation rl_src) {
   RegLocation rl_result;
   rl_src = LoadValueWide(rl_src, kFPReg);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
-  NewLIR2(kThumb2Vnegd, S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()),
+  NewLIR2(FWIDE(kA64Fneg2ff), S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()),
           S2d(rl_src.reg.GetLowReg(), rl_src.reg.GetHighReg()));
   StoreValueWide(rl_dest, rl_result);
 }
 
+// TODO(Arm64): implement this.
 bool Arm64Mir2Lir::GenInlinedSqrt(CallInfo* info) {
-  DCHECK_EQ(cu_->instruction_set, kThumb2);
+  DCHECK_EQ(cu_->instruction_set, kArm64);
   LIR *branch;
   RegLocation rl_src = info->args[0];
   RegLocation rl_dest = InlineTargetWide(info);  // double place for result
   rl_src = LoadValueWide(rl_src, kFPReg);
   RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
   // TODO: shouldn't need S2d once 64bitSolo has proper double tag bit.
-  NewLIR2(kThumb2Vsqrtd, S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()),
+  NewLIR2(FWIDE(kA64Fsqrt2ff), S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()),
           S2d(rl_src.reg.GetLowReg(), rl_src.reg.GetHighReg()));
-  NewLIR2(kThumb2Vcmpd, S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()),
+  NewLIR2(FWIDE(kA64Fcmp2ff), S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()),
           S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()));
-  NewLIR0(kThumb2Fmstat);
-  branch = NewLIR2(kThumbBCond, 0, kArmCondEq);
+  branch = NewLIR2(kA64B2ct, kArmCondEq, 0);
   ClobberCallerSave();
   LockCallTemps();  // Using fixed registers
-  RegStorage r_tgt = LoadHelper(QUICK_ENTRYPOINT_OFFSET(pSqrt));
-  NewLIR3(kThumb2Fmrrd, r0, r1, S2d(rl_src.reg.GetLowReg(), rl_src.reg.GetHighReg()));
-  NewLIR1(kThumbBlxR, r_tgt.GetReg());
-  NewLIR3(kThumb2Fmdrr, S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()), r0, r1);
+  RegStorage r_tgt = LoadHelper(A64_QUICK_ENTRYPOINT_OFFSET(pSqrt));
+  // NewLIR3(kThumb2Fmrrd, r0, r1, S2d(rl_src.reg.GetLowReg(), rl_src.reg.GetHighReg()));
+  NewLIR1(kA64Blr1x, r_tgt.GetReg());
+  // NewLIR3(kThumb2Fmdrr, S2d(rl_result.reg.GetLowReg(), rl_result.reg.GetHighReg()), r0, r1);
   branch->target = NewLIR0(kPseudoTargetLabel);
   StoreValueWide(rl_dest, rl_result);
   return true;

@@ -29,142 +29,49 @@ LIR* Arm64Mir2Lir::OpCmpBranch(ConditionCode cond, RegStorage src1, RegStorage s
   return OpCondBranch(cond, target);
 }
 
-/*
- * Generate a Thumb2 IT instruction, which can nullify up to
- * four subsequent instructions based on a condition and its
- * inverse.  The condition applies to the first instruction, which
- * is executed if the condition is met.  The string "guide" consists
- * of 0 to 3 chars, and applies to the 2nd through 4th instruction.
- * A "T" means the instruction is executed if the condition is
- * met, and an "E" means the instruction is executed if the condition
- * is not met.
- */
+// TODO(Arm64): remove this.
 LIR* Arm64Mir2Lir::OpIT(ConditionCode ccode, const char* guide) {
-  int mask;
-  int mask3 = 0;
-  int mask2 = 0;
-  int mask1 = 0;
-  ArmConditionCode code = ArmConditionEncoding(ccode);
-  int cond_bit = code & 1;
-  int alt_bit = cond_bit ^ 1;
+  LOG(FATAL) << "Unexpected use of OpIT for Arm64";
+  return NULL;
+}
 
-  // Note: case fallthroughs intentional
-  switch (strlen(guide)) {
-    case 3:
-      mask1 = (guide[2] == 'T') ? cond_bit : alt_bit;
-    case 2:
-      mask2 = (guide[1] == 'T') ? cond_bit : alt_bit;
-    case 1:
-      mask3 = (guide[0] == 'T') ? cond_bit : alt_bit;
-      break;
-    case 0:
-      break;
-    default:
-      LOG(FATAL) << "OAT: bad case in OpIT";
-  }
-  mask = (mask3 << 3) | (mask2 << 2) | (mask1 << 1) |
-       (1 << (3 - strlen(guide)));
-  return NewLIR2(kThumb2It, code, mask);
+void Arm64Mir2Lir::OpEndIT(LIR* it) {
+  LOG(FATAL) << "Unexpected use of OpEndIT for Arm64";
 }
 
 /*
  * 64-bit 3way compare function.
- *     mov   rX, #-1
- *     cmp   op1hi, op2hi
- *     blt   done
- *     bgt   flip
- *     sub   rX, op1lo, op2lo (treat as unsigned)
- *     beq   done
- *     ite   hi
- *     mov(hi)   rX, #-1
- *     mov(!hi)  rX, #1
- * flip:
- *     neg   rX
- * done:
+ *     cmp   xA, xB
+ *     csinc wC, wzr, wzr, eq
+ *     csneg wC, wC, wC, le
  */
 void Arm64Mir2Lir::GenCmpLong(RegLocation rl_dest, RegLocation rl_src1,
-                            RegLocation rl_src2) {
-  LIR* target1;
-  LIR* target2;
+                              RegLocation rl_src2) {
+  RegLocation rl_result;
   rl_src1 = LoadValueWide(rl_src1, kCoreReg);
   rl_src2 = LoadValueWide(rl_src2, kCoreReg);
-  RegStorage t_reg = AllocTemp();
-  LoadConstant(t_reg, -1);
-  OpRegReg(kOpCmp, rl_src1.reg.GetHigh(), rl_src2.reg.GetHigh());
-  LIR* branch1 = OpCondBranch(kCondLt, NULL);
-  LIR* branch2 = OpCondBranch(kCondGt, NULL);
-  OpRegRegReg(kOpSub, t_reg, rl_src1.reg, rl_src2.reg);
-  LIR* branch3 = OpCondBranch(kCondEq, NULL);
+  rl_result = EvalLoc(rl_dest, kCoreReg, true);
 
-  OpIT(kCondHi, "E");
-  NewLIR2(kThumb2MovI8M, t_reg.GetReg(), ModifiedImmediate(-1));
-  LoadConstant(t_reg, 1);
-  GenBarrier();
-
-  target2 = NewLIR0(kPseudoTargetLabel);
-  OpRegReg(kOpNeg, t_reg, t_reg);
-
-  target1 = NewLIR0(kPseudoTargetLabel);
-
-  RegLocation rl_temp = LocCReturn();  // Just using as template, will change
-  rl_temp.reg.SetReg(t_reg.GetReg());
-  StoreValue(rl_dest, rl_temp);
-  FreeTemp(t_reg);
-
-  branch1->target = target1;
-  branch2->target = target2;
-  branch3->target = branch1->target;
+  OpRegReg(kOpCmp, rl_src1.reg, rl_src2.reg);
+  NewLIR4(kA64Csinc4rrrc, rl_result.reg.GetReg(), rARM_ZR, rARM_ZR, kArmCondEq);
+  NewLIR4(kA64Csneg4rrrc, rl_result.reg.GetReg(), rl_result.reg.GetReg(),
+          rl_result.reg.GetReg(), kArmCondLe);
+  StoreValue(rl_dest, rl_result);
 }
 
 void Arm64Mir2Lir::GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
-                                          int64_t val, ConditionCode ccode) {
-  int32_t val_lo = Low32Bits(val);
-  int32_t val_hi = High32Bits(val);
-  DCHECK_GE(ModifiedImmediate(val_lo), 0);
-  DCHECK_GE(ModifiedImmediate(val_hi), 0);
+                                            int64_t val, ConditionCode ccode) {
   LIR* taken = &block_label_list_[bb->taken];
-  LIR* not_taken = &block_label_list_[bb->fall_through];
   rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-  RegStorage low_reg = rl_src1.reg.GetLow();
-  RegStorage high_reg = rl_src1.reg.GetHigh();
 
   if (val == 0 && (ccode == kCondEq || ccode == kCondNe)) {
-    RegStorage t_reg = AllocTemp();
-    NewLIR4(kThumb2OrrRRRs, t_reg.GetReg(), low_reg.GetReg(), high_reg.GetReg(), 0);
-    FreeTemp(t_reg);
+    ArmOpcode opcode = (ccode == kCondEq) ? kA64Cbz2rt : kA64Cbnz2rt;
+    LIR* branch = NewLIR2(WIDE(opcode), rl_src1.reg.GetLowReg(), 0);
+    branch->target = taken;
+  } else {
+    OpRegImm64(kOpCmp, rl_src1.reg, val, /*is_wide*/true);
     OpCondBranch(ccode, taken);
-    return;
   }
-
-  switch (ccode) {
-    case kCondEq:
-    case kCondNe:
-      OpCmpImmBranch(kCondNe, high_reg, val_hi, (ccode == kCondEq) ? not_taken : taken);
-      break;
-    case kCondLt:
-      OpCmpImmBranch(kCondLt, high_reg, val_hi, taken);
-      OpCmpImmBranch(kCondGt, high_reg, val_hi, not_taken);
-      ccode = kCondUlt;
-      break;
-    case kCondLe:
-      OpCmpImmBranch(kCondLt, high_reg, val_hi, taken);
-      OpCmpImmBranch(kCondGt, high_reg, val_hi, not_taken);
-      ccode = kCondLs;
-      break;
-    case kCondGt:
-      OpCmpImmBranch(kCondGt, high_reg, val_hi, taken);
-      OpCmpImmBranch(kCondLt, high_reg, val_hi, not_taken);
-      ccode = kCondHi;
-      break;
-    case kCondGe:
-      OpCmpImmBranch(kCondGt, high_reg, val_hi, taken);
-      OpCmpImmBranch(kCondLt, high_reg, val_hi, not_taken);
-      ccode = kCondUge;
-      break;
-    default:
-      LOG(FATAL) << "Unexpected ccode: " << ccode;
-  }
-  OpCmpImmBranch(ccode, low_reg, val_lo, taken);
 }
 
 void Arm64Mir2Lir::GenSelect(BasicBlock* bb, MIR* mir) {
@@ -251,8 +158,8 @@ void Arm64Mir2Lir::GenFusedLongCmpBranch(BasicBlock* bb, MIR* mir) {
     RegLocation rl_temp = UpdateLocWide(rl_src2);
     // Do special compare/branch against simple const operand if not already in registers.
     int64_t val = mir_graph_->ConstantValueWide(rl_src2);
-    if ((rl_temp.location != kLocPhysReg) &&
-        ((ModifiedImmediate(Low32Bits(val)) >= 0) && (ModifiedImmediate(High32Bits(val)) >= 0))) {
+    if ((rl_temp.location != kLocPhysReg)
+     /*&& ((ModifiedImmediate(Low32Bits(val)) >= 0) && (ModifiedImmediate(High32Bits(val)) >= 0))*/) {
       GenFusedLongCmpImmBranch(bb, rl_src1, val, ccode);
       return;
     }
@@ -300,56 +207,93 @@ void Arm64Mir2Lir::GenFusedLongCmpBranch(BasicBlock* bb, MIR* mir) {
  * Generate a register comparison to an immediate and branch.  Caller
  * is responsible for setting branch target field.
  */
-LIR* Arm64Mir2Lir::OpCmpImmBranch(ConditionCode cond, RegStorage reg, int check_value, LIR* target) {
+LIR* Arm64Mir2Lir::OpCmpImmBranch(ConditionCode cond, RegStorage reg, int check_value,
+                                  LIR* target) {
   LIR* branch;
   ArmConditionCode arm_cond = ArmConditionEncoding(cond);
-  /*
-   * A common use of OpCmpImmBranch is for null checks, and using the Thumb 16-bit
-   * compare-and-branch if zero is ideal if it will reach.  However, because null checks
-   * branch forward to a launch pad, they will frequently not reach - and thus have to
-   * be converted to a long form during assembly (which will trigger another assembly
-   * pass).  Here we estimate the branch distance for checks, and if large directly
-   * generate the long form in an attempt to avoid an extra assembly pass.
-   * TODO: consider interspersing launchpads in code following unconditional branches.
-   */
-  bool skip = ((target != NULL) && (target->opcode == kPseudoThrowTarget));
-  skip &= ((cu_->code_item->insns_size_in_code_units_ - current_dalvik_offset_) > 64);
-  if (!skip && (ARM_LOWREG(reg.GetReg())) && (check_value == 0) &&
-     ((arm_cond == kArmCondEq) || (arm_cond == kArmCondNe))) {
-    branch = NewLIR2((arm_cond == kArmCondEq) ? kThumb2Cbz : kThumb2Cbnz,
-                     reg.GetReg(), 0);
+  if (check_value == 0 && (arm_cond == kArmCondEq || arm_cond == kArmCondNe)) {
+    ArmOpcode opcode = (arm_cond == kArmCondEq) ? kA64Cbz2rt : kA64Cbnz2rt;
+    branch = NewLIR2(opcode, reg.GetReg(), 0);
   } else {
     OpRegImm(kOpCmp, reg, check_value);
-    branch = NewLIR2(kThumbBCond, 0, arm_cond);
+    branch = NewLIR2(kA64B2ct, arm_cond, 0);
   }
   branch->target = target;
   return branch;
 }
 
 LIR* Arm64Mir2Lir::OpRegCopyNoInsert(RegStorage r_dest, RegStorage r_src) {
+  bool dest_is_fp = ARM_FPREG(r_dest.GetLowReg());
+  bool src_is_fp = ARM_FPREG(r_src.GetLowReg());
+  ArmOpcode opcode = kA64Brk1d;
   LIR* res;
-  int opcode;
+
+  if (LIKELY(dest_is_fp == src_is_fp)) {
+    if (LIKELY(!dest_is_fp)) {
+      // Core/core copy.
+      // Copies involving the sp register require a different instruction.
+      opcode = ((UNLIKELY(r_dest == rs_rARM_SP || r_src == rs_rARM_SP)) ?
+                kA64Add4RRdT : kA64Mov2rr);
+
+      // core/core copy. Do a x/x copy only if both registers are x.
+      if (r_dest.Is64Bit() && r_src.Is64Bit()) {
+        opcode = WIDE(opcode);
+      }
+    } else {
+      // Float/float copy.
+#if 0
+      // TODO(Arm64): fix ARM_DOUBLEREG and friends.
+      bool dest_is_double = ARM_DOUBLEREG(r_dest.GetReg());
+      bool src_is_double = ARM_DOUBLEREG(r_src.GetReg());
+#else
+      bool dest_is_double = r_dest.Is64Bit();
+      bool src_is_double = r_src.Is64Bit();
+#endif
+
+      // We do not do float/double or double/float casts here.
+      DCHECK_EQ(dest_is_double, src_is_double);
+
+      // Homogeneous float/float copy.
+      opcode = (dest_is_double) ? FWIDE(kA64Fmov2ff) : kA64Fmov2ff;
+    }
+  } else {
+    // Inhomogeneous register copy.
+    if (dest_is_fp) {
+      if (ARM_DOUBLEREG(r_dest.GetReg())) {
+        DCHECK(r_src.Is64Bit());
+        opcode = kA64Fmov2Sx;
+      } else {
+        DCHECK(r_src.Is32Bit());
+        opcode = kA64Fmov2sw;
+      }
+    } else {
+      if (ARM_DOUBLEREG(r_src.GetReg())) {
+        DCHECK(r_dest.Is64Bit());
+        opcode = kA64Fmov2xS;
+      } else {
+        DCHECK(r_dest.Is32Bit());
+        opcode = kA64Fmov2ws;
+      }
+    }
+  }
+
+  // TODO(Arm64): remove code below: pairs not supported by Arm64.
+
   // If src or dest is a pair, we'll be using low reg.
   if (r_dest.IsPair()) {
     r_dest = r_dest.GetLow();
   }
+
   if (r_src.IsPair()) {
     r_src = r_src.GetLow();
   }
-  if (ARM_FPREG(r_dest.GetReg()) || ARM_FPREG(r_src.GetReg()))
-    return OpFpRegCopy(r_dest, r_src);
-  if (ARM_LOWREG(r_dest.GetReg()) && ARM_LOWREG(r_src.GetReg()))
-    opcode = kThumbMovRR;
-  else if (!ARM_LOWREG(r_dest.GetReg()) && !ARM_LOWREG(r_src.GetReg()))
-     opcode = kThumbMovRR_H2H;
-  else if (ARM_LOWREG(r_dest.GetReg()))
-     opcode = kThumbMovRR_H2L;
-  else
-     opcode = kThumbMovRR_L2H;
+
   res = RawLIR(current_dalvik_offset_, opcode, r_dest.GetReg(), r_src.GetReg());
+
   if (!(cu_->disable_opt & (1 << kSafeOptimizations)) && r_dest == r_src) {
     res->flags.is_nop = true;
   }
+
   return res;
 }
 
@@ -360,33 +304,7 @@ LIR* Arm64Mir2Lir::OpRegCopy(RegStorage r_dest, RegStorage r_src) {
 }
 
 void Arm64Mir2Lir::OpRegCopyWide(RegStorage r_dest, RegStorage r_src) {
-  bool dest_fp = ARM_FPREG(r_dest.GetLowReg());
-  bool src_fp = ARM_FPREG(r_src.GetLowReg());
-  if (dest_fp) {
-    if (src_fp) {
-      // FIXME: handle 64-bit solo's here.
-      OpRegCopy(RegStorage::Solo64(S2d(r_dest.GetLowReg(), r_dest.GetHighReg())),
-                RegStorage::Solo64(S2d(r_src.GetLowReg(), r_src.GetHighReg())));
-    } else {
-      NewLIR3(kThumb2Fmdrr, S2d(r_dest.GetLowReg(), r_dest.GetHighReg()),
-              r_src.GetLowReg(), r_src.GetHighReg());
-    }
-  } else {
-    if (src_fp) {
-      NewLIR3(kThumb2Fmrrd, r_dest.GetLowReg(), r_dest.GetHighReg(), S2d(r_src.GetLowReg(),
-              r_src.GetHighReg()));
-    } else {
-      // Handle overlap
-      if (r_src.GetHighReg() == r_dest.GetLowReg()) {
-        DCHECK_NE(r_src.GetLowReg(), r_dest.GetHighReg());
-        OpRegCopy(r_dest.GetHigh(), r_src.GetHigh());
-        OpRegCopy(r_dest.GetLow(), r_src.GetLow());
-      } else {
-        OpRegCopy(r_dest.GetLow(), r_src.GetLow());
-        OpRegCopy(r_dest.GetHigh(), r_src.GetHigh());
-      }
-    }
-  }
+  OpRegCopy(r_dest, r_src);
 }
 
 // Table of magic divisors
@@ -418,6 +336,10 @@ static const MagicTable magic_table[] = {
 // Integer division by constant via reciprocal multiply (Hacker's Delight, 10-4)
 bool Arm64Mir2Lir::SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div,
                                     RegLocation rl_src, RegLocation rl_dest, int lit) {
+  // TODO(Arm64): fix this for Arm64. Note: may be worth revisiting the magic table.
+  //   It should be possible subtracting one from all its entries, and using smaddl
+  //   to counteract this. The advantage is that integers should then be easier to
+  //   encode as logical immediates (0x55555555 rather than 0x55555556).
   if ((lit < 0) || (lit >= static_cast<int>(sizeof(magic_table)/sizeof(magic_table[0])))) {
     return false;
   }
@@ -436,22 +358,22 @@ bool Arm64Mir2Lir::SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_d
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   RegStorage r_hi = AllocTemp();
   RegStorage r_lo = AllocTemp();
-  NewLIR4(kThumb2Smull, r_lo.GetReg(), r_hi.GetReg(), r_magic.GetReg(), rl_src.reg.GetReg());
+  NewLIR4(kA64Smaddl4xwwx, r_lo.GetReg(), r_magic.GetReg(), rl_src.reg.GetReg(), rARM_ZR);
   switch (pattern) {
     case Divide3:
       OpRegRegRegShift(kOpSub, rl_result.reg.GetReg(), r_hi.GetReg(),
-               rl_src.reg.GetReg(), EncodeShift(kArmAsr, 31));
+               rl_src.reg.GetReg(), EncodeShift(kA64Asr, 31));
       break;
     case Divide5:
       OpRegRegImm(kOpAsr, r_lo, rl_src.reg, 31);
       OpRegRegRegShift(kOpRsub, rl_result.reg.GetReg(), r_lo.GetReg(), r_hi.GetReg(),
-               EncodeShift(kArmAsr, magic_table[lit].shift));
+               EncodeShift(kA64Asr, magic_table[lit].shift));
       break;
     case Divide7:
       OpRegReg(kOpAdd, r_hi, rl_src.reg);
       OpRegRegImm(kOpAsr, r_lo, rl_src.reg, 31);
       OpRegRegRegShift(kOpRsub, rl_result.reg.GetReg(), r_lo.GetReg(), r_hi.GetReg(),
-               EncodeShift(kArmAsr, magic_table[lit].shift));
+               EncodeShift(kA64Asr, magic_table[lit].shift));
       break;
     default:
       LOG(FATAL) << "Unexpected pattern: " << pattern;
@@ -460,20 +382,25 @@ bool Arm64Mir2Lir::SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_d
   return true;
 }
 
+bool Arm64Mir2Lir::EasyMultiply(RegLocation rl_src, RegLocation rl_dest, int lit) {
+  LOG(FATAL) << "Unexpected use of EasyMultiply for Arm64";
+  return false;
+}
+
 LIR* Arm64Mir2Lir::GenRegMemCheck(ConditionCode c_code, RegStorage reg1, RegStorage base,
                                 int offset, ThrowKind kind) {
-  LOG(FATAL) << "Unexpected use of GenRegMemCheck for Arm";
+  LOG(FATAL) << "Unexpected use of GenRegMemCheck for Arm64";
   return NULL;
 }
 
 RegLocation Arm64Mir2Lir::GenDivRem(RegLocation rl_dest, RegLocation rl_src1,
                       RegLocation rl_src2, bool is_div, bool check_zero) {
-  LOG(FATAL) << "Unexpected use of GenDivRem for Arm";
+  LOG(FATAL) << "Unexpected use of GenDivRem for Arm64";
   return rl_dest;
 }
 
 RegLocation Arm64Mir2Lir::GenDivRemLit(RegLocation rl_dest, RegLocation rl_src1, int lit, bool is_div) {
-  LOG(FATAL) << "Unexpected use of GenDivRemLit for Arm";
+  LOG(FATAL) << "Unexpected use of GenDivRemLit for Arm64";
   return rl_dest;
 }
 
@@ -575,11 +502,11 @@ bool Arm64Mir2Lir::GenInlinedPoke(CallInfo* info, OpSize size) {
 }
 
 void Arm64Mir2Lir::OpLea(RegStorage r_base, RegStorage reg1, RegStorage reg2, int scale, int offset) {
-  LOG(FATAL) << "Unexpected use of OpLea for Arm";
+  LOG(FATAL) << "Unexpected use of OpLea for Arm64";
 }
 
-void Arm64Mir2Lir::OpTlsCmp(ThreadOffset offset, int val) {
-  LOG(FATAL) << "Unexpected use of OpTlsCmp for Arm";
+void Arm64Mir2Lir::OpTlsCmp(A64ThreadOffset offset, int val) {
+  LOG(FATAL) << "Unexpected use of OpTlsCmp for Arm64";
 }
 
 bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
@@ -687,30 +614,28 @@ bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     if (!load_early) {
       LoadValueDirectWide(rl_src_expected, rl_expected.reg);
     }
-    NewLIR3(kThumb2Ldrexd, r_tmp.GetReg(), r_tmp_high.GetReg(), r_ptr.GetReg());
+    NewLIR3(kA64Ldxr2rX, r_tmp.GetReg(), r_tmp_high.GetReg(), r_ptr.GetReg());
     OpRegReg(kOpSub, r_tmp, rl_expected.reg.GetLow());
     OpRegReg(kOpSub, r_tmp_high, rl_expected.reg.GetHigh());
     if (!load_early) {
       LoadValueDirectWide(rl_src_new_value, rl_new_value.reg);
     }
-    // Make sure we use ORR that sets the ccode
-    if (ARM_LOWREG(r_tmp.GetReg()) && ARM_LOWREG(r_tmp_high.GetReg())) {
-      NewLIR2(kThumbOrr, r_tmp.GetReg(), r_tmp_high.GetReg());
-    } else {
-      NewLIR4(kThumb2OrrRRRs, r_tmp.GetReg(), r_tmp.GetReg(), r_tmp_high.GetReg(), 0);
-    }
+
+    LIR* branch1 = OpCmpImmBranch(kCondNe, r_tmp, 0, NULL);
+    LIR* branch2 = OpCmpImmBranch(kCondNe, r_tmp_high, 0, NULL);
+    NewLIR4(WIDE(kA64Stxr3wrX) /* eq */, r_tmp.GetReg(), rl_new_value.reg.GetReg(),
+            rl_new_value.reg.GetHighReg(), r_ptr.GetReg());
+    LIR* target2 = NewLIR0(kPseudoTargetLabel);
+    branch1->target = target2;
+    branch2->target = target2;
     FreeTemp(r_tmp_high);  // Now unneeded
 
-    DCHECK(last_lir_insn_->u.m.def_mask & ENCODE_CCODE);
-    OpIT(kCondEq, "T");
-    NewLIR4(kThumb2Strexd /* eq */, r_tmp.GetReg(), rl_new_value.reg.GetLowReg(), rl_new_value.reg.GetHighReg(), r_ptr.GetReg());
-
   } else {
-    NewLIR3(kThumb2Ldrex, r_tmp.GetReg(), r_ptr.GetReg(), 0);
+    NewLIR3(kA64Ldxr2rX, r_tmp.GetReg(), r_ptr.GetReg(), 0);
     OpRegReg(kOpSub, r_tmp, rl_expected.reg);
     DCHECK(last_lir_insn_->u.m.def_mask & ENCODE_CCODE);
     OpIT(kCondEq, "T");
-    NewLIR4(kThumb2Strex /* eq */, r_tmp.GetReg(), rl_new_value.reg.GetReg(), r_ptr.GetReg(), 0);
+    NewLIR4(kA64Stxr3wrX /* eq */, r_tmp.GetReg(), rl_new_value.reg.GetReg(), r_ptr.GetReg(), 0);
   }
 
   // Still one conditional left from OpIT(kCondEq, "T") from either branch
@@ -738,22 +663,24 @@ bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
 }
 
 LIR* Arm64Mir2Lir::OpPcRelLoad(RegStorage reg, LIR* target) {
-  return RawLIR(current_dalvik_offset_, kThumb2LdrPcRel12, reg.GetReg(), 0, 0, 0, 0, target);
+  return RawLIR(current_dalvik_offset_, WIDE(kA64Ldr2rp), reg.GetReg(), 0, 0, 0, 0, target);
 }
 
 LIR* Arm64Mir2Lir::OpVldm(RegStorage r_base, int count) {
-  return NewLIR3(kThumb2Vldms, r_base.GetReg(), fr0, count);
+  LOG(FATAL) << "Unexpected use of OpVldm for Arm64";
+  return NULL;
 }
 
 LIR* Arm64Mir2Lir::OpVstm(RegStorage r_base, int count) {
-  return NewLIR3(kThumb2Vstms, r_base.GetReg(), fr0, count);
+  LOG(FATAL) << "Unexpected use of OpVstm for Arm64";
+  return NULL;
 }
 
 void Arm64Mir2Lir::GenMultiplyByTwoBitMultiplier(RegLocation rl_src,
                                                RegLocation rl_result, int lit,
                                                int first_bit, int second_bit) {
   OpRegRegRegShift(kOpAdd, rl_result.reg.GetReg(), rl_src.reg.GetReg(), rl_src.reg.GetReg(),
-                   EncodeShift(kArmLsl, second_bit - first_bit));
+                   EncodeShift(kA64Lsl, second_bit - first_bit));
   if (first_bit != 0) {
     OpRegRegImm(kOpLsl, rl_result.reg, rl_result.reg, first_bit);
   }
@@ -761,15 +688,13 @@ void Arm64Mir2Lir::GenMultiplyByTwoBitMultiplier(RegLocation rl_src,
 
 void Arm64Mir2Lir::GenDivZeroCheck(RegStorage reg) {
   DCHECK(reg.IsPair());   // TODO: support k64BitSolo.
-  RegStorage t_reg = AllocTemp();
-  NewLIR4(kThumb2OrrRRRs, t_reg.GetReg(), reg.GetLowReg(), reg.GetHighReg(), 0);
-  FreeTemp(t_reg);
-  GenCheck(kCondEq, kThrowDivZero);
+  OpRegImm64(kOpCmp, reg, 0, /*is_wide*/true);
+  AddDivZeroSlowPath(kCondEq);
 }
 
 // Test suspend flag, return target of taken suspend branch
 LIR* Arm64Mir2Lir::OpTestSuspend(LIR* target) {
-  NewLIR2(kThumbSubRI8, rARM_SUSPEND, 1);
+  NewLIR3(kA64Subs3rRd, rARM_SUSPEND, rARM_SUSPEND, 1);
   return OpCondBranch((target == NULL) ? kCondEq : kCondNe, target);
 }
 
@@ -801,8 +726,8 @@ void Arm64Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
 
   // If the same barrier already exists, don't generate another.
   if (barrier == nullptr
-      || (barrier != nullptr && (barrier->opcode != kThumb2Dmb || barrier->operands[0] != dmb_flavor))) {
-    barrier = NewLIR1(kThumb2Dmb, dmb_flavor);
+      || (barrier->opcode != kA64Dmb1B || barrier->operands[0] != dmb_flavor)) {
+    barrier = NewLIR1(kA64Dmb1B, dmb_flavor);
   }
 
   // At this point we must have a memory barrier. Mark it as a scheduling barrier as well.
@@ -830,137 +755,45 @@ void Arm64Mir2Lir::GenNegLong(RegLocation rl_dest, RegLocation rl_src) {
   StoreValueWide(rl_dest, rl_result);
 }
 
+void Arm64Mir2Lir::GenLongOp(OpKind op, RegLocation rl_dest, RegLocation rl_src1,
+                             RegLocation rl_src2) {
+  RegLocation rl_result;
+  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
+  rl_src2 = LoadValueWide(rl_src2, kCoreReg);
+  rl_result = EvalLocWide(rl_dest, kCoreReg, true);
+  OpRegRegRegShift(op, rl_result.reg.GetReg(), rl_src1.reg.GetReg(), rl_src2.reg.GetReg(),
+                   ENCODE_NO_SHIFT, /*is_wide*/ true);
+  StoreValueWide(rl_dest, rl_result);
+}
+
 void Arm64Mir2Lir::GenMulLong(Instruction::Code opcode, RegLocation rl_dest,
-                            RegLocation rl_src1, RegLocation rl_src2) {
-    /*
-     * tmp1     = src1.hi * src2.lo;  // src1.hi is no longer needed
-     * dest     = src1.lo * src2.lo;
-     * tmp1    += src1.lo * src2.hi;
-     * dest.hi += tmp1;
-     *
-     * To pull off inline multiply, we have a worst-case requirement of 7 temporary
-     * registers.  Normally for Arm, we get 5.  We can get to 6 by including
-     * lr in the temp set.  The only problematic case is all operands and result are
-     * distinct, and none have been promoted.  In that case, we can succeed by aggressively
-     * freeing operand temp registers after they are no longer needed.  All other cases
-     * can proceed normally.  We'll just punt on the case of the result having a misaligned
-     * overlap with either operand and send that case to a runtime handler.
-     */
-    RegLocation rl_result;
-    if (BadOverlap(rl_src1, rl_dest) || (BadOverlap(rl_src2, rl_dest))) {
-      ThreadOffset func_offset = QUICK_ENTRYPOINT_OFFSET(pLmul);
-      FlushAllRegs();
-      CallRuntimeHelperRegLocationRegLocation(func_offset, rl_src1, rl_src2, false);
-      rl_result = GetReturnWide(false);
-      StoreValueWide(rl_dest, rl_result);
-      return;
-    }
-
-    rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-    rl_src2 = LoadValueWide(rl_src2, kCoreReg);
-
-    int reg_status = 0;
-    RegStorage res_lo;
-    RegStorage res_hi;
-    bool dest_promoted = rl_dest.location == kLocPhysReg && rl_dest.reg.Valid() &&
-        !IsTemp(rl_dest.reg.GetLowReg()) && !IsTemp(rl_dest.reg.GetHighReg());
-    bool src1_promoted = !IsTemp(rl_src1.reg.GetLowReg()) && !IsTemp(rl_src1.reg.GetHighReg());
-    bool src2_promoted = !IsTemp(rl_src2.reg.GetLowReg()) && !IsTemp(rl_src2.reg.GetHighReg());
-    // Check if rl_dest is *not* either operand and we have enough temp registers.
-    if ((rl_dest.s_reg_low != rl_src1.s_reg_low && rl_dest.s_reg_low != rl_src2.s_reg_low) &&
-        (dest_promoted || src1_promoted || src2_promoted)) {
-      // In this case, we do not need to manually allocate temp registers for result.
-      rl_result = EvalLoc(rl_dest, kCoreReg, true);
-      res_lo = rl_result.reg.GetLow();
-      res_hi = rl_result.reg.GetHigh();
-    } else {
-      res_lo = AllocTemp();
-      if ((rl_src1.s_reg_low == rl_src2.s_reg_low) || src1_promoted || src2_promoted) {
-        // In this case, we have enough temp registers to be allocated for result.
-        res_hi = AllocTemp();
-        reg_status = 1;
-      } else {
-        // In this case, all temps are now allocated.
-        // res_hi will be allocated after we can free src1_hi.
-        reg_status = 2;
-      }
-    }
-
-    // Temporarily add LR to the temp pool, and assign it to tmp1
-    MarkTemp(rARM_LR);
-    FreeTemp(rARM_LR);
-    RegStorage tmp1 = rs_rARM_LR;
-    LockTemp(rARM_LR);
-
-    if (rl_src1.reg == rl_src2.reg) {
-      DCHECK(res_hi.Valid());
-      DCHECK(res_lo.Valid());
-      NewLIR3(kThumb2MulRRR, tmp1.GetReg(), rl_src1.reg.GetLowReg(), rl_src1.reg.GetHighReg());
-      NewLIR4(kThumb2Umull, res_lo.GetReg(), res_hi.GetReg(), rl_src1.reg.GetLowReg(),
-              rl_src1.reg.GetLowReg());
-      OpRegRegRegShift(kOpAdd, res_hi.GetReg(), res_hi.GetReg(), tmp1.GetReg(),
-                       EncodeShift(kArmLsl, 1));
-    } else {
-      NewLIR3(kThumb2MulRRR, tmp1.GetReg(), rl_src2.reg.GetLowReg(), rl_src1.reg.GetHighReg());
-      if (reg_status == 2) {
-        DCHECK(!res_hi.Valid());
-        DCHECK_NE(rl_src1.reg.GetLowReg(), rl_src2.reg.GetLowReg());
-        DCHECK_NE(rl_src1.reg.GetHighReg(), rl_src2.reg.GetHighReg());
-        FreeTemp(rl_src1.reg.GetHighReg());
-        res_hi = AllocTemp();
-      }
-      DCHECK(res_hi.Valid());
-      DCHECK(res_lo.Valid());
-      NewLIR4(kThumb2Umull, res_lo.GetReg(), res_hi.GetReg(), rl_src2.reg.GetLowReg(),
-              rl_src1.reg.GetLowReg());
-      NewLIR4(kThumb2Mla, tmp1.GetReg(), rl_src1.reg.GetLowReg(), rl_src2.reg.GetHighReg(),
-              tmp1.GetReg());
-      NewLIR4(kThumb2AddRRR, res_hi.GetReg(), tmp1.GetReg(), res_hi.GetReg(), 0);
-      if (reg_status == 2) {
-        // Clobber rl_src1 since it was corrupted.
-        FreeTemp(rl_src1.reg);
-        Clobber(rl_src1.reg);
-      }
-    }
-
-    // Now, restore lr to its non-temp status.
-    FreeTemp(tmp1);
-    Clobber(rARM_LR);
-    UnmarkTemp(rARM_LR);
-
-    if (reg_status != 0) {
-      // We had manually allocated registers for rl_result.
-      // Now construct a RegLocation.
-      rl_result = GetReturnWide(false);  // Just using as a template.
-      rl_result.reg = RegStorage::MakeRegPair(res_lo, res_hi);
-    }
-
-    StoreValueWide(rl_dest, rl_result);
+                              RegLocation rl_src1, RegLocation rl_src2) {
+  GenLongOp(kOpMul, rl_dest, rl_src1, rl_src2);
 }
 
 void Arm64Mir2Lir::GenAddLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,
-                            RegLocation rl_src2) {
-  LOG(FATAL) << "Unexpected use of GenAddLong for Arm";
+                              RegLocation rl_src2) {
+  GenLongOp(kOpAdd, rl_dest, rl_src1, rl_src2);
 }
 
 void Arm64Mir2Lir::GenSubLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,
                             RegLocation rl_src2) {
-  LOG(FATAL) << "Unexpected use of GenSubLong for Arm";
+  GenLongOp(kOpSub, rl_dest, rl_src1, rl_src2);
 }
 
 void Arm64Mir2Lir::GenAndLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,
                             RegLocation rl_src2) {
-  LOG(FATAL) << "Unexpected use of GenAndLong for Arm";
+  GenLongOp(kOpAnd, rl_dest, rl_src1, rl_src2);
 }
 
 void Arm64Mir2Lir::GenOrLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,
                            RegLocation rl_src2) {
-  LOG(FATAL) << "Unexpected use of GenOrLong for Arm";
+  GenLongOp(kOpOr, rl_dest, rl_src1, rl_src2);
 }
 
 void Arm64Mir2Lir::GenXorLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,
                             RegLocation rl_src2) {
-  LOG(FATAL) << "Unexpected use of genXoLong for Arm";
+  GenLongOp(kOpXor, rl_dest, rl_src1, rl_src2);
 }
 
 /*
@@ -1010,7 +843,7 @@ void Arm64Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
       // No special indexed operation, lea + load w/ displacement
       reg_ptr = AllocTemp();
       OpRegRegRegShift(kOpAdd, reg_ptr.GetReg(), rl_array.reg.GetReg(), rl_index.reg.GetReg(),
-                       EncodeShift(kArmLsl, scale));
+                       EncodeShift(kA64Lsl, scale));
       FreeTemp(rl_index.reg.GetReg());
     }
     rl_result = EvalLoc(rl_dest, reg_class, true);
@@ -1118,7 +951,7 @@ void Arm64Mir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
     }
     if (!constant_index) {
       OpRegRegRegShift(kOpAdd, reg_ptr.GetReg(), rl_array.reg.GetReg(), rl_index.reg.GetReg(),
-                       EncodeShift(kArmLsl, scale));
+                       EncodeShift(kA64Lsl, scale));
     }
     if (needs_range_check) {
       if (constant_index) {
@@ -1184,7 +1017,7 @@ void Arm64Mir2Lir::GenShiftImmOpLong(Instruction::Code opcode,
       } else {
         OpRegRegImm(kOpLsl, rl_result.reg.GetHigh(), rl_src.reg.GetHigh(), shift_amount);
         OpRegRegRegShift(kOpOr, rl_result.reg.GetHighReg(), rl_result.reg.GetHighReg(), rl_src.reg.GetLowReg(),
-                         EncodeShift(kArmLsr, 32 - shift_amount));
+                         EncodeShift(kA64Lsr, 32 - shift_amount));
         OpRegRegImm(kOpLsl, rl_result.reg.GetLow(), rl_src.reg.GetLow(), shift_amount);
       }
       break;
@@ -1200,7 +1033,7 @@ void Arm64Mir2Lir::GenShiftImmOpLong(Instruction::Code opcode,
         RegStorage t_reg = AllocTemp();
         OpRegRegImm(kOpLsr, t_reg, rl_src.reg.GetLow(), shift_amount);
         OpRegRegRegShift(kOpOr, rl_result.reg.GetLowReg(), t_reg.GetReg(), rl_src.reg.GetHighReg(),
-                         EncodeShift(kArmLsl, 32 - shift_amount));
+                         EncodeShift(kA64Lsl, 32 - shift_amount));
         FreeTemp(t_reg);
         OpRegRegImm(kOpAsr, rl_result.reg.GetHigh(), rl_src.reg.GetHigh(), shift_amount);
       }
@@ -1217,7 +1050,7 @@ void Arm64Mir2Lir::GenShiftImmOpLong(Instruction::Code opcode,
         RegStorage t_reg = AllocTemp();
         OpRegRegImm(kOpLsr, t_reg, rl_src.reg.GetLow(), shift_amount);
         OpRegRegRegShift(kOpOr, rl_result.reg.GetLowReg(), t_reg.GetReg(), rl_src.reg.GetHighReg(),
-                         EncodeShift(kArmLsl, 32 - shift_amount));
+                         EncodeShift(kA64Lsl, 32 - shift_amount));
         FreeTemp(t_reg);
         OpRegRegImm(kOpLsr, rl_result.reg.GetHigh(), rl_src.reg.GetHigh(), shift_amount);
       }
@@ -1228,8 +1061,8 @@ void Arm64Mir2Lir::GenShiftImmOpLong(Instruction::Code opcode,
   StoreValueWide(rl_dest, rl_result);
 }
 
-void Arm64Mir2Lir::GenArithImmOpLong(Instruction::Code opcode,
-                                   RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) {
+void Arm64Mir2Lir::GenArithImmOpLong(Instruction::Code opcode, RegLocation rl_dest,
+                                     RegLocation rl_src1, RegLocation rl_src2) {
   if ((opcode == Instruction::SUB_LONG_2ADDR) || (opcode == Instruction::SUB_LONG)) {
     if (!rl_src2.is_const) {
       // Don't bother with special handling for subtract from immediate.
@@ -1248,11 +1081,10 @@ void Arm64Mir2Lir::GenArithImmOpLong(Instruction::Code opcode,
     return;
   }
   DCHECK(rl_src2.is_const);
-  int64_t val = mir_graph_->ConstantValueWide(rl_src2);
-  uint32_t val_lo = Low32Bits(val);
-  uint32_t val_hi = High32Bits(val);
-  int32_t mod_imm_lo = ModifiedImmediate(val_lo);
-  int32_t mod_imm_hi = ModifiedImmediate(val_hi);
+  // TODO(Arm64): implement this.
+  //  int64_t val = mir_graph_->ConstantValueWide(rl_src2);
+  int32_t mod_imm_lo = -1;  // ModifiedImmediate(val_lo);
+  int32_t mod_imm_hi = -1;  // ModifiedImmediate(val_hi);
 
   // Only a subset of add/sub immediate instructions set carry - so bail if we don't fit
   switch (opcode) {
@@ -1272,6 +1104,7 @@ void Arm64Mir2Lir::GenArithImmOpLong(Instruction::Code opcode,
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   // NOTE: once we've done the EvalLoc on dest, we can no longer bail.
   switch (opcode) {
+#if 0
     case Instruction::ADD_LONG:
     case Instruction::ADD_LONG_2ADDR:
       NewLIR3(kThumb2AddRRI8M, rl_result.reg.GetLowReg(), rl_src1.reg.GetLowReg(), mod_imm_lo);
@@ -1305,10 +1138,76 @@ void Arm64Mir2Lir::GenArithImmOpLong(Instruction::Code opcode,
       NewLIR3(kThumb2SubRRI8M, rl_result.reg.GetLowReg(), rl_src1.reg.GetLowReg(), mod_imm_lo);
       NewLIR3(kThumb2SbcRRI8M, rl_result.reg.GetHighReg(), rl_src1.reg.GetHighReg(), mod_imm_hi);
       break;
+#endif
     default:
       LOG(FATAL) << "Unexpected opcode " << opcode;
   }
   StoreValueWide(rl_dest, rl_result);
+}
+
+/**
+ * @brief Split a register list in pairs or registers.
+ *
+ * Given a list of registers in @p reg_mask, split the list in pairs. Use as follows:
+ * @code
+ *   int reg1 = -1, reg2 = -1;
+ *   while (reg_mask) {
+ *     reg_mask = GenPairWise(reg_mask, & reg1, & reg2);
+ *     if (UNLIKELY(reg2 < 0)) {
+ *       // Single register in reg1.
+ *     } else {
+ *       // Pair in reg1, reg2.
+ *     }
+ *   }
+ * @endcode
+ */
+uint32_t Arm64Mir2Lir::GenPairWise(uint32_t reg_mask, int* reg1, int* reg2) {
+  // Find first register.
+  int first_bit_set = __builtin_ctz(reg_mask) + 1;
+  int reg = *reg1 + first_bit_set;
+  reg_mask >>= first_bit_set;
+
+  if (LIKELY(reg_mask)) {
+    // Save the first register, find the second and use the pair opcode.
+    int second_bit_set = __builtin_ctz(reg_mask) + 1;
+    *reg2 = reg;
+    reg_mask >>= second_bit_set;
+    *reg1 = reg + second_bit_set;
+    return reg_mask;
+  }
+
+  // Use the single opcode, as we just have one register.
+  *reg1 = reg;
+  *reg2 = -1;
+  return reg_mask;
+}
+
+void Arm64Mir2Lir::UnSpillCoreRegs(int base, int offset, uint32_t reg_mask, bool use_x_regs) {
+  int reg1 = -1, reg2 = -1;
+  int pop_log2_size = (use_x_regs) ? 3 : 2;
+
+  for (offset = (offset >> pop_log2_size) - 1; reg_mask; offset--) {
+     reg_mask = GenPairWise(reg_mask, & reg1, & reg2);
+    if (UNLIKELY(reg2 < 0)) {
+      NewLIR3(kA64Ldr3rXD, reg1, base, offset);
+    } else {
+      NewLIR4(kA64Ldp4rrXD, reg1, reg2, base, offset);
+    }
+  }
+}
+
+void Arm64Mir2Lir::SpillCoreRegs(int base, int offset, uint32_t reg_mask, bool use_x_regs) {
+  int reg1 = -1, reg2 = -1;
+  int pop_log2_size = (use_x_regs) ? 3 : 2;
+
+  for (offset = (offset >> pop_log2_size) - 1; reg_mask; offset--) {
+    reg_mask = GenPairWise(reg_mask, & reg1, & reg2);
+    if (UNLIKELY(reg2 < 0)) {
+      NewLIR3(kA64Str3rXD, reg1, base, offset);
+    } else {
+      NewLIR4(kA64Stp4rrXD, reg1, reg2, base, offset);
+    }
+  }
 }
 
 }  // namespace art

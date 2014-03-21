@@ -141,6 +141,11 @@ struct PACKED(4) QuickEntryPoints {
   void (*pThrowNoSuchMethod)(int32_t);
   void (*pThrowNullPointer)();
   void (*pThrowStackOverflow)(void*);
+
+#ifdef WITH_HOST_SIMULATOR
+  // Host foreign architecture simulation
+  void (*pForeignCodeCall)(void);
+#endif
 };
 
 
