@@ -548,7 +548,7 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
 }
 
 /* Collect stats on number of checks removed */
-void MIRGraph::CountChecks(struct BasicBlock* bb) {
+void MIRGraph::CountChecks(BasicBlock* bb) {
   if (bb->data_flow_info != NULL) {
     for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
       if (mir->ssa_rep == NULL) {
@@ -619,7 +619,7 @@ bool MIRGraph::LayoutBlocks(BasicBlock* bb) {
 }
 
 /* Combine any basic blocks terminated by instructions that we now know can't throw */
-void MIRGraph::CombineBlocks(struct BasicBlock* bb) {
+void MIRGraph::CombineBlocks(BasicBlock* bb) {
   // Loop here to allow combining a sequence of blocks
   while (true) {
     // Check termination conditions
@@ -849,7 +849,7 @@ bool MIRGraph::EliminateNullChecksAndInferTypes(BasicBlock* bb) {
           LOG(WARNING) << "Unexpected opcode following new: " << next_mir->dalvikInsn.opcode;
         } else if (bb->fall_through != NullBasicBlockId) {
           // Look in next basic block
-          struct BasicBlock* next_bb = GetBasicBlock(bb->fall_through);
+          BasicBlock* next_bb = GetBasicBlock(bb->fall_through);
           for (MIR* tmir = next_bb->first_mir_insn; tmir != NULL;
             tmir =tmir->next) {
             if (static_cast<int>(tmir->dalvikInsn.opcode) >= static_cast<int>(kMirOpFirst)) {
@@ -1230,7 +1230,7 @@ void MIRGraph::DumpCheckStats() {
   }
 }
 
-bool MIRGraph::BuildExtendedBBList(struct BasicBlock* bb) {
+bool MIRGraph::BuildExtendedBBList(BasicBlock* bb) {
   if (bb->visited) return false;
   if (!((bb->block_type == kEntryBlock) || (bb->block_type == kDalvikByteCode)
       || (bb->block_type == kExitBlock))) {

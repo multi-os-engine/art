@@ -1188,15 +1188,7 @@ CallInfo* MIRGraph::NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type,
 
 // Allocate a new basic block.
 BasicBlock* MIRGraph::NewMemBB(BBType block_type, int block_id) {
-  BasicBlock* bb = static_cast<BasicBlock*>(arena_->Alloc(sizeof(BasicBlock),
-                                                          kArenaAllocBB));
-  bb->block_type = block_type;
-  bb->id = block_id;
-  // TUNING: better estimate of the exit block predecessors?
-  bb->predecessors = new (arena_) GrowableArray<BasicBlockId>(arena_,
-                                                             (block_type == kExitBlock) ? 2048 : 2,
-                                                             kGrowableArrayPredecessors);
-  bb->successor_block_list_type = kNotUsed;
+  BasicBlock* bb = new (arena_, kArenaAllocBB) BasicBlock(arena_, block_id, block_type);
   block_id_map_.Put(block_id, block_id);
   return bb;
 }

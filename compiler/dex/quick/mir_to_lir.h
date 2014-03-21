@@ -104,7 +104,7 @@ typedef uint32_t CodeOffset;         // Native code offset in bytes.
 #define REG_USE23            (REG_USE2 | REG_USE3)
 #define REG_USE123           (REG_USE1 | REG_USE2 | REG_USE3)
 
-struct BasicBlock;
+class BasicBlock;
 struct CallInfo;
 struct CompilationUnit;
 struct InlineMethod;

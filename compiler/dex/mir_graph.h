@@ -25,6 +25,7 @@
 #include "invoke_type.h"
 #include "mir_field_info.h"
 #include "mir_method_info.h"
+#include "utils/allocation.h"
 #include "utils/arena_bit_vector.h"
 #include "utils/growable_array.h"
 #include "reg_storage.h"
@@ -282,7 +283,38 @@ struct MIR {
 
 struct SuccessorBlockInfo;
 
-struct BasicBlock {
+class BasicBlock : public ArenaObject {
+ public:
+  explicit BasicBlock(ArenaAllocator* arena, BasicBlockId bb_id, BBType bb_type)
+      : id(bb_id),
+        dfs_id(NullBasicBlockId),
+        start_offset(0),
+        fall_through(NullBasicBlockId),
+        taken(NullBasicBlockId),
+        i_dom(NullBasicBlockId),
+        nesting_depth(0),
+        block_type(bb_type),
+        successor_block_list_type(kNotUsed),
+        visited(false),
+        hidden(false),
+        catch_entry(false),
+        explicit_throw(false),
+        conditional_branch(false),
+        terminated_by_return(false),
+        dominates_return(false),
+        use_lvn(false),
+        first_mir_insn(nullptr),
+        last_mir_insn(nullptr),
+        data_flow_info(nullptr),
+        dominators(nullptr),
+        i_dominated(nullptr),
+        dom_frontier(nullptr),
+        successor_blocks(nullptr) {
+    // TUNING: better estimate of the exit block predecessors?
+    predecessors = new (arena) GrowableArray<BasicBlockId>(arena, (block_type == kExitBlock) ? 2048 : 2,
+                                                           kGrowableArrayPredecessors);
+  }
+
   BasicBlockId id;
   BasicBlockId dfs_id;
   NarrowDexOffset start_offset;     // Offset in code units.
@@ -322,6 +354,9 @@ struct BasicBlock {
    * @return Returns the following MIR if one can be found.
    */
   MIR* GetNextUnconditionalMir(MIRGraph* mir_graph, MIR* current);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
 
 /*
@@ -850,7 +885,7 @@ class MIRGraph {
    * @brief Count the uses in the BasicBlock
    * @param bb the BasicBlock
    */
-  void CountUses(struct BasicBlock* bb);
+  void CountUses(BasicBlock* bb);
 
   /**
    * @brief Combine BasicBlocks
@@ -919,7 +954,7 @@ class MIRGraph {
   void SetConstantWide(int ssa_reg, int64_t value);
   int GetSSAUseCount(int s_reg);
   bool BasicBlockOpt(BasicBlock* bb);
-  bool BuildExtendedBBList(struct BasicBlock* bb);
+  bool BuildExtendedBBList(BasicBlock* bb);
   bool FillDefBlockMatrix(BasicBlock* bb);
   void InitializeDominationInfo(BasicBlock* bb);
   bool ComputeblockIDom(BasicBlock* bb);
