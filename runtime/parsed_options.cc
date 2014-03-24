@@ -572,6 +572,8 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
                StartsWith(option, "-enableassertions:") ||
                StartsWith(option, "-disableassertions:") ||
                (option == "--runtime-arg") ||
+               (option == "-ea") ||
+               (option == "-da") ||
                (option == "-esa") ||
                (option == "-dsa") ||
                (option == "-enablesystemassertions") ||
