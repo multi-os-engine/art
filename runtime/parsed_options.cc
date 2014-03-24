@@ -567,8 +567,8 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
         return false;
       }
       image_compiler_options_.push_back(options[i].first);
-    } else if (StartsWith(option, "-ea:") ||
-               StartsWith(option, "-da:") ||
+    } else if (StartsWith(option, "-ea") ||
+               StartsWith(option, "-da") ||
                StartsWith(option, "-enableassertions:") ||
                StartsWith(option, "-disableassertions:") ||
                (option == "--runtime-arg") ||
