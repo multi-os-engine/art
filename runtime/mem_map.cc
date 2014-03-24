@@ -132,7 +132,6 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* expected, size_t byte_count
 #if defined(__LP64__) && !defined(__x86_64__)
   // MAP_32BIT only available on x86_64.
   void* actual = MAP_FAILED;
-  std::string strerr;
   if (low_4gb && expected == nullptr) {
     flags |= MAP_FIXED;
 
@@ -180,11 +179,11 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* expected, size_t byte_count
     }
 
     if (actual == MAP_FAILED) {
-      strerr = "Could not find contiguous low-memory space.";
+      LOG(ERROR) << "Could not find contiguous low-memory space.";
+      errno = ENOMEM;
     }
   } else {
     actual = mmap(expected, page_aligned_byte_count, prot, flags, fd.get(), 0);
-    strerr = strerror(errno);
   }
 
 #else
@@ -195,10 +194,10 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* expected, size_t byte_count
 #endif
 
   void* actual = mmap(expected, page_aligned_byte_count, prot, flags, fd.get(), 0);
-  std::string strerr(strerror(errno));
 #endif
 
   if (actual == MAP_FAILED) {
+    std::string strerr(strerror(errno));
     std::string maps;
     ReadFileToString("/proc/self/maps", &maps);
     *error_msg = StringPrintf("Failed anonymous mmap(%p, %zd, 0x%x, 0x%x, %d, 0): %s\n%s",
@@ -247,8 +246,8 @@ MemMap* MemMap::MapFileAtAddress(byte* expected, size_t byte_count, int prot, in
                                               flags,
                                               fd,
                                               page_aligned_offset));
-  std::string strerr(strerror(errno));
   if (actual == MAP_FAILED) {
+    std::string strerr(strerror(errno));
     std::string maps;
     ReadFileToString("/proc/self/maps", &maps);
     *error_msg = StringPrintf("mmap(%p, %zd, 0x%x, 0x%x, %d, %" PRId64
