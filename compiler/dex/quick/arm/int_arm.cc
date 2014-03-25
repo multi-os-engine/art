@@ -418,10 +418,6 @@ bool ArmMir2Lir::SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div
   if (pattern == DivideNone) {
     return false;
   }
-  // Tuning: add rem patterns
-  if (!is_div) {
-    return false;
-  }
 
   int r_magic = AllocTemp();
   LoadConstant(r_magic, magic_table[lit].magic);
@@ -449,6 +445,120 @@ bool ArmMir2Lir::SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div
     default:
       LOG(FATAL) << "Unexpected pattern: " << pattern;
   }
+
+  if (!is_div) {
+    int tmp1 = r_lo;
+    EasyMultiplyOp ops[2];
+
+    bool canEasyMultiply = GetEasyMultiplyTwoOps(lit, ops);
+    DCHECK_NE(canEasyMultiply, false);
+
+    GenEasyMultiplyTwoOps(tmp1, rl_result.reg.GetReg(), ops);
+    OpRegRegReg(kOpSub, rl_result.reg.GetReg(), rl_src.reg.GetReg(), tmp1);
+  }
+
+  StoreValue(rl_dest, rl_result);
+  return true;
+}
+
+// Try to convert *lit to 1 RegRegRegShift/RegRegShift form.
+bool ArmMir2Lir::GetEasyMultiplyOp(int lit, ArmMir2Lir::EasyMultiplyOp* op) {
+  if (IsPowerOfTwo(lit)) {
+    op->op = kOpLsl;
+    op->shift = LowestSetBit(lit);
+    return true;
+  }
+
+  if (IsPowerOfTwo(lit - 1)) {
+    op->op = kOpAdd;
+    op->shift = LowestSetBit(lit - 1);
+    return true;
+  }
+
+  if (IsPowerOfTwo(lit + 1)) {
+    op->op = kOpRsub;
+    op->shift = LowestSetBit(lit + 1);
+    return true;
+  }
+
+  op->op = kOpInvalid;
+  return false;
+}
+
+// Try to convert *lit to 1~2 RegRegRegShift/RegRegShift forms.
+bool ArmMir2Lir::GetEasyMultiplyTwoOps(int lit, EasyMultiplyOp* ops) {
+  GetEasyMultiplyOp(lit, &ops[0]);
+  if (GetEasyMultiplyOp(lit, &ops[0])) {
+    ops[1].op = kOpInvalid;
+    return true;
+  }
+
+  int lit1 = lit;
+  uint32_t shift = LowestSetBit(lit1);
+  if (GetEasyMultiplyOp(lit1 >> shift, &ops[0])) {
+    ops[1].op = kOpLsl;
+    ops[1].shift = shift;
+    return true;
+  }
+
+  lit1 = lit - 1;
+  shift = LowestSetBit(lit1);
+  if (GetEasyMultiplyOp(lit1 >> shift, &ops[0])) {
+    ops[1].op = kOpAdd;
+    ops[1].shift = shift;
+    return true;
+  }
+
+  lit1 = lit + 1;
+  shift = LowestSetBit(lit1);
+  if (GetEasyMultiplyOp(lit1 >> shift, &ops[0])) {
+    ops[1].op = kOpRsub;
+    ops[1].shift = shift;
+    return true;
+  }
+
+  return false;
+}
+
+void ArmMir2Lir::GenEasyMultiplyTwoOps(int r_dest, int r_src, EasyMultiplyOp* ops) {
+  // dest = ( src << shift1) + [ src | -src | 0 ]
+  // dest = (dest << shift2) + [ src | -src | 0 ]
+  for (int i = 0; i < 2; i++) {
+    int r_src2;
+    if (i == 0) {
+      r_src2 = r_src;
+    } else {
+      r_src2 = r_dest;
+    }
+    switch (ops[i].op) {
+    case kOpLsl:
+      OpRegRegImm(kOpLsl, r_dest, r_src2, ops[i].shift);
+      break;
+    case kOpAdd:
+      OpRegRegRegShift(kOpAdd, r_dest, r_src, r_src2, EncodeShift(kArmLsl, ops[i].shift));
+      break;
+    case kOpRsub:
+      OpRegRegRegShift(kOpRsub, r_dest, r_src, r_src2, EncodeShift(kArmLsl, ops[i].shift));
+      break;
+    default:
+      DCHECK_NE(i, 0);
+      DCHECK_EQ(ops[i].op, kOpInvalid);
+      break;
+    }
+  }
+}
+
+bool ArmMir2Lir::EasyMultiply(RegLocation rl_src, RegLocation rl_dest, int lit) {
+  EasyMultiplyOp ops[2];
+
+  if (!GetEasyMultiplyTwoOps(lit, ops)) {
+    return false;
+  }
+
+  rl_src = LoadValue(rl_src, kCoreReg);
+  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
+
+  GenEasyMultiplyTwoOps(rl_result.reg.GetReg(), rl_src.reg.GetReg(), ops);
   StoreValue(rl_dest, rl_result);
   return true;
 }

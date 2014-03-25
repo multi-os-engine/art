@@ -29,6 +29,7 @@ class MipsMir2Lir : public Mir2Lir {
     // Required for target - codegen utilities.
     bool SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div, RegLocation rl_src,
                                     RegLocation rl_dest, int lit);
+    bool EasyMultiply(RegLocation rl_src, RegLocation rl_dest, int lit);
     int LoadHelper(ThreadOffset offset);
     LIR* CheckSuspendUsingLoad() OVERRIDE;
     LIR* LoadBaseDisp(int rBase, int displacement, int r_dest, OpSize size, int s_reg);

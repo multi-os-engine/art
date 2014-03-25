@@ -29,6 +29,7 @@ class ArmMir2Lir : public Mir2Lir {
     // Required for target - codegen helpers.
     bool SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div, RegLocation rl_src,
                                     RegLocation rl_dest, int lit);
+    bool EasyMultiply(RegLocation rl_src, RegLocation rl_dest, int lit);
     int LoadHelper(ThreadOffset offset);
     LIR* CheckSuspendUsingLoad() OVERRIDE;
     LIR* LoadBaseDisp(int rBase, int displacement, int r_dest, OpSize size, int s_reg);
@@ -193,6 +194,13 @@ class ArmMir2Lir : public Mir2Lir {
     RegLocation GenDivRem(RegLocation rl_dest, RegLocation rl_src1,
                           RegLocation rl_src2, bool is_div, bool check_zero);
     RegLocation GenDivRemLit(RegLocation rl_dest, RegLocation rl_src1, int lit, bool is_div);
+    typedef struct {
+      OpKind op;
+      uint32_t shift;
+    } EasyMultiplyOp;
+    bool GetEasyMultiplyOp(int lit, EasyMultiplyOp* op);
+    bool GetEasyMultiplyTwoOps(int lit, EasyMultiplyOp* ops);
+    void GenEasyMultiplyTwoOps(int r_dest, int r_src, EasyMultiplyOp* ops);
 };
 
 }  // namespace art
