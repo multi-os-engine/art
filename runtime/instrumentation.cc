@@ -827,6 +827,19 @@ void Instrumentation::PopMethodForUnwind(Thread* self, bool is_deoptimization) c
   }
 }
 
+void Instrumentation::VisitRoots(RootCallback* callback, void* arg) {
+  if (deoptimized_methods_.empty()) {
+    return;
+  }
+  std::set<mirror::ArtMethod*> new_deoptimized_methods;
+  for (mirror::ArtMethod* method : deoptimized_methods_) {
+    DCHECK(method != nullptr);
+    callback(reinterpret_cast<mirror::Object**>(&method), arg, 0, kRootVMInternal);
+    new_deoptimized_methods.insert(method);
+  }
+  deoptimized_methods_ = new_deoptimized_methods;
+}
+
 std::string InstrumentationStackFrame::Dump() const {
   std::ostringstream os;
   os << "Frame " << frame_id_ << " " << PrettyMethod(method_) << ":"
