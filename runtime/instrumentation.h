@@ -20,6 +20,7 @@
 #include "atomic.h"
 #include "base/macros.h"
 #include "base/mutex.h"
+#include "object_callbacks.h"
 
 #include <stdint.h>
 #include <set>
@@ -285,6 +286,8 @@ class Instrumentation {
 
   void InstallStubsForMethod(mirror::ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void VisitRoots(RootCallback* callback, void* arg) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
   // Does the job of installing or removing instrumentation code within methods.
