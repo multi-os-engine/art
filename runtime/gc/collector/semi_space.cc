@@ -125,8 +125,8 @@ void SemiSpace::InitializePhase() {
 void SemiSpace::ProcessReferences(Thread* self) {
   TimingLogger::ScopedSplit split("ProcessReferences", &timings_);
   WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
-  GetHeap()->ProcessReferences(timings_, clear_soft_references_, &MarkedForwardingAddressCallback,
-                               &MarkObjectCallback, &ProcessMarkStackCallback, this);
+  GetHeap()->ProcessReferences(timings_, clear_soft_references_, &IsMarkedHeapReferenceCallback,
+                               &MarkHeapReferenceCallback, &ProcessMarkStackCallback, this);
 }
 
 void SemiSpace::MarkingPhase() {
@@ -639,6 +639,17 @@ mirror::Object* SemiSpace::MarkObjectCallback(mirror::Object* root, void* arg) {
 void SemiSpace::MarkHeapReferenceCallback(mirror::HeapReference<mirror::Object>* obj_ptr,
                                           void* arg) {
   reinterpret_cast<SemiSpace*>(arg)->MarkObject(obj_ptr);
+}
+
+bool SemiSpace::IsMarkedHeapReferenceCallback(mirror::HeapReference<mirror::Object>* obj_ptr,
+                                              void* arg) {
+  mirror::Object* forward_address =
+      reinterpret_cast<SemiSpace*>(arg)->GetMarkedForwardAddress(obj_ptr);
+  if (forward_address) {
+    obj_ptr->Assign(forward_address);
+    return true;
+  }
+  return false;
 }
 
 void SemiSpace::MarkRootCallback(Object** root, void* arg, uint32_t /*thread_id*/,

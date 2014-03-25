@@ -49,6 +49,9 @@ class MANAGED Reference : public Object {
   void SetReferent(Object* referent) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     SetFieldObject<kTransactionActive>(ReferentOffset(), referent, true);
   }
+  HeapReference<mirror::Object>* GetReferentAddr() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetFieldObjectReferenceAddr(ReferentOffset());
+  }
   template<bool kTransactionActive>
   void ClearReferent() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     SetFieldObject<kTransactionActive>(ReferentOffset(), nullptr, true);

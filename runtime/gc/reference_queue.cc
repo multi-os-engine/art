@@ -105,74 +105,61 @@ void ReferenceQueue::Dump(std::ostream& os) const {
 }
 
 void ReferenceQueue::ClearWhiteReferences(ReferenceQueue& cleared_references,
-                                          IsMarkedCallback* preserve_callback,
+                                          IsHeapReferenceMarkedCallback* preserve_callback,
                                           void* arg) {
   while (!IsEmpty()) {
     mirror::Reference* ref = DequeuePendingReference();
-    mirror::Object* referent = ref->GetReferent();
-    if (referent != nullptr) {
-      mirror::Object* forward_address = preserve_callback(referent, arg);
-      if (forward_address == nullptr) {
-        // Referent is white, clear it.
-        if (Runtime::Current()->IsActiveTransaction()) {
-          ref->ClearReferent<true>();
-        } else {
-          ref->ClearReferent<false>();
-        }
-        if (ref->IsEnqueuable()) {
-          cleared_references.EnqueuePendingReference(ref);
-        }
-      } else if (referent != forward_address) {
-        // Object moved, need to updated the referent.
-        ref->SetReferent<false>(forward_address);
+    mirror::HeapReference<mirror::Object>* referent_ptr = ref->GetReferentAddr();
+    if (referent_ptr->AsMirrorPtr() != nullptr && !preserve_callback(referent_ptr, arg)) {
+      // Referent is white, clear it.
+      if (Runtime::Current()->IsActiveTransaction()) {
+        ref->ClearReferent<true>();
+      } else {
+        ref->ClearReferent<false>();
+      }
+      if (ref->IsEnqueuable()) {
+        cleared_references.EnqueuePendingReference(ref);
       }
     }
   }
 }
 
 void ReferenceQueue::EnqueueFinalizerReferences(ReferenceQueue& cleared_references,
-                                                IsMarkedCallback is_marked_callback,
-                                                MarkObjectCallback recursive_mark_callback,
+                                                IsHeapReferenceMarkedCallback* is_marked_callback,
+                                                MarkHeapReferenceCallback* mark_callback,
                                                 void* arg) {
   while (!IsEmpty()) {
     mirror::FinalizerReference* ref = DequeuePendingReference()->AsFinalizerReference();
-    mirror::Object* referent = ref->GetReferent();
-    if (referent != nullptr) {
-      mirror::Object* forward_address = is_marked_callback(referent, arg);
-      // If the referent isn't marked, mark it and update the
-      if (forward_address == nullptr) {
-        forward_address = recursive_mark_callback(referent, arg);
-        // If the referent is non-null the reference must queuable.
-        DCHECK(ref->IsEnqueuable());
-        // Move the updated referent to the zombie field.
-        if (Runtime::Current()->IsActiveTransaction()) {
-          ref->SetZombie<true>(forward_address);
-          ref->ClearReferent<true>();
-        } else {
-          ref->SetZombie<false>(forward_address);
-          ref->ClearReferent<false>();
-        }
-        cleared_references.EnqueueReference(ref);
-      } else if (referent != forward_address) {
-        ref->SetReferent<false>(forward_address);
+    mirror::HeapReference<mirror::Object>* referent_ptr = ref->GetReferentAddr();
+    mirror::Object* referent = referent_ptr->AsMirrorPtr();
+    if (referent != nullptr && !is_marked_callback(referent_ptr, arg)) {
+      // If the referent isn't marked, mark it.
+      mark_callback(referent_ptr, arg);
+      // If the referent is non-null the reference must queuable.
+      DCHECK(ref->IsEnqueuable());
+      // Move the updated referent to the zombie field.
+      if (Runtime::Current()->IsActiveTransaction()) {
+        ref->SetZombie<true>(referent_ptr->AsMirrorPtr());
+        ref->ClearReferent<true>();
+      } else {
+        ref->SetZombie<false>(referent_ptr->AsMirrorPtr());
+        ref->ClearReferent<false>();
       }
+      cleared_references.EnqueueReference(ref);
     }
   }
 }
 
-void ReferenceQueue::PreserveSomeSoftReferences(IsMarkedCallback preserve_callback, void* arg) {
+void ReferenceQueue::PreserveSomeSoftReferences(IsHeapReferenceMarkedCallback* preserve_callback,
+                                                void* arg) {
   ReferenceQueue cleared;
   while (!IsEmpty()) {
     mirror::Reference* ref = DequeuePendingReference();
+    mirror::HeapReference<mirror::Object>* referent_ptr = ref->GetReferentAddr();
     mirror::Object* referent = ref->GetReferent();
-    if (referent != nullptr) {
-      mirror::Object* forward_address = preserve_callback(referent, arg);
-      if (forward_address == nullptr) {
-        // Either the reference isn't marked or we don't wish to preserve it.
-        cleared.EnqueuePendingReference(ref);
-      } else if (forward_address != referent) {
-        ref->SetReferent<false>(forward_address);
-      }
+    if (referent != nullptr && !preserve_callback(referent_ptr, arg)) {
+      // Either the reference isn't marked or we don't wish to preserve it.
+      cleared.EnqueuePendingReference(ref);
     }
   }
   list_ = cleared.GetList();

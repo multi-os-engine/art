@@ -740,8 +740,8 @@ space::Space* Heap::FindSpaceFromObject(const mirror::Object* obj, bool fail_ok)
 }
 
 struct SoftReferenceArgs {
-  IsMarkedCallback* is_marked_callback_;
-  MarkObjectCallback* mark_callback_;
+  IsHeapReferenceMarkedCallback* is_marked_callback_;
+  MarkHeapReferenceCallback* mark_callback_;
   void* arg_;
 };
 
@@ -771,8 +771,8 @@ void Heap::ProcessSoftReferences(TimingLogger& timings, bool clear_soft,
 
 // Process reference class instances and schedule finalizations.
 void Heap::ProcessReferences(TimingLogger& timings, bool clear_soft,
-                             IsMarkedCallback* is_marked_callback,
-                             MarkObjectCallback* mark_object_callback,
+                             IsHeapReferenceMarkedCallback* is_marked_callback,
+                             MarkHeapReferenceCallback* mark_object_callback,
                              ProcessMarkStackCallback* process_mark_stack_callback, void* arg) {
   timings.StartSplit("(Paused)ProcessReferences");
   ProcessSoftReferences(timings, clear_soft, is_marked_callback, mark_object_callback,

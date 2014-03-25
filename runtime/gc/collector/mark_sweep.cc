@@ -51,7 +51,6 @@
 #include "runtime.h"
 #include "thread-inl.h"
 #include "thread_list.h"
-#include "verifier/method_verifier.h"
 
 using ::art::mirror::ArtField;
 using ::art::mirror::Class;

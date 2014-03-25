@@ -59,6 +59,7 @@ typedef void (VerifyRootCallback)(const mirror::Object* root, void* arg, size_t 
     const StackVisitor* visitor);
 
 typedef void (MarkHeapReferenceCallback)(mirror::HeapReference<mirror::Object>* ref, void* arg);
+typedef bool (IsHeapReferenceMarkedCallback)(mirror::HeapReference<mirror::Object>* ref, void* arg);
 
 // A callback for testing if an object is marked, returns nullptr if not marked, otherwise the new
 // address the object (if the object didn't move, returns the object input parameter).
