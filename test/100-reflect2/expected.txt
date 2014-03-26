@@ -24,6 +24,7 @@ z
 14
 java.lang.IllegalArgumentException: Invalid primitive conversion from int to short
 	at java.lang.reflect.Field.set(Native Method)
+	at java.lang.reflect.Field.set(Field.java:557)
 	at Main.testFieldReflection(Main.java:121)
 	at Main.main(Main.java:269)
 true (class java.lang.Boolean)
@@ -68,10 +69,11 @@ null (null)
 []
 java.lang.reflect.InvocationTargetException
 	at java.lang.reflect.Method.invoke(Native Method)
+	at java.lang.reflect.Method.invoke(Method.java:372)
 	at Main.testMethodReflection(Main.java:210)
 	at Main.main(Main.java:270)
 Caused by: java.lang.ArithmeticException: surprise!
 	at Main.thrower(Main.java:218)
-	... 3 more
+	... 4 more
  (class java.lang.String)
 yz (class java.lang.String)
