@@ -99,7 +99,7 @@ static bool CheckReceiver(const ScopedFastNativeObjectAccess& soa, jobject j_rcv
   return true;
 }
 
-static jobject Field_get(JNIEnv* env, jobject javaField, jobject javaObj) {
+static jobject Field_getNative(JNIEnv* env, jobject javaField, jobject javaObj) {
   ScopedFastNativeObjectAccess soa(env);
   CHECK(!kMovingFields) << "CheckReceiver may trigger thread suspension for initialization";
   mirror::ArtField* f = mirror::ArtField::FromReflectedField(soa, javaField);
@@ -148,35 +148,35 @@ static JValue GetPrimitiveField(JNIEnv* env, jobject javaField, jobject javaObj,
   return wide_value;
 }
 
-static jboolean Field_getBoolean(JNIEnv* env, jobject javaField, jobject javaObj) {
+static jboolean Field_getBooleanNative(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField(env, javaField, javaObj, 'Z').GetZ();
 }
 
-static jbyte Field_getByte(JNIEnv* env, jobject javaField, jobject javaObj) {
+static jbyte Field_getByteNative(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField(env, javaField, javaObj, 'B').GetB();
 }
 
-static jchar Field_getChar(JNIEnv* env, jobject javaField, jobject javaObj) {
+static jchar Field_getCharNative(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField(env, javaField, javaObj, 'C').GetC();
 }
 
-static jdouble Field_getDouble(JNIEnv* env, jobject javaField, jobject javaObj) {
+static jdouble Field_getDoubleNative(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField(env, javaField, javaObj, 'D').GetD();
 }
 
-static jfloat Field_getFloat(JNIEnv* env, jobject javaField, jobject javaObj) {
+static jfloat Field_getFloatNative(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField(env, javaField, javaObj, 'F').GetF();
 }
 
-static jint Field_getInt(JNIEnv* env, jobject javaField, jobject javaObj) {
+static jint Field_getIntNative(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField(env, javaField, javaObj, 'I').GetI();
 }
 
-static jlong Field_getLong(JNIEnv* env, jobject javaField, jobject javaObj) {
+static jlong Field_getLongNative(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField(env, javaField, javaObj, 'J').GetJ();
 }
 
-static jshort Field_getShort(JNIEnv* env, jobject javaField, jobject javaObj) {
+static jshort Field_getShortNative(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField(env, javaField, javaObj, 'S').GetS();
 }
 
@@ -224,7 +224,7 @@ static void SetFieldValue(ScopedFastNativeObjectAccess& soa, mirror::Object* o,
   }
 }
 
-static void Field_set(JNIEnv* env, jobject javaField, jobject javaObj, jobject javaValue) {
+static void Field_setNative(JNIEnv* env, jobject javaField, jobject javaObj, jobject javaValue) {
   ScopedFastNativeObjectAccess soa(env);
   CHECK(!kMovingFields) << "CheckReceiver may trigger thread suspension for initialization";
   mirror::ArtField* f = mirror::ArtField::FromReflectedField(soa, javaField);
@@ -291,73 +291,73 @@ static void SetPrimitiveField(JNIEnv* env, jobject javaField, jobject javaObj, c
   SetFieldValue(soa, o, f, field_type, false, wide_value);
 }
 
-static void Field_setBoolean(JNIEnv* env, jobject javaField, jobject javaObj, jboolean z) {
+static void Field_setBooleanNative(JNIEnv* env, jobject javaField, jobject javaObj, jboolean z) {
   JValue value;
   value.SetZ(z);
   SetPrimitiveField(env, javaField, javaObj, 'Z', value);
 }
 
-static void Field_setByte(JNIEnv* env, jobject javaField, jobject javaObj, jbyte b) {
+static void Field_setByteNative(JNIEnv* env, jobject javaField, jobject javaObj, jbyte b) {
   JValue value;
   value.SetB(b);
   SetPrimitiveField(env, javaField, javaObj, 'B', value);
 }
 
-static void Field_setChar(JNIEnv* env, jobject javaField, jobject javaObj, jchar c) {
+static void Field_setCharNative(JNIEnv* env, jobject javaField, jobject javaObj, jchar c) {
   JValue value;
   value.SetC(c);
   SetPrimitiveField(env, javaField, javaObj, 'C', value);
 }
 
-static void Field_setDouble(JNIEnv* env, jobject javaField, jobject javaObj, jdouble d) {
+static void Field_setDoubleNative(JNIEnv* env, jobject javaField, jobject javaObj, jdouble d) {
   JValue value;
   value.SetD(d);
   SetPrimitiveField(env, javaField, javaObj, 'D', value);
 }
 
-static void Field_setFloat(JNIEnv* env, jobject javaField, jobject javaObj, jfloat f) {
+static void Field_setFloatNative(JNIEnv* env, jobject javaField, jobject javaObj, jfloat f) {
   JValue value;
   value.SetF(f);
   SetPrimitiveField(env, javaField, javaObj, 'F', value);
 }
 
-static void Field_setInt(JNIEnv* env, jobject javaField, jobject javaObj, jint i) {
+static void Field_setIntNative(JNIEnv* env, jobject javaField, jobject javaObj, jint i) {
   JValue value;
   value.SetI(i);
   SetPrimitiveField(env, javaField, javaObj, 'I', value);
 }
 
-static void Field_setLong(JNIEnv* env, jobject javaField, jobject javaObj, jlong j) {
+static void Field_setLongNative(JNIEnv* env, jobject javaField, jobject javaObj, jlong j) {
   JValue value;
   value.SetJ(j);
   SetPrimitiveField(env, javaField, javaObj, 'J', value);
 }
 
-static void Field_setShort(JNIEnv* env, jobject javaField, jobject javaObj, jshort s) {
+static void Field_setShortNative(JNIEnv* env, jobject javaField, jobject javaObj, jshort s) {
   JValue value;
   value.SetS(s);
   SetPrimitiveField(env, javaField, javaObj, 'S', value);
 }
 
 static JNINativeMethod gMethods[] = {
-  NATIVE_METHOD(Field, get,        "!(Ljava/lang/Object;)Ljava/lang/Object;"),
-  NATIVE_METHOD(Field, getBoolean, "!(Ljava/lang/Object;)Z"),
-  NATIVE_METHOD(Field, getByte,    "!(Ljava/lang/Object;)B"),
-  NATIVE_METHOD(Field, getChar,    "!(Ljava/lang/Object;)C"),
-  NATIVE_METHOD(Field, getDouble,  "!(Ljava/lang/Object;)D"),
-  NATIVE_METHOD(Field, getFloat,   "!(Ljava/lang/Object;)F"),
-  NATIVE_METHOD(Field, getInt,     "!(Ljava/lang/Object;)I"),
-  NATIVE_METHOD(Field, getLong,    "!(Ljava/lang/Object;)J"),
-  NATIVE_METHOD(Field, getShort,   "!(Ljava/lang/Object;)S"),
-  NATIVE_METHOD(Field, set,        "!(Ljava/lang/Object;Ljava/lang/Object;)V"),
-  NATIVE_METHOD(Field, setBoolean, "!(Ljava/lang/Object;Z)V"),
-  NATIVE_METHOD(Field, setByte,    "!(Ljava/lang/Object;B)V"),
-  NATIVE_METHOD(Field, setChar,    "!(Ljava/lang/Object;C)V"),
-  NATIVE_METHOD(Field, setDouble,  "!(Ljava/lang/Object;D)V"),
-  NATIVE_METHOD(Field, setFloat,   "!(Ljava/lang/Object;F)V"),
-  NATIVE_METHOD(Field, setInt,     "!(Ljava/lang/Object;I)V"),
-  NATIVE_METHOD(Field, setLong,    "!(Ljava/lang/Object;J)V"),
-  NATIVE_METHOD(Field, setShort,   "!(Ljava/lang/Object;S)V"),
+  NATIVE_METHOD(Field, getNative,        "!(Ljava/lang/Object;)Ljava/lang/Object;"),
+  NATIVE_METHOD(Field, getBooleanNative, "!(Ljava/lang/Object;)Z"),
+  NATIVE_METHOD(Field, getByteNative,    "!(Ljava/lang/Object;)B"),
+  NATIVE_METHOD(Field, getCharNative,    "!(Ljava/lang/Object;)C"),
+  NATIVE_METHOD(Field, getDoubleNative,  "!(Ljava/lang/Object;)D"),
+  NATIVE_METHOD(Field, getFloatNative,   "!(Ljava/lang/Object;)F"),
+  NATIVE_METHOD(Field, getIntNative,     "!(Ljava/lang/Object;)I"),
+  NATIVE_METHOD(Field, getLongNative,    "!(Ljava/lang/Object;)J"),
+  NATIVE_METHOD(Field, getShortNative,   "!(Ljava/lang/Object;)S"),
+  NATIVE_METHOD(Field, setNative,        "!(Ljava/lang/Object;Ljava/lang/Object;)V"),
+  NATIVE_METHOD(Field, setBooleanNative, "!(Ljava/lang/Object;Z)V"),
+  NATIVE_METHOD(Field, setByteNative,    "!(Ljava/lang/Object;B)V"),
+  NATIVE_METHOD(Field, setCharNative,    "!(Ljava/lang/Object;C)V"),
+  NATIVE_METHOD(Field, setDoubleNative,  "!(Ljava/lang/Object;D)V"),
+  NATIVE_METHOD(Field, setFloatNative,   "!(Ljava/lang/Object;F)V"),
+  NATIVE_METHOD(Field, setIntNative,     "!(Ljava/lang/Object;I)V"),
+  NATIVE_METHOD(Field, setLongNative,    "!(Ljava/lang/Object;J)V"),
+  NATIVE_METHOD(Field, setShortNative,   "!(Ljava/lang/Object;S)V"),
 };
 
 void register_java_lang_reflect_Field(JNIEnv* env) {

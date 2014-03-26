@@ -29,8 +29,8 @@
 
 namespace art {
 
-static jobject Method_invoke(JNIEnv* env,
-                             jobject javaMethod, jobject javaReceiver, jobject javaArgs) {
+static jobject Method_invokeNative(JNIEnv* env,
+                                   jobject javaMethod, jobject javaReceiver, jobject javaArgs) {
   ScopedFastNativeObjectAccess soa(env);
   return InvokeMethod(soa, javaMethod, javaReceiver, javaArgs);
 }
@@ -56,7 +56,7 @@ static jobject Method_getExceptionTypesNative(JNIEnv* env, jobject javaMethod) {
 }
 
 static JNINativeMethod gMethods[] = {
-  NATIVE_METHOD(Method, invoke, "!(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"),
+  NATIVE_METHOD(Method, invokeNative, "!(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"),
   NATIVE_METHOD(Method, getExceptionTypesNative, "!()[Ljava/lang/Class;"),
 };
 

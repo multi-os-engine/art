@@ -540,16 +540,15 @@ class SubClass extends PublicClass {
         // Check access or lack of to field.
         Class<?> subClassAccessExceptionClass = null;
         if (f.getName().contains("Private") ||
-            (!same_package && f.getName().contains("Package"))) {
-          // ART deliberately doesn't throw IllegalAccessException.
-          // subClassAccessExceptionClass = IllegalAccessException.class;
+            (!same_package && f.getName().contains("Package")) ||
+            (!same_package && f.getName().contains("Protected"))) {
+          subClassAccessExceptionClass = IllegalAccessException.class;
         }
         Class<?> mainClassAccessExceptionClass = null;
         if (f.getName().contains("Private") ||
             (!same_package && f.getName().contains("Package")) ||
             (!same_package && f.getName().contains("Protected"))) {
-          // ART deliberately doesn't throw IllegalAccessException.
-          // mainClassAccessExceptionClass = IllegalAccessException.class;
+          mainClassAccessExceptionClass = IllegalAccessException.class;
         }
 
         this.getValue(f, validInst, typeChar, subClassAccessExceptionClass);
@@ -598,7 +597,6 @@ class SubClass extends PublicClass {
    */
   public Object getValue(Field field, Object obj, char type,
       Class expectedException) {
-
     Object result = null;
     try {
       switch (type) {
