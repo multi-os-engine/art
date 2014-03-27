@@ -54,7 +54,7 @@ void CumulativeLogger::Start() {
 
 void CumulativeLogger::End() {
   MutexLock mu(Thread::Current(), lock_);
-  iterations_++;
+  ++iterations_;
 }
 
 void CumulativeLogger::Reset() {
@@ -73,6 +73,7 @@ void CumulativeLogger::AddLogger(const TimingLogger &logger) {
     const char* split_name = split.second;
     AddPair(split_name, split_time);
   }
+  ++iterations_;
 }
 
 size_t CumulativeLogger::GetIterations() const {

@@ -31,36 +31,9 @@ namespace accounting {
 
 class HeapBitmap {
  public:
-  bool Test(const mirror::Object* obj) SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_) {
-    SpaceBitmap* bitmap = GetContinuousSpaceBitmap(obj);
-    if (LIKELY(bitmap != nullptr)) {
-      return bitmap->Test(obj);
-    } else {
-      return GetDiscontinuousSpaceObjectSet(obj) != NULL;
-    }
-  }
-
-  void Clear(const mirror::Object* obj) EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_) {
-    SpaceBitmap* bitmap = GetContinuousSpaceBitmap(obj);
-    if (LIKELY(bitmap != NULL)) {
-      bitmap->Clear(obj);
-    } else {
-      ObjectSet* set = GetDiscontinuousSpaceObjectSet(obj);
-      DCHECK(set != NULL);
-      set->Clear(obj);
-    }
-  }
-
-  void Set(const mirror::Object* obj) EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_) {
-    SpaceBitmap* bitmap = GetContinuousSpaceBitmap(obj);
-    if (LIKELY(bitmap != NULL)) {
-      bitmap->Set(obj);
-    } else {
-      ObjectSet* set = GetDiscontinuousSpaceObjectSet(obj);
-      DCHECK(set != NULL);
-      set->Set(obj);
-    }
-  }
+  bool Test(const mirror::Object* obj) SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
+  void Clear(const mirror::Object* obj) EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
+  void Set(const mirror::Object* obj) EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
   SpaceBitmap* GetContinuousSpaceBitmap(const mirror::Object* obj) {
     for (const auto& bitmap : continuous_space_bitmaps_) {

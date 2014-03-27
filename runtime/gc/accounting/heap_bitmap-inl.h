@@ -19,6 +19,8 @@
 
 #include "heap_bitmap.h"
 
+#include "space_bitmap-inl.h"
+
 namespace art {
 namespace gc {
 namespace accounting {
@@ -31,6 +33,37 @@ inline void HeapBitmap::Visit(const Visitor& visitor) {
   DCHECK(!discontinuous_space_sets_.empty());
   for (const auto& space_set : discontinuous_space_sets_) {
     space_set->Visit(visitor);
+  }
+}
+
+inline bool HeapBitmap::Test(const mirror::Object* obj) {
+  SpaceBitmap* bitmap = GetContinuousSpaceBitmap(obj);
+  if (LIKELY(bitmap != nullptr)) {
+    return bitmap->Test(obj);
+  } else {
+    return GetDiscontinuousSpaceObjectSet(obj) != NULL;
+  }
+}
+
+inline void HeapBitmap::Clear(const mirror::Object* obj) {
+  SpaceBitmap* bitmap = GetContinuousSpaceBitmap(obj);
+  if (LIKELY(bitmap != nullptr)) {
+    bitmap->Clear(obj);
+  } else {
+    ObjectSet* set = GetDiscontinuousSpaceObjectSet(obj);
+    DCHECK(set != NULL);
+    set->Clear(obj);
+  }
+}
+
+inline void HeapBitmap::Set(const mirror::Object* obj) {
+  SpaceBitmap* bitmap = GetContinuousSpaceBitmap(obj);
+  if (LIKELY(bitmap != NULL)) {
+    bitmap->Set(obj);
+  } else {
+    ObjectSet* set = GetDiscontinuousSpaceObjectSet(obj);
+    DCHECK(set != NULL);
+    set->Set(obj);
   }
 }
 

@@ -27,7 +27,7 @@
 #include "base/mutex-inl.h"
 #include "base/timing_logger.h"
 #include "gc/accounting/card_table-inl.h"
-#include "gc/accounting/heap_bitmap.h"
+#include "gc/accounting/heap_bitmap-inl.h"
 #include "gc/accounting/mod_union_table.h"
 #include "gc/accounting/space_bitmap-inl.h"
 #include "gc/heap.h"
@@ -1034,14 +1034,13 @@ mirror::Object* MarkSweep::VerifySystemWeakIsLiveCallback(Object* obj, void* arg
 }
 
 void MarkSweep::VerifyIsLive(const Object* obj) {
-  Heap* heap = GetHeap();
-  if (!heap->GetLiveBitmap()->Test(obj)) {
-    space::LargeObjectSpace* large_object_space = GetHeap()->GetLargeObjectsSpace();
+  if (!heap_->GetLiveBitmap()->Test(obj)) {
+    space::LargeObjectSpace* large_object_space = heap_->GetLargeObjectsSpace();
     if (!large_object_space->GetLiveObjects()->Test(obj)) {
-      if (std::find(heap->allocation_stack_->Begin(), heap->allocation_stack_->End(), obj) ==
-          heap->allocation_stack_->End()) {
+      if (std::find(heap_->allocation_stack_->Begin(), heap_->allocation_stack_->End(), obj) ==
+          heap_->allocation_stack_->End()) {
         // Object not found!
-        heap->DumpSpaces();
+        heap_->DumpSpaces();
         LOG(FATAL) << "Found dead object " << obj;
       }
     }
@@ -1326,7 +1325,7 @@ void MarkSweep::ProcessMarkStack(bool paused) {
         }
         obj = mark_stack_->PopBack();
       }
-      DCHECK(obj != NULL);
+      DCHECK(obj != nullptr);
       ScanObject(obj);
     }
   }
@@ -1347,14 +1346,9 @@ inline bool MarkSweep::IsMarked(const Object* object) const
 void MarkSweep::FinishPhase() {
   TimingLogger::ScopedSplit split("FinishPhase", &timings_);
   // Can't enqueue references if we hold the mutator lock.
-  Heap* heap = GetHeap();
   timings_.NewSplit("PostGcVerification");
-  heap->PostGcVerification(this);
-  // Update the cumulative statistics.
-  total_freed_objects_ += GetFreedObjects() + GetFreedLargeObjects();
-  total_freed_bytes_ += GetFreedBytes() + GetFreedLargeObjectBytes();
+  heap_->PostGcVerification(this);
   // Ensure that the mark stack is empty.
-  CHECK(mark_stack_->IsEmpty());
   if (kCountScannedTypes) {
     VLOG(gc) << "MarkSweep scanned classes=" << class_count_ << " arrays=" << array_count_
              << " other=" << other_count_;
@@ -1375,22 +1369,10 @@ void MarkSweep::FinishPhase() {
     VLOG(gc) << "Marked: null=" << mark_null_count_ << " immune=" <<  mark_immune_count_
         << " fastpath=" << mark_fastpath_count_ << " slowpath=" << mark_slowpath_count_;
   }
-  // Update the cumulative loggers.
-  cumulative_timings_.Start();
-  cumulative_timings_.AddLogger(timings_);
-  cumulative_timings_.End();
-  // Clear all of the spaces' mark bitmaps.
-  for (const auto& space : GetHeap()->GetContinuousSpaces()) {
-    accounting::SpaceBitmap* bitmap = space->GetMarkBitmap();
-    if (bitmap != nullptr &&
-        space->GetGcRetentionPolicy() != space::kGcRetentionPolicyNeverCollect) {
-      bitmap->Clear();
-    }
-  }
+  CHECK(mark_stack_->IsEmpty());
   mark_stack_->Reset();
-  // Reset the marked large objects.
-  space::LargeObjectSpace* large_objects = GetHeap()->GetLargeObjectsSpace();
-  large_objects->GetMarkObjects()->Clear();
+  WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
+  heap_->ClearMarkedObjects();
 }
 
 void MarkSweep::RevokeAllThreadLocalBuffers() {
