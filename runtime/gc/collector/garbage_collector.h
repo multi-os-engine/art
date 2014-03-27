@@ -68,8 +68,10 @@ class GarbageCollector {
   TimingLogger& GetTimings() {
     return timings_;
   }
-
   CumulativeLogger& GetCumulativeTimings() {
+    return cumulative_timings_;
+  }
+  const CumulativeLogger& GetCumulativeTimings() const {
     return cumulative_timings_;
   }
 
@@ -111,6 +113,17 @@ class GarbageCollector {
     return pause_histogram_;
   }
 
+  // Returns the estimated throughput in bytes / second.
+  uint64_t GetEstimatedMeanThroughput() const;
+
+  // Returns the estimated throughput of the last GC iteration.
+  uint64_t GetEstimatedLastIterationThroughput() const;
+
+  // Returns how many GC iterations have been run.
+  size_t GetIterations() const {
+    return GetCumulativeTimings().GetIterations();
+  }
+
  protected:
   // The initial phase. Done without mutators paused.
   virtual void InitializePhase() = 0;
@@ -139,8 +152,6 @@ class GarbageCollector {
 
   GcCause gc_cause_;
   bool clear_soft_references_;
-
-  const bool verbose_;
 
   uint64_t duration_ns_;
   TimingLogger timings_;
