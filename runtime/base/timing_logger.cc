@@ -60,21 +60,8 @@ void CumulativeLogger::End() {
 void CumulativeLogger::Reset() {
   MutexLock mu(Thread::Current(), lock_);
   iterations_ = 0;
+  total_time_ = 0;
   STLDeleteElements(&histograms_);
-}
-
-uint64_t CumulativeLogger::GetTotalNs() const {
-  MutexLock mu(Thread::Current(), lock_);
-  return GetTotalTime() * kAdjust;
-}
-
-uint64_t CumulativeLogger::GetTotalTime() const {
-  MutexLock mu(Thread::Current(), lock_);
-  uint64_t total = 0;
-  for (Histogram<uint64_t>* histogram : histograms_) {
-    total += histogram->Sum();
-  }
-  return total;
 }
 
 void CumulativeLogger::AddLogger(const TimingLogger &logger) {
@@ -101,7 +88,7 @@ void CumulativeLogger::Dump(std::ostream &os) {
 void CumulativeLogger::AddPair(const std::string& label, uint64_t delta_time) {
   // Convert delta time to microseconds so that we don't overflow our counters.
   delta_time /= kAdjust;
-
+  total_time_ += delta_time;
   Histogram<uint64_t>* histogram;
   Histogram<uint64_t> dummy(label.c_str());
   auto it = histograms_.find(&dummy);

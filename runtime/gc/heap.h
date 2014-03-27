@@ -661,7 +661,7 @@ class Heap {
   // Given the current contents of the alloc space, increase the allowed heap footprint to match
   // the target utilization ratio.  This should only be called immediately after a full garbage
   // collection.
-  void GrowForUtilization(collector::GcType gc_type, uint64_t gc_duration);
+  void GrowForUtilization(collector::GarbageCollector* collector_ran);
 
   size_t GetPercentFree();
 
