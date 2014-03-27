@@ -146,7 +146,11 @@ void GarbageCollector::Run(GcCause gc_cause, bool clear_soft_references) {
       break;
     }
   }
-
+  // Add the currnet timings to the cumulative timings.
+  cumulative_timings_.AddLogger(timings_);
+  // Update cumulative statistics with how much bytes the GC iteration freed.
+  total_freed_objects_ += GetFreedObjects() + GetFreedLargeObjects();
+  total_freed_bytes_ += GetFreedBytes() + GetFreedLargeObjectBytes();
   uint64_t end_time = NanoTime();
   duration_ns_ = end_time - start_time;
   total_time_ns_ += GetDurationNs();
