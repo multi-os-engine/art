@@ -975,7 +975,15 @@ JDWP::JdwpError Dbg::GetReflectedType(JDWP::RefTypeId class_id, JDWP::ExpandBuf*
     return status;
   }
 
-  expandBufAdd1(pReply, c->IsInterface() ? JDWP::TT_INTERFACE : JDWP::TT_CLASS);
+  JDWP::JdwpTypeTag type_tag;
+  if (c->IsArrayClass()) {
+    type_tag = JDWP::TT_ARRAY;
+  } else if (c->IsInterface()) {
+    type_tag = JDWP::TT_INTERFACE;
+  } else {
+    type_tag = JDWP::TT_CLASS;
+  }
+  expandBufAdd1(pReply, type_tag);
   expandBufAddRefTypeId(pReply, class_id);
   return JDWP::ERR_NONE;
 }
