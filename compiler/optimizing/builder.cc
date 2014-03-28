@@ -192,6 +192,38 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       break;
     }
 
+    case Instruction::ADD_INT: {
+      HInstruction* first = LoadLocal(instruction.VRegB());
+      HInstruction* second = LoadLocal(instruction.VRegC());
+      current_block_->AddInstruction(new (arena_) HAdd(Primitive::kPrimInt, first, second));
+      UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+      break;
+    }
+
+    case Instruction::ADD_INT_2ADDR: {
+      HInstruction* first = LoadLocal(instruction.VRegA());
+      HInstruction* second = LoadLocal(instruction.VRegB());
+      current_block_->AddInstruction(new (arena_) HAdd(Primitive::kPrimInt, first, second));
+      UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+      break;
+    }
+
+    case Instruction::ADD_INT_LIT16: {
+      HInstruction* first = GetConstant(instruction.VRegC_22s());
+      HInstruction* second = LoadLocal(instruction.VRegB());
+      current_block_->AddInstruction(new (arena_) HAdd(Primitive::kPrimInt, first, second));
+      UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+      break;
+    }
+
+    case Instruction::ADD_INT_LIT8: {
+      HInstruction* first = GetConstant(instruction.VRegC_22b());
+      HInstruction* second = LoadLocal(instruction.VRegB());
+      current_block_->AddInstruction(new (arena_) HAdd(Primitive::kPrimInt, first, second));
+      UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+      break;
+    }
+
     case Instruction::NOP:
       break;
 
