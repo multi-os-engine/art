@@ -173,5 +173,33 @@ void InstructionCodeGeneratorARM::VisitReturn(HReturn* ret) {
   codegen_->GenerateFrameExit();
 }
 
+void LocationsBuilderARM::VisitAdd(HAdd* add) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(add);
+  switch (add->GetResultType()) {
+    case Primitive::kPrimInt: {
+      locations->SetInAt(0, Location(R0));
+      locations->SetInAt(1, Location(R1));
+      locations->SetOut(Location(R0));
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unimplemented";
+  }
+  add->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitAdd(HAdd* add) {
+  LocationSummary* locations = add->GetLocations();
+  switch (add->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ add(locations->Out().reg<Register>(),
+             locations->InAt(0).reg<Register>(),
+             ShifterOperand(locations->InAt(1).reg<Register>()));
+      break;
+    default:
+      LOG(FATAL) << "Unimplemented";
+  }
+}
+
 }  // namespace arm
 }  // namespace art
