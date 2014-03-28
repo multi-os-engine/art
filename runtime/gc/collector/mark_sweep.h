@@ -235,12 +235,6 @@ class MarkSweep : public GarbageCollector {
         SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
         EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
-  // Unmarks an object by clearing the bit inside of the corresponding bitmap, or if it is in a
-  // space set, removing the object from the set.
-  void UnMarkObjectNonNull(const mirror::Object* obj)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
-
   // Mark the vm thread roots.
   void MarkThreadRoots(Thread* self)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
