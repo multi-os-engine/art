@@ -133,6 +133,7 @@ ART_NATIVETEST_OUT := $(TARGET_OUT_DATA_NATIVE_TESTS)/art
 # directory used for tests on device
 ART_TEST_DIR := /data/art-test
 ART_TEST_OUT := $(TARGET_OUT_DATA)/art-test
+ART_TEST_OUT_64 := $(TARGET_OUT_DATA)/art-test64
 
 ART_CPP_EXTENSION := .cc
 
