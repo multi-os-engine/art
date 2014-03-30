@@ -60,20 +60,15 @@ void FaultManager::Init() {
 }
 
 void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
-  bool handled = false;
   if (IsInGeneratedCode(context)) {
-    for (auto& handler : handlers_) {
-      handled = handler->Action(sig, info, context);
-      if (handled) {
+    for (const auto& handler : handlers_) {
+      if (handler->Action(sig, info, context)) {
         return;
       }
     }
   }
-
-  if (!handled) {
-    LOG(INFO)<< "Caught unknown SIGSEGV in ART fault handler";
-    oldaction_.sa_sigaction(sig, info, context);
-  }
+  LOG(INFO) << "Caught unknown SIGSEGV in ART fault handler";
+  oldaction_.sa_sigaction(sig, info, context);
 }
 
 void FaultManager::AddHandler(FaultHandler* handler) {
@@ -81,15 +76,10 @@ void FaultManager::AddHandler(FaultHandler* handler) {
 }
 
 void FaultManager::RemoveHandler(FaultHandler* handler) {
-  for (Handlers::iterator i = handlers_.begin(); i != handlers_.end(); ++i) {
-    FaultHandler* h = *i;
-    if (h == handler) {
-      handlers_.erase(i);
-      return;
-    }
-  }
+  auto it = std::find(handlers_.begin(), handlers_.end(), handler);
+  CHECK(it != handlers_.end()) << "Attempted to remove non existent handler " << handler;
+  handlers_.erase(it);
 }
-
 
 // This function is called within the signal handler.  It checks that
 // the mutator_lock is held (shared).  No annotalysis is done.
@@ -114,10 +104,11 @@ bool FaultManager::IsInGeneratedCode(void *context) {
 
   uintptr_t potential_method = 0;
   uintptr_t return_pc = 0;
+  uintptr_t sp = 0;
 
   // Get the architecture specific method address and return address.  These
   // are in architecture specific files in arch/<arch>/fault_handler_<arch>.cc
-  GetMethodAndReturnPC(context, /*out*/potential_method, /*out*/return_pc);
+  GetMethodAndReturnPCAndSP(context, &potential_method, &return_pc, &sp);
 
   // If we don't have a potential method, we're outta here.
   if (potential_method == 0) {
@@ -156,28 +147,45 @@ bool FaultManager::IsInGeneratedCode(void *context) {
   return method->ToDexPc(return_pc, false) != DexFile::kDexNoIndex;
 }
 
+FaultHandler::FaultHandler(FaultManager* manager) : manager_(manager) {
+  manager_->AddHandler(this);
+}
+
 //
 // Null pointer fault handler
 //
-
-NullPointerHandler::NullPointerHandler(FaultManager* manager) {
-  manager->AddHandler(this);
+NullPointerHandler::NullPointerHandler(FaultManager* manager) : FaultHandler(manager) {
 }
 
 //
 // Suspension fault handler
 //
-
-SuspensionHandler::SuspensionHandler(FaultManager* manager) {
-  manager->AddHandler(this);
+SuspensionHandler::SuspensionHandler(FaultManager* manager) : FaultHandler(manager) {
 }
 
 //
 // Stack overflow fault handler
 //
-
-StackOverflowHandler::StackOverflowHandler(FaultManager* manager) {
-  manager->AddHandler(this);
+StackOverflowHandler::StackOverflowHandler(FaultManager* manager) : FaultHandler(manager) {
 }
+
+//
+// Stack trace handler, used to help get a stack trace from SIGSEGV inside of compiled code.
+//
+StackTraceHandler::StackTraceHandler(FaultManager* manager) : FaultHandler(manager) {
+}
+
+bool StackTraceHandler::Action(int sig, siginfo_t* siginfo, void* context) {
+  uintptr_t method = 0;
+  uintptr_t return_pc = 0;
+  uintptr_t sp = 0;
+  GetFaultManager()->GetMethodAndReturnPCAndSP(context, &method, &return_pc, &sp);
+  // We already verified (IsInGeneratedCode).
+  Thread* self = Thread::Current();
+  self->SetTopOfStack(reinterpret_cast<mirror::ArtMethod**>(sp), return_pc);
+  self->Dump(LOG(INFO));
+  return true;
+}
+
 }   // namespace art
 

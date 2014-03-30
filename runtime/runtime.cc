@@ -521,12 +521,10 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
     GetInstrumentation()->ForceInterpretOnly();
   }
 
+  fault_manager.Init();
   if (options->explicit_checks_ != (ParsedOptions::kExplicitSuspendCheck |
         ParsedOptions::kExplicitNullCheck |
         ParsedOptions::kExplicitStackOverflowCheck)) {
-    // Initialize the fault manager.
-    fault_manager.Init();
-
     // These need to be in a specific order.  The null point check must be
     // the last in the list.
     if ((options->explicit_checks_ & ParsedOptions::kExplicitSuspendCheck) == 0) {
@@ -541,6 +539,8 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
       null_pointer_handler_ = new NullPointerHandler(&fault_manager);
     }
   }
+
+  new StackTraceHandler(&fault_manager);
 
   heap_ = new gc::Heap(options->heap_initial_size_,
                        options->heap_growth_limit_,

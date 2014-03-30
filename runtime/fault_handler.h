@@ -38,50 +38,73 @@ class FaultManager {
   void HandleFault(int sig, siginfo_t* info, void* context);
   void AddHandler(FaultHandler* handler);
   void RemoveHandler(FaultHandler* handler);
+  void GetMethodAndReturnPCAndSP(void* context, uintptr_t* out_method, uintptr_t* out_return_pc,
+                                 uintptr_t* out_sp);
 
  private:
   bool IsInGeneratedCode(void *context) NO_THREAD_SAFETY_ANALYSIS;
-  void GetMethodAndReturnPC(void* context, uintptr_t& method, uintptr_t& return_pc);
 
   typedef std::vector<FaultHandler*> Handlers;
   Handlers handlers_;
   struct sigaction oldaction_;
+  DISALLOW_COPY_AND_ASSIGN(FaultManager);
 };
 
 class FaultHandler {
  public:
-  FaultHandler() : manager_(nullptr) {}
-  explicit FaultHandler(FaultManager* manager) : manager_(manager) {}
+  explicit FaultHandler(FaultManager* manager);
   virtual ~FaultHandler() {}
+  FaultManager* GetFaultManager() {
+    return manager_;
+  }
 
   virtual bool Action(int sig, siginfo_t* siginfo, void* context) = 0;
- protected:
+
+ private:
   FaultManager* const manager_;
+  DISALLOW_COPY_AND_ASSIGN(FaultHandler);
 };
 
 class NullPointerHandler FINAL : public FaultHandler {
  public:
-  NullPointerHandler() {}
   explicit NullPointerHandler(FaultManager* manager);
 
   bool Action(int sig, siginfo_t* siginfo, void* context) OVERRIDE;
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(NullPointerHandler);
 };
 
 class SuspensionHandler FINAL : public FaultHandler {
  public:
-  SuspensionHandler() {}
   explicit SuspensionHandler(FaultManager* manager);
 
   bool Action(int sig, siginfo_t* siginfo, void* context) OVERRIDE;
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(SuspensionHandler);
 };
 
 class StackOverflowHandler FINAL : public FaultHandler {
  public:
-  StackOverflowHandler() {}
   explicit StackOverflowHandler(FaultManager* manager);
 
   bool Action(int sig, siginfo_t* siginfo, void* context) OVERRIDE;
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(StackOverflowHandler);
 };
+
+class StackTraceHandler FINAL : public FaultHandler {
+ public:
+  explicit StackTraceHandler(FaultManager* manager);
+
+  bool Action(int sig, siginfo_t* siginfo, void* context) OVERRIDE NO_THREAD_SAFETY_ANALYSIS;
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(StackTraceHandler);
+};
+
 
 // Statically allocated so the the signal handler can get access to it.
 extern FaultManager fault_manager;
