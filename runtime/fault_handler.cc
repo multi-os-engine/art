@@ -60,40 +60,45 @@ void FaultManager::Init() {
 }
 
 void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
-  bool handled = false;
-  if (IsInGeneratedCode(context)) {
-    for (auto& handler : handlers_) {
-      handled = handler->Action(sig, info, context);
-      if (handled) {
+  if (IsInGeneratedCode(context, true)) {
+    for (const auto& handler : generated_code_handlers_) {
+      if (handler->Action(sig, info, context)) {
         return;
       }
     }
   }
-
-  if (!handled) {
-    LOG(INFO)<< "Caught unknown SIGSEGV in ART fault handler";
-    oldaction_.sa_sigaction(sig, info, context);
-  }
-}
-
-void FaultManager::AddHandler(FaultHandler* handler) {
-  handlers_.push_back(handler);
-}
-
-void FaultManager::RemoveHandler(FaultHandler* handler) {
-  for (Handlers::iterator i = handlers_.begin(); i != handlers_.end(); ++i) {
-    FaultHandler* h = *i;
-    if (h == handler) {
-      handlers_.erase(i);
+  for (const auto& handler : other_handlers_) {
+    if (handler->Action(sig, info, context)) {
       return;
     }
   }
+  LOG(INFO) << "Caught unknown SIGSEGV in ART fault handler";
+  oldaction_.sa_sigaction(sig, info, context);
 }
 
+void FaultManager::AddHandler(FaultHandler* handler, bool generated_code) {
+  if (generated_code) {
+    generated_code_handlers_.push_back(handler);
+  } else {
+    other_handlers_.push_back(handler);
+  }
+}
+
+void FaultManager::RemoveHandler(FaultHandler* handler) {
+  auto it = std::find(generated_code_handlers_.begin(), generated_code_handlers_.end(), handler);
+  if (it != generated_code_handlers_.end()) {
+    generated_code_handlers_.erase(it);
+  }
+  auto it2 = std::find(other_handlers_.begin(), other_handlers_.end(), handler);
+  if (it2 != other_handlers_.end()) {
+    other_handlers_.erase(it);
+  }
+  LOG(FATAL) << "Attempted to remove non existent handler " << handler;
+}
 
 // This function is called within the signal handler.  It checks that
 // the mutator_lock is held (shared).  No annotalysis is done.
-bool FaultManager::IsInGeneratedCode(void *context) {
+bool FaultManager::IsInGeneratedCode(void* context, bool check_dex_pc) {
   // We can only be running Java code in the current thread if it
   // is in Runnable state.
   Thread* thread = Thread::Current();
@@ -114,10 +119,11 @@ bool FaultManager::IsInGeneratedCode(void *context) {
 
   uintptr_t potential_method = 0;
   uintptr_t return_pc = 0;
+  uintptr_t sp = 0;
 
   // Get the architecture specific method address and return address.  These
   // are in architecture specific files in arch/<arch>/fault_handler_<arch>.cc
-  GetMethodAndReturnPC(context, /*out*/potential_method, /*out*/return_pc);
+  GetMethodAndReturnPCAndSP(context, &potential_method, &return_pc, &sp);
 
   // If we don't have a potential method, we're outta here.
   if (potential_method == 0) {
@@ -153,31 +159,56 @@ bool FaultManager::IsInGeneratedCode(void *context) {
   // at the return PC address.
   mirror::ArtMethod* method =
       reinterpret_cast<mirror::ArtMethod*>(potential_method);
-  return method->ToDexPc(return_pc, false) != DexFile::kDexNoIndex;
+  return !check_dex_pc || method->ToDexPc(return_pc, false) != DexFile::kDexNoIndex;
+}
+
+FaultHandler::FaultHandler(FaultManager* manager) : manager_(manager) {
 }
 
 //
 // Null pointer fault handler
 //
-
-NullPointerHandler::NullPointerHandler(FaultManager* manager) {
-  manager->AddHandler(this);
+NullPointerHandler::NullPointerHandler(FaultManager* manager) : FaultHandler(manager) {
+  manager_->AddHandler(this, true);
 }
 
 //
 // Suspension fault handler
 //
-
-SuspensionHandler::SuspensionHandler(FaultManager* manager) {
-  manager->AddHandler(this);
+SuspensionHandler::SuspensionHandler(FaultManager* manager) : FaultHandler(manager) {
+  manager_->AddHandler(this, true);
 }
 
 //
 // Stack overflow fault handler
 //
-
-StackOverflowHandler::StackOverflowHandler(FaultManager* manager) {
-  manager->AddHandler(this);
+StackOverflowHandler::StackOverflowHandler(FaultManager* manager) : FaultHandler(manager) {
+  manager_->AddHandler(this, true);
 }
+
+//
+// Stack trace handler, used to help get a stack trace from SIGSEGV inside of compiled code.
+//
+StackTraceHandler::StackTraceHandler(FaultManager* manager) : FaultHandler(manager) {
+  manager_->AddHandler(this, false);
+}
+
+bool StackTraceHandler::Action(int sig, siginfo_t* siginfo, void* context) {
+  // Make sure that we are in the generated code, but we may not have a dex pc.
+  if (manager_->IsInGeneratedCode(context, false)) {
+    LOG(ERROR) << "Dumping java stack trace for crash in generated code";
+    uintptr_t method = 0;
+    uintptr_t return_pc = 0;
+    uintptr_t sp = 0;
+    manager_->GetMethodAndReturnPCAndSP(context, &method, &return_pc, &sp);
+    Thread* self = Thread::Current();
+    // Inside of generated code, sp[0] is the method, so sp is the frame.
+    mirror::ArtMethod** frame = reinterpret_cast<mirror::ArtMethod**>(sp);
+    self->SetTopOfStack(frame, 0);  // Since we don't necessarily have a dex pc, pass in 0.
+    self->DumpJavaStack(LOG(ERROR));
+  }
+  return false;  // Return false since we want to propagate the fault to the main signal handler.
+}
+
 }   // namespace art
 

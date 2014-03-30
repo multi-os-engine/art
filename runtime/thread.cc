@@ -778,7 +778,7 @@ struct StackDumpVisitor : public StackVisitor {
     int line_number = -1;
     if (dex_cache != nullptr) {  // be tolerant of bad input
       const DexFile& dex_file = *dex_cache->GetDexFile();
-      line_number = dex_file.GetLineNumFromPC(m, GetDexPc());
+      line_number = dex_file.GetLineNumFromPC(m, GetDexPc(false));
     }
     if (line_number == last_line_number && last_method == m) {
       ++repetition_count;
@@ -851,6 +851,12 @@ static bool ShouldShowNativeStack(const Thread* thread)
   return current_method != nullptr && current_method->IsNative();
 }
 
+void Thread::DumpJavaStack(std::ostream& os) const {
+  UniquePtr<Context> context(Context::Create());
+  StackDumpVisitor dumper(os, const_cast<Thread*>(this), context.get(), !throwing_OutOfMemoryError_);
+  dumper.WalkStack();
+}
+
 void Thread::DumpStack(std::ostream& os) const {
   // TODO: we call this code when dying but may not have suspended the thread ourself. The
   //       IsSuspended check is therefore racy with the use for dumping (normally we inhibit
@@ -864,9 +870,7 @@ void Thread::DumpStack(std::ostream& os) const {
       SirtRef<mirror::ArtMethod> method_ref(Thread::Current(), GetCurrentMethod(nullptr));
       DumpNativeStack(os, GetTid(), "  native: ", false, method_ref.get());
     }
-    UniquePtr<Context> context(Context::Create());
-    StackDumpVisitor dumper(os, const_cast<Thread*>(this), context.get(), !throwing_OutOfMemoryError_);
-    dumper.WalkStack();
+    DumpJavaStack(os);
   } else {
     os << "Not able to dump stack of thread that isn't suspended";
   }
