@@ -33,11 +33,12 @@ namespace art {
 extern "C" void art_quick_throw_null_pointer_exception();
 extern "C" void art_quick_test_suspend();
 
-void FaultManager::GetMethodAndReturnPC(void* context, uintptr_t& method, uintptr_t& return_pc) {
-  struct ucontext *uc = (struct ucontext *)context;
+void FaultManager::GetMethodAndReturnPCAndSP(void* context, uintptr_t* out_method,
+                                             uintptr_t* out_return_pc, uintptr_t* out_sp) {
+  struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
-  uintptr_t* sp = reinterpret_cast<uint32_t*>(sc->arm_sp);
-  if (sp == nullptr) {
+  *out_sp = static_cast<uintptr_t>(sc->arm_sp);
+  if (*out_sp == 0) {
     return;
   }
 
@@ -54,9 +55,9 @@ void FaultManager::GetMethodAndReturnPC(void* context, uintptr_t& method, uintpt
   uint32_t instr_size = is_32bit ? 4 : 2;
 
   // The method is at the top of the stack.
-  method = sp[0];
+  *out_method = reinterpret_cast<uintptr_t*>(*out_sp)[0];
 
-  return_pc = (sc->arm_pc + instr_size) | 1;
+  *out_return_pc = (sc->arm_pc + instr_size) | 1;
 }
 
 bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
@@ -67,7 +68,7 @@ bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
   // register in order to find the mapping.
 
   // Need to work out the size of the instruction that caused the exception.
-  struct ucontext *uc = (struct ucontext *)context;
+  struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
   uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->arm_pc);
 
