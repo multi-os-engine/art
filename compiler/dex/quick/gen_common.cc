@@ -731,7 +731,7 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
   cu_->compiler_driver->ProcessedInstanceField(field_info.FastGet());
   if (field_info.FastGet() && !SLOW_FIELD_PATH) {
     RegLocation rl_result;
-    RegisterClass reg_class = oat_reg_class_by_size(size);
+    RegisterClass reg_class = RegClassBySize(size);
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
     rl_obj = LoadValue(rl_obj, kCoreReg);
     if (is_long_or_double) {
@@ -801,7 +801,7 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
   const MirIFieldLoweringInfo& field_info = mir_graph_->GetIFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedInstanceField(field_info.FastPut());
   if (field_info.FastPut() && !SLOW_FIELD_PATH) {
-    RegisterClass reg_class = oat_reg_class_by_size(size);
+    RegisterClass reg_class = RegClassBySize(size);
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
     rl_obj = LoadValue(rl_obj, kCoreReg);
     if (is_long_or_double) {
@@ -1260,6 +1260,9 @@ void Mir2Lir::GenCheckCast(uint32_t insn_idx, uint32_t type_idx, RegLocation rl_
                                                                               &type_known_final,
                                                                               &type_known_abstract,
                                                                               &use_declaring_class);
+if (cu_->verbose) {
+  DumpRegPools();
+}
   // Note: currently type_known_final is unused, as optimizing will only improve the performance
   // of the exception throw path.
   DexCompilationUnit* cu = mir_graph_->GetCurrentDexCompilationUnit();

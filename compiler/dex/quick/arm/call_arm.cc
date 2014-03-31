@@ -338,10 +338,10 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
    * expanding the frame or flushing.  This leaves the utility
    * code with a single temp: r12.  This should be enough.
    */
-  LockTemp(r0);
-  LockTemp(r1);
-  LockTemp(r2);
-  LockTemp(r3);
+  LockTemp(rs_r0);
+  LockTemp(rs_r1);
+  LockTemp(rs_r2);
+  LockTemp(rs_r3);
 
   /*
    * We can safely skip the stack overflow check if we're
@@ -431,10 +431,10 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
 
   FlushIns(ArgLocs, rl_method);
 
-  FreeTemp(r0);
-  FreeTemp(r1);
-  FreeTemp(r2);
-  FreeTemp(r3);
+  FreeTemp(rs_r0);
+  FreeTemp(rs_r1);
+  FreeTemp(rs_r2);
+  FreeTemp(rs_r3);
 }
 
 void ArmMir2Lir::GenExitSequence() {
@@ -443,8 +443,8 @@ void ArmMir2Lir::GenExitSequence() {
    * In the exit path, r0/r1 are live - make sure they aren't
    * allocated by the register utilities as temps.
    */
-  LockTemp(r0);
-  LockTemp(r1);
+  LockTemp(rs_r0);
+  LockTemp(rs_r1);
 
   NewLIR0(kPseudoMethodExit);
   OpRegImm(kOpAdd, rs_rARM_SP, frame_size_ - (spill_count * 4));
@@ -452,13 +452,13 @@ void ArmMir2Lir::GenExitSequence() {
   if (num_fp_spills_) {
     NewLIR1(kThumb2VPopCS, num_fp_spills_);
   }
-  if (core_spill_mask_ & (1 << rARM_LR)) {
+  if (core_spill_mask_ & (1 << rs_rARM_LR.GetRegNum())) {
     /* Unspill rARM_LR to rARM_PC */
-    core_spill_mask_ &= ~(1 << rARM_LR);
-    core_spill_mask_ |= (1 << rARM_PC);
+    core_spill_mask_ &= ~(1 << rs_rARM_LR.GetRegNum());
+    core_spill_mask_ |= (1 << rs_rARM_PC.GetRegNum());
   }
   NewLIR1(kThumb2Pop, core_spill_mask_);
-  if (!(core_spill_mask_ & (1 << rARM_PC))) {
+  if (!(core_spill_mask_ & (1 << rs_rARM_PC.GetRegNum()))) {
     /* We didn't pop to rARM_PC, so must do a bv rARM_LR */
     NewLIR1(kThumbBx, rARM_LR);
   }
