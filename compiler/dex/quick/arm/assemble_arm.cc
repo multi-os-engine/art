@@ -1066,7 +1066,6 @@ void ArmMir2Lir::InsertFixupBefore(LIR* prev_lir, LIR* orig_lir, LIR* new_lir) {
  * TUNING: No longer true - find new NOP pattern.
  */
 #define PADDING_MOV_R5_R5               0x1C2D
-
 uint8_t* ArmMir2Lir::EncodeLIRs(uint8_t* write_pos, LIR* lir) {
   for (; lir != NULL; lir = NEXT_LIR(lir)) {
     if (!lir->flags.is_nop) {
@@ -1137,9 +1136,8 @@ uint8_t* ArmMir2Lir::EncodeLIRs(uint8_t* write_pos, LIR* lir) {
                 bits |= value;
                 break;
               case kFmtDfp: {
-                DCHECK(ARM_DOUBLEREG(operand));
-                DCHECK_EQ((operand & 0x1), 0U);
-                uint32_t reg_name = (operand & ARM_FP_REG_MASK) >> 1;
+                DCHECK(ARM_DOUBLEREG(operand)) << ", Operand = 0x" << std::hex << operand;
+                uint32_t reg_name = operand & RegStorage::kRegNumMask;
                 /* Snag the 1-bit slice and position it */
                 value = ((reg_name & 0x10) >> 4) << encoder->field_loc[i].end;
                 /* Extract and position the 4-bit slice */
@@ -1148,7 +1146,7 @@ uint8_t* ArmMir2Lir::EncodeLIRs(uint8_t* write_pos, LIR* lir) {
                 break;
               }
               case kFmtSfp:
-                DCHECK(ARM_SINGLEREG(operand));
+                DCHECK(ARM_SINGLEREG(operand)) << ", Operand = 0x" << std::hex << operand;
                 /* Snag the 1-bit slice and position it */
                 value = (operand & 0x1) << encoder->field_loc[i].end;
                 /* Extract and position the 4-bit slice */

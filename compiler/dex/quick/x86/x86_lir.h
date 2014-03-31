@@ -102,26 +102,20 @@ namespace art {
  * +========================+
  */
 
+// TODO: deprecate in favor of RegStorage.
 // Offset to distingish FP regs.
-#define X86_FP_REG_OFFSET 32
-// Offset to distinguish DP FP regs.
-#define X86_FP_DOUBLE (X86_FP_REG_OFFSET + 16)
-// Reg types.
-#define X86_REGTYPE(x) (x & (X86_FP_REG_OFFSET | X86_FP_DOUBLE))
-#define X86_FPREG(x) ((x & X86_FP_REG_OFFSET) == X86_FP_REG_OFFSET)
-#define X86_DOUBLEREG(x) ((x & X86_FP_DOUBLE) == X86_FP_DOUBLE)
-#define X86_SINGLEREG(x) (X86_FPREG(x) && !X86_DOUBLEREG(x))
+#define X86_FP_REG_OFFSET (RegStorage::kFloat)
+// Aliases for 64-bit vector form
+#define X86_FP_DOUBLE (RegStorage::kFloat + 16)
+// Aliases for 128-bit vector form
+#define X86_FP_QUAD (RegStorage::kFloat + 32)
 
-/*
- * Note: the low register of a floating point pair is sufficient to
- * create the name of a double, but require both names to be passed to
- * allow for asserts to verify that the pair is consecutive if significant
- * rework is done in this area.  Also, it is a good reminder in the calling
- * code that reg locations always describe doubles as a pair of singles.
- */
-#define X86_S2D(x, y) ((x) | X86_FP_DOUBLE)
+// Reg types.
+#define X86_REGTYPE(x) (x & RegStorage::kFloatMask)
+#define X86_FPREG(x) ((x & X86_FP_REG_OFFSET) == X86_FP_REG_OFFSET)
+
 /* Mask to strip off fp flags */
-#define X86_FP_REG_MASK 0xF
+#define X86_FP_REG_MASK (RegStorage::kRegNumMask)
 
 enum X86ResourceEncodingPos {
   kX86GPReg0   = 0,
@@ -167,6 +161,8 @@ enum X86NativeRegisterPool {
   r15    = 15,
   rRET   = 16,  // fake return address register for core spill mask.
 #endif
+
+  // xmm registers, single precision view
   fr0  =  0 + X86_FP_REG_OFFSET,
   fr1  =  1 + X86_FP_REG_OFFSET,
   fr2  =  2 + X86_FP_REG_OFFSET,
@@ -183,6 +179,45 @@ enum X86NativeRegisterPool {
   fr13 = 13 + X86_FP_REG_OFFSET,
   fr14 = 14 + X86_FP_REG_OFFSET,
   fr15 = 15 + X86_FP_REG_OFFSET,
+
+#if 0  // Need to re-encode RegStorage.
+
+  // xmm registers, double precision alises
+  dr0 = 0 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr1 = 1 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr2 = 2 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr3 = 3 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr4 = 4 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr5 = 5 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr6 = 6 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr7 = 7 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr8 = 8 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr9 = 9 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr10 = 10 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr11 = 11 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr12 = 12 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr13 = 13 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr14 = 14 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+  dr15 = 15 + X86_FP_DOUBLE + X86_FP_REG_OFFSET,
+
+  // xmm registers, quad precision alises
+  qr0 = 0 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr1 = 1 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr2 = 2 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr3 = 3 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr4 = 4 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr5 = 5 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr6 = 6 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr7 = 7 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr8 = 8 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr9 = 9 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr10 = 10 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr11 = 11 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr12 = 12 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr13 = 13 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr14 = 14 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+  qr15 = 15 + X86_FP_QUAD + X86_FP_REG_OFFSET,
+#endif
 };
 
 const RegStorage rs_r0(RegStorage::k32BitSolo, r0);
@@ -201,6 +236,35 @@ const RegStorage rs_r6(RegStorage::k32BitSolo, r6);
 const RegStorage rs_rSI = rs_r6;
 const RegStorage rs_r7(RegStorage::k32BitSolo, r7);
 const RegStorage rs_rDI = rs_r7;
+
+const RegStorage rs_fr0(RegStorage::k64BitVector, fr0);
+const RegStorage rs_fr1(RegStorage::k64BitVector, fr1);
+const RegStorage rs_fr2(RegStorage::k64BitVector, fr2);
+const RegStorage rs_fr3(RegStorage::k64BitVector, fr3);
+const RegStorage rs_fr4(RegStorage::k64BitVector, fr4);
+const RegStorage rs_fr5(RegStorage::k64BitVector, fr5);
+const RegStorage rs_fr6(RegStorage::k64BitVector, fr6);
+const RegStorage rs_fr7(RegStorage::k64BitVector, fr7);
+
+#if 0  // Need to re-encode RegStorage.
+const RegStorage rs_dr0(RegStorage::k64BitVector, dr0);
+const RegStorage rs_dr1(RegStorage::k64BitVector, dr1);
+const RegStorage rs_dr2(RegStorage::k64BitVector, dr2);
+const RegStorage rs_dr3(RegStorage::k64BitVector, dr3);
+const RegStorage rs_dr4(RegStorage::k64BitVector, dr4);
+const RegStorage rs_dr5(RegStorage::k64BitVector, dr5);
+const RegStorage rs_dr6(RegStorage::k64BitVector, dr6);
+const RegStorage rs_dr7(RegStorage::k64BitVector, dr7);
+
+const RegStorage rs_qr0(RegStorage::k64BitVector, qr0);
+const RegStorage rs_qr1(RegStorage::k64BitVector, qr1);
+const RegStorage rs_qr2(RegStorage::k64BitVector, qr2);
+const RegStorage rs_qr3(RegStorage::k64BitVector, qr3);
+const RegStorage rs_qr4(RegStorage::k64BitVector, qr4);
+const RegStorage rs_qr5(RegStorage::k64BitVector, qr5);
+const RegStorage rs_qr6(RegStorage::k64BitVector, qr6);
+const RegStorage rs_qr7(RegStorage::k64BitVector, qr7);
+#endif
 
 // TODO: elminate these #defines?
 #define rX86_ARG0 rAX
@@ -234,19 +298,17 @@ const RegStorage rs_rDI = rs_r7;
 
 // RegisterLocation templates return values (r_V0, or r_V0/r_V1).
 const RegLocation x86_loc_c_return
-    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, kVectorNotUsed,
-     RegStorage(RegStorage::k32BitSolo, rAX), INVALID_SREG, INVALID_SREG};
+    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, RegStorage(RegStorage::k32BitSolo, rAX),
+     INVALID_SREG, INVALID_SREG};
 const RegLocation x86_loc_c_return_wide
-    {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, kVectorNotUsed,
-     RegStorage(RegStorage::k64BitPair, rAX, rDX), INVALID_SREG, INVALID_SREG};
-// TODO: update to use k32BitVector (must encode in 7 bits, including fp flag).
+    {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, RegStorage(RegStorage::k64BitPair, rAX, rDX),
+     INVALID_SREG, INVALID_SREG};
 const RegLocation x86_loc_c_return_float
-    {kLocPhysReg, 0, 0, 0, 1, 0, 0, 0, 1, kVectorLength4,
-     RegStorage(RegStorage::k32BitSolo, fr0), INVALID_SREG, INVALID_SREG};
-// TODO: update to use k64BitVector (must encode in 7 bits, including fp flag).
+    {kLocPhysReg, 0, 0, 0, 1, 0, 0, 0, 1, RegStorage(RegStorage::k32BitVector, fr0),
+     INVALID_SREG, INVALID_SREG};
 const RegLocation x86_loc_c_return_double
-    {kLocPhysReg, 1, 0, 0, 1, 0, 0, 0, 1, kVectorLength8,
-     RegStorage(RegStorage::k64BitPair, fr0, fr0), INVALID_SREG, INVALID_SREG};
+    {kLocPhysReg, 1, 0, 0, 1, 0, 0, 0, 1, RegStorage(RegStorage::k64BitVector, fr0),
+    INVALID_SREG, INVALID_SREG};
 
 /*
  * The following enum defines the list of supported X86 instructions by the
