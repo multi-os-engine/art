@@ -94,9 +94,9 @@ namespace art {
  */
 
 // Offset to distingish FP regs.
-#define ARM_FP_REG_OFFSET 32
+#define ARM_FP_REG_OFFSET 64
 // Offset to distinguish DP FP regs.
-#define ARM_FP_DOUBLE 64
+#define ARM_FP_DOUBLE 32
 // First FP callee save.
 #define ARM_FP_CALLEE_SAVE_BASE 16
 // Reg types.
@@ -114,8 +114,6 @@ namespace art {
  * code that reg locations always describe doubles as a pair of singles.
  */
 #define ARM_S2D(x, y) ((x) | ARM_FP_DOUBLE)
-// Mask to strip off fp flags.
-#define ARM_FP_REG_MASK (ARM_FP_REG_OFFSET-1)
 
 enum ArmResourceEncodingPos {
   kArmGPReg0   = 0,

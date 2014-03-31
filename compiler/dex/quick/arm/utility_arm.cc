@@ -643,7 +643,7 @@ LIR* ArmMir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
   LIR* res = NULL;
   int32_t val_lo = Low32Bits(value);
   int32_t val_hi = High32Bits(value);
-  int target_reg = S2d(r_dest.GetLowReg(), r_dest.GetHighReg());
+  int target_reg = r_dest.GetReg();
   if (ARM_FPREG(r_dest.GetLowReg())) {
     if ((val_lo == 0) && (val_hi == 0)) {
       // TODO: we need better info about the target CPU.  a vector exclusive or
@@ -834,11 +834,7 @@ LIR* ArmMir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStorag
     case kDouble:
     case kLong:
       if (ARM_FPREG(dest_low_reg)) {
-        // Note: following change to avoid using pairs for doubles, replace conversion w/ DCHECK.
-        if (r_dest.IsPair()) {
-          DCHECK(ARM_FPREG(r_dest.GetHighReg()));
-          r_dest = RegStorage::Solo64(S2d(r_dest.GetLowReg(), r_dest.GetHighReg()));
-        }
+        DCHECK(!r_dest.IsPair());
         opcode = kThumb2Vldrd;
         if (displacement <= 1020) {
           short_form = true;
@@ -988,11 +984,7 @@ LIR* ArmMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegStora
         }
         already_generated = true;
       } else {
-        // Note: following change to avoid using pairs for doubles, replace conversion w/ DCHECK.
-        if (r_src.IsPair()) {
-          DCHECK(ARM_FPREG(r_src.GetHighReg()));
-          r_src = RegStorage::Solo64(S2d(r_src.GetLowReg(), r_src.GetHighReg()));
-        }
+        DCHECK(!r_src.IsPair());
         opcode = kThumb2Vstrd;
         if (displacement <= 1020) {
           short_form = true;

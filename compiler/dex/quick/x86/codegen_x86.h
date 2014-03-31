@@ -77,6 +77,8 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     void LockCallTemps();
     void MarkPreservedSingle(int v_reg, int reg);
     void CompilerInitializeRegAlloc();
+    RegStorage AllocTempDouble();
+    RegStorage AllocPreservedDouble(int s_reg);
 
     // Required for target - miscellaneous.
     void AssembleLIR();
@@ -265,7 +267,6 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     RegLocation UpdateLocWide(RegLocation loc);
     RegLocation EvalLocWide(RegLocation loc, int reg_class, bool update);
     RegLocation EvalLoc(RegLocation loc, int reg_class, bool update);
-    RegStorage AllocTempDouble();
     void ResetDefLocWide(RegLocation rl);
 
     /*

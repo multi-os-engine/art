@@ -232,17 +232,17 @@ class Mir2Lir : public Backend {
     };
 
     /*
-     * Data structure tracking the mapping between a Dalvik register (pair) and a
-     * native register (pair). The idea is to reuse the previously loaded value
-     * if possible, otherwise to keep the value in a native register as long as
-     * possible.
+     * Data structure tracking the mapping detween a Dalvik value (32 or 64 bits)
+     * and native register storage.  The primary purpose is to reuse previuosly
+     * loaded values, if possible, and otherwise to keep the value in register
+     * storage as long as possible.
      */
     struct RegisterInfo {
       int reg;                    // Reg number
       bool in_use;                // Has it been allocated?
       bool is_temp;               // Can allocate as temp?
-      bool pair;                  // Part of a register pair?
-      int partner;                // If pair, other reg of pair.
+      bool wide_value;            // Holds a Dalvik wide value (either itself, or part of a pair).
+      int partner;                // If wide_value, other reg of pair or self if 64-bit register.
       bool live;                  // Is there an associated SSA name?
       bool dirty;                 // If live, is it dirty?
       int s_reg;                  // Name of live value.
@@ -470,9 +470,7 @@ class Mir2Lir : public Backend {
     RegStorage AllocPreservedCoreReg(int s_reg);
     void RecordFpPromotion(RegStorage reg, int s_reg);
     RegStorage AllocPreservedSingle(int s_reg);
-    RegStorage AllocPreservedDouble(int s_reg);
     RegStorage AllocTempBody(RegisterInfo* p, int num_regs, int* next_temp, bool required);
-    virtual RegStorage AllocTempDouble();
     RegStorage AllocFreeTemp();
     RegStorage AllocTemp();
     RegStorage AllocTempFloat();
@@ -509,13 +507,14 @@ class Mir2Lir : public Backend {
     void MarkTemp(RegStorage reg);
     void UnmarkTemp(int reg);
     void UnmarkTemp(RegStorage reg);
-    void MarkPair(int low_reg, int high_reg);
+    void MarkWide(RegStorage reg);
     void MarkClean(RegLocation loc);
     void MarkDirty(RegLocation loc);
     void MarkInUse(int reg);
     void MarkInUse(RegStorage reg);
     void CopyRegInfo(int new_reg, int old_reg);
     void CopyRegInfo(RegStorage new_reg, RegStorage old_reg);
+    void CopyRegInfoWide(RegStorage new_reg, RegStorage old_reg);
     bool CheckCorePoolSanity();
     RegLocation UpdateLoc(RegLocation loc);
     virtual RegLocation UpdateLocWide(RegLocation loc);
@@ -844,6 +843,8 @@ class Mir2Lir : public Backend {
     virtual bool SameRegType(int reg1, int reg2) = 0;
     virtual RegStorage AllocTypedTemp(bool fp_hint, int reg_class) = 0;
     virtual RegStorage AllocTypedTempWide(bool fp_hint, int reg_class) = 0;
+    virtual RegStorage AllocTempDouble() = 0;
+    virtual RegStorage AllocPreservedDouble(int s_reg) = 0;
     // TODO: elminate S2d.
     virtual int S2d(int low_reg, int high_reg) = 0;
     virtual RegStorage TargetReg(SpecialTargetRegister reg) = 0;

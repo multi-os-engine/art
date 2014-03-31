@@ -252,19 +252,23 @@ void Mir2Lir::StoreValueWide(RegLocation rl_dest, RegLocation rl_src) {
   }
 
   // Dest is now live and dirty (until/if we flush it to home location)
-  MarkLive(rl_dest.reg.GetLow(), rl_dest.s_reg_low);
+  if (rl_dest.reg.IsPair()) {
+    MarkLive(rl_dest.reg.GetLow(), rl_dest.s_reg_low);
 
-  // Does this wide value live in two registers (or one vector one)?
-  // FIXME: wide reg update.
-  if (rl_dest.reg.GetLowReg() != rl_dest.reg.GetHighReg()) {
-    MarkLive(rl_dest.reg.GetHigh(), GetSRegHi(rl_dest.s_reg_low));
-    MarkDirty(rl_dest);
-    MarkPair(rl_dest.reg.GetLowReg(), rl_dest.reg.GetHighReg());
+    // Does this wide value live in two registers (or one vector one)?
+    if (rl_dest.reg.GetLowReg() != rl_dest.reg.GetHighReg()) {
+      // Is this right?  Associating s_reg_low w/ high reg?  If not, probably should move to this.
+      MarkLive(rl_dest.reg.GetHigh(), GetSRegHi(rl_dest.s_reg_low));
+      MarkWide(rl_dest.reg);
+    } else {
+      // This must be an x86 vector register value,
+      DCHECK(IsFpReg(rl_dest.reg) && (cu_->instruction_set == kX86));
+    }
   } else {
-    // This must be an x86 vector register value,
-    DCHECK(IsFpReg(rl_dest.reg) && (cu_->instruction_set == kX86));
-    MarkDirty(rl_dest);
+    MarkLive(rl_dest.reg, rl_dest.s_reg_low);
+    MarkWide(rl_dest.reg);
   }
+  MarkDirty(rl_dest);
 
 
   ResetDefLocWide(rl_dest);
@@ -335,7 +339,7 @@ void Mir2Lir::StoreFinalValueWide(RegLocation rl_dest, RegLocation rl_src) {
   if (rl_dest.reg.GetLowReg() != rl_dest.reg.GetHighReg()) {
     MarkLive(rl_dest.reg.GetHigh(), GetSRegHi(rl_dest.s_reg_low));
     MarkDirty(rl_dest);
-    MarkPair(rl_dest.reg.GetLowReg(), rl_dest.reg.GetHighReg());
+    MarkWide(rl_dest.reg);
   } else {
     // This must be an x86 vector register value,
     DCHECK(IsFpReg(rl_dest.reg) && (cu_->instruction_set == kX86));

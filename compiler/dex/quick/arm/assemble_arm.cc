@@ -1133,8 +1133,7 @@ uint8_t* ArmMir2Lir::EncodeLIRs(uint8_t* write_pos, LIR* lir) {
                 break;
               case kFmtDfp: {
                 DCHECK(ARM_DOUBLEREG(operand));
-                DCHECK_EQ((operand & 0x1), 0U);
-                uint32_t reg_name = (operand & ARM_FP_REG_MASK) >> 1;
+                uint32_t reg_name = operand & RegStorage::kRegNumMask;
                 /* Snag the 1-bit slice and position it */
                 value = ((reg_name & 0x10) >> 4) << encoder->field_loc[i].end;
                 /* Extract and position the 4-bit slice */

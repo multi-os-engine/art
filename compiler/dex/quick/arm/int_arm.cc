@@ -360,21 +360,19 @@ LIR* ArmMir2Lir::OpRegCopy(RegStorage r_dest, RegStorage r_src) {
 }
 
 void ArmMir2Lir::OpRegCopyWide(RegStorage r_dest, RegStorage r_src) {
-  bool dest_fp = ARM_FPREG(r_dest.GetLowReg());
-  bool src_fp = ARM_FPREG(r_src.GetLowReg());
+  bool dest_fp = r_dest.IsFloat();
+  bool src_fp = r_src.IsFloat();
+  DCHECK(r_dest.Is64Bit());
+  DCHECK(r_src.Is64Bit());
   if (dest_fp) {
     if (src_fp) {
-      // FIXME: handle 64-bit solo's here.
-      OpRegCopy(RegStorage::Solo64(S2d(r_dest.GetLowReg(), r_dest.GetHighReg())),
-                RegStorage::Solo64(S2d(r_src.GetLowReg(), r_src.GetHighReg())));
+      OpRegCopy(r_dest, r_src);
     } else {
-      NewLIR3(kThumb2Fmdrr, S2d(r_dest.GetLowReg(), r_dest.GetHighReg()),
-              r_src.GetLowReg(), r_src.GetHighReg());
+      NewLIR3(kThumb2Fmdrr, r_dest.GetReg(), r_src.GetLowReg(), r_src.GetHighReg());
     }
   } else {
     if (src_fp) {
-      NewLIR3(kThumb2Fmrrd, r_dest.GetLowReg(), r_dest.GetHighReg(), S2d(r_src.GetLowReg(),
-              r_src.GetHighReg()));
+      NewLIR3(kThumb2Fmrrd, r_dest.GetLowReg(), r_dest.GetHighReg(), r_src.GetReg());
     } else {
       // Handle overlap
       if (r_src.GetHighReg() == r_dest.GetLowReg()) {
