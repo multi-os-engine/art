@@ -604,7 +604,8 @@ void X86Mir2Lir::EmitModrmDisp(uint8_t reg_or_opcode, uint8_t base, int disp) {
   code_buffer_.push_back(modrm);
   if (base == rX86_SP) {
     // Special SIB for SP base
-    code_buffer_.push_back(0 << 6 | (rX86_SP << 3) | rX86_SP);
+    code_buffer_.push_back(0 << 6 | ((rX86_SP & RegStorage::kRegNumMask) << 3) |
+        (rX86_SP & RegStorage::kRegNumMask));
   }
   EmitDisp(base, disp);
 }
@@ -651,7 +652,7 @@ void X86Mir2Lir::EmitOpRegOpcode(const X86EncodingMap* entry, uint8_t reg) {
   // There's no 3-byte instruction with +rd
   DCHECK(entry->skeleton.opcode != 0x0F ||
          (entry->skeleton.extra_opcode1 != 0x38 && entry->skeleton.extra_opcode1 != 0x3A));
-  DCHECK(!X86_FPREG(reg));
+  DCHECK(!RegStorage::IsFloat(reg));
   DCHECK_LT(reg, 8);
   code_buffer_.back() += reg;
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
@@ -660,9 +661,7 @@ void X86Mir2Lir::EmitOpRegOpcode(const X86EncodingMap* entry, uint8_t reg) {
 
 void X86Mir2Lir::EmitOpReg(const X86EncodingMap* entry, uint8_t reg) {
   EmitPrefixAndOpcode(entry);
-  if (X86_FPREG(reg)) {
-    reg = reg & X86_FP_REG_MASK;
-  }
+  reg &= RegStorage::kRegNumMask;  // Strip out shape and type.
   if (reg >= 4) {
     DCHECK(strchr(entry->name, '8') == NULL) << entry->name << " " << static_cast<int>(reg)
         << " in " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
@@ -696,9 +695,7 @@ void X86Mir2Lir::EmitOpArray(const X86EncodingMap* entry, uint8_t base, uint8_t 
 void X86Mir2Lir::EmitMemReg(const X86EncodingMap* entry,
                        uint8_t base, int disp, uint8_t reg) {
   EmitPrefixAndOpcode(entry);
-  if (X86_FPREG(reg)) {
-    reg = reg & X86_FP_REG_MASK;
-  }
+  reg &= RegStorage::kRegNumMask;  // Strip out shape and type.
   if (reg >= 4) {
     DCHECK(strchr(entry->name, '8') == NULL ||
            entry->opcode == kX86Movzx8RM || entry->opcode == kX86Movsx8RM)
@@ -720,9 +717,7 @@ void X86Mir2Lir::EmitRegMem(const X86EncodingMap* entry,
 void X86Mir2Lir::EmitRegArray(const X86EncodingMap* entry, uint8_t reg, uint8_t base, uint8_t index,
                               int scale, int disp) {
   EmitPrefixAndOpcode(entry);
-  if (X86_FPREG(reg)) {
-    reg = reg & X86_FP_REG_MASK;
-  }
+  reg &= RegStorage::kRegNumMask;  // Strip out shape and type.
   EmitModrmSibDisp(reg, base, index, scale, disp);
   DCHECK_EQ(0, entry->skeleton.modrm_opcode);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
@@ -738,9 +733,7 @@ void X86Mir2Lir::EmitArrayReg(const X86EncodingMap* entry, uint8_t base, uint8_t
 void X86Mir2Lir::EmitRegThread(const X86EncodingMap* entry, uint8_t reg, int disp) {
   DCHECK_NE(entry->skeleton.prefix1, 0);
   EmitPrefixAndOpcode(entry);
-  if (X86_FPREG(reg)) {
-    reg = reg & X86_FP_REG_MASK;
-  }
+  reg &= RegStorage::kRegNumMask;  // Strip out shape and type.
   if (reg >= 4) {
     DCHECK(strchr(entry->name, '8') == NULL) << entry->name << " " << static_cast<int>(reg)
         << " in " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
@@ -759,12 +752,8 @@ void X86Mir2Lir::EmitRegThread(const X86EncodingMap* entry, uint8_t reg, int dis
 
 void X86Mir2Lir::EmitRegReg(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2) {
   EmitPrefixAndOpcode(entry);
-  if (X86_FPREG(reg1)) {
-    reg1 = reg1 & X86_FP_REG_MASK;
-  }
-  if (X86_FPREG(reg2)) {
-    reg2 = reg2 & X86_FP_REG_MASK;
-  }
+  reg1 &= RegStorage::kRegNumMask;  // Strip out shape and type.
+  reg2 &= RegStorage::kRegNumMask;  // Strip out shape and type.
   DCHECK_LT(reg1, 8);
   DCHECK_LT(reg2, 8);
   uint8_t modrm = (3 << 6) | (reg1 << 3) | reg2;
@@ -777,12 +766,8 @@ void X86Mir2Lir::EmitRegReg(const X86EncodingMap* entry, uint8_t reg1, uint8_t r
 void X86Mir2Lir::EmitRegRegImm(const X86EncodingMap* entry,
                           uint8_t reg1, uint8_t reg2, int32_t imm) {
   EmitPrefixAndOpcode(entry);
-  if (X86_FPREG(reg1)) {
-    reg1 = reg1 & X86_FP_REG_MASK;
-  }
-  if (X86_FPREG(reg2)) {
-    reg2 = reg2 & X86_FP_REG_MASK;
-  }
+  reg1 &= RegStorage::kRegNumMask;  // Strip out shape and type.
+  reg2 &= RegStorage::kRegNumMask;  // Strip out shape and type.
   DCHECK_LT(reg1, 8);
   DCHECK_LT(reg2, 8);
   uint8_t modrm = (3 << 6) | (reg1 << 3) | reg2;
@@ -800,7 +785,7 @@ void X86Mir2Lir::EmitRegRegImmRev(const X86EncodingMap* entry,
 void X86Mir2Lir::EmitRegMemImm(const X86EncodingMap* entry,
                                uint8_t reg, uint8_t base, int disp, int32_t imm) {
   EmitPrefixAndOpcode(entry);
-  DCHECK(!X86_FPREG(reg));
+  DCHECK(!RegStorage::IsFloat(reg));
   DCHECK_LT(reg, 8);
   EmitModrmDisp(reg, base, disp);
   DCHECK_EQ(0, entry->skeleton.modrm_opcode);
@@ -821,9 +806,7 @@ void X86Mir2Lir::EmitRegImm(const X86EncodingMap* entry, uint8_t reg, int imm) {
     code_buffer_.push_back(entry->skeleton.ax_opcode);
   } else {
     EmitOpcode(entry);
-    if (X86_FPREG(reg)) {
-      reg = reg & X86_FP_REG_MASK;
-    }
+    reg &= RegStorage::kRegNumMask;  // Strip out shape and type.
     uint8_t modrm = (3 << 6) | (entry->skeleton.modrm_opcode << 3) | reg;
     code_buffer_.push_back(modrm);
   }
@@ -1042,9 +1025,7 @@ void X86Mir2Lir::EmitPcRel(const X86EncodingMap* entry, uint8_t reg,
     disp = tab_rec->offset;
   }
   EmitPrefix(entry);
-  if (X86_FPREG(reg)) {
-    reg = reg & X86_FP_REG_MASK;
-  }
+  reg &= RegStorage::kRegNumMask;  // Strip out shape and type.
   DCHECK_LT(reg, 8);
   if (entry->opcode == kX86PcRelLoadRA) {
     code_buffer_.push_back(entry->skeleton.opcode);
