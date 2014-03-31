@@ -106,11 +106,6 @@ RegStorage X86Mir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
   }
 }
 
-// Create a double from a pair of singles.
-int X86Mir2Lir::S2d(int low_reg, int high_reg) {
-  return X86_S2D(low_reg, high_reg);
-}
-
 // Return mask to strip off fp reg flags and bias.
 uint32_t X86Mir2Lir::FpRegMask() {
   return X86_FP_REG_MASK;
@@ -349,7 +344,7 @@ void X86Mir2Lir::MarkPreservedSingle(int v_reg, int reg) {
 void X86Mir2Lir::FlushRegWide(RegStorage reg) {
   RegisterInfo* info1 = GetRegInfo(reg.GetLowReg());
   RegisterInfo* info2 = GetRegInfo(reg.GetHighReg());
-  DCHECK(info1 && info2 && info1->pair && info2->pair &&
+  DCHECK(info1 && info2 && info1->wide_value && info2->wide_value &&
          (info1->partner == info2->reg) &&
          (info2->partner == info1->reg));
   if ((info1->live && info1->dirty) || (info2->live && info2->dirty)) {
@@ -389,38 +384,38 @@ bool X86Mir2Lir::IsFpReg(RegStorage reg) {
 
 /* Clobber all regs that might be used by an external C call */
 void X86Mir2Lir::ClobberCallerSave() {
-  Clobber(rAX);
-  Clobber(rCX);
-  Clobber(rDX);
-  Clobber(rBX);
+  Clobber(rs_rAX);
+  Clobber(rs_rCX);
+  Clobber(rs_rDX);
+  Clobber(rs_rBX);
 }
 
 RegLocation X86Mir2Lir::GetReturnWideAlt() {
   RegLocation res = LocCReturnWide();
   CHECK(res.reg.GetLowReg() == rAX);
   CHECK(res.reg.GetHighReg() == rDX);
-  Clobber(rAX);
-  Clobber(rDX);
-  MarkInUse(rAX);
-  MarkInUse(rDX);
-  MarkPair(res.reg.GetLowReg(), res.reg.GetHighReg());
+  Clobber(rs_rAX);
+  Clobber(rs_rDX);
+  MarkInUse(rs_rAX);
+  MarkInUse(rs_rDX);
+  MarkWide(res.reg);
   return res;
 }
 
 RegLocation X86Mir2Lir::GetReturnAlt() {
   RegLocation res = LocCReturn();
   res.reg.SetReg(rDX);
-  Clobber(rDX);
-  MarkInUse(rDX);
+  Clobber(rs_rDX);
+  MarkInUse(rs_rDX);
   return res;
 }
 
 /* To be used when explicitly managing register use */
 void X86Mir2Lir::LockCallTemps() {
-  LockTemp(rX86_ARG0);
-  LockTemp(rX86_ARG1);
-  LockTemp(rX86_ARG2);
-  LockTemp(rX86_ARG3);
+  LockTemp(rs_rX86_ARG0);
+  LockTemp(rs_rX86_ARG1);
+  LockTemp(rs_rX86_ARG2);
+  LockTemp(rs_rX86_ARG3);
 }
 
 /* To be used when explicitly managing register use */
@@ -643,67 +638,71 @@ RegLocation X86Mir2Lir::UpdateLocWide(RegLocation loc) {
          (loc.location == kLocCompilerTemp));
     // Are the dalvik regs already live in physical registers?
     RegisterInfo* info_lo = AllocLive(loc.s_reg_low, kAnyReg);
+    bool register_pair = (info_lo != nullptr) && info_lo->wide_value &&
+        (info_lo->reg != info_lo->partner);
 
     // Handle FP registers specially on x86.
     if (info_lo && IsFpReg(info_lo->reg)) {
-      bool match = true;
+      // The matched register must be live as a double, not a single.
+      bool match = info_lo->wide_value;
 
       // We can't match a FP register with a pair of Core registers.
-      match = match && (info_lo->pair == 0);
+      match = match && !register_pair;
 
       if (match) {
         // We can reuse;update the register usage info.
         loc.location = kLocPhysReg;
-        loc.vec_len = kVectorLength8;
-        // TODO: use k64BitVector
-        loc.reg = RegStorage(RegStorage::k64BitPair, info_lo->reg, info_lo->reg);
-        DCHECK(IsFpReg(loc.reg.GetLowReg()));
+        loc.reg = RegStorage(RegStorage::k64BitVector, info_lo->reg);
         return loc;
       }
       // We can't easily reuse; clobber and free any overlaps.
       if (info_lo) {
         Clobber(info_lo->reg);
         FreeTemp(info_lo->reg);
-        if (info_lo->pair)
+        if (register_pair) {
           Clobber(info_lo->partner);
+        }
       }
     } else {
-      RegisterInfo* info_hi = AllocLive(GetSRegHi(loc.s_reg_low), kAnyReg);
+      RegisterInfo* info_hi;
+      if (register_pair) {
+        // Look for the allocation status of the high reg.
+        info_hi = AllocLive(GetSRegHi(loc.s_reg_low), kAnyReg);
+      } else {
+        info_hi = info_lo;
+      }
       bool match = true;
-      match = match && (info_lo != NULL);
-      match = match && (info_hi != NULL);
+      match = match && (info_lo != NULL) && info_lo->wide_value;
+      match = match && (info_hi != NULL) && info_hi->wide_value;
       // Are they both core or both FP?
       match = match && (IsFpReg(info_lo->reg) == IsFpReg(info_hi->reg));
-      // If a pair of floating point singles, are they properly aligned?
-      if (match && IsFpReg(info_lo->reg)) {
-        match &= ((info_lo->reg & 0x1) == 0);
-        match &= ((info_hi->reg - info_lo->reg) == 1);
-      }
       // If previously used as a pair, it is the same pair?
-      if (match && (info_lo->pair || info_hi->pair)) {
-        match = (info_lo->pair == info_hi->pair);
+      if (match && register_pair) {
         match &= ((info_lo->reg == info_hi->partner) &&
               (info_hi->reg == info_lo->partner));
       }
       if (match) {
         // Can reuse - update the register usage info
-        loc.reg = RegStorage(RegStorage::k64BitPair, info_lo->reg, info_hi->reg);
         loc.location = kLocPhysReg;
-        MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
-        DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
+        if (register_pair) {
+          loc.reg = RegStorage(RegStorage::k64BitPair, info_lo->reg, info_hi->reg);
+        } else {
+          loc.reg = RegStorage(RegStorage::k64BitSolo, info_lo->reg);
+        }
+        MarkWide(loc.reg);
         return loc;
       }
       // Can't easily reuse - clobber and free any overlaps
       if (info_lo) {
         Clobber(info_lo->reg);
         FreeTemp(info_lo->reg);
-        if (info_lo->pair)
+        if (info_lo->wide_value && (info_lo->reg != info_lo->partner))
           Clobber(info_lo->partner);
       }
-      if (info_hi) {
+      if (info_hi && (info_hi != info_lo)) {
         Clobber(info_hi->reg);
         FreeTemp(info_hi->reg);
-        if (info_hi->pair)
+        if (info_hi->wide_value && (info_hi->reg != info_hi->partner))
           Clobber(info_hi->partner);
       }
     }
@@ -711,130 +710,18 @@ RegLocation X86Mir2Lir::UpdateLocWide(RegLocation loc) {
   return loc;
 }
 
-// TODO: Reunify with common code after 'pair mess' has been fixed
-RegLocation X86Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update) {
-  DCHECK(loc.wide);
-
-  loc = UpdateLocWide(loc);
-
-  /* If it is already in a register, we can assume proper form.  Is it the right reg class? */
-  if (loc.location == kLocPhysReg) {
-    DCHECK_EQ(IsFpReg(loc.reg.GetLowReg()), loc.IsVectorScalar());
-    if (!RegClassMatches(reg_class, loc.reg)) {
-      /* It is the wrong register class.  Reallocate and copy. */
-      if (!IsFpReg(loc.reg.GetLowReg())) {
-        // We want this in a FP reg, and it is in core registers.
-        DCHECK(reg_class != kCoreReg);
-        // Allocate this into any FP reg, and mark it with the right size.
-        int32_t low_reg = AllocTypedTemp(true, reg_class).GetReg();
-        OpVectorRegCopyWide(low_reg, loc.reg.GetLowReg(), loc.reg.GetHighReg());
-        CopyRegInfo(low_reg, loc.reg.GetLowReg());
-        Clobber(loc.reg);
-        loc.reg.SetReg(low_reg);
-        loc.reg.SetHighReg(low_reg);  // Play nice with existing code.
-        loc.vec_len = kVectorLength8;
-      } else {
-        // The value is in a FP register, and we want it in a pair of core registers.
-        DCHECK_EQ(reg_class, kCoreReg);
-        DCHECK_EQ(loc.reg.GetLowReg(), loc.reg.GetHighReg());
-        RegStorage new_regs = AllocTypedTempWide(false, kCoreReg);  // Force to core registers.
-        OpRegCopyWide(new_regs, loc.reg);
-        CopyRegInfo(new_regs.GetLowReg(), loc.reg.GetLowReg());
-        CopyRegInfo(new_regs.GetHighReg(), loc.reg.GetHighReg());
-        Clobber(loc.reg);
-        loc.reg = new_regs;
-        MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
-        DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
-      }
-    }
-    return loc;
-  }
-
-  DCHECK_NE(loc.s_reg_low, INVALID_SREG);
-  DCHECK_NE(GetSRegHi(loc.s_reg_low), INVALID_SREG);
-
-  loc.reg = AllocTypedTempWide(loc.fp, reg_class);
-
-  // FIXME: take advantage of RegStorage notation.
-  if (loc.reg.GetLowReg() == loc.reg.GetHighReg()) {
-    DCHECK(IsFpReg(loc.reg.GetLowReg()));
-    loc.vec_len = kVectorLength8;
-  } else {
-    MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
-  }
-  if (update) {
-    loc.location = kLocPhysReg;
-    MarkLive(loc.reg.GetLow(), loc.s_reg_low);
-    if (loc.reg.GetLowReg() != loc.reg.GetHighReg()) {
-      MarkLive(loc.reg.GetHigh(), GetSRegHi(loc.s_reg_low));
-    }
-  }
-  return loc;
-}
-
-// TODO: Reunify with common code after 'pair mess' has been fixed
-RegLocation X86Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
-  if (loc.wide)
-    return EvalLocWide(loc, reg_class, update);
-
-  loc = UpdateLoc(loc);
-
-  if (loc.location == kLocPhysReg) {
-    if (!RegClassMatches(reg_class, loc.reg)) {
-      /* Wrong register class.  Realloc, copy and transfer ownership. */
-      RegStorage new_reg = AllocTypedTemp(loc.fp, reg_class);
-      OpRegCopy(new_reg, loc.reg);
-      CopyRegInfo(new_reg, loc.reg);
-      Clobber(loc.reg);
-      loc.reg = new_reg;
-      if (IsFpReg(loc.reg.GetReg()) && reg_class != kCoreReg)
-        loc.vec_len = kVectorLength4;
-    }
-    return loc;
-  }
-
-  DCHECK_NE(loc.s_reg_low, INVALID_SREG);
-
-  loc.reg = AllocTypedTemp(loc.fp, reg_class);
-  if (IsFpReg(loc.reg.GetReg()) && reg_class != kCoreReg)
-    loc.vec_len = kVectorLength4;
-
-  if (update) {
-    loc.location = kLocPhysReg;
-    MarkLive(loc.reg, loc.s_reg_low);
-  }
-  return loc;
-}
-
 RegStorage X86Mir2Lir::AllocTempDouble() {
-  // We really don't need a pair of registers.
-  // FIXME - update to double
+  // FIXME - Needs some consistency cleanup on container vs. used storage (i.e. wide_value).
+  // FIXME: Would life be easier we we just used k64BitSolo?
   int reg = AllocTempFloat().GetReg();
-  return RegStorage(RegStorage::k64BitPair, reg, reg);
+  return RegStorage(RegStorage::k64BitVector, reg);
 }
 
-// TODO: Reunify with common code after 'pair mess' has been fixed
-void X86Mir2Lir::ResetDefLocWide(RegLocation rl) {
-  DCHECK(rl.wide);
-  RegisterInfo* p_low = IsTemp(rl.reg.GetLowReg());
-  if (IsFpReg(rl.reg.GetLowReg())) {
-    // We are using only the low register.
-    if (p_low && !(cu_->disable_opt & (1 << kSuppressLoads))) {
-      NullifyRange(p_low->def_start, p_low->def_end, p_low->s_reg, rl.s_reg_low);
-    }
-    ResetDef(rl.reg.GetLowReg());
-  } else {
-    RegisterInfo* p_high = IsTemp(rl.reg.GetHighReg());
-    if (p_low && !(cu_->disable_opt & (1 << kSuppressLoads))) {
-      DCHECK(p_low->pair);
-      NullifyRange(p_low->def_start, p_low->def_end, p_low->s_reg, rl.s_reg_low);
-    }
-    if (p_high && !(cu_->disable_opt & (1 << kSuppressLoads))) {
-      DCHECK(p_high->pair);
-    }
-    ResetDef(rl.reg.GetLowReg());
-    ResetDef(rl.reg.GetHighReg());
-  }
+RegStorage X86Mir2Lir::AllocTempFloat() {
+  // FIXME: Would life be easier we we just used k32BitSolo?
+  int reg = AllocTempBody(reg_pool_->FPRegs, reg_pool_->num_fp_regs, &reg_pool_->next_fp_reg,
+                          true).GetReg();
+  return RegStorage(RegStorage::k32BitVector, reg);
 }
 
 void X86Mir2Lir::GenConstWide(RegLocation rl_dest, int64_t value) {
@@ -871,7 +758,6 @@ void X86Mir2Lir::DumpRegLocation(RegLocation loc) {
              << (loc.ref ? " r" : "  ")
              << (loc.high_word ? " h" : "  ")
              << (loc.home ? " H" : "  ")
-             << " vec_len: " << loc.vec_len
              << ", low: " << static_cast<int>(loc.reg.GetLowReg())
              << ", high: " << static_cast<int>(loc.reg.GetHighReg())
              << ", s_reg: " << loc.s_reg_low
@@ -1326,6 +1212,63 @@ std::vector<uint8_t>* X86Mir2Lir::ReturnCallFrameInformation() {
   (*cfi_info)[2] = length >> 16;
   (*cfi_info)[3] = length >> 24;
   return cfi_info;
+}
+/*
+ * Somewhat messy code here.  We want to allocate a pair of contiguous
+ * physical single-precision floating point registers starting with
+ * an even numbered reg.  It is possible that the paired s_reg (s_reg+1)
+ * has already been allocated - try to fit if possible.  Fail to
+ * allocate if we can't meet the requirements for the pair of
+ * s_reg<=sX[even] & (s_reg+1)<= sX+1.
+ */
+// TODO: needs rewrite to support non-backed 64-bit float regs.
+RegStorage X86Mir2Lir::AllocPreservedDouble(int s_reg) {
+  RegStorage res;
+  int v_reg = mir_graph_->SRegToVReg(s_reg);
+  int p_map_idx = SRegToPMap(s_reg);
+  if (promotion_map_[p_map_idx+1].fp_location == kLocPhysReg) {
+    // Upper reg is already allocated.  Can we fit?
+    int high_reg = promotion_map_[p_map_idx+1].FpReg;
+    if ((high_reg & 1) == 0) {
+      // High reg is even - fail.
+      return res;  // Invalid.
+    }
+    // Is the low reg of the pair free?
+    RegisterInfo* p = GetRegInfo(high_reg-1);
+    if (p->in_use || p->is_temp) {
+      // Already allocated or not preserved - fail.
+      return res;  // Invalid.
+    }
+    // OK - good to go.
+    res = RegStorage(RegStorage::k64BitPair, p->reg, p->reg + 1);
+    p->in_use = true;
+    DCHECK_EQ((res.GetReg() & 1), 0);
+    MarkPreservedSingle(v_reg, res.GetReg());
+  } else {
+    RegisterInfo* FPRegs = reg_pool_->FPRegs;
+    for (int i = 0; i < reg_pool_->num_fp_regs; i++) {
+      if (!FPRegs[i].is_temp && !FPRegs[i].in_use &&
+        ((FPRegs[i].reg & 0x1) == 0x0) &&
+        !FPRegs[i+1].is_temp && !FPRegs[i+1].in_use &&
+        ((FPRegs[i+1].reg & 0x1) == 0x1) &&
+        (FPRegs[i].reg + 1) == FPRegs[i+1].reg) {
+        res = RegStorage(RegStorage::k64BitPair, FPRegs[i].reg, FPRegs[i].reg+1);
+        FPRegs[i].in_use = true;
+        MarkPreservedSingle(v_reg, res.GetLowReg());
+        FPRegs[i+1].in_use = true;
+        DCHECK_EQ(res.GetLowReg() + 1, FPRegs[i+1].reg);
+        MarkPreservedSingle(v_reg+1, res.GetLowReg() + 1);
+        break;
+      }
+    }
+  }
+  if (res.Valid()) {
+    promotion_map_[p_map_idx].fp_location = kLocPhysReg;
+    promotion_map_[p_map_idx].FpReg = res.GetLowReg();
+    promotion_map_[p_map_idx+1].fp_location = kLocPhysReg;
+    promotion_map_[p_map_idx+1].FpReg = res.GetLowReg() + 1;
+  }
+  return res;
 }
 
 }  // namespace art

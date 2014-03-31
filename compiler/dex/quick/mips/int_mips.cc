@@ -473,7 +473,7 @@ void MipsMir2Lir::GenXorLong(Instruction::Code opcode, RegLocation rl_dest,
  */
 void MipsMir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
                           RegLocation rl_index, RegLocation rl_dest, int scale) {
-  RegisterClass reg_class = oat_reg_class_by_size(size);
+  RegisterClass reg_class = RegClassBySize(size);
   int len_offset = mirror::Array::LengthOffset().Int32Value();
   int data_offset;
   RegLocation rl_result;
@@ -540,7 +540,7 @@ void MipsMir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
  */
 void MipsMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
                           RegLocation rl_index, RegLocation rl_src, int scale, bool card_mark) {
-  RegisterClass reg_class = oat_reg_class_by_size(size);
+  RegisterClass reg_class = RegClassBySize(size);
   int len_offset = mirror::Array::LengthOffset().Int32Value();
   int data_offset;
 
@@ -554,7 +554,7 @@ void MipsMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
   rl_index = LoadValue(rl_index, kCoreReg);
   RegStorage reg_ptr;
   bool allocated_reg_ptr_temp = false;
-  if (IsTemp(rl_array.reg.GetReg()) && !card_mark) {
+  if (IsTemp(rl_array.reg) && !card_mark) {
     Clobber(rl_array.reg.GetReg());
     reg_ptr = rl_array.reg;
   } else {

@@ -102,26 +102,19 @@ namespace art {
  * +========================+
  */
 
+// TODO: deprecate in favor of RegStorage.
 // Offset to distingish FP regs.
-#define X86_FP_REG_OFFSET 32
+#define X86_FP_REG_OFFSET (RegStorage::kFloat)
 // Offset to distinguish DP FP regs.
-#define X86_FP_DOUBLE (X86_FP_REG_OFFSET + 16)
+#define X86_FP_DOUBLE (RegStorage::kDouble)
 // Reg types.
-#define X86_REGTYPE(x) (x & (X86_FP_REG_OFFSET | X86_FP_DOUBLE))
+#define X86_REGTYPE(x) (x & RegStorage::kFloatMask)
 #define X86_FPREG(x) ((x & X86_FP_REG_OFFSET) == X86_FP_REG_OFFSET)
 #define X86_DOUBLEREG(x) ((x & X86_FP_DOUBLE) == X86_FP_DOUBLE)
 #define X86_SINGLEREG(x) (X86_FPREG(x) && !X86_DOUBLEREG(x))
 
-/*
- * Note: the low register of a floating point pair is sufficient to
- * create the name of a double, but require both names to be passed to
- * allow for asserts to verify that the pair is consecutive if significant
- * rework is done in this area.  Also, it is a good reminder in the calling
- * code that reg locations always describe doubles as a pair of singles.
- */
-#define X86_S2D(x, y) ((x) | X86_FP_DOUBLE)
 /* Mask to strip off fp flags */
-#define X86_FP_REG_MASK 0xF
+#define X86_FP_REG_MASK (RegStorage::kRegNumMask)
 
 enum X86ResourceEncodingPos {
   kX86GPReg0   = 0,
@@ -234,19 +227,17 @@ const RegStorage rs_rDI = rs_r7;
 
 // RegisterLocation templates return values (r_V0, or r_V0/r_V1).
 const RegLocation x86_loc_c_return
-    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, kVectorNotUsed,
-     RegStorage(RegStorage::k32BitSolo, rAX), INVALID_SREG, INVALID_SREG};
+    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, RegStorage(RegStorage::k32BitSolo, rAX),
+     INVALID_SREG, INVALID_SREG};
 const RegLocation x86_loc_c_return_wide
-    {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, kVectorNotUsed,
-     RegStorage(RegStorage::k64BitPair, rAX, rDX), INVALID_SREG, INVALID_SREG};
-// TODO: update to use k32BitVector (must encode in 7 bits, including fp flag).
+    {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, RegStorage(RegStorage::k64BitPair, rAX, rDX),
+     INVALID_SREG, INVALID_SREG};
 const RegLocation x86_loc_c_return_float
-    {kLocPhysReg, 0, 0, 0, 1, 0, 0, 0, 1, kVectorLength4,
-     RegStorage(RegStorage::k32BitSolo, fr0), INVALID_SREG, INVALID_SREG};
-// TODO: update to use k64BitVector (must encode in 7 bits, including fp flag).
+    {kLocPhysReg, 0, 0, 0, 1, 0, 0, 0, 1, RegStorage(RegStorage::k32BitVector, fr0),
+     INVALID_SREG, INVALID_SREG};
 const RegLocation x86_loc_c_return_double
-    {kLocPhysReg, 1, 0, 0, 1, 0, 0, 0, 1, kVectorLength8,
-     RegStorage(RegStorage::k64BitPair, fr0, fr0), INVALID_SREG, INVALID_SREG};
+    {kLocPhysReg, 1, 0, 0, 1, 0, 0, 0, 1, RegStorage(RegStorage::k64BitVector, fr0),
+    INVALID_SREG, INVALID_SREG};
 
 /*
  * The following enum defines the list of supported X86 instructions by the

@@ -22,22 +22,37 @@ namespace art {
 
 /*
  * Representation of the physical register, register pair or vector holding a Dalvik value.
- * The basic configuration of the storage (i.e. solo reg, pair, vector) is common across all
- * targets, but the encoding of the actual storage element is target independent.
+ * The basic configuration of the storage (i.e. solo reg, pair, vector, floating point) is
+ * common across all targets, but the encoding of the actual storage element (and how that
+ * maps to the def/use mask) is target independent.
  *
  * The two most-significant bits describe the basic shape of the storage, while meaning of the
  * lower 14 bits depends on the shape:
  *
  *  [PW]
- *       P: 0 -> pair, 1 -> solo (or vector)
- *       W: 1 -> 64 bits, 0 -> 32 bits
+ *       P:  0  -> pair, 1 -> solo (or vector)
+ *       W:  1  -> 64 bits, 0 -> 32 bits
  *
- *  [00] [xxxxxxxxxxxxxx]     Invalid (typically all zeros)
- *  [01] [HHHHHHH] [LLLLLLL]  64-bit storage, composed of 2 32-bit registers
- *  [10] [0] [xxxxxx] [RRRRRRR]  32-bit solo register
- *  [11] [0] [xxxxxx] [RRRRRRR]  64-bit solo register
- *  [10] [1] [xxxxxx] [VVVVVVV]  32-bit vector storage
- *  [11] [1] [xxxxxx] [VVVVVVV]  64-bit vector storage
+ * We use the most significant bit of the lower 7 group to describe the type of register.
+ *
+ *  [F]
+ *       0 -> Core
+ *       1 -> Floating point
+ *
+ * Followed by a bit used, when applicable, to designate single or double precision float.
+ *
+ *  [D]
+ *      0 -> Single precison
+ *      1 -> Double precison
+ *
+ * The low 5/6 bits yield the actual resource number.
+ *
+ *  [00]                [xxxxxxxxxxxxxx]  Invalid
+ *  [01] [F] [0] [HHHHH] [F] [0] [LLLLL]  64-bit storage, composed of 2 32-bit registers
+ *  [10] [0] [xxxxxx]    [F] [D] [RRRRR]  32-bit solo register
+ *  [11] [0] [xxxxxx]    [F] [D] [RRRRR]  64-bit solo register
+ *  [10] [1] [xxxxxx]    [F]    [VVVVVV]  32-bit vector storage
+ *  [11] [1] [xxxxxx]    [F]    [VVVVVV]  64-bit vector storage
  *
  * x - don't care
  * L - low register number of a pair
@@ -45,8 +60,15 @@ namespace art {
  * R - register number of a solo reg
  * V - vector description
  *
- * Note that in all non-invalid cases, the low 7 bits must be sufficient to describe
- * whether the storage element is floating point (see IsFloatReg()).
+ * Note that in all non-invalid cases, we can determine if the storage is floating point
+ * by testing bit 6.  This must remain true across targets.  Though it appears to be
+ * permitted by the format, the [F][D] values from each half of a pair must match (to
+ * allow the high and low regs of a pair to be individually manipulated).
+ *
+ * Expansion note: As defined, we limit the number of registers to 32 per class.  Should
+ * special or coprocessor registers need to be represented, expansion in the solo register
+ * form can be done by using an [FD] encoding of [01], taking care not to conflict with
+ * kInvalidRegVal.
  *
  */
 
@@ -68,11 +90,16 @@ class RegStorage {
     kVector      = 0xa000,
     kSolo        = 0x8000,
     kShapeMask   = 0xc000,
-    kKindMask    = 0xe000
+    kKindMask    = 0xe000,
+    kFloat       = 0x0040,
+    kDouble      = 0x0020,
+    kFloatMask   = 0x0060
   };
 
   static const uint16_t kRegValMask = 0x007f;
-  static const uint16_t kInvalidRegVal = 0x007f;
+  static const uint16_t kRegNumMask = 0x001f;
+  // TODO: deprecate use of kInvalidRegVal and speed up GetReg().
+  static const uint16_t kInvalidRegVal = 0x0020;
   static const uint16_t kHighRegShift = 7;
   static const uint16_t kHighRegMask = kRegValMask << kHighRegShift;
 
@@ -125,9 +152,36 @@ class RegStorage {
     return ((reg_ & kVectorMask) == kVector);
   }
 
+  bool IsFloat() const {
+    DCHECK(Valid());
+    return ((reg_ & kFloat) == kFloat);
+  }
+
+  bool IsDouble() const {
+    DCHECK(Valid());
+    return ((reg_ & kFloatMask) == (kFloat | kDouble));
+  }
+
+  bool IsSingle() const {
+    DCHECK(Valid());
+    return ((reg_ & kFloatMask) == kFloat);
+  }
+
+  static bool IsFloat(uint16_t reg) {
+    return ((reg & kFloat) == kFloat);
+  }
+
+  static bool IsDouble(uint16_t reg) {
+    return ((reg & kFloatMask) == (kFloat | kDouble));
+  }
+
+  static bool IsSingle(uint16_t reg) {
+    return ((reg & kFloatMask) == kFloat);
+  }
+
   // Used to retrieve either the low register of a pair, or the only register.
   int GetReg() const {
-    DCHECK(!IsPair());
+    DCHECK(!IsPair()) << "reg_ = 0x" << std::hex << reg_;
     return Valid() ? (reg_ & kRegValMask) : kInvalidRegVal;
   }
 

@@ -653,8 +653,7 @@ LIR* MipsMir2Lir::OpMem(OpKind op, RegStorage r_base, int disp) {
 }
 
 LIR* MipsMir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale,
-                                       int displacement, RegStorage r_src, RegStorage r_src_hi,
-                                       OpSize size, int s_reg) {
+                                       int displacement, RegStorage r_src, OpSize size, int s_reg) {
   LOG(FATAL) << "Unexpected use of StoreBaseIndexedDisp for MIPS";
   return NULL;
 }
@@ -665,8 +664,7 @@ LIR* MipsMir2Lir::OpRegMem(OpKind op, RegStorage r_dest, RegStorage r_base, int 
 }
 
 LIR* MipsMir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale,
-                                      int displacement, RegStorage r_dest, RegStorage r_dest_hi,
-                                      OpSize size, int s_reg) {
+                                      int displacement, RegStorage r_dest, OpSize size, int s_reg) {
   LOG(FATAL) << "Unexpected use of LoadBaseIndexedDisp for MIPS";
   return NULL;
 }
