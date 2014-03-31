@@ -259,7 +259,7 @@ void Mir2Lir::StoreValueWide(RegLocation rl_dest, RegLocation rl_src) {
   if (rl_dest.reg.GetLowReg() != rl_dest.reg.GetHighReg()) {
     MarkLive(rl_dest.reg.GetHigh(), GetSRegHi(rl_dest.s_reg_low));
     MarkDirty(rl_dest);
-    MarkPair(rl_dest.reg.GetLowReg(), rl_dest.reg.GetHighReg());
+    MarkWide(rl_dest.reg);
   } else {
     // This must be an x86 vector register value,
     DCHECK(IsFpReg(rl_dest.reg) && (cu_->instruction_set == kX86));
@@ -335,7 +335,7 @@ void Mir2Lir::StoreFinalValueWide(RegLocation rl_dest, RegLocation rl_src) {
   if (rl_dest.reg.GetLowReg() != rl_dest.reg.GetHighReg()) {
     MarkLive(rl_dest.reg.GetHigh(), GetSRegHi(rl_dest.s_reg_low));
     MarkDirty(rl_dest);
-    MarkPair(rl_dest.reg.GetLowReg(), rl_dest.reg.GetHighReg());
+    MarkWide(rl_dest.reg);
   } else {
     // This must be an x86 vector register value,
     DCHECK(IsFpReg(rl_dest.reg) && (cu_->instruction_set == kX86));

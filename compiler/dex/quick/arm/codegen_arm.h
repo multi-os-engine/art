@@ -74,6 +74,8 @@ class ArmMir2Lir : public Mir2Lir {
     void LockCallTemps();
     void MarkPreservedSingle(int v_reg, int reg);
     void CompilerInitializeRegAlloc();
+    RegStorage AllocTempDouble();
+    RegStorage AllocPreservedDouble(int s_reg);
 
     // Required for target - miscellaneous.
     void AssembleLIR();
