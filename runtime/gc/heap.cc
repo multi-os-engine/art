@@ -914,8 +914,16 @@ void Heap::DoPendingTransitionOrTrim() {
   // Transition the collector if the desired collector type is not the same as the current
   // collector type.
   TransitionCollector(desired_collector_type);
-  // Do a heap trim if it is needed.
-  Trim();
+  if (!CareAboutPauseTimes()) {
+    // Deflate the monitors, this can cause a pause but shouldn't matter since we don't care
+    // about pauses.
+    Runtime* runtime = Runtime::Current();
+    runtime->GetThreadList()->SuspendAll();
+    runtime->GetMonitorList()->DeflateMonitors();
+    runtime->GetThreadList()->ResumeAll();
+    // Do a heap trim if it is needed.
+    Trim();
+  }
 }
 
 void Heap::Trim() {
