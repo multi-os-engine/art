@@ -868,7 +868,7 @@ class MIRGraph {
   RegLocation* reg_location_;                         // Map SSA names to location.
   SafeMap<unsigned int, unsigned int> block_id_map_;  // Block collapse lookup cache.
 
-  static const uint64_t oat_data_flow_attributes_[kMirOpLast];
+  static const uint64_t data_flow_attributes_[kMirOpLast];
   static const char* extended_mir_op_names_[kMirOpLast - kMirOpFirst];
   static const uint32_t analysis_attributes_[kMirOpLast];
 

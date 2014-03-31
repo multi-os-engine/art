@@ -232,19 +232,41 @@ class Mir2Lir : public Backend {
     };
 
     /*
-     * Data structure tracking the mapping between a Dalvik register (pair) and a
-     * native register (pair). The idea is to reuse the previously loaded value
-     * if possible, otherwise to keep the value in a native register as long as
-     * possible.
+     * Data structure tracking the mapping detween a Dalvik value (32 or 64 bits)
+     * and native register storage.  The primary purpose is to reuse previuosly
+     * loaded values, if possible, and otherwise to keep the value in register
+     * storage as long as possible.
+     *
+     * NOTE 1: that wide_value refers to the width of the Dalvik value contained in
+     * this register (or pair).  For example, a 64-bit register containing a 32-bit
+     * Dalvik value would have wide_value==false even though the storage container itself
+     * is wide.  Similarly, a 32-bit register containing half of a 64-bit Dalvik value
+     * would have wide_value==true (and additionally would have its partner field set to the
+     * other half whose wide_value field would also be true.
+     *
+     * NOTE 2: In the case of a register pair, you can determine which of the partners
+     * is the low half by looking at the s_reg names.  The high s_reg will equal low_sreg + 1.
+     *
+     * NOTE 3: In the case of a 64-bit register holding a Dalvik wide value, wide_value
+     * will be true and partner==reg.  s_reg refers to the low-order word of the Dalvik
+     * value, and the s_reg of the high word is implied (s_reg + 1).
+     *
+     * NOTE 4: The reg and is_temp fields should always be correct.  If is_temp is false no
+     * other fields have meaning.  If is_temp==true and live==false, no other fields have
+     * meaning.  If is_temp==true and live==true, wide_value, partner, dirty, s_reg, def_start
+     * and def_end describe the relationship between the temp register/register pair and
+     * the Dalvik value[s] described by s_reg/s_reg+1.
      */
     struct RegisterInfo {
-      int reg;                    // Reg number
+      // Should this be a RegStorage?
+      int reg;                    // Reg number.
       bool in_use;                // Has it been allocated?
       bool is_temp;               // Can allocate as temp?
-      bool pair;                  // Part of a register pair?
-      int partner;                // If pair, other reg of pair.
+      bool wide_value;            // Holds a Dalvik wide value (either itself, or part of a pair).
       bool live;                  // Is there an associated SSA name?
       bool dirty;                 // If live, is it dirty?
+      RegStorage alias;           // Backed or backing for another register/register pair?
+      int partner;                // If wide_value, other reg of pair or self if 64-bit register.
       int s_reg;                  // Name of live value.
       LIR *def_start;             // Starting inst in last def sequence.
       LIR *def_end;               // Ending inst in last def sequence.
@@ -330,7 +352,7 @@ class Mir2Lir : public Backend {
       return *reinterpret_cast<const int32_t*>(switch_data);
     }
 
-    RegisterClass oat_reg_class_by_size(OpSize size) {
+    RegisterClass RegClassBySize(OpSize size) {
       return (size == kUnsignedHalf || size == kSignedHalf || size == kUnsignedByte ||
               size == kSignedByte) ? kCoreReg : kAnyReg;
     }
@@ -450,14 +472,14 @@ class Mir2Lir : public Backend {
 
     // Shared by all targets - implemented in ralloc_util.cc
     int GetSRegHi(int lowSreg);
-    bool oat_live_out(int s_reg);
-    int oatSSASrc(MIR* mir, int num);
+    bool LiveOut(int s_reg);
     void SimpleRegAlloc();
     void ResetRegPool();
     void CompilerInitPool(RegisterInfo* regs, int* reg_nums, int num);
     void DumpRegPool(RegisterInfo* p, int num_regs);
     void DumpCoreRegPool();
     void DumpFpRegPool();
+    void DumpRegPools();
     /* Mark a temp register as dead.  Does not affect allocation state. */
     void Clobber(int reg) {
       ClobberBody(GetRegInfo(reg));
@@ -470,9 +492,7 @@ class Mir2Lir : public Backend {
     RegStorage AllocPreservedCoreReg(int s_reg);
     void RecordFpPromotion(RegStorage reg, int s_reg);
     RegStorage AllocPreservedSingle(int s_reg);
-    RegStorage AllocPreservedDouble(int s_reg);
     RegStorage AllocTempBody(RegisterInfo* p, int num_regs, int* next_temp, bool required);
-    virtual RegStorage AllocTempDouble();
     RegStorage AllocFreeTemp();
     RegStorage AllocTemp();
     RegStorage AllocTempFloat();
@@ -480,42 +500,36 @@ class Mir2Lir : public Backend {
     RegisterInfo* AllocLive(int s_reg, int reg_class);
     void FreeTemp(int reg);
     void FreeTemp(RegStorage reg);
-    RegisterInfo* IsLive(int reg);
     bool IsLive(RegStorage reg);
-    RegisterInfo* IsTemp(int reg);
     bool IsTemp(RegStorage reg);
-    RegisterInfo* IsPromoted(int reg);
     bool IsPromoted(RegStorage reg);
-    bool IsDirty(int reg);
     bool IsDirty(RegStorage reg);
-    void LockTemp(int reg);
     void LockTemp(RegStorage reg);
-    void ResetDef(int reg);
     void ResetDef(RegStorage reg);
-    void NullifyRange(LIR *start, LIR *finish, int s_reg1, int s_reg2);
+    void NullifyRange(RegStorage reg, int s_reg);
     void MarkDef(RegLocation rl, LIR *start, LIR *finish);
     void MarkDefWide(RegLocation rl, LIR *start, LIR *finish);
     RegLocation WideToNarrow(RegLocation rl);
     void ResetDefLoc(RegLocation rl);
-    virtual void ResetDefLocWide(RegLocation rl);
+    void ResetDefLocWide(RegLocation rl);
     void ResetDefTracking();
     void ClobberAllRegs();
     void FlushSpecificReg(RegisterInfo* info);
     void FlushAllRegsBody(RegisterInfo* info, int num_regs);
     void FlushAllRegs();
     bool RegClassMatches(int reg_class, RegStorage reg);
-    void MarkLive(RegStorage reg, int s_reg);
+    void MarkLive(RegLocation loc);
     void MarkTemp(int reg);
     void MarkTemp(RegStorage reg);
-    void UnmarkTemp(int reg);
     void UnmarkTemp(RegStorage reg);
-    void MarkPair(int low_reg, int high_reg);
+    void MarkWide(RegStorage reg);
     void MarkClean(RegLocation loc);
     void MarkDirty(RegLocation loc);
     void MarkInUse(int reg);
     void MarkInUse(RegStorage reg);
     void CopyRegInfo(int new_reg, int old_reg);
     void CopyRegInfo(RegStorage new_reg, RegStorage old_reg);
+    void CopyRegInfoWide(RegStorage new_reg, RegStorage old_reg);
     bool CheckCorePoolSanity();
     RegLocation UpdateLoc(RegLocation loc);
     virtual RegLocation UpdateLocWide(RegLocation loc);
@@ -548,6 +562,7 @@ class Mir2Lir : public Backend {
     RegLocation GetReturnWide(bool is_double);
     RegLocation GetReturn(bool is_float);
     RegisterInfo* GetRegInfo(int reg);
+    RegisterInfo* GetRegInfo(RegStorage reg);
 
     // Shared by all targets - implemented in gen_common.cc.
     void AddIntrinsicLaunchpad(CallInfo* info, LIR* branch, LIR* resume = nullptr);
@@ -844,6 +859,8 @@ class Mir2Lir : public Backend {
     virtual bool SameRegType(int reg1, int reg2) = 0;
     virtual RegStorage AllocTypedTemp(bool fp_hint, int reg_class) = 0;
     virtual RegStorage AllocTypedTempWide(bool fp_hint, int reg_class) = 0;
+    virtual RegStorage AllocTempDouble() = 0;
+    virtual RegStorage AllocPreservedDouble(int s_reg) = 0;
     // TODO: elminate S2d.
     virtual int S2d(int low_reg, int high_reg) = 0;
     virtual RegStorage TargetReg(SpecialTargetRegister reg) = 0;

@@ -94,9 +94,9 @@ namespace art {
  */
 
 // Offset to distingish FP regs.
-#define ARM_FP_REG_OFFSET 32
+#define ARM_FP_REG_OFFSET 64
 // Offset to distinguish DP FP regs.
-#define ARM_FP_DOUBLE 64
+#define ARM_FP_DOUBLE 32
 // First FP callee save.
 #define ARM_FP_CALLEE_SAVE_BASE 16
 // Reg types.
@@ -114,8 +114,6 @@ namespace art {
  * code that reg locations always describe doubles as a pair of singles.
  */
 #define ARM_S2D(x, y) ((x) | ARM_FP_DOUBLE)
-// Mask to strip off fp flags.
-#define ARM_FP_REG_MASK (ARM_FP_REG_OFFSET-1)
 
 enum ArmResourceEncodingPos {
   kArmGPReg0   = 0,
@@ -225,6 +223,56 @@ const RegStorage rs_rARM_LR(RegStorage::k32BitSolo, rARM_LR);
 const RegStorage rs_r15pc(RegStorage::k32BitSolo, r15pc);
 const RegStorage rs_rARM_PC(RegStorage::k32BitSolo, rARM_PC);
 const RegStorage rs_invalid(RegStorage::kInvalid);
+
+const RegStorage rs_fr0(RegStorage::k32BitSolo, fr0);
+const RegStorage rs_fr1(RegStorage::k32BitSolo, fr1);
+const RegStorage rs_fr2(RegStorage::k32BitSolo, fr2);
+const RegStorage rs_fr3(RegStorage::k32BitSolo, fr3);
+const RegStorage rs_fr4(RegStorage::k32BitSolo, fr4);
+const RegStorage rs_fr5(RegStorage::k32BitSolo, fr5);
+const RegStorage rs_fr6(RegStorage::k32BitSolo, fr6);
+const RegStorage rs_fr7(RegStorage::k32BitSolo, fr7);
+const RegStorage rs_fr8(RegStorage::k32BitSolo, fr0);
+const RegStorage rs_fr9(RegStorage::k32BitSolo, fr0);
+const RegStorage rs_fr10(RegStorage::k32BitSolo, fr10);
+const RegStorage rs_fr11(RegStorage::k32BitSolo, fr11);
+const RegStorage rs_fr12(RegStorage::k32BitSolo, fr12);
+const RegStorage rs_fr13(RegStorage::k32BitSolo, fr13);
+const RegStorage rs_fr14(RegStorage::k32BitSolo, fr14);
+const RegStorage rs_fr15(RegStorage::k32BitSolo, fr15);
+const RegStorage rs_fr16(RegStorage::k32BitSolo, fr16);
+const RegStorage rs_fr17(RegStorage::k32BitSolo, fr17);
+const RegStorage rs_fr18(RegStorage::k32BitSolo, fr18);
+const RegStorage rs_fr19(RegStorage::k32BitSolo, fr19);
+const RegStorage rs_fr20(RegStorage::k32BitSolo, fr20);
+const RegStorage rs_fr21(RegStorage::k32BitSolo, fr21);
+const RegStorage rs_fr22(RegStorage::k32BitSolo, fr22);
+const RegStorage rs_fr23(RegStorage::k32BitSolo, fr23);
+const RegStorage rs_fr24(RegStorage::k32BitSolo, fr24);
+const RegStorage rs_fr25(RegStorage::k32BitSolo, fr25);
+const RegStorage rs_fr26(RegStorage::k32BitSolo, fr26);
+const RegStorage rs_fr27(RegStorage::k32BitSolo, fr27);
+const RegStorage rs_fr28(RegStorage::k32BitSolo, fr28);
+const RegStorage rs_fr29(RegStorage::k32BitSolo, fr29);
+const RegStorage rs_fr30(RegStorage::k32BitSolo, fr30);
+const RegStorage rs_fr31(RegStorage::k32BitSolo, fr31);
+
+const RegStorage rs_dr0(RegStorage::k64BitSolo, dr0);
+const RegStorage rs_dr1(RegStorage::k64BitSolo, dr1);
+const RegStorage rs_dr2(RegStorage::k64BitSolo, dr2);
+const RegStorage rs_dr3(RegStorage::k64BitSolo, dr3);
+const RegStorage rs_dr4(RegStorage::k64BitSolo, dr4);
+const RegStorage rs_dr5(RegStorage::k64BitSolo, dr5);
+const RegStorage rs_dr6(RegStorage::k64BitSolo, dr6);
+const RegStorage rs_dr7(RegStorage::k64BitSolo, dr7);
+const RegStorage rs_dr8(RegStorage::k64BitSolo, dr0);
+const RegStorage rs_dr9(RegStorage::k64BitSolo, dr0);
+const RegStorage rs_dr10(RegStorage::k64BitSolo, dr10);
+const RegStorage rs_dr11(RegStorage::k64BitSolo, dr11);
+const RegStorage rs_dr12(RegStorage::k64BitSolo, dr12);
+const RegStorage rs_dr13(RegStorage::k64BitSolo, dr13);
+const RegStorage rs_dr14(RegStorage::k64BitSolo, dr14);
+const RegStorage rs_dr15(RegStorage::k64BitSolo, dr15);
 
 // Target-independent aliases.
 #define rARM_ARG0 r0

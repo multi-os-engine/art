@@ -340,7 +340,7 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
   rl_src.location = kLocPhysReg;
   rl_src.reg = TargetReg(kArg0);
   rl_src.home = false;
-  MarkLive(rl_src.reg, rl_src.s_reg_low);
+  MarkLive(rl_src);
   StoreValue(rl_method, rl_src);
   // If Method* has been promoted, explicitly flush
   if (rl_method.location == kLocPhysReg) {
@@ -663,7 +663,6 @@ static int NextInterfaceCallInsnWithAccessCheck(CompilationUnit* cu,
       QUICK_ENTRYPOINT_OFFSET(4, pInvokeInterfaceTrampolineWithAccessCheck);
   return NextInvokeInsnSP(cu, info, trampoline, state, target_method, 0);
 }
-
 int Mir2Lir::LoadArgRegs(CallInfo* info, int call_state,
                          NextCallInsn next_call_insn,
                          const MethodReference& target_method,
@@ -730,7 +729,20 @@ int Mir2Lir::GenDalvikArgsNoRange(CallInfo* info,
       // Wide spans, we need the 2nd half of uses[2].
       rl_arg = UpdateLocWide(rl_use2);
       if (rl_arg.location == kLocPhysReg) {
-        reg = rl_arg.reg.GetHigh();
+        // FIXME: needs rewrite, but will be replaced when hard-float API arrives.  For now,
+        // just hack to get working.
+        if (rl_arg.reg.IsPair()) {
+          reg = rl_arg.reg.GetHigh();
+        } else {
+          // We've got a Double, extract the high backing single reg.
+          DCHECK(rl_arg.reg.IsFloat());
+          DCHECK(rl_arg.reg.IsDouble());
+          int reg_num = rl_arg.reg.GetReg() & RegStorage::kRegNumMask;
+          // Convert the double to a high single.
+          // TODO: a utility for this?  But won't work if non-backed doubles.
+          reg_num = ((reg_num << 1) + 1) | RegStorage::kFloat;
+          reg = RegStorage(RegStorage::k32BitSolo, reg_num);
+        }
       } else {
         // kArg2 & rArg3 can safely be used here
         reg = TargetReg(kArg3);

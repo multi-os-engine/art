@@ -334,10 +334,10 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
    * expanding the frame or flushing.  This leaves the utility
    * code with a single temp: r12.  This should be enough.
    */
-  LockTemp(r0);
-  LockTemp(r1);
-  LockTemp(r2);
-  LockTemp(r3);
+  LockTemp(rs_r0);
+  LockTemp(rs_r1);
+  LockTemp(rs_r2);
+  LockTemp(rs_r3);
 
   /*
    * We can safely skip the stack overflow check if we're
@@ -439,8 +439,8 @@ void ArmMir2Lir::GenExitSequence() {
    * In the exit path, r0/r1 are live - make sure they aren't
    * allocated by the register utilities as temps.
    */
-  LockTemp(r0);
-  LockTemp(r1);
+  LockTemp(rs_r0);
+  LockTemp(rs_r1);
 
   NewLIR0(kPseudoMethodExit);
   OpRegImm(kOpAdd, rs_rARM_SP, frame_size_ - (spill_count * 4));
