@@ -286,7 +286,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
   // Prep Src and Dest locations.
   int next_sreg = 0;
   int next_loc = 0;
-  uint64_t attrs = mir_graph_->oat_data_flow_attributes_[opcode];
+  uint64_t attrs = mir_graph_->data_flow_attributes_[opcode];
   rl_src[0] = rl_src[1] = rl_src[2] = mir_graph_->GetBadLoc();
   if (attrs & DF_UA) {
     if (attrs & DF_A_WIDE) {
@@ -991,8 +991,7 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
     if (cu_->disable_opt & (1 << kTrackLiveTemps)) {
       ClobberAllRegs();
       // Reset temp allocation to minimize differences when A/B testing.
-      reg_pool_->next_core_reg = 0;
-      reg_pool_->next_fp_reg = 0;
+      reg_pool_->ResetNextTemp();
     }
 
     if (cu_->disable_opt & (1 << kSuppressLoads)) {
