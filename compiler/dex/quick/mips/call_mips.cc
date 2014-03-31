@@ -294,10 +294,10 @@ void MipsMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) 
    * expanding the frame or flushing.  This leaves the utility
    * code with a single temp: r12.  This should be enough.
    */
-  LockTemp(rMIPS_ARG0);
-  LockTemp(rMIPS_ARG1);
-  LockTemp(rMIPS_ARG2);
-  LockTemp(rMIPS_ARG3);
+  LockTemp(rs_rMIPS_ARG0);
+  LockTemp(rs_rMIPS_ARG1);
+  LockTemp(rs_rMIPS_ARG2);
+  LockTemp(rs_rMIPS_ARG3);
 
   /*
    * We can safely skip the stack overflow check if we're
@@ -361,8 +361,8 @@ void MipsMir2Lir::GenExitSequence() {
    * In the exit path, rMIPS_RET0/rMIPS_RET1 are live - make sure they aren't
    * allocated by the register utilities as temps.
    */
-  LockTemp(rMIPS_RET0);
-  LockTemp(rMIPS_RET1);
+  LockTemp(rs_rMIPS_RET0);
+  LockTemp(rs_rMIPS_RET1);
 
   NewLIR0(kPseudoMethodExit);
   UnSpillCoreRegs();

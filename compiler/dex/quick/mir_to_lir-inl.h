@@ -31,14 +31,17 @@ inline void Mir2Lir::ClobberBody(RegisterInfo* p) {
     p->s_reg = INVALID_SREG;
     p->def_start = NULL;
     p->def_end = NULL;
-    if (p->pair) {
-      p->pair = false;
-      p = GetRegInfo(p->partner);
-      p->pair = false;
-      p->live = false;
-      p->s_reg = INVALID_SREG;
-      p->def_start = NULL;
-      p->def_end = NULL;
+    if (p->wide_value) {
+      p->wide_value = false;
+      if (p->reg != p->partner) {
+        // Register pair - deal with the other half.
+        p = GetRegInfo(p->partner);
+        p->wide_value = false;
+        p->live = false;
+        p->s_reg = INVALID_SREG;
+        p->def_start = NULL;
+        p->def_end = NULL;
+      }
     }
   }
 }
@@ -231,6 +234,13 @@ inline void Mir2Lir::SetupResourceMasks(LIR* lir) {
 inline art::Mir2Lir::RegisterInfo* Mir2Lir::GetRegInfo(int reg) {
   DCHECK(reginfo_map_.Get(reg) != NULL);
   return reginfo_map_.Get(reg);
+}
+
+inline art::Mir2Lir::RegisterInfo* Mir2Lir::GetRegInfo(RegStorage reg) {
+  RegisterInfo* res = reg.IsPair() ? reginfo_map_.Get(reg.GetLowReg()) :
+      reginfo_map_.Get(reg.GetReg());
+  DCHECK(res != nullptr);
+  return res;
 }
 
 }  // namespace art
