@@ -502,33 +502,34 @@ struct ArtMethodOffsets : public CheckOffsets<mirror::ArtMethod> {
 struct ClassOffsets : public CheckOffsets<mirror::Class> {
   ClassOffsets() : CheckOffsets<mirror::Class>(false, "Ljava/lang/Class;") {
     // alphabetical references
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, class_loader_),                  "classLoader"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, component_type_),                "componentType"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_cache_),                     "dexCache"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, direct_methods_),                "directMethods"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, ifields_),                       "iFields"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, iftable_),                       "ifTable"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, imtable_),                       "imTable"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, name_),                          "name"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, sfields_),                       "sFields"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, super_class_),                   "superClass"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, verify_error_class_),            "verifyErrorClass"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, virtual_methods_),               "virtualMethods"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, vtable_),                        "vtable"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, class_loader_),                    "classLoader"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, component_type_),                  "componentType"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_cache_),                       "dexCache"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, direct_methods_),                  "directMethods"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, ifields_),                         "iFields"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, iftable_),                         "ifTable"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, imtable_),                         "imTable"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, name_),                            "name"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, sfields_),                         "sFields"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, super_class_),                     "superClass"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, verify_error_class_),              "verifyErrorClass"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, virtual_methods_),                 "virtualMethods"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, vtable_),                          "vtable"));
 
     // alphabetical 32-bit
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, access_flags_),                  "accessFlags"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, class_size_),                    "classSize"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, clinit_thread_id_),              "clinitThreadId"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_class_def_idx_),             "dexClassDefIndex"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_type_idx_),                  "dexTypeIndex"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, num_reference_instance_fields_), "numReferenceInstanceFields"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, num_reference_static_fields_),   "numReferenceStaticFields"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, object_size_),                   "objectSize"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, primitive_type_),                "primitiveType"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_instance_offsets_),    "referenceInstanceOffsets"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_static_offsets_),      "referenceStaticOffsets"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, status_),                        "status"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, access_flags_),                    "accessFlags"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, class_size_),                      "classSize"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, clinit_thread_id_),                "clinitThreadId"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_annotation_directory_offset_), "dexAnnotationDirectoryOffset"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_class_def_idx_),               "dexClassDefIndex"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_type_idx_),                    "dexTypeIndex"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, num_reference_instance_fields_),   "numReferenceInstanceFields"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, num_reference_static_fields_),     "numReferenceStaticFields"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, object_size_),                     "objectSize"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, primitive_type_),                  "primitiveType"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_instance_offsets_),      "referenceInstanceOffsets"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_static_offsets_),        "referenceStaticOffsets"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, status_),                          "status"));
   };
 };
 

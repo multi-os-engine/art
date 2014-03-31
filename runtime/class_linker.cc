@@ -1253,6 +1253,7 @@ class InitializeClassVisitor {
     // DCHECK(klass->IsClass());
     klass->SetClassSize(class_size_);
     klass->SetPrimitiveType(Primitive::kPrimNot);  // Default to not being primitive.
+    klass->SetDexAnnotationDirectoryOffset(-1);  // Default to -1.
     klass->SetDexClassDefIndex(DexFile::kDexNoIndex16);  // Default to no valid class def index.
     klass->SetDexTypeIndex(DexFile::kDexNoIndex16);  // Default to no valid type index.
   }
@@ -1875,6 +1876,7 @@ void ClassLinker::LoadClass(const DexFile& dex_file,
   DCHECK_EQ(klass->GetPrimitiveType(), Primitive::kPrimNot);
   klass->SetStatus(mirror::Class::kStatusIdx, NULL);
 
+  klass->SetDexAnnotationDirectoryOffset(-1);
   klass->SetDexClassDefIndex(dex_file.GetIndexForClassDef(dex_class_def));
   klass->SetDexTypeIndex(dex_class_def.class_idx_);
 

@@ -829,6 +829,15 @@ class MANAGED Class : public Object {
     return GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(Class, verify_error_class_), false);
   }
 
+  int32_t GetDexAnnotationDirectoryOffset() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_annotation_directory_offset_), false);
+  }
+
+  void SetDexAnnotationDirectoryOffset(int32_t annotation_directory_offset) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // Not called within a transaction.
+    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, dex_annotation_directory_offset_), annotation_directory_offset, false);
+  }
+
   uint16_t GetDexClassDefIndex() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_), false);
   }
@@ -956,6 +965,8 @@ class MANAGED Class : public Object {
   // Tid used to check for recursive <clinit> invocation.
   pid_t clinit_thread_id_;
 
+  int32_t dex_annotation_directory_offset_;
+
   // ClassDef index in dex file, -1 if no class definition such as an array.
   // TODO: really 16bits
   int32_t dex_class_def_idx_;
@@ -1007,7 +1018,7 @@ std::ostream& operator<<(std::ostream& os, const Class::Status& rhs);
 
 class MANAGED ClassClass : public Class {
  private:
-  int32_t pad_;
+//  int32_t pad_;
   int64_t serialVersionUID_;
   friend struct art::ClassClassOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(ClassClass);
