@@ -360,13 +360,10 @@ struct RegLocation {
   unsigned ref:1;       // Something GC cares about.
   unsigned high_word:1;  // High word of pair?
   unsigned home:1;      // Does this represent the home location?
-  VectorLengthType vec_len:3;  // TODO: remove.  Is this value in a vector register, and how big is it?
   RegStorage reg;       // Encoded physical registers.
   int16_t s_reg_low;    // SSA name for low Dalvik word.
   int16_t orig_sreg;    // TODO: remove after Bitcode gen complete
                         // and consolidate usage w/ s_reg_low.
-
-  bool IsVectorScalar() const { return vec_len == kVectorLength4 || vec_len == kVectorLength8;}
 };
 
 /*
@@ -392,8 +389,8 @@ struct CallInfo {
 };
 
 
-const RegLocation bad_loc = {kLocDalvikFrame, 0, 0, 0, 0, 0, 0, 0, 0, kVectorNotUsed,
-                             RegStorage(RegStorage::kInvalid), INVALID_SREG, INVALID_SREG};
+const RegLocation bad_loc = {kLocDalvikFrame, 0, 0, 0, 0, 0, 0, 0, 0, RegStorage(), INVALID_SREG,
+                             INVALID_SREG};
 
 class MIRGraph {
  public:
@@ -868,7 +865,7 @@ class MIRGraph {
   RegLocation* reg_location_;                         // Map SSA names to location.
   SafeMap<unsigned int, unsigned int> block_id_map_;  // Block collapse lookup cache.
 
-  static const uint64_t oat_data_flow_attributes_[kMirOpLast];
+  static const uint64_t data_flow_attributes_[kMirOpLast];
   static const char* extended_mir_op_names_[kMirOpLast - kMirOpFirst];
   static const uint32_t analysis_attributes_[kMirOpLast];
 
