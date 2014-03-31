@@ -37,18 +37,16 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     LIR* LoadBaseDispWide(RegStorage r_base, int displacement, RegStorage r_dest, int s_reg);
     LIR* LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_dest, int scale,
                          OpSize size);
-    // TODO: collapse r_dest, r_dest_hi
     LIR* LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale, int displacement,
-                             RegStorage r_dest, RegStorage r_dest_hi, OpSize size, int s_reg);
+                             RegStorage r_dest, OpSize size, int s_reg);
     LIR* LoadConstantNoClobber(RegStorage r_dest, int value);
     LIR* LoadConstantWide(RegStorage r_dest, int64_t value);
     LIR* StoreBaseDisp(RegStorage r_base, int displacement, RegStorage r_src, OpSize size);
     LIR* StoreBaseDispWide(RegStorage r_base, int displacement, RegStorage r_src);
     LIR* StoreBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_src, int scale,
                           OpSize size);
-    // TODO: collapse r_src, r_src_hi
     LIR* StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale, int displacement,
-                              RegStorage r_src, RegStorage r_src_hi, OpSize size, int s_reg);
+                              RegStorage r_src, OpSize size, int s_reg);
     void MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg);
 
     // Required for target - register utilities.
@@ -57,7 +55,6 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     bool SameRegType(int reg1, int reg2);
     RegStorage AllocTypedTemp(bool fp_hint, int reg_class);
     RegStorage AllocTypedTempWide(bool fp_hint, int reg_class);
-    int S2d(int low_reg, int high_reg);
     RegStorage TargetReg(SpecialTargetRegister reg);
     RegStorage GetArgMappingToPhysicalReg(int arg_num);
     RegLocation GetReturnAlt();
@@ -70,13 +67,14 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     uint64_t GetRegMaskCommon(int reg);
     void AdjustSpillMask();
     void ClobberCallerSave();
-    void FlushReg(RegStorage reg);
-    void FlushRegWide(RegStorage reg);
     void FreeCallTemps();
     void FreeRegLocTemps(RegLocation rl_keep, RegLocation rl_free);
     void LockCallTemps();
     void MarkPreservedSingle(int v_reg, int reg);
     void CompilerInitializeRegAlloc();
+    RegStorage AllocTempDouble();
+    RegStorage AllocTempFloat();
+    RegStorage AllocPreservedDouble(int s_reg);
 
     // Required for target - miscellaneous.
     void AssembleLIR();
@@ -264,10 +262,6 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     bool InexpensiveConstantDouble(int64_t value);
 
     RegLocation UpdateLocWide(RegLocation loc);
-    RegLocation EvalLocWide(RegLocation loc, int reg_class, bool update);
-    RegLocation EvalLoc(RegLocation loc, int reg_class, bool update);
-    RegStorage AllocTempDouble();
-    void ResetDefLocWide(RegLocation rl);
 
     /*
      * @brief x86 specific codegen for int operations.
@@ -381,7 +375,6 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     void EmitUnimplemented(const X86EncodingMap* entry, LIR* lir);
     void GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
                                   int64_t val, ConditionCode ccode);
-    void OpVectorRegCopyWide(uint8_t fp_reg, uint8_t low_reg, uint8_t high_reg);
     void GenConstWide(RegLocation rl_dest, int64_t value);
 
     static bool ProvidesFullMemoryBarrier(X86OpCode opcode);

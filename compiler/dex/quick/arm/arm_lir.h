@@ -94,9 +94,9 @@ namespace art {
  */
 
 // Offset to distingish FP regs.
-#define ARM_FP_REG_OFFSET 32
+#define ARM_FP_REG_OFFSET 64
 // Offset to distinguish DP FP regs.
-#define ARM_FP_DOUBLE 64
+#define ARM_FP_DOUBLE 32
 // First FP callee save.
 #define ARM_FP_CALLEE_SAVE_BASE 16
 // Reg types.
@@ -114,8 +114,6 @@ namespace art {
  * code that reg locations always describe doubles as a pair of singles.
  */
 #define ARM_S2D(x, y) ((x) | ARM_FP_DOUBLE)
-// Mask to strip off fp flags.
-#define ARM_FP_REG_MASK (ARM_FP_REG_OFFSET-1)
 
 enum ArmResourceEncodingPos {
   kArmGPReg0   = 0,
@@ -185,22 +183,22 @@ enum ArmNativeRegisterPool {
   fr29 = 29 + ARM_FP_REG_OFFSET,
   fr30 = 30 + ARM_FP_REG_OFFSET,
   fr31 = 31 + ARM_FP_REG_OFFSET,
-  dr0 = fr0 + ARM_FP_DOUBLE,
-  dr1 = fr2 + ARM_FP_DOUBLE,
-  dr2 = fr4 + ARM_FP_DOUBLE,
-  dr3 = fr6 + ARM_FP_DOUBLE,
-  dr4 = fr8 + ARM_FP_DOUBLE,
-  dr5 = fr10 + ARM_FP_DOUBLE,
-  dr6 = fr12 + ARM_FP_DOUBLE,
-  dr7 = fr14 + ARM_FP_DOUBLE,
-  dr8 = fr16 + ARM_FP_DOUBLE,
-  dr9 = fr18 + ARM_FP_DOUBLE,
-  dr10 = fr20 + ARM_FP_DOUBLE,
-  dr11 = fr22 + ARM_FP_DOUBLE,
-  dr12 = fr24 + ARM_FP_DOUBLE,
-  dr13 = fr26 + ARM_FP_DOUBLE,
-  dr14 = fr28 + ARM_FP_DOUBLE,
-  dr15 = fr30 + ARM_FP_DOUBLE,
+  dr0 = 0 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr1 = 1 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr2 = 2 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr3 = 3 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr4 = 4 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr5 = 5 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr6 = 6 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr7 = 7 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr8 = 8 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr9 = 9 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr10 = 10 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr11 = 11 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr12 = 12 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr13 = 13 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr14 = 14 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
+  dr15 = 15 + ARM_FP_DOUBLE + ARM_FP_REG_OFFSET,
 };
 
 // TODO: clean this up; reduce use of or eliminate macros
@@ -225,6 +223,56 @@ const RegStorage rs_rARM_LR(RegStorage::k32BitSolo, rARM_LR);
 const RegStorage rs_r15pc(RegStorage::k32BitSolo, r15pc);
 const RegStorage rs_rARM_PC(RegStorage::k32BitSolo, rARM_PC);
 const RegStorage rs_invalid(RegStorage::kInvalid);
+
+const RegStorage rs_fr0(RegStorage::k32BitSolo, fr0);
+const RegStorage rs_fr1(RegStorage::k32BitSolo, fr1);
+const RegStorage rs_fr2(RegStorage::k32BitSolo, fr2);
+const RegStorage rs_fr3(RegStorage::k32BitSolo, fr3);
+const RegStorage rs_fr4(RegStorage::k32BitSolo, fr4);
+const RegStorage rs_fr5(RegStorage::k32BitSolo, fr5);
+const RegStorage rs_fr6(RegStorage::k32BitSolo, fr6);
+const RegStorage rs_fr7(RegStorage::k32BitSolo, fr7);
+const RegStorage rs_fr8(RegStorage::k32BitSolo, fr0);
+const RegStorage rs_fr9(RegStorage::k32BitSolo, fr0);
+const RegStorage rs_fr10(RegStorage::k32BitSolo, fr10);
+const RegStorage rs_fr11(RegStorage::k32BitSolo, fr11);
+const RegStorage rs_fr12(RegStorage::k32BitSolo, fr12);
+const RegStorage rs_fr13(RegStorage::k32BitSolo, fr13);
+const RegStorage rs_fr14(RegStorage::k32BitSolo, fr14);
+const RegStorage rs_fr15(RegStorage::k32BitSolo, fr15);
+const RegStorage rs_fr16(RegStorage::k32BitSolo, fr16);
+const RegStorage rs_fr17(RegStorage::k32BitSolo, fr17);
+const RegStorage rs_fr18(RegStorage::k32BitSolo, fr18);
+const RegStorage rs_fr19(RegStorage::k32BitSolo, fr19);
+const RegStorage rs_fr20(RegStorage::k32BitSolo, fr20);
+const RegStorage rs_fr21(RegStorage::k32BitSolo, fr21);
+const RegStorage rs_fr22(RegStorage::k32BitSolo, fr22);
+const RegStorage rs_fr23(RegStorage::k32BitSolo, fr23);
+const RegStorage rs_fr24(RegStorage::k32BitSolo, fr24);
+const RegStorage rs_fr25(RegStorage::k32BitSolo, fr25);
+const RegStorage rs_fr26(RegStorage::k32BitSolo, fr26);
+const RegStorage rs_fr27(RegStorage::k32BitSolo, fr27);
+const RegStorage rs_fr28(RegStorage::k32BitSolo, fr28);
+const RegStorage rs_fr29(RegStorage::k32BitSolo, fr29);
+const RegStorage rs_fr30(RegStorage::k32BitSolo, fr30);
+const RegStorage rs_fr31(RegStorage::k32BitSolo, fr31);
+
+const RegStorage rs_dr0(RegStorage::k64BitSolo, dr0);
+const RegStorage rs_dr1(RegStorage::k64BitSolo, dr1);
+const RegStorage rs_dr2(RegStorage::k64BitSolo, dr2);
+const RegStorage rs_dr3(RegStorage::k64BitSolo, dr3);
+const RegStorage rs_dr4(RegStorage::k64BitSolo, dr4);
+const RegStorage rs_dr5(RegStorage::k64BitSolo, dr5);
+const RegStorage rs_dr6(RegStorage::k64BitSolo, dr6);
+const RegStorage rs_dr7(RegStorage::k64BitSolo, dr7);
+const RegStorage rs_dr8(RegStorage::k64BitSolo, dr0);
+const RegStorage rs_dr9(RegStorage::k64BitSolo, dr0);
+const RegStorage rs_dr10(RegStorage::k64BitSolo, dr10);
+const RegStorage rs_dr11(RegStorage::k64BitSolo, dr11);
+const RegStorage rs_dr12(RegStorage::k64BitSolo, dr12);
+const RegStorage rs_dr13(RegStorage::k64BitSolo, dr13);
+const RegStorage rs_dr14(RegStorage::k64BitSolo, dr14);
+const RegStorage rs_dr15(RegStorage::k64BitSolo, dr15);
 
 // Target-independent aliases.
 #define rARM_ARG0 r0
@@ -253,17 +301,17 @@ const RegStorage rs_invalid(RegStorage::kInvalid);
 
 // RegisterLocation templates return values (r0, or r0/r1).
 const RegLocation arm_loc_c_return
-    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, kVectorNotUsed,
-     RegStorage(RegStorage::k32BitSolo, r0), INVALID_SREG, INVALID_SREG};
+    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, RegStorage(RegStorage::k32BitSolo, r0),
+     INVALID_SREG, INVALID_SREG};
 const RegLocation arm_loc_c_return_wide
-    {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, kVectorNotUsed,
-     RegStorage(RegStorage::k64BitPair, r0, r1), INVALID_SREG, INVALID_SREG};
+    {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, RegStorage(RegStorage::k64BitPair, r0, r1),
+     INVALID_SREG, INVALID_SREG};
 const RegLocation arm_loc_c_return_float
-    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, kVectorNotUsed,
-     RegStorage(RegStorage::k32BitSolo, r0), INVALID_SREG, INVALID_SREG};
+    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, RegStorage(RegStorage::k32BitSolo, r0),
+     INVALID_SREG, INVALID_SREG};
 const RegLocation arm_loc_c_return_double
-    {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, kVectorNotUsed,
-     RegStorage(RegStorage::k64BitPair, r0, r1), INVALID_SREG, INVALID_SREG};
+    {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1, RegStorage(RegStorage::k64BitPair, r0, r1),
+     INVALID_SREG, INVALID_SREG};
 
 enum ArmShiftEncodings {
   kArmLsl = 0x0,

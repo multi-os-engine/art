@@ -39,7 +39,7 @@ class MipsMir2Lir FINAL : public Mir2Lir {
     LIR* LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_dest, int scale,
                          OpSize size);
     LIR* LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale, int displacement,
-                             RegStorage r_dest, RegStorage r_dest_hi, OpSize size, int s_reg);
+                             RegStorage r_dest, OpSize size, int s_reg);
     LIR* LoadConstantNoClobber(RegStorage r_dest, int value);
     LIR* LoadConstantWide(RegStorage r_dest, int64_t value);
     LIR* StoreBaseDisp(RegStorage r_base, int displacement, RegStorage r_src, OpSize size);
@@ -47,7 +47,7 @@ class MipsMir2Lir FINAL : public Mir2Lir {
     LIR* StoreBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_src, int scale,
                           OpSize size);
     LIR* StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale, int displacement,
-                              RegStorage r_src, RegStorage r_src_hi, OpSize size, int s_reg);
+                              RegStorage r_src, OpSize size, int s_reg);
     void MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg);
 
     // Required for target - register utilities.
@@ -69,13 +69,13 @@ class MipsMir2Lir FINAL : public Mir2Lir {
     uint64_t GetRegMaskCommon(int reg);
     void AdjustSpillMask();
     void ClobberCallerSave();
-    void FlushReg(RegStorage reg);
-    void FlushRegWide(RegStorage reg);
     void FreeCallTemps();
     void FreeRegLocTemps(RegLocation rl_keep, RegLocation rl_free);
     void LockCallTemps();
     void MarkPreservedSingle(int v_reg, int reg);
     void CompilerInitializeRegAlloc();
+    RegStorage AllocTempDouble();
+    RegStorage AllocPreservedDouble(int s_reg);
 
     // Required for target - miscellaneous.
     void AssembleLIR();

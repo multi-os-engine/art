@@ -42,7 +42,7 @@ void MIRGraph::DoConstantPropagation(BasicBlock* bb) {
   MIR* mir;
 
   for (mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
-    uint64_t df_attributes = oat_data_flow_attributes_[mir->dalvikInsn.opcode];
+    uint64_t df_attributes = data_flow_attributes_[mir->dalvikInsn.opcode];
 
     DecodedInstruction *d_insn = &mir->dalvikInsn;
 
@@ -234,7 +234,7 @@ size_t MIRGraph::GetNumAvailableNonSpecialCompilerTemps() {
 
 // FIXME - will probably need to revisit all uses of this, as type not defined.
 static const RegLocation temp_loc = {kLocCompilerTemp,
-                                     0, 1 /*defined*/, 0, 0, 0, 0, 0, 1 /*home*/, kVectorNotUsed,
+                                     0, 1 /*defined*/, 0, 0, 0, 0, 0, 1 /*home*/,
                                      RegStorage(), INVALID_SREG, INVALID_SREG};
 
 CompilerTemp* MIRGraph::GetNewCompilerTemp(CompilerTempType ct_type, bool wide) {
@@ -554,7 +554,7 @@ void MIRGraph::CountChecks(struct BasicBlock* bb) {
       if (mir->ssa_rep == NULL) {
         continue;
       }
-      uint64_t df_attributes = oat_data_flow_attributes_[mir->dalvikInsn.opcode];
+      uint64_t df_attributes = data_flow_attributes_[mir->dalvikInsn.opcode];
       if (df_attributes & DF_HAS_NULL_CHKS) {
         checkstats_->null_checks++;
         if (mir->optimization_flags & MIR_IGNORE_NULL_CHECK) {
@@ -639,7 +639,7 @@ void MIRGraph::CombineBlocks(struct BasicBlock* bb) {
     MIR* mir = bb->last_mir_insn;
     // Grab the attributes from the paired opcode
     MIR* throw_insn = mir->meta.throw_insn;
-    uint64_t df_attributes = oat_data_flow_attributes_[throw_insn->dalvikInsn.opcode];
+    uint64_t df_attributes = data_flow_attributes_[throw_insn->dalvikInsn.opcode];
     bool can_combine = true;
     if (df_attributes & DF_HAS_NULL_CHKS) {
       can_combine &= ((throw_insn->optimization_flags & MIR_IGNORE_NULL_CHECK) != 0);
@@ -791,7 +791,7 @@ bool MIRGraph::EliminateNullChecksAndInferTypes(BasicBlock* bb) {
       continue;
     }
 
-    uint64_t df_attributes = oat_data_flow_attributes_[mir->dalvikInsn.opcode];
+    uint64_t df_attributes = data_flow_attributes_[mir->dalvikInsn.opcode];
 
     // Might need a null check?
     if (df_attributes & DF_HAS_NULL_CHKS) {

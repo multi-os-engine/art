@@ -341,38 +341,6 @@ void MipsMir2Lir::MarkPreservedSingle(int s_reg, int reg) {
   LOG(FATAL) << "No support yet for promoted FP regs";
 }
 
-void MipsMir2Lir::FlushRegWide(RegStorage reg) {
-  RegisterInfo* info1 = GetRegInfo(reg.GetLowReg());
-  RegisterInfo* info2 = GetRegInfo(reg.GetHighReg());
-  DCHECK(info1 && info2 && info1->pair && info2->pair &&
-         (info1->partner == info2->reg) &&
-         (info2->partner == info1->reg));
-  if ((info1->live && info1->dirty) || (info2->live && info2->dirty)) {
-    if (!(info1->is_temp && info2->is_temp)) {
-      /* Should not happen.  If it does, there's a problem in eval_loc */
-      LOG(FATAL) << "Long half-temp, half-promoted";
-    }
-
-    info1->dirty = false;
-    info2->dirty = false;
-    if (mir_graph_->SRegToVReg(info2->s_reg) < mir_graph_->SRegToVReg(info1->s_reg))
-      info1 = info2;
-    int v_reg = mir_graph_->SRegToVReg(info1->s_reg);
-    StoreBaseDispWide(rs_rMIPS_SP, VRegOffset(v_reg),
-                      RegStorage(RegStorage::k64BitPair, info1->reg, info1->partner));
-  }
-}
-
-void MipsMir2Lir::FlushReg(RegStorage reg) {
-  DCHECK(!reg.IsPair());
-  RegisterInfo* info = GetRegInfo(reg.GetReg());
-  if (info->live && info->dirty) {
-    info->dirty = false;
-    int v_reg = mir_graph_->SRegToVReg(info->s_reg);
-    StoreBaseDisp(rs_rMIPS_SP, VRegOffset(v_reg), reg, kWord);
-  }
-}
-
 /* Give access to the target-dependent FP register encoding to common code */
 bool MipsMir2Lir::IsFpReg(int reg) {
   return MIPS_FPREG(reg);
@@ -384,45 +352,45 @@ bool MipsMir2Lir::IsFpReg(RegStorage reg) {
 
 /* Clobber all regs that might be used by an external C call */
 void MipsMir2Lir::ClobberCallerSave() {
-  Clobber(rZERO);
-  Clobber(rAT);
-  Clobber(rV0);
-  Clobber(rV1);
-  Clobber(rA0);
-  Clobber(rA1);
-  Clobber(rA2);
-  Clobber(rA3);
-  Clobber(rT0);
-  Clobber(rT1);
-  Clobber(rT2);
-  Clobber(rT3);
-  Clobber(rT4);
-  Clobber(rT5);
-  Clobber(rT6);
-  Clobber(rT7);
-  Clobber(rT8);
-  Clobber(rT9);
-  Clobber(rK0);
-  Clobber(rK1);
-  Clobber(rGP);
-  Clobber(rFP);
-  Clobber(rRA);
-  Clobber(rF0);
-  Clobber(rF1);
-  Clobber(rF2);
-  Clobber(rF3);
-  Clobber(rF4);
-  Clobber(rF5);
-  Clobber(rF6);
-  Clobber(rF7);
-  Clobber(rF8);
-  Clobber(rF9);
-  Clobber(rF10);
-  Clobber(rF11);
-  Clobber(rF12);
-  Clobber(rF13);
-  Clobber(rF14);
-  Clobber(rF15);
+  Clobber(rs_rZERO);
+  Clobber(rs_rAT);
+  Clobber(rs_rV0);
+  Clobber(rs_rV1);
+  Clobber(rs_rA0);
+  Clobber(rs_rA1);
+  Clobber(rs_rA2);
+  Clobber(rs_rA3);
+  Clobber(rs_rT0);
+  Clobber(rs_rT1);
+  Clobber(rs_rT2);
+  Clobber(rs_rT3);
+  Clobber(rs_rT4);
+  Clobber(rs_rT5);
+  Clobber(rs_rT6);
+  Clobber(rs_rT7);
+  Clobber(rs_rT8);
+  Clobber(rs_rT9);
+  Clobber(rs_rK0);
+  Clobber(rs_rK1);
+  Clobber(rs_rGP);
+  Clobber(rs_rFP);
+  Clobber(rs_rRA);
+  Clobber(rs_rF0);
+  Clobber(rs_rF1);
+  Clobber(rs_rF2);
+  Clobber(rs_rF3);
+  Clobber(rs_rF4);
+  Clobber(rs_rF5);
+  Clobber(rs_rF6);
+  Clobber(rs_rF7);
+  Clobber(rs_rF8);
+  Clobber(rs_rF9);
+  Clobber(rs_rF10);
+  Clobber(rs_rF11);
+  Clobber(rs_rF12);
+  Clobber(rs_rF13);
+  Clobber(rs_rF14);
+  Clobber(rs_rF15);
 }
 
 RegLocation MipsMir2Lir::GetReturnWideAlt() {
@@ -439,10 +407,10 @@ RegLocation MipsMir2Lir::GetReturnAlt() {
 
 /* To be used when explicitly managing register use */
 void MipsMir2Lir::LockCallTemps() {
-  LockTemp(rMIPS_ARG0);
-  LockTemp(rMIPS_ARG1);
-  LockTemp(rMIPS_ARG2);
-  LockTemp(rMIPS_ARG3);
+  LockTemp(rs_rMIPS_ARG0);
+  LockTemp(rs_rMIPS_ARG1);
+  LockTemp(rs_rMIPS_ARG2);
+  LockTemp(rs_rMIPS_ARG3);
 }
 
 /* To be used when explicitly managing register use */
@@ -606,6 +574,118 @@ const char* MipsMir2Lir::GetTargetInstName(int opcode) {
 const char* MipsMir2Lir::GetTargetInstFmt(int opcode) {
   DCHECK(!IsPseudoLirOp(opcode));
   return MipsMir2Lir::EncodingMap[opcode].fmt;
+}
+
+// REDO: too many assumptions.
+// Virtualize - this is target dependent.
+RegStorage MipsMir2Lir::AllocTempDouble() {
+  RegisterInfo* p = reg_pool_->FPRegs;
+  int num_regs = reg_pool_->num_fp_regs;
+  /* Start looking at an even reg */
+  int next = reg_pool_->next_fp_reg & ~0x1;
+
+  // First try to avoid allocating live registers
+  for (int i = 0; i < num_regs; i+=2) {
+    if (next >= num_regs)
+      next = 0;
+    if ((p[next].is_temp && !p[next].in_use && !p[next].live) &&
+      (p[next+1].is_temp && !p[next+1].in_use && !p[next+1].live)) {
+      Clobber(p[next].reg);
+      Clobber(p[next+1].reg);
+      p[next].in_use = true;
+      p[next+1].in_use = true;
+      DCHECK_EQ((p[next].reg+1), p[next+1].reg);
+      DCHECK_EQ((p[next].reg & 0x1), 0);
+      reg_pool_->next_fp_reg = next + 2;
+      if (reg_pool_->next_fp_reg >= num_regs) {
+        reg_pool_->next_fp_reg = 0;
+      }
+      // FIXME: should return k64BitSolo.
+      return RegStorage(RegStorage::k64BitPair, p[next].reg, p[next+1].reg);
+    }
+    next += 2;
+  }
+  next = reg_pool_->next_fp_reg & ~0x1;
+
+  // No choice - find a pair and kill it.
+  for (int i = 0; i < num_regs; i+=2) {
+    if (next >= num_regs)
+      next = 0;
+    if (p[next].is_temp && !p[next].in_use && p[next+1].is_temp &&
+      !p[next+1].in_use) {
+      Clobber(p[next].reg);
+      Clobber(p[next+1].reg);
+      p[next].in_use = true;
+      p[next+1].in_use = true;
+      DCHECK_EQ((p[next].reg+1), p[next+1].reg);
+      DCHECK_EQ((p[next].reg & 0x1), 0);
+      reg_pool_->next_fp_reg = next + 2;
+      if (reg_pool_->next_fp_reg >= num_regs) {
+        reg_pool_->next_fp_reg = 0;
+      }
+      return RegStorage(RegStorage::k64BitPair, p[next].reg, p[next+1].reg);
+    }
+    next += 2;
+  }
+  LOG(FATAL) << "No free temp registers (pair)";
+  return RegStorage::InvalidReg();
+}
+/*
+ * Somewhat messy code here.  We want to allocate a pair of contiguous
+ * physical single-precision floating point registers starting with
+ * an even numbered reg.  It is possible that the paired s_reg (s_reg+1)
+ * has already been allocated - try to fit if possible.  Fail to
+ * allocate if we can't meet the requirements for the pair of
+ * s_reg<=sX[even] & (s_reg+1)<= sX+1.
+ */
+// TODO: needs rewrite to support non-backed 64-bit float regs.
+RegStorage MipsMir2Lir::AllocPreservedDouble(int s_reg) {
+  RegStorage res;
+  int v_reg = mir_graph_->SRegToVReg(s_reg);
+  int p_map_idx = SRegToPMap(s_reg);
+  if (promotion_map_[p_map_idx+1].fp_location == kLocPhysReg) {
+    // Upper reg is already allocated.  Can we fit?
+    int high_reg = promotion_map_[p_map_idx+1].FpReg;
+    if ((high_reg & 1) == 0) {
+      // High reg is even - fail.
+      return res;  // Invalid.
+    }
+    // Is the low reg of the pair free?
+    RegisterInfo* p = GetRegInfo(high_reg-1);
+    if (p->in_use || p->is_temp) {
+      // Already allocated or not preserved - fail.
+      return res;  // Invalid.
+    }
+    // OK - good to go.
+    res = RegStorage(RegStorage::k64BitPair, p->reg, p->reg + 1);
+    p->in_use = true;
+    DCHECK_EQ((res.GetReg() & 1), 0);
+    MarkPreservedSingle(v_reg, res.GetReg());
+  } else {
+    RegisterInfo* FPRegs = reg_pool_->FPRegs;
+    for (int i = 0; i < reg_pool_->num_fp_regs; i++) {
+      if (!FPRegs[i].is_temp && !FPRegs[i].in_use &&
+        ((FPRegs[i].reg & 0x1) == 0x0) &&
+        !FPRegs[i+1].is_temp && !FPRegs[i+1].in_use &&
+        ((FPRegs[i+1].reg & 0x1) == 0x1) &&
+        (FPRegs[i].reg + 1) == FPRegs[i+1].reg) {
+        res = RegStorage(RegStorage::k64BitPair, FPRegs[i].reg, FPRegs[i].reg+1);
+        FPRegs[i].in_use = true;
+        MarkPreservedSingle(v_reg, res.GetLowReg());
+        FPRegs[i+1].in_use = true;
+        DCHECK_EQ(res.GetLowReg() + 1, FPRegs[i+1].reg);
+        MarkPreservedSingle(v_reg+1, res.GetLowReg() + 1);
+        break;
+      }
+    }
+  }
+  if (res.Valid()) {
+    promotion_map_[p_map_idx].fp_location = kLocPhysReg;
+    promotion_map_[p_map_idx].FpReg = res.GetLowReg();
+    promotion_map_[p_map_idx+1].fp_location = kLocPhysReg;
+    promotion_map_[p_map_idx+1].FpReg = res.GetLowReg() + 1;
+  }
+  return res;
 }
 
 }  // namespace art

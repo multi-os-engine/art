@@ -124,7 +124,7 @@ bool MIRGraph::SetHigh(int index) {
 bool MIRGraph::InferTypeAndSize(BasicBlock* bb, MIR* mir, bool changed) {
   SSARepresentation *ssa_rep = mir->ssa_rep;
   if (ssa_rep) {
-    uint64_t attrs = oat_data_flow_attributes_[mir->dalvikInsn.opcode];
+    uint64_t attrs = data_flow_attributes_[mir->dalvikInsn.opcode];
     const int* uses = ssa_rep->uses;
     const int* defs = ssa_rep->defs;
 
@@ -403,7 +403,7 @@ void MIRGraph::DumpRegLocTable(RegLocation* table, int count) {
 }
 
 // FIXME - will likely need to revisit all uses of this.
-static const RegLocation fresh_loc = {kLocDalvikFrame, 0, 0, 0, 0, 0, 0, 0, 0, kVectorNotUsed,
+static const RegLocation fresh_loc = {kLocDalvikFrame, 0, 0, 0, 0, 0, 0, 0, 0,
                                       RegStorage(), INVALID_SREG, INVALID_SREG};
 
 void MIRGraph::InitRegLocations() {

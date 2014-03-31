@@ -31,7 +31,11 @@ static int ReservedRegs[] = {rARM_SUSPEND, rARM_SELF, rARM_SP, rARM_LR, rARM_PC}
 static int FpRegs[] = {fr0, fr1, fr2, fr3, fr4, fr5, fr6, fr7,
                        fr8, fr9, fr10, fr11, fr12, fr13, fr14, fr15,
                        fr16, fr17, fr18, fr19, fr20, fr21, fr22, fr23,
-                       fr24, fr25, fr26, fr27, fr28, fr29, fr30, fr31};
+                       fr24, fr25, fr26, fr27, fr28, fr29, fr30, fr31,
+                       dr0, dr1, dr2, dr3, dr4, dr5, dr6, dr7, dr8, dr9,
+                       dr10, dr11, dr12, dr13, dr14, dr15};
+static int FpDoubles[] = {dr0, dr1, dr2, dr3, dr4, dr5, dr6, dr7, dr8, dr9, dr10, dr11, dr12,
+                          dr13, dr14, dr15};
 static int core_temps[] = {r0, r1, r2, r3, r12};
 static int fp_temps[] = {fr0, fr1, fr2, fr3, fr4, fr5, fr6, fr7,
                         fr8, fr9, fr10, fr11, fr12, fr13, fr14, fr15};
@@ -93,14 +97,10 @@ RegStorage ArmMir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
   }
 }
 
-// Create a double from a pair of singles.
-int ArmMir2Lir::S2d(int low_reg, int high_reg) {
-  return ARM_S2D(low_reg, high_reg);
-}
-
 // Return mask to strip off fp reg flags and bias.
+// TODO: eliminate this, and just use a RegStorage utility everywhere.
 uint32_t ArmMir2Lir::FpRegMask() {
-  return ARM_FP_REG_MASK;
+  return RegStorage::kRegNumMask;
 }
 
 // True if both regs single, both core or both double.
@@ -391,10 +391,10 @@ std::string ArmMir2Lir::BuildInsnString(const char* fmt, LIR* lir, unsigned char
              snprintf(tbuf, arraysize(tbuf), "%d [%#x]", operand, operand);
              break;
            case 's':
-             snprintf(tbuf, arraysize(tbuf), "s%d", operand & ARM_FP_REG_MASK);
+             snprintf(tbuf, arraysize(tbuf), "s%d", operand & RegStorage::kRegNumMask);
              break;
            case 'S':
-             snprintf(tbuf, arraysize(tbuf), "d%d", (operand & ARM_FP_REG_MASK) >> 1);
+             snprintf(tbuf, arraysize(tbuf), "d%d", (operand & RegStorage::kRegNumMask) >> 1);
              break;
            case 'h':
              snprintf(tbuf, arraysize(tbuf), "%04x", operand);
@@ -559,7 +559,10 @@ void ArmMir2Lir::CompilerInitializeRegAlloc() {
       (arena_->Alloc(num_fp_regs * sizeof(*reg_pool_->FPRegs), kArenaAllocRegAlloc));
   CompilerInitPool(reg_pool_->core_regs, core_regs, reg_pool_->num_core_regs);
   CompilerInitPool(reg_pool_->FPRegs, FpRegs, reg_pool_->num_fp_regs);
-
+  // Hide doubles (will do bookkeeping using single aliases.
+  for (unsigned int i = 0; i < sizeof(FpDoubles)/sizeof(FpDoubles[0]); i++) {
+    MarkInUse(FpDoubles[i]);
+  }
   // Keep special registers from being allocated
   // Don't reserve the r4 if we are doing implicit suspend checks.
   // TODO: re-enable this when we can safely save r4 over the suspension code path.
@@ -613,8 +616,8 @@ void ArmMir2Lir::AdjustSpillMask() {
  * Dalvik register INVALID_VREG (0xFFFFU).
  */
 void ArmMir2Lir::MarkPreservedSingle(int v_reg, int reg) {
-  DCHECK_GE(reg, ARM_FP_REG_MASK + ARM_FP_CALLEE_SAVE_BASE);
-  reg = (reg & ARM_FP_REG_MASK) - ARM_FP_CALLEE_SAVE_BASE;
+  DCHECK_GE(reg, RegStorage::kRegNumMask + ARM_FP_CALLEE_SAVE_BASE);
+  reg = (reg & RegStorage::kRegNumMask) - ARM_FP_CALLEE_SAVE_BASE;
   // Ensure fp_vmap_table is large enough
   int table_size = fp_vmap_table_.size();
   for (int i = table_size; i < (reg + 1); i++) {
@@ -625,39 +628,6 @@ void ArmMir2Lir::MarkPreservedSingle(int v_reg, int reg) {
   // Size of fp_vmap_table is high-water mark, use to set mask
   num_fp_spills_ = fp_vmap_table_.size();
   fp_spill_mask_ = ((1 << num_fp_spills_) - 1) << ARM_FP_CALLEE_SAVE_BASE;
-}
-
-void ArmMir2Lir::FlushRegWide(RegStorage reg) {
-  RegisterInfo* info1 = GetRegInfo(reg.GetLowReg());
-  RegisterInfo* info2 = GetRegInfo(reg.GetHighReg());
-  DCHECK(info1 && info2 && info1->pair && info2->pair &&
-       (info1->partner == info2->reg) &&
-       (info2->partner == info1->reg));
-  if ((info1->live && info1->dirty) || (info2->live && info2->dirty)) {
-    if (!(info1->is_temp && info2->is_temp)) {
-      /* Should not happen.  If it does, there's a problem in eval_loc */
-      LOG(FATAL) << "Long half-temp, half-promoted";
-    }
-
-    info1->dirty = false;
-    info2->dirty = false;
-    if (mir_graph_->SRegToVReg(info2->s_reg) <
-      mir_graph_->SRegToVReg(info1->s_reg))
-      info1 = info2;
-    int v_reg = mir_graph_->SRegToVReg(info1->s_reg);
-    StoreBaseDispWide(rs_rARM_SP, VRegOffset(v_reg),
-                      RegStorage(RegStorage::k64BitPair, info1->reg, info1->partner));
-  }
-}
-
-void ArmMir2Lir::FlushReg(RegStorage reg) {
-  DCHECK(!reg.IsPair());
-  RegisterInfo* info = GetRegInfo(reg.GetReg());
-  if (info->live && info->dirty) {
-    info->dirty = false;
-    int v_reg = mir_graph_->SRegToVReg(info->s_reg);
-    StoreBaseDisp(rs_rARM_SP, VRegOffset(v_reg), reg, kWord);
-  }
 }
 
 /* Give access to the target-dependent FP register encoding to common code */
@@ -671,56 +641,56 @@ bool ArmMir2Lir::IsFpReg(RegStorage reg) {
 
 /* Clobber all regs that might be used by an external C call */
 void ArmMir2Lir::ClobberCallerSave() {
-  Clobber(r0);
-  Clobber(r1);
-  Clobber(r2);
-  Clobber(r3);
-  Clobber(r12);
-  Clobber(r14lr);
-  Clobber(fr0);
-  Clobber(fr1);
-  Clobber(fr2);
-  Clobber(fr3);
-  Clobber(fr4);
-  Clobber(fr5);
-  Clobber(fr6);
-  Clobber(fr7);
-  Clobber(fr8);
-  Clobber(fr9);
-  Clobber(fr10);
-  Clobber(fr11);
-  Clobber(fr12);
-  Clobber(fr13);
-  Clobber(fr14);
-  Clobber(fr15);
+  Clobber(rs_r0);
+  Clobber(rs_r1);
+  Clobber(rs_r2);
+  Clobber(rs_r3);
+  Clobber(rs_r12);
+  Clobber(rs_r14lr);
+  Clobber(rs_fr0);
+  Clobber(rs_fr1);
+  Clobber(rs_fr2);
+  Clobber(rs_fr3);
+  Clobber(rs_fr4);
+  Clobber(rs_fr5);
+  Clobber(rs_fr6);
+  Clobber(rs_fr7);
+  Clobber(rs_fr8);
+  Clobber(rs_fr9);
+  Clobber(rs_fr10);
+  Clobber(rs_fr11);
+  Clobber(rs_fr12);
+  Clobber(rs_fr13);
+  Clobber(rs_fr14);
+  Clobber(rs_fr15);
 }
 
 RegLocation ArmMir2Lir::GetReturnWideAlt() {
   RegLocation res = LocCReturnWide();
   res.reg.SetReg(r2);
   res.reg.SetHighReg(r3);
-  Clobber(r2);
-  Clobber(r3);
-  MarkInUse(r2);
-  MarkInUse(r3);
-  MarkPair(res.reg.GetLowReg(), res.reg.GetHighReg());
+  Clobber(rs_r2);
+  Clobber(rs_r3);
+  MarkInUse(rs_r2);
+  MarkInUse(rs_r3);
+  MarkWide(res.reg);
   return res;
 }
 
 RegLocation ArmMir2Lir::GetReturnAlt() {
   RegLocation res = LocCReturn();
   res.reg.SetReg(r1);
-  Clobber(r1);
-  MarkInUse(r1);
+  Clobber(rs_r1);
+  MarkInUse(rs_r1);
   return res;
 }
 
 /* To be used when explicitly managing register use */
 void ArmMir2Lir::LockCallTemps() {
-  LockTemp(r0);
-  LockTemp(r1);
-  LockTemp(r2);
-  LockTemp(r3);
+  LockTemp(rs_r0);
+  LockTemp(rs_r1);
+  LockTemp(rs_r2);
+  LockTemp(rs_r3);
 }
 
 /* To be used when explicitly managing register use */
@@ -756,6 +726,124 @@ const char* ArmMir2Lir::GetTargetInstName(int opcode) {
 const char* ArmMir2Lir::GetTargetInstFmt(int opcode) {
   DCHECK(!IsPseudoLirOp(opcode));
   return ArmMir2Lir::EncodingMap[opcode].fmt;
+}
+
+// REDO: too many assumptions.
+// Virtualize - this is target dependent.
+RegStorage ArmMir2Lir::AllocTempDouble() {
+  RegisterInfo* p = reg_pool_->FPRegs;
+  int num_regs = reg_pool_->num_fp_regs;
+  /* Start looking at an even reg */
+  int next = reg_pool_->next_fp_reg & ~0x1;
+
+  // First try to avoid allocating live registers
+  for (int i = 0; i < num_regs; i+=2) {
+    if (next >= num_regs)
+      next = 0;
+    if ((p[next].is_temp && !p[next].in_use && !p[next].live) &&
+      (p[next+1].is_temp && !p[next+1].in_use && !p[next+1].live)) {
+      Clobber(p[next].reg);
+      Clobber(p[next+1].reg);
+      p[next].in_use = true;
+      p[next+1].in_use = true;
+      DCHECK_EQ((p[next].reg+1), p[next+1].reg);
+      DCHECK_EQ((p[next].reg & 0x1), 0);
+      reg_pool_->next_fp_reg = next + 2;
+      if (reg_pool_->next_fp_reg >= num_regs) {
+        reg_pool_->next_fp_reg = 0;
+      }
+      int dp_reg = ((p[next].reg & RegStorage::kRegNumMask) >> 1) | RegStorage::kFloat |
+          RegStorage::kDouble;
+      return RegStorage(RegStorage::k64BitSolo, dp_reg);
+    }
+    next += 2;
+  }
+  next = reg_pool_->next_fp_reg & ~0x1;
+
+  // No choice - find a pair and kill it.
+  for (int i = 0; i < num_regs; i+=2) {
+    if (next >= num_regs)
+      next = 0;
+    if (p[next].is_temp && !p[next].in_use && p[next+1].is_temp &&
+      !p[next+1].in_use) {
+      Clobber(p[next].reg);
+      Clobber(p[next+1].reg);
+      p[next].in_use = true;
+      p[next+1].in_use = true;
+      DCHECK_EQ((p[next].reg+1), p[next+1].reg);
+      DCHECK_EQ((p[next].reg & 0x1), 0);
+      reg_pool_->next_fp_reg = next + 2;
+      if (reg_pool_->next_fp_reg >= num_regs) {
+        reg_pool_->next_fp_reg = 0;
+      }
+      int dp_reg = ((p[next].reg & RegStorage::kRegNumMask) >> 1) | RegStorage::kFloat |
+          RegStorage::kDouble;
+      return RegStorage(RegStorage::k64BitSolo, dp_reg);
+    }
+    next += 2;
+  }
+  LOG(FATAL) << "No free temp registers (pair)";
+  return RegStorage::InvalidReg();
+}
+
+/*
+ * Somewhat messy code here.  We want to allocate a pair of contiguous
+ * physical single-precision floating point registers starting with
+ * an even numbered reg.  It is possible that the paired s_reg (s_reg+1)
+ * has already been allocated - try to fit if possible.  Fail to
+ * allocate if we can't meet the requirements for the pair of
+ * s_reg<=sX[even] & (s_reg+1)<= sX+1.
+ */
+// TODO: needs rewrite to support non-backed 64-bit float regs.
+RegStorage ArmMir2Lir::AllocPreservedDouble(int s_reg) {
+  RegStorage res;
+  int v_reg = mir_graph_->SRegToVReg(s_reg);
+  int p_map_idx = SRegToPMap(s_reg);
+  if (promotion_map_[p_map_idx+1].fp_location == kLocPhysReg) {
+    // Upper reg is already allocated.  Can we fit?
+    int high_reg = promotion_map_[p_map_idx+1].FpReg;
+    if ((high_reg & 1) == 0) {
+      // High reg is even - fail.
+      return res;  // Invalid.
+    }
+    // Is the low reg of the pair free?
+    RegisterInfo* p = GetRegInfo(high_reg-1);
+    if (p->in_use || p->is_temp) {
+      // Already allocated or not preserved - fail.
+      return res;  // Invalid.
+    }
+    // OK - good to go.
+    int dp_reg = ((p->reg & RegStorage::kRegNumMask) >> 1) | RegStorage::kFloat | RegStorage::kDouble;
+    res = RegStorage(RegStorage::k64BitSolo, dp_reg);
+    p->in_use = true;
+    MarkPreservedSingle(v_reg, p->reg);
+  } else {
+    RegisterInfo* FPRegs = reg_pool_->FPRegs;
+    for (int i = 0; i < reg_pool_->num_fp_regs; i++) {
+      if (!FPRegs[i].is_temp && !FPRegs[i].in_use &&
+        ((FPRegs[i].reg & 0x1) == 0x0) &&
+        !FPRegs[i+1].is_temp && !FPRegs[i+1].in_use &&
+        ((FPRegs[i+1].reg & 0x1) == 0x1) &&
+        (FPRegs[i].reg + 1) == FPRegs[i+1].reg) {
+        int dp_reg = ((FPRegs[i].reg & RegStorage::kRegNumMask) >> 1) | RegStorage::kFloat |
+            RegStorage::kDouble;
+        res = RegStorage(RegStorage::k64BitSolo, dp_reg);
+        FPRegs[i].in_use = true;
+        MarkPreservedSingle(v_reg, FPRegs[i].reg);
+        FPRegs[i+1].in_use = true;
+        MarkPreservedSingle(v_reg, FPRegs[i+1].reg);
+        break;
+      }
+    }
+  }
+  if (res.Valid()) {
+    int low_single = ((res.GetReg() & RegStorage::kRegNumMask) << 1) | RegStorage::kFloat;
+    promotion_map_[p_map_idx].fp_location = kLocPhysReg;
+    promotion_map_[p_map_idx].FpReg = low_single;
+    promotion_map_[p_map_idx+1].fp_location = kLocPhysReg;
+    promotion_map_[p_map_idx+1].FpReg = low_single + 1;
+  }
+  return res;
 }
 
 }  // namespace art
