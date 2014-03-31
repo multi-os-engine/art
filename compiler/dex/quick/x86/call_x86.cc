@@ -191,9 +191,9 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
    * expanding the frame or flushing.  This leaves the utility
    * code with no spare temps.
    */
-  LockTemp(rX86_ARG0);
-  LockTemp(rX86_ARG1);
-  LockTemp(rX86_ARG2);
+  LockTemp(rs_rX86_ARG0);
+  LockTemp(rs_rX86_ARG1);
+  LockTemp(rs_rX86_ARG2);
 
   /* Build frame, return address already on stack */
   // TODO: 64 bit.
@@ -264,8 +264,8 @@ void X86Mir2Lir::GenExitSequence() {
    * In the exit path, rX86_RET0/rX86_RET1 are live - make sure they aren't
    * allocated by the register utilities as temps.
    */
-  LockTemp(rX86_RET0);
-  LockTemp(rX86_RET1);
+  LockTemp(rs_rX86_RET0);
+  LockTemp(rs_rX86_RET1);
 
   NewLIR0(kPseudoMethodExit);
   UnSpillCoreRegs();

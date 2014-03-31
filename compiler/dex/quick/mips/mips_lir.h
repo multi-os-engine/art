@@ -288,6 +288,16 @@ const RegStorage rs_rF14(RegStorage::k32BitSolo, rF14);
 const RegStorage rs_rF15(RegStorage::k32BitSolo, rF15);
 const RegStorage rs_rF0(RegStorage::k32BitSolo, rF0);
 const RegStorage rs_rF1(RegStorage::k32BitSolo, rF1);
+const RegStorage rs_rF2(RegStorage::k32BitSolo, rF2);
+const RegStorage rs_rF3(RegStorage::k32BitSolo, rF3);
+const RegStorage rs_rF4(RegStorage::k32BitSolo, rF4);
+const RegStorage rs_rF5(RegStorage::k32BitSolo, rF5);
+const RegStorage rs_rF6(RegStorage::k32BitSolo, rF6);
+const RegStorage rs_rF7(RegStorage::k32BitSolo, rF7);
+const RegStorage rs_rF8(RegStorage::k32BitSolo, rF8);
+const RegStorage rs_rF9(RegStorage::k32BitSolo, rF9);
+const RegStorage rs_rF10(RegStorage::k32BitSolo, rF10);
+const RegStorage rs_rF11(RegStorage::k32BitSolo, rF11);
 
 // TODO: reduce/eliminate use of these.
 #define rMIPS_SUSPEND rS0
@@ -311,9 +321,9 @@ const RegStorage rs_rF1(RegStorage::k32BitSolo, rF1);
 #define rMIPS_FARG2 rFARG2
 #define rs_rMIPS_FARG2 rs_rFARG2
 #define rMIPS_FARG3 rFARG3
-#define rs_MIPS_FARG3 rs_rFARG3
+#define rs_rMIPS_FARG3 rs_rFARG3
 #define rMIPS_RET0 rRESULT0
-#define rs_MIPS_RET0 rs_rRESULT0
+#define rs_rMIPS_RET0 rs_rRESULT0
 #define rMIPS_RET1 rRESULT1
 #define rs_rMIPS_RET1 rs_rRESULT1
 #define rMIPS_INVOKE_TGT rT9

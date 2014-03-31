@@ -772,10 +772,10 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     LoadValueDirectWideFixed(rl_src_new_value, r_tmp2);
     NewLIR1(kX86Push32R, rDI);
     MarkTemp(rDI);
-    LockTemp(rDI);
+    LockTemp(rs_rDI);
     NewLIR1(kX86Push32R, rSI);
     MarkTemp(rSI);
-    LockTemp(rSI);
+    LockTemp(rs_rSI);
     const int push_offset = 4 /* push edi */ + 4 /* push esi */;
     int srcObjSp = IsInReg(this, rl_src_obj, rs_rSI) ? 0
                 : (IsInReg(this, rl_src_obj, rs_rDI) ? 4
@@ -792,10 +792,10 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     GenMemBarrier(kStoreLoad);
 
     FreeTemp(rSI);
-    UnmarkTemp(rSI);
+    UnmarkTemp(rs_rSI);
     NewLIR1(kX86Pop32R, rSI);
     FreeTemp(rDI);
-    UnmarkTemp(rDI);
+    UnmarkTemp(rs_rDI);
     NewLIR1(kX86Pop32R, rDI);
     FreeCallTemps();
   } else {
@@ -810,7 +810,7 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
       // Mark card for object assuming new value is stored.
       FreeTemp(r0);  // Temporarily release EAX for MarkGCCard().
       MarkGCCard(rl_new_value.reg, rl_object.reg);
-      LockTemp(r0);
+      LockTemp(rs_r0);
     }
 
     RegLocation rl_offset = LoadValue(rl_src_offset, kCoreReg);
@@ -1239,12 +1239,12 @@ void X86Mir2Lir::GenLongArith(RegLocation rl_dest, RegLocation rl_src1,
 
   // Get one of the source operands into temporary register.
   rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-  if (IsTemp(rl_src1.reg.GetLowReg()) && IsTemp(rl_src1.reg.GetHighReg())) {
+  if (IsTemp(rl_src1.reg.GetLow()) && IsTemp(rl_src1.reg.GetHigh())) {
     GenLongRegOrMemOp(rl_src1, rl_src2, op);
   } else if (is_commutative) {
     rl_src2 = LoadValueWide(rl_src2, kCoreReg);
     // We need at least one of them to be a temporary.
-    if (!(IsTemp(rl_src2.reg.GetLowReg()) && IsTemp(rl_src2.reg.GetHighReg()))) {
+    if (!(IsTemp(rl_src2.reg.GetLow()) && IsTemp(rl_src2.reg.GetHigh()))) {
       rl_src1 = ForceTempWide(rl_src1);
       GenLongRegOrMemOp(rl_src1, rl_src2, op);
     } else {
@@ -1319,7 +1319,7 @@ void X86Mir2Lir::OpRegThreadMem(OpKind op, int r_dest, ThreadOffset<4> thread_of
  */
 void X86Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
                              RegLocation rl_index, RegLocation rl_dest, int scale) {
-  RegisterClass reg_class = oat_reg_class_by_size(size);
+  RegisterClass reg_class = RegClassBySize(size);
   int len_offset = mirror::Array::LengthOffset().Int32Value();
   RegLocation rl_result;
   rl_array = LoadValue(rl_array, kCoreReg);
@@ -1355,13 +1355,11 @@ void X86Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
     }
   }
   rl_result = EvalLoc(rl_dest, reg_class, true);
+  LoadBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_result.reg, size,
+                      INVALID_SREG);
   if ((size == kLong) || (size == kDouble)) {
-    LoadBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_result.reg.GetLow(),
-                        rl_result.reg.GetHigh(), size, INVALID_SREG);
     StoreValueWide(rl_dest, rl_result);
   } else {
-    LoadBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_result.reg,
-                        RegStorage::InvalidReg(), size, INVALID_SREG);
     StoreValue(rl_dest, rl_result);
   }
 }
@@ -1372,7 +1370,7 @@ void X86Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
  */
 void X86Mir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
                              RegLocation rl_index, RegLocation rl_src, int scale, bool card_mark) {
-  RegisterClass reg_class = oat_reg_class_by_size(size);
+  RegisterClass reg_class = RegClassBySize(size);
   int len_offset = mirror::Array::LengthOffset().Int32Value();
   int data_offset;
 
@@ -1415,16 +1413,10 @@ void X86Mir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
   if ((size == kSignedByte || size == kUnsignedByte) && rl_src.reg.GetReg() >= 4) {
     RegStorage temp = AllocTemp();
     OpRegCopy(temp, rl_src.reg);
-    StoreBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, temp,
-                         RegStorage::InvalidReg(), size, INVALID_SREG);
+    StoreBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, temp, size, INVALID_SREG);
   } else {
-    if (rl_src.wide) {
-      StoreBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_src.reg.GetLow(),
-                           rl_src.reg.GetHigh(), size, INVALID_SREG);
-    } else {
-      StoreBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_src.reg,
-                           RegStorage::InvalidReg(), size, INVALID_SREG);
-    }
+    StoreBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_src.reg, size,
+                         INVALID_SREG);
   }
   if (card_mark) {
     // Free rl_index if its a temp. Ensures there are 2 free regs for card mark.

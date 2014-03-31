@@ -346,7 +346,7 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
   rl_src.location = kLocPhysReg;
   rl_src.reg = TargetReg(kArg0);
   rl_src.home = false;
-  MarkLive(rl_src.reg, rl_src.s_reg_low);
+  MarkLive(rl_src);
   StoreValue(rl_method, rl_src);
   // If Method* has been promoted, explicitly flush
   if (rl_method.location == kLocPhysReg) {
@@ -669,7 +669,6 @@ static int NextInterfaceCallInsnWithAccessCheck(CompilationUnit* cu,
       QUICK_ENTRYPOINT_OFFSET(4, pInvokeInterfaceTrampolineWithAccessCheck);
   return NextInvokeInsnSP(cu, info, trampoline, state, target_method, 0);
 }
-
 int Mir2Lir::LoadArgRegs(CallInfo* info, int call_state,
                          NextCallInsn next_call_insn,
                          const MethodReference& target_method,
@@ -736,7 +735,20 @@ int Mir2Lir::GenDalvikArgsNoRange(CallInfo* info,
       // Wide spans, we need the 2nd half of uses[2].
       rl_arg = UpdateLocWide(rl_use2);
       if (rl_arg.location == kLocPhysReg) {
-        reg = rl_arg.reg.GetHigh();
+        // FIXME: needs rewrite, but will be replaced when hard-float API arrives.  For now,
+        // just hack to get working.
+        if (rl_arg.reg.IsPair()) {
+          reg = rl_arg.reg.GetHigh();
+        } else {
+          // We've got a Double, extract the high backing single reg.
+          DCHECK(rl_arg.reg.IsFloat());
+          DCHECK(rl_arg.reg.IsDouble());
+          int reg_num = rl_arg.reg.GetReg() & RegStorage::kRegNumMask;
+          // Convert the double to a high single.
+          // TODO: a utility for this?  But won't work if non-backed doubles.
+          reg_num = ((reg_num << 1) + 1) | RegStorage::kFloat;
+          reg = RegStorage(RegStorage::k32BitSolo, reg_num);
+        }
       } else {
         // kArg2 & rArg3 can safely be used here
         reg = TargetReg(kArg3);
@@ -751,34 +763,28 @@ int Mir2Lir::GenDalvikArgsNoRange(CallInfo* info,
     }
     // Loop through the rest
     while (next_use < info->num_arg_words) {
-      RegStorage low_reg;
-      RegStorage high_reg;
+      RegStorage arg_reg;
       rl_arg = info->args[next_use];
       rl_arg = UpdateRawLoc(rl_arg);
       if (rl_arg.location == kLocPhysReg) {
-        if (rl_arg.wide) {
-          low_reg = rl_arg.reg.GetLow();
-          high_reg = rl_arg.reg.GetHigh();
-        } else {
-          low_reg = rl_arg.reg;
-        }
+        arg_reg = rl_arg.reg;
       } else {
-        low_reg = TargetReg(kArg2);
+        arg_reg = rl_arg.wide ? RegStorage::MakeRegPair(TargetReg(kArg2), TargetReg(kArg3)) :
+            TargetReg(kArg2);
         if (rl_arg.wide) {
-          high_reg = TargetReg(kArg3);
-          LoadValueDirectWideFixed(rl_arg, RegStorage::MakeRegPair(low_reg, high_reg));
+          LoadValueDirectWideFixed(rl_arg, arg_reg);
         } else {
-          LoadValueDirectFixed(rl_arg, low_reg);
+          LoadValueDirectFixed(rl_arg, arg_reg);
         }
         call_state = next_call_insn(cu_, info, call_state, target_method,
                                     vtable_idx, direct_code, direct_method, type);
       }
       int outs_offset = (next_use + 1) * 4;
       if (rl_arg.wide) {
-        StoreBaseDispWide(TargetReg(kSp), outs_offset, RegStorage::MakeRegPair(low_reg, high_reg));
+        StoreBaseDispWide(TargetReg(kSp), outs_offset, arg_reg);
         next_use += 2;
       } else {
-        StoreWordDisp(TargetReg(kSp), outs_offset, low_reg);
+        StoreWordDisp(TargetReg(kSp), outs_offset, arg_reg);
         next_use++;
       }
       call_state = next_call_insn(cu_, info, call_state, target_method, vtable_idx,
@@ -1119,8 +1125,8 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
   if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
     LoadBaseIndexed(reg_ptr, reg_off, rl_result.reg, 1, kUnsignedHalf);
   } else {
-    LoadBaseIndexedDisp(reg_ptr, reg_off, 1, data_offset, rl_result.reg,
-                        RegStorage::InvalidReg(), kUnsignedHalf, INVALID_SREG);
+    LoadBaseIndexedDisp(reg_ptr, reg_off, 1, data_offset, rl_result.reg, kUnsignedHalf,
+                        INVALID_SREG);
   }
   FreeTemp(reg_off);
   FreeTemp(reg_ptr);
@@ -1415,8 +1421,7 @@ bool Mir2Lir::GenInlinedUnsafeGet(CallInfo* info,
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   if (is_long) {
     if (cu_->instruction_set == kX86) {
-      LoadBaseIndexedDisp(rl_object.reg, rl_offset.reg, 0, 0, rl_result.reg.GetLow(),
-                          rl_result.reg.GetHigh(), kLong, INVALID_SREG);
+      LoadBaseIndexedDisp(rl_object.reg, rl_offset.reg, 0, 0, rl_result.reg, kLong, INVALID_SREG);
     } else {
       RegStorage rl_temp_offset = AllocTemp();
       OpRegRegReg(kOpAdd, rl_temp_offset, rl_object.reg, rl_offset.reg);
@@ -1463,8 +1468,7 @@ bool Mir2Lir::GenInlinedUnsafePut(CallInfo* info, bool is_long,
   if (is_long) {
     rl_value = LoadValueWide(rl_src_value, kCoreReg);
     if (cu_->instruction_set == kX86) {
-      StoreBaseIndexedDisp(rl_object.reg, rl_offset.reg, 0, 0, rl_value.reg.GetLow(),
-                           rl_value.reg.GetHigh(), kLong, INVALID_SREG);
+      StoreBaseIndexedDisp(rl_object.reg, rl_offset.reg, 0, 0, rl_value.reg, kLong, INVALID_SREG);
     } else {
       RegStorage rl_temp_offset = AllocTemp();
       OpRegRegReg(kOpAdd, rl_temp_offset, rl_object.reg, rl_offset.reg);

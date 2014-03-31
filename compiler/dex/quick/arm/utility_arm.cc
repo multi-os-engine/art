@@ -643,22 +643,24 @@ LIR* ArmMir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
   LIR* res = NULL;
   int32_t val_lo = Low32Bits(value);
   int32_t val_hi = High32Bits(value);
-  int target_reg = S2d(r_dest.GetLowReg(), r_dest.GetHighReg());
-  if (ARM_FPREG(r_dest.GetLowReg())) {
+  if (r_dest.IsFloat()) {
+    DCHECK(!r_dest.IsPair());
     if ((val_lo == 0) && (val_hi == 0)) {
       // TODO: we need better info about the target CPU.  a vector exclusive or
       //       would probably be better here if we could rely on its existance.
       // Load an immediate +2.0 (which encodes to 0)
-      NewLIR2(kThumb2Vmovd_IMM8, target_reg, 0);
+      NewLIR2(kThumb2Vmovd_IMM8, r_dest.GetReg(), 0);
       // +0.0 = +2.0 - +2.0
-      res = NewLIR3(kThumb2Vsubd, target_reg, target_reg, target_reg);
+      res = NewLIR3(kThumb2Vsubd, r_dest.GetReg(), r_dest.GetReg(), r_dest.GetReg());
     } else {
       int encoded_imm = EncodeImmDouble(value);
       if (encoded_imm >= 0) {
-        res = NewLIR2(kThumb2Vmovd_IMM8, target_reg, encoded_imm);
+        res = NewLIR2(kThumb2Vmovd_IMM8, r_dest.GetReg(), encoded_imm);
       }
     }
   } else {
+    // NOTE: Arm32 assumption here.
+    DCHECK(r_dest.IsPair());
     if ((InexpensiveConstantInt(val_lo) && (InexpensiveConstantInt(val_hi)))) {
       res = LoadConstantNoClobber(r_dest.GetLow(), val_lo);
       LoadConstantNoClobber(r_dest.GetHigh(), val_hi);
@@ -670,9 +672,9 @@ LIR* ArmMir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
     if (data_target == NULL) {
       data_target = AddWideData(&literal_list_, val_lo, val_hi);
     }
-    if (ARM_FPREG(r_dest.GetLowReg())) {
+    if (r_dest.IsFloat()) {
       res = RawLIR(current_dalvik_offset_, kThumb2Vldrd,
-                   target_reg, r15pc, 0, 0, 0, data_target);
+                   r_dest.GetReg(), r15pc, 0, 0, 0, data_target);
     } else {
       DCHECK(r_dest.IsPair());
       res = RawLIR(current_dalvik_offset_, kThumb2LdrdPcRel8,
@@ -834,11 +836,7 @@ LIR* ArmMir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStorag
     case kDouble:
     case kLong:
       if (ARM_FPREG(dest_low_reg)) {
-        // Note: following change to avoid using pairs for doubles, replace conversion w/ DCHECK.
-        if (r_dest.IsPair()) {
-          DCHECK(ARM_FPREG(r_dest.GetHighReg()));
-          r_dest = RegStorage::Solo64(S2d(r_dest.GetLowReg(), r_dest.GetHighReg()));
-        }
+        DCHECK(!r_dest.IsPair());
         opcode = kThumb2Vldrd;
         if (displacement <= 1020) {
           short_form = true;
@@ -988,11 +986,7 @@ LIR* ArmMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegStora
         }
         already_generated = true;
       } else {
-        // Note: following change to avoid using pairs for doubles, replace conversion w/ DCHECK.
-        if (r_src.IsPair()) {
-          DCHECK(ARM_FPREG(r_src.GetHighReg()));
-          r_src = RegStorage::Solo64(S2d(r_src.GetLowReg(), r_src.GetHighReg()));
-        }
+        DCHECK(!r_src.IsPair());
         opcode = kThumb2Vstrd;
         if (displacement <= 1020) {
           short_form = true;
@@ -1121,8 +1115,7 @@ LIR* ArmMir2Lir::OpMem(OpKind op, RegStorage r_base, int disp) {
 }
 
 LIR* ArmMir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale,
-                                      int displacement, RegStorage r_src, RegStorage r_src_hi,
-                                      OpSize size, int s_reg) {
+                                      int displacement, RegStorage r_src, OpSize size, int s_reg) {
   LOG(FATAL) << "Unexpected use of StoreBaseIndexedDisp for Arm";
   return NULL;
 }
@@ -1133,8 +1126,7 @@ LIR* ArmMir2Lir::OpRegMem(OpKind op, RegStorage r_dest, RegStorage r_base, int o
 }
 
 LIR* ArmMir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale,
-                                     int displacement, RegStorage r_dest, RegStorage r_dest_hi,
-                                     OpSize size, int s_reg) {
+                                     int displacement, RegStorage r_dest, OpSize size, int s_reg) {
   LOG(FATAL) << "Unexpected use of LoadBaseIndexedDisp for Arm";
   return NULL;
 }
