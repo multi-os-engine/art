@@ -621,7 +621,7 @@ void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_
     int flags = Instruction::FlagsOf(insn->dalvikInsn.opcode);
     int verify_flags = Instruction::VerifyFlagsOf(insn->dalvikInsn.opcode);
 
-    uint64_t df_flags = oat_data_flow_attributes_[insn->dalvikInsn.opcode];
+    uint64_t df_flags = data_flow_attributes_[insn->dalvikInsn.opcode];
     merged_df_flags |= df_flags;
 
     if (df_flags & DF_HAS_DEFS) {
