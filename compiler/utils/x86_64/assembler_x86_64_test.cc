@@ -16,9 +16,11 @@
 
 #include "assembler_x86_64.h"
 
-#include "gtest/gtest.h"
+#include "utils/assembler_test.h"
 
 namespace art {
+
+
 
 TEST(AssemblerX86_64, CreateBuffer) {
   AssemblerBuffer buffer;
@@ -27,6 +29,44 @@ TEST(AssemblerX86_64, CreateBuffer) {
   ASSERT_EQ(static_cast<size_t>(1), buffer.Size());
   buffer.Emit<int32_t>(42);
   ASSERT_EQ(static_cast<size_t>(5), buffer.Size());
+}
+
+class AssemblerX86_64Test : public AssemblerTest<x86_64::X86_64Assembler> {
+ protected:
+  // Use the x86-64 prebuilt.
+  const char* GetAssemblerCommand() OVERRIDE {
+    return "prebuilts/gcc/linux-x86/x86/x86_64-linux-android-4.8/bin/x86_64-linux-android-as";
+  }
+
+  // Use the x86-64 prebuilt.
+  const char* GetObjdumpCommand() OVERRIDE {
+    return "prebuilts/gcc/linux-x86/x86/x86_64-linux-android-4.8/bin/"
+           "x86_64-linux-android-objdump -h";
+  }
+};
+
+
+const char* pushq_test(x86_64::X86_64Assembler* assembler) {
+  assembler->pushq(x86_64::CpuRegister(x86_64::RAX));
+  assembler->pushq(x86_64::CpuRegister(x86_64::RBX));
+  assembler->pushq(x86_64::CpuRegister(x86_64::RCX));
+
+  return "pushq %rax\npushq %rbx\npushq %rcx\n";
+}
+
+TEST_F(AssemblerX86_64Test, SimplePush) {
+  Driver(pushq_test);
+}
+
+
+const char* simple_arithmetic_test(x86_64::X86_64Assembler* assembler) {
+  assembler->addq(x86_64::CpuRegister(x86_64::RAX), x86_64::Immediate(0x1234));
+
+  return "addq %rax, $0x1234\n";
+}
+
+TEST_F(AssemblerX86_64Test, SimpleArithmetic) {
+  Driver(simple_arithmetic_test);
 }
 
 }  // namespace art
