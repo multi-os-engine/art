@@ -22,6 +22,7 @@ namespace art {
 class CompilerOptions {
  public:
   enum CompilerFilter {
+    kVerifyNone,          // Skip verification and compile nothing.
     kInterpretOnly,       // Compile nothing.
     kProfiled,            // Compile based on profile.
     kSpace,               // Maximize space savings.
@@ -84,6 +85,15 @@ class CompilerOptions {
 
   void SetCompilerFilter(CompilerFilter compiler_filter) {
     compiler_filter_ = compiler_filter;
+  }
+
+  bool IsCompilationEnabled() const {
+    return ((compiler_filter_ != CompilerOptions::kVerifyNone) &&
+            (compiler_filter_ != CompilerOptions::kInterpretOnly));
+  }
+
+  bool IsVerificationEnabled() const {
+    return (compiler_filter_ != CompilerOptions::kVerifyNone);
   }
 
   size_t GetHugeMethodThreshold() const {

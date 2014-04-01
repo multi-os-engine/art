@@ -130,7 +130,8 @@ Runtime::Runtime()
       preinitialization_transaction_(nullptr),
       null_pointer_handler_(nullptr),
       suspend_handler_(nullptr),
-      stack_overflow_handler_(nullptr) {
+      stack_overflow_handler_(nullptr),
+      verify_(false) {
   for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
     callee_save_methods_[i] = nullptr;
   }
@@ -519,6 +520,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   thread_list_ = new ThreadList;
   intern_table_ = new InternTable;
 
+  verify_ = options->verify_;
 
   if (options->interpreter_only_) {
     GetInstrumentation()->ForceInterpretOnly();
