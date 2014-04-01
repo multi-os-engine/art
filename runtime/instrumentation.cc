@@ -733,13 +733,14 @@ void Instrumentation::MethodUnwindEvent(Thread* thread, mirror::Object* this_obj
 void Instrumentation::DexPcMovedEventImpl(Thread* thread, mirror::Object* this_object,
                                           mirror::ArtMethod* method,
                                           uint32_t dex_pc) const {
-  // TODO: STL copy-on-write collection? The copy below is due to the debug listener having an
-  // action where it can remove itself as a listener and break the iterator. The copy only works
-  // around the problem and in general we may have to move to something like reference counting to
-  // ensure listeners are deleted correctly.
-  std::list<InstrumentationListener*> copy(dex_pc_listeners_);
-  for (InstrumentationListener* listener : copy) {
-    listener->DexPcMoved(thread, this_object, method, dex_pc);
+  auto it = dex_pc_listeners_.begin();
+  bool is_end = (it == dex_pc_listeners_.end());
+  // Implemented this way to prevent problems caused by modification of the list while iterating.
+  while (!is_end) {
+    InstrumentationListener* cur = *it;
+    ++it;
+    is_end = (it == dex_pc_listeners_.end());
+    cur->DexPcMoved(thread, this_object, method, dex_pc);
   }
 }
 
@@ -750,8 +751,14 @@ void Instrumentation::ExceptionCaughtEvent(Thread* thread, const ThrowLocation& 
   if (have_exception_caught_listeners_) {
     DCHECK_EQ(thread->GetException(NULL), exception_object);
     thread->ClearException();
-    for (InstrumentationListener* listener : exception_caught_listeners_) {
-      listener->ExceptionCaught(thread, throw_location, catch_method, catch_dex_pc, exception_object);
+    auto it = exception_caught_listeners_.begin();
+    bool is_end = (it == exception_caught_listeners_.end());
+    // Implemented this way to prevent problems caused by modification of the list while iterating.
+    while (!is_end) {
+      InstrumentationListener* cur = *it;
+      ++it;
+      is_end = (it == exception_caught_listeners_.end());
+      cur->ExceptionCaught(thread, throw_location, catch_method, catch_dex_pc, exception_object);
     }
     thread->SetException(throw_location, exception_object);
   }
