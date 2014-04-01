@@ -498,6 +498,10 @@ void CompilerDriver::CompileAll(jobject class_loader,
                                 const std::vector<const DexFile*>& dex_files,
                                 TimingLogger* timings) {
   DCHECK(!Runtime::Current()->IsStarted());
+  if (compiler_options_->GetCompilerFilter() == CompilerOptions::kNoVerify) {
+    VLOG(compiler) << "No verify specified, skipping all compilation";
+    return;
+  }
   UniquePtr<ThreadPool> thread_pool(new ThreadPool("Compiler driver thread pool", thread_count_ - 1));
   PreCompile(class_loader, dex_files, thread_pool.get(), timings);
   Compile(class_loader, dex_files, thread_pool.get(), timings);

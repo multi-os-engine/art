@@ -209,6 +209,8 @@ static void Usage(const char* fmt, ...) {
   UsageError("  --disable-passes=<pass-names>:  disable one or more passes separated by comma.");
   UsageError("      Example: --disable-passes=UseCount,BBOptimizations");
   UsageError("");
+  UsageError("  --no-verify: runs with verification and compilation disabled");
+  UsageError("");
   std::cerr << "See log for usage error information\n";
   exit(EXIT_FAILURE);
 }
@@ -763,6 +765,7 @@ static int dex2oat(int argc, char** argv) {
   bool dump_stats = false;
   bool dump_timing = false;
   bool dump_passes = false;
+  bool no_verify = false;
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = !kIsTargetBuild;
   bool generate_gdb_information = kIsDebugBuild;
@@ -927,6 +930,8 @@ static int dex2oat(int argc, char** argv) {
     } else if (option.starts_with("--disable-passes=")) {
       std::string disable_passes = option.substr(strlen("--disable-passes=")).data();
       PassDriver::CreateDefaultPassList(disable_passes);
+    } else if (option == "--no-verify") {
+      no_verify = true;
     } else {
       Usage("Unknown argument %s", option.data());
     }
@@ -1049,6 +1054,10 @@ static int dex2oat(int argc, char** argv) {
     compiler_filter = CompilerOptions::kEverything;
   } else {
     Usage("Unknown --compiler-filter value %s", compiler_filter_string);
+  }
+
+  if (no_verify) {
+    compiler_filter = CompilerOptions::kNoVerify;
   }
 
   CompilerOptions compiler_options(compiler_filter,
@@ -1211,7 +1220,8 @@ static int dex2oat(int argc, char** argv) {
    * If we're not in interpret-only mode, go ahead and compile small applications. Don't
    * bother to check if we're doing the image.
    */
-  if (!image && (compiler_options.GetCompilerFilter() != CompilerOptions::kInterpretOnly)) {
+  if (!image && (compiler_options.GetCompilerFilter() != CompilerOptions::kInterpretOnly) &&
+      (compiler_options.GetCompilerFilter() != CompilerOptions::kNoVerify)) {
     size_t num_methods = 0;
     for (size_t i = 0; i != dex_files.size(); ++i) {
       const DexFile* dex_file = dex_files[i];

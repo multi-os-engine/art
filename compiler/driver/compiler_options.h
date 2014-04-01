@@ -22,6 +22,7 @@ namespace art {
 class CompilerOptions {
  public:
   enum CompilerFilter {
+    kNoVerify,            // Skip verification and compile nothing.
     kInterpretOnly,       // Compile nothing.
     kProfiled,            // Compile based on profile.
     kSpace,               // Maximize space savings.
