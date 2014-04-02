@@ -283,6 +283,28 @@ class QuickArgumentVisitor {
   }
 
   void VisitArguments() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // The caller's frame layout is treated in a different way by asm-stub
+    // and interpreter/argument visitor on x86_64 target. According to the
+    // QuickABI, the first N bytes of a caller's frame should be used as a
+    // reg-spill area for those arguments which is passed via GP/FP regs.
+    //
+    // The current implementation of asm-stubs doesn't consider the arguments
+    // fragmentation. Thus, the following args array is passed as is:
+    //          (reg1, ..., reg5, stack1, xmm0, stack2, xmm1, ...)
+    // , while argument visitor expects to see them as following:
+    //          (reg1, ..., reg5, xmm0, xmm1, stack1, stack2, ...).
+    // Simply speaking, all the reg-args should be grouped together in the
+    // beginning of a caller's frame, so their memory may be continuously
+    // used as a reg-spill area.
+    //
+    // In order to keep the stack arguments consistent on x86_64 target,
+    // some additional logic should be involved in the arguments visiting
+    // algorithm. Since, there's no x86_64 quick compiler yet, it's not
+    // even necessary having a reg-spill area in the caller's frame. Thus,
+    // to workaround the issue
+    //     (a) 'stack_args_' should point to the first method's argument
+    //     (b) whatever the argument type it is, the 'stack_index_' should
+    //         be moved forward along with every visiting.
     gpr_index_ = 0;
     fpr_index_ = 0;
     stack_index_ = 0;
@@ -292,6 +314,9 @@ class QuickArgumentVisitor {
       Visit();
       if (kNumQuickGprArgs > 0) {
         gpr_index_++;
+#if defined(__x86_64__)
+        stack_index_++;
+#endif
       } else {
         stack_index_++;
       }
@@ -309,6 +334,9 @@ class QuickArgumentVisitor {
           Visit();
           if (gpr_index_ < kNumQuickGprArgs) {
             gpr_index_++;
+#if defined(__x86_64__)
+            stack_index_++;
+#endif
           } else {
             stack_index_++;
           }
@@ -319,12 +347,18 @@ class QuickArgumentVisitor {
           if (kQuickSoftFloatAbi) {
             if (gpr_index_ < kNumQuickGprArgs) {
               gpr_index_++;
+#if defined(__x86_64__)
+              stack_index_++;
+#endif
             } else {
               stack_index_++;
             }
           } else {
             if ((kNumQuickFprArgs != 0) && (fpr_index_ + 1 < kNumQuickFprArgs + 1)) {
               fpr_index_++;
+#if defined(__x86_64__)
+              stack_index_++;
+#endif
             } else {
               stack_index_++;
             }
@@ -341,17 +375,22 @@ class QuickArgumentVisitor {
               if (kBytesPerGprSpillLocation == 4) {
                 if (gpr_index_ < kNumQuickGprArgs) {
                   gpr_index_++;
+#if defined(__x86_64__)
+                  stack_index_++;
+#endif
                 } else {
                   stack_index_++;
                 }
               }
+#if !defined(__x86_64__)
+              break;
+#endif
+            }
+            if (kBytesStackArgLocation == 4) {
+              stack_index_+= 2;
             } else {
-              if (kBytesStackArgLocation == 4) {
-                stack_index_+= 2;
-              } else {
-                CHECK_EQ(kBytesStackArgLocation, 8U);
-                stack_index_++;
-              }
+              CHECK_EQ(kBytesStackArgLocation, 8U);
+              stack_index_++;
             }
           } else {
             is_split_long_or_double_ = (kBytesPerFprSpillLocation == 4) &&
@@ -362,17 +401,22 @@ class QuickArgumentVisitor {
               if (kBytesPerFprSpillLocation == 4) {
                 if ((kNumQuickFprArgs != 0) && (fpr_index_ + 1 < kNumQuickFprArgs + 1)) {
                   fpr_index_++;
+#if defined(__x86_64__)
+                  stack_index_++;
+#endif
                 } else {
                   stack_index_++;
                 }
               }
+#if !defined(__x86_64__)
+              break;
+#endif
+            }
+            if (kBytesStackArgLocation == 4) {
+              stack_index_+= 2;
             } else {
-              if (kBytesStackArgLocation == 4) {
-                stack_index_+= 2;
-              } else {
-                CHECK_EQ(kBytesStackArgLocation, 8U);
-                stack_index_++;
-              }
+              CHECK_EQ(kBytesStackArgLocation, 8U);
+              stack_index_++;
             }
           }
           break;
@@ -390,6 +434,11 @@ class QuickArgumentVisitor {
       return (kNumQuickGprArgs * kBytesPerGprSpillLocation) + kBytesPerGprSpillLocation /* ArtMethod* */;
     } else {
       size_t offset = kBytesPerGprSpillLocation;  // Skip Method*.
+// Stack arguments should be treated in a different way for x86_64 target.
+// Rather then calculating the offset of arguments' spill area, we return
+// an offset pointing to the first method's argument ('this' for non-static
+// methods).
+#if !defined(__x86_64__)
       size_t gprs_seen = 0;
       size_t fprs_seen = 0;
       if (!is_static && (gprs_seen < kNumQuickGprArgs)) {
@@ -441,6 +490,7 @@ class QuickArgumentVisitor {
             LOG(FATAL) << "Unexpected shorty character: " << shorty[i] << " in " << shorty;
         }
       }
+#endif
       return offset;
     }
   }
