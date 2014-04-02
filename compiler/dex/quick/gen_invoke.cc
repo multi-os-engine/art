@@ -67,7 +67,7 @@ void Mir2Lir::AddIntrinsicLaunchpad(CallInfo* info, LIR* branch, LIR* resume) {
  * load arguments between the two parts.
  */
 RegStorage Mir2Lir::CallHelperSetup(ThreadOffset helper_offset) {
-  return (cu_->instruction_set == kX86) ? RegStorage::InvalidReg() : LoadHelper(helper_offset);
+  return (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) ? RegStorage::InvalidReg() : LoadHelper(helper_offset);
 }
 
 /* NOTE: if r_tgt is a temp, it will be freed following use */
@@ -75,7 +75,7 @@ LIR* Mir2Lir::CallHelper(RegStorage r_tgt, ThreadOffset helper_offset, bool safe
                          bool use_link) {
   LIR* call_inst;
   OpKind op = use_link ? kOpBlx : kOpBx;
-  if (cu_->instruction_set == kX86) {
+  if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
     call_inst = OpThreadMem(op, helper_offset);
   } else {
     call_inst = OpReg(op, r_tgt);
@@ -432,10 +432,10 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
     switch (state) {
     case 0:  // Get the current Method* [sets kArg0]
       if (direct_code != static_cast<unsigned int>(-1)) {
-        if (cu->instruction_set != kX86) {
+        if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
           cg->LoadConstant(cg->TargetReg(kInvokeTgt), direct_code);
         }
-      } else if (cu->instruction_set != kX86) {
+      } else if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
         cg->LoadCodeAddress(target_method, type, kInvokeTgt);
       }
       if (direct_method != static_cast<unsigned int>(-1)) {
@@ -461,7 +461,7 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
       if (direct_code != 0) {
         if (direct_code != static_cast<unsigned int>(-1)) {
           cg->LoadConstant(cg->TargetReg(kInvokeTgt), direct_code);
-        } else if (cu->instruction_set != kX86) {
+        } else if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
           CHECK_LT(target_method.dex_method_index, target_method.dex_file->NumMethodIds());
           cg->LoadCodeAddress(target_method, type, kInvokeTgt);
         }
@@ -474,7 +474,7 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
                        (target_method.dex_method_index * 4), cg->TargetReg(kArg0));
       break;
     case 3:  // Grab the code from the method*
-      if (cu->instruction_set != kX86) {
+      if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
         if (direct_code == 0) {
           cg->LoadWordDisp(cg->TargetReg(kArg0),
                            mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value(),
@@ -529,7 +529,7 @@ static int NextVCallInsn(CompilationUnit* cu, CallInfo* info,
                        cg->TargetReg(kArg0));
       break;
     case 4:  // Get the compiled code address [uses kArg0, sets kInvokeTgt]
-      if (cu->instruction_set != kX86) {
+      if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
         cg->LoadWordDisp(cg->TargetReg(kArg0),
                          mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value(),
                          cg->TargetReg(kInvokeTgt));
@@ -558,7 +558,7 @@ static int NextInterfaceCallInsn(CompilationUnit* cu, CallInfo* info, int state,
     case 0:  // Set target method index in case of conflict [set kHiddenArg, kHiddenFpArg (x86)]
       CHECK_LT(target_method.dex_method_index, target_method.dex_file->NumMethodIds());
       cg->LoadConstant(cg->TargetReg(kHiddenArg), target_method.dex_method_index);
-      if (cu->instruction_set == kX86) {
+      if (cu->instruction_set == kX86 || cu->instruction_set == kX86_64) {
         cg->OpRegCopy(cg->TargetReg(kHiddenFpArg), cg->TargetReg(kHiddenArg));
       }
       break;
@@ -584,7 +584,7 @@ static int NextInterfaceCallInsn(CompilationUnit* cu, CallInfo* info, int state,
                        cg->TargetReg(kArg0));
       break;
     case 5:  // Get the compiled code address [use kArg0, set kInvokeTgt]
-      if (cu->instruction_set != kX86) {
+      if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
         cg->LoadWordDisp(cg->TargetReg(kArg0),
                          mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value(),
                          cg->TargetReg(kInvokeTgt));
@@ -606,7 +606,7 @@ static int NextInvokeInsnSP(CompilationUnit* cu, CallInfo* info, ThreadOffset tr
    * resolved at compile time, we bail to a runtime helper.
    */
   if (state == 0) {
-    if (cu->instruction_set != kX86) {
+    if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
       // Load trampoline target
       cg->LoadWordDisp(cg->TargetReg(kSelf), trampoline.Int32Value(), cg->TargetReg(kInvokeTgt));
     }
@@ -875,7 +875,7 @@ int Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
     st->u.m.def_mask = ENCODE_ALL;
     call_state = next_call_insn(cu_, info, call_state, target_method, vtable_idx,
                              direct_code, direct_method, type);
-  } else if (cu_->instruction_set == kX86) {
+  } else if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
     int current_src_offset = start_offset;
     int current_dest_offset = outs_offset;
 
@@ -1050,7 +1050,7 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
   RegLocation rl_idx = info->args[1];
   rl_obj = LoadValue(rl_obj, kCoreReg);
   // X86 wants to avoid putting a constant index into a register.
-  if (!(cu_->instruction_set == kX86 && rl_idx.is_const)) {
+  if (!((cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64)&& rl_idx.is_const)) {
     rl_idx = LoadValue(rl_idx, kCoreReg);
   }
   RegStorage reg_max;
@@ -1059,7 +1059,7 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
   LIR* range_check_branch = nullptr;
   RegStorage reg_off;
   RegStorage reg_ptr;
-  if (cu_->instruction_set != kX86) {
+  if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
     reg_off = AllocTemp();
     reg_ptr = AllocTemp();
     if (range_check) {
@@ -1106,7 +1106,7 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
   }
   RegLocation rl_dest = InlineTarget(info);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  if (cu_->instruction_set != kX86) {
+  if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
     LoadBaseIndexed(reg_ptr, reg_off, rl_result.reg, 1, kUnsignedHalf);
   } else {
     LoadBaseIndexedDisp(reg_ptr, reg_off, 1, data_offset, rl_result.reg,
@@ -1144,7 +1144,7 @@ bool Mir2Lir::GenInlinedStringIsEmptyOrLength(CallInfo* info, bool is_empty) {
       OpRegReg(kOpNeg, t_reg, rl_result.reg);
       OpRegRegReg(kOpAdc, rl_result.reg, rl_result.reg, t_reg);
     } else {
-      DCHECK_EQ(cu_->instruction_set, kX86);
+      DCHECK(cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64);
       OpRegImm(kOpSub, rl_result.reg, 1);
       OpRegImm(kOpLsr, rl_result.reg, 31);
     }
@@ -1214,7 +1214,7 @@ bool Mir2Lir::GenInlinedAbsLong(CallInfo* info) {
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
 
   // If on x86 or if we would clobber a register needed later, just copy the source first.
-  if (cu_->instruction_set == kX86 || rl_result.reg.GetLowReg() == rl_src.reg.GetHighReg()) {
+  if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64 || rl_result.reg.GetLowReg() == rl_src.reg.GetHighReg()) {
     OpRegCopyWide(rl_result.reg, rl_src.reg);
     if (rl_result.reg.GetLowReg() != rl_src.reg.GetLowReg() &&
         rl_result.reg.GetLowReg() != rl_src.reg.GetHighReg() &&
@@ -1355,7 +1355,7 @@ bool Mir2Lir::GenInlinedStringCompareTo(CallInfo* info) {
   RegLocation rl_cmp = info->args[1];
   LoadValueDirectFixed(rl_this, reg_this);
   LoadValueDirectFixed(rl_cmp, reg_cmp);
-  RegStorage r_tgt = (cu_->instruction_set != kX86) ?
+  RegStorage r_tgt = (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) ?
       LoadHelper(QUICK_ENTRYPOINT_OFFSET(pStringCompareTo)) : RegStorage::InvalidReg();
   GenExplicitNullCheck(reg_this, info->opt_flags);
   info->opt_flags |= MIR_IGNORE_NULL_CHECK;  // Record that we've null checked.
@@ -1363,7 +1363,7 @@ bool Mir2Lir::GenInlinedStringCompareTo(CallInfo* info) {
   LIR* cmp_null_check_branch = OpCmpImmBranch(kCondEq, reg_cmp, 0, nullptr);
   AddIntrinsicLaunchpad(info, cmp_null_check_branch);
   // NOTE: not a safepoint
-  if (cu_->instruction_set != kX86) {
+  if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
     OpReg(kOpBlx, r_tgt);
   } else {
     OpThreadMem(kOpBlx, QUICK_ENTRYPOINT_OFFSET(pStringCompareTo));
@@ -1381,7 +1381,7 @@ bool Mir2Lir::GenInlinedCurrentThread(CallInfo* info) {
   if (cu_->instruction_set == kThumb2 || cu_->instruction_set == kMips) {
     LoadWordDisp(TargetReg(kSelf), offset.Int32Value(), rl_result.reg);
   } else {
-    CHECK(cu_->instruction_set == kX86);
+    CHECK(cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64);
     reinterpret_cast<X86Mir2Lir*>(this)->OpRegThreadMem(kOpMov, rl_result.reg.GetReg(), offset);
   }
   StoreValue(rl_dest, rl_result);
@@ -1538,7 +1538,7 @@ void Mir2Lir::GenInvokeNoInline(CallInfo* info) {
                                 method_info.DirectCode(), method_info.DirectMethod(), original_type);
   }
   LIR* call_inst;
-  if (cu_->instruction_set != kX86) {
+  if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
     call_inst = OpReg(kOpBlx, TargetReg(kInvokeTgt));
   } else {
     if (fast_path) {
