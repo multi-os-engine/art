@@ -366,56 +366,84 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
    */
   for (int i = 0; i < cu_->num_ins; i++) {
     PromotionMap* v_map = &promotion_map_[start_vreg + i];
-    RegStorage reg = GetArgMappingToPhysicalReg(i);
+    RegLocation* t_loc = &ArgLocs[i];
+    RegStorage a_reg = GetArgMappingToPhysicalReg(i);
 
-    if (reg.Valid()) {
-      // If arriving in register
-      bool need_flush = true;
-      RegLocation* t_loc = &ArgLocs[i];
-      if ((v_map->core_location == kLocPhysReg) && !t_loc->fp) {
-        OpRegCopy(RegStorage::Solo32(v_map->core_reg), reg);
-        need_flush = false;
+    // The following information is only used for wide args.
+    int p_offset = t_loc->high_word ? -1 : +1;
+    PromotionMap* p_map = v_map + p_offset;
+    RegStorage p_reg = GetArgMappingToPhysicalReg(i + p_offset);
+
+    // This information is only used when arg is a register.
+    bool need_flush = false;
+
+    bool can_load_wide = false;
+    if (t_loc->wide) {
+      // Is promoted?
+      can_load_wide = v_map->core_location == kLocPhysReg || v_map->fp_location == kLocPhysReg;
+      // Is fully promoted?
+      can_load_wide = can_load_wide &&
+          (p_map->core_location == v_map->core_location) &&
+          (p_map->fp_location == v_map->fp_location);
+      if ((cu_->instruction_set == kThumb2) && t_loc->fp && can_load_wide) {
+        /*
+         * In Arm, a double is represented as a pair of consecutive single float
+         * registers starting at an even number.  It's possible that both Dalvik vRegs
+         * representing the incoming double were independently promoted as singles - but
+         * not in a form usable as a double.  If so, we need to flush - even though the
+         * incoming arg appears fully in register.  At this point in the code, both
+         * halves of the double are promoted.  Make sure they are in a usable form.
+         */
+        int low_reg = t_loc->high_word ? p_map->FpReg : v_map->FpReg;
+        int high_reg = t_loc->high_word ? v_map->FpReg : p_map->FpReg;
+        if (((low_reg & 0x1) != 0) || (high_reg != (low_reg + 1))) {
+          can_load_wide = false;
+        }
+      }
+      // For wide args, force flush if not fully promoted or in a bad form.
+      need_flush = !can_load_wide;
+      // One more check for can_load_wide, args should both in registers or frame.
+      can_load_wide = can_load_wide && (a_reg.Valid() == p_reg.Valid());
+    }
+
+    if (a_reg.Valid()) {
+      // If arriving arg is a register.
+      if (can_load_wide) {
+        // Both halves will be copied, so only do it when t_loc is the low half.
+        if (t_loc->high_word == 0) {
+          int low_reg = t_loc->fp ? v_map->FpReg : v_map->core_reg;
+          int high_reg = t_loc->fp ? p_map->FpReg : p_map->core_reg;
+          OpRegCopyWide(RegStorage(RegStorage::k64BitPair, low_reg, high_reg),
+              RegStorage::MakeRegPair(a_reg, p_reg));
+        }
+      } else if ((v_map->core_location == kLocPhysReg) && !t_loc->fp) {
+        OpRegCopy(RegStorage::Solo32(v_map->core_reg), a_reg);
       } else if ((v_map->fp_location == kLocPhysReg) && t_loc->fp) {
-        OpRegCopy(RegStorage::Solo32(v_map->FpReg), reg);
-        need_flush = false;
+        OpRegCopy(RegStorage::Solo32(v_map->FpReg), a_reg);
       } else {
         need_flush = true;
       }
-
-      // For wide args, force flush if not fully promoted
-      if (t_loc->wide) {
-        PromotionMap* p_map = v_map + (t_loc->high_word ? -1 : +1);
-        // Is only half promoted?
-        need_flush |= (p_map->core_location != v_map->core_location) ||
-            (p_map->fp_location != v_map->fp_location);
-        if ((cu_->instruction_set == kThumb2) && t_loc->fp && !need_flush) {
-          /*
-           * In Arm, a double is represented as a pair of consecutive single float
-           * registers starting at an even number.  It's possible that both Dalvik vRegs
-           * representing the incoming double were independently promoted as singles - but
-           * not in a form usable as a double.  If so, we need to flush - even though the
-           * incoming arg appears fully in register.  At this point in the code, both
-           * halves of the double are promoted.  Make sure they are in a usable form.
-           */
-          int lowreg_index = start_vreg + i + (t_loc->high_word ? -1 : 0);
-          int low_reg = promotion_map_[lowreg_index].FpReg;
-          int high_reg = promotion_map_[lowreg_index + 1].FpReg;
-          if (((low_reg & 0x1) != 0) || (high_reg != (low_reg + 1))) {
-            need_flush = true;
-          }
-        }
-      }
       if (need_flush) {
-        StoreBaseDisp(TargetReg(kSp), SRegOffset(start_vreg + i), reg, kWord);
+        StoreBaseDisp(TargetReg(kSp), SRegOffset(start_vreg + i), a_reg, kWord);
       }
     } else {
-      // If arriving in frame & promoted
-      if (v_map->core_location == kLocPhysReg) {
-        LoadWordDisp(TargetReg(kSp), SRegOffset(start_vreg + i),
-                     RegStorage::Solo32(v_map->core_reg));
-      }
-      if (v_map->fp_location == kLocPhysReg) {
-        LoadWordDisp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->FpReg));
+      // If arriving arg is in frame & promoted.
+      if (can_load_wide) {
+        // Both halves will be load, so only do it when t_loc is the low half.
+        if (t_loc->high_word == 0) {
+          int low_reg = t_loc->fp ? v_map->FpReg : v_map->core_reg;
+          int high_reg = t_loc->fp ? p_map->FpReg : p_map->core_reg;
+          LoadBaseDispWide(TargetReg(kSp), SRegOffset(start_vreg + i),
+              RegStorage(RegStorage::k64BitPair, low_reg, high_reg), INVALID_SREG);
+        }
+      } else {
+        if (v_map->core_location == kLocPhysReg) {
+          LoadWordDisp(TargetReg(kSp), SRegOffset(start_vreg + i),
+              RegStorage::Solo32(v_map->core_reg));
+        }
+        if (v_map->fp_location == kLocPhysReg) {
+          LoadWordDisp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->FpReg));
+        }
       }
     }
   }
