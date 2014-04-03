@@ -45,8 +45,9 @@ class StackIndirectReferenceTable {
   }
 
   // Returns the size of a StackIndirectReferenceTable containing num_references sirts.
-  static size_t SizeOf(uint32_t num_references) {
-    size_t header_size = OFFSETOF_MEMBER(StackIndirectReferenceTable, references_);
+  // The frame_pointer_size could be overriden by calling convention (JNI compiler)
+  static size_t SizeOf(uint32_t num_references, size_t frame_pointer_size = sizeof(link_)) {
+    size_t header_size = frame_pointer_size + sizeof(number_of_references_);
     size_t data_size = sizeof(StackReference<mirror::Object>) * num_references;
     return header_size + data_size;
   }
