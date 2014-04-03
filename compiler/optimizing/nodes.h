@@ -201,6 +201,7 @@ class HBasicBlock : public ArenaObject {
   M(InvokeStatic)                                          \
   M(LoadLocal)                                             \
   M(Local)                                                 \
+  M(NewInstance)                                           \
   M(PushArgument)                                          \
   M(Return)                                                \
   M(ReturnVoid)                                            \
@@ -632,6 +633,22 @@ class HInvokeStatic : public HInvoke {
   const uint32_t index_in_dex_cache_;
 
   DISALLOW_COPY_AND_ASSIGN(HInvokeStatic);
+};
+
+class HNewInstance : public HTemplateInstruction<0> {
+ public:
+  HNewInstance(int32_t dex_pc, int32_t type_index) : dex_pc_(dex_pc), type_index_(type_index) {}
+
+  int32_t GetDexPc() const { return dex_pc_; }
+  int32_t GetTypeIndex() const { return type_index_; }
+
+  DECLARE_INSTRUCTION(NewInstance)
+
+ private:
+  int32_t dex_pc_;
+  int32_t type_index_;
+
+  DISALLOW_COPY_AND_ASSIGN(HNewInstance);
 };
 
 // HPushArgument nodes are inserted after the evaluation of an argument
