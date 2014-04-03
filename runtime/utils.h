@@ -68,6 +68,14 @@ static inline bool IsAligned(T* x) {
 #define DCHECK_ALIGNED(value, alignment) \
   DCHECK(::art::IsAligned<alignment>(value)) << reinterpret_cast<const void*>(value)
 
+// The expression ARRAY_SIZE(array) is a compile-time constant of type
+// size_t which represents the number of elements of the given
+// array. You should only use ARRAY_SIZE on statically allocated
+// arrays.
+#define ARRAY_SIZE(array)                                   \
+  ((sizeof(array) / sizeof(*(array))) /                     \
+  static_cast<size_t>(!(sizeof(array) % sizeof(*(array)))))
+
 // Check whether an N-bit two's-complement representation can hold value.
 static inline bool IsInt(int N, word value) {
   CHECK_LT(0, N);
