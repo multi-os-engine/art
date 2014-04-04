@@ -1236,6 +1236,9 @@ bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg) {
   }
   args.push_back(NULL);
 
+  std::string orig_ld_library_path(getenv("LD_LIBRARY_PATH"));
+  unsetenv("LD_LIBRARY_PATH");
+
   // fork and exec
   pid_t pid = fork();
   if (pid == 0) {
@@ -1249,6 +1252,8 @@ bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg) {
     PLOG(ERROR) << "Failed to execv(" << command_line << ")";
     exit(1);
   } else {
+    LOG(INFO) << "Forked process " << pid << ": '" << command_line << "'";
+    setenv("LD_LIBRARY_PATH", orig_ld_library_path.c_str(), 0);
     if (pid == -1) {
       *error_msg = StringPrintf("Failed to execv(%s) because fork failed: %s",
                                 command_line.c_str(), strerror(errno));
@@ -1265,8 +1270,8 @@ bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg) {
       return false;
     }
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-      *error_msg = StringPrintf("Failed execv(%s) because non-0 exit status",
-                                command_line.c_str());
+      *error_msg = StringPrintf("Non-0 (%d) exit status from execv(%s)",
+                                WEXITSTATUS(status), command_line.c_str());
       return false;
     }
   }
