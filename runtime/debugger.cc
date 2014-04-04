@@ -126,14 +126,14 @@ static std::ostream& operator<<(std::ostream& os, const Breakpoint& rhs)
   return os;
 }
 
-class DebugInstrumentationListener : public instrumentation::InstrumentationListener {
+class DebugInstrumentationListener FINAL : public instrumentation::InstrumentationListener {
  public:
   DebugInstrumentationListener() {}
   virtual ~DebugInstrumentationListener() {}
 
   virtual void MethodEntered(Thread* thread, mirror::Object* this_object,
                              mirror::ArtMethod* method, uint32_t dex_pc)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (method->IsNative()) {
       // TODO: post location events is a suspension point and native method entry stubs aren't.
       return;
@@ -144,7 +144,7 @@ class DebugInstrumentationListener : public instrumentation::InstrumentationList
   virtual void MethodExited(Thread* thread, mirror::Object* this_object,
                             mirror::ArtMethod* method,
                             uint32_t dex_pc, const JValue& return_value)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (method->IsNative()) {
       // TODO: post location events is a suspension point and native method entry stubs aren't.
       return;
@@ -154,7 +154,7 @@ class DebugInstrumentationListener : public instrumentation::InstrumentationList
 
   virtual void MethodUnwind(Thread* thread, mirror::Object* this_object,
                             mirror::ArtMethod* method, uint32_t dex_pc)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // We're not recorded to listen to this kind of event, so complain.
     LOG(ERROR) << "Unexpected method unwind event in debugger " << PrettyMethod(method)
                << " " << dex_pc;
@@ -162,16 +162,32 @@ class DebugInstrumentationListener : public instrumentation::InstrumentationList
 
   virtual void DexPcMoved(Thread* thread, mirror::Object* this_object,
                           mirror::ArtMethod* method, uint32_t new_dex_pc)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     Dbg::UpdateDebugger(thread, this_object, method, new_dex_pc);
+  }
+
+  virtual void FieldRead(Thread* thread, mirror::Object* this_object,
+                         mirror::ArtMethod* method, uint32_t dex_pc, mirror::ArtField* field)
+      OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    Dbg::PostFieldAccessEvent(thread, method, dex_pc, this_object, field);
+  }
+
+  virtual void FieldWritten(Thread* thread, mirror::Object* this_object,
+                            mirror::ArtMethod* method, uint32_t dex_pc, mirror::ArtField* field,
+                            const JValue& field_value)
+      OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    Dbg::PostFieldModificationEvent(thread, method, dex_pc, this_object, field, &field_value);
   }
 
   virtual void ExceptionCaught(Thread* thread, const ThrowLocation& throw_location,
                                mirror::ArtMethod* catch_method, uint32_t catch_dex_pc,
                                mirror::Throwable* exception_object)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     Dbg::PostException(thread, throw_location, catch_method, catch_dex_pc, exception_object);
   }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(DebugInstrumentationListener);
 } gDebugInstrumentationListener;
 
 // JDWP is allowed unless the Zygote forbids it.
@@ -637,6 +653,8 @@ void Dbg::GoActive() {
                                              instrumentation::Instrumentation::kMethodEntered |
                                              instrumentation::Instrumentation::kMethodExited |
                                              instrumentation::Instrumentation::kDexPcMoved |
+                                             instrumentation::Instrumentation::kFieldRead |
+                                             instrumentation::Instrumentation::kFieldWritten |
                                              instrumentation::Instrumentation::kExceptionCaught);
   gDebuggerActive = true;
   CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
@@ -672,6 +690,8 @@ void Dbg::Disconnected() {
                                                   instrumentation::Instrumentation::kMethodEntered |
                                                   instrumentation::Instrumentation::kMethodExited |
                                                   instrumentation::Instrumentation::kDexPcMoved |
+                                                  instrumentation::Instrumentation::kFieldRead |
+                                                  instrumentation::Instrumentation::kFieldWritten |
                                                   instrumentation::Instrumentation::kExceptionCaught);
     runtime->GetInstrumentation()->DisableDeoptimization();
     gDebuggerActive = false;
@@ -1572,6 +1592,13 @@ void Dbg::OutputMethodReturnValue(JDWP::MethodId method_id, const JValue* return
   OutputJValue(tag, return_value, pReply);
 }
 
+void Dbg::OutputFieldValue(JDWP::FieldId field_id, const JValue* field_value,
+                           JDWP::ExpandBuf* pReply) {
+  mirror::ArtField* f = FromFieldId(field_id);
+  JDWP::JdwpTag tag = BasicTagFromDescriptor(FieldHelper(f).GetTypeDescriptor());
+  OutputJValue(tag, field_value, pReply);
+}
+
 JDWP::JdwpError Dbg::GetBytecodes(JDWP::RefTypeId, JDWP::MethodId method_id,
                                   std::vector<uint8_t>& bytecodes)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -2456,6 +2483,40 @@ void Dbg::PostLocationEvent(mirror::ArtMethod* m, int dex_pc, mirror::Object* th
     this_id = gRegistry->Add(this_object);
   }
   gJdwpState->PostLocationEvent(&location, this_id, event_flags, return_value);
+}
+
+void Dbg::PostFieldAccessEvent(Thread* thread, mirror::ArtMethod* m, int dex_pc,
+                               mirror::Object* this_object, mirror::ArtField* f) {
+  if (!IsDebuggerActive()) {
+    return;
+  }
+  DCHECK(f != nullptr);
+  JDWP::JdwpLocation location;
+  SetLocation(location, m, dex_pc);
+
+  JDWP::RefTypeId type_id = gRegistry->AddRefType(f->GetDeclaringClass());
+  JDWP::FieldId field_id = ToFieldId(f);
+  JDWP::ObjectId this_id = gRegistry->Add(this_object);
+
+  gJdwpState->PostFieldEvent(&location, type_id, field_id, this_id, nullptr, false);
+}
+
+void Dbg::PostFieldModificationEvent(Thread* thread, mirror::ArtMethod* m, int dex_pc,
+                                     mirror::Object* this_object, mirror::ArtField* f,
+                                     const JValue* field_value) {
+  if (!IsDebuggerActive()) {
+    return;
+  }
+  DCHECK(f != nullptr);
+  DCHECK(field_value != nullptr);
+  JDWP::JdwpLocation location;
+  SetLocation(location, m, dex_pc);
+
+  JDWP::RefTypeId type_id = gRegistry->AddRefType(f->GetDeclaringClass());
+  JDWP::FieldId field_id = ToFieldId(f);
+  JDWP::ObjectId this_id = gRegistry->Add(this_object);
+
+  gJdwpState->PostFieldEvent(&location, type_id, field_id, this_id, field_value, true);
 }
 
 void Dbg::PostException(Thread* thread, const ThrowLocation& throw_location,

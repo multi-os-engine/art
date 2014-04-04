@@ -35,6 +35,7 @@
 
 namespace art {
 namespace mirror {
+class ArtField;
 class ArtMethod;
 class Class;
 class Object;
@@ -297,6 +298,9 @@ class Dbg {
   static void OutputMethodReturnValue(JDWP::MethodId method_id, const JValue* return_value,
                                       JDWP::ExpandBuf* pReply)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  static void OutputFieldValue(JDWP::FieldId field_id, const JValue* field_value,
+                               JDWP::ExpandBuf* pReply)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static JDWP::JdwpError GetBytecodes(JDWP::RefTypeId class_id, JDWP::MethodId method_id,
                                       std::vector<uint8_t>& bytecodes)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -410,6 +414,13 @@ class Dbg {
   static void PostLocationEvent(mirror::ArtMethod* method, int pcOffset,
                                 mirror::Object* thisPtr, int eventFlags,
                                 const JValue* return_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  static void PostFieldAccessEvent(Thread* thread, mirror::ArtMethod* m, int dex_pc,
+                                   mirror::Object* this_object, mirror::ArtField* f)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  static void PostFieldModificationEvent(Thread* thread, mirror::ArtMethod* m, int dex_pc,
+                                         mirror::Object* this_object, mirror::ArtField* f,
+                                         const JValue* field_value)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static void PostException(Thread* thread, const ThrowLocation& throw_location,
                             mirror::ArtMethod* catch_method,

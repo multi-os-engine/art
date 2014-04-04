@@ -32,6 +32,7 @@
 namespace art {
 
 namespace mirror {
+  class ArtField;
   class ArtMethod;
 }  // namespace mirror
 class Thread;
@@ -78,23 +79,31 @@ class Trace : public instrumentation::InstrumentationListener {
   void CompareAndUpdateStackTrace(Thread* thread, std::vector<mirror::ArtMethod*>* stack_trace)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // InstrumentationListener implementation.
   virtual void MethodEntered(Thread* thread, mirror::Object* this_object,
                              mirror::ArtMethod* method, uint32_t dex_pc)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
   virtual void MethodExited(Thread* thread, mirror::Object* this_object,
                             mirror::ArtMethod* method, uint32_t dex_pc,
                             const JValue& return_value)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
   virtual void MethodUnwind(Thread* thread, mirror::Object* this_object,
                             mirror::ArtMethod* method, uint32_t dex_pc)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
   virtual void DexPcMoved(Thread* thread, mirror::Object* this_object,
                           mirror::ArtMethod* method, uint32_t new_dex_pc)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
+  virtual void FieldRead(Thread* thread, mirror::Object* this_object,
+                         mirror::ArtMethod* method, uint32_t dex_pc, mirror::ArtField* field)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
+  virtual void FieldWritten(Thread* thread, mirror::Object* this_object,
+                            mirror::ArtMethod* method, uint32_t dex_pc, mirror::ArtField* field,
+                            const JValue& field_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
   virtual void ExceptionCaught(Thread* thread, const ThrowLocation& throw_location,
                                mirror::ArtMethod* catch_method, uint32_t catch_dex_pc,
                                mirror::Throwable* exception_object)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
 
   // Reuse an old stack trace if it exists, otherwise allocate a new one.
   static std::vector<mirror::ArtMethod*>* AllocStackTrace();
