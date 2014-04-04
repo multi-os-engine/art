@@ -62,6 +62,8 @@ using ::art::mirror::Throwable;
 namespace art {
 namespace interpreter {
 
+static constexpr bool kEnableFieldWatchpointReporting = true;
+
 // External references to both interpreter implementations.
 
 template<bool do_access_check, bool transaction_active>
@@ -169,6 +171,14 @@ static inline bool DoFieldGet(Thread* self, ShadowFrame& shadow_frame,
       return false;
     }
   }
+  if (kEnableFieldWatchpointReporting) {
+    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+    if (instrumentation->HasFieldReadListeners()) {
+      Object* this_object = f->IsStatic() ? nullptr : obj;
+      instrumentation->FieldReadEvent(self, this_object, shadow_frame.GetMethod(),
+                                      shadow_frame.GetDexPC(), f);
+    }
+  }
   uint32_t vregA = is_static ? inst->VRegA_21c(inst_data) : inst->VRegA_22c(inst_data);
   switch (field_type) {
     case Primitive::kPrimBoolean:
@@ -210,6 +220,16 @@ static inline bool DoIGetQuick(ShadowFrame& shadow_frame, const Instruction* ins
     return false;
   }
   MemberOffset field_offset(inst->VRegC_22c());
+  if (kEnableFieldWatchpointReporting) {
+    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+    if (instrumentation->HasFieldReadListeners()) {
+      ArtField* f = ArtField::FindInstanceFieldWithOffset(obj->GetClass(),
+                                                          field_offset.Uint32Value());
+      DCHECK(!f->IsStatic());
+      instrumentation->FieldReadEvent(Thread::Current(), obj, shadow_frame.GetMethod(),
+                                      shadow_frame.GetDexPC(), f);
+    }
+  }
   const bool is_volatile = false;  // iget-x-quick only on non volatile fields.
   const uint32_t vregA = inst->VRegA_22c(inst_data);
   switch (field_type) {
@@ -226,6 +246,39 @@ static inline bool DoIGetQuick(ShadowFrame& shadow_frame, const Instruction* ins
       LOG(FATAL) << "Unreachable: " << field_type;
   }
   return true;
+}
+
+static JValue GetFieldValue(const ShadowFrame& shadow_frame, uint32_t vregA,
+                            Primitive::Type field_type)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  JValue field_value;
+  switch (field_type) {
+    case Primitive::kPrimBoolean:
+      field_value.SetZ(static_cast<uint8_t>(shadow_frame.GetVReg(vregA)));
+      break;
+    case Primitive::kPrimByte:
+      field_value.SetB(static_cast<int8_t>(shadow_frame.GetVReg(vregA)));
+      break;
+    case Primitive::kPrimChar:
+      field_value.SetC(static_cast<uint16_t>(shadow_frame.GetVReg(vregA)));
+      break;
+    case Primitive::kPrimShort:
+      field_value.SetS(static_cast<int16_t>(shadow_frame.GetVReg(vregA)));
+      break;
+    case Primitive::kPrimInt:
+      field_value.SetI(shadow_frame.GetVReg(vregA));
+      break;
+    case Primitive::kPrimLong:
+      field_value.SetJ(shadow_frame.GetVRegLong(vregA));
+      break;
+    case Primitive::kPrimNot:
+      field_value.SetL(shadow_frame.GetVRegReference(vregA));
+      break;
+    default:
+      LOG(FATAL) << "Unreachable: " << field_type;
+      break;
+  }
+  return field_value;
 }
 
 // Handles iput-XXX and sput-XXX instructions.
@@ -254,6 +307,17 @@ static inline bool DoFieldPut(Thread* self, const ShadowFrame& shadow_frame,
     }
   }
   uint32_t vregA = is_static ? inst->VRegA_21c(inst_data) : inst->VRegA_22c(inst_data);
+
+  if (kEnableFieldWatchpointReporting) {
+    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+    if (instrumentation->HasFieldReadListeners()) {
+      JValue field_value = GetFieldValue(shadow_frame, vregA, field_type);
+      Object* this_object = f->IsStatic() ? nullptr : obj;
+      instrumentation->FieldWriteEvent(self, this_object, shadow_frame.GetMethod(),
+                                       shadow_frame.GetDexPC(), f, field_value);
+    }
+  }
+
   switch (field_type) {
     case Primitive::kPrimBoolean:
       f->SetBoolean<transaction_active>(obj, shadow_frame.GetVReg(vregA));
@@ -309,8 +373,19 @@ static inline bool DoIPutQuick(const ShadowFrame& shadow_frame, const Instructio
     return false;
   }
   MemberOffset field_offset(inst->VRegC_22c());
-  const bool is_volatile = false;  // iput-x-quick only on non volatile fields.
   const uint32_t vregA = inst->VRegA_22c(inst_data);
+  if (kEnableFieldWatchpointReporting) {
+    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+    if (instrumentation->HasFieldReadListeners()) {
+      ArtField* f = ArtField::FindInstanceFieldWithOffset(obj->GetClass(),
+                                                          field_offset.Uint32Value());
+      JValue field_value = GetFieldValue(shadow_frame, vregA, field_type);
+      DCHECK(!f->IsStatic());
+      instrumentation->FieldWriteEvent(Thread::Current(), obj, shadow_frame.GetMethod(),
+                                       shadow_frame.GetDexPC(), f, field_value);
+    }
+  }
+  const bool is_volatile = false;  // iput-x-quick only on non volatile fields.
   switch (field_type) {
     case Primitive::kPrimInt:
       obj->SetField32<transaction_active>(field_offset, shadow_frame.GetVReg(vregA), is_volatile);
