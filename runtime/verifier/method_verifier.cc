@@ -3616,27 +3616,6 @@ void MethodVerifier::VerifyISPut(const Instruction* inst, const RegType& insn_ty
   }
 }
 
-// Look for an instance field with this offset.
-// TODO: we may speed up the search if offsets are sorted by doing a quick search.
-static mirror::ArtField* FindInstanceFieldWithOffset(mirror::Class* klass, uint32_t field_offset)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::ObjectArray<mirror::ArtField>* instance_fields = klass->GetIFields();
-  if (instance_fields != NULL) {
-    for (int32_t i = 0, e = instance_fields->GetLength(); i < e; ++i) {
-      mirror::ArtField* field = instance_fields->Get(i);
-      if (field->GetOffset().Uint32Value() == field_offset) {
-        return field;
-      }
-    }
-  }
-  // We did not find field in class: look into superclass.
-  if (klass->GetSuperClass() != NULL) {
-    return FindInstanceFieldWithOffset(klass->GetSuperClass(), field_offset);
-  } else {
-    return NULL;
-  }
-}
-
 // Returns the access field of a quick field access (iget/iput-quick) or NULL
 // if it cannot be found.
 mirror::ArtField* MethodVerifier::GetQuickFieldAccess(const Instruction* inst,
@@ -3670,7 +3649,7 @@ mirror::ArtField* MethodVerifier::GetQuickFieldAccess(const Instruction* inst,
     return NULL;
   }
   uint32_t field_offset = static_cast<uint32_t>(inst->VRegC_22c());
-  return FindInstanceFieldWithOffset(object_class, field_offset);
+  return mirror::ArtField::FindInstanceFieldWithOffset(object_class, field_offset);
 }
 
 void MethodVerifier::VerifyIGetQuick(const Instruction* inst, const RegType& insn_type,
