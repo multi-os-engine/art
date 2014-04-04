@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
-#include <unistd.h>
+#include <algorithm>
 #include <fcntl.h>
+#include <fstream>
+#include <set>
+#include <unistd.h>
 
 #include "base/logging.h"
 #include "class_linker.h"
@@ -230,11 +233,111 @@ static void CopyProfileFile(const char* oldfile, const char* newfile) {
   close(fd2);
 }
 
+
+static bool loadTopKMethods(std::set<std::string>& topKMethods, const std::string& profileFileName,
+    double targetTopKPercentage) {
+  LOG(VERBOSE) << "reading profile file " << profileFileName;
+  struct stat st;
+  int err = stat(profileFileName.c_str(), &st);
+  if (err == -1) {
+    LOG(VERBOSE) << "not found";
+    return false;
+  }
+  std::ifstream in(profileFileName.c_str());
+  if (!in) {
+    LOG(VERBOSE) << "profile file " << profileFileName << " exists but can't be opened";
+    LOG(VERBOSE) << "file owner: " << st.st_uid << ":" << st.st_gid;
+    LOG(VERBOSE) << "me: " << getuid() << ":" << getgid();
+    LOG(VERBOSE) << "file permissions: " << std::oct << st.st_mode;
+    LOG(VERBOSE) << "errno: " << errno;
+    return false;
+  }
+  // The first line contains summary information.
+  std::string line;
+  std::getline(in, line);
+  if (in.eof()) {
+    return false;
+  }
+  std::vector<std::string> summary_info;
+  Split(line, '/', summary_info);
+  if (summary_info.size() != 3) {
+    // Bad summary info.  It should be count/total/bootpath.
+    return false;
+  }
+  // This is the number of hits in all methods.
+  uint32_t total_count = 0;
+  for (int i = 0 ; i < 3; ++i) {
+    total_count += atoi(summary_info[i].c_str());
+  }
+
+  // Now read each line until the end of file.  Each line consists of 3 fields separated by '/'.
+  // Store the info in descending order given by the most used methods.
+  typedef std::set<std::pair<int, std::string>> ProfileSet;
+  ProfileSet countSet;
+  while (!in.eof()) {
+    std::getline(in, line);
+    if (in.eof()) {
+      break;
+    }
+    std::vector<std::string> info;
+    Split(line, '/', info);
+    if (info.size() != 3) {
+      // Malformed.
+      break;
+    }
+    int count = atoi(info[1].c_str());
+    countSet.insert(std::make_pair(-count, info[0]));
+  }
+
+  ProfileSet::iterator end = countSet.end();
+  ProfileSet::iterator begin = countSet.begin();
+  uint32_t curTotalCount = 0;
+  uint32_t prevCount = 0;
+  double prevTopKPercent = 0;
+
+  for (ProfileSet::iterator it = begin; it != end; it++) {
+    uint32_t count = -it->first;
+    double usedPercent = (count * 100.0) / total_count;
+    curTotalCount += count;
+    // Methods with the same count should be part of the same top K percentage bucket.
+    double topKPercentage = (it != begin) && (prevCount == count)
+      ? prevTopKPercent
+      : 100 * static_cast<double>(curTotalCount) / static_cast<double>(total_count);
+
+    if (topKPercentage - usedPercent < targetTopKPercentage) {
+      topKMethods.insert(it->second);
+    } else {
+      break;
+    }
+    prevTopKPercent = topKPercentage;
+    prevCount = count;
+  }
+  return true;
+}
+
+static double getDoubleProperty(const char* property, double minValue, double maxValue, double defaultValue) {
+#ifndef HAVE_ANDROID_OS
+  return defaultValue;
+#else
+  char buf[PROP_VALUE_MAX];
+  char* endptr;
+
+  property_get(property, buf, "");
+  double value = strtod(buf, &endptr);
+
+  if (value == 0 && endptr == buf) {
+    value = defaultValue;
+  } else if (value < minValue || value > maxValue) {
+    value = defaultValue;
+  }
+  return value;
+#endif
+}
+
 static jboolean DexFile_isDexOptNeededInternal(JNIEnv* env, jclass, jstring javaFilename,
     jstring javaPkgname, jboolean defer) {
   const bool kVerboseLogging = false;  // Spammy logging.
   const bool kDebugLogging = true;  // Logging useful for debugging.
-
   ScopedUtfChars filename(env, javaFilename);
 
   if ((filename.c_str() == nullptr) || !OS::FileExists(filename.c_str())) {
@@ -282,7 +385,6 @@ static jboolean DexFile_isDexOptNeededInternal(JNIEnv* env, jclass, jstring java
     struct stat profstat, prevstat;
     int e1 = stat(profile_file.c_str(), &profstat);
     int e2 = stat(prev_profile_file.c_str(), &prevstat);
-
     if (e1 < 0) {
       // No profile file, need to run dex2oat
       if (kDebugLogging) {
@@ -292,46 +394,33 @@ static jboolean DexFile_isDexOptNeededInternal(JNIEnv* env, jclass, jstring java
     }
     if (e2 == 0) {
       // There is a previous profile file.  Check if the profile has changed significantly.
-      // Let's use the file size as a proxy for significance.  If the new profile is 10%
-      // different in size than the the old profile then we run dex2oat.
-      double newsize = profstat.st_size;
-      double oldsize = prevstat.st_size;
-      bool need_profile = false;
+      // A change in profile is considered significant if X% (change_thr property) of the top K% 
+      // (compile_thr property) samples has changed. 
 
-      double ratio = 0;     // If the old file was empty and the new one not
-      if (oldsize > 0 && newsize > 0) {
-        ratio = newsize / oldsize;
-      } else if (oldsize == 0 && newsize > 0) {
-        need_profile = true;
-      } else if (oldsize > 0 && newsize == 0) {
-        // Unlikely to happen, but cover all the bases.
-        need_profile = true;
+      double topKThreshold = getDoubleProperty("dalvik.vm.profiler.dex2oat.compile_thr", 10.0, 90.0, 90.0);
+      double changeThreshold = getDoubleProperty("dalvik.vm.profiler.dex2oat.change_thr", 1.0, 90.0, 10.0);
+      double changePercent = 0.0;
+      std::set<std::string> newTopK, oldTopK;
+      bool newOk = loadTopKMethods(newTopK, profile_file, topKThreshold);
+      bool oldOk = loadTopKMethods(oldTopK, prev_profile_file, topKThreshold);
+      if (!newOk || !oldOk) {
+        if (kDebugLogging) {
+          LOG(INFO) << "Ignoring invalid profiles";
+        }
+      } else if (newTopK.empty() || oldTopK.empty()) {
+        changePercent = 100.0;
+      } else {
+        std::set<std::string> diff;
+        std::set_difference(newTopK.begin(), newTopK.end(), oldTopK.begin(), oldTopK.end(), 
+          std::inserter(diff, diff.end()));
+        changePercent = 100.0 * static_cast<double>(diff.size()) / static_cast<double>(newTopK.size());
       }
 
-      double significant_difference = 10.0;
-#ifdef HAVE_ANDROID_OS
-      // Switch off profiler if the dalvik.vm.profiler property has value 0.
-      char buf[PROP_VALUE_MAX];
-      property_get("dalvik.vm.profiler.dex2oat.threshold", buf, "10.0");
-      significant_difference = strtod(buf, nullptr);
-
-      // Something reasonable?
-      if (significant_difference < 1.0 || significant_difference > 90.0) {
-        significant_difference = 10.0;
-      }
-#endif      // The percentage difference that we consider as being significant.
-      double diff_hwm = 1.0 + significant_difference/10.0;
-      double diff_lwm = 1.0 - significant_difference/10.0;
-
-      if (ratio > diff_hwm || ratio < diff_lwm) {
-        need_profile = true;
-      }
-
-      if (need_profile) {
+      if (changePercent > changeThreshold) {
         if (kDebugLogging) {
           LOG(INFO) << "DexFile_isDexOptNeeded size of new profile file " << profile_file <<
-          " is significantly different from old profile file " << prev_profile_file << " (new: " <<
-          newsize << ", old: " << oldsize << ", ratio: " << ratio << ")";
+          " is significantly different from old profile file " << prev_profile_file << " (top "
+          << topKThreshold << "% samples changed in proportion of " << changePercent << "%)";
         }
         if (!defer) {
           CopyProfileFile(profile_file.c_str(), prev_profile_file.c_str());
