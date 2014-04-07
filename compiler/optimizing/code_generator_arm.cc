@@ -319,5 +319,17 @@ void InstructionCodeGeneratorARM::VisitNewInstance(HNewInstance* instruction) {
   codegen_->RecordPcInfo(instruction->GetDexPc());
 }
 
+void LocationsBuilderARM::VisitNot(HNot* instruction) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  locations->SetInAt(0, Location(R0));
+  locations->SetOut(Location(R0));
+  instruction->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitNot(HNot* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  __ eor(locations->Out().reg<Register>(), locations->InAt(0).reg<Register>(), ShifterOperand(1));
+}
+
 }  // namespace arm
 }  // namespace art

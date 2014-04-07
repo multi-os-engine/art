@@ -71,6 +71,8 @@ class HGraphBuilder : public ValueObject {
   void UpdateLocal(int register_index, HInstruction* instruction) const;
   HInstruction* LoadLocal(int register_index) const;
 
+  template<typename T> void if_22t(const Instruction& instruction, int32_t dex_offset, bool is_not);
+
   ArenaAllocator* const arena_;
 
   // A list of the size of the dex code holding block information for
