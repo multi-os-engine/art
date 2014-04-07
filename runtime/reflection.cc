@@ -242,15 +242,15 @@ class ArgArray {
       }
 
 #define DO_FIRST_ARG(match_descriptor, get_fn, append) { \
-          const StringPiece src_descriptor(arg != nullptr \
-              ? ClassHelper(arg->GetClass<>()).GetDescriptor() \
-              : "null"); \
-          if (LIKELY(src_descriptor == match_descriptor)) { \
+          CHECK(arg != nullptr); \
+          ClassHelper ch(arg->GetClass<>()); \
+          const char* src_descriptor = ch.GetDescriptor(); \
+          if (LIKELY(strcmp(src_descriptor, match_descriptor) == 0)) { \
             mirror::ArtField* primitive_field = arg->GetClass()->GetIFields()->Get(0); \
             append(primitive_field-> get_fn(arg));
 
 #define DO_ARG(match_descriptor, get_fn, append) \
-          } else if (LIKELY(src_descriptor == match_descriptor)) { \
+          } else if (LIKELY(strcmp(src_descriptor, match_descriptor) == 0)) { \
             mirror::ArtField* primitive_field = arg->GetClass()->GetIFields()->Get(0); \
             append(primitive_field-> get_fn(arg));
 
@@ -741,7 +741,8 @@ static bool UnboxPrimitive(const ThrowLocation* throw_location, mirror::Object* 
   }
 
   JValue boxed_value;
-  const StringPiece src_descriptor(ClassHelper(o->GetClass()).GetDescriptor());
+  ClassHelper ch(o->GetClass());
+  const StringPiece src_descriptor(ch.GetDescriptor());
   mirror::Class* src_class = nullptr;
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   mirror::ArtField* primitive_field = o->GetClass()->GetIFields()->Get(0);
