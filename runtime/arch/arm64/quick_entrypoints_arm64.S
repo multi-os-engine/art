@@ -460,7 +460,7 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
     bne .LisDouble
 
     cmp x15, # 8*12         // Skip this load if all registers full.
-    beq .LfillRegisters
+    beq .Ladvance4
 
     add x17, x13, x15       // Calculate subroutine to jump to.
     br  x17
@@ -470,7 +470,7 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
     bne .LisLong
 
     cmp x15, # 8*12         // Skip this load if all registers full.
-    beq .LfillRegisters
+    beq .Ladvance8
 
 
     add x17, x14, x15       // Calculate subroutine to jump to.
@@ -481,7 +481,7 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
     bne .LisOther
 
     cmp x8, # 6*12          // Skip this load if all registers full.
-    beq .LfillRegisters
+    beq .Ladvance8
 
     add x17, x12, x8        // Calculate subroutine to jump to.
     br x17
@@ -489,9 +489,17 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
 
 .LisOther:                  // Everything else takes one vReg.
     cmp x8, # 6*12          // Skip this load if all registers full.
-    beq .LfillRegisters
+    beq .Ladvance4
     add x17, x11, x8        // Calculate subroutine to jump to.
     br x17
+
+.Ladvance4:
+    add x9, x9, #4
+    b .LfillRegisters
+
+.Ladvance8:
+    add x9, x9, #8
+    b .LfillRegisters
 
 // Macro for loading a parameter into a register.
 //  counter - the register with offset into these tables
@@ -683,7 +691,7 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
     bne .LisDouble2
 
     cmp x15, # 8*12         // Skip this load if all registers full.
-    beq .LfillRegisters2
+    beq .Ladvance4_2
 
     add x17, x13, x15       // Calculate subroutine to jump to.
     br  x17
@@ -693,7 +701,7 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
     bne .LisLong2
 
     cmp x15, # 8*12         // Skip this load if all registers full.
-    beq .LfillRegisters2
+    beq .Ladvance8_2
 
 
     add x17, x14, x15       // Calculate subroutine to jump to.
@@ -704,7 +712,7 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
     bne .LisOther2
 
     cmp x8, # 7*12          // Skip this load if all registers full.
-    beq .LfillRegisters2
+    beq .Ladvance8_2
 
     add x17, x12, x8        // Calculate subroutine to jump to.
     br x17
@@ -712,9 +720,17 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
 
 .LisOther2:                 // Everything else takes one vReg.
     cmp x8, # 7*12          // Skip this load if all registers full.
-    beq .LfillRegisters2
+    beq .Ladvance4_2
     add x17, x11, x8        // Calculate subroutine to jump to.
     br x17
+
+.Ladvance4_2:
+    add x9, x9, #4
+    b .LfillRegisters2
+
+.Ladvance8_2:
+    add x9, x9, #8
+    b .LfillRegisters2
 
 // Store ints.
 .LstoreW1_2:
