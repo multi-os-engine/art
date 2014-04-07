@@ -561,13 +561,14 @@ DEFINE_FUNCTION art_quick_unlock_object
     jz   .Lslow_unlock
     movl LOCK_WORD_OFFSET(%eax), %ecx     // ecx := lock word
     movl %fs:THREAD_ID_OFFSET, %edx       // edx := thread id
-    test %ecx, %ecx
-    jb   .Lslow_unlock                    // lock word contains a monitor
+    test LITERAL(0xC0000000), %ecx
+    jnz  .Lslow_unlock                    // lock word contains a monitor
     cmpw %cx, %dx                         // does the thread id match?
     jne  .Lslow_unlock
     cmpl LITERAL(65536), %ecx
     jae  .Lrecursive_thin_unlock
-    movl LITERAL(0), LOCK_WORD_OFFSET(%eax)
+    xor %ecx, %ecx
+    xchg %ecx, LOCK_WORD_OFFSET(%eax)
     ret
 .Lrecursive_thin_unlock:
     subl LITERAL(65536), %ecx
