@@ -242,9 +242,10 @@ class ArgArray {
       }
 
 #define DO_FIRST_ARG(match_descriptor, get_fn, append) { \
-          const StringPiece src_descriptor(arg != nullptr \
+          const std::string descriptor(arg != nullptr \
               ? ClassHelper(arg->GetClass<>()).GetDescriptor() \
               : "null"); \
+          const StringPiece src_descriptor(descriptor); \
           if (LIKELY(src_descriptor == match_descriptor)) { \
             mirror::ArtField* primitive_field = arg->GetClass()->GetIFields()->Get(0); \
             append(primitive_field-> get_fn(arg));
@@ -741,7 +742,8 @@ static bool UnboxPrimitive(const ThrowLocation* throw_location, mirror::Object* 
   }
 
   JValue boxed_value;
-  const StringPiece src_descriptor(ClassHelper(o->GetClass()).GetDescriptor());
+  const std::string descriptor(ClassHelper(o->GetClass()).GetDescriptor());
+  const StringPiece src_descriptor(descriptor);
   mirror::Class* src_class = nullptr;
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   mirror::ArtField* primitive_field = o->GetClass()->GetIFields()->Get(0);
