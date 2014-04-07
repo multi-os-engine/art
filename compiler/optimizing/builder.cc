@@ -43,6 +43,24 @@ static bool CanHandleCodeItem(const DexFile::CodeItem& code_item) {
   return true;
 }
 
+template<typename T>
+void HGraphBuilder::If_22t(const Instruction& instruction, int32_t dex_offset, bool is_not) {
+  HInstruction* first = LoadLocal(instruction.VRegA());
+  HInstruction* second = LoadLocal(instruction.VRegB());
+  current_block_->AddInstruction(new (arena_) T(first, second));
+  if (is_not) {
+    current_block_->AddInstruction(new (arena_) HNot(current_block_->GetLastInstruction()));
+  }
+  current_block_->AddInstruction(new (arena_) HIf(current_block_->GetLastInstruction()));
+  HBasicBlock* target = FindBlockStartingAt(instruction.GetTargetOffset() + dex_offset);
+  DCHECK(target != nullptr);
+  current_block_->AddSuccessor(target);
+  target = FindBlockStartingAt(dex_offset + instruction.SizeInCodeUnits());
+  DCHECK(target != nullptr);
+  current_block_->AddSuccessor(target);
+  current_block_ = nullptr;
+}
+
 HGraph* HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
   if (!CanHandleCodeItem(code_item)) {
     return nullptr;
@@ -152,6 +170,19 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       break;
     }
 
+    case Instruction::CONST_16: {
+      int32_t register_index = instruction.VRegA();
+      HIntConstant* constant = GetConstant(instruction.VRegB_21s());
+      UpdateLocal(register_index, constant);
+      break;
+    }
+
+    case Instruction::MOVE: {
+      HInstruction* value = LoadLocal(instruction.VRegB());
+      UpdateLocal(instruction.VRegA(), value);
+      break;
+    }
+
     case Instruction::RETURN_VOID: {
       current_block_->AddInstruction(new (arena_) HReturnVoid());
       current_block_->AddSuccessor(exit_block_);
@@ -160,17 +191,12 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
     }
 
     case Instruction::IF_EQ: {
-      HInstruction* first = LoadLocal(instruction.VRegA());
-      HInstruction* second = LoadLocal(instruction.VRegB());
-      current_block_->AddInstruction(new (arena_) HEqual(first, second));
-      current_block_->AddInstruction(new (arena_) HIf(current_block_->GetLastInstruction()));
-      HBasicBlock* target = FindBlockStartingAt(instruction.GetTargetOffset() + dex_offset);
-      DCHECK(target != nullptr);
-      current_block_->AddSuccessor(target);
-      target = FindBlockStartingAt(dex_offset + instruction.SizeInCodeUnits());
-      DCHECK(target != nullptr);
-      current_block_->AddSuccessor(target);
-      current_block_ = nullptr;
+      If_22t<HEqual>(instruction, dex_offset, false);
+      break;
+    }
+
+    case Instruction::IF_NE: {
+      If_22t<HEqual>(instruction, dex_offset, true);
       break;
     }
 

@@ -202,6 +202,7 @@ class HBasicBlock : public ArenaObject {
   M(LoadLocal)                                             \
   M(Local)                                                 \
   M(NewInstance)                                           \
+  M(Not)                                                   \
   M(PushArgument)                                          \
   M(Return)                                                \
   M(ReturnVoid)                                            \
@@ -680,6 +681,18 @@ class HAdd : public HBinaryOperation {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HAdd);
+};
+
+class HNot : public HTemplateInstruction<1> {
+ public:
+  HNot(HInstruction* input) {
+    SetRawInputAt(0, input);
+  }
+
+  DECLARE_INSTRUCTION(Not);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HNot);
 };
 
 class HGraphVisitor : public ValueObject {
