@@ -24,11 +24,11 @@ namespace arm64 {
 // Calling convention
 
 ManagedRegister Arm64ManagedRuntimeCallingConvention::InterproceduralScratchRegister() {
-  return Arm64ManagedRegister::FromCoreRegister(IP0);  // X16
+  return Arm64ManagedRegister::FromCoreRegister(X19);  // saved on entry restored on exit
 }
 
 ManagedRegister Arm64JniCallingConvention::InterproceduralScratchRegister() {
-  return Arm64ManagedRegister::FromCoreRegister(IP0);  // X16
+  return Arm64ManagedRegister::FromCoreRegister(X19);  // saved on entry restored on exit
 }
 
 static ManagedRegister ReturnRegisterForShorty(const char* shorty) {
@@ -79,41 +79,41 @@ ManagedRegister Arm64ManagedRuntimeCallingConvention::CurrentParamRegister() {
 FrameOffset Arm64ManagedRuntimeCallingConvention::CurrentParamStackOffset() {
   CHECK(IsCurrentParamOnStack());
   FrameOffset result =
-      FrameOffset(displacement_.Int32Value() +         // displacement
+      FrameOffset(displacement_.Int32Value() +   // displacement
                   kFramePointerSize +                 // Method*
-                  (itr_slots_ * kFramePointerSize));  // offset into in args
+                  (itr_slots_ * sizeof(uint32_t)));  // offset into in args
   return result;
 }
 
 const ManagedRegisterEntrySpills& Arm64ManagedRuntimeCallingConvention::EntrySpills() {
   // We spill the argument registers on ARM64 to free them up for scratch use, we then assume
   // all arguments are on the stack.
-  if (entry_spills_.size() == 0) {
-    // TODO Need fp regs spilled too.
-    //
-    size_t num_spills = NumArgs();
+  if ((entry_spills_.size() == 0) && (NumArgs() > 0)) {
+    int gp_reg_index = 1;   // we start from X1/W1, X0 holds ArtMethod*.
+    int fp_reg_index = 0;   // D0/S0.
 
-    // TODO Floating point need spilling too.
-    if (num_spills > 0) {
-      entry_spills_.push_back(Arm64ManagedRegister::FromCoreRegister(X1));
-      if (num_spills > 1) {
-        entry_spills_.push_back(Arm64ManagedRegister::FromCoreRegister(X2));
-        if (num_spills > 2) {
-          entry_spills_.push_back(Arm64ManagedRegister::FromCoreRegister(X3));
-          if (num_spills > 3) {
-            entry_spills_.push_back(Arm64ManagedRegister::FromCoreRegister(X5));
-            if (num_spills > 4) {
-              entry_spills_.push_back(Arm64ManagedRegister::FromCoreRegister(X6));
-              if (num_spills > 5) {
-                entry_spills_.push_back(Arm64ManagedRegister::FromCoreRegister(X7));
-              }
-            }
-          }
+    // We need to choose the correct register (D/S or X/W) since the managed
+    // stack uses 32bit stack slots.
+    ResetIterator(FrameOffset(0));
+    while (HasNext()) {
+      if (IsCurrentParamAFloatOrDouble() && (fp_reg_index < 8)) {
+        if (!IsCurrentParamADouble()) {
+          entry_spills_.push_back(Arm64ManagedRegister::FromSRegister(static_cast<SRegister>(fp_reg_index)));
+        } else {
+          entry_spills_.push_back(Arm64ManagedRegister::FromDRegister(static_cast<DRegister>(fp_reg_index)));
         }
+        fp_reg_index++;
+      } else if (gp_reg_index < 8) {
+        if (IsCurrentParamALong()) {
+          entry_spills_.push_back(Arm64ManagedRegister::FromCoreRegister(static_cast<Register>(gp_reg_index)));
+        } else {
+          entry_spills_.push_back(Arm64ManagedRegister::FromWRegister(static_cast<WRegister>(gp_reg_index)));
+        }
+        gp_reg_index++;
       }
+      Next();
     }
   }
-
   return entry_spills_;
 }
 // JNI calling convention
@@ -121,22 +121,6 @@ const ManagedRegisterEntrySpills& Arm64ManagedRuntimeCallingConvention::EntrySpi
 Arm64JniCallingConvention::Arm64JniCallingConvention(bool is_static, bool is_synchronized,
                                                      const char* shorty)
     : JniCallingConvention(is_static, is_synchronized, shorty, kFramePointerSize) {
-  // TODO This needs to be converted to 64bit.
-  // Compute padding to ensure longs and doubles are not split in AAPCS. Ignore the 'this' jobject
-  // or jclass for static methods and the JNIEnv. We start at the aligned register r2.
-//  size_t padding = 0;
-//  for (size_t cur_arg = IsStatic() ? 0 : 1, cur_reg = 2; cur_arg < NumArgs(); cur_arg++) {
-//    if (IsParamALongOrDouble(cur_arg)) {
-//      if ((cur_reg & 1) != 0) {
-//        padding += 4;
-//        cur_reg++;  // additional bump to ensure alignment
-//      }
-//      cur_reg++;  // additional bump to skip extra long word
-//    }
-//    cur_reg++;  // bump the iterator for every argument
-//  }
-  padding_ =0;
-
   callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X19));
   callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X20));
   callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X21));
@@ -162,83 +146,104 @@ Arm64JniCallingConvention::Arm64JniCallingConvention(bool is_static, bool is_syn
 uint32_t Arm64JniCallingConvention::CoreSpillMask() const {
   // Compute spill mask to agree with callee saves initialized in the constructor
   uint32_t result = 0;
-  result =  1 << X19 | 1 << X20 | 1 << X21 | 1 << X22 | 1 << X23 | 1 << X24 | 1 << X25
-      | 1 << X26 | 1 << X27 | 1 << X28 | 1<< X29 | 1 << LR;
+  result =  1 << X19 | 1 << X20 | 1 << X21 | 1 << X22 | 1 << X23 | 1 << X24 |
+            1 << X25 | 1 << X26 | 1 << X27 | 1 << X28 | 1 << X29 | 1 << LR;
+  return result;
+}
+
+uint32_t Arm64JniCallingConvention::FpSpillMask() const {
+  // Compute spill mask to agree with callee saves initialized in the constructor
+  uint32_t result = 0;
+  result = 1 << D8 | 1 << D9 | 1 << D10 | 1 << D11 | 1 << D12 | 1 << D13 |
+           1 << D14 | 1 << D15;
   return result;
 }
 
 ManagedRegister Arm64JniCallingConvention::ReturnScratchRegister() const {
-  return Arm64ManagedRegister::FromCoreRegister(X9);
+  return ManagedRegister::NoRegister();
 }
 
 size_t Arm64JniCallingConvention::FrameSize() {
-  // Method*, LR and callee save area size, local reference segment state
-  size_t frame_data_size = (3 + CalleeSaveRegisters().size()) * kFramePointerSize;
-  // References plus 2 words for SIRT header
-  size_t sirt_size = (ReferenceCount() + 2) * sirt_pointer_size_;
+  // Method*, callee save area size, local reference segment state
+  size_t frame_data_size = ((1 + CalleeSaveRegisters().size()) * kFramePointerSize) + sizeof(uint32_t);
+  // Link to previous SIRT + No. of SIRT entries + SIRT References
+  size_t sirt_size = kFramePointerSize + ((1 + ReferenceCount()) * sirt_pointer_size_);
   // Plus return value spill area size
   return RoundUp(frame_data_size + sirt_size + SizeOfReturnValue(), kStackAlignment);
 }
 
 size_t Arm64JniCallingConvention::OutArgSize() {
-  return RoundUp(NumberOfOutgoingStackArgs() * kFramePointerSize + padding_,
-                 kStackAlignment);
-}
-
-// JniCallingConvention ABI follows AAPCS where longs and doubles must occur
-// in even register numbers and stack slots
-void Arm64JniCallingConvention::Next() {
-  JniCallingConvention::Next();
-  size_t arg_pos = itr_args_ - NumberOfExtraArgumentsForJni();
-  if ((itr_args_ >= 2) &&
-      (arg_pos < NumArgs()) &&
-      IsParamALongOrDouble(arg_pos)) {
-    // itr_slots_ needs to be an even number, according to AAPCS.
-    if ((itr_slots_ & 0x1u) != 0) {
-      itr_slots_++;
-    }
-  }
+  return RoundUp(NumberOfOutgoingStackArgs() * kFramePointerSize, kStackAlignment);
 }
 
 bool Arm64JniCallingConvention::IsCurrentParamInRegister() {
-  return itr_slots_ < 4;
+  if (IsCurrentParamAFloatOrDouble()) {
+    return (itr_float_and_doubles_ < 8);
+  } else {
+    return ((itr_args_ - itr_float_and_doubles_) < 8);
+  }
 }
 
 bool Arm64JniCallingConvention::IsCurrentParamOnStack() {
   return !IsCurrentParamInRegister();
 }
 
-// TODO and floating point?
-
-static const Register kJniArgumentRegisters[] = {
+static const Register kJniCoreArgumentRegisters[] = {
   X0, X1, X2, X3, X4, X5, X6, X7
 };
+
+static const WRegister kJniWArgumentRegisters[] = {
+  W0, W1, W2, W3, W4, W5, W6, W7
+};
+
+static const DRegister kJniDArgumentRegisters[] = {
+  D0, D1, D2, D3, D4, D5, D6, D7
+};
+
+static const SRegister kJniSArgumentRegisters[] = {
+  S0, S1, S2, S3, S4, S5, S6, S7
+};
+
+
 ManagedRegister Arm64JniCallingConvention::CurrentParamRegister() {
-  CHECK_LT(itr_slots_, 4u);
-  int arg_pos = itr_args_ - NumberOfExtraArgumentsForJni();
-  // TODO Floating point & 64bit registers.
-  if ((itr_args_ >= 2) && IsParamALongOrDouble(arg_pos)) {
-    CHECK_EQ(itr_slots_, 2u);
-    return Arm64ManagedRegister::FromCoreRegister(X1);
+  CHECK(IsCurrentParamInRegister());
+  if (IsCurrentParamAFloatOrDouble()) {
+    CHECK_LT(itr_float_and_doubles_, 8u);
+    if (IsCurrentParamADouble()) {
+      return Arm64ManagedRegister::FromDRegister(kJniDArgumentRegisters[itr_float_and_doubles_]);
+    } else {
+      return Arm64ManagedRegister::FromSRegister(kJniSArgumentRegisters[itr_float_and_doubles_]);
+    }
   } else {
-    return
-      Arm64ManagedRegister::FromCoreRegister(kJniArgumentRegisters[itr_slots_]);
+    int gp_reg = itr_args_ - itr_float_and_doubles_;
+    CHECK_LT(static_cast<unsigned int>(gp_reg), 8u);
+    if (IsCurrentParamALong() || IsCurrentParamAReference())  {
+      return Arm64ManagedRegister::FromCoreRegister(kJniCoreArgumentRegisters[gp_reg]);
+    } else {
+      return Arm64ManagedRegister::FromWRegister(kJniWArgumentRegisters[gp_reg]);
+    }
   }
 }
 
 FrameOffset Arm64JniCallingConvention::CurrentParamStackOffset() {
-  CHECK_GE(itr_slots_, 4u);
-  size_t offset = displacement_.Int32Value() - OutArgSize() + ((itr_slots_ - 4) * kFramePointerSize);
+  CHECK(IsCurrentParamOnStack());
+  size_t offset = itr_args_
+                  - std::min(8u, itr_float_and_doubles_)
+                  - std::min(8u, (itr_args_ - itr_float_and_doubles_));
+  offset = displacement_.Int32Value() - OutArgSize() + (offset * kFramePointerSize);
   CHECK_LT(offset, OutArgSize());
   return FrameOffset(offset);
 }
 
 size_t Arm64JniCallingConvention::NumberOfOutgoingStackArgs() {
-  size_t static_args = IsStatic() ? 1 : 0;  // count jclass
-  // regular argument parameters and this
-  size_t param_args = NumArgs() + NumLongOrDoubleArgs();
-  // count JNIEnv* less arguments in registers
-  return static_args + param_args + 1 - 4;
+  // all arguments including JNI args
+  size_t all_args = NumArgs() + NumberOfExtraArgumentsForJni();
+
+  size_t all_stack_args = all_args -
+            std::min(8u, static_cast<unsigned int>(NumFloatOrDoubleArgs())) -
+            std::min(8u, static_cast<unsigned int>((all_args - NumFloatOrDoubleArgs())));
+
+  return all_stack_args;
 }
 
 }  // namespace arm64
