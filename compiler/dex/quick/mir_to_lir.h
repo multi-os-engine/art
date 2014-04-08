@@ -564,6 +564,7 @@ class Mir2Lir : public Backend {
     void GenBarrier();
     void AddDivZeroSlowPath(ConditionCode c_code);
     void AddDivZeroSlowPath(ConditionCode c_code, RegStorage reg, int imm_val);
+    LIR* AddNullCheckSlowPath(ConditionCode c_code, RegStorage reg, int imm_val);
     void MarkPossibleNullPointerException(int opt_flags);
     void MarkPossibleStackOverflowException();
     void ForceImplicitNullCheck(RegStorage reg, int opt_flags);
