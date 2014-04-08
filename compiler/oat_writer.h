@@ -52,14 +52,28 @@ class OutputStream;
 //
 // padding           if necessary so that the following code will be page aligned
 //
-// CompiledMethod    one variable sized blob with the contents of each CompiledMethod
-// CompiledMethod
-// CompiledMethod
-// CompiledMethod
-// CompiledMethod
-// CompiledMethod
+// OatMethodHeader   fixed size header for a CompiledMethod.
+// MethodCode        one variable sized blob with the code of a CompiledMethod.
+// OatMethodHeader   (OatMethodHeader, MethodCode) pairs are deduplicated.
+// MethodCode
 // ...
-// CompiledMethod
+// OatMethodHeader
+// MethodCode
+//
+// GcMap             one variable sized blob with GC map.
+// GcMap             GC maps are deduplicated.
+// ...
+// GcMap
+//
+// VmapTable         one variable sized VmapTable blob (quick compiler only).
+// VmapTable         VmapTables are deduplicated.
+// ...
+// VmapTable
+//
+// MappingTable      one variable sized blob with MappingTable (quick compiler only).
+// MappingTable      MappingTables are deduplicated.
+// ...
+// MappingTable
 //
 class OatWriter {
  public:
@@ -96,6 +110,25 @@ class OatWriter {
   }
 
  private:
+  struct GcMapBinder;
+  struct MappingTableBinder;
+  struct VmapTableBinder;
+
+  class DexMethodProcessor;
+  class OatDexMethodProcessor;
+  class InitOatClassesMethodProcessor;
+  class InitCodeMethodProcessor;
+  template <typename MapBinder>
+  class InitMapMethodProcessor;
+
+  class InitImageMethodProcessor;
+  class WriteCodeMethodProcessor;
+
+  template <typename MapBinder>
+  class WriteMapMethodProcessor;
+
+  bool ProcessDexMethods(DexMethodProcessor* processor);
+
   size_t InitOatHeader();
   size_t InitOatDexFiles(size_t offset);
   size_t InitDexFiles(size_t offset);
@@ -104,35 +137,10 @@ class OatWriter {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   size_t InitOatCodeDexFiles(size_t offset)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  size_t InitOatCodeDexFile(size_t offset,
-                            size_t* oat_class_index,
-                            const DexFile& dex_file)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  size_t InitOatCodeClassDef(size_t offset,
-                             size_t oat_class_index, size_t class_def_index,
-                             const DexFile& dex_file,
-                             const DexFile::ClassDef& class_def)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  size_t InitOatCodeMethod(size_t offset, size_t oat_class_index, size_t class_def_index,
-                           size_t class_def_method_index, size_t* method_offsets_index,
-                           bool is_native, InvokeType type, uint32_t method_idx, const DexFile&)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool WriteTables(OutputStream* out, const size_t file_offset);
   size_t WriteCode(OutputStream* out, const size_t file_offset);
   size_t WriteCodeDexFiles(OutputStream* out, const size_t file_offset, size_t relative_offset);
-  size_t WriteCodeDexFile(OutputStream* out, const size_t file_offset, size_t relative_offset,
-                          size_t* oat_class_index, const DexFile& dex_file);
-  size_t WriteCodeClassDef(OutputStream* out, const size_t file_offset, size_t relative_offset,
-                           size_t oat_class_index, const DexFile& dex_file,
-                           const DexFile::ClassDef& class_def);
-  size_t WriteCodeMethod(OutputStream* out, const size_t file_offset, size_t relative_offset,
-                         size_t oat_class_index, size_t class_def_method_index,
-                         size_t* method_offsets_index, bool is_static, uint32_t method_idx,
-                         const DexFile& dex_file);
-
-  void ReportWriteFailure(const char* what, uint32_t method_idx, const DexFile& dex_file,
-                          const OutputStream& out) const;
 
   class OatDexFile {
    public:
@@ -159,7 +167,7 @@ class OatWriter {
   class OatClass {
    public:
     explicit OatClass(size_t offset,
-                      std::vector<CompiledMethod*>* compiled_methods,
+                      const std::vector<CompiledMethod*>& compiled_methods,
                       uint32_t num_non_null_compiled_methods,
                       mirror::Class::Status status);
     ~OatClass();
@@ -170,8 +178,8 @@ class OatWriter {
     bool Write(OatWriter* oat_writer, OutputStream* out, const size_t file_offset) const;
 
     CompiledMethod* GetCompiledMethod(size_t class_def_method_index) const {
-      DCHECK(compiled_methods_ != NULL);
-      return (*compiled_methods_)[class_def_method_index];
+      DCHECK_LT(class_def_method_index, compiled_methods_.size());
+      return compiled_methods_[class_def_method_index];
     }
 
     // Offset of start of OatClass from beginning of OatHeader. It is
@@ -182,7 +190,7 @@ class OatWriter {
     size_t offset_;
 
     // CompiledMethods for each class_def_method_index, or NULL if no method is available.
-    std::vector<CompiledMethod*>* compiled_methods_;
+    std::vector<CompiledMethod*> compiled_methods_;
 
     // Offset from OatClass::offset_ to the OatMethodOffsets for the
     // class_def_method_index. If 0, it means the corresponding
@@ -265,7 +273,7 @@ class OatWriter {
   uint32_t size_quick_resolution_trampoline_;
   uint32_t size_quick_to_interpreter_bridge_;
   uint32_t size_trampoline_alignment_;
-  uint32_t size_code_size_;
+  uint32_t size_method_header_;
   uint32_t size_code_;
   uint32_t size_code_alignment_;
   uint32_t size_mapping_table_;
