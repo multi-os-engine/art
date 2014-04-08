@@ -94,13 +94,14 @@ class RosAlloc {
       byte* end = fpr_base + ByteSize(rosalloc);
       return end;
     }
-    bool IsLargerThanPageReleaseThreshold(RosAlloc* rosalloc)
+    bool IsLargerThanPageReleaseThreshold(RosAlloc* rosalloc) const
         EXCLUSIVE_LOCKS_REQUIRED(rosalloc->lock_) {
       return ByteSize(rosalloc) >= rosalloc->page_release_size_threshold_;
     }
-    bool IsAtEndOfSpace(RosAlloc* rosalloc)
+    bool IsAtEndOfSpace(RosAlloc* rosalloc) const
         EXCLUSIVE_LOCKS_REQUIRED(rosalloc->lock_) {
-      return reinterpret_cast<byte*>(this) + ByteSize(rosalloc) == rosalloc->base_ + rosalloc->footprint_;
+      return reinterpret_cast<const byte*>(this) + ByteSize(rosalloc) ==
+          rosalloc->base_ + rosalloc->footprint_;
     }
     bool ShouldReleasePages(RosAlloc* rosalloc) EXCLUSIVE_LOCKS_REQUIRED(rosalloc->lock_) {
       switch (rosalloc->page_release_mode_) {
@@ -535,6 +536,8 @@ class RosAlloc {
   // Try to reduce the current footprint by releasing the free page
   // run at the end of the memory region, if any.
   bool Trim();
+  // Reset the space to be empty.
+  void Reset();
   // Iterates over all the memory slots and apply the given function.
   void InspectAll(void (*handler)(void* start, void* end, size_t used_bytes, void* callback_arg),
                   void* arg)

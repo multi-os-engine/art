@@ -60,7 +60,6 @@ RosAlloc::RosAlloc(void* base, size_t capacity, size_t max_capacity,
              << std::hex << (intptr_t)(base_ + capacity_)
              << ", capacity=" << std::dec << capacity_
              << ", max_capacity=" << std::dec << max_capacity_;
-  memset(current_runs_, 0, sizeof(current_runs_));
   for (size_t i = 0; i < kNumOfSizeBrackets; i++) {
     size_bracket_locks_[i] = new Mutex("an rosalloc size bracket lock",
                                        kRosAllocBracketLock);
@@ -69,13 +68,27 @@ RosAlloc::RosAlloc(void* base, size_t capacity, size_t max_capacity,
   size_t num_of_pages = footprint_ / kPageSize;
   size_t max_num_of_pages = max_capacity_ / kPageSize;
   std::string error_msg;
-  page_map_mem_map_.reset(MemMap::MapAnonymous("rosalloc page map", NULL, RoundUp(max_num_of_pages, kPageSize),
+  page_map_mem_map_.reset(MemMap::MapAnonymous("rosalloc page map", NULL,
+                                               RoundUp(max_num_of_pages, kPageSize),
                                                PROT_READ | PROT_WRITE, false, &error_msg));
   CHECK(page_map_mem_map_.get() != NULL) << "Couldn't allocate the page map : " << error_msg;
   page_map_ = page_map_mem_map_->Begin();
   page_map_size_ = num_of_pages;
   max_page_map_size_ = max_num_of_pages;
   free_page_run_size_map_.resize(num_of_pages);
+  Reset();
+}
+
+void RosAlloc::Reset() {
+  MutexLock mu(Thread::Current(), lock_);
+  std::fill(free_page_run_size_map_.begin(), free_page_run_size_map_.end(), 0U);
+  free_page_runs_.clear();
+  memset(current_runs_, 0, sizeof(current_runs_));
+  for (size_t i = 0; i < kNumOfSizeBrackets; i++) {
+    non_full_runs_[i].clear();
+    full_runs_[i].clear();
+  }
+  madvise(page_map_mem_map_->Begin(), page_map_mem_map_->Size(), MADV_DONTNEED);
   FreePageRun* free_pages = reinterpret_cast<FreePageRun*>(base_);
   if (kIsDebugBuild) {
     free_pages->magic_num_ = kMagicNumFree;
@@ -87,7 +100,7 @@ RosAlloc::RosAlloc(void* base, size_t capacity, size_t max_capacity,
   DCHECK(free_pages->IsFree());
   free_page_runs_.insert(free_pages);
   if (kTraceRosAlloc) {
-    LOG(INFO) << "RosAlloc::RosAlloc() : Inserted run 0x" << std::hex
+    LOG(INFO) << "RosAlloc::Reset() : Inserted run 0x" << std::hex
               << reinterpret_cast<intptr_t>(free_pages)
               << " into free_page_runs_";
   }
