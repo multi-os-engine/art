@@ -668,6 +668,10 @@ class Heap {
   // Find a collector based on GC type.
   collector::GarbageCollector* FindCollectorByGcType(collector::GcType gc_type);
 
+  // Create the main free list space, typically either a RosAlloc space or DlMalloc space.
+  void CreateMainMallocSpace(MemMap* mem_map, size_t initial_size, size_t growth_limit,
+                             size_t capacity);
+
   // Given the current contents of the alloc space, increase the allowed heap footprint to match
   // the target utilization ratio.  This should only be called immediately after a full garbage
   // collection.
@@ -736,13 +740,6 @@ class Heap {
 
   // A remembered set remembers all of the references from the it's space to the target space.
   SafeMap<space::Space*, accounting::RememberedSet*> remembered_sets_;
-
-  // Keep the free list allocator mem map lying around when we transition to background so that we
-  // don't have to worry about virtual address space fragmentation.
-  UniquePtr<MemMap> allocator_mem_map_;
-
-  // The mem-map which we will use for the non-moving space after the zygote is done forking:
-  UniquePtr<MemMap> post_zygote_non_moving_space_mem_map_;
 
   // The current collector type.
   CollectorType collector_type_;
