@@ -43,6 +43,7 @@ class BumpPointerSpace FINAL : public ContinuousMemMapAllocSpace {
   // guaranteed to be granted, if it is required, the caller should call Begin on the returned
   // space to confirm the request was granted.
   static BumpPointerSpace* Create(const std::string& name, size_t capacity, byte* requested_begin);
+  static BumpPointerSpace* CreateFromMemMap(const std::string& name, MemMap* mem_map);
 
   // Allocate num_bytes, returns nullptr if the space is full.
   mirror::Object* Alloc(Thread* self, size_t num_bytes, size_t* bytes_allocated,
