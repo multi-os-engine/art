@@ -150,7 +150,7 @@ class Heap {
   explicit Heap(size_t initial_size, size_t growth_limit, size_t min_free,
                 size_t max_free, double target_utilization, size_t capacity,
                 const std::string& original_image_file_name,
-                CollectorType post_zygote_collector_type, CollectorType background_collector_type,
+                CollectorType foreground_collector_type, CollectorType background_collector_type,
                 size_t parallel_gc_threads, size_t conc_gc_threads, bool low_memory_mode,
                 size_t long_pause_threshold, size_t long_gc_threshold,
                 bool ignore_max_footprint, bool use_tlab, bool verify_pre_gc_heap,
@@ -668,6 +668,10 @@ class Heap {
   // Find a collector based on GC type.
   collector::GarbageCollector* FindCollectorByGcType(collector::GcType gc_type);
 
+  // Create the main free list space, typically either a RosAlloc space or DlMalloc space.
+  void CreateMainMallocSpace(MemMap* mem_map, size_t initial_size, size_t growth_limit,
+                             size_t capacity);
+
   // Given the current contents of the alloc space, increase the allowed heap footprint to match
   // the target utilization ratio.  This should only be called immediately after a full garbage
   // collection.
@@ -737,17 +741,10 @@ class Heap {
   // A remembered set remembers all of the references from the it's space to the target space.
   SafeMap<space::Space*, accounting::RememberedSet*> remembered_sets_;
 
-  // Keep the free list allocator mem map lying around when we transition to background so that we
-  // don't have to worry about virtual address space fragmentation.
-  UniquePtr<MemMap> allocator_mem_map_;
-
-  // The mem-map which we will use for the non-moving space after the zygote is done forking:
-  UniquePtr<MemMap> post_zygote_non_moving_space_mem_map_;
-
   // The current collector type.
   CollectorType collector_type_;
-  // Which collector we will switch to after zygote fork.
-  CollectorType post_zygote_collector_type_;
+  // Which collector we use when the app is in the foreground.
+  CollectorType foreground_collector_type_;
   // Which collector we will use when the app is notified of a transition to background.
   CollectorType background_collector_type_;
   // Desired collector type, heap trimming daemon transitions the heap if it is != collector_type_.
