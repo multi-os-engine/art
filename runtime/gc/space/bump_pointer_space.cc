@@ -38,6 +38,10 @@ BumpPointerSpace* BumpPointerSpace::Create(const std::string& name, size_t capac
   return new BumpPointerSpace(name, mem_map.release());
 }
 
+BumpPointerSpace* BumpPointerSpace::CreateFromMemMap(const std::string& name, MemMap* mem_map) {
+  return new BumpPointerSpace(name, mem_map);
+}
+
 BumpPointerSpace::BumpPointerSpace(const std::string& name, byte* begin, byte* limit)
     : ContinuousMemMapAllocSpace(name, nullptr, begin, begin, limit,
                                  kGcRetentionPolicyAlwaysCollect),

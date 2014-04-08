@@ -122,6 +122,7 @@ void SemiSpace::InitializePhase() {
   // Do any pre GC verification.
   timings_.NewSplit("PreGcVerification");
   heap_->PreGcVerification(this);
+  CHECK(from_space_->CanMoveObjects()) << "Attempting to move from " << *from_space_;
   // Set the initial bitmap.
   to_space_live_bitmap_ = to_space_->GetLiveBitmap();
 }
@@ -182,9 +183,6 @@ void SemiSpace::MarkingPhase() {
   Locks::mutator_lock_->AssertExclusiveHeld(self_);
 
   TimingLogger::ScopedSplit split("MarkingPhase", &timings_);
-  // Need to do this with mutators paused so that somebody doesn't accidentally allocate into the
-  // wrong space.
-  heap_->SwapSemiSpaces();
   if (generational_) {
     // If last_gc_to_space_end_ is out of the bounds of the from-space
     // (the to-space from last GC), then point it to the beginning of

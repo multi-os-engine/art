@@ -160,6 +160,9 @@ class Space {
   }
   virtual ContinuousMemMapAllocSpace* AsContinuousMemMapAllocSpace();
 
+  // Returns true if objects in the space are movable.
+  virtual bool CanMoveObjects() const = 0;
+
   virtual ~Space() {}
 
  protected:

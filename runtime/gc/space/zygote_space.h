@@ -74,6 +74,10 @@ class ZygoteSpace FINAL : public ContinuousMemMapAllocSpace {
   void Clear() OVERRIDE;
   void Reset() OVERRIDE;
 
+  bool CanMoveObjects() const OVERRIDE {
+    return false;
+  }
+
  protected:
   virtual accounting::SpaceBitmap::SweepCallback* GetSweepCallback() {
     return &SweepCallback;

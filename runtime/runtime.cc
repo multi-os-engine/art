@@ -246,9 +246,8 @@ void Runtime::Abort() {
 
   // Many people have difficulty distinguish aborts from crashes,
   // so be explicit.
-  AbortState state;
-  LOG(INTERNAL_FATAL) << Dumpable<AbortState>(state);
-
+  // AbortState state;
+  // LOG(INTERNAL_FATAL) << Dumpable<AbortState>(state);
   // Call the abort hook if we have one.
   if (Runtime::Current() != NULL && Runtime::Current()->abort_ != NULL) {
     LOG(INTERNAL_FATAL) << "Calling abort hook...";
