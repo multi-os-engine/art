@@ -120,6 +120,9 @@ class OatWriter {
   class InitCodeMethodProcessor;
   template <typename MapBinder>
   class InitMapMethodProcessor;
+  class CodeChecksumMethodProcessor;
+  template <typename MapBinder>
+  class MapChecksumMethodProcessor;
   class InitImageMethodProcessor;
   class WriteCodeMethodProcessor;
   template <typename MapBinder>
@@ -213,12 +216,13 @@ class OatWriter {
     // not is kOatClassBitmap, the bitmap will be NULL.
     BitVector* method_bitmap_;
 
-    // OatMethodOffsets for each CompiledMethod present in the
-    // OatClass. Note that some may be missing if
+    // OatMethodOffsets and OatMethodHeaders for each CompiledMethod
+    // present in the OatClass. Note that some may be missing if
     // OatClass::compiled_methods_ contains NULL values (and
     // oat_method_offsets_offsets_from_oat_class_ should contain 0
     // values in this case).
     std::vector<OatMethodOffsets> method_offsets_;
+    std::vector<OatMethodHeader> method_headers_;
 
    private:
     DISALLOW_COPY_AND_ASSIGN(OatClass);
@@ -287,9 +291,25 @@ class OatWriter {
   uint32_t size_oat_class_method_bitmaps_;
   uint32_t size_oat_class_method_offsets_;
 
+  struct CodeOffsetsKeyComparator {
+    bool operator()(const CompiledMethod* lhs, const CompiledMethod* rhs) const {
+      if (lhs->GetQuickCode() != rhs->GetQuickCode()) {
+        return lhs->GetQuickCode() < rhs->GetQuickCode();
+      }
+      // If the code is the same, all other fields are likely to be the same as well.
+      if (UNLIKELY(&lhs->GetMappingTable() != &rhs->GetMappingTable())) {
+        return &lhs->GetMappingTable() < &rhs->GetMappingTable();
+      }
+      if (UNLIKELY(&lhs->GetVmapTable() != &rhs->GetVmapTable())) {
+        return &lhs->GetVmapTable() < &rhs->GetVmapTable();
+      }
+      return false;
+    }
+  };
+
   // Code mappings for deduplication. Deduplication is already done on a pointer basis by the
   // compiler driver, so we can simply compare the pointers to find out if things are duplicated.
-  SafeMap<const std::vector<uint8_t>*, uint32_t> code_offsets_;
+  SafeMap<const CompiledMethod*, uint32_t, CodeOffsetsKeyComparator> code_offsets_;
   SafeMap<const std::vector<uint8_t>*, uint32_t> vmap_table_offsets_;
   SafeMap<const std::vector<uint8_t>*, uint32_t> mapping_table_offsets_;
   SafeMap<const std::vector<uint8_t>*, uint32_t> gc_map_offsets_;

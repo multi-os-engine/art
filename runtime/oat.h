@@ -160,10 +160,15 @@ class PACKED(4) OatMethodHeader {
  public:
   OatMethodHeader();
 
-  explicit OatMethodHeader(uint32_t code_size);
+  explicit OatMethodHeader(uint32_t mapping_table_offset, uint32_t vmap_table_offset,
+                           uint32_t code_size);
 
   ~OatMethodHeader();
 
+  // The offset in bytes of the mapping table from the end of the header.
+  uint32_t mapping_table_offset_;
+  // The offset in bytes of the vmap table from the end of the header.
+  uint32_t vmap_table_offset_;
   // The code size in bytes.
   uint32_t code_size_;
 };

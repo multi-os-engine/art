@@ -21,6 +21,7 @@
 #include "dex_file.h"
 #include "invoke_type.h"
 #include "modifiers.h"
+#include "oat.h"
 #include "object.h"
 #include "object_callbacks.h"
 
@@ -287,10 +288,7 @@ class MANAGED ArtMethod : public Object {
   void SetPortableOatCodeOffset(uint32_t code_offset);
 
   // Callers should wrap the uint8_t* in a MappingTable instance for convenient access.
-  const uint8_t* GetMappingTable() {
-    return GetFieldPtr<const uint8_t*>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, quick_mapping_table_),
-        false);
-  }
+  const uint8_t* GetMappingTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   void SetMappingTable(const uint8_t* mapping_table) {
@@ -298,7 +296,7 @@ class MANAGED ArtMethod : public Object {
         OFFSET_OF_OBJECT_MEMBER(ArtMethod, quick_mapping_table_), mapping_table, false);
   }
 
-  uint32_t GetOatMappingTableOffset();
+  uint32_t GetOatMappingTableOffset() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetOatMappingTableOffset(uint32_t mapping_table_offset);
 
