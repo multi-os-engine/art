@@ -156,12 +156,15 @@ struct OatWriter::MappingTableBinder {
   }
 
   static uint32_t GetOffset(OatClass* oat_class, size_t method_offsets_index) ALWAYS_INLINE {
-    return oat_class->method_offsets_[method_offsets_index].mapping_table_offset_;
+    uint32_t offset = oat_class->method_headers_[method_offsets_index].mapping_table_offset_;
+    return (offset == 0u) ? 0u :
+        offset + (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1);
   }
 
   static void SetOffset(OatClass* oat_class, size_t method_offsets_index, uint32_t offset)
       ALWAYS_INLINE {
-    oat_class->method_offsets_[method_offsets_index].mapping_table_offset_ = offset;
+    oat_class->method_headers_[method_offsets_index].mapping_table_offset_ =
+        offset - (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1);
   }
 
   static SafeMap<const std::vector<uint8_t>*, uint32_t>* GetDedupeMap(OatWriter* writer)
@@ -180,12 +183,15 @@ struct OatWriter::VmapTableBinder {
   }
 
   static uint32_t GetOffset(OatClass* oat_class, size_t method_offsets_index) ALWAYS_INLINE {
-    return oat_class->method_offsets_[method_offsets_index].vmap_table_offset_;
+    uint32_t offset = oat_class->method_headers_[method_offsets_index].vmap_table_offset_;
+    return (offset == 0u) ? 0u :
+        offset + (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1);
   }
 
   static void SetOffset(OatClass* oat_class, size_t method_offsets_index, uint32_t offset)
       ALWAYS_INLINE {
-    oat_class->method_offsets_[method_offsets_index].vmap_table_offset_ = offset;
+    oat_class->method_headers_[method_offsets_index].vmap_table_offset_ =
+        offset - (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1);
   }
 
   static SafeMap<const std::vector<uint8_t>*, uint32_t>* GetDedupeMap(OatWriter* writer)
@@ -329,8 +335,6 @@ class OatWriter::InitCodeMethodProcessor : public OatDexMethodProcessor {
       uint32_t frame_size_in_bytes = kStackAlignment;
       uint32_t core_spill_mask = 0;
       uint32_t fp_spill_mask = 0;
-      uint32_t mapping_table_offset = 0;
-      uint32_t vmap_table_offset = 0;
       uint32_t gc_map_offset = 0;
 
       const std::vector<uint8_t>* portable_code = compiled_method->GetPortableCode();
@@ -373,17 +377,16 @@ class OatWriter::InitCodeMethodProcessor : public OatDexMethodProcessor {
         }
 
         // Deduplicate code arrays.
-        auto code_iter = writer_->code_offsets_.find(quick_code);
+        auto code_iter = writer_->code_offsets_.find(compiled_method);
         if (code_iter != writer_->code_offsets_.end()) {
           quick_code_offset = code_iter->second;
         } else {
-          writer_->code_offsets_.Put(quick_code, quick_code_offset);
-          OatMethodHeader method_header(code_size);
-          offset_ += sizeof(method_header);  // Method header is prepended before code.
-          writer_->oat_header_->UpdateChecksum(&method_header, sizeof(method_header));
+          writer_->code_offsets_.Put(compiled_method, quick_code_offset);
+          offset_ += sizeof(OatMethodHeader);  // Method header is prepended before code.
           offset_ += code_size;
-          writer_->oat_header_->UpdateChecksum(&(*quick_code)[0], code_size);
         }
+        DCHECK_LT(method_offsets_index_, oat_class->method_headers_.size());
+        oat_class->method_headers_[method_offsets_index_].code_size_ = code_size;
       }
       frame_size_in_bytes = compiled_method->GetFrameSizeInBytes();
       core_spill_mask = compiled_method->GetCoreSpillMask();
@@ -417,8 +420,6 @@ class OatWriter::InitCodeMethodProcessor : public OatDexMethodProcessor {
                            frame_size_in_bytes,
                            core_spill_mask,
                            fp_spill_mask,
-                           mapping_table_offset,
-                           vmap_table_offset,
                            gc_map_offset);
       ++method_offsets_index_;
     }
@@ -455,10 +456,80 @@ class OatWriter::InitMapMethodProcessor : public OatDexMethodProcessor {
           MapBinder::SetOffset(oat_class, method_offsets_index_, offset_);
           dedupe_map->Put(map, offset_);
           offset_ += map_size;
-          writer_->oat_header_->UpdateChecksum(&(*map)[0], map_size);
         }
       }
       ++method_offsets_index_;
+    }
+
+    return true;
+  }
+};
+
+class OatWriter::CodeChecksumMethodProcessor : public OatDexMethodProcessor {
+ public:
+  CodeChecksumMethodProcessor(OatWriter* writer, size_t offset)
+    : OatDexMethodProcessor(writer, offset) {
+  }
+
+  bool ProcessMethod(size_t class_def_method_index, const ClassDataItemIterator& it) {
+    OatClass* oat_class = writer_->oat_classes_[oat_class_index_];
+    const CompiledMethod* compiled_method = oat_class->GetCompiledMethod(class_def_method_index);
+
+    if (compiled_method != NULL) {  // ie. not an abstract method
+      const OatMethodOffsets& method_offsets = oat_class->method_offsets_[method_offsets_index_];
+      ++method_offsets_index_;
+      const std::vector<uint8_t>* quick_code = compiled_method->GetQuickCode();
+      if (quick_code != nullptr) {
+        CHECK(compiled_method->GetPortableCode() == nullptr);
+        offset_ = compiled_method->AlignCode(offset_);
+        DCHECK_ALIGNED_PARAM(offset_,
+                             GetInstructionSetAlignment(compiled_method->GetInstructionSet()));
+        uint32_t code_size = quick_code->size() * sizeof(uint8_t);
+        CHECK_NE(code_size, 0U);
+
+        // Checksum deduplicated code arrays.
+        DCHECK(method_offsets.code_offset_ < offset_ || method_offsets.code_offset_ ==
+                   offset_ + sizeof(OatMethodHeader) + compiled_method->CodeDelta())
+            << PrettyMethod(it.GetMemberIndex(), *dex_file_);
+        if (method_offsets.code_offset_ >= offset_) {
+          const OatMethodHeader& method_header = oat_class->method_headers_[method_offsets_index_];
+          writer_->oat_header_->UpdateChecksum(&method_header, sizeof(method_header));
+          offset_ += sizeof(method_header);
+          writer_->oat_header_->UpdateChecksum(&(*quick_code)[0], code_size);
+          offset_ += code_size;
+        }
+      }
+    }
+
+    return true;
+  }
+};
+
+template <typename MapBinder>
+class OatWriter::MapChecksumMethodProcessor : public OatDexMethodProcessor {
+ public:
+  MapChecksumMethodProcessor(OatWriter* writer, size_t offset)
+    : OatDexMethodProcessor(writer, offset) {
+  }
+
+  bool ProcessMethod(size_t class_def_method_index, const ClassDataItemIterator& it) {
+    OatClass* oat_class = writer_->oat_classes_[oat_class_index_];
+    const CompiledMethod* compiled_method = oat_class->GetCompiledMethod(class_def_method_index);
+
+    if (compiled_method != NULL) {  // ie. not an abstract method
+      uint32_t map_offset = MapBinder::GetOffset(oat_class, method_offsets_index_);
+      ++method_offsets_index_;
+
+      // Checksum deduplicated map.
+      const std::vector<uint8_t>* map = MapBinder::GetMap(compiled_method);
+      size_t map_size = map->size() * sizeof((*map)[0]);
+      DCHECK((map_size == 0u && map_offset == 0u) ||
+             (map_size != 0u && map_offset != 0u && map_offset <= offset_))
+          << PrettyMethod(it.GetMemberIndex(), *dex_file_);
+      if (map_size != 0u && map_offset == offset_) {
+        writer_->oat_header_->UpdateChecksum(&(*map)[0], map_size);
+        offset_ += map_size;
+      }
     }
 
     return true;
@@ -476,7 +547,7 @@ class OatWriter::InitImageMethodProcessor : public OatDexMethodProcessor {
     OatClass* oat_class = writer_->oat_classes_[oat_class_index_];
     CompiledMethod* compiled_method = oat_class->GetCompiledMethod(class_def_method_index);
 
-    OatMethodOffsets offsets(0u, kStackAlignment, 0u, 0u, 0u, 0u, 0u);
+    OatMethodOffsets offsets(0u, kStackAlignment, 0u, 0u, 0u);
     if (compiled_method != nullptr) {
       DCHECK_LT(method_offsets_index_, oat_class->method_offsets_.size());
       offsets = oat_class->method_offsets_[method_offsets_index_];
@@ -510,8 +581,6 @@ class OatWriter::InitImageMethodProcessor : public OatDexMethodProcessor {
       offsets.frame_size_in_bytes_ = callee_save_method->GetFrameSizeInBytes() + sirt_size;
       offsets.core_spill_mask_ = callee_save_method->GetCoreSpillMask();
       offsets.fp_spill_mask_ = callee_save_method->GetFpSpillMask();
-      DCHECK_EQ(offsets.mapping_table_offset_, 0u);
-      DCHECK_EQ(offsets.vmap_table_offset_, 0u);
       DCHECK_EQ(offsets.gc_map_offset_, 0u);
     }
 
@@ -527,10 +596,8 @@ class OatWriter::InitImageMethodProcessor : public OatDexMethodProcessor {
     method->SetFrameSizeInBytes(offsets.frame_size_in_bytes_);
     method->SetCoreSpillMask(offsets.core_spill_mask_);
     method->SetFpSpillMask(offsets.fp_spill_mask_);
-    method->SetOatMappingTableOffset(offsets.mapping_table_offset_);
     // Portable code offsets are set by ElfWriterMclinker::FixupCompiledCodeOffset after linking.
     method->SetQuickOatCodeOffset(offsets.code_offset_);
-    method->SetOatVmapTableOffset(offsets.vmap_table_offset_);
     method->SetOatNativeGcMapOffset(offsets.gc_map_offset_);
 
     return true;
@@ -579,13 +646,11 @@ class OatWriter::WriteCodeMethodProcessor : public OatDexMethodProcessor {
 
         // Deduplicate code arrays.
         const OatMethodOffsets& method_offsets = oat_class->method_offsets_[method_offsets_index_];
-        DCHECK(writer_->code_offsets_.find(quick_code) != writer_->code_offsets_.end());
-        DCHECK(writer_->code_offsets_.find(quick_code)->second == method_offsets.code_offset_);
         DCHECK(method_offsets.code_offset_ < offset_ || method_offsets.code_offset_ ==
                    offset_ + sizeof(OatMethodHeader) + compiled_method->CodeDelta())
             << PrettyMethod(it.GetMemberIndex(), *dex_file_);
         if (method_offsets.code_offset_ >= offset_) {
-          OatMethodHeader method_header(code_size);
+          const OatMethodHeader& method_header = oat_class->method_headers_[method_offsets_index_];
           if (!out->WriteFully(&method_header, sizeof(method_header))) {
             ReportWriteFailure("method header", it);
             return false;
@@ -835,10 +900,26 @@ size_t OatWriter::InitOatCodeDexFiles(size_t offset) {
       offset = processor.Offset();                    \
     } while (false)
 
+  size_t code_offset = offset;
   PROCESS(InitCodeMethodProcessor);
+  size_t gc_maps_offset = offset;
   PROCESS(InitMapMethodProcessor<GcMapBinder>);
+  size_t mapping_tables_offset = offset;
   PROCESS(InitMapMethodProcessor<MappingTableBinder>);
+  size_t vmap_tables_offset = offset;
   PROCESS(InitMapMethodProcessor<VmapTableBinder>);
+  size_t end_offset = offset;
+
+  offset = code_offset;
+  PROCESS(CodeChecksumMethodProcessor);
+  CHECK_EQ(offset, gc_maps_offset);
+  PROCESS(MapChecksumMethodProcessor<GcMapBinder>);
+  CHECK_EQ(offset, mapping_tables_offset);
+  PROCESS(MapChecksumMethodProcessor<MappingTableBinder>);
+  CHECK_EQ(offset, vmap_tables_offset);
+  PROCESS(MapChecksumMethodProcessor<VmapTableBinder>);
+  CHECK_EQ(offset, end_offset);
+
   if (compiler_driver_->IsImage()) {
     PROCESS(InitImageMethodProcessor);
   }
@@ -1125,6 +1206,7 @@ OatWriter::OatClass::OatClass(size_t offset,
 
   status_ = status;
   method_offsets_.resize(num_non_null_compiled_methods);
+  method_headers_.resize(num_non_null_compiled_methods);
 
   uint32_t oat_method_offsets_offset_from_oat_class = sizeof(type_) + sizeof(status_);
   if (type_ == kOatClassSomeCompiled) {
