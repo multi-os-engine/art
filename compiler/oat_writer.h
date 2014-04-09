@@ -120,6 +120,9 @@ class OatWriter {
   class InitCodeMethodProcessor;
   template <typename MapBinder>
   class InitMapMethodProcessor;
+  class CodeChecksumMethodProcessor;
+  template <typename MapBinder>
+  class MapChecksumMethodProcessor;
   class InitImageMethodProcessor;
   class WriteCodeMethodProcessor;
   template <typename MapBinder>
@@ -213,12 +216,13 @@ class OatWriter {
     // not is kOatClassBitmap, the bitmap will be NULL.
     BitVector* method_bitmap_;
 
-    // OatMethodOffsets for each CompiledMethod present in the
-    // OatClass. Note that some may be missing if
+    // OatMethodOffsets and OatMethodHeaders for each CompiledMethod
+    // present in the OatClass. Note that some may be missing if
     // OatClass::compiled_methods_ contains NULL values (and
     // oat_method_offsets_offsets_from_oat_class_ should contain 0
     // values in this case).
     std::vector<OatMethodOffsets> method_offsets_;
+    std::vector<OatMethodHeader> method_headers_;
 
    private:
     DISALLOW_COPY_AND_ASSIGN(OatClass);

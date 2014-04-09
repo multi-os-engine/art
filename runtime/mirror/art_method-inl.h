@@ -156,7 +156,9 @@ inline void ArtMethod::SetPortableOatCodeOffset(uint32_t code_offset) {
 
 inline uint32_t ArtMethod::GetOatMappingTableOffset() {
   DCHECK(!Runtime::Current()->IsStarted());
-  return PointerToLowMemUInt32(GetMappingTable());
+  const uint8_t* mapping_table =
+      GetFieldPtr<const uint8_t*>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, quick_mapping_table_), false);
+  return PointerToLowMemUInt32(mapping_table);
 }
 
 inline void ArtMethod::SetOatMappingTableOffset(uint32_t mapping_table_offset) {
@@ -221,6 +223,41 @@ template<VerifyObjectFlags kVerifyFlags>
 inline void ArtMethod::SetNativeMethod(const void* native_method) {
   SetFieldPtr<false, true, kVerifyFlags>(
       OFFSET_OF_OBJECT_MEMBER(ArtMethod, entry_point_from_jni_), native_method, false);
+}
+
+inline const uint8_t* ArtMethod::GetMappingTable() {
+  const uint8_t* result =
+      GetFieldPtr<const uint8_t*>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, quick_mapping_table_),
+      false);
+  const uint8_t* result2 = nullptr;
+  if (!IsNative() && !IsRuntimeMethod() && !IsProxyMethod()) {
+    const void* code = Runtime::Current()->GetInstrumentation()->GetQuickCodeFor(this);
+    if (code != nullptr) {
+      // TODO: make this Thumb2 specific
+      uintptr_t code_val = reinterpret_cast<uintptr_t>(code) & ~0x1;
+      uint32_t offset = reinterpret_cast<OatMethodHeader*>(code_val)[-1].mapping_table_offset_;
+      CHECK_NE(offset, 0u) << PrettyMethod(this);
+      result2 = reinterpret_cast<const uint8_t*>(code_val + offset);
+      if (result != result2) {
+        LOG(ERROR) << "FAIL: " << PrettyMethod(this) << " " << std::hex << code << " + " << offset
+            << "; " << GetAccessFlags() << ", " << IsProxyMethod()
+            << "; " << static_cast<const void*>(result)
+            << ", " << static_cast<const void*>(result2)
+            << ", " << static_cast<const void*>(this);
+        volatile int* crash_ptr = nullptr;
+        *crash_ptr = 0;
+      }
+    }
+  }
+  if (result != nullptr && result2 != nullptr) {
+    CHECK(result == result2) << PrettyMethod(this) << ", " << static_cast<const void*>(result)
+        << ", " << static_cast<const void*>(result2);
+  } else if (result == nullptr) {
+    CHECK(result2 == nullptr) << PrettyMethod(this);
+  } else {
+    LOG(FATAL) << "OOOPS";
+  }
+  return result;
 }
 
 }  // namespace mirror
