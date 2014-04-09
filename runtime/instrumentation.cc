@@ -709,9 +709,10 @@ const void* Instrumentation::GetQuickCodeFor(mirror::ArtMethod* method) const {
   Runtime* runtime = Runtime::Current();
   if (LIKELY(!instrumentation_stubs_installed_)) {
     const void* code = method->GetEntryPointFromQuickCompiledCode();
-    DCHECK(code != NULL);
-    if (LIKELY(code != GetQuickResolutionTrampoline(runtime->GetClassLinker()) &&
-               code != GetQuickToInterpreterBridge())) {
+    DCHECK(code != nullptr);
+    DCHECK(code != GetQuickToInterpreterBridgeTrampoline(runtime->GetClassLinker()));
+    if (LIKELY(code != GetQuickResolutionTrampoline(runtime->GetClassLinker())) &&
+        LIKELY(code != GetQuickToInterpreterBridge())) {
       return code;
     }
   }

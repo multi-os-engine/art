@@ -44,6 +44,7 @@
 #include "mirror/object_array-inl.h"
 #include "noop_compiler_callbacks.h"
 #include "oat.h"
+#include "oat_file-inl.h"
 #include "object_utils.h"
 #include "os.h"
 #include "runtime.h"
@@ -1070,6 +1071,9 @@ class ImageDumper {
       }
     } else if (obj->IsArtMethod()) {
       mirror::ArtMethod* method = obj->AsArtMethod();
+      const void* entry_point = method->GetEntryPointFromQuickCompiledCode();
+      bool is_trampoline_to_interpreter = entry_point == GetQuickToInterpreterBridgeTrampoline(
+          Runtime::Current()->GetClassLinker());
       if (method->IsNative()) {
         // TODO: portable dumping.
         DCHECK(method->GetNativeGcMap() == nullptr) << PrettyMethod(method);
@@ -1088,7 +1092,8 @@ class ImageDumper {
           method->IsResolutionMethod() || method->IsImtConflictMethod() ||
           MethodHelper(method).IsClassInitializer()) {
         DCHECK(method->GetNativeGcMap() == NULL) << PrettyMethod(method);
-        DCHECK(method->GetMappingTable() == NULL) << PrettyMethod(method);
+        DCHECK(is_trampoline_to_interpreter || method->GetMappingTable() == nullptr)
+            << PrettyMethod(method);
       } else {
         const DexFile::CodeItem* code_item = MethodHelper(method).GetCodeItem();
         size_t dex_instruction_bytes = code_item->insns_size_in_code_units_ * 2;
@@ -1100,13 +1105,13 @@ class ImageDumper {
           state->stats_.gc_map_bytes += gc_map_bytes;
         }
 
-        size_t pc_mapping_table_bytes =
+        size_t pc_mapping_table_bytes = is_trampoline_to_interpreter ? 0u :
             state->ComputeOatSize(method->GetMappingTable(), &first_occurrence);
         if (first_occurrence) {
           state->stats_.pc_mapping_table_bytes += pc_mapping_table_bytes;
         }
 
-        size_t vmap_table_bytes =
+        size_t vmap_table_bytes = is_trampoline_to_interpreter ? 0u :
             state->ComputeOatSize(method->GetVmapTable(), &first_occurrence);
         if (first_occurrence) {
           state->stats_.vmap_table_bytes += vmap_table_bytes;
