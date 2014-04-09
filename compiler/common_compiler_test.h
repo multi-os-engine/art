@@ -167,8 +167,6 @@ class CommonCompilerTest : public CommonRuntimeTest {
                               frame_size_in_bytes,
                               core_spill_mask,
                               fp_spill_mask,
-                              mapping_table_offset,
-                              vmap_table_offset,
                               gc_map_offset);
   }
 
@@ -184,6 +182,7 @@ class CommonCompilerTest : public CommonRuntimeTest {
                                                               method->GetDexMethodIndex()));
     }
     if (compiled_method != nullptr) {
+      // TODO(vmarko): Add OatMethodHeader for Quick code.
       const std::vector<uint8_t>* code = compiled_method->GetQuickCode();
       if (code == nullptr) {
         code = compiled_method->GetPortableCode();

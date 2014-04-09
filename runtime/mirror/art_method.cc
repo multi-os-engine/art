@@ -374,5 +374,38 @@ void ArtMethod::UnregisterNative(Thread* self) {
   RegisterNative(self, GetJniDlsymLookupStub(), false);
 }
 
+const void* ArtMethod::GetOatCodePointer() {
+  // NOTE: Class initializers are not compiled. When we change that, we'll need to rewrite this.
+  if (IsPortableCompiled() || IsNative() || IsAbstract() || (IsConstructor() && IsStatic()) ||
+      IsRuntimeMethod() || IsProxyMethod()) {
+    return nullptr;
+  }
+  return EntryPointToCodePointer(Runtime::Current()->GetInstrumentation()->GetQuickCodeFor(this));
+}
+
+const uint8_t* ArtMethod::GetMappingTable() {
+  const void* code = GetOatCodePointer();
+  if (code == nullptr) {
+    return nullptr;
+  }
+  uint32_t offset = reinterpret_cast<const OatMethodHeader*>(code)[-1].mapping_table_offset_;
+  if (UNLIKELY(offset == 0u)) {
+    return nullptr;
+  }
+  return reinterpret_cast<const uint8_t*>(code) + offset;
+}
+
+const uint8_t* ArtMethod::GetVmapTable() {
+  const void* code = GetOatCodePointer();
+  if (code == nullptr) {
+    return nullptr;
+  }
+  uint32_t offset = reinterpret_cast<const OatMethodHeader*>(code)[-1].vmap_table_offset_;
+  if (UNLIKELY(offset == 0u)) {
+    return nullptr;
+  }
+  return reinterpret_cast<const uint8_t*>(code) + offset;
+}
+
 }  // namespace mirror
 }  // namespace art
