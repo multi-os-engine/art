@@ -3128,9 +3128,10 @@ mirror::ArtMethod* MethodVerifier::GetQuickInvokedMethod(const Instruction* inst
     this_class = actual_arg_type.GetClass();
   } else {
     const std::string& descriptor(actual_arg_type.GetDescriptor());
-    Thread* self = Thread::Current();
     ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-    this_class = class_linker->FindClass(self, descriptor.c_str(), *class_loader_);
+    // TODO: Should we pass precise here?
+    this_class =
+        reg_types_.FromDescriptor(class_loader_->get(), descriptor.c_str(), false).GetClass();
     if (this_class == NULL) {
       Thread* self = Thread::Current();
       self->ClearException();
