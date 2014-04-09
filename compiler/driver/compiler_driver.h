@@ -677,10 +677,13 @@ class CompilerDriver {
 
   uint32_t GetEntrypointTrampolineTableSize() const {
     uint32_t size = entrypoint_trampolines_.GetTrampolineTableSize();
-    if (instruction_set_ == kThumb2) {
-      return size * 4;
+    switch (instruction_set_) {
+      case kThumb2:
+      case kArm:
+         return size * 4;
+      default:
+       return size;
     }
-    return size;
   }
 
   // Get the maximum offset between entrypoint trampoline islands.  Different architectures
@@ -688,12 +691,15 @@ class CompilerDriver {
   // to determine when we need to generate a new trampoline island in the output to keep
   // subsequent calls in range.
   size_t GetMaxEntrypointTrampolineOffset() const {
-    if (instruction_set_ == kThumb2) {
-      // On Thumb2, the max range of a BL instruction is 16MB.  Give it a little wiggle room.
-      return 15*MB;
+    switch (instruction_set_) {
+      case kThumb2:
+      case kArm:
+        // On Thumb2, the max range of a BL instruction is 16MB.  Give it a little wiggle room.
+         return 15*MB;
+      default:
+        // Returning 0 means we won't generate a trampoline island.
+       return 0;
     }
-    // Returning 0 means we won't generate a trampoline island.
-    return 0;
   }
 
   void BuildEntrypointTrampolineCode();

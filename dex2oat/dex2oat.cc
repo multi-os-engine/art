@@ -1050,6 +1050,19 @@ static int dex2oat(int argc, char** argv) {
     Usage("Unknown --compiler-filter value %s", compiler_filter_string);
   }
 
+  // TODO: update this code sequence when other platforms support
+  // helper trampoline calls.
+  bool helper_trampolines_available;
+  switch (instruction_set) {
+  case kArm:
+  case kThumb2:
+    helper_trampolines_available = true;
+    break;
+  default:
+    helper_trampolines_available = false;
+    break;
+  }
+
   CompilerOptions compiler_options(compiler_filter,
                                    huge_method_threshold,
                                    large_method_threshold,
@@ -1057,7 +1070,7 @@ static int dex2oat(int argc, char** argv) {
                                    tiny_method_threshold,
                                    num_dex_methods_threshold,
                                    generate_gdb_information,
-                                   generate_helper_trampolines
+                                   generate_helper_trampolines && helper_trampolines_available
 #ifdef ART_SEA_IR_MODE
                                    , compiler_options.sea_ir_ = true;
 #endif

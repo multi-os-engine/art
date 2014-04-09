@@ -1254,6 +1254,8 @@ void CompilerDriver::BuildEntrypointTrampolineCode() {
   const auto& table = entrypoint_trampolines_.GetTrampolineTable();
   for (uint32_t offset : table) {
     switch (instruction_set_) {
+      case kArm:
+        // Intentional fall through.
       case kThumb2:
         BuildArmEntrypointTrampolineCall(ThreadOffset<4>(offset));
         break;

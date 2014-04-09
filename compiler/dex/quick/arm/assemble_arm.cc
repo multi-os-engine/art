@@ -1036,7 +1036,7 @@ const ArmEncodingMap ArmMir2Lir::EncodingMap[kArmLast] = {
                  IS_QUAD_OP | REG_USE0 | REG_USE1 | REG_USE2 | IS_STORE,
                  "strd", "!0C, !1C, [!2C, #!3E]", 4, kFixupNone),
     ENCODING_MAP(kThumb2BlTramp, 0xf000d000,
-                 kFmtUnused, -1, -1, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtBitBlt, 10, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,
                  IS_UNARY_OP | IS_BRANCH | REG_DEF_LR | NEEDS_FIXUP,
                  "bl", "!0t", 4, kFixupTrampCall),

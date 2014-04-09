@@ -29,11 +29,15 @@ void FinalEntrypointRelocationSetArm::Apply(uint8_t* code, const OatWriter* writ
   for (auto& reloc : relocations_) {
     switch (reloc.type_) {
       case kRelocationCall: {
-      // Fetch the instruction.  This is two 16 bit words.  We can't do a 32 bit load
-      // because it's not guaranteed to be 4-byte aligned.
+        // Fetch the instruction.  This is two 16 bit words.  We can't do a 32 bit load
+        // because it's not guaranteed to be 4-byte aligned.
         uint32_t inst = static_cast<uint32_t>(
             *reinterpret_cast<uint16_t*>(code + reloc.code_offset_) << 16
             | *reinterpret_cast<uint16_t*>(code + reloc.code_offset_ + 2));
+
+        // Remove the current offset from the instruction.  This is there
+        // to prevent deduplication from wrongly handling this instruction.
+        inst &= ~0x7ff;     // Bottom 11 bits.
 
         // Check that we are trying to relocate a Thumb2 BL instruction.
         CHECK_EQ(inst, 0xf000d000);
@@ -69,6 +73,8 @@ void FinalEntrypointRelocationSetArm::Apply(uint8_t* code, const OatWriter* writ
         uint32_t j2 = (i2 ^ signbit) ? 0 : 1;
         uint32_t value = (signbit << 26) | (j1 << 13) | (j2 << 11) | (imm10 << 16) |
             imm11;
+
+        // Blit the value into the instruction.
         inst |= value;
 
         // Write the instruction back.  High 16 bits first, little endian format.
