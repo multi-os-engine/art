@@ -346,6 +346,36 @@ size_t OatWriter::InitOatCodeClassDef(size_t offset,
   return offset;
 }
 
+static void DCheckCodeAlignment(size_t offset, InstructionSet isa) {
+  switch (isa) {
+    case kArm:
+      // Fall-through.
+    case kThumb2:
+      DCHECK_ALIGNED(offset, kArmAlignment);
+      break;
+
+    case kArm64:
+      DCHECK_ALIGNED(offset, kArm64Alignment);
+      break;
+
+    case kMips:
+      DCHECK_ALIGNED(offset, kMipsAlignment);
+      break;
+
+    case kX86_64:
+      // Fall-through.
+    case kX86:
+      DCHECK_ALIGNED(offset, kX86Alignment);
+      break;
+
+    case kNone:
+      // Use a DCHECK instead of FATAL so that in the non-debug case the whole switch can
+      // be optimized away.
+      DCHECK(false);
+      break;
+  }
+}
+
 size_t OatWriter::InitOatCodeMethod(size_t offset, size_t oat_class_index,
                                     size_t __attribute__((unused)) class_def_index,
                                     size_t class_def_method_index,
@@ -377,7 +407,8 @@ size_t OatWriter::InitOatCodeMethod(size_t offset, size_t oat_class_index,
     } else {
       CHECK(quick_code != nullptr);
       offset = compiled_method->AlignCode(offset);
-      DCHECK_ALIGNED(offset, kArmAlignment);
+
+      DCheckCodeAlignment(offset, compiled_method->GetInstructionSet());
 
       uint32_t thumb_offset = compiled_method->CodeDelta();
       uint32_t tramp_offset = offset + thumb_offset;
@@ -389,7 +420,7 @@ size_t OatWriter::InitOatCodeMethod(size_t offset, size_t oat_class_index,
 
         // Realign code after trampoline island.
         offset = compiled_method->AlignCode(offset);
-        DCHECK_ALIGNED(offset, kArmAlignment);
+        DCheckCodeAlignment(offset, compiled_method->GetInstructionSet());
       }
 
       uint32_t code_size = quick_code->size() * sizeof(uint8_t);
@@ -846,7 +877,7 @@ size_t OatWriter::WriteCodeMethod(OutputStream* out, const size_t file_offset,
         relative_offset += aligned_code_delta;
         DCHECK_OFFSET();
       }
-      DCHECK_ALIGNED(relative_offset, kArmAlignment);
+      DCheckCodeAlignment(relative_offset, compiled_method->GetInstructionSet());
 
       // Write out a trampoline island if there is one at this point.
       uint32_t trampsize = WriteTrampolineIslandIfNecessary(out, relative_offset +
@@ -871,7 +902,7 @@ size_t OatWriter::WriteCodeMethod(OutputStream* out, const size_t file_offset,
           relative_offset += aligned_code_delta;
           DCHECK_OFFSET();
         }
-        DCHECK_ALIGNED(relative_offset, kArmAlignment);
+        DCheckCodeAlignment(relative_offset, compiled_method->GetInstructionSet());
       }
 
       uint32_t code_size = quick_code->size() * sizeof(uint8_t);
