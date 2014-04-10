@@ -1408,6 +1408,10 @@ void Heap::TransitionCollector(CollectorType collector_type) {
       MutexLock mu(self, *gc_complete_lock_);
       // Ensure there is only one GC at a time.
       WaitForGcToCompleteLocked(self);
+      // If someone else beat us to it and changed the collector before we could, exit.
+      if (collector_type == collector_type_) {
+        return;
+      }
       // GC can be disabled if someone has a used GetPrimitiveArrayCritical but not yet released.
       if (!copying_transition || disable_moving_gc_count_ == 0) {
         // TODO: Not hard code in semi-space collector?
