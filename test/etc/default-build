@@ -27,6 +27,11 @@ fi
 if [ ${NEED_DEX} = "true" ]; then
   ${DX} -JXmx256m --debug --dex --dump-to=classes.lst --output=classes.dex --dump-width=1000 classes
   zip $TEST_NAME.jar classes.dex
+  if [ ${NEED_DUMP} = "true" ]; then
+    dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --runtime-arg -classpath --runtime-arg $TEST_NAME.jar --runtime-arg -implicit-checks:none --instruction-set-features=default --host --boot-image=$ANDROID_HOST_OUT/framework/core.art --dex-file=$TEST_NAME.jar --oat-file=$TEST_NAME.jar@classes.dex --android-root=$ANDROID_HOST_OUT
+    oatdump --oat-file=$TEST_NAME.jar@classes.dex > $TEST_NAME.jar@oatdump
+    cp $TEST_NAME.jar@oatdump ../../../host_mode/dev/cmp-oatdump/$TEST_NAME.jar@oatdump64
+  fi
 fi
 
 if [ -r src-ex ]; then

@@ -34,6 +34,14 @@ progdir=`pwd`
 prog="${progdir}"/`basename "${prog}"`
 test_dir="test-$$"
 tmp_dir="/tmp/$USER/${test_dir}"
+export NEED_DUMP="false"
+if [ "x$1" = "x--dump" ]; then
+  tmp_dir="$PWD/tmp/test"
+  export NEED_DUMP="true"
+  shift
+fi
+rm -rf $tmp_dir
+mkdir -p $tmp_dir
 
 export JAVA="java"
 export JAVAC="javac -g"
@@ -57,6 +65,7 @@ build="build"
 run="run"
 expected="expected.txt"
 output="output.txt"
+dex2oat_output="dex2oat_output.txt"
 build_output="build-output.txt"
 lib="libartd.so"
 run_args="--quiet"
@@ -345,12 +354,17 @@ else
     build_exit="$?"
     if [ "$build_exit" = '0' ]; then
         echo "${test_dir}: running..." 1>&2
-        "./${run}" $run_args "$@" >"$output" 2>&1
+#        "./${run}" $run_args "$@" >"$output" 2>&1
+        "./${run}" $run_args --dev "$@" > "$output" 2>&1
+        cat "$output" | grep dex2oat > "$dex2oat_output"
+        new_output=`cat "$output" | grep -v "dex2oat \|dex2oatd \|art \|System "`
+        echo "$new_output" > "$output"
     else
         cp "$build_output" "$output"
         echo "build exit status: $build_exit" >>"$output"
     fi
-    diff --strip-trailing-cr -q "$expected" "$output" >/dev/null
+#    diff --strip-trailing-cr -q "$expected" "$output" >/dev/null
+    diff --strip-trailing-cr --ignore-blank-lines -q "$expected" "$output" >/dev/null
     if [ "$?" = "0" ]; then
         # output == expected
         good="yes"
@@ -358,8 +372,21 @@ else
     fi
 fi
 
+# Report compilation stats
+if [ -e "$dex2oat_output" ]; then
+  total=`cat $dex2oat_output | grep "Method compiled\|Method filtered" | wc -l`
+  compiled=`cat $dex2oat_output | grep "Method compiled" | wc -l`
+  if [ "$total" == "0" ]; then
+    percent=0
+  else
+    percent=`echo "$compiled/$total*100" | bc -l | sed 's|\..*$||g'`
+  fi
+  echo "${test_dir##*/} Compilation Rate: $compiled of $total ($percent%)"
+fi
+
 # Clean up test files.
 if [ "$good" == "yes" ]; then
+
     cd "$oldwd"
     rm -rf "$tmp_dir"
     if [ "$target_mode" = "yes" -a "$build_exit" = "0" ]; then
@@ -383,6 +410,57 @@ fi
     echo "${TEST_NAME} files left in ${tmp_dir} on host"
     if [ "$target_mode" == "yes" ]; then
         echo "and in ${DEX_LOCATION} on target"
+    fi
+    sleep 5
+    SIGTRAP=`cat $output | grep 'SIGTRAP'`
+    DEX2OAT=`cat $output | grep -m 1 'because non-0 exit status'`
+    DEX2OAT=${DEX2OAT:-`cat $output | grep -m 1 -i 'Unable to locate class '`}
+    CHECK=`cat $output | grep -m 1 'Check failed:' | sed 's|\].*||g' | sed 's|.*\/||g'`
+    CHECK_TXT=`cat $output | grep -m 1 'Check failed:' | sed 's|.*Check failed: *||g'`
+    FAILURE=`cat $dex2oat_output | grep -m 1 -e 'dex2oatd F' -e 'dex2oat F' | sed 's|\].*||g' | sed 's|.*\/||g'`
+    FAILURE_TXT=`cat $dex2oat_output | grep -m 1 -e 'dex2oatd F' -e 'dex2oat F' | sed 's|.*\] *||g'`
+    NULLPTR=`cat $output | grep 'java.lang.NullPointerException'`
+    ARRBOUNDS=`cat $output | grep 'java.lang.ArrayIndexOutOfBoundsException'`
+    SIGSEGV=`cat $output | grep 'SIGSEGV'`
+    SIGFPE=`cat $output | grep 'SIGFPE'`
+    SEGFAULT=`cat $output | grep 'Segmentation fault'`
+    KILLED=`cat $output | grep 'Killed'`
+    CHECK=${CHECK:-$FAILURE}
+    CHECK_TXT=${CHECK_TXT:-$FAILURE_TXT}
+    if [ ! "$CHECK" == "" ]; then
+      CHECK=$CHECK"/"$CHECK_TXT
+      CHECK=`echo $CHECK | tr ' ' '_'`
+    fi
+    if [ ! "$SIGTRAP" == "" ]; then
+        echo "reason=SIGTRAP"
+        echo "SIGTRAP=${test_dir##*/}"
+    elif [ ! "$DEX2OAT" == "" ]; then
+        echo "reason=DEX2OAT/$CHECK"
+        echo "DEX2OAT/$CHECK=${test_dir##*/}"
+    elif [ ! "$CHECK" == "" ]; then
+        echo "reason=CHECK/$CHECK"
+        echo "CHECK/$CHECK=${test_dir##*/}"
+    elif [ ! "$SIGSEGV" == "" ]; then
+        echo "reason=SIGSEGV"
+        echo "SIGSEGV=${test_dir##*/}"
+    elif [ ! "$SIGFPE" == "" ]; then
+        echo "reason=SIGFPE"
+        echo "SIGFPE=${test_dir##*/}"
+    elif [ ! "$NULLPTR" == "" ]; then
+        echo "reason=NULLPTR"
+        echo "NULLPTR=${test_dir##*/}"
+    elif [ ! "$ARRBOUNDS" == "" ]; then
+        echo "reason=ARRBOUNDS"
+        echo "ARRBOUNDS=${test_dir##*/}"
+    elif [ ! "$SEGFAULT" == "" ]; then
+        echo "reason=SEGFAULT"
+        echo "SEGFAULT=${test_dir##*/}"
+    elif [ ! "$KILLED" == "" ]; then
+        echo "reason=KILLED"
+        echo "KILLED=${test_dir##*/}"
+    else
+        echo "reason=OTHER"
+        echo "OTHER=${test_dir##*/}"
     fi
 
 ) 1>&2
