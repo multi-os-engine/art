@@ -421,6 +421,61 @@ class VoidFunctor {
   }
 };
 
+static const uword kUwordOne = 1U;
+
+// BitField is a template for encoding and decoding a bit field inside
+// an unsigned machine word.
+template<typename T, int position, int size>
+class BitField {
+ public:
+  // Tells whether the provided value fits into the bit field.
+  static bool IsValid(T value) {
+    return (static_cast<uword>(value) & ~((kUwordOne << size) - 1)) == 0;
+  }
+
+  // Returns a uword mask of the bit field.
+  static uword Mask() {
+    return (kUwordOne << size) - 1;
+  }
+
+  // Returns a uword mask of the bit field which can be applied directly to
+  // to the raw unshifted bits.
+  static uword MaskInPlace() {
+    return ((kUwordOne << size) - 1) << position;
+  }
+
+  // Returns the shift count needed to right-shift the bit field to
+  // the least-significant bits.
+  static int Shift() {
+    return position;
+  }
+
+  // Returns the size of the bit field.
+  static int BitSize() {
+    return size;
+  }
+
+  // Returns a uword with the bit field value encoded.
+  static uword Encode(T value) {
+    DCHECK(IsValid(value));
+    return static_cast<uword>(value) << position;
+  }
+
+  // Extracts the bit field from the value.
+  static T Decode(uword value) {
+    return static_cast<T>((value >> position) & ((kUwordOne << size) - 1));
+  }
+
+  // Returns a uword with the bit field value encoded based on the
+  // original value. Only the bits corresponding to this bit field
+  // will be changed.
+  static uword Update(T value, uword original) {
+    DCHECK(IsValid(value));
+    return (static_cast<uword>(value) << position) |
+        (~MaskInPlace() & original);
+  }
+};
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_UTILS_H_
