@@ -189,6 +189,7 @@ define define-test-art-oat-rule-host
 $(3): PRIVATE_DEX_FILE := /$$(dex_file)
 $(3): PRIVATE_OAT_FILE := $$(oat_file)
 .PHONY: $(3)
+ifneq ($(HOST_SKIP_TESTS),true)
 $(3): $$(ART_OAT_TEST_$(1)_DEX) $(ART_TEST_HOST_OAT_DEPENDENCIES)
 	$(hide) mkdir -p $(ART_HOST_TEST_DIR)/android-data-$$@/dalvik-cache/$$($(2)HOST_ARCH)
 	$(hide) cp $$(realpath $$<) $(ART_HOST_TEST_DIR)/android-data-$$@/oat-test-dex-$(1).jar
@@ -213,6 +214,7 @@ $(3): $$(ART_OAT_TEST_$(1)_DEX) $(ART_TEST_HOST_OAT_DEPENDENCIES)
 	$$(hide) (echo $(MAKECMDGOALS) | grep -q $$@ && \
 	  echo "run-test run as top-level target, removing test directory $(ART_HOST_TEST_DIR)" && \
 	  rm -r $(ART_HOST_TEST_DIR)) || true
+endif
 endef  # define-test-art-oat-rule-host
 
 # Define rules to run oat tests on the host.

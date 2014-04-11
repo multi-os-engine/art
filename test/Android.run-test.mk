@@ -54,10 +54,12 @@ TEST_ART_RUN_TEST_BUILD_RULES :=
 define define-build-art-run-test
   dmart_target := $(art_run_tests_dir)/art-run-tests/$(1)/touch
 $$(dmart_target): $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) rm -rf $$(dir $$@) && mkdir -p $$(dir $$@)
 	$(hide) DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) \
 	  $(LOCAL_PATH)/run-test --build-only --output-path $$(abspath $$(dir $$@)) $(1)
 	$(hide) touch $$@
+endif
 
   TEST_ART_RUN_TEST_BUILD_RULES += $$(dmart_target)
   dmart_target :=
@@ -169,6 +171,7 @@ define define-test-art-run-test
 $$(run_test_rule_name): PRIVATE_RUN_TEST_OPTIONS := $$(run_test_options)
 .PHONY: $$(run_test_rule_name)
 $$(run_test_rule_name): $(DX) $(HOST_OUT_EXECUTABLES)/jasmin $$(prereq_rule)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $$(call ART_TEST_SKIP,$$@) && \
 	  DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) \
 	    art/test/run-test $$(PRIVATE_RUN_TEST_OPTIONS) $(1) \
@@ -176,6 +179,7 @@ $$(run_test_rule_name): $(DX) $(HOST_OUT_EXECUTABLES)/jasmin $$(prereq_rule)
 	$$(hide) (echo $(MAKECMDGOALS) | grep -q $$@ && \
 	  echo "run-test run as top-level target, removing test directory $(ART_HOST_TEST_DIR)" && \
 	  rm -r $(ART_HOST_TEST_DIR)) || true
+endif
 
   ART_TEST_$$(uc_host_or_target)_RUN_TEST_$$(uc_compiler)$(4)_RULES += $$(run_test_rule_name)
   ART_TEST_$$(uc_host_or_target)_RUN_TEST_$$(uc_compiler)_RULES += $$(run_test_rule_name)

@@ -141,15 +141,21 @@ TEST_ART_TARGET_SYNC_DEPS :=
 # "mm test-art" to build and run all tests on host and device
 .PHONY: test-art
 test-art: test-art-host test-art-target
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-gtest
 test-art-gtest: test-art-host-gtest test-art-target-gtest
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-run-test
 test-art-run-test: test-art-host-run-test test-art-target-run-test
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 ########################################################################
 # host test rules
@@ -169,65 +175,89 @@ test-art-host-vixl: $(VIXL_TEST_DEPENDENCY)
 # "mm test-art-host" to build and run all host tests.
 .PHONY: test-art-host
 test-art-host: test-art-host-gtest test-art-host-oat test-art-host-run-test test-art-host-vixl
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # All host tests that run solely with the default compiler.
 .PHONY: test-art-host-default
 test-art-host-default: test-art-host-oat-default test-art-host-run-test-default
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # All host tests that run solely with the optimizing compiler.
 .PHONY: test-art-host-optimizing
 test-art-host-optimizing: test-art-host-oat-optimizing test-art-host-run-test-optimizing
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # All host tests that run solely on the interpreter.
 .PHONY: test-art-host-interpreter
 test-art-host-interpreter: test-art-host-oat-interpreter test-art-host-run-test-interpreter
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # Primary host architecture variants:
 .PHONY: test-art-host$(ART_PHONY_TEST_HOST_SUFFIX)
 test-art-host$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-gtest$(ART_PHONY_TEST_HOST_SUFFIX) \
     test-art-host-oat$(ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test$(ART_PHONY_TEST_HOST_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-host-default$(ART_PHONY_TEST_HOST_SUFFIX)
 test-art-host-default$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-default$(ART_PHONY_TEST_HOST_SUFFIX) \
     test-art-host-run-test-default$(ART_PHONY_TEST_HOST_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-host-optimizing$(ART_PHONY_TEST_HOST_SUFFIX)
 test-art-host-optimizing$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-optimizing$(ART_PHONY_TEST_HOST_SUFFIX) \
     test-art-host-run-test-optimizing$(ART_PHONY_TEST_HOST_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-host-interpreter$(ART_PHONY_TEST_HOST_SUFFIX)
 test-art-host-interpreter$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-interpreter$(ART_PHONY_TEST_HOST_SUFFIX) \
     test-art-host-run-test-interpreter$(ART_PHONY_TEST_HOST_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # Secondary host architecture variants:
 ifneq ($(HOST_PREFER_32_BIT),true)
 .PHONY: test-art-host$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
 test-art-host$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-gtest$(2ND_ART_PHONY_TEST_HOST_SUFFIX) \
     test-art-host-oat$(2ND_ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-host-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
 test-art-host-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX) \
     test-art-host-run-test-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-host-optimizing$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
 test-art-host-optimizing$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-optimizing$(2ND_ART_PHONY_TEST_HOST_SUFFIX) \
     test-art-host-run-test-optimizing$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-host-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
 test-art-host-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX) \
     test-art-host-run-test-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 endif
 
 ########################################################################
@@ -236,65 +266,89 @@ endif
 # "mm test-art-target" to build and run all target tests.
 .PHONY: test-art-target
 test-art-target: test-art-target-gtest test-art-target-oat test-art-target-run-test
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # All target tests that run solely with the default compiler.
 .PHONY: test-art-target-default
 test-art-target-default: test-art-target-oat-default test-art-target-run-test-default
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # All target tests that run solely with the optimizing compiler.
 .PHONY: test-art-target-optimizing
 test-art-target-optimizing: test-art-target-oat-optimizing test-art-target-run-test-optimizing
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # All target tests that run solely on the interpreter.
 .PHONY: test-art-target-interpreter
 test-art-target-interpreter: test-art-target-oat-interpreter test-art-target-run-test-interpreter
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # Primary target architecture variants:
 .PHONY: test-art-target$(ART_PHONY_TEST_TARGET_SUFFIX)
 test-art-target$(ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-gtest$(ART_PHONY_TEST_TARGET_SUFFIX) \
     test-art-target-oat$(ART_PHONY_TEST_TARGET_SUFFIX) test-art-target-run-test$(ART_PHONY_TEST_TARGET_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-target-default$(ART_PHONY_TEST_TARGET_SUFFIX)
 test-art-target-default$(ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-default$(ART_PHONY_TEST_TARGET_SUFFIX) \
     test-art-target-run-test-default$(ART_PHONY_TEST_TARGET_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-target-optimizing$(ART_PHONY_TEST_TARGET_SUFFIX)
 test-art-target-optimizing$(ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-optimizing$(ART_PHONY_TEST_TARGET_SUFFIX) \
     test-art-target-run-test-optimizing$(ART_PHONY_TEST_TARGET_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-target-interpreter$(ART_PHONY_TEST_TARGET_SUFFIX)
 test-art-target-interpreter$(ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-interpreter$(ART_PHONY_TEST_TARGET_SUFFIX) \
     test-art-target-run-test-interpreter$(ART_PHONY_TEST_TARGET_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 # Secondary target architecture variants:
 ifdef TARGET_2ND_ARCH
 .PHONY: test-art-target$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
 test-art-target$(2ND_ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-gtest$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) \
     test-art-target-oat$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) test-art-target-run-test$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-target-default$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
 test-art-target-default$(2ND_ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-default$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) \
     test-art-target-run-test-default$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-target-optimizing$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
 test-art-target-optimizing$(2ND_ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-optimizing$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) \
     test-art-target-run-test-optimizing$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 .PHONY: test-art-target-interpreter$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
 test-art-target-interpreter$(2ND_ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-interpreter$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) \
     test-art-target-run-test-interpreter$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+ifneq ($(HOST_SKIP_TESTS),true)
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 endif
 
 ########################################################################
