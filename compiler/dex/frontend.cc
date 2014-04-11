@@ -761,7 +761,9 @@ static bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file,
       for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
         int opcode = mir->dalvikInsn.opcode;
         // Check if we support the byte code.
-        if (std::find(support_list, support_list + support_list_size,
+        // Temporary force compilation of methods with any bytecode
+        bool force_all = (cu.instruction_set == kX86_64);
+        if (!force_all && std::find(support_list, support_list + support_list_size,
             opcode) == support_list + support_list_size) {
           if (!cu.mir_graph->IsPseudoMirOp(opcode)) {
             VLOG(compiler) << "Unsupported dalvik byte code : "
@@ -921,8 +923,11 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
 
   // TODO(Arm64): Remove this when we are able to compile everything.
   if (!CanCompileMethod(method_idx, dex_file, cu)) {
+    LOG(INFO) << "Method filtered: " << PrettyMethod(method_idx, dex_file);
     VLOG(compiler) << "Cannot compile method : " << PrettyMethod(method_idx, dex_file);
     return nullptr;
+  } else {
+    LOG(INFO) << "Method compiled: " << PrettyMethod(method_idx, dex_file);
   }
 
   cu.NewTimingSplit("MIROpt:CheckFilters");
