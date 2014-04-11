@@ -48,7 +48,6 @@ void ArenaStack::Reset() {
 }
 
 MemStats ArenaStack::GetPeakStats() const {
-  DebugStackRefCounter::CheckNoRefs();
   return MemStats("ArenaStack peak", static_cast<const TaggedStats<Peak>*>(&stats_and_pool_),
                   bottom_arena_);
 }

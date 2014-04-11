@@ -26,6 +26,8 @@
 #include "oat.h"
 #include "mirror/class.h"
 #include "safe_map.h"
+#include "utils/scoped_arena_allocator.h"
+#include "utils/scoped_arena_containers.h"
 #include "UniquePtr.h"
 
 namespace art {
@@ -154,7 +156,7 @@ class OatWriter {
 
   class OatDexFile {
    public:
-    explicit OatDexFile(size_t offset, const DexFile& dex_file);
+    explicit OatDexFile(size_t offset, const DexFile& dex_file, ScopedArenaAllocator* allocator);
     size_t SizeOf() const;
     void UpdateChecksum(OatHeader* oat_header) const;
     bool Write(OatWriter* oat_writer, OutputStream* out, const size_t file_offset) const;
@@ -168,27 +170,26 @@ class OatWriter {
     const uint8_t* dex_file_location_data_;
     uint32_t dex_file_location_checksum_;
     uint32_t dex_file_offset_;
-    std::vector<uint32_t> methods_offsets_;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(OatDexFile);
+    size_t num_class_defs_;
+    uint32_t* methods_offsets_;  // Allocated with ScopedArenaAllocator.
   };
 
   class OatClass {
    public:
     explicit OatClass(size_t offset,
-                      const std::vector<CompiledMethod*>& compiled_methods,
+                      size_t num_compiled_methods,
                       uint32_t num_non_null_compiled_methods,
-                      mirror::Class::Status status);
-    ~OatClass();
-    size_t GetOatMethodOffsetsOffsetFromOatHeader(size_t class_def_method_index_) const;
-    size_t GetOatMethodOffsetsOffsetFromOatClass(size_t class_def_method_index_) const;
+                      CompiledMethod** compiled_methods,
+                      mirror::Class::Status status,
+                      ScopedArenaAllocator* allocator);
+    size_t GetOatMethodOffsetsOffsetFromOatHeader(size_t class_def_method_index) const;
+    size_t GetOatMethodOffsetsOffsetFromOatClass(size_t class_def_method_index) const;
     size_t SizeOf() const;
     void UpdateChecksum(OatHeader* oat_header) const;
     bool Write(OatWriter* oat_writer, OutputStream* out, const size_t file_offset) const;
 
     CompiledMethod* GetCompiledMethod(size_t class_def_method_index) const {
-      DCHECK_LT(class_def_method_index, compiled_methods_.size());
+      DCHECK_LT(class_def_method_index, num_compiled_methods_);
       return compiled_methods_[class_def_method_index];
     }
 
@@ -199,21 +200,27 @@ class OatWriter {
     // patched to point to code in the Portable .o ELF objects.
     size_t offset_;
 
-    // CompiledMethods for each class_def_method_index, or NULL if no method is available.
-    std::vector<CompiledMethod*> compiled_methods_;
+    // The number of methods in class definition.
+    size_t num_compiled_methods_;
+
+    // The number on non-nullptr compiled methods.
+    size_t num_non_null_compiled_methods_;
+
+    // CompiledMethod* for each class_def_method_index, or nullptr if no method is available.
+    CompiledMethod** compiled_methods_;  // Allocated with ScopedArenaAllocator.
 
     // Offset from OatClass::offset_ to the OatMethodOffsets for the
     // class_def_method_index. If 0, it means the corresponding
     // CompiledMethod entry in OatClass::compiled_methods_ should be
     // NULL and that the OatClass::type_ should be kOatClassBitmap.
-    std::vector<uint32_t> oat_method_offsets_offsets_from_oat_class_;
+    uint32_t* oat_method_offsets_offsets_from_oat_class_;  // Allocated with ScopedArenaAllocator.
 
     // data to write
 
-    COMPILE_ASSERT(mirror::Class::Status::kStatusMax < (2 ^ 16), class_status_wont_fit_in_16bits);
+    COMPILE_ASSERT(mirror::Class::Status::kStatusMax < (1 << 16), class_status_wont_fit_in_16bits);
     int16_t status_;
 
-    COMPILE_ASSERT(OatClassType::kOatClassMax < (2 ^ 16), oat_class_type_wont_fit_in_16bits);
+    COMPILE_ASSERT(OatClassType::kOatClassMax < (1 << 16), oat_class_type_wont_fit_in_16bits);
     uint16_t type_;
 
     uint32_t method_bitmap_size_;
@@ -230,11 +237,8 @@ class OatWriter {
     // OatClass::compiled_methods_ contains NULL values (and
     // oat_method_offsets_offsets_from_oat_class_ should contain 0
     // values in this case).
-    std::vector<OatMethodOffsets> method_offsets_;
-    std::vector<OatMethodHeader> method_headers_;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(OatClass);
+    OatMethodOffsets* method_offsets_;  // Allocated with ScopedArenaAllocator.
+    OatMethodHeader* method_headers_;  // Allocated with ScopedArenaAllocator.
   };
 
   std::vector<DebugInfo> method_info_;
@@ -252,10 +256,14 @@ class OatWriter {
   uintptr_t image_file_location_oat_begin_;
   std::string image_file_location_;
 
+  // Fast single-threaded memory allocator.
+  ArenaStack arena_stack_;
+  ScopedArenaAllocator allocator_;
+
   // data to write
   OatHeader* oat_header_;
-  std::vector<OatDexFile*> oat_dex_files_;
-  std::vector<OatClass*> oat_classes_;
+  ScopedArenaVector<OatDexFile> oat_dex_files_;
+  ScopedArenaVector<OatClass> oat_classes_;
   UniquePtr<const std::vector<uint8_t> > interpreter_to_interpreter_bridge_;
   UniquePtr<const std::vector<uint8_t> > interpreter_to_compiled_code_bridge_;
   UniquePtr<const std::vector<uint8_t> > jni_dlsym_lookup_;
