@@ -26,6 +26,8 @@
 #include "oat.h"
 #include "mirror/class.h"
 #include "safe_map.h"
+#include "utils/scoped_arena_allocator.h"
+#include "utils/scoped_arena_containers.h"
 #include "UniquePtr.h"
 
 namespace art {
@@ -142,7 +144,7 @@ class OatWriter {
 
   class OatDexFile {
    public:
-    explicit OatDexFile(size_t offset, const DexFile& dex_file);
+    explicit OatDexFile(size_t offset, const DexFile& dex_file, ScopedArenaAllocator* allocator);
     size_t SizeOf() const;
     void UpdateChecksum(OatHeader* oat_header) const;
     bool Write(OatWriter* oat_writer, OutputStream* out, const size_t file_offset) const;
@@ -156,10 +158,8 @@ class OatWriter {
     const uint8_t* dex_file_location_data_;
     uint32_t dex_file_location_checksum_;
     uint32_t dex_file_offset_;
-    std::vector<uint32_t> methods_offsets_;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(OatDexFile);
+    size_t num_class_defs_;
+    uint32_t* methods_offsets_;
   };
 
   class OatClass {
@@ -198,10 +198,10 @@ class OatWriter {
 
     // data to write
 
-    COMPILE_ASSERT(mirror::Class::Status::kStatusMax < (2 ^ 16), class_status_wont_fit_in_16bits);
+    COMPILE_ASSERT(mirror::Class::Status::kStatusMax < (1 << 16), class_status_wont_fit_in_16bits);
     int16_t status_;
 
-    COMPILE_ASSERT(OatClassType::kOatClassMax < (2 ^ 16), oat_class_type_wont_fit_in_16bits);
+    COMPILE_ASSERT(OatClassType::kOatClassMax < (1 << 16), oat_class_type_wont_fit_in_16bits);
     uint16_t type_;
 
     uint32_t method_bitmap_size_;
@@ -239,10 +239,14 @@ class OatWriter {
   uintptr_t image_file_location_oat_begin_;
   std::string image_file_location_;
 
+  // Fast single-threaded memory allocator.
+  ArenaStack arena_stack_;
+  ScopedArenaAllocator allocator_;
+
   // data to write
   OatHeader* oat_header_;
-  std::vector<OatDexFile*> oat_dex_files_;
-  std::vector<OatClass*> oat_classes_;
+  ScopedArenaVector<OatDexFile> oat_dex_files_;
+  ScopedArenaVector<OatClass*> oat_classes_;
   UniquePtr<const std::vector<uint8_t> > interpreter_to_interpreter_bridge_;
   UniquePtr<const std::vector<uint8_t> > interpreter_to_compiled_code_bridge_;
   UniquePtr<const std::vector<uint8_t> > jni_dlsym_lookup_;
@@ -286,13 +290,6 @@ class OatWriter {
   uint32_t size_oat_class_status_;
   uint32_t size_oat_class_method_bitmaps_;
   uint32_t size_oat_class_method_offsets_;
-
-  // Code mappings for deduplication. Deduplication is already done on a pointer basis by the
-  // compiler driver, so we can simply compare the pointers to find out if things are duplicated.
-  SafeMap<const std::vector<uint8_t>*, uint32_t> code_offsets_;
-  SafeMap<const std::vector<uint8_t>*, uint32_t> vmap_table_offsets_;
-  SafeMap<const std::vector<uint8_t>*, uint32_t> mapping_table_offsets_;
-  SafeMap<const std::vector<uint8_t>*, uint32_t> gc_map_offsets_;
 
   DISALLOW_COPY_AND_ASSIGN(OatWriter);
 };
