@@ -922,8 +922,11 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
 
   // TODO(Arm64): Remove this when we are able to compile everything.
   if (!CanCompileMethod(method_idx, dex_file, cu)) {
+    LOG(INFO) << "Method filtered: " << PrettyMethod(method_idx, dex_file);
     VLOG(compiler) << "Cannot compile method : " << PrettyMethod(method_idx, dex_file);
     return nullptr;
+  } else {
+    LOG(INFO) << "Method compiled: " << PrettyMethod(method_idx, dex_file);
   }
 
   cu.NewTimingSplit("MIROpt:CheckFilters");
