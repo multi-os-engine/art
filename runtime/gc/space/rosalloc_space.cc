@@ -182,17 +182,23 @@ size_t RosAllocSpace::Free(Thread* self, mirror::Object* ptr) {
 }
 
 size_t RosAllocSpace::FreeList(Thread* self, size_t num_ptrs, mirror::Object** ptrs) {
-  DCHECK(ptrs != NULL);
+  DCHECK(ptrs != nullptr);
 
-  // Don't need the lock to calculate the size of the freed pointers.
-  size_t bytes_freed = 0;
-  for (size_t i = 0; i < num_ptrs; i++) {
-    mirror::Object* ptr = ptrs[i];
-    const size_t look_ahead = 8;
-    if (kPrefetchDuringRosAllocFreeList && i + look_ahead < num_ptrs) {
-      __builtin_prefetch(reinterpret_cast<char*>(ptrs[i + look_ahead]));
+  // Use this only for verification, it is not safe to use since the class of the object may have
+  // been freed.
+  static constexpr bool kVerifyFreedBytes = false;
+  static constexpr size_t kPrefetchLookAhead = 8;
+
+  size_t verify_bytes = 0;
+  if (kVerifyFreedBytes || kPrefetchDuringRosAllocFreeList) {
+    for (size_t i = 0; i < num_ptrs; i++) {
+      if (i + kPrefetchLookAhead < num_ptrs) {
+        __builtin_prefetch(reinterpret_cast<char*>(ptrs[i + kPrefetchLookAhead]));
+      }
+      if (kVerifyFreedBytes) {
+        verify_bytes += AllocationSizeNonvirtual(ptrs[i], nullptr);
+      }
     }
-    bytes_freed += AllocationSizeNonvirtual(ptr, nullptr);
   }
 
   if (kRecentFreeCount > 0) {
@@ -216,7 +222,10 @@ size_t RosAllocSpace::FreeList(Thread* self, size_t num_ptrs, mirror::Object** p
     CHECK_EQ(num_broken_ptrs, 0u);
   }
 
-  rosalloc_->BulkFree(self, reinterpret_cast<void**>(ptrs), num_ptrs);
+  const size_t bytes_freed = rosalloc_->BulkFree(self, reinterpret_cast<void**>(ptrs), num_ptrs);
+  if (kVerifyFreedBytes) {
+    CHECK_EQ(verify_bytes, bytes_freed);
+  }
   return bytes_freed;
 }
 
