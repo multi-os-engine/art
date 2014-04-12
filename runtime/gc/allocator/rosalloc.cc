@@ -91,6 +91,9 @@ RosAlloc::RosAlloc(void* base, size_t capacity, size_t max_capacity,
               << reinterpret_cast<intptr_t>(free_pages)
               << " into free_page_runs_";
   }
+  dedicated_full_run_ = AllocRun(Thread::Current(), 0);
+  // Fill the alloc bitmap so nobody can successfully allocate from it.
+  dedicated_full_run_->FillAllocBitMap(0xFF);
 }
 
 RosAlloc::~RosAlloc() {
@@ -279,7 +282,7 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, byte page_map_type) {
   return nullptr;
 }
 
-void RosAlloc::FreePages(Thread* self, void* ptr) {
+size_t RosAlloc::FreePages(Thread* self, void* ptr) {
   lock_.AssertHeld(self);
   size_t pm_idx = ToPageMapIndex(ptr);
   DCHECK_LT(pm_idx, page_map_size_);
@@ -298,7 +301,7 @@ void RosAlloc::FreePages(Thread* self, void* ptr) {
     LOG(FATAL) << "Unreachable - RosAlloc::FreePages() : " << "pm_idx=" << pm_idx << ", pm_type="
                << static_cast<int>(pm_type) << ", ptr=" << std::hex
                << reinterpret_cast<intptr_t>(ptr);
-    return;
+    return 0;
   }
   // Update the page map and count the number of pages.
   size_t num_pages = 1;
@@ -422,6 +425,7 @@ void RosAlloc::FreePages(Thread* self, void* ptr) {
     LOG(INFO) << "RosAlloc::FreePages() : Inserted run 0x" << std::hex << reinterpret_cast<intptr_t>(fpr)
               << " into free_page_runs_";
   }
+  return num_pages;
 }
 
 void* RosAlloc::AllocLargeObject(Thread* self, size_t size, size_t* bytes_allocated) {
@@ -460,12 +464,11 @@ void* RosAlloc::AllocLargeObject(Thread* self, size_t size, size_t* bytes_alloca
   return r;
 }
 
-void RosAlloc::FreeInternal(Thread* self, void* ptr) {
+size_t RosAlloc::FreeInternal(Thread* self, void* ptr) {
   DCHECK_LE(base_, ptr);
   DCHECK_LT(ptr, base_ + footprint_);
   size_t pm_idx = RoundDownToPageMapIndex(ptr);
-  bool free_from_run = false;
-  Run* run = NULL;
+  Run* run = nullptr;
   {
     MutexLock mu(self, lock_);
     DCHECK_LT(pm_idx, page_map_size_);
@@ -477,16 +480,14 @@ void RosAlloc::FreeInternal(Thread* self, void* ptr) {
     switch (page_map_[pm_idx]) {
       case kPageMapEmpty:
         LOG(FATAL) << "Unreachable - page map type: " << page_map_[pm_idx];
-        return;
+        return 0;
       case kPageMapLargeObject:
-        FreePages(self, ptr);
-        return;
+        return FreePages(self, ptr) * kPageSize;
       case kPageMapLargeObjectPart:
         LOG(FATAL) << "Unreachable - page map type: " << page_map_[pm_idx];
-        return;
+        return 0;
       case kPageMapRun:
       case kPageMapRunPart: {
-        free_from_run = true;
         size_t pi = pm_idx;
         DCHECK(page_map_[pi] == kPageMapRun || page_map_[pi] == kPageMapRunPart);
         // Find the beginning of the run.
@@ -501,45 +502,27 @@ void RosAlloc::FreeInternal(Thread* self, void* ptr) {
       }
       default:
         LOG(FATAL) << "Unreachable - page map type: " << page_map_[pm_idx];
-        return;
+        return 0;
     }
   }
-  if (LIKELY(free_from_run)) {
-    DCHECK(run != NULL);
-    FreeFromRun(self, ptr, run);
-  }
+  DCHECK(run != nullptr);
+  const size_t size = IndexToBracketSize(run->size_bracket_idx_);
+  FreeFromRun(self, ptr, run);
+  return size;
 }
 
-void RosAlloc::Free(Thread* self, void* ptr) {
+size_t RosAlloc::Free(Thread* self, void* ptr) {
   ReaderMutexLock rmu(self, bulk_free_lock_);
-  FreeInternal(self, ptr);
+  return FreeInternal(self, ptr);
 }
 
-RosAlloc::Run* RosAlloc::RefillRun(Thread* self, size_t idx) {
-  Run* new_run;
-  size_t num_pages = numOfPages[idx];
-  // Get the lowest address non-full run from the binary tree.
-  Run* temp = NULL;
-  std::set<Run*>* bt = &non_full_runs_[idx];
-  std::set<Run*>::iterator found = bt->lower_bound(temp);
-  if (found != bt->end()) {
-    // If there's one, use it as the current run.
-    Run* non_full_run = *found;
-    DCHECK(non_full_run != NULL);
-    new_run = non_full_run;
-    DCHECK_EQ(new_run->is_thread_local_, 0);
-    bt->erase(found);
-    DCHECK_EQ(non_full_run->is_thread_local_, 0);
-  } else {
-    // If there's none, allocate a new run and use it as the
-    // current run.
-    {
-      MutexLock mu(self, lock_);
-      new_run = reinterpret_cast<Run*>(AllocPages(self, num_pages, kPageMapRun));
-    }
-    if (new_run == NULL) {
-      return NULL;
-    }
+RosAlloc::Run* RosAlloc::AllocRun(Thread* self, size_t idx) {
+  RosAlloc::Run* new_run = nullptr;
+  {
+    MutexLock mu(self, lock_);
+    new_run = reinterpret_cast<Run*>(AllocPages(self, numOfPages[idx], kPageMapRun));
+  }
+  if (LIKELY(new_run != nullptr)) {
     if (kIsDebugBuild) {
       new_run->magic_num_ = kMagicNum;
     }
@@ -547,8 +530,26 @@ RosAlloc::Run* RosAlloc::RefillRun(Thread* self, size_t idx) {
     new_run->top_slot_idx_ = 0;
     new_run->ClearBitMaps();
     new_run->to_be_bulk_freed_ = false;
+    new_run->ClearData();
   }
   return new_run;
+}
+
+RosAlloc::Run* RosAlloc::RefillRun(Thread* self, size_t idx) {
+  // Get the lowest address non-full run from the binary tree.
+  std::set<Run*>* bt = &non_full_runs_[idx];
+  std::set<Run*>::iterator found = bt->begin();
+  if (found != bt->end()) {
+    // If there's one, use it as the current run.
+    Run* non_full_run = *found;
+    DCHECK(non_full_run != nullptr);
+    DCHECK_EQ(non_full_run->is_thread_local_, 0);
+    bt->erase(found);
+    non_full_run->top_slot_idx_ = 0;
+    return non_full_run;
+  }
+  // If there's none, allocate a new run and use it as the current run.
+  return AllocRun(self, idx);
 }
 
 void* RosAlloc::AllocFromRun(Thread* self, size_t size, size_t* bytes_allocated) {
@@ -566,23 +567,12 @@ void* RosAlloc::AllocFromRun(Thread* self, size_t size, size_t* bytes_allocated)
   if (LIKELY(idx <= kMaxThreadLocalSizeBracketIdx)) {
     // Use a thread-local run.
     Run* thread_local_run = reinterpret_cast<Run*>(self->GetRosAllocRun(idx));
-    if (UNLIKELY(thread_local_run == NULL)) {
-      MutexLock mu(self, *size_bracket_locks_[idx]);
-      thread_local_run = RefillRun(self, idx);
-      if (UNLIKELY(thread_local_run == NULL)) {
-        return NULL;
-      }
-      DCHECK(non_full_runs_[idx].find(thread_local_run) == non_full_runs_[idx].end());
-      DCHECK(full_runs_[idx].find(thread_local_run) == full_runs_[idx].end());
-      thread_local_run->is_thread_local_ = 1;
-      self->SetRosAllocRun(idx, thread_local_run);
-      DCHECK(!thread_local_run->IsFull());
-    }
-
     DCHECK(thread_local_run != NULL);
     DCHECK_NE(thread_local_run->is_thread_local_, 0);
     slot_addr = thread_local_run->AllocSlot();
-
+    if (thread_local_run == dedicated_full_run_) {
+      DCHECK(slot_addr == nullptr) << "allocated from the dedicated full run";
+    }
     if (UNLIKELY(slot_addr == NULL)) {
       // The run got full. Try to free slots.
       DCHECK(thread_local_run->IsFull());
@@ -595,8 +585,8 @@ void* RosAlloc::AllocFromRun(Thread* self, size_t size, size_t* bytes_allocated)
         if (is_all_free_after_merge) {
           // Reinstate the bump index mode if it's all free.
           DCHECK_EQ(thread_local_run->top_slot_idx_, numOfSlots[idx]);
-          thread_local_run->top_slot_idx_ = 0;
         }
+        thread_local_run->top_slot_idx_ = 0;
       } else {
         // No slots got freed. Try to refill the thread-local run.
         DCHECK(thread_local_run->IsFull());
@@ -627,6 +617,9 @@ void* RosAlloc::AllocFromRun(Thread* self, size_t size, size_t* bytes_allocated)
       DCHECK(!thread_local_run->IsFull());
       DCHECK_NE(thread_local_run->is_thread_local_, 0);
       slot_addr = thread_local_run->AllocSlot();
+      if (thread_local_run == dedicated_full_run_) {
+        DCHECK(slot_addr == nullptr) << "allocated from the dedicated full run";
+      }
       // Must succeed now with a new run.
       DCHECK(slot_addr != NULL);
     }
@@ -686,10 +679,9 @@ void* RosAlloc::AllocFromRun(Thread* self, size_t size, size_t* bytes_allocated)
                 << "(" << std::dec << (bracket_size) << ")";
     }
   }
-  if (LIKELY(bytes_allocated != NULL)) {
-    *bytes_allocated = bracket_size;
-  }
-  memset(slot_addr, 0, size);
+  DCHECK(bytes_allocated != nullptr);
+  *bytes_allocated = bracket_size;
+  // Caller verifies that it is all 0.
   return slot_addr;
 }
 
@@ -802,58 +794,40 @@ std::string RosAlloc::Run::Dump() {
   return stream.str();
 }
 
-void* RosAlloc::Run::AllocSlot() {
-  size_t idx = size_bracket_idx_;
-  size_t num_slots = numOfSlots[idx];
-  DCHECK_LE(top_slot_idx_, num_slots);
-  if (LIKELY(top_slot_idx_ < num_slots)) {
-    // If it's in bump index mode, grab the top slot and increment the top index.
-    size_t slot_idx = top_slot_idx_;
-    byte* slot_addr = reinterpret_cast<byte*>(this) + headerSizes[idx] + slot_idx * bracketSizes[idx];
-    if (kTraceRosAlloc) {
-      LOG(INFO) << "RosAlloc::Run::AllocSlot() : 0x" << std::hex << reinterpret_cast<intptr_t>(slot_addr)
-                << ", bracket_size=" << std::dec << bracketSizes[idx] << ", slot_idx=" << slot_idx;
-    }
-    top_slot_idx_++;
-    size_t vec_idx = slot_idx / 32;
-    size_t vec_off = slot_idx % 32;
-    uint32_t* vec = &alloc_bit_map_[vec_idx];
-    DCHECK_EQ((*vec & (1 << vec_off)), static_cast<uint32_t>(0));
-    *vec |= 1 << vec_off;
-    DCHECK_NE((*vec & (1 << vec_off)), static_cast<uint32_t>(0));
-    return slot_addr;
-  }
-  // Not in bump index mode. Search the alloc bit map for an empty slot.
-  size_t num_vec = RoundUp(num_slots, 32) / 32;
-  size_t slot_idx = 0;
-  bool found_slot = false;
-  for (size_t v = 0; v < num_vec; v++) {
-    uint32_t *vecp = &alloc_bit_map_[v];
-    uint32_t ffz1 = __builtin_ffs(~*vecp);
-    uint32_t ffz;
+inline void* RosAlloc::Run::AllocSlot() {
+  const size_t idx = size_bracket_idx_;
+  while (true) {
+    uint32_t* alloc_bitmap_ptr = &alloc_bit_map_[top_slot_idx_];
+    uint32_t ffz1 = __builtin_ffs(~*alloc_bitmap_ptr);
     // TODO: Use LIKELY or UNLIKELY here?
-    if (LIKELY(ffz1 > 0 && (ffz = ffz1 - 1) + v * 32 < num_slots)) {
+    if (LIKELY(ffz1 != 0)) {
+      const uint32_t ffz = ffz1 - 1;
+      const uint32_t slot_idx = ffz + top_slot_idx_ * 32;
+      const uint32_t mask = 1U << ffz;
+      DCHECK_LT(slot_idx, numOfSlots[idx]) << "out of range";
       // Found an empty slot. Set the bit.
-      DCHECK_EQ((*vecp & (1 << ffz)), static_cast<uint32_t>(0));
-      *vecp |= (1 << ffz);
-      DCHECK_NE((*vecp & (1 << ffz)), static_cast<uint32_t>(0));
-      slot_idx = ffz + v * 32;
-      found_slot = true;
-      break;
+      DCHECK_EQ(*alloc_bitmap_ptr & mask, 0U);
+      *alloc_bitmap_ptr |= mask;
+      DCHECK_NE(*alloc_bitmap_ptr & mask, 0U);
+      byte* slot_addr = reinterpret_cast<byte*>(this) + headerSizes[idx] + slot_idx * bracketSizes[idx];
+      if (kTraceRosAlloc) {
+        LOG(INFO) << "RosAlloc::Run::AllocSlot() : 0x" << std::hex << reinterpret_cast<intptr_t>(slot_addr)
+                  << ", bracket_size=" << std::dec << bracketSizes[idx] << ", slot_idx=" << slot_idx;
+      }
+      return slot_addr;
     }
-  }
-  if (LIKELY(found_slot)) {
-    byte* slot_addr = reinterpret_cast<byte*>(this) + headerSizes[idx] + slot_idx * bracketSizes[idx];
-    if (kTraceRosAlloc) {
-      LOG(INFO) << "RosAlloc::Run::AllocSlot() : 0x" << std::hex << reinterpret_cast<intptr_t>(slot_addr)
-                << ", bracket_size=" << std::dec << bracketSizes[idx] << ", slot_idx=" << slot_idx;
+    const size_t num_slots = numOfSlots[idx];
+    size_t num_vec = RoundUp(num_slots, 32) / 32;
+    if (top_slot_idx_ + 1 >= num_vec) {
+      // Already at the last word, return null.
+      return nullptr;
     }
-    return slot_addr;
+    // Increase the index to the next word and try again.
+    ++top_slot_idx_;
   }
-  return NULL;
 }
 
-inline void RosAlloc::Run::FreeSlot(void* ptr) {
+void RosAlloc::Run::FreeSlot(void* ptr) {
   DCHECK_EQ(is_thread_local_, 0);
   byte idx = size_bracket_idx_;
   size_t offset_from_slot_base = reinterpret_cast<byte*>(ptr)
@@ -951,17 +925,19 @@ inline void RosAlloc::Run::MarkThreadLocalFreeBitMap(void* ptr) {
   MarkFreeBitMapShared(ptr, ThreadLocalFreeBitMap(), "MarkThreadLocalFreeBitMap");
 }
 
-inline void RosAlloc::Run::MarkBulkFreeBitMap(void* ptr) {
-  MarkFreeBitMapShared(ptr, BulkFreeBitMap(), "MarkFreeBitMap");
+inline size_t RosAlloc::Run::MarkBulkFreeBitMap(void* ptr) {
+  return MarkFreeBitMapShared(ptr, BulkFreeBitMap(), "MarkFreeBitMap");
 }
 
-inline void RosAlloc::Run::MarkFreeBitMapShared(void* ptr, uint32_t* free_bit_map_base,
-                                              const char* caller_name) {
-  byte idx = size_bracket_idx_;
+inline size_t RosAlloc::Run::MarkFreeBitMapShared(void* ptr, uint32_t* free_bit_map_base,
+                                                  const char* caller_name) {
+  const byte idx = size_bracket_idx_;
   size_t offset_from_slot_base = reinterpret_cast<byte*>(ptr)
       - (reinterpret_cast<byte*>(this) + headerSizes[idx]);
-  DCHECK_EQ(offset_from_slot_base % bracketSizes[idx], static_cast<size_t>(0));
-  size_t slot_idx = offset_from_slot_base / bracketSizes[idx];
+  const size_t bracket_size = bracketSizes[idx];
+  memset(ptr, 0, bracket_size);
+  DCHECK_EQ(offset_from_slot_base % bracket_size, static_cast<size_t>(0));
+  size_t slot_idx = offset_from_slot_base / bracket_size;
   DCHECK_LT(slot_idx, numOfSlots[idx]);
   size_t vec_idx = slot_idx / 32;
   if (kIsDebugBuild) {
@@ -978,6 +954,14 @@ inline void RosAlloc::Run::MarkFreeBitMapShared(void* ptr, uint32_t* free_bit_ma
               << reinterpret_cast<intptr_t>(ptr)
               << ", bracket_size=" << std::dec << bracketSizes[idx] << ", slot_idx=" << slot_idx;
   }
+  return bracket_size;
+}
+
+inline uint32_t RosAlloc::Run::GetLastWordMask(size_t num_slots, size_t num_vec) {
+  CHECK_GE(num_slots * 32, num_vec);
+  size_t remain = num_vec * 32 - num_slots;
+  CHECK_NE(remain, 32U);
+  return ((1U << remain) - 1) << (32U - remain);
 }
 
 inline bool RosAlloc::Run::IsAllFree() {
@@ -987,7 +971,9 @@ inline bool RosAlloc::Run::IsAllFree() {
   for (size_t v = 0; v < num_vec; v++) {
     uint32_t vec = alloc_bit_map_[v];
     if (vec != 0) {
-      return false;
+      if (v != num_vec - 1 || (vec & ~GetLastWordMask(num_slots, num_vec)) != 0) {
+        return false;
+      }
     }
   }
   return true;
@@ -997,16 +983,8 @@ inline bool RosAlloc::Run::IsFull() {
   byte idx = size_bracket_idx_;
   size_t num_slots = numOfSlots[idx];
   size_t num_vec = RoundUp(num_slots, 32) / 32;
-  size_t slots = 0;
-  for (size_t v = 0; v < num_vec; v++, slots += 32) {
-    DCHECK_GE(num_slots, slots);
-    uint32_t vec = alloc_bit_map_[v];
-    uint32_t mask = (num_slots - slots >= 32) ? static_cast<uint32_t>(-1)
-        : (1 << (num_slots - slots)) - 1;
-    if ((num_slots - slots) >= 32) {
-      DCHECK_EQ(mask, static_cast<uint32_t>(-1));
-    }
-    if (vec != mask) {
+  for (size_t v = 0; v < num_vec; ++v) {
+    if (~alloc_bit_map_[v] != 0) {
       return false;
     }
   }
@@ -1040,10 +1018,26 @@ inline bool RosAlloc::Run::IsThreadLocalFreeBitmapClean() {
 }
 
 inline void RosAlloc::Run::ClearBitMaps() {
-  byte idx = size_bracket_idx_;
+  const byte idx = size_bracket_idx_;
   size_t num_slots = numOfSlots[idx];
   size_t num_vec = RoundUp(num_slots, 32) / 32;
   memset(alloc_bit_map_, 0, sizeof(uint32_t) * num_vec * 3);
+  DCHECK_NE(num_vec, 0U);
+  // Make sure to set the bits at the end of the bitmap so that we don't allocate there.
+  alloc_bit_map_[num_vec - 1] |= GetLastWordMask(num_slots, num_vec);
+}
+
+inline void RosAlloc::Run::ClearData() {
+  const byte idx = size_bracket_idx_;
+  byte* slot_begin = reinterpret_cast<byte*>(this) + headerSizes[idx];
+  memset(slot_begin, 0, numOfSlots[idx] * bracketSizes[idx]);
+}
+
+inline void RosAlloc::Run::FillAllocBitMap(int value) {
+  byte idx = size_bracket_idx_;
+  size_t num_slots = numOfSlots[idx];
+  size_t num_vec = RoundUp(num_slots, 32) / 32;
+  memset(alloc_bit_map_, value, sizeof(uint32_t) * num_vec);
 }
 
 void RosAlloc::Run::InspectAllSlots(void (*handler)(void* start, void* end, size_t used_bytes, void* callback_arg),
@@ -1075,15 +1069,16 @@ void RosAlloc::Run::InspectAllSlots(void (*handler)(void* start, void* end, size
 // lock for better performance, assuming that the existence of an
 // allocated chunk/pointer being freed in BulkFree() guarantees that
 // the page map entry won't change. Disabled for now.
-static constexpr bool kReadPageMapEntryWithoutLockInBulkFree = false;
+static constexpr bool kReadPageMapEntryWithoutLockInBulkFree = true;
 
-void RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
+size_t RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
+  size_t freed_bytes = 0;
   if (false) {
     // Used only to test Free() as GC uses only BulkFree().
     for (size_t i = 0; i < num_ptrs; ++i) {
-      FreeInternal(self, ptrs[i]);
+      freed_bytes += FreeInternal(self, ptrs[i]);
     }
-    return;
+    return freed_bytes;
   }
 
   WriterMutexLock wmu(self, bulk_free_lock_);
@@ -1097,11 +1092,10 @@ void RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
 #endif
   for (size_t i = 0; i < num_ptrs; i++) {
     void* ptr = ptrs[i];
-    ptrs[i] = NULL;
     DCHECK_LE(base_, ptr);
     DCHECK_LT(ptr, base_ + footprint_);
     size_t pm_idx = RoundDownToPageMapIndex(ptr);
-    Run* run = NULL;
+    Run* run = nullptr;
     if (kReadPageMapEntryWithoutLockInBulkFree) {
       // Read the page map entries without locking the lock.
       byte page_map_entry = page_map_[pm_idx];
@@ -1117,23 +1111,22 @@ void RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
         size_t pi = pm_idx;
         DCHECK(page_map_[pi] == kPageMapRun || page_map_[pi] == kPageMapRunPart);
         // Find the beginning of the run.
-        while (page_map_[pi] != kPageMapRun) {
-          pi--;
+        do {
+          --pi;
           DCHECK_LT(pi, capacity_ / kPageSize);
-        }
-        DCHECK_EQ(page_map_[pi], kPageMapRun);
+        } while (page_map_[pi] != kPageMapRun);
         run = reinterpret_cast<Run*>(base_ + pi * kPageSize);
         DCHECK_EQ(run->magic_num_, kMagicNum);
       } else if (page_map_entry == kPageMapLargeObject) {
         MutexLock mu(self, lock_);
-        FreePages(self, ptr);
+        freed_bytes += FreePages(self, ptr) * kPageSize;
         continue;
       } else {
         LOG(FATAL) << "Unreachable - page map type: " << page_map_entry;
       }
-      DCHECK(run != NULL);
+      DCHECK(run != nullptr);
       // Set the bit in the bulk free bit map.
-      run->MarkBulkFreeBitMap(ptr);
+      freed_bytes += run->MarkBulkFreeBitMap(ptr);
 #ifdef HAVE_ANDROID_OS
       if (!run->to_be_bulk_freed_) {
         run->to_be_bulk_freed_ = true;
@@ -1144,7 +1137,6 @@ void RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
 #endif
     } else {
       // Read the page map entries with a lock.
-      bool free_from_run = false;
       {
         MutexLock mu(self, lock_);
         DCHECK_LT(pm_idx, page_map_size_);
@@ -1155,31 +1147,28 @@ void RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
                     << ", page_map_entry=" << static_cast<int>(page_map_entry);
         }
         if (LIKELY(page_map_entry == kPageMapRun)) {
-          free_from_run = true;
           run = reinterpret_cast<Run*>(base_ + pm_idx * kPageSize);
           DCHECK_EQ(run->magic_num_, kMagicNum);
         } else if (LIKELY(page_map_entry == kPageMapRunPart)) {
-          free_from_run = true;
           size_t pi = pm_idx;
           DCHECK(page_map_[pi] == kPageMapRun || page_map_[pi] == kPageMapRunPart);
           // Find the beginning of the run.
-          while (page_map_[pi] != kPageMapRun) {
-            pi--;
+          do {
+            --pi;
             DCHECK_LT(pi, capacity_ / kPageSize);
-          }
+          } while (page_map_[pi] != kPageMapRun);
           DCHECK_EQ(page_map_[pi], kPageMapRun);
           run = reinterpret_cast<Run*>(base_ + pi * kPageSize);
           DCHECK_EQ(run->magic_num_, kMagicNum);
         } else if (page_map_entry == kPageMapLargeObject) {
-          FreePages(self, ptr);
+          freed_bytes += FreePages(self, ptr) * kPageSize;
         } else {
           LOG(FATAL) << "Unreachable - page map type: " << page_map_entry;
         }
       }
-      if (LIKELY(free_from_run)) {
-        DCHECK(run != NULL);
+      if (LIKELY(run != nullptr)) {
         // Set the bit in the bulk free bit map.
-        run->MarkBulkFreeBitMap(ptr);
+        freed_bytes += run->MarkBulkFreeBitMap(ptr);
 #ifdef HAVE_ANDROID_OS
         if (!run->to_be_bulk_freed_) {
           run->to_be_bulk_freed_ = true;
@@ -1201,8 +1190,7 @@ void RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
 #else
   typedef hash_set<Run*, hash_run, eq_run>::iterator It;
 #endif
-  for (It it = runs.begin(); it != runs.end(); ++it) {
-    Run* run = *it;
+  for (Run* run : runs) {
 #ifdef HAVE_ANDROID_OS
     DCHECK(run->to_be_bulk_freed_);
     run->to_be_bulk_freed_ = false;
@@ -1306,6 +1294,7 @@ void RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
       }
     }
   }
+  return freed_bytes;
 }
 
 std::string RosAlloc::DumpPageMap() {
@@ -1603,10 +1592,13 @@ void RosAlloc::RevokeThreadLocalRuns(Thread* thread) {
   for (size_t idx = 0; idx < kNumOfSizeBrackets; idx++) {
     MutexLock mu(self, *size_bracket_locks_[idx]);
     Run* thread_local_run = reinterpret_cast<Run*>(thread->GetRosAllocRun(idx));
-    if (thread_local_run != NULL) {
+    if (thread_local_run != dedicated_full_run_) {
       DCHECK_EQ(thread_local_run->magic_num_, kMagicNum);
       DCHECK_NE(thread_local_run->is_thread_local_, 0);
-      thread->SetRosAllocRun(idx, nullptr);
+      thread->SetRosAllocRun(idx, dedicated_full_run_);
+      if (thread_local_run == nullptr) {
+        continue;
+      }
       // Note the thread local run may not be full here.
       bool dont_care;
       thread_local_run->MergeThreadLocalFreeBitMapToAllocBitMap(&dont_care);
@@ -1646,9 +1638,8 @@ void RosAlloc::RevokeAllThreadLocalRuns() {
   MutexLock mu(Thread::Current(), *Locks::runtime_shutdown_lock_);
   MutexLock mu2(Thread::Current(), *Locks::thread_list_lock_);
   std::list<Thread*> thread_list = Runtime::Current()->GetThreadList()->GetList();
-  for (auto it = thread_list.begin(); it != thread_list.end(); ++it) {
-    Thread* t = *it;
-    RevokeThreadLocalRuns(t);
+  for (Thread* thread : thread_list) {
+    RevokeThreadLocalRuns(thread);
   }
 }
 
@@ -1903,7 +1894,7 @@ void RosAlloc::Run::Verify(Thread* self, RosAlloc* rosalloc) {
   if (top_slot_idx_ < num_slots) {
     // If the bump index mode is on (top_slot_idx_ < num_slots), then
     // all of the slots after the top index must be free.
-    for (size_t i = top_slot_idx_; i < num_slots; ++i) {
+    if (false) for (size_t i = top_slot_idx_; i < num_slots; ++i) {
       size_t vec_idx = i / 32;
       size_t vec_off = i % 32;
       uint32_t vec = alloc_bit_map_[vec_idx];

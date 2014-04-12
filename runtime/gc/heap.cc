@@ -358,6 +358,7 @@ void Heap::CreateMainMallocSpace(MemMap* mem_map, size_t initial_size, size_t gr
                                                          kDefaultStartingSize, initial_size,
                                                          growth_limit, capacity, low_memory_mode_,
                                                          can_move_objects);
+    main_space_->RevokeAllThreadLocalBuffers();
     CHECK(main_space_ != nullptr) << "Failed to create rosalloc space";
   } else {
     main_space_ = space::DlMallocSpace::CreateFromMemMap(mem_map, "main dlmalloc space",
@@ -725,6 +726,7 @@ void Heap::DumpGcPerformanceInfo(std::ostream& os) {
   os << "Total mutator paused time: " << PrettyDuration(total_paused_time) << "\n";
   os << "Total time waiting for GC to complete: " << PrettyDuration(total_wait_time_) << "\n";
   os << "Approximate GC data structures memory overhead: " << gc_memory_overhead_;
+  BaseMutex::DumpAll(os);
 }
 
 Heap::~Heap() {
