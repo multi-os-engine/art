@@ -78,9 +78,9 @@ static constexpr size_t kGcAlotInterval = KB;
 static constexpr size_t kMinConcurrentRemainingBytes = 128 * KB;
 static constexpr size_t kMaxConcurrentRemainingBytes = 512 * KB;
 // Sticky GC throughput adjustment, divided by 4. Increasing this causes sticky GC to occur more
-// relative to partial/full GC. This is desirable since sticky GCs interfere less with mutator
+// relative to partial/full GC. This may be desirable since sticky GCs interfere less with mutator
 // threads (lower pauses, use less memory bandwidth).
-static constexpr double kStickyGcThroughputAdjustment = 1.25;
+static constexpr double kStickyGcThroughputAdjustment = 1.0;
 // Whether or not we use the free list large object space.
 static constexpr bool kUseFreeListSpaceForLOS = false;
 // Whtehr or not we compact the zygote in PreZygoteFork.
@@ -595,7 +595,17 @@ void Heap::AddSpace(space::Space* space, bool set_as_default) {
       if (continuous_space->IsDlMallocSpace()) {
         dlmalloc_space_ = continuous_space->AsDlMallocSpace();
       } else if (continuous_space->IsRosAllocSpace()) {
+        bool revoke_before = rosalloc_space_ != nullptr;
+        // Revoke before if we already have a rosalloc_space_ so that we don't end up with non full
+        // runs from the previous one during the revoke after.
+        if (revoke_before) {
+          rosalloc_space_->RevokeAllThreadLocalBuffers();
+        }
         rosalloc_space_ = continuous_space->AsRosAllocSpace();
+        // Didn't revoke before, need to revoke after to set up the thread local buffers.
+        if (!revoke_before) {
+          rosalloc_space_->RevokeAllThreadLocalBuffers();
+        }
       }
     }
     // Ensure that spaces remain sorted in increasing order of start address.
@@ -725,6 +735,7 @@ void Heap::DumpGcPerformanceInfo(std::ostream& os) {
   os << "Total mutator paused time: " << PrettyDuration(total_paused_time) << "\n";
   os << "Total time waiting for GC to complete: " << PrettyDuration(total_wait_time_) << "\n";
   os << "Approximate GC data structures memory overhead: " << gc_memory_overhead_;
+  BaseMutex::DumpAll(os);
 }
 
 Heap::~Heap() {
