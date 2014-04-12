@@ -33,6 +33,7 @@ class ParsedOptions {
   std::string boot_class_path_string_;
   std::string class_path_string_;
   std::string image_;
+  std::string instruction_set_;
   bool check_jni_;
   std::string jni_trace_;
   CompilerCallbacks* compiler_callbacks_;

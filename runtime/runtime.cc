@@ -523,6 +523,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   intern_table_ = new InternTable;
 
   verify_ = options->verify_;
+  instruction_set_ = options->instruction_set_;
 
   if (options->interpreter_only_) {
     GetInstrumentation()->ForceInterpretOnly();
@@ -1253,20 +1254,24 @@ void Runtime::AddCurrentRuntimeFeaturesAsDex2OatArguments(std::vector<std::strin
   }
   argv->push_back(checkstr);
 
+  if (!instruction_set_.empty()) {
+    argv->push_back("--instruction-set=" + instruction_set_);
+  } else {
   // Make the dex2oat instruction set match that of the launching runtime. If we have multiple
   // architecture support, dex2oat may be compiled as a different instruction-set than that
   // currently being executed.
 #if defined(__arm__)
-  argv->push_back("--instruction-set=arm");
+    argv->push_back("--instruction-set=arm");
 #elif defined(__aarch64__)
-  argv->push_back("--instruction-set=arm64");
+    argv->push_back("--instruction-set=arm64");
 #elif defined(__i386__)
-  argv->push_back("--instruction-set=x86");
+    argv->push_back("--instruction-set=x86");
 #elif defined(__x86_64__)
-  argv->push_back("--instruction-set=x86_64");
+    argv->push_back("--instruction-set=x86_64");
 #elif defined(__mips__)
-  argv->push_back("--instruction-set=mips");
+    argv->push_back("--instruction-set=mips");
 #endif
+  }
 
   std::string features("--instruction-set-features=");
   features += GetDefaultInstructionSetFeatures();

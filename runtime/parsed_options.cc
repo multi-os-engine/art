@@ -262,6 +262,10 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
       if (!ParseStringAfterChar(option, ':', &image_)) {
         return false;
       }
+    } else if (StartsWith(option, "-Xinstruction-set:")) {
+      if (!ParseStringAfterChar(option, ':', &instruction_set_)) {
+        return false;
+      }
     } else if (StartsWith(option, "-Xcheck:jni")) {
       check_jni_ = true;
     } else if (StartsWith(option, "-Xrunjdwp:") || StartsWith(option, "-agentlib:jdwp=")) {
@@ -720,6 +724,7 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -Xgc:[no]preverify_rosalloc\n");
   UsageMessage(stream, "  -Xgc:[no]postverify_rosalloc\n");
   UsageMessage(stream, "  -Ximage:filename\n");
+  UsageMessage(stream, "  -Xinstruction-set:stringvalue\n");
   UsageMessage(stream, "  -XX:ParallelGCThreads=integervalue\n");
   UsageMessage(stream, "  -XX:ConcGCThreads=integervalue\n");
   UsageMessage(stream, "  -XX:MaxSpinsBeforeThinLockInflation=integervalue\n");

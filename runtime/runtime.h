@@ -572,6 +572,8 @@ class Runtime {
   // If false, verification is disabled. True by default.
   bool verify_;
 
+  std::string instruction_set_;
+
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };
 
