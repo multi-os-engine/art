@@ -367,12 +367,9 @@ void SpaceTest::AllocAndFreeListTestBody(CreateSpaceFn create_space) {
     EXPECT_EQ(usable_size, computed_usable_size);
   }
 
-  // Release memory and check pointers are nullptr
+  // Release memory.
   // TODO: This isn't compaction safe, fix.
   space->FreeList(self, arraysize(lots_of_objects), lots_of_objects);
-  for (size_t i = 0; i < arraysize(lots_of_objects); i++) {
-    EXPECT_TRUE(lots_of_objects[i] == nullptr);
-  }
 }
 
 void SpaceTest::SizeFootPrintGrowthLimitAndTrimBody(MallocSpace* space, intptr_t object_size,

@@ -636,6 +636,8 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
                  false, false, 0);
   }
 
+  heap_->RevokeThreadLocalBuffers(self);
+
   // Pre-allocate an OutOfMemoryError for the double-OOME case.
   self->ThrowNewException(ThrowLocation(), "Ljava/lang/OutOfMemoryError;",
                           "OutOfMemoryError thrown while trying to throw OutOfMemoryError; "

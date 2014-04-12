@@ -342,6 +342,13 @@ void Thread::Init(ThreadList* thread_list, JavaVMExt* java_vm) {
 
   tlsPtr_.jni_env = new JNIEnvExt(this, java_vm);
   thread_list->Register(this);
+
+
+  // Need to do this before the thread does any allocations.
+  gc::Heap* heap = Runtime::Current()->GetHeap();
+  if (heap != nullptr) {
+    heap->RevokeThreadLocalBuffers(this);
+  }
 }
 
 Thread* Thread::Attach(const char* thread_name, bool as_daemon, jobject thread_group,
