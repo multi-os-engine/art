@@ -99,7 +99,7 @@ const bool kDebugLocking = kIsDebugBuild;
 // Record Log contention information, dumpable via SIGQUIT.
 #ifdef ART_USE_FUTEXES
 // To enable lock contention logging, set this to true.
-const bool kLogLockContentions = false;
+const bool kLogLockContentions = true;
 #else
 // Keep this false as lock contention logging is supported only with
 // futex.

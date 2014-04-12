@@ -243,10 +243,13 @@ class RosAlloc {
     void* AllocSlot();
     // Frees a slot in a run. This is used in a non-bulk free.
     void FreeSlot(void* ptr);
-    // Marks the slots to free in the bulk free bit map.
-    void MarkBulkFreeBitMap(void* ptr);
+    // Marks the slots to free in the bulk free bit map. Returns the bracket size.
+    size_t MarkBulkFreeBitMap(void* ptr);
     // Marks the slots to free in the thread-local free bit map.
     void MarkThreadLocalFreeBitMap(void* ptr);
+    // Last word mask, all of the bits in the last word which aren't valid slots are set to
+    // optimize allocation path.
+    static size_t GetLastWordMask(size_t num_slots, size_t num_vec);
     // Returns true if all the slots in the run are not in use.
     bool IsAllFree();
     // Returns true if all the slots in the run are in use.
@@ -257,6 +260,8 @@ class RosAlloc {
     bool IsThreadLocalFreeBitmapClean();
     // Clear all the bit maps.
     void ClearBitMaps();
+    // Fill the alloc bitmap with a specific value.
+    void FillAllocBitMap(int value);
     // Iterate over all the slots and apply the given function.
     void InspectAllSlots(void (*handler)(void* start, void* end, size_t used_bytes, void* callback_arg), void* arg);
     // Dump the run metadata for debugging.
@@ -267,8 +272,9 @@ class RosAlloc {
         EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_list_lock_);
 
    private:
-    // The common part of MarkFreeBitMap() and MarkThreadLocalFreeBitMap().
-    void MarkFreeBitMapShared(void* ptr, uint32_t* free_bit_map_base, const char* caller_name);
+    // The common part of MarkFreeBitMap() and MarkThreadLocalFreeBitMap(). Returns the bracket
+    // size.
+    size_t MarkFreeBitMapShared(void* ptr, uint32_t* free_bit_map_base, const char* caller_name);
     // Turns the bit map into a string for debugging.
     static std::string BitMapToStr(uint32_t* bit_map_base, size_t num_vec);
   };
@@ -376,7 +382,7 @@ class RosAlloc {
     return byte_offset / kPageSize;
   }
   // Returns the page map index from an address with rounding.
-  size_t RoundDownToPageMapIndex(void* addr) {
+  size_t RoundDownToPageMapIndex(void* addr) const {
     DCHECK(base_ <= addr && addr < reinterpret_cast<byte*>(base_) + capacity_);
     return (reinterpret_cast<uintptr_t>(addr) - reinterpret_cast<uintptr_t>(base_)) / kPageSize;
   }
@@ -446,6 +452,9 @@ class RosAlloc {
   hash_set<Run*, hash_run, eq_run> full_runs_[kNumOfSizeBrackets];
   // The set of free pages.
   std::set<FreePageRun*> free_page_runs_ GUARDED_BY(lock_);
+  // The dedicated full run, it is always full and shared by all threads when revoking happens.
+  // This is an optimization since enables us to avoid a null check for revoked runs.
+  Run* dedicated_full_run_;
   // The current runs where the allocations are first attempted for
   // the size brackes that do not use thread-local
   // runs. current_runs_[i] is guarded by size_bracket_locks_[i].
@@ -493,7 +502,8 @@ class RosAlloc {
   // Page-granularity alloc/free
   void* AllocPages(Thread* self, size_t num_pages, byte page_map_type)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
-  void FreePages(Thread* self, void* ptr) EXCLUSIVE_LOCKS_REQUIRED(lock_);
+  // Returns how many pages were freed.
+  size_t FreePages(Thread* self, void* ptr) EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Allocate/free a run slot.
   void* AllocFromRun(Thread* self, size_t size, size_t* bytes_allocated)
@@ -501,12 +511,15 @@ class RosAlloc {
   void FreeFromRun(Thread* self, void* ptr, Run* run)
       LOCKS_EXCLUDED(lock_);
 
+  // Used to allocate a new thread local run for a size bracket.
+  Run* AllocRun(Thread* self, size_t idx) LOCKS_EXCLUDED(lock_);
+
   // Used to acquire a new/reused run for a size bracket. Used when a
   // thread-local or current run gets full.
   Run* RefillRun(Thread* self, size_t idx) LOCKS_EXCLUDED(lock_);
 
   // The internal of non-bulk Free().
-  void FreeInternal(Thread* self, void* ptr) LOCKS_EXCLUDED(lock_);
+  size_t FreeInternal(Thread* self, void* ptr) LOCKS_EXCLUDED(lock_);
 
   // Allocates large objects.
   void* AllocLargeObject(Thread* self, size_t size, size_t* bytes_allocated) LOCKS_EXCLUDED(lock_);
@@ -518,9 +531,9 @@ class RosAlloc {
   ~RosAlloc();
   void* Alloc(Thread* self, size_t size, size_t* bytes_allocated)
       LOCKS_EXCLUDED(lock_);
-  void Free(Thread* self, void* ptr)
+  size_t Free(Thread* self, void* ptr)
       LOCKS_EXCLUDED(bulk_free_lock_);
-  void BulkFree(Thread* self, void** ptrs, size_t num_ptrs)
+  size_t BulkFree(Thread* self, void** ptrs, size_t num_ptrs)
       LOCKS_EXCLUDED(bulk_free_lock_);
   // Returns the size of the allocated slot for a given allocated memory chunk.
   size_t UsableSize(void* ptr);
