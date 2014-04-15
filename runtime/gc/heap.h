@@ -351,6 +351,10 @@ class Heap {
     return low_memory_mode_;
   }
 
+  // Returns the heap growth multiplier, this affects how much we grow the heap after a GC.
+  // Scales heap growth, min free, and max free.
+  float HeapGrowthMultiplier() const;
+
   // Freed bytes can be negative in cases where we copy objects from a compacted space to a
   // free-list backed space.
   void RecordFree(ssize_t freed_objects, ssize_t freed_bytes);

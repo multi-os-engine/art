@@ -86,6 +86,8 @@ static constexpr bool kUseFreeListSpaceForLOS = false;
 // Whtehr or not we compact the zygote in PreZygoteFork.
 static constexpr bool kCompactZygote = kMovingCollector;
 static constexpr size_t kNonMovingSpaceCapacity = 64 * MB;
+// How much more utilization we use in the foreground.
+static constexpr float kDefaultHeapGrowthMultiplier = 2.0f;
 
 Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max_free,
            double target_utilization, size_t capacity, const std::string& image_file_name,
@@ -2524,6 +2526,13 @@ collector::GarbageCollector* Heap::FindCollectorByGcType(collector::GcType gc_ty
   return nullptr;
 }
 
+float Heap::HeapGrowthMultiplier() const {
+  if (!CareAboutPauseTimes() || IsLowMemoryMode()) {
+    return 1.0f;
+  }
+  return kDefaultHeapGrowthMultiplier;
+}
+
 void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran) {
   // We know what our utilization is at this moment.
   // This doesn't actually resize any memory. It just lets the heap grow more when necessary.
@@ -2534,12 +2543,15 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran) {
   collector::GcType gc_type = collector_ran->GetGcType();
   if (gc_type != collector::kGcTypeSticky) {
     // Grow the heap for non sticky GC.
-    target_size = bytes_allocated / GetTargetHeapUtilization();
-    if (target_size > bytes_allocated + max_free_) {
-      target_size = bytes_allocated + max_free_;
-    } else if (target_size < bytes_allocated + min_free_) {
-      target_size = bytes_allocated + min_free_;
-    }
+    const float multiplier = HeapGrowthMultiplier();  // Use the multiplier to grow more for
+    // foreground.
+    int delta = bytes_allocated / GetTargetHeapUtilization() - bytes_allocated;
+    CHECK_GE(delta, 0);
+    target_size = bytes_allocated + delta * multiplier;
+    target_size = std::min(target_size,
+                           bytes_allocated + static_cast<size_t>(max_free_ * multiplier));
+    target_size = std::max(target_size,
+                           bytes_allocated + static_cast<size_t>(min_free_ * multiplier));
     native_need_to_run_finalization_ = true;
     next_gc_type_ = collector::kGcTypeSticky;
   } else {
