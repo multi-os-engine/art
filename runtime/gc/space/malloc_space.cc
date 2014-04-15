@@ -180,7 +180,6 @@ ZygoteSpace* MallocSpace::CreateZygoteSpace(const char* alloc_space_name, bool l
              << "GrowthLimit " << growth_limit_ << "\n"
              << "Capacity " << Capacity();
   SetGrowthLimit(RoundUp(size, kPageSize));
-  SetFootprintLimit(RoundUp(size, kPageSize));
 
   // TODO: Not hardcode these in?
   const size_t starting_size = kPageSize;
