@@ -227,6 +227,14 @@ struct BasicBlockDataFlow {
   ArenaBitVector* ending_check_v;  // For null check and class init check elimination.
 };
 
+struct UsedChain {
+  UsedChain *prev_use_;        /**< @brief Chain containing the previous use. */
+  MIR *mir_;                   /**< @brief MIR containing the current use. */
+  UsedChain *next_use_;        /**< @brief Chain containing the next use. */
+
+  UsedChain *next_chain_;      /**< @brief Used internally by the chain builder. */
+};
+
 /*
  * Normalized use/def for a MIR operation using SSA names rather than vregs.  Note that
  * uses/defs retain the Dalvik convention that long operations operate on a pair of 32-bit
@@ -242,6 +250,20 @@ struct SSARepresentation {
   bool* fp_use;
   int32_t* defs;
   bool* fp_def;
+
+  /** @brief For each definition in defs, we have an entry in usedNext.
+   *     If there is a WIDE, it gets two defs in the defs array and gets two
+   *       entries in the def-use chain.
+   *     Depending on uses, it might be important/necessary to follow both
+   *       chains.
+   */
+  UsedChain **used_next_;
+
+  /** @brief Where the uses are defined:
+   *      For each usage is uses, there is an entry in defWhere to provide the
+   *      MIR containing the definition.
+   */
+  MIR **def_where_;
 };
 
 /*
@@ -267,6 +289,7 @@ struct MIR {
   NarrowDexOffset offset;         // Offset of the instruction in code units.
   uint16_t optimization_flags;
   int16_t m_unit_index;           // From which method was this MIR included
+  uint16_t topological_order;
   MIR* prev;
   MIR* next;
   SSARepresentation* ssa_rep;
@@ -308,6 +331,7 @@ struct BasicBlock {
   bool terminated_by_return:1;  // Block ends with a Dalvik return opcode.
   bool dominates_return:1;      // Is a member of return extended basic block.
   bool use_lvn:1;               // Run local value numbering on this block.
+  uint16_t topological_order;
   MIR* first_mir_insn;
   MIR* last_mir_insn;
   BasicBlockDataFlow* data_flow_info;
@@ -900,6 +924,8 @@ class MIRGraph {
   void CompilerInitializeSSAConversion();
   void InsertPhiNodes();
   void DoDFSPreOrderSSARename(BasicBlock* block);
+  void ResetUseDefScopedArena();
+  UsedChain* GetUsedChain() const;
 
   /*
    * IsDebugBuild sanity check: keep track of the Dex PCs for catch entries so that later on
@@ -987,6 +1013,7 @@ class MIRGraph {
   ArenaBitVector** def_block_matrix_;    // num_dalvik_register x num_blocks.
   ArenaBitVector* temp_dalvik_register_v_;
   UniquePtr<ScopedArenaAllocator> temp_scoped_alloc_;
+  UniquePtr<ScopedArenaAllocator> use_def_scoped_alloc_;
   uint16_t* temp_insn_data_;
   uint32_t temp_bit_vector_size_;
   ArenaBitVector* temp_bit_vector_;
