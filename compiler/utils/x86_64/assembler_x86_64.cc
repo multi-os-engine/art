@@ -62,7 +62,7 @@ void X86_64Assembler::call(Label* label) {
 
 void X86_64Assembler::pushq(CpuRegister reg) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
-  EmitOptionalRex32(reg);
+  EmitOptionalOpcodeRex32(reg);
   EmitUint8(0x50 + reg.LowBits());
 }
 
@@ -89,7 +89,7 @@ void X86_64Assembler::pushq(const Immediate& imm) {
 
 void X86_64Assembler::popq(CpuRegister reg) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
-  EmitOptionalRex32(reg);
+  EmitOptionalOpcodeRex32(reg);
   EmitUint8(0x58 + reg.LowBits());
 }
 
@@ -104,7 +104,7 @@ void X86_64Assembler::popq(const Address& address) {
 
 void X86_64Assembler::movq(CpuRegister dst, const Immediate& imm) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
-  EmitRex64(dst);
+  EmitOpcodeRex64(dst);
   EmitUint8(0xB8 + dst.LowBits());
   EmitImmediate(imm);
 }
@@ -112,7 +112,7 @@ void X86_64Assembler::movq(CpuRegister dst, const Immediate& imm) {
 
 void X86_64Assembler::movl(CpuRegister dst, const Immediate& imm) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
-  EmitOptionalRex32(dst);
+  EmitOptionalOpcodeRex32(dst);
   EmitUint8(0xB8 + dst.LowBits());
   EmitImmediate(imm);
 }
@@ -1512,6 +1512,10 @@ void X86_64Assembler::EmitOptionalRex32(XmmRegister dst, CpuRegister src) {
   EmitOptionalRex(false, false, dst.NeedsRex(), false, src.NeedsRex());
 }
 
+void X86_64Assembler::EmitOptionalOpcodeRex32(CpuRegister reg) {
+  EmitOptionalRex(false, false, false, false, reg.NeedsRex());
+}
+
 void X86_64Assembler::EmitOptionalRex32(const Operand& operand) {
   uint8_t rex = operand.rex();
   if (rex != 0) {
@@ -1542,6 +1546,11 @@ void X86_64Assembler::EmitOptionalRex32(XmmRegister dst, const Operand& operand)
 void X86_64Assembler::EmitRex64(CpuRegister reg) {
   EmitOptionalRex(false, true, reg.NeedsRex(), false, false);
 }
+
+void X86_64Assembler::EmitOpcodeRex64(CpuRegister reg) {
+  EmitOptionalRex(false, true, false, false, reg.NeedsRex());
+}
+
 void X86_64Assembler::EmitRex64(CpuRegister dst, CpuRegister src) {
   EmitOptionalRex(false, true, dst.NeedsRex(), false, src.NeedsRex());
 }

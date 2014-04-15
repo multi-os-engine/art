@@ -623,6 +623,10 @@ class X86_64Assembler FINAL : public Assembler {
   void EmitOptionalByteRegNormalizingRex32(CpuRegister dst, CpuRegister src);
   void EmitOptionalByteRegNormalizingRex32(CpuRegister dst, const Operand& operand);
 
+  // Emit a REX.B prefix if necessary for those regs, which are encoded in opcode (i.e., opcode + r).
+  void EmitOptionalOpcodeRex32(CpuRegister reg);
+  void EmitOpcodeRex64(CpuRegister reg);
+
   DISALLOW_COPY_AND_ASSIGN(X86_64Assembler);
 };
 
