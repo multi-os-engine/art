@@ -135,6 +135,14 @@ class BitVector {
      */
     int GetHighestBitSet() const;
 
+    bool EnsureSizeAndClear(unsigned int num);
+
+    void Dump(std::ostream& os, const char* prefix, bool print_indices = true);
+    void DumpDot(FILE* file, const char* prefix, bool print_indices = true, bool last_entry = false);
+
+  protected:
+    void DumpHelper(std::string& buffer, const char* prefix, bool print_indices = true);
+
   private:
     Allocator* const allocator_;
     const bool expandable_;         // expand bitmap if we run out?
