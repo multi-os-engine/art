@@ -227,6 +227,14 @@ struct BasicBlockDataFlow {
   ArenaBitVector* ending_check_v;  // For null check and class init check elimination.
 };
 
+struct UsedChain {
+  UsedChain *prev_use_;        /**< @brief Chain containing the previous use. */
+  MIR *mir_;                   /**< @brief MIR containing the current use. */
+  UsedChain *next_use_;        /**< @brief Chain containing the next use. */
+
+  UsedChain *next_chain_;      /**< @brief Used internally by the chain builder. */
+};
+
 /*
  * Normalized use/def for a MIR operation using SSA names rather than vregs.  Note that
  * uses/defs retain the Dalvik convention that long operations operate on a pair of 32-bit
@@ -242,6 +250,20 @@ struct SSARepresentation {
   bool* fp_use;
   int32_t* defs;
   bool* fp_def;
+
+  /** @brief For each definition in defs, we have an entry in usedNext.
+   *     If there is a WIDE, it gets two defs in the defs array and gets two
+   *       entries in the def-use chain.
+   *     Depending on uses, it might be important/necessary to follow both
+   *       chains.
+   */
+  UsedChain **used_next_;
+
+  /** @brief Where the uses are defined:
+   *      For each usage is uses, there is an entry in defWhere to provide the
+   *      MIR containing the definition.
+   */
+  MIR **def_where_;
 };
 
 /*
@@ -867,6 +889,10 @@ class MIRGraph {
   // TODO: make these private.
   RegLocation* reg_location_;                         // Map SSA names to location.
   SafeMap<unsigned int, unsigned int> block_id_map_;  // Block collapse lookup cache.
+
+  // Have a MIRGraph level start of the chain to be able to re-use the same
+  // chain when a recalculation is required, instead of re-allocating...
+  UsedChain *global_def_use_chain_;
 
   static const uint64_t oat_data_flow_attributes_[kMirOpLast];
   static const char* extended_mir_op_names_[kMirOpLast - kMirOpFirst];
