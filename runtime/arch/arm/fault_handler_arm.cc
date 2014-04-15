@@ -34,7 +34,7 @@
 namespace art {
 
 extern "C" void art_quick_throw_null_pointer_exception();
-extern "C" void art_quick_throw_stack_overflow(void*);
+extern "C" void art_quick_throw_stack_overflow_from_signal();
 extern "C" void art_quick_implicit_suspend();
 
 // Get the size of a thumb2 instruction in bytes.
@@ -50,7 +50,7 @@ void FaultManager::GetMethodAndReturnPCAndSP(void* context, mirror::ArtMethod** 
   struct ucontext *uc = (struct ucontext *)context;
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
   *out_sp = static_cast<uintptr_t>(sc->arm_sp);
-  LOG(DEBUG) << "sp: " << *out_sp;
+  VLOG(signals) << "sp: " << *out_sp;
   if (*out_sp == 0) {
     return;
   }
@@ -74,7 +74,7 @@ void FaultManager::GetMethodAndReturnPCAndSP(void* context, mirror::ArtMethod** 
 
   // Need to work out the size of the instruction that caused the exception.
   uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->arm_pc);
-  LOG(DEBUG) << "pc: " << std::hex << static_cast<void*>(ptr);
+  VLOG(signals) << "pc: " << std::hex << static_cast<void*>(ptr);
   uint32_t instr_size = GetInstructionSize(ptr);
 
   *out_return_pc = (sc->arm_pc + instr_size) | 1;
@@ -95,7 +95,7 @@ bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
   uint32_t instr_size = GetInstructionSize(ptr);
   sc->arm_lr = (sc->arm_pc + instr_size) | 1;      // LR needs to point to gc map location
   sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_throw_null_pointer_exception);
-  LOG(DEBUG) << "Generating null pointer exception";
+  VLOG(signals) << "Generating null pointer exception";
   return true;
 }
 
@@ -117,10 +117,10 @@ bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
   uint8_t* ptr2 = reinterpret_cast<uint8_t*>(sc->arm_pc);
   uint8_t* ptr1 = ptr2 - 4;
-  LOG(DEBUG) << "checking suspend";
+  VLOG(signals) << "checking suspend";
 
   uint16_t inst2 = ptr2[0] | ptr2[1] << 8;
-  LOG(DEBUG) << "inst2: " << std::hex << inst2 << " checkinst2: " << checkinst2;
+  VLOG(signals) << "inst2: " << std::hex << inst2 << " checkinst2: " << checkinst2;
   if (inst2 != checkinst2) {
     // Second instruction is not good, not ours.
     return false;
@@ -132,7 +132,7 @@ bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
   bool found = false;
   while (ptr1 > limit) {
     uint32_t inst1 = ((ptr1[0] | ptr1[1] << 8) << 16) | (ptr1[2] | ptr1[3] << 8);
-    LOG(DEBUG) << "inst1: " << std::hex << inst1 << " checkinst1: " << checkinst1;
+    VLOG(signals) << "inst1: " << std::hex << inst1 << " checkinst1: " << checkinst1;
     if (inst1 == checkinst1) {
       found = true;
       break;
@@ -140,7 +140,7 @@ bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
     ptr1 -= 2;      // Min instruction size is 2 bytes.
   }
   if (found) {
-    LOG(DEBUG) << "suspend check match";
+    VLOG(signals) << "suspend check match";
     // This is a suspend check.  Arrange for the signal handler to return to
     // art_quick_implicit_suspend.  Also set LR so that after the suspend check it
     // will resume the instruction (current PC + 2).  PC points to the
@@ -148,14 +148,14 @@ bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
 
     // NB: remember that we need to set the bottom bit of the LR register
     // to switch to thumb mode.
-    LOG(DEBUG) << "arm lr: " << std::hex << sc->arm_lr;
-    LOG(DEBUG) << "arm pc: " << std::hex << sc->arm_pc;
+    VLOG(signals) << "arm lr: " << std::hex << sc->arm_lr;
+    VLOG(signals) << "arm pc: " << std::hex << sc->arm_pc;
     sc->arm_lr = sc->arm_pc + 3;      // +2 + 1 (for thumb)
     sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_implicit_suspend);
 
     // Now remove the suspend trigger that caused this fault.
     Thread::Current()->RemoveSuspendTrigger();
-    LOG(DEBUG) << "removed suspend trigger invoking test suspend";
+    VLOG(signals) << "removed suspend trigger invoking test suspend";
     return true;
   }
   return false;
@@ -174,50 +174,38 @@ bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
 // on the stack.
 //
 // If we determine this is a stack overflow we need to move the stack pointer
-// to the overflow region below the protected region.  Because we now have
-// a gap in the stack (skips over protected region), we need to arrange
-// for the rest of the system to be unaware of the new stack arrangement
-// and behave as if there is a fully valid stack.  We do this by placing
-// a unique address onto the stack followed by
-// the size of the gap.  The stack walker will detect this and skip over the
-// gap.
-
-// NB. We also need to be careful of stack alignment as the ARM EABI specifies that
-// stack must be 8 byte aligned when making any calls.
-
-// NB. The size of the gap is the difference between the previous frame's SP and
-// the SP at which the size word is pushed.
+// to the overflow region below the protected region.
 
 bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   struct ucontext *uc = (struct ucontext *)context;
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
-  LOG(DEBUG) << "stack overflow handler with sp at " << std::hex << &uc;
-  LOG(DEBUG) << "sigcontext: " << std::hex << sc;
+  VLOG(signals) << "stack overflow handler with sp at " << std::hex << &uc;
+  VLOG(signals) << "sigcontext: " << std::hex << sc;
 
   uint8_t* sp = reinterpret_cast<uint8_t*>(sc->arm_sp);
-  LOG(DEBUG) << "sp: " << static_cast<void*>(sp);
+  VLOG(signals) << "sp: " << static_cast<void*>(sp);
 
   uintptr_t* fault_addr = reinterpret_cast<uintptr_t*>(sc->fault_address);
-  LOG(DEBUG) << "fault_addr: " << std::hex << fault_addr;
-  LOG(DEBUG) << "checking for stack overflow, sp: " << std::hex << static_cast<void*>(sp) <<
+  VLOG(signals) << "fault_addr: " << std::hex << fault_addr;
+  VLOG(signals) << "checking for stack overflow, sp: " << std::hex << static_cast<void*>(sp) <<
     ", fault_addr: " << fault_addr;
   uintptr_t* overflow_addr = reinterpret_cast<uintptr_t*>(sp - Thread::kStackOverflowReservedBytes);
 
   // Check that the fault address is the value expected for a stack overflow.
   if (fault_addr != overflow_addr) {
-    LOG(DEBUG) << "Not a stack overflow";
+    VLOG(signals) << "Not a stack overflow";
     return false;
   }
 
   // We know this is a stack overflow.  We need to move the sp to the overflow region
   // the exists below the protected region.  R9 contains the current Thread* so
   // we can read the stack_end from that and subtract the size of the
-  // protected region.  This creates a gap in the stack that needs to be marked.
+  // protected region.  This creates a gap in the stack that needs to be skipped over.
   Thread* self = reinterpret_cast<Thread*>(sc->arm_r9);
 
   uint8_t* prevsp = sp;
   sp = self->GetStackEnd() - Thread::kStackOverflowProtectedSize;
-  LOG(DEBUG) << "setting sp to overflow region at " << std::hex << static_cast<void*>(sp);
+  VLOG(signals) << "setting sp to overflow region at " << std::hex << static_cast<void*>(sp);
 
   // We need to find the previous frame.  Remember that
   // this has not yet been fully constructed because the SP has not been
@@ -231,46 +219,58 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   // fp_spill_mask.  A population count on each will give the number of registers
   // in each mask.  Each register is 4 bytes on ARM32.
 
+  // The fault may have occurred during one of the push instructions to
+  // save the callee registers.  In this case the offsets to the previous frame
+  // will need to take this into account.  Deal with this case.
+
+  // Get the current PC value to see if the push instructions caused the problem.
+  uint8_t* instptr = reinterpret_cast<uint8_t*>(sc->arm_pc);
+  uint16_t inst = instptr[0] | instptr[1] << 8;
+  bool frame_includes_core_regs = true;
+  bool frame_includes_fp_regs = true;
+
+  constexpr uint16_t kPushHigh16 = 0xe92d;    // High 16 bits of push instruction.
+  constexpr uint16_t kVpushHigh16 = 0xed2d;   // High 16 bits of vpush instruction.
+  if (inst == kPushHigh16) {
+    // Caused by a push instruction.
+    frame_includes_core_regs = false;
+    frame_includes_fp_regs = false;
+  } else if (inst == kVpushHigh16) {
+    // Caused by vpush instruction.
+    frame_includes_fp_regs = false;
+  }
   mirror::ArtMethod* method = reinterpret_cast<mirror::ArtMethod*>(sc->arm_r0);
-  uint32_t spill_mask = method->GetCoreSpillMask();
-  uint32_t numcores = __builtin_popcount(spill_mask);
-  uint32_t fp_spill_mask = method->GetFpSpillMask();
-  uint32_t numfps = __builtin_popcount(fp_spill_mask);
-  uint32_t spill_size = (numcores + numfps) * 4;
-  LOG(DEBUG) << "spill size: " << spill_size;
+  uint32_t spill_size = 0;
+  if (frame_includes_core_regs) {
+    uint32_t spill_mask = method->GetCoreSpillMask();
+    uint32_t numcores = __builtin_popcount(spill_mask);
+    spill_size += numcores * 4;
+    if (frame_includes_fp_regs) {
+      uint32_t fp_spill_mask = method->GetFpSpillMask();
+      uint32_t numfps = __builtin_popcount(fp_spill_mask);
+      spill_size += numfps * 4;
+    }
+  }
+
+  VLOG(signals) << "spill size: " << spill_size;
   uint8_t* prevframe = prevsp + spill_size;
-  LOG(DEBUG) << "previous frame: " << static_cast<void*>(prevframe);
+  VLOG(signals) << "previous frame: " << static_cast<void*>(prevframe);
 
-  // NOTE: the ARM EABI needs an 8 byte alignment.  In the case of ARM32 a pointer
-  // is 4 bytes so that, together with the offset to the previous frame is 8
-  // bytes.  On other architectures we will need to align the stack.
-
-  // Push a marker onto the stack to tell the stack walker that there is a stack
-  // overflow and the stack is not contiguous.
-
-  // First the offset from SP to the previous frame.
-  sp -= sizeof(uint32_t);
-  LOG(DEBUG) << "push gap of " << static_cast<uint32_t>(prevframe - sp);
-  *reinterpret_cast<uint32_t*>(sp) = static_cast<uint32_t>(prevframe - sp);
-
-  // Now the gap marker (pointer sized).
-  sp -= sizeof(mirror::ArtMethod*);
-  *reinterpret_cast<void**>(sp) = stack_overflow_gap_marker;
 
   // Now establish the stack pointer for the signal return.
-  sc->arm_sp = reinterpret_cast<uintptr_t>(sp);
+  // sc->arm_sp = reinterpret_cast<uintptr_t>(sp);
+  sc->arm_sp = reinterpret_cast<uintptr_t>(prevframe);
 
-  // Now arrange for the signal handler to return to art_quick_throw_stack_overflow.
-  // We need the LR to point to the GC map just after the fault instruction.
-  uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->arm_pc);
-  uint32_t instr_size = GetInstructionSize(ptr);
-  sc->arm_lr = (sc->arm_pc + instr_size) | 1;      // LR needs to point to gc map location
-  sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow);
+  // Tell the stack overflow code where the new stack pointer should be.
+  sc->arm_ip = reinterpret_cast<uintptr_t>(sp);      // aka r12
 
-  // The kernel will now return to the address in sc->arm_pc.  We have arranged the
-  // stack pointer to be in the overflow region.  Throwing the exception will perform
-  // a longjmp which will restore the stack pointer to the correct location for the
-  // exception catch.
+  // Now arrange for the signal handler to return to art_quick_throw_stack_overflow_from_signal.
+  // The value of LR must be the same as it was when we entered the code that
+  // caused this fault.  This will be inserted into a callee save frame by
+  // the function to which this handler returns (art_quick_throw_stack_overflow_from_signal).
+  sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow_from_signal);
+
+  // The kernel will now return to the address in sc->arm_pc.
   return true;
 }
 }       // namespace art
