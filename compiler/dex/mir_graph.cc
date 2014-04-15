@@ -65,6 +65,7 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       def_block_matrix_(NULL),
       temp_dalvik_register_v_(NULL),
       temp_scoped_alloc_(),
+      use_def_scoped_alloc_(),
       temp_insn_data_(nullptr),
       temp_bit_vector_size_(0u),
       temp_bit_vector_(nullptr),
@@ -1238,5 +1239,20 @@ void MIRGraph::InitializeSSATransformation() {
   ClearAllVisitedFlags();
   DoDFSPreOrderSSARename(GetEntryBlock());
 }
+
+void MIRGraph::ResetUseDefScopedArena() {
+  if (use_def_scoped_alloc_.get() == nullptr) {
+    use_def_scoped_alloc_.reset(ScopedArenaAllocator::Create(&cu_->arena_stack));
+  } else {
+    use_def_scoped_alloc_->Reset();
+  }
+}
+
+UsedChain* MIRGraph::GetUsedChain() const {
+  DCHECK(use_def_scoped_alloc_.get() != nullptr);
+  return static_cast<UsedChain*> (use_def_scoped_alloc_->Alloc(sizeof(UsedChain), kArenaAllocDFInfo));
+}
+
+
 
 }  // namespace art
