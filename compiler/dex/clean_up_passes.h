@@ -22,6 +22,9 @@
 
 namespace art {
 
+  // Forward declaration.
+  class SSAWalkData;
+
   /**
    * @class InitializeData
    * @brief There is some data that needs to be initialized before cleaning up after a pass.
@@ -260,6 +263,21 @@ namespace art {
         DCHECK(c_unit != nullptr);
         c_unit->mir_graph->InitializeConstantPropagation();
       }
+  };
+
+  /**
+   * @class BuildDefUseChain
+   * @brief Pass to calculate def-use chains for the SSA
+   */
+  class BuildDefUseChain:public Pass {
+    public:
+      BuildDefUseChain(void):Pass("BuildDefUseChain") {
+      }
+
+      void Start(const PassDataHolder* data) const;
+
+    protected:
+      bool Build(BasicBlock *bb, MIRGraph *mir_graph, SSAWalkData *data) const;
   };
 
 }  // namespace art

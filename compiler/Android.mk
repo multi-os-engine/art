@@ -59,6 +59,7 @@ LIBART_COMPILER_SRC_FILES := \
 	dex/mir_field_info.cc \
 	dex/mir_method_info.cc \
 	dex/mir_optimization.cc \
+	dex/ssa_walkdata.cc \
 	dex/bb_optimizations.cc \
 	dex/clean_up_passes.cc \
 	dex/pass_driver_me_opts.cc \

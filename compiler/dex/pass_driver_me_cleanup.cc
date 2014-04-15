@@ -41,6 +41,7 @@ const Pass* const PassDriver<PassDriverMECleanUp>::g_passes[] = {
   GetPassInstance<ClearVisitedFlag>(),
   GetPassInstance<SSAConversion>(),
   GetPassInstance<PhiNodeOperands>(),
+  GetPassInstance<BuildDefUseChain>(),
   GetPassInstance<ConstantPropagation>(),
   GetPassInstance<PerformInitRegLocations>(),
   GetPassInstance<MethodUseCount>(),
