@@ -743,7 +743,7 @@ void RosAlloc::FreeFromRun(Thread* self, void* ptr, Run* run) {
     }
   } else {
     // It is not completely free. If it wasn't the current run or
-    // already in the non-full run set (i.e., it was full) insert it
+    // already in the full run set (i.e., it was full) insert it
     // into the non-full run set.
     if (run != current_runs_[idx]) {
       hash_set<Run*, hash_run, eq_run>* full_runs =
