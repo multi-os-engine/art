@@ -16,12 +16,14 @@
 
 #include "large_object_space.h"
 
+#include "gc/accounting/space_bitmap-inl.h"
 #include "base/logging.h"
 #include "base/mutex-inl.h"
 #include "base/stl_util.h"
 #include "UniquePtr.h"
 #include "image.h"
 #include "os.h"
+#include "space-inl.h"
 #include "thread-inl.h"
 #include "utils.h"
 
@@ -74,11 +76,11 @@ class ValgrindLargeObjectMapSpace FINAL : public LargeObjectMapSpace {
 };
 
 void LargeObjectSpace::SwapBitmaps() {
-  live_objects_.swap(mark_objects_);
+  live_bitmap_.swap(mark_bitmap_);
   // Swap names to get more descriptive diagnostics.
-  std::string temp_name = live_objects_->GetName();
-  live_objects_->SetName(mark_objects_->GetName());
-  mark_objects_->SetName(temp_name);
+  std::string temp_name = live_bitmap_->GetName();
+  live_bitmap_->SetName(mark_bitmap_->GetName());
+  mark_bitmap_->SetName(temp_name);
 }
 
 LargeObjectSpace::LargeObjectSpace(const std::string& name)
@@ -89,7 +91,7 @@ LargeObjectSpace::LargeObjectSpace(const std::string& name)
 
 
 void LargeObjectSpace::CopyLiveToMarked() {
-  mark_objects_->CopyFrom(*live_objects_.get());
+  mark_bitmap_->CopyFrom(live_bitmap_.get());
 }
 
 LargeObjectMapSpace::LargeObjectMapSpace(const std::string& name)
@@ -389,27 +391,36 @@ void FreeListSpace::Dump(std::ostream& os) const {
   }
 }
 
+void LargeObjectSpace::SweepCallback(size_t num_ptrs, mirror::Object** ptrs, void* arg) {
+  SweepCallbackContext* context = static_cast<SweepCallbackContext*>(arg);
+  space::LargeObjectSpace* space = context->space->AsLargeObjectSpace();
+  Thread* self = context->self;
+  Locks::heap_bitmap_lock_->AssertExclusiveHeld(self);
+  // If the bitmaps aren't swapped we need to clear the bits since the GC isn't going to re-swap
+  // the bitmaps as an optimization.
+  if (!context->swap_bitmaps) {
+    accounting::LargeObjectBitmap* bitmap = space->GetLiveBitmap();
+    for (size_t i = 0; i < num_ptrs; ++i) {
+      bitmap->Clear(ptrs[i]);
+    }
+  }
+  context->freed_objects += num_ptrs;
+  context->freed_bytes += space->FreeList(self, num_ptrs, ptrs);
+}
+
 void LargeObjectSpace::Sweep(bool swap_bitmaps, size_t* freed_objects, size_t* freed_bytes) {
-  // Sweep large objects
-  accounting::ObjectSet* large_live_objects = GetLiveObjects();
-  accounting::ObjectSet* large_mark_objects = GetMarkObjects();
+  accounting::LargeObjectBitmap* live_bitmap = GetLiveBitmap();
+  accounting::LargeObjectBitmap* mark_bitmap = GetMarkBitmap();
   if (swap_bitmaps) {
-    std::swap(large_live_objects, large_mark_objects);
+    std::swap(live_bitmap, mark_bitmap);
   }
   DCHECK(freed_objects != nullptr);
   DCHECK(freed_bytes != nullptr);
-  // O(n*log(n)) but hopefully there are not too many large objects.
-  size_t objects = 0;
-  size_t bytes = 0;
-  Thread* self = Thread::Current();
-  for (const mirror::Object* obj : large_live_objects->GetObjects()) {
-    if (!large_mark_objects->Test(obj)) {
-      bytes += Free(self, const_cast<mirror::Object*>(obj));
-      ++objects;
-    }
-  }
-  *freed_objects += objects;
-  *freed_bytes += bytes;
+  SweepCallbackContext scc(swap_bitmaps, this);
+  accounting::LargeObjectBitmap::SweepWalk(*live_bitmap, *mark_bitmap, live_bitmap->HeapBegin(),
+                                           live_bitmap->HeapLimit(), SweepCallback, &scc);
+  *freed_objects += scc.freed_objects;
+  *freed_bytes += scc.freed_bytes;
 }
 
 }  // namespace space

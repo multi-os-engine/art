@@ -82,6 +82,8 @@ class LargeObjectSpace : public DiscontinuousSpace, public AllocSpace {
  protected:
   explicit LargeObjectSpace(const std::string& name);
 
+  static void SweepCallback(size_t num_ptrs, mirror::Object** ptrs, void* arg);
+
   // Approximate number of bytes which have been allocated into the space.
   size_t num_bytes_allocated_;
   size_t num_objects_allocated_;
