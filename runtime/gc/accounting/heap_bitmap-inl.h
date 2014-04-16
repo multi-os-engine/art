@@ -30,9 +30,8 @@ inline void HeapBitmap::Visit(const Visitor& visitor) {
   for (const auto& bitmap : continuous_space_bitmaps_) {
     bitmap->VisitMarkedRange(bitmap->HeapBegin(), bitmap->HeapLimit(), visitor);
   }
-  DCHECK(!discontinuous_space_sets_.empty());
-  for (const auto& space_set : discontinuous_space_sets_) {
-    space_set->Visit(visitor);
+  for (const auto& bitmap : large_object_bitmaps_) {
+    bitmap->VisitMarkedRange(bitmap->HeapBegin(), bitmap->HeapLimit(), visitor);
   }
 }
 
@@ -40,30 +39,38 @@ inline bool HeapBitmap::Test(const mirror::Object* obj) {
   ContinuousSpaceBitmap* bitmap = GetContinuousSpaceBitmap(obj);
   if (LIKELY(bitmap != nullptr)) {
     return bitmap->Test(obj);
-  } else {
-    return GetDiscontinuousSpaceObjectSet(obj) != nullptr;
   }
+  for (const auto& bitmap : large_object_bitmaps_) {
+    if (bitmap->HasAddress(obj) && bitmap->Test(obj)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 inline void HeapBitmap::Clear(const mirror::Object* obj) {
   ContinuousSpaceBitmap* bitmap = GetContinuousSpaceBitmap(obj);
   if (LIKELY(bitmap != nullptr)) {
     bitmap->Clear(obj);
-  } else {
-    ObjectSet* set = GetDiscontinuousSpaceObjectSet(obj);
-    DCHECK(set != NULL);
-    set->Clear(obj);
+    return;
+  }
+  for (const auto& bitmap : large_object_bitmaps_) {
+    if (bitmap->HasAddress(obj)) {
+      bitmap->Clear(obj);
+    }
   }
 }
 
 inline void HeapBitmap::Set(const mirror::Object* obj) {
   ContinuousSpaceBitmap* bitmap = GetContinuousSpaceBitmap(obj);
-  if (LIKELY(bitmap != NULL)) {
+  if (LIKELY(bitmap != nullptr)) {
     bitmap->Set(obj);
-  } else {
-    ObjectSet* set = GetDiscontinuousSpaceObjectSet(obj);
-    DCHECK(set != NULL);
-    set->Set(obj);
+    return;
+  }
+  for (const auto& bitmap : large_object_bitmaps_) {
+    if (bitmap->HasAddress(obj)) {
+      bitmap->Set(obj);
+    }
   }
 }
 
@@ -71,15 +78,6 @@ inline ContinuousSpaceBitmap* HeapBitmap::GetContinuousSpaceBitmap(const mirror:
   for (const auto& bitmap : continuous_space_bitmaps_) {
     if (bitmap->HasAddress(obj)) {
       return bitmap;
-    }
-  }
-  return nullptr;
-}
-
-inline ObjectSet* HeapBitmap::GetDiscontinuousSpaceObjectSet(const mirror::Object* obj) const {
-  for (const auto& space_set : discontinuous_space_sets_) {
-    if (space_set->Test(obj)) {
-      return space_set;
     }
   }
   return nullptr;

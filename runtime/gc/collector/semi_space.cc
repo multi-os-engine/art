@@ -362,11 +362,10 @@ void SemiSpace::MarkReachableObjects() {
     // classes (primitive array classes) that could move though they
     // don't contain any other references.
     space::LargeObjectSpace* large_object_space = GetHeap()->GetLargeObjectsSpace();
-    accounting::ObjectSet* large_live_objects = large_object_space->GetLiveObjects();
+    accounting::LargeObjectBitmap* large_live_objects = large_object_space->GetLiveBitmap();
     SemiSpaceScanObjectVisitor visitor(this);
-    for (const Object* obj : large_live_objects->GetObjects()) {
-      visitor(const_cast<Object*>(obj));
-    }
+    large_live_objects->VisitMarkedRange(large_live_objects->HeapBegin(),
+                                         large_live_objects->HeapLimit(), visitor);
   }
 
   // Recursively process the mark stack.
@@ -455,7 +454,7 @@ bool SemiSpace::MarkLargeObject(const Object* obj) {
   // TODO: support >1 discontinuous space.
   space::LargeObjectSpace* large_object_space = GetHeap()->GetLargeObjectsSpace();
   DCHECK(large_object_space->Contains(obj));
-  accounting::ObjectSet* large_objects = large_object_space->GetMarkObjects();
+  accounting::LargeObjectBitmap* large_objects = large_object_space->GetMarkBitmap();
   if (UNLIKELY(!large_objects->Test(obj))) {
     large_objects->Set(obj);
     return true;

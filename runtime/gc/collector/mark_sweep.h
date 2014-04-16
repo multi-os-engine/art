@@ -229,8 +229,8 @@ class MarkSweep : public GarbageCollector {
 
   // Marks or unmarks a large object based on whether or not set is true. If set is true, then we
   // mark, otherwise we unmark.
-  bool MarkLargeObject(const mirror::Object* obj, bool set)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_) LOCKS_EXCLUDED(large_object_lock_);
+  bool MarkLargeObject(const mirror::Object* obj)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
   // Returns true if we need to add obj to a mark stack.
   bool MarkObjectParallel(const mirror::Object* obj) NO_THREAD_SAFETY_ANALYSIS;
@@ -315,7 +315,6 @@ class MarkSweep : public GarbageCollector {
   size_t live_stack_freeze_size_;
 
   UniquePtr<Barrier> gc_barrier_;
-  Mutex large_object_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   Mutex mark_stack_lock_ ACQUIRED_AFTER(Locks::classlinker_classes_lock_);
 
   const bool is_concurrent_;
