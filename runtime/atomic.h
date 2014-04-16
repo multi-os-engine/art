@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "base/macros.h"
+#include "base/logging.h"
 
 namespace art {
 
@@ -110,7 +111,15 @@ class QuasiAtomic {
   // Reads the 64-bit value at "addr" without tearing.
   static int64_t Read64(volatile const int64_t* addr) {
     if (!kNeedSwapMutexes) {
+#if defined(__i386__) && !defined(__x86_64__)
+      // TODO: switch to std::atomic
+      DCHECK((((int)addr) & 7) == 0);
+      int64_t result;
+      asm volatile ("movq %[addr], %[result]" : [result] "=x" (result) : [addr] "m" (*(int64_t*)addr));
+      return result;
+#else
       return *addr;
+#endif
     } else {
       return SwapMutexRead64(addr);
     }
@@ -119,7 +128,13 @@ class QuasiAtomic {
   // Writes to the 64-bit value at "addr" without tearing.
   static void Write64(volatile int64_t* addr, int64_t val) {
     if (!kNeedSwapMutexes) {
+#if defined(__i386__) && !defined(__x86_64__)
+      // TODO: switch to std::atomic
+      DCHECK((((int)addr) & 7) == 0);
+      asm volatile ("movq %[val], %[addr]" : [addr] "=m" (*addr) : [val] "x" (val));
+#else
       *addr = val;
+#endif
     } else {
       SwapMutexWrite64(addr, val);
     }
