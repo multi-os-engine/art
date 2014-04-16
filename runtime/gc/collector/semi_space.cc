@@ -124,6 +124,11 @@ void SemiSpace::InitializePhase() {
   CHECK(from_space_->CanMoveObjects()) << "Attempting to move from " << *from_space_;
   // Set the initial bitmap.
   to_space_live_bitmap_ = to_space_->GetLiveBitmap();
+  {
+    // TODO: I don't think we should need heap bitmap lock to get the mark bitmap.
+    ReaderMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
+    mark_bitmap_ = heap_->GetMarkBitmap();
+  }
 }
 
 void SemiSpace::ProcessReferences(Thread* self) {
@@ -362,11 +367,10 @@ void SemiSpace::MarkReachableObjects() {
     // classes (primitive array classes) that could move though they
     // don't contain any other references.
     space::LargeObjectSpace* large_object_space = GetHeap()->GetLargeObjectsSpace();
-    accounting::ObjectSet* large_live_objects = large_object_space->GetLiveObjects();
+    accounting::LargeObjectBitmap* large_live_objects = large_object_space->GetLiveBitmap();
     SemiSpaceScanObjectVisitor visitor(this);
-    for (const Object* obj : large_live_objects->GetObjects()) {
-      visitor(const_cast<Object*>(obj));
-    }
+    large_live_objects->VisitMarkedRange(large_live_objects->HeapBegin(),
+                                         large_live_objects->HeapLimit(), visitor);
   }
 
   // Recursively process the mark stack.
@@ -448,19 +452,6 @@ inline void SemiSpace::MarkStackPush(Object* obj) {
   }
   // The object must be pushed on to the mark stack.
   mark_stack_->PushBack(obj);
-}
-
-// Rare case, probably not worth inlining since it will increase instruction cache miss rate.
-bool SemiSpace::MarkLargeObject(const Object* obj) {
-  // TODO: support >1 discontinuous space.
-  space::LargeObjectSpace* large_object_space = GetHeap()->GetLargeObjectsSpace();
-  DCHECK(large_object_space->Contains(obj));
-  accounting::ObjectSet* large_objects = large_object_space->GetMarkObjects();
-  if (UNLIKELY(!large_objects->Test(obj))) {
-    large_objects->Set(obj);
-    return true;
-  }
-  return false;
 }
 
 static inline size_t CopyAvoidingDirtyingPages(void* dest, const void* src, size_t size) {
