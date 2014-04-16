@@ -21,6 +21,8 @@
 #include "base/macros.h"
 #include "globals.h"
 
+#include <map>
+
 typedef uint8_t uint4_t;
 typedef int8_t int4_t;
 
@@ -125,6 +127,20 @@ class Instruction {
     kReturn   = 0x10,  // returns, no additional statements
     kInvoke   = 0x20,  // a flavor of invoke
     kUnconditional = 0x40,  // unconditional branch
+    kAddExpression = 0x80,  // addition
+    kSubtractExpression = 0x100,  // subtract
+    kMultiplyExpression = 0x200,  // multiply
+    kDivideExpression = 0x400,    // division
+    kRemainderExpression = 0x800, // remainder expression
+    kAndExpression = 0x1000,      // and expression
+    kOrExpression = 0x2000,       // or expression
+    kXorExpression = 0x4000,      // xor expression
+    kShlExpression = 0x8000,      // shl expression
+    kShrExpression = 0x10000,     // shr expression
+    kUshrExpression = 0x20000,    // ushr expression
+    kCast     = 0x40000,          // cast
+    kSetter   = 0x80000,          // setter opcode
+    kGetter   = 0x100000,         // getter opcode
   };
 
   enum VerifyFlag {
@@ -560,10 +576,27 @@ struct DecodedInstruction {
   uint32_t arg[5];         /* vC/D/E/F/G in invoke or filled-new-array */
   Instruction::Code opcode;
 
+  explicit DecodedInstruction():vA(0), vB(0), vB_wide(0), vC(0), opcode(Instruction::NOP) {
+  }
+
   explicit DecodedInstruction(const Instruction* inst) {
     inst->Decode(vA, vB, vB_wide, vC, arg);
     opcode = inst->Opcode();
   }
+
+  /*
+   * Given a decoded instruction representing a const bytecode, it updates
+   * the out arguments with proper values as dictated by the constant bytecode.
+   */
+  bool GetConstant(int &lowConst, int &highConst, bool &wide) const;
+
+  bool IsConditionalBranch() const;
+  bool RewriteUses(int old_reg, int new_reg);
+  bool RewriteDef(int old_reg, int new_reg);
+  bool Rewrite3rc(const std::map<int, int> &old_to_new);
+  bool Rewrite35c(const std::map<int, int> &old_to_new);
+  bool IsSetter() const;
+  bool IsGetter() const;
 };
 
 }  // namespace art

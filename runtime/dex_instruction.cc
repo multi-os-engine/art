@@ -639,4 +639,153 @@ std::ostream& operator<<(std::ostream& os, const Instruction::Code& code) {
   return os << Instruction::Name(code);
 }
 
+/**
+ * @brief Given a decoded instruction, it checks whether the instruction
+ * sets a constant and if it does, more information is provided about the
+ * constant being set.
+ * @param lowConst Updated by function to represent the lower 32 bits of the constant being set.
+ * @param highConst Updated by function to represent the higher 32 bits of the constant being set.
+ * @param wide Updated by function whether a wide constant is being set by bytecode.
+ * @return Returns false if the decoded instruction does not represent a constant bytecode.
+ */
+bool DecodedInstruction::GetConstant(int &lowConst, int &highConst, bool &wide) const {
+  bool setsConst = true;
+
+  switch (opcode) {
+    case Instruction::CONST_4:
+    case Instruction::CONST_16:
+    case Instruction::CONST:
+      wide = false;
+      lowConst = vB;
+      break;
+    case Instruction::CONST_HIGH16:
+      wide = false;
+      lowConst = vB << 16;
+      break;
+    case Instruction::CONST_WIDE_16:
+    case Instruction::CONST_WIDE_32:
+      wide = true;
+      lowConst = vB;
+      highConst = 0;
+      break;
+    case Instruction::CONST_WIDE:
+      wide = true;
+      lowConst = static_cast<int>(vB_wide);
+      highConst = static_cast<int>(vB_wide >> 32);
+      break;
+    case Instruction::CONST_WIDE_HIGH16:
+      wide = true;
+      lowConst = 0;
+      highConst = vB << 16;
+      break;
+    default:
+      setsConst = false;
+      break;
+  }
+
+  return setsConst;
+}
+
+bool DecodedInstruction::IsConditionalBranch() const {
+  int flags = Instruction::FlagsOf(opcode);
+
+  // Can it continue and can it branch?
+  bool result = (flags == (Instruction::kContinue | Instruction::kBranch));
+
+  return result;
+}
+
+bool DecodedInstruction::Rewrite3rc(const std::map<int, int> &old_to_new) {
+  // The number of arguments is guaranteed to be in vA for this format.
+  uint32_t count = vA;
+
+  // vC holds the start register. The range uses registers from vC to (vC + vA - 1).
+  uint32_t local_vC = vC;
+
+  uint32_t new_vC = 0;
+  std::map<int, int>::const_iterator iter = old_to_new.find(local_vC);
+
+  if (iter == old_to_new.end()) {
+    // We have no new mapping for vC so we cannot rewrite anything.
+    return false;
+  } else {
+    new_vC = iter->second;
+  }
+
+  // Now check that all VRs have a consistent old to new mapping.
+  for (unsigned int vR = local_vC + 1; vR < local_vC + count; vR++) {
+    std::map<int, int>::const_iterator iter = old_to_new.find(vR);
+
+    if (iter == old_to_new.end()) {
+      // We don't have an entry and therefore we don't know the new.
+      return false;
+    } else {
+      uint32_t new_vR = iter->second;
+
+      // Now check that the range difference is the same.
+      if ((vR - local_vC) != (new_vR - new_vC)) {
+        // Range is not the same.
+        return false;
+      }
+    }
+  }
+
+  // If we made it to this point, all the checks passed and therefore we can update vC
+  vC = new_vC;
+  return true;
+}
+
+bool DecodedInstruction::Rewrite35c(const std::map<int, int> &old_to_new) {
+  bool found_operand = false;
+
+  // The number of arguments is guaranteed to be in vA for this format.
+  int count = vA;
+
+  // Go through each of the operands to look for a match for the old VR.
+  for (int operand = 0; operand < count; operand++) {
+    // See if we have a mapping for it.
+    std::map<int, int>::const_iterator iter = old_to_new.find(arg[operand]);
+
+    if (iter != old_to_new.end()) {
+      uint32_t new_vR = iter->second;
+
+      // Update the operand and mark it as found.
+      arg[operand] = new_vR;
+      found_operand = true;
+      break;
+    }
+  }
+
+  return found_operand;
+}
+
+bool DecodedInstruction::RewriteDef(int old_reg, int new_reg) {
+  // Check to make sure that the define matches desired VR to replace.
+  if (vA != static_cast<uint32_t>(old_reg)) {
+    return false;
+  }
+
+  // Now that we know we are fine to do the replacement, let's do it.
+  vA = static_cast<uint32_t>(new_reg);
+  return true;
+}
+
+bool DecodedInstruction::IsGetter() const {
+  int flags = Instruction::FlagsOf(opcode);
+
+  // Check the getter flag.
+  bool result = (flags & (Instruction::kGetter));
+
+  return result;
+}
+
+bool DecodedInstruction::IsSetter() const {
+  int flags = Instruction::FlagsOf(opcode);
+
+  // Check the setter flag.
+  bool result = (flags & (Instruction::kSetter));
+
+  return result;
+}
+
 }  // namespace art

@@ -277,6 +277,16 @@ struct MIR {
     // INVOKE data index, points to MIRGraph::method_lowering_infos_.
     uint32_t method_lowering_info;
   } meta;
+
+  explicit MIR():width(0), offset(0), optimization_flags(0), m_unit_index(0),
+                 next(nullptr), ssa_rep(nullptr) {
+    memset(&meta, 0, sizeof(meta));
+  }
+
+  static void* operator new(size_t size, ArenaAllocator* arena) {
+    return arena->Alloc(sizeof(MIR), kArenaAllocMIR);
+  }
+  static void operator delete(void* p) {}  // Nop.
 };
 
 struct SuccessorBlockInfo;
@@ -850,6 +860,8 @@ class MIRGraph {
    * @param bb the BasicBlock
    */
   void CountUses(struct BasicBlock* bb);
+
+  static uint64_t GetDataFlowAttributes(Instruction::Code opcode);
 
   /**
    * @brief Combine BasicBlocks
