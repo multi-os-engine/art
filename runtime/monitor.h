@@ -214,6 +214,7 @@ class Monitor {
 
   friend class MonitorInfo;
   friend class MonitorList;
+  friend class MonitorPool;
   friend class mirror::Object;
   DISALLOW_COPY_AND_ASSIGN(Monitor);
 };

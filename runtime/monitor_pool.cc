@@ -23,36 +23,84 @@
 
 namespace art {
 
+namespace mirror {
+  class Object;
+}  // namespace mirror
+
 MonitorPool::MonitorPool() : allocated_ids_lock_("allocated monitor ids lock",
                                                  LockLevel::kMonitorPoolLock) {
+  AllocateChunk();  // Get our first chunk.
 }
 
-Monitor* MonitorPool::LookupMonitorFromTable(MonitorId mon_id) {
-  ReaderMutexLock mu(Thread::Current(), allocated_ids_lock_);
-  return table_.Get(mon_id);
+// Assumes locks are held appropriately when necessary.
+// We do not need a lock in the constructor, but we need one when in CreateMonitorInPool.
+void MonitorPool::AllocateChunk() {
+  void* chunk = malloc(kChunkSize);
+  // Check we allocated memory.
+  CHECK_NE(reinterpret_cast<uintptr_t>(nullptr), reinterpret_cast<uintptr_t>(chunk));
+  // Check it is aligned as we need it.
+  CHECK_EQ(0U, reinterpret_cast<uintptr_t>(chunk) % kMonitorAlignment);
+  monitor_chunks_.push_back(reinterpret_cast<uintptr_t>(chunk));
 }
 
-MonitorId MonitorPool::AllocMonitorIdFromTable(Thread* self, Monitor* mon) {
-  WriterMutexLock mu(self, allocated_ids_lock_);
-  for (size_t i = 0; i < allocated_ids_.size(); ++i) {
-    if (!allocated_ids_[i]) {
-      allocated_ids_.set(i);
-      MonitorId mon_id = i + 1;  // Zero is reserved to mean "invalid".
-      table_.Put(mon_id, mon);
-      return mon_id;
-    }
+Monitor* MonitorPool::CreateMonitorInPool(Thread* self, Thread* owner, mirror::Object* obj,
+                                          int32_t hash_code)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  // We are gonna allocate, so acquire the writer lock.
+  MutexLock mu(self, allocated_ids_lock_);
+
+  // Scan the bitvector for the first free address
+  size_t index = 0;
+
+  auto begin = live_monitors_.begin() + index;
+  auto end = live_monitors_.end();
+  auto pos = std::find(begin, end, false);
+
+  index = pos - begin;
+
+  // Enough space, or need to resize?
+  if (index >= monitor_chunks_.size() * kChunkCapacity) {
+    AllocateChunk();
   }
-  LOG(FATAL) << "Out of internal monitor ids";
-  return 0;
+
+  // Mark the space used by the monitor
+  if (index == live_monitors_.size()) {
+    // Extend the bitvector
+    live_monitors_.push_back(true);
+  } else {
+    live_monitors_[index] = true;
+  }
+  // Construct the object
+  // TODO: Exception on monitor construction. Is it worth it to catch and release the bit?
+  size_t chunk_nr = index / kChunkCapacity;
+  size_t chunk_index = index % kChunkCapacity;
+
+  void* ptr = reinterpret_cast<void*>(monitor_chunks_[chunk_nr] + chunk_index * kAlignedMonitorSize);
+  Monitor* monitor = new(ptr) Monitor(self, owner, obj, hash_code);
+
+  return monitor;
 }
 
-void MonitorPool::ReleaseMonitorIdFromTable(MonitorId mon_id) {
-  WriterMutexLock mu(Thread::Current(), allocated_ids_lock_);
-  DCHECK(table_.Get(mon_id) != nullptr);
-  table_.erase(mon_id);
-  --mon_id;  // Zero is reserved to mean "invalid".
-  DCHECK(allocated_ids_[mon_id]) << mon_id;
-  allocated_ids_.reset(mon_id);
+void MonitorPool::ReleaseMonitorToPool(Thread* self, Monitor* monitor) {
+  // Might be racy with allocation, so acquire lock.
+  MutexLock mu(self, allocated_ids_lock_);
+
+  MonitorId id = monitor->GetMonitorId();
+
+  // Call the destructor.
+  // TODO: Exception safety?
+  monitor->~Monitor();
+
+  // Compute which index.
+  size_t index = MonitorIdToOffset(id) / kAlignedMonitorSize;
+  DCHECK_LT(index, live_monitors_.size());
+  live_monitors_[index] = false;
+}
+
+void MonitorPool::ReleaseMonitorsToPool(Thread* self, std::list<Monitor*>* monitors) {
+  for (Monitor* mon : *monitors) {
+    ReleaseMonitorToPool(self, mon);
+  }
 }
 
 }  // namespace art
