@@ -560,6 +560,10 @@ struct DecodedInstruction {
   uint32_t arg[5];         /* vC/D/E/F/G in invoke or filled-new-array */
   Instruction::Code opcode;
 
+  explicit DecodedInstruction():vA(0), vB(0), vB_wide(0), vC(0),
+                                opcode(Instruction::NOP) {
+  }
+
   explicit DecodedInstruction(const Instruction* inst) {
     inst->Decode(vA, vB, vB_wide, vC, arg);
     opcode = inst->Opcode();
