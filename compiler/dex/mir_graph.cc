@@ -175,7 +175,8 @@ BasicBlock* MIRGraph::SplitBlock(DexOffset code_offset,
   }
 
   orig_block->last_mir_insn = prev;
-  prev->next = NULL;
+  prev->next = nullptr;
+  insn->prev = nullptr;
 
   /*
    * Update the immediate predecessor block pointer so that outgoing edges
@@ -199,6 +200,7 @@ BasicBlock* MIRGraph::SplitBlock(DexOffset code_offset,
   while (p != bottom_block->last_mir_insn) {
     p = p->next;
     DCHECK(p != nullptr);
+    p->bb = bottom_block;
     int opcode = p->dalvikInsn.opcode;
     /*
      * Some messiness here to ensure that we only enter real opcodes and only the
@@ -870,40 +872,61 @@ void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suff
   fclose(file);
 }
 
-/* Insert an MIR instruction to the end of a basic block */
+/* Insert an MIR instruction to the end of a basic block. */
 void BasicBlock::AppendMIR(MIR* mir) {
   if (first_mir_insn == nullptr) {
     DCHECK(last_mir_insn == nullptr);
-    last_mir_insn = first_mir_insn = mir;
-    mir->next = nullptr;
+    first_mir_insn = mir;
   } else {
     last_mir_insn->next = mir;
-    mir->next = nullptr;
-    last_mir_insn = mir;
   }
+
+  mir->prev = last_mir_insn;
+  last_mir_insn = mir;
+  mir->next = nullptr;
+  mir->bb = this;
 }
 
-/* Insert an MIR instruction to the head of a basic block */
+/* Insert an MIR instruction to the head of a basic block. */
 void BasicBlock::PrependMIR(MIR* mir) {
   if (first_mir_insn == nullptr) {
     DCHECK(last_mir_insn == nullptr);
-    last_mir_insn = first_mir_insn = mir;
-    mir->next = nullptr;
+    last_mir_insn = mir;
   } else {
-    mir->next = first_mir_insn;
-    first_mir_insn = mir;
+    first_mir_insn->prev = mir;
   }
+
+  mir->next = first_mir_insn;
+  first_mir_insn = mir;
+  mir->bb = this;
+  mir->prev = nullptr;
 }
 
-/* Insert a MIR instruction after the specified MIR */
+/* Insert a MIR instruction after the specified MIR. */
 void BasicBlock::InsertMIRAfter(MIR* current_mir, MIR* new_mir) {
   new_mir->next = current_mir->next;
   current_mir->next = new_mir;
 
   if (last_mir_insn == current_mir) {
-    /* Is the last MIR in the block */
+    /* Is the last MIR in the block? */
     last_mir_insn = new_mir;
   }
+
+  new_mir->bb = this;
+  new_mir->prev = current_mir;
+}
+
+void BasicBlock::InsertMIRBefore(MIR* current_mir, MIR* new_mir) {
+  new_mir->prev = current_mir->prev;
+  current_mir->prev = new_mir;
+
+  if (first_mir_insn == current_mir) {
+    /* Is the first MIR in the block? */
+    first_mir_insn = new_mir;
+  }
+
+  new_mir->bb = this;
+  new_mir->next = current_mir;
 }
 
 MIR* BasicBlock::GetNextUnconditionalMir(MIRGraph* mir_graph, MIR* current) {
@@ -1237,6 +1260,119 @@ void MIRGraph::InitializeSSATransformation() {
   /* Rename register names by local defs and phi nodes */
   ClearAllVisitedFlags();
   DoDFSPreOrderSSARename(GetEntryBlock());
+}
+
+bool BasicBlock::RemoveMIR(MIR* mir) {
+  if (mir == nullptr) {
+    return false;
+  }
+
+  // Find the MIR, and the one before it if they exist.
+  MIR* current = nullptr;
+  MIR* prev = nullptr;
+
+  // Find the mir we are looking for.
+  for (current = first_mir_insn; current != nullptr; prev = current, current = current->next) {
+    if (current == mir) {
+      break;
+    }
+  }
+
+  // Did we find it?
+  if (current != nullptr) {
+    MIR* next = current->next;
+
+    // Just update the links of prev and next and current is almost gone.
+    if (prev != nullptr) {
+      prev->next = next;
+    }
+
+    // Exceptions are if first or last mirs are invoke.
+    if (first_mir_insn == current) {
+      first_mir_insn = next;
+    }
+
+    if (last_mir_insn == current) {
+      last_mir_insn = prev;
+    }
+
+    // Found it and removed it.
+    return true;
+  }
+
+  // We did not find it.
+  return false;
+}
+
+bool MIR::RemoveFromBasicBlock() {
+  // Punt to the BasicBlock handler.
+  if (bb != nullptr) {
+    return bb->RemoveMIR(this);
+  }
+  return false;
+}
+
+MIR* MIR::Copy(MIRGraph* mir_graph) {
+  ArenaAllocator* arena = mir_graph->GetArena();
+  MIR* res = static_cast<MIR*> (arena->Alloc(sizeof(*res), kArenaAllocMIR));
+  *res = *this;
+
+  // Remove links
+  res->next = nullptr;
+  res->prev = nullptr;
+  res->bb = nullptr;
+  res->ssa_rep = nullptr;
+
+  res->copied_from = this;
+  return res;
+}
+
+MIR* MIR::Copy(CompilationUnit* c_unit) {
+  return Copy(c_unit->mir_graph.get());
+}
+
+uint32_t SSARepresentation::GetStartUseIndex(Instruction::Code opcode) {
+  // Default result.
+  int res = 0;
+
+  // We are basically setting the iputs to their igets counterparts.
+  switch (opcode) {
+    case Instruction::IPUT:
+    case Instruction::IPUT_OBJECT:
+    case Instruction::IPUT_BOOLEAN:
+    case Instruction::IPUT_BYTE:
+    case Instruction::IPUT_CHAR:
+    case Instruction::IPUT_SHORT:
+    case Instruction::IPUT_QUICK:
+    case Instruction::IPUT_OBJECT_QUICK:
+    case Instruction::APUT:
+    case Instruction::APUT_OBJECT:
+    case Instruction::APUT_BOOLEAN:
+    case Instruction::APUT_BYTE:
+    case Instruction::APUT_CHAR:
+    case Instruction::APUT_SHORT:
+    case Instruction::SPUT:
+    case Instruction::SPUT_OBJECT:
+    case Instruction::SPUT_BOOLEAN:
+    case Instruction::SPUT_BYTE:
+    case Instruction::SPUT_CHAR:
+    case Instruction::SPUT_SHORT:
+      // Skip the VR containing what to store.
+      res = 1;
+      break;
+    case Instruction::IPUT_WIDE:
+    case Instruction::IPUT_WIDE_QUICK:
+    case Instruction::APUT_WIDE:
+    case Instruction::SPUT_WIDE:
+      // Skip the two VRs containing what to store.
+      res = 2;
+      break;
+    default:
+      // Do nothing in the general case.
+      break;
+  }
+
+  return res;
 }
 
 }  // namespace art
