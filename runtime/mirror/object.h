@@ -100,8 +100,8 @@ class MANAGED LOCKABLE Object {
     return OFFSET_OF_OBJECT_MEMBER(Object, monitor_);
   }
 
-  LockWord GetLockWord();
-  void SetLockWord(LockWord new_val);
+  LockWord GetLockWord(bool is_volatile);
+  void SetLockWord(LockWord new_val, bool is_volatile);
   bool CasLockWord(LockWord old_val, LockWord new_val) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   uint32_t GetLockOwnerThreadId();
 
