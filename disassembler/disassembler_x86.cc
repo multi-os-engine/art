@@ -144,7 +144,7 @@ size_t DisassemblerX86::DumpInstruction(std::ostream& os, const uint8_t* instr) 
       instr++;
     }
   } while (have_prefixes);
-  uint8_t rex = (supports_rex_ && (*instr >= 0x40) && (*instr <= 0x4F)) ? *instr : 0;
+  uint8_t rex = (supports_rex_ && (*instr >= 0x40) && (*instr <= 0x4F)) ? *instr++ : 0;
   bool has_modrm = false;
   bool reg_is_opcode = false;
   size_t immediate_bytes = 0;
@@ -774,6 +774,11 @@ DISASSEMBLER_ENTRY(cmp,
         instr++;
       } else if (mod == 2) {
         address << StringPrintf(" + %d", *reinterpret_cast<const int32_t*>(instr));
+        instr += 4;
+      }
+      if (ss == 0 && index == 4 && base == 5 && mod == 0) {  // 32bit disp
+        address_bits = *reinterpret_cast<const uint32_t*>(instr);
+        address << StringPrintf("0x%x", address_bits);
         instr += 4;
       }
       address << "]";
