@@ -550,8 +550,8 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
       r_base = TargetReg(kArg0);
       LockTemp(r_base);
       LoadWordDisp(r_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(), r_base);
-      LoadWordDisp(r_base, mirror::Array::DataOffset(sizeof(mirror::Object*)).Int32Value() +
-                   sizeof(int32_t*) * field_info.StorageIndex(), r_base);
+      LoadWordDisp(r_base, mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Object*>)).Int32Value() +
+                   sizeof(mirror::HeapReference<int32_t*>) * field_info.StorageIndex(), r_base);
       // r_base now points at static storage (Class*) or NULL if the type is not yet resolved.
       if (!field_info.IsInitialized() &&
           (mir->optimization_flags & MIR_IGNORE_CLINIT_CHECK) == 0) {
@@ -637,8 +637,8 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
       r_base = TargetReg(kArg0);
       LockTemp(r_base);
       LoadWordDisp(r_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(), r_base);
-      LoadWordDisp(r_base, mirror::Array::DataOffset(sizeof(mirror::Object*)).Int32Value() +
-                   sizeof(int32_t*) * field_info.StorageIndex(), r_base);
+      LoadWordDisp(r_base, mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Object*>)).Int32Value() +
+                   sizeof(mirror::HeapReference<int32_t*>) * field_info.StorageIndex(), r_base);
       // r_base now points at static storage (Class*) or NULL if the type is not yet resolved.
       if (!field_info.IsInitialized() &&
           (mir->optimization_flags & MIR_IGNORE_CLINIT_CHECK) == 0) {
@@ -918,7 +918,7 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
         mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value();
     LoadWordDisp(rl_method.reg, dex_cache_offset, res_reg);
     int32_t offset_of_type =
-        mirror::Array::DataOffset(sizeof(mirror::Class*)).Int32Value() + (sizeof(mirror::Class*)
+        mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Class*>)).Int32Value() + (sizeof(mirror::HeapReference<mirror::Class*>)
                           * type_idx);
     LoadWordDisp(res_reg, offset_of_type, rl_result.reg);
     if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file,
@@ -966,8 +966,8 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
 
 void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
   /* NOTE: Most strings should be available at compile time */
-  int32_t offset_of_string = mirror::Array::DataOffset(sizeof(mirror::String*)).Int32Value() +
-                 (sizeof(mirror::String*) * string_idx);
+  int32_t offset_of_string = mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::String*>)).Int32Value() +
+                 (sizeof(mirror::HeapReference<mirror::String*>) * string_idx);
   if (!cu_->compiler_driver->CanAssumeStringIsPresentInDexCache(
       *cu_->dex_file, string_idx) || SLOW_STRING_PATH) {
     // slow path, resolve string if not in dex cache
@@ -1132,8 +1132,8 @@ void Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx, Re
                  check_class);
     LoadWordDisp(object.reg,  mirror::Object::ClassOffset().Int32Value(), object_class);
     int32_t offset_of_type =
-      mirror::Array::DataOffset(sizeof(mirror::Class*)).Int32Value() +
-      (sizeof(mirror::Class*) * type_idx);
+      mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Class*>)).Int32Value() +
+      (sizeof(mirror::HeapReference<mirror::Class*>) * type_idx);
     LoadWordDisp(check_class, offset_of_type, check_class);
   }
 
@@ -1191,7 +1191,7 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
     LoadWordDisp(TargetReg(kArg1), mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                  class_reg);
     int32_t offset_of_type =
-        mirror::Array::DataOffset(sizeof(mirror::Class*)).Int32Value() + (sizeof(mirror::Class*)
+        mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Class*>)).Int32Value() + (sizeof(mirror::HeapReference<mirror::Class*>)
         * type_idx);
     LoadWordDisp(class_reg, offset_of_type, class_reg);
     if (!can_assume_type_is_in_dex_cache) {
@@ -1327,8 +1327,8 @@ void Mir2Lir::GenCheckCast(uint32_t insn_idx, uint32_t type_idx, RegLocation rl_
     LoadWordDisp(TargetReg(kArg1), mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                  class_reg);
     int32_t offset_of_type =
-        mirror::Array::DataOffset(sizeof(mirror::Class*)).Int32Value() +
-        (sizeof(mirror::Class*) * type_idx);
+        mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Class*>)).Int32Value() +
+        (sizeof(mirror::HeapReference<mirror::Class*>) * type_idx);
     LoadWordDisp(class_reg, offset_of_type, class_reg);
     if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file, type_idx)) {
       // Need to test presence of type in dex cache at runtime
