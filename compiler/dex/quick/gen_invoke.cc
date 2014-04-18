@@ -363,7 +363,11 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
   StoreValue(rl_method, rl_src);
   // If Method* has been promoted, explicitly flush
   if (rl_method.location == kLocPhysReg) {
-    StoreWordDisp(TargetReg(kSp), 0, TargetReg(kArg0));
+    if (cu_->instruction_set == kX86_64) {
+      StoreWordDisp(TargetReg(kSp), 0, RegStorage::Solo64(TargetReg(kArg0).GetReg()));
+    } else {
+      StoreWordDisp(TargetReg(kSp), 0, TargetReg(kArg0));
+    }
   }
 
   if (cu_->num_ins == 0) {
@@ -492,7 +496,7 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
     case 2:  // Grab target method*
       CHECK_EQ(cu->dex_file, target_method.dex_file);
       cg->LoadWordDisp(cg->TargetReg(kArg0),
-                       mirror::Array::DataOffset(sizeof(mirror::Object*)).Int32Value() +
+                       mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Object*>)).Int32Value() +
                        (target_method.dex_method_index * 4), cg->TargetReg(kArg0));
       break;
     case 3:  // Grab the code from the method*
@@ -547,7 +551,7 @@ static int NextVCallInsn(CompilationUnit* cu, CallInfo* info,
       break;
     case 3:  // Get target method [use kInvokeTgt, set kArg0]
       cg->LoadWordDisp(cg->TargetReg(kInvokeTgt), (method_idx * 4) +
-                       mirror::Array::DataOffset(sizeof(mirror::Object*)).Int32Value(),
+                       mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Object*>)).Int32Value(),
                        cg->TargetReg(kArg0));
       break;
     case 4:  // Get the compiled code address [uses kArg0, sets kInvokeTgt]
@@ -602,7 +606,7 @@ static int NextInterfaceCallInsn(CompilationUnit* cu, CallInfo* info, int state,
       break;
     case 4:  // Get target method [use kInvokeTgt, set kArg0]
       cg->LoadWordDisp(cg->TargetReg(kInvokeTgt), ((method_idx % ClassLinker::kImtSize) * 4) +
-                       mirror::Array::DataOffset(sizeof(mirror::Object*)).Int32Value(),
+                       mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Object*>)).Int32Value(),
                        cg->TargetReg(kArg0));
       break;
     case 5:  // Get the compiled code address [use kArg0, set kInvokeTgt]
@@ -1405,7 +1409,7 @@ bool Mir2Lir::GenInlinedCurrentThread(CallInfo* info) {
     LoadWordDisp(TargetReg(kSelf), offset.Int32Value(), rl_result.reg);
   } else {
     CHECK(cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64);
-    reinterpret_cast<X86Mir2Lir*>(this)->OpRegThreadMem(kOpMov, rl_result.reg.GetReg(), offset);
+    reinterpret_cast<X86Mir2Lir*>(this)->OpRegThreadMem(kOpMov, rl_result.reg, offset);
   }
   StoreValue(rl_dest, rl_result);
   return true;
