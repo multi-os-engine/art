@@ -34,7 +34,11 @@ namespace art {
 #endif
 };
 /*static*/ int ReservedRegs[] = {rX86_SP};
+#ifdef __x86_64__
+/*static*/ int core_temps[] = {rDI, rSI, rDX, rCX, rAX};
+#else
 /*static*/ int core_temps[] = {rAX, rCX, rDX, rBX};
+#endif
 /*static*/ int FpRegs[] = {
   fr0, fr1, fr2, fr3, fr4, fr5, fr6, fr7,
 #ifdef TARGET_REX_SUPPORT
@@ -551,11 +555,15 @@ void X86Mir2Lir::SpillCoreRegs() {
   }
   // Spill mask not including fake return address register
   uint32_t mask = core_spill_mask_ & ~(1 << rRET);
-  int offset = frame_size_ - (4 * num_core_spills_);
+  int offset = frame_size_ - (kPointerSize * num_core_spills_);
   for (int reg = 0; mask; mask >>= 1, reg++) {
     if (mask & 0x1) {
+#ifdef __x86_64__
+      StoreWordDisp(rs_rX86_SP, offset, RegStorage::Solo64(reg));
+#else
       StoreWordDisp(rs_rX86_SP, offset, RegStorage::Solo32(reg));
-      offset += 4;
+#endif
+      offset += kPointerSize;
     }
   }
 }
@@ -566,11 +574,15 @@ void X86Mir2Lir::UnSpillCoreRegs() {
   }
   // Spill mask not including fake return address register
   uint32_t mask = core_spill_mask_ & ~(1 << rRET);
-  int offset = frame_size_ - (4 * num_core_spills_);
+  int offset = frame_size_ - (kPointerSize * num_core_spills_);
   for (int reg = 0; mask; mask >>= 1, reg++) {
     if (mask & 0x1) {
+#ifdef __x86_64__
+      LoadWordDisp(rs_rX86_SP, offset, RegStorage::Solo64(reg));
+#else
       LoadWordDisp(rs_rX86_SP, offset, RegStorage::Solo32(reg));
-      offset += 4;
+#endif
+      offset += kPointerSize;
     }
   }
 }
@@ -579,13 +591,13 @@ bool X86Mir2Lir::IsUnconditionalBranch(LIR* lir) {
   return (lir->opcode == kX86Jmp8 || lir->opcode == kX86Jmp32);
 }
 
-X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
+X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena, bool is64bit)
     : Mir2Lir(cu, mir_graph, arena),
       base_of_code_(nullptr), store_method_addr_(false), store_method_addr_used_(false),
       method_address_insns_(arena, 100, kGrowableArrayMisc),
       class_type_address_insns_(arena, 100, kGrowableArrayMisc),
       call_method_insns_(arena, 100, kGrowableArrayMisc),
-      stack_decrement_(nullptr), stack_increment_(nullptr) {
+      stack_decrement_(nullptr), stack_increment_(nullptr), is64bit_(is64bit) {
   if (kIsDebugBuild) {
     for (int i = 0; i < kX86Last; i++) {
       if (X86Mir2Lir::EncodingMap[i].opcode != i) {
@@ -599,7 +611,12 @@ X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator*
 
 Mir2Lir* X86CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
                           ArenaAllocator* const arena) {
-  return new X86Mir2Lir(cu, mir_graph, arena);
+  return new X86Mir2Lir(cu, mir_graph, arena, false);
+}
+
+Mir2Lir* X86_64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
+                          ArenaAllocator* const arena) {
+  return new X86Mir2Lir(cu, mir_graph, arena, true);
 }
 
 // Not used in x86
@@ -1336,6 +1353,48 @@ std::vector<uint8_t>* X86Mir2Lir::ReturnCallFrameInformation() {
   (*cfi_info)[2] = length >> 16;
   (*cfi_info)[3] = length >> 24;
   return cfi_info;
+}
+
+int X86Mir2Lir::LoadArgRegs(CallInfo* info, int call_state,
+                         NextCallInsn next_call_insn,
+                         const MethodReference& target_method,
+                         uint32_t vtable_idx, uintptr_t direct_code,
+                         uintptr_t direct_method, InvokeType type, bool skip_this) {
+  int last_arg_reg = 3 - 1;
+  int arg_regs[3] = {TargetReg(kArg1).GetReg(), TargetReg(kArg2).GetReg(), TargetReg(kArg3).GetReg()};
+
+  int next_reg = 0;
+  int next_arg = 0;
+  if (skip_this) {
+    next_reg++;
+    next_arg++;
+  }
+  for (; (next_reg <= last_arg_reg)/*Remove?*/ && (next_arg < info->num_arg_words); next_reg++) {
+    RegLocation rl_arg = info->args[next_arg++];
+    rl_arg = UpdateRawLoc(rl_arg);
+#ifdef __x86_64__
+    if (rl_arg.wide) {
+      rl_arg.wide = 0;
+      LoadValueDirectFixed(rl_arg, RegStorage::Solo64(arg_regs[next_reg]));
+#else
+    if (rl_arg.wide && (next_reg <= last_arg_reg)) {
+      RegStorage r_tmp(RegStorage::k64BitPair, arg_regs[next_reg], arg_regs[next_reg + 1]);
+      LoadValueDirectWideFixed(rl_arg, r_tmp);
+      next_reg++;
+#endif
+      next_arg++;
+    } else {
+      if (rl_arg.wide) {
+        GenBreak();
+        rl_arg = NarrowRegLoc(rl_arg);
+        rl_arg.is_const = false;
+      }
+      LoadValueDirectFixed(rl_arg, RegStorage::Solo32(arg_regs[next_reg]));
+    }
+    call_state = next_call_insn(cu_, info, call_state, target_method, vtable_idx,
+                                direct_code, direct_method, type);
+  }
+  return call_state;
 }
 
 }  // namespace art

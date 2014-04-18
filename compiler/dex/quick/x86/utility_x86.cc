@@ -123,6 +123,7 @@ LIR* X86Mir2Lir::OpReg(OpKind op, RegStorage r_dest_src) {
     default:
       LOG(FATAL) << "Bad case in OpReg " << op;
   }
+  CHECK(!r_dest_src.Is64Bit() || X86Mir2Lir::EncodingMap[opcode].kind == kReg64) << "OpReg(" << op << ")";
   return NewLIR1(opcode, r_dest_src.GetReg());
 }
 
@@ -130,6 +131,16 @@ LIR* X86Mir2Lir::OpRegImm(OpKind op, RegStorage r_dest_src1, int value) {
   X86OpCode opcode = kX86Bkpt;
   bool byte_imm = IS_SIMM8(value);
   DCHECK(!X86_FPREG(r_dest_src1.GetReg()));
+  if (r_dest_src1.Is64Bit()) {
+    CHECK_EQ(byte_imm, true);
+    switch (op) {
+      case kOpAdd: opcode = kX86Add64RI8; break;
+      case kOpSub: opcode = kX86Sub64RI8; break;
+      default:
+        LOG(FATAL) << "Bad case in OpRegImm (64-bit) " << op;
+    }
+  } else {
+  CHECK_EQ(r_dest_src1.Is64Bit(), false);
   switch (op) {
     case kOpLsl: opcode = kX86Sal32RI; break;
     case kOpLsr: opcode = kX86Shr32RI; break;
@@ -156,6 +167,8 @@ LIR* X86Mir2Lir::OpRegImm(OpKind op, RegStorage r_dest_src1, int value) {
     default:
       LOG(FATAL) << "Bad case in OpRegImm " << op;
   }
+  }
+  CHECK(!r_dest_src1.Is64Bit() || X86Mir2Lir::EncodingMap[opcode].kind == kReg64Imm) << "OpRegImm(" << op << ")";
   return NewLIR2(opcode, r_dest_src1.GetReg(), value);
 }
 
@@ -561,8 +574,12 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
       if (X86_FPREG(r_dest.GetReg())) {
         opcode = is_array ? kX86MovsdRA : kX86MovsdRM;
       } else {
+#ifdef __x86_64__
+        opcode = is_array ? kX86Mov64RA  : kX86Mov64RM;
+#else
         pair = true;
         opcode = is_array ? kX86Mov32RA  : kX86Mov32RM;
+#endif
       }
       // TODO: double store is to unaligned address
       DCHECK_EQ((displacement & 0x3), 0);
@@ -675,8 +692,12 @@ LIR* X86Mir2Lir::LoadBaseDisp(RegStorage r_base, int displacement,
 
 LIR* X86Mir2Lir::LoadBaseDispWide(RegStorage r_base, int displacement, RegStorage r_dest,
                                   int s_reg) {
-  return LoadBaseIndexedDisp(r_base, RegStorage::InvalidReg(), 0, displacement,
+  if (r_dest.Is64Bit() && false) {
+    return LoadBaseDisp(r_base, displacement, r_dest, kLong, s_reg);
+  } else {
+    return LoadBaseIndexedDisp(r_base, RegStorage::InvalidReg(), 0, displacement,
                              r_dest.GetLow(), r_dest.GetHigh(), kLong, s_reg);
+  }
 }
 
 LIR* X86Mir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale,
@@ -696,8 +717,13 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int
       if (X86_FPREG(r_src.GetReg())) {
         opcode = is_array ? kX86MovsdAR : kX86MovsdMR;
       } else {
+#ifdef __x86_64__
+//      CHECK(r_src.Is64Bit());
+        opcode = is_array ? kX86Mov64AR  : kX86Mov64MR;
+#else
         pair = true;
         opcode = is_array ? kX86Mov32AR  : kX86Mov32MR;
+#endif
       }
       // TODO: double store is to unaligned address
       DCHECK_EQ((displacement & 0x3), 0);

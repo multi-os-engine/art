@@ -76,11 +76,19 @@ void Mir2Lir::Workaround7250540(RegLocation rl_dest, RegStorage zero_reg) {
 
 /* Load a word at base + displacement.  Displacement must be word multiple */
 LIR* Mir2Lir::LoadWordDisp(RegStorage r_base, int displacement, RegStorage r_dest) {
-  return LoadBaseDisp(r_base, displacement, r_dest, kWord, INVALID_SREG);
+  if (r_dest.Is64Bit()) {
+    return LoadBaseDisp(r_base, displacement, r_dest, kLong, INVALID_SREG);
+  } else {
+    return LoadBaseDisp(r_base, displacement, r_dest, kWord, INVALID_SREG);
+  }
 }
 
 LIR* Mir2Lir::StoreWordDisp(RegStorage r_base, int displacement, RegStorage r_src) {
-  return StoreBaseDisp(r_base, displacement, r_src, kWord);
+  if (r_src.Is64Bit()) {
+    return StoreBaseDisp(r_base, displacement, r_src, kLong);
+  } else {
+    return StoreBaseDisp(r_base, displacement, r_src, kWord);
+  }
 }
 
 /*

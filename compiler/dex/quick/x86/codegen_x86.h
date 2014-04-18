@@ -24,7 +24,7 @@ namespace art {
 
 class X86Mir2Lir FINAL : public Mir2Lir {
   public:
-    X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
+    X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena, bool is64bit);
 
     // Required for target - codegen helpers.
     bool SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div, RegLocation rl_src,
@@ -224,6 +224,8 @@ class X86Mir2Lir FINAL : public Mir2Lir {
                                     bool can_assume_type_is_in_dex_cache,
                                     uint32_t type_idx, RegLocation rl_dest, RegLocation rl_src);
 
+    void GenBreak();
+
     // Single operation generators.
     LIR* OpUnconditionalBranch(LIR* target);
     LIR* OpCmpBranch(ConditionCode cond, RegStorage src1, RegStorage src2, LIR* target);
@@ -256,7 +258,7 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     void OpRegCopyWide(RegStorage dest, RegStorage src);
     void OpTlsCmp(ThreadOffset<4> offset, int val);
 
-    void OpRegThreadMem(OpKind op, int r_dest, ThreadOffset<4> thread_offset);
+    void OpRegThreadMem(OpKind op, RegStorage r_dest, ThreadOffset<4> thread_offset);
     void SpillCoreRegs();
     void UnSpillCoreRegs();
     static const X86EncodingMap EncodingMap[kX86Last];
@@ -305,6 +307,12 @@ class X86Mir2Lir FINAL : public Mir2Lir {
      */
     void LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic_reg);
 
+    int LoadArgRegs(CallInfo* info, int call_state,
+            NextCallInsn next_call_insn,
+            const MethodReference& target_method,
+            uint32_t vtable_idx,
+            uintptr_t direct_code, uintptr_t direct_method, InvokeType type,
+            bool skip_this);
     /*
      * @brief Generate a relative call to the method that will be patched at link time.
      * @param target_method The MethodReference of the method to be invoked.
@@ -585,6 +593,9 @@ class X86Mir2Lir FINAL : public Mir2Lir {
 
     // Epilogue increment of stack pointer.
     LIR* stack_increment_;
+
+    // 64-bit mode
+    bool is64bit_;
 };
 
 }  // namespace art

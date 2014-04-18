@@ -1011,7 +1011,7 @@ static int dex2oat(int argc, char** argv) {
   }
 
   if (compiler_filter_string == NULL) {
-    if (instruction_set == kX86_64 || instruction_set == kArm64) {
+    if (((instruction_set == kX86_64 || instruction_set == kX86) && image) || instruction_set == kArm64) {
       // TODO: currently x86-64 and arm64 are only interpreted.
       compiler_filter_string = "interpret-only";
     } else if (image) {

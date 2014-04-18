@@ -1112,4 +1112,7 @@ LIR* Mir2Lir::LIRSlowPath::GenerateTargetLabel() {
   return target;
 }
 
+void Mir2Lir::GenBreak() {
+}
+
 }  // namespace art
