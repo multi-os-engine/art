@@ -46,7 +46,7 @@ END_MACRO
      * Runtime::CreateCalleeSaveMethod(kRefsOnly)
      */
 MACRO0(SETUP_REF_ONLY_CALLEE_SAVE_FRAME)
-    UNTESTED
+//    UNTESTED
     // R10 := Runtime::Current()
     movq _ZN3art7Runtime9instance_E@GOTPCREL(%rip), %r10
     movq (%r10), %r10
@@ -66,7 +66,7 @@ MACRO0(SETUP_REF_ONLY_CALLEE_SAVE_FRAME)
 END_MACRO
 
 MACRO0(RESTORE_REF_ONLY_CALLEE_SAVE_FRAME)
-    UNTESTED
+//    UNTESTED
     addq MACRO_LITERAL(8), %rsp
     CFI_ADJUST_CFA_OFFSET(-8)
     // TODO: optimize by not restoring callee-saves restored by the ABI
@@ -488,7 +488,7 @@ END_MACRO
 
 MACRO3(TWO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION VAR(c_name, 0)
-    UNTESTED
+//    UNTESTED
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME   // save ref containing registers for GC
     // Outgoing argument set up
     movq %rsp, %rcx                    // pass SP
@@ -513,7 +513,7 @@ MACRO3(THREE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
 END_MACRO
 
 MACRO0(RETURN_IF_RESULT_IS_NON_ZERO)
-    UNTESTED
+//    UNTESTED
     testq %rax, %rax               // rax == 0 ?
     jz  1f                         // if rax == 0 goto 1
     ret                            // return

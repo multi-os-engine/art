@@ -491,7 +491,11 @@ class Thread {
     size_t base = OFFSETOF_MEMBER(Thread, tlsPtr_);
     size_t scale;
     size_t shrink;
+#ifdef __x86_64__
+    if (pointer_size == sizeof(void*) || true) {  // TODO(64) ThreadOffset<8> in QCG FE/ME
+#else
     if (pointer_size == sizeof(void*)) {
+#endif
       scale = 1;
       shrink = 1;
     } else if (pointer_size > sizeof(void*)) {

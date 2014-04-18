@@ -714,7 +714,7 @@ class Mir2Lir : public Backend {
     bool GenInlinedUnsafeGet(CallInfo* info, bool is_long, bool is_volatile);
     bool GenInlinedUnsafePut(CallInfo* info, bool is_long, bool is_object,
                              bool is_volatile, bool is_ordered);
-    int LoadArgRegs(CallInfo* info, int call_state,
+    virtual int LoadArgRegs(CallInfo* info, int call_state,
                     NextCallInsn next_call_insn,
                     const MethodReference& target_method,
                     uint32_t vtable_idx,
@@ -1007,6 +1007,8 @@ class Mir2Lir : public Backend {
                              bool card_mark) = 0;
     virtual void GenShiftImmOpLong(Instruction::Code opcode, RegLocation rl_dest,
                                    RegLocation rl_src1, RegLocation rl_shift) = 0;
+
+    virtual void GenBreak();  // Generate debugger stop instruction
 
     // Required for target - single operation generators.
     virtual LIR* OpUnconditionalBranch(LIR* target) = 0;
