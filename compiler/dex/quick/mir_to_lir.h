@@ -723,14 +723,27 @@ class Mir2Lir : public Backend {
     RegLocation LoadCurrMethod();
     void LoadCurrMethodDirect(RegStorage r_tgt);
     LIR* LoadConstant(RegStorage r_dest, int value);
+    // Natural word size.
     LIR* LoadWordDisp(RegStorage r_base, int displacement, RegStorage r_dest);
+    // 32 bits, regardless of target.
+    LIR* Load32Disp(RegStorage r_base, int displacement, RegStorage r_dest);
+    // Object reference; compressed in memory, decompressed in register.
+    LIR* LoadRefDisp(RegStorage r_base, int displacement, RegStorage r_dest);
+    // Load Dalvik value with 32-bit memory storage.  If compressed object reference, decompress.
     RegLocation LoadValue(RegLocation rl_src, RegisterClass op_kind);
+    // Load Dalvik value with 64-bit memory storage.
     RegLocation LoadValueWide(RegLocation rl_src, RegisterClass op_kind);
+    // Load Dalvik value with 32-bit memory storage.  If compressed object reference, decompress.
     void LoadValueDirect(RegLocation rl_src, RegStorage r_dest);
+    // Load Dalvik value with 32-bit memory storage.  If compressed object reference, decompress.
     void LoadValueDirectFixed(RegLocation rl_src, RegStorage r_dest);
+    // Load Dalvik value with 64-bit memory storage.
     void LoadValueDirectWide(RegLocation rl_src, RegStorage r_dest);
+    // Load Dalvik value with 64-bit memory storage.
     void LoadValueDirectWideFixed(RegLocation rl_src, RegStorage r_dest);
     LIR* StoreWordDisp(RegStorage r_base, int displacement, RegStorage r_src);
+    LIR* Store32Disp(RegStorage r_base, int displacement, RegStorage r_src);
+    LIR* StoreRefDisp(RegStorage r_base, int displacement, RegStorage r_src);
 
     /**
      * @brief Used to do the final store in the destination as per bytecode semantics.
