@@ -65,7 +65,7 @@ void Mir2Lir::Workaround7250540(RegLocation rl_dest, RegStorage zero_reg) {
         OpRegCopy(RegStorage::Solo32(promotion_map_[pmap_index].core_reg), temp_reg);
       } else {
         // Lives in the frame, need to store.
-        StoreBaseDisp(TargetReg(kSp), SRegOffset(rl_dest.s_reg_low), temp_reg, kWord);
+        StoreBaseDisp(TargetReg(kSp), SRegOffset(rl_dest.s_reg_low), temp_reg, k32);
       }
       if (!zero_reg.Valid()) {
         FreeTemp(temp_reg);
@@ -81,6 +81,15 @@ LIR* Mir2Lir::LoadWordDisp(RegStorage r_base, int displacement, RegStorage r_des
 
 LIR* Mir2Lir::StoreWordDisp(RegStorage r_base, int displacement, RegStorage r_src) {
   return StoreBaseDisp(r_base, displacement, r_src, kWord);
+}
+
+/* Load a word at base + displacement.  Displacement must be word multiple */
+LIR* Mir2Lir::Load32Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
+  return LoadBaseDisp(r_base, displacement, r_dest, k32, INVALID_SREG);
+}
+
+LIR* Mir2Lir::Store32Disp(RegStorage r_base, int displacement, RegStorage r_src) {
+  return StoreBaseDisp(r_base, displacement, r_src, k32);
 }
 
 /*
@@ -194,7 +203,7 @@ void Mir2Lir::StoreValue(RegLocation rl_dest, RegLocation rl_src) {
   ResetDefLoc(rl_dest);
   if (IsDirty(rl_dest.reg) && oat_live_out(rl_dest.s_reg_low)) {
     def_start = last_lir_insn_;
-    StoreBaseDisp(TargetReg(kSp), SRegOffset(rl_dest.s_reg_low), rl_dest.reg, kWord);
+    Store32Disp(TargetReg(kSp), SRegOffset(rl_dest.s_reg_low), rl_dest.reg);
     MarkClean(rl_dest);
     def_end = last_lir_insn_;
     if (!rl_dest.ref) {
@@ -306,7 +315,7 @@ void Mir2Lir::StoreFinalValue(RegLocation rl_dest, RegLocation rl_src) {
   if (IsDirty(rl_dest.reg) &&
       oat_live_out(rl_dest.s_reg_low)) {
     LIR *def_start = last_lir_insn_;
-    StoreBaseDisp(TargetReg(kSp), SRegOffset(rl_dest.s_reg_low), rl_dest.reg, kWord);
+    Store32Disp(TargetReg(kSp), SRegOffset(rl_dest.s_reg_low), rl_dest.reg);
     MarkClean(rl_dest);
     LIR *def_end = last_lir_insn_;
     if (!rl_dest.ref) {

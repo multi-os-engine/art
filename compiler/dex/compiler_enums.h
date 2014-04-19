@@ -159,8 +159,9 @@ enum AssemblerStatus {
 };
 
 enum OpSize {
-  kWord,
-  kLong,
+  kWord,            // Natural word size of target (32/64)
+  k32,
+  k64,
   kSingle,
   kDouble,
   kUnsignedHalf,

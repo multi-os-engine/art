@@ -724,6 +724,7 @@ class Mir2Lir : public Backend {
     void LoadCurrMethodDirect(RegStorage r_tgt);
     LIR* LoadConstant(RegStorage r_dest, int value);
     LIR* LoadWordDisp(RegStorage r_base, int displacement, RegStorage r_dest);
+    LIR* Load32Disp(RegStorage r_base, int displacement, RegStorage r_dest);
     RegLocation LoadValue(RegLocation rl_src, RegisterClass op_kind);
     RegLocation LoadValueWide(RegLocation rl_src, RegisterClass op_kind);
     void LoadValueDirect(RegLocation rl_src, RegStorage r_dest);
@@ -731,6 +732,7 @@ class Mir2Lir : public Backend {
     void LoadValueDirectWide(RegLocation rl_src, RegStorage r_dest);
     void LoadValueDirectWideFixed(RegLocation rl_src, RegStorage r_dest);
     LIR* StoreWordDisp(RegStorage r_base, int displacement, RegStorage r_src);
+    LIR* Store32Disp(RegStorage r_base, int displacement, RegStorage r_src);
 
     /**
      * @brief Used to do the final store in the destination as per bytecode semantics.
