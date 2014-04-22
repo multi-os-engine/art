@@ -19,6 +19,7 @@ LOCAL_PATH := $(call my-dir)
 include art/build/Android.common.mk
 
 LIBART_COMMON_SRC_FILES := \
+	analysis/static_analyzer.cc \
 	atomic.cc.arm \
 	barrier.cc \
 	base/allocator.cc \
