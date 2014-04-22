@@ -110,18 +110,63 @@ class QuasiAtomic {
   // Reads the 64-bit value at "addr" without tearing.
   static int64_t Read64(volatile const int64_t* addr) {
     if (!kNeedSwapMutexes) {
-      return *addr;
+      int64_t value;
+#if defined(__LP64__)
+      value = *addr;
+#else
+#if defined(__arm__)
+    // Exclusive loads are defined not to tear, clearing the exclusive state isn't necessary. If we
+    // have LPAE (such as Cortex-A15) then ldrd would suffice.
+    __asm__ __volatile__("@ QuasiAtomic::Read64\n"
+      "ldrexd     %0, %H0, [%1]"
+      : "=&r" (value)
+      : "r" (addr));
+#elif defined(__i386__)
+  __asm__ __volatile__(
+      "movq     %1, %0\n"
+      : "=x" (value)
+      : "m" (*addr));
+#else
+      LOG(FATAL) << "Unsupported architecture";
+#endif
+#endif  // defined(__LP64__)
+      return value;
     } else {
       return SwapMutexRead64(addr);
     }
   }
 
   // Writes to the 64-bit value at "addr" without tearing.
-  static void Write64(volatile int64_t* addr, int64_t val) {
+  static void Write64(volatile int64_t* addr, int64_t value) {
     if (!kNeedSwapMutexes) {
-      *addr = val;
+#if defined(__LP64__)
+      *addr = value;
+#else
+#if defined(__arm__)
+    // The write is done as a swap so that the cache-line is in the exclusive state for the store.
+    // If we know that ARM architecture has LPAE (such as Cortex-A15) this isn't necessary and strd
+    // will suffice.
+    int64_t prev;
+    int status;
+    do {
+      __asm__ __volatile__("@ QuasiAtomic::Write64\n"
+        "ldrexd     %0, %H0, [%3]\n"
+        "strexd     %1, %4, %H4, [%3]"
+        : "=&r" (prev), "=&r" (status), "+m"(*addr)
+        : "r" (addr), "r" (value)
+        : "cc");
+      } while (UNLIKELY(status != 0));
+#elif defined(__i386__)
+      __asm__ __volatile__(
+        "movq     %1, %0"
+        : "=m" (*addr)
+        : "x" (value));
+#else
+      LOG(FATAL) << "Unsupported architecture";
+#endif
+#endif  // defined(__LP64__)
     } else {
-      SwapMutexWrite64(addr, val);
+      SwapMutexWrite64(addr, value);
     }
   }
 
