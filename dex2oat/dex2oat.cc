@@ -755,6 +755,7 @@ static int dex2oat(int argc, char** argv) {
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = !kIsTargetBuild;
   bool generate_gdb_information = kIsDebugBuild;
+  bool use_static_analyzer = false;
 
   for (int i = 0; i < argc; i++) {
     const StringPiece option(argv[i]);
@@ -1213,6 +1214,12 @@ static int dex2oat(int argc, char** argv) {
       compiler_options.SetCompilerFilter(CompilerOptions::kSpeed);
       VLOG(compiler) << "Below method threshold, compiling anyways";
     }
+  }
+
+  if (use_static_analyzer) {
+    CHECK(Runtime::Current()->GetClassLinker()->GetStaticAnalyzer() == nullptr);
+    Runtime::Current()->GetClassLinker()->InitStaticAnalyzer();
+    CHECK(Runtime::Current()->GetClassLinker()->GetStaticAnalyzer() != nullptr);
   }
 
   UniquePtr<const CompilerDriver> compiler(dex2oat->CreateOatFile(boot_image_option,
