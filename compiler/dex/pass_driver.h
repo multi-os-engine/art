@@ -27,22 +27,21 @@ class Pass;
 
 namespace art {
 
+// Enumeration defining possible commands to be applied to each pass.
+enum PassInstrumentation {
+  kPassInsertBefore,
+  kPassInsertAfter,
+  kPassReplace,
+  kPassRemove,
+};
+
 /**
  * @class PassDriver
  * @brief PassDriver is the wrapper around all Pass instances in order to execute them from the Middle-End
  */
 class PassDriver {
  public:
-  explicit PassDriver(CompilationUnit* cu, bool create_default_passes = true);
-
-  ~PassDriver();
-
-  /**
-   * @brief Insert a Pass: can warn if multiple passes have the same name.
-   * @param new_pass the new Pass to insert in the map and list.
-   * @param warn_override warn if the name of the Pass is already used.
-   */
-  void InsertPass(const Pass* new_pass);
+  explicit PassDriver(CompilationUnit* cu);
 
   /**
    * @brief Run a pass using the name as key.
@@ -82,9 +81,25 @@ class PassDriver {
     return dump_cfg_folder_;
   }
 
- protected:
-  void CreatePasses();
+  void SetDefaultPasses();
 
+  static void SetSpecialMEDriverSelection(void (*value)(PassDriver*)) {
+    special_me_pass_driver_selection_ = value;
+  }
+
+  void CopyPasses(std::vector<const Pass*> &passes);
+
+  std::vector<const Pass*>& GetPasses() {
+    return pass_list_;
+  }
+
+  /**
+   * @brief Depending on the action requested by mode, edit the list of passes to be
+   *        performed by putting pass before, after, or in place of the pass called name.
+   */
+  static bool HandleUserPass(Pass* pass, const char *name, enum PassInstrumentation mode);
+
+ protected:
   /** @brief List of passes: provides the order to execute the passes. */
   std::vector<const Pass*> pass_list_;
 
@@ -93,6 +108,16 @@ class PassDriver {
 
   /** @brief Dump CFG base folder: where is the base folder for dumping CFGs. */
   const char* dump_cfg_folder_;
+
+  static void (*special_me_pass_driver_selection_)(PassDriver*);
+
+  void InitializePasses() {
+    if (special_me_pass_driver_selection_ != nullptr) {
+      special_me_pass_driver_selection_(this);
+    } else {
+      SetDefaultPasses();
+    }
+  }
 };
 
 }  // namespace art
