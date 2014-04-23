@@ -32,7 +32,7 @@ namespace art {
 static jobject Method_invoke(JNIEnv* env, jobject javaMethod, jobject javaReceiver,
                              jobject javaArgs, jboolean accessible) {
   ScopedFastNativeObjectAccess soa(env);
-  return InvokeMethod(soa, javaMethod, javaReceiver, javaArgs, (accessible == JNI_TRUE));
+  return InvokeMethod(soa, javaMethod, javaReceiver, javaArgs, (accessible == JNI_TRUE), true);
 }
 
 static jobject Method_getExceptionTypesNative(JNIEnv* env, jobject javaMethod) {
