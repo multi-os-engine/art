@@ -15,7 +15,7 @@
  */
 
 #include "parsed_options.h"
-
+#include "plugin_handler.h"
 #ifdef HAVE_ANDROID_OS
 #include "cutils/properties.h"
 #endif
@@ -234,6 +234,9 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
   hook_vfprintf_ = vfprintf;
   hook_exit_ = exit;
   hook_abort_ = NULL;  // We don't call abort(3) by default; see Runtime::Abort.
+
+  // Now load up the plugins.
+  LoadUpPlugins("/system/lib/plugins");
 
 //  gLogVerbosity.class_linker = true;  // TODO: don't check this in!
 //  gLogVerbosity.compiler = true;  // TODO: don't check this in!
