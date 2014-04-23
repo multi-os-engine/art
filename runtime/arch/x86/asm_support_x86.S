@@ -19,49 +19,28 @@
 
 #include "asm_support_x86.h"
 
-#if defined(__clang__)
-    // Clang's as(1) doesn't let you name macro parameters.
-    #define MACRO0(macro_name) .macro macro_name
-    #define MACRO1(macro_name, macro_arg1) .macro macro_name
-    #define MACRO2(macro_name, macro_arg1, macro_args2) .macro macro_name
-    #define MACRO3(macro_name, macro_arg1, macro_args2, macro_args3) .macro macro_name
-    #define END_MACRO .endmacro
+// Regular gas(1) lets you name macro parameters.
+#define MACRO0(macro_name) .macro macro_name
+#define MACRO1(macro_name, macro_arg1) .macro macro_name macro_arg1
+#define MACRO2(macro_name, macro_arg1, macro_arg2) .macro macro_name macro_arg1, macro_arg2
+#define MACRO3(macro_name, macro_arg1, macro_arg2, macro_arg3) .macro macro_name macro_arg1, macro_arg2, macro_arg3
+#define END_MACRO .endm
 
-    // Clang's as(1) uses $0, $1, and so on for macro arguments.
-    #define VAR(name,index) SYMBOL($index)
-    #define PLT_VAR(name, index) SYMBOL($index)
-    #define REG_VAR(name,index) %$index
-    #define CALL_MACRO(name,index) $index
-    #define FUNCTION_TYPE(name,index) .type $index, @function
-    #define SIZE(name,index) .size $index, .-$index
+// Regular gas(1) uses \argument_name for macro arguments.
+// We need to turn on alternate macro syntax so we can use & instead or the preprocessor
+// will screw us by inserting a space between the \ and the name. Even in this mode there's
+// no special meaning to $, so literals are still just $x. The use of altmacro means % is a
+// special character meaning care needs to be taken when passing registers as macro arguments.
+.altmacro
+#define VAR(name,index) name&
+#define PLT_VAR(name, index) name&@PLT
+#define REG_VAR(name,index) %name
+#define CALL_MACRO(name,index) name&
+#define FUNCTION_TYPE(name,index) .type name&, @function
+#define SIZE(name,index) .size name, .-name
 
-    //  The use of $x for arguments mean that literals need to be represented with $$x in macros.
-    #define LITERAL(value) $value
-    #define MACRO_LITERAL(value) $$value
-#else
-    // Regular gas(1) lets you name macro parameters.
-    #define MACRO0(macro_name) .macro macro_name
-    #define MACRO1(macro_name, macro_arg1) .macro macro_name macro_arg1
-    #define MACRO2(macro_name, macro_arg1, macro_arg2) .macro macro_name macro_arg1, macro_arg2
-    #define MACRO3(macro_name, macro_arg1, macro_arg2, macro_arg3) .macro macro_name macro_arg1, macro_arg2, macro_arg3
-    #define END_MACRO .endm
-
-    // Regular gas(1) uses \argument_name for macro arguments.
-    // We need to turn on alternate macro syntax so we can use & instead or the preprocessor
-    // will screw us by inserting a space between the \ and the name. Even in this mode there's
-    // no special meaning to $, so literals are still just $x. The use of altmacro means % is a
-    // special character meaning care needs to be taken when passing registers as macro arguments.
-    .altmacro
-    #define VAR(name,index) name&
-    #define PLT_VAR(name, index) name&@PLT
-    #define REG_VAR(name,index) %name
-    #define CALL_MACRO(name,index) name&
-    #define FUNCTION_TYPE(name,index) .type name&, @function
-    #define SIZE(name,index) .size name, .-name
-
-    #define LITERAL(value) $value
-    #define MACRO_LITERAL(value) $value
-#endif
+#define LITERAL(value) $value
+#define MACRO_LITERAL(value) $value
 
     // CFI support.
 #if !defined(__APPLE__)
