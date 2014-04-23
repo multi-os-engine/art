@@ -462,7 +462,7 @@ void InvokeWithShadowFrame(Thread* self, ShadowFrame* shadow_frame, uint16_t arg
 }
 
 jobject InvokeMethod(const ScopedObjectAccess& soa, jobject javaMethod,
-                     jobject javaReceiver, jobject javaArgs, bool accessible) {
+                     jobject javaReceiver, jobject javaArgs, bool accessible, bool wrap_exception) {
   mirror::ArtMethod* m = mirror::ArtMethod::FromReflectedMethod(soa, javaMethod);
 
   mirror::Class* declaring_class = m->GetDeclaringClass();
@@ -517,14 +517,16 @@ jobject InvokeMethod(const ScopedObjectAccess& soa, jobject javaMethod,
 
   InvokeWithArgArray(soa, m, &arg_array, &result, mh.GetShorty());
 
-  // Wrap any exception with "Ljava/lang/reflect/InvocationTargetException;" and return early.
   if (soa.Self()->IsExceptionPending()) {
-    jthrowable th = soa.Env()->ExceptionOccurred();
-    soa.Env()->ExceptionClear();
-    jclass exception_class = soa.Env()->FindClass("java/lang/reflect/InvocationTargetException");
-    jmethodID mid = soa.Env()->GetMethodID(exception_class, "<init>", "(Ljava/lang/Throwable;)V");
-    jobject exception_instance = soa.Env()->NewObject(exception_class, mid, th);
-    soa.Env()->Throw(reinterpret_cast<jthrowable>(exception_instance));
+    if (wrap_exception) {
+      // Wrap any exception with "Ljava/lang/reflect/InvocationTargetException;" and return early.
+      jthrowable th = soa.Env()->ExceptionOccurred();
+      soa.Env()->ExceptionClear();
+      jclass exception_class = soa.Env()->FindClass("java/lang/reflect/InvocationTargetException");
+      jmethodID mid = soa.Env()->GetMethodID(exception_class, "<init>", "(Ljava/lang/Throwable;)V");
+      jobject exception_instance = soa.Env()->NewObject(exception_class, mid, th);
+      soa.Env()->Throw(reinterpret_cast<jthrowable>(exception_instance));
+    }
     return NULL;
   }
 
