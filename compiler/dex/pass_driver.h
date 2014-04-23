@@ -39,6 +39,14 @@ const Pass* GetPassInstance() {
 class PassDriverDataHolder {
 };
 
+// Enumeration defining possible commands to be applied to each pass.
+enum PassInstrumentation {
+  kPassInsertBefore,
+  kPassInsertAfter,
+  kPassReplace,
+  kPassRemove,
+};
+
 /**
  * @class PassDriver
  * @brief PassDriver is the wrapper around all Pass instances in order to execute them
@@ -165,11 +173,6 @@ class PassDriver {
     pass_list_ = PassDriver<PassDriverType>::g_default_pass_list;
   }
 
- protected:
-  virtual void InitializePasses() {
-    SetDefaultPasses();
-  }
-
   /**
    * @brief Apply a patch: perform start/work/end functions.
    */
@@ -186,6 +189,88 @@ class PassDriver {
     UNUSED(pass);
   }
 
+  static void SetSpecialDriverSelection(void (*value)(PassDriver*)) {
+    special_pass_driver_selection_ = value;
+  }
+
+  void CopyPasses(std::vector<const Pass*> &passes) {
+    pass_list_ = passes;
+  }
+
+  /**
+   * @brief Depending on the action requested by mode, edit the list of passes to be
+   *        performed by putting pass before, after, or in place of the pass called name.
+   */
+  static bool HandleUserPass(Pass* pass, const char *name, enum PassInstrumentation mode) {
+    // Walk the pass list and find the pass.
+    const Pass* cur_pass = nullptr;
+    unsigned int idx = 0;
+    unsigned int size = g_default_pass_list.size();
+
+    // idx is not defined in the loop because we will need it below.
+    for (idx = 0; idx < size; idx++) {
+      cur_pass = g_default_pass_list[idx];
+      if (strcmp(name, cur_pass->GetName()) == 0) {
+        break;
+      }
+    }
+
+    // Paranoid: didn't find the name.
+    if (idx == size) {
+      LOG(INFO) << "Pass Modification could not find the reference pass name, here is what you provided: " << name;
+      LOG(INFO) << "\t- Here are the loop passes for reference:";
+      PrintPassNames();
+      return false;
+    }
+
+    // We have the pass reference, what we do now depends on the mode.
+    // We have a bit of work here sometimes because the list is in vector form.
+    // We are reusing idx here, it represents the index of the pass that has "name" as its name.
+    switch (mode) {
+      case kPassReplace:
+        g_default_pass_list[idx] = pass;
+        break;
+      case kPassInsertBefore:
+        g_default_pass_list.push_back(nullptr);
+
+        // We know we found it so size > 0, thus this is fine.
+        // Note we start at size because we pushed back something right before.
+        for (unsigned int i = size; i > idx; i--) {
+          // Same reason makes the -1 here safe.
+          g_default_pass_list[i] = g_default_pass_list[i - 1];
+        }
+        g_default_pass_list[idx] = pass;
+        break;
+      case kPassInsertAfter:
+        g_default_pass_list.push_back(nullptr);
+
+        // We know we found it so size > 0, thus this is fine.
+        // Note we start at size because we pushed back something right before.
+        unsigned int i;
+        for (i = size; i > idx + 1; i--) {
+          // Same reason makes the -1 here safe.
+          g_default_pass_list[i] = g_default_pass_list[i - 1];
+        }
+        g_default_pass_list[i] = pass;
+        break;
+      case kPassRemove:
+        // We know we found it so size > 0, thus this is fine.
+        // Note we start at size because we pushed back something right before.
+        for (unsigned i = idx; i < size - 1; i++) {
+          g_default_pass_list[i] = g_default_pass_list[i + 1];
+        }
+        // We can now remove the last one.
+        g_default_pass_list.pop_back();
+        break;
+      default:
+        break;
+    }
+
+    // Report success
+    return true;
+  }
+
+ protected:
   /** @brief List of passes: provides the order to execute the passes. */
   std::vector<const Pass*> pass_list_;
 
@@ -206,6 +291,19 @@ class PassDriver {
 
   /** @brief What are the passes we want to be dumping the CFG? */
   static std::string dump_pass_list_;
+
+  /** @brief Dump CFG base folder: where is the base folder for dumping CFGs. */
+  const char* dump_cfg_folder_;
+
+  static void (*special_pass_driver_selection_)(PassDriver*);
+
+  void InitializePasses() {
+    if (special_pass_driver_selection_ != nullptr) {
+      special_pass_driver_selection_(this);
+    } else {
+      SetDefaultPasses();
+    }
+  }
 };
 
 }  // namespace art
