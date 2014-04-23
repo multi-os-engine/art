@@ -444,10 +444,9 @@ class Heap {
   void RevokeAllThreadLocalBuffers();
   void AssertAllBumpPointerSpaceThreadLocalBuffersAreRevoked();
 
-  void PreGcRosAllocVerification(TimingLogger* timings)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void PostGcRosAllocVerification(TimingLogger* timings)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void RosAllocVerification(TimingLogger* timings, const char* name) NO_THREAD_SAFETY_ANALYSIS;
+  void PreGcRosAllocVerification(TimingLogger* timings);
+  void PostGcRosAllocVerification(TimingLogger* timings);
 
   accounting::HeapBitmap* GetLiveBitmap() SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_) {
     return live_bitmap_.get();
