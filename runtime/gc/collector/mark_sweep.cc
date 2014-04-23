@@ -136,6 +136,37 @@ void MarkSweep::InitializePhase() {
   heap_->PreGcVerification(this);
 }
 
+void MarkSweep::RunPhases() {
+  Thread* self = Thread::Current();
+  InitializePhase();
+  if (Locks::mutator_lock_->IsExclusiveHeld(self)) {
+    MarkingPhase();
+    PausePhase();
+    RevokeAllThreadLocalBuffers();
+    ReclaimPhase();
+  } else {
+    Locks::mutator_lock_->AssertNotHeld(self);
+    if (IsConcurrent()) {
+      {
+        ReaderMutexLock mu(self, *Locks::mutator_lock_);
+        MarkingPhase();
+      }
+      ScopedPause pause(this);
+      PausePhase();
+      RevokeAllThreadLocalBuffers();
+    } else {
+      ScopedPause pause(this);
+      MarkingPhase();
+      PausePhase();
+      RevokeAllThreadLocalBuffers();
+    }
+    // Sweeping always done concurrently, even for non concurrent mark sweep.
+    ReaderMutexLock mu(self, *Locks::mutator_lock_);
+    ReclaimPhase();
+  }
+  FinishPhase();
+}
+
 void MarkSweep::ProcessReferences(Thread* self) {
   TimingLogger::ScopedSplit split("ProcessReferences", &timings_);
   WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
@@ -178,13 +209,11 @@ void MarkSweep::PausePhase() {
   timings_.StartSplit("PreSweepingGcVerification");
   heap_->PreSweepingGcVerification(this);
   timings_.EndSplit();
-  if (IsConcurrent()) {
-    // Disallow new system weaks to prevent a race which occurs when someone adds a new system
-    // weak before we sweep them. Since this new system weak may not be marked, the GC may
-    // incorrectly sweep it. This also fixes a race where interning may attempt to return a strong
-    // reference to a string that is about to be swept.
-    Runtime::Current()->DisallowNewSystemWeaks();
-  }
+  // Disallow new system weaks to prevent a race which occurs when someone adds a new system
+  // weak before we sweep them. Since this new system weak may not be marked, the GC may
+  // incorrectly sweep it. This also fixes a race where interning may attempt to return a strong
+  // reference to a string that is about to be swept.
+  Runtime::Current()->DisallowNewSystemWeaks();
 }
 
 void MarkSweep::PreCleanCards() {
@@ -266,9 +295,7 @@ void MarkSweep::ReclaimPhase() {
   TimingLogger::ScopedSplit split("ReclaimPhase", &timings_);
   Thread* self = Thread::Current();
   SweepSystemWeaks(self);
-  if (IsConcurrent()) {
-    Runtime::Current()->AllowNewSystemWeaks();
-  }
+  Runtime::Current()->AllowNewSystemWeaks();
   {
     WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
 

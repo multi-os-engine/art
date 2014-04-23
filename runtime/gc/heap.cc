@@ -1442,7 +1442,6 @@ void Heap::TransitionCollector(CollectorType collector_type) {
     usleep(1000);
   }
   tl->SuspendAll();
-  PreGcRosAllocVerification(&semi_space_collector_->GetTimings());
   switch (collector_type) {
     case kCollectorTypeSS:
       // Fall-through.
@@ -1472,7 +1471,6 @@ void Heap::TransitionCollector(CollectorType collector_type) {
     }
   }
   ChangeCollector(collector_type);
-  PostGcRosAllocVerification(&semi_space_collector_->GetTimings());
   tl->ResumeAll();
   // Can't call into java code with all threads suspended.
   EnqueueClearedReferences();
@@ -1787,6 +1785,8 @@ void Heap::Compact(space::ContinuousMemMapAllocSpace* target_space,
   CHECK(kMovingCollector);
   CHECK_NE(target_space, source_space) << "In-place compaction currently unsupported";
   if (target_space != source_space) {
+    // Don't swap spaces since this isn't a typical semi space collection.
+    semi_space_collector_->SetSwapSemiSpaces(false);
     semi_space_collector_->SetFromSpace(source_space);
     semi_space_collector_->SetToSpace(target_space);
     semi_space_collector_->Run(kGcCauseCollectorTransition, false);
@@ -1858,6 +1858,7 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
       semi_space_collector_->SetFromSpace(bump_pointer_space_);
       semi_space_collector_->SetToSpace(temp_space_);
       collector = semi_space_collector_;
+      semi_space_collector_->SetSwapSemiSpaces(true);
     } else if (collector_type_ == kCollectorTypeCC) {
       gc_type = concurrent_copying_collector_->GetGcType();
       collector = concurrent_copying_collector_;
@@ -1877,14 +1878,7 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
       << "Could not find garbage collector with collector_type="
       << static_cast<size_t>(collector_type_) << " and gc_type=" << gc_type;
   ATRACE_BEGIN(StringPrintf("%s %s GC", PrettyCause(gc_cause), collector->GetName()).c_str());
-  if (compacting_gc) {
-    runtime->GetThreadList()->SuspendAll();
-    collector->Run(gc_cause, clear_soft_references || runtime->IsZygote());
-    SwapSemiSpaces();
-    runtime->GetThreadList()->ResumeAll();
-  } else {
-    collector->Run(gc_cause, clear_soft_references || runtime->IsZygote());
-  }
+  collector->Run(gc_cause, clear_soft_references || runtime->IsZygote());
   total_objects_freed_ever_ += collector->GetFreedObjects();
   total_bytes_freed_ever_ += collector->GetFreedBytes();
   RequestHeapTrim();
@@ -2419,28 +2413,38 @@ void Heap::PostGcVerification(collector::GarbageCollector* gc) {
   }
 }
 
+void Heap::RosAllocVerification(TimingLogger* timings, const char* name) {
+  TimingLogger::ScopedSplit split(name, timings);
+  for (const auto& space : continuous_spaces_) {
+    if (space->IsRosAllocSpace()) {
+      VLOG(heap) << name << " : " << space->GetName();
+      space->AsRosAllocSpace()->Verify();
+    }
+  }
+}
+
 void Heap::PreGcRosAllocVerification(TimingLogger* timings) {
   if (verify_pre_gc_rosalloc_) {
-    TimingLogger::ScopedSplit split("PreGcRosAllocVerification", timings);
-    for (const auto& space : continuous_spaces_) {
-      if (space->IsRosAllocSpace()) {
-        VLOG(heap) << "PreGcRosAllocVerification : " << space->GetName();
-        space::RosAllocSpace* rosalloc_space = space->AsRosAllocSpace();
-        rosalloc_space->Verify();
-      }
+    if (!Locks::mutator_lock_->IsExclusiveHeld(Thread::Current())) {
+      ThreadList* thread_list = Runtime::Current()->GetThreadList();
+      thread_list->SuspendAll();
+      RosAllocVerification(timings, "PreGcRosAllocVerification");
+      thread_list->ResumeAll();
+    } else {
+      RosAllocVerification(timings, "PreGcRosAllocVerification");
     }
   }
 }
 
 void Heap::PostGcRosAllocVerification(TimingLogger* timings) {
   if (verify_post_gc_rosalloc_) {
-    TimingLogger::ScopedSplit split("PostGcRosAllocVerification", timings);
-    for (const auto& space : continuous_spaces_) {
-      if (space->IsRosAllocSpace()) {
-        VLOG(heap) << "PostGcRosAllocVerification : " << space->GetName();
-        space::RosAllocSpace* rosalloc_space = space->AsRosAllocSpace();
-        rosalloc_space->Verify();
-      }
+    if (!Locks::mutator_lock_->IsExclusiveHeld(Thread::Current())) {
+      ThreadList* thread_list = Runtime::Current()->GetThreadList();
+      thread_list->SuspendAll();
+      RosAllocVerification(timings, "PostGcRosAllocVerification");
+      thread_list->ResumeAll();
+    } else {
+      RosAllocVerification(timings, "PostGcRosAllocVerification");
     }
   }
 }
