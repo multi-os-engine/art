@@ -27,6 +27,8 @@
 
 namespace art {
 
+void (*PassDriver::special_me_pass_driver_selection_)(PassDriver*) = nullptr;
+
 namespace {  // anonymous namespace
 
 /**
@@ -57,29 +59,10 @@ inline void DoWalkBasicBlocks(CompilationUnit* c_unit, const Pass* pass) {
 
 }  // anonymous namespace
 
-PassDriver::PassDriver(CompilationUnit* cu, bool create_default_passes)
+PassDriver::PassDriver(CompilationUnit* cu)
     : cu_(cu), dump_cfg_folder_("/sdcard/") {
   DCHECK(cu != nullptr);
-
-  // If need be, create the default passes.
-  if (create_default_passes) {
-    CreatePasses();
-  }
-}
-
-PassDriver::~PassDriver() {
-}
-
-void PassDriver::InsertPass(const Pass* new_pass) {
-  DCHECK(new_pass != nullptr);
-  DCHECK(new_pass->GetName() != nullptr && new_pass->GetName()[0] != 0);
-
-  // It is an error to override an existing pass.
-  DCHECK(GetPass(new_pass->GetName()) == nullptr)
-      << "Pass name " << new_pass->GetName() << " already used.";
-
-  // Now add to the list.
-  pass_list_.push_back(new_pass);
+  InitializePasses();
 }
 
 /*
@@ -89,7 +72,7 @@ void PassDriver::InsertPass(const Pass* new_pass) {
  * Disadvantage is the passes can't change their internal states depending on CompilationUnit:
  *   - This is not yet an issue: no current pass would require it.
  */
-static const Pass* const gPasses[] = {
+static const Pass* const g_passes[] = {
   GetPassInstance<CacheFieldLoweringInfo>(),
   GetPassInstance<CacheMethodLoweringInfo>(),
   GetPassInstance<CallInlining>(),
@@ -105,28 +88,24 @@ static const Pass* const gPasses[] = {
 };
 
 // The default pass list is used by CreatePasses to initialize pass_list_.
-static std::vector<const Pass*> gDefaultPassList(gPasses, gPasses + arraysize(gPasses));
+static std::vector<const Pass*> g_default_pass_list(g_passes, g_passes + arraysize(g_passes));
 
 void PassDriver::CreateDefaultPassList(const std::string& disable_passes) {
-  // Insert each pass from gPasses into gDefaultPassList.
-  gDefaultPassList.clear();
-  gDefaultPassList.reserve(arraysize(gPasses));
-  for (const Pass* pass : gPasses) {
+  // Insert each pass from g_passes into g_default_pass_list.
+  g_default_pass_list.clear();
+  g_default_pass_list.reserve(arraysize(g_passes));
+  for (const Pass* pass : g_passes) {
     // Check if we should disable this pass.
     if (disable_passes.find(pass->GetName()) != std::string::npos) {
       LOG(INFO) << "Skipping " << pass->GetName();
     } else {
-      gDefaultPassList.push_back(pass);
+      g_default_pass_list.push_back(pass);
     }
   }
 }
 
-void PassDriver::CreatePasses() {
-  // Insert each pass into the list via the InsertPass method.
-  pass_list_.reserve(gDefaultPassList.size());
-  for (const Pass* pass : gDefaultPassList) {
-    InsertPass(pass);
-  }
+void PassDriver::SetDefaultPasses() {
+  pass_list_ = g_default_pass_list;
 }
 
 void PassDriver::HandlePassFlag(CompilationUnit* c_unit, const Pass* pass) {
@@ -242,7 +221,7 @@ void PassDriver::Launch() {
 void PassDriver::PrintPassNames() {
   LOG(INFO) << "Loop Passes are:";
 
-  for (const Pass* cur_pass : gPasses) {
+  for (const Pass* cur_pass : g_default_pass_list) {
     LOG(INFO) << "\t-" << cur_pass->GetName();
   }
 }
@@ -254,6 +233,79 @@ const Pass* PassDriver::GetPass(const char* name) const {
     }
   }
   return nullptr;
+}
+
+bool PassDriver::HandleUserPass(Pass* pass, const char* name, PassInstrumentation mode) {
+  // Walk the pass list and find the pass.
+  const Pass* cur_pass = nullptr;
+  unsigned int idx = 0;
+  unsigned int size = g_default_pass_list.size();
+
+  // idx is not defined in the loop because we will need it below.
+  for (idx = 0; idx < size; idx++) {
+    cur_pass = g_default_pass_list[idx];
+    if (strcmp(name, cur_pass->GetName()) == 0) {
+      break;
+    }
+  }
+
+  // Paranoid: didn't find the name.
+  if (idx == size) {
+    LOG(INFO) << "Pass Modification could not find the reference pass name, here is what you provided: " << name;
+    LOG(INFO) << "\t- Here are the loop passes for reference:";
+    PrintPassNames();
+    return false;
+  }
+
+  // We have the pass reference, what we do now depends on the mode.
+  // We have a bit of work here sometimes because the list is in vector form.
+  // We are reusing idx here, it represents the index of the pass that has "name" as its name.
+  switch (mode) {
+    case kPassReplace:
+      g_default_pass_list[idx] = pass;
+      break;
+    case kPassInsertBefore:
+      g_default_pass_list.push_back(nullptr);
+
+      // We know we found it so size > 0, thus this is fine.
+      // Note we start at size because we pushed back something right before.
+      for (unsigned int i = size; i > idx; i--) {
+        // Same reason makes the -1 here safe.
+        g_default_pass_list[i] = g_default_pass_list[i - 1];
+      }
+      g_default_pass_list[idx] = pass;
+      break;
+    case kPassInsertAfter:
+      g_default_pass_list.push_back(nullptr);
+
+      // We know we found it so size > 0, thus this is fine.
+      // Note we start at size because we pushed back something right before.
+      unsigned int i;
+      for (i = size; i > idx + 1; i--) {
+        // Same reason makes the -1 here safe.
+        g_default_pass_list[i] = g_default_pass_list[i - 1];
+      }
+      g_default_pass_list[i] = pass;
+      break;
+    case kPassRemove:
+      // We know we found it so size > 0, thus this is fine.
+      // Note we start at size because we pushed back something right before.
+      for (unsigned i = idx; i < size - 1; i++) {
+        g_default_pass_list[i] = g_default_pass_list[i + 1];
+      }
+      // We can now remove the last one.
+      g_default_pass_list.pop_back();
+      break;
+    default:
+      break;
+  }
+
+  // Report success
+  return true;
+}
+
+void PassDriver::CopyPasses(std::vector<const Pass*> &passes) {
+  pass_list_ = passes;
 }
 
 }  // namespace art
