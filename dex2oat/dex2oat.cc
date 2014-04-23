@@ -57,6 +57,7 @@
 #include "oat_writer.h"
 #include "object_utils.h"
 #include "os.h"
+#include "plugin_handler.h"
 #include "runtime.h"
 #include "ScopedLocalRef.h"
 #include "scoped_thread_state_change.h"
@@ -999,6 +1000,8 @@ static int dex2oat(int argc, char** argv) {
       ParseDouble(option.data(), '=', 0.0, 100.0, &top_k_profile_threshold);
     } else if (option == "--print-pass-names") {
       PassDriverMEOpts::PrintPassNames();
+    } else if (option == "--enable-plugin-loader") {
+      LoadUpPlugins("/system/lib/plugins");
     } else if (option.starts_with("--disable-passes=")) {
       std::string disable_passes = option.substr(strlen("--disable-passes=")).data();
       PassDriverMEOpts::CreateDefaultPassList(disable_passes);

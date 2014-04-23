@@ -21,6 +21,9 @@
 
 namespace art {
 
+template<>
+void (*PassDriver<PassDriverMEPostOpt>::special_pass_driver_selection_)(PassDriver*) = nullptr;
+
 /*
  * Create the pass list. These passes are immutable and are shared across the threads.
  *
