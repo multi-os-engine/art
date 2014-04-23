@@ -449,10 +449,7 @@ class Heap {
   void RevokeRosAllocThreadLocalBuffers(Thread* thread);
   void RevokeAllThreadLocalBuffers();
   void AssertAllBumpPointerSpaceThreadLocalBuffersAreRevoked();
-
-  void PreGcRosAllocVerification(TimingLogger* timings)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void PostGcRosAllocVerification(TimingLogger* timings)
+  void RosAllocVerification(TimingLogger* timings, const char* name)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   accounting::HeapBitmap* GetLiveBitmap() SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_) {
@@ -666,11 +663,12 @@ class Heap {
                      Locks::heap_bitmap_lock_,
                      Locks::thread_suspend_count_lock_);
 
-  void PreGcVerification(collector::GarbageCollector* gc);
+  void PreGcVerification(collector::GarbageCollector* gc)
+      LOCKS_EXCLUDED(Locks::mutator_lock_);
   void PreSweepingGcVerification(collector::GarbageCollector* gc)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
   void PostGcVerification(collector::GarbageCollector* gc)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+      LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   // Update the watermark for the native allocated bytes based on the current number of native
   // bytes allocated and the target utilization ratio.
@@ -955,6 +953,7 @@ class Heap {
   const bool running_on_valgrind_;
   const bool use_tlab_;
 
+  friend class collector::GarbageCollector;
   friend class collector::MarkSweep;
   friend class collector::SemiSpace;
   friend class ReferenceQueue;
