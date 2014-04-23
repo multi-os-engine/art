@@ -18,11 +18,13 @@
 #include "dex_file-inl.h"
 #include "jni_internal.h"
 #include "nth_caller_visitor.h"
+#include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
 #include "mirror/object-inl.h"
 #include "mirror/proxy.h"
 #include "object_utils.h"
+#include "reflection.h"
 #include "scoped_thread_state_change.h"
 #include "scoped_fast_native_object_access.h"
 #include "ScopedLocalRef.h"
@@ -95,10 +97,42 @@ static jobjectArray Class_getProxyInterfaces(JNIEnv* env, jobject javaThis) {
   return soa.AddLocalReference<jobjectArray>(c->GetInterfaces()->Clone(soa.Self()));
 }
 
+static jobject Class_newInstance(JNIEnv* env, jobject javaThis, jobject javaConstructor) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::ArtMethod* m = mirror::ArtMethod::FromReflectedMethod(soa, javaConstructor);
+  SirtRef<mirror::Class> c(soa.Self(), m->GetDeclaringClass());
+
+  if (!Runtime::Current()->GetClassLinker()->EnsureInitialized(c, true, true)) {
+    DCHECK(soa.Self()->IsExceptionPending());
+    return nullptr;
+  }
+
+  bool movable = true;
+  if (!kMovingMethods && c->IsArtMethodClass()) {
+    movable = false;
+  } else if (!kMovingFields && c->IsArtFieldClass()) {
+    movable = false;
+  } else if (!kMovingClasses && c->IsClassClass()) {
+    movable = false;
+  }
+  mirror::Object* receiver =
+      movable ? c->AllocObject(soa.Self()) : c->AllocNonMovableObject(soa.Self());
+  if (receiver == nullptr) {
+    return nullptr;
+  }
+
+  jobject javaReceiver = soa.AddLocalReference<jobject>(receiver);
+  InvokeMethod(soa, javaConstructor, javaReceiver, nullptr, true, false);
+
+  // Constructors are ()V methods, so we shouldn't touch the result of InvokeMethod.
+  return javaReceiver;
+}
+
 static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(Class, classForName, "!(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"),
   NATIVE_METHOD(Class, getNameNative, "!()Ljava/lang/String;"),
   NATIVE_METHOD(Class, getProxyInterfaces, "!()[Ljava/lang/Class;"),
+  NATIVE_METHOD(Class, newInstance, "!(Ljava/lang/reflect/Constructor;)Ljava/lang/Object;"),
 };
 
 void register_java_lang_Class(JNIEnv* env) {
