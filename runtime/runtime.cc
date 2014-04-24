@@ -74,6 +74,7 @@
 
 #ifdef HAVE_ANDROID_OS
 #include "cutils/properties.h"
+#include <sys/prctl.h>
 #endif
 
 namespace art {
@@ -413,6 +414,34 @@ void Runtime::EndThreadBirth() EXCLUSIVE_LOCKS_REQUIRED(Locks::runtime_shutdown_
   }
 }
 
+/*
+ * Copied and modified slightly from system/core/toolbox/mount.c
+ */
+static std::string getMountsDevDir(const char *arg)
+{
+  char mount_dev[256];
+  char mount_dir[256];
+  int match;
+
+  FILE *fp = fopen("/proc/self/mounts", "r");
+  if (fp == NULL) {
+    LOG(FATAL) << "Could not open /proc/self/mounts: " << strerror(errno);
+    return "";
+  }
+
+  while ((match = fscanf(fp, "%255s %255s %*s %*s %*d %*d\n", mount_dev, mount_dir)) != EOF) {
+    mount_dev[255] = 0;
+    mount_dir[255] = 0;
+    if (match == 2 && (strcmp(arg, mount_dir) == 0)) {
+      fclose(fp);
+      return mount_dev;
+    }
+  }
+
+  fclose(fp);
+  return "";
+}
+
 // Do zygote-mode-only initialization.
 bool Runtime::InitZygote() {
   // zygote goes into its own process group
@@ -443,6 +472,37 @@ bool Runtime::InitZygote() {
       return false;
     }
   }
+
+  // Mark /system as NOSUID | NODEV
+  const char* android_root = getenv("ANDROID_ROOT");
+
+  if (android_root == NULL) {
+    LOG(FATAL) << "environment variable ANDROID_ROOT does not exist?!?!";
+    return false;
+  }
+
+  std::string mountDev(getMountsDevDir(android_root));
+  if (mountDev.empty()) {
+    LOG(FATAL) << "Unable to find mount point for " << android_root;
+    return false;
+  }
+
+  if (mount(mountDev.c_str(), android_root, "none",
+        MS_REMOUNT | MS_NOSUID | MS_NODEV | MS_RDONLY | MS_BIND, NULL) == -1) {
+    LOG(FATAL) << "Remount of " << android_root << " failed: " << strerror(errno);
+    return false;
+  }
+
+#ifdef HAVE_ANDROID_OS
+  if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0) {
+    // Older kernels don't understand PR_SET_NO_NEW_PRIVS and return
+    // EINVAL. Don't die on such kernels.
+    if (errno != EINVAL) {
+      LOG(FATAL) << "PR_SET_NO_NEW_PRIVS failed: " << strerror(errno);
+      return false;
+    }
+  }
+#endif
 
   return true;
 }
