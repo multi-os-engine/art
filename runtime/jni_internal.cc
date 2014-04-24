@@ -819,6 +819,17 @@ class JNI {
     return result;
   }
 
+  static jobject AddFinalizerReference(ScopedObjectAccess& soa, jobject java_obj)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    mirror::Object* const obj = soa.Decode<mirror::Object*>(java_obj);
+    DCHECK(obj->GetClass()->IsFinalizable());
+    Runtime::Current()->GetHeap()->AddFinalizerReference(soa.Self(), obj);
+    if (UNLIKELY(soa.Self()->IsExceptionPending())) {
+      return nullptr;
+    }
+    return java_obj;
+  }
+
   static jobject NewObjectV(JNIEnv* env, jclass java_class, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT(java_class);
     CHECK_NON_NULL_ARGUMENT(mid);
@@ -827,6 +838,7 @@ class JNI {
     if (c == nullptr) {
       return nullptr;
     }
+    const bool add_finalizer = c->IsFinalizable();
     mirror::Object* result = c->AllocObject(soa.Self());
     if (result == nullptr) {
       return nullptr;
@@ -836,7 +848,7 @@ class JNI {
     if (soa.Self()->IsExceptionPending()) {
       return nullptr;
     }
-    return local_result;
+    return add_finalizer ? AddFinalizerReference(soa, local_result) : local_result;
   }
 
   static jobject NewObjectA(JNIEnv* env, jclass java_class, jmethodID mid, jvalue* args) {
@@ -847,6 +859,7 @@ class JNI {
     if (c == nullptr) {
       return nullptr;
     }
+    const bool add_finalizer = c->IsFinalizable();
     mirror::Object* result = c->AllocObject(soa.Self());
     if (result == nullptr) {
       return nullptr;
@@ -856,7 +869,7 @@ class JNI {
     if (soa.Self()->IsExceptionPending()) {
       return nullptr;
     }
-    return local_result;
+    return add_finalizer ? AddFinalizerReference(soa, local_result) : local_result;
   }
 
   static jmethodID GetMethodID(JNIEnv* env, jclass java_class, const char* name, const char* sig) {
