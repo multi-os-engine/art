@@ -163,4 +163,19 @@ TEST_F(MemMapTest, RemapAtEnd32bit) {
 }
 #endif
 
+#ifdef __x86_64__
+TEST_F(MemMapTest, MapAnonymousExactAddr32bitHighAddr) {
+  std::string error_msg;
+  UniquePtr<MemMap> map(MemMap::MapAnonymous("MapAnonymousExactAddr32bitHighAddr",
+                                             reinterpret_cast<byte*>(0x71000000),
+                                             0x21000000,
+                                             PROT_READ | PROT_WRITE,
+                                             true,
+                                             &error_msg));
+  ASSERT_TRUE(map.get() != nullptr) << error_msg;
+  ASSERT_TRUE(error_msg.empty());
+  ASSERT_EQ(reinterpret_cast<uintptr_t>(BaseBegin(map.get())), 0x71000000);
+}
+#endif
+
 }  // namespace art

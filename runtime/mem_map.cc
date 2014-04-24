@@ -192,7 +192,15 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* expected, size_t byte_count
 
 #else
 #ifdef __x86_64__
-  if (low_4gb) {
+  // If low_4gb, the memory range should below 4gb.
+  if (low_4gb && (reinterpret_cast<size_t>(expected) + page_aligned_byte_count < reinterpret_cast<size_t>(expected) ||
+                  reinterpret_cast<size_t>(expected) + page_aligned_byte_count > 0xffffffff)) {
+    *error_msg = StringPrintf("The requested address space (%zd, %zd) cannot fit in low_4gb",
+                               reinterpret_cast<size_t>(expected), reinterpret_cast<size_t>(expected) + page_aligned_byte_count);
+    return nullptr;
+  }
+
+  if (low_4gb && expected == nullptr) {
     flags |= MAP_32BIT;
   }
 #endif
