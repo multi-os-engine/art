@@ -672,6 +672,7 @@ void* RosAlloc::AllocFromRun(Thread* self, size_t size, size_t* bytes_allocated)
     // Use the (shared) current run.
     MutexLock mu(self, *size_bracket_locks_[idx]);
     Run* current_run = current_runs_[idx];
+    DCHECK_NE(current_run, dedicated_full_run_);
     if (UNLIKELY(current_run == NULL)) {
       current_run = RefillRun(self, idx);
       if (UNLIKELY(current_run == NULL)) {

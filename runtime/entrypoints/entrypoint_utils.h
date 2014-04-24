@@ -128,15 +128,24 @@ ALWAYS_INLINE static inline mirror::Object* AllocObjectFromCode(uint32_t type_id
     NO_THREAD_SAFETY_ANALYSIS {
   bool slow_path = false;
   mirror::Class* klass = CheckObjectAlloc<kAccessCheck>(type_idx, method, self, &slow_path);
+  mirror::Object* obj;
   if (UNLIKELY(slow_path)) {
     if (klass == nullptr) {
       return nullptr;
     }
     gc::Heap* heap = Runtime::Current()->GetHeap();
-    return klass->Alloc<kInstrumented>(self, heap->GetCurrentAllocator());
+    obj = klass->Alloc<kInstrumented>(self, heap->GetCurrentAllocator());
   }
   DCHECK(klass != nullptr);
-  return klass->Alloc<kInstrumented>(self, allocator_type);
+  const bool add_finalizer = klass->IsFinalizable();
+  obj = klass->Alloc<kInstrumented>(self, allocator_type);
+  // Read the class from the object in case it moved.
+  if (LIKELY(!add_finalizer) || obj == nullptr) {
+    return obj;
+  }
+  SirtRef<mirror::Object> sirt_obj(self, obj, false);
+  Runtime::Current()->GetHeap()->AddFinalizerReference(self, obj);
+  return sirt_obj.get();
 }
 
 // Given the context of a calling Method and a resolved class, create an instance.
@@ -155,8 +164,10 @@ ALWAYS_INLINE static inline mirror::Object* AllocObjectFromCodeResolved(mirror::
       return nullptr;
     }
     gc::Heap* heap = Runtime::Current()->GetHeap();
+    DCHECK(!klass->IsFinalizable());
     return klass->Alloc<kInstrumented>(self, heap->GetCurrentAllocator());
   }
+  DCHECK(!klass->IsFinalizable());
   return klass->Alloc<kInstrumented>(self, allocator_type);
 }
 
@@ -169,6 +180,7 @@ ALWAYS_INLINE static inline mirror::Object* AllocObjectFromCodeInitialized(mirro
                                                                            gc::AllocatorType allocator_type)
     NO_THREAD_SAFETY_ANALYSIS {
   DCHECK(klass != nullptr);
+  DCHECK(!klass->IsFinalizable());
   return klass->Alloc<kInstrumented>(self, allocator_type);
 }
 

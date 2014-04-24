@@ -330,9 +330,10 @@ void Mir2Lir::GenNewArray(uint32_t type_idx, RegLocation rl_dest,
     bool is_type_initialized;  // Ignored as an array does not have an initializer.
     bool use_direct_type_ptr;
     uintptr_t direct_type_ptr;
+    bool is_finalizable;
     if (kEmbedClassInCode &&
-        driver->CanEmbedTypeInCode(*dex_file, type_idx,
-                                   &is_type_initialized, &use_direct_type_ptr, &direct_type_ptr)) {
+        driver->CanEmbedTypeInCode(*dex_file, type_idx, &is_type_initialized, &use_direct_type_ptr,
+                                   &direct_type_ptr, &is_finalizable)) {
       // The fast path.
       if (!use_direct_type_ptr) {
         LoadClassType(type_idx, kArg0);
@@ -968,7 +969,7 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
  * Let helper function take care of everything.  Will
  * call Class::NewInstanceFromCode(type_idx, method);
  */
-void Mir2Lir::GenNewInstance(uint32_t type_idx, RegLocation rl_dest) {
+void Mir2Lir::GenNewInstance(uint32_t type_idx, RegLocation rl_dest) NO_THREAD_SAFETY_ANALYSIS {
   FlushAllRegs();  /* Everything to home location */
   // alloc will always check for resolution, do we also need to verify
   // access because the verifier was unable to?
@@ -980,9 +981,11 @@ void Mir2Lir::GenNewInstance(uint32_t type_idx, RegLocation rl_dest) {
     bool is_type_initialized;
     bool use_direct_type_ptr;
     uintptr_t direct_type_ptr;
+    bool is_finalizable;
     if (kEmbedClassInCode &&
-        driver->CanEmbedTypeInCode(*dex_file, type_idx,
-                                   &is_type_initialized, &use_direct_type_ptr, &direct_type_ptr)) {
+        driver->CanEmbedTypeInCode(*dex_file, type_idx, &is_type_initialized, &use_direct_type_ptr,
+                                   &direct_type_ptr, &is_finalizable) &&
+                                   !is_finalizable) {
       // The fast path.
       if (!use_direct_type_ptr) {
         LoadClassType(type_idx, kArg0);
