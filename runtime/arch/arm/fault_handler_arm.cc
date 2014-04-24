@@ -191,7 +191,6 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
     ", fault_addr: " << fault_addr;
 
   uintptr_t overflow_addr = sp - Thread::kStackOverflowReservedBytes;
-  bool confirmed_stack_overflow = false;
 
   Thread* self = reinterpret_cast<Thread*>(sc->arm_r9);
   CHECK_EQ(self, Thread::Current());
@@ -199,20 +198,7 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
       Thread::kStackOverflowProtectedSize;
 
   // Check that the fault address is the value expected for a stack overflow.
-  if (fault_addr == overflow_addr) {
-    confirmed_stack_overflow = true;
-  } else {
-    // If the fault address is within the protected region of the stack then
-    // we have an overflow.  This can occur if the push or vpush instructions
-    // result in an overflow.  This will be very rare and will only happen
-    // if the frame is right at the edge of the protected region.
-    if (fault_addr >= pregion &&
-        fault_addr < (pregion + Thread::kStackOverflowProtectedSize)) {
-      confirmed_stack_overflow = true;
-    }
-  }
-
-  if (!confirmed_stack_overflow) {
+  if (fault_addr != overflow_addr) {
     VLOG(signals) << "Not a stack overflow";
     return false;
   }
@@ -224,62 +210,16 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   sp = pregion;
   VLOG(signals) << "setting sp to overflow region at " << std::hex << sp;
 
-  // We need to find the previous frame.  Remember that
-  // this has not yet been fully constructed because the SP has not been
-  // decremented.  So we need to work out the size of the spill portion of the
-  // frame.  This consists of something like:
-  //
-  // 0xb6a1d49c: e92d40e0  push    {r5, r6, r7, lr}
-  // 0xb6a1d4a0: ed2d8a06  vpush.f32 {s16-s21}
-  //
-  // The first is encoded in the ArtMethod as the spill_mask, the second as the
-  // fp_spill_mask.  A population count on each will give the number of registers
-  // in each mask.  Each register is 4 bytes on ARM32.
+  // Since the compiler puts the implicit overflow
+  // check before the callee save instructions, the SP is already pointing to
+  // the previous frame.
 
-  // The fault may have occurred during one of the push instructions to
-  // save the callee registers.  In this case the offsets to the previous frame
-  // will need to take this into account.  Deal with this case.
-
-  // Get the current instruction to see if the push instructions caused the problem.
-  uint8_t* instptr = reinterpret_cast<uint8_t*>(sc->arm_pc);
-  uint16_t inst = instptr[0] | instptr[1] << 8;
-  bool frame_includes_core_regs = true;
-  bool frame_includes_fp_regs = true;
-
-  constexpr uint16_t kPushHigh16 = 0xe92d;    // High 16 bits of push instruction.
-  constexpr uint16_t kVpushHigh16 = 0xed2d;   // High 16 bits of vpush instruction.
-  if (inst == kPushHigh16) {
-    // Caused by a push instruction.
-    frame_includes_core_regs = false;
-    frame_includes_fp_regs = false;
-  } else if (inst == kVpushHigh16) {
-    // Caused by vpush instruction.
-    frame_includes_fp_regs = false;
-  }
   mirror::ArtMethod* method = reinterpret_cast<mirror::ArtMethod*>(sc->arm_r0);
 
-  // Work out how many bytes up the stack we need to go to find the previous frame.  This
-  // will depend on what instruction caused the fault.
-  uint32_t spill_size = 0;
-  if (frame_includes_core_regs) {
-    uint32_t spill_mask = method->GetCoreSpillMask();
-    uint32_t numcores = __builtin_popcount(spill_mask);
-    spill_size += numcores * 4;
-    if (frame_includes_fp_regs) {
-      uint32_t fp_spill_mask = method->GetFpSpillMask();
-      uint32_t numfps = __builtin_popcount(fp_spill_mask);
-      spill_size += numfps * 4;
-    }
-  }
-
-  VLOG(signals) << "spill size: " << spill_size;
-  uintptr_t prevframe = prevsp + spill_size;
-  VLOG(signals) << "previous frame: " << std::hex << prevframe;
-
+  VLOG(signals) << "previous frame: " << std::hex << prevsp;
 
   // Now establish the stack pointer for the signal return.
-  // sc->arm_sp = reinterpret_cast<uintptr_t>(sp);
-  sc->arm_sp = prevframe;
+  sc->arm_sp = prevsp;
 
   // Tell the stack overflow code where the new stack pointer should be.
   sc->arm_ip = sp;      // aka r12
