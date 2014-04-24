@@ -139,6 +139,9 @@ public class Main {
             System.out.println("checkStaticMethodInvokeAfterFailedClinit FAILED"
                                + " due to missing ExceptionInInitializerError");
         } catch (ExceptionInInitializerError expected) {
+            StackTraceElement ste = expected.getStackTrace()[0];
+            System.out.println("Throw ExceptionInInitializerError from "
+                               + ste.getClassName() + "." + ste.getMethodName());
         }
 
         // Call again to make sure we still get the expected error.
