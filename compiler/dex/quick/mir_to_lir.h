@@ -1275,7 +1275,6 @@ class Mir2Lir : public Backend {
     MIRGraph* const mir_graph_;
     GrowableArray<SwitchTable*> switch_tables_;
     GrowableArray<FillArrayData*> fill_array_data_;
-    GrowableArray<LIR*> suspend_launchpads_;
     GrowableArray<RegisterInfo*> tempreg_info_;
     GrowableArray<RegisterInfo*> reginfo_map_;
     GrowableArray<void*> pointer_storage_;
