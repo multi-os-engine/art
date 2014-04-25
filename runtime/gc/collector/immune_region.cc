@@ -36,21 +36,21 @@ bool ImmuneRegion::AddContinuousSpace(space::ContinuousSpace* space) {
   // Bind live to mark bitmap if necessary.
   if (space->GetLiveBitmap() != space->GetMarkBitmap()) {
     CHECK(space->IsContinuousMemMapAllocSpace());
-    space->AsContinuousMemMapAllocSpace()->BindLiveToMarkBitmap();
-  }
-  mirror::Object* space_begin = reinterpret_cast<mirror::Object*>(space->Begin());
-  mirror::Object* space_limit = reinterpret_cast<mirror::Object*>(space->Limit());
-  if (IsEmpty()) {
+    mirror::Object* space_begin = reinterpret_cast<mirror::Object*>(space->Begin());
+    mirror::Object* space_limit = reinterpret_cast<mirror::Object*>(space->Limit());
+    if (IsEmpty()) {
     SetBegin(space_begin);
     SetEnd(space_limit);
-  } else {
-    if (space_limit <= begin_) {  // Space is before the immune region.
-      SetBegin(space_begin);
-    } else if (space_begin >= end_) {  // Space is after the immune region.
-      SetEnd(space_limit);
     } else {
-      return false;
+      if (space_limit <= begin_) {  // Space is before the immune region.
+        SetBegin(space_begin);
+      } else if (space_begin >= end_) {  // Space is after the immune region.
+        SetEnd(space_limit);
+      } else {
+        return false;
+      }
     }
+    space->AsContinuousMemMapAllocSpace()->BindLiveToMarkBitmap();
   }
   return true;
 }
