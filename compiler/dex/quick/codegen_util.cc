@@ -15,6 +15,7 @@
  */
 
 #include "dex/compiler_internals.h"
+#include "driver/compiler_options.h"
 #include "dex_file-inl.h"
 #include "gc_map.h"
 #include "gc_map_builder.h"
@@ -586,8 +587,9 @@ bool Mir2Lir::VerifyCatchEntries() {
   return success;
 }
 
-
 void Mir2Lir::CreateMappingTables() {
+  bool generate_dex_map = cu_->compiler_driver->GetCompilerOptions().GetGenerateDexMap();
+
   uint32_t pc2dex_data_size = 0u;
   uint32_t pc2dex_entries = 0u;
   uint32_t pc2dex_offset = 0u;
@@ -597,7 +599,7 @@ void Mir2Lir::CreateMappingTables() {
   uint32_t dex2pc_offset = 0u;
   uint32_t dex2pc_dalvik_offset = 0u;
   for (LIR* tgt_lir = first_lir_insn_; tgt_lir != NULL; tgt_lir = NEXT_LIR(tgt_lir)) {
-    if (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC)) {
+    if (generate_dex_map || (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC))) {
       pc2dex_entries += 1;
       DCHECK(pc2dex_offset <= tgt_lir->offset);
       pc2dex_data_size += UnsignedLeb128Size(tgt_lir->offset - pc2dex_offset);
@@ -632,7 +634,7 @@ void Mir2Lir::CreateMappingTables() {
   dex2pc_offset = 0u;
   dex2pc_dalvik_offset = 0u;
   for (LIR* tgt_lir = first_lir_insn_; tgt_lir != NULL; tgt_lir = NEXT_LIR(tgt_lir)) {
-    if (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC)) {
+    if (generate_dex_map || (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC))) {
       DCHECK(pc2dex_offset <= tgt_lir->offset);
       write_pos = EncodeUnsignedLeb128(write_pos, tgt_lir->offset - pc2dex_offset);
       write_pos = EncodeSignedLeb128(write_pos, static_cast<int32_t>(tgt_lir->dalvik_offset) -
@@ -663,7 +665,7 @@ void Mir2Lir::CreateMappingTables() {
     auto it = table.PcToDexBegin();
     auto it2 = table.DexToPcBegin();
     for (LIR* tgt_lir = first_lir_insn_; tgt_lir != NULL; tgt_lir = NEXT_LIR(tgt_lir)) {
-      if (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC)) {
+      if (generate_dex_map || (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC))) {
         CHECK_EQ(tgt_lir->offset, it.NativePcOffset());
         CHECK_EQ(tgt_lir->dalvik_offset, it.DexPc());
         ++it;
@@ -703,9 +705,9 @@ void Mir2Lir::CreateNativeGcMap() {
     uint32_t native_offset = it.NativePcOffset();
     uint32_t dex_pc = it.DexPc();
     const uint8_t* references = dex_gc_map.FindBitMap(dex_pc, false);
-    CHECK(references != NULL) << "Missing ref for dex pc 0x" << std::hex << dex_pc <<
-        ": " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
-    native_gc_map_builder.AddEntry(native_offset, references);
+    if (references != NULL) {
+      native_gc_map_builder.AddEntry(native_offset, references);
+    }
   }
 }
 
