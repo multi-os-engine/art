@@ -54,6 +54,8 @@ LIBART_COMPILER_SRC_FILES := \
 	dex/mir_method_info.cc \
 	dex/mir_optimization.cc \
 	dex/pass_driver.cc \
+	dex/loop_information.cc \
+	dex/loop_formation.cc \
 	dex/bb_optimizations.cc \
 	dex/bit_vector_block_iterator.cc \
 	dex/frontend.cc \

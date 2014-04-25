@@ -33,6 +33,7 @@ namespace art {
 
 struct ArenaMemBlock;
 class Backend;
+class LoopInformation;
 struct Memstats;
 class MIRGraph;
 class Mir2Lir;
@@ -88,6 +89,7 @@ struct CompilationUnit {
   UniquePtr<MIRGraph> mir_graph;   // MIR container.
   UniquePtr<Backend> cg;           // Target-specific codegen.
   TimingLogger timings;
+  LoopInformation* loop_information;
 };
 
 }  // namespace art

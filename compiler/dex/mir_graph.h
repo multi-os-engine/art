@@ -227,6 +227,14 @@ struct BasicBlockDataFlow {
   ArenaBitVector* ending_check_v;  // For null check and class init check elimination.
 };
 
+struct UsedChain {
+    UsedChain *prev_use;        /**< @brief Chain containing the previous use */
+    MIR *mir;                   /**< @brief MIR containing the current use */
+    UsedChain *next_use;        /**< @brief Chain containing the next use */
+
+    UsedChain *next_chain;      /**< @brief Used internally by the chain builder */
+};
+
 /*
  * Normalized use/def for a MIR operation using SSA names rather than vregs.  Note that
  * uses/defs retain the Dalvik convention that long operations operate on a pair of 32-bit
@@ -242,6 +250,19 @@ struct SSARepresentation {
   bool* fp_use;
   int32_t* defs;
   bool* fp_def;
+  /** @brief For each definition in defs, we have an entry in the usedNext array
+   *     If there is a WIDE, it gets two defs in the defs array and gets two entries in the def-use chain
+   *     Depending on uses, it might be important/necessary to follow both chains
+   */
+  UsedChain **used_next;
+
+  /** @brief Where the uses are defined:
+   *      For each usage is uses, there is an entry in defWhere to provide the MIR containing the definition
+   */
+  MIR **def_where;
+
+  uint32_t GetStartUseIndex(Instruction::Code opcode) const;
+  bool UsesAreInvariant(ArenaBitVector* variants, int skip_uses = 0) const;
 };
 
 /*
@@ -260,6 +281,8 @@ struct MIR {
   uint16_t optimization_flags;
   int16_t m_unit_index;           // From which method was this MIR included
   MIR* next;
+  MIR* prev;
+  BasicBlock* bb;
   SSARepresentation* ssa_rep;
   union {
     // Incoming edges for phi node.
@@ -311,6 +334,9 @@ struct BasicBlock {
   void AppendMIR(MIR* mir);
   void PrependMIR(MIR* mir);
   void InsertMIRAfter(MIR* current_mir, MIR* new_mir);
+  BasicBlock* Copy(MIRGraph* mir_graph) {
+    return nullptr;
+  }
 
   /**
    * @brief Used to obtain the next MIR that follows unconditionally.
@@ -331,6 +357,22 @@ struct BasicBlock {
 struct SuccessorBlockInfo {
   BasicBlockId block;
   int key;
+};
+
+class ChildBlockIterator {
+ public:
+  /**
+   * @brief Constructs a child iterator.
+   * @param bb The basic whose children we need to iterate through.
+   * @param mir_graph The MIRGraph used to get the arena for allocation.
+   */
+  ChildBlockIterator(BasicBlock* bb, MIRGraph* mir_graph) {
+  }
+  BasicBlock* Next() {
+    return nullptr;
+  }
+
+ private:
 };
 
 /*
@@ -536,6 +578,16 @@ class MIRGraph {
   }
 
   void ComputeInlineIFieldLoweringInfo(uint16_t field_idx, MIR* invoke, MIR* iget_or_iput);
+  BasicBlock* CreateNewBB(BBType type) {
+    return nullptr;
+  }
+  void InsertBasicBlockBetween(BasicBlockId parent, BasicBlockId old, BasicBlockId newid, bool val = true) {
+  }
+  void CalculateBasicBlockInformation() {
+  }
+
+  void PrependInstructionsToBasicBlocks(ArenaBitVector* bv, const std::vector<MIR*> &insns) {
+  }
 
   void InitRegLocations();
 

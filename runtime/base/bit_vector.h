@@ -95,6 +95,10 @@ class BitVector {
 
     virtual ~BitVector();
 
+    void Dump(std::ostringstream &buffer, const char* prefix) {
+    }
+    void DumpDot(FILE* file, const char* prefix) {
+    }
     void SetBit(uint32_t num);
     void ClearBit(uint32_t num);
     bool IsBitSet(uint32_t num) const;
