@@ -1096,9 +1096,6 @@ void Mir2Lir::MethodMIR2LIR() {
     } while ((next_bb != NULL) && (next_bb->block_type == kDead));
   }
   HandleSlowPaths();
-
-  cu_->NewTimingSplit("Launchpads");
-  HandleSuspendLaunchPads();
 }
 
 //

@@ -563,7 +563,6 @@ class Mir2Lir : public Backend {
     bool HandleEasyDivRem(Instruction::Code dalvik_opcode, bool is_div,
                           RegLocation rl_src, RegLocation rl_dest, int lit);
     bool HandleEasyMultiply(RegLocation rl_src, RegLocation rl_dest, int lit);
-    void HandleSuspendLaunchPads();
     void HandleSlowPaths();
     void GenBarrier();
     void GenDivZeroException();
@@ -1275,7 +1274,6 @@ class Mir2Lir : public Backend {
     MIRGraph* const mir_graph_;
     GrowableArray<SwitchTable*> switch_tables_;
     GrowableArray<FillArrayData*> fill_array_data_;
-    GrowableArray<LIR*> suspend_launchpads_;
     GrowableArray<RegisterInfo*> tempreg_info_;
     GrowableArray<RegisterInfo*> reginfo_map_;
     GrowableArray<void*> pointer_storage_;
