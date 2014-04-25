@@ -359,7 +359,7 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
   rl_src.location = kLocPhysReg;
   rl_src.reg = TargetReg(kArg0);
   rl_src.home = false;
-  MarkLive(rl_src.reg, rl_src.s_reg_low);
+  MarkLive(rl_src);
   if (rl_method.wide) {
     StoreValueWide(rl_method, rl_src);
   } else {

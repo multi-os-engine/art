@@ -649,8 +649,22 @@ bool Mir2Lir::RegClassMatches(int reg_class, RegStorage reg) {
   }
 }
 
-void Mir2Lir::MarkLive(RegStorage reg, int s_reg) {
-  DCHECK(!reg.IsPair());   // Could be done - but would that be meaningful?
+void Mir2Lir::MarkLive(RegLocation loc) {
+  if (!loc.wide) {
+    MarkLiveBody(loc.reg, loc.s_reg_low);
+  } else {
+    MarkLiveBody(loc.reg.GetLow(), loc.s_reg_low);
+    if (loc.reg.GetLowReg() != loc.reg.GetHighReg()) {
+      MarkLiveBody(loc.reg.GetHigh(), GetSRegHi(loc.s_reg_low));
+    } else {
+      // This must be an x86 vector register value.
+      DCHECK(IsFpReg(loc.reg) && (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64));
+    }
+  }
+}
+
+void Mir2Lir::MarkLiveBody(RegStorage reg, int s_reg) {
+  DCHECK(!reg.IsPair());
   RegisterInfo* info = GetRegInfo(reg.GetReg());
   if ((info->s_reg == s_reg) && info->live) {
     return;  /* already live */
@@ -689,13 +703,19 @@ void Mir2Lir::UnmarkTemp(RegStorage reg) {
   UnmarkTemp(reg.GetReg());
 }
 
-void Mir2Lir::MarkPair(int low_reg, int high_reg) {
-  DCHECK_NE(low_reg, high_reg);
-  RegisterInfo* info_lo = GetRegInfo(low_reg);
-  RegisterInfo* info_hi = GetRegInfo(high_reg);
-  info_lo->pair = info_hi->pair = true;
-  info_lo->partner = high_reg;
-  info_hi->partner = low_reg;
+void Mir2Lir::MarkPair(RegStorage reg) {
+  int low_reg = reg.GetLowReg();
+  int high_reg = reg.GetHighReg();
+  if (low_reg != high_reg) {
+    RegisterInfo* info_lo = GetRegInfo(low_reg);
+    RegisterInfo* info_hi = GetRegInfo(high_reg);
+    info_lo->pair = info_hi->pair = true;
+    info_lo->partner = high_reg;
+    info_hi->partner = low_reg;
+  } else {
+    // This must be an x86 vector register value.
+    DCHECK(IsFpReg(reg) && (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64));
+  }
 }
 
 void Mir2Lir::MarkClean(RegLocation loc) {
@@ -848,7 +868,7 @@ RegLocation Mir2Lir::UpdateLocWide(RegLocation loc) {
       // Can reuse - update the register usage info
       loc.location = kLocPhysReg;
       loc.reg = RegStorage(RegStorage::k64BitPair, info_lo->reg, info_hi->reg);
-      MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
+      MarkPair(loc.reg);
       DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
       return loc;
     }
@@ -895,7 +915,7 @@ RegLocation Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update) {
       CopyRegInfo(new_regs.GetHighReg(), loc.reg.GetHighReg());
       Clobber(loc.reg);
       loc.reg = new_regs;
-      MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
+      MarkPair(loc.reg);
       DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
     }
     return loc;
@@ -906,14 +926,10 @@ RegLocation Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update) {
 
   loc.reg = AllocTypedTempWide(loc.fp, reg_class);
 
-  MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
+  MarkPair(loc.reg);
   if (update) {
     loc.location = kLocPhysReg;
-    MarkLive(loc.reg.GetLow(), loc.s_reg_low);
-    // Does this wide value live in two registers or one vector register?
-    if (loc.reg.GetLowReg() != loc.reg.GetHighReg()) {
-      MarkLive(loc.reg.GetHigh(), GetSRegHi(loc.s_reg_low));
-    }
+    MarkLive(loc);
   }
   DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
   return loc;
@@ -943,7 +959,7 @@ RegLocation Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
 
   if (update) {
     loc.location = kLocPhysReg;
-    MarkLive(loc.reg, loc.s_reg_low);
+    MarkLive(loc);
   }
   return loc;
 }
@@ -1158,10 +1174,7 @@ RegLocation Mir2Lir::GetReturnWide(bool is_double) {
   Clobber(res.reg.GetHighReg());
   LockTemp(res.reg.GetLowReg());
   LockTemp(res.reg.GetHighReg());
-  // Does this wide value live in two registers or one vector register?
-  if (res.reg.GetLowReg() != res.reg.GetHighReg()) {
-    MarkPair(res.reg.GetLowReg(), res.reg.GetHighReg());
-  }
+  MarkPair(res.reg);
   return res;
 }
 

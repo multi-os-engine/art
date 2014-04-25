@@ -404,7 +404,7 @@ RegLocation X86Mir2Lir::GetReturnWideAlt() {
   Clobber(rDX);
   MarkInUse(rAX);
   MarkInUse(rDX);
-  MarkPair(res.reg.GetLowReg(), res.reg.GetHighReg());
+  MarkPair(res.reg);
   return res;
 }
 
@@ -690,7 +690,7 @@ RegLocation X86Mir2Lir::UpdateLocWide(RegLocation loc) {
         // Can reuse - update the register usage info
         loc.reg = RegStorage(RegStorage::k64BitPair, info_lo->reg, info_hi->reg);
         loc.location = kLocPhysReg;
-        MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
+        MarkPair(loc.reg);
         DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
         return loc;
       }
@@ -744,7 +744,7 @@ RegLocation X86Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update)
         CopyRegInfo(new_regs.GetHighReg(), loc.reg.GetHighReg());
         Clobber(loc.reg);
         loc.reg = new_regs;
-        MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
+        MarkPair(loc.reg);
         DCHECK(!IsFpReg(loc.reg.GetLowReg()) || ((loc.reg.GetLowReg() & 0x1) == 0));
       }
     }
@@ -760,15 +760,11 @@ RegLocation X86Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update)
   if (loc.reg.GetLowReg() == loc.reg.GetHighReg()) {
     DCHECK(IsFpReg(loc.reg.GetLowReg()));
     loc.vec_len = kVectorLength8;
-  } else {
-    MarkPair(loc.reg.GetLowReg(), loc.reg.GetHighReg());
   }
+  MarkPair(loc.reg);
   if (update) {
     loc.location = kLocPhysReg;
-    MarkLive(loc.reg.GetLow(), loc.s_reg_low);
-    if (loc.reg.GetLowReg() != loc.reg.GetHighReg()) {
-      MarkLive(loc.reg.GetHigh(), GetSRegHi(loc.s_reg_low));
-    }
+    MarkLive(loc);
   }
   return loc;
 }
@@ -802,7 +798,7 @@ RegLocation X86Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
 
   if (update) {
     loc.location = kLocPhysReg;
-    MarkLive(loc.reg, loc.s_reg_low);
+    MarkLive(loc);
   }
   return loc;
 }

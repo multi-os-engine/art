@@ -513,12 +513,12 @@ class Mir2Lir : public Backend {
     void FlushAllRegsBody(RegisterInfo* info, int num_regs);
     void FlushAllRegs();
     bool RegClassMatches(int reg_class, RegStorage reg);
-    void MarkLive(RegStorage reg, int s_reg);
+    void MarkLive(RegLocation loc);
     void MarkTemp(int reg);
     void MarkTemp(RegStorage reg);
     void UnmarkTemp(int reg);
     void UnmarkTemp(RegStorage reg);
-    void MarkPair(int low_reg, int high_reg);
+    void MarkPair(RegStorage reg);
     void MarkClean(RegLocation loc);
     void MarkDirty(RegLocation loc);
     void MarkInUse(int reg);
@@ -1197,6 +1197,8 @@ class Mir2Lir : public Backend {
     virtual bool GenSpecialCase(BasicBlock* bb, MIR* mir, const InlineMethod& special);
 
   private:
+    void MarkLiveBody(RegStorage reg, int s_reg);
+
     void ClobberBody(RegisterInfo* p);
     void ResetDefBody(RegisterInfo* p) {
       p->def_start = NULL;

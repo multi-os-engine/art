@@ -703,7 +703,7 @@ RegLocation ArmMir2Lir::GetReturnWideAlt() {
   Clobber(r3);
   MarkInUse(r2);
   MarkInUse(r3);
-  MarkPair(res.reg.GetLowReg(), res.reg.GetHighReg());
+  MarkPair(res.reg);
   return res;
 }
 
