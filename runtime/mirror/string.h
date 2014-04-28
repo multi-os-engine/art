@@ -111,14 +111,14 @@ class MANAGED String : public Object {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
-  void SetHashCode(int32_t new_hash_code) {
+  void SetHashCode(int32_t new_hash_code) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // Hash code is invariant so use non-transactional mode. Also disable check as we may run inside
     // a transaction.
     DCHECK_EQ(0, GetField32(OFFSET_OF_OBJECT_MEMBER(String, hash_code_), false));
     SetField32<false, false>(OFFSET_OF_OBJECT_MEMBER(String, hash_code_), new_hash_code, false);
   }
 
-  void SetCount(int32_t new_count) {
+  void SetCount(int32_t new_count) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // Count is invariant so use non-transactional mode. Also disable check as we may run inside
     // a transaction.
     DCHECK_LE(0, new_count);

@@ -15,7 +15,10 @@
  */
 
 #include "interpreter_common.h"
+
 #include <limits>
+
+#include "mirror/string-inl.h"
 
 namespace art {
 namespace interpreter {

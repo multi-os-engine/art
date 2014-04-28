@@ -238,7 +238,8 @@ static inline bool DoIGetQuick(ShadowFrame& shadow_frame, const Instruction* ins
       shadow_frame.SetVRegLong(vregA, static_cast<int64_t>(obj->GetField64(field_offset, is_volatile)));
       break;
     case Primitive::kPrimNot:
-      shadow_frame.SetVRegReference(vregA, obj->GetFieldObject<mirror::Object>(field_offset, is_volatile));
+      CHECK_EQ(is_volatile, false);
+      shadow_frame.SetVRegReference(vregA, obj->GetFieldObject<mirror::Object>(field_offset));
       break;
     default:
       LOG(FATAL) << "Unreachable: " << field_type;

@@ -184,7 +184,8 @@ class SemiSpace : public GarbageCollector {
   void ProcessMarkStack()
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::heap_bitmap_lock_);
 
-  inline mirror::Object* GetForwardingAddressInFromSpace(mirror::Object* obj) const;
+  inline mirror::Object* GetForwardingAddressInFromSpace(mirror::Object* obj) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Revoke all the thread-local buffers.
   void RevokeAllThreadLocalBuffers();

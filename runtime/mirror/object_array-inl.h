@@ -55,7 +55,7 @@ inline T* ObjectArray<T>::Get(int32_t i) {
     DCHECK(Thread::Current()->IsExceptionPending());
     return NULL;
   }
-  return GetFieldObject<T>(OffsetOfElement(i), false);
+  return GetFieldObject<T>(OffsetOfElement(i));
 }
 
 template<class T> template<VerifyObjectFlags kVerifyFlags>
@@ -112,7 +112,7 @@ inline void ObjectArray<T>::SetWithoutChecksAndWriteBarrier(int32_t i, T* object
 template<class T>
 inline T* ObjectArray<T>::GetWithoutChecks(int32_t i) {
   DCHECK(CheckIsValidIndex(i));
-  return GetFieldObject<T>(OffsetOfElement(i), false);
+  return GetFieldObject<T>(OffsetOfElement(i));
 }
 
 template<class T>

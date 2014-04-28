@@ -1133,8 +1133,7 @@ void Heap::VerifyObjectBody(mirror::Object* obj) {
     return;
   }
   CHECK(IsAligned<kObjectAlignment>(obj)) << "Object isn't aligned: " << obj;
-  mirror::Class* c = obj->GetFieldObject<mirror::Class, kVerifyNone>(
-      mirror::Object::ClassOffset(), false);
+  mirror::Class* c = obj->GetFieldObject<mirror::Class, kVerifyNone>(mirror::Object::ClassOffset());
   CHECK(c != nullptr) << "Null class in object " << obj;
   CHECK(IsAligned<kObjectAlignment>(c)) << "Class " << c << " not aligned in object " << obj;
   CHECK(VerifyClassClass(c));
@@ -1381,7 +1380,7 @@ class ReferringObjectsFinder {
   // For Object::VisitReferences.
   void operator()(mirror::Object* obj, MemberOffset offset, bool /* is_static */) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::Object* ref = obj->GetFieldObject<mirror::Object>(offset, false);
+    mirror::Object* ref = obj->GetFieldObject<mirror::Object>(offset);
     if (ref == object_ && (max_count_ == 0 || referring_objects_.size() < max_count_)) {
       referring_objects_.push_back(obj);
     }
@@ -1993,7 +1992,7 @@ class VerifyReferenceVisitor {
 
   void operator()(mirror::Object* obj, MemberOffset offset, bool /*is_static*/) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    this->operator()(obj, obj->GetFieldObject<mirror::Object>(offset, false), offset);
+    this->operator()(obj, obj->GetFieldObject<mirror::Object>(offset), offset);
   }
 
   // TODO: Fix the no thread safety analysis.
@@ -2185,7 +2184,7 @@ class VerifyReferenceCardVisitor {
   // annotalysis on visitors.
   void operator()(mirror::Object* obj, MemberOffset offset, bool is_static) const
       NO_THREAD_SAFETY_ANALYSIS {
-    mirror::Object* ref = obj->GetFieldObject<mirror::Object>(offset, false);
+    mirror::Object* ref = obj->GetFieldObject<mirror::Object>(offset);
     // Filter out class references since changing an object's class does not mark the card as dirty.
     // Also handles large objects, since the only reference they hold is a class reference.
     if (ref != nullptr && !ref->IsClass()) {
