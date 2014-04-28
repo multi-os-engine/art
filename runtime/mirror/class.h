@@ -387,7 +387,7 @@ class MANAGED Class : public Object {
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kDoReadBarrier = true>
   Class* GetComponentType() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<Class, kVerifyFlags, kDoReadBarrier>(ComponentTypeOffset(), false);
+    return GetFieldObject<Class, kVerifyFlags, kDoReadBarrier>(ComponentTypeOffset());
   }
 
   void SetComponentType(Class* new_component_type) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -538,8 +538,7 @@ class MANAGED Class : public Object {
 
   void SetSuperClass(Class *new_super_class) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // Super class is assigned once, except during class linker initialization.
-    Class* old_super_class = GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(Class, super_class_),
-                                                   false);
+    Class* old_super_class = GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(Class, super_class_));
     DCHECK(old_super_class == nullptr || old_super_class == new_super_class);
     DCHECK(new_super_class != nullptr);
     SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(Class, super_class_), new_super_class, false);
@@ -553,7 +552,7 @@ class MANAGED Class : public Object {
     return MemberOffset(OFFSETOF_MEMBER(Class, super_class_));
   }
 
-  ClassLoader* GetClassLoader() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ClassLoader* GetClassLoader() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetClassLoader(ClassLoader* new_cl) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -724,11 +723,7 @@ class MANAGED Class : public Object {
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  uint32_t GetReferenceInstanceOffsets() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK(IsResolved<kVerifyFlags>() || IsErroneous<kVerifyFlags>());
-    return GetField32<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, reference_instance_offsets_),
-                                   false);
-  }
+  uint32_t GetReferenceInstanceOffsets() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetReferenceInstanceOffsets(uint32_t new_reference_offsets)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -827,7 +822,7 @@ class MANAGED Class : public Object {
 
   Class* GetVerifyErrorClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // DCHECK(IsErroneous());
-    return GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(Class, verify_error_class_), false);
+    return GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(Class, verify_error_class_));
   }
 
   uint16_t GetDexClassDefIndex() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {

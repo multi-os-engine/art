@@ -127,14 +127,14 @@ static void Unsafe_putOrderedLong(JNIEnv* env, jobject, jobject javaObj, jlong o
 static jobject Unsafe_getObjectVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
-  mirror::Object* value = obj->GetFieldObject<mirror::Object>(MemberOffset(offset), true);
+  mirror::Object* value = obj->GetFieldObjectVolatile<mirror::Object>(MemberOffset(offset));
   return soa.AddLocalReference<jobject>(value);
 }
 
 static jobject Unsafe_getObject(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
-  mirror::Object* value = obj->GetFieldObject<mirror::Object>(MemberOffset(offset), false);
+  mirror::Object* value = obj->GetFieldObject<mirror::Object>(MemberOffset(offset));
   return soa.AddLocalReference<jobject>(value);
 }
 

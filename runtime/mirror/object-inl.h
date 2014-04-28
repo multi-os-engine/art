@@ -37,7 +37,7 @@ namespace mirror {
 template<VerifyObjectFlags kVerifyFlags, bool kDoReadBarrier>
 inline Class* Object::GetClass() {
   return GetFieldObject<Class, kVerifyFlags, kDoReadBarrier>(
-      OFFSET_OF_OBJECT_MEMBER(Object, klass_), false);
+      OFFSET_OF_OBJECT_MEMBER(Object, klass_));
 }
 
 template<VerifyObjectFlags kVerifyFlags>
@@ -501,21 +501,26 @@ inline bool Object::CasField64(MemberOffset field_offset, int64_t old_value, int
   return QuasiAtomic::Cas64(old_value, new_value, addr);
 }
 
-template<class T, VerifyObjectFlags kVerifyFlags, bool kDoReadBarrier>
-inline T* Object::GetFieldObject(MemberOffset field_offset, bool is_volatile) {
+template<class T, VerifyObjectFlags kVerifyFlags, bool kDoReadBarrier, bool kIsVolatile>
+inline T* Object::GetFieldObject(MemberOffset field_offset) {
   if (kVerifyFlags & kVerifyThis) {
     VerifyObject(this);
   }
   byte* raw_addr = reinterpret_cast<byte*>(this) + field_offset.Int32Value();
   HeapReference<T>* objref_addr = reinterpret_cast<HeapReference<T>*>(raw_addr);
   T* result = ReadBarrier::Barrier<T, kDoReadBarrier>(this, field_offset, objref_addr);
-  if (UNLIKELY(is_volatile)) {
+  if (UNLIKELY(kIsVolatile)) {
     QuasiAtomic::MembarLoadLoad();  // Ensure loads don't re-order.
   }
   if (kVerifyFlags & kVerifyReads) {
     VerifyObject(result);
   }
   return result;
+}
+
+template<class T, VerifyObjectFlags kVerifyFlags, bool kDoReadBarrier>
+inline T* Object::GetFieldObjectVolatile(MemberOffset field_offset) {
+  return GetFieldObject<T, kVerifyFlags, kDoReadBarrier, true>(field_offset);
 }
 
 template<bool kTransactionActive, bool kCheckTransaction, VerifyObjectFlags kVerifyFlags>
@@ -525,9 +530,13 @@ inline void Object::SetFieldObjectWithoutWriteBarrier(MemberOffset field_offset,
     DCHECK_EQ(kTransactionActive, Runtime::Current()->IsActiveTransaction());
   }
   if (kTransactionActive) {
-    Runtime::Current()->RecordWriteFieldReference(this, field_offset,
-                                                  GetFieldObject<Object>(field_offset, is_volatile),
-                                                  true);
+    mirror::Object* obj;
+    if (is_volatile == false) {
+      obj = GetFieldObject<Object>(field_offset);
+    } else {
+      obj = GetFieldObjectVolatile<Object>(field_offset);
+    }
+    Runtime::Current()->RecordWriteFieldReference(this, field_offset, obj, true);
   }
   if (kVerifyFlags & kVerifyThis) {
     VerifyObject(this);
