@@ -210,6 +210,10 @@ static void Usage(const char* fmt, ...) {
   UsageError("  --disable-passes=<pass-names>:  disable one or more passes separated by comma.");
   UsageError("      Example: --disable-passes=UseCount,BBOptimizations");
   UsageError("");
+  UsageError("  --gen-src-info: enable source line debug info generation");
+  UsageError("  --no-gen-src-info: disable source line debug info generation");
+  UsageError("      Default: disabled");
+  UsageError("");
   std::cerr << "See log for usage error information\n";
   exit(EXIT_FAILURE);
 }
@@ -755,6 +759,7 @@ static int dex2oat(int argc, char** argv) {
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = !kIsTargetBuild;
   bool generate_gdb_information = kIsDebugBuild;
+  bool generate_dex_map = false;
 
   for (int i = 0; i < argc; i++) {
     const StringPiece option(argv[i]);
@@ -796,6 +801,10 @@ static int dex2oat(int argc, char** argv) {
       generate_gdb_information = true;
     } else if (option == "--no-gen-gdb-info") {
       generate_gdb_information = false;
+    } else if (option == "--gen-src-info") {
+      generate_dex_map = true;
+    } else if (option == "--no-gen-src-info") {
+      generate_dex_map = false;
     } else if (option.starts_with("-j")) {
       const char* thread_count_str = option.substr(strlen("-j")).data();
       if (!ParseInt(thread_count_str, &thread_count)) {
@@ -1047,7 +1056,8 @@ static int dex2oat(int argc, char** argv) {
                                    small_method_threshold,
                                    tiny_method_threshold,
                                    num_dex_methods_threshold,
-                                   generate_gdb_information
+                                   generate_gdb_information,
+                                   generate_dex_map
 #ifdef ART_SEA_IR_MODE
                                    , compiler_options.sea_ir_ = true;
 #endif
