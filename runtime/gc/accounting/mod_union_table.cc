@@ -171,7 +171,7 @@ class CheckReferenceVisitor {
   // Extra parameters are required since we use this same visitor signature for checking objects.
   void operator()(Object* obj, MemberOffset offset, bool /*is_static*/) const
       SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_) {
-    mirror::Object* ref = obj->GetFieldObject<mirror::Object>(offset, false);
+    mirror::Object* ref = obj->GetFieldObject<mirror::Object>(offset);
     if (ref != nullptr && mod_union_table_->ShouldAddReference(ref) &&
         references_.find(ref) == references_.end()) {
       Heap* heap = mod_union_table_->GetHeap();

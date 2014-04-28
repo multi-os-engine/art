@@ -43,7 +43,7 @@ class MANAGED Reference : public Object {
   }
 
   Object* GetReferent() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<Object>(ReferentOffset(), true);
+    return GetFieldObjectVolatile<Object>(ReferentOffset());
   }
   template<bool kTransactionActive>
   void SetReferent(Object* referent) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -58,7 +58,7 @@ class MANAGED Reference : public Object {
   // the java threads for cleared references. Once these cleared references have a null referent,
   // we never end up reading their pending next from the GC again.
   Reference* GetPendingNext() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<Reference>(PendingNextOffset(), false);
+    return GetFieldObject<Reference>(PendingNextOffset());
   }
   template<bool kTransactionActive>
   void SetPendingNext(Reference* pending_next) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -96,7 +96,7 @@ class MANAGED FinalizerReference : public Reference {
     return SetFieldObject<kTransactionActive>(ZombieOffset(), zombie, true);
   }
   Object* GetZombie() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<Object>(ZombieOffset(), true);
+    return GetFieldObjectVolatile<Object>(ZombieOffset());
   }
 
  private:

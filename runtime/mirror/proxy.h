@@ -31,14 +31,12 @@ class MANAGED SynthesizedProxyClass : public Class {
  public:
   ObjectArray<Class>* GetInterfaces() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return GetFieldObject<ObjectArray<Class> >(OFFSET_OF_OBJECT_MEMBER(SynthesizedProxyClass,
-                                                                       interfaces_),
-                                               false);
+                                                                       interfaces_));
   }
 
   ObjectArray<ObjectArray<Class> >* GetThrows()  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return GetFieldObject<ObjectArray<ObjectArray<Class> > >(OFFSET_OF_OBJECT_MEMBER(SynthesizedProxyClass,
-                                                                                     throws_),
-                                               false);
+                                                                                     throws_));
   }
 
  private:

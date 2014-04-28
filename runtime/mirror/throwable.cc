@@ -35,8 +35,7 @@ Class* Throwable::java_lang_Throwable_ = NULL;
 void Throwable::SetCause(Throwable* cause) {
   CHECK(cause != nullptr);
   CHECK(cause != this);
-  Throwable* current_cause = GetFieldObject<Throwable>(OFFSET_OF_OBJECT_MEMBER(Throwable, cause_),
-                                                       false);
+  Throwable* current_cause = GetFieldObject<Throwable>(OFFSET_OF_OBJECT_MEMBER(Throwable, cause_));
   CHECK(current_cause == NULL || current_cause == this);
   if (Runtime::Current()->IsActiveTransaction()) {
     SetFieldObject<true>(OFFSET_OF_OBJECT_MEMBER(Throwable, cause_), cause, false);
@@ -78,7 +77,7 @@ std::string Throwable::Dump() {
                              source_file, line_number);
     }
   }
-  Throwable* cause = GetFieldObject<Throwable>(OFFSET_OF_OBJECT_MEMBER(Throwable, cause_), false);
+  Throwable* cause = GetFieldObject<Throwable>(OFFSET_OF_OBJECT_MEMBER(Throwable, cause_));
   if (cause != NULL && cause != this) {  // Constructor makes cause == this by default.
     result += "Caused by: ";
     result += cause->Dump();

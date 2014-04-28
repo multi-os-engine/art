@@ -40,7 +40,7 @@ class MANAGED Throwable : public Object {
     }
   }
   String* GetDetailMessage() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<String>(OFFSET_OF_OBJECT_MEMBER(Throwable, detail_message_), false);
+    return GetFieldObject<String>(OFFSET_OF_OBJECT_MEMBER(Throwable, detail_message_));
   }
   std::string Dump() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -62,7 +62,7 @@ class MANAGED Throwable : public Object {
 
  private:
   Object* GetStackState() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<Object>(OFFSET_OF_OBJECT_MEMBER(Throwable, stack_state_), true);
+    return GetFieldObjectVolatile<Object>(OFFSET_OF_OBJECT_MEMBER(Throwable, stack_state_));
   }
 
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".

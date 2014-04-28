@@ -30,7 +30,7 @@ namespace art {
 namespace mirror {
 
 inline Class* ArtField::GetDeclaringClass() {
-  Class* result = GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(ArtField, declaring_class_), false);
+  Class* result = GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(ArtField, declaring_class_));
   DCHECK(result != NULL);
   DCHECK(result->IsLoaded() || result->IsErroneous());
   return result;
@@ -85,7 +85,10 @@ inline void ArtField::Set64(Object* object, uint64_t new_value) {
 inline Object* ArtField::GetObj(Object* object) {
   DCHECK(object != NULL) << PrettyField(this);
   DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
-  return object->GetFieldObject<Object>(GetOffset(), IsVolatile());
+  if (UNLIKELY(IsVolatile())) {
+    return object->GetFieldObjectVolatile<Object>(GetOffset());
+  }
+  return object->GetFieldObject<Object>(GetOffset());
 }
 
 template<bool kTransactionActive>

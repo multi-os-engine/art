@@ -84,14 +84,7 @@ class MANAGED Array : public Object {
   // Returns true if the index is valid. If not, throws an ArrayIndexOutOfBoundsException and
   // returns false.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  bool CheckIsValidIndex(int32_t index) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    if (UNLIKELY(static_cast<uint32_t>(index) >=
-                 static_cast<uint32_t>(GetLength<kVerifyFlags>()))) {
-      ThrowArrayIndexOutOfBoundsException(index);
-      return false;
-    }
-    return true;
-  }
+  bool CheckIsValidIndex(int32_t index) ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  protected:
   void ThrowArrayStoreException(Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -108,7 +101,7 @@ class MANAGED Array : public Object {
   DISALLOW_IMPLICIT_CONSTRUCTORS(Array);
 };
 
-template<class T>
+template<typename T>
 class MANAGED PrimitiveArray : public Array {
  public:
   typedef T ElementType;
@@ -116,15 +109,15 @@ class MANAGED PrimitiveArray : public Array {
   static PrimitiveArray<T>* Alloc(Thread* self, size_t length)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  const T* GetData() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  const T* GetData() const ALWAYS_INLINE  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return reinterpret_cast<const T*>(GetRawData(sizeof(T), 0));
   }
 
-  T* GetData() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  T* GetData() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return reinterpret_cast<T*>(GetRawData(sizeof(T), 0));
   }
 
-  T Get(int32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  T Get(int32_t i) ALWAYS_INLINE  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (UNLIKELY(!CheckIsValidIndex(i))) {
       DCHECK(Thread::Current()->IsExceptionPending());
       return T(0);
@@ -132,43 +125,22 @@ class MANAGED PrimitiveArray : public Array {
     return GetWithoutChecks(i);
   }
 
-  T GetWithoutChecks(int32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  T GetWithoutChecks(int32_t i) ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK(CheckIsValidIndex(i));
     return GetData()[i];
   }
 
-  void Set(int32_t i, T value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    if (Runtime::Current()->IsActiveTransaction()) {
-      Set<true>(i, value);
-    } else {
-      Set<false>(i, value);
-    }
-  }
+  void Set(int32_t i, T value) ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // TODO fix thread safety analysis broken by the use of template. This should be
   // SHARED_LOCKS_REQUIRED(Locks::mutator_lock_).
   template<bool kTransactionActive, bool kCheckTransaction = true>
-  void Set(int32_t i, T value) NO_THREAD_SAFETY_ANALYSIS {
-    if (LIKELY(CheckIsValidIndex(i))) {
-      SetWithoutChecks<kTransactionActive, kCheckTransaction>(i, value);
-    } else {
-      DCHECK(Thread::Current()->IsExceptionPending());
-    }
-  }
+  void Set(int32_t i, T value) ALWAYS_INLINE NO_THREAD_SAFETY_ANALYSIS;
 
   // TODO fix thread safety analysis broken by the use of template. This should be
   // SHARED_LOCKS_REQUIRED(Locks::mutator_lock_).
   template<bool kTransactionActive, bool kCheckTransaction = true>
-  void SetWithoutChecks(int32_t i, T value) NO_THREAD_SAFETY_ANALYSIS {
-    if (kCheckTransaction) {
-      DCHECK_EQ(kTransactionActive, Runtime::Current()->IsActiveTransaction());
-    }
-    if (kTransactionActive) {
-      Runtime::Current()->RecordWriteArray(this, i, GetWithoutChecks(i));
-    }
-    DCHECK(CheckIsValidIndex(i));
-    GetData()[i] = value;
-  }
+  void SetWithoutChecks(int32_t i, T value) ALWAYS_INLINE NO_THREAD_SAFETY_ANALYSIS;
 
   /*
    * Works like memmove(), except we guarantee not to allow tearing of array values (ie using

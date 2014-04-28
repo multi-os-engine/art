@@ -29,8 +29,7 @@ namespace art {
 namespace mirror {
 
 inline Class* ArtMethod::GetDeclaringClass() {
-  Class* result = GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, declaring_class_),
-                                        false);
+  Class* result = GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, declaring_class_));
   DCHECK(result != NULL) << this;
   DCHECK(result->IsIdxLoaded() || result->IsErroneous()) << this;
   return result;
@@ -63,17 +62,17 @@ inline uint32_t ArtMethod::GetDexMethodIndex() {
 
 inline ObjectArray<String>* ArtMethod::GetDexCacheStrings() {
   return GetFieldObject<ObjectArray<String> >(
-      OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_strings_), false);
+      OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_strings_));
 }
 
 inline ObjectArray<ArtMethod>* ArtMethod::GetDexCacheResolvedMethods() {
   return GetFieldObject<ObjectArray<ArtMethod> >(
-      OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_resolved_methods_), false);
+      OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_resolved_methods_));
 }
 
 inline ObjectArray<Class>* ArtMethod::GetDexCacheResolvedTypes() {
   return GetFieldObject<ObjectArray<Class> >(
-      OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_resolved_types_), false);
+      OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_cache_resolved_types_));
 }
 
 inline uint32_t ArtMethod::GetCodeSize() {
