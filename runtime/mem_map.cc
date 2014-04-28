@@ -182,7 +182,7 @@ static bool CheckMapRequest(byte* expected_ptr, void* actual_ptr, size_t byte_co
 MemMap* MemMap::MapAnonymous(const char* name, byte* expected, size_t byte_count, int prot,
                              bool low_4gb, std::string* error_msg) {
   if (byte_count == 0) {
-    return new MemMap(name, nullptr, 0, nullptr, 0, prot);
+    return new MemMap(name, nullptr, 0, nullptr, 0, prot, false);
   }
   size_t page_aligned_byte_count = RoundUp(byte_count, kPageSize);
 
@@ -324,7 +324,7 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* expected, size_t byte_count
     return nullptr;
   }
   return new MemMap(name, reinterpret_cast<byte*>(actual), byte_count, actual,
-                    page_aligned_byte_count, prot);
+                    page_aligned_byte_count, prot, false);
 }
 
 MemMap* MemMap::MapFileAtAddress(byte* expected, size_t byte_count, int prot, int flags, int fd,
@@ -342,7 +342,7 @@ MemMap* MemMap::MapFileAtAddress(byte* expected, size_t byte_count, int prot, in
   }
 
   if (byte_count == 0) {
-    return new MemMap(filename, nullptr, 0, nullptr, 0, prot);
+    return new MemMap(filename, nullptr, 0, nullptr, 0, prot, false);
   }
   // Adjust 'offset' to be page-aligned as required by mmap.
   int page_offset = start % kPageSize;
@@ -378,16 +378,18 @@ MemMap* MemMap::MapFileAtAddress(byte* expected, size_t byte_count, int prot, in
     return nullptr;
   }
   return new MemMap(filename, actual + page_offset, byte_count, actual, page_aligned_byte_count,
-                    prot);
+                    prot, reuse);
 }
 
 MemMap::~MemMap() {
   if (base_begin_ == nullptr && base_size_ == 0) {
     return;
   }
-  int result = munmap(base_begin_, base_size_);
-  if (result == -1) {
-    PLOG(FATAL) << "munmap failed";
+  if (!reuse_) {
+    int result = munmap(base_begin_, base_size_);
+    if (result == -1) {
+      PLOG(FATAL) << "munmap failed";
+    }
   }
 
   // Remove it from maps_.
@@ -405,9 +407,9 @@ MemMap::~MemMap() {
 }
 
 MemMap::MemMap(const std::string& name, byte* begin, size_t size, void* base_begin,
-               size_t base_size, int prot)
+               size_t base_size, int prot, bool reuse)
     : name_(name), begin_(begin), size_(size), base_begin_(base_begin), base_size_(base_size),
-      prot_(prot) {
+      prot_(prot), reuse_(reuse) {
   if (size_ == 0) {
     CHECK(begin_ == nullptr);
     CHECK(base_begin_ == nullptr);
@@ -437,7 +439,7 @@ MemMap* MemMap::RemapAtEnd(byte* new_end, const char* tail_name, int tail_prot,
   byte* new_base_end = new_end;
   DCHECK_LE(new_base_end, old_base_end);
   if (new_base_end == old_base_end) {
-    return new MemMap(tail_name, nullptr, 0, nullptr, 0, tail_prot);
+    return new MemMap(tail_name, nullptr, 0, nullptr, 0, tail_prot, false);
   }
   size_ = new_end - reinterpret_cast<byte*>(begin_);
   base_size_ = new_base_end - reinterpret_cast<byte*>(base_begin_);
@@ -489,7 +491,7 @@ MemMap* MemMap::RemapAtEnd(byte* new_end, const char* tail_name, int tail_prot,
                               maps.c_str());
     return nullptr;
   }
-  return new MemMap(tail_name, actual, tail_size, actual, tail_base_size, tail_prot);
+  return new MemMap(tail_name, actual, tail_size, actual, tail_base_size, tail_prot, false);
 }
 
 void MemMap::MadviseDontNeedAndZero() {
