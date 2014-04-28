@@ -106,7 +106,7 @@ class MemMap {
 
  private:
   MemMap(const std::string& name, byte* begin, size_t size, void* base_begin, size_t base_size,
-         int prot);
+         int prot, bool reuse);
 
   std::string name_;
   byte* const begin_;  // Start of data.
@@ -115,6 +115,7 @@ class MemMap {
   void* const base_begin_;  // Page-aligned base address.
   size_t base_size_;  // Length of mapping. May be changed by RemapAtEnd (ie Zygote).
   int prot_;  // Protection of the map.
+  bool reuse_; // It overlaps an existing page mapping or not.
 
 #if defined(__LP64__) && !defined(__x86_64__)
   static uintptr_t next_mem_pos_;   // next memory location to check for low_4g extent
