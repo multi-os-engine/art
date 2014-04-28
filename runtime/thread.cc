@@ -1935,43 +1935,7 @@ class ReferenceMapVisitor : public StackVisitor {
     }
     ShadowFrame* shadow_frame = GetCurrentShadowFrame();
     if (shadow_frame != nullptr) {
-      mirror::ArtMethod* m = shadow_frame->GetMethod();
-      size_t num_regs = shadow_frame->NumberOfVRegs();
-      if (m->IsNative() || shadow_frame->HasReferenceArray()) {
-        // SIRT for JNI or References for interpreter.
-        for (size_t reg = 0; reg < num_regs; ++reg) {
-          mirror::Object* ref = shadow_frame->GetVRegReference(reg);
-          if (ref != nullptr) {
-            mirror::Object* new_ref = ref;
-            visitor_(&new_ref, reg, this);
-            if (new_ref != ref) {
-             shadow_frame->SetVRegReference(reg, new_ref);
-            }
-          }
-        }
-      } else {
-        // Java method.
-        // Portable path use DexGcMap and store in Method.native_gc_map_.
-        const uint8_t* gc_map = m->GetNativeGcMap();
-        CHECK(gc_map != nullptr) << PrettyMethod(m);
-        verifier::DexPcToReferenceMap dex_gc_map(gc_map);
-        uint32_t dex_pc = GetDexPc();
-        const uint8_t* reg_bitmap = dex_gc_map.FindBitMap(dex_pc);
-        DCHECK(reg_bitmap != nullptr);
-        num_regs = std::min(dex_gc_map.RegWidth() * 8, num_regs);
-        for (size_t reg = 0; reg < num_regs; ++reg) {
-          if (TestBitmap(reg, reg_bitmap)) {
-            mirror::Object* ref = shadow_frame->GetVRegReference(reg);
-            if (ref != nullptr) {
-              mirror::Object* new_ref = ref;
-              visitor_(&new_ref, reg, this);
-              if (new_ref != ref) {
-               shadow_frame->SetVRegReference(reg, new_ref);
-              }
-            }
-          }
-        }
-      }
+      VisitShadowFrame(shadow_frame);
     } else {
       mirror::ArtMethod* m = GetMethod();
       // Process register map (which native and runtime methods don't have)
@@ -2025,6 +1989,46 @@ class ReferenceMapVisitor : public StackVisitor {
       }
     }
     return true;
+  }
+
+  void VisitShadowFrame(ShadowFrame* shadow_frame) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    mirror::ArtMethod* m = shadow_frame->GetMethod();
+    size_t num_regs = shadow_frame->NumberOfVRegs();
+    if (m->IsNative() || shadow_frame->HasReferenceArray()) {
+      // SIRT for JNI or References for interpreter.
+      for (size_t reg = 0; reg < num_regs; ++reg) {
+        mirror::Object* ref = shadow_frame->GetVRegReference(reg);
+        if (ref != nullptr) {
+          mirror::Object* new_ref = ref;
+          visitor_(&new_ref, reg, this);
+          if (new_ref != ref) {
+            shadow_frame->SetVRegReference(reg, new_ref);
+          }
+        }
+      }
+    } else {
+      // Java method.
+      // Portable path use DexGcMap and store in Method.native_gc_map_.
+      const uint8_t* gc_map = m->GetNativeGcMap();
+      CHECK(gc_map != nullptr) << PrettyMethod(m);
+      verifier::DexPcToReferenceMap dex_gc_map(gc_map);
+      uint32_t dex_pc = shadow_frame->GetDexPC();
+      const uint8_t* reg_bitmap = dex_gc_map.FindBitMap(dex_pc);
+      DCHECK(reg_bitmap != nullptr);
+      num_regs = std::min(dex_gc_map.RegWidth() * 8, num_regs);
+      for (size_t reg = 0; reg < num_regs; ++reg) {
+        if (TestBitmap(reg, reg_bitmap)) {
+          mirror::Object* ref = shadow_frame->GetVRegReference(reg);
+          if (ref != nullptr) {
+            mirror::Object* new_ref = ref;
+            visitor_(&new_ref, reg, this);
+            if (new_ref != ref) {
+              shadow_frame->SetVRegReference(reg, new_ref);
+            }
+          }
+        }
+      }
+    }
   }
 
  private:
@@ -2083,6 +2087,14 @@ void Thread::VisitRoots(RootCallback* visitor, void* arg) {
   }
   if (tlsPtr_.single_step_control != nullptr) {
     tlsPtr_.single_step_control->VisitRoots(visitor, arg, thread_id, kRootDebugger);
+  }
+  if (tlsPtr_.deoptimization_shadow_frame != nullptr) {
+    RootCallbackVisitor visitorToCallback(visitor, arg, thread_id);
+    ReferenceMapVisitor<RootCallbackVisitor> mapper(this, nullptr, visitorToCallback);
+    for (ShadowFrame* shadow_frame = tlsPtr_.deoptimization_shadow_frame; shadow_frame != nullptr;
+        shadow_frame = shadow_frame->GetLink()) {
+      mapper.VisitShadowFrame(shadow_frame);
+    }
   }
   // Visit roots on this thread's stack
   Context* context = GetLongJumpContext();
