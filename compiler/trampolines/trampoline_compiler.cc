@@ -30,7 +30,7 @@ namespace art {
 namespace arm {
 static const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
                                                     ThreadOffset<4> offset) {
-  UniquePtr<ArmAssembler> assembler(static_cast<ArmAssembler*>(Assembler::Create(kArm)));
+  UniquePtr<ArmAssembler> assembler(static_cast<ArmAssembler*>(Assembler::Create(kThumb2)));
 
   switch (abi) {
     case kInterpreterAbi:  // Thread* is first argument (R0) in interpreter ABI.
