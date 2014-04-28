@@ -38,6 +38,8 @@ class AssemblerFixup;
 
 namespace arm {
   class ArmAssembler;
+  class Arm32Assembler;
+  class Thumb2Assembler;
 }
 namespace arm64 {
   class Arm64Assembler;
@@ -87,7 +89,7 @@ class Label {
 
   int LinkPosition() const {
     CHECK(IsLinked());
-    return position_ - kWordSize;
+    return position_ - kPointerSize;
   }
 
   bool IsBound() const { return position_ < 0; }
@@ -102,18 +104,23 @@ class Label {
   }
 
   void BindTo(int position) {
+    // std::cout << "binding label with current position " << std::dec << position_ << "\n";
     CHECK(!IsBound());
     position_ = -position - kPointerSize;
     CHECK(IsBound());
   }
 
   void LinkTo(int position) {
+    // std::cout << "linking label with current position " << std::dec << position_ << "\n";
+    // std::cout << "new position " << position << "\n";
     CHECK(!IsBound());
     position_ = position + kPointerSize;
     CHECK(IsLinked());
   }
 
   friend class arm::ArmAssembler;
+  friend class arm::Arm32Assembler;
+  friend class arm::Thumb2Assembler;
   friend class mips::MipsAssembler;
   friend class x86::X86Assembler;
   friend class x86_64::X86_64Assembler;
