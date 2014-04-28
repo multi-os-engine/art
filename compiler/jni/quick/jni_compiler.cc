@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <vector>
+#include <fstream>
 
 #include "base/logging.h"
 #include "base/macros.h"
@@ -61,9 +62,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver& compiler,
   const bool is_synchronized = (access_flags & kAccSynchronized) != 0;
   const char* shorty = dex_file.GetMethodShorty(dex_file.GetMethodId(method_idx));
   InstructionSet instruction_set = compiler.GetInstructionSet();
-  if (instruction_set == kThumb2) {
-    instruction_set = kArm;
-  }
+
   const bool is_64_bit_target = Is64BitInstructionSet(instruction_set);
   // Calling conventions used to iterate over parameters to method
   UniquePtr<JniCallingConvention> main_jni_conv(
