@@ -206,6 +206,13 @@ class AllocSpace {
   virtual mirror::Object* Alloc(Thread* self, size_t num_bytes, size_t* bytes_allocated,
                                 size_t* usable_size) = 0;
 
+  // Unsafe allocation for when mutators are suspended, used by the semispace collector.
+  virtual mirror::Object* AllocThreadUnsafe(Thread* self, size_t num_bytes, size_t* bytes_allocated,
+                                            size_t* usable_size)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return Alloc(self, num_bytes, bytes_allocated, usable_size);
+  }
+
   // Return the storage space required by obj.
   virtual size_t AllocationSize(mirror::Object* obj, size_t* usable_size) = 0;
 

@@ -29,6 +29,7 @@
 #include "entrypoints/jni/jni_entrypoints.h"
 #include "entrypoints/portable/portable_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints.h"
+#include "gc/allocator/rosalloc.h"
 #include "globals.h"
 #include "jvalue.h"
 #include "object_callbacks.h"
@@ -1060,12 +1061,9 @@ class Thread {
     byte* thread_local_end;
     size_t thread_local_objects;
 
-    // Thread-local rosalloc runs. There are 34 size brackets in rosalloc
-    // runs (RosAlloc::kNumOfSizeBrackets). We can't refer to the
-    // RosAlloc class due to a header file circular dependency issue.
-    // To compensate, we check that the two values match at RosAlloc
-    // initialization time.
-    void* rosalloc_runs[kRosAllocNumOfSizeBrackets];
+    // Thread-local rosalloc runs. There are 34 size brackets in rosalloc runs
+    // (RosAlloc::kNumOfSizeBrackets). But we only need have thread local runs for the first few.
+    void* rosalloc_runs[gc::allocator::RosAlloc::kNumThreadLocalSizeBracketIdx];
 
     // Thread-local allocation stack data/routines.
     mirror::Object** thread_local_alloc_stack_top;
