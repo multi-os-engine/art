@@ -17,6 +17,7 @@
 #include "mir_graph.h"
 
 #include <inttypes.h>
+#include <queue>
 
 #include "base/stl_util.h"
 #include "compiler_internals.h"
@@ -61,6 +62,7 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       dfs_order_(NULL),
       dfs_post_order_(NULL),
       dom_post_order_traversal_(NULL),
+      topological_order_(nullptr),
       i_dom_list_(NULL),
       def_block_matrix_(NULL),
       temp_dalvik_register_v_(NULL),
@@ -1237,6 +1239,167 @@ void MIRGraph::InitializeSSATransformation() {
   /* Rename register names by local defs and phi nodes */
   ClearAllVisitedFlags();
   DoDFSPreOrderSSARename(GetEntryBlock());
+
+  /* Compute the topological order */
+  ComputeTopologicalSortOrder();
+}
+
+void MIRGraph::ComputeTopologicalSortOrder() {
+  std::queue<BasicBlock *> q;
+  std::map<int, int> visited_cnt_values;
+
+  // Clear the nodes
+  ClearAllVisitedFlags();
+
+  // Set up visitedCntValues map for all BB. The default value for this counters in the map is zero.
+  // also fill initial queue.
+  GrowableArray<BasicBlock*>::Iterator iterator(&block_list_);
+
+  while (true) {
+    BasicBlock* bb = iterator.Next();
+
+    if (bb == nullptr) {
+      break;
+    }
+
+    if (bb->hidden == true) {
+      continue;
+    }
+
+    visited_cnt_values[bb->id] = bb->predecessors->Size();
+
+    GrowableArray<BasicBlockId>::Iterator pred_iterator(bb->predecessors);
+    // to process loops we should not wait dominators
+    while (true) {
+      BasicBlock* pred_bb = GetBasicBlock(pred_iterator.Next());
+
+      if (pred_bb == nullptr) {
+        break;
+      }
+
+      if (pred_bb->dominators == nullptr || pred_bb->hidden == true) {
+        continue;
+      }
+
+      // Skip the backward branch
+      if (pred_bb->dominators->IsBitSet(bb->id) != 0) {
+        visited_cnt_values[bb->id]--;
+      }
+    }
+
+    // add entry block to queue
+    if (visited_cnt_values[bb->id] == 0) {
+      q.push(bb);
+    }
+  }
+
+  while (q.size() > 0) {
+    // Get top
+    BasicBlock *bb = q.front();
+    q.pop();
+
+    DCHECK_EQ(bb->hidden, false);
+
+    if (bb->IsExceptionBlock() == true) {
+      continue;
+    }
+
+    // We've visited all the predecessors. So, we can visit bb
+    if (bb->visited == false) {
+      bb->visited = true;
+
+      // reduce visitedCnt for all the successors and add into the queue ones with visitedCnt equals to zero
+      ChildBlockIterator succIter(bb, this);
+      BasicBlock *successor = succIter.Next();
+      while (successor != nullptr) {
+        // one more predecessor was visited
+        visited_cnt_values[successor->id]--;
+
+        if (visited_cnt_values[successor->id] <= 0 && successor->visited == false && successor->hidden == false) {
+          q.push(successor);
+        }
+
+        // Take next successor
+        successor = succIter.Next();
+      }
+    }
+  }
+}
+
+bool BasicBlock::IsExceptionBlock() const {
+  if (block_type == kExceptionHandling) {
+    return true;
+  }
+
+  if (first_mir_insn == nullptr) {
+    return false;
+  }
+
+  if (first_mir_insn->dalvikInsn.opcode == Instruction::MOVE_EXCEPTION) {
+    return true;
+  }
+
+  return false;
+}
+
+ChildBlockIterator::ChildBlockIterator(BasicBlock *bb, MIRGraph *mir_graph) {
+  // Initialize basic block and MIRGraph.
+  basic_block_ = bb;
+  mir_graph_ = mir_graph;
+
+  // We have not yet visited any of the children.
+  visited_fallthrough_ = false;
+  visited_taken_ = false;
+
+  // Check if we have successors.
+  if (basic_block_ != 0 && basic_block_->successor_block_list_type != kNotUsed) {
+    have_successors_ = true;
+    successor_iter_.Reset(bb->successor_blocks);
+  } else {
+    // We have no successors if the block list is unused
+    have_successors_ = false;
+  }
+}
+
+BasicBlock* ChildBlockIterator::Next() {
+  // We check if we have a basic block. If we don't we cannot get next child.
+  if (basic_block_ == nullptr) {
+    return nullptr;
+  }
+
+  // If we haven't visited fallthrough, return that.
+  if (visited_fallthrough_ == false) {
+    visited_fallthrough_ = true;
+
+    BasicBlock* result = mir_graph_->GetBasicBlock(basic_block_->fall_through);
+    if (result != nullptr) {
+      return result;
+    }
+  }
+
+  // If we haven't visited taken, return that.
+  if (visited_taken_ == false) {
+    visited_taken_ = true;
+
+    BasicBlock* result = mir_graph_->GetBasicBlock(basic_block_->taken);
+    if (result != nullptr) {
+      return result;
+    }
+  }
+
+  // We visited both taken and fallthrough. Now check if we have successors we need to visit.
+  if (have_successors_ == true) {
+    // Get information about next successor block.
+    SuccessorBlockInfo *successor_block_info = successor_iter_.Next();
+
+    // If we don't have anymore successors, return nullptr.
+    if (successor_block_info != nullptr) {
+      return mir_graph_->GetBasicBlock(successor_block_info->block);
+    }
+  }
+
+  // We do not have anything.
+  return nullptr;
 }
 
 }  // namespace art
