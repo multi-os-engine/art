@@ -46,11 +46,15 @@ inline size_t RosAllocSpace::AllocationSizeNonvirtual(mirror::Object* obj, size_
   return size_by_size;
 }
 
+template<bool kThreadUnsafe>
 inline mirror::Object* RosAllocSpace::AllocCommon(Thread* self, size_t num_bytes,
                                                   size_t* bytes_allocated, size_t* usable_size) {
   size_t rosalloc_size = 0;
+  if (kThreadUnsafe) {
+    Locks::mutator_lock_->AssertExclusiveHeld(self);
+  }
   mirror::Object* result = reinterpret_cast<mirror::Object*>(
-      rosalloc_->Alloc(self, num_bytes, &rosalloc_size));
+      rosalloc_->Alloc<kThreadUnsafe>(self, num_bytes, &rosalloc_size));
   if (LIKELY(result != NULL)) {
     if (kDebugSpaces) {
       CHECK(Contains(result)) << "Allocation (" << reinterpret_cast<void*>(result)
