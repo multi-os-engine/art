@@ -76,6 +76,18 @@ class PassDriver {
   static void PrintPassNames();
   static void CreateDefaultPassList(const std::string& disable_passes);
 
+  static void SetPrintAllPasses() {
+    default_print_passes_ = true;
+  }
+
+  static void SetDumpPassList(const char* list) {
+    dump_pass_list_.reset(list);
+  }
+
+  static void SetPrintPassList(const char* list) {
+    print_pass_list_.reset(list);
+  }
+
   const Pass* GetPass(const char* name) const;
 
   const char* GetDumpCFGFolder() const {
@@ -93,6 +105,10 @@ class PassDriver {
 
   /** @brief Dump CFG base folder: where is the base folder for dumping CFGs. */
   const char* dump_cfg_folder_;
+
+  static bool default_print_passes_;
+  static UniquePtr<const char> print_pass_list_;
+  static UniquePtr<const char> dump_pass_list_;
 };
 
 }  // namespace art

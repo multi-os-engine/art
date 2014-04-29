@@ -27,6 +27,10 @@
 
 namespace art {
 
+UniquePtr<const char> PassDriver::dump_pass_list_(nullptr);
+UniquePtr<const char> PassDriver::print_pass_list_(nullptr);
+bool PassDriver::default_print_passes_ = false;
+
 namespace {  // anonymous namespace
 
 /**
@@ -182,6 +186,14 @@ bool PassDriver::RunPass(CompilationUnit* c_unit, const Pass* pass, bool time_sp
   DCHECK(pass != nullptr);
   DCHECK(pass->GetName() != nullptr && pass->GetName()[0] != 0);
 
+  bool old_print_pass = c_unit->print_pass;
+
+  const char* print_pass_list = print_pass_list_.get();
+
+  if (print_pass_list != nullptr && strstr(print_pass_list, pass->GetName()) != nullptr) {
+    c_unit->print_pass = true;
+  }
+
   // Do we perform a time split
   if (time_split) {
     c_unit->NewTimingSplit(pass->GetName());
@@ -198,7 +210,16 @@ bool PassDriver::RunPass(CompilationUnit* c_unit, const Pass* pass, bool time_sp
     HandlePassFlag(c_unit, pass);
 
     // Do we want to log it?
-    if ((c_unit->enable_debug&  (1 << kDebugDumpCFG)) != 0) {
+    bool should_dump = ((c_unit->enable_debug&  (1 << kDebugDumpCFG)) != 0);
+
+    const char* dump_pass_list = dump_pass_list_.get();
+
+    if (dump_pass_list != nullptr) {
+      bool found = strstr(dump_pass_list, pass->GetName());
+      should_dump = (should_dump || found);
+    }
+
+    if (should_dump) {
       // Do we have a pass folder?
       const char* passFolder = pass->GetDumpCFGFolder();
       DCHECK(passFolder != nullptr);
@@ -213,6 +234,8 @@ bool PassDriver::RunPass(CompilationUnit* c_unit, const Pass* pass, bool time_sp
       }
     }
   }
+
+  c_unit->print_pass = old_print_pass;
 
   // If the pass gate passed, we can declare success.
   return should_apply_pass;
@@ -234,6 +257,8 @@ bool PassDriver::RunPass(CompilationUnit* c_unit, const char* pass_name) {
 }
 
 void PassDriver::Launch() {
+  cu_->print_pass = default_print_passes_;
+
   for (const Pass* cur_pass : pass_list_) {
     RunPass(cu_, cur_pass, true);
   }

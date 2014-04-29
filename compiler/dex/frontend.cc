@@ -103,7 +103,8 @@ CompilationUnit::CompilationUnit(ArenaPool* pool)
     arena_stack(pool),
     mir_graph(NULL),
     cg(NULL),
-    timings("QuickCompiler", true, false) {
+    timings("QuickCompiler", true, false),
+    print_pass(false) {
 }
 
 CompilationUnit::~CompilationUnit() {
