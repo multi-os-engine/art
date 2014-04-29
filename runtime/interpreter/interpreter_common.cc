@@ -207,7 +207,8 @@ bool DoFieldPut(Thread* self, const ShadowFrame& shadow_frame, const Instruction
   bool do_assignability_check = do_access_check;
   bool is_static = (find_type == StaticObjectWrite) || (find_type == StaticPrimitiveWrite);
   uint32_t field_idx = is_static ? inst->VRegB_21c() : inst->VRegC_22c();
-  ArtField* f = FindFieldFromCode<find_type, do_access_check>(field_idx, shadow_frame.GetMethod(), self,
+  ArtField* f = FindFieldFromCode<find_type, do_access_check>(field_idx, shadow_frame.GetMethod(),
+                                                              self,
                                                               Primitive::ComponentSize(field_type));
   if (UNLIKELY(f == nullptr)) {
     CHECK(self->IsExceptionPending());
@@ -539,6 +540,7 @@ void AbortTransaction(Thread* self, const char* fmt, ...) {
 template<bool is_range, bool do_assignability_check>
 bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
             const Instruction* inst, uint16_t inst_data, JValue* result) {
+  method->GetDeclaringClass()->AssertInitializedOrInitializingInThread(self);
   // Compute method information.
   const DexFile::CodeItem* code_item = method->GetCodeItem();
   const uint16_t num_ins = (is_range) ? inst->VRegA_3rc(inst_data) : inst->VRegA_35c(inst_data);
@@ -930,6 +932,17 @@ static void UnstartedRuntimeInvoke(Thread* self, MethodHelper& mh,
     }
   } else {
     // Not special, continue with regular interpreter execution.
+    if (UNLIKELY(shadow_frame->GetMethod()->IsStatic() &&
+                 !shadow_frame->GetMethod()->GetDeclaringClass()->IsInitialized())) {
+      StackHandleScope<1> hs(self);
+      Handle<mirror::Class> h_class(hs.NewHandle(shadow_frame->GetMethod()->GetDeclaringClass()));
+      if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(h_class, true,
+                                                                            true))) {
+        DCHECK(Thread::Current()->IsExceptionPending());
+        return;
+      }
+      CHECK(h_class->IsInitializing());
+    }
     artInterpreterToInterpreterBridge(self, mh, code_item, shadow_frame, result);
   }
 }
