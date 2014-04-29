@@ -22,8 +22,29 @@
 #include "base/macros.h"
 namespace art {
 
-// Empty Pass Data Class, can be extended by any pass extending the base Pass class.
-class PassDataHolder {
+// Forward declarations.
+struct BasicBlock;
+struct CompilationUnit;
+class Pass;
+
+/**
+ * @brief OptimizationFlag is an enumeration to perform certain tasks for a given pass.
+ * @details Each enum should be a power of 2 to be correctly used.
+ */
+enum OptimizationFlag {
+};
+
+enum DataFlowAnalysisMode {
+  kAllNodes = 0,                           /**< @brief All nodes. */
+  kPreOrderDFSTraversal,                   /**< @brief Depth-First-Search / Pre-Order. */
+  kRepeatingPreOrderDFSTraversal,          /**< @brief Depth-First-Search / Repeating Pre-Order. */
+  kReversePostOrderDFSTraversal,           /**< @brief Depth-First-Search / Reverse Post-Order. */
+  kRepeatingPostOrderDFSTraversal,         /**< @brief Depth-First-Search / Repeating Post-Order. */
+  kRepeatingReversePostOrderDFSTraversal,  /**< @brief Depth-First-Search / Repeating Reverse Post-Order. */
+  kPostOrderDOMTraversal,                  /**< @brief Dominator tree / Post-Order. */
+  kTopologicalSortTraversal,               /**< @brief Topological Order traversal. */
+  kRepeatingTopologicalSortTraversal,      /**< @brief Repeating Topological Order traversal. */
+  kNoNodes,                                /**< @brief Skip BasicBlock traversal. */
 };
 
 /**
