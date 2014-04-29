@@ -940,6 +940,8 @@ void Mir2Lir::HandleExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
       GenSelect(bb, mir);
       break;
     default:
+      // Give the backends a chance to handle extended MIR opcodes.
+      GenMachineSpecificExtendedMethodMIR(bb, mir);
       break;
   }
 }
