@@ -152,14 +152,14 @@ mirror::Object* RosAllocSpace::AllocWithGrowth(Thread* self, size_t num_bytes,
     size_t max_allowed = Capacity();
     rosalloc_->SetFootprintLimit(max_allowed);
     // Try the allocation.
-    result = AllocCommon(self, num_bytes, bytes_allocated, usable_size);
+    result = AllocCommon<false>(self, num_bytes, bytes_allocated, usable_size);
     // Shrink back down as small as possible.
     size_t footprint = rosalloc_->Footprint();
     rosalloc_->SetFootprintLimit(footprint);
   }
   // Note RosAlloc zeroes memory internally.
   // Return the new allocation or NULL.
-  CHECK(!kDebugSpaces || result == NULL || Contains(result));
+  CHECK(!kDebugSpaces || result == nullptr || Contains(result));
   return result;
 }
 
