@@ -422,12 +422,24 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
       }
       case Instruction::NEW_INSTANCE: {
         PREAMBLE();
+        Runtime* runtime = Runtime::Current();
         Object* obj = AllocObjectFromCode<do_access_check, true>(
             inst->VRegB_21c(), shadow_frame.GetMethod(), self,
-            Runtime::Current()->GetHeap()->GetCurrentAllocator());
+            runtime->GetHeap()->GetCurrentAllocator());
         if (UNLIKELY(obj == NULL)) {
           HANDLE_PENDING_EXCEPTION();
         } else {
+          // Don't allow finalizable objects to be allocated during a transaction since these can't
+          // be finalized without a started runtime.
+          if (runtime->IsActiveTransaction() && obj->GetClass()->IsFinalizable()) {
+            DCHECK(!runtime->IsStarted());
+            // Throw an exception so we can abort the transaction and undo every change.
+            ThrowLocation throw_location = self->GetCurrentLocationForThrow();
+            self->ThrowNewExceptionF(throw_location, "Ljava/lang/InternalError;",
+                                     "Allocating finalizable object in transcation: %s",
+                                     PrettyTypeOf(obj).c_str());
+            HANDLE_PENDING_EXCEPTION();
+          }
           shadow_frame.SetVRegReference(inst->VRegA_21c(inst_data), obj);
           inst = inst->Next_2xx();
         }
