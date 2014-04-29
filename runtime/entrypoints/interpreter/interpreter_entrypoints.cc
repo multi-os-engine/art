@@ -29,25 +29,7 @@ extern "C" void artInterpreterToCompiledCodeBridge(Thread* self, MethodHelper& m
                                                    const DexFile::CodeItem* code_item,
                                                    ShadowFrame* shadow_frame, JValue* result) {
   mirror::ArtMethod* method = shadow_frame->GetMethod();
-  // Ensure static methods are initialized.
-  if (method->IsStatic()) {
-    mirror::Class* declaringClass = method->GetDeclaringClass();
-    if (UNLIKELY(!declaringClass->IsInitialized())) {
-      self->PushShadowFrame(shadow_frame);
-      StackHandleScope<1> hs(self);
-      Handle<mirror::Class> h_class(hs.NewHandle(declaringClass));
-      if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(self, h_class, true,
-                                                                            true))) {
-        self->PopShadowFrame();
-        DCHECK(self->IsExceptionPending());
-        return;
-      }
-      self->PopShadowFrame();
-      CHECK(h_class->IsInitializing());
-      // Reload from shadow frame in case the method moved, this is faster than adding a handle.
-      method = shadow_frame->GetMethod();
-    }
-  }
+  method->GetDeclaringClass()->AssertInitializedOrInitializingInThread(self);
   uint16_t arg_offset = (code_item == NULL) ? 0 : code_item->registers_size_ - code_item->ins_size_;
   if (kUsePortableCompiler) {
     InvokeWithShadowFrame(self, shadow_frame, arg_offset, mh, result);
