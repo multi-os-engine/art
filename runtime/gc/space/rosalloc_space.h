@@ -52,6 +52,11 @@ class RosAllocSpace : public MallocSpace {
                         size_t* usable_size) OVERRIDE {
     return AllocNonvirtual(self, num_bytes, bytes_allocated, usable_size);
   }
+  // TODO: Implement this?
+  mirror::Object* AllocThreadUnsafe(Thread* self, size_t num_bytes, size_t* bytes_allocated,
+                                    size_t* usable_size) OVERRIDE {
+    return AllocNonvirtual(self, num_bytes, bytes_allocated, usable_size);
+  }
   size_t AllocationSize(mirror::Object* obj, size_t* usable_size) OVERRIDE {
     return AllocationSizeNonvirtual(obj, usable_size);
   }
