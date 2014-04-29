@@ -102,12 +102,14 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
 
 // Handles invoke-XXX/range instructions.
 // Returns true on success, otherwise throws an exception and returns false.
+
 template<InvokeType type, bool is_range, bool do_access_check>
 static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instruction* inst,
                             uint16_t inst_data, JValue* result) {
+  constexpr bool is_static = (type == kStatic);
   const uint32_t method_idx = (is_range) ? inst->VRegB_3rc() : inst->VRegB_35c();
   const uint32_t vregC = (is_range) ? inst->VRegC_3rc() : inst->VRegC_35c();
-  Object* receiver = (type == kStatic) ? nullptr : shadow_frame.GetVRegReference(vregC);
+  Object* receiver = is_static ? nullptr : shadow_frame.GetVRegReference(vregC);
   mirror::ArtMethod* sf_method = shadow_frame.GetMethod();
   ArtMethod* const method = FindMethodFromCode<type, do_access_check>(
       method_idx, &receiver, &sf_method, self);
@@ -121,6 +123,16 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
     result->SetJ(0);
     return false;
   } else {
+    // Ensure static methods are initialized.
+    if (UNLIKELY(is_static && !method->GetDeclaringClass()->IsInitialized())) {
+      StackHandleScope<1> hs(self);
+      Handle<mirror::Class> h_class(hs.NewHandle(method->GetDeclaringClass()));
+      if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(h_class, true,
+                                                                            true))) {
+        DCHECK(Thread::Current()->IsExceptionPending());
+        return false;
+      }
+    }
     return DoCall<is_range, do_access_check>(method, self, shadow_frame, inst, inst_data, result);
   }
 }
