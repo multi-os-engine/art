@@ -29,20 +29,11 @@ extern "C" void artInterpreterToCompiledCodeBridge(Thread* self, MethodHelper& m
                                                    const DexFile::CodeItem* code_item,
                                                    ShadowFrame* shadow_frame, JValue* result) {
   mirror::ArtMethod* method = shadow_frame->GetMethod();
-  // Ensure static methods are initialized.
-  if (method->IsStatic()) {
+  // TODO check is WIP and may fail.
+  if (true || method->IsStatic()) {
     mirror::Class* declaringClass = method->GetDeclaringClass();
-    if (UNLIKELY(!declaringClass->IsInitializing())) {
-      self->PushShadowFrame(shadow_frame);
-      SirtRef<mirror::Class> sirt_c(self, declaringClass);
-      if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(sirt_c, true, true))) {
-        self->PopShadowFrame();
-        DCHECK(self->IsExceptionPending());
-        return;
-      }
-      self->PopShadowFrame();
-      CHECK(sirt_c->IsInitializing());
-    }
+    CHECK(declaringClass->IsInitializing()) << PrettyClass(declaringClass)
+            << " (status=" << declaringClass->GetStatus() << ")";
   }
   uint16_t arg_offset = (code_item == NULL) ? 0 : code_item->registers_size_ - code_item->ins_size_;
   if (kUsePortableCompiler) {

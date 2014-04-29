@@ -375,6 +375,17 @@ static void UnstartedRuntimeInvoke(Thread* self, MethodHelper& mh,
     }
   } else {
     // Not special, continue with regular interpreter execution.
+    if (shadow_frame->GetMethod()->IsStatic()) {
+      SirtRef<Class> declaringClass(self, shadow_frame->GetMethod()->GetDeclaringClass());
+      if (UNLIKELY(!declaringClass->IsInitializing())) {
+        if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(declaringClass, true,
+                                                                              true))) {
+          DCHECK(Thread::Current()->IsExceptionPending());
+          return;
+        }
+        CHECK(declaringClass->IsInitializing());
+      }
+    }
     artInterpreterToInterpreterBridge(self, mh, code_item, shadow_frame, result);
   }
 }

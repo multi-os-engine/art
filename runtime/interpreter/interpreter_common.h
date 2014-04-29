@@ -97,9 +97,10 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
 template<InvokeType type, bool is_range, bool do_access_check>
 static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instruction* inst,
                             uint16_t inst_data, JValue* result) {
+  constexpr bool is_static = (type == kStatic);
   const uint32_t method_idx = (is_range) ? inst->VRegB_3rc() : inst->VRegB_35c();
   const uint32_t vregC = (is_range) ? inst->VRegC_3rc() : inst->VRegC_35c();
-  Object* receiver = (type == kStatic) ? nullptr : shadow_frame.GetVRegReference(vregC);
+  Object* receiver = is_static ? nullptr : shadow_frame.GetVRegReference(vregC);
   ArtMethod* const method = FindMethodFromCode<type, do_access_check>(method_idx, receiver,
                                                                       shadow_frame.GetMethod(),
                                                                       self);
@@ -112,6 +113,19 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
     result->SetJ(0);
     return false;
   } else {
+    // Ensure static methods are initialized.
+    if (is_static) {
+      mirror::Class* declaringClass = method->GetDeclaringClass();
+      if (UNLIKELY(!declaringClass->IsInitializing())) {
+        SirtRef<Class> sirt_class(self, declaringClass);
+        if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(sirt_class, true,
+                                                                              true))) {
+          DCHECK(Thread::Current()->IsExceptionPending());
+          return false;
+        }
+        CHECK(sirt_class->IsInitializing());
+      }
+    }
     return DoCall<is_range, do_access_check>(method, self, shadow_frame, inst, inst_data, result);
   }
 }
