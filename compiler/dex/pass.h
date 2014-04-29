@@ -19,11 +19,12 @@
 
 #include <string>
 
+#include "compiler_ir.h"
+
 namespace art {
 
 // Forward declarations.
 struct BasicBlock;
-struct CompilationUnit;
 class Pass;
 
 /**
@@ -76,7 +77,7 @@ class Pass {
   }
 
   virtual bool GetFlag(OptimizationFlag flag) const {
-    return (flags_ & flag);
+    return (flags_ & flag) != 0;
   }
 
   const char* GetDumpCFGFolder() const {
@@ -127,6 +128,21 @@ class Pass {
 
     // BasicBlock did not change.
     return false;
+  }
+
+  static void BasePrintMessage(CompilationUnit* c_unit, const char* pass_name, const char* message, ...) {
+    // Check if we want to log something or not.
+    if (c_unit->print_pass == true) {
+      // Stringify the message.
+      va_list args;
+      va_start(args, message);
+      std::string stringified_message;
+      StringAppendV(&stringified_message, message, args);
+      va_end(args);
+
+      // Log the message and ensure to include pass name.
+      LOG(INFO) << pass_name << ": " << stringified_message;
+    }
   }
 
  protected:

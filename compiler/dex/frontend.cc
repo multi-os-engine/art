@@ -105,6 +105,7 @@ CompilationUnit::CompilationUnit(ArenaPool* pool)
     mir_graph(nullptr),
     cg(nullptr),
     timings("QuickCompiler", true, false) {
+    print_pass(false) {
 }
 
 CompilationUnit::~CompilationUnit() {
