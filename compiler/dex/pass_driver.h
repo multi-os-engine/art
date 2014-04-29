@@ -150,6 +150,18 @@ class PassDriver {
     return pass_list_;
   }
 
+  static void SetPrintAllPasses() {
+    default_print_passes_ = true;
+  }
+
+  static void SetDumpPassList(const char* list) {
+    dump_pass_list_.reset(list);
+  }
+
+  static void SetPrintPassList(const char* list) {
+    print_pass_list_.reset(list);
+  }
+
   virtual void InitializePasses() {
     SetDefaultPasses();
   }
@@ -185,6 +197,10 @@ class PassDriver {
 
   /** @brief The default pass list is used to initialize pass_list_. */
   static std::vector<const Pass*> g_default_pass_list;
+
+  static bool default_print_passes_;
+  static std::unique_ptr<const char> print_pass_list_;
+  static std::unique_ptr<const char> dump_pass_list_;
 };
 
 }  // namespace art
