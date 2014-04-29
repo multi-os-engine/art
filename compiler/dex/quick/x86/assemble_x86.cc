@@ -403,6 +403,19 @@ static size_t ComputeSize(const X86EncodingMap* entry, int base, int displacemen
   return size;
 }
 
+void X86Mir2Lir::UpdateLIROffsets() {
+  // Only used for code listings.
+  size_t offset = 0;
+  for (LIR* lir = first_lir_insn_; lir != nullptr; lir = lir->next) {
+    lir->offset = offset;
+    if (!lir->flags.is_nop && !IsPseudoLirOp(lir->opcode)) {
+      offset += GetInsnSize(lir);
+    } else if (lir->opcode == kPseudoPseudoAlign4) {
+      offset += (offset & 0x2);
+    }
+  }
+}
+
 int X86Mir2Lir::GetInsnSize(LIR* lir) {
   DCHECK(!IsPseudoLirOp(lir->opcode));
   const X86EncodingMap* entry = &X86Mir2Lir::EncodingMap[lir->opcode];

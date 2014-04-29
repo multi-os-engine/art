@@ -293,6 +293,7 @@ void Mir2Lir::CodegenDump() {
   LOG(INFO) << "expansion factor: "
             << static_cast<float>(total_size_) / static_cast<float>(insns_size * 2);
   DumpPromotionMap();
+  UpdateLIROffsets();
   for (lir_insn = first_lir_insn_; lir_insn != NULL; lir_insn = lir_insn->next) {
     DumpLIRInsn(lir_insn, 0);
   }

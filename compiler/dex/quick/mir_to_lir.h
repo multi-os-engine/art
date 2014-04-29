@@ -921,6 +921,8 @@ class Mir2Lir : public Backend {
     virtual uint64_t GetTargetInstFlags(int opcode) = 0;
     virtual int GetInsnSize(LIR* lir) = 0;
     virtual bool IsUnconditionalBranch(LIR* lir) = 0;
+    // Update LIR for verbose listings.
+    virtual void UpdateLIROffsets() = 0;
 
     // Required for target - Dalvik-level generators.
     virtual void GenArithImmOpLong(Instruction::Code opcode, RegLocation rl_dest,
@@ -1050,7 +1052,7 @@ class Mir2Lir : public Backend {
     virtual LIR* OpMem(OpKind op, RegStorage r_base, int disp) = 0;
     virtual LIR* OpPcRelLoad(RegStorage reg, LIR* target) = 0;
     virtual LIR* OpReg(OpKind op, RegStorage r_dest_src) = 0;
-    virtual LIR* OpRegCopy(RegStorage r_dest, RegStorage r_src) = 0;
+    virtual void OpRegCopy(RegStorage r_dest, RegStorage r_src) = 0;
     virtual LIR* OpRegCopyNoInsert(RegStorage r_dest, RegStorage r_src) = 0;
     virtual LIR* OpRegImm(OpKind op, RegStorage r_dest_src1, int value) = 0;
     virtual LIR* OpRegMem(OpKind op, RegStorage r_dest, RegStorage r_base, int offset) = 0;

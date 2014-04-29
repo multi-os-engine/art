@@ -708,6 +708,20 @@ AssemblerStatus MipsMir2Lir::AssembleInstructions(CodeOffset start_addr) {
   return res;
 }
 
+
+void MipsMir2Lir::UpdateLIROffsets() {
+  // Only used for code listings.
+  size_t offset = 0;
+  for (LIR* lir = first_lir_insn_; lir != nullptr; lir = lir->next) {
+    lir->offset = offset;
+    if (!lir->flags.is_nop && !IsPseudoLirOp(lir->opcode)) {
+      offset += EncodingMap[lir->opcode].size;
+    } else if (lir->opcode == kPseudoPseudoAlign4) {
+      offset += (offset & 0x2);
+    }
+  }
+}
+
 int MipsMir2Lir::GetInsnSize(LIR* lir) {
   DCHECK(!IsPseudoLirOp(lir->opcode));
   return EncodingMap[lir->opcode].size;

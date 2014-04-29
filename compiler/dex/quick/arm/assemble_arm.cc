@@ -1630,6 +1630,19 @@ int ArmMir2Lir::GetInsnSize(LIR* lir) {
   return EncodingMap[lir->opcode].size;
 }
 
+void ArmMir2Lir::UpdateLIROffsets() {
+  // Only used for code listings.
+  size_t offset = 0;
+  for (LIR* lir = first_lir_insn_; lir != nullptr; lir = lir->next) {
+    lir->offset = offset;
+    if (!lir->flags.is_nop && !IsPseudoLirOp(lir->opcode)) {
+      offset += EncodingMap[lir->opcode].size;
+    } else if (lir->opcode == kPseudoPseudoAlign4) {
+      offset += (offset & 0x2);
+    }
+  }
+}
+
 // Encode instruction bit pattern and assign offsets.
 uint32_t ArmMir2Lir::LinkFixupInsns(LIR* head_lir, LIR* tail_lir, uint32_t offset) {
   LIR* end_lir = tail_lir->next;
