@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #include "base/unix_file/fd_file.h"
@@ -35,6 +36,10 @@
 #include "thread.h"
 #include "thread_list.h"
 #include "utils.h"
+
+#define SIG_BACKTRACE     SIGURG
+#define SI_GET_BACKTRACE  (-10)
+#define SI_GOT_BACKTRACE  (SI_GET_BACKTRACE - 1)
 
 namespace art {
 
@@ -160,14 +165,14 @@ void SignalCatcher::HandleSigUsr1() {
   Runtime::Current()->GetHeap()->CollectGarbage(false);
 }
 
-int SignalCatcher::WaitForSignal(Thread* self, SignalSet& signals) {
+int SignalCatcher::WaitForSignal(Thread* self, SignalSet& signals, siginfo_t* info) {
   ScopedThreadStateChange tsc(self, kWaitingInMainSignalCatcherLoop);
 
   // Signals for sigwait() must be blocked but not ignored.  We
   // block signals like SIGQUIT for all threads, so the condition
   // is met.  When the signal hits, we wake up, without any signal
   // handlers being invoked.
-  int signal_number = signals.Wait();
+  int signal_number = signals.Wait(info);
   if (!ShouldHalt()) {
     // Let the user know we got the signal, just in case the system's too screwed for us to
     // actually do what they want us to do...
@@ -178,6 +183,84 @@ int SignalCatcher::WaitForSignal(Thread* self, SignalSet& signals) {
   }
 
   return signal_number;
+}
+
+class CheckDumpJavaStackBySysTid : public Closure {
+ public:
+  explicit CheckDumpJavaStackBySysTid(pid_t tid, std::ostream& os)
+      : tid_(tid), os_(os) {
+  }
+
+  virtual void Run(Thread* thread) OVERRIDE NO_THREAD_SAFETY_ANALYSIS {
+    if (UNLIKELY(thread->GetTid() == tid_)) {
+      // As "thread" will suspend at the coming safe-point, we are sure
+      // its Java stack won't change. So it's safe to dump its Java stack
+      thread->DumpJavaStack(os_, false, false);
+    }
+  }
+
+ private:
+  pid_t tid_;
+  std::ostream& os_;
+};
+
+int sys_sigwaitinfo(const sigset_t *set, siginfo_t *info)
+{
+  int ret;
+  union {
+    uint64_t kernel_sigset;
+    sigset_t dummy_sigset;
+  } u;
+
+  u.kernel_sigset = 0;
+  u.dummy_sigset = *set;
+
+  do {
+    ret = syscall(__NR_rt_sigtimedwait, &u.dummy_sigset, info,
+                    NULL, sizeof(u.kernel_sigset));
+  } while ((ret < 0) && (EAGAIN == errno));
+
+  return ret;
+}
+
+static void PublishStacktracePtrace(const char* buf, pid_t tid)
+{
+  siginfo_t si;
+  sigset_t omask;
+  sigset_t mask;
+  pid_t mytid = syscall(__NR_gettid);
+
+  si.si_pid = mytid;
+  si.si_uid = getuid();
+  si.si_signo = SIG_BACKTRACE;
+  si.si_errno = 0;
+  si.si_code = SI_GOT_BACKTRACE;
+  si.si_ptr = (void *)(char *)(buf);
+
+  sigemptyset(&mask);
+  sigaddset(&mask, SIG_BACKTRACE);
+  pthread_sigmask(SIG_UNBLOCK, &mask, &omask);
+  syscall(__NR_rt_tgsigqueueinfo, getpid(), mytid, si.si_signo, &si);
+  pthread_sigmask(SIG_SETMASK, &omask, NULL);
+}
+
+static int ReportStacktracePtrace(siginfo_t* info)
+{
+  if (info->si_code == SI_GET_BACKTRACE) {
+    std::ostringstream os;
+    pid_t tid  = (pid_t)(intptr_t)(info->si_ptr);
+    Thread* self = Thread::Current();
+
+    if (LIKELY(NULL != self)) {
+      CheckDumpJavaStackBySysTid check_point(tid, os);
+      ScopedThreadStateChange tsc(self, art::kWaitingForSignalCatcherOutput);
+      Runtime::Current()->GetThreadList()->RunCheckpoint(&check_point, true);
+    }
+
+    PublishStacktracePtrace(os.str().c_str(), tid);
+    return 1;
+  }
+  return 0;
 }
 
 void* SignalCatcher::Run(void* arg) {
@@ -202,7 +285,8 @@ void* SignalCatcher::Run(void* arg) {
   signals.Add(SIGUSR1);
 
   while (true) {
-    int signal_number = signal_catcher->WaitForSignal(self, signals);
+    siginfo_t rsi;
+    int signal_number = signal_catcher->WaitForSignal(self, signals, &rsi);
     if (signal_catcher->ShouldHalt()) {
       runtime->DetachCurrentThread();
       return NULL;
@@ -213,7 +297,9 @@ void* SignalCatcher::Run(void* arg) {
       signal_catcher->HandleSigQuit();
       break;
     case SIGUSR1:
-      signal_catcher->HandleSigUsr1();
+      if (!ReportStacktracePtrace(&rsi)) {
+        signal_catcher->HandleSigUsr1();
+      }
       break;
     default:
       LOG(ERROR) << "Unexpected signal %d" << signal_number;

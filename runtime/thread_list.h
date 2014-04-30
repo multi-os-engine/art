@@ -84,9 +84,19 @@ class ThreadList {
   // Find an already suspended thread (or self) by its id.
   Thread* FindThreadByThreadId(uint32_t thin_lock_id);
 
-  // Run a checkpoint on threads, running threads are not suspended but run the checkpoint inside
+  // Run a checkpoint on threads.
+  //
+  // 1. If "unsafe" is "false", running threads are not suspended but run the checkpoint inside
   // of the suspend check. Returns how many checkpoints we should expect to run.
-  size_t RunCheckpoint(Closure* checkpoint_function)
+  //
+  // 2. If "unsafe" is "true", run the checkpoint directly on all threads and return the total
+  // number of all threads. When the checkpoint against a specific thread is in progress,
+  // the thread is guaranteed to be suspended before it changes its Java stack
+  // (i.e. entering a leaving a basic block of code, calling or leaving a method, etc.);
+  // yet the thread might still be running with its current Java stack
+  // (i.e. running within the same basic block of code). However, in some cases it is safe,
+  // for example when taking a snapshot of a running thread's Java stack trace
+  size_t RunCheckpoint(Closure* checkpoint_function, bool unsafe = false)
       LOCKS_EXCLUDED(Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_);
 
