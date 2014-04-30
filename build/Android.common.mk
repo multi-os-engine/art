@@ -123,6 +123,11 @@ ifneq ($(WITHOUT_HOST_CLANG),true)
   ART_HOST_CLANG := true
 endif
 
+# enable ART_TARGET_CLANG for ARM64
+ifneq (,$(filter $(TARGET_ARCH),arm64))
+ART_TARGET_CLANG := true
+endif
+
 # directory used for dalvik-cache on device
 ART_DALVIK_CACHE_DIR := /data/dalvik-cache
 
