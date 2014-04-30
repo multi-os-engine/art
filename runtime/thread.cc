@@ -811,9 +811,11 @@ void Thread::DumpState(std::ostream& os) const {
 }
 
 struct StackDumpVisitor : public StackVisitor {
-  StackDumpVisitor(std::ostream& os, Thread* thread, Context* context, bool can_allocate)
+  StackDumpVisitor(std::ostream& os, Thread* thread, Context* context, bool can_allocate,
+                   bool can_describe_wait)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       : StackVisitor(thread, context), os(os), thread(thread), can_allocate(can_allocate),
+        can_describe_wait(can_describe_wait),
         last_method(nullptr), last_line_number(0), repetition_count(0), frame_count(0) {
   }
 
@@ -857,7 +859,7 @@ struct StackDumpVisitor : public StackVisitor {
            << ":" << line_number << ")";
       }
       os << "\n";
-      if (frame_count == 0) {
+      if (frame_count == 0 && can_describe_wait) {
         Monitor::DescribeWait(os, thread);
       }
       if (can_allocate) {
@@ -892,6 +894,7 @@ struct StackDumpVisitor : public StackVisitor {
   std::ostream& os;
   const Thread* thread;
   const bool can_allocate;
+  const bool can_describe_wait;
   MethodHelper mh;
   mirror::ArtMethod* last_method;
   int last_line_number;
@@ -921,10 +924,13 @@ static bool ShouldShowNativeStack(const Thread* thread)
   return current_method != nullptr && current_method->IsNative();
 }
 
-void Thread::DumpJavaStack(std::ostream& os) const {
+void Thread::DumpJavaStack(std::ostream& os,
+                           bool can_try_allocate,
+                           bool can_describe_wait) const {
   UniquePtr<Context> context(Context::Create());
   StackDumpVisitor dumper(os, const_cast<Thread*>(this), context.get(),
-                          !tls32_.throwing_OutOfMemoryError);
+                          can_try_allocate && !tls32_.throwing_OutOfMemoryError,
+                          can_describe_wait);
   dumper.WalkStack();
 }
 

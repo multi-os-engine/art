@@ -157,7 +157,9 @@ class Thread {
       LOCKS_EXCLUDED(Locks::thread_suspend_count_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void DumpJavaStack(std::ostream& os) const
+  void DumpJavaStack(std::ostream& os,
+                     bool can_try_allocate = true,
+                     bool can_describe_wait = true) const
       LOCKS_EXCLUDED(Locks::thread_suspend_count_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

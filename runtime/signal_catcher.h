@@ -17,6 +17,8 @@
 #ifndef ART_RUNTIME_SIGNAL_CATCHER_H_
 #define ART_RUNTIME_SIGNAL_CATCHER_H_
 
+#include <signal.h>
+
 #include "base/mutex.h"
 
 namespace art {
@@ -47,7 +49,7 @@ class SignalCatcher {
   void Output(const std::string& s);
   void SetHaltFlag(bool new_value);
   bool ShouldHalt();
-  int WaitForSignal(Thread* self, SignalSet& signals);
+  int WaitForSignal(Thread* self, SignalSet& signals, siginfo_t* info);
 
   std::string stack_trace_file_;
 
