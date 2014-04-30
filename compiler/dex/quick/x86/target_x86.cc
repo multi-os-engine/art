@@ -40,7 +40,7 @@ static const RegStorage sp_regs_arr_32[] = {
 };
 static const RegStorage sp_regs_arr_64[] = {
     rs_fr0, rs_fr1, rs_fr2, rs_fr3, rs_fr4, rs_fr5, rs_fr6, rs_fr7,
-#ifdef TARGET_REX_SUPPORT
+#ifdef TARGET_REX_SUPPORTx
     rs_fr8, rs_fr9, rs_fr10, rs_fr11, rs_fr12, rs_fr13, rs_fr14, rs_fr15
 #endif
 };
@@ -49,7 +49,7 @@ static const RegStorage dp_regs_arr_32[] = {
 };
 static const RegStorage dp_regs_arr_64[] = {
     rs_dr0, rs_dr1, rs_dr2, rs_dr3, rs_dr4, rs_dr5, rs_dr6, rs_dr7,
-#ifdef TARGET_REX_SUPPORT
+#ifdef TARGET_REX_SUPPORTx
     rs_dr8, rs_dr9, rs_dr10, rs_dr11, rs_dr12, rs_dr13, rs_dr14, rs_dr15
 #endif
 };
@@ -67,7 +67,7 @@ static const RegStorage sp_temps_arr_32[] = {
 };
 static const RegStorage sp_temps_arr_64[] = {
     rs_fr0, rs_fr1, rs_fr2, rs_fr3, rs_fr4, rs_fr5, rs_fr6, rs_fr7,
-#ifdef TARGET_REX_SUPPORT
+#ifdef TARGET_REX_SUPPORTx
     rs_fr8, rs_fr9, rs_fr10, rs_fr11, rs_fr12, rs_fr13, rs_fr14, rs_fr15
 #endif
 };
@@ -76,7 +76,7 @@ static const RegStorage dp_temps_arr_32[] = {
 };
 static const RegStorage dp_temps_arr_64[] = {
     rs_dr0, rs_dr1, rs_dr2, rs_dr3, rs_dr4, rs_dr5, rs_dr6, rs_dr7,
-#ifdef TARGET_REX_SUPPORT
+#ifdef TARGET_REX_SUPPORTx
     rs_dr8, rs_dr9, rs_dr10, rs_dr11, rs_dr12, rs_dr13, rs_dr14, rs_dr15
 #endif
 };
@@ -211,6 +211,7 @@ uint64_t X86Mir2Lir::GetRegMaskCommon(RegStorage reg) {
   shift = reg.IsFloat() ? kX86FPReg0 : 0;
   /* Expand the double register id into single offset */
   shift += reg_id;
+//  LOG(INFO) << std::hex << "!!! GetRegMaskCommon reg: " << reg.GetReg() << " res; " << (seed << shift);
   return (seed << shift);
 }
 
@@ -558,6 +559,7 @@ void X86Mir2Lir::CompilerInitializeRegAlloc() {
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     int sp_reg_num = info->GetReg().GetRegNum();
     RegStorage dp_reg = RegStorage::Solo64(RegStorage::kFloatingPoint | sp_reg_num);
+//    LOG(INFO) << std::hex << "!!! sp_reg_num: " << sp_reg_num << " dp_reg: " << dp_reg.GetReg();
     RegisterInfo* dp_reg_info = GetRegInfo(dp_reg);
     // 64-bit xmm vector register's master storage should refer to itself.
     DCHECK_EQ(dp_reg_info, dp_reg_info->Master());
@@ -595,6 +597,7 @@ void X86Mir2Lir::SpillCoreRegs() {
   int offset = frame_size_ - (GetInstructionSetPointerSize(cu_->instruction_set) * num_core_spills_);
   for (int reg = 0; mask; mask >>= 1, reg++) {
     if (mask & 0x1) {
+//      LOG(INFO) << std::hex << "!!! SPILL CORE " << reg << " off: " << offset;
       StoreWordDisp(rs_rX86_SP, offset, RegStorage::Solo32(reg));
       offset += GetInstructionSetPointerSize(cu_->instruction_set);
     }
