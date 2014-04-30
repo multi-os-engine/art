@@ -22,7 +22,7 @@
 
 namespace art {
 
-class X86Mir2Lir FINAL : public Mir2Lir {
+class X86Mir2Lir : public Mir2Lir {
   public:
     X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
 
@@ -176,8 +176,8 @@ class X86Mir2Lir FINAL : public Mir2Lir {
       * @param op The DEX opcode for the operation.
       * @param is_commutative The sources can be swapped if needed.
       */
-    void GenLongArith(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2,
-                      Instruction::Code op, bool is_commutative);
+    virtual void GenLongArith(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2,
+                              Instruction::Code op, bool is_commutative);
 
     /**
       * @brief Generate a two operand long arithmetic operation.
@@ -193,7 +193,7 @@ class X86Mir2Lir FINAL : public Mir2Lir {
       * @param rl_src The other operand.  May be in a register or in memory.
       * @param op The DEX opcode for the operation.
       */
-    void GenLongRegOrMemOp(RegLocation rl_dest, RegLocation rl_src, Instruction::Code op);
+    virtual void GenLongRegOrMemOp(RegLocation rl_dest, RegLocation rl_src, Instruction::Code op);
 
     /**
      * @brief Implement instanceof a final class with x86 specific code.
@@ -266,6 +266,12 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     bool InexpensiveConstantDouble(int64_t value);
 
     /*
+     * @brief Should try to optimize for two address instructions?
+     * @return true if we try to avoid generating three operand instructions.
+     */
+    virtual bool GenerateTwoOperandInstructions() const { return true; }
+
+    /*
      * @brief x86 specific codegen for int operations.
      * @param opcode Operation to perform.
      * @param rl_dest Destination for the result.
@@ -305,7 +311,7 @@ class X86Mir2Lir FINAL : public Mir2Lir {
      * @param type How the method will be invoked.
      * @returns Call instruction
      */
-    LIR * CallWithLinkerFixup(const MethodReference& target_method, InvokeType type);
+    virtual LIR * CallWithLinkerFixup(const MethodReference& target_method, InvokeType type);
 
     /*
      * @brief Handle x86 specific literals
@@ -324,7 +330,7 @@ class X86Mir2Lir FINAL : public Mir2Lir {
      */
     std::vector<uint8_t>* ReturnCallFrameInformation();
 
-  private:
+  protected:
     void EmitPrefix(const X86EncodingMap* entry);
     void EmitOpcode(const X86EncodingMap* entry);
     void EmitPrefixAndOpcode(const X86EncodingMap* entry);
@@ -395,6 +401,12 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     void GenConstWide(RegLocation rl_dest, int64_t value);
 
     static bool ProvidesFullMemoryBarrier(X86OpCode opcode);
+
+    /*
+     * @brief Ensure that a temporary register is byte addressable.
+     * @returns a temporary guarenteed to be byte addressable.
+     */
+    virtual RegStorage AllocateByteRegister();
 
     /*
      * @brief generate inline code for fast case of Strng.indexOf.
@@ -516,7 +528,7 @@ class X86Mir2Lir FINAL : public Mir2Lir {
      * @param rl_src The source of the long.
      * @param is_double 'true' if dealing with double, 'false' for float.
      */
-    void GenLongToFP(RegLocation rl_dest, RegLocation rl_src, bool is_double);
+    virtual void GenLongToFP(RegLocation rl_dest, RegLocation rl_src, bool is_double);
 
     /*
      * @brief Perform MIR analysis before compiling method.
@@ -562,7 +574,7 @@ class X86Mir2Lir FINAL : public Mir2Lir {
      * @param bb Basic block containing instruction.
      * @param mir Instruction to analyze.
      */
-    void AnalyzeMIR(int opcode, BasicBlock * bb, MIR *mir);
+    virtual void AnalyzeMIR(int opcode, BasicBlock * bb, MIR *mir);
 
     /*
      * @brief Analyze one MIR float/double instruction
