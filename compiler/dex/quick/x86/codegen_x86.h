@@ -325,10 +325,15 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     std::vector<uint8_t>* ReturnCallFrameInformation();
 
   private:
-    size_t ComputeSize(const X86EncodingMap* entry, int base, int displacement, bool has_sib);
+    uint8_t LowRegisterBits(uint8_t reg);
+    bool NeedsRex(uint8_t reg);
+    size_t ComputeSize(const X86EncodingMap* entry, int base, int displacement, int reg1, int reg2, bool has_sib);
+
     void EmitPrefix(const X86EncodingMap* entry);
+    void EmitPrefix(const X86EncodingMap* entry, uint8_t reg_r, uint8_t reg_x, uint8_t reg_b);
     void EmitOpcode(const X86EncodingMap* entry);
     void EmitPrefixAndOpcode(const X86EncodingMap* entry);
+    void EmitPrefixAndOpcode(const X86EncodingMap* entry, uint8_t reg_r, uint8_t reg_x, uint8_t reg_b);
     void EmitDisp(uint8_t base, int disp);
     void EmitModrmThread(uint8_t reg_or_opcode);
     void EmitModrmDisp(uint8_t reg_or_opcode, uint8_t base, int disp);
