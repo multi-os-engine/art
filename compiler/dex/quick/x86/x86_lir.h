@@ -160,8 +160,18 @@ enum X86NativeRegisterPool {
   fr5  = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 5,
   fr6  = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 6,
   fr7  = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 7,
+#ifdef TARGET_REX_SUPPORT
+  fr8  = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 8,
+  fr9  = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 9,
+  fr10 = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 10,
+  fr11 = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 11,
+  fr12 = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 12,
+  fr13 = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 13,
+  fr14 = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 14,
+  fr15 = RegStorage::k32BitSolo | RegStorage::kFloatingPoint | 15,
+#endif
 
-  // xmm registers, double precision alises
+  // xmm registers, double precision aliases
   dr0  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 0,
   dr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 1,
   dr2  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 2,
@@ -170,8 +180,18 @@ enum X86NativeRegisterPool {
   dr5  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 5,
   dr6  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 6,
   dr7  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 7,
+#ifdef TARGET_REX_SUPPORT
+  dr8  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 8,
+  dr9  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 9,
+  dr10 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 10,
+  dr11 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 11,
+  dr12 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 12,
+  dr13 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 13,
+  dr14 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 14,
+  dr15 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 15,
+#endif
 
-  // xmm registers, quad precision alises
+  // xmm registers, quad precision aliases
   qr0  = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 0,
   qr1  = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 1,
   qr2  = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 2,
@@ -180,6 +200,16 @@ enum X86NativeRegisterPool {
   qr5  = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 5,
   qr6  = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 6,
   qr7  = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 7,
+#ifdef TARGET_REX_SUPPORT
+  qr8  = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 8,
+  qr9  = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 9,
+  qr10 = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 10,
+  qr11 = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 11,
+  qr12 = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 12,
+  qr13 = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 13,
+  qr14 = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 14,
+  qr15 = RegStorage::k128BitSolo | RegStorage::kFloatingPoint | 15,
+#endif
 
   // TODO: as needed, add 256, 512 and 1024-bit xmm views.
 };
@@ -202,6 +232,16 @@ constexpr RegStorage rs_rSI = rs_r6;
 constexpr RegStorage rs_r7(RegStorage::kValid | r7);
 constexpr RegStorage rs_rDI = rs_r7;
 constexpr RegStorage rs_rRET(RegStorage::kValid | rRET);
+#ifdef TARGET_REX_SUPPORT
+constexpr RegStorage rs_r8(RegStorage::kValid | r8);
+constexpr RegStorage rs_r9(RegStorage::kValid | r9);
+constexpr RegStorage rs_r10(RegStorage::kValid | r10);
+constexpr RegStorage rs_r11(RegStorage::kValid | r11);
+constexpr RegStorage rs_r12(RegStorage::kValid | r12);
+constexpr RegStorage rs_r13(RegStorage::kValid | r13);
+constexpr RegStorage rs_r14(RegStorage::kValid | r14);
+constexpr RegStorage rs_r15(RegStorage::kValid | r15);
+#endif
 
 constexpr RegStorage rs_fr0(RegStorage::kValid | fr0);
 constexpr RegStorage rs_fr1(RegStorage::kValid | fr1);
@@ -211,6 +251,16 @@ constexpr RegStorage rs_fr4(RegStorage::kValid | fr4);
 constexpr RegStorage rs_fr5(RegStorage::kValid | fr5);
 constexpr RegStorage rs_fr6(RegStorage::kValid | fr6);
 constexpr RegStorage rs_fr7(RegStorage::kValid | fr7);
+#ifdef TARGET_REX_SUPPORT
+constexpr RegStorage rs_fr8(RegStorage::kValid | fr8);
+constexpr RegStorage rs_fr9(RegStorage::kValid | fr9);
+constexpr RegStorage rs_fr10(RegStorage::kValid | fr10);
+constexpr RegStorage rs_fr11(RegStorage::kValid | fr11);
+constexpr RegStorage rs_fr12(RegStorage::kValid | fr12);
+constexpr RegStorage rs_fr13(RegStorage::kValid | fr13);
+constexpr RegStorage rs_fr14(RegStorage::kValid | fr14);
+constexpr RegStorage rs_fr15(RegStorage::kValid | fr15);
+#endif
 
 constexpr RegStorage rs_dr0(RegStorage::kValid | dr0);
 constexpr RegStorage rs_dr1(RegStorage::kValid | dr1);
@@ -220,6 +270,16 @@ constexpr RegStorage rs_dr4(RegStorage::kValid | dr4);
 constexpr RegStorage rs_dr5(RegStorage::kValid | dr5);
 constexpr RegStorage rs_dr6(RegStorage::kValid | dr6);
 constexpr RegStorage rs_dr7(RegStorage::kValid | dr7);
+#ifdef TARGET_REX_SUPPORT
+constexpr RegStorage rs_dr8(RegStorage::kValid | dr8);
+constexpr RegStorage rs_dr9(RegStorage::kValid | dr9);
+constexpr RegStorage rs_dr10(RegStorage::kValid | dr10);
+constexpr RegStorage rs_dr11(RegStorage::kValid | dr11);
+constexpr RegStorage rs_dr12(RegStorage::kValid | dr12);
+constexpr RegStorage rs_dr13(RegStorage::kValid | dr13);
+constexpr RegStorage rs_dr14(RegStorage::kValid | dr14);
+constexpr RegStorage rs_dr15(RegStorage::kValid | dr15);
+#endif
 
 constexpr RegStorage rs_qr0(RegStorage::kValid | qr0);
 constexpr RegStorage rs_qr1(RegStorage::kValid | qr1);
@@ -229,6 +289,16 @@ constexpr RegStorage rs_qr4(RegStorage::kValid | qr4);
 constexpr RegStorage rs_qr5(RegStorage::kValid | qr5);
 constexpr RegStorage rs_qr6(RegStorage::kValid | qr6);
 constexpr RegStorage rs_qr7(RegStorage::kValid | qr7);
+#ifdef TARGET_REX_SUPPORT
+constexpr RegStorage rs_qr8(RegStorage::kValid | qr8);
+constexpr RegStorage rs_qr9(RegStorage::kValid | qr9);
+constexpr RegStorage rs_qr10(RegStorage::kValid | qr10);
+constexpr RegStorage rs_qr11(RegStorage::kValid | qr11);
+constexpr RegStorage rs_qr12(RegStorage::kValid | qr12);
+constexpr RegStorage rs_qr13(RegStorage::kValid | qr13);
+constexpr RegStorage rs_qr14(RegStorage::kValid | qr14);
+constexpr RegStorage rs_qr15(RegStorage::kValid | qr15);
+#endif
 
 extern X86NativeRegisterPool rX86_ARG0;
 extern X86NativeRegisterPool rX86_ARG1;
@@ -537,6 +607,15 @@ struct X86EncodingMap {
 // 64 Bit Operand Size
 #define REX_W 0x48
 // Extension of the ModR/M reg field
+#define REX_R 0x44
+// Extension of the SIB index field
+#define REX_X 0x42
+// Extension of the ModR/M r/m field, SIB base field, or Opcode reg field
+#define REX_B 0x41
+// Mask extracting the least 3 bits of r0..r15
+#define kRegNumMask32 0x07
+// Value indicating that base or reg is not used
+#define NO_REG 0
 
 #define IS_SIMM8(v) ((-128 <= (v)) && ((v) <= 127))
 #define IS_SIMM16(v) ((-32768 <= (v)) && ((v) <= 32767))

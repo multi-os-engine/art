@@ -394,13 +394,17 @@ ENCODING_MAP(Cmp, IS_LOAD, 0, 0,
   { kX86RepneScasw, kPrefix2Nullary, NO_OPERAND | REG_USEA | REG_USEC | SETS_CCODES, { 0x66, 0xF2, 0xAF, 0, 0, 0, 0, 0 }, "RepNE ScasW", "" },
 };
 
-size_t X86Mir2Lir::ComputeSize(const X86EncodingMap* entry, int base, int displacement, bool has_sib) {
+size_t X86Mir2Lir::ComputeSize(const X86EncodingMap* entry, int base, int displacement, int reg1, int reg2, bool has_sib) {
   size_t size = 0;
   if (entry->skeleton.prefix1 > 0) {
     ++size;
     if (entry->skeleton.prefix2 > 0) {
       ++size;
     }
+  }
+  if ((NeedsRex(reg1) || NeedsRex(reg2)) && entry->skeleton.prefix1 != REX_W) {
+    ++size;  // REX_R
+//    LOG(INFO) << std::hex <<  "!!! REX_R " << entry->name << " reg1: " << reg1 << " reg2: " << reg2 << " base: " << base;
   }
   ++size;  // opcode
   if (entry->skeleton.opcode == 0x0F) {
@@ -424,6 +428,7 @@ size_t X86Mir2Lir::ComputeSize(const X86EncodingMap* entry, int base, int displa
     size += IS_SIMM8(displacement) ? 1 : 4;
   }
   size += entry->skeleton.immediate_bytes;
+//  LOG(INFO) << std::hex << "!!! ComputeSize " << entry->name << " " << size << " reg1: " << reg1 << " reg2: " << reg2 << " base: " << base;
   return size;
 }
 
@@ -440,38 +445,38 @@ int X86Mir2Lir::GetInsnSize(LIR* lir) {
     case kPrefix2Nullary:
       return 3;  // 1 byte of opcode + 2 prefixes
     case kRegOpcode:  // lir operands - 0: reg
-      return ComputeSize(entry, 0, 0, false) - 1;  // substract 1 for modrm
+      return ComputeSize(entry, 0, 0, lir->operands[0], NO_REG, false) - 1;  // substract 1 for modrm
     case kReg64:
     case kReg:  // lir operands - 0: reg
-      return ComputeSize(entry, 0, 0, false);
+      return ComputeSize(entry, 0, 0, lir->operands[0], NO_REG, false);
     case kMem:  // lir operands - 0: base, 1: disp
-      return ComputeSize(entry, lir->operands[0], lir->operands[1], false);
+      return ComputeSize(entry, lir->operands[0], lir->operands[1], NO_REG, NO_REG, false);
     case kArray:  // lir operands - 0: base, 1: index, 2: scale, 3: disp
-      return ComputeSize(entry, lir->operands[0], lir->operands[3], true);
+      return ComputeSize(entry, lir->operands[0], lir->operands[3], NO_REG, NO_REG, true);
     case kMemReg64:
     case kMemReg:  // lir operands - 0: base, 1: disp, 2: reg
-      return ComputeSize(entry, lir->operands[0], lir->operands[1], false);
+      return ComputeSize(entry, lir->operands[0], lir->operands[1], lir->operands[2], NO_REG, false);
     case kMemRegImm:  // lir operands - 0: base, 1: disp, 2: reg 3: immediate
-      return ComputeSize(entry, lir->operands[0], lir->operands[1], false);
+      return ComputeSize(entry, lir->operands[0], lir->operands[1], lir->operands[2], NO_REG, false);
     case kArrayReg64:
     case kArrayReg:  // lir operands - 0: base, 1: index, 2: scale, 3: disp, 4: reg
-      return ComputeSize(entry, lir->operands[0], lir->operands[3], true);
+      return ComputeSize(entry, lir->operands[0], lir->operands[3], lir->operands[4], NO_REG, true);
     case kThreadReg:  // lir operands - 0: disp, 1: reg
-      return ComputeSize(entry, 0, lir->operands[0], false);
-    case kRegReg:
-      return ComputeSize(entry, 0, 0, false);
-    case kRegRegStore:
-      return ComputeSize(entry, 0, 0, false);
+      return ComputeSize(entry, 0, lir->operands[0], lir->operands[1], NO_REG, false);
+    case kRegReg:  // lir operands - 0: reg1, 1: reg2
+      return ComputeSize(entry, 0, 0, lir->operands[0], lir->operands[1], false);
+    case kRegRegStore:  // lir operands - 0: reg2, 1: reg1
+      return ComputeSize(entry, 0, 0, lir->operands[1], lir->operands[0], false);
     case kRegMem:  // lir operands - 0: reg, 1: base, 2: disp
-      return ComputeSize(entry, lir->operands[1], lir->operands[2], false);
+      return ComputeSize(entry, lir->operands[1], lir->operands[2], lir->operands[0], NO_REG, false);
     case kRegArray:   // lir operands - 0: reg, 1: base, 2: index, 3: scale, 4: disp
-      return ComputeSize(entry, lir->operands[1], lir->operands[4], true);
+      return ComputeSize(entry, lir->operands[1], lir->operands[4], lir->operands[0], NO_REG, true);
     case kReg64Thread:  // lir operands - 0: reg, 1: disp
     case kRegThread:  // lir operands - 0: reg, 1: disp
-      return ComputeSize(entry, 0, 0x12345678, false);  // displacement size is always 32bit
+      return ComputeSize(entry, 0, 0x12345678, lir->operands[0], NO_REG, false);  // displacement size is always 32bit
     case kReg64Imm:
     case kRegImm: {  // lir operands - 0: reg, 1: immediate
-      size_t size = ComputeSize(entry, 0, 0, false);
+      size_t size = ComputeSize(entry, 0, 0, lir->operands[0], NO_REG, false);
       if (entry->skeleton.ax_opcode == 0) {
         return size;
       } else {
@@ -481,47 +486,47 @@ int X86Mir2Lir::GetInsnSize(LIR* lir) {
       }
     }
     case kMemImm:  // lir operands - 0: base, 1: disp, 2: immediate
-      return ComputeSize(entry, lir->operands[0], lir->operands[1], false);
+      return ComputeSize(entry, lir->operands[0], lir->operands[1], NO_REG, NO_REG, false);
     case kArrayImm:  // lir operands - 0: base, 1: index, 2: scale, 3: disp 4: immediate
-      return ComputeSize(entry, lir->operands[0], lir->operands[3], true);
+      return ComputeSize(entry, lir->operands[0], lir->operands[3], NO_REG, NO_REG, true);
     case kThreadImm:  // lir operands - 0: disp, 1: imm
-      return ComputeSize(entry, 0, 0x12345678, false);  // displacement size is always 32bit
+      return ComputeSize(entry, 0, 0x12345678, NO_REG, NO_REG, false);  // displacement size is always 32bit
     case kRegRegImm:  // lir operands - 0: reg, 1: reg, 2: imm
     case kRegRegImmRev:
-      return ComputeSize(entry, 0, 0, false);
+      return ComputeSize(entry, 0, 0, lir->operands[0], lir->operands[1], false);  // TODO(64): Is Rev a special case for compute size?
     case kRegMemImm:  // lir operands - 0: reg, 1: base, 2: disp, 3: imm
-      return ComputeSize(entry, lir->operands[1], lir->operands[2], false);
+      return ComputeSize(entry, lir->operands[1], lir->operands[2], lir->operands[0], NO_REG, false);
     case kRegArrayImm:  // lir operands - 0: reg, 1: base, 2: index, 3: scale, 4: disp, 5: imm
-      return ComputeSize(entry, lir->operands[1], lir->operands[4], true);
+      return ComputeSize(entry, lir->operands[1], lir->operands[4], lir->operands[0], NO_REG, true);
     case kMovRegImm:  // lir operands - 0: reg, 1: immediate
-      return 1 + entry->skeleton.immediate_bytes;
+      return 1 + entry->skeleton.immediate_bytes;  // TODO(64): reg1
     case kShiftRegImm:  // lir operands - 0: reg, 1: immediate
       // Shift by immediate one has a shorter opcode.
-      return ComputeSize(entry, 0, 0, false) - (lir->operands[1] == 1 ? 1 : 0);
+      return ComputeSize(entry, 0, 0, lir->operands[0], NO_REG, false) - (lir->operands[1] == 1 ? 1 : 0);
     case kShiftMemImm:  // lir operands - 0: base, 1: disp, 2: immediate
       // Shift by immediate one has a shorter opcode.
-      return ComputeSize(entry, lir->operands[0], lir->operands[1], false) -
+      return ComputeSize(entry, lir->operands[0], lir->operands[1], NO_REG, NO_REG, false) -
              (lir->operands[2] == 1 ? 1 : 0);
     case kShiftArrayImm:  // lir operands - 0: base, 1: index, 2: scale, 3: disp 4: immediate
       // Shift by immediate one has a shorter opcode.
-      return ComputeSize(entry, lir->operands[0], lir->operands[3], true) -
+      return ComputeSize(entry, lir->operands[0], lir->operands[3], NO_REG, NO_REG, true) -
              (lir->operands[4] == 1 ? 1 : 0);
     case kShiftRegCl:
-      return ComputeSize(entry, 0, 0, false);
+      return ComputeSize(entry, 0, 0, NO_REG, NO_REG, false);  // TODO(64): reg1
     case kShiftMemCl:  // lir operands - 0: base, 1: disp, 2: cl
-      return ComputeSize(entry, lir->operands[0], lir->operands[1], false);
+      return ComputeSize(entry, lir->operands[0], lir->operands[1], NO_REG, NO_REG, false);
     case kShiftArrayCl:  // lir operands - 0: base, 1: index, 2: scale, 3: disp, 4: reg
-      return ComputeSize(entry, lir->operands[0], lir->operands[3], true);
+      return ComputeSize(entry, lir->operands[0], lir->operands[3], lir->operands[4], NO_REG, true);
     case kRegCond:  // lir operands - 0: reg, 1: cond
-      return ComputeSize(entry, 0, 0, false);
+      return ComputeSize(entry, 0, 0, lir->operands[0], NO_REG, false);
     case kMemCond:  // lir operands - 0: base, 1: disp, 2: cond
-      return ComputeSize(entry, lir->operands[0], lir->operands[1], false);
+      return ComputeSize(entry, lir->operands[0], lir->operands[1], NO_REG, NO_REG, false);
     case kArrayCond:  // lir operands - 0: base, 1: index, 2: scale, 3: disp, 4: cond
-      return ComputeSize(entry, lir->operands[0], lir->operands[3], true);
+      return ComputeSize(entry, lir->operands[0], lir->operands[3], NO_REG, NO_REG, true);
     case kRegRegCond:  // lir operands - 0: reg, 1: reg, 2: cond
-      return ComputeSize(entry, 0, 0, false);
+      return ComputeSize(entry, 0, 0, lir->operands[0], lir->operands[1], false);
     case kRegMemCond:  // lir operands - 0: reg, 1: reg, 2: disp, 3:cond
-      return ComputeSize(entry, lir->operands[1], lir->operands[2], false);
+      return ComputeSize(entry, lir->operands[1], lir->operands[2], lir->operands[0], lir->operands[1], false);
     case kJcc:
       if (lir->opcode == kX86Jcc8) {
         return 2;  // opcode + rel8
@@ -535,7 +540,7 @@ int X86Mir2Lir::GetInsnSize(LIR* lir) {
       } else if (lir->opcode == kX86Jmp32) {
         return 5;  // opcode + rel32
       } else if (lir->opcode == kX86JmpT) {
-        return ComputeSize(entry, 0, 0x12345678, false);  // displacement size is always 32bit
+        return ComputeSize(entry, 0, 0x12345678, NO_REG, NO_REG, false);  // displacement size is always 32bit
       } else {
         DCHECK(lir->opcode == kX86JmpR);
         return 2;  // opcode + modrm
@@ -545,11 +550,11 @@ int X86Mir2Lir::GetInsnSize(LIR* lir) {
         case kX86CallI: return 5;  // opcode 0:disp
         case kX86CallR: return 2;  // opcode modrm
         case kX86CallM:  // lir operands - 0: base, 1: disp
-          return ComputeSize(entry, lir->operands[0], lir->operands[1], false);
+          return ComputeSize(entry, lir->operands[0], lir->operands[1], NO_REG, NO_REG, false);
         case kX86CallA:  // lir operands - 0: base, 1: index, 2: scale, 3: disp
-          return ComputeSize(entry, lir->operands[0], lir->operands[3], true);
+          return ComputeSize(entry, lir->operands[0], lir->operands[3], NO_REG, NO_REG, true);
         case kX86CallT:  // lir operands - 0: disp
-          return ComputeSize(entry, 0, 0x12345678, false);  // displacement size is always 32bit
+          return ComputeSize(entry, 0, 0x12345678, NO_REG, NO_REG, false);  // displacement size is always 32bit
         default:
           break;
       }
@@ -557,7 +562,7 @@ int X86Mir2Lir::GetInsnSize(LIR* lir) {
     case kPcRel:
       if (entry->opcode == kX86PcRelLoadRA) {
         // lir operands - 0: reg, 1: base, 2: index, 3: scale, 4: table
-        return ComputeSize(entry, lir->operands[1], 0x12345678, true);
+        return ComputeSize(entry, lir->operands[1], 0x12345678, lir->operands[0], NO_REG, true);
       } else {
         DCHECK(entry->opcode == kX86PcRelAdr);
         return 5;  // opcode with reg + 4 byte immediate
@@ -565,7 +570,7 @@ int X86Mir2Lir::GetInsnSize(LIR* lir) {
     case kMacro:
       DCHECK_EQ(lir->opcode, static_cast<int>(kX86StartOfMethod));
       return 5 /* call opcode + 4 byte displacement */ + 1 /* pop reg */ +
-          ComputeSize(&X86Mir2Lir::EncodingMap[kX86Sub32RI], 0, 0, false) -
+          ComputeSize(&X86Mir2Lir::EncodingMap[kX86Sub32RI], 0, 0, NO_REG, NO_REG, false) -  // TODO(64): reg1?..
           (RegStorage::RegNum(lir->operands[0]) == rs_rAX.GetRegNum()  ? 1 : 0);  // shorter ax encoding
     default:
       break;
@@ -575,18 +580,60 @@ int X86Mir2Lir::GetInsnSize(LIR* lir) {
 }
 
 void X86Mir2Lir::EmitPrefix(const X86EncodingMap* entry) {
+  EmitPrefix(entry, NO_REG, NO_REG, NO_REG);
+}
+
+void X86Mir2Lir::EmitPrefix(const X86EncodingMap* entry, uint8_t reg_r, uint8_t reg_x, uint8_t reg_b) {
+  // REX.WRXB
+  // W - 64-bit operand
+  // R - MODRM.reg
+  // X - SIB.index
+  // B - MODRM.rm/SIB.base
+  bool force = false;
+  bool w = (entry->skeleton.prefix1 == REX_W) || (entry->skeleton.prefix2 == REX_W);
+  bool r = NeedsRex(reg_r);
+  bool x = NeedsRex(reg_x);
+  bool b = NeedsRex(reg_b);
+  uint8_t rex = force ? 0x40 : 0;
+  if (w) {
+    rex |= 0x48;  // REX.W000
+  }
+  if (r) {
+    rex |= 0x44;  // REX.0R00
+  }
+  if (x) {
+    rex |= 0x42;  // REX.00X0
+  }
+  if (b) {
+    rex |= 0x41;  // REX.000B
+  }
   if (entry->skeleton.prefix1 != 0) {
     if (Gen64Bit() && entry->skeleton.prefix1 == THREAD_PREFIX) {
       // 64 bit adresses by GS, not FS
       code_buffer_.push_back(THREAD_PREFIX_GS);
     } else {
-      code_buffer_.push_back(entry->skeleton.prefix1);
+      if (entry->skeleton.prefix1 == REX_W) {
+        rex |= entry->skeleton.prefix1;
+        code_buffer_.push_back(rex);
+        rex = 0;
+      } else {
+        code_buffer_.push_back(entry->skeleton.prefix1);
+      }
     }
     if (entry->skeleton.prefix2 != 0) {
-      code_buffer_.push_back(entry->skeleton.prefix2);
+      if (entry->skeleton.prefix2 == REX_W) {
+        rex |= entry->skeleton.prefix2;
+        code_buffer_.push_back(rex);
+        rex = 0;
+      } else {
+        code_buffer_.push_back(entry->skeleton.prefix2);
+      }
     }
   } else {
     DCHECK_EQ(0, entry->skeleton.prefix2);
+  }
+  if (rex != 0) {
+    code_buffer_.push_back(rex);
   }
 }
 
@@ -606,7 +653,11 @@ void X86Mir2Lir::EmitOpcode(const X86EncodingMap* entry) {
 }
 
 void X86Mir2Lir::EmitPrefixAndOpcode(const X86EncodingMap* entry) {
-  EmitPrefix(entry);
+  EmitPrefixAndOpcode(entry, NO_REG, NO_REG, NO_REG);
+}
+
+void X86Mir2Lir::EmitPrefixAndOpcode(const X86EncodingMap* entry, uint8_t reg_r, uint8_t reg_x, uint8_t reg_b) {
+  EmitPrefix(entry, reg_r, reg_x, reg_b);
   EmitOpcode(entry);
 }
 
@@ -700,7 +751,8 @@ void X86Mir2Lir::EmitImm(const X86EncodingMap* entry, int imm) {
 }
 
 void X86Mir2Lir::EmitOpRegOpcode(const X86EncodingMap* entry, uint8_t reg) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, reg, NO_REG, NO_REG);
+  reg = LowRegisterBits(reg);
   // There's no 3-byte instruction with +rd
   DCHECK(entry->skeleton.opcode != 0x0F ||
          (entry->skeleton.extra_opcode1 != 0x38 && entry->skeleton.extra_opcode1 != 0x3A));
@@ -712,7 +764,8 @@ void X86Mir2Lir::EmitOpRegOpcode(const X86EncodingMap* entry, uint8_t reg) {
 }
 
 void X86Mir2Lir::EmitOpReg(const X86EncodingMap* entry, uint8_t reg) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, reg, NO_REG, NO_REG);
+  reg = LowRegisterBits(reg);
   if (RegStorage::RegNum(reg) >= 4) {
     DCHECK(strchr(entry->name, '8') == NULL) << entry->name << " "
         << static_cast<int>(RegStorage::RegNum(reg))
@@ -726,7 +779,8 @@ void X86Mir2Lir::EmitOpReg(const X86EncodingMap* entry, uint8_t reg) {
 }
 
 void X86Mir2Lir::EmitOpMem(const X86EncodingMap* entry, uint8_t base, int disp) {
-  EmitPrefix(entry);
+  EmitPrefix(entry, NO_REG, NO_REG, base);
+  base = LowRegisterBits(base);
   code_buffer_.push_back(entry->skeleton.opcode);
   DCHECK_NE(0x0F, entry->skeleton.opcode);
   DCHECK_EQ(0, entry->skeleton.extra_opcode1);
@@ -738,15 +792,35 @@ void X86Mir2Lir::EmitOpMem(const X86EncodingMap* entry, uint8_t base, int disp) 
 
 void X86Mir2Lir::EmitOpArray(const X86EncodingMap* entry, uint8_t base, uint8_t index,
                              int scale, int disp) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, NO_REG, index, base);
+  index = LowRegisterBits(index);
+  base = LowRegisterBits(base);
   EmitModrmSibDisp(entry->skeleton.modrm_opcode, base, index, scale, disp);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
   DCHECK_EQ(0, entry->skeleton.immediate_bytes);
 }
 
+uint8_t X86Mir2Lir::LowRegisterBits(uint8_t reg) {
+  uint8_t res = reg;
+  res = reg & kRegNumMask32;  // 3 bits
+  return res;
+}
+
+bool X86Mir2Lir::NeedsRex(uint8_t reg) {
+  return RegStorage::RegNum(reg) > 7;
+}
+
 void X86Mir2Lir::EmitMemReg(const X86EncodingMap* entry,
                        uint8_t base, int disp, uint8_t reg) {
-  EmitPrefixAndOpcode(entry);
+  if (NeedsRex(base)) {
+//    INT3;
+//    LOG(INFO) << "!!! EmitMemReg base: " << std::hex << static_cast<int>(base) << " reg: " << static_cast<int>(reg);
+  }
+//  CHECK(!NeedsRex(base));
+
+  EmitPrefixAndOpcode(entry, reg, NO_REG, base);
+  reg = LowRegisterBits(reg);
+  base = LowRegisterBits(base);
   if (RegStorage::RegNum(reg) >= 4) {
     DCHECK(strchr(entry->name, '8') == NULL ||
            entry->opcode == kX86Movzx8RM || entry->opcode == kX86Movsx8RM)
@@ -767,7 +841,10 @@ void X86Mir2Lir::EmitRegMem(const X86EncodingMap* entry,
 
 void X86Mir2Lir::EmitRegArray(const X86EncodingMap* entry, uint8_t reg, uint8_t base, uint8_t index,
                               int scale, int disp) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, reg, index, base);
+  reg = LowRegisterBits(reg);
+  index = LowRegisterBits(index);
+  base = LowRegisterBits(base);
   EmitModrmSibDisp(reg, base, index, scale, disp);
   DCHECK_EQ(0, entry->skeleton.modrm_opcode);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
@@ -782,7 +859,9 @@ void X86Mir2Lir::EmitArrayReg(const X86EncodingMap* entry, uint8_t base, uint8_t
 
 void X86Mir2Lir::EmitArrayImm(const X86EncodingMap* entry, uint8_t base, uint8_t index, int scale,
                               int disp, int32_t imm) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, NO_REG, index, base);
+  index = LowRegisterBits(index);
+  base = LowRegisterBits(base);
   EmitModrmSibDisp(entry->skeleton.modrm_opcode, base, index, scale, disp);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
   EmitImm(entry, imm);
@@ -790,7 +869,8 @@ void X86Mir2Lir::EmitArrayImm(const X86EncodingMap* entry, uint8_t base, uint8_t
 
 void X86Mir2Lir::EmitRegThread(const X86EncodingMap* entry, uint8_t reg, int disp) {
   DCHECK_NE(entry->skeleton.prefix1, 0);
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, reg, NO_REG, NO_REG);
+  reg = LowRegisterBits(reg);
   if (RegStorage::RegNum(reg) >= 4) {
     DCHECK(strchr(entry->name, '8') == NULL) << entry->name << " "
         << static_cast<int>(RegStorage::RegNum(reg))
@@ -808,7 +888,9 @@ void X86Mir2Lir::EmitRegThread(const X86EncodingMap* entry, uint8_t reg, int dis
 }
 
 void X86Mir2Lir::EmitRegReg(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, reg1, NO_REG, reg2);
+  reg1 = LowRegisterBits(reg1);
+  reg2 = LowRegisterBits(reg2);
   DCHECK_LT(RegStorage::RegNum(reg1), 8);
   DCHECK_LT(RegStorage::RegNum(reg2), 8);
   uint8_t modrm = (3 << 6) | (RegStorage::RegNum(reg1) << 3) | RegStorage::RegNum(reg2);
@@ -820,7 +902,9 @@ void X86Mir2Lir::EmitRegReg(const X86EncodingMap* entry, uint8_t reg1, uint8_t r
 
 void X86Mir2Lir::EmitRegRegImm(const X86EncodingMap* entry,
                           uint8_t reg1, uint8_t reg2, int32_t imm) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, reg1, NO_REG, reg2);
+  reg1 = LowRegisterBits(reg1);
+  reg2 = LowRegisterBits(reg2);
   DCHECK_LT(RegStorage::RegNum(reg1), 8);
   DCHECK_LT(RegStorage::RegNum(reg2), 8);
   uint8_t modrm = (3 << 6) | (RegStorage::RegNum(reg1) << 3) | RegStorage::RegNum(reg2);
@@ -837,7 +921,9 @@ void X86Mir2Lir::EmitRegRegImmRev(const X86EncodingMap* entry,
 
 void X86Mir2Lir::EmitRegMemImm(const X86EncodingMap* entry,
                                uint8_t reg, uint8_t base, int disp, int32_t imm) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, reg, NO_REG, base);
+  reg = LowRegisterBits(reg);
+  base = LowRegisterBits(base);
   DCHECK(!RegStorage::IsFloat(reg));
   DCHECK_LT(RegStorage::RegNum(reg), 8);
   EmitModrmDisp(reg, base, disp);
@@ -852,7 +938,8 @@ void X86Mir2Lir::EmitMemRegImm(const X86EncodingMap* entry,
 }
 
 void X86Mir2Lir::EmitRegImm(const X86EncodingMap* entry, uint8_t reg, int imm) {
-  EmitPrefix(entry);
+  EmitPrefix(entry, reg, NO_REG, NO_REG);
+  reg = LowRegisterBits(reg);
   if (RegStorage::RegNum(reg) == rs_rAX.GetRegNum() && entry->skeleton.ax_opcode != 0) {
     code_buffer_.push_back(entry->skeleton.ax_opcode);
   } else {
@@ -864,7 +951,8 @@ void X86Mir2Lir::EmitRegImm(const X86EncodingMap* entry, uint8_t reg, int imm) {
 }
 
 void X86Mir2Lir::EmitMemImm(const X86EncodingMap* entry, uint8_t base, int disp, int32_t imm) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, NO_REG, NO_REG, base);
+  base = LowRegisterBits(base);
   EmitModrmDisp(entry->skeleton.modrm_opcode, base, disp);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
   EmitImm(entry, imm);
@@ -882,6 +970,8 @@ void X86Mir2Lir::EmitThreadImm(const X86EncodingMap* entry, int disp, int imm) {
 }
 
 void X86Mir2Lir::EmitMovRegImm(const X86EncodingMap* entry, uint8_t reg, int imm) {
+  EmitPrefix(entry, NO_REG, NO_REG, reg);
+  reg = LowRegisterBits(reg);
   DCHECK_LT(RegStorage::RegNum(reg), 8);
   code_buffer_.push_back(0xB8 + RegStorage::RegNum(reg));
   code_buffer_.push_back(imm & 0xFF);
@@ -891,7 +981,8 @@ void X86Mir2Lir::EmitMovRegImm(const X86EncodingMap* entry, uint8_t reg, int imm
 }
 
 void X86Mir2Lir::EmitShiftRegImm(const X86EncodingMap* entry, uint8_t reg, int imm) {
-  EmitPrefix(entry);
+  EmitPrefix(entry, reg, NO_REG, NO_REG);
+  reg = LowRegisterBits(reg);
   if (imm != 1) {
     code_buffer_.push_back(entry->skeleton.opcode);
   } else {
@@ -918,7 +1009,8 @@ void X86Mir2Lir::EmitShiftRegImm(const X86EncodingMap* entry, uint8_t reg, int i
 
 void X86Mir2Lir::EmitShiftRegCl(const X86EncodingMap* entry, uint8_t reg, uint8_t cl) {
   DCHECK_EQ(cl, static_cast<uint8_t>(rs_rCX.GetReg()));
-  EmitPrefix(entry);
+  EmitPrefix(entry, reg, NO_REG, NO_REG);  // TODO(64): cl
+  reg = LowRegisterBits(reg);
   code_buffer_.push_back(entry->skeleton.opcode);
   DCHECK_NE(0x0F, entry->skeleton.opcode);
   DCHECK_EQ(0, entry->skeleton.extra_opcode1);
@@ -933,7 +1025,8 @@ void X86Mir2Lir::EmitShiftRegCl(const X86EncodingMap* entry, uint8_t reg, uint8_
 void X86Mir2Lir::EmitShiftMemCl(const X86EncodingMap* entry, uint8_t base,
                                 int displacement, uint8_t cl) {
   DCHECK_EQ(cl, static_cast<uint8_t>(rs_rCX.GetReg()));
-  EmitPrefix(entry);
+  EmitPrefix(entry, NO_REG, NO_REG, base);  // TODO(64): cl
+  base = LowRegisterBits(base);
   code_buffer_.push_back(entry->skeleton.opcode);
   DCHECK_NE(0x0F, entry->skeleton.opcode);
   DCHECK_EQ(0, entry->skeleton.extra_opcode1);
@@ -946,7 +1039,8 @@ void X86Mir2Lir::EmitShiftMemCl(const X86EncodingMap* entry, uint8_t base,
 
 void X86Mir2Lir::EmitShiftMemImm(const X86EncodingMap* entry, uint8_t base,
                                 int displacement, int imm) {
-  EmitPrefix(entry);
+  EmitPrefix(entry, NO_REG, NO_REG, base);
+  base = LowRegisterBits(base);
   if (imm != 1) {
     code_buffer_.push_back(entry->skeleton.opcode);
   } else {
@@ -965,7 +1059,8 @@ void X86Mir2Lir::EmitShiftMemImm(const X86EncodingMap* entry, uint8_t base,
 }
 
 void X86Mir2Lir::EmitRegCond(const X86EncodingMap* entry, uint8_t reg, uint8_t condition) {
-  EmitPrefix(entry);
+  EmitPrefix(entry, reg, NO_REG, NO_REG);  // TODO(64): condition
+  reg = LowRegisterBits(reg);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
   DCHECK_EQ(0x0F, entry->skeleton.opcode);
   code_buffer_.push_back(0x0F);
@@ -1000,7 +1095,9 @@ void X86Mir2Lir::EmitMemCond(const X86EncodingMap* entry, uint8_t base, int disp
 void X86Mir2Lir::EmitRegRegCond(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2,
                                 uint8_t condition) {
   // Generate prefix and opcode without the condition
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, reg1, NO_REG, reg2);  // TODO(64): condition
+  reg1 = LowRegisterBits(reg1);
+  reg2 = LowRegisterBits(reg2);
 
   // Now add the condition. The last byte of opcode is the one that receives it.
   DCHECK_LE(condition, 0xF);
@@ -1024,7 +1121,9 @@ void X86Mir2Lir::EmitRegRegCond(const X86EncodingMap* entry, uint8_t reg1, uint8
 
 void X86Mir2Lir::EmitRegMemCond(const X86EncodingMap* entry, uint8_t reg1, uint8_t base, int displacement, uint8_t condition) {
   // Generate prefix and opcode without the condition
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, reg1, NO_REG, base);  // TODO(64): condition
+  reg1 = LowRegisterBits(reg1);
+  base = LowRegisterBits(base);
 
   // Now add the condition. The last byte of opcode is the one that receives it.
   DCHECK_LE(condition, 0xF);
@@ -1083,7 +1182,8 @@ void X86Mir2Lir::EmitJcc(const X86EncodingMap* entry, int rel, uint8_t cc) {
 }
 
 void X86Mir2Lir::EmitCallMem(const X86EncodingMap* entry, uint8_t base, int disp) {
-  EmitPrefixAndOpcode(entry);
+  EmitPrefixAndOpcode(entry, NO_REG, NO_REG, base);
+  base = LowRegisterBits(base);
   EmitModrmDisp(entry->skeleton.modrm_opcode, base, disp);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
   DCHECK_EQ(0, entry->skeleton.immediate_bytes);
@@ -1124,7 +1224,9 @@ void X86Mir2Lir::EmitPcRel(const X86EncodingMap* entry, uint8_t reg,
         reinterpret_cast<Mir2Lir::EmbeddedData*>(UnwrapPointer(base_or_table));
     disp = tab_rec->offset;
   }
-  EmitPrefix(entry);
+  EmitPrefix(entry, reg, index, NO_REG);  // TODO: base_or_table
+  reg = LowRegisterBits(reg);
+  index = LowRegisterBits(index);
   DCHECK_LT(RegStorage::RegNum(reg), 8);
   if (entry->opcode == kX86PcRelLoadRA) {
     code_buffer_.push_back(entry->skeleton.opcode);
@@ -1576,6 +1678,7 @@ void X86Mir2Lir::AssembleLIR() {
       break;
     } else {
       assembler_retries++;
+      LOG(INFO) << "ASSEMBLER RETRY";
       if (assembler_retries > MAX_ASSEMBLER_RETRIES) {
         CodegenDump();
         LOG(FATAL) << "Assembler error - too many retries";
@@ -1602,5 +1705,4 @@ void X86Mir2Lir::AssembleLIR() {
   cu_->NewTimingSplit("GcMap");
   CreateNativeGcMap();
 }
-
 }  // namespace art
