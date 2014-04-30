@@ -193,7 +193,10 @@ art_cflags := \
 	-Wno-sign-promo \
 	-Wno-unused-parameter \
 	-Wstrict-aliasing \
-	-fstrict-aliasing
+	-fstrict-aliasing \
+	-Wno-implicit-exception-spec-mismatch \
+	-DNVALGRIND \
+	-Wno-unused-value
 
 ifeq ($(ART_SMALL_MODE),true)
   art_cflags += -DART_SMALL_MODE=1
@@ -209,7 +212,12 @@ ifeq ($(HOST_OS),linux)
 endif
 
 art_non_debug_cflags := \
-        -O3
+	-O3
+
+ifeq ($(ART_TARGET_CLANG),true)
+art_non_debug_cflags += \
+        -fno-vectorize
+endif
 
 art_debug_cflags := \
 	-O1 \
@@ -239,7 +247,7 @@ ifneq ($(filter 4.6 4.6.%, $(TARGET_GCC_VERSION)),)
   ART_TARGET_CFLAGS += -Wthread-safety
 else
   ifeq ($(ART_TARGET_CLANG),true)
-    ART_TARGET_CFLAGS += -Wthread-safety
+    ART_TARGET_CFLAGS +=
   else
     # Warn if -Wthread-safety is not suport and not doing a top-level or 'mma' build.
     ifneq ($(ONE_SHOT_MAKEFILE),)
@@ -249,7 +257,7 @@ else
   endif
 endif
 # We compile with GCC 4.6 or clang on the host, both of which support -Wthread-safety.
-ART_HOST_CFLAGS += -Wthread-safety
+ART_HOST_CFLAGS +=
 
 # To use oprofile_android --callgraph, uncomment this and recompile with "mmm art -B -j16"
 # ART_TARGET_CFLAGS += -fno-omit-frame-pointer -marm -mapcs
@@ -304,7 +312,7 @@ endif
 #         Has one argument, the suffix
 define call-art-multi-target
   $(call $(1),$(ART_PHONY_TEST_TARGET_SUFFIX))
-  
+
   ifdef TARGET_2ND_ARCH
     $(call $(1),$(2ND_ART_PHONY_TEST_TARGET_SUFFIX))
   endif
@@ -329,10 +337,10 @@ endef
 #         Has one argument, the suffix
 define call-art-multi-target-var
   $(call $(1),$(ART_PHONY_TEST_TARGET_SUFFIX))
-  
+
   ifdef TARGET_2ND_ARCH
     $(call $(1),$(2ND_ART_PHONY_TEST_TARGET_SUFFIX))
-    
+
     # Link both together, if it makes sense
     ifneq ($(ART_PHONY_TEST_TARGET_SUFFIX),)
       ifneq ($(2ND_ART_PHONY_TEST_TARGET_SUFFIX),)
@@ -351,10 +359,10 @@ endef
 #       We assume we can link the names together easily...
 define call-art-multi-target-rule
   $(call $(1),$(ART_PHONY_TEST_TARGET_SUFFIX))
-  
+
   ifdef TARGET_2ND_ARCH
     $(call $(1),$(2ND_ART_PHONY_TEST_TARGET_SUFFIX))
-  
+
     # Link both together, if it makes sense
     ifneq ($(ART_PHONY_TEST_TARGET_SUFFIX),)
       ifneq ($(2ND_ART_PHONY_TEST_TARGET_SUFFIX),)
