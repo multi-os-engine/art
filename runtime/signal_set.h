@@ -23,6 +23,8 @@
 
 namespace art {
 
+extern int sys_sigwaitinfo(const sigset_t *set, siginfo_t *info);
+
 class SignalSet {
  public:
   SignalSet() {
@@ -43,12 +45,12 @@ class SignalSet {
     }
   }
 
-  int Wait() {
+  int Wait(siginfo_t* info) {
     // Sleep in sigwait() until a signal arrives. gdb causes EINTR failures.
     int signal_number;
-    int rc = TEMP_FAILURE_RETRY(sigwait(&set_, &signal_number));
-    if (rc != 0) {
-      PLOG(FATAL) << "sigwait failed";
+    signal_number = TEMP_FAILURE_RETRY(sys_sigwaitinfo(&set_, info));
+    if (signal_number <= 0) {
+      PLOG(FATAL) << "sigwaitinfo failed";
     }
     return signal_number;
   }

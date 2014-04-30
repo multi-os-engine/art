@@ -196,7 +196,7 @@ static void ThreadSuspendSleep(Thread* self, useconds_t* delay_us, useconds_t* t
   }
 }
 
-size_t ThreadList::RunCheckpoint(Closure* checkpoint_function) {
+size_t ThreadList::RunCheckpoint(Closure* checkpoint_function, bool unsafe) {
   Thread* self = Thread::Current();
   Locks::mutator_lock_->AssertNotExclusiveHeld(self);
   Locks::thread_list_lock_->AssertNotHeld(self);
@@ -212,7 +212,23 @@ size_t ThreadList::RunCheckpoint(Closure* checkpoint_function) {
     // manually called.
     MutexLock mu(self, *Locks::thread_list_lock_);
     MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
-    for (const auto& thread : list_) {
+    if (unsafe) {
+      // Don't wait until all threads are suspended; just make sure they won't change Java stack
+      // by themselves while we run the checkpoint function against them.
+      for (const auto& thread : list_) {
+        if (thread != self) {
+          // Only inc count, keeping suspended_count_modified_threads empty
+          count++;
+          // Increase suspendCount. This will make it positive
+          thread->ModifySuspendCount(self, +1, false);
+          // By making suspendCount positive, we are sure thread will wait for us at a safe point
+          // before it can change Java stack (enter/leave a method or basic block)
+          checkpoint_function->Run(thread);
+          // Decrease suspendCount
+          thread->ModifySuspendCount(self, -1, false);
+        }
+      }
+    } else for (const auto& thread : list_) {
       if (thread != self) {
         while (true) {
           if (thread->RequestCheckpoint(checkpoint_function)) {
