@@ -735,6 +735,12 @@ void Mir2Lir::CreateNativeGcMap() {
     }
   }
   MethodReference method_ref(cu_->dex_file, cu_->method_idx);
+
+  /*
+   * TODO This logic assumes that there is a single method in compilation unit.
+   * A new technique must be set in place for the GC map when multiple methods (that
+   * have GC safepoints) can exist in the compilation unit.
+   */
   const std::vector<uint8_t>& gc_map_raw =
       mir_graph_->GetCurrentDexCompilationUnit()->GetVerifiedMethod()->GetDexGcMap();
   verifier::DexPcToReferenceMap dex_gc_map(&(gc_map_raw)[0]);
