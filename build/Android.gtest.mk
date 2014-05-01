@@ -245,12 +245,12 @@ endef
 
 ifeq ($(ART_BUILD_TARGET),true)
   $(foreach file,$(RUNTIME_GTEST_TARGET_SRC_FILES), $(eval $(call build-art-test,target,$(file),,)))
-  $(foreach file,$(COMPILER_GTEST_TARGET_SRC_FILES), $(eval $(call build-art-test,target,$(file),art/compiler,libartd-compiler)))
+  $(foreach file,$(COMPILER_GTEST_TARGET_SRC_FILES), $(eval $(call build-art-test,target,$(file),art/compiler art/analysis,libartd-compiler libartd-analysis)))
 endif
 ifeq ($(WITH_HOST_DALVIK),true)
   ifeq ($(ART_BUILD_HOST),true)
     $(foreach file,$(RUNTIME_GTEST_HOST_SRC_FILES), $(eval $(call build-art-test,host,$(file),,)))
-    $(foreach file,$(COMPILER_GTEST_HOST_SRC_FILES), $(eval $(call build-art-test,host,$(file),art/compiler,libartd-compiler)))
+    $(foreach file,$(COMPILER_GTEST_HOST_SRC_FILES), $(eval $(call build-art-test,host,$(file),art/compiler art/analysis,libartd-compiler libartd-analysis)))
   endif
 endif
 

@@ -215,6 +215,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     else # host
       LOCAL_CFLAGS += $(ART_HOST_DEBUG_CFLAGS)
     endif
+    LOCAL_SHARED_LIBRARIES += libartd-analysis
     LOCAL_SHARED_LIBRARIES += libartd
   else
     ifeq ($$(art_target_or_host),target)
@@ -222,6 +223,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     else # host
       LOCAL_CFLAGS += $(ART_HOST_NON_DEBUG_CFLAGS)
     endif
+    LOCAL_SHARED_LIBRARIES += libart-analysis
     LOCAL_SHARED_LIBRARIES += libart
   endif
   ifeq ($(ART_USE_PORTABLE_COMPILER),true)

@@ -20,6 +20,7 @@
 #include "compiler_callbacks.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "verifier/method_verifier-inl.h"
+#include "static_analyzer.h"
 
 namespace art {
 
@@ -52,6 +53,9 @@ inline bool CompilerCallbacksImpl::MethodVerified(verifier::MethodVerifier* veri
     MethodReference ref = verifier->GetMethodReference();
     method_inliner_map_->GetMethodInliner(ref.dex_file)
         ->AnalyseMethodCode(verifier);
+    if (verification_results_->GetStaticAnalyzer() != nullptr) {
+      verification_results_->GetStaticAnalyzer()->AnalyzeMethod(verifier);
+    }
   }
   return result;
 }
