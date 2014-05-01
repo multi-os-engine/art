@@ -18,6 +18,7 @@
 
 #include <iostream>
 
+#include "analysis/static_analyzer.h"
 #include "base/logging.h"
 #include "base/mutex-inl.h"
 #include "class_linker.h"
@@ -140,6 +141,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(const DexFile* dex_file,
   size_t error_count = 0;
   bool hard_fail = false;
   ClassLinker* linker = Runtime::Current()->GetClassLinker();
+  StaticAnalyzer* static_analyzer = linker->GetStaticAnalyzer();
   int64_t previous_direct_method_idx = -1;
   while (it.HasNextDirectMethod()) {
     uint32_t method_idx = it.GetMemberIndex();
@@ -157,6 +159,8 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(const DexFile* dex_file,
       DCHECK(Thread::Current()->IsExceptionPending());
       // We couldn't resolve the method, but continue regardless.
       Thread::Current()->ClearException();
+    } else if (static_analyzer != nullptr) {
+        static_analyzer->AnalyzeMethod(method, *dex_file);
     }
     MethodVerifier::FailureKind result = VerifyMethod(method_idx,
                                                       dex_file,
@@ -199,6 +203,8 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(const DexFile* dex_file,
       DCHECK(Thread::Current()->IsExceptionPending());
       // We couldn't resolve the method, but continue regardless.
       Thread::Current()->ClearException();
+    } else if (static_analyzer != nullptr) {
+      static_analyzer->AnalyzeMethod(method, *dex_file);
     }
     MethodVerifier::FailureKind result = VerifyMethod(method_idx,
                                                       dex_file,

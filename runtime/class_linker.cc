@@ -25,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "analysis/static_analyzer.h"
 #include "base/casts.h"
 #include "base/logging.h"
 #include "base/stl_util.h"
@@ -1308,6 +1309,12 @@ mirror::ObjectArray<mirror::StackTraceElement>* ClassLinker::AllocStackTraceElem
     Thread* self, size_t length) {
   return mirror::ObjectArray<mirror::StackTraceElement>::Alloc(
       self, GetClassRoot(kJavaLangStackTraceElementArrayClass), length);
+}
+
+void ClassLinker::InitStaticAnalyzer() {
+  if (GetStaticAnalyzer() == nullptr) {
+    static_analyzer_.reset(new StaticAnalyzer());
+  }
 }
 
 static mirror::Class* EnsureResolved(Thread* self, mirror::Class* klass)
