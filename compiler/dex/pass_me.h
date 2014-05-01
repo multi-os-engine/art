@@ -93,6 +93,21 @@ class PassME: public Pass {
     return (flags_ & flag);
   }
 
+  static void BasePrintMessage(CompilationUnit* c_unit, const char* pass_name, const char* message, ...) {
+    // Check if we want to log something or not.
+    if (c_unit->print_pass) {
+      // Stringify the message.
+      va_list args;
+      va_start(args, message);
+      std::string stringified_message;
+      StringAppendV(&stringified_message, message, args);
+      va_end(args);
+
+      // Log the message and ensure to include pass name.
+      LOG(INFO) << pass_name << ": " << stringified_message;
+    }
+  }
+
  protected:
   /** @brief Type of traversal: determines the order to execute the pass on the BasicBlocks. */
   const DataFlowAnalysisMode traversal_type_;

@@ -184,9 +184,11 @@ define build-libart-compiler
   ifeq ($$(art_ndebug_or_debug),ndebug)
     LOCAL_MODULE := libart-compiler
     LOCAL_SHARED_LIBRARIES += libart
+    LOCAL_SHARED_LIBRARIES += libart-analysis
   else # debug
     LOCAL_MODULE := libartd-compiler
     LOCAL_SHARED_LIBRARIES += libartd
+    LOCAL_SHARED_LIBRARIES += libartd-analysis
   endif
 
   LOCAL_MODULE_TAGS := optional
@@ -245,7 +247,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     include $(LLVM_GEN_INTRINSICS_MK)
   endif
 
-  LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime
+  LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime art/analysis
 
   ifeq ($$(art_target_or_host),host)
     LOCAL_LDLIBS += -ldl -lpthread

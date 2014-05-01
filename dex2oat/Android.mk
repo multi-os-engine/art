@@ -30,16 +30,16 @@ else
 endif
 
 ifeq ($(ART_BUILD_TARGET_NDEBUG),true)
-  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libart-compiler,art/compiler,target,ndebug,$(dex2oat_arch)))
+  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libart-compiler libart-analysis,art/compiler art/analysis,target,ndebug,$(dex2oat_arch)))
 endif
 ifeq ($(ART_BUILD_TARGET_DEBUG),true)
-  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libartd-compiler,art/compiler,target,debug,$(dex2oat_arch)))
+  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libartd-compiler libartd-analysis,art/compiler art/analysis,target,debug,$(dex2oat_arch)))
 endif
 
 # We always build dex2oat and dependencies, even if the host build is otherwise disabled, since they are used to cross compile for the target.
 ifeq ($(ART_BUILD_NDEBUG),true)
-  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libart-compiler,art/compiler,host,ndebug))
+  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libart-compiler libart-analysis,art/compiler art/analysis,host,ndebug))
 endif
 ifeq ($(ART_BUILD_DEBUG),true)
-  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libartd-compiler,art/compiler,host,debug))
+  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libartd-compiler libartd-analysis,art/compiler art/analysis,host,debug))
 endif
