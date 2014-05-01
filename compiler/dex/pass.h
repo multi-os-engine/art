@@ -18,6 +18,7 @@
 #define ART_COMPILER_DEX_PASS_H_
 
 #include <string>
+#include "base/pass.h"
 
 namespace art {
 
@@ -31,6 +32,13 @@ class Pass;
  * @details Each enum should be a power of 2 to be correctly used.
  */
 enum OptimizationFlag {
+};
+
+// Data holder class.
+class PassMEDataHolder: public PassDataHolder {
+  public:
+    CompilationUnit* c_unit;
+    BasicBlock* bb;
 };
 
 enum DataFlowAnalysisMode {
@@ -49,90 +57,37 @@ enum DataFlowAnalysisMode {
  * @brief Pass is the Pass structure for the optimizations.
  * @details The following structure has the different optimization passes that we are going to do.
  */
-class Pass {
+class PassME: public Pass {
  public:
-  explicit Pass(const char* name, DataFlowAnalysisMode type = kAllNodes,
-                unsigned int flags = 0u, const char* dump = "")
-    : pass_name_(name), traversal_type_(type), flags_(flags), dump_cfg_folder_(dump) {
+  explicit PassME(const char* name, DataFlowAnalysisMode type = kAllNodes,
+          unsigned int flags = 0u, const char* dump = "")
+    : Pass(name), traversal_type_(type), flags_(flags), dump_cfg_folder_(dump) {
   }
 
-  Pass(const char* name, DataFlowAnalysisMode type, const char* dump)
-    : pass_name_(name), traversal_type_(type), flags_(0), dump_cfg_folder_(dump) {
+  PassME(const char* name, DataFlowAnalysisMode type, const char* dump)
+    : Pass(name), traversal_type_(type), flags_(0), dump_cfg_folder_(dump) {
   }
 
-  Pass(const char* name, const char* dump)
-    : pass_name_(name), traversal_type_(kAllNodes), flags_(0), dump_cfg_folder_(dump) {
+  PassME(const char* name, const char* dump)
+    : Pass(name), traversal_type_(kAllNodes), flags_(0), dump_cfg_folder_(dump) {
   }
 
-  virtual ~Pass() {
-  }
-
-  virtual const char* GetName() const {
-    return pass_name_;
+  ~PassME() {
   }
 
   virtual DataFlowAnalysisMode GetTraversal() const {
     return traversal_type_;
   }
 
-  virtual bool GetFlag(OptimizationFlag flag) const {
-    return (flags_ & flag);
-  }
-
   const char* GetDumpCFGFolder() const {
     return dump_cfg_folder_;
   }
 
-  /**
-   * @brief Gate for the pass: determines whether to execute the pass or not considering a CompilationUnit
-   * @param c_unit the CompilationUnit.
-   * @return whether or not to execute the pass
-   */
-  virtual bool Gate(const CompilationUnit* c_unit) const {
-    // Unused parameter.
-    UNUSED(c_unit);
-
-    // Base class says yes.
-    return true;
-  }
-
-  /**
-   * @brief Start of the pass: called before the WalkBasicBlocks function
-   * @param c_unit the considered CompilationUnit.
-   */
-  virtual void Start(CompilationUnit* c_unit) const {
-    // Unused parameter.
-    UNUSED(c_unit);
-  }
-
-  /**
-   * @brief End of the pass: called after the WalkBasicBlocks function
-   * @param c_unit the considered CompilationUnit.
-   */
-  virtual void End(CompilationUnit* c_unit) const {
-    // Unused parameter.
-    UNUSED(c_unit);
-  }
-
-  /**
-   * @brief Actually walk the BasicBlocks following a particular traversal type.
-   * @param c_unit the CompilationUnit.
-   * @param bb the BasicBlock.
-   * @return whether or not there is a change when walking the BasicBlock
-   */
-  virtual bool WalkBasicBlocks(CompilationUnit* c_unit, BasicBlock* bb) const {
-    // Unused parameters.
-    UNUSED(c_unit);
-    UNUSED(bb);
-
-    // BasicBlock did not change.
-    return false;
+  bool GetFlag(OptimizationFlag flag) const {
+    return (flags_ & flag);
   }
 
  protected:
-  /** @brief The pass name: used for searching for a pass when running a particular pass or debugging. */
-  const char* const pass_name_;
-
   /** @brief Type of traversal: determines the order to execute the pass on the BasicBlocks. */
   const DataFlowAnalysisMode traversal_type_;
 
@@ -141,10 +96,6 @@ class Pass {
 
   /** @brief CFG Dump Folder: what sub-folder to use for dumping the CFGs post pass. */
   const char* const dump_cfg_folder_;
-
- private:
-  // In order to make the all passes not copy-friendly.
-  DISALLOW_COPY_AND_ASSIGN(Pass);
 };
 }  // namespace art
 #endif  // ART_COMPILER_DEX_PASS_H_
