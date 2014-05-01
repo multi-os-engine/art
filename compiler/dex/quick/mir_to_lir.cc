@@ -533,7 +533,8 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       break;
 
     case Instruction::CHECK_CAST: {
-      GenCheckCast(mir->offset, vB, rl_src[0]);
+      GenCheckCast(mir_graph_->GetDexCompilationUnitByMir(mir), mir_graph_->GetMirOriginalOffset(mir),
+                   vB, rl_src[0]);
       break;
     }
     case Instruction::INSTANCE_OF:
@@ -705,8 +706,8 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       bool is_safe = is_null;  // Always safe to store null.
       if (!is_safe) {
         // Check safety from verifier type information.
-        const DexCompilationUnit* unit = mir_graph_->GetCurrentDexCompilationUnit();
-        is_safe = cu_->compiler_driver->IsSafeCast(unit, mir->offset);
+        const DexCompilationUnit* unit = mir_graph_->GetDexCompilationUnitByMir(mir);
+        is_safe = cu_->compiler_driver->IsSafeCast(unit, mir_graph_->GetMirOriginalOffset(mir));
       }
       if (is_null || is_safe) {
         // Store of constant null doesn't require an assignability test and can be generated inline
