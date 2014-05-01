@@ -88,12 +88,10 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       temp_bit_vector_size_(0u),
       temp_bit_vector_(nullptr),
       block_list_(arena, 100, kGrowableArrayBlockList),
-      try_block_addr_(NULL),
       entry_block_(NULL),
       exit_block_(NULL),
       num_blocks_(0),
       current_code_item_(NULL),
-      dex_pc_to_block_map_(arena, 0, kGrowableArrayMisc),
       current_method_(kInvalidEntry),
       current_offset_(kInvalidEntry),
       def_count_(0),
@@ -116,17 +114,138 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       sfield_lowering_infos_(arena, 0u),
       method_lowering_infos_(arena, 0u),
       gen_suspend_test_list_(arena, 0u) {
-  try_block_addr_ = new (arena_) ArenaBitVector(arena_, 0, true /* expandable */);
 }
 
 MIRGraph::~MIRGraph() {
   STLDeleteElements(&m_units_);
+  STLDeleteElements(&m_unit_to_try_block_addr);
+}
+
+ControlFlowGraph::ControlFlowGraph(ArenaAllocator* arena, const DexFile::CodeItem* code_item,
+                                   DexOffset start_offset, bool supress_exception_edges)
+      : entry_block_(nullptr), exit_block_(nullptr), current_code_item_(code_item),
+        arena_(arena), try_block_addr_(nullptr), block_list_(arena, 100, kGrowableArrayBlockList),
+        num_vregs_(code_item->registers_size_), num_ins_(code_item->ins_size_), num_bytecodes_(0u) {
+  // Since blocks use IDs for children, we need to create a block that represents this null block.
+  // We create it first to ensure that it gets id of 0.
+  BasicBlock* null_block = CreateNewBB(kNullBlock);
+  DCHECK_EQ(null_block->id, NullBasicBlockId);
+  null_block->hidden = true;
+
+  // Create the entry and exit blocks.
+  entry_block_ = CreateNewBB(kEntryBlock);
+  entry_block_->start_offset = start_offset;
+  exit_block_ = CreateNewBB(kExitBlock);
+
+  // Create a block to record parsed instructions.
+  BasicBlock* cur_block = CreateNewBB(kDalvikByteCode);
+  cur_block->start_offset = start_offset;
+  UpdateFallthrough(entry_block_, cur_block);
+
+  // Identify code range in try blocks and set up the empty catch blocks.
+  try_block_addr_ = new (arena_) ArenaBitVector(arena_, current_code_item_->insns_size_in_code_units_,
+                                                true /* expandable */);
+  ProcessTryCatchBlocks();
+
+  // Parse all instructions and put them into containing basic blocks.
+  const uint16_t* code_ptr = current_code_item_->insns_ + start_offset;
+  const uint16_t* code_end = current_code_item_->insns_ + current_code_item_->insns_size_in_code_units_;
+  DexOffset current_offset = start_offset;
+
+  while (code_ptr < code_end) {
+    // Allocate the MIR and initialize it with offset and width.
+    MIR* insn = NewMIR(arena_);
+    insn->offset = current_offset;
+    insn->m_unit_index = 0;
+    int width = ParseInsn(code_ptr, &insn->dalvikInsn);
+    Instruction::Code opcode = insn->dalvikInsn.opcode;
+
+    int flags = Instruction::FlagsOf(opcode);
+
+    // Check for inline data block signatures.
+    if (opcode == Instruction::NOP) {
+      // A simple NOP will have a width of 1 at this point, embedded data NOP > 1.
+      if ((width == 1) && ((current_offset & 0x1) == 0x1) && ((code_end - code_ptr) > 1)) {
+        // Could be an aligning nop.  If an embedded data NOP follows, treat pair as single unit.
+        uint16_t following_raw_instruction = code_ptr[1];
+        if ((following_raw_instruction == Instruction::kSparseSwitchSignature)
+            || (following_raw_instruction == Instruction::kPackedSwitchSignature)
+            || (following_raw_instruction == Instruction::kArrayDataSignature)) {
+          width += Instruction::At(code_ptr + 1)->SizeInCodeUnits();
+        }
+      }
+      if (width == 1) {
+        // It is a simple nop - treat normally.
+        cur_block->AppendMIR(insn);
+      } else {
+        DCHECK(cur_block->fall_through == NullBasicBlockId);
+        DCHECK(cur_block->taken == NullBasicBlockId);
+        // Unreachable instruction, mark for no continuation.
+        flags &= ~Instruction::kContinue;
+      }
+    } else {
+      cur_block->AppendMIR(insn);
+    }
+
+    // Associate the starting dex_pc for this opcode with its containing basic block.
+    dex_pc_to_block_map_.Overwrite(insn->offset, cur_block);
+
+    code_ptr += width;
+    num_bytecodes_++;
+
+    if (flags & Instruction::kBranch) {
+      cur_block = ProcessCanBranch(cur_block, insn, current_offset, width, flags, code_ptr, code_end);
+    } else if (flags & Instruction::kReturn) {
+      return_mirs_ .push_back(insn);
+      cur_block->terminated_by_return = true;
+      UpdateFallthrough(cur_block, exit_block_);
+
+      /*
+       * Terminate the current block if there are instructions
+       * afterwards.
+       */
+      if (code_ptr < code_end) {
+        /*
+         * Create a fallthrough block for real instructions
+         * (incl. NOP).
+         */
+        FindBlock(current_offset + width, /* split */false, /* create */true,
+        /* immed_pred_block_p */NULL);
+      }
+    } else if (flags & Instruction::kThrow) {
+      cur_block = ProcessCanThrow(cur_block, insn, current_offset, width, flags, try_block_addr_, code_ptr, code_end,
+                                  supress_exception_edges);
+    } else if (flags & Instruction::kSwitch) {
+      cur_block = ProcessCanSwitch(cur_block, insn, current_offset, width, flags);
+    }
+
+    current_offset += width;
+    BasicBlock *next_block = FindBlock(current_offset, /* split */false, /* create */
+                                       false, /* immed_pred_block_p */NULL);
+    if (next_block) {
+      /*
+       * The next instruction could be the target of a previously parsed
+       * forward branch so a block is already created. If the current
+       * instruction is not an unconditional branch, connect them through
+       * the fall-through link.
+       */
+      DCHECK(
+          cur_block->fall_through == NullBasicBlockId
+          || GetBasicBlock(cur_block->fall_through) == next_block
+          || GetBasicBlock(cur_block->fall_through) == exit_block_);
+
+      if ((cur_block->fall_through == NullBasicBlockId) && (flags & Instruction::kContinue)) {
+        UpdateFallthrough(cur_block, next_block);
+      }
+      cur_block = next_block;
+    }
+  }
 }
 
 /*
  * Parse an instruction, return the length of the instruction
  */
-int MIRGraph::ParseInsn(const uint16_t* code_ptr, MIR::DecodedInstruction* decoded_instruction) {
+int ControlFlowGraph::ParseInsn(const uint16_t* code_ptr, MIR::DecodedInstruction* decoded_instruction) {
   const Instruction* inst = Instruction::At(code_ptr);
   decoded_instruction->opcode = inst->Opcode();
   decoded_instruction->vA = inst->HasVRegA() ? inst->VRegA() : 0;
@@ -141,7 +260,7 @@ int MIRGraph::ParseInsn(const uint16_t* code_ptr, MIR::DecodedInstruction* decod
 
 
 /* Split an existing block from the specified code offset into two */
-BasicBlock* MIRGraph::SplitBlock(DexOffset code_offset,
+BasicBlock* ControlFlowGraph::SplitBlock(DexOffset code_offset,
                                  BasicBlock* orig_block, BasicBlock** immed_pred_block_p) {
   DCHECK_GT(code_offset, orig_block->start_offset);
   MIR* insn = orig_block->first_mir_insn;
@@ -154,9 +273,8 @@ BasicBlock* MIRGraph::SplitBlock(DexOffset code_offset,
   if (insn == NULL) {
     LOG(FATAL) << "Break split failed";
   }
-  BasicBlock* bottom_block = NewMemBB(kDalvikByteCode, num_blocks_++);
-  block_list_.Insert(bottom_block);
 
+  BasicBlock* bottom_block = CreateNewBB(kDalvikByteCode);
   bottom_block->start_offset = code_offset;
   bottom_block->first_mir_insn = insn;
   bottom_block->last_mir_insn = orig_block->last_mir_insn;
@@ -218,10 +336,10 @@ BasicBlock* MIRGraph::SplitBlock(DexOffset code_offset,
   DCHECK(insn == bottom_block->first_mir_insn);
   DCHECK_EQ(insn->offset, bottom_block->start_offset);
   DCHECK(static_cast<int>(insn->dalvikInsn.opcode) == kMirOpCheck ||
-         !IsPseudoMirOp(insn->dalvikInsn.opcode));
-  DCHECK_EQ(dex_pc_to_block_map_.Get(insn->offset), orig_block->id);
+         !MIRGraph::IsPseudoMirOp(insn->dalvikInsn.opcode));
+  DCHECK_EQ(dex_pc_to_block_map_.Get(insn->offset), orig_block);
   MIR* p = insn;
-  dex_pc_to_block_map_.Put(p->offset, bottom_block->id);
+  dex_pc_to_block_map_.Overwrite(p->offset, bottom_block);
   while (p != bottom_block->last_mir_insn) {
     p = p->next;
     DCHECK(p != nullptr);
@@ -233,9 +351,9 @@ BasicBlock* MIRGraph::SplitBlock(DexOffset code_offset,
      * CHECK and work portions. Since the 2nd half of a split operation is always
      * the first in a BasicBlock, we can't hit it here.
      */
-    if ((opcode == kMirOpCheck) || !IsPseudoMirOp(opcode)) {
-      DCHECK_EQ(dex_pc_to_block_map_.Get(p->offset), orig_block->id);
-      dex_pc_to_block_map_.Put(p->offset, bottom_block->id);
+    if ((opcode == kMirOpCheck) || !MIRGraph::IsPseudoMirOp(opcode)) {
+      DCHECK_EQ(dex_pc_to_block_map_.Get(p->offset), orig_block);
+      dex_pc_to_block_map_.Overwrite(p->offset, bottom_block);
     }
   }
 
@@ -250,41 +368,33 @@ BasicBlock* MIRGraph::SplitBlock(DexOffset code_offset,
  * (by the caller)
  * Utilizes a map for fast lookup of the typical cases.
  */
-BasicBlock* MIRGraph::FindBlock(DexOffset code_offset, bool split, bool create,
+BasicBlock* ControlFlowGraph::FindBlock(DexOffset code_offset, bool split, bool create,
                                 BasicBlock** immed_pred_block_p) {
-  if (code_offset >= cu_->code_item->insns_size_in_code_units_) {
-    return NULL;
+  // Look for the block that starts with the corresponding offset.
+  BasicBlock* bb =
+      dex_pc_to_block_map_.find(code_offset) == dex_pc_to_block_map_.end() ?
+          nullptr : dex_pc_to_block_map_.Get(code_offset);
+
+  if (bb != nullptr) {
+    // If the start offset of the found block does not match, it must be the case
+    // that the instruction is in middle of the block. Thus the block must be split.
+    if (bb->start_offset != code_offset) {
+      bb = SplitBlock(code_offset, bb, bb == *immed_pred_block_p ? immed_pred_block_p : nullptr);
+    }
+  } else {
+    // There was no block found, but only make one if requested.
+    if (create) {
+      bb = CreateNewBB(kDalvikByteCode);
+      bb->start_offset = code_offset;
+      dex_pc_to_block_map_.Overwrite(bb->start_offset, bb);
+    }
   }
 
-  int block_id = dex_pc_to_block_map_.Get(code_offset);
-  BasicBlock* bb = (block_id == 0) ? NULL : block_list_.Get(block_id);
-
-  if ((bb != NULL) && (bb->start_offset == code_offset)) {
-    // Does this containing block start with the desired instruction?
-    return bb;
-  }
-
-  // No direct hit.
-  if (!create) {
-    return NULL;
-  }
-
-  if (bb != NULL) {
-    // The target exists somewhere in an existing block.
-    return SplitBlock(code_offset, bb, bb == *immed_pred_block_p ?  immed_pred_block_p : NULL);
-  }
-
-  // Create a new block.
-  bb = NewMemBB(kDalvikByteCode, num_blocks_++);
-  block_list_.Insert(bb);
-  bb->start_offset = code_offset;
-  dex_pc_to_block_map_.Put(bb->start_offset, bb->id);
   return bb;
 }
 
-
 /* Identify code range in try blocks and set up the empty catch blocks */
-void MIRGraph::ProcessTryCatchBlocks() {
+void ControlFlowGraph::ProcessTryCatchBlocks() {
   int tries_size = current_code_item_->tries_size_;
   DexOffset offset;
 
@@ -317,7 +427,7 @@ void MIRGraph::ProcessTryCatchBlocks() {
 }
 
 /* Process instructions with the kBranch flag */
-BasicBlock* MIRGraph::ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset,
+BasicBlock* ControlFlowGraph::ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset,
                                        int width, int flags, const uint16_t* code_ptr,
                                        const uint16_t* code_end) {
   DexOffset target = cur_offset;
@@ -347,12 +457,12 @@ BasicBlock* MIRGraph::ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffs
       break;
     default:
       LOG(FATAL) << "Unexpected opcode(" << insn->dalvikInsn.opcode << ") with kBranch set";
+      return nullptr;
   }
-  CountBranch(target);
+
   BasicBlock* taken_block = FindBlock(target, /* split */ true, /* create */ true,
                                       /* immed_pred_block_p */ &cur_block);
-  cur_block->taken = taken_block->id;
-  taken_block->predecessors->Insert(cur_block->id);
+  UpdateTaken(cur_block, taken_block);
 
   /* Always terminate the current block for conditional branches */
   if (flags & Instruction::kContinue) {
@@ -374,8 +484,7 @@ BasicBlock* MIRGraph::ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffs
                                              true,
                                              /* immed_pred_block_p */
                                              &cur_block);
-    cur_block->fall_through = fallthrough_block->id;
-    fallthrough_block->predecessors->Insert(cur_block->id);
+    UpdateFallthrough(cur_block, fallthrough_block);
   } else if (code_ptr < code_end) {
     FindBlock(cur_offset + width, /* split */ false, /* create */ true,
                 /* immed_pred_block_p */ NULL);
@@ -384,10 +493,10 @@ BasicBlock* MIRGraph::ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffs
 }
 
 /* Process instructions with the kSwitch flag */
-BasicBlock* MIRGraph::ProcessCanSwitch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset,
+BasicBlock* ControlFlowGraph::ProcessCanSwitch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset,
                                        int width, int flags) {
   const uint16_t* switch_data =
-      reinterpret_cast<const uint16_t*>(GetCurrentInsns() + cur_offset + insn->dalvikInsn.vB);
+      reinterpret_cast<const uint16_t*>(current_code_item_->insns_ + cur_offset + insn->dalvikInsn.vB);
   int size;
   const int* keyTable;
   const int* target_table;
@@ -454,26 +563,25 @@ BasicBlock* MIRGraph::ProcessCanSwitch(BasicBlock* cur_block, MIR* insn, DexOffs
   /* Fall-through case */
   BasicBlock* fallthrough_block = FindBlock(cur_offset +  width, /* split */ false,
                                             /* create */ true, /* immed_pred_block_p */ NULL);
-  cur_block->fall_through = fallthrough_block->id;
-  fallthrough_block->predecessors->Insert(cur_block->id);
+  UpdateFallthrough(cur_block, fallthrough_block);
+
   return cur_block;
 }
 
 /* Process instructions with the kThrow flag */
-BasicBlock* MIRGraph::ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset,
+BasicBlock* ControlFlowGraph::ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset,
                                       int width, int flags, ArenaBitVector* try_block_addr,
-                                      const uint16_t* code_ptr, const uint16_t* code_end) {
+                                      const uint16_t* code_ptr, const uint16_t* code_end,
+                                      bool supress_exception_edges) {
   bool in_try_block = try_block_addr->IsBitSet(cur_offset);
   bool is_throw = (insn->dalvikInsn.opcode == Instruction::THROW);
-  bool build_all_edges =
-      (cu_->disable_opt & (1 << kSuppressExceptionEdges)) || is_throw || in_try_block;
+  bool build_all_edges = supress_exception_edges || is_throw || in_try_block;
 
   /* In try block */
   if (in_try_block) {
     CatchHandlerIterator iterator(*current_code_item_, cur_offset);
 
     if (cur_block->successor_block_list_type != kNotUsed) {
-      LOG(INFO) << PrettyMethod(cu_->method_idx, *cu_->dex_file);
       LOG(FATAL) << "Successor block list already in use: "
                  << static_cast<int>(cur_block->successor_block_list_type);
     }
@@ -484,11 +592,9 @@ BasicBlock* MIRGraph::ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffse
 
     for (; iterator.HasNext(); iterator.Next()) {
       BasicBlock* catch_block = FindBlock(iterator.GetHandlerAddress(), false /* split*/,
-                                         false /* creat */, NULL  /* immed_pred_block_p */);
+                                         false /* create */, NULL  /* immed_pred_block_p */);
       catch_block->catch_entry = true;
-      if (kIsDebugBuild) {
-        catches_.insert(catch_block->start_offset);
-      }
+
       SuccessorBlockInfo* successor_block_info = reinterpret_cast<SuccessorBlockInfo*>
           (arena_->Alloc(sizeof(SuccessorBlockInfo), kArenaAllocSuccessor));
       successor_block_info->block = catch_block->id;
@@ -497,9 +603,8 @@ BasicBlock* MIRGraph::ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffse
       catch_block->predecessors->Insert(cur_block->id);
     }
   } else if (build_all_edges) {
-    BasicBlock* eh_block = NewMemBB(kExceptionHandling, num_blocks_++);
+    BasicBlock* eh_block = CreateNewBB(kExceptionHandling);
     cur_block->taken = eh_block->id;
-    block_list_.Insert(eh_block);
     eh_block->start_offset = cur_offset;
     eh_block->predecessors->Insert(cur_block->id);
   }
@@ -544,12 +649,10 @@ BasicBlock* MIRGraph::ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffse
    * Note also that the dex_pc_to_block_map_ entry for the potentially
    * throwing instruction will refer to the original basic block.
    */
-  BasicBlock* new_block = NewMemBB(kDalvikByteCode, num_blocks_++);
-  block_list_.Insert(new_block);
+  BasicBlock *new_block = CreateNewBB(kDalvikByteCode);
   new_block->start_offset = insn->offset;
-  cur_block->fall_through = new_block->id;
-  new_block->predecessors->Insert(cur_block->id);
-  MIR* new_insn = NewMIR();
+  UpdateFallthrough(cur_block, new_block);
+  MIR* new_insn = NewMIR(arena_);
   *new_insn = *insn;
   insn->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpCheck);
   // Associate the two halves.
@@ -558,45 +661,202 @@ BasicBlock* MIRGraph::ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffse
   return new_block;
 }
 
-/* Parse a Dex method and insert it into the MIRGraph at the current insert point. */
-void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_flags,
+bool MIRGraph::MergeCFG(DexCompilationUnit* m_unit, ControlFlowGraph& control_flow_graph) {
+  // First, update the blocks in the control flow graph to have non-overlapping IDs.
+  // If the MIRGraph contains no blocks yet, then the control flow graph IDs do not need renamed.
+  BasicBlockId rename_offset = block_list_.Size();
+
+  /*
+   * A null block is inserted in every CFG and is always at position 0.
+   * For that reason, we skip inserting it again when we merge into MIRGraph.
+   * But the issue is that there is an implicit mapping between position in block
+   * list and the block id. For example, if caller had 3 blocks, and callee has
+   * one block with id 1 (because null block has id 0), then the newly renamed
+   * block must have id of 3 + 1 - 1 = 3.
+   */
+  if (rename_offset > 0) {
+    rename_offset = rename_offset - 1;
+  }
+
+  GrowableArray<BasicBlock *>::Iterator block_iter(&control_flow_graph.GetBlockList());
+  for (BasicBlock* block = block_iter.Next(); block != nullptr; block = block_iter.Next()) {
+    if (rename_offset != 0) {
+      // Since offset is not zero, it must mean the MIR graph already has a null block. Skip it.
+      if (block->block_type == kNullBlock) {
+        continue;
+      }
+
+      // Change the id of the current block
+      block->id += rename_offset;
+
+      // Rename the fallthrough block.
+      if (block->fall_through != NullBasicBlockId) {
+        block->fall_through += rename_offset;
+      }
+
+      // Rename the taken block.
+      if (block->taken != NullBasicBlockId) {
+        block->taken += rename_offset;
+      }
+
+      // Rename all of the successor blocks.
+      if (block->successor_block_list_type != kNotUsed) {
+        GrowableArray<SuccessorBlockInfo*>::Iterator succ_iter(block->successor_blocks);
+        for (SuccessorBlockInfo *successor_block_info = succ_iter.Next(); successor_block_info != nullptr;
+            successor_block_info = succ_iter.Next()) {
+          successor_block_info->block += rename_offset;
+        }
+      }
+    } else {
+      // This is the first time blocks are being inserted. We handle specially the entry and exit blocks.
+      if (block->block_type == kEntryBlock) {
+        entry_block_ = block;
+      } else if (block->block_type == kExitBlock) {
+        exit_block_ = block;
+      }
+    }
+
+    // Reset the predecessors because they will be recalculated below.
+    block->predecessors->Reset();
+
+    // Add this block to the block list for MIRGraph.
+    block_list_.Insert(block);
+  }
+
+  // The links were fixed, but the predecessor information is out of date for the newly
+  // inserted blocks. Therefore, we will now walk through and fix that.
+  block_iter.Reset();
+  for (BasicBlock* block = block_iter.Next(); block != nullptr; block = block_iter.Next()) {
+    if (block->fall_through != NullBasicBlockId) {
+      BasicBlock *fall_through = GetBasicBlock(block->fall_through);
+      fall_through->predecessors->Insert(block->id);
+    }
+
+    if (block->taken != NullBasicBlockId) {
+      BasicBlock *taken = GetBasicBlock(block->taken);
+      taken->predecessors->Insert(block->id);
+    }
+
+    if (block->successor_block_list_type != kNotUsed) {
+      GrowableArray<SuccessorBlockInfo*>::Iterator succ_iter(block->successor_blocks);
+      for (SuccessorBlockInfo *successor_block_info = succ_iter.Next(); successor_block_info != nullptr;
+          successor_block_info = succ_iter.Next()) {
+        BasicBlock *child = GetBasicBlock(successor_block_info->block);
+        child->predecessors->Insert(block->id);
+      }
+    }
+  }
+
+  // Record the new number of blocks in the MIRGraph.
+  num_blocks_ = block_list_.Size();
+
+  // Determine the start offset.
+  NarrowDexOffset start_offset = 0u;
+  for (auto it = m_units_.begin(); it != m_units_.end(); it++) {
+    if ((*it) == nullptr) {
+      start_offset += 1;
+    }
+
+    const DexFile::CodeItem* code_item = (*it)->GetCodeItem();
+    if (code_item == nullptr) {
+      start_offset += 1;
+    }
+
+    // TODO check for overflow for the narrow offset.
+    start_offset += code_item->insns_size_in_code_units_;
+  }
+
+  // Now go through all of the MIRs in the CFG to do some accounting and updating.
+  block_iter.Reset();
+  for (BasicBlock* block = block_iter.Next(); block != nullptr; block = block_iter.Next()) {
+    // If the debug build is enabled, then the offsets in catch blocks should be recorded.
+    // TODO When integrating multiple methods into same MIRGraph, this is not exactly right
+    // unless the integrated offsets do not overlap.
+    if (kIsDebugBuild && block->catch_entry == true) {
+      catches_.insert(block->start_offset);
+    }
+
+    block->start_offset += start_offset;
+
+    for (MIR* mir = block->first_mir_insn; mir != nullptr; mir = mir->next) {
+      // Update the MIR to know the corresponding method in MIRGraph.
+      mir->m_unit_index = m_units_.size();
+      mir->offset += start_offset;
+
+      // If opcode account is enabled, do the counting for newly inserted MIRs.
+      int opcode = mir->dalvikInsn.opcode;
+      if (opcode_count_ != NULL) {
+        opcode_count_[opcode]++;
+      }
+
+      uint64_t df_flags = oat_data_flow_attributes_[opcode];
+
+      // Updated the merged DF flags.
+      merged_df_flags_ |= df_flags;
+
+      if (df_flags & DF_HAS_DEFS) {
+        def_count_ += (df_flags & DF_A_WIDE) ? 2 : 1;
+      }
+
+      if (df_flags & DF_LVN) {
+        // Run local value numbering on this basic block.
+        block->use_lvn = true;
+      }
+
+      int verify_flags = Instruction::VerifyFlagsOf(mir->dalvikInsn.opcode);
+
+      if (verify_flags & Instruction::kVerifyVarArgRange) {
+        /*
+         * The Quick backend's runtime model includes a gap between a method's
+         * argument ("in") vregs and the rest of its vregs.  Handling a range instruction
+         * which spans the gap is somewhat complicated, and should not happen
+         * in normal usage of dx.  Punt to the interpreter.
+         */
+        int first_reg_in_range = mir->dalvikInsn.vC;
+        int last_reg_in_range = first_reg_in_range + mir->dalvikInsn.vA - 1;
+        if (IsInVReg(first_reg_in_range) != IsInVReg(last_reg_in_range)) {
+          punt_to_interpreter_ = true;
+        }
+      }
+    }
+
+    // Count the branches.
+    if (block->last_mir_insn != nullptr) {
+      if ((Instruction::FlagsOf(block->last_mir_insn->dalvikInsn.opcode) & Instruction::kBranch) != 0) {
+        DexOffset from_offset = block->last_mir_insn->offset;
+
+        ChildBlockIterator child_iter(block, this);
+        for (BasicBlock* child = child_iter.Next(); child != nullptr; child = child_iter.Next()) {
+          CountBranch(from_offset, child->start_offset);
+        }
+      }
+    }
+  }
+
+  // Now update the m_units to contain the newly integrated method.
+  m_units_.push_back(m_unit);
+  m_unit_to_try_block_addr.push_back(control_flow_graph.GetTryBlockAddr());
+  m_unit_to_start_offset.push_back(start_offset);
+
+  // Integration was successful.
+  return true;
+}
+
+/* Parse a Dex method and insert it into the MIRGraph. */
+void MIRGraph::IntegrateMethod(const DexFile::CodeItem* code_item, uint32_t access_flags,
                            InvokeType invoke_type, uint16_t class_def_idx,
                            uint32_t method_idx, jobject class_loader, const DexFile& dex_file) {
   current_code_item_ = code_item;
   method_stack_.push_back(std::make_pair(current_method_, current_offset_));
   current_method_ = m_units_.size();
   current_offset_ = 0;
-  // TODO: will need to snapshot stack image and use that as the mir context identification.
-  m_units_.push_back(new DexCompilationUnit(cu_, class_loader, Runtime::Current()->GetClassLinker(),
-                     dex_file, current_code_item_, class_def_idx, method_idx, access_flags,
-                     cu_->compiler_driver->GetVerifiedMethod(&dex_file, method_idx)));
-  const uint16_t* code_ptr = current_code_item_->insns_;
-  const uint16_t* code_end =
-      current_code_item_->insns_ + current_code_item_->insns_size_in_code_units_;
 
   // TODO: need to rework expansion of block list & try_block_addr when inlining activated.
   // TUNING: use better estimate of basic blocks for following resize.
   block_list_.Resize(block_list_.Size() + current_code_item_->insns_size_in_code_units_);
-  dex_pc_to_block_map_.SetSize(dex_pc_to_block_map_.Size() + current_code_item_->insns_size_in_code_units_);
-
-  // TODO: replace with explicit resize routine.  Using automatic extension side effect for now.
-  try_block_addr_->SetBit(current_code_item_->insns_size_in_code_units_);
-  try_block_addr_->ClearBit(current_code_item_->insns_size_in_code_units_);
 
   // If this is the first method, set up default entry and exit blocks.
   if (current_method_ == 0) {
-    DCHECK(entry_block_ == NULL);
-    DCHECK(exit_block_ == NULL);
-    DCHECK_EQ(num_blocks_, 0U);
-    // Use id 0 to represent a null block.
-    BasicBlock* null_block = NewMemBB(kNullBlock, num_blocks_++);
-    DCHECK_EQ(null_block->id, NullBasicBlockId);
-    null_block->hidden = true;
-    block_list_.Insert(null_block);
-    entry_block_ = NewMemBB(kEntryBlock, num_blocks_++);
-    block_list_.Insert(entry_block_);
-    exit_block_ = NewMemBB(kExitBlock, num_blocks_++);
-    block_list_.Insert(exit_block_);
     // TODO: deprecate all "cu->" fields; move what's left to wherever CompilationUnit is allocated.
     cu_->dex_file = &dex_file;
     cu_->class_def_idx = class_def_idx;
@@ -617,135 +877,13 @@ void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_
      */
   }
 
-  /* Current block to record parsed instructions */
-  BasicBlock* cur_block = NewMemBB(kDalvikByteCode, num_blocks_++);
-  DCHECK_EQ(current_offset_, 0U);
-  cur_block->start_offset = current_offset_;
-  block_list_.Insert(cur_block);
-  // TODO: for inlining support, insert at the insert point rather than entry block.
-  entry_block_->fall_through = cur_block->id;
-  cur_block->predecessors->Insert(entry_block_->id);
-
-  /* Identify code range in try blocks and set up the empty catch blocks */
-  ProcessTryCatchBlocks();
-
-  uint64_t merged_df_flags = 0u;
-
-  /* Parse all instructions and put them into containing basic blocks */
-  while (code_ptr < code_end) {
-    MIR *insn = NewMIR();
-    insn->offset = current_offset_;
-    insn->m_unit_index = current_method_;
-    int width = ParseInsn(code_ptr, &insn->dalvikInsn);
-    Instruction::Code opcode = insn->dalvikInsn.opcode;
-    if (opcode_count_ != NULL) {
-      opcode_count_[static_cast<int>(opcode)]++;
-    }
-
-    int flags = Instruction::FlagsOf(insn->dalvikInsn.opcode);
-    int verify_flags = Instruction::VerifyFlagsOf(insn->dalvikInsn.opcode);
-
-    uint64_t df_flags = GetDataFlowAttributes(insn);
-    merged_df_flags |= df_flags;
-
-    if (df_flags & DF_HAS_DEFS) {
-      def_count_ += (df_flags & DF_A_WIDE) ? 2 : 1;
-    }
-
-    if (df_flags & DF_LVN) {
-      cur_block->use_lvn = true;  // Run local value numbering on this basic block.
-    }
-
-    // Check for inline data block signatures.
-    if (opcode == Instruction::NOP) {
-      // A simple NOP will have a width of 1 at this point, embedded data NOP > 1.
-      if ((width == 1) && ((current_offset_ & 0x1) == 0x1) && ((code_end - code_ptr) > 1)) {
-        // Could be an aligning nop.  If an embedded data NOP follows, treat pair as single unit.
-        uint16_t following_raw_instruction = code_ptr[1];
-        if ((following_raw_instruction == Instruction::kSparseSwitchSignature) ||
-            (following_raw_instruction == Instruction::kPackedSwitchSignature) ||
-            (following_raw_instruction == Instruction::kArrayDataSignature)) {
-          width += Instruction::At(code_ptr + 1)->SizeInCodeUnits();
-        }
-      }
-      if (width == 1) {
-        // It is a simple nop - treat normally.
-        cur_block->AppendMIR(insn);
-      } else {
-        DCHECK(cur_block->fall_through == NullBasicBlockId);
-        DCHECK(cur_block->taken == NullBasicBlockId);
-        // Unreachable instruction, mark for no continuation.
-        flags &= ~Instruction::kContinue;
-      }
-    } else {
-      cur_block->AppendMIR(insn);
-    }
-
-    // Associate the starting dex_pc for this opcode with its containing basic block.
-    dex_pc_to_block_map_.Put(insn->offset, cur_block->id);
-
-    code_ptr += width;
-
-    if (flags & Instruction::kBranch) {
-      cur_block = ProcessCanBranch(cur_block, insn, current_offset_,
-                                   width, flags, code_ptr, code_end);
-    } else if (flags & Instruction::kReturn) {
-      cur_block->terminated_by_return = true;
-      cur_block->fall_through = exit_block_->id;
-      exit_block_->predecessors->Insert(cur_block->id);
-      /*
-       * Terminate the current block if there are instructions
-       * afterwards.
-       */
-      if (code_ptr < code_end) {
-        /*
-         * Create a fallthrough block for real instructions
-         * (incl. NOP).
-         */
-         FindBlock(current_offset_ + width, /* split */ false, /* create */ true,
-                   /* immed_pred_block_p */ NULL);
-      }
-    } else if (flags & Instruction::kThrow) {
-      cur_block = ProcessCanThrow(cur_block, insn, current_offset_, width, flags, try_block_addr_,
-                                  code_ptr, code_end);
-    } else if (flags & Instruction::kSwitch) {
-      cur_block = ProcessCanSwitch(cur_block, insn, current_offset_, width, flags);
-    }
-    if (verify_flags & Instruction::kVerifyVarArgRange) {
-      /*
-       * The Quick backend's runtime model includes a gap between a method's
-       * argument ("in") vregs and the rest of its vregs.  Handling a range instruction
-       * which spans the gap is somewhat complicated, and should not happen
-       * in normal usage of dx.  Punt to the interpreter.
-       */
-      int first_reg_in_range = insn->dalvikInsn.vC;
-      int last_reg_in_range = first_reg_in_range + insn->dalvikInsn.vA - 1;
-      if (IsInVReg(first_reg_in_range) != IsInVReg(last_reg_in_range)) {
-        punt_to_interpreter_ = true;
-      }
-    }
-    current_offset_ += width;
-    BasicBlock* next_block = FindBlock(current_offset_, /* split */ false, /* create */
-                                      false, /* immed_pred_block_p */ NULL);
-    if (next_block) {
-      /*
-       * The next instruction could be the target of a previously parsed
-       * forward branch so a block is already created. If the current
-       * instruction is not an unconditional branch, connect them through
-       * the fall-through link.
-       */
-      DCHECK(cur_block->fall_through == NullBasicBlockId ||
-             GetBasicBlock(cur_block->fall_through) == next_block ||
-             GetBasicBlock(cur_block->fall_through) == exit_block_);
-
-      if ((cur_block->fall_through == NullBasicBlockId) && (flags & Instruction::kContinue)) {
-        cur_block->fall_through = next_block->id;
-        next_block->predecessors->Insert(cur_block->id);
-      }
-      cur_block = next_block;
-    }
-  }
-  merged_df_flags_ = merged_df_flags;
+  // TODO: will need to snapshot stack image and use that as the mir context identification.
+  std::unique_ptr<DexCompilationUnit> initial_m_unit(
+      new DexCompilationUnit(cu_, class_loader, Runtime::Current()->GetClassLinker(), dex_file, current_code_item_,
+                             class_def_idx, method_idx, access_flags,
+                             cu_->compiler_driver->GetVerifiedMethod(&dex_file, method_idx)));
+  ControlFlowGraph method_cfg(arena_, code_item, 0, cu_->disable_opt & (1 << kSuppressExceptionEdges));
+  MergeCFG(initial_m_unit.release(), method_cfg);
 
   if (cu_->enable_debug & (1 << kDebugDumpCFG)) {
     DumpCFG("/sdcard/1_post_parse_cfg/", true);
@@ -835,12 +973,13 @@ void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suff
                         mir->next ? " | " : " ");
               }
             } else {
-              fprintf(file, "    {%04x %s %s %s\\l}%s\\\n", mir->offset,
+              fprintf(file, "    {%04x %s %s %s %s\\l}%s\\\n", mir->offset,
                       mir->ssa_rep ? GetDalvikDisassembly(mir) :
                       !IsPseudoMirOp(opcode) ? Instruction::Name(mir->dalvikInsn.opcode) :
                         extended_mir_op_names_[opcode - kMirOpFirst],
                       (mir->optimization_flags & MIR_IGNORE_RANGE_CHECK) != 0 ? " no_rangecheck" : " ",
                       (mir->optimization_flags & MIR_IGNORE_NULL_CHECK) != 0 ? " no_nullcheck" : " ",
+                      (mir->optimization_flags & MIR_CALLEE) != 0 ? " inlined" : " ",
                       mir->next ? " | " : " ");
             }
         }
@@ -1375,24 +1514,27 @@ CallInfo* MIRGraph::NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type,
   return info;
 }
 
-// Allocate a new MIR.
-MIR* MIRGraph::NewMIR() {
-  MIR* mir = new (arena_) MIR();
+MIR* ControlFlowGraph::NewMIR(ArenaAllocator* arena) {
+  MIR* mir = new (arena) MIR();
   return mir;
 }
 
+// Allocate a new MIR.
+MIR* MIRGraph::NewMIR() {
+  return ControlFlowGraph::NewMIR(arena_);
+}
+
 // Allocate a new basic block.
-BasicBlock* MIRGraph::NewMemBB(BBType block_type, int block_id) {
-  BasicBlock* bb = new (arena_) BasicBlock();
+BasicBlock* ControlFlowGraph::NewMemBB(ArenaAllocator* arena, BBType block_type, int block_id) {
+  BasicBlock* bb = new (arena) BasicBlock();
 
   bb->block_type = block_type;
   bb->id = block_id;
   // TUNING: better estimate of the exit block predecessors?
-  bb->predecessors = new (arena_) GrowableArray<BasicBlockId>(arena_,
+  bb->predecessors = new (arena) GrowableArray<BasicBlockId>(arena,
                                                              (block_type == kExitBlock) ? 2048 : 2,
                                                              kGrowableArrayPredecessors);
   bb->successor_block_list_type = kNotUsed;
-  block_id_map_.Put(block_id, block_id);
   return bb;
 }
 
@@ -1935,8 +2077,14 @@ void BasicBlock::UpdatePredecessor(BasicBlockId old_parent, BasicBlockId new_par
 // Create a new basic block with block_id as num_blocks_ that is
 // post-incremented.
 BasicBlock* MIRGraph::CreateNewBB(BBType block_type) {
-  BasicBlock* res = NewMemBB(block_type, num_blocks_++);
+  int block_id = num_blocks_++;
+  return CreateNewBB(block_type, block_id);
+}
+
+BasicBlock* MIRGraph::CreateNewBB(BBType block_type, int block_id) {
+  BasicBlock* res = ControlFlowGraph::NewMemBB(arena_, block_type, block_id);
   block_list_.Insert(res);
+  block_id_map_.Put(block_id, block_id);
   return res;
 }
 
