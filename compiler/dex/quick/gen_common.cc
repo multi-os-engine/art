@@ -1327,7 +1327,7 @@ void Mir2Lir::GenInstanceof(uint32_t type_idx, RegLocation rl_dest, RegLocation 
   }
 }
 
-void Mir2Lir::GenCheckCast(uint32_t insn_idx, uint32_t type_idx, RegLocation rl_src) {
+void Mir2Lir::GenCheckCast(DexCompilationUnit* m_unit, uint32_t insn_idx, uint32_t type_idx, RegLocation rl_src) {
   bool type_known_final, type_known_abstract, use_declaring_class;
   bool needs_access_check = !cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx,
                                                                               *cu_->dex_file,
@@ -1337,8 +1337,7 @@ void Mir2Lir::GenCheckCast(uint32_t insn_idx, uint32_t type_idx, RegLocation rl_
                                                                               &use_declaring_class);
   // Note: currently type_known_final is unused, as optimizing will only improve the performance
   // of the exception throw path.
-  DexCompilationUnit* cu = mir_graph_->GetCurrentDexCompilationUnit();
-  if (!needs_access_check && cu_->compiler_driver->IsSafeCast(cu, insn_idx)) {
+  if (!needs_access_check && cu_->compiler_driver->IsSafeCast(m_unit, insn_idx)) {
     // Verifier type analysis proved this check cast would never cause an exception.
     return;
   }

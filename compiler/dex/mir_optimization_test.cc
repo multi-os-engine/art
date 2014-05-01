@@ -107,8 +107,7 @@ class ClassInitCheckEliminationTest : public testing::Test {
     ASSERT_EQ(kExitBlock, defs[2].type);
     for (size_t i = 0u; i != count; ++i) {
       const BBDef* def = &defs[i];
-      BasicBlock* bb = cu_.mir_graph->NewMemBB(def->type, i);
-      cu_.mir_graph->block_list_.Insert(bb);
+      BasicBlock* bb = cu_.mir_graph->CreateNewBB(def->type, i);
       if (def->num_successors <= 2) {
         bb->successor_block_list_type = kNotUsed;
         bb->successor_blocks = nullptr;
@@ -179,7 +178,7 @@ class ClassInitCheckEliminationTest : public testing::Test {
         cu_.arena.Alloc(sizeof(DexFile::CodeItem), kArenaAllocMisc));
     memset(code_item_, 0, sizeof(DexFile::CodeItem));
     code_item_->insns_size_in_code_units_ = 2u * count;
-    cu_.mir_graph->current_code_item_ = cu_.code_item = code_item_;
+    cu_.code_item = code_item_;
   }
 
   template <size_t count>

@@ -725,7 +725,7 @@ bool DexFileMethodInliner::GenInlineReturnArg(MIRGraph* mir_graph, BasicBlock* b
 bool DexFileMethodInliner::GenInlineIGet(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
                                          MIR* move_result, const InlineMethod& method,
                                          uint32_t method_idx) {
-  CompilationUnit* cu = mir_graph->GetCurrentDexCompilationUnit()->GetCompilationUnit();
+  CompilationUnit* cu = mir_graph->GetDexCompilationUnitByMir(invoke)->GetCompilationUnit();
   if (cu->enable_debug & (1 << kDebugSlowFieldPath)) {
     return false;
   }
@@ -777,7 +777,7 @@ bool DexFileMethodInliner::GenInlineIGet(MIRGraph* mir_graph, BasicBlock* bb, MI
 bool DexFileMethodInliner::GenInlineIPut(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
                                          MIR* move_result, const InlineMethod& method,
                                          uint32_t method_idx) {
-  CompilationUnit* cu = mir_graph->GetCurrentDexCompilationUnit()->GetCompilationUnit();
+  CompilationUnit* cu = mir_graph->GetDexCompilationUnitByMir(invoke)->GetCompilationUnit();
   if (cu->enable_debug & (1 << kDebugSlowFieldPath)) {
     return false;
   }

@@ -1108,7 +1108,7 @@ bool MIRGraph::SkipCompilation(std::string* skip_message) {
 
 void MIRGraph::DoCacheFieldLoweringInfo() {
   // All IGET/IPUT/SGET/SPUT instructions take 2 code units and there must also be a RETURN.
-  const uint32_t max_refs = (current_code_item_->insns_size_in_code_units_ - 1u) / 2u;
+  const uint32_t max_refs = (GetNumDalvikInsns() - 1u) / 2u;
   ScopedArenaAllocator allocator(&cu_->arena_stack);
   uint16_t* field_idxs =
       reinterpret_cast<uint16_t*>(allocator.Alloc(max_refs * sizeof(uint16_t), kArenaAllocMisc));
@@ -1124,7 +1124,7 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
     for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
       if (mir->dalvikInsn.opcode >= Instruction::IGET &&
           mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) {
-        const Instruction* insn = Instruction::At(current_code_item_->insns_ + mir->offset);
+        const Instruction* insn = GetInstructionFor(mir);
         // Get field index and try to find it among existing indexes. If found, it's usually among
         // the last few added, so we'll start the search from ifield_pos/sfield_pos. Though this
         // is a linear search, it actually performs much better than map based approach.
@@ -1221,7 +1221,7 @@ void MIRGraph::DoCacheMethodLoweringInfo() {
   ScopedArenaAllocator allocator(&cu_->arena_stack);
 
   // All INVOKE instructions take 3 code units and there must also be a RETURN.
-  uint32_t max_refs = (current_code_item_->insns_size_in_code_units_ - 1u) / 3u;
+  uint32_t max_refs = (GetNumDalvikInsns() - 1u) / 3u;
 
   // Map invoke key (see MapEntry) to lowering info index and vice versa.
   // The invoke_map and sequential entries are essentially equivalent to Boost.MultiIndex's
@@ -1242,7 +1242,7 @@ void MIRGraph::DoCacheMethodLoweringInfo() {
           mir->dalvikInsn.opcode <= Instruction::INVOKE_INTERFACE_RANGE &&
           mir->dalvikInsn.opcode != Instruction::RETURN_VOID_BARRIER) {
         // Decode target method index and invoke type.
-        const Instruction* insn = Instruction::At(current_code_item_->insns_ + mir->offset);
+        const Instruction* insn = GetInstructionFor(mir);
         uint16_t target_method_idx;
         uint16_t invoke_type_idx;
         if (mir->dalvikInsn.opcode <= Instruction::INVOKE_INTERFACE) {
