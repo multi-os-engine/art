@@ -216,6 +216,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
       LOCAL_CFLAGS += $(ART_HOST_DEBUG_CFLAGS)
     endif
     LOCAL_SHARED_LIBRARIES += libartd
+    LOCAL_SHARED_LIBRARIES += libartd-analysis
   else
     ifeq ($$(art_target_or_host),target)
       LOCAL_CFLAGS += $(ART_TARGET_NON_DEBUG_CFLAGS)
@@ -223,6 +224,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
       LOCAL_CFLAGS += $(ART_HOST_NON_DEBUG_CFLAGS)
     endif
     LOCAL_SHARED_LIBRARIES += libart
+    LOCAL_SHARED_LIBRARIES += libart-analysis
   endif
   ifeq ($(ART_USE_PORTABLE_COMPILER),true)
     LOCAL_SHARED_LIBRARIES += libLLVM
@@ -246,7 +248,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     include $(LLVM_GEN_INTRINSICS_MK)
   endif
 
-  LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime
+  LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime art/analysis
 
   ifeq ($$(art_target_or_host),host)
     LOCAL_LDLIBS += -ldl -lpthread

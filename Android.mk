@@ -83,6 +83,7 @@ ifneq ($(art_dont_bother),true)
 ########################################################################
 # product targets
 include $(art_path)/runtime/Android.mk
+include $(art_path)/analysis/Android.mk
 include $(art_path)/compiler/Android.mk
 include $(art_path)/dex2oat/Android.mk
 include $(art_path)/disassembler/Android.mk

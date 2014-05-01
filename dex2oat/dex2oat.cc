@@ -763,6 +763,7 @@ static int dex2oat(int argc, char** argv) {
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = !kIsTargetBuild;
   bool generate_gdb_information = kIsDebugBuild;
+  bool use_static_analyzer = false;
 
   for (int i = 0; i < argc; i++) {
     const StringPiece option(argv[i]);
@@ -923,6 +924,8 @@ static int dex2oat(int argc, char** argv) {
     } else if (option.starts_with("--disable-passes=")) {
       std::string disable_passes = option.substr(strlen("--disable-passes=")).data();
       PassDriverME::CreateDefaultPassList(disable_passes);
+    } else if (option == "--use-static-analyzer") {
+      use_static_analyzer = true;
     } else {
       Usage("Unknown argument %s", option.data());
     }
@@ -1105,6 +1108,9 @@ static int dex2oat(int argc, char** argv) {
   }
 
   VerificationResults verification_results(&compiler_options);
+  if (use_static_analyzer) {
+    verification_results.InitStaticAnalyzer();
+  }
   DexFileToMethodInlinerMap method_inliner_map;
   CompilerCallbacksImpl callbacks(&verification_results, &method_inliner_map);
   runtime_options.push_back(std::make_pair("compilercallbacks", &callbacks));

@@ -36,6 +36,8 @@ class MethodVerifier;
 class CompilerOptions;
 class VerifiedMethod;
 
+class StaticAnalyzer;
+
 // Used by CompilerCallbacks to track verification information from the Runtime.
 class VerificationResults {
   public:
@@ -55,6 +57,11 @@ class VerificationResults {
     bool IsCandidateForCompilation(MethodReference& method_ref,
                                    const uint32_t access_flags);
 
+    // Getter for the Static Analyzer
+    StaticAnalyzer* GetStaticAnalyzer();
+    // Calls to init the static analyzer. Will not initialize it if already initialized.
+    void InitStaticAnalyzer();
+
   private:
     // Verified methods.
     typedef SafeMap<MethodReference, const VerifiedMethod*,
@@ -65,6 +72,8 @@ class VerificationResults {
     // Rejected classes.
     ReaderWriterMutex rejected_classes_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
     std::set<ClassReference> rejected_classes_ GUARDED_BY(rejected_classes_lock_);
+
+    std::unique_ptr<StaticAnalyzer> static_analyzer_;
 };
 
 }  // namespace art
