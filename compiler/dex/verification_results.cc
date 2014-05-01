@@ -21,6 +21,7 @@
 #include "base/mutex-inl.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
+#include "static_analyzer.h"
 #include "thread.h"
 #include "thread-inl.h"
 #include "verified_method.h"
@@ -111,6 +112,18 @@ bool VerificationResults::IsCandidateForCompilation(MethodReference& method_ref,
     return false;
   }
   return true;
+}
+
+// Getter for the Static Analyzer
+StaticAnalyzer* VerificationResults::GetStaticAnalyzer() {
+  return static_analyzer_.get();
+}
+
+// Calls to init the static analyzer. Will not initialize it if already initialized.
+void VerificationResults::InitStaticAnalyzer() {
+  if (GetStaticAnalyzer() == nullptr) {
+    static_analyzer_.reset(new StaticAnalyzer());
+  }
 }
 
 }  // namespace art
