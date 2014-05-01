@@ -864,7 +864,7 @@ class Mir2Lir : public Backend {
     void GenNewInstance(uint32_t type_idx, RegLocation rl_dest);
     void GenThrow(RegLocation rl_src);
     void GenInstanceof(uint32_t type_idx, RegLocation rl_dest, RegLocation rl_src);
-    void GenCheckCast(uint32_t insn_idx, uint32_t type_idx, RegLocation rl_src);
+    void GenCheckCast(DexCompilationUnit* m_unit, uint32_t insn_idx, uint32_t type_idx, RegLocation rl_src);
     void GenLong3Addr(OpKind first_op, OpKind second_op, RegLocation rl_dest,
                       RegLocation rl_src1, RegLocation rl_src2);
     virtual void GenShiftOpLong(Instruction::Code opcode, RegLocation rl_dest,

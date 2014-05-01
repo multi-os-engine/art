@@ -520,6 +520,298 @@ struct CallInfo {
 const RegLocation bad_loc = {kLocDalvikFrame, 0, 0, 0, 0, 0, 0, 0, 0, RegStorage(), INVALID_SREG,
                              INVALID_SREG};
 
+/**
+ * @brief Abstraction that is used to represent the control flow graph of a method.
+ */
+class ControlFlowGraph {
+ public:
+  /**
+   * @brief Used to construct a control flow graph from a code item.
+   * @param arena The arena to use for allocations. If blocks will be merged
+   * into MIRGraph, it makes sense to use its arena.
+   * @param code_item The code item for which to create the CFG.
+   * @param start_offset The start offset at which to create the CFG. In normal cases
+   * this should be zero to handle the whole method.
+   * @param supress_exception_edges Whether exception edges should be supressed.
+   */
+  explicit ControlFlowGraph(ArenaAllocator* arena, const DexFile::CodeItem* code_item,
+                            DexOffset start_offset, bool supress_exception_edges);
+
+  /**
+   * @return Returns the entry block.
+   */
+  BasicBlock* GetEntryBlock() const {
+    return entry_block_;
+  }
+
+  /**
+   * @return Returns the exit block.
+   */
+  BasicBlock* GetExitBlock() const {
+    return exit_block_;
+  }
+
+  /**
+   * @brief Used to obtain the single return mir of the CFG.
+   * @details Caller must guarantee that there is just one by calling GetNumReturns.
+   * @return Returns the return mir.
+   */
+  MIR* GetReturnMir() const {
+    CHECK_EQ(return_mirs_.size(), 1u);
+    return return_mirs_[0];
+  }
+
+  /**
+   * @return Returns the number of return mirs in graph.
+   */
+  size_t GetNumReturns() const {
+    return return_mirs_.size();
+  }
+
+  /**
+   * @return Returns a list of all the return mirs.
+   */
+  std::vector<MIR*>& GetReturnMirs() {
+    return return_mirs_;
+  }
+
+  /**
+   * @return Returns the bitvector that represents offsets in try blocks.
+   */
+  ArenaBitVector* GetTryBlockAddr() const {
+    return try_block_addr_;
+  }
+
+  /**
+   * @return Returns the list of all of the blocks.
+   */
+  GrowableArray<BasicBlock*>& GetBlockList() {
+    return block_list_;
+  }
+
+  /**
+   * @param block_id The id of the block to get.
+   * @return Returns the basic block with the given id.
+   */
+  BasicBlock* GetBasicBlock(BasicBlockId block_id) const {
+    CHECK_LT(block_id, block_list_.Size());
+    return (block_id == NullBasicBlockId) ? nullptr : block_list_.Get(block_id);
+  }
+
+  /**
+   * @return Returns the number of virtual registers in method represented by graph.
+   */
+  uint32_t GetNumVRegs() const {
+    return num_vregs_;
+  }
+
+  /**
+   * @return Returns the number of "in" VRs in method represented by graph.
+   */
+  uint32_t GetNumIns() const {
+    return num_ins_;
+  }
+
+  /**
+   * @return Returns the number of bytecodes in graph.
+   */
+  uint32_t GetNumBytecodes() const {
+    return num_bytecodes_;
+  }
+
+  /**
+   * @return Returns the VR name of the first "in".
+   */
+  uint32_t GetFirstInNumber() const {
+    return GetNumVRegs() - GetNumIns();
+  }
+
+  const DexFile::CodeItem* GetCodeItem() const {
+    return current_code_item_;
+  }
+
+  /**
+   * @brief Used to allocate a new empty basic block.
+   * @param arena The arena in which to allocate it.
+   * @param block_type The block type to create.
+   * @param block_id The id of the new block.
+   * @return Returns the newly created block.
+   */
+  static BasicBlock* NewMemBB(ArenaAllocator* arena, BBType block_type, int block_id);
+
+  /**
+   * @brief Used to allocate a new empty MIR.
+   * @param arena The arena to use for allocation.
+   * @return Returns the newly created MIR.
+   */
+  static MIR* NewMIR(ArenaAllocator* arena);
+
+ private:
+  /**
+   * @brief Used to decode a MIR instruction pointed to.
+   * @param code_ptr The code pointer at which to decode instruction.
+   * @param decoded_instruction Updated by method to contain decoded instruction.
+   * @return Returns the length of the instruction.
+   */
+  int ParseInsn(const uint16_t* code_ptr, MIR::DecodedInstruction* decoded_instruction);
+
+  /**
+   * @brief Used to find a block at the requested code offset.
+   * @param code_offset The offset to look for.
+   * @param split If offset is in middle of block, this represents if split can happen.
+   * @param create If the block does not exist, this represents if it can be created.
+   * @param immed_pred_block_p If provided, it will update pointer to hold newly created block
+   * after split.
+   * @return Returns the block with the corresponding offset if one was found.
+   */
+  BasicBlock* FindBlock(DexOffset code_offset, bool split, bool create, BasicBlock** immed_pred_block_p);
+
+  /**
+   * @brief Used to split a block into two.
+   * @param code_offset Represents the offset at which the split should happen.
+   * @param orig_block The original block to split.
+   * @param immed_pred_block_p If provided, it will update pointed to hold newly created block
+   * after split.
+   * @return Returns the newly create block after split.
+   */
+  BasicBlock* SplitBlock(DexOffset code_offset, BasicBlock* orig_block, BasicBlock** immed_pred_block_p);
+
+  bool IsBadMonitorExitCatch(NarrowDexOffset monitor_exit_offset, NarrowDexOffset catch_offset);
+
+  /**
+   * @brief Used to process all of the try/catch information for method.
+   * @details try_block_addr_ is updated.
+   */
+  void ProcessTryCatchBlocks();
+
+  /**
+   * @brief Used to handle a branching MIR.
+   * @param cur_block The current block being handled.
+   * @param insn The branching MIR.
+   * @param cur_offset The offset of the branching MIR.
+   * @param width The width of the branching MIR.
+   * @param flags Dex flags of branching MIR.
+   * @param code_ptr The current code pointer of the dex code item.
+   * @param code_end The end code pointer of the dex code item.
+   * @return Returns current block (which may be updated after a split).
+   */
+  BasicBlock* ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
+                               int flags, const uint16_t* code_ptr, const uint16_t* code_end);
+
+  /**
+   * @brief Used to handle a switching MIR.
+   * @param cur_block The current block being handled.
+   * @param insn The switching MIR.
+   * @param cur_offset The offset of the switching MIR.
+   * @param width The width of the switching MIR.
+   * @param flags Dex flags of switching MIR.
+   * @return Returns current block (which may be updated after a split).
+   */
+  BasicBlock* ProcessCanSwitch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
+                               int flags);
+
+  /**
+   * @brief Used to handle a throwing MIR.
+   * @param cur_block The current block being handled.
+   * @param insn The throwing MIR.
+   * @param cur_offset The offset of the throwing MIR.
+   * @param width The width of the throwing MIR.
+   * @param flags Dex flags of throwing MIR.
+   * @param try_block_addr The bitvector that represents whether offset is in try block.
+   * @param code_ptr The current code pointer of the dex code item.
+   * @param code_end The end code pointer of the dex code item.
+   * @param supress_exception_edges Whether the exception edges should be supressed.
+   * @return Returns current block (which may be updated after a split).
+   */
+  BasicBlock* ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
+                              int flags, ArenaBitVector* try_block_addr, const uint16_t* code_ptr,
+                              const uint16_t* code_end, bool supress_exception_edges);
+
+  /**
+   * @brief Used to create a block and automatically give it an id and insert in block list.
+   * @param block_type The block type to create.
+   * @return Returns the newly created block.
+   */
+  BasicBlock* CreateNewBB(BBType block_type) {
+    BasicBlock* new_block = NewMemBB(arena_, block_type, block_list_.Size());
+    block_list_.Insert(new_block);
+    return new_block;
+  }
+
+  /**
+   * @brief Helper to update fallthrough of a block.
+   * @param parent The parent whose child to update.
+   * @param new_child The new child to set as fallthrough.
+   */
+  void UpdateFallthrough(BasicBlock *parent, BasicBlock *new_child) {
+    BasicBlock *old_child = GetBasicBlock(parent->fall_through);
+    parent->fall_through = new_child->id;
+    new_child->predecessors->Insert(parent->id);
+    if (old_child != nullptr) {
+      old_child->predecessors->Delete(parent->id);
+    }
+  }
+
+  /**
+   * @brief Helper to update taken of a block.
+   * @param parent The parent whose child to update.
+   * @param new_child The new child to set as taken.
+   */
+  void UpdateTaken(BasicBlock *parent, BasicBlock *new_child) {
+    BasicBlock *old_child = GetBasicBlock(parent->taken);
+    parent->taken = new_child->id;
+    new_child->predecessors->Insert(parent->id);
+    if (old_child != nullptr) {
+      old_child->predecessors->Delete(parent->id);
+    }
+  }
+
+  /**
+   * @brief The single entry block.
+   */
+  BasicBlock* entry_block_;
+
+  /**
+   * @brief The single exit block.
+   */
+  BasicBlock* exit_block_;
+
+  /**
+   * @brief List of all of the return mirs.
+   */
+  std::vector<MIR*> return_mirs_;
+
+  /**
+   * @brief The code item (from dex file) that was used to create CFG.
+   */
+  const DexFile::CodeItem* current_code_item_;
+
+  /**
+   * @brief The arena used to allocate blocks and MIRs.
+   */
+  ArenaAllocator* arena_;
+
+  /**
+   * @brief Bitvector in which the bits set represent the dex offset. If bit is
+   * set, it means that offset is in try block.
+   */
+  ArenaBitVector* try_block_addr_;
+
+  /**
+   * @brief Represents map of dex offset to corresponding block that contains it.
+   */
+  SafeMap<DexOffset, BasicBlock*> dex_pc_to_block_map_;
+
+  /**
+   * @brief Keeps track of block list of the control flow graph.
+   */
+  GrowableArray<BasicBlock*> block_list_;
+
+  uint16_t num_vregs_;      /** !< Number of virtual registers of method represented by graph. */
+  uint16_t num_ins_;        /** !< Number of ins of method represented by graph. */
+  uint32_t num_bytecodes_;  /** !< Number of bytecodes in graph. */
+};
+
 class MIRGraph {
  public:
   MIRGraph(CompilationUnit* cu, ArenaAllocator* arena);
@@ -540,33 +832,82 @@ class MIRGraph {
    * Parse dex method and add MIR at current insert point.  Returns id (which is
    * actually the index of the method in the m_units_ array).
    */
-  void InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_flags,
+  void IntegrateMethod(const DexFile::CodeItem* code_item, uint32_t access_flags,
                     InvokeType invoke_type, uint16_t class_def_idx,
                     uint32_t method_idx, jobject class_loader, const DexFile& dex_file);
 
+  /**
+   * @brief Used to merge a new method with its CFG into current MIRGraph.
+   * @details All of the key MIRGraph data structures are updated to reflect the
+   * newly integrated CFG. However, one key aspect of MergeCFG is that it does
+   * not actually insert in a way that it is makes the blocks reachable (unless
+   * it is the first method inserted). Thus, an inliner would have to explicitly
+   * create those links.
+   * @param m_unit The dex compilation unit for method.
+   * @param control_flow_graph The control flow graph of method to integrate.
+   * @return Returns whether integration was successful.
+   */
+  bool MergeCFG(DexCompilationUnit* m_unit, ControlFlowGraph& control_flow_graph);
+
   /* Find existing block */
   BasicBlock* FindBlock(DexOffset code_offset) {
-    return FindBlock(code_offset, false, false, NULL);
-  }
-
-  const uint16_t* GetCurrentInsns() const {
-    return current_code_item_->insns_;
+    GrowableArray<BasicBlock*>::Iterator iter(&block_list_);
+    for (BasicBlock* bb = iter.Next(); bb != NULL; bb = iter.Next()) {
+      if (bb->start_offset == code_offset) {
+        return bb;
+      }
+    }
+    return nullptr;
   }
 
   const uint16_t* GetInsns(int m_unit_index) const {
-    return m_units_[m_unit_index]->GetCodeItem()->insns_;
+    return GetCodeItem(m_unit_index)->insns_;
+  }
+
+  DexOffset GetDexCompilationUnitStartOffset(int m_unit_index) const {
+    return m_unit_to_start_offset[m_unit_index];
+  }
+
+  /**
+   * @brief This is used to get a MIR's original offset from its dex file.
+   * @details This exists because integrating multiple methods is done by making
+   * sure that the offsets are not overlapping (for better MIR tracking).
+   * @param mir The mir whose original offset to get.
+   * @return Returns the original offset from dex file.
+   */
+  DexOffset GetMirOriginalOffset(const MIR* mir) const {
+    DexOffset real_offset = mir->offset - GetDexCompilationUnitStartOffset(mir->m_unit_index);
+    return real_offset;
+  }
+
+  const Instruction* GetInstructionFor(const MIR* mir) const {
+    return Instruction::At(GetInsns(mir->m_unit_index) + GetMirOriginalOffset(mir));
   }
 
   unsigned int GetNumBlocks() const {
     return num_blocks_;
   }
 
+  /**
+   * @brief Includes all methods in compilation unit when providing the num dalvik instructions.
+   * @return Returns the cumulative sum of all insn sizes (in code units).
+   */
   size_t GetNumDalvikInsns() const {
-    return cu_->code_item->insns_size_in_code_units_;
+    size_t cumulative_size = 0u;
+    for (auto it : m_units_) {
+      const DexFile::CodeItem* code_item = it->GetCodeItem();
+      cumulative_size += (code_item == nullptr ? 0 : code_item->insns_size_in_code_units_);
+    }
+    return cumulative_size;
   }
 
-  ArenaBitVector* GetTryBlockAddr() const {
-    return try_block_addr_;
+  /**
+   * @brief Used to determine if MIR is in try block.
+   * @param mir The mir to check.
+   * @return Returns true if MIR is in a try block.
+   */
+  bool IsMirInTryBlock(MIR* mir) {
+    return m_unit_to_try_block_addr[mir->m_unit_index]->IsBitSet(GetMirOriginalOffset(mir));
   }
 
   BasicBlock* GetEntryBlock() const {
@@ -617,7 +958,30 @@ class MIRGraph {
   void ShowOpcodeStats();
 
   DexCompilationUnit* GetCurrentDexCompilationUnit() const {
-    return m_units_[current_method_];
+    // The callers of this really expect that they obtain the compilation unit
+    // for the single method in compilation unit. Eventually when multiple
+    // methods can reside, the caller should get the appropriate dex compilation
+    // unit as the context indicates.
+    return GetDexCompilationUnit(0);
+  }
+
+  DexCompilationUnit* GetDexCompilationUnit(uint16_t m_unit_index) const {
+    return m_units_[m_unit_index];
+  }
+
+  DexCompilationUnit* GetDexCompilationUnitByMir(MIR* mir) const {
+    return GetDexCompilationUnit(mir->m_unit_index);
+  }
+
+  const DexFile::CodeItem* GetCodeItem(uint16_t m_unit_index) const {
+    return GetDexCompilationUnit(m_unit_index)->GetCodeItem();
+  }
+
+  uint16_t GetNumMethodsInlined() {
+    if (m_units_.size() == 0) {
+      return 0;
+    }
+    return m_units_.size() - 1;
   }
 
   /**
@@ -856,17 +1220,24 @@ class MIRGraph {
     return reg_location_[method_sreg_];
   }
 
+  static bool IsBackedge(BasicBlock* from_bb, BasicBlock* target_bb) {
+    if (from_bb == nullptr || target_bb == nullptr) {
+      return false;
+    }
+    return (target_bb->start_offset <= from_bb->start_offset);
+  }
+
   bool IsBackedge(BasicBlock* branch_bb, BasicBlockId target_bb_id) {
     return ((target_bb_id != NullBasicBlockId) &&
-            (GetBasicBlock(target_bb_id)->start_offset <= branch_bb->start_offset));
+            (IsBackedge(branch_bb, GetBasicBlock(target_bb_id))));
   }
 
   bool IsBackwardsBranch(BasicBlock* branch_bb) {
     return IsBackedge(branch_bb, branch_bb->taken) || IsBackedge(branch_bb, branch_bb->fall_through);
   }
 
-  void CountBranch(DexOffset target_offset) {
-    if (target_offset <= current_offset_) {
+  void CountBranch(DexOffset from_offset, DexOffset target_offset) {
+    if (target_offset <= from_offset) {
       backward_branches_++;
     } else {
       forward_branches_++;
@@ -948,13 +1319,13 @@ class MIRGraph {
   const char* GetShortyFromTargetIdx(int);
   void DumpMIRGraph();
   CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range);
-  BasicBlock* NewMemBB(BBType block_type, int block_id);
   MIR* NewMIR();
   MIR* AdvanceMIR(BasicBlock** p_bb, MIR* mir);
   BasicBlock* NextDominatedBlock(BasicBlock* bb);
   bool LayoutBlocks(BasicBlock* bb);
   void ComputeTopologicalSortOrder();
   BasicBlock* CreateNewBB(BBType block_type);
+  BasicBlock* CreateNewBB(BBType block_type, int block_id);
 
   bool InlineCallsGate();
   void InlineCallsStart();
@@ -1060,22 +1431,6 @@ class MIRGraph {
                        ArenaBitVector* live_in_v, int dalvik_reg_id);
   void HandleDef(ArenaBitVector* def_v, int dalvik_reg_id);
   bool DoSSAConversion(BasicBlock* bb);
-  bool InvokeUsesMethodStar(MIR* mir);
-  int ParseInsn(const uint16_t* code_ptr, MIR::DecodedInstruction* decoded_instruction);
-  bool ContentIsInsn(const uint16_t* code_ptr);
-  BasicBlock* SplitBlock(DexOffset code_offset, BasicBlock* orig_block,
-                         BasicBlock** immed_pred_block_p);
-  BasicBlock* FindBlock(DexOffset code_offset, bool split, bool create,
-                        BasicBlock** immed_pred_block_p);
-  void ProcessTryCatchBlocks();
-  bool IsBadMonitorExitCatch(NarrowDexOffset monitor_exit_offset, NarrowDexOffset catch_offset);
-  BasicBlock* ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
-                               int flags, const uint16_t* code_ptr, const uint16_t* code_end);
-  BasicBlock* ProcessCanSwitch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
-                               int flags);
-  BasicBlock* ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
-                              int flags, ArenaBitVector* try_block_addr, const uint16_t* code_ptr,
-                              const uint16_t* code_end);
   int AddNewSReg(int v_reg);
   void HandleSSAUse(int* uses, int dalvik_reg, int reg_index);
   void DataFlowSSAFormat35C(MIR* mir);
@@ -1131,17 +1486,31 @@ class MIRGraph {
   std::unique_ptr<GlobalValueNumbering> temp_gvn_;
   static const int kInvalidEntry = -1;
   GrowableArray<BasicBlock*> block_list_;
-  ArenaBitVector* try_block_addr_;
   BasicBlock* entry_block_;
   BasicBlock* exit_block_;
   unsigned int num_blocks_;
-  const DexFile::CodeItem* current_code_item_;
-  GrowableArray<uint16_t> dex_pc_to_block_map_;  // FindBlock lookup cache.
-  std::vector<DexCompilationUnit*> m_units_;     // List of methods included in this graph
-  typedef std::pair<int, int> MIRLocation;       // Insert point, (m_unit_ index, offset)
-  std::vector<MIRLocation> method_stack_;        // Include stack
-  int current_method_;
-  DexOffset current_offset_;                     // Offset in code units
+
+  /**
+   * @brief List of dex compilation units for each method included in graph.
+   */
+  std::vector<DexCompilationUnit*> m_units_;
+
+  /**
+   * @brief Contains BitVectors that represent the address ranges that are inside a try block.
+   * @details Keeps track of this information for all of the methods in MIRGraph. This structure
+   * is indexed by the corresponding position in the m_units_. This keeps original MIR offsets
+   * instead of renamed ones so GetMirOriginalOffset should be used to get the real offset.
+   */
+  std::vector<ArenaBitVector *> m_unit_to_try_block_addr;
+
+  /**
+   * @brief Keeps track of the start offsets for each method in MIRGraph.
+   * @details All inlined callees contained renamed offsets corresponding to the start.
+   * Getting the real offset means getting a MIR's m_unit and subtracting the start offset
+   * from the actual MIR offset.
+   */
+  std::vector<DexOffset> m_unit_to_start_offset;
+
   int def_count_;                                // Used to estimate size of ssa name storage.
   int* opcode_count_;                            // Dex opcode coverage stats.
   int num_ssa_regs_;                             // Number of names following SSA transformation.

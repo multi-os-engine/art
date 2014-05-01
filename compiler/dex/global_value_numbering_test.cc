@@ -181,8 +181,7 @@ class GlobalValueNumberingTest : public testing::Test {
     ASSERT_EQ(kExitBlock, defs[2].type);
     for (size_t i = 0u; i != count; ++i) {
       const BBDef* def = &defs[i];
-      BasicBlock* bb = cu_.mir_graph->NewMemBB(def->type, i);
-      cu_.mir_graph->block_list_.Insert(bb);
+      BasicBlock* bb = cu_.mir_graph->CreateNewBB(def->type, i);
       if (def->num_successors <= 2) {
         bb->successor_block_list_type = kNotUsed;
         bb->successor_blocks = nullptr;

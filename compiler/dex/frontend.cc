@@ -697,7 +697,7 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
   }
 
   /* Build the raw MIR graph */
-  cu.mir_graph->InlineMethod(code_item, access_flags, invoke_type, class_def_idx, method_idx,
+  cu.mir_graph->IntegrateMethod(code_item, access_flags, invoke_type, class_def_idx, method_idx,
                               class_loader, dex_file);
 
   if (!CanCompileMethod(method_idx, dex_file, cu)) {
