@@ -51,6 +51,7 @@
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
 #include "handle_scope-inl.h"
+#include "static_analyzer.h"
 #include "thread.h"
 #include "thread_pool.h"
 #include "trampolines/trampoline_compiler.h"
@@ -509,6 +510,10 @@ void CompilerDriver::CompileAll(jobject class_loader,
   Compile(class_loader, dex_files, thread_pool.get(), timings);
   if (dump_stats_) {
     stats_->Dump();
+    StaticAnalyzer* static_analyzer = verification_results_->GetStaticAnalyzer();
+    if (static_analyzer != nullptr) {
+      static_analyzer->LogAnalysis();
+    }
   }
 }
 
@@ -1485,6 +1490,7 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
   jobject jclass_loader = manager->GetClassLoader();
   const DexFile& dex_file = *manager->GetDexFile();
   ClassLinker* class_linker = manager->GetClassLinker();
+  StaticAnalyzer* static_analyzer = manager->GetCompiler()->GetVerificationResults()->GetStaticAnalyzer();
 
   // If an instance field is final then we need to have a barrier on the return, static final
   // fields are assigned within the lock held for class initialization. Conservatively assume
@@ -1559,6 +1565,8 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
                                                                   it.GetMethodInvokeType(class_def));
           if (method == NULL) {
             CheckAndClearResolveException(soa.Self());
+          } else if (static_analyzer != nullptr) {
+            static_analyzer->AnalyzeMethod(method, dex_file);
           }
           it.Next();
         }
@@ -1569,6 +1577,8 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
                                                                   it.GetMethodInvokeType(class_def));
           if (method == NULL) {
             CheckAndClearResolveException(soa.Self());
+          } else if (static_analyzer != nullptr) {
+            static_analyzer->AnalyzeMethod(method, dex_file);
           }
           it.Next();
         }
