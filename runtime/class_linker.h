@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "analysis/static_analyzer.h"
 #include "base/macros.h"
 #include "base/mutex.h"
 #include "dex_file.h"
@@ -388,6 +389,13 @@ class ClassLinker {
   // Special code to allocate an art method, use this instead of class->AllocObject.
   mirror::ArtMethod* AllocArtMethod(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Calls to init the static analyzer. Will not initialize it if already initialized.
+  void InitStaticAnalyzer();
+  // Getter for the Static Analyzer
+  StaticAnalyzer* GetStaticAnalyzer() {
+    return static_analyzer_.get();
+  }
+
  private:
   const OatFile::OatMethod GetOatMethodFor(mirror::ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -665,6 +673,8 @@ class ClassLinker {
   const void* quick_imt_conflict_trampoline_;
   const void* quick_generic_jni_trampoline_;
   const void* quick_to_interpreter_bridge_trampoline_;
+
+  UniquePtr<StaticAnalyzer> static_analyzer_;
 
   friend class ImageWriter;  // for GetClassRoots
   FRIEND_TEST(ClassLinkerTest, ClassRootDescriptors);

@@ -665,6 +665,8 @@ class CompilerDriver {
   void UpdateImageClasses(TimingLogger* timings) LOCKS_EXCLUDED(Locks::mutator_lock_);
   static void FindClinitImageClassesCallback(mirror::Object* object, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  // Creates decisions based on static analysis.
+  void PreCompileSummary();
 
   void Compile(jobject class_loader, const std::vector<const DexFile*>& dex_files,
                ThreadPool* thread_pool, TimingLogger* timings);

@@ -22,6 +22,7 @@
 #include <vector>
 #include <unistd.h>
 
+#include "analysis/method_static_analysis.h"
 #include "base/stl_util.h"
 #include "base/timing_logger.h"
 #include "class_linker.h"
@@ -505,6 +506,10 @@ void CompilerDriver::CompileAll(jobject class_loader,
   Compile(class_loader, dex_files, thread_pool.get(), timings);
   if (dump_stats_) {
     stats_->Dump();
+    StaticAnalyzer* static_analyzer = Runtime::Current()->GetClassLinker()->GetStaticAnalyzer();
+    if (static_analyzer != nullptr) {
+      static_analyzer->LogAnalysis();
+    }
   }
 }
 
@@ -612,6 +617,8 @@ void CompilerDriver::PreCompile(jobject class_loader, const std::vector<const De
   InitializeClasses(class_loader, dex_files, thread_pool, timings);
 
   UpdateImageClasses(timings);
+
+  PreCompileSummary();
 }
 
 bool CompilerDriver::IsImageClass(const char* descriptor) const {
@@ -788,6 +795,16 @@ void CompilerDriver::UpdateImageClasses(TimingLogger* timings) {
     WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
     heap->VisitObjects(FindClinitImageClassesCallback, this);
     self->EndAssertNoThreadSuspension(old_cause);
+  }
+}
+
+void CompilerDriver::PreCompileSummary() {
+  StaticAnalyzer* static_analyzer = Runtime::Current()->GetClassLinker()->GetStaticAnalyzer();
+  // Check if the Static Analyzer was initialized.
+  if (static_analyzer != nullptr) {
+    // TODO: Get a particular static analysis pass instance and look at the stats holder for global stats.
+    // TODO: Or call a query method within the Static Analyzer for a particular stat for a particular method.
+    // TODO: Make an appropriate decision
   }
 }
 
@@ -1445,6 +1462,12 @@ static bool SkipClass(jobject class_loader, const DexFile& dex_file, mirror::Cla
   return false;
 }
 
+// Return true if method should be skipped during compilation.
+// No cases currently.
+static bool SkipMethod(uint32_t method_idx, const DexFile& dex_file) {
+  return false;
+}
+
 static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manager,
                                          size_t class_def_index)
     LOCKS_EXCLUDED(Locks::mutator_lock_) {
@@ -1453,6 +1476,7 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
   jobject jclass_loader = manager->GetClassLoader();
   const DexFile& dex_file = *manager->GetDexFile();
   ClassLinker* class_linker = manager->GetClassLinker();
+  StaticAnalyzer* static_analyzer = class_linker->GetStaticAnalyzer();
 
   // If an instance field is final then we need to have a barrier on the return, static final
   // fields are assigned within the lock held for class initialization. Conservatively assume
@@ -1528,6 +1552,8 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
           if (method == NULL) {
             CHECK(soa.Self()->IsExceptionPending());
             soa.Self()->ClearException();
+          } else if (static_analyzer != nullptr) {
+            class_linker->GetStaticAnalyzer()->AnalyzeMethod(method, dex_file);
           }
           it.Next();
         }
@@ -1538,6 +1564,8 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
           if (method == NULL) {
             CHECK(soa.Self()->IsExceptionPending());
             soa.Self()->ClearException();
+          } else if (static_analyzer != nullptr) {
+            class_linker->GetStaticAnalyzer()->AnalyzeMethod(method, dex_file);
           }
           it.Next();
         }
@@ -1821,7 +1849,7 @@ void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, siz
   int64_t previous_direct_method_idx = -1;
   while (it.HasNextDirectMethod()) {
     uint32_t method_idx = it.GetMemberIndex();
-    if (method_idx == previous_direct_method_idx) {
+    if (method_idx == previous_direct_method_idx || SkipMethod(method_idx, dex_file) == true) {
       // smali can create dex files with two encoded_methods sharing the same method_idx
       // http://code.google.com/p/smali/issues/detail?id=119
       it.Next();
@@ -1837,7 +1865,7 @@ void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, siz
   int64_t previous_virtual_method_idx = -1;
   while (it.HasNextVirtualMethod()) {
     uint32_t method_idx = it.GetMemberIndex();
-    if (method_idx == previous_virtual_method_idx) {
+    if (method_idx == previous_virtual_method_idx || SkipMethod(method_idx, dex_file) == true) {
       // smali can create dex files with two encoded_methods sharing the same method_idx
       // http://code.google.com/p/smali/issues/detail?id=119
       it.Next();
