@@ -141,6 +141,10 @@ class GarbageCollector {
   // Revoke all the thread-local buffers.
   virtual void RevokeAllThreadLocalBuffers() = 0;
 
+  // Record that you have freed some objects or large objects, calls Heap::RecordFree.
+  void RecordFree(ssize_t freed_objects, ssize_t freed_bytes);
+  void RecordFreeLargeObjects(ssize_t freed_objects, ssize_t freed_bytes);
+
   static constexpr size_t kPauseBucketSize = 500;
   static constexpr size_t kPauseBucketCount = 32;
 
