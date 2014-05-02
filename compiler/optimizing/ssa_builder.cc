@@ -23,8 +23,8 @@ void SsaBuilder::BuildSsa() {
   // 1) Visit in dominator order. We need to have all predecessors of a block visited
   // (with the exception of loops) in order to create the right environment for that
   // block. For loops, we create phis whose inputs will be set in 2).
-  for (size_t i = 0; i < GetGraph()->GetDominatorOrder()->Size(); i++) {
-    VisitBasicBlock(GetGraph()->GetDominatorOrder()->Get(i));
+  for (HDominatorOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
+    VisitBasicBlock(it.Current());
   }
 
   // 2) Set inputs of loop phis.

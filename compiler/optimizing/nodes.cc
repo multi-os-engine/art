@@ -152,7 +152,7 @@ void HGraph::SimplifyCFG() {
         dominator_order_.InsertAt(i, pre_header);
         i++;
 
-        ArenaBitVector back_edges(arena_, GetBlocks()->Size(), false);
+        ArenaBitVector back_edges(arena_, GetBlocks().Size(), false);
         for (size_t pred = 0; pred < info->GetBackEdges()->Size(); pred++) {
           back_edges.SetBit(info->GetBackEdges()->Get(pred)->GetBlockId());
         }
@@ -298,9 +298,25 @@ FOR_EACH_INSTRUCTION(DEFINE_ACCEPT)
 #undef DEFINE_ACCEPT
 
 void HGraphVisitor::VisitInsertionOrder() {
-  const GrowableArray<HBasicBlock*>* blocks = graph_->GetBlocks();
-  for (size_t i = 0 ; i < blocks->Size(); i++) {
-    VisitBasicBlock(blocks->Get(i));
+  const GrowableArray<HBasicBlock*>& blocks = graph_->GetBlocks();
+  for (size_t i = 0 ; i < blocks.Size(); i++) {
+    VisitBasicBlock(blocks.Get(i));
+  }
+}
+
+void HGraphVisitor::VisitDominatorOrder() {
+  const GrowableArray<HBasicBlock*>& dominator_order = graph_->GetDominatorOrder();
+  DCHECK(!dominator_order.IsEmpty());
+  for (size_t i = 0, e = dominator_order.Size(); i < e; ++i) {
+    VisitBasicBlock(dominator_order.Get(i));
+  }
+}
+
+void HGraphVisitor::VisitPostDominatorOrder() {
+  const GrowableArray<HBasicBlock*>& dominator_order = graph_->GetDominatorOrder();
+  DCHECK(!dominator_order.IsEmpty());
+  for (int i = dominator_order.Size() - 1; i >= 0; --i) {
+    VisitBasicBlock(dominator_order.Get(i));
   }
 }
 
