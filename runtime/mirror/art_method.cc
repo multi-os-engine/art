@@ -29,6 +29,7 @@
 #include "object-inl.h"
 #include "object_array.h"
 #include "object_array-inl.h"
+#include "quick/quick_method_frame_info.h"
 #include "scoped_thread_state_change.h"
 #include "string.h"
 #include "object_utils.h"
@@ -389,7 +390,7 @@ const uint8_t* ArtMethod::GetMappingTable() {
   if (code == nullptr) {
     return nullptr;
   }
-  uint32_t offset = reinterpret_cast<const OatMethodHeader*>(code)[-1].mapping_table_offset_;
+  uint32_t offset = reinterpret_cast<const OatQuickMethodHeader*>(code)[-1].mapping_table_offset_;
   if (UNLIKELY(offset == 0u)) {
     return nullptr;
   }
@@ -401,11 +402,45 @@ const uint8_t* ArtMethod::GetVmapTable() {
   if (code == nullptr) {
     return nullptr;
   }
-  uint32_t offset = reinterpret_cast<const OatMethodHeader*>(code)[-1].vmap_table_offset_;
+  uint32_t offset = reinterpret_cast<const OatQuickMethodHeader*>(code)[-1].vmap_table_offset_;
   if (UNLIKELY(offset == 0u)) {
     return nullptr;
   }
   return reinterpret_cast<const uint8_t*>(code) - offset;
+}
+
+QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo() {
+  if (UNLIKELY(IsPortableCompiled())) {
+    // Portable compiled dex bytecode or jni stub.
+    return QuickMethodFrameInfo(kStackAlignment, 0u, 0u);
+  }
+  if (UNLIKELY(IsAbstract()) || UNLIKELY(IsProxyMethod())) {
+    return Runtime::Current()->GetCalleeSaveMethodFrameInfo(Runtime::kRefsAndArgs);
+  }
+  if (UNLIKELY(IsRuntimeMethod())) {
+    return Runtime::Current()->GetRuntimeMethodFrameInfo(this);
+  }
+
+  Runtime* runtime = Runtime::Current();
+  const void* entry_point = runtime->GetInstrumentation()->GetQuickCodeFor(this);
+  // On failure, instead of nullptr we get the quick-generic-jni-trampoline for native method
+  // indicating the generic JNI, or the quick-to-interpreter-bridge (but not the trampoline)
+  // for non-native methods. And we really shouldn't see a failure for non-native methods here.
+  DCHECK(entry_point != GetQuickToInterpreterBridgeTrampoline(runtime->GetClassLinker()));
+  CHECK(entry_point != GetQuickToInterpreterBridge());
+
+  if (UNLIKELY(entry_point == GetQuickGenericJniTrampoline())) {
+    // Generic JNI frame.
+    DCHECK(IsNative());
+    uint32_t sirt_refs = MethodHelper(this).GetNumberOfReferenceArgsWithoutReceiver() + 1;
+    size_t sirt_size = StackIndirectReferenceTable::GetAlignedSirtSize(sirt_refs);
+    QuickMethodFrameInfo callee_info = runtime->GetCalleeSaveMethodFrameInfo(Runtime::kRefsAndArgs);
+    return QuickMethodFrameInfo(callee_info.FrameSizeInBytes() + sirt_size,
+                                callee_info.CoreSpillMask(), callee_info.FpSpillMask());
+  }
+
+  const void* code_pointer = EntryPointToCodePointer(entry_point);
+  return reinterpret_cast<const OatQuickMethodHeader*>(code_pointer)[-1].frame_info_;
 }
 
 }  // namespace mirror
