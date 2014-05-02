@@ -1239,4 +1239,64 @@ void MIRGraph::InitializeSSATransformation() {
   DoDFSPreOrderSSARename(GetEntryBlock());
 }
 
+ChildBlockIterator::ChildBlockIterator(BasicBlock *bb, MIRGraph *mir_graph) {
+  // Initialize basic block and MIRGraph.
+  basic_block_ = bb;
+  mir_graph_ = mir_graph;
+
+  // We have not yet visited any of the children.
+  visited_fallthrough_ = false;
+  visited_taken_ = false;
+
+  // Check if we have successors.
+  if (basic_block_ != 0 && basic_block_->successor_block_list_type != kNotUsed) {
+    have_successors_ = true;
+    successor_iter_.Reset(bb->successor_blocks);
+  } else {
+    // We have no successors if the block list is unused
+    have_successors_ = false;
+  }
+}
+
+BasicBlock* ChildBlockIterator::Next() {
+  // We check if we have a basic block. If we don't we cannot get next child.
+  if (basic_block_ == nullptr) {
+    return nullptr;
+  }
+
+  // If we haven't visited fallthrough, return that.
+  if (visited_fallthrough_ == false) {
+    visited_fallthrough_ = true;
+
+    BasicBlock* result = mir_graph_->GetBasicBlock(basic_block_->fall_through);
+    if (result != nullptr) {
+      return result;
+    }
+  }
+
+  // If we haven't visited taken, return that.
+  if (visited_taken_ == false) {
+    visited_taken_ = true;
+
+    BasicBlock* result = mir_graph_->GetBasicBlock(basic_block_->taken);
+    if (result != nullptr) {
+      return result;
+    }
+  }
+
+  // We visited both taken and fallthrough. Now check if we have successors we need to visit.
+  if (have_successors_ == true) {
+    // Get information about next successor block.
+    SuccessorBlockInfo *successor_block_info = successor_iter_.Next();
+
+    // If we don't have anymore successors, return nullptr.
+    if (successor_block_info != nullptr) {
+      return mir_graph_->GetBasicBlock(successor_block_info->block);
+    }
+  }
+
+  // We do not have anything.
+  return nullptr;
+}
+
 }  // namespace art
