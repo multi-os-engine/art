@@ -132,6 +132,11 @@ void CodeGenerator::AllocateRegistersLocally(HInstruction* instruction) const {
     }
   }
 
+  // Make all registers available for the return value.
+  for (size_t i = 0, e = GetNumberOfRegisters(); i < e; ++i) {
+    blocked_registers_[i] = false;
+  }
+
   Location result_location = locations->Out();
   if (result_location.IsUnallocated()) {
     switch (result_location.GetPolicy()) {
