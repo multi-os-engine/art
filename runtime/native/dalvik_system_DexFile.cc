@@ -433,12 +433,30 @@ static jboolean IsDexOptNeededInternal(JNIEnv* env, const char* filename,
     return JNI_TRUE;
   }
 
+  const InstructionSet image_instruction_set = GetInstructionSetFromString(
+      instruction_set);
   for (const auto& space : runtime->GetHeap()->GetContinuousSpaces()) {
     if (space->IsImageSpace()) {
       // TODO: Ensure this works with multiple image spaces.
-      const ImageHeader& image_header = space->AsImageSpace()->GetImageHeader();
-      if (oat_file->GetOatHeader().GetImageFileLocationOatChecksum() !=
-          image_header.GetOatChecksum()) {
+      uint32_t oat_checksum = 0;
+      uintptr_t oat_data_begin = 0;
+
+      const gc::space::ImageSpace* image_space = space->AsImageSpace();
+      // If the requested instruction set is the same as the current runtime,
+      // we can use the checksums directly. If it isn't, we'll have to read the
+      // image header from the image for the right instruction set.
+      if (image_instruction_set == kRuntimeISA) {
+        const ImageHeader& image_header = image_space->GetImageHeader();
+        oat_checksum = image_header.GetOatChecksum();
+        oat_data_begin = reinterpret_cast<uintptr_t>(image_header.GetOatDataBegin());
+      } else {
+        UniquePtr<ImageHeader> image_header(gc::space::ImageSpace::ReadImageHeaderOrDie(
+            image_space->GetImageFilename().c_str(), image_instruction_set));
+        oat_checksum = image_header->GetOatChecksum();
+        oat_data_begin = reinterpret_cast<uintptr_t>(image_header->GetOatDataBegin());
+      }
+
+      if (oat_file->GetOatHeader().GetImageFileLocationOatChecksum() != oat_checksum) {
         if (kReasonLogging) {
           ScopedObjectAccess soa(env);
           LOG(INFO) << "DexFile_isDexOptNeeded cache file " << cache_location
@@ -447,8 +465,7 @@ static jboolean IsDexOptNeededInternal(JNIEnv* env, const char* filename,
         }
         return JNI_TRUE;
       }
-      if (oat_file->GetOatHeader().GetImageFileLocationOatDataBegin()
-          != reinterpret_cast<uintptr_t>(image_header.GetOatDataBegin())) {
+      if (oat_file->GetOatHeader().GetImageFileLocationOatDataBegin() != oat_data_begin) {
         if (kReasonLogging) {
           ScopedObjectAccess soa(env);
           LOG(INFO) << "DexFile_isDexOptNeeded cache file " << cache_location

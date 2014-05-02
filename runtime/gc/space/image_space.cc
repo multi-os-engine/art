@@ -98,35 +98,69 @@ static bool GenerateImage(const std::string& image_file_name, std::string* error
   return Exec(arg_vector, error_msg);
 }
 
+bool ImageSpace::GetImageFileLocation(const char* original_file_name,
+                                      const InstructionSet image_isa,
+                                      std::string* location,
+                                      bool *is_system) {
+  if (OS::FileExists(original_file_name)) {
+    *location = std::string(original_file_name);
+    *is_system = true;
+    return true;
+  }
+
+  const std::string dalvik_cache = GetDalvikCacheOrDie(GetInstructionSetString(image_isa));
+  const std::string image_file_name(GetDalvikCacheFilenameOrDie(original_file_name,
+                                                          dalvik_cache.c_str()));
+
+  *location = image_file_name;
+  *is_system = false;
+  return OS::FileExists(image_file_name.c_str());
+}
+
+ImageHeader* ImageSpace::ReadImageHeaderOrDie(const char* original_image_file_name,
+                                              const InstructionSet image_isa) {
+  std::string image_location;
+  bool is_system = false;
+  if (GetImageFileLocation(original_image_file_name, image_isa, &image_location, &is_system)) {
+    UniquePtr<File> image_file(OS::OpenFileForReading(image_location.c_str()));
+    UniquePtr<ImageHeader> image_header(new ImageHeader);
+    const bool success = image_file->ReadFully(&image_header, sizeof(ImageHeader));
+    if (!success || !image_header->IsValid()) {
+      LOG(FATAL) << "Invalid Image header for: " << image_location;
+      return nullptr;
+    }
+
+    return image_header.release();
+  }
+
+  LOG(FATAL) << "Unable to find image file for: " << original_image_file_name;
+  return nullptr;
+}
+
 ImageSpace* ImageSpace::Create(const char* original_image_file_name,
                                const InstructionSet image_isa) {
-  if (OS::FileExists(original_image_file_name)) {
-    // If the /system file exists, it should be up-to-date, don't try to generate
-    std::string error_msg;
-    ImageSpace* space = ImageSpace::Init(original_image_file_name, false, &error_msg);
-    if (space == nullptr) {
-      LOG(FATAL) << "Failed to load image '" << original_image_file_name << "': " << error_msg;
-    }
-    return space;
-  }
-  // If the /system file didn't exist, we need to use one from the dalvik-cache.
-  // If the cache file exists, try to open, but if it fails, regenerate.
-  // If it does not exist, generate.
-  const std::string dalvik_cache = GetDalvikCacheOrDie(GetInstructionSetString(image_isa));
-  std::string image_file_name(GetDalvikCacheFilenameOrDie(original_image_file_name,
-                                                          dalvik_cache.c_str()));
+  std::string image_location;
   std::string error_msg;
-  if (OS::FileExists(image_file_name.c_str())) {
-    space::ImageSpace* image_space = ImageSpace::Init(image_file_name.c_str(), true, &error_msg);
-    if (image_space != nullptr) {
-      return image_space;
+  bool is_system = false;
+  if (GetImageFileLocation(original_image_file_name, image_isa, &image_location, &is_system)) {
+    ImageSpace* space = ImageSpace::Init(image_location.c_str(), !is_system, &error_msg);
+    if (space != nullptr) {
+      return space;
+    }
+
+    // If the /system file exists, it should be up-to-date, don't try to generate it.
+    // If it's not the /system file, log a warning and fall through to GenerateImage.
+    if (is_system) {
+      LOG(FATAL) << "Failed to load image '" << original_image_file_name << "': " << error_msg;
+      return nullptr;
     } else {
       LOG(WARNING) << error_msg;
     }
   }
-  CHECK(GenerateImage(image_file_name, &error_msg))
-      << "Failed to generate image '" << image_file_name << "': " << error_msg;
-  ImageSpace* space = ImageSpace::Init(image_file_name.c_str(), true, &error_msg);
+
+  CHECK(GenerateImage(image_location, &error_msg))
+      << "Failed to generate image '" << image_location << "': " << error_msg;
+  ImageSpace* space = ImageSpace::Init(image_location.c_str(), true, &error_msg);
   if (space == nullptr) {
     LOG(FATAL) << "Failed to load image '" << original_image_file_name << "': " << error_msg;
   }

@@ -46,6 +46,11 @@ class ImageSpace : public MemMapSpace {
   static ImageSpace* Create(const char* image, const InstructionSet image_isa)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Reads the image header from the file specified by image for the
+  // instruction set image_isa.
+  static ImageHeader* ReadImageHeaderOrDie(const char* image,
+                                           const InstructionSet image_isa);
+
   // Releases the OatFile from the ImageSpace so it can be transfer to
   // the caller, presumably the ClassLinker.
   OatFile* ReleaseOatFile()
@@ -92,6 +97,17 @@ class ImageSpace : public MemMapSpace {
   // the OatFile in /data/dalvik-cache if necessary.
   static ImageSpace* Init(const char* image, bool validate_oat_file, std::string* error_msg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Returns the location of the image file corresponding to
+  // original_file_name, or the location where a new image should
+  // be written if one doesn't exist. Looks for a generated image in
+  // system/ and then in the dalvik cache directories.
+  //
+  // Returns true if an image was found, false otherwise.
+  static bool GetImageFileLocation(const char* original_file_name,
+                                   const InstructionSet image_isa,
+                                   std::string* location,
+                                   bool* is_system);
 
   OatFile* OpenOatFile(const char* image, std::string* error_msg) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
