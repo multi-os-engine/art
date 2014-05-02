@@ -519,9 +519,6 @@ void OatFile::OatMethod::LinkMethod(mirror::ArtMethod* method) const {
   CHECK(method != NULL);
   method->SetEntryPointFromPortableCompiledCode(GetPortableCode());
   method->SetEntryPointFromQuickCompiledCode(GetQuickCode());
-  method->SetFrameSizeInBytes(frame_size_in_bytes_);
-  method->SetCoreSpillMask(core_spill_mask_);
-  method->SetFpSpillMask(fp_spill_mask_);
   method->SetNativeGcMap(GetNativeGcMap());  // Used by native methods in work around JNI mode.
 }
 

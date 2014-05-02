@@ -177,7 +177,7 @@ TEST_F(OatTest, OatHeaderSizeCheck) {
   // it is time to update OatHeader::kOatVersion
   EXPECT_EQ(80U, sizeof(OatHeader));
   EXPECT_EQ(20U, sizeof(OatMethodOffsets));
-  EXPECT_EQ(12U, sizeof(OatMethodHeader));
+  EXPECT_EQ(24U, sizeof(OatMethodHeader));
 }
 
 TEST_F(OatTest, OatHeaderIsValid) {

@@ -45,6 +45,7 @@
 #include "gc/heap.h"
 #include "gc/space/space.h"
 #include "jni_internal.h"
+#include "quick/quick_method_frame_info.h"
 #include "mirror/art_field-inl.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
@@ -2020,9 +2021,7 @@ class ReferenceMapVisitor : public StackVisitor {
         const uint8_t* reg_bitmap = map.FindBitMap(GetNativePcOffset());
         DCHECK(reg_bitmap != nullptr);
         const VmapTable vmap_table(m->GetVmapTable());
-        uint32_t core_spills = m->GetCoreSpillMask();
-        uint32_t fp_spills = m->GetFpSpillMask();
-        size_t frame_size = m->GetFrameSizeInBytes();
+        QuickMethodFrameInfo frame_info = m->GetQuickFrameInfo();
         // For all dex registers in the bitmap
         mirror::ArtMethod** cur_quick_frame = GetCurrentQuickFrame();
         DCHECK(cur_quick_frame != nullptr);
@@ -2031,7 +2030,8 @@ class ReferenceMapVisitor : public StackVisitor {
           if (TestBitmap(reg, reg_bitmap)) {
             uint32_t vmap_offset;
             if (vmap_table.IsInContext(reg, kReferenceVReg, &vmap_offset)) {
-              int vmap_reg = vmap_table.ComputeRegister(core_spills, vmap_offset, kReferenceVReg);
+              int vmap_reg = vmap_table.ComputeRegister(frame_info.CoreSpillMask(), vmap_offset,
+                                                        kReferenceVReg);
               // This is sound as spilled GPRs will be word sized (ie 32 or 64bit).
               mirror::Object** ref_addr = reinterpret_cast<mirror::Object**>(GetGPRAddress(vmap_reg));
               if (*ref_addr != nullptr) {
@@ -2040,8 +2040,8 @@ class ReferenceMapVisitor : public StackVisitor {
             } else {
               StackReference<mirror::Object>* ref_addr =
                   reinterpret_cast<StackReference<mirror::Object>*>(
-                      GetVRegAddr(cur_quick_frame, code_item, core_spills, fp_spills, frame_size,
-                                  reg));
+                      GetVRegAddr(cur_quick_frame, code_item, frame_info.CoreSpillMask(),
+                                  frame_info.FpSpillMask(), frame_info.FrameSizeInBytes(), reg));
               mirror::Object* ref = ref_addr->AsMirrorPtr();
               if (ref != nullptr) {
                 mirror::Object* new_ref = ref;
