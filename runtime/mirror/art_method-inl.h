@@ -81,7 +81,7 @@ inline uint32_t ArtMethod::GetCodeSize() {
   if (code == nullptr) {
     return 0u;
   }
-  return reinterpret_cast<const OatMethodHeader*>(code)[-1].code_size_;
+  return reinterpret_cast<const OatQuickMethodHeader*>(code)[-1].code_size_;
 }
 
 inline bool ArtMethod::CheckIncompatibleClassChange(InvokeType type) {
