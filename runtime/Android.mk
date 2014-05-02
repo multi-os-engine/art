@@ -159,10 +159,15 @@ LIBART_COMMON_SRC_FILES := \
 
 LIBART_COMMON_SRC_FILES += \
 	arch/context.cc \
+	arch/arm/method_frame_info_arm.cc \
 	arch/arm/registers_arm.cc \
+	arch/arm64/method_frame_info_arm64.cc \
 	arch/arm64/registers_arm64.cc \
-	arch/x86/registers_x86.cc \
+	arch/mips/method_frame_info_mips.cc \
 	arch/mips/registers_mips.cc \
+	arch/x86/method_frame_info_x86.cc \
+	arch/x86/registers_x86.cc \
+	arch/x86_64/method_frame_info_x86_64.cc \
 	entrypoints/entrypoint_utils.cc \
 	entrypoints/interpreter/interpreter_entrypoints.cc \
 	entrypoints/jni/jni_entrypoints.cc \

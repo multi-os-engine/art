@@ -75,6 +75,7 @@ COMPILER_GTEST_COMMON_SRC_FILES := \
 	compiler/elf_writer_test.cc \
 	compiler/image_test.cc \
 	compiler/jni/jni_compiler_test.cc \
+	compiler/jni/quick/calling_convention_test.cc \
 	compiler/oat_test.cc \
 	compiler/optimizing/codegen_test.cc \
 	compiler/optimizing/dominator_test.cc \

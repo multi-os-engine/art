@@ -26,6 +26,7 @@
 #include "interpreter/interpreter.h"
 #include "jni_internal.h"
 #include "mapping_table.h"
+#include "method_frame_info.h"
 #include "object-inl.h"
 #include "object_array.h"
 #include "object_array-inl.h"
@@ -406,6 +407,67 @@ const uint8_t* ArtMethod::GetVmapTable() {
     return nullptr;
   }
   return reinterpret_cast<const uint8_t*>(code) - offset;
+}
+
+void ArtMethod::CheckFrameSizeInBytes(uint32_t size) {
+  MethodFrameInfo frame_info = GetFrameInfo();
+  CHECK_EQ(size, frame_info.FrameSizeInBytes());
+  CHECK_EQ(GetCoreSpillMask(), frame_info.CoreSpillMask()) << PrettyMethod(this);
+  CHECK_EQ(GetFpSpillMask(), frame_info.FpSpillMask()) << PrettyMethod(this);
+}
+
+MethodFrameInfo ArtMethod::GetFrameInfo() {
+  if (UNLIKELY(IsPortableCompiled())) {
+    // Portable compiled dex bytecode or jni stub.
+    return MethodFrameInfo(kStackAlignment, 0u, 0u);
+  }
+  if (UNLIKELY(IsNative())) {
+    Runtime* runtime = Runtime::Current();
+    const void* entry_point = GetEntryPointFromQuickCompiledCode();
+    if (entry_point == GetQuickResolutionTrampoline(runtime->GetClassLinker())) {
+      entry_point = Runtime::Current()->GetClassLinker()->GetQuickOatCodeFor(this);
+    }
+    if (entry_point == GetQuickGenericJniTrampoline()) {
+      // Trampolines, see LinkCode() in class_linker.cc.
+      uint32_t sirt_refs = MethodHelper(this).GetNumberOfReferenceArgsWithoutReceiver() + 1;
+      size_t sirt_size = StackIndirectReferenceTable::GetAlignedSirtSize(sirt_refs);
+      MethodFrameInfo callee_info = runtime->GetCalleeSaveMethodFrameInfo(Runtime::kRefsAndArgs);
+      return MethodFrameInfo(callee_info.FrameSizeInBytes() + sirt_size,
+                             callee_info.CoreSpillMask(), callee_info.FpSpillMask());
+    } else {
+      MethodFrameInfo result = runtime->GetJniMethodFrameInfo(this);
+
+      Runtime* runtime = Runtime::Current();
+      const void* entry_point = runtime->GetInstrumentation()->GetQuickCodeFor(this);
+      // On failure, instead of nullptr we get the quick-to-interpreter-bridge (but not the trampoline).
+      DCHECK(entry_point != GetQuickToInterpreterBridgeTrampoline(runtime->GetClassLinker()));
+      CHECK(entry_point != GetQuickToInterpreterBridge());
+      const void* code_pointer = EntryPointToCodePointer(entry_point);
+
+      const OatMethodHeader* hdr_end = reinterpret_cast<const OatMethodHeader*>(code_pointer);
+      CHECK_EQ(result.FrameSizeInBytes(), hdr_end[-1].frame_size_in_bytes_);
+      CHECK_EQ(result.CoreSpillMask(), hdr_end[-1].core_spill_mask_);
+      CHECK_EQ(result.FpSpillMask(), hdr_end[-1].fp_spill_mask_);
+      return result;
+    }
+  }
+  if (UNLIKELY(IsAbstract()) || UNLIKELY(IsProxyMethod())) {
+    return Runtime::Current()->GetCalleeSaveMethodFrameInfo(Runtime::kRefsAndArgs);
+  }
+  if (UNLIKELY(IsRuntimeMethod())) {
+    return Runtime::Current()->GetRuntimeMethodFrameInfo(this);
+  }
+
+  Runtime* runtime = Runtime::Current();
+  const void* entry_point = runtime->GetInstrumentation()->GetQuickCodeFor(this);
+  // On failure, instead of nullptr we get the quick-to-interpreter-bridge (but not the trampoline).
+  DCHECK(entry_point != GetQuickToInterpreterBridgeTrampoline(runtime->GetClassLinker()));
+  CHECK(entry_point != GetQuickToInterpreterBridge());
+  const void* code_pointer = EntryPointToCodePointer(entry_point);
+
+  const OatMethodHeader* hdr_end = reinterpret_cast<const OatMethodHeader*>(code_pointer);
+  return MethodFrameInfo(hdr_end[-1].frame_size_in_bytes_, hdr_end[-1].core_spill_mask_,
+                         hdr_end[-1].fp_spill_mask_);
 }
 
 }  // namespace mirror

@@ -30,7 +30,9 @@ class ArchTest : public CommonRuntimeTest {
     Thread* t = Thread::Current();
     t->TransitionFromSuspendedToRunnable();  // So we can create callee-save methods.
 
-    mirror::ArtMethod* save_method = r->CreateCalleeSaveMethod(isa, type);
+    r->SetInstructionSet(isa);
+    mirror::ArtMethod* save_method = r->CreateCalleeSaveMethod(type);
+    r->SetCalleeSaveMethod(save_method, type);
     EXPECT_EQ(save_method->GetFrameSizeInBytes(), save_size) << "Expected and real size differs for "
         << type << " core spills=" << std::hex << save_method->GetCoreSpillMask() << " fp spills="
         << save_method->GetFpSpillMask() << std::dec;

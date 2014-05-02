@@ -30,6 +30,7 @@ struct ArtMethodOffsets;
 struct ConstructorMethodOffsets;
 union JValue;
 struct MethodClassOffsets;
+class MethodFrameInfo;
 class MethodHelper;
 class ScopedObjectAccess;
 class StringPiece;
@@ -322,8 +323,13 @@ class MANAGED ArtMethod : public Object {
     if (kCheckFrameSize) {
       DCHECK_LE(static_cast<size_t>(kStackAlignment), result);
     }
+    CheckFrameSizeInBytes(result);
     return result;
   }
+
+  void CheckFrameSizeInBytes(uint32_t size) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  MethodFrameInfo GetFrameInfo() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetFrameSizeInBytes(size_t new_frame_size_in_bytes)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {

@@ -331,9 +331,9 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
     if (compiled_method != nullptr) {
       // Derived from CompiledMethod.
       uint32_t quick_code_offset = 0;
-      uint32_t frame_size_in_bytes = kStackAlignment;
-      uint32_t core_spill_mask = 0;
-      uint32_t fp_spill_mask = 0;
+      uint32_t frame_size_in_bytes = compiled_method->GetFrameSizeInBytes();
+      uint32_t core_spill_mask = compiled_method->GetCoreSpillMask();
+      uint32_t fp_spill_mask = compiled_method->GetFpSpillMask();
 
       const std::vector<uint8_t>* portable_code = compiled_method->GetPortableCode();
       const std::vector<uint8_t>* quick_code = compiled_method->GetQuickCode();
@@ -376,6 +376,9 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
 
         DCHECK_LT(method_offsets_index_, oat_class->method_headers_.size());
         OatMethodHeader* method_header = &oat_class->method_headers_[method_offsets_index_];
+        method_header->frame_size_in_bytes_ = frame_size_in_bytes;
+        method_header->core_spill_mask_ = core_spill_mask;
+        method_header->fp_spill_mask_ = fp_spill_mask;
         method_header->code_size_ = code_size;
 
         // Deduplicate code arrays.
@@ -392,9 +395,6 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
           offset_ += code_size;
         }
       }
-      frame_size_in_bytes = compiled_method->GetFrameSizeInBytes();
-      core_spill_mask = compiled_method->GetCoreSpillMask();
-      fp_spill_mask = compiled_method->GetFpSpillMask();
 
       if (kIsDebugBuild) {
         // We expect GC maps except when the class hasn't been verified or the method is native.

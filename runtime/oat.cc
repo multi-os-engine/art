@@ -369,13 +369,20 @@ OatMethodOffsets::~OatMethodOffsets() {}
 OatMethodHeader::OatMethodHeader()
   : mapping_table_offset_(0),
     vmap_table_offset_(0),
+    frame_size_in_bytes_(0),
+    core_spill_mask_(0),
+    fp_spill_mask_(0),
     code_size_(0)
 {}
 
 OatMethodHeader::OatMethodHeader(uint32_t vmap_table_offset, uint32_t mapping_table_offset,
-                                 uint32_t code_size)
+                                 uint32_t frame_size_in_bytes, uint32_t core_spill_mask,
+                                 uint32_t fp_spill_mask, uint32_t code_size)
   : mapping_table_offset_(mapping_table_offset),
     vmap_table_offset_(vmap_table_offset),
+    frame_size_in_bytes_(frame_size_in_bytes),
+    core_spill_mask_(core_spill_mask),
+    fp_spill_mask_(fp_spill_mask),
     code_size_(code_size)
 {}
 
