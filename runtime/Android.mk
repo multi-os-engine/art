@@ -87,6 +87,12 @@ LIBART_COMMON_SRC_FILES := \
 	jdwp/jdwp_socket.cc \
 	jdwp/object_registry.cc \
 	jni_internal.cc \
+	jni/quick/arm/calling_convention_arm.cc \
+	jni/quick/arm64/calling_convention_arm64.cc \
+	jni/quick/mips/calling_convention_mips.cc \
+	jni/quick/x86/calling_convention_x86.cc \
+	jni/quick/x86_64/calling_convention_x86_64.cc \
+	jni/quick/calling_convention.cc \
 	jobject_comparator.cc \
 	mem_map.cc \
 	memory_region.cc \
@@ -146,6 +152,11 @@ LIBART_COMMON_SRC_FILES := \
 	fault_handler.cc \
 	utf.cc \
 	utils.cc \
+	utils/arm/managed_register_arm.cc \
+	utils/arm64/managed_register_arm64.cc \
+	utils/mips/managed_register_mips.cc \
+	utils/x86/managed_register_x86.cc \
+	utils/x86_64/managed_register_x86_64.cc \
 	verifier/dex_gc_map.cc \
 	verifier/instruction_flags.cc \
 	verifier/method_verifier.cc \

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_UTILS_ARM64_CONSTANTS_ARM64_H_
-#define ART_COMPILER_UTILS_ARM64_CONSTANTS_ARM64_H_
+#ifndef ART_RUNTIME_UTILS_ARM64_CONSTANTS_ARM64_H_
+#define ART_RUNTIME_UTILS_ARM64_CONSTANTS_ARM64_H_
 
 #include <stdint.h>
 #include <iosfwd>
@@ -37,4 +37,4 @@ constexpr size_t kBufferSizeArm64 = 4096*2;
 }  // arm64
 }  // art
 
-#endif  // ART_COMPILER_UTILS_ARM64_CONSTANTS_ARM64_H_
+#endif  // ART_RUNTIME_UTILS_ARM64_CONSTANTS_ARM64_H_

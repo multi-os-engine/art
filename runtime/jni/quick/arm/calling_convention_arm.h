@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 The Android Open Source Project
+ * Copyright (C) 2011 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_JNI_QUICK_X86_64_CALLING_CONVENTION_X86_64_H_
-#define ART_COMPILER_JNI_QUICK_X86_64_CALLING_CONVENTION_X86_64_H_
+#ifndef ART_RUNTIME_JNI_QUICK_ARM_CALLING_CONVENTION_ARM_H_
+#define ART_RUNTIME_JNI_QUICK_ARM_CALLING_CONVENTION_ARM_H_
 
 #include "jni/quick/calling_convention.h"
 
 namespace art {
-namespace x86_64 {
+namespace arm {
 
-constexpr size_t kFramePointerSize = 8;
+constexpr size_t kFramePointerSize = 4;
 
-class X86_64ManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCallingConvention {
+class ArmManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCallingConvention {
  public:
-  explicit X86_64ManagedRuntimeCallingConvention(bool is_static, bool is_synchronized,
-                                              const char* shorty)
+  ArmManagedRuntimeCallingConvention(bool is_static, bool is_synchronized, const char* shorty)
       : ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty, kFramePointerSize) {}
-  ~X86_64ManagedRuntimeCallingConvention() OVERRIDE {}
+  ~ArmManagedRuntimeCallingConvention() OVERRIDE {}
   // Calling convention
   ManagedRegister ReturnRegister() OVERRIDE;
   ManagedRegister InterproceduralScratchRegister() OVERRIDE;
@@ -40,20 +39,23 @@ class X86_64ManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCalling
   ManagedRegister CurrentParamRegister() OVERRIDE;
   FrameOffset CurrentParamStackOffset() OVERRIDE;
   const ManagedRegisterEntrySpills& EntrySpills() OVERRIDE;
+
  private:
   ManagedRegisterEntrySpills entry_spills_;
-  DISALLOW_COPY_AND_ASSIGN(X86_64ManagedRuntimeCallingConvention);
+
+  DISALLOW_COPY_AND_ASSIGN(ArmManagedRuntimeCallingConvention);
 };
 
-class X86_64JniCallingConvention FINAL : public JniCallingConvention {
+class ArmJniCallingConvention FINAL : public JniCallingConvention {
  public:
-  explicit X86_64JniCallingConvention(bool is_static, bool is_synchronized, const char* shorty);
-  ~X86_64JniCallingConvention() OVERRIDE {}
+  explicit ArmJniCallingConvention(bool is_static, bool is_synchronized, const char* shorty);
+  ~ArmJniCallingConvention() OVERRIDE {}
   // Calling convention
   ManagedRegister ReturnRegister() OVERRIDE;
   ManagedRegister IntReturnRegister() OVERRIDE;
   ManagedRegister InterproceduralScratchRegister() OVERRIDE;
   // JNI calling convention
+  void Next() OVERRIDE;  // Override default behavior for AAPCS
   size_t FrameSize() OVERRIDE;
   size_t OutArgSize() OVERRIDE;
   const std::vector<ManagedRegister>& CalleeSaveRegisters() const OVERRIDE {
@@ -62,16 +64,16 @@ class X86_64JniCallingConvention FINAL : public JniCallingConvention {
   ManagedRegister ReturnScratchRegister() const OVERRIDE;
   uint32_t CoreSpillMask() const OVERRIDE;
   uint32_t FpSpillMask() const OVERRIDE {
-    return 0;
+    return 0;  // Floats aren't spilled in JNI down call
   }
   bool IsCurrentParamInRegister() OVERRIDE;
   bool IsCurrentParamOnStack() OVERRIDE;
   ManagedRegister CurrentParamRegister() OVERRIDE;
   FrameOffset CurrentParamStackOffset() OVERRIDE;
 
-  // x86-64 needs to extend small return types.
+  // AAPCS mandates return values are extended.
   bool RequiresSmallResultTypeExtension() const OVERRIDE {
-    return true;
+    return false;
   }
 
  protected:
@@ -81,10 +83,13 @@ class X86_64JniCallingConvention FINAL : public JniCallingConvention {
   // TODO: these values aren't unique and can be shared amongst instances
   std::vector<ManagedRegister> callee_save_regs_;
 
-  DISALLOW_COPY_AND_ASSIGN(X86_64JniCallingConvention);
+  // Padding to ensure longs and doubles are not split in AAPCS
+  size_t padding_;
+
+  DISALLOW_COPY_AND_ASSIGN(ArmJniCallingConvention);
 };
 
-}  // namespace x86_64
+}  // namespace arm
 }  // namespace art
 
-#endif  // ART_COMPILER_JNI_QUICK_X86_64_CALLING_CONVENTION_X86_64_H_
+#endif  // ART_RUNTIME_JNI_QUICK_ARM_CALLING_CONVENTION_ARM_H_

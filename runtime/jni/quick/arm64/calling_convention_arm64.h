@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 The Android Open Source Project
+ * Copyright (C) 2014 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_JNI_QUICK_X86_CALLING_CONVENTION_X86_H_
-#define ART_COMPILER_JNI_QUICK_X86_CALLING_CONVENTION_X86_H_
+#ifndef ART_RUNTIME_JNI_QUICK_ARM64_CALLING_CONVENTION_ARM64_H_
+#define ART_RUNTIME_JNI_QUICK_ARM64_CALLING_CONVENTION_ARM64_H_
 
 #include "jni/quick/calling_convention.h"
 
 namespace art {
-namespace x86 {
+namespace arm64 {
 
-constexpr size_t kFramePointerSize = 4;
+constexpr size_t kFramePointerSize = 8;
 
-class X86ManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCallingConvention {
+class Arm64ManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCallingConvention {
  public:
-  explicit X86ManagedRuntimeCallingConvention(bool is_static, bool is_synchronized,
-                                              const char* shorty)
+  Arm64ManagedRuntimeCallingConvention(bool is_static, bool is_synchronized, const char* shorty)
       : ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty, kFramePointerSize) {}
-  ~X86ManagedRuntimeCallingConvention() OVERRIDE {}
+  ~Arm64ManagedRuntimeCallingConvention() OVERRIDE {}
   // Calling convention
   ManagedRegister ReturnRegister() OVERRIDE;
   ManagedRegister InterproceduralScratchRegister() OVERRIDE;
@@ -40,15 +39,17 @@ class X86ManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCallingCon
   ManagedRegister CurrentParamRegister() OVERRIDE;
   FrameOffset CurrentParamStackOffset() OVERRIDE;
   const ManagedRegisterEntrySpills& EntrySpills() OVERRIDE;
+
  private:
   ManagedRegisterEntrySpills entry_spills_;
-  DISALLOW_COPY_AND_ASSIGN(X86ManagedRuntimeCallingConvention);
+
+  DISALLOW_COPY_AND_ASSIGN(Arm64ManagedRuntimeCallingConvention);
 };
 
-class X86JniCallingConvention FINAL : public JniCallingConvention {
+class Arm64JniCallingConvention FINAL : public JniCallingConvention {
  public:
-  explicit X86JniCallingConvention(bool is_static, bool is_synchronized, const char* shorty);
-  ~X86JniCallingConvention() OVERRIDE {}
+  explicit Arm64JniCallingConvention(bool is_static, bool is_synchronized, const char* shorty);
+  ~Arm64JniCallingConvention() OVERRIDE {}
   // Calling convention
   ManagedRegister ReturnRegister() OVERRIDE;
   ManagedRegister IntReturnRegister() OVERRIDE;
@@ -61,15 +62,13 @@ class X86JniCallingConvention FINAL : public JniCallingConvention {
   }
   ManagedRegister ReturnScratchRegister() const OVERRIDE;
   uint32_t CoreSpillMask() const OVERRIDE;
-  uint32_t FpSpillMask() const OVERRIDE {
-    return 0;
-  }
+  uint32_t FpSpillMask() const OVERRIDE;
   bool IsCurrentParamInRegister() OVERRIDE;
   bool IsCurrentParamOnStack() OVERRIDE;
   ManagedRegister CurrentParamRegister() OVERRIDE;
   FrameOffset CurrentParamStackOffset() OVERRIDE;
 
-  // x86 needs to extend small return types.
+  // aarch64 calling convention leaves upper bits undefined.
   bool RequiresSmallResultTypeExtension() const OVERRIDE {
     return true;
   }
@@ -81,10 +80,10 @@ class X86JniCallingConvention FINAL : public JniCallingConvention {
   // TODO: these values aren't unique and can be shared amongst instances
   std::vector<ManagedRegister> callee_save_regs_;
 
-  DISALLOW_COPY_AND_ASSIGN(X86JniCallingConvention);
+  DISALLOW_COPY_AND_ASSIGN(Arm64JniCallingConvention);
 };
 
-}  // namespace x86
+}  // namespace arm64
 }  // namespace art
 
-#endif  // ART_COMPILER_JNI_QUICK_X86_CALLING_CONVENTION_X86_H_
+#endif  // ART_RUNTIME_JNI_QUICK_ARM64_CALLING_CONVENTION_ARM64_H_

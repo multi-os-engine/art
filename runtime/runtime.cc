@@ -78,6 +78,153 @@
 
 namespace art {
 
+namespace {  // anonymous namespace
+
+static constexpr uint32_t kArmRefSpills =
+    (1 << art::arm::R5) | (1 << art::arm::R6)  | (1 << art::arm::R7) | (1 << art::arm::R8) |
+    (1 << art::arm::R10) | (1 << art::arm::R11);
+static constexpr uint32_t kArmArgSpills =
+    (1 << art::arm::R1) | (1 << art::arm::R2) | (1 << art::arm::R3);
+static constexpr uint32_t kArmAllSpills =
+    (1 << art::arm::R4) | (1 << art::arm::R9);
+static constexpr uint32_t kArmFpAllSpills =
+    (1 << art::arm::S0)  | (1 << art::arm::S1)  | (1 << art::arm::S2)  | (1 << art::arm::S3)  |
+    (1 << art::arm::S4)  | (1 << art::arm::S5)  | (1 << art::arm::S6)  | (1 << art::arm::S7)  |
+    (1 << art::arm::S8)  | (1 << art::arm::S9)  | (1 << art::arm::S10) | (1 << art::arm::S11) |
+    (1 << art::arm::S12) | (1 << art::arm::S13) | (1 << art::arm::S14) | (1 << art::arm::S15) |
+    (1 << art::arm::S16) | (1 << art::arm::S17) | (1 << art::arm::S18) | (1 << art::arm::S19) |
+    (1 << art::arm::S20) | (1 << art::arm::S21) | (1 << art::arm::S22) | (1 << art::arm::S23) |
+    (1 << art::arm::S24) | (1 << art::arm::S25) | (1 << art::arm::S26) | (1 << art::arm::S27) |
+    (1 << art::arm::S28) | (1 << art::arm::S29) | (1 << art::arm::S30) | (1 << art::arm::S31);
+
+constexpr uint32_t ArmCoreSpills(Runtime::CalleeSaveType type) {
+  return kArmRefSpills | (type == Runtime::kRefsAndArgs ? kArmArgSpills : 0) |
+      (type == Runtime::kSaveAll ? kArmAllSpills : 0) | (1 << art::arm::LR);
+}
+
+constexpr uint32_t ArmFpSpills(Runtime::CalleeSaveType type) {
+  return type == Runtime::kSaveAll ? kArmFpAllSpills : 0;
+}
+
+constexpr uint32_t ArmFrameSize(Runtime::CalleeSaveType type) {
+  return RoundUp((POPCOUNT(ArmCoreSpills(type)) /* gprs */ +
+                  POPCOUNT(ArmFpSpills(type)) /* fprs */ +
+                  1 /* Method* */) * kArmPointerSize, kStackAlignment);
+}
+
+static constexpr uint32_t kMipsRefSpills =
+    (1 << art::mips::S2) | (1 << art::mips::S3) | (1 << art::mips::S4) | (1 << art::mips::S5) |
+    (1 << art::mips::S6) | (1 << art::mips::S7) | (1 << art::mips::GP) | (1 << art::mips::FP);
+static constexpr uint32_t kMipsArgSpills =
+    (1 << art::mips::A1) | (1 << art::mips::A2) | (1 << art::mips::A3);
+static constexpr uint32_t kMipsAllSpills =
+    (1 << art::mips::S0) | (1 << art::mips::S1);
+
+constexpr uint32_t MipsCoreSpills(Runtime::CalleeSaveType type) {
+  return kMipsRefSpills | (type == Runtime::kRefsAndArgs ? kMipsArgSpills : 0) |
+      (type == Runtime::kSaveAll ? kMipsAllSpills : 0) | (1 << art::mips::RA);
+}
+
+constexpr uint32_t MipsFrameSize(Runtime::CalleeSaveType type) {
+  return RoundUp((POPCOUNT(MipsCoreSpills(type)) /* gprs */ +
+                  (type == Runtime::kRefsAndArgs ? 0 : 3) + 1 /* Method* */) *
+                 kMipsPointerSize, kStackAlignment);
+}
+
+static constexpr uint32_t kX86RefSpills =
+    (1 << art::x86::EBP) | (1 << art::x86::ESI) | (1 << art::x86::EDI);
+static constexpr uint32_t kX86ArgSpills =
+    (1 << art::x86::ECX) | (1 << art::x86::EDX) | (1 << art::x86::EBX);
+
+constexpr uint32_t X86CoreSpills(Runtime::CalleeSaveType type) {
+  return kX86RefSpills | (type == Runtime::kRefsAndArgs ? kX86ArgSpills : 0) |
+      (1 << art::x86::kNumberOfCpuRegisters);  // fake return address callee save
+}
+
+constexpr uint32_t X86FrameSize(Runtime::CalleeSaveType type) {
+  return RoundUp((POPCOUNT(X86CoreSpills(type)) /* gprs */ +
+                  1 /* Method* */) * kX86PointerSize, kStackAlignment);
+}
+
+static constexpr uint32_t kX86_64RefSpills =
+    (1 << art::x86_64::RBX) | (1 << art::x86_64::RBP) | (1 << art::x86_64::R12) |
+    (1 << art::x86_64::R13) | (1 << art::x86_64::R14) | (1 << art::x86_64::R15);
+static constexpr uint32_t kX86_64ArgSpills =
+    (1 << art::x86_64::RSI) | (1 << art::x86_64::RDX) | (1 << art::x86_64::RCX) |
+    (1 << art::x86_64::R8) | (1 << art::x86_64::R9);
+static constexpr uint32_t kX86_64FpArgSpills =
+    (1 << art::x86_64::XMM0) | (1 << art::x86_64::XMM1) | (1 << art::x86_64::XMM2) |
+    (1 << art::x86_64::XMM3) | (1 << art::x86_64::XMM4) | (1 << art::x86_64::XMM5) |
+    (1 << art::x86_64::XMM6) | (1 << art::x86_64::XMM7);
+
+constexpr uint32_t X86_64CoreSpills(Runtime::CalleeSaveType type) {
+  return kX86_64RefSpills | (type == Runtime::kRefsAndArgs ? kX86_64ArgSpills : 0) |
+      (1 << art::x86_64::kNumberOfCpuRegisters);  // fake return address callee save;
+}
+
+constexpr uint32_t X86_64FpSpills(Runtime::CalleeSaveType type) {
+  return (type == Runtime::kRefsAndArgs ? kX86_64FpArgSpills : 0);
+}
+
+constexpr uint32_t X86_64FrameSize(Runtime::CalleeSaveType type) {
+  return RoundUp((POPCOUNT(X86_64CoreSpills(type)) /* gprs */ +
+                  POPCOUNT(X86_64FpSpills(type)) /* fprs */ +
+                  1 /* Method* */) * kX86_64PointerSize, kStackAlignment);
+}
+
+// Callee saved registers
+static constexpr uint32_t kArm64RefSpills =
+    (1 << art::arm64::X19) | (1 << art::arm64::X20) | (1 << art::arm64::X21) |
+    (1 << art::arm64::X22) | (1 << art::arm64::X23) | (1 << art::arm64::X24) |
+    (1 << art::arm64::X25) | (1 << art::arm64::X26) | (1 << art::arm64::X27) |
+    (1 << art::arm64::X28);
+// X0 is the method pointer. Not saved.
+static constexpr uint32_t kArm64ArgSpills =
+    (1 << art::arm64::X1) | (1 << art::arm64::X2) | (1 << art::arm64::X3) |
+    (1 << art::arm64::X4) | (1 << art::arm64::X5) | (1 << art::arm64::X6) |
+    (1 << art::arm64::X7);
+// TODO  This is conservative. Only ALL should include the thread register.
+// The thread register is not preserved by the aapcs64.
+// LR is always saved.
+static constexpr uint32_t kArm64AllSpills =  0;  // (1 << art::arm64::LR);
+
+// Save callee-saved floating point registers. Rest are scratch/parameters.
+static constexpr uint32_t kArm64FpArgSpills =
+    (1 << art::arm64::D0) | (1 << art::arm64::D1) | (1 << art::arm64::D2) |
+    (1 << art::arm64::D3) | (1 << art::arm64::D4) | (1 << art::arm64::D5) |
+    (1 << art::arm64::D6) | (1 << art::arm64::D7);
+static constexpr uint32_t kArm64FpRefSpills =
+    (1 << art::arm64::D8)  | (1 << art::arm64::D9)  | (1 << art::arm64::D10) |
+    (1 << art::arm64::D11)  | (1 << art::arm64::D12)  | (1 << art::arm64::D13) |
+    (1 << art::arm64::D14)  | (1 << art::arm64::D15);
+static constexpr uint32_t kArm64FpAllSpills =
+    kArm64FpArgSpills |
+    (1 << art::arm64::D16)  | (1 << art::arm64::D17) | (1 << art::arm64::D18) |
+    (1 << art::arm64::D19)  | (1 << art::arm64::D20) | (1 << art::arm64::D21) |
+    (1 << art::arm64::D22)  | (1 << art::arm64::D23) | (1 << art::arm64::D24) |
+    (1 << art::arm64::D25)  | (1 << art::arm64::D26) | (1 << art::arm64::D27) |
+    (1 << art::arm64::D28)  | (1 << art::arm64::D29) | (1 << art::arm64::D30) |
+    (1 << art::arm64::D31);
+
+constexpr uint32_t Arm64CoreSpills(Runtime::CalleeSaveType type) {
+  return kArm64RefSpills | (type == Runtime::kRefsAndArgs ? kArm64ArgSpills : 0) |
+      (type == Runtime::kSaveAll ? kArm64AllSpills : 0) | (1 << art::arm64::FP)
+      | (1 << art::arm64::X18) | (1 << art::arm64::LR);
+}
+
+constexpr uint32_t Arm64FpSpills(Runtime::CalleeSaveType type) {
+  return kArm64FpRefSpills | (type == Runtime::kRefsAndArgs ? kArm64FpArgSpills: 0)
+      | (type == Runtime::kSaveAll ? kArm64FpAllSpills : 0);
+}
+
+constexpr uint32_t Arm64FrameSize(Runtime::CalleeSaveType type) {
+  return RoundUp((POPCOUNT(Arm64CoreSpills(type)) /* gprs */ +
+                  POPCOUNT(Arm64FpSpills(type)) /* fprs */ +
+                  1 /* Method* */) * kArm64PointerSize, kStackAlignment);
+}
+
+}  // anonymous namespace
+
 static constexpr bool kEnableJavaStackTraceHandler = true;
 const char* Runtime::kDefaultInstructionSetFeatures =
     STRINGIFY(ART_DEFAULT_INSTRUCTION_SET_FEATURES);
@@ -88,6 +235,7 @@ Runtime::Runtime()
       resolution_method_(nullptr),
       imt_conflict_method_(nullptr),
       default_imt_(nullptr),
+      instruction_set_(kNone),
       compiler_callbacks_(nullptr),
       is_zygote_(false),
       is_concurrent_gc_enabled_(true),
@@ -137,6 +285,9 @@ Runtime::Runtime()
       verify_(false) {
   for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
     callee_save_methods_[i] = nullptr;
+    callee_save_method_frame_size_[i] = 0u;
+    callee_save_method_core_spills_[i] = 0u;
+    callee_save_method_fp_spills_[i] = 0u;
   }
 }
 
@@ -980,8 +1131,7 @@ mirror::ArtMethod* Runtime::CreateResolutionMethod() {
   return method.get();
 }
 
-mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(InstructionSet instruction_set,
-                                                   CalleeSaveType type) {
+mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(CalleeSaveType type) {
   Thread* self = Thread::Current();
   Runtime* runtime = Runtime::Current();
   ClassLinker* class_linker = runtime->GetClassLinker();
@@ -991,118 +1141,10 @@ mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(InstructionSet instruction_se
   method->SetDexMethodIndex(DexFile::kDexNoIndex);
   method->SetEntryPointFromPortableCompiledCode(nullptr);
   method->SetEntryPointFromQuickCompiledCode(nullptr);
-  if ((instruction_set == kThumb2) || (instruction_set == kArm)) {
-    uint32_t ref_spills = (1 << art::arm::R5) | (1 << art::arm::R6)  | (1 << art::arm::R7) |
-                          (1 << art::arm::R8) | (1 << art::arm::R10) | (1 << art::arm::R11);
-    uint32_t arg_spills = (1 << art::arm::R1) | (1 << art::arm::R2) | (1 << art::arm::R3);
-    uint32_t all_spills = (1 << art::arm::R4) | (1 << art::arm::R9);
-    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0) |
-                           (type == kSaveAll ? all_spills : 0) | (1 << art::arm::LR);
-    uint32_t fp_all_spills = (1 << art::arm::S0)  | (1 << art::arm::S1)  | (1 << art::arm::S2) |
-                             (1 << art::arm::S3)  | (1 << art::arm::S4)  | (1 << art::arm::S5) |
-                             (1 << art::arm::S6)  | (1 << art::arm::S7)  | (1 << art::arm::S8) |
-                             (1 << art::arm::S9)  | (1 << art::arm::S10) | (1 << art::arm::S11) |
-                             (1 << art::arm::S12) | (1 << art::arm::S13) | (1 << art::arm::S14) |
-                             (1 << art::arm::S15) | (1 << art::arm::S16) | (1 << art::arm::S17) |
-                             (1 << art::arm::S18) | (1 << art::arm::S19) | (1 << art::arm::S20) |
-                             (1 << art::arm::S21) | (1 << art::arm::S22) | (1 << art::arm::S23) |
-                             (1 << art::arm::S24) | (1 << art::arm::S25) | (1 << art::arm::S26) |
-                             (1 << art::arm::S27) | (1 << art::arm::S28) | (1 << art::arm::S29) |
-                             (1 << art::arm::S30) | (1 << art::arm::S31);
-    uint32_t fp_spills = type == kSaveAll ? fp_all_spills : 0;
-    size_t frame_size = RoundUp((POPCOUNT(core_spills) /* gprs */ +
-                                 POPCOUNT(fp_spills) /* fprs */ +
-                                 1 /* Method* */) * kArmPointerSize, kStackAlignment);
-    method->SetFrameSizeInBytes(frame_size);
-    method->SetCoreSpillMask(core_spills);
-    method->SetFpSpillMask(fp_spills);
-  } else if (instruction_set == kMips) {
-    uint32_t ref_spills = (1 << art::mips::S2) | (1 << art::mips::S3) | (1 << art::mips::S4) |
-                          (1 << art::mips::S5) | (1 << art::mips::S6) | (1 << art::mips::S7) |
-                          (1 << art::mips::GP) | (1 << art::mips::FP);
-    uint32_t arg_spills = (1 << art::mips::A1) | (1 << art::mips::A2) | (1 << art::mips::A3);
-    uint32_t all_spills = (1 << art::mips::S0) | (1 << art::mips::S1);
-    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0) |
-                           (type == kSaveAll ? all_spills : 0) | (1 << art::mips::RA);
-    size_t frame_size = RoundUp((POPCOUNT(core_spills) /* gprs */ +
-                                (type == kRefsAndArgs ? 0 : 3) + 1 /* Method* */) *
-                                kMipsPointerSize, kStackAlignment);
-    method->SetFrameSizeInBytes(frame_size);
-    method->SetCoreSpillMask(core_spills);
-    method->SetFpSpillMask(0);
-  } else if (instruction_set == kX86) {
-    uint32_t ref_spills = (1 << art::x86::EBP) | (1 << art::x86::ESI) | (1 << art::x86::EDI);
-    uint32_t arg_spills = (1 << art::x86::ECX) | (1 << art::x86::EDX) | (1 << art::x86::EBX);
-    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0) |
-                         (1 << art::x86::kNumberOfCpuRegisters);  // fake return address callee save
-    size_t frame_size = RoundUp((POPCOUNT(core_spills) /* gprs */ +
-                                 1 /* Method* */) * kX86PointerSize, kStackAlignment);
-    method->SetFrameSizeInBytes(frame_size);
-    method->SetCoreSpillMask(core_spills);
-    method->SetFpSpillMask(0);
-  } else if (instruction_set == kX86_64) {
-    uint32_t ref_spills =
-        (1 << art::x86_64::RBX) | (1 << art::x86_64::RBP) | (1 << art::x86_64::R12) |
-        (1 << art::x86_64::R13) | (1 << art::x86_64::R14) | (1 << art::x86_64::R15);
-    uint32_t arg_spills =
-        (1 << art::x86_64::RSI) | (1 << art::x86_64::RDX) | (1 << art::x86_64::RCX) |
-        (1 << art::x86_64::R8) | (1 << art::x86_64::R9);
-    uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0) |
-        (1 << art::x86_64::kNumberOfCpuRegisters);  // fake return address callee save
-    uint32_t fp_arg_spills =
-        (1 << art::x86_64::XMM0) | (1 << art::x86_64::XMM1) | (1 << art::x86_64::XMM2) |
-        (1 << art::x86_64::XMM3) | (1 << art::x86_64::XMM4) | (1 << art::x86_64::XMM5) |
-        (1 << art::x86_64::XMM6) | (1 << art::x86_64::XMM7);
-    uint32_t fp_spills = (type == kRefsAndArgs ? fp_arg_spills : 0);
-    size_t frame_size = RoundUp((POPCOUNT(core_spills) /* gprs */ +
-                                 POPCOUNT(fp_spills) /* fprs */ +
-                                 1 /* Method* */) * kX86_64PointerSize, kStackAlignment);
-    method->SetFrameSizeInBytes(frame_size);
-    method->SetCoreSpillMask(core_spills);
-    method->SetFpSpillMask(fp_spills);
-  } else if (instruction_set == kArm64) {
-      // Callee saved registers
-      uint32_t ref_spills = (1 << art::arm64::X19) | (1 << art::arm64::X20) | (1 << art::arm64::X21) |
-                            (1 << art::arm64::X22) | (1 << art::arm64::X23) | (1 << art::arm64::X24) |
-                            (1 << art::arm64::X25) | (1 << art::arm64::X26) | (1 << art::arm64::X27) |
-                            (1 << art::arm64::X28);
-      // X0 is the method pointer. Not saved.
-      uint32_t arg_spills = (1 << art::arm64::X1) | (1 << art::arm64::X2) | (1 << art::arm64::X3) |
-                            (1 << art::arm64::X4) | (1 << art::arm64::X5) | (1 << art::arm64::X6) |
-                            (1 << art::arm64::X7);
-      // TODO  This is conservative. Only ALL should include the thread register.
-      // The thread register is not preserved by the aapcs64.
-      // LR is always saved.
-      uint32_t all_spills =  0;  // (1 << art::arm64::LR);
-      uint32_t core_spills = ref_spills | (type == kRefsAndArgs ? arg_spills : 0) |
-                             (type == kSaveAll ? all_spills : 0) | (1 << art::arm64::FP)
-                             | (1 << art::arm64::X18) | (1 << art::arm64::LR);
-
-      // Save callee-saved floating point registers. Rest are scratch/parameters.
-      uint32_t fp_arg_spills = (1 << art::arm64::D0) | (1 << art::arm64::D1) | (1 << art::arm64::D2) |
-                            (1 << art::arm64::D3) | (1 << art::arm64::D4) | (1 << art::arm64::D5) |
-                            (1 << art::arm64::D6) | (1 << art::arm64::D7);
-      uint32_t fp_ref_spills = (1 << art::arm64::D8)  | (1 << art::arm64::D9)  | (1 << art::arm64::D10) |
-                               (1 << art::arm64::D11)  | (1 << art::arm64::D12)  | (1 << art::arm64::D13) |
-                               (1 << art::arm64::D14)  | (1 << art::arm64::D15);
-      uint32_t fp_all_spills = fp_arg_spills |
-                          (1 << art::arm64::D16)  | (1 << art::arm64::D17) | (1 << art::arm64::D18) |
-                          (1 << art::arm64::D19)  | (1 << art::arm64::D20) | (1 << art::arm64::D21) |
-                          (1 << art::arm64::D22)  | (1 << art::arm64::D23) | (1 << art::arm64::D24) |
-                          (1 << art::arm64::D25)  | (1 << art::arm64::D26) | (1 << art::arm64::D27) |
-                          (1 << art::arm64::D28)  | (1 << art::arm64::D29) | (1 << art::arm64::D30) |
-                          (1 << art::arm64::D31);
-      uint32_t fp_spills = fp_ref_spills | (type == kRefsAndArgs ? fp_arg_spills: 0)
-                          | (type == kSaveAll ? fp_all_spills : 0);
-      size_t frame_size = RoundUp((POPCOUNT(core_spills) /* gprs */ +
-                                   POPCOUNT(fp_spills) /* fprs */ +
-                                   1 /* Method* */) * kArm64PointerSize, kStackAlignment);
-      method->SetFrameSizeInBytes(frame_size);
-      method->SetCoreSpillMask(core_spills);
-      method->SetFpSpillMask(fp_spills);
-  } else {
-    UNIMPLEMENTED(FATAL) << instruction_set;
-  }
+  DCHECK_NE(instruction_set_, kNone);
+  method->SetFrameSizeInBytes(callee_save_method_frame_size_[type]);
+  method->SetCoreSpillMask(callee_save_method_core_spills_[type]);
+  method->SetFpSpillMask(callee_save_method_fp_spills_[type]);
   return method.get();
 }
 
@@ -1118,6 +1160,48 @@ void Runtime::AllowNewSystemWeaks() {
   intern_table_->AllowNewInterns();
   java_vm_->AllowNewWeakGlobals();
   Dbg::AllowNewObjectRegistryObjects();
+}
+
+void Runtime::SetInstructionSet(InstructionSet instruction_set) {
+  instruction_set_ = instruction_set;
+  if ((instruction_set_ == kThumb2) || (instruction_set_ == kArm)) {
+    for (int i = 0; i != kLastCalleeSaveType; ++i) {
+      CalleeSaveType type = static_cast<CalleeSaveType>(i);
+      callee_save_method_core_spills_[i] = ArmCoreSpills(type);
+      callee_save_method_fp_spills_[i] = ArmFpSpills(type);
+      callee_save_method_frame_size_[i] = ArmFrameSize(type);
+    }
+  } else if (instruction_set_ == kMips) {
+    for (int i = 0; i != kLastCalleeSaveType; ++i) {
+      CalleeSaveType type = static_cast<CalleeSaveType>(i);
+      callee_save_method_core_spills_[i] = MipsCoreSpills(type);
+      callee_save_method_fp_spills_[i] = 0u;
+      callee_save_method_frame_size_[i] = MipsFrameSize(type);
+    }
+  } else if (instruction_set_ == kX86) {
+    for (int i = 0; i != kLastCalleeSaveType; ++i) {
+      CalleeSaveType type = static_cast<CalleeSaveType>(i);
+      callee_save_method_core_spills_[i] = X86CoreSpills(type);
+      callee_save_method_fp_spills_[i] = 0u;
+      callee_save_method_frame_size_[i] = X86FrameSize(type);
+    }
+  } else if (instruction_set_ == kX86_64) {
+    for (int i = 0; i != kLastCalleeSaveType; ++i) {
+      CalleeSaveType type = static_cast<CalleeSaveType>(i);
+      callee_save_method_core_spills_[i] = X86_64CoreSpills(type);
+      callee_save_method_fp_spills_[i] = X86_64FpSpills(type);
+      callee_save_method_frame_size_[i] = X86_64FrameSize(type);
+    }
+  } else if (instruction_set_ == kArm64) {
+    for (int i = 0; i != kLastCalleeSaveType; ++i) {
+      CalleeSaveType type = static_cast<CalleeSaveType>(i);
+      callee_save_method_core_spills_[i] = Arm64CoreSpills(type);
+      callee_save_method_fp_spills_[i] = Arm64FpSpills(type);
+      callee_save_method_frame_size_[i] = Arm64FrameSize(type);
+    }
+  } else {
+    UNIMPLEMENTED(FATAL) << instruction_set_;
+  }
 }
 
 void Runtime::SetCalleeSaveMethod(mirror::ArtMethod* method, CalleeSaveType type) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 The Android Open Source Project
+ * Copyright (C) 2014 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,26 @@
  * limitations under the License.
  */
 
-#include "managed_register_x86.h"
+#include "managed_register_x86_64.h"
 
 #include "globals.h"
 
 namespace art {
-namespace x86 {
+namespace x86_64 {
 
 // Define register pairs.
 // This list must be kept in sync with the RegisterPair enum.
 #define REGISTER_PAIR_LIST(P) \
-  P(EAX, EDX)                 \
-  P(EAX, ECX)                 \
-  P(EAX, EBX)                 \
-  P(EAX, EDI)                 \
-  P(EDX, ECX)                 \
-  P(EDX, EBX)                 \
-  P(EDX, EDI)                 \
-  P(ECX, EBX)                 \
-  P(ECX, EDI)                 \
-  P(EBX, EDI)                 \
-  P(ECX, EDX)
+  P(RAX, RDX)                 \
+  P(RAX, RCX)                 \
+  P(RAX, RBX)                 \
+  P(RAX, RDI)                 \
+  P(RDX, RCX)                 \
+  P(RDX, RBX)                 \
+  P(RDX, RDI)                 \
+  P(RCX, RBX)                 \
+  P(RCX, RDI)                 \
+  P(RBX, RDI)
 
 
 struct RegisterPairDescriptor {
@@ -51,20 +50,20 @@ static const RegisterPairDescriptor kRegisterPairs[] = {
 };
 
 std::ostream& operator<<(std::ostream& os, const RegisterPair& reg) {
-  os << X86ManagedRegister::FromRegisterPair(reg);
+  os << X86_64ManagedRegister::FromRegisterPair(reg);
   return os;
 }
 
-bool X86ManagedRegister::Overlaps(const X86ManagedRegister& other) const {
+bool X86_64ManagedRegister::Overlaps(const X86_64ManagedRegister& other) const {
   if (IsNoRegister() || other.IsNoRegister()) return false;
   CHECK(IsValidManagedRegister());
   CHECK(other.IsValidManagedRegister());
   if (Equals(other)) return true;
   if (IsRegisterPair()) {
-    Register low = AsRegisterPairLow();
-    Register high = AsRegisterPairHigh();
-    return X86ManagedRegister::FromCpuRegister(low).Overlaps(other) ||
-        X86ManagedRegister::FromCpuRegister(high).Overlaps(other);
+    Register low = AsRegisterPairLow().AsRegister();
+    Register high = AsRegisterPairHigh().AsRegister();
+    return X86_64ManagedRegister::FromCpuRegister(low).Overlaps(other) ||
+        X86_64ManagedRegister::FromCpuRegister(high).Overlaps(other);
   }
   if (other.IsRegisterPair()) {
     return other.Overlaps(*this);
@@ -73,7 +72,7 @@ bool X86ManagedRegister::Overlaps(const X86ManagedRegister& other) const {
 }
 
 
-int X86ManagedRegister::AllocIdLow() const {
+int X86_64ManagedRegister::AllocIdLow() const {
   CHECK(IsRegisterPair());
   const int r = RegId() - (kNumberOfCpuRegIds + kNumberOfXmmRegIds +
                            kNumberOfX87RegIds);
@@ -82,7 +81,7 @@ int X86ManagedRegister::AllocIdLow() const {
 }
 
 
-int X86ManagedRegister::AllocIdHigh() const {
+int X86_64ManagedRegister::AllocIdHigh() const {
   CHECK(IsRegisterPair());
   const int r = RegId() - (kNumberOfCpuRegIds + kNumberOfXmmRegIds +
                            kNumberOfX87RegIds);
@@ -91,15 +90,15 @@ int X86ManagedRegister::AllocIdHigh() const {
 }
 
 
-void X86ManagedRegister::Print(std::ostream& os) const {
+void X86_64ManagedRegister::Print(std::ostream& os) const {
   if (!IsValidManagedRegister()) {
     os << "No Register";
   } else if (IsXmmRegister()) {
-    os << "XMM: " << static_cast<int>(AsXmmRegister());
+    os << "XMM: " << static_cast<int>(AsXmmRegister().AsFloatRegister());
   } else if (IsX87Register()) {
     os << "X87: " << static_cast<int>(AsX87Register());
   } else if (IsCpuRegister()) {
-    os << "CPU: " << static_cast<int>(AsCpuRegister());
+    os << "CPU: " << static_cast<int>(AsCpuRegister().AsRegister());
   } else if (IsRegisterPair()) {
     os << "Pair: " << AsRegisterPairLow() << ", " << AsRegisterPairHigh();
   } else {
@@ -107,10 +106,22 @@ void X86ManagedRegister::Print(std::ostream& os) const {
   }
 }
 
-std::ostream& operator<<(std::ostream& os, const X86ManagedRegister& reg) {
+std::ostream& operator<<(std::ostream& os, const X86_64ManagedRegister& reg) {
   reg.Print(os);
   return os;
 }
 
-}  // namespace x86
+std::ostream& operator<<(std::ostream& os, const CpuRegister& reg) {
+  return os << reg.AsRegister();
+}
+
+std::ostream& operator<<(std::ostream& os, const XmmRegister& reg) {
+  return os << reg.AsFloatRegister();
+}
+
+std::ostream& operator<<(std::ostream& os, const X87Register& reg) {
+  return os << "ST" << static_cast<int>(reg);
+}
+
+}  // namespace x86_64
 }  // namespace art

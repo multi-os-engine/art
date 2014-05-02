@@ -24,18 +24,6 @@
 namespace art {
 namespace x86_64 {
 
-std::ostream& operator<<(std::ostream& os, const CpuRegister& reg) {
-  return os << reg.AsRegister();
-}
-
-std::ostream& operator<<(std::ostream& os, const XmmRegister& reg) {
-  return os << reg.AsFloatRegister();
-}
-
-std::ostream& operator<<(std::ostream& os, const X87Register& reg) {
-  return os << "ST" << static_cast<int>(reg);
-}
-
 void X86_64Assembler::call(CpuRegister reg) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitOptionalRex32(reg);

@@ -19,9 +19,9 @@
 
 #include <vector>
 #include "base/macros.h"
-#include "constants_x86.h"
+#include "utils/x86/constants_x86.h"
 #include "globals.h"
-#include "managed_register_x86.h"
+#include "utils/x86/managed_register_x86.h"
 #include "offsets.h"
 #include "utils/assembler.h"
 #include "utils.h"

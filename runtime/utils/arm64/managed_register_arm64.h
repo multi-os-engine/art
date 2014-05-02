@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_UTILS_ARM64_MANAGED_REGISTER_ARM64_H_
-#define ART_COMPILER_UTILS_ARM64_MANAGED_REGISTER_ARM64_H_
+#ifndef ART_RUNTIME_UTILS_ARM64_MANAGED_REGISTER_ARM64_H_
+#define ART_RUNTIME_UTILS_ARM64_MANAGED_REGISTER_ARM64_H_
 
 #include "base/logging.h"
 #include "constants_arm64.h"
@@ -225,4 +225,4 @@ inline arm64::Arm64ManagedRegister ManagedRegister::AsArm64() const {
 
 }  // namespace art
 
-#endif  // ART_COMPILER_UTILS_ARM64_MANAGED_REGISTER_ARM64_H_
+#endif  // ART_RUNTIME_UTILS_ARM64_MANAGED_REGISTER_ARM64_H_

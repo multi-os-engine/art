@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_UTILS_MANAGED_REGISTER_H_
-#define ART_COMPILER_UTILS_MANAGED_REGISTER_H_
+#ifndef ART_RUNTIME_UTILS_MANAGED_REGISTER_H_
+#define ART_RUNTIME_UTILS_MANAGED_REGISTER_H_
 
 #include <vector>
 
@@ -129,4 +129,4 @@ class ManagedRegisterEntrySpills : public std::vector<ManagedRegisterSpill> {
 
 }  // namespace art
 
-#endif  // ART_COMPILER_UTILS_MANAGED_REGISTER_H_
+#endif  // ART_RUNTIME_UTILS_MANAGED_REGISTER_H_

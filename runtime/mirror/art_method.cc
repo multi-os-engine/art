@@ -34,6 +34,8 @@
 #include "object_utils.h"
 #include "well_known_classes.h"
 
+#include "jni/quick/calling_convention.h"
+
 namespace art {
 namespace mirror {
 
@@ -404,6 +406,56 @@ const uint8_t* ArtMethod::GetVmapTable() {
     return nullptr;
   }
   return reinterpret_cast<const uint8_t*>(code) - offset;
+}
+
+void ArtMethod::CheckFrameSizeInBytes(uint32_t size) {
+  const void* code_pointer = GetOatCodePointer();
+  if (code_pointer != nullptr) {
+    CHECK_EQ(size, reinterpret_cast<const OatMethodHeader*>(code_pointer)[-1].frame_size_in_bytes_);
+  } else if (IsProxyMethod() || IsAbstract()) {
+    CHECK_EQ(size, Runtime::Current()->GetCalleeSaveMethodFrameSize(Runtime::kRefsAndArgs));
+  } else if (IsNative()) {
+    Runtime* runtime = Runtime::Current();
+    const void* entry_point = GetEntryPointFromQuickCompiledCode();
+    if (entry_point == GetQuickResolutionTrampoline(runtime->GetClassLinker()) ||
+        entry_point == GetQuickGenericJniTrampoline()) {
+      // Trampolines, see LinkCode() in class_linker.cc.
+      uint32_t sirt_refs = MethodHelper(this).GetNumberOfReferenceArgsWithoutReceiver() + 1;
+      size_t sirt_size = StackIndirectReferenceTable::GetAlignedSirtSize(sirt_refs);
+      CHECK_EQ(size,
+               Runtime::Current()->GetCalleeSaveMethodFrameSize(Runtime::kRefsAndArgs) + sirt_size);
+    } else if (IsPortableCompiled()) {
+      // Portable compiled, see CompiledMethod ctor used by portable jni compiler.
+      CHECK_EQ(size, kStackAlignment);
+    } else {
+      // Use JniCallingConvention, see quick jni compiler.
+      InstructionSet instruction_set = runtime->GetInstructionSet();
+      UniquePtr<JniCallingConvention> calling_convention(JniCallingConvention::Create(
+          IsStatic(), IsSynchronized(), MethodHelper(this).GetShorty(), instruction_set));
+      CHECK_EQ(size, calling_convention->FrameSize())
+          << "VMarko: MISMATCH; " << PrettyMethod(this, false) << " fast:" << IsFastNative();
+    }
+  } else if (IsPortableCompiled()) {
+    // Portable compiled, see CompiledMethod ctor used by portable compiler.
+    CHECK_EQ(size, kStackAlignment);
+  } else if (IsRuntimeMethod()) {
+    // Runtime methods, see Runtime::CreateCalleeSaveMethod().
+    // Cannot be imt-conflict-method or resolution-method.
+    Runtime* runtime = Runtime::Current();
+    CHECK(this != runtime->GetImtConflictMethod());
+    CHECK(this != runtime->GetResolutionMethod());
+    if (this == runtime->GetCalleeSaveMethod(Runtime::kRefsAndArgs)) {
+      CHECK_EQ(size, runtime->GetCalleeSaveMethodFrameSize(Runtime::kRefsAndArgs));
+    } else if (this == runtime->GetCalleeSaveMethod(Runtime::kSaveAll)) {
+      CHECK_EQ(size, runtime->GetCalleeSaveMethodFrameSize(Runtime::kSaveAll));
+    } else if (this == runtime->GetCalleeSaveMethod(Runtime::kRefsOnly)) {
+      CHECK_EQ(size, runtime->GetCalleeSaveMethodFrameSize(Runtime::kRefsOnly));
+    } else {
+      LOG(FATAL) << "VMarko: Unknown runtime method! " << PrettyMethod(this);
+    }
+  } else {
+    LOG(FATAL) << "VMarko: What's this method? " << PrettyMethod(this);
+  }
 }
 
 }  // namespace mirror

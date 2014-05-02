@@ -19,7 +19,7 @@
 
 #include "base/logging.h"
 #include "base/macros.h"
-#include "calling_convention.h"
+#include "jni/quick/calling_convention.h"
 #include "class_linker.h"
 #include "compiled_method.h"
 #include "dex_file-inl.h"

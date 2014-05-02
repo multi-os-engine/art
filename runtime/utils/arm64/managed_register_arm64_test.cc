@@ -15,7 +15,9 @@
  */
 
 #include "globals.h"
+#if 0
 #include "assembler_arm64.h"
+#endif
 #include "managed_register_arm64.h"
 #include "gtest/gtest.h"
 
@@ -609,6 +611,7 @@ TEST(Arm64ManagedRegister, Overlaps) {
   EXPECT_TRUE(!reg.Overlaps(Arm64ManagedRegister::FromDRegister(D20)));
 }
 
+#if 0
 TEST(Arm64ManagedRegister, VixlRegisters) {
   // X Registers.
   EXPECT_TRUE(vixl::x0.Is(Arm64Assembler::reg_x(X0)));
@@ -757,6 +760,7 @@ TEST(Arm64ManagedRegister, VixlRegisters) {
   EXPECT_TRUE(vixl::s30.Is(Arm64Assembler::reg_s(S30)));
   EXPECT_TRUE(vixl::s31.Is(Arm64Assembler::reg_s(S31)));
 }
+#endif
 
 }  // namespace arm64
 }  // namespace art

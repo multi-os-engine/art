@@ -24,15 +24,6 @@
 namespace art {
 namespace mips {
 
-std::ostream& operator<<(std::ostream& os, const DRegister& rhs) {
-  if (rhs >= D0 && rhs < kNumberOfDRegisters) {
-    os << "d" << static_cast<int>(rhs);
-  } else {
-    os << "DRegister[" << static_cast<int>(rhs) << "]";
-  }
-  return os;
-}
-
 void MipsAssembler::Emit(int32_t value) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   buffer_.Emit<int32_t>(value);

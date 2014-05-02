@@ -21,12 +21,12 @@
 
 #include "base/logging.h"
 #include "base/macros.h"
-#include "arm/constants_arm.h"
-#include "mips/constants_mips.h"
-#include "x86/constants_x86.h"
-#include "x86_64/constants_x86_64.h"
+#include "utils/arm/constants_arm.h"
+#include "utils/mips/constants_mips.h"
+#include "utils/x86/constants_x86.h"
+#include "utils/x86_64/constants_x86_64.h"
 #include "instruction_set.h"
-#include "managed_register.h"
+#include "utils/managed_register.h"
 #include "memory_region.h"
 #include "offsets.h"
 

@@ -183,7 +183,10 @@ class CommonCompilerTest : public CommonRuntimeTest {
         const std::vector<uint8_t>& mapping_table = compiled_method->GetMappingTable();
         uint32_t mapping_table_offset = mapping_table.empty() ? 0u
             : sizeof(OatMethodHeader) + vmap_table.size() + mapping_table.size();
-        OatMethodHeader method_header(vmap_table_offset, mapping_table_offset, code_size);
+        OatMethodHeader method_header(vmap_table_offset, mapping_table_offset,
+                                      compiled_method->GetFrameSizeInBytes(),
+                                      compiled_method->GetCoreSpillMask(),
+                                      compiled_method->GetFpSpillMask(), code_size);
 
         header_code_and_maps_chunks_.push_back(std::vector<uint8_t>());
         std::vector<uint8_t>* chunk = &header_code_and_maps_chunks_.back();
@@ -323,11 +326,12 @@ class CommonCompilerTest : public CommonRuntimeTest {
       compiler_options_->SetCompilerFilter(CompilerOptions::kInterpretOnly);
 #endif
 
+      runtime_->SetInstructionSet(instruction_set);
       for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
         Runtime::CalleeSaveType type = Runtime::CalleeSaveType(i);
         if (!runtime_->HasCalleeSaveMethod(type)) {
           runtime_->SetCalleeSaveMethod(
-              runtime_->CreateCalleeSaveMethod(instruction_set, type), type);
+              runtime_->CreateCalleeSaveMethod(type), type);
         }
       }
 

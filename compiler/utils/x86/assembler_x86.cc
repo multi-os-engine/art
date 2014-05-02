@@ -24,14 +24,6 @@
 namespace art {
 namespace x86 {
 
-std::ostream& operator<<(std::ostream& os, const XmmRegister& reg) {
-  return os << "XMM" << static_cast<int>(reg);
-}
-
-std::ostream& operator<<(std::ostream& os, const X87Register& reg) {
-  return os << "ST" << static_cast<int>(reg);
-}
-
 void X86Assembler::call(Register reg) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitUint8(0xFF);

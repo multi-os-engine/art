@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_JNI_QUICK_ARM_CALLING_CONVENTION_ARM_H_
-#define ART_COMPILER_JNI_QUICK_ARM_CALLING_CONVENTION_ARM_H_
+#ifndef ART_RUNTIME_JNI_QUICK_MIPS_CALLING_CONVENTION_MIPS_H_
+#define ART_RUNTIME_JNI_QUICK_MIPS_CALLING_CONVENTION_MIPS_H_
 
 #include "jni/quick/calling_convention.h"
 
 namespace art {
-namespace arm {
+namespace mips {
 
 constexpr size_t kFramePointerSize = 4;
 
-class ArmManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCallingConvention {
+class MipsManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCallingConvention {
  public:
-  ArmManagedRuntimeCallingConvention(bool is_static, bool is_synchronized, const char* shorty)
+  MipsManagedRuntimeCallingConvention(bool is_static, bool is_synchronized, const char* shorty)
       : ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty, kFramePointerSize) {}
-  ~ArmManagedRuntimeCallingConvention() OVERRIDE {}
+  ~MipsManagedRuntimeCallingConvention() OVERRIDE {}
   // Calling convention
   ManagedRegister ReturnRegister() OVERRIDE;
   ManagedRegister InterproceduralScratchRegister() OVERRIDE;
@@ -43,13 +43,13 @@ class ArmManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCallingCon
  private:
   ManagedRegisterEntrySpills entry_spills_;
 
-  DISALLOW_COPY_AND_ASSIGN(ArmManagedRuntimeCallingConvention);
+  DISALLOW_COPY_AND_ASSIGN(MipsManagedRuntimeCallingConvention);
 };
 
-class ArmJniCallingConvention FINAL : public JniCallingConvention {
+class MipsJniCallingConvention FINAL : public JniCallingConvention {
  public:
-  explicit ArmJniCallingConvention(bool is_static, bool is_synchronized, const char* shorty);
-  ~ArmJniCallingConvention() OVERRIDE {}
+  explicit MipsJniCallingConvention(bool is_static, bool is_synchronized, const char* shorty);
+  ~MipsJniCallingConvention() OVERRIDE {}
   // Calling convention
   ManagedRegister ReturnRegister() OVERRIDE;
   ManagedRegister IntReturnRegister() OVERRIDE;
@@ -71,7 +71,7 @@ class ArmJniCallingConvention FINAL : public JniCallingConvention {
   ManagedRegister CurrentParamRegister() OVERRIDE;
   FrameOffset CurrentParamStackOffset() OVERRIDE;
 
-  // AAPCS mandates return values are extended.
+  // Mips does not need to extend small return types.
   bool RequiresSmallResultTypeExtension() const OVERRIDE {
     return false;
   }
@@ -86,10 +86,10 @@ class ArmJniCallingConvention FINAL : public JniCallingConvention {
   // Padding to ensure longs and doubles are not split in AAPCS
   size_t padding_;
 
-  DISALLOW_COPY_AND_ASSIGN(ArmJniCallingConvention);
+  DISALLOW_COPY_AND_ASSIGN(MipsJniCallingConvention);
 };
 
-}  // namespace arm
+}  // namespace mips
 }  // namespace art
 
-#endif  // ART_COMPILER_JNI_QUICK_ARM_CALLING_CONVENTION_ARM_H_
+#endif  // ART_RUNTIME_JNI_QUICK_MIPS_CALLING_CONVENTION_MIPS_H_

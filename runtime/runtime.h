@@ -325,20 +325,23 @@ class Runtime {
     return callee_save_methods_[type];
   }
 
+  uint32_t GetCalleeSaveMethodFrameSize(CalleeSaveType type) const {
+    return callee_save_method_frame_size_[type];
+  }
+
   static size_t GetCalleeSaveMethodOffset(CalleeSaveType type) {
     return OFFSETOF_MEMBER(Runtime, callee_save_methods_[type]);
   }
 
+  InstructionSet GetInstructionSet() const {
+    return instruction_set_;
+  }
+
+  void SetInstructionSet(InstructionSet instruction_set);
+
   void SetCalleeSaveMethod(mirror::ArtMethod* method, CalleeSaveType type);
 
-  mirror::ArtMethod* CreateCalleeSaveMethod(InstructionSet instruction_set,
-                                                 CalleeSaveType type)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  mirror::ArtMethod* CreateRefOnlyCalleeSaveMethod(InstructionSet instruction_set)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  mirror::ArtMethod* CreateRefAndArgsCalleeSaveMethod(InstructionSet instruction_set)
+  mirror::ArtMethod* CreateCalleeSaveMethod(CalleeSaveType type)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   int32_t GetStat(int kind);
@@ -467,6 +470,11 @@ class Runtime {
   mirror::ArtMethod* resolution_method_;
   mirror::ArtMethod* imt_conflict_method_;
   mirror::ObjectArray<mirror::ArtMethod>* default_imt_;
+
+  InstructionSet instruction_set_;
+  uint32_t callee_save_method_frame_size_[kLastCalleeSaveType];
+  uint32_t callee_save_method_core_spills_[kLastCalleeSaveType];
+  uint32_t callee_save_method_fp_spills_[kLastCalleeSaveType];
 
   CompilerCallbacks* compiler_callbacks_;
   bool is_zygote_;

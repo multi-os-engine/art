@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_UTILS_MIPS_CONSTANTS_MIPS_H_
-#define ART_COMPILER_UTILS_MIPS_CONSTANTS_MIPS_H_
+#ifndef ART_RUNTIME_UTILS_MIPS_CONSTANTS_MIPS_H_
+#define ART_RUNTIME_UTILS_MIPS_CONSTANTS_MIPS_H_
 
 #include <iosfwd>
 
@@ -107,4 +107,4 @@ class Instr {
 }  // namespace mips
 }  // namespace art
 
-#endif  // ART_COMPILER_UTILS_MIPS_CONSTANTS_MIPS_H_
+#endif  // ART_RUNTIME_UTILS_MIPS_CONSTANTS_MIPS_H_

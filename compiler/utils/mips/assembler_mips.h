@@ -20,9 +20,9 @@
 #include <vector>
 
 #include "base/macros.h"
-#include "constants_mips.h"
+#include "utils/mips/constants_mips.h"
 #include "globals.h"
-#include "managed_register_mips.h"
+#include "utils/mips/managed_register_mips.h"
 #include "utils/assembler.h"
 #include "offsets.h"
 #include "utils.h"

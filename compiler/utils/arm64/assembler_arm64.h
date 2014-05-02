@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 #include "base/logging.h"
-#include "constants_arm64.h"
+#include "utils/arm64/constants_arm64.h"
 #include "utils/arm64/managed_register_arm64.h"
 #include "utils/assembler.h"
 #include "offsets.h"

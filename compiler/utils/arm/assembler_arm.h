@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "base/logging.h"
-#include "constants_arm.h"
+#include "utils/arm/constants_arm.h"
 #include "utils/arm/managed_register_arm.h"
 #include "utils/assembler.h"
 #include "offsets.h"

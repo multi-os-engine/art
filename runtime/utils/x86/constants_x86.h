@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 The Android Open Source Project
+ * Copyright (C) 2011 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,50 +14,43 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_UTILS_X86_64_CONSTANTS_X86_64_H_
-#define ART_COMPILER_UTILS_X86_64_CONSTANTS_X86_64_H_
+#ifndef ART_RUNTIME_UTILS_X86_CONSTANTS_X86_H_
+#define ART_RUNTIME_UTILS_X86_CONSTANTS_X86_H_
 
 #include <iosfwd>
 
-#include "arch/x86_64/registers_x86_64.h"
+#include "arch/x86/registers_x86.h"
 #include "base/logging.h"
 #include "base/macros.h"
 #include "globals.h"
 
 namespace art {
-namespace x86_64 {
+namespace x86 {
 
-class CpuRegister {
- public:
-  explicit CpuRegister(Register r) : reg_(r) {}
-  Register AsRegister() const {
-    return reg_;
-  }
-  uint8_t LowBits() const {
-    return reg_ & 7;
-  }
-  bool NeedsRex() const {
-    return reg_ > 7;
-  }
- private:
-  const Register reg_;
+enum ByteRegister {
+  AL = 0,
+  CL = 1,
+  DL = 2,
+  BL = 3,
+  AH = 4,
+  CH = 5,
+  DH = 6,
+  BH = 7,
+  kNoByteRegister = -1  // Signals an illegal register.
 };
-std::ostream& operator<<(std::ostream& os, const CpuRegister& reg);
 
-class XmmRegister {
- public:
-  explicit XmmRegister(FloatRegister r) : reg_(r) {}
-  FloatRegister AsFloatRegister() const {
-    return reg_;
-  }
-  uint8_t LowBits() const {
-    return reg_ & 7;
-  }
-  bool NeedsRex() const {
-    return reg_ > 7;
-  }
- private:
-  const FloatRegister reg_;
+
+enum XmmRegister {
+  XMM0 = 0,
+  XMM1 = 1,
+  XMM2 = 2,
+  XMM3 = 3,
+  XMM4 = 4,
+  XMM5 = 5,
+  XMM6 = 6,
+  XMM7 = 7,
+  kNumberOfXmmRegisters = 8,
+  kNoXmmRegister = -1  // Signals an illegal register.
 };
 std::ostream& operator<<(std::ostream& os, const XmmRegister& reg);
 
@@ -127,7 +120,7 @@ class Instr {
   DISALLOW_IMPLICIT_CONSTRUCTORS(Instr);
 };
 
-}  // namespace x86_64
+}  // namespace x86
 }  // namespace art
 
-#endif  // ART_COMPILER_UTILS_X86_64_CONSTANTS_X86_64_H_
+#endif  // ART_RUNTIME_UTILS_X86_CONSTANTS_X86_H_

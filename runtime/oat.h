@@ -157,7 +157,8 @@ class PACKED(4) OatMethodHeader {
   OatMethodHeader();
 
   explicit OatMethodHeader(uint32_t mapping_table_offset, uint32_t vmap_table_offset,
-                           uint32_t code_size);
+                           uint32_t frame_size_in_bytes, uint32_t core_spill_mask,
+                           uint32_t fp_spill_mask, uint32_t code_size);
 
   ~OatMethodHeader();
 
@@ -165,6 +166,10 @@ class PACKED(4) OatMethodHeader {
   uint32_t mapping_table_offset_;
   // The offset in bytes from the start of the vmap table to the end of the header.
   uint32_t vmap_table_offset_;
+  // The stack frame information.
+  uint32_t frame_size_in_bytes_;
+  uint32_t core_spill_mask_;
+  uint32_t fp_spill_mask_;
   // The code size in bytes.
   uint32_t code_size_;
 };

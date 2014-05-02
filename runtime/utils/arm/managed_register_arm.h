@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_UTILS_ARM_MANAGED_REGISTER_ARM_H_
-#define ART_COMPILER_UTILS_ARM_MANAGED_REGISTER_ARM_H_
+#ifndef ART_RUNTIME_UTILS_ARM_MANAGED_REGISTER_ARM_H_
+#define ART_RUNTIME_UTILS_ARM_MANAGED_REGISTER_ARM_H_
 
 #include "base/logging.h"
 #include "constants_arm.h"
@@ -271,4 +271,4 @@ inline arm::ArmManagedRegister ManagedRegister::AsArm() const {
 
 }  // namespace art
 
-#endif  // ART_COMPILER_UTILS_ARM_MANAGED_REGISTER_ARM_H_
+#endif  // ART_RUNTIME_UTILS_ARM_MANAGED_REGISTER_ARM_H_

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_JNI_QUICK_CALLING_CONVENTION_H_
-#define ART_COMPILER_JNI_QUICK_CALLING_CONVENTION_H_
+#ifndef ART_RUNTIME_JNI_QUICK_CALLING_CONVENTION_H_
+#define ART_RUNTIME_JNI_QUICK_CALLING_CONVENTION_H_
 
 #include <vector>
 #include "stack_indirect_reference_table.h"
@@ -360,4 +360,4 @@ class JniCallingConvention : public CallingConvention {
 
 }  // namespace art
 
-#endif  // ART_COMPILER_JNI_QUICK_CALLING_CONVENTION_H_
+#endif  // ART_RUNTIME_JNI_QUICK_CALLING_CONVENTION_H_

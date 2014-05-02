@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 The Android Open Source Project
+ * Copyright (C) 2014 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,31 +14,30 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_UTILS_X86_MANAGED_REGISTER_X86_H_
-#define ART_COMPILER_UTILS_X86_MANAGED_REGISTER_X86_H_
+#ifndef ART_RUNTIME_UTILS_X86_64_MANAGED_REGISTER_X86_64_H_
+#define ART_RUNTIME_UTILS_X86_64_MANAGED_REGISTER_X86_64_H_
 
-#include "constants_x86.h"
+#include "constants_x86_64.h"
 #include "utils/managed_register.h"
 
 namespace art {
-namespace x86 {
+namespace x86_64 {
 
 // Values for register pairs.
 // The registers in kReservedCpuRegistersArray in x86.cc are not used in pairs.
 // The table kRegisterPairs in x86.cc must be kept in sync with this enum.
 enum RegisterPair {
-  EAX_EDX = 0,
-  EAX_ECX = 1,
-  EAX_EBX = 2,
-  EAX_EDI = 3,
-  EDX_ECX = 4,
-  EDX_EBX = 5,
-  EDX_EDI = 6,
-  ECX_EBX = 7,
-  ECX_EDI = 8,
-  EBX_EDI = 9,
-  ECX_EDX = 10,  // Dalvik style passing
-  kNumberOfRegisterPairs = 11,
+  RAX_RDX = 0,
+  RAX_RCX = 1,
+  RAX_RBX = 2,
+  RAX_RDI = 3,
+  RDX_RCX = 4,
+  RDX_RBX = 5,
+  RDX_RDI = 6,
+  RCX_RBX = 7,
+  RCX_RDI = 8,
+  RBX_RDI = 9,
+  kNumberOfRegisterPairs = 10,
   kNoRegisterPair = -1,
 };
 
@@ -47,8 +46,8 @@ std::ostream& operator<<(std::ostream& os, const RegisterPair& reg);
 const int kNumberOfCpuRegIds = kNumberOfCpuRegisters;
 const int kNumberOfCpuAllocIds = kNumberOfCpuRegisters;
 
-const int kNumberOfXmmRegIds = kNumberOfXmmRegisters;
-const int kNumberOfXmmAllocIds = kNumberOfXmmRegisters;
+const int kNumberOfXmmRegIds = kNumberOfFloatRegisters;
+const int kNumberOfXmmAllocIds = kNumberOfFloatRegisters;
 
 const int kNumberOfX87RegIds = kNumberOfX87Registers;
 const int kNumberOfX87AllocIds = kNumberOfX87Registers;
@@ -86,22 +85,16 @@ const int kNumberOfAllocIds = kNumberOfCpuAllocIds + kNumberOfXmmAllocIds +
 // (enum RegisterPair).
 // 'ManagedRegister::NoRegister()' provides an invalid register.
 // There is a one-to-one mapping between ManagedRegister and register id.
-class X86ManagedRegister : public ManagedRegister {
+class X86_64ManagedRegister : public ManagedRegister {
  public:
-  ByteRegister AsByteRegister() const {
+  CpuRegister AsCpuRegister() const {
     CHECK(IsCpuRegister());
-    CHECK_LT(AsCpuRegister(), ESP);  // ESP, EBP, ESI and EDI cannot be encoded as byte registers.
-    return static_cast<ByteRegister>(id_);
-  }
-
-  Register AsCpuRegister() const {
-    CHECK(IsCpuRegister());
-    return static_cast<Register>(id_);
+    return CpuRegister(static_cast<Register>(id_));
   }
 
   XmmRegister AsXmmRegister() const {
     CHECK(IsXmmRegister());
-    return static_cast<XmmRegister>(id_ - kNumberOfCpuRegIds);
+    return XmmRegister(static_cast<FloatRegister>(id_ - kNumberOfCpuRegIds));
   }
 
   X87Register AsX87Register() const {
@@ -110,22 +103,16 @@ class X86ManagedRegister : public ManagedRegister {
                                     (kNumberOfCpuRegIds + kNumberOfXmmRegIds));
   }
 
-  Register AsRegisterPairLow() const {
+  CpuRegister AsRegisterPairLow() const {
     CHECK(IsRegisterPair());
     // Appropriate mapping of register ids allows to use AllocIdLow().
     return FromRegId(AllocIdLow()).AsCpuRegister();
   }
 
-  Register AsRegisterPairHigh() const {
+  CpuRegister AsRegisterPairHigh() const {
     CHECK(IsRegisterPair());
     // Appropriate mapping of register ids allows to use AllocIdHigh().
     return FromRegId(AllocIdHigh()).AsCpuRegister();
-  }
-
-  RegisterPair AsRegisterPair() const {
-    CHECK(IsRegisterPair());
-    return static_cast<RegisterPair>(id_ -
-        (kNumberOfCpuRegIds + kNumberOfXmmRegIds + kNumberOfX87RegIds));
   }
 
   bool IsCpuRegister() const {
@@ -157,24 +144,23 @@ class X86ManagedRegister : public ManagedRegister {
   // Returns true if the two managed-registers ('this' and 'other') overlap.
   // Either managed-register may be the NoRegister. If both are the NoRegister
   // then false is returned.
-  bool Overlaps(const X86ManagedRegister& other) const;
+  bool Overlaps(const X86_64ManagedRegister& other) const;
 
-  static X86ManagedRegister FromCpuRegister(Register r) {
+  static X86_64ManagedRegister FromCpuRegister(Register r) {
     CHECK_NE(r, kNoRegister);
     return FromRegId(r);
   }
 
-  static X86ManagedRegister FromXmmRegister(XmmRegister r) {
-    CHECK_NE(r, kNoXmmRegister);
+  static X86_64ManagedRegister FromXmmRegister(FloatRegister r) {
     return FromRegId(r + kNumberOfCpuRegIds);
   }
 
-  static X86ManagedRegister FromX87Register(X87Register r) {
+  static X86_64ManagedRegister FromX87Register(X87Register r) {
     CHECK_NE(r, kNoX87Register);
     return FromRegId(r + kNumberOfCpuRegIds + kNumberOfXmmRegIds);
   }
 
-  static X86ManagedRegister FromRegisterPair(RegisterPair r) {
+  static X86_64ManagedRegister FromRegisterPair(RegisterPair r) {
     CHECK_NE(r, kNoRegisterPair);
     return FromRegId(r + (kNumberOfCpuRegIds + kNumberOfXmmRegIds +
                           kNumberOfX87RegIds));
@@ -201,25 +187,25 @@ class X86ManagedRegister : public ManagedRegister {
 
   friend class ManagedRegister;
 
-  explicit X86ManagedRegister(int reg_id) : ManagedRegister(reg_id) {}
+  explicit X86_64ManagedRegister(int reg_id) : ManagedRegister(reg_id) {}
 
-  static X86ManagedRegister FromRegId(int reg_id) {
-    X86ManagedRegister reg(reg_id);
+  static X86_64ManagedRegister FromRegId(int reg_id) {
+    X86_64ManagedRegister reg(reg_id);
     CHECK(reg.IsValidManagedRegister());
     return reg;
   }
 };
 
-std::ostream& operator<<(std::ostream& os, const X86ManagedRegister& reg);
+std::ostream& operator<<(std::ostream& os, const X86_64ManagedRegister& reg);
 
-}  // namespace x86
+}  // namespace x86_64
 
-inline x86::X86ManagedRegister ManagedRegister::AsX86() const {
-  x86::X86ManagedRegister reg(id_);
+inline x86_64::X86_64ManagedRegister ManagedRegister::AsX86_64() const {
+  x86_64::X86_64ManagedRegister reg(id_);
   CHECK(reg.IsNoRegister() || reg.IsValidManagedRegister());
   return reg;
 }
 
 }  // namespace art
 
-#endif  // ART_COMPILER_UTILS_X86_MANAGED_REGISTER_X86_H_
+#endif  // ART_RUNTIME_UTILS_X86_64_MANAGED_REGISTER_X86_64_H_

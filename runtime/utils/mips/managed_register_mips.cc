@@ -99,5 +99,14 @@ std::ostream& operator<<(std::ostream& os, const RegisterPair& reg) {
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, const DRegister& rhs) {
+  if (rhs >= D0 && rhs < kNumberOfDRegisters) {
+    os << "d" << static_cast<int>(rhs);
+  } else {
+    os << "DRegister[" << static_cast<int>(rhs) << "]";
+  }
+  return os;
+}
+
 }  // namespace mips
 }  // namespace art
