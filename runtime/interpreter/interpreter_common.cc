@@ -355,6 +355,12 @@ static void UnstartedRuntimeInvoke(Thread* self, MethodHelper& mh,
     args[0] = StackReference<mirror::Object>::FromMirrorPtr(found).AsVRegValue();
     EnterInterpreterFromInvoke(self, c, field.get(), args, NULL);
     result->SetL(field.get());
+  } else if (name == "int java.lang.Object.hashCode()") {
+    Object* obj = shadow_frame->GetVRegReference(arg_offset);
+    result->SetI(obj->IdentityHashCode());
+  } else if (name == "java.lang.String java.lang.reflect.ArtMethod.getMethodName(java.lang.reflect.ArtMethod)") {
+    ArtMethod* method = shadow_frame->GetVRegReference(arg_offset)->AsArtMethod();
+    result->SetL(MethodHelper(method).GetNameAsString());
   } else if (name == "void java.lang.System.arraycopy(java.lang.Object, int, java.lang.Object, int, int)" ||
              name == "void java.lang.System.arraycopy(char[], int, char[], int, int)") {
     // Special case array copying without initializing System.
