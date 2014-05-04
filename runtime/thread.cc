@@ -1233,40 +1233,49 @@ void Thread::SirtVisitRoots(RootCallback* visitor, void* arg, uint32_t thread_id
 
 mirror::Object* Thread::DecodeJObject(jobject obj) const {
   Locks::mutator_lock_->AssertSharedHeld(this);
-  if (obj == nullptr) {
+  if (UNLIKELY(obj == nullptr)) {
     return nullptr;
   }
-  IndirectRef ref = reinterpret_cast<IndirectRef>(obj);
-  IndirectRefKind kind = GetIndirectRefKind(ref);
+  const IndirectRef ref = reinterpret_cast<IndirectRef>(obj);
+  const IndirectRefKind kind = GetIndirectRefKind(ref);
   mirror::Object* result;
   // The "kinds" below are sorted by the frequency we expect to encounter them.
-  if (kind == kLocal) {
-    IndirectReferenceTable& locals = tlsPtr_.jni_env->locals;
-    result = locals.Get(ref);
-  } else if (kind == kSirtOrInvalid) {
-    // TODO: make stack indirect reference table lookup more efficient.
-    // Check if this is a local reference in the SIRT.
-    if (LIKELY(SirtContains(obj))) {
-      // Read from SIRT.
-      result = reinterpret_cast<StackReference<mirror::Object>*>(obj)->AsMirrorPtr();
-      VerifyObject(result);
-    } else {
-      result = kInvalidIndirectRefObject;
+  switch (kind) {
+    case kLocal: {
+      IndirectReferenceTable& locals = tlsPtr_.jni_env->locals;
+      result = locals.Get(ref);
+      break;
     }
-  } else if (kind == kGlobal) {
-    JavaVMExt* vm = Runtime::Current()->GetJavaVM();
-    IndirectReferenceTable& globals = vm->globals;
-    ReaderMutexLock mu(const_cast<Thread*>(this), vm->globals_lock);
-    result = const_cast<mirror::Object*>(globals.Get(ref));
-  } else {
-    DCHECK_EQ(kind, kWeakGlobal);
-    result = Runtime::Current()->GetJavaVM()->DecodeWeakGlobal(const_cast<Thread*>(this), ref);
-    if (result == kClearedJniWeakGlobal) {
-      // This is a special case where it's okay to return nullptr.
-      return nullptr;
+    case kSirtOrInvalid: {
+      // TODO: make stack indirect reference table lookup more efficient.
+      // Check if this is a local reference in the SIRT.
+      if (LIKELY(SirtContains(obj))) {
+        // Read from SIRT.
+        result = reinterpret_cast<StackReference<mirror::Object>*>(obj)->AsMirrorPtr();
+        VerifyObject(result);
+      } else {
+        result = kInvalidIndirectRefObject;
+      }
+      break;
+    }
+    case kGlobal: {
+      JavaVMExt* const vm = Runtime::Current()->GetJavaVM();
+      result = vm->globals.SynchronizedGet(const_cast<Thread*>(this), &vm->globals_lock, ref);
+      break;
+    }
+    case kWeakGlobal: {
+      result = Runtime::Current()->GetJavaVM()->DecodeWeakGlobal(const_cast<Thread*>(this), ref);
+      if (result == kClearedJniWeakGlobal) {
+        // This is a special case where it's okay to return nullptr.
+        return nullptr;
+      }
+      break;
+    }
+    default: {
+      result = nullptr;
+      LOG(FATAL) << "Unreachable";
     }
   }
-
   if (UNLIKELY(result == nullptr)) {
     JniAbortF(nullptr, "use of deleted %s %p", ToStr<IndirectRefKind>(kind).c_str(), obj);
   }
