@@ -118,13 +118,29 @@ class Instruction {
   };
 
   enum Flags {
-    kBranch   = 0x01,  // conditional or unconditional branch
-    kContinue = 0x02,  // flow can continue to next statement
-    kSwitch   = 0x04,  // switch statement
-    kThrow    = 0x08,  // could cause an exception to be thrown
-    kReturn   = 0x10,  // returns, no additional statements
-    kInvoke   = 0x20,  // a flavor of invoke
-    kUnconditional = 0x40,  // unconditional branch
+    kBranch              = 0x000001,  // conditional or unconditional branch
+    kContinue            = 0x000002,  // flow can continue to next statement
+    kSwitch              = 0x000004,  // switch statement
+    kThrow               = 0x000008,  // could cause an exception to be thrown
+    kReturn              = 0x000010,  // returns, no additional statements
+    kInvoke              = 0x000020,  // a flavor of invoke
+    kUnconditional       = 0x000040,  // unconditional branch
+    kAddExpression       = 0x000080,  // addition
+    kSubtractExpression  = 0x000100,  // subtract
+    kMultiplyExpression  = 0x000200,  // multiply
+    kDivideExpression    = 0x000400,  // division
+    kRemainderExpression = 0x000800,  // remainder expression
+    kAndExpression       = 0x001000,  // and expression
+    kOrExpression        = 0x002000,  // or expression
+    kXorExpression       = 0x004000,  // xor expression
+    kShlExpression       = 0x008000,  // shl expression
+    kShrExpression       = 0x010000,  // shr expression
+    kUshrExpression      = 0x020000,  // ushr expression
+    kCast                = 0x040000,  // cast
+    kSetter              = 0x080000,  // setter opcode
+    kGetter              = 0x100000,  // getter opcode
+    kClobber             = 0x200000,  // clobbers memory in a big way (not just a write)
+    kCIsConst            = 0x400000,  // C is a const opcode
   };
 
   enum VerifyFlag {

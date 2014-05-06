@@ -261,6 +261,48 @@ struct MIR {
     uint32_t vC;
     uint32_t arg[5];         /* vC/D/E/F/G in invoke or filled-new-array */
     Instruction::Code opcode;
+
+    explicit DecodedInstruction():vA(0), vB(0), vB_wide(0), vC(0), opcode(Instruction::NOP) {
+    }
+
+    /*
+     * Given a decoded instruction representing a const bytecode, it updates
+     * the out arguments with proper values as dictated by the constant bytecode.
+     */
+    bool GetConstant(int* low_const, int* high_const, bool* wide) const;
+
+    bool RewriteUses(int old_reg, int new_reg);
+    bool RewriteDef(int old_reg, int new_reg);
+    bool Rewrite3rc(const std::map<int, int> &old_to_new);
+    bool Rewrite35c(const std::map<int, int> &old_to_new);
+
+    bool IsSetter() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kSetter) == Instruction::kSetter);
+    }
+
+    bool IsGetter() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kGetter) == Instruction::kGetter);
+    }
+
+    bool IsConditionalBranch() const {
+      return (Instruction::FlagsOf(opcode) == (Instruction::kContinue | Instruction::kBranch));
+    }
+
+    bool IsVCConst() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kCIsConst) == Instruction::kCIsConst);
+    }
+
+    bool IsCast() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kCast) == Instruction::kCast);
+    }
+
+    bool Clobbers() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kClobber) == Instruction::kClobber);
+    }
+
+    bool IsLinear() const {
+      return (Instruction::FlagsOf(opcode) & (Instruction::kAddExpression | Instruction::kSubtractExpression)) != 0;
+    }
   } dalvikInsn;
 
   uint16_t width;                 // Note: width can include switch table or fill array data.
