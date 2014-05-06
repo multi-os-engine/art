@@ -427,6 +427,14 @@
     DELIVER_PENDING_EXCEPTION
 .endm
 
+.macro RETURN_OR_DELIVER_PENDING_EXCEPTION_REG reg
+    ldr \reg, [xSELF, # THREAD_EXCEPTION_OFFSET]   // Get exception field.
+    cbnz \reg, 1f
+    ret
+1:
+    DELIVER_PENDING_EXCEPTION
+.endm
+
 // FIXME: Temporary fix for TR(XSELF).
 .macro NO_ARG_RUNTIME_EXCEPTION c_name, cxx_name
     .extern \cxx_name
@@ -1153,19 +1161,6 @@ END art_quick_aput_obj
 UNIMPLEMENTED art_quick_initialize_static_storage
 UNIMPLEMENTED art_quick_initialize_type
 UNIMPLEMENTED art_quick_initialize_type_and_verify_access
-UNIMPLEMENTED art_quick_get32_static
-UNIMPLEMENTED art_quick_get64_static
-UNIMPLEMENTED art_quick_get_obj_static
-UNIMPLEMENTED art_quick_get32_instance
-UNIMPLEMENTED art_quick_get64_instance
-UNIMPLEMENTED art_quick_get_obj_instance
-UNIMPLEMENTED art_quick_set32_static
-UNIMPLEMENTED art_quick_set64_static
-UNIMPLEMENTED art_quick_set_obj_static
-UNIMPLEMENTED art_quick_set32_instance
-UNIMPLEMENTED art_quick_set64_instance
-UNIMPLEMENTED art_quick_set_obj_instance
-UNIMPLEMENTED art_quick_resolve_string
 
 // Macro to facilitate adding new allocation entrypoints.
 // TODO: xSELF -> x19. Temporarily rely on xSELF being saved in REF_ONLY
@@ -1196,6 +1191,92 @@ ENTRY \name
     DELIVER_PENDING_EXCEPTION
 END \name
 .endm
+
+// Macro to facilitate adding new allocation entrypoints.
+// TODO: xSELF -> x19. Temporarily rely on xSELF being saved in REF_ONLY
+.macro ONE_ARG_REF_DOWNCALL name, entrypoint
+    .extern \entrypoint
+ENTRY \name
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
+    ldr    x1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE] // Load referrer
+    mov    x2, xSELF                  // pass Thread::Current
+    mov    x3, sp                     // pass SP
+    bl     \entrypoint                // (uint32_t type_idx, Method* method, Thread*, SP)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RETURN_OR_DELIVER_PENDING_EXCEPTION_REG x1
+END \name
+.endm
+
+// Macro to facilitate adding new array allocation entrypoints.
+// TODO: xSELF -> x19. Temporarily rely on xSELF being saved in REF_ONLY
+.macro TWO_ARG_REF_DOWNCALL name, entrypoint
+    .extern \entrypoint
+ENTRY \name
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
+    ldr    x2, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE] // Load referrer
+    mov    x3, xSELF                  // pass Thread::Current
+    mov    x4, sp                     // pass SP
+    bl     \entrypoint
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RETURN_OR_DELIVER_PENDING_EXCEPTION_REG x1
+END \name
+.endm
+
+// Macro to facilitate adding new array allocation entrypoints.
+// TODO: xSELF -> x19. Temporarily rely on xSELF being saved in REF_ONLY
+.macro THREE_ARG_REF_DOWNCALL name, entrypoint
+    .extern \entrypoint
+ENTRY \name
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
+    ldr    x3, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE] // Load referrer
+    mov    x4, xSELF                  // pass Thread::Current
+    mov    x5, sp                     // pass SP
+    bl     \entrypoint
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RETURN_OR_DELIVER_PENDING_EXCEPTION_REG x1
+END \name
+.endm
+
+ONE_ARG_REF_DOWNCALL art_quick_get32_static, artGet32StaticFromCode
+ONE_ARG_REF_DOWNCALL art_quick_get64_static, artGet64StaticFromCode
+ONE_ARG_REF_DOWNCALL art_quick_get_obj_static, artGetObjStaticFromCode
+
+TWO_ARG_REF_DOWNCALL art_quick_get32_instance, artGet32InstanceFromCode
+TWO_ARG_REF_DOWNCALL art_quick_get64_instance, artGet64InstanceFromCode
+TWO_ARG_REF_DOWNCALL art_quick_get_obj_instance, artGetObjInstanceFromCode
+
+TWO_ARG_REF_DOWNCALL art_quick_set32_static, artSet32StaticFromCode
+TWO_ARG_REF_DOWNCALL art_quick_set_obj_static, artSetObjStaticFromCode
+
+THREE_ARG_REF_DOWNCALL art_quick_set32_instance, artSet32InstanceFromCode
+
+THREE_ARG_REF_DOWNCALL art_quick_set_obj_instance, artSetObjInstanceFromCode
+
+// This is separated out as the argument order is different.
+    .extern artSet64StaticFromCode
+ENTRY art_quick_set64_static
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
+    mov    x3, x1                     // Store value
+    ldr    x1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE] // Load referrer
+    mov    x2, x3                     // Put value param
+    mov    x3, xSELF                  // pass Thread::Current
+    mov    x4, sp                     // pass SP
+    bl     artSet64StaticFromCode
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RETURN_OR_DELIVER_PENDING_EXCEPTION_REG x1
+END art_quick_set64_static
+
+// This is separated out as it doesn't take a referrer.
+.macro RET_IF_NO_EXC
+    ldr x1, [xSELF, # THREAD_EXCEPTION_OFFSET]   // Get exception field.
+    cbnz x1, 1f
+    ret
+1:
+.endm
+THREE_ARG_DOWNCALL art_quick_set64_instance, artSet64InstanceFromCode, RET_IF_NO_EXC
+
+
+UNIMPLEMENTED art_quick_resolve_string
 
 // Generate the allocation entrypoints for each allocator.
 GENERATE_ALL_ALLOC_ENTRYPOINTS
