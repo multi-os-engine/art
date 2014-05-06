@@ -857,19 +857,81 @@ END_FUNCTION art_quick_memcpy
 
 NO_ARG_DOWNCALL art_quick_test_suspend, artTestSuspendFromCode, ret
 
-UNIMPLEMENTED art_quick_fmod
-UNIMPLEMENTED art_quick_fmodf
-UNIMPLEMENTED art_quick_l2d
-UNIMPLEMENTED art_quick_l2f
-UNIMPLEMENTED art_quick_d2l
-UNIMPLEMENTED art_quick_f2l
+DEFINE_FUNCTION art_quick_fmod
+    call PLT_SYMBOL(fmod)         // (jdouble a, jdouble b)
+    ret
+END_FUNCTION art_quick_fmod
+
+DEFINE_FUNCTION art_quick_fmodf
+    call PLT_SYMBOL(fmodf)        // (jfloat a, jfloat b)
+    ret
+END_FUNCTION art_quick_fmodf
+
+DEFINE_FUNCTION art_quick_l2d
+    cvtsi2sdq %rdi, %xmm0
+    ret
+END_FUNCTION art_quick_l2d
+
+DEFINE_FUNCTION art_quick_l2f
+    cvtsi2ssq %rdi, %xmm0
+    ret
+END_FUNCTION art_quick_l2f
+
+DEFINE_FUNCTION art_quick_d2l
+    cvttsd2siq %xmm0, %rax
+    ret
+END_FUNCTION art_quick_d2l
+
+DEFINE_FUNCTION art_quick_f2l
+    cvttss2siq %xmm0, %rax
+    ret
+END_FUNCTION art_quick_f2l
+
 UNIMPLEMENTED art_quick_idivmod
-UNIMPLEMENTED art_quick_ldiv
-UNIMPLEMENTED art_quick_lmod
-UNIMPLEMENTED art_quick_lmul
-UNIMPLEMENTED art_quick_lshl
-UNIMPLEMENTED art_quick_lshr
-UNIMPLEMENTED art_quick_lushr
+
+DEFINE_FUNCTION art_quick_ldiv
+    movq %rdi, %rdx
+    movq %rdi, %rax
+    sarq LITERAL(63), %rdx
+    idivq %rsi
+    ret
+END_FUNCTION art_quick_ldiv
+
+DEFINE_FUNCTION art_quick_lmod
+    movq %rdi, %rdx
+    movq %rdi, %rax
+    sarq LITERAL(63), %rdx
+    idivq %rsi
+    movq %rdx, %rax
+    ret
+END_FUNCTION art_quick_lmod
+
+DEFINE_FUNCTION art_quick_lmul
+    movq %rdi, %rax
+    imulq %rsi, %rax
+    ret
+END_FUNCTION art_quick_lmul
+
+DEFINE_FUNCTION art_quick_lshl
+    movq %rdi, %rax
+    movl %esi, %ecx
+    salq %cl, %rax
+    ret
+END_FUNCTION art_quick_lmul
+
+DEFINE_FUNCTION art_quick_lshr
+    movq %rdi, %rax
+    movl %esi, %ecx
+    salq %cl, %rax
+    ret
+END_FUNCTION art_quick_lshr
+
+DEFINE_FUNCTION art_quick_lushr
+    movq %rdi, %rax
+    movl %esi, %ecx
+    shrq %cl, %rax
+    ret
+END_FUNCTION art_quick_lushr
 
 DEFINE_FUNCTION art_quick_set32_instance
     movq 8(%rsp), %rcx                 // pass referrer
