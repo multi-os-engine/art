@@ -656,6 +656,8 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
     }
   }
 
+  LOG(INFO) << PrettySize(heap_maximum_size_);
+
   // If a reference to the dalvik core.jar snuck in, replace it with
   // the art specific version. This can happen with on device
   // boot.art/boot.oat generation by GenerateImage which relies on the

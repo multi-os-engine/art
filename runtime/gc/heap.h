@@ -54,6 +54,9 @@ namespace mirror {
 }  // namespace mirror
 
 namespace gc {
+
+class ReferenceProcessor;
+
 namespace accounting {
   class HeapBitmap;
   class ModUnionTable;
@@ -314,21 +317,6 @@ class Heap {
     return discontinuous_spaces_;
   }
 
-  static mirror::Object* PreserveSoftReferenceCallback(mirror::Object* obj, void* arg);
-  void ProcessSoftReferences(TimingLogger& timings, bool clear_soft,
-                             IsMarkedCallback* is_marked_callback,
-                             MarkObjectCallback* mark_object_callback,
-                             ProcessMarkStackCallback* process_mark_stack_callback, void* arg)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
-  void ProcessReferences(TimingLogger& timings, bool clear_soft,
-                         IsMarkedCallback* is_marked_callback,
-                         MarkObjectCallback* mark_object_callback,
-                         ProcessMarkStackCallback* process_mark_stack_callback,
-                         void* arg)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
-
   // Enable verification of object references when the runtime is sufficiently initialized.
   void EnableObjectValidation() {
     verify_object_mode_ = kVerifyObjectSupport;
@@ -565,6 +553,10 @@ class Heap {
   }
   bool HasImageSpace() const;
 
+  ReferenceProcessor* GetReferenceProcessor() {
+    return reference_processor_.get();
+  }
+
  private:
   void Compact(space::ContinuousMemMapAllocSpace* target_space,
                space::ContinuousMemMapAllocSpace* source_space)
@@ -629,12 +621,6 @@ class Heap {
 
   // Returns true if the address passed in is within the address range of a continuous space.
   bool IsValidContinuousSpaceObjectAddress(const mirror::Object* obj) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  void EnqueueClearedReferences();
-  // Returns true if the reference object has not yet been enqueued.
-  void DelayReferenceReferent(mirror::Class* klass, mirror::Reference* ref,
-                              IsMarkedCallback is_marked_callback, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Run the finalizers.
@@ -797,12 +783,8 @@ class Heap {
   Mutex* gc_complete_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   UniquePtr<ConditionVariable> gc_complete_cond_ GUARDED_BY(gc_complete_lock_);
 
-  // Reference queues.
-  ReferenceQueue soft_reference_queue_;
-  ReferenceQueue weak_reference_queue_;
-  ReferenceQueue finalizer_reference_queue_;
-  ReferenceQueue phantom_reference_queue_;
-  ReferenceQueue cleared_references_;
+  // Reference processor;
+  UniquePtr<ReferenceProcessor> reference_processor_;
 
   // True while the garbage collector is running.
   volatile CollectorType collector_type_running_ GUARDED_BY(gc_complete_lock_);
