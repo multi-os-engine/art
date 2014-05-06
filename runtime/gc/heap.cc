@@ -39,6 +39,7 @@
 #include "gc/collector/partial_mark_sweep.h"
 #include "gc/collector/semi_space.h"
 #include "gc/collector/sticky_mark_sweep.h"
+#include "gc/reference_processor.h"
 #include "gc/space/bump_pointer_space.h"
 #include "gc/space/dlmalloc_space-inl.h"
 #include "gc/space/image_space.h"
@@ -181,6 +182,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   }
   ChangeCollector(desired_collector_type_);
 
+  reference_processor_.reset(new ReferenceProcessor);
   live_bitmap_.reset(new accounting::HeapBitmap(this));
   mark_bitmap_.reset(new accounting::HeapBitmap(this));
   // Requested begin for the alloc space, to follow the mapped image and oat files
@@ -769,102 +771,6 @@ space::Space* Heap::FindSpaceFromObject(const mirror::Object* obj, bool fail_ok)
     return result;
   }
   return FindDiscontinuousSpaceFromObject(obj, true);
-}
-
-struct SoftReferenceArgs {
-  IsMarkedCallback* is_marked_callback_;
-  MarkObjectCallback* mark_callback_;
-  void* arg_;
-};
-
-mirror::Object* Heap::PreserveSoftReferenceCallback(mirror::Object* obj, void* arg) {
-  SoftReferenceArgs* args = reinterpret_cast<SoftReferenceArgs*>(arg);
-  // TODO: Not preserve all soft references.
-  return args->mark_callback_(obj, args->arg_);
-}
-
-void Heap::ProcessSoftReferences(TimingLogger& timings, bool clear_soft,
-                                 IsMarkedCallback* is_marked_callback,
-                                 MarkObjectCallback* mark_object_callback,
-                                 ProcessMarkStackCallback* process_mark_stack_callback, void* arg) {
-  // Unless required to clear soft references with white references, preserve some white referents.
-  if (!clear_soft) {
-    // Don't clear for sticky GC.
-    SoftReferenceArgs soft_reference_args;
-    soft_reference_args.is_marked_callback_ = is_marked_callback;
-    soft_reference_args.mark_callback_ = mark_object_callback;
-    soft_reference_args.arg_ = arg;
-    // References with a marked referent are removed from the list.
-    soft_reference_queue_.PreserveSomeSoftReferences(&PreserveSoftReferenceCallback,
-                                                     &soft_reference_args);
-    process_mark_stack_callback(arg);
-  }
-}
-
-// Process reference class instances and schedule finalizations.
-void Heap::ProcessReferences(TimingLogger& timings, bool clear_soft,
-                             IsMarkedCallback* is_marked_callback,
-                             MarkObjectCallback* mark_object_callback,
-                             ProcessMarkStackCallback* process_mark_stack_callback, void* arg) {
-  timings.StartSplit("(Paused)ProcessReferences");
-  ProcessSoftReferences(timings, clear_soft, is_marked_callback, mark_object_callback,
-                        process_mark_stack_callback, arg);
-  // Clear all remaining soft and weak references with white referents.
-  soft_reference_queue_.ClearWhiteReferences(cleared_references_, is_marked_callback, arg);
-  weak_reference_queue_.ClearWhiteReferences(cleared_references_, is_marked_callback, arg);
-  timings.EndSplit();
-  // Preserve all white objects with finalize methods and schedule them for finalization.
-  timings.StartSplit("(Paused)EnqueueFinalizerReferences");
-  finalizer_reference_queue_.EnqueueFinalizerReferences(cleared_references_, is_marked_callback,
-                                                        mark_object_callback, arg);
-  process_mark_stack_callback(arg);
-  timings.EndSplit();
-  timings.StartSplit("(Paused)ProcessReferences");
-  // Clear all f-reachable soft and weak references with white referents.
-  soft_reference_queue_.ClearWhiteReferences(cleared_references_, is_marked_callback, arg);
-  weak_reference_queue_.ClearWhiteReferences(cleared_references_, is_marked_callback, arg);
-  // Clear all phantom references with white referents.
-  phantom_reference_queue_.ClearWhiteReferences(cleared_references_, is_marked_callback, arg);
-  // At this point all reference queues other than the cleared references should be empty.
-  DCHECK(soft_reference_queue_.IsEmpty());
-  DCHECK(weak_reference_queue_.IsEmpty());
-  DCHECK(finalizer_reference_queue_.IsEmpty());
-  DCHECK(phantom_reference_queue_.IsEmpty());
-  timings.EndSplit();
-}
-
-// Process the "referent" field in a java.lang.ref.Reference.  If the referent has not yet been
-// marked, put it on the appropriate list in the heap for later processing.
-void Heap::DelayReferenceReferent(mirror::Class* klass, mirror::Reference* ref,
-                                  IsMarkedCallback is_marked_callback, void* arg) {
-  // klass can be the class of the old object if the visitor already updated the class of ref.
-  DCHECK(klass->IsReferenceClass());
-  mirror::Object* referent = ref->GetReferent();
-  if (referent != nullptr) {
-    mirror::Object* forward_address = is_marked_callback(referent, arg);
-    // Null means that the object is not currently marked.
-    if (forward_address == nullptr) {
-      Thread* self = Thread::Current();
-      // TODO: Remove these locks, and use atomic stacks for storing references?
-      // We need to check that the references haven't already been enqueued since we can end up
-      // scanning the same reference multiple times due to dirty cards.
-      if (klass->IsSoftReferenceClass()) {
-        soft_reference_queue_.AtomicEnqueueIfNotEnqueued(self, ref);
-      } else if (klass->IsWeakReferenceClass()) {
-        weak_reference_queue_.AtomicEnqueueIfNotEnqueued(self, ref);
-      } else if (klass->IsFinalizerReferenceClass()) {
-        finalizer_reference_queue_.AtomicEnqueueIfNotEnqueued(self, ref);
-      } else if (klass->IsPhantomReferenceClass()) {
-        phantom_reference_queue_.AtomicEnqueueIfNotEnqueued(self, ref);
-      } else {
-        LOG(FATAL) << "Invalid reference type " << PrettyClass(klass) << " " << std::hex
-                   << klass->GetAccessFlags();
-      }
-    } else if (referent != forward_address) {
-      // Referent is already marked and we need to update it.
-      ref->SetReferent<false>(forward_address);
-    }
-  }
 }
 
 space::ImageSpace* Heap::GetImageSpace() const {
@@ -1477,7 +1383,7 @@ void Heap::TransitionCollector(CollectorType collector_type) {
   ChangeCollector(collector_type);
   tl->ResumeAll();
   // Can't call into java code with all threads suspended.
-  EnqueueClearedReferences();
+  reference_processor_->EnqueueClearedReferences();
   uint64_t duration = NanoTime() - start_time;
   GrowForUtilization(semi_space_collector_);
   FinishGC(self, collector::kGcTypeFull);
@@ -1881,7 +1787,7 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
   total_bytes_freed_ever_ += collector->GetFreedBytes();
   RequestHeapTrim();
   // Enqueue cleared references.
-  EnqueueClearedReferences();
+  reference_processor_->EnqueueClearedReferences();
   // Grow the heap so that we know when to perform the next GC.
   GrowForUtilization(collector);
   const size_t duration = collector->GetDurationNs();
@@ -2622,27 +2528,10 @@ void Heap::AddFinalizerReference(Thread* self, mirror::Object** object) {
   *object = soa.Decode<mirror::Object*>(arg.get());
 }
 
-void Heap::EnqueueClearedReferences() {
-  Thread* self = Thread::Current();
-  Locks::mutator_lock_->AssertNotHeld(self);
-  if (!cleared_references_.IsEmpty()) {
-    // When a runtime isn't started there are no reference queues to care about so ignore.
-    if (LIKELY(Runtime::Current()->IsStarted())) {
-      ScopedObjectAccess soa(self);
-      ScopedLocalRef<jobject> arg(self->GetJniEnv(),
-                                  soa.AddLocalReference<jobject>(cleared_references_.GetList()));
-      jvalue args[1];
-      args[0].l = arg.get();
-      InvokeWithJValues(soa, nullptr, WellKnownClasses::java_lang_ref_ReferenceQueue_add, args);
-    }
-    cleared_references_.Clear();
-  }
-}
-
 void Heap::RequestConcurrentGC(Thread* self) {
   // Make sure that we can do a concurrent GC.
   Runtime* runtime = Runtime::Current();
-  if (runtime == NULL || !runtime->IsFinishedStarting() || runtime->IsShuttingDown(self) ||
+  if (runtime == nullptr || !runtime->IsFinishedStarting() || runtime->IsShuttingDown(self) ||
       self->IsHandlingStackOverflow()) {
     return;
   }
