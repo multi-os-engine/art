@@ -261,6 +261,69 @@ struct MIR {
     uint32_t vC;
     uint32_t arg[5];         /* vC/D/E/F/G in invoke or filled-new-array */
     Instruction::Code opcode;
+
+    explicit DecodedInstruction():vA(0), vB(0), vB_wide(0), vC(0), opcode(Instruction::NOP) {
+    }
+
+    /*
+     * Given a decoded instruction representing a const bytecode, it updates
+     * the out arguments with proper values as dictated by the constant bytecode.
+     */
+    bool GetConstant(int64_t* ptr_value, bool* wide) const;
+
+    bool RewriteUses(int old_reg, int new_reg);
+    bool RewriteDef(int old_reg, int new_reg);
+
+    /**
+     * @brief Rewriting the DecodedInstruction when it is a 3rc format
+     * @param old_to_new contains an association between old VR value to new VR value
+     *        Thus, if it contains (5, 3) as a tuple, any v5 will be transformed into v3.
+     */
+    bool Rewrite3rc(const std::map<int, int>& old_to_new);
+
+    /**
+     * @brief Rewriting the DecodedInstruction when it is a 35c format
+     * @param old_to_new contains an association between old VR value to new VR value
+     *        Thus, if it contains (5, 3) as a tuple, any v5 will be transformed into v3.
+     */
+    bool Rewrite35c(const std::map<int, int>& old_to_new);
+
+    bool IsStore() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kStore) == Instruction::kStore);
+    }
+
+    bool IsLoad() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kLoad) == Instruction::kLoad);
+    }
+
+    bool IsConditionalBranch() const {
+      return (Instruction::FlagsOf(opcode) == (Instruction::kContinue | Instruction::kBranch));
+    }
+
+    /**
+     * @brief Is the vC component of the decoded instruction a constant?
+     */
+    bool IsVCConst() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kVCIsConst) == Instruction::kVCIsConst);
+    }
+
+    bool IsCast() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kCast) == Instruction::kCast);
+    }
+
+    /**
+     * @brief Does the instruction clobber memory?
+     * @details Clobber means that the instruction changes the memory not in a punctual way.
+     *          Therefore any supposition on memory aliasing or memory contents should be disregarded
+     *            when crossing such an instruction.
+     */
+    bool Clobbers() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kClobber) == Instruction::kClobber);
+    }
+
+    bool IsLinear() const {
+      return (Instruction::FlagsOf(opcode) & (Instruction::kAdd | Instruction::kSubtract)) != 0;
+    }
   } dalvikInsn;
 
   uint16_t width;                 // Note: width can include switch table or fill array data.
