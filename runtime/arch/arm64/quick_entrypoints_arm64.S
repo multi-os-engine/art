@@ -42,7 +42,7 @@
 #endif
 
     // FP args
-    stp d1, d2,   [sp, #8]
+    stp d1, d2, [sp, #8]
     stp d2, d3, [sp, #24]
     stp d4, d5, [sp, #40]
     stp d6, d7, [sp, #56]
@@ -393,15 +393,15 @@
     .cfi_adjust_cfa_offset -304
 .endm
 
-.macro RETURN_IF_RESULT_IS_ZERO
-    cbnz x0, 1f                // result non-zero branch over
-    ret                        // return
+.macro RETURN_IF_RESULT_IS_ZERO ret_reg=x0
+    cbnz \ret_reg, 1f         // result non-zero branch over
+    ret                       // return
 1:
 .endm
 
-.macro RETURN_IF_RESULT_IS_NON_ZERO
-    cbz x0, 1f                 // result zero branch over
-    ret                        // return
+.macro RETURN_IF_RESULT_IS_NON_ZERO ret_reg=x0
+    cbz \ret_reg, 1f          // result zero branch over
+    ret                       // return
 1:
 .endm
 
@@ -1150,7 +1150,23 @@ ENTRY art_quick_aput_obj
     brk 0                         // Unreached.
 END art_quick_aput_obj
 
-UNIMPLEMENTED art_quick_initialize_static_storage
+    /*
+     * Entry from managed code when uninitialized static storage, this stub will run the class
+     * initializer and deliver the exception on error. On success the static storage base is
+     * returned.
+     */
+    .extern artInitializeStaticStorageFromCode
+ENTRY art_quick_initialize_static_storage
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME           // save callee saves in case of GC
+    mov    x2, xSELF                           // pass Thread::Current
+    mov    x3, sp                              // pass SP
+    // artInitializeStaticStorageFromCode(uint32_t type_idx, Method* referrer, Thread*, SP)
+    bl     artInitializeStaticStorageFromCode
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RETURN_IF_RESULT_IS_NON_ZERO
+    DELIVER_PENDING_EXCEPTION
+END art_quick_initialize_static_storage
+
 UNIMPLEMENTED art_quick_initialize_type
 UNIMPLEMENTED art_quick_initialize_type_and_verify_access
 UNIMPLEMENTED art_quick_get32_static
@@ -1165,7 +1181,24 @@ UNIMPLEMENTED art_quick_set_obj_static
 UNIMPLEMENTED art_quick_set32_instance
 UNIMPLEMENTED art_quick_set64_instance
 UNIMPLEMENTED art_quick_set_obj_instance
-UNIMPLEMENTED art_quick_resolve_string
+
+    /*
+     * Entry from managed code to resolve a string, this stub will allocate a String and deliver an
+     * exception on error. On success the String is returned. x0 holds the referring method,
+     * w1 holds the string index. The fast path check for hit in strings cache has already been
+     * performed.
+     */
+    .extern artResolveStringFromCode
+ENTRY art_quick_resolve_string
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
+    mov    x2, xSELF                  // pass Thread::Current
+    mov    x3, sp                     // pass SP
+    // artResolveStringFromCode(Method* referrer, uint32_t string_idx, Thread*, SP)
+    bl     artResolveStringFromCode
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RETURN_IF_RESULT_IS_NON_ZERO
+    DELIVER_PENDING_EXCEPTION
+END art_quick_resolve_string
 
 // Macro to facilitate adding new allocation entrypoints.
 // TODO: xSELF -> x19. Temporarily rely on xSELF being saved in REF_ONLY
@@ -1229,14 +1262,13 @@ UNIMPLEMENTED art_quick_imt_conflict_trampoline
 
 ENTRY art_quick_resolution_trampoline
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
-    mov x19, x0           // save the called method
     mov x2, xSELF
     mov x3, sp
     bl artQuickResolutionTrampoline  // (called, receiver, Thread*, SP)
-    mov x9, x0            // Remember returned code pointer in x9.
-    mov x0, x19           // Restore the method, before x19 is restored to on-call value
+    cbz x0, 1f
+    mov x9, x0              // Remember returned code pointer in x9.
+    ldr x0, [sp, #0]        // artQuickResolutionTrampoline puts called method in *SP.
     RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
-    cbz x9, 1f
     br x9
 1:
     RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
