@@ -1308,4 +1308,133 @@ BasicBlock* ChildBlockIterator::Next() {
   return nullptr;
 }
 
+/**
+ * @brief Given a decoded instruction, it checks whether the instruction
+ * sets a constant and if it does, more information is provided about the
+ * constant being set.
+ * @param ptr_value pointer to a 64-bit holder for the constant.
+ * @param wide Updated by function whether a wide constant is being set by bytecode.
+ * @return Returns false if the decoded instruction does not represent a constant bytecode.
+ */
+bool MIR::DecodedInstruction::GetConstant(int64_t* ptr_value, bool* wide) const {
+  bool sets_const = true;
+  int64_t value = vB;
+
+  DCHECK(ptr_value != nullptr);
+  DCHECK(wide != nullptr);
+
+  switch (opcode) {
+    case Instruction::CONST_4:
+    case Instruction::CONST_16:
+    case Instruction::CONST:
+      *wide = false;
+      value <<= 32;      // In order to get the sign extend.
+      value >>= 32;
+      break;
+    case Instruction::CONST_HIGH16:
+      *wide = false;
+      value <<= 48;      // In order to get the sign extend.
+      value >>= 32;
+      break;
+    case Instruction::CONST_WIDE_16:
+    case Instruction::CONST_WIDE_32:
+      *wide = true;
+      value <<= 32;      // In order to get the sign extend.
+      value >>= 32;
+      break;
+    case Instruction::CONST_WIDE:
+      *wide = true;
+      value = vB_wide;
+      break;
+    case Instruction::CONST_WIDE_HIGH16:
+      *wide = true;
+      value <<= 48;      // In order to get the sign extend.
+      break;
+    default:
+      sets_const = false;
+      break;
+  }
+
+  if (sets_const) {
+    *ptr_value = value;
+  }
+
+  return sets_const;
+}
+
+bool MIR::DecodedInstruction::Rewrite3rc(const std::map<int, int> &old_to_new) {
+  // The number of arguments is guaranteed to be in vA for this format.
+  uint32_t count = vA;
+
+  // vC holds the start register. The range uses registers from vC to (vC + vA - 1).
+  uint32_t local_vC = vC;
+
+  uint32_t new_vC = 0;
+  std::map<int, int>::const_iterator iter = old_to_new.find(local_vC);
+
+  if (iter == old_to_new.end()) {
+    // We have no new mapping for vC so we cannot rewrite anything.
+    return false;
+  } else {
+    new_vC = iter->second;
+  }
+
+  // Now check that all VRs have a consistent old to new mapping.
+  for (unsigned int vR = local_vC + 1; vR < local_vC + count; vR++) {
+    std::map<int, int>::const_iterator iter = old_to_new.find(vR);
+
+    if (iter == old_to_new.end()) {
+      // We don't have an entry and therefore we don't know the new.
+      return false;
+    } else {
+      uint32_t new_vR = iter->second;
+
+      // Now check that the range difference is the same.
+      if ((vR - local_vC) != (new_vR - new_vC)) {
+        // Range is not the same.
+        return false;
+      }
+    }
+  }
+
+  // If we made it to this point, all the checks passed and therefore we can update vC
+  vC = new_vC;
+  return true;
+}
+
+bool MIR::DecodedInstruction::Rewrite35c(const std::map<int, int> &old_to_new) {
+  bool found_operand = false;
+
+  // The number of arguments is guaranteed to be in vA for this format.
+  int count = vA;
+
+  // Go through each of the operands to look for a match for the old VR.
+  for (int operand = 0; operand < count; operand++) {
+    // See if we have a mapping for it.
+    std::map<int, int>::const_iterator iter = old_to_new.find(arg[operand]);
+
+    if (iter != old_to_new.end()) {
+      uint32_t new_vR = iter->second;
+
+      // Update the operand and mark it as found.
+      arg[operand] = new_vR;
+      found_operand = true;
+      break;
+    }
+  }
+
+  return found_operand;
+}
+
+bool MIR::DecodedInstruction::RewriteDef(int old_reg, int new_reg) {
+  // Check to make sure that the define matches desired VR to replace.
+  if (vA != static_cast<uint32_t>(old_reg)) {
+    return false;
+  }
+
+  // Now that we know we are fine to do the replacement, let's do it.
+  vA = static_cast<uint32_t>(new_reg);
+  return true;
+}
+
 }  // namespace art
