@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <alloca.h>
+
 #include "reflection.h"
 
 #include "class_linker.h"
@@ -36,27 +38,9 @@ namespace art {
 
 class ArgArray {
  public:
-  explicit ArgArray(const char* shorty, uint32_t shorty_len)
-      : shorty_(shorty), shorty_len_(shorty_len), num_bytes_(0) {
-    size_t num_slots = shorty_len + 1;  // +1 in case of receiver.
-    if (LIKELY((num_slots * 2) < kSmallArgArraySize)) {
-      // We can trivially use the small arg array.
-      arg_array_ = small_arg_array_;
-    } else {
-      // Analyze shorty to see if we need the large arg array.
-      for (size_t i = 1; i < shorty_len; ++i) {
-        char c = shorty[i];
-        if (c == 'J' || c == 'D') {
-          num_slots++;
-        }
-      }
-      if (num_slots <= kSmallArgArraySize) {
-        arg_array_ = small_arg_array_;
-      } else {
-        large_arg_array_.reset(new uint32_t[num_slots]);
-        arg_array_ = large_arg_array_.get();
-      }
-    }
+  explicit ArgArray(void* storage, const char* shorty, uint32_t shorty_len)
+      : shorty_(shorty), shorty_len_(shorty_len),
+        arg_array_(reinterpret_cast<uint32_t*>(storage)), arg_ptr_(arg_array_) {
   }
 
   uint32_t* GetArray() {
@@ -64,12 +48,11 @@ class ArgArray {
   }
 
   uint32_t GetNumBytes() {
-    return num_bytes_;
+    return (arg_ptr_ - arg_array_) * sizeof(uint32_t);
   }
 
   void Append(uint32_t value) {
-    arg_array_[num_bytes_ / 4] = value;
-    num_bytes_ += 4;
+    *(arg_ptr_++) = value;
   }
 
   void Append(mirror::Object* obj) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -79,13 +62,12 @@ class ArgArray {
   void AppendWide(uint64_t value) {
     // For ARM and MIPS portable, align wide values to 8 bytes (ArgArray starts at offset of 4).
 #if defined(ART_USE_PORTABLE_COMPILER) && (defined(__arm__) || defined(__mips__))
-    if (num_bytes_ % 8 == 0) {
-      num_bytes_ += 4;
+    if (GetNumBytes() % 8 == 0) {
+      arg_ptr_++;
     }
 #endif
-    arg_array_[num_bytes_ / 4] = value;
-    arg_array_[(num_bytes_ / 4) + 1] = value >> 32;
-    num_bytes_ += 8;
+    Append(static_cast<uint32_t>(value));
+    Append(static_cast<uint32_t>(value >> 32));
   }
 
   void AppendFloat(float value) {
@@ -337,13 +319,10 @@ class ArgArray {
   }
 
  private:
-  enum { kSmallArgArraySize = 16 };
   const char* const shorty_;
   const uint32_t shorty_len_;
-  uint32_t num_bytes_;
   uint32_t* arg_array_;
-  uint32_t small_arg_array_[kSmallArgArraySize];
-  UniquePtr<uint32_t[]> large_arg_array_;
+  uint32_t* arg_ptr_;
 };
 
 static void CheckMethodArguments(mirror::ArtMethod* m, uint32_t* args)
@@ -413,7 +392,7 @@ JValue InvokeWithVarArgs(const ScopedObjectAccess& soa, jobject obj, jmethodID m
   mirror::Object* receiver = method->IsStatic() ? nullptr : soa.Decode<mirror::Object*>(obj);
   MethodHelper mh(method);
   JValue result;
-  ArgArray arg_array(mh.GetShorty(), mh.GetShortyLength());
+  ArgArray arg_array(alloca(mh.GetShortyLength() * 8 + 4), mh.GetShorty(), mh.GetShortyLength());
   arg_array.BuildArgArrayFromVarArgs(soa, receiver, args);
   InvokeWithArgArray(soa, method, &arg_array, &result, mh.GetShorty());
   return result;
@@ -424,7 +403,7 @@ JValue InvokeWithJValues(const ScopedObjectAccessUnchecked& soa, mirror::Object*
   mirror::ArtMethod* method = soa.DecodeMethod(mid);
   MethodHelper mh(method);
   JValue result;
-  ArgArray arg_array(mh.GetShorty(), mh.GetShortyLength());
+  ArgArray arg_array(alloca(mh.GetShortyLength() * 8 + 4), mh.GetShorty(), mh.GetShortyLength());
   arg_array.BuildArgArrayFromJValues(soa, receiver, args);
   InvokeWithArgArray(soa, method, &arg_array, &result, mh.GetShorty());
   return result;
@@ -435,7 +414,7 @@ JValue InvokeVirtualOrInterfaceWithJValues(const ScopedObjectAccess& soa,
   mirror::ArtMethod* method = FindVirtualMethod(receiver, soa.DecodeMethod(mid));
   MethodHelper mh(method);
   JValue result;
-  ArgArray arg_array(mh.GetShorty(), mh.GetShortyLength());
+  ArgArray arg_array(alloca(mh.GetShortyLength() * 8 + 4), mh.GetShorty(), mh.GetShortyLength());
   arg_array.BuildArgArrayFromJValues(soa, receiver, args);
   InvokeWithArgArray(soa, method, &arg_array, &result, mh.GetShorty());
   return result;
@@ -447,7 +426,7 @@ JValue InvokeVirtualOrInterfaceWithVarArgs(const ScopedObjectAccess& soa,
   mirror::ArtMethod* method = FindVirtualMethod(receiver, soa.DecodeMethod(mid));
   MethodHelper mh(method);
   JValue result;
-  ArgArray arg_array(mh.GetShorty(), mh.GetShortyLength());
+  ArgArray arg_array(alloca(mh.GetShortyLength() * 8 + 4), mh.GetShorty(), mh.GetShortyLength());
   arg_array.BuildArgArrayFromVarArgs(soa, receiver, args);
   InvokeWithArgArray(soa, method, &arg_array, &result, mh.GetShorty());
   return result;
@@ -455,7 +434,7 @@ JValue InvokeVirtualOrInterfaceWithVarArgs(const ScopedObjectAccess& soa,
 
 void InvokeWithShadowFrame(Thread* self, ShadowFrame* shadow_frame, uint16_t arg_offset,
                            MethodHelper& mh, JValue* result) {
-  ArgArray arg_array(mh.GetShorty(), mh.GetShortyLength());
+  ArgArray arg_array(alloca(mh.GetShortyLength() * 8 + 4), mh.GetShorty(), mh.GetShortyLength());
   arg_array.BuildArgArrayFromFrame(shadow_frame, arg_offset);
   shadow_frame->GetMethod()->Invoke(self, arg_array.GetArray(), arg_array.GetNumBytes(), result,
                                     mh.GetShorty());
@@ -509,7 +488,7 @@ jobject InvokeMethod(const ScopedObjectAccess& soa, jobject javaMethod,
 
   // Invoke the method.
   JValue result;
-  ArgArray arg_array(mh.GetShorty(), mh.GetShortyLength());
+  ArgArray arg_array(alloca(mh.GetShortyLength() * 8 + 4), mh.GetShorty(), mh.GetShortyLength());
   if (!arg_array.BuildArgArrayFromObjectArray(soa, receiver, objects, mh)) {
     CHECK(soa.Self()->IsExceptionPending());
     return nullptr;
@@ -675,7 +654,7 @@ mirror::Object* BoxPrimitive(Primitive::Type src_class, const JValue& value) {
   ScopedObjectAccessUnchecked soa(Thread::Current());
   DCHECK_EQ(soa.Self()->GetState(), kRunnable);
 
-  ArgArray arg_array(shorty, 2);
+  ArgArray arg_array(alloca(8), shorty, 2);
   JValue result;
   if (src_class == Primitive::kPrimDouble || src_class == Primitive::kPrimLong) {
     arg_array.AppendWide(value.GetJ());
