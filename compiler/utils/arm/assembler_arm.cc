@@ -1752,7 +1752,7 @@ void ArmAssembler::MemoryBarrier(ManagedRegister mscratch) {
 #endif
 }
 
-void ArmAssembler::CreateSirtEntry(ManagedRegister mout_reg,
+void ArmAssembler::CreateHandleScopeEntry(ManagedRegister mout_reg,
                                    FrameOffset sirt_offset,
                                    ManagedRegister min_reg, bool null_allowed) {
   ArmManagedRegister out_reg = mout_reg.AsArm();
@@ -1778,7 +1778,7 @@ void ArmAssembler::CreateSirtEntry(ManagedRegister mout_reg,
   }
 }
 
-void ArmAssembler::CreateSirtEntry(FrameOffset out_off,
+void ArmAssembler::CreateHandleScopeEntry(FrameOffset out_off,
                                    FrameOffset sirt_offset,
                                    ManagedRegister mscratch,
                                    bool null_allowed) {
@@ -1798,7 +1798,7 @@ void ArmAssembler::CreateSirtEntry(FrameOffset out_off,
   StoreToOffset(kStoreWord, scratch.AsCoreRegister(), SP, out_off.Int32Value());
 }
 
-void ArmAssembler::LoadReferenceFromSirt(ManagedRegister mout_reg,
+void ArmAssembler::LoadReferenceFromHandleScope(ManagedRegister mout_reg,
                                          ManagedRegister min_reg) {
   ArmManagedRegister out_reg = mout_reg.AsArm();
   ArmManagedRegister in_reg = min_reg.AsArm();

@@ -827,7 +827,7 @@ void MipsAssembler::MemoryBarrier(ManagedRegister) {
   UNIMPLEMENTED(FATAL) << "no mips implementation";
 }
 
-void MipsAssembler::CreateSirtEntry(ManagedRegister mout_reg,
+void MipsAssembler::CreateHandleScopeEntry(ManagedRegister mout_reg,
                                     FrameOffset sirt_offset,
                                     ManagedRegister min_reg, bool null_allowed) {
   MipsManagedRegister out_reg = mout_reg.AsMips();
@@ -855,7 +855,7 @@ void MipsAssembler::CreateSirtEntry(ManagedRegister mout_reg,
   }
 }
 
-void MipsAssembler::CreateSirtEntry(FrameOffset out_off,
+void MipsAssembler::CreateHandleScopeEntry(FrameOffset out_off,
                                     FrameOffset sirt_offset,
                                     ManagedRegister mscratch,
                                     bool null_allowed) {
@@ -878,7 +878,7 @@ void MipsAssembler::CreateSirtEntry(FrameOffset out_off,
 }
 
 // Given a SIRT entry, load the associated reference.
-void MipsAssembler::LoadReferenceFromSirt(ManagedRegister mout_reg,
+void MipsAssembler::LoadReferenceFromHandleScope(ManagedRegister mout_reg,
                                           ManagedRegister min_reg) {
   MipsManagedRegister out_reg = mout_reg.AsMips();
   MipsManagedRegister in_reg = min_reg.AsMips();

@@ -539,7 +539,7 @@ void Arm64Assembler::CallFromThread64(ThreadOffset<8> /*offset*/, ManagedRegiste
   UNIMPLEMENTED(FATAL) << "Unimplemented Call() variant";
 }
 
-void Arm64Assembler::CreateSirtEntry(ManagedRegister m_out_reg, FrameOffset sirt_offs,
+void Arm64Assembler::CreateHandleScopeEntry(ManagedRegister m_out_reg, FrameOffset sirt_offs,
                                      ManagedRegister m_in_reg, bool null_allowed) {
   Arm64ManagedRegister out_reg = m_out_reg.AsArm64();
   Arm64ManagedRegister in_reg = m_in_reg.AsArm64();
@@ -565,7 +565,7 @@ void Arm64Assembler::CreateSirtEntry(ManagedRegister m_out_reg, FrameOffset sirt
   }
 }
 
-void Arm64Assembler::CreateSirtEntry(FrameOffset out_off, FrameOffset sirt_offset,
+void Arm64Assembler::CreateHandleScopeEntry(FrameOffset out_off, FrameOffset sirt_offset,
                                      ManagedRegister m_scratch, bool null_allowed) {
   Arm64ManagedRegister scratch = m_scratch.AsArm64();
   CHECK(scratch.IsCoreRegister()) << scratch;
@@ -584,7 +584,7 @@ void Arm64Assembler::CreateSirtEntry(FrameOffset out_off, FrameOffset sirt_offse
   StoreToOffset(scratch.AsCoreRegister(), SP, out_off.Int32Value());
 }
 
-void Arm64Assembler::LoadReferenceFromSirt(ManagedRegister m_out_reg,
+void Arm64Assembler::LoadReferenceFromHandleScope(ManagedRegister m_out_reg,
                                            ManagedRegister m_in_reg) {
   Arm64ManagedRegister out_reg = m_out_reg.AsArm64();
   Arm64ManagedRegister in_reg = m_in_reg.AsArm64();
