@@ -1080,6 +1080,7 @@ class MIRGraph {
   GrowableArray<MirMethodLoweringInfo> method_lowering_infos_;
   static const uint64_t oat_data_flow_attributes_[kMirOpLast];
 
+  friend class ExpressionTest;
   friend class ClassInitCheckEliminationTest;
   friend class LocalValueNumberingTest;
 };
