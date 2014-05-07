@@ -49,7 +49,7 @@
 #include "mirror/throwable.h"
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 #include "thread_pool.h"
 #include "trampolines/trampoline_compiler.h"
@@ -524,7 +524,7 @@ static DexToDexCompilationLevel GetDexToDexCompilationlevel(
   // function). Since image classes can be verified again while compiling an application,
   // we must prevent the DEX-to-DEX compiler from introducing them.
   // TODO: find a way to enable "quick" instructions for image classes and remove this check.
-  bool compiling_image_classes = class_loader.get() == nullptr;
+  bool compiling_image_classes = class_loader.Get() == nullptr;
   if (compiling_image_classes) {
     return kRequired;
   } else if (klass->IsVerified()) {
@@ -701,7 +701,7 @@ void CompilerDriver::LoadImageClasses(TimingLogger* timings)
   for (auto it = image_classes_->begin(), end = image_classes_->end(); it != end;) {
     const std::string& descriptor(*it);
     SirtRef<mirror::Class> klass(self, class_linker->FindSystemClass(self, descriptor.c_str()));
-    if (klass.get() == NULL) {
+    if (klass.Get() == NULL) {
       VLOG(compiler) << "Failed to find class " << descriptor;
       image_classes_->erase(it++);
       self->ClearException();
@@ -727,12 +727,12 @@ void CompilerDriver::LoadImageClasses(TimingLogger* timings)
       SirtRef<mirror::ClassLoader> class_loader(self, nullptr);
       SirtRef<mirror::Class> klass(self, class_linker->ResolveType(*dex_file, exception_type_idx,
                                                                    dex_cache, class_loader));
-      if (klass.get() == NULL) {
+      if (klass.Get() == NULL) {
         const DexFile::TypeId& type_id = dex_file->GetTypeId(exception_type_idx);
         const char* descriptor = dex_file->GetTypeDescriptor(type_id);
         LOG(FATAL) << "Failed to resolve class " << descriptor;
       }
-      DCHECK(java_lang_Throwable->IsAssignableFrom(klass.get()));
+      DCHECK(java_lang_Throwable->IsAssignableFrom(klass.Get()));
     }
     // Resolving exceptions may load classes that reference more exceptions, iterate until no
     // more are found
@@ -986,10 +986,10 @@ bool CompilerDriver::ComputeInstanceFieldInfo(uint32_t field_idx, const DexCompi
         soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
     SirtRef<mirror::ArtField> resolved_field_sirt(soa.Self(),
         ResolveField(soa, dex_cache_sirt, class_loader_sirt, mUnit, field_idx, false));
-    referrer_class = (resolved_field_sirt.get() != nullptr)
+    referrer_class = (resolved_field_sirt.Get() != nullptr)
         ? ResolveCompilingMethodsClass(soa, dex_cache_sirt, class_loader_sirt, mUnit) : nullptr;
-    resolved_field = resolved_field_sirt.get();
-    dex_cache = dex_cache_sirt.get();
+    resolved_field = resolved_field_sirt.Get();
+    dex_cache = dex_cache_sirt.Get();
   }
   bool result = false;
   if (resolved_field != nullptr && referrer_class != nullptr) {
@@ -1023,10 +1023,10 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
         soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
     SirtRef<mirror::ArtField> resolved_field_sirt(soa.Self(),
         ResolveField(soa, dex_cache_sirt, class_loader_sirt, mUnit, field_idx, true));
-    referrer_class = (resolved_field_sirt.get() != nullptr)
+    referrer_class = (resolved_field_sirt.Get() != nullptr)
         ? ResolveCompilingMethodsClass(soa, dex_cache_sirt, class_loader_sirt, mUnit) : nullptr;
-    resolved_field = resolved_field_sirt.get();
-    dex_cache = dex_cache_sirt.get();
+    resolved_field = resolved_field_sirt.Get();
+    dex_cache = dex_cache_sirt.Get();
   }
   bool result = false;
   if (resolved_field != nullptr && referrer_class != nullptr) {
@@ -1176,9 +1176,9 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
     uint32_t method_idx = target_method->dex_method_index;
     SirtRef<mirror::ArtMethod> resolved_method_sirt(soa.Self(),
         ResolveMethod(soa, dex_cache, class_loader, mUnit, method_idx, orig_invoke_type));
-    referrer_class = (resolved_method_sirt.get() != nullptr)
+    referrer_class = (resolved_method_sirt.Get() != nullptr)
         ? ResolveCompilingMethodsClass(soa, dex_cache, class_loader, mUnit) : nullptr;
-    resolved_method = resolved_method_sirt.get();
+    resolved_method = resolved_method_sirt.Get();
   }
   bool result = false;
   if (resolved_method != nullptr) {
@@ -1196,7 +1196,7 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
       // Devirtualization not enabled. Inline IsFastInvoke(), dropping the devirtualization parts.
       if (UNLIKELY(referrer_class == nullptr) ||
           UNLIKELY(!referrer_class->CanAccessResolvedMethod(resolved_method->GetDeclaringClass(),
-                                                            resolved_method, dex_cache.get(),
+                                                            resolved_method, dex_cache.Get(),
                                                             target_method->dex_method_index)) ||
           *invoke_type == kSuper) {
         // Slow path. (Without devirtualization, all super calls go slow path as well.)
@@ -1615,7 +1615,7 @@ static void VerifyClass(const ParallelCompilationManager* manager, size_t class_
       soa.Self(), soa.Decode<mirror::ClassLoader*>(jclass_loader));
   SirtRef<mirror::Class> klass(soa.Self(), class_linker->FindClass(soa.Self(), descriptor,
                                                                    class_loader));
-  if (klass.get() == nullptr) {
+  if (klass.Get() == nullptr) {
     CHECK(soa.Self()->IsExceptionPending());
     soa.Self()->ClearException();
 
@@ -1632,8 +1632,8 @@ static void VerifyClass(const ParallelCompilationManager* manager, size_t class_
       LOG(ERROR) << "Verification failed on class " << PrettyDescriptor(descriptor)
                  << " because: " << error_msg;
     }
-  } else if (!SkipClass(jclass_loader, dex_file, klass.get())) {
-    CHECK(klass->IsResolved()) << PrettyClass(klass.get());
+  } else if (!SkipClass(jclass_loader, dex_file, klass.Get())) {
+    CHECK(klass->IsResolved()) << PrettyClass(klass.Get());
     class_linker->VerifyClass(klass);
 
     if (klass->IsErroneous()) {
@@ -1643,7 +1643,7 @@ static void VerifyClass(const ParallelCompilationManager* manager, size_t class_
     }
 
     CHECK(klass->IsCompileTimeVerified() || klass->IsErroneous())
-        << PrettyDescriptor(klass.get()) << ": state=" << klass->GetStatus();
+        << PrettyDescriptor(klass.Get()) << ": state=" << klass->GetStatus();
   }
   soa.Self()->AssertNoPendingException();
 }
@@ -1672,7 +1672,7 @@ static void InitializeClass(const ParallelCompilationManager* manager, size_t cl
                                manager->GetClassLinker()->FindClass(soa.Self(), descriptor,
                                                                     class_loader));
 
-  if (klass.get() != nullptr && !SkipClass(jclass_loader, dex_file, klass.get())) {
+  if (klass.Get() != nullptr && !SkipClass(jclass_loader, dex_file, klass.Get())) {
     // Only try to initialize classes that were successfully verified.
     if (klass->IsVerified()) {
       // Attempt to initialize the class but bail if we either need to initialize the super-class

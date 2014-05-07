@@ -100,7 +100,7 @@ static bool CheckReceiver(const ScopedFastNativeObjectAccess& soa, jobject j_rcv
       *class_or_rcvr = nullptr;
       return false;
     }
-    *class_or_rcvr = sirt_klass.get();
+    *class_or_rcvr = sirt_klass.Get();
     return true;
   }
 

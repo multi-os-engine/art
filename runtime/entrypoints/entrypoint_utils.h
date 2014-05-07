@@ -30,7 +30,7 @@
 #include "mirror/object-inl.h"
 #include "mirror/throwable.h"
 #include "object_utils.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 
 namespace art {
@@ -86,7 +86,7 @@ ALWAYS_INLINE static inline mirror::Class* CheckObjectAlloc(uint32_t type_idx,
       DCHECK(self->IsExceptionPending());
       return nullptr;  // Failure
     }
-    return sirt_klass.get();
+    return sirt_klass.Get();
   }
   return klass;
 }
@@ -110,7 +110,7 @@ ALWAYS_INLINE static inline mirror::Class* CheckClassInitializedForObjectAlloc(m
       DCHECK(self->IsExceptionPending());
       return nullptr;  // Failure
     }
-    return sirt_class.get();
+    return sirt_class.Get();
   }
   return klass;
 }
@@ -391,7 +391,7 @@ static inline mirror::ArtMethod* FindMethodFromCode(uint32_t method_idx,
   if (UNLIKELY(resolved_method == nullptr)) {
     DCHECK(self->IsExceptionPending());  // Throw exception and unwind.
     return nullptr;  // Failure.
-  } else if (UNLIKELY(sirt_this.get() == nullptr && type != kStatic)) {
+  } else if (UNLIKELY(sirt_this.Get() == nullptr && type != kStatic)) {
     // Maintain interpreter-like semantics where NullPointerException is thrown
     // after potential NoSuchMethodError from class linker.
     ThrowLocation throw_location = self->GetCurrentLocationForThrow();
@@ -466,7 +466,7 @@ static inline mirror::ArtMethod* FindMethodFromCode(uint32_t method_idx,
             sirt_this->GetClass()->FindVirtualMethodForInterface(resolved_method);
         if (UNLIKELY(interface_method == nullptr)) {
           ThrowIncompatibleClassChangeErrorClassForInterfaceDispatch(resolved_method,
-                                                                     sirt_this.get(), referrer);
+                                                                     sirt_this.Get(), referrer);
           return nullptr;  // Failure.
         } else {
           return interface_method;
@@ -630,7 +630,7 @@ static inline mirror::Class* ResolveVerifyAndClinit(uint32_t type_idx,
     CHECK(self->IsExceptionPending());
     return nullptr;  // Failure - Indicate to caller to deliver exception
   }
-  return sirt_class.get();
+  return sirt_class.Get();
 }
 
 extern void ThrowStackOverflowError(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

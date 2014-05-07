@@ -316,9 +316,9 @@ static void UnstartedRuntimeInvoke(Thread* self, MethodHelper& mh,
     ArtMethod* c = klass->FindDeclaredDirectMethod("<init>", "()V");
     CHECK(c != NULL);
     SirtRef<Object> obj(self, klass->AllocObject(self));
-    CHECK(obj.get() != NULL);
-    EnterInterpreterFromInvoke(self, c, obj.get(), NULL, NULL);
-    result->SetL(obj.get());
+    CHECK(obj.Get() != NULL);
+    EnterInterpreterFromInvoke(self, c, obj.Get(), NULL, NULL);
+    result->SetL(obj.Get());
   } else if (name == "java.lang.reflect.Field java.lang.Class.getDeclaredField(java.lang.String)") {
     // Special managed code cut-out to allow field lookup in a un-started runtime that'd fail
     // going the reflective Dex way.
@@ -351,12 +351,12 @@ static void UnstartedRuntimeInvoke(Thread* self, MethodHelper& mh,
     //       NoClassDefFoundError is thrown if the field's type cannot be resolved.
     Class* jlr_Field = self->DecodeJObject(WellKnownClasses::java_lang_reflect_Field)->AsClass();
     SirtRef<Object> field(self, jlr_Field->AllocNonMovableObject(self));
-    CHECK(field.get() != NULL);
+    CHECK(field.Get() != NULL);
     ArtMethod* c = jlr_Field->FindDeclaredDirectMethod("<init>", "(Ljava/lang/reflect/ArtField;)V");
     uint32_t args[1];
     args[0] = StackReference<mirror::Object>::FromMirrorPtr(found).AsVRegValue();
-    EnterInterpreterFromInvoke(self, c, field.get(), args, NULL);
-    result->SetL(field.get());
+    EnterInterpreterFromInvoke(self, c, field.Get(), args, NULL);
+    result->SetL(field.Get());
   } else if (name == "int java.lang.Object.hashCode()") {
     Object* obj = shadow_frame->GetVRegReference(arg_offset);
     result->SetI(obj->IdentityHashCode());

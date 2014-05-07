@@ -28,7 +28,7 @@
 #include "object_array-inl.h"
 #include "object_utils.h"
 #include "runtime.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 #include "throwable.h"
 #include "utils.h"
@@ -90,7 +90,7 @@ void Class::SetStatus(Status new_status, Thread* self) {
       old_throw_dex_pc = old_throw_location.GetDexPc();
       self->ClearException();
     }
-    CHECK(old_exception.get() != NULL);
+    CHECK(old_exception.Get() != NULL);
 
     // clear exception to call FindSystemClass
     self->ClearException();
@@ -107,10 +107,10 @@ void Class::SetStatus(Status new_status, Thread* self) {
     }
 
     // Restore exception.
-    ThrowLocation gc_safe_throw_location(old_throw_this_object.get(), old_throw_method.get(),
+    ThrowLocation gc_safe_throw_location(old_throw_this_object.Get(), old_throw_method.Get(),
                                          old_throw_dex_pc);
 
-    self->SetException(gc_safe_throw_location, old_exception.get());
+    self->SetException(gc_safe_throw_location, old_exception.Get());
   }
   CHECK(sizeof(Status) == sizeof(uint32_t)) << PrettyClass(this);
   if (Runtime::Current()->IsActiveTransaction()) {

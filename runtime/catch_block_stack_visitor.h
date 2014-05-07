@@ -19,7 +19,7 @@
 
 #include "mirror/object-inl.h"
 #include "stack.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 

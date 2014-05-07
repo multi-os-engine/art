@@ -19,12 +19,13 @@
 #include <unistd.h>
 
 #include "gc/heap.h"
+#include "handle_scope-inl.h"
 #include "jni_internal.h"
 #include "mirror/class_loader.h"
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
 #include "ScopedUtfChars.h"
-#include "sirt_ref-inl.h"
+#include "verify_object-inl.h"
 
 namespace art {
 

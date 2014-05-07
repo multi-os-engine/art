@@ -182,7 +182,7 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
   // Only the main GC thread, no workers.
   conc_gc_threads_ = 0;
   // Default is CMS which is Sticky + Partial + Full CMS GC.
-  collector_type_ = gc::kCollectorTypeCMS;
+  collector_type_ = gc::kCollectorTypeSS;
   // If background_collector_type_ is kCollectorTypeNone, it defaults to the collector_type_ after
   // parsing options.
   background_collector_type_ = gc::kCollectorTypeNone;

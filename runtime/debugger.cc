@@ -28,6 +28,7 @@
 #include "gc/accounting/card_table-inl.h"
 #include "gc/space/large_object_space.h"
 #include "gc/space/space-inl.h"
+#include "handle_scope.h"
 #include "jdwp/object_registry.h"
 #include "mirror/art_field-inl.h"
 #include "mirror/art_method-inl.h"
@@ -45,8 +46,7 @@
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
 #include "ScopedPrimitiveArray.h"
-#include "sirt_ref.h"
-#include "stack_indirect_reference_table.h"
+#include "handle_scope-inl.h"
 #include "thread_list.h"
 #include "throw_location.h"
 #include "utf.h"
@@ -3358,26 +3358,26 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
   // Translate the method through the vtable, unless the debugger wants to suppress it.
   SirtRef<mirror::ArtMethod> m(soa.Self(), pReq->method);
   if ((pReq->options & JDWP::INVOKE_NONVIRTUAL) == 0 && pReq->receiver != NULL) {
-    mirror::ArtMethod* actual_method = pReq->klass->FindVirtualMethodForVirtualOrInterface(m.get());
-    if (actual_method != m.get()) {
-      VLOG(jdwp) << "ExecuteMethod translated " << PrettyMethod(m.get()) << " to " << PrettyMethod(actual_method);
+    mirror::ArtMethod* actual_method = pReq->klass->FindVirtualMethodForVirtualOrInterface(m.Get());
+    if (actual_method != m.Get()) {
+      VLOG(jdwp) << "ExecuteMethod translated " << PrettyMethod(m.Get()) << " to " << PrettyMethod(actual_method);
       m.reset(actual_method);
     }
   }
-  VLOG(jdwp) << "ExecuteMethod " << PrettyMethod(m.get())
+  VLOG(jdwp) << "ExecuteMethod " << PrettyMethod(m.Get())
              << " receiver=" << pReq->receiver
              << " arg_count=" << pReq->arg_count;
-  CHECK(m.get() != nullptr);
+  CHECK(m.Get() != nullptr);
 
   CHECK_EQ(sizeof(jvalue), sizeof(uint64_t));
 
-  pReq->result_value = InvokeWithJValues(soa, pReq->receiver, soa.EncodeMethod(m.get()),
+  pReq->result_value = InvokeWithJValues(soa, pReq->receiver, soa.EncodeMethod(m.Get()),
                                          reinterpret_cast<jvalue*>(pReq->arg_values));
 
   mirror::Throwable* exception = soa.Self()->GetException(NULL);
   soa.Self()->ClearException();
   pReq->exception = gRegistry->Add(exception);
-  pReq->result_tag = BasicTagFromDescriptor(MethodHelper(m.get()).GetShorty());
+  pReq->result_tag = BasicTagFromDescriptor(MethodHelper(m.Get()).GetShorty());
   if (pReq->exception != 0) {
     VLOG(jdwp) << "  JDWP invocation returning with exception=" << exception
         << " " << exception->Dump();
@@ -3402,10 +3402,10 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
     gRegistry->Add(pReq->result_value.GetL());
   }
 
-  if (old_exception.get() != NULL) {
-    ThrowLocation gc_safe_throw_location(old_throw_this_object.get(), old_throw_method.get(),
+  if (old_exception.Get() != NULL) {
+    ThrowLocation gc_safe_throw_location(old_throw_this_object.Get(), old_throw_method.Get(),
                                          old_throw_dex_pc);
-    soa.Self()->SetException(gc_safe_throw_location, old_exception.get());
+    soa.Self()->SetException(gc_safe_throw_location, old_exception.Get());
   }
 }
 
@@ -3548,8 +3548,8 @@ void Dbg::DdmSendThreadNotification(Thread* t, uint32_t type) {
     CHECK(type == CHUNK_TYPE("THCR") || type == CHUNK_TYPE("THNM")) << type;
     ScopedObjectAccessUnchecked soa(Thread::Current());
     SirtRef<mirror::String> name(soa.Self(), t->GetThreadName(soa));
-    size_t char_count = (name.get() != NULL) ? name->GetLength() : 0;
-    const jchar* chars = (name.get() != NULL) ? name->GetCharArray()->GetData() : NULL;
+    size_t char_count = (name.Get() != NULL) ? name->GetLength() : 0;
+    const jchar* chars = (name.Get() != NULL) ? name->GetCharArray()->GetData() : NULL;
 
     std::vector<uint8_t> bytes;
     JDWP::Append4BE(bytes, t->GetThreadId());

@@ -234,7 +234,7 @@ class CommonCompilerTest : public CommonRuntimeTest {
         // Compute Sirt size, as Sirt goes into frame
         MethodHelper mh(method);
         uint32_t sirt_refs = mh.GetNumberOfReferenceArgsWithoutReceiver() + 1;
-        uint32_t sirt_size = StackIndirectReferenceTable::SizeOf(sirt_refs);
+        uint32_t sirt_size = HandleScope::SizeOf(sirt_refs);
 
         OatFile::OatMethod oat_method = CreateOatMethod(method_code,
                                                         callee_save_method->GetFrameSizeInBytes() +

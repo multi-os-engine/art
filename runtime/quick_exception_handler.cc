@@ -20,7 +20,7 @@
 #include "deoptimize_stack_visitor.h"
 #include "entrypoints/entrypoint_utils.h"
 #include "mirror/art_method-inl.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 
@@ -56,13 +56,13 @@ void QuickExceptionHandler::FindCatch(const ThrowLocation& throw_location,
     DCHECK(!self_->IsExceptionPending());
   } else {
     // Put exception back in root set with clear throw location.
-    self_->SetException(ThrowLocation(), exception_ref.get());
+    self_->SetException(ThrowLocation(), exception_ref.Get());
   }
   // The debugger may suspend this thread and walk its stack. Let's do this before popping
   // instrumentation frames.
   instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
   instrumentation->ExceptionCaughtEvent(self_, throw_location, catch_method, handler_dex_pc_,
-                                        exception_ref.get());
+                                        exception_ref.Get());
 }
 
 void QuickExceptionHandler::DeoptimizeStack() {

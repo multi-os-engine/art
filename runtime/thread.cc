@@ -44,6 +44,7 @@
 #include "gc/accounting/card_table-inl.h"
 #include "gc/heap.h"
 #include "gc/space/space.h"
+#include "handle_scope.h"
 #include "indirect_reference_table-inl.h"
 #include "jni_internal.h"
 #include "mirror/art_field-inl.h"
@@ -60,9 +61,8 @@
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
 #include "ScopedUtfChars.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "stack.h"
-#include "stack_indirect_reference_table.h"
 #include "thread-inl.h"
 #include "thread_list.h"
 #include "utils.h"
@@ -431,7 +431,7 @@ void Thread::CreatePeer(const char* name, bool as_daemon, jobject thread_group) 
 
   ScopedObjectAccess soa(self);
   SirtRef<mirror::String> peer_thread_name(soa.Self(), GetThreadName(soa));
-  if (peer_thread_name.get() == nullptr) {
+  if (peer_thread_name.Get() == nullptr) {
     // The Thread constructor should have set the Thread.name to a
     // non-null value. However, because we can run without code
     // available (in the compiler, in tests), we manually assign the
@@ -444,7 +444,7 @@ void Thread::CreatePeer(const char* name, bool as_daemon, jobject thread_group) 
     peer_thread_name.reset(GetThreadName(soa));
   }
   // 'thread_name' may have been null, so don't trust 'peer_thread_name' to be non-null.
-  if (peer_thread_name.get() != nullptr) {
+  if (peer_thread_name.Get() != nullptr) {
     SetThreadName(peer_thread_name->ToModifiedUtf8().c_str());
   }
 }
@@ -951,7 +951,7 @@ void Thread::DumpStack(std::ostream& os) const {
     if (dump_for_abort || ShouldShowNativeStack(this)) {
       DumpKernelStack(os, GetTid(), "  kernel: ", false);
       SirtRef<mirror::ArtMethod> method_ref(Thread::Current(), GetCurrentMethod(nullptr));
-      DumpNativeStack(os, GetTid(), "  native: ", method_ref.get());
+      DumpNativeStack(os, GetTid(), "  native: ", method_ref.Get());
     }
     DumpJavaStack(os);
   } else {
@@ -1209,7 +1209,7 @@ void Thread::RemoveFromThreadGroup(ScopedObjectAccess& soa) {
 
 size_t Thread::NumSirtReferences() {
   size_t count = 0;
-  for (StackIndirectReferenceTable* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
+  for (HandleScope* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
     count += cur->NumberOfReferences();
   }
   return count;
@@ -1218,7 +1218,7 @@ size_t Thread::NumSirtReferences() {
 bool Thread::SirtContains(jobject obj) const {
   StackReference<mirror::Object>* sirt_entry =
       reinterpret_cast<StackReference<mirror::Object>*>(obj);
-  for (StackIndirectReferenceTable* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
+  for (HandleScope* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
     if (cur->Contains(sirt_entry)) {
       return true;
     }
@@ -1228,7 +1228,7 @@ bool Thread::SirtContains(jobject obj) const {
 }
 
 void Thread::SirtVisitRoots(RootCallback* visitor, void* arg, uint32_t thread_id) {
-  for (StackIndirectReferenceTable* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
+  for (HandleScope* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
     size_t num_refs = cur->NumberOfReferences();
     for (size_t j = 0; j < num_refs; ++j) {
       mirror::Object* object = cur->GetReference(j);
@@ -1372,7 +1372,7 @@ class BuildInternalStackTraceVisitor : public StackVisitor {
         method_trace(self_,
                      Runtime::Current()->GetClassLinker()->AllocObjectArray<mirror::Object>(self_,
                                                                                             depth + 1));
-    if (method_trace.get() == nullptr) {
+    if (method_trace.Get() == nullptr) {
       return false;
     }
     mirror::IntArray* dex_pc_trace = mirror::IntArray::Alloc(self_, depth);
@@ -1387,7 +1387,7 @@ class BuildInternalStackTraceVisitor : public StackVisitor {
     const char* last_no_suspend_cause =
         self_->StartAssertNoThreadSuspension("Building internal stack trace");
     CHECK(last_no_suspend_cause == nullptr) << last_no_suspend_cause;
-    method_trace_ = method_trace.get();
+    method_trace_ = method_trace.Get();
     dex_pc_trace_ = dex_pc_trace;
     return true;
   }
@@ -1513,13 +1513,13 @@ jobjectArray Thread::InternalStackTraceToStackTraceElementArray(const ScopedObje
       CHECK(descriptor != nullptr);
       std::string class_name(PrettyDescriptor(descriptor));
       class_name_object.reset(mirror::String::AllocFromModifiedUtf8(soa.Self(), class_name.c_str()));
-      if (class_name_object.get() == nullptr) {
+      if (class_name_object.Get() == nullptr) {
         return nullptr;
       }
       const char* source_file = mh.GetDeclaringClassSourceFile();
       if (source_file != nullptr) {
         source_name_object.reset(mirror::String::AllocFromModifiedUtf8(soa.Self(), source_file));
-        if (source_name_object.get() == nullptr) {
+        if (source_name_object.Get() == nullptr) {
           return nullptr;
         }
       }
@@ -1529,7 +1529,7 @@ jobjectArray Thread::InternalStackTraceToStackTraceElementArray(const ScopedObje
     SirtRef<mirror::String> method_name_object(soa.Self(),
                                                mirror::String::AllocFromModifiedUtf8(soa.Self(),
                                                                                      method_name));
-    if (method_name_object.get() == nullptr) {
+    if (method_name_object.Get() == nullptr) {
       return nullptr;
     }
     mirror::StackTraceElement* obj = mirror::StackTraceElement::Alloc(
@@ -1581,14 +1581,14 @@ void Thread::ThrowNewWrappedException(const ThrowLocation& throw_location,
   Runtime* runtime = Runtime::Current();
 
   mirror::ClassLoader* cl = nullptr;
-  if (saved_throw_method.get() != nullptr) {
-    cl = saved_throw_method.get()->GetDeclaringClass()->GetClassLoader();
+  if (saved_throw_method.Get() != nullptr) {
+    cl = saved_throw_method.Get()->GetDeclaringClass()->GetClassLoader();
   }
   SirtRef<mirror::ClassLoader> class_loader(this, cl);
   SirtRef<mirror::Class>
       exception_class(this, runtime->GetClassLinker()->FindClass(this, exception_class_descriptor,
                                                                  class_loader));
-  if (UNLIKELY(exception_class.get() == nullptr)) {
+  if (UNLIKELY(exception_class.Get() == nullptr)) {
     CHECK(IsExceptionPending());
     LOG(ERROR) << "No exception class " << PrettyDescriptor(exception_class_descriptor);
     return;
@@ -1603,8 +1603,8 @@ void Thread::ThrowNewWrappedException(const ThrowLocation& throw_location,
                                 down_cast<mirror::Throwable*>(exception_class->AllocObject(this)));
 
   // If we couldn't allocate the exception, throw the pre-allocated out of memory exception.
-  if (exception.get() == nullptr) {
-    ThrowLocation gc_safe_throw_location(saved_throw_this.get(), saved_throw_method.get(),
+  if (exception.Get() == nullptr) {
+    ThrowLocation gc_safe_throw_location(saved_throw_this.Get(), saved_throw_method.Get(),
                                          throw_location.GetDexPc());
     SetException(gc_safe_throw_location, Runtime::Current()->GetPreAllocatedOutOfMemoryError());
     return;
@@ -1656,9 +1656,9 @@ void Thread::ThrowNewWrappedException(const ThrowLocation& throw_location,
     if (trace.get() != nullptr) {
       exception->SetStackState(down_cast<mirror::Throwable*>(DecodeJObject(trace.get())));
     }
-    ThrowLocation gc_safe_throw_location(saved_throw_this.get(), saved_throw_method.get(),
+    ThrowLocation gc_safe_throw_location(saved_throw_this.Get(), saved_throw_method.Get(),
                                          throw_location.GetDexPc());
-    SetException(gc_safe_throw_location, exception.get());
+    SetException(gc_safe_throw_location, exception.Get());
   } else {
     jvalue jv_args[2];
     size_t i = 0;
@@ -1671,11 +1671,11 @@ void Thread::ThrowNewWrappedException(const ThrowLocation& throw_location,
       jv_args[i].l = cause.get();
       ++i;
     }
-    InvokeWithJValues(soa, exception.get(), soa.EncodeMethod(exception_init_method), jv_args);
+    InvokeWithJValues(soa, exception.Get(), soa.EncodeMethod(exception_init_method), jv_args);
     if (LIKELY(!IsExceptionPending())) {
-      ThrowLocation gc_safe_throw_location(saved_throw_this.get(), saved_throw_method.get(),
+      ThrowLocation gc_safe_throw_location(saved_throw_this.Get(), saved_throw_method.Get(),
                                            throw_location.GetDexPc());
-      SetException(gc_safe_throw_location, exception.get());
+      SetException(gc_safe_throw_location, exception.Get());
     }
   }
 }

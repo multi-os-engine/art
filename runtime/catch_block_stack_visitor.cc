@@ -19,7 +19,7 @@
 #include "dex_instruction.h"
 #include "mirror/art_method-inl.h"
 #include "quick_exception_handler.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "verifier/method_verifier.h"
 
 namespace art {

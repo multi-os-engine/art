@@ -44,7 +44,7 @@ static jobject Constructor_newInstance(JNIEnv* env, jobject javaMethod, jobjectA
     soa.Self()->ThrowNewExceptionF(throw_location, "Ljava/lang/InstantiationException;",
                                    "Can't instantiate %s %s",
                                    c->IsInterface() ? "interface" : "abstract class",
-                                   PrettyDescriptor(c.get()).c_str());
+                                   PrettyDescriptor(c.Get()).c_str());
     return nullptr;
   }
 

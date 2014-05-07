@@ -60,7 +60,7 @@
 #include "scoped_thread_state_change.h"
 #include "signal_catcher.h"
 #include "signal_set.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 #include "thread_list.h"
 #include "trace.h"
@@ -333,13 +333,13 @@ jobject CreateSystemClassLoader() {
   JValue result = InvokeWithJValues(soa, nullptr, soa.EncodeMethod(getSystemClassLoader), nullptr);
   SirtRef<mirror::ClassLoader> class_loader(soa.Self(),
                                             down_cast<mirror::ClassLoader*>(result.GetL()));
-  CHECK(class_loader.get() != nullptr);
+  CHECK(class_loader.Get() != nullptr);
   JNIEnv* env = soa.Self()->GetJniEnv();
   ScopedLocalRef<jobject> system_class_loader(env,
-                                              soa.AddLocalReference<jobject>(class_loader.get()));
+                                              soa.AddLocalReference<jobject>(class_loader.Get()));
   CHECK(system_class_loader.get() != nullptr);
 
-  soa.Self()->SetClassLoaderOverride(class_loader.get());
+  soa.Self()->SetClassLoaderOverride(class_loader.Get());
 
   SirtRef<mirror::Class> thread_class(
       soa.Self(),
@@ -351,7 +351,7 @@ jobject CreateSystemClassLoader() {
   CHECK(contextClassLoader != NULL);
 
   // We can't run in a transaction yet.
-  contextClassLoader->SetObject<false>(soa.Self()->GetPeer(), class_loader.get());
+  contextClassLoader->SetObject<false>(soa.Self()->GetPeer(), class_loader.Get());
 
   return env->NewGlobalRef(system_class_loader.get());
 }
@@ -940,7 +940,7 @@ mirror::ObjectArray<mirror::ArtMethod>* Runtime::CreateDefaultImt(ClassLinker* c
   for (size_t i = 0; i < static_cast<size_t>(imtable->GetLength()); i++) {
     imtable->Set<false>(i, imt_conflict_method);
   }
-  return imtable.get();
+  return imtable.Get();
 }
 
 mirror::ArtMethod* Runtime::CreateImtConflictMethod() {
@@ -959,7 +959,7 @@ mirror::ArtMethod* Runtime::CreateImtConflictMethod() {
     method->SetEntryPointFromPortableCompiledCode(GetPortableImtConflictTrampoline(class_linker));
     method->SetEntryPointFromQuickCompiledCode(GetQuickImtConflictTrampoline(class_linker));
   }
-  return method.get();
+  return method.Get();
 }
 
 mirror::ArtMethod* Runtime::CreateResolutionMethod() {
@@ -978,7 +978,7 @@ mirror::ArtMethod* Runtime::CreateResolutionMethod() {
     method->SetEntryPointFromPortableCompiledCode(GetPortableResolutionTrampoline(class_linker));
     method->SetEntryPointFromQuickCompiledCode(GetQuickResolutionTrampoline(class_linker));
   }
-  return method.get();
+  return method.Get();
 }
 
 mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(InstructionSet instruction_set,
@@ -1104,7 +1104,7 @@ mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(InstructionSet instruction_se
   } else {
     UNIMPLEMENTED(FATAL) << instruction_set;
   }
-  return method.get();
+  return method.Get();
 }
 
 void Runtime::DisallowNewSystemWeaks() {

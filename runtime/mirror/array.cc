@@ -26,7 +26,7 @@
 #include "object_array.h"
 #include "object_array-inl.h"
 #include "object_utils.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 #include "utils.h"
 
@@ -46,10 +46,10 @@ static Array* RecursiveCreateMultiArray(Thread* self,
                                         const SirtRef<mirror::IntArray>& dimensions)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   int32_t array_length = dimensions->Get(current_dimension);
-  SirtRef<Array> new_array(self, Array::Alloc<true>(self, array_class.get(), array_length,
+  SirtRef<Array> new_array(self, Array::Alloc<true>(self, array_class.Get(), array_length,
                                                     array_class->GetComponentSize(),
                                                     Runtime::Current()->GetHeap()->GetCurrentAllocator()));
-  if (UNLIKELY(new_array.get() == nullptr)) {
+  if (UNLIKELY(new_array.Get() == nullptr)) {
     CHECK(self->IsExceptionPending());
     return nullptr;
   }
@@ -67,7 +67,7 @@ static Array* RecursiveCreateMultiArray(Thread* self,
       new_array->AsObjectArray<Array>()->Set<false, false>(i, sub_array);
     }
   }
-  return new_array.get();
+  return new_array.Get();
 }
 
 Array* Array::CreateMultiArray(Thread* self, const SirtRef<Class>& element_class,
@@ -91,14 +91,14 @@ Array* Array::CreateMultiArray(Thread* self, const SirtRef<Class>& element_class
   // Find/generate the array class.
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   SirtRef<mirror::Class> array_class(self,
-                                     class_linker->FindArrayClass(self, element_class.get()));
-  if (UNLIKELY(array_class.get() == nullptr)) {
+                                     class_linker->FindArrayClass(self, element_class.Get()));
+  if (UNLIKELY(array_class.Get() == nullptr)) {
     CHECK(self->IsExceptionPending());
     return nullptr;
   }
   for (int32_t i = 1; i < dimensions->GetLength(); ++i) {
-    array_class.reset(class_linker->FindArrayClass(self, array_class.get()));
-    if (UNLIKELY(array_class.get() == nullptr)) {
+    array_class.reset(class_linker->FindArrayClass(self, array_class.Get()));
+    if (UNLIKELY(array_class.Get() == nullptr)) {
       CHECK(self->IsExceptionPending());
       return nullptr;
     }

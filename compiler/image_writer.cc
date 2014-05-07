@@ -51,7 +51,7 @@
 #include "object_utils.h"
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 #include "UniquePtr.h"
 #include "utils.h"
 
@@ -382,16 +382,14 @@ void ImageWriter::CalculateObjectOffsets(Object* obj) {
       DCHECK_EQ(obj, obj->AsString()->Intern());
       return;
     }
-    Thread* self = Thread::Current();
-    SirtRef<Object> sirt_obj(self, obj);
-    mirror::String* interned = obj->AsString()->Intern();
-    if (sirt_obj.get() != interned) {
+    mirror::String* const interned = obj->AsString()->Intern();
+    if (obj != interned) {
       if (!IsImageOffsetAssigned(interned)) {
         // interned obj is after us, allocate its location early
         AssignImageOffset(interned);
       }
       // point those looking for this object to the interned version.
-      SetImageOffset(sirt_obj.get(), GetImageOffset(interned));
+      SetImageOffset(obj, GetImageOffset(interned));
       return;
     }
     // else (obj == interned), nothing to do but fall through to the normal case
@@ -404,12 +402,14 @@ ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
   Runtime* runtime = Runtime::Current();
   ClassLinker* class_linker = runtime->GetClassLinker();
   Thread* self = Thread::Current();
-  SirtRef<Class> object_array_class(self, class_linker->FindSystemClass(self,
-                                                                        "[Ljava/lang/Object;"));
+  StackHandleScope<2> hs(self);
+  Handle<Class> object_array_class(hs.NewHandle(
+      class_linker->FindSystemClass(self, "[Ljava/lang/Object;")));
 
   // build an Object[] of all the DexCaches used in the source_space_
-  ObjectArray<Object>* dex_caches = ObjectArray<Object>::Alloc(self, object_array_class.get(),
-                                                               class_linker->GetDexCaches().size());
+  Handle<ObjectArray<Object>> dex_caches(
+      hs.NewHandle(ObjectArray<Object>::Alloc(self, object_array_class.Get(),
+                                              class_linker->GetDexCaches().size())));
   int i = 0;
   for (DexCache* dex_cache : class_linker->GetDexCaches()) {
     dex_caches->Set<false>(i++, dex_cache);
@@ -417,7 +417,7 @@ ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
 
   // build an Object[] of the roots needed to restore the runtime
   SirtRef<ObjectArray<Object> > image_roots(
-      self, ObjectArray<Object>::Alloc(self, object_array_class.get(), ImageHeader::kImageRootsMax));
+      self, ObjectArray<Object>::Alloc(self, object_array_class.Get(), ImageHeader::kImageRootsMax));
   image_roots->Set<false>(ImageHeader::kResolutionMethod, runtime->GetResolutionMethod());
   image_roots->Set<false>(ImageHeader::kImtConflictMethod, runtime->GetImtConflictMethod());
   image_roots->Set<false>(ImageHeader::kDefaultImt, runtime->GetDefaultImt());
@@ -427,12 +427,12 @@ ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
                           runtime->GetCalleeSaveMethod(Runtime::kRefsOnly));
   image_roots->Set<false>(ImageHeader::kRefsAndArgsSaveMethod,
                           runtime->GetCalleeSaveMethod(Runtime::kRefsAndArgs));
-  image_roots->Set<false>(ImageHeader::kDexCaches, dex_caches);
+  image_roots->Set<false>(ImageHeader::kDexCaches, dex_caches.Get());
   image_roots->Set<false>(ImageHeader::kClassRoots, class_linker->GetClassRoots());
   for (int i = 0; i < ImageHeader::kImageRootsMax; i++) {
     CHECK(image_roots->Get(i) != NULL);
   }
-  return image_roots.get();
+  return image_roots.Get();
 }
 
 // Walk instance fields of the given Class. Separate function to allow recursion on the super
@@ -464,8 +464,8 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
     SirtRef<mirror::Object> sirt_obj(self, obj);
     SirtRef<mirror::Class> klass(self, obj->GetClass());
     // visit the object itself.
-    CalculateObjectOffsets(sirt_obj.get());
-    WalkInstanceFields(sirt_obj.get(), klass.get());
+    CalculateObjectOffsets(sirt_obj.Get());
+    WalkInstanceFields(sirt_obj.Get(), klass.Get());
     // Walk static fields of a Class.
     if (sirt_obj->IsClass()) {
       size_t num_static_fields = klass->NumReferenceStaticFields();
@@ -533,7 +533,7 @@ void ImageWriter::CalculateNewObjectOffsets(size_t oat_loaded_size, size_t oat_d
                            static_cast<uint32_t>(image_end_),
                            RoundUp(image_end_, kPageSize),
                            RoundUp(bitmap_bytes, kPageSize),
-                           PointerToLowMemUInt32(GetImageAddress(image_roots.get())),
+                           PointerToLowMemUInt32(GetImageAddress(image_roots.Get())),
                            oat_file_->GetOatHeader().GetChecksum(),
                            PointerToLowMemUInt32(oat_file_begin),
                            PointerToLowMemUInt32(oat_data_begin_),

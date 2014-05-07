@@ -20,7 +20,7 @@
 #include "mirror/class-inl.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 namespace gc {
@@ -47,7 +47,7 @@ TEST_F(HeapTest, GarbageCollectClassLinkerInit) {
                                                                         "[Ljava/lang/Object;"));
     for (size_t i = 0; i < 1024; ++i) {
       SirtRef<mirror::ObjectArray<mirror::Object> > array(soa.Self(),
-          mirror::ObjectArray<mirror::Object>::Alloc(soa.Self(), c.get(), 2048));
+          mirror::ObjectArray<mirror::Object>::Alloc(soa.Self(), c.Get(), 2048));
       for (size_t j = 0; j < 2048; ++j) {
         mirror::String* string = mirror::String::AllocFromModifiedUtf8(soa.Self(), "hello, world!");
         // SIRT operator -> deferences the SIRT before running the method.

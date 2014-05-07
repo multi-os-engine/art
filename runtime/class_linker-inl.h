@@ -24,7 +24,7 @@
 #include "mirror/iftable.h"
 #include "mirror/object_array.h"
 #include "object_utils.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 

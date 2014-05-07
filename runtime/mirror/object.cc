@@ -32,7 +32,7 @@
 #include "object_array-inl.h"
 #include "object_utils.h"
 #include "runtime.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "throwable.h"
 #include "well_known_classes.h"
 
@@ -107,7 +107,7 @@ class CopyObjectVisitor {
   void operator()(Object* obj, size_t usable_size) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     UNUSED(usable_size);
-    CopyObject(self_, obj, orig_->get(), num_bytes_);
+    CopyObject(self_, obj, orig_->Get(), num_bytes_);
   }
 
  private:
@@ -166,7 +166,7 @@ int32_t Object::IdentityHashCode() const {
         SirtRef<mirror::Object> sirt_this(self, current_this);
         Monitor::InflateThinLocked(self, sirt_this, lw, GenerateIdentityHashCode());
         // A GC may have occurred when we switched to kBlocked.
-        current_this = sirt_this.get();
+        current_this = sirt_this.Get();
         break;
       }
       case LockWord::kFatLocked: {

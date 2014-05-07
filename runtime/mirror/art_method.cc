@@ -251,11 +251,11 @@ uint32_t ArtMethod::FindCatchBlock(SirtRef<Class>& exception_type, uint32_t dex_
     }
     // Does this catch exception type apply?
     Class* iter_exception_type = mh.GetClassFromTypeIdx(iter_type_idx);
-    if (exception_type.get() == nullptr) {
+    if (exception_type.Get() == nullptr) {
       self->ClearException();
       LOG(WARNING) << "Unresolved exception class when finding catch block: "
         << mh.GetTypeDescriptorFromTypeIdx(iter_type_idx);
-    } else if (iter_exception_type->IsAssignableFrom(exception_type.get())) {
+    } else if (iter_exception_type->IsAssignableFrom(exception_type.Get())) {
       found_dex_pc = it.GetHandlerAddress();
       break;
     }
@@ -266,8 +266,8 @@ uint32_t ArtMethod::FindCatchBlock(SirtRef<Class>& exception_type, uint32_t dex_
     *has_no_move_exception = (first_catch_instr->Opcode() != Instruction::MOVE_EXCEPTION);
   }
   // Put the exception back.
-  if (exception.get() != nullptr) {
-    self->SetException(throw_location, exception.get());
+  if (exception.Get() != nullptr) {
+    self->SetException(throw_location, exception.Get());
   }
   return found_dex_pc;
 }

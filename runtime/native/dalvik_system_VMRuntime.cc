@@ -275,9 +275,9 @@ static void PreloadDexCachesResolveField(SirtRef<mirror::DexCache>& dex_cache,
     return;
   }
   if (is_static) {
-    field = klass->FindStaticField(dex_cache.get(), field_idx);
+    field = klass->FindStaticField(dex_cache.Get(), field_idx);
   } else {
-    field = klass->FindInstanceField(dex_cache.get(), field_idx);
+    field = klass->FindInstanceField(dex_cache.Get(), field_idx);
   }
   if (field == NULL) {
     return;
@@ -304,14 +304,14 @@ static void PreloadDexCachesResolveMethod(SirtRef<mirror::DexCache>& dex_cache,
   switch (invoke_type) {
     case kDirect:
     case kStatic:
-      method = klass->FindDirectMethod(dex_cache.get(), method_idx);
+      method = klass->FindDirectMethod(dex_cache.Get(), method_idx);
       break;
     case kInterface:
-      method = klass->FindInterfaceMethod(dex_cache.get(), method_idx);
+      method = klass->FindInterfaceMethod(dex_cache.Get(), method_idx);
       break;
     case kSuper:
     case kVirtual:
-      method = klass->FindVirtualMethod(dex_cache.get(), method_idx);
+      method = klass->FindVirtualMethod(dex_cache.Get(), method_idx);
       break;
     default:
       LOG(FATAL) << "Unreachable - invocation type: " << invoke_type;
@@ -444,7 +444,7 @@ static void VMRuntime_preloadDexCaches(JNIEnv* env, jobject) {
 
     if (kPreloadDexCachesTypes) {
       for (size_t i = 0; i < dex_cache->NumResolvedTypes(); i++) {
-        PreloadDexCachesResolveType(dex_cache.get(), i);
+        PreloadDexCachesResolveType(dex_cache.Get(), i);
       }
     }
 

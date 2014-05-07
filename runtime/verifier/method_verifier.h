@@ -347,7 +347,7 @@ class MethodVerifier {
   /* Ensure that the wide register index is valid for this code item. */
   bool CheckWideRegisterIndex(uint32_t idx);
 
-  // Perform static checks on a field get or set instruction. All we do here is ensure that the
+  // Perform static checks on a field Get or set instruction. All we do here is ensure that the
   // field index is in the valid range.
   bool CheckFieldIndex(uint32_t idx);
 

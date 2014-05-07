@@ -34,7 +34,7 @@
 #include "mirror/proxy.h"
 #include "mirror/reference.h"
 #include "mirror/stack_trace_element.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 
@@ -111,8 +111,8 @@ class ClassLinkerTest : public CommonRuntimeTest {
 
   void AssertArrayClass(const std::string& array_descriptor, const SirtRef<mirror::Class>& array)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    ClassHelper kh(array.get());
-    ASSERT_TRUE(array.get() != NULL);
+    ClassHelper kh(array.Get());
+    ASSERT_TRUE(array.Get() != NULL);
     ASSERT_TRUE(array->GetClass() != NULL);
     ASSERT_EQ(array->GetClass(), array->GetClass()->GetClass());
     EXPECT_TRUE(array->GetClass()->GetSuperClass() != NULL);
@@ -141,17 +141,17 @@ class ClassLinkerTest : public CommonRuntimeTest {
     EXPECT_EQ(0U, array->NumVirtualMethods());
     EXPECT_EQ(0U, array->NumInstanceFields());
     EXPECT_EQ(0U, array->NumStaticFields());
-    kh.ChangeClass(array.get());
+    kh.ChangeClass(array.Get());
     EXPECT_EQ(2U, kh.NumDirectInterfaces());
     EXPECT_TRUE(array->GetVTable() != NULL);
     EXPECT_EQ(2, array->GetIfTableCount());
     ASSERT_TRUE(array->GetIfTable() != NULL);
     kh.ChangeClass(kh.GetDirectInterface(0));
     EXPECT_STREQ(kh.GetDescriptor(), "Ljava/lang/Cloneable;");
-    kh.ChangeClass(array.get());
+    kh.ChangeClass(array.Get());
     kh.ChangeClass(kh.GetDirectInterface(1));
     EXPECT_STREQ(kh.GetDescriptor(), "Ljava/io/Serializable;");
-    EXPECT_EQ(class_linker_->FindArrayClass(self, array->GetComponentType()), array.get());
+    EXPECT_EQ(class_linker_->FindArrayClass(self, array->GetComponentType()), array.Get());
   }
 
   void AssertMethod(mirror::ArtMethod* method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -184,7 +184,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
 
   void AssertClass(const std::string& descriptor, const SirtRef<mirror::Class>& klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    ClassHelper kh(klass.get());
+    ClassHelper kh(klass.Get());
     EXPECT_STREQ(descriptor.c_str(), kh.GetDescriptor());
     if (descriptor == "Ljava/lang/Object;") {
       EXPECT_FALSE(klass->HasSuperClass());
@@ -200,7 +200,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     EXPECT_FALSE(klass->IsErroneous());
     EXPECT_FALSE(klass->IsArrayClass());
     EXPECT_TRUE(klass->GetComponentType() == NULL);
-    EXPECT_TRUE(klass->IsInSamePackage(klass.get()));
+    EXPECT_TRUE(klass->IsInSamePackage(klass.Get()));
     EXPECT_TRUE(mirror::Class::IsInSamePackage(kh.GetDescriptor(), kh.GetDescriptor()));
     if (klass->IsInterface()) {
       EXPECT_TRUE(klass->IsAbstract());
@@ -242,31 +242,31 @@ class ClassLinkerTest : public CommonRuntimeTest {
     }
 
     EXPECT_FALSE(klass->IsPrimitive());
-    EXPECT_TRUE(klass->CanAccess(klass.get()));
+    EXPECT_TRUE(klass->CanAccess(klass.Get()));
 
     for (size_t i = 0; i < klass->NumDirectMethods(); i++) {
       mirror::ArtMethod* method = klass->GetDirectMethod(i);
       AssertMethod(method);
       EXPECT_TRUE(method->IsDirect());
-      EXPECT_EQ(klass.get(), method->GetDeclaringClass());
+      EXPECT_EQ(klass.Get(), method->GetDeclaringClass());
     }
 
     for (size_t i = 0; i < klass->NumVirtualMethods(); i++) {
       mirror::ArtMethod* method = klass->GetVirtualMethod(i);
       AssertMethod(method);
       EXPECT_FALSE(method->IsDirect());
-      EXPECT_TRUE(method->GetDeclaringClass()->IsAssignableFrom(klass.get()));
+      EXPECT_TRUE(method->GetDeclaringClass()->IsAssignableFrom(klass.Get()));
     }
 
     for (size_t i = 0; i < klass->NumInstanceFields(); i++) {
       mirror::ArtField* field = klass->GetInstanceField(i);
-      AssertField(klass.get(), field);
+      AssertField(klass.Get(), field);
       EXPECT_FALSE(field->IsStatic());
     }
 
     for (size_t i = 0; i < klass->NumStaticFields(); i++) {
       mirror::ArtField* field = klass->GetStaticField(i);
-      AssertField(klass.get(), field);
+      AssertField(klass.Get(), field);
       EXPECT_TRUE(field->IsStatic());
     }
 
@@ -294,7 +294,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     }
 
     size_t total_num_reference_instance_fields = 0;
-    mirror::Class* k = klass.get();
+    mirror::Class* k = klass.Get();
     while (k != NULL) {
       total_num_reference_instance_fields += k->NumReferenceInstanceFields();
       k = k->GetSuperClass();
@@ -307,11 +307,11 @@ class ClassLinkerTest : public CommonRuntimeTest {
     ASSERT_TRUE(descriptor != NULL);
     Thread* self = Thread::Current();
     SirtRef<mirror::Class> klass(self, class_linker_->FindSystemClass(self, descriptor.c_str()));
-    ASSERT_TRUE(klass.get() != nullptr);
-    EXPECT_STREQ(descriptor.c_str(), ClassHelper(klass.get()).GetDescriptor());
+    ASSERT_TRUE(klass.Get() != nullptr);
+    EXPECT_STREQ(descriptor.c_str(), ClassHelper(klass.Get()).GetDescriptor());
     EXPECT_EQ(class_loader, klass->GetClassLoader());
     if (klass->IsPrimitive()) {
-      AssertPrimitiveClass(descriptor, klass.get());
+      AssertPrimitiveClass(descriptor, klass.Get());
     } else if (klass->IsArrayClass()) {
       AssertArrayClass(descriptor, klass);
     } else {
@@ -759,7 +759,7 @@ TEST_F(ClassLinkerTest, FindClass) {
   ASSERT_STREQ(kh.GetDescriptor(), "LMyClass;");
   EXPECT_TRUE(MyClass->GetSuperClass() == JavaLangObject);
   EXPECT_TRUE(MyClass->HasSuperClass());
-  EXPECT_EQ(class_loader.get(), MyClass->GetClassLoader());
+  EXPECT_EQ(class_loader.Get(), MyClass->GetClassLoader());
   EXPECT_EQ(mirror::Class::kStatusResolved, MyClass->GetStatus());
   EXPECT_FALSE(MyClass->IsErroneous());
   EXPECT_TRUE(MyClass->IsLoaded());
@@ -787,7 +787,7 @@ TEST_F(ClassLinkerTest, FindClass) {
   AssertArrayClass("[Ljava/lang/Object;", "Ljava/lang/Object;", NULL);
   // synthesized on the fly
   AssertArrayClass("[[C", "[C", NULL);
-  AssertArrayClass("[[[LMyClass;", "[[LMyClass;", class_loader.get());
+  AssertArrayClass("[[[LMyClass;", "[[LMyClass;", class_loader.Get());
   // or not available at all
   AssertNonExistentClass("[[[[LNonExistentClass;");
 }
@@ -907,69 +907,69 @@ TEST_F(ClassLinkerTest, StaticFields) {
   FieldHelper fh(s0);
   EXPECT_STREQ(ClassHelper(s0->GetClass()).GetDescriptor(), "Ljava/lang/reflect/ArtField;");
   EXPECT_TRUE(fh.GetTypeAsPrimitiveType() == Primitive::kPrimBoolean);
-  EXPECT_EQ(true, s0->GetBoolean(statics.get()));
-  s0->SetBoolean<false>(statics.get(), false);
+  EXPECT_EQ(true, s0->GetBoolean(statics.Get()));
+  s0->SetBoolean<false>(statics.Get(), false);
 
   mirror::ArtField* s1 = statics->FindStaticField("s1", "B");
   fh.ChangeField(s1);
   EXPECT_TRUE(fh.GetTypeAsPrimitiveType() == Primitive::kPrimByte);
-  EXPECT_EQ(5, s1->GetByte(statics.get()));
-  s1->SetByte<false>(statics.get(), 6);
+  EXPECT_EQ(5, s1->GetByte(statics.Get()));
+  s1->SetByte<false>(statics.Get(), 6);
 
   mirror::ArtField* s2 = statics->FindStaticField("s2", "C");
   fh.ChangeField(s2);
   EXPECT_TRUE(fh.GetTypeAsPrimitiveType() == Primitive::kPrimChar);
-  EXPECT_EQ('a', s2->GetChar(statics.get()));
-  s2->SetChar<false>(statics.get(), 'b');
+  EXPECT_EQ('a', s2->GetChar(statics.Get()));
+  s2->SetChar<false>(statics.Get(), 'b');
 
   mirror::ArtField* s3 = statics->FindStaticField("s3", "S");
   fh.ChangeField(s3);
   EXPECT_TRUE(fh.GetTypeAsPrimitiveType() == Primitive::kPrimShort);
-  EXPECT_EQ(-536, s3->GetShort(statics.get()));
-  s3->SetShort<false>(statics.get(), -535);
+  EXPECT_EQ(-536, s3->GetShort(statics.Get()));
+  s3->SetShort<false>(statics.Get(), -535);
 
   mirror::ArtField* s4 = statics->FindStaticField("s4", "I");
   fh.ChangeField(s4);
   EXPECT_TRUE(fh.GetTypeAsPrimitiveType() == Primitive::kPrimInt);
-  EXPECT_EQ(2000000000, s4->GetInt(statics.get()));
-  s4->SetInt<false>(statics.get(), 2000000001);
+  EXPECT_EQ(2000000000, s4->GetInt(statics.Get()));
+  s4->SetInt<false>(statics.Get(), 2000000001);
 
   mirror::ArtField* s5 = statics->FindStaticField("s5", "J");
   fh.ChangeField(s5);
   EXPECT_TRUE(fh.GetTypeAsPrimitiveType() == Primitive::kPrimLong);
-  EXPECT_EQ(0x1234567890abcdefLL, s5->GetLong(statics.get()));
-  s5->SetLong<false>(statics.get(), INT64_C(0x34567890abcdef12));
+  EXPECT_EQ(0x1234567890abcdefLL, s5->GetLong(statics.Get()));
+  s5->SetLong<false>(statics.Get(), INT64_C(0x34567890abcdef12));
 
   mirror::ArtField* s6 = statics->FindStaticField("s6", "F");
   fh.ChangeField(s6);
   EXPECT_TRUE(fh.GetTypeAsPrimitiveType() == Primitive::kPrimFloat);
-  EXPECT_EQ(0.5, s6->GetFloat(statics.get()));
-  s6->SetFloat<false>(statics.get(), 0.75);
+  EXPECT_EQ(0.5, s6->GetFloat(statics.Get()));
+  s6->SetFloat<false>(statics.Get(), 0.75);
 
   mirror::ArtField* s7 = statics->FindStaticField("s7", "D");
   fh.ChangeField(s7);
   EXPECT_TRUE(fh.GetTypeAsPrimitiveType() == Primitive::kPrimDouble);
-  EXPECT_EQ(16777217, s7->GetDouble(statics.get()));
-  s7->SetDouble<false>(statics.get(), 16777219);
+  EXPECT_EQ(16777217, s7->GetDouble(statics.Get()));
+  s7->SetDouble<false>(statics.Get(), 16777219);
 
   mirror::ArtField* s8 = statics->FindStaticField("s8", "Ljava/lang/String;");
   fh.ChangeField(s8);
   EXPECT_TRUE(fh.GetTypeAsPrimitiveType() == Primitive::kPrimNot);
-  EXPECT_TRUE(s8->GetObject(statics.get())->AsString()->Equals("android"));
+  EXPECT_TRUE(s8->GetObject(statics.Get())->AsString()->Equals("android"));
   s8->SetObject<false>(s8->GetDeclaringClass(),
                        mirror::String::AllocFromModifiedUtf8(soa.Self(), "robot"));
 
   // TODO: Remove EXPECT_FALSE when GCC can handle EXPECT_EQ
   // http://code.google.com/p/googletest/issues/detail?id=322
-  EXPECT_FALSE(s0->GetBoolean(statics.get()));
-  EXPECT_EQ(6, s1->GetByte(statics.get()));
-  EXPECT_EQ('b', s2->GetChar(statics.get()));
-  EXPECT_EQ(-535, s3->GetShort(statics.get()));
-  EXPECT_EQ(2000000001, s4->GetInt(statics.get()));
-  EXPECT_EQ(INT64_C(0x34567890abcdef12), s5->GetLong(statics.get()));
-  EXPECT_EQ(0.75, s6->GetFloat(statics.get()));
-  EXPECT_EQ(16777219, s7->GetDouble(statics.get()));
-  EXPECT_TRUE(s8->GetObject(statics.get())->AsString()->Equals("robot"));
+  EXPECT_FALSE(s0->GetBoolean(statics.Get()));
+  EXPECT_EQ(6, s1->GetByte(statics.Get()));
+  EXPECT_EQ('b', s2->GetChar(statics.Get()));
+  EXPECT_EQ(-535, s3->GetShort(statics.Get()));
+  EXPECT_EQ(2000000001, s4->GetInt(statics.Get()));
+  EXPECT_EQ(INT64_C(0x34567890abcdef12), s5->GetLong(statics.Get()));
+  EXPECT_EQ(0.75, s6->GetFloat(statics.Get()));
+  EXPECT_EQ(16777219, s7->GetDouble(statics.Get()));
+  EXPECT_TRUE(s8->GetObject(statics.Get())->AsString()->Equals("robot"));
 }
 
 TEST_F(ClassLinkerTest, Interfaces) {

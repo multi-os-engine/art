@@ -28,7 +28,7 @@
 #include "mirror/dex_cache-inl.h"
 #include "mirror/art_field-inl.h"
 #include "scoped_thread_state_change.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 
@@ -44,8 +44,8 @@ inline mirror::ClassLoader* CompilerDriver::GetClassLoader(ScopedObjectAccess& s
 inline mirror::Class* CompilerDriver::ResolveCompilingMethodsClass(
     ScopedObjectAccess& soa, const SirtRef<mirror::DexCache>& dex_cache,
     const SirtRef<mirror::ClassLoader>& class_loader, const DexCompilationUnit* mUnit) {
-  DCHECK(dex_cache->GetDexFile() == mUnit->GetDexFile());
-  DCHECK(class_loader.get() == soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
+  DCHECK_EQ(dex_cache->GetDexFile(), mUnit->GetDexFile());
+  DCHECK_EQ(class_loader.Get(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
   const DexFile::MethodId& referrer_method_id =
       mUnit->GetDexFile()->GetMethodId(mUnit->GetDexMethodIndex());
   mirror::Class* referrer_class = mUnit->GetClassLinker()->ResolveType(
@@ -62,8 +62,8 @@ inline mirror::ArtField* CompilerDriver::ResolveField(
     ScopedObjectAccess& soa, const SirtRef<mirror::DexCache>& dex_cache,
     const SirtRef<mirror::ClassLoader>& class_loader, const DexCompilationUnit* mUnit,
     uint32_t field_idx, bool is_static) {
-  DCHECK(dex_cache->GetDexFile() == mUnit->GetDexFile());
-  DCHECK(class_loader.get() == soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
+  DCHECK_EQ(dex_cache->GetDexFile(), mUnit->GetDexFile());
+  DCHECK_EQ(class_loader.Get(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
   mirror::ArtField* resolved_field = mUnit->GetClassLinker()->ResolveField(
       *mUnit->GetDexFile(), field_idx, dex_cache, class_loader, is_static);
   DCHECK_EQ(resolved_field == nullptr, soa.Self()->IsExceptionPending());
@@ -169,7 +169,7 @@ inline mirror::ArtMethod* CompilerDriver::ResolveMethod(
     const SirtRef<mirror::ClassLoader>& class_loader, const DexCompilationUnit* mUnit,
     uint32_t method_idx, InvokeType invoke_type) {
   DCHECK(dex_cache->GetDexFile() == mUnit->GetDexFile());
-  DCHECK(class_loader.get() == soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
+  DCHECK(class_loader.Get() == soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
   mirror::ArtMethod* resolved_method = mUnit->GetClassLinker()->ResolveMethod(
       *mUnit->GetDexFile(), method_idx, dex_cache, class_loader, nullptr, invoke_type);
   DCHECK_EQ(resolved_method == nullptr, soa.Self()->IsExceptionPending());
@@ -217,7 +217,7 @@ inline int CompilerDriver::IsFastInvoke(
   }
   mirror::Class* methods_class = resolved_method->GetDeclaringClass();
   if (UNLIKELY(!referrer_class->CanAccessResolvedMethod(methods_class, resolved_method,
-                                                        dex_cache.get(),
+                                                        dex_cache.Get(),
                                                         target_method->dex_method_index))) {
     return 0;
   }
@@ -237,7 +237,7 @@ inline int CompilerDriver::IsFastInvoke(
     // Sharpen a virtual call into a direct call. The method_idx is into referrer's
     // dex cache, check that this resolved method is where we expect it.
     CHECK(target_method->dex_file == mUnit->GetDexFile());
-    DCHECK(dex_cache.get() == mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile()));
+    DCHECK(dex_cache.Get() == mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile()));
     CHECK(referrer_class->GetDexCache()->GetResolvedMethod(target_method->dex_method_index) ==
         resolved_method) << PrettyMethod(resolved_method);
     int stats_flags = kFlagMethodResolved;

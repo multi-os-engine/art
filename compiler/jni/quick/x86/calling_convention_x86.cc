@@ -125,8 +125,8 @@ uint32_t X86JniCallingConvention::CoreSpillMask() const {
 size_t X86JniCallingConvention::FrameSize() {
   // Method*, return address and callee save area size, local reference segment state
   size_t frame_data_size = (3 + CalleeSaveRegisters().size()) * kFramePointerSize;
-  // References plus 2 words for SIRT header
-  size_t sirt_size = StackIndirectReferenceTable::GetAlignedSirtSizeTarget(kFramePointerSize, ReferenceCount());
+  // References plus 2 words for HandleScope header
+  size_t sirt_size = HandleScope::GetAlignedSirtSizeTarget(kFramePointerSize, ReferenceCount());
   // Plus return value spill area size
   return RoundUp(frame_data_size + sirt_size + SizeOfReturnValue(), kStackAlignment);
 }

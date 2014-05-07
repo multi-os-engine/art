@@ -29,7 +29,7 @@
 #include "mirror/string.h"
 
 #include "runtime.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 
 #include <string>
 
@@ -42,24 +42,24 @@ class ObjectLock {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       : self_(self), obj_(object) {
     CHECK(object != nullptr);
-    CHECK(object->get() != nullptr);
-    obj_->get()->MonitorEnter(self_);
+    CHECK(object->Get() != nullptr);
+    obj_->Get()->MonitorEnter(self_);
   }
 
   ~ObjectLock() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    obj_->get()->MonitorExit(self_);
+    obj_->Get()->MonitorExit(self_);
   }
 
   void WaitIgnoringInterrupts() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    Monitor::Wait(self_, obj_->get(), 0, 0, false, kWaiting);
+    Monitor::Wait(self_, obj_->Get(), 0, 0, false, kWaiting);
   }
 
   void Notify() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    obj_->get()->Notify(self_);
+    obj_->Get()->Notify(self_);
   }
 
   void NotifyAll() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    obj_->get()->NotifyAll(self_);
+    obj_->Get()->NotifyAll(self_);
   }
 
  private:

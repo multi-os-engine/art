@@ -22,7 +22,7 @@
 #include "mirror/object-inl.h"
 #include "object_utils.h"
 #include "scoped_fast_native_object_access.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 

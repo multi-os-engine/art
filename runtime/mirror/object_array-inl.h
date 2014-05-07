@@ -23,7 +23,7 @@
 #include "mirror/art_field.h"
 #include "mirror/class.h"
 #include "runtime.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 #include <string>
 
@@ -118,7 +118,7 @@ inline void ObjectArray<T>::AssignableMemmove(int32_t dst_pos, ObjectArray<T>* s
                                               int32_t src_pos, int32_t count) {
   if (kIsDebugBuild) {
     for (int i = 0; i < count; ++i) {
-      // The Get will perform the VerifyObject.
+      // The get will perform the VerifyObject.
       src->GetWithoutChecks(src_pos + i);
     }
   }
@@ -150,7 +150,7 @@ inline void ObjectArray<T>::AssignableMemmove(int32_t dst_pos, ObjectArray<T>* s
   Runtime::Current()->GetHeap()->WriteBarrierArray(this, dst_pos, count);
   if (kIsDebugBuild) {
     for (int i = 0; i < count; ++i) {
-      // The Get will perform the VerifyObject.
+      // The get will perform the VerifyObject.
       GetWithoutChecks(dst_pos + i);
     }
   }
@@ -161,7 +161,7 @@ inline void ObjectArray<T>::AssignableMemcpy(int32_t dst_pos, ObjectArray<T>* sr
                                              int32_t src_pos, int32_t count) {
   if (kIsDebugBuild) {
     for (int i = 0; i < count; ++i) {
-      // The Get will perform the VerifyObject.
+      // The get will perform the VerifyObject.
       src->GetWithoutChecks(src_pos + i);
     }
   }
@@ -182,7 +182,7 @@ inline void ObjectArray<T>::AssignableMemcpy(int32_t dst_pos, ObjectArray<T>* sr
   Runtime::Current()->GetHeap()->WriteBarrierArray(this, dst_pos, count);
   if (kIsDebugBuild) {
     for (int i = 0; i < count; ++i) {
-      // The Get will perform the VerifyObject.
+      // The get will perform the VerifyObject.
       GetWithoutChecks(dst_pos + i);
     }
   }
@@ -250,7 +250,7 @@ inline ObjectArray<T>* ObjectArray<T>::CopyOf(Thread* self, int32_t new_length) 
       heap->GetCurrentNonMovingAllocator();
   ObjectArray<T>* new_array = Alloc(self, GetClass(), new_length, allocator_type);
   if (LIKELY(new_array != nullptr)) {
-    new_array->AssignableMemcpy(0, sirt_this.get(), 0, std::min(sirt_this->GetLength(), new_length));
+    new_array->AssignableMemcpy(0, sirt_this.Get(), 0, std::min(sirt_this->GetLength(), new_length));
   }
   return new_array;
 }

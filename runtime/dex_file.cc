@@ -37,7 +37,7 @@
 #include "os.h"
 #include "safe_map.h"
 #include "ScopedFd.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 #include "UniquePtr.h"
 #include "utf-inl.h"

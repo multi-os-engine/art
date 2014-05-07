@@ -22,7 +22,7 @@
 #include "intern_table.h"
 #include "object-inl.h"
 #include "runtime.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 #include "utf-inl.h"
 
@@ -124,7 +124,7 @@ String* String::AllocFromModifiedUtf8(Thread* self, int32_t utf16_length,
 
 String* String::Alloc(Thread* self, int32_t utf16_length) {
   SirtRef<CharArray> array(self, CharArray::Alloc(self, utf16_length));
-  if (UNLIKELY(array.get() == nullptr)) {
+  if (UNLIKELY(array.Get() == nullptr)) {
     return nullptr;
   }
   return Alloc(self, array);
@@ -134,7 +134,7 @@ String* String::Alloc(Thread* self, const SirtRef<CharArray>& array) {
   // Hold reference in case AllocObject causes GC.
   String* string = down_cast<String*>(GetJavaLangString()->AllocObject(self));
   if (LIKELY(string != nullptr)) {
-    string->SetArray(array.get());
+    string->SetArray(array.Get());
     string->SetCount(array->GetLength());
   }
   return string;

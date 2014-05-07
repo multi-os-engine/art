@@ -34,7 +34,7 @@
 #include "art_method-inl.h"
 #include "object-inl.h"
 #include "object_array-inl.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "string-inl.h"
 #include "UniquePtr.h"
 
@@ -117,12 +117,12 @@ TEST_F(ObjectTest, AllocObjectArray) {
   EXPECT_EQ(2, oa->GetLength());
   EXPECT_TRUE(oa->Get(0) == NULL);
   EXPECT_TRUE(oa->Get(1) == NULL);
-  oa->Set<false>(0, oa.get());
-  EXPECT_TRUE(oa->Get(0) == oa.get());
+  oa->Set<false>(0, oa.Get());
+  EXPECT_TRUE(oa->Get(0) == oa.Get());
   EXPECT_TRUE(oa->Get(1) == NULL);
-  oa->Set<false>(1, oa.get());
-  EXPECT_TRUE(oa->Get(0) == oa.get());
-  EXPECT_TRUE(oa->Get(1) == oa.get());
+  oa->Set<false>(1, oa.Get());
+  EXPECT_TRUE(oa->Get(0) == oa.Get());
+  EXPECT_TRUE(oa->Get(1) == oa.Get());
 
   Class* aioobe = class_linker_->FindSystemClass(soa.Self(),
                                                  "Ljava/lang/ArrayIndexOutOfBoundsException;");
@@ -340,8 +340,8 @@ TEST_F(ObjectTest, StaticFieldFromCode) {
   EXPECT_TRUE(s0 != NULL);
 
   SirtRef<CharArray> char_array(soa.Self(), CharArray::Alloc(soa.Self(), 0));
-  field->SetObj<false>(field->GetDeclaringClass(), char_array.get());
-  EXPECT_EQ(char_array.get(), field->GetObj(klass));
+  field->SetObj<false>(field->GetDeclaringClass(), char_array.Get());
+  EXPECT_EQ(char_array.Get(), field->GetObj(klass));
 
   field->SetObj<false>(field->GetDeclaringClass(), NULL);
   EXPECT_EQ(NULL, field->GetObj(klass));
@@ -392,7 +392,7 @@ TEST_F(ObjectTest, StringEquals) {
   ScopedObjectAccess soa(Thread::Current());
   SirtRef<String> string(soa.Self(), String::AllocFromModifiedUtf8(soa.Self(), "android"));
   SirtRef<String> string_2(soa.Self(), String::AllocFromModifiedUtf8(soa.Self(), "android"));
-  EXPECT_TRUE(string->Equals(string_2.get()));
+  EXPECT_TRUE(string->Equals(string_2.Get()));
   EXPECT_FALSE(string->Equals("Android"));
   EXPECT_FALSE(string->Equals("ANDROID"));
   EXPECT_FALSE(string->Equals(""));
@@ -411,13 +411,13 @@ TEST_F(ObjectTest, StringCompareTo) {
   SirtRef<String> string_3(soa.Self(), String::AllocFromModifiedUtf8(soa.Self(), "Android"));
   SirtRef<String> string_4(soa.Self(), String::AllocFromModifiedUtf8(soa.Self(), "and"));
   SirtRef<String> string_5(soa.Self(), String::AllocFromModifiedUtf8(soa.Self(), ""));
-  EXPECT_EQ(0, string->CompareTo(string_2.get()));
-  EXPECT_LT(0, string->CompareTo(string_3.get()));
-  EXPECT_GT(0, string_3->CompareTo(string.get()));
-  EXPECT_LT(0, string->CompareTo(string_4.get()));
-  EXPECT_GT(0, string_4->CompareTo(string.get()));
-  EXPECT_LT(0, string->CompareTo(string_5.get()));
-  EXPECT_GT(0, string_5->CompareTo(string.get()));
+  EXPECT_EQ(0, string->CompareTo(string_2.Get()));
+  EXPECT_LT(0, string->CompareTo(string_3.Get()));
+  EXPECT_GT(0, string_3->CompareTo(string.Get()));
+  EXPECT_LT(0, string->CompareTo(string_4.Get()));
+  EXPECT_GT(0, string_4->CompareTo(string.Get()));
+  EXPECT_LT(0, string->CompareTo(string_5.Get()));
+  EXPECT_GT(0, string_5->CompareTo(string.Get()));
 }
 
 TEST_F(ObjectTest, StringLength) {
@@ -518,8 +518,8 @@ TEST_F(ObjectTest, InstanceOf) {
 
   SirtRef<Object> x(soa.Self(), X->AllocObject(soa.Self()));
   SirtRef<Object> y(soa.Self(), Y->AllocObject(soa.Self()));
-  ASSERT_TRUE(x.get() != NULL);
-  ASSERT_TRUE(y.get() != NULL);
+  ASSERT_TRUE(x.Get() != NULL);
+  ASSERT_TRUE(y.Get() != NULL);
 
   EXPECT_TRUE(x->InstanceOf(X));
   EXPECT_FALSE(x->InstanceOf(Y));
@@ -633,7 +633,7 @@ TEST_F(ObjectTest, IsAssignableFromArray) {
 TEST_F(ObjectTest, FindInstanceField) {
   ScopedObjectAccess soa(Thread::Current());
   SirtRef<String> s(soa.Self(), String::AllocFromModifiedUtf8(soa.Self(), "ABC"));
-  ASSERT_TRUE(s.get() != NULL);
+  ASSERT_TRUE(s.Get() != NULL);
   Class* c = s->GetClass();
   ASSERT_TRUE(c != NULL);
 
@@ -666,7 +666,7 @@ TEST_F(ObjectTest, FindInstanceField) {
 TEST_F(ObjectTest, FindStaticField) {
   ScopedObjectAccess soa(Thread::Current());
   SirtRef<String> s(soa.Self(), String::AllocFromModifiedUtf8(soa.Self(), "ABC"));
-  ASSERT_TRUE(s.get() != NULL);
+  ASSERT_TRUE(s.Get() != NULL);
   Class* c = s->GetClass();
   ASSERT_TRUE(c != NULL);
 

@@ -33,7 +33,7 @@
 #include "output_stream.h"
 #include "safe_map.h"
 #include "scoped_thread_state_change.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 #include "verifier/method_verifier.h"
 
 namespace art {
@@ -526,7 +526,7 @@ class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {
       }
       size_t pointer_size = GetInstructionSetPointerSize(
           writer_->compiler_driver_->GetInstructionSet());
-      size_t sirt_size = StackIndirectReferenceTable::GetAlignedSirtSizeTarget(pointer_size, refs);
+      size_t sirt_size = HandleScope::GetAlignedSirtSizeTarget(pointer_size, refs);
 
       // Get the generic spill masks and base frame size.
       mirror::ArtMethod* callee_save_method =

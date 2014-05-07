@@ -31,12 +31,12 @@
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/allocator/rosalloc.h"
 #include "globals.h"
+#include "handle_scope.h"
 #include "jvalue.h"
 #include "object_callbacks.h"
 #include "offsets.h"
 #include "runtime_stats.h"
 #include "stack.h"
-#include "stack_indirect_reference_table.h"
 #include "thread_state.h"
 #include "throw_location.h"
 #include "UniquePtr.h"
@@ -662,13 +662,17 @@ class Thread {
   void SirtVisitRoots(RootCallback* visitor, void* arg, uint32_t thread_id)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void PushSirt(StackIndirectReferenceTable* sirt) {
+  HandleScope* GetTopSirt() {
+    return tlsPtr_.top_sirt;
+  }
+
+  void PushSirt(HandleScope* sirt) {
     sirt->SetLink(tlsPtr_.top_sirt);
     tlsPtr_.top_sirt = sirt;
   }
 
-  StackIndirectReferenceTable* PopSirt() {
-    StackIndirectReferenceTable* sirt = tlsPtr_.top_sirt;
+  HandleScope* PopSirt() {
+    HandleScope* sirt = tlsPtr_.top_sirt;
     DCHECK(sirt != NULL);
     tlsPtr_.top_sirt = tlsPtr_.top_sirt->GetLink();
     return sirt;
@@ -1006,8 +1010,8 @@ class Thread {
     // If we're blocked in MonitorEnter, this is the object we're trying to lock.
     mirror::Object* monitor_enter_object;
 
-    // Top of linked list of stack indirect reference tables or NULL for none.
-    StackIndirectReferenceTable* top_sirt;
+    // Top of linked list of handle scopes or nullptr for none.
+    HandleScope* top_sirt;
 
     // Needed to get the right ClassLoader in JNI_OnLoad, but also
     // useful for testing.

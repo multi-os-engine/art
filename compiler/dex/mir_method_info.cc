@@ -22,7 +22,7 @@
 #include "mirror/class_loader.h"  // Only to allow casts in SirtRef<ClassLoader>.
 #include "mirror/dex_cache.h"     // Only to allow casts in SirtRef<DexCache>.
 #include "scoped_thread_state_change.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 
@@ -73,10 +73,10 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
 
     MethodReference target_method(mUnit->GetDexFile(), it->MethodIndex());
     int fast_path_flags = compiler_driver->IsFastInvoke(
-        soa, dex_cache, class_loader, mUnit, referrer_class.get(), resolved_method, &invoke_type,
+        soa, dex_cache, class_loader, mUnit, referrer_class.Get(), resolved_method, &invoke_type,
         &target_method, devirt_target, &it->direct_code_, &it->direct_method_);
     bool needs_clinit =
-        compiler_driver->NeedsClassInitialization(referrer_class.get(), resolved_method);
+        compiler_driver->NeedsClassInitialization(referrer_class.Get(), resolved_method);
     uint16_t other_flags = it->flags_ &
         ~(kFlagFastPath | kFlagNeedsClassInitialization | (kInvokeTypeMask << kBitSharpTypeBegin));
     it->flags_ = other_flags |
