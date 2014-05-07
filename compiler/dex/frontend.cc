@@ -21,7 +21,7 @@
 #include "dataflow_iterator-inl.h"
 #include "leb128.h"
 #include "mirror/object.h"
-#include "pass_driver_me.h"
+#include "pass_driver_me_opts.h"
 #include "runtime.h"
 #include "base/logging.h"
 #include "base/timing_logger.h"
@@ -918,7 +918,7 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
   }
 
   /* Create the pass driver and launch it */
-  PassDriverME pass_driver(&cu);
+  PassDriverMEOpts pass_driver(&cu);
   pass_driver.Launch();
 
   if (cu.enable_debug & (1 << kDebugDumpCheckStats)) {

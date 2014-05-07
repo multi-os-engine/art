@@ -32,6 +32,9 @@ class Pass;
  * @details Each enum should be a power of 2 to be correctly used.
  */
 enum OptimizationFlag {
+  kOptimizationBasicBlockChange = 1,  /**< @brief Has there been a change to a BasicBlock? */
+  kOptimizationDefUsesChange = 2,     /**< @brief Has there been a change to a def-use? */
+  kLoopStructureChange = 4,           /**< @brief Has there been a loop structural change? */
 };
 
 // Data holder class.
