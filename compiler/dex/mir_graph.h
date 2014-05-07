@@ -1020,6 +1020,15 @@ class MIRGraph {
   void CombineBlocks(BasicBlock* bb);
 
   void ClearAllVisitedFlags();
+  void CalculateBasicBlockInformation(bool build_loop_info);
+  void InitializeBasicBlockData();
+  void ComputeDFSOrders();
+  void ComputeDefBlockMatrix();
+  void ComputeDominators();
+  void CompilerInitializeSSAConversion();
+  void InsertPhiNodes();
+  void DoDFSPreOrderSSARename(BasicBlock* block);
+
   /*
    * IsDebugBuild sanity check: keep track of the Dex PCs for catch entries so that later on
    * we can verify that all catch entries have native PC entries.
@@ -1035,7 +1044,6 @@ class MIRGraph {
 
   void HandleSSADef(int* defs, int dalvik_reg, int reg_index);
   bool InferTypeAndSize(BasicBlock* bb, MIR* mir, bool changed);
-  void ComputeDFSOrders();
 
  protected:
   int FindCommonParent(int block1, int block2);
@@ -1044,7 +1052,6 @@ class MIRGraph {
   void HandleLiveInUse(ArenaBitVector* use_v, ArenaBitVector* def_v,
                        ArenaBitVector* live_in_v, int dalvik_reg_id);
   void HandleDef(ArenaBitVector* def_v, int dalvik_reg_id);
-  void CompilerInitializeSSAConversion();
   bool DoSSAConversion(BasicBlock* bb);
   bool InvokeUsesMethodStar(MIR* mir);
   int ParseInsn(const uint16_t* code_ptr, MIR::DecodedInstruction* decoded_instruction);
@@ -1071,11 +1078,7 @@ class MIRGraph {
   BasicBlock* NextUnvisitedSuccessor(BasicBlock* bb);
   void MarkPreOrder(BasicBlock* bb);
   void RecordDFSOrders(BasicBlock* bb);
-  void ComputeDefBlockMatrix();
   void ComputeDomPostOrderTraversal(BasicBlock* bb);
-  void ComputeDominators();
-  void InsertPhiNodes();
-  void DoDFSPreOrderSSARename(BasicBlock* block);
   void SetConstant(int32_t ssa_reg, int value);
   void SetConstantWide(int ssa_reg, int64_t value);
   int GetSSAUseCount(int s_reg);
