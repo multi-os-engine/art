@@ -417,9 +417,9 @@ class OatDumper {
       Runtime* runtime = Runtime::Current();
       if (runtime != nullptr) {
         ScopedObjectAccess soa(Thread::Current());
-        SirtRef<mirror::DexCache> dex_cache(
+        Handle<mirror::DexCache> dex_cache(
             soa.Self(), runtime->GetClassLinker()->FindDexCache(dex_file));
-        SirtRef<mirror::ClassLoader> class_loader(soa.Self(), nullptr);
+        Handle<mirror::ClassLoader> class_loader(soa.Self(), nullptr);
         verifier::MethodVerifier verifier(&dex_file, &dex_cache, &class_loader, &class_def,
                                           code_item, dex_method_idx, nullptr, method_access_flags,
                                           true, true);
@@ -687,9 +687,9 @@ class OatDumper {
                     uint32_t method_access_flags) {
     if ((method_access_flags & kAccNative) == 0) {
       ScopedObjectAccess soa(Thread::Current());
-      SirtRef<mirror::DexCache> dex_cache(
+      Handle<mirror::DexCache> dex_cache(
           soa.Self(), Runtime::Current()->GetClassLinker()->FindDexCache(*dex_file));
-      SirtRef<mirror::ClassLoader> class_loader(soa.Self(), nullptr);
+      Handle<mirror::ClassLoader> class_loader(soa.Self(), nullptr);
       verifier::MethodVerifier::VerifyMethodAndDump(os, dex_method_idx, dex_file, dex_cache,
                                                     class_loader, &class_def, code_item, NULL,
                                                     method_access_flags);

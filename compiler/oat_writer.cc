@@ -33,7 +33,7 @@
 #include "output_stream.h"
 #include "safe_map.h"
 #include "scoped_thread_state_change.h"
-#include "sirt_ref-inl.h"
+#include "handle_scope-inl.h"
 #include "verifier/method_verifier.h"
 
 namespace art {
@@ -513,7 +513,7 @@ class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {
     uint32_t method_idx = it.GetMemberIndex();
     bool is_native = (it.GetMemberAccessFlags() & kAccNative) != 0;
     if (is_native && compiled_method == nullptr) {
-      // Compute Sirt size as putting _every_ reference into it, even null ones.
+      // Compute HandleScope size as putting _every_ reference into it, even null ones.
       uint32_t s_len;
       const char* shorty = dex_file_->GetMethodShorty(dex_file_->GetMethodId(method_idx),
                                                       &s_len);
@@ -526,7 +526,7 @@ class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {
       }
       size_t pointer_size = GetInstructionSetPointerSize(
           writer_->compiler_driver_->GetInstructionSet());
-      size_t sirt_size = StackIndirectReferenceTable::GetAlignedSirtSizeTarget(pointer_size, refs);
+      size_t sirt_size = HandleScope::GetAlignedHandleScopeSizeTarget(pointer_size, refs);
 
       // Get the generic spill masks and base frame size.
       mirror::ArtMethod* callee_save_method =
@@ -542,8 +542,8 @@ class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {
     InvokeType invoke_type = it.GetMethodInvokeType(dex_file_->GetClassDef(class_def_index_));
     // Unchecked as we hold mutator_lock_ on entry.
     ScopedObjectAccessUnchecked soa(Thread::Current());
-    SirtRef<mirror::DexCache> dex_cache(soa.Self(), linker->FindDexCache(*dex_file_));
-    SirtRef<mirror::ClassLoader> class_loader(soa.Self(), nullptr);
+    Handle<mirror::DexCache> dex_cache(soa.Self(), linker->FindDexCache(*dex_file_));
+    Handle<mirror::ClassLoader> class_loader(soa.Self(), nullptr);
     mirror::ArtMethod* method = linker->ResolveMethod(*dex_file_, method_idx, dex_cache,
                                                       class_loader, nullptr, invoke_type);
     CHECK(method != NULL);

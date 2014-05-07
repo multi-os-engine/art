@@ -152,7 +152,7 @@ TEST_F(OatTest, WriteRead) {
       num_virtual_methods = it.NumVirtualMethods();
     }
     const char* descriptor = dex_file->GetClassDescriptor(class_def);
-    SirtRef<mirror::ClassLoader> loader(soa.Self(), nullptr);
+    Handle<mirror::ClassLoader> loader(soa.Self(), nullptr);
     mirror::Class* klass = class_linker->FindClass(soa.Self(), descriptor, loader);
 
     const OatFile::OatClass oat_class = oat_dex_file->GetOatClass(i);

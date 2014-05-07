@@ -1727,7 +1727,7 @@ void X86Assembler::MemoryBarrier(ManagedRegister) {
 #endif
 }
 
-void X86Assembler::CreateSirtEntry(ManagedRegister mout_reg,
+void X86Assembler::CreateHandleScopeEntry(ManagedRegister mout_reg,
                                    FrameOffset sirt_offset,
                                    ManagedRegister min_reg, bool null_allowed) {
   X86ManagedRegister out_reg = mout_reg.AsX86();
@@ -1749,7 +1749,7 @@ void X86Assembler::CreateSirtEntry(ManagedRegister mout_reg,
   }
 }
 
-void X86Assembler::CreateSirtEntry(FrameOffset out_off,
+void X86Assembler::CreateHandleScopeEntry(FrameOffset out_off,
                                    FrameOffset sirt_offset,
                                    ManagedRegister mscratch,
                                    bool null_allowed) {
@@ -1769,7 +1769,7 @@ void X86Assembler::CreateSirtEntry(FrameOffset out_off,
 }
 
 // Given a SIRT entry, load the associated reference.
-void X86Assembler::LoadReferenceFromSirt(ManagedRegister mout_reg,
+void X86Assembler::LoadReferenceFromHandleScope(ManagedRegister mout_reg,
                                          ManagedRegister min_reg) {
   X86ManagedRegister out_reg = mout_reg.AsX86();
   X86ManagedRegister in_reg = min_reg.AsX86();

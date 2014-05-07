@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 The Android Open Source Project
+ * Copyright (C) 2014 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef ART_RUNTIME_STACK_INDIRECT_REFERENCE_TABLE_H_
-#define ART_RUNTIME_STACK_INDIRECT_REFERENCE_TABLE_H_
+#ifndef ART_RUNTIME_HANDLE_SCOPE_H_
+#define ART_RUNTIME_HANDLE_SCOPE_H_
 
 #include "base/logging.h"
 #include "base/macros.h"
+#include "handle.h"
 #include "stack.h"
 #include "utils.h"
 
@@ -28,17 +29,11 @@ class Object;
 }
 class Thread;
 
-// Stack allocated indirect reference table. It can allocated within
-// the bridge frame between managed and native code backed by stack
-// storage or manually allocated by SirtRef to hold one reference.
-class StackIndirectReferenceTable {
+// HandleScopes can be allocated within the bridge frame between managed and native code backed by
+// stack storage or manually allocated in native.
+class HandleScope {
  public:
-  explicit StackIndirectReferenceTable(mirror::Object* object) :
-      link_(NULL), number_of_references_(1) {
-    references_[0].Assign(object);
-  }
-
-  ~StackIndirectReferenceTable() {}
+  ~HandleScope() {}
 
   // Number of references contained within this SIRT.
   uint32_t NumberOfReferences() const {
@@ -49,21 +44,21 @@ class StackIndirectReferenceTable {
   // used at runtime, so OFFSETOF_MEMBER computes the right offsets automatically. The last one
   // takes the pointer size explicitly so that at compile time we can cross-compile correctly.
 
-  // Returns the size of a StackIndirectReferenceTable containing num_references sirts.
+  // Returns the size of a HandleScope containing num_references sirts.
   static size_t SizeOf(uint32_t num_references) {
-    size_t header_size = OFFSETOF_MEMBER(StackIndirectReferenceTable, references_);
+    size_t header_size = OFFSETOF_MEMBER(HandleScope, references_);
     size_t data_size = sizeof(StackReference<mirror::Object>) * num_references;
     return header_size + data_size;
   }
 
   // Get the size of the SIRT for the number of entries, with padding added for potential alignment.
-  static size_t GetAlignedSirtSize(uint32_t num_references) {
+  static size_t GetAlignedHandleScopeSize(uint32_t num_references) {
     size_t sirt_size = SizeOf(num_references);
     return RoundUp(sirt_size, 8);
   }
 
   // Get the size of the SIRT for the number of entries, with padding added for potential alignment.
-  static size_t GetAlignedSirtSizeTarget(size_t pointer_size, uint32_t num_references) {
+  static size_t GetAlignedHandleScopeSizeTarget(size_t pointer_size, uint32_t num_references) {
     // Assume that the layout is packed.
     size_t header_size = pointer_size + sizeof(number_of_references_);
     // This assumes there is no layout change between 32 and 64b.
@@ -72,12 +67,12 @@ class StackIndirectReferenceTable {
     return RoundUp(sirt_size, 8);
   }
 
-  // Link to previous SIRT or NULL.
-  StackIndirectReferenceTable* GetLink() const {
+  // Link to previous HandleScope or null.
+  HandleScope* GetLink() const {
     return link_;
   }
 
-  void SetLink(StackIndirectReferenceTable* sirt) {
+  void SetLink(HandleScope* sirt) {
     DCHECK_NE(this, sirt);
     link_ = sirt;
   }
@@ -88,24 +83,26 @@ class StackIndirectReferenceTable {
     number_of_references_ = num_references;
   }
 
-  mirror::Object* GetReference(size_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::Object* GetReference(size_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      ALWAYS_INLINE {
     DCHECK_LT(i, number_of_references_);
     return references_[i].AsMirrorPtr();
   }
 
-  StackReference<mirror::Object>* GetStackReference(size_t i)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  Handle<mirror::Object> GetHandle(size_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      ALWAYS_INLINE {
     DCHECK_LT(i, number_of_references_);
-    return &references_[i];
+    return Handle<mirror::Object>(&references_[i]);
   }
 
-  void SetReference(size_t i, mirror::Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  void SetReference(size_t i, mirror::Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      ALWAYS_INLINE {
     DCHECK_LT(i, number_of_references_);
     references_[i].Assign(object);
   }
 
   bool Contains(StackReference<mirror::Object>* sirt_entry) const {
-    // A SIRT should always contain something. One created by the
+    // A HandleScope should always contain something. One created by the
     // jni_compiler should have a jobject/jclass as a native method is
     // passed in a this pointer or a class
     DCHECK_GT(number_of_references_, 0U);
@@ -113,7 +110,7 @@ class StackIndirectReferenceTable {
             && (sirt_entry <= (&references_[number_of_references_ - 1])));
   }
 
-  // Offset of link within SIRT, used by generated code
+  // Offset of link within HandleScope, used by generated code
   static size_t LinkOffset(size_t pointer_size) {
     return 0;
   }
@@ -128,18 +125,67 @@ class StackIndirectReferenceTable {
     return pointer_size + sizeof(number_of_references_);
   }
 
- private:
-  StackIndirectReferenceTable() {}
+ protected:
+  explicit HandleScope(size_t number_of_references) :
+      link_(nullptr), number_of_references_(number_of_references) {
+  }
 
-  StackIndirectReferenceTable* link_;
+  HandleScope* link_;
   uint32_t number_of_references_;
 
   // number_of_references_ are available if this is allocated and filled in by jni_compiler.
-  StackReference<mirror::Object> references_[1];
+  StackReference<mirror::Object> references_[0];
 
-  DISALLOW_COPY_AND_ASSIGN(StackIndirectReferenceTable);
+ private:
+  template<size_t kNumReferences> friend class StackHandleScope;
+  DISALLOW_COPY_AND_ASSIGN(HandleScope);
+};
+
+template<class T>
+class HandleWrapper {
+ public:
+  HandleWrapper(T** obj, const Handle<T>& handle)
+     : obj_(obj), handle_(handle) {
+  }
+
+  ~HandleWrapper() {
+    *obj_ = handle_.Get();
+  }
+
+ private:
+  T** obj_;
+  Handle<T> handle_;
+};
+
+// Handle scope with a fixed size which is allocated on the stack.
+template<size_t kNumReferences>
+class StackHandleScope : public HandleScope {
+ public:
+  explicit StackHandleScope(Thread* self);
+  ~StackHandleScope();
+
+  template<class T>
+  Handle<T> NewHandle(T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SetReference(pos_, object);
+    return Handle<T>(GetHandle(pos_++));
+  }
+
+  template<class T>
+  HandleWrapper<T> NewHandleWrapper(T** object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SetReference(pos_, *object);
+    Handle<T> h(GetHandle(pos_++));
+    return HandleWrapper<T>(object, h);
+  }
+
+ private:
+  // references_storage_ needs to be first so that it matches the address of references_.
+  StackReference<mirror::Object> references_storage_[kNumReferences];
+  Thread* const self_;
+  size_t pos_;
+
+  template<size_t kNumRefs> friend class StackHandleScope;
 };
 
 }  // namespace art
 
-#endif  // ART_RUNTIME_STACK_INDIRECT_REFERENCE_TABLE_H_
+#endif  // ART_RUNTIME_HANDLE_SCOPE_H_

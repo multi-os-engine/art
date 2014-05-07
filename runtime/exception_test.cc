@@ -25,7 +25,7 @@
 #include "mirror/stack_trace_element.h"
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 #include "UniquePtr.h"
 #include "vmap_table.h"
@@ -38,13 +38,13 @@ class ExceptionTest : public CommonRuntimeTest {
     CommonRuntimeTest::SetUp();
 
     ScopedObjectAccess soa(Thread::Current());
-    SirtRef<mirror::ClassLoader> class_loader(
+    Handle<mirror::ClassLoader> class_loader(
         soa.Self(), soa.Decode<mirror::ClassLoader*>(LoadDex("ExceptionHandle")));
     my_klass_ = class_linker_->FindClass(soa.Self(), "LExceptionHandle;", class_loader);
     ASSERT_TRUE(my_klass_ != NULL);
-    SirtRef<mirror::Class> sirt_klass(soa.Self(), my_klass_);
+    Handle<mirror::Class> sirt_klass(soa.Self(), my_klass_);
     class_linker_->EnsureInitialized(sirt_klass, true, true);
-    my_klass_ = sirt_klass.get();
+    my_klass_ = sirt_klass.Get();
 
     dex_ = my_klass_->GetDexCache()->GetDexFile();
 

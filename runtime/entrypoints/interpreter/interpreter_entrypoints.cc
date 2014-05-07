@@ -34,7 +34,7 @@ extern "C" void artInterpreterToCompiledCodeBridge(Thread* self, MethodHelper& m
     mirror::Class* declaringClass = method->GetDeclaringClass();
     if (UNLIKELY(!declaringClass->IsInitializing())) {
       self->PushShadowFrame(shadow_frame);
-      SirtRef<mirror::Class> sirt_c(self, declaringClass);
+      Handle<mirror::Class> sirt_c(self, declaringClass);
       if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(sirt_c, true, true))) {
         self->PopShadowFrame();
         DCHECK(self->IsExceptionPending());

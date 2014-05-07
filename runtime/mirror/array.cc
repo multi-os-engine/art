@@ -26,7 +26,7 @@
 #include "object_array.h"
 #include "object_array-inl.h"
 #include "object_utils.h"
-#include "sirt_ref.h"
+#include "handle_scope-inl.h"
 #include "thread.h"
 #include "utils.h"
 
@@ -42,21 +42,21 @@ namespace mirror {
 // Recursively create an array with multiple dimensions.  Elements may be
 // Objects or primitive types.
 static Array* RecursiveCreateMultiArray(Thread* self,
-                                        const SirtRef<Class>& array_class, int current_dimension,
-                                        const SirtRef<mirror::IntArray>& dimensions)
+                                        const Handle<Class>& array_class, int current_dimension,
+                                        const Handle<mirror::IntArray>& dimensions)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   int32_t array_length = dimensions->Get(current_dimension);
-  SirtRef<Array> new_array(self, Array::Alloc<true>(self, array_class.get(), array_length,
+  Handle<Array> new_array(self, Array::Alloc<true>(self, array_class.Get(), array_length,
                                                     array_class->GetComponentSize(),
                                                     Runtime::Current()->GetHeap()->GetCurrentAllocator()));
-  if (UNLIKELY(new_array.get() == nullptr)) {
+  if (UNLIKELY(new_array.Get() == nullptr)) {
     CHECK(self->IsExceptionPending());
     return nullptr;
   }
   if (current_dimension + 1 < dimensions->GetLength()) {
     // Create a new sub-array in every element of the array.
     for (int32_t i = 0; i < array_length; i++) {
-      SirtRef<mirror::Class> sirt_component_type(self, array_class->GetComponentType());
+      Handle<mirror::Class> sirt_component_type(self, array_class->GetComponentType());
       Array* sub_array = RecursiveCreateMultiArray(self, sirt_component_type,
                                                    current_dimension + 1, dimensions);
       if (UNLIKELY(sub_array == nullptr)) {
@@ -67,11 +67,11 @@ static Array* RecursiveCreateMultiArray(Thread* self,
       new_array->AsObjectArray<Array>()->Set<false, false>(i, sub_array);
     }
   }
-  return new_array.get();
+  return new_array.Get();
 }
 
-Array* Array::CreateMultiArray(Thread* self, const SirtRef<Class>& element_class,
-                               const SirtRef<IntArray>& dimensions) {
+Array* Array::CreateMultiArray(Thread* self, const Handle<Class>& element_class,
+                               const Handle<IntArray>& dimensions) {
   // Verify dimensions.
   //
   // The caller is responsible for verifying that "dimArray" is non-null
@@ -90,15 +90,15 @@ Array* Array::CreateMultiArray(Thread* self, const SirtRef<Class>& element_class
 
   // Find/generate the array class.
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  SirtRef<mirror::Class> array_class(self,
-                                     class_linker->FindArrayClass(self, element_class.get()));
-  if (UNLIKELY(array_class.get() == nullptr)) {
+  Handle<mirror::Class> array_class(self,
+                                     class_linker->FindArrayClass(self, element_class.Get()));
+  if (UNLIKELY(array_class.Get() == nullptr)) {
     CHECK(self->IsExceptionPending());
     return nullptr;
   }
   for (int32_t i = 1; i < dimensions->GetLength(); ++i) {
-    array_class.reset(class_linker->FindArrayClass(self, array_class.get()));
-    if (UNLIKELY(array_class.get() == nullptr)) {
+    array_class.reset(class_linker->FindArrayClass(self, array_class.Get()));
+    if (UNLIKELY(array_class.Get() == nullptr)) {
       CHECK(self->IsExceptionPending());
       return nullptr;
     }

@@ -467,11 +467,11 @@ jobject InvokeMethod(const ScopedObjectAccess& soa, jobject javaMethod,
 
   mirror::Class* declaring_class = m->GetDeclaringClass();
   if (UNLIKELY(!declaring_class->IsInitialized())) {
-    SirtRef<mirror::Class> sirt_c(soa.Self(), declaring_class);
+    Handle<mirror::Class> sirt_c(soa.Self(), declaring_class);
     if (!Runtime::Current()->GetClassLinker()->EnsureInitialized(sirt_c, true, true)) {
       return nullptr;
     }
-    declaring_class = sirt_c.get();
+    declaring_class = sirt_c.Get();
   }
 
   mirror::Object* receiver = nullptr;

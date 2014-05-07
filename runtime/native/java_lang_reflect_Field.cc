@@ -94,13 +94,13 @@ static bool CheckReceiver(const ScopedFastNativeObjectAccess& soa, jobject j_rcv
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   soa.Self()->AssertThreadSuspensionIsAllowable();
   if (f->IsStatic()) {
-    SirtRef<mirror::Class> sirt_klass(soa.Self(), f->GetDeclaringClass());
+    Handle<mirror::Class> sirt_klass(soa.Self(), f->GetDeclaringClass());
     if (UNLIKELY(!Runtime::Current()->GetClassLinker()->EnsureInitialized(sirt_klass, true, true))) {
       DCHECK(soa.Self()->IsExceptionPending());
       *class_or_rcvr = nullptr;
       return false;
     }
-    *class_or_rcvr = sirt_klass.get();
+    *class_or_rcvr = sirt_klass.Get();
     return true;
   }
 
@@ -271,7 +271,7 @@ static void Field_set(JNIEnv* env, jobject javaField, jobject javaObj, jobject j
     const char* field_type_desciptor = fh.GetTypeDescriptor();
     field_prim_type = Primitive::GetType(field_type_desciptor[0]);
     if (field_prim_type == Primitive::kPrimNot) {
-      SirtRef<mirror::Object> sirt_obj(soa.Self(), o);
+      Handle<mirror::Object> h_obj(soa.Self(), o);
       // May cause resolution.
       CHECK(!kMovingFields) << "Resolution may trigger thread suspension";
       field_type = fh.GetType(true);

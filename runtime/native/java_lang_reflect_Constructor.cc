@@ -38,13 +38,13 @@ static jobject Constructor_newInstance(JNIEnv* env, jobject javaMethod, jobjectA
                                        jboolean accessible) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::ArtMethod* m = mirror::ArtMethod::FromReflectedMethod(soa, javaMethod);
-  SirtRef<mirror::Class> c(soa.Self(), m->GetDeclaringClass());
+  Handle<mirror::Class> c(soa.Self(), m->GetDeclaringClass());
   if (UNLIKELY(c->IsAbstract())) {
     ThrowLocation throw_location = soa.Self()->GetCurrentLocationForThrow();
     soa.Self()->ThrowNewExceptionF(throw_location, "Ljava/lang/InstantiationException;",
                                    "Can't instantiate %s %s",
                                    c->IsInterface() ? "interface" : "abstract class",
-                                   PrettyDescriptor(c.get()).c_str());
+                                   PrettyDescriptor(c.Get()).c_str());
     return nullptr;
   }
 

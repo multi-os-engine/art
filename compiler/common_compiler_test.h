@@ -231,10 +231,10 @@ class CommonCompilerTest : public CommonRuntimeTest {
         const void* method_code = GetQuickGenericJniTrampoline();
         mirror::ArtMethod* callee_save_method = runtime_->GetCalleeSaveMethod(Runtime::kRefsAndArgs);
 
-        // Compute Sirt size, as Sirt goes into frame
+        // Compute HandleScope size, as the HandleScope goes into frame
         MethodHelper mh(method);
         uint32_t sirt_refs = mh.GetNumberOfReferenceArgsWithoutReceiver() + 1;
-        uint32_t sirt_size = StackIndirectReferenceTable::SizeOf(sirt_refs);
+        uint32_t sirt_size = HandleScope::SizeOf(sirt_refs);
 
         OatFile::OatMethod oat_method = CreateOatMethod(method_code,
                                                         callee_save_method->GetFrameSizeInBytes() +
@@ -279,7 +279,7 @@ class CommonCompilerTest : public CommonRuntimeTest {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     std::string class_descriptor(DotToDescriptor(class_name));
     Thread* self = Thread::Current();
-    SirtRef<mirror::ClassLoader> loader(self, class_loader);
+    Handle<mirror::ClassLoader> loader(self, class_loader);
     mirror::Class* klass = class_linker_->FindClass(self, class_descriptor.c_str(), loader);
     CHECK(klass != nullptr) << "Class not found " << class_name;
     for (size_t i = 0; i < klass->NumDirectMethods(); i++) {
@@ -373,7 +373,7 @@ class CommonCompilerTest : public CommonRuntimeTest {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     std::string class_descriptor(DotToDescriptor(class_name));
     Thread* self = Thread::Current();
-    SirtRef<mirror::ClassLoader> loader(self, class_loader);
+    Handle<mirror::ClassLoader> loader(self, class_loader);
     mirror::Class* klass = class_linker_->FindClass(self, class_descriptor.c_str(), loader);
     CHECK(klass != nullptr) << "Class not found " << class_name;
     for (size_t i = 0; i < klass->NumDirectMethods(); i++) {
@@ -393,7 +393,7 @@ class CommonCompilerTest : public CommonRuntimeTest {
     timings.EndSplit();
   }
 
-  void CompileDirectMethod(SirtRef<mirror::ClassLoader>& class_loader, const char* class_name,
+  void CompileDirectMethod(Handle<mirror::ClassLoader>& class_loader, const char* class_name,
                            const char* method_name, const char* signature)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     std::string class_descriptor(DotToDescriptor(class_name));
@@ -406,7 +406,7 @@ class CommonCompilerTest : public CommonRuntimeTest {
     CompileMethod(method);
   }
 
-  void CompileVirtualMethod(SirtRef<mirror::ClassLoader>& class_loader, const char* class_name,
+  void CompileVirtualMethod(Handle<mirror::ClassLoader>& class_loader, const char* class_name,
                             const char* method_name, const char* signature)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     std::string class_descriptor(DotToDescriptor(class_name));

@@ -48,7 +48,7 @@ class JniCompilerTest : public CommonCompilerTest {
   void CompileForTest(jobject class_loader, bool direct,
                       const char* method_name, const char* method_sig) {
     ScopedObjectAccess soa(Thread::Current());
-    SirtRef<mirror::ClassLoader> loader(soa.Self(), soa.Decode<mirror::ClassLoader*>(class_loader));
+    Handle<mirror::ClassLoader> loader(soa.Self(), soa.Decode<mirror::ClassLoader*>(class_loader));
     // Compile the native method before starting the runtime
     mirror::Class* c = class_linker_->FindClass(soa.Self(), "LMyClassNatives;", loader);
     mirror::ArtMethod* method;
@@ -153,7 +153,7 @@ TEST_F(JniCompilerTest, CompileAndRunIntMethodThroughStub) {
 
   ScopedObjectAccess soa(Thread::Current());
   std::string reason;
-  SirtRef<mirror::ClassLoader> class_loader(soa.Self(),
+  Handle<mirror::ClassLoader> class_loader(soa.Self(),
                                             soa.Decode<mirror::ClassLoader*>(class_loader_));
   ASSERT_TRUE(
       Runtime::Current()->GetJavaVM()->LoadNativeLibrary("", class_loader, &reason)) << reason;
@@ -169,7 +169,7 @@ TEST_F(JniCompilerTest, CompileAndRunStaticIntMethodThroughStub) {
 
   ScopedObjectAccess soa(Thread::Current());
   std::string reason;
-  SirtRef<mirror::ClassLoader> class_loader(soa.Self(),
+  Handle<mirror::ClassLoader> class_loader(soa.Self(),
                                             soa.Decode<mirror::ClassLoader*>(class_loader_));
   ASSERT_TRUE(
       Runtime::Current()->GetJavaVM()->LoadNativeLibrary("", class_loader, &reason)) << reason;

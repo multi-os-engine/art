@@ -87,8 +87,8 @@ class ReflectionTest : public CommonCompilerTest {
     const char* class_name = is_static ? "StaticLeafMethods" : "NonStaticLeafMethods";
     jobject jclass_loader(LoadDex(class_name));
     Thread* self = Thread::Current();
-    SirtRef<mirror::ClassLoader> null_class_loader(self, nullptr);
-    SirtRef<mirror::ClassLoader>
+    Handle<mirror::ClassLoader> null_class_loader(self, nullptr);
+    Handle<mirror::ClassLoader>
         class_loader(self,
                      ScopedObjectAccessUnchecked(self).Decode<mirror::ClassLoader*>(jclass_loader));
     if (is_static) {
@@ -485,7 +485,7 @@ TEST_F(ReflectionTest, StaticMainMethod) {
   TEST_DISABLED_FOR_PORTABLE();
   ScopedObjectAccess soa(Thread::Current());
   jobject jclass_loader = LoadDex("Main");
-  SirtRef<mirror::ClassLoader>
+  Handle<mirror::ClassLoader>
       class_loader(soa.Self(), soa.Decode<mirror::ClassLoader*>(jclass_loader));
   CompileDirectMethod(class_loader, "Main", "main", "([Ljava/lang/String;)V");
 

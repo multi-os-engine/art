@@ -370,13 +370,13 @@ TEST_F(StubTest, LockObject) {
   ScopedObjectAccess soa(self);
   // garbage is created during ClassLinker::Init
 
-  SirtRef<mirror::String> obj(soa.Self(),
+  Handle<mirror::String> obj(soa.Self(),
                               mirror::String::AllocFromModifiedUtf8(soa.Self(), "hello, world!"));
   LockWord lock = obj->GetLockWord(false);
   LockWord::LockState old_state = lock.GetState();
   EXPECT_EQ(LockWord::LockState::kUnlocked, old_state);
 
-  Invoke3(reinterpret_cast<size_t>(obj.get()), 0U, 0U,
+  Invoke3(reinterpret_cast<size_t>(obj.Get()), 0U, 0U,
           reinterpret_cast<uintptr_t>(&art_quick_lock_object), self);
 
   LockWord lock_after = obj->GetLockWord(false);
@@ -385,7 +385,7 @@ TEST_F(StubTest, LockObject) {
   EXPECT_EQ(lock_after.ThinLockCount(), 0U);  // Thin lock starts count at zero
 
   for (size_t i = 1; i < kThinLockLoops; ++i) {
-    Invoke3(reinterpret_cast<size_t>(obj.get()), 0U, 0U,
+    Invoke3(reinterpret_cast<size_t>(obj.Get()), 0U, 0U,
               reinterpret_cast<uintptr_t>(&art_quick_lock_object), self);
 
     // Check we're at lock count i
@@ -433,13 +433,13 @@ TEST_F(StubTest, UnlockObject) {
   ScopedObjectAccess soa(self);
   // garbage is created during ClassLinker::Init
 
-  SirtRef<mirror::String> obj(soa.Self(),
+  Handle<mirror::String> obj(soa.Self(),
                               mirror::String::AllocFromModifiedUtf8(soa.Self(), "hello, world!"));
   LockWord lock = obj->GetLockWord(false);
   LockWord::LockState old_state = lock.GetState();
   EXPECT_EQ(LockWord::LockState::kUnlocked, old_state);
 
-  Invoke3(reinterpret_cast<size_t>(obj.get()), 0U, 0U,
+  Invoke3(reinterpret_cast<size_t>(obj.Get()), 0U, 0U,
           reinterpret_cast<uintptr_t>(&art_quick_unlock_object), self);
 
   // This should be an illegal monitor state.
@@ -450,14 +450,14 @@ TEST_F(StubTest, UnlockObject) {
   LockWord::LockState new_state = lock_after.GetState();
   EXPECT_EQ(LockWord::LockState::kUnlocked, new_state);
 
-  Invoke3(reinterpret_cast<size_t>(obj.get()), 0U, 0U,
+  Invoke3(reinterpret_cast<size_t>(obj.Get()), 0U, 0U,
           reinterpret_cast<uintptr_t>(&art_quick_lock_object), self);
 
   LockWord lock_after2 = obj->GetLockWord(false);
   LockWord::LockState new_state2 = lock_after2.GetState();
   EXPECT_EQ(LockWord::LockState::kThinLocked, new_state2);
 
-  Invoke3(reinterpret_cast<size_t>(obj.get()), 0U, 0U,
+  Invoke3(reinterpret_cast<size_t>(obj.Get()), 0U, 0U,
           reinterpret_cast<uintptr_t>(&art_quick_unlock_object), self);
 
   LockWord lock_after3 = obj->GetLockWord(false);
@@ -474,12 +474,12 @@ TEST_F(StubTest, UnlockObject) {
   constexpr size_t kIterations = 10000;  // Number of iterations
 
   size_t counts[kNumberOfLocks];
-  SirtRef<mirror::String>* objects[kNumberOfLocks];
+  Handle<mirror::String>* objects[kNumberOfLocks];
 
   // Initialize = allocate.
   for (size_t i = 0; i < kNumberOfLocks; ++i) {
     counts[i] = 0;
-    objects[i] = new SirtRef<mirror::String>(soa.Self(),
+    objects[i] = new Handle<mirror::String>(soa.Self(),
                                              mirror::String::AllocFromModifiedUtf8(soa.Self(), ""));
   }
 
@@ -498,11 +498,11 @@ TEST_F(StubTest, UnlockObject) {
     }
 
     if (lock) {
-      Invoke3(reinterpret_cast<size_t>(objects[index]->get()), 0U, 0U,
+      Invoke3(reinterpret_cast<size_t>(objects[index]->Get()), 0U, 0U,
               reinterpret_cast<uintptr_t>(&art_quick_lock_object), self);
       counts[index]++;
     } else {
-      Invoke3(reinterpret_cast<size_t>(objects[index]->get()), 0U, 0U,
+      Invoke3(reinterpret_cast<size_t>(objects[index]->Get()), 0U, 0U,
               reinterpret_cast<uintptr_t>(&art_quick_unlock_object), self);
       counts[index]--;
     }
@@ -510,7 +510,7 @@ TEST_F(StubTest, UnlockObject) {
     EXPECT_FALSE(self->IsExceptionPending());
 
     // Check the new state.
-    LockWord lock_iter = objects[index]->get()->GetLockWord(false);
+    LockWord lock_iter = objects[index]->Get()->GetLockWord(false);
     LockWord::LockState iter_state = lock_iter.GetState();
     if (counts[index] > 0) {
       EXPECT_EQ(LockWord::LockState::kThinLocked, iter_state);
@@ -521,18 +521,18 @@ TEST_F(StubTest, UnlockObject) {
   }
 
   // Unlock the remaining count times and then check it's unlocked. Then deallocate.
-  // Go reverse order to correctly handle SirtRefs.
+  // Go reverse order to correctly handle Handles.
   for (size_t i = 0; i < kNumberOfLocks; ++i) {
     size_t index = kNumberOfLocks - 1 - i;
     size_t count = counts[index];
     while (count > 0) {
-      Invoke3(reinterpret_cast<size_t>(objects[index]->get()), 0U, 0U,
+      Invoke3(reinterpret_cast<size_t>(objects[index]->Get()), 0U, 0U,
               reinterpret_cast<uintptr_t>(&art_quick_unlock_object), self);
 
       count--;
     }
 
-    LockWord lock_after4 = objects[index]->get()->GetLockWord(false);
+    LockWord lock_after4 = objects[index]->Get()->GetLockWord(false);
     LockWord::LockState new_state4 = lock_after4.GetState();
     EXPECT_EQ(LockWord::LockState::kUnlocked, new_state4);
 
@@ -560,31 +560,31 @@ TEST_F(StubTest, CheckCast) {
   ScopedObjectAccess soa(self);
   // garbage is created during ClassLinker::Init
 
-  SirtRef<mirror::Class> c(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
+  Handle<mirror::Class> c(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
                                                                           "[Ljava/lang/Object;"));
-  SirtRef<mirror::Class> c2(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
+  Handle<mirror::Class> c2(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
                                                                             "[Ljava/lang/String;"));
 
   EXPECT_FALSE(self->IsExceptionPending());
 
-  Invoke3(reinterpret_cast<size_t>(c.get()), reinterpret_cast<size_t>(c.get()), 0U,
+  Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(c.Get()), 0U,
           reinterpret_cast<uintptr_t>(&art_quick_check_cast), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
 
-  Invoke3(reinterpret_cast<size_t>(c2.get()), reinterpret_cast<size_t>(c2.get()), 0U,
+  Invoke3(reinterpret_cast<size_t>(c2.Get()), reinterpret_cast<size_t>(c2.Get()), 0U,
           reinterpret_cast<uintptr_t>(&art_quick_check_cast), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
 
-  Invoke3(reinterpret_cast<size_t>(c.get()), reinterpret_cast<size_t>(c2.get()), 0U,
+  Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(c2.Get()), 0U,
           reinterpret_cast<uintptr_t>(&art_quick_check_cast), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
 
   // TODO: Make the following work. But that would require correct managed frames.
 
-  Invoke3(reinterpret_cast<size_t>(c2.get()), reinterpret_cast<size_t>(c.get()), 0U,
+  Invoke3(reinterpret_cast<size_t>(c2.Get()), reinterpret_cast<size_t>(c.Get()), 0U,
           reinterpret_cast<uintptr_t>(&art_quick_check_cast), self);
 
   EXPECT_TRUE(self->IsExceptionPending());
@@ -612,23 +612,23 @@ TEST_F(StubTest, APutObj) {
   ScopedObjectAccess soa(self);
   // garbage is created during ClassLinker::Init
 
-  SirtRef<mirror::Class> c(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
+  Handle<mirror::Class> c(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
                                                                             "Ljava/lang/Object;"));
-  SirtRef<mirror::Class> c2(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
+  Handle<mirror::Class> c2(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
                                                                             "Ljava/lang/String;"));
-  SirtRef<mirror::Class> ca(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
+  Handle<mirror::Class> ca(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
                                                                             "[Ljava/lang/String;"));
 
   // Build a string array of size 1
-  SirtRef<mirror::ObjectArray<mirror::Object> > array(soa.Self(),
-            mirror::ObjectArray<mirror::Object>::Alloc(soa.Self(), ca.get(), 10));
+  Handle<mirror::ObjectArray<mirror::Object> > array(soa.Self(),
+            mirror::ObjectArray<mirror::Object>::Alloc(soa.Self(), ca.Get(), 10));
 
   // Build a string -> should be assignable
-  SirtRef<mirror::Object> str_obj(soa.Self(),
+  Handle<mirror::Object> str_obj(soa.Self(),
                                   mirror::String::AllocFromModifiedUtf8(soa.Self(), "hello, world!"));
 
   // Build a generic object -> should fail assigning
-  SirtRef<mirror::Object> obj_obj(soa.Self(), c->AllocObject(soa.Self()));
+  Handle<mirror::Object> obj_obj(soa.Self(), c->AllocObject(soa.Self()));
 
   // Play with it...
 
@@ -637,51 +637,51 @@ TEST_F(StubTest, APutObj) {
 
   EXPECT_FALSE(self->IsExceptionPending());
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 0U, reinterpret_cast<size_t>(str_obj.get()),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 0U, reinterpret_cast<size_t>(str_obj.Get()),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
-  EXPECT_EQ(str_obj.get(), array->Get(0));
+  EXPECT_EQ(str_obj.Get(), array->Get(0));
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 1U, reinterpret_cast<size_t>(str_obj.get()),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 1U, reinterpret_cast<size_t>(str_obj.Get()),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
-  EXPECT_EQ(str_obj.get(), array->Get(1));
+  EXPECT_EQ(str_obj.Get(), array->Get(1));
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 2U, reinterpret_cast<size_t>(str_obj.get()),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 2U, reinterpret_cast<size_t>(str_obj.Get()),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
-  EXPECT_EQ(str_obj.get(), array->Get(2));
+  EXPECT_EQ(str_obj.Get(), array->Get(2));
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 3U, reinterpret_cast<size_t>(str_obj.get()),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 3U, reinterpret_cast<size_t>(str_obj.Get()),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
-  EXPECT_EQ(str_obj.get(), array->Get(3));
+  EXPECT_EQ(str_obj.Get(), array->Get(3));
 
   // 1.2) Assign null to array[0..3]
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 0U, reinterpret_cast<size_t>(nullptr),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 0U, reinterpret_cast<size_t>(nullptr),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
   EXPECT_EQ(nullptr, array->Get(0));
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 1U, reinterpret_cast<size_t>(nullptr),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 1U, reinterpret_cast<size_t>(nullptr),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
   EXPECT_EQ(nullptr, array->Get(1));
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 2U, reinterpret_cast<size_t>(nullptr),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 2U, reinterpret_cast<size_t>(nullptr),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
   EXPECT_EQ(nullptr, array->Get(2));
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 3U, reinterpret_cast<size_t>(nullptr),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 3U, reinterpret_cast<size_t>(nullptr),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_FALSE(self->IsExceptionPending());
@@ -693,7 +693,7 @@ TEST_F(StubTest, APutObj) {
   // 2.1) Array = null
   // TODO: Throwing NPE needs actual DEX code
 
-//  Invoke3(reinterpret_cast<size_t>(nullptr), 0U, reinterpret_cast<size_t>(str_obj.get()),
+//  Invoke3(reinterpret_cast<size_t>(nullptr), 0U, reinterpret_cast<size_t>(str_obj.Get()),
 //          reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 //
 //  EXPECT_TRUE(self->IsExceptionPending());
@@ -701,8 +701,8 @@ TEST_F(StubTest, APutObj) {
 
   // 2.2) Index < 0
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), static_cast<size_t>(-1),
-          reinterpret_cast<size_t>(str_obj.get()),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), static_cast<size_t>(-1),
+          reinterpret_cast<size_t>(str_obj.Get()),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_TRUE(self->IsExceptionPending());
@@ -710,7 +710,7 @@ TEST_F(StubTest, APutObj) {
 
   // 2.3) Index > 0
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 10U, reinterpret_cast<size_t>(str_obj.get()),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 10U, reinterpret_cast<size_t>(str_obj.Get()),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_TRUE(self->IsExceptionPending());
@@ -718,7 +718,7 @@ TEST_F(StubTest, APutObj) {
 
   // 3) Failure cases (obj into str[])
 
-  Invoke3(reinterpret_cast<size_t>(array.get()), 0U, reinterpret_cast<size_t>(obj_obj.get()),
+  Invoke3(reinterpret_cast<size_t>(array.Get()), 0U, reinterpret_cast<size_t>(obj_obj.Get()),
           reinterpret_cast<uintptr_t>(&art_quick_aput_obj_with_null_and_bound_check), self);
 
   EXPECT_TRUE(self->IsExceptionPending());
@@ -743,7 +743,7 @@ TEST_F(StubTest, AllocObject) {
   ScopedObjectAccess soa(self);
   // garbage is created during ClassLinker::Init
 
-  SirtRef<mirror::Class> c(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
+  Handle<mirror::Class> c(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
                                                                       "Ljava/lang/Object;"));
 
   // Play with it...
@@ -760,35 +760,35 @@ TEST_F(StubTest, AllocObject) {
     EXPECT_FALSE(self->IsExceptionPending());
     EXPECT_NE(reinterpret_cast<size_t>(nullptr), result);
     mirror::Object* obj = reinterpret_cast<mirror::Object*>(result);
-    EXPECT_EQ(c.get(), obj->GetClass());
+    EXPECT_EQ(c.Get(), obj->GetClass());
     VerifyObject(obj);
   }
 
   {
     // We can use nullptr in the second argument as we do not need a method here (not used in
     // resolved/initialized cases)
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.get()), reinterpret_cast<size_t>(nullptr), 0U,
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr), 0U,
                             reinterpret_cast<uintptr_t>(GetTlsPtr(self)->quick_entrypoints.pAllocObjectResolved),
                             self);
 
     EXPECT_FALSE(self->IsExceptionPending());
     EXPECT_NE(reinterpret_cast<size_t>(nullptr), result);
     mirror::Object* obj = reinterpret_cast<mirror::Object*>(result);
-    EXPECT_EQ(c.get(), obj->GetClass());
+    EXPECT_EQ(c.Get(), obj->GetClass());
     VerifyObject(obj);
   }
 
   {
     // We can use nullptr in the second argument as we do not need a method here (not used in
     // resolved/initialized cases)
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.get()), reinterpret_cast<size_t>(nullptr), 0U,
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr), 0U,
                             reinterpret_cast<uintptr_t>(GetTlsPtr(self)->quick_entrypoints.pAllocObjectInitialized),
                             self);
 
     EXPECT_FALSE(self->IsExceptionPending());
     EXPECT_NE(reinterpret_cast<size_t>(nullptr), result);
     mirror::Object* obj = reinterpret_cast<mirror::Object*>(result);
-    EXPECT_EQ(c.get(), obj->GetClass());
+    EXPECT_EQ(c.Get(), obj->GetClass());
     VerifyObject(obj);
   }
 
@@ -799,17 +799,17 @@ TEST_F(StubTest, AllocObject) {
     Runtime::Current()->GetHeap()->SetIdealFootprint(1 * GB);
 
     // Array helps to fill memory faster.
-    SirtRef<mirror::Class> ca(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
+    Handle<mirror::Class> ca(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
                                                                          "[Ljava/lang/Object;"));
-    std::vector<SirtRef<mirror::Object>*> sirt_refs;
+    std::vector<Handle<mirror::Object>*> sirt_refs;
     // Start allocating with 128K
     size_t length = 128 * KB / 4;
     while (length > 10) {
-      SirtRef<mirror::Object>* ref = new SirtRef<mirror::Object>(soa.Self(),
+      Handle<mirror::Object>* ref = new Handle<mirror::Object>(soa.Self(),
                                               mirror::ObjectArray<mirror::Object>::Alloc(soa.Self(),
-                                                                                         ca.get(),
+                                                                                         ca.Get(),
                                                                                          length/4));
-      if (self->IsExceptionPending() || ref->get() == nullptr) {
+      if (self->IsExceptionPending() || ref->Get() == nullptr) {
         self->ClearException();
         delete ref;
 
@@ -828,9 +828,9 @@ TEST_F(StubTest, AllocObject) {
 
     // Allocate simple objects till it fails.
     while (!self->IsExceptionPending()) {
-      SirtRef<mirror::Object>* ref = new SirtRef<mirror::Object>(soa.Self(),
+      Handle<mirror::Object>* ref = new Handle<mirror::Object>(soa.Self(),
                                                                  c->AllocObject(soa.Self()));
-      if (!self->IsExceptionPending() && ref->get() != nullptr) {
+      if (!self->IsExceptionPending() && ref->Get() != nullptr) {
         sirt_refs.push_back(ref);
       } else {
         delete ref;
@@ -838,16 +838,15 @@ TEST_F(StubTest, AllocObject) {
     }
     self->ClearException();
 
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.get()), reinterpret_cast<size_t>(nullptr), 0U,
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr), 0U,
                             reinterpret_cast<uintptr_t>(GetTlsPtr(self)->quick_entrypoints.pAllocObjectInitialized),
                             self);
-
     EXPECT_TRUE(self->IsExceptionPending());
     self->ClearException();
     EXPECT_EQ(reinterpret_cast<size_t>(nullptr), result);
 
     // Release all the allocated objects.
-    // Need to go backward to release SirtRef in the right order.
+    // Need to go backward to release Handle in the right order.
     auto it = sirt_refs.rbegin();
     auto end = sirt_refs.rend();
     for (; it != end; ++it) {
@@ -874,11 +873,11 @@ TEST_F(StubTest, AllocObjectArray) {
   ScopedObjectAccess soa(self);
   // garbage is created during ClassLinker::Init
 
-  SirtRef<mirror::Class> c(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
+  Handle<mirror::Class> c(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
                                                                         "[Ljava/lang/Object;"));
 
   // Needed to have a linked method.
-  SirtRef<mirror::Class> c_obj(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
+  Handle<mirror::Class> c_obj(soa.Self(), class_linker_->FindSystemClass(soa.Self(),
                                                                           "Ljava/lang/Object;"));
 
   // Play with it...
@@ -899,7 +898,7 @@ TEST_F(StubTest, AllocObjectArray) {
     EXPECT_FALSE(self->IsExceptionPending());
     EXPECT_NE(reinterpret_cast<size_t>(nullptr), result);
     mirror::Array* obj = reinterpret_cast<mirror::Array*>(result);
-    EXPECT_EQ(c.get(), obj->GetClass());
+    EXPECT_EQ(c.Get(), obj->GetClass());
     VerifyObject(obj);
     EXPECT_EQ(obj->GetLength(), 10);
   }
@@ -907,16 +906,15 @@ TEST_F(StubTest, AllocObjectArray) {
   {
     // We can use nullptr in the second argument as we do not need a method here (not used in
     // resolved/initialized cases)
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.get()), reinterpret_cast<size_t>(nullptr), 10U,
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr), 10U,
                             reinterpret_cast<uintptr_t>(GetTlsPtr(self)->quick_entrypoints.pAllocArrayResolved),
                             self);
-
     EXPECT_FALSE(self->IsExceptionPending()) << PrettyTypeOf(self->GetException(nullptr));
     EXPECT_NE(reinterpret_cast<size_t>(nullptr), result);
     mirror::Object* obj = reinterpret_cast<mirror::Object*>(result);
     EXPECT_TRUE(obj->IsArrayInstance());
     EXPECT_TRUE(obj->IsObjectArray());
-    EXPECT_EQ(c.get(), obj->GetClass());
+    EXPECT_EQ(c.Get(), obj->GetClass());
     VerifyObject(obj);
     mirror::Array* array = reinterpret_cast<mirror::Array*>(result);
     EXPECT_EQ(array->GetLength(), 10);
@@ -926,7 +924,7 @@ TEST_F(StubTest, AllocObjectArray) {
 
   // Out-of-memory.
   {
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.get()), reinterpret_cast<size_t>(nullptr),
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr),
                             GB,  // that should fail...
                             reinterpret_cast<uintptr_t>(GetTlsPtr(self)->quick_entrypoints.pAllocArrayResolved),
                             self);
@@ -968,27 +966,27 @@ TEST_F(StubTest, StringCompareTo) {
 
   constexpr size_t string_count = 2 * base_string_count;
 
-  SirtRef<mirror::String>* s[string_count];
+  Handle<mirror::String>* s[string_count];
 
   for (size_t i = 0; i < base_string_count; ++i) {
-    s[i] = new SirtRef<mirror::String>(soa.Self(), mirror::String::AllocFromModifiedUtf8(soa.Self(),
+    s[i] = new Handle<mirror::String>(soa.Self(), mirror::String::AllocFromModifiedUtf8(soa.Self(),
                                                                                          c[i]));
   }
 
   RandGen r(0x1234);
 
   for (size_t i = base_string_count; i < string_count; ++i) {
-    s[i] = new SirtRef<mirror::String>(soa.Self(), mirror::String::AllocFromModifiedUtf8(soa.Self(),
+    s[i] = new Handle<mirror::String>(soa.Self(), mirror::String::AllocFromModifiedUtf8(soa.Self(),
                                                                          c[i - base_string_count]));
-    int32_t length = s[i]->get()->GetLength();
+    int32_t length = s[i]->Get()->GetLength();
     if (length > 1) {
       // Set a random offset and length.
       int32_t new_offset = 1 + (r.next() % (length - 1));
       int32_t rest = length - new_offset - 1;
       int32_t new_length = 1 + (rest > 0 ? r.next() % rest : 0);
 
-      s[i]->get()->SetField32<false>(mirror::String::CountOffset(), new_length);
-      s[i]->get()->SetField32<false>(mirror::String::OffsetOffset(), new_offset);
+      s[i]->Get()->SetField32<false>(mirror::String::CountOffset(), new_length);
+      s[i]->Get()->SetField32<false>(mirror::String::OffsetOffset(), new_offset);
     }
   }
 
@@ -1000,7 +998,7 @@ TEST_F(StubTest, StringCompareTo) {
   int32_t expected[string_count][string_count];
   for (size_t x = 0; x < string_count; ++x) {
     for (size_t y = 0; y < string_count; ++y) {
-      expected[x][y] = s[x]->get()->CompareTo(s[y]->get());
+      expected[x][y] = s[x]->Get()->CompareTo(s[y]->Get());
     }
   }
 
@@ -1009,8 +1007,8 @@ TEST_F(StubTest, StringCompareTo) {
   for (size_t x = 0; x < string_count; ++x) {
     for (size_t y = 0; y < string_count; ++y) {
       // Test string_compareto x y
-      size_t result = Invoke3(reinterpret_cast<size_t>(s[x]->get()),
-                              reinterpret_cast<size_t>(s[y]->get()), 0U,
+      size_t result = Invoke3(reinterpret_cast<size_t>(s[x]->Get()),
+                              reinterpret_cast<size_t>(s[y]->Get()), 0U,
                               reinterpret_cast<uintptr_t>(&art_quick_string_compareto), self);
 
       EXPECT_FALSE(self->IsExceptionPending());
@@ -1048,7 +1046,7 @@ extern "C" void art_quick_set32_static(void);
 extern "C" void art_quick_get32_static(void);
 #endif
 
-static void GetSet32Static(SirtRef<mirror::Object>* obj, SirtRef<mirror::ArtField>* f, Thread* self,
+static void GetSet32Static(Handle<mirror::Object>* obj, Handle<mirror::ArtField>* f, Thread* self,
                            mirror::ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || defined(__x86_64__)
@@ -1084,7 +1082,7 @@ extern "C" void art_quick_set32_instance(void);
 extern "C" void art_quick_get32_instance(void);
 #endif
 
-static void GetSet32Instance(SirtRef<mirror::Object>* obj, SirtRef<mirror::ArtField>* f,
+static void GetSet32Instance(Handle<mirror::Object>* obj, Handle<mirror::ArtField>* f,
                              Thread* self, mirror::ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || defined(__x86_64__)
@@ -1093,20 +1091,20 @@ static void GetSet32Instance(SirtRef<mirror::Object>* obj, SirtRef<mirror::ArtFi
 
   for (size_t i = 0; i < num_values; ++i) {
     test->Invoke3WithReferrer(static_cast<size_t>((*f)->GetDexFieldIndex()),
-                              reinterpret_cast<size_t>(obj->get()),
+                              reinterpret_cast<size_t>(obj->Get()),
                               static_cast<size_t>(values[i]),
                               reinterpret_cast<uintptr_t>(&art_quick_set32_instance),
                               self,
                               referrer);
 
-    int32_t res = f->get()->GetInt(obj->get());
+    int32_t res = f->Get()->GetInt(obj->Get());
     EXPECT_EQ(res, static_cast<int32_t>(values[i])) << "Iteration " << i;
 
     res++;
-    f->get()->SetInt<false>(obj->get(), res);
+    f->Get()->SetInt<false>(obj->Get(), res);
 
     size_t res2 = test->Invoke3WithReferrer(static_cast<size_t>((*f)->GetDexFieldIndex()),
-                                            reinterpret_cast<size_t>(obj->get()),
+                                            reinterpret_cast<size_t>(obj->Get()),
                                             0U,
                                             reinterpret_cast<uintptr_t>(&art_quick_get32_instance),
                                             self,
@@ -1145,7 +1143,7 @@ static void set_and_check_static(uint32_t f_idx, mirror::Object* val, Thread* se
 }
 #endif
 
-static void GetSetObjStatic(SirtRef<mirror::Object>* obj, SirtRef<mirror::ArtField>* f, Thread* self,
+static void GetSetObjStatic(Handle<mirror::Object>* obj, Handle<mirror::ArtField>* f, Thread* self,
                             mirror::ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || defined(__x86_64__)
@@ -1168,7 +1166,7 @@ static void GetSetObjStatic(SirtRef<mirror::Object>* obj, SirtRef<mirror::ArtFie
 extern "C" void art_quick_set_obj_instance(void);
 extern "C" void art_quick_get_obj_instance(void);
 
-static void set_and_check_instance(SirtRef<mirror::ArtField>* f, mirror::Object* trg,
+static void set_and_check_instance(Handle<mirror::ArtField>* f, mirror::Object* trg,
                                    mirror::Object* val, Thread* self, mirror::ArtMethod* referrer,
                                    StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -1188,21 +1186,21 @@ static void set_and_check_instance(SirtRef<mirror::ArtField>* f, mirror::Object*
 
   EXPECT_EQ(res, reinterpret_cast<size_t>(val)) << "Value " << val;
 
-  EXPECT_EQ(val, f->get()->GetObj(trg));
+  EXPECT_EQ(val, f->Get()->GetObj(trg));
 }
 #endif
 
-static void GetSetObjInstance(SirtRef<mirror::Object>* obj, SirtRef<mirror::ArtField>* f,
+static void GetSetObjInstance(Handle<mirror::Object>* obj, Handle<mirror::ArtField>* f,
                               Thread* self, mirror::ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || defined(__x86_64__)
-  set_and_check_instance(f, obj->get(), nullptr, self, referrer, test);
+  set_and_check_instance(f, obj->Get(), nullptr, self, referrer, test);
 
   // Allocate a string object for simplicity.
   mirror::String* str = mirror::String::AllocFromModifiedUtf8(self, "Test");
-  set_and_check_instance(f, obj->get(), str, self, referrer, test);
+  set_and_check_instance(f, obj->Get(), str, self, referrer, test);
 
-  set_and_check_instance(f, obj->get(), nullptr, self, referrer, test);
+  set_and_check_instance(f, obj->Get(), nullptr, self, referrer, test);
 #else
   LOG(INFO) << "Skipping setObjinstance as I don't know how to do that on " << kRuntimeISA;
   // Force-print to std::cout so it's also outside the logcat.
@@ -1218,7 +1216,7 @@ extern "C" void art_quick_set64_static(void);
 extern "C" void art_quick_get64_static(void);
 #endif
 
-static void GetSet64Static(SirtRef<mirror::Object>* obj, SirtRef<mirror::ArtField>* f, Thread* self,
+static void GetSet64Static(Handle<mirror::Object>* obj, Handle<mirror::ArtField>* f, Thread* self,
                            mirror::ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__x86_64__) || defined(__aarch64__)
@@ -1253,7 +1251,7 @@ extern "C" void art_quick_set64_instance(void);
 extern "C" void art_quick_get64_instance(void);
 #endif
 
-static void GetSet64Instance(SirtRef<mirror::Object>* obj, SirtRef<mirror::ArtField>* f,
+static void GetSet64Instance(Handle<mirror::Object>* obj, Handle<mirror::ArtField>* f,
                              Thread* self, mirror::ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__x86_64__) || defined(__aarch64__)
@@ -1262,20 +1260,20 @@ static void GetSet64Instance(SirtRef<mirror::Object>* obj, SirtRef<mirror::ArtFi
 
   for (size_t i = 0; i < num_values; ++i) {
     test->Invoke3WithReferrer(static_cast<size_t>((*f)->GetDexFieldIndex()),
-                              reinterpret_cast<size_t>(obj->get()),
+                              reinterpret_cast<size_t>(obj->Get()),
                               static_cast<size_t>(values[i]),
                               reinterpret_cast<uintptr_t>(&art_quick_set64_instance),
                               self,
                               referrer);
 
-    int64_t res = f->get()->GetLong(obj->get());
+    int64_t res = f->Get()->GetLong(obj->Get());
     EXPECT_EQ(res, static_cast<int64_t>(values[i])) << "Iteration " << i;
 
     res++;
-    f->get()->SetLong<false>(obj->get(), res);
+    f->Get()->SetLong<false>(obj->Get(), res);
 
     size_t res2 = test->Invoke3WithReferrer(static_cast<size_t>((*f)->GetDexFieldIndex()),
-                                            reinterpret_cast<size_t>(obj->get()),
+                                            reinterpret_cast<size_t>(obj->Get()),
                                             0U,
                                             reinterpret_cast<uintptr_t>(&art_quick_get64_instance),
                                             self,
@@ -1299,41 +1297,41 @@ static void TestFields(Thread* self, StubTest* test, Primitive::Type test_type) 
   CHECK(o != NULL);
 
   ScopedObjectAccess soa(self);
-  SirtRef<mirror::Object> obj(self, soa.Decode<mirror::Object*>(o));
+  Handle<mirror::Object> obj(self, soa.Decode<mirror::Object*>(o));
 
-  SirtRef<mirror::Class> c(self, obj->GetClass());
+  Handle<mirror::Class> c(self, obj->GetClass());
 
   // Need a method as a referrer
-  SirtRef<mirror::ArtMethod> m(self, c->GetDirectMethod(0));
+  Handle<mirror::ArtMethod> m(self, c->GetDirectMethod(0));
 
   // Play with it...
 
   // Static fields.
   {
-    SirtRef<mirror::ObjectArray<mirror::ArtField>> fields(self, c.get()->GetSFields());
+    Handle<mirror::ObjectArray<mirror::ArtField>> fields(self, c.Get()->GetSFields());
     int32_t num_fields = fields->GetLength();
     for (int32_t i = 0; i < num_fields; ++i) {
-      SirtRef<mirror::ArtField> f(self, fields->Get(i));
+      Handle<mirror::ArtField> f(self, fields->Get(i));
 
-      FieldHelper fh(f.get());
+      FieldHelper fh(f.Get());
       Primitive::Type type = fh.GetTypeAsPrimitiveType();
       switch (type) {
         case Primitive::Type::kPrimInt:
           if (test_type == type) {
-            GetSet32Static(&obj, &f, self, m.get(), test);
+            GetSet32Static(&obj, &f, self, m.Get(), test);
           }
           break;
 
         case Primitive::Type::kPrimLong:
           if (test_type == type) {
-            GetSet64Static(&obj, &f, self, m.get(), test);
+            GetSet64Static(&obj, &f, self, m.Get(), test);
           }
           break;
 
         case Primitive::Type::kPrimNot:
           // Don't try array.
           if (test_type == type && fh.GetTypeDescriptor()[0] != '[') {
-            GetSetObjStatic(&obj, &f, self, m.get(), test);
+            GetSetObjStatic(&obj, &f, self, m.Get(), test);
           }
           break;
 
@@ -1345,30 +1343,30 @@ static void TestFields(Thread* self, StubTest* test, Primitive::Type test_type) 
 
   // Instance fields.
   {
-    SirtRef<mirror::ObjectArray<mirror::ArtField>> fields(self, c.get()->GetIFields());
+    Handle<mirror::ObjectArray<mirror::ArtField>> fields(self, c.Get()->GetIFields());
     int32_t num_fields = fields->GetLength();
     for (int32_t i = 0; i < num_fields; ++i) {
-      SirtRef<mirror::ArtField> f(self, fields->Get(i));
+      Handle<mirror::ArtField> f(self, fields->Get(i));
 
-      FieldHelper fh(f.get());
+      FieldHelper fh(f.Get());
       Primitive::Type type = fh.GetTypeAsPrimitiveType();
       switch (type) {
         case Primitive::Type::kPrimInt:
           if (test_type == type) {
-            GetSet32Instance(&obj, &f, self, m.get(), test);
+            GetSet32Instance(&obj, &f, self, m.Get(), test);
           }
           break;
 
         case Primitive::Type::kPrimLong:
           if (test_type == type) {
-            GetSet64Instance(&obj, &f, self, m.get(), test);
+            GetSet64Instance(&obj, &f, self, m.Get(), test);
           }
           break;
 
         case Primitive::Type::kPrimNot:
           // Don't try array.
           if (test_type == type && fh.GetTypeDescriptor()[0] != '[') {
-            GetSetObjInstance(&obj, &f, self, m.get(), test);
+            GetSetObjInstance(&obj, &f, self, m.Get(), test);
           }
           break;
 
