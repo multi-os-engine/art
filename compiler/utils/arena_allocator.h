@@ -43,6 +43,7 @@ enum ArenaAllocKind {
   kArenaAllocLIR,
   kArenaAllocMIR,
   kArenaAllocDFInfo,
+  kArenaAllocExpression,
   kArenaAllocGrowableArray,
   kArenaAllocGrowableBitMap,
   kArenaAllocDalvikToSSAMap,
