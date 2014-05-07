@@ -19,6 +19,7 @@
 
 #include "base/logging.h"
 #include "base/macros.h"
+#include "handle.h"
 #include "stack.h"
 #include "utils.h"
 
@@ -33,9 +34,8 @@ class Thread;
 // storage or manually allocated by SirtRef to hold one reference.
 class StackIndirectReferenceTable {
  public:
-  explicit StackIndirectReferenceTable(mirror::Object* object) :
-      link_(NULL), number_of_references_(1) {
-    references_[0].Assign(object);
+  explicit StackIndirectReferenceTable(size_t number_of_references) :
+      link_(nullptr), number_of_references_(number_of_references) {
   }
 
   ~StackIndirectReferenceTable() {}
@@ -72,7 +72,7 @@ class StackIndirectReferenceTable {
     return RoundUp(sirt_size, 8);
   }
 
-  // Link to previous SIRT or NULL.
+  // Link to previous SIRT or null.
   StackIndirectReferenceTable* GetLink() const {
     return link_;
   }
@@ -88,18 +88,20 @@ class StackIndirectReferenceTable {
     number_of_references_ = num_references;
   }
 
-  mirror::Object* GetReference(size_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::Object* GetReference(size_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      ALWAYS_INLINE {
     DCHECK_LT(i, number_of_references_);
     return references_[i].AsMirrorPtr();
   }
 
-  StackReference<mirror::Object>* GetStackReference(size_t i)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  Handle<mirror::Object> GetHandle(size_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      ALWAYS_INLINE {
     DCHECK_LT(i, number_of_references_);
-    return &references_[i];
+    return Handle<mirror::Object>(&references_[i]);
   }
 
-  void SetReference(size_t i, mirror::Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  void SetReference(size_t i, mirror::Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      ALWAYS_INLINE {
     DCHECK_LT(i, number_of_references_);
     references_[i].Assign(object);
   }
@@ -128,16 +130,31 @@ class StackIndirectReferenceTable {
     return pointer_size + sizeof(number_of_references_);
   }
 
- private:
+ protected:
   StackIndirectReferenceTable() {}
 
   StackIndirectReferenceTable* link_;
   uint32_t number_of_references_;
 
   // number_of_references_ are available if this is allocated and filled in by jni_compiler.
-  StackReference<mirror::Object> references_[1];
+  StackReference<mirror::Object> references_[0];
 
+ private:
+  template<size_t kNumReferences> friend class FixedSizeStackIndirectReferenceTable;
   DISALLOW_COPY_AND_ASSIGN(StackIndirectReferenceTable);
+};
+
+template<size_t kNumReferences>
+class FixedSizeStackIndirectReferenceTable : public StackIndirectReferenceTable {
+ public:
+  FixedSizeStackIndirectReferenceTable() : StackIndirectReferenceTable(kNumReferences) {
+    // TODO: Figure out how to use a compile assert.
+    DCHECK_EQ(OFFSETOF_MEMBER(StackIndirectReferenceTable, references_),
+              OFFSETOF_MEMBER(FixedSizeStackIndirectReferenceTable<1>, references_storage_));
+  }
+
+ private:
+  StackReference<mirror::Object> references_storage_[kNumReferences];
 };
 
 }  // namespace art

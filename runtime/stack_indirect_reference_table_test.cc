@@ -14,19 +14,21 @@
  * limitations under the License.
  */
 
-#include "stack_indirect_reference_table.h"
 #include "gtest/gtest.h"
+#include "scoped_thread_state_change.h"
+#include "stack_indirect_reference_table.h"
+#include "thread.h"
 
 namespace art {
 
 // Test the offsets computed for members of StackIndirectReferenceTable. Because of cross-compiling
 // it is impossible the use OFFSETOF_MEMBER, so we do some reasonable computations ourselves. This
 // test checks whether we do the right thing.
-TEST(StackIndirectReferenceTableTest, Offsets) {
+TEST(StackIndirectReferenceTableTest, Offsets) NO_THREAD_SAFETY_ANALYSIS {
   // As the members of StackIndirectReferenceTable are private, we cannot use OFFSETOF_MEMBER
   // here. So do the inverse: set some data, and access it through pointers created from the offsets.
-
-  StackIndirectReferenceTable test_table(reinterpret_cast<mirror::Object*>(0x1234));
+  FixedSizeStackIndirectReferenceTable<1> test_table;
+  test_table.SetReference(0, reinterpret_cast<mirror::Object*>(0x1234));
   test_table.SetLink(reinterpret_cast<StackIndirectReferenceTable*>(0x5678));
   test_table.SetNumberOfReferences(0x9ABC);
 

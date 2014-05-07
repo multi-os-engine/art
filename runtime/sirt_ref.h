@@ -20,6 +20,7 @@
 #include "base/casts.h"
 #include "base/logging.h"
 #include "base/macros.h"
+#include "handle.h"
 #include "stack_indirect_reference_table.h"
 #include "thread.h"
 
@@ -47,7 +48,7 @@ class SirtRef {
 
  private:
   Thread* const self_;
-  StackIndirectReferenceTable sirt_;
+  FixedSizeStackIndirectReferenceTable<1> sirt_;
 
   DISALLOW_COPY_AND_ASSIGN(SirtRef);
 };
@@ -61,6 +62,36 @@ class SirtRefNoVerify : public SirtRef<T> {
   T* reset(T* object = nullptr) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return SirtRef<T>::reset(object, false);
   }
+};
+
+template<class T>
+class SirtHandleWrapper : public SirtRef<T> {
+ public:
+  SirtHandleWrapper(Thread* self, Handle<T> handle)
+      : SirtRef<T>(self, handle.Get(), true), handle_(handle) {
+  }
+
+  ~SirtHandleWrapper() {
+    handle_->Assign(this->get());
+  }
+
+ private:
+  Handle<T> handle_;
+};
+
+template<class T>
+class SirtObjectWrapper : public SirtRef<T> {
+ public:
+  SirtObjectWrapper(Thread* self, T** handle)
+      : SirtRef<T>(self, *handle, true), handle_(handle) {
+  }
+
+  ~SirtObjectWrapper() {
+    *handle_ = this->get();
+  }
+
+ private:
+  T** handle_;
 };
 
 }  // namespace art

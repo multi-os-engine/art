@@ -300,11 +300,9 @@ inline bool Heap::IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t
 inline void Heap::CheckConcurrentGC(Thread* self, size_t new_num_bytes_allocated,
                                     mirror::Object** obj) {
   if (UNLIKELY(new_num_bytes_allocated >= concurrent_start_bytes_)) {
-    // The SirtRef is necessary since the calls in RequestConcurrentGC are a safepoint.
-    SirtRef<mirror::Object> ref(self, *obj);
+    // The SirtObjectWrapper is necessary since the calls in RequestConcurrentGC are a safepoint.
+    SirtObjectWrapper<mirror::Object> sirt_klass(self, obj);
     RequestConcurrentGC(self);
-    // Restore obj in case it moved.
-    *obj = ref.get();
   }
 }
 

@@ -24,7 +24,8 @@
 namespace art {
 
 template<class T> inline SirtRef<T>::SirtRef(Thread* self, T* object, bool should_verify)
-  : self_(self), sirt_(object) {
+  : self_(self) {
+  sirt_.SetReference(0, object);
   if (should_verify) {
     VerifyObject(object);
   }

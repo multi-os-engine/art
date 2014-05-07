@@ -1325,7 +1325,7 @@ class BuildGenericJniFrameVisitor FINAL : public QuickArgumentVisitor {
   void FinalizeSirt(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   jobject GetFirstSirtEntry() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return reinterpret_cast<jobject>(sirt_->GetStackReference(0));
+    return sirt_->GetHandle(0).ToJObject();
   }
 
   void PushGpr(uintptr_t val) {
@@ -1564,7 +1564,7 @@ extern "C" uint64_t artQuickGenericJniEndTrampoline(Thread* self, mirror::ArtMet
     StackIndirectReferenceTable* table =
         reinterpret_cast<StackIndirectReferenceTable*>(
             reinterpret_cast<uint8_t*>(sp) + kPointerSize);
-    lock = reinterpret_cast<jobject>(table->GetStackReference(0));
+    lock = table->GetHandle(0).ToJObject();
   }
 
   MethodHelper mh(called);
