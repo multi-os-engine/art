@@ -25,6 +25,7 @@
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/quick/dex_file_method_inliner.h"
 #include "leb128.h"
+#include "pass_driver_me_cleanup.h"
 
 namespace art {
 
@@ -1236,27 +1237,6 @@ void MIRGraph::InitializeMethodUses() {
   }
 }
 
-void MIRGraph::InitializeSSATransformation() {
-  /* Compute the DFS order */
-  ComputeDFSOrders();
-
-  /* Compute the dominator info */
-  ComputeDominators();
-
-  /* Allocate data structures in preparation for SSA conversion */
-  CompilerInitializeSSAConversion();
-
-  /* Find out the "Dalvik reg def x block" relation */
-  ComputeDefBlockMatrix();
-
-  /* Insert phi nodes to dominance frontiers for all variables */
-  InsertPhiNodes();
-
-  /* Rename register names by local defs and phi nodes */
-  ClearAllVisitedFlags();
-  DoDFSPreOrderSSARename(GetEntryBlock());
-}
-
 ChildBlockIterator::ChildBlockIterator(BasicBlock* bb, MIRGraph* mir_graph)
     : basic_block_(bb), mir_graph_(mir_graph), visited_fallthrough_(false),
       visited_taken_(false), have_successors_(false) {
@@ -1306,6 +1286,15 @@ BasicBlock* ChildBlockIterator::Next() {
 
   // We do not have anything.
   return nullptr;
+}
+
+void MIRGraph::CalculateBasicBlockInformation(bool build_info) {
+  PassDriverMECleanUp driver(cu_);
+  driver.Launch();
+}
+
+void MIRGraph::InitializeBasicBlockData() {
+  num_blocks_ = block_list_.Size();
 }
 
 }  // namespace art

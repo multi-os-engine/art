@@ -267,6 +267,7 @@ struct MIR {
   NarrowDexOffset offset;         // Offset of the instruction in code units.
   uint16_t optimization_flags;
   int16_t m_unit_index;           // From which method was this MIR included
+  MIR* prev;
   MIR* next;
   SSARepresentation* ssa_rep;
   union {
@@ -856,11 +857,6 @@ class MIRGraph {
   void InitializeConstantPropagation();
 
   /**
-   * @brief Perform the initial preparation for the SSA Transformation.
-   */
-  void InitializeSSATransformation();
-
-  /**
    * @brief Insert a the operands for the Phi nodes.
    * @param bb the considered BasicBlock.
    * @return true
@@ -889,6 +885,15 @@ class MIRGraph {
   void CombineBlocks(BasicBlock* bb);
 
   void ClearAllVisitedFlags();
+  void CalculateBasicBlockInformation(bool build_loop_info);
+  void InitializeBasicBlockData();
+  void ComputeDFSOrders();
+  void ComputeDefBlockMatrix();
+  void ComputeDominators();
+  void CompilerInitializeSSAConversion();
+  void InsertPhiNodes();
+  void DoDFSPreOrderSSARename(BasicBlock* block);
+
   /*
    * IsDebugBuild sanity check: keep track of the Dex PCs for catch entries so that later on
    * we can verify that all catch entries have native PC entries.
@@ -909,7 +914,6 @@ class MIRGraph {
   void HandleLiveInUse(ArenaBitVector* use_v, ArenaBitVector* def_v,
                        ArenaBitVector* live_in_v, int dalvik_reg_id);
   void HandleDef(ArenaBitVector* def_v, int dalvik_reg_id);
-  void CompilerInitializeSSAConversion();
   bool DoSSAConversion(BasicBlock* bb);
   bool InvokeUsesMethodStar(MIR* mir);
   int ParseInsn(const uint16_t* code_ptr, MIR::DecodedInstruction* decoded_instruction);
@@ -938,12 +942,7 @@ class MIRGraph {
   BasicBlock* NextUnvisitedSuccessor(BasicBlock* bb);
   void MarkPreOrder(BasicBlock* bb);
   void RecordDFSOrders(BasicBlock* bb);
-  void ComputeDFSOrders();
-  void ComputeDefBlockMatrix();
   void ComputeDomPostOrderTraversal(BasicBlock* bb);
-  void ComputeDominators();
-  void InsertPhiNodes();
-  void DoDFSPreOrderSSARename(BasicBlock* block);
   void SetConstant(int32_t ssa_reg, int value);
   void SetConstantWide(int ssa_reg, int64_t value);
   int GetSSAUseCount(int s_reg);
