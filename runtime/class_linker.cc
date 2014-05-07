@@ -37,6 +37,7 @@
 #include "gc/accounting/heap_bitmap.h"
 #include "gc/heap.h"
 #include "gc/space/image_space.h"
+#include "handle_scope.h"
 #include "intern_table.h"
 #include "interpreter/interpreter.h"
 #include "leb128.h"
@@ -60,7 +61,6 @@
 #include "ScopedLocalRef.h"
 #include "scoped_thread_state_change.h"
 #include "sirt_ref.h"
-#include "stack_indirect_reference_table.h"
 #include "thread.h"
 #include "UniquePtr.h"
 #include "utils.h"
@@ -1840,7 +1840,7 @@ static void LinkCode(const SirtRef<mirror::ArtMethod>& method, const OatFile::Oa
           refs++;
         }
       }
-      size_t sirt_size = StackIndirectReferenceTable::GetAlignedSirtSize(refs);
+      size_t sirt_size = HandleScope::GetAlignedSirtSize(refs);
 
       // Get the generic spill masks and base frame size.
       mirror::ArtMethod* callee_save_method =

@@ -18,7 +18,7 @@
 #define ART_COMPILER_JNI_QUICK_CALLING_CONVENTION_H_
 
 #include <vector>
-#include "stack_indirect_reference_table.h"
+#include "handle_scope.h"
 #include "thread.h"
 #include "utils/managed_register.h"
 
@@ -323,18 +323,17 @@ class JniCallingConvention : public CallingConvention {
   }
 
   FrameOffset SirtLinkOffset() const {
-    return FrameOffset(SirtOffset().Int32Value() +
-                       StackIndirectReferenceTable::LinkOffset(frame_pointer_size_));
+    return FrameOffset(SirtOffset().Int32Value() + HandleScope::LinkOffset(frame_pointer_size_));
   }
 
   FrameOffset SirtNumRefsOffset() const {
     return FrameOffset(SirtOffset().Int32Value() +
-                       StackIndirectReferenceTable::NumberOfReferencesOffset(frame_pointer_size_));
+                       HandleScope::NumberOfReferencesOffset(frame_pointer_size_));
   }
 
   FrameOffset SirtReferencesOffset() const {
     return FrameOffset(SirtOffset().Int32Value() +
-                       StackIndirectReferenceTable::ReferencesOffset(frame_pointer_size_));
+                       HandleScope::ReferencesOffset(frame_pointer_size_));
   }
 
   virtual ~JniCallingConvention() {}

@@ -110,10 +110,8 @@ mirror::Object* StackVisitor::GetThisObject() const {
     return NULL;
   } else if (m->IsNative()) {
     if (cur_quick_frame_ != NULL) {
-      StackIndirectReferenceTable* sirt =
-          reinterpret_cast<StackIndirectReferenceTable*>(
-              reinterpret_cast<char*>(cur_quick_frame_) +
-              m->GetSirtOffsetInBytes());
+      HandleScope* sirt = reinterpret_cast<HandleScope*>(reinterpret_cast<char*>(cur_quick_frame_) +
+          m->GetSirtOffsetInBytes());
       return sirt->GetReference(0);
     } else {
       return cur_shadow_frame_->GetVRegReference(0);

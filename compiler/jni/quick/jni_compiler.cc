@@ -103,7 +103,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   const std::vector<ManagedRegister>& callee_save_regs = main_jni_conv->CalleeSaveRegisters();
   __ BuildFrame(frame_size, mr_conv->MethodRegister(), callee_save_regs, mr_conv->EntrySpills());
 
-  // 2. Set up the StackIndirectReferenceTable
+  // 2. Set up the HandleScope
   mr_conv->ResetIterator(FrameOffset(frame_size));
   main_jni_conv->ResetIterator(FrameOffset(0));
   __ StoreImmediateToFrame(main_jni_conv->SirtNumRefsOffset(),

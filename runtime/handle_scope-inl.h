@@ -14,36 +14,30 @@
  * limitations under the License.
  */
 
-#ifndef ART_RUNTIME_SIRT_REF_INL_H_
-#define ART_RUNTIME_SIRT_REF_INL_H_
-
-#include "sirt_ref.h"
+#ifndef ART_RUNTIME_HANDLE_SCOPE_INL_H_
+#define ART_RUNTIME_HANDLE_SCOPE_INL_H_
 
 #include "handle_scope-inl.h"
-#include "verify_object-inl.h"
+
+#include "thread.h"
 
 namespace art {
 
-template<class T> inline SirtRef<T>::SirtRef(Thread* self, T* object, bool should_verify)
-  : sirt_(self) {
-  sirt_.SetReference(0, object);
-  if (should_verify) {
-    VerifyObject(object);
-  }
+template<size_t kNumReferences>
+StackHandleScope<kNumReferences>::StackHandleScope(Thread* self)
+    : HandleScope(kNumReferences), self_(self), pos_(0) {
+  // TODO: Figure out how to use a compile assert.
+  DCHECK_EQ(OFFSETOF_MEMBER(HandleScope, references_),
+            OFFSETOF_MEMBER(StackHandleScope<1>, references_storage_));
+  self_->PushSirt(this);
 }
 
-template<class T> inline SirtRef<T>::~SirtRef() {
-}
-
-template<class T> inline T* SirtRef<T>::reset(T* object, bool should_verify) {
-  if (should_verify) {
-    VerifyObject(object);
-  }
-  T* old_ref = get();
-  sirt_.SetReference(0, object);
-  return old_ref;
+template<size_t kNumReferences>
+StackHandleScope<kNumReferences>::~StackHandleScope() {
+  HandleScope* top_sirt = self_->PopSirt();
+  DCHECK_EQ(top_sirt, this);
 }
 
 }  // namespace art
 
-#endif  // ART_RUNTIME_SIRT_REF_INL_H_
+#endif  // ART_RUNTIME_HANDLE_SCOPE_INL_H_

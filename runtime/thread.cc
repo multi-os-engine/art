@@ -44,6 +44,7 @@
 #include "gc/accounting/card_table-inl.h"
 #include "gc/heap.h"
 #include "gc/space/space.h"
+#include "handle_scope.h"
 #include "jni_internal.h"
 #include "mirror/art_field-inl.h"
 #include "mirror/art_method-inl.h"
@@ -61,7 +62,6 @@
 #include "ScopedUtfChars.h"
 #include "sirt_ref.h"
 #include "stack.h"
-#include "stack_indirect_reference_table.h"
 #include "thread-inl.h"
 #include "thread_list.h"
 #include "utils.h"
@@ -1208,7 +1208,7 @@ void Thread::RemoveFromThreadGroup(ScopedObjectAccess& soa) {
 
 size_t Thread::NumSirtReferences() {
   size_t count = 0;
-  for (StackIndirectReferenceTable* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
+  for (HandleScope* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
     count += cur->NumberOfReferences();
   }
   return count;
@@ -1217,7 +1217,7 @@ size_t Thread::NumSirtReferences() {
 bool Thread::SirtContains(jobject obj) const {
   StackReference<mirror::Object>* sirt_entry =
       reinterpret_cast<StackReference<mirror::Object>*>(obj);
-  for (StackIndirectReferenceTable* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
+  for (HandleScope* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
     if (cur->Contains(sirt_entry)) {
       return true;
     }
@@ -1227,7 +1227,7 @@ bool Thread::SirtContains(jobject obj) const {
 }
 
 void Thread::SirtVisitRoots(RootCallback* visitor, void* arg, uint32_t thread_id) {
-  for (StackIndirectReferenceTable* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
+  for (HandleScope* cur = tlsPtr_.top_sirt; cur; cur = cur->GetLink()) {
     size_t num_refs = cur->NumberOfReferences();
     for (size_t j = 0; j < num_refs; ++j) {
       mirror::Object* object = cur->GetReference(j);
@@ -1268,7 +1268,7 @@ mirror::Object* Thread::DecodeJObject(jobject obj) const {
     JavaVMExt* vm = Runtime::Current()->GetJavaVM();
     IndirectReferenceTable& globals = vm->globals;
     ReaderMutexLock mu(const_cast<Thread*>(this), vm->globals_lock);
-    result = const_cast<mirror::Object*>(globals.Get(ref));
+    result = globals.Get(ref);
   } else {
     DCHECK_EQ(kind, kWeakGlobal);
     result = Runtime::Current()->GetJavaVM()->DecodeWeakGlobal(const_cast<Thread*>(this), ref);
