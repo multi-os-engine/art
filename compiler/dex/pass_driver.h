@@ -108,6 +108,30 @@ class PassDriver {
     return nullptr;
   }
 
+  /**
+   * @brief Run a pass using the Pass itself.
+   * @param time_split do we want a time split request(default: false)?
+   * @return whether the pass was applied.
+   */
+  virtual bool RunPass(const Pass* pass, bool time_split = false) = 0;
+
+  static void SetSpecialDriverSelection(void (*value)(PassDriver<PassDriverType>*)) {
+    PassDriver<PassDriverType>::special_pass_driver_selection = value;
+  }
+
+  /**
+   * @brief Searches for a particular pass.
+   * @param the name of the pass to be searched for.
+   */
+  static const Pass* GetDefaultPass(const char* name) {
+    for (const Pass* cur_pass : PassDriver<PassDriverType>::g_default_pass_list) {
+      if (strcmp(name, cur_pass->GetName()) == 0) {
+        return cur_pass;
+      }
+    }
+    return nullptr;
+  }
+
   static void CreateDefaultPassList(const std::string& disable_passes) {
     // Insert each pass from g_passes into g_default_pass_list.
     PassDriverType::g_default_pass_list.clear();
@@ -123,12 +147,43 @@ class PassDriver {
     }
   }
 
+  static void ClearDefaultPassList() {
+    PassDriver<PassDriverType>::g_default_pass_list.clear();
+  }
+
   /**
-   * @brief Run a pass using the Pass itself.
-   * @param time_split do we want a time split request(default: false)?
-   * @return whether the pass was applied.
+   * @brief Insert a Pass in the global default list.
    */
-  virtual bool RunPass(const Pass* pass, bool time_split = false) = 0;
+  static void AddPassToDefaultPassList(const Pass* new_pass) {
+    DCHECK(new_pass != nullptr);
+    DCHECK(new_pass->GetName() != nullptr && new_pass->GetName()[0] != 0);
+
+    // It is an error to override an existing pass.
+    DCHECK(GetDefaultPass(new_pass->GetName()) == nullptr)
+        << "Pass name " << new_pass->GetName() << " already used.";
+
+    // Now add to the list.
+    PassDriver<PassDriverType>::g_default_pass_list.push_back(new_pass);
+  }
+
+  /**
+   * @brief Remove a Pass from the global default list.
+   */
+  static bool RemovePassFromDefaultPassList(const char* pass_name) {
+    for (auto it = PassDriver<PassDriverType>::g_default_pass_list.begin();
+              it != PassDriver<PassDriverType>::g_default_pass_list.end(); ++it) {
+      if (strcmp(pass_name, (*it)->GetName()) == 0) {
+        PassDriver<PassDriverType>::g_default_pass_list.erase(it);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static void CreateCustomDefaultPassList(std::vector<const Pass*> pass_list) {
+    PassDriver<PassDriverType>::g_default_pass_list.clear();
+    PassDriver<PassDriverType>::g_default_pass_list = pass_list;
+  }
 
   /**
    * @brief Print the pass names of all the passes available.
@@ -151,7 +206,11 @@ class PassDriver {
   }
 
   virtual void InitializePasses() {
-    SetDefaultPasses();
+    if (PassDriver<PassDriverType>::special_pass_driver_selection != nullptr) {
+      PassDriver<PassDriverType>::special_pass_driver_selection(this);
+    } else {
+      SetDefaultPasses();
+    }
   }
 
   void SetDefaultPasses() {
@@ -185,6 +244,8 @@ class PassDriver {
 
   /** @brief The default pass list is used to initialize pass_list_. */
   static std::vector<const Pass*> g_default_pass_list;
+
+  static void (*special_pass_driver_selection)(PassDriver<PassDriverType>*);
 };
 
 }  // namespace art
