@@ -24,15 +24,6 @@
      * Runtime::CreateCalleeSaveMethod(kSaveAll)
      */
 .macro SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
-    adrp x9, :got:_ZN3art7Runtime9instance_E
-    ldr x9, [x9, #:got_lo12:_ZN3art7Runtime9instance_E]
-
-    // Our registers aren't intermixed - just spill in order.
-    ldr x9,[x9]  // x9 = & (art::Runtime * art::Runtime.instance_) .
-
-    // x9 = (ArtMethod*) Runtime.instance_.callee_save_methods[kRefAndArgs]  .
-    ldr x9, [x9, RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET ]
-
     sub sp, sp, #368
     .cfi_adjust_cfa_offset 368
 
@@ -42,7 +33,7 @@
 #endif
 
     // FP args
-    stp d1, d2,   [sp, #8]
+    stp d0, d1, [sp, #8]
     stp d2, d3, [sp, #24]
     stp d4, d5, [sp, #40]
     stp d6, d7, [sp, #56]
@@ -53,6 +44,11 @@
     stp d12, d13, [sp, #104]
     stp d14, d15, [sp, #120]
 
+    // FP caller-saves (AAPCS)
+    // TODO: Do we really need to save these?
+    // The register usage need to be matched in
+    // runtime.cc, quick compiler, jni compiler and here
+    // Tune this with the compiler.
     stp d16, d17,   [sp, #136]
     stp d18, d19,   [sp, #152]
     stp d20, d21,   [sp, #168]
@@ -61,7 +57,6 @@
     stp d26, d27,   [sp, #216]
     stp d28, d29,   [sp, #232]
     stp d30, d31,   [sp, #248]
-
 
     // Callee saved.
     stp xSELF, x19, [sp, #264]
@@ -90,27 +85,13 @@
 
     str xLR, [sp, #360]
     .cfi_rel_offset x30, 360
-
-    // Loads appropriate callee-save-method
-    str x9, [sp]    // Store ArtMethod* Runtime::callee_save_methods_[kRefsAndArgs]
-
 .endm
 
     /*
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kRefsOnly).
      */
-// WIP.
 .macro SETUP_REF_ONLY_CALLEE_SAVE_FRAME
-    adrp x9, :got:_ZN3art7Runtime9instance_E
-    ldr x9, [x9, #:got_lo12:_ZN3art7Runtime9instance_E]
-
-    // Our registers aren't intermixed - just spill in order.
-    ldr x9,[x9]  // x9 = & (art::Runtime * art::Runtime.instance_) .
-
-    // x9 = (ArtMethod*) Runtime.instance_.callee_save_methods[kRefAndArgs]  .
-    ldr x9, [x9, RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET ]
-
     sub sp, sp, #176
     .cfi_adjust_cfa_offset 176
 
@@ -152,9 +133,6 @@
 
     str xLR, [sp, #168]
     .cfi_rel_offset x30, 168
-
-    // Loads appropriate callee-save-method
-    str x9, [sp]    // Store ArtMethod* Runtime::callee_save_methods_[kRefsAndArgs]
 .endm
 
 .macro RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
@@ -197,11 +175,18 @@
 .endm
 
 .macro RESTORE_REF_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
-    brk 0
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    ret
 .endm
 
 
-.macro SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_INTERNAL
+    /*
+     * Macro that sets up the callee save frame to conform with
+     * Runtime::CreateCalleeSaveMethod(kRefsAndArgs).
+     *
+     * TODO This is probably too conservative - saving FP & LR.
+     */
+.macro SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
     sub sp, sp, #304
     .cfi_adjust_cfa_offset 304
 
@@ -210,10 +195,13 @@
 #error "REFS_AND_ARGS_CALLEE_SAVE_FRAME(ARM64) size not as expected."
 #endif
 
+    // FP args
     stp d0, d1,   [sp, #16]
     stp d2, d3,   [sp, #32]
     stp d4, d5,   [sp, #48]
     stp d6, d7,   [sp, #64]
+
+    // FP callee-saves
     stp d8, d9,   [sp, #80]
     stp d10, d11, [sp, #96]
     stp d12, d13, [sp, #112]
@@ -260,33 +248,15 @@
     .cfi_rel_offset x30, 296
 .endm
 
-    /*
-     * Macro that sets up the callee save frame to conform with
-     * Runtime::CreateCalleeSaveMethod(kRefsAndArgs).
-     *
-     * TODO This is probably too conservative - saving FP & LR.
-     */
-.macro SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
-    adrp x9, :got:_ZN3art7Runtime9instance_E
-    ldr x9, [x9, #:got_lo12:_ZN3art7Runtime9instance_E]
-
-    // Our registers aren't intermixed - just spill in order.
-    ldr x9,[x9]  // x9 = & (art::Runtime * art::Runtime.instance_) .
-
-    // x9 = (ArtMethod*) Runtime.instance_.callee_save_methods[kRefAndArgs]  .
-    ldr x9, [x9, RUNTIME_REF_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET ]
-
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_INTERNAL
-
-    str x9, [sp]    // Store ArtMethod* Runtime::callee_save_methods_[kRefsAndArgs]
-.endm
-
 .macro RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
 
+    // FP args
     ldp d0, d1,   [sp, #16]
     ldp d2, d3,   [sp, #32]
     ldp d4, d5,   [sp, #48]
     ldp d6, d7,   [sp, #64]
+
+    // FP callee-saves
     ldp d8, d9,   [sp, #80]
     ldp d10, d11, [sp, #96]
     ldp d12, d13, [sp, #112]
@@ -339,10 +309,13 @@
 
 .macro RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME_NO_D0
 
+    // FP args
     ldr d1,   [sp, #24]
     ldp d2, d3,   [sp, #32]
     ldp d4, d5,   [sp, #48]
     ldp d6, d7,   [sp, #64]
+
+    // FP callee-saves
     ldp d8, d9,   [sp, #80]
     ldp d10, d11, [sp, #96]
     ldp d12, d13, [sp, #112]
@@ -1463,7 +1436,7 @@ END art_quick_resolution_trampoline
      * Called to do a generic JNI down-call
      */
 ENTRY art_quick_generic_jni_trampoline
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_INTERNAL
+    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
     str x0, [sp, #0]  // Store native ArtMethod* to bottom of stack.
 
     // Save SP , so we can have static CFI info.
