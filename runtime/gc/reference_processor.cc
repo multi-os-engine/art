@@ -71,7 +71,7 @@ mirror::Object* ReferenceProcessor::GetReferent(Thread* self, mirror::Reference*
         return obj;
       }
     }
-    condition_.Wait(self);
+    condition_.WaitHoldingLocks(self);
   }
   return reference->GetReferent();
 }
