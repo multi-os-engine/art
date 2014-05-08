@@ -27,6 +27,7 @@
 #include "base/timing_logger.h"
 #include "driver/compiler_options.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
+#include "dex/selectivity.h"
 
 namespace art {
 
