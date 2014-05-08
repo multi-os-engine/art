@@ -45,6 +45,9 @@ inline void DoWalkBasicBlocks(PassMEDataHolder* data, const PassME* pass) {
 }
 }  // anonymous namespace
 
+template<>
+void (*PassDriver<PassDriverME>::special_pass_driver_selection)(PassDriver<PassDriverME>*) = nullptr;
+
 /*
  * Create the pass list. These passes are immutable and are shared across the threads.
  *
