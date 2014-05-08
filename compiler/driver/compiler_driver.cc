@@ -29,6 +29,7 @@
 #include "compiler_driver-inl.h"
 #include "dex_compilation_unit.h"
 #include "dex_file-inl.h"
+#include "dex/selectivity.h"
 #include "dex/verification_results.h"
 #include "dex/verified_method.h"
 #include "dex/quick/dex_file_method_inliner.h"
@@ -615,6 +616,8 @@ void CompilerDriver::PreCompile(jobject class_loader, const std::vector<const De
   InitializeClasses(class_loader, dex_files, thread_pool, timings);
 
   UpdateImageClasses(timings);
+
+  PreCompileSummary();
 }
 
 bool CompilerDriver::IsImageClass(const char* descriptor) const {
@@ -808,6 +811,9 @@ void CompilerDriver::UpdateImageClasses(TimingLogger* timings) {
   }
 }
 
+void CompilerDriver::PreCompileSummary() {
+  Selectivity::ExecutePreCompileSummaryAction(this, verification_results_);
+}
 bool CompilerDriver::CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file, uint32_t type_idx) {
   if (IsImage() &&
       IsImageClass(dex_file.StringDataByIdx(dex_file.GetTypeId(type_idx).descriptor_idx_))) {
@@ -1420,6 +1426,11 @@ class ParallelCompilationManager {
   DISALLOW_COPY_AND_ASSIGN(ParallelCompilationManager);
 };
 
+
+static bool SkipMethod(const DexFile::CodeItem* code_item, uint32_t method_idx, uint32_t* access_flags, uint16_t* class_def_idx, const DexFile& dex_file, DexToDexCompilationLevel* dex_to_dex_compilation_level) {
+  return Selectivity::ExecuteMethodSelectivityAction(code_item, method_idx, access_flags, class_def_idx, dex_file, dex_to_dex_compilation_level);
+}
+
 // Return true if the class should be skipped during compilation.
 //
 // The first case where we skip is for redundant class definitions in
@@ -1806,7 +1817,7 @@ void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, siz
   const DexFile& dex_file = *manager->GetDexFile();
   const DexFile::ClassDef& class_def = dex_file.GetClassDef(class_def_index);
   ClassLinker* class_linker = manager->GetClassLinker();
-  if (SkipClass(class_linker, jclass_loader, dex_file, class_def)) {
+  if (SkipClass(class_linker, jclass_loader, dex_file, class_def) == true || Selectivity::ExecuteClassSelectivityAction(dex_file, class_def) == true) {
     return;
   }
   ClassReference ref(&dex_file, class_def_index);
@@ -1903,6 +1914,10 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
   } else {
     MethodReference method_ref(&dex_file, method_idx);
     bool compile = verification_results_->IsCandidateForCompilation(method_ref, access_flags);
+    if (SkipMethod(code_item, method_idx, &access_flags, &class_def_idx, dex_file, &dex_to_dex_compilation_level) == true) {
+      compile = false;
+      dex_to_dex_compilation_level = kDontDexToDexCompile;
+    }
     if (compile) {
       // NOTE: if compiler declines to compile this method, it will return NULL.
       compiled_method = compiler_->Compile(code_item, access_flags, invoke_type, class_def_idx,
