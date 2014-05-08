@@ -300,7 +300,7 @@ void Arm64Mir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
     GenNullCheck(rs_x0, opt_flags);
     Load32Disp(rs_x0, mirror::Object::MonitorOffset().Int32Value(), rs_x1);  // Get lock
     MarkPossibleNullPointerException(opt_flags);
-    Load32Disp(rs_rA64_SELF, Thread::ThinLockIdOffset<4>().Int32Value(), rs_x2);
+    Load32Disp(rs_rA64_SELF, Thread::ThinLockIdOffset<8>().Int32Value(), rs_x2);
     LoadConstantNoClobber(rs_x3, 0);
     // Is lock unheld on lock or held by us (==thread_id) on unlock?
     OpRegReg(kOpCmp, rs_x1, rs_x2);
