@@ -96,34 +96,53 @@ bool QuickCompiler::WriteElf(art::File* file,
 }
 
 Backend* QuickCompiler::GetCodeGenerator(CompilationUnit* cu, void* compilation_unit) const {
-  Mir2Lir* mir_to_lir = nullptr;
-  switch (cu->instruction_set) {
-    case kThumb2:
-      mir_to_lir = ArmCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
-      break;
-    case kArm64:
-      mir_to_lir = Arm64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
-      break;
-    case kMips:
-      mir_to_lir = MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
-      break;
-    case kX86:
-      mir_to_lir = X86CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
-      break;
-    case kX86_64:
-      mir_to_lir = X86CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
-      break;
-    default:
-      LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;
+  // Because of templatization this is quite unelegant.
+  size_t max_temps = 0;
+  Backend* result = nullptr;
+
+  if (Is64BitInstructionSet(cu->instruction_set)) {
+    Mir2Lir<8>* mir_to_lir = nullptr;
+    switch (cu->instruction_set) {
+      case kArm64:
+        mir_to_lir = Arm64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+        break;
+      case kX86_64:
+        mir_to_lir = X86_64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+        break;
+      default:
+        LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;
+    }
+    if (mir_to_lir != nullptr) {
+      max_temps = mir_to_lir->GetMaxPossibleCompilerTemps();
+      result = mir_to_lir;
+    }
+  } else {
+    Mir2Lir<4>* mir_to_lir = nullptr;
+    switch (cu->instruction_set) {
+      case kThumb2:
+        mir_to_lir = ArmCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);;
+        break;
+      case kMips:
+        mir_to_lir = MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+        break;
+      case kX86:
+        mir_to_lir = X86CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+        break;
+      default:
+        LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;
+    }
+    if (mir_to_lir != nullptr) {
+      max_temps = mir_to_lir->GetMaxPossibleCompilerTemps();
+      result = mir_to_lir;
+    }
   }
 
   /* The number of compiler temporaries depends on backend so set it up now if possible */
-  if (mir_to_lir) {
-    size_t max_temps = mir_to_lir->GetMaxPossibleCompilerTemps();
+  if (max_temps != 0) {
     bool set_max = cu->mir_graph->SetMaxAvailableNonSpecialCompilerTemps(max_temps);
     CHECK(set_max);
   }
-  return mir_to_lir;
+  return result;
 }
 
 std::vector<uint8_t>* QuickCompiler::GetCallFrameInformationInitialization(

@@ -547,8 +547,8 @@ Arm64Mir2Lir::Arm64Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAlloca
   }
 }
 
-Mir2Lir* Arm64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
-                            ArenaAllocator* const arena) {
+Mir2Lir<8>* Arm64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
+                             ArenaAllocator* const arena) {
   return new Arm64Mir2Lir(cu, mir_graph, arena);
 }
 
@@ -931,8 +931,8 @@ int Arm64Mir2Lir::LoadArgRegs(CallInfo* info, int call_state,
       }
       LoadValueDirectFixed(rl_arg, RegStorage::Solo32(next_reg));
     }
-    call_state = next_call_insn(cu_, info, call_state, target_method, vtable_idx,
-                                direct_code, direct_method, type);
+    call_state = (this->*next_call_insn)(info, call_state, target_method, vtable_idx,
+                                         direct_code, direct_method, type);
   }
   return call_state;
 }

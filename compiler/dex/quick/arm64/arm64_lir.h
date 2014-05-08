@@ -95,7 +95,7 @@ namespace art {
  * +========================+
  */
 
-#if 1
+#if 0
 #define A64_PTR_SIZE 4
 #define A64_GET_INT_OFFS(offs) ((offs).Int32Value())
 #else

@@ -302,7 +302,8 @@ bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index) {
   return it != inline_methods_.end() && (it->second.flags & kInlineIntrinsic) != 0;
 }
 
-bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
+template <size_t pointer_size>
+bool DexFileMethodInliner::GenIntrinsic(Mir2Lir<pointer_size>* backend, CallInfo* info) {
   InlineMethod intrinsic;
   {
     ReaderMutexLock mu(Thread::Current(), lock_);
@@ -362,6 +363,8 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
       return false;  // avoid warning "control reaches end of non-void function"
   }
 }
+template bool DexFileMethodInliner::GenIntrinsic(Mir2Lir<4>* backend, CallInfo* info);
+template bool DexFileMethodInliner::GenIntrinsic(Mir2Lir<8>* backend, CallInfo* info);
 
 bool DexFileMethodInliner::IsSpecial(uint32_t method_index) {
   ReaderMutexLock mu(Thread::Current(), lock_);
@@ -369,7 +372,8 @@ bool DexFileMethodInliner::IsSpecial(uint32_t method_index) {
   return it != inline_methods_.end() && (it->second.flags & kInlineSpecial) != 0;
 }
 
-bool DexFileMethodInliner::GenSpecial(Mir2Lir* backend, uint32_t method_idx) {
+template <size_t pointer_size>
+bool DexFileMethodInliner::GenSpecial(Mir2Lir<pointer_size>* backend, uint32_t method_idx) {
   InlineMethod special;
   {
     ReaderMutexLock mu(Thread::Current(), lock_);
@@ -381,6 +385,8 @@ bool DexFileMethodInliner::GenSpecial(Mir2Lir* backend, uint32_t method_idx) {
   }
   return backend->SpecialMIR2LIR(special);
 }
+template bool DexFileMethodInliner::GenSpecial(Mir2Lir<4>* backend, uint32_t method_idx);
+template bool DexFileMethodInliner::GenSpecial(Mir2Lir<8>* backend, uint32_t method_idx);
 
 bool DexFileMethodInliner::GenInline(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
                                      uint32_t method_idx) {

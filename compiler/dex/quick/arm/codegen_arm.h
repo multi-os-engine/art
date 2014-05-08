@@ -22,7 +22,7 @@
 
 namespace art {
 
-class ArmMir2Lir FINAL : public Mir2Lir {
+class ArmMir2Lir FINAL : public Mir2Lir<4> {
   public:
     ArmMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
 

@@ -534,7 +534,7 @@ ArmMir2Lir::ArmMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator*
   }
 }
 
-Mir2Lir* ArmCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
+Mir2Lir<4>* ArmCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
                           ArenaAllocator* const arena) {
   return new ArmMir2Lir(cu, mir_graph, arena);
 }

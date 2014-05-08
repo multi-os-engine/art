@@ -35,6 +35,7 @@ struct BasicBlock;
 struct CallInfo;
 struct MIR;
 class MIRGraph;
+template <size_t pointer_size>
 class Mir2Lir;
 
 /**
@@ -72,7 +73,8 @@ class DexFileMethodInliner {
     /**
      * Generate code for an intrinsic function invocation.
      */
-    bool GenIntrinsic(Mir2Lir* backend, CallInfo* info) LOCKS_EXCLUDED(lock_);
+    template <size_t pointer_size>
+    bool GenIntrinsic(Mir2Lir<pointer_size>* backend, CallInfo* info) LOCKS_EXCLUDED(lock_);
 
     /**
      * Check whether a particular method index corresponds to a special function.
@@ -82,7 +84,8 @@ class DexFileMethodInliner {
     /**
      * Generate code for a special function.
      */
-    bool GenSpecial(Mir2Lir* backend, uint32_t method_idx) LOCKS_EXCLUDED(lock_);
+    template <size_t pointer_size>
+    bool GenSpecial(Mir2Lir<pointer_size>* backend, uint32_t method_idx) LOCKS_EXCLUDED(lock_);
 
     /**
      * Try to inline an invoke.

@@ -22,7 +22,92 @@
 
 namespace art {
 
-class X86Mir2Lir FINAL : public Mir2Lir {
+class X86Mir2LirShared {
+ public:
+  static const X86EncodingMap EncodingMap[kX86Last];
+
+  explicit X86Mir2LirShared(CodeBuffer* cb, CompilationUnit* cu) : code_buffer_(cb), cu_(cu) {
+  }
+
+  void EmitPrefix(const X86EncodingMap* entry);
+  void EmitOpcode(const X86EncodingMap* entry);
+  void EmitPrefixAndOpcode(const X86EncodingMap* entry);
+  void EmitDisp(uint8_t base, int disp);
+  void EmitModrmDisp(uint8_t reg_or_opcode, uint8_t base, int disp);
+  void EmitModrmSibDisp(uint8_t reg_or_opcode, uint8_t base, uint8_t index, int scale, int disp);
+  void EmitImm(const X86EncodingMap* entry, int imm);
+  void EmitOpRegOpcode(const X86EncodingMap* entry, uint8_t reg);
+  void EmitOpReg(const X86EncodingMap* entry, uint8_t reg);
+  void EmitOpMem(const X86EncodingMap* entry, uint8_t base, int disp);
+  void EmitOpArray(const X86EncodingMap* entry, uint8_t base, uint8_t index, int scale, int disp);
+  void EmitMemReg(const X86EncodingMap* entry, uint8_t base, int disp, uint8_t reg);
+  void EmitMemImm(const X86EncodingMap* entry, uint8_t base, int disp, int32_t imm);
+  void EmitRegMem(const X86EncodingMap* entry, uint8_t reg, uint8_t base, int disp);
+  void EmitRegArray(const X86EncodingMap* entry, uint8_t reg, uint8_t base, uint8_t index,
+                    int scale, int disp);
+  void EmitArrayReg(const X86EncodingMap* entry, uint8_t base, uint8_t index, int scale, int disp,
+                    uint8_t reg);
+  void EmitArrayImm(const X86EncodingMap* entry, uint8_t base, uint8_t index, int scale, int disp,
+                    int32_t imm);
+  void EmitRegThread(const X86EncodingMap* entry, uint8_t reg, int disp);
+  void EmitRegReg(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2);
+  void EmitRegRegImm(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2, int32_t imm);
+  void EmitRegRegImmRev(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2, int32_t imm);
+  void EmitRegMemImm(const X86EncodingMap* entry, uint8_t reg1, uint8_t base, int disp,
+                     int32_t imm);
+  void EmitMemRegImm(const X86EncodingMap* entry, uint8_t base, int disp, uint8_t reg1, int32_t imm);
+  void EmitRegImm(const X86EncodingMap* entry, uint8_t reg, int imm);
+  void EmitThreadImm(const X86EncodingMap* entry, int disp, int imm);
+  void EmitMovRegImm(const X86EncodingMap* entry, uint8_t reg, int imm);
+  void EmitShiftRegImm(const X86EncodingMap* entry, uint8_t reg, int imm);
+  void EmitShiftMemImm(const X86EncodingMap* entry, uint8_t base, int disp, int imm);
+  void EmitShiftMemCl(const X86EncodingMap* entry, uint8_t base, int displacement, uint8_t cl);
+  void EmitShiftRegCl(const X86EncodingMap* entry, uint8_t reg, uint8_t cl);
+  void EmitRegCond(const X86EncodingMap* entry, uint8_t reg, uint8_t condition);
+  void EmitMemCond(const X86EncodingMap* entry, uint8_t base, int displacement, uint8_t condition);
+
+  /**
+   * @brief Used for encoding conditional register to register operation.
+   * @param entry The entry in the encoding map for the opcode.
+   * @param reg1 The first physical register.
+   * @param reg2 The second physical register.
+   * @param condition The condition code for operation.
+   */
+  void EmitRegRegCond(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2, uint8_t condition);
+
+  /**
+   * @brief Used for encoding conditional register to memory operation.
+   * @param entry The entry in the encoding map for the opcode.
+   * @param reg1 The first physical register.
+   * @param base The memory base register.
+   * @param displacement The memory displacement.
+   * @param condition The condition code for operation.
+   */
+  void EmitRegMemCond(const X86EncodingMap* entry, uint8_t reg1, uint8_t base, int displacement, uint8_t condition);
+
+  void EmitJmp(const X86EncodingMap* entry, int rel);
+  void EmitJcc(const X86EncodingMap* entry, int rel, uint8_t cc);
+  void EmitCallMem(const X86EncodingMap* entry, uint8_t base, int disp);
+  void EmitCallImmediate(const X86EncodingMap* entry, int disp);
+  void EmitCallThread(const X86EncodingMap* entry, int disp);
+
+  template <size_t pointer_size>
+  void EmitPcRel(const X86EncodingMap* entry, uint8_t reg,
+                 int base_or_table_i, void* base_or_table, uint8_t index,
+                 int scale, int table_or_disp_i, void* table_or_disp);
+
+  void EmitMacro(const X86EncodingMap* entry, uint8_t reg, int offset);
+  void EmitUnimplemented(const X86EncodingMap* entry, LIR* lir);
+
+  int GetInsnSize(LIR* lir);
+
+ private:
+  CodeBuffer* code_buffer_;
+  CompilationUnit* cu_;
+};
+
+template <size_t pointer_size>
+class X86Mir2Lir FINAL : public Mir2Lir<pointer_size> {
   public:
     X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
 
@@ -31,7 +116,7 @@ class X86Mir2Lir FINAL : public Mir2Lir {
                             RegLocation rl_dest, int lit);
     bool EasyMultiply(RegLocation rl_src, RegLocation rl_dest, int lit) OVERRIDE;
     LIR* CheckSuspendUsingLoad() OVERRIDE;
-    RegStorage LoadHelper(ThreadOffset<4> offset);
+    RegStorage LoadHelper(ThreadOffset<pointer_size> offset);
     LIR* LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_dest,
                       OpSize size) OVERRIDE;
     LIR* LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_dest, int scale,
@@ -236,17 +321,16 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     LIR* OpRegRegImm(OpKind op, RegStorage r_dest, RegStorage r_src1, int value);
     LIR* OpRegRegReg(OpKind op, RegStorage r_dest, RegStorage r_src1, RegStorage r_src2);
     LIR* OpTestSuspend(LIR* target);
-    LIR* OpThreadMem(OpKind op, ThreadOffset<4> thread_offset);
+    LIR* OpThreadMem(OpKind op, ThreadOffset<pointer_size> thread_offset);
     LIR* OpVldm(RegStorage r_base, int count);
     LIR* OpVstm(RegStorage r_base, int count);
     void OpLea(RegStorage r_base, RegStorage reg1, RegStorage reg2, int scale, int offset);
     void OpRegCopyWide(RegStorage dest, RegStorage src);
-    void OpTlsCmp(ThreadOffset<4> offset, int val);
+    void OpTlsCmp(ThreadOffset<pointer_size> offset, int val);
 
-    void OpRegThreadMem(OpKind op, RegStorage r_dest, ThreadOffset<4> thread_offset);
+    void OpRegThreadMem(OpKind op, RegStorage r_dest, ThreadOffset<pointer_size> thread_offset);
     void SpillCoreRegs();
     void UnSpillCoreRegs();
-    static const X86EncodingMap EncodingMap[kX86Last];
     bool InexpensiveConstantInt(int32_t value);
     bool InexpensiveConstantFloat(int32_t value);
     bool InexpensiveConstantLong(int64_t value);
@@ -312,71 +396,8 @@ class X86Mir2Lir FINAL : public Mir2Lir {
     std::vector<uint8_t>* ReturnCallFrameInformation();
 
   private:
-    void EmitPrefix(const X86EncodingMap* entry);
-    void EmitOpcode(const X86EncodingMap* entry);
-    void EmitPrefixAndOpcode(const X86EncodingMap* entry);
-    void EmitDisp(uint8_t base, int disp);
-    void EmitModrmDisp(uint8_t reg_or_opcode, uint8_t base, int disp);
-    void EmitModrmSibDisp(uint8_t reg_or_opcode, uint8_t base, uint8_t index, int scale, int disp);
-    void EmitImm(const X86EncodingMap* entry, int imm);
-    void EmitOpRegOpcode(const X86EncodingMap* entry, uint8_t reg);
-    void EmitOpReg(const X86EncodingMap* entry, uint8_t reg);
-    void EmitOpMem(const X86EncodingMap* entry, uint8_t base, int disp);
-    void EmitOpArray(const X86EncodingMap* entry, uint8_t base, uint8_t index, int scale, int disp);
-    void EmitMemReg(const X86EncodingMap* entry, uint8_t base, int disp, uint8_t reg);
-    void EmitMemImm(const X86EncodingMap* entry, uint8_t base, int disp, int32_t imm);
-    void EmitRegMem(const X86EncodingMap* entry, uint8_t reg, uint8_t base, int disp);
-    void EmitRegArray(const X86EncodingMap* entry, uint8_t reg, uint8_t base, uint8_t index,
-                      int scale, int disp);
-    void EmitArrayReg(const X86EncodingMap* entry, uint8_t base, uint8_t index, int scale, int disp,
-                      uint8_t reg);
-    void EmitArrayImm(const X86EncodingMap* entry, uint8_t base, uint8_t index, int scale, int disp,
-                      int32_t imm);
-    void EmitRegThread(const X86EncodingMap* entry, uint8_t reg, int disp);
-    void EmitRegReg(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2);
-    void EmitRegRegImm(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2, int32_t imm);
-    void EmitRegRegImmRev(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2, int32_t imm);
-    void EmitRegMemImm(const X86EncodingMap* entry, uint8_t reg1, uint8_t base, int disp,
-                       int32_t imm);
-    void EmitMemRegImm(const X86EncodingMap* entry, uint8_t base, int disp, uint8_t reg1, int32_t imm);
-    void EmitRegImm(const X86EncodingMap* entry, uint8_t reg, int imm);
-    void EmitThreadImm(const X86EncodingMap* entry, int disp, int imm);
-    void EmitMovRegImm(const X86EncodingMap* entry, uint8_t reg, int imm);
-    void EmitShiftRegImm(const X86EncodingMap* entry, uint8_t reg, int imm);
-    void EmitShiftMemImm(const X86EncodingMap* entry, uint8_t base, int disp, int imm);
-    void EmitShiftMemCl(const X86EncodingMap* entry, uint8_t base, int displacement, uint8_t cl);
-    void EmitShiftRegCl(const X86EncodingMap* entry, uint8_t reg, uint8_t cl);
-    void EmitRegCond(const X86EncodingMap* entry, uint8_t reg, uint8_t condition);
-    void EmitMemCond(const X86EncodingMap* entry, uint8_t base, int displacement, uint8_t condition);
-
-    /**
-     * @brief Used for encoding conditional register to register operation.
-     * @param entry The entry in the encoding map for the opcode.
-     * @param reg1 The first physical register.
-     * @param reg2 The second physical register.
-     * @param condition The condition code for operation.
-     */
-    void EmitRegRegCond(const X86EncodingMap* entry, uint8_t reg1, uint8_t reg2, uint8_t condition);
-
-    /**
-     * @brief Used for encoding conditional register to memory operation.
-     * @param entry The entry in the encoding map for the opcode.
-     * @param reg1 The first physical register.
-     * @param base The memory base register.
-     * @param displacement The memory displacement.
-     * @param condition The condition code for operation.
-     */
-    void EmitRegMemCond(const X86EncodingMap* entry, uint8_t reg1, uint8_t base, int displacement, uint8_t condition);
-
-    void EmitJmp(const X86EncodingMap* entry, int rel);
-    void EmitJcc(const X86EncodingMap* entry, int rel, uint8_t cc);
-    void EmitCallMem(const X86EncodingMap* entry, uint8_t base, int disp);
-    void EmitCallImmediate(const X86EncodingMap* entry, int disp);
-    void EmitCallThread(const X86EncodingMap* entry, int disp);
     void EmitPcRel(const X86EncodingMap* entry, uint8_t reg, int base_or_table, uint8_t index,
                    int scale, int table_or_disp);
-    void EmitMacro(const X86EncodingMap* entry, uint8_t reg, int offset);
-    void EmitUnimplemented(const X86EncodingMap* entry, LIR* lir);
     void GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
                                   int64_t val, ConditionCode ccode);
     void GenConstWide(RegLocation rl_dest, int64_t value);
@@ -580,6 +601,8 @@ class X86Mir2Lir FINAL : public Mir2Lir {
 
     // Epilogue increment of stack pointer.
     LIR* stack_increment_;
+
+    X86Mir2LirShared x86_shared_;
 };
 
 }  // namespace art

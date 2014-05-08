@@ -38,8 +38,14 @@ static bool IsDalvikRegisterClobbered(LIR* lir1, LIR* lir2) {
   return (reg1Lo == reg2Lo) || (reg1Lo == reg2Hi) || (reg1Hi == reg2Lo);
 }
 
+// Macro to templatize functions and instantiate them.
+#define MIR2LIR(ret, sig) \
+  template ret Mir2Lir<4>::sig; \
+  template ret Mir2Lir<8>::sig; \
+  template <size_t pointer_size> ret Mir2Lir<pointer_size>::sig
+
 /* Convert a more expensive instruction (ie load) into a move */
-void Mir2Lir::ConvertMemOpIntoMove(LIR* orig_lir, RegStorage dest, RegStorage src) {
+MIR2LIR(void, ConvertMemOpIntoMove(LIR* orig_lir, RegStorage dest, RegStorage src)) {
   /* Insert a move to replace the load */
   LIR* move_lir;
   move_lir = OpRegCopyNoInsert(dest, src);
@@ -70,7 +76,7 @@ void Mir2Lir::ConvertMemOpIntoMove(LIR* orig_lir, RegStorage dest, RegStorage sr
  *   1) They are must-aliases
  *   2) The memory location is not written to in between
  */
-void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
+MIR2LIR(void, ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir)) {
   LIR* this_lir;
 
   if (head_lir == tail_lir) {
@@ -276,7 +282,7 @@ void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
  * Perform a pass of bottom-up walk, from the second instruction in the
  * superblock, to try to hoist loads to earlier slots.
  */
-void Mir2Lir::ApplyLoadHoisting(LIR* head_lir, LIR* tail_lir) {
+MIR2LIR(void, ApplyLoadHoisting(LIR* head_lir, LIR* tail_lir)) {
   LIR* this_lir, *check_lir;
   /*
    * Store the list of independent instructions that can be hoisted past.
@@ -465,7 +471,7 @@ void Mir2Lir::ApplyLoadHoisting(LIR* head_lir, LIR* tail_lir) {
   }
 }
 
-void Mir2Lir::ApplyLocalOptimizations(LIR* head_lir, LIR* tail_lir) {
+MIR2LIR(void, ApplyLocalOptimizations(LIR* head_lir, LIR* tail_lir)) {
   if (!(cu_->disable_opt & (1 << kLoadStoreElimination))) {
     ApplyLoadStoreElimination(head_lir, tail_lir);
   }

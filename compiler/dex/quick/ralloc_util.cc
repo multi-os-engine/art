@@ -22,13 +22,20 @@
 
 namespace art {
 
+// Macro to templatize functions and instantiate them.
+#define MIR2LIR(ret, sig) \
+  template ret Mir2Lir<4>::sig; \
+  template ret Mir2Lir<8>::sig; \
+  template <size_t pointer_size> ret Mir2Lir<pointer_size>::sig
+
 /*
  * Free all allocated temps in the temp pools.  Note that this does
  * not affect the "liveness" of a temp register, which will stay
  * live until it is either explicitly killed or reallocated.
  */
-void Mir2Lir::ResetRegPool() {
-  GrowableArray<RegisterInfo*>::Iterator iter(&tempreg_info_);
+MIR2LIR(void, ResetRegPool()) {
+  typename GrowableArray<RegisterInfo*>::Iterator iter(&tempreg_info_);
+
   for (RegisterInfo* info = iter.Next(); info != NULL; info = iter.Next()) {
     info->MarkFree();
   }
@@ -38,7 +45,7 @@ void Mir2Lir::ResetRegPool() {
   }
 }
 
-Mir2Lir::RegisterInfo::RegisterInfo(RegStorage r, uint64_t mask)
+MIR2LIR(, RegisterInfo::RegisterInfo(RegStorage r, uint64_t mask))
   : reg_(r), is_temp_(false), wide_value_(false), live_(false),
     dirty_(false), partner_(r), s_reg_(INVALID_SREG), def_use_mask_(mask), master_(this) {
   switch (r.StorageSize()) {
@@ -53,14 +60,14 @@ Mir2Lir::RegisterInfo::RegisterInfo(RegStorage r, uint64_t mask)
   used_storage_ = r.Valid() ? ~storage_mask_ : storage_mask_;
 }
 
-Mir2Lir::RegisterPool::RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena,
+MIR2LIR(, RegisterPool::RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena,
                                     const std::vector<RegStorage>& core_regs,
                                     const std::vector<RegStorage>& sp_regs,
                                     const std::vector<RegStorage>& dp_regs,
                                     const std::vector<RegStorage>& reserved_regs,
                                     const std::vector<RegStorage>& core_temps,
                                     const std::vector<RegStorage>& sp_temps,
-                                    const std::vector<RegStorage>& dp_temps) :
+                                    const std::vector<RegStorage>& dp_temps)) :
     core_regs_(arena, core_regs.size()), next_core_reg_(0), sp_regs_(arena, sp_regs.size()),
     next_sp_reg_(0), dp_regs_(arena, dp_regs.size()), next_dp_reg_(0), m2l_(m2l)  {
   // Initialize the fast lookup map.
@@ -108,9 +115,9 @@ Mir2Lir::RegisterPool::RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena,
   m2l_->reginfo_map_.Put(RegStorage::InvalidReg().GetReg(), invalid_reg);
 }
 
-void Mir2Lir::DumpRegPool(GrowableArray<RegisterInfo*>* regs) {
+MIR2LIR(void, DumpRegPool(GrowableArray<RegisterInfo*>* regs)) {
   LOG(INFO) << "================================================";
-  GrowableArray<RegisterInfo*>::Iterator it(regs);
+  typename GrowableArray<RegisterInfo*>::Iterator it(regs);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     LOG(INFO) << StringPrintf(
         "R[%d:%d:%c]: T:%d, U:%d, W:%d, p:%d, LV:%d, D:%d, SR:%d, DEF:%d",
@@ -121,23 +128,23 @@ void Mir2Lir::DumpRegPool(GrowableArray<RegisterInfo*>* regs) {
   LOG(INFO) << "================================================";
 }
 
-void Mir2Lir::DumpCoreRegPool() {
+MIR2LIR(void, DumpCoreRegPool()) {
   DumpRegPool(&reg_pool_->core_regs_);
 }
 
-void Mir2Lir::DumpFpRegPool() {
+MIR2LIR(void, DumpFpRegPool()) {
   DumpRegPool(&reg_pool_->sp_regs_);
   DumpRegPool(&reg_pool_->dp_regs_);
 }
 
-void Mir2Lir::DumpRegPools() {
+MIR2LIR(void, DumpRegPools()) {
   LOG(INFO) << "Core registers";
   DumpCoreRegPool();
   LOG(INFO) << "FP registers";
   DumpFpRegPool();
 }
 
-void Mir2Lir::Clobber(RegStorage reg) {
+MIR2LIR(void, Clobber(RegStorage reg)) {
   if (reg.IsPair()) {
     ClobberBody(GetRegInfo(reg.GetLow()));
     ClobberBody(GetRegInfo(reg.GetHigh()));
@@ -146,8 +153,8 @@ void Mir2Lir::Clobber(RegStorage reg) {
   }
 }
 
-void Mir2Lir::ClobberSRegBody(GrowableArray<RegisterInfo*>* regs, int s_reg) {
-  GrowableArray<RegisterInfo*>::Iterator it(regs);
+MIR2LIR(void, ClobberSRegBody(GrowableArray<RegisterInfo*>* regs, int s_reg)) {
+  typename GrowableArray<RegisterInfo*>::Iterator it(regs);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     if ((info->SReg() == s_reg)  ||
         (info->IsWide() && (GetRegInfo(info->Partner())->SReg() == s_reg))) {
@@ -171,7 +178,7 @@ void Mir2Lir::ClobberSRegBody(GrowableArray<RegisterInfo*>* regs, int s_reg) {
  * changes (for example: INT_TO_FLOAT v1, v1).  Revisit when improved register allocation is
  * addressed.
  */
-void Mir2Lir::ClobberSReg(int s_reg) {
+MIR2LIR(void, ClobberSReg(int s_reg)) {
   if (s_reg != INVALID_SREG) {
     /* Reset live temp tracking sanity checker */
     if (kIsDebugBuild) {
@@ -194,7 +201,7 @@ void Mir2Lir::ClobberSReg(int s_reg) {
  * ssa name (above the last original Dalvik register).  This function
  * maps SSA names to positions in the promotion_map array.
  */
-int Mir2Lir::SRegToPMap(int s_reg) {
+MIR2LIR(int, SRegToPMap(int s_reg)) {
   DCHECK_LT(s_reg, mir_graph_->GetNumSSARegs());
   DCHECK_GE(s_reg, 0);
   int v_reg = mir_graph_->SRegToVReg(s_reg);
@@ -215,7 +222,7 @@ int Mir2Lir::SRegToPMap(int s_reg) {
 }
 
 // TODO: refactor following Alloc/Record routines - much commonality.
-void Mir2Lir::RecordCorePromotion(RegStorage reg, int s_reg) {
+MIR2LIR(void, RecordCorePromotion(RegStorage reg, int s_reg)) {
   int p_map_idx = SRegToPMap(s_reg);
   int v_reg = mir_graph_->SRegToVReg(s_reg);
   int reg_num = reg.GetRegNum();
@@ -229,9 +236,9 @@ void Mir2Lir::RecordCorePromotion(RegStorage reg, int s_reg) {
 }
 
 /* Reserve a callee-save register.  Return InvalidReg if none available */
-RegStorage Mir2Lir::AllocPreservedCoreReg(int s_reg) {
+MIR2LIR(RegStorage, AllocPreservedCoreReg(int s_reg)) {
   RegStorage res;
-  GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->core_regs_);
+  typename GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->core_regs_);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     if (!info->IsTemp() && !info->InUse()) {
       res = info->GetReg();
@@ -242,7 +249,7 @@ RegStorage Mir2Lir::AllocPreservedCoreReg(int s_reg) {
   return res;
 }
 
-void Mir2Lir::RecordSinglePromotion(RegStorage reg, int s_reg) {
+MIR2LIR(void, RecordSinglePromotion(RegStorage reg, int s_reg)) {
   int p_map_idx = SRegToPMap(s_reg);
   int v_reg = mir_graph_->SRegToVReg(s_reg);
   GetRegInfo(reg)->MarkInUse();
@@ -252,9 +259,9 @@ void Mir2Lir::RecordSinglePromotion(RegStorage reg, int s_reg) {
 }
 
 // Reserve a callee-save sp single register.
-RegStorage Mir2Lir::AllocPreservedSingle(int s_reg) {
+MIR2LIR(RegStorage, AllocPreservedSingle(int s_reg)) {
   RegStorage res;
-  GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->sp_regs_);
+  typename GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->sp_regs_);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     if (!info->IsTemp() && !info->InUse()) {
       res = info->GetReg();
@@ -265,7 +272,7 @@ RegStorage Mir2Lir::AllocPreservedSingle(int s_reg) {
   return res;
 }
 
-void Mir2Lir::RecordDoublePromotion(RegStorage reg, int s_reg) {
+MIR2LIR(void, RecordDoublePromotion(RegStorage reg, int s_reg)) {
   int p_map_idx = SRegToPMap(s_reg);
   int v_reg = mir_graph_->SRegToVReg(s_reg);
   GetRegInfo(reg)->MarkInUse();
@@ -275,9 +282,9 @@ void Mir2Lir::RecordDoublePromotion(RegStorage reg, int s_reg) {
 }
 
 // Reserve a callee-save dp solo register.
-RegStorage Mir2Lir::AllocPreservedDouble(int s_reg) {
+MIR2LIR(RegStorage, AllocPreservedDouble(int s_reg)) {
   RegStorage res;
-  GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->dp_regs_);
+  typename GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->dp_regs_);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     if (!info->IsTemp() && !info->InUse()) {
       res = info->GetReg();
@@ -289,7 +296,7 @@ RegStorage Mir2Lir::AllocPreservedDouble(int s_reg) {
 }
 
 
-RegStorage Mir2Lir::AllocTempBody(GrowableArray<RegisterInfo*> &regs, int* next_temp, bool required) {
+MIR2LIR(RegStorage, AllocTempBody(GrowableArray<RegisterInfo*> &regs, int* next_temp, bool required)) {
   int num_regs = regs.Size();
   int next = *next_temp;
   for (int i = 0; i< num_regs; i++) {
@@ -328,29 +335,29 @@ RegStorage Mir2Lir::AllocTempBody(GrowableArray<RegisterInfo*> &regs, int* next_
 }
 
 /* Return a temp if one is available, -1 otherwise */
-RegStorage Mir2Lir::AllocFreeTemp() {
+MIR2LIR(RegStorage, Mir2Lir::AllocFreeTemp()) {
   return AllocTempBody(reg_pool_->core_regs_, &reg_pool_->next_core_reg_, false);
 }
 
-RegStorage Mir2Lir::AllocTemp() {
+MIR2LIR(RegStorage, Mir2Lir::AllocTemp()) {
   return AllocTempBody(reg_pool_->core_regs_, &reg_pool_->next_core_reg_, true);
 }
 
-RegStorage Mir2Lir::AllocTempSingle() {
+MIR2LIR(RegStorage, AllocTempSingle()) {
   RegStorage res = AllocTempBody(reg_pool_->sp_regs_, &reg_pool_->next_sp_reg_, true);
   DCHECK(res.IsSingle()) << "Reg: 0x" << std::hex << res.GetRawBits();
   return res;
 }
 
-RegStorage Mir2Lir::AllocTempDouble() {
+MIR2LIR(RegStorage, AllocTempDouble()) {
   RegStorage res = AllocTempBody(reg_pool_->dp_regs_, &reg_pool_->next_dp_reg_, true);
   DCHECK(res.IsDouble()) << "Reg: 0x" << std::hex << res.GetRawBits();
   return res;
 }
 
-RegStorage Mir2Lir::FindLiveReg(GrowableArray<RegisterInfo*> &regs, int s_reg) {
+MIR2LIR(RegStorage, Mir2Lir::FindLiveReg(GrowableArray<RegisterInfo*> &regs, int s_reg)) {
   RegStorage res;
-  GrowableArray<RegisterInfo*>::Iterator it(&regs);
+  typename GrowableArray<RegisterInfo*>::Iterator it(&regs);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     if ((info->SReg() == s_reg) && info->IsLive()) {
       res = info->GetReg();
@@ -360,7 +367,7 @@ RegStorage Mir2Lir::FindLiveReg(GrowableArray<RegisterInfo*> &regs, int s_reg) {
   return res;
 }
 
-RegStorage Mir2Lir::AllocLiveReg(int s_reg, int reg_class, bool wide) {
+MIR2LIR(RegStorage, AllocLiveReg(int s_reg, int reg_class, bool wide)) {
   RegStorage reg;
   // TODO: might be worth a sanity check here to verify at most 1 live reg per s_reg.
   if ((reg_class == kAnyReg) || (reg_class == kFPReg)) {
@@ -405,7 +412,7 @@ RegStorage Mir2Lir::AllocLiveReg(int s_reg, int reg_class, bool wide) {
   return reg;
 }
 
-void Mir2Lir::FreeTemp(RegStorage reg) {
+MIR2LIR(void, FreeTemp(RegStorage reg)) {
   if (reg.IsPair()) {
     FreeTemp(reg.GetLow());
     FreeTemp(reg.GetHigh());
@@ -419,7 +426,7 @@ void Mir2Lir::FreeTemp(RegStorage reg) {
   }
 }
 
-bool Mir2Lir::IsLive(RegStorage reg) {
+MIR2LIR(bool, IsLive(RegStorage reg)) {
   bool res;
   if (reg.IsPair()) {
     RegisterInfo* p_lo = GetRegInfo(reg.GetLow());
@@ -432,7 +439,7 @@ bool Mir2Lir::IsLive(RegStorage reg) {
   return res;
 }
 
-bool Mir2Lir::IsTemp(RegStorage reg) {
+MIR2LIR(bool, IsTemp(RegStorage reg)) {
   bool res;
   if (reg.IsPair()) {
     RegisterInfo* p_lo = GetRegInfo(reg.GetLow());
@@ -445,7 +452,7 @@ bool Mir2Lir::IsTemp(RegStorage reg) {
   return res;
 }
 
-bool Mir2Lir::IsPromoted(RegStorage reg) {
+MIR2LIR(bool, IsPromoted(RegStorage reg)) {
   bool res;
   if (reg.IsPair()) {
     RegisterInfo* p_lo = GetRegInfo(reg.GetLow());
@@ -458,7 +465,7 @@ bool Mir2Lir::IsPromoted(RegStorage reg) {
   return res;
 }
 
-bool Mir2Lir::IsDirty(RegStorage reg) {
+MIR2LIR(bool, IsDirty(RegStorage reg)) {
   bool res;
   if (reg.IsPair()) {
     RegisterInfo* p_lo = GetRegInfo(reg.GetLow());
@@ -476,7 +483,7 @@ bool Mir2Lir::IsDirty(RegStorage reg) {
  * register.  No check is made to see if the register was previously
  * allocated.  Use with caution.
  */
-void Mir2Lir::LockTemp(RegStorage reg) {
+MIR2LIR(void, LockTemp(RegStorage reg)) {
   DCHECK(IsTemp(reg));
   if (reg.IsPair()) {
     RegisterInfo* p_lo = GetRegInfo(reg.GetLow());
@@ -492,7 +499,7 @@ void Mir2Lir::LockTemp(RegStorage reg) {
   }
 }
 
-void Mir2Lir::ResetDef(RegStorage reg) {
+MIR2LIR(void, ResetDef(RegStorage reg)) {
   if (reg.IsPair()) {
     GetRegInfo(reg.GetLow())->ResetDefBody();
     GetRegInfo(reg.GetHigh())->ResetDefBody();
@@ -501,7 +508,7 @@ void Mir2Lir::ResetDef(RegStorage reg) {
   }
 }
 
-void Mir2Lir::NullifyRange(RegStorage reg, int s_reg) {
+MIR2LIR(void, NullifyRange(RegStorage reg, int s_reg)) {
   RegisterInfo* info = nullptr;
   RegStorage rs = reg.IsPair() ? reg.GetLow() : reg;
   if (IsTemp(rs)) {
@@ -523,7 +530,7 @@ void Mir2Lir::NullifyRange(RegStorage reg, int s_reg) {
  * on entry start points to the LIR prior to the beginning of the
  * sequence.
  */
-void Mir2Lir::MarkDef(RegLocation rl, LIR *start, LIR *finish) {
+MIR2LIR(void, MarkDef(RegLocation rl, LIR *start, LIR *finish)) {
   DCHECK(!rl.wide);
   DCHECK(start && start->next);
   DCHECK(finish);
@@ -537,7 +544,7 @@ void Mir2Lir::MarkDef(RegLocation rl, LIR *start, LIR *finish) {
  * on entry start points to the LIR prior to the beginning of the
  * sequence.
  */
-void Mir2Lir::MarkDefWide(RegLocation rl, LIR *start, LIR *finish) {
+MIR2LIR(void, MarkDefWide(RegLocation rl, LIR *start, LIR *finish)) {
   DCHECK(rl.wide);
   DCHECK(start && start->next);
   DCHECK(finish);
@@ -552,7 +559,7 @@ void Mir2Lir::MarkDefWide(RegLocation rl, LIR *start, LIR *finish) {
   p->SetDefEnd(finish);
 }
 
-RegLocation Mir2Lir::WideToNarrow(RegLocation rl) {
+MIR2LIR(RegLocation, WideToNarrow(RegLocation rl)) {
   DCHECK(rl.wide);
   if (rl.location == kLocPhysReg) {
     if (rl.reg.IsPair()) {
@@ -573,7 +580,7 @@ RegLocation Mir2Lir::WideToNarrow(RegLocation rl) {
   return rl;
 }
 
-void Mir2Lir::ResetDefLoc(RegLocation rl) {
+MIR2LIR(void, ResetDefLoc(RegLocation rl)) {
   DCHECK(!rl.wide);
   if (IsTemp(rl.reg) && !(cu_->disable_opt & (1 << kSuppressLoads))) {
     NullifyRange(rl.reg, rl.s_reg_low);
@@ -581,7 +588,7 @@ void Mir2Lir::ResetDefLoc(RegLocation rl) {
   ResetDef(rl.reg);
 }
 
-void Mir2Lir::ResetDefLocWide(RegLocation rl) {
+MIR2LIR(void, ResetDefLocWide(RegLocation rl)) {
   DCHECK(rl.wide);
   // If pair, only track low reg of pair.
   RegStorage rs = rl.reg.IsPair() ? rl.reg.GetLow() : rl.reg;
@@ -591,23 +598,23 @@ void Mir2Lir::ResetDefLocWide(RegLocation rl) {
   ResetDef(rs);
 }
 
-void Mir2Lir::ResetDefTracking() {
-  GrowableArray<RegisterInfo*>::Iterator core_it(&reg_pool_->core_regs_);
+MIR2LIR(void, ResetDefTracking()) {
+  typename GrowableArray<RegisterInfo*>::Iterator core_it(&reg_pool_->core_regs_);
   for (RegisterInfo* info = core_it.Next(); info != nullptr; info = core_it.Next()) {
     info->ResetDefBody();
   }
-  GrowableArray<RegisterInfo*>::Iterator sp_it(&reg_pool_->core_regs_);
+  typename GrowableArray<RegisterInfo*>::Iterator sp_it(&reg_pool_->core_regs_);
   for (RegisterInfo* info = sp_it.Next(); info != nullptr; info = sp_it.Next()) {
     info->ResetDefBody();
   }
-  GrowableArray<RegisterInfo*>::Iterator dp_it(&reg_pool_->core_regs_);
+  typename GrowableArray<RegisterInfo*>::Iterator dp_it(&reg_pool_->core_regs_);
   for (RegisterInfo* info = dp_it.Next(); info != nullptr; info = dp_it.Next()) {
     info->ResetDefBody();
   }
 }
 
-void Mir2Lir::ClobberAllRegs() {
-  GrowableArray<RegisterInfo*>::Iterator iter(&tempreg_info_);
+MIR2LIR(void, ClobberAllRegs()) {
+  typename GrowableArray<RegisterInfo*>::Iterator iter(&tempreg_info_);
   for (RegisterInfo* info = iter.Next(); info != NULL; info = iter.Next()) {
     info->SetIsLive(false);
     info->SetSReg(INVALID_SREG);
@@ -616,7 +623,7 @@ void Mir2Lir::ClobberAllRegs() {
   }
 }
 
-void Mir2Lir::FlushRegWide(RegStorage reg) {
+MIR2LIR(void, FlushRegWide(RegStorage reg)) {
   if (reg.IsPair()) {
     RegisterInfo* info1 = GetRegInfo(reg.GetLow());
     RegisterInfo* info2 = GetRegInfo(reg.GetHigh());
@@ -646,7 +653,7 @@ void Mir2Lir::FlushRegWide(RegStorage reg) {
   }
 }
 
-void Mir2Lir::FlushReg(RegStorage reg) {
+MIR2LIR(void, FlushReg(RegStorage reg)) {
   DCHECK(!reg.IsPair());
   RegisterInfo* info = GetRegInfo(reg);
   if (info->IsLive() && info->IsDirty()) {
@@ -656,7 +663,7 @@ void Mir2Lir::FlushReg(RegStorage reg) {
   }
 }
 
-void Mir2Lir::FlushSpecificReg(RegisterInfo* info) {
+MIR2LIR(void, FlushSpecificReg(RegisterInfo* info)) {
   if (info->IsWide()) {
     FlushRegWide(info->GetReg());
   } else {
@@ -664,8 +671,8 @@ void Mir2Lir::FlushSpecificReg(RegisterInfo* info) {
   }
 }
 
-void Mir2Lir::FlushAllRegs() {
-  GrowableArray<RegisterInfo*>::Iterator it(&tempreg_info_);
+MIR2LIR(void, FlushAllRegs()) {
+  typename GrowableArray<RegisterInfo*>::Iterator it(&tempreg_info_);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     if (info->IsLive() && info->IsDirty()) {
       FlushSpecificReg(info);
@@ -679,7 +686,7 @@ void Mir2Lir::FlushAllRegs() {
 }
 
 
-bool Mir2Lir::RegClassMatches(int reg_class, RegStorage reg) {
+MIR2LIR(bool, RegClassMatches(int reg_class, RegStorage reg)) {
   if (reg_class == kAnyReg) {
     return true;
   } else if (reg_class == kCoreReg) {
@@ -689,7 +696,7 @@ bool Mir2Lir::RegClassMatches(int reg_class, RegStorage reg) {
   }
 }
 
-void Mir2Lir::MarkLiveReg(RegStorage reg, int s_reg) {
+MIR2LIR(void, MarkLiveReg(RegStorage reg, int s_reg)) {
   RegisterInfo* info = GetRegInfo(reg);
   if ((info->SReg() == s_reg) && info->IsLive()) {
     return;  // Already live.
@@ -707,7 +714,7 @@ void Mir2Lir::MarkLiveReg(RegStorage reg, int s_reg) {
   info->SetSReg(s_reg);
 }
 
-void Mir2Lir::MarkLive(RegLocation loc) {
+MIR2LIR(void, MarkLive(RegLocation loc)) {
   RegStorage reg = loc.reg;
   int s_reg = loc.s_reg_low;
   if (reg.IsPair()) {
@@ -721,21 +728,21 @@ void Mir2Lir::MarkLive(RegLocation loc) {
   }
 }
 
-void Mir2Lir::MarkTemp(RegStorage reg) {
+MIR2LIR(void, MarkTemp(RegStorage reg)) {
   DCHECK(!reg.IsPair());
   RegisterInfo* info = GetRegInfo(reg);
   tempreg_info_.Insert(info);
   info->SetIsTemp(true);
 }
 
-void Mir2Lir::UnmarkTemp(RegStorage reg) {
+MIR2LIR(void, UnmarkTemp(RegStorage reg)) {
   DCHECK(!reg.IsPair());
   RegisterInfo* info = GetRegInfo(reg);
   tempreg_info_.Delete(info);
   info->SetIsTemp(false);
 }
 
-void Mir2Lir::MarkWide(RegStorage reg) {
+MIR2LIR(void, MarkWide(RegStorage reg)) {
   if (reg.IsPair()) {
     RegisterInfo* info_lo = GetRegInfo(reg.GetLow());
     RegisterInfo* info_hi = GetRegInfo(reg.GetHigh());
@@ -750,7 +757,7 @@ void Mir2Lir::MarkWide(RegStorage reg) {
   }
 }
 
-void Mir2Lir::MarkClean(RegLocation loc) {
+MIR2LIR(void, MarkClean(RegLocation loc)) {
   if (loc.reg.IsPair()) {
     RegisterInfo* info = GetRegInfo(loc.reg.GetLow());
     info->SetIsDirty(false);
@@ -763,7 +770,7 @@ void Mir2Lir::MarkClean(RegLocation loc) {
 }
 
 // FIXME: need to verify rules/assumptions about how wide values are treated in 64BitSolos.
-void Mir2Lir::MarkDirty(RegLocation loc) {
+MIR2LIR(void, MarkDirty(RegLocation loc)) {
   if (loc.home) {
     // If already home, can't be dirty
     return;
@@ -779,7 +786,7 @@ void Mir2Lir::MarkDirty(RegLocation loc) {
   }
 }
 
-void Mir2Lir::MarkInUse(RegStorage reg) {
+MIR2LIR(void, MarkInUse(RegStorage reg)) {
   if (reg.IsPair()) {
     GetRegInfo(reg.GetLow())->MarkInUse();
     GetRegInfo(reg.GetHigh())->MarkInUse();
@@ -788,8 +795,8 @@ void Mir2Lir::MarkInUse(RegStorage reg) {
   }
 }
 
-bool Mir2Lir::CheckCorePoolSanity() {
-  GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->core_regs_);
+MIR2LIR(bool, CheckCorePoolSanity()) {
+  typename GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->core_regs_);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     RegStorage my_reg = info->GetReg();
     if (info->IsWide() && my_reg.IsPair()) {
@@ -827,7 +834,7 @@ bool Mir2Lir::CheckCorePoolSanity() {
  * is a bit complex when dealing with FP regs.  Examine code to see
  * if it's worthwhile trying to be more clever here.
  */
-RegLocation Mir2Lir::UpdateLoc(RegLocation loc) {
+MIR2LIR(RegLocation, UpdateLoc(RegLocation loc)) {
   DCHECK(!loc.wide);
   DCHECK(CheckCorePoolSanity());
   if (loc.location != kLocPhysReg) {
@@ -851,7 +858,7 @@ RegLocation Mir2Lir::UpdateLoc(RegLocation loc) {
   return loc;
 }
 
-RegLocation Mir2Lir::UpdateLocWide(RegLocation loc) {
+MIR2LIR(RegLocation, UpdateLocWide(RegLocation loc)) {
   DCHECK(loc.wide);
   DCHECK(CheckCorePoolSanity());
   if (loc.location != kLocPhysReg) {
@@ -886,14 +893,14 @@ RegLocation Mir2Lir::UpdateLocWide(RegLocation loc) {
 }
 
 /* For use in cases we don't know (or care) width */
-RegLocation Mir2Lir::UpdateRawLoc(RegLocation loc) {
+MIR2LIR(RegLocation, UpdateRawLoc(RegLocation loc)) {
   if (loc.wide)
     return UpdateLocWide(loc);
   else
     return UpdateLoc(loc);
 }
 
-RegLocation Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update) {
+MIR2LIR(RegLocation, EvalLocWide(RegLocation loc, int reg_class, bool update)) {
   DCHECK(loc.wide);
 
   loc = UpdateLocWide(loc);
@@ -926,7 +933,7 @@ RegLocation Mir2Lir::EvalLocWide(RegLocation loc, int reg_class, bool update) {
   return loc;
 }
 
-RegLocation Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
+MIR2LIR(RegLocation, EvalLoc(RegLocation loc, int reg_class, bool update)) {
   if (loc.wide) {
     return EvalLocWide(loc, reg_class, update);
   }
@@ -958,7 +965,7 @@ RegLocation Mir2Lir::EvalLoc(RegLocation loc, int reg_class, bool update) {
 }
 
 /* USE SSA names to count references of base Dalvik v_regs. */
-void Mir2Lir::CountRefs(RefCounts* core_counts, RefCounts* fp_counts, size_t num_regs) {
+MIR2LIR(void, CountRefs(RefCounts* core_counts, RefCounts* fp_counts, size_t num_regs)) {
   for (int i = 0; i < mir_graph_->GetNumSSARegs(); i++) {
     RegLocation loc = mir_graph_->reg_location_[i];
     RefCounts* counts = loc.fp ? fp_counts : core_counts;
@@ -978,9 +985,12 @@ void Mir2Lir::CountRefs(RefCounts* core_counts, RefCounts* fp_counts, size_t num
 }
 
 /* qsort callback function, sort descending */
+template <size_t pointer_size>
 static int SortCounts(const void *val1, const void *val2) {
-  const Mir2Lir::RefCounts* op1 = reinterpret_cast<const Mir2Lir::RefCounts*>(val1);
-  const Mir2Lir::RefCounts* op2 = reinterpret_cast<const Mir2Lir::RefCounts*>(val2);
+  const typename Mir2Lir<pointer_size>::RefCounts* op1 =
+      reinterpret_cast<const typename Mir2Lir<pointer_size>::RefCounts*>(val1);
+  const typename Mir2Lir<pointer_size>::RefCounts* op2 =
+      reinterpret_cast<const typename Mir2Lir<pointer_size>::RefCounts*>(val2);
   // Note that we fall back to sorting on reg so we get stable output
   // on differing qsort implementations (such as on host and target or
   // between local host and build servers).
@@ -989,7 +999,7 @@ static int SortCounts(const void *val1, const void *val2) {
           : (op1->count < op2->count ? 1 : -1);
 }
 
-void Mir2Lir::DumpCounts(const RefCounts* arr, int size, const char* msg) {
+MIR2LIR(void, DumpCounts(const RefCounts* arr, int size, const char* msg)) {
   LOG(INFO) << msg;
   for (int i = 0; i < size; i++) {
     if ((arr[i].s_reg & STARTING_DOUBLE_SREG) != 0) {
@@ -1004,7 +1014,7 @@ void Mir2Lir::DumpCounts(const RefCounts* arr, int size, const char* msg) {
  * Note: some portions of this code required even if the kPromoteRegs
  * optimization is disabled.
  */
-void Mir2Lir::DoPromotion() {
+MIR2LIR(void, DoPromotion()) {
   int dalvik_regs = cu_->num_dalvik_registers;
   int num_regs = dalvik_regs + mir_graph_->GetNumUsedCompilerTemps();
   const int promotion_threshold = 1;
@@ -1055,8 +1065,8 @@ void Mir2Lir::DoPromotion() {
 
 
   // Sort the count arrays
-  qsort(core_regs, num_regs, sizeof(RefCounts), SortCounts);
-  qsort(FpRegs, num_regs * 2, sizeof(RefCounts), SortCounts);
+  qsort(core_regs, num_regs, sizeof(RefCounts), SortCounts<pointer_size>);
+  qsort(FpRegs, num_regs * 2, sizeof(RefCounts), SortCounts<pointer_size>);
 
   if (cu_->verbose) {
     DumpCounts(core_regs, num_regs, "Core regs after sort");
@@ -1153,19 +1163,19 @@ void Mir2Lir::DoPromotion() {
 }
 
 /* Returns sp-relative offset in bytes for a VReg */
-int Mir2Lir::VRegOffset(int v_reg) {
+MIR2LIR(int, VRegOffset(int v_reg)) {
   return StackVisitor::GetVRegOffset(cu_->code_item, core_spill_mask_,
                                      fp_spill_mask_, frame_size_, v_reg,
                                      cu_->instruction_set);
 }
 
 /* Returns sp-relative offset in bytes for a SReg */
-int Mir2Lir::SRegOffset(int s_reg) {
+MIR2LIR(int, SRegOffset(int s_reg)) {
   return VRegOffset(mir_graph_->SRegToVReg(s_reg));
 }
 
 /* Mark register usage state and return long retloc */
-RegLocation Mir2Lir::GetReturnWide(bool is_double) {
+MIR2LIR(RegLocation, GetReturnWide(bool is_double)) {
   RegLocation gpr_res = LocCReturnWide();
   RegLocation fpr_res = LocCReturnDouble();
   RegLocation res = is_double ? fpr_res : gpr_res;
@@ -1185,7 +1195,7 @@ RegLocation Mir2Lir::GetReturnWide(bool is_double) {
   return res;
 }
 
-RegLocation Mir2Lir::GetReturn(bool is_float) {
+MIR2LIR(RegLocation, GetReturn(bool is_float)) {
   RegLocation gpr_res = LocCReturn();
   RegLocation fpr_res = LocCReturnFloat();
   RegLocation res = is_float ? fpr_res : gpr_res;
@@ -1198,7 +1208,7 @@ RegLocation Mir2Lir::GetReturn(bool is_float) {
   return res;
 }
 
-void Mir2Lir::SimpleRegAlloc() {
+MIR2LIR(void, SimpleRegAlloc()) {
   DoPromotion();
 
   if (cu_->verbose && !(cu_->disable_opt & (1 << kPromoteRegs))) {
@@ -1219,11 +1229,11 @@ void Mir2Lir::SimpleRegAlloc() {
  * records for operands are first created, we need to ask the locRecord
  * identified by the dataflow pass what it's new name is.
  */
-int Mir2Lir::GetSRegHi(int lowSreg) {
+MIR2LIR(int, GetSRegHi(int lowSreg)) {
   return (lowSreg == INVALID_SREG) ? INVALID_SREG : lowSreg + 1;
 }
 
-bool Mir2Lir::LiveOut(int s_reg) {
+MIR2LIR(bool, LiveOut(int s_reg)) {
   // For now.
   return true;
 }

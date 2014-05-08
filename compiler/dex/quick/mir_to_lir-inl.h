@@ -23,8 +23,10 @@
 
 namespace art {
 
+#define MIR2LIR(ret, sig) template <size_t pointer_size> inline ret Mir2Lir<pointer_size>::sig
+
 /* Mark a temp register as dead.  Does not affect allocation state. */
-inline void Mir2Lir::ClobberBody(RegisterInfo* p) {
+MIR2LIR(void, ClobberBody(RegisterInfo* p)) {
   if (p->IsTemp()) {
     DCHECK(!(p->IsLive() && p->IsDirty()))  << "Live & dirty temp in clobber";
     p->SetIsLive(false);
@@ -44,8 +46,8 @@ inline void Mir2Lir::ClobberBody(RegisterInfo* p) {
   }
 }
 
-inline LIR* Mir2Lir::RawLIR(DexOffset dalvik_offset, int opcode, int op0,
-                            int op1, int op2, int op3, int op4, LIR* target) {
+MIR2LIR(LIR*, RawLIR(DexOffset dalvik_offset, int opcode, int op0, int op1, int op2, int op3,
+                      int op4, LIR* target)) {
   LIR* insn = static_cast<LIR*>(arena_->Alloc(sizeof(LIR), kArenaAllocLIR));
   insn->dalvik_offset = dalvik_offset;
   insn->opcode = opcode;
@@ -69,7 +71,7 @@ inline LIR* Mir2Lir::RawLIR(DexOffset dalvik_offset, int opcode, int op0,
  * The following are building blocks to construct low-level IRs with 0 - 4
  * operands.
  */
-inline LIR* Mir2Lir::NewLIR0(int opcode) {
+MIR2LIR(LIR*, NewLIR0(int opcode)) {
   DCHECK(IsPseudoLirOp(opcode) || (GetTargetInstFlags(opcode) & NO_OPERAND))
       << GetTargetInstName(opcode) << " " << opcode << " "
       << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " "
@@ -79,7 +81,7 @@ inline LIR* Mir2Lir::NewLIR0(int opcode) {
   return insn;
 }
 
-inline LIR* Mir2Lir::NewLIR1(int opcode, int dest) {
+MIR2LIR(LIR*, NewLIR1(int opcode, int dest)) {
   DCHECK(IsPseudoLirOp(opcode) || (GetTargetInstFlags(opcode) & IS_UNARY_OP))
       << GetTargetInstName(opcode) << " " << opcode << " "
       << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " "
@@ -89,7 +91,7 @@ inline LIR* Mir2Lir::NewLIR1(int opcode, int dest) {
   return insn;
 }
 
-inline LIR* Mir2Lir::NewLIR2(int opcode, int dest, int src1) {
+MIR2LIR(LIR*, NewLIR2(int opcode, int dest, int src1)) {
   DCHECK(IsPseudoLirOp(opcode) || (GetTargetInstFlags(opcode) & IS_BINARY_OP))
       << GetTargetInstName(opcode) << " " << opcode << " "
       << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " "
@@ -99,7 +101,7 @@ inline LIR* Mir2Lir::NewLIR2(int opcode, int dest, int src1) {
   return insn;
 }
 
-inline LIR* Mir2Lir::NewLIR2NoDest(int opcode, int src, int info) {
+MIR2LIR(LIR*, NewLIR2NoDest(int opcode, int src, int info)) {
   DCHECK(IsPseudoLirOp(opcode) || (GetTargetInstFlags(opcode) & IS_UNARY_OP))
       << GetTargetInstName(opcode) << " " << opcode << " "
       << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " "
@@ -109,7 +111,7 @@ inline LIR* Mir2Lir::NewLIR2NoDest(int opcode, int src, int info) {
   return insn;
 }
 
-inline LIR* Mir2Lir::NewLIR3(int opcode, int dest, int src1, int src2) {
+MIR2LIR(LIR*, NewLIR3(int opcode, int dest, int src1, int src2)) {
   DCHECK(IsPseudoLirOp(opcode) || (GetTargetInstFlags(opcode) & IS_TERTIARY_OP))
       << GetTargetInstName(opcode) << " " << opcode << " "
       << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " "
@@ -119,7 +121,7 @@ inline LIR* Mir2Lir::NewLIR3(int opcode, int dest, int src1, int src2) {
   return insn;
 }
 
-inline LIR* Mir2Lir::NewLIR4(int opcode, int dest, int src1, int src2, int info) {
+MIR2LIR(LIR*, NewLIR4(int opcode, int dest, int src1, int src2, int info)) {
   DCHECK(IsPseudoLirOp(opcode) || (GetTargetInstFlags(opcode) & IS_QUAD_OP))
       << GetTargetInstName(opcode) << " " << opcode << " "
       << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " "
@@ -129,8 +131,7 @@ inline LIR* Mir2Lir::NewLIR4(int opcode, int dest, int src1, int src2, int info)
   return insn;
 }
 
-inline LIR* Mir2Lir::NewLIR5(int opcode, int dest, int src1, int src2, int info1,
-                             int info2) {
+MIR2LIR(LIR*, NewLIR5(int opcode, int dest, int src1, int src2, int info1, int info2)) {
   DCHECK(IsPseudoLirOp(opcode) || (GetTargetInstFlags(opcode) & IS_QUIN_OP))
       << GetTargetInstName(opcode) << " " << opcode << " "
       << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " "
@@ -143,7 +144,7 @@ inline LIR* Mir2Lir::NewLIR5(int opcode, int dest, int src1, int src2, int info1
 /*
  * Mark the corresponding bit(s).
  */
-inline void Mir2Lir::SetupRegMask(uint64_t* mask, int reg) {
+MIR2LIR(void, SetupRegMask(uint64_t* mask, int reg)) {
   DCHECK_EQ((reg & ~RegStorage::kRegValMask), 0);
   DCHECK(reginfo_map_.Get(reg) != nullptr) << "No info for 0x" << reg;
   *mask |= reginfo_map_.Get(reg)->DefUseMask();
@@ -152,7 +153,7 @@ inline void Mir2Lir::SetupRegMask(uint64_t* mask, int reg) {
 /*
  * Set up the proper fields in the resource mask
  */
-inline void Mir2Lir::SetupResourceMasks(LIR* lir) {
+MIR2LIR(void, SetupResourceMasks(LIR* lir)) {
   int opcode = lir->opcode;
 
   if (IsPseudoLirOp(opcode)) {
@@ -231,12 +232,14 @@ inline void Mir2Lir::SetupResourceMasks(LIR* lir) {
   SetupTargetResourceMasks(lir, flags);
 }
 
-inline art::Mir2Lir::RegisterInfo* Mir2Lir::GetRegInfo(RegStorage reg) {
+MIR2LIR(typename art::Mir2Lir<pointer_size>::RegisterInfo*, GetRegInfo(RegStorage reg)) {
   RegisterInfo* res = reg.IsPair() ? reginfo_map_.Get(reg.GetLowReg()) :
       reginfo_map_.Get(reg.GetReg());
   DCHECK(res != nullptr);
   return res;
 }
+
+#undef MIR2LIR
 
 }  // namespace art
 

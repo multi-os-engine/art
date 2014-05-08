@@ -23,11 +23,17 @@ namespace art {
 
 /* This file contains target-independent codegen and support. */
 
+// Macro to templatize functions and instantiate them.
+#define MIR2LIR(ret, sig) \
+  template ret Mir2Lir<4>::sig; \
+  template ret Mir2Lir<8>::sig; \
+  template <size_t pointer_size> ret Mir2Lir<pointer_size>::sig
+
 /*
  * Load an immediate value into a fixed or temp register.  Target
  * register is clobbered, and marked in_use.
  */
-LIR* Mir2Lir::LoadConstant(RegStorage r_dest, int value) {
+MIR2LIR(LIR*, LoadConstant(RegStorage r_dest, int value)) {
   if (IsTemp(r_dest)) {
     Clobber(r_dest);
     MarkInUse(r_dest);
@@ -40,7 +46,7 @@ LIR* Mir2Lir::LoadConstant(RegStorage r_dest, int value) {
  * promoted floating point register, also copy a zero into the int/ref identity of
  * that sreg.
  */
-void Mir2Lir::Workaround7250540(RegLocation rl_dest, RegStorage zero_reg) {
+MIR2LIR(void, Workaround7250540(RegLocation rl_dest, RegStorage zero_reg)) {
   if (rl_dest.fp) {
     int pmap_index = SRegToPMap(rl_dest.s_reg_low);
     if (promotion_map_[pmap_index].fp_location == kLocPhysReg) {
@@ -79,7 +85,7 @@ void Mir2Lir::Workaround7250540(RegLocation rl_dest, RegStorage zero_reg) {
  * using this routine, as it doesn't perform any bookkeeping regarding
  * register liveness.  That is the responsibility of the caller.
  */
-void Mir2Lir::LoadValueDirect(RegLocation rl_src, RegStorage r_dest) {
+MIR2LIR(void, LoadValueDirect(RegLocation rl_src, RegStorage r_dest)) {
   rl_src = UpdateLoc(rl_src);
   if (rl_src.location == kLocPhysReg) {
     OpRegCopy(r_dest, rl_src.reg);
@@ -103,7 +109,7 @@ void Mir2Lir::LoadValueDirect(RegLocation rl_src, RegStorage r_dest) {
  * register.  Should be used when loading to a fixed register (for example,
  * loading arguments to an out of line call.
  */
-void Mir2Lir::LoadValueDirectFixed(RegLocation rl_src, RegStorage r_dest) {
+MIR2LIR(void, LoadValueDirectFixed(RegLocation rl_src, RegStorage r_dest)) {
   Clobber(r_dest);
   MarkInUse(r_dest);
   LoadValueDirect(rl_src, r_dest);
@@ -114,7 +120,7 @@ void Mir2Lir::LoadValueDirectFixed(RegLocation rl_src, RegStorage r_dest) {
  * using this routine, as it doesn't perform any bookkeeping regarding
  * register liveness.  That is the responsibility of the caller.
  */
-void Mir2Lir::LoadValueDirectWide(RegLocation rl_src, RegStorage r_dest) {
+MIR2LIR(void, LoadValueDirectWide(RegLocation rl_src, RegStorage r_dest)) {
   rl_src = UpdateLocWide(rl_src);
   if (rl_src.location == kLocPhysReg) {
     OpRegCopyWide(r_dest, rl_src.reg);
@@ -132,13 +138,13 @@ void Mir2Lir::LoadValueDirectWide(RegLocation rl_src, RegStorage r_dest) {
  * registers.  Should be used when loading to a fixed registers (for example,
  * loading arguments to an out of line call.
  */
-void Mir2Lir::LoadValueDirectWideFixed(RegLocation rl_src, RegStorage r_dest) {
+MIR2LIR(void, LoadValueDirectWideFixed(RegLocation rl_src, RegStorage r_dest)) {
   Clobber(r_dest);
   MarkInUse(r_dest);
   LoadValueDirectWide(rl_src, r_dest);
 }
 
-RegLocation Mir2Lir::LoadValue(RegLocation rl_src, RegisterClass op_kind) {
+MIR2LIR(RegLocation, LoadValue(RegLocation rl_src, RegisterClass op_kind)) {
   rl_src = EvalLoc(rl_src, op_kind, false);
   if (IsInexpensiveConstant(rl_src) || rl_src.location != kLocPhysReg) {
     LoadValueDirect(rl_src, rl_src.reg);
@@ -148,7 +154,7 @@ RegLocation Mir2Lir::LoadValue(RegLocation rl_src, RegisterClass op_kind) {
   return rl_src;
 }
 
-void Mir2Lir::StoreValue(RegLocation rl_dest, RegLocation rl_src) {
+MIR2LIR(void, StoreValue(RegLocation rl_dest, RegLocation rl_src)) {
   /*
    * Sanity checking - should never try to store to the same
    * ssa name during the compilation of a single instruction
@@ -201,7 +207,7 @@ void Mir2Lir::StoreValue(RegLocation rl_dest, RegLocation rl_src) {
   }
 }
 
-RegLocation Mir2Lir::LoadValueWide(RegLocation rl_src, RegisterClass op_kind) {
+MIR2LIR(RegLocation, LoadValueWide(RegLocation rl_src, RegisterClass op_kind)) {
   DCHECK(rl_src.wide);
   rl_src = EvalLoc(rl_src, op_kind, false);
   if (IsInexpensiveConstant(rl_src) || rl_src.location != kLocPhysReg) {
@@ -212,7 +218,7 @@ RegLocation Mir2Lir::LoadValueWide(RegLocation rl_src, RegisterClass op_kind) {
   return rl_src;
 }
 
-void Mir2Lir::StoreValueWide(RegLocation rl_dest, RegLocation rl_src) {
+MIR2LIR(void, StoreValueWide(RegLocation rl_dest, RegLocation rl_src)) {
   /*
    * Sanity checking - should never try to store to the same
    * ssa name during the compilation of a single instruction
@@ -265,7 +271,7 @@ void Mir2Lir::StoreValueWide(RegLocation rl_dest, RegLocation rl_src) {
   }
 }
 
-void Mir2Lir::StoreFinalValue(RegLocation rl_dest, RegLocation rl_src) {
+MIR2LIR(void, StoreFinalValue(RegLocation rl_dest, RegLocation rl_src)) {
   DCHECK_EQ(rl_src.location, kLocPhysReg);
 
   if (rl_dest.location == kLocPhysReg) {
@@ -295,7 +301,7 @@ void Mir2Lir::StoreFinalValue(RegLocation rl_dest, RegLocation rl_src) {
   }
 }
 
-void Mir2Lir::StoreFinalValueWide(RegLocation rl_dest, RegLocation rl_src) {
+MIR2LIR(void, StoreFinalValueWide(RegLocation rl_dest, RegLocation rl_src)) {
   DCHECK(rl_dest.wide);
   DCHECK(rl_src.wide);
   DCHECK_EQ(rl_src.location, kLocPhysReg);
@@ -328,15 +334,15 @@ void Mir2Lir::StoreFinalValueWide(RegLocation rl_dest, RegLocation rl_src) {
 }
 
 /* Utilities to load the current Method* */
-void Mir2Lir::LoadCurrMethodDirect(RegStorage r_tgt) {
+MIR2LIR(void, LoadCurrMethodDirect(RegStorage r_tgt)) {
   LoadValueDirectFixed(mir_graph_->GetMethodLoc(), r_tgt);
 }
 
-RegLocation Mir2Lir::LoadCurrMethod() {
+MIR2LIR(RegLocation, LoadCurrMethod()) {
   return LoadValue(mir_graph_->GetMethodLoc(), kCoreReg);
 }
 
-RegLocation Mir2Lir::ForceTemp(RegLocation loc) {
+MIR2LIR(RegLocation, ForceTemp(RegLocation loc)) {
   DCHECK(!loc.wide);
   DCHECK(loc.location == kLocPhysReg);
   DCHECK(!loc.reg.IsFloat());
@@ -354,7 +360,7 @@ RegLocation Mir2Lir::ForceTemp(RegLocation loc) {
 }
 
 // FIXME: will need an update for 64-bit core regs.
-RegLocation Mir2Lir::ForceTempWide(RegLocation loc) {
+MIR2LIR(RegLocation, ForceTempWide(RegLocation loc)) {
   DCHECK(loc.wide);
   DCHECK(loc.location == kLocPhysReg);
   DCHECK(!loc.reg.IsFloat());

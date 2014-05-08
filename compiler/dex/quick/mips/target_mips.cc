@@ -566,7 +566,7 @@ MipsMir2Lir::MipsMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocato
   }
 }
 
-Mir2Lir* MipsCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
+Mir2Lir<4>* MipsCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
                            ArenaAllocator* const arena) {
   return new MipsMir2Lir(cu, mir_graph, arena);
 }

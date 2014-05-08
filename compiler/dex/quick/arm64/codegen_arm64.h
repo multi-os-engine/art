@@ -22,7 +22,7 @@
 
 namespace art {
 
-class Arm64Mir2Lir : public Mir2Lir {
+class Arm64Mir2Lir FINAL : public Mir2Lir<8> {
   public:
     Arm64Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
 
@@ -31,7 +31,7 @@ class Arm64Mir2Lir : public Mir2Lir {
                             RegLocation rl_dest, int lit);
     bool EasyMultiply(RegLocation rl_src, RegLocation rl_dest, int lit) OVERRIDE;
     LIR* CheckSuspendUsingLoad() OVERRIDE;
-    RegStorage LoadHelper(A64ThreadOffset offset);
+    RegStorage LoadHelper(ThreadOffset<8> offset);
     LIR* LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_dest,
                       OpSize size) OVERRIDE;
     LIR* LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_dest, int scale,
@@ -172,12 +172,12 @@ class Arm64Mir2Lir : public Mir2Lir {
     LIR* OpRegRegImm(OpKind op, RegStorage r_dest, RegStorage r_src1, int value);
     LIR* OpRegRegReg(OpKind op, RegStorage r_dest, RegStorage r_src1, RegStorage r_src2);
     LIR* OpTestSuspend(LIR* target);
-    LIR* OpThreadMem(OpKind op, A64ThreadOffset thread_offset);
+    LIR* OpThreadMem(OpKind op, ThreadOffset<8> thread_offset);
     LIR* OpVldm(RegStorage r_base, int count);
     LIR* OpVstm(RegStorage r_base, int count);
     void OpLea(RegStorage r_base, RegStorage reg1, RegStorage reg2, int scale, int offset);
     void OpRegCopyWide(RegStorage dest, RegStorage src);
-    void OpTlsCmp(A64ThreadOffset offset, int val);
+    void OpTlsCmp(ThreadOffset<8> offset, int val);
 
     LIR* LoadBaseDispBody(RegStorage r_base, int displacement, RegStorage r_dest, OpSize size);
     LIR* StoreBaseDispBody(RegStorage r_base, int displacement, RegStorage r_src, OpSize size);

@@ -35,6 +35,7 @@ struct ArenaMemBlock;
 class Backend;
 struct Memstats;
 class MIRGraph;
+template <size_t pointer_size>
 class Mir2Lir;
 
 struct CompilationUnit {

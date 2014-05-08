@@ -23,7 +23,13 @@
 
 namespace art {
 
-void Mir2Lir::LockArg(int in_position, bool wide) {
+// Macro to templatize functions and instantiate them.
+#define MIR2LIR(ret, sig) \
+  template ret Mir2Lir<4>::sig; \
+  template ret Mir2Lir<8>::sig; \
+  template <size_t pointer_size> ret Mir2Lir<pointer_size>::sig
+
+MIR2LIR(void, LockArg(int in_position, bool wide)) {
   RegStorage reg_arg_low = GetArgMappingToPhysicalReg(in_position);
   RegStorage reg_arg_high = wide ? GetArgMappingToPhysicalReg(in_position + 1) :
       RegStorage::InvalidReg();
@@ -37,7 +43,7 @@ void Mir2Lir::LockArg(int in_position, bool wide) {
 }
 
 // TODO: needs revisit for 64-bit.
-RegStorage Mir2Lir::LoadArg(int in_position, bool wide) {
+MIR2LIR(RegStorage, LoadArg(int in_position, bool wide)) {
   RegStorage reg_arg_low = GetArgMappingToPhysicalReg(in_position);
   RegStorage reg_arg_high = wide ? GetArgMappingToPhysicalReg(in_position + 1) :
       RegStorage::InvalidReg();
@@ -80,7 +86,7 @@ RegStorage Mir2Lir::LoadArg(int in_position, bool wide) {
   }
 }
 
-void Mir2Lir::LoadArgDirect(int in_position, RegLocation rl_dest) {
+MIR2LIR(void, LoadArgDirect(int in_position, RegLocation rl_dest)) {
   int offset = StackVisitor::GetOutVROffset(in_position, cu_->instruction_set);
   if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
     /*
@@ -117,7 +123,7 @@ void Mir2Lir::LoadArgDirect(int in_position, RegLocation rl_dest) {
   }
 }
 
-bool Mir2Lir::GenSpecialIGet(MIR* mir, const InlineMethod& special) {
+MIR2LIR(bool, GenSpecialIGet(MIR* mir, const InlineMethod& special)) {
   // FastInstance() already checked by DexFileMethodInliner.
   const InlineIGetIPutData& data = special.d.ifield_data;
   if (data.method_is_static != 0u || data.object_arg != 0u) {
@@ -147,7 +153,7 @@ bool Mir2Lir::GenSpecialIGet(MIR* mir, const InlineMethod& special) {
   return true;
 }
 
-bool Mir2Lir::GenSpecialIPut(MIR* mir, const InlineMethod& special) {
+MIR2LIR(bool, GenSpecialIPut(MIR* mir, const InlineMethod& special)) {
   // FastInstance() already checked by DexFileMethodInliner.
   const InlineIGetIPutData& data = special.d.ifield_data;
   if (data.method_is_static != 0u || data.object_arg != 0u) {
@@ -184,7 +190,7 @@ bool Mir2Lir::GenSpecialIPut(MIR* mir, const InlineMethod& special) {
   return true;
 }
 
-bool Mir2Lir::GenSpecialIdentity(MIR* mir, const InlineMethod& special) {
+MIR2LIR(bool, GenSpecialIdentity(MIR* mir, const InlineMethod& special)) {
   const InlineReturnArgData& data = special.d.return_data;
   bool wide = (data.is_wide != 0u);
   // The inliner doesn't distinguish kDouble or kFloat, use shorty.
@@ -201,7 +207,7 @@ bool Mir2Lir::GenSpecialIdentity(MIR* mir, const InlineMethod& special) {
 /*
  * Special-case code generation for simple non-throwing leaf methods.
  */
-bool Mir2Lir::GenSpecialCase(BasicBlock* bb, MIR* mir, const InlineMethod& special) {
+MIR2LIR(bool, GenSpecialCase(BasicBlock* bb, MIR* mir, const InlineMethod& special)) {
   DCHECK(special.flags & kInlineSpecial);
   current_dalvik_offset_ = mir->offset;
   MIR* return_mir = nullptr;
@@ -271,7 +277,7 @@ bool Mir2Lir::GenSpecialCase(BasicBlock* bb, MIR* mir, const InlineMethod& speci
  * load/store utilities here, or target-dependent genXX() handlers
  * when necessary.
  */
-void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list) {
+MIR2LIR(void, CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list)) {
   RegLocation rl_src[3];
   RegLocation rl_dest = mir_graph_->GetBadLoc();
   RegLocation rl_result = mir_graph_->GetBadLoc();
@@ -910,7 +916,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
 }  // NOLINT(readability/fn_size)
 
 // Process extended MIR instructions
-void Mir2Lir::HandleExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
+MIR2LIR(void, HandleExtendedMethodMIR(BasicBlock* bb, MIR* mir)) {
   switch (static_cast<ExtendedMIROpcode>(mir->dalvikInsn.opcode)) {
     case kMirOpCopy: {
       RegLocation rl_src = mir_graph_->GetSrc(mir, 0);
@@ -941,7 +947,7 @@ void Mir2Lir::HandleExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
   }
 }
 
-void Mir2Lir::GenPrintLabel(MIR* mir) {
+MIR2LIR(void, GenPrintLabel(MIR* mir)) {
   // Mark the beginning of a Dalvik instruction for line tracking.
   if (cu_->verbose) {
      char* inst_str = mir_graph_->GetDalvikDisassembly(mir);
@@ -950,7 +956,7 @@ void Mir2Lir::GenPrintLabel(MIR* mir) {
 }
 
 // Handle the content in each basic block.
-bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
+MIR2LIR(bool, MethodBlockCodeGen(BasicBlock* bb)) {
   if (bb->block_type == kDead) return false;
   current_dalvik_offset_ = bb->start_offset;
   MIR* mir;
@@ -1041,7 +1047,7 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
   return false;
 }
 
-bool Mir2Lir::SpecialMIR2LIR(const InlineMethod& special) {
+MIR2LIR(bool, SpecialMIR2LIR(const InlineMethod& special)) {
   cu_->NewTimingSplit("SpecialMIR2LIR");
   // Find the first DalvikByteCode block.
   int num_reachable_blocks = mir_graph_->GetNumReachableBlocks();
@@ -1071,7 +1077,7 @@ bool Mir2Lir::SpecialMIR2LIR(const InlineMethod& special) {
   return GenSpecialCase(bb, mir, special);
 }
 
-void Mir2Lir::MethodMIR2LIR() {
+MIR2LIR(void, MethodMIR2LIR()) {
   cu_->NewTimingSplit("MIR2LIR");
 
   // Hold the labels of each block.
@@ -1101,7 +1107,7 @@ void Mir2Lir::MethodMIR2LIR() {
 // LIR Slow Path
 //
 
-LIR* Mir2Lir::LIRSlowPath::GenerateTargetLabel(int opcode) {
+MIR2LIR(LIR*, LIRSlowPath::GenerateTargetLabel(int opcode)) {
   m2l_->SetCurrentDexPc(current_dex_pc_);
   LIR* target = m2l_->NewLIR0(opcode);
   fromfast_->target = target;
