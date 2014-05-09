@@ -229,6 +229,8 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
 //  gLogVerbosity.jdwp = true;  // TODO: don't check this in!
 //  gLogVerbosity.jni = true;  // TODO: don't check this in!
 //  gLogVerbosity.monitor = true;  // TODO: don't check this in!
+//  gLogVerbosity.profiler = true;  // TODO: don't check this in!
+//  gLogVerbosity.signals = true;  // TODO: don't check this in!
 //  gLogVerbosity.startup = true;  // TODO: don't check this in!
 //  gLogVerbosity.third_party_jni = true;  // TODO: don't check this in!
 //  gLogVerbosity.threads = true;  // TODO: don't check this in!
@@ -459,6 +461,10 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
           gLogVerbosity.jni = true;
         } else if (verbose_options[i] == "monitor") {
           gLogVerbosity.monitor = true;
+        } else if (verbose_options[i] == "profiler") {
+          gLogVerbosity.profiler = true;
+        } else if (verbose_options[i] == "signals") {
+          gLogVerbosity.signals = true;
         } else if (verbose_options[i] == "startup") {
           gLogVerbosity.startup = true;
         } else if (verbose_options[i] == "third-party-jni") {
