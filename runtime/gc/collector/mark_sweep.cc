@@ -372,6 +372,7 @@ class MarkSweepMarkObjectSlowPath {
   }
 
   void operator()(const Object* obj) const ALWAYS_INLINE {
+    CHECK(obj != nullptr);
     if (kProfileLargeObjects) {
       // TODO: Differentiate between marking and testing somehow.
       ++mark_sweep_->large_object_test_;
