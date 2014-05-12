@@ -360,9 +360,10 @@ LIR* Arm64Mir2Lir::OpReg(OpKind op, RegStorage r_dest_src) {
   return NewLIR1(opcode, r_dest_src.GetReg());
 }
 
-LIR* Arm64Mir2Lir::OpRegRegShift(OpKind op, int r_dest_src1, int r_src2,
-                                 int shift, bool is_wide) {
-  ArmOpcode wide = (is_wide) ? WIDE(0) : UNWIDE(0);
+LIR* Arm64Mir2Lir::OpRegRegShift(OpKind op, RegStorage r_dest_src1, RegStorage r_src2,
+                                 int shift) {
+  ArmOpcode wide = r_dest_src1.Is64Bit() ? WIDE(0) : UNWIDE(0);
+  CHECK_EQ(r_dest_src1.Is64Bit(), r_src2.Is64Bit());
   ArmOpcode opcode = kA64Brk1d;
 
   switch (OP_KIND_UNWIDE(op)) {
@@ -388,26 +389,26 @@ LIR* Arm64Mir2Lir::OpRegRegShift(OpKind op, int r_dest_src1, int r_src2,
     case kOpRev:
       DCHECK_EQ(shift, 0);
       // Binary, but rm is encoded twice.
-      return NewLIR3(kA64Rev2rr | wide, r_dest_src1, r_src2, r_src2);
+      return NewLIR3(kA64Rev2rr | wide, r_dest_src1.GetReg(), r_src2.GetReg(), r_src2.GetReg());
       break;
     case kOpRevsh:
       // Binary, but rm is encoded twice.
-      return NewLIR3(kA64Rev162rr | wide, r_dest_src1, r_src2, r_src2);
+      return NewLIR3(kA64Rev162rr | wide, r_dest_src1.GetReg(), r_src2.GetReg(), r_src2.GetReg());
       break;
     case kOp2Byte:
       DCHECK_EQ(shift, ENCODE_NO_SHIFT);
       // "sbfx r1, r2, #imm1, #imm2" is "sbfm r1, r2, #imm1, #(imm1 + imm2 - 1)".
       // For now we use sbfm directly.
-      return NewLIR4(kA64Sbfm4rrdd | wide, r_dest_src1, r_src2, 0, 7);
+      return NewLIR4(kA64Sbfm4rrdd | wide, r_dest_src1.GetReg(), r_src2.GetReg(), 0, 7);
     case kOp2Short:
       DCHECK_EQ(shift, ENCODE_NO_SHIFT);
       // For now we use sbfm rather than its alias, sbfx.
-      return NewLIR4(kA64Sbfm4rrdd | wide, r_dest_src1, r_src2, 0, 15);
+      return NewLIR4(kA64Sbfm4rrdd | wide, r_dest_src1.GetReg(), r_src2.GetReg(), 0, 15);
     case kOp2Char:
       // "ubfx r1, r2, #imm1, #imm2" is "ubfm r1, r2, #imm1, #(imm1 + imm2 - 1)".
       // For now we use ubfm directly.
       DCHECK_EQ(shift, ENCODE_NO_SHIFT);
-      return NewLIR4(kA64Ubfm4rrdd | wide, r_dest_src1, r_src2, 0, 15);
+      return NewLIR4(kA64Ubfm4rrdd | wide, r_dest_src1.GetReg(), r_src2.GetReg(), 0, 15);
     default:
       return OpRegRegRegShift(op, r_dest_src1, r_dest_src1, r_src2, shift);
   }
@@ -415,12 +416,12 @@ LIR* Arm64Mir2Lir::OpRegRegShift(OpKind op, int r_dest_src1, int r_src2,
   DCHECK(!IsPseudoLirOp(opcode));
   if (EncodingMap[opcode].flags & IS_BINARY_OP) {
     DCHECK_EQ(shift, ENCODE_NO_SHIFT);
-    return NewLIR2(opcode | wide, r_dest_src1, r_src2);
+    return NewLIR2(opcode | wide, r_dest_src1.GetReg(), r_src2.GetReg());
   } else if (EncodingMap[opcode].flags & IS_TERTIARY_OP) {
     ArmEncodingKind kind = EncodingMap[opcode].field_loc[2].kind;
     if (kind == kFmtExtend || kind == kFmtShift) {
       DCHECK_EQ(kind == kFmtExtend, IsExtendEncoding(shift));
-      return NewLIR3(opcode | wide, r_dest_src1, r_src2, shift);
+      return NewLIR3(opcode | wide, r_dest_src1.GetReg(), r_src2.GetReg(), shift);
     }
   }
 
@@ -429,8 +430,7 @@ LIR* Arm64Mir2Lir::OpRegRegShift(OpKind op, int r_dest_src1, int r_src2,
 }
 
 LIR* Arm64Mir2Lir::OpRegReg(OpKind op, RegStorage r_dest_src1, RegStorage r_src2) {
-  return OpRegRegShift(op, r_dest_src1.GetReg(), r_src2.GetReg(), ENCODE_NO_SHIFT,
-                       r_dest_src1.Is64Bit());
+  return OpRegRegShift(op, r_dest_src1, r_src2, ENCODE_NO_SHIFT);
 }
 
 LIR* Arm64Mir2Lir::OpMovRegMem(RegStorage r_dest, RegStorage r_base, int offset, MoveType move_type) {
@@ -448,8 +448,8 @@ LIR* Arm64Mir2Lir::OpCondRegReg(OpKind op, ConditionCode cc, RegStorage r_dest, 
   return NULL;
 }
 
-LIR* Arm64Mir2Lir::OpRegRegRegShift(OpKind op, int r_dest, int r_src1,
-                                    int r_src2, int shift, bool is_wide) {
+LIR* Arm64Mir2Lir::OpRegRegRegShift(OpKind op, RegStorage r_dest, RegStorage r_src1,
+                                    RegStorage r_src2, int shift) {
   ArmOpcode opcode = kA64Brk1d;
 
   switch (OP_KIND_UNWIDE(op)) {
@@ -503,19 +503,21 @@ LIR* Arm64Mir2Lir::OpRegRegRegShift(OpKind op, int r_dest, int r_src1,
   // The instructions above belong to two kinds:
   // - 4-operands instructions, where the last operand is a shift/extend immediate,
   // - 3-operands instructions with no shift/extend.
-  ArmOpcode widened_opcode = (is_wide) ? WIDE(opcode) : opcode;
+  ArmOpcode widened_opcode = r_dest.Is64Bit() ? WIDE(opcode) : opcode;
+  CHECK_EQ(r_dest.Is64Bit(), r_src1.Is64Bit());
+  CHECK_EQ(r_dest.Is64Bit(), r_src2.Is64Bit());
   if (EncodingMap[opcode].flags & IS_QUAD_OP) {
     DCHECK_EQ(shift, ENCODE_NO_SHIFT);
-    return NewLIR4(widened_opcode, r_dest, r_src1, r_src2, shift);
+    return NewLIR4(widened_opcode, r_dest.GetReg(), r_src1.GetReg(), r_src2.GetReg(), shift);
   } else {
     DCHECK(EncodingMap[opcode].flags & IS_TERTIARY_OP);
     DCHECK_EQ(shift, ENCODE_NO_SHIFT);
-    return NewLIR3(widened_opcode, r_dest, r_src1, r_src2);
+    return NewLIR3(widened_opcode, r_dest.GetReg(), r_src1.GetReg(), r_src2.GetReg());
   }
 }
 
 LIR* Arm64Mir2Lir::OpRegRegReg(OpKind op, RegStorage r_dest, RegStorage r_src1, RegStorage r_src2) {
-  return OpRegRegRegShift(op, r_dest.GetReg(), r_src1.GetReg(), r_src2.GetReg(), ENCODE_NO_SHIFT);
+  return OpRegRegRegShift(op, r_dest, r_src1, r_src2, ENCODE_NO_SHIFT);
 }
 
 LIR* Arm64Mir2Lir::OpRegRegImm(OpKind op, RegStorage r_dest, RegStorage r_src1, int value) {
@@ -525,7 +527,8 @@ LIR* Arm64Mir2Lir::OpRegRegImm(OpKind op, RegStorage r_dest, RegStorage r_src1, 
   ArmOpcode opcode = kA64Brk1d;
   ArmOpcode alt_opcode = kA64Brk1d;
   int32_t log_imm = -1;
-  bool is_wide = OP_KIND_IS_WIDE(op);
+  bool is_wide = r_dest.Is64Bit();
+  CHECK_EQ(r_dest.Is64Bit(), r_src1.Is64Bit());
   ArmOpcode wide = (is_wide) ? WIDE(0) : UNWIDE(0);
 
   switch (OP_KIND_UNWIDE(op)) {
@@ -613,10 +616,11 @@ LIR* Arm64Mir2Lir::OpRegRegImm(OpKind op, RegStorage r_dest, RegStorage r_src1, 
 }
 
 LIR* Arm64Mir2Lir::OpRegImm(OpKind op, RegStorage r_dest_src1, int value) {
-  return OpRegImm64(op, r_dest_src1, static_cast<int64_t>(value), /*is_wide*/false);
+  return OpRegImm64(op, r_dest_src1, static_cast<int64_t>(value));
 }
 
-LIR* Arm64Mir2Lir::OpRegImm64(OpKind op, RegStorage r_dest_src1, int64_t value, bool is_wide) {
+LIR* Arm64Mir2Lir::OpRegImm64(OpKind op, RegStorage r_dest_src1, int64_t value) {
+  bool is_wide = r_dest_src1.Is64Bit();
   ArmOpcode wide = (is_wide) ? WIDE(0) : UNWIDE(0);
   ArmOpcode opcode = kA64Brk1d;
   ArmOpcode neg_opcode = kA64Brk1d;

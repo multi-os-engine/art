@@ -582,9 +582,7 @@ RegStorage Arm64Mir2Lir::AllocTypedTempWide(bool fp_hint, int reg_class) {
   if (((reg_class == kAnyReg) && fp_hint) || (reg_class == kFPReg)) {
     return AllocTempDouble();
   } else {
-    RegStorage low_reg = AllocTemp();
-    RegStorage high_reg = AllocTemp();
-    return RegStorage::MakeRegPair(low_reg, high_reg);
+    return AllocTempWide();
   }
 }
 
