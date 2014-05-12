@@ -389,10 +389,26 @@ struct BasicBlock {
   GrowableArray<SuccessorBlockInfo*>* successor_blocks;
 
   void AppendMIR(MIR* mir);
+  void AppendMIRList(MIR* first_list_mir, MIR* last_list_mir);
+  void AppendMIRList(const std::vector<MIR*>& insns);
   void PrependMIR(MIR* mir);
+  void PrependMIRList(MIR* first_list_mir, MIR* last_list_mir);
+  void PrependMIRList(const std::vector<MIR*>& to_add);
   void InsertMIRAfter(MIR* current_mir, MIR* new_mir);
-  void InsertMIRBefore(MIR* current_mir, MIR* new_mir);
+  void InsertMIRListAfter(MIR* insert_after, MIR* first_list_mir, MIR* last_list_mir);
   MIR* FindPreviousMIR(MIR* mir);
+  void InsertMIRBefore(MIR* insert_before, MIR* list);
+  void InsertMIRListBefore(MIR* insert_before, MIR* first_list_mir, MIR* last_list_mir);
+  bool RemoveMIR(MIR* mir);
+  bool RemoveMIRList(MIR* first_list_mir, MIR* last_list_mir);
+
+  BasicBlock* Copy(CompilationUnit* c_unit);
+  BasicBlock* Copy(MIRGraph* mir_graph);
+  void ResetOptimizationFlags(uint16_t reset_flags);
+  void Hide(CompilationUnit* c_unit);
+  bool IsSSALiveOut(const CompilationUnit* c_unit, int ssa_reg);
+  bool ReplaceChild(BasicBlockId old_bb, BasicBlockId new_bb);
+  void UpdatePredecessor(BasicBlockId old_pred, BasicBlockId new_pred);
 
   /**
    * @brief Used to obtain the next MIR that follows unconditionally.
@@ -403,8 +419,12 @@ struct BasicBlock {
    * @return Returns the following MIR if one can be found.
    */
   MIR* GetNextUnconditionalMir(MIRGraph* mir_graph, MIR* current);
-  bool RemoveMIR(MIR* mir);
   bool IsExceptionBlock() const;
+
+  static void* operator new(size_t size, ArenaAllocator* arena) {
+    return arena->Alloc(sizeof(BasicBlock), kArenaAllocBB);
+  }
+  static void operator delete(void* p) {}  // Nop.
 };
 
 /*
@@ -921,6 +941,7 @@ class MIRGraph {
   BasicBlock* NextDominatedBlock(BasicBlock* bb);
   bool LayoutBlocks(BasicBlock* bb);
   void ComputeTopologicalSortOrder();
+  BasicBlock* CreateNewBB(BBType block_type);
 
   bool InlineCallsGate();
   void InlineCallsStart();
