@@ -180,7 +180,11 @@ void X86Mir2Lir::MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) {
   int ct_offset = Is64BitInstructionSet(cu_->instruction_set) ?
       Thread::CardTableOffset<8>().Int32Value() :
       Thread::CardTableOffset<4>().Int32Value();
-  NewLIR2(kX86Mov32RT, reg_card_base.GetReg(), ct_offset);
+  if (Gen64Bit()) {
+    NewLIR2(kX86Mov64RT, reg_card_base.GetReg(), ct_offset);
+  } else {
+    NewLIR2(kX86Mov32RT, reg_card_base.GetReg(), ct_offset);
+  }
   OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
   StoreBaseIndexed(reg_card_base, reg_card_no, reg_card_base, 0, kUnsignedByte);
   LIR* target = NewLIR0(kPseudoTargetLabel);
@@ -202,7 +206,7 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
 
   /* Build frame, return address already on stack */
   // TODO: 64 bit.
-  stack_decrement_ = OpRegImm(kOpSub, rs_rX86_SP, frame_size_ - 4);
+  stack_decrement_ = OpRegImm(kOpSub, rs_rX86_SP, frame_size_ - kPointerSize);
 
   /*
    * We can safely skip the stack overflow check if we're
@@ -248,7 +252,7 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
     // mov esp, ebp
     // in case a signal comes in that's not using an alternate signal stack and the large frame may
     // have moved us outside of the reserved area at the end of the stack.
-    // cmp rX86_SP, fs:[stack_end_]; jcc throw_slowpath
+    // cmp rs_rX86_SP, fs:[stack_end_]; jcc throw_slowpath
     if (Is64BitInstructionSet(cu_->instruction_set)) {
       OpRegThreadMem(kOpCmp, rs_rX86_SP, Thread::StackEndOffset<8>());
     } else {
@@ -286,7 +290,7 @@ void X86Mir2Lir::GenExitSequence() {
   NewLIR0(kPseudoMethodExit);
   UnSpillCoreRegs();
   /* Remove frame except for return address */
-  stack_increment_ = OpRegImm(kOpAdd, rs_rX86_SP, frame_size_ - 4);
+  stack_increment_ = OpRegImm(kOpAdd, rs_rX86_SP, frame_size_ - kPointerSize);
   NewLIR0(kX86Ret);
 }
 
