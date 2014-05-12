@@ -1366,12 +1366,22 @@ void X86Mir2Lir::GenNegLong(RegLocation rl_dest, RegLocation rl_src) {
 
 void X86Mir2Lir::OpRegThreadMem(OpKind op, RegStorage r_dest, ThreadOffset<4> thread_offset) {
   X86OpCode opcode = kX86Bkpt;
-  switch (op) {
-  case kOpCmp: opcode = kX86Cmp32RT;  break;
-  case kOpMov: opcode = kX86Mov32RT;  break;
-  default:
-    LOG(FATAL) << "Bad opcode: " << op;
-    break;
+  if (Gen64Bit() && r_dest.Is64BitSolo()) {
+    switch (op) {
+    case kOpCmp: opcode = kX86Cmp64RT;  break;
+    case kOpMov: opcode = kX86Mov64RT;  break;
+    default:
+      LOG(FATAL) << "Bad opcode(OpRegThreadMem 64): " << op;
+      break;
+    }
+  } else {
+    switch (op) {
+    case kOpCmp: opcode = kX86Cmp32RT;  break;
+    case kOpMov: opcode = kX86Mov32RT;  break;
+    default:
+      LOG(FATAL) << "Bad opcode: " << op;
+      break;
+    }
   }
   NewLIR2(opcode, r_dest.GetReg(), thread_offset.Int32Value());
 }
@@ -1838,8 +1848,8 @@ void X86Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,
 
   // If Method* is already in a register, we can save a copy.
   RegLocation rl_method = mir_graph_->GetMethodLoc();
-  int32_t offset_of_type = mirror::Array::DataOffset(sizeof(mirror::Class*)).Int32Value() +
-    (sizeof(mirror::Class*) * type_idx);
+  int32_t offset_of_type = mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Class*>)).Int32Value() +
+    (sizeof(mirror::HeapReference<mirror::Class*>) * type_idx);
 
   if (rl_method.location == kLocPhysReg) {
     if (use_declaring_class) {
@@ -1907,7 +1917,7 @@ void X86Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_k
     LoadRefDisp(TargetReg(kArg1), mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                  class_reg);
     int32_t offset_of_type =
-        mirror::Array::DataOffset(sizeof(mirror::Class*)).Int32Value() + (sizeof(mirror::Class*)
+        mirror::Array::DataOffset(sizeof(mirror::HeapReference<mirror::Class*>)).Int32Value() + (sizeof(mirror::HeapReference<mirror::Class*>)
         * type_idx);
     LoadRefDisp(class_reg, offset_of_type, class_reg);
     if (!can_assume_type_is_in_dex_cache) {
