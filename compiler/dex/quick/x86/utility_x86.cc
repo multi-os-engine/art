@@ -130,6 +130,14 @@ LIR* X86Mir2Lir::OpRegImm(OpKind op, RegStorage r_dest_src1, int value) {
   X86OpCode opcode = kX86Bkpt;
   bool byte_imm = IS_SIMM8(value);
   DCHECK(!r_dest_src1.IsFloat());
+  if (r_dest_src1.Is64Bit()) {
+    switch (op) {
+      case kOpAdd: opcode = byte_imm ? kX86Add64RI8 : kX86Add64RI; break;
+      case kOpSub: opcode = byte_imm ? kX86Sub64RI8 : kX86Sub64RI; break;
+      default:
+        LOG(FATAL) << "Bad case in OpRegImm (64-bit) " << op;
+    }
+  } else {
   switch (op) {
     case kOpLsl: opcode = kX86Sal32RI; break;
     case kOpLsr: opcode = kX86Shr32RI; break;
@@ -156,6 +164,8 @@ LIR* X86Mir2Lir::OpRegImm(OpKind op, RegStorage r_dest_src1, int value) {
     default:
       LOG(FATAL) << "Bad case in OpRegImm " << op;
   }
+  }
+  CHECK(!r_dest_src1.Is64Bit() || X86Mir2Lir::EncodingMap[opcode].kind == kReg64Imm) << "OpRegImm(" << op << ")";
   return NewLIR2(opcode, r_dest_src1.GetReg(), value);
 }
 
@@ -464,7 +474,7 @@ LIR* X86Mir2Lir::OpRegRegImm(OpKind op, RegStorage r_dest, RegStorage r_src, int
                      r_src.GetReg() /* index */, value /* scale */, 0 /* disp */);
     } else if (op == kOpAdd) {  // lea add special case
       return NewLIR5(kX86Lea32RA, r_dest.GetReg(), r_src.GetReg() /* base */,
-                     r4sib_no_index /* index */, 0 /* scale */, value /* disp */);
+                     rs_rX86_SP.GetReg()/*r4sib_no_index*/ /* index */, 0 /* scale */, value /* disp */);
     }
     OpRegCopy(r_dest, r_src);
   }
@@ -564,6 +574,13 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
       // TODO: double store is to unaligned address
       DCHECK_EQ((displacement & 0x3), 0);
       break;
+    case kWord:
+      if (Gen64Bit()) {
+        opcode = is_array ? kX86Mov64RA  : kX86Mov64RM;
+        CHECK_EQ(is_array, false);
+        CHECK_EQ(r_dest.IsFloat(), false);
+        break;
+      }  // else fall down to k32 case
     case k32:
     case kSingle:
     case kReference:  // TODO: update for reference decompression on 64-bit targets.
@@ -675,10 +692,6 @@ LIR* X86Mir2Lir::LoadBaseDispVolatile(RegStorage r_base, int displacement, RegSt
 
 LIR* X86Mir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_dest,
                               OpSize size) {
-  // TODO: base this on target.
-  if (size == kWord) {
-    size = k32;
-  }
   return LoadBaseIndexedDisp(r_base, RegStorage::InvalidReg(), 0, displacement, r_dest,
                              size);
 }
@@ -697,11 +710,23 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int
       if (r_src.IsFloat()) {
         opcode = is_array ? kX86MovsdAR : kX86MovsdMR;
       } else {
-        opcode = is_array ? kX86Mov32AR  : kX86Mov32MR;
+        if (Gen64Bit()) {
+          opcode = is_array ? kX86Mov64AR  : kX86Mov64MR;
+        } else {
+          // TODO(64): pair = true;
+          opcode = is_array ? kX86Mov32AR  : kX86Mov32MR;
+        }
       }
       // TODO: double store is to unaligned address
       DCHECK_EQ((displacement & 0x3), 0);
       break;
+    case kWord:
+      if (Gen64Bit()) {
+        opcode = is_array ? kX86Mov64AR  : kX86Mov64MR;
+        CHECK_EQ(is_array, false);
+        CHECK_EQ(r_src.IsFloat(), false);
+        break;
+      }  // else fall down to k32 case
     case k32:
     case kSingle:
     case kReference:
@@ -771,10 +796,6 @@ LIR* X86Mir2Lir::StoreBaseDispVolatile(RegStorage r_base, int displacement,
 
 LIR* X86Mir2Lir::StoreBaseDisp(RegStorage r_base, int displacement,
                                RegStorage r_src, OpSize size) {
-  // TODO: base this on target.
-  if (size == kWord) {
-    size = k32;
-  }
   return StoreBaseIndexedDisp(r_base, RegStorage::InvalidReg(), 0, displacement, r_src, size);
 }
 

@@ -141,6 +141,10 @@ class RegStorage {
     return ((reg_ & k64BitMask) == k64Bits);
   }
 
+  bool Is64BitSolo() const {
+    return ((reg_ & kShapeMask) == k64BitSolo);
+  }
+
   bool IsPair() const {
     return ((reg_ & kShapeMask) == k64BitPair);
   }
