@@ -27,10 +27,21 @@ LOCAL_CFLAGS := $(dalvikvm_cflags)
 LOCAL_SHARED_LIBRARIES := libdl libnativehelper
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
 LOCAL_MULTILIB := both
+ifeq (true,$(TARGET_IS_64_BIT))
+LOCAL_MODULE_STEM_32 := dalvikvm32
+else
 LOCAL_MODULE_STEM_32 := dalvikvm
+endif
 LOCAL_MODULE_STEM_64 := dalvikvm64
 include art/build/Android.libcxx.mk
 include $(BUILD_EXECUTABLE)
+
+# only create symlink for 64bit target.
+# for 32 bit target keep the old behavior.
+ifeq (true,$(TARGET_IS_64_BIT))
+include  $(BUILD_SYSTEM)/executable_prefer_symlink.mk
+endif
+
 ART_TARGET_EXECUTABLES += $(TARGET_OUT_EXECUTABLES)/$(LOCAL_MODULE)
 
 ifeq ($(WITH_HOST_DALVIK),true)
