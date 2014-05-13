@@ -3972,7 +3972,9 @@ void Dbg::DdmSendHeapSegments(bool native) {
   // Send a series of heap segment chunks.
   HeapChunkContext context((what == HPSG_WHAT_MERGED_OBJECTS), native);
   if (native) {
+#ifdef USE_DLMALLOC
     dlmalloc_inspect_all(HeapChunkContext::HeapChunkCallback, &context);
+#endif
   } else {
     gc::Heap* heap = Runtime::Current()->GetHeap();
     const std::vector<gc::space::ContinuousSpace*>& spaces = heap->GetContinuousSpaces();
