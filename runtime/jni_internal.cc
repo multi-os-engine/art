@@ -2077,6 +2077,11 @@ class JNI {
     CHECK_NON_NULL_ARGUMENT(java_array);
     ScopedObjectAccess soa(env);
     mirror::Array* array = soa.Decode<mirror::Array*>(java_array);
+    if (UNLIKELY(!array->GetClass()->IsPrimitiveArray())) {
+      JniAbortF("GetPrimitiveArrayCritical", "expected primitive array, given %s",
+                PrettyDescriptor(array->GetClass()).c_str());
+      return nullptr;
+    }
     gc::Heap* heap = Runtime::Current()->GetHeap();
     if (heap->IsMovableObject(array)) {
       heap->IncrementDisableMovingGC(soa.Self());
@@ -2090,196 +2095,189 @@ class JNI {
     return array->GetRawData(array->GetClass()->GetComponentSize(), 0);
   }
 
-  static void ReleasePrimitiveArrayCritical(JNIEnv* env, jarray array, void* elements, jint mode) {
-    CHECK_NON_NULL_ARGUMENT(array);
-    ReleasePrimitiveArray(env, array, elements, mode);
+  static void ReleasePrimitiveArrayCritical(JNIEnv* env, jarray java_array, void* elements,
+                                            jint mode) {
+    CHECK_NON_NULL_ARGUMENT(java_array);
+    ScopedObjectAccess soa(env);
+    mirror::Array* array = soa.Decode<mirror::Array*>(java_array);
+    if (UNLIKELY(!array->GetClass()->IsPrimitiveArray())) {
+      JniAbortF("ReleasePrimitiveArrayCritical", "expected primitive array, given %s",
+                PrettyDescriptor(array->GetClass()).c_str());
+      return;
+    }
+    const size_t component_size = array->GetClass()->GetComponentSize();
+    ReleasePrimitiveArray(soa, array, component_size, elements, mode);
   }
 
   static jboolean* GetBooleanArrayElements(JNIEnv* env, jbooleanArray array, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(array);
     ScopedObjectAccess soa(env);
-    return GetPrimitiveArray<jbooleanArray, jboolean*, mirror::BooleanArray>(soa, array, is_copy);
+    return GetPrimitiveArray<jbooleanArray, jboolean, mirror::BooleanArray>(soa, array, is_copy);
   }
 
   static jbyte* GetByteArrayElements(JNIEnv* env, jbyteArray array, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(array);
     ScopedObjectAccess soa(env);
-    return GetPrimitiveArray<jbyteArray, jbyte*, mirror::ByteArray>(soa, array, is_copy);
+    return GetPrimitiveArray<jbyteArray, jbyte, mirror::ByteArray>(soa, array, is_copy);
   }
 
   static jchar* GetCharArrayElements(JNIEnv* env, jcharArray array, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(array);
     ScopedObjectAccess soa(env);
-    return GetPrimitiveArray<jcharArray, jchar*, mirror::CharArray>(soa, array, is_copy);
+    return GetPrimitiveArray<jcharArray, jchar, mirror::CharArray>(soa, array, is_copy);
   }
 
   static jdouble* GetDoubleArrayElements(JNIEnv* env, jdoubleArray array, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(array);
     ScopedObjectAccess soa(env);
-    return GetPrimitiveArray<jdoubleArray, jdouble*, mirror::DoubleArray>(soa, array, is_copy);
+    return GetPrimitiveArray<jdoubleArray, jdouble, mirror::DoubleArray>(soa, array, is_copy);
   }
 
   static jfloat* GetFloatArrayElements(JNIEnv* env, jfloatArray array, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(array);
     ScopedObjectAccess soa(env);
-    return GetPrimitiveArray<jfloatArray, jfloat*, mirror::FloatArray>(soa, array, is_copy);
+    return GetPrimitiveArray<jfloatArray, jfloat, mirror::FloatArray>(soa, array, is_copy);
   }
 
   static jint* GetIntArrayElements(JNIEnv* env, jintArray array, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(array);
     ScopedObjectAccess soa(env);
-    return GetPrimitiveArray<jintArray, jint*, mirror::IntArray>(soa, array, is_copy);
+    return GetPrimitiveArray<jintArray, jint, mirror::IntArray>(soa, array, is_copy);
   }
 
   static jlong* GetLongArrayElements(JNIEnv* env, jlongArray array, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(array);
     ScopedObjectAccess soa(env);
-    return GetPrimitiveArray<jlongArray, jlong*, mirror::LongArray>(soa, array, is_copy);
+    return GetPrimitiveArray<jlongArray, jlong, mirror::LongArray>(soa, array, is_copy);
   }
 
   static jshort* GetShortArrayElements(JNIEnv* env, jshortArray array, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(array);
     ScopedObjectAccess soa(env);
-    return GetPrimitiveArray<jshortArray, jshort*, mirror::ShortArray>(soa, array, is_copy);
+    return GetPrimitiveArray<jshortArray, jshort, mirror::ShortArray>(soa, array, is_copy);
   }
 
   static void ReleaseBooleanArrayElements(JNIEnv* env, jbooleanArray array, jboolean* elements,
                                           jint mode) {
-    ReleasePrimitiveArray(env, array, elements, mode);
+    ReleasePrimitiveArray<jbooleanArray, jboolean, mirror::BooleanArray>(env, array, elements, mode);
   }
 
   static void ReleaseByteArrayElements(JNIEnv* env, jbyteArray array, jbyte* elements, jint mode) {
-    ReleasePrimitiveArray(env, array, elements, mode);
+    ReleasePrimitiveArray<jbyteArray, jbyte, mirror::ByteArray>(env, array, elements, mode);
   }
 
   static void ReleaseCharArrayElements(JNIEnv* env, jcharArray array, jchar* elements, jint mode) {
-    ReleasePrimitiveArray(env, array, elements, mode);
+    ReleasePrimitiveArray<jcharArray, jchar, mirror::CharArray>(env, array, elements, mode);
   }
 
   static void ReleaseDoubleArrayElements(JNIEnv* env, jdoubleArray array, jdouble* elements,
                                          jint mode) {
-    ReleasePrimitiveArray(env, array, elements, mode);
+    ReleasePrimitiveArray<jdoubleArray, jdouble, mirror::DoubleArray>(env, array, elements, mode);
   }
 
   static void ReleaseFloatArrayElements(JNIEnv* env, jfloatArray array, jfloat* elements,
                                         jint mode) {
-    ReleasePrimitiveArray(env, array, elements, mode);
+    ReleasePrimitiveArray<jfloatArray, jfloat, mirror::FloatArray>(env, array, elements, mode);
   }
 
   static void ReleaseIntArrayElements(JNIEnv* env, jintArray array, jint* elements, jint mode) {
-    ReleasePrimitiveArray(env, array, elements, mode);
+    ReleasePrimitiveArray<jintArray, jint, mirror::IntArray>(env, array, elements, mode);
   }
 
   static void ReleaseLongArrayElements(JNIEnv* env, jlongArray array, jlong* elements, jint mode) {
-    ReleasePrimitiveArray(env, array, elements, mode);
+    ReleasePrimitiveArray<jlongArray, jlong, mirror::LongArray>(env, array, elements, mode);
   }
 
   static void ReleaseShortArrayElements(JNIEnv* env, jshortArray array, jshort* elements,
                                         jint mode) {
-    ReleasePrimitiveArray(env, array, elements, mode);
+    ReleasePrimitiveArray<jshortArray, jshort, mirror::ShortArray>(env, array, elements, mode);
   }
 
   static void GetBooleanArrayRegion(JNIEnv* env, jbooleanArray array, jsize start, jsize length,
                                     jboolean* buf) {
-    ScopedObjectAccess soa(env);
-    GetPrimitiveArrayRegion<jbooleanArray, jboolean, mirror::BooleanArray>(soa, array, start,
+    GetPrimitiveArrayRegion<jbooleanArray, jboolean, mirror::BooleanArray>(env, array, start,
                                                                            length, buf);
   }
 
   static void GetByteArrayRegion(JNIEnv* env, jbyteArray array, jsize start, jsize length,
                                  jbyte* buf) {
-    ScopedObjectAccess soa(env);
-    GetPrimitiveArrayRegion<jbyteArray, jbyte, mirror::ByteArray>(soa, array, start, length, buf);
+    GetPrimitiveArrayRegion<jbyteArray, jbyte, mirror::ByteArray>(env, array, start, length, buf);
   }
 
   static void GetCharArrayRegion(JNIEnv* env, jcharArray array, jsize start, jsize length,
                                  jchar* buf) {
-    ScopedObjectAccess soa(env);
-    GetPrimitiveArrayRegion<jcharArray, jchar, mirror::CharArray>(soa, array, start, length, buf);
+    GetPrimitiveArrayRegion<jcharArray, jchar, mirror::CharArray>(env, array, start, length, buf);
   }
 
   static void GetDoubleArrayRegion(JNIEnv* env, jdoubleArray array, jsize start, jsize length,
                                    jdouble* buf) {
-    ScopedObjectAccess soa(env);
-    GetPrimitiveArrayRegion<jdoubleArray, jdouble, mirror::DoubleArray>(soa, array, start, length,
+    GetPrimitiveArrayRegion<jdoubleArray, jdouble, mirror::DoubleArray>(env, array, start, length,
                                                                         buf);
   }
 
   static void GetFloatArrayRegion(JNIEnv* env, jfloatArray array, jsize start, jsize length,
                                   jfloat* buf) {
-    ScopedObjectAccess soa(env);
-    GetPrimitiveArrayRegion<jfloatArray, jfloat, mirror::FloatArray>(soa, array, start, length,
+    GetPrimitiveArrayRegion<jfloatArray, jfloat, mirror::FloatArray>(env, array, start, length,
                                                                      buf);
   }
 
   static void GetIntArrayRegion(JNIEnv* env, jintArray array, jsize start, jsize length,
                                 jint* buf) {
-    ScopedObjectAccess soa(env);
-    GetPrimitiveArrayRegion<jintArray, jint, mirror::IntArray>(soa, array, start, length, buf);
+    GetPrimitiveArrayRegion<jintArray, jint, mirror::IntArray>(env, array, start, length, buf);
   }
 
   static void GetLongArrayRegion(JNIEnv* env, jlongArray array, jsize start, jsize length,
                                  jlong* buf) {
-    ScopedObjectAccess soa(env);
-    GetPrimitiveArrayRegion<jlongArray, jlong, mirror::LongArray>(soa, array, start, length, buf);
+    GetPrimitiveArrayRegion<jlongArray, jlong, mirror::LongArray>(env, array, start, length, buf);
   }
 
   static void GetShortArrayRegion(JNIEnv* env, jshortArray array, jsize start, jsize length,
                                   jshort* buf) {
-    ScopedObjectAccess soa(env);
-    GetPrimitiveArrayRegion<jshortArray, jshort, mirror::ShortArray>(soa, array, start, length,
+    GetPrimitiveArrayRegion<jshortArray, jshort, mirror::ShortArray>(env, array, start, length,
                                                                      buf);
   }
 
   static void SetBooleanArrayRegion(JNIEnv* env, jbooleanArray array, jsize start, jsize length,
                                     const jboolean* buf) {
-    ScopedObjectAccess soa(env);
-    SetPrimitiveArrayRegion<jbooleanArray, jboolean, mirror::BooleanArray>(soa, array, start,
+    SetPrimitiveArrayRegion<jbooleanArray, jboolean, mirror::BooleanArray>(env, array, start,
                                                                            length, buf);
   }
 
   static void SetByteArrayRegion(JNIEnv* env, jbyteArray array, jsize start, jsize length,
                                  const jbyte* buf) {
-    ScopedObjectAccess soa(env);
-    SetPrimitiveArrayRegion<jbyteArray, jbyte, mirror::ByteArray>(soa, array, start, length, buf);
+    SetPrimitiveArrayRegion<jbyteArray, jbyte, mirror::ByteArray>(env, array, start, length, buf);
   }
 
   static void SetCharArrayRegion(JNIEnv* env, jcharArray array, jsize start, jsize length,
                                  const jchar* buf) {
-    ScopedObjectAccess soa(env);
-    SetPrimitiveArrayRegion<jcharArray, jchar, mirror::CharArray>(soa, array, start, length, buf);
+    SetPrimitiveArrayRegion<jcharArray, jchar, mirror::CharArray>(env, array, start, length, buf);
   }
 
   static void SetDoubleArrayRegion(JNIEnv* env, jdoubleArray array, jsize start, jsize length,
                                    const jdouble* buf) {
-    ScopedObjectAccess soa(env);
-    SetPrimitiveArrayRegion<jdoubleArray, jdouble, mirror::DoubleArray>(soa, array, start, length,
+    SetPrimitiveArrayRegion<jdoubleArray, jdouble, mirror::DoubleArray>(env, array, start, length,
                                                                         buf);
   }
 
   static void SetFloatArrayRegion(JNIEnv* env, jfloatArray array, jsize start, jsize length,
                                   const jfloat* buf) {
-    ScopedObjectAccess soa(env);
-    SetPrimitiveArrayRegion<jfloatArray, jfloat, mirror::FloatArray>(soa, array, start, length,
+    SetPrimitiveArrayRegion<jfloatArray, jfloat, mirror::FloatArray>(env, array, start, length,
                                                                      buf);
   }
 
   static void SetIntArrayRegion(JNIEnv* env, jintArray array, jsize start, jsize length,
                                 const jint* buf) {
-    ScopedObjectAccess soa(env);
-    SetPrimitiveArrayRegion<jintArray, jint, mirror::IntArray>(soa, array, start, length, buf);
+    SetPrimitiveArrayRegion<jintArray, jint, mirror::IntArray>(env, array, start, length, buf);
   }
 
   static void SetLongArrayRegion(JNIEnv* env, jlongArray array, jsize start, jsize length,
                                  const jlong* buf) {
-    ScopedObjectAccess soa(env);
-    SetPrimitiveArrayRegion<jlongArray, jlong, mirror::LongArray>(soa, array, start, length, buf);
+    SetPrimitiveArrayRegion<jlongArray, jlong, mirror::LongArray>(env, array, start, length, buf);
   }
 
   static void SetShortArrayRegion(JNIEnv* env, jshortArray array, jsize start, jsize length,
                                   const jshort* buf) {
-    ScopedObjectAccess soa(env);
-    SetPrimitiveArrayRegion<jshortArray, jshort, mirror::ShortArray>(soa, array, start, length,
+    SetPrimitiveArrayRegion<jshortArray, jshort, mirror::ShortArray>(env, array, start, length,
                                                                      buf);
   }
 
@@ -2483,41 +2481,71 @@ class JNI {
     return soa.AddLocalReference<JniT>(result);
   }
 
-  template <typename ArrayT, typename CArrayT, typename ArtArrayT>
-  static CArrayT GetPrimitiveArray(ScopedObjectAccess& soa, ArrayT java_array,
-                                   jboolean* is_copy)
+  template <typename JArrayT, typename ElementT, typename ArtArrayT>
+  static ArtArrayT* DecodeAndCheckArrayType(ScopedObjectAccess& soa, JArrayT java_array,
+                                           const char* fn_name, const char* operation)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     ArtArrayT* array = soa.Decode<ArtArrayT*>(java_array);
+    if (UNLIKELY(ArtArrayT::GetArrayClass() != array->GetClass())) {
+      JniAbortF(fn_name, "attempt to %s %s primitive array elements with an object of type %s",
+                operation, PrettyDescriptor(ArtArrayT::GetArrayClass()->GetComponentType()).c_str(),
+                PrettyDescriptor(array->GetClass()).c_str());
+      return nullptr;
+    }
+    DCHECK_EQ(sizeof(ElementT), array->GetClass()->GetComponentSize());
+    return array;
+  }
+
+  template <typename ArrayT, typename ElementT, typename ArtArrayT>
+  static ElementT* GetPrimitiveArray(ScopedObjectAccess& soa, ArrayT java_array,
+                                     jboolean* is_copy)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    ArtArrayT* array = DecodeAndCheckArrayType<ArrayT, ElementT, ArtArrayT>(soa, java_array,
+                                                                            "GetArrayElements",
+                                                                            "get");
+    if (UNLIKELY(array == nullptr)) {
+      return nullptr;
+    }
     PinPrimitiveArray(soa, array);
     // Only make a copy if necessary.
     if (Runtime::Current()->GetHeap()->IsMovableObject(array)) {
       if (is_copy != nullptr) {
         *is_copy = JNI_TRUE;
       }
-      static const size_t component_size = array->GetClass()->GetComponentSize();
+      const size_t component_size = sizeof(ElementT);
       size_t size = array->GetLength() * component_size;
       void* data = new uint64_t[RoundUp(size, 8) / 8];
       memcpy(data, array->GetData(), size);
-      return reinterpret_cast<CArrayT>(data);
+      return reinterpret_cast<ElementT*>(data);
     } else {
       if (is_copy != nullptr) {
         *is_copy = JNI_FALSE;
       }
-      return reinterpret_cast<CArrayT>(array->GetData());
+      return reinterpret_cast<ElementT*>(array->GetData());
     }
   }
 
-  template <typename ArrayT, typename ElementT>
+  template <typename ArrayT, typename ElementT, typename ArtArrayT>
   static void ReleasePrimitiveArray(JNIEnv* env, ArrayT java_array, ElementT* elements, jint mode) {
     ScopedObjectAccess soa(env);
-    mirror::Array* array = soa.Decode<mirror::Array*>(java_array);
-    size_t component_size = array->GetClass()->GetComponentSize();
+    ArtArrayT* array = DecodeAndCheckArrayType<ArrayT, ElementT, ArtArrayT>(soa, java_array,
+                                                                            "ReleaseArrayElements",
+                                                                            "release");
+    if (array == nullptr) {
+      return;
+    }
+    ReleasePrimitiveArray(soa, array, sizeof(ElementT), elements, mode);
+  }
+
+  static void ReleasePrimitiveArray(ScopedObjectAccess& soa, mirror::Array* array,
+                                    size_t component_size, void* elements, jint mode)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     void* array_data = array->GetRawData(component_size, 0);
     gc::Heap* heap = Runtime::Current()->GetHeap();
-    bool is_copy = array_data != reinterpret_cast<void*>(elements);
+    bool is_copy = array_data != elements;
     size_t bytes = array->GetLength() * component_size;
-    VLOG(heap) << "Release primitive array " << env << " array_data " << array_data
-               << " elements " << reinterpret_cast<void*>(elements);
+    VLOG(heap) << "Release primitive array " << soa.Env() << " array_data " << array_data
+               << " elements " << elements;
     if (is_copy) {
       // Sanity check: If elements is not the same as the java array's data, it better not be a
       // heap address. TODO: This might be slow to check, may be worth keeping track of which
@@ -2543,33 +2571,43 @@ class JNI {
     }
   }
 
-  template <typename JavaArrayT, typename JavaT, typename ArrayT>
-  static void GetPrimitiveArrayRegion(ScopedObjectAccess& soa, JavaArrayT java_array,
-                                      jsize start, jsize length, JavaT* buf)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  template <typename JArrayT, typename ElementT, typename ArtArrayT>
+  static void GetPrimitiveArrayRegion(JNIEnv* env, JArrayT java_array,
+                                      jsize start, jsize length, ElementT* buf) {
     CHECK_NON_NULL_ARGUMENT(java_array);
-    ArrayT* array = soa.Decode<ArrayT*>(java_array);
-    if (start < 0 || length < 0 || start + length > array->GetLength()) {
-      ThrowAIOOBE(soa, array, start, length, "src");
-    } else {
-      CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
-      JavaT* data = array->GetData();
-      memcpy(buf, data + start, length * sizeof(JavaT));
+    ScopedObjectAccess soa(env);
+    ArtArrayT* array =
+        DecodeAndCheckArrayType<JArrayT, ElementT, ArtArrayT>(soa, java_array,
+                                                              "GetPrimitiveArrayRegion",
+                                                              "get region of");
+    if (array != nullptr) {
+      if (start < 0 || length < 0 || start + length > array->GetLength()) {
+        ThrowAIOOBE(soa, array, start, length, "src");
+      } else {
+        CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
+        ElementT* data = array->GetData();
+        memcpy(buf, data + start, length * sizeof(ElementT));
+      }
     }
   }
 
-  template <typename JavaArrayT, typename JavaT, typename ArrayT>
-  static void SetPrimitiveArrayRegion(ScopedObjectAccess& soa, JavaArrayT java_array,
-                                      jsize start, jsize length, const JavaT* buf)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  template <typename JArrayT, typename ElementT, typename ArtArrayT>
+  static void SetPrimitiveArrayRegion(JNIEnv* env, JArrayT java_array,
+                                      jsize start, jsize length, const ElementT* buf) {
     CHECK_NON_NULL_ARGUMENT(java_array);
-    ArrayT* array = soa.Decode<ArrayT*>(java_array);
-    if (start < 0 || length < 0 || start + length > array->GetLength()) {
-      ThrowAIOOBE(soa, array, start, length, "dst");
-    } else {
-      CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
-      JavaT* data = array->GetData();
-      memcpy(data + start, buf, length * sizeof(JavaT));
+    ScopedObjectAccess soa(env);
+    ArtArrayT* array =
+        DecodeAndCheckArrayType<JArrayT, ElementT, ArtArrayT>(soa, java_array,
+                                                              "SetPrimitiveArrayRegion",
+                                                              "set region of");
+    if (array != nullptr) {
+      if (start < 0 || length < 0 || start + length > array->GetLength()) {
+        ThrowAIOOBE(soa, array, start, length, "dst");
+      } else {
+        CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
+        ElementT* data = array->GetData();
+        memcpy(data + start, buf, length * sizeof(ElementT));
+      }
     }
   }
 };
