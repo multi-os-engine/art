@@ -2488,6 +2488,13 @@ class JNI {
                                    jboolean* is_copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     ArtArrayT* array = soa.Decode<ArtArrayT*>(java_array);
+    if (UNLIKELY(ArtArrayT::GetArrayClass() != array->GetClass())) {
+      JniAbortF("GetArrayElements", "attempt to get %s primitive array elements from an object "
+                "of type %s",
+                PrettyDescriptor(ArtArrayT::GetArrayClass()->GetComponentType()).c_str(),
+                PrettyDescriptor(array->GetClass()).c_str());
+      return nullptr;
+    }
     PinPrimitiveArray(soa, array);
     // Only make a copy if necessary.
     if (Runtime::Current()->GetHeap()->IsMovableObject(array)) {

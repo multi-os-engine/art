@@ -103,6 +103,37 @@ TEST_F(JniInternalTest, GetVersion) {
   ASSERT_EQ(JNI_VERSION_1_6, env_->GetVersion());
 }
 
+TEST_F(JniInternalTest, GetPrimitiveArrayElementsOfWrongType) {
+  CheckJniAbortCatcher jni_abort_catcher;
+  jobject array = env_->NewBooleanArray(10);
+  jboolean is_copy;
+  EXPECT_EQ(env_->GetByteArrayElements(reinterpret_cast<jbyteArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get byte primitive array elements from an object of type boolean[]");
+  EXPECT_EQ(env_->GetShortArrayElements(reinterpret_cast<jshortArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get short primitive array elements from an object of type boolean[]");
+  EXPECT_EQ(env_->GetCharArrayElements(reinterpret_cast<jcharArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get char primitive array elements from an object of type boolean[]");
+  EXPECT_EQ(env_->GetIntArrayElements(reinterpret_cast<jintArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get int primitive array elements from an object of type boolean[]");
+  EXPECT_EQ(env_->GetLongArrayElements(reinterpret_cast<jlongArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get long primitive array elements from an object of type boolean[]");
+  EXPECT_EQ(env_->GetFloatArrayElements(reinterpret_cast<jfloatArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get float primitive array elements from an object of type boolean[]");
+  EXPECT_EQ(env_->GetDoubleArrayElements(reinterpret_cast<jdoubleArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get double primitive array elements from an object of type boolean[]");
+  array = env_->NewByteArray(10);
+  EXPECT_EQ(env_->GetBooleanArrayElements(reinterpret_cast<jbooleanArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get boolean primitive array elements from an object of type byte[]");
+}
+
 #define EXPECT_CLASS_FOUND(NAME) \
   EXPECT_TRUE(env_->FindClass(NAME) != NULL); \
   EXPECT_FALSE(env_->ExceptionCheck())
