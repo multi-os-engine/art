@@ -979,7 +979,7 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
   }
 
   // Free temp registers and reset redundant store tracking.
-  ClobberAllTemps();
+  ClobberAllRegs();
 
   if (bb->block_type == kEntryBlock) {
     ResetRegPool();
@@ -994,7 +994,7 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
   for (mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
     ResetRegPool();
     if (cu_->disable_opt & (1 << kTrackLiveTemps)) {
-      ClobberAllTemps();
+      ClobberAllRegs();
       // Reset temp allocation to minimize differences when A/B testing.
       reg_pool_->ResetNextTemp();
     }
@@ -1074,7 +1074,7 @@ bool Mir2Lir::SpecialMIR2LIR(const InlineMethod& special) {
   // Free temp registers and reset redundant store tracking.
   ResetRegPool();
   ResetDefTracking();
-  ClobberAllTemps();
+  ClobberAllRegs();
 
   return GenSpecialCase(bb, mir, special);
 }

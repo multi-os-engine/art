@@ -40,8 +40,7 @@ void Mir2Lir::ResetRegPool() {
 
 Mir2Lir::RegisterInfo::RegisterInfo(RegStorage r, uint64_t mask)
   : reg_(r), is_temp_(false), wide_value_(false), dirty_(false), aliased_(false), partner_(r),
-    s_reg_(INVALID_SREG), def_use_mask_(mask), master_(this), def_start_(nullptr),
-    def_end_(nullptr), alias_chain_(nullptr) {
+    s_reg_(INVALID_SREG), def_use_mask_(mask), master_(this) {
   switch (r.StorageSize()) {
     case 0: storage_mask_ = 0xffffffff; break;
     case 4: storage_mask_ = 0x00000001; break;
@@ -67,13 +66,9 @@ Mir2Lir::RegisterPool::RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena,
     next_sp_reg_(0), dp_regs_(arena, dp_regs.size()), next_dp_reg_(0), m2l_(m2l)  {
   // Initialize the fast lookup map.
   m2l_->reginfo_map_.Reset();
-  if (kIsDebugBuild) {
-    m2l_->reginfo_map_.Resize(RegStorage::kMaxRegs);
-    for (unsigned i = 0; i < RegStorage::kMaxRegs; i++) {
-      m2l_->reginfo_map_.Insert(nullptr);
-    }
-  } else {
-    m2l_->reginfo_map_.SetSize(RegStorage::kMaxRegs);
+  m2l_->reginfo_map_.Resize(RegStorage::kMaxRegs);
+  for (unsigned i = 0; i < RegStorage::kMaxRegs; i++) {
+    m2l_->reginfo_map_.Insert(nullptr);
   }
 
   // Construct the register pool.
@@ -144,43 +139,29 @@ void Mir2Lir::DumpRegPools() {
 }
 
 void Mir2Lir::Clobber(RegStorage reg) {
-  if (UNLIKELY(reg.IsPair())) {
+  if (reg.IsPair()) {
     DCHECK(!GetRegInfo(reg.GetLow())->IsAliased());
-    Clobber(reg.GetLow());
+    ClobberBody(GetRegInfo(reg.GetLow()));
     DCHECK(!GetRegInfo(reg.GetHigh())->IsAliased());
-    Clobber(reg.GetHigh());
+    ClobberBody(GetRegInfo(reg.GetHigh()));
   } else {
     RegisterInfo* info = GetRegInfo(reg);
-    if (info->IsTemp() && !info->IsDead()) {
-      ClobberBody(info);
-      if (info->IsAliased()) {
-        ClobberAliases(info);
-      } else {
-        RegisterInfo* master = info->Master();
-        if (info != master) {
-          ClobberBody(info->Master());
-        }
-      }
+    if (info->IsAliased()) {
+      ClobberAliases(info);
+    } else if (info != info->Master() && info->Master()->SReg() != INVALID_SREG) {
+      ClobberBody(info->Master());
     }
+    ClobberBody(info);
   }
 }
 
 void Mir2Lir::ClobberAliases(RegisterInfo* info) {
-  for (RegisterInfo* alias = info->GetAliasChain(); alias != nullptr;
-       alias = alias->GetAliasChain()) {
-    DCHECK(!alias->IsAliased());  // Only the master should be marked as alised.
-    if (alias->SReg() != INVALID_SREG) {
-      alias->SetSReg(INVALID_SREG);
-      alias->ResetDefBody();
-      if (alias->IsWide()) {
-        alias->SetIsWide(false);
-        if (alias->GetReg() != alias->Partner()) {
-          RegisterInfo* p = GetRegInfo(alias->Partner());
-          p->SetIsWide(false);
-          p->MarkDead();
-          p->ResetDefBody();
-        }
-      }
+  DCHECK(info->IsAliased());
+  GrowableArray<RegisterInfo*>::Iterator iter(&tempreg_info_);
+  for (RegisterInfo* tmpreg_info = iter.Next(); tmpreg_info != NULL; tmpreg_info = iter.Next()) {
+    if (tmpreg_info->Master() == info) {
+      // tmpreg_info is an alias of info.
+      ClobberBody(tmpreg_info);
     }
   }
 }
@@ -204,10 +185,11 @@ void Mir2Lir::ClobberSReg(int s_reg) {
     GrowableArray<RegisterInfo*>::Iterator iter(&tempreg_info_);
     for (RegisterInfo* info = iter.Next(); info != NULL; info = iter.Next()) {
       if (info->SReg() == s_reg) {
-        ClobberBody(info);
         if (info->IsAliased()) {
+          // TUNING: if this gets hot, we could add links to follow - aliasing is static.
           ClobberAliases(info);
         }
+        ClobberBody(info);
       }
     }
   }
@@ -663,7 +645,7 @@ void Mir2Lir::ResetDefTracking() {
   }
 }
 
-void Mir2Lir::ClobberAllTemps() {
+void Mir2Lir::ClobberAllRegs() {
   GrowableArray<RegisterInfo*>::Iterator iter(&tempreg_info_);
   for (RegisterInfo* info = iter.Next(); info != NULL; info = iter.Next()) {
     ClobberBody(info);
@@ -721,9 +703,10 @@ void Mir2Lir::FlushSpecificReg(RegisterInfo* info) {
 void Mir2Lir::FlushAllRegs() {
   GrowableArray<RegisterInfo*>::Iterator it(&tempreg_info_);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
-    if (info->IsDirty() && info->IsLive()) {
+    if (info->IsLive() && info->IsDirty()) {
       FlushSpecificReg(info);
     }
+    DCHECK(info->IsTemp());
     info->MarkDead();
     info->SetSReg(INVALID_SREG);
     info->ResetDefBody();

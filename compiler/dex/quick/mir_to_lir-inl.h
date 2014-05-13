@@ -25,8 +25,7 @@ namespace art {
 
 /* Mark a temp register as dead.  Does not affect allocation state. */
 inline void Mir2Lir::ClobberBody(RegisterInfo* p) {
-  DCHECK(p->IsTemp());
-  if (!p->IsDead()) {
+  if (p->IsTemp()) {
     DCHECK(!(p->IsLive() && p->IsDirty()))  << "Live & dirty temp in clobber";
     p->MarkDead();
     p->ResetDefBody();
