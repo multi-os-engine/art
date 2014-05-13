@@ -480,6 +480,178 @@ TEST_F(JniInternalTest, ShortArrays) {
                          GetShortArrayElements, ReleaseShortArrayElements, jshort, "[S");
 }
 
+TEST_F(JniInternalTest, GetPrimitiveArrayElementsOfWrongType) {
+  CheckJniAbortCatcher jni_abort_catcher;
+  jbooleanArray array = env_->NewBooleanArray(10);
+  jboolean is_copy;
+  EXPECT_EQ(env_->GetByteArrayElements(reinterpret_cast<jbyteArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get byte primitive array elements with an object of type boolean[]");
+  EXPECT_EQ(env_->GetShortArrayElements(reinterpret_cast<jshortArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get short primitive array elements with an object of type boolean[]");
+  EXPECT_EQ(env_->GetCharArrayElements(reinterpret_cast<jcharArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get char primitive array elements with an object of type boolean[]");
+  EXPECT_EQ(env_->GetIntArrayElements(reinterpret_cast<jintArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get int primitive array elements with an object of type boolean[]");
+  EXPECT_EQ(env_->GetLongArrayElements(reinterpret_cast<jlongArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get long primitive array elements with an object of type boolean[]");
+  EXPECT_EQ(env_->GetFloatArrayElements(reinterpret_cast<jfloatArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get float primitive array elements with an object of type boolean[]");
+  EXPECT_EQ(env_->GetDoubleArrayElements(reinterpret_cast<jdoubleArray>(array), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get double primitive array elements with an object of type boolean[]");
+  jbyteArray array2 = env_->NewByteArray(10);
+  EXPECT_EQ(env_->GetBooleanArrayElements(reinterpret_cast<jbooleanArray>(array2), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get boolean primitive array elements with an object of type byte[]");
+  jobject object = env_->NewStringUTF("Test String");
+  EXPECT_EQ(env_->GetBooleanArrayElements(reinterpret_cast<jbooleanArray>(object), &is_copy), nullptr);
+  jni_abort_catcher.Check(
+      "attempt to get boolean primitive array elements with an object of type java.lang.String");
+}
+
+TEST_F(JniInternalTest, ReleasePrimitiveArrayElementsOfWrongType) {
+  CheckJniAbortCatcher jni_abort_catcher;
+  jbooleanArray array = env_->NewBooleanArray(10);
+  ASSERT_TRUE(array != nullptr);
+  jboolean is_copy;
+  jboolean* elements = env_->GetBooleanArrayElements(array, &is_copy);
+  ASSERT_TRUE(elements != nullptr);
+  env_->ReleaseByteArrayElements(reinterpret_cast<jbyteArray>(array),
+                                 reinterpret_cast<jbyte*>(elements), 0);
+  jni_abort_catcher.Check(
+      "attempt to release byte primitive array elements with an object of type boolean[]");
+  env_->ReleaseShortArrayElements(reinterpret_cast<jshortArray>(array),
+                                  reinterpret_cast<jshort*>(elements), 0);
+  jni_abort_catcher.Check(
+      "attempt to release short primitive array elements with an object of type boolean[]");
+  env_->ReleaseCharArrayElements(reinterpret_cast<jcharArray>(array),
+                                 reinterpret_cast<jchar*>(elements), 0);
+  jni_abort_catcher.Check(
+      "attempt to release char primitive array elements with an object of type boolean[]");
+  env_->ReleaseIntArrayElements(reinterpret_cast<jintArray>(array),
+                                reinterpret_cast<jint*>(elements), 0);
+  jni_abort_catcher.Check(
+      "attempt to release int primitive array elements with an object of type boolean[]");
+  env_->ReleaseLongArrayElements(reinterpret_cast<jlongArray>(array),
+                                 reinterpret_cast<jlong*>(elements), 0);
+  jni_abort_catcher.Check(
+      "attempt to release long primitive array elements with an object of type boolean[]");
+  env_->ReleaseFloatArrayElements(reinterpret_cast<jfloatArray>(array),
+                                  reinterpret_cast<jfloat*>(elements), 0);
+  jni_abort_catcher.Check(
+      "attempt to release float primitive array elements with an object of type boolean[]");
+  env_->ReleaseDoubleArrayElements(reinterpret_cast<jdoubleArray>(array),
+                                  reinterpret_cast<jdouble*>(elements), 0);
+  jni_abort_catcher.Check(
+      "attempt to release double primitive array elements with an object of type boolean[]");
+  jbyteArray array2 = env_->NewByteArray(10);
+  env_->ReleaseBooleanArrayElements(reinterpret_cast<jbooleanArray>(array2), elements, 0);
+  jni_abort_catcher.Check(
+      "attempt to release boolean primitive array elements with an object of type byte[]");
+  jobject object = env_->NewStringUTF("Test String");
+  env_->ReleaseBooleanArrayElements(reinterpret_cast<jbooleanArray>(object), elements, 0);
+  jni_abort_catcher.Check(
+      "attempt to release boolean primitive array elements with an object of type java.lang.String");
+}
+
+TEST_F(JniInternalTest, GetPrimitiveArrayRegionElementsOfWrongType) {
+  CheckJniAbortCatcher jni_abort_catcher;
+  constexpr size_t kLength = 10;
+  jbooleanArray array = env_->NewBooleanArray(kLength);
+  ASSERT_TRUE(array != nullptr);
+  jboolean elements[kLength];
+  env_->GetByteArrayRegion(reinterpret_cast<jbyteArray>(array), 0, kLength,
+                           reinterpret_cast<jbyte*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to get region of byte primitive array elements with an object of type boolean[]");
+  env_->GetShortArrayRegion(reinterpret_cast<jshortArray>(array), 0, kLength,
+                            reinterpret_cast<jshort*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to get region of short primitive array elements with an object of type boolean[]");
+  env_->GetCharArrayRegion(reinterpret_cast<jcharArray>(array), 0, kLength,
+                           reinterpret_cast<jchar*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to get region of char primitive array elements with an object of type boolean[]");
+  env_->GetIntArrayRegion(reinterpret_cast<jintArray>(array), 0, kLength,
+                          reinterpret_cast<jint*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to get region of int primitive array elements with an object of type boolean[]");
+  env_->GetLongArrayRegion(reinterpret_cast<jlongArray>(array), 0, kLength,
+                           reinterpret_cast<jlong*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to get region of long primitive array elements with an object of type boolean[]");
+  env_->GetFloatArrayRegion(reinterpret_cast<jfloatArray>(array), 0, kLength,
+                            reinterpret_cast<jfloat*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to get region of float primitive array elements with an object of type boolean[]");
+  env_->GetDoubleArrayRegion(reinterpret_cast<jdoubleArray>(array), 0, kLength,
+                           reinterpret_cast<jdouble*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to get region of double primitive array elements with an object of type boolean[]");
+  jbyteArray array2 = env_->NewByteArray(10);
+  env_->GetBooleanArrayRegion(reinterpret_cast<jbooleanArray>(array2), 0, kLength,
+                              reinterpret_cast<jboolean*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to get region of boolean primitive array elements with an object of type byte[]");
+  jobject object = env_->NewStringUTF("Test String");
+  env_->GetBooleanArrayRegion(reinterpret_cast<jbooleanArray>(object), 0, kLength,
+                              reinterpret_cast<jboolean*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to get region of boolean primitive array elements with an object of type java.lang.String");
+}
+
+TEST_F(JniInternalTest, SetPrimitiveArrayRegionElementsOfWrongType) {
+  CheckJniAbortCatcher jni_abort_catcher;
+  constexpr size_t kLength = 10;
+  jbooleanArray array = env_->NewBooleanArray(kLength);
+  ASSERT_TRUE(array != nullptr);
+  jboolean elements[kLength];
+  env_->SetByteArrayRegion(reinterpret_cast<jbyteArray>(array), 0, kLength,
+                           reinterpret_cast<jbyte*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to set region of byte primitive array elements with an object of type boolean[]");
+  env_->SetShortArrayRegion(reinterpret_cast<jshortArray>(array), 0, kLength,
+                            reinterpret_cast<jshort*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to set region of short primitive array elements with an object of type boolean[]");
+  env_->SetCharArrayRegion(reinterpret_cast<jcharArray>(array), 0, kLength,
+                           reinterpret_cast<jchar*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to set region of char primitive array elements with an object of type boolean[]");
+  env_->SetIntArrayRegion(reinterpret_cast<jintArray>(array), 0, kLength,
+                          reinterpret_cast<jint*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to set region of int primitive array elements with an object of type boolean[]");
+  env_->SetLongArrayRegion(reinterpret_cast<jlongArray>(array), 0, kLength,
+                           reinterpret_cast<jlong*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to set region of long primitive array elements with an object of type boolean[]");
+  env_->SetFloatArrayRegion(reinterpret_cast<jfloatArray>(array), 0, kLength,
+                            reinterpret_cast<jfloat*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to set region of float primitive array elements with an object of type boolean[]");
+  env_->SetDoubleArrayRegion(reinterpret_cast<jdoubleArray>(array), 0, kLength,
+                           reinterpret_cast<jdouble*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to set region of double primitive array elements with an object of type boolean[]");
+  jbyteArray array2 = env_->NewByteArray(10);
+  env_->SetBooleanArrayRegion(reinterpret_cast<jbooleanArray>(array2), 0, kLength,
+                              reinterpret_cast<jboolean*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to set region of boolean primitive array elements with an object of type byte[]");
+  jobject object = env_->NewStringUTF("Test String");
+  env_->SetBooleanArrayRegion(reinterpret_cast<jbooleanArray>(object), 0, kLength,
+                              reinterpret_cast<jboolean*>(elements));
+  jni_abort_catcher.Check(
+      "attempt to set region of boolean primitive array elements with an object of type java.lang.String");
+}
+
 TEST_F(JniInternalTest, NewObjectArray) {
   jclass element_class = env_->FindClass("java/lang/String");
   ASSERT_TRUE(element_class != nullptr);
