@@ -57,14 +57,19 @@ Mir2Lir::RegisterInfo::RegisterInfo(RegStorage r, uint64_t mask)
 
 Mir2Lir::RegisterPool::RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena,
                                     const std::vector<RegStorage>& core_regs,
+                                    const std::vector<RegStorage>& core64_regs,
                                     const std::vector<RegStorage>& sp_regs,
                                     const std::vector<RegStorage>& dp_regs,
                                     const std::vector<RegStorage>& reserved_regs,
+                                    const std::vector<RegStorage>& reserved64_regs,
                                     const std::vector<RegStorage>& core_temps,
+                                    const std::vector<RegStorage>& core64_temps,
                                     const std::vector<RegStorage>& sp_temps,
                                     const std::vector<RegStorage>& dp_temps) :
-    core_regs_(arena, core_regs.size()), next_core_reg_(0), sp_regs_(arena, sp_regs.size()),
-    next_sp_reg_(0), dp_regs_(arena, dp_regs.size()), next_dp_reg_(0), m2l_(m2l)  {
+    core_regs_(arena, core_regs.size()), next_core_reg_(0),
+    core64_regs_(arena, core64_regs.size()), next_core64_reg_(0),
+    sp_regs_(arena, sp_regs.size()), next_sp_reg_(0),
+    dp_regs_(arena, dp_regs.size()), next_dp_reg_(0), m2l_(m2l)  {
   // Initialize the fast lookup map.
   m2l_->reginfo_map_.Reset();
   if (kIsDebugBuild) {
@@ -82,6 +87,11 @@ Mir2Lir::RegisterPool::RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena,
     m2l_->reginfo_map_.Put(reg.GetReg(), info);
     core_regs_.Insert(info);
   }
+  for (RegStorage reg : core64_regs) {
+    RegisterInfo* info = new (arena) RegisterInfo(reg, m2l_->GetRegMaskCommon(reg));
+    m2l_->reginfo_map_.Put(reg.GetReg(), info);
+    core64_regs_.Insert(info);
+  }
   for (RegStorage reg : sp_regs) {
     RegisterInfo* info = new (arena) RegisterInfo(reg, m2l_->GetRegMaskCommon(reg));
     m2l_->reginfo_map_.Put(reg.GetReg(), info);
@@ -97,9 +107,15 @@ Mir2Lir::RegisterPool::RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena,
   for (RegStorage reg : reserved_regs) {
     m2l_->MarkInUse(reg);
   }
+  for (RegStorage reg : reserved64_regs) {
+    m2l_->MarkInUse(reg);
+  }
 
   // Mark temp regs - all others not in use can be used for promotion
   for (RegStorage reg : core_temps) {
+    m2l_->MarkTemp(reg);
+  }
+  for (RegStorage reg : core64_temps) {
     m2l_->MarkTemp(reg);
   }
   for (RegStorage reg : sp_temps) {
@@ -370,6 +386,10 @@ RegStorage Mir2Lir::AllocFreeTemp() {
 
 RegStorage Mir2Lir::AllocTemp() {
   return AllocTempBody(reg_pool_->core_regs_, &reg_pool_->next_core_reg_, true);
+}
+
+RegStorage Mir2Lir::AllocTempWide() {
+  return AllocTempBody(reg_pool_->core64_regs_, &reg_pool_->next_core64_reg_, true);
 }
 
 RegStorage Mir2Lir::AllocTempSingle() {

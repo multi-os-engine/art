@@ -59,6 +59,7 @@ static const RegStorage dp_temps_arr[] = {
 #endif
 };
 
+static const std::vector<RegStorage> empty_pool;
 static const std::vector<RegStorage> core_regs(core_regs_arr,
     core_regs_arr + sizeof(core_regs_arr) / sizeof(core_regs_arr[0]));
 static const std::vector<RegStorage> sp_regs(sp_regs_arr,
@@ -472,8 +473,10 @@ RegStorage X86Mir2Lir::AllocTypedTemp(bool fp_hint, int reg_class) {
 }
 
 void X86Mir2Lir::CompilerInitializeRegAlloc() {
-  reg_pool_ = new (arena_) RegisterPool(this, arena_, core_regs, sp_regs, dp_regs, reserved_regs,
-                                        core_temps, sp_temps, dp_temps);
+  reg_pool_ = new (arena_) RegisterPool(this, arena_, core_regs, empty_pool /* core64 */, sp_regs,
+                                        dp_regs, reserved_regs, empty_pool /* reserved64 */,
+                                        core_temps, empty_pool /* core64_temps */, sp_temps,
+                                        dp_temps);
 
   // Target-specific adjustments.
 

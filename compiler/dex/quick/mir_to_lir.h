@@ -397,10 +397,15 @@ class Mir2Lir : public Backend {
 
     class RegisterPool {
      public:
-      RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena, const std::vector<RegStorage>& core_regs,
-                   const std::vector<RegStorage>& sp_regs, const std::vector<RegStorage>& dp_regs,
+      RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena,
+                   const std::vector<RegStorage>& core_regs,
+                   const std::vector<RegStorage>& core64_regs,
+                   const std::vector<RegStorage>& sp_regs,
+                   const std::vector<RegStorage>& dp_regs,
                    const std::vector<RegStorage>& reserved_regs,
+                   const std::vector<RegStorage>& reserved64_regs,
                    const std::vector<RegStorage>& core_temps,
+                   const std::vector<RegStorage>& core64_temps,
                    const std::vector<RegStorage>& sp_temps,
                    const std::vector<RegStorage>& dp_temps);
       ~RegisterPool() {}
@@ -414,6 +419,8 @@ class Mir2Lir : public Backend {
       }
       GrowableArray<RegisterInfo*> core_regs_;
       int next_core_reg_;
+      GrowableArray<RegisterInfo*> core64_regs_;
+      int next_core64_reg_;
       GrowableArray<RegisterInfo*> sp_regs_;    // Single precision float.
       int next_sp_reg_;
       GrowableArray<RegisterInfo*> dp_regs_;    // Double precision float.
@@ -644,6 +651,7 @@ class Mir2Lir : public Backend {
     RegStorage AllocTempBody(GrowableArray<RegisterInfo*> &regs, int* next_temp, bool required);
     RegStorage AllocFreeTemp();
     RegStorage AllocTemp();
+    RegStorage AllocTempWide();
     RegStorage AllocTempSingle();
     RegStorage AllocTempDouble();
     void FlushReg(RegStorage reg);
