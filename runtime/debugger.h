@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "base/reference_counter.h"
 #include "jdwp/jdwp.h"
 #include "jni.h"
 #include "jvalue.h"
@@ -129,20 +130,30 @@ struct SingleStepControl {
   DISALLOW_COPY_AND_ASSIGN(SingleStepControl);
 };
 
+// TODO rename to InstrumentationRequest.
 struct DeoptimizationRequest {
   enum Kind {
     kNothing,                   // no action.
+    kRegisterForEvent,          // start listening for instrumentation event.
+    kUnregisterForEvent,        // stop listening for instrumentation event.
     kFullDeoptimization,        // deoptimize everything.
     kFullUndeoptimization,      // undeoptimize everything.
     kSelectiveDeoptimization,   // deoptimize one method.
     kSelectiveUndeoptimization  // undeoptimize one method.
   };
 
-  DeoptimizationRequest() : kind(kNothing), method(nullptr) {}
+  DeoptimizationRequest() : kind(kNothing), instrumentation_event(0), method(nullptr) {}
 
   void VisitRoots(RootCallback* callback, void* arg);
 
   Kind kind;
+
+  // TODO we could use a union to hold the instrumentation_event and the method since they
+  // respectively have sense only for kRegisterForEvent/kUnregisterForEvent and
+  // kSelectiveDeoptimization/kSelectiveUndeoptimization.
+
+  // Event to start or stop listening to. Only for kRegisterForEvent and kUnregisterForEvent.
+  uint32_t instrumentation_event;
 
   // Method for selective deoptimization.
   mirror::ArtMethod* method;
@@ -579,22 +590,37 @@ class Dbg {
   static size_t alloc_record_count_ GUARDED_BY(alloc_tracker_lock_);
 
   // Guards deoptimization requests.
+  // TODO rename to instrumentation_update_lock.
   static Mutex* deoptimization_lock_ ACQUIRED_AFTER(Locks::breakpoint_lock_);
 
   // Deoptimization requests to be processed each time the event list is updated. This is used when
   // registering and unregistering events so we do not deoptimize while holding the event list
   // lock.
+  // TODO rename to instrumentation_requests.
   static std::vector<DeoptimizationRequest> deoptimization_requests_ GUARDED_BY(deoptimization_lock_);
 
   // Count the number of events requiring full deoptimization. When the counter is > 0, everything
   // is deoptimized, otherwise everything is undeoptimized.
   // Note: we fully deoptimize on the first event only (when the counter is set to 1). We fully
   // undeoptimize when the last event is unregistered (when the counter is set to 0).
-  static size_t full_deoptimization_event_count_ GUARDED_BY(deoptimization_lock_);
+  static ReferenceCounter full_deoptimization_event_count_ GUARDED_BY(deoptimization_lock_);
 
   // Count the number of full undeoptimization requests delayed to next resume or end of debug
   // session.
   static size_t delayed_full_undeoptimization_count_ GUARDED_BY(deoptimization_lock_);
+
+  static ReferenceCounter* GetReferenceCounterForEvent(uint32_t instrumentation_event);
+
+  // Instrumentation event reference counters.
+  // TODO we could use an array instead of having all these dedicated counters. Instrumentation
+  // events are bits of a mask so we could convert them to array index.
+  static ReferenceCounter dex_pc_change_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static ReferenceCounter method_enter_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static ReferenceCounter method_exit_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static ReferenceCounter field_read_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static ReferenceCounter field_write_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static ReferenceCounter exception_catch_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static uint32_t instrumentation_events_ GUARDED_BY(Locks::mutator_lock_);
 
   DISALLOW_COPY_AND_ASSIGN(Dbg);
 };
