@@ -413,7 +413,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
   LOCAL_SHARED_LIBRARIES += liblog libnativehelper
   LOCAL_SHARED_LIBRARIES += libbacktrace # native stack trace support
   ifeq ($$(art_target_or_host),target)
-    LOCAL_SHARED_LIBRARIES += libcutils libdl libselinux libutils
+    LOCAL_SHARED_LIBRARIES += libcutils libdl libselinux libutils libsigchain
     LOCAL_STATIC_LIBRARIES := libziparchive libz
   else # host
     LOCAL_STATIC_LIBRARIES += libcutils libziparchive-host libz libutils
@@ -466,3 +466,7 @@ endif
 ifeq ($(ART_BUILD_TARGET_DEBUG),true)
   $(eval $(call build-libart,target,debug,$(ART_TARGET_CLANG)))
 endif
+
+include $(LOCAL_PATH)/sigchainlib/Android.mk
+
+
