@@ -25,6 +25,7 @@
 #include "object_callbacks.h"
 #include "reference_table.h"
 #include "runtime.h"
+#include "weak_global_table.h"
 
 #include <iosfwd>
 #include <string>
@@ -126,6 +127,10 @@ class JavaVMExt : public JavaVM {
   const JNIInvokeInterface* unchecked_functions;
 
  private:
+  // Field id table.
+  WeakGlobalTable field_ids_;
+  WeakGlobalTable method_ids_;
+
   // TODO: Make the other members of this class also private.
   // JNI weak global references.
   Mutex weak_globals_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;

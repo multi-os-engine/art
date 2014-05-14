@@ -44,6 +44,7 @@ LIBART_COMMON_SRC_FILES := \
 	dex_file_verifier.cc \
 	dex_instruction.cc \
 	elf_file.cc \
+	fault_handler.cc \
 	gc/allocator/dlmalloc.cc \
 	gc/allocator/rosalloc.cc \
 	gc/accounting/card_table.cc \
@@ -71,6 +72,7 @@ LIBART_COMMON_SRC_FILES := \
 	gc/space/rosalloc_space.cc \
 	gc/space/space.cc \
 	gc/space/zygote_space.cc \
+	handle_table.cc \
 	hprof/hprof.cc \
 	image.cc \
 	indirect_reference_table.cc \
@@ -145,7 +147,6 @@ LIBART_COMMON_SRC_FILES := \
 	trace.cc \
 	transaction.cc \
 	profiler.cc \
-	fault_handler.cc \
 	utf.cc \
 	utils.cc \
 	verifier/dex_gc_map.cc \
@@ -154,6 +155,7 @@ LIBART_COMMON_SRC_FILES := \
 	verifier/reg_type.cc \
 	verifier/reg_type_cache.cc \
 	verifier/register_line.cc \
+	weak_global_table.cc \
 	well_known_classes.cc \
 	zip_archive.cc
 

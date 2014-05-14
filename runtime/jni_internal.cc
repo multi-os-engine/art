@@ -22,6 +22,8 @@
 #include <utility>
 #include <vector>
 
+#include <unordered_map>
+
 #include "atomic.h"
 #include "base/logging.h"
 #include "base/mutex.h"
@@ -68,6 +70,9 @@ static size_t gGlobalsMax = 51200;  // Arbitrary sanity check. (Must fit in 16 b
 
 static const size_t kWeakGlobalsInitial = 16;  // Arbitrary.
 static const size_t kWeakGlobalsMax = 51200;  // Arbitrary sanity check. (Must fit in 16 bits.)
+
+// Maximum number of jfieldID and jmethodID.
+static const size_t kWeakIDMax = 256 * 0x1000;  // Arbitrary, 256K.
 
 static jweak AddWeakGlobalReference(ScopedObjectAccess& soa, mirror::Object* obj)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -3028,6 +3033,8 @@ JavaVMExt::JavaVMExt(Runtime* runtime, ParsedOptions* options)
       globals(gGlobalsInitial, gGlobalsMax, kGlobal),
       libraries_lock("JNI shared libraries map lock", kLoadLibraryLock),
       libraries(new Libraries),
+      field_ids_("jfieldID table", kWeakIDMax, nullptr),
+      method_ids_("jmethodID table", kWeakIDMax, nullptr),
       weak_globals_lock_("JNI weak global reference table lock"),
       weak_globals_(kWeakGlobalsInitial, kWeakGlobalsMax, kWeakGlobal),
       allow_new_weak_globals_(true),
