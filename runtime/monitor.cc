@@ -642,11 +642,14 @@ void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object>& obj, LockW
   } else {
     ThreadList* thread_list = Runtime::Current()->GetThreadList();
     // Suspend the owner, inflate. First change to blocked and give up mutator_lock_.
-    ScopedThreadStateChange tsc(self, kBlocked);
     self->SetMonitorEnterObject(obj.Get());
     if (lock_word == obj->GetLockWord(true)) {  // If lock word hasn't changed.
       bool timed_out;
-      Thread* owner = thread_list->SuspendThreadByThreadId(owner_thread_id, false, &timed_out);
+      Thread* owner;
+      {
+        ScopedThreadStateChange tsc(self, kBlocked);
+        owner = thread_list->SuspendThreadByThreadId(owner_thread_id, false, &timed_out);
+      }
       if (owner != nullptr) {
         // We succeeded in suspending the thread, check the lock's status didn't change.
         lock_word = obj->GetLockWord(true);
