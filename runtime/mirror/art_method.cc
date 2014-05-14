@@ -252,7 +252,7 @@ uint32_t ArtMethod::FindCatchBlock(Handle<Class>& exception_type, uint32_t dex_p
     }
     // Does this catch exception type apply?
     Class* iter_exception_type = mh.GetClassFromTypeIdx(iter_type_idx);
-    if (exception_type.Get() == nullptr) {
+    if (iter_exception_type == nullptr) {
       self->ClearException();
       LOG(WARNING) << "Unresolved exception class when finding catch block: "
         << mh.GetTypeDescriptorFromTypeIdx(iter_type_idx);
