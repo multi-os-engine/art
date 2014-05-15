@@ -52,8 +52,14 @@ static jobjectArray DdmVmInternal_getStackTraceById(JNIEnv* env, jclass, jint th
     jobject internal_trace = self->CreateInternalStackTrace<false>(soa);
     trace = Thread::InternalStackTraceToStackTraceElementArray(soa, internal_trace);
   } else {
-    // Suspend thread to build stack trace.
     ThreadList* thread_list = Runtime::Current()->GetThreadList();
+
+    // Check for valid thread
+    if (Runtime::Current()->GetThreadList()->FindThreadByThreadId(thin_lock_id) == nullptr) {
+      return nullptr;
+    }
+
+    // Suspend thread to build stack trace.
     bool timed_out;
     Thread* thread = thread_list->SuspendThreadByThreadId(thin_lock_id, false, &timed_out);
     if (thread != nullptr) {
