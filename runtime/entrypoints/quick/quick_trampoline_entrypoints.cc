@@ -1843,6 +1843,28 @@ extern "C" MethodAndCode artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
     DCHECK_EQ(32U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
     uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp));
     uintptr_t caller_pc = regs[7];
+#elif defined(__x86_64__)
+    // On entry the stack pointed by sp is:
+    // | argN        |  |
+    // | ...         |  |
+    // | arg4        |  |
+    // | arg3 spill  |  |  Caller's frame
+    // | arg2 spill  |  |
+    // | arg1 spill  |  |
+    // | Method*     | ---
+    // | Return      |
+    // | ...         |    callee and GPR args
+    // | RBX         |
+    // | RDX         |
+    // | RCX         |
+    // | ...         |    FPR args
+    // | XMM5        |    arg3
+    // | XMM6        |    arg2
+    // | XMM7        |    arg1
+    // | R10/Method* |  <- sp
+    DCHECK_EQ(176U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
+    uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp));
+    uintptr_t caller_pc = regs[21];
 #elif defined(__mips__)
     // On entry the stack pointed by sp is:
     // | argN       |  |
