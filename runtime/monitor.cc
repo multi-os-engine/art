@@ -615,8 +615,13 @@ void Monitor::Inflate(Thread* self, Thread* owner, mirror::Object* obj, int32_t 
   // Allocate and acquire a new monitor.
   UniquePtr<Monitor> m(new Monitor(self, owner, obj, hash_code));
   if (m->Install(self)) {
-    VLOG(monitor) << "monitor: thread " << owner->GetThreadId()
+    if(owner != nullptr){
+    VLOG(monitor) << "monitor: thread" << owner->GetThreadId()
                     << " created monitor " << m.get() << " for object " << obj;
+    }else{
+    VLOG(monitor) << "monitor: Inflate with the existing hashcode"
+                    << " created monitor " << m.get() << " for object " << obj;
+    }
     Runtime::Current()->GetMonitorList()->Add(m.release());
     CHECK_EQ(obj->GetLockWord().GetState(), LockWord::kFatLocked);
   }
