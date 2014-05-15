@@ -27,7 +27,9 @@ mirror::ArtMethod* FindMethodHelper(uint32_t method_idx, mirror::Object* this_ob
   mirror::ArtMethod* method = FindMethodFast(method_idx, this_object, caller_method,
                                              access_check, type);
   if (UNLIKELY(method == NULL)) {
-    method = FindMethodFromCode<type, access_check>(method_idx, this_object, caller_method, thread);
+    // Note: This can cause thread suspension.
+    method = FindMethodFromCode<type, access_check>(method_idx, &this_object, &caller_method,
+                                                    thread);
     if (UNLIKELY(method == NULL)) {
       CHECK(thread->IsExceptionPending());
       return 0;  // failure
