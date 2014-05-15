@@ -18,7 +18,7 @@
 
 #include <iostream>
 
-#include "UniquePtr.h"
+#include "base/UniquePtrCompat.h"
 #include "gtest/gtest.h"
 
 namespace art {

@@ -27,7 +27,7 @@
 #include "mem_map.h"
 #include "os.h"
 #include "safe_map.h"
-#include "UniquePtr.h"
+#include "base/UniquePtrCompat.h"
 
 namespace art {
 

@@ -21,7 +21,7 @@
 #include <sys/types.h>
 #include <zlib.h>
 
-#include "UniquePtr.h"
+#include "base/UniquePtrCompat.h"
 #include "common_runtime_test.h"
 #include "os.h"
 

@@ -33,7 +33,7 @@
 #include "reg_type_cache-inl.h"
 #include "register_line.h"
 #include "safe_map.h"
-#include "UniquePtr.h"
+#include "base/UniquePtrCompat.h"
 
 namespace art {
 

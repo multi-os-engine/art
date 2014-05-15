@@ -30,7 +30,7 @@
 #include "os.h"
 #include "safe_map.h"
 #include "gc/space/space.h"
-#include "UniquePtr.h"
+#include "base/UniquePtrCompat.h"
 
 namespace art {
 

@@ -23,7 +23,7 @@
 
 #include "base/logging.h"
 #include "base/unix_file/fd_file.h"
-#include "UniquePtr.h"
+#include "base/UniquePtrCompat.h"
 
 namespace art {
 

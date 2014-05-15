@@ -27,7 +27,7 @@
 #include "scoped_thread_state_change.h"
 #include "handle_scope-inl.h"
 #include "thread.h"
-#include "UniquePtr.h"
+#include "base/UniquePtrCompat.h"
 #include "vmap_table.h"
 
 namespace art {

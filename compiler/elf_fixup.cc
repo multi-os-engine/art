@@ -22,7 +22,7 @@
 #include "base/stringprintf.h"
 #include "elf_file.h"
 #include "elf_writer.h"
-#include "UniquePtr.h"
+#include "base/UniquePtrCompat.h"
 
 namespace art {
 
