@@ -1963,6 +1963,10 @@ class ReferenceMapVisitor : public StackVisitor {
 
   void VisitShadowFrame(ShadowFrame* shadow_frame) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     mirror::ArtMethod* m = shadow_frame->GetMethod();
+    if (m != nullptr) {
+      // TODO: Im not sure passing in 0 for vreg here is what we want to do.
+      // visitor_(reinterpret_cast<mirror::Object**>(shadow_frame->GetMethodAddress()), 0, this);
+    }
     size_t num_regs = shadow_frame->NumberOfVRegs();
     if (m->IsNative() || shadow_frame->HasReferenceArray()) {
       // handle scope for JNI or References for interpreter.

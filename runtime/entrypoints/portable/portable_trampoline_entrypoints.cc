@@ -379,7 +379,7 @@ extern "C" const void* artPortableResolutionTrampoline(mirror::ArtMethod* called
         is_range = true;
     }
     uint32_t dex_method_idx = (is_range) ? instr->VRegB_3rc() : instr->VRegB_35c();
-    called = linker->ResolveMethod(dex_method_idx, caller, invoke_type);
+    called = linker->ResolveMethod(Thread::Current(), dex_method_idx, &caller, invoke_type);
     // Incompatible class change should have been handled in resolve method.
     CHECK(!called->CheckIncompatibleClassChange(invoke_type));
     // Refine called method based on receiver.

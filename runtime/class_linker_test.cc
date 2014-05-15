@@ -110,7 +110,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     AssertArrayClass(array_descriptor, array);
   }
 
-  void AssertArrayClass(const std::string& array_descriptor, const Handle<mirror::Class>& array)
+  void AssertArrayClass(const std::string& array_descriptor, Handle<mirror::Class> array)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     ClassHelper kh(array.Get());
     ASSERT_TRUE(array.Get() != NULL);
@@ -183,7 +183,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     EXPECT_TRUE(fh.GetType() != NULL);
   }
 
-  void AssertClass(const std::string& descriptor, const Handle<mirror::Class>& klass)
+  void AssertClass(const std::string& descriptor, Handle<mirror::Class> klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     ClassHelper kh(klass.Get());
     EXPECT_STREQ(descriptor.c_str(), kh.GetDescriptor());
@@ -853,8 +853,7 @@ TEST_F(ClassLinkerTest, ValidateBoxedTypes) {
   // Validate that the "value" field is always the 0th field in each of java.lang's box classes.
   // This lets UnboxPrimitive avoid searching for the field by name at runtime.
   ScopedObjectAccess soa(Thread::Current());
-  StackHandleScope<1> hs(soa.Self());
-  auto class_loader(hs.NewHandle<mirror::ClassLoader>(nullptr));
+  NullHandle<mirror::ClassLoader> class_loader;
   mirror::Class* c;
   c = class_linker_->FindClass(soa.Self(), "Ljava/lang/Boolean;", class_loader);
   FieldHelper fh(c->GetIFields()->Get(0));

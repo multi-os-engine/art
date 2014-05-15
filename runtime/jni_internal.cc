@@ -3132,7 +3132,7 @@ void JavaVMExt::DumpReferenceTables(std::ostream& os) {
 }
 
 bool JavaVMExt::LoadNativeLibrary(const std::string& path,
-                                  const Handle<mirror::ClassLoader>& class_loader,
+                                  Handle<mirror::ClassLoader> class_loader,
                                   std::string* detail) {
   detail->clear();
 
