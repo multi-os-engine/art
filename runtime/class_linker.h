@@ -176,7 +176,11 @@ class ClassLinker {
                                    InvokeType type)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  mirror::ArtMethod* ResolveMethod(uint32_t method_idx, mirror::ArtMethod* referrer,
+  mirror::ArtMethod* GetResolvedMethod(Thread* self, uint32_t method_idx,
+                                       mirror::ArtMethod* referrer, InvokeType type)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  mirror::ArtMethod* ResolveMethod(Thread* self, uint32_t method_idx, mirror::ArtMethod* referrer,
                                    InvokeType type)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

@@ -110,21 +110,32 @@ inline mirror::Class* ClassLinker::ResolveType(uint16_t type_idx, mirror::ArtFie
   return resolved_type;
 }
 
-inline mirror::ArtMethod* ClassLinker::ResolveMethod(uint32_t method_idx,
-                                                     mirror::ArtMethod* referrer,
-                                                     InvokeType type) {
+inline mirror::ArtMethod* ClassLinker::GetResolvedMethod(Thread* self, uint32_t method_idx,
+                                                         mirror::ArtMethod* referrer,
+                                                         InvokeType type) {
   mirror::ArtMethod* resolved_method =
       referrer->GetDexCacheResolvedMethods()->Get(method_idx);
-  if (UNLIKELY(resolved_method == NULL || resolved_method->IsRuntimeMethod())) {
-    mirror::Class* declaring_class = referrer->GetDeclaringClass();
-    StackHandleScope<2> hs(Thread::Current());
-    Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
-    Handle<mirror::ClassLoader> class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
-    const DexFile& dex_file = *dex_cache->GetDexFile();
-    resolved_method = ResolveMethod(dex_file, method_idx, dex_cache, class_loader, referrer, type);
-    if (resolved_method != nullptr) {
-      DCHECK_EQ(dex_cache->GetResolvedMethod(method_idx), resolved_method);
-    }
+  if (resolved_method == nullptr || resolved_method->IsRuntimeMethod()) {
+    return nullptr;
+  }
+  return resolved_method;
+}
+
+inline mirror::ArtMethod* ClassLinker::ResolveMethod(Thread* self, uint32_t method_idx,
+                                                     mirror::ArtMethod* referrer,
+                                                     InvokeType type) {
+  mirror::ArtMethod* resolved_method = GetResolvedMethod(self, method_idx, referrer, type);
+  if (LIKELY(resolved_method != nullptr)) {
+    return resolved_method;
+  }
+  mirror::Class* declaring_class = referrer->GetDeclaringClass();
+  StackHandleScope<2> hs(self);
+  Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
+  Handle<mirror::ClassLoader> class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
+  const DexFile& dex_file = *dex_cache->GetDexFile();
+  resolved_method = ResolveMethod(dex_file, method_idx, dex_cache, class_loader, referrer, type);
+  if (resolved_method != nullptr) {
+    DCHECK_EQ(dex_cache->GetResolvedMethod(method_idx), resolved_method);
   }
   return resolved_method;
 }

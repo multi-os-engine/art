@@ -29,6 +29,7 @@
 #include "dex_instruction.h"
 #include "entrypoints/entrypoint_utils.h"
 #include "gc/accounting/card_table-inl.h"
+#include "handle_scope-inl.h"
 #include "nth_caller_visitor.h"
 #include "mirror/art_field-inl.h"
 #include "mirror/art_method.h"
@@ -103,9 +104,9 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
   const uint32_t method_idx = (is_range) ? inst->VRegB_3rc() : inst->VRegB_35c();
   const uint32_t vregC = (is_range) ? inst->VRegC_3rc() : inst->VRegC_35c();
   Object* receiver = (type == kStatic) ? nullptr : shadow_frame.GetVRegReference(vregC);
-  ArtMethod* const method = FindMethodFromCode<type, do_access_check>(method_idx, receiver,
-                                                                      shadow_frame.GetMethod(),
-                                                                      self);
+  mirror::ArtMethod* sf_method = shadow_frame.GetMethod();
+  ArtMethod* const method = FindMethodFromCode<type, do_access_check>(
+      method_idx, &receiver, &sf_method, self);
   if (UNLIKELY(method == nullptr)) {
     CHECK(self->IsExceptionPending());
     result->SetJ(0);
@@ -339,6 +340,10 @@ static inline bool DoFieldPut(Thread* self, const ShadowFrame& shadow_frame,
     case Primitive::kPrimNot: {
       Object* reg = shadow_frame.GetVRegReference(vregA);
       if (do_assignability_check && reg != nullptr) {
+        // FieldHelper::GetType can resolve classes, use a handle wrapper which will resotre the
+        // object in the destructor.
+        StackHandleScope<1> hs(self);
+        HandleWrapper<mirror::Object> wrapper(hs.NewHandleWrapper(&obj));
         Class* field_class = FieldHelper(f).GetType();
         if (!reg->VerifierInstanceOf(field_class)) {
           // This should never happen.

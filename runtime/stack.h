@@ -306,6 +306,11 @@ class ShadowFrame {
     return method_;
   }
 
+  mirror::ArtMethod** GetMethodAddress() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK(method_ != nullptr);
+    return &method_;
+  }
+
   mirror::Object* GetThisObject() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   mirror::Object* GetThisObject(uint16_t num_ins) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -321,6 +326,7 @@ class ShadowFrame {
     UNIMPLEMENTED(FATAL) << "Should only be called when portable is enabled";
 #endif
   }
+
 
   bool Contains(StackReference<mirror::Object>* shadow_frame_entry_obj) const {
     if (HasReferenceArray()) {
@@ -393,7 +399,7 @@ class ShadowFrame {
   // TODO: make const in the portable case.
   mirror::ArtMethod* method_;
 #else
-  mirror::ArtMethod* const method_;
+  mirror::ArtMethod* method_;
 #endif
   uint32_t dex_pc_;
   uint32_t vregs_[0];
