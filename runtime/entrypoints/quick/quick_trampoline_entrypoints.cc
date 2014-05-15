@@ -1804,67 +1804,15 @@ extern "C" MethodAndCode artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
     }
   } else {
     FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsAndArgs);
-    DCHECK(interface_method == Runtime::Current()->GetResolutionMethod());
-    // Determine method index from calling dex instruction.
-#if defined(__arm__)
-    // On entry the stack pointed by sp is:
-    // | argN       |  |
-    // | ...        |  |
-    // | arg4       |  |
-    // | arg3 spill |  |  Caller's frame
-    // | arg2 spill |  |
-    // | arg1 spill |  |
-    // | Method*    | ---
-    // | LR         |
-    // | ...        |    callee saves
-    // | R3         |    arg3
-    // | R2         |    arg2
-    // | R1         |    arg1
-    // | R0         |
-    // | Method*    |  <- sp
-    DCHECK_EQ(48U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
-    uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp) + kPointerSize);
-    uintptr_t caller_pc = regs[10];
-#elif defined(__i386__)
-    // On entry the stack pointed by sp is:
-    // | argN        |  |
-    // | ...         |  |
-    // | arg4        |  |
-    // | arg3 spill  |  |  Caller's frame
-    // | arg2 spill  |  |
-    // | arg1 spill  |  |
-    // | Method*     | ---
-    // | Return      |
-    // | EBP,ESI,EDI |    callee saves
-    // | EBX         |    arg3
-    // | EDX         |    arg2
-    // | ECX         |    arg1
-    // | EAX/Method* |  <- sp
-    DCHECK_EQ(32U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
-    uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp));
-    uintptr_t caller_pc = regs[7];
-#elif defined(__mips__)
-    // On entry the stack pointed by sp is:
-    // | argN       |  |
-    // | ...        |  |
-    // | arg4       |  |
-    // | arg3 spill |  |  Caller's frame
-    // | arg2 spill |  |
-    // | arg1 spill |  |
-    // | Method*    | ---
-    // | RA         |
-    // | ...        |    callee saves
-    // | A3         |    arg3
-    // | A2         |    arg2
-    // | A1         |    arg1
-    // | A0/Method* |  <- sp
-    DCHECK_EQ(64U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
-    uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp));
-    uintptr_t caller_pc = regs[15];
-#else
-    UNIMPLEMENTED(FATAL);
-    uintptr_t caller_pc = 0;
-#endif
+    Runtime* runtime = Runtime::Current();
+    DCHECK(interface_method == runtime->GetResolutionMethod());
+
+    // Find the caller PC.
+    mirror::ArtMethod* callee_save = runtime->GetCalleeSaveMethod(Runtime::kRefsAndArgs);
+    size_t pc_offset = callee_save->GetReturnPcOffsetInBytes();
+    uintptr_t caller_pc = *reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp) + pc_offset);
+
+    // Map the caller PC to a dex PC.
     uint32_t dex_pc = caller_method->ToDexPc(caller_pc);
     const DexFile::CodeItem* code = MethodHelper(caller_method).GetCodeItem();
     CHECK_LT(dex_pc, code->insns_size_in_code_units_);
