@@ -1804,7 +1804,10 @@ extern "C" MethodAndCode artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
     }
   } else {
     FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsAndArgs);
-    DCHECK(interface_method == Runtime::Current()->GetResolutionMethod());
+    Runtime* runtime = Runtime::Current();
+    DCHECK(interface_method == runtime->GetResolutionMethod());
+    mirror::ArtMethod* callee_save = runtime->GetCalleeSaveMethod(Runtime::kRefsAndArgs);
+    size_t frame_size = callee_save->GetFrameSizeInBytes();
     // Determine method index from calling dex instruction.
 #if defined(__arm__)
     // On entry the stack pointed by sp is:
@@ -1822,7 +1825,7 @@ extern "C" MethodAndCode artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
     // | R1         |    arg1
     // | R0         |
     // | Method*    |  <- sp
-    DCHECK_EQ(48U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
+    DCHECK_EQ(48U, frame_size);
     uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp) + kPointerSize);
     uintptr_t caller_pc = regs[10];
 #elif defined(__i386__)
@@ -1840,9 +1843,34 @@ extern "C" MethodAndCode artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
     // | EDX         |    arg2
     // | ECX         |    arg1
     // | EAX/Method* |  <- sp
-    DCHECK_EQ(32U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
+    DCHECK_EQ(32U, frame_size);
     uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp));
     uintptr_t caller_pc = regs[7];
+#elif defined(__x86_64__)
+    // On entry the stack pointed by sp is:
+    // | argN        |  |
+    // | ...         |  |
+    // | arg4        |  |
+    // | arg3 spill  |  |  Caller's frame
+    // | arg2 spill  |  |
+    // | arg1 spill  |  |
+    // | Method*     | ---
+    // | Return      |
+    // | R15         |    callee and GPR args
+    // | ...         |
+    // | RBX         |
+    // | RDX         |
+    // | RCX         |
+    // | Padding     |
+    // | XMM7        |    FPR args
+    // | ...         |
+    // | XMM2        |
+    // | XMM1        |
+    // | XMM0        |
+    // | R10/Method* |  <- sp
+    DCHECK_EQ(176U, frame_size);
+    uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp));
+    uintptr_t caller_pc = regs[21];
 #elif defined(__mips__)
     // On entry the stack pointed by sp is:
     // | argN       |  |
@@ -1858,7 +1886,7 @@ extern "C" MethodAndCode artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
     // | A2         |    arg2
     // | A1         |    arg1
     // | A0/Method* |  <- sp
-    DCHECK_EQ(64U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
+    DCHECK_EQ(64U, frame_size);
     uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp));
     uintptr_t caller_pc = regs[15];
 #else
