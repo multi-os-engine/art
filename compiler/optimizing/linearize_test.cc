@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2014 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/+
+ + Copyright (C) 2014 The Android Open Source Project
+ +
+ + Licensed under the Apache License, Version 2.0 (the "License");
+ + you may not use this file except in compliance with the License.
+ + You may obtain a copy of the License at
+ +
+ +      http://www.apache.org/licenses/LICENSE-2.0
+ +
+ + Unless required by applicable law or agreed to in writing, software
+ + distributed under the License is distributed on an "AS IS" BASIS,
+ + WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ + See the License for the specific language governing permissions and
+ + limitations under the License.
+ +/
 
 #include <fstream>
 
@@ -32,17 +32,17 @@
 
 namespace art {
 
-static void TestCode(const uint16_t* data, const int* expected_order, size_t number_of_blocks) {
+static void TestCode(const uint16_t+ data, const int+ expected_order, size_t number_of_blocks) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraphBuilder builder(&allocator);
-  const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
-  HGraph* graph = builder.BuildGraph(*item);
+  const DexFile::CodeItem+ item = reinterpret_cast<const DexFile::CodeItem+>(data);
+  HGraph+ graph = builder.BuildGraph(+item);
   ASSERT_NE(graph, nullptr);
 
   graph->BuildDominatorTree();
   graph->FindNaturalLoops();
-  SsaLivenessAnalysis liveness(*graph);
+  SsaLivenessAnalysis liveness(+graph);
   liveness.Analyze();
 
   ASSERT_EQ(liveness.GetLinearPostOrder().Size(), number_of_blocks);
@@ -53,17 +53,17 @@ static void TestCode(const uint16_t* data, const int* expected_order, size_t num
 }
 
 TEST(LinearizeTest, CFG1) {
-  // Structure of this graph (* are back edges)
+  // Structure of this graph (+ are back edges)
   //            Block0
   //              |
   //            Block1
   //              |
-  //            Block2 ******
-  //            /   \       *
-  //       Block5   Block7  *
-  //         |        |     *
-  //       Block6   Block3  *
-  //               * /   \  *
+  //            Block2 ++++++
+  //            /   \       +
+  //       Block5   Block7  +
+  //         |        |     +
+  //       Block6   Block3  +
+  //               + /   \  +
   //           Block4   Block8
 
   const uint16_t data[] = ONE_REGISTER_CODE_ITEM(
@@ -78,17 +78,17 @@ TEST(LinearizeTest, CFG1) {
 }
 
 TEST(LinearizeTest, CFG2) {
-  // Structure of this graph (* are back edges)
+  // Structure of this graph (+ are back edges)
   //            Block0
   //              |
   //            Block1
   //              |
-  //            Block2 ******
-  //            /   \       *
-  //       Block3   Block7  *
-  //         |        |     *
-  //       Block6   Block4  *
-  //               * /   \  *
+  //            Block2 ++++++
+  //            /   \       +
+  //       Block3   Block7  +
+  //         |        |     +
+  //       Block6   Block4  +
+  //               + /   \  +
   //           Block5   Block8
 
   const uint16_t data[] = ONE_REGISTER_CODE_ITEM(
@@ -103,20 +103,20 @@ TEST(LinearizeTest, CFG2) {
 }
 
 TEST(LinearizeTest, CFG3) {
-  // Structure of this graph (* are back edges)
+  // Structure of this graph (+ are back edges)
   //            Block0
   //              |
   //            Block1
   //              |
-  //            Block2 ******
-  //            /   \       *
-  //       Block3   Block8  *
-  //         |        |     *
-  //       Block7   Block5  *
-  //                 / *  \ *
-  //           Block6  * Block9
-  //             |     *
-  //           Block4 **
+  //            Block2 ++++++
+  //            /   \       +
+  //       Block3   Block8  +
+  //         |        |     +
+  //       Block7   Block5  +
+  //                 / +  \ +
+  //           Block6  + Block9
+  //             |     +
+  //           Block4 ++
   const uint16_t data[] = ONE_REGISTER_CODE_ITEM(
     Instruction::CONST_4 | 0 | 0,
     Instruction::IF_EQ, 4,
@@ -130,21 +130,21 @@ TEST(LinearizeTest, CFG3) {
 }
 
 TEST(LinearizeTest, CFG4) {
-  // Structure of this graph (* are back edges)
+  // Structure of this graph (+ are back edges)
   //            Block0
   //              |
   //            Block1
   //              |
   //            Block2
-  //            / *  \
-  //       Block6 * Block8
-  //         |    *   |
-  //       Block7 * Block3 *******
-  //              *  /  \        *
-  //           Block9   Block10  *
-  //                      |      *
-  //                    Block4   *
-  //                   */    \   *
+  //            / +  \
+  //       Block6 + Block8
+  //         |    +   |
+  //       Block7 + Block3 +++++++
+  //              +  /  \        +
+  //           Block9   Block10  +
+  //                      |      +
+  //                    Block4   +
+  //                   +/    \   +
   //                Block5  Block11
   const uint16_t data[] = ONE_REGISTER_CODE_ITEM(
     Instruction::CONST_4 | 0 | 0,
@@ -159,21 +159,21 @@ TEST(LinearizeTest, CFG4) {
 }
 
 TEST(LinearizeTest, CFG5) {
-  // Structure of this graph (* are back edges)
+  // Structure of this graph (+ are back edges)
   //            Block0
   //              |
   //            Block1
   //              |
   //            Block2
-  //            / *  \
-  //       Block3 * Block8
-  //         |    *   |
-  //       Block7 * Block4 *******
-  //              *  /  \        *
-  //           Block9   Block10  *
-  //                      |      *
-  //                    Block5   *
-  //                   */    \   *
+  //            / +  \
+  //       Block3 + Block8
+  //         |    +   |
+  //       Block7 + Block4 +++++++
+  //              +  /  \        +
+  //           Block9   Block10  +
+  //                      |      +
+  //                    Block5   +
+  //                   +/    \   +
   //                Block6  Block11
   const uint16_t data[] = ONE_REGISTER_CODE_ITEM(
     Instruction::CONST_4 | 0 | 0,
