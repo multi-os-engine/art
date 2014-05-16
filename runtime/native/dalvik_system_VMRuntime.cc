@@ -155,6 +155,24 @@ static jstring VMRuntime_vmLibrary(JNIEnv* env, jobject) {
   return env->NewStringUTF(kIsDebugBuild ? "libartd.so" : "libart.so");
 }
 
+static jstring VMRuntime_vmInstructionSet(JNIEnv* env, jobject) {
+  InstructionSet isa = Runtime::Current()->GetInstructionSet();
+  const char* isa_string = GetInstructionSetString(isa);
+  return env->NewStringUTF(isa_string);
+}
+
+static jstring VMRuntime_vmFlags(JNIEnv* env, jobject) {
+  std::string vmFlags;
+  vmFlags += "CheckJNI=";
+  vmFlags += (Runtime::Current()->GetJavaVM()->check_jni) ? "true" : "false";
+  return env->NewStringUTF(vmFlags.c_str());
+}
+
+static jboolean VMRuntime_is64Bit(JNIEnv* env, jobject) {
+  bool is64BitMode = (sizeof(void*) == sizeof(uint64_t));
+  return is64BitMode ? JNI_TRUE : JNI_FALSE;
+}
+
 static void VMRuntime_setTargetSdkVersionNative(JNIEnv* env, jobject, jint targetSdkVersion) {
   // This is the target SDK version of the app we're about to run. It is intended that this a place
   // where workarounds can be enabled.
@@ -529,6 +547,9 @@ static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(VMRuntime, trimHeap, "()V"),
   NATIVE_METHOD(VMRuntime, vmVersion, "()Ljava/lang/String;"),
   NATIVE_METHOD(VMRuntime, vmLibrary, "()Ljava/lang/String;"),
+  NATIVE_METHOD(VMRuntime, vmInstructionSet, "()Ljava/lang/String;"),
+  NATIVE_METHOD(VMRuntime, vmFlags, "()Ljava/lang/String;"),
+  NATIVE_METHOD(VMRuntime, is64Bit, "!()Z"),
   NATIVE_METHOD(VMRuntime, preloadDexCaches, "()V"),
   NATIVE_METHOD(VMRuntime, registerAppInfo, "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"),
 };
