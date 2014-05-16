@@ -132,7 +132,7 @@ inline ObjectArray<ArtMethod>* Class::GetVTable() {
 }
 
 inline ObjectArray<ArtMethod>* Class::GetVTableDuringLinking() {
-  DCHECK(IsLoaded() || IsErroneous());
+  DCHECK(IsLoaded() || IsErroneous() || IsArrayClass());
   return GetFieldObject<ObjectArray<ArtMethod>>(OFFSET_OF_OBJECT_MEMBER(Class, vtable_));
 }
 
@@ -146,6 +146,43 @@ inline ObjectArray<ArtMethod>* Class::GetImTable() {
 
 inline void Class::SetImTable(ObjectArray<ArtMethod>* new_imtable) {
   SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(Class, imtable_), new_imtable);
+}
+
+inline MemberOffset Class::EmbeddedVTableOffset() {
+  return MemberOffset(sizeof(Class) + ClassLinker::kImtSize * sizeof(mirror::Class::ImTableEntry));
+}
+
+inline bool Class::ShouldHaveEmbeddedImtAndVTable() {
+  return Runtime::Current()->IsEmbeddedImtAndVTableEnabled() && !IsInterface();
+}
+
+inline ArtMethod* Class::GetEmbeddedImTableEntry(uint32_t i) {
+  if (Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+    uint32_t offset = EmbeddedImTableOffset().Uint32Value() + i * sizeof(ImTableEntry);
+    return GetFieldObject<mirror::ArtMethod>(MemberOffset(offset));
+  } else {
+    return GetImTable()->Get(i);
+  }
+}
+
+inline void Class::SetEmbeddedImTableEntry(uint32_t i, ArtMethod* method) {
+  if (!Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+    return;
+  }
+
+  uint32_t offset = EmbeddedImTableOffset().Uint32Value() + i * sizeof(ImTableEntry);
+  SetFieldObject<false>(MemberOffset(offset), method);
+  CHECK(method == GetImTable()->Get(i));
+}
+
+inline void Class::SetEmbeddedVTableEntry(uint32_t i, ArtMethod* method) {
+  if (!Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+    return;
+  }
+
+  uint32_t offset = EmbeddedVTableOffset().Uint32Value() + i * sizeof(VTableEntry);
+  SetFieldObject<false>(MemberOffset(offset), method);
+  CHECK(method == GetVTableDuringLinking()->Get(i));
 }
 
 inline bool Class::Implements(Class* klass) {
@@ -373,7 +410,8 @@ inline ObjectArray<ArtField>* Class::GetSFields() {
 
 inline void Class::SetSFields(ObjectArray<ArtField>* new_sfields)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  DCHECK(NULL == GetFieldObject<ObjectArray<ArtField>>(OFFSET_OF_OBJECT_MEMBER(Class, sfields_)));
+  DCHECK((IsRetired() && new_sfields == nullptr) ||
+         (NULL == GetFieldObject<ObjectArray<ArtField>>(OFFSET_OF_OBJECT_MEMBER(Class, sfields_))));
   SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(Class, sfields_), new_sfields);
 }
 
@@ -435,9 +473,9 @@ inline void Class::SetVerifyErrorClass(Class* klass) {
 
 template<VerifyObjectFlags kVerifyFlags>
 inline uint32_t Class::GetAccessFlags() {
-  // Check class is loaded or this is java.lang.String that has a
+  // Check class is loaded/retired or this is java.lang.String that has a
   // circularity issue during loading the names of its members
-  DCHECK(IsLoaded<kVerifyFlags>() ||
+  DCHECK(IsIdxLoaded<kVerifyFlags>() || IsRetired<kVerifyFlags>() ||
          IsErroneous<static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis)>() ||
          this == String::GetJavaLangString() ||
          this == ArtField::GetJavaLangReflectArtField() ||
@@ -503,12 +541,58 @@ inline Object* Class::AllocNonMovableObject(Thread* self) {
   return Alloc<true>(self, Runtime::Current()->GetHeap()->GetCurrentNonMovingAllocator());
 }
 
+inline bool Class::IsRoot() {
+  mirror::ObjectArray<mirror::Class>* class_roots =
+      Runtime::Current()->GetClassLinker()->GetClassRoots();
+  for (int i = 0; i < class_roots->GetLength(); i ++) {
+    if (this == class_roots->Get(i)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+inline bool Class::IsTemp() {
+  return !IsResolved() &&
+         ShouldHaveEmbeddedImtAndVTable() &&
+         !IsResolving() &&
+         !IsRoot(); /* Test this last since it's a little bit of work. */
+}
+
 template <bool kVisitClass, typename Visitor>
 inline void Class::VisitReferences(mirror::Class* klass, const Visitor& visitor) {
   // Visit the static fields first so that we don't overwrite the SFields / IFields instance
   // fields.
-  VisitStaticFieldsReferences<kVisitClass>(this, visitor);
-  VisitInstanceFieldsReferences<kVisitClass>(klass, visitor);
+  if (!IsRetired()) {
+    VisitInstanceFieldsReferences<kVisitClass>(klass, visitor);
+    if (!IsTemp()) {
+      // Temp classes don't ever populate imt/vtable or static fields
+      // and they are not even allocated with the right size for those.
+      VisitStaticFieldsReferences<kVisitClass>(this, visitor);
+      if (ShouldHaveEmbeddedImtAndVTable()) {
+        VisitImtAndVTable(visitor);
+      }
+    }
+  }
+}
+
+template<typename Visitor>
+inline void Class::VisitImtAndVTable(const Visitor& visitor) {
+  uint32_t pos = sizeof(mirror::Class);
+
+  size_t count = ClassLinker::kImtSize;
+  for (size_t i = 0; i < count; ++i) {
+    MemberOffset offset = MemberOffset(pos);
+    visitor(this, offset, true);
+    pos += sizeof(ImTableEntry);
+  }
+
+  count = ((GetVTable() != NULL) ? GetVTable()->GetLength() : 0);
+  for (size_t i = 0; i < count; ++i) {
+    MemberOffset offset = MemberOffset(pos);
+    visitor(this, offset, true);
+    pos += sizeof(VTableEntry);
+  }
 }
 
 template<ReadBarrierOption kReadBarrierOption>
@@ -544,6 +628,18 @@ inline bool Class::DescriptorEquals(const char* match) {
     const DexFile::TypeId& type_id = dex_file.GetTypeId(GetClassDef()->class_idx_);
     return strcmp(dex_file.GetTypeDescriptor(type_id), match) == 0;
   }
+}
+
+inline void Class::InitializeClassVisitor::operator()(
+    mirror::Object* obj, size_t usable_size) const {
+  DCHECK_LE(class_size_, usable_size);
+  // Avoid AsClass as object is not yet in live bitmap or allocation stack.
+  mirror::Class* klass = down_cast<mirror::Class*>(obj);
+  // DCHECK(klass->IsClass());
+  klass->SetClassSize(class_size_);
+  klass->SetPrimitiveType(Primitive::kPrimNot);  // Default to not being primitive.
+  klass->SetDexClassDefIndex(DexFile::kDexNoIndex16);  // Default to no valid class def index.
+  klass->SetDexTypeIndex(DexFile::kDexNoIndex16);  // Default to no valid type index.
 }
 
 }  // namespace mirror

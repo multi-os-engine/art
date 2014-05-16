@@ -21,7 +21,7 @@
 #include "mirror/class-inl.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
-#include "mirror/proxy.h"
+#include "mirror/proxy-inl.h"
 #include "object_utils.h"
 #include "reflection.h"
 #include "scoped_fast_native_object_access.h"
