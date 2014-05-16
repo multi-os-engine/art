@@ -598,6 +598,8 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
     case kDouble:
       if (r_dest.IsFloat()) {
         opcode = is_array ? kX86MovsdRA : kX86MovsdRM;
+      } else if (!pair) {
+        opcode = is_array ? kX86Mov64RA  : kX86Mov64RM;
       } else {
         opcode = is_array ? kX86Mov32RA  : kX86Mov32RM;
       }
@@ -739,13 +741,10 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int
     case kDouble:
       if (r_src.IsFloat()) {
         opcode = is_array ? kX86MovsdAR : kX86MovsdMR;
+      } else if (!pair) {
+        opcode = is_array ? kX86Mov64AR  : kX86Mov64MR;
       } else {
-        if (Gen64Bit()) {
-          opcode = is_array ? kX86Mov64AR  : kX86Mov64MR;
-        } else {
-          // TODO(64): pair = true;
-          opcode = is_array ? kX86Mov32AR  : kX86Mov32MR;
-        }
+        opcode = is_array ? kX86Mov32AR  : kX86Mov32MR;
       }
       // TODO: double store is to unaligned address
       DCHECK_EQ((displacement & 0x3), 0);

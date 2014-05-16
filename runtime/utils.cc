@@ -1267,6 +1267,7 @@ bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg) {
 
   // fork and exec
   pid_t pid = fork();
+//  pid_t pid = 0;
   if (pid == 0) {
     // no allocation allowed between fork and exec
 
