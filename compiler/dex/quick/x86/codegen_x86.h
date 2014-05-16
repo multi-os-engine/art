@@ -55,7 +55,8 @@ class X86Mir2Lir : public Mir2Lir {
 
     // Required for target - register utilities.
     RegStorage TargetReg(SpecialTargetRegister reg);
-    RegStorage GetArgMappingToPhysicalReg(int arg_num);
+    RegStorage GetArgMappingToPhysicalReg(int core_arg_num);
+    RegStorage GetFloatArgMappingToPhysicalReg(int fp_arg_num);
     RegLocation GetReturnAlt();
     RegLocation GetReturnWideAlt();
     RegLocation LocCReturn();
@@ -304,6 +305,29 @@ class X86Mir2Lir : public Mir2Lir {
      * @note register will be passed to TargetReg to get physical register.
      */
     void LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic_reg);
+
+    void FlushIns(RegLocation* ArgLocs, RegLocation rl_method);
+
+    int LoadArgRegs(CallInfo* info, int call_state,
+            NextCallInsn next_call_insn,
+            const MethodReference& target_method,
+            uint32_t vtable_idx,
+            uintptr_t direct_code, uintptr_t direct_method, InvokeType type,
+            bool skip_this);
+
+    int GenDalvikArgsNoRange(CallInfo* info, int call_state, LIR** pcrLabel,
+                             NextCallInsn next_call_insn,
+                             const MethodReference& target_method,
+                             uint32_t vtable_idx,
+                             uintptr_t direct_code, uintptr_t direct_method, InvokeType type,
+                             bool skip_this);
+
+    int GenDalvikArgsRange(CallInfo* info, int call_state, LIR** pcrLabel,
+                           NextCallInsn next_call_insn,
+                           const MethodReference& target_method,
+                           uint32_t vtable_idx,
+                           uintptr_t direct_code, uintptr_t direct_method, InvokeType type,
+                           bool skip_this);
 
     /*
      * @brief Generate a relative call to the method that will be patched at link time.
