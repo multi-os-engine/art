@@ -249,3 +249,8 @@ ifeq ($(WITH_HOST_DALVIK),true)
     $(foreach file,$(COMPILER_GTEST_HOST_SRC_FILES), $(eval $(call build-art-test,host,$(file),art/compiler,libartd-compiler)))
   endif
 endif
+
+################################################################
+# Include this if we want to build art gtest for the target
+ART_TARGET_GTEST_MAKE_TARGETS :=
+$(foreach file, $(RUNTIME_GTEST_HOST_SRC_FILES), $(eval ART_TARGET_GTEST_MAKE_TARGETS += $$(notdir $$(basename $$(file)))))
