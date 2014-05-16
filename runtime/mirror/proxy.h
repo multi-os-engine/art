@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_MIRROR_PROXY_H_
 #define ART_RUNTIME_MIRROR_PROXY_H_
 
+#include "art_field-inl.h"
 #include "object.h"
 
 namespace art {
@@ -30,13 +31,18 @@ namespace mirror {
 class MANAGED SynthesizedProxyClass : public Class {
  public:
   ObjectArray<Class>* GetInterfaces() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<ObjectArray<Class>>(OFFSET_OF_OBJECT_MEMBER(SynthesizedProxyClass,
-                                                                       interfaces_));
+    // First static field.
+    DCHECK(GetSFields()->Get(0)->IsArtField());
+    DCHECK_STREQ(GetSFields()->Get(0)->GetName(), "interfaces");
+    return GetFieldObject<ObjectArray<Class> >(SFieldsOffset());
   }
 
-  ObjectArray<ObjectArray<Class>>* GetThrows()  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<ObjectArray<ObjectArray<Class>>>(OFFSET_OF_OBJECT_MEMBER(SynthesizedProxyClass,
-                                                                                     throws_));
+  ObjectArray<ObjectArray<Class> >* GetThrows()  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // Second static field.
+    DCHECK(GetSFields()->Get(1)->IsArtField());
+    DCHECK_STREQ(GetSFields()->Get(1)->GetName(), "throws");
+    return GetFieldObject<ObjectArray<ObjectArray<Class> > >(
+        MemberOffset(SFieldsOffset().Uint32Value() + sizeof(HeapReference<ObjectArray<Class>>)));
   }
 
  private:
