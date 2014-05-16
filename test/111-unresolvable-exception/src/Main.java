@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
+import java.io.IOException;
+
 public class Main {
     static public void main(String[] args) throws Exception {
       try {
         check(false);
+        System.out.println("Should not get here!");
       } catch (Throwable t) {          // Should catch the NoClassDefFoundError
         System.out.println("Caught " + t.getClass());
-      }
+      }      
     }
 
     private static void check(boolean b) {
@@ -31,11 +34,12 @@ public class Main {
         }
         throw new RuntimeException();  // Trigger exception handling.
       } catch (TestException e) {      // This handler will have an unresolvable class.
+        System.out.println("Should not get here!");
       } catch (Exception e) {          // General-purpose handler
         System.out.println("Should not get here!");
       }
     }
-
+    
     // This avoids having to construct one explicitly, which won't work.
-    private static native void throwsTestException() throws TestException;
+    private static native void throwsTestException() throws TestException, IOException;
 }

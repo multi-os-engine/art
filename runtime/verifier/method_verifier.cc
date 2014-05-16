@@ -46,7 +46,7 @@
 namespace art {
 namespace verifier {
 
-static const bool gDebugVerify = false;
+static constexpr bool gDebugVerify = false;
 // TODO: Add a constant to method_verifier to turn on verbose logging?
 
 void PcToRegisterLineTable::Init(RegisterTrackingMode mode, InstructionFlags* flags,
@@ -122,8 +122,8 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(mirror::Class* klass,
 }
 
 MethodVerifier::FailureKind MethodVerifier::VerifyClass(const DexFile* dex_file,
-                                                        Handle<mirror::DexCache>& dex_cache,
-                                                        Handle<mirror::ClassLoader>& class_loader,
+                                                        const Handle<mirror::DexCache>& dex_cache,
+                                                        const Handle<mirror::ClassLoader>& class_loader,
                                                         const DexFile::ClassDef* class_def,
                                                         bool allow_soft_failures,
                                                         std::string* error) {
@@ -233,8 +233,8 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(const DexFile* dex_file,
 
 MethodVerifier::FailureKind MethodVerifier::VerifyMethod(uint32_t method_idx,
                                                          const DexFile* dex_file,
-                                                         Handle<mirror::DexCache>& dex_cache,
-                                                         Handle<mirror::ClassLoader>& class_loader,
+                                                         const Handle<mirror::DexCache>& dex_cache,
+                                                         const Handle<mirror::ClassLoader>& class_loader,
                                                          const DexFile::ClassDef* class_def,
                                                          const DexFile::CodeItem* code_item,
                                                          mirror::ArtMethod* method,
@@ -243,7 +243,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyMethod(uint32_t method_idx,
   MethodVerifier::FailureKind result = kNoFailure;
   uint64_t start_ns = NanoTime();
 
-  MethodVerifier verifier_(dex_file, &dex_cache, &class_loader, class_def, code_item,
+  MethodVerifier verifier_(dex_file, dex_cache, class_loader, class_def, code_item,
                            method_idx, method, method_access_flags, true, allow_soft_failures);
   if (verifier_.Verify()) {
     // Verification completed, however failures may be pending that didn't cause the verification
@@ -277,14 +277,14 @@ MethodVerifier::FailureKind MethodVerifier::VerifyMethod(uint32_t method_idx,
 }
 
 void MethodVerifier::VerifyMethodAndDump(std::ostream& os, uint32_t dex_method_idx,
-                                         const DexFile* dex_file,
-                                         Handle<mirror::DexCache>& dex_cache,
-                                         Handle<mirror::ClassLoader>& class_loader,
+                                         const DexFile* const dex_file,
+                                         const Handle<mirror::DexCache>& dex_cache,
+                                         const Handle<mirror::ClassLoader>& class_loader,
                                          const DexFile::ClassDef* class_def,
                                          const DexFile::CodeItem* code_item,
                                          mirror::ArtMethod* method,
                                          uint32_t method_access_flags) {
-  MethodVerifier verifier(dex_file, &dex_cache, &class_loader, class_def, code_item,
+  MethodVerifier verifier(dex_file, dex_cache, class_loader, class_def, code_item,
                           dex_method_idx, method, method_access_flags, true, true);
   verifier.Verify();
   verifier.DumpFailures(os);
@@ -292,8 +292,9 @@ void MethodVerifier::VerifyMethodAndDump(std::ostream& os, uint32_t dex_method_i
   verifier.Dump(os);
 }
 
-MethodVerifier::MethodVerifier(const DexFile* dex_file, Handle<mirror::DexCache>* dex_cache,
-                               Handle<mirror::ClassLoader>* class_loader,
+MethodVerifier::MethodVerifier(const DexFile* const dex_file,
+                               const Handle<mirror::DexCache>& dex_cache,
+                               const Handle<mirror::ClassLoader>& class_loader,
                                const DexFile::ClassDef* class_def,
                                const DexFile::CodeItem* code_item, uint32_t dex_method_idx,
                                mirror::ArtMethod* method, uint32_t method_access_flags,
@@ -335,7 +336,7 @@ void MethodVerifier::FindLocksAtDexPc(mirror::ArtMethod* m, uint32_t dex_pc,
   StackHandleScope<2> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(mh.GetDexCache()));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(mh.GetClassLoader()));
-  MethodVerifier verifier(&mh.GetDexFile(), &dex_cache, &class_loader, &mh.GetClassDef(),
+  MethodVerifier verifier(&mh.GetDexFile(), dex_cache, class_loader, &mh.GetClassDef(),
                           mh.GetCodeItem(), m->GetDexMethodIndex(), m, m->GetAccessFlags(), false,
                           true);
   verifier.interesting_dex_pc_ = dex_pc;
@@ -360,7 +361,7 @@ mirror::ArtField* MethodVerifier::FindAccessedFieldAtDexPc(mirror::ArtMethod* m,
   StackHandleScope<2> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(mh.GetDexCache()));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(mh.GetClassLoader()));
-  MethodVerifier verifier(&mh.GetDexFile(), &dex_cache, &class_loader, &mh.GetClassDef(),
+  MethodVerifier verifier(&mh.GetDexFile(), dex_cache, class_loader, &mh.GetClassDef(),
                           mh.GetCodeItem(), m->GetDexMethodIndex(), m, m->GetAccessFlags(), true,
                           true);
   return verifier.FindAccessedFieldAtDexPc(dex_pc);
@@ -391,7 +392,7 @@ mirror::ArtMethod* MethodVerifier::FindInvokedMethodAtDexPc(mirror::ArtMethod* m
   StackHandleScope<2> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(mh.GetDexCache()));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(mh.GetClassLoader()));
-  MethodVerifier verifier(&mh.GetDexFile(), &dex_cache, &class_loader, &mh.GetClassDef(),
+  MethodVerifier verifier(&mh.GetDexFile(), dex_cache, class_loader, &mh.GetClassDef(),
                           mh.GetCodeItem(), m->GetDexMethodIndex(), m, m->GetAccessFlags(), true,
                           true);
   return verifier.FindInvokedMethodAtDexPc(dex_pc);
@@ -609,7 +610,7 @@ bool MethodVerifier::ScanTryCatchBlocks() {
       if (iterator.GetHandlerTypeIndex() != DexFile::kDexNoIndex16) {
         mirror::Class* exception_type = linker->ResolveType(*dex_file_,
                                                             iterator.GetHandlerTypeIndex(),
-                                                            *dex_cache_, *class_loader_);
+                                                            dex_cache_, class_loader_);
         if (exception_type == NULL) {
           DCHECK(Thread::Current()->IsExceptionPending());
           Thread::Current()->ClearException();
@@ -1834,7 +1835,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
                                             << array_type;
         } else {
           const RegType& component_type = reg_types_.GetComponentType(array_type,
-                                                                      class_loader_->Get());
+                                                                      class_loader_.Get());
           DCHECK(!component_type.IsConflict());
           if (component_type.IsNonZeroReferenceTypes()) {
             Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "invalid fill-array-data with component type "
@@ -2149,7 +2150,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
         const DexFile::MethodId& method_id = dex_file_->GetMethodId(method_idx);
         uint32_t return_type_idx = dex_file_->GetProtoId(method_id.proto_idx_).return_type_idx_;
         const char* descriptor = dex_file_->StringByTypeIdx(return_type_idx);
-        return_type = &reg_types_.FromDescriptor(class_loader_->Get(), descriptor, false);
+        return_type = &reg_types_.FromDescriptor(class_loader_.Get(), descriptor, false);
       }
       if (!return_type->IsLowHalf()) {
         work_line_->SetResultRegisterType(*return_type);
@@ -2216,7 +2217,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
          */
         work_line_->MarkRefsAsInitialized(this_type);
       }
-      const RegType& return_type = reg_types_.FromDescriptor(class_loader_->Get(),
+      const RegType& return_type = reg_types_.FromDescriptor(class_loader_.Get(),
                                                              return_type_descriptor, false);
       if (!return_type.IsLowHalf()) {
         work_line_->SetResultRegisterType(return_type);
@@ -2242,7 +2243,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
         } else {
           descriptor = MethodHelper(called_method).GetReturnTypeDescriptor();
         }
-        const RegType& return_type =  reg_types_.FromDescriptor(class_loader_->Get(), descriptor,
+        const RegType& return_type =  reg_types_.FromDescriptor(class_loader_.Get(), descriptor,
                                                                 false);
         if (!return_type.IsLowHalf()) {
           work_line_->SetResultRegisterType(return_type);
@@ -2300,7 +2301,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       } else {
         descriptor = MethodHelper(abs_method).GetReturnTypeDescriptor();
       }
-      const RegType& return_type = reg_types_.FromDescriptor(class_loader_->Get(), descriptor,
+      const RegType& return_type = reg_types_.FromDescriptor(class_loader_.Get(), descriptor,
                                                              false);
       if (!return_type.IsLowHalf()) {
         work_line_->SetResultRegisterType(return_type);
@@ -2566,7 +2567,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       mirror::ArtMethod* called_method = VerifyInvokeVirtualQuickArgs(inst, is_range);
       if (called_method != NULL) {
         const char* descriptor = MethodHelper(called_method).GetReturnTypeDescriptor();
-        const RegType& return_type = reg_types_.FromDescriptor(class_loader_->Get(), descriptor,
+        const RegType& return_type = reg_types_.FromDescriptor(class_loader_.Get(), descriptor,
                                                                false);
         if (!return_type.IsLowHalf()) {
           work_line_->SetResultRegisterType(return_type);
@@ -2626,8 +2627,20 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
     info_messages_ << "Rejecting opcode " << inst->DumpString(dex_file_);
     return false;
   } else if (have_pending_runtime_throw_failure_) {
+    if ((opcode_flags & Instruction::kThrow) == 0) {
+      // For throw instructions before processing we: <quote> Make a copy of the previous register
+      // state. If the instruction can throw an exception, we will copy/merge this into the "catch"
+      // address rather than work_line, because we don't want the result from the "successful" code
+      // path (e.g. a check-cast that "improves" a type) to be visible to the exception handler.
+      // </quote>. As this instruction is now a throw the same is necessary.
+      //
+      // There's an assumption here that the work-line wasn't changed.
+      saved_line_->CopyFromLine(work_line_.get());
+    }
     /* checking interpreter will throw, mark following code as unreachable */
     opcode_flags = Instruction::kThrow;
+    // Erase flag.
+    have_pending_runtime_throw_failure_ = false;
   }
   /*
    * If we didn't just set the result register, clear it out. This ensures that you can only use
@@ -2833,18 +2846,18 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
 const RegType& MethodVerifier::ResolveClassAndCheckAccess(uint32_t class_idx) {
   const char* descriptor = dex_file_->StringByTypeIdx(class_idx);
   const RegType& referrer = GetDeclaringClass();
-  mirror::Class* klass = (*dex_cache_)->GetResolvedType(class_idx);
+  mirror::Class* klass = dex_cache_->GetResolvedType(class_idx);
   const RegType& result =
       klass != NULL ? reg_types_.FromClass(descriptor, klass,
                                            klass->CannotBeAssignedFromOtherTypes())
-                    : reg_types_.FromDescriptor(class_loader_->Get(), descriptor, false);
+                    : reg_types_.FromDescriptor(class_loader_.Get(), descriptor, false);
   if (result.IsConflict()) {
     Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "accessing broken descriptor '" << descriptor
         << "' in " << referrer;
     return result;
   }
   if (klass == NULL && !result.IsUnresolvedTypes()) {
-    (*dex_cache_)->SetResolvedType(class_idx, result.GetClass());
+    dex_cache_->SetResolvedType(class_idx, result.GetClass());
   }
   // Check if access is allowed. Unresolved types use xxxWithAccessCheck to
   // check at runtime if access is allowed and so pass here. If result is
@@ -2916,7 +2929,7 @@ mirror::ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(uint32_t dex_meth
   }
   mirror::Class* klass = klass_type.GetClass();
   const RegType& referrer = GetDeclaringClass();
-  mirror::ArtMethod* res_method = (*dex_cache_)->GetResolvedMethod(dex_method_idx);
+  mirror::ArtMethod* res_method = dex_cache_->GetResolvedMethod(dex_method_idx);
   if (res_method == NULL) {
     const char* name = dex_file_->GetMethodName(method_id);
     const Signature signature = dex_file_->GetMethodSignature(method_id);
@@ -2929,7 +2942,7 @@ mirror::ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(uint32_t dex_meth
       res_method = klass->FindVirtualMethod(name, signature);
     }
     if (res_method != NULL) {
-      (*dex_cache_)->SetResolvedMethod(dex_method_idx, res_method);
+      dex_cache_->SetResolvedMethod(dex_method_idx, res_method);
     } else {
       // If a virtual or interface method wasn't found with the expected type, look in
       // the direct methods. This can happen when the wrong invoke type is used or when
@@ -3093,7 +3106,7 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
           << " missing signature component";
       return NULL;
     }
-    const RegType& reg_type = reg_types_.FromDescriptor(class_loader_->Get(), descriptor, false);
+    const RegType& reg_type = reg_types_.FromDescriptor(class_loader_.Get(), descriptor, false);
     uint32_t get_reg = is_range ? inst->VRegC_3rc() + actual_args : arg[actual_args];
     if (reg_type.IsIntegralTypes()) {
       const RegType& src_type = work_line_->GetRegisterType(get_reg);
@@ -3218,7 +3231,7 @@ mirror::ArtMethod* MethodVerifier::VerifyInvokeVirtualQuickArgs(const Instructio
                                         << " missing signature component";
       return NULL;
     }
-    const RegType& reg_type = reg_types_.FromDescriptor(class_loader_->Get(), descriptor, false);
+    const RegType& reg_type = reg_types_.FromDescriptor(class_loader_.Get(), descriptor, false);
     uint32_t get_reg = is_range ? inst->VRegC_3rc() + actual_args : arg[actual_args];
     if (!work_line_->VerifyRegisterType(get_reg, reg_type)) {
       return res_method;
@@ -3262,7 +3275,7 @@ void MethodVerifier::VerifyNewArray(const Instruction* inst, bool is_filled, boo
     } else {
       // Verify each register. If "arg_count" is bad, VerifyRegisterType() will run off the end of
       // the list and fail. It's legal, if silly, for arg_count to be zero.
-      const RegType& expected_type = reg_types_.GetComponentType(res_type, class_loader_->Get());
+      const RegType& expected_type = reg_types_.GetComponentType(res_type, class_loader_.Get());
       uint32_t arg_count = (is_range) ? inst->VRegA_3rc() : inst->VRegA_35c();
       uint32_t arg[5];
       if (!is_range) {
@@ -3304,7 +3317,7 @@ void MethodVerifier::VerifyAGet(const Instruction* inst,
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "not array type " << array_type << " with aget";
     } else {
       /* verify the class */
-      const RegType& component_type = reg_types_.GetComponentType(array_type, class_loader_->Get());
+      const RegType& component_type = reg_types_.GetComponentType(array_type, class_loader_.Get());
       if (!component_type.IsReferenceTypes() && !is_primitive) {
         Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "primitive array type " << array_type
             << " source for aget-object";
@@ -3381,7 +3394,7 @@ void MethodVerifier::VerifyAPut(const Instruction* inst,
     } else if (!array_type.IsArrayTypes()) {
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "not array type " << array_type << " with aput";
     } else {
-      const RegType& component_type = reg_types_.GetComponentType(array_type, class_loader_->Get());
+      const RegType& component_type = reg_types_.GetComponentType(array_type, class_loader_.Get());
       const uint32_t vregA = inst->VRegA_23x();
       if (is_primitive) {
         VerifyPrimitivePut(component_type, insn_type, vregA);
@@ -3414,8 +3427,8 @@ mirror::ArtField* MethodVerifier::GetStaticField(int field_idx) {
     return NULL;  // Can't resolve Class so no more to do here, will do checking at runtime.
   }
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  mirror::ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, *dex_cache_,
-                                                          *class_loader_);
+  mirror::ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, dex_cache_,
+                                                          class_loader_);
   if (field == NULL) {
     VLOG(verifier) << "Unable to resolve static field " << field_idx << " ("
               << dex_file_->GetFieldName(field_id) << ") in "
@@ -3449,8 +3462,8 @@ mirror::ArtField* MethodVerifier::GetInstanceField(const RegType& obj_type, int 
     return NULL;  // Can't resolve Class so no more to do here
   }
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  mirror::ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, *dex_cache_,
-                                                          *class_loader_);
+  mirror::ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, dex_cache_,
+                                                          class_loader_);
   if (field == NULL) {
     VLOG(verifier) << "Unable to resolve instance field " << field_idx << " ("
               << dex_file_->GetFieldName(field_id) << ") in "
@@ -3523,7 +3536,7 @@ void MethodVerifier::VerifyISGet(const Instruction* inst, const RegType& insn_ty
   if (field_type == nullptr) {
     const DexFile::FieldId& field_id = dex_file_->GetFieldId(field_idx);
     const char* descriptor = dex_file_->GetFieldTypeDescriptor(field_id);
-    field_type = &reg_types_.FromDescriptor(class_loader_->Get(), descriptor, false);
+    field_type = &reg_types_.FromDescriptor(class_loader_.Get(), descriptor, false);
   }
   DCHECK(field_type != nullptr);
   const uint32_t vregA = (is_static) ? inst->VRegA_21c() : inst->VRegA_22c();
@@ -3590,7 +3603,7 @@ void MethodVerifier::VerifyISPut(const Instruction* inst, const RegType& insn_ty
   if (field_type == nullptr) {
     const DexFile::FieldId& field_id = dex_file_->GetFieldId(field_idx);
     const char* descriptor = dex_file_->GetFieldTypeDescriptor(field_id);
-    field_type = &reg_types_.FromDescriptor(class_loader_->Get(), descriptor, false);
+    field_type = &reg_types_.FromDescriptor(class_loader_.Get(), descriptor, false);
   }
   DCHECK(field_type != nullptr);
   const uint32_t vregA = (is_static) ? inst->VRegA_21c() : inst->VRegA_22c();
@@ -3842,7 +3855,7 @@ const RegType& MethodVerifier::GetMethodReturnType() {
       const DexFile::ProtoId& proto_id = dex_file_->GetMethodPrototype(method_id);
       uint16_t return_type_idx = proto_id.return_type_idx_;
       const char* descriptor = dex_file_->GetTypeDescriptor(dex_file_->GetTypeId(return_type_idx));
-      return_type_ = &reg_types_.FromDescriptor(class_loader_->Get(), descriptor, false);
+      return_type_ = &reg_types_.FromDescriptor(class_loader_.Get(), descriptor, false);
     }
   }
   return *return_type_;
@@ -3858,7 +3871,7 @@ const RegType& MethodVerifier::GetDeclaringClass() {
       declaring_class_ = &reg_types_.FromClass(descriptor, klass,
                                                klass->CannotBeAssignedFromOtherTypes());
     } else {
-      declaring_class_ = &reg_types_.FromDescriptor(class_loader_->Get(), descriptor, false);
+      declaring_class_ = &reg_types_.FromDescriptor(class_loader_.Get(), descriptor, false);
     }
   }
   return *declaring_class_;
