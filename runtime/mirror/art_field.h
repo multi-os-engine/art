@@ -35,6 +35,8 @@ namespace mirror {
 // C++ mirror of java.lang.reflect.ArtField
 class MANAGED ArtField : public Object {
  public:
+  static constexpr size_t kVTableLength = 17;
+
   static ArtField* FromReflectedField(const ScopedObjectAccessAlreadyRunnable& soa,
                                       jobject jlr_field)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

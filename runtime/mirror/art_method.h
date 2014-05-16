@@ -47,6 +47,8 @@ typedef void (EntryPointFromInterpreter)(Thread* self, MethodHelper& mh,
 // C++ mirror of java.lang.reflect.Method and java.lang.reflect.Constructor
 class MANAGED ArtMethod : public Object {
  public:
+  static constexpr size_t kVTableLength = 19;
+
   static ArtMethod* FromReflectedMethod(const ScopedObjectAccessAlreadyRunnable& soa,
                                         jobject jlr_method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
