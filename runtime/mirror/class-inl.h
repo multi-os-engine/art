@@ -24,6 +24,7 @@
 #include "class_loader.h"
 #include "common_throws.h"
 #include "dex_cache.h"
+#include "dex_file.h"
 #include "gc/heap-inl.h"
 #include "iftable.h"
 #include "object_array-inl.h"
@@ -508,7 +509,7 @@ inline void Class::VisitReferences(mirror::Class* klass, const Visitor& visitor)
 }
 
 template<ReadBarrierOption kReadBarrierOption>
-bool Class::IsArtFieldClass() {
+inline bool Class::IsArtFieldClass() {
   Class* java_lang_Class = GetClass<kVerifyNone, kReadBarrierOption>();
   Class* java_lang_reflect_ArtField =
       java_lang_Class->GetInstanceField(0)->GetClass<kVerifyNone, kReadBarrierOption>();
@@ -516,7 +517,7 @@ bool Class::IsArtFieldClass() {
 }
 
 template<ReadBarrierOption kReadBarrierOption>
-bool Class::IsArtMethodClass() {
+inline bool Class::IsArtMethodClass() {
   return this == ArtMethod::GetJavaLangReflectArtMethod<kReadBarrierOption>();
 }
 
@@ -525,6 +526,10 @@ inline bool Class::IsClassClass() {
   Class* java_lang_Class = GetClass<kVerifyFlags, kReadBarrierOption>()->
       template GetClass<kVerifyFlags, kReadBarrierOption>();
   return this == java_lang_Class;
+}
+
+inline const DexFile& Class::GetDexFile() {
+  return *GetDexCache()->GetDexFile();
 }
 
 }  // namespace mirror
