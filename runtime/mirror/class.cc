@@ -61,7 +61,8 @@ void Class::SetStatus(Status new_status, Thread* self) {
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   bool class_linker_initialized = class_linker != nullptr && class_linker->IsInitialized();
   if (LIKELY(class_linker_initialized)) {
-    if (UNLIKELY(new_status <= old_status && new_status != kStatusError)) {
+    if (UNLIKELY(new_status <= old_status && new_status != kStatusError &&
+                 new_status != kStatusRetired)) {
       LOG(FATAL) << "Unexpected change back of class status for " << PrettyClass(this) << " "
           << old_status << " -> " << new_status;
     }
@@ -111,10 +112,21 @@ void Class::SetStatus(Status new_status, Thread* self) {
   } else {
     SetField32Volatile<false>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
   }
+
+  if (!class_linker_initialized) {
+    return;
+  }
+
   // Classes that are being resolved or initialized need to notify waiters that the class status
   // changed. See ClassLinker::EnsureResolved and ClassLinker::WaitForInitializeClass.
-  if ((old_status >= kStatusResolved || new_status >= kStatusResolved) &&
-      class_linker_initialized) {
+  if (IsTemp()) {
+    if (new_status == kStatusRetired || new_status == kStatusError) {
+      NotifyAll(self);
+    }
+    CHECK(new_status < kStatusResolved);
+    return;
+  }
+  if (old_status >= kStatusResolved || new_status >= kStatusResolved) {
     NotifyAll(self);
   }
 }
@@ -794,6 +806,54 @@ const DexFile::TypeList* Class::GetInterfaceTypeList() {
     return nullptr;
   }
   return GetDexFile().GetInterfacesList(*class_def);
+}
+
+void Class::PopulateEmbeddedImtAndVTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  if (!Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+    return;
+  }
+
+  ObjectArray<ArtMethod>* table = GetImTable();
+  if (table != nullptr) {
+    for (uint32_t i = 0; i < ClassLinker::kImtSize; i++) {
+      SetEmbeddedImTableEntry(i, table->Get(i));
+    }
+  }
+
+  table = GetVTableDuringLinking();
+  CHECK(table != nullptr);
+  for (int32_t i = 0; i < table->GetLength(); i++) {
+    SetEmbeddedVTableEntry(i, table->Get(i));
+  }
+}
+
+Class* Class::CopyOf(Thread* self, int32_t new_length) {
+  DCHECK_GE(new_length, 0);
+  // We may get copied by a compacting GC.
+  StackHandleScope<1> hs(self);
+  Handle<mirror::Class> h_this(hs.NewHandle(this));
+  gc::Heap* heap = Runtime::Current()->GetHeap();
+  InitializeClassVisitor visitor(new_length);
+
+  mirror::Object* new_class =
+      kMovingClasses ? heap->AllocObject<true>(self, java_lang_Class_, new_length, visitor)
+                     : heap->AllocNonMovableObject<true>(self, java_lang_Class_, new_length, visitor);
+  if (UNLIKELY(new_class == nullptr)) {
+    CHECK(self->IsExceptionPending());  // Expect an OOME.
+    return NULL;
+  }
+
+  mirror::Class* new_class_obj = new_class->AsClass();
+  memcpy(new_class_obj, h_this.Get(), sizeof(Class));
+
+  new_class_obj->status_ = kStatusTransitioning;
+  new_class_obj->PopulateEmbeddedImtAndVTable();
+  // Correct some fields.
+  new_class_obj->SetLockWord(LockWord(), false);
+  new_class_obj->SetClassSize(new_length);
+
+  Runtime::Current()->GetHeap()->WriteBarrierEveryFieldOf(new_class_obj);
+  return new_class_obj;
 }
 
 }  // namespace mirror

@@ -162,8 +162,8 @@ class MANAGED StringClass : public Class {
  private:
   HeapReference<CharArray> ASCII_;
   HeapReference<Object> CASE_INSENSITIVE_ORDER_;
-  uint32_t REPLACEMENT_CHAR_;
   int64_t serialVersionUID_;
+  uint32_t REPLACEMENT_CHAR_;
   friend struct art::StringClassOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(StringClass);
 };
