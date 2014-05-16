@@ -55,7 +55,7 @@ class CodeVectorAllocator FINAL : public CodeAllocator {
 /**
  * If set to true, generates a file suitable for the c1visualizer tool and IRHydra.
  */
-static bool kIsVisualizerEnabled = false;
+static bool kIsVisualizerEnabled = true;
 
 /**
  * Filter to apply to the visualizer. Methods whose name contain that filter will
@@ -129,6 +129,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
 
   graph->FindNaturalLoops();
   SsaLivenessAnalysis(*graph).Analyze();
+  visualizer.DumpGraph("liveness");
 
   return new CompiledMethod(GetCompilerDriver(),
                             instruction_set,
