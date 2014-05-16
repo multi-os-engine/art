@@ -29,6 +29,18 @@
 namespace art {
 namespace mirror {
 
+inline uint32_t ArtMethod::ClassSize() {
+  uint32_t vtable_entries = Object::kVTableLength + 8;
+  return Class::ComputeClassSize(true, vtable_entries, 0, 0, 0);
+}
+
+template<ReadBarrierOption kReadBarrierOption>
+inline Class* ArtMethod::GetJavaLangReflectArtMethod() {
+  DCHECK(java_lang_reflect_ArtMethod_ != nullptr);
+  return ReadBarrier::BarrierForRoot<mirror::Class, kReadBarrierOption>(
+      &java_lang_reflect_ArtMethod_);
+}
+
 inline Class* ArtMethod::GetDeclaringClass() {
   Class* result = GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, declaring_class_));
   DCHECK(result != NULL) << this;

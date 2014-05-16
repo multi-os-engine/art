@@ -63,6 +63,17 @@ static constexpr bool kCheckFieldAssignments = false;
 // C++ mirror of java.lang.Object
 class MANAGED LOCKABLE Object {
  public:
+  // The number of vtable entries in java.lang.Object.
+  static constexpr size_t kVTableLength = 11;
+
+  // The size of the java.lang.Class representing a java.lang.Object.
+  static uint32_t ClassSize();
+
+  // Size of an instance of java.lang.Object.
+  static constexpr uint32_t InstanceSize() {
+    return sizeof(Object);
+  }
+
   static MemberOffset ClassOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Object, klass_);
   }
