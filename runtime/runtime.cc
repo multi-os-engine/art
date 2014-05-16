@@ -1017,8 +1017,8 @@ mirror::ArtMethod* Runtime::CreateImtConflictMethod() {
     method->SetEntryPointFromPortableCompiledCode(nullptr);
     method->SetEntryPointFromQuickCompiledCode(nullptr);
   } else {
-    method->SetEntryPointFromPortableCompiledCode(GetPortableImtConflictTrampoline(class_linker));
-    method->SetEntryPointFromQuickCompiledCode(GetQuickImtConflictTrampoline(class_linker));
+    method->SetEntryPointFromPortableCompiledCode(class_linker->GetPortableImtConflictTrampoline());
+    method->SetEntryPointFromQuickCompiledCode(class_linker->GetQuickImtConflictTrampoline());
   }
   return method.Get();
 }
@@ -1037,8 +1037,8 @@ mirror::ArtMethod* Runtime::CreateResolutionMethod() {
     method->SetEntryPointFromPortableCompiledCode(nullptr);
     method->SetEntryPointFromQuickCompiledCode(nullptr);
   } else {
-    method->SetEntryPointFromPortableCompiledCode(GetPortableResolutionTrampoline(class_linker));
-    method->SetEntryPointFromQuickCompiledCode(GetQuickResolutionTrampoline(class_linker));
+    method->SetEntryPointFromPortableCompiledCode(class_linker->GetPortableResolutionTrampoline());
+    method->SetEntryPointFromQuickCompiledCode(class_linker->GetQuickResolutionTrampoline());
   }
   return method.Get();
 }
