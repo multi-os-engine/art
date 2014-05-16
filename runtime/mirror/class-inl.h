@@ -132,7 +132,7 @@ inline ObjectArray<ArtMethod>* Class::GetVTable() {
 }
 
 inline ObjectArray<ArtMethod>* Class::GetVTableDuringLinking() {
-  DCHECK(IsLoaded() || IsErroneous());
+  DCHECK(IsLoaded() || IsErroneous() || IsArrayClass());
   return GetFieldObject<ObjectArray<ArtMethod>>(OFFSET_OF_OBJECT_MEMBER(Class, vtable_));
 }
 
@@ -146,6 +146,35 @@ inline ObjectArray<ArtMethod>* Class::GetImTable() {
 
 inline void Class::SetImTable(ObjectArray<ArtMethod>* new_imtable) {
   SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(Class, imtable_), new_imtable);
+}
+
+inline bool Class::HasEmbeddedImtAndVTable() {
+  return Runtime::Current()->IsEmbeddedImtAndVTableEnabled() && !IsInterface();
+}
+
+inline void Class::SetEmbeddedImTableEntry(uint32_t i, ArtMethod* method) {
+  if (!Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+    return;
+  }
+
+  uint32_t offset = sizeof(mirror::Class) + i * sizeof(DispatchTableEntry);
+  SetFieldObject<false>(MemberOffset(offset), method);
+  SetField64<false>(GetDispatchTableEntryPointOffset(MemberOffset(offset)),
+                    (int64_t)method->GetEntryPointFromQuickCompiledCode());
+  CHECK(method == GetImTable()->Get(i));
+}
+
+inline void Class::SetEmbeddedVTableEntry(uint32_t i, ArtMethod* method) {
+  if (!Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+    return;
+  }
+
+  uint32_t offset = sizeof(mirror::Class) +
+                    (ClassLinker::kImtSize + i) * sizeof(DispatchTableEntry);
+  SetFieldObject<false>(MemberOffset(offset), method);
+  SetField64<false>(GetDispatchTableEntryPointOffset(MemberOffset(offset)),
+                    (int64_t)method->GetEntryPointFromQuickCompiledCode());
+  CHECK(method == GetVTableDuringLinking()->Get(i));
 }
 
 inline bool Class::Implements(Class* klass) {
@@ -373,7 +402,8 @@ inline ObjectArray<ArtField>* Class::GetSFields() {
 
 inline void Class::SetSFields(ObjectArray<ArtField>* new_sfields)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  DCHECK(NULL == GetFieldObject<ObjectArray<ArtField>>(OFFSET_OF_OBJECT_MEMBER(Class, sfields_)));
+  DCHECK((IsRetired() && new_sfields == NULL) ||
+         (NULL == GetFieldObject<ObjectArray<ArtField>>(OFFSET_OF_OBJECT_MEMBER(Class, sfields_))));
   SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(Class, sfields_), new_sfields);
 }
 
@@ -437,7 +467,7 @@ template<VerifyObjectFlags kVerifyFlags>
 inline uint32_t Class::GetAccessFlags() {
   // Check class is loaded or this is java.lang.String that has a
   // circularity issue during loading the names of its members
-  DCHECK(IsLoaded<kVerifyFlags>() ||
+  DCHECK(IsIdxLoaded<kVerifyFlags>() ||
          IsErroneous<static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis)>() ||
          this == String::GetJavaLangString() ||
          this == ArtField::GetJavaLangReflectArtField() ||
@@ -505,8 +535,36 @@ inline Object* Class::AllocNonMovableObject(Thread* self) {
 
 template <bool kVisitClass, typename Visitor>
 inline void Class::VisitReferences(mirror::Class* klass, const Visitor& visitor) {
-  VisitInstanceFieldsReferences<kVisitClass>(klass, visitor);
-  VisitStaticFieldsReferences<kVisitClass>(this, visitor);
+  if (!IsRetired()) {
+    VisitInstanceFieldsReferences<kVisitClass>(klass, visitor);
+    if (!IsTemp()) {
+      // Temp classes don't ever populate imt/vtable or static fields
+      // and they are not even allocated with the right size for those.
+      VisitStaticFieldsReferences<kVisitClass>(this, visitor);
+      if (HasEmbeddedImtAndVTable()) {
+        VisitImtAndVTable(visitor);
+      }
+    }
+  }
+}
+
+template<typename Visitor>
+inline void Class::VisitImtAndVTable(const Visitor& visitor) {
+  uint32_t pos = sizeof(mirror::Class);
+
+  size_t count = ClassLinker::kImtSize;
+  for (size_t i = 0; i < count; ++i) {
+    MemberOffset offset = MemberOffset(pos);
+    visitor(this, offset, true);
+    pos += sizeof(DispatchTableEntry);
+  }
+
+  count = ((GetVTable() != NULL) ? GetVTable()->GetLength() : 0);
+  for (size_t i = 0; i < count; ++i) {
+    MemberOffset offset = MemberOffset(pos);
+    visitor(this, offset, true);
+    pos += sizeof(DispatchTableEntry);
+  }
 }
 
 inline bool Class::IsArtFieldClass() const {

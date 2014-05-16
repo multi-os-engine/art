@@ -596,6 +596,21 @@ class FixupVisitor {
     // image.
     copy_->SetFieldObjectWithoutWriteBarrier<false, true, kVerifyNone>(
         offset, image_writer_->GetImageAddress(ref));
+
+    if (Runtime::Current()->IsEmbeddedImtAndVTableEnabled() &&
+        obj->IsClass() && ref != NULL && ref->IsArtMethod()) {
+      // Make sure it's part of embedded imtable/vtable.
+      uint32_t sfields_offset = obj->AsClass()->SFieldsOffset().Uint32Value();
+      CHECK((offset.Uint32Value() >= sizeof(mirror::Class)) &&
+            (sfields_offset == 0 || offset.Uint32Value() < sfields_offset)) <<
+          "offset: " << offset.Uint32Value() << " static fields offset: " <<
+          sfields_offset << " class: " << PrettyClass(obj->AsClass());
+
+      ArtMethod* method = ref->AsArtMethod<kVerifyNone>();
+      const byte* quick_entry_point = image_writer_->GetQuickEntryPoint(method);
+      copy_->SetField64<false>(mirror::Class::GetDispatchTableEntryPointOffset(offset),
+                               (int64_t)quick_entry_point);
+    }
   }
 
   // java.lang.ref.Reference visitor.
@@ -625,19 +640,28 @@ void ImageWriter::FixupObject(Object* orig, Object* copy) {
   FixupVisitor visitor(this, copy);
   orig->VisitReferences<true /*visit class*/>(visitor, visitor);
   if (orig->IsArtMethod<kVerifyNone>()) {
-    FixupMethod(orig->AsArtMethod<kVerifyNone>(), down_cast<ArtMethod*>(copy));
+    const byte* quick_entry_point;
+    FixupMethod(orig->AsArtMethod<kVerifyNone>(), down_cast<ArtMethod*>(copy), quick_entry_point);
   }
 }
 
-void ImageWriter::FixupMethod(ArtMethod* orig, ArtMethod* copy) {
+void ImageWriter::FixupMethod(ArtMethod* orig, ArtMethod* copy, const byte*& quick_entry_point) {
   // OatWriter replaces the code_ with an offset value. Here we re-adjust to a pointer relative to
   // oat_begin_
 
   // The resolution method has a special trampoline to call.
   if (UNLIKELY(orig == Runtime::Current()->GetResolutionMethod())) {
+    if (copy == NULL) {
+      quick_entry_point = GetOatAddress(quick_resolution_trampoline_offset_);
+      return;
+    }
     copy->SetEntryPointFromPortableCompiledCode<kVerifyNone>(GetOatAddress(portable_resolution_trampoline_offset_));
     copy->SetEntryPointFromQuickCompiledCode<kVerifyNone>(GetOatAddress(quick_resolution_trampoline_offset_));
   } else if (UNLIKELY(orig == Runtime::Current()->GetImtConflictMethod())) {
+    if (copy == NULL) {
+      quick_entry_point = GetOatAddress(quick_imt_conflict_trampoline_offset_);
+      return;
+    }
     copy->SetEntryPointFromPortableCompiledCode<kVerifyNone>(GetOatAddress(portable_imt_conflict_trampoline_offset_));
     copy->SetEntryPointFromQuickCompiledCode<kVerifyNone>(GetOatAddress(quick_imt_conflict_trampoline_offset_));
   } else {
@@ -645,6 +669,10 @@ void ImageWriter::FixupMethod(ArtMethod* orig, ArtMethod* copy) {
     // resolution trampoline. Abstract methods never have code and so we need to make sure their
     // use results in an AbstractMethodError. We use the interpreter to achieve this.
     if (UNLIKELY(orig->IsAbstract())) {
+      if (copy == NULL) {
+        quick_entry_point = GetOatAddress(quick_to_interpreter_bridge_offset_);
+        return;
+      }
       copy->SetEntryPointFromPortableCompiledCode<kVerifyNone>(GetOatAddress(portable_to_interpreter_bridge_offset_));
       copy->SetEntryPointFromQuickCompiledCode<kVerifyNone>(GetOatAddress(quick_to_interpreter_bridge_offset_));
       copy->SetEntryPointFromInterpreter<kVerifyNone>(reinterpret_cast<EntryPointFromInterpreter*>
@@ -672,6 +700,10 @@ void ImageWriter::FixupMethod(ArtMethod* orig, ArtMethod* copy) {
         // We have code for a static method, but need to go through the resolution stub for class
         // initialization.
         quick_code = GetOatAddress(quick_resolution_trampoline_offset_);
+      }
+      if (copy == NULL) {
+        quick_entry_point = quick_code;
+        return;
       }
       copy->SetEntryPointFromQuickCompiledCode<kVerifyNone>(quick_code);
 

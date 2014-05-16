@@ -519,7 +519,10 @@ struct ClassOffsets : public CheckOffsets<mirror::Class> {
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, primitive_type_),                "primitiveType"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_instance_offsets_),    "referenceInstanceOffsets"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_static_offsets_),      "referenceStaticOffsets"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, root_),                          "root"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, sfields_start_),                 "staticFieldsStart"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, status_),                        "status"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, temp_),                          "temporary"));
   };
 };
 
@@ -574,22 +577,26 @@ struct ProxyOffsets : public CheckOffsets<mirror::Proxy> {
 
 struct ClassClassOffsets : public CheckOffsets<mirror::ClassClass> {
   ClassClassOffsets() : CheckOffsets<mirror::ClassClass>(true, "Ljava/lang/Class;") {
+    size_t tbl_size = ClassLinker::SizeOfImtAndVTable(ClassLinker::kJavaLangClassVTableLength, true);
+
     // alphabetical 64-bit
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::ClassClass, serialVersionUID_), "serialVersionUID"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::ClassClass, serialVersionUID_) + tbl_size, "serialVersionUID"));
   };
 };
 
 struct StringClassOffsets : public CheckOffsets<mirror::StringClass> {
   StringClassOffsets() : CheckOffsets<mirror::StringClass>(true, "Ljava/lang/String;") {
-    // alphabetical references
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, ASCII_),                  "ASCII"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, CASE_INSENSITIVE_ORDER_), "CASE_INSENSITIVE_ORDER"));
+    size_t tbl_size = ClassLinker::SizeOfImtAndVTable(ClassLinker::kJavaLangStringVTableLength, true);
 
-    // alphabetical 32-bit
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, REPLACEMENT_CHAR_),       "REPLACEMENT_CHAR"));
+    // alphabetical references
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, ASCII_) + tbl_size,                  "ASCII"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, CASE_INSENSITIVE_ORDER_) + tbl_size, "CASE_INSENSITIVE_ORDER"));
 
     // alphabetical 64-bit
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, serialVersionUID_),       "serialVersionUID"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, serialVersionUID_) + tbl_size,       "serialVersionUID"));
+
+    // alphabetical 32-bit
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, REPLACEMENT_CHAR_) + tbl_size,       "REPLACEMENT_CHAR"));
   };
 };
 

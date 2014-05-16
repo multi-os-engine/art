@@ -144,10 +144,17 @@ class ImageWriter {
   void CopyAndFixupObjects();
   static void CopyAndFixupObjectsCallback(mirror::Object* obj, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void FixupMethod(mirror::ArtMethod* orig, mirror::ArtMethod* copy)
+  void FixupMethod(mirror::ArtMethod* orig, mirror::ArtMethod* copy, const byte*& quick_entry_point)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void FixupObject(mirror::Object* orig, mirror::Object* copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  const byte* GetQuickEntryPoint(mirror::ArtMethod* method)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    const byte* quick_entry_point;
+    FixupMethod(method, NULL, quick_entry_point);
+    return quick_entry_point;
+  }
 
   // Patches references in OatFile to expect runtime addresses.
   void PatchOatCodeAndMethods()

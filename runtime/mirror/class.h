@@ -17,11 +17,13 @@
 #ifndef ART_RUNTIME_MIRROR_CLASS_H_
 #define ART_RUNTIME_MIRROR_CLASS_H_
 
+#include "base/casts.h"
 #include "dex_file.h"
 #include "gc/allocator_type.h"
 #include "invoke_type.h"
 #include "modifiers.h"
 #include "object.h"
+#include "object_array.h"
 #include "object_callbacks.h"
 #include "primitive.h"
 
@@ -69,6 +71,7 @@ class StringPiece;
 namespace mirror {
 
 class ArtField;
+class ArtMethod;
 class ClassLoader;
 class DexCache;
 class IfTable;
@@ -76,6 +79,12 @@ class IfTable;
 // C++ mirror of java.lang.Class
 class MANAGED Class : public Object {
  public:
+  // imtable/vtable entry embedded in class object.
+  struct MANAGED DispatchTableEntry {
+    HeapReference<ArtMethod> method;
+    uint64_t entry_point_from_quick_compiled_code;
+  };
+
   // Class Status
   //
   // kStatusNotReady: If a Class cannot be found in the class table by
@@ -108,6 +117,7 @@ class MANAGED Class : public Object {
   //
   // TODO: Explain the other states
   enum Status {
+    kStatusRetired = -2,
     kStatusError = -1,
     kStatusNotReady = 0,
     kStatusIdx = 1,  // Loaded, DEX idx in super_class_type_idx_ and interfaces_type_idx_.
@@ -169,6 +179,22 @@ class MANAGED Class : public Object {
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsVerified() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return GetStatus<kVerifyFlags>() >= kStatusVerified;
+  }
+
+  // Returns true if the class has been retired.
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  bool IsRetired() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetStatus<kVerifyFlags>() == kStatusRetired;
+  }
+
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  void SetRetired(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SetStatus(mirror::Class::kStatusRetired, self);
+    // Retired class isn't of the right size. Make sure static (ref) fields
+    // won't be visited.
+    SetSFields(NULL);
+    SetNumReferenceStaticFields(0);
+    SetReferenceStaticOffsets(0);
   }
 
   // Returns true if the class is initializing.
@@ -271,6 +297,22 @@ class MANAGED Class : public Object {
         return component->CannotBeAssignedFromOtherTypes();
       }
     }
+  }
+
+  bool IsRoot() {
+    return root_;
+  }
+
+  void SetRoot(bool root) {
+    root_ = root;
+  }
+
+  bool IsTemp() {
+    return temp_;
+  }
+
+  void SetTemp(bool temp) {
+    temp_ = temp;
   }
 
   String* GetName() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);  // Returns the cached name.
@@ -629,6 +671,11 @@ class MANAGED Class : public Object {
     return OFFSET_OF_OBJECT_MEMBER(Class, imtable_);
   }
 
+  bool HasEmbeddedImtAndVTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetEmbeddedImTableEntry(uint32_t i, ArtMethod* method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetEmbeddedVTableEntry(uint32_t i, ArtMethod* method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void PopulateEmbeddedImtAndVTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Given a method implemented by this class but potentially from a super class, return the
   // specific implementation method for this class.
   ArtMethod* FindVirtualMethodForVirtual(ArtMethod* method)
@@ -734,8 +781,12 @@ class MANAGED Class : public Object {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Beginning of static field data
-  static MemberOffset FieldsOffset() {
-    return OFFSET_OF_OBJECT_MEMBER(Class, fields_);
+  MemberOffset SFieldsOffset() {
+    return MemberOffset(sfields_start_);
+  }
+
+  void SetSFieldsStart(int32_t start) {
+    sfields_start_ = start;
   }
 
   // Returns the number of static fields containing reference types.
@@ -745,7 +796,7 @@ class MANAGED Class : public Object {
   }
 
   uint32_t NumReferenceStaticFieldsDuringLinking() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK(IsLoaded() || IsErroneous());
+    DCHECK(IsLoaded() || IsErroneous() || IsRetired());
     return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, num_reference_static_fields_));
   }
 
@@ -842,6 +893,12 @@ class MANAGED Class : public Object {
     SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_), type_idx);
   }
 
+  // Return offset of entry point that's paired with the method at method_offset
+  // in the embedded imt/vtable.
+  static MemberOffset GetDispatchTableEntryPointOffset(MemberOffset method_offset) {
+    return MemberOffset(method_offset.Uint32Value() + sizeof(HeapReference<ArtMethod>));
+  }
+
   static Class* GetJavaLangClass() {
     DCHECK(java_lang_Class_ != NULL);
     return java_lang_Class_;
@@ -860,6 +917,10 @@ class MANAGED Class : public Object {
   void VisitReferences(mirror::Class* klass, const Visitor& visitor)
       NO_THREAD_SAFETY_ANALYSIS;
 
+  template<typename Visitor>
+  void VisitImtAndVTable(const Visitor& visitor)
+      NO_THREAD_SAFETY_ANALYSIS;
+
   std::string GetDescriptor() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool DescriptorEquals(const char* match) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   std::string GetArrayDescriptor() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -872,6 +933,34 @@ class MANAGED Class : public Object {
   std::string GetLocation() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   const DexFile& GetDexFile() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   const DexFile::TypeList* GetInterfaceTypeList() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  Class* CopyOf(Thread* self, int32_t new_length)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Used to initialize a class in the allocation code path to ensure it is guarded by a StoreStore
+  // fence.
+  class InitializeClassVisitor {
+   public:
+    explicit InitializeClassVisitor(uint32_t class_size) : class_size_(class_size) {
+    }
+
+    void operator()(mirror::Object* obj, size_t usable_size) const
+        SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      DCHECK_LE(class_size_, usable_size);
+      // Avoid AsClass as object is not yet in live bitmap or allocation stack.
+      mirror::Class* klass = down_cast<mirror::Class*>(obj);
+      // DCHECK(klass->IsClass());
+      klass->SetClassSize(class_size_);
+      klass->SetPrimitiveType(Primitive::kPrimNot);  // Default to not being primitive.
+      klass->SetDexClassDefIndex(DexFile::kDexNoIndex16);  // Default to no valid class def index.
+      klass->SetDexTypeIndex(DexFile::kDexNoIndex16);  // Default to no valid type index.
+    }
+
+   private:
+    const uint32_t class_size_;
+
+    DISALLOW_COPY_AND_ASSIGN(InitializeClassVisitor);
+  };
 
  private:
   void SetVerifyErrorClass(Class* klass) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -992,8 +1081,18 @@ class MANAGED Class : public Object {
   // Bitmap of offsets of sfields.
   uint32_t reference_static_offsets_;
 
+  // Whether this belongs to class_roots_;
+  int32_t root_;
+
+  // Start offset for static fields.
+  int32_t sfields_start_;
+
   // State of class initialization.
   Status status_;
+
+  // Whether this will be retired later and be replaced
+  // with a class object of the right size.
+  int32_t temp_;
 
   // TODO: ?
   // initiating class loader list
@@ -1001,7 +1100,12 @@ class MANAGED Class : public Object {
   // values are kept in a table in gDvm.
   // InitiatingLoaderList initiating_loader_list_;
 
-  // Location of first static field.
+  // The following data exist in real class objects.
+  // Embedded Imtable, for class object that's not an interface, fixed size.
+  DispatchTableEntry embedded_imtable_[0];
+  // Embedded Vtable, for class object that's not an interface, variable size.
+  DispatchTableEntry embedded_vtable_[0];
+  // Static fields, variable size.
   uint32_t fields_[0];
 
   // java.lang.Class
@@ -1015,7 +1119,6 @@ std::ostream& operator<<(std::ostream& os, const Class::Status& rhs);
 
 class MANAGED ClassClass : public Class {
  private:
-  int32_t pad_;
   int64_t serialVersionUID_;
   friend struct art::ClassClassOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(ClassClass);

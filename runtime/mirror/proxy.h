@@ -30,13 +30,14 @@ namespace mirror {
 class MANAGED SynthesizedProxyClass : public Class {
  public:
   ObjectArray<Class>* GetInterfaces() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<ObjectArray<Class>>(OFFSET_OF_OBJECT_MEMBER(SynthesizedProxyClass,
-                                                                       interfaces_));
+    // First static field.
+    return GetFieldObject<ObjectArray<Class> >(SFieldsOffset());
   }
 
-  ObjectArray<ObjectArray<Class>>* GetThrows()  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<ObjectArray<ObjectArray<Class>>>(OFFSET_OF_OBJECT_MEMBER(SynthesizedProxyClass,
-                                                                                     throws_));
+  ObjectArray<ObjectArray<Class> >* GetThrows()  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // Second static field.
+    return GetFieldObject<ObjectArray<ObjectArray<Class> > >(
+        MemberOffset(SFieldsOffset().Uint32Value() + sizeof(HeapReference<ObjectArray<Class>>)));
   }
 
  private:
