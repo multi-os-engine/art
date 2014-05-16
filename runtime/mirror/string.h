@@ -34,6 +34,8 @@ namespace mirror {
 // C++ mirror of java.lang.String
 class MANAGED String : public Object {
  public:
+  static constexpr size_t kVTableLength = 62;
+
   static MemberOffset CountOffset() {
     return OFFSET_OF_OBJECT_MEMBER(String, count_);
   }
@@ -162,8 +164,8 @@ class MANAGED StringClass : public Class {
  private:
   HeapReference<CharArray> ASCII_;
   HeapReference<Object> CASE_INSENSITIVE_ORDER_;
-  uint32_t REPLACEMENT_CHAR_;
   int64_t serialVersionUID_;
+  uint32_t REPLACEMENT_CHAR_;
   friend struct art::StringClassOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(StringClass);
 };

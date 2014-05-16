@@ -30,6 +30,10 @@
 #include "object_callbacks.h"
 
 namespace art {
+
+struct ClassClassOffsets;
+struct StringClassOffsets;
+
 namespace gc {
 namespace space {
   class ImageSpace;
@@ -395,6 +399,11 @@ class ClassLinker {
   // Special code to allocate an art method, use this instead of class->AllocObject.
   mirror::ArtMethod* AllocArtMethod(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  mirror::ObjectArray<mirror::Class>* GetClassRoots() {
+    DCHECK(class_roots_ != nullptr);
+    return class_roots_;
+  }
+
  private:
   const OatFile::OatMethod GetOatMethodFor(mirror::ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -438,7 +447,7 @@ class ClassLinker {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   uint32_t SizeOfClass(const DexFile& dex_file,
-                     const DexFile::ClassDef& dex_class_def);
+                       const DexFile::ClassDef& dex_class_def);
 
   void LoadClass(const DexFile& dex_file,
                  const DexFile::ClassDef& dex_class_def,
@@ -491,8 +500,9 @@ class ClassLinker {
                                                      mirror::Class* klass2)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool LinkClass(Thread* self, Handle<mirror::Class> klass,
-                 Handle<mirror::ObjectArray<mirror::Class>> interfaces)
+  bool LinkClass(Thread* self, const char* descriptor, Handle<mirror::Class> klass,
+                 Handle<mirror::ObjectArray<mirror::Class>> interfaces,
+                 mirror::Class** new_class)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool LinkSuperClass(Handle<mirror::Class> klass)
@@ -512,16 +522,15 @@ class ClassLinker {
                             Handle<mirror::ObjectArray<mirror::Class>> interfaces)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool LinkStaticFields(Handle<mirror::Class> klass)
+  bool LinkStaticFields(Handle<mirror::Class> klass, size_t* class_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool LinkInstanceFields(Handle<mirror::Class> klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  bool LinkFields(Handle<mirror::Class> klass, bool is_static)
+  bool LinkFields(Handle<mirror::Class> klass, bool is_static, size_t* class_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void LinkCode(Handle<mirror::ArtMethod> method, const OatFile::OatClass* oat_class,
                 const DexFile& dex_file, uint32_t dex_method_index, uint32_t method_index)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
 
   void CreateReferenceInstanceOffsets(Handle<mirror::Class> klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -591,9 +600,25 @@ class ClassLinker {
                                             size_t hash)
       SHARED_LOCKS_REQUIRED(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
 
+  mirror::Class* UpdateClass(const char* descriptor, mirror::Class* klass, size_t hash)
+      LOCKS_EXCLUDED(Locks::classlinker_classes_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   void MoveImageClassesToClassTable() LOCKS_EXCLUDED(Locks::classlinker_classes_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   mirror::Class* LookupClassFromImage(const char* descriptor)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  mirror::Class* EnsureResolved(Thread* self, const char* descriptor, mirror::Class* klass)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static uint32_t SizeWithVTableLength(uint32_t size, uint32_t vtable_len);
+
+  // Set multiple_of_8bytes to true when there are static fields so that imt/vtable won't
+  // affect the layout of static fields as done in SizeOfClass().
+  static uint32_t SizeOfImtAndVTable(uint32_t vtable_len, bool multiple_of_8bytes);
+
+  void FixupTemporaryDeclaringClass(mirror::Class* temp_class, mirror::Class* new_class)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // indexes into class_roots_.
@@ -643,11 +668,6 @@ class ClassLinker {
   void SetClassRoot(ClassRoot class_root, mirror::Class* klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  mirror::ObjectArray<mirror::Class>* GetClassRoots() {
-    DCHECK(class_roots_ != NULL);
-    return class_roots_;
-  }
-
   static const char* class_roots_descriptors_[];
 
   const char* GetClassRootDescriptor(ClassRoot class_root) {
@@ -679,6 +699,8 @@ class ClassLinker {
   const void* quick_to_interpreter_bridge_trampoline_;
 
   friend class ImageWriter;  // for GetClassRoots
+  friend struct art::ClassClassOffsets;
+  friend struct art::StringClassOffsets;
   FRIEND_TEST(ClassLinkerTest, ClassRootDescriptors);
   FRIEND_TEST(mirror::DexCacheTest, Open);
   FRIEND_TEST(ExceptionTest, FindExceptionHandler);

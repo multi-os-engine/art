@@ -519,6 +519,7 @@ struct ClassOffsets : public CheckOffsets<mirror::Class> {
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, primitive_type_),                "primitiveType"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_instance_offsets_),    "referenceInstanceOffsets"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_static_offsets_),      "referenceStaticOffsets"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, sfields_start_),                 "staticFieldsStart"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, status_),                        "status"));
   };
 };
@@ -574,22 +575,26 @@ struct ProxyOffsets : public CheckOffsets<mirror::Proxy> {
 
 struct ClassClassOffsets : public CheckOffsets<mirror::ClassClass> {
   ClassClassOffsets() : CheckOffsets<mirror::ClassClass>(true, "Ljava/lang/Class;") {
+    size_t tbl_size = ClassLinker::SizeOfImtAndVTable(mirror::Class::kVTableLength, true);
+
     // alphabetical 64-bit
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::ClassClass, serialVersionUID_), "serialVersionUID"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::ClassClass, serialVersionUID_) + tbl_size, "serialVersionUID"));
   };
 };
 
 struct StringClassOffsets : public CheckOffsets<mirror::StringClass> {
   StringClassOffsets() : CheckOffsets<mirror::StringClass>(true, "Ljava/lang/String;") {
-    // alphabetical references
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, ASCII_),                  "ASCII"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, CASE_INSENSITIVE_ORDER_), "CASE_INSENSITIVE_ORDER"));
+    size_t tbl_size = ClassLinker::SizeOfImtAndVTable(mirror::String::kVTableLength, true);
 
-    // alphabetical 32-bit
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, REPLACEMENT_CHAR_),       "REPLACEMENT_CHAR"));
+    // alphabetical references
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, ASCII_) + tbl_size,                  "ASCII"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, CASE_INSENSITIVE_ORDER_) + tbl_size, "CASE_INSENSITIVE_ORDER"));
 
     // alphabetical 64-bit
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, serialVersionUID_),       "serialVersionUID"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, serialVersionUID_) + tbl_size,       "serialVersionUID"));
+
+    // alphabetical 32-bit
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::StringClass, REPLACEMENT_CHAR_) + tbl_size,       "REPLACEMENT_CHAR"));
   };
 };
 
@@ -1089,6 +1094,37 @@ TEST_F(ClassLinkerTest, ClassRootDescriptors) {
     EXPECT_STREQ(klass->GetDescriptor().c_str(),
                  class_linker_->GetClassRootDescriptor(ClassLinker::ClassRoot(i))) << " i = " << i;
   }
+}
+
+TEST_F(ClassLinkerTest, ValidatePredefinedVTableLength) {
+  ScopedObjectAccess soa(Thread::Current());
+  NullHandle<mirror::ClassLoader> class_loader;
+  mirror::Class* c;
+  size_t size;
+
+  c = class_linker_->FindClass(soa.Self(), "Ljava/lang/Class;", class_loader);
+  size = mirror::Class::kVTableLength;
+  EXPECT_EQ((size_t)c->GetVTable()->GetLength(), size);
+
+  c = class_linker_->FindClass(soa.Self(), "Ljava/lang/Object;", class_loader);
+  size = mirror::Object::kVTableLength;
+  EXPECT_EQ((size_t)c->GetVTable()->GetLength(), size);
+
+  c = class_linker_->FindClass(soa.Self(), "Ljava/lang/String;", class_loader);
+  size = mirror::String::kVTableLength;
+  EXPECT_EQ((size_t)c->GetVTable()->GetLength(), size);
+
+  c = class_linker_->FindClass(soa.Self(), "Ljava/lang/DexCache;", class_loader);
+  size = mirror::DexCache::kVTableLength;
+  EXPECT_EQ((size_t)c->GetVTable()->GetLength(), size);
+
+  c = class_linker_->FindClass(soa.Self(), "Ljava/lang/reflect/ArtField;", class_loader);
+  size = mirror::ArtField::kVTableLength;
+  EXPECT_EQ((size_t)c->GetVTable()->GetLength(), size);
+
+  c = class_linker_->FindClass(soa.Self(), "Ljava/lang/reflect/ArtMethod;", class_loader);
+  size = mirror::ArtMethod::kVTableLength;
+  EXPECT_EQ((size_t)c->GetVTable()->GetLength(), size);
 }
 
 }  // namespace art

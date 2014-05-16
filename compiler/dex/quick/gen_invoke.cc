@@ -676,16 +676,33 @@ static int NextVCallInsn(CompilationUnit* cu, CallInfo* info,
     }
     case 1:  // Is "this" null? [use kArg1]
       cg->GenNullCheck(cg->TargetReg(kArg1), info->opt_flags);
-      // get this->klass_ [use kArg1, set kInvokeTgt]
+      // get this->klass_ [use kArg1, set kArg0]
       cg->LoadRefDisp(cg->TargetReg(kArg1), mirror::Object::ClassOffset().Int32Value(),
-                      cg->TargetReg(kInvokeTgt),
+                      cg->TargetReg(kArg0),
                       kNotVolatile);
       cg->MarkPossibleNullPointerException(info->opt_flags);
       break;
-    case 2:  // Get this->klass_->vtable [usr kInvokeTgt, set kInvokeTgt]
-      cg->LoadRefDisp(cg->TargetReg(kInvokeTgt), mirror::Class::VTableOffset().Int32Value(),
-                      cg->TargetReg(kInvokeTgt),
-                      kNotVolatile);
+    case 2:
+      if (Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+        // Get embedded vtable offset.
+        int32_t offset = sizeof(mirror::Class) +
+            (ClassLinker::kImtSize + method_idx) * sizeof(mirror::Class::DispatchTableEntry);
+        if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
+          // Load entry point from quick compiler to kInvokeTgt.
+          cg->LoadWordDisp(cg->TargetReg(kArg0), offset + 4,
+                           cg->TargetReg(kInvokeTgt));
+        }
+        // Load target method to kArg0.
+        cg->LoadRefDisp(cg->TargetReg(kArg0), offset,
+                        cg->TargetReg(kArg0),
+                        kNotVolatile);
+        return -1;
+      } else {
+        // Get this->klass_->vtable [use kArg0, set kInvokeTgt]
+        cg->LoadRefDisp(cg->TargetReg(kArg0), mirror::Class::VTableOffset().Int32Value(),
+                        cg->TargetReg(kInvokeTgt),
+                        kNotVolatile);
+      }
       break;
     case 3:  // Get target method [use kInvokeTgt, set kArg0]
       cg->LoadRefDisp(cg->TargetReg(kInvokeTgt),
@@ -734,17 +751,31 @@ static int NextInterfaceCallInsn(CompilationUnit* cu, CallInfo* info, int state,
     }
     case 2:  // Is "this" null? [use kArg1]
       cg->GenNullCheck(cg->TargetReg(kArg1), info->opt_flags);
-      // Get this->klass_ [use kArg1, set kInvokeTgt]
+      // Get this->klass_ [use kArg1, set kArg0]
       cg->LoadRefDisp(cg->TargetReg(kArg1), mirror::Object::ClassOffset().Int32Value(),
-                      cg->TargetReg(kInvokeTgt),
+                      cg->TargetReg(kArg0),
                       kNotVolatile);
       cg->MarkPossibleNullPointerException(info->opt_flags);
       break;
-    case 3:  // Get this->klass_->imtable [use kInvokeTgt, set kInvokeTgt]
-      // NOTE: native pointer.
-      cg->LoadRefDisp(cg->TargetReg(kInvokeTgt), mirror::Class::ImTableOffset().Int32Value(),
-                      cg->TargetReg(kInvokeTgt),
-                      kNotVolatile);
+    case 3:
+      if (Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+        int32_t offset = sizeof(mirror::Class) + (method_idx % ClassLinker::kImtSize) * sizeof(mirror::Class::DispatchTableEntry);
+        if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
+          // Load entry point from quick compiler to kInvokeTgt.
+          cg->LoadWordDisp(cg->TargetReg(kArg0), offset + 4,
+                           cg->TargetReg(kInvokeTgt));
+        }
+        // Load target method to kArg0.
+        cg->LoadRefDisp(cg->TargetReg(kArg0), offset,
+                        cg->TargetReg(kArg0),
+                        kNotVolatile);
+        return -1;
+      } else {
+        // Get this->klass_->imtable [use kArg0, set kInvokeTgt]
+        cg->LoadRefDisp(cg->TargetReg(kArg0), mirror::Class::ImTableOffset().Int32Value(),
+                        cg->TargetReg(kInvokeTgt),
+                        kNotVolatile);
+      }
       break;
     case 4:  // Get target method [use kInvokeTgt, set kArg0]
       // NOTE: native pointer.

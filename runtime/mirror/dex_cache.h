@@ -42,6 +42,8 @@ class MANAGED DexCacheClass : public Class {
 
 class MANAGED DexCache : public Object {
  public:
+  static constexpr size_t kVTableLength = 12;
+
   void Init(const DexFile* dex_file,
             String* location,
             ObjectArray<String>* strings,

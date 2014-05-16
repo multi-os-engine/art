@@ -1735,7 +1735,7 @@ TEST_F(StubTest, IMT) {
   // Sanity check: check that there is a conflict for List.contains in ArrayList.
 
   mirror::Class* arraylist_class = soa.Decode<mirror::Class*>(arraylist_jclass);
-  mirror::ArtMethod* m = arraylist_class->GetImTable()->Get(
+  mirror::ArtMethod* m = arraylist_class->GetEmbeddedImTableEntry(
       inf_contains->GetDexMethodIndex() % ClassLinker::kImtSize);
 
   if (!m->IsImtConflictMethod()) {

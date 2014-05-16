@@ -210,6 +210,36 @@ inline mirror::Class* ClassLinker::GetClassRoot(ClassRoot class_root)
   return klass;
 }
 
+inline uint32_t ClassLinker::SizeOfImtAndVTable(uint32_t vtable_len, bool multiple_of_8bytes) {
+  if (!Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+    return 0;
+  }
+
+  uint32_t dispatch_table_size = (kImtSize + vtable_len) *
+      sizeof(mirror::Class::DispatchTableEntry);
+  // Keep total table size multiple of 8 bytes so that it won't
+  // have any effect on the layout of static fields which
+  // we use to pre-calculate the class object size in SizeOfClass().
+  if (multiple_of_8bytes && dispatch_table_size % 8 != 0) {
+    CHECK_EQ(dispatch_table_size % 8, 4U);
+    dispatch_table_size += 4;
+  }
+  return dispatch_table_size;
+}
+
+inline uint32_t ClassLinker::SizeWithVTableLength(uint32_t size, uint32_t vtable_len) {
+  if (!Runtime::Current()->IsEmbeddedImtAndVTableEnabled()) {
+    return size;
+  }
+
+  if (size == sizeof(mirror::Class)) {
+    // No static fields.
+    return size + SizeOfImtAndVTable(vtable_len, false);
+  }
+
+  return size + SizeOfImtAndVTable(vtable_len, true);
+}
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_CLASS_LINKER_INL_H_
