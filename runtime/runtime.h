@@ -440,6 +440,10 @@ class Runtime {
     return verify_;
   }
 
+  bool IsEmbeddedImtAndVTableEnabled() const {
+    return false;
+  }
+
   bool RunningOnValgrind() const {
     return running_on_valgrind_;
   }
