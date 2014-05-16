@@ -46,7 +46,7 @@
 namespace art {
 namespace verifier {
 
-static const bool gDebugVerify = false;
+static constexpr bool gDebugVerify = false;
 // TODO: Add a constant to method_verifier to turn on verbose logging?
 
 void PcToRegisterLineTable::Init(RegisterTrackingMode mode, InstructionFlags* flags,
@@ -122,8 +122,8 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(mirror::Class* klass,
 }
 
 MethodVerifier::FailureKind MethodVerifier::VerifyClass(const DexFile* dex_file,
-                                                        Handle<mirror::DexCache>& dex_cache,
-                                                        Handle<mirror::ClassLoader>& class_loader,
+                                                        const Handle<mirror::DexCache>& dex_cache,
+                                                        const Handle<mirror::ClassLoader>& class_loader,
                                                         const DexFile::ClassDef* class_def,
                                                         bool allow_soft_failures,
                                                         std::string* error) {
@@ -233,8 +233,8 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(const DexFile* dex_file,
 
 MethodVerifier::FailureKind MethodVerifier::VerifyMethod(uint32_t method_idx,
                                                          const DexFile* dex_file,
-                                                         Handle<mirror::DexCache>& dex_cache,
-                                                         Handle<mirror::ClassLoader>& class_loader,
+                                                         const Handle<mirror::DexCache>& dex_cache,
+                                                         const Handle<mirror::ClassLoader>& class_loader,
                                                          const DexFile::ClassDef* class_def,
                                                          const DexFile::CodeItem* code_item,
                                                          mirror::ArtMethod* method,
@@ -278,8 +278,8 @@ MethodVerifier::FailureKind MethodVerifier::VerifyMethod(uint32_t method_idx,
 
 void MethodVerifier::VerifyMethodAndDump(std::ostream& os, uint32_t dex_method_idx,
                                          const DexFile* dex_file,
-                                         Handle<mirror::DexCache>& dex_cache,
-                                         Handle<mirror::ClassLoader>& class_loader,
+                                         const Handle<mirror::DexCache>& dex_cache,
+                                         const Handle<mirror::ClassLoader>& class_loader,
                                          const DexFile::ClassDef* class_def,
                                          const DexFile::CodeItem* code_item,
                                          mirror::ArtMethod* method,
@@ -292,8 +292,8 @@ void MethodVerifier::VerifyMethodAndDump(std::ostream& os, uint32_t dex_method_i
   verifier.Dump(os);
 }
 
-MethodVerifier::MethodVerifier(const DexFile* dex_file, Handle<mirror::DexCache>* dex_cache,
-                               Handle<mirror::ClassLoader>* class_loader,
+MethodVerifier::MethodVerifier(const DexFile* dex_file, const Handle<mirror::DexCache>* dex_cache,
+                               const Handle<mirror::ClassLoader>* class_loader,
                                const DexFile::ClassDef* class_def,
                                const DexFile::CodeItem* code_item, uint32_t dex_method_idx,
                                mirror::ArtMethod* method, uint32_t method_access_flags,
@@ -2626,8 +2626,17 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
     info_messages_ << "Rejecting opcode " << inst->DumpString(dex_file_);
     return false;
   } else if (have_pending_runtime_throw_failure_) {
+    if ((opcode_flags & Instruction::kThrow) == 0) {
+      // We do not have saved_line_. This will likely produce an error if the instruction
+      // is in a try-block (block below applies, then).
+      //
+      // As this will throw at runtime, just fake it.
+      saved_line_->CopyFromLine(work_line_.get());
+    }
     /* checking interpreter will throw, mark following code as unreachable */
     opcode_flags = Instruction::kThrow;
+    // Erase flag.
+    have_pending_runtime_throw_failure_ = false;
   }
   /*
    * If we didn't just set the result register, clear it out. This ensures that you can only use
