@@ -582,8 +582,20 @@ LIR* X86Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
         }
       }
     } else {
-      res = LoadConstantNoClobber(r_dest.GetLow(), val_lo);
-      LoadConstantNoClobber(r_dest.GetHigh(), val_hi);
+      if (r_dest.IsPair()) {
+        res = LoadConstantNoClobber(r_dest.GetLow(), val_lo);
+        LoadConstantNoClobber(r_dest.GetHigh(), val_hi);
+      } else {
+        // TODO(64) make int64_t value parameter of LoadConstantNoClobber
+        if (val_lo < 0) {
+          val_hi += 1;
+        }
+        res = LoadConstantNoClobber(r_dest, val_hi);
+        NewLIR2(kX86Sal64RI, r_dest.GetReg(), 32);
+        if (val_lo != 0) {
+          NewLIR2(kX86Add64RI, r_dest.GetReg(), val_lo);
+        }
+      }
     }
     return res;
 }
@@ -601,6 +613,8 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
     case kDouble:
       if (r_dest.IsFloat()) {
         opcode = is_array ? kX86MovsdRA : kX86MovsdRM;
+      } else if (!pair) {
+        opcode = is_array ? kX86Mov64RA  : kX86Mov64RM;
       } else {
         opcode = is_array ? kX86Mov32RA  : kX86Mov32RM;
       }
@@ -742,13 +756,10 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int
     case kDouble:
       if (r_src.IsFloat()) {
         opcode = is_array ? kX86MovsdAR : kX86MovsdMR;
+      } else if (!pair) {
+        opcode = is_array ? kX86Mov64AR  : kX86Mov64MR;
       } else {
-        if (Gen64Bit()) {
-          opcode = is_array ? kX86Mov64AR  : kX86Mov64MR;
-        } else {
-          // TODO(64): pair = true;
-          opcode = is_array ? kX86Mov32AR  : kX86Mov32MR;
-        }
+        opcode = is_array ? kX86Mov32AR  : kX86Mov32MR;
       }
       // TODO: double store is to unaligned address
       DCHECK_EQ((displacement & 0x3), 0);
