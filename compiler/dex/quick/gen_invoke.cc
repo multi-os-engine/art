@@ -448,8 +448,14 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
   } else {
     StoreValue(rl_method, rl_src);
   }
-  // If Method* has been promoted, explicitly flush
-  if (rl_method.location == kLocPhysReg) {
+  /*
+   * If 64-bit targets, explicitly flush 8 bytes of Method* to workaround an
+   * issue that rl_method occupies only 4 bytes, as rl_method is not a wide
+   * register.  Or if Method* has been promoted, explicitly flush.
+   * TODO.  After we can use rl_method as a wide register, we will drop
+   * cu_->target64.
+   */
+  if (cu_->target64 || rl_method.location == kLocPhysReg) {
     StoreWordDisp(TargetReg(kSp), 0, TargetReg(kArg0));
   }
 

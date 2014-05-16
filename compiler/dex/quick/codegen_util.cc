@@ -1054,7 +1054,8 @@ int Mir2Lir::ComputeFrameSize() {
                   + num_fp_spills_ * GetBytesPerFprSpillLocation(cu_->instruction_set)
                   + sizeof(uint32_t)  // Filler.
                   + (cu_->num_regs + cu_->num_outs) * sizeof(uint32_t)
-                  + GetNumBytesForCompilerTempSpillRegion();
+                  + GetNumBytesForCompilerTempSpillRegion()
+                  + (kPointerSize - sizeof(uint32_t));  // Method* may need extra bytes for 64-bit targets.
   /* Align and set */
   return RoundUp(size, kStackAlignment);
 }
