@@ -463,8 +463,7 @@ static inline mirror::ArtMethod* FindMethodFromCode(uint32_t method_idx,
     }
     case kInterface: {
       uint32_t imt_index = resolved_method->GetDexMethodIndex() % ClassLinker::kImtSize;
-      mirror::ObjectArray<mirror::ArtMethod>* imt_table = (*this_object)->GetClass()->GetImTable();
-      mirror::ArtMethod* imt_method = imt_table->Get(imt_index);
+      mirror::ArtMethod* imt_method = (*this_object)->GetClass()->GetEmbeddedImTableEntry(imt_index);
       if (!imt_method->IsImtConflictMethod()) {
         return imt_method;
       } else {

@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_MIRROR_PROXY_H_
 #define ART_RUNTIME_MIRROR_PROXY_H_
 
+#include "art_field-inl.h"
 #include "object.h"
 
 namespace art {
@@ -29,19 +30,13 @@ namespace mirror {
 // has the static fields used to implement reflection on proxy objects.
 class MANAGED SynthesizedProxyClass : public Class {
  public:
-  ObjectArray<Class>* GetInterfaces() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<ObjectArray<Class>>(OFFSET_OF_OBJECT_MEMBER(SynthesizedProxyClass,
-                                                                       interfaces_));
-  }
-
-  ObjectArray<ObjectArray<Class>>* GetThrows()  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<ObjectArray<ObjectArray<Class>>>(OFFSET_OF_OBJECT_MEMBER(SynthesizedProxyClass,
-                                                                                     throws_));
-  }
+  ObjectArray<Class>* GetInterfaces() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ObjectArray<ObjectArray<Class> >* GetThrows() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
-  HeapReference<ObjectArray<Class>> interfaces_;
-  HeapReference<ObjectArray<ObjectArray<Class>>> throws_;
+  // These static fields follow the embedded imt/vtable.
+  // HeapReference<ObjectArray<Class>> interfaces_;
+  // HeapReference<ObjectArray<ObjectArray<Class>>> throws_;
   DISALLOW_IMPLICIT_CONSTRUCTORS(SynthesizedProxyClass);
 };
 
