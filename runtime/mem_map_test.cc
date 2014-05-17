@@ -214,6 +214,7 @@ TEST_F(MemMapTest, MapAnonymousLow4GBRangeTooHigh) {
   ASSERT_EQ(nullptr, map.get());
   ASSERT_FALSE(error_msg.empty());
 }
+
 #endif
 
 }  // namespace art
