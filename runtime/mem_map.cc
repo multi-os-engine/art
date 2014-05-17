@@ -48,7 +48,7 @@ static std::ostream& operator<<(
 
 #if defined(__LP64__) && !defined(__x86_64__)
 // Where to start with low memory allocation.
-static constexpr uintptr_t LOW_MEM_START = kPageSize * 2;
+static constexpr uintptr_t LOW_MEM_START = 64 * KB;
 
 uintptr_t MemMap::next_mem_pos_ = LOW_MEM_START;   // first page to check for low-mem extent
 #endif
