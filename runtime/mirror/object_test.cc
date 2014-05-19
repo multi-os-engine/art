@@ -18,6 +18,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <memory>
 
 #include "array-inl.h"
 #include "art_field-inl.h"
@@ -36,7 +37,6 @@
 #include "object_array-inl.h"
 #include "handle_scope-inl.h"
 #include "string-inl.h"
-#include "UniquePtrCompat.h"
 
 namespace art {
 namespace mirror {
@@ -48,7 +48,7 @@ class ObjectTest : public CommonRuntimeTest {
                     const char* utf16_expected_le,
                     int32_t expected_hash)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    UniquePtr<uint16_t[]> utf16_expected(new uint16_t[expected_utf16_length]);
+    std::unique_ptr<uint16_t[]> utf16_expected(new uint16_t[expected_utf16_length]);
     for (int32_t i = 0; i < expected_utf16_length; i++) {
       uint16_t ch = (((utf16_expected_le[i*2 + 0] & 0xff) << 8) |
                      ((utf16_expected_le[i*2 + 1] & 0xff) << 0));

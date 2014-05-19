@@ -260,7 +260,7 @@ class FreeListSpace FINAL : public LargeObjectSpace {
 
   // There is not footer for any allocations at the end of the space, so we keep track of how much
   // free space there is at the end manually.
-  UniquePtr<MemMap> mem_map_;
+  std::unique_ptr<MemMap> mem_map_;
   Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   size_t free_end_ GUARDED_BY(lock_);
   FreeBlocks free_blocks_ GUARDED_BY(lock_);
