@@ -463,7 +463,10 @@ inline void MarkSweep::MarkObject(Object* obj) {
 
 void MarkSweep::MarkRootParallelCallback(Object** root, void* arg, uint32_t /*thread_id*/,
                                          RootType /*root_type*/) {
-  reinterpret_cast<MarkSweep*>(arg)->MarkObjectNonNullParallel(*root);
+  Object* obj = *root;
+  if (obj != nullptr) {
+    reinterpret_cast<MarkSweep*>(arg)->MarkObjectNonNullParallel(obj);
+  }
 }
 
 void MarkSweep::VerifyRootMarked(Object** root, void* arg, uint32_t /*thread_id*/,
@@ -473,7 +476,10 @@ void MarkSweep::VerifyRootMarked(Object** root, void* arg, uint32_t /*thread_id*
 
 void MarkSweep::MarkRootCallback(Object** root, void* arg, uint32_t /*thread_id*/,
                                  RootType /*root_type*/) {
-  reinterpret_cast<MarkSweep*>(arg)->MarkObjectNonNull(*root);
+  Object* obj = *root;
+  if (obj != nullptr) {
+    reinterpret_cast<MarkSweep*>(arg)->MarkObjectNonNull(obj);
+  }
 }
 
 void MarkSweep::VerifyRootCallback(const Object* root, void* arg, size_t vreg,

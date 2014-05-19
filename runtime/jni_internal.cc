@@ -795,6 +795,7 @@ class JNI {
     if (obj == nullptr) {
       return;
     }
+    ScopedObjectAccess soa(env);
     IndirectReferenceTable& locals = reinterpret_cast<JNIEnvExt*>(env)->locals;
 
     uint32_t cookie = reinterpret_cast<JNIEnvExt*>(env)->local_ref_cookie;
