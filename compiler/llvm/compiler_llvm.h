@@ -23,7 +23,7 @@
 #include "instruction_set.h"
 #include "mirror/object.h"
 
-#include <UniquePtr.h>
+#include <std::unique_ptr.h>
 
 #include <string>
 #include <utility>

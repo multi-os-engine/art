@@ -28,7 +28,7 @@
 #include "mem_map.h"
 #include "modifiers.h"
 #include "safe_map.h"
-#include "UniquePtrCompat.h"
+#include <memory>
 
 namespace art {
 
@@ -870,7 +870,7 @@ class DexFile {
   const uint32_t location_checksum_;
 
   // Manages the underlying memory allocation.
-  UniquePtr<MemMap> mem_map_;
+  std::unique_ptr<MemMap> mem_map_;
 
   // Points to the header section.
   const Header* const header_;

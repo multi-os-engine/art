@@ -30,7 +30,7 @@
 #include "mirror/object_array-inl.h"
 #include "space_bitmap-inl.h"
 #include "thread.h"
-#include "UniquePtrCompat.h"
+#include <memory>
 
 using ::art::mirror::Object;
 

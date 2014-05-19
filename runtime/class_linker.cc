@@ -19,8 +19,8 @@
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/stat.h>
-
 #include <deque>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -62,7 +62,6 @@
 #include "scoped_thread_state_change.h"
 #include "handle_scope-inl.h"
 #include "thread.h"
-#include "UniquePtrCompat.h"
 #include "utils.h"
 #include "verifier/method_verifier.h"
 #include "well_known_classes.h"
@@ -647,7 +646,7 @@ const DexFile* ClassLinker::FindDexFileInOatLocation(const char* dex_location,
                                                      uint32_t dex_location_checksum,
                                                      const char* oat_location,
                                                      std::string* error_msg) {
-  UniquePtr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, NULL,
+  std::unique_ptr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, NULL,
                                             !Runtime::Current()->IsCompiler(),
                                             error_msg));
   if (oat_file.get() == nullptr) {
@@ -745,7 +744,7 @@ class ScopedFlock {
   }
 
  private:
-  UniquePtr<File> file_;
+  std::unique_ptr<File> file_;
 
   DISALLOW_COPY_AND_ASSIGN(ScopedFlock);
 };
@@ -784,7 +783,7 @@ const DexFile* ClassLinker::FindOrCreateOatFileForDexLocation(const char* dex_lo
     error_msgs->push_back(error_msg);
     return nullptr;
   }
-  UniquePtr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, NULL,
+  std::unique_ptr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, NULL,
                                             !Runtime::Current()->IsCompiler(),
                                             &error_msg));
   if (oat_file.get() == nullptr) {
@@ -829,7 +828,7 @@ bool ClassLinker::VerifyOatFileChecksums(const OatFile* oat_file,
     image_oat_checksum = image_header.GetOatChecksum();
     image_oat_data_begin = reinterpret_cast<uintptr_t>(image_header.GetOatDataBegin());
   } else {
-    UniquePtr<ImageHeader> image_header(gc::space::ImageSpace::ReadImageHeaderOrDie(
+    std::unique_ptr<ImageHeader> image_header(gc::space::ImageSpace::ReadImageHeaderOrDie(
         image_space->GetImageLocation().c_str(), instruction_set));
     image_oat_checksum = image_header->GetOatChecksum();
     image_oat_data_begin = reinterpret_cast<uintptr_t>(image_header->GetOatDataBegin());
@@ -878,7 +877,7 @@ const DexFile* ClassLinker::VerifyAndOpenDexFileFromOatFile(const std::string& o
                                                             const char* dex_location,
                                                             std::string* error_msg,
                                                             bool* open_failed) {
-  UniquePtr<const OatFile> oat_file(FindOatFileFromOatLocation(oat_file_location, error_msg));
+  std::unique_ptr<const OatFile> oat_file(FindOatFileFromOatLocation(oat_file_location, error_msg));
   if (oat_file.get() == nullptr) {
     *open_failed = true;
     return nullptr;

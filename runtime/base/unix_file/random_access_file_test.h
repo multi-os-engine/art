@@ -22,7 +22,7 @@
 #include <string>
 
 #include "common_runtime_test.h"
-#include "UniquePtrCompat.h"
+#include <memory>
 
 namespace unix_file {
 
@@ -62,7 +62,7 @@ class RandomAccessFileTest : public testing::Test {
 
   void TestRead() {
     char buf[256];
-    UniquePtr<RandomAccessFile> file(MakeTestFile());
+    std::unique_ptr<RandomAccessFile> file(MakeTestFile());
 
     // Reading from the start of an empty file gets you zero bytes, however many
     // you ask for.
@@ -77,7 +77,7 @@ class RandomAccessFileTest : public testing::Test {
 
   void TestReadContent(const std::string& content, RandomAccessFile* file) {
     const int buf_size = content.size() + 10;
-    UniquePtr<char> buf(new char[buf_size]);
+    std::unique_ptr<char> buf(new char[buf_size]);
     // Can't read from a negative offset.
     ASSERT_EQ(-EINVAL, file->Read(buf.get(), 0, -123));
 
@@ -107,7 +107,7 @@ class RandomAccessFileTest : public testing::Test {
 
   void TestSetLength() {
     const std::string content("hello");
-    UniquePtr<RandomAccessFile> file(MakeTestFile());
+    std::unique_ptr<RandomAccessFile> file(MakeTestFile());
     ASSERT_EQ(content.size(), static_cast<uint64_t>(file->Write(content.data(), content.size(), 0)));
     ASSERT_EQ(content.size(), static_cast<uint64_t>(file->GetLength()));
 
@@ -132,7 +132,7 @@ class RandomAccessFileTest : public testing::Test {
 
   void TestWrite() {
     const std::string content("hello");
-    UniquePtr<RandomAccessFile> file(MakeTestFile());
+    std::unique_ptr<RandomAccessFile> file(MakeTestFile());
 
     // Can't write to a negative offset.
     ASSERT_EQ(-EINVAL, file->Write(content.data(), 0, -123));

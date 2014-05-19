@@ -28,7 +28,7 @@
 #include "runtime_support_llvm_func.h"
 #include "safe_map.h"
 
-#include <UniquePtr.h>
+#include <std::unique_ptr.h>
 #include <string>
 #include <vector>
 
@@ -106,12 +106,12 @@ class LlvmCompilationUnit {
   const CompilerLLVM* compiler_llvm_;
   const size_t cunit_id_;
 
-  UniquePtr< ::llvm::LLVMContext> context_;
-  UniquePtr<IRBuilder> irb_;
-  UniquePtr<RuntimeSupportBuilder> runtime_support_;
+  std::unique_ptr< ::llvm::LLVMContext> context_;
+  std::unique_ptr<IRBuilder> irb_;
+  std::unique_ptr<RuntimeSupportBuilder> runtime_support_;
   ::llvm::Module* module_;  // Managed by context_
-  UniquePtr<IntrinsicHelper> intrinsic_helper_;
-  UniquePtr<LLVMInfo> llvm_info_;
+  std::unique_ptr<IntrinsicHelper> intrinsic_helper_;
+  std::unique_ptr<LLVMInfo> llvm_info_;
   CompilerDriver* driver_;
   DexCompilationUnit* dex_compilation_unit_;
 

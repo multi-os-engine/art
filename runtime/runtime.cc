@@ -72,7 +72,7 @@
 #include "trace.h"
 #include "transaction.h"
 #include "profiler.h"
-#include "UniquePtrCompat.h"
+#include <memory>
 #include "verifier/method_verifier.h"
 #include "well_known_classes.h"
 
@@ -502,7 +502,7 @@ void Runtime::StartDaemonThreads() {
 bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   CHECK_EQ(sysconf(_SC_PAGE_SIZE), kPageSize);
 
-  UniquePtr<ParsedOptions> options(ParsedOptions::Create(raw_options, ignore_unrecognized));
+  std::unique_ptr<ParsedOptions> options(ParsedOptions::Create(raw_options, ignore_unrecognized));
   if (options.get() == NULL) {
     LOG(ERROR) << "Failed to parse options";
     return false;

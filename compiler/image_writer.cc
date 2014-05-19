@@ -52,7 +52,7 @@
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
 #include "handle_scope-inl.h"
-#include "UniquePtrCompat.h"
+#include <memory>
 #include "utils.h"
 
 using ::art::mirror::ArtField;
@@ -77,7 +77,7 @@ bool ImageWriter::Write(const std::string& image_filename,
 
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
 
-  UniquePtr<File> oat_file(OS::OpenFileReadWrite(oat_filename.c_str()));
+  std::unique_ptr<File> oat_file(OS::OpenFileReadWrite(oat_filename.c_str()));
   if (oat_file.get() == NULL) {
     LOG(ERROR) << "Failed to open oat file " << oat_filename << " for " << oat_location;
     return false;
@@ -141,7 +141,7 @@ bool ImageWriter::Write(const std::string& image_filename,
   PatchOatCodeAndMethods();
   Thread::Current()->TransitionFromRunnableToSuspended(kNative);
 
-  UniquePtr<File> image_file(OS::CreateEmptyFile(image_filename.c_str()));
+  std::unique_ptr<File> image_file(OS::CreateEmptyFile(image_filename.c_str()));
   ImageHeader* image_header = reinterpret_cast<ImageHeader*>(image_->Begin());
   if (image_file.get() == NULL) {
     LOG(ERROR) << "Failed to open image file " << image_filename;
