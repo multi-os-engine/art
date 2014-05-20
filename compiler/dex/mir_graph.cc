@@ -543,7 +543,7 @@ BasicBlock* MIRGraph::ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffse
   new_block->start_offset = insn->offset;
   cur_block->fall_through = new_block->id;
   new_block->predecessors->Insert(cur_block->id);
-  MIR* new_insn = static_cast<MIR*>(arena_->Alloc(sizeof(MIR), kArenaAllocMIR));
+  MIR* new_insn = NewMIR();
   *new_insn = *insn;
   insn->dalvikInsn.opcode =
       static_cast<Instruction::Code>(kMirOpCheck);
@@ -629,7 +629,7 @@ void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_
 
   /* Parse all instructions and put them into containing basic blocks */
   while (code_ptr < code_end) {
-    MIR *insn = static_cast<MIR *>(arena_->Alloc(sizeof(MIR), kArenaAllocMIR));
+    MIR *insn = NewMIR();
     insn->offset = current_offset_;
     insn->m_unit_index = current_method_;
     int width = ParseInsn(code_ptr, &insn->dalvikInsn);
@@ -1240,10 +1240,16 @@ CallInfo* MIRGraph::NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type,
   return info;
 }
 
+// Allocate a new MIR.
+MIR* MIRGraph::NewMIR() {
+  MIR* mir = new (arena_) MIR();
+  return mir;
+}
+
 // Allocate a new basic block.
 BasicBlock* MIRGraph::NewMemBB(BBType block_type, int block_id) {
-  BasicBlock* bb = static_cast<BasicBlock*>(arena_->Alloc(sizeof(BasicBlock),
-                                                          kArenaAllocBB));
+  BasicBlock* bb = new(arena_) BasicBlock();
+
   bb->block_type = block_type;
   bb->id = block_id;
   // TUNING: better estimate of the exit block predecessors?

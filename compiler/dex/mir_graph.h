@@ -261,6 +261,10 @@ struct MIR {
     uint32_t vC;
     uint32_t arg[5];         /* vC/D/E/F/G in invoke or filled-new-array */
     Instruction::Code opcode;
+
+    explicit DecodedInstruction()
+        : vA(0), vB(0), vB_wide(0), vC(0), opcode(Instruction::NOP) {
+    }
   } dalvikInsn;
 
   uint16_t width;                 // Note: width can include switch table or fill array data.
@@ -285,6 +289,16 @@ struct MIR {
     // INVOKE data index, points to MIRGraph::method_lowering_infos_.
     uint32_t method_lowering_info;
   } meta;
+
+  explicit MIR():width(0), offset(0), optimization_flags(0), m_unit_index(0),
+    next(nullptr), ssa_rep(nullptr) {
+    memset(&meta, 0, sizeof(meta));
+  }
+
+  static void* operator new(size_t size, ArenaAllocator* arena) {
+    return arena->Alloc(sizeof(MIR), kArenaAllocMIR);
+  }
+  static void operator delete(void* p) {}  // Nop.
 };
 
 struct SuccessorBlockInfo;
@@ -329,6 +343,11 @@ struct BasicBlock {
    * @return Returns the following MIR if one can be found.
    */
   MIR* GetNextUnconditionalMir(MIRGraph* mir_graph, MIR* current);
+
+  static void* operator new(size_t size, ArenaAllocator* arena) {
+    return arena->Alloc(sizeof(BasicBlock), kArenaAllocBB);
+  }
+  static void operator delete(void* p) {}  // Nop.
 };
 
 /*
@@ -836,6 +855,7 @@ class MIRGraph {
   void DumpMIRGraph();
   CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range);
   BasicBlock* NewMemBB(BBType block_type, int block_id);
+  MIR* NewMIR();
   MIR* AdvanceMIR(BasicBlock** p_bb, MIR* mir);
   BasicBlock* NextDominatedBlock(BasicBlock* bb);
   bool LayoutBlocks(BasicBlock* bb);

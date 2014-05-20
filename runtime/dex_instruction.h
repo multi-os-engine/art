@@ -551,7 +551,6 @@ std::ostream& operator<<(std::ostream& os, const Instruction::Code& code);
 std::ostream& operator<<(std::ostream& os, const Instruction::Format& format);
 std::ostream& operator<<(std::ostream& os, const Instruction::Flags& flags);
 std::ostream& operator<<(std::ostream& os, const Instruction::VerifyFlag& vflags);
-
 }  // namespace art
 
 #endif  // ART_RUNTIME_DEX_INSTRUCTION_H_
