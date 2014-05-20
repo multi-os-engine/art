@@ -165,7 +165,7 @@ class BaseMutex {
  public:
   bool HasEverContended() const {
     if (kLogLockContentions) {
-      return contetion_log_data_->contention_count > 0;
+      return contetion_log_data_->contention_count.LoadSequentiallyConsistent() > 0;
     }
     return false;
   }

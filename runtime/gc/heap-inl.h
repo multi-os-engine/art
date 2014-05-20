@@ -279,7 +279,7 @@ inline bool Heap::ShouldAllocLargeObject(mirror::Class* c, size_t byte_count) co
 
 template <bool kGrow>
 inline bool Heap::IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t alloc_size) {
-  size_t new_footprint = num_bytes_allocated_ + alloc_size;
+  size_t new_footprint = num_bytes_allocated_.LoadSequentiallyConsistent() + alloc_size;
   if (UNLIKELY(new_footprint > max_allowed_footprint_)) {
     if (UNLIKELY(new_footprint > growth_limit_)) {
       return true;

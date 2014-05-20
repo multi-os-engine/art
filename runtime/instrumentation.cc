@@ -522,7 +522,7 @@ void Instrumentation::SetEntrypointsInstrumented(bool instrumented) {
 void Instrumentation::InstrumentQuickAllocEntryPoints() {
   // TODO: the read of quick_alloc_entry_points_instrumentation_counter_ is racey and this code
   //       should be guarded by a lock.
-  DCHECK_GE(quick_alloc_entry_points_instrumentation_counter_.Load(), 0);
+  DCHECK_GE(quick_alloc_entry_points_instrumentation_counter_.LoadSequentiallyConsistent(), 0);
   const bool enable_instrumentation =
       quick_alloc_entry_points_instrumentation_counter_.FetchAndAdd(1) == 0;
   if (enable_instrumentation) {
@@ -533,7 +533,7 @@ void Instrumentation::InstrumentQuickAllocEntryPoints() {
 void Instrumentation::UninstrumentQuickAllocEntryPoints() {
   // TODO: the read of quick_alloc_entry_points_instrumentation_counter_ is racey and this code
   //       should be guarded by a lock.
-  DCHECK_GT(quick_alloc_entry_points_instrumentation_counter_.Load(), 0);
+  DCHECK_GT(quick_alloc_entry_points_instrumentation_counter_.LoadSequentiallyConsistent(), 0);
   const bool disable_instrumentation =
       quick_alloc_entry_points_instrumentation_counter_.FetchAndSub(1) == 1;
   if (disable_instrumentation) {
