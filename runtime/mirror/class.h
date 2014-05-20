@@ -375,11 +375,9 @@ class MANAGED Class : public Object {
 
   bool IsThrowableClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   bool IsArtFieldClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  bool IsArtMethodClass();
+  bool IsArtMethodClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static MemberOffset ComponentTypeOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Class, component_type_);
