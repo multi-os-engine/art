@@ -19,6 +19,10 @@
 #include <inttypes.h>
 #include <backtrace/BacktraceMap.h>
 
+#ifdef ART_TARGET
+#include <sys/auxv.h>
+#endif
+
 #include "UniquePtrCompat.h"
 #include "base/stringprintf.h"
 #include "ScopedFd.h"
@@ -47,10 +51,57 @@ static std::ostream& operator<<(
 }
 
 #if defined(__LP64__) && !defined(__x86_64__)
-// Where to start with low memory allocation. The first 64KB is protected by SELinux.
+// The regular start of memory allocations. The first 64KB is protected by SELinux.
 static constexpr uintptr_t LOW_MEM_START = 64 * KB;
 
-uintptr_t MemMap::next_mem_pos_ = LOW_MEM_START;   // first page to check for low-mem extent
+// Generate random starting position.
+// To not interfere with image position, take the image's address and only place it below. Current
+// formula (sketch):
+//
+// ART_BASE_ADDR      = 0001XXXXXXXXXXXXXXX
+// ----------------------------------------
+//                    = 0000111111111111111
+// & ~(kPageSize - 1) =~0000000000000001111
+// ----------------------------------------
+// mask               = 0000111111111110000
+// & random data      = YYYYYYYYYYYYYYYYYYY
+// -----------------------------------
+// tmp                = 0000YYYYYYYYYYY0000
+// + LOW_MEM_START    = 0000000000001000000
+// --------------------------------------
+// start
+//
+// On the host, we do not have auxv. There, simply start with low_mem_start.
+//
+#ifdef ART_TARGET
+uintptr_t CreateStartPos(uint64_t input) {
+  CHECK_NE(0, ART_BASE_ADDRESS);
+
+  // Start with all bits below highest bit in ART_BASE_ADDRESS.
+  size_t leading_zeros = CLZ(static_cast<uint32_t>(ART_BASE_ADDRESS));
+  uintptr_t mask = (1 << (31 - leading_zeros)) - 1;
+
+  // Lowest (usually 12) bits are not used, as aligned by page size.
+  mask &= ~(kPageSize - 1);
+
+  // Mask input data.
+  return (input & mask) + LOW_MEM_START;
+}
+#endif
+
+static uintptr_t GenerateRandomNextMemPos() {
+#ifdef ART_TARGET
+  uint8_t* random_data = reinterpret_cast<uint8_t*>(getauxval(AT_RANDOM));
+  // The lower 8B are taken for the stack guard. Use the upper 8B (with mask).
+  return CreateStartPos(*reinterpret_cast<size_t*>(random_data + 8));
+#else
+  // No auxv on host.
+  return LOW_MEM_START;
+#endif
+}
+
+// Initialize linear scan to random position.
+uintptr_t MemMap::next_mem_pos_ = GenerateRandomNextMemPos();
 #endif
 
 static bool CheckMapRequest(byte* expected_ptr, void* actual_ptr, size_t byte_count,
