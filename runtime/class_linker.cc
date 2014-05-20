@@ -3917,20 +3917,20 @@ bool ClassLinker::LinkFields(const Handle<mirror::Class>& klass, bool is_static)
   } else {
     mirror::Class* super_class = klass->GetSuperClass();
     if (super_class != NULL) {
-      CHECK(super_class->IsResolved());
+      CHECK(super_class->IsResolved()) << PrettyClass(klass.Get()) << " " << PrettyClass(super_class);
       field_offset = MemberOffset(super_class->GetObjectSize());
     }
     size = field_offset.Uint32Value();
   }
 
-  CHECK_EQ(num_fields == 0, fields == NULL);
+  CHECK_EQ(num_fields == 0, fields == NULL) << PrettyClass(klass.Get());
 
   // we want a relatively stable order so that adding new fields
   // minimizes disruption of C++ version such as Class and Method.
   std::deque<mirror::ArtField*> grouped_and_sorted_fields;
   for (size_t i = 0; i < num_fields; i++) {
     mirror::ArtField* f = fields->Get(i);
-    CHECK(f != NULL);
+    CHECK(f != NULL) << PrettyClass(klass.Get());
     grouped_and_sorted_fields.push_back(f);
   }
   std::sort(grouped_and_sorted_fields.begin(), grouped_and_sorted_fields.end(),
@@ -3962,7 +3962,7 @@ bool ClassLinker::LinkFields(const Handle<mirror::Class>& klass, bool is_static)
       mirror::ArtField* field = grouped_and_sorted_fields[i];
       FieldHelper fh(field);
       Primitive::Type type = fh.GetTypeAsPrimitiveType();
-      CHECK(type != Primitive::kPrimNot);  // should only be working on primitive types
+      CHECK(type != Primitive::kPrimNot) << PrettyField(field);  // should only be working on primitive types
       if (type == Primitive::kPrimLong || type == Primitive::kPrimDouble) {
         continue;
       }
@@ -3978,13 +3978,14 @@ bool ClassLinker::LinkFields(const Handle<mirror::Class>& klass, bool is_static)
 
   // Alignment is good, shuffle any double-wide fields forward, and
   // finish assigning field offsets to all fields.
-  DCHECK(current_field == num_fields || IsAligned<8>(field_offset.Uint32Value()));
+  DCHECK(current_field == num_fields || IsAligned<8>(field_offset.Uint32Value()))
+      << PrettyClass(klass.Get());
   while (!grouped_and_sorted_fields.empty()) {
     mirror::ArtField* field = grouped_and_sorted_fields.front();
     grouped_and_sorted_fields.pop_front();
     FieldHelper fh(field);
     Primitive::Type type = fh.GetTypeAsPrimitiveType();
-    CHECK(type != Primitive::kPrimNot);  // should only be working on primitive types
+    CHECK(type != Primitive::kPrimNot) << PrettyField(field);  // should only be working on primitive types
     fields->Set<false>(current_field, field);
     field->SetOffset(field_offset);
     field_offset = MemberOffset(field_offset.Uint32Value() +
@@ -3998,9 +3999,9 @@ bool ClassLinker::LinkFields(const Handle<mirror::Class>& klass, bool is_static)
   if (!is_static && "Ljava/lang/ref/Reference;" == klass->GetDescriptor()) {
     // We know there are no non-reference fields in the Reference classes, and we know
     // that 'referent' is alphabetically last, so this is easy...
-    CHECK_EQ(num_reference_fields, num_fields);
+    CHECK_EQ(num_reference_fields, num_fields) << PrettyClass(klass.Get());
     FieldHelper fh(fields->Get(num_fields - 1));
-    CHECK_STREQ(fh.GetName(), "referent");
+    CHECK_STREQ(fh.GetName(), "referent") << PrettyClass(klass.Get());
     --num_reference_fields;
   }
 
@@ -4027,14 +4028,14 @@ bool ClassLinker::LinkFields(const Handle<mirror::Class>& klass, bool is_static)
       if (is_primitive) {
         if (!seen_non_ref) {
           seen_non_ref = true;
-          DCHECK_EQ(num_reference_fields, i);
+          DCHECK_EQ(num_reference_fields, i) << PrettyField(field);
         }
       } else {
-        DCHECK(!seen_non_ref);
+        DCHECK(!seen_non_ref) << PrettyField(field);
       }
     }
     if (!seen_non_ref) {
-      DCHECK_EQ(num_fields, num_reference_fields);
+      DCHECK_EQ(num_fields, num_reference_fields) << PrettyClass(klass.Get());
     }
   }
   size = field_offset.Uint32Value();
@@ -4049,7 +4050,7 @@ bool ClassLinker::LinkFields(const Handle<mirror::Class>& klass, bool is_static)
       size_t previous_size = klass->GetObjectSize();
       if (previous_size != 0) {
         // Make sure that we didn't originally have an incorrect size.
-        CHECK_EQ(previous_size, size);
+        CHECK_EQ(previous_size, size) << klass->GetDescriptor();
       }
       klass->SetObjectSize(size);
     }
