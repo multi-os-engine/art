@@ -40,10 +40,10 @@ struct descriptor_table_entry_t {
 
 namespace art {
 
-static Mutex modify_ldt_lock("modify_ldt lock");
+Mutex *modify_ldt_lock = nullptr;
 
 void Thread::InitCpu() {
-  MutexLock mu(Thread::Current(), modify_ldt_lock);
+  MutexLock mu(Thread::Current(), *modify_ldt_lock);
 
   const uintptr_t base = reinterpret_cast<uintptr_t>(this);
   const size_t limit = kPageSize;
@@ -138,7 +138,7 @@ void Thread::InitCpu() {
 }
 
 void Thread::CleanupCpu() {
-  MutexLock mu(Thread::Current(), modify_ldt_lock);
+  MutexLock mu(Thread::Current(), *modify_ldt_lock);
 
   // Sanity check that reads from %fs point to this Thread*.
   Thread* self_check;

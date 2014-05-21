@@ -29,6 +29,9 @@
 
 namespace art {
 
+#if defined(__i386__)
+extern Mutex* modify_ldt_lock;
+#endif
 Mutex* Locks::abort_lock_ = nullptr;
 Mutex* Locks::breakpoint_lock_ = nullptr;
 ReaderWriterMutex* Locks::classlinker_classes_lock_ = nullptr;
@@ -813,6 +816,9 @@ void ConditionVariable::TimedWait(Thread* self, int64_t ms, int32_t ns) {
 void Locks::Init() {
   if (logging_lock_ != nullptr) {
     // Already initialized.
+#if defined(__i386__)
+    DCHECK(modify_ldt_lock != nullptr);
+#endif
     DCHECK(abort_lock_ != nullptr);
     DCHECK(breakpoint_lock_ != nullptr);
     DCHECK(classlinker_classes_lock_ != nullptr);
@@ -827,6 +833,9 @@ void Locks::Init() {
     DCHECK(intern_table_lock_ != nullptr);
   } else {
     logging_lock_ = new Mutex("logging lock", kLoggingLock, true);
+#if defined(__i386__)
+    modify_ldt_lock = new Mutex("modify_ldt lock");
+#endif
     abort_lock_ = new Mutex("abort lock", kAbortLock, true);
 
     DCHECK(breakpoint_lock_ == nullptr);
