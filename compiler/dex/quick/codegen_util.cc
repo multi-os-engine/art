@@ -364,6 +364,18 @@ LIR* Mir2Lir::ScanLiteralPoolWide(LIR* data_target, int val_lo, int val_hi) {
   return NULL;
 }
 
+/* Search the existing constants in the literal pool for an exact method match */
+LIR* Mir2Lir::ScanLiteralPoolMethod(LIR* data_target, const MethodReference& method) {
+  while (data_target) {
+    if (static_cast<uint32_t>(data_target->operands[0]) == method.dex_method_index &&
+        UnwrapPointer(data_target->operands[1]) == method.dex_file) {
+      return data_target;
+    }
+    data_target = data_target->next;
+  }
+  return nullptr;
+}
+
 /*
  * The following are building blocks to insert constants into the pool or
  * instruction streams.
@@ -1143,12 +1155,14 @@ void Mir2Lir::AddSlowPath(LIRSlowPath* slowpath) {
 
 void Mir2Lir::LoadCodeAddress(const MethodReference& target_method, InvokeType type,
                               SpecialTargetRegister symbolic_reg) {
-  int target_method_idx = target_method.dex_method_index;
-  LIR* data_target = ScanLiteralPool(code_literal_list_, target_method_idx, 0);
+  DCHECK(type == kStatic || type == kDirect);
+  LIR* data_target = ScanLiteralPoolMethod(code_literal_list_, target_method);
   if (data_target == NULL) {
-    data_target = AddWordData(&code_literal_list_, target_method_idx);
+    data_target = AddWordData(&code_literal_list_, target_method.dex_method_index);
     data_target->operands[1] = WrapPointer(const_cast<DexFile*>(target_method.dex_file));
     data_target->operands[2] = type;
+  } else {
+    DCHECK_EQ(static_cast<InvokeType>(data_target->operands[2]), type);
   }
   LIR* load_pc_rel = OpPcRelLoad(TargetReg(symbolic_reg), data_target);
   AppendLIR(load_pc_rel);
@@ -1157,12 +1171,14 @@ void Mir2Lir::LoadCodeAddress(const MethodReference& target_method, InvokeType t
 
 void Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeType type,
                                 SpecialTargetRegister symbolic_reg) {
-  int target_method_idx = target_method.dex_method_index;
-  LIR* data_target = ScanLiteralPool(method_literal_list_, target_method_idx, 0);
+  DCHECK(type == kStatic || type == kDirect);
+  LIR* data_target = ScanLiteralPoolMethod(method_literal_list_, target_method);
   if (data_target == NULL) {
-    data_target = AddWordData(&method_literal_list_, target_method_idx);
+    data_target = AddWordData(&method_literal_list_, target_method.dex_method_index);
     data_target->operands[1] = WrapPointer(const_cast<DexFile*>(target_method.dex_file));
     data_target->operands[2] = type;
+  } else {
+    DCHECK_EQ(static_cast<InvokeType>(data_target->operands[2]), type);
   }
   LIR* load_pc_rel = OpPcRelLoad(TargetReg(symbolic_reg), data_target);
   AppendLIR(load_pc_rel);

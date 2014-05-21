@@ -544,12 +544,12 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
           cg->LoadConstant(cg->TargetReg(kInvokeTgt), direct_code);
         }
       } else if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
-        cg->LoadCodeAddress(target_method, type, kInvokeTgt);
+        cg->LoadCodeAddress(target_method, info->type, kInvokeTgt);
       }
       if (direct_method != static_cast<uintptr_t>(-1)) {
         cg->LoadConstant(cg->TargetReg(kArg0), direct_method);
       } else {
-        cg->LoadMethodAddress(target_method, type, kArg0);
+        cg->LoadMethodAddress(target_method, info->type, kArg0);
       }
       break;
     default:
@@ -571,7 +571,7 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
           cg->LoadConstant(cg->TargetReg(kInvokeTgt), direct_code);
         } else if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
           CHECK_LT(target_method.dex_method_index, target_method.dex_file->NumMethodIds());
-          cg->LoadCodeAddress(target_method, type, kInvokeTgt);
+          cg->LoadCodeAddress(target_method, info->type, kInvokeTgt);
         }
       }
       break;
