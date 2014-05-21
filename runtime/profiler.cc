@@ -217,7 +217,7 @@ void* BackgroundMethodSamplingProfiler::RunProfilerThread(void* arg) {
       now_us = MicroTime();
     }
 
-    if (valid_samples > 0 && !ShuttingDown(self)) {
+    if (valid_samples > 0) {
       // After the profile has been taken, write it out.
       ScopedObjectAccess soa(self);   // Acquire the mutator lock.
       uint32_t size = profiler->WriteProfile();
