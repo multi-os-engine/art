@@ -650,8 +650,6 @@ void ImageWriter::FixupMethod(ArtMethod* orig, ArtMethod* copy) {
       copy->SetEntryPointFromInterpreter<kVerifyNone>(reinterpret_cast<EntryPointFromInterpreter*>
           (const_cast<byte*>(GetOatAddress(interpreter_to_interpreter_bridge_offset_))));
     } else {
-      copy->SetEntryPointFromInterpreter<kVerifyNone>(reinterpret_cast<EntryPointFromInterpreter*>
-          (const_cast<byte*>(GetOatAddress(interpreter_to_compiled_code_bridge_offset_))));
       // Use original code if it exists. Otherwise, set the code pointer to the resolution
       // trampoline.
       const byte* quick_code = GetOatAddress(orig->GetQuickOatCodeOffset());
@@ -672,6 +670,13 @@ void ImageWriter::FixupMethod(ArtMethod* orig, ArtMethod* copy) {
         // initialization.
         copy->SetEntryPointFromQuickCompiledCode<kVerifyNone>(GetOatAddress(quick_resolution_trampoline_offset_));
       }
+
+      // Use entrypoint from interpreter matching entrypoint from compiled code.
+      bool interpreter_only = (copy->GetEntryPointFromQuickCompiledCode<kVerifyNone>() == GetOatAddress(quick_to_interpreter_bridge_offset_));
+      uint32_t entrypoint_offset = interpreter_only ? interpreter_to_interpreter_bridge_offset_ : interpreter_to_compiled_code_bridge_offset_;
+      copy->SetEntryPointFromInterpreter<kVerifyNone>(reinterpret_cast<EntryPointFromInterpreter*>
+          (const_cast<byte*>(GetOatAddress(entrypoint_offset))));
+
       const byte* portable_code = GetOatAddress(orig->GetPortableOatCodeOffset());
       if (portable_code != nullptr) {
         copy->SetEntryPointFromPortableCompiledCode<kVerifyNone>(portable_code);
