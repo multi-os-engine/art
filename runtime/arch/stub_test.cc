@@ -1681,9 +1681,10 @@ TEST_F(StubTest, Fields64) {
 
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || defined(__x86_64__)
 extern "C" void art_quick_imt_conflict_trampoline(void);
+extern "C" void art_quick_invoke_interface_trampoline_with_access_check(void);
 #endif
 
-TEST_F(StubTest, IMT) {
+TEST_F(StubTest, InterfaceTrampolines) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || defined(__x86_64__)
   TEST_DISABLED_FOR_HEAP_REFERENCE_POISONING();
 
@@ -1733,19 +1734,6 @@ TEST_F(StubTest, IMT) {
   jmethodID obj_constructor = env->GetMethodID(obj_jclass, "<init>", "()V");
   ASSERT_NE(nullptr, obj_constructor);
 
-  // Sanity check: check that there is a conflict for List.contains in ArrayList.
-
-  mirror::Class* arraylist_class = soa.Decode<mirror::Class*>(arraylist_jclass);
-  mirror::ArtMethod* m = arraylist_class->GetImTable()->Get(
-      inf_contains->GetDexMethodIndex() % ClassLinker::kImtSize);
-
-  if (!m->IsImtConflictMethod()) {
-    LOG(WARNING) << "Test is meaningless, no IMT conflict in setup: " <<
-        PrettyMethod(m, true);
-    LOG(WARNING) << "Please update StubTest.IMT.";
-    return;
-  }
-
   // Create instances.
 
   jobject jarray_list = env->NewObject(arraylist_jclass, arraylist_constructor);
@@ -1756,7 +1744,11 @@ TEST_F(StubTest, IMT) {
   ASSERT_NE(nullptr, jobj);
   Handle<mirror::Object> obj(hs.NewHandle(soa.Decode<mirror::Object*>(jobj)));
 
-  // Invoke.
+  // Invocation tests.
+
+  // 1. imt_conflict
+
+  // Contains.
 
   size_t result =
       Invoke3WithReferrerAndHidden(0U, reinterpret_cast<size_t>(array_list.Get()),
@@ -1774,7 +1766,7 @@ TEST_F(StubTest, IMT) {
 
   ASSERT_FALSE(self->IsExceptionPending()) << PrettyTypeOf(self->GetException(nullptr));
 
-  // Invoke again.
+  // Contains.
 
   result = Invoke3WithReferrerAndHidden(0U, reinterpret_cast<size_t>(array_list.Get()),
                                         reinterpret_cast<size_t>(obj.Get()),
@@ -1784,10 +1776,30 @@ TEST_F(StubTest, IMT) {
 
   ASSERT_FALSE(self->IsExceptionPending());
   EXPECT_EQ(static_cast<size_t>(JNI_TRUE), result);
+
+  // 2. regular interface trampoline
+
+  result = Invoke3WithReferrer(static_cast<size_t>(inf_contains.Get()->GetDexMethodIndex()),
+                               reinterpret_cast<size_t>(array_list.Get()),
+                               reinterpret_cast<size_t>(obj.Get()),
+                               reinterpret_cast<uintptr_t>(&art_quick_invoke_interface_trampoline_with_access_check),
+                               self, contains_amethod.Get());
+
+  ASSERT_FALSE(self->IsExceptionPending());
+  EXPECT_EQ(static_cast<size_t>(JNI_TRUE), result);
+
+  result = Invoke3WithReferrer(static_cast<size_t>(inf_contains.Get()->GetDexMethodIndex()),
+                                 reinterpret_cast<size_t>(array_list.Get()),
+                                 reinterpret_cast<size_t>(array_list.Get()),
+                                 reinterpret_cast<uintptr_t>(&art_quick_invoke_interface_trampoline_with_access_check),
+                                 self, contains_amethod.Get());
+
+  ASSERT_FALSE(self->IsExceptionPending());
+  EXPECT_EQ(static_cast<size_t>(JNI_FALSE), result);
 #else
-  LOG(INFO) << "Skipping memcpy as I don't know how to do that on " << kRuntimeISA;
+  LOG(INFO) << "Skipping interfaces as I don't know how to do that on " << kRuntimeISA;
   // Force-print to std::cout so it's also outside the logcat.
-  std::cout << "Skipping memcpy as I don't know how to do that on " << kRuntimeISA << std::endl;
+  std::cout << "Skipping interfaces as I don't know how to do that on " << kRuntimeISA << std::endl;
 #endif
 }
 
