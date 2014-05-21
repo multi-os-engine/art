@@ -164,6 +164,9 @@ Runtime::~Runtime() {
     }
     shutting_down_ = true;
   }
+  // Shut down background profiler before the runtime exits.
+  BackgroundMethodSamplingProfiler::Stop();
+
   Trace::Shutdown();
 
   // Make sure to let the GC complete if it is running.
