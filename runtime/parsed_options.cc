@@ -533,8 +533,8 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
       Trace::SetDefaultClockSource(kProfilerClockSourceWall);
     } else if (option == "-Xprofile:dualclock") {
       Trace::SetDefaultClockSource(kProfilerClockSourceDual);
-    } else if (StartsWith(option, "-Xprofile:")) {
-      if (!ParseStringAfterChar(option, ':', &profile_output_filename_)) {
+    } else if (StartsWith(option, "-Xprofile=")) {
+      if (!ParseStringAfterChar(option, '=', &profile_output_filename_)) {
         return false;
       }
       profile_ = true;
