@@ -210,7 +210,11 @@ void* SignalCatcher::Run(void* arg) {
 
     switch (signal_number) {
     case SIGQUIT:
+#if !defined(__mips__)
       signal_catcher->HandleSigQuit();
+#else
+      LOG(WARNING) << "Not handling SigQuit on MIPS due to bug generating native backtraces";
+#endif
       break;
     case SIGUSR1:
       signal_catcher->HandleSigUsr1();

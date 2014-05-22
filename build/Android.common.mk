@@ -212,7 +212,7 @@ ifeq ($(HOST_OS),linux)
 endif
 
 art_non_debug_cflags := \
-	-O3
+	-O1
 
 # FIXME: upstream LLVM has a vectorizer bug that needs to be fixed
 ifeq ($(ART_TARGET_CLANG),true)
