@@ -60,14 +60,14 @@ TEST(LiveRangesTest, CFG1) {
   liveness.Analyze();
 
   LiveInterval* interval = liveness.GetInstructionFromSsaIndex(0)->GetLiveInterval();
-  ASSERT_EQ(1u, interval->GetRanges().Size());
-  LiveRange range = interval->GetRanges().Get(0);
-  ASSERT_EQ(2u, range.GetStart());
+  LiveRange* range = interval->GetFirstRange();
+  ASSERT_EQ(2u, range->GetStart());
   // Last use is the return instruction.
-  ASSERT_EQ(6u, range.GetEnd());
+  ASSERT_EQ(6u, range->GetEnd());
   HBasicBlock* block = graph->GetBlocks().Get(1);
   ASSERT_TRUE(block->GetLastInstruction()->AsReturn() != nullptr);
   ASSERT_EQ(6u, block->GetLastInstruction()->GetLifetimePosition());
+  ASSERT_TRUE(range->GetNext() == nullptr);
 }
 
 TEST(LiveRangesTest, CFG2) {
@@ -105,14 +105,14 @@ TEST(LiveRangesTest, CFG2) {
   liveness.Analyze();
 
   LiveInterval* interval = liveness.GetInstructionFromSsaIndex(0)->GetLiveInterval();
-  ASSERT_EQ(1u, interval->GetRanges().Size());
-  LiveRange range = interval->GetRanges().Get(0);
-  ASSERT_EQ(2u, range.GetStart());
+  LiveRange* range = interval->GetFirstRange();
+  ASSERT_EQ(2u, range->GetStart());
   // Last use is the return instruction.
-  ASSERT_EQ(16u, range.GetEnd());
+  ASSERT_EQ(16u, range->GetEnd());
   HBasicBlock* block = graph->GetBlocks().Get(3);
   ASSERT_TRUE(block->GetLastInstruction()->AsReturn() != nullptr);
   ASSERT_EQ(16u, block->GetLastInstruction()->GetLifetimePosition());
+  ASSERT_TRUE(range->GetNext() == nullptr);
 }
 
 TEST(LiveRangesTest, CFG3) {
@@ -154,34 +154,34 @@ TEST(LiveRangesTest, CFG3) {
 
   // Test for the 0 constant.
   LiveInterval* interval = liveness.GetInstructionFromSsaIndex(0)->GetLiveInterval();
-  ASSERT_EQ(1u, interval->GetRanges().Size());
-  LiveRange range = interval->GetRanges().Get(0);
-  ASSERT_EQ(2u, range.GetStart());
+  LiveRange* range = interval->GetFirstRange();
+  ASSERT_EQ(2u, range->GetStart());
   // Last use is the phi at the return block so instruction is live until
   // the end of the then block.
-  ASSERT_EQ(12u, range.GetEnd());
+  ASSERT_EQ(12u, range->GetEnd());
+  ASSERT_TRUE(range->GetNext() == nullptr);
 
   // Test for the 4 constant.
   interval = liveness.GetInstructionFromSsaIndex(1)->GetLiveInterval();
   // The then branch is a hole for this constant, therefore its interval has 2 ranges.
-  ASSERT_EQ(2u, interval->GetRanges().Size());
-  // First range is the else block.
-  range = interval->GetRanges().Get(0);
-  ASSERT_EQ(13u, range.GetStart());
-  // Last use is the phi at the return block.
-  ASSERT_EQ(15u, range.GetEnd());
-  // Second range starts from the definition and ends at the if block.
-  range = interval->GetRanges().Get(1);
-  ASSERT_EQ(3u, range.GetStart());
+  // First range starts from the definition and ends at the if block.
+  range = interval->GetFirstRange();
+  ASSERT_EQ(3u, range->GetStart());
   // 9 is the end of the if block.
-  ASSERT_EQ(9u, range.GetEnd());
+  ASSERT_EQ(9u, range->GetEnd());
+  // Second range is the else block.
+  range = range->GetNext();
+  ASSERT_EQ(13u, range->GetStart());
+  // Last use is the phi at the return block.
+  ASSERT_EQ(15u, range->GetEnd());
+  ASSERT_TRUE(range->GetNext() == nullptr);
 
   // Test for the phi.
   interval = liveness.GetInstructionFromSsaIndex(3)->GetLiveInterval();
-  ASSERT_EQ(1u, interval->GetRanges().Size());
-  range = interval->GetRanges().Get(0);
-  ASSERT_EQ(16u, range.GetStart());
-  ASSERT_EQ(17u, range.GetEnd());
+  range = interval->GetFirstRange();
+  ASSERT_EQ(16u, range->GetStart());
+  ASSERT_EQ(17u, range->GetEnd());
+  ASSERT_TRUE(range->GetNext() == nullptr);
 }
 
 TEST(LiveRangesTest, Loop) {
@@ -228,36 +228,36 @@ TEST(LiveRangesTest, Loop) {
 
   // Test for the 0 constant.
   LiveInterval* interval = liveness.GetInstructionFromSsaIndex(0)->GetLiveInterval();
-  ASSERT_EQ(1u, interval->GetRanges().Size());
-  LiveRange range = interval->GetRanges().Get(0);
-  ASSERT_EQ(2u, range.GetStart());
+  LiveRange* range = interval->GetFirstRange();
+  ASSERT_EQ(2u, range->GetStart());
   // Last use is the loop phi so instruction is live until
   // the end of the pre loop header.
-  ASSERT_EQ(9u, range.GetEnd());
+  ASSERT_EQ(9u, range->GetEnd());
+  ASSERT_TRUE(range->GetNext() == nullptr);
 
   // Test for the 4 constant.
   interval = liveness.GetInstructionFromSsaIndex(1)->GetLiveInterval();
+  range = interval->GetFirstRange();
   // The instruction is live until the end of the loop.
-  ASSERT_EQ(1u, interval->GetRanges().Size());
-  range = interval->GetRanges().Get(0);
-  ASSERT_EQ(3u, range.GetStart());
-  ASSERT_EQ(16u, range.GetEnd());
+  ASSERT_EQ(3u, range->GetStart());
+  ASSERT_EQ(16u, range->GetEnd());
+  ASSERT_TRUE(range->GetNext() == nullptr);
 
   // Test for the 5 constant.
   interval = liveness.GetInstructionFromSsaIndex(2)->GetLiveInterval();
+  range = interval->GetFirstRange();
   // The instruction is live until the return instruction of the loop.
-  ASSERT_EQ(1u, interval->GetRanges().Size());
-  range = interval->GetRanges().Get(0);
-  ASSERT_EQ(4u, range.GetStart());
-  ASSERT_EQ(18u, range.GetEnd());
+  ASSERT_EQ(4u, range->GetStart());
+  ASSERT_EQ(18u, range->GetEnd());
+  ASSERT_TRUE(range->GetNext() == nullptr);
 
   // Test for the phi.
   interval = liveness.GetInstructionFromSsaIndex(3)->GetLiveInterval();
-  ASSERT_EQ(1u, interval->GetRanges().Size());
-  range = interval->GetRanges().Get(0);
+  range = interval->GetFirstRange();
   // Instruction is consumed by the if.
-  ASSERT_EQ(10u, range.GetStart());
-  ASSERT_EQ(11u, range.GetEnd());
+  ASSERT_EQ(10u, range->GetStart());
+  ASSERT_EQ(11u, range->GetEnd());
+  ASSERT_TRUE(range->GetNext() == nullptr);
 }
 
 }  // namespace art
