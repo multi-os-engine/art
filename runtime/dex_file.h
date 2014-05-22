@@ -353,7 +353,8 @@ class DexFile {
   static bool GetChecksum(const char* filename, uint32_t* checksum, std::string* error_msg);
 
   // Opens .dex file, guessing the container format based on file extension
-  static const DexFile* Open(const char* filename, const char* location, std::string* error_msg);
+  static bool Open(const char* filename, const char* location, std::string* error_msg,
+                   std::vector<const DexFile*>* dex_container);
 
   // Opens .dex file, backed by existing memory
   static const DexFile* Open(const uint8_t* base, size_t size,
@@ -363,9 +364,9 @@ class DexFile {
     return OpenMemory(base, size, location, location_checksum, NULL, error_msg);
   }
 
-  // Opens .dex file from the classes.dex in a zip archive
-  static const DexFile* Open(const ZipArchive& zip_archive, const std::string& location,
-                             std::string* error_msg);
+  // Open all classesXXX.dex files from a zip archive.
+  static bool OpenAll(const ZipArchive& zip_archive, const std::string& location,
+                      std::string* error_msg, std::vector<const DexFile*>* dex_container);
 
   // Closes a .dex file.
   virtual ~DexFile();
@@ -819,12 +820,30 @@ class DexFile {
     return size_;
   }
 
+  static bool IsSyntheticLocation(const char* location);
+  static std::pair<std::unique_ptr<char>, const char*> SplitSyntheticLocation(const char* location);
+
+  static bool IsSyntheticLocation(const std::string& location);
+  static std::string GetSyntheticBaseFilename(const std::string& location);
+
  private:
   // Opens a .dex file
   static const DexFile* OpenFile(int fd, const char* location, bool verify, std::string* error_msg);
 
-  // Opens a dex file from within a .jar, .zip, or .apk file
-  static const DexFile* OpenZip(int fd, const std::string& location, std::string* error_msg);
+  // Opens dex files from within a .jar, .zip, or .apk file
+  static bool OpenZip(int fd, const std::string& location, std::string* error_msg,
+                      std::vector<const DexFile*>* dex_container);
+
+  // Opens .dex file from the entry_name in a zip archive. error_code is undefined when non-nullptr
+  // return.
+  // error_code: 1 = Entry not found
+  //             2 = Error extracting to memory
+  //             3 = Error opening dex file from memory
+  //             4 = Verification error
+  //             5 = Failed to set RO
+  static const DexFile* Open(const ZipArchive& zip_archive, const char* entry_name,
+                             const std::string& location, std::string* error_msg,
+                             uint8_t* error_code);
 
   // Opens a .dex file at the given address backed by a MemMap
   static const DexFile* OpenMemory(const std::string& location,

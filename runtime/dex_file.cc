@@ -87,7 +87,20 @@ static int OpenAndReadMagic(const char* filename, uint32_t* magic, std::string* 
 bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string* error_msg) {
   CHECK(checksum != NULL);
   uint32_t magic;
-  ScopedFd fd(OpenAndReadMagic(filename, &magic, error_msg));
+
+  // Strip ":...", which is the location
+  const char* zip_entry_name = kClassesDex;
+  const char* file_part = filename;
+  std::unique_ptr<char> file_part_ptr;
+
+  if (IsSyntheticLocation(filename)) {
+    std::pair<std::unique_ptr<char>, const char*> pair = SplitSyntheticLocation(filename);
+    file_part_ptr = std::move(pair.first);
+    file_part = file_part_ptr.get();
+    zip_entry_name = pair.second;
+  }
+
+  ScopedFd fd(OpenAndReadMagic(file_part, &magic, error_msg));
   if (fd.get() == -1) {
     DCHECK(!error_msg->empty());
     return false;
@@ -95,13 +108,13 @@ bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string*
   if (IsZipMagic(magic)) {
     std::unique_ptr<ZipArchive> zip_archive(ZipArchive::OpenFromFd(fd.release(), filename, error_msg));
     if (zip_archive.get() == NULL) {
-      *error_msg = StringPrintf("Failed to open zip archive '%s'", filename);
+      *error_msg = StringPrintf("Failed to open zip archive '%s'", file_part);
       return false;
     }
-    std::unique_ptr<ZipEntry> zip_entry(zip_archive->Find(kClassesDex, error_msg));
+    std::unique_ptr<ZipEntry> zip_entry(zip_archive->Find(zip_entry_name, error_msg));
     if (zip_entry.get() == NULL) {
-      *error_msg = StringPrintf("Zip archive '%s' doesn't contain %s (error msg: %s)", filename,
-                                kClassesDex, error_msg->c_str());
+      *error_msg = StringPrintf("Zip archive '%s' doesn't contain %s (error msg: %s)", file_part,
+                                zip_entry_name, error_msg->c_str());
       return false;
     }
     *checksum = zip_entry->GetCrc32();
@@ -119,20 +132,26 @@ bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string*
   return false;
 }
 
-const DexFile* DexFile::Open(const char* filename,
-                             const char* location,
-                             std::string* error_msg) {
+bool DexFile::Open(const char* filename, const char* location, std::string* error_msg,
+                   std::vector<const DexFile*>* dex_container) {
   uint32_t magic;
   ScopedFd fd(OpenAndReadMagic(filename, &magic, error_msg));
   if (fd.get() == -1) {
     DCHECK(!error_msg->empty());
-    return NULL;
+    return false;
   }
   if (IsZipMagic(magic)) {
-    return DexFile::OpenZip(fd.release(), location, error_msg);
+    return DexFile::OpenZip(fd.release(), location, error_msg, dex_container);
   }
   if (IsDexMagic(magic)) {
-    return DexFile::OpenFile(fd.release(), location, true, error_msg);
+    std::unique_ptr<const DexFile> dex_file(DexFile::OpenFile(fd.release(), location, true,
+                                                              error_msg));
+    if (dex_file.get() != nullptr) {
+      dex_container->push_back(dex_file.release());
+      return true;
+    } else {
+      return false;
+    }
   }
   *error_msg = StringPrintf("Expected valid zip or dex file: '%s'", filename);
   return nullptr;
@@ -217,13 +236,14 @@ const DexFile* DexFile::OpenFile(int fd, const char* location, bool verify,
 
 const char* DexFile::kClassesDex = "classes.dex";
 
-const DexFile* DexFile::OpenZip(int fd, const std::string& location, std::string* error_msg) {
+bool DexFile::OpenZip(int fd, const std::string& location, std::string* error_msg,
+                      std::vector<const  DexFile*>* dex_container) {
   std::unique_ptr<ZipArchive> zip_archive(ZipArchive::OpenFromFd(fd, location.c_str(), error_msg));
   if (zip_archive.get() == nullptr) {
     DCHECK(!error_msg->empty());
-    return nullptr;
+    return false;
   }
-  return DexFile::Open(*zip_archive, location, error_msg);
+  return DexFile::OpenAll(*zip_archive, location, error_msg, dex_container);
 }
 
 const DexFile* DexFile::OpenMemory(const std::string& location,
@@ -238,17 +258,20 @@ const DexFile* DexFile::OpenMemory(const std::string& location,
                     error_msg);
 }
 
-const DexFile* DexFile::Open(const ZipArchive& zip_archive, const std::string& location,
-                             std::string* error_msg) {
+const DexFile* DexFile::Open(const ZipArchive& zip_archive, const char* entry_name,
+                             const std::string& location, std::string* error_msg,
+                             uint8_t* error_code) {
   CHECK(!location.empty());
-  std::unique_ptr<ZipEntry> zip_entry(zip_archive.Find(kClassesDex, error_msg));
+  std::unique_ptr<ZipEntry> zip_entry(zip_archive.Find(entry_name, error_msg));
   if (zip_entry.get() == NULL) {
+    *error_code = 1;
     return nullptr;
   }
-  std::unique_ptr<MemMap> map(zip_entry->ExtractToMemMap(kClassesDex, error_msg));
+  std::unique_ptr<MemMap> map(zip_entry->ExtractToMemMap(entry_name, error_msg));
   if (map.get() == NULL) {
-    *error_msg = StringPrintf("Failed to extract '%s' from '%s': %s", kClassesDex, location.c_str(),
+    *error_msg = StringPrintf("Failed to extract '%s' from '%s': %s", entry_name, location.c_str(),
                               error_msg->c_str());
+    *error_code = 2;
     return nullptr;
   }
   std::unique_ptr<const DexFile> dex_file(OpenMemory(location, zip_entry->GetCrc32(), map.release(),
@@ -256,19 +279,61 @@ const DexFile* DexFile::Open(const ZipArchive& zip_archive, const std::string& l
   if (dex_file.get() == nullptr) {
     *error_msg = StringPrintf("Failed to open dex file '%s' from memory: %s", location.c_str(),
                               error_msg->c_str());
+    *error_code = 3;
     return nullptr;
   }
   if (!DexFileVerifier::Verify(dex_file.get(), dex_file->Begin(), dex_file->Size(),
                                location.c_str(), error_msg)) {
+    *error_code = 4;
     return nullptr;
   }
   if (!dex_file->DisableWrite()) {
     *error_msg = StringPrintf("Failed to make dex file '%s' read only", location.c_str());
+    *error_code = 5;
     return nullptr;
   }
   CHECK(dex_file->IsReadOnly()) << location;
   return dex_file.release();
 }
+
+bool DexFile::OpenAll(const ZipArchive& zip_archive, const std::string& location,
+                      std::string* error_msg, std::vector<const DexFile*>* dex_container) {
+  uint8_t error_code;
+  std::unique_ptr<const DexFile> dex_file(Open(zip_archive, kClassesDex, location, error_msg,
+                                               &error_code));
+  if (dex_file.get() == nullptr) {
+    return false;
+  } else {
+    // Had at least classes.dex.
+    dex_container->push_back(dex_file.release());
+
+    // Now try some more.
+    size_t i = 2;
+
+    // We could try to avoid std::string allocations by working on a char array directly. As we
+    // do not expect a lot of iterations, this seems too involved and brittle.
+
+    while (i < 100) {
+      std::string name = StringPrintf("classes%zu.dex", i);
+      std::string fake_location = location + ":" + name;
+      std::unique_ptr<const DexFile> next_dex_file(Open(zip_archive, name.c_str(), fake_location,
+                                                        error_msg, &error_code));
+      if (next_dex_file.get() == nullptr) {
+        if (error_code != 1) {
+          LOG(WARNING) << error_msg;
+        }
+        break;
+      } else {
+        dex_container->push_back(next_dex_file.release());
+      }
+
+      i++;
+    }
+
+    return true;
+  }
+}
+
 
 const DexFile* DexFile::OpenMemory(const byte* base,
                                    size_t size,
@@ -863,6 +928,39 @@ bool DexFile::LineNumForPcCb(void* raw_context, uint32_t address, uint32_t line_
     context->line_num_ = line_num;
     return address == context->address_;
   }
+}
+
+bool DexFile::IsSyntheticLocation(const char* location) {
+  return strrchr(location, ':') != nullptr;
+}
+
+bool DexFile::IsSyntheticLocation(const std::string& location) {
+  return location.find(':') != std::string::npos;
+}
+
+std::pair<std::unique_ptr<char>, const char*> DexFile::SplitSyntheticLocation(
+    const char* location) {
+  std::pair<std::unique_ptr<char>, const char*> ret;
+  const char* colon_ptr = strrchr(location, ':');
+
+  // Check it's synthetic.
+  CHECK_NE(colon_ptr, static_cast<const char*>(nullptr));
+
+  size_t colon_index = colon_ptr - location;
+  char* tmp = new char[colon_index + 1];
+  strncpy(tmp, location, colon_index);
+  tmp[colon_index] = 0;
+  ret.first.reset(tmp);
+
+  ret.second = colon_ptr + 1;
+
+  return ret;
+}
+
+std::string DexFile::GetSyntheticBaseFilename(const std::string& location) {
+  size_t colon_index = location.rfind(':');
+  CHECK_NE(std::string::npos, colon_index);
+  return location.substr(0, colon_index);
 }
 
 std::ostream& operator<<(std::ostream& os, const DexFile& dex_file) {

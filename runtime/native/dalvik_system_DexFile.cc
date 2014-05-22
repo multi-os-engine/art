@@ -107,7 +107,7 @@ static jlong DexFile_openDexFileNative(JNIEnv* env, jclass, jstring javaSourceNa
   std::vector<std::string> error_msgs;
   std::string error_msg;
   if (!DexFile::GetChecksum(sourceName.c_str(), dex_location_checksum_pointer, &error_msg)) {
-    dex_location_checksum_pointer = NULL;
+    dex_location_checksum_pointer = nullptr;
   }
 
   ClassLinker* linker = Runtime::Current()->GetClassLinker();
@@ -120,7 +120,7 @@ static jlong DexFile_openDexFileNative(JNIEnv* env, jclass, jstring javaSourceNa
                                                            &error_msgs);
   } else {
     // FindOrCreateOatFileForDexLocation requires the dex_location_checksum
-    if (dex_location_checksum_pointer == NULL) {
+    if (dex_location_checksum_pointer == nullptr) {
       ScopedObjectAccess soa(env);
       DCHECK(!error_msg.empty());
       ThrowIOException("%s", error_msg.c_str());
@@ -141,36 +141,86 @@ static jlong DexFile_openDexFileNative(JNIEnv* env, jclass, jstring javaSourceNa
     }
 
     return 0;
+  } else {
+    std::vector<const DexFile*>* ret = new std::vector<const DexFile*>();
+    ret->push_back(dex_file);
+
+    size_t i = 2;
+
+    for (;;) {
+      // Construct name
+      std::string next_name_str;
+      StringAppendF(&next_name_str, "%s:classes%zu.dex", sourceName.c_str(), i);
+      const char* next_name = next_name_str.c_str();
+
+      // TODO: load checksum
+      dex_location_checksum_pointer = &dex_location_checksum;
+      if (!DexFile::GetChecksum(next_name, dex_location_checksum_pointer, &error_msg)) {
+        dex_location_checksum_pointer = nullptr;
+      }
+
+      const DexFile* next_dex_file;
+      if (outputName.c_str() == nullptr) {
+        next_dex_file = linker->FindDexFileInOatFileFromDexLocation(next_name,
+                                                                    dex_location_checksum_pointer,
+                                                                    kRuntimeISA, &error_msgs);
+      } else {
+        if (dex_location_checksum_pointer != nullptr) {
+          next_dex_file = linker->FindOrCreateOatFileForDexLocation(next_name, dex_location_checksum,
+                                                                    outputName.c_str(), &error_msgs);
+        } else {
+          next_dex_file = nullptr;
+        }
+      }
+      if (next_dex_file == nullptr) {
+        break;
+      }
+
+      ret->push_back(next_dex_file);
+      i++;
+    }
+
+    return static_cast<jlong>(reinterpret_cast<uintptr_t>(ret));
   }
-  return static_cast<jlong>(reinterpret_cast<uintptr_t>(dex_file));
 }
 
-static const DexFile* toDexFile(jlong dex_file_address, JNIEnv* env) {
-  const DexFile* dex_file = reinterpret_cast<const DexFile*>(static_cast<uintptr_t>(dex_file_address));
-  if (UNLIKELY(dex_file == nullptr)) {
+static std::vector<const DexFile*>* toDexFile(jlong dex_file_address, JNIEnv* env) {
+  std::vector<const DexFile*>* dex_files = reinterpret_cast<std::vector<const DexFile*>*>(
+      static_cast<uintptr_t>(dex_file_address));
+  if (UNLIKELY(dex_files == nullptr)) {
     ScopedObjectAccess soa(env);
     ThrowNullPointerException(NULL, "dex_file == null");
   }
-  return dex_file;
+  return dex_files;
 }
 
 static void DexFile_closeDexFile(JNIEnv* env, jclass, jlong cookie) {
-  const DexFile* dex_file;
-  dex_file = toDexFile(cookie, env);
-  if (dex_file == nullptr) {
+  std::vector<const DexFile*>* dex_files;
+  dex_files = toDexFile(cookie, env);
+  if (dex_files == nullptr) {
     return;
   }
   ScopedObjectAccess soa(env);
-  if (Runtime::Current()->GetClassLinker()->IsDexFileRegistered(*dex_file)) {
-    return;
+
+  size_t freed = 0;
+  size_t index = 0;
+  for (const DexFile* dex_file : *dex_files) {
+    if (!Runtime::Current()->GetClassLinker()->IsDexFileRegistered(*dex_file)) {
+      delete dex_file;
+      freed++;
+      (*dex_files)[index] = nullptr;
+    }
+    index++;
   }
-  delete dex_file;
+  if (freed == index) {
+    delete dex_files;
+  }
 }
 
 static jclass DexFile_defineClassNative(JNIEnv* env, jclass, jstring javaName, jobject javaLoader,
                                         jlong cookie) {
-  const DexFile* dex_file = toDexFile(cookie, env);
-  if (dex_file == NULL) {
+  std::vector<const DexFile*>* dex_files = toDexFile(cookie, env);
+  if (dex_files == NULL) {
     VLOG(class_linker) << "Failed to find dex_file";
     return NULL;
   }
@@ -180,38 +230,52 @@ static jclass DexFile_defineClassNative(JNIEnv* env, jclass, jstring javaName, j
     return NULL;
   }
   const std::string descriptor(DotToDescriptor(class_name.c_str()));
-  const DexFile::ClassDef* dex_class_def = dex_file->FindClassDef(descriptor.c_str());
-  if (dex_class_def == NULL) {
-    VLOG(class_linker) << "Failed to find dex_class_def";
-    return NULL;
+
+  for (const DexFile* dex_file : *dex_files) {
+    const DexFile::ClassDef* dex_class_def = dex_file->FindClassDef(descriptor.c_str());
+    if (dex_class_def != nullptr) {
+      ScopedObjectAccess soa(env);
+      ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+      class_linker->RegisterDexFile(*dex_file);
+      StackHandleScope<1> hs(soa.Self());
+      Handle<mirror::ClassLoader> class_loader(
+          hs.NewHandle(soa.Decode<mirror::ClassLoader*>(javaLoader)));
+      mirror::Class* result = class_linker->DefineClass(descriptor.c_str(), class_loader, *dex_file,
+                                                        *dex_class_def);
+      if (result != nullptr) {
+        VLOG(class_linker) << "DexFile_defineClassNative returning " << result;
+        return soa.AddLocalReference<jclass>(result);
+      }
+    }
   }
-  ScopedObjectAccess soa(env);
-  ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  class_linker->RegisterDexFile(*dex_file);
-  StackHandleScope<1> hs(soa.Self());
-  Handle<mirror::ClassLoader> class_loader(
-      hs.NewHandle(soa.Decode<mirror::ClassLoader*>(javaLoader)));
-  mirror::Class* result = class_linker->DefineClass(descriptor.c_str(), class_loader, *dex_file,
-                                                    *dex_class_def);
-  VLOG(class_linker) << "DexFile_defineClassNative returning " << result;
-  return soa.AddLocalReference<jclass>(result);
+  VLOG(class_linker) << "Failed to find dex_class_def";
+  return nullptr;
 }
 
 static jobjectArray DexFile_getClassNameList(JNIEnv* env, jclass, jlong cookie) {
   jobjectArray result = nullptr;
-  const DexFile* dex_file = toDexFile(cookie, env);
-  if (dex_file != nullptr) {
-    result = env->NewObjectArray(dex_file->NumClassDefs(), WellKnownClasses::java_lang_String,
-                                 nullptr);
+  std::vector<const DexFile*>* dex_files = toDexFile(cookie, env);
+  if (dex_files != nullptr) {
+    // Sum up class defs.
+    size_t num_class_defs = 0;
+    for (const DexFile* dex_file : *dex_files) {
+      num_class_defs += dex_file->NumClassDefs();
+    }
+
+    result = env->NewObjectArray(num_class_defs, WellKnownClasses::java_lang_String, nullptr);
     if (result != nullptr) {
-      for (size_t i = 0; i < dex_file->NumClassDefs(); ++i) {
-        const DexFile::ClassDef& class_def = dex_file->GetClassDef(i);
-        const char* descriptor = dex_file->GetClassDescriptor(class_def);
-        ScopedLocalRef<jstring> jdescriptor(env, env->NewStringUTF(descriptor));
-        if (jdescriptor.get() == nullptr) {
-          return nullptr;
+      jsize offset = 0;
+      for (const DexFile* dex_file : *dex_files) {
+        for (size_t i = 0; i < dex_file->NumClassDefs(); ++i) {
+          const DexFile::ClassDef& class_def = dex_file->GetClassDef(i);
+          const char* descriptor = dex_file->GetClassDescriptor(class_def);
+          ScopedLocalRef<jstring> jdescriptor(env, env->NewStringUTF(descriptor));
+          if (jdescriptor.get() == nullptr) {
+            return nullptr;
+          }
+          env->SetObjectArrayElement(result, offset + i, jdescriptor.get());
         }
-        env->SetObjectArrayElement(result, i, jdescriptor.get());
+        offset += dex_file->NumClassDefs();
       }
     }
   }

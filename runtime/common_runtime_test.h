@@ -156,6 +156,17 @@ class CommonRuntimeTest : public testing::Test {
     return !kIsTargetBuild;
   }
 
+  const DexFile* LoadExpectSingleDexFile(const char* filename, const char* location,
+                                              std::string* error_msg) {
+    std::vector<const DexFile*> tmp;
+    if (!DexFile::Open(filename, location, error_msg, &tmp)) {
+      return nullptr;
+    } else {
+      CHECK_EQ(1U, tmp.size());
+      return tmp[0];
+    }
+  }
+
   virtual void SetUp() {
     SetEnvironmentVariables(android_data_);
     dalvik_cache_.append(android_data_.c_str());
@@ -164,12 +175,14 @@ class CommonRuntimeTest : public testing::Test {
     ASSERT_EQ(mkdir_result, 0);
 
     std::string error_msg;
-    java_lang_dex_file_ = DexFile::Open(GetLibCoreDexFileName().c_str(),
-                                        GetLibCoreDexFileName().c_str(), &error_msg);
-    if (java_lang_dex_file_ == nullptr) {
+    std::vector<const DexFile*> tmp;
+    if (!DexFile::Open(GetLibCoreDexFileName().c_str(), GetLibCoreDexFileName().c_str(), &error_msg,
+                       &tmp)) {
       LOG(FATAL) << "Could not open .dex file '" << GetLibCoreDexFileName() << "': "
-          << error_msg << "\n";
+                << error_msg << "\n";
     }
+    CHECK_EQ(1U, tmp.size());
+    java_lang_dex_file_ = tmp[0];
     boot_class_path_.push_back(java_lang_dex_file_);
 
     std::string min_heap_string(StringPrintf("-Xms%zdm", gc::Heap::kDefaultInitialSize / MB));
@@ -233,7 +246,7 @@ class CommonRuntimeTest : public testing::Test {
     // There's a function to clear the array, but it's not public...
     typedef void (*IcuCleanupFn)();
     void* sym = dlsym(RTLD_DEFAULT, "u_cleanup_" U_ICU_VERSION_SHORT);
-    CHECK(sym != nullptr);
+    CHECK(sym != nullptr) << dlerror();
     IcuCleanupFn icu_cleanup_fn = reinterpret_cast<IcuCleanupFn>(sym);
     (*icu_cleanup_fn)();
 
@@ -264,7 +277,8 @@ class CommonRuntimeTest : public testing::Test {
     return GetAndroidRoot();
   }
 
-  const DexFile* OpenTestDexFile(const char* name) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  std::vector<const DexFile*> OpenTestDexFiles(const char* name)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     CHECK(name != nullptr);
     std::string filename;
     if (IsHost()) {
@@ -277,27 +291,49 @@ class CommonRuntimeTest : public testing::Test {
     filename += name;
     filename += ".jar";
     std::string error_msg;
-    const DexFile* dex_file = DexFile::Open(filename.c_str(), filename.c_str(), &error_msg);
-    CHECK(dex_file != nullptr) << "Failed to open '" << filename << "': " << error_msg;
-    CHECK_EQ(PROT_READ, dex_file->GetPermissions());
-    CHECK(dex_file->IsReadOnly());
-    opened_dex_files_.push_back(dex_file);
-    return dex_file;
+    std::vector<const DexFile*> tmp;
+    bool success = DexFile::Open(filename.c_str(), filename.c_str(), &error_msg, &tmp);
+    CHECK(success) << "Failed to open '" << filename << "': " << error_msg;
+    for (const DexFile* dex_file : tmp) {
+      CHECK_EQ(PROT_READ, dex_file->GetPermissions());
+      CHECK(dex_file->IsReadOnly());
+    }
+    opened_dex_files_.insert(opened_dex_files_.end(), tmp.begin(), tmp.end());
+    return tmp;
+  }
+
+  const DexFile* OpenTestDexFile(const char* name)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    std::vector<const DexFile*> vector = OpenTestDexFiles(name);
+    EXPECT_EQ(1U, vector.size());
+    return vector[0];
   }
 
   jobject LoadDex(const char* dex_name) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    const DexFile* dex_file = OpenTestDexFile(dex_name);
-    CHECK(dex_file != nullptr);
-    class_linker_->RegisterDexFile(*dex_file);
-    std::vector<const DexFile*> class_path;
-    class_path.push_back(dex_file);
+    std::vector<const DexFile*> dex_files = OpenTestDexFiles(dex_name);
+    CHECK_NE(0U, dex_files.size());
+    for (const DexFile* dex_file : dex_files) {
+      class_linker_->RegisterDexFile(*dex_file);
+    }
     ScopedObjectAccessUnchecked soa(Thread::Current());
     ScopedLocalRef<jobject> class_loader_local(soa.Env(),
         soa.Env()->AllocObject(WellKnownClasses::dalvik_system_PathClassLoader));
     jobject class_loader = soa.Env()->NewGlobalRef(class_loader_local.get());
     soa.Self()->SetClassLoaderOverride(soa.Decode<mirror::ClassLoader*>(class_loader_local.get()));
-    Runtime::Current()->SetCompileTimeClassPath(class_loader, class_path);
+    Runtime::Current()->SetCompileTimeClassPath(class_loader, dex_files);
     return class_loader;
+  }
+
+  // Helper for old-style single-dex open.
+  static const DexFile* DexFileOpen(const char* filename, const char* location,
+                                    std::string* error_msg) {
+    std::vector<const DexFile*> tmp;
+    if (!DexFile::Open(filename, location, error_msg, &tmp)) {
+      return nullptr;
+    } else {
+      EXPECT_EQ(1U, tmp.size());
+      return tmp[0];
+    }
   }
 
   std::string android_data_;
