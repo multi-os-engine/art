@@ -295,7 +295,9 @@ inline QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo() {
   if (UNLIKELY(entry_point == runtime->GetClassLinker()->GetQuickGenericJniTrampoline())) {
     // Generic JNI frame.
     DCHECK(IsNative());
-    uint32_t handle_refs = MethodHelper(this).GetNumberOfReferenceArgsWithoutReceiver() + 1;
+    StackHandleScope<1> hs(Thread::Current());
+    uint32_t handle_refs =
+        MethodHelper(hs.NewHandle(this)).GetNumberOfReferenceArgsWithoutReceiver() + 1;
     size_t scope_size = HandleScope::SizeOf(handle_refs);
     QuickMethodFrameInfo callee_info = runtime->GetCalleeSaveMethodFrameInfo(Runtime::kRefsAndArgs);
 
@@ -316,6 +318,107 @@ inline QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo(const void* code_pointe
   DCHECK(code_pointer != nullptr);
   DCHECK(code_pointer == GetQuickOatCodePointer());
   return reinterpret_cast<const OatQuickMethodHeader*>(code_pointer)[-1].frame_info_;
+}
+
+const DexFile* ArtMethod::GetDexFile() {
+  return GetDeclaringClass()->GetDexCache()->GetDexFile();
+}
+
+const char* ArtMethod::GetDeclaringClassDescriptor() {
+  uint32_t dex_method_idx = GetDexMethodIndex();
+  if (UNLIKELY(dex_method_idx == DexFile::kDexNoIndex)) {
+    return "<runtime method>";
+  }
+  const DexFile* dex_file = GetDexFile();
+  return dex_file->GetMethodDeclaringClassDescriptor(dex_file->GetMethodId(dex_method_idx));
+}
+
+const char* ArtMethod::GetShorty(uint32_t* out_length) {
+  const DexFile* dex_file = GetDexFile();
+  return dex_file->GetMethodShorty(dex_file->GetMethodId(GetDexMethodIndex()), out_length);
+}
+
+const Signature ArtMethod::GetSignature() {
+  uint32_t dex_method_idx = GetDexMethodIndex();
+  if (dex_method_idx != DexFile::kDexNoIndex) {
+    const DexFile* dex_file = GetDexFile();
+    return dex_file->GetMethodSignature(dex_file->GetMethodId(dex_method_idx));
+  }
+  return Signature::NoSignature();
+}
+
+const char* ArtMethod::GetName() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  uint32_t dex_method_idx = GetDexMethodIndex();
+  if (LIKELY(dex_method_idx != DexFile::kDexNoIndex)) {
+    const DexFile* dex_file = GetDexFile();
+    return dex_file->GetMethodName(dex_file->GetMethodId(dex_method_idx));
+  }
+  Runtime* runtime = Runtime::Current();
+  if (this == runtime->GetResolutionMethod()) {
+    return "<runtime internal resolution method>";
+  } else if (this == runtime->GetImtConflictMethod()) {
+    return "<runtime internal imt conflict method>";
+  } else if (this == runtime->GetCalleeSaveMethod(Runtime::kSaveAll)) {
+    return "<runtime internal callee-save all registers method>";
+  } else if (this == runtime->GetCalleeSaveMethod(Runtime::kRefsOnly)) {
+    return "<runtime internal callee-save reference registers method>";
+  } else if (this == runtime->GetCalleeSaveMethod(Runtime::kRefsAndArgs)) {
+    return "<runtime internal callee-save reference and argument registers method>";
+  } else {
+    return "<unknown runtime internal method>";
+  }
+}
+
+const DexFile::CodeItem* ArtMethod::GetCodeItem() {
+  return GetDexFile()->GetCodeItem(GetCodeItemOffset());
+}
+
+bool ArtMethod::IsResolvedTypeIdx(uint16_t type_idx) {
+  return GetDexCacheResolvedTypes()->Get(type_idx) != nullptr;
+}
+
+int32_t ArtMethod::GetLineNumFromDexPC(uint32_t dex_pc) {
+  if (dex_pc == DexFile::kDexNoIndex) {
+    return IsNative() ? -2 : -1;
+  }
+  return GetDexFile()->GetLineNumFromPC(this, dex_pc);
+}
+
+const DexFile::ProtoId& ArtMethod::GetPrototype() {
+  const DexFile* dex_file = GetDexFile();
+  return dex_file->GetMethodPrototype(dex_file->GetMethodId(GetDexMethodIndex()));
+}
+
+const DexFile::TypeList* ArtMethod::GetParameterTypeList() {
+  const DexFile* dex_file = GetDexFile();
+  const DexFile::ProtoId& proto = dex_file->GetMethodPrototype(
+      dex_file->GetMethodId(GetDexMethodIndex()));
+  return dex_file->GetProtoParameters(proto);
+}
+
+const char* ArtMethod::GetDeclaringClassSourceFile() {
+  return GetDeclaringClass()->GetSourceFile();
+}
+
+uint16_t ArtMethod::GetClassDefIndex() {
+  return GetDeclaringClass()->GetDexClassDefIndex();
+}
+
+const DexFile::ClassDef& ArtMethod::GetClassDef() {
+  return GetDexFile()->GetClassDef(GetClassDefIndex());
+}
+
+const char* ArtMethod::GetReturnTypeDescriptor() {
+  const DexFile* dex_file = GetDexFile();
+  const DexFile::MethodId& method_id = dex_file->GetMethodId(GetDexMethodIndex());
+  const DexFile::ProtoId& proto_id = dex_file->GetMethodPrototype(method_id);
+  uint16_t return_type_idx = proto_id.return_type_idx_;
+  return dex_file->GetTypeDescriptor(dex_file->GetTypeId(return_type_idx));
+}
+
+const char* ArtMethod::GetTypeDescriptorFromTypeIdx(uint16_t type_idx) {
+  const DexFile* dex_file = GetDexFile();
+  return dex_file->GetTypeDescriptor(dex_file->GetTypeId(type_idx));
 }
 
 }  // namespace mirror

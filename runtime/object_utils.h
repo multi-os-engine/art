@@ -165,12 +165,9 @@ class FieldHelper {
 
 class MethodHelper {
  public:
-  MethodHelper() : method_(nullptr), shorty_(nullptr), shorty_len_(0) {}
-
-  explicit MethodHelper(mirror::ArtMethod* m)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : method_(nullptr), shorty_(nullptr), shorty_len_(0) {
-    SetMethod(m);
+  explicit MethodHelper(Handle<mirror::ArtMethod> m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      : method_(m), shorty_(nullptr), shorty_len_(0) {
+    SetMethod(m.Get());
   }
 
   void ChangeMethod(mirror::ArtMethod* new_m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -179,48 +176,28 @@ class MethodHelper {
     shorty_ = nullptr;
   }
 
-  mirror::ArtMethod* GetMethod() const {
+  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return method_.Get();
+  }
+
+  Handle<mirror::ArtMethod> GetHandle() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return method_;
   }
 
-  const char* GetName() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    const DexFile& dex_file = GetDexFile();
-    uint32_t dex_method_idx = method_->GetDexMethodIndex();
-    if (LIKELY(dex_method_idx != DexFile::kDexNoIndex)) {
-      return dex_file.GetMethodName(dex_file.GetMethodId(dex_method_idx));
-    } else {
-      Runtime* runtime = Runtime::Current();
-      if (method_ == runtime->GetResolutionMethod()) {
-        return "<runtime internal resolution method>";
-      } else if (method_ == runtime->GetImtConflictMethod()) {
-        return "<runtime internal imt conflict method>";
-      } else if (method_ == runtime->GetCalleeSaveMethod(Runtime::kSaveAll)) {
-        return "<runtime internal callee-save all registers method>";
-      } else if (method_ == runtime->GetCalleeSaveMethod(Runtime::kRefsOnly)) {
-        return "<runtime internal callee-save reference registers method>";
-      } else if (method_ == runtime->GetCalleeSaveMethod(Runtime::kRefsAndArgs)) {
-        return "<runtime internal callee-save reference and argument registers method>";
-      } else {
-        return "<unknown runtime internal method>";
-      }
-    }
-  }
-
-  mirror::String* GetNameAsString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::String* GetNameAsString(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const DexFile& dex_file = GetDexFile();
     uint32_t dex_method_idx = method_->GetDexMethodIndex();
     const DexFile::MethodId& method_id = dex_file.GetMethodId(dex_method_idx);
-    StackHandleScope<1> hs(Thread::Current());
+    StackHandleScope<1> hs(self);
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(GetDexCache()));
-    return GetClassLinker()->ResolveString(dex_file, method_id.name_idx_, dex_cache);
+    return Runtime::Current()->GetClassLinker()->ResolveString(dex_file, method_id.name_idx_,
+                                                               dex_cache);
   }
 
   const char* GetShorty() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const char* result = shorty_;
     if (result == nullptr) {
-      const DexFile& dex_file = GetDexFile();
-      result = dex_file.GetMethodShorty(dex_file.GetMethodId(method_->GetDexMethodIndex()),
-                                        &shorty_len_);
+      result = method_->GetShorty(&shorty_len_);
       shorty_ = result;
     }
     return result;
@@ -247,26 +224,6 @@ class MethodHelper {
     return refs;
   }
 
-  const Signature GetSignature() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    const DexFile& dex_file = GetDexFile();
-    uint32_t dex_method_idx = method_->GetDexMethodIndex();
-    if (dex_method_idx != DexFile::kDexNoIndex) {
-      return dex_file.GetMethodSignature(dex_file.GetMethodId(dex_method_idx));
-    } else {
-      return Signature::NoSignature();
-    }
-  }
-
-  const DexFile::ProtoId& GetPrototype() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    const DexFile& dex_file = GetDexFile();
-    return dex_file.GetMethodPrototype(dex_file.GetMethodId(method_->GetDexMethodIndex()));
-  }
-
-  const DexFile::TypeList* GetParameterTypeList() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    const DexFile::ProtoId& proto = GetPrototype();
-    return GetDexFile().GetProtoParameters(proto);
-  }
-
   mirror::Class* GetReturnType(bool resolve = true) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const DexFile& dex_file = GetDexFile();
     const DexFile::MethodId& method_id = dex_file.GetMethodId(method_->GetDexMethodIndex());
@@ -275,66 +232,16 @@ class MethodHelper {
     return GetClassFromTypeIdx(return_type_idx, resolve);
   }
 
-  const char* GetReturnTypeDescriptor() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    const DexFile& dex_file = GetDexFile();
-    const DexFile::MethodId& method_id = dex_file.GetMethodId(method_->GetDexMethodIndex());
-    const DexFile::ProtoId& proto_id = dex_file.GetMethodPrototype(method_id);
-    uint16_t return_type_idx = proto_id.return_type_idx_;
-    return dex_file.GetTypeDescriptor(dex_file.GetTypeId(return_type_idx));
-  }
-
-  int32_t GetLineNumFromDexPC(uint32_t dex_pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    if (dex_pc == DexFile::kDexNoIndex) {
-      return method_->IsNative() ? -2 : -1;
-    } else {
-      const DexFile& dex_file = GetDexFile();
-      return dex_file.GetLineNumFromPC(method_, dex_pc);
-    }
-  }
-
-  const char* GetDeclaringClassDescriptor() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    const DexFile& dex_file = GetDexFile();
-    uint32_t dex_method_idx = method_->GetDexMethodIndex();
-    if (UNLIKELY(dex_method_idx == DexFile::kDexNoIndex)) {
-      return "<runtime method>";
-    }
-    return dex_file.GetMethodDeclaringClassDescriptor(dex_file.GetMethodId(dex_method_idx));
-  }
-
-  const char* GetDeclaringClassSourceFile() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return method_->GetDeclaringClass()->GetSourceFile();
-  }
-
-  uint16_t GetClassDefIndex() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return method_->GetDeclaringClass()->GetDexClassDefIndex();
-  }
-
-  const DexFile::ClassDef& GetClassDef() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetDexFile().GetClassDef(GetClassDefIndex());
-  }
-
-  mirror::ClassLoader* GetClassLoader() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return method_->GetDeclaringClass()->GetClassLoader();
-  }
-
-  bool IsStatic() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return method_->IsStatic();
-  }
-
-  bool IsClassInitializer() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return method_->IsConstructor() && IsStatic();
-  }
-
   size_t NumArgs() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // "1 +" because the first in Args is the receiver.
     // "- 1" because we don't count the return type.
-    return (IsStatic() ? 0 : 1) + GetShortyLength() - 1;
+    return (method_->IsStatic() ? 0 : 1) + GetShortyLength() - 1;
   }
 
   // Get the primitive type associated with the given parameter.
   Primitive::Type GetParamPrimitiveType(size_t param) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     CHECK_LT(param, NumArgs());
-    if (IsStatic()) {
+    if (method_->IsStatic()) {
       param++;  // 0th argument must skip return value at start of the shorty
     } else if (param == 0) {
       return Primitive::kPrimNot;
@@ -376,8 +283,8 @@ class MethodHelper {
     if (UNLIKELY(GetReturnType() != other->GetReturnType())) {
       return false;
     }
-    const DexFile::TypeList* types = GetParameterTypeList();
-    const DexFile::TypeList* other_types = other->GetParameterTypeList();
+    const DexFile::TypeList* types = method_->GetParameterTypeList();
+    const DexFile::TypeList* other_types = other->GetMethod()->GetParameterTypeList();
     if (types == nullptr) {
       return (other_types == nullptr) || (other_types->Size() == 0);
     } else if (UNLIKELY(other_types == nullptr)) {
@@ -398,30 +305,14 @@ class MethodHelper {
     return true;
   }
 
-  const DexFile::CodeItem* GetCodeItem()
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetDexFile().GetCodeItem(method_->GetCodeItemOffset());
-  }
-
-  bool IsResolvedTypeIdx(uint16_t type_idx) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return method_->GetDexCacheResolvedTypes()->Get(type_idx) != nullptr;
-  }
-
   mirror::Class* GetClassFromTypeIdx(uint16_t type_idx, bool resolve = true)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     mirror::Class* type = method_->GetDexCacheResolvedTypes()->Get(type_idx);
     if (type == nullptr && resolve) {
-      type = GetClassLinker()->ResolveType(type_idx, method_);
+      type = Runtime::Current()->GetClassLinker()->ResolveType(type_idx, method_.Get());
       CHECK(type != nullptr || Thread::Current()->IsExceptionPending());
     }
     return type;
-  }
-
-  const char* GetTypeDescriptorFromTypeIdx(uint16_t type_idx)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    const DexFile& dex_file = GetDexFile();
-    return dex_file.GetTypeDescriptor(dex_file.GetTypeId(type_idx));
   }
 
   mirror::Class* GetDexCacheResolvedType(uint16_t type_idx)
@@ -442,7 +333,7 @@ class MethodHelper {
     if (UNLIKELY(s == nullptr)) {
       StackHandleScope<1> hs(Thread::Current());
       Handle<mirror::DexCache> dex_cache(hs.NewHandle(GetDexCache()));
-      s = GetClassLinker()->ResolveString(GetDexFile(), string_idx, dex_cache);
+      s = Runtime::Current()->GetClassLinker()->ResolveString(GetDexFile(), string_idx, dex_cache);
     }
     return s;
   }
@@ -528,18 +419,15 @@ class MethodHelper {
         mirror::ArtMethod* interface_method =
             method->GetDexCacheResolvedMethods()->Get(method->GetDexMethodIndex());
         DCHECK(interface_method != nullptr);
-        DCHECK(interface_method == GetClassLinker()->FindMethodForProxy(klass, method));
+        DCHECK_EQ(interface_method,
+                  Runtime::Current()->GetClassLinker()->FindMethodForProxy(klass, method));
         method = interface_method;
       }
     }
-    method_ = method;
+    method_.Assign(method);
   }
 
-  ClassLinker* GetClassLinker() ALWAYS_INLINE {
-    return Runtime::Current()->GetClassLinker();
-  }
-
-  mirror::ArtMethod* method_;
+  Handle<mirror::ArtMethod> method_;
   const char* shorty_;
   uint32_t shorty_len_;
 

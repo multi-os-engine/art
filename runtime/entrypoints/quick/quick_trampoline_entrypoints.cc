@@ -470,16 +470,16 @@ extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Threa
   } else {
     DCHECK(!method->IsNative()) << PrettyMethod(method);
     const char* old_cause = self->StartAssertNoThreadSuspension("Building interpreter shadow frame");
-    MethodHelper mh(method);
-    const DexFile::CodeItem* code_item = mh.GetCodeItem();
+    const DexFile::CodeItem* code_item = method->GetCodeItem();
     DCHECK(code_item != nullptr) << PrettyMethod(method);
     uint16_t num_regs = code_item->registers_size_;
     void* memory = alloca(ShadowFrame::ComputeSize(num_regs));
     ShadowFrame* shadow_frame(ShadowFrame::Create(num_regs, NULL,  // No last shadow coming from quick.
                                                   method, 0, memory));
     size_t first_arg_reg = code_item->registers_size_ - code_item->ins_size_;
-    BuildQuickShadowFrameVisitor shadow_frame_builder(sp, mh.IsStatic(), mh.GetShorty(),
-                                                      mh.GetShortyLength(),
+    uint32_t shorty_len = 0;
+    const char* shorty = method->GetShorty(&shorty_len);
+    BuildQuickShadowFrameVisitor shadow_frame_builder(sp, method->IsStatic(), shorty, shorty_len,
                                                       shadow_frame, first_arg_reg);
     shadow_frame_builder.VisitArguments();
     // Push a transition back into managed code onto the linked list in thread.
@@ -499,6 +499,8 @@ extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Threa
       }
     }
 
+    StackHandleScope<1> hs(self);
+    MethodHelper mh(hs.NewHandle(method));
     JValue result = interpreter::EnterInterpreterFromStub(self, mh, code_item, *shadow_frame);
     // Pop transition.
     self->PopManagedStackFragment(fragment);
@@ -687,11 +689,8 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
   if (called->IsRuntimeMethod()) {
     uint32_t dex_pc = caller->ToDexPc(QuickArgumentVisitor::GetCallingPc(sp));
     const DexFile::CodeItem* code;
-    {
-      MethodHelper mh(caller);
-      dex_file = &mh.GetDexFile();
-      code = mh.GetCodeItem();
-    }
+    dex_file = caller->GetDexFile();
+    code = caller->GetCodeItem();
     CHECK_LT(dex_pc, code->insns_size_in_code_units_);
     const Instruction* instr = Instruction::At(&code->insns_[dex_pc]);
     Instruction::Code instr_code = instr->Opcode();

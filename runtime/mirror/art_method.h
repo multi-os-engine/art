@@ -88,6 +88,11 @@ class MANAGED ArtMethod : public Object {
     return (GetAccessFlags() & kAccConstructor) != 0;
   }
 
+  // Returns true if the method is a class initializer.
+  bool IsClassInitializer() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return IsConstructor() && IsStatic();
+  }
+
   // Returns true if the method is static, private, or a constructor.
   bool IsDirect() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return IsDirect(GetAccessFlags());
@@ -398,8 +403,8 @@ class MANAGED ArtMethod : public Object {
   // Find the catch block for the given exception type and dex_pc. When a catch block is found,
   // indicates whether the found catch block is responsible for clearing the exception or whether
   // a move-exception instruction is present.
-  uint32_t FindCatchBlock(Handle<Class> exception_type, uint32_t dex_pc,
-                          bool* has_no_move_exception)
+  static uint32_t FindCatchBlock(Handle<ArtMethod> h_this, Handle<Class> exception_type,
+                                 uint32_t dex_pc, bool* has_no_move_exception)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static void SetClass(Class* java_lang_reflect_ArtMethod);
@@ -412,6 +417,27 @@ class MANAGED ArtMethod : public Object {
   static void ResetClass();
 
   static void VisitRoots(RootCallback* callback, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  const DexFile* GetDexFile() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const char* GetDeclaringClassDescriptor() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const char* GetShorty() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    uint32_t unused_length;
+    return GetShorty(&unused_length);
+  }
+  const char* GetShorty(uint32_t* out_length) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const Signature GetSignature() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const char* GetName() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const DexFile::CodeItem* GetCodeItem() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  bool IsResolvedTypeIdx(uint16_t type_idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  int32_t GetLineNumFromDexPC(uint32_t dex_pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const DexFile::ProtoId& GetPrototype() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const DexFile::TypeList* GetParameterTypeList() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const char* GetDeclaringClassSourceFile() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  uint16_t GetClassDefIndex() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const DexFile::ClassDef& GetClassDef() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) ;
+  const char* GetReturnTypeDescriptor() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const char* GetTypeDescriptorFromTypeIdx(uint16_t type_idx)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  protected:
