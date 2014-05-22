@@ -1223,8 +1223,13 @@ std::string GetSystemImageFilename(const char* location, const InstructionSet is
 std::string DexFilenameToOdexFilename(const std::string& location, const InstructionSet isa) {
   // location = /foo/bar/baz.jar
   // odex_location = /foo/bar/<isa>/baz.odex
-  CHECK_GE(location.size(), 4U) << location;  // must be at least .123
-  std::string odex_location(location);
+
+  // If synthetic, just use base filename.
+  const std::string& loc = DexFile::IsMultiDexLocation(location) ?
+      DexFile::GetMultiDexBaseFilename(location) : location;
+
+  CHECK_GE(loc.size(), 4U) << location;  // must be at least .123
+  std::string odex_location(loc);
   InsertIsaDirectory(isa, &odex_location);
   size_t dot_index = odex_location.size() - 3 - 1;  // 3=dex or zip or apk
   CHECK_EQ('.', odex_location[dot_index]) << location;

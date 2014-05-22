@@ -315,6 +315,15 @@ const byte* OatFile::End() const {
   return end_;
 }
 
+const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location) const {
+  Table::const_iterator it = oat_dex_files_.find(dex_location);
+  if (it != oat_dex_files_.end()) {
+    return it->second;
+  } else {
+    return nullptr;
+  }
+}
+
 const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
                                                   const uint32_t* dex_location_checksum,
                                                   bool warn_if_not_found) const {
