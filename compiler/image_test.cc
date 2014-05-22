@@ -130,9 +130,9 @@ TEST_F(ImageTest, WriteRead) {
   java_lang_dex_file_ = NULL;
 
   std::string error_msg;
-  std::unique_ptr<const DexFile> dex(DexFile::Open(GetLibCoreDexFileName().c_str(),
-                                             GetLibCoreDexFileName().c_str(),
-                                             &error_msg));
+  std::unique_ptr<const DexFile> dex(LoadExpectSingleDexFile(GetLibCoreDexFileName().c_str(),
+                                                             GetLibCoreDexFileName().c_str(),
+                                                             &error_msg));
   ASSERT_TRUE(dex.get() != nullptr) << error_msg;
 
   // Remove the reservation of the memory for use to load the image.

@@ -216,6 +216,8 @@ class OatFile {
     DISALLOW_COPY_AND_ASSIGN(OatDexFile);
   };
 
+  const OatDexFile* GetOatDexFile(const char* dex_location) const;
+
   const OatDexFile* GetOatDexFile(const char* dex_location,
                                   const uint32_t* const dex_location_checksum,
                                   bool exception_if_not_found = true) const;
