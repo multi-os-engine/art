@@ -55,6 +55,8 @@ class LocalValueNumberingTest : public testing::Test {
     { opcode, value, 0u, 0, { }, 1, { reg } }
 #define DEF_CONST_WIDE(opcode, reg, value) \
     { opcode, value, 0u, 0, { }, 2, { reg, reg + 1 } }
+#define DEF_CONST_STRING(opcode, reg, index) \
+    { opcode, index, 0u, 0, { }, 1, { reg } }
 #define DEF_IGET(opcode, reg, obj, field_info) \
     { opcode, 0u, field_info, 1, { obj }, 1, { reg } }
 #define DEF_IGET_WIDE(opcode, reg, obj, field_info) \
@@ -71,6 +73,10 @@ class LocalValueNumberingTest : public testing::Test {
     { opcode, 0u, field_info, 1, { reg }, 0, { } }
 #define DEF_SPUT_WIDE(opcode, reg, field_info) \
     { opcode, 0u, field_info, 2, { reg, reg + 1 }, 0, { } }
+#define DEF_AGET(opcode, reg, obj, idx) \
+    { opcode, 0u, 0u, 2, { obj, idx }, 1, { reg } }
+#define DEF_APUT(opcode, reg, obj, idx) \
+    { opcode, 0u, 0u, 3, { reg, obj, idx }, 0, { } }
 #define DEF_INVOKE1(opcode, reg) \
     { opcode, 0u, 0u, 1, { reg }, 0, { } }
 #define DEF_UNIQUE_REF(opcode, reg) \
@@ -170,8 +176,11 @@ class LocalValueNumberingTest : public testing::Test {
         cu_(&pool_),
         mir_count_(0u),
         mirs_(nullptr),
-        lvn_(LocalValueNumbering::Create(&cu_)) {
+        allocator_(),
+        lvn_() {
     cu_.mir_graph.reset(new MIRGraph(&cu_, &cu_.arena));
+    allocator_.reset(ScopedArenaAllocator::Create(&cu_.arena_stack));
+    lvn_.reset(LocalValueNumbering::Create(&cu_, allocator_.get()));
   }
 
   ArenaPool pool_;
@@ -180,6 +189,7 @@ class LocalValueNumberingTest : public testing::Test {
   MIR* mirs_;
   std::vector<SSARepresentation> ssa_reps_;
   std::vector<uint16_t> value_names_;
+  std::unique_ptr<ScopedArenaAllocator> allocator_;
   std::unique_ptr<LocalValueNumbering> lvn_;
 };
 
@@ -320,6 +330,63 @@ TEST_F(LocalValueNumberingTest, TestVolatile) {
   EXPECT_EQ(mirs_[1].optimization_flags, 0u);
   EXPECT_EQ(mirs_[2].optimization_flags, MIR_IGNORE_NULL_CHECK);
   EXPECT_EQ(mirs_[3].optimization_flags, 0u);
+}
+
+TEST_F(LocalValueNumberingTest, TestConstString) {
+  static const MIRDef mirs[] = {
+      DEF_CONST_STRING(Instruction::CONST_STRING, 0u, 0u),
+      DEF_CONST_STRING(Instruction::CONST_STRING, 1u, 0u),
+      DEF_CONST_STRING(Instruction::CONST_STRING, 2u, 2u),
+      DEF_CONST_STRING(Instruction::CONST_STRING, 3u, 0u),
+      DEF_INVOKE1(Instruction::INVOKE_DIRECT, 2u),
+      DEF_CONST_STRING(Instruction::CONST_STRING, 4u, 2u),
+  };
+
+  PrepareMIRs(mirs);
+  PerformLVN();
+  ASSERT_EQ(value_names_.size(), 6u);
+  EXPECT_EQ(value_names_[1], value_names_[0]);
+  EXPECT_NE(value_names_[2], value_names_[0]);
+  EXPECT_EQ(value_names_[3], value_names_[0]);
+  EXPECT_EQ(value_names_[5], value_names_[2]);
+}
+
+TEST_F(LocalValueNumberingTest, TestSameValueInDifferentMemoryLocations) {
+  static const IFieldDef ifields[] = {
+      { 1u, 1u, 1u, false },
+      { 2u, 1u, 2u, false }
+  };
+  static const SFieldDef sfields[] = {
+      { 3u, 1u, 3u, false },
+  };
+  static const MIRDef mirs[] = {
+      DEF_IGET(Instruction::IGET, 0u, 10u, 0u),
+      DEF_IPUT(Instruction::IPUT, 0u, 10u, 1u),
+      DEF_SPUT(Instruction::SPUT, 0u, 0u),
+      DEF_APUT(Instruction::APUT, 0u, 11u, 12u),
+      DEF_IGET(Instruction::IGET, 1u, 10u, 0u),
+      DEF_IGET(Instruction::IGET, 2u, 10u, 1u),
+      DEF_AGET(Instruction::AGET, 3u, 11u, 12u),
+      DEF_SGET(Instruction::SGET, 4u, 0u),
+  };
+
+  PrepareIFields(ifields);
+  PrepareSFields(sfields);
+  PrepareMIRs(mirs);
+  PerformLVN();
+  ASSERT_EQ(value_names_.size(), 8u);
+  EXPECT_EQ(value_names_[4], value_names_[0]);
+  EXPECT_EQ(value_names_[5], value_names_[0]);
+  EXPECT_EQ(value_names_[6], value_names_[0]);
+  EXPECT_EQ(value_names_[7], value_names_[0]);
+  EXPECT_EQ(mirs_[0].optimization_flags, 0u);
+  EXPECT_EQ(mirs_[1].optimization_flags, MIR_IGNORE_NULL_CHECK);
+  EXPECT_EQ(mirs_[2].optimization_flags, 0u);
+  EXPECT_EQ(mirs_[3].optimization_flags, 0u);
+  EXPECT_EQ(mirs_[4].optimization_flags, MIR_IGNORE_NULL_CHECK);
+  EXPECT_EQ(mirs_[5].optimization_flags, MIR_IGNORE_NULL_CHECK);
+  EXPECT_EQ(mirs_[6].optimization_flags, MIR_IGNORE_NULL_CHECK | MIR_IGNORE_RANGE_CHECK);
+  EXPECT_EQ(mirs_[7].optimization_flags, 0u);
 }
 
 }  // namespace art
