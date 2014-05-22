@@ -1013,7 +1013,7 @@ class HAdd : public HBinaryOperation {
 
   virtual bool IsCommutative() { return true; }
 
-  DECLARE_INSTRUCTION(Add);
+  DECLARE_INSTRUCTION(Add)
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HAdd);
@@ -1026,7 +1026,7 @@ class HSub : public HBinaryOperation {
 
   virtual bool IsCommutative() { return false; }
 
-  DECLARE_INSTRUCTION(Sub);
+  DECLARE_INSTRUCTION(Sub)
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HSub);
@@ -1043,7 +1043,7 @@ class HParameterValue : public HTemplateInstruction<0> {
 
   virtual Primitive::Type GetType() const { return parameter_type_; }
 
-  DECLARE_INSTRUCTION(ParameterValue);
+  DECLARE_INSTRUCTION(ParameterValue)
 
  private:
   // The index of this parameter in the parameters list. Must be less
@@ -1063,7 +1063,7 @@ class HNot : public HTemplateInstruction<1> {
 
   virtual Primitive::Type GetType() const { return Primitive::kPrimBoolean; }
 
-  DECLARE_INSTRUCTION(Not);
+  DECLARE_INSTRUCTION(Not)
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HNot);
@@ -1088,6 +1088,7 @@ class HPhi : public HInstruction {
   void AddInput(HInstruction* input);
 
   virtual Primitive::Type GetType() const { return type_; }
+  void SetType(Primitive::Type type) { type_ = type; }
 
   uint32_t GetRegNumber() const { return reg_number_; }
 
@@ -1096,7 +1097,7 @@ class HPhi : public HInstruction {
  protected:
   GrowableArray<HInstruction*> inputs_;
   const uint32_t reg_number_;
-  const Primitive::Type type_;
+  Primitive::Type type_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HPhi);
