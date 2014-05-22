@@ -604,6 +604,10 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
           return false;
         }
       }
+    } else if (StartsWith(option, "-Xcompiler:")) {
+      if (!ParseStringAfterChar(option, ':', &compiler_filename_)) {
+        return false;
+      }
     } else if (option == "-Xcompiler-option") {
       i++;
       if (i == options.size()) {
@@ -791,6 +795,7 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -Xprofile-duration:integervalue\n");
   UsageMessage(stream, "  -Xprofile-interval:integervalue\n");
   UsageMessage(stream, "  -Xprofile-backoff:integervalue\n");
+  UsageMessage(stream, "  -Xcompiler:filename\n");
   UsageMessage(stream, "  -Xcompiler-option dex2oat-option\n");
   UsageMessage(stream, "  -Ximage-compiler-option dex2oat-option\n");
   UsageMessage(stream, "\n");

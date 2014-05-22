@@ -528,6 +528,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   default_stack_size_ = options->stack_size_;
   stack_trace_file_ = options->stack_trace_file_;
 
+  compiler_filename_ = options->compiler_filename_;
   compiler_options_ = options->compiler_options_;
   image_compiler_options_ = options->image_compiler_options_;
 
