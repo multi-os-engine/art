@@ -320,9 +320,11 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
     return true;
   }
   bool use_lvn = bb->use_lvn;
+  std::unique_ptr<ScopedArenaAllocator> allocator;
   std::unique_ptr<LocalValueNumbering> local_valnum;
   if (use_lvn) {
-    local_valnum.reset(LocalValueNumbering::Create(cu_));
+    allocator.reset(ScopedArenaAllocator::Create(&cu_->arena_stack));
+    local_valnum.reset(LocalValueNumbering::Create(cu_, allocator.get()));
   }
   while (bb != NULL) {
     for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
