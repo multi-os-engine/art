@@ -18,6 +18,7 @@
 #define ART_RUNTIME_BASE_MACROS_H_
 
 #include <stddef.h>  // for size_t
+#include <unistd.h>  // for TEMP_FAILURE_RETRY
 
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 
