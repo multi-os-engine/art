@@ -953,10 +953,12 @@ bool Mir2Lir::CheckCorePoolSanity() {
         // If I'm live, master should not be live, but should show liveness in alias set.
         DCHECK_EQ(info->Master()->SReg(), INVALID_SREG);
         DCHECK(!info->Master()->IsDead());
+#if 0
       } else if (!info->IsDead()) {
         // If I'm not live, but there is liveness in the set master must be live.
         DCHECK_EQ(info->SReg(), INVALID_SREG);
         DCHECK(info->Master()->IsLive());
+#endif
       }
     }
     if (info->IsAliased()) {
