@@ -31,7 +31,7 @@
 namespace art {
 
 #define REG(mh, reg_bitmap, reg) \
-    (((reg) < mh.GetCodeItem()->registers_size_) && \
+    (((reg) < m->GetCodeItem()->registers_size_) && \
      ((*((reg_bitmap) + (reg)/8) >> ((reg) % 8) ) & 0x01))
 
 #define CHECK_REGS(...) if (!IsShadowFrame()) { \
@@ -64,8 +64,7 @@ struct TestReferenceMapVisitor : public StackVisitor {
       NativePcOffsetToReferenceMap map(m->GetNativeGcMap());
       reg_bitmap = map.FindBitMap(GetNativePcOffset());
     }
-    MethodHelper mh(m);
-    StringPiece m_name(mh.GetName());
+    StringPiece m_name(m->GetName());
 
     // Given the method name and the number of times the method has been called,
     // we know the Dex registers with live reference values. Assert that what we
