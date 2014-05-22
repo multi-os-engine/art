@@ -405,10 +405,8 @@ void BitVector::Dump(std::ostream& os, const char *prefix) const {
   os << buffer.str() << std::endl;
 }
 
-void BitVector::DumpDot(FILE* file, const char* prefix, bool last_entry) const {
-  std::ostringstream buffer;
-  Dump(buffer, prefix);
 
+void BitVector::DumpDotHelper(FILE* file, std::ostringstream& buffer, bool last_entry) const {
   // Now print it to the file.
   fprintf(file, "    {%s}", buffer.str().c_str());
 
@@ -419,6 +417,31 @@ void BitVector::DumpDot(FILE* file, const char* prefix, bool last_entry) const {
 
   // Add the \n.
   fprintf(file, "\\\n");
+}
+
+void BitVector::DumpDot(FILE* file, const char* prefix, bool last_entry) const {
+  std::ostringstream buffer;
+  DumpHelper(buffer, prefix);
+  DumpDotHelper(file, buffer, last_entry);
+}
+
+void BitVector::DumpIndicesDot(FILE* file, const char* prefix, bool last_entry) const {
+  std::ostringstream buffer;
+  DumpIndicesHelper(buffer, prefix);
+  DumpDotHelper(file, buffer, last_entry);
+}
+
+void BitVector::DumpIndicesHelper(std::ostringstream& buffer, const char* prefix) const {
+  // Initialize it.
+  if (prefix != nullptr) {
+    buffer << prefix;
+  }
+
+  for (size_t i = 0; i < number_of_bits_; i++) {
+    if (IsBitSet(i)) {
+      buffer << i << " ";
+    }
+  }
 }
 
 void BitVector::DumpHelper(std::ostringstream& buffer, const char* prefix) const {

@@ -150,9 +150,12 @@ class BitVector {
 
     void Dump(std::ostream& os, const char* prefix) const;
     void DumpDot(FILE* file, const char* prefix, bool last_entry = false) const;
+    void DumpIndicesDot(FILE* file, const char* prefix, bool last_entry = false) const;
 
   protected:
     void DumpHelper(std::ostringstream& buffer, const char* prefix) const;
+    void DumpIndicesHelper(std::ostringstream& buffer, const char* prefix) const;
+    void DumpDotHelper(FILE* file, std::ostringstream& buffer, bool last_entry) const;
 
   private:
     Allocator* const allocator_;
