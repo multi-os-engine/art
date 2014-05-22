@@ -399,15 +399,15 @@ uint32_t BitVector::NumSetBits(const uint32_t* storage, uint32_t end) {
   return count;
 }
 
-void BitVector::Dump(std::ostream& os, const char *prefix) const {
+void BitVector::Dump(std::ostream& os, const char *prefix, bool print_indices) const {
   std::ostringstream buffer;
-  DumpHelper(buffer, prefix);
+  DumpHelper(buffer, prefix, print_indices);
   os << buffer.str() << std::endl;
 }
 
-void BitVector::DumpDot(FILE* file, const char* prefix, bool last_entry) const {
+void BitVector::DumpDot(FILE* file, const char* prefix, bool last_entry, bool print_indices) const {
   std::ostringstream buffer;
-  Dump(buffer, prefix);
+  DumpHelper(buffer, prefix, print_indices);
 
   // Now print it to the file.
   fprintf(file, "    {%s}", buffer.str().c_str());
@@ -421,17 +421,27 @@ void BitVector::DumpDot(FILE* file, const char* prefix, bool last_entry) const {
   fprintf(file, "\\\n");
 }
 
-void BitVector::DumpHelper(std::ostringstream& buffer, const char* prefix) const {
+void BitVector::DumpHelper(std::ostringstream& buffer, const char* prefix, bool print_indices) const {
   // Initialize it.
   if (prefix != nullptr) {
     buffer << prefix;
   }
 
-  buffer << '(';
-  for (size_t i = 0; i < number_of_bits_; i++) {
-    buffer << IsBitSet(i);
+  if (!print_indices) {
+    buffer << '(';
   }
-  buffer << ')';
+
+  for (size_t i = 0; i < number_of_bits_; i++) {
+    if (print_indices) {
+      buffer << i << " ";
+    } else {
+      buffer << IsBitSet(i);
+    }
+  }
+
+  if (print_indices == false) {
+    buffer << ')';
+  }
 }
 
 }  // namespace art
