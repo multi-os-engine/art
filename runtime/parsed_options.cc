@@ -15,6 +15,7 @@
  */
 
 #include "parsed_options.h"
+#include "utils.h"
 #ifdef HAVE_ANDROID_OS
 #include "cutils/properties.h"
 #endif
@@ -242,6 +243,9 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
 //  gLogVerbosity.third_party_jni = true;  // TODO: don't check this in!
 //  gLogVerbosity.threads = true;  // TODO: don't check this in!
 //  gLogVerbosity.verifier = true;  // TODO: don't check this in!
+
+  compiler_executable_ = GetAndroidRoot();
+  compiler_executable_ += (kIsDebugBuild ? "/bin/dex2oatd" : "/bin/dex2oat");
 
   method_trace_ = false;
   method_trace_file_ = "/data/method-trace-file.bin";
@@ -604,6 +608,10 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
           return false;
         }
       }
+    } else if (StartsWith(option, "-Xcompiler:")) {
+      if (!ParseStringAfterChar(option, ':', &compiler_executable_)) {
+        return false;
+      }
     } else if (option == "-Xcompiler-option") {
       i++;
       if (i == options.size()) {
@@ -791,6 +799,7 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -Xprofile-duration:integervalue\n");
   UsageMessage(stream, "  -Xprofile-interval:integervalue\n");
   UsageMessage(stream, "  -Xprofile-backoff:doublevalue\n");
+  UsageMessage(stream, "  -Xcompiler:filename\n");
   UsageMessage(stream, "  -Xcompiler-option dex2oat-option\n");
   UsageMessage(stream, "  -Ximage-compiler-option dex2oat-option\n");
   UsageMessage(stream, "\n");
