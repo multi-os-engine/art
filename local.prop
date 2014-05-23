@@ -1,0 +1,6 @@
+dalvik.vm.profiler=1
+dalvik.vm.profile.start-immediately=1
+dalvik.vm.profile.period_secs=30
+dalvik.vm.profile.duration_secs=1
+dalvik.vm.profile.interval_us=500
+dalvik.vm.profile.backoff_coeff=2
