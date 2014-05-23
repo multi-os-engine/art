@@ -179,19 +179,21 @@ class InstructionBitVectorIterator : public ValueObject {
   InstructionBitVectorIterator(const BitVector& vector,
                                const GrowableArray<HInstruction*>& instructions)
         : instructions_(instructions),
-          iterator_(BitVector::Iterator(&vector)),
-          current_bit_index_(iterator_.Next()) {}
+          iterator_(vector.Indexes().begin()) {}
 
-  bool Done() const { return current_bit_index_ == -1; }
-  HInstruction* Current() const { return instructions_.Get(current_bit_index_); }
+  bool Done() const { return iterator_.Done(); }
+  HInstruction* Current() const {
+    DCHECK(!Done());
+    return instructions_.Get(*iterator_);
+  }
   void Advance() {
-    current_bit_index_ = iterator_.Next();
+    DCHECK(!Done());
+    ++iterator_;
   }
 
  private:
   const GrowableArray<HInstruction*> instructions_;
-  BitVector::Iterator iterator_;
-  int32_t current_bit_index_;
+  BitVector::IndexIterator iterator_;
 
   DISALLOW_COPY_AND_ASSIGN(InstructionBitVectorIterator);
 };
