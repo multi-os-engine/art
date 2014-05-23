@@ -298,7 +298,11 @@ ENTRY art_quick_do_long_jump
     l.s     $f29, 116($a1)
     l.s     $f30, 120($a1)
     l.s     $f31, 124($a1)
+    .set push
+    .set nomacro
+    .set noat
     lw      $at, 4($a0)
+    .set pop
     lw      $v0, 8($a0)
     lw      $v1, 12($a0)
     lw      $a1, 20($a0)
