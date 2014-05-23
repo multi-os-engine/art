@@ -25,10 +25,6 @@ void Arm64Mir2Lir::GenArithOpFloat(Instruction::Code opcode, RegLocation rl_dest
   int op = kA64Brk1d;
   RegLocation rl_result;
 
-  /*
-   * Don't attempt to optimize register usage since these opcodes call out to
-   * the handlers.
-   */
   switch (opcode) {
     case Instruction::ADD_FLOAT_2ADDR:
     case Instruction::ADD_FLOAT:
@@ -156,12 +152,12 @@ void Arm64Mir2Lir::GenConversion(Instruction::Code opcode,
   }
 
   if (rl_src.wide) {
-    rl_src = LoadValueWide(rl_src, kFPReg);
+    rl_src = LoadValueWide(rl_src, kAnyReg);
   } else {
-    rl_src = LoadValue(rl_src, kFPReg);
+    rl_src = LoadValue(rl_src, kAnyReg);
   }
 
-  rl_result = EvalLoc(rl_dest, kFPReg, true);
+  rl_result = EvalLoc(rl_dest, kAnyReg, true);
   NewLIR2(op, rl_result.reg.GetReg(), rl_src.reg.GetReg());
 
   if (rl_dest.wide) {
@@ -296,25 +292,11 @@ void Arm64Mir2Lir::GenNegDouble(RegLocation rl_dest, RegLocation rl_src) {
 }
 
 bool Arm64Mir2Lir::GenInlinedSqrt(CallInfo* info) {
-  // TODO(Arm64): implement this.
-  UNIMPLEMENTED(FATAL) << "GenInlinedSqrt not implemented for Arm64";
-
-  DCHECK_EQ(cu_->instruction_set, kArm64);
-  LIR *branch;
   RegLocation rl_src = info->args[0];
   RegLocation rl_dest = InlineTargetWide(info);  // double place for result
   rl_src = LoadValueWide(rl_src, kFPReg);
   RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR2(FWIDE(kA64Fsqrt2ff), rl_result.reg.GetReg(), rl_src.reg.GetReg());
-  NewLIR2(FWIDE(kA64Fcmp2ff), rl_result.reg.GetReg(), rl_result.reg.GetReg());
-  branch = NewLIR2(kA64B2ct, kArmCondEq, 0);
-  ClobberCallerSave();
-  LockCallTemps();  // Using fixed registers
-  RegStorage r_tgt = LoadHelper(QUICK_ENTRYPOINT_OFFSET(8, pSqrt));
-  // NewLIR3(kThumb2Fmrrd, r0, r1, rl_src.reg.GetReg());
-  NewLIR1(kA64Blr1x, r_tgt.GetReg());
-  // NewLIR3(kThumb2Fmdrr, rl_result.reg.GetReg(), r0, r1);
-  branch->target = NewLIR0(kPseudoTargetLabel);
   StoreValueWide(rl_dest, rl_result);
   return true;
 }
