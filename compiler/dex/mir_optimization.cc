@@ -273,6 +273,13 @@ CompilerTemp* MIRGraph::GetNewCompilerTemp(CompilerTempType ct_type, bool wide) 
     num_non_special_compiler_temps_++;
 
     if (wide) {
+      // Create a new CompilerTemp for the high part.
+      CompilerTemp *compiler_temp_high = static_cast<CompilerTemp *>(arena_->Alloc(sizeof(CompilerTemp),
+                                                                     kArenaAllocRegAlloc));
+      compiler_temp_high->v_reg = compiler_temp->v_reg;
+      compiler_temp_high->s_reg_low = compiler_temp->s_reg_low;
+      compiler_temps_.Insert(compiler_temp_high);
+
       // Ensure that the two registers are consecutive. Since the virtual registers used for temps grow in a
       // negative fashion, we need the smaller to refer to the low part. Thus, we redefine the v_reg and s_reg_low.
       compiler_temp->v_reg--;
