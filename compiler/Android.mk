@@ -249,7 +249,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
   LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime
 
   ifeq ($$(art_target_or_host),host)
-    LOCAL_LDLIBS += -ldl -lpthread
+    LOCAL_LDLIBS += -ldl -lpthread -lstdc++
   endif
   LOCAL_ADDITIONAL_DEPENDENCIES := art/build/Android.common.mk
   LOCAL_ADDITIONAL_DEPENDENCIES += $(LOCAL_PATH)/Android.mk

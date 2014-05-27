@@ -45,6 +45,7 @@ define build-libart-disassembler
   include $(CLEAR_VARS)
   ifeq ($$(art_target_or_host),host)
      LOCAL_IS_HOST_MODULE := true
+     LOCAL_LDLIBS += -lstdc++
   endif
   LOCAL_CPP_EXTENSION := $(ART_CPP_EXTENSION)
   ifeq ($$(art_ndebug_or_debug),ndebug)

@@ -48,7 +48,7 @@ LOCAL_SRC_FILES := dalvikvm.cc
 LOCAL_CFLAGS := $(dalvikvm_cflags)
 LOCAL_C_INCLUDES := art/runtime
 LOCAL_SHARED_LIBRARIES := libnativehelper
-LOCAL_LDFLAGS := -ldl -lpthread
+LOCAL_LDFLAGS := -ldl -lpthread -lstdc++
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
 LOCAL_IS_HOST_MODULE := true
 include external/libcxx/libcxx.mk
