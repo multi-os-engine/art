@@ -234,10 +234,10 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   // create the bump pointer space if we are not a moving foreground collector but have a moving
   // background collector since the heap transition code will create the temp space by recycling
   // the bitmap from the main space.
-  if (kMovingCollector) {
+  if (kMovingCollector &&
+      (IsMovingGc(foreground_collector_type_) || IsMovingGc(background_collector_type_))) {
     // TODO: Place bump-pointer spaces somewhere to minimize size of card table.
-    // TODO: Not create all the bump pointer spaces if not necessary (currently only GSS needs all
-    // 2 of bump pointer spaces + main space) b/14059466. Divide by 2 for a temporary fix.
+    // Divide by 2 for a temporary fix for reducing virtual memory usage.
     const size_t bump_pointer_space_capacity = capacity / 2;
     bump_pointer_space_ = space::BumpPointerSpace::Create("Bump pointer space",
                                                           bump_pointer_space_capacity, nullptr);
