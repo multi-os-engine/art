@@ -721,19 +721,24 @@ void Mir2Lir::CreateNativeGcMap() {
       mir_graph_->GetCurrentDexCompilationUnit()->GetVerifiedMethod()->GetDexGcMap();
   verifier::DexPcToReferenceMap dex_gc_map(&(gc_map_raw)[0]);
   DCHECK_EQ(gc_map_raw.size(), dex_gc_map.RawSize());
-  // Compute native offset to references size.
-  GcMapBuilder native_gc_map_builder(&native_gc_map_,
-                                     mapping_table.PcToDexSize(),
-                                     max_native_offset, dex_gc_map.RegWidth());
 
+  NativePcOffsetToReferenceMap2 encoded_gc_map;
+  size_t reg_width = dex_gc_map.RegWidth();
+
+  // Walk through the mapping table to record the native PC to reference bitmap.
   for (auto it = mapping_table.PcToDexBegin(), end = mapping_table.PcToDexEnd(); it != end; ++it) {
     uint32_t native_offset = it.NativePcOffset();
     uint32_t dex_pc = it.DexPc();
     const uint8_t* references = dex_gc_map.FindBitMap(dex_pc, false);
     CHECK(references != NULL) << "Missing ref for dex pc 0x" << std::hex << dex_pc <<
         ": " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
-    native_gc_map_builder.AddEntry(native_offset, references);
+    encoded_gc_map.AddEntry(native_offset, references, reg_width);
   }
+
+  // Now serialize the gc map to the output buffer
+  size_t bytes_needed = encoded_gc_map.GetBytesNeededToSerialize();
+  native_gc_map_.resize(bytes_needed);
+  encoded_gc_map.Serialize(&(native_gc_map_[0]), bytes_needed);
 }
 
 /* Determine the offset of each literal field */
