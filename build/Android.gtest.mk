@@ -233,7 +233,7 @@ $$(art_gtest_target): $$(art_gtest_target)$(ART_PHONY_TEST_TARGET_SUFFIX)
     art_gtest_target := test-art-$$(art_target_or_host)-gtest-$$(art_gtest_name)
 .PHONY: $$(art_gtest_target)
 $$(art_gtest_target): $$(art_gtest_exe) test-art-host-dependencies
-	$$<
+	LD_PRELOAD=libsigchain.so $$<
 	@echo $$@ PASSED
 
     ART_HOST_GTEST_TARGETS += $$(art_gtest_target)
