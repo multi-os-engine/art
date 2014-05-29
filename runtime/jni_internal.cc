@@ -41,6 +41,7 @@
 #include "mirror/object_array-inl.h"
 #include "mirror/string-inl.h"
 #include "mirror/throwable.h"
+#include "native_bridge.h"
 #include "object_utils.h"
 #include "parsed_options.h"
 #include "reflection.h"
@@ -350,6 +351,7 @@ class SharedLibrary {
   SharedLibrary(const std::string& path, void* handle, mirror::Object* class_loader)
       : path_(path),
         handle_(handle),
+        need_native_bridge_(false),
         class_loader_(class_loader),
         jni_on_load_lock_("JNI_OnLoad lock"),
         jni_on_load_cond_("JNI_OnLoad condition variable", jni_on_load_lock_),
@@ -409,7 +411,19 @@ class SharedLibrary {
     jni_on_load_cond_.Broadcast(self);
   }
 
+  void SetNeedNativeBridge() {
+      need_native_bridge_ = true;
+  }
+
+  bool NeedNativeBridge() {
+      return need_native_bridge_;
+  }
+
   void* FindSymbol(const std::string& symbol_name) {
+    if (NeedNativeBridge()) {
+      DCHECK(NativeBridgeInterface::IsAvailable());
+      return NativeBridgeInterface::DlSym(handle_, symbol_name.c_str());
+    }
     return dlsym(handle_, symbol_name.c_str());
   }
 
@@ -431,6 +445,8 @@ class SharedLibrary {
 
   // The void* returned by dlopen(3).
   void* handle_;
+
+  bool need_native_bridge_;
 
   // The ClassLoader this library is associated with.
   mirror::Object* class_loader_;
@@ -499,6 +515,9 @@ class Libraries {
       if (fn != nullptr) {
         VLOG(jni) << "[Found native code for " << PrettyMethod(m)
                   << " in \"" << library->GetPath() << "\"]";
+        if (library->NeedNativeBridge()) {
+          m->SetBridgedNative();
+        }
         return fn;
       }
     }
@@ -2341,6 +2360,7 @@ class JNI {
     for (jint i = 0; i < method_count; ++i) {
       const char* name = methods[i].name;
       const char* sig = methods[i].signature;
+      void * fnPtr = methods[i].fnPtr;
       bool is_fast = false;
       if (*sig == '!') {
         is_fast = true;
@@ -2367,8 +2387,10 @@ class JNI {
       }
 
       VLOG(jni) << "[Registering JNI native method " << PrettyMethod(m) << "]";
-
-      m->RegisterNative(soa.Self(), methods[i].fnPtr, is_fast);
+      if (NativeBridgeInterface::IsNeeded(fnPtr)) {
+        m->SetBridgedNative();
+      }
+      m->RegisterNative(soa.Self(), fnPtr, is_fast);
     }
     return JNI_OK;
   }
@@ -3227,7 +3249,24 @@ bool JavaVMExt::LoadNativeLibrary(const std::string& path,
   // This can execute slowly for a large library on a busy system, so we
   // want to switch from kRunnable while it executes.  This allows the GC to ignore us.
   self->TransitionFromRunnableToSuspended(kWaitingForJniOnLoad);
-  void* handle = dlopen(path.empty() ? nullptr : path.c_str(), RTLD_LAZY);
+  void* handle = nullptr;
+
+  const char* char_str = path.empty() ? nullptr : path.c_str();
+  if (!NativeBridgeInterface::AlwaysUseBridge() ||
+      !NativeBridgeInterface::IsSupported(char_str)) {
+    handle = dlopen(char_str, RTLD_LAZY);
+  }
+
+  bool needs_native = false;
+  if (nullptr == handle) {
+    if (NativeBridgeInterface::IsSupported(char_str)) {
+      handle = NativeBridgeInterface::DlOpen(char_str, RTLD_LAZY);
+
+      if (handle != nullptr) {
+        needs_native = true;
+      }
+    }
+  }
   self->TransitionFromSuspendedToRunnable();
 
   VLOG(jni) << "[Call to dlopen(\"" << path << "\", RTLD_LAZY) returned " << handle << "]";
@@ -3246,6 +3285,9 @@ bool JavaVMExt::LoadNativeLibrary(const std::string& path,
     library = libraries->Get(path);
     if (library == nullptr) {  // We won race to get libraries_lock
       library = new SharedLibrary(path, handle, class_loader.Get());
+      if (needs_native) {
+        library->SetNeedNativeBridge();
+      }
       libraries->Put(path, library);
       created_library = true;
     }
@@ -3260,7 +3302,14 @@ bool JavaVMExt::LoadNativeLibrary(const std::string& path,
       << "]";
 
   bool was_successful = false;
-  void* sym = dlsym(handle, "JNI_OnLoad");
+  void* sym = nullptr;
+  if (library->NeedNativeBridge()) {
+    DCHECK(NativeBridgeInterface::IsAvailable());
+    sym = NativeBridgeInterface::DlSym(handle, "JNI_OnLoad");
+  } else {
+    sym = dlsym(handle, "JNI_OnLoad");
+  }
+
   if (sym == nullptr) {
     VLOG(jni) << "[No JNI_OnLoad found in \"" << path << "\"]";
     was_successful = true;
@@ -3279,7 +3328,11 @@ bool JavaVMExt::LoadNativeLibrary(const std::string& path,
     {
       ScopedThreadStateChange tsc(self, kNative);
       VLOG(jni) << "[Calling JNI_OnLoad in \"" << path << "\"]";
-      version = (*jni_on_load)(this, nullptr);
+      if (library->NeedNativeBridge()) {
+        version = NativeBridgeInterface::JniOnLoad(sym, this, nullptr);
+      } else {
+        version = (*jni_on_load)(this, nullptr);
+      }
     }
 
     self->SetClassLoaderOverride(old_class_loader.Get());

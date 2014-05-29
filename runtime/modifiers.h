@@ -48,6 +48,7 @@ static const uint32_t kAccClassIsProxy = 0x00040000;  // class (dex only)
 static const uint32_t kAccPreverified = 0x00080000;  // method (dex only)
 static const uint32_t kAccFastNative = 0x0080000;  // method (dex only)
 static const uint32_t kAccPortableCompiled = 0x0100000;  // method (dex only)
+static const uint32_t kAccBridgedNative = 0x0200000;  // method
 
 // Special runtime-only flags.
 // Note: if only kAccClassIsReference is set, we have a soft reference.

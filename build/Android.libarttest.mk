@@ -19,7 +19,8 @@ LIBARTTEST_COMMON_SRC_FILES := \
 	test/SignalTest/signaltest.cc \
 	test/ReferenceMap/stack_walk_refmap_jni.cc \
 	test/StackWalk/stack_walk_jni.cc \
-	test/UnsafeTest/unsafe_test.cc
+	test/UnsafeTest/unsafe_test.cc \
+	test/112-native-bridge/src/nativebridge.cc
 
 ART_TARGET_LIBARTTEST_$(ART_PHONY_TEST_TARGET_SUFFIX) += $(ART_TEST_OUT)/$(TARGET_ARCH)/libarttest.so
 ifdef TARGET_2ND_ARCH

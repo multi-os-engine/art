@@ -502,6 +502,7 @@ class Runtime {
   std::string boot_class_path_string_;
   std::string class_path_string_;
   std::vector<std::string> properties_;
+  std::string native_bridge_string_;
 
   // The default stack size for managed threads created by the runtime.
   size_t default_stack_size_;

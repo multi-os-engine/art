@@ -639,6 +639,10 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
         Usage("Unknown -Xverify option %s\n", verify_mode.c_str());
         return false;
       }
+    } else if (StartsWith(option, "-XX:NativeBridge=")) {
+      if (!ParseStringAfterChar(option, '=', &native_bridge_string_)) {
+        return false;
+      }
     } else if (StartsWith(option, "-ea") ||
                StartsWith(option, "-da") ||
                StartsWith(option, "-enableassertions") ||

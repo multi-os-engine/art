@@ -36,6 +36,7 @@ class ParsedOptions {
   std::string image_;
   bool check_jni_;
   std::string jni_trace_;
+  std::string native_bridge_string_;
   CompilerCallbacks* compiler_callbacks_;
   bool is_zygote_;
   bool interpreter_only_;

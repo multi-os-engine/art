@@ -124,6 +124,7 @@ LIBART_COMMON_SRC_FILES := \
 	native/org_apache_harmony_dalvik_ddmc_DdmServer.cc \
 	native/org_apache_harmony_dalvik_ddmc_DdmVmInternal.cc \
 	native/sun_misc_Unsafe.cc \
+	native_bridge.cc \
 	oat.cc \
 	oat_file.cc \
 	offsets.cc \

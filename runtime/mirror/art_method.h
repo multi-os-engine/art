@@ -125,6 +125,19 @@ class MANAGED ArtMethod : public Object {
     return (GetAccessFlags() & mask) == mask;
   }
 
+  bool IsBridgedNative() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    uint32_t mask = kAccBridgedNative | kAccNative;
+    return (GetAccessFlags() & mask) == mask;
+  }
+
+  void SetBridgedNative() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // Not called within a transaction.
+    // TODO: Races? There should be none, as this is called late.
+    DCHECK(IsNative() && !IsFastNative());
+    uint32_t new_access_flags = GetAccessFlags() | kAccBridgedNative;
+    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, access_flags_), new_access_flags);
+  }
+
   bool IsAbstract() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccAbstract) != 0;
   }
