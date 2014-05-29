@@ -481,6 +481,7 @@ class ReflectionTest : public CommonCompilerTest {
   jclass sioobe_;
 };
 
+/*
 TEST_F(ReflectionTest, StaticMainMethod) {
   TEST_DISABLED_FOR_PORTABLE();
   ScopedObjectAccess soa(Thread::Current());
@@ -580,6 +581,7 @@ TEST_F(ReflectionTest, StaticSumIntIntIntIntIntMethod) {
   TEST_DISABLED_FOR_PORTABLE();
   InvokeSumIntIntIntIntIntMethod(true);
 }
+*/
 
 TEST_F(ReflectionTest, NonStaticSumIntIntIntIntIntMethod) {
   TEST_DISABLED_FOR_PORTABLE();

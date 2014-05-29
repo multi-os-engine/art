@@ -560,7 +560,8 @@ INVOKE_TRAMPOLINE art_quick_invoke_virtual_trampoline_with_access_check, artInvo
 .macro INVOKE_STUB_CREATE_FRAME
 
 SAVE_SIZE=5*8   // x4, x5, SP, LR & FP saved.
-SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
+SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
+
 
     mov x9, sp                             // Save stack pointer.
     .cfi_register sp,x9
@@ -597,7 +598,7 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
     // W2 - args length
     // X9 - destination address.
     // W10 - temporary
-    add x9, sp, #8                         // Destination address is bottom of stack + NULL.
+    add x9, sp, #4                         // Destination address is bottom of stack + NULL.
 
     // Use \@ to differentiate between macro invocations.
 .LcopyParams\@:
@@ -611,9 +612,12 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
 
 .LendCopyParams\@:
 
-    // Store NULL into Method* at bottom of frame.
-    str xzr, [sp]
+    // Store NULL into StackReference<Method>* at bottom of frame.
+    str wzr, [sp]
 
+#if (STACK_REFERENCE_SIZE != 4)
+#error "STACK_REFERENCE_SIZE(ARM64) size not as expected."
+#endif
 .endm
 
 .macro INVOKE_STUB_CALL_AND_RETURN
