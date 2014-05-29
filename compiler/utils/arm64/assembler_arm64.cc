@@ -656,16 +656,17 @@ void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
   // trashed by native code.
   ___ Mov(reg_x(ETR), reg_x(TR));
 
-  // Increate frame to required size - must be at least space to push Method*.
+  // Increase frame to required size - must be at least space to push StackReference<Method>.
   CHECK_GT(frame_size, kCalleeSavedRegsSize * kFramePointerSize);
   size_t adjust = frame_size - (kCalleeSavedRegsSize * kFramePointerSize);
   IncreaseFrameSize(adjust);
 
-  // Write Method*.
-  StoreToOffset(X0, SP, 0);
+  // Write StackReference<Method>.
+  DCHECK_EQ(4U, sizeof(StackReference<mirror::ArtMethod>));
+  StoreWToOffset(StoreOperandType::kStoreWord, W0, SP, 0);
 
   // Write out entry spills
-  int32_t offset = frame_size + kFramePointerSize;
+  int32_t offset = frame_size + sizeof(StackReference<mirror::ArtMethod>);
   for (size_t i = 0; i < entry_spills.size(); ++i) {
     Arm64ManagedRegister reg = entry_spills.at(i).AsArm64();
     if (reg.IsNoRegister()) {
