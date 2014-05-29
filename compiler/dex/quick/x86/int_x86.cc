@@ -1084,6 +1084,7 @@ void X86Mir2Lir::GenArrayBoundsCheck(RegStorage index,
   };
 
   OpRegMem(kOpCmp, index, array_base, len_offset);
+  MarkPossibleNullPointerException(0);
   LIR* branch = OpCondBranch(kCondUge, nullptr);
   AddSlowPath(new (arena_) ArrayBoundsCheckSlowPath(this, branch,
                                                     index, array_base, len_offset));
@@ -1124,6 +1125,7 @@ void X86Mir2Lir::GenArrayBoundsCheck(int32_t index,
   };
 
   NewLIR3(IS_SIMM8(index) ? kX86Cmp32MI8 : kX86Cmp32MI, array_base.GetReg(), len_offset, index);
+  MarkPossibleNullPointerException(0);
   LIR* branch = OpCondBranch(kCondLs, nullptr);
   AddSlowPath(new (arena_) ArrayBoundsCheckSlowPath(this, branch,
                                                     index, array_base, len_offset));
