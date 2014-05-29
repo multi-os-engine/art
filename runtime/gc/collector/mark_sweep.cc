@@ -694,8 +694,15 @@ class MarkStackTask : public Task {
         }
         obj = mark_stack_[--mark_stack_pos_];
       }
-      DCHECK(obj != nullptr);
-      visitor(obj);
+      do {
+        DCHECK(obj != NULL);
+        ScanObject(obj);
+        if (prefetch_fifo.empty()){
+          break;
+        }
+        obj = prefetch_fifo.front();
+        prefetch_fifo.pop_front();
+      } while(1);
     }
   }
 };
@@ -1263,8 +1270,15 @@ void MarkSweep::ProcessMarkStack(bool paused) {
         }
         obj = mark_stack_->PopBack();
       }
-      DCHECK(obj != nullptr);
-      ScanObject(obj);
+      do {
+        DCHECK(obj != NULL);
+        ScanObject(obj);
+        if (prefetch_fifo.empty()){
+          break;
+        }
+        obj = prefetch_fifo.front();
+        prefetch_fifo.pop_front();
+      } while(1);
     }
   }
   timings_.EndSplit();
