@@ -234,6 +234,21 @@ class MANAGED ArtMethod : public Object {
         entry_point_from_interpreter);
   }
 
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  void * GetEntryPointFromNativeBridge()
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetFieldPtr<void*, kVerifyFlags>(
+               OFFSET_OF_OBJECT_MEMBER(ArtMethod, entry_point_from_native_bridge_));
+  }
+
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  void SetEntryPointFromNativeBridge(void * entry_point_from_native_bridge)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SetFieldPtr<false, true, kVerifyFlags>(
+        OFFSET_OF_OBJECT_MEMBER(ArtMethod, entry_point_from_native_bridge_),
+        entry_point_from_native_bridge);
+  }
+
   static MemberOffset EntryPointFromPortableCompiledCodeOffset() {
     return MemberOffset(OFFSETOF_MEMBER(ArtMethod, entry_point_from_portable_compiled_code_));
   }
@@ -434,6 +449,9 @@ class MANAGED ArtMethod : public Object {
 
   // Pointer to JNI function registered to this method, or a function to resolve the JNI function.
   uint64_t entry_point_from_jni_;
+
+  // Pointer to JNI function registered to this method by native bridge.
+  uint64_t entry_point_from_native_bridge_;
 
   // Method dispatch from portable compiled code invokes this pointer which may cause bridging into
   // quick compiled code or the interpreter.

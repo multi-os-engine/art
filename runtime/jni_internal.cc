@@ -52,6 +52,11 @@
 #include "utf.h"
 #include "well_known_classes.h"
 
+#ifdef WITH_NATIVE_BRIDGE
+#include "nativebridge/NativeBridge.h"
+#include <cutils/properties.h>
+#endif
+
 namespace art {
 
 static const size_t kMonitorsInitial = 32;  // Arbitrary.
@@ -68,6 +73,140 @@ static size_t gGlobalsMax = 51200;  // Arbitrary sanity check. (Must fit in 16 b
 
 static const size_t kWeakGlobalsInitial = 16;  // Arbitrary.
 static const size_t kWeakGlobalsMax = 51200;  // Arbitrary sanity check. (Must fit in 16 bits.)
+
+#ifdef WITH_NATIVE_BRIDGE
+extern "C" const char * GetMethodShorty(JNIEnv* env, jmethodID mid) {
+  ScopedObjectAccess soa(env);
+  mirror::ArtMethod* m = soa.DecodeMethod(mid);
+  MethodHelper mh(m);
+  return mh.GetShorty();
+}
+
+static const nativebridge::nb_vm_itf_t * artGetNativeBridge() {
+
+  static const nativebridge::nb_vm_itf_t * nb_vm_itf = nullptr;
+
+  if (IS_64BIT_PROC())
+      return nullptr;
+
+  if (nullptr != nb_vm_itf)
+      return nb_vm_itf;
+
+  char propBuf[PROPERTY_VALUE_MAX];
+  property_get(PROP_ENABLE_NB, propBuf, "");
+  if (strcmp(propBuf, "true"))
+      return nullptr;
+
+  int lib_name_len = property_get(PROP_LIB_NB, propBuf, "");
+  if (lib_name_len <= 0)
+      return nullptr;
+
+  char * lib_nb_path = new char[lib_name_len + SYS_LIB_PATH_LEN + 1];
+  strncpy (lib_nb_path, SYS_LIB_PATH, SYS_LIB_PATH_LEN);
+  strncpy (lib_nb_path + SYS_LIB_PATH_LEN, propBuf, lib_name_len);
+  lib_nb_path[lib_name_len + SYS_LIB_PATH_LEN] = '\0';
+
+  void * handle = dlopen(lib_nb_path, RTLD_LAZY);
+  delete (lib_nb_path);
+  if (nullptr == handle)
+      return nullptr;
+
+  nb_vm_itf = (nativebridge::nb_vm_itf_t*)dlsym(handle, NB_VM_ITF_SYM);
+  if (nullptr == nb_vm_itf)
+      return nullptr;
+
+  struct env_t {
+      void *logger;
+      void *getShorty;
+  } env;
+
+  env.logger = (void*)NULL;
+  env.getShorty = (void*)GetMethodShorty;
+
+  if(!nb_vm_itf->init(&env))
+      nb_vm_itf = nullptr;
+
+  return nb_vm_itf;
+}
+
+static void artInvokeNativeBridge (JNIEnv* env, jobject jobj,
+        JValue* p_return, const int * argv) {
+  Thread* self = Thread::Current();
+  mirror::ArtMethod* method = self->GetCurrentMethod(NULL);
+  void* native_func = method->GetEntryPointFromNativeBridge();
+
+  int argc = 0;
+  const char * shorty = nullptr;
+  Locks::mutator_lock_->SharedLock(self);
+  {
+      MethodHelper mh(method);
+      argc = mh.GetShortyLength() - 1;
+      shorty = mh.GetShorty();
+  }
+  Locks::mutator_lock_->SharedUnlock(self);
+
+  const nativebridge::nb_vm_itf_t * nb_vm_itf = artGetNativeBridge();
+  if (nullptr == nb_vm_itf) { return; }
+  nb_vm_itf->invoke(env, jobj, 0, argc, argv, shorty, native_func, p_return);
+}
+
+static void* artInvokeNativeBridgeI(JNIEnv* env, jobject jobj, ...) {
+  JValue p_return;
+  int jobj_addr = reinterpret_cast<int>(&jobj);
+  const int * argv = reinterpret_cast<const int *>(sizeof(jobject) + jobj_addr);
+  artInvokeNativeBridge(env, jobj, &p_return, argv);
+  return reinterpret_cast<void*>(p_return.GetI());
+}
+
+static uint64_t artInvokeNativeBridgeJ(JNIEnv* env, jobject jobj, ...) {
+  JValue p_return;
+  int jobj_addr = reinterpret_cast<int>(&jobj);
+  const int * argv = reinterpret_cast<const int *>(sizeof(jobject) + jobj_addr);
+  artInvokeNativeBridge(env, jobj, &p_return, argv);
+  return p_return.GetJ();
+}
+
+static float artInvokeNativeBridgeF(JNIEnv* env, jobject jobj, ...) {
+  JValue p_return;
+  int jobj_addr = reinterpret_cast<int>(&jobj);
+  const int * argv = reinterpret_cast<const int *>(sizeof(jobject) + jobj_addr);
+  artInvokeNativeBridge(env, jobj, &p_return, argv);
+  return p_return.GetF();
+}
+
+static double artInvokeNativeBridgeD(JNIEnv* env, jobject jobj, ...) {
+  JValue p_return;
+  int jobj_addr = reinterpret_cast<int>(&jobj);
+  const int * argv = reinterpret_cast<const int *>(sizeof(jobject) + jobj_addr);
+  artInvokeNativeBridge(env, jobj, &p_return, argv);
+  return p_return.GetD();
+}
+
+static void * GetNativeBridgeFunc (mirror::ArtMethod* method) {
+  MethodHelper mh(method);
+  const char * shorty = mh.GetShorty();
+  switch (*shorty) {
+      case 'V':  // fall through
+      case 'Z':
+      case 'B':
+      case 'C':
+      case 'S':
+      case 'I':
+      case 'L':
+        return (void*)artInvokeNativeBridgeI;
+      case 'J':
+        return (void*)artInvokeNativeBridgeJ;
+      case 'F':
+        return (void*)artInvokeNativeBridgeF;
+      case 'D':
+        return (void*)artInvokeNativeBridgeD;
+      default:
+        CHECK_EQ(1, 0);
+        return nullptr;
+  }
+  return nullptr;
+}
+#endif
 
 static jweak AddWeakGlobalReference(ScopedObjectAccess& soa, mirror::Object* obj)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -350,6 +489,9 @@ class SharedLibrary {
   SharedLibrary(const std::string& path, void* handle, mirror::Object* class_loader)
       : path_(path),
         handle_(handle),
+#ifdef WITH_NATIVE_BRIDGE
+        need_native_bridge_(false),
+#endif
         class_loader_(class_loader),
         jni_on_load_lock_("JNI_OnLoad lock"),
         jni_on_load_cond_("JNI_OnLoad condition variable", jni_on_load_lock_),
@@ -409,7 +551,24 @@ class SharedLibrary {
     jni_on_load_cond_.Broadcast(self);
   }
 
+#ifdef WITH_NATIVE_BRIDGE
+  void SetNeedNativeBridge() {
+      need_native_bridge_ = true;
+  }
+
+  bool NeedNativeBridge() {
+      return need_native_bridge_;
+  }
+#endif
+
   void* FindSymbol(const std::string& symbol_name) {
+#ifdef WITH_NATIVE_BRIDGE
+    if (NeedNativeBridge()) {
+        const nativebridge::nb_vm_itf_t * nb_vm_itf = artGetNativeBridge();
+        if (nullptr == nb_vm_itf) { return nullptr; }
+        return nb_vm_itf->dlsym(handle_, symbol_name.c_str());
+    }
+#endif
     return dlsym(handle_, symbol_name.c_str());
   }
 
@@ -431,6 +590,10 @@ class SharedLibrary {
 
   // The void* returned by dlopen(3).
   void* handle_;
+
+#ifdef WITH_NATIVE_BRIDGE
+  bool need_native_bridge_;
+#endif
 
   // The ClassLoader this library is associated with.
   mirror::Object* class_loader_;
@@ -499,6 +662,14 @@ class Libraries {
       if (fn != nullptr) {
         VLOG(jni) << "[Found native code for " << PrettyMethod(m)
                   << " in \"" << library->GetPath() << "\"]";
+#ifdef WITH_NATIVE_BRIDGE
+        if (library->NeedNativeBridge()) {
+          m->SetEntryPointFromNativeBridge(fn);
+          fn = GetNativeBridgeFunc(m);
+        } else {
+          m->SetEntryPointFromNativeBridge(nullptr);
+        }
+#endif
         return fn;
       }
     }
@@ -2304,9 +2475,13 @@ class JNI {
       return JNI_OK;
     }
     CHECK_NON_NULL_ARGUMENT_FN_NAME("RegisterNatives", methods, JNI_ERR);
+#ifdef WITH_NATIVE_BRIDGE
+    const nativebridge::nb_vm_itf_t * nb_vm_itf = artGetNativeBridge();
+#endif
     for (jint i = 0; i < method_count; ++i) {
       const char* name = methods[i].name;
       const char* sig = methods[i].signature;
+      void * fnPtr = methods[i].fnPtr;
       bool is_fast = false;
       if (*sig == '!') {
         is_fast = true;
@@ -2333,8 +2508,15 @@ class JNI {
       }
 
       VLOG(jni) << "[Registering JNI native method " << PrettyMethod(m) << "]";
-
-      m->RegisterNative(soa.Self(), methods[i].fnPtr, is_fast);
+#ifdef WITH_NATIVE_BRIDGE
+      if ((nullptr != nb_vm_itf) && (nb_vm_itf->isNeeded(fnPtr))) {
+        m->SetEntryPointFromNativeBridge(fnPtr);
+        fnPtr = GetNativeBridgeFunc(m);
+      } else {
+        m->SetEntryPointFromNativeBridge(nullptr);
+      }
+#endif
+      m->RegisterNative(soa.Self(), fnPtr, is_fast);
     }
     return JNI_OK;
   }
@@ -2347,11 +2529,19 @@ class JNI {
     VLOG(jni) << "[Unregistering JNI native methods for " << PrettyClass(c) << "]";
 
     size_t unregistered_count = 0;
+#ifdef WITH_NATIVE_BRIDGE
+    const nativebridge::nb_vm_itf_t * nb_vm_itf = artGetNativeBridge();
+#endif
     for (size_t i = 0; i < c->NumDirectMethods(); ++i) {
       mirror::ArtMethod* m = c->GetDirectMethod(i);
       if (m->IsNative()) {
         m->UnregisterNative(soa.Self());
         unregistered_count++;
+#ifdef WITH_NATIVE_BRIDGE
+      if (nullptr != nb_vm_itf) {
+        m->SetEntryPointFromNativeBridge(nullptr);
+      }
+#endif
       }
     }
     for (size_t i = 0; i < c->NumVirtualMethods(); ++i) {
@@ -2359,6 +2549,11 @@ class JNI {
       if (m->IsNative()) {
         m->UnregisterNative(soa.Self());
         unregistered_count++;
+#ifdef WITH_NATIVE_BRIDGE
+      if (nullptr != nb_vm_itf) {
+        m->SetEntryPointFromNativeBridge(nullptr);
+      }
+#endif
       }
     }
 
@@ -3194,6 +3389,19 @@ bool JavaVMExt::LoadNativeLibrary(const std::string& path,
   // want to switch from kRunnable while it executes.  This allows the GC to ignore us.
   self->TransitionFromRunnableToSuspended(kWaitingForJniOnLoad);
   void* handle = dlopen(path.empty() ? nullptr : path.c_str(), RTLD_LAZY);
+#ifdef WITH_NATIVE_BRIDGE
+  const nativebridge::nb_vm_itf_t * nb_vm_itf = nullptr;
+  if (nullptr == handle) {
+    nb_vm_itf = artGetNativeBridge();
+    const char * path_char = path.empty() ? nullptr : path.c_str();
+    if ((nullptr != nb_vm_itf) && (nb_vm_itf->isSupported(path_char))) {
+      handle = nb_vm_itf->dlopen(path_char, RTLD_LAZY);
+    }
+    if (nullptr != handle) {
+      library->SetNeedNativeBridge();
+    }
+  }
+#endif
   self->TransitionFromSuspendedToRunnable();
 
   VLOG(jni) << "[Call to dlopen(\"" << path << "\", RTLD_LAZY) returned " << handle << "]";
@@ -3226,7 +3434,15 @@ bool JavaVMExt::LoadNativeLibrary(const std::string& path,
       << "]";
 
   bool was_successful = false;
-  void* sym = dlsym(handle, "JNI_OnLoad");
+  void* sym = nullptr;
+#ifdef WITH_NATIVE_BRIDGE
+  if (library->NeedNativeBridge()) {
+    sym = nb_vm_itf->dlsym(handle, "JNI_OnLoad");
+  }
+  else
+#endif
+  sym = dlsym(handle, "JNI_OnLoad");
+
   if (sym == nullptr) {
     VLOG(jni) << "[No JNI_OnLoad found in \"" << path << "\"]";
     was_successful = true;
@@ -3245,6 +3461,12 @@ bool JavaVMExt::LoadNativeLibrary(const std::string& path,
     {
       ScopedThreadStateChange tsc(self, kNative);
       VLOG(jni) << "[Calling JNI_OnLoad in \"" << path << "\"]";
+#ifdef WITH_NATIVE_BRIDGE
+      if (library->NeedNativeBridge()) {
+        version = nb_vm_itf->jniOnLoad(sym, this, nullptr);
+      }
+      else
+#endif
       version = (*jni_on_load)(this, nullptr);
     }
 
