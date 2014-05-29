@@ -563,41 +563,6 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
     GetInstrumentation()->ForceInterpretOnly();
   }
 
-  bool implicit_checks_supported = false;
-  switch (kRuntimeISA) {
-    case kArm:
-    case kThumb2:
-      implicit_checks_supported = true;
-      break;
-    default:
-      break;
-  }
-
-  if (implicit_checks_supported &&
-      (options->explicit_checks_ != (ParsedOptions::kExplicitSuspendCheck |
-          ParsedOptions::kExplicitNullCheck |
-          ParsedOptions::kExplicitStackOverflowCheck) || kEnableJavaStackTraceHandler)) {
-    fault_manager.Init();
-
-    // These need to be in a specific order.  The null point check handler must be
-    // after the suspend check and stack overflow check handlers.
-    if ((options->explicit_checks_ & ParsedOptions::kExplicitSuspendCheck) == 0) {
-      suspend_handler_ = new SuspensionHandler(&fault_manager);
-    }
-
-    if ((options->explicit_checks_ & ParsedOptions::kExplicitStackOverflowCheck) == 0) {
-      stack_overflow_handler_ = new StackOverflowHandler(&fault_manager);
-    }
-
-    if ((options->explicit_checks_ & ParsedOptions::kExplicitNullCheck) == 0) {
-      null_pointer_handler_ = new NullPointerHandler(&fault_manager);
-    }
-
-    if (kEnableJavaStackTraceHandler) {
-      new JavaStackTraceHandler(&fault_manager);
-    }
-  }
-
   heap_ = new gc::Heap(options->heap_initial_size_,
                        options->heap_growth_limit_,
                        options->heap_min_free_,
@@ -627,6 +592,42 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
 
   BlockSignals();
   InitPlatformSignalHandlers();
+
+  bool implicit_checks_supported = false;
+  switch (kRuntimeISA) {
+    case kArm:
+    case kThumb2:
+    case kX86:
+      implicit_checks_supported = true;
+      break;
+    default:
+      break;
+  }
+
+  if (!options->interpreter_only_ &&implicit_checks_supported &&
+      (options->explicit_checks_ != (ParsedOptions::kExplicitSuspendCheck |
+          ParsedOptions::kExplicitNullCheck |
+          ParsedOptions::kExplicitStackOverflowCheck) || kEnableJavaStackTraceHandler)) {
+    fault_manager.Init();
+
+    // These need to be in a specific order.  The null point check handler must be
+    // after the suspend check and stack overflow check handlers.
+    if ((options->explicit_checks_ & ParsedOptions::kExplicitSuspendCheck) == 0) {
+      suspend_handler_ = new SuspensionHandler(&fault_manager);
+    }
+
+    if ((options->explicit_checks_ & ParsedOptions::kExplicitStackOverflowCheck) == 0) {
+      stack_overflow_handler_ = new StackOverflowHandler(&fault_manager);
+    }
+
+    if ((options->explicit_checks_ & ParsedOptions::kExplicitNullCheck) == 0) {
+      null_pointer_handler_ = new NullPointerHandler(&fault_manager);
+    }
+
+    if (kEnableJavaStackTraceHandler) {
+      new JavaStackTraceHandler(&fault_manager);
+    }
+  }
 
   java_vm_ = new JavaVMExt(this, options.get());
 
