@@ -790,12 +790,13 @@ class Mir2Lir : public Backend {
     void GenArrayBoundsCheck(RegStorage index, RegStorage length);
     void GenArrayBoundsCheck(int32_t index, RegStorage length);
     LIR* GenNullCheck(RegStorage reg);
-    void MarkPossibleNullPointerException(int opt_flags);
+    void MarkPossibleNullPointerException(int opt_flags, LIR* inst = nullptr);
     void MarkPossibleStackOverflowException();
     void ForceImplicitNullCheck(RegStorage reg, int opt_flags);
     LIR* GenImmedCheck(ConditionCode c_code, RegStorage reg, int imm_val, ThrowKind kind);
     LIR* GenNullCheck(RegStorage m_reg, int opt_flags);
     LIR* GenExplicitNullCheck(RegStorage m_reg, int opt_flags);
+    virtual void GenImplicitNullCheck(RegStorage reg, int opt_flags);
     void GenCompareAndBranch(Instruction::Code opcode, RegLocation rl_src1,
                              RegLocation rl_src2, LIR* taken, LIR* fall_through);
     void GenCompareZeroAndBranch(Instruction::Code opcode, RegLocation rl_src,

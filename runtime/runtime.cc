@@ -567,16 +567,18 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   switch (kRuntimeISA) {
     case kArm:
     case kThumb2:
+    case kX86:
       implicit_checks_supported = true;
       break;
     default:
       break;
   }
 
-  if (implicit_checks_supported &&
+  if (!options->interpreter_only_ &&implicit_checks_supported &&
       (options->explicit_checks_ != (ParsedOptions::kExplicitSuspendCheck |
           ParsedOptions::kExplicitNullCheck |
           ParsedOptions::kExplicitStackOverflowCheck) || kEnableJavaStackTraceHandler)) {
+    std::cout << "Installing ART signal handlers\n";
     fault_manager.Init();
 
     // These need to be in a specific order.  The null point check handler must be

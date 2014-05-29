@@ -648,9 +648,9 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
     } else {
       DCHECK(!r_dest.IsFloat());  // Make sure we're not still using a pair here.
       if (r_base == r_dest.GetLow()) {
-        load2 = NewLIR3(opcode, r_dest.GetHighReg(), r_base.GetReg(),
+        load = NewLIR3(opcode, r_dest.GetHighReg(), r_base.GetReg(),
                         displacement + HIWORD_OFFSET);
-        load = NewLIR3(opcode, r_dest.GetLowReg(), r_base.GetReg(), displacement + LOWORD_OFFSET);
+        load2 = NewLIR3(opcode, r_dest.GetLowReg(), r_base.GetReg(), displacement + LOWORD_OFFSET);
       } else {
         load = NewLIR3(opcode, r_dest.GetLowReg(), r_base.GetReg(), displacement + LOWORD_OFFSET);
         load2 = NewLIR3(opcode, r_dest.GetHighReg(), r_base.GetReg(),
@@ -675,16 +675,16 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
         if (r_dest.GetHigh() == r_index) {
           // We can't use either register for the first load.
           RegStorage temp = AllocTemp();
-          load2 = NewLIR5(opcode, temp.GetReg(), r_base.GetReg(), r_index.GetReg(), scale,
+          load = NewLIR5(opcode, temp.GetReg(), r_base.GetReg(), r_index.GetReg(), scale,
                           displacement + HIWORD_OFFSET);
-          load = NewLIR5(opcode, r_dest.GetLowReg(), r_base.GetReg(), r_index.GetReg(), scale,
+          load2 = NewLIR5(opcode, r_dest.GetLowReg(), r_base.GetReg(), r_index.GetReg(), scale,
                          displacement + LOWORD_OFFSET);
           OpRegCopy(r_dest.GetHigh(), temp);
           FreeTemp(temp);
         } else {
-          load2 = NewLIR5(opcode, r_dest.GetHighReg(), r_base.GetReg(), r_index.GetReg(), scale,
+          load = NewLIR5(opcode, r_dest.GetHighReg(), r_base.GetReg(), r_index.GetReg(), scale,
                           displacement + HIWORD_OFFSET);
-          load = NewLIR5(opcode, r_dest.GetLowReg(), r_base.GetReg(), r_index.GetReg(), scale,
+          load2 = NewLIR5(opcode, r_dest.GetLowReg(), r_base.GetReg(), r_index.GetReg(), scale,
                          displacement + LOWORD_OFFSET);
         }
       } else {
@@ -707,6 +707,7 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
     }
   }
 
+  // Always return first load generated as this might cause a fault if base is nullptr.
   return load;
 }
 
