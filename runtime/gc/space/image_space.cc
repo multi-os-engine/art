@@ -45,6 +45,7 @@ ImageSpace::ImageSpace(const std::string& image_filename, const char* image_loca
 
 static bool GenerateImage(const std::string& image_filename, std::string* error_msg) {
   const std::string boot_class_path_string(Runtime::Current()->GetBootClassPathString());
+  LOG(INFO) << "read boot class path as " << boot_class_path_string;
   std::vector<std::string> boot_class_path;
   Split(boot_class_path_string, ':', boot_class_path);
   if (boot_class_path.empty()) {
