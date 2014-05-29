@@ -927,12 +927,23 @@ int Mir2Lir::GenDalvikArgsNoRange(CallInfo* info,
       *pcrLabel = GenExplicitNullCheck(TargetReg(kArg1), info->opt_flags);
     } else {
       *pcrLabel = nullptr;
+      if (!(cu_->disable_opt & (1 << kNullCheckElimination)) &&
+          (info->opt_flags & MIR_IGNORE_NULL_CHECK)) {
+        return call_state;
+      }
       // In lieu of generating a check for kArg1 being null, we need to
       // perform a load when doing implicit checks.
-      RegStorage tmp = AllocTemp();
-      Load32Disp(TargetReg(kArg1), 0, tmp);
-      MarkPossibleNullPointerException(info->opt_flags);
-      FreeTemp(tmp);
+      if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
+        // Implicit null pointer check.
+        // test eax,[arg1+0]
+        NewLIR3(kX86Test32RM, rs_rAX.GetReg(), TargetReg(kArg1).GetReg(), 0);
+        MarkPossibleNullPointerException(info->opt_flags);
+      } else {
+        RegStorage tmp = AllocTemp();
+        Load32Disp(TargetReg(kArg1), 0, tmp);
+        MarkPossibleNullPointerException(info->opt_flags);
+        FreeTemp(tmp);
+      }
     }
   }
   return call_state;
@@ -1146,12 +1157,23 @@ int Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
       *pcrLabel = GenExplicitNullCheck(TargetReg(kArg1), info->opt_flags);
     } else {
       *pcrLabel = nullptr;
+      if (!(cu_->disable_opt & (1 << kNullCheckElimination)) &&
+          (info->opt_flags & MIR_IGNORE_NULL_CHECK)) {
+        return call_state;
+      }
       // In lieu of generating a check for kArg1 being null, we need to
       // perform a load when doing implicit checks.
-      RegStorage tmp = AllocTemp();
-      Load32Disp(TargetReg(kArg1), 0, tmp);
-      MarkPossibleNullPointerException(info->opt_flags);
-      FreeTemp(tmp);
+      if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
+        // Implicit null pointer check.
+        // test eax,[arg1+0]
+        NewLIR3(kX86Test32RM, rs_rAX.GetReg(), TargetReg(kArg1).GetReg(), 0);
+        MarkPossibleNullPointerException(info->opt_flags);
+      } else {
+        RegStorage tmp = AllocTemp();
+        Load32Disp(TargetReg(kArg1), 0, tmp);
+        MarkPossibleNullPointerException(info->opt_flags);
+        FreeTemp(tmp);
+      }
     }
   }
   return call_state;
@@ -1230,14 +1252,17 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
         range_check_branch = OpCmpMemImmBranch(
             kCondUlt, RegStorage::InvalidReg(), rl_obj.reg, count_offset,
             mir_graph_->ConstantValue(rl_idx.orig_sreg), nullptr);
-      } else {
+        MarkPossibleNullPointerException(info->opt_flags);
+     } else {
         OpRegMem(kOpCmp, rl_idx.reg, rl_obj.reg, count_offset);
+        MarkPossibleNullPointerException(info->opt_flags);
         range_check_branch = OpCondBranch(kCondUge, nullptr);
       }
     }
     reg_off = AllocTemp();
     reg_ptr = AllocTemp();
     Load32Disp(rl_obj.reg, offset_offset, reg_off);
+    MarkPossibleNullPointerException(info->opt_flags);
     Load32Disp(rl_obj.reg, value_offset, reg_ptr);
   }
   if (rl_idx.is_const) {

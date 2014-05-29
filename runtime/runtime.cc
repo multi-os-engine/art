@@ -566,6 +566,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   switch (kRuntimeISA) {
     case kArm:
     case kThumb2:
+    case kX86:
       implicit_checks_supported = true;
       break;
     default:
@@ -576,6 +577,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
       (options->explicit_checks_ != (ParsedOptions::kExplicitSuspendCheck |
           ParsedOptions::kExplicitNullCheck |
           ParsedOptions::kExplicitStackOverflowCheck) || kEnableJavaStackTraceHandler)) {
+    VLOG(signals) << "Installing signal handler in runtime";
     fault_manager.Init();
 
     // These need to be in a specific order.  The null point check handler must be
@@ -589,6 +591,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
     }
 
     if ((options->explicit_checks_ & ParsedOptions::kExplicitNullCheck) == 0) {
+      VLOG(signals) << "installing implicit null check handler";
       null_pointer_handler_ = new NullPointerHandler(&fault_manager);
     }
 

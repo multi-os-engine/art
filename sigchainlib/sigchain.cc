@@ -14,7 +14,13 @@
  * limitations under the License.
  */
 
+#ifdef HAVE_ANDROID_OS
 #include <android/log.h>
+#else
+#include <stdarg.h>
+#include <iostream>
+#endif
+
 #include <dlfcn.h>
 #include <signal.h>
 #include <stdio.h>
@@ -67,7 +73,11 @@ static void log(const char* format, ...) {
   va_list ap;
   va_start(ap, format);
   vsnprintf(buf, sizeof(buf), format, ap);
+#ifdef HAVE_ANDROID_OS
   __android_log_write(ANDROID_LOG_ERROR, "libsigchain", buf);
+#else
+  std::cout << buf << "\n";
+#endif
   va_end(ap);
 }
 

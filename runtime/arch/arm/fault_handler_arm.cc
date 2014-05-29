@@ -45,7 +45,8 @@ static uint32_t GetInstructionSize(uint8_t* pc) {
   return instr_size;
 }
 
-void FaultManager::GetMethodAndReturnPCAndSP(void* context, mirror::ArtMethod** out_method,
+void FaultManager::GetMethodAndReturnPCAndSP(siginfo_t* siginfo, void* context,
+                                             mirror::ArtMethod** out_method,
                                              uintptr_t* out_return_pc, uintptr_t* out_sp) {
   struct ucontext *uc = (struct ucontext *)context;
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
@@ -204,7 +205,7 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   }
 
   // We know this is a stack overflow.  We need to move the sp to the overflow region
-  // the exists below the protected region.  Determine the address of the next
+  // that exists below the protected region.  Determine the address of the next
   // available valid address below the protected region.
   uintptr_t prevsp = sp;
   sp = pregion;
