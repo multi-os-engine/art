@@ -187,12 +187,23 @@ LIR* Mir2Lir::GenExplicitNullCheck(RegStorage m_reg, int opt_flags) {
   return GenNullCheck(m_reg);
 }
 
-void Mir2Lir::MarkPossibleNullPointerException(int opt_flags) {
+void Mir2Lir::MarkPossibleNullPointerException(int opt_flags, LIR* inst) {
   if (!Runtime::Current()->ExplicitNullChecks()) {
     if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
       return;
     }
-    MarkSafepointPC(last_lir_insn_);
+    // Insert the GC map either after the given instruction
+    // or after the last instruction.
+    if (inst != nullptr && inst != last_lir_insn_) {
+      // Insert in the middle of the stream somewhere.
+      DCHECK(!inst->flags.use_def_invalid);
+      inst->u.m.def_mask = ENCODE_ALL;
+      LIR* safepoint_pc = RawLIR(current_dalvik_offset_, kPseudoSafepointPC);
+      InsertLIRAfter(inst, safepoint_pc);
+    } else {
+      // Insert after last instruction.
+      MarkSafepointPC(last_lir_insn_);
+    }
   }
 }
 
@@ -599,7 +610,7 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
         LockTemp(r_tmp);
         LIR* uninit_branch = OpCmpMemImmBranch(kCondLt, r_tmp, r_base,
                                           mirror::Class::StatusOffset().Int32Value(),
-                                          mirror::Class::kStatusInitialized, NULL);
+                                          mirror::Class::kStatusInitialized, nullptr, nullptr);
         LIR* cont = NewLIR0(kPseudoTargetLabel);
 
         AddSlowPath(new (arena_) StaticFieldSlowPath(this, unresolved_branch, uninit_branch, cont,
@@ -692,7 +703,7 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
         LockTemp(r_tmp);
         LIR* uninit_branch = OpCmpMemImmBranch(kCondLt, r_tmp, r_base,
                                           mirror::Class::StatusOffset().Int32Value(),
-                                          mirror::Class::kStatusInitialized, NULL);
+                                          mirror::Class::kStatusInitialized, nullptr, nullptr);
         LIR* cont = NewLIR0(kPseudoTargetLabel);
 
         AddSlowPath(new (arena_) StaticFieldSlowPath(this, unresolved_branch, uninit_branch, cont,
@@ -778,15 +789,15 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
     RegLocation rl_result = EvalLoc(rl_dest, reg_class, true);
     int field_offset = field_info.FieldOffset().Int32Value();
     if (field_info.IsVolatile()) {
-      LoadBaseDispVolatile(rl_obj.reg, field_offset, rl_result.reg, load_size);
-      MarkPossibleNullPointerException(opt_flags);
+      LIR* load = LoadBaseDispVolatile(rl_obj.reg, field_offset, rl_result.reg, load_size);
+      MarkPossibleNullPointerException(opt_flags, load);
       // Without context sensitive analysis, we must issue the most conservative barriers.
       // In this case, either a load or store may follow so we issue both barriers.
       GenMemBarrier(kLoadLoad);
       GenMemBarrier(kLoadStore);
     } else {
-      LoadBaseDisp(rl_obj.reg, field_offset, rl_result.reg, load_size);
-      MarkPossibleNullPointerException(opt_flags);
+      LIR* load = LoadBaseDisp(rl_obj.reg, field_offset, rl_result.reg, load_size);
+      MarkPossibleNullPointerException(opt_flags, load);
     }
     if (is_long_or_double) {
       StoreValueWide(rl_dest, rl_result);
@@ -842,13 +853,13 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
     if (field_info.IsVolatile()) {
       // There might have been a store before this volatile one so insert StoreStore barrier.
       GenMemBarrier(kStoreStore);
-      StoreBaseDispVolatile(rl_obj.reg, field_offset, rl_src.reg, store_size);
-      MarkPossibleNullPointerException(opt_flags);
+      LIR* store = StoreBaseDispVolatile(rl_obj.reg, field_offset, rl_src.reg, store_size);
+      MarkPossibleNullPointerException(opt_flags, store);
       // A load might follow the volatile store so insert a StoreLoad barrier.
       GenMemBarrier(kStoreLoad);
     } else {
-      StoreBaseDisp(rl_obj.reg, field_offset, rl_src.reg, store_size);
-      MarkPossibleNullPointerException(opt_flags);
+      LIR* store = StoreBaseDisp(rl_obj.reg, field_offset, rl_src.reg, store_size);
+      MarkPossibleNullPointerException(opt_flags, store);
     }
     if (is_object && !mir_graph_->IsConstantNullRef(rl_src)) {
       MarkGCCard(rl_src.reg, rl_obj.reg);
