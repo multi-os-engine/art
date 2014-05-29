@@ -223,12 +223,26 @@ static size_t FixStackSize(size_t stack_size) {
   return stack_size;
 }
 
+byte dont_optimize_this;
+
 // Install a protected region in the stack.  This is used to trigger a SIGSEGV if a stack
 // overflow is detected.  It is located right below the stack_end_.  Just below that
 // is the StackOverflow reserved region used when creating the StackOverflow
 // exception.
 void Thread::InstallImplicitProtection(bool is_main_stack) {
   byte* pregion = tlsPtr_.stack_end;
+
+  // We need to map in the main stack.  This must be done by reading from the
+  // current stack pointer downwards as the stack might be mapped using VM_GROWSDOWN
+  // in the kernel.  Any access more than a page below the current SP will cause
+  // a segv.
+  byte* stack_top = reinterpret_cast<byte*>(reinterpret_cast<uintptr_t>(&pregion) &
+      ~(kPageSize - 1));    // Page containing current top of stack.
+  if (is_main_stack) {
+    for (byte* p = stack_top; p > pregion - kStackOverflowImplicitCheckSize; p -= kPageSize) {
+      dont_optimize_this = *p;
+    }
+  }
 
   constexpr uint32_t kMarker = 0xdadadada;
   uintptr_t *marker = reinterpret_cast<uintptr_t*>(pregion);
@@ -241,17 +255,6 @@ void Thread::InstallImplicitProtection(bool is_main_stack) {
 
   pregion -= kStackOverflowProtectedSize;
 
-  // Touch the pages in the region to map them in.  Otherwise mprotect fails.  Only
-  // need to do this on the main stack.  We only need to touch one byte per page.
-  if (is_main_stack) {
-    byte* start = pregion;
-    byte* end = pregion + kStackOverflowProtectedSize;
-    while (start < end) {
-      *start = static_cast<byte>(0);
-      start += kPageSize;
-    }
-  }
-
   VLOG(threads) << "installing stack protected region at " << std::hex <<
       static_cast<void*>(pregion) << " to " <<
       static_cast<void*>(pregion + kStackOverflowProtectedSize - 1);
@@ -263,7 +266,7 @@ void Thread::InstallImplicitProtection(bool is_main_stack) {
 
   // Tell the kernel that we won't be needing these pages any more.
   if (is_main_stack) {
-    madvise(pregion, kStackOverflowProtectedSize, MADV_DONTNEED);
+    madvise(pregion, stack_top - pregion, MADV_DONTNEED);
   }
 }
 
@@ -522,13 +525,16 @@ void Thread::InitStackHwm() {
   // Install the protected region if we are doing implicit overflow checks.
   if (implicit_stack_check) {
     if (is_main_thread) {
-      // The main thread has a 16K protected region at the bottom.  We need
+      size_t guardsize;
+      pthread_attr_t attributes;
+      CHECK_PTHREAD_CALL(pthread_attr_init, (&attributes), "guard size query");
+      CHECK_PTHREAD_CALL(pthread_attr_getguardsize, (&attributes, &guardsize), "guard size query");
+      // The main thread might have protected region at the bottom.  We need
       // to install our own region so we need to move the limits
       // of the stack to make room for it.
-      constexpr uint32_t kDelta = 16 * KB;
-      tlsPtr_.stack_begin += kDelta;
-      tlsPtr_.stack_end += kDelta;
-      tlsPtr_.stack_size -= kDelta;
+      tlsPtr_.stack_begin += guardsize;
+      tlsPtr_.stack_end += guardsize;
+      tlsPtr_.stack_size -= guardsize;
     }
     InstallImplicitProtection(is_main_thread);
   }

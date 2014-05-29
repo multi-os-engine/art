@@ -742,8 +742,10 @@ RegStorage X86Mir2Lir::LoadHelper(ThreadOffset<8> offset) {
 }
 
 LIR* X86Mir2Lir::CheckSuspendUsingLoad() {
-  LOG(FATAL) << "Unexpected use of CheckSuspendUsingLoad in x86";
-  return nullptr;
+  // First load the pointer in fs:[suspend-trigger] into eax
+  // Then use a test instruction to indirect via that address.
+  NewLIR2(kX86Mov32RT, rs_rAX.GetReg(),  Thread::ThreadSuspendTriggerOffset<4>().Int32Value());
+  return NewLIR3(kX86Test32RM, rs_rAX.GetReg(), rs_rAX.GetReg(), 0);
 }
 
 uint64_t X86Mir2Lir::GetTargetInstFlags(int opcode) {

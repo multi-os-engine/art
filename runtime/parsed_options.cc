@@ -238,7 +238,7 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
 //  gLogVerbosity.jni = true;  // TODO: don't check this in!
 //  gLogVerbosity.monitor = true;  // TODO: don't check this in!
 //  gLogVerbosity.profiler = true;  // TODO: don't check this in!
-//  gLogVerbosity.signals = true;  // TODO: don't check this in!
+  gLogVerbosity.signals = true;  // TODO: don't check this in!
 //  gLogVerbosity.startup = true;  // TODO: don't check this in!
 //  gLogVerbosity.third_party_jni = true;  // TODO: don't check this in!
 //  gLogVerbosity.threads = true;  // TODO: don't check this in!
@@ -264,7 +264,7 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
 #ifdef HAVE_ANDROID_OS
   {
     char buf[PROP_VALUE_MAX];
-    property_get("dalvik.vm.implicit_checks", buf, "none");
+    property_get("dalvik.vm.implicit_checks", buf, "null");
     std::string checks(buf);
     std::vector<std::string> checkvec;
     Split(checks, ',', checkvec);
@@ -287,12 +287,14 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
     }
   }
 #else
-  explicit_checks_ = kExplicitNullCheck | kExplicitSuspendCheck |
-    kExplicitStackOverflowCheck;
+  // Host.
+  // explicit_checks_ = kExplicitNullCheck | kExplicitSuspendCheck |
+    // kExplicitStackOverflowCheck;
+  explicit_checks_ = 0;   // kExplicitSuspendCheck;
 #endif
 
   for (size_t i = 0; i < options.size(); ++i) {
-    if (true && options[0].first == "-Xzygote") {
+    if (true || options[0].first == "-Xzygote") {
       LOG(INFO) << "option[" << i << "]=" << options[i].first;
     }
   }
@@ -306,6 +308,7 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
       Exit(0);
     } else if (StartsWith(option, "-Xbootclasspath:")) {
       boot_class_path_string_ = option.substr(strlen("-Xbootclasspath:")).data();
+      LOG(INFO) << "setting boot class path to " << boot_class_path_string_;
     } else if (option == "-classpath" || option == "-cp") {
       // TODO: support -Djava.class.path
       i++;

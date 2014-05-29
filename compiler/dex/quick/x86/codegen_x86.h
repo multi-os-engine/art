@@ -52,6 +52,7 @@ class X86Mir2Lir : public Mir2Lir {
     LIR* StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale, int displacement,
                               RegStorage r_src, OpSize size) OVERRIDE;
     void MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg);
+    void GenImplicitNullCheck(RegStorage reg, int opt_flags);
 
     // Required for target - register utilities.
     RegStorage TargetReg(SpecialTargetRegister reg);
