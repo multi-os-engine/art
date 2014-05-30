@@ -15,6 +15,7 @@
  */
 
 #include "compiler_internals.h"
+#include "global_value_numbering.h"
 #include "local_value_numbering.h"
 #include "dataflow_iterator-inl.h"
 #include "dex/quick/dex_file_method_inliner.h"
@@ -321,10 +322,13 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
   }
   bool use_lvn = bb->use_lvn;
   std::unique_ptr<ScopedArenaAllocator> allocator;
+  std::unique_ptr<GlobalValueNumbering> global_valnum;
   std::unique_ptr<LocalValueNumbering> local_valnum;
   if (use_lvn) {
     allocator.reset(ScopedArenaAllocator::Create(&cu_->arena_stack));
-    local_valnum.reset(new (allocator.get()) LocalValueNumbering(cu_, allocator.get()));
+    global_valnum.reset(new (allocator.get()) GlobalValueNumbering(cu_, allocator.get()));
+    local_valnum.reset(new (allocator.get()) LocalValueNumbering(global_valnum.get(),
+                                                                 allocator.get()));
   }
   while (bb != NULL) {
     for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
@@ -552,7 +556,7 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
     }
     bb = ((cu_->disable_opt & (1 << kSuppressExceptionEdges)) != 0) ? NextDominatedBlock(bb) : NULL;
   }
-  if (use_lvn && UNLIKELY(!local_valnum->Good())) {
+  if (use_lvn && UNLIKELY(!global_valnum->Good())) {
     LOG(WARNING) << "LVN overflow in " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
   }
 

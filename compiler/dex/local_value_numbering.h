@@ -20,19 +20,26 @@
 #include <memory>
 
 #include "compiler_internals.h"
+#include "global_value_numbering.h"
 #include "utils/scoped_arena_allocator.h"
 #include "utils/scoped_arena_containers.h"
 
 namespace art {
 
 class DexFile;
-class MirFieldInfo;
+class GlobalValueNumbering;
+
+// Enable/disable tracking values stored in the FILLED_NEW_ARRAY result.
+static constexpr bool kLocalValueNumberingEnableFilledNewArrayTracking = true;
 
 class LocalValueNumbering {
  public:
-  LocalValueNumbering(CompilationUnit* cu, ScopedArenaAllocator* allocator);
+  LocalValueNumbering(GlobalValueNumbering* gvn, ScopedArenaAllocator* allocator);
 
   uint16_t GetValueNumber(MIR* mir);
+
+  // TODO: GVN
+  bool Equals(const GlobalValueNumbering& other);
 
   // LocalValueNumbering should be allocated on the ArenaStack (or the native stack).
   static void* operator new(size_t size, ScopedArenaAllocator* allocator) {
@@ -42,13 +49,8 @@ class LocalValueNumbering {
   // Allow delete-expression to destroy a LocalValueNumbering object without deallocation.
   static void operator delete(void* ptr) { UNUSED(ptr); }
 
-  // Checks that the value names didn't overflow.
-  bool Good() const {
-    return last_value_ < kNoValue;
-  }
-
  private:
-  static constexpr uint16_t kNoValue = 0xffffu;
+  static constexpr uint16_t kNoValue = GlobalValueNumbering::kNoValue;
 
   // Field types correspond to the ordering of GET/PUT instructions; this order is the same
   // for IGET, IPUT, SGET, SPUT, AGET and APUT:
@@ -60,24 +62,6 @@ class LocalValueNumbering {
   // op_CHAR    5
   // op_SHORT   6
   static constexpr size_t kFieldTypeCount = 7;
-
-  // FieldReference represents a unique resolved field.
-  struct FieldReference {
-    const DexFile* dex_file;
-    uint16_t field_idx;
-  };
-
-  struct FieldReferenceComparator {
-    bool operator()(const FieldReference& lhs, const FieldReference& rhs) const {
-      if (lhs.field_idx != rhs.field_idx) {
-        return lhs.field_idx < rhs.field_idx;
-      }
-      return lhs.dex_file < rhs.dex_file;
-    }
-  };
-
-  // Maps field key to field id for resolved fields.
-  typedef ScopedArenaSafeMap<FieldReference, uint32_t, FieldReferenceComparator> FieldIndexMap;
 
   struct RangeCheckKey {
     uint16_t array;
@@ -98,39 +82,34 @@ class LocalValueNumbering {
   typedef ScopedArenaSafeMap<uint16_t, uint16_t> AliasingIFieldVersionMap;
   typedef ScopedArenaSafeMap<uint16_t, uint16_t> NonAliasingArrayVersionMap;
 
-  struct NonAliasingIFieldKey {
-    uint16_t base;
-    uint16_t field_id;
+  struct EscapedIFieldClobberKey {
+    uint16_t base;      // Or array.
     uint16_t type;
+    uint16_t field_id;  // None (kNoValue) for arrays and unresolved instance field stores.
   };
 
-  struct NonAliasingIFieldKeyComparator {
-    bool operator()(const NonAliasingIFieldKey& lhs, const NonAliasingIFieldKey& rhs) const {
-      // Compare the type first. This allows iterating across all the entries for a certain type
-      // as needed when we need to purge them for an unresolved field IPUT.
+  struct EscapedIFieldClobberKeyComparator {
+    bool operator()(const EscapedIFieldClobberKey& lhs, const EscapedIFieldClobberKey& rhs) const {
+      if (lhs.base != rhs.base) {
+        return lhs.base < rhs.base;
+      }
       if (lhs.type != rhs.type) {
         return lhs.type < rhs.type;
       }
-      // Compare the field second. This allows iterating across all the entries for a certain
-      // field as needed when we need to purge them for an aliasing field IPUT.
-      if (lhs.field_id != rhs.field_id) {
-        return lhs.field_id < rhs.field_id;
-      }
-      // Compare the base last.
-      return lhs.base < rhs.base;
+      return lhs.field_id < rhs.field_id;
     }
   };
 
-  // Set of instance fields still holding non-aliased values after the base has been stored.
-  typedef ScopedArenaSet<NonAliasingIFieldKey, NonAliasingIFieldKeyComparator> NonAliasingFieldSet;
+  typedef ScopedArenaSet<EscapedIFieldClobberKey, EscapedIFieldClobberKeyComparator>
+      EscapedIFieldClobberSet;
 
-  struct EscapedArrayKey {
+  struct EscapedArrayClobberKey {
     uint16_t base;
     uint16_t type;
   };
 
-  struct EscapedArrayKeyComparator {
-    bool operator()(const EscapedArrayKey& lhs, const EscapedArrayKey& rhs) const {
+  struct EscapedArrayClobberKeyComparator {
+    bool operator()(const EscapedArrayClobberKey& lhs, const EscapedArrayClobberKey& rhs) const {
       // Compare the type first. This allows iterating across all the entries for a certain type
       // as needed when we need to purge them for an unresolved field APUT.
       if (lhs.type != rhs.type) {
@@ -142,81 +121,68 @@ class LocalValueNumbering {
   };
 
   // Set of previously non-aliasing array refs that escaped.
-  typedef ScopedArenaSet<EscapedArrayKey, EscapedArrayKeyComparator> EscapedArraySet;
+  typedef ScopedArenaSet<EscapedArrayClobberKey, EscapedArrayClobberKeyComparator>
+      EscapedArrayClobberSet;
 
   // Key is s_reg, value is value name.
   typedef ScopedArenaSafeMap<uint16_t, uint16_t> SregValueMap;
+  // Key is v_reg, value is value name.
+  typedef ScopedArenaSafeMap<uint16_t, uint16_t> VregValueMap;
   // Key is concatenation of opcode, operand1, operand2 and modifier, value is value name.
-  typedef ScopedArenaSafeMap<uint64_t, uint16_t> ValueMap;
+  typedef GlobalValueNumbering::ValueMap ValueMap;
   // Key represents a memory address, value is generation.
   // A set of value names.
   typedef ScopedArenaSet<uint16_t> ValueNameSet;
 
-  static uint64_t BuildKey(uint16_t op, uint16_t operand1, uint16_t operand2, uint16_t modifier) {
-    return (static_cast<uint64_t>(op) << 48 | static_cast<uint64_t>(operand1) << 32 |
-            static_cast<uint64_t>(operand2) << 16 | static_cast<uint64_t>(modifier));
-  };
-
-  static uint16_t ExtractOp(uint64_t key) {
-    return static_cast<uint16_t>(key >> 48);
-  }
-
-  static uint16_t ExtractOperand1(uint64_t key) {
-    return static_cast<uint16_t>(key >> 32);
-  }
-
-  static uint16_t ExtractOperand2(uint64_t key) {
-    return static_cast<uint16_t>(key >> 16);
-  }
-
-  static uint16_t ExtractModifier(uint64_t key) {
-    return static_cast<uint16_t>(key);
-  }
-
-  static bool EqualOpAndOperand1(uint64_t key1, uint64_t key2) {
-    return static_cast<uint32_t>(key1 >> 32) == static_cast<uint32_t>(key2 >> 32);
-  }
-
-  uint16_t LookupValue(uint16_t op, uint16_t operand1, uint16_t operand2, uint16_t modifier) {
+  uint16_t LookupLocalValue(uint16_t op, uint16_t operand1, uint16_t operand2, uint16_t modifier) {
     uint16_t res;
-    uint64_t key = BuildKey(op, operand1, operand2, modifier);
-    ValueMap::iterator it = value_map_.find(key);
-    if (it != value_map_.end()) {
+    uint64_t key = GlobalValueNumbering::BuildKey(op, operand1, operand2, modifier);
+    ValueMap::iterator it = local_value_map_.find(key);
+    if (it != local_value_map_.end()) {
       res = it->second;
     } else {
-      ++last_value_;
-      res = last_value_;
-      value_map_.Put(key, res);
+      res = gvn_->NewValueName();
+      local_value_map_.Put(key, res);
     }
     return res;
   };
 
-  void StoreValue(uint16_t op, uint16_t operand1, uint16_t operand2, uint16_t modifier,
-                  uint16_t value) {
-    uint64_t key = BuildKey(op, operand1, operand2, modifier);
-    value_map_.Overwrite(key, value);
+  void StoreLocalValue(uint16_t op, uint16_t operand1, uint16_t operand2, uint16_t modifier,
+                       uint16_t value) {
+    uint64_t key = GlobalValueNumbering::BuildKey(op, operand1, operand2, modifier);
+    local_value_map_.Overwrite(key, value);
   }
 
-  bool HasValue(uint16_t op, uint16_t operand1, uint16_t operand2, uint16_t modifier,
-                uint16_t value) const {
-    uint64_t key = BuildKey(op, operand1, operand2, modifier);
-    ValueMap::const_iterator it = value_map_.find(key);
-    return (it != value_map_.end() && it->second == value);
-  };
+  // Find local value if exists, otherwise get global value.
+  uint16_t LookupValuePreferLocal(uint16_t op, uint16_t operand1, uint16_t operand2,
+                                  uint16_t modifier) {
+    uint64_t key = GlobalValueNumbering::BuildKey(op, operand1, operand2, modifier);
+    ValueMap::iterator it = local_value_map_.find(key);
+    if (it != local_value_map_.end()) {
+      return it->second;
+    } else {
+      return gvn_->LookupValue(op, operand1, operand2, modifier);
+    }
+  }
 
-  bool ValueExists(uint16_t op, uint16_t operand1, uint16_t operand2, uint16_t modifier) const {
-    uint64_t key = BuildKey(op, operand1, operand2, modifier);
-    ValueMap::const_iterator it = value_map_.find(key);
-    return (it != value_map_.end());
+  bool HasValuePreferLocal(uint16_t op, uint16_t operand1, uint16_t operand2, uint16_t modifier,
+                           uint16_t value) const {
+    uint64_t key = GlobalValueNumbering::BuildKey(op, operand1, operand2, modifier);
+    ValueMap::const_iterator it = local_value_map_.find(key);
+    if (it != local_value_map_.end()) {
+      return it->second == value;
+    } else {
+      return gvn_->HasValue(op, operand1, operand2, modifier, value);
+    }
   };
 
   void SetOperandValue(uint16_t s_reg, uint16_t value) {
-    SregValueMap::iterator it = sreg_value_map_.find(s_reg);
-    if (it != sreg_value_map_.end()) {
-      DCHECK_EQ(it->second, value);
-    } else {
-      sreg_value_map_.Put(s_reg, value);
-    }
+    // FIXME: Remove the DCHECK when we handle GVN for BBs with multiple predecessors.
+    // We're using Overwrite() for performance (only one lookup in release mode)
+    // but if the value exists, it must not change.
+    DCHECK(sreg_value_map_.find(s_reg) == sreg_value_map_.end() ||
+           sreg_value_map_.Get(s_reg) == value);
+    sreg_value_map_.Overwrite(s_reg, value);
   };
 
   uint16_t GetOperandValue(int s_reg) {
@@ -226,19 +192,19 @@ class LocalValueNumbering {
       res = it->second;
     } else {
       // First use
-      res = LookupValue(kNoValue, s_reg, kNoValue, kNoValue);
+      res = gvn_->LookupValue(kNoValue, s_reg, kNoValue, kNoValue);
       sreg_value_map_.Put(s_reg, res);
     }
     return res;
   };
 
   void SetOperandValueWide(uint16_t s_reg, uint16_t value) {
-    SregValueMap::iterator it = sreg_wide_value_map_.find(s_reg);
-    if (it != sreg_wide_value_map_.end()) {
-      DCHECK_EQ(it->second, value);
-    } else {
-      sreg_wide_value_map_.Put(s_reg, value);
-    }
+    // FIXME: Remove the DCHECK when we handle GVN for BBs with multiple predecessors.
+    // We're using Overwrite() for performance (only one lookup in release mode)
+    // but if the value exists, it must not change.
+    DCHECK(sreg_wide_value_map_.find(s_reg) == sreg_wide_value_map_.end() ||
+           sreg_wide_value_map_.Get(s_reg) == value);
+    sreg_wide_value_map_.Overwrite(s_reg, value);
   };
 
   uint16_t GetOperandValueWide(int s_reg) {
@@ -248,13 +214,12 @@ class LocalValueNumbering {
       res = it->second;
     } else {
       // First use
-      res = LookupValue(kNoValue, s_reg, kNoValue, kNoValue);
+      res = gvn_->LookupValue(kNoValue, s_reg, kNoValue, kNoValue);
       sreg_wide_value_map_.Put(s_reg, res);
     }
     return res;
   };
 
-  uint16_t GetFieldId(const MirFieldInfo& field_info);
   uint16_t MarkNonAliasingNonNull(MIR* mir);
   bool IsNonAliasing(uint16_t reg);
   bool IsNonAliasingIField(uint16_t reg, uint16_t field_id, uint16_t type);
@@ -270,15 +235,11 @@ class LocalValueNumbering {
   uint16_t HandleSGet(MIR* mir, uint16_t opcode);
   void HandleSPut(MIR* mir, uint16_t opcode);
 
-  CompilationUnit* const cu_;
-
-  // We have 32-bit last_value_ so that we can detect when we run out of value names, see Good().
-  // We usually don't check Good() until the end of LVN unless we're about to modify code.
-  uint32_t last_value_;
+  GlobalValueNumbering* gvn_;
 
   SregValueMap sreg_value_map_;
   SregValueMap sreg_wide_value_map_;
-  ValueMap value_map_;
+  ValueMap local_value_map_;
 
   // Data for dealing with memory clobbering and store/load aliasing.
   uint16_t global_memory_version_;
@@ -287,13 +248,13 @@ class LocalValueNumbering {
   uint16_t aliasing_array_version_[kFieldTypeCount];
   AliasingIFieldVersionMap aliasing_ifield_version_map_;
   NonAliasingArrayVersionMap non_aliasing_array_version_map_;
-  FieldIndexMap field_index_map_;
   // Value names of references to objects that cannot be reached through a different value name.
   ValueNameSet non_aliasing_refs_;
-  // Instance fields still holding non-aliased values after the base has escaped.
-  NonAliasingFieldSet non_aliasing_ifields_;
-  // Previously non-aliasing array refs that escaped but can still be used for non-aliasing AGET.
-  EscapedArraySet escaped_array_refs_;
+  // Previously non-aliasing refs that escaped but can still be used for non-aliasing AGET/IGET.
+  ValueNameSet escaped_refs_;
+  // Blacklists for cases where escaped_refs_ can't be used.
+  EscapedIFieldClobberSet escaped_ifield_clobber_set_;
+  EscapedArrayClobberSet escaped_array_clobber_set_;
 
   // Range check and null check elimination.
   RangeCheckSet range_checked_;
