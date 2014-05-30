@@ -189,6 +189,7 @@ enum OatMethodAttributes {
 #define MIR_DUP                         (1 << kMIRDup)
 
 #define BLOCK_NAME_LEN 80
+#define LEAF_OPTIMIZATION 1
 
 typedef uint16_t BasicBlockId;
 static const BasicBlockId NullBasicBlockId = 0;
@@ -906,6 +907,16 @@ class MIRGraph {
   bool InferTypeAndSize(BasicBlock* bb, MIR* mir, bool changed);
   void ComputeDFSOrders();
 
+  // Used for removing redudant suspend tests
+  void AppendGenSuspendTestList(BasicBlock* bb) {
+    if (gen_suspend_test_list_.Size() == 0 || 
+        gen_suspend_test_list_.Get(gen_suspend_test_list_.Size() - 1) != bb) {
+      gen_suspend_test_list_.Insert(bb);
+    }
+  }
+
+  bool HasSuspendTestBetween(BasicBlock* source, BasicBlockId target_id);
+
  protected:
   int FindCommonParent(int block1, int block2);
   void ComputeSuccLineIn(ArenaBitVector* dest, const ArenaBitVector* src1,
@@ -1017,6 +1028,7 @@ class MIRGraph {
   GrowableArray<MirSFieldLoweringInfo> sfield_lowering_infos_;
   GrowableArray<MirMethodLoweringInfo> method_lowering_infos_;
   static const uint64_t oat_data_flow_attributes_[kMirOpLast];
+  GrowableArray<BasicBlock*> gen_suspend_test_list_; // List of blocks containing suspend tests
 
   friend class ClassInitCheckEliminationTest;
   friend class LocalValueNumberingTest;
