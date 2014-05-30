@@ -25,12 +25,19 @@ namespace art {
 namespace arm {
 
 static constexpr uint32_t kArmCalleeSaveRefSpills =
+#ifndef ARM_R4_SUSPEND_FLAG
+    (1 << art::arm::R4) |
+#endif
     (1 << art::arm::R5) | (1 << art::arm::R6)  | (1 << art::arm::R7) | (1 << art::arm::R8) |
     (1 << art::arm::R10) | (1 << art::arm::R11);
 static constexpr uint32_t kArmCalleeSaveArgSpills =
     (1 << art::arm::R1) | (1 << art::arm::R2) | (1 << art::arm::R3);
 static constexpr uint32_t kArmCalleeSaveAllSpills =
+#ifdef ARM_R4_SUSPEND_FLAG
     (1 << art::arm::R4) | (1 << art::arm::R9);
+#else
+    (1 << art::arm::R9);
+#endif
 static constexpr uint32_t kArmCalleeSaveFpAllSpills =
     (1 << art::arm::S0)  | (1 << art::arm::S1)  | (1 << art::arm::S2)  | (1 << art::arm::S3)  |
     (1 << art::arm::S4)  | (1 << art::arm::S5)  | (1 << art::arm::S6)  | (1 << art::arm::S7)  |

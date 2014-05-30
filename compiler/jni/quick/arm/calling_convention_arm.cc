@@ -122,6 +122,9 @@ ArmJniCallingConvention::ArmJniCallingConvention(bool is_static, bool is_synchro
   }
   padding_ = padding;
 
+#ifndef ARM_R4_SUSPEND_FLAG
+  callee_save_regs_.push_back(ArmManagedRegister::FromCoreRegister(R4));
+#endif
   callee_save_regs_.push_back(ArmManagedRegister::FromCoreRegister(R5));
   callee_save_regs_.push_back(ArmManagedRegister::FromCoreRegister(R6));
   callee_save_regs_.push_back(ArmManagedRegister::FromCoreRegister(R7));
@@ -133,7 +136,11 @@ ArmJniCallingConvention::ArmJniCallingConvention(bool is_static, bool is_synchro
 uint32_t ArmJniCallingConvention::CoreSpillMask() const {
   // Compute spill mask to agree with callee saves initialized in the constructor
   uint32_t result = 0;
+#ifdef ARM_R4_SUSPEND_FLAG
   result = 1 << R5 | 1 << R6 | 1 << R7 | 1 << R8 | 1 << R10 | 1 << R11 | 1 << LR;
+#else
+  result = 1 << R4 | 1 << R5 | 1 << R6 | 1 << R7 | 1 << R8 | 1 << R10 | 1 << R11 | 1 << LR;
+#endif
   return result;
 }
 
