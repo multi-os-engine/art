@@ -28,6 +28,7 @@
 #include "base/mutex.h"
 #include "globals.h"
 #include "instrumentation.h"
+#include "profiler_options.h"
 #include "os.h"
 #include "safe_map.h"
 
@@ -101,9 +102,9 @@ class ProfileSampleResults {
 
 class BackgroundMethodSamplingProfiler {
  public:
-  static void Start(int period, int duration, const std::string& profile_filename,
-                    const std::string& procName, int interval_us,
-                    double backoff_coefficient, bool startImmediately)
+  // Start a profile thread with the user-supplied arguments.
+  // Returns true if the profile was started or if it was already running. Returns false otherwise.
+  static bool Start(const std::string& output_filename, const ProfilerOptions& options)
   LOCKS_EXCLUDED(Locks::mutator_lock_,
                  Locks::thread_list_lock_,
                  Locks::thread_suspend_count_lock_,
@@ -119,10 +120,7 @@ class BackgroundMethodSamplingProfiler {
   }
 
  private:
-  explicit BackgroundMethodSamplingProfiler(int period, int duration,
-                                            const std::string& profile_filename,
-                                            const std::string& process_name,
-                                            double backoff_coefficient, int interval_us, bool startImmediately);
+  explicit BackgroundMethodSamplingProfiler(const std::string& output_filename, const ProfilerOptions& options);
 
   // The sampling interval in microseconds is passed as an argument.
   static void* RunProfilerThread(void* arg) LOCKS_EXCLUDED(Locks::profiler_lock_);
@@ -141,35 +139,14 @@ class BackgroundMethodSamplingProfiler {
   // Sampling thread, non-zero when sampling.
   static pthread_t profiler_pthread_;
 
-  // Some measure of the number of samples that are significant
+  // Some measure of the number of samples that are significant.
   static constexpr uint32_t kSignificantSamples = 10;
 
-  // File to write profile data out to.  Cannot be empty if we are profiling.
-  std::string profile_file_name_;
+  // The name of the file where profile data will be written.
+  std::string output_filename_;
+  // The options used to start the profiler.
+  const ProfilerOptions& options_;
 
-  // Process name.
-  std::string process_name_;
-
-  // Number of seconds between profile runs.
-  uint32_t period_s_;
-
-  // Most of the time we want to delay the profiler startup to prevent everything
-  // running at the same time (all processes).  This is the default, but if we
-  // want to override this, set the 'start_immediately_' to true.  This is done
-  // if the -Xprofile option is given on the command line.
-  bool start_immediately_;
-
-  uint32_t interval_us_;
-
-  // A backoff coefficent to adjust the profile period based on time.
-  double backoff_factor_;
-
-  // How much to increase the backoff by on each profile iteration.
-  double backoff_coefficient_;
-
-  // Duration of each profile run.  The profile file will be written at the end
-  // of each run.
-  uint32_t duration_s_;
 
   // Profile condition support.
   Mutex wait_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
@@ -217,7 +194,7 @@ class ProfileFile {
   };
 
  public:
-  // Loads profile data from the given file. The data are merged with any existing data.
+  // Loads profile data from the given file. The new data are merged with any existing data.
   // Returns true if the file was loaded successfully and false otherwise.
   bool LoadFile(const std::string& filename);
 
