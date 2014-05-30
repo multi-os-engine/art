@@ -23,6 +23,7 @@
 #include "compiler_internals.h"
 #include "dex_file-inl.h"
 #include "dex_instruction-inl.h"
+#include "dex/global_value_numbering.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/quick/dex_file_method_inliner.h"
 #include "leb128.h"
