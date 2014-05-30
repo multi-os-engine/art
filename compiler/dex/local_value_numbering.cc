@@ -16,6 +16,7 @@
 
 #include "local_value_numbering.h"
 
+#include "global_value_numbering.h"
 #include "mir_field_info.h"
 #include "mir_graph.h"
 
@@ -24,57 +25,481 @@ namespace art {
 namespace {  // anonymous namespace
 
 // Operations used for value map keys instead of actual opcode.
-static constexpr uint16_t kInvokeMemoryVersionBumpOp = Instruction::INVOKE_DIRECT;
-static constexpr uint16_t kUnresolvedSFieldOp = Instruction::SPUT;
-static constexpr uint16_t kResolvedSFieldOp = Instruction::SGET;
-static constexpr uint16_t kUnresolvedIFieldOp = Instruction::IPUT;
-static constexpr uint16_t kNonAliasingIFieldOp = Instruction::IGET;
-static constexpr uint16_t kAliasingIFieldOp = Instruction::IGET_WIDE;
-static constexpr uint16_t kAliasingIFieldStartVersionOp = Instruction::IGET_WIDE;
-static constexpr uint16_t kAliasingIFieldBumpVersionOp = Instruction::IGET_OBJECT;
-static constexpr uint16_t kArrayAccessLocOp = Instruction::APUT;
-static constexpr uint16_t kNonAliasingArrayOp = Instruction::AGET;
-static constexpr uint16_t kNonAliasingArrayStartVersionOp = Instruction::AGET_WIDE;
-static constexpr uint16_t kAliasingArrayOp = Instruction::AGET_OBJECT;
-static constexpr uint16_t kAliasingArrayMemoryVersionOp = Instruction::AGET_BOOLEAN;
-static constexpr uint16_t kAliasingArrayBumpVersionOp = Instruction::AGET_BYTE;
+static constexpr uint16_t kInvokeMemoryVersionBumpOp = Instruction::INVOKE_VIRTUAL;
+static constexpr uint16_t kUnresolvedSFieldOp = Instruction::SGET;
+static constexpr uint16_t kResolvedSFieldOp = Instruction::SGET_WIDE;
+static constexpr uint16_t kUnresolvedIFieldOp = Instruction::IGET;
+static constexpr uint16_t kNonAliasingIFieldLocOp = Instruction::IGET_WIDE;
+static constexpr uint16_t kNonAliasingIFieldInitialOp = Instruction::IGET_OBJECT;
+static constexpr uint16_t kAliasingIFieldOp = Instruction::IGET_BOOLEAN;
+static constexpr uint16_t kAliasingIFieldStartVersionOp = Instruction::IGET_BYTE;
+static constexpr uint16_t kAliasingIFieldBumpVersionOp = Instruction::IGET_CHAR;
+static constexpr uint16_t kArrayAccessLocOp = Instruction::AGET;
+static constexpr uint16_t kNonAliasingArrayOp = Instruction::AGET_WIDE;
+static constexpr uint16_t kNonAliasingArrayStartVersionOp = Instruction::AGET_OBJECT;
+static constexpr uint16_t kAliasingArrayOp = Instruction::AGET_BOOLEAN;
+static constexpr uint16_t kAliasingArrayMemoryVersionOp = Instruction::AGET_BYTE;
+static constexpr uint16_t kAliasingArrayBumpVersionOp = Instruction::AGET_CHAR;
+static constexpr uint16_t kMergeBlockMemoryVersionBumpOp = Instruction::INVOKE_VIRTUAL_RANGE;
+static constexpr uint16_t kMergeBlockAliasingIFieldVersionBumpOp = Instruction::IPUT;
+static constexpr uint16_t kMergeBlockNonAliasingArrayVersionBumpOp = Instruction::APUT;
+static constexpr uint16_t kMergeBlockNonAliasingIFieldVersionBumpOp = Instruction::APUT_WIDE;
+static constexpr uint16_t kMergeBlockSFieldVersionBumpOp = Instruction::APUT_OBJECT;
 
 }  // anonymous namespace
 
-LocalValueNumbering::LocalValueNumbering(CompilationUnit* cu, ScopedArenaAllocator* allocator)
-    : cu_(cu),
-      last_value_(0u),
-      sreg_value_map_(std::less<uint16_t>(), allocator->Adapter()),
-      sreg_wide_value_map_(std::less<uint16_t>(), allocator->Adapter()),
-      value_map_(std::less<uint64_t>(), allocator->Adapter()),
+LocalValueNumbering::LocalValueNumbering(GlobalValueNumbering* gvn, uint16_t id)
+    : gvn_(gvn),
+      id_(id),
+      non_aliasing_ifield_value_map_(std::less<uint16_t>(), gvn->Allocator()->Adapter()),
+      sfield_value_map_(std::less<uint16_t>(), gvn->Allocator()->Adapter()),
       global_memory_version_(0u),
-      aliasing_ifield_version_map_(std::less<uint16_t>(), allocator->Adapter()),
-      non_aliasing_array_version_map_(std::less<uint16_t>(), allocator->Adapter()),
-      field_index_map_(FieldReferenceComparator(), allocator->Adapter()),
-      non_aliasing_refs_(std::less<uint16_t>(), allocator->Adapter()),
-      non_aliasing_ifields_(NonAliasingIFieldKeyComparator(), allocator->Adapter()),
-      escaped_array_refs_(EscapedArrayKeyComparator(), allocator->Adapter()),
-      range_checked_(RangeCheckKeyComparator() , allocator->Adapter()),
-      null_checked_(std::less<uint16_t>(), allocator->Adapter()) {
+      aliasing_ifield_version_map_(std::less<uint16_t>(), gvn->Allocator()->Adapter()),
+      non_aliasing_array_version_map_(std::less<uint16_t>(), gvn->Allocator()->Adapter()),
+      non_aliasing_refs_(std::less<uint16_t>(), gvn->Allocator()->Adapter()),
+      escaped_refs_(std::less<uint16_t>(), gvn->Allocator()->Adapter()),
+      escaped_ifield_clobber_set_(EscapedIFieldClobberKeyComparator(), gvn->Allocator()->Adapter()),
+      escaped_array_clobber_set_(EscapedArrayClobberKeyComparator(), gvn->Allocator()->Adapter()),
+      range_checked_(RangeCheckKeyComparator() , gvn->Allocator()->Adapter()),
+      null_checked_(std::less<uint16_t>(), gvn->Allocator()->Adapter()),
+      merge_names_(gvn->Allocator()->Adapter()),
+      merge_map_(std::less<ScopedArenaVector<BasicBlockId>>(), gvn->Allocator()->Adapter()) {
   std::fill_n(unresolved_sfield_version_, kFieldTypeCount, 0u);
   std::fill_n(unresolved_ifield_version_, kFieldTypeCount, 0u);
   std::fill_n(aliasing_array_version_, kFieldTypeCount, 0u);
 }
 
-uint16_t LocalValueNumbering::GetFieldId(const MirFieldInfo& field_info) {
-  FieldReference key = { field_info.DeclaringDexFile(), field_info.DeclaringFieldIndex() };
-  auto it = field_index_map_.find(key);
-  if (it != field_index_map_.end()) {
-    return it->second;
+void LocalValueNumbering::SetCatchEntry() {
+  // Use kMergeBlockMemoryVersionBumpOp, it's unique for each BB.
+  global_memory_version_ = gvn_->LookupValue(kMergeBlockMemoryVersionBumpOp, 0u, 0u, id_);
+}
+
+bool LocalValueNumbering::Equals(const LocalValueNumbering& other) const {
+  DCHECK(gvn_ == other.gvn_);
+  // Compare the maps/sets and memory versions.
+  return non_aliasing_ifield_value_map_ == other.non_aliasing_ifield_value_map_ &&
+      sfield_value_map_ == other.sfield_value_map_ &&
+      SameMemoryVersion(other) &&
+      aliasing_ifield_version_map_ == other.aliasing_ifield_version_map_ &&
+      non_aliasing_array_version_map_ == other.non_aliasing_array_version_map_ &&
+      non_aliasing_refs_ == other.non_aliasing_refs_ &&
+      escaped_refs_ == other.escaped_refs_ &&
+      escaped_ifield_clobber_set_ == other.escaped_ifield_clobber_set_ &&
+      escaped_array_clobber_set_ == other.escaped_array_clobber_set_ &&
+      range_checked_ == other.range_checked_ &&
+      null_checked_ == other.null_checked_;
+}
+
+bool LocalValueNumbering::SameMemoryVersion(const LocalValueNumbering& other) const {
+  return
+      global_memory_version_ == other.global_memory_version_ &&
+      std::equal(unresolved_ifield_version_, unresolved_ifield_version_ + kFieldTypeCount,
+                 other.unresolved_ifield_version_) &&
+      std::equal(unresolved_sfield_version_, unresolved_sfield_version_ + kFieldTypeCount,
+                 other.unresolved_sfield_version_) &&
+      std::equal(aliasing_array_version_, aliasing_array_version_ + kFieldTypeCount,
+                 other.aliasing_array_version_);
+}
+
+void LocalValueNumbering::Copy(const LocalValueNumbering& other) {
+  non_aliasing_ifield_value_map_ = other.non_aliasing_ifield_value_map_;
+  sfield_value_map_ = other.sfield_value_map_;
+  global_memory_version_ = other.global_memory_version_;
+  aliasing_ifield_version_map_ = other.aliasing_ifield_version_map_;
+  non_aliasing_array_version_map_ = other.non_aliasing_array_version_map_;
+  non_aliasing_refs_ = other.non_aliasing_refs_;
+  escaped_refs_ = other.escaped_refs_;
+  escaped_ifield_clobber_set_ = other.escaped_ifield_clobber_set_;
+  escaped_array_clobber_set_ = other.escaped_array_clobber_set_;
+  range_checked_ = other.range_checked_;
+  null_checked_ = other.null_checked_;
+  std::copy(other.unresolved_ifield_version_, other.unresolved_ifield_version_ + kFieldTypeCount,
+            unresolved_ifield_version_);
+  std::copy(other.unresolved_sfield_version_, other.unresolved_sfield_version_ + kFieldTypeCount,
+            unresolved_sfield_version_);
+  std::copy(other.aliasing_array_version_, other.aliasing_array_version_ + kFieldTypeCount,
+            aliasing_array_version_);
+}
+
+template <typename K, typename V, typename Comparator>
+void LocalValueNumbering::MergeLocalMap(ScopedArenaSafeMap<K, V, Comparator>* work_map,
+                                        const ScopedArenaSafeMap<K, V, Comparator>& other_map,
+                                        uint16_t bump_op) {
+  // TODO: Keep a map of merge sets (a set of all incoming id, value name pairs) in GVN
+  // so that we can asign the same value if multiple locations merge the same value names.
+  // Then merge all the bump_ops into one.
+  Comparator cmp;  // All our comparators are stateless and default-constructible.
+  auto it = work_map->begin(), end = work_map->end();
+  auto other_it = other_map.begin(), other_end = other_map.end();
+  while (it != end || other_it != other_end) {
+    if (it == end || (other_it != end && cmp(other_it->first, it->first))) {
+      uint16_t value = gvn_->LookupValue(bump_op, it->first, id_, kNoValue);
+      work_map->PutHint(it, other_it->first, value);
+      ++other_it;
+    } else if (other_it == other_end || (it != end && cmp(it->first, other_it->first))) {
+      uint16_t value = gvn_->LookupValue(bump_op, it->first, id_, kNoValue);
+      it->second = value;
+      ++it;
+    } else {
+      if (it->second != other_it->second) {
+        uint16_t value = gvn_->LookupValue(bump_op, it->first, id_, kNoValue);
+        it->second = value;
+      }
+      ++it;
+      ++other_it;
+    }
   }
-  uint16_t id = field_index_map_.size();
-  field_index_map_.Put(key, id);
-  return id;
+}
+
+template <typename K, typename Comparator>
+void LocalValueNumbering::MergeClobberSet(ScopedArenaSet<K, Comparator>* work_clobber_set,
+                                          const ScopedArenaSet<K, Comparator>& other_clobber_set) {
+  auto cs_it = work_clobber_set->begin(), cs_end = work_clobber_set->end();
+  auto other_cs_it = other_clobber_set.begin(), other_cs_end = other_clobber_set.end();
+  for (uint16_t base : escaped_refs_) {  // Iteration in increasing order.
+    while (cs_it != cs_end && cs_it->base < base) {
+      cs_it = work_clobber_set->erase(cs_it);  // Remove obsolete clobber entry.
+    }
+    while (other_cs_it != other_cs_end && other_cs_it->base < base) {
+      ++other_cs_it;  // Skip obsolete clobber entry in other_clobber_set.
+    }
+    // Now merge the entries for base.
+    while ((cs_it != cs_end && cs_it->base == base) ||
+        (other_cs_it != other_cs_end && other_cs_it->base == base)) {
+      Comparator cmp;  // All our comparators are stateless and default-constructible.
+      if (cs_it == cs_end || (other_cs_it != other_cs_end && cmp(*other_cs_it, *cs_it))) {
+        work_clobber_set->insert(cs_it, *other_cs_it);
+        ++other_cs_it;
+      } else if (other_cs_it == other_cs_end || (cs_it != cs_end && cmp(*cs_it, *other_cs_it))) {
+        // *cs_it is already in this->escaped_ifield_clobber_set_.
+        ++cs_it;
+      } else {
+        ++cs_it;
+        ++other_cs_it;
+      }
+    }
+  }
+  // Remove clobber entries for refs after the last base.
+  work_clobber_set->erase(cs_it, cs_end);
+}
+
+template <typename K, typename Comparator>
+void LocalValueNumbering::Intersect(ScopedArenaSet<K, Comparator>* work_set,
+                                    const ScopedArenaSet<K, Comparator>& other_set) {
+  // In-place intersection; *work_set = Intersect(*work_set, other).
+  Comparator cmp = work_set->key_comp();
+  auto it = work_set->begin(), end = work_set->end();
+  auto other_it = other_set.begin(), other_end = other_set.end();
+  while (it != end) {
+    while (other_it != other_end && cmp(*other_it, *it)) {
+      ++other_it;
+    }
+    if (other_it != other_end && !cmp(*it, *other_it)) {
+      ++it;
+      ++other_it;
+    } else {
+      it = work_set->erase(it);
+    }
+  }
+}
+
+uint16_t LocalValueNumbering::MergeSFieldValues(
+    const ScopedArenaVector<const LocalValueNumbering*>& lvns, uint16_t field_id) {
+  merge_names_.reserve(lvns.size());
+  merge_names_.clear();
+  uint16_t value_name = kNoValue;
+  bool same_values = true;
+  for (const LocalValueNumbering* lvn : lvns) {
+    // Get the value name as in HandleSGet() but don't modify *lvn.
+    auto it = lvn->sfield_value_map_.find(field_id);
+    if (it != lvn->sfield_value_map_.end()) {
+      value_name = it->second;
+    } else {
+      uint16_t type = gvn_->GetFieldType(field_id);
+      value_name = gvn_->LookupValue(kResolvedSFieldOp, field_id,
+                                     lvn->unresolved_sfield_version_[type],
+                                     lvn->global_memory_version_);
+    }
+
+    same_values = same_values && (merge_names_.empty() || value_name == merge_names_.back());
+    merge_names_.push_back(value_name);
+  }
+  if (same_values) {
+    // value_name already contains the result.
+  } else {
+    auto lb = merge_map_.lower_bound(merge_names_);
+    if (lb != merge_map_.end() && !merge_map_.key_comp()(merge_names_, lb->first)) {
+      value_name = lb->second;
+    } else {
+      value_name = gvn_->LookupValue(kMergeBlockSFieldVersionBumpOp, field_id, id_, kNoValue);
+      merge_map_.PutHint(lb, merge_names_, value_name);
+      if (gvn_->NullCheckedInAllPredecessors(*this, lvns, merge_names_)) {
+        null_checked_.insert(value_name);
+      }
+    }
+  }
+  return value_name;
+}
+
+uint16_t LocalValueNumbering::MergeNonAliasingIFieldValues(
+    const ScopedArenaVector<const LocalValueNumbering*>& lvns, uint16_t field_loc) {
+  merge_names_.reserve(lvns.size());
+  merge_names_.clear();
+  uint16_t value_name = kNoValue;
+  bool same_values = true;
+  for (const LocalValueNumbering* lvn : lvns) {
+    // Get the value name as in HandleIGet() but don't modify *lvn.
+    auto it = lvn->non_aliasing_ifield_value_map_.find(field_loc);
+    if (it != lvn->non_aliasing_ifield_value_map_.end()) {
+      value_name = it->second;
+    } else {
+      value_name = gvn_->LookupValue(kNonAliasingIFieldInitialOp, field_loc, kNoValue, kNoValue);
+    }
+
+    same_values = same_values && (merge_names_.empty() || value_name == merge_names_.back());
+    merge_names_.push_back(value_name);
+  }
+  if (same_values) {
+    // value_name already contains the result.
+  } else {
+    auto lb = merge_map_.lower_bound(merge_names_);
+    if (lb != merge_map_.end() && !merge_map_.key_comp()(merge_names_, lb->first)) {
+      value_name = lb->second;
+    } else {
+      value_name = gvn_->LookupValue(kMergeBlockNonAliasingIFieldVersionBumpOp, field_loc,
+                                     id_, kNoValue);
+      merge_map_.PutHint(lb, merge_names_, value_name);
+      if (gvn_->NullCheckedInAllPredecessors(*this, lvns, merge_names_)) {
+        null_checked_.insert(value_name);
+      }
+    }
+  }
+  return value_name;
+}
+
+void LocalValueNumbering::MergeSFieldValues(
+    const ScopedArenaVector<const LocalValueNumbering*>& lvns) {
+  for (const LocalValueNumbering* lvn : lvns) {
+    auto my_it = sfield_value_map_.begin(), my_end = sfield_value_map_.end();
+    for (const auto& entry : lvn->sfield_value_map_) {
+      while (my_it != my_end && my_it->first < entry.first) {
+        ++my_it;
+      }
+      if (my_it != my_end && my_it->first == entry.first) {
+        // Already handled.
+        ++my_it;
+      } else {
+        // Merge values for this field_id.
+        uint16_t value_name = MergeSFieldValues(lvns, entry.first);
+        sfield_value_map_.PutHint(my_it, entry.first, value_name);  // my_it remains valid.
+      }
+    }
+  }
+}
+
+void LocalValueNumbering::MergeNonAliasingIFieldValues(
+    const ScopedArenaVector<const LocalValueNumbering*>& lvns) {
+  for (const LocalValueNumbering* lvn : lvns) {
+    auto my_it = non_aliasing_ifield_value_map_.begin(),
+        my_end = non_aliasing_ifield_value_map_.end();
+    for (const auto& entry : lvn->non_aliasing_ifield_value_map_) {
+      while (my_it != my_end && my_it->first < entry.first) {
+        ++my_it;
+      }
+      if (my_it != my_end && my_it->first == entry.first) {
+        // Already handled.
+        ++my_it;
+      } else {
+        // Merge values for this field_loc.
+        uint16_t value_name = MergeNonAliasingIFieldValues(lvns, entry.first);
+        non_aliasing_ifield_value_map_.PutHint(my_it, entry.first, value_name);  // my_it remains valid.
+      }
+    }
+  }
+}
+
+void LocalValueNumbering::MergeEscapedRefs(
+    const ScopedArenaVector<const LocalValueNumbering*>& lvns) {
+  for (const LocalValueNumbering* lvn : lvns) {
+    auto my_it = escaped_refs_.begin(), my_end = escaped_refs_.end();
+    for (const auto& entry : lvn->escaped_refs_) {
+      while (my_it != my_end && escaped_refs_.key_comp()(*my_it, entry)) {
+        ++my_it;
+      }
+      if (my_it != my_end && !escaped_refs_.key_comp()(entry, *my_it)) {
+        // Already handled.
+        ++my_it;
+      } else {
+        // See if the ref is either escaped or non-aliasing in each predecessor.
+        bool is_escaped = true;
+        for (const LocalValueNumbering* inner_lvn : lvns) {
+          if (inner_lvn->non_aliasing_refs_.count(entry) == 0u &&
+              inner_lvn->escaped_refs_.count(entry) == 0u) {
+            is_escaped = false;
+            break;
+          }
+        }
+        if (is_escaped) {
+          escaped_refs_.emplace_hint(my_it, entry);  // my_it remains valid.
+        }
+      }
+    }
+  }
+}
+
+void LocalValueNumbering::MergeEscapedIFieldClobberSets(
+    const ScopedArenaVector<const LocalValueNumbering*>& lvns) {
+  for (const LocalValueNumbering* lvn : lvns) {
+    auto my_it = escaped_ifield_clobber_set_.begin(), my_end = escaped_ifield_clobber_set_.end();
+    for (const auto& entry : lvn->escaped_ifield_clobber_set_) {
+      while (my_it != my_end && escaped_ifield_clobber_set_.key_comp()(*my_it, entry)) {
+        ++my_it;
+      }
+      if (my_it != my_end && !escaped_ifield_clobber_set_.key_comp()(entry, *my_it)) {
+        // Already handled.
+        ++my_it;
+      } else {
+        // See if the ref is still escaped.
+        if (escaped_refs_.count(entry.base)) {
+          // TODO: Prune field id clobbers for clobbered types.
+          escaped_ifield_clobber_set_.emplace_hint(my_it, entry);
+        }
+      }
+    }
+  }
+}
+
+template <typename Set, Set LocalValueNumbering::* set_ptr>
+void LocalValueNumbering::IntersectSets(
+    const ScopedArenaVector<const LocalValueNumbering*>& lvns) {
+  DCHECK_GE(lvns.size(), 2u);
+
+  // Find the LVN with the least entries in the set.
+  const LocalValueNumbering* least_entries_lvn = lvns[0];
+  for (const LocalValueNumbering* lvn : lvns) {
+    if ((lvn->*set_ptr).size() < (least_entries_lvn->*set_ptr).size()) {
+      least_entries_lvn = lvn;
+    }
+  }
+
+  // For each key check if it's in all the LVNs.
+  for (const auto& key : least_entries_lvn->*set_ptr) {
+    bool checked = true;
+    for (const LocalValueNumbering* lvn : lvns) {
+      if (lvn != least_entries_lvn && (lvn->*set_ptr).count(key) == 0u) {
+        checked = false;
+        break;
+      }
+    }
+    if (checked) {
+      (this->*set_ptr).insert(key);
+    }
+  }
+}
+
+void LocalValueNumbering::MergeNullChecked(
+    const ScopedArenaVector<const LocalValueNumbering*>& lvns) {
+  DCHECK_GE(lvns.size(), 2u);
+  for (const LocalValueNumbering* lvn : lvns) {
+    auto my_it = null_checked_.begin(), my_end = null_checked_.end();
+    for (const auto& entry : lvn->null_checked_) {
+      while (my_it != my_end && *my_it < entry) {
+        ++my_it;
+      }
+      if (*my_it == entry) {
+        // Already handled.
+        ++my_it;
+      } else {
+        // Merge null_checked_ for this ref.
+        merge_names_.clear();
+        merge_names_.resize(lvns.size(), entry);
+        if (gvn_->NullCheckedInAllPredecessors(*this, lvns, merge_names_)) {
+          null_checked_.insert(my_it, entry);  // my_it remains valid.
+        }
+      }
+    }
+  }
+}
+
+void LocalValueNumbering::Merge(const ScopedArenaVector<const LocalValueNumbering*>& lvns) {
+  DCHECK_GE(lvns.size(), 2u);
+
+  // We won't do anything complicated for range checks, just calculate the intersection.
+  IntersectSets<RangeCheckSet, &LocalValueNumbering::range_checked_>(lvns);
+
+  // Intersect the non-aliasing refs and merge escaped refs and clobber sets.
+  IntersectSets<ValueNameSet, &LocalValueNumbering::non_aliasing_refs_>(lvns);
+  MergeEscapedRefs(lvns);
+  MergeEscapedIFieldClobberSets(lvns);
+
+  MergeNullChecked(lvns);  // May later insert more.
+  MergeNonAliasingIFieldValues(lvns);
+  MergeSFieldValues(lvns);
+
+  // Quick hack relying on the other Merge() that I want to rewrite!
+  for (const LocalValueNumbering* other : lvns) {
+    if (other == lvns[0]) {
+      global_memory_version_ = other->global_memory_version_;
+      aliasing_ifield_version_map_ = other->aliasing_ifield_version_map_;
+      non_aliasing_array_version_map_ = other->non_aliasing_array_version_map_;
+      escaped_array_clobber_set_ = other->escaped_array_clobber_set_;
+      std::copy(other->unresolved_ifield_version_, other->unresolved_ifield_version_ + kFieldTypeCount,
+                unresolved_ifield_version_);
+      std::copy(other->unresolved_sfield_version_, other->unresolved_sfield_version_ + kFieldTypeCount,
+                unresolved_sfield_version_);
+      std::copy(other->aliasing_array_version_, other->aliasing_array_version_ + kFieldTypeCount,
+                aliasing_array_version_);
+    } else {
+      Merge(*other);
+    }
+  }
+}
+
+void LocalValueNumbering::Merge(const LocalValueNumbering& other) {
+  // Merge local maps.
+  MergeLocalMap(&aliasing_ifield_version_map_, other.aliasing_ifield_version_map_,
+                kMergeBlockAliasingIFieldVersionBumpOp);
+  MergeLocalMap(&non_aliasing_array_version_map_, other.non_aliasing_array_version_map_,
+                kMergeBlockNonAliasingArrayVersionBumpOp);
+
+  // Merge escaped references and clobber sets.
+  if (global_memory_version_ != other.global_memory_version_) {
+    // All fields or array elements of escaped references may have been modified.
+    escaped_array_clobber_set_.clear();
+  } else {
+    MergeClobberSet(&escaped_array_clobber_set_, other. escaped_array_clobber_set_);
+  }
+
+  // Check memory version mismatch.
+  uint16_t new_version = kNoValue;
+  if (!SameMemoryVersion(other)) {
+    new_version = gvn_->LookupValue(kMergeBlockMemoryVersionBumpOp, 0u, 0u, id_);
+    if (global_memory_version_ != other.global_memory_version_) {
+      global_memory_version_ = new_version;
+      // Reset all aliasing memory versions.
+      std::fill_n(unresolved_sfield_version_, kFieldTypeCount, new_version);
+      std::fill_n(unresolved_ifield_version_, kFieldTypeCount, new_version);
+      std::fill_n(aliasing_array_version_, kFieldTypeCount, new_version);
+    } else {
+      for (uint16_t type = 0; type != kFieldTypeCount; ++type)  {
+        if (unresolved_ifield_version_[type] != other.unresolved_ifield_version_[type]) {
+          unresolved_ifield_version_[type] = new_version;
+        }
+        if (unresolved_sfield_version_[type] != other.unresolved_sfield_version_[type]) {
+          unresolved_sfield_version_[type] = new_version;
+          RemoveSFieldsForType(type);
+        }
+        if (aliasing_array_version_[type] != other.aliasing_array_version_[type]) {
+          aliasing_array_version_[type] = new_version;
+        }
+      }
+    }
+  }
 }
 
 uint16_t LocalValueNumbering::MarkNonAliasingNonNull(MIR* mir) {
-  uint16_t res = GetOperandValue(mir->ssa_rep->defs[0]);
-  SetOperandValue(mir->ssa_rep->defs[0], res);
+  uint16_t res = gvn_->GetOperandValue(mir->ssa_rep->defs[0]);
+  gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
   DCHECK(null_checked_.find(res) == null_checked_.end());
   null_checked_.insert(res);
   non_aliasing_refs_.insert(res);
@@ -89,24 +514,36 @@ bool LocalValueNumbering::IsNonAliasingIField(uint16_t reg, uint16_t field_id, u
   if (IsNonAliasing(reg)) {
     return true;
   }
-  NonAliasingIFieldKey key = { reg, field_id, type };
-  return non_aliasing_ifields_.count(key) != 0u;
+  if (escaped_refs_.find(reg) == escaped_refs_.end()) {
+    return false;
+  }
+  // Check for IPUTs to unresolved fields.
+  EscapedIFieldClobberKey key1 = { reg, type, kNoValue };
+  if (escaped_ifield_clobber_set_.find(key1) != escaped_ifield_clobber_set_.end()) {
+    return false;
+  }
+  // Check for aliased IPUTs to the same field.
+  EscapedIFieldClobberKey key2 = { reg, type, field_id };
+  return escaped_ifield_clobber_set_.find(key2) == escaped_ifield_clobber_set_.end();
 }
 
 bool LocalValueNumbering::IsNonAliasingArray(uint16_t reg, uint16_t type) {
   if (IsNonAliasing(reg)) {
     return true;
   }
-  EscapedArrayKey key = { reg, type };
-  return escaped_array_refs_.count(key) != 0u;
+  if (escaped_refs_.count(reg) == 0u) {
+    return false;
+  }
+  // Check for aliased APUTs.
+  EscapedArrayClobberKey key = { reg, type };
+  return escaped_array_clobber_set_.find(key) == escaped_array_clobber_set_.end();
 }
-
 
 void LocalValueNumbering::HandleNullCheck(MIR* mir, uint16_t reg) {
   auto lb = null_checked_.lower_bound(reg);
   if (lb != null_checked_.end() && *lb == reg) {
-    if (LIKELY(Good())) {
-      if (cu_->verbose) {
+    if (LIKELY(gvn_->CanModify())) {
+      if (gvn_->GetCompilationUnit()->verbose) {
         LOG(INFO) << "Removing null check for 0x" << std::hex << mir->offset;
       }
       mir->optimization_flags |= MIR_IGNORE_NULL_CHECK;
@@ -120,8 +557,8 @@ void LocalValueNumbering::HandleRangeCheck(MIR* mir, uint16_t array, uint16_t in
   RangeCheckKey key = { array, index };
   auto lb = range_checked_.lower_bound(key);
   if (lb != range_checked_.end() && !RangeCheckKeyComparator()(key, *lb)) {
-    if (LIKELY(Good())) {
-      if (cu_->verbose) {
+    if (LIKELY(gvn_->CanModify())) {
+      if (gvn_->GetCompilationUnit()->verbose) {
         LOG(INFO) << "Removing range check for 0x" << std::hex << mir->offset;
       }
       mir->optimization_flags |= MIR_IGNORE_RANGE_CHECK;
@@ -134,64 +571,49 @@ void LocalValueNumbering::HandleRangeCheck(MIR* mir, uint16_t array, uint16_t in
 
 void LocalValueNumbering::HandlePutObject(MIR* mir) {
   // If we're storing a non-aliasing reference, stop tracking it as non-aliasing now.
-  uint16_t base = GetOperandValue(mir->ssa_rep->uses[0]);
+  uint16_t base = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
   HandleEscapingRef(base);
 }
 
 void LocalValueNumbering::HandleEscapingRef(uint16_t base) {
   auto it = non_aliasing_refs_.find(base);
   if (it != non_aliasing_refs_.end()) {
-    uint64_t iget_key = BuildKey(Instruction::IGET, base, 0u, 0u);
-    for (auto iget_it = value_map_.lower_bound(iget_key), iget_end = value_map_.end();
-        iget_it != iget_end && EqualOpAndOperand1(iget_it->first, iget_key); ++iget_it) {
-      uint16_t field_id = ExtractOperand2(iget_it->first);
-      uint16_t type = ExtractModifier(iget_it->first);
-      NonAliasingIFieldKey key = { base, field_id, type };
-      non_aliasing_ifields_.insert(key);
-    }
-    uint64_t aget_key = BuildKey(kNonAliasingArrayStartVersionOp, base, 0u, 0u);
-    auto aget_it = value_map_.lower_bound(aget_key);
-    if (aget_it != value_map_.end() && EqualOpAndOperand1(aget_key, aget_it->first)) {
-      DCHECK_EQ(ExtractOperand2(aget_it->first), kNoValue);
-      uint16_t type = ExtractModifier(aget_it->first);
-      EscapedArrayKey key = { base, type };
-      escaped_array_refs_.insert(key);
-    }
     non_aliasing_refs_.erase(it);
+    escaped_refs_.insert(base);
   }
 }
 
 uint16_t LocalValueNumbering::HandleAGet(MIR* mir, uint16_t opcode) {
   // uint16_t type = opcode - Instruction::AGET;
-  uint16_t array = GetOperandValue(mir->ssa_rep->uses[0]);
+  uint16_t array = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
   HandleNullCheck(mir, array);
-  uint16_t index = GetOperandValue(mir->ssa_rep->uses[1]);
+  uint16_t index = gvn_->GetOperandValue(mir->ssa_rep->uses[1]);
   HandleRangeCheck(mir, array, index);
   uint16_t type = opcode - Instruction::AGET;
   // Establish value number for loaded register.
   uint16_t res;
   if (IsNonAliasingArray(array, type)) {
     // Get the start version that accounts for aliasing within the array (different index names).
-    uint16_t start_version = LookupValue(kNonAliasingArrayStartVersionOp, array, kNoValue, type);
+    uint16_t start_version =
+        gvn_->LookupValue(kNonAliasingArrayStartVersionOp, array, kNoValue, kNoValue);
     // Find the current version from the non_aliasing_array_version_map_.
     uint16_t memory_version = start_version;
     auto it = non_aliasing_array_version_map_.find(start_version);
     if (it != non_aliasing_array_version_map_.end()) {
       memory_version = it->second;
-    } else {
-      // Just use the start_version.
     }
-    res = LookupValue(kNonAliasingArrayOp, array, index, memory_version);
+    res = gvn_->LookupValue(kNonAliasingArrayOp, array, index, memory_version);
   } else {
     // Get the memory version of aliased array accesses of this type.
-    uint16_t memory_version = LookupValue(kAliasingArrayMemoryVersionOp, global_memory_version_,
-                                          aliasing_array_version_[type], kNoValue);
-    res = LookupValue(kAliasingArrayOp, array, index, memory_version);
+    uint16_t memory_version = gvn_->LookupValue(kAliasingArrayMemoryVersionOp,
+                                                global_memory_version_,
+                                                aliasing_array_version_[type], kNoValue);
+    res = gvn_->LookupValue(kAliasingArrayOp, array, index, memory_version);
   }
   if (opcode == Instruction::AGET_WIDE) {
-    SetOperandValueWide(mir->ssa_rep->defs[0], res);
+    gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
   } else {
-    SetOperandValue(mir->ssa_rep->defs[0], res);
+    gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
   }
   return res;
 }
@@ -199,95 +621,107 @@ uint16_t LocalValueNumbering::HandleAGet(MIR* mir, uint16_t opcode) {
 void LocalValueNumbering::HandleAPut(MIR* mir, uint16_t opcode) {
   int array_idx = (opcode == Instruction::APUT_WIDE) ? 2 : 1;
   int index_idx = array_idx + 1;
-  uint16_t array = GetOperandValue(mir->ssa_rep->uses[array_idx]);
+  uint16_t array = gvn_->GetOperandValue(mir->ssa_rep->uses[array_idx]);
   HandleNullCheck(mir, array);
-  uint16_t index = GetOperandValue(mir->ssa_rep->uses[index_idx]);
+  uint16_t index = gvn_->GetOperandValue(mir->ssa_rep->uses[index_idx]);
   HandleRangeCheck(mir, array, index);
 
   uint16_t type = opcode - Instruction::APUT;
   uint16_t value = (opcode == Instruction::APUT_WIDE)
-                   ? GetOperandValueWide(mir->ssa_rep->uses[0])
-                   : GetOperandValue(mir->ssa_rep->uses[0]);
+                   ? gvn_->GetOperandValueWide(mir->ssa_rep->uses[0])
+                   : gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
   if (IsNonAliasing(array)) {
     // Get the start version that accounts for aliasing within the array (different index values).
-    uint16_t start_version = LookupValue(kNonAliasingArrayStartVersionOp, array, kNoValue, type);
+    uint16_t start_version =
+        gvn_->LookupValue(kNonAliasingArrayStartVersionOp, array, kNoValue, kNoValue);
     auto it = non_aliasing_array_version_map_.find(start_version);
     uint16_t memory_version = start_version;
     if (it != non_aliasing_array_version_map_.end()) {
       memory_version = it->second;
     }
-    // We need to take 4 values (array, index, memory_version, value) into account for bumping
-    // the memory version but the key can take only 3. Merge array and index into a location.
-    uint16_t array_access_location = LookupValue(kArrayAccessLocOp, array, index, kNoValue);
-    // Bump the version, adding to the chain.
-    memory_version = LookupValue(kAliasingArrayBumpVersionOp, memory_version,
-                                 array_access_location, value);
-    non_aliasing_array_version_map_.Overwrite(start_version, memory_version);
-    StoreValue(kNonAliasingArrayOp, array, index, memory_version, value);
-  } else {
-    // Get the memory version based on global_memory_version_ and aliasing_array_version_[type].
-    uint16_t memory_version = LookupValue(kAliasingArrayMemoryVersionOp, global_memory_version_,
-                                          aliasing_array_version_[type], kNoValue);
-    if (HasValue(kAliasingArrayOp, array, index, memory_version, value)) {
+    if (gvn_->HasValue(kNonAliasingArrayOp, array, index, memory_version, value)) {
       // This APUT can be eliminated, it stores the same value that's already in the field.
       // TODO: Eliminate the APUT.
       return;
     }
     // We need to take 4 values (array, index, memory_version, value) into account for bumping
     // the memory version but the key can take only 3. Merge array and index into a location.
-    uint16_t array_access_location = LookupValue(kArrayAccessLocOp, array, index, kNoValue);
+    uint16_t array_access_location = gvn_->LookupValue(kArrayAccessLocOp, array, index, kNoValue);
     // Bump the version, adding to the chain.
-    uint16_t bumped_version = LookupValue(kAliasingArrayBumpVersionOp, memory_version,
-                                          array_access_location, value);
+    memory_version = gvn_->LookupValue(kAliasingArrayBumpVersionOp, memory_version,
+                                       array_access_location, value);
+    non_aliasing_array_version_map_.Overwrite(start_version, memory_version);
+    gvn_->StoreValue(kNonAliasingArrayOp, array, index, memory_version, value);
+  } else {
+    // Get the memory version based on global_memory_version_ and aliasing_array_version_[type].
+    uint16_t memory_version = gvn_->LookupValue(kAliasingArrayMemoryVersionOp,
+                                                global_memory_version_,
+                                                aliasing_array_version_[type], kNoValue);
+    if (gvn_->HasValue(kAliasingArrayOp, array, index, memory_version, value)) {
+      // This APUT can be eliminated, it stores the same value that's already in the field.
+      // TODO: Eliminate the APUT.
+      return;
+    }
+    // We need to take 4 values (array, index, memory_version, value) into account for bumping
+    // the memory version but the key can take only 3. Merge array and index into a location.
+    uint16_t array_access_location = gvn_->LookupValue(kArrayAccessLocOp, array, index, kNoValue);
+    // Bump the version, adding to the chain.
+    uint16_t bumped_version = gvn_->LookupValue(kAliasingArrayBumpVersionOp, memory_version,
+                                                array_access_location, value);
     aliasing_array_version_[type] = bumped_version;
-    memory_version = LookupValue(kAliasingArrayMemoryVersionOp, global_memory_version_,
-                                 bumped_version, kNoValue);
-    StoreValue(kAliasingArrayOp, array, index, memory_version, value);
+    memory_version = gvn_->LookupValue(kAliasingArrayMemoryVersionOp, global_memory_version_,
+                                       bumped_version, kNoValue);
+    gvn_->StoreValue(kAliasingArrayOp, array, index, memory_version, value);
 
-    // Clear escaped array refs for this type.
-    EscapedArrayKey array_key = { type, 0u };
-    auto it = escaped_array_refs_.lower_bound(array_key), end = escaped_array_refs_.end();
-    while (it != end && it->type == type) {
-      it = escaped_array_refs_.erase(it);
+    // Clobber all escaped array refs for this type.
+    for (uint16_t escaped_array : escaped_refs_) {
+      EscapedArrayClobberKey clobber_key = { escaped_array, type };
+      escaped_array_clobber_set_.insert(clobber_key);
     }
   }
 }
 
 uint16_t LocalValueNumbering::HandleIGet(MIR* mir, uint16_t opcode) {
-  uint16_t base = GetOperandValue(mir->ssa_rep->uses[0]);
+  uint16_t base = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
   HandleNullCheck(mir, base);
-  const MirFieldInfo& field_info = cu_->mir_graph->GetIFieldLoweringInfo(mir);
+  const MirFieldInfo& field_info = gvn_->GetMirGraph()->GetIFieldLoweringInfo(mir);
   uint16_t res;
   if (!field_info.IsResolved() || field_info.IsVolatile()) {
     // Volatile fields always get a new memory version; field id is irrelevant.
     // Unresolved fields may be volatile, so handle them as such to be safe.
     // Use result s_reg - will be unique.
-    res = LookupValue(kNoValue, mir->ssa_rep->defs[0], kNoValue, kNoValue);
+    res = gvn_->LookupValue(kNoValue, mir->ssa_rep->defs[0], kNoValue, kNoValue);
   } else {
     uint16_t type = opcode - Instruction::IGET;
-    uint16_t field_id = GetFieldId(field_info);
+    uint16_t field_id = gvn_->GetFieldId(field_info, type);
     if (IsNonAliasingIField(base, field_id, type)) {
-      res = LookupValue(kNonAliasingIFieldOp, base, field_id, type);
+      uint16_t loc = gvn_->LookupValue(kNonAliasingIFieldLocOp, base, field_id, type);
+      auto lb = non_aliasing_ifield_value_map_.lower_bound(loc);
+      if (lb != non_aliasing_ifield_value_map_.end() && lb->first == loc) {
+        res = lb->second;
+      } else {
+        res = gvn_->LookupValue(kNonAliasingIFieldInitialOp, loc, kNoValue, kNoValue);
+        non_aliasing_ifield_value_map_.PutHint(lb, loc, res);
+      }
     } else {
       // Get the start version that accounts for aliasing with unresolved fields of the same type
       // and make it unique for the field by including the field_id.
-      uint16_t start_version = LookupValue(kAliasingIFieldStartVersionOp, global_memory_version_,
-                                           unresolved_ifield_version_[type], field_id);
+      uint16_t start_version = gvn_->LookupValue(kAliasingIFieldStartVersionOp,
+                                                 global_memory_version_,
+                                                 unresolved_ifield_version_[type], field_id);
       // Find the current version from the aliasing_ifield_version_map_.
       uint16_t memory_version = start_version;
-      auto version_it = aliasing_ifield_version_map_.find(start_version);
-      if (version_it != aliasing_ifield_version_map_.end()) {
-        memory_version = version_it->second;
-      } else {
-        // Just use the start_version.
+      auto version_lb = aliasing_ifield_version_map_.lower_bound(start_version);
+      if (version_lb != aliasing_ifield_version_map_.end() && version_lb->first == start_version) {
+        memory_version = version_lb->second;
       }
-      res = LookupValue(kAliasingIFieldOp, base, field_id, memory_version);
+      res = gvn_->LookupValue(kAliasingIFieldOp, base, field_id, memory_version);
     }
   }
   if (opcode == Instruction::IGET_WIDE) {
-    SetOperandValueWide(mir->ssa_rep->defs[0], res);
+    gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
   } else {
-    SetOperandValue(mir->ssa_rep->defs[0], res);
+    gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
   }
   return res;
 }
@@ -295,36 +729,50 @@ uint16_t LocalValueNumbering::HandleIGet(MIR* mir, uint16_t opcode) {
 void LocalValueNumbering::HandleIPut(MIR* mir, uint16_t opcode) {
   uint16_t type = opcode - Instruction::IPUT;
   int base_reg = (opcode == Instruction::IPUT_WIDE) ? 2 : 1;
-  uint16_t base = GetOperandValue(mir->ssa_rep->uses[base_reg]);
+  uint16_t base = gvn_->GetOperandValue(mir->ssa_rep->uses[base_reg]);
   HandleNullCheck(mir, base);
-  const MirFieldInfo& field_info = cu_->mir_graph->GetIFieldLoweringInfo(mir);
+  const MirFieldInfo& field_info = gvn_->GetMirGraph()->GetIFieldLoweringInfo(mir);
   if (!field_info.IsResolved()) {
     // Unresolved fields always alias with everything of the same type.
     // Use mir->offset as modifier; without elaborate inlining, it will be unique.
     unresolved_ifield_version_[type] =
-        LookupValue(kUnresolvedIFieldOp, kNoValue, kNoValue, mir->offset);
+        gvn_->LookupValue(kUnresolvedIFieldOp, kNoValue, kNoValue, mir->offset);
 
-    // Treat fields of escaped references of the same type as potentially modified.
-    NonAliasingIFieldKey key = { type, 0u, 0u };  // lowest possible key of this type.
-    auto it = non_aliasing_ifields_.lower_bound(key), end = non_aliasing_ifields_.end();
-    while (it != end && it->type == type) {
-      it = non_aliasing_ifields_.erase(it);
+    // For simplicity, treat base as escaped now.
+    HandleEscapingRef(base);
+
+    // Clobber all fields of escaped references of the same type.
+    for (uint16_t escaped_ref : escaped_refs_) {
+      EscapedIFieldClobberKey clobber_key = { escaped_ref, type, kNoValue };
+      escaped_ifield_clobber_set_.insert(clobber_key);
     }
   } else if (field_info.IsVolatile()) {
     // Nothing to do, resolved volatile fields always get a new memory version anyway and
     // can't alias with resolved non-volatile fields.
   } else {
-    uint16_t field_id = GetFieldId(field_info);
+    uint16_t field_id = gvn_->GetFieldId(field_info, type);
     uint16_t value = (opcode == Instruction::IPUT_WIDE)
-                     ? GetOperandValueWide(mir->ssa_rep->uses[0])
-                     : GetOperandValue(mir->ssa_rep->uses[0]);
+                     ? gvn_->GetOperandValueWide(mir->ssa_rep->uses[0])
+                     : gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
     if (IsNonAliasing(base)) {
-      StoreValue(kNonAliasingIFieldOp, base, field_id, type, value);
+      uint16_t loc = gvn_->LookupValue(kNonAliasingIFieldLocOp, base, field_id, type);
+      auto lb = non_aliasing_ifield_value_map_.lower_bound(loc);
+      if (lb != non_aliasing_ifield_value_map_.end() && lb->first == loc) {
+        if (lb->second == value) {
+          // This IPUT can be eliminated, it stores the same value that's already in the field.
+          // TODO: Eliminate the IPUT.
+          return;
+        }
+        lb->second = value;  // Overwrite.
+      } else {
+        non_aliasing_ifield_value_map_.PutHint(lb, loc, value);
+      }
     } else {
       // Get the start version that accounts for aliasing with unresolved fields of the same type
       // and make it unique for the field by including the field_id.
-      uint16_t start_version = LookupValue(kAliasingIFieldStartVersionOp, global_memory_version_,
-                                           unresolved_ifield_version_[type], field_id);
+      uint16_t start_version = gvn_->LookupValue(kAliasingIFieldStartVersionOp,
+                                                 global_memory_version_,
+                                                 unresolved_ifield_version_[type], field_id);
       // Find the old version from the aliasing_ifield_version_map_.
       uint16_t old_version = start_version;
       auto version_it = aliasing_ifield_version_map_.find(start_version);
@@ -332,76 +780,101 @@ void LocalValueNumbering::HandleIPut(MIR* mir, uint16_t opcode) {
         old_version = version_it->second;
       }
       // Check if the field currently contains the value, making this a NOP.
-      if (HasValue(kAliasingIFieldOp, base, field_id, old_version, value)) {
+      if (gvn_->HasValue(kAliasingIFieldOp, base, field_id, old_version, value)) {
         // This IPUT can be eliminated, it stores the same value that's already in the field.
         // TODO: Eliminate the IPUT.
         return;
       }
       // Bump the version, adding to the chain started by start_version.
-      uint16_t memory_version = LookupValue(kAliasingIFieldBumpVersionOp, old_version, base, value);
+      uint16_t memory_version =
+          gvn_->LookupValue(kAliasingIFieldBumpVersionOp, old_version, base, value);
       // Update the aliasing_ifield_version_map_ so that HandleIGet() can get the memory_version
       // without knowing the values used to build the chain.
       aliasing_ifield_version_map_.Overwrite(start_version, memory_version);
-      StoreValue(kAliasingIFieldOp, base, field_id, memory_version, value);
+      gvn_->StoreValue(kAliasingIFieldOp, base, field_id, memory_version, value);
 
-      // Clear non-aliasing fields for this field_id.
-      NonAliasingIFieldKey field_key = { type, field_id, 0u };
-      auto it = non_aliasing_ifields_.lower_bound(field_key), end = non_aliasing_ifields_.end();
-      while (it != end && it->field_id == field_id) {
-        DCHECK_EQ(type, it->type);
-        it = non_aliasing_ifields_.erase(it);
+      // Clobber all fields of escaped references for this field.
+      for (uint16_t escaped_ref : escaped_refs_) {
+        EscapedIFieldClobberKey clobber_key = { escaped_ref, type, field_id };
+        escaped_ifield_clobber_set_.insert(clobber_key);
       }
     }
   }
 }
 
 uint16_t LocalValueNumbering::HandleSGet(MIR* mir, uint16_t opcode) {
-  const MirFieldInfo& field_info = cu_->mir_graph->GetSFieldLoweringInfo(mir);
+  const MirFieldInfo& field_info = gvn_->GetMirGraph()->GetSFieldLoweringInfo(mir);
   uint16_t res;
   if (!field_info.IsResolved() || field_info.IsVolatile()) {
     // Volatile fields always get a new memory version; field id is irrelevant.
     // Unresolved fields may be volatile, so handle them as such to be safe.
     // Use result s_reg - will be unique.
-    res = LookupValue(kNoValue, mir->ssa_rep->defs[0], kNoValue, kNoValue);
+    res = gvn_->LookupValue(kNoValue, mir->ssa_rep->defs[0], kNoValue, kNoValue);
   } else {
-    uint16_t field_id = GetFieldId(field_info);
-    // Resolved non-volatile static fields can alias with non-resolved fields of the same type,
-    // so we need to use unresolved_sfield_version_[type] in addition to global_memory_version_
-    // to determine the version of the field.
     uint16_t type = opcode - Instruction::SGET;
-    res = LookupValue(kResolvedSFieldOp, field_id,
-                      unresolved_sfield_version_[type], global_memory_version_);
+    uint16_t field_id = gvn_->GetFieldId(field_info, type);
+    auto lb = sfield_value_map_.lower_bound(field_id);
+    if (lb != sfield_value_map_.end() && lb->first == field_id) {
+      res = lb->second;
+    } else {
+      // Resolved non-volatile static fields can alias with non-resolved fields of the same type,
+      // so we need to use unresolved_sfield_version_[type] in addition to global_memory_version_
+      // to determine the version of the field.
+      res = gvn_->LookupValue(kResolvedSFieldOp, field_id,
+                              unresolved_sfield_version_[type], global_memory_version_);
+      sfield_value_map_.PutHint(lb, field_id, res);
+    }
   }
   if (opcode == Instruction::SGET_WIDE) {
-    SetOperandValueWide(mir->ssa_rep->defs[0], res);
+    gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
   } else {
-    SetOperandValue(mir->ssa_rep->defs[0], res);
+    gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
   }
   return res;
 }
 
 void LocalValueNumbering::HandleSPut(MIR* mir, uint16_t opcode) {
   uint16_t type = opcode - Instruction::SPUT;
-  const MirFieldInfo& field_info = cu_->mir_graph->GetSFieldLoweringInfo(mir);
+  const MirFieldInfo& field_info = gvn_->GetMirGraph()->GetSFieldLoweringInfo(mir);
   if (!field_info.IsResolved()) {
     // Unresolved fields always alias with everything of the same type.
     // Use mir->offset as modifier; without elaborate inlining, it will be unique.
     unresolved_sfield_version_[type] =
-        LookupValue(kUnresolvedSFieldOp, kNoValue, kNoValue, mir->offset);
+        gvn_->LookupValue(kUnresolvedSFieldOp, kNoValue, kNoValue, mir->offset);
+    RemoveSFieldsForType(type);
   } else if (field_info.IsVolatile()) {
     // Nothing to do, resolved volatile fields always get a new memory version anyway and
     // can't alias with resolved non-volatile fields.
   } else {
-    uint16_t field_id = GetFieldId(field_info);
+    uint16_t field_id = gvn_->GetFieldId(field_info, type);
     uint16_t value = (opcode == Instruction::SPUT_WIDE)
-                     ? GetOperandValueWide(mir->ssa_rep->uses[0])
-                     : GetOperandValue(mir->ssa_rep->uses[0]);
+                     ? gvn_->GetOperandValueWide(mir->ssa_rep->uses[0])
+                     : gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
     // Resolved non-volatile static fields can alias with non-resolved fields of the same type,
     // so we need to use unresolved_sfield_version_[type] in addition to global_memory_version_
     // to determine the version of the field.
-    uint16_t type = opcode - Instruction::SGET;
-    StoreValue(kResolvedSFieldOp, field_id,
-               unresolved_sfield_version_[type], global_memory_version_, value);
+    auto lb = sfield_value_map_.lower_bound(field_id);
+    if (lb != sfield_value_map_.end() && lb->first == field_id) {
+      if (lb->second == value) {
+        // This SPUT can be eliminated, it stores the same value that's already in the field.
+        // TODO: Eliminate the SPUT.
+        return;
+      }
+      lb->second = value;  // Overwrite.
+    } else {
+      sfield_value_map_.PutHint(lb, field_id, value);
+    }
+  }
+}
+
+void LocalValueNumbering::RemoveSFieldsForType(uint16_t type) {
+  // Erase all static fields of this type from the sfield_value_map_.
+  for (auto it = sfield_value_map_.begin(), end = sfield_value_map_.end(); it != end; ) {
+    if (gvn_->GetFieldType(it->first) == type) {
+      it = sfield_value_map_.erase(it);
+    } else {
+      ++it;
+    }
   }
 }
 
@@ -448,13 +921,26 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::FILLED_NEW_ARRAY_RANGE:
       // Nothing defined but the result will be unique and non-null.
       if (mir->next != nullptr && mir->next->dalvikInsn.opcode == Instruction::MOVE_RESULT_OBJECT) {
-        MarkNonAliasingNonNull(mir->next);
+        uint16_t array = MarkNonAliasingNonNull(mir->next);
+        if (kLocalValueNumberingEnableFilledNewArrayTracking && mir->ssa_rep->num_uses != 0u) {
+          uint16_t memory_version =
+              gvn_->LookupValue(kNonAliasingArrayStartVersionOp, array, kNoValue, kNoValue);
+          DCHECK_EQ(non_aliasing_array_version_map_.count(memory_version), 0u);
+          for (size_t i = 0u, count = mir->ssa_rep->num_uses; i != count; ++i) {
+            DCHECK_EQ(High16Bits(i), 0u);
+            uint16_t index = gvn_->LookupValue(Instruction::CONST, i, 0u, 0);
+            uint16_t value = gvn_->GetOperandValue(mir->ssa_rep->uses[i]);
+            gvn_->StoreValue(kNonAliasingArrayOp, array, index, memory_version, value);
+            RangeCheckKey key = { array, index };
+            range_checked_.insert(key);
+          }
+        }
         // TUNING: We could track value names stored in the array.
         // The MOVE_RESULT_OBJECT will be processed next and we'll return the value name then.
       }
       // All args escaped (if references).
       for (size_t i = 0u, count = mir->ssa_rep->num_uses; i != count; ++i) {
-        uint16_t reg = GetOperandValue(mir->ssa_rep->uses[i]);
+        uint16_t reg = gvn_->GetOperandValue(mir->ssa_rep->uses[i]);
         HandleEscapingRef(reg);
       }
       break;
@@ -468,7 +954,7 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::INVOKE_INTERFACE:
     case Instruction::INVOKE_INTERFACE_RANGE: {
         // Nothing defined but handle the null check.
-        uint16_t reg = GetOperandValue(mir->ssa_rep->uses[0]);
+        uint16_t reg = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
         HandleNullCheck(mir, reg);
       }
       // Intentional fall-through.
@@ -476,16 +962,19 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::INVOKE_STATIC_RANGE:
       if ((mir->optimization_flags & MIR_INLINED) == 0) {
         // Use mir->offset as modifier; without elaborate inlining, it will be unique.
-        global_memory_version_ = LookupValue(kInvokeMemoryVersionBumpOp, 0u, 0u, mir->offset);
+        global_memory_version_ =
+            gvn_->LookupValue(kInvokeMemoryVersionBumpOp, 0u, 0u, mir->offset);
         // Make ref args aliasing.
         for (size_t i = 0u, count = mir->ssa_rep->num_uses; i != count; ++i) {
-          uint16_t reg = GetOperandValue(mir->ssa_rep->uses[i]);
+          uint16_t reg = gvn_->GetOperandValue(mir->ssa_rep->uses[i]);
           non_aliasing_refs_.erase(reg);
         }
-        // All fields of escaped references need to be treated as potentially modified.
-        non_aliasing_ifields_.clear();
-        // Array elements may also have been modified via escaped array refs.
-        escaped_array_refs_.clear();
+        // All static fields may have been modified.
+        sfield_value_map_.clear();
+        // All fields or array elements of escaped references may have been modified.
+        escaped_refs_.clear();
+        escaped_ifield_clobber_set_.clear();
+        escaped_array_clobber_set_.clear();
       }
       break;
 
@@ -493,8 +982,8 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::MOVE_RESULT_OBJECT:
     case Instruction::INSTANCE_OF:
       // 1 result, treat as unique each time, use result s_reg - will be unique.
-      res = GetOperandValue(mir->ssa_rep->defs[0]);
-      SetOperandValue(mir->ssa_rep->defs[0], res);
+      res = gvn_->GetOperandValue(mir->ssa_rep->defs[0]);
+      gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       break;
     case Instruction::MOVE_EXCEPTION:
     case Instruction::NEW_INSTANCE:
@@ -506,9 +995,9 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::CONST_STRING:
     case Instruction::CONST_STRING_JUMBO:
       // These strings are internalized, so assign value based on the string pool index.
-      res = LookupValue(Instruction::CONST_STRING, Low16Bits(mir->dalvikInsn.vB),
-                        High16Bits(mir->dalvikInsn.vB), 0);
-      SetOperandValue(mir->ssa_rep->defs[0], res);
+      res = gvn_->LookupValue(Instruction::CONST_STRING, Low16Bits(mir->dalvikInsn.vB),
+                              High16Bits(mir->dalvikInsn.vB), 0);
+      gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       null_checked_.insert(res);  // May already be there.
       // NOTE: Hacking the contents of an internalized string via reflection is possible
       // but the behavior is undefined. Therefore, we consider the string constant and
@@ -518,15 +1007,13 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
       break;
     case Instruction::MOVE_RESULT_WIDE:
       // 1 wide result, treat as unique each time, use result s_reg - will be unique.
-      res = GetOperandValueWide(mir->ssa_rep->defs[0]);
-      SetOperandValueWide(mir->ssa_rep->defs[0], res);
+      res = gvn_->GetOperandValueWide(mir->ssa_rep->defs[0]);
+      gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
       break;
 
     case kMirOpPhi:
-      /*
-       * Because we'll only see phi nodes at the beginning of an extended basic block,
-       * we can ignore them.  Revisit if we shift to global value numbering.
-       */
+      // TODO: Shifting to GVN. Reuse the same value name if the Phi has already been seen
+      // somewhere in memory. Otherwise, check if all incoming sregs are null-checked.
       break;
 
     case Instruction::MOVE:
@@ -537,63 +1024,64 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::MOVE_OBJECT_FROM16:
     case kMirOpCopy:
       // Just copy value number of source to value number of result.
-      res = GetOperandValue(mir->ssa_rep->uses[0]);
-      SetOperandValue(mir->ssa_rep->defs[0], res);
+      res = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
+      gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       break;
 
     case Instruction::MOVE_WIDE:
     case Instruction::MOVE_WIDE_16:
     case Instruction::MOVE_WIDE_FROM16:
       // Just copy value number of source to value number of result.
-      res = GetOperandValueWide(mir->ssa_rep->uses[0]);
-      SetOperandValueWide(mir->ssa_rep->defs[0], res);
+      res = gvn_->GetOperandValueWide(mir->ssa_rep->uses[0]);
+      gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
       break;
 
     case Instruction::CONST:
     case Instruction::CONST_4:
     case Instruction::CONST_16:
-      res = LookupValue(Instruction::CONST, Low16Bits(mir->dalvikInsn.vB),
-                        High16Bits(mir->dalvikInsn.vB), 0);
-      SetOperandValue(mir->ssa_rep->defs[0], res);
+      res = gvn_->LookupValue(Instruction::CONST, Low16Bits(mir->dalvikInsn.vB),
+                              High16Bits(mir->dalvikInsn.vB), 0);
+      gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       break;
 
     case Instruction::CONST_HIGH16:
-      res = LookupValue(Instruction::CONST, 0, mir->dalvikInsn.vB, 0);
-      SetOperandValue(mir->ssa_rep->defs[0], res);
+      res = gvn_->LookupValue(Instruction::CONST, 0, mir->dalvikInsn.vB, 0);
+      gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       break;
 
     case Instruction::CONST_WIDE_16:
     case Instruction::CONST_WIDE_32: {
-        uint16_t low_res = LookupValue(Instruction::CONST, Low16Bits(mir->dalvikInsn.vB),
-                                       High16Bits(mir->dalvikInsn.vB >> 16), 1);
+        uint16_t low_res = gvn_->LookupValue(Instruction::CONST, Low16Bits(mir->dalvikInsn.vB),
+                                             High16Bits(mir->dalvikInsn.vB >> 16), 1);
         uint16_t high_res;
         if (mir->dalvikInsn.vB & 0x80000000) {
-          high_res = LookupValue(Instruction::CONST, 0xffff, 0xffff, 2);
+          high_res = gvn_->LookupValue(Instruction::CONST, 0xffff, 0xffff, 2);
         } else {
-          high_res = LookupValue(Instruction::CONST, 0, 0, 2);
+          high_res = gvn_->LookupValue(Instruction::CONST, 0, 0, 2);
         }
-        res = LookupValue(Instruction::CONST, low_res, high_res, 3);
-        SetOperandValueWide(mir->ssa_rep->defs[0], res);
+        res = gvn_->LookupValue(Instruction::CONST, low_res, high_res, 3);
+        gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
       }
       break;
 
     case Instruction::CONST_WIDE: {
         uint32_t low_word = Low32Bits(mir->dalvikInsn.vB_wide);
         uint32_t high_word = High32Bits(mir->dalvikInsn.vB_wide);
-        uint16_t low_res = LookupValue(Instruction::CONST, Low16Bits(low_word),
-                                       High16Bits(low_word), 1);
-        uint16_t high_res = LookupValue(Instruction::CONST, Low16Bits(high_word),
-                                       High16Bits(high_word), 2);
-        res = LookupValue(Instruction::CONST, low_res, high_res, 3);
-        SetOperandValueWide(mir->ssa_rep->defs[0], res);
+        uint16_t low_res = gvn_->LookupValue(Instruction::CONST, Low16Bits(low_word),
+                                             High16Bits(low_word), 1);
+        uint16_t high_res = gvn_->LookupValue(Instruction::CONST, Low16Bits(high_word),
+                                              High16Bits(high_word), 2);
+        res = gvn_->LookupValue(Instruction::CONST, low_res, high_res, 3);
+        gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
       }
       break;
 
     case Instruction::CONST_WIDE_HIGH16: {
-        uint16_t low_res = LookupValue(Instruction::CONST, 0, 0, 1);
-        uint16_t high_res = LookupValue(Instruction::CONST, 0, Low16Bits(mir->dalvikInsn.vB), 2);
-        res = LookupValue(Instruction::CONST, low_res, high_res, 3);
-        SetOperandValueWide(mir->ssa_rep->defs[0], res);
+        uint16_t low_res = gvn_->LookupValue(Instruction::CONST, 0, 0, 1);
+        uint16_t high_res = gvn_->LookupValue(Instruction::CONST, 0,
+                                              Low16Bits(mir->dalvikInsn.vB), 2);
+        res = gvn_->LookupValue(Instruction::CONST, low_res, high_res, 3);
+        gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -607,9 +1095,9 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::INT_TO_FLOAT:
     case Instruction::FLOAT_TO_INT: {
         // res = op + 1 operand
-        uint16_t operand1 = GetOperandValue(mir->ssa_rep->uses[0]);
-        res = LookupValue(opcode, operand1, kNoValue, kNoValue);
-        SetOperandValue(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
+        res = gvn_->LookupValue(opcode, operand1, kNoValue, kNoValue);
+        gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -618,9 +1106,9 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::DOUBLE_TO_FLOAT:
     case Instruction::DOUBLE_TO_INT: {
         // res = op + 1 wide operand
-        uint16_t operand1 = GetOperandValueWide(mir->ssa_rep->uses[0]);
-        res = LookupValue(opcode, operand1, kNoValue, kNoValue);
-        SetOperandValue(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValueWide(mir->ssa_rep->uses[0]);
+        res = gvn_->LookupValue(opcode, operand1, kNoValue, kNoValue);
+        gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -631,9 +1119,9 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::NOT_LONG:
     case Instruction::NEG_DOUBLE: {
         // wide res = op + 1 wide operand
-        uint16_t operand1 = GetOperandValueWide(mir->ssa_rep->uses[0]);
-        res = LookupValue(opcode, operand1, kNoValue, kNoValue);
-        SetOperandValueWide(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValueWide(mir->ssa_rep->uses[0]);
+        res = gvn_->LookupValue(opcode, operand1, kNoValue, kNoValue);
+        gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -642,9 +1130,9 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::INT_TO_DOUBLE:
     case Instruction::INT_TO_LONG: {
         // wide res = op + 1 operand
-        uint16_t operand1 = GetOperandValue(mir->ssa_rep->uses[0]);
-        res = LookupValue(opcode, operand1, kNoValue, kNoValue);
-        SetOperandValueWide(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
+        res = gvn_->LookupValue(opcode, operand1, kNoValue, kNoValue);
+        gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -652,10 +1140,10 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::CMPG_DOUBLE:
     case Instruction::CMP_LONG: {
         // res = op + 2 wide operands
-        uint16_t operand1 = GetOperandValueWide(mir->ssa_rep->uses[0]);
-        uint16_t operand2 = GetOperandValueWide(mir->ssa_rep->uses[2]);
-        res = LookupValue(opcode, operand1, operand2, kNoValue);
-        SetOperandValue(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValueWide(mir->ssa_rep->uses[0]);
+        uint16_t operand2 = gvn_->GetOperandValueWide(mir->ssa_rep->uses[2]);
+        res = gvn_->LookupValue(opcode, operand1, operand2, kNoValue);
+        gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -684,10 +1172,10 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::USHR_INT:
     case Instruction::USHR_INT_2ADDR: {
         // res = op + 2 operands
-        uint16_t operand1 = GetOperandValue(mir->ssa_rep->uses[0]);
-        uint16_t operand2 = GetOperandValue(mir->ssa_rep->uses[1]);
-        res = LookupValue(opcode, operand1, operand2, kNoValue);
-        SetOperandValue(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
+        uint16_t operand2 = gvn_->GetOperandValue(mir->ssa_rep->uses[1]);
+        res = gvn_->LookupValue(opcode, operand1, operand2, kNoValue);
+        gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -718,10 +1206,10 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::DIV_DOUBLE_2ADDR:
     case Instruction::REM_DOUBLE_2ADDR: {
         // wide res = op + 2 wide operands
-        uint16_t operand1 = GetOperandValueWide(mir->ssa_rep->uses[0]);
-        uint16_t operand2 = GetOperandValueWide(mir->ssa_rep->uses[2]);
-        res = LookupValue(opcode, operand1, operand2, kNoValue);
-        SetOperandValueWide(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValueWide(mir->ssa_rep->uses[0]);
+        uint16_t operand2 = gvn_->GetOperandValueWide(mir->ssa_rep->uses[2]);
+        res = gvn_->LookupValue(opcode, operand1, operand2, kNoValue);
+        gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -732,10 +1220,10 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::SHR_LONG_2ADDR:
     case Instruction::USHR_LONG_2ADDR: {
         // wide res = op + 1 wide operand + 1 operand
-        uint16_t operand1 = GetOperandValueWide(mir->ssa_rep->uses[0]);
-        uint16_t operand2 = GetOperandValue(mir->ssa_rep->uses[2]);
-        res = LookupValue(opcode, operand1, operand2, kNoValue);
-        SetOperandValueWide(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValueWide(mir->ssa_rep->uses[0]);
+        uint16_t operand2 = gvn_->GetOperandValue(mir->ssa_rep->uses[2]);
+        res = gvn_->LookupValue(opcode, operand1, operand2, kNoValue);
+        gvn_->SetOperandValueWide(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -750,10 +1238,10 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::DIV_FLOAT_2ADDR:
     case Instruction::REM_FLOAT_2ADDR: {
         // res = op + 2 operands
-        uint16_t operand1 = GetOperandValue(mir->ssa_rep->uses[0]);
-        uint16_t operand2 = GetOperandValue(mir->ssa_rep->uses[1]);
-        res = LookupValue(opcode, operand1, operand2, kNoValue);
-        SetOperandValue(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
+        uint16_t operand2 = gvn_->GetOperandValue(mir->ssa_rep->uses[1]);
+        res = gvn_->LookupValue(opcode, operand1, operand2, kNoValue);
+        gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       }
       break;
 
@@ -777,10 +1265,10 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::SHR_INT_LIT8:
     case Instruction::USHR_INT_LIT8: {
         // Same as res = op + 2 operands, except use vC as operand 2
-        uint16_t operand1 = GetOperandValue(mir->ssa_rep->uses[0]);
-        uint16_t operand2 = LookupValue(Instruction::CONST, mir->dalvikInsn.vC, 0, 0);
-        res = LookupValue(opcode, operand1, operand2, kNoValue);
-        SetOperandValue(mir->ssa_rep->defs[0], res);
+        uint16_t operand1 = gvn_->GetOperandValue(mir->ssa_rep->uses[0]);
+        uint16_t operand2 = gvn_->LookupValue(Instruction::CONST, mir->dalvikInsn.vC, 0, 0);
+        res = gvn_->LookupValue(opcode, operand1, operand2, kNoValue);
+        gvn_->SetOperandValue(mir->ssa_rep->defs[0], res);
       }
       break;
 
