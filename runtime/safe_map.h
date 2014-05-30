@@ -59,7 +59,7 @@ class SafeMap {
   size_type size() const { return map_.size(); }
 
   void clear() { map_.clear(); }
-  void erase(iterator it) { map_.erase(it); }
+  iterator erase(iterator it) { return map_.erase(it); }
   size_type erase(const K& k) { return map_.erase(k); }
 
   iterator find(const K& k) { return map_.find(k); }
@@ -83,6 +83,25 @@ class SafeMap {
     DCHECK(result.second);  // Check we didn't accidentally overwrite an existing value.
   }
 
+  // Used to insert a new mapping with a position hint for better performance.
+  void Put(iterator pos, const K& k, const V& v) {
+    // Check that we're using a good hint. It should be map_.lower_bound(k).
+    DCHECK(pos == map_.end() || map_.key_comp()(k, pos->first));
+    DCHECK(pos == map_.begin() || map_.key_comp()((--iterator(pos))->first, k));
+    map_.insert(pos, std::make_pair(k, v));
+  }
+
+  // Used to insert a mapping that may already exist. If the key already exists, the new value
+  // and old value must be the same. V must be equality-comparable.
+  void PutIfMissing(const K& k, const V& v) {
+    auto lb = map_.lower_bound(k);
+    if (lb != map_.end() && !map_.key_comp()(k, lb->first)) {
+      DCHECK(lb->second == v);
+    } else {
+      map_.insert(lb, std::make_pair(k, v));
+    }
+  }
+
   // Used to insert a new mapping or overwrite an existing mapping. Note that if the value type
   // of this container is a pointer, any overwritten pointer will be lost and if this container
   // was the owner, you have a leak.
@@ -102,13 +121,15 @@ class SafeMap {
   ::std::map<K, V, Comparator, Allocator> map_;
 };
 
-template <typename K, typename V, typename Comparator>
-bool operator==(const SafeMap<K, V, Comparator>& lhs, const SafeMap<K, V, Comparator>& rhs) {
+template <typename K, typename V, typename Comparator, typename Allocator>
+bool operator==(const SafeMap<K, V, Comparator, Allocator>& lhs,
+                const SafeMap<K, V, Comparator, Allocator>& rhs) {
   return lhs.Equals(rhs);
 }
 
-template <typename K, typename V, typename Comparator>
-bool operator!=(const SafeMap<K, V, Comparator>& lhs, const SafeMap<K, V, Comparator>& rhs) {
+template <typename K, typename V, typename Comparator, typename Allocator>
+bool operator!=(const SafeMap<K, V, Comparator, Allocator>& lhs,
+                const SafeMap<K, V, Comparator, Allocator>& rhs) {
   return !(lhs == rhs);
 }
 
