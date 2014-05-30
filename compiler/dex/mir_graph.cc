@@ -108,7 +108,8 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       merged_df_flags_(0u),
       ifield_lowering_infos_(arena, 0u),
       sfield_lowering_infos_(arena, 0u),
-      method_lowering_infos_(arena, 0u) {
+      method_lowering_infos_(arena, 0u),
+      gen_suspend_test_list_(arena, 0u) {
   try_block_addr_ = new (arena_) ArenaBitVector(arena_, 0, true /* expandable */);
   max_available_special_compiler_temps_ = std::abs(static_cast<int>(kVRegNonSpecialTempBaseReg))
       - std::abs(static_cast<int>(kVRegTempBaseReg));
@@ -1291,6 +1292,28 @@ void MIRGraph::InitializeSSATransformation() {
   /* Rename register names by local defs and phi nodes */
   ClearAllVisitedFlags();
   DoDFSPreOrderSSARename(GetEntryBlock());
+}
+
+/* This is used to check if there is already a method call dominating the
+ * source basic block of a backedge and being dominated by the target basic
+ * block of the backedge.
+ */
+bool MIRGraph::HasSuspendTestBetween(BasicBlock* source, BasicBlockId target_id) {
+  BasicBlock* target = GetBasicBlock(target_id);
+
+  if (!source || !target)
+    return false;
+
+  int idx;
+  for (idx = gen_suspend_test_list_.Size() - 1; idx >= 0; idx--) {
+    BasicBlock* bb = gen_suspend_test_list_.Get(idx);
+    if (bb == source)
+      return true; // the block has been inserted by a suspend check before
+    if (source->dominators->IsBitSet(bb->id) && bb->dominators->IsBitSet(target_id))
+      return true; 
+  }
+
+  return false;
 }
 
 ChildBlockIterator::ChildBlockIterator(BasicBlock* bb, MIRGraph* mir_graph)
