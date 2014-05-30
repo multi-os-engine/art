@@ -37,7 +37,6 @@
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
 #include "ScopedUtfChars.h"
-#include "utils.h"
 #include "well_known_classes.h"
 #include "zip_archive.h"
 
@@ -357,8 +356,8 @@ static jboolean IsDexOptNeededInternal(JNIEnv* env, const char* filename,
       // There is a previous profile file.  Check if the profile has changed significantly.
       // A change in profile is considered significant if X% (change_thr property) of the top K%
       // (compile_thr property) samples has changed.
-      double top_k_threshold = GetDoubleProperty("dalvik.vm.profiler.dex2oat.compile_thr", 10.0, 90.0, 90.0);
-      double change_threshold = GetDoubleProperty("dalvik.vm.profiler.dex2oat.change_thr", 1.0, 90.0, 10.0);
+      double top_k_threshold = Runtime::Current()->GetProfileOptions().GetTopKThreshold();
+      double change_threshold = Runtime::Current()->GetProfileOptions().GetChangeInTopKThreshold();
       double change_percent = 0.0;
       ProfileFile new_profile, old_profile;
       bool new_ok = new_profile.LoadFile(profile_file);

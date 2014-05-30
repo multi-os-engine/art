@@ -77,13 +77,7 @@ class ParsedOptions {
   std::string compiler_executable_;
   std::vector<std::string> compiler_options_;
   std::vector<std::string> image_compiler_options_;
-  bool profile_;
-  std::string profile_output_filename_;
-  uint32_t profile_period_s_;
-  uint32_t profile_duration_s_;
-  uint32_t profile_interval_us_;
-  double profile_backoff_coefficient_;
-  bool profile_start_immediately_;
+  ProfileOptions profile_options_;
   ProfilerClockSource profile_clock_source_;
   bool verify_;
   InstructionSet image_isa_;

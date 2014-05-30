@@ -123,12 +123,6 @@ Runtime::Runtime()
       abort_(nullptr),
       stats_enabled_(false),
       running_on_valgrind_(RUNNING_ON_VALGRIND > 0),
-      profile_(false),
-      profile_period_s_(0),
-      profile_duration_s_(0),
-      profile_interval_us_(0),
-      profile_backoff_coefficient_(0),
-      profile_start_immediately_(true),
       method_trace_(false),
       method_trace_file_size_(0),
       instrumentation_(),
@@ -165,7 +159,7 @@ Runtime::~Runtime() {
     shutting_down_ = true;
   }
   // Shut down background profiler before the runtime exits.
-  if (profile_) {
+  if (profile_options_.IsEnabled()) {
     BackgroundMethodSamplingProfiler::Shutdown();
   }
 
@@ -415,17 +409,16 @@ bool Runtime::Start() {
   }
 
   VLOG(startup) << "Runtime::Start exiting";
-
   finished_starting_ = true;
 
-  if (profile_) {
+  if (profile_options_.IsEnabled()) {
     // User has asked for a profile using -Xprofile
     // Create the profile file if it doesn't exist.
-    int fd = open(profile_output_filename_.c_str(), O_RDWR|O_CREAT|O_EXCL, 0660);
+    int fd = open(profile_options_.GetOutputFilename().c_str(), O_RDWR|O_CREAT|O_EXCL, 0660);
     if (fd >= 0) {
       close(fd);
     }
-    StartProfiler(profile_output_filename_.c_str(), "");
+    BackgroundMethodSamplingProfiler::Start(profile_options_);
   }
 
   return true;
@@ -652,15 +645,8 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   method_trace_file_ = options->method_trace_file_;
   method_trace_file_size_ = options->method_trace_file_size_;
 
-  // Extract the profile options.
-  // TODO: move into a Trace options struct?
-  profile_period_s_ = options->profile_period_s_;
-  profile_duration_s_ = options->profile_duration_s_;
-  profile_interval_us_ = options->profile_interval_us_;
-  profile_backoff_coefficient_ = options->profile_backoff_coefficient_;
-  profile_start_immediately_ = options->profile_start_immediately_;
-  profile_ = options->profile_;
-  profile_output_filename_ = options->profile_output_filename_;
+  profile_options_ = options->profile_options_;
+
   // TODO: move this to just be an Trace::Start argument
   Trace::SetDefaultClockSource(options->profile_clock_source_);
 
@@ -1113,9 +1099,11 @@ void Runtime::RemoveMethodVerifier(verifier::MethodVerifier* verifier) {
   method_verifiers_.erase(it);
 }
 
-void Runtime::StartProfiler(const char* appDir, const char* procName) {
-  BackgroundMethodSamplingProfiler::Start(profile_period_s_, profile_duration_s_, appDir,
-      procName, profile_interval_us_, profile_backoff_coefficient_, profile_start_immediately_);
+void Runtime::StartProfiler(const char* profile_output_filename, const char* procName) {
+  // We are asked to start the profile with a different output file.
+  // Update the options first and then start the profiler.
+  profile_options_.SetOutputFilename(profile_output_filename);
+  BackgroundMethodSamplingProfiler::Start(profile_options_);
 }
 
 // Transaction support.
