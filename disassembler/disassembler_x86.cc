@@ -867,7 +867,7 @@ DISASSEMBLER_ENTRY(cmp,
     static const char* c7_opcodes[] = {"mov", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7"};
     modrm_opcodes = c7_opcodes;
     store = true;
-    immediate_bytes = 4;
+    immediate_bytes = prefix[2] == 0x66 ? 2 : 4;
     has_modrm = true;
     reg_is_opcode = true;
     break;
@@ -1038,6 +1038,9 @@ DISASSEMBLER_ENTRY(cmp,
     if (immediate_bytes == 1) {
       args << StringPrintf("%d", *reinterpret_cast<const int8_t*>(instr));
       instr++;
+    } else if (immediate_bytes == 2) {
+      args << StringPrintf("%d", *reinterpret_cast<const int16_t*>(instr));
+      instr += 2;
     } else {
       CHECK_EQ(immediate_bytes, 4u);
       args << StringPrintf("%d", *reinterpret_cast<const int32_t*>(instr));
