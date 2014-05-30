@@ -25,10 +25,24 @@
 
 namespace art {
 
+<<<<<<< HEAD
 static constexpr RegStorage core_regs_arr[] =
     {rs_r0, rs_r1, rs_r2, rs_r3, rs_rARM_SUSPEND, rs_r5, rs_r6, rs_r7, rs_r8, rs_rARM_SELF,
      rs_r10, rs_r11, rs_r12, rs_rARM_SP, rs_rARM_LR, rs_rARM_PC};
 static constexpr RegStorage sp_regs_arr[] =
+=======
+// TODO: rework this when c++11 support allows.
+#ifdef ARM_R4_SUSPEND_FLAG
+static const RegStorage core_regs_arr[] =
+    {rs_r0, rs_r1, rs_r2, rs_r3, rs_rARM_SUSPEND, rs_r5, rs_r6, rs_r7, rs_r8, rs_rARM_SELF,
+     rs_r10, rs_r11, rs_r12, rs_rARM_SP, rs_rARM_LR, rs_rARM_PC};
+#else
+static const RegStorage core_regs_arr[] =
+    {rs_r0, rs_r1, rs_r2, rs_r3, rs_r4, rs_r5, rs_r6, rs_r7, rs_r8, rs_rARM_SELF,
+     rs_r10, rs_r11, rs_r12, rs_rARM_SP, rs_rARM_LR, rs_rARM_PC};
+#endif
+static const RegStorage sp_regs_arr[] =
+>>>>>>> Add an optimization for removing redundant suspend tests in ART
     {rs_fr0, rs_fr1, rs_fr2, rs_fr3, rs_fr4, rs_fr5, rs_fr6, rs_fr7, rs_fr8, rs_fr9, rs_fr10,
      rs_fr11, rs_fr12, rs_fr13, rs_fr14, rs_fr15, rs_fr16, rs_fr17, rs_fr18, rs_fr19, rs_fr20,
      rs_fr21, rs_fr22, rs_fr23, rs_fr24, rs_fr25, rs_fr26, rs_fr27, rs_fr28, rs_fr29, rs_fr30,
@@ -36,10 +50,23 @@ static constexpr RegStorage sp_regs_arr[] =
 static constexpr RegStorage dp_regs_arr[] =
     {rs_dr0, rs_dr1, rs_dr2, rs_dr3, rs_dr4, rs_dr5, rs_dr6, rs_dr7, rs_dr8, rs_dr9, rs_dr10,
      rs_dr11, rs_dr12, rs_dr13, rs_dr14, rs_dr15};
+<<<<<<< HEAD
 static constexpr RegStorage reserved_regs_arr[] =
     {rs_rARM_SUSPEND, rs_rARM_SELF, rs_rARM_SP, rs_rARM_LR, rs_rARM_PC};
 static constexpr RegStorage core_temps_arr[] = {rs_r0, rs_r1, rs_r2, rs_r3, rs_r12};
 static constexpr RegStorage sp_temps_arr[] =
+=======
+#ifdef ARM_R4_SUSPEND_FLAG
+static const RegStorage reserved_regs_arr[] =
+    {rs_rARM_SUSPEND, rs_rARM_SELF, rs_rARM_SP, rs_rARM_LR, rs_rARM_PC};
+static const RegStorage core_temps_arr[] = {rs_r0, rs_r1, rs_r2, rs_r3, rs_r12};
+#else
+static const RegStorage reserved_regs_arr[] =
+    {rs_rARM_SELF, rs_rARM_SP, rs_rARM_LR, rs_rARM_PC};
+static const RegStorage core_temps_arr[] = {rs_r0, rs_r1, rs_r2, rs_r3, rs_r4, rs_r12};
+#endif
+static const RegStorage sp_temps_arr[] =
+>>>>>>> Add an optimization for removing redundant suspend tests in ART
     {rs_fr0, rs_fr1, rs_fr2, rs_fr3, rs_fr4, rs_fr5, rs_fr6, rs_fr7, rs_fr8, rs_fr9, rs_fr10,
      rs_fr11, rs_fr12, rs_fr13, rs_fr14, rs_fr15};
 static constexpr RegStorage dp_temps_arr[] =
@@ -79,7 +106,11 @@ RegStorage ArmMir2Lir::TargetReg(SpecialTargetRegister reg) {
   RegStorage res_reg = RegStorage::InvalidReg();
   switch (reg) {
     case kSelf: res_reg = rs_rARM_SELF; break;
+#ifdef ARM_R4_SUSPEND_FLAG
     case kSuspend: res_reg =  rs_rARM_SUSPEND; break;
+#else
+    case kSuspend: res_reg = RegStorage::InvalidReg(); break;
+#endif
     case kLr: res_reg =  rs_rARM_LR; break;
     case kPc: res_reg =  rs_rARM_PC; break;
     case kSp: res_reg =  rs_rARM_SP; break;
@@ -578,11 +609,13 @@ void ArmMir2Lir::CompilerInitializeRegAlloc() {
     }
   }
 
+#ifdef ARM_R4_SUSPEND_FLAG
   // TODO: re-enable this when we can safely save r4 over the suspension code path.
   bool no_suspend = NO_SUSPEND;  // || !Runtime::Current()->ExplicitSuspendChecks();
   if (no_suspend) {
     GetRegInfo(rs_rARM_SUSPEND)->MarkFree();
   }
+#endif
 
   // Don't start allocating temps at r0/s0/d0 or you may clobber return regs in early-exit methods.
   // TODO: adjust when we roll to hard float calling convention.
