@@ -442,6 +442,16 @@ struct BasicBlock {
   void UpdatePredecessor(BasicBlockId old_pred, BasicBlockId new_pred);
 
   /**
+   * @brief Returns the number of successors.
+   */
+  size_t NumSuccessors() const {
+    return
+        ((fall_through != kNullBlock) ? 1u : 0u) +
+        ((taken != kNullBlock) ? 1u : 0u) +
+        ((successor_block_list_type != kNotUsed) ? successor_blocks->Size() : 0u);
+  }
+
+  /**
    * @brief Used to obtain the next MIR that follows unconditionally.
    * @details The implementation does not guarantee that a MIR does not
    * follow even if this method returns nullptr.
@@ -1189,6 +1199,7 @@ class MIRGraph {
   GrowableArray<BasicBlock*> gen_suspend_test_list_;  // List of blocks containing suspend tests
 
   friend class ClassInitCheckEliminationTest;
+  friend class GlobalValueNumberingTest;
   friend class LocalValueNumberingTest;
 };
 
