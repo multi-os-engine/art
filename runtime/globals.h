@@ -123,6 +123,10 @@ static constexpr bool kUseBakerOrBrooksReadBarrier = kUseBakerReadBarrier || kUs
 // If true, references within the heap are poisoned (negated).
 static constexpr bool kPoisonHeapReferences = false;
 
+// Should the R4 register on ARM be reserved globally in quick generated code to decrease the
+// frequency of proper thread suspension checks.
+// #define ARM_R4_SUSPEND_FLAG
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_GLOBALS_H_
