@@ -350,6 +350,9 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
                 (mir->ssa_rep->defs[0] == mir_next->ssa_rep->uses[0]) &&
                 (GetSSAUseCount(mir->ssa_rep->defs[0]) == 1)) {
               mir_next->meta.ccode = ConditionCodeForIfCcZ(mir_next->dalvikInsn.opcode);
+              // Copy in the decoded instruction information for potential SSA re-creation.
+              mir_next->dalvikInsn.vA = mir->dalvikInsn.vB;
+              mir_next->dalvikInsn.vB = mir->dalvikInsn.vC;
               switch (opcode) {
                 case Instruction::CMPL_FLOAT:
                   mir_next->dalvikInsn.opcode =
