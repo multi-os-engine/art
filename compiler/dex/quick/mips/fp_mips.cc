@@ -52,7 +52,7 @@ void MipsMir2Lir::GenArithOpFloat(Instruction::Code opcode,
       FlushAllRegs();   // Send everything to home location
       CallRuntimeHelperRegLocationRegLocation(QUICK_ENTRYPOINT_OFFSET(4, pFmodf), rl_src1, rl_src2,
                                               false);
-      rl_result = GetReturn(true);
+      rl_result = GetReturn(kFPReg);
       StoreValue(rl_dest, rl_result);
       return;
     case Instruction::NEG_FLOAT:
@@ -204,7 +204,7 @@ void MipsMir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
   RegStorage r_tgt = LoadHelper(offset);
   // NOTE: not a safepoint
   OpReg(kOpBlx, r_tgt);
-  RegLocation rl_result = GetReturn(false);
+  RegLocation rl_result = GetReturn(kCoreReg);
   StoreValue(rl_dest, rl_result);
 }
 
