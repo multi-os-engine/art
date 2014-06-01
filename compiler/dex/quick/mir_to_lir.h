@@ -456,6 +456,8 @@ class Mir2Lir : public Backend {
       int next_sp_reg_;
       GrowableArray<RegisterInfo*> dp_regs_;    // Double precision float.
       int next_dp_reg_;
+      GrowableArray<RegisterInfo*>* ref_regs_;  // Points to core_regs_ or core64_regs_
+      int* next_ref_reg_;
 
      private:
       Mir2Lir* const m2l_;
@@ -550,8 +552,12 @@ class Mir2Lir : public Backend {
      * just use our knowledge of type to select the most appropriate register class?
      */
     RegisterClass RegClassBySize(OpSize size) {
-      return (size == kUnsignedHalf || size == kSignedHalf || size == kUnsignedByte ||
-              size == kSignedByte) ? kCoreReg : kAnyReg;
+      if (size == kReference) {
+        return kRefReg;
+      } else {
+        return (size == kUnsignedHalf || size == kSignedHalf || size == kUnsignedByte ||
+                size == kSignedByte) ? kCoreReg : kAnyReg;
+      }
     }
 
     size_t CodeBufferSizeInBytes() {
@@ -699,7 +705,7 @@ class Mir2Lir : public Backend {
     virtual RegStorage AllocFreeTemp();
     virtual RegStorage AllocTemp();
     virtual RegStorage AllocTempWide();
-    virtual RegStorage AllocTempWord();
+    virtual RegStorage AllocTempRef();
     virtual RegStorage AllocTempSingle();
     virtual RegStorage AllocTempDouble();
     virtual RegStorage AllocTypedTemp(bool fp_hint, int reg_class);
@@ -719,7 +725,6 @@ class Mir2Lir : public Backend {
     void NullifyRange(RegStorage reg, int s_reg);
     void MarkDef(RegLocation rl, LIR *start, LIR *finish);
     void MarkDefWide(RegLocation rl, LIR *start, LIR *finish);
-    virtual RegLocation WideToNarrow(RegLocation rl);
     void ResetDefLoc(RegLocation rl);
     void ResetDefLocWide(RegLocation rl);
     void ResetDefTracking();

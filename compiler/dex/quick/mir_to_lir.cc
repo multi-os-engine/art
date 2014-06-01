@@ -782,7 +782,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
 
     case Instruction::LONG_TO_INT:
       rl_src[0] = UpdateLocWide(rl_src[0]);
-      rl_src[0] = WideToNarrow(rl_src[0]);
+      rl_src[0] = NarrowRegLoc(rl_src[0]);
       StoreValue(rl_dest, rl_src[0]);
       break;
 
