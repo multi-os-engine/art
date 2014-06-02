@@ -32,6 +32,10 @@ static inline uint32_t BitsToWords(uint32_t bits) {
   return (bits + 31) >> 5;
 }
 
+static inline uint32_t WordsToBits(uint32_t words) {
+  return words << 5;
+}
+
 // TODO: replace excessive argument defaulting when we are at gcc 4.7
 // or later on host with delegating constructor support. Specifically,
 // starts_bits and storage_size/storage are mutually exclusive.
@@ -44,11 +48,12 @@ BitVector::BitVector(uint32_t start_bits,
     expandable_(expandable),
     storage_size_(storage_size),
     storage_(storage),
-    number_of_bits_(start_bits) {
+    number_of_bits_(start_bits + 1) {
   COMPILE_ASSERT(sizeof(*storage_) == kWordBytes, check_word_bytes);
   COMPILE_ASSERT(sizeof(*storage_) * 8u == kWordBits, check_word_bits);
   if (storage_ == nullptr) {
     storage_size_ = BitsToWords(start_bits);
+    number_of_bits_ = WordsToBits(storage_size_);
     storage_ = static_cast<uint32_t*>(allocator_->Alloc(storage_size_ * kWordBytes));
   }
 }
@@ -95,7 +100,7 @@ void BitVector::SetBit(uint32_t num) {
     // TOTO: collect stats on space wasted because of resize.
     storage_ = new_storage;
     storage_size_ = new_size;
-    number_of_bits_ = num;
+    number_of_bits_ = WordsToBits(storage_size_);
   }
 
   storage_[num >> 5] |= check_masks[num & 0x1f];
