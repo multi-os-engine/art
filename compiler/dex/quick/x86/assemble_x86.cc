@@ -174,6 +174,11 @@ ENCODING_MAP(Cmp, IS_LOAD, 0, 0,
   { kX86Mov8AI, kArrayImm,  IS_STORE | IS_QUIN_OP     | REG_USE01,      { 0,             0, 0xC6, 0, 0, 0, 0, 1 }, "Mov8AI", "[!0r+!1r<<!2d+!3d],!4d" },
   { kX86Mov8TI, kThreadImm, IS_STORE | IS_BINARY_OP,                    { THREAD_PREFIX, 0, 0xC6, 0, 0, 0, 0, 1 }, "Mov8TI", "fs:[!0d],!1d" },
 
+  { kX86Mov8MR64, kMemReg,    IS_STORE | IS_TERTIARY_OP | REG_USE02,      { REX,           0, 0x88, 0, 0, 0, 0, 0 }, "Mov8MR64", "[!0r+!1d],!2r" },
+  { kX86Mov8AR64, kArrayReg,  IS_STORE | IS_QUIN_OP     | REG_USE014,     { REX,           0, 0x88, 0, 0, 0, 0, 0 }, "Mov8AR64", "[!0r+!1r<<!2d+!3d],!4r" },
+  { kX86Mov8TR64, kThreadReg, IS_STORE | IS_BINARY_OP   | REG_USE1,       { THREAD_PREFIX, REX, 0x88, 0, 0, 0, 0, 0 }, "Mov8TR64", "fs:[!0d],!1r" },
+  { kX86Mov8RM64, kRegMem,    IS_LOAD  | IS_TERTIARY_OP | REG_DEF0_USE1,  { REX,           0, 0x8A, 0, 0, 0, 0, 0 }, "Mov8RM64", "!0r,[!1r+!2d]" },
+
   { kX86Mov16MR, kMemReg,    IS_STORE | IS_TERTIARY_OP | REG_USE02,      { 0x66,          0,    0x89, 0, 0, 0, 0, 0 }, "Mov16MR", "[!0r+!1d],!2r" },
   { kX86Mov16AR, kArrayReg,  IS_STORE | IS_QUIN_OP     | REG_USE014,     { 0x66,          0,    0x89, 0, 0, 0, 0, 0 }, "Mov16AR", "[!0r+!1r<<!2d+!3d],!4r" },
   { kX86Mov16TR, kThreadReg, IS_STORE | IS_BINARY_OP   | REG_USE1,       { THREAD_PREFIX, 0x66, 0x89, 0, 0, 0, 0, 0 }, "Mov16TR", "fs:[!0d],!1r" },
@@ -488,7 +493,8 @@ size_t X86Mir2Lir::ComputeSize(const X86EncodingMap* entry, int base, int displa
     }
   }
   if ((NeedsRex(base) || NeedsRex(reg_r) || NeedsRex(reg_x)) &&
-       entry->skeleton.prefix1 != REX_W && entry->skeleton.prefix2 != REX_W) {
+       entry->skeleton.prefix1 != REX_W && entry->skeleton.prefix2 != REX_W &&
+       entry->skeleton.prefix1 != REX && entry->skeleton.prefix2 != REX) {
     ++size;  // REX_R
   }
   ++size;  // opcode
@@ -698,12 +704,12 @@ void X86Mir2Lir::EmitPrefix(const X86EncodingMap* entry,
   // R - MODRM.reg
   // X - SIB.index
   // B - MODRM.rm/SIB.base
-  bool force = false;
+  bool force = (entry->skeleton.prefix1 == REX) || (entry->skeleton.prefix2 == REX);
   bool w = (entry->skeleton.prefix1 == REX_W) || (entry->skeleton.prefix2 == REX_W);
   bool r = NeedsRex(reg_r);
   bool x = NeedsRex(reg_x);
   bool b = NeedsRex(reg_b);
-  uint8_t rex = force ? 0x40 : 0;
+  uint8_t rex = force ? REX : 0;
   if (w) {
     rex |= 0x48;  // REX.W000
   }
@@ -721,7 +727,7 @@ void X86Mir2Lir::EmitPrefix(const X86EncodingMap* entry,
       // 64 bit adresses by GS, not FS
       code_buffer_.push_back(THREAD_PREFIX_GS);
     } else {
-      if (entry->skeleton.prefix1 == REX_W) {
+      if (entry->skeleton.prefix1 == REX_W || entry->skeleton.prefix1 == REX) {
         rex |= entry->skeleton.prefix1;
         code_buffer_.push_back(rex);
         rex = 0;
@@ -730,7 +736,7 @@ void X86Mir2Lir::EmitPrefix(const X86EncodingMap* entry,
       }
     }
     if (entry->skeleton.prefix2 != 0) {
-      if (entry->skeleton.prefix2 == REX_W) {
+      if (entry->skeleton.prefix2 == REX_W || entry->skeleton.prefix2 == REX) {
         rex |= entry->skeleton.prefix2;
         code_buffer_.push_back(rex);
         rex = 0;
@@ -876,7 +882,7 @@ void X86Mir2Lir::EmitImm(const X86EncodingMap* entry, int64_t imm) {
 }
 
 void X86Mir2Lir::EmitOpRegOpcode(const X86EncodingMap* entry, uint8_t reg) {
-  EmitPrefixAndOpcode(entry, reg, NO_REG, NO_REG);
+  EmitPrefixAndOpcode(entry, NO_REG, NO_REG, reg);
   reg = LowRegisterBits(reg);
   // There's no 3-byte instruction with +rd
   DCHECK(entry->skeleton.opcode != 0x0F ||

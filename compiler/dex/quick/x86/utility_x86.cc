@@ -249,7 +249,7 @@ LIR* X86Mir2Lir::OpMovRegMem(RegStorage r_dest, RegStorage r_base, int offset, M
   switch (move_type) {
     case kMov8GP:
       CHECK(!r_dest.IsFloat());
-      opcode = kX86Mov8RM;
+      opcode = Gen64Bit() ? kX86Mov8RM64 : kX86Mov8RM;
       break;
     case kMov16GP:
       CHECK(!r_dest.IsFloat());
@@ -302,7 +302,7 @@ LIR* X86Mir2Lir::OpMovMemReg(RegStorage r_base, int offset, RegStorage r_src, Mo
   switch (move_type) {
     case kMov8GP:
       CHECK(!r_src.IsFloat());
-      opcode = kX86Mov8MR;
+      opcode = Gen64Bit() ? kX86Mov8MR64 : kX86Mov8MR;
       break;
     case kMov16GP:
       CHECK(!r_src.IsFloat());
@@ -777,7 +777,11 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int
       break;
     case kUnsignedByte:
     case kSignedByte:
-      opcode = is_array ? kX86Mov8AR : kX86Mov8MR;
+      if (Gen64Bit()) {
+        opcode = is_array ? kX86Mov8AR64 : kX86Mov8MR64;
+      } else {
+        opcode = is_array ? kX86Mov8AR : kX86Mov8MR;
+      }
       break;
     default:
       LOG(FATAL) << "Bad case in StoreBaseIndexedDispBody";

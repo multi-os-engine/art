@@ -436,6 +436,8 @@ enum X86OpCode {
   kX86Mov8MR, kX86Mov8AR, kX86Mov8TR,
   kX86Mov8RR, kX86Mov8RM, kX86Mov8RA, kX86Mov8RT,
   kX86Mov8RI, kX86Mov8MI, kX86Mov8AI, kX86Mov8TI,
+  kX86Mov8MR64, kX86Mov8AR64, kX86Mov8TR64,
+  kX86Mov8RM64,
   kX86Mov16MR, kX86Mov16AR, kX86Mov16TR,
   kX86Mov16RR, kX86Mov16RM, kX86Mov16RA, kX86Mov16RT,
   kX86Mov16RI, kX86Mov16MI, kX86Mov16AI, kX86Mov16TI,
@@ -685,6 +687,8 @@ struct X86EncodingMap {
 #define THREAD_PREFIX 0x64
 #define THREAD_PREFIX_GS 0x65
 
+// REX.0000
+#define REX 0x40
 // 64 Bit Operand Size
 #define REX_W 0x48
 // Extension of the ModR/M reg field
