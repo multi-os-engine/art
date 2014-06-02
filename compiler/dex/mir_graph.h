@@ -280,6 +280,10 @@ struct MIR {
      */
     bool GetConstant(int64_t* ptr_value, bool* wide) const;
 
+    bool Invokes() const {
+      return ((Instruction::FlagsOf(opcode) & Instruction::kInvoke) == Instruction::kInvoke);
+    }
+
     bool IsStore() const {
       return ((Instruction::FlagsOf(opcode) & Instruction::kStore) == Instruction::kStore);
     }
