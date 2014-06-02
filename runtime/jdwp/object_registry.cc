@@ -53,6 +53,11 @@ JDWP::ObjectId ObjectRegistry::InternalAdd(mirror::Object* o) {
   while (UNLIKELY(!allow_new_objects_)) {
     condition_.WaitHoldingLocks(soa.Self());
   }
+  // We need to apply the read barrier to the object pointers before
+  // touching them.
+  if (kUseBakerOrBrooksReadBarrier) {
+    ReadBarrierObjectPointersLocked();
+  }
   ObjectRegistryEntry* entry;
   auto it = object_to_entry_.find(o);
   if (it != object_to_entry_.end()) {
@@ -86,12 +91,19 @@ JDWP::ObjectId ObjectRegistry::InternalAdd(mirror::Object* o) {
 
 bool ObjectRegistry::Contains(mirror::Object* o) {
   MutexLock mu(Thread::Current(), lock_);
+  // We need to apply the read barrier to the object pointers before
+  // touching them.
+  if (kUseBakerOrBrooksReadBarrier) {
+    ReadBarrierObjectPointersLocked();
+  }
   return object_to_entry_.find(o) != object_to_entry_.end();
 }
 
 void ObjectRegistry::Clear() {
   Thread* self = Thread::Current();
   MutexLock mu(self, lock_);
+  // We don't need to call ReadBarrierObjectPointersLocked() here as
+  // we don't use the key type.
   VLOG(jdwp) << "Object registry contained " << object_to_entry_.size() << " entries";
   // Delete all the JNI references.
   JNIEnv* env = self->GetJniEnv();
@@ -190,6 +202,11 @@ void ObjectRegistry::DisposeObject(JDWP::ObjectId id, uint32_t reference_count) 
   if (it == id_to_entry_.end()) {
     return;
   }
+  // We need to apply the read barrier to the object pointers before
+  // touching them.
+  if (kUseBakerOrBrooksReadBarrier) {
+    ReadBarrierObjectPointersLocked();
+  }
   ObjectRegistryEntry* entry = it->second;
   entry->reference_count -= reference_count;
   if (entry->reference_count <= 0) {
@@ -208,6 +225,8 @@ void ObjectRegistry::DisposeObject(JDWP::ObjectId id, uint32_t reference_count) 
 
 void ObjectRegistry::UpdateObjectPointers(IsMarkedCallback* callback, void* arg) {
   MutexLock mu(Thread::Current(), lock_);
+  // No read barrier is necessary on the object pointers in
+  // object_to_entry_ here as this is called by GC.
   if (object_to_entry_.empty()) {
     return;
   }
@@ -220,6 +239,29 @@ void ObjectRegistry::UpdateObjectPointers(IsMarkedCallback* callback, void* arg)
         new_object_to_entry.insert(std::make_pair(new_obj, pair.second));
       }
     }
+  }
+
+  object_to_entry_ = new_object_to_entry;
+}
+
+// This applies the read barrier to all the object pointers in
+// object_to_entry_ (before we access them.) Note a read barrier may
+// move objects (and changing the object pointers) when we access an
+// object pointer in a weak root (the map keys in this case).
+//
+// TODO: Avoid applying the read barrier to all the object
+// pointers. For example, use a mutlimap with the indentity hash code
+// as the key type.
+void ObjectRegistry::ReadBarrierObjectPointersLocked() {
+  DCHECK(kUseBakerOrBrooksReadBarrier);
+  if (object_to_entry_.empty()) {
+    return;
+  }
+  std::map<mirror::Object*, ObjectRegistryEntry*> new_object_to_entry;
+  for (auto& pair : object_to_entry_) {
+    mirror::Object* obj = pair.first;
+    mirror::Object* new_obj = ReadBarrier::BarrierForWeakRoot<mirror::Object, kWithReadBarrier>(&obj);
+    new_object_to_entry.insert(std::make_pair(new_obj, pair.second));
   }
   object_to_entry_ = new_object_to_entry;
 }

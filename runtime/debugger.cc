@@ -63,26 +63,54 @@ static const size_t kMaxAllocRecordStackDepth = 16;  // Max 255.
 static const size_t kDefaultNumAllocRecords = 64*1024;  // Must be a power of 2.
 
 struct AllocRecordStackTraceElement {
+ private:
+  // This is a weak root. Be careful to access it with a read barrier.
   mirror::ArtMethod* method;
+
+ public:
   uint32_t dex_pc;
 
   AllocRecordStackTraceElement() : method(nullptr), dex_pc(0) {
   }
 
-  int32_t LineNumber() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return MethodHelper(method).GetLineNumFromDexPC(dex_pc);
+  int32_t LineNumber() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return MethodHelper(GetMethod()).GetLineNumFromDexPC(dex_pc);
+  }
+
+  template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
+  mirror::ArtMethod* GetMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    mirror::ArtMethod** weak_root = &method;
+    return ReadBarrier::BarrierForWeakRoot<mirror::ArtMethod, kReadBarrierOption>(weak_root);
+  }
+
+  void SetMethod(mirror::ArtMethod* m) {
+    method = m;
   }
 };
 
 struct AllocRecord {
+ private:
+  // This is a weak root. Be careful to access it with a read barrier.
   mirror::Class* type;
+
+ public:
   size_t byte_count;
   uint16_t thin_lock_id;
   AllocRecordStackTraceElement stack[kMaxAllocRecordStackDepth];  // Unused entries have NULL method.
 
-  size_t GetDepth() {
+  template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
+  mirror::Class* GetType() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    mirror::Class** weak_root = &type;
+    return ReadBarrier::BarrierForWeakRoot<mirror::Class, kReadBarrierOption>(weak_root);
+  }
+
+  void SetType(mirror::Class* t) {
+    type = t;
+  }
+
+  size_t GetDepth() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     size_t depth = 0;
-    while (depth < kMaxAllocRecordStackDepth && stack[depth].method != NULL) {
+    while (depth < kMaxAllocRecordStackDepth && stack[depth].GetMethod() != NULL) {
       ++depth;
     }
     return depth;
@@ -90,15 +118,17 @@ struct AllocRecord {
 
   void UpdateObjectPointers(IsMarkedCallback* callback, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // No read barrier is necessary on type here as this is called by GC.
     if (type != nullptr) {
       type = down_cast<mirror::Class*>(callback(type, arg));
     }
     for (size_t stack_frame = 0; stack_frame < kMaxAllocRecordStackDepth; ++stack_frame) {
-      mirror::ArtMethod*& m = stack[stack_frame].method;
+      // No read barrier is necessary on GetMethod() here as this is called by GC.
+      mirror::ArtMethod* m = stack[stack_frame].GetMethod<kWithoutReadBarrier>();
       if (m == nullptr) {
         break;
       }
-      m = down_cast<mirror::ArtMethod*>(callback(m, arg));
+      stack[stack_frame].SetMethod(down_cast<mirror::ArtMethod*>(callback(m, arg)));
     }
   }
 };
@@ -4127,7 +4157,7 @@ struct AllocRecordStackVisitor : public StackVisitor {
     }
     mirror::ArtMethod* m = GetMethod();
     if (!m->IsRuntimeMethod()) {
-      record->stack[depth].method = m;
+      record->stack[depth].SetMethod(m);
       record->stack[depth].dex_pc = GetDexPc();
       ++depth;
     }
@@ -4137,7 +4167,7 @@ struct AllocRecordStackVisitor : public StackVisitor {
   ~AllocRecordStackVisitor() {
     // Clear out any unused stack trace elements.
     for (; depth < kMaxAllocRecordStackDepth; ++depth) {
-      record->stack[depth].method = NULL;
+      record->stack[depth].SetMethod(nullptr);
       record->stack[depth].dex_pc = 0;
     }
   }
@@ -4162,7 +4192,7 @@ void Dbg::RecordAllocation(mirror::Class* type, size_t byte_count) {
 
   // Fill in the basics.
   AllocRecord* record = &recent_allocation_records_[alloc_record_head_];
-  record->type = type;
+  record->SetType(type);
   record->byte_count = byte_count;
   record->thin_lock_id = self->GetThreadId();
 
@@ -4206,10 +4236,10 @@ void Dbg::DumpRecentAllocations() {
     AllocRecord* record = &recent_allocation_records_[i];
 
     LOG(INFO) << StringPrintf(" Thread %-2d %6zd bytes ", record->thin_lock_id, record->byte_count)
-              << PrettyClass(record->type);
+              << PrettyClass(record->GetType());
 
     for (size_t stack_frame = 0; stack_frame < kMaxAllocRecordStackDepth; ++stack_frame) {
-      mirror::ArtMethod* m = record->stack[stack_frame].method;
+      mirror::ArtMethod* m = record->stack[stack_frame].GetMethod();
       if (m == NULL) {
         break;
       }
@@ -4360,11 +4390,11 @@ jbyteArray Dbg::GetRecentAllocations() {
     while (count--) {
       AllocRecord* record = &recent_allocation_records_[idx];
 
-      class_names.Add(record->type->GetDescriptor().c_str());
+      class_names.Add(record->GetType()->GetDescriptor().c_str());
 
       MethodHelper mh;
       for (size_t i = 0; i < kMaxAllocRecordStackDepth; i++) {
-        mirror::ArtMethod* m = record->stack[i].method;
+        mirror::ArtMethod* m = record->stack[i].GetMethod();
         if (m != NULL) {
           mh.ChangeMethod(m);
           class_names.Add(mh.GetDeclaringClassDescriptor());
@@ -4415,7 +4445,7 @@ jbyteArray Dbg::GetRecentAllocations() {
       AllocRecord* record = &recent_allocation_records_[idx];
       size_t stack_depth = record->GetDepth();
       size_t allocated_object_class_name_index =
-          class_names.IndexOf(record->type->GetDescriptor().c_str());
+          class_names.IndexOf(record->GetType()->GetDescriptor().c_str());
       JDWP::Append4BE(bytes, record->byte_count);
       JDWP::Append2BE(bytes, record->thin_lock_id);
       JDWP::Append2BE(bytes, allocated_object_class_name_index);
@@ -4428,7 +4458,7 @@ jbyteArray Dbg::GetRecentAllocations() {
         // (2b) method name
         // (2b) method source file
         // (2b) line number, clipped to 32767; -2 if native; -1 if no source
-        mh.ChangeMethod(record->stack[stack_frame].method);
+        mh.ChangeMethod(record->stack[stack_frame].GetMethod());
         size_t class_name_index = class_names.IndexOf(mh.GetDeclaringClassDescriptor());
         size_t method_name_index = method_names.IndexOf(mh.GetName());
         size_t file_name_index = filenames.IndexOf(GetMethodSourceFile(&mh));

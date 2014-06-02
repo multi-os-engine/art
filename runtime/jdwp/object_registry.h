@@ -98,11 +98,14 @@ class ObjectRegistry {
   mirror::Object* InternalGet(JDWP::ObjectId id) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void Demote(ObjectRegistryEntry& entry) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, lock_);
   void Promote(ObjectRegistryEntry& entry) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, lock_);
+  void ReadBarrierObjectPointersLocked()
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   bool allow_new_objects_ GUARDED_BY(lock_);
   ConditionVariable condition_ GUARDED_BY(lock_);
 
+  // This contains weak roots. Be careful to access with a read barrier.
   std::map<mirror::Object*, ObjectRegistryEntry*> object_to_entry_ GUARDED_BY(lock_);
   SafeMap<JDWP::ObjectId, ObjectRegistryEntry*> id_to_entry_ GUARDED_BY(lock_);
 
