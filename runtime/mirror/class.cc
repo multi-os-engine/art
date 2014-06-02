@@ -107,9 +107,9 @@ void Class::SetStatus(Status new_status, Thread* self) {
   }
   CHECK(sizeof(Status) == sizeof(uint32_t)) << PrettyClass(this);
   if (Runtime::Current()->IsActiveTransaction()) {
-    SetField32<true>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
+    SetField32Volatile<true>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
   } else {
-    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
+    SetField32Volatile<false>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
   }
   // Classes that are being resolved or initialized need to notify waiters that the class status
   // changed. See ClassLinker::EnsureResolved and ClassLinker::WaitForInitializeClass.
