@@ -135,7 +135,7 @@ MIR* MIRGraph::FindMoveResult(BasicBlock* bb, MIR* mir) {
       break;
     }
     // Keep going if pseudo op, otherwise terminate
-    if (IsPseudoMirOp(mir->dalvikInsn.opcode)) {
+    if (MIR::DecodedInstruction::IsPseudoMirOp(mir->dalvikInsn.opcode)) {
       mir = AdvanceMIR(&tbb, mir);
     } else {
       mir = NULL;
@@ -872,7 +872,7 @@ bool MIRGraph::EliminateNullChecksAndInferTypes(BasicBlock* bb) {
           struct BasicBlock* next_bb = GetBasicBlock(bb->fall_through);
           for (MIR* tmir = next_bb->first_mir_insn; tmir != NULL;
             tmir =tmir->next) {
-            if (IsPseudoMirOp(tmir->dalvikInsn.opcode)) {
+            if (MIR::DecodedInstruction::IsPseudoMirOp(tmir->dalvikInsn.opcode)) {
               continue;
             }
             // First non-pseudo should be MOVE_RESULT_OBJECT
@@ -1189,7 +1189,7 @@ void MIRGraph::InlineCalls(BasicBlock* bb) {
     return;
   }
   for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
-    if (IsPseudoMirOp(mir->dalvikInsn.opcode)) {
+    if (MIR::DecodedInstruction::IsPseudoMirOp(mir->dalvikInsn.opcode)) {
       continue;
     }
     if (!(Instruction::FlagsOf(mir->dalvikInsn.opcode) & Instruction::kInvoke)) {

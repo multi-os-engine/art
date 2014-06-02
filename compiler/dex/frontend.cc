@@ -746,7 +746,7 @@ static bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file,
         // Check if we support the byte code.
         if (std::find(support_list, support_list + support_list_size,
             opcode) == support_list + support_list_size) {
-          if (!cu.mir_graph->IsPseudoMirOp(opcode)) {
+          if (!MIR::DecodedInstruction::IsPseudoMirOp(opcode)) {
             VLOG(compiler) << "Unsupported dalvik byte code : "
                            << mir->dalvikInsn.opcode;
           } else {
