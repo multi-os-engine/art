@@ -31,7 +31,7 @@ class Thread;
 
 // HandleScopes can be allocated within the bridge frame between managed and native code backed by
 // stack storage or manually allocated in native.
-class HandleScope {
+class PACKED(4) HandleScope {
  public:
   ~HandleScope() {}
 
@@ -126,7 +126,7 @@ class HandleScope {
   uint32_t number_of_references_;
 
   // number_of_references_ are available if this is allocated and filled in by jni_compiler.
-  StackReference<mirror::Object> references_[0];
+  StackReference<mirror::Object> references_[1];
 
  private:
   template<size_t kNumReferences> friend class StackHandleScope;
@@ -152,7 +152,7 @@ class HandleWrapper : public Handle<T> {
 
 // Scoped handle storage of a fixed size that is usually stack allocated.
 template<size_t kNumReferences>
-class StackHandleScope : public HandleScope {
+class PACKED(4) StackHandleScope : public HandleScope {
  public:
   explicit StackHandleScope(Thread* self);
   ~StackHandleScope();
@@ -172,7 +172,7 @@ class StackHandleScope : public HandleScope {
 
  private:
   // references_storage_ needs to be first so that it matches the address of references_.
-  StackReference<mirror::Object> references_storage_[kNumReferences];
+  StackReference<mirror::Object> references_storage_[kNumReferences - 1];
   Thread* const self_;
   size_t pos_;
 
