@@ -35,6 +35,7 @@
 #include "profiler.h"
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
+#include "ScopedFd.h"
 #include "ScopedLocalRef.h"
 #include "ScopedUtfChars.h"
 #include "utils.h"
@@ -217,8 +218,8 @@ static jobjectArray DexFile_getClassNameList(JNIEnv* env, jclass, jlong cookie) 
 
 // Copy a profile file
 static void CopyProfileFile(const char* oldfile, const char* newfile) {
-  int fd = open(oldfile, O_RDONLY);
-  if (fd < 0) {
+  ScopedFd fd(open(oldfile, O_RDONLY));
+  if (fd.get() == -1) {
     // If we can't open the file show the uid:gid of the this process to allow
     // diagnosis of the problem.
     LOG(ERROR) << "Failed to open profile file " << oldfile<< ".  My uid:gid is "
@@ -227,8 +228,8 @@ static void CopyProfileFile(const char* oldfile, const char* newfile) {
   }
 
   // Create the copy with rw------- (only accessible by system)
-  int fd2 = open(newfile, O_WRONLY|O_CREAT|O_TRUNC, 0600);
-  if (fd2 < 0) {
+  ScopedFd fd2(open(newfile, O_WRONLY|O_CREAT|O_TRUNC, 0600));
+  if (fd2.get()  == -1) {
     // If we can't open the file show the uid:gid of the this process to allow
     // diagnosis of the problem.
     LOG(ERROR) << "Failed to create/write prev profile file " << newfile << ".  My uid:gid is "
@@ -237,14 +238,12 @@ static void CopyProfileFile(const char* oldfile, const char* newfile) {
   }
   char buf[4096];
   while (true) {
-    int n = read(fd, buf, sizeof(buf));
+    int n = read(fd.get(), buf, sizeof(buf));
     if (n <= 0) {
       break;
     }
-    write(fd2, buf, n);
+    write(fd2.get(), buf, n);
   }
-  close(fd);
-  close(fd2);
 }
 
 static jboolean IsDexOptNeededInternal(JNIEnv* env, const char* filename,
