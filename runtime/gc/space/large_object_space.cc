@@ -97,7 +97,7 @@ void LargeObjectSpace::CopyLiveToMarked() {
 
 LargeObjectMapSpace::LargeObjectMapSpace(const std::string& name)
     : LargeObjectSpace(name, nullptr, nullptr),
-      lock_("large object map space lock", kAllocSpaceLock) {}
+      lock_("large object map space lock", kAllocSpaceLock), unique_id_(0) {}
 
 LargeObjectMapSpace* LargeObjectMapSpace::Create(const std::string& name) {
   if (Runtime::Current()->RunningOnValgrind()) {
@@ -110,8 +110,10 @@ LargeObjectMapSpace* LargeObjectMapSpace::Create(const std::string& name) {
 mirror::Object* LargeObjectMapSpace::Alloc(Thread* self, size_t num_bytes,
                                            size_t* bytes_allocated, size_t* usable_size) {
   std::string error_msg;
-  MemMap* mem_map = MemMap::MapAnonymous("large object space allocation", NULL, num_bytes,
-                                         PROT_READ | PROT_WRITE, true, &error_msg);
+  MemMap* mem_map = MemMap::MapAnonymous(
+      StringPrintf("large object space allocation %" PRId64,
+                   unique_id_.FetchAndAddSequentiallyConsistent(1)).c_str(),
+      nullptr, num_bytes, PROT_READ | PROT_WRITE, true, &error_msg);
   if (UNLIKELY(mem_map == NULL)) {
     LOG(WARNING) << "Large object allocation failed: " << error_msg;
     return NULL;

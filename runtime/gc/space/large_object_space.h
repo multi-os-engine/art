@@ -137,6 +137,8 @@ class LargeObjectMapSpace : public LargeObjectSpace {
   typedef SafeMap<mirror::Object*, MemMap*, std::less<mirror::Object*>,
       accounting::GcAllocator<std::pair<mirror::Object*, MemMap*>>> MemMaps;
   MemMaps mem_maps_ GUARDED_BY(lock_);
+  // Unique id for ensuring maps have unique names.
+  Atomic<uint64_t> unique_id_;
 };
 
 // A continuous large object space with a free-list to handle holes.
