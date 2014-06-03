@@ -32,6 +32,7 @@ class LargeObjectSpaceTest : public SpaceTest {
 
 
 void LargeObjectSpaceTest::LargeObjectTest() {
+  Thread* self = Thread::Current();
   size_t rand_seed = 0;
   for (size_t i = 0; i < 2; ++i) {
     LargeObjectSpace* los = nullptr;
@@ -49,8 +50,7 @@ void LargeObjectSpaceTest::LargeObjectTest() {
       while (requests.size() < num_allocations) {
         size_t request_size = test_rand(&rand_seed) % max_allocation_size;
         size_t allocation_size = 0;
-        mirror::Object* obj = los->Alloc(Thread::Current(), request_size, &allocation_size,
-                                         nullptr);
+        mirror::Object* obj = los->Alloc(self, request_size, &allocation_size, nullptr);
         ASSERT_TRUE(obj != nullptr);
         ASSERT_EQ(allocation_size, los->AllocationSize(obj, nullptr));
         ASSERT_GE(allocation_size, request_size);
@@ -102,9 +102,8 @@ class AllocRaceTask : public Task {
     for (size_t i = 0; i < iterations_ ; ++i) {
       size_t alloc_size;
       mirror::Object* ptr = los_->Alloc(self, size_, &alloc_size, nullptr);
-
+      EXPECT_TRUE(ptr != nullptr);
       NanoSleep((id_ + 3) * 1000);  // (3+id) mu s
-
       los_->Free(self, ptr);
     }
   }
