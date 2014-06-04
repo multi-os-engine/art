@@ -189,7 +189,11 @@ test-art-host-oat-interpreter: $(ART_TEST_HOST_OAT_INTERPRETER_TARGETS)
 test-art-host-oat: test-art-host-oat-default test-art-host-oat-interpreter
 	@echo test-art-host-oat PASSED
 
+TEST_ART_HOST_RUN_TEST_DEFAULT_OPT_TARGETS :=
+TEST_ART_HOST_RUN_TEST_INTERPRETER_OPT_TARGETS :=
+
 define declare-test-art-host-run-test
+# libartd
 .PHONY: test-art-host-run-test-default-$(1)
 test-art-host-run-test-default-$(1): test-art-host-dependencies $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
 	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) --host $(1)
@@ -197,6 +201,15 @@ test-art-host-run-test-default-$(1): test-art-host-dependencies $(DX) $(HOST_OUT
 
 TEST_ART_HOST_RUN_TEST_DEFAULT_TARGETS += test-art-host-run-test-default-$(1)
 
+# libart
+.PHONY: test-art-host-run-test-default-opt-$(1)
+test-art-host-run-test-default-opt-$(1): test-art-host-dependencies $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
+	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test -O $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) --host $(1)
+	@echo test-art-host-run-test-default-$(1) PASSED
+
+TEST_ART_HOST_RUN_TEST_DEFAULT_OPT_TARGETS += test-art-host-run-test-default-opt-$(1)
+
+# libartd
 .PHONY: test-art-host-run-test-interpreter-$(1)
 test-art-host-run-test-interpreter-$(1): test-art-host-dependencies $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
 	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) --host --interpreter $(1)
@@ -204,8 +217,16 @@ test-art-host-run-test-interpreter-$(1): test-art-host-dependencies $(DX) $(HOST
 
 TEST_ART_HOST_RUN_TEST_INTERPRETER_TARGETS += test-art-host-run-test-interpreter-$(1)
 
+# libart
+.PHONY: test-art-host-run-test-interpreter-opt-$(1)
+test-art-host-run-test-interpreter-opt-$(1): test-art-host-dependencies $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
+	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test -O $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) --host --interpreter $(1)
+	@echo test-art-host-run-test-interpreter-$(1) PASSED
+
+TEST_ART_HOST_RUN_TEST_INTERPRETER_OPT_TARGETS += test-art-host-run-test-interpreter-$(1)
+
 .PHONY: test-art-host-run-test-$(1)
-test-art-host-run-test-$(1): test-art-host-run-test-default-$(1) test-art-host-run-test-interpreter-$(1)
+test-art-host-run-test-$(1): test-art-host-run-test-default-$(1) test-art-host-run-test-interpreter-opt-$(1)
 
 endef
 
@@ -215,12 +236,20 @@ $(foreach test, $(TEST_ART_RUN_TESTS), $(eval $(call declare-test-art-host-run-t
 test-art-host-run-test-default: $(TEST_ART_HOST_RUN_TEST_DEFAULT_TARGETS)
 	@echo test-art-host-run-test-default PASSED
 
+.PHONY: test-art-host-run-test-default-opt
+test-art-host-run-test-default-opt: $(TEST_ART_HOST_RUN_TEST_DEFAULT_OPT_TARGETS)
+	@echo test-art-host-run-test-default-opt PASSED
+
 .PHONY: test-art-host-run-test-interpreter
 test-art-host-run-test-interpreter: $(TEST_ART_HOST_RUN_TEST_INTERPRETER_TARGETS)
 	@echo test-art-host-run-test-interpreter PASSED
 
+.PHONY: test-art-host-run-test-interpreter-opt
+test-art-host-run-test-interpreter-opt: $(TEST_ART_HOST_RUN_TEST_INTERPRETER_OPT_TARGETS)
+	@echo test-art-host-run-test-interpreter-opt PASSED
+
 .PHONY: test-art-host-run-test
-test-art-host-run-test: test-art-host-run-test-default test-art-host-run-test-interpreter
+test-art-host-run-test: test-art-host-run-test-default test-art-host-run-test-interpreter test-art-host-run-test-default-opt test-art-host-run-test-interpreter-opt
 	@echo test-art-host-run-test PASSED
 
 ########################################################################
@@ -273,7 +302,15 @@ endif
 test-art-target-run-test-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-sync $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
 	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) $$($(2)run_test_$(1)) $(1)
 	@echo test-art-target-run-test-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX) PASSED
+
+.PHONY: test-art-target-run-test-opt-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target-run-test-opt-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-sync $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
+	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test -O $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) $$($(2)run_test_$(1)) $(1)
+	@echo test-art-target-run-test-opt-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX) PASSED
 endef
+
+TEST_ART_TARGET_RUN_TEST_OPT_TARGETS$(ART_PHONY_TEST_TARGET_SUFFIX) :=
+TEST_ART_TARGET_RUN_TEST_OPT_TARGETS$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) :=
 
 define declare-test-art-target-run-test
 
@@ -286,12 +323,21 @@ define declare-test-art-target-run-test
       # Link primary to non-suffix
 test-art-target-run-test-$(1): test-art-target-run-test-$(1)$(ART_PHONY_TEST_TARGET_SUFFIX)
     endif
+
+    TEST_ART_TARGET_RUN_TEST_OPT_TARGETS$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) += test-art-target-run-test-$(1)$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+
+    ifneq ($(ART_PHONY_TEST_TARGET_SUFFIX),)
+      # Link primary to non-suffix
+test-art-target-run-test-opt-$(1): test-art-target-run-test-opt-$(1)$(ART_PHONY_TEST_TARGET_SUFFIX)
+    endif
   endif
   $(call declare-test-art-target-run-test-impl,$(1),)
 
   TEST_ART_TARGET_RUN_TEST_TARGETS$(ART_PHONY_TEST_TARGET_SUFFIX) += test-art-target-run-test-$(1)$(ART_PHONY_TEST_TARGET_SUFFIX)
+  TEST_ART_TARGET_RUN_TEST_OPT_TARGETS$(ART_PHONY_TEST_TARGET_SUFFIX) += test-art-target-run-test-opt-$(1)$(ART_PHONY_TEST_TARGET_SUFFIX)
 
 test-art-run-test-$(1): test-art-host-run-test-$(1) test-art-target-run-test-$(1)
+test-art-run-test-opt-$(1): test-art-host-run-test-opt-$(1) test-art-target-run-test-opt-$(1)
 
 endef
 
@@ -302,6 +348,10 @@ define declare-test-art-target-run-test
 .PHONY: test-art-target-run-test$(1)
 test-art-target-run-test$(1): $(TEST_ART_TARGET_RUN_TEST_TARGETS$(1))
 	@echo test-art-target-run-test$(1) PASSED
+
+.PHONY: test-art-target-run-test-opt$(1)
+test-art-target-run-test-opt$(1): $(TEST_ART_TARGET_RUN_TEST_OPT_TARGETS$(1))
+	@echo test-art-target-run-test-opt$(1) PASSED
 endef
 $(eval $(call call-art-multi-target-rule,declare-test-art-target-run-test,test-art-target-run-test))
 
