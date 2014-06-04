@@ -54,6 +54,7 @@ class Thread;
 // [1] http://www.drdobbs.com/parallel/use-lock-hierarchies-to-avoid-deadlock/204801163
 enum LockLevel {
   kLoggingLock = 0,
+  kMemMapsLock,
   kUnexpectedSignalLock,
   kThreadSuspendCountLock,
   kAbortLock,
