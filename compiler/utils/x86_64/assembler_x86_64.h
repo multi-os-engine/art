@@ -31,6 +31,7 @@ namespace x86_64 {
 
 class Immediate {
  public:
+  // Note that conversion size_t -> int64_t could be wrong for negative values.
   explicit Immediate(int64_t value) : value_(value) {}
 
   int64_t value() const { return value_; }
