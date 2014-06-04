@@ -91,6 +91,7 @@ Runtime* Runtime::instance_ = NULL;
 
 Runtime::Runtime()
     : pre_allocated_OutOfMemoryError_(nullptr),
+      pre_allocated_NoClassDefFoundError_(nullptr),
       resolution_method_(nullptr),
       imt_conflict_method_(nullptr),
       default_imt_(nullptr),
@@ -521,7 +522,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   CHECK_EQ(sysconf(_SC_PAGE_SIZE), kPageSize);
 
   std::unique_ptr<ParsedOptions> options(ParsedOptions::Create(raw_options, ignore_unrecognized));
-  if (options.get() == NULL) {
+  if (options.get() == nullptr) {
     LOG(ERROR) << "Failed to parse options";
     return false;
   }
@@ -635,9 +636,9 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   // ClassLinker needs an attached thread, but we can't fully attach a thread without creating
   // objects. We can't supply a thread group yet; it will be fixed later. Since we are the main
   // thread, we do not get a java peer.
-  Thread* self = Thread::Attach("main", false, NULL, false);
+  Thread* self = Thread::Attach("main", false, nullptr, false);
   CHECK_EQ(self->GetThreadId(), ThreadList::kMainThreadId);
-  CHECK(self != NULL);
+  CHECK(self != nullptr);
 
   // Set us to runnable so tools using a runtime can allocate and GC by default
   self->TransitionFromSuspendedToRunnable();
@@ -653,11 +654,11 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
       GetHeap()->GetImageSpace()->VerifyImageAllocations();
     }
   } else {
-    CHECK(options->boot_class_path_ != NULL);
+    CHECK(options->boot_class_path_ != nullptr);
     CHECK_NE(options->boot_class_path_->size(), 0U);
     class_linker_->InitFromCompiler(*options->boot_class_path_);
   }
-  CHECK(class_linker_ != NULL);
+  CHECK(class_linker_ != nullptr);
   verifier::MethodVerifier::Init();
 
   method_trace_ = options->method_trace_;
@@ -685,7 +686,14 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   self->ThrowNewException(ThrowLocation(), "Ljava/lang/OutOfMemoryError;",
                           "OutOfMemoryError thrown while trying to throw OutOfMemoryError; "
                           "no stack available");
-  pre_allocated_OutOfMemoryError_ = self->GetException(NULL);
+  pre_allocated_OutOfMemoryError_ = self->GetException(nullptr);
+  self->ClearException();
+
+  // Pre-allocate a NoClassDefFoundError for the common case of failing to find a system class
+  // ahead of checking the application's class loader.
+  self->ThrowNewException(ThrowLocation(), "Ljava/lang/NoClassDefFoundError;",
+                          "Class not found using the system class loader; no stack available");
+  pre_allocated_NoClassDefFoundError_ = self->GetException(nullptr);
   self->ClearException();
 
   VLOG(startup) << "Runtime::Init exiting";
@@ -896,11 +904,18 @@ void Runtime::DetachCurrentThread() {
   thread_list_->Unregister(self);
 }
 
-  mirror::Throwable* Runtime::GetPreAllocatedOutOfMemoryError() const {
-  if (pre_allocated_OutOfMemoryError_ == NULL) {
+mirror::Throwable* Runtime::GetPreAllocatedOutOfMemoryError() const {
+  if (pre_allocated_OutOfMemoryError_ == nullptr) {
     LOG(ERROR) << "Failed to return pre-allocated OOME";
   }
   return pre_allocated_OutOfMemoryError_;
+}
+
+mirror::Throwable* Runtime::GetPreAllocatedNoClassDefFoundError() const {
+  if (pre_allocated_NoClassDefFoundError_ == nullptr) {
+    LOG(ERROR) << "Failed to return pre-allocated NoClassDefFoundError";
+  }
+  return pre_allocated_NoClassDefFoundError_;
 }
 
 void Runtime::VisitConstantRoots(RootCallback* callback, void* arg) {
@@ -939,6 +954,11 @@ void Runtime::VisitNonThreadRoots(RootCallback* callback, void* arg) {
     callback(reinterpret_cast<mirror::Object**>(&pre_allocated_OutOfMemoryError_), arg, 0,
              kRootVMInternal);
     DCHECK(pre_allocated_OutOfMemoryError_ != nullptr);
+  }
+  if (pre_allocated_NoClassDefFoundError_ != nullptr) {
+    callback(reinterpret_cast<mirror::Object**>(&pre_allocated_NoClassDefFoundError_), arg, 0,
+             kRootVMInternal);
+    DCHECK(pre_allocated_NoClassDefFoundError_ != nullptr);
   }
   callback(reinterpret_cast<mirror::Object**>(&resolution_method_), arg, 0, kRootVMInternal);
   DCHECK(resolution_method_ != nullptr);

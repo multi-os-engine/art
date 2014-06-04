@@ -217,7 +217,10 @@ class Runtime {
   }
 
   mirror::Throwable* GetPreAllocatedOutOfMemoryError() const
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  mirror::Throwable* GetPreAllocatedNoClassDefFoundError() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   const std::vector<std::string>& GetProperties() const {
     return properties_;
@@ -480,6 +483,7 @@ class Runtime {
 
   mirror::ArtMethod* callee_save_methods_[kLastCalleeSaveType];
   mirror::Throwable* pre_allocated_OutOfMemoryError_;
+  mirror::Throwable* pre_allocated_NoClassDefFoundError_;
   mirror::ArtMethod* resolution_method_;
   mirror::ArtMethod* imt_conflict_method_;
   mirror::ObjectArray<mirror::ArtMethod>* default_imt_;

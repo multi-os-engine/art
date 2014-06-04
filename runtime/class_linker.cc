@@ -1379,24 +1379,32 @@ mirror::Class* ClassLinker::FindClass(Thread* self, const char* descriptor,
   }
   // Find the class in the loaded classes table.
   mirror::Class* klass = LookupClass(descriptor, class_loader.Get());
-  if (klass != NULL) {
+  if (klass != nullptr) {
     return EnsureResolved(self, klass);
   }
   // Class is not yet loaded.
   if (descriptor[0] == '[') {
     return CreateArrayClass(self, descriptor, class_loader);
   } else if (class_loader.Get() == nullptr) {
+    // The system class loader, search the boot class path.
     DexFile::ClassPathEntry pair = DexFile::FindInClassPath(descriptor, boot_class_path_);
-    if (pair.second != NULL) {
+    if (pair.second != nullptr) {
       StackHandleScope<1> hs(self);
       return DefineClass(descriptor, NullHandle<mirror::ClassLoader>(), *pair.first, *pair.second);
+    } else {
+      // The system class loader is searched ahead of the application class loader, failures are
+      // expected and will be wrapped in a ClassNotFoundException. Use the pre-allocated error to
+      // trigger the chaining with a proper stack trace.
+      mirror::Throwable* pre_allocated = Runtime::Current()->GetPreAllocatedNoClassDefFoundError();
+      self->SetException(ThrowLocation(), pre_allocated);
+      return nullptr;
     }
   } else if (Runtime::Current()->UseCompileTimeClassPath()) {
     // First try the boot class path, we check the descriptor first to avoid an unnecessary
     // throw of a NoClassDefFoundError.
     if (IsInBootClassPath(descriptor)) {
       mirror::Class* system_class = FindSystemClass(self, descriptor);
-      CHECK(system_class != NULL);
+      CHECK(system_class != nullptr);
       return system_class;
     }
     // Next try the compile time class path.
@@ -1409,7 +1417,7 @@ mirror::Class* ClassLinker::FindClass(Thread* self, const char* descriptor,
     }
 
     DexFile::ClassPathEntry pair = DexFile::FindInClassPath(descriptor, *class_path);
-    if (pair.second != NULL) {
+    if (pair.second != nullptr) {
       return DefineClass(descriptor, class_loader, *pair.first, *pair.second);
     }
 
@@ -1418,27 +1426,28 @@ mirror::Class* ClassLinker::FindClass(Thread* self, const char* descriptor,
     ScopedLocalRef<jobject> class_loader_object(soa.Env(),
                                                 soa.AddLocalReference<jobject>(class_loader.Get()));
     std::string class_name_string(DescriptorToDot(descriptor));
-    ScopedLocalRef<jobject> result(soa.Env(), NULL);
+    ScopedLocalRef<jobject> result(soa.Env(), nullptr);
     {
       ScopedThreadStateChange tsc(self, kNative);
       ScopedLocalRef<jobject> class_name_object(soa.Env(),
                                                 soa.Env()->NewStringUTF(class_name_string.c_str()));
-      if (class_name_object.get() == NULL) {
-        return NULL;
+      if (class_name_object.get() == nullptr) {
+        DCHECK(self->IsExceptionPending());  // OOME.
+        return nullptr;
       }
-      CHECK(class_loader_object.get() != NULL);
+      CHECK(class_loader_object.get() != nullptr);
       result.reset(soa.Env()->CallObjectMethod(class_loader_object.get(),
                                                WellKnownClasses::java_lang_ClassLoader_loadClass,
                                                class_name_object.get()));
     }
     if (self->IsExceptionPending()) {
       // If the ClassLoader threw, pass that exception up.
-      return NULL;
-    } else if (result.get() == NULL) {
+      return nullptr;
+    } else if (result.get() == nullptr) {
       // broken loader - throw NPE to be compatible with Dalvik
-      ThrowNullPointerException(NULL, StringPrintf("ClassLoader.loadClass returned null for %s",
-                                                   class_name_string.c_str()).c_str());
-      return NULL;
+      ThrowNullPointerException(nullptr, StringPrintf("ClassLoader.loadClass returned null for %s",
+                                                      class_name_string.c_str()).c_str());
+      return nullptr;
     } else {
       // success, return mirror::Class*
       return soa.Decode<mirror::Class*>(result.get());
@@ -1446,7 +1455,7 @@ mirror::Class* ClassLinker::FindClass(Thread* self, const char* descriptor,
   }
 
   ThrowNoClassDefFoundError("Class %s not found", PrintableString(descriptor).c_str());
-  return NULL;
+  return nullptr;
 }
 
 mirror::Class* ClassLinker::DefineClass(const char* descriptor,
