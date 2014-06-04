@@ -17,6 +17,7 @@
 #ifndef ART_COMPILER_DRIVER_COMPILER_DRIVER_H_
 #define ART_COMPILER_DRIVER_COMPILER_DRIVER_H_
 
+#include <deque>
 #include <set>
 #include <string>
 #include <vector>
@@ -433,35 +434,32 @@ class CompilerDriver {
                      uint16_t referrer_class_def_idx,
                      uint32_t referrer_method_idx,
                      size_t literal_offset)
-      : dex_file_(dex_file),
-        referrer_class_def_idx_(referrer_class_def_idx),
-        referrer_method_idx_(referrer_method_idx),
-        literal_offset_(literal_offset) {
-      CHECK(dex_file_ != NULL);
+        : dex_file_(dex_file),
+          referrer_class_def_idx_(referrer_class_def_idx),
+          referrer_method_idx_(referrer_method_idx),
+          literal_offset_(literal_offset) {
+      DCHECK(dex_file != nullptr);
+      DCHECK_EQ(referrer_method_idx, referrer_method_idx_);  // Must be 16-bits only.
     }
     virtual ~PatchInformation() {}
 
+   private:
     const DexFile* const dex_file_;
     const uint16_t referrer_class_def_idx_;
-    const uint32_t referrer_method_idx_;
+    const uint16_t referrer_method_idx_;
     const size_t literal_offset_;
-
-    friend class CompilerDriver;
   };
 
   class CallPatchInformation : public PatchInformation {
    public:
-    InvokeType GetReferrerInvokeType() const {
-      return referrer_invoke_type_;
-    }
     uint32_t GetTargetMethodIdx() const {
       return target_method_idx_;
     }
-    const DexFile* GetTargetDexFile() const {
-      return target_dex_file_;
+    const DexFile& GetTargetDexFile() const {
+      return *target_dex_file_;
     }
     InvokeType GetTargetInvokeType() const {
-      return target_invoke_type_;
+      return static_cast<InvokeType>(target_invoke_type_);
     }
 
     const CallPatchInformation* AsCall() const {
@@ -481,24 +479,24 @@ class CompilerDriver {
     CallPatchInformation(const DexFile* dex_file,
                          uint16_t referrer_class_def_idx,
                          uint32_t referrer_method_idx,
-                         InvokeType referrer_invoke_type,
                          uint32_t target_method_idx,
                          const DexFile* target_dex_file,
                          InvokeType target_invoke_type,
                          size_t literal_offset)
         : PatchInformation(dex_file, referrer_class_def_idx,
                            referrer_method_idx, literal_offset),
-          referrer_invoke_type_(referrer_invoke_type),
-          target_method_idx_(target_method_idx),
           target_dex_file_(target_dex_file),
+          target_method_idx_(target_method_idx),
           target_invoke_type_(target_invoke_type) {
+      DCHECK(dex_file != nullptr);
+      DCHECK_EQ(target_method_idx, target_method_idx_);  // Must be 16-bits only.
+      DCHECK_EQ(target_invoke_type, static_cast<InvokeType>(target_invoke_type_));
     }
 
    private:
-    const InvokeType referrer_invoke_type_;
-    const uint32_t target_method_idx_;
-    const DexFile* target_dex_file_;
-    const InvokeType target_invoke_type_;
+    const DexFile* const target_dex_file_;
+    const uint16_t target_method_idx_;
+    const uint16_t target_invoke_type_;
 
     friend class CompilerDriver;
     DISALLOW_COPY_AND_ASSIGN(CallPatchInformation);
@@ -510,26 +508,25 @@ class CompilerDriver {
       return true;
     }
     int RelativeOffset() const {
-      return offset_;
+      return pc_relative_offset_;
     }
 
    private:
     RelativeCallPatchInformation(const DexFile* dex_file,
                                  uint16_t referrer_class_def_idx,
                                  uint32_t referrer_method_idx,
-                                 InvokeType referrer_invoke_type,
                                  uint32_t target_method_idx,
                                  const DexFile* target_dex_file,
                                  InvokeType target_invoke_type,
                                  size_t literal_offset,
                                  int32_t pc_relative_offset)
         : CallPatchInformation(dex_file, referrer_class_def_idx,
-                           referrer_method_idx, referrer_invoke_type, target_method_idx,
-                           target_dex_file, target_invoke_type, literal_offset),
-          offset_(pc_relative_offset) {
+                               referrer_method_idx, target_method_idx, target_dex_file,
+                               target_invoke_type, literal_offset),
+          pc_relative_offset_(pc_relative_offset) {
     }
 
-    const int offset_;
+    const int pc_relative_offset_;
 
     friend class CompilerDriver;
     DISALLOW_COPY_AND_ASSIGN(RelativeCallPatchInformation);
@@ -565,13 +562,13 @@ class CompilerDriver {
     DISALLOW_COPY_AND_ASSIGN(TypePatchInformation);
   };
 
-  const std::vector<const CallPatchInformation*>& GetCodeToPatch() const {
+  const std::deque<const CallPatchInformation*>& GetCodeToPatch() const {
     return code_to_patch_;
   }
-  const std::vector<const CallPatchInformation*>& GetMethodsToPatch() const {
+  const std::deque<const CallPatchInformation*>& GetMethodsToPatch() const {
     return methods_to_patch_;
   }
-  const std::vector<const TypePatchInformation*>& GetClassesToPatch() const {
+  const std::deque<const TypePatchInformation*>& GetClassesToPatch() const {
     return classes_to_patch_;
   }
 
@@ -680,9 +677,10 @@ class CompilerDriver {
   static void CompileClass(const ParallelCompilationManager* context, size_t class_def_index)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
-  std::vector<const CallPatchInformation*> code_to_patch_;
-  std::vector<const CallPatchInformation*> methods_to_patch_;
-  std::vector<const TypePatchInformation*> classes_to_patch_;
+  // NOTE: Using deque<> rather than vector<> to avoid allocating large chunks of memory.
+  std::deque<const CallPatchInformation*> code_to_patch_;
+  std::deque<const CallPatchInformation*> methods_to_patch_;
+  std::deque<const TypePatchInformation*> classes_to_patch_;
 
   const CompilerOptions* const compiler_options_;
   VerificationResults* const verification_results_;

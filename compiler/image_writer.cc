@@ -727,19 +727,19 @@ static ArtMethod* GetTargetMethod(const CompilerDriver::CallPatchInformation* pa
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   StackHandleScope<1> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(
-      hs.NewHandle(class_linker->FindDexCache(*patch->GetTargetDexFile())));
-  ArtMethod* method = class_linker->ResolveMethod(*patch->GetTargetDexFile(),
+      hs.NewHandle(class_linker->FindDexCache(patch->GetTargetDexFile())));
+  ArtMethod* method = class_linker->ResolveMethod(patch->GetTargetDexFile(),
                                                   patch->GetTargetMethodIdx(),
                                                   dex_cache,
                                                   NullHandle<mirror::ClassLoader>(),
                                                   NullHandle<mirror::ArtMethod>(),
                                                   patch->GetTargetInvokeType());
   CHECK(method != NULL)
-    << patch->GetTargetDexFile()->GetLocation() << " " << patch->GetTargetMethodIdx();
+    << patch->GetTargetDexFile().GetLocation() << " " << patch->GetTargetMethodIdx();
   CHECK(!method->IsRuntimeMethod())
-    << patch->GetTargetDexFile()->GetLocation() << " " << patch->GetTargetMethodIdx();
+    << patch->GetTargetDexFile().GetLocation() << " " << patch->GetTargetMethodIdx();
   CHECK(dex_cache->GetResolvedMethods()->Get(patch->GetTargetMethodIdx()) == method)
-    << patch->GetTargetDexFile()->GetLocation() << " " << patch->GetReferrerMethodIdx() << " "
+    << patch->GetTargetDexFile().GetLocation() << " " << patch->GetReferrerMethodIdx() << " "
     << PrettyMethod(dex_cache->GetResolvedMethods()->Get(patch->GetTargetMethodIdx())) << " "
     << PrettyMethod(method);
   return method;
@@ -766,10 +766,7 @@ void ImageWriter::PatchOatCodeAndMethods() {
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   const char* old_cause = self->StartAssertNoThreadSuspension("ImageWriter");
 
-  typedef std::vector<const CompilerDriver::CallPatchInformation*> CallPatches;
-  const CallPatches& code_to_patch = compiler_driver_.GetCodeToPatch();
-  for (size_t i = 0; i < code_to_patch.size(); i++) {
-    const CompilerDriver::CallPatchInformation* patch = code_to_patch[i];
+  for (const CompilerDriver::CallPatchInformation* patch : compiler_driver_.GetCodeToPatch()) {
     ArtMethod* target = GetTargetMethod(patch);
     uintptr_t quick_code = reinterpret_cast<uintptr_t>(class_linker->GetQuickOatCodeFor(target));
     DCHECK_NE(quick_code, 0U) << PrettyMethod(target);
@@ -810,17 +807,12 @@ void ImageWriter::PatchOatCodeAndMethods() {
     SetPatchLocation(patch, value);
   }
 
-  const CallPatches& methods_to_patch = compiler_driver_.GetMethodsToPatch();
-  for (size_t i = 0; i < methods_to_patch.size(); i++) {
-    const CompilerDriver::CallPatchInformation* patch = methods_to_patch[i];
+  for (const CompilerDriver::CallPatchInformation* patch : compiler_driver_.GetMethodsToPatch()) {
     ArtMethod* target = GetTargetMethod(patch);
     SetPatchLocation(patch, PointerToLowMemUInt32(GetImageAddress(target)));
   }
 
-  const std::vector<const CompilerDriver::TypePatchInformation*>& classes_to_patch =
-      compiler_driver_.GetClassesToPatch();
-  for (size_t i = 0; i < classes_to_patch.size(); i++) {
-    const CompilerDriver::TypePatchInformation* patch = classes_to_patch[i];
+  for (const CompilerDriver::TypePatchInformation* patch : compiler_driver_.GetClassesToPatch()) {
     Class* target = GetTargetType(patch);
     SetPatchLocation(patch, PointerToLowMemUInt32(GetImageAddress(target)));
   }
@@ -843,7 +835,7 @@ void ImageWriter::SetPatchLocation(const CompilerDriver::PatchInformation* patch
   if (kIsDebugBuild) {
     if (patch->IsCall()) {
       const CompilerDriver::CallPatchInformation* cpatch = patch->AsCall();
-      const DexFile::MethodId& id = cpatch->GetTargetDexFile()->GetMethodId(cpatch->GetTargetMethodIdx());
+      const DexFile::MethodId& id = cpatch->GetTargetDexFile().GetMethodId(cpatch->GetTargetMethodIdx());
       uint32_t expected = reinterpret_cast<uintptr_t>(&id) & 0xFFFFFFFF;
       uint32_t actual = *patch_location;
       CHECK(actual == expected || actual == value) << std::hex
