@@ -31,7 +31,8 @@ namespace x86_64 {
 
 class Immediate {
  public:
-  explicit Immediate(int64_t value) : value_(value) {}
+  // parameter is to be long to meet conversion rules from unsigned
+  explicit Immediate(long value) : value_(value) {}
 
   int64_t value() const { return value_; }
 
