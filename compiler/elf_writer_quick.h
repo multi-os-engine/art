@@ -18,6 +18,8 @@
 #define ART_COMPILER_ELF_WRITER_QUICK_H_
 
 #include "elf_writer.h"
+#include "elf_utils.h"
+#include "instruction_set.h"
 
 namespace art {
 
@@ -44,6 +46,292 @@ class ElfWriterQuick FINAL : public ElfWriter {
   ElfWriterQuick(const CompilerDriver& driver, File* elf_file)
     : ElfWriter(driver, elf_file) {}
   ~ElfWriterQuick() {}
+
+  class ElfBuilder;
+  class ElfSectionBuilder {
+    friend class ElfBuilder;
+   public:
+    ElfSectionBuilder(const std::string& sec_name, Elf32_Word type, Elf32_Word flags,
+                      const ElfSectionBuilder *link, Elf32_Word info, Elf32_Word align,
+                      Elf32_Word entsize)
+        : name_(sec_name), link_(link) {
+      memset(&section_, 0, sizeof(section_));
+      section_.sh_type = type;
+      section_.sh_flags = flags;
+      section_.sh_info = info;
+      section_.sh_addralign = align;
+      section_.sh_entsize = entsize;
+    }
+
+    virtual ~ElfSectionBuilder() {}
+
+    Elf32_Shdr section_;
+    Elf32_Word section_index_ = 0;
+
+   protected:
+    const std::string name_;
+    const ElfSectionBuilder* link_;
+
+    inline Elf32_Word GetLink() {
+      return (link_) ? link_->section_index_ : 0;
+    }
+  };
+
+  class ElfDynamicBuilder : public ElfSectionBuilder {
+    friend class ElfBuilder;
+   public:
+    void AddDynamicTag(Elf32_Sword tag, Elf32_Sword d_un);
+    void AddDynamicTag(Elf32_Sword tag, Elf32_Sword offset, ElfSectionBuilder* section);
+
+    ElfDynamicBuilder(const std::string& sec_name, ElfSectionBuilder *link)
+        : ElfSectionBuilder(sec_name, SHT_DYNAMIC, SHF_ALLOC | SHF_ALLOC, link,
+                            0, kPageSize, sizeof(Elf32_Dyn)) {}
+    ~ElfDynamicBuilder() {}
+
+   protected:
+    struct ElfDynamicState {
+      ElfSectionBuilder* section_;
+      Elf32_Sword tag_;
+      Elf32_Sword off_;
+    };
+    std::vector<ElfDynamicState> dynamics_;
+    inline Elf32_Word size() {
+      // Add 1 for the DT_NULL, 1 for DT_STRSZ, and 1 for DT_SONAME. All of
+      // these must be added when we actually put the file together because
+      // their values are very dependent on state.
+      return dynamics_.size() + 3;
+    }
+
+    /*
+     * Create the actual dynamic vector. strsz should be the size of the .dynstr
+     * table and soname_off should be the offset of the soname in .dynstr.
+     * Since niether can be found prior to final layout we will wait until here
+     * to add them.
+     */
+    std::vector<Elf32_Dyn> GetDynamics(Elf32_Sword strsz, Elf32_Sword soname_off);
+  };
+
+  class ElfRawSectionBuilder : public ElfSectionBuilder {
+    friend class ElfBuilder;
+   public:
+    // TODO change this name.
+    ElfRawSectionBuilder(const std::string& sec_name, Elf32_Word type, Elf32_Word flags,
+                         const ElfSectionBuilder* link, Elf32_Word info, Elf32_Word align,
+                         Elf32_Word entsize)
+        : ElfSectionBuilder(sec_name, type, flags, link, info, align, entsize) {}
+    ~ElfRawSectionBuilder() {}
+    std::vector<uint8_t>* GetBuffer() { return &buf_; }
+    void SetBuffer(std::vector<uint8_t> buf) { buf_ = buf; }
+   protected:
+    std::vector<uint8_t> buf_;
+  };
+
+  class ElfOatSectionBuilder : public ElfSectionBuilder {
+    friend class ElfBuilder;
+   public:
+    ElfOatSectionBuilder(const std::string& sec_name, Elf32_Word size, Elf32_Word offset,
+                         Elf32_Word type, Elf32_Word flags)
+        : ElfSectionBuilder(sec_name, type, flags, NULL, 0, kPageSize, 0),
+          offset_(offset), size_(size) {}
+    ~ElfOatSectionBuilder() {}
+   protected:
+    // Offset of the content within the file.
+    Elf32_Word offset_;
+    // Size of the content within the file.
+    Elf32_Word size_;
+  };
+
+  class ElfSymtabBuilder : public ElfSectionBuilder {
+    friend class ElfBuilder;
+   public:
+    /*
+     * Add a symbol with given name to this symtab. The symbol refers to
+     * 'relative_addr' within the given section and has the given attributes.
+     */
+    virtual void AddSymbol(const std::string& name,
+                           const ElfSectionBuilder* section,
+                           Elf32_Addr addr,
+                           bool is_relative,
+                           Elf32_Word size,
+                           uint8_t binding,
+                           uint8_t type,
+                           uint8_t other = 0);
+
+    ElfSymtabBuilder(const std::string& sec_name, Elf32_Word type,
+                     const std::string& str_name, Elf32_Word str_type, bool alloc)
+        : ElfSectionBuilder(sec_name, type, ((alloc)?SHF_ALLOC:0), &strtab_, 0,
+                            sizeof(Elf32_Word), sizeof(Elf32_Sym)),
+          str_name_(str_name), str_type_(str_type),
+          strtab_(str_name, str_type, ((alloc)?SHF_ALLOC:0), NULL, 0, 1, 1) {}
+    virtual ~ElfSymtabBuilder() {}
+
+   protected:
+    std::vector<uint8_t> GenerateHashContents();
+    std::string GenerateStrtab();
+    std::vector<Elf32_Sym> GenerateSymtab();
+
+    inline Elf32_Word size() {
+      // 1 is for the implicit NULL symbol.
+      return symbols_.size() + 1;
+    }
+
+    struct ElfSymbolState {
+      const std::string name_;
+      const ElfSectionBuilder* section_;
+      Elf32_Addr addr_;
+      Elf32_Word size_;
+      bool is_relative_;
+      uint8_t info_;
+      uint8_t other_;
+      // Used during Write().
+      Elf32_Word name_idx_;
+    };
+
+    // Information for the strsym for dynstr sections.
+    const std::string str_name_;
+    Elf32_Word str_type_;
+    // The symbols in the same order they will be in the symbol table.
+    std::vector<ElfSymbolState> symbols_;
+    ElfSectionBuilder strtab_;
+  };
+
+  class ElfSymtabBuilderFake : public ElfSymtabBuilder {
+    friend class ElfBuilder;
+   public:
+    void AddSymbol(const std::string& name,
+                   const ElfSectionBuilder* section,
+                   Elf32_Addr relative_addr,
+                   bool is_relative,
+                   Elf32_Word size,
+                   uint8_t binding,
+                   uint8_t type,
+                   uint8_t other = 0) {}  // NOOP
+    ElfSymtabBuilderFake() : ElfSymtabBuilder(".symtab_fake", 0, ".strtab_fake", 0, false) {}
+    ~ElfSymtabBuilderFake() {}
+  };
+
+  class ElfBuilder FINAL {
+   public:
+    ElfBuilder(OatWriter* oat_writer,
+               File* elf_file,
+               InstructionSet isa,
+               Elf32_Word rodata_relative_offset,
+               Elf32_Word rodata_size,
+               Elf32_Word text_relative_offset,
+               Elf32_Word text_size,
+               const bool add_symbols,
+               bool debug = false)
+        : oat_writer_(oat_writer),
+          elf_file_(elf_file),
+          add_symbols_(add_symbols),
+          debug_(debug),
+          text_builder_(".text", text_size, text_relative_offset, SHT_PROGBITS,
+                        SHF_ALLOC | SHF_EXECINSTR),
+          rodata_builder_(".rodata", rodata_size, rodata_relative_offset,
+                          SHT_PROGBITS, SHF_ALLOC),
+          dynsym_builder_(".dynsym", SHT_DYNSYM, ".dynstr", SHT_STRTAB, true),
+          symtab_builder_(".symtab", SHT_SYMTAB, ".strtab", SHT_STRTAB, false),
+          hash_builder_(".hash", SHT_HASH, SHF_ALLOC, &dynsym_builder_, 0,
+                        sizeof(Elf32_Word), sizeof(Elf32_Word)),
+          dynamic_builder_(".dynamic", &dynsym_builder_),
+          shstrtab_builder_(".shstrtab", SHT_STRTAB, 0, NULL, 0, 1, 1) {
+      SetupEhdr();
+      SetupDynamic();
+      SetupRequiredSymbols();
+      SetISA(isa);
+    }
+    ~ElfBuilder() {}
+
+    bool Write();
+    inline ElfSymtabBuilder* GetDefaultDynsymBuilder() { return &dynsym_builder_; }
+    inline ElfSymtabBuilder* GetDefaultSymtabBuilder() {
+      if (add_symbols_) {
+        return &symtab_builder_;
+      } else {
+        return static_cast<ElfSymtabBuilder*>(&fake_symtab_builder_);
+      }
+    }
+
+    /*
+     * Adds the given raw section to the builder. This will copy it. The caller
+     * is responsible for deallocating their copy.
+     */
+    inline void RegisterRawSection(ElfRawSectionBuilder bld) {
+      other_builders_.push_back(bld);
+    }
+
+   private:
+    OatWriter* oat_writer_;
+    // const std::vector<const DexFile*>& dex_files_;
+    // const std::string& android_root_;
+    File* elf_file_;
+    // const bool is_host_;
+    const bool add_symbols_;
+    const bool debug_;
+
+    bool fatal_error_ = false;
+
+    Elf32_Ehdr elf_header_;
+
+   public:
+    ElfOatSectionBuilder text_builder_;
+    ElfOatSectionBuilder rodata_builder_;
+    ElfSymtabBuilder dynsym_builder_;
+    ElfSymtabBuilder symtab_builder_;
+    ElfSymtabBuilderFake fake_symtab_builder_;
+    ElfSectionBuilder hash_builder_;
+    ElfDynamicBuilder dynamic_builder_;
+    ElfSectionBuilder shstrtab_builder_;
+    std::vector<ElfRawSectionBuilder> other_builders_;
+
+   private:
+    void SetISA(InstructionSet isa);
+    void SetupEhdr();
+
+    /*
+     * Sets up a bunch of the required Dynamic Section entries.
+     * Namely it will initialize all the mandatory ones that it can.
+     * Specifically:
+     * DT_HASH
+     * DT_STRTAB
+     * DT_SYMTAB
+     * DT_SYMENT
+     *
+     * Some such as DT_SONAME, DT_STRSZ and DT_NULL will be put in later.
+     */
+    void SetupDynamic();
+
+    /*
+     * Sets up the basic dynamic symbols that are needed, namely all those we
+     * can know already.
+     *
+     * Specifically adds:
+     * oatdata
+     * oatexec
+     * oatlastword
+     */
+    void SetupRequiredSymbols();
+    inline void AssignSectionStr(ElfSectionBuilder *builder, std::string& strtab);
+    struct ElfFilePiece {
+      ElfFilePiece(const std::string& name, Elf32_Word offset, void* data, Elf32_Word size)
+          : dbg_name_(name), offset_(offset), data_(data), size_(size) {}
+      ~ElfFilePiece() {}
+
+      const std::string& dbg_name_;
+      Elf32_Word offset_;
+      const void *data_;
+      Elf32_Word size_;
+      static bool Compare(ElfFilePiece a, ElfFilePiece b) {
+        return a.offset_ < b.offset_;
+      }
+    };
+    /*
+     * Will perform bounds checking and write out directly any pieces whose data
+     * is not null.
+     */
+    bool WriteOutFile(std::vector<ElfFilePiece>& pieces);
+    inline bool UsingRealSymtab() { return add_symbols_; }
+  };
 
   /*
    * @brief Generate the DWARF debug_info and debug_abbrev sections
