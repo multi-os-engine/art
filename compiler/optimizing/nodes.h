@@ -376,6 +376,8 @@ class HBasicBlock : public ArenaObject {
   size_t lifetime_start_;
   size_t lifetime_end_;
 
+  friend class HIf;
+
   DISALLOW_COPY_AND_ASSIGN(HBasicBlock);
 };
 
@@ -508,6 +510,7 @@ class HInstruction : public ArenaObject {
   void ReplaceWith(HInstruction* instruction);
 
 #define INSTRUCTION_TYPE_CHECK(type)                                           \
+  bool Is##type() { return (As##type() != nullptr); }                          \
   virtual H##type* As##type() { return nullptr; }
 
   FOR_EACH_INSTRUCTION(INSTRUCTION_TYPE_CHECK)

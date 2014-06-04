@@ -22,6 +22,9 @@
 #include "instruction_set.h"
 #include "nodes.h"
 #include "optimizing_unit_test.h"
+#include "register_allocator.h"
+#include "ssa_builder.h"
+#include "ssa_liveness_analysis.h"
 
 #include "gtest/gtest.h"
 
@@ -47,6 +50,17 @@ class InternalCodeAllocator : public CodeAllocator {
   DISALLOW_COPY_AND_ASSIGN(InternalCodeAllocator);
 };
 
+static void ExecuteGraph(const InternalCodeAllocator& allocator,
+                         bool has_result,
+                         int32_t expected) {
+  typedef int32_t (*fptr)();
+  CommonCompilerTest::MakeExecutable(allocator.GetMemory(), allocator.GetSize());
+  int32_t result = reinterpret_cast<fptr>(allocator.GetMemory())();
+  if (has_result) {
+    CHECK_EQ(result, expected);
+  }
+}
+
 static void TestCode(const uint16_t* data, bool has_result = false, int32_t expected = 0) {
   ArenaPool pool;
   ArenaAllocator arena(&pool);
@@ -54,26 +68,32 @@ static void TestCode(const uint16_t* data, bool has_result = false, int32_t expe
   const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
   HGraph* graph = builder.BuildGraph(*item);
   ASSERT_NE(graph, nullptr);
+
+  static constexpr InstructionSet instruction_sets[] = { kX86 };
   InternalCodeAllocator allocator;
-  CodeGenerator* codegen = CodeGenerator::Create(&arena, graph, kX86);
-  codegen->Compile(&allocator);
-  typedef int32_t (*fptr)();
-#if defined(__i386__)
-  CommonCompilerTest::MakeExecutable(allocator.GetMemory(), allocator.GetSize());
-  int32_t result = reinterpret_cast<fptr>(allocator.GetMemory())();
-  if (has_result) {
-    CHECK_EQ(result, expected);
+
+  for (size_t i = 0; i < arraysize(instruction_sets); ++i) {
+    CodeGenerator* codegen = CodeGenerator::Create(&arena, graph, instruction_sets[i]);
+    codegen->CompileBaseline(&allocator);
+    if (kRuntimeISA == instruction_sets[i]) {
+      ExecuteGraph(allocator, has_result, expected);
+    }
+    /*
+    codegen = CodeGenerator::Create(&arena, graph, instruction_sets[i]);
+    if (RegisterAllocator::CanAllocateRegistersFor(*graph)) {
+      graph->BuildDominatorTree();
+      graph->TransformToSSA();
+      graph->FindNaturalLoops();
+      SsaLivenessAnalysis liveness(*graph);
+      liveness.Analyze();
+      RegisterAllocator register_allocator(graph->GetArena(), codegen, liveness);
+      register_allocator.AllocateRegisters();
+      codegen->CompileOptimized(&allocator, register_allocator.GetNumberOfSpillSlots());
+      if (kRuntimeISA == instruction_sets[i]) {
+        ExecuteGraph(allocator, has_result, expected);
+      }
+    }*/
   }
-#endif
-  codegen = CodeGenerator::Create(&arena, graph, kArm);
-  codegen->Compile(&allocator);
-#if defined(__arm__)
-  CommonCompilerTest::MakeExecutable(allocator.GetMemory(), allocator.GetSize());
-  int32_t result = reinterpret_cast<fptr>(allocator.GetMemory())();
-  if (has_result) {
-    CHECK_EQ(result, expected);
-  }
-#endif
 }
 
 TEST(CodegenTest, ReturnVoid) {
@@ -122,12 +142,13 @@ TEST(CodegenTest, CFG3) {
 }
 
 TEST(CodegenTest, CFG4) {
+  /*
   const uint16_t data[] = ZERO_REGISTER_CODE_ITEM(
     Instruction::RETURN_VOID,
     Instruction::GOTO | 0x100,
     Instruction::GOTO | 0xFE00);
 
-  TestCode(data);
+  TestCode(data);*/
 }
 
 TEST(CodegenTest, CFG5) {
