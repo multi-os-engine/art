@@ -1263,12 +1263,12 @@ void CompilerDriver::AddCodePatch(const DexFile* dex_file,
                                   InvokeType target_invoke_type,
                                   size_t literal_offset) {
   MutexLock mu(Thread::Current(), compiled_methods_lock_);
+  auto tgt_res = patch_targets_.emplace(target_dex_file, target_method_idx, target_invoke_type);
+  const PatchTarget* target = &*tgt_res.first;  // New or old, ignoring tgt_res.second.
   code_to_patch_.push_back(new CallPatchInformation(dex_file,
                                                     referrer_class_def_idx,
                                                     referrer_method_idx,
-                                                    target_method_idx,
-                                                    target_dex_file,
-                                                    target_invoke_type,
+                                                    target,
                                                     literal_offset));
 }
 void CompilerDriver::AddRelativeCodePatch(const DexFile* dex_file,
@@ -1281,12 +1281,12 @@ void CompilerDriver::AddRelativeCodePatch(const DexFile* dex_file,
                                           size_t literal_offset,
                                           int32_t pc_relative_offset) {
   MutexLock mu(Thread::Current(), compiled_methods_lock_);
+  auto tgt_res = patch_targets_.emplace(target_dex_file, target_method_idx, target_invoke_type);
+  const PatchTarget* target = &*tgt_res.first;  // New or old, ignoring tgt_res.second.
   code_to_patch_.push_back(new RelativeCallPatchInformation(dex_file,
                                                             referrer_class_def_idx,
                                                             referrer_method_idx,
-                                                            target_method_idx,
-                                                            target_dex_file,
-                                                            target_invoke_type,
+                                                            target,
                                                             literal_offset,
                                                             pc_relative_offset));
 }
@@ -1299,12 +1299,12 @@ void CompilerDriver::AddMethodPatch(const DexFile* dex_file,
                                     InvokeType target_invoke_type,
                                     size_t literal_offset) {
   MutexLock mu(Thread::Current(), compiled_methods_lock_);
+  auto tgt_res = patch_targets_.emplace(target_dex_file, target_method_idx, target_invoke_type);
+  const PatchTarget* target = &*tgt_res.first;  // New or old, ignoring tgt_res.second.
   methods_to_patch_.push_back(new CallPatchInformation(dex_file,
                                                        referrer_class_def_idx,
                                                        referrer_method_idx,
-                                                       target_method_idx,
-                                                       target_dex_file,
-                                                       target_invoke_type,
+                                                       target,
                                                        literal_offset));
 }
 void CompilerDriver::AddClassPatch(const DexFile* dex_file,

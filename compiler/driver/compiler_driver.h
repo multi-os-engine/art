@@ -21,6 +21,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 #include "base/mutex.h"
 #include "base/timing_logger.h"
@@ -399,6 +400,48 @@ class CompilerDriver {
     return timings_logger_;
   }
 
+ private:
+  class PatchTarget {
+   public:
+    PatchTarget(const DexFile* dex_file, uint32_t method_idx, InvokeType invoke_type)
+        : dex_file_(dex_file), method_idx_(method_idx), invoke_type_(invoke_type) {
+      DCHECK(dex_file != nullptr);
+      DCHECK_EQ(method_idx, method_idx_);  // method_idx must be 16-bits only.
+      DCHECK_EQ(invoke_type, static_cast<InvokeType>(invoke_type_));
+    }
+
+    const DexFile& GetDexFile() const {
+      return *dex_file_;
+    }
+
+    uint32_t GetMethodIdx() const {
+      return method_idx_;
+    }
+
+    InvokeType GetInvokeType() const {
+      return static_cast<InvokeType>(invoke_type_);
+    }
+
+    bool operator==(const PatchTarget& other) const {
+      return method_idx_ == other.method_idx_ && dex_file_ == other.dex_file_ &&
+          invoke_type_ == other.invoke_type_;
+    }
+
+   private:
+    const DexFile* dex_file_;
+    uint16_t method_idx_;
+    uint16_t invoke_type_;
+  };
+
+  struct PatchTargetHash {
+    size_t operator()(const PatchTarget& value) {
+      return reinterpret_cast<size_t>(&value.GetDexFile()) * 0x7fffffu +
+          value.GetMethodIdx() * 0x7fffu +
+          static_cast<size_t>(value.GetInvokeType()) * 0x7fu;
+    }
+  };
+
+ public:
   class PatchInformation {
    public:
     const DexFile& GetDexFile() const {
@@ -453,13 +496,13 @@ class CompilerDriver {
   class CallPatchInformation : public PatchInformation {
    public:
     uint32_t GetTargetMethodIdx() const {
-      return target_method_idx_;
+      return target_->GetMethodIdx();
     }
     const DexFile& GetTargetDexFile() const {
-      return *target_dex_file_;
+      return target_->GetDexFile();
     }
     InvokeType GetTargetInvokeType() const {
-      return static_cast<InvokeType>(target_invoke_type_);
+      return target_->GetInvokeType();
     }
 
     const CallPatchInformation* AsCall() const {
@@ -479,24 +522,15 @@ class CompilerDriver {
     CallPatchInformation(const DexFile* dex_file,
                          uint16_t referrer_class_def_idx,
                          uint32_t referrer_method_idx,
-                         uint32_t target_method_idx,
-                         const DexFile* target_dex_file,
-                         InvokeType target_invoke_type,
+                         const PatchTarget* target,
                          size_t literal_offset)
         : PatchInformation(dex_file, referrer_class_def_idx,
                            referrer_method_idx, literal_offset),
-          target_dex_file_(target_dex_file),
-          target_method_idx_(target_method_idx),
-          target_invoke_type_(target_invoke_type) {
-      DCHECK(dex_file != nullptr);
-      DCHECK_EQ(target_method_idx, target_method_idx_);  // Must be 16-bits only.
-      DCHECK_EQ(target_invoke_type, static_cast<InvokeType>(target_invoke_type_));
+          target_(target) {
     }
 
    private:
-    const DexFile* const target_dex_file_;
-    const uint16_t target_method_idx_;
-    const uint16_t target_invoke_type_;
+    const PatchTarget* const target_;
 
     friend class CompilerDriver;
     DISALLOW_COPY_AND_ASSIGN(CallPatchInformation);
@@ -515,14 +549,11 @@ class CompilerDriver {
     RelativeCallPatchInformation(const DexFile* dex_file,
                                  uint16_t referrer_class_def_idx,
                                  uint32_t referrer_method_idx,
-                                 uint32_t target_method_idx,
-                                 const DexFile* target_dex_file,
-                                 InvokeType target_invoke_type,
+                                 const PatchTarget* target,
                                  size_t literal_offset,
                                  int32_t pc_relative_offset)
         : CallPatchInformation(dex_file, referrer_class_def_idx,
-                               referrer_method_idx, target_method_idx, target_dex_file,
-                               target_invoke_type, literal_offset),
+                               referrer_method_idx, target, literal_offset),
           pc_relative_offset_(pc_relative_offset) {
     }
 
@@ -676,6 +707,10 @@ class CompilerDriver {
 
   static void CompileClass(const ParallelCompilationManager* context, size_t class_def_index)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
+
+  // Pointers to unordered_set<> elements do not change on insert.
+  // They are therefore suitable for the code/method/type patch information below.
+  std::unordered_set<PatchTarget, PatchTargetHash> patch_targets_;
 
   // NOTE: Using deque<> rather than vector<> to avoid allocating large chunks of memory.
   std::deque<const CallPatchInformation*> code_to_patch_;
