@@ -41,6 +41,17 @@ class InitializeData : public PassME {
     c_unit->mir_graph.get()->InitializeBasicBlockData();
     c_unit->mir_graph.get()->SSATransformationStart();
   }
+
+  bool Worker(const PassDataHolder* data) const {
+    DCHECK(data != nullptr);
+    const PassMEDataHolder* pass_me_data_holder = down_cast<const PassMEDataHolder*>(data);
+    BasicBlock* bb = pass_me_data_holder->bb;
+    DCHECK(bb != nullptr);
+    for (MIR* mir = bb->first_mir_insn; mir; mir = mir->next) {
+      mir->ssa_rep = nullptr;
+    }
+    return false;
+  }
 };
 
 /**
