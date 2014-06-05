@@ -66,6 +66,67 @@
 #include "well_known_classes.h"
 #include "zip_archive.h"
 
+#include <unordered_map>
+
+extern pthread_mutex_t vmarko_mutex;
+extern std::set<pid_t, std::less<pid_t>, art::MallocAllocator<pid_t>> vmarko_dumping_threads;
+extern pthread_mutex_t vmarko_stats_mutex;
+extern std::unordered_map<std::string, art::AllocStats> vmarko_alloc_counts;
+
+extern void* TrackedAlloc(std::size_t size) noexcept;
+
+void* operator new(std::size_t size) noexcept {
+  return TrackedAlloc(size);
+}
+
+void* operator new[](std::size_t size) noexcept {
+  return TrackedAlloc(size);
+}
+
+void operator delete(void* ptr) noexcept {
+  free(ptr);
+}
+
+void operator delete[](void* ptr) noexcept {
+  free(ptr);
+}
+
+void VMarkoDump() {
+  pid_t tid = art::GetTid();
+  pthread_mutex_lock(&vmarko_mutex);
+  auto dt_it = vmarko_dumping_threads.insert(tid).first;
+  pthread_mutex_unlock(&vmarko_mutex);
+
+  pthread_mutex_lock(&vmarko_stats_mutex);
+  uint64_t total_count = 0u;
+  uint64_t total_size = 0u;
+  uint32_t reported = 0u;
+  uint64_t max_size = 0u;
+  uint64_t max_count = 0u;
+  for (const auto& entry : vmarko_alloc_counts) {
+    max_size = std::max(max_size, entry.second.size);
+    max_count = std::max(max_count, entry.second.count);
+    total_count += entry.second.count;
+    if (static_cast<uint64_t>(-1) - total_size < entry.second.size) {
+      total_size = static_cast<uint64_t>(-1);
+    } else {
+      total_size += entry.second.size;
+    }
+    if (entry.second.count > 1000 || entry.second.size > 128 * 1024) {
+      reported += 1u;
+      LOG(INFO) << entry.second.count << " allocations, " << entry.second.size << "B";
+      LOG(INFO) << entry.first;
+    }
+  }
+  LOG(INFO) << "VMarko: #" << total_count << ", " << total_size << "B, reported " << reported
+      << ", max size " << max_size << "B, max count " << max_count;
+  pthread_mutex_unlock(&vmarko_stats_mutex);
+
+  pthread_mutex_lock(&vmarko_mutex);
+  vmarko_dumping_threads.erase(dt_it);
+  pthread_mutex_unlock(&vmarko_mutex);
+}
+
 namespace art {
 
 static int original_argc;
@@ -660,9 +721,9 @@ class WatchDog {
     //       large.
     int64_t multiplier = kVerifyObjectSupport > kVerifyObjectModeFast ? 100 : 1;
     timespec warning_ts;
-    InitTimeSpec(true, CLOCK_REALTIME, multiplier * kWatchDogWarningSeconds * 1000, 0, &warning_ts);
+    InitTimeSpec(true, CLOCK_REALTIME, multiplier * kWatchDogWarningSeconds * 1000 * 10, 0, &warning_ts);
     timespec timeout_ts;
-    InitTimeSpec(true, CLOCK_REALTIME, multiplier * kWatchDogTimeoutSeconds * 1000, 0, &timeout_ts);
+    InitTimeSpec(true, CLOCK_REALTIME, multiplier * kWatchDogTimeoutSeconds * 1000 * 10, 0, &timeout_ts);
     const char* reason = "dex2oat watch dog thread waiting";
     CHECK_WATCH_DOG_PTHREAD_CALL(pthread_mutex_lock, (&mutex_), reason);
     while (!shutting_down_) {
@@ -1521,6 +1582,7 @@ static int dex2oat(int argc, char** argv) {
   if (dump_passes) {
     LOG(INFO) << Dumpable<CumulativeLogger>(compiler_phases_timings);
   }
+  VMarkoDump();
 
   // Everything was successfully written, do an explicit exit here to avoid running Runtime
   // destructors that take time (bug 10645725) unless we're a debug build or running on valgrind.

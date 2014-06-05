@@ -59,6 +59,108 @@
 #include <linux/unistd.h>
 #endif
 
+#include <unordered_map>
+
+static constexpr uint64_t kVMarkoTrackAllocGap = 256;
+static constexpr size_t kVMarkoStackDepth = 5;
+
+extern pthread_mutex_t vmarko_mutex;
+extern uint64_t vmarko_alloc_count;
+extern std::set<pid_t, std::less<pid_t>, art::MallocAllocator<pid_t>> vmarko_dumping_threads;
+extern pthread_mutex_t vmarko_stats_mutex;
+extern std::unordered_map<std::string, art::AllocStats> vmarko_alloc_counts;
+
+pthread_mutex_t vmarko_mutex = PTHREAD_MUTEX_INITIALIZER;
+uint64_t vmarko_alloc_count = 0u;
+std::set<pid_t, std::less<pid_t>, art::MallocAllocator<pid_t>> vmarko_dumping_threads;
+pthread_mutex_t vmarko_stats_mutex = PTHREAD_MUTEX_INITIALIZER;
+std::unordered_map<std::string, art::AllocStats> vmarko_alloc_counts;
+
+void* TrackedAlloc(std::size_t size) noexcept {
+  pthread_mutex_lock(&vmarko_mutex);
+  pid_t tid = art::GetTid();
+  if (vmarko_dumping_threads.count(tid) != 0) {
+    // This is an allocation that's part of a stack trace dump.
+  } else {
+    vmarko_alloc_count += 1u;
+    COMPILE_ASSERT(art::IsPowerOfTwo(kVMarkoTrackAllocGap), must_be_power_of_2);
+    if ((vmarko_alloc_count & (kVMarkoTrackAllocGap - 1u)) == 0) {
+      auto dt_it = vmarko_dumping_threads.insert(tid).first;
+      pthread_mutex_unlock(&vmarko_mutex);
+
+      std::string key;
+      {
+        std::unique_ptr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid));
+        if (!backtrace->Unwind(4)) {
+          abort();
+        }
+        std::ostringstream oss;
+        size_t count = 0u;
+        for (auto it = backtrace->begin(), end = backtrace->end();
+             it != end && count < kVMarkoStackDepth; ++it, ++count) {
+          oss << "#" << std::dec << std::setw(2) << std::setfill('0') << it->num << " pc "
+              << (it->map != nullptr ? '+' : '@')
+              << std::hex << std::setw(8) << std::setfill('0')
+              << (it->map != nullptr ? it->pc : it->pc - it->map->start) << "  "
+              << (it->map != nullptr ? it->map->name : "");
+          if (!it->map) {
+            oss << "???";
+          } else if (it->func_name.empty()) {
+            oss << " (<empty>)";
+          } else {
+            oss << " (" << it->func_name << "+" << std::dec << std::setw(1) << it->func_offset
+                << ")";
+          }
+          oss << '\n';
+        }
+        key = oss.str();
+      }
+
+      pthread_mutex_lock(&vmarko_stats_mutex);
+      auto ac_it = vmarko_alloc_counts.find(key);
+      if (ac_it != vmarko_alloc_counts.end()) {
+        ac_it->second.count += 1u;
+        if (static_cast<uint64_t>(-1) - ac_it->second.size < size) {
+          ac_it->second.size = static_cast<uint64_t>(-1);
+        } else {
+          ac_it->second.size += size;
+        }
+      } else {
+        art::AllocStats stats = { 1u, size };
+        vmarko_alloc_counts.emplace(key, stats);
+      }
+      pthread_mutex_unlock(&vmarko_stats_mutex);
+
+      pthread_mutex_lock(&vmarko_mutex);
+      vmarko_dumping_threads.erase(dt_it);
+    }
+  }
+  pthread_mutex_unlock(&vmarko_mutex);
+
+  void* p = malloc(size);
+  if (UNLIKELY(p == nullptr)) {
+    abort();
+  }
+
+  return p;
+}
+
+void* operator new(std::size_t size) noexcept {
+  return TrackedAlloc(size);
+}
+
+void* operator new[](std::size_t size) noexcept {
+  return TrackedAlloc(size);
+}
+
+void operator delete(void* ptr) noexcept {
+  free(ptr);
+}
+
+void operator delete[](void* ptr) noexcept {
+  free(ptr);
+}
+
 namespace art {
 
 pid_t GetTid() {

@@ -497,6 +497,97 @@ class VoidFunctor {
   }
 };
 
+// Tracking memory allocations.
+
+// An allocator that skips the overridden operator new/delete.
+template <typename T>
+class MallocAllocator;
+
+template <>
+class MallocAllocator<void> {
+ public:
+  typedef void value_type;
+  typedef void* pointer;
+  typedef const void* const_pointer;
+
+  template <typename U>
+  struct rebind {
+    typedef MallocAllocator<U> other;
+  };
+
+  MallocAllocator() { }
+  template <typename U>
+  MallocAllocator(const MallocAllocator<U>& other) { }
+  MallocAllocator(const MallocAllocator& other) = default;
+  MallocAllocator& operator=(const MallocAllocator& other) = default;
+  ~MallocAllocator() = default;
+};
+
+template <typename T>
+class MallocAllocator {
+ public:
+  typedef T value_type;
+  typedef T* pointer;
+  typedef T& reference;
+  typedef const T* const_pointer;
+  typedef const T& const_reference;
+  typedef size_t size_type;
+  typedef ptrdiff_t difference_type;
+
+  template <typename U>
+  struct rebind {
+    typedef MallocAllocator<U> other;
+  };
+
+  MallocAllocator() { }
+  template <typename U>
+  MallocAllocator(const MallocAllocator<U>& other) { }
+  MallocAllocator(const MallocAllocator& other) = default;
+  MallocAllocator& operator=(const MallocAllocator& other) = default;
+  ~MallocAllocator() = default;
+
+  size_type max_size() const {
+    return static_cast<size_type>(-1) / sizeof(T);
+  }
+
+  pointer address(reference x) const { return &x; }
+  const_pointer address(const_reference x) const { return &x; }
+
+  pointer allocate(size_type n, MallocAllocator<void>::pointer hint = nullptr) {
+    DCHECK_LE(n, max_size());
+    void* p = malloc(n * sizeof(T));
+    if (p == nullptr) {
+      abort();
+    }
+    return reinterpret_cast<T*>(p);
+  }
+  void deallocate(pointer p, size_type n) {
+    free(p);
+  }
+
+  void construct(pointer p, const_reference val) {
+    new (static_cast<void*>(p)) value_type(val);
+  }
+  void destroy(pointer p) {
+    p->~value_type();
+  }
+};
+
+template <typename T>
+inline bool operator==(const MallocAllocator<T>& lhs, const MallocAllocator<T>& rhs) {
+  return true;
+}
+
+template <typename T>
+inline bool operator!=(const MallocAllocator<T>& lhs, const MallocAllocator<T>& rhs) {
+  return !(lhs == rhs);
+}
+
+struct AllocStats {
+  uint64_t count;
+  uint64_t size;
+};
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_UTILS_H_
