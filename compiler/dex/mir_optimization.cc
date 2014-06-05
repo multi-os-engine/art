@@ -358,6 +358,8 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
                 (mir->ssa_rep->defs[0] == mir_next->ssa_rep->uses[0]) &&
                 (GetSSAUseCount(mir->ssa_rep->defs[0]) == 1)) {
               mir_next->meta.ccode = ConditionCodeForIfCcZ(mir_next->dalvikInsn.opcode);
+              mir_next->dalvikInsn.vA = mir->dalvikInsn.vB;
+              mir_next->dalvikInsn.vB = mir->dalvikInsn.vC;
               switch (opcode) {
                 case Instruction::CMPL_FLOAT:
                   mir_next->dalvikInsn.opcode =
@@ -470,7 +472,7 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
             MIR* if_false = ft->first_mir_insn;
             // It's possible that the target of the select isn't used - skip those (rare) cases.
             MIR* phi = FindPhi(tk_tk, if_true->ssa_rep->defs[0]);
-            if ((phi != NULL) && (if_true->dalvikInsn.vA == if_false->dalvikInsn.vA)) {
+            if (0 && (phi != NULL) && (if_true->dalvikInsn.vA == if_false->dalvikInsn.vA)) {
               /*
                * We'll convert the IF_EQZ/IF_NEZ to a SELECT.  We need to find the
                * Phi node in the merge block and delete it (while using the SSA name

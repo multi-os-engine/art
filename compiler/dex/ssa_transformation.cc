@@ -275,11 +275,11 @@ void MIRGraph::InitializeDominationInfo(BasicBlock* bb) {
 
   if (bb->dominators == NULL) {
     bb->dominators = new (arena_) ArenaBitVector(arena_, num_total_blocks,
-                                                 false /* expandable */, kBitMapDominators);
+                                                 true, kBitMapDominators);
     bb->i_dominated = new (arena_) ArenaBitVector(arena_, num_total_blocks,
-                                                  false /* expandable */, kBitMapIDominated);
+                                                  true, kBitMapIDominated);
     bb->dom_frontier = new (arena_) ArenaBitVector(arena_, num_total_blocks,
-                                                   false /* expandable */, kBitMapDomFrontier);
+                                                   true, kBitMapDomFrontier);
   } else {
     bb->dominators->ClearAllBits();
     bb->i_dominated->ClearAllBits();
