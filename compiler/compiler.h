@@ -122,6 +122,15 @@ class Compiler {
     return nullptr;
   }
 
+  /**
+   * @brief Return the compiler version, this is used to check for compatibility.
+   * @return the version number.
+   */
+#define ART_COMPILER_VERSION_NUMBER 1
+  static uint64_t GetARTCompilerVersion() {
+    return ART_COMPILER_VERSION_NUMBER;
+  }
+
  protected:
   explicit Compiler(CompilerDriver* driver, uint64_t warning) :
       driver_(driver), maximum_compilation_time_before_warning_(warning) {

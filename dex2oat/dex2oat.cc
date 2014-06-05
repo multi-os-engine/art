@@ -59,6 +59,7 @@
 #include "mirror/object_array-inl.h"
 #include "oat_writer.h"
 #include "os.h"
+#include "plugin_handler.h"
 #include "runtime.h"
 #include "ScopedLocalRef.h"
 #include "scoped_thread_state_change.h"
@@ -1178,6 +1179,12 @@ static int dex2oat(int argc, char** argv) {
 
   // Store the compiler_filter for the selectivity system.
   Selectivity::SetOriginalCompilerFilter(compiler_filter);
+
+  // Enable plugins if using compiler filter level O1 or greater.
+  if (compiler_filter >= CompilerOptions::kO1) {
+    // Now load up the plugins.
+      LoadUpPlugins("/system/lib/plugins");
+  }
 
   if (!disable_passes.empty()) {
       PassDriverMEOpts::CreateDefaultPassList(disable_passes);

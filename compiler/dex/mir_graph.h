@@ -540,7 +540,20 @@ const RegLocation bad_loc = {kLocDalvikFrame, 0, 0, 0, 0, 0, 0, 0, 0, RegStorage
 class MIRGraph {
  public:
   MIRGraph(CompilationUnit* cu, ArenaAllocator* arena);
-  ~MIRGraph();
+  virtual ~MIRGraph();
+
+  static MIRGraph* CreateMIRGraph(CompilationUnit* c_unit) {
+    if (plugin_create_mir_graph_ == nullptr) {
+      return new MIRGraph(c_unit, &(c_unit->arena));
+    } else {
+      return plugin_create_mir_graph_(c_unit);
+    }
+  }
+
+  typedef MIRGraph* (*MIRGraphFctPtr)(CompilationUnit*);
+  static void SetPluginCreateMirGraph(MIRGraphFctPtr fct) {
+    plugin_create_mir_graph_ = fct;
+  }
 
   /*
    * Examine the graph to determine whether it's worthwile to spend the time compiling
@@ -1000,7 +1013,8 @@ class MIRGraph {
   void DumpMIRGraph();
   CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range);
   BasicBlock* NewMemBB(BBType block_type, int block_id);
-  MIR* NewMIR();
+  virtual MIR* NewMIR();
+  virtual BasicBlock* CreateBasicBlock();
   MIR* AdvanceMIR(BasicBlock** p_bb, MIR* mir);
   BasicBlock* NextDominatedBlock(BasicBlock* bb);
   bool LayoutBlocks(BasicBlock* bb);
@@ -1211,6 +1225,7 @@ class MIRGraph {
   unsigned int attributes_;
   Checkstats* checkstats_;
   ArenaAllocator* arena_;
+  static MIRGraphFctPtr plugin_create_mir_graph_;
   int backward_branches_;
   int forward_branches_;
   GrowableArray<CompilerTemp*> compiler_temps_;

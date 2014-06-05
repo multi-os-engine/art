@@ -147,7 +147,7 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
   compiler->InitCompilationUnit(cu);
 
   cu.StartTimingSplit("BuildMIRGraph");
-  cu.mir_graph.reset(new MIRGraph(&cu, &cu.arena));
+  cu.mir_graph.reset(MIRGraph::CreateMIRGraph(&cu));
 
   /*
    * After creation of the MIR graph, also create the code generator.
