@@ -225,6 +225,20 @@ class RegStorage {
     return reg_ & kRegNumMask;
   }
 
+  // Get the 32-bit RegStorage corresponding to a 64-bit RegStorage.
+  RegStorage As32Bit() const {
+    DCHECK(Is64Bit());
+    DCHECK(!IsPair());
+    return RegStorage(k32BitSolo, reg_ & kRegTypeMask);
+  }
+
+  // Get the 64-bit RegStorage corresponding to a 32-bit RegStorage.
+  RegStorage As64Bit() const {
+    DCHECK(Is32Bit());
+    DCHECK(!IsPair());
+    return RegStorage(k64BitSolo, reg_ & kRegTypeMask);
+  }
+
   // Is register number in 0..7?
   bool Low8() const {
     return GetRegNum() < 8;
