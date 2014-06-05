@@ -23,6 +23,9 @@
 
 namespace art {
 
+template<>
+void (*PassDriver<PassDriverMEOpts>::special_pass_driver_selection_)(PassDriver*, CompilationUnit*) = nullptr;
+
 /*
  * Create the pass list. These passes are immutable and are shared across the threads.
  *
@@ -79,9 +82,9 @@ void PassDriverMEOpts::ApplyPass(PassDataHolder* data, const Pass* pass) {
   PassMEDataHolder* pass_me_data_holder = down_cast<PassMEDataHolder*>(data);
 
   // Now we care about flags.
+  CompilationUnit* c_unit = pass_me_data_holder->c_unit;
   if ((pass_me->GetFlag(kOptimizationBasicBlockChange) == true) ||
       (pass_me->GetFlag(kOptimizationDefUsesChange) == true)) {
-    CompilationUnit* c_unit = pass_me_data_holder->c_unit;
     c_unit->mir_graph.get()->CalculateBasicBlockInformation();
   }
 }

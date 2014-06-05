@@ -37,6 +37,7 @@
 #include "class_linker.h"
 #include "compiler.h"
 #include "compiler_callbacks.h"
+#include "dex/selectivity.h"
 #include "dex_file-inl.h"
 #include "dex/pass_driver_me_opts.h"
 #include "dex/verification_results.h"
@@ -65,6 +66,7 @@
 #include "vector_output_stream.h"
 #include "well_known_classes.h"
 #include "zip_archive.h"
+#include "plugin_handler.h"
 
 namespace art {
 
@@ -843,6 +845,10 @@ static int dex2oat(int argc, char** argv) {
   std::string profile_file;
   double top_k_profile_threshold = CompilerOptions::kDefaultTopKProfileThreshold;
 
+  // Pass logic and data.
+  std::string disable_passes;
+  bool print_pass_names = false;
+
   bool is_host = false;
   bool dump_stats = false;
   bool dump_timing = false;
@@ -852,6 +858,7 @@ static int dex2oat(int argc, char** argv) {
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = true;
   bool generate_gdb_information = kIsDebugBuild;
+  bool use_selectivity_analysis = false;
 
   // Checks are all explicit until we know the architecture.
   bool implicit_null_checks = false;
@@ -1021,10 +1028,9 @@ static int dex2oat(int argc, char** argv) {
     } else if (option.starts_with("--top-k-profile-threshold=")) {
       ParseDouble(option.data(), '=', 0.0, 100.0, &top_k_profile_threshold);
     } else if (option == "--print-pass-names") {
-      PassDriverMEOpts::PrintPassNames();
+      print_pass_names = true;
     } else if (option.starts_with("--disable-passes=")) {
-      std::string disable_passes = option.substr(strlen("--disable-passes=")).data();
-      PassDriverMEOpts::CreateDefaultPassList(disable_passes);
+      disable_passes = option.substr(strlen("--disable-passes=")).data();
     } else if (option.starts_with("--print-passes=")) {
       std::string print_passes = option.substr(strlen("--print-passes=")).data();
       PassDriverMEOpts::SetPrintPassList(print_passes);
@@ -1033,6 +1039,8 @@ static int dex2oat(int argc, char** argv) {
     } else if (option.starts_with("--dump-cfg-passes=")) {
       std::string dump_passes = option.substr(strlen("--dump-cfg-passes=")).data();
       PassDriverMEOpts::SetDumpPassList(dump_passes);
+    } else if (option == "--use-selectivity-analysis") {
+      use_selectivity_analysis = true;
     } else if (option == "--include-patch-information") {
       include_patch_information = true;
     } else if (option == "--no-include-patch-information") {
@@ -1159,6 +1167,12 @@ static int dex2oat(int argc, char** argv) {
     compiler_filter = CompilerOptions::kSpeed;
   } else if (strcmp(compiler_filter_string, "everything") == 0) {
     compiler_filter = CompilerOptions::kEverything;
+  } else if (strcmp(compiler_filter_string, "O1") == 0) {
+    compiler_filter = CompilerOptions::kO1;
+  } else if (strcmp(compiler_filter_string, "O2") == 0) {
+    compiler_filter = CompilerOptions::kO2;
+  } else if (strcmp(compiler_filter_string, "O3") == 0) {
+    compiler_filter = CompilerOptions::kO3;
   } else {
     Usage("Unknown --compiler-filter value %s", compiler_filter_string);
   }
@@ -1177,6 +1191,23 @@ static int dex2oat(int argc, char** argv) {
     default:
       // Defaults are correct.
       break;
+  }
+
+  // Store the compiler_filter for the selectivity system.
+  Selectivity::original_compiler_filter = compiler_filter;
+
+  // Enable plugins if using compiler filter level O1 or greater.
+  if (compiler_filter >= CompilerOptions::kO1) {
+    // Now load up the plugins.
+      LoadUpPlugins("/system/lib/plugins");
+  }
+
+  if (!disable_passes.empty()) {
+      PassDriverMEOpts::CreateDefaultPassList(disable_passes);
+  }
+
+  if (print_pass_names) {
+      PassDriverMEOpts::PrintPassNames();
   }
 
   std::unique_ptr<CompilerOptions> compiler_options(new CompilerOptions(compiler_filter,
@@ -1243,6 +1274,7 @@ static int dex2oat(int argc, char** argv) {
 
   std::unique_ptr<VerificationResults> verification_results(new VerificationResults(
                                                             compiler_options.get()));
+  Selectivity::ToggleAnalysis(use_selectivity_analysis, disable_passes);
   DexFileToMethodInlinerMap method_inliner_map;
   QuickCompilerCallbacks callbacks(verification_results.get(), &method_inliner_map);
   runtime_options.push_back(std::make_pair("compilercallbacks", &callbacks));
