@@ -1358,12 +1358,71 @@ void Thread::SetClassLoaderOverride(jobject class_loader_override) {
   tlsPtr_.class_loader_override = GetJniEnv()->NewGlobalRef(class_loader_override);
 }
 
+class CompareToExistingStackTraceVisitor : public StackVisitor {
+ public:
+  explicit CompareToExistingStackTraceVisitor(Thread* thread,
+                                              mirror::ObjectArray<mirror::Object>* trace)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      : StackVisitor(thread, nullptr),
+        element_(0), skipping_(true), matches_(true) {
+    method_trace_ = trace;
+    num_elements_ = trace->GetLength() - 1;
+    CHECK_GE(num_elements_, 0);
+    dex_pc_trace_ = trace->Get(num_elements_)->AsIntArray();
+  }
+
+  bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // We want to skip frames up to and including the exception's constructor.
+    // Note we also skip the frame if it doesn't have a method (namely the callee
+    // save frame)
+    mirror::ArtMethod* m = GetMethod();
+    if (skipping_ && !m->IsRuntimeMethod() &&
+        !mirror::Throwable::GetJavaLangThrowable()->IsAssignableFrom(m->GetDeclaringClass())) {
+      skipping_ = false;
+    }
+    if (!skipping_) {
+      if (!m->IsRuntimeMethod()) {  // Ignore runtime frames (in particular callee save).
+        bool element_differs = element_ >= num_elements_;
+        element_differs = element_differs ||
+            method_trace_->GetWithoutChecks(element_) != m;
+        element_differs = element_differs ||
+            dex_pc_trace_->GetWithoutChecks(element_) !=
+            m->IsProxyMethod() ? DexFile::kDexNoIndex : GetDexPc();
+        // Fail if elements differ.
+        if (element_differs) {
+          matches_ = false;
+          return false;
+        }
+        ++element_;
+      }
+    }
+    return true;
+  }
+
+  bool Matches() const {
+    return (element_ == num_elements_) && matches_;
+  }
+
+ private:
+  // Array of dex PC values.
+  mirror::IntArray* dex_pc_trace_;
+  // An array of the methods on the stack, the last entry is a reference to the PC trace.
+  mirror::ObjectArray<mirror::Object>* method_trace_;
+  // The number of elements in the trace.
+  int32_t num_elements_;
+  // The element we're processing.
+  int32_t element_;
+  // Have we found no constructor methods?
+  bool skipping_;
+  // Did the traces match or differ?
+  bool matches_;
+};
+
 class CountStackDepthVisitor : public StackVisitor {
  public:
   explicit CountStackDepthVisitor(Thread* thread)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : StackVisitor(thread, nullptr),
-        depth_(0), skip_depth_(0), skipping_(true) {}
+      : StackVisitor(thread, nullptr), depth_(0), skip_depth_(0), skipping_(true) {}
 
   bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // We want to skip frames up to and including the exception's constructor.
@@ -1474,16 +1533,22 @@ class BuildInternalStackTraceVisitor : public StackVisitor {
 };
 
 template<bool kTransactionActive>
-jobject Thread::CreateInternalStackTrace(const ScopedObjectAccessAlreadyRunnable& soa) const {
+jobject Thread::CreateInternalStackTrace(const ScopedObjectAccessAlreadyRunnable& soa) {
+  if (!kTransactionActive && tlsPtr_.last_internal_stack_trace != nullptr) {
+    CompareToExistingStackTraceVisitor compare_visitor(this, tlsPtr_.last_internal_stack_trace);
+    compare_visitor.WalkStack();
+    if (compare_visitor.Matches()) {
+      return soa.AddLocalReference<jobject>(tlsPtr_.last_internal_stack_trace);
+    }
+  }
   // Compute depth of stack
-  CountStackDepthVisitor count_visitor(const_cast<Thread*>(this));
+  CountStackDepthVisitor count_visitor(this);
   count_visitor.WalkStack();
   int32_t depth = count_visitor.GetDepth();
   int32_t skip_depth = count_visitor.GetSkipDepth();
 
   // Build internal stack trace.
-  BuildInternalStackTraceVisitor<kTransactionActive> build_trace_visitor(soa.Self(),
-                                                                         const_cast<Thread*>(this),
+  BuildInternalStackTraceVisitor<kTransactionActive> build_trace_visitor(soa.Self(), this,
                                                                          skip_depth);
   if (!build_trace_visitor.Init(depth)) {
     return nullptr;  // Allocation failed.
@@ -1495,12 +1560,15 @@ jobject Thread::CreateInternalStackTrace(const ScopedObjectAccessAlreadyRunnable
       CHECK(trace->Get(i) != nullptr);
     }
   }
+  if (!kTransactionActive) {
+    tlsPtr_.last_internal_stack_trace = trace;
+  }
   return soa.AddLocalReference<jobjectArray>(trace);
 }
 template jobject Thread::CreateInternalStackTrace<false>(
-    const ScopedObjectAccessAlreadyRunnable& soa) const;
+    const ScopedObjectAccessAlreadyRunnable& soa);
 template jobject Thread::CreateInternalStackTrace<true>(
-    const ScopedObjectAccessAlreadyRunnable& soa) const;
+    const ScopedObjectAccessAlreadyRunnable& soa);
 
 jobjectArray Thread::InternalStackTraceToStackTraceElementArray(
     const ScopedObjectAccessAlreadyRunnable& soa, jobject internal, jobjectArray output_array,
@@ -2153,6 +2221,10 @@ void Thread::VisitRoots(RootCallback* visitor, void* arg) {
     visitor(reinterpret_cast<mirror::Object**>(&tlsPtr_.exception), arg, thread_id, kRootNativeStack);
   }
   tlsPtr_.throw_location.VisitRoots(visitor, arg);
+  if (tlsPtr_.last_internal_stack_trace != nullptr) {
+    visitor(reinterpret_cast<mirror::Object**>(&tlsPtr_.last_internal_stack_trace), arg, thread_id,
+            kRootNativeStack);
+  }
   if (tlsPtr_.monitor_enter_object != nullptr) {
     visitor(&tlsPtr_.monitor_enter_object, arg, thread_id, kRootNativeStack);
   }

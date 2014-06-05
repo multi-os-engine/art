@@ -467,7 +467,7 @@ class Thread {
   // Create the internal representation of a stack trace, that is more time
   // and space efficient to compute than the StackTraceElement[].
   template<bool kTransactionActive>
-  jobject CreateInternalStackTrace(const ScopedObjectAccessAlreadyRunnable& soa) const
+  jobject CreateInternalStackTrace(const ScopedObjectAccessAlreadyRunnable& soa)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Convert an internal stack trace representation (returned by CreateInternalStackTrace) to a
@@ -1024,10 +1024,11 @@ class Thread {
       managed_stack(), suspend_trigger(nullptr), jni_env(nullptr), self(nullptr), opeer(nullptr),
       jpeer(nullptr), stack_begin(nullptr), stack_size(0), throw_location(),
       stack_trace_sample(nullptr), wait_next(nullptr), monitor_enter_object(nullptr),
-      top_handle_scope(nullptr), class_loader_override(nullptr), long_jump_context(nullptr),
-      instrumentation_stack(nullptr), debug_invoke_req(nullptr), single_step_control(nullptr),
-      deoptimization_shadow_frame(nullptr), shadow_frame_under_construction(nullptr), name(nullptr),
-      pthread_self(0), last_no_thread_suspension_cause(nullptr), thread_local_start(nullptr),
+      top_handle_scope(nullptr), class_loader_override(nullptr), last_internal_stack_trace(nullptr),
+      long_jump_context(nullptr), instrumentation_stack(nullptr), debug_invoke_req(nullptr),
+      single_step_control(nullptr), deoptimization_shadow_frame(nullptr),
+      shadow_frame_under_construction(nullptr), name(nullptr), pthread_self(0),
+      last_no_thread_suspension_cause(nullptr), thread_local_start(nullptr),
       thread_local_pos(nullptr), thread_local_end(nullptr), thread_local_objects(0),
       thread_local_alloc_stack_top(nullptr), thread_local_alloc_stack_end(nullptr) {
     }
@@ -1086,6 +1087,9 @@ class Thread {
     // Needed to get the right ClassLoader in JNI_OnLoad, but also
     // useful for testing.
     jobject class_loader_override;
+
+    // A cache of the last stack trace for this thread.
+    mirror::ObjectArray<mirror::Object>* last_internal_stack_trace;
 
     // Thread local, lazily allocated, long jump context. Used to deliver exceptions.
     Context* long_jump_context;
