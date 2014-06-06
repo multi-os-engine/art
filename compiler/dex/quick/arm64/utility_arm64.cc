@@ -104,7 +104,7 @@ LIR* Arm64Mir2Lir::LoadFPConstantValue(int r_dest, int32_t value) {
 
   LIR* load_pc_rel = RawLIR(current_dalvik_offset_, kA64Ldr2fp,
                             r_dest, 0, 0, 0, 0, data_target);
-  SetMemRefType(load_pc_rel, true, kLiteral);
+  SetMemRefType(load_pc_rel, true, ResourceMask::kLiteral);
   AppendLIR(load_pc_rel);
   return load_pc_rel;
 }
@@ -131,7 +131,7 @@ LIR* Arm64Mir2Lir::LoadFPConstantValueWide(int r_dest, int64_t value) {
   DCHECK(RegStorage::IsFloat(r_dest));
   LIR* load_pc_rel = RawLIR(current_dalvik_offset_, FWIDE(kA64Ldr2fp),
                             r_dest, 0, 0, 0, 0, data_target);
-  SetMemRefType(load_pc_rel, true, kLiteral);
+  SetMemRefType(load_pc_rel, true, ResourceMask::kLiteral);
   AppendLIR(load_pc_rel);
   return load_pc_rel;
 }
@@ -685,7 +685,7 @@ LIR* Arm64Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
 
     LIR* res = RawLIR(current_dalvik_offset_, WIDE(kA64Ldr2rp),
                       r_dest.GetReg(), 0, 0, 0, 0, data_target);
-    SetMemRefType(res, true, kLiteral);
+    SetMemRefType(res, true, ResourceMask::kLiteral);
     AppendLIR(res);
     return res;
   }

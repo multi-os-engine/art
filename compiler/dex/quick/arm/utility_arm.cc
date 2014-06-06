@@ -89,7 +89,7 @@ LIR* ArmMir2Lir::LoadFPConstantValue(int r_dest, int value) {
   }
   LIR* load_pc_rel = RawLIR(current_dalvik_offset_, kThumb2Vldrs,
                           r_dest, rs_r15pc.GetReg(), 0, 0, 0, data_target);
-  SetMemRefType(load_pc_rel, true, kLiteral);
+  SetMemRefType(load_pc_rel, true, ResourceMask::kLiteral);
   AppendLIR(load_pc_rel);
   return load_pc_rel;
 }
@@ -678,7 +678,7 @@ LIR* ArmMir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
       res = RawLIR(current_dalvik_offset_, kThumb2LdrdPcRel8,
                    r_dest.GetLowReg(), r_dest.GetHighReg(), rs_r15pc.GetReg(), 0, 0, data_target);
     }
-    SetMemRefType(res, true, kLiteral);
+    SetMemRefType(res, true, ResourceMask::kLiteral);
     AppendLIR(res);
   }
   return res;

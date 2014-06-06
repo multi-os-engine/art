@@ -566,7 +566,7 @@ LIR* X86Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
                            kDouble);
         res->target = data_target;
         res->flags.fixup = kFixupLoad;
-        SetMemRefType(res, true, kLiteral);
+        SetMemRefType(res, true, ResourceMask::kLiteral);
         store_method_addr_used_ = true;
       } else {
         if (val_lo == 0) {

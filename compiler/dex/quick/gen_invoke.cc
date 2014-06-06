@@ -1001,16 +1001,16 @@ int Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
     OpRegRegImm(kOpAdd, TargetReg(kArg3), TargetReg(kSp), start_offset);
     LIR* ld = OpVldm(TargetReg(kArg3), regs_left_to_pass_via_stack);
     // TUNING: loosen barrier
-    ld->u.m.def_mask = ENCODE_ALL;
-    SetMemRefType(ld, true /* is_load */, kDalvikReg);
+    ld->u.m.def_mask = &kEncodeAll;
+    SetMemRefType(ld, true /* is_load */, ResourceMask::kDalvikReg);
     call_state = next_call_insn(cu_, info, call_state, target_method, vtable_idx,
                              direct_code, direct_method, type);
     OpRegRegImm(kOpAdd, TargetReg(kArg3), TargetReg(kSp), 4 /* Method* */ + (3 * 4));
     call_state = next_call_insn(cu_, info, call_state, target_method, vtable_idx,
                              direct_code, direct_method, type);
     LIR* st = OpVstm(TargetReg(kArg3), regs_left_to_pass_via_stack);
-    SetMemRefType(st, false /* is_load */, kDalvikReg);
-    st->u.m.def_mask = ENCODE_ALL;
+    SetMemRefType(st, false /* is_load */, ResourceMask::kDalvikReg);
+    st->u.m.def_mask = &kEncodeAll;
     call_state = next_call_insn(cu_, info, call_state, target_method, vtable_idx,
                              direct_code, direct_method, type);
   } else if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
@@ -1083,8 +1083,8 @@ int Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
             AnnotateDalvikRegAccess(ld2, (current_src_offset + (bytes_to_move >> 1)) >> 2, true, true);
           } else {
             // Set barrier for 128-bit load.
-            SetMemRefType(ld1, true /* is_load */, kDalvikReg);
-            ld1->u.m.def_mask = ENCODE_ALL;
+            SetMemRefType(ld1, true /* is_load */, ResourceMask::kDalvikReg);
+            ld1->u.m.def_mask = &kEncodeAll;
           }
         }
         if (st1 != nullptr) {
@@ -1094,8 +1094,8 @@ int Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
             AnnotateDalvikRegAccess(st2, (current_dest_offset + (bytes_to_move >> 1)) >> 2, false, true);
           } else {
             // Set barrier for 128-bit store.
-            SetMemRefType(st1, false /* is_load */, kDalvikReg);
-            st1->u.m.def_mask = ENCODE_ALL;
+            SetMemRefType(st1, false /* is_load */, ResourceMask::kDalvikReg);
+            st1->u.m.def_mask = &kEncodeAll;
           }
         }
 
