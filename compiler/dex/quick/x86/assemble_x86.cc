@@ -1480,7 +1480,9 @@ AssemblerStatus X86Mir2Lir::AssembleInstructions(CodeOffset start_addr) {
                   << " delta: " << delta << " old delta: " << lir->operands[0];
             }
             lir->opcode = kX86Jcc32;
-            SetupResourceMasks(lir);
+            lir->flags.size = GetInsnSize(lir);
+            DCHECK(lir->u.m.def_mask->Equals(kEncodeAll));
+            DCHECK(lir->u.m.use_mask->Equals(kEncodeAll));
             res = kRetryAll;
           }
           if (kVerbosePcFixup) {
@@ -1544,7 +1546,9 @@ AssemblerStatus X86Mir2Lir::AssembleInstructions(CodeOffset start_addr) {
               LOG(INFO) << "Retry for JMP growth at " << lir->offset;
             }
             lir->opcode = kX86Jmp32;
-            SetupResourceMasks(lir);
+            lir->flags.size = GetInsnSize(lir);
+            DCHECK(lir->u.m.def_mask->Equals(kEncodeAll));
+            DCHECK(lir->u.m.use_mask->Equals(kEncodeAll));
             res = kRetryAll;
           }
           lir->operands[0] = delta;
