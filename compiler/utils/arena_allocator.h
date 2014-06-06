@@ -41,6 +41,7 @@ enum ArenaAllocKind {
   kArenaAllocMisc,
   kArenaAllocBB,
   kArenaAllocLIR,
+  kArenaAllocLIRResourceMask,
   kArenaAllocMIR,
   kArenaAllocDFInfo,
   kArenaAllocGrowableArray,
