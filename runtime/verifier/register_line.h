@@ -291,6 +291,12 @@ class RegisterLine {
     return monitors_[i];
   }
 
+  // RegisterLine::Create allocates using new byte[] so we should have a corresponding delete
+  // byte[] to please valgrind.
+  static void operator delete(void* ptr, std::size_t sz) {
+    delete[] reinterpret_cast<uint8_t*>(ptr);
+  }
+
  private:
   void CopyRegToLockDepth(size_t dst, size_t src) {
     SafeMap<uint32_t, uint32_t>::iterator it = reg_to_lock_depths_.find(src);
