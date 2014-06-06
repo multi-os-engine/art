@@ -858,7 +858,7 @@ void Arm64Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
     return;
   }
 
-  int start_vreg = cu_->num_dalvik_registers - cu_->num_ins;
+  int start_vreg = mir_graph_->GetNumOfLocalCodeVRs();
   for (int i = 0; i < cu_->num_ins; i++) {
     PromotionMap* v_map = &promotion_map_[start_vreg + i];
     RegLocation* t_loc = &ArgLocs[i];

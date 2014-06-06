@@ -1669,7 +1669,7 @@ bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
       art::llvm::IntrinsicHelper::IntrinsicId id =
               art::llvm::IntrinsicHelper::AllocaShadowFrame;
       ::llvm::Function* func = intrinsic_helper_->GetIntrinsicFunction(id);
-      ::llvm::Value* entries = irb_->getInt32(cu_->num_dalvik_registers);
+      ::llvm::Value* entries = irb_->getInt32(mir_graph_->GetNumOfCodeVRs());
       irb_->CreateCall(func, entries);
     }
 

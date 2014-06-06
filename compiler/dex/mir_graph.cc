@@ -106,15 +106,15 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       forward_branches_(0),
       compiler_temps_(arena, 6, kGrowableArrayMisc),
       num_non_special_compiler_temps_(0),
+      num_special_compiler_temps_(0),
       max_available_non_special_compiler_temps_(0),
+      max_available_special_compiler_temps_(1),  // We only need the method ptr as a special temp for now.
       punt_to_interpreter_(false),
       merged_df_flags_(0u),
       ifield_lowering_infos_(arena, 0u),
       sfield_lowering_infos_(arena, 0u),
       method_lowering_infos_(arena, 0u) {
   try_block_addr_ = new (arena_) ArenaBitVector(arena_, 0, true /* expandable */);
-  max_available_special_compiler_temps_ = std::abs(static_cast<int>(kVRegNonSpecialTempBaseReg))
-      - std::abs(static_cast<int>(kVRegTempBaseReg));
 }
 
 MIRGraph::~MIRGraph() {
@@ -605,7 +605,6 @@ void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_
     cu_->num_ins = current_code_item_->ins_size_;
     cu_->num_regs = current_code_item_->registers_size_ - cu_->num_ins;
     cu_->num_outs = current_code_item_->outs_size_;
-    cu_->num_dalvik_registers = current_code_item_->registers_size_;
     cu_->insns = current_code_item_->insns_;
     cu_->code_item = current_code_item_;
   } else {
