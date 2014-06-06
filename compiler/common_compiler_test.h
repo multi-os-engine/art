@@ -324,7 +324,7 @@ class CommonCompilerTest : public CommonRuntimeTest {
                                                 compiler_kind, instruction_set,
                                                 instruction_set_features,
                                                 true, new CompilerDriver::DescriptorSet,
-                                                2, true, true, timer_.get()));
+                                                2, true, true, true, timer_.get()));
     }
     // We typically don't generate an image in unit tests, disable this optimization by default.
     compiler_driver_->SetSupportBootImageFixup(false);

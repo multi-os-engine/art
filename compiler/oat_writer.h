@@ -108,6 +108,10 @@ class OatWriter {
     return method_info_;
   }
 
+  bool DidCaptureDebugInfo() const {
+    return capture_debug_info_;
+  }
+
  private:
   // The DataAccess classes are helper classes that provide access to members related to
   // a given map, i.e. GC map, mapping table or vmap table. By abstracting these away
@@ -245,6 +249,8 @@ class OatWriter {
 
   // Size required for Oat data structures.
   size_t size_;
+
+  const bool capture_debug_info_;
 
   // dependencies on the image.
   uint32_t image_file_location_oat_checksum_;

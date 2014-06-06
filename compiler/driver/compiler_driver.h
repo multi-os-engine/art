@@ -105,7 +105,7 @@ class CompilerDriver {
                           InstructionSetFeatures instruction_set_features,
                           bool image, DescriptorSet* image_classes,
                           size_t thread_count, bool dump_stats, bool dump_passes,
-                          CumulativeLogger* timer,
+                          bool capture_debug_info_, CumulativeLogger* timer,
                           std::string profile_file = "");
 
   ~CompilerDriver();
@@ -392,6 +392,10 @@ class CompilerDriver {
 
   bool GetDumpPasses() const {
     return dump_passes_;
+  }
+
+  bool GetCaptureDebugInfo() const {
+    return capture_debug_info_;
   }
 
   CumulativeLogger* GetTimingsLogger() const {
@@ -722,6 +726,7 @@ class CompilerDriver {
 
   bool dump_stats_;
   const bool dump_passes_;
+  const bool capture_debug_info_;
 
   CumulativeLogger* const timings_logger_;
 

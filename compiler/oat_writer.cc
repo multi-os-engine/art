@@ -54,6 +54,7 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
                      TimingLogger* timings)
   : compiler_driver_(compiler),
     dex_files_(&dex_files),
+    capture_debug_info_(compiler->GetCaptureDebugInfo()),
     image_file_location_oat_checksum_(image_file_location_oat_checksum),
     image_file_location_oat_begin_(image_file_location_oat_begin),
     image_file_location_(image_file_location),
@@ -350,31 +351,17 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
         uint32_t thumb_offset = compiled_method->CodeDelta();
         quick_code_offset = offset_ + sizeof(OatQuickMethodHeader) + thumb_offset;
 
-        std::vector<uint8_t>* cfi_info = writer_->compiler_driver_->GetCallFrameInformation();
-        if (cfi_info != nullptr) {
-          // Copy in the FDE, if present
-          const std::vector<uint8_t>* fde = compiled_method->GetCFIInfo();
-          if (fde != nullptr) {
-            // Copy the information into cfi_info and then fix the address in the new copy.
-            int cur_offset = cfi_info->size();
-            cfi_info->insert(cfi_info->end(), fde->begin(), fde->end());
-
-            // Set the 'initial_location' field to address the start of the method.
-            uint32_t new_value = quick_code_offset - writer_->oat_header_->GetExecutableOffset();
-            uint32_t offset_to_update = cur_offset + 2*sizeof(uint32_t);
-            (*cfi_info)[offset_to_update+0] = new_value;
-            (*cfi_info)[offset_to_update+1] = new_value >> 8;
-            (*cfi_info)[offset_to_update+2] = new_value >> 16;
-            (*cfi_info)[offset_to_update+3] = new_value >> 24;
-            std::string name = PrettyMethod(it.GetMemberIndex(), *dex_file_, false);
-            writer_->method_info_.push_back(DebugInfo(name, new_value, new_value + code_size));
-          }
-        }
+        bool force_debug_capture = false;
+        bool deduped = false;
+        uint32_t quick_code_start =
+            quick_code_offset - writer_->oat_header_->GetExecutableOffset();
 
         // Deduplicate code arrays.
         auto code_iter = dedupe_map_.find(compiled_method);
         if (code_iter != dedupe_map_.end()) {
           quick_code_offset = code_iter->second;
+          quick_code_start = quick_code_offset - writer_->oat_header_->GetExecutableOffset();
+          deduped = true;
         } else {
           dedupe_map_.Put(compiled_method, quick_code_offset);
         }
@@ -408,6 +395,37 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
           offset_ += sizeof(*method_header);  // Method header is prepended before code.
           writer_->oat_header_->UpdateChecksum(&(*quick_code)[0], code_size);
           offset_ += code_size;
+        }
+
+        std::vector<uint8_t>* cfi_info = writer_->compiler_driver_->GetCallFrameInformation();
+        if (cfi_info != nullptr) {
+          // Copy in the FDE, if present
+          const std::vector<uint8_t>* fde = compiled_method->GetCFIInfo();
+          if (fde != nullptr) {
+            // Copy the information into cfi_info and then fix the address in the new copy.
+            int cur_offset = cfi_info->size();
+            cfi_info->insert(cfi_info->end(), fde->begin(), fde->end());
+
+            // Set the 'initial_location' field to address the start of the method.
+            uint32_t offset_to_update = cur_offset + 2*sizeof(uint32_t);
+            (*cfi_info)[offset_to_update+0] = quick_code_start;
+            (*cfi_info)[offset_to_update+1] = quick_code_start >> 8;
+            (*cfi_info)[offset_to_update+2] = quick_code_start >> 16;
+            (*cfi_info)[offset_to_update+3] = quick_code_start >> 24;
+            force_debug_capture = true;
+          }
+        }
+
+
+        if (writer_->capture_debug_info_ || force_debug_capture) {
+          // Record debug information for this function if we are doing that or
+          // we have CFI and so need it.
+          std::string name = PrettyMethod(it.GetMemberIndex(), *dex_file_, true);
+          if (deduped) {
+            name += " [ DEDUPED ]";
+          }
+          writer_->method_info_.push_back(DebugInfo(name, quick_code_start,
+                                                    quick_code_start + code_size));
         }
       }
 

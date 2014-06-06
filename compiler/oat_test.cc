@@ -101,7 +101,7 @@ TEST_F(OatTest, WriteRead) {
                                             verification_results_.get(),
                                             method_inliner_map_.get(),
                                             compiler_kind, insn_set,
-                                            insn_features, false, NULL, 2, true, true,
+                                            insn_features, false, NULL, 2, true, true, true,
                                             timer_.get()));
   jobject class_loader = NULL;
   if (kCompile) {

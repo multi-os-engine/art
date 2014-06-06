@@ -324,6 +324,7 @@ class Dex2Oat {
                                       std::unique_ptr<CompilerDriver::DescriptorSet>& image_classes,
                                       bool dump_stats,
                                       bool dump_passes,
+                                      bool capture_debug_info,
                                       TimingLogger& timings,
                                       CumulativeLogger& compiler_phases_timings,
                                       std::string profile_file) {
@@ -356,6 +357,7 @@ class Dex2Oat {
                                                         thread_count_,
                                                         dump_stats,
                                                         dump_passes,
+                                                        capture_debug_info,
                                                         &compiler_phases_timings,
                                                         profile_file));
 
@@ -783,6 +785,7 @@ static int dex2oat(int argc, char** argv) {
   bool dump_stats = false;
   bool dump_timing = false;
   bool dump_passes = false;
+  bool capture_debug_info = kIsDebugBuild;
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = !kIsTargetBuild;
   bool generate_gdb_information = kIsDebugBuild;
@@ -936,6 +939,10 @@ static int dex2oat(int argc, char** argv) {
       dump_passes = true;
     } else if (option == "--dump-stats") {
       dump_stats = true;
+    } else if (option == "--capture-debug-info") {
+      capture_debug_info = true;
+    } else if (option == "--no-capture-debug-info") {
+      capture_debug_info = false;
     } else if (option.starts_with("--profile-file=")) {
       profile_file = option.substr(strlen("--profile-file=")).data();
       VLOG(compiler) << "dex2oat: profile file is " << profile_file;
@@ -1267,6 +1274,7 @@ static int dex2oat(int argc, char** argv) {
                                                                   image_classes,
                                                                   dump_stats,
                                                                   dump_passes,
+                                                                  capture_debug_info,
                                                                   timings,
                                                                   compiler_phases_timings,
                                                                   profile_file));
