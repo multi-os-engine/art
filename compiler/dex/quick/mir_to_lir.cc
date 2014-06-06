@@ -1123,7 +1123,7 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
       head_lir = &block_label_list_[bb->id];
       // Set the first label as a scheduling barrier.
       DCHECK(!head_lir->flags.use_def_invalid);
-      head_lir->u.m.def_mask = ENCODE_ALL;
+      head_lir->u.m.def_mask = &kEncodeAll;
     }
 
     if (opcode == kMirOpCheck) {

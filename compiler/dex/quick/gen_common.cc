@@ -44,7 +44,7 @@ void Mir2Lir::GenBarrier() {
   LIR* barrier = NewLIR0(kPseudoBarrier);
   /* Mark all resources as being clobbered */
   DCHECK(!barrier->flags.use_def_invalid);
-  barrier->u.m.def_mask = ENCODE_ALL;
+  barrier->u.m.def_mask = &kEncodeAll;
 }
 
 void Mir2Lir::GenDivZeroException() {

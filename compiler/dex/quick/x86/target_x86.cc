@@ -220,77 +220,70 @@ RegStorage X86Mir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
 /*
  * Decode the register id.
  */
-uint64_t X86Mir2Lir::GetRegMaskCommon(RegStorage reg) {
-  uint64_t seed;
-  int shift;
-  int reg_id;
-
-  reg_id = reg.GetRegNum();
-  /* Double registers in x86 are just a single FP register */
-  seed = 1;
-  /* FP register starts at bit position 16 */
-  shift = (reg.IsFloat() || reg.StorageSize() > 8) ? kX86FPReg0 : 0;
-  /* Expand the double register id into single offset */
-  shift += reg_id;
-  return (seed << shift);
+ResourceMask X86Mir2Lir::GetRegMaskCommon(const RegStorage& reg) const {
+  /* Double registers in x86 are just a single FP register. This is always just a single bit. */
+  return ResourceMask::Bit(
+      /* FP register starts at bit position 16 */
+      ((reg.IsFloat() || reg.StorageSize() > 8) ? kX86FPReg0 : 0) + reg.GetRegNum());
 }
 
-uint64_t X86Mir2Lir::GetPCUseDefEncoding() {
+ResourceMask X86Mir2Lir::GetPCUseDefEncoding() const {
   /*
    * FIXME: might make sense to use a virtual resource encoding bit for pc.  Might be
    * able to clean up some of the x86/Arm_Mips differences
    */
   LOG(FATAL) << "Unexpected call to GetPCUseDefEncoding for x86";
-  return 0ULL;
+  return kEncodeNone;
 }
 
-void X86Mir2Lir::SetupTargetResourceMasks(LIR* lir, uint64_t flags) {
+void X86Mir2Lir::SetupTargetResourceMasks(LIR* lir, uint64_t flags,
+                                          ResourceMask* def_mask, ResourceMask* use_mask) {
   DCHECK(cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64);
   DCHECK(!lir->flags.use_def_invalid);
 
   // X86-specific resource map setup here.
   if (flags & REG_USE_SP) {
-    lir->u.m.use_mask |= ENCODE_X86_REG_SP;
+    use_mask->SetTargetSpecificBit(kX86RegSP);
   }
 
   if (flags & REG_DEF_SP) {
-    lir->u.m.def_mask |= ENCODE_X86_REG_SP;
+    def_mask->SetTargetSpecificBit(kX86RegSP);
   }
 
   if (flags & REG_DEFA) {
-    SetupRegMask(&lir->u.m.def_mask, rs_rAX.GetReg());
+    SetupRegMask(def_mask, rs_rAX.GetReg());
   }
 
   if (flags & REG_DEFD) {
-    SetupRegMask(&lir->u.m.def_mask, rs_rDX.GetReg());
+    SetupRegMask(def_mask, rs_rDX.GetReg());
   }
   if (flags & REG_USEA) {
-    SetupRegMask(&lir->u.m.use_mask, rs_rAX.GetReg());
+    SetupRegMask(use_mask, rs_rAX.GetReg());
   }
 
   if (flags & REG_USEC) {
-    SetupRegMask(&lir->u.m.use_mask, rs_rCX.GetReg());
+    SetupRegMask(use_mask, rs_rCX.GetReg());
   }
 
   if (flags & REG_USED) {
-    SetupRegMask(&lir->u.m.use_mask, rs_rDX.GetReg());
+    SetupRegMask(use_mask, rs_rDX.GetReg());
   }
 
   if (flags & REG_USEB) {
-    SetupRegMask(&lir->u.m.use_mask, rs_rBX.GetReg());
+    SetupRegMask(use_mask, rs_rBX.GetReg());
   }
 
   // Fixup hard to describe instruction: Uses rAX, rCX, rDI; sets rDI.
   if (lir->opcode == kX86RepneScasw) {
-    SetupRegMask(&lir->u.m.use_mask, rs_rAX.GetReg());
-    SetupRegMask(&lir->u.m.use_mask, rs_rCX.GetReg());
-    SetupRegMask(&lir->u.m.use_mask, rs_rDI.GetReg());
-    SetupRegMask(&lir->u.m.def_mask, rs_rDI.GetReg());
+    SetupRegMask(use_mask, rs_rAX.GetReg());
+    SetupRegMask(use_mask, rs_rCX.GetReg());
+    SetupRegMask(use_mask, rs_rDI.GetReg());
+    SetupRegMask(def_mask, rs_rDI.GetReg());
   }
 
   if (flags & USE_FP_STACK) {
-    lir->u.m.use_mask |= ENCODE_X86_FP_STACK;
-    lir->u.m.def_mask |= ENCODE_X86_FP_STACK;
+    use_mask->SetTargetSpecificBit(kX86FPStack);
+    def_mask->SetTargetSpecificBit(kX86FPStack);
   }
 }
 
@@ -382,40 +375,40 @@ std::string X86Mir2Lir::BuildInsnString(const char *fmt, LIR *lir, unsigned char
   return buf;
 }
 
-void X86Mir2Lir::DumpResourceMask(LIR *x86LIR, uint64_t mask, const char *prefix) {
+void X86Mir2Lir::DumpResourceMask(LIR *x86LIR, const ResourceMask& mask, const char *prefix) {
   char buf[256];
   buf[0] = 0;
 
-  if (mask == ENCODE_ALL) {
+  if (mask.Equals(kEncodeAll)) {
     strcpy(buf, "all");
   } else {
     char num[8];
     int i;
 
     for (i = 0; i < kX86RegEnd; i++) {
-      if (mask & (1ULL << i)) {
+      if (mask.HasBit(i)) {
         snprintf(num, arraysize(num), "%d ", i);
         strcat(buf, num);
       }
     }
 
-    if (mask & ENCODE_CCODE) {
+    if (mask.HasBit(ResourceMask::kCCode)) {
       strcat(buf, "cc ");
     }
     /* Memory bits */
-    if (x86LIR && (mask & ENCODE_DALVIK_REG)) {
+    if (x86LIR && (mask.HasBit(ResourceMask::kDalvikReg))) {
       snprintf(buf + strlen(buf), arraysize(buf) - strlen(buf), "dr%d%s",
                DECODE_ALIAS_INFO_REG(x86LIR->flags.alias_info),
                (DECODE_ALIAS_INFO_WIDE(x86LIR->flags.alias_info)) ? "(+1)" : "");
     }
-    if (mask & ENCODE_LITERAL) {
+    if (mask.HasBit(ResourceMask::kLiteral)) {
       strcat(buf, "lit ");
     }
 
-    if (mask & ENCODE_HEAP_REF) {
+    if (mask.HasBit(ResourceMask::kHeapRef)) {
       strcat(buf, "heap ");
     }
-    if (mask & ENCODE_MUST_NOT_ALIAS) {
+    if (mask.HasBit(ResourceMask::kMustNotAlias)) {
       strcat(buf, "noalias ");
     }
   }
@@ -541,7 +534,7 @@ bool X86Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
   } else {
     // Mark as a scheduling barrier.
     DCHECK(!mem_barrier->flags.use_def_invalid);
-    mem_barrier->u.m.def_mask = ENCODE_ALL;
+    mem_barrier->u.m.def_mask = &kEncodeAll;
   }
   return ret;
 #else
@@ -1365,7 +1358,7 @@ void X86Mir2Lir::GenConst128(BasicBlock* bb, MIR* mir) {
   LIR *load = NewLIR3(kX86Mova128RM, reg, rl_method.reg.GetReg(),  256 /* bogus */);
   load->flags.fixup = kFixupLoad;
   load->target = data_target;
-  SetMemRefType(load, true, kLiteral);
+  SetMemRefType(load, true, ResourceMask::kLiteral);
 }
 
 void X86Mir2Lir::GenMoveVector(BasicBlock *bb, MIR *mir) {

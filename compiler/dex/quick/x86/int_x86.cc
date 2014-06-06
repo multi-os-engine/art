@@ -843,7 +843,7 @@ LIR* X86Mir2Lir::OpPcRelLoad(RegStorage reg, LIR* target) {
                     0, 0, target);
   res->target = target;
   res->flags.fixup = kFixupLoad;
-  SetMemRefType(res, true, kLiteral);
+  SetMemRefType(res, true, ResourceMask::kLiteral);
   store_method_addr_used_ = true;
   return res;
 }
