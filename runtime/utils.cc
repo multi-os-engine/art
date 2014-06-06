@@ -1056,6 +1056,7 @@ void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix,
   if (current_method != nullptr) {
     Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
   }
+#ifdef __linux__
   std::unique_ptr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid));
   if (!backtrace->Unwind(0)) {
     os << prefix << "(backtrace::Unwind failed for thread " << tid << ")\n";
@@ -1097,6 +1098,7 @@ void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix,
     }
     os << "\n";
   }
+#endif
 }
 
 #if defined(__APPLE__)

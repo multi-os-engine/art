@@ -19,7 +19,7 @@
 
 // Include the micro-API to avoid potential macro conflicts with the
 // compiler's own elf.h file.
-#include "../../bionic/libc/kernel/uapi/linux/elf.h"
+#include "../../external/elfutils/0.153/libelf/elf.h"
 
 // Architecture dependent flags for the ELF header.
 #define EF_ARM_EABI_VER5 0x05000000
