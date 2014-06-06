@@ -570,6 +570,8 @@ class StackVisitor {
   uintptr_t* GetGPRAddress(uint32_t reg) const;
   uintptr_t GetGPR(uint32_t reg) const;
   void SetGPR(uint32_t reg, uintptr_t value);
+  uintptr_t GetFPR(uint32_t reg) const;
+  void SetFPR(uint32_t reg, uintptr_t value);
 
   // This is a fast-path for getting/setting values in a quick frame.
   uint32_t* GetVRegAddr(StackReference<mirror::ArtMethod>* cur_quick_frame,

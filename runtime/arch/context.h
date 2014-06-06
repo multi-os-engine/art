@@ -58,6 +58,12 @@ class Context {
   // Set the given GPR.
   virtual void SetGPR(uint32_t reg, uintptr_t value) = 0;
 
+  // Read the given FPR
+  virtual uintptr_t GetFPR(uint32_t reg) = 0;
+
+  // Set the given FPR.
+  virtual void SetFPR(uint32_t reg, uintptr_t value) = 0;
+
   // Smash the caller save registers. If we're throwing, we don't want to return bogus values.
   virtual void SmashCallerSaves() = 0;
 

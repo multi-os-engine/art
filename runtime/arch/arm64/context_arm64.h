@@ -44,7 +44,7 @@ class Arm64Context : public Context {
     SetGPR(LR, new_lr);
   }
 
-  virtual uintptr_t* GetGPRAddress(uint32_t reg) {
+  uintptr_t* GetGPRAddress(uint32_t reg) {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
     return gprs_[reg];
   }
@@ -55,6 +55,14 @@ class Arm64Context : public Context {
   }
 
   void SetGPR(uint32_t reg, uintptr_t value);
+
+  uintptr_t GetFPR(uint32_t reg) {
+    DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfDRegisters));
+    return *fprs_[reg];
+  }
+
+  void SetFPR(uint32_t reg, uintptr_t value);
+
   void SmashCallerSaves();
   void DoLongJump();
 
