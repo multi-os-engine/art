@@ -258,6 +258,15 @@ DISASSEMBLER_ENTRY(cmp,
     reg_in_opcode = true;
     target_specific = true;
     break;
+  case 0x63:
+    if (rex == 0x48) {
+      opcode << "movsxd";
+      has_modrm = true;
+      load = true;
+    } else {
+      opcode << StringPrintf("unknown opcode '%02X'", *instr);
+    }
+    break;
   case 0x68: opcode << "push"; immediate_bytes = 4; break;
   case 0x69: opcode << "imul"; load = true; has_modrm = true; immediate_bytes = 4; break;
   case 0x6A: opcode << "push"; immediate_bytes = 1; break;
