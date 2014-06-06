@@ -477,8 +477,8 @@ use-artd-full:
 	adb root && sleep 3
 	adb shell stop
 	adb shell rm -rf $(ART_DALVIK_CACHE_DIR)/*
-	adb shell setprop dalvik.vm.dex2oat-flags ""
-	adb shell setprop dalvik.vm.image-dex2oat-flags ""
+	adb shell setprop dalvik.vm.dex2oat-flags "--include-debug-symbols"
+	adb shell setprop dalvik.vm.image-dex2oat-flags "--include-debug-symbols"
 	adb shell setprop persist.sys.dalvik.vm.lib.2 libartd.so
 	adb shell start
 
