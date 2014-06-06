@@ -32,31 +32,39 @@ class Arm64Context : public Context {
 
   ~Arm64Context() {}
 
-  void Reset();
+  void Reset() OVERRIDE;
 
-  void FillCalleeSaves(const StackVisitor& fr);
+  void FillCalleeSaves(const StackVisitor& fr) OVERRIDE;
 
-  void SetSP(uintptr_t new_sp) {
+  void SetSP(uintptr_t new_sp) OVERRIDE {
     SetGPR(SP, new_sp);
   }
 
-  void SetPC(uintptr_t new_lr) {
+  void SetPC(uintptr_t new_lr) OVERRIDE {
     SetGPR(LR, new_lr);
   }
 
-  virtual uintptr_t* GetGPRAddress(uint32_t reg) {
+  uintptr_t* GetGPRAddress(uint32_t reg) OVERRIDE {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
     return gprs_[reg];
   }
 
-  uintptr_t GetGPR(uint32_t reg) {
+  uintptr_t GetGPR(uint32_t reg) OVERRIDE {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
     return *gprs_[reg];
   }
 
-  void SetGPR(uint32_t reg, uintptr_t value);
-  void SmashCallerSaves();
-  void DoLongJump();
+  void SetGPR(uint32_t reg, uintptr_t value) OVERRIDE;
+
+  uintptr_t GetFPR(uint32_t reg) OVERRIDE {
+    DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfDRegisters));
+    return *fprs_[reg];
+  }
+
+  void SetFPR(uint32_t reg, uintptr_t value) OVERRIDE;
+
+  void SmashCallerSaves() OVERRIDE;
+  void DoLongJump() OVERRIDE;
 
  private:
   // Pointers to register locations, initialized to NULL or the specific registers below.

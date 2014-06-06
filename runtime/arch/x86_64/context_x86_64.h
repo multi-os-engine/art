@@ -31,32 +31,39 @@ class X86_64Context : public Context {
   }
   virtual ~X86_64Context() {}
 
-  virtual void Reset();
+  void Reset() OVERRIDE;
 
-  virtual void FillCalleeSaves(const StackVisitor& fr) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void FillCalleeSaves(const StackVisitor& fr) OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  virtual void SetSP(uintptr_t new_sp) {
+  void SetSP(uintptr_t new_sp) OVERRIDE {
     SetGPR(RSP, new_sp);
   }
 
-  virtual void SetPC(uintptr_t new_pc) {
+  void SetPC(uintptr_t new_pc) OVERRIDE {
     rip_ = new_pc;
   }
 
-  virtual uintptr_t* GetGPRAddress(uint32_t reg) {
+  uintptr_t* GetGPRAddress(uint32_t reg) OVERRIDE {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCpuRegisters));
     return gprs_[reg];
   }
 
-  virtual uintptr_t GetGPR(uint32_t reg) {
+  uintptr_t GetGPR(uint32_t reg) OVERRIDE {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCpuRegisters));
     return *gprs_[reg];
   }
 
-  virtual void SetGPR(uint32_t reg, uintptr_t value);
+  void SetGPR(uint32_t reg, uintptr_t value) OVERRIDE;
 
-  virtual void SmashCallerSaves();
-  virtual void DoLongJump();
+  uintptr_t GetFPR(uint32_t reg) OVERRIDE {
+    DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfFloatRegisters));
+    return *fprs_[reg];
+  }
+
+  void SetFPR(uint32_t reg, uintptr_t value) OVERRIDE;
+
+  void SmashCallerSaves() OVERRIDE;
+  void DoLongJump() OVERRIDE;
 
  private:
   // Pointers to register locations. Values are initialized to NULL or the special registers below.

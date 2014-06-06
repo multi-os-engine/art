@@ -31,31 +31,39 @@ class MipsContext : public Context {
   }
   virtual ~MipsContext() {}
 
-  virtual void Reset();
+  void Reset() OVERRIDE;
 
-  virtual void FillCalleeSaves(const StackVisitor& fr) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void FillCalleeSaves(const StackVisitor& fr) OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  virtual void SetSP(uintptr_t new_sp) {
+  void SetSP(uintptr_t new_sp) OVERRIDE {
     SetGPR(SP, new_sp);
   }
 
-  virtual void SetPC(uintptr_t new_pc) {
+  void SetPC(uintptr_t new_pc) OVERRIDE {
     SetGPR(RA, new_pc);
   }
 
-  virtual uintptr_t* GetGPRAddress(uint32_t reg) {
+  uintptr_t* GetGPRAddress(uint32_t reg) OVERRIDE {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
     return gprs_[reg];
   }
 
-  virtual uintptr_t GetGPR(uint32_t reg) {
+  uintptr_t GetGPR(uint32_t reg) OVERRIDE {
     CHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
     return *gprs_[reg];
   }
 
-  virtual void SetGPR(uint32_t reg, uintptr_t value);
-  virtual void SmashCallerSaves();
-  virtual void DoLongJump();
+  void SetGPR(uint32_t reg, uintptr_t value) OVERRIDE;
+
+  uintptr_t GetFPR(uint32_t reg) OVERRIDE {
+    CHECK_LT(reg, static_cast<uint32_t>(kNumberOfFRegisters));
+    return *fprs_[reg];
+  }
+
+  void SetFPR(uint32_t reg, uintptr_t value) OVERRIDE;
+
+  void SmashCallerSaves() OVERRIDE;
+  void DoLongJump() OVERRIDE;
 
  private:
   // Pointers to registers in the stack, initialized to NULL except for the special cases below.
