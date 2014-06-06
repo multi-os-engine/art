@@ -32,31 +32,39 @@ class ArmContext : public Context {
 
   virtual ~ArmContext() {}
 
-  virtual void Reset();
+  void Reset();
 
-  virtual void FillCalleeSaves(const StackVisitor& fr) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void FillCalleeSaves(const StackVisitor& fr) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  virtual void SetSP(uintptr_t new_sp) {
+  void SetSP(uintptr_t new_sp) {
     SetGPR(SP, new_sp);
   }
 
-  virtual void SetPC(uintptr_t new_pc) {
+  void SetPC(uintptr_t new_pc) {
     SetGPR(PC, new_pc);
   }
 
-  virtual uintptr_t* GetGPRAddress(uint32_t reg) {
+  uintptr_t* GetGPRAddress(uint32_t reg) {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
     return gprs_[reg];
   }
 
-  virtual uintptr_t GetGPR(uint32_t reg) {
+  uintptr_t GetGPR(uint32_t reg) {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
     return *gprs_[reg];
   }
 
-  virtual void SetGPR(uint32_t reg, uintptr_t value);
-  virtual void SmashCallerSaves();
-  virtual void DoLongJump();
+  uintptr_t GetFPR(uint32_t reg) {
+    DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfSRegisters));
+    return *fprs_[reg];
+  }
+
+  void SetGPR(uint32_t reg, uintptr_t value);
+
+  void SetFPR(uint32_t reg, uintptr_t value);
+
+  void SmashCallerSaves();
+  void DoLongJump();
 
  private:
   // Pointers to register locations, initialized to NULL or the specific registers below.

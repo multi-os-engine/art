@@ -27,8 +27,11 @@ namespace arm {
 static constexpr uint32_t kArmCalleeSaveRefSpills =
     (1 << art::arm::R5) | (1 << art::arm::R6)  | (1 << art::arm::R7) | (1 << art::arm::R8) |
     (1 << art::arm::R10) | (1 << art::arm::R11);
+// FIXME: remove R0. We add it to simulate a 1-byte padding is spilled right after R1-R3. It allows
+// to get the correct address of FP callee-saved registers in kRefsAndArgs.
+// stack allocation
 static constexpr uint32_t kArmCalleeSaveArgSpills =
-    (1 << art::arm::R1) | (1 << art::arm::R2) | (1 << art::arm::R3);
+    (1 << art::arm::R0) | (1 << art::arm::R1) | (1 << art::arm::R2) | (1 << art::arm::R3);
 static constexpr uint32_t kArmCalleeSaveAllSpills =
     (1 << art::arm::R4) | (1 << art::arm::R9);
 static constexpr uint32_t kArmCalleeSaveFpAllSpills =
@@ -47,7 +50,7 @@ constexpr uint32_t ArmCalleeSaveCoreSpills(Runtime::CalleeSaveType type) {
 }
 
 constexpr uint32_t ArmCalleeSaveFpSpills(Runtime::CalleeSaveType type) {
-  return type == Runtime::kSaveAll ? kArmCalleeSaveFpAllSpills : 0;
+  return (type == Runtime::kSaveAll || type == Runtime::kRefsAndArgs) ? kArmCalleeSaveFpAllSpills : 0;
 }
 
 constexpr uint32_t ArmCalleeSaveFrameSize(Runtime::CalleeSaveType type) {

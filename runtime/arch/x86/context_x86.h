@@ -31,32 +31,41 @@ class X86Context : public Context {
   }
   virtual ~X86Context() {}
 
-  virtual void Reset();
+  void Reset();
 
-  virtual void FillCalleeSaves(const StackVisitor& fr) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void FillCalleeSaves(const StackVisitor& fr) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  virtual void SetSP(uintptr_t new_sp) {
+  void SetSP(uintptr_t new_sp) {
     SetGPR(ESP, new_sp);
   }
 
-  virtual void SetPC(uintptr_t new_pc) {
+  void SetPC(uintptr_t new_pc) {
     eip_ = new_pc;
   }
 
-  virtual uintptr_t* GetGPRAddress(uint32_t reg) {
+  uintptr_t* GetGPRAddress(uint32_t reg) {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCpuRegisters));
     return gprs_[reg];
   }
 
-  virtual uintptr_t GetGPR(uint32_t reg) {
+  uintptr_t GetGPR(uint32_t reg) {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCpuRegisters));
     return *gprs_[reg];
   }
 
-  virtual void SetGPR(uint32_t reg, uintptr_t value);
+  void SetGPR(uint32_t reg, uintptr_t value);
 
-  virtual void SmashCallerSaves();
-  virtual void DoLongJump();
+  uintptr_t GetFPR(uint32_t reg) {
+    LOG(FATAL) << "Floating-point registers are all caller save in X86";
+    return 0;
+  }
+
+  void SetFPR(uint32_t reg, uintptr_t value) {
+    LOG(FATAL) << "Floating-point registers are all caller save in X86";
+  }
+
+  void SmashCallerSaves();
+  void DoLongJump();
 
  private:
   // Pointers to register locations, floating point registers are all caller save. Values are

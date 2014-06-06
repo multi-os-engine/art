@@ -51,14 +51,17 @@ class QuickArgumentVisitor {
   // | R2         |    arg2
   // | R1         |    arg1
   // | R0         |    padding
+  // | S31        |
+  // | ...        |
+  // | S0         |
   // | Method*    |  <- sp
   static constexpr bool kQuickSoftFloatAbi = true;  // This is a soft float ABI.
   static constexpr size_t kNumQuickGprArgs = 3;  // 3 arguments passed in GPRs.
   static constexpr size_t kNumQuickFprArgs = 0;  // 0 arguments passed in FPRs.
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset = 0;  // Offset of first FPR arg.
-  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Gpr1Offset = 8;  // Offset of first GPR arg.
-  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_LrOffset = 44;  // Offset of return address.
-  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_FrameSize = 48;  // Frame size.
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Gpr1Offset = 136;  // Offset of first GPR arg.
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_LrOffset = 172;  // Offset of return address.
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_FrameSize = 176;  // Frame size.
   static size_t GprIndexToGprOffset(uint32_t gpr_index) {
     return gpr_index * GetBytesPerGprSpillLocation(kRuntimeISA);
   }
@@ -1822,9 +1825,11 @@ extern "C" MethodAndCode artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
     // | R1         |    arg1
     // | R0         |
     // | Method*    |  <- sp
-    DCHECK_EQ(48U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
-    uintptr_t* regs = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp) + kPointerSize);
-    uintptr_t caller_pc = regs[10];
+    DCHECK_EQ(176U, Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes());
+    uintptr_t* caller_pc_addr = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp) +
+        Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes() -
+        kPointerSize);
+    uintptr_t caller_pc = *caller_pc_addr;
 #elif defined(__i386__)
     // On entry the stack pointed by sp is:
     // | argN        |  |

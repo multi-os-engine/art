@@ -155,7 +155,13 @@ uint32_t StackVisitor::GetVReg(mirror::ArtMethod* m, uint16_t vreg, VRegKind kin
     if (vmap_table.IsInContext(vreg, kind, &vmap_offset)) {
       bool is_float = (kind == kFloatVReg) || (kind == kDoubleLoVReg) || (kind == kDoubleHiVReg);
       uint32_t spill_mask = is_float ? frame_info.FpSpillMask() : frame_info.CoreSpillMask();
-      return GetGPR(vmap_table.ComputeRegister(spill_mask, vmap_offset, kind));
+      uint32_t reg = vmap_table.ComputeRegister(spill_mask, vmap_offset, kind);
+      LOG(INFO) << "GetVReg: reg=" << reg << ", vreg=" << vreg << ", kind=" << kind << ", vmap_offset=" << vmap_offset << ", spill_mask=0x" << std::hex << spill_mask;
+      if (is_float) {
+        return GetFPR(reg);
+      } else {
+        return GetGPR(reg);
+      }
     } else {
       const DexFile::CodeItem* code_item = MethodHelper(m).GetCodeItem();
       DCHECK(code_item != NULL) << PrettyMethod(m);  // Can't be NULL or how would we compile its instructions?
@@ -181,8 +187,13 @@ void StackVisitor::SetVReg(mirror::ArtMethod* m, uint16_t vreg, uint32_t new_val
     if (vmap_table.IsInContext(vreg, kind, &vmap_offset)) {
       bool is_float = (kind == kFloatVReg) || (kind == kDoubleLoVReg) || (kind == kDoubleHiVReg);
       uint32_t spill_mask = is_float ? frame_info.FpSpillMask() : frame_info.CoreSpillMask();
-      const uint32_t reg = vmap_table.ComputeRegister(spill_mask, vmap_offset, kReferenceVReg);
-      SetGPR(reg, new_value);
+      const uint32_t reg = vmap_table.ComputeRegister(spill_mask, vmap_offset, kind);
+      LOG(INFO) << "SetVReg: reg=" << reg << ", vreg=" << vreg << ", kind=" << kind << ", vmap_offset=" << vmap_offset << ", spill_mask=0x" << std::hex << spill_mask;
+      if (is_float) {
+        SetFPR(reg, new_value);
+      } else {
+        SetGPR(reg, new_value);
+      }
     } else {
       const DexFile::CodeItem* code_item = MethodHelper(m).GetCodeItem();
       DCHECK(code_item != NULL) << PrettyMethod(m);  // Can't be NULL or how would we compile its instructions?
@@ -209,6 +220,16 @@ uintptr_t StackVisitor::GetGPR(uint32_t reg) const {
 void StackVisitor::SetGPR(uint32_t reg, uintptr_t value) {
   DCHECK(cur_quick_frame_ != NULL) << "This is a quick frame routine";
   context_->SetGPR(reg, value);
+}
+
+uintptr_t StackVisitor::GetFPR(uint32_t reg) const {
+  DCHECK(cur_quick_frame_ != NULL) << "This is a quick frame routine";
+  return context_->GetFPR(reg);
+}
+
+void StackVisitor::SetFPR(uint32_t reg, uintptr_t value) {
+  DCHECK(cur_quick_frame_ != NULL) << "This is a quick frame routine";
+  context_->SetFPR(reg, value);
 }
 
 uintptr_t StackVisitor::GetReturnPc() const {

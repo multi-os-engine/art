@@ -121,18 +121,28 @@
     .cfi_rel_offset r11, 32
     .cfi_rel_offset lr, 36
     .cfi_adjust_cfa_offset 40
-    sub sp, #8                        @ 2 words of space, bottom word will hold Method*
-    .pad #8
-    .cfi_adjust_cfa_offset 8
+    sub sp, #4                        @ padding
+    .pad #4
+    .cfi_adjust_cfa_offset 4
+    vpush {s0-s31}
+    .cfi_adjust_cfa_offset 128
+    sub sp, #4                        @ bottom word will hold Method*
+    .pad #4
+    .cfi_adjust_cfa_offset 4
 
     // Ugly compile-time check, but we only have the preprocessor.
-#if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != 40 + 8)
-#error "REFS_AND_ARGS_CALLEE_SAVE_FRAME(ARM64) size not as expected."
+#if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != 40 + 128 + 8)
+#error "REFS_AND_ARGS_CALLEE_SAVE_FRAME(ARM) size not as expected."
 #endif
 .endm
 
 .macro RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
-    add  sp, #8                      @ rewind sp
+    add  sp, #4                      @ rewind sp (Method*)
+    .cfi_adjust_cfa_offset -4
+    vpop {s0-s31}
+    .cfi_adjust_cfa_offset -128
+    add  sp, #4                      @ rewind sp (padding)
+    .cfi_adjust_cfa_offset -4
     pop {r1-r3, r5-r8, r10-r11, lr}  @ 10 words of callee saves
     .cfi_restore r1
     .cfi_restore r2
@@ -280,7 +290,7 @@ END art_quick_throw_stack_overflow_from_signal
     .extern \cxx_name
 ENTRY \c_name
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME  @ save callee saves in case allocation triggers GC
-    ldr    r2, [sp, #48]                  @ pass caller Method*
+    ldr    r2, [sp, #FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE]                  @ pass caller Method*
     mov    r3, r9                         @ pass Thread::Current
     mov    r12, sp
     str    r12, [sp, #-16]!               @ expand the frame and pass SP
@@ -1012,9 +1022,10 @@ ENTRY art_quick_to_interpreter_bridge
     mov     r2, sp                 @ pass SP
     blx     artQuickToInterpreterBridge    @ (Method* method, Thread*, SP)
     ldr     r2, [r9, #THREAD_EXCEPTION_OFFSET]  @ load Thread::Current()->exception_
-    add     sp, #16                @ skip r1-r3, 4 bytes padding.
-    .cfi_adjust_cfa_offset -16
-    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    add     sp, #4                @ skip Method*
+    vpop {s0-s31}                 @ pop FP regs
+    add sp, #16                   @ skip padding and R1-R3
+    pop {r5-r8, r10-r11, lr}
     cbnz    r2, 1f                 @ success if no exception is pending
     bx    lr                       @ return on success
 1:

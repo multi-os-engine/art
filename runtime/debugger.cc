@@ -2266,12 +2266,13 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
     // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
     // annotalysis.
     bool VisitFrame() NO_THREAD_SAFETY_ANALYSIS {
+      mirror::ArtMethod* m = GetMethod();
+      LOG(INFO) << "GetLocalVisitor: visit " << PrettyMethod(m);
       if (GetFrameId() != frame_id_) {
         return true;  // Not our frame, carry on.
       }
       // TODO: check that the tag is compatible with the actual type of the slot!
       // TODO: check slot is valid for this method or return INVALID_SLOT error.
-      mirror::ArtMethod* m = GetMethod();
       if (m->IsNative()) {
         // We can't read local value from native method.
         error_ = JDWP::ERR_OPAQUE_FRAME;
@@ -2397,7 +2398,9 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
   // TODO check thread is suspended by the debugger ?
   std::unique_ptr<Context> context(Context::Create());
   GetLocalVisitor visitor(soa, thread, context.get(), frame_id, slot, tag, buf, width);
+  LOG(INFO) << "------------------ DEBUGGER - START STACK WALK ----------------------";
   visitor.WalkStack();
+  LOG(INFO) << "------------------ DEBUGGER - END STACK WALK ----------------------";
   return visitor.error_;
 }
 
