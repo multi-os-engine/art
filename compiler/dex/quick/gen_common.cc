@@ -1959,7 +1959,7 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
 
   switch (opcode) {
     case Instruction::NOT_LONG:
-      if (cu->instruction_set == kArm64) {
+      if (cu->instruction_set == kArm64 || cu->instruction_set == kX86_64) {
         mir_to_lir->GenNotLong(rl_dest, rl_src2);
         return;
       }
@@ -2009,7 +2009,7 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
       break;
     case Instruction::DIV_LONG:
     case Instruction::DIV_LONG_2ADDR:
-      if (cu->instruction_set == kArm64) {
+      if (cu->instruction_set == kArm64 || cu->instruction_set == kX86_64) {
         mir_to_lir->GenDivRemLong(opcode, rl_dest, rl_src1, rl_src2, /*is_div*/ true);
         return;
       }
@@ -2072,14 +2072,25 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
   } else {
     mir_to_lir->FlushAllRegs();   /* Send everything to home location */
     if (check_zero) {
-      RegStorage r_tmp1 = RegStorage::MakeRegPair(mir_to_lir->TargetReg(kArg0),
-                                                  mir_to_lir->TargetReg(kArg1));
-      RegStorage r_tmp2 = RegStorage::MakeRegPair(mir_to_lir->TargetReg(kArg2),
-                                                  mir_to_lir->TargetReg(kArg3));
+      RegStorage r_tmp1;
+      RegStorage r_tmp2;
+      if (cu->instruction_set == kX86_64) {
+        r_tmp1 = RegStorage::Solo64(mir_to_lir->TargetReg(kArg0).GetReg());
+        r_tmp2 = RegStorage::Solo64(mir_to_lir->TargetReg(kArg1).GetReg());
+      } else {
+        r_tmp1 = RegStorage::MakeRegPair(mir_to_lir->TargetReg(kArg0),
+                                                    mir_to_lir->TargetReg(kArg1));
+        r_tmp2 = RegStorage::MakeRegPair(mir_to_lir->TargetReg(kArg2),
+                                                    mir_to_lir->TargetReg(kArg3));
+      }
       mir_to_lir->LoadValueDirectWideFixed(rl_src2, r_tmp2);
       RegStorage r_tgt = mir_to_lir->CallHelperSetup(func_offset);
-      mir_to_lir->GenDivZeroCheckWide(RegStorage::MakeRegPair(mir_to_lir->TargetReg(kArg2),
-                                                              mir_to_lir->TargetReg(kArg3)));
+      if (cu->instruction_set == kX86_64) {
+        mir_to_lir->GenDivZeroCheckWide(r_tmp2);
+      } else {
+        mir_to_lir->GenDivZeroCheckWide(RegStorage::MakeRegPair(mir_to_lir->TargetReg(kArg2),
+                                                                mir_to_lir->TargetReg(kArg3)));
+      }
       mir_to_lir->LoadValueDirectWideFixed(rl_src1, r_tmp1);
       // NOTE: callout here is not a safepoint
       mir_to_lir->CallHelper(r_tgt, func_offset, false /* not safepoint */);
