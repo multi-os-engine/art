@@ -57,7 +57,6 @@ struct CompilationUnit {
   jobject class_loader;                // compiling method's class loader.
   uint16_t class_def_idx;              // compiling method's defining class definition index.
   uint32_t method_idx;                 // compiling method's index into method_ids of DexFile.
-  const DexFile::CodeItem* code_item;  // compiling method's DexFile code_item.
   uint32_t access_flags;               // compiling method's access flags.
   InvokeType invoke_type;              // compiling method's invocation type.
   const char* shorty;                  // compiling method's shorty.
@@ -71,12 +70,6 @@ struct CompilationUnit {
   InstructionSetFeatures GetInstructionSetFeatures() {
     return compiler_driver->GetInstructionSetFeatures();
   }
-  // TODO: much of this info available elsewhere.  Go to the original source?
-  uint16_t num_dalvik_registers;        // method->registers_size.
-  const uint16_t* insns;
-  uint16_t num_ins;
-  uint16_t num_outs;
-  uint16_t num_regs;            // Unlike num_dalvik_registers, does not include ins.
 
   // If non-empty, apply optimizer/debug flags only to matching methods.
   std::string compiler_method_match;

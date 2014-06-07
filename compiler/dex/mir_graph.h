@@ -216,6 +216,7 @@ struct CompilerTemp {
 enum CompilerTempType {
   kCompilerTempVR,                // A virtual register temporary.
   kCompilerTempSpecialMethodPtr,  // Temporary that keeps track of current method pointer.
+  kCompilerTempBackend,           // Temporary that is used by backend.
 };
 
 // When debug option enabled, records effectiveness of null and range check elimination.
@@ -568,20 +569,43 @@ class MIRGraph {
     return FindBlock(code_offset, false, false, NULL);
   }
 
-  const uint16_t* GetCurrentInsns() const {
-    return current_code_item_->insns_;
-  }
-
+  /**
+   * @brief Used to obtain the raw dex bytecode instruction pointer.
+   * @param m_unit_index The method index in MIRGraph (caused by having multiple methods).
+   * This is guaranteed to contain index 0 which is the base method being compiled.
+   * @return Returns the raw instruction pointer.
+   */
   const uint16_t* GetInsns(int m_unit_index) const {
     return m_units_[m_unit_index]->GetCodeItem()->insns_;
+  }
+
+  /**
+   * @brief Used to obtain the raw data table.
+   * @param mir sparse switch, packed switch, of fill-array-data
+   * @param table_offset The table offset from start of method.
+   * @return Returns the raw table pointer.
+   */
+  const uint16_t* GetTable(MIR* mir, uint32_t table_offset) const {
+    return GetInsns(mir->m_unit_index) + mir->offset + table_offset;
   }
 
   unsigned int GetNumBlocks() const {
     return num_blocks_;
   }
 
+  /**
+   * @brief Includes all methods in compilation unit when providing the num dalvik instructions.
+   * @return Returns the cumulative sum of all insn sizes (in code units).
+   */
   size_t GetNumDalvikInsns() const {
-    return cu_->code_item->insns_size_in_code_units_;
+    size_t cumulative_size = 0u;
+    for (auto it : m_units_) {
+      const DexFile::CodeItem* code_item = it->GetCodeItem();
+      // Even if the code item is null, we still count non-zero value so that
+      // each m_unit is counted as having impact.
+      cumulative_size += (code_item == nullptr ? 1 : code_item->insns_size_in_code_units_);
+    }
+    return cumulative_size;
   }
 
   ArenaBitVector* GetTryBlockAddr() const {
@@ -637,6 +661,18 @@ class MIRGraph {
 
   DexCompilationUnit* GetCurrentDexCompilationUnit() const {
     return m_units_[current_method_];
+  }
+
+  DexCompilationUnit* GetDexCompilationUnit(uint16_t m_unit_index) const {
+    return m_units_[m_unit_index];
+  }
+
+  DexCompilationUnit* GetDexCompilationUnitByMir(MIR* mir) const {
+    return GetDexCompilationUnit(mir->m_unit_index);
+  }
+
+  const DexFile::CodeItem* GetCodeItem(uint16_t m_unit_index) const {
+    return GetDexCompilationUnit(m_unit_index)->GetCodeItem();
   }
 
   /**
@@ -782,12 +818,12 @@ class MIRGraph {
     return num_reachable_blocks_;
   }
 
-  int GetUseCount(int vreg) const {
-    return use_counts_.Get(vreg);
+  int GetUseCount(int sreg) const {
+    return use_counts_.Get(sreg);
   }
 
-  int GetRawUseCount(int vreg) const {
-    return raw_use_counts_.Get(vreg);
+  int GetRawUseCount(int sreg) const {
+    return raw_use_counts_.Get(sreg);
   }
 
   int GetSSASubscript(int ssa_reg) const {
@@ -843,9 +879,26 @@ class MIRGraph {
    * @return Returns the number of compiler temporaries.
    */
   size_t GetNumUsedCompilerTemps() const {
-    size_t total_num_temps = compiler_temps_.Size();
-    DCHECK_LE(num_non_special_compiler_temps_, total_num_temps);
-    return total_num_temps;
+    // Assume that the special temps will always be used.
+    return GetNumNonSpecialCompilerTemps() + max_available_special_compiler_temps_;
+  }
+
+  /**
+   * @brief Used to obtain number of bytes needed for special temps.
+   * @details This space is always needed because temps have special location on stack.
+   * @return Returns number of bytes for the special temps.
+   */
+  size_t GetNumBytesForSpecialTemps() const;
+
+  /**
+   * @brief Used by backend as a hint for maximum number of bytes for non-special temps.
+   * @details Returns 4 bytes for each temp because that is the maximum amount needed
+   * for storing each temp. The BE could be smarter though and allocate a smaller
+   * spill region.
+   * @return Returns the maximum number of bytes needed for non-special temps.
+   */
+  size_t GetMaximumBytesForNonSpecialTemps() const {
+    return GetNumNonSpecialCompilerTemps() * sizeof(uint32_t);
   }
 
   /**
@@ -863,7 +916,9 @@ class MIRGraph {
    * @return Returns true if the max was set and false if failed to set.
    */
   bool SetMaxAvailableNonSpecialCompilerTemps(size_t new_max) {
-    if (new_max < GetNumNonSpecialCompilerTemps()) {
+    // Make sure that enough temps still exist for backend and also that the
+    // new max can still keep around all of the already requested temps.
+    if (new_max < (GetNumNonSpecialCompilerTemps() + reserved_temps_for_backend_)) {
       return false;
     } else {
       max_available_non_special_compiler_temps_ = new_max;
@@ -872,21 +927,12 @@ class MIRGraph {
   }
 
   /**
-   * @brief Provides the number of non-special compiler temps available.
+   * @brief Provides the number of non-special compiler temps available for use by ME.
    * @details Even if this returns zero, special compiler temps are guaranteed to be available.
+   * Additionally, this makes sure to not use any temps reserved for BE only.
    * @return Returns the number of available temps.
    */
-  size_t GetNumAvailableNonSpecialCompilerTemps();
-
-  /**
-   * @brief Used to obtain an existing compiler temporary.
-   * @param index The index of the temporary which must be strictly less than the
-   * number of temporaries.
-   * @return Returns the temporary that was asked for.
-   */
-  CompilerTemp* GetCompilerTemp(size_t index) const {
-    return compiler_temps_.Get(index);
-  }
+  size_t GetNumAvailableVRTemps();
 
   /**
    * @brief Used to obtain the maximum number of compiler temporaries that can be requested.
@@ -897,7 +943,22 @@ class MIRGraph {
   }
 
   /**
+   * @brief Used to signal that the compiler temps have been committed.
+   * @details This should be used once the number of temps can no longer change,
+   * such as after frame size is committed and cannot be changed.
+   */
+  void CommitCompilerTemps() {
+    compiler_temps_committed_ = true;
+  }
+
+  /**
    * @brief Used to obtain a new unique compiler temporary.
+   * @details Two things are done for convenience when allocating a new compiler
+   * temporary. The ssa register is automatically requested and the information
+   * about reg location is filled. This helps when the temp is requested post
+   * ssa initialization, such as when temps are requested by the backend.
+   * @warning If the temp requested will be used for ME and have multiple versions,
+   * the sreg provided by the temp will be invalidated on next ssa recalculation.
    * @param ct_type Type of compiler temporary requested.
    * @param wide Whether we should allocate a wide temporary.
    * @return Returns the newly created compiler temporary.
@@ -939,8 +1000,49 @@ class MIRGraph {
   }
 
   // Is this vreg in the in set?
-  bool IsInVReg(int vreg) {
-    return (vreg >= cu_->num_regs);
+  bool IsInVReg(uint32_t vreg) {
+    return (vreg >= GetFirstInVR()) && (vreg < GetFirstTempVR());
+  }
+
+  uint32_t GetNumOfCodeVRs() const {
+    return current_code_item_->registers_size_;
+  }
+
+  uint32_t GetNumOfCodeAndTempVRs() const {
+    // Include all of the possible temps so that no structures overflow when initialized.
+    return GetNumOfCodeVRs() + GetMaxPossibleCompilerTemps();
+  }
+
+  uint32_t GetNumOfLocalCodeVRs() const {
+    // This also refers to the first "in" VR.
+    return GetNumOfCodeVRs() - current_code_item_->ins_size_;
+  }
+
+  uint32_t GetNumOfInVRs() const {
+    return current_code_item_->ins_size_;
+  }
+
+  uint32_t GetNumOfOutVRs() const {
+    return current_code_item_->outs_size_;
+  }
+
+  uint32_t GetFirstInVR() const {
+    return GetNumOfLocalCodeVRs();
+  }
+
+  uint32_t GetFirstTempVR() const {
+    // Temp VRs immediately follow code VRs.
+    return GetNumOfCodeVRs();
+  }
+
+  uint32_t GetFirstSpecialTempVR() const {
+    // Special temps appear first in the ordering before non special temps.
+    return GetFirstTempVR();
+  }
+
+  uint32_t GetFirstNonSpecialTempVR() const {
+    // We always leave space for all the special temps before the non-special ones.
+    return GetFirstSpecialTempVR() + max_available_special_compiler_temps_;
   }
 
   void DumpCheckStats();
@@ -1116,7 +1218,6 @@ class MIRGraph {
                       ArenaBitVector* live_in_v,
                       const MIR::DecodedInstruction& d_insn);
   bool DoSSAConversion(BasicBlock* bb);
-  bool InvokeUsesMethodStar(MIR* mir);
   int ParseInsn(const uint16_t* code_ptr, MIR::DecodedInstruction* decoded_instruction);
   bool ContentIsInsn(const uint16_t* code_ptr);
   BasicBlock* SplitBlock(DexOffset code_offset, BasicBlock* orig_block,
@@ -1186,7 +1287,7 @@ class MIRGraph {
   // Stack of the loop head indexes and recalculation flags for RepeatingTopologicalSortIterator.
   GrowableArray<std::pair<uint16_t, bool>>* topological_order_loop_head_stack_;
   int* i_dom_list_;
-  ArenaBitVector** def_block_matrix_;    // num_dalvik_register x num_blocks.
+  ArenaBitVector** def_block_matrix_;    // original num registers x num_blocks.
   std::unique_ptr<ScopedArenaAllocator> temp_scoped_alloc_;
   uint16_t* temp_insn_data_;
   uint32_t temp_bit_vector_size_;
@@ -1215,11 +1316,13 @@ class MIRGraph {
   ArenaAllocator* arena_;
   int backward_branches_;
   int forward_branches_;
-  GrowableArray<CompilerTemp*> compiler_temps_;
-  size_t num_non_special_compiler_temps_;
-  size_t max_available_non_special_compiler_temps_;
-  size_t max_available_special_compiler_temps_;
-  bool punt_to_interpreter_;                    // Difficult or not worthwhile - just interpret.
+  size_t num_non_special_compiler_temps_;  // Keeps track of allocated non-special compiler temps. These are VRs that are in compiler temp region on stack.
+  size_t max_available_non_special_compiler_temps_;  // Keeps track of maximum available non-special temps.
+  size_t max_available_special_compiler_temps_;      // Keeps track of maximum available special temps.
+  bool requested_backend_temp_;            // Keeps track whether BE temps have been requested.
+  size_t reserved_temps_for_backend_;      // Keeps track of the remaining temps that are reserved for BE.
+  bool compiler_temps_committed_;          // Keeps track whether number of temps has been frozen (for example post frame size calculation).
+  bool punt_to_interpreter_;               // Difficult or not worthwhile - just interpret.
   uint64_t merged_df_flags_;
   GrowableArray<MirIFieldLoweringInfo> ifield_lowering_infos_;
   GrowableArray<MirSFieldLoweringInfo> sfield_lowering_infos_;
