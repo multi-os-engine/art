@@ -794,6 +794,8 @@ class X86Mir2Lir : public Mir2Lir {
      * @param mir A kMirOpConst128b MIR instruction to match.
      */
     LIR *AddVectorLiteral(MIR *mir);
+
+    virtual RegLocation ForceTempWide(RegLocation loc);
 };
 
 }  // namespace art
