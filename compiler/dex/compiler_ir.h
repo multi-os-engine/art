@@ -70,11 +70,10 @@ struct CompilationUnit {
     return compiler_driver->GetInstructionSetFeatures();
   }
   // TODO: much of this info available elsewhere.  Go to the original source?
-  uint16_t num_dalvik_registers;        // method->registers_size.
   const uint16_t* insns;
   uint16_t num_ins;
   uint16_t num_outs;
-  uint16_t num_regs;            // Unlike num_dalvik_registers, does not include ins.
+  uint16_t num_regs;            // method register size - ins.
 
   // If non-empty, apply optimizer/debug flags only to matching methods.
   std::string compiler_method_match;
