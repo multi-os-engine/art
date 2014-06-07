@@ -177,9 +177,8 @@ class ClassInitCheckEliminationTest : public testing::Test {
 
     code_item_ = static_cast<DexFile::CodeItem*>(
         cu_.arena.Alloc(sizeof(DexFile::CodeItem), kArenaAllocMisc));
-    memset(code_item_, 0, sizeof(DexFile::CodeItem));
     code_item_->insns_size_in_code_units_ = 2u * count;
-    cu_.mir_graph->current_code_item_ = cu_.code_item = code_item_;
+    cu_.mir_graph->current_code_item_ = code_item_;
   }
 
   template <size_t count>
