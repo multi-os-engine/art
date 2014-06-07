@@ -892,7 +892,7 @@ static RegStorage GetArgPhysicalReg(RegLocation* loc, int* num_gpr_used, int* nu
 
 RegStorage Arm64Mir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
   if (!in_to_reg_storage_mapping_.IsInitialized()) {
-    int start_vreg = cu_->num_dalvik_registers - cu_->num_ins;
+    int start_vreg = mir_graph_->GetFirstInVR();
     RegLocation* arg_locs = &mir_graph_->reg_location_[start_vreg];
 
     InToRegStorageArm64Mapper mapper;
@@ -936,7 +936,7 @@ void Arm64Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
 
   // Handle dalvik registers.
   ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
-  int start_vreg = cu_->num_dalvik_registers - cu_->num_ins;
+  int start_vreg = mir_graph_->GetFirstInVR();
   for (int i = 0; i < cu_->num_ins; i++) {
     RegLocation* t_loc = &ArgLocs[i];
     OpSize op_size;
