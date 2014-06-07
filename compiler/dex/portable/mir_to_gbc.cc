@@ -140,11 +140,11 @@ void MirConverter::InitIR() {
   return GetLLVMBlock(bb->id);
 }
 
-void MirConverter::ConvertPackedSwitch(BasicBlock* bb,
+void MirConverter::ConvertPackedSwitch(BasicBlock* bb, MIR* mir,
                                 int32_t table_offset, RegLocation rl_src) {
   const Instruction::PackedSwitchPayload* payload =
       reinterpret_cast<const Instruction::PackedSwitchPayload*>(
-      cu_->insns + current_dalvik_offset_ + table_offset);
+      mir_graph_->GetTable(mir, table_offset));
 
   ::llvm::Value* value = GetLLVMValue(rl_src.orig_sreg);
 
@@ -164,11 +164,11 @@ void MirConverter::ConvertPackedSwitch(BasicBlock* bb,
   bb->fall_through = NullBasicBlockId;
 }
 
-void MirConverter::ConvertSparseSwitch(BasicBlock* bb,
+void MirConverter::ConvertSparseSwitch(BasicBlock* bb, MIR* mir,
                                 int32_t table_offset, RegLocation rl_src) {
   const Instruction::SparseSwitchPayload* payload =
       reinterpret_cast<const Instruction::SparseSwitchPayload*>(
-      cu_->insns + current_dalvik_offset_ + table_offset);
+      mir_graph_->GetTable(mir, table_offset));
 
   const int32_t* keys = payload->GetKeys();
   const int32_t* targets = payload->GetTargets();
@@ -1669,7 +1669,7 @@ bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
       art::llvm::IntrinsicHelper::IntrinsicId id =
               art::llvm::IntrinsicHelper::AllocaShadowFrame;
       ::llvm::Function* func = intrinsic_helper_->GetIntrinsicFunction(id);
-      ::llvm::Value* entries = irb_->getInt32(cu_->num_dalvik_registers);
+      ::llvm::Value* entries = irb_->getInt32(mir_graph_->GetNumOfCodeVRs());
       irb_->CreateCall(func, entries);
     }
 
