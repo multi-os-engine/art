@@ -44,6 +44,9 @@ class SignalCatcher {
   static void* Run(void* arg);
 
   void HandleSigUsr1();
+#ifdef WITH_GC_PROFILING
+  void HandleSigUsr2();
+#endif
   void Output(const std::string& s);
   void SetHaltFlag(bool new_value);
   bool ShouldHalt();

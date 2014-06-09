@@ -26,6 +26,9 @@
 #include "gc/space/space-inl.h"
 #include "thread-inl.h"
 #include "thread_list.h"
+#ifdef WITH_GC_PROFILING
+#include "gc/gcprofiler.h"
+#endif
 
 namespace art {
 namespace gc {
@@ -86,6 +89,25 @@ void GarbageCollector::Run(GcCause gc_cause, bool clear_soft_references) {
   for (uint64_t pause_time : pause_times_) {
     pause_histogram_.AddValue(pause_time / 1000);
   }
+#ifdef WITH_GC_PROFILING
+  uint64_t mark_max=0;
+  uint64_t sweep_max=0;
+  uint64_t pause_max=0;
+  GcProfiler* gcProfiler = GcProfiler::getInstance();
+  for (const TimingLogger::SplitTiming& split : timings_.GetSplits()) {
+    const char* name = split.second;
+    if (strncmp(name, "MarkingPhase", strlen("MarkingPhase")) == 0) {
+      mark_max = split.first > mark_max ? split.first : mark_max;
+    } else if (strncmp(name, "ReclaimPhase", strlen("ReclaimPhase")) == 0) {
+      sweep_max = split.first > sweep_max ? split.first : sweep_max;
+    }
+  }
+  // pause time is more than timesplit in pause phash
+  for (uint64_t pause_time : pause_times_) {
+    pause_max = pause_time > pause_max ? pause_time : pause_max;
+  }
+  gcProfiler->setGCTimes(pause_max, mark_max, sweep_max);
+#endif
 }
 
 void GarbageCollector::SwapBitmaps() {

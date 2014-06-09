@@ -158,7 +158,18 @@ void SignalCatcher::HandleSigQuit() {
 void SignalCatcher::HandleSigUsr1() {
   LOG(INFO) << "SIGUSR1 forcing GC (no HPROF)";
   Runtime::Current()->GetHeap()->CollectGarbage(false);
+#ifdef WITH_GC_PROFILING
+  LOG(INFO) << "SIGUSR1 start profiling GC";
+  Runtime::Current()->GetHeap()->GCProfileStart();
+#endif
 }
+
+#ifdef WITH_GC_PROFILING
+void SignalCatcher::HandleSigUsr2() {
+  LOG(INFO) << "SIGUSR2 stop profiling GC";
+  Runtime::Current()->GetHeap()->GCProfileEnd(false);
+}
+#endif
 
 int SignalCatcher::WaitForSignal(Thread* self, SignalSet& signals) {
   ScopedThreadStateChange tsc(self, kWaitingInMainSignalCatcherLoop);
@@ -200,6 +211,9 @@ void* SignalCatcher::Run(void* arg) {
   SignalSet signals;
   signals.Add(SIGQUIT);
   signals.Add(SIGUSR1);
+#ifdef WITH_GC_PROFILING
+  signals.Add(SIGUSR2);
+#endif
 
   while (true) {
     int signal_number = signal_catcher->WaitForSignal(self, signals);
@@ -215,6 +229,11 @@ void* SignalCatcher::Run(void* arg) {
     case SIGUSR1:
       signal_catcher->HandleSigUsr1();
       break;
+#ifdef WITH_GC_PROFILING
+    case SIGUSR2:
+      signal_catcher->HandleSigUsr2();
+      break;
+#endif
     default:
       LOG(ERROR) << "Unexpected signal %d" << signal_number;
       break;

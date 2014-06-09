@@ -89,6 +89,13 @@ class ParsedOptions {
   static constexpr uint32_t kExplicitStackOverflowCheck = 4;
   uint32_t explicit_checks_;
 
+#ifdef WITH_GC_PROFILING
+  // for gcprofiling at process start up. combined with "-XX:GcProfile" option
+  bool enable_gcprofile_;
+  // dir path for saving gc profile data, used with setprop "-XGcProfileDir:filename"
+  std::string gcprofile_dir_;
+#endif
+
  private:
   ParsedOptions() {}
 

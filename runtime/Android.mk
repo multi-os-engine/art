@@ -191,6 +191,10 @@ LIBART_COMMON_SRC_FILES += \
 	entrypoints/quick/quick_throw_entrypoints.cc \
 	entrypoints/quick/quick_trampoline_entrypoints.cc
 
+ifeq ($(ART_WITH_GC_PROFILING),true)
+LIBART_COMMON_SRC_FILES += \
+	gc/gcprofiler.cc
+endif
 # Source files that only compile with GCC.
 LIBART_GCC_ONLY_SRC_FILES := \
 	interpreter/interpreter_goto_table_impl.cc
@@ -302,9 +306,18 @@ LIBART_ENUM_OPERATOR_OUT_HEADER_FILES := \
 	thread_state.h \
 	verifier/method_verifier.h
 
+ifeq ($(ART_WITH_GC_PROFILING),true)
+LIBART_ENUM_OPERATOR_OUT_HEADER_FILES += \
+	gc/gcprofiler.h
+endif
+
 LIBART_CFLAGS :=
 ifeq ($(ART_USE_PORTABLE_COMPILER),true)
   LIBART_CFLAGS += -DART_USE_PORTABLE_COMPILER=1
+endif
+
+ifeq ($(ART_WITH_GC_PROFILING),true)
+  LIBART_CFLAGS += -DWITH_GC_PROFILING
 endif
 
 ifeq ($(MALLOC_IMPL),jemalloc)

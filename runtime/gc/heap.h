@@ -556,6 +556,12 @@ class Heap {
     return &reference_processor_;
   }
 
+#ifdef WITH_GC_PROFILING
+  void GCProfileSetDir(std::string dir);
+  void GCProfileStart();
+  void GCProfileEnd(bool dropResult);
+#endif
+
  private:
   void Compact(space::ContinuousMemMapAllocSpace* target_space,
                space::ContinuousMemMapAllocSpace* source_space)

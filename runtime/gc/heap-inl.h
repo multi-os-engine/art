@@ -31,6 +31,9 @@
 #include "thread.h"
 #include "thread-inl.h"
 #include "verify_object-inl.h"
+#ifdef WITH_GC_PROFILING
+#include "gc/gcprofiler.h"
+#endif
 
 namespace art {
 namespace gc {
@@ -57,6 +60,12 @@ inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self, mirror::Clas
   size_t bytes_allocated, usable_size;
   obj = TryToAllocate<kInstrumented, false>(self, allocator, byte_count, &bytes_allocated,
                                             &usable_size);
+#ifdef WITH_GC_PROFILING
+  GcProfiler* gcProfiler = GcProfiler::getInstance();
+  if (obj != nullptr) {
+    gcProfiler->createSuccAllocRecord(obj, byte_count, klass);
+  }
+#endif
   if (UNLIKELY(obj == nullptr)) {
     bool is_current_allocator = allocator == GetCurrentAllocator();
     obj = AllocateInternalWithGc(self, allocator, byte_count, &bytes_allocated, &usable_size,
@@ -97,6 +106,10 @@ inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self, mirror::Clas
   }
   const size_t new_num_bytes_allocated =
       static_cast<size_t>(num_bytes_allocated_.FetchAndAddSequentiallyConsistent(bytes_allocated)) + bytes_allocated;
+
+#ifdef WITH_GC_PROFILING
+  gcProfiler->addAllocInfo(bytes_allocated);
+#endif
   // TODO: Deprecate.
   if (kInstrumented) {
     if (Runtime::Current()->HasStatsEnabled()) {

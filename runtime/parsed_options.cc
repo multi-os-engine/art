@@ -252,7 +252,9 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
   method_trace_file_size_ = 10 * MB;
 
   profile_clock_source_ = kDefaultProfilerClockSource;
-
+#ifdef WITH_GC_PROFILING
+  enable_gcprofile_ = false;
+#endif
   verify_ = true;
   image_isa_ = kRuntimeISA;
 
@@ -675,6 +677,14 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
                (option == "-Xjitsuspendpoll") ||
                StartsWith(option, "-XX:mainThreadStackSize=")) {
       // Ignored for backwards compatibility.
+#ifdef WITH_GC_PROFILING
+    } else if (option == "-XX:GcProfile") {
+      enable_gcprofile_ = true;
+    } else if (StartsWith(option, "-XGcProfileDir:")) {
+      if (!ParseStringAfterChar(option, ':', &gcprofile_dir_)) {
+        return false;
+      }
+#endif
     } else if (!ignore_unrecognized) {
       Usage("Unrecognized option %s\n", option.c_str());
       return false;
@@ -846,6 +856,10 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -Xjitdisableopt\n");
   UsageMessage(stream, "  -Xjitsuspendpoll\n");
   UsageMessage(stream, "  -XX:mainThreadStackSize=N\n");
+#ifdef WITH_GC_PROFILING
+  UsageMessage(stream, "  -XX:GcProfile\n");
+  UsageMessage(stream, "  -XGcProfileDir:dirname\n");
+#endif
   UsageMessage(stream, "\n");
 
   Exit((error) ? 1 : 0);

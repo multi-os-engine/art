@@ -133,6 +133,10 @@ Runtime::Runtime()
       system_thread_group_(nullptr),
       system_class_loader_(nullptr),
       dump_gc_performance_on_shutdown_(false),
+#ifdef WITH_GC_PROFILING
+      enable_gcprofile_(false),
+      gcprofile_dir_("/data/local/tmp/gcprofile"),
+#endif
       preinitialization_transaction_(nullptr),
       null_pointer_handler_(nullptr),
       suspend_handler_(nullptr),
@@ -171,6 +175,12 @@ Runtime::~Runtime() {
   // Make sure to let the GC complete if it is running.
   heap_->WaitForGcToComplete(gc::kGcCauseBackground, self);
   heap_->DeleteThreadPool();
+#ifdef WITH_GC_PROFILING
+  if (enable_gcprofile_) {
+    LOG(INFO) << "stop gc profile when destroying vm";
+    GetHeap()->GCProfileEnd(false);
+  }
+#endif
 
   // Make sure our internal threads are dead before we start tearing down things they're using.
   Dbg::StopJdwp();
@@ -480,6 +490,14 @@ void Runtime::DidForkFromZygote() {
   // Start the JDWP thread. If the command-line debugger flags specified "suspend=y",
   // this will pause the runtime, so we probably want this to come last.
   Dbg::StartJdwp();
+
+#ifdef WITH_GC_PROFILING
+  if (enable_gcprofile_) {
+    LOG(INFO) << "start gc profile when fork from zygote";
+    GetHeap()->GCProfileEnd(true);
+    GetHeap()->GCProfileStart();
+  }
+#endif
 }
 
 void Runtime::StartSignalCatcher() {
@@ -620,6 +638,15 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
 
   dump_gc_performance_on_shutdown_ = options->dump_gc_performance_on_shutdown_;
 
+#ifdef WITH_GC_PROFILING
+  enable_gcprofile_ = options->enable_gcprofile_;
+  if (options->gcprofile_dir_.empty() != true) {
+    gcprofile_dir_ = options->gcprofile_dir_;
+  }
+  // set GC Profile data dir path
+  GetHeap()->GCProfileSetDir(gcprofile_dir_);
+#endif
+
   BlockSignals();
   InitPlatformSignalHandlers();
 
@@ -664,6 +691,15 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
 
   // TODO: move this to just be an Trace::Start argument
   Trace::SetDefaultClockSource(options->profile_clock_source_);
+#ifdef WITH_GC_PROFILING
+  // start GC Profiling if is_zygote_
+  // The forked process start GC Profiling in DidForkFromZygote 
+  if (enable_gcprofile_ && is_zygote_) {
+    LOG(INFO) << "start gc profile when runtime initializing";
+    GetHeap()->GCProfileEnd(true);
+    GetHeap()->GCProfileStart();
+  }
+#endif
 
   if (options->method_trace_) {
     Trace::Start(options->method_trace_file_.c_str(), -1, options->method_trace_file_size_, 0,
@@ -862,6 +898,10 @@ void Runtime::BlockSignals() {
   signals.Add(SIGQUIT);
   // SIGUSR1 is used to initiate a GC.
   signals.Add(SIGUSR1);
+#ifdef WITH_GC_PROFILING
+  // SIGUSR2 is used to dump gc profiling data
+  signals.Add(SIGUSR2);
+#endif
   signals.Block();
 }
 

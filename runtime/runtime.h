@@ -584,6 +584,12 @@ class Runtime {
   // If true, then we dump the GC cumulative timings on shutdown.
   bool dump_gc_performance_on_shutdown_;
 
+#ifdef WITH_GC_PROFILING
+  // enabling gc profiling at process start up. this is used combine with setprop "-XX:GcProfile"
+  bool enable_gcprofile_;
+  // dir path for saving gc profile data, used with setprop "-XGcProfileDir:filename"
+  std::string gcprofile_dir_;
+#endif
   // Transaction used for pre-initializing classes at compilation time.
   Transaction* preinitialization_transaction_;
   NullPointerHandler* null_pointer_handler_;
