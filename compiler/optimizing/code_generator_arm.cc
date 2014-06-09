@@ -15,14 +15,14 @@
  */
 
 #include "code_generator_arm.h"
-#include "utils/assembler.h"
-#include "utils/arm/assembler_arm.h"
-#include "utils/arm/managed_register_arm.h"
 
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "mirror/array.h"
 #include "mirror/art_method.h"
 #include "thread.h"
+#include "utils/assembler.h"
+#include "utils/arm/assembler_arm.h"
+#include "utils/arm/managed_register_arm.h"
 
 #define __ reinterpret_cast<ArmAssembler*>(GetAssembler())->
 
@@ -161,7 +161,7 @@ int32_t CodeGeneratorARM::GetStackSlot(HLocal* local) const {
   uint16_t number_of_in_vregs = GetGraph()->GetNumberOfInVRegs();
   if (reg_number >= number_of_vregs - number_of_in_vregs) {
     // Local is a parameter of the method. It is stored in the caller's frame.
-    return GetFrameSize() + kArmWordSize  // ART method
+    return GetFrameSize() + kVRegSize  // ART method
                           + (reg_number - number_of_vregs + number_of_in_vregs) * kVRegSize;
   } else {
     // Local is a temporary in this method. It is stored in this method's frame.
@@ -210,7 +210,7 @@ Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type
       if (index < calling_convention.GetNumberOfRegisters()) {
         return ArmCoreLocation(calling_convention.GetRegisterAt(index));
       } else {
-        return Location::StackSlot(calling_convention.GetStackOffsetOf(index, kArmWordSize));
+        return Location::StackSlot(calling_convention.GetStackOffsetOf(index));
       }
     }
 
@@ -223,7 +223,7 @@ Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type
       } else if (index + 1 == calling_convention.GetNumberOfRegisters()) {
         return Location::QuickParameter(index);
       } else {
-        return Location::DoubleStackSlot(calling_convention.GetStackOffsetOf(index, kArmWordSize));
+        return Location::DoubleStackSlot(calling_convention.GetStackOffsetOf(index));
       }
     }
 
@@ -274,7 +274,7 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
       __ Mov(destination.AsArm().AsRegisterPairLow(),
              calling_convention.GetRegisterAt(argument_index));
       __ ldr(destination.AsArm().AsRegisterPairHigh(),
-             Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1, kArmWordSize) + GetFrameSize()));
+             Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1) + GetFrameSize()));
     } else {
       DCHECK(source.IsDoubleStackSlot());
       if (destination.AsArm().AsRegisterPair() == R1_R2) {
@@ -291,12 +291,12 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
     if (source.IsRegister()) {
       __ Mov(calling_convention.GetRegisterAt(argument_index), source.AsArm().AsRegisterPairLow());
       __ str(source.AsArm().AsRegisterPairHigh(),
-             Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1, kArmWordSize)));
+             Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1)));
     } else {
       DCHECK(source.IsDoubleStackSlot());
       __ ldr(calling_convention.GetRegisterAt(argument_index), Address(SP, source.GetStackIndex()));
       __ ldr(R0, Address(SP, source.GetHighStackIndex(kArmWordSize)));
-      __ str(R0, Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1, kArmWordSize)));
+      __ str(R0, Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1)));
     }
   } else {
     DCHECK(destination.IsDoubleStackSlot());
@@ -314,7 +314,7 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
       __ str(calling_convention.GetRegisterAt(argument_index),
              Address(SP, destination.GetStackIndex()));
       __ ldr(R0,
-             Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1, kArmWordSize) + GetFrameSize()));
+             Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1) + GetFrameSize()));
       __ str(R0, Address(SP, destination.GetHighStackIndex(kArmWordSize)));
     } else {
       DCHECK(source.IsDoubleStackSlot());
