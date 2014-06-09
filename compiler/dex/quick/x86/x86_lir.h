@@ -654,7 +654,6 @@ enum X86EncodingKind {
   kData,                                    // Special case for raw data.
   kNop,                                     // Special case for variable length nop.
   kNullary,                                 // Opcode that takes no arguments.
-  kPrefix2Nullary,                          // Opcode that takes no arguments, but 2 prefixes.
   kRegOpcode,                               // Shorter form of R instruction kind (opcode+rd)
   kReg, kMem, kArray,                       // R, M and A instruction kinds.
   kMemReg, kArrayReg, kThreadReg,           // MR, AR and TR instruction kinds.
@@ -680,19 +679,23 @@ enum X86EncodingKind {
 /* Struct used to define the EncodingMap positions for each X86 opcode */
 struct X86EncodingMap {
   X86OpCode opcode;      // e.g. kOpAddRI
-  X86EncodingKind kind;  // Used to discriminate in the union below
+  X86EncodingKind kind;  // The broad category the instruction conforms to.
   uint64_t flags;
   struct {
-  uint8_t prefix1;       // non-zero => a prefix byte
-  uint8_t prefix2;       // non-zero => a second prefix byte
-  uint8_t opcode;        // 1 byte opcode
-  uint8_t extra_opcode1;  // possible extra opcode byte
-  uint8_t extra_opcode2;  // possible second extra opcode byte
-  // 3bit opcode that gets encoded in the register bits of the modrm byte, use determined by the
-  // encoding kind
+  uint8_t prefix1;       // Non-zero => a prefix byte.
+  uint8_t prefix2;       // Non-zero => a second prefix byte.
+  uint8_t opcode;        // 1 byte opcode.
+  uint8_t extra_opcode1;  // Possible extra opcode byte.
+  uint8_t extra_opcode2;  // Possible second extra opcode byte.
+  // 3-bit opcode that gets encoded in the register bits of the modrm byte, use determined by the
+  // encoding kind.
   uint8_t modrm_opcode;
-  uint8_t ax_opcode;  // non-zero => shorter encoding for AX as a destination
-  uint8_t immediate_bytes;  // number of bytes of immediate
+  uint8_t ax_opcode;  // Non-zero => shorter encoding for AX as a destination.
+  uint8_t immediate_bytes;  // Number of bytes of immediate.
+  // Does the instruction address a byte register? In 32-bit mode the registers ah, bh, ch and dh
+  // are not used. In 64-bit mode the REX prefix is used to normalize and allow any byte register
+  // to be addressed.
+  bool r8_form;
   } skeleton;
   const char *name;
   const char* fmt;
