@@ -17,6 +17,7 @@
 #include "compiler_internals.h"
 #include "dataflow_iterator-inl.h"
 #include "utils/scoped_arena_containers.h"
+#include <queue>
 
 #define NOTVISITED (-1)
 
@@ -90,6 +91,34 @@ void MIRGraph::RecordDFSOrders(BasicBlock* block) {
   }
 }
 
+void MIRGraph::RecordBFSOrders(BasicBlock* block) {
+  std::queue<BasicBlock*> succ;
+  block->visited = true;
+  // Enqueue the pre_order block id.
+  if (block->id != NullBasicBlockId) {
+    bfs_order_->Insert(block->id);
+  }
+  succ.push(block);
+  while (!succ.empty()) {
+    BasicBlock* curr = succ.front();
+    BasicBlock* next_successor = NextUnvisitedSuccessor(curr);
+    if (next_successor != nullptr) {
+      next_successor->visited = true;
+      // Enqueue the pre_order block id.
+      if (next_successor->id != NullBasicBlockId) {
+        bfs_order_->Insert(next_successor->id);
+      }
+      succ.push(next_successor);
+      continue;
+    }
+    curr->bfs_id = bfs_post_order_->Size();
+    if (curr->id != NullBasicBlockId) {
+      bfs_post_order_->Insert(curr->id);
+    }
+    succ.pop();
+  }
+}
+
 /* Sort the blocks by the Depth-First-Search */
 void MIRGraph::ComputeDFSOrders() {
   /* Initialize or reset the DFS pre_order list */
@@ -127,6 +156,35 @@ void MIRGraph::ComputeDFSOrders() {
       }
     }
   }
+}
+
+// Sort the blocks by the Breadth-First-Search.
+void MIRGraph::ComputeBFSOrders() {
+  // Initialize or reset the BFS pre_order list.
+  if (bfs_order_ == nullptr) {
+    bfs_order_ = new (arena_) GrowableArray<BasicBlockId>(arena_, GetNumBlocks(),
+                                                          kGrowableArrayBfsOrder);
+  } else {
+    // Just reset the used length on the counter.
+    bfs_order_->Reset();
+  }
+
+  // Initialize or reset the BFS post_order list.
+  if (bfs_post_order_ == nullptr) {
+    bfs_post_order_ = new (arena_) GrowableArray<BasicBlockId>(arena_, GetNumBlocks(),
+                                                               kGrowableArrayBfsPostOrder);
+  } else {
+    // Just reset the used length on the counter.
+    bfs_post_order_->Reset();
+  }
+
+  // Reset visited flags from all nodes.
+  ClearAllVisitedFlags();
+
+  // Record bfs orders.
+  RecordBFSOrders(GetEntryBlock());
+
+  num_reachable_blocks_ = bfs_order_->Size(); //Uncomment when you have a working RecordBFSOrders
 }
 
 /*

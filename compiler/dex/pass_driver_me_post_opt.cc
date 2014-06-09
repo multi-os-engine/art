@@ -35,6 +35,7 @@ const Pass* const PassDriver<PassDriverMEPostOpt>::g_passes[] = {
   GetPassInstance<ClearPhiInstructions>(),
   GetPassInstance<CalculatePredecessors>(),
   GetPassInstance<DFSOrders>(),
+  GetPassInstance<BFSOrders>(),
   GetPassInstance<BuildDomination>(),
   GetPassInstance<DefBlockMatrix>(),
   GetPassInstance<CreatePhiNodes>(),

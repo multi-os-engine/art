@@ -372,6 +372,7 @@ struct SuccessorBlockInfo;
 struct BasicBlock {
   BasicBlockId id;
   BasicBlockId dfs_id;
+  BasicBlockId bfs_id;
   NarrowDexOffset start_offset;     // Offset in code units.
   BasicBlockId fall_through;
   BasicBlockId taken;
@@ -623,8 +624,16 @@ class MIRGraph {
     return dfs_order_;
   }
 
+  GrowableArray<BasicBlockId>* GetBfsOrder() {
+    return bfs_order_;
+  }
+
   GrowableArray<BasicBlockId>* GetDfsPostOrder() {
     return dfs_post_order_;
+  }
+
+  GrowableArray<BasicBlockId>* GetBfsPostOrder() {
+    return bfs_post_order_;
   }
 
   GrowableArray<BasicBlockId>* GetDomPostOrder() {
@@ -1042,6 +1051,7 @@ class MIRGraph {
   void CalculateBasicBlockInformation();
   void InitializeBasicBlockData();
   void ComputeDFSOrders();
+  void ComputeBFSOrders();
   void ComputeDefBlockMatrix();
   void ComputeDominators();
   void CompilerInitializeSSAConversion();
@@ -1111,6 +1121,7 @@ class MIRGraph {
   BasicBlock* NextUnvisitedSuccessor(BasicBlock* bb);
   void MarkPreOrder(BasicBlock* bb);
   void RecordDFSOrders(BasicBlock* bb);
+  void RecordBFSOrders(BasicBlock* bb);
   void ComputeDomPostOrderTraversal(BasicBlock* bb);
   void SetConstant(int32_t ssa_reg, int value);
   void SetConstantWide(int ssa_reg, int64_t value);
@@ -1143,7 +1154,9 @@ class MIRGraph {
   unsigned int num_reachable_blocks_;
   unsigned int max_num_reachable_blocks_;
   GrowableArray<BasicBlockId>* dfs_order_;
+  GrowableArray<BasicBlockId>* bfs_order_;
   GrowableArray<BasicBlockId>* dfs_post_order_;
+  GrowableArray<BasicBlockId>* bfs_post_order_;
   GrowableArray<BasicBlockId>* dom_post_order_traversal_;
   GrowableArray<BasicBlockId>* topological_order_;
   int* i_dom_list_;

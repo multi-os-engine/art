@@ -99,6 +99,23 @@ class DFSOrders : public PassME {
 };
 
 /**
+ * @class BFSOrders
+ * @brief Compute the BFS order of the MIR graph
+ */
+class BFSOrders : public PassME {
+ public:
+  BFSOrders() : PassME("BFSOrders") {
+  }
+
+  void Start(const PassDataHolder* data) const {
+    DCHECK(data != nullptr);
+    CompilationUnit* c_unit = down_cast<const PassMEDataHolder*>(data)->c_unit;
+    DCHECK(c_unit != nullptr);
+    c_unit->mir_graph.get()->ComputeBFSOrders();
+  }
+};
+
+/**
  * @class BuildDomination
  * @brief Build the domination information of the MIR Graph
  */

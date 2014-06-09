@@ -141,6 +141,38 @@ namespace art {
   };
 
   /**
+   * @class PreOrderBfsIterator
+   * @brief Used to perform a Pre-order Breadth-First-Search Iteration of a MIRGraph.
+   */
+  class PreOrderBfsIterator : public DataflowIterator {
+    public:
+      /**
+       * @brief The constructor, using all of the reachable blocks of the MIRGraph.
+       * @param mir_graph The MIRGraph considered.
+       */
+      explicit PreOrderBfsIterator(MIRGraph* mir_graph)
+          : DataflowIterator(mir_graph, 0, mir_graph->GetNumReachableBlocks()) {
+        idx_ = start_idx_;
+        block_id_list_ = mir_graph->GetBfsOrder();
+        std::cerr << "Block list: " << block_id_list_;
+      }
+
+      /**
+       * @brief Get the next BasicBlock depending on iteration order.
+       * @param had_change did the user of the iteration change the previous BasicBlock.
+       * @return the next BasicBlock following the iteration order, or 0 if finished.
+       */
+      virtual BasicBlock* Next(bool had_change = false) {
+        if (block_id_list_ == nullptr) {
+          return nullptr;
+        }
+        // Update changed: If had_change is true, we remember it for the whole iteration.
+        changed_ |= had_change;
+        return ForwardSingleNext();
+      }
+  };
+
+  /**
    * @class RepeatingPreOrderDfsIterator
    * @brief Used to perform a Repeating Pre-order Depth-First-Search Iteration of a MIRGraph.
    * @details If there is a change during an iteration, the iteration starts over at the end of the iteration.
@@ -167,6 +199,35 @@ namespace art {
         // Update changed: if had_changed is true, we remember it for the whole iteration.
         changed_ |= had_change;
 
+        return ForwardRepeatNext();
+      }
+  };
+
+  /**
+   * @class RepeatingPreOrderBfsIterator
+   * @brief Used to perform a Repeating Pre-order Breadth-First-Search Iteration of a MIRGraph.
+   * @details If there is a change during an iteration, the iteration starts over at the end of the iteration.
+   */
+  class RepeatingPreOrderBfsIterator : public DataflowIterator {
+    public:
+      /**
+       * @brief The constructor, using all of the reachable blocks of the MIRGraph.
+       * @param mir_graph The MIRGraph considered.
+       */
+      explicit RepeatingPreOrderBfsIterator(MIRGraph* mir_graph)
+          : DataflowIterator(mir_graph, 0, mir_graph->GetNumReachableBlocks()) {
+        idx_ = start_idx_;
+        block_id_list_ = mir_graph->GetBfsOrder();
+      }
+
+      /**
+       * @brief Get the next BasicBlock depending on iteration order.
+       * @param had_change did the user of the iteration change the previous BasicBlock.
+       * @return the next BasicBlock following the iteration order, or 0 if finished.
+       */
+      virtual BasicBlock* Next(bool had_change = false) {
+        // Update changed: if had_change is true, we remember it for the whole iteration.
+        changed_ |= had_change;
         return ForwardRepeatNext();
       }
   };
@@ -203,6 +264,35 @@ namespace art {
   };
 
   /**
+   * @class RepeatingPostOrderBfsIterator
+   * @brief Used to perform a Repeating Post-order Breadth-First-Search Iteration of a MIRGraph.
+   * @details If there is a change during an iteration, the iteration starts over at the end of the iteration.
+   */
+  class RepeatingPostOrderBfsIterator : public DataflowIterator {
+    public:
+      /**
+       * @brief The constructor, using all of the reachable blocks of the MIRGraph.
+       * @param mir_graph The MIRGraph considered.
+       */
+      explicit RepeatingPostOrderBfsIterator(MIRGraph* mir_graph)
+          : DataflowIterator(mir_graph, 0, mir_graph->GetNumReachableBlocks()) {
+        idx_ = start_idx_;
+        block_id_list_ = mir_graph->GetBfsPostOrder();
+      }
+
+      /**
+       * @brief Get the next BasicBlock depending on iteration order.
+       * @param had_change did the user of the iteration change the previous BasicBlock.
+       * @return the next BasicBlock following the iteration order, or 0 if finished.
+       */
+      virtual BasicBlock* Next(bool had_change = false) {
+        // Update changed: If had_change is true, we remember it for the whole iteration.
+        changed_ |= had_change;
+        return ForwardRepeatNext();
+      }
+  };
+
+  /**
    * @class ReversePostOrderDfsIterator
    * @brief Used to perform a Reverse Post-order Depth-First-Search Iteration of a MIRGraph.
    */
@@ -228,6 +318,34 @@ namespace art {
         // Update changed: if had_changed is true, we remember it for the whole iteration.
         changed_ |= had_change;
 
+        return ReverseSingleNext();
+      }
+  };
+
+  /**
+   * @class ReversePostOrderBfsIterator
+   * @brief Used to perform a Reverse Post-order Breadth-First-Search Iteration of a MIRGraph.
+   */
+  class ReversePostOrderBfsIterator : public DataflowIterator {
+    public:
+      /**
+       * @brief The constructor, using all of the reachable blocks of the MIRGraph.
+       * @param mir_graph The MIRGraph considered.
+       */
+      explicit ReversePostOrderBfsIterator(MIRGraph* mir_graph)
+          : DataflowIterator(mir_graph, mir_graph->GetNumReachableBlocks() -1, 0) {
+        idx_ = start_idx_;
+        block_id_list_ = mir_graph->GetBfsPostOrder();
+      }
+
+      /**
+       * @brief Get the next BasicBlock depending on iteration order.
+       * @param had_change did the user of the iteration change the previous BasicBlock.
+       * @return the next BasicBlock following the iteration order, or 0 if finished.
+       */
+      virtual BasicBlock* Next(bool had_change = false) {
+        // Update changed: if had_change is true, we remember it for the whole iteration.
+        changed_ |= had_change;
         return ReverseSingleNext();
       }
   };
@@ -259,6 +377,35 @@ namespace art {
         // Update changed: if had_changed is true, we remember it for the whole iteration.
         changed_ |= had_change;
 
+        return ReverseRepeatNext();
+      }
+  };
+
+  /**
+   * @class ReversePostOrderBfsIterator
+   * @brief Used to perform a Repeating Reverse Post-order Breadth-First-Search Iteration of a MIRGraph.
+   * @details If there is a change during an iteration, the iteration starts over at the end of the iteration.
+   */
+  class RepeatingReversePostOrderBfsIterator : public DataflowIterator {
+    public:
+      /**
+       * @brief The constructor, using all of the reachable blocks of the MIRGraph.
+       * @param mir_graph The MIRGraph considered.
+       */
+      explicit RepeatingReversePostOrderBfsIterator(MIRGraph* mir_graph)
+          : DataflowIterator(mir_graph, mir_graph->GetNumReachableBlocks() -1, 0) {
+        idx_ = start_idx_;
+        block_id_list_ = mir_graph->GetBfsPostOrder();
+      }
+
+      /**
+       * @brief Get the next BasicBlock depending on iteration order.
+       * @param had_change did the user of the iteration change the previous BasicBlock.
+       * @return the next BasicBlock following the iteration order, or 0 if finished.
+       */
+      virtual BasicBlock* Next(bool had_change = false) {
+        // Update changed: If had_change is true, we remember it for the whole iteration.
+        changed_ |= had_change;
         return ReverseRepeatNext();
       }
   };
