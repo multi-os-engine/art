@@ -2355,6 +2355,9 @@ void X86Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_k
   /* kArg0 is ref, kArg2 is class. If ref==null, use directly as bool result. */
   RegLocation rl_result = GetReturn(kRefReg);
 
+  // Ensure top 3 bytes of result are 0.
+  LoadConstant(rl_result.reg, 0);
+
   // SETcc only works with EAX..EDX.
   DCHECK_LT(rl_result.reg.GetRegNum(), 4);
 
@@ -2367,8 +2370,6 @@ void X86Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_k
   /* kArg0 is ref, kArg1 is ref->klass_, kArg2 is class. */
   LIR* branchover = nullptr;
   if (type_known_final) {
-    // Ensure top 3 bytes of result are 0.
-    LoadConstant(rl_result.reg, 0);
     OpRegReg(kOpCmp, TargetReg(kArg1), TargetReg(kArg2));
     // Set the low byte of the result to 0 or 1 from the compare condition code.
     NewLIR2(kX86Set8R, rl_result.reg.GetReg(), kX86CondEq);
