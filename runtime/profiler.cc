@@ -63,7 +63,8 @@ volatile bool BackgroundMethodSamplingProfiler::shutting_down_ = false;
 static void GetSample(Thread* thread, void* arg) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   BackgroundMethodSamplingProfiler* profiler =
       reinterpret_cast<BackgroundMethodSamplingProfiler*>(arg);
-  mirror::ArtMethod* method = thread->GetCurrentMethod(nullptr);
+  uint32_t dex_pc;
+  mirror::ArtMethod* method = thread->GetCurrentMethod(&dex_pc);
   if (false && method == nullptr) {
     LOG(INFO) << "No current method available";
     std::ostringstream os;
@@ -71,7 +72,7 @@ static void GetSample(Thread* thread, void* arg) SHARED_LOCKS_REQUIRED(Locks::mu
     std::string data(os.str());
     LOG(INFO) << data;
   }
-  profiler->RecordMethod(method);
+  profiler->RecordMethod(method, dex_pc);
 }
 
 // A closure that is called by the thread checkpoint code.
@@ -289,6 +290,16 @@ bool BackgroundMethodSamplingProfiler::Start(
 
   CHECK(!output_filename.empty());
 
+  std::string output_filename_ext = output_filename;
+  if (options.GetProfileType() == kProfilerMethodAndDexPC) {
+    output_filename_ext = output_filename_ext + ".pc";
+  }
+  // Create the profile file if it doesn't exist.
+  int fd = open(output_filename_ext.c_str(), O_RDWR|O_CREAT|O_EXCL, 0660);
+  if (fd >= 0) {
+    close(fd);
+  }
+
   Thread* self = Thread::Current();
   {
     MutexLock mu(self, *Locks::profiler_lock_);
@@ -298,11 +309,11 @@ bool BackgroundMethodSamplingProfiler::Start(
     }
   }
 
-  LOG(INFO) << "Starting profiler using output file: " << output_filename
+  LOG(INFO) << "Starting profiler using output file: " << output_filename_ext
             << " and options: " << options;
   {
     MutexLock mu(self, *Locks::profiler_lock_);
-    profiler_ = new BackgroundMethodSamplingProfiler(output_filename, options);
+    profiler_ = new BackgroundMethodSamplingProfiler(output_filename_ext, options);
 
     CHECK_PTHREAD_CALL(pthread_create, (&profiler_pthread_, nullptr, &RunProfilerThread,
         reinterpret_cast<void*>(profiler_)),
@@ -360,7 +371,7 @@ BackgroundMethodSamplingProfiler::BackgroundMethodSamplingProfiler(
 
 // A method has been hit, record its invocation in the method map.
 // The mutator_lock must be held (shared) when this is called.
-void BackgroundMethodSamplingProfiler::RecordMethod(mirror::ArtMethod* method) {
+void BackgroundMethodSamplingProfiler::RecordMethod(mirror::ArtMethod* method, uint32_t dex_pc) {
   if (method == nullptr) {
     profile_table_.NullMethod();
     // Don't record a nullptr method.
@@ -394,7 +405,11 @@ void BackgroundMethodSamplingProfiler::RecordMethod(mirror::ArtMethod* method) {
 
   // Add to the profile table unless it is filtered out.
   if (!is_filtered) {
-    profile_table_.Put(method);
+    if (options_.GetProfileType() == kProfilerMethod) {
+      profile_table_.Put(method);
+    } else if (options_.GetProfileType() == kProfilerMethodAndDexPC) {
+      profile_table_.PutDexPC(method, dex_pc);
+    }
   }
 }
 
@@ -404,7 +419,7 @@ void BackgroundMethodSamplingProfiler::CleanProfile() {
 }
 
 uint32_t BackgroundMethodSamplingProfiler::DumpProfile(std::ostream& os) {
-  return profile_table_.Write(os);
+  return profile_table_.Write(os, options_.GetProfileType());
 }
 
 // Profile Table.
@@ -415,19 +430,21 @@ ProfileSampleResults::ProfileSampleResults(Mutex& lock) : lock_(lock), num_sampl
     num_boot_methods_(0) {
   for (int i = 0; i < kHashSize; i++) {
     table[i] = nullptr;
+    dex_table[i] = nullptr;
   }
 }
 
 ProfileSampleResults::~ProfileSampleResults() {
   for (int i = 0; i < kHashSize; i++) {
      delete table[i];
+     delete dex_table[i];
   }
 }
 
 // Add a method to the profile table.  If it's the first time the method
 // has been seen, add it with count=1, otherwise increment the count.
 void ProfileSampleResults::Put(mirror::ArtMethod* method) {
-  lock_.Lock(Thread::Current());
+  MutexLock mu(Thread::Current(), lock_);
   uint32_t index = Hash(method);
   if (table[index] == nullptr) {
     table[index] = new Map();
@@ -439,11 +456,27 @@ void ProfileSampleResults::Put(mirror::ArtMethod* method) {
     i->second++;
   }
   num_samples_++;
-  lock_.Unlock(Thread::Current());
+}
+
+// Add a method with dex pc to the profile table
+void ProfileSampleResults::PutDexPC(mirror::ArtMethod* method, uint32_t dex_pc) {
+  MutexLock mu(Thread::Current(), lock_);
+  uint32_t index = Hash(method);
+  if (dex_table[index] == nullptr) {
+    dex_table[index] = new DexPCMap();
+  }
+  InstructionLocation inst_loc = std::make_pair(method, dex_pc);
+  DexPCMap::iterator i = dex_table[index]->find(inst_loc);
+  if (i == dex_table[index]->end()) {
+    (*dex_table[index])[inst_loc] = 1;
+  } else {
+    i->second++;
+  }
+  num_samples_++;
 }
 
 // Write the profile table to the output stream.  Also merge with the previous profile.
-uint32_t ProfileSampleResults::Write(std::ostream &os) {
+uint32_t ProfileSampleResults::Write(std::ostream& os, ProfileDataType type) {
   ScopedObjectAccess soa(Thread::Current());
   num_samples_ += previous_num_samples_;
   num_null_methods_ += previous_num_null_methods_;
@@ -453,30 +486,60 @@ uint32_t ProfileSampleResults::Write(std::ostream &os) {
                  << num_samples_ << "/" << num_null_methods_ << "/" << num_boot_methods_;
   os << num_samples_ << "/" << num_null_methods_ << "/" << num_boot_methods_ << "\n";
   uint32_t num_methods = 0;
-  for (int i = 0 ; i < kHashSize; i++) {
-    Map *map = table[i];
-    if (map != nullptr) {
-      for (const auto &meth_iter : *map) {
-        mirror::ArtMethod *method = meth_iter.first;
-        std::string method_name = PrettyMethod(method);
+  if (type == kProfilerMethod) {
+    for (int i = 0 ; i < kHashSize; i++) {
+      Map *map = table[i];
+      if (map != nullptr) {
+        for (const auto &meth_iter : *map) {
+          mirror::ArtMethod *method = meth_iter.first;
+          std::string method_name = PrettyMethod(method);
 
-        MethodHelper mh(method);
-        const DexFile::CodeItem* codeitem = mh.GetCodeItem();
-        uint32_t method_size = 0;
-        if (codeitem != nullptr) {
-          method_size = codeitem->insns_size_in_code_units_;
-        }
-        uint32_t count = meth_iter.second;
+          MethodHelper mh(method);
+          const DexFile::CodeItem* codeitem = mh.GetCodeItem();
+          uint32_t method_size = 0;
+          if (codeitem != nullptr) {
+            method_size = codeitem->insns_size_in_code_units_;
+          }
+          uint32_t count = meth_iter.second;
 
-        // Merge this profile entry with one from a previous run (if present).  Also
-        // remove the previous entry.
-        PreviousProfile::iterator pi = previous_.find(method_name);
-        if (pi != previous_.end()) {
-          count += pi->second.count_;
-          previous_.erase(pi);
+          // Merge this profile entry with one from a previous run (if present).  Also
+          // remove the previous entry.
+          PreviousProfile::iterator pi = previous_.find(method_name);
+          if (pi != previous_.end()) {
+            count += pi->second.count_;
+            previous_.erase(pi);
+          }
+          os << StringPrintf("%s/%u/%u\n",  method_name.c_str(), count, method_size);
+          ++num_methods;
         }
-        os << StringPrintf("%s/%u/%u\n",  method_name.c_str(), count, method_size);
-        ++num_methods;
+      }
+    }
+  } else if (type == kProfilerMethodAndDexPC) {
+    for (int i = 0 ; i < kHashSize; i++) {
+      DexPCMap *dex_map = dex_table[i];
+      if (dex_map != nullptr) {
+        for (const auto &dex_pc_iter : *dex_map) {
+          mirror::ArtMethod *method = dex_pc_iter.first.first;
+          uint32_t dex_pc = dex_pc_iter.first.second;
+          std::string method_name = PrettyMethod(method);
+          std::string dex_pc_str = StringPrintf("%s:%u", method_name.c_str(), dex_pc);
+
+          MethodHelper mh(method);
+          const DexFile::CodeItem* codeitem = mh.GetCodeItem();
+          uint32_t method_size = 0;
+          if (codeitem != nullptr) {
+            method_size = codeitem->insns_size_in_code_units_;
+          }
+          uint32_t count = dex_pc_iter.second;
+
+          PreviousProfile::iterator pi = previous_.find(dex_pc_str);
+          if (pi != previous_.end()) {
+            count += pi->second.count_;
+            previous_.erase(pi);
+          }
+          os << StringPrintf("%s:%u/%u/%u\n", method_name.c_str(), dex_pc, count, method_size);
+          ++num_methods;
+        }
       }
     }
   }
@@ -494,8 +557,10 @@ void ProfileSampleResults::Clear() {
   num_null_methods_ = 0;
   num_boot_methods_ = 0;
   for (int i = 0; i < kHashSize; i++) {
-     delete table[i];
-     table[i] = nullptr;
+    delete table[i];
+    table[i] = nullptr;
+    delete dex_table[i];
+    dex_table[i] = nullptr;
   }
   previous_.clear();
 }

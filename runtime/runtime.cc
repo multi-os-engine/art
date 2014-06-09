@@ -415,11 +415,6 @@ bool Runtime::Start() {
 
   if (profiler_options_.IsEnabled() && !profile_output_filename_.empty()) {
     // User has asked for a profile using -Xenable-profiler.
-    // Create the profile file if it doesn't exist.
-    int fd = open(profile_output_filename_.c_str(), O_RDWR|O_CREAT|O_EXCL, 0660);
-    if (fd >= 0) {
-      close(fd);
-    }
     StartProfiler(profile_output_filename_.c_str());
   }
 

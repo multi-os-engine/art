@@ -40,6 +40,8 @@ namespace mirror {
 }  // namespace mirror
 class Thread;
 
+typedef std::pair<mirror::ArtMethod*, uint32_t> InstructionLocation;
+
 //
 // This class holds all the results for all runs of the profiler.  It also
 // counts the number of null methods (where we can't determine the method) and
@@ -53,7 +55,8 @@ class ProfileSampleResults {
   ~ProfileSampleResults();
 
   void Put(mirror::ArtMethod* method);
-  uint32_t Write(std::ostream &os);
+  void PutDexPC(mirror::ArtMethod* method, uint32_t pc);
+  uint32_t Write(std::ostream &os, ProfileDataType type);
   void ReadPrevious(int fd);
   void Clear();
   uint32_t GetNumSamples() { return num_samples_; }
@@ -68,8 +71,11 @@ class ProfileSampleResults {
   uint32_t num_null_methods_;    // Number of samples where can don't know the method.
   uint32_t num_boot_methods_;    // Number of samples in the boot path.
 
-  typedef std::map<mirror::ArtMethod*, uint32_t> Map;   // Map of method vs its count.
+  typedef std::map<mirror::ArtMethod*, uint32_t> Map;         // Map of method vs its count.
   Map *table[kHashSize];
+
+  typedef std::map<InstructionLocation, uint32_t> DexPCMap;   // Map of method+dexpc vs its count.
+  DexPCMap *dex_table[kHashSize];
 
   struct PreviousValue {
     PreviousValue() : count_(0), method_size_(0) {}
@@ -114,7 +120,7 @@ class BackgroundMethodSamplingProfiler {
   static void Stop() LOCKS_EXCLUDED(Locks::profiler_lock_, wait_lock_);
   static void Shutdown() LOCKS_EXCLUDED(Locks::profiler_lock_);
 
-  void RecordMethod(mirror::ArtMethod *method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void RecordMethod(mirror::ArtMethod *method, uint32_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   Barrier& GetBarrier() {
     return *profiler_barrier_;
