@@ -1283,8 +1283,8 @@ END \name
      */
 TWO_ARG_DOWNCALL art_quick_initialize_static_storage, artInitializeStaticStorageFromCode, RETURN_IF_RESULT_IS_NON_ZERO
 
-UNIMPLEMENTED art_quick_initialize_type
-UNIMPLEMENTED art_quick_initialize_type_and_verify_access
+TWO_ARG_DOWNCALL art_quick_initialize_type, artInitializeTypeFromCode, RETURN_IF_RESULT_IS_NON_ZERO
+TWO_ARG_DOWNCALL art_quick_initialize_type_and_verify_access, artInitializeTypeAndVerifyAccessFromCode, RETURN_IF_RESULT_IS_NON_ZERO
 
 ONE_ARG_REF_DOWNCALL art_quick_get32_static, artGet32StaticFromCode, RETURN_OR_DELIVER_PENDING_EXCEPTION_X1
 ONE_ARG_REF_DOWNCALL art_quick_get64_static, artGet64StaticFromCode, RETURN_OR_DELIVER_PENDING_EXCEPTION_X1
@@ -1580,7 +1580,125 @@ END art_quick_to_interpreter_bridge
 UNIMPLEMENTED art_quick_instrumentation_entry
 UNIMPLEMENTED art_quick_instrumentation_exit
 UNIMPLEMENTED art_quick_deoptimize
-UNIMPLEMENTED art_quick_indexof
+
+    /*
+     * String's indexOf.
+     *
+     * Adapted from ARM32. TODO: Not very optimized.
+     *
+     * On entry:
+     *    x0:   string object (known non-null)
+     *    w1:   char to match (known <= 0xFFFF)
+     *    w2:   Starting offset in string data
+     */
+
+.macro INDEX_FROM_X0_X12_DIFF subx0
+.if \subx0
+    sub   x0, x0, #\subx0
+.endif
+    sub   x0, x0, x12
+    asr   x0, x0, #1
+.endm
+
+.macro RESTORE_INDEXOF_SAVES_AND_RET
+    ldr x11, [sp, #16]
+    .cfi_restore x11
+    ldp x4, x10, [sp], #32
+    .cfi_restore x4
+    .cfi_restore x10
+    .cfi_adjust_cfa_offset -32
+    ret
+.endm
+
+ENTRY art_quick_indexof
+    stp x4, x10, [sp, #-32]!             // 16B aligned
+    .cfi_adjust_cfa_offset 32
+    .cfi_rel_offset x4, 0
+    .cfi_rel_offset x10, 8
+    str x11, [sp, #16]
+    .cfi_rel_offset x11, 16
+
+    ldr   w3, [x0, #STRING_COUNT_OFFSET]
+    ldr   w12, [x0, #STRING_OFFSET_OFFSET]
+    ldr   w0, [x0, #STRING_VALUE_OFFSET]
+
+    /* Clamp start to [0..count] */
+    cmp   w2, #0
+    csel  w2, w2, wzr, ge
+    cmp   w2, w3
+    csel  w2, w2, w3, le
+
+    /* Build a pointer to the start of string data */
+    add   x0, x0, #STRING_DATA_OFFSET
+    add   x0, x0, w12, sxtw #1
+
+    /* Save a copy in r12 to later compute result */
+    mov   x12, x0
+
+    /* Build pointer to start of data to compare and pre-bias */
+    add   x0, x0, w2, sxtw #1
+    sub   x0, x0, #2
+
+    /* Compute iteration count */
+    sub   w2, w3, w2
+
+    /*
+     * At this point we have:
+     *   x0: start of data to test
+     *   w1: char to compare
+     *   w2: iteration count
+     *   x12: original start of string data
+     *   w3, w4, w10, w11 available for loading string data
+     */
+
+    subs  w2, w2, #4
+    blt   .Lindexof_remainder
+
+.Lindexof_loop4:
+    ldrh  w3, [x0, #2]!
+    ldrh  w4, [x0, #2]!
+    ldrh  w10, [x0, #2]!
+    ldrh  w11, [x0, #2]!
+    cmp   w3, w1
+    beq   .Lmatch_0
+    cmp   w4, w1
+    beq   .Lmatch_1
+    cmp   w10, w1
+    beq   .Lmatch_2
+    cmp   w11, w1
+    beq   .Lmatch_3
+    subs  w2, w2, #4
+    bge   .Lindexof_loop4
+
+.Lindexof_remainder:
+    adds  w2, w2, #4
+    beq   .Lindexof_nomatch
+
+.Lindexof_loop1:
+    ldrh  w3, [x0, #2]!
+    cmp   w3, w1
+    beq   .Lmatch_3
+    subs  w2, w2, #1
+    bne   .Lindexof_loop1
+
+.Lindexof_nomatch:
+    mov   x0, #-1
+//  movn  x0, #-1
+    RESTORE_INDEXOF_SAVES_AND_RET
+
+.Lmatch_0:
+    INDEX_FROM_X0_X12_DIFF 6
+    RESTORE_INDEXOF_SAVES_AND_RET
+.Lmatch_1:
+    INDEX_FROM_X0_X12_DIFF 4
+    RESTORE_INDEXOF_SAVES_AND_RET
+.Lmatch_2:
+    INDEX_FROM_X0_X12_DIFF 2
+    RESTORE_INDEXOF_SAVES_AND_RET
+.Lmatch_3:
+    INDEX_FROM_X0_X12_DIFF 0
+    RESTORE_INDEXOF_SAVES_AND_RET
+END art_quick_indexof
 
    /*
      * String's compareTo.
