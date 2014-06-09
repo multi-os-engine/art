@@ -560,6 +560,10 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
       if (!ParseDouble(option, ':', 10.0, 90.0, &profiler_options_.top_k_change_threshold_)) {
         return false;
       }
+    } else if (option == "-Xprofile-type:method") {
+      profiler_options_.profile_type_ = kProfilerMethodSig;
+    } else if (option == "-Xprofile-type:dexpc") {
+      profiler_options_.profile_type_ = kProfilerDexPC;
     } else if (StartsWith(option, "-implicit-checks:")) {
       std::string checks;
       if (!ParseStringAfterChar(option, ':', &checks)) {
@@ -803,6 +807,7 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -Xprofile-start-immediately\n");
   UsageMessage(stream, "  -Xprofile-top-k-threshold:doublevalue\n");
   UsageMessage(stream, "  -Xprofile-top-k-change-threshold:doublevalue\n");
+  UsageMessage(stream, "  -Xprofile-type:{method,dexpc}\n");
   UsageMessage(stream, "  -Xcompiler:filename\n");
   UsageMessage(stream, "  -Xcompiler-option dex2oat-option\n");
   UsageMessage(stream, "  -Ximage-compiler-option dex2oat-option\n");
