@@ -197,6 +197,13 @@ test-art-host-run-test-default-$(1): test-art-host-dependencies $(DX) $(HOST_OUT
 
 TEST_ART_HOST_RUN_TEST_DEFAULT_TARGETS += test-art-host-run-test-default-$(1)
 
+.PHONY: test-art-host-run-test-optimizing-$(1)
+test-art-host-run-test-optimizing-$(1): test-art-host-dependencies $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
+	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test -Xcompiler-option --compiler-backend=Optimizing $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) --host $(1)
+	@echo test-art-host-run-test-optimizing-$(1) PASSED
+
+TEST_ART_HOST_RUN_TEST_OPTIMIZING_TARGETS += test-art-host-run-test-optimizing-$(1)
+
 .PHONY: test-art-host-run-test-interpreter-$(1)
 test-art-host-run-test-interpreter-$(1): test-art-host-dependencies $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
 	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) --host --interpreter $(1)
@@ -205,7 +212,7 @@ test-art-host-run-test-interpreter-$(1): test-art-host-dependencies $(DX) $(HOST
 TEST_ART_HOST_RUN_TEST_INTERPRETER_TARGETS += test-art-host-run-test-interpreter-$(1)
 
 .PHONY: test-art-host-run-test-$(1)
-test-art-host-run-test-$(1): test-art-host-run-test-default-$(1) test-art-host-run-test-interpreter-$(1)
+test-art-host-run-test-$(1): test-art-host-run-test-default-$(1) test-art-host-run-test-interpreter-$(1) test-art-host-run-test-optimizing-$(1)
 
 endef
 
@@ -214,6 +221,10 @@ $(foreach test, $(TEST_ART_RUN_TESTS), $(eval $(call declare-test-art-host-run-t
 .PHONY: test-art-host-run-test-default
 test-art-host-run-test-default: $(TEST_ART_HOST_RUN_TEST_DEFAULT_TARGETS)
 	@echo test-art-host-run-test-default PASSED
+
+.PHONY: test-art-host-run-test-optimizing
+test-art-host-run-test-optimizing: $(TEST_ART_HOST_RUN_TEST_OPTIMIZING_TARGETS)
+	@echo test-art-host-run-test-optimizing PASSED
 
 .PHONY: test-art-host-run-test-interpreter
 test-art-host-run-test-interpreter: $(TEST_ART_HOST_RUN_TEST_INTERPRETER_TARGETS)
