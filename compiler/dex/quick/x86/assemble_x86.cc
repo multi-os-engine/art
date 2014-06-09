@@ -1165,7 +1165,7 @@ void X86Mir2Lir::EmitShiftRegImm(const X86EncodingMap* entry, uint8_t reg, int i
 
 void X86Mir2Lir::EmitShiftRegCl(const X86EncodingMap* entry, uint8_t reg, uint8_t cl) {
   DCHECK_EQ(cl, static_cast<uint8_t>(rs_rCX.GetReg()));
-  EmitPrefix(entry, reg, NO_REG, NO_REG);
+  EmitPrefix(entry, NO_REG, NO_REG, reg);
   reg = LowRegisterBits(reg);
   code_buffer_.push_back(entry->skeleton.opcode);
   DCHECK_NE(0x0F, entry->skeleton.opcode);
