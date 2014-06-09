@@ -63,44 +63,111 @@ static const size_t kMaxAllocRecordStackDepth = 16;  // Max 255.
 static const size_t kDefaultNumAllocRecords = 64*1024;  // Must be a power of 2.
 
 struct AllocRecordStackTraceElement {
-  mirror::ArtMethod* method;
-  uint32_t dex_pc;
-
-  AllocRecordStackTraceElement() : method(nullptr), dex_pc(0) {
+ public:
+  AllocRecordStackTraceElement() : method_(nullptr), dex_pc_(0) {
   }
 
-  int32_t LineNumber() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return MethodHelper(method).GetLineNumFromDexPC(dex_pc);
+  int32_t LineNumber() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    mirror::ArtMethod* method = Method();
+    DCHECK(method != nullptr);
+    return MethodHelper(method).GetLineNumFromDexPC(DexPc());
   }
+
+  mirror::ArtMethod* Method() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (method_ == nullptr) {
+      return nullptr;
+    }
+    mirror::ArtMethod* method = reinterpret_cast<mirror::ArtMethod*>(
+        Thread::Current()->DecodeJObject(method_));
+    return method;
+  }
+
+  void SetMethod(mirror::ArtMethod* m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    ScopedObjectAccessUnchecked soa(Thread::Current());
+    JNIEnv* env = soa.Env();
+    if (method_ != nullptr) {
+      env->DeleteWeakGlobalRef(method_);
+    }
+    if (m == nullptr) {
+      method_ = nullptr;
+    } else {
+      method_ = env->NewWeakGlobalRef(soa.AddLocalReference<jobject>(m));
+    }
+  }
+
+  uint32_t DexPc() {
+    return dex_pc_;
+  }
+
+  void SetDexPc(uint32_t pc) {
+    dex_pc_ = pc;
+  }
+
+ private:
+  jobject method_;  // This is a weak global.
+  uint32_t dex_pc_;
 };
 
-struct AllocRecord {
-  mirror::Class* type;
-  size_t byte_count;
-  uint16_t thin_lock_id;
-  AllocRecordStackTraceElement stack[kMaxAllocRecordStackDepth];  // Unused entries have NULL method.
+class AllocRecord {
+ public:
+  AllocRecord() : type_(nullptr), byte_count_(0), thin_lock_id_(0) {}
 
-  size_t GetDepth() {
+  mirror::Class* Type() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (type_ == nullptr) {
+      return nullptr;
+    }
+    mirror::Class* type = reinterpret_cast<mirror::Class*>(
+        Thread::Current()->DecodeJObject(type_));
+    return type;
+  }
+
+  void SetType(mirror::Class* t) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    ScopedObjectAccessUnchecked soa(Thread::Current());
+    JNIEnv* env = soa.Env();
+    if (type_ != nullptr) {
+      env->DeleteWeakGlobalRef(type_);
+    }
+    if (t == nullptr) {
+      type_ = nullptr;
+    } else {
+      type_ = env->NewWeakGlobalRef(soa.AddLocalReference<jobject>(t));
+    }
+  }
+
+  size_t GetDepth() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     size_t depth = 0;
-    while (depth < kMaxAllocRecordStackDepth && stack[depth].method != NULL) {
+    while (depth < kMaxAllocRecordStackDepth && stack_[depth].Method() != NULL) {
       ++depth;
     }
     return depth;
   }
 
-  void UpdateObjectPointers(IsMarkedCallback* callback, void* arg)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    if (type != nullptr) {
-      type = down_cast<mirror::Class*>(callback(type, arg));
-    }
-    for (size_t stack_frame = 0; stack_frame < kMaxAllocRecordStackDepth; ++stack_frame) {
-      mirror::ArtMethod*& m = stack[stack_frame].method;
-      if (m == nullptr) {
-        break;
-      }
-      m = down_cast<mirror::ArtMethod*>(callback(m, arg));
-    }
+  size_t ByteCount() {
+    return byte_count_;
   }
+
+  void SetByteCount(size_t count) {
+    byte_count_ = count;
+  }
+
+  uint16_t ThinLockId() {
+    return thin_lock_id_;
+  }
+
+  void SetThinLockId(uint16_t id) {
+    thin_lock_id_ = id;
+  }
+
+  AllocRecordStackTraceElement* StackElement(size_t index) {
+    DCHECK_LT(index, kMaxAllocRecordStackDepth);
+    return &stack_[index];
+  }
+
+ private:
+  jobject type_;  // This is a weak global.
+  size_t byte_count_;
+  uint16_t thin_lock_id_;
+  AllocRecordStackTraceElement stack_[kMaxAllocRecordStackDepth];  // Unused entries have NULL method.
 };
 
 struct Breakpoint {
@@ -4127,8 +4194,8 @@ struct AllocRecordStackVisitor : public StackVisitor {
     }
     mirror::ArtMethod* m = GetMethod();
     if (!m->IsRuntimeMethod()) {
-      record->stack[depth].method = m;
-      record->stack[depth].dex_pc = GetDexPc();
+      record->StackElement(depth)->SetMethod(m);
+      record->StackElement(depth)->SetDexPc(GetDexPc());
       ++depth;
     }
     return true;
@@ -4137,8 +4204,8 @@ struct AllocRecordStackVisitor : public StackVisitor {
   ~AllocRecordStackVisitor() {
     // Clear out any unused stack trace elements.
     for (; depth < kMaxAllocRecordStackDepth; ++depth) {
-      record->stack[depth].method = NULL;
-      record->stack[depth].dex_pc = 0;
+      record->StackElement(depth)->SetMethod(nullptr);
+      record->StackElement(depth)->SetDexPc(0);
     }
   }
 
@@ -4162,9 +4229,9 @@ void Dbg::RecordAllocation(mirror::Class* type, size_t byte_count) {
 
   // Fill in the basics.
   AllocRecord* record = &recent_allocation_records_[alloc_record_head_];
-  record->type = type;
-  record->byte_count = byte_count;
-  record->thin_lock_id = self->GetThreadId();
+  record->SetType(type);
+  record->SetByteCount(byte_count);
+  record->SetThinLockId(self->GetThreadId());
 
   // Fill in the stack trace.
   AllocRecordStackVisitor visitor(self, record);
@@ -4205,15 +4272,16 @@ void Dbg::DumpRecentAllocations() {
   while (count--) {
     AllocRecord* record = &recent_allocation_records_[i];
 
-    LOG(INFO) << StringPrintf(" Thread %-2d %6zd bytes ", record->thin_lock_id, record->byte_count)
-              << PrettyClass(record->type);
+    LOG(INFO) << StringPrintf(" Thread %-2d %6zd bytes ", record->ThinLockId(), record->ByteCount())
+              << PrettyClass(record->Type());
 
     for (size_t stack_frame = 0; stack_frame < kMaxAllocRecordStackDepth; ++stack_frame) {
-      mirror::ArtMethod* m = record->stack[stack_frame].method;
+      AllocRecordStackTraceElement* stack_element = record->StackElement(stack_frame);
+      mirror::ArtMethod* m = stack_element->Method();
       if (m == NULL) {
         break;
       }
-      LOG(INFO) << "    " << PrettyMethod(m) << " line " << record->stack[stack_frame].LineNumber();
+      LOG(INFO) << "    " << PrettyMethod(m) << " line " << stack_element->LineNumber();
     }
 
     // pause periodically to help logcat catch up
@@ -4222,35 +4290,6 @@ void Dbg::DumpRecentAllocations() {
     }
 
     i = (i + 1) & (alloc_record_max_ - 1);
-  }
-}
-
-void Dbg::UpdateObjectPointers(IsMarkedCallback* callback, void* arg) {
-  if (recent_allocation_records_ != nullptr) {
-    MutexLock mu(Thread::Current(), *alloc_tracker_lock_);
-    size_t i = HeadIndex();
-    size_t count = alloc_record_count_;
-    while (count--) {
-      AllocRecord* record = &recent_allocation_records_[i];
-      DCHECK(record != nullptr);
-      record->UpdateObjectPointers(callback, arg);
-      i = (i + 1) & (alloc_record_max_ - 1);
-    }
-  }
-  if (gRegistry != nullptr) {
-    gRegistry->UpdateObjectPointers(callback, arg);
-  }
-}
-
-void Dbg::AllowNewObjectRegistryObjects() {
-  if (gRegistry != nullptr) {
-    gRegistry->AllowNewObjects();
-  }
-}
-
-void Dbg::DisallowNewObjectRegistryObjects() {
-  if (gRegistry != nullptr) {
-    gRegistry->DisallowNewObjects();
   }
 }
 
@@ -4360,11 +4399,11 @@ jbyteArray Dbg::GetRecentAllocations() {
     while (count--) {
       AllocRecord* record = &recent_allocation_records_[idx];
 
-      class_names.Add(record->type->GetDescriptor().c_str());
+      class_names.Add(record->Type()->GetDescriptor().c_str());
 
       MethodHelper mh;
       for (size_t i = 0; i < kMaxAllocRecordStackDepth; i++) {
-        mirror::ArtMethod* m = record->stack[i].method;
+        mirror::ArtMethod* m = record->StackElement(i)->Method();
         if (m != NULL) {
           mh.ChangeMethod(m);
           class_names.Add(mh.GetDeclaringClassDescriptor());
@@ -4415,9 +4454,9 @@ jbyteArray Dbg::GetRecentAllocations() {
       AllocRecord* record = &recent_allocation_records_[idx];
       size_t stack_depth = record->GetDepth();
       size_t allocated_object_class_name_index =
-          class_names.IndexOf(record->type->GetDescriptor().c_str());
-      JDWP::Append4BE(bytes, record->byte_count);
-      JDWP::Append2BE(bytes, record->thin_lock_id);
+          class_names.IndexOf(record->Type()->GetDescriptor().c_str());
+      JDWP::Append4BE(bytes, record->ByteCount());
+      JDWP::Append2BE(bytes, record->ThinLockId());
       JDWP::Append2BE(bytes, allocated_object_class_name_index);
       JDWP::Append1BE(bytes, stack_depth);
 
@@ -4428,14 +4467,14 @@ jbyteArray Dbg::GetRecentAllocations() {
         // (2b) method name
         // (2b) method source file
         // (2b) line number, clipped to 32767; -2 if native; -1 if no source
-        mh.ChangeMethod(record->stack[stack_frame].method);
+        mh.ChangeMethod(record->StackElement(stack_frame)->Method());
         size_t class_name_index = class_names.IndexOf(mh.GetDeclaringClassDescriptor());
         size_t method_name_index = method_names.IndexOf(mh.GetName());
         size_t file_name_index = filenames.IndexOf(GetMethodSourceFile(&mh));
         JDWP::Append2BE(bytes, class_name_index);
         JDWP::Append2BE(bytes, method_name_index);
         JDWP::Append2BE(bytes, file_name_index);
-        JDWP::Append2BE(bytes, record->stack[stack_frame].LineNumber());
+        JDWP::Append2BE(bytes, record->StackElement(stack_frame)->LineNumber());
       }
 
       idx = (idx + 1) & (alloc_record_max_ - 1);
