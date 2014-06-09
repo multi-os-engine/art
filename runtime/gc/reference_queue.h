@@ -55,7 +55,10 @@ class ReferenceQueue {
   // overhead.
   void EnqueueReference(mirror::Reference* ref) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void EnqueuePendingReference(mirror::Reference* ref) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  mirror::Reference* DequeuePendingReference() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  mirror::Reference* DequeuePendingReference(bool clear_pending_next)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void ClearPendingNext(mirror::Reference*) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Enqueues finalizer references with white referents.  White referents are blackened, moved to the
   // zombie field, and the referent field is cleared.
   void EnqueueFinalizerReferences(ReferenceQueue& cleared_references,
@@ -65,7 +68,7 @@ class ReferenceQueue {
   // Walks the reference list marking any references subject to the reference clearing policy.
   // References with a black referent are removed from the list.  References with white referents
   // biased toward saving are blackened and also removed from the list.
-  void PreserveSomeSoftReferences(IsMarkedCallback* preserve_callback, void* arg)
+  void ForwardSoftReferences(IsMarkedCallback* preserve_callback, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   // Unlink the reference list clearing references objects with white referents.  Cleared references
   // registered to a reference queue are scheduled for appending by the heap worker thread.

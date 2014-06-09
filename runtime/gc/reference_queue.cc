@@ -63,7 +63,7 @@ void ReferenceQueue::EnqueuePendingReference(mirror::Reference* ref) {
   }
 }
 
-mirror::Reference* ReferenceQueue::DequeuePendingReference() {
+mirror::Reference* ReferenceQueue::DequeuePendingReference(bool clear_pending_next) {
   DCHECK(!IsEmpty());
   mirror::Reference* head = list_->GetPendingNext();
   DCHECK(head != nullptr);
@@ -82,12 +82,18 @@ mirror::Reference* ReferenceQueue::DequeuePendingReference() {
     }
     ref = head;
   }
+  if (clear_pending_next) {
+    ClearPendingNext(ref);
+  }
+  return ref;
+}
+
+void ReferenceQueue::ClearPendingNext(mirror::Reference* ref) {
   if (Runtime::Current()->IsActiveTransaction()) {
     ref->SetPendingNext<true>(nullptr);
   } else {
     ref->SetPendingNext<false>(nullptr);
   }
-  return ref;
 }
 
 void ReferenceQueue::Dump(std::ostream& os) const {
@@ -108,7 +114,7 @@ void ReferenceQueue::ClearWhiteReferences(ReferenceQueue& cleared_references,
                                           IsMarkedCallback* preserve_callback,
                                           void* arg) {
   while (!IsEmpty()) {
-    mirror::Reference* ref = DequeuePendingReference();
+    mirror::Reference* ref = DequeuePendingReference(true);
     mirror::Object* referent = ref->GetReferent<kWithoutReadBarrier>();
     if (referent != nullptr) {
       mirror::Object* forward_address = preserve_callback(referent, arg);
@@ -135,7 +141,7 @@ void ReferenceQueue::EnqueueFinalizerReferences(ReferenceQueue& cleared_referenc
                                                 MarkObjectCallback* mark_object_callback,
                                                 void* arg) {
   while (!IsEmpty()) {
-    mirror::FinalizerReference* ref = DequeuePendingReference()->AsFinalizerReference();
+    mirror::FinalizerReference* ref = DequeuePendingReference(true)->AsFinalizerReference();
     mirror::Object* referent = ref->GetReferent<kWithoutReadBarrier>();
     if (referent != nullptr) {
       mirror::Object* forward_address = is_marked_callback(referent, arg);
@@ -160,22 +166,23 @@ void ReferenceQueue::EnqueueFinalizerReferences(ReferenceQueue& cleared_referenc
   }
 }
 
-void ReferenceQueue::PreserveSomeSoftReferences(IsMarkedCallback* preserve_callback, void* arg) {
-  ReferenceQueue cleared;
-  while (!IsEmpty()) {
-    mirror::Reference* ref = DequeuePendingReference();
+void ReferenceQueue::ForwardSoftReferences(IsMarkedCallback* preserve_callback,
+                                                void* arg) {
+  if (UNLIKELY(IsEmpty())) {
+    return;
+  }
+  mirror::Reference* const head = list_;
+  mirror::Reference* ref = head;
+  do {
     mirror::Object* referent = ref->GetReferent<kWithoutReadBarrier>();
     if (referent != nullptr) {
       mirror::Object* forward_address = preserve_callback(referent, arg);
-      if (forward_address == nullptr) {
-        // Either the reference isn't marked or we don't wish to preserve it.
-        cleared.EnqueuePendingReference(ref);
-      } else if (forward_address != referent) {
+      if (forward_address != nullptr && forward_address != referent) {
         ref->SetReferent<false>(forward_address);
       }
     }
-  }
-  list_ = cleared.GetList();
+    ref = ref->GetPendingNext();
+  } while (UNLIKELY(ref != head));
 }
 
 }  // namespace gc
