@@ -810,7 +810,7 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
                    : (IsInReg(this, rl_src_offset, rs_rDI) ? 4
                    : (SRegOffset(rl_src_offset.s_reg_low) + push_offset));
     LoadWordDisp(TargetReg(kSp), srcOffsetSp, rs_rSI);
-    NewLIR4(kX86LockCmpxchg8bA, rs_rDI.GetReg(), rs_rSI.GetReg(), 0, 0);
+    NewLIR4(kX86LockCmpxchg64A, rs_rDI.GetReg(), rs_rSI.GetReg(), 0, 0);
 
     // After a store we need to insert barrier in case of potential load. Since the
     // locked cmpxchg has full barrier semantics, only a scheduling barrier will be generated.
