@@ -1037,6 +1037,10 @@ void X86Mir2Lir::InstallLiteralPools() {
  * otherwise bails to standard library code.
  */
 bool X86Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
+  if (cu_->instruction_set == kX86_64) {
+    // TODO - add kX86_64 implementation
+    return false;
+  }
   ClobberCallerSave();
   LockCallTemps();  // Using fixed registers
 
