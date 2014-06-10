@@ -1003,12 +1003,12 @@ END_FUNCTION art_quick_proxy_invoke_handler
 
     /*
      * Called to resolve an imt conflict.
-     * rax is a hidden argument that holds the target method's dex method index.
+     * r11 is a hidden argument that holds the target method's dex method index.
      */
 DEFINE_FUNCTION art_quick_imt_conflict_trampoline
     movl 8(%rsp), %edi            // load caller Method*
     movl METHOD_DEX_CACHE_METHODS_OFFSET(%rdi), %edi  // load dex_cache_resolved_methods
-    movl OBJECT_ARRAY_DATA_OFFSET(%rdi, %rax, 4), %edi  // load the target method
+    movl OBJECT_ARRAY_DATA_OFFSET(%rdi, %r11, 4), %edi  // load the target method
     jmp art_quick_invoke_interface_trampoline_local
 END_FUNCTION art_quick_imt_conflict_trampoline
 
