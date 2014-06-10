@@ -18,6 +18,7 @@
 #define ART_RUNTIME_CLASS_LINKER_INL_H_
 
 #include "class_linker.h"
+#include "gc/heap-inl.h"
 #include "mirror/art_field.h"
 #include "mirror/class_loader.h"
 #include "mirror/dex_cache-inl.h"
@@ -192,7 +193,8 @@ inline mirror::IfTable* ClassLinker::AllocIfTable(Thread* self, size_t ifcount) 
 inline mirror::ObjectArray<mirror::ArtField>* ClassLinker::AllocArtFieldArray(Thread* self,
                                                                               size_t length) {
   return mirror::ObjectArray<mirror::ArtField>::Alloc(
-      self, GetClassRoot(kJavaLangReflectArtFieldArrayClass), length);
+      self, GetClassRoot(kJavaLangReflectArtFieldArrayClass), length,
+      Runtime::Current()->GetHeap()->GetCurrentNonMovingAllocator());
 }
 
 inline mirror::Class* ClassLinker::GetClassRoot(ClassRoot class_root)

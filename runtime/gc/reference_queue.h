@@ -84,6 +84,9 @@ class ReferenceQueue {
   mirror::Reference* GetList() {
     return list_;
   }
+  // Visits list_.
+  void UpdateRoots(IsMarkedCallback* callback, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
   // Lock, used for parallel GC reference enqueuing. It allows for multiple threads simultaneously

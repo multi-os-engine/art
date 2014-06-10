@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 The Android Open Source Project
+ * Copyright (C) 2014 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef ART_RUNTIME_MIRROR_IFTABLE_INL_H_
-#define ART_RUNTIME_MIRROR_IFTABLE_INL_H_
+#ifndef ART_RUNTIME_GC_COLLECTOR_MARK_COMPACT_INL_H_
+#define ART_RUNTIME_GC_COLLECTOR_MARK_COMPACT_INL_H_
 
-#include "iftable.h"
+#include "mark_compact.h"
+
+#include "gc/accounting/heap_bitmap.h"
+#include "mirror/object-inl.h"
 
 namespace art {
-namespace mirror {
+namespace gc {
+namespace collector {
 
-inline void IfTable::SetInterface(int32_t i, Class* interface) {
-  DCHECK(interface != NULL);
-  DCHECK(interface->IsInterface());
-  const size_t idx = i * kMax + kInterface;
-  DCHECK_EQ(Get(idx), static_cast<Object*>(nullptr));
-  Set<false>(idx, interface);
-}
-
-}  // namespace mirror
+}  // namespace collector
+}  // namespace gc
 }  // namespace art
 
-#endif  // ART_RUNTIME_MIRROR_IFTABLE_INL_H_
+#endif  // ART_RUNTIME_GC_COLLECTOR_MARK_COMPACT_INL_H_

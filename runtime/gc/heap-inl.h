@@ -52,6 +52,9 @@ inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self, mirror::Clas
     return AllocLargeObject<kInstrumented, PreFenceVisitor>(self, klass, byte_count,
                                                             pre_fence_visitor);
   }
+  if (klass != nullptr && klass->IsClassClass()) {
+    CHECK_EQ(allocator, kAllocatorTypeNonMoving);
+  }
   mirror::Object* obj;
   AllocationTimer alloc_timer(this, &obj);
   size_t bytes_allocated, usable_size;

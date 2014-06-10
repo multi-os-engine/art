@@ -113,6 +113,8 @@ static gc::CollectorType ParseCollectorType(const std::string& option) {
     return gc::kCollectorTypeGSS;
   } else if (option == "CC") {
     return gc::kCollectorTypeCC;
+  } else if (option == "MC") {
+    return gc::kCollectorTypeMC;
   } else {
     return gc::kCollectorTypeNone;
   }
@@ -187,7 +189,7 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
   conc_gc_threads_ = 0;
   // The default GC type is set in makefiles.
 #if ART_DEFAULT_GC_TYPE_IS_CMS
-  collector_type_ = gc::kCollectorTypeCMS;
+  collector_type_ = gc::kCollectorTypeMC;
 #elif ART_DEFAULT_GC_TYPE_IS_SS
   collector_type_ = gc::kCollectorTypeSS;
 #elif ART_DEFAULT_GC_TYPE_IS_GSS

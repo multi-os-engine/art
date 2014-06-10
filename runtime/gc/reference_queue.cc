@@ -179,5 +179,11 @@ void ReferenceQueue::ForwardSoftReferences(IsMarkedCallback* preserve_callback,
   } while (LIKELY(ref != head));
 }
 
+void ReferenceQueue::UpdateRoots(IsMarkedCallback* callback, void* arg) {
+  if (list_ != nullptr) {
+    list_ = down_cast<mirror::Reference*>(callback(list_, arg));
+  }
+}
+
 }  // namespace gc
 }  // namespace art
