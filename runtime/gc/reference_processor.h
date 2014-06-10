@@ -58,6 +58,8 @@ class ReferenceProcessor {
   void DelayReferenceReferent(mirror::Class* klass, mirror::Reference* ref,
                               IsMarkedCallback is_marked_callback, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void UpdateRoots(IsMarkedCallback* callback, void* arg)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::heap_bitmap_lock_);
 
  private:
   class ProcessReferencesArgs {
