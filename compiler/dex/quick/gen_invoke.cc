@@ -1370,7 +1370,11 @@ bool Mir2Lir::GenInlinedReverseBytes(CallInfo* info, OpSize size) {
   RegLocation rl_src_i = info->args[0];
   RegLocation rl_dest = (size == k64) ? InlineTargetWide(info) : InlineTarget(info);  // result reg
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  if (size == k64) {
+  if (size == k64 && cu_->instruction_set == kX86_64) {
+    RegLocation rl_i = LoadValueWide(rl_src_i, kCoreReg);
+    OpRegReg(kOpRev, rl_result.reg, rl_i.reg);
+    StoreValueWide(rl_dest, rl_result);
+  } else if (size == k64) {
     RegLocation rl_i = LoadValueWide(rl_src_i, kCoreReg);
     if (cu_->instruction_set == kArm64) {
       OpRegReg(kOpRev, rl_result.reg, rl_i.reg);
@@ -1428,7 +1432,9 @@ bool Mir2Lir::GenInlinedAbsLong(CallInfo* info) {
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
 
   // If on x86 or if we would clobber a register needed later, just copy the source first.
-  if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64 || rl_result.reg.GetLowReg() == rl_src.reg.GetHighReg()) {
+  if (cu_->instruction_set != kX86_64 &&
+      (cu_->instruction_set == kX86 ||
+       rl_result.reg.GetLowReg() == rl_src.reg.GetHighReg())) {
     OpRegCopyWide(rl_result.reg, rl_src.reg);
     if (rl_result.reg.GetLowReg() != rl_src.reg.GetLowReg() &&
         rl_result.reg.GetLowReg() != rl_src.reg.GetHighReg() &&
@@ -1441,12 +1447,20 @@ bool Mir2Lir::GenInlinedAbsLong(CallInfo* info) {
   }
 
   // abs(x) = y<=x>>31, (x+y)^y.
-  RegStorage sign_reg = AllocTemp();
-  OpRegRegImm(kOpAsr, sign_reg, rl_src.reg.GetHigh(), 31);
-  OpRegRegReg(kOpAdd, rl_result.reg.GetLow(), rl_src.reg.GetLow(), sign_reg);
-  OpRegRegReg(kOpAdc, rl_result.reg.GetHigh(), rl_src.reg.GetHigh(), sign_reg);
-  OpRegReg(kOpXor, rl_result.reg.GetLow(), sign_reg);
-  OpRegReg(kOpXor, rl_result.reg.GetHigh(), sign_reg);
+  RegStorage sign_reg;
+  if (cu_->instruction_set == kX86_64) {
+    sign_reg = AllocTempWide();
+    OpRegRegImm(kOpAsr, sign_reg, rl_src.reg, 63);
+    OpRegRegReg(kOpAdd, rl_result.reg, rl_src.reg, sign_reg);
+    OpRegReg(kOpXor, rl_result.reg, sign_reg);
+  } else {
+    sign_reg = AllocTemp();
+    OpRegRegImm(kOpAsr, sign_reg, rl_src.reg.GetHigh(), 31);
+    OpRegRegReg(kOpAdd, rl_result.reg.GetLow(), rl_src.reg.GetLow(), sign_reg);
+    OpRegRegReg(kOpAdc, rl_result.reg.GetHigh(), rl_src.reg.GetHigh(), sign_reg);
+    OpRegReg(kOpXor, rl_result.reg.GetLow(), sign_reg);
+    OpRegReg(kOpXor, rl_result.reg.GetHigh(), sign_reg);
+  }
   FreeTemp(sign_reg);
   StoreValueWide(rl_dest, rl_result);
   return true;
@@ -1475,16 +1489,18 @@ bool Mir2Lir::GenInlinedAbsDouble(CallInfo* info) {
   rl_src = LoadValueWide(rl_src, kCoreReg);
   RegLocation rl_dest = InlineTargetWide(info);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-
-  if (cu_->instruction_set == kArm64) {
-    // TODO - Can ecode ? UBXF otherwise
-    // OpRegRegImm(kOpAnd, rl_result.reg, 0x7fffffffffffffff);
-    return false;
+  if (cu_->instruction_set == kX86_64) {
+    RegStorage temp_reg = AllocTempWide();
+    LoadConstantWide(temp_reg, 0x7fffffffffffffff);
+    OpRegReg(kOpAnd, temp_reg, rl_src.reg);
+    OpRegReg(kOpMov, rl_result.reg, temp_reg);
+    StoreValueWide(rl_dest, rl_result);
+    FreeTemp(temp_reg);
   } else {
     OpRegCopyWide(rl_result.reg, rl_src.reg);
     OpRegImm(kOpAnd, rl_result.reg.GetHigh(), 0x7fffffff);
+    StoreValueWide(rl_dest, rl_result);
   }
-  StoreValueWide(rl_dest, rl_result);
   return true;
 }
 
@@ -1566,6 +1582,7 @@ bool Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
 
 /* Fast string.compareTo(Ljava/lang/string;)I. */
 bool Mir2Lir::GenInlinedStringCompareTo(CallInfo* info) {
+
   if (cu_->instruction_set == kMips) {
     // TODO - add Mips implementation
     return false;
@@ -1747,8 +1764,7 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
   DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
   // TODO: Enable instrinsics for x86_64
   // Temporary disable intrinsics for x86_64. We will enable them later step by step.
-  // Temporary disable intrinsics for Arm64. We will enable them later step by step.
-  if ((cu_->instruction_set != kX86_64) && (cu_->instruction_set != kArm64)) {
+  if (cu_->instruction_set != kX86_64) {
     if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
         ->GenIntrinsic(this, info)) {
       return;
