@@ -217,7 +217,7 @@ template <size_t pointer_size>
 void Mir2Lir::CallRuntimeHelperImmReg(ThreadOffset<pointer_size> helper_offset, int arg0,
                                       RegStorage arg1, bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
-  OpRegCopy(TargetReg(kArg1), arg1);
+  OpRegCopy(TargetReg(kArg1, arg1.Is64Bit()), arg1);
   LoadConstant(TargetReg(kArg0), arg0);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
@@ -282,108 +282,124 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocation(ThreadOffset<pointer_size>
                                                       RegLocation arg0, RegLocation arg1,
                                                       bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
-  if (arg0.wide == 0) {
-    LoadValueDirectFixed(arg0, arg0.fp ? TargetReg(kFArg0) : TargetReg(kArg0));
-    if (arg1.wide == 0) {
-      if (cu_->instruction_set == kMips) {
-        LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg2) : TargetReg(kArg1));
-      } else if (cu_->instruction_set == kArm64) {
-        LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg1) : TargetReg(kArg1));
-      } else if (cu_->instruction_set == kX86_64) {
-        if (arg0.fp) {
-          LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg1) : TargetReg(kArg0));
-        } else {
-          LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg0) : TargetReg(kArg1));
-        }
-      } else {
-        LoadValueDirectFixed(arg1, TargetReg(kArg1));
-      }
+
+  if (cu_->instruction_set == kArm64) {
+    RegStorage arg0_reg = TargetReg((arg0.fp) ? kFArg0 : kArg0, arg0.wide);
+
+    RegStorage arg1_reg;
+    if (arg1.fp == arg0.fp) {
+      arg1_reg = TargetReg((arg1.fp) ? kFArg1 : kArg1);
     } else {
-      if (cu_->instruction_set == kMips) {
-        RegStorage r_tmp;
-        if (arg1.fp) {
-          r_tmp = RegStorage::MakeRegPair(TargetReg(kFArg2), TargetReg(kFArg3));
-        } else {
-          r_tmp = RegStorage::MakeRegPair(TargetReg(kArg1), TargetReg(kArg2));
-        }
-        LoadValueDirectWideFixed(arg1, r_tmp);
-      } else {
-        RegStorage r_tmp;
-        if (cu_->target64) {
-          r_tmp = RegStorage::Solo64(TargetReg(kArg1).GetReg());
-        } else {
-          r_tmp = RegStorage::MakeRegPair(TargetReg(kArg1), TargetReg(kArg2));
-        }
-        LoadValueDirectWideFixed(arg1, r_tmp);
-      }
+      arg1_reg = TargetReg((arg1.fp) ? kFArg0 : kArg0);
+    }
+
+    if (arg0.wide == 0) {
+      LoadValueDirectFixed(arg0, arg0_reg);
+    } else {
+      LoadValueDirectWideFixed(arg0, arg0_reg);
+    }
+
+    if (arg1.wide == 0) {
+      LoadValueDirectFixed(arg1, arg1_reg);
+    } else {
+      LoadValueDirectWideFixed(arg1, arg1_reg);
     }
   } else {
-    RegStorage r_tmp;
-    if (arg0.fp) {
-      if (cu_->target64) {
-        r_tmp = RegStorage::FloatSolo64(TargetReg(kFArg0).GetReg());
+    if (arg0.wide == 0) {
+      LoadValueDirectFixed(arg0, arg0.fp ? TargetReg(kFArg0) : TargetReg(kArg0));
+      if (arg1.wide == 0) {
+        if (cu_->instruction_set == kMips) {
+          LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg2) : TargetReg(kArg1));
+        } else if (cu_->instruction_set == kX86_64) {
+          if (arg0.fp) {
+            LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg1) : TargetReg(kArg0));
+          } else {
+            LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg0) : TargetReg(kArg1));
+          }
+        } else {
+          LoadValueDirectFixed(arg1, TargetReg(kArg1));
+        }
       } else {
-        r_tmp = RegStorage::MakeRegPair(TargetReg(kFArg0), TargetReg(kFArg1));
-      }
-    } else {
-      if (cu_->target64) {
-        r_tmp = RegStorage::Solo64(TargetReg(kArg0).GetReg());
-      } else {
-        r_tmp = RegStorage::MakeRegPair(TargetReg(kArg0), TargetReg(kArg1));
-      }
-    }
-    LoadValueDirectWideFixed(arg0, r_tmp);
-    if (arg1.wide == 0) {
-      if (cu_->target64) {
-        LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg1) : TargetReg(kArg1));
-      } else {
-        LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg2) : TargetReg(kArg2));
+        if (cu_->instruction_set == kMips) {
+          RegStorage r_tmp;
+          if (arg1.fp) {
+            r_tmp = RegStorage::MakeRegPair(TargetReg(kFArg2), TargetReg(kFArg3));
+          } else {
+            r_tmp = RegStorage::MakeRegPair(TargetReg(kArg1), TargetReg(kArg2));
+          }
+          LoadValueDirectWideFixed(arg1, r_tmp);
+        } else {
+          RegStorage r_tmp;
+          if (cu_->target64) {
+            r_tmp = RegStorage::Solo64(TargetReg(kArg1).GetReg());
+          } else {
+            r_tmp = RegStorage::MakeRegPair(TargetReg(kArg1), TargetReg(kArg2));
+          }
+          LoadValueDirectWideFixed(arg1, r_tmp);
+        }
       }
     } else {
       RegStorage r_tmp;
-      if (arg1.fp) {
+      if (arg0.fp) {
         if (cu_->target64) {
-          r_tmp = RegStorage::FloatSolo64(TargetReg(kFArg1).GetReg());
+          r_tmp = RegStorage::FloatSolo64(TargetReg(kFArg0).GetReg());
         } else {
-          r_tmp = RegStorage::MakeRegPair(TargetReg(kFArg2), TargetReg(kFArg3));
+          r_tmp = RegStorage::MakeRegPair(TargetReg(kFArg0), TargetReg(kFArg1));
         }
       } else {
         if (cu_->target64) {
-          r_tmp = RegStorage::Solo64(TargetReg(kArg1).GetReg());
+          r_tmp = RegStorage::Solo64(TargetReg(kArg0).GetReg());
         } else {
-          r_tmp = RegStorage::MakeRegPair(TargetReg(kArg2), TargetReg(kArg3));
+          r_tmp = RegStorage::MakeRegPair(TargetReg(kArg0), TargetReg(kArg1));
         }
       }
-      LoadValueDirectWideFixed(arg1, r_tmp);
+      LoadValueDirectWideFixed(arg0, r_tmp);
+      if (arg1.wide == 0) {
+        if (cu_->target64) {
+          LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg1) : TargetReg(kArg1));
+        } else {
+          LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg2) : TargetReg(kArg2));
+        }
+      } else {
+        RegStorage r_tmp;
+        if (arg1.fp) {
+          if (cu_->target64) {
+            r_tmp = RegStorage::FloatSolo64(TargetReg(kFArg1).GetReg());
+          } else {
+            r_tmp = RegStorage::MakeRegPair(TargetReg(kFArg2), TargetReg(kFArg3));
+          }
+        } else {
+          if (cu_->target64) {
+            r_tmp = RegStorage::Solo64(TargetReg(kArg1).GetReg());
+          } else {
+            r_tmp = RegStorage::MakeRegPair(TargetReg(kArg2), TargetReg(kArg3));
+          }
+        }
+        LoadValueDirectWideFixed(arg1, r_tmp);
+      }
     }
   }
+
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
 INSTANTIATE(void Mir2Lir::CallRuntimeHelperRegLocationRegLocation, RegLocation arg0,
             RegLocation arg1, bool safepoint_pc)
 
-// TODO: This is a hack! Reshape the two macros into functions and move them to a better place.
-#define IsSameReg(r1, r2) \
-  (GetRegInfo(r1)->Master()->GetReg().GetReg() == GetRegInfo(r2)->Master()->GetReg().GetReg())
-#define TargetArgReg(arg, is_wide) \
-  (GetRegInfo(TargetReg(arg))->FindMatchingView( \
-     (is_wide) ? RegisterInfo::k64SoloStorageMask : RegisterInfo::k32SoloStorageMask)->GetReg())
-
 void Mir2Lir::CopyToArgumentRegs(RegStorage arg0, RegStorage arg1) {
   if (IsSameReg(arg1, TargetReg(kArg0))) {
     if (IsSameReg(arg0, TargetReg(kArg1))) {
       // Swap kArg0 and kArg1 with kArg2 as temp.
-      OpRegCopy(TargetArgReg(kArg2, arg1.Is64Bit()), arg1);
-      OpRegCopy(TargetArgReg(kArg0, arg0.Is64Bit()), arg0);
-      OpRegCopy(TargetArgReg(kArg1, arg1.Is64Bit()), TargetReg(kArg2));
+      OpRegCopy(TargetReg(kArg2, arg1.Is64Bit()), arg1);
+      OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
+      OpRegCopy(TargetReg(kArg1, arg1.Is64Bit()), TargetReg(kArg2, arg1.Is64Bit()));
     } else {
-      OpRegCopy(TargetArgReg(kArg1, arg1.Is64Bit()), arg1);
-      OpRegCopy(TargetArgReg(kArg0, arg0.Is64Bit()), arg0);
+      OpRegCopy(TargetReg(kArg1, arg1.Is64Bit()), arg1);
+      OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
     }
   } else {
-    OpRegCopy(TargetArgReg(kArg0, arg0.Is64Bit()), arg0);
-    OpRegCopy(TargetArgReg(kArg1, arg1.Is64Bit()), arg1);
+    OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
+    OpRegCopy(TargetReg(kArg1, arg1.Is64Bit()), arg1);
   }
 }
 
@@ -495,13 +511,13 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
    */
   RegLocation rl_src = rl_method;
   rl_src.location = kLocPhysReg;
-  rl_src.reg = TargetReg(kArg0);
+  rl_src.reg = TargetRefReg(kArg0);
   rl_src.home = false;
   MarkLive(rl_src);
   StoreValue(rl_method, rl_src);
   // If Method* has been promoted, explicitly flush
   if (rl_method.location == kLocPhysReg) {
-    StoreRefDisp(TargetReg(kSp), 0, TargetReg(kArg0));
+    StoreRefDisp(TargetReg(kSp), 0, TargetRefReg(kArg0));
   }
 
   if (cu_->num_ins == 0) {
@@ -601,7 +617,7 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
       if (direct_method != static_cast<uintptr_t>(-1)) {
         cg->LoadConstant(cg->TargetReg(kArg0), direct_method);
       } else {
-        cg->LoadMethodAddress(target_method, type, kArg0);
+        cg->LoadMethodAddress(target_method, type, cg->TargetRefReg(kArg0));
       }
       break;
     default:
@@ -614,9 +630,9 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
       cg->LoadCurrMethodDirect(cg->TargetReg(kArg0));
       break;
     case 1:  // Get method->dex_cache_resolved_methods_
-      cg->LoadRefDisp(cg->TargetReg(kArg0),
+      cg->LoadRefDisp(cg->TargetRefReg(kArg0),
                       mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
-                      cg->TargetReg(kArg0));
+                      cg->TargetRefReg(kArg0));
       // Set up direct code if known.
       if (direct_code != 0) {
         if (direct_code != static_cast<uintptr_t>(-1)) {
@@ -629,14 +645,14 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
       break;
     case 2:  // Grab target method*
       CHECK_EQ(cu->dex_file, target_method.dex_file);
-      cg->LoadRefDisp(cg->TargetReg(kArg0),
+      cg->LoadRefDisp(cg->TargetRefReg(kArg0),
                       ObjArray::OffsetOfElement(target_method.dex_method_index).Int32Value(),
-                      cg->TargetReg(kArg0));
+                      cg->TargetRefReg(kArg0));
       break;
     case 3:  // Grab the code from the method*
       if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
         if (direct_code == 0) {
-          cg->LoadWordDisp(cg->TargetReg(kArg0),
+          cg->LoadWordDisp(cg->TargetRefReg(kArg0),
                            mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value(),
                            cg->TargetReg(kInvokeTgt));
         }
@@ -673,9 +689,9 @@ static int NextVCallInsn(CompilationUnit* cu, CallInfo* info,
       break;
     }
     case 1:  // Is "this" null? [use kArg1]
-      cg->GenNullCheck(cg->TargetReg(kArg1), info->opt_flags);
+      cg->GenNullCheck(cg->TargetRefReg(kArg1), info->opt_flags);
       // get this->klass_ [use kArg1, set kInvokeTgt]
-      cg->LoadRefDisp(cg->TargetReg(kArg1), mirror::Object::ClassOffset().Int32Value(),
+      cg->LoadRefDisp(cg->TargetRefReg(kArg1), mirror::Object::ClassOffset().Int32Value(),
                       cg->TargetReg(kInvokeTgt));
       cg->MarkPossibleNullPointerException(info->opt_flags);
       break;
@@ -686,11 +702,11 @@ static int NextVCallInsn(CompilationUnit* cu, CallInfo* info,
     case 3:  // Get target method [use kInvokeTgt, set kArg0]
       cg->LoadRefDisp(cg->TargetReg(kInvokeTgt),
                       ObjArray::OffsetOfElement(method_idx).Int32Value(),
-                      cg->TargetReg(kArg0));
+                      cg->TargetRefReg(kArg0));
       break;
     case 4:  // Get the compiled code address [uses kArg0, sets kInvokeTgt]
       if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
-        cg->LoadWordDisp(cg->TargetReg(kArg0),
+        cg->LoadWordDisp(cg->TargetRefReg(kArg0),
                          mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value(),
                          cg->TargetReg(kInvokeTgt));
         break;
@@ -728,9 +744,9 @@ static int NextInterfaceCallInsn(CompilationUnit* cu, CallInfo* info, int state,
       break;
     }
     case 2:  // Is "this" null? [use kArg1]
-      cg->GenNullCheck(cg->TargetReg(kArg1), info->opt_flags);
+      cg->GenNullCheck(cg->TargetRefReg(kArg1), info->opt_flags);
       // Get this->klass_ [use kArg1, set kInvokeTgt]
-      cg->LoadRefDisp(cg->TargetReg(kArg1), mirror::Object::ClassOffset().Int32Value(),
+      cg->LoadRefDisp(cg->TargetRefReg(kArg1), mirror::Object::ClassOffset().Int32Value(),
                       cg->TargetReg(kInvokeTgt));
       cg->MarkPossibleNullPointerException(info->opt_flags);
       break;
@@ -743,11 +759,11 @@ static int NextInterfaceCallInsn(CompilationUnit* cu, CallInfo* info, int state,
       // NOTE: native pointer.
       cg->LoadRefDisp(cg->TargetReg(kInvokeTgt),
                        ObjArray::OffsetOfElement(method_idx % ClassLinker::kImtSize).Int32Value(),
-                       cg->TargetReg(kArg0));
+                       cg->TargetRefReg(kArg0));
       break;
     case 5:  // Get the compiled code address [use kArg0, set kInvokeTgt]
       if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
-        cg->LoadWordDisp(cg->TargetReg(kArg0),
+        cg->LoadWordDisp(cg->TargetRefReg(kArg0),
                          mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value(),
                          cg->TargetReg(kInvokeTgt));
         break;

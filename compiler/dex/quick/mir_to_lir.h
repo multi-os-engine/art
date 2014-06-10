@@ -715,6 +715,11 @@ class Mir2Lir : public Backend {
     // Handle bookkeeping to convert a wide RegLocation to a narrow RegLocation.  No code generated.
     RegLocation NarrowRegLoc(RegLocation loc);
 
+    /**
+     * @brief Whether two RegStorage are referring to the same underlying physical register.
+     */
+    bool IsSameReg(RegStorage reg1, RegStorage reg2);
+
     // Shared by all targets - implemented in local_optimizations.cc
     void ConvertMemOpIntoMove(LIR* orig_lir, RegStorage dest, RegStorage src);
     void ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir);
@@ -1101,25 +1106,23 @@ class Mir2Lir : public Backend {
      * @note register will be passed to TargetReg to get physical register.
      */
     void LoadCodeAddress(const MethodReference& target_method, InvokeType type,
-                         SpecialTargetRegister symbolic_reg);
+                         SpecialTargetRegister reg);
 
     /*
      * @brief Load the Method* of a dex method into the register.
      * @param target_method The MethodReference of the method to be invoked.
      * @param type How the method will be invoked.
      * @param register that will contain the code address.
-     * @note register will be passed to TargetReg to get physical register.
      */
     virtual void LoadMethodAddress(const MethodReference& target_method, InvokeType type,
-                                   SpecialTargetRegister symbolic_reg);
+                                   RegStorage reg);
 
     /*
      * @brief Load the Class* of a Dex Class type into the register.
      * @param type How the method will be invoked.
      * @param register that will contain the code address.
-     * @note register will be passed to TargetReg to get physical register.
      */
-    virtual void LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic_reg);
+    virtual void LoadClassType(uint32_t type_idx, RegStorage reg);
 
     // Routines that work for the generic case, but may be overriden by target.
     /*
@@ -1165,7 +1168,30 @@ class Mir2Lir : public Backend {
     virtual void MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) = 0;
 
     // Required for target - register utilities.
+
+    /**
+     * @brief Portable way of getting special registers from the backend.
+     * @param reg Enumeration describing the purpose of the register.
+     * @return Return the #RegStorage corresponding to the given purpose @p reg.
+     * @note This function is currently allowed to return any suitable view of the registers
+     *   (e.g. this could be 64-bit solo or 32-bit solo for 64-bit backends).
+     */
     virtual RegStorage TargetReg(SpecialTargetRegister reg) = 0;
+
+    /**
+     * @brief Portable way of getting special registers from the backend.
+     * @param reg Enumeration describing the purpose of the register.
+     * @param is_wide Whether the view should be 64-bit (rather than 32-bit).
+     * @return Return the #RegStorage corresponding to the given purpose @p reg.
+     */
+    virtual RegStorage TargetReg(SpecialTargetRegister reg, bool is_wide);
+
+    /**
+     * @brief Portable way of getting a special register for storing a reference.
+     * @see TargetReg()
+     */
+    virtual RegStorage TargetRefReg(SpecialTargetRegister reg);
+
     virtual RegStorage GetArgMappingToPhysicalReg(int arg_num) = 0;
     virtual RegLocation GetReturnAlt() = 0;
     virtual RegLocation GetReturnWideAlt() = 0;

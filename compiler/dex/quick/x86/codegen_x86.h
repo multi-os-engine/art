@@ -342,7 +342,7 @@ class X86Mir2Lir : public Mir2Lir {
    * @note register will be passed to TargetReg to get physical register.
    */
   void LoadMethodAddress(const MethodReference& target_method, InvokeType type,
-                         SpecialTargetRegister symbolic_reg);
+                         RegStorage symbolic_reg);
 
   /*
    * @brief Load the Class* of a Dex Class type into the register.
@@ -350,7 +350,7 @@ class X86Mir2Lir : public Mir2Lir {
    * @param register that will contain the code address.
    * @note register will be passed to TargetReg to get physical register.
    */
-  void LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic_reg);
+  void LoadClassType(uint32_t type_idx, RegStorage symbolic_reg);
 
   void FlushIns(RegLocation* ArgLocs, RegLocation rl_method);
 

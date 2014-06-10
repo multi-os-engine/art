@@ -888,7 +888,7 @@ void X86Mir2Lir::Materialize() {
 }
 
 void X86Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeType type,
-                                   SpecialTargetRegister symbolic_reg) {
+                                   RegStorage reg) {
   /*
    * For x86, just generate a 32 bit move immediate instruction, that will be filled
    * in at 'link time'.  For now, put a unique value based on target to ensure that
@@ -900,14 +900,14 @@ void X86Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeT
   uintptr_t target_method_id_ptr = reinterpret_cast<uintptr_t>(&target_method_id);
 
   // Generate the move instruction with the unique pointer and save index, dex_file, and type.
-  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg).GetReg(),
+  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, reg.GetReg(),
                      static_cast<int>(target_method_id_ptr), target_method_idx,
                      WrapPointer(const_cast<DexFile*>(target_dex_file)), type);
   AppendLIR(move);
   method_address_insns_.Insert(move);
 }
 
-void X86Mir2Lir::LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic_reg) {
+void X86Mir2Lir::LoadClassType(uint32_t type_idx, RegStorage reg) {
   /*
    * For x86, just generate a 32 bit move immediate instruction, that will be filled
    * in at 'link time'.  For now, put a unique value based on target to ensure that
@@ -917,7 +917,7 @@ void X86Mir2Lir::LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic
   uintptr_t ptr = reinterpret_cast<uintptr_t>(&id);
 
   // Generate the move instruction with the unique pointer and save index and type.
-  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg).GetReg(),
+  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, reg.GetReg(),
                      static_cast<int>(ptr), type_idx);
   AppendLIR(move);
   class_type_address_insns_.Insert(move);

@@ -140,7 +140,7 @@ void Arm64Mir2Lir::GenPackedSwitch(MIR* mir, uint32_t table_offset,
 
   // Load the displacement from the switch table
   RegStorage disp_reg = AllocTemp();
-  LoadBaseIndexed(table_base, As64BitReg(key_reg), As64BitReg(disp_reg), 2, k32);
+  LoadBaseIndexed(table_base, As64BitReg(key_reg), disp_reg, 2, k32);
 
   // Get base branch address.
   RegStorage branch_reg = AllocTempWide();
@@ -267,7 +267,7 @@ void Arm64Mir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
   MarkPossibleNullPointerException(opt_flags);
   LIR* slow_unlock_branch = OpCmpBranch(kCondNe, rs_w1, rs_w2, NULL);
   GenMemBarrier(kStoreLoad);
-  Store32Disp(rs_x0, mirror::Object::MonitorOffset().Int32Value(), rs_xzr);
+  Store32Disp(rs_x0, mirror::Object::MonitorOffset().Int32Value(), rs_wzr);
   LIR* unlock_success_branch = OpUnconditionalBranch(NULL);
 
   LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);
@@ -302,7 +302,8 @@ void Arm64Mir2Lir::MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) {
   RegStorage reg_card_no = AllocTemp();
   LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, NULL);
   LoadWordDisp(rs_rA64_SELF, Thread::CardTableOffset<8>().Int32Value(), reg_card_base);
-  OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
+  OpRegRegImm(kOpLsr, reg_card_no, As32BitReg(tgt_addr_reg),
+              gc::accounting::CardTable::kCardShift);
   // TODO(Arm64): generate "strb wB, [xB, wC, uxtw]" rather than "strb wB, [xB, xC]"?
   StoreBaseIndexed(reg_card_base, As64BitReg(reg_card_no), As32BitReg(reg_card_base),
                    0, kUnsignedByte);

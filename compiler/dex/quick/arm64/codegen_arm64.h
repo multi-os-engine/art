@@ -93,6 +93,8 @@ class Arm64Mir2Lir : public Mir2Lir {
 
     // Required for target - register utilities.
     RegStorage TargetReg(SpecialTargetRegister reg);
+    RegStorage TargetReg(SpecialTargetRegister reg, bool is_wide);
+    RegStorage TargetRefReg(SpecialTargetRegister reg);
     RegStorage GetArgMappingToPhysicalReg(int arg_num);
     RegLocation GetReturnAlt();
     RegLocation GetReturnWideAlt();

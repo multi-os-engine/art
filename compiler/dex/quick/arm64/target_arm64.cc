@@ -112,14 +112,14 @@ RegStorage Arm64Mir2Lir::TargetReg(SpecialTargetRegister reg) {
     case kLr: res_reg =  rs_rA64_LR; break;
     case kPc: res_reg = RegStorage::InvalidReg(); break;
     case kSp: res_reg =  rs_rA64_SP; break;
-    case kArg0: res_reg = rs_x0; break;
-    case kArg1: res_reg = rs_x1; break;
-    case kArg2: res_reg = rs_x2; break;
-    case kArg3: res_reg = rs_x3; break;
-    case kArg4: res_reg = rs_x4; break;
-    case kArg5: res_reg = rs_x5; break;
-    case kArg6: res_reg = rs_x6; break;
-    case kArg7: res_reg = rs_x7; break;
+    case kArg0: res_reg = rs_w0; break;
+    case kArg1: res_reg = rs_w1; break;
+    case kArg2: res_reg = rs_w2; break;
+    case kArg3: res_reg = rs_w3; break;
+    case kArg4: res_reg = rs_w4; break;
+    case kArg5: res_reg = rs_w5; break;
+    case kArg6: res_reg = rs_w6; break;
+    case kArg7: res_reg = rs_w7; break;
     case kFArg0: res_reg = rs_f0; break;
     case kFArg1: res_reg = rs_f1; break;
     case kFArg2: res_reg = rs_f2; break;
@@ -137,6 +137,20 @@ RegStorage Arm64Mir2Lir::TargetReg(SpecialTargetRegister reg) {
     default: res_reg = RegStorage::InvalidReg();
   }
   return res_reg;
+}
+
+RegStorage Arm64Mir2Lir::TargetReg(SpecialTargetRegister symbolic_reg, bool is_wide) {
+  RegStorage reg = TargetReg(symbolic_reg);
+  if (is_wide) {
+    return (reg.Is64Bit()) ? reg : As64BitReg(reg);
+  } else {
+    return (reg.Is32Bit()) ? reg : As32BitReg(reg);
+  }
+}
+
+RegStorage Arm64Mir2Lir::TargetRefReg(SpecialTargetRegister symbolic_reg) {
+  RegStorage reg = TargetReg(symbolic_reg);
+  return (reg.Is64Bit() ? reg : As64BitReg(reg));
 }
 
 /*
@@ -943,13 +957,13 @@ void Arm64Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
    */
   RegLocation rl_src = rl_method;
   rl_src.location = kLocPhysReg;
-  rl_src.reg = TargetReg(kArg0);
+  rl_src.reg = TargetRefReg(kArg0);
   rl_src.home = false;
   MarkLive(rl_src);
   StoreValue(rl_method, rl_src);
   // If Method* has been promoted, explicitly flush
   if (rl_method.location == kLocPhysReg) {
-    StoreRefDisp(TargetReg(kSp), 0, TargetReg(kArg0));
+    StoreRefDisp(TargetReg(kSp), 0, TargetRefReg(kArg0));
   }
 
   if (cu_->num_ins == 0) {

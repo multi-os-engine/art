@@ -420,6 +420,8 @@ LIR* Arm64Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
     data_target = AddWideData(&literal_list_, val_lo, val_hi);
   }
 
+  DCHECK(r_dest.Is64Bit());
+
   ScopedMemRefType mem_ref_type(this, ResourceMask::kLiteral);
   LIR *res = RawLIR(current_dalvik_offset_, WIDE(kA64Ldr2rp),
                     r_dest.GetReg(), 0, 0, 0, 0, data_target);
@@ -632,8 +634,8 @@ LIR* Arm64Mir2Lir::OpRegRegRegShift(OpKind op, RegStorage r_dest, RegStorage r_s
   // - 4-operands instructions, where the last operand is a shift/extend immediate,
   // - 3-operands instructions with no shift/extend.
   ArmOpcode widened_opcode = r_dest.Is64Bit() ? WIDE(opcode) : opcode;
-  CHECK_EQ(r_dest.Is64Bit(), r_src1.Is64Bit());
-  CHECK_EQ(r_dest.Is64Bit(), r_src2.Is64Bit());
+  DCHECK_EQ(r_dest.Is64Bit(), r_src1.Is64Bit());
+  DCHECK_EQ(r_dest.Is64Bit(), r_src2.Is64Bit());
   if (EncodingMap[opcode].flags & IS_QUAD_OP) {
     DCHECK(!IsExtendEncoding(shift));
     return NewLIR4(widened_opcode, r_dest.GetReg(), r_src1.GetReg(), r_src2.GetReg(), shift);
@@ -921,9 +923,16 @@ LIR* Arm64Mir2Lir::LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegSto
       opcode = WIDE(kA64Ldr4rXxG);
       expected_scale = 3;
       break;
+    case kReference:
+      // r_dest is 64-bit (e.g x1), but we generate a 32-bit load to uncompress the reference
+      // (e.g. ldr w1, [...]).
+      if (r_dest.Is64Bit()) {
+        r_dest = As32BitReg(r_dest);
+      }
+      // Intentional fall-through.
     case kSingle:
     case k32:
-    case kReference:
+      DCHECK(r_dest.Is32Bit());
       opcode = kA64Ldr4rXxG;
       expected_scale = 2;
       break;
@@ -994,9 +1003,15 @@ LIR* Arm64Mir2Lir::StoreBaseIndexed(RegStorage r_base, RegStorage r_index, RegSt
       opcode = WIDE(kA64Str4rXxG);
       expected_scale = 3;
       break;
-    case kSingle:     // Intentional fall-trough.
-    case k32:         // Intentional fall-trough.
     case kReference:
+      // r_src is 64-bit (e.g x1), but we generate a 32-bit store to compress the reference
+      // (e.g. str w1, [...]).
+      if (r_src.Is64Bit()) {
+        r_src = As32BitReg(r_src);
+      }
+      // Intentional fall-through.
+    case kSingle:     // Intentional fall-trough.
+    case k32:
       opcode = kA64Str4rXxG;
       expected_scale = 2;
       break;
@@ -1038,6 +1053,7 @@ LIR* Arm64Mir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStor
   ArmOpcode alt_opcode = kA64Brk1d;
   int scale = 0;
 
+  DCHECK(r_base.Is64Bit());
   switch (size) {
     case kDouble:     // Intentional fall-through.
     case kWord:       // Intentional fall-through.
@@ -1052,14 +1068,21 @@ LIR* Arm64Mir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStor
         alt_opcode = WIDE(kA64Ldur3rXd);
       }
       break;
+    case kReference:
+      // r_dest is 64-bit (e.g x1), but we generate a 32-bit load to uncompress the reference
+      // (e.g. ldr w1, [...]).
+      if (r_dest.Is64Bit()) {
+        r_dest = As32BitReg(r_dest);
+      }
+      // Intentional fall-through.
     case kSingle:     // Intentional fall-through.
     case k32:         // Intentional fall-trough.
-    case kReference:
       scale = 2;
       if (r_dest.IsFloat()) {
         DCHECK(r_dest.IsSingle());
         opcode = kA64Ldr3fXD;
       } else {
+        DCHECK(r_dest.Is32Bit());
         opcode = kA64Ldr3rXD;
       }
       break;
@@ -1136,13 +1159,20 @@ LIR* Arm64Mir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegSto
         opcode = FWIDE(kA64Str3fXD);
         alt_opcode = FWIDE(kA64Stur3fXd);
       } else {
-        opcode = FWIDE(kA64Str3rXD);
-        alt_opcode = FWIDE(kA64Stur3rXd);
+        DCHECK(r_src.Is64Bit());
+        opcode = WIDE(kA64Str3rXD);
+        alt_opcode = WIDE(kA64Stur3rXd);
       }
       break;
-    case kSingle:     // Intentional fall-through.
-    case k32:         // Intentional fall-trough.
     case kReference:
+      // r_src is 64-bit (e.g x1), but we generate a 32-bit store to compress the reference
+      // (e.g. str w1, [...]).
+      if (r_src.Is64Bit()) {
+        r_src = As32BitReg(r_src);
+      }
+      // Intentional fall-through.
+    case kSingle:     // Intentional fall-through.
+    case k32:
       scale = 2;
       if (r_src.IsFloat()) {
         DCHECK(r_src.IsSingle());
@@ -1150,6 +1180,7 @@ LIR* Arm64Mir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegSto
       } else {
         opcode = kA64Str3rXD;
       }
+      DCHECK(r_src.Is32Bit());
       break;
     case kUnsignedHalf:
     case kSignedHalf:

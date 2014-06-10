@@ -193,6 +193,8 @@ LIR* Arm64Mir2Lir::OpRegCopyNoInsert(RegStorage r_dest, RegStorage r_src) {
       if (r_dest.Is64Bit() && r_src.Is64Bit()) {
         opcode = WIDE(opcode);
       }
+      DCHECK_EQ(r_dest.Is64Bit(), r_src.Is64Bit());
+
     } else {
       // Float/float copy.
       bool dest_is_double = r_dest.IsDouble();
@@ -528,6 +530,7 @@ bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
 }
 
 LIR* Arm64Mir2Lir::OpPcRelLoad(RegStorage reg, LIR* target) {
+  DCHECK(reg.Is64Bit());
   return RawLIR(current_dalvik_offset_, WIDE(kA64Ldr2rp), reg.GetReg(), 0, 0, 0, 0, target);
 }
 
@@ -558,7 +561,7 @@ void Arm64Mir2Lir::GenDivZeroCheckWide(RegStorage reg) {
 LIR* Arm64Mir2Lir::OpTestSuspend(LIR* target) {
   // FIXME: Define rA64_SUSPEND as w19, when we do not need two copies of reserved register.
   // Note: The opcode is not set as wide, so actually we are using the 32-bit version register.
-  NewLIR3(kA64Subs3rRd, rA64_SUSPEND, rA64_SUSPEND, 1);
+  NewLIR3(kA64Subs3rRd, rA32_SUSPEND, rA32_SUSPEND, 1);
   return OpCondBranch((target == NULL) ? kCondEq : kCondNe, target);
 }
 
@@ -614,7 +617,7 @@ void Arm64Mir2Lir::GenIntToLong(RegLocation rl_dest, RegLocation rl_src) {
 
   rl_src = LoadValue(rl_src, kCoreReg);
   rl_result = EvalLocWide(rl_dest, kCoreReg, true);
-  NewLIR4(WIDE(kA64Sbfm4rrdd), rl_result.reg.GetReg(), rl_src.reg.GetReg(), 0, 31);
+  NewLIR4(WIDE(kA64Sbfm4rrdd), rl_result.reg.GetReg(), As64BitReg(rl_src.reg).GetReg(), 0, 31);
   StoreValueWide(rl_dest, rl_result);
 }
 

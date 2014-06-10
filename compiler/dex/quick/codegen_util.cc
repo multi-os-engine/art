@@ -1176,7 +1176,7 @@ void Mir2Lir::LoadCodeAddress(const MethodReference& target_method, InvokeType t
 }
 
 void Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeType type,
-                                SpecialTargetRegister symbolic_reg) {
+                                RegStorage reg) {
   LIR* data_target = ScanLiteralPoolMethod(method_literal_list_, target_method);
   if (data_target == NULL) {
     data_target = AddWordData(&method_literal_list_, target_method.dex_method_index);
@@ -1186,18 +1186,18 @@ void Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeType
     // resolve these invokes to the same method, so we don't care which one we record here.
     data_target->operands[2] = type;
   }
-  LIR* load_pc_rel = OpPcRelLoad(TargetReg(symbolic_reg), data_target);
+  LIR* load_pc_rel = OpPcRelLoad(reg, data_target);
   AppendLIR(load_pc_rel);
   DCHECK_NE(cu_->instruction_set, kMips) << reinterpret_cast<void*>(data_target);
 }
 
-void Mir2Lir::LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic_reg) {
+void Mir2Lir::LoadClassType(uint32_t type_idx, RegStorage reg) {
   // Use the literal pool and a PC-relative load from a data word.
   LIR* data_target = ScanLiteralPool(class_literal_list_, type_idx, 0);
   if (data_target == nullptr) {
     data_target = AddWordData(&class_literal_list_, type_idx);
   }
-  LIR* load_pc_rel = OpPcRelLoad(TargetReg(symbolic_reg), data_target);
+  LIR* load_pc_rel = OpPcRelLoad(reg, data_target);
   AppendLIR(load_pc_rel);
 }
 
@@ -1229,6 +1229,21 @@ RegLocation Mir2Lir::NarrowRegLoc(RegLocation loc) {
   }
   loc.wide = false;
   return loc;
+}
+
+bool Mir2Lir::IsSameReg(RegStorage reg1, RegStorage reg2) {
+  RegisterInfo* info1 = GetRegInfo(reg1);
+  RegisterInfo* info2 = GetRegInfo(reg2);
+  return (info1->Master() == info2->Master() &&
+          (info1->StorageMask() & info2->StorageMask()) != 0);
+}
+
+RegStorage Mir2Lir::TargetReg(SpecialTargetRegister reg, bool is_wide) {
+  return TargetReg(reg);
+}
+
+RegStorage Mir2Lir::TargetRefReg(SpecialTargetRegister reg) {
+  return TargetReg(reg);
 }
 
 void Mir2Lir::GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
