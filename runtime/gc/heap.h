@@ -66,6 +66,7 @@ namespace accounting {
 namespace collector {
   class ConcurrentCopying;
   class GarbageCollector;
+  class MarkCompact;
   class MarkSweep;
   class SemiSpace;
 }  // namespace collector
@@ -958,6 +959,7 @@ class Heap {
   const bool use_tlab_;
 
   friend class collector::GarbageCollector;
+  friend class collector::MarkCompact;
   friend class collector::MarkSweep;
   friend class collector::SemiSpace;
   friend class ReferenceQueue;

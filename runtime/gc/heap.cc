@@ -1338,8 +1338,9 @@ void Heap::TransitionCollector(CollectorType collector_type) {
              << " -> " << static_cast<int>(collector_type);
   uint64_t start_time = NanoTime();
   uint32_t before_allocated = num_bytes_allocated_.LoadSequentiallyConsistent();
-  ThreadList* tl = Runtime::Current()->GetThreadList();
-  Thread* self = Thread::Current();
+  Runtime* const runtime = Runtime::Current();
+  ThreadList* const tl = runtime->GetThreadList();
+  Thread* const self = Thread::Current();
   ScopedThreadStateChange tsc(self, kWaitingPerformingGc);
   Locks::mutator_lock_->AssertNotHeld(self);
   const bool copying_transition =
@@ -1368,7 +1369,7 @@ void Heap::TransitionCollector(CollectorType collector_type) {
     }
     usleep(1000);
   }
-  if (Runtime::Current()->IsShuttingDown(self)) {
+  if (runtime->IsShuttingDown(self)) {
     // Don't allow heap transitions to happen if the runtime is shutting down since these can
     // cause objects to get finalized.
     FinishGC(self, collector::kGcTypeNone);

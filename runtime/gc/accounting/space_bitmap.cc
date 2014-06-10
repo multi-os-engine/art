@@ -259,6 +259,7 @@ void SpaceBitmap<kAlignment>::InOrderWalk(ObjectCallback* callback, void* arg) {
   }
 }
 
+template class SpaceBitmap<kObjectAlignment / 2>;
 template class SpaceBitmap<kObjectAlignment>;
 template class SpaceBitmap<kPageSize>;
 
