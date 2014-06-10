@@ -558,7 +558,7 @@ void Arm64Mir2Lir::GenDivZeroCheckWide(RegStorage reg) {
 LIR* Arm64Mir2Lir::OpTestSuspend(LIR* target) {
   // FIXME: Define rA64_SUSPEND as w19, when we do not need two copies of reserved register.
   // Note: The opcode is not set as wide, so actually we are using the 32-bit version register.
-  NewLIR3(kA64Subs3rRd, rA64_SUSPEND, rA64_SUSPEND, 1);
+  NewLIR3(kA64Subs3rRd, rA32_SUSPEND, rA32_SUSPEND, 1);
   return OpCondBranch((target == NULL) ? kCondEq : kCondNe, target);
 }
 
