@@ -1370,7 +1370,11 @@ bool Mir2Lir::GenInlinedReverseBytes(CallInfo* info, OpSize size) {
   RegLocation rl_src_i = info->args[0];
   RegLocation rl_dest = (size == k64) ? InlineTargetWide(info) : InlineTarget(info);  // result reg
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  if (size == k64) {
+  if (size == k64 && cu_->instruction_set == kX86_64) {
+    RegLocation rl_i = LoadValueWide(rl_src_i, kCoreReg);
+    OpRegReg(kOpRev, rl_result.reg, rl_i.reg);
+    StoreValueWide(rl_dest, rl_result);
+  } else if (size == k64) {
     RegLocation rl_i = LoadValueWide(rl_src_i, kCoreReg);
     if (cu_->instruction_set == kArm64) {
       OpRegReg(kOpRev, rl_result.reg, rl_i.reg);
@@ -1422,6 +1426,10 @@ bool Mir2Lir::GenInlinedAbsLong(CallInfo* info) {
     // TODO - add Mips implementation
     return false;
   }
+  if (cu_->instruction_set == kX86_64) {
+    // TODO - add kX86_64 implementation
+    return false;
+  }
   RegLocation rl_src = info->args[0];
   rl_src = LoadValueWide(rl_src, kCoreReg);
   RegLocation rl_dest = InlineTargetWide(info);
@@ -1471,6 +1479,10 @@ bool Mir2Lir::GenInlinedAbsDouble(CallInfo* info) {
     // TODO - add Mips implementation
     return false;
   }
+  if (cu_->instruction_set == kX86_64) {
+    // TODO - add kX86_64 implementation
+    return false;
+  }
   RegLocation rl_src = info->args[0];
   rl_src = LoadValueWide(rl_src, kCoreReg);
   RegLocation rl_dest = InlineTargetWide(info);
@@ -1517,6 +1529,10 @@ bool Mir2Lir::GenInlinedDoubleCvt(CallInfo* info) {
 bool Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
   if (cu_->instruction_set == kMips) {
     // TODO - add Mips implementation
+    return false;
+  }
+  if (cu_->instruction_set == kX86_64) {
+    // TODO - add kX86_64 implementation
     return false;
   }
   RegLocation rl_obj = info->args[0];
@@ -1745,14 +1761,9 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
     return;
   }
   DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
-  // TODO: Enable instrinsics for x86_64
-  // Temporary disable intrinsics for x86_64. We will enable them later step by step.
-  // Temporary disable intrinsics for Arm64. We will enable them later step by step.
-  if ((cu_->instruction_set != kX86_64) && (cu_->instruction_set != kArm64)) {
-    if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
-        ->GenIntrinsic(this, info)) {
-      return;
-    }
+  if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
+      ->GenIntrinsic(this, info)) {
+    return;
   }
   GenInvokeNoInline(info);
 }
