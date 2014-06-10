@@ -1024,7 +1024,7 @@ class MIRGraph {
   MIR* FindMoveResult(BasicBlock* bb, MIR* mir);
   int SRegToVReg(int ssa_reg) const;
   void VerifyDataflow();
-  void CheckForDominanceFrontier(BasicBlock* dom_bb, const BasicBlock* succ_bb);
+  bool CheckForDominanceFrontier(BasicBlock* dom_bb, const BasicBlock* succ_bb);
   bool EliminateNullChecksGate();
   bool EliminateNullChecks(BasicBlock* bb);
   void EliminateNullChecksEnd();

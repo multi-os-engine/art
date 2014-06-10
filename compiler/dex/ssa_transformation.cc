@@ -207,44 +207,73 @@ void MIRGraph::ComputeDomPostOrderTraversal(BasicBlock* bb) {
   }
 }
 
-void MIRGraph::CheckForDominanceFrontier(BasicBlock* dom_bb,
-                                         const BasicBlock* succ_bb) {
+bool MIRGraph::CheckForDominanceFrontier(BasicBlock* dom_bb, const BasicBlock* succ_bb) {
   /*
    * TODO - evaluate whether phi will ever need to be inserted into exit
    * blocks.
    */
-  if (succ_bb->i_dom != dom_bb->id &&
-    succ_bb->block_type == kDalvikByteCode &&
-    succ_bb->hidden == false) {
-    dom_bb->dom_frontier->SetBit(succ_bb->id);
+  /* ??? Should hidden blocks be simply ignored, or placed into the
+     proper place in dominance frontiers?
+     Right now this code ignores them */
+  if (succ_bb->block_type != kDalvikByteCode ||
+      succ_bb->hidden == true) {
+    return true;
   }
+  DCHECK(dom_bb->dom_frontier != nullptr);  // TODO: this test fails when dom_bb is hidden.
+  if (succ_bb->i_dom != dom_bb->id) {
+    bool old = dom_bb->dom_frontier->IsBitSet(succ_bb->id);
+    if (!old) {
+      dom_bb->dom_frontier->SetBit(succ_bb->id);
+      return true;
+    }
+  }
+  return false;
 }
 
-/* Worker function to compute the dominance frontier */
+/* Compute dominance frontiers, ala Harvey, Ferrante, et al.
+
+   This algorithm can be found in Timothy Harvey's PhD thesis,
+   in the section on iterative dominance algorithms.
+   It performs less useless comparisons and attempts to set bits
+   than the standard df_local/df_up formulation.
+
+   First, we identify each join point, j (any node with more than one
+   incoming edge is a join point).
+
+   We then examine each predecessor, p, of j and walk up the dominator tree
+   starting at p.
+
+   We stop the walk when we reach j's immediate dominator - j is in the
+   dominance frontier of each of the nodes in the walk, except for j's
+   immediate dominator. Intuitively, all of the rest of j's dominators are
+   shared by j's predecessors as well.
+   Since they dominate j, they will not have j in their dominance frontiers.
+
+   The number of nodes touched by this algorithm is equal to the size
+   of the dominance frontiers, no more, no less.
+*/
 bool MIRGraph::ComputeDominanceFrontier(BasicBlock* bb) {
-  /* Calculate DF_local */
-  if (bb->taken != NullBasicBlockId) {
-    CheckForDominanceFrontier(bb, GetBasicBlock(bb->taken));
-  }
-  if (bb->fall_through != NullBasicBlockId) {
-    CheckForDominanceFrontier(bb, GetBasicBlock(bb->fall_through));
-  }
-  if (bb->successor_block_list_type != kNotUsed) {
-    for (SuccessorBlockInfo* successor_block_info : bb->successor_blocks) {
-      BasicBlock* succ_bb = GetBasicBlock(successor_block_info->block);
-      CheckForDominanceFrontier(bb, succ_bb);
+  // If there aren't at least two predecessors, it's not a join point
+  if (bb->predecessors.size() > 2)
+    return true;
+
+  ArenaVector<BasicBlockId>::const_iterator iter = bb->predecessors.cbegin();
+  while (true) {
+    BasicBlock* runner = GetBasicBlock(*++iter);
+    if (runner == GetEntryBlock()) {
+      continue;
+    }
+    if (runner == nullptr) {
+      break;
+    }
+    BasicBlock *domsb = GetBasicBlock(bb->i_dom);
+    while (runner != domsb) {
+      if (!CheckForDominanceFrontier(runner, bb)) {
+        break;
+      }
+      runner = GetBasicBlock(runner->i_dom);
     }
   }
-
-  /* Calculate DF_up */
-  for (uint32_t dominated_idx : bb->i_dominated->Indexes()) {
-    BasicBlock* dominated_bb = GetBasicBlock(dominated_idx);
-    for (uint32_t df_up_block_idx : dominated_bb->dom_frontier->Indexes()) {
-      BasicBlock* df_up_block = GetBasicBlock(df_up_block_idx);
-      CheckForDominanceFrontier(bb, df_up_block);
-    }
-  }
-
   return true;
 }
 
@@ -403,8 +432,7 @@ void MIRGraph::ComputeDominators() {
   }
 
   // Compute the dominance frontier for each block.
-  ComputeDomPostOrderTraversal(GetEntryBlock());
-  PostOrderDOMIterator iter5(this);
+  AllNodesIterator iter5(this);
   for (BasicBlock* bb = iter5.Next(); bb != NULL; bb = iter5.Next()) {
     ComputeDominanceFrontier(bb);
   }
