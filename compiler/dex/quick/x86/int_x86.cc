@@ -684,7 +684,6 @@ RegLocation X86Mir2Lir::GenDivRem(RegLocation rl_dest, RegLocation rl_src1,
 
 bool X86Mir2Lir::GenInlinedMinMaxInt(CallInfo* info, bool is_min) {
   DCHECK(cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64);
-
   // Get the two arguments to the invoke and place them in GP registers.
   RegLocation rl_src1 = info->args[0];
   RegLocation rl_src2 = info->args[1];
@@ -722,6 +721,10 @@ bool X86Mir2Lir::GenInlinedMinMaxInt(CallInfo* info, bool is_min) {
 }
 
 bool X86Mir2Lir::GenInlinedPeek(CallInfo* info, OpSize size) {
+  if (cu_->instruction_set == kX86_64) {
+    // TODO - add kX86_64 implementation
+    return false;
+  }
   RegLocation rl_src_address = info->args[0];  // long address
   rl_src_address = NarrowRegLoc(rl_src_address);  // ignore high half in info->args[1]
   RegLocation rl_dest = size == k64 ? InlineTargetWide(info) : InlineTarget(info);
@@ -739,6 +742,10 @@ bool X86Mir2Lir::GenInlinedPeek(CallInfo* info, OpSize size) {
 }
 
 bool X86Mir2Lir::GenInlinedPoke(CallInfo* info, OpSize size) {
+  if (cu_->instruction_set == kX86_64) {
+    // TODO - add kX86_64 implementation
+    return false;
+  }
   RegLocation rl_src_address = info->args[0];  // long address
   rl_src_address = NarrowRegLoc(rl_src_address);  // ignore high half in info->args[1]
   RegLocation rl_src_value = info->args[2];  // [size] value
@@ -776,6 +783,10 @@ static bool IsInReg(X86Mir2Lir *pMir2Lir, const RegLocation &rl, RegStorage reg)
 
 bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   DCHECK(cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64);
+  if (cu_->instruction_set == kX86_64) {
+    // TODO - add kX86_64 implementation
+    return false;
+  }
   // Unused - RegLocation rl_src_unsafe = info->args[0];
   RegLocation rl_src_obj = info->args[1];  // Object - known non-null
   RegLocation rl_src_offset = info->args[2];  // long low
@@ -785,7 +796,24 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   RegLocation rl_src_new_value = info->args[is_long ? 6 : 5];  // int, long or Object
   // If is_long, high half is in info->args[7]
 
-  if (is_long) {
+  if (is_long && Gen64Bit()) {
+    // RAX must hold expected for CMPXCHG. Neither rl_new_value, nor r_ptr may be in RAX.
+    FlushReg(rs_r0);
+    Clobber(rs_r0);
+    LockTemp(rs_r0);
+
+    RegLocation rl_object = LoadValue(rl_src_obj, kRefReg);
+    RegLocation rl_new_value = LoadValueWide(rl_src_new_value, kCoreReg);
+    RegLocation rl_offset = LoadValue(rl_src_offset, kCoreReg);
+    LoadValueDirectWide(rl_src_expected, rs_r0);
+    NewLIR5(kX86LockCmpxchg64AR, rl_object.reg.GetReg(), rl_offset.reg.GetReg(), 0, 0, rl_new_value.reg.GetReg());
+
+    // After a store we need to insert barrier in case of potential load. Since the
+    // locked cmpxchg has full barrier semantics, only a scheduling barrier will be generated.
+    GenMemBarrier(kStoreLoad);
+
+    FreeTemp(rs_r0);
+  } else if (is_long) {
     // TODO: avoid unnecessary loads of SI and DI when the values are in registers.
     // TODO: CFI support.
     FlushAllRegs();

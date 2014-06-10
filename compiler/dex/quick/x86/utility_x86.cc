@@ -121,7 +121,7 @@ LIR* X86Mir2Lir::OpReg(OpKind op, RegStorage r_dest_src) {
   switch (op) {
     case kOpNeg: opcode = r_dest_src.Is64Bit() ? kX86Neg64R : kX86Neg32R; break;
     case kOpNot: opcode = r_dest_src.Is64Bit() ? kX86Not64R : kX86Not32R; break;
-    case kOpRev: opcode = kX86Bswap32R; break;
+    case kOpRev: opcode = r_dest_src.Is64Bit() ? kX86Bswap64R : kX86Bswap32R; break;
     case kOpBlx: opcode = kX86CallR; break;
     default:
       LOG(FATAL) << "Bad case in OpReg " << op;
