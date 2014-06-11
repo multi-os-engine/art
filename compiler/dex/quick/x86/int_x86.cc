@@ -37,7 +37,14 @@ void X86Mir2Lir::GenCmpLong(RegLocation rl_dest, RegLocation rl_src1,
     RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
     OpRegReg(kOpXor, rl_result.reg, rl_result.reg);  // result = 0
     OpRegReg(kOpCmp, rl_src1.reg, rl_src2.reg);
-    NewLIR2(kX86Set8R, rl_result.reg.GetReg(), kX86CondNe);  // result = (src1 != src2) ? 1 : result
+    // If the result reg can't be byte accessed, use a jump and move instead of a set.
+    if (rl_result.reg.GetRegNum() >= rs_rX86_SP.GetRegNum()) {
+      LIR* branch = NewLIR2(kX86Jcc8, 0, kX86CondEq);
+      NewLIR2(kX86Mov32RI, rl_result.reg.GetReg(), 0x1);
+      branch->target = NewLIR0(kPseudoTargetLabel);
+    } else {
+      NewLIR2(kX86Set8R, rl_result.reg.GetReg(), kX86CondNe);  // result = (src1 != src2) ? 1 : 0
+    }
     RegStorage temp_reg = AllocTemp();
     OpRegReg(kOpNeg, temp_reg, rl_result.reg);
     OpRegReg(kOpCmp, rl_src1.reg, rl_src2.reg);
@@ -1303,9 +1310,9 @@ void X86Mir2Lir::GenLongRegOrMemOp(RegLocation rl_dest, RegLocation rl_src,
   if (!Gen64Bit()) {
     x86op = GetOpcode(op, rl_dest, rl_src, true);
     lir = NewLIR3(x86op, rl_dest.reg.GetHighReg(), r_base, displacement + HIWORD_OFFSET);
+    AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
+                            true /* is_load */, true /* is64bit */);
   }
-  AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
-                          true /* is_load */, true /* is64bit */);
 }
 
 void X86Mir2Lir::GenLongArith(RegLocation rl_dest, RegLocation rl_src, Instruction::Code op) {
@@ -1339,11 +1346,11 @@ void X86Mir2Lir::GenLongArith(RegLocation rl_dest, RegLocation rl_src, Instructi
   if (!Gen64Bit()) {
     x86op = GetOpcode(op, rl_dest, rl_src, true);
     lir = NewLIR3(x86op, r_base, displacement + HIWORD_OFFSET, rl_src.reg.GetHighReg());
+    AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
+                            true /* is_load */, true /* is64bit */);
+    AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
+                            false /* is_load */, true /* is64bit */);
   }
-  AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
-                          true /* is_load */, true /* is64bit */);
-  AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
-                          false /* is_load */, true /* is64bit */);
   FreeTemp(rl_src.reg);
 }
 
@@ -2252,6 +2259,8 @@ void X86Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_k
     LoadRefDisp(class_reg, offset_of_type, class_reg);
     if (!can_assume_type_is_in_dex_cache) {
       // Need to test presence of type in dex cache at runtime.
+      RegLocation rl_result = GetReturn(kRefReg);
+      LoadConstant(rl_result.reg, 0);
       LIR* hop_branch = OpCmpImmBranch(kCondNe, class_reg, 0, NULL);
       // Type is not resolved. Call out to helper, which will return resolved type in kRet0/kArg0.
       if (Is64BitInstructionSet(cu_->instruction_set)) {
@@ -2566,6 +2575,7 @@ void X86Mir2Lir::GenIntToLong(RegLocation rl_dest, RegLocation rl_src) {
     Mir2Lir::GenIntToLong(rl_dest, rl_src);
     return;
   }
+  rl_src = UpdateLoc(rl_src);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   if (rl_src.location == kLocPhysReg) {
     NewLIR2(kX86MovsxdRR, rl_result.reg.GetReg(), rl_src.reg.GetReg());

@@ -883,11 +883,12 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
         (1 << kBBOpt) |
         (1 << kMatch) |
         (1 << kPromoteCompilerTemps));
-  }
-
-  if (cu.instruction_set == kArm64 || cu.instruction_set == kX86_64) {
+  } else if (cu.instruction_set == kX86_64) {
+    cu.disable_opt |= (
+        (1 << kLoadStoreElimination) |
+        (1 << kPromoteRegs));
+  } else if (cu.instruction_set == kArm64) {
     // TODO(Arm64): enable optimizations once backend is mature enough.
-    // TODO(X86_64): enable optimizations once backend is mature enough.
     cu.disable_opt = ~(uint32_t)0;
     if (cu.instruction_set == kArm64) {
       cu.enable_debug |= (1 << kDebugCodegenDump);

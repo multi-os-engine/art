@@ -431,6 +431,10 @@ void X86Mir2Lir::MarkPreservedDouble(int v_reg, RegStorage reg) {
 }
 
 RegStorage X86Mir2Lir::AllocateByteRegister() {
+  if (Gen64Bit()) {
+    // Ensure we get EAX-EDX
+    reg_pool_->ResetNextTemp();
+  }
   return AllocTypedTemp(false, kCoreReg);
 }
 

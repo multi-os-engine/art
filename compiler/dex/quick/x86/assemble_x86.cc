@@ -685,7 +685,7 @@ int X86Mir2Lir::GetInsnSize(LIR* lir) {
       return ComputeSize(entry, lir->operands[4], lir->operands[1], lir->operands[0],
                          true, false, false, lir->operands[3]);
     case kRegCond:  // lir operands - 0: reg, 1: cond
-      return ComputeSize(entry, lir->operands[0], NO_REG, NO_REG,
+      return ComputeSize(entry, NO_REG, NO_REG, lir->operands[0],
                          false, entry->skeleton.r8_form, false, 0);
     case kMemCond:  // lir operands - 0: base, 1: disp, 2: cond
       DCHECK_EQ(false, entry->skeleton.r8_form);
@@ -1272,7 +1272,7 @@ void X86Mir2Lir::EmitShiftMemImm(const X86EncodingMap* entry, int32_t raw_base, 
 
 void X86Mir2Lir::EmitRegCond(const X86EncodingMap* entry, int32_t raw_reg, int32_t cc) {
   CheckValidByteRegister(entry, raw_reg);
-  EmitPrefix(entry, raw_reg, NO_REG, NO_REG, entry->skeleton.r8_form);
+  EmitPrefix(entry, NO_REG, NO_REG, raw_reg, entry->skeleton.r8_form);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
   DCHECK_EQ(0x0F, entry->skeleton.opcode);
   code_buffer_.push_back(0x0F);
