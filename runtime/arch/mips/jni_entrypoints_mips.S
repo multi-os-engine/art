@@ -29,21 +29,26 @@ ENTRY art_jni_dlsym_lookup_stub
     .cfi_adjust_cfa_offset 32
     sw     $ra, 16($sp)
     .cfi_rel_offset 31, 16
-    sw     $a3, 12($sp)
-    .cfi_rel_offset 7, 12
-    sw     $a2, 8($sp)
-    .cfi_rel_offset 6, 8
-    sw     $a1, 4($sp)
-    .cfi_rel_offset 5, 4
-    sw     $a0, 0($sp)
-    .cfi_rel_offset 4, 0
+    sw     $a0, 32($sp)         # Store the arguments in caller's stack.
+    .cfi_rel_offset 4, 32
+    sw     $a1, 36($sp)
+    .cfi_rel_offset 5, 36
+    sw     $a2, 40($sp)
+    .cfi_rel_offset 6, 40
+    sw     $a3, 44($sp)
+    .cfi_rel_offset 7, 44
     jal   artFindNativeMethod   # (Thread*)
     move  $a0, $s1              # pass Thread::Current()
-    lw    $a0, 0($sp)           # restore registers from stack
-    lw    $a1, 4($sp)
-    lw    $a2, 8($sp)
-    lw    $a3, 12($sp)
+    lw    $a0, 32($sp)           # restore registers from stack
+    .cfi_restore 4
+    lw    $a1, 36($sp)
+    .cfi_restore 5
+    lw    $a2, 40($sp)
+    .cfi_restore 6
+    lw    $a3, 44($sp)
+    .cfi_restore 7
     lw    $ra, 16($sp)
+    .cfi_restore 31
     beq   $v0, $zero, .Lno_native_code_found
     addiu $sp, $sp, 32          # restore the stack
     .cfi_adjust_cfa_offset -32
