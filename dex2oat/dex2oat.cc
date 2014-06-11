@@ -1168,6 +1168,7 @@ static int dex2oat(int argc, char** argv) {
   switch (instruction_set) {
     case kArm:
     case kThumb2:
+    case kArm64:
     case kX86:
       implicit_null_checks = true;
       implicit_so_checks = true;
