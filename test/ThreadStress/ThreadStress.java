@@ -30,52 +30,223 @@ class ThreadStress implements Runnable {
 
     public static final boolean DEBUG = false;
 
-    enum Operation {
-        OOM(1),
-        SIGQUIT(19),
-        ALLOC(60),
-        STACKTRACE(20),
-        EXIT(50),
+    private static abstract class Operation {
+        /**
+         * Perform the action represented by this operation. Returns true if the thread should
+         * continue. 
+         */
+        public abstract boolean perform();
+    }
 
-        SLEEP(25),
-        TIMED_WAIT(10),
-        WAIT(15);
-
-        private final int frequency;
-        Operation(int frequency) {
-            this.frequency = frequency;
+    private final static class OOM extends Operation {
+        @Override
+        public boolean perform() {
+            try {
+                List<byte[]> l = new ArrayList<byte[]>();
+                while (true) {
+                    l.add(new byte[1024]);
+                }
+            } catch (OutOfMemoryError e) {
+            }
+            return true;
         }
     }
 
+    private final static class SigQuit extends Operation {
+        @Override
+        public boolean perform() {
+            try {
+                Os.kill(Os.getpid(), OsConstants.SIGQUIT);
+            } catch (ErrnoException ex) {
+            }
+            return true;
+        }
+    }
+
+    private final static class Alloc extends Operation {
+        @Override
+        public boolean perform() {
+            try {
+                List<byte[]> l = new ArrayList<byte[]>();
+                for (int i = 0; i < 1024; i++) {
+                    l.add(new byte[1024]);
+                }
+            } catch (OutOfMemoryError e) {
+            }
+            return true;
+        }
+    }
+
+    private final static class StackTrace extends Operation {
+        @Override
+        public boolean perform() {
+            Thread.currentThread().getStackTrace();
+            return true;
+        }
+    }
+
+    private final static class Exit extends Operation {
+        @Override
+        public boolean perform() {
+            return false;
+        }
+    }
+
+    private final static class Sleep extends Operation {
+        @Override
+        public boolean perform() {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException ignored) {
+            }
+            return true;
+        }
+    }
+
+    private final static class TimedWait extends Operation {
+        private final Object lock;
+
+        public TimedWait(Object lock) {
+            this.lock = lock;
+        }
+
+        @Override
+        public boolean perform() {
+            synchronized (lock) {
+                try {
+                    lock.wait(100, 0);
+                } catch (InterruptedException ignored) {
+                }
+            }
+            return true;
+        }
+    }
+
+    private final static class Wait extends Operation {
+        private final Object lock;
+
+        public Wait(Object lock) {
+            this.lock = lock;
+        }
+
+        @Override
+        public boolean perform() {
+            synchronized (lock) {
+                try {
+                    lock.wait();
+                } catch (InterruptedException ignored) {
+                }
+            }
+            return true;
+        }
+    }
+
+    private final static class SyncAndWork extends Operation {
+        private final Object lock;
+
+        public SyncAndWork(Object lock) {
+            this.lock = lock;
+        }
+
+        @Override
+        public boolean perform() {
+            synchronized (lock) {
+                try {
+                    Thread.sleep((int)(Math.random()*10));
+                } catch (InterruptedException ignored) {
+                }
+            }
+            return true;
+        }
+    }
+
+    private final static Map<Operation, Double> createDefaultFrequencyMap(Object lock) {
+        Map<Operation, Double> frequencyMap = new HashMap<Operation, Double>();
+        frequencyMap.put(new OOM(), 0.005);             //  1/200
+        frequencyMap.put(new SigQuit(), 0.095);         // 19/200
+        frequencyMap.put(new Alloc(), 0.3);             // 60/200
+        frequencyMap.put(new StackTrace(), 0.1);        // 20/200
+        frequencyMap.put(new Exit(), 0.25);             // 50/200
+        frequencyMap.put(new Sleep(), 0.125);           // 25/200
+        frequencyMap.put(new TimedWait(lock), 0.05);    // 10/200
+        frequencyMap.put(new Wait(lock), 0.075);        // 15/200
+
+        return frequencyMap;
+    }
+
+    private final static Map<Operation, Double> createLockFrequencyMap(Object lock) {
+      Map<Operation, Double> frequencyMap = new HashMap<Operation, Double>();
+      frequencyMap.put(new Sleep(), 0.2);
+      frequencyMap.put(new TimedWait(lock), 0.2);
+      frequencyMap.put(new Wait(lock), 0.2);
+      frequencyMap.put(new SyncAndWork(lock), 0.4);
+
+      return frequencyMap;
+    }
+
     public static void main(String[] args) throws Exception {
+      parseAndRun(args);
 
-        final int numberOfThreads = 5;
-        final int totalOperations = 1000;
-        final int operationsPerThread = totalOperations/numberOfThreads;
+      // parseAndRun(new String[] { "--locks-only", "-n", "10", "-o", "10000" });
+    }
 
-        // Lock used to notify threads performing Operation.WAIT
-        final Object lock = new Object();
+    public static void parseAndRun(String[] args) throws Exception {
+        int numberOfThreads = -1;
+        int totalOperations = -1;
+        int operationsPerThread = -1;
+        Object lock = null;
+        Map<Operation, Double> frequencyMap = null;
 
+        if (args != null) {
+            for (int i = 0; i < args.length; i++) {
+                if (args[i].equals("-n")) {
+                    i++;
+                    numberOfThreads = Integer.parseInt(args[i]);
+                } else if (args[i].equals("-o")) {
+                    i++;
+                    totalOperations = Integer.parseInt(args[i]);
+                } else if (args[i].equals("-t")) {
+                    i++;
+                    operationsPerThread = Integer.parseInt(args[i]);
+                } else if (args[i].equals("--locks-only")) {
+                    lock = new Object();
+                    frequencyMap = createLockFrequencyMap(lock);
+                }
+            }
+        }
+
+        if (numberOfThreads == -1) {
+            numberOfThreads = 5;
+        }
+
+        if (totalOperations == -1) {
+            totalOperations = 1000;
+        }
+
+        if (operationsPerThread == -1) {
+            operationsPerThread = totalOperations/numberOfThreads;
+        }
+
+        if (lock == null) {
+            lock = new Object();
+        }
+
+        if (frequencyMap == null) {
+            frequencyMap = createDefaultFrequencyMap(lock);
+        }
+
+        runTest(numberOfThreads, operationsPerThread, lock, frequencyMap);
+    }
+
+    public static void runTest(final int numberOfThreads, final int operationsPerThread,
+                               final Object lock, Map<Operation, Double> frequencyMap)
+                                   throws Exception {
         // Each thread is going to do operationsPerThread
         // operations. The distribution of operations is determined by
         // the Operation.frequency values. We fill out an Operation[]
         // for each thread with the operations it is to perform. The
         // Operation[] is shuffled so that there is more random
         // interactions between the threads.
-
-        // The simple-minded filling in of Operation[] based on
-        // Operation.frequency below won't have even have close to a
-        // reasonable distribution if the count of Operation
-        // frequencies is greater than the total number of
-        // operations. So here we do a quick sanity check in case
-        // people tweak the constants above.
-        int operationCount = 0;
-        for (Operation op : Operation.values()) {
-            operationCount += op.frequency;
-        }
-        if (operationCount > operationsPerThread) {
-            throw new AssertionError(operationCount + " > " + operationsPerThread);
-        }
 
         // Fill in the Operation[] array for each thread by laying
         // down references to operation according to their desired
@@ -86,8 +257,9 @@ class ThreadStress implements Runnable {
             int o = 0;
             LOOP:
             while (true) {
-                for (Operation op : Operation.values()) {
-                    for (int f = 0; f < op.frequency; f++) {
+                for (Operation op : frequencyMap.keySet()) {
+                    int freq = (int)(frequencyMap.get(op) * operationsPerThread);
+                    for (int f = 0; f < freq; f++) {
                         if (o == operations.length) {
                             break LOOP;
                         }
@@ -105,7 +277,7 @@ class ThreadStress implements Runnable {
         // sane compared to Operation.frequency
         if (DEBUG) {
             for (int t = 0; t < threadStresses.length; t++) {
-                Operation[] operations = new Operation[operationsPerThread];
+                Operation[] operations = threadStresses[t].operations;
                 Map<Operation, Integer> distribution = new HashMap<Operation, Integer>();
                 for (Operation operation : operations) {
                     Integer ops = distribution.get(operation);
@@ -117,7 +289,7 @@ class ThreadStress implements Runnable {
                     distribution.put(operation, ops);
                 }
                 System.out.println("Distribution for " + t);
-                for (Operation op : Operation.values()) {
+                for (Operation op : frequencyMap.keySet()) {
                     System.out.println(op + " = " + distribution.get(op));
                 }
             }
@@ -153,17 +325,19 @@ class ThreadStress implements Runnable {
 
         // The notifier thread is a daemon just loops forever to wake
         // up threads in Operation.WAIT
-        Thread notifier = new Thread("Notifier") {
-            public void run() {
-                while (true) {
-                    synchronized (lock) {
-                        lock.notifyAll();
+        if (lock != null) {
+            Thread notifier = new Thread("Notifier") {
+                public void run() {
+                    while (true) {
+                        synchronized (lock) {
+                            lock.notifyAll();
+                        }
                     }
                 }
-            }
-        };
-        notifier.setDaemon(true);
-        notifier.start();
+            };
+            notifier.setDaemon(true);
+            notifier.start();
+        }
 
         for (int r = 0; r < runners.length; r++) {
             runners[r].start();
@@ -198,67 +372,8 @@ class ThreadStress implements Runnable {
                                        + " is " + operation);
                 }
                 nextOperation++;
-                switch (operation) {
-                    case EXIT: {
-                        return;
-                    }
-                    case SIGQUIT: {
-                        try {
-                            Os.kill(Os.getpid(), OsConstants.SIGQUIT);
-                        } catch (ErrnoException ex) {
-                        }
-                    }
-                    case SLEEP: {
-                        try {
-                            Thread.sleep(100);
-                        } catch (InterruptedException ignored) {
-                        }
-                    }
-                    case TIMED_WAIT: {
-                        synchronized (lock) {
-                            try {
-                                lock.wait(100, 0);
-                            } catch (InterruptedException ignored) {
-                            }
-                        }
-                        break;
-                    }
-                    case WAIT: {
-                        synchronized (lock) {
-                            try {
-                                lock.wait();
-                            } catch (InterruptedException ignored) {
-                            }
-                        }
-                        break;
-                    }
-                    case OOM: {
-                        try {
-                            List<byte[]> l = new ArrayList<byte[]>();
-                            while (true) {
-                                l.add(new byte[1024]);
-                            }
-                        } catch (OutOfMemoryError e) {
-                        }
-                        break;
-                    }
-                    case ALLOC: {
-                        try {
-                            List<byte[]> l = new ArrayList<byte[]>();
-                            for (int i = 0; i < 1024; i++) {
-                                l.add(new byte[1024]);
-                            }
-                        } catch (OutOfMemoryError e) {
-                        }
-                        break;
-                    }
-                    case STACKTRACE: {
-                        Thread.currentThread().getStackTrace();
-                        break;
-                    }
-                    default: {
-                        throw new AssertionError(operation.toString());
-                    }
+                if (!operation.perform()) {
+                    return;
                 }
             }
         } finally {
