@@ -685,6 +685,7 @@ int X86Mir2Lir::GetInsnSize(LIR* lir) {
       return ComputeSize(entry, lir->operands[4], lir->operands[1], lir->operands[0],
                          true, false, false, lir->operands[3]);
     case kRegCond:  // lir operands - 0: reg, 1: cond
+      // Note: RegCond form passes reg as REX_R but encodes it as REX_B.
       return ComputeSize(entry, lir->operands[0], NO_REG, NO_REG,
                          false, entry->skeleton.r8_form, false, 0);
     case kMemCond:  // lir operands - 0: base, 1: disp, 2: cond
@@ -802,7 +803,7 @@ void X86Mir2Lir::CheckValidByteRegister(const X86EncodingMap* entry, int32_t raw
 
 void X86Mir2Lir::EmitPrefix(const X86EncodingMap* entry,
                             int32_t raw_reg_r, int32_t raw_reg_x, int32_t raw_reg_b,
-                            bool r8_form) {
+                            bool r8_form_r, bool r8_form_b = false) {
   // REX.WRXB
   // W - 64-bit operand
   // R - MODRM.reg
@@ -813,7 +814,8 @@ void X86Mir2Lir::EmitPrefix(const X86EncodingMap* entry,
   bool x = NeedsRex(raw_reg_x);
   bool b = NeedsRex(raw_reg_b);
   uint8_t rex = 0;
-  if (r8_form && RegStorage::RegNum(raw_reg_r) > 4) {
+  if ((r8_form_r && RegStorage::RegNum(raw_reg_r) > 4) ||
+      (r8_form_b && RegStorage::RegNum(raw_reg_b) > 4)) {
     rex |= 0x40;  // REX.0000
   }
   if (w) {
@@ -1272,7 +1274,7 @@ void X86Mir2Lir::EmitShiftMemImm(const X86EncodingMap* entry, int32_t raw_base, 
 
 void X86Mir2Lir::EmitRegCond(const X86EncodingMap* entry, int32_t raw_reg, int32_t cc) {
   CheckValidByteRegister(entry, raw_reg);
-  EmitPrefix(entry, raw_reg, NO_REG, NO_REG, entry->skeleton.r8_form);
+  EmitPrefix(entry, NO_REG, NO_REG, raw_reg, false, entry->skeleton.r8_form);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
   DCHECK_EQ(0x0F, entry->skeleton.opcode);
   code_buffer_.push_back(0x0F);
