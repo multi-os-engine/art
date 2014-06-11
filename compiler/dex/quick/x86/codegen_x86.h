@@ -463,6 +463,12 @@ class X86Mir2Lir : public Mir2Lir {
   virtual RegStorage AllocateByteRegister();
 
   /*
+   * @brief Check if a register is byte addressable.
+   * @returns true if a register is byte addressable.
+   */
+  bool IsByteRegister(RegStorage reg);
+
+  /*
    * @brief generate inline code for fast case of Strng.indexOf.
    * @param info Call parameters
    * @param zero_based 'true' if the index into the string is 0.
