@@ -321,6 +321,10 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
   LockTemp(rs_x7);
   LockTemp(rs_x8);
   LockTemp(rs_x9);
+  /* TUNING:
+   * Use AllocTemp() and reuse LR if possible to give us the freedom on adjusting the number
+   * of temp registers.
+   */
 
   /*
    * We can safely skip the stack overflow check if we're
@@ -344,13 +348,12 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
         LoadWordDisp(rs_xSELF, Thread::StackEndOffset<8>().Int32Value(), rs_x9);
       }
     } else {
-      // TODO(Arm64) Implement implicit checks.
       // Implicit stack overflow check.
       // Generate a load from [sp, #-framesize].  If this is in the stack
       // redzone we will get a segmentation fault.
-      // Load32Disp(rs_wSP, -Thread::kStackOverflowReservedBytes, rs_wzr);
-      // MarkPossibleStackOverflowException();
-      LOG(FATAL) << "Implicit stack overflow checks not implemented.";
+      OpRegRegImm(kOpSub, rs_x8, rs_sp, kArm64StackOverflowReservedBytes);
+      Load32Disp(rs_x8, 0, rs_x8);
+      MarkPossibleStackOverflowException();
     }
   }
 

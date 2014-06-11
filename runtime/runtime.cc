@@ -577,6 +577,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   switch (kRuntimeISA) {
     case kArm:
     case kThumb2:
+    case kArm64:
       implicit_checks_supported = true;
       break;
     default:
