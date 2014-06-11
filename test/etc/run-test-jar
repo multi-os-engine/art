@@ -175,6 +175,7 @@ if [ "x$1" = "x" ] ; then
   MAIN="Main"
 else
   MAIN="$1"
+  shift
 fi
 
 if [ "$ZYGOTE" = "" ]; then
@@ -308,7 +309,6 @@ dalvikvm_cmdline="$INVOKE_WITH $GDB $ANDROID_ROOT/bin/$DALVIKVM \
                   $DEBUGGER_OPTS \
                   $DALVIKVM_BOOT_OPT \
                   -cp $DEX_LOCATION/$TEST_NAME.jar$SECONDARY_DEX $MAIN"
-
 
 if [ "$HOST" = "n" ]; then
     adb root > /dev/null
