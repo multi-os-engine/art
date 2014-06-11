@@ -66,6 +66,18 @@
     } \
   } while (false)
 
+// CHECK/DCHECK that can be used in a constexpr function. For example,
+//    constexpr int half(int n) {
+//      return
+//          DCHECK_CONSTEXPR(n >= 0, , 0)
+//          CHECK_CONSTEXPR((n & 1) == 0), << "Extra debugging output: n = " << n, 0)
+//          n / 2;
+//    }
+#define CHECK_CONSTEXPR_IMPL(cond, text, out, dummy) \
+  (!(cond)) ? LOG(FATAL) << "Check failed: " << text out, dummy :
+#define CHECK_CONSTEXPR(x, out, dummy) CHECK_CONSTEXPR_IMPL(x, #x, out, dummy)
+#define DCHECK_CONSTEXPR(x, out, dummy) CHECK_CONSTEXPR_IMPL(kIsDebugBuild || (x), #x, out, dummy)
+
 #ifndef NDEBUG
 
 #define DCHECK(x) CHECK(x)
