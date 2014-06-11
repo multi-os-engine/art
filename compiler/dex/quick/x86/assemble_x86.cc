@@ -1272,7 +1272,13 @@ void X86Mir2Lir::EmitShiftMemImm(const X86EncodingMap* entry, int32_t raw_base, 
 
 void X86Mir2Lir::EmitRegCond(const X86EncodingMap* entry, int32_t raw_reg, int32_t cc) {
   CheckValidByteRegister(entry, raw_reg);
-  EmitPrefix(entry, raw_reg, NO_REG, NO_REG, entry->skeleton.r8_form);
+  // Workaround for EmitPrefix, for r8_form it expects that register in raw_reg_r
+  // while this operation is emitted with reg in raw_reg_b.
+  // If we have r8_form and raw_reg need rex that EmitPrefix will generate rex anyway
+  // but if raw_reg does not need rex then we should specify raw_reg_r to force
+  // emitting reg.
+  const bool forceRex = !NeedsRex(raw_reg) && entry->skeleton.r8_form;
+  EmitPrefix(entry, forceRex ? raw_reg : NO_REG, NO_REG, raw_reg, entry->skeleton.r8_form);
   DCHECK_EQ(0, entry->skeleton.ax_opcode);
   DCHECK_EQ(0x0F, entry->skeleton.opcode);
   code_buffer_.push_back(0x0F);

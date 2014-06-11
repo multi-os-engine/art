@@ -856,7 +856,7 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   RegStorage result_reg = rl_result.reg;
 
   // SETcc only works with EAX..EDX.
-  if (result_reg.GetRegNum() >= rs_rX86_SP.GetRegNum()) {
+  if (!Gen64Bit() && result_reg.GetRegNum() >= rs_rX86_SP.GetRegNum()) {
     result_reg = AllocateByteRegister();
     DCHECK_LT(result_reg.GetRegNum(), rs_rX86_SP.GetRegNum());
   }
@@ -1303,9 +1303,9 @@ void X86Mir2Lir::GenLongRegOrMemOp(RegLocation rl_dest, RegLocation rl_src,
   if (!Gen64Bit()) {
     x86op = GetOpcode(op, rl_dest, rl_src, true);
     lir = NewLIR3(x86op, rl_dest.reg.GetHighReg(), r_base, displacement + HIWORD_OFFSET);
+    AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
+                            true /* is_load */, true /* is64bit */);
   }
-  AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
-                          true /* is_load */, true /* is64bit */);
 }
 
 void X86Mir2Lir::GenLongArith(RegLocation rl_dest, RegLocation rl_src, Instruction::Code op) {
@@ -1339,11 +1339,11 @@ void X86Mir2Lir::GenLongArith(RegLocation rl_dest, RegLocation rl_src, Instructi
   if (!Gen64Bit()) {
     x86op = GetOpcode(op, rl_dest, rl_src, true);
     lir = NewLIR3(x86op, r_base, displacement + HIWORD_OFFSET, rl_src.reg.GetHighReg());
+    AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
+                            true /* is_load */, true /* is64bit */);
+    AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
+                            false /* is_load */, true /* is64bit */);
   }
-  AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
-                          true /* is_load */, true /* is64bit */);
-  AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2,
-                          false /* is_load */, true /* is64bit */);
   FreeTemp(rl_src.reg);
 }
 
@@ -1677,7 +1677,7 @@ void X86Mir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
   }
   // If the src reg can't be byte accessed, move it to a temp first.
   if ((size == kSignedByte || size == kUnsignedByte) &&
-      rl_src.reg.GetRegNum() >= rs_rX86_SP.GetRegNum()) {
+      !Gen64Bit() && rl_src.reg.GetRegNum() >= rs_rX86_SP.GetRegNum()) {
     RegStorage temp = AllocTemp();
     OpRegCopy(temp, rl_src.reg);
     StoreBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, temp, size);
@@ -2155,9 +2155,12 @@ void X86Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,
   RegStorage result_reg = rl_result.reg;
 
   // SETcc only works with EAX..EDX.
-  if (result_reg == object.reg || result_reg.GetRegNum() >= rs_rX86_SP.GetRegNum()) {
+  if (result_reg == object.reg ||
+      (!Gen64Bit() && result_reg.GetRegNum() >= rs_rX86_SP.GetRegNum())) {
     result_reg = AllocateByteRegister();
-    DCHECK_LT(result_reg.GetRegNum(), rs_rX86_SP.GetRegNum());
+    if (!Gen64Bit()) {
+      DCHECK_LT(result_reg.GetRegNum(), rs_rX86_SP.GetRegNum());
+    }
   }
 
   // Assume that there is no match.
@@ -2567,6 +2570,7 @@ void X86Mir2Lir::GenIntToLong(RegLocation rl_dest, RegLocation rl_src) {
     Mir2Lir::GenIntToLong(rl_dest, rl_src);
     return;
   }
+  rl_src = UpdateLoc(rl_src);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   if (rl_src.location == kLocPhysReg) {
     NewLIR2(kX86MovsxdRR, rl_result.reg.GetReg(), rl_src.reg.GetReg());
