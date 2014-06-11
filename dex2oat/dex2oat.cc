@@ -739,7 +739,10 @@ void CheckExplicitCheckOptions(InstructionSet isa, bool* explicit_null_checks,
     case kArm:
     case kThumb2:
       break;  // All checks implemented, leave as is.
-
+    case kArm64:
+      // Explicit suspension is not implemented.
+      *explicit_suspend_checks = true;
+      break;
     default:  // No checks implemented, reset all to explicit checks.
       *explicit_null_checks = true;
       *explicit_so_checks = true;
