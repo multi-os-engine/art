@@ -60,6 +60,7 @@
 #include "runtime.h"
 #include "ScopedLocalRef.h"
 #include "scoped_thread_state_change.h"
+#include "utils.h"
 #include "vector_output_stream.h"
 #include "well_known_classes.h"
 #include "zip_archive.h"
@@ -202,6 +203,11 @@ static void Usage(const char* fmt, ...) {
   UsageError("  --host: used with Portable backend to link against host runtime libraries");
   UsageError("");
   UsageError("  --dump-timing: display a breakdown of where time was spent");
+  UsageError("");
+  UsageError("  --include-patch-information: Include patching information so the generated code");
+  UsageError("      can have its base address moved without full recompilation.");
+  UsageError("");
+  UsageError("  --no-include-patch-information: Do not include patching information.");
   UsageError("");
   UsageError("  --include-debug-symbols: Include ELF symbols in this oat file");
   UsageError("");
@@ -510,16 +516,6 @@ class Dex2Oat {
   DISALLOW_IMPLICIT_CONSTRUCTORS(Dex2Oat);
 };
 
-static bool ParseInt(const char* in, int* out) {
-  char* end;
-  int result = strtol(in, &end, 10);
-  if (in == end || *end != '\0') {
-    return false;
-  }
-  *out = result;
-  return true;
-}
-
 static size_t OpenDexFiles(const std::vector<const char*>& dex_filenames,
                            const std::vector<const char*>& dex_locations,
                            std::vector<const DexFile*>& dex_files) {
@@ -827,6 +823,8 @@ static int dex2oat(int argc, char** argv) {
   bool dump_stats = false;
   bool dump_timing = false;
   bool dump_passes = false;
+  bool include_patch_information = CompilerOptions::kDefaultIncludePatchInformation;
+  bool explicit_include_patch_information = false;
   bool include_debug_symbols = kIsDebugBuild;
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = !kIsTargetBuild;
@@ -1037,6 +1035,12 @@ static int dex2oat(int argc, char** argv) {
         }
       }
       has_explicit_checks_options = true;
+    } else if (option == "--include-patch-information") {
+      include_patch_information = true;
+      explicit_include_patch_information = true;
+    } else if (option == "--no-include-patch-information") {
+      include_patch_information = false;
+      explicit_include_patch_information = true;
     } else {
       Usage("Unknown argument %s", option.data());
     }
@@ -1167,6 +1171,11 @@ static int dex2oat(int argc, char** argv) {
                             &explicit_suspend_checks);
 
   LOG(INFO) << "init compiler options for explicit null: " << explicit_null_checks;
+  if (!explicit_include_patch_information) {
+    include_patch_information =
+        (compiler_kind == Compiler::kQuick && CompilerOptions::kDefaultIncludePatchInformation);
+  }
+
   CompilerOptions compiler_options(compiler_filter,
                                    huge_method_threshold,
                                    large_method_threshold,
@@ -1174,6 +1183,7 @@ static int dex2oat(int argc, char** argv) {
                                    tiny_method_threshold,
                                    num_dex_methods_threshold,
                                    generate_gdb_information,
+                                   include_patch_information,
                                    top_k_profile_threshold,
                                    include_debug_symbols,
                                    explicit_null_checks,
