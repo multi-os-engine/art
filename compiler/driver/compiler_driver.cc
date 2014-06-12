@@ -2000,11 +2000,12 @@ bool CompilerDriver::RequiresConstructorBarrier(Thread* self, const DexFile* dex
 
 bool CompilerDriver::WriteElf(const std::string& android_root,
                               bool is_host,
+                              bool include_patches,
                               const std::vector<const art::DexFile*>& dex_files,
                               OatWriter* oat_writer,
                               art::File* file)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  return compiler_->WriteElf(file, oat_writer, dex_files, android_root, is_host);
+  return compiler_->WriteElf(file, oat_writer, dex_files, android_root, is_host, include_patches);
 }
 void CompilerDriver::InstructionSetToLLVMTarget(InstructionSet instruction_set,
                                                 std::string* target_triple,

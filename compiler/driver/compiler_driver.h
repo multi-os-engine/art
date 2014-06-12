@@ -365,6 +365,7 @@ class CompilerDriver {
 
   bool WriteElf(const std::string& android_root,
                 bool is_host,
+                bool include_patches,
                 const std::vector<const DexFile*>& dex_files,
                 OatWriter* oat_writer,
                 File* file);

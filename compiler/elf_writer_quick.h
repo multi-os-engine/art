@@ -31,6 +31,7 @@ class ElfWriterQuick FINAL : public ElfWriter {
                      const std::vector<const DexFile*>& dex_files,
                      const std::string& android_root,
                      bool is_host,
+                     bool include_patches,
                      const CompilerDriver& driver)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -38,7 +39,8 @@ class ElfWriterQuick FINAL : public ElfWriter {
   bool Write(OatWriter* oat_writer,
              const std::vector<const DexFile*>& dex_files,
              const std::string& android_root,
-             bool is_host)
+             bool is_host,
+             bool include_patches)
       OVERRIDE
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -51,6 +53,7 @@ class ElfWriterQuick FINAL : public ElfWriter {
   void AddDebugSymbols(ElfBuilder& builder,
                        OatWriter* oat_writer,
                        bool debug);
+  void ReservePatchSpace(std::vector<uint8_t>* buffer, bool debug);
 
   class ElfSectionBuilder {
    public:
