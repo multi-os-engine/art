@@ -119,6 +119,7 @@ TEST_F(OatTest, WriteRead) {
                        &timings);
   bool success = compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                             !kIsTargetBuild,
+                                            compiler_kind == Compiler::kQuick,
                                             class_linker->GetBootClassPath(),
                                             &oat_writer,
                                             tmp.GetFile());

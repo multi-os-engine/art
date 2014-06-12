@@ -90,8 +90,9 @@ bool QuickCompiler::WriteElf(art::File* file,
                              OatWriter* oat_writer,
                              const std::vector<const art::DexFile*>& dex_files,
                              const std::string& android_root,
-                             bool is_host) const {
-  return art::ElfWriterQuick::Create(file, oat_writer, dex_files, android_root, is_host,
+                             bool is_host,
+                             bool include_patches) const {
+  return art::ElfWriterQuick::Create(file, oat_writer, dex_files, android_root, is_host, include_patches,
                                      *GetCompilerDriver());
 }
 

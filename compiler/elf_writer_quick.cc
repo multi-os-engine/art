@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <unordered_set>
+
 #include "elf_writer_quick.h"
 
 #include "base/logging.h"
@@ -798,15 +800,36 @@ bool ElfWriterQuick::Create(File* elf_file,
                             const std::vector<const DexFile*>& dex_files,
                             const std::string& android_root,
                             bool is_host,
+                            bool include_patches,
                             const CompilerDriver& driver) {
   ElfWriterQuick elf_writer(driver, elf_file);
-  return elf_writer.Write(oat_writer, dex_files, android_root, is_host);
+  return elf_writer.Write(oat_writer, dex_files, android_root, is_host, include_patches);
+}
+
+// Add patch information to this section. Each patch is a Elf32_Word that
+// identifies an offset from the start of the text section
+void ElfWriterQuick::ReservePatchSpace(std::vector<uint8_t>* buffer, bool debug) {
+  size_t size =
+      compiler_driver_->GetCodeToPatch().size() +
+      compiler_driver_->GetMethodsToPatch().size() +
+      compiler_driver_->GetClassesToPatch().size();
+  if (size == 0) {
+    if (debug) {
+      LOG(INFO) << "No patches to record";
+    }
+    return;
+  }
+  buffer->resize(size * sizeof(uintptr_t));
+  if (debug) {
+    LOG(INFO) << "Patches reserved for " << size;
+  }
 }
 
 bool ElfWriterQuick::Write(OatWriter* oat_writer,
                            const std::vector<const DexFile*>& dex_files_unused,
                            const std::string& android_root_unused,
-                           bool is_host_unused) {
+                           bool is_host_unused,
+                           bool add_relocs) {
   const bool debug = false;
   const bool add_symbols = oat_writer->DidAddSymbols();
   const OatHeader& oat_header = oat_writer->GetOatHeader();
@@ -834,6 +857,13 @@ bool ElfWriterQuick::Write(OatWriter* oat_writer,
     builder.RegisterRawSection(debug_abbrev);
     builder.RegisterRawSection(debug_frame);
     builder.RegisterRawSection(debug_str);
+  }
+
+  if (add_relocs) {
+    ElfRawSectionBuilder oat_patches(".oat_patches", SHT_OAT_PATCH, 0, NULL, 0,
+                                     sizeof(size_t), sizeof(size_t));
+    ReservePatchSpace(oat_patches.GetBuffer(), debug);
+    builder.RegisterRawSection(oat_patches);
   }
 
   return builder.Write();

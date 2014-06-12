@@ -61,6 +61,7 @@ TEST_F(ImageTest, WriteRead) {
 
   {
     {
+      bool include_patches = true;
       jobject class_loader = NULL;
       ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
       TimingLogger timings("ImageTest::WriteRead", false, false);
@@ -69,6 +70,7 @@ TEST_F(ImageTest, WriteRead) {
         // TODO: we disable this for portable so the test executes in a reasonable amount of time.
         //       We shouldn't need to do this.
         compiler_options_->SetCompilerFilter(CompilerOptions::kInterpretOnly);
+        include_patches = false;
       }
       for (const DexFile* dex_file : class_linker->GetBootClassPath()) {
         dex_file->EnableWrite();
@@ -81,6 +83,7 @@ TEST_F(ImageTest, WriteRead) {
                            0, 0, "", compiler_driver_.get(), &timings);
       bool success = compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                                 !kIsTargetBuild,
+                                                include_patches,
                                                 class_linker->GetBootClassPath(),
                                                 &oat_writer,
                                                 oat_file.GetFile());
@@ -93,7 +96,7 @@ TEST_F(ImageTest, WriteRead) {
 
   const uintptr_t requested_image_base = ART_BASE_ADDRESS;
   {
-    ImageWriter writer(*compiler_driver_.get());
+    ImageWriter writer(*compiler_driver_.get(), true);
     bool success_image = writer.Write(image_file.GetFilename(), requested_image_base,
                                       dup_oat->GetPath(), dup_oat->GetPath());
     ASSERT_TRUE(success_image);

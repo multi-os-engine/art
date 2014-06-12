@@ -56,15 +56,20 @@ bool ElfWriterMclinker::Create(File* elf_file,
                                const std::vector<const DexFile*>& dex_files,
                                const std::string& android_root,
                                bool is_host,
+                               bool include_patches,
                                const CompilerDriver& driver) {
   ElfWriterMclinker elf_writer(driver, elf_file);
-  return elf_writer.Write(oat_writer, dex_files, android_root, is_host);
+  if (include_patches) {
+    LOG(WARNING) << "Patching information is only supported with quick compiler";
+  }
+  return elf_writer.Write(oat_writer, dex_files, android_root, is_host, include_patches);
 }
 
 bool ElfWriterMclinker::Write(OatWriter* oat_writer,
                               const std::vector<const DexFile*>& dex_files,
                               const std::string& android_root,
-                              bool is_host) {
+                              bool is_host,
+                              bool include_patches_unused) {
   std::vector<uint8_t> oat_contents;
   oat_contents.reserve(oat_writer->GetSize());
   VectorOutputStream output_stream("oat contents", oat_contents);
