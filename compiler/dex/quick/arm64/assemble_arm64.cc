@@ -689,8 +689,20 @@ uint8_t* Arm64Mir2Lir::EncodeLIRs(uint8_t* write_pos, LIR* lir) {
               // Fail, if `expected' contains an unsatisfied requirement.
               if (expected != nullptr) {
                 // TODO(Arm64): make this FATAL.
+                LOG(WARNING) << "Method: " << PrettyMethod(cu_->method_idx, *cu_->dex_file)
+                             << " @ 0x" << std::hex << lir->dalvik_offset;
                 LOG(WARNING) << "Bad argument n. " << i << " of " << encoder->name
                              << ". Expected " << expected << ", got 0x" << std::hex << operand;
+                LOG(WARNING) << "want_float = " << want_float;
+                LOG(WARNING) << "want_size_match = " << want_size_match;
+                LOG(WARNING) << "IsFloat(): " << reg.IsFloat();
+                LOG(WARNING) << "IsDouble(): " << reg.IsDouble();
+                LOG(WARNING) << "IsSingle(): " << reg.IsSingle();
+                LOG(WARNING) << "Is64Bit(): " << reg.Is64Bit();
+                LOG(WARNING) << "lir->operands[0]: " << lir->operands[0];
+                LOG(WARNING) << "lir->operands[1]: " << lir->operands[1];
+                LOG(WARNING) << "lir->operands[2]: " << lir->operands[2];
+                LOG(WARNING) << "lir->operands[3]: " << lir->operands[3];
               }
             }
 
