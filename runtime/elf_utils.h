@@ -62,6 +62,9 @@
 #define DT_MIPS_HIPAGENO     0x70000014 /* Number of GOT page table entries */
 #define DT_MIPS_RLD_MAP      0x70000016 /* Address of debug map pointer */
 
+// Patching section type
+#define SHT_OAT_PATCH        SHT_LOUSER
+
 inline void SetBindingAndType(Elf32_Sym* sym, unsigned char b, unsigned char t) {
   sym->st_info = (b << 4) + (t & 0x0f);
 }

@@ -54,7 +54,8 @@ class ElfWriter {
   virtual bool Write(OatWriter* oat_writer,
                      const std::vector<const DexFile*>& dex_files,
                      const std::string& android_root,
-                     bool is_host)
+                     bool is_host,
+                     bool include_patches)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
 
   const CompilerDriver* const compiler_driver_;
