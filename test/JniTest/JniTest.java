@@ -21,6 +21,7 @@ class JniTest {
         System.loadLibrary("arttest");
         testFindClassOnAttachedNativeThread();
         testFindFieldOnAttachedNativeThread();
+        testReflectFieldGetOnAttachedNativeThreadNative();
         testCallStaticVoidMethodOnSubClass();
         testGetMirandaMethod();
         testZeroLengthByteBuffers();
@@ -33,6 +34,10 @@ class JniTest {
     private static native void testFindClassOnAttachedNativeThread();
 
     private static boolean testFindFieldOnAttachedNativeThreadField;
+
+    private static native void testReflectFieldGetOnAttachedNativeThreadNative();
+
+    public static boolean testReflectFieldGetOnAttachedNativeThreadField;
 
     private static void testFindFieldOnAttachedNativeThread() {
       testFindFieldOnAttachedNativeThreadNative();
