@@ -1006,7 +1006,8 @@ bool MIRGraph::ComputeSkipCompilation(MethodStats* stats, bool skip_default) {
 bool MIRGraph::SkipCompilation() {
   const CompilerOptions& compiler_options = cu_->compiler_driver->GetCompilerOptions();
   CompilerOptions::CompilerFilter compiler_filter = compiler_options.GetCompilerFilter();
-  if (compiler_filter == CompilerOptions::kEverything) {
+  FIXME: don't submit like this - force total compilation for testing.
+  if (true || compiler_filter == CompilerOptions::kEverything) {
     return false;
   }
 
