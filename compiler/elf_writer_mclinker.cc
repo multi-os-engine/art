@@ -64,7 +64,8 @@ bool ElfWriterMclinker::Create(File* elf_file,
 bool ElfWriterMclinker::Write(OatWriter* oat_writer,
                               const std::vector<const DexFile*>& dex_files,
                               const std::string& android_root,
-                              bool is_host) {
+                              bool is_host,
+                              bool include_patches_unused) {
   std::vector<uint8_t> oat_contents;
   oat_contents.reserve(oat_writer->GetSize());
   VectorOutputStream output_stream("oat contents", oat_contents);
