@@ -135,7 +135,7 @@ void CompilationUnit::EndTiming() {
 }
 
 // Enable opcodes that mostly work, but produce assertion errors (thus breaking libartd.so).
-#define ARM64_USE_EXPERIMENTAL_OPCODES 0
+#define ARM64_USE_EXPERIMENTAL_OPCODES 1
 
 // TODO: Remove this when we are able to compile everything.
 int arm64_support_list[] = {
@@ -336,54 +336,54 @@ int arm64_support_list[] = {
     kMirOpSelect,
 
 #if ARM64_USE_EXPERIMENTAL_OPCODES
-    // Instruction::MOVE_RESULT,
-    // Instruction::MOVE_RESULT_WIDE,
-    // Instruction::MOVE_RESULT_OBJECT,
-    // Instruction::CONST_STRING_JUMBO,
-    // Instruction::CONST_CLASS,
-    // Instruction::CHECK_CAST,
-    // Instruction::INSTANCE_OF,
-    // Instruction::ARRAY_LENGTH,
-    // Instruction::NEW_INSTANCE,
-    // Instruction::NEW_ARRAY,
-    // Instruction::FILLED_NEW_ARRAY,
-    // Instruction::FILLED_NEW_ARRAY_RANGE,
-    // Instruction::FILL_ARRAY_DATA,
+    Instruction::MOVE_RESULT,
+    Instruction::MOVE_RESULT_WIDE,
+    Instruction::MOVE_RESULT_OBJECT,
+    Instruction::CONST_STRING_JUMBO,
+    Instruction::CONST_CLASS,
+    Instruction::CHECK_CAST,
+    Instruction::INSTANCE_OF,
+    Instruction::ARRAY_LENGTH,
+    Instruction::NEW_INSTANCE,
+    Instruction::NEW_ARRAY,
+    Instruction::FILLED_NEW_ARRAY,
+    Instruction::FILLED_NEW_ARRAY_RANGE,
+    Instruction::FILL_ARRAY_DATA,
     // Instruction::UNUSED_3E,
     // Instruction::UNUSED_3F,
     // Instruction::UNUSED_40,
     // Instruction::UNUSED_41,
     // Instruction::UNUSED_42,
     // Instruction::UNUSED_43,
-    // Instruction::AGET,
-    // Instruction::AGET_WIDE,
-    // Instruction::AGET_OBJECT,
-    // Instruction::AGET_BOOLEAN,
-    // Instruction::AGET_BYTE,
-    // Instruction::AGET_CHAR,
-    // Instruction::AGET_SHORT,
-    // Instruction::APUT,
-    // Instruction::APUT_WIDE,
-    // Instruction::APUT_OBJECT,
-    // Instruction::APUT_BOOLEAN,
-    // Instruction::APUT_BYTE,
-    // Instruction::APUT_CHAR,
-    // Instruction::APUT_SHORT,
-    // Instruction::IPUT_WIDE,
-    // Instruction::IGET_WIDE,
-    // Instruction::SGET_WIDE,
-    // Instruction::SPUT_WIDE,
+    Instruction::AGET,
+    Instruction::AGET_WIDE,
+    Instruction::AGET_OBJECT,
+    Instruction::AGET_BOOLEAN,
+    Instruction::AGET_BYTE,
+    Instruction::AGET_CHAR,
+    Instruction::AGET_SHORT,
+    Instruction::APUT,
+    Instruction::APUT_WIDE,
+    Instruction::APUT_OBJECT,
+    Instruction::APUT_BOOLEAN,
+    Instruction::APUT_BYTE,
+    Instruction::APUT_CHAR,
+    Instruction::APUT_SHORT,
+    Instruction::IPUT_WIDE,
+    Instruction::IGET_WIDE,
+    Instruction::SGET_WIDE,
+    Instruction::SPUT_WIDE,
     Instruction::INVOKE_VIRTUAL,
     Instruction::INVOKE_SUPER,
     Instruction::INVOKE_DIRECT,
     Instruction::INVOKE_STATIC,
     Instruction::INVOKE_INTERFACE,
-    // Instruction::RETURN_VOID_BARRIER,
-    // Instruction::INVOKE_VIRTUAL_RANGE,
-    // Instruction::INVOKE_SUPER_RANGE,
-    // Instruction::INVOKE_DIRECT_RANGE,
-    // Instruction::INVOKE_STATIC_RANGE,
-    // Instruction::INVOKE_INTERFACE_RANGE,
+    Instruction::RETURN_VOID_BARRIER,
+    Instruction::INVOKE_VIRTUAL_RANGE,
+    Instruction::INVOKE_SUPER_RANGE,
+    Instruction::INVOKE_DIRECT_RANGE,
+    Instruction::INVOKE_STATIC_RANGE,
+    Instruction::INVOKE_INTERFACE_RANGE,
     // Instruction::UNUSED_79,
     // Instruction::UNUSED_7A,
     // Instruction::IGET_QUICK,
@@ -715,19 +715,9 @@ constexpr char x86_64_supported_types[] = "ZBSCILVJFD";
 static bool CanCompileShorty(const char* shorty, InstructionSet instruction_set) {
   uint32_t shorty_size = strlen(shorty);
   CHECK_GE(shorty_size, 1u);
-  // Set a limitation on maximum number of parameters.
-  // Note : there is an implied "method*" parameter, and probably "this" as well.
-  // 1 is for the return type. Currently, we only accept 2 parameters at the most.
-  // (x86_64): For now we have the same limitation. But we might want to split this
-  //           check in future into two separate cases for arm64 and x86_64.
-  if ((shorty_size > (1 + 2)) && (instruction_set != kX86_64)) {
-    return false;
-  }
 
-  const char* supported_types = arm64_supported_types;
-  if (instruction_set == kX86_64) {
-    supported_types = x86_64_supported_types;
-  }
+  const char* supported_types =
+      (instruction_set == kX86_64) ? x86_64_supported_types : arm64_supported_types;
   for (uint32_t i = 0; i < shorty_size; i++) {
     if (strchr(supported_types, shorty[i]) == nullptr) {
       return false;
@@ -745,7 +735,7 @@ static bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file,
     // Check if we can compile the prototype.
     const char* shorty = dex_file.GetMethodShorty(dex_file.GetMethodId(method_idx));
     if (!CanCompileShorty(shorty, cu.instruction_set)) {
-      VLOG(compiler) << "Unsupported shorty : " << shorty;
+      LOG(INFO) << "Unsupported shorty : " << shorty;
       return false;
     }
 
@@ -766,10 +756,10 @@ static bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file,
         if (std::find(support_list, support_list + support_list_size,
             opcode) == support_list + support_list_size) {
           if (!cu.mir_graph->IsPseudoMirOp(opcode)) {
-            VLOG(compiler) << "Unsupported dalvik byte code : "
+            LOG(INFO) << "Unsupported dalvik byte code : "
                            << mir->dalvikInsn.opcode;
           } else {
-            VLOG(compiler) << "Unsupported extended MIR opcode : "
+            LOG(INFO) << "Unsupported extended MIR opcode : "
                            << MIRGraph::extended_mir_op_names_[opcode - kMirOpFirst];
           }
           return false;
@@ -784,7 +774,7 @@ static bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file,
           const char* invoke_method_shorty = dex_file.GetMethodShorty(
               dex_file.GetMethodId(invoke_method_idx));
           if (!CanCompileShorty(invoke_method_shorty, cu.instruction_set)) {
-            VLOG(compiler) << "Unsupported to invoke '"
+            LOG(INFO) << "Unsupported to invoke '"
                            << PrettyMethod(invoke_method_idx, dex_file)
                            << "' with shorty : " << invoke_method_shorty;
             return false;
@@ -892,7 +882,10 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
     // TODO(X86_64): enable optimizations once backend is mature enough.
     cu.disable_opt = ~(uint32_t)0;
     if (cu.instruction_set == kArm64) {
-      cu.enable_debug |= (1 << kDebugCodegenDump);
+      if (PrettyMethod(method_idx, dex_file).find("testLIL") != std::string::npos) {
+        cu.verbose = true;
+        cu.enable_debug |= (1 << kDebugCodegenDump);
+      }
     }
   }
 
@@ -925,14 +918,17 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
 
   // TODO(Arm64): Remove this when we are able to compile everything.
   if (!CanCompileMethod(method_idx, dex_file, cu)) {
-    VLOG(compiler) << "Cannot compile method : " << PrettyMethod(method_idx, dex_file);
+    LOG(INFO) << "Cannot compile method : " << PrettyMethod(method_idx, dex_file);
     return nullptr;
   }
 
   cu.NewTimingSplit("MIROpt:CheckFilters");
   if (cu.mir_graph->SkipCompilation()) {
-    return NULL;
+    LOG(INFO) << "Skipping method : " << PrettyMethod(method_idx, dex_file);
+    return nullptr;
   }
+
+  LOG(INFO) << "Compiling method : " << PrettyMethod(method_idx, dex_file);
 
   /* Create the pass driver and launch it */
   PassDriverMEOpts pass_driver(&cu);

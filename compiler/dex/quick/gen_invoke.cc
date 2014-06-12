@@ -293,7 +293,7 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocation(ThreadOffset<pointer_size>
         LoadValueDirectWideFixed(arg1, r_tmp);
       } else {
         RegStorage r_tmp;
-        if (cu_->instruction_set == kX86_64) {
+        if (cu_->target64) {
           r_tmp = RegStorage::Solo64(TargetReg(kArg1).GetReg());
         } else {
           r_tmp = RegStorage::MakeRegPair(TargetReg(kArg1), TargetReg(kArg2));
@@ -304,13 +304,13 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocation(ThreadOffset<pointer_size>
   } else {
     RegStorage r_tmp;
     if (arg0.fp) {
-      if (cu_->instruction_set == kX86_64) {
+      if (cu_->target64) {
         r_tmp = RegStorage::FloatSolo64(TargetReg(kFArg0).GetReg());
       } else {
         r_tmp = RegStorage::MakeRegPair(TargetReg(kFArg0), TargetReg(kFArg1));
       }
     } else {
-      if (cu_->instruction_set == kX86_64) {
+      if (cu_->target64) {
         r_tmp = RegStorage::Solo64(TargetReg(kArg0).GetReg());
       } else {
         r_tmp = RegStorage::MakeRegPair(TargetReg(kArg0), TargetReg(kArg1));
@@ -318,7 +318,7 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocation(ThreadOffset<pointer_size>
     }
     LoadValueDirectWideFixed(arg0, r_tmp);
     if (arg1.wide == 0) {
-      if (cu_->instruction_set == kX86_64) {
+      if (cu_->target64) {
         LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg1) : TargetReg(kArg1));
       } else {
         LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg2) : TargetReg(kArg2));
@@ -326,13 +326,13 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocation(ThreadOffset<pointer_size>
     } else {
       RegStorage r_tmp;
       if (arg1.fp) {
-        if (cu_->instruction_set == kX86_64) {
+        if (cu_->target64) {
           r_tmp = RegStorage::FloatSolo64(TargetReg(kFArg1).GetReg());
         } else {
           r_tmp = RegStorage::MakeRegPair(TargetReg(kFArg2), TargetReg(kFArg3));
         }
       } else {
-        if (cu_->instruction_set == kX86_64) {
+        if (cu_->target64) {
           r_tmp = RegStorage::Solo64(TargetReg(kArg1).GetReg());
         } else {
           r_tmp = RegStorage::MakeRegPair(TargetReg(kArg2), TargetReg(kArg3));
@@ -758,7 +758,7 @@ static int NextStaticCallInsnSP(CompilationUnit* cu, CallInfo* info,
                                 const MethodReference& target_method,
                                 uint32_t unused, uintptr_t unused2,
                                 uintptr_t unused3, InvokeType unused4) {
-  if (Is64BitInstructionSet(cu->instruction_set)) {
+  if (cu->target64) {
     ThreadOffset<8> trampoline = QUICK_ENTRYPOINT_OFFSET(8, pInvokeStaticTrampolineWithAccessCheck);
     return NextInvokeInsnSP<8>(cu, info, trampoline, state, target_method, 0);
   } else {
@@ -771,7 +771,7 @@ static int NextDirectCallInsnSP(CompilationUnit* cu, CallInfo* info, int state,
                                 const MethodReference& target_method,
                                 uint32_t unused, uintptr_t unused2,
                                 uintptr_t unused3, InvokeType unused4) {
-  if (Is64BitInstructionSet(cu->instruction_set)) {
+  if (cu->target64) {
     ThreadOffset<8> trampoline = QUICK_ENTRYPOINT_OFFSET(8, pInvokeDirectTrampolineWithAccessCheck);
     return NextInvokeInsnSP<8>(cu, info, trampoline, state, target_method, 0);
   } else {
@@ -784,7 +784,7 @@ static int NextSuperCallInsnSP(CompilationUnit* cu, CallInfo* info, int state,
                                const MethodReference& target_method,
                                uint32_t unused, uintptr_t unused2,
                                uintptr_t unused3, InvokeType unused4) {
-  if (Is64BitInstructionSet(cu->instruction_set)) {
+  if (cu->target64) {
     ThreadOffset<8> trampoline = QUICK_ENTRYPOINT_OFFSET(8, pInvokeSuperTrampolineWithAccessCheck);
     return NextInvokeInsnSP<8>(cu, info, trampoline, state, target_method, 0);
   } else {
@@ -797,7 +797,7 @@ static int NextVCallInsnSP(CompilationUnit* cu, CallInfo* info, int state,
                            const MethodReference& target_method,
                            uint32_t unused, uintptr_t unused2,
                            uintptr_t unused3, InvokeType unused4) {
-  if (Is64BitInstructionSet(cu->instruction_set)) {
+  if (cu->target64) {
     ThreadOffset<8> trampoline = QUICK_ENTRYPOINT_OFFSET(8, pInvokeVirtualTrampolineWithAccessCheck);
     return NextInvokeInsnSP<8>(cu, info, trampoline, state, target_method, 0);
   } else {
@@ -811,7 +811,7 @@ static int NextInterfaceCallInsnWithAccessCheck(CompilationUnit* cu,
                                                 const MethodReference& target_method,
                                                 uint32_t unused, uintptr_t unused2,
                                                 uintptr_t unused3, InvokeType unused4) {
-  if (Is64BitInstructionSet(cu->instruction_set)) {
+  if (cu->target64) {
       ThreadOffset<8> trampoline = QUICK_ENTRYPOINT_OFFSET(8, pInvokeInterfaceTrampolineWithAccessCheck);
       return NextInvokeInsnSP<8>(cu, info, trampoline, state, target_method, 0);
     } else {
@@ -1167,7 +1167,7 @@ int Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
     // Generate memcpy
     OpRegRegImm(kOpAdd, TargetReg(kArg0), TargetReg(kSp), outs_offset);
     OpRegRegImm(kOpAdd, TargetReg(kArg1), TargetReg(kSp), start_offset);
-    if (Is64BitInstructionSet(cu_->instruction_set)) {
+    if (cu_->target64) {
       CallRuntimeHelperRegRegImm(QUICK_ENTRYPOINT_OFFSET(8, pMemcpy), TargetReg(kArg0),
                                  TargetReg(kArg1), (info->num_arg_words - 3) * 4, false);
     } else {
@@ -1519,7 +1519,7 @@ bool Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
     RegLocation rl_start = info->args[2];     // 3rd arg only present in III flavor of IndexOf.
     LoadValueDirectFixed(rl_start, reg_start);
   }
-  RegStorage r_tgt = Is64BitInstructionSet(cu_->instruction_set) ?
+  RegStorage r_tgt = cu_->target64 ?
       LoadHelper(QUICK_ENTRYPOINT_OFFSET(8, pIndexOf)) :
       LoadHelper(QUICK_ENTRYPOINT_OFFSET(4, pIndexOf));
   GenExplicitNullCheck(reg_ptr, info->opt_flags);
@@ -1560,7 +1560,7 @@ bool Mir2Lir::GenInlinedStringCompareTo(CallInfo* info) {
   LoadValueDirectFixed(rl_cmp, reg_cmp);
   RegStorage r_tgt;
   if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
-    if (Is64BitInstructionSet(cu_->instruction_set)) {
+    if (cu_->target64) {
       r_tgt = LoadHelper(QUICK_ENTRYPOINT_OFFSET(8, pStringCompareTo));
     } else {
       r_tgt = LoadHelper(QUICK_ENTRYPOINT_OFFSET(4, pStringCompareTo));
@@ -1577,7 +1577,7 @@ bool Mir2Lir::GenInlinedStringCompareTo(CallInfo* info) {
   if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
     OpReg(kOpBlx, r_tgt);
   } else {
-    if (Is64BitInstructionSet(cu_->instruction_set)) {
+    if (cu_->target64) {
       OpThreadMem(kOpBlx, QUICK_ENTRYPOINT_OFFSET(8, pStringCompareTo));
     } else {
       OpThreadMem(kOpBlx, QUICK_ENTRYPOINT_OFFSET(4, pStringCompareTo));
@@ -1829,7 +1829,7 @@ void Mir2Lir::GenInvokeNoInline(CallInfo* info) {
       }
     } else {
       // TODO: Extract?
-      if (Is64BitInstructionSet(cu_->instruction_set)) {
+      if (cu_->target64) {
         call_inst = GenInvokeNoInlineCall<8>(this, info->type);
       } else {
         call_inst = GenInvokeNoInlineCall<4>(this, info->type);
