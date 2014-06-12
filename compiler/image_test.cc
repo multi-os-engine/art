@@ -81,6 +81,8 @@ TEST_F(ImageTest, WriteRead) {
                            0, 0, "", compiler_driver_.get(), &timings);
       bool success = compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                                 !kIsTargetBuild,
+                                                // Patching is only supported on quick compiler
+                                                !kUsePortableCompiler,
                                                 class_linker->GetBootClassPath(),
                                                 &oat_writer,
                                                 oat_file.GetFile());
@@ -93,7 +95,7 @@ TEST_F(ImageTest, WriteRead) {
 
   const uintptr_t requested_image_base = ART_BASE_ADDRESS;
   {
-    ImageWriter writer(*compiler_driver_.get());
+    ImageWriter writer(*compiler_driver_.get(), true);
     bool success_image = writer.Write(image_file.GetFilename(), requested_image_base,
                                       dup_oat->GetPath(), dup_oat->GetPath());
     ASSERT_TRUE(success_image);

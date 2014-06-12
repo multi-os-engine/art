@@ -37,12 +37,13 @@ namespace art {
 // Write a Space built during compilation for use during execution.
 class ImageWriter {
  public:
-  explicit ImageWriter(const CompilerDriver& compiler_driver)
+  explicit ImageWriter(const CompilerDriver& compiler_driver, bool add_patches)
       : compiler_driver_(compiler_driver), oat_file_(NULL), image_end_(0), image_begin_(NULL),
         oat_data_begin_(NULL), interpreter_to_interpreter_bridge_offset_(0),
         interpreter_to_compiled_code_bridge_offset_(0), portable_imt_conflict_trampoline_offset_(0),
         portable_resolution_trampoline_offset_(0), quick_generic_jni_trampoline_offset_(0),
-        quick_imt_conflict_trampoline_offset_(0), quick_resolution_trampoline_offset_(0) {}
+        quick_imt_conflict_trampoline_offset_(0), quick_resolution_trampoline_offset_(0),
+        add_patches_(add_patches) {}
 
   ~ImageWriter() {}
 
@@ -150,9 +151,10 @@ class ImageWriter {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Patches references in OatFile to expect runtime addresses.
-  void PatchOatCodeAndMethods()
+  void PatchOatCodeAndMethods(File* elf_file)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void SetPatchLocation(const CompilerDriver::PatchInformation* patch, uint32_t value)
+  void SetPatchLocation(const CompilerDriver::PatchInformation* patch, uint32_t value,
+                        uintptr_t* patched_location)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   const CompilerDriver& compiler_driver_;
@@ -190,6 +192,7 @@ class ImageWriter {
   uint32_t quick_resolution_trampoline_offset_;
   uint32_t quick_to_interpreter_bridge_offset_;
 
+  bool add_patches_;
   friend class FixupVisitor;
   DISALLOW_COPY_AND_ASSIGN(ImageWriter);
 };

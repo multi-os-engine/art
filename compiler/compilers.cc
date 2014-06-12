@@ -90,9 +90,10 @@ bool QuickCompiler::WriteElf(art::File* file,
                              OatWriter* oat_writer,
                              const std::vector<const art::DexFile*>& dex_files,
                              const std::string& android_root,
-                             bool is_host) const {
+                             bool is_host,
+                             bool include_patches) const {
   return art::ElfWriterQuick::Create(file, oat_writer, dex_files, android_root, is_host,
-                                     *GetCompilerDriver());
+                                     include_patches, *GetCompilerDriver());
 }
 
 Backend* QuickCompiler::GetCodeGenerator(CompilationUnit* cu, void* compilation_unit) const {

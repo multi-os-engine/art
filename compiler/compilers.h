@@ -48,7 +48,8 @@ class QuickCompiler : public Compiler {
                 OatWriter* oat_writer,
                 const std::vector<const art::DexFile*>& dex_files,
                 const std::string& android_root,
-                bool is_host) const
+                bool is_host,
+                bool include_patches) const
     OVERRIDE
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
