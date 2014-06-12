@@ -122,6 +122,7 @@ inline void BaseMutex::RegisterAsLocked(Thread* self) {
         if (i > kAbortLock) {
           // Only abort in the check below if this is more than abort level lock.
           bad_mutexes_held = true;
+          break;
         }
       }
     }
