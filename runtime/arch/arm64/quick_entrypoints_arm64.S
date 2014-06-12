@@ -452,6 +452,31 @@ TWO_ARG_RUNTIME_EXCEPTION art_quick_throw_array_bounds, artThrowArrayBoundsFromC
      */
 NO_ARG_RUNTIME_EXCEPTION art_quick_throw_stack_overflow, artThrowStackOverflowFromCode
 
+ /*
+   * Invoke stack overflow exception from signal handler.
+   * On entry:
+   * xSELF: thread
+   * sp: address of last known frame
+   * x17: address of next valid SP below protected region in stack
+   *
+   * This is deceptively simple but hides some complexity.  It is called in the case of
+   * a stack overflow condition during implicit checks.  The signal handler has been
+   * called by the kernel due to a load from the protected stack region.  The handler
+   * works out the address of the previous frame and passes this in SP.  However there
+   * is a piece of memory somewhere below the current SP that is not accessible (the
+   * memory that caused the signal).  The signal handler works out the next
+   * accessible value of SP and passes this in x17.  This code then sets up the SP
+   * to be this new value and calls the code to create and throw the stack overflow
+   * exception.
+   */
+ENTRY art_quick_throw_stack_overflow_from_signal
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    mov x0, xSELF                     // pass Thread::Current
+    mov x1, sp                        // pass SP
+    mov sp, x17                       // move SP down to below protected region.
+    b   artThrowStackOverflowFromCode               // artThrowStackOverflowFromCode(Thread*, SP)
+END art_quick_throw_stack_overflow_from_signal
+
     /*
      * Called by managed code to create and deliver a NoSuchMethodError.
      */
