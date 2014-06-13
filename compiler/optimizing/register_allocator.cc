@@ -90,6 +90,7 @@ void RegisterAllocator::BlockRegister(Location location,
                                       size_t end,
                                       Primitive::Type type) {
   int reg = location.reg().RegId();
+  fprintf(stderr, "Block %d from %zu to %zu\n", reg, start, end);
   LiveInterval* interval = physical_register_intervals_.Get(reg);
   if (interval == nullptr) {
     interval = LiveInterval::MakeFixedInterval(allocator_, reg, type);
@@ -132,10 +133,7 @@ void RegisterAllocator::AllocateRegistersInternal() {
       Location output = locations->Out();
       size_t position = instruction->GetLifetimePosition();
       if (output.IsRegister()) {
-        // Shift the interval's start by one to account for the blocked register.
-        current->SetFrom(position + 1);
         current->SetRegister(output.reg().RegId());
-        BlockRegister(output, position, position + 1, instruction->GetType());
       } else if (output.IsStackSlot()) {
         current->SetSpillSlot(output.GetStackIndex());
       }
@@ -148,7 +146,6 @@ void RegisterAllocator::AllocateRegistersInternal() {
 
       // Add the interval to the correct list.
       if (current->HasRegister()) {
-        DCHECK(instruction->IsParameterValue());
         inactive_.Add(current);
       } else if (current->HasSpillSlot()) {
         DCHECK(instruction->IsParameterValue());
