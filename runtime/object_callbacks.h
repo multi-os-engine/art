@@ -70,6 +70,9 @@ typedef void (DelayReferenceReferentCallback)(mirror::Class* klass, mirror::Refe
 // address the object (if the object didn't move, returns the object input parameter).
 typedef mirror::Object* (IsMarkedCallback)(mirror::Object* object, void* arg)
     __attribute__((warn_unused_result));
+
+typedef bool (IsHeapReferenceMarkedCallback)(mirror::HeapReference<mirror::Object>* object,
+    void* arg) __attribute__((warn_unused_result));
 typedef void (ProcessMarkStackCallback)(void* arg);
 
 }  // namespace art

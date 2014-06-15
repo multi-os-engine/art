@@ -164,7 +164,7 @@ void SemiSpace::ProcessReferences(Thread* self) {
   TimingLogger::ScopedSplit split("ProcessReferences", &timings_);
   WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
   GetHeap()->GetReferenceProcessor()->ProcessReferences(
-      false, &timings_, clear_soft_references_, &MarkedForwardingAddressCallback,
+      false, &timings_, clear_soft_references_, &HeapReferenceMarkedCallback,
       &MarkObjectCallback, &ProcessMarkStackCallback, this);
 }
 
@@ -649,6 +649,17 @@ void SemiSpace::MarkRoots() {
   Runtime::Current()->VisitRoots(MarkRootCallback, this);
 }
 
+bool SemiSpace::HeapReferenceMarkedCallback(mirror::HeapReference<mirror::Object>* object,
+                                            void* arg) {
+  mirror::Object* obj = object->AsMirrorPtr();
+  mirror::Object* new_obj =
+      reinterpret_cast<SemiSpace*>(arg)->GetMarkedForwardAddress(obj);
+  if (new_obj != nullptr && new_obj != obj) {
+    object->Assign(new_obj);
+  }
+  return new_obj;
+}
+
 mirror::Object* SemiSpace::MarkedForwardingAddressCallback(mirror::Object* object, void* arg) {
   return reinterpret_cast<SemiSpace*>(arg)->GetMarkedForwardAddress(object);
 }
@@ -698,7 +709,7 @@ void SemiSpace::SweepLargeObjects(bool swap_bitmaps) {
 // marked, put it on the appropriate list in the heap for later processing.
 void SemiSpace::DelayReferenceReferent(mirror::Class* klass, mirror::Reference* reference) {
   heap_->GetReferenceProcessor()->DelayReferenceReferent(klass, reference,
-                                                         MarkedForwardingAddressCallback, this);
+                                                         &HeapReferenceMarkedCallback, this);
 }
 
 class SemiSpaceMarkObjectVisitor {

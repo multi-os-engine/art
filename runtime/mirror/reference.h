@@ -41,11 +41,14 @@ class MANAGED Reference : public Object {
   static MemberOffset ReferentOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Reference, referent_);
   }
-
   template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   Object* GetReferent() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return GetFieldObjectVolatile<Object, kDefaultVerifyFlags, kReadBarrierOption>(
         ReferentOffset());
+  }
+  template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
+  HeapReference<Object>* GetReferentReferenceAddr() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetFieldObjectReferenceAddr<kDefaultVerifyFlags>(ReferentOffset());
   }
   template<bool kTransactionActive>
   void SetReferent(Object* referent) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -55,7 +58,6 @@ class MANAGED Reference : public Object {
   void ClearReferent() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     SetFieldObjectVolatile<kTransactionActive>(ReferentOffset(), nullptr);
   }
-
   // Volatile read/write is not necessary since the java pending next is only accessed from
   // the java threads for cleared references. Once these cleared references have a null referent,
   // we never end up reading their pending next from the GC again.
