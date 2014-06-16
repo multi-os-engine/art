@@ -3006,6 +3006,56 @@ mirror::ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(uint32_t dex_meth
   return res_method;
 }
 
+void MethodVerifier::VerifyInvocationArgsUnresolvedMethod(const Instruction* inst,
+                                                          MethodType method_type,
+                                                          bool is_range) {
+  // As the method may not have been resolved, make this static check against what we expect.
+  // The main reason for this code block is to fail hard when we find an illegal use, e.g.,
+  // wrong number of arguments or wrong primitive types, even if the method could not be resolved.
+  const uint32_t method_idx = (is_range) ? inst->VRegB_3rc() : inst->VRegB_35c();
+  const size_t expected_args = (is_range) ? inst->VRegA_3rc() : inst->VRegA_35c();
+  uint32_t arg[5];
+  if (!is_range) {
+    inst->GetVarArgs(arg);
+  }
+  uint32_t sig_registers = method_type == METHOD_STATIC ? 0 : 1;
+  DexFileParameterIterator it(*dex_file_,
+                              dex_file_->GetProtoId(dex_file_->GetMethodId(method_idx).proto_idx_));
+
+  for ( ; it.HasNext(); it.Next()) {
+    if (sig_registers >= expected_args) {
+      Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Rejecting invocation, expected " << inst->VRegA() <<
+          " arguments, found " << sig_registers << " or more.";
+      return;
+    }
+
+    const char* param_descriptor = it.GetDescriptor();
+    const RegType& reg_type = reg_types_.FromDescriptor(class_loader_->Get(), param_descriptor,
+                                                        false);
+    uint32_t get_reg = is_range ? inst->VRegC_3rc() + static_cast<uint32_t>(sig_registers) :
+            arg[sig_registers];
+    if (reg_type.IsIntegralTypes()) {
+      const RegType& src_type = work_line_->GetRegisterType(get_reg);
+      if (!src_type.IsIntegralTypes()) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "register v" << get_reg << " has type " << src_type
+            << " but expected " << reg_type;
+        return;
+      }
+    } else if (!work_line_->VerifyRegisterType(get_reg, reg_type)) {
+      // Continue on soft failures. We need to find possible hard failures to avoid problems in the
+      // compiler.
+      if (have_pending_hard_failure_) {
+        return;
+      }
+    }
+    sig_registers += reg_type.IsLongOrDoubleTypes() ?  2 : 1;
+  }
+  if (expected_args != sig_registers) {
+    Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Rejecting invocation, expected " << expected_args <<
+        " arguments, found " << sig_registers;
+  }
+}
+
 mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
                                                              MethodType method_type,
                                                              bool is_range,
@@ -3014,28 +3064,13 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
   // we're making.
   const uint32_t method_idx = (is_range) ? inst->VRegB_3rc() : inst->VRegB_35c();
 
-  // As the method may not have been resolved, make this static check against what we expect.
-  const DexFile::MethodId& method_id = dex_file_->GetMethodId(method_idx);
-  uint32_t shorty_idx = dex_file_->GetProtoId(method_id.proto_idx_).shorty_idx_;
-  uint32_t shorty_len;
-  const char* descriptor = dex_file_->StringDataAndUtf16LengthByIdx(shorty_idx, &shorty_len);
-  int32_t sig_registers = method_type == METHOD_STATIC ? 0 : 1;
-  for (size_t i = 1; i < shorty_len; i++) {
-    if (descriptor[i] == 'J' || descriptor[i] == 'D') {
-      sig_registers += 2;
-    } else {
-      sig_registers++;
-    }
-  }
-  if (inst->VRegA() != sig_registers) {
-    Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Rejecting invocation, expected " << inst->VRegA() <<
-        " arguments, found " << sig_registers;
-    return nullptr;
-  }
-
   mirror::ArtMethod* res_method = ResolveMethodAndCheckAccess(method_idx, method_type);
   if (res_method == NULL) {  // error or class is unresolved
-    return NULL;
+    // Check what we can statically.
+    if (!have_pending_hard_failure_) {
+      VerifyInvocationArgsUnresolvedMethod(inst, method_type, is_range);
+    }
+    return nullptr;
   }
 
   // If we're using invoke-super(method), make sure that the executing method's class' superclass
@@ -3047,7 +3082,7 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
       Fail(VERIFY_ERROR_NO_METHOD) << "unknown super class in invoke-super from "
                                    << PrettyMethod(dex_method_idx_, *dex_file_)
                                    << " to super " << PrettyMethod(res_method);
-      return NULL;
+      return nullptr;
     }
     mirror::Class* super_klass = super.GetClass();
     if (res_method->GetMethodIndex() >= super_klass->GetVTable()->GetLength()) {
@@ -3056,7 +3091,7 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
                                    << " to super " << super
                                    << "." << res_method->GetName()
                                    << res_method->GetSignature();
-      return NULL;
+      return nullptr;
     }
   }
   // We use vAA as our expected arg count, rather than res_method->insSize, because we need to
@@ -3068,7 +3103,7 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
   if (expected_args > code_item_->outs_size_) {
     Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "invalid argument count (" << expected_args
         << ") exceeds outsSize (" << code_item_->outs_size_ << ")";
-    return NULL;
+    return nullptr;
   }
 
   /*
@@ -3080,11 +3115,11 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
   if (!res_method->IsStatic()) {
     const RegType& actual_arg_type = work_line_->GetInvocationThis(inst, is_range);
     if (actual_arg_type.IsConflict()) {  // GetInvocationThis failed.
-      return NULL;
+      return nullptr;
     }
     if (actual_arg_type.IsUninitializedReference() && !res_method->IsConstructor()) {
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "'this' arg must be initialized";
-      return NULL;
+      return nullptr;
     }
     if (method_type != METHOD_INTERFACE && !actual_arg_type.IsZero()) {
       mirror::Class* klass = res_method->GetDeclaringClass();
@@ -3095,7 +3130,11 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
         Fail(actual_arg_type.IsUnresolvedTypes() ? VERIFY_ERROR_NO_CLASS:
             VERIFY_ERROR_BAD_CLASS_SOFT) << "'this' argument '" << actual_arg_type
             << "' not instance of '" << res_method_class << "'";
-        return NULL;
+        // Need to continue on soft failures, as the compiler might rely on some hard failures
+        // later.
+        if (have_pending_hard_failure_) {
+          return nullptr;
+        }
       }
     }
     actual_args++;
@@ -3105,7 +3144,7 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
    * have been verified, so we can't assume it's properly formed.
    */
   const DexFile::TypeList* params = res_method->GetParameterTypeList();
-  size_t params_size = params == NULL ? 0 : params->Size();
+  size_t params_size = params == nullptr ? 0 : params->Size();
   uint32_t arg[5];
   if (!is_range) {
     inst->GetVarArgs(arg);
@@ -3115,14 +3154,14 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Rejecting invalid call to '" << PrettyMethod(res_method)
           << "'. Expected " << expected_args << " arguments, processing argument " << actual_args
           << " (where longs/doubles count twice).";
-      return NULL;
+      return nullptr;
     }
     const char* descriptor =
         res_method->GetTypeDescriptorFromTypeIdx(params->GetTypeItem(param_index).type_idx_);
-    if (descriptor == NULL) {
+    if (descriptor == nullptr) {
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Rejecting invocation of " << PrettyMethod(res_method)
           << " missing signature component";
-      return NULL;
+      return nullptr;
     }
     const RegType& reg_type = reg_types_.FromDescriptor(class_loader_->Get(), descriptor, false);
     uint32_t get_reg = is_range ? inst->VRegC_3rc() + actual_args : arg[actual_args];
@@ -3134,14 +3173,18 @@ mirror::ArtMethod* MethodVerifier::VerifyInvocationArgs(const Instruction* inst,
         return res_method;
       }
     } else if (!work_line_->VerifyRegisterType(get_reg, reg_type)) {
-      return res_method;
+      // Need to continue on soft failures, as a later parameter might produce a hard one that the
+      // compiler relies on.
+      if (have_pending_hard_failure_) {
+        return res_method;
+      }
     }
     actual_args = reg_type.IsLongOrDoubleTypes() ? actual_args + 2 : actual_args + 1;
   }
   if (actual_args != expected_args) {
     Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Rejecting invocation of " << PrettyMethod(res_method)
         << " expected " << expected_args << " arguments, found " << actual_args;
-    return NULL;
+    return nullptr;
   } else {
     return res_method;
   }
