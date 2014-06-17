@@ -89,6 +89,10 @@ struct CompilationUnit {
   std::unique_ptr<Backend> cg;           // Target-specific codegen.
   TimingLogger timings;
   bool print_pass;                 // Do we want to print a pass or not?
+
+  bool explicit_null_checks_;
+  bool explicit_so_checks_;
+  bool explicit_suspend_checks_;
 };
 
 }  // namespace art

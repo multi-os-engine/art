@@ -106,7 +106,10 @@ CompilationUnit::CompilationUnit(ArenaPool* pool)
     mir_graph(nullptr),
     cg(nullptr),
     timings("QuickCompiler", true, false),
-    print_pass(false) {
+    print_pass(false),
+    explicit_null_checks_(true),
+    explicit_so_checks_(true),
+    explicit_suspend_checks_(true) {
 }
 
 CompilationUnit::~CompilationUnit() {
@@ -849,6 +852,14 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
 
   if (cu.verbose) {
     cu.enable_debug |= (1 << kDebugCodegenDump);
+  }
+
+  // TODO: Fix the implicit check arguments. They need to come as options from somewhere.
+  if (cu.instruction_set == kRuntimeISA) {
+    Runtime* runtime = Runtime::Current();
+    cu.explicit_null_checks_ = runtime->ExplicitNullChecks();
+    cu.explicit_so_checks_ = runtime->ExplicitStackOverflowChecks();
+    cu.explicit_suspend_checks_ = runtime->ExplicitSuspendChecks();
   }
 
   /*
