@@ -1120,16 +1120,14 @@ void Mir2Lir::CountRefs(RefCounts* core_counts, RefCounts* fp_counts, size_t num
     RegLocation loc = mir_graph_->reg_location_[i];
     RefCounts* counts = loc.fp ? fp_counts : core_counts;
     int p_map_idx = SRegToPMap(loc.s_reg_low);
-    if (loc.fp) {
+    if (loc.fp || !IsInexpensiveConstant(loc)) {
       if (loc.wide) {
-        // Treat doubles as a unit, using upper half of fp_counts array.
-        counts[p_map_idx + num_regs].count += mir_graph_->GetUseCount(i);
-        i++;
-      } else {
-        counts[p_map_idx].count += mir_graph_->GetUseCount(i);
+        p_map_idx += num_regs;
       }
-    } else if (!IsInexpensiveConstant(loc)) {
       counts[p_map_idx].count += mir_graph_->GetUseCount(i);
+    }
+    if (loc.wide) {
+      i++;
     }
   }
 }
@@ -1149,8 +1147,8 @@ static int SortCounts(const void *val1, const void *val2) {
 void Mir2Lir::DumpCounts(const RefCounts* arr, int size, const char* msg) {
   LOG(INFO) << msg;
   for (int i = 0; i < size; i++) {
-    if ((arr[i].s_reg & STARTING_DOUBLE_SREG) != 0) {
-      LOG(INFO) << "s_reg[D" << (arr[i].s_reg & ~STARTING_DOUBLE_SREG) << "]: " << arr[i].count;
+    if ((arr[i].s_reg & STARTING_64BIT_SREG) != 0) {
+      LOG(INFO) << "s_reg[Q" << (arr[i].s_reg & ~STARTING_64BIT_SREG) << "]: " << arr[i].count;
     } else {
       LOG(INFO) << "s_reg[" << arr[i].s_reg << "]: " << arr[i].count;
     }
@@ -1184,7 +1182,7 @@ void Mir2Lir::DoPromotion() {
    * to describe register live ranges for GC.
    */
   RefCounts *core_regs =
-      static_cast<RefCounts*>(arena_->Alloc(sizeof(RefCounts) * num_regs,
+      static_cast<RefCounts*>(arena_->Alloc(sizeof(RefCounts) * num_regs * 2,
                                             kArenaAllocRegAlloc));
   RefCounts *FpRegs =
       static_cast<RefCounts *>(arena_->Alloc(sizeof(RefCounts) * num_regs * 2,
@@ -1198,18 +1196,28 @@ void Mir2Lir::DoPromotion() {
   for (unsigned int ct_idx = 0; ct_idx < mir_graph_->GetNumUsedCompilerTemps(); ct_idx++) {
     CompilerTemp* ct = mir_graph_->GetCompilerTemp(ct_idx);
     core_regs[dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
+    core_regs[num_regs + dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
     FpRegs[dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
     FpRegs[num_regs + dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
   }
 
-  // Duplicate in upper half to represent possible fp double starting sregs.
+  // Duplicate in upper half to represent possible 64-bit starting sregs.
   for (int i = 0; i < num_regs; i++) {
-    FpRegs[num_regs + i].s_reg = FpRegs[i].s_reg | STARTING_DOUBLE_SREG;
+    core_regs[num_regs + i].s_reg = core_regs[i].s_reg | STARTING_64BIT_SREG;
+    FpRegs[num_regs + i].s_reg = FpRegs[i].s_reg | STARTING_64BIT_SREG;
   }
 
   // Sum use counts of SSA regs by original Dalvik vreg.
   CountRefs(core_regs, FpRegs, num_regs);
 
+  // Update core regs with collected long info
+  for (int i = 0; i < num_regs; i++) {
+    core_regs[i].count += core_regs[num_regs + i].count;
+    if (cu_->instruction_set != kX86_64) {
+      core_regs[i + 1].count += core_regs[num_regs + i].count;
+    }
+    core_regs[num_regs + i].count = 0;
+  }
 
   // Sort the count arrays
   qsort(core_regs, num_regs, sizeof(RefCounts), SortCounts);
@@ -1223,11 +1231,11 @@ void Mir2Lir::DoPromotion() {
   if (!(cu_->disable_opt & (1 << kPromoteRegs))) {
     // Promote FpRegs
     for (int i = 0; (i < (num_regs * 2)) && (FpRegs[i].count >= promotion_threshold); i++) {
-      int p_map_idx = SRegToPMap(FpRegs[i].s_reg & ~STARTING_DOUBLE_SREG);
-      if ((FpRegs[i].s_reg & STARTING_DOUBLE_SREG) != 0) {
+      int p_map_idx = SRegToPMap(FpRegs[i].s_reg & ~STARTING_64BIT_SREG);
+      if ((FpRegs[i].s_reg & STARTING_64BIT_SREG) != 0) {
         if ((promotion_map_[p_map_idx].fp_location != kLocPhysReg) &&
             (promotion_map_[p_map_idx + 1].fp_location != kLocPhysReg)) {
-          int low_sreg = FpRegs[i].s_reg & ~STARTING_DOUBLE_SREG;
+          int low_sreg = FpRegs[i].s_reg & ~STARTING_64BIT_SREG;
           // Ignore result - if can't alloc double may still be able to alloc singles.
           AllocPreservedDouble(low_sreg);
         }
@@ -1242,10 +1250,11 @@ void Mir2Lir::DoPromotion() {
     // Promote core regs
     for (int i = 0; (i < num_regs) &&
             (core_regs[i].count >= promotion_threshold); i++) {
-      int p_map_idx = SRegToPMap(core_regs[i].s_reg);
+      int low_sreg = core_regs[i].s_reg & ~STARTING_64BIT_SREG;
+      int p_map_idx = SRegToPMap(low_sreg);
       if (promotion_map_[p_map_idx].core_location !=
           kLocPhysReg) {
-        RegStorage reg = AllocPreservedCoreReg(core_regs[i].s_reg);
+        RegStorage reg = AllocPreservedCoreReg(low_sreg);
         if (!reg.Valid()) {
            break;  // No more left
         }
@@ -1293,13 +1302,21 @@ void Mir2Lir::DoPromotion() {
           }
         }
       } else {
-        if ((promotion_map_[p_map_idx].core_location == kLocPhysReg)
-           && (promotion_map_[p_map_idx+1].core_location ==
-           kLocPhysReg)) {
-          curr->location = kLocPhysReg;
-          curr->reg = RegStorage(RegStorage::k64BitPair, promotion_map_[p_map_idx].core_reg,
-                                 promotion_map_[p_map_idx+1].core_reg);
-          curr->home = true;
+        if (cu_->instruction_set == kX86_64) {
+          if (promotion_map_[p_map_idx].core_location == kLocPhysReg) {
+            curr->location = kLocPhysReg;
+            curr->reg = RegStorage::Solo64(promotion_map_[p_map_idx].core_reg);
+            curr->home = true;
+          }
+        } else {
+          if ((promotion_map_[p_map_idx].core_location == kLocPhysReg)
+             && (promotion_map_[p_map_idx+1].core_location ==
+             kLocPhysReg)) {
+            curr->location = kLocPhysReg;
+            curr->reg = RegStorage(RegStorage::k64BitPair, promotion_map_[p_map_idx].core_reg,
+                                   promotion_map_[p_map_idx+1].core_reg);
+            curr->home = true;
+          }
         }
       }
     }
