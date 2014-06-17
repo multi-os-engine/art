@@ -197,8 +197,8 @@ Mir2Lir* X86_64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_grap
     high_reg = (both_regs >> 8) & 0xff; \
   } while (false)
 
-// Mask to denote sreg as the start of a double.  Must not interfere with low 16 bits.
-#define STARTING_DOUBLE_SREG 0x10000
+// Mask to denote sreg as the start of a 64-bit.  Must not interfere with low 16 bits.
+#define STARTING_64BIT_SREG 0x10000
 
 // TODO: replace these macros
 #define SLOW_FIELD_PATH (cu_->enable_debug & (1 << kDebugSlowFieldPath))
