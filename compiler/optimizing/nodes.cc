@@ -445,4 +445,20 @@ void HGraphVisitor::VisitBasicBlock(HBasicBlock* block) {
   }
 }
 
+
+bool HCondition::NeedsMaterialized() const {
+  if (NumberOfUses() != 1) {
+    return true;
+  }
+  HUseListNode<HInstruction>* uses = GetUses();
+  HInstruction* user = uses->GetUser();
+  if (!user->IsIfInstruction()) {
+    return true;
+  }
+  if (GetNext() != user) {
+    return true;
+  }
+  return false;
+}
+
 }  // namespace art

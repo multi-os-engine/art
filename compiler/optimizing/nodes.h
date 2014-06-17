@@ -38,6 +38,15 @@ static const int kDefaultNumberOfSuccessors = 2;
 static const int kDefaultNumberOfPredecessors = 2;
 static const int kDefaultNumberOfBackEdges = 1;
 
+enum IfCondition {
+  kCondEQ,
+  kCondNE,
+  kCondLT,
+  kCondLE,
+  kCondGT,
+  kCondGE,
+};
+
 class HInstructionList {
  public:
   HInstructionList() : first_instruction_(nullptr), last_instruction_(nullptr) {}
@@ -382,6 +391,11 @@ class HBasicBlock : public ArenaObject {
 #define FOR_EACH_INSTRUCTION(M)                            \
   M(Add)                                                   \
   M(Equal)                                                 \
+  M(NotEqual)                                              \
+  M(LessThan)                                              \
+  M(LessThanOrEqual)                                       \
+  M(GreaterThan)                                           \
+  M(GreaterThanOrEqual)                                    \
   M(Exit)                                                  \
   M(Goto)                                                  \
   M(If)                                                    \
@@ -399,6 +413,7 @@ class HBasicBlock : public ArenaObject {
   M(ReturnVoid)                                            \
   M(StoreLocal)                                            \
   M(Sub)                                                   \
+
 
 #define FORWARD_DECLARATION(type) class H##type;
 FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
@@ -506,6 +521,10 @@ class HInstruction : public ArenaObject {
   void SetLocations(LocationSummary* locations) { locations_ = locations; }
 
   void ReplaceWith(HInstruction* instruction);
+
+  virtual bool NeedsMaterialized() const { return true; }
+  virtual bool IsCondition() const { return false; }
+  virtual bool IsIfInstruction() const { return false; }
 
 #define INSTRUCTION_TYPE_CHECK(type)                                           \
   bool Is##type() { return (As##type() != nullptr); }                          \
@@ -738,6 +757,18 @@ class HTemplateInstruction: public HInstruction {
   friend class SsaBuilder;
 };
 
+template<intptr_t N>
+class HExpression: public HTemplateInstruction<N> {
+ public:
+  explicit HExpression<N>(Primitive::Type type) : type_(type) { }
+  virtual ~HExpression() { }
+
+  virtual Primitive::Type GetType() const { return type_; }
+
+ private:
+  const Primitive::Type type_;
+};
+
 // Represents dex's RETURN_VOID opcode. A HReturnVoid is a control flow
 // instruction that branches to the exit block.
 class HReturnVoid : public HTemplateInstruction<0> {
@@ -800,11 +831,12 @@ class HGoto : public HTemplateInstruction<0> {
   DISALLOW_COPY_AND_ASSIGN(HGoto);
 };
 
+
 // Conditional branch. A block ending with an HIf instruction must have
 // two successors.
 class HIf : public HTemplateInstruction<1> {
  public:
-  explicit HIf(HInstruction* input) {
+  explicit HIf(HInstruction* input, IfCondition cond) : cond_(cond) {
     SetRawInputAt(0, input);
   }
 
@@ -818,50 +850,133 @@ class HIf : public HTemplateInstruction<1> {
 
   virtual bool IsControlFlow() const { return true; }
 
+  IfCondition GetCondition() const { return cond_; }
+
   DECLARE_INSTRUCTION(If);
 
+  virtual bool IsIfInstruction() const { return true; }
+
  private:
+  const IfCondition cond_;
+
   DISALLOW_COPY_AND_ASSIGN(HIf);
 };
 
-class HBinaryOperation : public HTemplateInstruction<2> {
+class HBinaryOperation : public HExpression<2> {
  public:
   HBinaryOperation(Primitive::Type result_type,
                    HInstruction* left,
-                   HInstruction* right) : result_type_(result_type) {
+                   HInstruction* right) : HExpression(result_type) {
     SetRawInputAt(0, left);
     SetRawInputAt(1, right);
   }
 
   HInstruction* GetLeft() const { return InputAt(0); }
   HInstruction* GetRight() const { return InputAt(1); }
-  Primitive::Type GetResultType() const { return result_type_; }
+  Primitive::Type GetResultType() const { return GetType(); }
 
   virtual bool IsCommutative() { return false; }
-  virtual Primitive::Type GetType() const { return GetResultType(); }
 
  private:
-  const Primitive::Type result_type_;
-
   DISALLOW_COPY_AND_ASSIGN(HBinaryOperation);
 };
 
-
-// Instruction to check if two inputs are equal to each other.
-class HEqual : public HBinaryOperation {
+class HUnaryOperation : public HExpression<1> {
  public:
-  HEqual(HInstruction* first, HInstruction* second)
+  HUnaryOperation(Primitive::Type result_type,
+                   HInstruction* sub) : HExpression(result_type) {
+    SetRawInputAt(0, sub);
+  }
+
+  HInstruction* GetSub() const { return InputAt(0); }
+  Primitive::Type GetResultType() const { return GetType(); }
+
+  virtual bool IsCommutative() { return false; }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HUnaryOperation);
+};
+
+class HCondition : public HBinaryOperation {
+ public:
+  HCondition(HInstruction* first, HInstruction* second)
       : HBinaryOperation(Primitive::kPrimBoolean, first, second) {}
 
   virtual bool IsCommutative() { return true; }
+  virtual bool IsCondition() const { return true; }
+  virtual bool NeedsMaterialized() const;
 
-  virtual Primitive::Type GetType() const { return Primitive::kPrimBoolean; }
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HCondition);
+};
+
+// Instruction to check if two inputs are equal to each other.
+class HEqual : public HCondition {
+ public:
+  HEqual(HInstruction* first, HInstruction* second)
+      : HCondition(first, second) {}
 
   DECLARE_INSTRUCTION(Equal);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HEqual);
 };
+
+class HNotEqual : public HCondition {
+ public:
+  HNotEqual(HInstruction* first, HInstruction* second)
+      : HCondition(first, second) {}
+
+  DECLARE_INSTRUCTION(NotEqual);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HNotEqual);
+};
+
+class HLessThan : public HCondition {
+ public:
+  HLessThan(HInstruction* first, HInstruction* second)
+      : HCondition(first, second) {}
+
+  DECLARE_INSTRUCTION(LessThan);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HLessThan);
+};
+
+class HLessThanOrEqual : public HCondition {
+ public:
+  HLessThanOrEqual(HInstruction* first, HInstruction* second)
+      : HCondition(first, second) {}
+
+  DECLARE_INSTRUCTION(LessThanOrEqual);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HLessThanOrEqual);
+};
+
+class HGreaterThan : public HCondition {
+ public:
+  HGreaterThan(HInstruction* first, HInstruction* second)
+      : HCondition(first, second) {}
+
+  DECLARE_INSTRUCTION(GreaterThan);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HGreaterThan);
+};
+
+class HGreaterThanOrEqual : public HCondition {
+ public:
+  HGreaterThanOrEqual(HInstruction* first, HInstruction* second)
+      : HCondition(first, second) {}
+
+  DECLARE_INSTRUCTION(GreaterThanOrEqual);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HGreaterThanOrEqual);
+};
+
 
 // A local in the graph. Corresponds to a Dex register.
 class HLocal : public HTemplateInstruction<0> {
@@ -880,21 +995,17 @@ class HLocal : public HTemplateInstruction<0> {
 };
 
 // Load a given local. The local is an input of this instruction.
-class HLoadLocal : public HTemplateInstruction<1> {
+class HLoadLocal : public HExpression<1> {
  public:
-  explicit HLoadLocal(HLocal* local, Primitive::Type type) : type_(type) {
+  explicit HLoadLocal(HLocal* local, Primitive::Type type) : HExpression(type) {
     SetRawInputAt(0, local);
   }
-
-  virtual Primitive::Type GetType() const { return type_; }
 
   HLocal* GetLocal() const { return reinterpret_cast<HLocal*>(InputAt(0)); }
 
   DECLARE_INSTRUCTION(LoadLocal);
 
  private:
-  const Primitive::Type type_;
-
   DISALLOW_COPY_AND_ASSIGN(HLoadLocal);
 };
 
@@ -917,12 +1028,11 @@ class HStoreLocal : public HTemplateInstruction<2> {
 
 // Constants of the type int. Those can be from Dex instructions, or
 // synthesized (for example with the if-eqz instruction).
-class HIntConstant : public HTemplateInstruction<0> {
+class HIntConstant : public HExpression<0> {
  public:
-  explicit HIntConstant(int32_t value) : value_(value) { }
+  explicit HIntConstant(int32_t value) : HExpression(Primitive::kPrimInt), value_(value) { }
 
   int32_t GetValue() const { return value_; }
-  virtual Primitive::Type GetType() const { return Primitive::kPrimInt; }
 
   DECLARE_INSTRUCTION(IntConstant);
 
@@ -932,9 +1042,9 @@ class HIntConstant : public HTemplateInstruction<0> {
   DISALLOW_COPY_AND_ASSIGN(HIntConstant);
 };
 
-class HLongConstant : public HTemplateInstruction<0> {
+class HLongConstant : public HExpression<0> {
  public:
-  explicit HLongConstant(int64_t value) : value_(value) { }
+  explicit HLongConstant(int64_t value) : HExpression(Primitive::kPrimLong), value_(value) { }
 
   int64_t GetValue() const { return value_; }
 
@@ -1008,14 +1118,13 @@ class HInvokeStatic : public HInvoke {
   DISALLOW_COPY_AND_ASSIGN(HInvokeStatic);
 };
 
-class HNewInstance : public HTemplateInstruction<0> {
+class HNewInstance : public HExpression<0> {
  public:
-  HNewInstance(uint32_t dex_pc, uint16_t type_index) : dex_pc_(dex_pc), type_index_(type_index) {}
+  HNewInstance(uint32_t dex_pc, uint16_t type_index) : HExpression(Primitive::kPrimNot),
+    dex_pc_(dex_pc), type_index_(type_index) {}
 
   uint32_t GetDexPc() const { return dex_pc_; }
   uint16_t GetTypeIndex() const { return type_index_; }
-
-  virtual Primitive::Type GetType() const { return Primitive::kPrimNot; }
 
   // Calls runtime so needs an environment.
   virtual bool NeedsEnvironment() const { return true; }
@@ -1057,14 +1166,12 @@ class HSub : public HBinaryOperation {
 
 // The value of a parameter in this method. Its location depends on
 // the calling convention.
-class HParameterValue : public HTemplateInstruction<0> {
+class HParameterValue : public HExpression<0> {
  public:
   HParameterValue(uint8_t index, Primitive::Type parameter_type)
-      : index_(index), parameter_type_(parameter_type) {}
+      : HExpression(parameter_type), index_(index) {}
 
   uint8_t GetIndex() const { return index_; }
-
-  virtual Primitive::Type GetType() const { return parameter_type_; }
 
   DECLARE_INSTRUCTION(ParameterValue);
 
@@ -1073,18 +1180,14 @@ class HParameterValue : public HTemplateInstruction<0> {
   // than HGraph::number_of_in_vregs_;
   const uint8_t index_;
 
-  const Primitive::Type parameter_type_;
-
   DISALLOW_COPY_AND_ASSIGN(HParameterValue);
 };
 
-class HNot : public HTemplateInstruction<1> {
+class HNot : public HExpression<1> {
  public:
-  explicit HNot(HInstruction* input) {
+  explicit HNot(HInstruction* input) : HExpression(Primitive::kPrimBoolean) {
     SetRawInputAt(0, input);
   }
-
-  virtual Primitive::Type GetType() const { return Primitive::kPrimBoolean; }
 
   DECLARE_INSTRUCTION(Not);
 

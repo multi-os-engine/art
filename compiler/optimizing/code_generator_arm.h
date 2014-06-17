@@ -20,7 +20,7 @@
 #include "code_generator.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
-#include "utils/arm/assembler_arm32.h"
+#include "utils/arm/assembler_thumb2.h"
 
 namespace art {
 namespace arm {
@@ -32,6 +32,20 @@ static constexpr size_t kArmWordSize = 4;
 static constexpr Register kParameterCoreRegisters[] = { R1, R2, R3 };
 static constexpr RegisterPair kParameterCorePairRegisters[] = { R1_R2, R2_R3 };
 static constexpr size_t kParameterCoreRegistersLength = arraysize(kParameterCoreRegisters);
+
+inline Condition ARMCondition(IfCondition cond) {
+  switch (cond) {
+  case kCondEQ: return EQ;
+  case kCondNE: return NE;
+  case kCondLT: return LT;
+  case kCondLE: return LE;
+  case kCondGT: return GT;
+  case kCondGE: return GE;
+  default:
+    LOG(FATAL) << "Unknown if condition";
+  }
+  return EQ;        // Unreachable.
+}
 
 class InvokeDexCallingConvention : public CallingConvention<Register> {
  public:
@@ -96,6 +110,9 @@ class LocationsBuilderARM : public HGraphVisitor {
  private:
   CodeGeneratorARM* const codegen_;
   InvokeDexCallingConventionVisitor parameter_visitor_;
+
+  // Common visitors.
+  virtual void VisitCondition(HCondition* instr);
 
   DISALLOW_COPY_AND_ASSIGN(LocationsBuilderARM);
 };
@@ -180,7 +197,7 @@ class CodeGeneratorARM : public CodeGenerator {
   LocationsBuilderARM location_builder_;
   InstructionCodeGeneratorARM instruction_visitor_;
   ParallelMoveResolverARM move_resolver_;
-  Arm32Assembler assembler_;
+  Thumb2Assembler assembler_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorARM);
 };

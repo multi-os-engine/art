@@ -30,7 +30,7 @@ static HBasicBlock* createIfBlock(HGraph* graph, ArenaAllocator* allocator) {
   graph->AddBlock(if_block);
   HInstruction* instr = new (allocator) HIntConstant(4);
   if_block->AddInstruction(instr);
-  instr = new (allocator) HIf(instr);
+  instr = new (allocator) HIf(instr, kCondEQ);
   if_block->AddInstruction(instr);
   return if_block;
 }

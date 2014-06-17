@@ -51,7 +51,9 @@ void CodeGenerator::CompileBaseline(CodeAllocator* allocator) {
       HInstruction* current = it.Current();
       current->Accept(location_builder);
       InitLocations(current);
-      current->Accept(instruction_visitor);
+      if (current->NeedsMaterialized()) {
+        current->Accept(instruction_visitor);
+      }
     }
   }
 
@@ -76,7 +78,9 @@ void CodeGenerator::CompileOptimized(CodeAllocator* allocator) {
     HGraphVisitor* instruction_visitor = GetInstructionVisitor();
     for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
       HInstruction* current = it.Current();
-      current->Accept(instruction_visitor);
+      if (current->NeedsMaterialized()) {
+        current->Accept(instruction_visitor);
+      }
     }
   }
 

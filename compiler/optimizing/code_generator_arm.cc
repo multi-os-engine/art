@@ -424,28 +424,95 @@ void LocationsBuilderARM::VisitIf(HIf* if_instr) {
 }
 
 void InstructionCodeGeneratorARM::VisitIf(HIf* if_instr) {
-  // TODO: Generate the input as a condition, instead of materializing in a register.
-  __ cmp(if_instr->GetLocations()->InAt(0).AsArm().AsCoreRegister(), ShifterOperand(0));
-  __ b(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()), EQ);
-  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfTrueSuccessor())) {
-    __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  HInstruction* condition = if_instr->InputAt(0);
+  CHECK(condition->IsCondition());
+  __ cmp(condition->GetLocations()->InAt(0).AsArm().AsCoreRegister(),
+         ShifterOperand(condition->GetLocations()->InAt(1).AsArm().AsCoreRegister()));
+  __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()), ARMCondition(if_instr->GetCondition()));
+  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor())) {
+    __ b(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
   }
 }
 
-void LocationsBuilderARM::VisitEqual(HEqual* equal) {
-  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(equal);
+
+void LocationsBuilderARM::VisitCondition(HCondition* comp) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(comp);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
   locations->SetOut(Location::RequiresRegister());
-  equal->SetLocations(locations);
+  comp->SetLocations(locations);
 }
 
-void InstructionCodeGeneratorARM::VisitEqual(HEqual* equal) {
-  LocationSummary* locations = equal->GetLocations();
+void LocationsBuilderARM::VisitEqual(HEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitEqual(HEqual* comp) {
+  LocationSummary* locations = comp->GetLocations();
   __ teq(locations->InAt(0).AsArm().AsCoreRegister(),
          ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
   __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(1), EQ);
   __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(0), NE);
+}
+
+void LocationsBuilderARM::VisitNotEqual(HNotEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitNotEqual(HNotEqual* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  __ teq(locations->InAt(0).AsArm().AsCoreRegister(),
+         ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(1), NE);
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(0), EQ);
+}
+
+void LocationsBuilderARM::VisitLessThan(HLessThan* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitLessThan(HLessThan* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  __ cmp(locations->InAt(0).AsArm().AsCoreRegister(),
+         ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(1), LT);
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(0), GE);
+}
+
+void LocationsBuilderARM::VisitLessThanOrEqual(HLessThanOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitLessThanOrEqual(HLessThanOrEqual* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  __ cmp(locations->InAt(0).AsArm().AsCoreRegister(),
+         ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(1), LE);
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(0), GT);
+}
+
+void LocationsBuilderARM::VisitGreaterThan(HGreaterThan* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitGreaterThan(HGreaterThan* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  __ cmp(locations->InAt(0).AsArm().AsCoreRegister(),
+         ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(1), GT);
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(0), LE);
+}
+
+void LocationsBuilderARM::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  __ cmp(locations->InAt(0).AsArm().AsCoreRegister(),
+         ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(1), GE);
+  __ mov(locations->Out().AsArm().AsCoreRegister(), ShifterOperand(0), LT);
 }
 
 void LocationsBuilderARM::VisitLocal(HLocal* local) {

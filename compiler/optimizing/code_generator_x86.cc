@@ -416,21 +416,32 @@ void InstructionCodeGeneratorX86::VisitExit(HExit* exit) {
 
 void LocationsBuilderX86::VisitIf(HIf* if_instr) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(if_instr);
-  locations->SetInAt(0, Location::Any());
+  locations->SetInAt(0, Location::RequiresRegister());
   if_instr->SetLocations(locations);
 }
 
 void InstructionCodeGeneratorX86::VisitIf(HIf* if_instr) {
-  // TODO: Generate the input as a condition, instead of materializing in a register.
-  Location location = if_instr->GetLocations()->InAt(0);
-  if (location.IsRegister()) {
-    __ cmpl(location.AsX86().AsCpuRegister(), Immediate(0));
+  HInstruction* condition = if_instr->InputAt(0);
+  CHECK(condition->IsCondition());
+  Location lhs = condition->GetLocations()->InAt(0);
+  Location rhs = condition->GetLocations()->InAt(1);
+  if (lhs.IsRegister()) {
+    if (rhs.IsRegister()) {
+      __ cmpl(lhs.AsX86().AsCpuRegister(), rhs.AsX86().AsCpuRegister());
+    } else {
+      __ cmpl(lhs.AsX86().AsCpuRegister(), Address(ESP, rhs.GetStackIndex()));
+    }
   } else {
-    __ cmpl(Address(ESP, location.GetStackIndex()), Immediate(0));
+    if (rhs.IsRegister()) {
+    __ cmpl(Address(ESP, lhs.GetStackIndex()), rhs.AsX86().AsCpuRegister());
+    } else {
+      // Both are not in registers.  Can this happen?
+      LOG(FATAL) << "Unexpected locations for inputs to if statement";
+    }
   }
-  __ j(kEqual, codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
-  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfTrueSuccessor())) {
-    __ jmp(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  __ j(X86Condition(if_instr->GetCondition()), codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor())) {
+    __ jmp(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
   }
 }
 
@@ -475,16 +486,20 @@ void LocationsBuilderX86::VisitStoreLocal(HStoreLocal* store) {
 void InstructionCodeGeneratorX86::VisitStoreLocal(HStoreLocal* store) {
 }
 
-void LocationsBuilderX86::VisitEqual(HEqual* equal) {
-  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(equal);
+void LocationsBuilderX86::VisitCondition(HCondition* comp) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(comp);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::Any());
   locations->SetOut(Location::SameAsFirstInput());
-  equal->SetLocations(locations);
+  comp->SetLocations(locations);
 }
 
-void InstructionCodeGeneratorX86::VisitEqual(HEqual* equal) {
-  LocationSummary* locations = equal->GetLocations();
+void LocationsBuilderX86::VisitEqual(HEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitEqual(HEqual* comp) {
+  LocationSummary* locations = comp->GetLocations();
   if (locations->InAt(1).IsRegister()) {
     __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
             locations->InAt(1).AsX86().AsCpuRegister());
@@ -493,6 +508,86 @@ void InstructionCodeGeneratorX86::VisitEqual(HEqual* equal) {
             Address(ESP, locations->InAt(1).GetStackIndex()));
   }
   __ setb(kEqual, locations->Out().AsX86().AsCpuRegister());
+}
+
+void LocationsBuilderX86::VisitNotEqual(HNotEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitNotEqual(HNotEqual* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  if (locations->InAt(1).IsRegister()) {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            locations->InAt(1).AsX86().AsCpuRegister());
+  } else {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            Address(ESP, locations->InAt(1).GetStackIndex()));
+  }
+  __ setb(kNotEqual, locations->Out().AsX86().AsCpuRegister());
+}
+
+void LocationsBuilderX86::VisitLessThan(HLessThan* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitLessThan(HLessThan* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  if (locations->InAt(1).IsRegister()) {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            locations->InAt(1).AsX86().AsCpuRegister());
+  } else {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            Address(ESP, locations->InAt(1).GetStackIndex()));
+  }
+  __ setb(kLess, locations->Out().AsX86().AsCpuRegister());
+}
+
+void LocationsBuilderX86::VisitLessThanOrEqual(HLessThanOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitLessThanOrEqual(HLessThanOrEqual* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  if (locations->InAt(1).IsRegister()) {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            locations->InAt(1).AsX86().AsCpuRegister());
+  } else {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            Address(ESP, locations->InAt(1).GetStackIndex()));
+  }
+  __ setb(kLessEqual, locations->Out().AsX86().AsCpuRegister());
+}
+
+void LocationsBuilderX86::VisitGreaterThan(HGreaterThan* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitGreaterThan(HGreaterThan* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  if (locations->InAt(1).IsRegister()) {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            locations->InAt(1).AsX86().AsCpuRegister());
+  } else {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            Address(ESP, locations->InAt(1).GetStackIndex()));
+  }
+  __ setb(kGreater, locations->Out().AsX86().AsCpuRegister());
+}
+
+void LocationsBuilderX86::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
+  LocationSummary* locations = comp->GetLocations();
+  if (locations->InAt(1).IsRegister()) {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            locations->InAt(1).AsX86().AsCpuRegister());
+  } else {
+    __ cmpl(locations->InAt(0).AsX86().AsCpuRegister(),
+            Address(ESP, locations->InAt(1).GetStackIndex()));
+  }
+  __ setb(kGreaterEqual, locations->Out().AsX86().AsCpuRegister());
 }
 
 void LocationsBuilderX86::VisitIntConstant(HIntConstant* constant) {

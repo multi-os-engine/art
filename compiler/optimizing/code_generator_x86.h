@@ -33,6 +33,20 @@ static constexpr Register kParameterCoreRegisters[] = { ECX, EDX, EBX };
 static constexpr RegisterPair kParameterCorePairRegisters[] = { ECX_EDX, EDX_EBX };
 static constexpr size_t kParameterCoreRegistersLength = arraysize(kParameterCoreRegisters);
 
+inline Condition X86Condition(IfCondition cond) {
+  switch (cond) {
+  case kCondEQ: return kEqual;
+  case kCondNE: return kNotEqual;
+  case kCondLT: return kLess;
+  case kCondLE: return kLessEqual;
+  case kCondGT: return kGreater;
+  case kCondGE: return kGreaterEqual;
+  default:
+    LOG(FATAL) << "Unknown if condition";
+  }
+  return kEqual;
+}
+
 class InvokeDexCallingConvention : public CallingConvention<Register> {
  public:
   InvokeDexCallingConvention()
@@ -94,9 +108,13 @@ class LocationsBuilderX86 : public HGraphVisitor {
 
 #undef DECLARE_VISIT_INSTRUCTION
 
+
  private:
   CodeGeneratorX86* const codegen_;
   InvokeDexCallingConventionVisitor parameter_visitor_;
+
+  // Common visitors.
+  virtual void VisitCondition(HCondition* instr);
 
   DISALLOW_COPY_AND_ASSIGN(LocationsBuilderX86);
 };
