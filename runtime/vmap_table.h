@@ -63,6 +63,15 @@ class VmapTable {
     bool in_floats = false;
     const uint8_t* table = table_;
     uint16_t adjusted_vreg = vreg + kEntryAdjustment;
+
+    // if we can promote long 64-bit then we need to find a low VREG for high one
+    // TODO: how to detect whether VR is negative?
+    if (kRuntimeISA == kX86_64) {
+      if (kind == kLongHiVReg) {
+        adjusted_vreg--;
+      }
+    }
+
     size_t end = DecodeUnsignedLeb128(&table);
     for (size_t i = 0; i < end; ++i) {
       // Stop if we find what we are are looking for.
