@@ -417,18 +417,28 @@ void InstructionCodeGeneratorARM::VisitExit(HExit* exit) {
   }
 }
 
+void LocationsBuilderARM::VisitCallResult(HCallResult* res) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(res);
+  locations->SetOut(ArmCoreLocation(R0));
+  res->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitCallResult(HCallResult* res) {
+}
+
 void LocationsBuilderARM::VisitIf(HIf* if_instr) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(if_instr);
   locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
   if_instr->SetLocations(locations);
 }
 
 void InstructionCodeGeneratorARM::VisitIf(HIf* if_instr) {
-  // TODO: Generate the input as a condition, instead of materializing in a register.
-  __ cmp(if_instr->GetLocations()->InAt(0).AsArm().AsCoreRegister(), ShifterOperand(0));
-  __ b(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()), EQ);
-  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfTrueSuccessor())) {
-    __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  __ cmp(if_instr->GetLocations()->InAt(0).AsArm().AsCoreRegister(),
+         ShifterOperand(if_instr->GetLocations()->InAt(1).AsArm().AsCoreRegister()));
+  __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()), ARMCondition(if_instr->GetCondition()));
+  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor())) {
+    __ b(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
   }
 }
 

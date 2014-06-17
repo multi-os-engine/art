@@ -293,18 +293,29 @@ void InstructionCodeGeneratorX86_64::VisitExit(HExit* exit) {
   }
 }
 
+void LocationsBuilderX86_64::VisitCallResult(HCallResult* res) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(res);
+  locations->SetOut(X86_64CpuLocation(RAX));
+  res->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86_64::VisitCallResult(HCallResult* res) {
+}
+
 void LocationsBuilderX86_64::VisitIf(HIf* if_instr) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(if_instr);
   locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
   if_instr->SetLocations(locations);
 }
 
 void InstructionCodeGeneratorX86_64::VisitIf(HIf* if_instr) {
-  // TODO: Generate the input as a condition, instead of materializing in a register.
-  __ cmpl(if_instr->GetLocations()->InAt(0).AsX86_64().AsCpuRegister(), Immediate(0));
-  __ j(kEqual, codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
-  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfTrueSuccessor())) {
-    __ jmp(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  Location lhs = if_instr->GetLocations()->InAt(0);
+  Location rhs = if_instr->GetLocations()->InAt(1);
+  __ cmpl(lhs.AsX86_64().AsCpuRegister(), rhs.AsX86_64().AsCpuRegister());
+  __ j(X86_64Condition(if_instr->GetCondition()), codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor())) {
+    __ jmp(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
   }
 }
 

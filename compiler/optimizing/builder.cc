@@ -92,15 +92,24 @@ static bool CanHandleCodeItem(const DexFile::CodeItem& code_item) {
   return true;
 }
 
-template<typename T>
-void HGraphBuilder::If_22t(const Instruction& instruction, int32_t dex_offset, bool is_not) {
+void HGraphBuilder::If_22t(const Instruction& instruction, int32_t dex_offset, IfCondition cond) {
   HInstruction* first = LoadLocal(instruction.VRegA(), Primitive::kPrimInt);
   HInstruction* second = LoadLocal(instruction.VRegB(), Primitive::kPrimInt);
-  current_block_->AddInstruction(new (arena_) T(first, second));
-  if (is_not) {
-    current_block_->AddInstruction(new (arena_) HNot(current_block_->GetLastInstruction()));
-  }
-  current_block_->AddInstruction(new (arena_) HIf(current_block_->GetLastInstruction()));
+  HInstruction* ifinst = new (arena_) HIf(first, second, cond);
+  current_block_->AddInstruction(ifinst);
+  HBasicBlock* target = FindBlockStartingAt(instruction.GetTargetOffset() + dex_offset);
+  DCHECK(target != nullptr);
+  current_block_->AddSuccessor(target);
+  target = FindBlockStartingAt(dex_offset + instruction.SizeInCodeUnits());
+  DCHECK(target != nullptr);
+  current_block_->AddSuccessor(target);
+  current_block_ = nullptr;
+}
+
+void HGraphBuilder::If_21t(const Instruction& instruction, int32_t dex_offset, IfCondition cond) {
+  HInstruction* value = LoadLocal(instruction.VRegA(), Primitive::kPrimInt);
+  HInstruction* ifinst = new (arena_) HIf(value, GetIntConstant(0), cond);
+  current_block_->AddInstruction(ifinst);
   HBasicBlock* target = FindBlockStartingAt(instruction.GetTargetOffset() + dex_offset);
   DCHECK(target != nullptr);
   current_block_->AddSuccessor(target);
@@ -340,16 +349,38 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       break;
     }
 
+    case Instruction::CONST: {
+      int32_t register_index = instruction.VRegA();
+      HIntConstant* constant = GetIntConstant(instruction.VRegB_31i());
+      UpdateLocal(register_index, constant);
+      break;
+    }
+
+    case Instruction::CONST_HIGH16: {
+      int32_t register_index = instruction.VRegA();
+      HIntConstant* constant = GetIntConstant(instruction.VRegB_21h() << 16);
+      UpdateLocal(register_index, constant);
+      break;
+    }
+
     case Instruction::CONST_WIDE_16: {
       int32_t register_index = instruction.VRegA();
-      HLongConstant* constant = GetLongConstant(instruction.VRegB_21s());
+      // Get 16 bits of constant value, sign extended to 64 bits.
+      int64_t value = instruction.VRegB_21s();
+      value <<= 48;
+      value >>= 48;
+      HLongConstant* constant = GetLongConstant(value);
       UpdateLocal(register_index, constant);
       break;
     }
 
     case Instruction::CONST_WIDE_32: {
       int32_t register_index = instruction.VRegA();
-      HLongConstant* constant = GetLongConstant(instruction.VRegB_31i());
+      // Get 32 bits of constant value, sign extended to 64 bits.
+      int64_t value = instruction.VRegB_31i();
+      value <<= 32;
+      value >>= 32;
+      HLongConstant* constant = GetLongConstant(value);
       UpdateLocal(register_index, constant);
       break;
     }
@@ -361,8 +392,35 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       break;
     }
 
-    case Instruction::MOVE: {
+    case Instruction::CONST_WIDE_HIGH16: {
+      int32_t register_index = instruction.VRegA();
+      int64_t value = static_cast<int64_t>(instruction.VRegB_21h()) << 48;
+      HLongConstant* constant = GetLongConstant(value);
+      UpdateLocal(register_index, constant);
+      break;
+    }
+
+    // TODO: these instructions are also used to move floating point values, so what is
+    // the type (int or float)?
+    case Instruction::MOVE:
+    case Instruction::MOVE_FROM16:
+    case Instruction::MOVE_16: {
       HInstruction* value = LoadLocal(instruction.VRegB(), Primitive::kPrimInt);
+      UpdateLocal(instruction.VRegA(), value);
+      break;
+    }
+
+    case Instruction::MOVE_WIDE:
+    case Instruction::MOVE_WIDE_16: {
+      HInstruction* value = LoadLocal(instruction.VRegB(), Primitive::kPrimLong);
+      UpdateLocal(instruction.VRegA(), value);
+      break;
+    }
+
+    case Instruction::MOVE_OBJECT:
+    case Instruction::MOVE_OBJECT_16:
+    case Instruction::MOVE_OBJECT_FROM16: {
+      HInstruction* value = LoadLocal(instruction.VRegB(), Primitive::kPrimNot);
       UpdateLocal(instruction.VRegA(), value);
       break;
     }
@@ -372,15 +430,16 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       break;
     }
 
-    case Instruction::IF_EQ: {
-      If_22t<HEqual>(instruction, dex_offset, false);
-      break;
-    }
+#define IF_XX(cond) \
+    case Instruction::IF_##cond: If_22t(instruction, dex_offset, kCond##cond); break; \
+    case Instruction::IF_##cond##Z: If_21t(instruction, dex_offset, kCond##cond); break
 
-    case Instruction::IF_NE: {
-      If_22t<HEqual>(instruction, dex_offset, true);
-      break;
-    }
+    IF_XX(EQ);
+    IF_XX(NE);
+    IF_XX(LT);
+    IF_XX(LE);
+    IF_XX(GT);
+    IF_XX(GE);
 
     case Instruction::GOTO:
     case Instruction::GOTO_16:
@@ -499,11 +558,23 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       break;
     }
 
-    case Instruction::MOVE_RESULT:
-    case Instruction::MOVE_RESULT_WIDE: {
+    case Instruction::MOVE_RESULT: {
+      current_block_->AddInstruction(new (arena_) HCallResult(Primitive::kPrimInt));
       UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
       break;
     }
+
+    case Instruction::MOVE_RESULT_WIDE: {
+      current_block_->AddInstruction(new (arena_) HCallResult(Primitive::kPrimLong));
+      UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+      break;
+    }
+
+    case Instruction::MOVE_RESULT_OBJECT: {
+       current_block_->AddInstruction(new (arena_) HCallResult(Primitive::kPrimNot));
+       UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+       break;
+     }
 
     case Instruction::NOP:
       break;

@@ -28,9 +28,11 @@ namespace art {
 static HBasicBlock* createIfBlock(HGraph* graph, ArenaAllocator* allocator) {
   HBasicBlock* if_block = new (allocator) HBasicBlock(graph);
   graph->AddBlock(if_block);
-  HInstruction* instr = new (allocator) HIntConstant(4);
-  if_block->AddInstruction(instr);
-  instr = new (allocator) HIf(instr);
+  HInstruction* instr1 = new (allocator) HIntConstant(4);
+  HInstruction* instr2 = new (allocator) HIntConstant(5);
+  if_block->AddInstruction(instr1);
+  if_block->AddInstruction(instr2);
+  HInstruction* instr = new (allocator) HIf(instr1, instr2, kCondEQ);
   if_block->AddInstruction(instr);
   return if_block;
 }

@@ -33,6 +33,20 @@ static constexpr Register kParameterCoreRegisters[] = { R1, R2, R3 };
 static constexpr RegisterPair kParameterCorePairRegisters[] = { R1_R2, R2_R3 };
 static constexpr size_t kParameterCoreRegistersLength = arraysize(kParameterCoreRegisters);
 
+inline Condition ARMCondition(IfCondition cond) {
+  switch (cond) {
+  case kCondEQ: return EQ;
+  case kCondNE: return NE;
+  case kCondLT: return LT;
+  case kCondLE: return LE;
+  case kCondGT: return GT;
+  case kCondGE: return GE;
+  default:
+    LOG(FATAL) << "Unknown if condition";
+  }
+  return EQ;        // Unreachable.
+}
+
 class InvokeDexCallingConvention : public CallingConvention<Register> {
  public:
   InvokeDexCallingConvention()

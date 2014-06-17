@@ -31,6 +31,20 @@ static constexpr Register kParameterCoreRegisters[] = { RSI, RDX, RCX, R8, R9 };
 
 static constexpr size_t kParameterCoreRegistersLength = arraysize(kParameterCoreRegisters);
 
+inline Condition X86_64Condition(IfCondition cond) {
+  switch (cond) {
+  case kCondEQ: return kEqual;
+  case kCondNE: return kNotEqual;
+  case kCondLT: return kLess;
+  case kCondLE: return kLessEqual;
+  case kCondGT: return kGreater;
+  case kCondGE: return kGreaterEqual;
+  default:
+    LOG(FATAL) << "Unknown if condition";
+  }
+  return kEqual;
+}
+
 class InvokeDexCallingConvention : public CallingConvention<Register> {
  public:
   InvokeDexCallingConvention()

@@ -414,23 +414,42 @@ void InstructionCodeGeneratorX86::VisitExit(HExit* exit) {
   }
 }
 
+void LocationsBuilderX86::VisitCallResult(HCallResult* res) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(res);
+  locations->SetOut(X86CpuLocation(EAX));
+  res->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitCallResult(HCallResult* res) {
+}
+
 void LocationsBuilderX86::VisitIf(HIf* if_instr) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(if_instr);
   locations->SetInAt(0, Location::Any());
+  locations->SetInAt(1, Location::Any());
   if_instr->SetLocations(locations);
 }
 
 void InstructionCodeGeneratorX86::VisitIf(HIf* if_instr) {
-  // TODO: Generate the input as a condition, instead of materializing in a register.
-  Location location = if_instr->GetLocations()->InAt(0);
-  if (location.IsRegister()) {
-    __ cmpl(location.AsX86().AsCpuRegister(), Immediate(0));
+  Location lhs = if_instr->GetLocations()->InAt(0);
+  Location rhs = if_instr->GetLocations()->InAt(1);
+  if (lhs.IsRegister()) {
+    if (rhs.IsRegister()) {
+      __ cmpl(lhs.AsX86().AsCpuRegister(), rhs.AsX86().AsCpuRegister());
+    } else {
+      __ cmpl(lhs.AsX86().AsCpuRegister(), Address(ESP, rhs.GetStackIndex()));
+    }
   } else {
-    __ cmpl(Address(ESP, location.GetStackIndex()), Immediate(0));
+    if (rhs.IsRegister()) {
+      __ cmpl(Address(ESP, lhs.GetStackIndex()), rhs.AsX86().AsCpuRegister());
+    } else {
+      // TODO: need a temp for this
+      __ cmpl(Address(ESP, lhs.GetStackIndex()), Immediate(0));
+    }
   }
-  __ j(kEqual, codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
-  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfTrueSuccessor())) {
-    __ jmp(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  __ j(X86Condition(if_instr->GetCondition()), codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor())) {
+    __ jmp(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
   }
 }
 

@@ -269,18 +269,34 @@ void DisassemblerArm::DumpArm(std::ostream& os, const uint8_t* instr_ptr) {
         uint32_t op = (instruction >> 21) & 0xf;
         opcode = kDataProcessingOperations[op];
         bool implicit_s = ((op & ~3) == 8);  // TST, TEQ, CMP, and CMN.
-        if (implicit_s) {
-          // Rd is unused (and not shown), and we don't show the 's' suffix either.
-        } else {
+        bool is_mov = op == 0b1101 || op == 0b1111;
+        if (is_mov) {
+          // Show only Rd and Rm.
           if (s) {
-            suffixes += 's';
-          }
-          args << ArmRegister(instruction, 12) << ", ";
-        }
-        if (i) {
-          args << ArmRegister(instruction, 16) << ", " << ShiftedImmediate(instruction);
+             suffixes += 's';
+           }
+           args << ArmRegister(instruction, 12) << ", ";
+           if (i) {
+              args << ShiftedImmediate(instruction);
+            } else {
+              // TODO: Shifted register.
+              args << ArmRegister(instruction, 16) << ", " << ArmRegister(instruction, 0);
+            }
         } else {
-          args << Rm(instruction);
+          if (implicit_s) {
+            // Rd is unused (and not shown), and we don't show the 's' suffix either.
+          } else {
+            if (s) {
+              suffixes += 's';
+            }
+            args << ArmRegister(instruction, 12) << ", ";
+          }
+          if (i) {
+            args << ArmRegister(instruction, 16) << ", " << ShiftedImmediate(instruction);
+          } else {
+            // TODO: Shifted register.
+            args << ArmRegister(instruction, 16) << ", " << ArmRegister(instruction, 0);
+          }
         }
       }
       break;
