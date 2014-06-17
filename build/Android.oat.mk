@@ -32,35 +32,52 @@ TARGET_CORE_DEX_FILES := $(foreach jar,$(TARGET_CORE_JARS),$(call intermediates-
 TARGET_INSTRUCTION_SET_FEATURES := $(DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES)
 
 # Use dex2oat debug version for better error reporting
-$(HOST_CORE_IMG_OUT): $(HOST_CORE_DEX_FILES) $(DEX2OATD_DEPENDENCY)
-	@echo "host dex2oat: $@ ($?)"
-	@mkdir -p $(dir $@)
-	$(hide) $(DEX2OATD) --runtime-arg -Xms16m --runtime-arg -Xmx16m --image-classes=$(PRELOADED_CLASSES) $(addprefix \
-		--dex-file=,$(HOST_CORE_DEX_FILES)) $(addprefix --dex-location=,$(HOST_CORE_DEX_LOCATIONS)) --oat-file=$(HOST_CORE_OAT_OUT) \
-		--oat-location=$(HOST_CORE_OAT) --image=$(HOST_CORE_IMG_OUT) --base=$(LIBART_IMG_HOST_BASE_ADDRESS) \
-		--instruction-set=$(ART_HOST_ARCH) --host --android-root=$(HOST_OUT)
+# $(1): 2ND_ or undefined, 2ND_ for 32-bit host builds.
+define create-core-oat-host-rules
+$$($(1)HOST_CORE_IMG_OUT): $$($(1)HOST_CORE_DEX_FILES) $$(DEX2OATD_DEPENDENCY)
+	@echo "host dex2oat: $$@ ($$?)"
+	@mkdir -p $$(dir $$@)
+	$$(hide) $$(DEX2OATD) --runtime-arg -Xms16m --runtime-arg -Xmx16m \
+	  --image-classes=$$(PRELOADED_CLASSES) $$(addprefix --dex-file=,$$(HOST_CORE_DEX_FILES)) \
+	  $$(addprefix --dex-location=,$$(HOST_CORE_DEX_LOCATIONS)) --oat-file=$$($(1)HOST_CORE_OAT_OUT) \
+		--oat-location=$$($(1)HOST_CORE_OAT) --image=$$($(1)HOST_CORE_IMG_OUT) \
+		--base=$$(LIBART_IMG_HOST_BASE_ADDRESS) --instruction-set=$$($(1)ART_HOST_ARCH) \
+		--instruction-set-features=$$($(1)HOST_INSTRUCTION_SET_FEATURES) \
+		--host --android-root=$$(HOST_OUT)
 
-$(HOST_CORE_OAT_OUT): $(HOST_CORE_IMG_OUT)
+# This "renaming" eases declaration in art/Android.mk
+HOST_CORE_IMG_OUT$($(1)ART_PHONY_TEST_HOST_SUFFIX) := $($(1)HOST_CORE_IMG_OUT)
 
-define create-oat-target-targets
+$$($(1)HOST_CORE_OAT_OUT): $$($(1)HOST_CORE_IMG_OUT)
+endef  # create-core-oat-host-rules
+
+$(eval $(call create-core-oat-host-rules,))
+ifneq ($(HOST_PREFER_32_BIT),true)
+$(eval $(call create-core-oat-host-rules,2ND_))
+endif
+
+define create-core-oat-target-rules
 $$($(1)TARGET_CORE_IMG_OUT): $$($(1)TARGET_CORE_DEX_FILES) $$(DEX2OATD_DEPENDENCY)
 	@echo "target dex2oat: $$@ ($$?)"
 	@mkdir -p $$(dir $$@)
-	$$(hide) $$(DEX2OATD) --runtime-arg -Xms16m --runtime-arg -Xmx16m --image-classes=$$(PRELOADED_CLASSES) $$(addprefix \
-		--dex-file=,$$(TARGET_CORE_DEX_FILES)) $$(addprefix --dex-location=,$$(TARGET_CORE_DEX_LOCATIONS)) --oat-file=$$($(1)TARGET_CORE_OAT_OUT) \
-		--oat-location=$$($(1)TARGET_CORE_OAT) --image=$$($(1)TARGET_CORE_IMG_OUT) --base=$$(LIBART_IMG_TARGET_BASE_ADDRESS) \
-		--instruction-set=$$($(1)TARGET_ARCH) --instruction-set-features=$$(TARGET_INSTRUCTION_SET_FEATURES) --android-root=$$(PRODUCT_OUT)/system
+	$$(hide) $$(DEX2OATD) --runtime-arg -Xms16m --runtime-arg -Xmx16m \
+	  --image-classes=$$(PRELOADED_CLASSES) $$(addprefix --dex-file=,$$(TARGET_CORE_DEX_FILES)) \
+	  $$(addprefix --dex-location=,$$(TARGET_CORE_DEX_LOCATIONS)) --oat-file=$$($(1)TARGET_CORE_OAT_OUT) \
+		--oat-location=$$($(1)TARGET_CORE_OAT) --image=$$($(1)TARGET_CORE_IMG_OUT) \
+		--base=$$(LIBART_IMG_TARGET_BASE_ADDRESS) --instruction-set=$$($(1)TARGET_ARCH) \
+		--instruction-set-features=$$($(1)TARGET_INSTRUCTION_SET_FEATURES) \
+		--android-root=$$(PRODUCT_OUT)/system
 
 # This "renaming" eases declaration in art/Android.mk
 TARGET_CORE_IMG_OUT$($(1)ART_PHONY_TEST_TARGET_SUFFIX) := $($(1)TARGET_CORE_IMG_OUT)
 
 $$($(1)TARGET_CORE_OAT_OUT): $$($(1)TARGET_CORE_IMG_OUT)
-endef
+endef  # create-core-oat-target-rules
 
 ifdef TARGET_2ND_ARCH
-$(eval $(call create-oat-target-targets,2ND_))
+$(eval $(call create-core-oat-target-rules,2ND_))
 endif
-$(eval $(call create-oat-target-targets,))
+$(eval $(call create-core-oat-target-rules,))
 
 
 ifeq ($(ART_BUILD_HOST),true)
