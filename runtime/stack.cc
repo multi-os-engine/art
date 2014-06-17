@@ -163,6 +163,15 @@ bool StackVisitor::GetVReg(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind,
         success = GetFPR(reg, &ptr_val);
       } else {
         success = GetGPR(reg, &ptr_val);
+        if (success && kRuntimeISA == kX86_64) {
+          int64_t value_long = static_cast<int64_t>(ptr_val);
+          if (kind == kLongLoVReg) {
+            ptr_val = static_cast<uintptr_t>(value_long & 0xFFFFFFFF);
+          }
+          if (kind == kLongHiVReg) {
+            ptr_val = static_cast<uintptr_t>(value_long >> 32);
+          }
+        }
       }
       *val = ptr_val;
       return success;
@@ -197,6 +206,28 @@ bool StackVisitor::SetVReg(mirror::ArtMethod* m, uint16_t vreg, uint32_t new_val
       if (is_float) {
         return SetFPR(reg, new_value);
       } else {
+        if (kRuntimeISA == kX86_64) {
+          if (kind == kLongLoVReg) {
+            uintptr_t orig_long;
+            bool success = GetGPR(reg, &orig_long);
+            if (!success) {
+              return success;
+            }
+            uint64_t new_value_long = static_cast<uint64_t>(orig_long);
+            new_value_long = (new_value_long & 0xFFFFFFFF00000000) | static_cast<uint64_t>(new_value);
+            return SetGPR(reg, static_cast<uintptr_t>(new_value_long));
+          }
+          if (kind == kLongHiVReg) {
+            uintptr_t orig_long;
+            bool success = GetGPR(reg, &orig_long);
+            if (!success) {
+              return success;
+            }
+            uint64_t new_value_long = static_cast<uint64_t>(orig_long);
+            new_value_long = (new_value_long & 0x00000000FFFFFFFF) | (static_cast<uint64_t>(new_value) << 32);
+            return SetGPR(reg, static_cast<uintptr_t>(new_value_long));
+          }
+        }
         return SetGPR(reg, new_value);
       }
     } else {
