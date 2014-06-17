@@ -18,11 +18,12 @@ LOCAL_PATH := $(call my-dir)
 
 art_path := $(LOCAL_PATH)
 art_build_path := $(art_path)/build
-include $(art_build_path)/Android.common.mk
 
 ########################################################################
 # clean-oat targets
 #
+
+include art/build/Android.common_path.mk
 
 # following the example of build's dont_bother for clean targets
 ifneq (,$(filter clean-oat,$(MAKECMDGOALS)))
@@ -67,9 +68,9 @@ endif
 .PHONY: clean-oat-target
 clean-oat-target:
 	adb remount
-	adb shell rm -rf $(ART_NATIVETEST_DIR)
-	adb shell rm -rf $(ART_TEST_DIR)
-	adb shell rm -rf $(ART_DALVIK_CACHE_DIR)/*
+	adb shell rm -rf $(ART_TARGET_NATIVETEST_DIR)
+	adb shell rm -rf $(ART_TARGET_TEST_DIR)
+	adb shell rm -rf $(ART_TARGET_DALVIK_CACHE_DIR)/*
 	adb shell rm -rf $(DEXPREOPT_BOOT_JAR_DIR)/$(DEX2OAT_TARGET_ARCH)
 	adb shell rm -rf system/app/$(DEX2OAT_TARGET_ARCH)
 ifdef TARGET_2ND_ARCH
@@ -81,7 +82,13 @@ endif
 ifneq ($(art_dont_bother),true)
 
 ########################################################################
+# cpplint targets to style check art source files
+
+include $(art_build_path)/Android.cpplint.mk
+
+########################################################################
 # product targets
+
 include $(art_path)/runtime/Android.mk
 include $(art_path)/compiler/Android.mk
 include $(art_path)/dex2oat/Android.mk
@@ -93,12 +100,11 @@ include $(art_build_path)/Android.oat.mk
 include $(art_path)/sigchainlib/Android.mk
 
 
-
-
 # ART_HOST_DEPENDENCIES depends on Android.executable.mk above for ART_HOST_EXECUTABLES
-ART_HOST_DEPENDENCIES := $(ART_HOST_EXECUTABLES) $(HOST_OUT_JAVA_LIBRARIES)/core-libart-hostdex.jar
-ART_HOST_DEPENDENCIES += $(HOST_LIBRARY_PATH)/libjavacore$(ART_HOST_SHLIB_EXTENSION)
-ART_TARGET_DEPENDENCIES := $(ART_TARGET_EXECUTABLES) $(TARGET_OUT_JAVA_LIBRARIES)/core-libart.jar $(TARGET_OUT_SHARED_LIBRARIES)/libjavacore.so
+ART_HOST_DEPENDENCIES := $(ART_HOST_EXECUTABLES) $(HOST_OUT_JAVA_LIBRARIES)/core-libart-hostdex.jar \
+	$(HOST_LIBRARY_PATH)/libjavacore$(ART_HOST_SHLIB_EXTENSION)
+ART_TARGET_DEPENDENCIES := $(ART_TARGET_EXECUTABLES) $(TARGET_OUT_JAVA_LIBRARIES)/core-libart.jar \
+	$(TARGET_OUT_SHARED_LIBRARIES)/libjavacore.so
 ifdef TARGET_2ND_ARCH
 ART_TARGET_DEPENDENCIES += $(2ND_TARGET_OUT_SHARED_LIBRARIES)/libjavacore.so
 endif
@@ -106,229 +112,189 @@ endif
 ########################################################################
 # test targets
 
-include $(art_path)/test/Android.mk
+include $(art_build_path)/Android.common_test.mk
 include $(art_build_path)/Android.gtest.mk
-
-$(eval $(call combine-art-multi-target-var,ART_TARGET_GTEST_TARGETS))
-$(eval $(call combine-art-multi-target-var,ART_TARGET_GTEST_EXECUTABLES))
+include $(art_path)/test/Android.oat.mk
+include $(art_path)/test/Android.run-test.mk
 
 # The ART_*_TEST_DEPENDENCIES definitions:
 # - depend on Android.oattest.mk above for ART_TEST_*_DEX_FILES
 # - depend on Android.gtest.mk above for ART_*_GTEST_EXECUTABLES
-ART_HOST_TEST_DEPENDENCIES   := $(ART_HOST_DEPENDENCIES)   $(ART_HOST_GTEST_EXECUTABLES)   $(ART_TEST_HOST_DEX_FILES)   $(HOST_CORE_IMG_OUT)
+ART_HOST_TEST_DEPENDENCIES   := $(ART_HOST_DEPENDENCIES)  $(ART_TEST_HOST_DEX_FILES)   $(HOST_CORE_IMG_OUT)
 
 define declare-art-target-test-dependencies-var
-ART_TARGET_TEST_DEPENDENCIES$(1) := $(ART_TARGET_DEPENDENCIES) $(ART_TARGET_GTEST_EXECUTABLES$(1)) $(ART_TEST_TARGET_DEX_FILES$(1)) $(TARGET_CORE_IMG_OUT$(1))
+ART_TARGET_TEST_DEPENDENCIES$(1) := $(ART_TARGET_DEPENDENCIES) $(ART_TEST_TARGET_DEX_FILES$(1)) $(TARGET_CORE_IMG_OUT$(1))
 endef
 $(eval $(call call-art-multi-target-var,declare-art-target-test-dependencies-var,ART_TARGET_TEST_DEPENDENCIES))
-
-include $(art_build_path)/Android.libarttest.mk
 
 # "mm test-art" to build and run all tests on host and device
 .PHONY: test-art
 test-art: test-art-host test-art-target
-	@echo test-art PASSED
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
 .PHONY: test-art-gtest
 test-art-gtest: test-art-host-gtest test-art-target-gtest
-	@echo test-art-gtest PASSED
-
-.PHONY: test-art-oat
-test-art-oat: test-art-host-oat test-art-target-oat
-	@echo test-art-oat PASSED
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
 .PHONY: test-art-run-test
 test-art-run-test: test-art-host-run-test test-art-target-run-test
-	@echo test-art-run-test PASSED
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
 ########################################################################
 # host test targets
 
-.PHONY: test-art-host-vixl
+.PHONY: test-art-host-dependencies
+test-art-host-dependencies: $(ART_HOST_TEST_DEPENDENCIES) $(HOST_CORE_DEX_LOCATIONS)
+
 VIXL_TEST_DEPENDENCY :=
 # We can only run the vixl tests on 64-bit hosts (vixl testing issue) when its a
 # top-level build (to declare the vixl test rule).
-ifneq ($(HOST_IS_64_BIT),)
+ifneq ($(HOST_PREFER_32_BIT),true)
 ifeq ($(ONE_SHOT_MAKEFILE),)
 VIXL_TEST_DEPENDENCY := run-vixl-tests
 endif
 endif
 
+.PHONY: test-art-host-vixl
 test-art-host-vixl: $(VIXL_TEST_DEPENDENCY)
 
-# "mm test-art-host" to build and run all host tests
+# "mm test-art-host" to build and run all host tests.
 .PHONY: test-art-host
 test-art-host: test-art-host-gtest test-art-host-oat test-art-host-run-test test-art-host-vixl
-	@echo test-art-host PASSED
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
+# All host tests that run solely with the default compiler.
+.PHONY: test-art-host-default
+test-art-host-default: test-art-host-oat-default test-art-host-run-test-default
+	$(call ART_TEST_PREREQ_FINISHED,$@)
+
+# All host tests that run solely with the optimizing compiler.
+.PHONY: test-art-host-optimizing
+test-art-host-optimizing: test-art-host-oat-optimizing test-art-host-run-test-optimizing
+	$(call ART_TEST_PREREQ_FINISHED,$@)
+
+# All host tests that run solely on the interpreter.
 .PHONY: test-art-host-interpreter
 test-art-host-interpreter: test-art-host-oat-interpreter test-art-host-run-test-interpreter
-	@echo test-art-host-interpreter PASSED
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-.PHONY: test-art-host-dependencies
-test-art-host-dependencies: $(ART_HOST_TEST_DEPENDENCIES) $(HOST_LIBRARY_PATH)/libarttest$(ART_HOST_SHLIB_EXTENSION) $(HOST_CORE_DEX_LOCATIONS)
+# Primary host architecture variants:
+.PHONY: test-art-host$(ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-gtest$(ART_PHONY_TEST_HOST_SUFFIX) \
+    test-art-host-oat$(ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test$(ART_PHONY_TEST_HOST_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-.PHONY: test-art-host-gtest
-test-art-host-gtest: $(ART_HOST_GTEST_TARGETS)
-	@echo test-art-host-gtest PASSED
+.PHONY: test-art-host-default$(ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-default$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-default$(ART_PHONY_TEST_HOST_SUFFIX) \
+    test-art-host-run-test-default$(ART_PHONY_TEST_HOST_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-# "mm valgrind-test-art-host-gtest" to build and run the host gtests under valgrind.
-.PHONY: valgrind-test-art-host-gtest
-valgrind-test-art-host-gtest: $(ART_HOST_VALGRIND_GTEST_TARGETS)
-	@echo valgrind-test-art-host-gtest PASSED
+.PHONY: test-art-host-optimizing$(ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-optimizing$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-optimizing$(ART_PHONY_TEST_HOST_SUFFIX) \
+    test-art-host-run-test-optimizing$(ART_PHONY_TEST_HOST_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-.PHONY: test-art-host-oat-default
-test-art-host-oat-default: $(ART_TEST_HOST_OAT_DEFAULT_TARGETS)
-	@echo test-art-host-oat-default PASSED
+.PHONY: test-art-host-interpreter$(ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-interpreter$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-interpreter$(ART_PHONY_TEST_HOST_SUFFIX) \
+    test-art-host-run-test-interpreter$(ART_PHONY_TEST_HOST_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-.PHONY: test-art-host-oat-interpreter
-test-art-host-oat-interpreter: $(ART_TEST_HOST_OAT_INTERPRETER_TARGETS)
-	@echo test-art-host-oat-interpreter PASSED
+# Secondary host architecture variants:
+ifneq ($(HOST_PREFER_32_BIT),true)
+.PHONY: test-art-host$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-gtest$(2ND_ART_PHONY_TEST_HOST_SUFFIX) \
+    test-art-host-oat$(2ND_ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-.PHONY: test-art-host-oat
-test-art-host-oat: test-art-host-oat-default test-art-host-oat-interpreter
-	@echo test-art-host-oat PASSED
+.PHONY: test-art-host-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX) \
+    test-art-host-run-test-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-FAILING_OPTIMIZING_MESSAGE := failed with the optimizing compiler. If the test passes \
-  with Quick and interpreter, it is probably just a bug in the optimizing compiler. Please \
-  add the test name to the FAILING_OPTIMIZING_TESTS Makefile variable in art/Android.mk, \
-  and file a bug.
+.PHONY: test-art-host-optimizing$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-optimizing$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-optimizing$(2ND_ART_PHONY_TEST_HOST_SUFFIX) \
+    test-art-host-run-test-optimizing$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-# Placeholder for failing tests on the optimizing compiler.
-
-define declare-test-art-host-run-test
-.PHONY: test-art-host-run-test-default-$(1)
-test-art-host-run-test-default-$(1): test-art-host-dependencies $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
-	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) --host $(1)
-	@echo test-art-host-run-test-default-$(1) PASSED
-
-TEST_ART_HOST_RUN_TEST_DEFAULT_TARGETS += test-art-host-run-test-default-$(1)
-
-.PHONY: test-art-host-run-test-optimizing-$(1)
-test-art-host-run-test-optimizing-$(1): test-art-host-dependencies $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
-	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test -Xcompiler-option --compiler-backend=Optimizing $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) --host $(1) \
-	|| (echo -e "\x1b[31;01mTest $(1) $(FAILING_OPTIMIZING_MESSAGE)\x1b[0m" && exit 1)
-	@echo test-art-host-run-test-optimizing-$(1) PASSED
-
-TEST_ART_HOST_RUN_TEST_OPTIMIZING_TARGETS += test-art-host-run-test-optimizing-$(1)
-
-.PHONY: test-art-host-run-test-interpreter-$(1)
-test-art-host-run-test-interpreter-$(1): test-art-host-dependencies $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
-	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) --host --interpreter $(1)
-	@echo test-art-host-run-test-interpreter-$(1) PASSED
-
-TEST_ART_HOST_RUN_TEST_INTERPRETER_TARGETS += test-art-host-run-test-interpreter-$(1)
-
-.PHONY: test-art-host-run-test-$(1)
-test-art-host-run-test-$(1): test-art-host-run-test-default-$(1) test-art-host-run-test-interpreter-$(1) test-art-host-run-test-optimizing-$(1)
-
-endef
-
-$(foreach test, $(TEST_ART_RUN_TESTS), $(eval $(call declare-test-art-host-run-test,$(test))))
-
-.PHONY: test-art-host-run-test-default
-test-art-host-run-test-default: $(TEST_ART_HOST_RUN_TEST_DEFAULT_TARGETS)
-	@echo test-art-host-run-test-default PASSED
-
-FAILING_OPTIMIZING_TESTS :=
-$(foreach test, $(FAILING_OPTIMIZING_TESTS), \
-	$(eval TEST_ART_HOST_RUN_TEST_OPTIMIZING_TARGETS := $(filter-out test-art-host-run-test-optimizing-$(test), $(TEST_ART_HOST_RUN_TEST_OPTIMIZING_TARGETS))))
-
-.PHONY: test-art-host-run-test-optimizing
-test-art-host-run-test-optimizing: $(TEST_ART_HOST_RUN_TEST_OPTIMIZING_TARGETS)
-	$(foreach test, $(FAILING_OPTIMIZING_TESTS), $(info Optimizing compiler has skipped $(test)))
-	@echo test-art-host-run-test-optimizing PASSED
-
-.PHONY: test-art-host-run-test-interpreter
-test-art-host-run-test-interpreter: $(TEST_ART_HOST_RUN_TEST_INTERPRETER_TARGETS)
-	@echo test-art-host-run-test-interpreter PASSED
-
-.PHONY: test-art-host-run-test
-test-art-host-run-test: test-art-host-run-test-default test-art-host-run-test-interpreter test-art-host-run-test-optimizing
-	@echo test-art-host-run-test PASSED
+.PHONY: test-art-host-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX) \
+    test-art-host-run-test-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
+endif
 
 ########################################################################
 # target test targets
 
-# "mm test-art-target" to build and run all target tests
-define declare-test-art-target
-.PHONY: test-art-target$(1)
-test-art-target$(1): test-art-target-gtest$(1) test-art-target-oat$(1) test-art-target-run-test$(1)
-	@echo test-art-target$(1) PASSED
-endef
-$(eval $(call call-art-multi-target-rule,declare-test-art-target,test-art-target))
-
-define declare-test-art-target-dependencies
-.PHONY: test-art-target-dependencies$(1)
-test-art-target-dependencies$(1): $(ART_TARGET_TEST_DEPENDENCIES$(1)) $(ART_TARGET_LIBARTTEST_$(1))
-endef
-$(eval $(call call-art-multi-target-rule,declare-test-art-target-dependencies,test-art-target-dependencies))
-
-
 .PHONY: test-art-target-sync
-test-art-target-sync: test-art-target-dependencies$(ART_PHONY_TEST_TARGET_SUFFIX) test-art-target-dependencies$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target-sync: test-art-target-dependencies$(ART_PHONY_TEST_TARGET_SUFFIX) \
+    test-art-target-dependencies$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
 	adb remount
 	adb sync
-	adb shell mkdir -p $(ART_TEST_DIR)
+	adb shell mkdir -p $(ART_TARGET_TEST_DIR)
 
+# "mm test-art-target" to build and run all target tests.
+.PHONY: test-art-target
+test-art-target: test-art-target-gtest test-art-target-oat test-art-target-run-test
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-define declare-test-art-target-gtest
-.PHONY: test-art-target-gtest$(1)
-test-art-target-gtest$(1): $(ART_TARGET_GTEST_TARGETS$(1))
-	@echo test-art-target-gtest$(1) PASSED
-endef
-$(eval $(call call-art-multi-target-rule,declare-test-art-target-gtest,test-art-target-gtest))
+# All target tests that run solely with the default compiler.
+.PHONY: test-art-target-default
+test-art-target-default: test-art-target-oat-default test-art-target-run-test-default
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
+# All target tests that run solely with the optimizing compiler.
+.PHONY: test-art-target-optimizing
+test-art-target-optimizing: test-art-target-oat-optimizing test-art-target-run-test-optimizing
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-define declare-test-art-target-oat
-.PHONY: test-art-target-oat$(1)
-test-art-target-oat$(1): $(ART_TEST_TARGET_OAT_TARGETS$(1))
-	@echo test-art-target-oat$(1) PASSED
-endef
-$(eval $(call call-art-multi-target-rule,declare-test-art-target-oat,test-art-target-oat))
+# All target tests that run solely on the interpreter.
+.PHONY: test-art-target-interpreter
+test-art-target-interpreter: test-art-target-oat-interpreter test-art-target-run-test-interpreter
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
+# Primary target architecture variants:
+.PHONY: test-art-target$(ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target$(ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-gtest$(ART_PHONY_TEST_TARGET_SUFFIX) \
+    test-art-target-oat$(ART_PHONY_TEST_TARGET_SUFFIX) test-art-target-run-test$(ART_PHONY_TEST_TARGET_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 
-define declare-test-art-target-run-test-impl
-$(2)run_test_$(1) :=
-ifeq ($($(2)ART_PHONY_TEST_TARGET_SUFFIX),64)
- $(2)run_test_$(1) := --64
+.PHONY: test-art-target-default$(ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target-default$(ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-default$(ART_PHONY_TEST_TARGET_SUFFIX) \
+    test-art-target-run-test-default$(ART_PHONY_TEST_TARGET_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
+
+.PHONY: test-art-target-optimizing$(ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target-optimizing$(ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-optimizing$(ART_PHONY_TEST_TARGET_SUFFIX) \
+    test-art-target-run-test-optimizing$(ART_PHONY_TEST_TARGET_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
+
+.PHONY: test-art-target-interpreter$(ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target-interpreter$(ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-interpreter$(ART_PHONY_TEST_TARGET_SUFFIX) \
+    test-art-target-run-test-interpreter$(ART_PHONY_TEST_TARGET_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
+
+# Secondary target architecture variants:
+ifdef TARGET_2ND_ARCH
+.PHONY: test-art-target$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target$(2ND_ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-gtest$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) \
+    test-art-target-oat$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) test-art-target-run-test$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
+
+.PHONY: test-art-target-default$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target-default$(2ND_ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-default$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) \
+    test-art-target-run-test-default$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
+
+.PHONY: test-art-target-optimizing$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target-optimizing$(2ND_ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-optimizing$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) \
+    test-art-target-run-test-optimizing$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
+
+.PHONY: test-art-target-interpreter$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+test-art-target-interpreter$(2ND_ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-oat-interpreter$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) \
+    test-art-target-run-test-interpreter$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
+	$(call ART_TEST_PREREQ_FINISHED,$@)
 endif
-.PHONY: test-art-target-run-test-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX)
-test-art-target-run-test-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-sync $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
-	DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) art/test/run-test $(addprefix --runtime-option ,$(DALVIKVM_FLAGS)) $$($(2)run_test_$(1)) $(1)
-	@echo test-art-target-run-test-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX) PASSED
-endef
-
-define declare-test-art-target-run-test
-
-  ifdef TARGET_2ND_ARCH
-    $(call declare-test-art-target-run-test-impl,$(1),2ND_)
-    
-    TEST_ART_TARGET_RUN_TEST_TARGETS$(2ND_ART_PHONY_TEST_TARGET_SUFFIX) += test-art-target-run-test-$(1)$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
-
-    ifneq ($(ART_PHONY_TEST_TARGET_SUFFIX),)
-      # Link primary to non-suffix
-test-art-target-run-test-$(1): test-art-target-run-test-$(1)$(ART_PHONY_TEST_TARGET_SUFFIX)
-    endif
-  endif
-  $(call declare-test-art-target-run-test-impl,$(1),)
-
-  TEST_ART_TARGET_RUN_TEST_TARGETS$(ART_PHONY_TEST_TARGET_SUFFIX) += test-art-target-run-test-$(1)$(ART_PHONY_TEST_TARGET_SUFFIX)
-
-test-art-run-test-$(1): test-art-host-run-test-$(1) test-art-target-run-test-$(1)
-
-endef
-
-$(foreach test, $(TEST_ART_RUN_TESTS), $(eval $(call declare-test-art-target-run-test,$(test))))
-
-
-define declare-test-art-target-run-test
-.PHONY: test-art-target-run-test$(1)
-test-art-target-run-test$(1): $(TEST_ART_TARGET_RUN_TEST_TARGETS$(1))
-	@echo test-art-target-run-test$(1) PASSED
-endef
-$(eval $(call call-art-multi-target-rule,declare-test-art-target-run-test,test-art-target-run-test))
-
 
 ########################################################################
 # oat-target and oat-target-sync targets
@@ -396,71 +362,14 @@ build-art-target: $(ART_TARGET_EXECUTABLES) $(ART_TARGET_GTEST_EXECUTABLES) $(TA
 ########################################################################
 # "m art-host" for just building the files needed to run the art script
 .PHONY: art-host
-art-host:   $(HOST_OUT_EXECUTABLES)/art $(HOST_OUT)/bin/dalvikvm $(HOST_OUT)/lib/libart.so $(HOST_OUT)/bin/dex2oat $(HOST_CORE_IMG_OUT) $(HOST_OUT)/lib/libjavacore.so
+ifeq ($(HOST_PREFER_32_BIT),true)
+art-host:   $(HOST_OUT_EXECUTABLES)/art $(HOST_OUT)/bin/dalvikvm32 $(HOST_OUT)/lib/libart.so $(HOST_OUT)/bin/dex2oat $(HOST_CORE_IMG_OUT) $(HOST_OUT)/lib/libjavacore.so
+else
+art-host:   $(HOST_OUT_EXECUTABLES)/art $(HOST_OUT)/bin/dalvikvm64 $(HOST_OUT)/bin/dalvikvm32 $(HOST_OUT)/lib/libart.so $(HOST_OUT)/bin/dex2oat $(HOST_CORE_IMG_OUT) $(HOST_OUT)/lib/libjavacore.so
+endif
 
 .PHONY: art-host-debug
 art-host-debug:   art-host $(HOST_OUT)/lib/libartd.so $(HOST_OUT)/bin/dex2oatd
-
-########################################################################
-# oatdump targets
-
-ART_DUMP_OAT_PATH ?= $(OUT_DIR)
-
-OATDUMP := $(HOST_OUT_EXECUTABLES)/oatdump$(HOST_EXECUTABLE_SUFFIX)
-OATDUMPD := $(HOST_OUT_EXECUTABLES)/oatdumpd$(HOST_EXECUTABLE_SUFFIX)
-# TODO: for now, override with debug version for better error reporting
-OATDUMP := $(OATDUMPD)
-
-.PHONY: dump-oat
-dump-oat: dump-oat-core dump-oat-boot
-
-.PHONY: dump-oat-core
-dump-oat-core: dump-oat-core-host dump-oat-core-target
-
-.PHONY: dump-oat-core-host
-ifeq ($(ART_BUILD_HOST),true)
-dump-oat-core-host: $(HOST_CORE_IMG_OUT) $(OATDUMP)
-	$(OATDUMP) --image=$(HOST_CORE_IMG_LOCATION) --output=$(ART_DUMP_OAT_PATH)/core.host.oatdump.txt
-	@echo Output in $(ART_DUMP_OAT_PATH)/core.host.oatdump.txt
-endif
-
-.PHONY: dump-oat-core-target
-ifeq ($(ART_BUILD_TARGET),true)
-dump-oat-core-target: $(TARGET_CORE_IMG_OUT) $(OATDUMP)
-	$(OATDUMP) --image=$(TARGET_CORE_IMG_LOCATION) --output=$(ART_DUMP_OAT_PATH)/core.target.oatdump.txt --instruction-set=$(TARGET_ARCH)
-	@echo Output in $(ART_DUMP_OAT_PATH)/core.target.oatdump.txt
-endif
-
-.PHONY: dump-oat-boot-$(TARGET_ARCH)
-ifeq ($(ART_BUILD_TARGET_NDEBUG),true)
-dump-oat-boot-$(TARGET_ARCH): $(DEFAULT_DEX_PREOPT_BUILT_IMAGE_FILENAME) $(OATDUMP)
-	$(OATDUMP) --image=$(DEFAULT_DEX_PREOPT_BUILT_IMAGE_LOCATION) --output=$(ART_DUMP_OAT_PATH)/boot.$(TARGET_ARCH).oatdump.txt --instruction-set=$(TARGET_ARCH)
-	@echo Output in $(ART_DUMP_OAT_PATH)/boot.$(TARGET_ARCH).oatdump.txt
-endif
-
-ifdef TARGET_2ND_ARCH
-dump-oat-boot-$(TARGET_2ND_ARCH): $(2ND_DEFAULT_DEX_PREOPT_BUILT_IMAGE_FILENAME) $(OATDUMP)
-	$(OATDUMP) --image=$(2ND_DEFAULT_DEX_PREOPT_BUILT_IMAGE_LOCATION) --output=$(ART_DUMP_OAT_PATH)/boot.$(TARGET_2ND_ARCH).oatdump.txt --instruction-set=$(TARGET_2ND_ARCH)
-	@echo Output in $(ART_DUMP_OAT_PATH)/boot.$(TARGET_2ND_ARCH).oatdump.txt
-endif
-
-.PHONY: dump-oat-boot
-dump-oat-boot: dump-oat-boot-$(TARGET_ARCH)
-ifdef TARGET_2ND_ARCH
-dump-oat-boot: dump-oat-boot-$(TARGET_2ND_ARCH)
-endif
-
-.PHONY: dump-oat-Calculator
-ifeq ($(ART_BUILD_TARGET_NDEBUG),true)
-dump-oat-Calculator: $(TARGET_OUT_APPS)/Calculator.odex $(DEFAULT_DEX_PREOPT_BUILT_IMAGE) $(OATDUMP)
-	$(OATDUMP) --oat-file=$< --output=$(ART_DUMP_OAT_PATH)/Calculator.oatdump.txt
-	@echo Output in $(ART_DUMP_OAT_PATH)/Calculator.oatdump.txt
-endif
-
-########################################################################
-# cpplint targets to style check art source files
-
-include $(art_build_path)/Android.cpplint.mk
 
 ########################################################################
 # targets to switch back and forth from libdvm to libart
