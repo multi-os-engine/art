@@ -37,12 +37,6 @@ ART_BUILD_TARGET_DEBUG ?= true
 ART_BUILD_HOST_NDEBUG ?= true
 ART_BUILD_HOST_DEBUG ?= true
 
-ifeq ($(HOST_PREFER_32_BIT),true)
-ART_HOST_ARCH := $(HOST_2ND_ARCH)
-else
-ART_HOST_ARCH := $(HOST_ARCH)
-endif
-
 ifeq ($(ART_BUILD_TARGET_NDEBUG),false)
 $(info Disabling ART_BUILD_TARGET_NDEBUG)
 endif
@@ -160,13 +154,8 @@ ART_TEST_OUT := $(TARGET_OUT_DATA)/art-test
 
 # Primary vs. secondary
 2ND_TARGET_ARCH := $(TARGET_2ND_ARCH)
-ART_PHONY_TEST_TARGET_SUFFIX :=
-2ND_ART_PHONY_TEST_TARGET_SUFFIX :=
 ifdef TARGET_2ND_ARCH
-  art_test_primary_suffix :=
-  art_test_secondary_suffix :=
   ifneq ($(filter %64,$(TARGET_ARCH)),)
-    art_test_primary_suffix := 64
     ART_PHONY_TEST_TARGET_SUFFIX := 64
     2ND_ART_PHONY_TEST_TARGET_SUFFIX := 32
     ART_TARGET_ARCH_32 := $(TARGET_2ND_ARCH)
@@ -176,8 +165,28 @@ ifdef TARGET_2ND_ARCH
     $(error Do not know what to do with this multi-target configuration!)
   endif
 else
+  ART_PHONY_TEST_TARGET_SUFFIX := 32
+  2ND_ART_PHONY_TEST_TARGET_SUFFIX :=
   ART_TARGET_ARCH_32 := $(TARGET_ARCH)
   ART_TARGET_ARCH_64 :=
+endif
+
+ifeq ($(HOST_PREFER_32_BIT),true)
+  ART_PHONY_TEST_HOST_SUFFIX := 32
+  2ND_ART_PHONY_TEST_HOST_SUFFIX :=
+  ART_HOST_ARCH_32 := $(HOST_ARCH)
+  ART_HOST_ARCH_64 :=
+  ART_HOST_ARCH := $(HOST_ARCH)
+  2ND_ART_HOST_ARCH :=
+  2ND_HOST_ARCH :=
+else
+  ART_PHONY_TEST_HOST_SUFFIX := 64
+  2ND_ART_PHONY_TEST_HOST_SUFFIX := 32
+  ART_HOST_ARCH_32 := $(HOST_2ND_ARCH)
+  ART_HOST_ARCH_64 := $(HOST_ARCH)
+  ART_HOST_ARCH := $(HOST_ARCH)
+  2ND_ART_HOST_ARCH := $(HOST_2ND_ARCH)
+  2ND_HOST_ARCH := $(HOST_2ND_ARCH)
 endif
 
 ART_CPP_EXTENSION := .cc
@@ -316,20 +325,23 @@ ART_TARGET_DEBUG_CFLAGS := $(art_debug_cflags)
 
 # $(1): ndebug_or_debug
 define set-target-local-cflags-vars
-    LOCAL_CFLAGS += $(ART_TARGET_CFLAGS)
-    LOCAL_CFLAGS_x86 += $(ART_TARGET_CFLAGS_x86)
-    art_target_cflags_ndebug_or_debug := $(1)
-    ifeq ($$(art_target_cflags_ndebug_or_debug),debug)
-      LOCAL_CFLAGS += $(ART_TARGET_DEBUG_CFLAGS)
-    else
-      LOCAL_CFLAGS += $(ART_TARGET_NON_DEBUG_CFLAGS)
-    endif
+  LOCAL_CFLAGS += $(ART_TARGET_CFLAGS)
+  LOCAL_CFLAGS_x86 += $(ART_TARGET_CFLAGS_x86)
+  art_target_cflags_ndebug_or_debug := $(1)
+  ifeq ($$(art_target_cflags_ndebug_or_debug),debug)
+    LOCAL_CFLAGS += $(ART_TARGET_DEBUG_CFLAGS)
+  else
+    LOCAL_CFLAGS += $(ART_TARGET_NON_DEBUG_CFLAGS)
+  endif
 
-    # TODO: Also set when ART_TARGET_CLANG_$(arch)!=false and ART_TARGET_CLANG==true
-    $(foreach arch,$(ART_SUPPORTED_ARCH),
-    	ifeq ($$(ART_TARGET_CLANG_$(arch)),true)
-        LOCAL_CFLAGS_$(arch) += $$(ART_TARGET_CLANG_CFLAGS_$(arch))
-      endif)
+  # TODO: Also set when ART_TARGET_CLANG_$(arch)!=false and ART_TARGET_CLANG==true
+  $(foreach arch,$(ART_SUPPORTED_ARCH),
+  	ifeq ($$(ART_TARGET_CLANG_$(arch)),true)
+      LOCAL_CFLAGS_$(arch) += $$(ART_TARGET_CLANG_CFLAGS_$(arch))
+    endif)
+      
+  # Clear locally used variables.
+  art_target_cflags_ndebug_or_debug :=
 endef
 
 ART_BUILD_TARGET := false
@@ -420,18 +432,27 @@ $(2): $(2)$(ART_PHONY_TEST_TARGET_SUFFIX) $(2)$(2ND_ART_PHONY_TEST_TARGET_SUFFIX
 endef
 
 HOST_CORE_OAT := $(HOST_OUT_JAVA_LIBRARIES)/$(ART_HOST_ARCH)/core.oat
+ifneq ($(HOST_PREFER_32_BIT),true)
+2ND_HOST_CORE_OAT := $(HOST_OUT_JAVA_LIBRARIES)/$(2ND_ART_HOST_ARCH)/core.oat
+endif
 TARGET_CORE_OAT := $(ART_TEST_DIR)/$(DEX2OAT_TARGET_ARCH)/core.oat
 ifdef TARGET_2ND_ARCH
 2ND_TARGET_CORE_OAT := $(2ND_ART_TEST_DIR)/$($(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH)/core.oat
 endif
 
 HOST_CORE_OAT_OUT := $(HOST_OUT_JAVA_LIBRARIES)/$(ART_HOST_ARCH)/core.oat
+ifneq ($(HOST_PREFER_32_BIT),true)
+2ND_HOST_CORE_OAT_OUT := $(HOST_OUT_JAVA_LIBRARIES)/$(2ND_ART_HOST_ARCH)/core.oat
+endif
 TARGET_CORE_OAT_OUT := $(ART_TEST_OUT)/$(DEX2OAT_TARGET_ARCH)/core.oat
 ifdef TARGET_2ND_ARCH
 2ND_TARGET_CORE_OAT_OUT := $(ART_TEST_OUT)/$($(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH)/core.oat
 endif
 
 HOST_CORE_IMG_OUT := $(HOST_OUT_JAVA_LIBRARIES)/$(ART_HOST_ARCH)/core.art
+ifneq ($(HOST_PREFER_32_BIT),true)
+2ND_HOST_CORE_IMG_OUT := $(HOST_OUT_JAVA_LIBRARIES)/$(2ND_ART_HOST_ARCH)/core.art
+endif
 TARGET_CORE_IMG_OUT := $(ART_TEST_OUT)/$(DEX2OAT_TARGET_ARCH)/core.art
 ifdef TARGET_2ND_ARCH
 2ND_TARGET_CORE_IMG_OUT := $(ART_TEST_OUT)/$($(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH)/core.art
@@ -439,5 +460,60 @@ endif
 
 HOST_CORE_IMG_LOCATION := $(HOST_OUT_JAVA_LIBRARIES)/core.art
 TARGET_CORE_IMG_LOCATION := $(ART_TEST_OUT)/core.art
+
+# List of known broken tests that won't attempt to be executed. The test name must be the full
+# rule name such as test-art-host-oat-optimizing-HelloWorld64.
+ART_TEST_KNOWN_BROKEN := test-art-host-run-test-optimizing-003-omnibus-opcodes32
+
+# List of known failing tests that when executed won't cause test execution to finish. The test name
+# must be the full rule name such as test-art-host-oat-optimizing-HelloWorld64.
+ART_TEST_KNOWN_FAILING :=
+
+# Keep going after encountering a test failure?
+ART_TEST_KEEP_GOING ?= false
+
+# Define the command run on test failure. $(1) is the name of the test. Executed by the shell.
+define ART_TEST_FAILED
+  ( [ -f /tmp/test-art-$$PPID/skipped/$(1) ] || \
+    (mkdir -p /tmp/test-art-$$PPID/failed/ && touch /tmp/test-art-$$PPID/failed/$(1) && \
+      echo $(ART_TEST_KNOWN_FAILING) | grep -q $(1) \
+        && (echo -e "$(1) \e[91mKNOWN FAILURE\e[0m") \
+        || (echo -e "$(1) \e[91mFAILED\e[0m")))
+endef
+
+# Define the command run on test success. $(1) is the name of the test. Executed by the shell.
+define ART_TEST_PASSED
+  (mkdir -p /tmp/test-art-$$PPID/passed/ && touch /tmp/test-art-$$PPID/passed/$(1) && \
+    echo -e "$(1) \e[92mPASSED\e[0m")
+endef
+
+# Define the command run on test success of multiple prerequisites. $(1) is the name of the test.
+# When the test is a top-level make target then a summary of the ran tests is produced. Executed by
+# the shell.
+define ART_TEST_PREREQ_FINISHED
+  (echo -e "$(1) \e[32mCOMPLETE\e[0m" && \
+    (echo $(MAKECMDGOALS) | grep -q $(1) \
+      && (([ -d /tmp/test-art-$$PPID/passed/ ] \
+          && (echo -e "\e[92mPASSING TESTS\e[0m" && ls -1 /tmp/test-art-$$PPID/passed/) \
+          || (echo -e "\e[91mNO TESTS PASSED\e[0m")) && \
+        ([ -d /tmp/test-art-$$PPID/skipped/ ] \
+          && (echo -e "\e[93mSKIPPED TESTS\e[0m" && ls -1 /tmp/test-art-$$PPID/skipped/) \
+          || (echo -e "\e[92mNO TESTS SKIPPED\e[0m")) && \
+        ([ -d /tmp/test-art-$$PPID/failed/ ] \
+          && (echo -e "\e[91mFAILING TESTS\e[0m" && ls -1 /tmp/test-art-$$PPID/failed/) \
+          || (echo -e "\e[92mNO TESTS FAILED\e[0m"))) \
+      && rm -r /tmp/test-art-$$PPID \
+      || true))
+endef
+
+# Define the command executed by the shell ahead of running an art test. $(1) is the name of the
+# test.
+define ART_TEST_SKIP
+  (echo -e "$(1) \e[95mRUNNING\e[0m" && \
+    ([ $(ART_TEST_KEEP_GOING) = true ] || \
+      ([ ! -d /tmp/test-art-$$PPID/failed/ ] && echo $(ART_TEST_KNOWN_BROKEN) | grep -q -v $(1)) || \
+      (mkdir -p /tmp/test-art-$$PPID/skipped/ && touch /tmp/test-art-$$PPID/skipped/$(1) && \
+        echo -e "$(1) \e[93mSKIPPED\e[0m" && false)))
+endef
 
 endif # ANDROID_COMMON_MK

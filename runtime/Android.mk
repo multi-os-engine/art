@@ -419,6 +419,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     ifeq ($(HOST_OS),linux)
       LOCAL_LDLIBS += -lrt
     endif
+    LOCAL_MULTILIB := both
   endif
   ifeq ($(ART_USE_PORTABLE_COMPILER),true)
     include $(LLVM_GEN_INTRINSICS_MK)
@@ -428,7 +429,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
       include $(LLVM_HOST_BUILD_MK)
     endif
   endif
-  LOCAL_ADDITIONAL_DEPENDENCIES := art/build/Android.common.mk
+  # LOCAL_ADDITIONAL_DEPENDENCIES := art/build/Android.common.mk
   LOCAL_ADDITIONAL_DEPENDENCIES += $(LOCAL_PATH)/Android.mk
 
   ifeq ($$(art_target_or_host),target)

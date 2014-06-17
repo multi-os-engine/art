@@ -90,8 +90,8 @@ define build-art-executable
 
   ifeq ($$(art_target_or_host),target)
     LOCAL_MODULE_TARGET_ARCH := $(ART_SUPPORTED_ARCH)
-    LOCAL_MULTILIB := $$(art_multilib)
   endif
+  LOCAL_MULTILIB := $$(art_multilib)
 
   include external/libcxx/libcxx.mk
   ifeq ($$(art_target_or_host),target)
