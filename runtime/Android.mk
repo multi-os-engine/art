@@ -418,6 +418,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     ifeq ($(HOST_OS),linux)
       LOCAL_LDLIBS += -lrt
     endif
+    LOCAL_MULTILIB := both
   endif
   ifeq ($(ART_USE_PORTABLE_COMPILER),true)
     include $(LLVM_GEN_INTRINSICS_MK)

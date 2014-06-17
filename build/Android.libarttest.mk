@@ -67,6 +67,7 @@ define build-libarttest
       LOCAL_LDLIBS += -lrt
     endif
     LOCAL_IS_HOST_MODULE := true
+    LOCAL_MULTILIB := both
     include $(BUILD_HOST_SHARED_LIBRARY)
   endif
 endef

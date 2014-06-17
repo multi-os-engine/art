@@ -133,16 +133,15 @@ test-art: test-art-host test-art-target
 test-art-gtest: test-art-host-gtest test-art-target-gtest
 	@echo test-art-gtest PASSED
 
-.PHONY: test-art-oat
-test-art-oat: test-art-host-oat test-art-target-oat
-	@echo test-art-oat PASSED
-
 .PHONY: test-art-run-test
 test-art-run-test: test-art-host-run-test test-art-target-run-test
 	@echo test-art-run-test PASSED
 
 ########################################################################
 # host test targets
+
+.PHONY: test-art-host-dependencies
+test-art-host-dependencies: $(ART_HOST_TEST_DEPENDENCIES) $(HOST_LIBRARY_PATH)/libarttest$(ART_HOST_SHLIB_EXTENSION) $(HOST_CORE_DEX_LOCATIONS)
 
 .PHONY: test-art-host-vixl
 VIXL_TEST_DEPENDENCY :=
@@ -156,38 +155,48 @@ endif
 
 test-art-host-vixl: $(VIXL_TEST_DEPENDENCY)
 
-# "mm test-art-host" to build and run all host tests
+# "mm test-art-host" to build and run all host tests.
 .PHONY: test-art-host
 test-art-host: test-art-host-gtest test-art-host-oat test-art-host-run-test test-art-host-vixl
-	@echo test-art-host PASSED
+	@echo $$@ PASSED
 
+# All host tests that run solely with the default compiler.
+.PHONY: test-art-host-default
+test-art-host-default: test-art-host-oat-default test-art-host-run-test-default
+	@echo $$@ PASSED
+
+# All host tests that run solely on the interpreter.
 .PHONY: test-art-host-interpreter
 test-art-host-interpreter: test-art-host-oat-interpreter test-art-host-run-test-interpreter
-	@echo test-art-host-interpreter PASSED
+	@echo $$@ PASSED
 
-.PHONY: test-art-host-dependencies
-test-art-host-dependencies: $(ART_HOST_TEST_DEPENDENCIES) $(HOST_LIBRARY_PATH)/libarttest$(ART_HOST_SHLIB_EXTENSION) $(HOST_CORE_DEX_LOCATIONS)
+# Primary host architecture variants:
+.PHONY: test-art-host$(ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-gtest$(ART_PHONY_TEST_HOST_SUFFIX) test-art-host-oat$(ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test$(ART_PHONY_TEST_HOST_SUFFIX)
+	@echo $$@ PASSED
 
-.PHONY: test-art-host-gtest
-test-art-host-gtest: $(ART_HOST_GTEST_TARGETS)
-	@echo test-art-host-gtest PASSED
+.PHONY: test-art-host-default$(ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-default$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-default$(ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test-default$(ART_PHONY_TEST_HOST_SUFFIX)
+	@echo $$@ PASSED
 
-# "mm valgrind-test-art-host-gtest" to build and run the host gtests under valgrind.
-.PHONY: valgrind-test-art-host-gtest
-valgrind-test-art-host-gtest: $(ART_HOST_VALGRIND_GTEST_TARGETS)
-	@echo valgrind-test-art-host-gtest PASSED
+.PHONY: test-art-host-interpreter$(ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-interpreter$(ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-interpreter$(ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test-interpreter$(ART_PHONY_TEST_HOST_SUFFIX)
+	@echo $$@ PASSED
 
-.PHONY: test-art-host-oat-default
-test-art-host-oat-default: $(ART_TEST_HOST_OAT_DEFAULT_TARGETS)
-	@echo test-art-host-oat-default PASSED
+# Secondary host architecture variants:
+ifneq ($(HOST_PREFER_32_BIT),true)
+.PHONY: test-art-host$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-gtest$(2ND_ART_PHONY_TEST_HOST_SUFFIX) test-art-host-oat$(2ND_ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+	@echo $$@ PASSED
 
-.PHONY: test-art-host-oat-interpreter
-test-art-host-oat-interpreter: $(ART_TEST_HOST_OAT_INTERPRETER_TARGETS)
-	@echo test-art-host-oat-interpreter PASSED
+.PHONY: test-art-host-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test-default$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+	@echo $$@ PASSED
 
-.PHONY: test-art-host-oat
-test-art-host-oat: test-art-host-oat-default test-art-host-oat-interpreter
-	@echo test-art-host-oat PASSED
+.PHONY: test-art-host-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+test-art-host-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX): test-art-host-oat-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX) test-art-host-run-test-interpreter$(2ND_ART_PHONY_TEST_HOST_SUFFIX)
+	@echo $$@ PASSED
+endif
 
 define declare-test-art-host-run-test
 .PHONY: test-art-host-run-test-default-$(1)
@@ -248,26 +257,11 @@ test-art-target-sync: test-art-target-dependencies$(ART_PHONY_TEST_TARGET_SUFFIX
 	adb shell mkdir -p $(ART_TEST_DIR)
 
 
-define declare-test-art-target-gtest
-.PHONY: test-art-target-gtest$(1)
-test-art-target-gtest$(1): $(ART_TARGET_GTEST_TARGETS$(1))
-	@echo test-art-target-gtest$(1) PASSED
-endef
-$(eval $(call call-art-multi-target-rule,declare-test-art-target-gtest,test-art-target-gtest))
-
-
-define declare-test-art-target-oat
-.PHONY: test-art-target-oat$(1)
-test-art-target-oat$(1): $(ART_TEST_TARGET_OAT_TARGETS$(1))
-	@echo test-art-target-oat$(1) PASSED
-endef
-$(eval $(call call-art-multi-target-rule,declare-test-art-target-oat,test-art-target-oat))
-
 
 define declare-test-art-target-run-test-impl
 $(2)run_test_$(1) :=
 ifeq ($($(2)ART_PHONY_TEST_TARGET_SUFFIX),64)
- $(2)run_test_$(1) := --64
+  $(2)run_test_$(1) := --64
 endif
 .PHONY: test-art-target-run-test-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX)
 test-art-target-run-test-$(1)$($(2)ART_PHONY_TEST_TARGET_SUFFIX): test-art-target-sync $(DX) $(HOST_OUT_EXECUTABLES)/jasmin
@@ -372,7 +366,11 @@ build-art-target: $(ART_TARGET_EXECUTABLES) $(ART_TARGET_GTEST_EXECUTABLES) $(TA
 ########################################################################
 # "m art-host" for just building the files needed to run the art script
 .PHONY: art-host
-art-host:   $(HOST_OUT_EXECUTABLES)/art $(HOST_OUT)/bin/dalvikvm $(HOST_OUT)/lib/libart.so $(HOST_OUT)/bin/dex2oat $(HOST_CORE_IMG_OUT) $(HOST_OUT)/lib/libjavacore.so
+ifeq ($(HOST_PREFER_32_BIT),true)
+art-host:   $(HOST_OUT_EXECUTABLES)/art $(HOST_OUT)/bin/dalvikvm32 $(HOST_OUT)/lib/libart.so $(HOST_OUT)/bin/dex2oat $(HOST_CORE_IMG_OUT) $(HOST_OUT)/lib/libjavacore.so
+else
+art-host:   $(HOST_OUT_EXECUTABLES)/art $(HOST_OUT)/bin/dalvikvm64 $(HOST_OUT)/bin/dalvikvm32 $(HOST_OUT)/lib/libart.so $(HOST_OUT)/bin/dex2oat $(HOST_CORE_IMG_OUT) $(HOST_OUT)/lib/libjavacore.so
+endif
 
 .PHONY: art-host-debug
 art-host-debug:   art-host $(HOST_OUT)/lib/libartd.so $(HOST_OUT)/bin/dex2oatd

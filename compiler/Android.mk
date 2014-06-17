@@ -256,6 +256,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     include $(BUILD_SHARED_LIBRARY)
   else # host
     LOCAL_STATIC_LIBRARIES += libcutils libvixl
+    LOCAL_MULTILIB := both
     include $(BUILD_HOST_SHARED_LIBRARY)
   endif
 
