@@ -111,6 +111,12 @@ void RegisterAllocator::AllocateRegistersInternal() {
   // is the one with the lowest start position.
   for (size_t i = liveness_.GetNumberOfSsaValues(); i > 0; --i) {
     HInstruction* instruction = liveness_.GetInstructionFromSsaIndex(i - 1);
+    if (instruction->IsCondition()) {
+      HCondition* cond = instruction->AsCondition();
+      if (!cond->NeedsMaterialization()) {
+        continue;
+      }
+    }
     LiveInterval* current = instruction->GetLiveInterval();
     if (ShouldProcess(processing_core_registers_, current)) {
       DCHECK(unhandled_.IsEmpty() || current->StartsBefore(unhandled_.Peek()));
