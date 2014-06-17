@@ -1284,13 +1284,6 @@ TEST_F(JniCompilerTest, WithoutImplementation) {
   EXPECT_TRUE(env_->ExceptionCheck() == JNI_TRUE);
 }
 
-template <typename U, typename V> V convert(U in) {
-  DCHECK_LE(sizeof(U), sizeof(V));
-  union { U u; V v; } tmp;
-  tmp.u = in;
-  return tmp.v;
-}
-
 void Java_MyClassNatives_stackArgsIntsFirst(JNIEnv* env, jclass klass, jint i1, jint i2, jint i3,
                                             jint i4, jint i5, jint i6, jint i7, jint i8, jint i9,
                                             jint i10, jfloat f1, jfloat f2, jfloat f3, jfloat f4,

@@ -203,6 +203,17 @@ static inline bool NeedsEscaping(uint16_t ch) {
   return (ch < ' ' || ch > '~');
 }
 
+template<typename U, typename V>
+static inline V convert(U in) {
+  COMPILE_ASSERT(sizeof(U) <= sizeof(V), size_of_u_not_le_size_of_v);
+  union {
+    U u;
+    V v;
+  } tmp;
+  tmp.u = in;
+  return tmp.v;
+}
+
 std::string PrintableChar(uint16_t ch);
 
 // Returns an ASCII string corresponding to the given UTF-8 string.
