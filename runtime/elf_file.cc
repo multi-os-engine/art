@@ -129,22 +129,29 @@ ElfFile::ElfFile(File* file, bool writable, bool program_header_only)
 ElfFile* ElfFile::Open(File* file, bool writable, bool program_header_only,
                        std::string* error_msg) {
   std::unique_ptr<ElfFile> elf_file(new ElfFile(file, writable, program_header_only));
-  if (!elf_file->Setup(error_msg)) {
-    return nullptr;
-  }
-  return elf_file.release();
-}
-
-bool ElfFile::Setup(std::string* error_msg) {
-  int prot;
-  int flags;
-  if (writable_) {
+  int prot, flags;
+  if (writable) {
     prot = PROT_READ | PROT_WRITE;
     flags = MAP_SHARED;
   } else {
     prot = PROT_READ;
     flags = MAP_PRIVATE;
   }
+  if (!elf_file->Setup(prot, flags, error_msg)) {
+    return nullptr;
+  }
+  return elf_file.release();
+}
+
+ElfFile* ElfFile::Open(File* file, int prot, int flags, std::string* error_msg) {
+  std::unique_ptr<ElfFile> elf_file(new ElfFile(file, (prot & PROT_WRITE) == PROT_WRITE, false));
+  if (!elf_file->Setup(prot, flags, error_msg)) {
+    return nullptr;
+  }
+  return elf_file.release();
+}
+
+bool ElfFile::Setup(int prot, int flags, std::string* error_msg) {
   int64_t temp_file_length = file_->GetLength();
   if (temp_file_length < 0) {
     errno = -temp_file_length;
@@ -565,6 +572,15 @@ Elf32_Shdr& ElfFile::GetSectionNameStringSection() const {
 }
 
 const byte* ElfFile::FindDynamicSymbolAddress(const std::string& symbol_name) const {
+  const Elf32_Sym* sym = FindDynamicSymbol(symbol_name);
+  if (sym != NULL) {
+    return base_address_ + sym->st_value;
+  } else {
+    return NULL;
+  }
+}
+
+const Elf32_Sym* ElfFile::FindDynamicSymbol(const std::string& symbol_name) const {
   Elf32_Word hash = elfhash(symbol_name.c_str());
   Elf32_Word bucket_index = hash % GetHashBucketNum();
   Elf32_Word symbol_and_chain_index = GetHashBucket(bucket_index);
@@ -572,7 +588,7 @@ const byte* ElfFile::FindDynamicSymbolAddress(const std::string& symbol_name) co
     Elf32_Sym& symbol = GetSymbol(SHT_DYNSYM, symbol_and_chain_index);
     const char* name = GetString(SHT_DYNSYM, symbol.st_name);
     if (symbol_name == name) {
-      return base_address_ + symbol.st_value;
+      return &symbol;
     }
     symbol_and_chain_index = GetHashChain(symbol_and_chain_index);
   }
@@ -970,12 +986,6 @@ bool ElfFile::ValidPointer(const byte* start) const {
   return false;
 }
 
-static bool check_section_name(ElfFile& file, int section_num, const char *name) {
-  Elf32_Shdr& section_header = file.GetSectionHeader(section_num);
-  const char *section_name = file.GetString(SHT_SYMTAB, section_header.sh_name);
-  return strcmp(name, section_name) == 0;
-}
-
 static void IncrementUint32(byte *p, uint32_t increment) {
   uint32_t *u = reinterpret_cast<uint32_t *>(p);
   *u += increment;
@@ -986,6 +996,42 @@ static void RoundAndClear(byte *image, uint32_t& offset, int pwr2) {
   while (offset & mask) {
     image[offset++] = 0;
   }
+}
+
+// pool is an array of chars at least 'len' items long. target is a null
+// terminated string. Returns the array index of the null terminated string
+// target within pool, or -1 if it is not present in pool.
+static int32_t FindStringWithin(const byte* pool, size_t len, const std::string& target) {
+  std::string real_target;
+  // Make the actual string "\0<String>\0" and search for that using memmem
+  real_target += '\0';
+  real_target += target;
+  real_target += '\0';
+  intptr_t res = reinterpret_cast<intptr_t>(memmem(
+      pool, len, real_target.c_str(), real_target.size()));
+  if (res == 0) {
+    return -1;
+  } else {
+    // Add 1 to account for leading '\0'.
+    return static_cast<int32_t>(1 + res - reinterpret_cast<intptr_t>(pool));
+  }
+}
+
+Elf32_Shdr* ElfFile::FindSectionByName(const std::string& name) const {
+  CHECK(!program_header_only_);
+  Elf32_Shdr& shstrtab_sec = GetSectionNameStringSection();
+  const byte* shstrtab = Begin() + shstrtab_sec.sh_offset;
+  intptr_t name_idx = FindStringWithin(shstrtab, shstrtab_sec.sh_size, ".shstrtab");
+  if (name_idx == -1) {
+    return NULL;
+  }
+  for (uint32_t i = 0; i < GetSectionHeaderNum(); i++) {
+    Elf32_Shdr& shdr = GetSectionHeader(i);
+    if (shdr.sh_name == static_cast<uintptr_t>(name_idx)) {
+      return &shdr;
+    }
+  }
+  return NULL;
 }
 
 // Simple macro to bump a point to a section header to the next one.
@@ -1000,18 +1046,26 @@ void ElfFile::GdbJITSupport() {
 
   // Well, we need the whole file to do this.
   std::string error_msg;
-  std::unique_ptr<ElfFile> ptr(Open(const_cast<File*>(file_), false, false, &error_msg));
-  ElfFile& all = *ptr;
+  // Make it MAP_PRIVATE so we can just give it to gdb if all the nessecary
+  // sections are there.
+  std::unique_ptr<ElfFile> all_ptr(Open(const_cast<File*>(file_), PROT_READ | PROT_WRITE,
+                                        MAP_PRIVATE, &error_msg));
+  if (all_ptr.get() == nullptr) {
+    return;
+  }
+  ElfFile& all = *all_ptr;
 
   // Do we have interesting sections?
   // Is this an OAT file with interesting sections?
-  if (all.GetSectionHeaderNum() != kExpectedSectionsInOATFile) {
+  if (all.GetSectionHeaderNum() < kExpectedSectionsInOATFile) {
     return;
   }
-  if (!check_section_name(all, 8, ".debug_info") ||
-      !check_section_name(all, 9, ".debug_abbrev") ||
-      !check_section_name(all, 10, ".debug_frame") ||
-      !check_section_name(all, 11, ".debug_str")) {
+  Elf32_Shdr *info, *abbrev, *frame, *str;
+  if ((info = all.FindSectionByName(".debug_info")) == NULL ||
+      (abbrev = all.FindSectionByName(".debug_abbrev")) == NULL ||
+      (frame = all.FindSectionByName(".debug_frame")) == NULL ||
+      (str = all.FindSectionByName(".debug_str")) == NULL ||
+      all.FindSectionByName(".text") == NULL) {
     return;
   }
 #ifdef __LP64__
@@ -1019,227 +1073,232 @@ void ElfFile::GdbJITSupport() {
     return;  // No ELF debug support in 64bit.
   }
 #endif
-  // This is not needed if we have no .text segment.
-  uint32_t text_start_addr = 0;
-  for (uint32_t i = 0; i < segments_.size(); i++) {
-    if (segments_[i]->GetProtect() & PROT_EXEC) {
-      // We found the .text section.
-      text_start_addr = PointerToLowMemUInt32(segments_[i]->Begin());
-      break;
+  // TODO This entire thing should be rewritten to eliminate any reliance on the
+  // linkers' decisions about where to put the sections.
+  //
+  // If there are exactly the right number of sections we should be fine using
+  // the old method
+  if (all.GetSectionHeaderNum() == kExpectedSectionsInOATFile) {
+    // This is not needed if we have no .text segment.
+    uint32_t text_start_addr = 0;
+    for (uint32_t i = 0; i < segments_.size(); i++) {
+      if (segments_[i]->GetProtect() & PROT_EXEC) {
+        // We found the .text section.
+        text_start_addr = PointerToLowMemUInt32(segments_[i]->Begin());
+        break;
+      }
     }
-  }
-  if (text_start_addr == 0U) {
-    return;
-  }
-
-  // Okay, we are good enough.  Fake up an ELF image and tell GDB about it.
-  // We need some extra space for the debug and string sections, the ELF header, and the
-  // section header.
-  uint32_t needed_size = KB;
-
-  for (Elf32_Word i = 1; i < all.GetSectionHeaderNum(); i++) {
-    Elf32_Shdr& section_header = all.GetSectionHeader(i);
-    if (section_header.sh_addr == 0 && section_header.sh_type != SHT_DYNSYM) {
-      // Debug section: we need it.
-      needed_size += section_header.sh_size;
-    } else if (section_header.sh_type == SHT_STRTAB &&
-                strcmp(".shstrtab",
-                       all.GetString(SHT_SYMTAB, section_header.sh_name)) == 0) {
-      // We also need the shared string table.
-      needed_size += section_header.sh_size;
-
-      // We also need the extra strings .symtab\0.strtab\0
-      needed_size += 16;
+    if (text_start_addr == 0U) {
+      return;
     }
-  }
 
-  // Start creating our image.
-  jit_elf_image_ = new byte[needed_size];
+    // Okay, we are good enough.  Fake up an ELF image and tell GDB about it.
+    // We need some extra space for the debug and string sections, the ELF header, and the
+    // section header.
+    uint32_t needed_size = KB + info->sh_size + abbrev->sh_size + frame->sh_size
+                              + str->sh_size + all.GetSectionNameStringSection().sh_size + 16;
 
-  // Create the Elf Header by copying the old one
-  Elf32_Ehdr& elf_hdr =
-    *reinterpret_cast<Elf32_Ehdr*>(jit_elf_image_);
+    // Start creating our image.
+    jit_elf_image_ = new byte[needed_size];
 
-  elf_hdr = all.GetHeader();
-  elf_hdr.e_entry = 0;
-  elf_hdr.e_phoff = 0;
-  elf_hdr.e_phnum = 0;
-  elf_hdr.e_phentsize = 0;
-  elf_hdr.e_type = ET_EXEC;
+    // Create the Elf Header by copying the old one
+    Elf32_Ehdr& elf_hdr =
+      *reinterpret_cast<Elf32_Ehdr*>(jit_elf_image_);
 
-  uint32_t offset = sizeof(Elf32_Ehdr);
+    elf_hdr = all.GetHeader();
+    elf_hdr.e_entry = 0;
+    elf_hdr.e_phoff = 0;
+    elf_hdr.e_phnum = 0;
+    elf_hdr.e_phentsize = 0;
+    elf_hdr.e_type = ET_EXEC;
 
-  // Copy the debug sections and string table.
-  uint32_t debug_offsets[kExpectedSectionsInOATFile];
-  memset(debug_offsets, '\0', sizeof debug_offsets);
-  Elf32_Shdr *text_header = nullptr;
-  int extra_shstrtab_entries = -1;
-  int text_section_index = -1;
-  int section_index = 1;
-  for (Elf32_Word i = 1; i < kExpectedSectionsInOATFile; i++) {
-    Elf32_Shdr& section_header = all.GetSectionHeader(i);
-    // Round up to multiple of 4, ensuring zero fill.
-    RoundAndClear(jit_elf_image_, offset, 4);
-    if (section_header.sh_addr == 0 && section_header.sh_type != SHT_DYNSYM) {
-      // Debug section: we need it.  Unfortunately, it wasn't mapped in.
-      debug_offsets[i] = offset;
-      // Read it from the file.
-      lseek(file_->Fd(), section_header.sh_offset, SEEK_SET);
-      read(file_->Fd(), jit_elf_image_ + offset, section_header.sh_size);
-      offset += section_header.sh_size;
-      section_index++;
-      offset += 16;
-    } else if (section_header.sh_type == SHT_STRTAB &&
-                strcmp(".shstrtab",
-                       all.GetString(SHT_SYMTAB, section_header.sh_name)) == 0) {
-      // We also need the shared string table.
-      debug_offsets[i] = offset;
-      // Read it from the file.
-      lseek(file_->Fd(), section_header.sh_offset, SEEK_SET);
-      read(file_->Fd(), jit_elf_image_ + offset, section_header.sh_size);
-      offset += section_header.sh_size;
-      // We also need the extra strings .symtab\0.strtab\0
-      extra_shstrtab_entries = section_header.sh_size;
-      memcpy(jit_elf_image_+offset, ".symtab\0.strtab\0", 16);
-      offset += 16;
-      section_index++;
-    } else if (section_header.sh_flags & SHF_EXECINSTR) {
-      DCHECK(strcmp(".text", all.GetString(SHT_SYMTAB,
-                                           section_header.sh_name)) == 0);
-      text_header = &section_header;
-      text_section_index = section_index++;
+    uint32_t offset = sizeof(Elf32_Ehdr);
+
+    // Copy the debug sections and string table.
+    uint32_t debug_offsets[kExpectedSectionsInOATFile];
+    memset(debug_offsets, '\0', sizeof debug_offsets);
+    Elf32_Shdr *text_header = nullptr;
+    int extra_shstrtab_entries = -1;
+    int text_section_index = -1;
+    int section_index = 1;
+    for (Elf32_Word i = 1; i < kExpectedSectionsInOATFile; i++) {
+      Elf32_Shdr& section_header = all.GetSectionHeader(i);
+      // Round up to multiple of 4, ensuring zero fill.
+      RoundAndClear(jit_elf_image_, offset, 4);
+      if (section_header.sh_addr == 0 && section_header.sh_type != SHT_DYNSYM) {
+        // Debug section: we need it.  Unfortunately, it wasn't mapped in.
+        debug_offsets[i] = offset;
+        // Read it from the file.
+        lseek(file_->Fd(), section_header.sh_offset, SEEK_SET);
+        read(file_->Fd(), jit_elf_image_ + offset, section_header.sh_size);
+        offset += section_header.sh_size;
+        section_index++;
+        offset += 16;
+      } else if (section_header.sh_type == SHT_STRTAB &&
+                  strcmp(".shstrtab",
+                        all.GetString(SHT_SYMTAB, section_header.sh_name)) == 0) {
+        // We also need the shared string table.
+        debug_offsets[i] = offset;
+        // Read it from the file.
+        lseek(file_->Fd(), section_header.sh_offset, SEEK_SET);
+        read(file_->Fd(), jit_elf_image_ + offset, section_header.sh_size);
+        offset += section_header.sh_size;
+        // We also need the extra strings .symtab\0.strtab\0
+        extra_shstrtab_entries = section_header.sh_size;
+        memcpy(jit_elf_image_+offset, ".symtab\0.strtab\0", 16);
+        offset += 16;
+        section_index++;
+      } else if (section_header.sh_flags & SHF_EXECINSTR) {
+        DCHECK(strcmp(".text", all.GetString(SHT_SYMTAB,
+                                            section_header.sh_name)) == 0);
+        text_header = &section_header;
+        text_section_index = section_index++;
+      }
     }
-  }
-  DCHECK(text_header != nullptr);
-  DCHECK_NE(extra_shstrtab_entries, -1);
+    DCHECK(text_header != nullptr);
+    DCHECK_NE(extra_shstrtab_entries, -1);
 
-  // We now need to update the addresses for debug_info and debug_frame to get to the
-  // correct offset within the .text section.
-  byte *p = jit_elf_image_+debug_offsets[8];
-  byte *end = p + all.GetSectionHeader(8).sh_size;
+    // We now need to update the addresses for debug_info and debug_frame to get to the
+    // correct offset within the .text section.
+    byte *p = jit_elf_image_+debug_offsets[8];
+    byte *end = p + all.GetSectionHeader(8).sh_size;
 
-  // For debug_info; patch compilation using low_pc @ offset 13, high_pc at offset 17.
-  IncrementUint32(p + 13, text_start_addr);
-  IncrementUint32(p + 17, text_start_addr);
+    // For debug_info; patch compilation using low_pc @ offset 13, high_pc at offset 17.
+    IncrementUint32(p + 13, text_start_addr);
+    IncrementUint32(p + 17, text_start_addr);
 
-  // Now fix the low_pc, high_pc for each method address.
-  // First method starts at offset 0x15, each subsequent method is 1+3*4 bytes further.
-  for (p += 0x15; p < end; p += 1 /* attr# */ + 3 * sizeof(uint32_t) /* addresses */) {
-    IncrementUint32(p + 1 + sizeof(uint32_t), text_start_addr);
-    IncrementUint32(p + 1 + 2 * sizeof(uint32_t), text_start_addr);
-  }
-
-  // Now we have to handle the debug_frame method start addresses
-  p = jit_elf_image_+debug_offsets[10];
-  end = p + all.GetSectionHeader(10).sh_size;
-
-  // Skip past the CIE.
-  p += *reinterpret_cast<uint32_t *>(p) + 4;
-
-  // And walk the FDEs.
-  for (; p < end; p += *reinterpret_cast<uint32_t *>(p) + sizeof(uint32_t)) {
-    IncrementUint32(p + 2 * sizeof(uint32_t), text_start_addr);
-  }
-
-  // Create the data for the symbol table.
-  const int kSymbtabAlignment = 16;
-  RoundAndClear(jit_elf_image_, offset, kSymbtabAlignment);
-  uint32_t symtab_offset = offset;
-
-  // First entry is empty.
-  memset(jit_elf_image_+offset, 0, sizeof(Elf32_Sym));
-  offset += sizeof(Elf32_Sym);
-
-  // Symbol 1 is the real .text section.
-  Elf32_Sym& sym_ent = *reinterpret_cast<Elf32_Sym*>(jit_elf_image_+offset);
-  sym_ent.st_name = 1; /* .text */
-  sym_ent.st_value = text_start_addr;
-  sym_ent.st_size = text_header->sh_size;
-  SetBindingAndType(&sym_ent, STB_LOCAL, STT_SECTION);
-  sym_ent.st_other = 0;
-  sym_ent.st_shndx = text_section_index;
-  offset += sizeof(Elf32_Sym);
-
-  // Create the data for the string table.
-  RoundAndClear(jit_elf_image_, offset, kSymbtabAlignment);
-  const int kTextStringSize = 7;
-  uint32_t strtab_offset = offset;
-  memcpy(jit_elf_image_+offset, "\0.text", kTextStringSize);
-  offset += kTextStringSize;
-
-  // Create the section header table.
-  // Round up to multiple of kSymbtabAlignment, ensuring zero fill.
-  RoundAndClear(jit_elf_image_, offset, kSymbtabAlignment);
-  elf_hdr.e_shoff = offset;
-  Elf32_Shdr *sp =
-    reinterpret_cast<Elf32_Shdr *>(jit_elf_image_ + offset);
-
-  // Copy the first empty index.
-  *sp = all.GetSectionHeader(0);
-  BUMP_SHENT(sp);
-
-  elf_hdr.e_shnum = 1;
-  for (Elf32_Word i = 1; i < kExpectedSectionsInOATFile; i++) {
-    Elf32_Shdr& section_header = all.GetSectionHeader(i);
-    if (section_header.sh_addr == 0 && section_header.sh_type != SHT_DYNSYM) {
-      // Debug section: we need it.
-      *sp = section_header;
-      sp->sh_offset = debug_offsets[i];
-      sp->sh_addr = 0;
-      elf_hdr.e_shnum++;
-      BUMP_SHENT(sp);
-    } else if (section_header.sh_type == SHT_STRTAB &&
-                strcmp(".shstrtab",
-                       all.GetString(SHT_SYMTAB, section_header.sh_name)) == 0) {
-      // We also need the shared string table.
-      *sp = section_header;
-      sp->sh_offset = debug_offsets[i];
-      sp->sh_size += 16; /* sizeof ".symtab\0.strtab\0" */
-      sp->sh_addr = 0;
-      elf_hdr.e_shstrndx = elf_hdr.e_shnum;
-      elf_hdr.e_shnum++;
-      BUMP_SHENT(sp);
+    // Now fix the low_pc, high_pc for each method address.
+    // First method starts at offset 0x15, each subsequent method is 1+3*4 bytes further.
+    for (p += 0x15; p < end; p += 1 /* attr# */ + 3 * sizeof(uint32_t) /* addresses */) {
+      IncrementUint32(p + 1 + sizeof(uint32_t), text_start_addr);
+      IncrementUint32(p + 1 + 2 * sizeof(uint32_t), text_start_addr);
     }
+
+    // Now we have to handle the debug_frame method start addresses
+    p = jit_elf_image_+debug_offsets[10];
+    end = p + all.GetSectionHeader(10).sh_size;
+
+    // Skip past the CIE.
+    p += *reinterpret_cast<uint32_t *>(p) + 4;
+
+    // And walk the FDEs.
+    for (; p < end; p += *reinterpret_cast<uint32_t *>(p) + sizeof(uint32_t)) {
+      IncrementUint32(p + 2 * sizeof(uint32_t), text_start_addr);
+    }
+
+    // Create the data for the symbol table.
+    const int kSymbtabAlignment = 16;
+    RoundAndClear(jit_elf_image_, offset, kSymbtabAlignment);
+    uint32_t symtab_offset = offset;
+
+    // First entry is empty.
+    memset(jit_elf_image_+offset, 0, sizeof(Elf32_Sym));
+    offset += sizeof(Elf32_Sym);
+
+    // Symbol 1 is the real .text section.
+    Elf32_Sym& sym_ent = *reinterpret_cast<Elf32_Sym*>(jit_elf_image_+offset);
+    sym_ent.st_name = 1; /* .text */
+    sym_ent.st_value = text_start_addr;
+    sym_ent.st_size = text_header->sh_size;
+    SetBindingAndType(&sym_ent, STB_LOCAL, STT_SECTION);
+    sym_ent.st_other = 0;
+    sym_ent.st_shndx = text_section_index;
+    offset += sizeof(Elf32_Sym);
+
+    // Create the data for the string table.
+    RoundAndClear(jit_elf_image_, offset, kSymbtabAlignment);
+    const int kTextStringSize = 7;
+    uint32_t strtab_offset = offset;
+    memcpy(jit_elf_image_+offset, "\0.text", kTextStringSize);
+    offset += kTextStringSize;
+
+    // Create the section header table.
+    // Round up to multiple of kSymbtabAlignment, ensuring zero fill.
+    RoundAndClear(jit_elf_image_, offset, kSymbtabAlignment);
+    elf_hdr.e_shoff = offset;
+    Elf32_Shdr *sp =
+      reinterpret_cast<Elf32_Shdr *>(jit_elf_image_ + offset);
+
+    // Copy the first empty index.
+    *sp = all.GetSectionHeader(0);
+    BUMP_SHENT(sp);
+
+    elf_hdr.e_shnum = 1;
+    for (Elf32_Word i = 1; i < kExpectedSectionsInOATFile; i++) {
+      Elf32_Shdr& section_header = all.GetSectionHeader(i);
+      if (section_header.sh_addr == 0 && section_header.sh_type != SHT_DYNSYM) {
+        // Debug section: we need it.
+        *sp = section_header;
+        sp->sh_offset = debug_offsets[i];
+        sp->sh_addr = 0;
+        elf_hdr.e_shnum++;
+        BUMP_SHENT(sp);
+      } else if (section_header.sh_type == SHT_STRTAB &&
+                  strcmp(".shstrtab",
+                        all.GetString(SHT_SYMTAB, section_header.sh_name)) == 0) {
+        // We also need the shared string table.
+        *sp = section_header;
+        sp->sh_offset = debug_offsets[i];
+        sp->sh_size += 16; /* sizeof ".symtab\0.strtab\0" */
+        sp->sh_addr = 0;
+        elf_hdr.e_shstrndx = elf_hdr.e_shnum;
+        elf_hdr.e_shnum++;
+        BUMP_SHENT(sp);
+      }
+    }
+
+    // Add a .text section for the matching code section.
+    *sp = *text_header;
+    sp->sh_type = SHT_NOBITS;
+    sp->sh_offset = 0;
+    sp->sh_addr = text_start_addr;
+    elf_hdr.e_shnum++;
+    BUMP_SHENT(sp);
+
+    // .symtab section:  Need an empty index and the .text entry
+    sp->sh_name = extra_shstrtab_entries;
+    sp->sh_type = SHT_SYMTAB;
+    sp->sh_flags = 0;
+    sp->sh_addr = 0;
+    sp->sh_offset = symtab_offset;
+    sp->sh_size = 2 * sizeof(Elf32_Sym);
+    sp->sh_link = elf_hdr.e_shnum + 1;  // Link to .strtab section.
+    sp->sh_info = 0;
+    sp->sh_addralign = 16;
+    sp->sh_entsize = sizeof(Elf32_Sym);
+    elf_hdr.e_shnum++;
+    BUMP_SHENT(sp);
+
+    // .strtab section:  Enough for .text\0.
+    sp->sh_name = extra_shstrtab_entries + 8;
+    sp->sh_type = SHT_STRTAB;
+    sp->sh_flags = 0;
+    sp->sh_addr = 0;
+    sp->sh_offset = strtab_offset;
+    sp->sh_size = kTextStringSize;
+    sp->sh_link = 0;
+    sp->sh_info = 0;
+    sp->sh_addralign = 16;
+    sp->sh_entsize = 0;
+    elf_hdr.e_shnum++;
+    BUMP_SHENT(sp);
+
+    // We now have enough information to tell GDB about our file.
+    jit_gdb_entry_ = CreateCodeEntry(jit_elf_image_, offset);
+  } else if (all.FindSectionByName(".strtab") != NULL &&
+             all.FindSectionByName(".symtab") != NULL) {
+    // all is MAP_PRIVATE so it can be written to freely.
+    // We also already have strtab and symtab so we are fine there.
+    Elf32_Shdr* text_sec = all.FindSectionByName(".text");
+    text_sec->sh_type = SHT_NOBITS;
+    text_sec->sh_offset = 0;
+    // Point text_sec->sh_addr to the real text section
+    text_sec->sh_addr = reinterpret_cast<Elf32_Addr>(FindDynamicSymbolAddress("oatexec"));
+    jit_gdb_entry_ = CreateCodeEntry(all.Begin(), all.Size());
+    gdb_file_mapping_.reset(all_ptr.release());
+  } else {
+    LOG(WARNING) << "Unable to initialize GDB Support.";
   }
-
-  // Add a .text section for the matching code section.
-  *sp = *text_header;
-  sp->sh_type = SHT_NOBITS;
-  sp->sh_offset = 0;
-  sp->sh_addr = text_start_addr;
-  elf_hdr.e_shnum++;
-  BUMP_SHENT(sp);
-
-  // .symtab section:  Need an empty index and the .text entry
-  sp->sh_name = extra_shstrtab_entries;
-  sp->sh_type = SHT_SYMTAB;
-  sp->sh_flags = 0;
-  sp->sh_addr = 0;
-  sp->sh_offset = symtab_offset;
-  sp->sh_size = 2 * sizeof(Elf32_Sym);
-  sp->sh_link = elf_hdr.e_shnum + 1;  // Link to .strtab section.
-  sp->sh_info = 0;
-  sp->sh_addralign = 16;
-  sp->sh_entsize = sizeof(Elf32_Sym);
-  elf_hdr.e_shnum++;
-  BUMP_SHENT(sp);
-
-  // .strtab section:  Enough for .text\0.
-  sp->sh_name = extra_shstrtab_entries + 8;
-  sp->sh_type = SHT_STRTAB;
-  sp->sh_flags = 0;
-  sp->sh_addr = 0;
-  sp->sh_offset = strtab_offset;
-  sp->sh_size = kTextStringSize;
-  sp->sh_link = 0;
-  sp->sh_info = 0;
-  sp->sh_addralign = 16;
-  sp->sh_entsize = 0;
-  elf_hdr.e_shnum++;
-  BUMP_SHENT(sp);
-
-  // We now have enough information to tell GDB about our file.
-  jit_gdb_entry_ = CreateCodeEntry(jit_elf_image_, offset);
 }
 
 }  // namespace art
