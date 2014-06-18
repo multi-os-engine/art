@@ -52,6 +52,7 @@ static const uint32_t kAccPortableCompiled = 0x0100000;  // method (dex only)
 // Special runtime-only flags.
 // Note: if only kAccClassIsReference is set, we have a soft reference.
 static const uint32_t kAccClassIsFinalizable        = 0x80000000;  // class/ancestor overrides finalize()
+static const uint32_t kAccClassIsReferenceClass     = 0x10000000;  // class is strictly a reference class
 static const uint32_t kAccClassIsReference          = 0x08000000;  // class is a soft/weak/phantom ref
 static const uint32_t kAccClassIsWeakReference      = 0x04000000;  // class is a weak reference
 static const uint32_t kAccClassIsFinalizerReference = 0x02000000;  // class is a finalizer reference
