@@ -514,11 +514,6 @@ static inline mirror::ArtField* FindFieldFast(uint32_t field_idx,
   if (UNLIKELY(resolved_field == NULL)) {
     return NULL;
   }
-  mirror::Class* fields_class = resolved_field->GetDeclaringClass();
-  // Check class is initiliazed or initializing.
-  if (UNLIKELY(!fields_class->IsInitializing())) {
-    return NULL;
-  }
   // Check for incompatible class change.
   bool is_primitive;
   bool is_set;
@@ -542,6 +537,14 @@ static inline mirror::ArtField* FindFieldFast(uint32_t field_idx,
   if (UNLIKELY(resolved_field->IsStatic() != is_static)) {
     // Incompatible class change.
     return NULL;
+  }
+  mirror::Class* fields_class = resolved_field->GetDeclaringClass();
+  if (is_static) {
+    // Check class is initialized else fail so that we can contend to initialize the class with
+    // other threads that may be racing to do this.
+    if (UNLIKELY(!fields_class->IsInitialized())) {
+      return NULL;
+    }
   }
   mirror::Class* referring_class = referrer->GetDeclaringClass();
   if (UNLIKELY(!referring_class->CanAccess(fields_class) ||
