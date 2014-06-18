@@ -660,6 +660,8 @@ class ClassLinker {
   mirror::ObjectArray<mirror::Class>* class_roots_;
 
   mirror::Class* GetClassRoot(ClassRoot class_root) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  // retrieves without obtaining lock, requires that class linker has finished init
+  mirror::Class* GetClassRootUnchecked(ClassRoot class_root);
 
   void SetClassRoot(ClassRoot class_root, mirror::Class* klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
