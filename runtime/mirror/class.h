@@ -561,6 +561,10 @@ class MANAGED Class : public Object {
     return MemberOffset(OFFSETOF_MEMBER(Class, super_class_));
   }
 
+  static MemberOffset AccessFlagsOffset() {
+    return MemberOffset(OFFSETOF_MEMBER(Class, access_flags_));
+  }
+
   ClassLoader* GetClassLoader() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetClassLoader(ClassLoader* new_cl) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

@@ -23,6 +23,7 @@
 #include "invoke_type.h"
 #include "mirror/array.h"
 #include "mirror/object_array-inl.h"
+#include "mirror/reference.h"
 #include "mirror/string.h"
 #include "mir_to_lir-inl.h"
 #include "x86/codegen_x86.h"
@@ -1259,6 +1260,65 @@ RegLocation Mir2Lir::InlineTargetWide(CallInfo* info) {
     res = info->result;
   }
   return res;
+}
+
+bool Mir2Lir::GenInlinedGet(CallInfo* info) {
+  if (cu_->instruction_set == kMips) {
+    // TODO - add Mips implementation
+    return false;
+  }
+  RegLocation rl_obj = info->args[0];
+  rl_obj = LoadValue(rl_obj);
+
+  RegStorage reg_class = AllocTempRef();
+  RegStorage reg_flags = AllocTemp();
+
+  // load initial class pointer
+  GenNullCheck(rl_obj.reg, info->opt_flags);
+  LoadRefDisp(rl_obj.reg, mirror::Reference::ClassOffset().Int32Value(), reg_class, kNotVolatile);
+  MarkPossibleNullPointerException(info->opt_flags);
+
+  // jump to flag check
+  LIR* jmp_flag_check = OpUnconditionalBranch(nullptr);
+
+  // keep going up inheritance tree until we find Reference
+  LIR* search_start_target = NewLIR0(kPseudoTargetLabel);
+  LIR* branch_ref_found = OpCmpImmBranch(kCondNe, reg_flags, 0, nullptr);
+
+  LoadRefDisp(reg_class, mirror::Class::SuperClassOffset().Int32Value(), reg_class, kNotVolatile);
+  LIR* flag_load_target = NewLIR0(kPseudoTargetLabel);
+  jmp_flag_check->target = flag_load_target;
+  Load32Disp(reg_class, mirror::Class::AccessFlagsOffset().Int32Value(), reg_flags);
+  OpRegImm(kOpAnd, reg_flags, kAccClassIsReferenceClass);
+  OpUnconditionalBranch(search_start_target);
+
+  // found reference class
+  LIR* reference_found_target = NewLIR0(kPseudoTargetLabel);
+  branch_ref_found->target = reference_found_target;
+  FreeTemp(reg_flags);
+
+  RegStorage reg_slow_path = AllocTemp();
+  Load32Disp(reg_class, mirror::ReferenceClass::SlowPathEnabledOffset().Int32Value(), reg_slow_path);
+  FreeTemp(reg_class);
+
+  LIR* slow_path_branch = OpCmpImmBranch(kCondNe, reg_slow_path, 0, nullptr);
+  FreeTemp(reg_slow_path);
+
+  RegLocation rl_dest = InlineTarget(info);
+  RegLocation rl_result = EvalLoc(rl_dest, kRefReg, true);
+  LoadRefDisp(rl_obj.reg, mirror::Reference::ReferentOffset().Int32Value(), rl_result.reg, kNotVolatile);
+  StoreValue(rl_dest, rl_result);
+  LIR* jump_finished = OpUnconditionalBranch(nullptr);
+
+  LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);
+  slow_path_branch->target = slow_path_target;
+  ResetRegPool();
+  GenInvokeNoInline(info);
+
+  LIR* finished_target = NewLIR0(kPseudoTargetLabel);
+  jump_finished->target = finished_target;
+
+  return true;
 }
 
 bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
