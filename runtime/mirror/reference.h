@@ -17,7 +17,10 @@
 #ifndef ART_RUNTIME_MIRROR_REFERENCE_H_
 #define ART_RUNTIME_MIRROR_REFERENCE_H_
 
+#include "class.h"
 #include "object.h"
+#include "object_callbacks.h"
+#include "thread.h"
 
 namespace art {
 
@@ -29,6 +32,7 @@ class ReferenceQueue;
 }  // namespace gc
 
 struct ReferenceOffsets;
+struct ReferenceClassOffsets;
 struct FinalizerReferenceOffsets;
 
 namespace mirror {
@@ -80,6 +84,14 @@ class MANAGED Reference : public Object {
 
   bool IsEnqueuable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  static Class* GetJavaLangRefReference() {
+    CHECK(java_lang_ref_Reference_ != nullptr);
+    return java_lang_ref_Reference_;
+  }
+  static void SetClass(Class* klass);
+  static void ResetClass(void);
+  static void VisitRoots(RootCallback* callback, void* arg);
+
  private:
   // Note: This avoids a read barrier, it should only be used by the GC.
   HeapReference<Object>* GetReferentReferenceAddr() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -92,10 +104,44 @@ class MANAGED Reference : public Object {
   HeapReference<Reference> queue_next_;  // Note this is Java volatile:
   HeapReference<Object> referent_;  // Note this is Java volatile:
 
+  static Class* java_lang_ref_Reference_;
+
   friend struct art::ReferenceOffsets;  // for verifying offset information
   friend class gc::ReferenceProcessor;
   friend class gc::ReferenceQueue;
   DISALLOW_IMPLICIT_CONSTRUCTORS(Reference);
+};
+
+// Tightly coupled with the ReferenceProcessor to provide switch for slow/fast path. Consistency
+// is maintained by ReferenceProcessor.
+class MANAGED ReferenceClass : public Class {
+ public:
+  static MemberOffset DisableIntrinsicOffset() {
+    return OFFSET_OF_OBJECT_MEMBER(ReferenceClass, disable_intrinsic_);
+  }
+  static MemberOffset SlowPathEnabledOffset() {
+    return OFFSET_OF_OBJECT_MEMBER(ReferenceClass, slow_path_enabled_);
+  }
+
+  void Init(void) {
+    disable_intrinsic_ = false;
+    slow_path_enabled_ = false;
+  }
+
+  bool GetSlowPathEnabled(void) {
+    return slow_path_enabled_;
+  }
+  void SetSlowPathEnabled(bool enabled) {
+    slow_path_enabled_ = enabled;
+  }
+
+ private:
+  int32_t disable_intrinsic_;
+  int32_t slow_path_enabled_;
+  // allows runtime to safely enable/disable intrinsics fast path for benchmarking
+
+  friend struct art::ReferenceClassOffsets;  // for verifying offset information
+  DISALLOW_IMPLICIT_CONSTRUCTORS(ReferenceClass);
 };
 
 // C++ mirror of java.lang.ref.FinalizerReference
