@@ -643,6 +643,7 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
   CHECK_EQ(self->GetThreadId(), ThreadList::kMainThreadId);
   CHECK(self != NULL);
 
+  class_linker_ = new ClassLinker(intern_table_);
   // Set us to runnable so tools using a runtime can allocate and GC by default
   self->TransitionFromSuspendedToRunnable();
 
