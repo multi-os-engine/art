@@ -254,6 +254,12 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   java_lang_String->SetObjectSize(sizeof(mirror::String));
   java_lang_String->SetStatus(mirror::Class::kStatusResolved, self);
 
+  // Setup Reference.
+  Handle<mirror::Class> java_lang_ref_Reference(hs.NewHandle(AllocClass(self, java_lang_Class.Get(), sizeof(mirror::ReferenceClass))));
+  mirror::Reference::SetClass(java_lang_ref_Reference.Get());
+  java_lang_ref_Reference->SetObjectSize(sizeof(mirror::Reference));
+  java_lang_ref_Reference->SetStatus(mirror::Class::kStatusResolved, self);
+
   // Create storage for root classes, save away our work so far (requires descriptors).
   class_roots_ = mirror::ObjectArray<mirror::Class>::Alloc(self, object_array_class.Get(),
                                                            kClassRootsMax);
@@ -264,6 +270,7 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   SetClassRoot(kObjectArrayClass, object_array_class.Get());
   SetClassRoot(kCharArrayClass, char_array_class.Get());
   SetClassRoot(kJavaLangString, java_lang_String.Get());
+  SetClassRoot(kJavaLangRefReference, java_lang_ref_Reference.Get());
 
   // Setup the primitive type classes.
   SetClassRoot(kPrimitiveBoolean, CreatePrimitiveClass(self, Primitive::kPrimBoolean));
@@ -452,8 +459,14 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   SetClassRoot(kJavaLangReflectProxy, java_lang_reflect_Proxy);
 
   // java.lang.ref classes need to be specially flagged, but otherwise are normal classes
-  mirror::Class* java_lang_ref_Reference = FindSystemClass(self, "Ljava/lang/ref/Reference;");
-  SetClassRoot(kJavaLangRefReference, java_lang_ref_Reference);
+  // finish initlizing Reference class
+  java_lang_ref_Reference->SetStatus(mirror::Class::kStatusNotReady, self);
+  mirror::Class* Reference_class = FindSystemClass(self, "Ljava/lang/ref/Reference;");
+  CHECK_EQ(java_lang_ref_Reference.Get(), Reference_class);
+  CHECK_EQ(java_lang_ref_Reference->GetObjectSize(), sizeof(mirror::Reference));
+  Reference_class->SetAccessFlags(
+      Reference_class->GetAccessFlags() |
+          kAccClassIsReferenceClass); // Flag denotes class is Reference, and not its subclass.
   mirror::Class* java_lang_ref_FinalizerReference =
       FindSystemClass(self, "Ljava/lang/ref/FinalizerReference;");
   java_lang_ref_FinalizerReference->SetAccessFlags(
@@ -542,6 +555,7 @@ void ClassLinker::FinishInit(Thread* self) {
   // that Object, Class, and Object[] are setup
   init_done_ = true;
 
+  down_cast<mirror::ReferenceClass*>(mirror::Reference::GetJavaLangRefReference())->SetSlowPathEnabled(false);
   VLOG(startup) << "ClassLinker::FinishInit exiting";
 }
 
@@ -1048,6 +1062,7 @@ void ClassLinker::InitFromImage() {
   array_iftable_ = GetClassRoot(kObjectArrayClass)->GetIfTable();
   DCHECK(array_iftable_ == GetClassRoot(kBooleanArrayClass)->GetIfTable());
   // String class root was set above
+  mirror::Reference::SetClass(GetClassRoot(kJavaLangRefReference));
   mirror::ArtField::SetClass(GetClassRoot(kJavaLangReflectArtField));
   mirror::BooleanArray::SetArrayClass(GetClassRoot(kBooleanArrayClass));
   mirror::ByteArray::SetArrayClass(GetClassRoot(kByteArrayClass));
@@ -1415,6 +1430,8 @@ mirror::Class* ClassLinker::DefineClass(const char* descriptor,
       klass.Assign(GetClassRoot(kJavaLangClass));
     } else if (strcmp(descriptor, "Ljava/lang/String;") == 0) {
       klass.Assign(GetClassRoot(kJavaLangString));
+    } else if (strcmp(descriptor, "Ljava/lang/ref/Reference;") == 0) {
+      klass.Assign(GetClassRoot(kJavaLangRefReference));
     } else if (strcmp(descriptor, "Ljava/lang/DexCache;") == 0) {
       klass.Assign(GetClassRoot(kJavaLangDexCache));
     } else if (strcmp(descriptor, "Ljava/lang/reflect/ArtField;") == 0) {
