@@ -733,6 +733,7 @@ DEFINE_FUNCTION art_quick_memcpy
 END_FUNCTION art_quick_memcpy
 
 NO_ARG_DOWNCALL art_quick_test_suspend, artTestSuspendFromCode, ret
+NO_ARG_DOWNCALL art_quick_reference_processor_is_using_slow_path, artReferenceProcessorIsUsingSlowPath, ret
 
 DEFINE_FUNCTION art_quick_d2l
     PUSH eax                      // alignment padding
