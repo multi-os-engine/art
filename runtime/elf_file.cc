@@ -22,8 +22,11 @@
 #include "base/logging.h"
 #include "base/stringprintf.h"
 #include "base/stl_util.h"
+#include "leb128.h"
 #include "utils.h"
 #include "instruction_set.h"
+// Get dwarf data.
+#include "dwarf.h"
 
 namespace art {
 
@@ -129,22 +132,30 @@ ElfFile::ElfFile(File* file, bool writable, bool program_header_only)
 ElfFile* ElfFile::Open(File* file, bool writable, bool program_header_only,
                        std::string* error_msg) {
   std::unique_ptr<ElfFile> elf_file(new ElfFile(file, writable, program_header_only));
-  if (!elf_file->Setup(error_msg)) {
-    return nullptr;
-  }
-  return elf_file.release();
-}
-
-bool ElfFile::Setup(std::string* error_msg) {
   int prot;
   int flags;
-  if (writable_) {
+  if (writable) {
     prot = PROT_READ | PROT_WRITE;
     flags = MAP_SHARED;
   } else {
     prot = PROT_READ;
     flags = MAP_PRIVATE;
   }
+  if (!elf_file->Setup(prot, flags, error_msg)) {
+    return nullptr;
+  }
+  return elf_file.release();
+}
+
+ElfFile* ElfFile::Open(File* file, int prot, int flags, std::string* error_msg) {
+  std::unique_ptr<ElfFile> elf_file(new ElfFile(file, (prot & PROT_WRITE) == PROT_WRITE, false));
+  if (!elf_file->Setup(prot, flags, error_msg)) {
+    return nullptr;
+  }
+  return elf_file.release();
+}
+
+bool ElfFile::Setup(int prot, int flags, std::string* error_msg) {
   int64_t temp_file_length = file_->GetLength();
   if (temp_file_length < 0) {
     errno = -temp_file_length;
@@ -565,6 +576,15 @@ Elf32_Shdr& ElfFile::GetSectionNameStringSection() const {
 }
 
 const byte* ElfFile::FindDynamicSymbolAddress(const std::string& symbol_name) const {
+  const Elf32_Sym* sym = FindDynamicSymbol(symbol_name);
+  if (sym != NULL) {
+    return base_address_ + sym->st_value;
+  } else {
+    return NULL;
+  }
+}
+
+const Elf32_Sym* ElfFile::FindDynamicSymbol(const std::string& symbol_name) const {
   Elf32_Word hash = elfhash(symbol_name.c_str());
   Elf32_Word bucket_index = hash % GetHashBucketNum();
   Elf32_Word symbol_and_chain_index = GetHashBucket(bucket_index);
@@ -572,7 +592,7 @@ const byte* ElfFile::FindDynamicSymbolAddress(const std::string& symbol_name) co
     Elf32_Sym& symbol = GetSymbol(SHT_DYNSYM, symbol_and_chain_index);
     const char* name = GetString(SHT_DYNSYM, symbol.st_name);
     if (symbol_name == name) {
-      return base_address_ + symbol.st_value;
+      return &symbol;
     }
     symbol_and_chain_index = GetHashChain(symbol_and_chain_index);
   }
@@ -970,29 +990,323 @@ bool ElfFile::ValidPointer(const byte* start) const {
   return false;
 }
 
-static bool check_section_name(ElfFile& file, int section_num, const char *name) {
-  Elf32_Shdr& section_header = file.GetSectionHeader(section_num);
-  const char *section_name = file.GetString(SHT_SYMTAB, section_header.sh_name);
-  return strcmp(name, section_name) == 0;
+
+Elf32_Shdr* ElfFile::FindSectionByName(const std::string& name) const {
+  CHECK(!program_header_only_);
+  Elf32_Shdr& shstrtab_sec = GetSectionNameStringSection();
+  for (uint32_t i = 0; i < GetSectionHeaderNum(); i++) {
+    Elf32_Shdr& shdr = GetSectionHeader(i);
+    const char* sec_name = GetString(shstrtab_sec, shdr.sh_name);
+    if (sec_name == NULL) {
+      continue;
+    }
+    if (name == sec_name) {
+      return &shdr;
+    }
+  }
+  return NULL;
 }
 
-static void IncrementUint32(byte *p, uint32_t increment) {
-  uint32_t *u = reinterpret_cast<uint32_t *>(p);
-  *u += increment;
+struct PACKED(1) FDE {
+  uint32_t raw_length_;
+  uint32_t GetLength() {
+    return raw_length_ + sizeof(raw_length_);
+  }
+  uint32_t CIE_pointer;
+  uint32_t initial_location;
+  uint32_t address_range;
+  uint8_t instructions[1];
+};
+
+static FDE* NextFDE(FDE* frame) {
+  byte* fde_bytes = reinterpret_cast<byte*>(frame);
+  fde_bytes += frame->GetLength();
+  return reinterpret_cast<FDE*>(fde_bytes);
 }
 
-static void RoundAndClear(byte *image, uint32_t& offset, int pwr2) {
-  uint32_t mask = pwr2 - 1;
-  while (offset & mask) {
-    image[offset++] = 0;
+static bool IsFDE(FDE* frame) {
+  // TODO This seems to be the constant everyone uses (for the .debug_frame
+  // section at least), however we should investigate this further.
+  const uint32_t kDwarfCIE_id = 0xffffffff;
+  const uint32_t kReservedLengths[] = {0xffffffff, 0xfffffff0};
+  return frame->CIE_pointer != kDwarfCIE_id &&
+      frame->raw_length_ != kReservedLengths[0] && frame->raw_length_ != kReservedLengths[1];
+}
+
+// TODO This only works for 32-bit Elf Files.
+static bool FixupDebugFrame(uintptr_t text_start, byte* dbg_frame, size_t dbg_frame_size) {
+  FDE* last_frame = reinterpret_cast<FDE*>(dbg_frame + dbg_frame_size);
+  FDE* frame = NextFDE(reinterpret_cast<FDE*>(dbg_frame));
+  for (; frame < last_frame; frame = NextFDE(frame)) {
+    if (!IsFDE(frame)) {
+      return false;
+    }
+    frame->initial_location += text_start;
+  }
+  return true;
+}
+
+struct PACKED(1) DebugInfoHeader {
+  uint32_t unit_length;  // TODO 32-bit specific size
+  uint16_t version;
+  uint32_t debug_abbrev_offset;  // TODO 32-bit specific size
+  uint8_t  address_size;
+};
+
+// Returns -1 if it is variable length, which we will just disallow for now.
+static int32_t FormLength(uint32_t att) {
+  switch (att) {
+    case dwarf::DW_FORM_data1:
+    case dwarf::DW_FORM_flag:
+    case dwarf::DW_FORM_flag_present:
+    case dwarf::DW_FORM_ref1:
+      return 1;
+
+    case dwarf::DW_FORM_data2:
+    case dwarf::DW_FORM_ref2:
+      return 2;
+
+    case dwarf::DW_FORM_addr:        // TODO 32-bit only
+    case dwarf::DW_FORM_ref_addr:    // TODO 32-bit only
+    case dwarf::DW_FORM_sec_offset:  // TODO 32-bit only
+    case dwarf::DW_FORM_strp:        // TODO 32-bit only
+    case dwarf::DW_FORM_data4:
+    case dwarf::DW_FORM_ref4:
+      return 4;
+
+    case dwarf::DW_FORM_data8:
+    case dwarf::DW_FORM_ref8:
+    case dwarf::DW_FORM_ref_sig8:
+      return 8;
+
+    case dwarf::DW_FORM_block:
+    case dwarf::DW_FORM_block1:
+    case dwarf::DW_FORM_block2:
+    case dwarf::DW_FORM_block4:
+    case dwarf::DW_FORM_exprloc:
+    case dwarf::DW_FORM_indirect:
+    case dwarf::DW_FORM_ref_udata:
+    case dwarf::DW_FORM_sdata:
+    case dwarf::DW_FORM_string:
+    case dwarf::DW_FORM_udata:
+    default:
+      return -1;
   }
 }
 
-// Simple macro to bump a point to a section header to the next one.
-#define BUMP_SHENT(sp) \
-  sp = reinterpret_cast<Elf32_Shdr *> (\
-      reinterpret_cast<byte*>(sp) + elf_hdr.e_shentsize);\
-  offset += elf_hdr.e_shentsize
+class DebugTag {
+ public:
+  const uint32_t index_;
+  ~DebugTag() {}
+  // Creates a new tag and moves data pointer up to the start of the next one.
+  // NULL means error.
+  static DebugTag* Create(const byte** data_pointer) {
+    const byte* data = *data_pointer;
+    uint32_t index = DecodeUnsignedLeb128(&data);
+    std::unique_ptr<DebugTag> tag(new DebugTag(index));
+    tag->size_ = static_cast<uint32_t>(
+        reinterpret_cast<uintptr_t>(data) - reinterpret_cast<uintptr_t>(*data_pointer));
+    // skip the abrev
+    tag->tag_ = DecodeUnsignedLeb128(&data);
+    tag->has_child_ = (*data == 0);
+    data++;
+    while (true) {
+      uint32_t attr = DecodeUnsignedLeb128(&data);
+      uint32_t form = DecodeUnsignedLeb128(&data);
+      if (attr == 0 && form == 0) {
+        break;
+      } else if (attr == 0 || form == 0) {
+        // Bad abrev.
+        return NULL;
+      }
+      int32_t size = FormLength(form);
+      if (size == -1) {
+        return NULL;
+      }
+      tag->AddAttribute(attr, static_cast<uint32_t>(size));
+    }
+    *data_pointer = data;
+    return tag.release();
+  }
+
+  uint32_t GetSize() const {
+    return size_;
+  }
+
+  bool HasChild() {
+    return has_child_;
+  }
+
+  uint32_t GetTagNumber() {
+    return tag_;
+  }
+
+  // Gets the offset of a particular attribute in this tag structure.
+  // Interpretation of the data is left to the consumer. 0 is returned if the
+  // tag does not contain the attribute.
+  uint32_t GetOffsetOf(uint32_t dwarf_attribute) const {
+    auto it = off_map_.find(dwarf_attribute);
+    if (it == off_map_.end()) {
+      return 0;
+    } else {
+      return it->second;
+    }
+  }
+
+  // Gets the size of attribute
+  uint32_t GetAttrSize(uint32_t dwarf_attribute) const {
+    auto it = size_map_.find(dwarf_attribute);
+    if (it == size_map_.end()) {
+      return 0;
+    } else {
+      return it->second;
+    }
+  }
+
+ private:
+  explicit DebugTag(uint32_t index) : index_(index) {}
+  void AddAttribute(uint32_t type, uint32_t attr_size) {
+    off_map_.insert(std::pair<uint32_t, uint32_t>(type, size_));
+    size_map_.insert(std::pair<uint32_t, uint32_t>(type, attr_size));
+    size_ += attr_size;
+  }
+  std::map<uint32_t, uint32_t> off_map_;
+  std::map<uint32_t, uint32_t> size_map_;
+  uint32_t size_;
+  uint32_t tag_;
+  bool has_child_;
+};
+
+class DebugAbbrev {
+ public:
+  ~DebugAbbrev() {}
+  static DebugAbbrev* Create(const byte* dbg_abbrev, size_t dbg_abbrev_size) {
+    std::unique_ptr<DebugAbbrev> abrev(new DebugAbbrev);
+    const byte* last = dbg_abbrev + dbg_abbrev_size;
+    while (dbg_abbrev < last) {
+      std::unique_ptr<DebugTag> tag(DebugTag::Create(&dbg_abbrev));
+      if (tag.get() == NULL) {
+        return NULL;
+      } else {
+        abrev->tags_.insert(std::pair<uint32_t, uint32_t>(tag->index_, abrev->tag_list_.size()));
+        abrev->tag_list_.push_back(std::move(tag));
+      }
+    }
+    return abrev.release();
+  }
+
+  DebugTag* ReadTag(const byte* entry) {
+    uint32_t tag_num = DecodeUnsignedLeb128(&entry);
+    auto it = tags_.find(tag_num);
+    if (it == tags_.end()) {
+      return NULL;
+    } else {
+      CHECK_GT(tag_list_.size(), it->second);
+      return tag_list_.at(it->second).get();
+    }
+  }
+
+ private:
+  DebugAbbrev() {}
+  std::map<uint32_t, uint32_t> tags_;
+  std::vector<std::unique_ptr<DebugTag>> tag_list_;
+};
+
+class DebugInfoIterator {
+ public:
+  static DebugInfoIterator* Create(DebugInfoHeader* header, size_t frame_size,
+                                   DebugAbbrev* abrev) {
+    std::unique_ptr<DebugInfoIterator> iter(new DebugInfoIterator(header, frame_size, abrev));
+    if (iter->GetCurrentTag() == NULL) {
+      return NULL;
+    } else {
+      return iter.release();
+    }
+  }
+  ~DebugInfoIterator() {}
+
+  // Moves to the next DIE. Returns false if at last entry.
+  // TODO Handle variable length attributes.
+  bool next() {
+    if (current_entry_ == NULL || current_tag_ == NULL) {
+      return false;
+    }
+    current_entry_ += current_tag_->GetSize();
+    if (current_entry_ >= last_entry_) {
+      current_entry_ = NULL;
+      return false;
+    }
+    current_tag_ = abbrev_->ReadTag(current_entry_);
+    if (current_tag_ == NULL) {
+      current_entry_ = NULL;
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  const DebugTag* GetCurrentTag() {
+    return const_cast<DebugTag*>(current_tag_);
+  }
+  byte* GetPointerToField(uint8_t dwarf_field) {
+    if (current_tag_ == NULL || current_entry_ == NULL || current_entry_ >= last_entry_) {
+      return NULL;
+    }
+    uint32_t off = current_tag_->GetOffsetOf(dwarf_field);
+    if (off == 0) {
+      // tag does not have that field.
+      return NULL;
+    } else {
+      DCHECK_LT(off, current_tag_->GetSize());
+      return current_entry_ + off;
+    }
+  }
+
+ private:
+  DebugInfoIterator(DebugInfoHeader* header, size_t frame_size, DebugAbbrev* abbrev)
+      : abbrev_(abbrev),
+        last_entry_(reinterpret_cast<byte*>(header) + frame_size),
+        current_entry_(reinterpret_cast<byte*>(header) + sizeof(DebugInfoHeader)),
+        current_tag_(abbrev_->ReadTag(current_entry_)) {}
+  DebugAbbrev* abbrev_;
+  byte* last_entry_;
+  byte* current_entry_;
+  DebugTag* current_tag_;
+};
+
+static bool FixupDebugInfo(uint32_t text_start, DebugInfoIterator* iter) {
+  do {
+    if (iter->GetCurrentTag()->GetAttrSize(dwarf::DW_AT_low_pc) != sizeof(int32_t) ||
+        iter->GetCurrentTag()->GetAttrSize(dwarf::DW_AT_high_pc) != sizeof(int32_t)) {
+      return false;
+    }
+    uint32_t* PC_low = reinterpret_cast<uint32_t*>(iter->GetPointerToField(dwarf::DW_AT_low_pc));
+    uint32_t* PC_high = reinterpret_cast<uint32_t*>(iter->GetPointerToField(dwarf::DW_AT_high_pc));
+    if (PC_low != NULL && PC_high != NULL) {
+      *PC_low  += text_start;
+      *PC_high += text_start;
+    }
+  } while (iter->next());
+  return true;
+}
+
+static bool FixupDebugSections(const byte* dbg_abrev, size_t dbg_abrev_size,
+                               uintptr_t text_start,
+                               byte* dbg_info, size_t dbg_info_size,
+                               byte* dbg_frame, size_t dbg_frame_size) {
+  std::unique_ptr<DebugAbbrev> abrev(DebugAbbrev::Create(dbg_abrev, dbg_abrev_size));
+  if (abrev.get() == NULL) {
+    return false;
+  }
+  std::unique_ptr<DebugInfoIterator> iter(
+      DebugInfoIterator::Create(reinterpret_cast<DebugInfoHeader*>(dbg_info),
+                                dbg_info_size, abrev.get()));
+  if (iter.get() == NULL) {
+    return false;
+  }
+  return FixupDebugInfo(text_start, iter.get())
+      && FixupDebugFrame(text_start, dbg_frame, dbg_frame_size);
+}
 
 void ElfFile::GdbJITSupport() {
   // We only get here if we only are mapping the program header.
@@ -1000,18 +1314,25 @@ void ElfFile::GdbJITSupport() {
 
   // Well, we need the whole file to do this.
   std::string error_msg;
-  std::unique_ptr<ElfFile> ptr(Open(const_cast<File*>(file_), false, false, &error_msg));
-  ElfFile& all = *ptr;
-
-  // Do we have interesting sections?
-  // Is this an OAT file with interesting sections?
-  if (all.GetSectionHeaderNum() != kExpectedSectionsInOATFile) {
+  // Make it MAP_PRIVATE so we can just give it to gdb if all the necessary
+  // sections are there.
+  std::unique_ptr<ElfFile> all_ptr(Open(const_cast<File*>(file_), PROT_READ | PROT_WRITE,
+                                        MAP_PRIVATE, &error_msg));
+  if (all_ptr.get() == nullptr) {
     return;
   }
-  if (!check_section_name(all, 8, ".debug_info") ||
-      !check_section_name(all, 9, ".debug_abbrev") ||
-      !check_section_name(all, 10, ".debug_frame") ||
-      !check_section_name(all, 11, ".debug_str")) {
+  ElfFile& all = *all_ptr;
+
+  // Do we have interesting sections?
+  const Elf32_Shdr* debug_info = all.FindSectionByName(".debug_info");
+  const Elf32_Shdr* debug_abbrev = all.FindSectionByName(".debug_abbrev");
+  const Elf32_Shdr* debug_frame = all.FindSectionByName(".debug_frame");
+  const Elf32_Shdr* debug_str = all.FindSectionByName(".debug_str");
+  const Elf32_Shdr* strtab_sec = all.FindSectionByName(".strtab");
+  const Elf32_Shdr* symtab_sec = all.FindSectionByName(".symtab");
+  Elf32_Shdr* text_sec = all.FindSectionByName(".text");
+  if (debug_info == NULL || debug_abbrev == NULL || debug_frame == NULL ||
+      debug_str == NULL || text_sec == NULL || strtab_sec == NULL || symtab_sec == NULL) {
     return;
   }
 #ifdef __LP64__
@@ -1019,227 +1340,30 @@ void ElfFile::GdbJITSupport() {
     return;  // No ELF debug support in 64bit.
   }
 #endif
-  // This is not needed if we have no .text segment.
-  uint32_t text_start_addr = 0;
-  for (uint32_t i = 0; i < segments_.size(); i++) {
-    if (segments_[i]->GetProtect() & PROT_EXEC) {
-      // We found the .text section.
-      text_start_addr = PointerToLowMemUInt32(segments_[i]->Begin());
-      break;
-    }
-  }
-  if (text_start_addr == 0U) {
-    return;
-  }
-
-  // Okay, we are good enough.  Fake up an ELF image and tell GDB about it.
-  // We need some extra space for the debug and string sections, the ELF header, and the
-  // section header.
-  uint32_t needed_size = KB;
-
-  for (Elf32_Word i = 1; i < all.GetSectionHeaderNum(); i++) {
-    Elf32_Shdr& section_header = all.GetSectionHeader(i);
-    if (section_header.sh_addr == 0 && section_header.sh_type != SHT_DYNSYM) {
-      // Debug section: we need it.
-      needed_size += section_header.sh_size;
-    } else if (section_header.sh_type == SHT_STRTAB &&
-                strcmp(".shstrtab",
-                       all.GetString(SHT_SYMTAB, section_header.sh_name)) == 0) {
-      // We also need the shared string table.
-      needed_size += section_header.sh_size;
-
-      // We also need the extra strings .symtab\0.strtab\0
-      needed_size += 16;
-    }
-  }
-
-  // Start creating our image.
-  jit_elf_image_ = new byte[needed_size];
-
-  // Create the Elf Header by copying the old one
-  Elf32_Ehdr& elf_hdr =
-    *reinterpret_cast<Elf32_Ehdr*>(jit_elf_image_);
-
-  elf_hdr = all.GetHeader();
+  // We need to add in a strtab and symtab to the image.
+  // all is MAP_PRIVATE so it can be written to freely.
+  // We also already have strtab and symtab so we are fine there.
+  Elf32_Ehdr& elf_hdr = all.GetHeader();
   elf_hdr.e_entry = 0;
   elf_hdr.e_phoff = 0;
   elf_hdr.e_phnum = 0;
   elf_hdr.e_phentsize = 0;
   elf_hdr.e_type = ET_EXEC;
 
-  uint32_t offset = sizeof(Elf32_Ehdr);
+  text_sec->sh_type = SHT_NOBITS;
+  text_sec->sh_offset = 0;
 
-  // Copy the debug sections and string table.
-  uint32_t debug_offsets[kExpectedSectionsInOATFile];
-  memset(debug_offsets, '\0', sizeof debug_offsets);
-  Elf32_Shdr *text_header = nullptr;
-  int extra_shstrtab_entries = -1;
-  int text_section_index = -1;
-  int section_index = 1;
-  for (Elf32_Word i = 1; i < kExpectedSectionsInOATFile; i++) {
-    Elf32_Shdr& section_header = all.GetSectionHeader(i);
-    // Round up to multiple of 4, ensuring zero fill.
-    RoundAndClear(jit_elf_image_, offset, 4);
-    if (section_header.sh_addr == 0 && section_header.sh_type != SHT_DYNSYM) {
-      // Debug section: we need it.  Unfortunately, it wasn't mapped in.
-      debug_offsets[i] = offset;
-      // Read it from the file.
-      lseek(file_->Fd(), section_header.sh_offset, SEEK_SET);
-      read(file_->Fd(), jit_elf_image_ + offset, section_header.sh_size);
-      offset += section_header.sh_size;
-      section_index++;
-      offset += 16;
-    } else if (section_header.sh_type == SHT_STRTAB &&
-                strcmp(".shstrtab",
-                       all.GetString(SHT_SYMTAB, section_header.sh_name)) == 0) {
-      // We also need the shared string table.
-      debug_offsets[i] = offset;
-      // Read it from the file.
-      lseek(file_->Fd(), section_header.sh_offset, SEEK_SET);
-      read(file_->Fd(), jit_elf_image_ + offset, section_header.sh_size);
-      offset += section_header.sh_size;
-      // We also need the extra strings .symtab\0.strtab\0
-      extra_shstrtab_entries = section_header.sh_size;
-      memcpy(jit_elf_image_+offset, ".symtab\0.strtab\0", 16);
-      offset += 16;
-      section_index++;
-    } else if (section_header.sh_flags & SHF_EXECINSTR) {
-      DCHECK(strcmp(".text", all.GetString(SHT_SYMTAB,
-                                           section_header.sh_name)) == 0);
-      text_header = &section_header;
-      text_section_index = section_index++;
-    }
-  }
-  DCHECK(text_header != nullptr);
-  DCHECK_NE(extra_shstrtab_entries, -1);
-
-  // We now need to update the addresses for debug_info and debug_frame to get to the
-  // correct offset within the .text section.
-  byte *p = jit_elf_image_+debug_offsets[8];
-  byte *end = p + all.GetSectionHeader(8).sh_size;
-
-  // For debug_info; patch compilation using low_pc @ offset 13, high_pc at offset 17.
-  IncrementUint32(p + 13, text_start_addr);
-  IncrementUint32(p + 17, text_start_addr);
-
-  // Now fix the low_pc, high_pc for each method address.
-  // First method starts at offset 0x15, each subsequent method is 1+3*4 bytes further.
-  for (p += 0x15; p < end; p += 1 /* attr# */ + 3 * sizeof(uint32_t) /* addresses */) {
-    IncrementUint32(p + 1 + sizeof(uint32_t), text_start_addr);
-    IncrementUint32(p + 1 + 2 * sizeof(uint32_t), text_start_addr);
+  if (!FixupDebugSections(
+        all.Begin() + debug_abbrev->sh_offset, debug_abbrev->sh_size, text_sec->sh_addr,
+        all.Begin() + debug_info->sh_offset, debug_info->sh_size,
+        all.Begin() + debug_frame->sh_offset, debug_frame->sh_size)) {
+    // Failure.
+    LOG(INFO) << "Failed to load GDB data";
+    return;
   }
 
-  // Now we have to handle the debug_frame method start addresses
-  p = jit_elf_image_+debug_offsets[10];
-  end = p + all.GetSectionHeader(10).sh_size;
-
-  // Skip past the CIE.
-  p += *reinterpret_cast<uint32_t *>(p) + 4;
-
-  // And walk the FDEs.
-  for (; p < end; p += *reinterpret_cast<uint32_t *>(p) + sizeof(uint32_t)) {
-    IncrementUint32(p + 2 * sizeof(uint32_t), text_start_addr);
-  }
-
-  // Create the data for the symbol table.
-  const int kSymbtabAlignment = 16;
-  RoundAndClear(jit_elf_image_, offset, kSymbtabAlignment);
-  uint32_t symtab_offset = offset;
-
-  // First entry is empty.
-  memset(jit_elf_image_+offset, 0, sizeof(Elf32_Sym));
-  offset += sizeof(Elf32_Sym);
-
-  // Symbol 1 is the real .text section.
-  Elf32_Sym& sym_ent = *reinterpret_cast<Elf32_Sym*>(jit_elf_image_+offset);
-  sym_ent.st_name = 1; /* .text */
-  sym_ent.st_value = text_start_addr;
-  sym_ent.st_size = text_header->sh_size;
-  SetBindingAndType(&sym_ent, STB_LOCAL, STT_SECTION);
-  sym_ent.st_other = 0;
-  sym_ent.st_shndx = text_section_index;
-  offset += sizeof(Elf32_Sym);
-
-  // Create the data for the string table.
-  RoundAndClear(jit_elf_image_, offset, kSymbtabAlignment);
-  const int kTextStringSize = 7;
-  uint32_t strtab_offset = offset;
-  memcpy(jit_elf_image_+offset, "\0.text", kTextStringSize);
-  offset += kTextStringSize;
-
-  // Create the section header table.
-  // Round up to multiple of kSymbtabAlignment, ensuring zero fill.
-  RoundAndClear(jit_elf_image_, offset, kSymbtabAlignment);
-  elf_hdr.e_shoff = offset;
-  Elf32_Shdr *sp =
-    reinterpret_cast<Elf32_Shdr *>(jit_elf_image_ + offset);
-
-  // Copy the first empty index.
-  *sp = all.GetSectionHeader(0);
-  BUMP_SHENT(sp);
-
-  elf_hdr.e_shnum = 1;
-  for (Elf32_Word i = 1; i < kExpectedSectionsInOATFile; i++) {
-    Elf32_Shdr& section_header = all.GetSectionHeader(i);
-    if (section_header.sh_addr == 0 && section_header.sh_type != SHT_DYNSYM) {
-      // Debug section: we need it.
-      *sp = section_header;
-      sp->sh_offset = debug_offsets[i];
-      sp->sh_addr = 0;
-      elf_hdr.e_shnum++;
-      BUMP_SHENT(sp);
-    } else if (section_header.sh_type == SHT_STRTAB &&
-                strcmp(".shstrtab",
-                       all.GetString(SHT_SYMTAB, section_header.sh_name)) == 0) {
-      // We also need the shared string table.
-      *sp = section_header;
-      sp->sh_offset = debug_offsets[i];
-      sp->sh_size += 16; /* sizeof ".symtab\0.strtab\0" */
-      sp->sh_addr = 0;
-      elf_hdr.e_shstrndx = elf_hdr.e_shnum;
-      elf_hdr.e_shnum++;
-      BUMP_SHENT(sp);
-    }
-  }
-
-  // Add a .text section for the matching code section.
-  *sp = *text_header;
-  sp->sh_type = SHT_NOBITS;
-  sp->sh_offset = 0;
-  sp->sh_addr = text_start_addr;
-  elf_hdr.e_shnum++;
-  BUMP_SHENT(sp);
-
-  // .symtab section:  Need an empty index and the .text entry
-  sp->sh_name = extra_shstrtab_entries;
-  sp->sh_type = SHT_SYMTAB;
-  sp->sh_flags = 0;
-  sp->sh_addr = 0;
-  sp->sh_offset = symtab_offset;
-  sp->sh_size = 2 * sizeof(Elf32_Sym);
-  sp->sh_link = elf_hdr.e_shnum + 1;  // Link to .strtab section.
-  sp->sh_info = 0;
-  sp->sh_addralign = 16;
-  sp->sh_entsize = sizeof(Elf32_Sym);
-  elf_hdr.e_shnum++;
-  BUMP_SHENT(sp);
-
-  // .strtab section:  Enough for .text\0.
-  sp->sh_name = extra_shstrtab_entries + 8;
-  sp->sh_type = SHT_STRTAB;
-  sp->sh_flags = 0;
-  sp->sh_addr = 0;
-  sp->sh_offset = strtab_offset;
-  sp->sh_size = kTextStringSize;
-  sp->sh_link = 0;
-  sp->sh_info = 0;
-  sp->sh_addralign = 16;
-  sp->sh_entsize = 0;
-  elf_hdr.e_shnum++;
-  BUMP_SHENT(sp);
-
-  // We now have enough information to tell GDB about our file.
-  jit_gdb_entry_ = CreateCodeEntry(jit_elf_image_, offset);
+  jit_gdb_entry_ = CreateCodeEntry(all.Begin(), all.Size());
+  gdb_file_mapping_.reset(all_ptr.release());
 }
 
 }  // namespace art

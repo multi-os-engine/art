@@ -20,6 +20,7 @@
 #include "base/unix_file/fd_file.h"
 #include "buffered_output_stream.h"
 #include "driver/compiler_driver.h"
+#include "dwarf.h"
 #include "elf_utils.h"
 #include "file_output_stream.h"
 #include "globals.h"
@@ -866,31 +867,6 @@ static void PushHalf(std::vector<uint8_t>*buf, int data) {
   buf->push_back((data >> 8) & 0xff);
 }
 
-// DWARF constants needed to generate CFI information.
-enum {
-  // Tag encodings.
-  DW_TAG_compile_unit = 0x11,
-  DW_TAG_subprogram = 0X2e,
-
-  // Attribute encodings.
-  DW_AT_name = 0x03,
-  DW_AT_low_pc = 0x11,
-  DW_AT_high_pc = 0x12,
-  DW_AT_language = 0x13,
-
-  // Constant encoding.
-  DW_CHILDREN_no = 0x00,
-  DW_CHILDREN_yes = 0x01,
-
-  // Attribute form encodings.
-  DW_FORM_addr = 0x01,
-  DW_FORM_data1 = 0x0b,
-  DW_FORM_strp = 0x0e,
-
-  // Language encoding.
-  DW_LANG_Java = 0x000b
-};
-
 void ElfWriterQuick::FillInCFIInformation(OatWriter* oat_writer,
                                           std::vector<uint8_t>* dbg_info,
                                           std::vector<uint8_t>* dbg_abbrev,
@@ -899,48 +875,48 @@ void ElfWriterQuick::FillInCFIInformation(OatWriter* oat_writer,
   // We only care about low_pc and high_pc right now for the compilation
   // unit and methods.
 
-  // Tag 1: Compilation unit: DW_TAG_compile_unit.
+  // Tag 1: Compilation unit: dwarf::DW_TAG_compile_unit.
   dbg_abbrev->push_back(1);
-  dbg_abbrev->push_back(DW_TAG_compile_unit);
+  dbg_abbrev->push_back(dwarf::DW_TAG_compile_unit);
 
   // There are children (the methods).
-  dbg_abbrev->push_back(DW_CHILDREN_yes);
+  dbg_abbrev->push_back(dwarf::DW_CHILDREN_yes);
 
-  // DW_LANG_Java DW_FORM_data1.
-  dbg_abbrev->push_back(DW_AT_language);
-  dbg_abbrev->push_back(DW_FORM_data1);
+  // dwarf::DW_LANG_Java DW_FORM_data1.
+  dbg_abbrev->push_back(dwarf::DW_AT_language);
+  dbg_abbrev->push_back(dwarf::DW_FORM_data1);
 
-  // DW_AT_low_pc DW_FORM_addr.
-  dbg_abbrev->push_back(DW_AT_low_pc);
-  dbg_abbrev->push_back(DW_FORM_addr);
+  // dwarf::DW_AT_low_pc DW_FORM_addr.
+  dbg_abbrev->push_back(dwarf::DW_AT_low_pc);
+  dbg_abbrev->push_back(dwarf::DW_FORM_addr);
 
-  // DW_AT_high_pc DW_FORM_addr.
-  dbg_abbrev->push_back(DW_AT_high_pc);
-  dbg_abbrev->push_back(DW_FORM_addr);
+  // dwarf::DW_AT_high_pc DW_FORM_addr.
+  dbg_abbrev->push_back(dwarf::DW_AT_high_pc);
+  dbg_abbrev->push_back(dwarf::DW_FORM_addr);
 
-  // End of DW_TAG_compile_unit.
+  // End of dwarf::DW_TAG_compile_unit.
   PushHalf(dbg_abbrev, 0);
 
-  // Tag 2: Compilation unit: DW_TAG_subprogram.
+  // Tag 2: Compilation unit: dwarf::DW_TAG_subprogram.
   dbg_abbrev->push_back(2);
-  dbg_abbrev->push_back(DW_TAG_subprogram);
+  dbg_abbrev->push_back(dwarf::DW_TAG_subprogram);
 
   // There are no children.
-  dbg_abbrev->push_back(DW_CHILDREN_no);
+  dbg_abbrev->push_back(dwarf::DW_CHILDREN_no);
 
   // Name of the method.
-  dbg_abbrev->push_back(DW_AT_name);
-  dbg_abbrev->push_back(DW_FORM_strp);
+  dbg_abbrev->push_back(dwarf::DW_AT_name);
+  dbg_abbrev->push_back(dwarf::DW_FORM_strp);
 
-  // DW_AT_low_pc DW_FORM_addr.
-  dbg_abbrev->push_back(DW_AT_low_pc);
-  dbg_abbrev->push_back(DW_FORM_addr);
+  // dwarf::DW_AT_low_pc DW_FORM_addr.
+  dbg_abbrev->push_back(dwarf::DW_AT_low_pc);
+  dbg_abbrev->push_back(dwarf::DW_FORM_addr);
 
-  // DW_AT_high_pc DW_FORM_addr.
-  dbg_abbrev->push_back(DW_AT_high_pc);
-  dbg_abbrev->push_back(DW_FORM_addr);
+  // dwarf::DW_AT_high_pc DW_FORM_addr.
+  dbg_abbrev->push_back(dwarf::DW_AT_high_pc);
+  dbg_abbrev->push_back(dwarf::DW_FORM_addr);
 
-  // End of DW_TAG_subprogram.
+  // End of dwarf::DW_TAG_subprogram.
   PushHalf(dbg_abbrev, 0);
 
   // Start the debug_info section with the header information
@@ -961,7 +937,7 @@ void ElfWriterQuick::FillInCFIInformation(OatWriter* oat_writer,
   dbg_info->push_back(1);
 
   // The language is Java.
-  dbg_info->push_back(DW_LANG_Java);
+  dbg_info->push_back(dwarf::DW_LANG_Java);
 
   // Leave space for low_pc and high_pc.
   int low_pc_offset = dbg_info->size();
