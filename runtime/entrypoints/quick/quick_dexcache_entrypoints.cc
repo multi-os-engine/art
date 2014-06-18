@@ -66,4 +66,10 @@ extern "C" mirror::String* artResolveStringFromCode(mirror::ArtMethod* referrer,
   return ResolveStringFromCode(referrer, string_idx);
 }
 
+extern "C" bool artReferenceProcessorIsUsingSlowPath(Thread* self, StackReference<mirror::ArtMethod>* sp)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsOnly);
+  return Runtime::Current()->GetHeap()->GetReferenceProcessor()->IsUsingSlowPath();
+}
+
 }  // namespace art

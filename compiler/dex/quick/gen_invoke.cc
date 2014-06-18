@@ -22,6 +22,7 @@
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "invoke_type.h"
 #include "mirror/array.h"
+#include "mirror/reference.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/string.h"
 #include "mir_to_lir-inl.h"
@@ -1237,6 +1238,42 @@ RegLocation Mir2Lir::InlineTargetWide(CallInfo* info) {
     res = info->result;
   }
   return res;
+}
+
+bool Mir2Lir::GenInlinedGet(CallInfo* info) {
+  if (cu_->instruction_set == kMips) {
+    // TODO - add Mips implementation
+    return false;
+  }
+  RegLocation rl_obj = info->args[0];
+  RegLocation rl_dest = InlineTarget(info);
+  RegLocation rl_result = EvalLoc(rl_dest, kRefReg, true);
+
+  LockCallTemps();
+  rl_obj = LoadValue(rl_obj);
+  FreeCallTemps();
+
+  if (Is64BitInstructionSet(cu_->instruction_set)) {
+    CallRuntimeHelper(QUICK_ENTRYPOINT_OFFSET(8, pReferenceProcessorIsUsingSlowPath), true);
+  } else {
+    CallRuntimeHelper(QUICK_ENTRYPOINT_OFFSET(4, pReferenceProcessorIsUsingSlowPath), true);
+  }
+  RegLocation slow_path_res = GetReturn(kCoreReg);
+  LIR* cmp_slow_path_branch = OpCmpImmBranch(kCondNe, slow_path_res.reg, 0, nullptr);
+
+  GenExplicitNullCheck(rl_obj.reg, info->opt_flags);
+  LoadRefDisp(rl_obj.reg, mirror::Reference::ReferentOffset().Int32Value(), rl_result.reg);
+  StoreValue(rl_dest, rl_result);
+  LIR* jump_finished = OpUnconditionalBranch(nullptr);
+
+  LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);
+  cmp_slow_path_branch->target = slow_path_target;
+  GenInvokeNoInline(info);
+
+  LIR* finished_target = NewLIR0(kPseudoTargetLabel);
+  jump_finished->target = finished_target;
+
+  return true;
 }
 
 bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {

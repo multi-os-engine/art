@@ -92,6 +92,9 @@ extern "C" void art_quick_invoke_static_trampoline_with_access_check(uint32_t, v
 extern "C" void art_quick_invoke_super_trampoline_with_access_check(uint32_t, void*);
 extern "C" void art_quick_invoke_virtual_trampoline_with_access_check(uint32_t, void*);
 
+// Reference Processor.
+extern "C" bool art_quick_reference_processor_is_using_slow_path();
+
 // Thread entrypoints.
 extern void CheckSuspendFromCode(Thread* thread);
 extern "C" void art_quick_test_suspend();
@@ -203,6 +206,9 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pInvokeStaticTrampolineWithAccessCheck = art_quick_invoke_static_trampoline_with_access_check;
   qpoints->pInvokeSuperTrampolineWithAccessCheck = art_quick_invoke_super_trampoline_with_access_check;
   qpoints->pInvokeVirtualTrampolineWithAccessCheck = art_quick_invoke_virtual_trampoline_with_access_check;
+
+  // Reference Processor
+  qpoints->pReferenceProcessorIsUsingSlowPath = art_quick_reference_processor_is_using_slow_path;
 
   // Thread
   qpoints->pCheckSuspend = CheckSuspendFromCode;

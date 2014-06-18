@@ -1449,3 +1449,13 @@ ENTRY art_quick_string_compareto
 .Ldone:
     pop   {r4, r7-r12, pc}
 END art_quick_string_compareto
+
+    .extern artReferenceProcessorIsUsingSlowPath
+ENTRY art_quick_reference_processor_is_using_slow_path
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME
+    mov    r0, r9
+    mov    r1, sp
+    bl     artReferenceProcessorIsUsingSlowPath
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    bx     lr
+END art_quick_reference_processor_is_using_slow_path
