@@ -329,6 +329,24 @@ void Class::SetClassLoader(ClassLoader* new_class_loader) {
   }
 }
 
+ArtMethod* Class::FindInterfaceMethod(const StringPiece& name, const StringPiece& signature) {
+  // Check the current class before checking the interfaces.
+  ArtMethod* method = FindDeclaredVirtualMethod(name, signature);
+  if (method != NULL) {
+    return method;
+  }
+
+  int32_t iftable_count = GetIfTableCount();
+  IfTable* iftable = GetIfTable();
+  for (int32_t i = 0; i < iftable_count; i++) {
+    method = iftable->GetInterface(i)->FindDeclaredVirtualMethod(name, signature);
+    if (method != NULL) {
+      return method;
+    }
+  }
+  return NULL;
+}
+
 ArtMethod* Class::FindInterfaceMethod(const StringPiece& name, const Signature& signature) {
   // Check the current class before checking the interfaces.
   ArtMethod* method = FindDeclaredVirtualMethod(name, signature);

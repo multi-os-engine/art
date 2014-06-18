@@ -136,11 +136,15 @@ static jmethodID FindMethodID(ScopedObjectAccess& soa, jclass jni_class,
   if (is_static) {
     method = c->FindDirectMethod(name, sig);
   } else {
-    method = c->FindVirtualMethod(name, sig);
-    if (method == nullptr) {
-      // No virtual method matching the signature.  Search declared
-      // private methods and constructors.
-      method = c->FindDeclaredDirectMethod(name, sig);
+    if (c->IsInterface()) {
+      method = c->FindInterfaceMethod(name, sig);
+    } else {
+      method = c->FindVirtualMethod(name, sig);
+      if (method == nullptr) {
+        // No virtual method matching the signature.  Search declared
+        // private methods and constructors.
+        method = c->FindDeclaredDirectMethod(name, sig);
+      }
     }
   }
   if (method == nullptr || method->IsStatic() != is_static) {
