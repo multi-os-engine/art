@@ -41,6 +41,8 @@ extern "C" {
 class ElfFile {
  public:
   static ElfFile* Open(File* file, bool writable, bool program_header_only, std::string* error_msg);
+  // Open with specific mmap flags, Always maps in the whole file.
+  static ElfFile* Open(File* file, int mmap_prot, int mmap_flags, std::string* error_msg);
   ~ElfFile();
 
   // Load segments into memory based on PT_LOAD program headers
@@ -70,11 +72,13 @@ class ElfFile {
   Elf32_Word GetSectionHeaderNum() const;
   Elf32_Shdr& GetSectionHeader(Elf32_Word) const;
   Elf32_Shdr* FindSectionByType(Elf32_Word type) const;
+  Elf32_Shdr* FindSectionByName(const std::string& name) const;
 
   Elf32_Shdr& GetSectionNameStringSection() const;
 
   // Find .dynsym using .hash for more efficient lookup than FindSymbolAddress.
   const byte* FindDynamicSymbolAddress(const std::string& symbol_name) const;
+  const Elf32_Sym* FindDynamicSymbol(const std::string& symbol_name) const;
 
   static bool IsSymbolSectionType(Elf32_Word section_type);
   Elf32_Word GetSymbolNum(Elf32_Shdr&) const;
@@ -125,7 +129,7 @@ class ElfFile {
  private:
   ElfFile(File* file, bool writable, bool program_header_only);
 
-  bool Setup(std::string* error_msg);
+  bool Setup(int prot, int flags, std::string* error_msg);
 
   bool SetMap(MemMap* map, std::string* error_msg);
 
@@ -181,6 +185,7 @@ class ElfFile {
   // Support for GDB JIT
   byte* jit_elf_image_;
   JITCodeEntry* jit_gdb_entry_;
+  std::unique_ptr<ElfFile> gdb_file_mapping_;
   void GdbJITSupport();
   // Is this an OAT file with debug information in it?
   static constexpr uint32_t kExpectedSectionsInOATFile = 12;
