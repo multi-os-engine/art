@@ -166,6 +166,139 @@ static void System_arraycopyCharUnchecked(JNIEnv* env, jclass, jobject javaSrc, 
   dstArray->AsCharArray()->Memmove(dstPos, srcArray->AsCharArray(), srcPos, count);
 }
 
+static void System_arraycopyByteUnchecked(JNIEnv* env, jclass, jobject javaSrc, jint srcPos,
+                                          jobject javaDst, jint dstPos, jint count) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Object* srcObject = soa.Decode<mirror::Object*>(javaSrc);
+  mirror::Object* dstObject = soa.Decode<mirror::Object*>(javaDst);
+  DCHECK(srcObject != nullptr);
+  DCHECK(dstObject != nullptr);
+  mirror::Array* srcArray = srcObject->AsArray();
+  mirror::Array* dstArray = dstObject->AsArray();
+  DCHECK_GE(srcPos, 0);
+  DCHECK_GE(dstPos, 0);
+  DCHECK_GE(count, 0);
+  DCHECK_LE(srcPos + count, srcArray->GetLength());
+  DCHECK_LE(dstPos + count, dstArray->GetLength());
+  DCHECK_EQ(srcArray->GetClass(), dstArray->GetClass());
+  DCHECK_EQ(srcArray->GetClass()->GetComponentType()->GetPrimitiveType(), Primitive::kPrimByte);
+  dstArray->AsByteArray()->Memmove(dstPos, srcArray->AsByteArray(), srcPos, count);
+}
+
+static void System_arraycopyShortUnchecked(JNIEnv* env, jclass, jobject javaSrc, jint srcPos,
+                                          jobject javaDst, jint dstPos, jint count) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Object* srcObject = soa.Decode<mirror::Object*>(javaSrc);
+  mirror::Object* dstObject = soa.Decode<mirror::Object*>(javaDst);
+  DCHECK(srcObject != nullptr);
+  DCHECK(dstObject != nullptr);
+  mirror::Array* srcArray = srcObject->AsArray();
+  mirror::Array* dstArray = dstObject->AsArray();
+  DCHECK_GE(srcPos, 0);
+  DCHECK_GE(dstPos, 0);
+  DCHECK_GE(count, 0);
+  DCHECK_LE(srcPos + count, srcArray->GetLength());
+  DCHECK_LE(dstPos + count, dstArray->GetLength());
+  DCHECK_EQ(srcArray->GetClass(), dstArray->GetClass());
+  DCHECK_EQ(srcArray->GetClass()->GetComponentType()->GetPrimitiveType(), Primitive::kPrimShort);
+  dstArray->AsShortArray()->Memmove(dstPos, srcArray->AsShortArray(), srcPos, count);
+}
+
+static void System_arraycopyIntUnchecked(JNIEnv* env, jclass, jobject javaSrc, jint srcPos,
+                                          jobject javaDst, jint dstPos, jint count) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Object* srcObject = soa.Decode<mirror::Object*>(javaSrc);
+  mirror::Object* dstObject = soa.Decode<mirror::Object*>(javaDst);
+  DCHECK(srcObject != nullptr);
+  DCHECK(dstObject != nullptr);
+  mirror::Array* srcArray = srcObject->AsArray();
+  mirror::Array* dstArray = dstObject->AsArray();
+  DCHECK_GE(srcPos, 0);
+  DCHECK_GE(dstPos, 0);
+  DCHECK_GE(count, 0);
+  DCHECK_LE(srcPos + count, srcArray->GetLength());
+  DCHECK_LE(dstPos + count, dstArray->GetLength());
+  DCHECK_EQ(srcArray->GetClass(), dstArray->GetClass());
+  DCHECK_EQ(srcArray->GetClass()->GetComponentType()->GetPrimitiveType(), Primitive::kPrimInt);
+  dstArray->AsIntArray()->Memmove(dstPos, srcArray->AsIntArray(), srcPos, count);
+}
+
+static void System_arraycopyLongUnchecked(JNIEnv* env, jclass, jobject javaSrc, jint srcPos,
+                                          jobject javaDst, jint dstPos, jint count) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Object* srcObject = soa.Decode<mirror::Object*>(javaSrc);
+  mirror::Object* dstObject = soa.Decode<mirror::Object*>(javaDst);
+  DCHECK(srcObject != nullptr);
+  DCHECK(dstObject != nullptr);
+  mirror::Array* srcArray = srcObject->AsArray();
+  mirror::Array* dstArray = dstObject->AsArray();
+  DCHECK_GE(srcPos, 0);
+  DCHECK_GE(dstPos, 0);
+  DCHECK_GE(count, 0);
+  DCHECK_LE(srcPos + count, srcArray->GetLength());
+  DCHECK_LE(dstPos + count, dstArray->GetLength());
+  DCHECK_EQ(srcArray->GetClass(), dstArray->GetClass());
+  DCHECK_EQ(srcArray->GetClass()->GetComponentType()->GetPrimitiveType(), Primitive::kPrimLong);
+  dstArray->AsLongArray()->Memmove(dstPos, srcArray->AsLongArray(), srcPos, count);
+}
+
+static void System_arraycopyFloatUnchecked(JNIEnv* env, jclass, jobject javaSrc, jint srcPos,
+                                          jobject javaDst, jint dstPos, jint count) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Object* srcObject = soa.Decode<mirror::Object*>(javaSrc);
+  mirror::Object* dstObject = soa.Decode<mirror::Object*>(javaDst);
+  DCHECK(srcObject != nullptr);
+  DCHECK(dstObject != nullptr);
+  mirror::Array* srcArray = srcObject->AsArray();
+  mirror::Array* dstArray = dstObject->AsArray();
+  DCHECK_GE(srcPos, 0);
+  DCHECK_GE(dstPos, 0);
+  DCHECK_GE(count, 0);
+  DCHECK_LE(srcPos + count, srcArray->GetLength());
+  DCHECK_LE(dstPos + count, dstArray->GetLength());
+  DCHECK_EQ(srcArray->GetClass(), dstArray->GetClass());
+  DCHECK_EQ(srcArray->GetClass()->GetComponentType()->GetPrimitiveType(), Primitive::kPrimFloat);
+  dstArray->AsFloatArray()->Memmove(dstPos, srcArray->AsFloatArray(), srcPos, count);
+}
+
+static void System_arraycopyDoubleUnchecked(JNIEnv* env, jclass, jobject javaSrc, jint srcPos,
+                                          jobject javaDst, jint dstPos, jint count) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Object* srcObject = soa.Decode<mirror::Object*>(javaSrc);
+  mirror::Object* dstObject = soa.Decode<mirror::Object*>(javaDst);
+  DCHECK(srcObject != nullptr);
+  DCHECK(dstObject != nullptr);
+  mirror::Array* srcArray = srcObject->AsArray();
+  mirror::Array* dstArray = dstObject->AsArray();
+  DCHECK_GE(srcPos, 0);
+  DCHECK_GE(dstPos, 0);
+  DCHECK_GE(count, 0);
+  DCHECK_LE(srcPos + count, srcArray->GetLength());
+  DCHECK_LE(dstPos + count, dstArray->GetLength());
+  DCHECK_EQ(srcArray->GetClass(), dstArray->GetClass());
+  DCHECK_EQ(srcArray->GetClass()->GetComponentType()->GetPrimitiveType(), Primitive::kPrimDouble);
+  dstArray->AsDoubleArray()->Memmove(dstPos, srcArray->AsDoubleArray(), srcPos, count);
+}
+
+static void System_arraycopyBooleanUnchecked(JNIEnv* env, jclass, jobject javaSrc, jint srcPos,
+                                          jobject javaDst, jint dstPos, jint count) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Object* srcObject = soa.Decode<mirror::Object*>(javaSrc);
+  mirror::Object* dstObject = soa.Decode<mirror::Object*>(javaDst);
+  DCHECK(srcObject != nullptr);
+  DCHECK(dstObject != nullptr);
+  mirror::Array* srcArray = srcObject->AsArray();
+  mirror::Array* dstArray = dstObject->AsArray();
+  DCHECK_GE(srcPos, 0);
+  DCHECK_GE(dstPos, 0);
+  DCHECK_GE(count, 0);
+  DCHECK_LE(srcPos + count, srcArray->GetLength());
+  DCHECK_LE(dstPos + count, dstArray->GetLength());
+  DCHECK_EQ(srcArray->GetClass(), dstArray->GetClass());
+  DCHECK_EQ(srcArray->GetClass()->GetComponentType()->GetPrimitiveType(), Primitive::kPrimBoolean);
+  dstArray->AsBooleanArray()->Memmove(dstPos, srcArray->AsBooleanArray(), srcPos, count);
+}
+
 static jint System_identityHashCode(JNIEnv* env, jclass, jobject javaObject) {
   if (UNLIKELY(javaObject == nullptr)) {
     return 0;
@@ -178,6 +311,13 @@ static jint System_identityHashCode(JNIEnv* env, jclass, jobject javaObject) {
 static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(System, arraycopy, "!(Ljava/lang/Object;ILjava/lang/Object;II)V"),
   NATIVE_METHOD(System, arraycopyCharUnchecked, "!([CI[CII)V"),
+  NATIVE_METHOD(System, arraycopyByteUnchecked, "!([BI[BII)V"),
+  NATIVE_METHOD(System, arraycopyShortUnchecked, "!([SI[SII)V"),
+  NATIVE_METHOD(System, arraycopyIntUnchecked, "!([II[III)V"),
+  NATIVE_METHOD(System, arraycopyLongUnchecked, "!([JI[JII)V"),
+  NATIVE_METHOD(System, arraycopyFloatUnchecked, "!([FI[FII)V"),
+  NATIVE_METHOD(System, arraycopyDoubleUnchecked, "!([DI[DII)V"),
+  NATIVE_METHOD(System, arraycopyBooleanUnchecked, "!([ZI[ZII)V"),
   NATIVE_METHOD(System, identityHashCode, "!(Ljava/lang/Object;)I"),
 };
 
