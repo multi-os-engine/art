@@ -128,6 +128,9 @@ struct PACKED(4) QuickEntryPoints {
   void (*pInvokeSuperTrampolineWithAccessCheck)(uint32_t, void*);
   void (*pInvokeVirtualTrampolineWithAccessCheck)(uint32_t, void*);
 
+  // ReferenceProcessor
+  bool (*pReferenceProcessorIsUsingSlowPath)();
+
   // Thread
   void (*pCheckSuspend)(Thread*);  // Stub that is called when the suspend count is non-zero
   void (*pTestSuspend)();  // Stub that is periodically called to test the suspend count

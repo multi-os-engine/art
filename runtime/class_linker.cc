@@ -254,6 +254,10 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   java_lang_String->SetObjectSize(sizeof(mirror::String));
   java_lang_String->SetStatus(mirror::Class::kStatusResolved, self);
 
+  // Setup Reference.
+  Handle<mirror::Class> t(hs.NewHandle(AllocClass(self, java_lang_Class.Get(),
+                                                                        sizeof(mirror::ReferenceClass))));
+
   // Create storage for root classes, save away our work so far (requires descriptors).
   class_roots_ = mirror::ObjectArray<mirror::Class>::Alloc(self, object_array_class.Get(),
                                                            kClassRootsMax);
@@ -264,6 +268,7 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   SetClassRoot(kObjectArrayClass, object_array_class.Get());
   SetClassRoot(kCharArrayClass, char_array_class.Get());
   SetClassRoot(kJavaLangString, java_lang_String.Get());
+  SetClassRoot(kJavaLangRefReference, t.Get());
 
   // Setup the primitive type classes.
   SetClassRoot(kPrimitiveBoolean, CreatePrimitiveClass(self, Primitive::kPrimBoolean));
@@ -538,6 +543,7 @@ void ClassLinker::FinishInit(Thread* self) {
   // that Object, Class, and Object[] are setup
   init_done_ = true;
 
+  Runtime::Current()->GetHeap()->GetReferenceProcessor()->SetReferenceClass(down_cast<mirror::ReferenceClass*>(java_lang_ref_Reference));
   VLOG(startup) << "ClassLinker::FinishInit exiting";
 }
 

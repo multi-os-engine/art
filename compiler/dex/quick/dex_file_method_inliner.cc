@@ -73,6 +73,7 @@ const char* const DexFileMethodInliner::kClassCacheNames[] = {
     "D",                       // kClassCacheDouble
     "V",                       // kClassCacheVoid
     "Ljava/lang/Object;",      // kClassCacheJavaLangObject
+    "Ljava/lang/ref/Reference;",  // kClassCacheJavaLangRefReference
     "Ljava/lang/String;",      // kClassCacheJavaLangString
     "Ljava/lang/Double;",      // kClassCacheJavaLangDouble
     "Ljava/lang/Float;",       // kClassCacheJavaLangFloat
@@ -96,6 +97,7 @@ const char* const DexFileMethodInliner::kNameCacheNames[] = {
     "max",                   // kNameCacheMax
     "min",                   // kNameCacheMin
     "sqrt",                  // kNameCacheSqrt
+    "get",                   // kNameCacheGet
     "charAt",                // kNameCacheCharAt
     "compareTo",             // kNameCacheCompareTo
     "isEmpty",               // kNameCacheIsEmpty
@@ -159,6 +161,8 @@ const DexFileMethodInliner::ProtoDef DexFileMethodInliner::kProtoCacheDefs[] = {
     { kClassCacheBoolean, 0, { } },
     // kProtoCache_I
     { kClassCacheInt, 0, { } },
+    // kProtoCache_Object
+    { kClassCacheJavaLangObject, 0, { } },
     // kProtoCache_Thread
     { kClassCacheJavaLangThread, 0, { } },
     // kProtoCacheJ_B
@@ -226,6 +230,8 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
     INTRINSIC(JavaLangStrictMath, Max, II_I, kIntrinsicMinMaxInt, kIntrinsicFlagMax),
     INTRINSIC(JavaLangMath,       Sqrt, D_D, kIntrinsicSqrt, 0),
     INTRINSIC(JavaLangStrictMath, Sqrt, D_D, kIntrinsicSqrt, 0),
+
+    INTRINSIC(JavaLangRefReference, Get, _Object, kIntrinsicGet, 0),
 
     INTRINSIC(JavaLangString, CharAt, I_C, kIntrinsicCharAt, 0),
     INTRINSIC(JavaLangString, CompareTo, String_I, kIntrinsicCompareTo, 0),
@@ -331,6 +337,8 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
       return backend->GenInlinedMinMaxInt(info, intrinsic.d.data & kIntrinsicFlagMin);
     case kIntrinsicSqrt:
       return backend->GenInlinedSqrt(info);
+    case kIntrinsicGet:
+      return backend->GenInlinedGet(info);
     case kIntrinsicCharAt:
       return backend->GenInlinedCharAt(info);
     case kIntrinsicCompareTo:

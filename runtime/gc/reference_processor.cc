@@ -17,6 +17,7 @@
 #include "reference_processor.h"
 
 #include "mirror/object-inl.h"
+#include "mirror/reference.h"
 #include "mirror/reference-inl.h"
 #include "reflection.h"
 #include "ScopedLocalRef.h"
@@ -27,18 +28,32 @@ namespace art {
 namespace gc {
 
 ReferenceProcessor::ReferenceProcessor()
-    : process_references_args_(nullptr, nullptr, nullptr), slow_path_enabled_(false),
+    : process_references_args_(nullptr, nullptr, nullptr), reference_class_(nullptr),
       preserving_references_(false), lock_("reference processor lock", kReferenceProcessorLock),
       condition_("reference processor condition", lock_) {
 }
 
+bool ReferenceProcessor::SlowPathEnabled() {
+  CHECK(reference_class_ != nullptr);
+  return reference_class_->SlowPathEnabled();
+}
+
+void ReferenceProcessor::SetReferenceClass(mirror::ReferenceClass* klass) {
+  CHECK(reference_class_ == nullptr);
+  reference_class_ = klass;
+  MutexLock mu(Thread::Current(), lock_);
+  DisableSlowPath(Thread::Current());
+}
+
 void ReferenceProcessor::EnableSlowPath() {
+  CHECK(reference_class_ != nullptr);
   Locks::mutator_lock_->AssertExclusiveHeld(Thread::Current());
-  slow_path_enabled_ = true;
+  reference_class_->SetSlowPathEnabled(true);
 }
 
 void ReferenceProcessor::DisableSlowPath(Thread* self) {
-  slow_path_enabled_ = false;
+  CHECK(reference_class_ != nullptr);
+  reference_class_->SetSlowPathEnabled(false);
   condition_.Broadcast(self);
 }
 
@@ -46,11 +61,11 @@ mirror::Object* ReferenceProcessor::GetReferent(Thread* self, mirror::Reference*
   mirror::Object* const referent = reference->GetReferent();
   // If the referent is null then it is already cleared, we can just return null since there is no
   // scenario where it becomes non-null during the reference processing phase.
-  if (LIKELY(!slow_path_enabled_) || referent == nullptr) {
+  if (LIKELY(!SlowPathEnabled()) || referent == nullptr) {
     return referent;
   }
   MutexLock mu(self, lock_);
-  while (slow_path_enabled_) {
+  while (SlowPathEnabled()) {
     mirror::HeapReference<mirror::Object>* const referent_addr =
         reference->GetReferentReferenceAddr();
     // If the referent became cleared, return it. Don't need barrier since thread roots can't get
@@ -116,7 +131,7 @@ void ReferenceProcessor::ProcessReferences(bool concurrent, TimingLogger* timing
     process_references_args_.is_marked_callback_ = is_marked_callback;
     process_references_args_.mark_callback_ = mark_object_callback;
     process_references_args_.arg_ = arg;
-    CHECK_EQ(slow_path_enabled_, concurrent) << "Slow path must be enabled iff concurrent";
+    CHECK_EQ(SlowPathEnabled(), concurrent) << "Slow path must be enabled iff concurrent";
   }
   timings->StartSplit(concurrent ? "ProcessReferences" : "(Paused)ProcessReferences");
   // Unless required to clear soft references with white references, preserve some white referents.

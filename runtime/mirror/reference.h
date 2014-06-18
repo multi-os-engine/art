@@ -86,6 +86,7 @@ class MANAGED Reference : public Object {
     return GetFieldObjectReferenceAddr<kDefaultVerifyFlags>(ReferentOffset());
   }
 
+
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   HeapReference<Reference> pending_next_;  // Note this is Java volatile:
   HeapReference<Object> queue_;  // Note this is Java volatile:
@@ -96,6 +97,21 @@ class MANAGED Reference : public Object {
   friend class gc::ReferenceProcessor;
   friend class gc::ReferenceQueue;
   DISALLOW_IMPLICIT_CONSTRUCTORS(Reference);
+};
+
+class MANAGED ReferenceClass : public Class {
+ public:
+  static MemberOffset SlowPathEnabledOffset() {
+    return OFFSET_OF_OBJECT_MEMBER(ReferenceClass, slow_path_enabled_);
+  }
+
+  void SetSlowPathEnabled(bool enabled) { slow_path_enabled_ = enabled; }
+  bool SlowPathEnabled(void) { return slow_path_enabled_; }
+
+ private:
+  bool slow_path_enabled_;
+  friend class gc::ReferenceProcessor;
+  DISALLOW_IMPLICIT_CONSTRUCTORS(ReferenceClass);
 };
 
 // C++ mirror of java.lang.ref.FinalizerReference

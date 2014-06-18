@@ -65,5 +65,4 @@ extern "C" mirror::String* artResolveStringFromCode(mirror::ArtMethod* referrer,
   FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsOnly);
   return ResolveStringFromCode(referrer, string_idx);
 }
-
 }  // namespace art
