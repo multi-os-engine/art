@@ -30,6 +30,7 @@ class TimingLogger;
 namespace mirror {
 class Object;
 class Reference;
+class ReferenceClass;
 }  // namespace mirror
 
 namespace gc {
@@ -49,9 +50,10 @@ class ReferenceProcessor {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
       LOCKS_EXCLUDED(lock_);
+  // The slow path bool is contained in the reference class object, can only be set once
   // Only allow setting this with mutators suspended so that we can avoid using a lock in the
   // GetReferent fast path as an optimization.
-  void EnableSlowPath() EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void EnableSlowPath() LOCKS_EXCLUDED(lock_) EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
   // Decode the referent, may block if references are being processed.
   mirror::Object* GetReferent(Thread* self, mirror::Reference* reference)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) LOCKS_EXCLUDED(lock_);
@@ -75,8 +77,9 @@ class ReferenceProcessor {
     MarkObjectCallback* mark_callback_;
     void* arg_;
   };
+  bool SlowPathEnabled() SHARED_LOCKS_REQUIRED(lock_, Locks::mutator_lock_);
   // Called by ProcessReferences.
-  void DisableSlowPath(Thread* self) EXCLUSIVE_LOCKS_REQUIRED(lock_);
+  void DisableSlowPath(Thread* self) EXCLUSIVE_LOCKS_REQUIRED(lock_) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   // If we are preserving references it means that some dead objects may become live, we use start
   // and stop preserving to block mutators using GetReferrent from getting access to these
   // referents.
@@ -84,8 +87,6 @@ class ReferenceProcessor {
   void StopPreservingReferences(Thread* self) LOCKS_EXCLUDED(lock_);
   // Process args, used by the GetReferent to return referents which are already marked.
   ProcessReferencesArgs process_references_args_ GUARDED_BY(lock_);
-  // Boolean for whether or not we need to go slow path in GetReferent.
-  volatile bool slow_path_enabled_;
   // Boolean for whether or not we are preserving references (either soft references or finalizers).
   // If this is true, then we cannot return a referent (see comment in GetReferent).
   bool preserving_references_ GUARDED_BY(lock_);
