@@ -1757,7 +1757,7 @@ END art_quick_indexof
      *    x1:   comp object pointer
      *
      */
-    .extern memcmp16_generic_static
+    .extern __memcmp16
 ENTRY art_quick_string_compareto
     mov    x2, x0         // x0 is return, use x2 for first input.
     sub    x0, x2, x1     // Same string object?
@@ -1850,16 +1850,17 @@ ENTRY art_quick_string_compareto
     ret
 
 .Ldo_memcmp16:
-    str x0, [sp,#-16]!           // Save x0
+    mov x14, x0                  // Save x0 and LR. __memcmp16 does not use these temps.
+    mov x15, xLR                 //                 TODO: Codify and check that?
 
     mov x0, x2
     uxtw x2, w3
-    bl memcmp16_generic_static
+    bl __memcmp16
 
-    ldr x1, [sp], #16            // Restore old x0 = length diff
+    mov xLR, x15                 // Restore LR.
 
-    cmp x0, #0                   // Check the memcmp difference
-    csel x0, x0, x1, ne          // x0 := x0 != 0 ? x0 : x1
+    cmp x0, #0                   // Check the memcmp difference.
+    csel x0, x0, x14, ne         // x0 := x0 != 0 ? x14(prev x0=length diff) : x1.
     ret
 END art_quick_string_compareto
 
