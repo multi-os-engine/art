@@ -399,6 +399,7 @@ class HBasicBlock : public ArenaObject {
   M(ReturnVoid)                                            \
   M(StoreLocal)                                            \
   M(Sub)                                                   \
+  M(Compare)                                               \
 
 #define FORWARD_DECLARATION(type) class H##type;
 FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
@@ -855,12 +856,26 @@ class HEqual : public HBinaryOperation {
 
   virtual bool IsCommutative() { return true; }
 
-  virtual Primitive::Type GetType() const { return Primitive::kPrimBoolean; }
-
   DECLARE_INSTRUCTION(Equal);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HEqual);
+};
+
+// Instruction to check how two inputs compare to each other.
+// Result is 0 if input0 == input1, 1 if input0 > input1, or -1 if input0 < input1.
+class HCompare : public HBinaryOperation {
+ public:
+  HCompare(Primitive::Type type, HInstruction* first, HInstruction* second)
+      : HBinaryOperation(Primitive::kPrimInt, first, second) {
+    DCHECK_EQ(type, first->GetType());
+    DCHECK_EQ(type, second->GetType());
+  }
+
+  DECLARE_INSTRUCTION(Compare);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HCompare);
 };
 
 // A local in the graph. Corresponds to a Dex register.

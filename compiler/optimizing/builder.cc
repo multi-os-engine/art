@@ -110,6 +110,24 @@ void HGraphBuilder::If_22t(const Instruction& instruction, int32_t dex_offset, b
   current_block_ = nullptr;
 }
 
+template<typename T>
+void HGraphBuilder::If_21t(const Instruction& instruction, int32_t dex_offset, bool is_not) {
+  HInstruction* first = LoadLocal(instruction.VRegA(), Primitive::kPrimInt);
+  HInstruction* second = GetIntConstant(0);
+  current_block_->AddInstruction(new (arena_) T(first, second));
+  if (is_not) {
+    current_block_->AddInstruction(new (arena_) HNot(current_block_->GetLastInstruction()));
+  }
+  current_block_->AddInstruction(new (arena_) HIf(current_block_->GetLastInstruction()));
+  HBasicBlock* target = FindBlockStartingAt(instruction.GetTargetOffset() + dex_offset);
+  DCHECK(target != nullptr);
+  current_block_->AddSuccessor(target);
+  target = FindBlockStartingAt(dex_offset + instruction.SizeInCodeUnits());
+  DCHECK(target != nullptr);
+  current_block_->AddSuccessor(target);
+  current_block_ = nullptr;
+}
+
 HGraph* HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
   if (!CanHandleCodeItem(code_item)) {
     return nullptr;
@@ -211,7 +229,7 @@ HBasicBlock* HGraphBuilder::FindBlockStartingAt(int32_t index) const {
 }
 
 template<typename T>
-void HGraphBuilder::Binop_32x(const Instruction& instruction, Primitive::Type type) {
+void HGraphBuilder::Binop_23x(const Instruction& instruction, Primitive::Type type) {
   HInstruction* first = LoadLocal(instruction.VRegB(), type);
   HInstruction* second = LoadLocal(instruction.VRegC(), type);
   current_block_->AddInstruction(new (arena_) T(type, first, second));
@@ -367,6 +385,12 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       break;
     }
 
+    case Instruction::MOVE_WIDE: {
+      HInstruction* value = LoadLocal(instruction.VRegB(), Primitive::kPrimLong);
+      UpdateLocal(instruction.VRegA(), value);
+      break;
+    }
+
     case Instruction::RETURN_VOID: {
       BuildReturn(instruction, Primitive::kPrimVoid);
       break;
@@ -379,6 +403,16 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
 
     case Instruction::IF_NE: {
       If_22t<HEqual>(instruction, dex_offset, true);
+      break;
+    }
+
+    case Instruction::IF_EQZ: {
+      If_21t<HEqual>(instruction, dex_offset, false);
+      break;
+    }
+
+    case Instruction::IF_NEZ: {
+      If_21t<HEqual>(instruction, dex_offset, true);
       break;
     }
 
@@ -433,22 +467,22 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
     }
 
     case Instruction::ADD_INT: {
-      Binop_32x<HAdd>(instruction, Primitive::kPrimInt);
+      Binop_23x<HAdd>(instruction, Primitive::kPrimInt);
       break;
     }
 
     case Instruction::ADD_LONG: {
-      Binop_32x<HAdd>(instruction, Primitive::kPrimLong);
+      Binop_23x<HAdd>(instruction, Primitive::kPrimLong);
       break;
     }
 
     case Instruction::SUB_INT: {
-      Binop_32x<HSub>(instruction, Primitive::kPrimInt);
+      Binop_23x<HSub>(instruction, Primitive::kPrimInt);
       break;
     }
 
     case Instruction::SUB_LONG: {
-      Binop_32x<HSub>(instruction, Primitive::kPrimLong);
+      Binop_23x<HSub>(instruction, Primitive::kPrimLong);
       break;
     }
 
@@ -502,6 +536,11 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
     case Instruction::MOVE_RESULT:
     case Instruction::MOVE_RESULT_WIDE: {
       UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+      break;
+    }
+
+    case Instruction::CMP_LONG: {
+      Binop_23x<HCompare>(instruction, Primitive::kPrimLong);
       break;
     }
 
