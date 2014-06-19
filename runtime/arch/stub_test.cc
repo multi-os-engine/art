@@ -1223,7 +1223,9 @@ TEST_F(StubTest, StringCompareTo) {
   // Setup: The first half is standard. The second half uses a non-zero offset.
   // TODO: Shared backing arrays.
   static constexpr size_t kBaseStringCount  = 7;
-  const char* c[kBaseStringCount] = { "", "", "a", "aa", "ab", "aac", "aac" , };
+  const char* c[kBaseStringCount] = { "", "", "a", "aa", "ab",
+      "aacaacaacaacaacaac",  // this one's under the default limit to go to __memcmp16
+      "aacaacaacaacaacaacaacaacaacaacaacaac" };  // this one's over
 
   static constexpr size_t kStringCount = 2 * kBaseStringCount;
 
