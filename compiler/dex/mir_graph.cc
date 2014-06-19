@@ -284,6 +284,8 @@ BasicBlock* MIRGraph::FindBlock(DexOffset code_offset, bool split, bool create,
 
 /* Identify code range in try blocks and set up the empty catch blocks */
 void MIRGraph::ProcessTryCatchBlocks() {
+  bool verbose = PrettyMethod(cu_->method_idx, *cu_->dex_file) ==
+      "com.google.android.mms.pdu.GenericPdu com.google.android.mms.pdu.PduPersister.load(android.net.Uri)";
   int tries_size = current_code_item_->tries_size_;
   DexOffset offset;
 
@@ -296,6 +298,12 @@ void MIRGraph::ProcessTryCatchBlocks() {
         DexFile::GetTryItems(*current_code_item_, i);
     DexOffset start_offset = pTry->start_addr_;
     DexOffset end_offset = start_offset + pTry->insn_count_;
+    if (verbose) {
+      CatchHandlerIterator iter(*current_code_item_, *pTry);
+      LOG(INFO) << "ProcessTryCatchBlocks() in " << PrettyMethod(cu_->method_idx, *cu_->dex_file)
+          << std::hex
+          << " [" << start_offset << ", " << end_offset << ") -> " << iter.GetHandlerAddress();
+    }
     for (offset = start_offset; offset < end_offset; offset++) {
       try_block_addr_->SetBit(offset);
     }
@@ -458,10 +466,21 @@ BasicBlock* MIRGraph::ProcessCanSwitch(BasicBlock* cur_block, MIR* insn, DexOffs
   return cur_block;
 }
 
+void __attribute__((noinline)) VMarkoBkpt() {
+  // LOG(INFO) << "VMarkoBkpt()";
+}
+
 /* Process instructions with the kThrow flag */
 BasicBlock* MIRGraph::ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset,
                                       int width, int flags, ArenaBitVector* try_block_addr,
                                       const uint16_t* code_ptr, const uint16_t* code_end) {
+  bool verbose = PrettyMethod(cu_->method_idx, *cu_->dex_file) ==
+      "com.google.android.mms.pdu.GenericPdu com.google.android.mms.pdu.PduPersister.load(android.net.Uri)";
+  if (verbose) {
+    LOG(INFO) << "ProcessCanThrow in " << PrettyMethod(cu_->method_idx, *cu_->dex_file)
+        << " @" << std::hex << insn->offset << " / cur_offset=" << cur_offset;
+    VMarkoBkpt();
+  }
   bool in_try_block = try_block_addr->IsBitSet(cur_offset);
   bool is_throw = (insn->dalvikInsn.opcode == Instruction::THROW);
   bool build_all_edges =
@@ -488,6 +507,7 @@ BasicBlock* MIRGraph::ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffse
       if (kIsDebugBuild) {
         catches_.insert(catch_block->start_offset);
       }
+      if (verbose) LOG(INFO) << "  Catch @" << std::hex << catch_block->start_offset;
       SuccessorBlockInfo* successor_block_info = reinterpret_cast<SuccessorBlockInfo*>
           (arena_->Alloc(sizeof(SuccessorBlockInfo), kArenaAllocSuccessor));
       successor_block_info->block = catch_block->id;
@@ -776,6 +796,16 @@ uint64_t MIRGraph::GetDataFlowAttributes(MIR* mir) {
   DCHECK(mir != nullptr);
   Instruction::Code opcode = mir->dalvikInsn.opcode;
   return GetDataFlowAttributes(opcode);
+}
+
+const char* MIRGraph::InstructionName(int opcode) const {
+  if (opcode < 0 || opcode > kMirOpSelect) {
+    return "BAD-INSN";
+  }
+  if (!IsPseudoMirOp(opcode)) {
+    return Instruction::Name(static_cast<Instruction::Code>(opcode));
+  }
+  return extended_mir_op_names_[opcode - kMirOpFirst];
 }
 
 // TODO: use a configurable base prefix, and adjust callers to supply pass name.

@@ -650,6 +650,8 @@ class MIRGraph {
     return m_units_[current_method_];
   }
 
+  const char* InstructionName(int opcode) const;
+
   /**
    * @brief Dump a CFG into a dot file format.
    * @param dir_prefix the directory the file will be created in.

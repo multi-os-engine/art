@@ -429,6 +429,36 @@ void MIRGraph::ComputeDominators() {
   for (BasicBlock* bb = iter5.Next(); bb != NULL; bb = iter5.Next()) {
     ComputeDominanceFrontier(bb);
   }
+
+
+  bool verbose = PrettyMethod(cu_->method_idx, *cu_->dex_file) ==
+      "com.google.android.mms.pdu.GenericPdu com.google.android.mms.pdu.PduPersister.load(android.net.Uri)";
+  if (verbose) {
+    const BasicBlockId dump_bb[] = {4, 273};
+    for (BasicBlockId id : dump_bb) {
+      BasicBlock* bb = GetBasicBlock(id);
+      LOG(INFO) << "BB #" << id << "@" << std::hex << bb->start_offset <<  ":";
+      for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+        LOG(INFO) << "  0x" << std::hex << mir->offset << ": "
+            << InstructionName(mir->dalvikInsn.opcode) << "; "
+            << static_cast<int>(mir->dalvikInsn.opcode);
+      }
+      GrowableArray<BasicBlockId>::Iterator pred_iterator(bb->predecessors);
+      while (true) {
+        BasicBlock* pred_bb = GetBasicBlock(pred_iterator.Next());
+
+        if (pred_bb == nullptr) {
+          break;
+        }
+
+        LOG(INFO) << "  pred: " << pred_bb->id << " @" << std::hex << pred_bb->start_offset
+            << (pred_bb->hidden ? " hidden" : "")
+            << (pred_bb->dominators == nullptr ? " null-dom" : "")
+            << " " << std::boolalpha
+            << (pred_bb->dominators == nullptr ? false : pred_bb->dominators->IsBitSet(bb->id));
+      }
+    }
+  }
 }
 
 /*
