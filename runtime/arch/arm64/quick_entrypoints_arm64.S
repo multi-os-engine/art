@@ -1757,7 +1757,7 @@ END art_quick_indexof
      *    x1:   comp object pointer
      *
      */
-    .extern memcmp16_generic_static
+    .extern __memcmp16
 ENTRY art_quick_string_compareto
     mov    x2, x0         // x0 is return, use x2 for first input.
     sub    x0, x2, x1     // Same string object?
@@ -1854,7 +1854,7 @@ ENTRY art_quick_string_compareto
 
     mov x0, x2
     uxtw x2, w3
-    bl memcmp16_generic_static
+    bl __memcmp16
 
     ldr x1, [sp], #16            // Restore old x0 = length diff
 
