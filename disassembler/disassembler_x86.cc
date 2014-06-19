@@ -288,9 +288,9 @@ DISASSEMBLER_ENTRY(cmp,
     has_modrm = true;
     byte_operand = (*instr == 0x86);
     break;
-  case 0x88: opcode << "mov"; store = true; has_modrm = true; byte_operand = true; break;
+  case 0x88: opcode << "movb"; store = true; has_modrm = true; byte_operand = true; break;
   case 0x89: opcode << "mov"; store = true; has_modrm = true; break;
-  case 0x8A: opcode << "mov"; load = true; has_modrm = true; byte_operand = true; break;
+  case 0x8A: opcode << "movb"; load = true; has_modrm = true; byte_operand = true; break;
   case 0x8B: opcode << "mov"; load = true; has_modrm = true; break;
 
   case 0x0F:  // 2 byte extended opcode
@@ -894,7 +894,7 @@ DISASSEMBLER_ENTRY(cmp,
     opcode << (prefix[2] == 0x66 ? "scasw" : "scasl");
     break;
   case 0xB0: case 0xB1: case 0xB2: case 0xB3: case 0xB4: case 0xB5: case 0xB6: case 0xB7:
-    opcode << "mov";
+    opcode << "movb";
     immediate_bytes = 1;
     reg_in_opcode = true;
     break;
@@ -916,6 +916,15 @@ DISASSEMBLER_ENTRY(cmp,
     byte_operand = (*instr == 0xC0);
     break;
   case 0xC3: opcode << "ret"; break;
+  case 0xC6:
+    static const char* c6_opcodes[] = {"movb", "unknown-c6", "unknown-c6", "unknown-c6", "unknown-c6", "unknown-c6", "unknown-c6", "unknown-c6"};
+    modrm_opcodes = c6_opcodes;
+    store = true;
+    immediate_bytes = 1;
+    has_modrm = true;
+    reg_is_opcode = true;
+    byte_operand = true;
+    break;
   case 0xC7:
     static const char* c7_opcodes[] = {"mov", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7"};
     modrm_opcodes = c7_opcodes;
