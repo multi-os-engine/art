@@ -644,6 +644,38 @@ LIR* Arm64Mir2Lir::OpRegRegRegShift(OpKind op, RegStorage r_dest, RegStorage r_s
   }
 }
 
+LIR* Arm64Mir2Lir::OpRegRegRegExtend(OpKind op, RegStorage r_dest, RegStorage r_src1,
+                                     RegStorage r_src2, A64RegExtEncodings ext) {
+  ArmOpcode opcode = kA64Brk1d;
+
+  switch (op) {
+    case kOpAdd:
+      opcode = kA64Add4rrre;
+      break;
+    case kOpSub:
+      opcode = kA64Sub4rrre;
+      break;
+    default:
+      LOG(FATAL) << "Unimplemented opcode: " << op;
+      break;
+  }
+  ArmOpcode widened_opcode = r_dest.Is64Bit() ? WIDE(opcode) : opcode;
+
+  CHECK(r_dest.Is64Bit());
+  CHECK(r_src1.Is64Bit());
+
+  // TODO: Down-convert r_src2 when necessary.
+
+  // To make the encoding correct, we need:
+  // 23..21 = 001  = extend
+  // 15..13 = 01x  = LSL/UXTX  /  x defines wide or not
+  // 12..10 = 000  = no shift (not necessary yet)
+  // => info =   001 extend_type_3b 000
+  int info = (1 << 6) | (ext << 3);
+
+  return NewLIR4(widened_opcode, r_dest.GetReg(), r_src1.GetReg(), r_src2.GetReg(), info);
+}
+
 LIR* Arm64Mir2Lir::OpRegRegReg(OpKind op, RegStorage r_dest, RegStorage r_src1, RegStorage r_src2) {
   return OpRegRegRegShift(op, r_dest, r_src1, r_src2, ENCODE_NO_SHIFT);
 }
