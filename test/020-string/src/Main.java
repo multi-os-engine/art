@@ -40,12 +40,12 @@ public class Main {
         if (testStr.length() != testStr2.length())
             System.out.println("WARNING: stringTest length mismatch");
 
-        System.out.println("Compare result is " + testStr.compareTo(testStr2));
+        System.out.println("Compare result is " + Integer.signum(testStr.compareTo(testStr2)));
 
         // expected: -65302
         String s1 = "\u0c6d\u0cb6\u0d00\u0000\u0080\u0080\u0080\u0000\u0002\u0002\u0002\u0000\u00e9\u00e9\u00e9";
         String s2 = "\u0c6d\u0cb6\u0d00\u0000\u0080\u0080\u0080\u0000\u0002\u0002\u0002\u0000\uffff\uffff\uffff\u00e9\u00e9\u00e9";
-        System.out.println("Compare unicode: " + s1.compareTo(s2));
+        System.out.println("Compare unicode: " + Integer.signum(s1.compareTo(s2)));
 
         try {
             testStr.charAt(500);

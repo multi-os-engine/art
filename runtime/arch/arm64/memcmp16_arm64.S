@@ -30,7 +30,10 @@
  * ARMv8-a, AArch64
  */
 
-#include <private/bionic_asm.h>
+#ifndef ART_RUNTIME_ARCH_ARM64_MEMCMP16_ARM64_S_
+#define ART_RUNTIME_ARCH_ARM64_MEMCMP16_ARM64_S_
+
+#include "asm_support_arm64.S"
 
 /* Parameters and result.  */
 #define src1		x0
@@ -53,8 +56,9 @@
 #define limit_wd	x12
 #define mask		x13
 
-ENTRY(memcmp)
+ENTRY __memcmp16
 	cbz	limit, .Lret0
+	lsl	limit, limit, #1	/* Half-words to bytes.  */
 	eor	tmp1, src1, src2
 	tst	tmp1, #7
 	b.ne	.Lmisaligned8
@@ -94,6 +98,11 @@ ENTRY(memcmp)
 .Lnot_limit:
 
 #ifndef	__AARCH64EB__
+	/* We need to swap the order of the half-words, without swapping
+	   the order of the bytes within the half-words.  */
+	rev16	diff, diff
+	rev16	data1, data1
+	rev16	data2, data2
 	rev	diff, diff
 	rev	data1, data1
 	rev	data2, data2
@@ -105,10 +114,12 @@ ENTRY(memcmp)
 	clz	pos, diff
 	lsl	data1, data1, pos
 	lsl	data2, data2, pos
-	/* But we need to zero-extend (char is unsigned) the value and then
-	   perform a signed 32-bit subtraction.  */
-	lsr	data1, data1, #56
-	sub	result, data1, data2, lsr #56
+	/* The bits that represents the sign of the result are now in
+	   bit 63.  We need to do a subtraction of unsigned values to
+	   get the correct sign in the result, so shift them right to
+	   bit 0.  */
+	lsr	data1, data1, #63
+	sub	result, data1, data2, lsr #63
 	ret
 
 .Lmutual_align:
@@ -145,11 +156,13 @@ ENTRY(memcmp)
 	sub	limit, limit, #1
 1:
 	/* Perhaps we can do better than this.  */
-	ldrb	data1w, [src1], #1
-	ldrb	data2w, [src2], #1
-	subs	limit, limit, #1
+	ldrh	data1w, [src1], #2
+	ldrh	data2w, [src2], #2
+	subs	limit, limit, #2
 	ccmp	data1w, data2w, #0, cs	/* NZCV = 0b0000.  */
 	b.eq	1b
 	sub	result, data1, data2
 	ret
-END(memcmp)
+END __memcmp16
+
+#endif  // ART_RUNTIME_ARCH_ARM64_MEMCMP16_ARM64_S_
