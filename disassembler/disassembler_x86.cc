@@ -916,6 +916,15 @@ DISASSEMBLER_ENTRY(cmp,
     byte_operand = (*instr == 0xC0);
     break;
   case 0xC3: opcode << "ret"; break;
+  case 0xC6:
+    static const char* c6_opcodes[] = {"mov", "unknown-c6", "unknown-c6", "unknown-c6", "unknown-c6", "unknown-c6", "unknown-c6", "unknown-c6"};
+    modrm_opcodes = c6_opcodes;
+    store = true;
+    immediate_bytes = 1;
+    has_modrm = true;
+    reg_is_opcode = true;
+    byte_operand = true;
+    break;
   case 0xC7:
     static const char* c7_opcodes[] = {"mov", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7", "unknown-c7"};
     modrm_opcodes = c7_opcodes;
