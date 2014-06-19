@@ -79,7 +79,7 @@ class HGraphBuilder : public ValueObject {
   bool InitializeParameters(uint16_t number_of_parameters);
 
   template<typename T>
-  void Binop_32x(const Instruction& instruction, Primitive::Type type);
+  void Binop_23x(const Instruction& instruction, Primitive::Type type);
 
   template<typename T>
   void Binop_12x(const Instruction& instruction, Primitive::Type type);
@@ -90,6 +90,7 @@ class HGraphBuilder : public ValueObject {
   template<typename T>
   void Binop_22s(const Instruction& instruction, bool reverse);
 
+  template<typename T> void If_21t(const Instruction& instruction, int32_t dex_offset, bool is_not);
   template<typename T> void If_22t(const Instruction& instruction, int32_t dex_offset, bool is_not);
 
   void BuildReturn(const Instruction& instruction, Primitive::Type type);
