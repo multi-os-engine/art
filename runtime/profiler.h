@@ -31,6 +31,7 @@
 #include "profiler_options.h"
 #include "os.h"
 #include "safe_map.h"
+#include "method_reference.h"
 
 namespace art {
 
@@ -39,6 +40,55 @@ namespace mirror {
   class Class;
 }  // namespace mirror
 class Thread;
+
+typedef std::pair<mirror::ArtMethod*, uint32_t> InstructionLocation;
+
+// This class stores the sampled bounded stacks in a trie structure.
+class StackTrieNode{
+ public:
+  StackTrieNode(MethodReference method, uint32_t dex_pc, uint32_t method_size,
+      StackTrieNode* parent) :
+      parent_(parent), method_(method), dex_pc_(dex_pc),
+      count_(0), method_size_(method_size) {
+  }
+  StackTrieNode() : parent_(nullptr), method_(nullptr, 0),
+      dex_pc_(0), count_(0), method_size_(0) {
+  }
+  StackTrieNode* GetParent() { return parent_; }
+  MethodReference GetMethod() { return method_; }
+  uint32_t GetCount() { return count_; }
+  uint32_t GetDexPC() { return dex_pc_; }
+  uint32_t GetMethodSize() { return method_size_; }
+  void AppendChild(StackTrieNode* child) { children_.insert(child); }
+  StackTrieNode* FindChild(MethodReference method, uint32_t dex_pc);
+  void DeleteChildren();
+  void IncreaseCount() { ++count_; }
+
+ private:
+  //Comparator for stack trie node.
+  struct StackTrieNodeComparator {
+    bool operator()(StackTrieNode* node1, StackTrieNode* node2) const {
+      MethodReference mr1 = node1->GetMethod();
+      MethodReference mr2 = node2->GetMethod();
+      if (mr1.dex_file == mr2.dex_file) {
+        if (mr1.dex_method_index == mr2.dex_method_index) {
+          return node1->GetDexPC() < node2->GetDexPC();
+        } else {
+          return mr1.dex_method_index < mr2.dex_method_index;
+        }
+      } else {
+        return mr1.dex_file < mr2.dex_file;
+      }
+    }
+  };
+
+  std::set<StackTrieNode*, StackTrieNodeComparator> children_;
+  StackTrieNode* parent_;
+  MethodReference method_;
+  uint32_t dex_pc_;
+  uint32_t count_;
+  uint32_t method_size_;
+};
 
 //
 // This class holds all the results for all runs of the profiler.  It also
@@ -54,6 +104,7 @@ class ProfileSampleResults {
 
   void Put(mirror::ArtMethod* method);
   void PutDexPC(mirror::ArtMethod* method, uint32_t pc);
+  void PutStack(const std::vector<InstructionLocation>& stack_dump);
   uint32_t Write(std::ostream &os, ProfileDataType type);
   void ReadPrevious(int fd, ProfileDataType type);
   void Clear();
@@ -76,6 +127,9 @@ class ProfileSampleResults {
   // Map of method vs dex pc counts in the method.
   typedef std::map<mirror::ArtMethod*, DexPCCountMap*> MethodDexPCMap;
   MethodDexPCMap *dex_table[kHashSize];
+
+  std::set<StackTrieNode*> trie_leaves_;  // Leaf nodes of the stack tries.
+  StackTrieNode* stack_trie_root_;  // Root of the trie that stores sampled stack information.
 
   struct PreviousValue {
     PreviousValue() : count_(0), method_size_(0), dex_pc_map_(nullptr) {}
@@ -122,6 +176,8 @@ class BackgroundMethodSamplingProfiler {
   static void Shutdown() LOCKS_EXCLUDED(Locks::profiler_lock_);
 
   void RecordMethod(mirror::ArtMethod *method, uint32_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void RecordStack(const std::vector<InstructionLocation>& stack) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const ProfilerOptions& GetProfilerOptions() const { return options_; }
 
   Barrier& GetBarrier() {
     return *profiler_barrier_;

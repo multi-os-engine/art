@@ -57,22 +57,60 @@ volatile bool BackgroundMethodSamplingProfiler::shutting_down_ = false;
 // wakelock or something to modify the run characteristics.  This can be done when we
 // have some performance data after it's been used for a while.
 
+// Walk through the method within depth of max_depth_ on the Java stack
+class BoundedStackVisitor : public StackVisitor {
+ public:
+  BoundedStackVisitor(std::vector<std::pair<mirror::ArtMethod*, uint32_t>>* stack,
+      Thread* thread, uint32_t max_depth)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      : StackVisitor(thread, NULL), stack_(stack), max_depth_(max_depth), depth_(0) {
+  }
+
+  bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    mirror::ArtMethod* m = GetMethod();
+    if (m->IsRuntimeMethod()) {
+      return true;
+    }
+    uint32_t dex_pc_ = GetDexPc();
+    stack_->push_back(std::make_pair(m, dex_pc_));
+    ++depth_;
+    if (depth_ < max_depth_) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+ private:
+  std::vector<std::pair<mirror::ArtMethod*, uint32_t>>* stack_;
+  const uint32_t max_depth_;
+  uint32_t depth_;
+};
 
 // This is called from either a thread list traversal or from a checkpoint.  Regardless
 // of which caller, the mutator lock must be held.
 static void GetSample(Thread* thread, void* arg) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   BackgroundMethodSamplingProfiler* profiler =
       reinterpret_cast<BackgroundMethodSamplingProfiler*>(arg);
-  uint32_t dex_pc;
-  mirror::ArtMethod* method = thread->GetCurrentMethod(&dex_pc);
-  if (false && method == nullptr) {
-    LOG(INFO) << "No current method available";
-    std::ostringstream os;
-    thread->Dump(os);
-    std::string data(os.str());
-    LOG(INFO) << data;
+  if (profiler->GetProfilerOptions().GetProfileType() == kProfilerMethod ||
+      profiler->GetProfilerOptions().GetProfileType() == kProfilerMethodAndDexPC) {
+    uint32_t dex_pc;
+    mirror::ArtMethod* method = thread->GetCurrentMethod(&dex_pc);
+    if (false && method == nullptr) {
+      LOG(INFO) << "No current method available";
+      std::ostringstream os;
+      thread->Dump(os);
+      std::string data(os.str());
+      LOG(INFO) << data;
+    }
+    profiler->RecordMethod(method, dex_pc);
+  } else if (profiler->GetProfilerOptions().GetProfileType() == kProfilerBoundedStack) {
+    std::vector<InstructionLocation> stack;
+    uint32_t max_depth = profiler->GetProfilerOptions().GetMaxStackDepth();
+    BoundedStackVisitor bounded_stack_visitor(&stack, thread, max_depth);
+    bounded_stack_visitor.WalkStack();
+    profiler->RecordStack(stack);
   }
-  profiler->RecordMethod(method, dex_pc);
 }
 
 // A closure that is called by the thread checkpoint code.
@@ -402,6 +440,46 @@ void BackgroundMethodSamplingProfiler::RecordMethod(mirror::ArtMethod* method, u
   }
 }
 
+// Record the current bounded stack into sampling results.
+void BackgroundMethodSamplingProfiler::RecordStack(
+    const std::vector<InstructionLocation>& stack) {
+  if (stack.size() == 0) {
+    return;
+  }
+  // Get the method on top of the stack. We use this method to perform filtering as RecordMethod.
+  mirror::ArtMethod* method = stack.front().first;
+
+  if (method == nullptr) {
+    profile_table_.NullMethod();
+    return;
+  }
+
+  mirror::Class* cls = method->GetDeclaringClass();
+  if (cls != nullptr) {
+    if (cls->GetClassLoader() == nullptr) {
+      profile_table_.BootMethod();
+      return;
+    }
+  }
+
+  bool is_filtered = false;
+
+  if (strcmp(method->GetName(), "<clinit>") == 0) {
+    is_filtered = true;
+  }
+
+  if (!is_filtered && filtered_methods_.size() > 0) {
+    std::string method_full_name = PrettyMethod(method);
+
+    is_filtered = filtered_methods_.count(method_full_name) != 0;
+  }
+
+  // Add to the profile table unless it is filtered out.
+  if (!is_filtered) {
+      profile_table_.PutStack(stack);
+  }
+}
+
 // Clean out any recordings for the method traces.
 void BackgroundMethodSamplingProfiler::CleanProfile() {
   profile_table_.Clear();
@@ -421,6 +499,7 @@ ProfileSampleResults::ProfileSampleResults(Mutex& lock) : lock_(lock), num_sampl
     table[i] = nullptr;
     dex_table[i] = nullptr;
   }
+  stack_trie_root_ = nullptr;
 }
 
 ProfileSampleResults::~ProfileSampleResults() {
@@ -465,6 +544,54 @@ void ProfileSampleResults::PutDexPC(mirror::ArtMethod* method, uint32_t dex_pc) 
       dex_pc_i->second++;
     }
   }
+  num_samples_++;
+}
+
+// Add a bounded stack to the profile table
+void ProfileSampleResults::PutStack(const std::vector<InstructionLocation>& stack) {
+  MutexLock mu(Thread::Current(), lock_);
+  ScopedObjectAccess soa(Thread::Current());
+  if (stack_trie_root_ == nullptr) {
+    stack_trie_root_ = new StackTrieNode();
+  }
+
+  StackTrieNode* current = stack_trie_root_;
+  if (stack.size() == 0) {
+    current->IncreaseCount();
+    return;
+  }
+
+  for (std::vector<InstructionLocation>::const_reverse_iterator iter = stack.rbegin();
+      iter != stack.rend(); ++iter) {
+    InstructionLocation inst_loc = *iter;
+    mirror::ArtMethod* method = inst_loc.first;
+    if (method == nullptr) {
+      // skip null method
+      continue;
+    }
+    uint32_t dex_pc = inst_loc.second;
+    uint32_t method_idx = method->GetDexMethodIndex();
+    const DexFile* dex_file = method->GetDeclaringClass()->GetDexCache()->GetDexFile();
+    MethodReference method_ref(dex_file, method_idx);
+    StackTrieNode* child = current->FindChild(method_ref, dex_pc);
+    if (child != nullptr) {
+      current = child;
+    } else {
+      uint32_t method_size = 0;
+      const DexFile::CodeItem* codeitem = method->GetCodeItem();
+      if (codeitem != nullptr) {
+        method_size = codeitem->insns_size_in_code_units_;
+      }
+      StackTrieNode* new_node = new StackTrieNode(method_ref, dex_pc, method_size, current);
+      current->AppendChild(new_node);
+      current = new_node;
+    }
+  }
+
+  if (current != stack_trie_root_ && current->GetCount() == 0) {
+    trie_leaves_.insert(current);
+  }
+  current->IncreaseCount();
   num_samples_++;
 }
 
@@ -556,11 +683,44 @@ uint32_t ProfileSampleResults::Write(std::ostream& os, ProfileDataType type) {
         }
       }
     }
+  } else if (type == kProfilerBoundedStack) {
+    if (trie_leaves_.size() > 0) {
+      for (const auto &node_iter : trie_leaves_) {
+        StackTrieNode* node = node_iter;
+        if (node != nullptr) {
+          uint32_t method_size = node->GetMethodSize();
+          uint32_t count = node->GetCount();
+
+          // going backward on the trie to retrieve all methodref and dex_pc
+          std::string stack_sig = StringPrintf("[%s:%u",
+              PrettyMethod(node->GetMethod().dex_method_index, *(node->GetMethod().dex_file)).c_str(),
+              node->GetDexPC());
+          StackTrieNode* current = node->GetParent();
+          // traverse until the dummy root node
+          while (current!=nullptr && current->GetParent() != nullptr) {
+            stack_sig += StringPrintf("#%s:%u",
+                PrettyMethod(current->GetMethod().dex_method_index, *(current->GetMethod().dex_file)).c_str(),
+                current->GetDexPC());
+            current = current->GetParent();
+          }
+          stack_sig += "]";
+          // We write bounded stack in the format:
+          // "[method_1:pc_1#method_2:pc2#...]/count/top_method_size"
+          PreviousProfile::iterator pi = previous_.find(stack_sig);
+          if (pi != previous_.end()) {
+            count += pi->second.count_;
+            previous_.erase(pi);
+          }
+          os << StringPrintf("%s/%u/%u\n",  stack_sig.c_str(), count, method_size);
+          ++num_methods;
+        }
+      }
+    }
   }
 
   // Now we write out the remaining previous methods.
   for (const auto &pi : previous_) {
-    if (type == kProfilerMethod) {
+    if (type == kProfilerMethod || type == kProfilerBoundedStack) {
       os << StringPrintf("%s/%u/%u\n",  pi.first.c_str(), pi.second.count_, pi.second.method_size_);
     } else if (type == kProfilerMethodAndDexPC) {
       os << StringPrintf("%s/%u/%u/[",  pi.first.c_str(), pi.second.count_, pi.second.method_size_);
@@ -598,6 +758,12 @@ void ProfileSampleResults::Clear() {
   for (auto &pi : previous_) {
     delete pi.second.dex_pc_map_;
     pi.second.dex_pc_map_ = nullptr;
+  }
+  if (stack_trie_root_ != nullptr) {
+    stack_trie_root_->DeleteChildren();
+    delete stack_trie_root_;
+    stack_trie_root_ = nullptr;
+    trie_leaves_.clear();
   }
   previous_.clear();
 }
@@ -770,6 +936,30 @@ bool ProfileFile::GetTopKSamples(std::set<std::string>& topKSamples, double topK
     }
   }
   return true;
+}
+
+StackTrieNode* StackTrieNode::FindChild(MethodReference method, uint32_t dex_pc) {
+  if (children_.size() == 0) {
+    return nullptr;
+  }
+  // Create a dummy node for searching.
+  StackTrieNode* node = new StackTrieNode(method, dex_pc, 0, nullptr);
+  std::set<StackTrieNode*, StackTrieNodeComparator>::iterator i = children_.find(node);
+  delete node;
+  if (i == children_.end()) {
+    return nullptr;
+  } else {
+    return (*i);
+  }
+}
+
+void StackTrieNode::DeleteChildren() {
+  for (auto &child : children_) {
+    if (child != nullptr) {
+      child->DeleteChildren();
+      delete child;
+    }
+  }
 }
 
 }  // namespace art
