@@ -38,12 +38,11 @@ class CompilerDriverTest : public CommonCompilerTest {
  protected:
   void CompileAll(jobject class_loader) LOCKS_EXCLUDED(Locks::mutator_lock_) {
     TimingLogger timings("CompilerDriverTest::CompileAll", false, false);
-    timings.StartSplit("CompileAll");
+    TimingLogger::ScopedTiming t("CompileAll", &timings);
     compiler_driver_->CompileAll(class_loader,
                                  Runtime::Current()->GetCompileTimeClassPath(class_loader),
                                  &timings);
     MakeAllExecutable(class_loader);
-    timings.EndSplit();
   }
 
   void EnsureCompiled(jobject class_loader, const char* class_name, const char* method,
