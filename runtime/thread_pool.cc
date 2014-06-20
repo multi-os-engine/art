@@ -29,6 +29,7 @@ ThreadPoolWorker::ThreadPoolWorker(ThreadPool* thread_pool, const std::string& n
                                    size_t stack_size)
     : thread_pool_(thread_pool),
       name_(name) {
+  LOG(INFO) << "ThreadPoolWorker" << this;
   std::string error_msg;
   stack_.reset(MemMap::MapAnonymous(name.c_str(), nullptr, stack_size, PROT_READ | PROT_WRITE,
                                     false, &error_msg));
@@ -47,8 +48,10 @@ ThreadPoolWorker::~ThreadPoolWorker() {
 
 void ThreadPoolWorker::Run() {
   Thread* self = Thread::Current();
+  LOG(INFO) << "Worker " << this << " I have " << self;
   Task* task = NULL;
   thread_pool_->creation_barier_.Wait(self);
+  LOG(INFO) << "Worker " << this << " Now I have " << self;
   while ((task = thread_pool_->GetTask(self)) != NULL) {
     task->Run(self);
     task->Finalize();
@@ -57,6 +60,7 @@ void ThreadPoolWorker::Run() {
 
 void* ThreadPoolWorker::Callback(void* arg) {
   ThreadPoolWorker* worker = reinterpret_cast<ThreadPoolWorker*>(arg);
+  LOG(INFO) << "Callback for " << worker;
   Runtime* runtime = Runtime::Current();
   CHECK(runtime->AttachCurrentThread(worker->name_.c_str(), true, NULL, false));
   // Do work until its time to shut down.

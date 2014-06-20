@@ -397,12 +397,17 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   DCHECK(self != NULL);
   DCHECK(why == kTimedWaiting || why == kWaiting || why == kSleeping);
 
+  monitor_lock_.AssertNotHeld(self);
+
   monitor_lock_.Lock(self);
+
+  LOG(INFO) << "Acquired monitor lock: " << self;
+  monitor_lock_.AssertHeld(self);
 
   // Make sure that we hold the lock.
   if (owner_ != self) {
-    ThrowIllegalMonitorStateExceptionF("object not locked by thread before wait()");
     monitor_lock_.Unlock(self);
+    ThrowIllegalMonitorStateExceptionF("object not locked by thread before wait()");
     return;
   }
 
@@ -415,11 +420,18 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   // Enforce the timeout range.
   if (ms < 0 || ns < 0 || ns > 999999) {
     ThrowLocation throw_location = self->GetCurrentLocationForThrow();
+    LOG(INFO) << "Want to throw now: ";
+    monitor_lock_.AssertHeld(self);
     self->ThrowNewExceptionF(throw_location, "Ljava/lang/IllegalArgumentException;",
                              "timeout arguments out of range: ms=%" PRId64 " ns=%d", ms, ns);
+
+    LOG(INFO) << "Unlocking...";
+
     monitor_lock_.Unlock(self);
     return;
   }
+
+  LOG(INFO) << "Waiting now.";
 
   /*
    * Add ourselves to the set of threads waiting on this monitor, and
@@ -512,6 +524,8 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   --num_waiters_;
   RemoveFromWaitSet(self);
 
+  monitor_lock_.Unlock(self);
+
   if (was_interrupted) {
     /*
      * We were interrupted while waiting, or somebody interrupted an
@@ -529,7 +543,6 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
       self->ThrowNewException(throw_location, "Ljava/lang/InterruptedException;", NULL);
     }
   }
-  monitor_lock_.Unlock(self);
 }
 
 void Monitor::Notify(Thread* self) {
