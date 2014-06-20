@@ -1,0 +1,2 @@
+The test examines exit from monitor wait with exception during GC.
+
