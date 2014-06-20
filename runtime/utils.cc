@@ -509,45 +509,32 @@ uint64_t GetNsToTimeUnitDivisor(TimeUnit time_unit) {
   return 0;
 }
 
-std::string FormatDuration(uint64_t nano_duration, TimeUnit time_unit) {
-  const char* unit = NULL;
+std::string FormatDuration(uint64_t nano_duration, TimeUnit time_unit, uint64_t max_fraction) {
+  const char* unit = nullptr;
   uint64_t divisor = GetNsToTimeUnitDivisor(time_unit);
-  uint32_t zero_fill = 1;
   switch (time_unit) {
     case kTimeUnitSecond:
       unit = "s";
-      zero_fill = 9;
       break;
     case kTimeUnitMillisecond:
       unit = "ms";
-      zero_fill = 6;
       break;
     case kTimeUnitMicrosecond:
       unit = "us";
-      zero_fill = 3;
       break;
     case kTimeUnitNanosecond:
       unit = "ns";
-      zero_fill = 0;
       break;
   }
-
-  uint64_t whole_part = nano_duration / divisor;
+  const uint64_t whole_part = nano_duration / divisor;
   uint64_t fractional_part = nano_duration % divisor;
   if (fractional_part == 0) {
     return StringPrintf("%" PRIu64 "%s", whole_part, unit);
   } else {
-    while ((fractional_part % 1000) == 0) {
-      zero_fill -= 3;
-      fractional_part /= 1000;
+    while (fractional_part > max_fraction) {
+      fractional_part  = (fractional_part + 5) / 10;
     }
-    if (zero_fill == 3) {
-      return StringPrintf("%" PRIu64 ".%03" PRIu64 "%s", whole_part, fractional_part, unit);
-    } else if (zero_fill == 6) {
-      return StringPrintf("%" PRIu64 ".%06" PRIu64 "%s", whole_part, fractional_part, unit);
-    } else {
-      return StringPrintf("%" PRIu64 ".%09" PRIu64 "%s", whole_part, fractional_part, unit);
-    }
+    return StringPrintf("%" PRIu64 ".%" PRIu64 "%s", whole_part, fractional_part, unit);
   }
 }
 

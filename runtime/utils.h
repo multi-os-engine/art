@@ -268,7 +268,7 @@ std::string PrettySize(int64_t size_in_bytes);
 std::string PrettyDuration(uint64_t nano_duration);
 
 // Format a nanosecond time to specified units.
-std::string FormatDuration(uint64_t nano_duration, TimeUnit time_unit);
+std::string FormatDuration(uint64_t nano_duration, TimeUnit time_unit, uint64_t max_fraction = 999);
 
 // Get the appropriate unit for a nanosecond duration.
 TimeUnit GetAppropriateTimeUnit(uint64_t nano_duration);
