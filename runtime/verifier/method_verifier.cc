@@ -717,12 +717,24 @@ bool MethodVerifier::VerifyInstruction(const Instruction* inst, uint32_t code_of
     case Instruction::kVerifySwitchTargets:
       result = result && CheckSwitchTargets(code_offset);
       break;
+    case Instruction:: kVerifyVarArgNonZero:
+      if (inst->VRegA() <= 0) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "var_arg_non_zero with zero args " << inst->Name();
+        return false;
+      }
+      // Fall-through.
     case Instruction::kVerifyVarArg: {
       uint32_t args[Instruction::kMaxVarArgRegs];
       inst->GetVarArgs(args);
       result = result && CheckVarArgRegs(inst->VRegA(), args);
       break;
     }
+    case Instruction:: kVerifyVarArgRangeNonZero:
+      if (inst->VRegA() <= 0) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "var_arg_range_non_zero with zero args " << inst->Name();
+        return false;
+      }
+      // Fall-through.
     case Instruction::kVerifyVarArgRange:
       result = result && CheckVarArgRangeRegs(inst->VRegA(), inst->VRegC());
       break;
