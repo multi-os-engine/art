@@ -409,20 +409,6 @@ void X86Mir2Lir::AdjustSpillMask() {
   num_core_spills_++;
 }
 
-/*
- * Mark a callee-save fp register as promoted.  Note that
- * vpush/vpop uses contiguous register lists so we must
- * include any holes in the mask.  Associate holes with
- * Dalvik register INVALID_VREG (0xFFFFU).
- */
-void X86Mir2Lir::MarkPreservedSingle(int v_reg, RegStorage reg) {
-  UNIMPLEMENTED(FATAL) << "MarkPreservedSingle";
-}
-
-void X86Mir2Lir::MarkPreservedDouble(int v_reg, RegStorage reg) {
-  UNIMPLEMENTED(FATAL) << "MarkPreservedDouble";
-}
-
 RegStorage X86Mir2Lir::AllocateByteRegister() {
   RegStorage reg = AllocTypedTemp(false, kCoreReg);
   if (!Gen64Bit()) {
@@ -1901,7 +1887,7 @@ void X86Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
         OpRegCopy(RegStorage::Solo32(v_map->core_reg), reg);
         need_flush = false;
       } else if ((v_map->fp_location == kLocPhysReg) && t_loc->fp) {
-        OpRegCopy(RegStorage::Solo32(v_map->FpReg), reg);
+        OpRegCopy(RegStorage::Solo32(v_map->fp_reg), reg);
         need_flush = false;
       } else {
         need_flush = true;
@@ -1933,7 +1919,7 @@ void X86Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
         Load32Disp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->core_reg));
       }
       if (v_map->fp_location == kLocPhysReg) {
-        Load32Disp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->FpReg));
+        Load32Disp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->fp_reg));
       }
     }
   }
@@ -2223,4 +2209,3 @@ int X86Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
 }
 
 }  // namespace art
-
