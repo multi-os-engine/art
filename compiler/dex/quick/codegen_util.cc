@@ -272,7 +272,7 @@ void Mir2Lir::DumpPromotionMap() {
     PromotionMap v_reg_map = promotion_map_[i];
     std::string buf;
     if (v_reg_map.fp_location == kLocPhysReg) {
-      StringAppendF(&buf, " : s%d", RegStorage::RegNum(v_reg_map.FpReg));
+      StringAppendF(&buf, " : s%d", RegStorage::RegNum(v_reg_map.fp_reg));
     }
 
     std::string buf3;

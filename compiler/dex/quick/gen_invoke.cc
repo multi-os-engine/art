@@ -534,7 +534,7 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
         OpRegCopy(RegStorage::Solo32(v_map->core_reg), reg);
         need_flush = false;
       } else if ((v_map->fp_location == kLocPhysReg) && t_loc->fp) {
-        OpRegCopy(RegStorage::Solo32(v_map->FpReg), reg);
+        OpRegCopy(RegStorage::Solo32(v_map->fp_reg), reg);
         need_flush = false;
       } else {
         need_flush = true;
@@ -556,8 +556,8 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
            * halves of the double are promoted.  Make sure they are in a usable form.
            */
           int lowreg_index = start_vreg + i + (t_loc->high_word ? -1 : 0);
-          int low_reg = promotion_map_[lowreg_index].FpReg;
-          int high_reg = promotion_map_[lowreg_index + 1].FpReg;
+          int low_reg = promotion_map_[lowreg_index].fp_reg;
+          int high_reg = promotion_map_[lowreg_index + 1].fp_reg;
           if (((low_reg & 0x1) != 0) || (high_reg != (low_reg + 1))) {
             need_flush = true;
           }
@@ -572,7 +572,7 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
         Load32Disp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->core_reg));
       }
       if (v_map->fp_location == kLocPhysReg) {
-        Load32Disp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->FpReg));
+        Load32Disp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->fp_reg));
       }
     }
   }

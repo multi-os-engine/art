@@ -648,29 +648,6 @@ void Arm64Mir2Lir::AdjustSpillMask() {
   num_core_spills_++;
 }
 
-/*
- * Mark a callee-save fp register as promoted.
- */
-void Arm64Mir2Lir::MarkPreservedSingle(int v_reg, RegStorage reg) {
-  DCHECK(reg.IsFloat());
-  int adjusted_reg_num = reg.GetRegNum() - A64_FP_CALLEE_SAVE_BASE;
-  // Ensure fp_vmap_table is large enough
-  int table_size = fp_vmap_table_.size();
-  for (int i = table_size; i < (adjusted_reg_num + 1); i++) {
-    fp_vmap_table_.push_back(INVALID_VREG);
-  }
-  // Add the current mapping
-  fp_vmap_table_[adjusted_reg_num] = v_reg;
-  // Size of fp_vmap_table is high-water mark, use to set mask
-  num_fp_spills_ = fp_vmap_table_.size();
-  fp_spill_mask_ = ((1 << num_fp_spills_) - 1) << A64_FP_CALLEE_SAVE_BASE;
-}
-
-void Arm64Mir2Lir::MarkPreservedDouble(int v_reg, RegStorage reg) {
-  DCHECK(reg.IsDouble());
-  MarkPreservedSingle(v_reg, reg);
-}
-
 /* Clobber all regs that might be used by an external C call */
 void Arm64Mir2Lir::ClobberCallerSave() {
   Clobber(rs_x0);
@@ -969,7 +946,7 @@ void Arm64Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
       if ((v_map->core_location == kLocPhysReg) && !t_loc->fp) {
         OpRegCopy(RegStorage::Solo32(v_map->core_reg), reg);
       } else if ((v_map->fp_location == kLocPhysReg) && t_loc->fp) {
-        OpRegCopy(RegStorage::Solo32(v_map->FpReg), reg);
+        OpRegCopy(RegStorage::Solo32(v_map->fp_reg), reg);
       } else {
         StoreBaseDisp(TargetReg(kSp), SRegOffset(start_vreg + i), reg, op_size, kNotVolatile);
         if (reg.Is64Bit()) {
@@ -986,7 +963,7 @@ void Arm64Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
                      RegStorage::Solo32(v_map->core_reg));
       }
       if (v_map->fp_location == kLocPhysReg) {
-        LoadWordDisp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->FpReg));
+        LoadWordDisp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->fp_reg));
       }
     }
   }
