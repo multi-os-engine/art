@@ -284,8 +284,13 @@ void Mir2Lir::RecordCorePromotion(RegStorage reg, int s_reg) {
 
 /* Reserve a callee-save register.  Return InvalidReg if none available */
 RegStorage Mir2Lir::AllocPreservedCoreReg(int s_reg) {
-  // TODO: 64-bit and refreg update
   RegStorage res;
+  /*
+   * Note: it really doesn't matter much whether we allocate from the core or core64
+   * pool for 64-bit targets - but for some targets it does matter whether allocations
+   * happens from the single or double pool.  This entire section of code could stand
+   * a good refactoring.
+   */
   GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->core_regs_);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     if (!info->IsTemp() && !info->InUse()) {
@@ -297,49 +302,50 @@ RegStorage Mir2Lir::AllocPreservedCoreReg(int s_reg) {
   return res;
 }
 
-void Mir2Lir::RecordSinglePromotion(RegStorage reg, int s_reg) {
+void Mir2Lir::RecordFpPromotion(RegStorage reg, int s_reg) {
+  DCHECK_NE(cu_->instruction_set, kThumb2);
   int p_map_idx = SRegToPMap(s_reg);
   int v_reg = mir_graph_->SRegToVReg(s_reg);
+  int reg_num = reg.GetRegNum();
   GetRegInfo(reg)->MarkInUse();
-  MarkPreservedSingle(v_reg, reg);
+  fp_spill_mask_ |= (1 << reg_num);
+  // Include reg for later sort
+  fp_vmap_table_.push_back(reg_num << VREG_NUM_WIDTH | (v_reg & ((1 << VREG_NUM_WIDTH) - 1)));
+  num_fp_spills_++;
   promotion_map_[p_map_idx].fp_location = kLocPhysReg;
-  promotion_map_[p_map_idx].FpReg = reg.GetReg();
+  promotion_map_[p_map_idx].fp_reg = reg.GetReg();
 }
 
-// Reserve a callee-save sp single register.
-RegStorage Mir2Lir::AllocPreservedSingle(int s_reg) {
+// Reserve a callee-save floating point.
+RegStorage Mir2Lir::AllocPreservedFpReg(int s_reg) {
+  /*
+   * For targets other than Thumb2, it doesn't matter whether we allocate from
+   * the sp_regs_ or dp_regs_ pool.  Some refactoring is in order here.
+   */
+  DCHECK_NE(cu_->instruction_set, kThumb2);
   RegStorage res;
   GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->sp_regs_);
   for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
     if (!info->IsTemp() && !info->InUse()) {
       res = info->GetReg();
-      RecordSinglePromotion(res, s_reg);
+      RecordFpPromotion(res, s_reg);
       break;
     }
   }
   return res;
 }
 
-void Mir2Lir::RecordDoublePromotion(RegStorage reg, int s_reg) {
-  int p_map_idx = SRegToPMap(s_reg);
-  int v_reg = mir_graph_->SRegToVReg(s_reg);
-  GetRegInfo(reg)->MarkInUse();
-  MarkPreservedDouble(v_reg, reg);
-  promotion_map_[p_map_idx].fp_location = kLocPhysReg;
-  promotion_map_[p_map_idx].FpReg = reg.GetReg();
-}
-
-// Reserve a callee-save dp solo register.
+// TODO: this is Thumb2 only.  Remove when DoPromotion refactored.
 RegStorage Mir2Lir::AllocPreservedDouble(int s_reg) {
   RegStorage res;
-  GrowableArray<RegisterInfo*>::Iterator it(&reg_pool_->dp_regs_);
-  for (RegisterInfo* info = it.Next(); info != nullptr; info = it.Next()) {
-    if (!info->IsTemp() && !info->InUse()) {
-      res = info->GetReg();
-      RecordDoublePromotion(res, s_reg);
-      break;
-    }
-  }
+  UNIMPLEMENTED(FATAL) << "Unexpected use of AllocPreservedDouble";
+  return res;
+}
+
+// TODO: this is Thumb2 only.  Remove when DoPromotion refactored.
+RegStorage Mir2Lir::AllocPreservedSingle(int s_reg) {
+  RegStorage res;
+  UNIMPLEMENTED(FATAL) << "Unexpected use of AllocPreservedSingle";
   return res;
 }
 
@@ -1120,16 +1126,23 @@ void Mir2Lir::CountRefs(RefCounts* core_counts, RefCounts* fp_counts, size_t num
     RegLocation loc = mir_graph_->reg_location_[i];
     RefCounts* counts = loc.fp ? fp_counts : core_counts;
     int p_map_idx = SRegToPMap(loc.s_reg_low);
+    int use_count = mir_graph_->GetUseCount(i);
     if (loc.fp) {
       if (loc.wide) {
         // Treat doubles as a unit, using upper half of fp_counts array.
-        counts[p_map_idx + num_regs].count += mir_graph_->GetUseCount(i);
+        counts[p_map_idx + num_regs].count += use_count;
         i++;
       } else {
-        counts[p_map_idx].count += mir_graph_->GetUseCount(i);
+        counts[p_map_idx].count += use_count;
       }
     } else if (!IsInexpensiveConstant(loc)) {
-      counts[p_map_idx].count += mir_graph_->GetUseCount(i);
+      if (loc.wide && cu_->target64) {
+        // Treat long as a unit, using upper half of core_counts array.
+        counts[p_map_idx + num_regs].count += use_count;
+        i++;
+      } else {
+        counts[p_map_idx].count += use_count;
+      }
     }
   }
 }
@@ -1149,8 +1162,8 @@ static int SortCounts(const void *val1, const void *val2) {
 void Mir2Lir::DumpCounts(const RefCounts* arr, int size, const char* msg) {
   LOG(INFO) << msg;
   for (int i = 0; i < size; i++) {
-    if ((arr[i].s_reg & STARTING_DOUBLE_SREG) != 0) {
-      LOG(INFO) << "s_reg[D" << (arr[i].s_reg & ~STARTING_DOUBLE_SREG) << "]: " << arr[i].count;
+    if ((arr[i].s_reg & STARTING_WIDE_SREG) != 0) {
+      LOG(INFO) << "s_reg[D" << (arr[i].s_reg & ~STARTING_WIDE_SREG) << "]: " << arr[i].count;
     } else {
       LOG(INFO) << "s_reg[" << arr[i].s_reg << "]: " << arr[i].count;
     }
@@ -1183,71 +1196,91 @@ void Mir2Lir::DoPromotion() {
    * TUNING: replace with linear scan once we have the ability
    * to describe register live ranges for GC.
    */
+  size_t core_reg_count_size = cu_->target64 ? num_regs * 2 : num_regs;
+  size_t fp_reg_count_size = num_regs * 2;
   RefCounts *core_regs =
-      static_cast<RefCounts*>(arena_->Alloc(sizeof(RefCounts) * num_regs,
+      static_cast<RefCounts*>(arena_->Alloc(sizeof(RefCounts) * core_reg_count_size,
                                             kArenaAllocRegAlloc));
-  RefCounts *FpRegs =
-      static_cast<RefCounts *>(arena_->Alloc(sizeof(RefCounts) * num_regs * 2,
+  RefCounts *fp_regs =
+      static_cast<RefCounts *>(arena_->Alloc(sizeof(RefCounts) * fp_reg_count_size,
                                              kArenaAllocRegAlloc));
   // Set ssa names for original Dalvik registers
   for (int i = 0; i < dalvik_regs; i++) {
-    core_regs[i].s_reg = FpRegs[i].s_reg = i;
+    core_regs[i].s_reg = fp_regs[i].s_reg = i;
   }
 
   // Set ssa names for compiler temporaries
   for (unsigned int ct_idx = 0; ct_idx < mir_graph_->GetNumUsedCompilerTemps(); ct_idx++) {
     CompilerTemp* ct = mir_graph_->GetCompilerTemp(ct_idx);
     core_regs[dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
-    FpRegs[dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
-    FpRegs[num_regs + dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
+    core_regs[num_regs + dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
+    fp_regs[dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
+    fp_regs[num_regs + dalvik_regs + ct_idx].s_reg = ct->s_reg_low;
   }
 
-  // Duplicate in upper half to represent possible fp double starting sregs.
-  for (int i = 0; i < num_regs; i++) {
-    FpRegs[num_regs + i].s_reg = FpRegs[i].s_reg | STARTING_DOUBLE_SREG;
+  // Duplicate in upper half to represent possible wide starting sregs.
+  for (size_t i = num_regs; i < fp_reg_count_size; i++) {
+    fp_regs[i].s_reg = fp_regs[i - num_regs].s_reg | STARTING_WIDE_SREG;
+  }
+  for (size_t i = num_regs; i < core_reg_count_size; i++) {
+    core_regs[i].s_reg = core_regs[i - num_regs].s_reg | STARTING_WIDE_SREG;
   }
 
   // Sum use counts of SSA regs by original Dalvik vreg.
-  CountRefs(core_regs, FpRegs, num_regs);
+  CountRefs(core_regs, fp_regs, num_regs);
 
 
   // Sort the count arrays
-  qsort(core_regs, num_regs, sizeof(RefCounts), SortCounts);
-  qsort(FpRegs, num_regs * 2, sizeof(RefCounts), SortCounts);
+  qsort(core_regs, core_reg_count_size, sizeof(RefCounts), SortCounts);
+  qsort(fp_regs, fp_reg_count_size, sizeof(RefCounts), SortCounts);
 
   if (cu_->verbose) {
-    DumpCounts(core_regs, num_regs, "Core regs after sort");
-    DumpCounts(FpRegs, num_regs * 2, "Fp regs after sort");
+    DumpCounts(core_regs, core_reg_count_size, "Core regs after sort");
+    DumpCounts(fp_regs, fp_reg_count_size, "Fp regs after sort");
   }
 
   if (!(cu_->disable_opt & (1 << kPromoteRegs))) {
-    // Promote FpRegs
-    for (int i = 0; (i < (num_regs * 2)) && (FpRegs[i].count >= promotion_threshold); i++) {
-      int p_map_idx = SRegToPMap(FpRegs[i].s_reg & ~STARTING_DOUBLE_SREG);
-      if ((FpRegs[i].s_reg & STARTING_DOUBLE_SREG) != 0) {
-        if ((promotion_map_[p_map_idx].fp_location != kLocPhysReg) &&
-            (promotion_map_[p_map_idx + 1].fp_location != kLocPhysReg)) {
-          int low_sreg = FpRegs[i].s_reg & ~STARTING_DOUBLE_SREG;
-          // Ignore result - if can't alloc double may still be able to alloc singles.
-          AllocPreservedDouble(low_sreg);
-        }
-      } else if (promotion_map_[p_map_idx].fp_location != kLocPhysReg) {
-        RegStorage reg = AllocPreservedSingle(FpRegs[i].s_reg);
-        if (!reg.Valid()) {
-          break;  // No more left.
-        }
-      }
-    }
-
+    // TODO: significant differences between Thumb2 and other targets.  Break this out.
     // Promote core regs
-    for (int i = 0; (i < num_regs) &&
-            (core_regs[i].count >= promotion_threshold); i++) {
-      int p_map_idx = SRegToPMap(core_regs[i].s_reg);
-      if (promotion_map_[p_map_idx].core_location !=
-          kLocPhysReg) {
+    for (size_t i = 0; (i < core_reg_count_size) && (core_regs[i].count >= promotion_threshold);
+         i++) {
+      size_t p_map_idx = SRegToPMap(core_regs[i].s_reg & ~STARTING_WIDE_SREG);
+      if (promotion_map_[p_map_idx].core_location != kLocPhysReg) {
         RegStorage reg = AllocPreservedCoreReg(core_regs[i].s_reg);
         if (!reg.Valid()) {
            break;  // No more left
+        }
+      }
+    }
+    if (cu_->instruction_set == kThumb2) {
+      // Promote fp_regs
+      for (size_t i = 0; (i < fp_reg_count_size) && (fp_regs[i].count >= promotion_threshold);
+           i++) {
+        size_t p_map_idx = SRegToPMap(fp_regs[i].s_reg & ~STARTING_WIDE_SREG);
+        if ((fp_regs[i].s_reg & STARTING_WIDE_SREG) != 0) {
+          if ((promotion_map_[p_map_idx].fp_location != kLocPhysReg) &&
+              (promotion_map_[p_map_idx + 1].fp_location != kLocPhysReg)) {
+            int low_sreg = fp_regs[i].s_reg & ~STARTING_WIDE_SREG;
+            // Ignore result - if can't alloc double may still be able to alloc singles.
+            AllocPreservedDouble(low_sreg);
+          }
+        } else if (promotion_map_[p_map_idx].fp_location != kLocPhysReg) {
+          RegStorage reg = AllocPreservedSingle(fp_regs[i].s_reg);
+          if (!reg.Valid()) {
+            break;  // No more left.
+          }
+        }
+      }
+    } else {
+      // Promote fp regs
+      for (size_t i = 0; (i < fp_reg_count_size) && (fp_regs[i].count >= promotion_threshold);
+           i++) {
+        size_t p_map_idx = SRegToPMap(fp_regs[i].s_reg & ~STARTING_WIDE_SREG);
+        if (promotion_map_[p_map_idx].fp_location != kLocPhysReg) {
+          RegStorage reg = AllocPreservedDouble(fp_regs[i].s_reg);
+          if (!reg.Valid()) {
+             break;  // No more left
+          }
         }
       }
     }
@@ -1261,7 +1294,7 @@ void Mir2Lir::DoPromotion() {
       if (curr->fp) {
         if (promotion_map_[p_map_idx].fp_location == kLocPhysReg) {
           curr->location = kLocPhysReg;
-          curr->reg = RegStorage::Solo32(promotion_map_[p_map_idx].FpReg);
+          curr->reg = RegStorage::FloatSolo32(promotion_map_[p_map_idx].fp_reg);
           curr->home = true;
         }
       } else {
@@ -1271,35 +1304,49 @@ void Mir2Lir::DoPromotion() {
           curr->home = true;
         }
       }
-    } else {
-      if (curr->high_word) {
-        continue;
-      }
-      if (curr->fp) {
-        if ((promotion_map_[p_map_idx].fp_location == kLocPhysReg) &&
-            (promotion_map_[p_map_idx+1].fp_location == kLocPhysReg)) {
-          int low_reg = promotion_map_[p_map_idx].FpReg;
-          int high_reg = promotion_map_[p_map_idx+1].FpReg;
-          // Doubles require pair of singles starting at even reg
-          // TODO: move target-specific restrictions out of here.
-          if (((low_reg & 0x1) == 0) && ((low_reg + 1) == high_reg)) {
-            curr->location = kLocPhysReg;
-            if (cu_->instruction_set == kThumb2) {
-              curr->reg = RegStorage::FloatSolo64(RegStorage::RegNum(low_reg) >> 1);
-            } else {
-              curr->reg = RegStorage(RegStorage::k64BitPair, low_reg, high_reg);
+    } else if (!curr->high_word) {
+      // TODO: make virtual & move Thumb2 support elsewhere.
+      if (cu_->instruction_set == kThumb2) {
+        if (curr->fp) {
+          if ((promotion_map_[p_map_idx].fp_location == kLocPhysReg) &&
+              (promotion_map_[p_map_idx+1].fp_location == kLocPhysReg)) {
+            int low_reg = promotion_map_[p_map_idx].fp_reg;
+            int high_reg = promotion_map_[p_map_idx+1].fp_reg;
+            // Doubles require pair of singles starting at even reg
+            // TODO: move target-specific restrictions out of here.
+            if (((low_reg & 0x1) == 0) && ((low_reg + 1) == high_reg)) {
+              curr->location = kLocPhysReg;
+              if (cu_->instruction_set == kThumb2) {
+                curr->reg = RegStorage::FloatSolo64(RegStorage::RegNum(low_reg) >> 1);
+              } else {
+                curr->reg = RegStorage(RegStorage::k64BitPair, low_reg, high_reg);
+              }
+              curr->home = true;
             }
+          }
+        } else {
+          if ((promotion_map_[p_map_idx].core_location == kLocPhysReg)
+             && (promotion_map_[p_map_idx+1].core_location ==
+             kLocPhysReg)) {
+            curr->location = kLocPhysReg;
+            curr->reg = RegStorage(RegStorage::k64BitPair, promotion_map_[p_map_idx].core_reg,
+                                   promotion_map_[p_map_idx+1].core_reg);
             curr->home = true;
           }
         }
       } else {
-        if ((promotion_map_[p_map_idx].core_location == kLocPhysReg)
-           && (promotion_map_[p_map_idx+1].core_location ==
-           kLocPhysReg)) {
-          curr->location = kLocPhysReg;
-          curr->reg = RegStorage(RegStorage::k64BitPair, promotion_map_[p_map_idx].core_reg,
-                                 promotion_map_[p_map_idx+1].core_reg);
-          curr->home = true;
+        if (curr->fp) {
+          if (promotion_map_[p_map_idx].fp_location == kLocPhysReg) {
+            curr->location = kLocPhysReg;
+            curr->reg = RegStorage::FloatSolo64(promotion_map_[p_map_idx].fp_reg);
+            curr->home = true;
+          }
+        } else {
+          if (promotion_map_[p_map_idx].core_location == kLocPhysReg) {
+            curr->location = kLocPhysReg;
+            curr->reg = RegStorage::Solo64(promotion_map_[p_map_idx].core_reg);
+            curr->home = true;
+          }
         }
       }
     }
