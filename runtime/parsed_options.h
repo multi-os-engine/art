@@ -88,7 +88,8 @@ class ParsedOptions {
   static constexpr uint32_t kExplicitSuspendCheck = 2;
   static constexpr uint32_t kExplicitStackOverflowCheck = 4;
   uint32_t explicit_checks_;
-
+  // Whether enable Ros2Ros compact.
+  bool use_Ros2Ros_compact_;
  private:
   ParsedOptions() {}
 

@@ -40,6 +40,8 @@ enum CollectorType {
   kCollectorTypeHeapTrim,
   // A (mostly) concurrent copying collector.
   kCollectorTypeCC,
+  // A Ros2Ros compaction collector.
+  kCollectorTypeRos2RosCompact,
 };
 std::ostream& operator<<(std::ostream& os, const CollectorType& collector_type);
 
