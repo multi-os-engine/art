@@ -199,11 +199,15 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
 #endif
   // If background_collector_type_ is kCollectorTypeNone, it defaults to the collector_type_ after
   // parsing options.
-  background_collector_type_ = gc::kCollectorTypeSS;
+  background_collector_type_ = gc::kCollectorTypeNone;
   stack_size_ = 0;  // 0 means default.
   max_spins_before_thin_lock_inflation_ = Monitor::kDefaultMaxSpinsBeforeThinLockInflation;
   low_memory_mode_ = false;
   use_tlab_ = false;
+  // Use sticky compaction by default.
+  use_sticky_compaction_ = true;
+  // Minimal interval is 100s by default.
+  min_interval_sticky_compaction_by_oom_ = 100*1000*1000;
   verify_pre_gc_heap_ = false;
   // Pre sweeping is the one that usually fails if the GC corrupted the heap.
   verify_pre_sweeping_heap_ = kIsDebugBuild;
@@ -414,8 +418,12 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
       ignore_max_footprint_ = true;
     } else if (option == "-XX:LowMemoryMode") {
       low_memory_mode_ = true;
+      // Apply SS to reduce the memory consumption for background apps.
+      background_collector_type_ = gc::kCollectorTypeSS;
     } else if (option == "-XX:UseTLAB") {
       use_tlab_ = true;
+    } else if (option == "-XX:DisableStickyCompact") {
+      use_sticky_compaction_ = false;
     } else if (StartsWith(option, "-D")) {
       properties_.push_back(option.substr(strlen("-D")));
     } else if (StartsWith(option, "-Xjnitrace:")) {

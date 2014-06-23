@@ -255,6 +255,24 @@ class Thread {
     return tls32_.tid;
   }
 
+  /**
+   * @brief   Set performed sticky compaction count.
+   *
+   * @parma   count        performed sticky compaction count
+   */
+  void SetPerformedStickyCompactionCount(int32_t count) {
+    count_performed_sticky_compaction = count;
+  }
+
+  /**
+   * @brief   Get performed sticky compaction count.
+   *
+   * @return  return performed sticky compaction count
+   */
+  int32_t GetPerformedStickyCompactionCount() {
+    return count_performed_sticky_compaction;
+  }
+
   // Returns the java.lang.Thread's name, or NULL if this Thread* doesn't have a peer.
   mirror::String* GetThreadName(const ScopedObjectAccessAlreadyRunnable& ts) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -1103,6 +1121,9 @@ class Thread {
   friend class EntrypointsOrderTest;  // To test the order of tls entries.
 
   DISALLOW_COPY_AND_ASSIGN(Thread);
+
+  // Count for performed sticky compaction
+  int32_t count_performed_sticky_compaction;
 };
 
 std::ostream& operator<<(std::ostream& os, const Thread& thread);

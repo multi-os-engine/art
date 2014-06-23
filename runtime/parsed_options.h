@@ -88,7 +88,10 @@ class ParsedOptions {
   static constexpr uint32_t kExplicitSuspendCheck = 2;
   static constexpr uint32_t kExplicitStackOverflowCheck = 4;
   uint32_t explicit_checks_;
-
+  // Whether enable sticky compaction for background transition.
+  bool use_sticky_compaction_;
+  // Minimal interval allowed between two sticky compactions caused by OOM.
+  uint64_t min_interval_sticky_compaction_by_oom_;
  private:
   ParsedOptions() {}
 

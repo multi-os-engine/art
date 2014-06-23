@@ -40,6 +40,21 @@ enum GcType {
 std::ostream& operator<<(std::ostream& os, const GcType& policy);
 
 }  // namespace collector
+
+// The result of the sticky compaction.
+namespace StickyCompact {
+enum Result {
+  // Success.
+  kSuccess,
+  // Ignore current request due to frequent compactions.
+  kErrorIgnore,
+  // Fail to create MemMap for the backup space.
+  kErrorMemMap,
+  // System is shutting down.
+  kErrorShuttingDown,
+};
+}  // namespace StickyCompact
+
 }  // namespace gc
 }  // namespace art
 

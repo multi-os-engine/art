@@ -71,6 +71,10 @@ namespace collector {
   class SemiSpace;
 }  // namespace collector
 
+namespace allocator {
+  class RosAlloc;
+}  // namespace alloctor
+
 namespace space {
   class AllocSpace;
   class BumpPointerSpace;
@@ -150,7 +154,7 @@ class Heap {
                 bool ignore_max_footprint, bool use_tlab,
                 bool verify_pre_gc_heap, bool verify_pre_sweeping_heap, bool verify_post_gc_heap,
                 bool verify_pre_gc_rosalloc, bool verify_pre_sweeping_rosalloc,
-                bool verify_post_gc_rosalloc);
+                bool verify_post_gc_rosalloc, bool use_sticky_compaction, uint64_t min_interval_sticky_compaction_by_oom);
 
   ~Heap();
 
@@ -489,6 +493,13 @@ class Heap {
     return rosalloc_space_;
   }
 
+  /**
+   * @brief   Return the corresponding rosalloc space.
+   *
+   * @param   rosalloc      pointer to rosalloc handle
+   */
+  space::RosAllocSpace* GetRosAllocSpace(gc::allocator::RosAlloc* rosalloc) const;
+
   space::MallocSpace* GetNonMovingSpace() const {
     return non_moving_space_;
   }
@@ -558,8 +569,16 @@ class Heap {
   }
 
  private:
+  /**
+   * @brief   Compact source space to target space.
+   *
+   * @param   target_space     pointer to target space
+   * @param   source_space     pointer to source space
+   * @param   gc_cause         gc cause type
+   */
   void Compact(space::ContinuousMemMapAllocSpace* target_space,
-               space::ContinuousMemMapAllocSpace* source_space)
+               space::ContinuousMemMapAllocSpace* source_space,
+               GcCause gc_cause)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void FinishGC(Thread* self, collector::GcType gc_type) LOCKS_EXCLUDED(gc_complete_lock_);
@@ -672,9 +691,27 @@ class Heap {
   // Find a collector based on GC type.
   collector::GarbageCollector* FindCollectorByGcType(collector::GcType gc_type);
 
+
+  /**
+   * @brief   Create a new alloc space and compact default alloc space to it.
+   *
+   * @return  request result
+   */
+  StickyCompact::Result RequestStickyCompact();
+
+  /**
+   * @brief   Create the main free list space, typically either a RosAlloc space or DlMalloc space.
+   *
+   * @param   mem_map               memMap pointer
+   * @param   initial_size          space initial size
+   * @param   growth_limit          space growth limit
+   * @param   capacity              space capacity
+   * @param   alloc_space_index     array index to store space name
+   * @param   is_backup             whether create a backup space
+   */
   // Create the main free list space, typically either a RosAlloc space or DlMalloc space.
   void CreateMainMallocSpace(MemMap* mem_map, size_t initial_size, size_t growth_limit,
-                             size_t capacity);
+                             size_t capacity, size_t alloc_space_index, bool is_backup = false);
 
   // Given the current contents of the alloc space, increase the allowed heap footprint to match
   // the target utilization ratio.  This should only be called immediately after a full garbage
@@ -958,6 +995,39 @@ class Heap {
 
   const bool running_on_valgrind_;
   const bool use_tlab_;
+
+  // Pointer to backup space.
+  space::MallocSpace* main_space_bk_;
+
+  // Start address of the backup space.
+  byte* main_space_bk_start_pos_;
+
+  // Minimal interval allowed between two sticky compactions caused by OOM.
+  uint64_t min_interval_sticky_compaction_by_oom_;
+
+  // Times of the last sticky compaction caused by OOM.
+  uint64_t last_time_sticky_compaction_by_oom_;
+
+  // Saved OOMs by direct sticky compaction.
+  Atomic<size_t> count_direct_delay_OOM_;
+
+  // Saved OOMs by indirect sticky compaction.
+  Atomic<size_t> count_indirect_delay_OOM_;
+
+  // Count for requested sticky compaction.
+  Atomic<size_t> count_requested_sticky_compaction_;
+
+  // Count for ignored sticky compaction.
+  Atomic<size_t> count_ignored_sticky_compaction_;
+
+  // Count for performed sticky compaction.
+  volatile int32_t count_performed_sticky_compaction_;
+
+  // Judge whether launch sticky compaction in TrimDaemon thread.
+  bool desired_sticky_compaction_;
+
+  // Whether enable sticky compaction
+  bool use_sticky_compaction_;
 
   friend class collector::GarbageCollector;
   friend class collector::MarkCompact;
