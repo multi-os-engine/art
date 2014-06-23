@@ -68,6 +68,8 @@
 #include "thread_list.h"
 #include "well_known_classes.h"
 
+#include <cutils/atomic-inline.h>
+
 namespace art {
 
 namespace gc {
@@ -93,6 +95,11 @@ static constexpr size_t kNonMovingSpaceCapacity = 64 * MB;
 static constexpr size_t kAllocationStackReserveSize = 1024;
 // Default mark stack size in bytes.
 static const size_t kDefaultMarkStackSize = 64 * KB;
+// Define space name.
+static constexpr char kRosAllocSpace[] = "main rosalloc space";
+static constexpr char kRosAllocSpaceBackup[] = "main rosalloc space 1";
+static const char kMemMapSpace[] = "main space";
+static const char kMemMapSpaceBackup[] = "main space 1";
 
 Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max_free,
            double target_utilization, double foreground_heap_growth_multiplier, size_t capacity,
@@ -103,7 +110,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
            bool ignore_max_footprint, bool use_tlab,
            bool verify_pre_gc_heap, bool verify_pre_sweeping_heap, bool verify_post_gc_heap,
            bool verify_pre_gc_rosalloc, bool verify_pre_sweeping_rosalloc,
-           bool verify_post_gc_rosalloc)
+           bool verify_post_gc_rosalloc, bool use_ros2ros_compact)
     : non_moving_space_(nullptr),
       rosalloc_space_(nullptr),
       dlmalloc_space_(nullptr),
@@ -173,7 +180,10 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       verify_object_mode_(kVerifyObjectModeDisabled),
       disable_moving_gc_count_(0),
       running_on_valgrind_(Runtime::Current()->RunningOnValgrind()),
-      use_tlab_(use_tlab) {
+      use_tlab_(use_tlab),
+      main_space_bk_(nullptr),
+      count_performed_Ros2Ros_compaction_(0),
+      desired_Ros2Ros_compaction_(false) {
   if (VLOG_IS_ON(heap) || VLOG_IS_ON(startup)) {
     LOG(INFO) << "Heap() entering";
   }
@@ -205,30 +215,66 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     CHECK_GT(oat_file_end_addr, image_space->End());
     requested_alloc_space_begin = AlignUp(oat_file_end_addr, kPageSize);
   }
+
+/*
+requested_alloc_space_begin ->     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+                                   +-  nonmoving space (kNonMovingSpaceCapacity) +-
+                                   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+                                   +-   main rosalloc space 1 (capacity)         +-
+                                   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+                                   +-     main rosalloc space (capacity)         +-
+                                   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+*/
+  main_space_bk_start_pos_ = requested_alloc_space_begin + kNonMovingSpaceCapacity;
+  use_ros2ros_compact_ = kUseRosAlloc && use_ros2ros_compact &&
+                         background_collector_type_ == kCollectorTypeCMS &&
+                         foreground_collector_type_ == kCollectorTypeCMS;
   if (is_zygote) {
     // Reserve the address range before we create the non moving space to make sure bitmaps don't
     // take it.
     std::string error_str;
     MemMap* mem_map = MemMap::MapAnonymous(
-        "main space", requested_alloc_space_begin + kNonMovingSpaceCapacity, capacity,
+        kMemMapSpace, requested_alloc_space_begin + kNonMovingSpaceCapacity + capacity, capacity,
         PROT_READ | PROT_WRITE, true, &error_str);
-    CHECK(mem_map != nullptr) << error_str;
+    if (mem_map == nullptr) {
+      // Fails to reserve the backup rosalloc space.
+      mem_map = MemMap::MapAnonymous(
+          kMemMapSpace, requested_alloc_space_begin + kNonMovingSpaceCapacity, capacity,
+          PROT_READ | PROT_WRITE, true, &error_str);
+      CHECK(mem_map != nullptr) << error_str;
+      // Disable Ros2Ros compact.
+      use_ros2ros_compact_ = false;
+   }
     // Non moving space is always dlmalloc since we currently don't have support for multiple
     // rosalloc spaces.
     non_moving_space_ = space::DlMallocSpace::Create(
         "zygote / non moving space", initial_size, kNonMovingSpaceCapacity, kNonMovingSpaceCapacity,
         requested_alloc_space_begin, false);
     non_moving_space_->SetFootprintLimit(non_moving_space_->Capacity());
-    CreateMainMallocSpace(mem_map, initial_size, growth_limit, capacity);
+    CreateMainMallocSpace(mem_map, initial_size, growth_limit, capacity, kRosAllocSpace);
   } else {
     std::string error_str;
-    MemMap* mem_map = MemMap::MapAnonymous("main/non-moving space", requested_alloc_space_begin,
+    MemMap* mem_map = MemMap::MapAnonymous(kMemMapSpace, requested_alloc_space_begin + kNonMovingSpaceCapacity + capacity,
                                            capacity, PROT_READ | PROT_WRITE, true, &error_str);
-    CHECK(mem_map != nullptr) << error_str;
+    if (mem_map == nullptr) {
+      // Fails to reserve the backup rosalloc space.
+      mem_map = MemMap::MapAnonymous("main/non-moving space", requested_alloc_space_begin,
+                                             capacity, PROT_READ | PROT_WRITE, true, &error_str);
+      CHECK(mem_map != nullptr) << error_str;
+      // Disable Ros2Ros compact.
+      use_ros2ros_compact_ = false;
+    }
     // Create the main free list space, which doubles as the non moving space. We can do this since
     // non zygote means that we won't have any background compaction.
-    CreateMainMallocSpace(mem_map, initial_size, growth_limit, capacity);
+    CreateMainMallocSpace(mem_map, initial_size, growth_limit, capacity, kRosAllocSpace);
     non_moving_space_ = main_space_;
+    // Introduce a seperate non moving space.
+    if (use_ros2ros_compact_) {
+      non_moving_space_ = space::DlMallocSpace::Create(
+          "non moving space", kDefaultInitialSize, kNonMovingSpaceCapacity, kNonMovingSpaceCapacity,
+          requested_alloc_space_begin, false);
+      non_moving_space_->SetFootprintLimit(non_moving_space_->Capacity());
+    }
   }
   CHECK(non_moving_space_ != nullptr);
 
@@ -250,7 +296,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     CHECK(temp_space_ != nullptr) << "Failed to create bump pointer space";
     AddSpace(temp_space_);
   }
-  if (non_moving_space_ != main_space_) {
+  // Add non moving space in zygote and non-zygote case.
+  if (non_moving_space_ != nullptr && non_moving_space_ != main_space_) {
     AddSpace(non_moving_space_);
   }
   if (main_space_ != nullptr) {
@@ -338,7 +385,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     garbage_collectors_.push_back(mark_compact_collector_);
   }
 
-  if (GetImageSpace() != nullptr && main_space_ != nullptr) {
+  /*if (GetImageSpace() != nullptr && main_space_ != nullptr) {
     // Check that there's no gap between the image space and the main
     // space so that the immune region won't break (eg. due to a large
     // object allocated in the gap).
@@ -347,7 +394,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       MemMap::DumpMaps(LOG(ERROR));
       LOG(FATAL) << "There's a gap between the image space and the main space";
     }
-  }
+  }*/
 
   if (running_on_valgrind_) {
     Runtime::Current()->GetInstrumentation()->InstrumentQuickAllocEntryPoints();
@@ -359,7 +406,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
 }
 
 void Heap::CreateMainMallocSpace(MemMap* mem_map, size_t initial_size, size_t growth_limit,
-                                 size_t capacity) {
+                                 size_t capacity, const char* rosalloc_space_name, bool is_backup) {
+  space::MallocSpace* malloc_space;
   // Is background compaction is enabled?
   bool can_move_objects = IsMovingGc(background_collector_type_) !=
       IsMovingGc(foreground_collector_type_);
@@ -376,26 +424,42 @@ void Heap::CreateMainMallocSpace(MemMap* mem_map, size_t initial_size, size_t gr
     RemoveRememberedSet(main_space_);
   }
   if (kUseRosAlloc) {
-    rosalloc_space_ = space::RosAllocSpace::CreateFromMemMap(
-        mem_map, "main rosalloc space", kDefaultStartingSize, initial_size, growth_limit, capacity,
-        low_memory_mode_, can_move_objects);
-    main_space_ = rosalloc_space_;
-    CHECK(main_space_ != nullptr) << "Failed to create rosalloc space";
+    if (use_ros2ros_compact_) {
+      can_move_objects = true;
+    }
+    // Create rosalloc space.
+    DCHECK(rosalloc_space_name != nullptr);
+    malloc_space = space::RosAllocSpace::CreateFromMemMap(mem_map, rosalloc_space_name,
+                                                           kDefaultStartingSize, initial_size,
+                                                           growth_limit, capacity, low_memory_mode_,
+                                                           can_move_objects);
+    CHECK(malloc_space != nullptr) << "Failed to create rosalloc space";
+    // Configure rosalloc space.
+    if (!is_backup) {
+      main_space_ = malloc_space;
+      SetSpaceAsDefault(main_space_);
+    } else {
+      main_space_bk_ = malloc_space;
+    }
   } else {
-    dlmalloc_space_ = space::DlMallocSpace::CreateFromMemMap(
-        mem_map, "main dlmalloc space", kDefaultStartingSize, initial_size, growth_limit, capacity,
-        can_move_objects);
-    main_space_ = dlmalloc_space_;
-    CHECK(main_space_ != nullptr) << "Failed to create dlmalloc space";
+    malloc_space = space::DlMallocSpace::CreateFromMemMap(mem_map, "main dlmalloc space",
+                                                          kDefaultStartingSize, initial_size,
+                                                          growth_limit, capacity,
+                                                          can_move_objects);
+    CHECK(malloc_space != nullptr) << "Failed to create dlmalloc space";
+    main_space_ = malloc_space;
+    SetSpaceAsDefault(main_space_);
   }
-  main_space_->SetFootprintLimit(main_space_->Capacity());
+  if (malloc_space != nullptr) {
+    malloc_space->SetFootprintLimit(malloc_space->Capacity());
+  }
   if (collector::SemiSpace::kUseRememberedSet) {
     accounting::RememberedSet* main_space_rem_set =
-        new accounting::RememberedSet("Main space remembered set", this, main_space_);
+        new accounting::RememberedSet("Main space remembered set", this, malloc_space);
     CHECK(main_space_rem_set != nullptr) << "Failed to create main space remembered set";
     AddRememberedSet(main_space_rem_set);
   }
-  VLOG(heap) << "Created main space " << main_space_;
+  VLOG(heap) << "Created main space " << malloc_space;
 }
 
 void Heap::ChangeAllocator(AllocatorType allocator) {
@@ -547,8 +611,15 @@ void Heap::UpdateProcessState(ProcessState process_state) {
       RequestCollectorTransition(foreground_collector_type_, 0);
     } else {
       // Don't delay for debug builds since we may want to stress test the GC.
-      RequestCollectorTransition(background_collector_type_, kIsDebugBuild ? 0 :
-          kCollectorTransitionWait);
+      // Note: take kCollectorTypeRos2RosCompact as parameter is a little bit confused because
+      // We still use kCollectorTypeCMS after application is switched background.
+      if (use_ros2ros_compact_) {
+        desired_Ros2Ros_compaction_ = true;
+        RequestCollectorTransition(kCollectorTypeRos2RosCompact, kIsDebugBuild ? 0 :kCollectorTransitionWait);
+      } else {
+        RequestCollectorTransition(background_collector_type_, kIsDebugBuild ? 0 :
+            kCollectorTransitionWait);
+      }
     }
   }
 }
@@ -828,9 +899,20 @@ void Heap::ThrowOutOfMemoryError(Thread* self, size_t byte_count, bool large_obj
         // lock, temporarily release the shared access to the mutator
         // lock here by transitioning to the suspended state.
         Locks::mutator_lock_->AssertSharedHeld(self);
-        self->TransitionFromRunnableToSuspended(kSuspended);
-        space->AsMallocSpace()->Walk(MSpaceChunkCallback, &max_contiguous_allocation);
-        self->TransitionFromSuspendedToRunnable();
+        if (space->IsRosAllocSpace()) {
+          self->TransitionFromRunnableToSuspended(kSuspended);
+          Locks::mutator_lock_->ExclusiveLock(self);
+          // Ignore Walk/Inspect if the target space is switched as the backup rosalloc.
+          if (space == main_space_->AsRosAllocSpace()) {
+            space->AsMallocSpace()->Walk(MSpaceChunkCallback, &max_contiguous_allocation);
+          }
+          Locks::mutator_lock_->ExclusiveUnlock(self);
+          self->TransitionFromSuspendedToRunnable();
+        } else {
+          self->TransitionFromRunnableToSuspended(kSuspended);
+          space->AsMallocSpace()->Walk(MSpaceChunkCallback, &max_contiguous_allocation);
+          self->TransitionFromSuspendedToRunnable();
+        }
         Locks::mutator_lock_->AssertSharedHeld(self);
       }
     }
@@ -861,6 +943,13 @@ void Heap::DoPendingTransitionOrTrim() {
   // Transition the collector if the desired collector type is not the same as the current
   // collector type.
   TransitionCollector(desired_collector_type);
+  // Launch Ros2Ros compaction if it is desired.
+  if (!CareAboutPauseTimes() && desired_Ros2Ros_compaction_) {
+     RequestRos2RosCompact();
+     desired_Ros2Ros_compaction_ = false;
+     // No need Trim(). Ros2Ros compaction may free more virtual and physical memory.
+     return;
+  }
   if (!CareAboutPauseTimes()) {
     // Deflate the monitors, this can cause a pause but shouldn't matter since we don't care
     // about pauses.
@@ -1096,6 +1185,17 @@ void Heap::RecordFree(uint64_t freed_objects, int64_t freed_bytes) {
   }
 }
 
+space::RosAllocSpace* Heap::GetRosAllocSpace(gc::allocator::RosAlloc* rosalloc) const {
+  for (const auto& space : continuous_spaces_) {
+    if (space->AsContinuousSpace()->IsRosAllocSpace()) {
+      if (space->AsContinuousSpace()->AsRosAllocSpace()->GetRosAlloc() == rosalloc) {
+        return space->AsContinuousSpace()->AsRosAllocSpace();
+      }
+    }
+  }
+  return nullptr;
+}
+
 mirror::Object* Heap::AllocateInternalWithGc(Thread* self, AllocatorType allocator,
                                              size_t alloc_size, size_t* bytes_allocated,
                                              size_t* usable_size,
@@ -1163,6 +1263,7 @@ mirror::Object* Heap::AllocateInternalWithGc(Thread* self, AllocatorType allocat
   if (ptr != nullptr) {
     return ptr;
   }
+
   // Most allocations should have succeeded by now, so the heap is really full, really fragmented,
   // or the requested size is really big. Do another GC, collecting SoftReferences this time. The
   // VM spec requires that all SoftReferences have been collected and cleared before throwing
@@ -1178,7 +1279,59 @@ mirror::Object* Heap::AllocateInternalWithGc(Thread* self, AllocatorType allocat
   }
   ptr = TryToAllocate<true, true>(self, allocator, alloc_size, bytes_allocated, usable_size);
   if (ptr == nullptr) {
-    ThrowOutOfMemoryError(self, alloc_size, allocator == kAllocatorTypeLOS);
+    if (!use_ros2ros_compact_) {
+      ThrowOutOfMemoryError(self, alloc_size, false);
+    } else {
+      if (allocator == kAllocatorTypeRosAlloc) {
+        Ros2RosCompact::Result result = RequestRos2RosCompact();
+        switch (result) {
+          case Ros2RosCompact::kErrorIgnore:
+            // Some Ros2Ros compaction is already performed in the blocking time (current Ros2Ros
+            // compaction waits for getting mutator lock exclusively), try one more allocation.
+            ptr = TryToAllocate<true, true>(self, allocator, alloc_size, bytes_allocated, usable_size);
+            if (ptr != nullptr) {
+              count_indirect_delay_OOM_++;
+            }
+            break;
+          case Ros2RosCompact::kSuccess:
+            // Current request is performed, try one more allocation.
+            ptr = TryToAllocate<true, true>(self, allocator, alloc_size, bytes_allocated, usable_size);
+            if (ptr != nullptr) {
+              count_direct_delay_OOM_++;
+            }
+           break;
+          case Ros2RosCompact::kErrorMemMap:
+            // Throw OOM by default.
+            break;
+          case Ros2RosCompact::kErrorShuttingDown:
+            // Throw OOM by default.
+            break;
+          default: {
+            LOG(FATAL) << "Unimplemented Ros2Ros compaction result "
+                       << static_cast<size_t>(result);
+          }
+        }
+
+        // We can not delay OOM, throw OOM.
+        if (ptr == nullptr) {
+          ThrowOutOfMemoryError(self, alloc_size, false);
+          return ptr;
+        }
+
+        LOG(INFO) << "Heap Ros2Ros compaction delay an OOM,"
+                  << " requested Ros2Ros compaction " << count_requested_Ros2Ros_compaction_.LoadSequentiallyConsistent()
+                  << " performed Ros2Ros compaction " << count_performed_Ros2Ros_compaction_
+                  << " ignored Ros2Ros compaction " << count_ignored_Ros2Ros_compaction_.LoadSequentiallyConsistent()
+                  << " direct delayed count = " << count_direct_delay_OOM_.LoadSequentiallyConsistent()
+                  << " indirect delayed count = " << count_indirect_delay_OOM_.LoadSequentiallyConsistent();
+      } else {
+        if (allocator == kAllocatorTypeLOS) {
+          ThrowOutOfMemoryError(self, alloc_size, true);
+        } else {
+          ThrowOutOfMemoryError(self, alloc_size, false);
+        }
+      }
+    }
   }
   return ptr;
 }
@@ -1335,6 +1488,113 @@ void Heap::CollectGarbage(bool clear_soft_references) {
   CollectGarbageInternal(gc_plan_.back(), kGcCauseExplicit, clear_soft_references);
 }
 
+Ros2RosCompact::Result Heap::RequestRos2RosCompact() {
+  double heap_size_before_Ros2Ros;
+  double heap_size_after_Ros2Ros;
+  const char* map_space_name;
+  const char* rosalloc_space_name;
+  collector::GcType last_gc_type;
+  Thread* self = Thread::Current();
+  // Inc requested Ros2Ros compaction.
+  count_requested_Ros2Ros_compaction_++;
+  // Store performed Ros2Ros compaction at a new request arrival.
+  self->SetPerformedRos2RosCompactionCount(count_performed_Ros2Ros_compaction_);
+  ThreadList* tl = Runtime::Current()->GetThreadList();
+  ScopedThreadStateChange tsc(self, kWaitingPerformingGc);
+  Locks::mutator_lock_->AssertNotHeld(self);
+  const bool copying_transition =
+     IsMovingGc(background_collector_type_) || IsMovingGc(foreground_collector_type_);
+  for (;;) {
+    {
+      ScopedThreadStateChange tsc(self, kWaitingForGcToComplete);
+      MutexLock mu(self, *gc_complete_lock_);
+      // Ensure there is only one GC at a time.
+      last_gc_type = WaitForGcToCompleteLocked(kGcCauseRos2RosCompact, self);
+      // If someone else beat us to it and changed the collector before we could, exit.
+      // This is safe to do before the suspend all since we set the collector_type_running_ before
+      // we exit the loop. If another thread attempts to do the heap transition before we exit,
+      // then it would get blocked on WaitForGcToCompleteLocked.
+      // GC can be disabled if someone has a used GetPrimitiveArrayCritical but not yet released.
+      if (!copying_transition || disable_moving_gc_count_ == 0) {
+        collector_type_running_ = kCollectorTypeRos2RosCompact;
+        break;
+      }
+    }
+    usleep(1000);
+  }
+
+  if (Runtime::Current()->IsShuttingDown(self)) {
+    // Don't allow heap transitions to happen if the runtime is shutting down since these can
+    // cause objects to get finalized.
+    FinishGC(self, collector::kGcTypeNone);
+    return Ros2RosCompact::kErrorShuttingDown;
+  }
+
+  // Check whether last_gc_type is kGcRos2RosCompact and
+  // whether some Ros2Ros compaction is already performed during the blocking time.
+  if (last_gc_type == collector::kGcRos2RosCompact ||
+      count_performed_Ros2Ros_compaction_ > self->GetPerformedRos2RosCompactionCount()) {
+    count_ignored_Ros2Ros_compaction_++;
+    FinishGC(self, collector::kGcTypeNone);
+    return Ros2RosCompact::kErrorIgnore;
+  }
+  // Suspend all threads.
+  tl->SuspendAll();
+  uint64_t start_time = NanoTime();
+  // Update map_space_name and rosalloc_space_name.
+  if (main_space_->AsContinuousSpace()->Begin() > main_space_bk_start_pos_) {
+    map_space_name = kMemMapSpaceBackup;
+    rosalloc_space_name = kRosAllocSpaceBackup;
+  } else {
+    map_space_name = kMemMapSpace;
+    rosalloc_space_name = kRosAllocSpace;
+  }
+  // Create MemMap space.
+  std::string error_str;
+  MemMap* mem_map = MemMap::MapAnonymous(map_space_name, main_space_bk_start_pos_,
+                                         capacity_, PROT_READ | PROT_WRITE, true, &error_str);
+  if (mem_map == nullptr) {
+    // in case of huge pressure on virtual memory.
+    tl->ResumeAll();
+    FinishGC(self, collector::kGcTypeNone);
+    return Ros2RosCompact::kErrorMemMap;
+  }
+  // Create a rosalloc space.
+  CreateMainMallocSpace(mem_map, kDefaultInitialSize, growth_limit_, capacity_, rosalloc_space_name, true);
+  AddSpace(main_space_bk_);
+  // Launch compaction.
+  space::RosAllocSpace* to_space = main_space_bk_->AsContinuousSpace()->AsRosAllocSpace();
+  space::RosAllocSpace* from_space = main_space_->AsContinuousSpace()->AsRosAllocSpace();
+  to_space->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
+  heap_size_before_Ros2Ros = from_space->AsContinuousSpace()->End()
+                              - from_space->AsContinuousSpace()->Begin();
+  Compact(to_space, from_space, kGcCauseRos2RosCompact);
+  heap_size_after_Ros2Ros = to_space->AsContinuousSpace()->End()
+                              - to_space->AsContinuousSpace()->Begin();
+  // Clean.
+  main_space_bk_start_pos_ = from_space->Begin();
+  MemMap* old_mem_map = from_space->ReleaseMemMap();
+  RemoveSpace(from_space);
+  delete from_space;
+  delete old_mem_map;
+  main_space_ = to_space;
+  rosalloc_space_ = to_space;
+  main_space_bk_ = nullptr;
+  // Update performed Ros2Ros compaction count.
+  count_performed_Ros2Ros_compaction_++;
+  // Print statics log and resume all threads.
+  uint64_t duration = NanoTime() - start_time;
+  LOG(INFO) << "Heap Ros2Ros compaction took " << PrettyDuration(duration) <<
+  " compact-ratio: " << std::fixed << heap_size_after_Ros2Ros/heap_size_before_Ros2Ros;
+  tl->ResumeAll();
+  // Finish GC.
+  reference_processor_.EnqueueClearedReferences(self);
+  GrowForUtilization(semi_space_collector_);
+  FinishGC(self, collector::kGcRos2RosCompact);
+  return Ros2RosCompact::kSuccess;
+}
+
+
 void Heap::TransitionCollector(CollectorType collector_type) {
   if (collector_type == collector_type_) {
     return;
@@ -1389,7 +1649,7 @@ void Heap::TransitionCollector(CollectorType collector_type) {
         // We are transitioning from non moving GC -> moving GC, since we copied from the bump
         // pointer space last transition it will be protected.
         bump_pointer_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
-        Compact(bump_pointer_space_, main_space_);
+        Compact(bump_pointer_space_, main_space_, kGcCauseCollectorTransition);
         // Remove the main space so that we don't try to trim it, this doens't work for debug
         // builds since RosAlloc attempts to read the magic number from a protected page.
         RemoveSpace(main_space_);
@@ -1403,7 +1663,7 @@ void Heap::TransitionCollector(CollectorType collector_type) {
         // Compact to the main space from the bump pointer space, don't need to swap semispaces.
         AddSpace(main_space_);
         main_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
-        Compact(main_space_, bump_pointer_space_);
+        Compact(main_space_, bump_pointer_space_, kGcCauseCollectorTransition);
       }
       break;
     }
@@ -1634,7 +1894,7 @@ void Heap::PreZygoteFork() {
       MemMap* mem_map = main_space_->ReleaseMemMap();
       RemoveSpace(main_space_);
       space::Space* old_main_space = main_space_;
-      CreateMainMallocSpace(mem_map, kDefaultInitialSize, mem_map->Size(), mem_map->Size());
+      CreateMainMallocSpace(mem_map, kDefaultInitialSize, mem_map->Size(), mem_map->Size(), kRosAllocSpace);
       delete old_main_space;
       AddSpace(main_space_);
     } else {
@@ -1728,14 +1988,15 @@ void Heap::SwapSemiSpaces() {
 }
 
 void Heap::Compact(space::ContinuousMemMapAllocSpace* target_space,
-                   space::ContinuousMemMapAllocSpace* source_space) {
+                   space::ContinuousMemMapAllocSpace* source_space,
+                   GcCause gc_cause) {
   CHECK(kMovingCollector);
   if (target_space != source_space) {
     // Don't swap spaces since this isn't a typical semi space collection.
     semi_space_collector_->SetSwapSemiSpaces(false);
     semi_space_collector_->SetFromSpace(source_space);
     semi_space_collector_->SetToSpace(target_space);
-    semi_space_collector_->Run(kGcCauseCollectorTransition, false);
+    semi_space_collector_->Run(gc_cause, false);
   } else {
     CHECK(target_space->IsBumpPointerSpace())
         << "In-place compaction is only supported for bump pointer spaces";
@@ -2685,7 +2946,10 @@ void Heap::RequestCollectorTransition(CollectorType desired_collector_type, uint
       return;
     }
     heap_transition_target_time_ = std::max(heap_transition_target_time_, NanoTime() + delta_time);
-    desired_collector_type_ = desired_collector_type;
+    // We do not want to change desired_collector_type_ to kCollectorTypeRos2RosCompact
+    if (desired_collector_type != kCollectorTypeRos2RosCompact) {
+      desired_collector_type_ = desired_collector_type;
+    }
   }
   SignalHeapTrimDaemon(self);
 }

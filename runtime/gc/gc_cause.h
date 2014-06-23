@@ -39,6 +39,8 @@ enum GcCause {
   kGcCauseDisableMovingGc,
   // Not a real GC cause, used when we trim the heap.
   kGcCauseTrim,
+  // GC triggered for a Ros2Ros compaction.
+  kGcCauseRos2RosCompact,
 };
 
 const char* PrettyCause(GcCause cause);

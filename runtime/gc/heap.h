@@ -71,6 +71,10 @@ namespace collector {
   class SemiSpace;
 }  // namespace collector
 
+namespace allocator {
+  class RosAlloc;
+}  // namespace alloctor
+
 namespace space {
   class AllocSpace;
   class BumpPointerSpace;
@@ -150,7 +154,7 @@ class Heap {
                 bool ignore_max_footprint, bool use_tlab,
                 bool verify_pre_gc_heap, bool verify_pre_sweeping_heap, bool verify_post_gc_heap,
                 bool verify_pre_gc_rosalloc, bool verify_pre_sweeping_rosalloc,
-                bool verify_post_gc_rosalloc);
+                bool verify_post_gc_rosalloc, bool use_ros2ros_compact);
 
   ~Heap();
 
@@ -489,6 +493,13 @@ class Heap {
     return rosalloc_space_;
   }
 
+  /**
+   * @brief   Return the corresponding rosalloc space.
+   *
+   * @param   rosalloc      pointer to rosalloc handle
+   */
+  space::RosAllocSpace* GetRosAllocSpace(gc::allocator::RosAlloc* rosalloc) const;
+
   space::MallocSpace* GetNonMovingSpace() const {
     return non_moving_space_;
   }
@@ -558,8 +569,16 @@ class Heap {
   }
 
  private:
+  /**
+   * @brief   Compact source space to target space.
+   *
+   * @param   target_space     pointer to target space
+   * @param   source_space     pointer to source space
+   * @param   gc_cause         gc cause type
+   */
   void Compact(space::ContinuousMemMapAllocSpace* target_space,
-               space::ContinuousMemMapAllocSpace* source_space)
+               space::ContinuousMemMapAllocSpace* source_space,
+               GcCause gc_cause)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void FinishGC(Thread* self, collector::GcType gc_type) LOCKS_EXCLUDED(gc_complete_lock_);
@@ -672,9 +691,27 @@ class Heap {
   // Find a collector based on GC type.
   collector::GarbageCollector* FindCollectorByGcType(collector::GcType gc_type);
 
+
+  /**
+   * @brief   Create a new rosalloc space and compact default rosalloc space to it.
+   *
+   * @return  request result
+   */
+  Ros2RosCompact::Result RequestRos2RosCompact();
+
+  /**
+   * @brief   Create the main free list space, typically either a RosAlloc space or DlMalloc space.
+   *
+   * @param   mem_map               memMap pointer
+   * @param   initial_size          rosalloc space initial size
+   * @param   growth_limit          rosalloc space growth limit
+   * @param   capacity              rosalloc space capacity
+   * @param   rosalloc_space_name   rosalloc space name
+   * @param   is_backup             whether create a backup rosalloc space
+   */
   // Create the main free list space, typically either a RosAlloc space or DlMalloc space.
   void CreateMainMallocSpace(MemMap* mem_map, size_t initial_size, size_t growth_limit,
-                             size_t capacity);
+                             size_t capacity, const char* rosalloc_space_name, bool is_backup = false);
 
   // Given the current contents of the alloc space, increase the allowed heap footprint to match
   // the target utilization ratio.  This should only be called immediately after a full garbage
@@ -958,6 +995,33 @@ class Heap {
 
   const bool running_on_valgrind_;
   const bool use_tlab_;
+
+  // Pointer to backup rosalloc space.
+  space::MallocSpace* main_space_bk_;
+
+  // Start address of the backup rosalloc space.
+  byte* main_space_bk_start_pos_;
+
+  // Saved OOMs by direct Ros2Ros compaction.
+  Atomic<size_t> count_direct_delay_OOM_;
+
+  // Saved OOMs by indirect Ros2Ros compaction.
+  Atomic<size_t> count_indirect_delay_OOM_;
+
+  // Count for requested Ros2Ros compaction.
+  Atomic<size_t> count_requested_Ros2Ros_compaction_;
+
+  // Count for ignored Ros2Ros compaction.
+  Atomic<size_t> count_ignored_Ros2Ros_compaction_;
+
+  // Count for performed Ros2Ros compaction.
+  volatile int32_t count_performed_Ros2Ros_compaction_;
+
+  // Judge whether launch Ros2Ros compaction in TrimDaemon thread.
+  bool desired_Ros2Ros_compaction_;
+
+  // Whether enable Ros2Ros compaction
+  bool use_ros2ros_compact_;
 
   friend class collector::GarbageCollector;
   friend class collector::MarkCompact;
