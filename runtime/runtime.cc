@@ -631,7 +631,9 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
                        options->verify_post_gc_heap_,
                        options->verify_pre_gc_rosalloc_,
                        options->verify_pre_sweeping_rosalloc_,
-                       options->verify_post_gc_rosalloc_);
+                       options->verify_post_gc_rosalloc_,
+                       options->use_sticky_compaction_,
+                       options->min_interval_sticky_compaction_by_oom_);
 
   dump_gc_performance_on_shutdown_ = options->dump_gc_performance_on_shutdown_;
 

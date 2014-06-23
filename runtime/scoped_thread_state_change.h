@@ -282,6 +282,19 @@ class ScopedObjectAccess : public ScopedObjectAccessUnchecked {
   DISALLOW_COPY_AND_ASSIGN(ScopedObjectAccess);
 };
 
+class ScopedThreadStateChangeRunnableToSuspended : public ScopedThreadStateChange {
+ public:
+  ScopedThreadStateChangeRunnableToSuspended(Thread* self, ThreadState new_thread_state)
+     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) UNLOCK_FUNCTION(Locks::mutator_lock_)
+     ALWAYS_INLINE
+     : ScopedThreadStateChange(self, new_thread_state) {
+    DCHECK_NE(new_thread_state, kRunnable);
+  }
+
+  ~ScopedThreadStateChangeRunnableToSuspended() SHARED_LOCK_FUNCTION(Locks::mutator_lock_) {
+  }
+};
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_SCOPED_THREAD_STATE_CHANGE_H_
