@@ -250,6 +250,46 @@ void DisassemblerArm::DumpArm(std::ostream& os, const uint8_t* instr_ptr) {
   std::ostringstream args;
   switch (op1) {
     case 0:
+      if (((instruction & (1 << 24)) == 0) && ((instruction >> 4) & 0b1111) == 0b1001) {
+        // Multiply instructions.
+        uint32_t op = (instruction >> 20) & 0b1111;
+        uint32_t top3 = op >> 1;
+        bool ra_present = false;
+        bool hi_lo = false;
+        switch (top3) {
+          case 0b000: opcode = "mul"; break;
+          case 0b001: opcode = "mla"; ra_present = true; break;
+          case 0b010: {
+            switch (op) {
+              case 0b0100: opcode = "umaal"; hi_lo = true; break;
+              case 0b0110: opcode = "mls"; ra_present = true; break;
+              default:
+                opcode = "<undefined>"; break;
+            }
+          }
+          break;
+          case 0b100: opcode = "umull"; hi_lo = true; break;
+          case 0b101: opcode = "umlal"; hi_lo = true; break;
+          case 0b110: opcode = "smull"; hi_lo = true; break;
+          case 0b111: opcode = "smlal"; hi_lo = true; break;
+          default:
+            opcode = "<undefined>"; break;
+        }
+        ArmRegister rn(instruction, 0);
+        ArmRegister rm(instruction, 8);
+        ArmRegister rd(instruction, 16);
+        if (ra_present) {
+          ArmRegister ra(instruction, 12);
+          args << rd << ", " << rn << ", " << rm << ", " << ra;
+        } else if (hi_lo) {
+          ArmRegister rdlo(instruction, 12);
+          args << rd << ", " << rdlo << ", " << rn << ", " << rm;
+        } else {
+          args << rd << ", " << rn << ", " << rm;
+        }
+        break;
+      }
+    // Deliberate fall through.
     case 1:  // Data processing instructions.
       {
         if ((instruction & 0x0ff000f0) == 0x01200070) {  // BKPT
@@ -306,6 +346,7 @@ void DisassemblerArm::DumpArm(std::ostream& os, const uint8_t* instr_ptr) {
         bool b = (instruction & (1 << 22)) != 0;
         bool w = (instruction & (1 << 21)) != 0;
         bool l = (instruction & (1 << 20)) != 0;
+        bool u = (instruction & (1 << 23)) != 0;
         opcode = StringPrintf("%s%s", (l ? "ldr" : "str"), (b ? "b" : ""));
         args << ArmRegister(instruction, 12) << ", ";
         ArmRegister rn(instruction, 16);
@@ -314,12 +355,13 @@ void DisassemblerArm::DumpArm(std::ostream& os, const uint8_t* instr_ptr) {
         } else {
           bool wback = !p || w;
           uint32_t offset = (instruction & 0xfff);
+          const char* minus = u ? "" : "-";
           if (p && !wback) {
-            args << "[" << rn << ", #" << offset << "]";
+            args << "[" << rn << ", #" << minus << offset << "]";
           } else if (p && wback) {
-            args << "[" << rn << ", #" << offset << "]!";
+            args << "[" << rn << ", #" << minus << offset << "]!";
           } else if (!p && wback) {
-            args << "[" << rn << "], #" << offset;
+            args << "[" << rn << "], #" << minus << offset;
           } else {
             LOG(FATAL) << p << " " << w;
           }
@@ -1317,10 +1359,11 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
                       opcode << "str";
                     }
                     args << Rt << ", [" << Rn;
+                    const char* minus = U == 0 ? "-" : "";
                     if (P == 0 && W == 1) {
-                      args << "], #" << imm32;
+                      args << "], #" << minus << imm32;
                     } else {
-                      args << ", #" << imm32 << "]";
+                      args << ", #" << minus << imm32 << "]";
                       if (W == 1) {
                         args << "!";
                       }

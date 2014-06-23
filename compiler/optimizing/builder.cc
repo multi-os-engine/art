@@ -234,10 +234,42 @@ void HGraphBuilder::Binop_32x(const Instruction& instruction, Primitive::Type ty
 }
 
 template<typename T>
+void HGraphBuilder::Shift_32x(const Instruction& instruction, Primitive::Type type) {
+  HInstruction* first = LoadLocal(instruction.VRegB(), type);
+  HInstruction* second = LoadLocal(instruction.VRegC(), type);
+
+  // For shifts we need to limit the shift amount to 5 bits.
+  HInstruction* mask = GetIntConstant(31);
+  second = current_block_->AddInstruction(new (arena_) HAnd(Primitive::kPrimInt, second, mask));
+  HInstruction* result = current_block_->AddInstruction(new (arena_) T(type, first, second));
+
+  UpdateLocal(instruction.VRegA(), result);
+}
+
+template<typename T>
 void HGraphBuilder::Binop_12x(const Instruction& instruction, Primitive::Type type) {
   HInstruction* first = LoadLocal(instruction.VRegA(), type);
   HInstruction* second = LoadLocal(instruction.VRegB(), type);
   current_block_->AddInstruction(new (arena_) T(type, first, second));
+  UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+}
+
+template<typename T>
+void HGraphBuilder::Shift_12x(const Instruction& instruction, Primitive::Type type) {
+  HInstruction* first = LoadLocal(instruction.VRegA(), type);
+  HInstruction* second = LoadLocal(instruction.VRegB(), type);
+
+  // For shifts we need to limit the shift amount to 5 bits.
+  HInstruction* mask = GetIntConstant(31);
+  second = current_block_->AddInstruction(new (arena_) HAnd(Primitive::kPrimInt, second, mask));
+  HInstruction* result = current_block_->AddInstruction(new (arena_) T(type, first, second));
+  UpdateLocal(instruction.VRegA(), result);
+}
+
+template<typename T>
+void HGraphBuilder::Unop_12x(const Instruction& instruction, Primitive::Type type) {
+  HInstruction* sub = LoadLocal(instruction.VRegB(), type);
+  current_block_->AddInstruction(new (arena_) T(type, sub));
   UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
 }
 
@@ -500,65 +532,135 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
       break;
     }
 
-    case Instruction::ADD_INT: {
-      Binop_32x<HAdd>(instruction, Primitive::kPrimInt);
-      break;
-    }
+#define BINOP_INT(op, type) \
+    case Instruction::op:\
+      Binop_32x<type>(instruction, Primitive::kPrimInt); \
+      break
 
-    case Instruction::ADD_LONG: {
-      Binop_32x<HAdd>(instruction, Primitive::kPrimLong);
-      break;
-    }
+    BINOP_INT(ADD_INT, HAdd);
+    BINOP_INT(SUB_INT, HSub);
+    BINOP_INT(RSUB_INT, HRsub);
+    BINOP_INT(MUL_INT, HMult);
+    BINOP_INT(DIV_INT, HDiv);
+    BINOP_INT(REM_INT, HRem);
+    BINOP_INT(AND_INT, HAnd);
+    BINOP_INT(OR_INT, HOr);
+    BINOP_INT(XOR_INT, HXor);
 
-    case Instruction::SUB_INT: {
-      Binop_32x<HSub>(instruction, Primitive::kPrimInt);
-      break;
-    }
+#define SHIFT_INT(op, type) \
+    case Instruction::op:\
+      Shift_32x<type>(instruction, Primitive::kPrimInt); \
+      break
 
-    case Instruction::SUB_LONG: {
-      Binop_32x<HSub>(instruction, Primitive::kPrimLong);
-      break;
-    }
+    SHIFT_INT(SHR_INT, HAsr);
+    SHIFT_INT(SHL_INT, HLsl);
+    SHIFT_INT(USHR_INT, HLsr);
 
-    case Instruction::ADD_INT_2ADDR: {
-      Binop_12x<HAdd>(instruction, Primitive::kPrimInt);
-      break;
-    }
 
-    case Instruction::ADD_LONG_2ADDR: {
-      Binop_12x<HAdd>(instruction, Primitive::kPrimLong);
-      break;
-    }
+#define BINOP_LONG(op, type) \
+    case Instruction::op:\
+      Binop_32x<type>(instruction, Primitive::kPrimLong); \
+      break
 
-    case Instruction::SUB_INT_2ADDR: {
-      Binop_12x<HSub>(instruction, Primitive::kPrimInt);
-      break;
-    }
+    BINOP_LONG(ADD_LONG, HAdd);
+    BINOP_LONG(SUB_LONG, HSub);
+    BINOP_LONG(MUL_LONG, HMult);
+    BINOP_LONG(DIV_LONG, HDiv);
 
-    case Instruction::SUB_LONG_2ADDR: {
-      Binop_12x<HSub>(instruction, Primitive::kPrimLong);
-      break;
-    }
+#define SHIFT_LONG(op, type) \
+    case Instruction::op:\
+      Shift_32x<type>(instruction, Primitive::kPrimLong); \
+      break
 
-    case Instruction::ADD_INT_LIT16: {
-      Binop_22s<HAdd>(instruction, false);
-      break;
-    }
+    SHIFT_LONG(SHR_LONG, HAsr);
+    SHIFT_LONG(SHL_LONG, HLsl);
+    SHIFT_LONG(USHR_LONG, HLsr);
 
-    case Instruction::RSUB_INT: {
-      Binop_22s<HSub>(instruction, true);
-      break;
-    }
+#define BINOP_INT_2ADDR(op, type) \
+    case Instruction::op: \
+      Binop_12x<type>(instruction, Primitive::kPrimInt); \
+      break
 
-    case Instruction::ADD_INT_LIT8: {
-      Binop_22b<HAdd>(instruction, false);
-      break;
-    }
+    BINOP_INT_2ADDR(ADD_INT_2ADDR, HAdd);
+    BINOP_INT_2ADDR(SUB_INT_2ADDR, HSub);
+    BINOP_INT_2ADDR(MUL_INT_2ADDR, HMult);
+    BINOP_INT_2ADDR(DIV_INT_2ADDR, HDiv);
+    BINOP_INT_2ADDR(REM_INT_2ADDR, HRem);
+    BINOP_INT_2ADDR(AND_INT_2ADDR, HAnd);
+    BINOP_INT_2ADDR(OR_INT_2ADDR, HOr);
+    BINOP_INT_2ADDR(XOR_INT_2ADDR, HXor);
 
-    case Instruction::RSUB_INT_LIT8: {
-      Binop_22b<HSub>(instruction, true);
-      break;
-    }
+#define SHIFT_INT_2ADDR(op, type) \
+    case Instruction::op:\
+      Shift_12x<type>(instruction, Primitive::kPrimInt); \
+      break
+
+    SHIFT_INT_2ADDR(SHR_INT_2ADDR, HAsr);
+    SHIFT_INT_2ADDR(SHL_INT_2ADDR, HLsl);
+    SHIFT_INT_2ADDR(USHR_INT_2ADDR, HLsr);
+
+#define BINOP_LONG_2ADDR(op, type) \
+    case Instruction::op: \
+      Binop_12x<type>(instruction, Primitive::kPrimLong); \
+      break
+
+    BINOP_LONG_2ADDR(ADD_LONG_2ADDR, HAdd);
+    BINOP_LONG_2ADDR(SUB_LONG_2ADDR, HSub);
+    BINOP_LONG_2ADDR(MUL_LONG_2ADDR, HMult);
+    BINOP_LONG_2ADDR(DIV_LONG_2ADDR, HDiv);
+    BINOP_LONG_2ADDR(REM_LONG_2ADDR, HRem);
+    BINOP_LONG_2ADDR(AND_LONG_2ADDR, HAnd);
+    BINOP_LONG_2ADDR(OR_LONG_2ADDR, HOr);
+    BINOP_LONG_2ADDR(XOR_LONG_2ADDR, HXor);
+
+#define SHIFT_LONG_2ADDR(op, type) \
+    case Instruction::op:\
+      Shift_12x<type>(instruction, Primitive::kPrimLong); \
+      break
+
+    SHIFT_LONG_2ADDR(SHR_LONG_2ADDR, HAsr);
+    SHIFT_LONG_2ADDR(SHL_LONG_2ADDR, HLsl);
+    SHIFT_LONG_2ADDR(USHR_LONG_2ADDR, HLsr);
+
+#define BINOP_INT_LIT16(op, type) \
+    case Instruction::op: \
+      Binop_22s<type>(instruction, false); \
+      break
+
+    BINOP_INT_LIT16(ADD_INT_LIT16, HAdd);
+    BINOP_INT_LIT16(MUL_INT_LIT16, HMult);
+    BINOP_INT_LIT16(DIV_INT_LIT16, HDiv);
+    BINOP_INT_LIT16(REM_INT_LIT16, HRem);
+    BINOP_INT_LIT16(AND_INT_LIT16, HAnd);
+    BINOP_INT_LIT16(OR_INT_LIT16, HOr);
+    BINOP_INT_LIT16(XOR_INT_LIT16, HXor);
+
+#define BINOP_INT_LIT8(op, type) \
+    case Instruction::op: \
+      Binop_22b<type>(instruction, false); \
+      break
+
+    BINOP_INT_LIT8(ADD_INT_LIT8, HAdd);
+    BINOP_INT_LIT8(RSUB_INT_LIT8, HRsub);
+    BINOP_INT_LIT8(MUL_INT_LIT8, HMult);
+    BINOP_INT_LIT8(DIV_INT_LIT8, HDiv);
+    BINOP_INT_LIT8(REM_INT_LIT8, HRem);
+    BINOP_INT_LIT8(AND_INT_LIT8, HAnd);
+    BINOP_INT_LIT8(OR_INT_LIT8, HOr);
+    BINOP_INT_LIT8(XOR_INT_LIT8, HXor);
+    BINOP_INT_LIT8(SHL_INT_LIT8, HLsl);
+    BINOP_INT_LIT8(SHR_INT_LIT8, HAsr);
+    BINOP_INT_LIT8(USHR_INT_LIT8, HLsr);
+
+#define UNOP(op, type, rtype) \
+    case Instruction::op: \
+      Unop_12x<type>(instruction, rtype); \
+      break
+
+    UNOP(NOT_INT, HNot, Primitive::kPrimInt);
+    UNOP(NEG_INT, HNeg, Primitive::kPrimInt);
+    UNOP(NOT_LONG, HNot, Primitive::kPrimLong);
+    UNOP(NEG_LONG, HNeg, Primitive::kPrimLong);
 
     case Instruction::NEW_INSTANCE: {
       current_block_->AddInstruction(

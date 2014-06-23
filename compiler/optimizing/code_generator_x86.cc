@@ -852,6 +852,357 @@ void InstructionCodeGeneratorX86::VisitSub(HSub* sub) {
   }
 }
 
+
+void LocationsBuilderX86::VisitRsub(HRsub* rsb) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(rsb);
+  switch (rsb->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected rsub type " << rsb->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented rsub type " << rsb->GetResultType();
+  }
+  rsb->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitRsub(HRsub* rsb) {
+  LocationSummary* locations = rsb->GetLocations();
+  switch (rsb->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ subl(locations->InAt(1).AsX86().AsCpuRegister(),
+              locations->InAt(0).AsX86().AsCpuRegister());
+     break;
+
+    case Primitive::kPrimLong:
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected rsub type " << rsb->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented rsub type " << rsb->GetResultType();
+  }
+}
+
+// Multiply.
+void LocationsBuilderX86::VisitMult(HMult* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitMult(HMult* inst) {
+}
+
+// Divide.
+void LocationsBuilderX86::VisitDiv(HDiv* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitDiv(HDiv* inst) {
+}
+
+// Remainder.
+void LocationsBuilderX86::VisitRem(HRem* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitRem(HRem* inst) {
+}
+
+// And.
+void LocationsBuilderX86::VisitAnd(HAnd* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitAnd(HAnd* inst) {
+}
+
+// Or.
+void LocationsBuilderX86::VisitOr(HOr* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitOr(HOr* inst) {
+}
+
+// Exclusive Or.
+void LocationsBuilderX86::VisitXor(HXor* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitXor(HXor* inst) {
+}
+
+// Logical shift left.
+void LocationsBuilderX86::VisitLsl(HLsl* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitLsl(HLsl* inst) {
+}
+
+// Logical shift right.
+void LocationsBuilderX86::VisitLsr(HLsr* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitLsr(HLsr* inst) {
+}
+
+// Arithmetic shift right.
+void LocationsBuilderX86::VisitAsr(HAsr* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitAsr(HAsr* inst) {
+}
+
+void LocationsBuilderX86::VisitLoad(HLoad* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::Any());
+  locations->SetOut(Location::RequiresRegister());
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitLoad(HLoad* inst) {
+#if 0
+  LocationSummary* locations = inst->GetLocations();
+  Location base = locations->InAt(0);
+  Location offsetloc = locations->InAt(1);
+  Location result = locations->Out();
+  uint32_t offset_imm;
+  Register offset_reg;
+  bool is_immediate = true;
+  if (offsetloc.IsRegister()) {
+    offset_reg = offsetloc.AsX86().AsCoreRegister();
+    is_immediate = false;
+  } else {
+    offset_imm = offsetloc
+  }
+  switch (type_) {
+    case Primitive::kPrimInt:
+      __ ldr(out.AsX86().AsCoreRegister*(), Address(base.AsX86().AsCoreRegister()
+      break;
+
+    case Primitive::kPrimLong:
+     break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented load type " << inst->GetResultType();
+  }
+#endif
+}
+
+void LocationsBuilderX86::VisitStore(HStore* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::Any());
+  locations->SetOut(Location::RequiresRegister());
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitStore(HStore* inst) {
+}
+
 void LocationsBuilderX86::VisitNewInstance(HNewInstance* instruction) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
   locations->SetOut(X86CpuLocation(EAX));
@@ -898,7 +1249,56 @@ void InstructionCodeGeneratorX86::VisitNot(HNot* instruction) {
   LocationSummary* locations = instruction->GetLocations();
   Location out = locations->Out();
   DCHECK_EQ(locations->InAt(0).AsX86().AsCpuRegister(), out.AsX86().AsCpuRegister());
-  __ xorl(out.AsX86().AsCpuRegister(), Immediate(1));
+  switch (instruction->GetType()) {
+     case Primitive::kPrimInt:
+       // TODO: is there a better instruction to perform onescomp?
+       __ xorl(out.AsX86().AsCpuRegister(), Immediate(0xffffffff));
+       break;
+
+     case Primitive::kPrimLong:
+       // TODO: implement this.
+       break;
+
+     case Primitive::kPrimBoolean:
+     case Primitive::kPrimByte:
+     case Primitive::kPrimChar:
+     case Primitive::kPrimShort:
+       LOG(FATAL) << "Unexpected not type " << instruction->GetType();
+       break;
+
+     default:
+       LOG(FATAL) << "Unimplemented not type " << instruction->GetType();
+  }
+}
+
+void LocationsBuilderX86::VisitNeg(HNeg* instruction) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister());
+  instruction->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitNeg(HNeg* instruction) {
+//  LocationSummary* locations = instruction->GetLocations();
+  switch (instruction->GetType()) {
+    case Primitive::kPrimInt:
+      // TODO: implement this.
+      break;
+
+    case Primitive::kPrimLong:
+      // TODO: implement this.
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected neg type " << instruction->GetType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented neg type " << instruction->GetType();
+  }
 }
 
 void LocationsBuilderX86::VisitPhi(HPhi* instruction) {

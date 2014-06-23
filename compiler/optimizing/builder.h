@@ -76,7 +76,16 @@ class HGraphBuilder : public ValueObject {
   void Binop_32x(const Instruction& instruction, Primitive::Type type);
 
   template<typename T>
+  void Shift_32x(const Instruction& instruction, Primitive::Type type);
+
+  template<typename T>
   void Binop_12x(const Instruction& instruction, Primitive::Type type);
+
+  template<typename T>
+  void Shift_12x(const Instruction& instruction, Primitive::Type type);
+
+  template<typename T>
+  void Unop_12x(const Instruction& instruction, Primitive::Type type);
 
   template<typename T>
   void Binop_22b(const Instruction& instruction, bool reverse);

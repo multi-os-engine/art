@@ -28,8 +28,8 @@ const char* DataProcessingRegisterResults[] = {
   "  18:	eb41 0002 	adc.w	r0, r1, r2\n",
   "  1c:	eb61 0002 	sbc.w	r0, r1, r2\n",
   "  20:	ebc1 0002 	rsb	r0, r1, r2\n",
-  "  24:	1c08      	adds	r0, r1, #0\n",
-  "  26:	1e08      	subs	r0, r1, #0\n",
+  "  24:	4408      	add r0, r1\n",
+  "  26:	1a40      	subs	r0, r0, r1\n",
   "  28:	4008      	ands	r0, r1\n",
   "  2a:	4308      	orrs	r0, r1\n",
   "  2c:	4048      	eors	r0, r1\n",
@@ -314,17 +314,16 @@ const char* LongBranchResults[] = {
 };
 const char* LoadMultipleResults[] = {
   "   0:	cc09      	ldmia	r4!, {r0, r3}\n",
-  "   2:	e934 4800 	ldmdb	r4!, {fp, lr}\n",
-  "   6:	e914 4800 	ldmdb	r4, {fp, lr}\n",
+  "   2:	e8b4 4800 	ldmia.w	r4!, {fp, lr}\n",
+  "   6:	e894 4800 	ldmia.w	r4, {fp, lr}\n",
   "   a:	f854 5b04 	ldr.w	r5, [r4], #4\n",
   nullptr
 };
 const char* StoreMultipleResults[] = {
   "   0:	c409      	stmia	r4!, {r0, r3}\n",
-  "   2:	e8a4 4800 	stmia.w	r4!, {fp, lr}\n",
-  "   6:	e884 4800 	stmia.w	r4, {fp, lr}\n",
-  "   a:	f844 5c04 	str.w	r5, [r4, #-4]\n",
-  "   e:	f844 5d04 	str.w	r5, [r4, #-4]!\n",
+  "   2:	e924 4800 	stmdb	r4!, {fp, lr}\n",
+  "   6:	e904 4800 	stmdb	r4, {fp, lr}\n",
+  "   a:	f844 5d04 	str.w	r5, [r4, #-4]!\n",
   nullptr
 };
 const char* MovWMovTResults[] = {

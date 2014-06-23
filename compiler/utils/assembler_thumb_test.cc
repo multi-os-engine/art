@@ -183,8 +183,6 @@ void dump(std::vector<uint8_t>& code, const char* testname) {
   snprintf(cmd, sizeof(cmd), "%sarm-eabi-objdump -d %s.oo | grep '^  *[0-9a-f][0-9a-f]*:'",
     toolsdir.c_str(), filename);
   if (kPrintResults) {
-    // Print the results only, don't check. This is used to generate new output for inserting
-    // into the .inc file.
     system(cmd);
   } else {
     // Check the results match the appropriate results in the .inc file.
@@ -289,15 +287,15 @@ TEST(Thumb2AssemblerTest, DataProcessingRegister) {
   __ rsb(R0, R1, ShifterOperand(R2));
 
   // 16 bit variants.
-  __ add(R0, R1, ShifterOperand());
-  __ sub(R0, R1, ShifterOperand());
-  __ and_(R0, R1, ShifterOperand());
-  __ orr(R0, R1, ShifterOperand());
-  __ eor(R0, R1, ShifterOperand());
-  __ bic(R0, R1, ShifterOperand());
-  __ adc(R0, R1, ShifterOperand());
-  __ sbc(R0, R1, ShifterOperand());
-  __ rsb(R0, R1, ShifterOperand());
+  __ add(R0, R0, ShifterOperand(R1));
+  __ sub(R0, R0, ShifterOperand(R1));
+  __ and_(R0, R0, ShifterOperand(R1));
+  __ orr(R0, R0, ShifterOperand(R1));
+  __ eor(R0, R0, ShifterOperand(R1));
+  __ bic(R0, R0, ShifterOperand(R1));
+  __ adc(R0, R0, ShifterOperand(R1));
+  __ sbc(R0, R0, ShifterOperand(R1));
+  __ rsb(R0, R0, ShifterOperand(R1));
 
   __ tst(R0, ShifterOperand(R1));
   __ teq(R0, ShifterOperand(R1));
@@ -773,14 +771,14 @@ TEST(Thumb2AssemblerTest, LoadMultiple) {
   arm::Thumb2Assembler* assembler = static_cast<arm::Thumb2Assembler*>(Assembler::Create(kThumb2));
 
   // 16 bit.
-  __ ldm(DB_W, R4, (1 << R0 | 1 << R3));
+  __ ldm(IA_W, R4, (1 << R0 | 1 << R3));
 
   // 32 bit.
-  __ ldm(DB_W, R4, (1 << LR | 1 << R11));
-  __ ldm(DB, R4, (1 << LR | 1 << R11));
+  __ ldm(IA_W, R4, (1 << LR | 1 << R11));
+  __ ldm(IA, R4, (1 << LR | 1 << R11));
 
   // Single reg is converted to ldr
-  __ ldm(DB_W, R4, (1 << R5));
+  __ ldm(IA_W, R4, (1 << R5));
 
   size_t cs = __ CodeSize();
   std::vector<uint8_t> managed_code(cs);
@@ -794,15 +792,14 @@ TEST(Thumb2AssemblerTest, StoreMultiple) {
   arm::Thumb2Assembler* assembler = static_cast<arm::Thumb2Assembler*>(Assembler::Create(kThumb2));
 
   // 16 bit.
-  __ stm(IA_W, R4, (1 << R0 | 1 << R3));
+  __ stm(DB_W, R4, (1 << R0 | 1 << R3));
 
   // 32 bit.
-  __ stm(IA_W, R4, (1 << LR | 1 << R11));
-  __ stm(IA, R4, (1 << LR | 1 << R11));
+  __ stm(DB_W, R4, (1 << LR | 1 << R11));
+  __ stm(DB, R4, (1 << LR | 1 << R11));
 
   // Single reg is converted to str
-  __ stm(IA_W, R4, (1 << R5));
-  __ stm(IA, R4, (1 << R5));
+  __ stm(DB_W, R4, (1 << R5));
 
   size_t cs = __ CodeSize();
   std::vector<uint8_t> managed_code(cs);

@@ -160,17 +160,7 @@ class Location : public ValueObject {
     return value_ == other.value_;
   }
 
-  const char* DebugString() const {
-    switch (GetKind()) {
-      case kInvalid: return "?";
-      case kRegister: return "R";
-      case kStackSlot: return "S";
-      case kDoubleStackSlot: return "DS";
-      case kQuickParameter: return "Q";
-      case kUnallocated: return "U";
-    }
-    return "?";
-  }
+  const char* DebugString() const;
 
   // Unallocated locations.
   enum Policy {
@@ -286,6 +276,8 @@ class LocationSummary : public ArenaObject {
   }
 
   Location Out() const { return output_; }
+
+  std::string DebugString() const;
 
  private:
   GrowableArray<Location> inputs_;

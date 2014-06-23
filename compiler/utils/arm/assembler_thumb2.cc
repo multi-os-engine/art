@@ -329,7 +329,7 @@ void Thumb2Assembler::ldm(BlockAddressMode am,
       ++reg;
     }
     CHECK_LT(reg, 16);
-    CHECK(am == DB_W);      // Only writeback is supported.
+    CHECK(am == IA_W);      // Only writeback is supported.
     ldr(static_cast<Register>(reg), Address(base, kRegisterSize, Address::PostIndex), cond);
   } else {
     EmitMultiMemOp(cond, am, true, base, regs);
@@ -352,8 +352,8 @@ void Thumb2Assembler::stm(BlockAddressMode am,
       ++reg;
     }
     CHECK_LT(reg, 16);
-    CHECK(am == IA || am == IA_W);
-    Address::Mode strmode = am == IA ? Address::PreIndex : Address::Offset;
+    CHECK(am == DB || am == DB_W);
+    Address::Mode strmode = am == DB_W ? Address::PreIndex : Address::Offset;
     str(static_cast<Register>(reg), Address(base, -kRegisterSize, strmode), cond);
   } else {
     EmitMultiMemOp(cond, am, false, base, regs);
@@ -688,7 +688,9 @@ bool Thumb2Assembler::Is32BitDataProcessing(Condition cond,
     case SUB:
       break;
     default:
-      if (so.IsRegister() && rd != rn) {
+      if (so.IsRegister() && (rd != rn || so.IsShift())) {
+        // Can't do 16 bit if the dest and first source are different or there is
+        // a shift applied to the second source.
         return true;
       }
   }
@@ -854,6 +856,8 @@ void Thumb2Assembler::Emit16BitDataProcessing(Condition cond,
     if (so.IsImmediate()) {
       use_immediate = true;
       immediate = so.GetImmediate();
+    } else {
+      rn = so.GetRegister();
     }
 
     switch (opcode) {
@@ -877,7 +881,6 @@ void Thumb2Assembler::Emit16BitDataProcessing(Condition cond,
            rn_shift = 8;
         } else {
           thumb_opcode = 0b1010;
-          rn = so.GetRegister();
         }
 
         break;
@@ -906,7 +909,7 @@ void Thumb2Assembler::Emit16BitDataProcessing(Condition cond,
         }
         break;
       case BIC: thumb_opcode = 0b1110; break;
-      case MVN: thumb_opcode = 0b1111; rn = so.GetRegister(); break;
+      case MVN: thumb_opcode = 0b1111; break;
       default:
         break;
     }
@@ -1230,8 +1233,6 @@ uint16_t Thumb2Assembler::EmitCompareAndBranch(Register rn, uint16_t prev, bool 
 }
 
 
-// NOTE: this only support immediate offsets, not [rx,ry].
-// TODO: support [rx,ry] instructions.
 void Thumb2Assembler::EmitLoadStore(Condition cond,
                                     bool load,
                                     bool byte,

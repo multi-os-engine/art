@@ -24,7 +24,9 @@ namespace art {
 
 class HPrettyPrinter : public HGraphVisitor {
  public:
-  explicit HPrettyPrinter(HGraph* graph) : HGraphVisitor(graph) { }
+  explicit HPrettyPrinter(HGraph* graph) : HGraphVisitor(graph), print_locations_(false) { }
+  HPrettyPrinter(HGraph* graph, bool print_locations) : HGraphVisitor(graph),
+      print_locations_(print_locations) { }
 
   void PrintPreInstruction(HInstruction* instruction) {
     PrintString("  ");
@@ -65,6 +67,12 @@ class HPrettyPrinter : public HGraphVisitor {
       }
       PrintString("]");
     }
+    if (print_locations_) {
+      LocationSummary* locations = instruction->GetLocations();
+      if (locations != nullptr) {
+        PrintString(locations->DebugString().c_str());
+      }
+    }
     PrintNewLine();
   }
 
@@ -98,6 +106,7 @@ class HPrettyPrinter : public HGraphVisitor {
   virtual void PrintString(const char* value) = 0;
 
  private:
+  bool print_locations_;
   DISALLOW_COPY_AND_ASSIGN(HPrettyPrinter);
 };
 
@@ -105,6 +114,8 @@ class StringPrettyPrinter : public HPrettyPrinter {
  public:
   explicit StringPrettyPrinter(HGraph* graph)
       : HPrettyPrinter(graph), str_(""), current_block_(nullptr) { }
+  StringPrettyPrinter(HGraph* graph, bool print_locations) :
+    HPrettyPrinter(graph, print_locations), str_(""), current_block_(nullptr) { }
 
   virtual void PrintInt(int value) {
     str_ += StringPrintf("%d", value);

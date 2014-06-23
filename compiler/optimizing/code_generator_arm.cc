@@ -841,6 +841,568 @@ void InstructionCodeGeneratorARM::VisitSub(HSub* sub) {
   }
 }
 
+void LocationsBuilderARM::VisitRsub(HRsub* rsb) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(rsb);
+  switch (rsb->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected rsub type " << rsb->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented rsub type " << rsb->GetResultType();
+  }
+  rsb->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitRsub(HRsub* rsb) {
+  LocationSummary* locations = rsb->GetLocations();
+  HIntConstant* rhs = rsb->InputAt(0)->AsIntConstant();
+  switch (rsb->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ rsb(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             ShifterOperand(rhs->GetValue()));
+      break;
+
+    case Primitive::kPrimLong:
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected rsub type " << rsb->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented rsub type " << rsb->GetResultType();
+  }
+}
+
+// Multiply.
+void LocationsBuilderARM::VisitMult(HMult* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitMult(HMult* inst) {
+  LocationSummary* locations = inst->GetLocations();
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      LOG(INFO) << "multiply int";
+      __ mul(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             locations->InAt(1).AsArm().AsCoreRegister());
+      break;
+
+    case Primitive::kPrimLong:
+      // TODO: implement this.
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mult type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mult type " << inst->GetResultType();
+  }
+}
+
+// Divide.
+void LocationsBuilderARM::VisitDiv(HDiv* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected div type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented div type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitDiv(HDiv* inst) {
+  LocationSummary* locations = inst->GetLocations();
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ sdiv(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             locations->InAt(1).AsArm().AsCoreRegister());
+      break;
+
+    case Primitive::kPrimLong:
+      // TODO: implement this.
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected div type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented div type " << inst->GetResultType();
+  }
+}
+
+// Remainder.
+void LocationsBuilderARM::VisitRem(HRem* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->AddTemp(Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected rem type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented rem type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitRem(HRem* inst) {
+  LocationSummary* locations = inst->GetLocations();
+  Location tmp = locations->GetTemp(0);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ sdiv(tmp.AsArm().AsCoreRegister(), locations->InAt(0).AsArm().AsCoreRegister(),
+              locations->InAt(1).AsArm().AsCoreRegister());
+      __ mul(tmp.AsArm().AsCoreRegister(), tmp.AsArm().AsCoreRegister(),
+             locations->InAt(1).AsArm().AsCoreRegister());
+      __ sub(locations->Out().AsArm().AsCoreRegister(), locations->InAt(0).AsArm().AsCoreRegister(),
+             ShifterOperand(tmp.AsArm().AsCoreRegister()));
+      break;
+
+    case Primitive::kPrimLong:
+      // TODO: implement this.
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected div type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented div type " << inst->GetResultType();
+  }
+}
+
+// And.
+void LocationsBuilderARM::VisitAnd(HAnd* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected and type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented and type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitAnd(HAnd* inst) {
+  LocationSummary* locations = inst->GetLocations();
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ and_(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
+      break;
+
+    case Primitive::kPrimLong:
+      __ and_(locations->Out().AsArm().AsRegisterPairLow(),
+              locations->InAt(0).AsArm().AsRegisterPairLow(),
+              ShifterOperand(locations->InAt(1).AsArm().AsRegisterPairLow()));
+      __ and_(locations->Out().AsArm().AsRegisterPairHigh(),
+             locations->InAt(0).AsArm().AsRegisterPairHigh(),
+             ShifterOperand(locations->InAt(1).AsArm().AsRegisterPairHigh()));
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected and type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented and type " << inst->GetResultType();
+  }
+}
+
+// Or.
+void LocationsBuilderARM::VisitOr(HOr* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected or type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented or type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitOr(HOr* inst) {
+  LocationSummary* locations = inst->GetLocations();
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ orr(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
+      break;
+
+    case Primitive::kPrimLong:
+      __ orr(locations->Out().AsArm().AsRegisterPairLow(),
+              locations->InAt(0).AsArm().AsRegisterPairLow(),
+              ShifterOperand(locations->InAt(1).AsArm().AsRegisterPairLow()));
+      __ orr(locations->Out().AsArm().AsRegisterPairHigh(),
+             locations->InAt(0).AsArm().AsRegisterPairHigh(),
+             ShifterOperand(locations->InAt(1).AsArm().AsRegisterPairHigh()));
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected or type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented or type " << inst->GetResultType();
+  }
+}
+
+// Exclusive Or.
+void LocationsBuilderARM::VisitXor(HXor* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected xor type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented xor type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitXor(HXor* inst) {
+  LocationSummary* locations = inst->GetLocations();
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ eor(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
+      break;
+
+    case Primitive::kPrimLong:
+      __ eor(locations->Out().AsArm().AsRegisterPairLow(),
+              locations->InAt(0).AsArm().AsRegisterPairLow(),
+              ShifterOperand(locations->InAt(1).AsArm().AsRegisterPairLow()));
+      __ eor(locations->Out().AsArm().AsRegisterPairHigh(),
+             locations->InAt(0).AsArm().AsRegisterPairHigh(),
+             ShifterOperand(locations->InAt(1).AsArm().AsRegisterPairHigh()));
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected xor type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented xor type " << inst->GetResultType();
+  }
+}
+
+// Logical shift left.
+void LocationsBuilderARM::VisitLsl(HLsl* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected lsl type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented lsl type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitLsl(HLsl* inst) {
+  LocationSummary* locations = inst->GetLocations();
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ Lsl(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             locations->InAt(1).AsArm().AsCoreRegister());
+      break;
+
+    case Primitive::kPrimLong:
+      // TODO: implement this.
+     break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected xor type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented xor type " << inst->GetResultType();
+  }
+}
+
+// Logical shift right.
+void LocationsBuilderARM::VisitLsr(HLsr* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected lsr type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented lsr type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitLsr(HLsr* inst) {
+  LocationSummary* locations = inst->GetLocations();
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ Lsr(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             locations->InAt(1).AsArm().AsCoreRegister());
+      break;
+
+    case Primitive::kPrimLong:
+      // TODO: implement this.
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected lsr type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented lsr type " << inst->GetResultType();
+  }
+}
+
+// Arithmetic shift right.
+void LocationsBuilderARM::VisitAsr(HAsr* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unexpected asr type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented asr type " << inst->GetResultType();
+  }
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitAsr(HAsr* inst) {
+  LocationSummary* locations = inst->GetLocations();
+  switch (inst->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ Asr(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             locations->InAt(1).AsArm().AsCoreRegister());
+      break;
+
+    case Primitive::kPrimLong:
+      // TODO: implement this.
+     break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected asr type " << inst->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented asr type " << inst->GetResultType();
+  }
+}
+
+void LocationsBuilderARM::VisitLoad(HLoad* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::Any());
+  locations->SetOut(Location::RequiresRegister());
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitLoad(HLoad* inst) {
+#if 0
+  LocationSummary* locations = inst->GetLocations();
+  Location base = locations->InAt(0);
+  Location offsetloc = locations->InAt(1);
+  Location result = locations->Out();
+  uint32_t offset_imm;
+  Register offset_reg;
+  bool is_immediate = true;
+  if (offsetloc.IsRegister()) {
+    offset_reg = offsetloc.AsArm().AsCoreRegister();
+    is_immediate = false;
+  } else {
+    offset_imm = offsetloc
+  }
+  switch (type_) {
+    case Primitive::kPrimInt:
+      __ ldr(out.AsArm().AsCoreRegister*(), Address(base.AsArm().AsCoreRegister()
+      break;
+
+    case Primitive::kPrimLong:
+     break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented load type " << inst->GetResultType();
+  }
+#endif
+}
+
+void LocationsBuilderARM::VisitStore(HStore* inst) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(inst);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::Any());
+  locations->SetOut(Location::RequiresRegister());
+  inst->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitStore(HStore* inst) {
+}
+
 static constexpr Register kRuntimeParameterCoreRegisters[] = { R0, R1 };
 static constexpr size_t kRuntimeParameterCoreRegistersLength =
     arraysize(kRuntimeParameterCoreRegisters);
@@ -901,8 +1463,66 @@ void LocationsBuilderARM::VisitNot(HNot* instruction) {
 
 void InstructionCodeGeneratorARM::VisitNot(HNot* instruction) {
   LocationSummary* locations = instruction->GetLocations();
-  __ eor(locations->Out().AsArm().AsCoreRegister(),
-         locations->InAt(0).AsArm().AsCoreRegister(), ShifterOperand(1));
+  switch (instruction->GetType()) {
+    case Primitive::kPrimInt:
+      __ mvn(locations->Out().AsArm().AsCoreRegister(),
+             ShifterOperand(locations->InAt(0).AsArm().AsCoreRegister()));
+      break;
+
+    case Primitive::kPrimLong:
+      __ mvn(locations->Out().AsArm().AsRegisterPairLow(),
+              ShifterOperand(locations->InAt(0).AsArm().AsRegisterPairLow()));
+      __ mvn(locations->Out().AsArm().AsRegisterPairHigh(),
+              ShifterOperand(locations->InAt(0).AsArm().AsRegisterPairHigh()));
+       break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected not type " << instruction->GetType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented not type " << instruction->GetType();
+  }
+}
+
+void LocationsBuilderARM::VisitNeg(HNeg* instruction) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister());
+  instruction->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitNeg(HNeg* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  switch (instruction->GetType()) {
+    case Primitive::kPrimInt:
+      __ rsb(locations->Out().AsArm().AsCoreRegister(),
+             locations->InAt(0).AsArm().AsCoreRegister(),
+             ShifterOperand(0));
+      break;
+
+    case Primitive::kPrimLong:
+      __ rsbs(locations->Out().AsArm().AsRegisterPairLow(),
+              locations->InAt(0).AsArm().AsRegisterPairLow(),
+              ShifterOperand(0));
+      __ rsc(locations->Out().AsArm().AsRegisterPairHigh(),
+              locations->InAt(0).AsArm().AsRegisterPairHigh(),
+              ShifterOperand(0));
+       break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected neg type " << instruction->GetType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented neg type " << instruction->GetType();
+  }
 }
 
 void LocationsBuilderARM::VisitPhi(HPhi* instruction) {

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "base/hex_dump.h"
 #include "builder.h"
 #include "code_generator.h"
 #include "common_compiler_test.h"
@@ -22,7 +23,7 @@
 #include "instruction_set.h"
 #include "nodes.h"
 #include "optimizing_unit_test.h"
-
+#include "pretty_printer.h"
 #include "gtest/gtest.h"
 
 namespace art {
@@ -52,6 +53,10 @@ static void Run(const InternalCodeAllocator& allocator, bool has_result, int32_t
   typedef int32_t (*fptr)();
   CommonCompilerTest::MakeExecutable(allocator.GetMemory(), allocator.GetSize());
   fptr f = reinterpret_cast<fptr>(allocator.GetMemory());
+  LOG(INFO) << HexDump(allocator.GetMemory(), allocator.GetSize(), true, "code ");
+#if defined(__arm__)
+  f = reinterpret_cast<fptr>(reinterpret_cast<uintptr_t>(f) | 1);   // thumb2.
+#endif
   int32_t result = f();
   if (has_result) {
     CHECK_EQ(result, expected);
@@ -70,12 +75,18 @@ static void TestCode(const uint16_t* data, bool has_result = false, int32_t expe
 
   CodeGenerator* codegen = CodeGenerator::Create(&arena, graph, kX86);
   codegen->CompileBaseline(&allocator);
+
 #if defined(__i386__)
   Run(allocator, has_result, expected);
 #endif
 
   codegen = CodeGenerator::Create(&arena, graph, kArm);
   codegen->CompileBaseline(&allocator);
+
+  StringPrettyPrinter printer(graph, true);
+  printer.VisitInsertionOrder();
+  LOG(INFO) << printer.str();
+
 #if defined(__arm__)
   Run(allocator, has_result, expected);
 #endif
@@ -244,5 +255,96 @@ TEST(CodegenTest, ReturnAdd4) {
 
   TestCode(data, true, 7);
 }
+
+TEST(CodegenTest, ReturnSub1) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 5 << 12 | 0,
+    Instruction::CONST_4 | 4 << 12 | 1 << 8,
+    Instruction::SUB_INT, 1 << 8 | 0,
+    Instruction::RETURN);
+
+  TestCode(data, true, 1);
+}
+
+TEST(CodegenTest, ReturnMult1) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 5 << 12 | 0,
+    Instruction::CONST_4 | 4 << 12 | 1 << 8,
+    Instruction::MUL_INT, 1 << 8 | 0,
+    Instruction::RETURN);
+
+  TestCode(data, true, 20);
+}
+
+TEST(CodegenTest, ReturnDiv1) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 4 << 12 | 0,
+    Instruction::CONST_4 | 2 << 12 | 1 << 8,
+    Instruction::DIV_INT, 1 << 8 | 0,
+    Instruction::RETURN);
+
+  TestCode(data, true, 2);
+}
+
+TEST(CodegenTest, ReturnRem1) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 5 << 12 | 0,
+    Instruction::CONST_4 | 2 << 12 | 1 << 8,
+    Instruction::REM_INT, 1 << 8 | 0,
+    Instruction::RETURN);
+
+  TestCode(data, true, 1);
+}
+
+TEST(CodegenTest, ReturnAnd1) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 7 << 12 | 0,
+    Instruction::CONST_4 | 5 << 12 | 1 << 8,
+    Instruction::AND_INT, 1 << 8 | 0,
+    Instruction::RETURN);
+
+  TestCode(data, true, 5);
+}
+
+TEST(CodegenTest, ReturnOr1) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 2 << 12 | 0,
+    Instruction::CONST_4 | 5 << 12 | 1 << 8,
+    Instruction::OR_INT, 1 << 8 | 0,
+    Instruction::RETURN);
+
+  TestCode(data, true, 7);
+}
+
+TEST(CodegenTest, ReturnShr1) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 4 << 12 | 0,
+    Instruction::CONST_4 | 1 << 12 | 1 << 8,
+    Instruction::SHR_INT, 1 << 8 | 0,
+    Instruction::RETURN);
+
+  TestCode(data, true, 2);
+}
+
+TEST(CodegenTest, ReturnShl1) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 4 << 12 | 0,
+    Instruction::CONST_4 | 1 << 12 | 1 << 8,
+    Instruction::SHL_INT, 1 << 8 | 0,
+    Instruction::RETURN);
+
+  TestCode(data, true, 8);
+}
+
+TEST(CodegenTest, ReturnUshr1) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 4 << 12 | 0,
+    Instruction::CONST_4 | 1 << 12 | 1 << 8,
+    Instruction::USHR_INT, 1 << 8 | 0,
+    Instruction::RETURN);
+
+  TestCode(data, true, 2);
+}
+
 
 }  // namespace art

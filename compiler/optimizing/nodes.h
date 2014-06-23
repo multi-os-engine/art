@@ -331,7 +331,7 @@ class HBasicBlock : public ArenaObject {
     return -1;
   }
 
-  void AddInstruction(HInstruction* instruction);
+  HInstruction* AddInstruction(HInstruction* instruction);
   void RemoveInstruction(HInstruction* instruction);
   void InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor);
   void AddPhi(HPhi* phi);
@@ -407,6 +407,7 @@ class HBasicBlock : public ArenaObject {
   M(LongConstant)                                          \
   M(NewInstance)                                           \
   M(Not)                                                   \
+  M(Neg)                                                   \
   M(ParameterValue)                                        \
   M(ParallelMove)                                          \
   M(Phi)                                                   \
@@ -414,6 +415,18 @@ class HBasicBlock : public ArenaObject {
   M(ReturnVoid)                                            \
   M(StoreLocal)                                            \
   M(Sub)                                                   \
+  M(Rsub)                                                 \
+  M(Mult)                                                 \
+  M(Div)                                                  \
+  M(Rem)                                                  \
+  M(And)                                                  \
+  M(Or)                                                   \
+  M(Xor)                                                  \
+  M(Lsr)                                                  \
+  M(Asr)                                                  \
+  M(Lsl)                                                  \
+  M(Load)                                                 \
+  M(Store)                                                \
 
 
 #define FORWARD_DECLARATION(type) class H##type;
@@ -1172,6 +1185,171 @@ class HSub : public HBinaryOperation {
   DISALLOW_COPY_AND_ASSIGN(HSub);
 };
 
+class HRsub : public HBinaryOperation {
+ public:
+  HRsub(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return false; }
+
+  DECLARE_INSTRUCTION(Rsub);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HRsub);
+};
+
+class HMult : public HBinaryOperation {
+ public:
+  HMult(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return true; }
+
+  DECLARE_INSTRUCTION(Mult);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HMult);
+};
+
+class HDiv : public HBinaryOperation {
+ public:
+  HDiv(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return false; }
+
+  DECLARE_INSTRUCTION(Div);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HDiv);
+};
+
+class HRem : public HBinaryOperation {
+ public:
+  HRem(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return false; }
+
+  DECLARE_INSTRUCTION(Rem);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HRem);
+};
+
+class HAnd : public HBinaryOperation {
+ public:
+  HAnd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return true; }
+
+  DECLARE_INSTRUCTION(And);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HAnd);
+};
+
+class HOr : public HBinaryOperation {
+ public:
+  HOr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return true; }
+
+  DECLARE_INSTRUCTION(Or);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HOr);
+};
+
+class HXor : public HBinaryOperation {
+ public:
+  HXor(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return true; }
+
+  DECLARE_INSTRUCTION(Xor);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HXor);
+};
+
+class HLsr : public HBinaryOperation {
+ public:
+  HLsr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return false; }
+
+  DECLARE_INSTRUCTION(Lsr);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HLsr);
+};
+
+class HAsr : public HBinaryOperation {
+ public:
+  HAsr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return false; }
+
+  DECLARE_INSTRUCTION(Asr);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HAsr);
+};
+
+class HLsl : public HBinaryOperation {
+ public:
+  HLsl(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return false; }
+
+  DECLARE_INSTRUCTION(Lsl);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HLsl);
+};
+
+class HLoad : public HTemplateInstruction<2> {
+ public:
+  HLoad(Primitive::Type type, HInstruction* base, HInstruction* offset)
+      : type_(type) {
+    SetRawInputAt(0, base);
+    SetRawInputAt(1, offset);
+  }
+
+  DECLARE_INSTRUCTION(Load);
+
+ private:
+  Primitive::Type type_;
+
+  DISALLOW_COPY_AND_ASSIGN(HLoad);
+};
+
+class HStore : public HTemplateInstruction<3> {
+ public:
+  HStore(Primitive::Type type, HInstruction* value, HInstruction* base, HInstruction* offset)
+      : type_(type) {
+    SetRawInputAt(0, value);
+    SetRawInputAt(1, base);
+    SetRawInputAt(2, offset);
+  }
+
+  DECLARE_INSTRUCTION(Store);
+
+ private:
+  Primitive::Type type_;
+
+  DISALLOW_COPY_AND_ASSIGN(HStore);
+};
+
+
+
 // The value of a parameter in this method. Its location depends on
 // the calling convention.
 class HParameterValue : public HExpression<0> {
@@ -1191,16 +1369,36 @@ class HParameterValue : public HExpression<0> {
   DISALLOW_COPY_AND_ASSIGN(HParameterValue);
 };
 
-class HNot : public HExpression<1> {
+class HUnaryExpression : public HExpression<1> {
  public:
-  explicit HNot(HInstruction* input) : HExpression(Primitive::kPrimBoolean) {
+  HUnaryExpression(Primitive::Type type, HInstruction* input) : HExpression(type) {
     SetRawInputAt(0, input);
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HUnaryExpression);
+};
+
+class HNot : public HUnaryExpression {
+ public:
+  HNot(Primitive::Type type, HInstruction* input) : HUnaryExpression(type, input) {
   }
 
   DECLARE_INSTRUCTION(Not);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HNot);
+};
+
+class HNeg : public HUnaryExpression {
+ public:
+  HNeg(Primitive::Type type, HInstruction* input) : HUnaryExpression(type, input) {
+  }
+
+  DECLARE_INSTRUCTION(Neg);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HNeg);
 };
 
 class HPhi : public HInstruction {

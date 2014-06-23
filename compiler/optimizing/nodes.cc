@@ -317,8 +317,9 @@ static void Add(HInstructionList* instruction_list,
   instruction_list->AddInstruction(instruction);
 }
 
-void HBasicBlock::AddInstruction(HInstruction* instruction) {
+HInstruction* HBasicBlock::AddInstruction(HInstruction* instruction) {
   Add(&instructions_, this, instruction);
+  return instruction;
 }
 
 void HBasicBlock::AddPhi(HPhi* phi) {
