@@ -887,14 +887,6 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
     cu.mir_graph->EnableOpcodeCounting();
   }
 
-  // Check early if we should skip this compilation if the profiler is enabled.
-  if (cu.compiler_driver->ProfilePresent()) {
-    std::string methodname = PrettyMethod(method_idx, dex_file);
-    if (cu.mir_graph->SkipCompilationByName(methodname)) {
-      return nullptr;
-    }
-  }
-
   /* Build the raw MIR graph */
   cu.mir_graph->InlineMethod(code_item, access_flags, invoke_type, class_def_idx, method_idx,
                               class_loader, dex_file);
@@ -917,6 +909,14 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
   /* Create the pass driver and launch it */
   PassDriverMEOpts pass_driver(&cu);
   pass_driver.Launch();
+
+// Check early if we should skip this compilation if the profiler is enabled.
+  if (cu.compiler_driver->ProfilePresent() && !cu.mir_graph->MethodIsLeaf()) {
+    std::string methodname = PrettyMethod(method_idx, dex_file);
+    if (cu.mir_graph->SkipCompilationByName(methodname)) {
+      return NULL;
+    }
+  }
 
   if (cu.enable_debug & (1 << kDebugDumpCheckStats)) {
     cu.mir_graph->DumpCheckStats();
