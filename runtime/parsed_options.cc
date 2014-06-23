@@ -197,13 +197,18 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
 #else
 #error "ART default GC type must be set"
 #endif
+  // If we are using sticky compaction then default background compaction to off since we perform
+  // sticky compactions when we transition to not jank perceptible.
+  use_sticky_compaction_ = false;
   // If background_collector_type_ is kCollectorTypeNone, it defaults to the collector_type_ after
   // parsing options.
-  background_collector_type_ = gc::kCollectorTypeSS;
+  background_collector_type_ =
+      use_sticky_compaction_ ? gc::kCollectorTypeNone : gc::kCollectorTypeSS;
   stack_size_ = 0;  // 0 means default.
   max_spins_before_thin_lock_inflation_ = Monitor::kDefaultMaxSpinsBeforeThinLockInflation;
   low_memory_mode_ = false;
   use_tlab_ = false;
+  min_interval_sticky_compaction_by_oom_ = MsToNs(100 * 1000);  // 100s.
   verify_pre_gc_heap_ = false;
   // Pre sweeping is the one that usually fails if the GC corrupted the heap.
   verify_pre_sweeping_heap_ = kIsDebugBuild;
@@ -417,6 +422,10 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
       low_memory_mode_ = true;
     } else if (option == "-XX:UseTLAB") {
       use_tlab_ = true;
+    } else if (option == "-XX:EnableStickyCompact") {
+      use_sticky_compaction_ = true;
+    } else if (option == "-XX:DisableStickyCompact") {
+      use_sticky_compaction_ = false;
     } else if (StartsWith(option, "-D")) {
       properties_.push_back(option.substr(strlen("-D")));
     } else if (StartsWith(option, "-Xjnitrace:")) {

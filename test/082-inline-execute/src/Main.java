@@ -580,6 +580,7 @@ public class Main {
 
   static Object runtime;
   static Method address_of;
+  static Method new_non_movable_array;
   static Method peek_byte;
   static Method peek_short;
   static Method peek_int;
@@ -594,6 +595,7 @@ public class Main {
     Method get_runtime = vm_runtime.getDeclaredMethod("getRuntime");
     runtime = get_runtime.invoke(null);
     address_of = vm_runtime.getDeclaredMethod("addressOf", Object.class);
+    new_non_movable_array = vm_runtime.getDeclaredMethod("newNonMovableArray", Class.class, Integer.TYPE);
 
     Class<?> io_memory = Class.forName("libcore.io.Memory");
     peek_byte = io_memory.getDeclaredMethod("peekByte", Long.TYPE);
@@ -607,7 +609,7 @@ public class Main {
   }
 
   public static void test_Memory_peekByte() throws Exception {
-    byte[] b = new byte [2];
+    byte[] b = (byte[])new_non_movable_array.invoke(runtime, Byte.TYPE, 2);
     b[0] = 0x12;
     b[1] = 0x11;
     long address = (long)address_of.invoke(runtime, b);
@@ -616,7 +618,7 @@ public class Main {
   }
 
   public static void test_Memory_peekShort() throws Exception {
-    byte[] b = new byte [3];
+    byte[] b = (byte[])new_non_movable_array.invoke(runtime, Byte.TYPE, 3);
     b[0] = 0x13;
     b[1] = 0x12;
     b[2] = 0x11;
@@ -626,7 +628,7 @@ public class Main {
   }
 
   public static void test_Memory_peekInt() throws Exception {
-    byte[] b = new byte [5];
+    byte[] b = (byte[])new_non_movable_array.invoke(runtime, Byte.TYPE, 5);
     b[0] = 0x15;
     b[1] = 0x14;
     b[2] = 0x13;
@@ -638,7 +640,7 @@ public class Main {
   }
 
   public static void test_Memory_peekLong() throws Exception {
-    byte[] b = new byte [9];
+    byte[] b = (byte[])new_non_movable_array.invoke(runtime, Byte.TYPE, 9);
     b[0] = 0x19;
     b[1] = 0x18;
     b[2] = 0x17;
@@ -655,7 +657,7 @@ public class Main {
 
   public static void test_Memory_pokeByte() throws Exception {
     byte[] r = {0x11, 0x12};
-    byte[] b = new byte [2];
+    byte[] b = (byte[])new_non_movable_array.invoke(runtime, Byte.TYPE, 2);
     long address = (long)address_of.invoke(runtime, b);
     poke_byte.invoke(null, address, (byte)0x11);
     poke_byte.invoke(null, address + 1, (byte)0x12);
@@ -665,7 +667,7 @@ public class Main {
   public static void test_Memory_pokeShort() throws Exception {
     byte[] ra = {0x12, 0x11, 0x13};
     byte[] ru = {0x12, 0x22, 0x21};
-    byte[] b = new byte [3];
+    byte[] b = (byte[])new_non_movable_array.invoke(runtime, Byte.TYPE, 3);
     long address = (long)address_of.invoke(runtime, b);
 
     // Aligned write
@@ -681,7 +683,7 @@ public class Main {
   public static void test_Memory_pokeInt() throws Exception {
     byte[] ra = {0x14, 0x13, 0x12, 0x11, 0x15};
     byte[] ru = {0x14, 0x24, 0x23, 0x22, 0x21};
-    byte[] b = new byte [5];
+    byte[] b = (byte[])new_non_movable_array.invoke(runtime, Byte.TYPE, 5);
     long address = (long)address_of.invoke(runtime, b);
 
     b[4] = 0x15;
@@ -695,7 +697,7 @@ public class Main {
   public static void test_Memory_pokeLong() throws Exception {
     byte[] ra = {0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11, 0x19};
     byte[] ru = {0x18, 0x28, 0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21};
-    byte[] b = new byte [9];
+    byte[] b = (byte[])new_non_movable_array.invoke(runtime, Byte.TYPE, 9);
     long address = (long)address_of.invoke(runtime, b);
 
     b[8] = 0x19;
