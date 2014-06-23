@@ -34,12 +34,29 @@ enum GcType {
   kGcTypePartial,
   // Full GC that marks and frees in both the application and Zygote heap.
   kGcTypeFull,
+  // Ros2Ros compaction GC that compacts default rosalloc space to the backup one.
+  kGcRos2RosCompact,
   // Number of different GC types.
   kGcTypeMax,
 };
 std::ostream& operator<<(std::ostream& os, const GcType& policy);
 
 }  // namespace collector
+
+// The result of requested Ros2Ros Compaction.
+namespace Ros2RosCompact {
+enum Result {
+  // Success.
+  kSuccess,
+  // Ignore current request due to frequent Ros2Ros compactions.
+  kErrorIgnore,
+  // Fail to create MemMap for the backup rosalloc space.
+  kErrorMemMap,
+  // System is shutting down.
+  kErrorShuttingDown,
+};
+}  // namespace Ros2Roscompact
+
 }  // namespace gc
 }  // namespace art
 

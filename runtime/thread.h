@@ -255,6 +255,24 @@ class Thread {
     return tls32_.tid;
   }
 
+  /**
+   * @brief   Set performed Ros2Ros compaction count.
+   *
+   * @parma   count        performed Ros2Ros compaction count
+   */
+  void SetPerformedRos2RosCompactionCount(int32_t count) {
+    count_performed_Ros2Ros_compaction = count;
+  }
+
+  /**
+   * @brief   Get performed Ros2Ros compaction count.
+   *
+   * @return  return performed Ros2Ros compaction count
+   */
+  int32_t GetPerformedRos2RosCompactionCount() {
+    return count_performed_Ros2Ros_compaction;
+  }
+
   // Returns the java.lang.Thread's name, or NULL if this Thread* doesn't have a peer.
   mirror::String* GetThreadName(const ScopedObjectAccessAlreadyRunnable& ts) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -1103,6 +1121,9 @@ class Thread {
   friend class EntrypointsOrderTest;  // To test the order of tls entries.
 
   DISALLOW_COPY_AND_ASSIGN(Thread);
+
+  // Count for performed Ros2Ros compaction
+  int32_t count_performed_Ros2Ros_compaction;
 };
 
 std::ostream& operator<<(std::ostream& os, const Thread& thread);

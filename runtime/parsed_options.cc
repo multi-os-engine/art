@@ -199,11 +199,12 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
 #endif
   // If background_collector_type_ is kCollectorTypeNone, it defaults to the collector_type_ after
   // parsing options.
-  background_collector_type_ = gc::kCollectorTypeSS;
+  background_collector_type_ = gc::kCollectorTypeNone;
   stack_size_ = 0;  // 0 means default.
   max_spins_before_thin_lock_inflation_ = Monitor::kDefaultMaxSpinsBeforeThinLockInflation;
   low_memory_mode_ = false;
   use_tlab_ = false;
+  use_Ros2Ros_compact_ = true;
   verify_pre_gc_heap_ = false;
   // Pre sweeping is the one that usually fails if the GC corrupted the heap.
   verify_pre_sweeping_heap_ = kIsDebugBuild;
@@ -416,6 +417,8 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
       low_memory_mode_ = true;
     } else if (option == "-XX:UseTLAB") {
       use_tlab_ = true;
+    } else if (option == "-XX:DisableRos2RosCompact") {
+      use_Ros2Ros_compact_ = false;
     } else if (StartsWith(option, "-D")) {
       properties_.push_back(option.substr(strlen("-D")));
     } else if (StartsWith(option, "-Xjnitrace:")) {

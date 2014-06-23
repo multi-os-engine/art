@@ -31,6 +31,7 @@ const char* PrettyCause(GcCause cause) {
     case kGcCauseForNativeAlloc: return "NativeAlloc";
     case kGcCauseCollectorTransition: return "CollectorTransition";
     case kGcCauseDisableMovingGc: return "DisableMovingGc";
+    case kGcCauseRos2RosCompact: return "Ros2RosCompact";
     case kGcCauseTrim: return "HeapTrim";
     default:
       LOG(FATAL) << "Unreachable";
