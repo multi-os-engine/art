@@ -796,5 +796,13 @@ const DexFile::TypeList* Class::GetInterfaceTypeList() {
   return GetDexFile().GetInterfacesList(*class_def);
 }
 
+void Class::AssertInitializedOrInitializingInThread(Thread* self) {
+  if (!IsInitialized()) {
+    CHECK(IsInitializing()) << PrettyClass(this) << " is not initializing: " << GetStatus();
+    CHECK_EQ(GetClinitThreadId(), self->GetTid()) << PrettyClass(this)
+                                                  << " is initializing in a different thread";
+  }
+}
+
 }  // namespace mirror
 }  // namespace art
