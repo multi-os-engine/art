@@ -159,7 +159,7 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, byte page_map_type) {
     if (it != free_page_runs_.rend() && (last_free_page_run = *it)->End(this) == base_ + footprint_) {
       // There is a free page run at the end.
       DCHECK(last_free_page_run->IsFree());
-      DCHECK_EQ(page_map_[ToPageMapIndex(last_free_page_run)], kPageMapEmpty);
+      DCHECK(IsFreePage(ToPageMapIndex(last_free_page_run)));
       last_free_page_run_size = last_free_page_run->ByteSize(this);
     } else {
       // There is no free page run at the end.
@@ -248,7 +248,7 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, byte page_map_type) {
     // Update the page map.
     size_t page_map_idx = ToPageMapIndex(res);
     for (size_t i = 0; i < num_pages; i++) {
-      DCHECK_EQ(page_map_[page_map_idx + i], kPageMapEmpty);
+      DCHECK(IsFreePage(page_map_idx + i));
     }
     switch (page_map_type) {
     case kPageMapRun:
@@ -301,8 +301,7 @@ size_t RosAlloc::FreePages(Thread* self, void* ptr, bool already_zero) {
     pm_part_type = kPageMapLargeObjectPart;
     break;
   default:
-    pm_part_type = kPageMapEmpty;
-    LOG(FATAL) << "Unreachable - RosAlloc::FreePages() : " << "pm_idx=" << pm_idx << ", pm_type="
+    LOG(FATAL) << "Unreachable - " << __FUNCTION__ << " : " << "pm_idx=" << pm_idx << ", pm_type="
                << static_cast<int>(pm_type) << ", ptr=" << std::hex
                << reinterpret_cast<intptr_t>(ptr);
     return 0;
@@ -330,7 +329,7 @@ size_t RosAlloc::FreePages(Thread* self, void* ptr, bool already_zero) {
   }
 
   if (kTraceRosAlloc) {
-    LOG(INFO) << "RosAlloc::FreePages() : 0x" << std::hex << reinterpret_cast<intptr_t>(ptr)
+    LOG(INFO) << __PRETTY_FUNCTION__ << " : 0x" << std::hex << reinterpret_cast<intptr_t>(ptr)
               << "-0x" << (reinterpret_cast<intptr_t>(ptr) + byte_size)
               << "(" << std::dec << (num_pages * kPageSize) << ")";
   }
@@ -347,7 +346,7 @@ size_t RosAlloc::FreePages(Thread* self, void* ptr, bool already_zero) {
   if (!free_page_runs_.empty()) {
     // Try to coalesce in the higher address direction.
     if (kTraceRosAlloc) {
-      LOG(INFO) << "RosAlloc::FreePages() : trying to coalesce a free page run 0x"
+      LOG(INFO) << __PRETTY_FUNCTION__ << "RosAlloc::FreePages() : trying to coalesce a free page run 0x"
                 << std::hex << reinterpret_cast<uintptr_t>(fpr) << " [" << std::dec << pm_idx << "] -0x"
                 << std::hex << reinterpret_cast<uintptr_t>(fpr->End(this)) << " [" << std::dec
                 << (fpr->End(this) == End() ? page_map_size_ : ToPageMapIndex(fpr->End(this))) << "]";
@@ -497,27 +496,26 @@ size_t RosAlloc::FreeInternal(Thread* self, void* ptr) {
                 << ", page_map_entry=" << static_cast<int>(page_map_entry);
     }
     switch (page_map_[pm_idx]) {
-      case kPageMapEmpty:
-        LOG(FATAL) << "Unreachable - page map type: " << page_map_[pm_idx];
-        return 0;
       case kPageMapLargeObject:
         return FreePages(self, ptr, false);
       case kPageMapLargeObjectPart:
         LOG(FATAL) << "Unreachable - page map type: " << page_map_[pm_idx];
         return 0;
-      case kPageMapRun:
       case kPageMapRunPart: {
-        size_t pi = pm_idx;
-        DCHECK(page_map_[pi] == kPageMapRun || page_map_[pi] == kPageMapRunPart);
         // Find the beginning of the run.
-        while (page_map_[pi] != kPageMapRun) {
-          pi--;
-          DCHECK_LT(pi, capacity_ / kPageSize);
-        }
-        DCHECK_EQ(page_map_[pi], kPageMapRun);
-        run = reinterpret_cast<Run*>(base_ + pi * kPageSize);
+        do {
+          --pm_idx;
+          DCHECK_LT(pm_idx, capacity_ / kPageSize);
+        } while (page_map_[pm_idx] != kPageMapRun);
+      case kPageMapRun:
+        run = reinterpret_cast<Run*>(base_ + pm_idx * kPageSize);
         DCHECK_EQ(run->magic_num_, kMagicNum);
         break;
+      case kPageMapReleased:
+        // Fall-through.
+      case kPageMapEmpty:
+        LOG(FATAL) << "Unreachable - page map type: " << page_map_[pm_idx];
+        return 0;
       }
       default:
         LOG(FATAL) << "Unreachable - page map type: " << page_map_[pm_idx];
@@ -1358,6 +1356,8 @@ std::string RosAlloc::DumpPageMap() {
   for (size_t i = 0; i < end; ++i) {
     byte pm = page_map_[i];
     switch (pm) {
+      case kPageMapReleased:
+        // Fall-through.
       case kPageMapEmpty: {
         FreePageRun* fpr = reinterpret_cast<FreePageRun*>(base_ + i * kPageSize);
         if (free_page_runs_.find(fpr) != free_page_runs_.end()) {
@@ -1441,43 +1441,46 @@ size_t RosAlloc::UsableSize(void* ptr) {
   size_t pm_idx = RoundDownToPageMapIndex(ptr);
   MutexLock mu(Thread::Current(), lock_);
   switch (page_map_[pm_idx]) {
-  case kPageMapEmpty:
-    LOG(FATAL) << "Unreachable - RosAlloc::UsableSize(): pm_idx=" << pm_idx << ", ptr=" << std::hex
-               << reinterpret_cast<intptr_t>(ptr);
-    break;
-  case kPageMapLargeObject: {
-    size_t num_pages = 1;
-    size_t idx = pm_idx + 1;
-    size_t end = page_map_size_;
-    while (idx < end && page_map_[idx] == kPageMapLargeObjectPart) {
-      num_pages++;
-      idx++;
+    case kPageMapReleased:
+      // Fall-through.
+    case kPageMapEmpty:
+      LOG(FATAL) << "Unreachable - RosAlloc::UsableSize(): pm_idx=" << pm_idx << ", ptr=" << std::hex
+                 << reinterpret_cast<intptr_t>(ptr);
+      break;
+    case kPageMapLargeObject: {
+      size_t num_pages = 1;
+      size_t idx = pm_idx + 1;
+      size_t end = page_map_size_;
+      while (idx < end && page_map_[idx] == kPageMapLargeObjectPart) {
+        num_pages++;
+        idx++;
+      }
+      return num_pages * kPageSize;
     }
-    return num_pages * kPageSize;
-  }
-  case kPageMapLargeObjectPart:
-    LOG(FATAL) << "Unreachable - RosAlloc::UsableSize(): pm_idx=" << pm_idx << ", ptr=" << std::hex
-               << reinterpret_cast<intptr_t>(ptr);
-    break;
-  case kPageMapRun:
-  case kPageMapRunPart: {
-    // Find the beginning of the run.
-    while (page_map_[pm_idx] != kPageMapRun) {
-      pm_idx--;
-      DCHECK_LT(pm_idx, capacity_ / kPageSize);
+    case kPageMapLargeObjectPart:
+      LOG(FATAL) << "Unreachable - RosAlloc::UsableSize(): pm_idx=" << pm_idx << ", ptr=" << std::hex
+                 << reinterpret_cast<intptr_t>(ptr);
+      break;
+    case kPageMapRun:
+    case kPageMapRunPart: {
+      // Find the beginning of the run.
+      while (page_map_[pm_idx] != kPageMapRun) {
+        pm_idx--;
+        DCHECK_LT(pm_idx, capacity_ / kPageSize);
+      }
+      DCHECK_EQ(page_map_[pm_idx], kPageMapRun);
+      Run* run = reinterpret_cast<Run*>(base_ + pm_idx * kPageSize);
+      DCHECK_EQ(run->magic_num_, kMagicNum);
+      size_t idx = run->size_bracket_idx_;
+      size_t offset_from_slot_base = reinterpret_cast<byte*>(ptr)
+          - (reinterpret_cast<byte*>(run) + headerSizes[idx]);
+      DCHECK_EQ(offset_from_slot_base % bracketSizes[idx], static_cast<size_t>(0));
+      return IndexToBracketSize(idx);
     }
-    DCHECK_EQ(page_map_[pm_idx], kPageMapRun);
-    Run* run = reinterpret_cast<Run*>(base_ + pm_idx * kPageSize);
-    DCHECK_EQ(run->magic_num_, kMagicNum);
-    size_t idx = run->size_bracket_idx_;
-    size_t offset_from_slot_base = reinterpret_cast<byte*>(ptr)
-        - (reinterpret_cast<byte*>(run) + headerSizes[idx]);
-    DCHECK_EQ(offset_from_slot_base % bracketSizes[idx], static_cast<size_t>(0));
-    return IndexToBracketSize(idx);
-  }
-  default:
-    LOG(FATAL) << "Unreachable - page map type: " << page_map_[pm_idx];
-    break;
+    default: {
+      LOG(FATAL) << "Unreachable - page map type: " << page_map_[pm_idx];
+      break;
+    }
   }
   return 0;
 }
@@ -1490,7 +1493,7 @@ bool RosAlloc::Trim() {
   if (it != free_page_runs_.rend() && (last_free_page_run = *it)->End(this) == base_ + footprint_) {
     // Remove the last free page run, if any.
     DCHECK(last_free_page_run->IsFree());
-    DCHECK_EQ(page_map_[ToPageMapIndex(last_free_page_run)], kPageMapEmpty);
+    DCHECK(IsFreePage(ToPageMapIndex(last_free_page_run)));
     DCHECK_EQ(last_free_page_run->ByteSize(this) % kPageSize, static_cast<size_t>(0));
     DCHECK_EQ(last_free_page_run->End(this), base_ + footprint_);
     free_page_runs_.erase(last_free_page_run);
@@ -1500,7 +1503,7 @@ bool RosAlloc::Trim() {
     size_t new_num_of_pages = new_footprint / kPageSize;
     DCHECK_GE(page_map_size_, new_num_of_pages);
     // Zero out the tail of the page map.
-    byte* zero_begin = page_map_ + new_num_of_pages;
+    byte* zero_begin = const_cast<byte*>(page_map_) + new_num_of_pages;
     byte* madvise_begin = AlignUp(zero_begin, kPageSize);
     DCHECK_LE(madvise_begin, page_map_mem_map_->End());
     size_t madvise_size = page_map_mem_map_->End() - madvise_begin;
@@ -1543,6 +1546,8 @@ void RosAlloc::InspectAll(void (*handler)(void* start, void* end, size_t used_by
   while (i < pm_end) {
     byte pm = page_map_[i];
     switch (pm) {
+      case kPageMapReleased:
+        // Fall-through.
       case kPageMapEmpty: {
         // The start of a free page run.
         FreePageRun* fpr = reinterpret_cast<FreePageRun*>(base_ + i * kPageSize);
@@ -1558,10 +1563,8 @@ void RosAlloc::InspectAll(void (*handler)(void* start, void* end, size_t used_by
         void* end = reinterpret_cast<byte*>(fpr) + fpr_size;
         handler(start, end, 0, arg);
         size_t num_pages = fpr_size / kPageSize;
-        if (kIsDebugBuild) {
-          for (size_t j = i + 1; j < i + num_pages; ++j) {
-            DCHECK_EQ(page_map_[j], kPageMapEmpty);
-          }
+        for (size_t j = i + 1; j < i + num_pages; ++j) {
+          DCHECK(IsFreePage(j));
         }
         i += fpr_size / kPageSize;
         DCHECK_LE(i, pm_end);
@@ -1579,10 +1582,8 @@ void RosAlloc::InspectAll(void (*handler)(void* start, void* end, size_t used_by
         void* end = base_ + (i + num_pages) * kPageSize;
         size_t used_bytes = num_pages * kPageSize;
         handler(start, end, used_bytes, arg);
-        if (kIsDebugBuild) {
-          for (size_t j = i + 1; j < i + num_pages; ++j) {
-            DCHECK_EQ(page_map_[j], kPageMapLargeObjectPart);
-          }
+        for (size_t j = i + 1; j < i + num_pages; ++j) {
+          DCHECK_EQ(page_map_[j], kPageMapLargeObjectPart);
         }
         i += num_pages;
         DCHECK_LE(i, pm_end);
@@ -1865,7 +1866,7 @@ void RosAlloc::ObjectsAllocatedCallback(void* start, void* end, size_t used_byte
 void RosAlloc::Verify() {
   Thread* self = Thread::Current();
   CHECK(Locks::mutator_lock_->IsExclusiveHeld(self))
-      << "The mutator locks isn't exclusively locked at RosAlloc::Verify()";
+      << "The mutator locks isn't exclusively locked at " << __PRETTY_FUNCTION__;
   MutexLock mu(self, *Locks::thread_list_lock_);
   ReaderMutexLock wmu(self, bulk_free_lock_);
   std::vector<Run*> runs;
@@ -1876,6 +1877,8 @@ void RosAlloc::Verify() {
     while (i < pm_end) {
       byte pm = page_map_[i];
       switch (pm) {
+        case kPageMapReleased:
+          // Fall-through.
         case kPageMapEmpty: {
           // The start of a free page run.
           FreePageRun* fpr = reinterpret_cast<FreePageRun*>(base_ + i * kPageSize);
@@ -1889,7 +1892,7 @@ void RosAlloc::Verify() {
           CHECK_GT(num_pages, static_cast<uintptr_t>(0))
               << "A free page run size must be > 0 : " << fpr_size;
           for (size_t j = i + 1; j < i + num_pages; ++j) {
-            CHECK_EQ(page_map_[j], kPageMapEmpty)
+            CHECK(IsFreePage(j))
                 << "A mismatch between the page map table for kPageMapEmpty "
                 << " at page index " << j
                 << " and the free page run size : page index range : "
@@ -2097,53 +2100,66 @@ size_t RosAlloc::ReleasePages() {
   Thread* self = Thread::Current();
   size_t reclaimed_bytes = 0;
   size_t i = 0;
-  while (true) {
-    MutexLock mu(self, lock_);
-    // Check the page map size which might have changed due to grow/shrink.
-    size_t pm_end = page_map_size_;
-    if (i >= pm_end) {
-      // Reached the end.
-      break;
-    }
+  while (i < page_map_size_) {  // Check the page map size which might have changed due to grow/shrink.
     byte pm = page_map_[i];
     switch (pm) {
       case kPageMapEmpty: {
-        // The start of a free page run. Release pages.
-        FreePageRun* fpr = reinterpret_cast<FreePageRun*>(base_ + i * kPageSize);
-        DCHECK(free_page_runs_.find(fpr) != free_page_runs_.end());
-        size_t fpr_size = fpr->ByteSize(this);
-        DCHECK(IsAligned<kPageSize>(fpr_size));
-        byte* start = reinterpret_cast<byte*>(fpr);
-        if (kIsDebugBuild) {
-          // In the debug build, the first page of a free page run
-          // contains a magic number for debugging. Exclude it.
-          start = reinterpret_cast<byte*>(fpr) + kPageSize;
+        // Only lock if we have an empty page since we want to prevent other threads racing in.
+        MutexLock mu(self, lock_);
+        // Check that it's still empty after we acquired the lock since another thread could have
+        // raced in and placed an allocation here.
+        pm = page_map_[i];
+        if (LIKELY(pm == kPageMapEmpty)) {
+          // The start of a free page run. Release pages.
+          FreePageRun* fpr = reinterpret_cast<FreePageRun*>(base_ + i * kPageSize);
+          DCHECK(free_page_runs_.find(fpr) != free_page_runs_.end());
+          size_t fpr_size = fpr->ByteSize(this);
+          DCHECK(IsAligned<kPageSize>(fpr_size));
+          byte* start = reinterpret_cast<byte*>(fpr);
+          reclaimed_bytes += ReleasePageRange(start, start + fpr_size);
+          i += fpr_size / kPageSize;
+          DCHECK_LE(i, page_map_size_);
         }
-        byte* end = reinterpret_cast<byte*>(fpr) + fpr_size;
-        if (!kMadviseZeroes) {
-          memset(start, 0, end - start);
-        }
-        CHECK_EQ(madvise(start, end - start, MADV_DONTNEED), 0);
-        reclaimed_bytes += fpr_size;
-        size_t num_pages = fpr_size / kPageSize;
-        if (kIsDebugBuild) {
-          for (size_t j = i + 1; j < i + num_pages; ++j) {
-            DCHECK_EQ(page_map_[j], kPageMapEmpty);
-          }
-        }
-        i += num_pages;
-        DCHECK_LE(i, pm_end);
         break;
       }
       case kPageMapLargeObject:      // Fall through.
       case kPageMapLargeObjectPart:  // Fall through.
       case kPageMapRun:              // Fall through.
       case kPageMapRunPart:          // Fall through.
+      case kPageMapReleased:         // Fall through since it is already released.
         ++i;
         break;  // Skip.
       default:
         LOG(FATAL) << "Unreachable - page map type: " << pm;
         break;
+    }
+  }
+  return reclaimed_bytes;
+}
+
+size_t RosAlloc::ReleasePageRange(byte* start, byte* end) {
+  DCHECK_ALIGNED(start, kPageSize);
+  DCHECK_ALIGNED(end, kPageSize);
+  DCHECK_LT(start, end);
+  if (kIsDebugBuild) {
+    // In the debug build, the first page of a free page run
+    // contains a magic number for debugging. Exclude it.
+    start += kPageSize;
+  }
+  if (!kMadviseZeroes) {
+    memset(start, 0, end - start);
+  }
+  CHECK_EQ(madvise(start, end - start, MADV_DONTNEED), 0);
+  size_t pm_idx = ToPageMapIndex(start);
+  size_t reclaimed_bytes = 0;
+  // Calculate reclaimed bytes and upate page map.
+  const size_t max_idx = pm_idx + (end - start) / kPageSize;
+  for (; pm_idx < max_idx; ++pm_idx) {
+    DCHECK(IsFreePage(pm_idx));
+    if (page_map_[pm_idx] == kPageMapEmpty) {
+      // Mark the page as released and update how many bytes we released.
+      reclaimed_bytes += kPageSize;
+      page_map_[pm_idx] = kPageMapReleased;
     }
   }
   return reclaimed_bytes;
