@@ -456,7 +456,7 @@ void MIRGraph::InitRegLocations() {
 
   reg_location_ = loc;
 
-  int num_regs = cu_->num_dalvik_registers;
+  int num_regs = GetNumOfCodeVRs();
 
   /* Add types of incoming arguments based on signature */
   int num_ins = cu_->num_ins;

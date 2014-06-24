@@ -95,7 +95,6 @@ CompilationUnit::CompilationUnit(ArenaPool* pool)
     compiler(nullptr),
     instruction_set(kNone),
     target64(false),
-    num_dalvik_registers(0),
     insns(nullptr),
     num_ins(0),
     num_outs(0),
@@ -813,7 +812,6 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
         (cu.instruction_set == kMips));
 
   /* Adjust this value accordingly once inlining is performed */
-  cu.num_dalvik_registers = code_item->registers_size_;
   // TODO: set this from command line
   cu.compiler_flip_match = false;
   bool use_match = !cu.compiler_method_match.empty();
