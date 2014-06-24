@@ -202,6 +202,7 @@ size_t DisassemblerX86::DumpInstruction(std::ostream& os, const uint8_t* instr) 
   bool store = false;  // stores to memory (ie rm is on the left)
   bool load = false;  // loads from memory (ie rm is on the right)
   bool byte_operand = false;
+  bool byte_second_operand = false;  // true if the second is byte and differ from first one
   bool target_specific = false;  // register name depends on target (64 vs 32 bits).
   bool ax = false;  // implicit use of ax
   bool cx = false;  // implicit use of cx
@@ -717,9 +718,9 @@ DISASSEMBLER_ENTRY(cmp,
         break;
       case 0xAF: opcode << "imul"; has_modrm = true; load = true; break;
       case 0xB1: opcode << "cmpxchg"; has_modrm = true; store = true; break;
-      case 0xB6: opcode << "movzxb"; has_modrm = true; load = true; break;
+      case 0xB6: opcode << "movzxb"; has_modrm = true; load = true; byte_second_operand = true; break;
       case 0xB7: opcode << "movzxw"; has_modrm = true; load = true; break;
-      case 0xBE: opcode << "movsxb"; has_modrm = true; load = true; break;
+      case 0xBE: opcode << "movsxb"; has_modrm = true; load = true; byte_second_operand = true; rex |= (rex == 0 ? 0 : 0b1000); break;
       case 0xBF: opcode << "movsxw"; has_modrm = true; load = true; break;
       case 0xC5:
         if (prefix[2] == 0x66) {
@@ -1097,7 +1098,8 @@ DISASSEMBLER_ENTRY(cmp,
     } else {
       if (mod == 3) {
         if (!no_ops) {
-          DumpRmReg(address, rex_w, rm, byte_operand, prefix[2], load ? src_reg_file : dst_reg_file);
+          DumpRmReg(address, rex_w, rm, byte_operand || byte_second_operand,
+                    prefix[2], load ? src_reg_file : dst_reg_file);
         }
       } else {
         address << "[";
