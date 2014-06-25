@@ -1816,7 +1816,7 @@ RegStorage X86Mir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
   }
 
   if (!in_to_reg_storage_mapping_.IsInitialized()) {
-    int start_vreg = cu_->num_dalvik_registers - cu_->num_ins;
+    int start_vreg = cu_->mir_graph->GetNumOfLocalCodeVRs();
     RegLocation* arg_locs = &mir_graph_->reg_location_[start_vreg];
 
     InToRegStorageX86_64Mapper mapper;
@@ -1873,7 +1873,7 @@ void X86Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
     return;
   }
 
-  int start_vreg = cu_->num_dalvik_registers - cu_->num_ins;
+  int start_vreg = cu_->mir_graph->GetNumOfLocalCodeVRs();
   /*
    * Copy incoming arguments to their proper home locations.
    * NOTE: an older version of dx had an issue in which
@@ -2030,9 +2030,6 @@ int X86Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
         next_arg++;
       }
     }
-
-    // Logic below assumes that Method pointer is at offset zero from SP.
-    DCHECK_EQ(VRegOffset(static_cast<int>(kVRegMethodPtrBaseReg)), 0);
 
     // The rest can be copied together
     int start_offset = SRegOffset(info->args[last_mapped_in + size_of_the_last_mapped].s_reg_low);
