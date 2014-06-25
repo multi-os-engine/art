@@ -497,7 +497,7 @@ void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
     return;
   }
 
-  int start_vreg = cu_->num_dalvik_registers - cu_->num_ins;
+  int start_vreg = mir_graph_->GetNumOfLocalCodeVRs();
   /*
    * Copy incoming arguments to their proper home locations.
    * NOTE: an older version of dx had an issue in which
@@ -1046,9 +1046,6 @@ int Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
       next_arg++;
     }
   }
-
-  // Logic below assumes that Method pointer is at offset zero from SP.
-  DCHECK_EQ(VRegOffset(static_cast<int>(kVRegMethodPtrBaseReg)), 0);
 
   // The first 3 arguments are passed via registers.
   // TODO: For 64-bit, instead of hardcoding 4 for Method* size, we should either
