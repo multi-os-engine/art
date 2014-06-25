@@ -1,0 +1,8 @@
+Code-Review+1: Serguei Katkov <serguei.i.katkov@intel.com>
+Code-Review+2: Ian Rogers <irogers@google.com>
+Verified+1: Ian Rogers <irogers@google.com>
+Submitted-by: Ian Rogers <irogers@google.com>
+Submitted-at: Wed, 25 Jun 2014 05:11:55 +0000
+Reviewed-on: https://android-review.googlesource.com/99251
+Project: platform/art
+Branch: refs/heads/master
