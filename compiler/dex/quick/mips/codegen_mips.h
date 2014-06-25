@@ -185,10 +185,10 @@ class MipsMir2Lir FINAL : public Mir2Lir {
 
     // TODO: collapse r_dest.
     LIR* LoadBaseDispBody(RegStorage r_base, int displacement, RegStorage r_dest,
-                          RegStorage r_dest_hi, OpSize size);
+                          OpSize size);
     // TODO: collapse r_src.
     LIR* StoreBaseDispBody(RegStorage r_base, int displacement, RegStorage r_src,
-                           RegStorage r_src_hi, OpSize size);
+                           OpSize size);
     void SpillCoreRegs();
     void UnSpillCoreRegs();
     static const MipsEncodingMap EncodingMap[kMipsLast];

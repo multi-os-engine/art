@@ -342,6 +342,11 @@ LIR* MipsMir2Lir::OpCondRegReg(OpKind op, ConditionCode cc, RegStorage r_dest, R
 
 LIR* MipsMir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
   LIR *res;
+  if (!r_dest.IsPair()) {
+    DCHECK(r_dest.IsFloat());
+    int reg_num = (r_dest.GetRegNum() & ~1) | RegStorage::kFloatingPoint;
+    r_dest = RegStorage(RegStorage::k64BitPair, reg_num, reg_num + 1);
+  }
   res = LoadConstantNoClobber(r_dest.GetLow(), Low32Bits(value));
   LoadConstantNoClobber(r_dest.GetHigh(), High32Bits(value));
   return res;
@@ -448,7 +453,7 @@ LIR* MipsMir2Lir::StoreBaseIndexed(RegStorage r_base, RegStorage r_index, RegSto
 
 // FIXME: don't split r_dest into 2 containers.
 LIR* MipsMir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStorage r_dest,
-                                   RegStorage r_dest_hi, OpSize size) {
+                                   OpSize size) {
 /*
  * Load value from base + displacement.  Optionally perform null check
  * on base (which must have an associated s_reg and MIR).  If not
@@ -462,23 +467,23 @@ LIR* MipsMir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStora
   LIR *load2 = NULL;
   MipsOpCode opcode = kMipsNop;
   bool short_form = IS_SIMM16(displacement);
-  bool pair = false;
+  bool pair = r_dest.IsPair();
 
   switch (size) {
     case k64:
     case kDouble:
-      pair = true;
-      opcode = kMipsLw;
+      if (!pair) {
+        // Form 64-bit pair
+        DCHECK(r_dest.IsDouble());
+        int reg_num = (r_dest.GetRegNum() & ~1) | RegStorage::kFloatingPoint;
+        r_dest = RegStorage(RegStorage::k64BitPair, reg_num, reg_num + 1);
+        pair = 1;
+      }
       if (r_dest.IsFloat()) {
+        DCHECK_EQ(r_dest.GetLowReg(), r_dest.GetHighReg() - 1);
         opcode = kMipsFlwc1;
-        if (r_dest.IsDouble()) {
-          int reg_num = (r_dest.GetRegNum() << 1) | RegStorage::kFloatingPoint;
-          r_dest = RegStorage(RegStorage::k64BitSolo, reg_num, reg_num + 1);
-        } else {
-          DCHECK(r_dest_hi.IsFloat());
-          DCHECK_EQ(r_dest.GetReg(), r_dest_hi.GetReg() - 1);
-          r_dest_hi.SetReg(r_dest.GetReg() + 1);
-        }
+      } else {
+        opcode = kMipsLw;
       }
       short_form = IS_SIMM16_2WORD(displacement);
       DCHECK_EQ((displacement & 0x3), 0);
@@ -515,15 +520,15 @@ LIR* MipsMir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStora
     if (!pair) {
       load = res = NewLIR3(opcode, r_dest.GetReg(), displacement, r_base.GetReg());
     } else {
-      load = res = NewLIR3(opcode, r_dest.GetReg(), displacement + LOWORD_OFFSET, r_base.GetReg());
-      load2 = NewLIR3(opcode, r_dest_hi.GetReg(), displacement + HIWORD_OFFSET, r_base.GetReg());
+      load = res = NewLIR3(opcode, r_dest.GetLowReg(), displacement + LOWORD_OFFSET, r_base.GetReg());
+      load2 = NewLIR3(opcode, r_dest.GetHighReg(), displacement + HIWORD_OFFSET, r_base.GetReg());
     }
   } else {
     if (pair) {
       RegStorage r_tmp = AllocTemp();
       res = OpRegRegImm(kOpAdd, r_tmp, r_base, displacement);
-      load = NewLIR3(opcode, r_dest.GetReg(), LOWORD_OFFSET, r_tmp.GetReg());
-      load2 = NewLIR3(opcode, r_dest_hi.GetReg(), HIWORD_OFFSET, r_tmp.GetReg());
+      load = NewLIR3(opcode, r_dest.GetLowReg(), LOWORD_OFFSET, r_tmp.GetReg());
+      load2 = NewLIR3(opcode, r_dest.GetHighReg(), HIWORD_OFFSET, r_tmp.GetReg());
       FreeTemp(r_tmp);
     } else {
       RegStorage r_tmp = (r_base == r_dest) ? AllocTemp() : r_dest;
@@ -558,16 +563,12 @@ LIR* MipsMir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r
   if (size == kWord) {
     size = k32;
   }
-  if (size == k64 || size == kDouble) {
-    return LoadBaseDispBody(r_base, displacement, r_dest.GetLow(), r_dest.GetHigh(), size);
-  } else {
-    return LoadBaseDispBody(r_base, displacement, r_dest, RegStorage::InvalidReg(), size);
-  }
+  return LoadBaseDispBody(r_base, displacement, r_dest, size);
 }
 
 // FIXME: don't split r_dest into 2 containers.
 LIR* MipsMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement,
-                                    RegStorage r_src, RegStorage r_src_hi, OpSize size) {
+                                    RegStorage r_src, OpSize size) {
   LIR *res;
   LIR *store = NULL;
   LIR *store2 = NULL;
@@ -578,17 +579,18 @@ LIR* MipsMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement,
   switch (size) {
     case k64:
     case kDouble:
-      opcode = kMipsSw;
+      if (!pair) {
+        // Form 64-bit pair
+        DCHECK(r_src.IsDouble());
+        int reg_num = (r_src.GetRegNum() & ~1) | RegStorage::kFloatingPoint;
+        r_src = RegStorage(RegStorage::k64BitPair, reg_num, reg_num + 1);
+        pair = 1;
+      }
       if (r_src.IsFloat()) {
+        DCHECK_EQ(r_src.GetLowReg(), r_src.GetHighReg() - 1);
         opcode = kMipsFswc1;
-        if (r_src.IsDouble()) {
-          int reg_num = (r_src.GetRegNum() << 1) | RegStorage::kFloatingPoint;
-          r_src = RegStorage(RegStorage::k64BitPair, reg_num, reg_num + 1);
-        } else {
-          DCHECK(r_src_hi.IsFloat());
-          DCHECK_EQ(r_src.GetReg(), (r_src_hi.GetReg() - 1));
-          r_src_hi.SetReg(r_src.GetReg() + 1);
-        }
+      } else {
+        opcode = kMipsSw;
       }
       short_form = IS_SIMM16_2WORD(displacement);
       DCHECK_EQ((displacement & 0x3), 0);
@@ -620,8 +622,8 @@ LIR* MipsMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement,
     if (!pair) {
       store = res = NewLIR3(opcode, r_src.GetReg(), displacement, r_base.GetReg());
     } else {
-      store = res = NewLIR3(opcode, r_src.GetReg(), displacement + LOWORD_OFFSET, r_base.GetReg());
-      store2 = NewLIR3(opcode, r_src_hi.GetReg(), displacement + HIWORD_OFFSET, r_base.GetReg());
+      store = res = NewLIR3(opcode, r_src.GetLowReg(), displacement + LOWORD_OFFSET, r_base.GetReg());
+      store2 = NewLIR3(opcode, r_src.GetHighReg(), displacement + HIWORD_OFFSET, r_base.GetReg());
     }
   } else {
     RegStorage r_scratch = AllocTemp();
@@ -629,8 +631,8 @@ LIR* MipsMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement,
     if (!pair) {
       store =  NewLIR3(opcode, r_src.GetReg(), 0, r_scratch.GetReg());
     } else {
-      store =  NewLIR3(opcode, r_src.GetReg(), LOWORD_OFFSET, r_scratch.GetReg());
-      store2 = NewLIR3(opcode, r_src_hi.GetReg(), HIWORD_OFFSET, r_scratch.GetReg());
+      store =  NewLIR3(opcode, r_src.GetLowReg(), LOWORD_OFFSET, r_scratch.GetReg());
+      store2 = NewLIR3(opcode, r_src.GetHighReg(), HIWORD_OFFSET, r_scratch.GetReg());
     }
     FreeTemp(r_scratch);
   }
@@ -660,11 +662,7 @@ LIR* MipsMir2Lir::StoreBaseDisp(RegStorage r_base, int displacement, RegStorage 
   if (size == kWord) {
     size = k32;
   }
-  if (size == k64 || size == kDouble) {
-    return StoreBaseDispBody(r_base, displacement, r_src.GetLow(), r_src.GetHigh(), size);
-  } else {
-    return StoreBaseDispBody(r_base, displacement, r_src, RegStorage::InvalidReg(), size);
-  }
+  return StoreBaseDispBody(r_base, displacement, r_src, size);
 }
 
 LIR* MipsMir2Lir::OpThreadMem(OpKind op, ThreadOffset<4> thread_offset) {
