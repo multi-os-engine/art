@@ -465,6 +465,7 @@ class X86Mir2Lir : public Mir2Lir {
    * @returns true if a register is byte addressable.
    */
   bool IsByteRegister(RegStorage reg);
+  bool GenInlinedArrayCopyCharArray(CallInfo* info);
 
   /*
    * @brief generate inline code for fast case of Strng.indexOf.
