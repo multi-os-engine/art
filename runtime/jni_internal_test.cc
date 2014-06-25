@@ -1472,6 +1472,11 @@ TEST_F(JniInternalTest, DeleteWeakGlobalRef) {
   env_->DeleteWeakGlobalRef(o2);
 }
 
+TEST_F(JniInternalTest, ExceptionDescribe) {
+  env_->ExceptionClear();
+  env_->ExceptionDescribe();
+}
+
 TEST_F(JniInternalTest, Throw) {
   EXPECT_EQ(JNI_ERR, env_->Throw(nullptr));
 
