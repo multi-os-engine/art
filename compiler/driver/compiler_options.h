@@ -52,6 +52,7 @@ class CompilerOptions {
     tiny_method_threshold_(kDefaultTinyMethodThreshold),
     num_dex_methods_threshold_(kDefaultNumDexMethodsThreshold),
     generate_gdb_information_(false),
+    generate_dex_map_(false),
     top_k_profile_threshold_(kDefaultTopKProfileThreshold),
     include_debug_symbols_(kDefaultIncludeDebugSymbols),
     explicit_null_checks_(true),
@@ -69,6 +70,7 @@ class CompilerOptions {
                   size_t tiny_method_threshold,
                   size_t num_dex_methods_threshold,
                   bool generate_gdb_information,
+                  bool generate_dex_map,
                   double top_k_profile_threshold,
                   bool include_debug_symbols,
                   bool explicit_null_checks,
@@ -85,6 +87,7 @@ class CompilerOptions {
     tiny_method_threshold_(tiny_method_threshold),
     num_dex_methods_threshold_(num_dex_methods_threshold),
     generate_gdb_information_(generate_gdb_information),
+    generate_dex_map_(generate_dex_map),
     top_k_profile_threshold_(top_k_profile_threshold),
     include_debug_symbols_(include_debug_symbols),
     explicit_null_checks_(explicit_null_checks),
@@ -188,6 +191,10 @@ class CompilerOptions {
     return generate_gdb_information_;
   }
 
+  bool GetGenerateDexMap() const {
+    return generate_dex_map_;
+  }
+
  private:
   CompilerFilter compiler_filter_;
   size_t huge_method_threshold_;
@@ -196,6 +203,7 @@ class CompilerOptions {
   size_t tiny_method_threshold_;
   size_t num_dex_methods_threshold_;
   bool generate_gdb_information_;
+  bool generate_dex_map_;
   // When using a profile file only the top K% of the profiled samples will be compiled.
   double top_k_profile_threshold_;
   bool include_debug_symbols_;
