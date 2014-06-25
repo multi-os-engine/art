@@ -30,6 +30,12 @@
 #include "os.h"
 #include "utils.h"
 #include "vmap_table.h"
+#include "mapping_table.h"
+#include "oat_file-inl.h"
+
+#ifdef VTUNE_ART
+#include "vtune_support.h"
+#endif
 
 namespace art {
 
@@ -76,7 +82,11 @@ OatFile* OatFile::Open(const std::string& filename,
     *error_msg = StringPrintf("Failed to open oat filename for reading: %s", strerror(errno));
     return NULL;
   }
-  return OpenElfFile(file.get(), location, requested_base, false, executable, error_msg);
+  OatFile* oat_file = OpenElfFile(file.get(), location, requested_base, false, executable, error_msg);
+  if (executable && oat_file) {
+    SendOatFileToVTune(*oat_file);
+  }
+  return oat_file;
 }
 
 OatFile* OatFile::OpenWritable(File* file, const std::string& location, std::string* error_msg) {
