@@ -1137,8 +1137,9 @@ static int dex2oat(int argc, char** argv) {
 
   if (compiler_filter_string == nullptr) {
     if (instruction_set == kMips) {
-      // TODO: fix compiler for Mips.
-      compiler_filter_string = "interpret-only";
+      // TODO: fix compiler for Mips64.
+      // compiler_filter_string = "interpret-only";
+      compiler_filter_string = "speed";
     } else if (image) {
       compiler_filter_string = "speed";
     } else {
