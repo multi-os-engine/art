@@ -194,12 +194,11 @@ ART_TEST_TARGET_GTEST_RULES :=
 define define-art-gtest-rule-target
   gtest_rule := test-art-target-gtest-$(1)$$($(2)ART_PHONY_TEST_TARGET_SUFFIX)
 
-  # Add the test dependencies to test-art-target-sync, which will be a prerequisit for the test
+  # Add the test dependencies to test-art-target-sync, which will be a prerequisite for the test
   # to ensure files are pushed to the device.
   TEST_ART_TARGET_SYNC_DEPS += \
     $$(ART_GTEST_$(1)_DEPS) \
     $$(ART_TARGET_NATIVETEST_OUT)/$$(TARGET_$(2)ARCH)/$(1) \
-    $$(TARGET_CORE_DEX_LOCATIONS) \
     $$($(2)TARGET_OUT_SHARED_LIBRARIES)/libjavacore.so
 
 .PHONY: $$(gtest_rule)

@@ -72,7 +72,7 @@ TEST_ART_TARGET_SYNC_DEPS += $(ART_TARGET_EXECUTABLES) $(TARGET_CORE_IMG_OUT) $(
 # $(3): the target (rule name), e.g. test-art-target-oat-default-HelloWorld64
 # $(4): -Xint or undefined - do we want to run with the interpreter or default.
 define define-test-art-oat-rule-target
-  # Add the test dependencies to test-art-target-sync, which will be a prerequisit for the test
+  # Add the test dependencies to test-art-target-sync, which will be a prerequisite for the test
   # to ensure files are pushed to the device.
   TEST_ART_TARGET_SYNC_DEPS += $$(ART_OAT_TEST_$(1)_DEX)
 
