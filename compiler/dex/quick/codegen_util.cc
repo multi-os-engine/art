@@ -267,8 +267,8 @@ void Mir2Lir::DumpLIRInsn(LIR* lir, unsigned char* base_addr) {
 }
 
 void Mir2Lir::DumpPromotionMap() {
-  int num_regs = cu_->num_dalvik_registers + mir_graph_->GetNumUsedCompilerTemps();
-  for (int i = 0; i < num_regs; i++) {
+  uint32_t num_regs = mir_graph_->GetNumOfCodeAndTempVRs();
+  for (uint32_t i = 0; i < num_regs; i++) {
     PromotionMap v_reg_map = promotion_map_[i];
     std::string buf;
     if (v_reg_map.fp_location == kLocPhysReg) {
@@ -276,12 +276,13 @@ void Mir2Lir::DumpPromotionMap() {
     }
 
     std::string buf3;
-    if (i < cu_->num_dalvik_registers) {
+    if (i < mir_graph_->GetNumOfCodeVRs()) {
       StringAppendF(&buf3, "%02d", i);
-    } else if (i == mir_graph_->GetMethodSReg()) {
+    } else if (i == mir_graph_->GetNumOfCodeVRs()) {
       buf3 = "Method*";
     } else {
-      StringAppendF(&buf3, "ct%d", i - cu_->num_dalvik_registers);
+      uint32_t diff = i - mir_graph_->GetNumOfCodeVRs();
+      StringAppendF(&buf3, "ct%d", diff);
     }
 
     LOG(INFO) << StringPrintf("V[%s] -> %s%d%s", buf3.c_str(),
