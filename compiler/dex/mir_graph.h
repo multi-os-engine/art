@@ -826,6 +826,14 @@ class MIRGraph {
   }
 
   /**
+   * @brief Used to obtain the number of special compiler temporaries being used.
+   * @return Returns the number of non-special compiler temporaries.
+   */
+  size_t GetNumSpecialCompilerTemps() const {
+    return num_special_compiler_temps_;
+  }
+
+  /**
    * @brief Used to set the total number of available non-special compiler temporaries.
    * @details Can fail setting the new max if there are more temps being used than the new_max.
    * @param new_max The new maximum number of non-special compiler temporaries.
@@ -846,6 +854,12 @@ class MIRGraph {
    * @return Returns the number of available temps.
    */
   size_t GetNumAvailableNonSpecialCompilerTemps();
+
+  /**
+   * @brief Provides the number of special compiler temps available.
+   * @return Returns the number of available special temps.
+   */
+  size_t GetNumAvailableSpecialCompilerTemps();
 
   /**
    * @brief Used to obtain an existing compiler temporary.
@@ -918,6 +932,38 @@ class MIRGraph {
   // Is this vreg in the in set?
   bool IsInVReg(int vreg) {
     return (vreg >= cu_->num_regs);
+  }
+
+  size_t GetNumOfCodeVRs() const {
+    return current_code_item_->registers_size_;
+  }
+
+  size_t GetNumOfCodeAndTempVRs() const {
+    return GetNumOfCodeVRs() + num_non_special_compiler_temps_ + max_available_special_compiler_temps_;
+  }
+
+  size_t GetNumOfLocalCodeVRs() const {
+    // This also refers to the first "in" VR
+    return GetNumOfCodeVRs() - current_code_item_->ins_size_;
+  }
+
+  size_t GetNumOfInVRs() const {
+    return current_code_item_->ins_size_;
+  }
+
+  size_t GetFirstTempVR() const {
+    // Temp VRs immediately follow code VRs
+    return GetNumOfCodeVRs();
+  }
+
+  size_t GetFirstSpecialTempVR() const {
+    // Special temps appear first in the ordering before non special temps
+    return GetNumOfCodeVRs();
+  }
+
+  size_t GetFirstNonSpecialTempVR() const {
+    // We always leave space for all the special temps before the non-special ones
+    return GetFirstSpecialTempVR() + max_available_special_compiler_temps_;
   }
 
   void DumpCheckStats();
@@ -1149,7 +1195,7 @@ class MIRGraph {
   GrowableArray<BasicBlockId>* dom_post_order_traversal_;
   GrowableArray<BasicBlockId>* topological_order_;
   int* i_dom_list_;
-  ArenaBitVector** def_block_matrix_;    // num_dalvik_register x num_blocks.
+  ArenaBitVector** def_block_matrix_;    // original num registers x num_blocks.
   std::unique_ptr<ScopedArenaAllocator> temp_scoped_alloc_;
   uint16_t* temp_insn_data_;
   uint32_t temp_bit_vector_size_;
@@ -1179,6 +1225,7 @@ class MIRGraph {
   int forward_branches_;
   GrowableArray<CompilerTemp*> compiler_temps_;
   size_t num_non_special_compiler_temps_;
+  size_t num_special_compiler_temps_;
   size_t max_available_non_special_compiler_temps_;
   size_t max_available_special_compiler_temps_;
   bool punt_to_interpreter_;                    // Difficult or not worthwhile - just interpret.

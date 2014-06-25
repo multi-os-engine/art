@@ -252,20 +252,7 @@ int Mir2Lir::SRegToPMap(int s_reg) {
   DCHECK_LT(s_reg, mir_graph_->GetNumSSARegs());
   DCHECK_GE(s_reg, 0);
   int v_reg = mir_graph_->SRegToVReg(s_reg);
-  if (v_reg >= 0) {
-    DCHECK_LT(v_reg, cu_->num_dalvik_registers);
-    return v_reg;
-  } else {
-    /*
-     * It must be the case that the v_reg for temporary is less than or equal to the
-     * base reg for temps. For that reason, "position" must be zero or positive.
-     */
-    unsigned int position = std::abs(v_reg) - std::abs(static_cast<int>(kVRegTempBaseReg));
-
-    // The temporaries are placed after dalvik registers in the promotion map
-    DCHECK_LT(position, mir_graph_->GetNumUsedCompilerTemps());
-    return cu_->num_dalvik_registers + position;
-  }
+  return v_reg;
 }
 
 // TODO: refactor following Alloc/Record routines - much commonality.
@@ -1168,7 +1155,7 @@ void Mir2Lir::DumpCounts(const RefCounts* arr, int size, const char* msg) {
  * optimization is disabled.
  */
 void Mir2Lir::DoPromotion() {
-  int dalvik_regs = cu_->num_dalvik_registers;
+  int dalvik_regs = mir_graph_->GetNumOfCodeVRs();
   int num_regs = dalvik_regs + mir_graph_->GetNumUsedCompilerTemps();
   const int promotion_threshold = 1;
   // Allocate the promotion map - one entry for each Dalvik vReg or compiler temp
