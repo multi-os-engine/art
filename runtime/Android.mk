@@ -193,6 +193,18 @@ LIBART_COMMON_SRC_FILES += \
 	entrypoints/quick/quick_throw_entrypoints.cc \
 	entrypoints/quick/quick_trampoline_entrypoints.cc
 
+LIBART_CFLAGS :=
+
+# Enable Intel VTune JIT API support
+LIBART_VTUNE := true
+
+ifeq ($(LIBART_VTUNE),true)
+  LIBART_CFLAGS += -DVTUNE_ART
+  LIBART_COMMON_SRC_FILES += \
+  	vtune/jitprofiling.cc \
+  	vtune_support.cc
+endif
+
 # Source files that only compile with GCC.
 LIBART_GCC_ONLY_SRC_FILES := \
 	interpreter/interpreter_goto_table_impl.cc
@@ -303,7 +315,6 @@ LIBART_ENUM_OPERATOR_OUT_HEADER_FILES := \
 	thread_state.h \
 	verifier/method_verifier.h
 
-LIBART_CFLAGS :=
 ifeq ($(ART_USE_PORTABLE_COMPILER),true)
   LIBART_CFLAGS += -DART_USE_PORTABLE_COMPILER=1
 endif
