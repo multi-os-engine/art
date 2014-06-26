@@ -111,12 +111,14 @@ TEST_F(OatTest, WriteRead) {
 
   ScopedObjectAccess soa(Thread::Current());
   ScratchFile tmp;
+  SafeMap<std::string, std::string> key_value_store;
+  key_value_store.Put(OatHeader::kImageLocationKey, "lue.art");
   OatWriter oat_writer(class_linker->GetBootClassPath(),
                        42U,
                        4096U,
-                       "lue.art",
                        compiler_driver_.get(),
-                       &timings);
+                       &timings,
+                       &key_value_store);
   bool success = compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                             !kIsTargetBuild,
                                             class_linker->GetBootClassPath(),
@@ -136,7 +138,7 @@ TEST_F(OatTest, WriteRead) {
   ASSERT_EQ(1U, oat_header.GetDexFileCount());  // core
   ASSERT_EQ(42U, oat_header.GetImageFileLocationOatChecksum());
   ASSERT_EQ(4096U, oat_header.GetImageFileLocationOatDataBegin());
-  ASSERT_EQ("lue.art", oat_header.GetImageFileLocation());
+  ASSERT_EQ("lue.art", std::string(oat_header.GetStoreValueByKey(OatHeader::kImageLocationKey)));
 
   const DexFile* dex_file = java_lang_dex_file_;
   uint32_t dex_file_checksum = dex_file->GetLocationChecksum();
@@ -195,7 +197,7 @@ TEST_F(OatTest, OatHeaderIsValid) {
                          &dex_files,
                          image_file_location_oat_checksum,
                          image_file_location_oat_begin,
-                         image_file_location);
+                         nullptr);
     ASSERT_TRUE(oat_header.IsValid());
 
     char* magic = const_cast<char*>(oat_header.GetMagic());

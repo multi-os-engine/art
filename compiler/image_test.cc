@@ -77,8 +77,8 @@ TEST_F(ImageTest, WriteRead) {
 
       t.NewTiming("WriteElf");
       ScopedObjectAccess soa(Thread::Current());
-      OatWriter oat_writer(class_linker->GetBootClassPath(),
-                           0, 0, "", compiler_driver_.get(), &timings);
+      OatWriter oat_writer(class_linker->GetBootClassPath(), 0, 0, compiler_driver_.get(), &timings,
+                           nullptr);
       bool success = compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                                 !kIsTargetBuild,
                                                 class_linker->GetBootClassPath(),
