@@ -25,7 +25,7 @@
 // 32-bit is enough for the suspend register.
 #define wSUSPEND w19
 // Register holding Thread::Current().
-#define xSELF x18
+#define xSELF x20
 // Frame Pointer
 #define xFP   x29
 // Link Register

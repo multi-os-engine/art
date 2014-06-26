@@ -141,7 +141,7 @@ enum A64NativeRegisterPool {
   rwsp = rw31,
   rsp = rx31,
   rA64_SUSPEND = rx19,
-  rA64_SELF = rx18,
+  rA64_SELF = rx20,
   rA64_SP = rx31,
   rA64_LR = rx30,
   /*
@@ -150,7 +150,7 @@ enum A64NativeRegisterPool {
    * allocated as 32-bit temp registers.
    */
   rA32_SUSPEND = rw19,
-  rA32_SELF = rw18,
+  rA32_SELF = rw20,
   rA32_SP = rw31,
   rA32_LR = rw30
 };

@@ -62,7 +62,7 @@ constexpr uint32_t Arm64CalleeSaveCoreSpills(Runtime::CalleeSaveType type) {
   return kArm64CalleeSaveRefSpills |
       (type == Runtime::kRefsAndArgs ? kArm64CalleeSaveArgSpills : 0) |
       (type == Runtime::kSaveAll ? kArm64CalleeSaveAllSpills : 0) | (1 << art::arm64::FP) |
-      (1 << art::arm64::X18) | (1 << art::arm64::LR);
+      (1 << art::arm64::X18) | (1 << art::arm64::LR);  // TODO(Arm64): Fix this - remove X18.
 }
 
 constexpr uint32_t Arm64CalleeSaveFpSpills(Runtime::CalleeSaveType type) {

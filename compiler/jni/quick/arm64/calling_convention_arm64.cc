@@ -39,11 +39,11 @@ static const SRegister kSArgumentRegisters[] = {
 
 // Calling convention
 ManagedRegister Arm64ManagedRuntimeCallingConvention::InterproceduralScratchRegister() {
-  return Arm64ManagedRegister::FromCoreRegister(X20);  // saved on entry restored on exit
+  return Arm64ManagedRegister::FromCoreRegister(X21);  // saved on entry restored on exit
 }
 
 ManagedRegister Arm64JniCallingConvention::InterproceduralScratchRegister() {
-  return Arm64ManagedRegister::FromCoreRegister(X20);  // saved on entry restored on exit
+  return Arm64ManagedRegister::FromCoreRegister(X21);  // saved on entry restored on exit
 }
 
 static ManagedRegister ReturnRegisterForShorty(const char* shorty) {
