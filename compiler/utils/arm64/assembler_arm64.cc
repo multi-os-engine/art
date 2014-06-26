@@ -50,11 +50,11 @@ void Arm64Assembler::FinalizeInstructions(const MemoryRegion& region) {
 }
 
 void Arm64Assembler::GetCurrentThread(ManagedRegister tr) {
-  ___ Mov(reg_x(tr.AsArm64().AsCoreRegister()), reg_x(ETR));
+  ___ Mov(reg_x(tr.AsArm64().AsCoreRegister()), reg_x(TR));
 }
 
 void Arm64Assembler::GetCurrentThread(FrameOffset offset, ManagedRegister /* scratch */) {
-  StoreToOffset(ETR, SP, offset.Int32Value());
+  StoreToOffset(TR, SP, offset.Int32Value());
 }
 
 // See Arm64 PCS Section 5.2.2.1.
@@ -164,7 +164,7 @@ void Arm64Assembler::StoreImmediateToThread64(ThreadOffset<8> offs, uint32_t imm
   Arm64ManagedRegister scratch = m_scratch.AsArm64();
   CHECK(scratch.IsCoreRegister()) << scratch;
   LoadImmediate(scratch.AsCoreRegister(), imm);
-  StoreToOffset(scratch.AsCoreRegister(), ETR, offs.Int32Value());
+  StoreToOffset(scratch.AsCoreRegister(), TR, offs.Int32Value());
 }
 
 void Arm64Assembler::StoreStackOffsetToThread64(ThreadOffset<8> tr_offs,
@@ -173,14 +173,14 @@ void Arm64Assembler::StoreStackOffsetToThread64(ThreadOffset<8> tr_offs,
   Arm64ManagedRegister scratch = m_scratch.AsArm64();
   CHECK(scratch.IsCoreRegister()) << scratch;
   AddConstant(scratch.AsCoreRegister(), SP, fr_offs.Int32Value());
-  StoreToOffset(scratch.AsCoreRegister(), ETR, tr_offs.Int32Value());
+  StoreToOffset(scratch.AsCoreRegister(), TR, tr_offs.Int32Value());
 }
 
 void Arm64Assembler::StoreStackPointerToThread64(ThreadOffset<8> tr_offs) {
   vixl::UseScratchRegisterScope temps(vixl_masm_);
   vixl::Register temp = temps.AcquireX();
   ___ Mov(temp, reg_x(SP));
-  ___ Str(temp, MEM_OP(reg_x(ETR), tr_offs.Int32Value()));
+  ___ Str(temp, MEM_OP(reg_x(TR), tr_offs.Int32Value()));
 }
 
 void Arm64Assembler::StoreSpanning(FrameOffset dest_off, ManagedRegister m_source,
@@ -281,7 +281,7 @@ void Arm64Assembler::Load(ManagedRegister m_dst, FrameOffset src, size_t size) {
 }
 
 void Arm64Assembler::LoadFromThread64(ManagedRegister m_dst, ThreadOffset<8> src, size_t size) {
-  return Load(m_dst.AsArm64(), ETR, src.Int32Value(), size);
+  return Load(m_dst.AsArm64(), TR, src.Int32Value(), size);
 }
 
 void Arm64Assembler::LoadRef(ManagedRegister m_dst, FrameOffset offs) {
@@ -312,7 +312,7 @@ void Arm64Assembler::LoadRawPtr(ManagedRegister m_dst, ManagedRegister m_base, O
 void Arm64Assembler::LoadRawPtrFromThread64(ManagedRegister m_dst, ThreadOffset<8> offs) {
   Arm64ManagedRegister dst = m_dst.AsArm64();
   CHECK(dst.IsCoreRegister()) << dst;
-  LoadFromOffset(dst.AsCoreRegister(), ETR, offs.Int32Value());
+  LoadFromOffset(dst.AsCoreRegister(), TR, offs.Int32Value());
 }
 
 // Copying routines.
@@ -350,7 +350,7 @@ void Arm64Assembler::CopyRawPtrFromThread64(FrameOffset fr_offs,
                                           ManagedRegister m_scratch) {
   Arm64ManagedRegister scratch = m_scratch.AsArm64();
   CHECK(scratch.IsCoreRegister()) << scratch;
-  LoadFromOffset(scratch.AsCoreRegister(), ETR, tr_offs.Int32Value());
+  LoadFromOffset(scratch.AsCoreRegister(), TR, tr_offs.Int32Value());
   StoreToOffset(scratch.AsCoreRegister(), SP, fr_offs.Int32Value());
 }
 
@@ -360,7 +360,7 @@ void Arm64Assembler::CopyRawPtrToThread64(ThreadOffset<8> tr_offs,
   Arm64ManagedRegister scratch = m_scratch.AsArm64();
   CHECK(scratch.IsCoreRegister()) << scratch;
   LoadFromOffset(scratch.AsCoreRegister(), SP, fr_offs.Int32Value());
-  StoreToOffset(scratch.AsCoreRegister(), ETR, tr_offs.Int32Value());
+  StoreToOffset(scratch.AsCoreRegister(), TR, tr_offs.Int32Value());
 }
 
 void Arm64Assembler::CopyRef(FrameOffset dest, FrameOffset src,
@@ -606,7 +606,7 @@ void Arm64Assembler::ExceptionPoll(ManagedRegister m_scratch, size_t stack_adjus
   Arm64ManagedRegister scratch = m_scratch.AsArm64();
   Arm64Exception *current_exception = new Arm64Exception(scratch, stack_adjust);
   exception_blocks_.push_back(current_exception);
-  LoadFromOffset(scratch.AsCoreRegister(), ETR, Thread::ExceptionOffset<8>().Int32Value());
+  LoadFromOffset(scratch.AsCoreRegister(), TR, Thread::ExceptionOffset<8>().Int32Value());
   ___ Cmp(reg_x(scratch.AsCoreRegister()), 0);
   ___ B(current_exception->Entry(), COND_OP(NE));
 }
@@ -624,12 +624,7 @@ void Arm64Assembler::EmitExceptionPoll(Arm64Exception *exception) {
   // Pass exception object as argument.
   // Don't care about preserving X0 as this won't return.
   ___ Mov(reg_x(X0), reg_x(exception->scratch_.AsCoreRegister()));
-  ___ Ldr(temp, MEM_OP(reg_x(ETR), QUICK_ENTRYPOINT_OFFSET(8, pDeliverException).Int32Value()));
-
-  // Move ETR(Callee saved) back to TR(Caller saved) reg. We use ETR on calls
-  // to external functions that might trash TR. We do not need the original
-  // X19 saved in BuildFrame().
-  ___ Mov(reg_x(TR), reg_x(ETR));
+  ___ Ldr(temp, MEM_OP(reg_x(TR), QUICK_ENTRYPOINT_OFFSET(8, pDeliverException).Int32Value()));
 
   ___ Blr(temp);
   // Call should never return.
@@ -650,11 +645,6 @@ void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
   // equivalent to the APCS callee saved regs [X19, x30] [D8, D15].
   CHECK_EQ(callee_save_regs.size(), kCalleeSavedRegsSize);
   ___ PushCalleeSavedRegisters();
-
-  // Move TR(Caller saved) to ETR(Callee saved). The original X19 has been
-  // saved by PushCalleeSavedRegisters(). This way we make sure that TR is not
-  // trashed by native code.
-  ___ Mov(reg_x(ETR), reg_x(TR));
 
   // Increase frame to required size - must be at least space to push StackReference<Method>.
   CHECK_GT(frame_size, kCalleeSavedRegsSize * kFramePointerSize);
@@ -700,11 +690,6 @@ void Arm64Assembler::RemoveFrame(size_t frame_size, const std::vector<ManagedReg
   // Decrease frame size to start of callee saved regs.
   size_t adjust = frame_size - (kCalleeSavedRegsSize * kFramePointerSize);
   DecreaseFrameSize(adjust);
-
-  // We move ETR (Callee Saved) back to TR (Caller Saved) which might have
-  // been trashed in the native call. The original X19 (ETR) is restored as
-  // part of PopCalleeSavedRegisters().
-  ___ Mov(reg_x(TR), reg_x(ETR));
 
   // Pop callee saved and return to LR.
   ___ PopCalleeSavedRegisters();

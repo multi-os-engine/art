@@ -54,7 +54,6 @@ static constexpr RegStorage reserved64_regs_arr[] =
 // TUNING: Are there too many temp registers and too less promote target?
 // This definition need to be matched with runtime.cc, quick entry assembly and JNI compiler
 // Note: we are not able to call to C function directly if it un-match C ABI.
-// Currently, rs_rA64_SELF is not a callee save register which does not match C ABI.
 static constexpr RegStorage core_temps_arr[] =
     {rs_w0, rs_w1, rs_w2, rs_w3, rs_w4, rs_w5, rs_w6, rs_w7,
      rs_w8, rs_w9, rs_w10, rs_w11, rs_w12, rs_w13, rs_w14, rs_w15, rs_w16,

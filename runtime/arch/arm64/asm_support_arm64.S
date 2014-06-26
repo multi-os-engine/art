@@ -22,10 +22,12 @@
 // Define special registers.
 
 // Register holding suspend check count down.
-// 32-bit is enough for the suspend register.
-#define wSUSPEND w19
+// 32-bit view of suspend register.
+#define wSUSPEND w20
+// 64-bit view of suspend register.
+#define xSUSPEND x20
 // Register holding Thread::Current().
-#define xSELF x18
+#define xSELF x19
 // Frame Pointer
 #define xFP   x29
 // Link Register

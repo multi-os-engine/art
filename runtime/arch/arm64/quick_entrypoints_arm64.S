@@ -63,32 +63,32 @@
     stp d30, d31,   [sp, #248]
 
 
-    // Callee saved.
-    stp xSELF, x19, [sp, #264]
+    str x18, [sp, #264]           // TODO: Do not save x18.
     .cfi_rel_offset x18, 264
+
+    // Callee saved.
+    stp x19, x20, [sp, #272]      // Save TR and SUSPEND regs.
     .cfi_rel_offset x19, 272
-
-    stp x20, x21, [sp, #280]
     .cfi_rel_offset x20, 280
+
+    stp x21, x22, [sp, #288]
     .cfi_rel_offset x21, 288
-
-    stp x22, x23, [sp, #296]
     .cfi_rel_offset x22, 296
+
+    stp x23, x24, [sp, #304]
     .cfi_rel_offset x23, 304
-
-    stp x24, x25, [sp, #312]
     .cfi_rel_offset x24, 312
+
+    stp x25, x26, [sp, #320]
     .cfi_rel_offset x25, 320
-
-    stp x26, x27, [sp, #328]
     .cfi_rel_offset x26, 328
+
+    stp x27, x28, [sp, #336]
     .cfi_rel_offset x27, 336
-
-    stp x28, xFP, [sp, #344]    // Save FP.
     .cfi_rel_offset x28, 344
-    .cfi_rel_offset x29, 352
 
-    str xLR, [sp, #360]
+    stp xFP, xLR, [sp, #352]    // Save FP and LR.
+    .cfi_rel_offset x29, 352
     .cfi_rel_offset x30, 360
 
     // Loads appropriate callee-save-method
@@ -125,32 +125,32 @@
     stp d12, d13, [sp, #40]
     stp d14, d15, [sp, #56]
 
-    // Callee saved.
-    stp xSELF, x19, [sp, #72]
+    str x18, [sp, #72]          // TODO: Do not save x18.
     .cfi_rel_offset x18, 72
+
+    // Callee saved.
+    stp x19, x20, [sp, #80]     // Save TR and SUSPEND regs.
     .cfi_rel_offset x19, 80
-
-    stp x20, x21, [sp, #88]
     .cfi_rel_offset x20, 88
+
+    stp x21, x22, [sp, #96]
     .cfi_rel_offset x21, 96
-
-    stp x22, x23, [sp, #104]
     .cfi_rel_offset x22, 104
+
+    stp x23, x24, [sp, #112]
     .cfi_rel_offset x23, 112
-
-    stp x24, x25, [sp, #120]
     .cfi_rel_offset x24, 120
+
+    stp x25, x26, [sp, #128]
     .cfi_rel_offset x25, 128
-
-    stp x26, x27, [sp, #136]
     .cfi_rel_offset x26, 136
+
+    stp x27, x28, [sp, #144]
     .cfi_rel_offset x27, 144
-
-    stp x28, xFP, [sp, #152]    // Save FP.
     .cfi_rel_offset x28, 152
-    .cfi_rel_offset x29, 160
 
-    str xLR, [sp, #168]
+    stp xFP, xLR, [sp, #160]    // Save FP and LR.
+    .cfi_rel_offset x29, 160
     .cfi_rel_offset x30, 168
 
     // Loads appropriate callee-save-method
@@ -164,32 +164,32 @@
     ldp d12, d13, [sp, #40]
     ldp d14, d15, [sp, #56]
 
-    // Callee saved.
-    ldp xSELF, x19, [sp, #72]
+    ldr x18, [sp, #64]        // TODO: Remove x18.
     .cfi_restore x18
+
+    // Callee saved.
+    ldp x19, x20, [sp, #80]   // Load TR and SUSPEND regs.
     .cfi_restore x19
-
-    ldp x20, x21, [sp, #88]
     .cfi_restore x20
+
+    ldp x21, x22, [sp, #96]
     .cfi_restore x21
-
-    ldp x22, x23, [sp, #104]
     .cfi_restore x22
+
+    ldp x23, x24, [sp, #112]
     .cfi_restore x23
-
-    ldp x24, x25, [sp, #120]
     .cfi_restore x24
+
+    ldp x25, x26, [sp, #128]
     .cfi_restore x25
-
-    ldp x26, x27, [sp, #136]
     .cfi_restore x26
+
+    ldp x27, x28, [sp, #144]
     .cfi_restore x27
-
-    ldp x28, xFP, [sp, #152]    // Save FP.
     .cfi_restore x28
-    .cfi_restore x29
 
-    ldr xLR, [sp, #168]
+    ldp xFP, xLR, [sp, #160]    // Save FP.
+    .cfi_restore x29
     .cfi_restore x30
 
     add sp, sp, #176
@@ -239,7 +239,7 @@
 
     stp x7,  xSELF, [sp, #192]
     .cfi_rel_offset x7, 192
-    .cfi_rel_offset x18, 200
+    .cfi_rel_offset x19, 200
 
     stp x19, x20, [sp, #208]
     .cfi_rel_offset x19, 208
@@ -313,7 +313,7 @@
 
     ldp x7,  xSELF, [sp, #192]
     .cfi_restore x7
-    .cfi_restore x18
+    .cfi_restore x19
 
     ldp x19, x20, [sp, #208]
     .cfi_restore x19
@@ -508,7 +508,7 @@ INVOKE_TRAMPOLINE art_quick_invoke_virtual_trampoline_with_access_check, artInvo
 
 .macro INVOKE_STUB_CREATE_FRAME
 
-SAVE_SIZE=6*8   // x4, x5, x19(wSUSPEND), SP, LR & FP saved.
+SAVE_SIZE=7*8   // x4, x5, xSUSPEND, xSELF, SP, LR & FP saved.
 SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
 
 
@@ -524,9 +524,12 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
     .cfi_def_cfa_register x10              // before this.
     .cfi_adjust_cfa_offset SAVE_SIZE
 
-    stp x9, x19, [x10, #32]                // Save old stack pointer and x19(wSUSPEND)
+    str xSELF, [x10, #48]                 // Save xSELF.
+    .cfi_rel_offset x19, 48
+
+    stp x9, xSUSPEND, [x10, #32]          // Save old stack pointer and xSUSPEND.
     .cfi_rel_offset sp, 32
-    .cfi_rel_offset x19, 40
+    .cfi_rel_offset x20, 40
 
     stp x4, x5, [x10, #16]                 // Save result and shorty addresses.
     .cfi_rel_offset x4, 16
@@ -605,8 +608,11 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
     str x0, [x4]
 
 .Lexit_art_quick_invoke_stub\@:
-    ldp x2, x19, [xFP, #32]   // Restore stack pointer and x19.
+    ldr xSELF, [xFP, #48]     // Restore xSELF.
     .cfi_restore x19
+
+    ldp x2, xSUSPEND, [xFP, #32]   // Restore stack pointer and xSUSPEND.
+    .cfi_restore x20
     mov sp, x2
     .cfi_restore sp
 
@@ -633,6 +639,8 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
  *  |       FP''           | <- SP'
  *  +----------------------+
  *  +----------------------+
+ *  |        X20 - Suspend |
+ *  |        X19 - Thread  |
  *  |        SP'           |
  *  |        X5            |
  *  |        X4            |        Saved registers
@@ -1061,7 +1069,7 @@ ENTRY art_quick_check_cast
     .cfi_rel_offset x0, 0
     .cfi_rel_offset x1, 8
     stp xSELF, xLR, [sp, #16]
-    .cfi_rel_offset x18, 16
+    .cfi_rel_offset x19, 16
     .cfi_rel_offset x30, 24
 
     // Call runtime code
@@ -1075,7 +1083,7 @@ ENTRY art_quick_check_cast
     .cfi_restore x0
     .cfi_restore x1
     ldp xSELF, xLR, [sp, #16]
-    .cfi_restore x18
+    .cfi_restore x19
     .cfi_restore x30
     add sp, sp, #32
     .cfi_adjust_cfa_offset -32
@@ -1087,7 +1095,7 @@ ENTRY art_quick_check_cast
     .cfi_restore x0
     .cfi_restore x1
     ldp xSELF, xLR, [sp, #16]
-    .cfi_restore x18
+    .cfi_restore x19
     .cfi_restore x30
     add sp, sp, #32
     .cfi_adjust_cfa_offset -32
@@ -1158,7 +1166,7 @@ ENTRY art_quick_aput_obj
     .cfi_rel_offset x1, 8
     stp x2, xSELF, [sp, #16]
     .cfi_rel_offset x2, 16
-    .cfi_rel_offset x18, 24
+    .cfi_rel_offset x19, 24
     str xLR, [sp, #32]
     .cfi_rel_offset x30, 32
 
@@ -1176,7 +1184,7 @@ ENTRY art_quick_aput_obj
     .cfi_restore x1
     ldp x2, xSELF, [sp, #16]
     .cfi_restore x2
-    .cfi_restore x18
+    .cfi_restore x19
     ldr xLR, [sp, #32]
     .cfi_restore x30
     add sp, sp, #48
@@ -1195,7 +1203,7 @@ ENTRY art_quick_aput_obj
     .cfi_restore x1
     ldp x2, xSELF, [sp, #16]
     .cfi_restore x2
-    .cfi_restore x18
+    .cfi_restore x19
     ldr xLR, [sp, #32]
     .cfi_restore x30
     add sp, sp, #48
@@ -1239,7 +1247,6 @@ END \name
 
 // Macros taking opportunity of code similarities for downcalls with referrer.
 
-// TODO: xSELF -> x19. Temporarily rely on xSELF being saved in REF_ONLY
 .macro ONE_ARG_REF_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
@@ -1253,7 +1260,6 @@ ENTRY \name
 END \name
 .endm
 
-// TODO: xSELF -> x19. Temporarily rely on xSELF being saved in REF_ONLY
 .macro TWO_ARG_REF_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
@@ -1267,7 +1273,6 @@ ENTRY \name
 END \name
 .endm
 
-// TODO: xSELF -> x19. Temporarily rely on xSELF being saved in REF_ONLY
 .macro THREE_ARG_REF_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
@@ -1864,17 +1869,10 @@ ENTRY art_quick_string_compareto
 END art_quick_string_compareto
 
 // Macro to facilitate adding new entrypoints which call to native function directly.
-// Currently, xSELF is the only thing we need to take care of between managed code and AAPCS.
-// But we might introduce more differences.
 .macro NATIVE_DOWNCALL name, entrypoint
     .extern \entrypoint
 ENTRY \name
-    sub    sp, sp, #16
-    stp    xSELF, xLR, [sp]
-    bl     \entrypoint
-    ldp    xSELF, xLR, [sp]
-    add    sp, sp, #16
-    ret
+    b   \entrypoint
 END \name
 .endm
 

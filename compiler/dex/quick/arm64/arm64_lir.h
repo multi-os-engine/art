@@ -142,16 +142,16 @@ enum A64NativeRegisterPool {
   rwsp = rw31,
 
   // Aliases which are not defined in "ARM Architecture Reference, register names".
-  rxSUSPEND = rx19,
-  rxSELF = rx18,
+  rxSUSPEND = rx20,
+  rxSELF = rx19,
   rxLR = rx30,
   /*
    * FIXME: It's a bit awkward to define both 32 and 64-bit views of these - we'll only ever use
    * the 64-bit view. However, for now we'll define a 32-bit view to keep these from being
    * allocated as 32-bit temp registers.
    */
-  rwSUSPEND = rw19,
-  rwSELF = rw18,
+  rwSUSPEND = rw20,
+  rwSELF = rw19,
   rwLR = rw30,
 };
 
