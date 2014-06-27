@@ -870,7 +870,22 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
         (1 << kPromoteRegs));
   } else if (cu.instruction_set == kArm64) {
     // TODO(Arm64): enable optimizations once backend is mature enough.
-    cu.disable_opt = ~(uint32_t)0;
+    cu.disable_opt = (
+      // TODO(Arm64): enable optimizations once backend is mature enough.
+      (1 << kLoadStoreElimination) |  //
+      (1 << kLoadHoisting) |
+      (1 << kSuppressLoads) |   //
+      // (1 << kNullCheckElimination) |
+      // (1 << kClassInitCheckElimination) |
+      (1 << kPromoteRegs) |
+      (1 << kTrackLiveTemps) |   //
+      // (1 << kSafeOptimizations) |
+      (1 << kBBOpt) |
+      // (1 << kMatch) |
+      // (1 << kPromoteCompilerTemps) |
+      // (1 << kSuppressExceptionEdges) |
+      // (1 << kSuppressMethodInlining) |
+      0);
   }
 
   cu.StartTimingSplit("BuildMIRGraph");
