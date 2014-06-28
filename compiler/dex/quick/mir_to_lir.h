@@ -237,7 +237,12 @@ COMPILE_ASSERT(!IsLargeFrame(kSmallFrameSize, kX86_64),
 
 class Mir2Lir : public Backend {
   public:
+#ifdef __x86_64__
+    // TODO: remove this after CL with 64-bit ref support will be merged
+    static constexpr bool kFailOnSizeError = false && kIsDebugBuild;
+#else
     static constexpr bool kFailOnSizeError = true && kIsDebugBuild;
+#endif
     static constexpr bool kReportSizeError = true && kIsDebugBuild;
 
     /*
