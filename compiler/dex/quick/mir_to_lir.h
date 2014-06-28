@@ -239,7 +239,7 @@ COMPILE_ASSERT(!IsLargeFrame(kSmallFrameSize, kX86_64),
 
 class Mir2Lir : public Backend {
   public:
-    static constexpr bool kFailOnSizeError = true && kIsDebugBuild;
+    static constexpr bool kFailOnSizeError = false && kIsDebugBuild;
     static constexpr bool kReportSizeError = true && kIsDebugBuild;
 
     /*
