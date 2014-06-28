@@ -1414,10 +1414,11 @@ void X86Mir2Lir::GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
 }
 
 void X86Mir2Lir::GenConst128(BasicBlock* bb, MIR* mir) {
-  int type_size = mir->dalvikInsn.vA;
+  store_method_addr_used_ = true;
+  int type_size = mir->dalvikInsn.vB;
   // We support 128 bit vectors.
   DCHECK_EQ(type_size & 0xFFFF, 128);
-  RegStorage rs_dest = RegStorage::Solo128(mir->dalvikInsn.vB);
+  RegStorage rs_dest = RegStorage::Solo128(mir->dalvikInsn.vA);
   uint32_t *args = mir->dalvikInsn.arg;
   int reg = rs_dest.GetReg();
   // Check for all 0 case.
@@ -1444,24 +1445,24 @@ void X86Mir2Lir::GenConst128(BasicBlock* bb, MIR* mir) {
   // 4 byte offset.  We will fix this up in the assembler later to have the right
   // value.
   ScopedMemRefType mem_ref_type(this, ResourceMask::kLiteral);
-  LIR *load = NewLIR3(kX86Mova128RM, reg, rl_method.reg.GetReg(),  256 /* bogus */);
+  LIR *load = NewLIR2(kX86MovupsRM, reg, rl_method.reg.GetReg());
   load->flags.fixup = kFixupLoad;
   load->target = data_target;
 }
 
 void X86Mir2Lir::GenMoveVector(BasicBlock *bb, MIR *mir) {
   // We only support 128 bit registers.
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  RegStorage rs_dest = RegStorage::Solo128(mir->dalvikInsn.vB);
-  RegStorage rs_src = RegStorage::Solo128(mir->dalvikInsn.vC);
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  RegStorage rs_dest = RegStorage::Solo128(mir->dalvikInsn.vA);
+  RegStorage rs_src = RegStorage::Solo128(mir->dalvikInsn.vB);
   NewLIR2(kX86Mova128RR, rs_dest.GetReg(), rs_src.GetReg());
 }
 
 void X86Mir2Lir::GenMultiplyVector(BasicBlock *bb, MIR *mir) {
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vA >> 16);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vC);
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vA);
+  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vB);
   int opcode = 0;
   switch (opsize) {
     case k32:
@@ -1484,10 +1485,10 @@ void X86Mir2Lir::GenMultiplyVector(BasicBlock *bb, MIR *mir) {
 }
 
 void X86Mir2Lir::GenAddVector(BasicBlock *bb, MIR *mir) {
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vA >> 16);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vC);
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vA);
+  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vB);
   int opcode = 0;
   switch (opsize) {
     case k32:
@@ -1515,10 +1516,10 @@ void X86Mir2Lir::GenAddVector(BasicBlock *bb, MIR *mir) {
 }
 
 void X86Mir2Lir::GenSubtractVector(BasicBlock *bb, MIR *mir) {
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vA >> 16);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vC);
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vA);
+  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vB);
   int opcode = 0;
   switch (opsize) {
     case k32:
@@ -1546,10 +1547,10 @@ void X86Mir2Lir::GenSubtractVector(BasicBlock *bb, MIR *mir) {
 }
 
 void X86Mir2Lir::GenShiftLeftVector(BasicBlock *bb, MIR *mir) {
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vA >> 16);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  int imm = mir->dalvikInsn.vC;
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vA);
+  int imm = mir->dalvikInsn.vB;
   int opcode = 0;
   switch (opsize) {
     case k32:
@@ -1570,10 +1571,10 @@ void X86Mir2Lir::GenShiftLeftVector(BasicBlock *bb, MIR *mir) {
 }
 
 void X86Mir2Lir::GenSignedShiftRightVector(BasicBlock *bb, MIR *mir) {
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vA >> 16);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  int imm = mir->dalvikInsn.vC;
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vA);
+  int imm = mir->dalvikInsn.vB;
   int opcode = 0;
   switch (opsize) {
     case k32:
@@ -1591,10 +1592,10 @@ void X86Mir2Lir::GenSignedShiftRightVector(BasicBlock *bb, MIR *mir) {
 }
 
 void X86Mir2Lir::GenUnsignedShiftRightVector(BasicBlock *bb, MIR *mir) {
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vA >> 16);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  int imm = mir->dalvikInsn.vC;
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vA);
+  int imm = mir->dalvikInsn.vB;
   int opcode = 0;
   switch (opsize) {
     case k32:
@@ -1616,90 +1617,145 @@ void X86Mir2Lir::GenUnsignedShiftRightVector(BasicBlock *bb, MIR *mir) {
 
 void X86Mir2Lir::GenAndVector(BasicBlock *bb, MIR *mir) {
   // We only support 128 bit registers.
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vC);
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vA);
+  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vB);
   NewLIR2(kX86PandRR, rs_dest_src1.GetReg(), rs_src2.GetReg());
 }
 
 void X86Mir2Lir::GenOrVector(BasicBlock *bb, MIR *mir) {
   // We only support 128 bit registers.
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vC);
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vA);
+  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vB);
   NewLIR2(kX86PorRR, rs_dest_src1.GetReg(), rs_src2.GetReg());
 }
 
 void X86Mir2Lir::GenXorVector(BasicBlock *bb, MIR *mir) {
   // We only support 128 bit registers.
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vC);
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vA);
+  RegStorage rs_src2 = RegStorage::Solo128(mir->dalvikInsn.vB);
   NewLIR2(kX86PxorRR, rs_dest_src1.GetReg(), rs_src2.GetReg());
 }
 
 void X86Mir2Lir::GenAddReduceVector(BasicBlock *bb, MIR *mir) {
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vA >> 16);
-  RegStorage rs_dest_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
-  int imm = mir->dalvikInsn.vC;
+  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+  RegStorage rs_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
+  RegLocation rl_dest = mir_graph_->GetDest(mir);
+
+  int vec_bytes = (mir->dalvikInsn.vC & 0xFFFF) / 8;
+  int vec_unit_size = 0;
   int opcode = 0;
+  int extr_opcode = 0;
+
   switch (opsize) {
     case k32:
+      extr_opcode = kX86PextrdRRI;
       opcode = kX86PhadddRR;
+      vec_unit_size = 4;
       break;
     case kSignedHalf:
     case kUnsignedHalf:
+      extr_opcode = kX86PextrwRRI;
       opcode = kX86PhaddwRR;
+      vec_unit_size = 2;
       break;
     default:
       LOG(FATAL) << "Unsupported vector add reduce " << opsize;
       break;
   }
-  NewLIR2(opcode, rs_dest_src1.GetReg(), imm);
+
+  int elems = vec_bytes / vec_unit_size;
+
+  while (elems > 1) {
+    NewLIR2(opcode, rs_src1.GetReg(), rs_src1.GetReg());
+    elems >>= 1;
+  }
+
+  // We need to extract to a GPR.
+  RegStorage temp = AllocTemp();
+  NewLIR3(extr_opcode, temp.GetReg(), rs_src1.GetReg(), 0);
+
+  // Can we do this directly into memory?
+  RegLocation rl_result = UpdateLocTyped(rl_dest, kCoreReg);
+  if (rl_result.location == kLocPhysReg) {
+    // Ensure res is in a core reg
+    rl_result = EvalLoc(rl_dest, kCoreReg, true);
+    OpRegReg(kOpAdd, rl_result.reg, temp);
+    StoreFinalValue(rl_dest, rl_result);
+  } else {
+    OpMemReg(kOpAdd, rl_result, temp.GetReg());
+  }
+
+  FreeTemp(temp);
 }
 
 void X86Mir2Lir::GenReduceVector(BasicBlock *bb, MIR *mir) {
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vA >> 16);
-  RegStorage rs_src = RegStorage::Solo128(mir->dalvikInsn.vB);
-  int index = mir->dalvikInsn.arg[0];
-  int opcode = 0;
+  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+  RegLocation rl_dest = mir_graph_->GetDest(mir);
+  RegStorage rs_src1 = RegStorage::Solo128(mir->dalvikInsn.vB);
+  int extract_index = mir->dalvikInsn.arg[0];
+  int extr_opcode = 0;
+  RegLocation rl_result;
+  bool is_wide = false;
+
   switch (opsize) {
     case k32:
-      opcode = kX86PextrdRRI;
+      rl_result = UpdateLocTyped(rl_dest, kCoreReg);
+      extr_opcode = (rl_result.location == kLocPhysReg) ? kX86PextrdMRI : kX86PextrdRRI;
       break;
     case kSignedHalf:
     case kUnsignedHalf:
-      opcode = kX86PextrwRRI;
-      break;
-    case kUnsignedByte:
-    case kSignedByte:
-      opcode = kX86PextrbRRI;
+      rl_result= UpdateLocTyped(rl_dest, kCoreReg);
+      extr_opcode = (rl_result.location == kLocPhysReg) ? kX86PextrwMRI : kX86PextrwRRI;
       break;
     default:
-      LOG(FATAL) << "Unsupported vector reduce " << opsize;
+      LOG(FATAL) << "Unsupported vector add reduce " << opsize;
+      return;
       break;
   }
-  // We need to extract to a GPR.
-  RegStorage temp = AllocTemp();
-  NewLIR3(opcode, temp.GetReg(), rs_src.GetReg(), index);
 
-  // Assume that the destination VR is in the def for the mir.
-  RegLocation rl_dest = mir_graph_->GetDest(mir);
-  RegLocation rl_temp =
-    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, temp, INVALID_SREG, INVALID_SREG};
-  StoreValue(rl_dest, rl_temp);
+  if (rl_result.location == kLocPhysReg) {
+    NewLIR3(extr_opcode, rl_result.reg.GetReg(), rs_src1.GetReg(), extract_index);
+    if (is_wide == true) {
+      StoreFinalValue(rl_dest, rl_result);
+    } else {
+      StoreFinalValueWide(rl_dest, rl_result);
+    }
+  } else {
+    int displacement = SRegOffset(rl_result.s_reg_low);
+    LIR *l = NewLIR3(extr_opcode, rs_rX86_SP.GetReg(), displacement, rs_src1.GetReg());
+    AnnotateDalvikRegAccess(l, displacement >> 2, true /* is_load */, is_wide /* is_64bit */);
+    AnnotateDalvikRegAccess(l, displacement >> 2, false /* is_load */, is_wide /* is_64bit */);
+  }
 }
 
 void X86Mir2Lir::GenSetVector(BasicBlock *bb, MIR *mir) {
-  DCHECK_EQ(mir->dalvikInsn.vA & 0xFFFF, 128U);
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vA >> 16);
-  RegStorage rs_dest = RegStorage::Solo128(mir->dalvikInsn.vB);
-  int op_low = 0, op_high = 0;
+  DCHECK_EQ(mir->dalvikInsn.vC & 0xFFFF, 128U);
+  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+  RegStorage rs_dest = RegStorage::Solo128(mir->dalvikInsn.vA);
+  int op_low = 0, op_high = 0, imm = 0, op_mov = kX86MovdxrRR;
+  RegisterClass reg_type = kCoreReg;
+
   switch (opsize) {
     case k32:
       op_low = kX86PshufdRRI;
+      break;
+    case kSingle:
+      op_low = kX86PshufdRRI;
+      op_mov = kX86Mova128RR;
+      reg_type = kFPReg;
+      break;
+    case k64:
+      op_low = kX86PshufdRRI;
+      imm = 0x44;
+      break;
+    case kDouble:
+      op_low = kX86PshufdRRI;
+      op_mov = kX86Mova128RR;
+      reg_type = kFPReg;
+      imm = 0x44;
       break;
     case kSignedHalf:
     case kUnsignedHalf:
@@ -1713,22 +1769,26 @@ void X86Mir2Lir::GenSetVector(BasicBlock *bb, MIR *mir) {
       break;
   }
 
-  // Load the value from the VR into a GPR.
   RegLocation rl_src = mir_graph_->GetSrc(mir, 0);
-  rl_src = LoadValue(rl_src, kCoreReg);
+
+  // Load the value from the VR into the reg.
+  if (rl_src.wide == 0) {
+    rl_src = LoadValue(rl_src, reg_type);
+  } else {
+    rl_src = LoadValueWide(rl_src, reg_type);
+  }
 
   // Load the value into the XMM register.
-  NewLIR2(kX86MovdxrRR, rs_dest.GetReg(), rl_src.reg.GetReg());
+  NewLIR2(op_mov, rs_dest.GetReg(), rl_src.reg.GetReg());
 
   // Now shuffle the value across the destination.
-  NewLIR3(op_low, rs_dest.GetReg(), rs_dest.GetReg(), 0);
+  NewLIR3(op_low, rs_dest.GetReg(), rs_dest.GetReg(), imm);
 
   // And then repeat as needed.
   if (op_high != 0) {
-    NewLIR3(op_high, rs_dest.GetReg(), rs_dest.GetReg(), 0);
+    NewLIR3(op_high, rs_dest.GetReg(), rs_dest.GetReg(), imm);
   }
 }
-
 
 LIR *X86Mir2Lir::ScanVectorLiteral(MIR *mir) {
   int *args = reinterpret_cast<int*>(mir->dalvikInsn.arg);

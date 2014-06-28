@@ -425,6 +425,20 @@ DISASSEMBLER_ENTRY(cmp,
         instr++;
         if (prefix[2] == 0x66) {
           switch (*instr) {
+            case 0x01:
+              opcode << "phaddw";
+              prefix[2] = 0;
+              has_modrm = true;
+              load = true;
+              src_reg_file = dst_reg_file = SSE;
+              break;
+            case 0x02:
+              opcode << "phaddd";
+              prefix[2] = 0;
+              has_modrm = true;
+              load = true;
+              src_reg_file = dst_reg_file = SSE;
+              break;
             case 0x40:
               opcode << "pmulld";
               prefix[2] = 0;
@@ -448,7 +462,7 @@ DISASSEMBLER_ENTRY(cmp,
               prefix[2] = 0;
               has_modrm = true;
               store = true;
-              dst_reg_file = SSE;
+              src_reg_file = SSE;
               immediate_bytes = 1;
               break;
             case 0x16:
@@ -456,7 +470,7 @@ DISASSEMBLER_ENTRY(cmp,
               prefix[2] = 0;
               has_modrm = true;
               store = true;
-              dst_reg_file = SSE;
+              src_reg_file = SSE;
               immediate_bytes = 1;
               break;
             default:
@@ -726,7 +740,7 @@ DISASSEMBLER_ENTRY(cmp,
           prefix[2] = 0;
           has_modrm = true;
           store = true;
-          src_reg_file = dst_reg_file = SSE;
+          src_reg_file = SSE;
           immediate_bytes = 1;
         } else {
           opcode << StringPrintf("unknown opcode '0F %02X'", *instr);
