@@ -901,7 +901,7 @@ void Mir2Lir::GenArrayObjPut(int opt_flags, RegLocation rl_array, RegLocation rl
 
 void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
   RegLocation rl_method = LoadCurrMethod();
-  DCHECK(!cu_->target64 || rl_method.reg.Is64Bit());
+//  DCHECK(!cu_->target64 || rl_method.reg.Is64Bit());
   RegStorage res_reg = AllocTempRef();
   RegLocation rl_result = EvalLoc(rl_dest, kRefReg, true);
   if (!cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx,
