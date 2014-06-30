@@ -87,7 +87,7 @@ void Arm64Mir2Lir::GenSparseSwitch(MIR* mir, uint32_t table_offset,
   tab_rec->anchor = switch_label;
 
   // Add displacement to base branch address and go!
-  OpRegRegRegExtend(kOpAdd, r_base, r_base, As64BitReg(r_disp), kA64Sxtw, 0U);
+  OpRegRegRegExtend(kOpAdd, r_base, r_base, As64BitReg(r_disp), EncodeExtend(kA64Sxtw, 0U));
   NewLIR1(kA64Br1x, r_base.GetReg());
 
   // Loop exit label.
@@ -140,7 +140,8 @@ void Arm64Mir2Lir::GenPackedSwitch(MIR* mir, uint32_t table_offset,
   tab_rec->anchor = switch_label;
 
   // Add displacement to base branch address and go!
-  OpRegRegRegExtend(kOpAdd, branch_reg, branch_reg, As64BitReg(disp_reg), kA64Sxtw, 0U);
+  OpRegRegRegExtend(kOpAdd, branch_reg, branch_reg, As64BitReg(disp_reg),
+      EncodeExtend(kA64Sxtw, 0U));
   NewLIR1(kA64Br1x, branch_reg.GetReg());
 
   // branch_over target here

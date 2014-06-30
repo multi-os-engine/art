@@ -533,6 +533,11 @@ LIR* Arm64Mir2Lir::OpRegRegExtend(OpKind op, RegStorage r_dest_src1, RegStorage 
     case kOpCmp:
       opcode = kA64Cmp3Rre;
       break;
+    case kOpAdd:
+      // Note: intentional fallthrough
+    case kOpSub:
+      return OpRegRegRegExtend(op, r_dest_src1, r_dest_src1, r_src2, extend);
+      break;
     default:
       LOG(FATAL) << "Bad Opcode: " << opcode;
       break;
@@ -645,7 +650,7 @@ LIR* Arm64Mir2Lir::OpRegRegRegShift(OpKind op, RegStorage r_dest, RegStorage r_s
 }
 
 LIR* Arm64Mir2Lir::OpRegRegRegExtend(OpKind op, RegStorage r_dest, RegStorage r_src1,
-                                     RegStorage r_src2, A64RegExtEncodings ext, uint8_t amount) {
+                                     RegStorage r_src2, int extend) {
   ArmOpcode opcode = kA64Brk1d;
 
   switch (op) {
@@ -674,12 +679,7 @@ LIR* Arm64Mir2Lir::OpRegRegRegExtend(OpKind op, RegStorage r_dest, RegStorage r_
     CHECK(!r_src2.Is64Bit());
   }
 
-  // Sanity checks.
-  //    1) Amount is in the range 0..4
-  CHECK_LE(amount, 4);
-
-  return NewLIR4(widened_opcode, r_dest.GetReg(), r_src1.GetReg(), r_src2.GetReg(),
-                 EncodeExtend(ext, amount));
+  return NewLIR4(widened_opcode, r_dest.GetReg(), r_src1.GetReg(), r_src2.GetReg(), extend);
 }
 
 LIR* Arm64Mir2Lir::OpRegRegReg(OpKind op, RegStorage r_dest, RegStorage r_src1, RegStorage r_src2) {
@@ -822,15 +822,6 @@ LIR* Arm64Mir2Lir::OpRegImm64(OpKind op, RegStorage r_dest_src1, int64_t value) 
     }
     OpRegImm64(op, r_dest_src1, abs_value & (~INT64_C(0xfff)));
     return OpRegImm64(op, r_dest_src1, abs_value & 0xfff);
-  } else if (LIKELY(A64_REG_IS_SP(r_dest_src1.GetReg()) && (op == kOpAdd || op == kOpSub))) {
-    // Note: "sub sp, sp, Xm" is not correct on arm64.
-    // We need special instructions for SP.
-    // Also operation on 32-bit SP should be avoided.
-    DCHECK(IS_WIDE(wide));
-    RegStorage r_tmp = AllocTempWide();
-    OpRegRegImm(kOpAdd, r_tmp, r_dest_src1, 0);
-    OpRegImm64(op, r_tmp, value);
-    return OpRegRegImm(kOpAdd, r_dest_src1, r_tmp, 0);
   } else {
     RegStorage r_tmp;
     LIR* res;
@@ -875,10 +866,14 @@ LIR* Arm64Mir2Lir::OpRegImm64(OpKind op, RegStorage r_dest_src1, int64_t value) 
 }
 
 int Arm64Mir2Lir::EncodeShift(int shift_type, int amount) {
+  DCHECK_EQ(shift_type & 0x3, shift_type);
+  DCHECK_EQ(amount & 0x3f, amount);
   return ((shift_type & 0x3) << 7) | (amount & 0x3f);
 }
 
 int Arm64Mir2Lir::EncodeExtend(int extend_type, int amount) {
+  DCHECK_EQ(extend_type & 0x7, extend_type);
+  DCHECK_EQ(amount & 0x7, amount);
   return  (1 << 6) | ((extend_type & 0x7) << 3) | (amount & 0x7);
 }
 
