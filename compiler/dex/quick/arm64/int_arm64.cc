@@ -450,9 +450,8 @@ bool Arm64Mir2Lir::GenInlinedMinMaxInt(CallInfo* info, bool is_min) {
 
 bool Arm64Mir2Lir::GenInlinedPeek(CallInfo* info, OpSize size) {
   RegLocation rl_src_address = info->args[0];  // long address
-  rl_src_address = NarrowRegLoc(rl_src_address);  // ignore high half in info->args[1] ?
-  RegLocation rl_dest = InlineTarget(info);
-  RegLocation rl_address = LoadValue(rl_src_address, kCoreReg);   // kRefReg
+  RegLocation rl_dest = (size == k64) ? InlineTargetWide(info) : InlineTarget(info);
+  RegLocation rl_address = LoadValueWide(rl_src_address, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
 
   LoadBaseDisp(rl_address.reg, 0, rl_result.reg, size, kNotVolatile);
@@ -467,9 +466,8 @@ bool Arm64Mir2Lir::GenInlinedPeek(CallInfo* info, OpSize size) {
 
 bool Arm64Mir2Lir::GenInlinedPoke(CallInfo* info, OpSize size) {
   RegLocation rl_src_address = info->args[0];  // long address
-  rl_src_address = NarrowRegLoc(rl_src_address);  // ignore high half in info->args[1]
   RegLocation rl_src_value = info->args[2];  // [size] value
-  RegLocation rl_address = LoadValue(rl_src_address, kCoreReg);   // kRefReg
+  RegLocation rl_address = LoadValueWide(rl_src_address, kCoreReg);
 
   RegLocation rl_value;
   if (size == k64) {
@@ -496,7 +494,6 @@ void Arm64Mir2Lir::OpTlsCmp(ThreadOffset<8> offset, int val) {
 
 bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   DCHECK_EQ(cu_->instruction_set, kArm64);
-  ArmOpcode wide = is_long ? WIDE(0) : UNWIDE(0);
   // Unused - RegLocation rl_src_unsafe = info->args[0];
   RegLocation rl_src_obj = info->args[1];  // Object - known non-null
   RegLocation rl_src_offset = info->args[2];  // long low
@@ -509,7 +506,7 @@ bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
 
   // Load Object and offset
   RegLocation rl_object = LoadValue(rl_src_obj, kRefReg);
-  RegLocation rl_offset = LoadValue(rl_src_offset, kRefReg);
+  RegLocation rl_offset = LoadValue(rl_src_offset, kCoreReg);
 
   RegLocation rl_new_value;
   RegLocation rl_expected;
@@ -527,7 +524,7 @@ bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   }
 
   RegStorage r_ptr = AllocTempRef();
-  OpRegRegReg(kOpAdd, r_ptr, rl_object.reg, rl_offset.reg);
+  OpRegRegReg(kOpAdd, r_ptr, rl_object.reg, As64BitReg(rl_offset.reg));
 
   // Free now unneeded rl_object and rl_offset to give more temps.
   ClobberSReg(rl_object.s_reg_low);
@@ -541,22 +538,30 @@ bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   // result = tmp != 0;
 
   RegStorage r_tmp;
+  RegStorage r_tmp_stored;
+  RegStorage rl_new_value_stored = rl_new_value.reg;
+  ArmOpcode wide = UNWIDE(0);
   if (is_long) {
-    r_tmp = AllocTempWide();
+    r_tmp_stored = r_tmp = AllocTempWide();
+    wide = WIDE(0);
   } else if (is_object) {
+    // References use 64-bit registers, but are stored as compressed 32-bit values.
+    // This means r_tmp_stored != r_tmp.
     r_tmp = AllocTempRef();
+    r_tmp_stored = As32BitReg(r_tmp);
+    rl_new_value_stored = As32BitReg(rl_new_value_stored);
   } else {
-    r_tmp = AllocTemp();
+    r_tmp_stored = r_tmp = AllocTemp();
   }
 
+  RegStorage r_tmp32 = (r_tmp.Is32Bit()) ? r_tmp : As32BitReg(r_tmp);
   LIR* loop = NewLIR0(kPseudoTargetLabel);
-  NewLIR2(kA64Ldaxr2rX | wide, r_tmp.GetReg(), r_ptr.GetReg());
+  NewLIR2(kA64Ldaxr2rX | wide, r_tmp_stored.GetReg(), r_ptr.GetReg());
   OpRegReg(kOpCmp, r_tmp, rl_expected.reg);
   DCHECK(last_lir_insn_->u.m.def_mask->HasBit(ResourceMask::kCCode));
   LIR* early_exit = OpCondBranch(kCondNe, NULL);
-
-  NewLIR3(kA64Stlxr3wrX | wide, As32BitReg(r_tmp).GetReg(), rl_new_value.reg.GetReg(), r_ptr.GetReg());
-  NewLIR3(kA64Cmp3RdT, As32BitReg(r_tmp).GetReg(), 0, ENCODE_NO_SHIFT);
+  NewLIR3(kA64Stlxr3wrX | wide, r_tmp32.GetReg(), rl_new_value_stored.GetReg(), r_ptr.GetReg());
+  NewLIR3(kA64Cmp3RdT, r_tmp32.GetReg(), 0, ENCODE_NO_SHIFT);
   DCHECK(last_lir_insn_->u.m.def_mask->HasBit(ResourceMask::kCCode));
   OpCondBranch(kCondNe, loop);
 

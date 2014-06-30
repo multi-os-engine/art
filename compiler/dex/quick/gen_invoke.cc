@@ -1320,7 +1320,7 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
     }
     Load32Disp(rl_obj.reg, offset_offset, reg_off);
     MarkPossibleNullPointerException(info->opt_flags);
-    Load32Disp(rl_obj.reg, value_offset, reg_ptr);
+    LoadRefDisp(rl_obj.reg, value_offset, reg_ptr, kNotVolatile);
     if (range_check) {
       // Set up a slow path to allow retry in case of bounds violation */
       OpRegReg(kOpCmp, rl_idx.reg, reg_max);
@@ -1407,8 +1407,8 @@ bool Mir2Lir::GenInlinedStringIsEmptyOrLength(CallInfo* info, bool is_empty) {
 }
 
 bool Mir2Lir::GenInlinedReverseBytes(CallInfo* info, OpSize size) {
-  if (cu_->instruction_set == kMips) {
-    // TODO - add Mips implementation
+  if (cu_->instruction_set == kMips || cu_->instruction_set == kArm64) {
+    // TODO - add Mips implementation; Enable Arm64.
     return false;
   }
   RegLocation rl_src_i = info->args[0];
@@ -1520,14 +1520,8 @@ bool Mir2Lir::GenInlinedAbsDouble(CallInfo* info) {
   RegLocation rl_dest = InlineTargetWide(info);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
 
-  if (cu_->instruction_set == kArm64) {
-    // TODO - Can ecode ? UBXF otherwise
-    // OpRegRegImm(kOpAnd, rl_result.reg, 0x7fffffffffffffff);
-    return false;
-  } else {
-    OpRegCopyWide(rl_result.reg, rl_src.reg);
-    OpRegImm(kOpAnd, rl_result.reg.GetHigh(), 0x7fffffff);
-  }
+  OpRegCopyWide(rl_result.reg, rl_src.reg);
+  OpRegImm(kOpAnd, rl_result.reg.GetHigh(), 0x7fffffff);
   StoreValueWide(rl_dest, rl_result);
   return true;
 }
@@ -1573,8 +1567,8 @@ bool Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
   ClobberCallerSave();
   LockCallTemps();  // Using fixed registers
   RegStorage reg_ptr = TargetReg(kArg0);
-  RegStorage reg_char = TargetReg(kArg1);
-  RegStorage reg_start = TargetReg(kArg2);
+  RegStorage reg_char = TargetReg(kArg1, false);
+  RegStorage reg_start = TargetReg(kArg2, false);
 
   LoadValueDirectFixed(rl_obj, reg_ptr);
   LoadValueDirectFixed(rl_char, reg_char);
@@ -1656,7 +1650,7 @@ bool Mir2Lir::GenInlinedStringCompareTo(CallInfo* info) {
 
 bool Mir2Lir::GenInlinedCurrentThread(CallInfo* info) {
   RegLocation rl_dest = InlineTarget(info);
-  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
+  RegLocation rl_result = EvalLoc(rl_dest, kRefReg, true);
 
   switch (cu_->instruction_set) {
     case kArm:
@@ -1668,7 +1662,8 @@ bool Mir2Lir::GenInlinedCurrentThread(CallInfo* info) {
       break;
 
     case kArm64:
-      Load32Disp(TargetReg(kSelf), Thread::PeerOffset<8>().Int32Value(), rl_result.reg);
+      LoadRefDisp(TargetReg(kSelf), Thread::PeerOffset<8>().Int32Value(), rl_result.reg,
+                  kNotVolatile);
       break;
 
     case kX86:
@@ -1702,10 +1697,13 @@ bool Mir2Lir::GenInlinedUnsafeGet(CallInfo* info,
 
   RegLocation rl_object = LoadValue(rl_src_obj, kRefReg);
   RegLocation rl_offset = LoadValue(rl_src_offset, kCoreReg);
-  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
+  RegLocation rl_result;
   if (is_long) {
+    rl_result = EvalLocWide(rl_dest, LocToRegClass(rl_dest), true);
     if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
       LoadBaseIndexedDisp(rl_object.reg, rl_offset.reg, 0, 0, rl_result.reg, k64);
+    } else if (cu_->instruction_set == kArm64) {
+      LoadBaseIndexed(rl_object.reg, rl_offset.reg, rl_result.reg, 0, k64);
     } else {
       RegStorage rl_temp_offset = AllocTemp();
       OpRegRegReg(kOpAdd, rl_temp_offset, rl_object.reg, rl_offset.reg);
@@ -1713,7 +1711,9 @@ bool Mir2Lir::GenInlinedUnsafeGet(CallInfo* info,
       FreeTemp(rl_temp_offset);
     }
   } else {
-    LoadBaseIndexed(rl_object.reg, rl_offset.reg, rl_result.reg, 0, k32);
+    rl_result = EvalLoc(rl_dest, LocToRegClass(rl_dest), true);
+    LoadBaseIndexed(rl_object.reg, rl_offset.reg, rl_result.reg, 0,
+                    (rl_result.ref) ? kReference : k32);
   }
 
   if (is_volatile) {
@@ -1753,6 +1753,8 @@ bool Mir2Lir::GenInlinedUnsafePut(CallInfo* info, bool is_long,
     rl_value = LoadValueWide(rl_src_value, kCoreReg);
     if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
       StoreBaseIndexedDisp(rl_object.reg, rl_offset.reg, 0, 0, rl_value.reg, k64);
+    } else if (cu_->instruction_set == kArm64) {
+      StoreBaseIndexed(rl_object.reg, rl_offset.reg, rl_value.reg, 0, k64);
     } else {
       RegStorage rl_temp_offset = AllocTemp();
       OpRegRegReg(kOpAdd, rl_temp_offset, rl_object.reg, rl_offset.reg);
@@ -1761,7 +1763,8 @@ bool Mir2Lir::GenInlinedUnsafePut(CallInfo* info, bool is_long,
     }
   } else {
     rl_value = LoadValue(rl_src_value);
-    StoreBaseIndexed(rl_object.reg, rl_offset.reg, rl_value.reg, 0, k32);
+    StoreBaseIndexed(rl_object.reg, rl_offset.reg, rl_value.reg, 0,
+                     (rl_value.ref) ? kReference : k32);
   }
 
   // Free up the temp early, to ensure x86 doesn't run out of temporaries in MarkGCCard.
@@ -1791,8 +1794,7 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
   DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
   // TODO: Enable instrinsics for x86_64
   // Temporary disable intrinsics for x86_64. We will enable them later step by step.
-  // Temporary disable intrinsics for Arm64. We will enable them later step by step.
-  if ((cu_->instruction_set != kX86_64) && (cu_->instruction_set != kArm64)) {
+  if (cu_->instruction_set != kX86_64) {
     if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
         ->GenIntrinsic(this, info)) {
       return;
