@@ -253,6 +253,18 @@ inline art::Mir2Lir::RegisterInfo* Mir2Lir::GetRegInfo(RegStorage reg) {
   return res;
 }
 
+inline void Mir2Lir::CheckRegLocation(RegLocation rl) const {
+  if (kFailOnSizeError || kReportSizeError) {
+    CheckRegLocationImpl(rl, kFailOnSizeError, kReportSizeError);
+  }
+}
+
+inline void Mir2Lir::CheckRegStorage(RegStorage rs, int wide, int ref, int fp) const {
+  if (kFailOnSizeError || kReportSizeError) {
+    CheckRegStorageImpl(rs, wide, ref, fp, kFailOnSizeError, kReportSizeError);
+  }
+}
+
 }  // namespace art
 
 #endif  // ART_COMPILER_DEX_QUICK_MIR_TO_LIR_INL_H_
