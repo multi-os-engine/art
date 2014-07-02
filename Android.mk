@@ -144,6 +144,12 @@ TEST_ART_TARGET_SYNC_DEPS :=
 test-art: test-art-host test-art-target
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
 
+# "mm test-art-full" to build and run all tests on host and device including all configurations of
+# run-test. This will take a while to run
+.PHONY: test-art-full
+test-art-full: test-art-host-full test-art-target-full
+	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+
 .PHONY: test-art-gtest
 test-art-gtest: test-art-host-gtest test-art-target-gtest
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
@@ -170,6 +176,12 @@ test-art-host-vixl: $(VIXL_TEST_DEPENDENCY)
 # "mm test-art-host" to build and run all host tests.
 .PHONY: test-art-host
 test-art-host: test-art-host-gtest test-art-host-oat test-art-host-run-test test-art-host-vixl
+	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+
+# "mm test-art-host-full" to build and run all host tests, including all configurations of run-test,
+# this will take a while to run.
+.PHONY: test-art-host-full
+test-art-host-full: test-art-host-gtest test-art-host-oat test-art-host-run-test-full test-art-host-vixl
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
 
 # All host tests that run solely with the default compiler.
@@ -237,6 +249,12 @@ endif
 # "mm test-art-target" to build and run all target tests.
 .PHONY: test-art-target
 test-art-target: test-art-target-gtest test-art-target-oat test-art-target-run-test
+	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
+
+# "mm test-art-target-full" to build and run all target tests including all configurations of
+# run-test, this will take a while to run.
+.PHONY: test-art-target-full
+test-art-target-full: test-art-target-gtest test-art-target-oat test-art-target-run-test-full
 	$(hide) $(call ART_TEST_PREREQ_FINISHED,$@)
 
 # All target tests that run solely with the default compiler.
@@ -329,7 +347,7 @@ $$(OUT_OAT_FILE): $(PRODUCT_OUT)/$(1) $(DEFAULT_DEX_PREOPT_BUILT_IMAGE) $(DEX2OA
 		--dex-location=/$(1) --oat-file=$$@ \
 		--instruction-set=$(DEX2OAT_TARGET_ARCH) \
 		--instruction-set-features=$(DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES) \
-		--android-root=$(PRODUCT_OUT)/system
+		--android-root=$(PRODUCT_OUT)/system --include-patch-information
 
 endif
 
