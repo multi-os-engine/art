@@ -65,6 +65,8 @@ struct CompilationUnit {
   const Compiler* compiler;
   InstructionSet instruction_set;
   bool target64;
+  // compiler_driver.GetCompilerOptions().GetIncludePatchInformation()
+  bool include_patch_information;
 
   InstructionSetFeatures GetInstructionSetFeatures() {
     return compiler_driver->GetInstructionSetFeatures();
