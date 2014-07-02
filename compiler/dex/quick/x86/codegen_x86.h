@@ -34,9 +34,11 @@ class X86Mir2Lir : public Mir2Lir {
 
   class InToRegStorageX86_64Mapper : public InToRegStorageMapper {
    public:
-    InToRegStorageX86_64Mapper() : cur_core_reg_(0), cur_fp_reg_(0) {}
+    explicit InToRegStorageX86_64Mapper(Mir2Lir* ml) : ml_(ml), cur_core_reg_(0), cur_fp_reg_(0) {}
     virtual ~InToRegStorageX86_64Mapper() {}
     virtual RegStorage GetNextReg(bool is_double_or_float, bool is_wide);
+   protected:
+    Mir2Lir* ml_;
    private:
     int cur_core_reg_;
     int cur_fp_reg_;
@@ -85,7 +87,20 @@ class X86Mir2Lir : public Mir2Lir {
   void MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg);
 
   // Required for target - register utilities.
-  RegStorage TargetReg(SpecialTargetRegister reg);
+  RegStorage TargetReg(SpecialTargetRegister reg) OVERRIDE;
+  RegStorage TargetReg32(SpecialTargetRegister reg);
+  RegStorage TargetReg(SpecialTargetRegister symbolic_reg, bool is_wide) OVERRIDE {
+    RegStorage reg = TargetReg32(symbolic_reg);
+    if (is_wide) {
+      return (reg.Is64Bit()) ? reg : As64BitReg(reg);
+    } else {
+      return (reg.Is32Bit()) ? reg : As32BitReg(reg);
+    }
+  }
+  RegStorage TargetRefReg(SpecialTargetRegister symbolic_reg) OVERRIDE {
+    RegStorage reg = TargetReg32(symbolic_reg);
+    return (!cu_->target64 ? reg : (reg.Is32Bit() ? As64BitReg(reg) : reg));
+  }
   RegStorage GetArgMappingToPhysicalReg(int arg_num);
   RegStorage GetCoreArgMappingToPhysicalReg(int core_arg_num);
   RegLocation GetReturnAlt();
@@ -390,6 +405,68 @@ class X86Mir2Lir : public Mir2Lir {
   std::vector<uint8_t>* ReturnCallFrameInformation();
 
  protected:
+  // Casting of RegStorage
+  private:
+    RegStorage As32BitReg(RegStorage reg) {
+      DCHECK(!reg.IsPair());
+      if ((kFailOnSizeError || kReportSizeError) && !reg.Is64Bit()) {
+        if (kFailOnSizeError) {
+          LOG(FATAL) << "Expected 64b register " << reg.GetReg();
+        } else {
+          LOG(WARNING) << "Expected 64b register " << reg.GetReg();
+          return reg;
+        }
+      }
+      RegStorage ret_val = RegStorage(RegStorage::k32BitSolo,
+                                      reg.GetRawBits() & RegStorage::kRegTypeMask);
+      DCHECK_EQ(GetRegInfo(reg)->FindMatchingView(RegisterInfo::k32SoloStorageMask)
+                               ->GetReg().GetReg(),
+                ret_val.GetReg());
+      return ret_val;
+    }
+
+    RegStorage Check32BitReg(RegStorage reg) {
+      if ((kFailOnSizeError || kReportSizeError) && !reg.Is32Bit()) {
+        if (kFailOnSizeError) {
+          LOG(FATAL) << "Checked for 32b register";
+        } else {
+          LOG(WARNING) << "Checked for 32b register";
+          return As32BitReg(reg);
+        }
+      }
+      return reg;
+    }
+
+    RegStorage As64BitReg(RegStorage reg) {
+      DCHECK(!reg.IsPair());
+      if ((kFailOnSizeError || kReportSizeError) && !reg.Is32Bit()) {
+        if (kFailOnSizeError) {
+          LOG(FATAL) << "Expected 32b register " << reg.GetReg();
+        } else {
+          LOG(WARNING) << "Expected 32b register " << reg.GetReg();
+          return reg;
+        }
+      }
+      RegStorage ret_val = RegStorage(RegStorage::k64BitSolo,
+                                      reg.GetRawBits() & RegStorage::kRegTypeMask);
+      DCHECK_EQ(GetRegInfo(reg)->FindMatchingView(RegisterInfo::k64SoloStorageMask)
+                               ->GetReg().GetReg(),
+                ret_val.GetReg());
+      return ret_val;
+    }
+
+    RegStorage Check64BitReg(RegStorage reg) {
+      if ((kFailOnSizeError || kReportSizeError) && !reg.Is64Bit()) {
+        if (kFailOnSizeError) {
+          LOG(FATAL) << "Checked for 64b register";
+        } else {
+          LOG(WARNING) << "Checked for 64b register";
+          return As64BitReg(reg);
+        }
+      }
+      return reg;
+    }
+
   size_t ComputeSize(const X86EncodingMap* entry, int32_t raw_reg, int32_t raw_index,
                      int32_t raw_base, int32_t displacement);
   void CheckValidByteRegister(const X86EncodingMap* entry, int32_t raw_reg);

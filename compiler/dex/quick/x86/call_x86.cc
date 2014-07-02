@@ -158,29 +158,33 @@ void X86Mir2Lir::GenFillArrayData(DexOffset table_offset, RegLocation rl_src) {
 
   // Making a call - use explicit registers
   FlushAllRegs();   /* Everything to home location */
-  LoadValueDirectFixed(rl_src, rs_rX86_ARG0);
+  RegStorage array_ptr = TargetRefReg(kArg0);
+  RegStorage payload = TargetRefReg(kArg1);
+  RegStorage method_start = TargetRefReg(kArg2);
+
+  LoadValueDirectFixed(rl_src, array_ptr);
   // Materialize a pointer to the fill data image
   if (base_of_code_ != nullptr) {
     // We can use the saved value.
     RegLocation rl_method = mir_graph_->GetRegLocation(base_of_code_->s_reg_low);
     if (rl_method.wide) {
-      LoadValueDirectWide(rl_method, rs_rX86_ARG2);
+      LoadValueDirectWide(rl_method, method_start);
     } else {
-      LoadValueDirect(rl_method, rs_rX86_ARG2);
+      LoadValueDirect(rl_method, method_start);
     }
     store_method_addr_used_ = true;
   } else {
     // TODO(64) force to be 64-bit
-    NewLIR1(kX86StartOfMethod, rs_rX86_ARG2.GetReg());
+    NewLIR1(kX86StartOfMethod, method_start.GetReg());
   }
-  NewLIR2(kX86PcRelAdr, rs_rX86_ARG1.GetReg(), WrapPointer(tab_rec));
-  NewLIR2(cu_->target64 ? kX86Add64RR : kX86Add32RR, rs_rX86_ARG1.GetReg(), rs_rX86_ARG2.GetReg());
+  NewLIR2(kX86PcRelAdr, payload.GetReg(), WrapPointer(tab_rec));
+  OpRegReg(kOpAdd, payload, method_start);
   if (cu_->target64) {
-    CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(8, pHandleFillArrayData), rs_rX86_ARG0,
-                            rs_rX86_ARG1, true);
+    CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(8, pHandleFillArrayData), array_ptr,
+                            payload, true);
   } else {
-    CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(4, pHandleFillArrayData), rs_rX86_ARG0,
-                            rs_rX86_ARG1, true);
+    CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(4, pHandleFillArrayData), array_ptr,
+                            payload, true);
   }
 }
 
@@ -229,7 +233,7 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   LockTemp(rs_rX86_ARG2);
 
   /* Build frame, return address already on stack */
-  stack_decrement_ = OpRegImm(kOpSub, rs_rX86_SP, frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set));
+  stack_decrement_ = OpRegImm(kOpSub, TargetRefReg(kSp), frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set));
 
   /*
    * We can safely skip the stack overflow check if we're
@@ -252,7 +256,7 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
         m2l_->ResetRegPool();
         m2l_->ResetDefTracking();
         GenerateTargetLabel(kPseudoThrowTarget);
-        m2l_->OpRegImm(kOpAdd, rs_rX86_SP, sp_displace_);
+        m2l_->OpRegImm(kOpAdd, m2l_->TargetRefReg(kSp), sp_displace_);
         m2l_->ClobberCallerSave();
         // Assumes codegen and target are in thumb2 mode.
         if (cu_->target64) {
@@ -277,9 +281,9 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
     // have moved us outside of the reserved area at the end of the stack.
     // cmp rs_rX86_SP, fs:[stack_end_]; jcc throw_slowpath
     if (cu_->target64) {
-      OpRegThreadMem(kOpCmp, rs_rX86_SP, Thread::StackEndOffset<8>());
+      OpRegThreadMem(kOpCmp, TargetRefReg(kSp), Thread::StackEndOffset<8>());
     } else {
-      OpRegThreadMem(kOpCmp, rs_rX86_SP, Thread::StackEndOffset<4>());
+      OpRegThreadMem(kOpCmp, TargetRefReg(kSp), Thread::StackEndOffset<4>());
     }
     LIR* branch = OpCondBranch(kCondUlt, nullptr);
     AddSlowPath(
@@ -291,11 +295,12 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   FlushIns(ArgLocs, rl_method);
 
   if (base_of_code_ != nullptr) {
+    RegStorage method_start = TargetRefReg(kArg0);
     // We have been asked to save the address of the method start for later use.
-    setup_method_address_[0] = NewLIR1(kX86StartOfMethod, rs_rX86_ARG0.GetReg());
+    setup_method_address_[0] = NewLIR1(kX86StartOfMethod, method_start.GetReg());
     int displacement = SRegOffset(base_of_code_->s_reg_low);
     // Native pointer - must be natural word size.
-    setup_method_address_[1] = StoreBaseDisp(rs_rX86_SP, displacement, rs_rX86_ARG0,
+    setup_method_address_[1] = StoreBaseDisp(TargetRefReg(kSp), displacement, method_start,
                                              cu_->target64 ? k64 : k32, kNotVolatile);
   }
 
@@ -315,7 +320,7 @@ void X86Mir2Lir::GenExitSequence() {
   NewLIR0(kPseudoMethodExit);
   UnSpillCoreRegs();
   /* Remove frame except for return address */
-  stack_increment_ = OpRegImm(kOpAdd, rs_rX86_SP, frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set));
+  stack_increment_ = OpRegImm(kOpAdd, TargetRefReg(kSp), frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set));
   NewLIR0(kX86Ret);
 }
 

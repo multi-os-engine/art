@@ -144,12 +144,12 @@ void X86Mir2Lir::GenLongToFP(RegLocation rl_dest, RegLocation rl_src, bool is_do
     } else {
       // It must have been register promoted if it is not a temp but is still in physical
       // register. Since we need it to be in memory to convert, we place it there now.
-      StoreBaseDisp(TargetReg(kSp), src_v_reg_offset, rl_src.reg, k64, kNotVolatile);
+      StoreBaseDisp(TargetRefReg(kSp), src_v_reg_offset, rl_src.reg, k64, kNotVolatile);
     }
   }
 
   // Push the source virtual register onto the x87 stack.
-  LIR *fild64 = NewLIR2NoDest(kX86Fild64M, TargetReg(kSp).GetReg(),
+  LIR *fild64 = NewLIR2NoDest(kX86Fild64M, TargetRefReg(kSp).GetReg(),
                               src_v_reg_offset + LOWORD_OFFSET);
   AnnotateDalvikRegAccess(fild64, (src_v_reg_offset + LOWORD_OFFSET) >> 2,
                           true /* is_load */, true /* is64bit */);
@@ -157,7 +157,7 @@ void X86Mir2Lir::GenLongToFP(RegLocation rl_dest, RegLocation rl_src, bool is_do
   // Now pop off x87 stack and store it in the destination VR's stack location.
   int opcode = is_double ? kX86Fstp64M : kX86Fstp32M;
   int displacement = is_double ? dest_v_reg_offset + LOWORD_OFFSET : dest_v_reg_offset;
-  LIR *fstp = NewLIR2NoDest(opcode, TargetReg(kSp).GetReg(), displacement);
+  LIR *fstp = NewLIR2NoDest(opcode, TargetRefReg(kSp).GetReg(), displacement);
   AnnotateDalvikRegAccess(fstp, displacement >> 2, false /* is_load */, is_double);
 
   /*
@@ -178,11 +178,11 @@ void X86Mir2Lir::GenLongToFP(RegLocation rl_dest, RegLocation rl_src, bool is_do
      */
     rl_result = EvalLoc(rl_dest, kFPReg, true);
     if (is_double) {
-      LoadBaseDisp(TargetReg(kSp), dest_v_reg_offset, rl_result.reg, k64, kNotVolatile);
+      LoadBaseDisp(TargetRefReg(kSp), dest_v_reg_offset, rl_result.reg, k64, kNotVolatile);
 
       StoreFinalValueWide(rl_dest, rl_result);
     } else {
-      Load32Disp(TargetReg(kSp), dest_v_reg_offset, rl_result.reg);
+      Load32Disp(TargetRefReg(kSp), dest_v_reg_offset, rl_result.reg);
 
       StoreFinalValue(rl_dest, rl_result);
     }
@@ -363,7 +363,7 @@ void X86Mir2Lir::GenRemFP(RegLocation rl_dest, RegLocation rl_src1, RegLocation 
     } else {
       // It must have been register promoted if it is not a temp but is still in physical
       // register. Since we need it to be in memory to convert, we place it there now.
-      StoreBaseDisp(TargetReg(kSp), src1_v_reg_offset, rl_src1.reg, is_double ? k64 : k32,
+      StoreBaseDisp(TargetRefReg(kSp), src1_v_reg_offset, rl_src1.reg, is_double ? k64 : k32,
                     kNotVolatile);
     }
   }
@@ -374,7 +374,7 @@ void X86Mir2Lir::GenRemFP(RegLocation rl_dest, RegLocation rl_src1, RegLocation 
       FlushSpecificReg(reg_info);
       ResetDef(rl_src2.reg);
     } else {
-      StoreBaseDisp(TargetReg(kSp), src2_v_reg_offset, rl_src2.reg, is_double ? k64 : k32,
+      StoreBaseDisp(TargetRefReg(kSp), src2_v_reg_offset, rl_src2.reg, is_double ? k64 : k32,
                     kNotVolatile);
     }
   }
@@ -382,12 +382,12 @@ void X86Mir2Lir::GenRemFP(RegLocation rl_dest, RegLocation rl_src1, RegLocation 
   int fld_opcode = is_double ? kX86Fld64M : kX86Fld32M;
 
   // Push the source virtual registers onto the x87 stack.
-  LIR *fld_2 = NewLIR2NoDest(fld_opcode, TargetReg(kSp).GetReg(),
+  LIR *fld_2 = NewLIR2NoDest(fld_opcode, TargetRefReg(kSp).GetReg(),
                              src2_v_reg_offset + LOWORD_OFFSET);
   AnnotateDalvikRegAccess(fld_2, (src2_v_reg_offset + LOWORD_OFFSET) >> 2,
                           true /* is_load */, is_double /* is64bit */);
 
-  LIR *fld_1 = NewLIR2NoDest(fld_opcode, TargetReg(kSp).GetReg(),
+  LIR *fld_1 = NewLIR2NoDest(fld_opcode, TargetRefReg(kSp).GetReg(),
                              src1_v_reg_offset + LOWORD_OFFSET);
   AnnotateDalvikRegAccess(fld_1, (src1_v_reg_offset + LOWORD_OFFSET) >> 2,
                           true /* is_load */, is_double /* is64bit */);
@@ -416,7 +416,7 @@ void X86Mir2Lir::GenRemFP(RegLocation rl_dest, RegLocation rl_src1, RegLocation 
   // Now store result in the destination VR's stack location.
   int displacement = dest_v_reg_offset + LOWORD_OFFSET;
   int opcode = is_double ? kX86Fst64M : kX86Fst32M;
-  LIR *fst = NewLIR2NoDest(opcode, TargetReg(kSp).GetReg(), displacement);
+  LIR *fst = NewLIR2NoDest(opcode, TargetRefReg(kSp).GetReg(), displacement);
   AnnotateDalvikRegAccess(fst, displacement >> 2, false /* is_load */, is_double /* is64bit */);
 
   // Pop ST(1) and ST(0).
@@ -435,10 +435,10 @@ void X86Mir2Lir::GenRemFP(RegLocation rl_dest, RegLocation rl_src1, RegLocation 
   if (rl_result.location == kLocPhysReg) {
     rl_result = EvalLoc(rl_dest, kFPReg, true);
     if (is_double) {
-      LoadBaseDisp(TargetReg(kSp), dest_v_reg_offset, rl_result.reg, k64, kNotVolatile);
+      LoadBaseDisp(TargetRefReg(kSp), dest_v_reg_offset, rl_result.reg, k64, kNotVolatile);
       StoreFinalValueWide(rl_dest, rl_result);
     } else {
-      Load32Disp(TargetReg(kSp), dest_v_reg_offset, rl_result.reg);
+      Load32Disp(TargetRefReg(kSp), dest_v_reg_offset, rl_result.reg);
       StoreFinalValue(rl_dest, rl_result);
     }
   }
@@ -626,7 +626,7 @@ bool X86Mir2Lir::GenInlinedAbsFloat(CallInfo* info) {
     // Operate directly into memory.
     int displacement = SRegOffset(rl_dest.s_reg_low);
     ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
-    LIR *lir = NewLIR3(kX86And32MI, TargetReg(kSp).GetReg(), displacement, 0x7fffffff);
+    LIR *lir = NewLIR3(kX86And32MI, TargetRefReg(kSp).GetReg(), displacement, 0x7fffffff);
     AnnotateDalvikRegAccess(lir, displacement >> 2, false /*is_load */, false /* is_64bit */);
     AnnotateDalvikRegAccess(lir, displacement >> 2, true /* is_load */, false /* is_64bit*/);
     return true;
@@ -681,7 +681,7 @@ bool X86Mir2Lir::GenInlinedAbsDouble(CallInfo* info) {
     // Operate directly into memory.
     int displacement = SRegOffset(rl_dest.s_reg_low);
     ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
-    LIR *lir = NewLIR3(kX86And32MI, TargetReg(kSp).GetReg(), displacement  + HIWORD_OFFSET, 0x7fffffff);
+    LIR *lir = NewLIR3(kX86And32MI, TargetRefReg(kSp).GetReg(), displacement  + HIWORD_OFFSET, 0x7fffffff);
     AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2, true /* is_load */, true /* is_64bit*/);
     AnnotateDalvikRegAccess(lir, (displacement + HIWORD_OFFSET) >> 2, false /*is_load */, true /* is_64bit */);
     return true;
