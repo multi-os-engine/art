@@ -41,6 +41,11 @@ class CompilerCallbacksImpl FINAL : public CompilerCallbacks {
       verification_results_->AddRejectedClass(ref);
     }
 
+    // We are running in an environment where we can call patchoat safetly so we should.
+    bool PreferRelocation() OVERRIDE {
+      return true;
+    }
+
   private:
     VerificationResults* const verification_results_;
     DexFileToMethodInlinerMap* const method_inliner_map_;

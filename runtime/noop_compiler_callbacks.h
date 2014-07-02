@@ -29,6 +29,9 @@ class NoopCompilerCallbacks FINAL : public CompilerCallbacks {
     return true;
   }
   void ClassRejected(ClassReference ref) OVERRIDE {}
+
+  // This is only used by compilers which need to be able to run without relocation.
+  bool PreferRelocation() OVERRIDE { return false; }
 };
 
 }  // namespace art

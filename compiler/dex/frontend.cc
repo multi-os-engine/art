@@ -626,6 +626,7 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
   CompilationUnit cu(driver.GetArenaPool());
 
   cu.compiler_driver = &driver;
+  cu.add_patches = driver.GetCompilerOptions().GetIncludePatchInformation();
   cu.class_linker = class_linker;
   cu.instruction_set = driver.GetInstructionSet();
   if (cu.instruction_set == kArm) {

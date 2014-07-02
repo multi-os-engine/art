@@ -365,7 +365,7 @@ static void GenNewArrayImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu,
         driver->CanEmbedTypeInCode(*dex_file, type_idx, &is_type_initialized, &use_direct_type_ptr,
                                    &direct_type_ptr, &is_finalizable)) {
       // The fast path.
-      if (!use_direct_type_ptr) {
+      if (!use_direct_type_ptr || cu->add_patches) {
         mir_to_lir->LoadClassType(type_idx, kArg0);
         func_offset = QUICK_ENTRYPOINT_OFFSET(pointer_size, pAllocArrayResolved);
         mir_to_lir->CallRuntimeHelperRegMethodRegLocation(func_offset,
@@ -1075,7 +1075,7 @@ static void GenNewInstanceImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, uint32_
                                    &direct_type_ptr, &is_finalizable) &&
                                    !is_finalizable) {
       // The fast path.
-      if (!use_direct_type_ptr) {
+      if (!use_direct_type_ptr || cu->add_patches) {
         mir_to_lir->LoadClassType(type_idx, kArg0);
         if (!is_type_initialized) {
           func_offset = QUICK_ENTRYPOINT_OFFSET(pointer_size, pAllocObjectResolved);
