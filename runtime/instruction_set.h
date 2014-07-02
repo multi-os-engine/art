@@ -194,6 +194,8 @@ static constexpr size_t GetStackOverflowReservedBytes(InstructionSet isa) {
            (LOG(FATAL) << "Unknown instruction set" << isa, 0);
 }
 
+InstructionSet GetStandardIsa(InstructionSet isa);
+
 static constexpr size_t kRuntimeStackOverflowReservedBytes =
     GetStackOverflowReservedBytes(kRuntimeISA);
 

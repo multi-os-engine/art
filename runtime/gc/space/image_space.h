@@ -118,8 +118,14 @@ class ImageSpace : public MemMapSpace {
   // Returns true if an image was found, false otherwise.
   static bool FindImageFilename(const char* image_location,
                                 InstructionSet image_isa,
-                                std::string* location,
-                                bool* is_system);
+                                std::string* system_location,
+                                bool* has_system,
+                                std::string* data_location,
+                                bool* dalvik_cache_exists,
+                                bool* has_data);
+
+  static bool RelocateImage(const char* image_location, const char* dest_filename,
+                            InstructionSet isa, std::string* error_msg);
 
   OatFile* OpenOatFile(const char* image, std::string* error_msg) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
