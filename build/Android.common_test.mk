@@ -22,9 +22,15 @@ include art/build/Android.common_path.mk
 # List of known broken tests that we won't attempt to execute. The test name must be the full
 # rule name such as test-art-host-oat-optimizing-HelloWorld64.
 ART_TEST_KNOWN_BROKEN := \
+  test-art-host-oat-optimizing-norelocate-SignalTest64 \
+  test-art-host-oat-optimizing-norelocate-SignalTest32 \
+  test-art-host-oat-optimizing-relocate-SignalTest64 \
+  test-art-host-oat-optimizing-relocate-SignalTest32 \
   test-art-host-oat-optimizing-SignalTest64 \
   test-art-host-oat-optimizing-SignalTest32 \
-  test-art-target-oat-optimizing-SignalTest32
+  test-art-target-oat-optimizing-SignalTest32 \
+  test-art-target-oat-optimizing-norelocate-SignalTest32 \
+  test-art-target-oat-optimizing-relocate-SignalTest32
 
 # List of known failing tests that when executed won't cause test execution to not finish.
 # The test name must be the full rule name such as test-art-host-oat-optimizing-HelloWorld64.
@@ -47,6 +53,21 @@ ART_TEST_GC_VERIFY ?= $(ART_TEST_FULL)
 
 # Do you want tests with the GC stress mode enabled run?
 ART_TEST_GC_STRESS ?= $(ART_TEST_FULL)
+
+# Do you want oat tests with relocation enabled?
+ART_TEST_OAT_RELOCATE ?= true
+
+# Do you want oat tests with relocation disabled?
+ART_TEST_OAT_NO_RELOCATE ?= $(ART_TEST_FULL)
+
+# Do you want run-tests with relocation enabled?
+ART_TEST_RUN_TEST_RELOCATE ?= $(ART_TEST_FULL)
+
+# Do you want run-tests with relocation disabled?
+ART_TEST_RUN_TEST_NO_RELOCATE ?= $(ART_TEST_FULL)
+
+# Do you want run-tests with prebuild enabled?
+ART_TEST_RUN_TEST_PREBUILD ?= true
 
 # Define the command run on test failure. $(1) is the name of the test. Executed by the shell.
 define ART_TEST_FAILED
