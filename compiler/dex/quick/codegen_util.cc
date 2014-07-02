@@ -1185,7 +1185,7 @@ void Mir2Lir::LoadCodeAddress(const MethodReference& target_method, InvokeType t
     data_target->operands[2] = type;
   }
   // TODO: This is actually a pointer, not a reference.
-  LIR* load_pc_rel = OpPcRelLoad(TargetRefReg(symbolic_reg), data_target);
+  LIR* load_pc_rel = OpPcRelLoad(TargetPtrReg(symbolic_reg), data_target);
   AppendLIR(load_pc_rel);
   DCHECK_NE(cu_->instruction_set, kMips) << reinterpret_cast<void*>(data_target);
 }
@@ -1201,7 +1201,7 @@ void Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeType
     // resolve these invokes to the same method, so we don't care which one we record here.
     data_target->operands[2] = type;
   }
-  LIR* load_pc_rel = OpPcRelLoad(TargetRefReg(symbolic_reg), data_target);
+  LIR* load_pc_rel = OpPcRelLoad(TargetPtrReg(symbolic_reg), data_target);
   AppendLIR(load_pc_rel);
   DCHECK_NE(cu_->instruction_set, kMips) << reinterpret_cast<void*>(data_target);
 }
@@ -1212,7 +1212,7 @@ void Mir2Lir::LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic_re
   if (data_target == nullptr) {
     data_target = AddWordData(&class_literal_list_, type_idx);
   }
-  LIR* load_pc_rel = OpPcRelLoad(TargetRefReg(symbolic_reg), data_target);
+  LIR* load_pc_rel = OpPcRelLoad(TargetPtrReg(symbolic_reg), data_target);
   AppendLIR(load_pc_rel);
 }
 
