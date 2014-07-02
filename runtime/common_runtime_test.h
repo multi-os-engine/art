@@ -224,12 +224,12 @@ class CommonRuntimeTest : public testing::Test {
   // Allow subclases such as CommonCompilerTest to add extra options.
   virtual void SetUpRuntimeOptions(Runtime::Options *options) {}
 
-  virtual void TearDown() {
-    const char* android_data = getenv("ANDROID_DATA");
-    ASSERT_TRUE(android_data != nullptr);
-    DIR* dir = opendir(dalvik_cache_.c_str());
+  void ClearDirectory(const char* dirpath) {
+    ASSERT_TRUE(dirpath != nullptr);
+    DIR* dir = opendir(dirpath);
     ASSERT_TRUE(dir != nullptr);
     dirent* e;
+    struct stat s;
     while ((e = readdir(dir)) != nullptr) {
       if ((strcmp(e->d_name, ".") == 0) || (strcmp(e->d_name, "..") == 0)) {
         continue;
@@ -237,10 +237,24 @@ class CommonRuntimeTest : public testing::Test {
       std::string filename(dalvik_cache_);
       filename.push_back('/');
       filename.append(e->d_name);
-      int unlink_result = unlink(filename.c_str());
-      ASSERT_EQ(0, unlink_result);
+      int stat_result = lstat(filename.c_str(), &s);
+      ASSERT_EQ(0, stat_result) << "unable to stat " << filename;
+      if (S_ISDIR(s.st_mode)) {
+        ClearDirectory(filename.c_str());
+        int rmdir_result = rmdir(filename.c_str());
+        ASSERT_EQ(0, rmdir_result) << filename;
+      } else {
+        int unlink_result = unlink(filename.c_str());
+        ASSERT_EQ(0, unlink_result) << filename;
+      }
     }
     closedir(dir);
+  }
+
+  virtual void TearDown() {
+    const char* android_data = getenv("ANDROID_DATA");
+    ASSERT_TRUE(android_data != nullptr);
+    ClearDirectory(dalvik_cache_.c_str());
     int rmdir_cache_result = rmdir(dalvik_cache_.c_str());
     ASSERT_EQ(0, rmdir_cache_result);
     int rmdir_data_result = rmdir(android_data_.c_str());

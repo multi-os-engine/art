@@ -17,11 +17,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 
 #include <string>
 #include <vector>
 
+#include "base/scoped_flock.h"
 #include "base/stringpiece.h"
 #include "base/stringprintf.h"
 #include "elf_utils.h"
@@ -235,6 +237,12 @@ bool PatchOat::Patch(const File* input_oat, const std::string& image_location, o
 
 bool PatchOat::WriteElf(File* out) {
   TimingLogger::ScopedTiming t("Writing Elf File", timings_);
+  std::string error_msg;
+
+  // Lock the output file.
+  ScopedFlock flock;
+  flock.Init(out, &error_msg);
+
   CHECK(oat_file_.get() != nullptr);
   CHECK(out != nullptr);
   size_t expect = oat_file_->Size();
@@ -249,6 +257,12 @@ bool PatchOat::WriteElf(File* out) {
 
 bool PatchOat::WriteImage(File* out) {
   TimingLogger::ScopedTiming t("Writing image File", timings_);
+  std::string error_msg;
+
+  // Lock the output file.
+  ScopedFlock flock;
+  flock.Init(out, &error_msg);
+
   CHECK(image_ != nullptr);
   CHECK(out != nullptr);
   size_t expect = image_->Size();
@@ -436,19 +450,50 @@ bool PatchOat::CheckOatFile() {
   return true;
 }
 
+bool PatchOat::PatchOatHeader() {
+  Elf32_Shdr *rodata_sec = oat_file_->FindSectionByName(".rodata");
+  if (rodata_sec == nullptr) {
+    return false;
+  }
+  OatHeader* oat_header = reinterpret_cast<OatHeader*>(oat_file_->Begin() + rodata_sec->sh_offset);
+  if (!oat_header->IsValid()) {
+    LOG(ERROR) << "Elf file " << oat_file_->GetFile().GetPath() << " has an invalid oat header";
+    return false;
+  }
+  oat_header->RelocateOat(delta_);
+  return true;
+}
+
 bool PatchOat::PatchElf() {
-  TimingLogger::ScopedTiming t("Fixup Elf Headers", timings_);
+  TimingLogger::ScopedTiming t("Fixup Elf Text Section", timings_);
+  if (!PatchTextSection()) {
+    return false;
+  }
+
+  if (!PatchOatHeader()) {
+    return false;
+  }
+
+  bool need_fixup = false;
+  t.NewTiming("Fixup Elf Headers");
   // Fixup Phdr's
   for (unsigned int i = 0; i < oat_file_->GetProgramHeaderNum(); i++) {
     Elf32_Phdr& hdr = oat_file_->GetProgramHeader(i);
-    if (hdr.p_vaddr != 0) {
+    if (hdr.p_vaddr != 0 && hdr.p_vaddr != hdr.p_offset) {
+      need_fixup = true;
       hdr.p_vaddr += delta_;
     }
-    if (hdr.p_paddr != 0) {
+    if (hdr.p_paddr != 0 && hdr.p_paddr != hdr.p_offset) {
+      need_fixup = true;
       hdr.p_paddr += delta_;
     }
   }
-  // Fixup Shdr's
+  if (!need_fixup) {
+    // This was never passed through ElfFixup so we can ignore all the other headers, since they
+    // all just hold offsets, which this won't change.
+    return true;
+  }
+  t.NewTiming("Fixup Section Headers");
   for (unsigned int i = 0; i < oat_file_->GetSectionHeaderNum(); i++) {
     Elf32_Shdr& hdr = oat_file_->GetSectionHeader(i);
     if (hdr.sh_addr != 0) {
@@ -456,7 +501,7 @@ bool PatchOat::PatchElf() {
     }
   }
 
-  // Fixup Dynamics.
+  t.NewTiming("Fixup Dynamics");
   for (Elf32_Word i = 0; i < oat_file_->GetDynamicNum(); i++) {
     Elf32_Dyn& dyn = oat_file_->GetDynamic(i);
     if (IsDynamicSectionPointer(dyn.d_tag, oat_file_->GetHeader().e_machine)) {
@@ -478,12 +523,6 @@ bool PatchOat::PatchElf() {
     if (!PatchSymbols(symtab_sec)) {
       return false;
     }
-  }
-
-  t.NewTiming("Fixup Elf Text Section");
-  // Fixup text
-  if (!PatchTextSection()) {
-    return false;
   }
 
   return true;
@@ -993,7 +1032,9 @@ static int patchoat(int argc, char **argv) {
   };
 
   if (debug) {
-    LOG(INFO) << "moving offset by " << base_delta << " (0x" << std::hex << base_delta << ") bytes";
+    LOG(INFO) << "moving offset by " << base_delta
+              << " (0x" << std::hex << base_delta << ") bytes or "
+              << std::dec << (base_delta/kPageSize) << " pages.";
   }
 
   bool ret;

@@ -37,6 +37,7 @@ class ScopedFlock {
   // changed (usually due to a new file being created at the same path)
   // between attempts to lock it.
   bool Init(const char* filename, std::string* error_msg);
+  bool Init(File* file, std::string* error_msg);
 
   // Returns the (locked) file associated with this instance.
   File* GetFile();

@@ -575,14 +575,14 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
   if (direct_code != 0 && direct_method != 0) {
     switch (state) {
     case 0:  // Get the current Method* [sets kArg0]
-      if (direct_code != static_cast<uintptr_t>(-1)) {
+      if (!cu->include_patch_information && direct_code != static_cast<uintptr_t>(-1)) {
         if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
           cg->LoadConstant(cg->TargetPtrReg(kInvokeTgt), direct_code);
         }
       } else if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
         cg->LoadCodeAddress(target_method, type, kInvokeTgt);
       }
-      if (direct_method != static_cast<uintptr_t>(-1)) {
+      if (!cu->include_patch_information && direct_method != static_cast<uintptr_t>(-1)) {
         cg->LoadConstant(cg->TargetReg(kArg0, kRef), direct_method);
       } else {
         cg->LoadMethodAddress(target_method, type, kArg0);
@@ -605,7 +605,7 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
                       kNotVolatile);
       // Set up direct code if known.
       if (direct_code != 0) {
-        if (direct_code != static_cast<uintptr_t>(-1)) {
+        if (!cu->include_patch_information && direct_code != static_cast<uintptr_t>(-1)) {
           cg->LoadConstant(cg->TargetPtrReg(kInvokeTgt), direct_code);
         } else if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
           CHECK_LT(target_method.dex_method_index, target_method.dex_file->NumMethodIds());

@@ -1175,6 +1175,43 @@ const char* GetAndroidData() {
   return android_data;
 }
 
+const char* GetAndroidDataSafe() {
+  const char* android_data = getenv("ANDROID_DATA");
+  if (android_data == NULL) {
+    if (OS::DirectoryExists("/data")) {
+      android_data = "/data";
+    } else {
+      return nullptr;
+    }
+  }
+  if (!OS::DirectoryExists(android_data)) {
+    return nullptr;
+  }
+  return android_data;
+}
+
+void GetDalvikCache(const char* subdir, std::string* dalvik_cache,
+                    bool* have_android_data, bool* dalvik_cache_exists,
+                    const bool create_if_absent) {
+  CHECK(subdir != nullptr);
+  const char* android_data = GetAndroidDataSafe();
+  if (android_data == nullptr) {
+    *have_android_data = false;
+    *dalvik_cache_exists = false;
+    return;
+  } else {
+    *have_android_data = true;
+  }
+  const std::string dalvik_cache_root(StringPrintf("%s/dalvik-cache/", android_data));
+  *dalvik_cache = dalvik_cache_root + subdir;
+  *dalvik_cache_exists = OS::DirectoryExists(dalvik_cache->c_str());
+  if (create_if_absent && !*dalvik_cache_exists && strcmp(android_data, "/data") != 0) {
+    // Don't create the system's /data/dalvik-cache/... because it needs special permissions.
+    *dalvik_cache_exists = ((mkdir(dalvik_cache_root.c_str(), 0700) == 0 || errno == EEXIST) &&
+                            (mkdir(dalvik_cache->c_str(), 0700) == 0 || errno == EEXIST));
+  }
+}
+
 std::string GetDalvikCacheOrDie(const char* subdir, const bool create_if_absent) {
   CHECK(subdir != nullptr);
   const char* android_data = GetAndroidData();
@@ -1199,6 +1236,22 @@ std::string GetDalvikCacheOrDie(const char* subdir, const bool create_if_absent)
     }
   }
   return dalvik_cache;
+}
+
+bool GetDalvikCacheFilename(const char* location, const char* cache_location,
+                            std::string* filename) {
+  if (location[0] != '/') {
+    LOG(ERROR) << "Expected path in location to be absolute: "<< location;
+    return false;
+  }
+  std::string cache_file(&location[1]);  // skip leading slash
+  if (!EndsWith(location, ".dex") && !EndsWith(location, ".art")) {
+    cache_file += "/";
+    cache_file += DexFile::kClassesDex;
+  }
+  std::replace(cache_file.begin(), cache_file.end(), '/', '@');
+  *filename = StringPrintf("%s/%s", cache_location, cache_file.c_str());
+  return true;
 }
 
 std::string GetDalvikCacheFilenameOrDie(const char* location, const char* cache_location) {
