@@ -61,9 +61,12 @@ build_output="build-output.txt"
 lib="libartd.so"
 run_args="--quiet"
 
+prebuild_mode="no"
 target_mode="yes"
 dev_mode="no"
 update_mode="no"
+debug_mode="no"
+relocate="yes"
 runtime="art"
 usage="no"
 build_only="no"
@@ -88,6 +91,16 @@ while true; do
         lib="libdvm.so"
         runtime="dalvik"
         shift
+    elif [ "x$1" = "x--relocate" ]; then
+        relocate="yes"
+        shift
+    elif [ "x$1" = "x--no-relocate" ]; then
+        relocate="no"
+        shift
+    elif [ "x$1" = "x--prebuild" ]; then
+        RUN="${progdir}/etc/push-and-run-prebuilt-test-jar"
+        prebuild_mode="yes"
+        shift;
     elif [ "x$1" = "x--image" ]; then
         shift
         image="$1"
@@ -174,6 +187,13 @@ while true; do
 done
 mkdir -p $tmp_dir
 
+if [ "$target_mode" = "no" ]; then
+    if [ "$prebuild_mode" = "yes" ]; then
+        echo "--prebuild is not compatible with --host"
+        exit 1;
+    fi
+fi
+
 if [ ! "$runtime" = "jvm" ]; then
   run_args="${run_args} --lib $lib"
 fi
@@ -198,6 +218,9 @@ elif [ "$runtime" = "art" ]; then
         run_args="${run_args} --boot -Ximage:${ANDROID_HOST_OUT}/framework/core.art"
     else
         run_args="${run_args} --boot -Ximage:/data/art-test/core.art"
+        if [ "$relocate" = "no" ]; then
+          run_args="${run_args} --no-relocate";
+        fi
     fi
 fi
 
@@ -252,6 +275,10 @@ if [ "$usage" = "yes" ]; then
         echo "    --zygote             Spawn the process from the Zygote." \
              "If used, then the"
         echo "                         other runtime options are ignored."
+        echo "    --prebuild           Run dex2oat on the files before starting test."
+        echo "                         This is only compatable with target tests."
+        echo "    --relocate           Force the use of relocating in the test"
+        echo "    --no-relocate        Force the use of no relocating in the test"
         echo "    --host               Use the host-mode virtual machine."
         echo "    --invoke-with        Pass --invoke-with option to runtime."
         echo "    --dalvik             Use Dalvik (off by default)."

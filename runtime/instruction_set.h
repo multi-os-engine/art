@@ -194,6 +194,20 @@ static constexpr size_t GetStackOverflowReservedBytes(InstructionSet isa) {
            (LOG(FATAL) << "Unknown instruction set" << isa, 0);
 }
 
+static InstructionSet GetStandardIsa(InstructionSet isa) {
+  switch (isa) {
+    case kThumb2:
+    case kArm:
+      return kThumb2;
+    default:
+      return isa;
+  }
+}
+
+static constexpr bool IsSameIsa(InstructionSet a, InstructionSet b) {
+  return (a == b) || (GetStandardIsa(a) == GetStandardIsa(b));
+}
+
 static constexpr size_t kRuntimeStackOverflowReservedBytes =
     GetStackOverflowReservedBytes(kRuntimeISA);
 

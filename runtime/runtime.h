@@ -25,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "compiler_callbacks.h"
 #include "instrumentation.h"
 #include "instruction_set.h"
 #include "jobject_comparator.h"
@@ -54,7 +55,6 @@ namespace verifier {
 class MethodVerifier;
 }
 class ClassLinker;
-class CompilerCallbacks;
 class DexFile;
 class InternTable;
 class JavaVMExt;
@@ -91,6 +91,18 @@ class Runtime {
     return compiler_callbacks_ != nullptr;
   }
 
+  bool CanRelocate() const {
+    return !IsCompiler() || compiler_callbacks_->IsRelocationPossible();
+  }
+
+  bool ShouldRelocate() const {
+    return must_relocate_ && CanRelocate();
+  }
+
+  bool MustRelocateIfPossible() const {
+    return must_relocate_;
+  }
+
   CompilerCallbacks* GetCompilerCallbacks() {
     return compiler_callbacks_;
   }
@@ -104,6 +116,7 @@ class Runtime {
   }
 
   std::string GetCompilerExecutable() const;
+  std::string GetPatchoatExecutable() const;
 
   const std::vector<std::string>& GetCompilerOptions() const {
     return compiler_options_;
@@ -485,10 +498,12 @@ class Runtime {
 
   CompilerCallbacks* compiler_callbacks_;
   bool is_zygote_;
+  bool must_relocate_;
   bool is_concurrent_gc_enabled_;
   bool is_explicit_gc_disabled_;
 
   std::string compiler_executable_;
+  std::string patchoat_executable_;
   std::vector<std::string> compiler_options_;
   std::vector<std::string> image_compiler_options_;
 
