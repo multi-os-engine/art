@@ -39,6 +39,16 @@ const char* GetInstructionSetString(const InstructionSet isa) {
   }
 }
 
+InstructionSet GetStandardIsa(InstructionSet isa) {
+  switch (isa) {
+    case kThumb2:
+    case kArm:
+      return kThumb2;
+    default:
+      return isa;
+  }
+}
+
 InstructionSet GetInstructionSetFromString(const char* isa_str) {
   CHECK(isa_str != nullptr);
 
