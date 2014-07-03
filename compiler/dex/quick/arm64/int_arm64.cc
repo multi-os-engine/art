@@ -502,7 +502,6 @@ bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   // If is_long, high half is in info->args[5]
   RegLocation rl_src_new_value = info->args[is_long ? 6 : 5];  // int, long or Object
   // If is_long, high half is in info->args[7]
-  RegLocation rl_dest = InlineTarget(info);  // boolean place for result
 
   // Load Object and offset
   RegLocation rl_object = LoadValue(rl_src_obj, kRefReg);
@@ -568,11 +567,17 @@ bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   LIR* exit_loop = NewLIR0(kPseudoTargetLabel);
   early_exit->target = exit_loop;
 
-  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  NewLIR4(kA64Csinc4rrrc, rl_result.reg.GetReg(), rwzr, rwzr, kArmCondNe);
-
   FreeTemp(r_tmp);  // Now unneeded.
   FreeTemp(r_ptr);  // Now unneeded.
+
+  if (info->result.location == kLocInvalid) {
+    // Result it unused, we're done.
+    return true;
+  }
+
+  RegLocation rl_dest = InlineTarget(info);  // boolean place for result
+  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
+  NewLIR4(kA64Csinc4rrrc, rl_result.reg.GetReg(), rwzr, rwzr, kArmCondNe);
 
   StoreValue(rl_dest, rl_result);
 

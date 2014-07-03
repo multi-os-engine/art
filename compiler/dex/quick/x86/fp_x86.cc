@@ -602,10 +602,7 @@ bool X86Mir2Lir::GenInlinedAbsFloat(CallInfo* info) {
 
   // Get the virtual register number
   DCHECK_NE(rl_src.s_reg_low, INVALID_SREG);
-  if (rl_dest.s_reg_low == INVALID_SREG) {
-    // Result is unused, the code is dead. Inlining successful, no code generated.
-    return true;
-  }
+  DCHECK_NE(rl_dest.s_reg_low, INVALID_SREG);
   int v_src_reg = mir_graph_->SRegToVReg(rl_src.s_reg_low);
   int v_dst_reg = mir_graph_->SRegToVReg(rl_dest.s_reg_low);
 
@@ -644,10 +641,7 @@ bool X86Mir2Lir::GenInlinedAbsDouble(CallInfo* info) {
   RegLocation rl_src = info->args[0];
   RegLocation rl_dest = InlineTargetWide(info);
   DCHECK_NE(rl_src.s_reg_low, INVALID_SREG);
-  if (rl_dest.s_reg_low == INVALID_SREG) {
-    // Result is unused, the code is dead. Inlining successful, no code generated.
-    return true;
-  }
+  DCHECK_NE(rl_dest.s_reg_low, INVALID_SREG);
   if (cu_->target64) {
     rl_src = LoadValueWide(rl_src, kCoreReg);
     RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);

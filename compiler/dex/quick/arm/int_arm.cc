@@ -774,7 +774,6 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   // If is_long, high half is in info->args[5]
   RegLocation rl_src_new_value = info->args[is_long ? 6 : 5];  // int, long or Object
   // If is_long, high half is in info->args[7]
-  RegLocation rl_dest = InlineTarget(info);  // boolean place for result
 
   // We have only 5 temporary registers available and actually only 4 if the InlineTarget
   // above locked one of the temps. For a straightforward CAS64 we need 7 registers:
@@ -908,7 +907,13 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     FreeTemp(rl_expected.reg);  // Now unneeded.
   }
 
+  if (info->result.location == kLocInvalid) {
+    // Result it unused, we're done.
+    return true;
+  }
+
   // result := (tmp1 != 0) ? 0 : 1;
+  RegLocation rl_dest = InlineTarget(info);  // boolean place for result
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   OpRegRegImm(kOpRsub, rl_result.reg, r_tmp, 1);
   DCHECK(last_lir_insn_->u.m.def_mask->HasBit(ResourceMask::kCCode));

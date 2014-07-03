@@ -34,6 +34,97 @@ namespace art {
 
 namespace {  // anonymous namespace
 
+enum {
+  kFlagIntrinsicStatic = 1,
+  kFlagIntrinsicPure = 2,
+};
+
+static constexpr int kIntrinsicFlags[] = {
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicDoubleCvt
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicFloatCvt
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicReverseBits
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicReverseBytes
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicAbsInt
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicAbsLong
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicAbsFloat
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicAbsDouble
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicMinMaxInt
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicMinMaxLong
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicMinMaxFloat
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicMinMaxDouble
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicSqrt
+    kFlagIntrinsicPure,                           // kIntrinsicCharAt
+    kFlagIntrinsicPure,                           // kIntrinsicCompareTo
+    kFlagIntrinsicPure,                           // kIntrinsicIsEmptyOrLength
+    kFlagIntrinsicPure,                           // kIntrinsicIndexOf
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicCurrentThread
+    // NOTE: Do not consider SIGSEGV a side effect of kIntrinsicPeek.
+    kFlagIntrinsicStatic | kFlagIntrinsicPure,    // kIntrinsicPeek
+    kFlagIntrinsicStatic | 0,                     // kIntrinsicPoke
+    0,                                            // kIntrinsicCas
+    // NOTE: Do not consider SIGSEGV a side effect of kIntrinsicUnsafeGet.
+    kFlagIntrinsicPure,                           // kIntrinsicUnsafeGet
+    0,                                            // kIntrinsicUnsafePut
+};
+
+COMPILE_ASSERT(arraysize(kIntrinsicFlags) == kInlineOpNop, check_arraysize_kIntrinsicIsStatic);
+
+constexpr bool IsStatic(InlineMethodOpcode opcode) {
+  return (kIntrinsicFlags[opcode] & kFlagIntrinsicStatic) != 0;
+}
+
+COMPILE_ASSERT(IsStatic(kIntrinsicDoubleCvt), DoubleCvt_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicFloatCvt), FloatCvt_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicReverseBits), ReverseBits_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicReverseBytes), ReverseBytes_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicAbsInt), AbsInt_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicAbsLong), AbsLong_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicAbsFloat), AbsFloat_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicAbsDouble), AbsDouble_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicMinMaxInt), MinMaxInt_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicMinMaxLong), MinMaxLong_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicMinMaxFloat), MinMaxFloat_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicMinMaxDouble), MinMaxDouble_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicSqrt), Sqrt_must_be_static);
+COMPILE_ASSERT(!IsStatic(kIntrinsicCharAt), CharAt_must_not_be_static);
+COMPILE_ASSERT(!IsStatic(kIntrinsicCompareTo), CompareTo_must_not_be_static);
+COMPILE_ASSERT(!IsStatic(kIntrinsicIsEmptyOrLength), IsEmptyOrLength_must_not_be_static);
+COMPILE_ASSERT(!IsStatic(kIntrinsicIndexOf), IndexOf_must_not_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicCurrentThread), CurrentThread_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicPeek), Peek_must_be_static);
+COMPILE_ASSERT(IsStatic(kIntrinsicPoke),Poke_must_be_static);
+COMPILE_ASSERT(!IsStatic(kIntrinsicCas), Cas_must_not_be_static);
+COMPILE_ASSERT(!IsStatic(kIntrinsicUnsafeGet), UnsafeGet_must_not_be_static);
+COMPILE_ASSERT(!IsStatic(kIntrinsicUnsafePut), UnsafePut_must_not_be_static);
+
+constexpr bool IsPure(InlineMethodOpcode opcode) {
+  return (kIntrinsicFlags[opcode] & kFlagIntrinsicPure) != 0;
+}
+
+COMPILE_ASSERT(IsPure(kIntrinsicDoubleCvt), DoubleCvt_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicFloatCvt), FloatCvt_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicReverseBits), ReverseBits_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicReverseBytes), ReverseBytes_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicAbsInt), AbsInt_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicAbsLong), AbsLong_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicAbsFloat), AbsFloat_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicAbsDouble), AbsDouble_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicMinMaxInt), MinMaxInt_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicMinMaxLong), MinMaxLong_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicMinMaxFloat), MinMaxFloat_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicMinMaxDouble), MinMaxDouble_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicSqrt), Sqrt_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicCharAt), CharAt_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicCompareTo), CompareTo_not_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicIsEmptyOrLength), IsEmptyOrLength_not_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicIndexOf), IndexOf_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicCurrentThread), CurrentThread_must_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicPeek), Peek_must_not_be_pure);
+COMPILE_ASSERT(!IsPure(kIntrinsicPoke),Poke_must_not_be_pure);
+COMPILE_ASSERT(!IsPure(kIntrinsicCas), Cas_must_not_be_pure);
+COMPILE_ASSERT(IsPure(kIntrinsicUnsafeGet), UnsafeGet_must_not_be_pure);
+COMPILE_ASSERT(!IsPure(kIntrinsicUnsafePut), UnsafePut_must_not_be_pure);
+
 MIR* AllocReplacementMIR(MIRGraph* mir_graph, MIR* invoke, MIR* move_return) {
   MIR* insn = mir_graph->NewMIR();
   insn->offset = invoke->offset;
@@ -333,6 +424,14 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
       return false;
     }
     intrinsic = it->second;
+  }
+  if (IsStatic(intrinsic.opcode) != (info->type == kStatic)) {
+    // Invoke type mismatch.
+    return false;
+  }
+  if (IsPure(intrinsic.opcode) && info->result.location == kLocInvalid) {
+    // No side effects and the result is unused. Consider inlined without generating code.
+    return true;
   }
   switch (intrinsic.opcode) {
     case kIntrinsicDoubleCvt:
