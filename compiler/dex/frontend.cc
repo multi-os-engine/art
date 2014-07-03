@@ -508,6 +508,7 @@ CompilationUnit::CompilationUnit(ArenaPool* pool)
 }
 
 CompilationUnit::~CompilationUnit() {
+  overridden_pass_options.clear();
 }
 
 void CompilationUnit::StartTimingSplit(const char* label) {
