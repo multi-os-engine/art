@@ -79,10 +79,54 @@ class PassME: public Pass {
   }
 
   ~PassME() {
+    default_options_.clear();
   }
 
   virtual DataFlowAnalysisMode GetTraversal() const {
     return traversal_type_;
+  }
+
+  /**
+   * @return Returns whether the pass has any configurable options.
+   */
+  bool HasOptions() const {
+    return default_options_.size() != 0;
+  }
+
+  /**
+   * @brief Prints the pass options along with default settings if there are any.
+   * @details The printing is done using LOG(INFO).
+   */
+  void PrintPassDefaultOptions() const {
+    for (auto option_it = default_options_.begin(); option_it != default_options_.end(); option_it++) {
+      LOG(INFO) << "\t" << option_it->first << ":" << std::dec << option_it->second;
+    }
+  }
+
+  /**
+   * @brief Used to obtain the option for a pass.
+   * @details Will return the overridden option if it exists or default one.
+   * @param option_name The name of option whose setting to look for.
+   * @param c_unit The compilation unit currently being handled.
+   * @return Returns the setting for the pass option.
+   */
+  int GetPassOption(const char* option_name, CompilationUnit* c_unit) {
+    // First check if there are any overridden settings in compilation unit.
+    auto overridden_it = c_unit->overridden_pass_options.find(std::string(option_name));
+    if (overridden_it != c_unit->overridden_pass_options.end()) {
+      return overridden_it->second;
+    }
+
+    // Next check the default options.
+    auto default_it = default_options_.find(option_name);
+
+    if (default_it == default_options_.end()) {
+      // An invalid option is being requested.
+      DCHECK(false);
+      return 0;
+    }
+
+    return default_it->second;
   }
 
   const char* GetDumpCFGFolder() const {
@@ -102,6 +146,9 @@ class PassME: public Pass {
 
   /** @brief CFG Dump Folder: what sub-folder to use for dumping the CFGs post pass. */
   const char* const dump_cfg_folder_;
+
+  /** @brief Contains a map of options with the default settings. */
+  SafeMap<const char*, int> default_options_;
 };
 }  // namespace art
 #endif  // ART_COMPILER_DEX_PASS_ME_H_

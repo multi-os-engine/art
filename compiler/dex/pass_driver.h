@@ -161,6 +161,10 @@ class PassDriver {
     print_pass_list_ = list;
   }
 
+  static void SetOverriddenPassOptions(const std::string& s) {
+    overridden_pass_options_list_ = s;
+  }
+
   void SetDefaultPasses() {
     pass_list_ = PassDriver<PassDriverType>::g_default_pass_list;
   }
@@ -206,6 +210,9 @@ class PassDriver {
 
   /** @brief What are the passes we want to be dumping the CFG? */
   static std::string dump_pass_list_;
+
+  /** @brief String of all options that should be overridden for selected passes */
+  static std::string overridden_pass_options_list_;
 };
 
 }  // namespace art
