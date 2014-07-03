@@ -226,6 +226,13 @@ static void Usage(const char* fmt, ...) {
   UsageError("  --disable-passes=<pass-names>:  disable one or more passes separated by comma.");
   UsageError("      Example: --disable-passes=UseCount,BBOptimizations");
   UsageError("");
+  UsageError("  --print-pass-options: print a list of passes that have configurable options along with the setting.");
+  UsageError("      Will print default if no overridden setting exists.");
+  UsageError("");
+  UsageError("  --pass-options=Pass1Name:Pass1OptionName:Pass1Option#,Pass2Name:Pass2OptionName:Pass2Option#");
+  UsageError("      Used to specify a pass specific option. The setting itself must be integer.");
+  UsageError("      Separator used between options is a comma.");
+  UsageError("");
   std::cerr << "See log for usage error information\n";
   exit(EXIT_FAILURE);
 }
@@ -847,6 +854,7 @@ static int dex2oat(int argc, char** argv) {
   bool dump_stats = false;
   bool dump_timing = false;
   bool dump_passes = false;
+  bool print_pass_options = false;
   bool include_patch_information = CompilerOptions::kDefaultIncludePatchInformation;
   bool include_debug_symbols = kIsDebugBuild;
   bool dump_slow_timing = kIsDebugBuild;
@@ -1022,9 +1030,14 @@ static int dex2oat(int argc, char** argv) {
       ParseDouble(option.data(), '=', 0.0, 100.0, &top_k_profile_threshold);
     } else if (option == "--print-pass-names") {
       PassDriverMEOpts::PrintPassNames();
+    } else if (option == "--print-pass-options") {
+      print_pass_options = true;
     } else if (option.starts_with("--disable-passes=")) {
       std::string disable_passes = option.substr(strlen("--disable-passes=")).data();
       PassDriverMEOpts::CreateDefaultPassList(disable_passes);
+    } else if (option.starts_with("--pass-options=")) {
+      std::string options = option.substr(strlen("--pass-options=")).data();
+      PassDriverMEOpts::SetOverriddenPassOptions(options);
     } else if (option.starts_with("--print-passes=")) {
       std::string print_passes = option.substr(strlen("--print-passes=")).data();
       PassDriverMEOpts::SetPrintPassList(print_passes);
@@ -1161,6 +1174,10 @@ static int dex2oat(int argc, char** argv) {
     compiler_filter = CompilerOptions::kEverything;
   } else {
     Usage("Unknown --compiler-filter value %s", compiler_filter_string);
+  }
+
+  if (print_pass_options) {
+    PassDriverMEOpts::PrintPassOptions();
   }
 
   // Set the compilation target's implicit checks options.
