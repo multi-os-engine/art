@@ -774,14 +774,12 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   // If is_long, high half is in info->args[5]
   RegLocation rl_src_new_value = info->args[is_long ? 6 : 5];  // int, long or Object
   // If is_long, high half is in info->args[7]
-  RegLocation rl_dest = InlineTarget(info);  // boolean place for result
 
-  // We have only 5 temporary registers available and actually only 4 if the InlineTarget
-  // above locked one of the temps. For a straightforward CAS64 we need 7 registers:
-  // r_ptr (1), new_value (2), expected(2) and ldrexd result (2). If neither expected nor
-  // new_value is in a non-temp core register we shall reload them in the ldrex/strex loop
-  // into the same temps, reducing the number of required temps down to 5. We shall work
-  // around the potentially locked temp by using LR for r_ptr, unconditionally.
+  // We have only 5 temporary registers available. For a straightforward CAS64 we need 7
+  // registers: r_ptr (1), new_value (2), expected(2) and ldrexd result (2). If neither expected
+  // nor new_value is in a non-temp core register we shall reload them in the ldrex/strex loop
+  // into the same temps, reducing the number of required temps down to 5. We shall also use LR
+  // for r_ptr to allow one more temp, should any LoadValueWide() need it.
   // TODO: Pass information about the need for more temps to the stack frame generation
   // code so that we can rely on being able to allocate enough temps.
   DCHECK(!GetRegInfo(rs_rARM_LR)->IsTemp());
@@ -908,7 +906,13 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     FreeTemp(rl_expected.reg);  // Now unneeded.
   }
 
+  if (info->result.location == kLocInvalid) {
+    // Result it unused, we're done.
+    return true;
+  }
+
   // result := (tmp1 != 0) ? 0 : 1;
+  RegLocation rl_dest = InlineTarget(info);  // boolean place for result
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   OpRegRegImm(kOpRsub, rl_result.reg, r_tmp, 1);
   DCHECK(last_lir_insn_->u.m.def_mask->HasBit(ResourceMask::kCCode));

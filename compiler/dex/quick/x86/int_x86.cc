@@ -862,7 +862,6 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
 
     FreeTemp(rs_r0);
   } else if (is_long) {
-    // TODO: avoid unnecessary loads of SI and DI when the values are in registers.
     // TODO: CFI support.
     FlushAllRegs();
     LockCallTemps();
@@ -870,7 +869,6 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     RegStorage r_tmp2 = RegStorage::MakeRegPair(rs_rBX, rs_rCX);
     LoadValueDirectWideFixed(rl_src_expected, r_tmp1);
     LoadValueDirectWideFixed(rl_src_new_value, r_tmp2);
-    // FIXME: needs 64-bit update.
     const bool obj_in_di = IsInReg(this, rl_src_obj, rs_rDI);
     const bool obj_in_si = IsInReg(this, rl_src_obj, rs_rSI);
     DCHECK(!obj_in_si || !obj_in_di);
@@ -914,7 +912,6 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     // locked cmpxchg has full barrier semantics, only a scheduling barrier will be generated.
     GenMemBarrier(kStoreLoad);
 
-
     if (push_si) {
       FreeTemp(rs_rSI);
       UnmarkTemp(rs_rSI);
@@ -953,6 +950,11 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     FreeTemp(rs_r0);
   }
 
+  if (info->result.location == kLocInvalid) {
+    // Result is unused, we're done.
+    return true;
+  }
+
   // Convert ZF to boolean
   RegLocation rl_dest = InlineTarget(info);  // boolean place for result
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
@@ -964,7 +966,7 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   }
   NewLIR2(kX86Set8R, result_reg.GetReg(), kX86CondZ);
   NewLIR2(kX86Movzx8RR, rl_result.reg.GetReg(), result_reg.GetReg());
-  if (IsTemp(result_reg)) {
+  if (result_reg != rl_result.reg) {
     FreeTemp(result_reg);
   }
   StoreValue(rl_dest, rl_result);
