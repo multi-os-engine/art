@@ -634,8 +634,10 @@ class Hprof {
     // U1: NUL-terminated magic string.
     fwrite(magic, 1, sizeof(magic), header_fp_);
 
-    // U4: size of identifiers.  We're using addresses as IDs, so make sure a pointer fits.
-    U4_TO_BUF_BE(buf, 0, sizeof(void*));
+    // U4: size of identifiers.  We're using addresses as IDs but only the low mem part of them so
+    // 4 bytes should be enough.
+    // TODO: the proper way would be to write sizeof(void*) and use the entire address as the ID.
+    U4_TO_BUF_BE(buf, 0, sizeof(uint32_t));
     fwrite(buf, 1, sizeof(uint32_t), header_fp_);
 
     // The current time, in milliseconds since 0:00 GMT, 1/1/70.
