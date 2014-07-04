@@ -189,6 +189,8 @@ class GlobalValueNumbering {
     return cu_->mir_graph->GetBasicBlock(bb_id);
   }
 
+  bool IsThrowingInsnClobberring(const BasicBlock* pred_bb) const;
+
   static bool HasNullCheckLastInsn(const BasicBlock* pred_bb, BasicBlockId succ_id);
 
   bool NullCheckedInAllPredecessors(const ScopedArenaVector<uint16_t>& merge_names) const;

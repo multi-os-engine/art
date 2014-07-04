@@ -366,7 +366,7 @@ void LocalValueNumbering::MergeOne(const LocalValueNumbering& other, MergeType m
   range_checked_ = other.range_checked_;
   null_checked_ = other.null_checked_;
 
-  if (merge_type == kCatchMerge) {
+  if (merge_type == kClobberedCatchMerge) {
     // Memory is clobbered. Use new memory version and don't merge aliasing locations.
     global_memory_version_ = NewMemoryVersion(&merge_new_memory_version_);
     std::fill_n(unresolved_sfield_version_, kFieldTypeCount, global_memory_version_);
@@ -847,7 +847,7 @@ void LocalValueNumbering::Merge(MergeType merge_type) {
     return;
   }
 
-  MergeMemoryVersions(merge_type == kCatchMerge);
+  MergeMemoryVersions(merge_type == kClobberedCatchMerge);
 
   // Merge non-aliasing maps/sets.
   MergeSets<IFieldLocToValueMap, &LocalValueNumbering::non_aliasing_ifield_value_map_,
@@ -865,7 +865,7 @@ void LocalValueNumbering::Merge(MergeType merge_type) {
   MergeSets<ValueNameSet, &LocalValueNumbering::null_checked_,
             &LocalValueNumbering::MergeNullChecked>();
 
-  if (merge_type == kCatchMerge) {
+  if (merge_type == kClobberedCatchMerge) {
     // Memory is clobbered. New memory version already created, don't merge aliasing locations.
     PruneNonAliasingRefsForCatch();
     return;

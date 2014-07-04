@@ -46,6 +46,7 @@ enum opt_control_vector {
   kNullCheckElimination,
   kClassInitCheckElimination,
   kGlobalValueNumbering,
+  kGlobalValueNumberingNonClobberedCatch,
   kPromoteRegs,
   kTrackLiveTemps,
   kSafeOptimizations,

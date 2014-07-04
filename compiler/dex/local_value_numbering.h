@@ -65,7 +65,7 @@ class LocalValueNumbering {
 
   enum MergeType {
     kNormalMerge,
-    kCatchMerge,
+    kClobberedCatchMerge,
     kReturnMerge,  // RETURN or PHI+RETURN. Merge only sreg maps.
   };
 

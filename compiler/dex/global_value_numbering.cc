@@ -72,6 +72,10 @@ LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb) {
       work_lvn_->SetSRegNullChecked(this_reg);
     }
   } else {
+    // If non-clobbered catch optimization is disabled, consider every catch entry clobbered,
+    // otherwise look at each predecessor's throwing insn.
+    bool clobbered_catch = bb->catch_entry &&
+        (cu_->disable_opt & (1 << kGlobalValueNumberingNonClobberedCatch)) != 0;
     // Merge all incoming arcs.
     // To avoid repeated allocation on the ArenaStack, reuse a single vector kept as a member.
     DCHECK(merge_lvns_.empty());
@@ -81,11 +85,14 @@ LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb) {
       if (lvns_[pred_bb->id] != nullptr) {
         merge_lvns_.push_back(lvns_[pred_bb->id]);
       }
+      if (bb->catch_entry && !clobbered_catch && IsThrowingInsnClobberring(pred_bb)) {
+        clobbered_catch = true;
+      }
     }
     // Determine merge type.
     LocalValueNumbering::MergeType merge_type = LocalValueNumbering::kNormalMerge;
-    if (bb->catch_entry) {
-      merge_type = LocalValueNumbering::kCatchMerge;
+    if (clobbered_catch) {
+      merge_type = LocalValueNumbering::kClobberedCatchMerge;
     } else if (bb->last_mir_insn != nullptr &&
         (bb->last_mir_insn->dalvikInsn.opcode == Instruction::RETURN ||
          bb->last_mir_insn->dalvikInsn.opcode == Instruction::RETURN_OBJECT ||
@@ -173,6 +180,145 @@ uint16_t GlobalValueNumbering::GetArrayLocation(uint16_t base, uint16_t index) {
   DCHECK(!cmp(lb->first, key) && !cmp(key, lb->first));
   array_location_reverse_map_.push_back(&*lb);
   return location;
+}
+
+bool GlobalValueNumbering::IsThrowingInsnClobberring(const BasicBlock* pred_bb) const {
+  DCHECK(pred_bb->fall_through != kNullBlock);
+  DCHECK(pred_bb->taken == kNullBlock);
+  BasicBlock* succ_bb = cu_->mir_graph->GetBasicBlock(pred_bb->fall_through);
+  DCHECK(succ_bb != nullptr);
+  MIR* mir = succ_bb->first_mir_insn;
+  DCHECK(mir != nullptr);
+  // There was initially a throwing insn but it could have been optimized away
+  // or replaced with a non-throwing insn by the inliner.
+  if (static_cast<int>(mir->dalvikInsn.opcode) == kMirOpNop) {
+    return false;
+  }
+  DCHECK(!MIRGraph::IsPseudoMirOp(mir->dalvikInsn.opcode));
+  if ((Instruction::FlagsOf(mir->dalvikInsn.opcode) & Instruction::kThrow) == 0) {
+    // This should be an inlined CONST/MOVE.
+    return false;
+  }
+  switch (mir->dalvikInsn.opcode) {
+    case Instruction::CONST_STRING:
+    case Instruction::CONST_STRING_JUMBO:
+    case Instruction::CONST_CLASS:
+      // These calls to the runtime cannot modify any location the GVN tracks.
+      return true;
+
+    case Instruction::MONITOR_ENTER:
+    case Instruction::MONITOR_EXIT:
+      // If MONITOR_ENTER/MONITOR_EXIT throws it has no side effect in any location the GVN tracks.
+      return false;
+
+    case Instruction::CHECK_CAST:
+    case Instruction::INSTANCE_OF:
+    case Instruction::ARRAY_LENGTH:
+    case Instruction::NEW_INSTANCE:
+    case Instruction::NEW_ARRAY:
+    case Instruction::FILLED_NEW_ARRAY:
+    case Instruction::FILLED_NEW_ARRAY_RANGE:
+      // No side-effects on throw.
+      return false;
+
+    case Instruction::THROW:
+      // The THROW call to the runtime cannot modify any location the GVN tracks.
+      // NOTE: We assign a new value to MOVE_EXCEPTION even if it would catch the thrown object.
+      return false;
+
+    case Instruction::AGET:
+    case Instruction::AGET_WIDE:
+    case Instruction::AGET_OBJECT:
+    case Instruction::AGET_BOOLEAN:
+    case Instruction::AGET_BYTE:
+    case Instruction::AGET_CHAR:
+    case Instruction::AGET_SHORT:
+    case Instruction::APUT:
+    case Instruction::APUT_WIDE:
+    case Instruction::APUT_OBJECT:
+    case Instruction::APUT_BOOLEAN:
+    case Instruction::APUT_BYTE:
+    case Instruction::APUT_CHAR:
+    case Instruction::APUT_SHORT:
+    case Instruction::IGET:
+    case Instruction::IGET_WIDE:
+    case Instruction::IGET_OBJECT:
+    case Instruction::IGET_BOOLEAN:
+    case Instruction::IGET_BYTE:
+    case Instruction::IGET_CHAR:
+    case Instruction::IGET_SHORT:
+    case Instruction::IPUT:
+    case Instruction::IPUT_WIDE:
+    case Instruction::IPUT_OBJECT:
+    case Instruction::IPUT_BOOLEAN:
+    case Instruction::IPUT_BYTE:
+    case Instruction::IPUT_CHAR:
+    case Instruction::IPUT_SHORT:
+      // No side-effects on throw.
+      return false;
+
+    case Instruction::SGET:
+    case Instruction::SGET_WIDE:
+    case Instruction::SGET_OBJECT:
+    case Instruction::SGET_BOOLEAN:
+    case Instruction::SGET_BYTE:
+    case Instruction::SGET_CHAR:
+    case Instruction::SGET_SHORT:
+    case Instruction::SPUT:
+    case Instruction::SPUT_WIDE:
+    case Instruction::SPUT_OBJECT:
+    case Instruction::SPUT_BOOLEAN:
+    case Instruction::SPUT_BYTE:
+    case Instruction::SPUT_CHAR:
+    case Instruction::SPUT_SHORT:
+        // Check if the mir can call class initializer. Otherwise it can't even throw.
+        return !cu_->mir_graph->GetSFieldLoweringInfo(mir).IsInitialized() &&
+            (mir->optimization_flags & MIR_IGNORE_CLINIT_CHECK) == 0;
+
+    case Instruction::INVOKE_VIRTUAL:
+    case Instruction::INVOKE_SUPER:
+    case Instruction::INVOKE_DIRECT:
+    case Instruction::INVOKE_STATIC:
+    case Instruction::INVOKE_INTERFACE:
+    case Instruction::INVOKE_VIRTUAL_RANGE:
+    case Instruction::INVOKE_SUPER_RANGE:
+    case Instruction::INVOKE_DIRECT_RANGE:
+    case Instruction::INVOKE_STATIC_RANGE:
+    case Instruction::INVOKE_INTERFACE_RANGE:
+      return true;
+
+    case Instruction::DIV_INT:
+    case Instruction::REM_INT:
+    case Instruction::DIV_LONG:
+    case Instruction::REM_LONG:
+    case Instruction::DIV_INT_2ADDR:
+    case Instruction::REM_INT_2ADDR:
+    case Instruction::DIV_LONG_2ADDR:
+    case Instruction::REM_LONG_2ADDR:
+    case Instruction::DIV_INT_LIT16:
+    case Instruction::REM_INT_LIT16:
+    case Instruction::DIV_INT_LIT8:
+    case Instruction::REM_INT_LIT8:
+      // No side-effects on throw.
+      return false;
+
+    case Instruction::FILL_ARRAY_DATA:
+      DCHECK(false) << "Verifier error: FILL_ARRAY_DATA within reachable code should be rejected.";
+      // Intentional fall-through.
+    case Instruction::IGET_QUICK:
+    case Instruction::IGET_WIDE_QUICK:
+    case Instruction::IGET_OBJECT_QUICK:
+    case Instruction::IPUT_QUICK:
+    case Instruction::IPUT_WIDE_QUICK:
+    case Instruction::IPUT_OBJECT_QUICK:
+    case Instruction::INVOKE_VIRTUAL_QUICK:
+    case Instruction::INVOKE_VIRTUAL_RANGE_QUICK:
+      DCHECK(false) << "Verifier/compiler error: quickened insns should be rejected for compiler.";
+      // Intentional fall-through.
+    default:
+      LOG(FATAL) << "Unexpected opcode: " << mir->dalvikInsn.opcode;
+      return false;
+  }
 }
 
 bool GlobalValueNumbering::HasNullCheckLastInsn(const BasicBlock* pred_bb,
