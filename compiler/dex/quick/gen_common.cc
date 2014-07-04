@@ -273,7 +273,7 @@ void Mir2Lir::GenCompareAndBranch(Instruction::Code opcode, RegLocation rl_src1,
     // If it's already live in a register or not easily materialized, just keep going
     RegLocation rl_temp = UpdateLoc(rl_src2);
     if ((rl_temp.location == kLocDalvikFrame) &&
-        InexpensiveConstantInt(mir_graph_->ConstantValue(rl_src2))) {
+        InexpensiveConstantInt(mir_graph_->ConstantValue(rl_src2), opcode)) {
       // OK - convert this to a compare immediate and branch
       OpCmpImmBranch(cond, rl_src1.reg, mir_graph_->ConstantValue(rl_src2), taken);
       return;
