@@ -1165,12 +1165,10 @@ void Mir2Lir::CountRefs(RefCounts* core_counts, RefCounts* fp_counts, size_t num
       }
     } else if (!IsInexpensiveConstant(loc)) {
       if (loc.wide && cu_->target64) {
-        // Treat long as a unit, using upper half of core_counts array.
-        counts[p_map_idx + num_regs].count += use_count;
+        // For core registers we can count int and long together
         i++;
-      } else {
-        counts[p_map_idx].count += use_count;
       }
+      counts[p_map_idx].count += use_count;
     }
   }
 }
