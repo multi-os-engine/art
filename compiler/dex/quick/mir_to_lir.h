@@ -287,8 +287,8 @@ class Mir2Lir : public Backend {
      *
      * NOTE 4: The reg and is_temp fields should always be correct.  If is_temp is false no
      * other fields have meaning. [perhaps not true, wide should work for promoted regs?]
-     * If is_temp==true and live==false, no other fields have
-     * meaning.  If is_temp==true and live==true, wide_value, partner, dirty, s_reg, def_start
+     * If is_temp==true and live==false, no other fields have meaning.
+     * If is_temp==true and live==true, wide_value, partner, unrelated, dirty, s_reg, def_start
      * and def_end describe the relationship between the temp register/register pair and
      * the Dalvik value[s] described by s_reg/s_reg+1.
      *
@@ -392,6 +392,8 @@ class Mir2Lir : public Backend {
           SetPartner(GetReg());
         }
       }
+      bool IsUnrelated() { return unrelated_; }
+      bool SetIsUnrelated(bool val) { return unrelated_ = val; }
       bool IsDirty() { return dirty_; }
       void SetIsDirty(bool val) { dirty_ = val; }
       RegStorage Partner() { return partner_; }
@@ -432,6 +434,11 @@ class Mir2Lir : public Backend {
       RegStorage reg_;
       bool is_temp_;               // Can allocate as temp?
       bool wide_value_;            // Holds a Dalvik wide value (either itself, or part of a pair).
+      bool unrelated_;             // If live, does it hold a value unrelated to the s-reg?
+                                   // It would be unrelated when it just come to live.
+                                   // Any write operation on the p-reg makes it present the actual s-reg.
+                                   // But since modification on the p-reg should follow a store,
+                                   // we only mark it as related when load/store happens.
       bool dirty_;                 // If live, is it dirty?
       bool aliased_;               // Is this the master for other aliased RegisterInfo's?
       RegStorage partner_;         // If wide_value, other reg of pair or self if 64-bit register.
@@ -763,6 +770,7 @@ class Mir2Lir : public Backend {
     virtual bool IsTemp(RegStorage reg);
     bool IsPromoted(RegStorage reg);
     bool IsDirty(RegStorage reg);
+    bool IsUnrelated(RegStorage reg);
     void LockTemp(RegStorage reg);
     void ResetDef(RegStorage reg);
     void NullifyRange(RegStorage reg, int s_reg);
@@ -776,6 +784,7 @@ class Mir2Lir : public Backend {
     void FlushAllRegs();
     bool RegClassMatches(int reg_class, RegStorage reg);
     void MarkLive(RegLocation loc);
+    void MarkRelated(RegLocation loc);
     void MarkTemp(RegStorage reg);
     void UnmarkTemp(RegStorage reg);
     void MarkWide(RegStorage reg);

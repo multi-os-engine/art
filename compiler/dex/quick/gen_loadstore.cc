@@ -81,8 +81,17 @@ void Mir2Lir::Workaround7250540(RegLocation rl_dest, RegStorage zero_reg) {
  * register liveness.  That is the responsibility of the caller.
  */
 void Mir2Lir::LoadValueDirect(RegLocation rl_src, RegStorage r_dest) {
+  RegLocation rl_src_orig = rl_src;
   rl_src = UpdateLoc(rl_src);
+  if (IsUnrelated(rl_src.reg)) {
+    // Need to load from the original register location,
+    // if the physical register holds a value that does not reflect s-register.
+    rl_src = rl_src_orig;
+  }
   if (rl_src.location == kLocPhysReg) {
+    // Should never load from a physical register which does not reflect the value of s-reg.
+    // FIXME: Enable the sanity check.
+    // DCHECK(!IsUnrelated(rl_src.reg));
     OpRegCopy(r_dest, rl_src.reg);
   } else if (IsInexpensiveConstant(rl_src)) {
     // On 64-bit targets, will sign extend.  Make sure constant reference is always NULL.
@@ -117,8 +126,17 @@ void Mir2Lir::LoadValueDirectFixed(RegLocation rl_src, RegStorage r_dest) {
  * register liveness.  That is the responsibility of the caller.
  */
 void Mir2Lir::LoadValueDirectWide(RegLocation rl_src, RegStorage r_dest) {
+  RegLocation rl_src_orig = rl_src;
   rl_src = UpdateLocWide(rl_src);
+  if (IsUnrelated(rl_src.reg)) {
+    // Need to load from the original register location,
+    // if the physical register holds a value that does not reflect s-register.
+    rl_src = rl_src_orig;
+  }
   if (rl_src.location == kLocPhysReg) {
+    // Should never load from a physical register which does not reflect the value of s-reg.
+    // FIXME: Enable the sanity check.
+    // DCHECK(!IsUnrelated(rl_src.reg));
     OpRegCopyWide(r_dest, rl_src.reg);
   } else if (IsInexpensiveConstant(rl_src)) {
     LoadConstantWide(r_dest, mir_graph_->ConstantValueWide(rl_src));
@@ -143,6 +161,7 @@ void Mir2Lir::LoadValueDirectWideFixed(RegLocation rl_src, RegStorage r_dest) {
 
 RegLocation Mir2Lir::LoadValue(RegLocation rl_src, RegisterClass op_kind) {
   DCHECK(!rl_src.ref || op_kind == kRefReg);
+  RegLocation rl_src_orig = rl_src;
   rl_src = UpdateLoc(rl_src);
   if (rl_src.location == kLocPhysReg) {
     if (!RegClassMatches(op_kind, rl_src.reg)) {
@@ -154,6 +173,11 @@ RegLocation Mir2Lir::LoadValue(RegLocation rl_src, RegisterClass op_kind) {
       // ...and mark the new one live.
       rl_src.reg = new_reg;
       MarkLive(rl_src);
+      MarkRelated(rl_src);
+    }
+    if (IsUnrelated(rl_src.reg)) {
+      LoadValueDirect(rl_src_orig, rl_src.reg);
+      MarkRelated(rl_src);
     }
     return rl_src;
   }
@@ -163,6 +187,7 @@ RegLocation Mir2Lir::LoadValue(RegLocation rl_src, RegisterClass op_kind) {
   LoadValueDirect(rl_src, rl_src.reg);
   rl_src.location = kLocPhysReg;
   MarkLive(rl_src);
+  MarkRelated(rl_src);
   return rl_src;
 }
 
@@ -207,6 +232,7 @@ void Mir2Lir::StoreValue(RegLocation rl_dest, RegLocation rl_src) {
 
   // Dest is now live and dirty (until/if we flush it to home location)
   MarkLive(rl_dest);
+  MarkRelated(rl_dest);
   MarkDirty(rl_dest);
 
 
@@ -230,6 +256,7 @@ void Mir2Lir::StoreValue(RegLocation rl_dest, RegLocation rl_src) {
 
 RegLocation Mir2Lir::LoadValueWide(RegLocation rl_src, RegisterClass op_kind) {
   DCHECK(rl_src.wide);
+  RegLocation rl_src_orig = rl_src;
   rl_src = UpdateLocWide(rl_src);
   if (rl_src.location == kLocPhysReg) {
     if (!RegClassMatches(op_kind, rl_src.reg)) {
@@ -241,6 +268,11 @@ RegLocation Mir2Lir::LoadValueWide(RegLocation rl_src, RegisterClass op_kind) {
       // ...and mark the new ones live.
       rl_src.reg = new_regs;
       MarkLive(rl_src);
+      MarkRelated(rl_src);
+    }
+    if (IsUnrelated(rl_src.reg)) {
+      LoadValueDirectWide(rl_src_orig, rl_src.reg);
+      MarkRelated(rl_src);
     }
     return rl_src;
   }
@@ -251,6 +283,7 @@ RegLocation Mir2Lir::LoadValueWide(RegLocation rl_src, RegisterClass op_kind) {
   LoadValueDirectWide(rl_src, rl_src.reg);
   rl_src.location = kLocPhysReg;
   MarkLive(rl_src);
+  MarkRelated(rl_src);
   return rl_src;
 }
 
@@ -295,6 +328,7 @@ void Mir2Lir::StoreValueWide(RegLocation rl_dest, RegLocation rl_src) {
 
   // Dest is now live and dirty (until/if we flush it to home location)
   MarkLive(rl_dest);
+  MarkRelated(rl_dest);
   MarkWide(rl_dest.reg);
   MarkDirty(rl_dest);
 
@@ -326,6 +360,7 @@ void Mir2Lir::StoreFinalValue(RegLocation rl_dest, RegLocation rl_src) {
 
   // Dest is now live and dirty (until/if we flush it to home location)
   MarkLive(rl_dest);
+  MarkRelated(rl_dest);
   MarkDirty(rl_dest);
 
 
@@ -359,6 +394,7 @@ void Mir2Lir::StoreFinalValueWide(RegLocation rl_dest, RegLocation rl_src) {
 
   // Dest is now live and dirty (until/if we flush it to home location).
   MarkLive(rl_dest);
+  MarkRelated(rl_dest);
   MarkWide(rl_dest.reg);
   MarkDirty(rl_dest);
 

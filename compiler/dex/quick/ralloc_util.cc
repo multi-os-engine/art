@@ -624,6 +624,20 @@ bool Mir2Lir::IsDirty(RegStorage reg) {
   return res;
 }
 
+bool Mir2Lir::IsUnrelated(RegStorage reg) {
+  bool res;
+  if (reg.IsPair()) {
+    RegisterInfo* p_lo = GetRegInfo(reg.GetLow());
+    RegisterInfo* p_hi = GetRegInfo(reg.GetHigh());
+    res = (p_lo->IsUnrelated() && p_lo->IsLive())
+        || (p_hi->IsUnrelated() && p_hi->IsLive());
+  } else {
+    RegisterInfo* p = GetRegInfo(reg);
+    res = p->IsUnrelated() && p->IsLive();
+  }
+  return res;
+}
+
 /*
  * Similar to AllocTemp(), but forces the allocation of a specific
  * register.  No check is made to see if the register was previously
@@ -840,7 +854,9 @@ void Mir2Lir::MarkLive(RegLocation loc) {
       ClobberSReg(s_reg);
       ClobberSReg(s_reg + 1);
       info_lo->MarkLive(s_reg);
+      info_lo->SetIsUnrelated(true);
       info_hi->MarkLive(s_reg + 1);
+      info_hi->SetIsUnrelated(true);
     } else {
       RegisterInfo* info = GetRegInfo(reg);
       if (info->IsLive() && (info->SReg() == s_reg)) {
@@ -851,11 +867,30 @@ void Mir2Lir::MarkLive(RegLocation loc) {
         ClobberSReg(s_reg + 1);
       }
       info->MarkLive(s_reg);
+      info->SetIsUnrelated(true);
     }
     if (loc.wide) {
       MarkWide(reg);
     } else {
       MarkNarrow(reg);
+    }
+  }
+}
+
+void Mir2Lir::MarkRelated(RegLocation loc) {
+  if (loc.reg.IsPair()) {
+    RegisterInfo* p_lo = GetRegInfo(loc.reg.GetLow());
+    RegisterInfo* p_hi = GetRegInfo(loc.reg.GetHigh());
+    if (p_lo->IsLive()) {
+      p_lo->SetIsUnrelated(false);
+    }
+    if (p_hi->IsLive()) {
+      p_lo->SetIsUnrelated(false);
+    }
+  } else {
+    RegisterInfo* p = GetRegInfo(loc.reg);
+    if (p->IsLive()) {
+      p->SetIsUnrelated(false);
     }
   }
 }
