@@ -280,6 +280,7 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
 
     ArmConditionCode ArmConditionEncoding(ConditionCode code);
     bool InexpensiveConstantInt(int32_t value);
+    bool InexpensiveConstantInt(int32_t value, Instruction::Code opcode);
     bool InexpensiveConstantFloat(int32_t value);
     bool InexpensiveConstantLong(int64_t value);
     bool InexpensiveConstantDouble(int64_t value);
