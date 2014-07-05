@@ -891,7 +891,7 @@ void X86Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeT
   uintptr_t target_method_id_ptr = reinterpret_cast<uintptr_t>(&target_method_id);
 
   // Generate the move instruction with the unique pointer and save index, dex_file, and type.
-  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg, false).GetReg(),
+  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg, kWide32).GetReg(),
                      static_cast<int>(target_method_id_ptr), target_method_idx,
                      WrapPointer(const_cast<DexFile*>(target_dex_file)), type);
   AppendLIR(move);
@@ -908,7 +908,7 @@ void X86Mir2Lir::LoadClassType(uint32_t type_idx, SpecialTargetRegister symbolic
   uintptr_t ptr = reinterpret_cast<uintptr_t>(&id);
 
   // Generate the move instruction with the unique pointer and save index and type.
-  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg, false).GetReg(),
+  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI, TargetReg(symbolic_reg, kWide32).GetReg(),
                      static_cast<int>(ptr), type_idx);
   AppendLIR(move);
   class_type_address_insns_.Insert(move);
@@ -1759,11 +1759,12 @@ RegStorage X86Mir2Lir::InToRegStorageX86_64Mapper::GetNextReg(bool is_double_or_
 
   if (is_double_or_float) {
     if (cur_fp_reg_ < fpArgMappingToPhysicalRegSize) {
-      return ml_->TargetReg(fpArgMappingToPhysicalReg[cur_fp_reg_++], is_wide);
+      return ml_->TargetReg(fpArgMappingToPhysicalReg[cur_fp_reg_++], is_wide ? kWide64 : kWide32);
     }
   } else {
     if (cur_core_reg_ < coreArgMappingToPhysicalRegSize) {
-      return ml_->TargetReg(coreArgMappingToPhysicalReg[cur_core_reg_++], is_wide);
+      return ml_->TargetReg(coreArgMappingToPhysicalReg[cur_core_reg_++],
+                            is_wide ? kWide64 : kWide32);
     }
   }
   return RegStorage::InvalidReg();
@@ -2105,7 +2106,7 @@ int X86Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
 
         // Instead of allocating a new temp, simply reuse one of the registers being used
         // for argument passing.
-        RegStorage temp = TargetReg(kArg3, false);
+        RegStorage temp = TargetReg(kArg3, kWide32);
 
         // Now load the argument VR and store to the outs.
         Load32Disp(rs_rX86_SP, current_src_offset, temp);
@@ -2121,8 +2122,8 @@ int X86Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
 
   // Now handle rest not registers if they are
   if (in_to_reg_storage_mapping.IsThereStackMapped()) {
-    RegStorage regSingle = TargetReg(kArg2, false);
-    RegStorage regWide = TargetReg(kArg3, true);
+    RegStorage regSingle = TargetReg(kArg2, kWide32);
+    RegStorage regWide = TargetReg(kArg3, kWide64);
     for (int i = start_index;
          i < last_mapped_in + size_of_the_last_mapped + regs_left_to_pass_via_stack; i++) {
       RegLocation rl_arg = info->args[i];

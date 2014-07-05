@@ -132,7 +132,7 @@ INSTANTIATE(void Mir2Lir::CallRuntimeHelper, bool safepoint_pc)
 template <size_t pointer_size>
 void Mir2Lir::CallRuntimeHelperImm(ThreadOffset<pointer_size> helper_offset, int arg0, bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
-  LoadConstant(TargetReg(kArg0, false), arg0);
+  LoadConstant(TargetReg(kArg0, kWide32), arg0);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -142,7 +142,7 @@ template <size_t pointer_size>
 void Mir2Lir::CallRuntimeHelperReg(ThreadOffset<pointer_size> helper_offset, RegStorage arg0,
                                    bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
-  OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
+  OpRegCopy(TargetReg(kArg0, arg0.GetWideKind()), arg0);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -155,13 +155,7 @@ void Mir2Lir::CallRuntimeHelperRegLocation(ThreadOffset<pointer_size> helper_off
   if (arg0.wide == 0) {
     LoadValueDirectFixed(arg0, TargetReg(arg0.fp ? kFArg0 : kArg0, arg0));
   } else {
-    RegStorage r_tmp;
-    if (cu_->target64) {
-      r_tmp = TargetReg(kArg0, true);
-    } else {
-      r_tmp = TargetReg(arg0.fp ? kFArg0 : kArg0, arg0.fp ? kFArg1 : kArg1);
-    }
-    LoadValueDirectWideFixed(arg0, r_tmp);
+    LoadValueDirectWideFixed(arg0, TargetReg(arg0.fp ? kFArg0 : kArg0, kWide64));
   }
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
@@ -172,8 +166,8 @@ template <size_t pointer_size>
 void Mir2Lir::CallRuntimeHelperImmImm(ThreadOffset<pointer_size> helper_offset, int arg0, int arg1,
                                       bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
-  LoadConstant(TargetReg(kArg0, false), arg0);
-  LoadConstant(TargetReg(kArg1, false), arg1);
+  LoadConstant(TargetReg(kArg0, kWide32), arg0);
+  LoadConstant(TargetReg(kArg1, kWide32), arg1);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -183,23 +177,14 @@ template <size_t pointer_size>
 void Mir2Lir::CallRuntimeHelperImmRegLocation(ThreadOffset<pointer_size> helper_offset, int arg0,
                                               RegLocation arg1, bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
+  DCHECK(!arg1.fp);
   if (arg1.wide == 0) {
     LoadValueDirectFixed(arg1, TargetReg(kArg1, arg1));
   } else {
-    RegStorage r_tmp;
-    if (cu_->target64) {
-      r_tmp = TargetReg(kArg1, true);
-    } else {
-      if (cu_->instruction_set == kMips) {
-        // skip kArg1 for stack alignment.
-        r_tmp = TargetReg(kArg2, kArg3);
-      } else {
-        r_tmp = TargetReg(kArg1, kArg2);
-      }
-    }
+    RegStorage r_tmp = TargetReg(cu_->instruction_set == kMips ? kArg2 : kArg1, kWide64);
     LoadValueDirectWideFixed(arg1, r_tmp);
   }
-  LoadConstant(TargetReg(kArg0, false), arg0);
+  LoadConstant(TargetReg(kArg0, kWide32), arg0);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -212,7 +197,7 @@ void Mir2Lir::CallRuntimeHelperRegLocationImm(ThreadOffset<pointer_size> helper_
   RegStorage r_tgt = CallHelperSetup(helper_offset);
   DCHECK(!arg0.wide);
   LoadValueDirectFixed(arg0, TargetReg(kArg0, arg0));
-  LoadConstant(TargetReg(kArg1, false), arg1);
+  LoadConstant(TargetReg(kArg1, kWide32), arg1);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -223,8 +208,8 @@ template <size_t pointer_size>
 void Mir2Lir::CallRuntimeHelperImmReg(ThreadOffset<pointer_size> helper_offset, int arg0,
                                       RegStorage arg1, bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
-  OpRegCopy(TargetReg(kArg1, arg1.Is64Bit()), arg1);
-  LoadConstant(TargetReg(kArg0, false), arg0);
+  OpRegCopy(TargetReg(kArg1, arg1.GetWideKind()), arg1);
+  LoadConstant(TargetReg(kArg0, kWide32), arg0);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -234,8 +219,8 @@ template <size_t pointer_size>
 void Mir2Lir::CallRuntimeHelperRegImm(ThreadOffset<pointer_size> helper_offset, RegStorage arg0,
                                       int arg1, bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
-  OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
-  LoadConstant(TargetReg(kArg1, false), arg1);
+  OpRegCopy(TargetReg(kArg0, arg0.GetWideKind()), arg0);
+  LoadConstant(TargetReg(kArg1, kWide32), arg1);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -246,7 +231,7 @@ void Mir2Lir::CallRuntimeHelperImmMethod(ThreadOffset<pointer_size> helper_offse
                                          bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
   LoadCurrMethodDirect(TargetRefReg(kArg1));
-  LoadConstant(TargetReg(kArg0, false), arg0);
+  LoadConstant(TargetReg(kArg0, kWide32), arg0);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -256,9 +241,10 @@ template <size_t pointer_size>
 void Mir2Lir::CallRuntimeHelperRegMethod(ThreadOffset<pointer_size> helper_offset, RegStorage arg0,
                                          bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
-  DCHECK(!IsSameReg(TargetReg(kArg1, arg0.Is64Bit()), arg0));
-  if (TargetReg(kArg0, arg0.Is64Bit()).NotExactlyEquals(arg0)) {
-    OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
+  DCHECK(!IsSameReg(TargetReg(kArg1, arg0.GetWideKind()), arg0));
+  RegStorage r_tmp = TargetReg(kArg0, arg0.GetWideKind());
+  if (r_tmp.NotExactlyEquals(arg0)) {
+    OpRegCopy(r_tmp, arg0);
   }
   LoadCurrMethodDirect(TargetRefReg(kArg1));
   ClobberCallerSave();
@@ -271,9 +257,10 @@ void Mir2Lir::CallRuntimeHelperRegMethodRegLocation(ThreadOffset<pointer_size> h
                                                     RegStorage arg0, RegLocation arg2,
                                                     bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
-  DCHECK(!IsSameReg(TargetReg(kArg1, arg0.Is64Bit()), arg0));
-  if (TargetReg(kArg0, arg0.Is64Bit()).NotExactlyEquals(arg0)) {
-    OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
+  DCHECK(!IsSameReg(TargetReg(kArg1, arg0.GetWideKind()), arg0));
+  RegStorage r_tmp = TargetReg(kArg0, arg0.GetWideKind());
+  if (r_tmp.NotExactlyEquals(arg0)) {
+    OpRegCopy(r_tmp, arg0);
   }
   LoadCurrMethodDirect(TargetRefReg(kArg1));
   LoadValueDirectFixed(arg2, TargetReg(kArg2, arg2));
@@ -312,47 +299,26 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocation(ThreadOffset<pointer_size>
   } else {
     DCHECK(!cu_->target64);
     if (arg0.wide == 0) {
-      LoadValueDirectFixed(arg0, arg0.fp ? TargetReg(kFArg0, false) : TargetReg(kArg0, false));
+      LoadValueDirectFixed(arg0, TargetReg(arg0.fp ? kFArg0 : kArg0, kWide32));
       if (arg1.wide == 0) {
         if (cu_->instruction_set == kMips) {
-          LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg2, false) : TargetReg(kArg1, false));
+          LoadValueDirectFixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg1, kWide32));
         } else {
-          LoadValueDirectFixed(arg1, TargetReg(kArg1, false));
+          LoadValueDirectFixed(arg1, TargetReg(kArg1, kWide32));
         }
       } else {
         if (cu_->instruction_set == kMips) {
-          RegStorage r_tmp;
-          if (arg1.fp) {
-            r_tmp = TargetReg(kFArg2, kFArg3);
-          } else {
-            // skip kArg1 for stack alignment.
-            r_tmp = TargetReg(kArg2, kArg3);
-          }
-          LoadValueDirectWideFixed(arg1, r_tmp);
+          LoadValueDirectWideFixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg2, kWide64));
         } else {
-          RegStorage r_tmp;
-          r_tmp = TargetReg(kArg1, kArg2);
-          LoadValueDirectWideFixed(arg1, r_tmp);
+          LoadValueDirectWideFixed(arg1, TargetReg(kArg1, kWide64));
         }
       }
     } else {
-      RegStorage r_tmp;
-      if (arg0.fp) {
-        r_tmp = TargetReg(kFArg0, kFArg1);
-      } else {
-        r_tmp = TargetReg(kArg0, kArg1);
-      }
-      LoadValueDirectWideFixed(arg0, r_tmp);
+      LoadValueDirectWideFixed(arg0, TargetReg(arg0.fp ? kFArg0 : kArg0, kWide64));
       if (arg1.wide == 0) {
-        LoadValueDirectFixed(arg1, arg1.fp ? TargetReg(kFArg2, false) : TargetReg(kArg2, false));
+        LoadValueDirectFixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg2, kWide32));
       } else {
-        RegStorage r_tmp;
-        if (arg1.fp) {
-          r_tmp = TargetReg(kFArg2, kFArg3);
-        } else {
-          r_tmp = TargetReg(kArg2, kArg3);
-        }
-        LoadValueDirectWideFixed(arg1, r_tmp);
+        LoadValueDirectWideFixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg2, kWide64));
       }
     }
   }
@@ -363,19 +329,21 @@ INSTANTIATE(void Mir2Lir::CallRuntimeHelperRegLocationRegLocation, RegLocation a
             RegLocation arg1, bool safepoint_pc)
 
 void Mir2Lir::CopyToArgumentRegs(RegStorage arg0, RegStorage arg1) {
-  if (IsSameReg(arg1, TargetReg(kArg0, arg1.Is64Bit()))) {
-    if (IsSameReg(arg0, TargetReg(kArg1, arg0.Is64Bit()))) {
+  WideKind arg0_kind = arg0.GetWideKind();
+  WideKind arg1_kind = arg1.GetWideKind();
+  if (IsSameReg(arg1, TargetReg(kArg0, arg1_kind))) {
+    if (IsSameReg(arg0, TargetReg(kArg1, arg0_kind))) {
       // Swap kArg0 and kArg1 with kArg2 as temp.
-      OpRegCopy(TargetReg(kArg2, arg1.Is64Bit()), arg1);
-      OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
-      OpRegCopy(TargetReg(kArg1, arg1.Is64Bit()), TargetReg(kArg2, arg1.Is64Bit()));
+      OpRegCopy(TargetReg(kArg2, arg1_kind), arg1);
+      OpRegCopy(TargetReg(kArg0, arg0_kind), arg0);
+      OpRegCopy(TargetReg(kArg1, arg1_kind), TargetReg(kArg2, arg1_kind));
     } else {
-      OpRegCopy(TargetReg(kArg1, arg1.Is64Bit()), arg1);
-      OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
+      OpRegCopy(TargetReg(kArg1, arg1_kind), arg1);
+      OpRegCopy(TargetReg(kArg0, arg0_kind), arg0);
     }
   } else {
-    OpRegCopy(TargetReg(kArg0, arg0.Is64Bit()), arg0);
-    OpRegCopy(TargetReg(kArg1, arg1.Is64Bit()), arg1);
+    OpRegCopy(TargetReg(kArg0, arg0_kind), arg0);
+    OpRegCopy(TargetReg(kArg1, arg1_kind), arg1);
   }
 }
 
@@ -395,7 +363,7 @@ void Mir2Lir::CallRuntimeHelperRegRegImm(ThreadOffset<pointer_size> helper_offse
                                          RegStorage arg1, int arg2, bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
   CopyToArgumentRegs(arg0, arg1);
-  LoadConstant(TargetReg(kArg2, false), arg2);
+  LoadConstant(TargetReg(kArg2, kWide32), arg2);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -408,7 +376,7 @@ void Mir2Lir::CallRuntimeHelperImmMethodRegLocation(ThreadOffset<pointer_size> h
   RegStorage r_tgt = CallHelperSetup(helper_offset);
   LoadValueDirectFixed(arg2, TargetReg(kArg2, arg2));
   LoadCurrMethodDirect(TargetRefReg(kArg1));
-  LoadConstant(TargetReg(kArg0, false), arg0);
+  LoadConstant(TargetReg(kArg0, kWide32), arg0);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -420,8 +388,8 @@ void Mir2Lir::CallRuntimeHelperImmMethodImm(ThreadOffset<pointer_size> helper_of
                                             int arg2, bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(helper_offset);
   LoadCurrMethodDirect(TargetRefReg(kArg1));
-  LoadConstant(TargetReg(kArg2, false), arg2);
-  LoadConstant(TargetReg(kArg0, false), arg0);
+  LoadConstant(TargetReg(kArg2, kWide32), arg2);
+  LoadConstant(TargetReg(kArg0, kWide32), arg0);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -438,15 +406,9 @@ void Mir2Lir::CallRuntimeHelperImmRegLocationRegLocation(ThreadOffset<pointer_si
   if (arg2.wide == 0) {
     LoadValueDirectFixed(arg2, TargetReg(kArg2, arg2));
   } else {
-    RegStorage r_tmp;
-    if (cu_->target64) {
-      r_tmp = TargetReg(kArg2, true);
-    } else {
-      r_tmp = TargetReg(kArg2, kArg3);
-    }
-    LoadValueDirectWideFixed(arg2, r_tmp);
+    LoadValueDirectWideFixed(arg2, TargetReg(kArg2, kWide64));
   }
-  LoadConstant(TargetReg(kArg0, false), arg0);
+  LoadConstant(TargetReg(kArg0, kWide32), arg0);
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
 }
@@ -712,9 +674,9 @@ static int NextInterfaceCallInsn(CompilationUnit* cu, CallInfo* info, int state,
   switch (state) {
     case 0:  // Set target method index in case of conflict [set kHiddenArg, kHiddenFpArg (x86)]
       CHECK_LT(target_method.dex_method_index, target_method.dex_file->NumMethodIds());
-      cg->LoadConstant(cg->TargetReg(kHiddenArg, false), target_method.dex_method_index);
+      cg->LoadConstant(cg->TargetReg(kHiddenArg, kWide32), target_method.dex_method_index);
       if (cu->instruction_set == kX86) {
-        cg->OpRegCopy(cg->TargetReg(kHiddenFpArg, false), cg->TargetReg(kHiddenArg, false));
+        cg->OpRegCopy(cg->TargetReg(kHiddenFpArg, kWide32), cg->TargetReg(kHiddenArg, kWide32));
       }
       break;
     case 1: {  // Get "this" [set kArg1]
@@ -773,7 +735,7 @@ static int NextInvokeInsnSP(CompilationUnit* cu, CallInfo* info, ThreadOffset<po
     }
     // Load kArg0 with method index
     CHECK_EQ(cu->dex_file, target_method.dex_file);
-    cg->LoadConstant(cg->TargetReg(kArg0, false), target_method.dex_method_index);
+    cg->LoadConstant(cg->TargetReg(kArg0, kWide32), target_method.dex_method_index);
     return 1;
   }
   return -1;
@@ -852,7 +814,8 @@ int Mir2Lir::LoadArgRegs(CallInfo* info, int call_state,
                          uint32_t vtable_idx, uintptr_t direct_code,
                          uintptr_t direct_method, InvokeType type, bool skip_this) {
   int last_arg_reg = 3 - 1;
-  int arg_regs[3] = {TargetReg(kArg1, false).GetReg(), TargetReg(kArg2, false).GetReg(), TargetReg(kArg3, false).GetReg()};
+  int arg_regs[3] = {TargetReg(kArg1, kWide32).GetReg(), TargetReg(kArg2, kWide32).GetReg(),
+                     TargetReg(kArg3, kWide32).GetReg()};
 
   int next_reg = 0;
   int next_arg = 0;
@@ -927,7 +890,7 @@ int Mir2Lir::GenDalvikArgsNoRange(CallInfo* info,
         }
       } else {
         // kArg2 & rArg3 can safely be used here
-        reg = TargetReg(kArg3, false);
+        reg = TargetReg(kArg3, kWide32);
         {
           ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
           Load32Disp(TargetPtrReg(kSp), SRegOffset(rl_arg.s_reg_low) + 4, reg);
@@ -951,7 +914,7 @@ int Mir2Lir::GenDalvikArgsNoRange(CallInfo* info,
       if (rl_arg.location == kLocPhysReg) {
         arg_reg = rl_arg.reg;
       } else {
-        arg_reg = rl_arg.wide ? TargetReg(kArg2, kArg3) : TargetReg(kArg2, false);
+        arg_reg = TargetReg(kArg2, rl_arg.wide ? kWide64 : kWide32);
         if (rl_arg.wide) {
           LoadValueDirectWideFixed(rl_arg, arg_reg);
         } else {
@@ -1177,7 +1140,7 @@ int Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
 
         // Instead of allocating a new temp, simply reuse one of the registers being used
         // for argument passing.
-        RegStorage temp = TargetReg(kArg3, false);
+        RegStorage temp = TargetReg(kArg3, kWide32);
 
         // Now load the argument VR and store to the outs.
         Load32Disp(TargetPtrReg(kSp), current_src_offset, temp);
@@ -1550,8 +1513,8 @@ bool Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
   ClobberCallerSave();
   LockCallTemps();  // Using fixed registers
   RegStorage reg_ptr = TargetRefReg(kArg0);
-  RegStorage reg_char = TargetReg(kArg1, false);
-  RegStorage reg_start = TargetReg(kArg2, false);
+  RegStorage reg_char = TargetReg(kArg1, kWide32);
+  RegStorage reg_start = TargetReg(kArg2, kWide32);
 
   LoadValueDirectFixed(rl_obj, reg_ptr);
   LoadValueDirectFixed(rl_char, reg_char);

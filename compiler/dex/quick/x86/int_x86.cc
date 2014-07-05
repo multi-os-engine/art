@@ -1057,23 +1057,23 @@ void X86Mir2Lir::GenArrayBoundsCheck(RegStorage index,
       RegStorage new_index = index_;
       // Move index out of kArg1, either directly to kArg0, or to kArg2.
       // TODO: clean-up to check not a number but with type
-      if (index_ == m2l_->TargetReg(kArg1, false)) {
+      if (index_ == m2l_->TargetReg(kArg1, kWide32)) {
         if (array_base_ == m2l_->TargetRefReg(kArg0)) {
-          m2l_->OpRegCopy(m2l_->TargetReg(kArg2, false), index_);
-          new_index = m2l_->TargetReg(kArg2, false);
+          m2l_->OpRegCopy(m2l_->TargetReg(kArg2, kWide32), index_);
+          new_index = m2l_->TargetReg(kArg2, kWide32);
         } else {
-          m2l_->OpRegCopy(m2l_->TargetReg(kArg0, false), index_);
-          new_index = m2l_->TargetReg(kArg0, false);
+          m2l_->OpRegCopy(m2l_->TargetReg(kArg0, kWide32), index_);
+          new_index = m2l_->TargetReg(kArg0, kWide32);
         }
       }
       // Load array length to kArg1.
-      m2l_->OpRegMem(kOpMov, m2l_->TargetReg(kArg1, false), array_base_, len_offset_);
+      m2l_->OpRegMem(kOpMov, m2l_->TargetReg(kArg1, kWide32), array_base_, len_offset_);
       if (cu_->target64) {
         m2l_->CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(8, pThrowArrayBounds),
-                                      new_index, m2l_->TargetReg(kArg1, false), true);
+                                      new_index, m2l_->TargetReg(kArg1, kWide32), true);
       } else {
         m2l_->CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(4, pThrowArrayBounds),
-                                      new_index, m2l_->TargetReg(kArg1, false), true);
+                                      new_index, m2l_->TargetReg(kArg1, kWide32), true);
       }
     }
 
@@ -1106,14 +1106,16 @@ void X86Mir2Lir::GenArrayBoundsCheck(int32_t index,
       GenerateTargetLabel(kPseudoThrowTarget);
 
       // Load array length to kArg1.
-      m2l_->OpRegMem(kOpMov, m2l_->TargetReg(kArg1, false), array_base_, len_offset_);
-      m2l_->LoadConstant(m2l_->TargetReg(kArg0, false), index_);
+      m2l_->OpRegMem(kOpMov, m2l_->TargetReg(kArg1, kWide32), array_base_, len_offset_);
+      m2l_->LoadConstant(m2l_->TargetReg(kArg0, kWide32), index_);
       if (cu_->target64) {
         m2l_->CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(8, pThrowArrayBounds),
-                                      m2l_->TargetReg(kArg0, false), m2l_->TargetReg(kArg1, false), true);
+                                      m2l_->TargetReg(kArg0, kWide32),
+                                      m2l_->TargetReg(kArg1, kWide32), true);
       } else {
         m2l_->CallRuntimeHelperRegReg(QUICK_ENTRYPOINT_OFFSET(4, pThrowArrayBounds),
-                                      m2l_->TargetReg(kArg0, false), m2l_->TargetReg(kArg1, false), true);
+                                      m2l_->TargetReg(kArg0, kWide32),
+                                      m2l_->TargetReg(kArg1, kWide32), true);
       }
     }
 
@@ -2605,7 +2607,7 @@ void X86Mir2Lir::GenArithOpInt(Instruction::Code opcode, RegLocation rl_dest,
   } else {
     if (shift_op) {
       // X86 doesn't require masking and must use ECX.
-      RegStorage t_reg = TargetReg(kCount, false);  // rCX
+      RegStorage t_reg = TargetReg(kCount, kWide32);  // rCX
       LoadValueDirectFixed(rl_rhs, t_reg);
       if (is_two_addr) {
         // Can we do this directly into memory?
@@ -2793,7 +2795,7 @@ void X86Mir2Lir::GenShiftOpLong(Instruction::Code opcode, RegLocation rl_dest,
   }
 
   // X86 doesn't require masking and must use ECX.
-  RegStorage t_reg = TargetReg(kCount, false);  // rCX
+  RegStorage t_reg = TargetReg(kCount, kWide32);  // rCX
   LoadValueDirectFixed(rl_shift, t_reg);
   if (is_two_addr) {
     // Can we do this directly into memory?

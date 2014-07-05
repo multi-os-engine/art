@@ -127,8 +127,8 @@ void Mir2Lir::GenArrayBoundsCheck(int index, RegStorage length) {
       m2l_->ResetDefTracking();
       GenerateTargetLabel(kPseudoThrowTarget);
 
-      RegStorage arg1_32 = m2l_->TargetReg(kArg1, false);
-      RegStorage arg0_32 = m2l_->TargetReg(kArg0, false);
+      RegStorage arg1_32 = m2l_->TargetReg(kArg1, kWide32);
+      RegStorage arg0_32 = m2l_->TargetReg(kArg0, kWide32);
 
       m2l_->OpRegCopy(arg1_32, length_);
       m2l_->LoadConstant(arg0_32, index_);
@@ -368,7 +368,8 @@ static void GenNewArrayImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu,
       if (!use_direct_type_ptr) {
         mir_to_lir->LoadClassType(type_idx, kArg0);
         func_offset = QUICK_ENTRYPOINT_OFFSET(pointer_size, pAllocArrayResolved);
-        mir_to_lir->CallRuntimeHelperRegMethodRegLocation(func_offset, mir_to_lir->TargetReg(kArg0, false),
+        mir_to_lir->CallRuntimeHelperRegMethodRegLocation(func_offset,
+                                                          mir_to_lir->TargetReg(kArg0, kWide32),
                                                           rl_src, true);
       } else {
         // Use the direct pointer.
@@ -431,8 +432,8 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
   } else {
     GenFilledNewArrayCall<4>(this, cu_, elems, type_idx);
   }
-  FreeTemp(TargetReg(kArg2, false));
-  FreeTemp(TargetReg(kArg1, false));
+  FreeTemp(TargetReg(kArg2, kWide32));
+  FreeTemp(TargetReg(kArg1, kWide32));
   /*
    * NOTE: the implicit target for Instruction::FILLED_NEW_ARRAY is the
    * return region.  Because AllocFromCode placed the new array
@@ -477,7 +478,7 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
     switch (cu_->instruction_set) {
       case kThumb2:
       case kArm64:
-        r_val = TargetReg(kLr, false);
+        r_val = TargetReg(kLr, kWide32);
         break;
       case kX86:
       case kX86_64:
@@ -618,7 +619,7 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
         // The slow path is invoked if the r_base is NULL or the class pointed
         // to by it is not initialized.
         LIR* unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, NULL);
-        RegStorage r_tmp = TargetReg(kArg2, false);
+        RegStorage r_tmp = TargetReg(kArg2, kWide32);
         LockTemp(r_tmp);
         LIR* uninit_branch = OpCmpMemImmBranch(kCondLt, r_tmp, r_base,
                                           mirror::Class::StatusOffset().Int32Value(),
@@ -711,7 +712,7 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
         // The slow path is invoked if the r_base is NULL or the class pointed
         // to by it is not initialized.
         LIR* unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, NULL);
-        RegStorage r_tmp = TargetReg(kArg2, false);
+        RegStorage r_tmp = TargetReg(kArg2, kWide32);
         LockTemp(r_tmp);
         LIR* uninit_branch = OpCmpMemImmBranch(kCondLt, r_tmp, r_base,
                                           mirror::Class::StatusOffset().Int32Value(),
@@ -1274,7 +1275,7 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
       /* Uses conditional nullification */
         OpRegReg(kOpCmp, TargetRefReg(kArg1), TargetRefReg(kArg2));  // Same?
         it = OpIT(kCondEq, "EE");   // if-convert the test
-        LoadConstant(TargetReg(kArg0, false), 1);     // .eq case - load true
+        LoadConstant(TargetReg(kArg0, kWide32), 1);     // .eq case - load true
       }
       OpRegCopy(TargetRefReg(kArg0), TargetRefReg(kArg2));    // .ne case - arg0 <= class
       OpReg(kOpBlx, r_tgt);    // .ne case: helper(class, ref->class)
@@ -1673,13 +1674,13 @@ void Mir2Lir::GenArithOpInt(Instruction::Code opcode, RegLocation rl_dest,
     // If we haven't already generated the code use the callout function.
     if (!done) {
       FlushAllRegs();   /* Send everything to home location */
-      LoadValueDirectFixed(rl_src2, TargetReg(kArg1, false));
+      LoadValueDirectFixed(rl_src2, TargetReg(kArg1, kWide32));
       RegStorage r_tgt = cu_->target64 ?
           CallHelperSetup(QUICK_ENTRYPOINT_OFFSET(8, pIdivmod)) :
           CallHelperSetup(QUICK_ENTRYPOINT_OFFSET(4, pIdivmod));
-      LoadValueDirectFixed(rl_src1, TargetReg(kArg0, false));
+      LoadValueDirectFixed(rl_src1, TargetReg(kArg0, kWide32));
       if (check_zero) {
-        GenDivZeroCheck(TargetReg(kArg1, false));
+        GenDivZeroCheck(TargetReg(kArg1, kWide32));
       }
       // NOTE: callout here is not a safepoint.
       if (cu_->target64) {
@@ -1943,14 +1944,14 @@ void Mir2Lir::GenArithOpIntLit(Instruction::Code opcode, RegLocation rl_dest, Re
 
       if (!done) {
         FlushAllRegs();   /* Everything to home location. */
-        LoadValueDirectFixed(rl_src, TargetReg(kArg0, false));
-        Clobber(TargetReg(kArg0, false));
+        LoadValueDirectFixed(rl_src, TargetReg(kArg0, kWide32));
+        Clobber(TargetReg(kArg0, kWide32));
         if (cu_->target64) {
-          CallRuntimeHelperRegImm(QUICK_ENTRYPOINT_OFFSET(8, pIdivmod), TargetReg(kArg0, false), lit,
-                                  false);
+          CallRuntimeHelperRegImm(QUICK_ENTRYPOINT_OFFSET(8, pIdivmod), TargetReg(kArg0, kWide32),
+                                  lit, false);
         } else {
-          CallRuntimeHelperRegImm(QUICK_ENTRYPOINT_OFFSET(4, pIdivmod), TargetReg(kArg0, false), lit,
-                                  false);
+          CallRuntimeHelperRegImm(QUICK_ENTRYPOINT_OFFSET(4, pIdivmod), TargetReg(kArg0, kWide32),
+                                  lit, false);
         }
         if (is_div)
           rl_result = GetReturn(kCoreReg);
@@ -1983,7 +1984,7 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
   bool call_out = false;
   bool check_zero = false;
   ThreadOffset<pointer_size> func_offset(-1);
-  int ret_reg = mir_to_lir->TargetReg(kRet0, false).GetReg();
+  int ret_reg = mir_to_lir->TargetReg(kRet0, kWide32).GetReg();
 
   switch (opcode) {
     case Instruction::NOT_LONG:
@@ -2031,7 +2032,7 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
         return;
       } else {
         call_out = true;
-        ret_reg = mir_to_lir->TargetReg(kRet0, false).GetReg();
+        ret_reg = mir_to_lir->TargetReg(kRet0, kWide32).GetReg();
         func_offset = QUICK_ENTRYPOINT_OFFSET(pointer_size, pLmul);
       }
       break;
@@ -2043,7 +2044,7 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
       }
       call_out = true;
       check_zero = true;
-      ret_reg = mir_to_lir->TargetReg(kRet0, false).GetReg();
+      ret_reg = mir_to_lir->TargetReg(kRet0, kWide32).GetReg();
       func_offset = QUICK_ENTRYPOINT_OFFSET(pointer_size, pLdiv);
       break;
     case Instruction::REM_LONG:
@@ -2056,8 +2057,8 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
       check_zero = true;
       func_offset = QUICK_ENTRYPOINT_OFFSET(pointer_size, pLmod);
       /* NOTE - for Arm, result is in kArg2/kArg3 instead of kRet0/kRet1 */
-      ret_reg = (cu->instruction_set == kThumb2) ? mir_to_lir->TargetReg(kArg2, false).GetReg() :
-          mir_to_lir->TargetReg(kRet0, false).GetReg();
+      ret_reg = (cu->instruction_set == kThumb2) ? mir_to_lir->TargetReg(kArg2, kWide32).GetReg() :
+          mir_to_lir->TargetReg(kRet0, kWide32).GetReg();
       break;
     case Instruction::AND_LONG_2ADDR:
     case Instruction::AND_LONG:
@@ -2100,11 +2101,11 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
   } else {
     mir_to_lir->FlushAllRegs();   /* Send everything to home location */
     if (check_zero) {
-      RegStorage r_tmp1 = mir_to_lir->TargetReg(kArg0, kArg1);
-      RegStorage r_tmp2 = mir_to_lir->TargetReg(kArg2, kArg3);
+      RegStorage r_tmp1 = mir_to_lir->TargetReg(kArg0, kWide64);
+      RegStorage r_tmp2 = mir_to_lir->TargetReg(kArg2, kWide64);
       mir_to_lir->LoadValueDirectWideFixed(rl_src2, r_tmp2);
       RegStorage r_tgt = mir_to_lir->CallHelperSetup(func_offset);
-      mir_to_lir->GenDivZeroCheckWide(mir_to_lir->TargetReg(kArg2, kArg3));
+      mir_to_lir->GenDivZeroCheckWide(r_tmp2);
       mir_to_lir->LoadValueDirectWideFixed(rl_src1, r_tmp1);
       // NOTE: callout here is not a safepoint
       mir_to_lir->CallHelper(r_tgt, func_offset, false /* not safepoint */);
@@ -2112,7 +2113,7 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
       mir_to_lir->CallRuntimeHelperRegLocationRegLocation(func_offset, rl_src1, rl_src2, false);
     }
     // Adjust return regs in to handle case of rem returning kArg2/kArg3
-    if (ret_reg == mir_to_lir->TargetReg(kRet0, false).GetReg())
+    if (ret_reg == mir_to_lir->TargetReg(kRet0, kWide32).GetReg())
       rl_result = mir_to_lir->GetReturnWide(kCoreReg);
     else
       rl_result = mir_to_lir->GetReturnWideAlt();

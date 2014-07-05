@@ -1198,18 +1198,20 @@ class Mir2Lir : public Backend {
      * @param is_wide Whether the view should be 64-bit (rather than 32-bit).
      * @return Return the #RegStorage corresponding to the given purpose @p reg.
      */
-    virtual RegStorage TargetReg(SpecialTargetRegister reg, bool is_wide) {
-      return TargetReg(reg);
-    }
-
-    /**
-     * @brief Portable way of getting special register pair from the backend.
-     * @param reg Enumeration describing the purpose of the first register.
-     * @param reg Enumeration describing the purpose of the second register.
-     * @return Return the #RegStorage corresponding to the given purpose @p reg.
-     */
-    virtual RegStorage TargetReg(SpecialTargetRegister reg1, SpecialTargetRegister reg2) {
-      return RegStorage::MakeRegPair(TargetReg(reg1, false), TargetReg(reg2, false));
+    virtual RegStorage TargetReg(SpecialTargetRegister reg, WideKind is_wide) {
+      if (is_wide == kWide64) {
+        DCHECK((kArg0 <= reg && reg < kArg7) || (kFArg0 <= reg && reg < kFArg7));
+        COMPILE_ASSERT((kArg1 == kArg0 + 1) && (kArg2 == kArg1 + 1) && (kArg3 == kArg2 + 1) &&
+                       (kArg4 == kArg3 + 1) && (kArg5 == kArg4 + 1) && (kArg6 == kArg5 + 1) &&
+                       (kArg7 == kArg6 + 1), kargs_range_unexpected);
+        COMPILE_ASSERT((kFArg1 == kFArg0 + 1) && (kFArg2 == kFArg1 + 1) && (kFArg3 == kFArg2 + 1) &&
+                       (kFArg4 == kFArg3 + 1) && (kFArg5 == kFArg4 + 1) && (kFArg6 == kFArg5 + 1) &&
+                       (kFArg7 == kFArg6 + 1), kfargs_range_unexpected);
+        return RegStorage::MakeRegPair(TargetReg(reg),
+                                       TargetReg(static_cast<SpecialTargetRegister>(reg + 1)));
+      } else {
+        return TargetReg(reg);
+      }
     }
 
     /**
@@ -1233,7 +1235,7 @@ class Mir2Lir : public Backend {
       if (loc.ref) {
         return TargetRefReg(reg);
       } else {
-        return TargetReg(reg, loc.wide);
+        return TargetReg(reg, loc.wide ? kWide64 : kWide32);
       }
     }
 
