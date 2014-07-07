@@ -657,6 +657,10 @@ class MIRGraph {
     return m_units_[current_method_];
   }
 
+  DexCompilationUnit* GetDexCompilationUnit(uint16_t m_unit_index) const {
+    return m_units_[m_unit_index];
+  }
+
   /**
    * @brief Dump a CFG into a dot file format.
    * @param dir_prefix the directory the file will be created in.
