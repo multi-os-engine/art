@@ -20,6 +20,7 @@
 #include "base/logging.h"
 #include "base/macros.h"
 #include "base/mutex.h"
+#include "dex_file.h"
 #include "invoke_type.h"
 #include "method_reference.h"
 
@@ -27,9 +28,8 @@ namespace art {
 
 class CompilerDriver;
 class DexCompilationUnit;
-class DexFile;
 
-class MirMethodInfo {
+class PACKED(2) MirMethodInfo {
  public:
   uint16_t MethodIndex() const {
     return method_idx_;
@@ -89,7 +89,7 @@ class MirMethodInfo {
   const DexFile* declaring_dex_file_;
 };
 
-class MirMethodLoweringInfo : public MirMethodInfo {
+class PACKED(2) MirMethodLoweringInfo : public MirMethodInfo {
  public:
   // For each requested method retrieve the method's declaring location (dex file, class
   // index and method index) and compute whether we can fast path the method call. For fast
@@ -108,6 +108,7 @@ class MirMethodLoweringInfo : public MirMethodInfo {
         target_dex_file_(nullptr),
         target_method_idx_(0u),
         vtable_idx_(0u),
+        code_item_offset_(0u),
         stats_flags_(0) {
   }
 
@@ -151,6 +152,17 @@ class MirMethodLoweringInfo : public MirMethodInfo {
     return direct_method_;
   }
 
+  const DexFile::CodeItem* GetCodeItem() const {
+    if (target_dex_file_ != nullptr && code_item_offset_ != 0u) {
+      return target_dex_file_->GetCodeItem(code_item_offset_);
+    }
+    return nullptr;
+  }
+
+  uint32_t GetCodeItemOffset() const {
+    return code_item_offset_;
+  }
+
   int StatsFlags() const {
     return stats_flags_;
   }
@@ -183,6 +195,7 @@ class MirMethodLoweringInfo : public MirMethodInfo {
   const DexFile* target_dex_file_;
   uint16_t target_method_idx_;
   uint16_t vtable_idx_;
+  uint32_t code_item_offset_;
   int stats_flags_;
 
   friend class ClassInitCheckEliminationTest;
