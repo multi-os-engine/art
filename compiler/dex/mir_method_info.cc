@@ -75,7 +75,7 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
     MethodReference target_method(mUnit->GetDexFile(), it->MethodIndex());
     int fast_path_flags = compiler_driver->IsFastInvoke(
         soa, dex_cache, class_loader, mUnit, referrer_class.Get(), resolved_method, &invoke_type,
-        &target_method, devirt_target, &it->direct_code_, &it->direct_method_);
+        &target_method, devirt_target, &it->direct_code_, &it->direct_method_, &it->code_item_offset_);
     bool needs_clinit =
         compiler_driver->NeedsClassInitialization(referrer_class.Get(), resolved_method);
     uint16_t other_flags = it->flags_ &

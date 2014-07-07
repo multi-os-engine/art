@@ -104,6 +104,8 @@ class DexCompilationUnit {
 
   const std::string& GetSymbol();
 
+  const std::string& GetPrettyMethod();
+
  private:
   CompilationUnit* const cu_;
 
@@ -120,6 +122,7 @@ class DexCompilationUnit {
   const VerifiedMethod* const verified_method_;
 
   std::string symbol_;
+  std::string pretty_method_;
 };
 
 }  // namespace art
