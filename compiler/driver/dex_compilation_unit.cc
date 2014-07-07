@@ -58,9 +58,16 @@ DexCompilationUnit::DexCompilationUnit(CompilationUnit* cu,
 const std::string& DexCompilationUnit::GetSymbol() {
   if (symbol_.empty()) {
     symbol_ = "dex_";
-    symbol_ += MangleForJni(PrettyMethod(dex_method_idx_, *dex_file_));
+    symbol_ += MangleForJni(GetPrettyMethod());
   }
   return symbol_;
+}
+
+const std::string& DexCompilationUnit::GetPrettyMethod() {
+  if (pretty_method_.empty()) {
+    pretty_method_ = PrettyMethod(dex_method_idx_, *dex_file_);
+  }
+  return pretty_method_;
 }
 
 }  // namespace art
