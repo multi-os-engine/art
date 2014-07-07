@@ -753,12 +753,11 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
     } else {
       GenSgetCall<4>(this, is_long_or_double, is_object, &field_info);
     }
-    // FIXME: pGetXXStatic always return an int or int64 regardless of rl_dest.fp.
     if (is_long_or_double) {
       RegLocation rl_result = GetReturnWide(kCoreReg);
       StoreValueWide(rl_dest, rl_result);
     } else {
-      RegLocation rl_result = GetReturn(rl_dest.ref ? kRefReg : kCoreReg);
+      RegLocation rl_result = GetReturn(kCoreReg);
       StoreValue(rl_dest, rl_result);
     }
   }
@@ -820,10 +819,10 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
       GenIgetCall<4>(this, is_long_or_double, is_object, &field_info, rl_obj);
     }
     if (is_long_or_double) {
-      RegLocation rl_result = GetReturnWide(LocToRegClass(rl_dest));
+      RegLocation rl_result = GetReturnWide(kCoreReg);
       StoreValueWide(rl_dest, rl_result);
     } else {
-      RegLocation rl_result = GetReturn(LocToRegClass(rl_dest));
+      RegLocation rl_result = GetReturn(kCoreReg);
       StoreValue(rl_dest, rl_result);
     }
   }
