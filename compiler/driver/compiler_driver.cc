@@ -1258,7 +1258,7 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
 
       stats_flags = IsFastInvoke(
           soa, dex_cache, class_loader, mUnit, referrer_class, resolved_method,
-          invoke_type, target_method, devirt_target, direct_code, direct_method);
+          invoke_type, target_method, devirt_target, direct_code, direct_method, nullptr);
       result = stats_flags != 0;
     } else {
       // Devirtualization not enabled. Inline IsFastInvoke(), dropping the devirtualization parts.
