@@ -18,10 +18,22 @@
 set -e
 
 mkdir classes
-${JAVAC} -d classes `find src -name '*.java'`
+
+if [ -r common ]; then
+  ${JAVAC} -d classes `find common -name '*.java'`
+fi
+
+TOP_LEVEL_CLASSES=`find . -maxdepth 1 -name '*.java'`
+if [ ${TOP_LEVEL_CLASSES} != "" ]; then
+  ${JAVAC} -cp common -d classes ${TOP_LEVEL_CLASSES}
+fi
+
+if [ -r src ]; then
+  ${JAVAC} -cp common -d classes `find src -name '*.java'`
+fi
 
 if [ -r src2 ]; then
-  ${JAVAC} -d classes `find src2 -name '*.java'`
+  ${JAVAC} -cp common -d classes `find src2 -name '*.java'`
 fi
 
 if [ ${NEED_DEX} = "true" ]; then
