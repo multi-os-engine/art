@@ -70,6 +70,17 @@ public class Main {
       return (b - a) < maxDelta;
   }
 
+  /**
+   * Will test inlining Thread.currentThread().
+   */
+  public static void test_Thread_currentThread() {
+    // 1. Do not use result.
+    Thread.currentThread();
+
+    // 2. Result should not be null.
+    Assert.assertNotNull(Thread.currentThread());
+  }
+
   public static void test_String_length() {
     String str0 = "";
     String str1 = "x";
