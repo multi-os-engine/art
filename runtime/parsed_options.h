@@ -80,6 +80,8 @@ class ParsedOptions {
   std::vector<std::string> image_compiler_options_;
   ProfilerOptions profiler_options_;
   std::string profile_output_filename_;
+  std::string vtune_package_;
+  std::string vtune_map_;
   ProfilerClockSource profile_clock_source_;
   bool verify_;
   InstructionSet image_isa_;
