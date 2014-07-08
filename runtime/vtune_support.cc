@@ -22,6 +22,14 @@
 #include "oat_file-inl.h"
 #include "dex_file-inl.h"
 #include "dex_instruction.h"
+#include "utils.h"
+#include "cutils/process_name.h"
+
+#if defined(HAVE_PRCTL)
+#include <sys/prctl.h>
+#endif
+
+#include "runtime.h"
 #include "vtune/jitprofiling.h"
 
 namespace art {
@@ -140,20 +148,67 @@ static void getLineInfoForDex(const DexFile::CodeItem* code_item, LineInfoTable&
   }
 }
 
-void SendOatFileToVTune(OatFile &oat_file) {
-  // TODO: come up with another way to get options:
-  // 1. filter by app package (process nice name)
-  // 2. filter by dex/oat/class/method
-  // 3. output map type: none/dex/java
-  // 4. vtune jit api library path (to set INTEL_JIT_PROFILER environment variable)
-  // 5. set any other environment vars for the profiler lib (output path, ...)
-  static const char * OAT_FILE_VTUNE = getenv("OAT_FILE_VTUNE");
-  static const char * OAT_FILE_VTUNE_SRC = getenv("OAT_FILE_VTUNE_SRC");
+// filtering options initialized once for every new process id
+static std::string vtune_package;
+static std::string vtune_map;
+static bool process_listed;
+static bool core_expected; // core classes can come from a forked parent process
 
-  // filter output
-  if (OAT_FILE_VTUNE == NULL || 0 != strcmp(OAT_FILE_VTUNE, oat_file.GetLocation().c_str())) {
-    return ;
+static bool IsCoreOat(OatFile &oat_file) {
+  return EndsWith(oat_file.GetLocation(), "/system@framework@boot.oat") ||
+         EndsWith(oat_file.GetLocation(), "/system/framework/boot.oat");
+}
+
+// called once per process
+static bool IsRejectedProcess() {
+  vtune_package = Runtime::Current()->GetVTunePackage();
+  vtune_map = Runtime::Current()->GetVTuneMap();
+
+  if (vtune_package.size() == 0) {
+    return true;
   }
+
+  const char *proc_name = get_process_name();
+#if defined(HAVE_PRCTL)
+  char prctlbuf[17];
+  if (strcmp(proc_name, "unknown") == 0 &&
+      prctl(PR_GET_NAME, (unsigned long) prctlbuf, 0, 0, 0) == 0) {
+    prctlbuf[16] = 0;
+    proc_name = prctlbuf;
+  }
+#endif
+
+  process_listed = vtune_package.find(std::string(":") + proc_name) != std::string::npos;
+  core_expected = vtune_package.compare(0, 5, "core:") == 0;
+
+  bool rejected = !process_listed && !core_expected;
+
+  LOG(INFO) << "VTUNE: package=" << vtune_package
+            << "; proc=" << proc_name
+            << (rejected ? "; rejected" : "");
+
+  return rejected;
+}
+
+void SendOatFileToVTune(OatFile &oat_file) {
+  static bool rejected_process = true;
+  static pid_t init_pid = 0;
+
+  pid_t current_pid = getpid();
+  if (current_pid != init_pid) {
+    rejected_process = IsRejectedProcess();
+    init_pid = current_pid;
+  }
+
+  if (rejected_process || (!process_listed && (!core_expected || !IsCoreOat(oat_file)))) {
+    LOG(INFO) << "VTUNE: package=" << vtune_package
+              << "; oat=" << oat_file.GetLocation()
+              << "; rejected";
+    return;
+  }
+
+  // accepted
+  DCHECK(process_listed || core_expected);
 
   iJIT_Method_Load jit_method;
   memset(&jit_method, 0, sizeof(jit_method));
@@ -218,16 +273,15 @@ void SendOatFileToVTune(OatFile &oat_file) {
         LineInfoTable pc2dex;
         LineInfoTable pc2java;
 
-        if ((OAT_FILE_VTUNE_SRC == NULL || strcmp(OAT_FILE_VTUNE_SRC, "none") != 0)
-             && table.TotalSize() != 0 && table.PcToDexSize() != 0) {
+        if (vtune_map != "none" && table.TotalSize() != 0 && table.PcToDexSize() != 0) {
           for (MappingTable::PcToDexIterator cur = table.PcToDexBegin(), end = table.PcToDexEnd(); cur != end; ++cur) {
             pc2dex.push_back( {cur.NativePcOffset(), cur.DexPc()});
           }
 
-          if (OAT_FILE_VTUNE_SRC != NULL && strcmp(OAT_FILE_VTUNE_SRC, "dex") == 0) {
+          if (vtune_map == "dex") {
             pc2src = &pc2dex;
             getLineInfoForDex(code_item, pc2dex);
-            // TODO: set dexdump file name for this method
+            // TODO: set method specific dexdump file name for this method
           } else { // default is pc -> java
             pc2src = &pc2java;
             const byte* dbgstream = dex_file->GetDebugInfoStream(it.GetMethodCodeItem());
@@ -252,12 +306,12 @@ void SendOatFileToVTune(OatFile &oat_file) {
 
         int is_notified = iJIT_NotifyEvent(iJVM_EVENT_TYPE_METHOD_LOAD_FINISHED, (void*)&jit_method);
         if (is_notified) {
-          LOG(DEBUG) << "JIT API: method '" << jit_method.method_name
+          LOG(DEBUG) << "VTUNE: method '" << jit_method.method_name
                      << "' is written successfully: id=" << jit_method.method_id
                      << ", address=" << jit_method.method_load_address
                      << ", size=" << jit_method.method_size;
-        } else if (true) {
-          LOG(WARNING) << "JIT API: failed to write method '" << jit_method.method_name
+        } else {
+          LOG(WARNING) << "VTUNE: failed to write method '" << jit_method.method_name
                        << "': id=" << jit_method.method_id
                        << ", address=" << jit_method.method_load_address
                        << ", size=" << jit_method.method_size;
