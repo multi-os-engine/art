@@ -15,6 +15,9 @@
  */
 
 import junit.framework.Assert;
+import libcore.io.Memory;
+import dalvik.system.VMRuntime;
+import java.util.Arrays;
 
 public class Main {
   public static void main(String args[]) {
@@ -49,6 +52,14 @@ public class Main {
     test_String_indexOf();
     test_String_isEmpty();
     test_String_length();
+    test_Memory_peekByte();
+    test_Memory_peekShortNative();
+    test_Memory_peekIntNative();
+    test_Memory_peekLongNative();
+    test_Memory_pokeByte();
+    test_Memory_pokeShortNative();
+    test_Memory_pokeIntNative();
+    test_Memory_pokeLongNative();
   }
 
   /*
@@ -498,4 +509,73 @@ public class Main {
     Assert.assertEquals(Long.reverse(Long.MIN_VALUE), 1L);
   }
 
+  public static void test_Memory_peekByte() {
+    byte[] b = new byte [1];
+    b[0] = 0x12;
+    long address = VMRuntime.getRuntime().addressOf(b);
+    Assert.assertEquals(Memory.peekByte(address), 0x12);
+  }
+
+  public static void test_Memory_peekShortNative() {
+    byte[] b = new byte [2];
+    b[0] = 0x34;
+    b[1] = 0x12;
+    long address = VMRuntime.getRuntime().addressOf(b);
+    Assert.assertEquals(Memory.peekShortNative(address), 0x1234);
+  }
+
+  public static void test_Memory_peekIntNative() {
+    byte[] b = new byte [4];
+    b[0] = 0x78;
+    b[1] = 0x56;
+    b[2] = 0x34;
+    b[3] = 0x12;
+    long address = VMRuntime.getRuntime().addressOf(b);
+    Assert.assertEquals(Memory.peekIntNative(address), 0x12345678);
+  }
+
+  public static void test_Memory_peekLongNative() {
+    byte[] b = new byte [8];
+    b[0] = 0x78;
+    b[1] = 0x56;
+    b[2] = 0x34;
+    b[3] = 0x12;
+    b[4] = 0x78;
+    b[5] = 0x56;
+    b[6] = 0x34;
+    b[7] = 0x12;
+    long address = VMRuntime.getRuntime().addressOf(b);
+    Assert.assertEquals(Memory.peekLongNative(address), 0x1234567812345678L);
+  }
+
+  public static void test_Memory_pokeByte() {
+    byte[] b = new byte [1];
+    long address = VMRuntime.getRuntime().addressOf(b);
+    Memory.pokeByte(address, (byte)0x12);
+    Assert.assertEquals(b[0], 0x12);
+  }
+
+  public static void test_Memory_pokeShortNative() {
+    byte[] r = {0x34, 0x12};
+    byte[] b = new byte [2];
+    long address = VMRuntime.getRuntime().addressOf(b);
+    Memory.pokeShortNative(address, (short)0x1234);
+    Assert.assertTrue(Arrays.equals(r, b));
+  }
+
+  public static void test_Memory_pokeIntNative() {
+    byte[] r = {0x78, 0x56, 0x34, 0x12};
+    byte[] b = new byte [4];
+    long address = VMRuntime.getRuntime().addressOf(b);
+    Memory.pokeIntNative(address, (int)0x12345678);
+    Assert.assertTrue(Arrays.equals(r, b));
+  }
+
+  public static void test_Memory_pokeLongNative() {
+    byte[] r = {0x78, 0x56, 0x34, 0x12, 0x78, 0x56, 0x34, 0x12};
+    byte[] b = new byte [8];
+    long address = VMRuntime.getRuntime().addressOf(b);
+    Memory.pokeLongNative(address, (long)0x1234567812345678L);
+    Assert.assertTrue(Arrays.equals(r, b));
+  }
 }
