@@ -78,6 +78,18 @@ void X86_64Context::SmashCallerSaves() {
   gprs_[R9] = nullptr;
   gprs_[R10] = nullptr;
   gprs_[R11] = nullptr;
+  fprs_[XMM0] = nullptr;
+  fprs_[XMM1] = nullptr;
+  fprs_[XMM2] = nullptr;
+  fprs_[XMM3] = nullptr;
+  fprs_[XMM4] = nullptr;
+  fprs_[XMM5] = nullptr;
+  fprs_[XMM6] = nullptr;
+  fprs_[XMM7] = nullptr;
+  fprs_[XMM8] = nullptr;
+  fprs_[XMM9] = nullptr;
+  fprs_[XMM10] = nullptr;
+  fprs_[XMM11] = nullptr;
 }
 
 bool X86_64Context::SetGPR(uint32_t reg, uintptr_t value) {
