@@ -608,6 +608,9 @@ bool Runtime::Init(const Options& raw_options, bool ignore_unrecognized) {
     }
   }
 
+  vtune_package_ = options->vtune_package_;
+  vtune_map_ = options->vtune_map_;
+
   heap_ = new gc::Heap(options->heap_initial_size_,
                        options->heap_growth_limit_,
                        options->heap_min_free_,

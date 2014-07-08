@@ -436,6 +436,14 @@ class Runtime {
     return stack_overflow_handler_ == nullptr;
   }
 
+  const std::string& GetVTunePackage() {
+    return vtune_package_;
+  }
+
+  const std::string& GetVTuneMap() {
+    return vtune_map_;
+  }
+
   bool IsVerificationEnabled() const {
     return verify_;
   }
@@ -589,6 +597,10 @@ class Runtime {
   NullPointerHandler* null_pointer_handler_;
   SuspensionHandler* suspend_handler_;
   StackOverflowHandler* stack_overflow_handler_;
+
+  // VTune JIT API options
+  std::string vtune_package_;
+  std::string vtune_map_;
 
   // If false, verification is disabled. True by default.
   bool verify_;
