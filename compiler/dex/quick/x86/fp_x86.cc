@@ -705,4 +705,53 @@ bool X86Mir2Lir::GenInlinedAbsDouble(CallInfo* info) {
   }
 }
 
+bool X86Mir2Lir::GenInlinedMinMaxFP(CallInfo* info, bool is_min, bool is_double) {
+  if (is_double) {
+    RegLocation rl_src1 = LoadValueWide(info->args[0], kFPReg);
+    RegLocation rl_src2 = LoadValueWide(info->args[2], kFPReg);
+    RegLocation rl_dest = InlineTargetWide(info);
+    RegLocation rl_result = EvalLocWide(rl_dest, kFPReg, true);
+
+    // Avoid src2 corruption by OpRegCopyWide.
+    if (rl_result.reg == rl_src2.reg) {
+        std::swap(rl_src2.reg, rl_src1.reg);
+    }
+
+    OpRegCopyWide(rl_result.reg, rl_src1.reg);
+
+    // If src1 is Double.NaN, return it as a result.
+    NewLIR2(kX86UcomisdRR, rl_src1.reg.GetReg(), rl_src1.reg.GetReg());
+    LIR* branch_nan = NewLIR2(kX86Jcc8, 0, kX86CondP);
+
+    // Do Min/Max.
+    int op = (is_min) ? kX86MinsdRR : kX86MaxsdRR;
+    NewLIR2(op, rl_result.reg.GetReg(), rl_src2.reg.GetReg());
+    branch_nan->target = NewLIR0(kPseudoTargetLabel);
+    StoreValueWide(rl_dest, rl_result);
+  } else {
+    RegLocation rl_src1 = LoadValue(info->args[0], kFPReg);
+    RegLocation rl_src2 = LoadValue(info->args[1], kFPReg);
+    RegLocation rl_dest = InlineTarget(info);
+    RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
+
+    // Avoid src2 corruption by OpRegCopyWide.
+    if (rl_result.reg == rl_src2.reg) {
+        std::swap(rl_src2.reg, rl_src1.reg);
+    }
+
+    OpRegCopy(rl_result.reg, rl_src1.reg);
+
+    // If src1 is Double.NaN, return it as a result.
+    NewLIR2(kX86UcomissRR, rl_src1.reg.GetReg(), rl_src1.reg.GetReg());
+    LIR* branch_nan = NewLIR2(kX86Jcc8, 0, kX86CondP);
+
+    // Do Min/Max.
+    int op = (is_min) ? kX86MinssRR : kX86MaxssRR;
+    NewLIR2(op, rl_result.reg.GetReg(), rl_src2.reg.GetReg());
+    branch_nan->target = NewLIR0(kPseudoTargetLabel);
+    StoreValue(rl_dest, rl_result);
+  }
+  return true;
+}
+
 }  // namespace art
