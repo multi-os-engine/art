@@ -107,6 +107,11 @@ OatFile* OatFile::Open(const std::string& filename,
     // We really should have a runtime.
     DCHECK_NE(static_cast<Runtime*>(nullptr), runtime);
 
+    if (runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
+      // We are an interpret-only environment. Ignore the check value.
+      return ret.release();
+    }
+
     if (runtime->ExplicitNullChecks() != explicit_null_checks ||
         runtime->ExplicitStackOverflowChecks() != explicit_so_checks ||
         runtime->ExplicitSuspendChecks() != explicit_suspend_checks) {
