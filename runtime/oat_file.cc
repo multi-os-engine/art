@@ -34,6 +34,10 @@
 #include "utils.h"
 #include "vmap_table.h"
 
+#ifdef VTUNE_ART
+#include "vtune_support.h"
+#endif
+
 namespace art {
 
 void OatFile::CheckLocation(const std::string& location) {
@@ -118,6 +122,9 @@ OatFile* OatFile::Open(const std::string& filename,
       *error_msg = os.str();
       return nullptr;
     }
+
+    SendOatFileToVTune(*ret.get());
+
     return ret.release();
   } else {
     *error_msg = "Failed parsing implicit check options.";
