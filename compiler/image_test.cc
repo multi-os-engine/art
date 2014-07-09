@@ -142,6 +142,9 @@ TEST_F(ImageTest, WriteRead) {
   std::string image("-Ximage:");
   image.append(image_location.GetFilename());
   options.push_back(std::make_pair(image.c_str(), reinterpret_cast<void*>(NULL)));
+  // Turn off implicit checks for this runtime, as we compiled the image with them off.
+  std::string explicit_checks("-implicit-checks:none");
+  options.push_back(std::make_pair(explicit_checks.c_str(), reinterpret_cast<void*>(NULL)));
 
   if (!Runtime::Create(options, false)) {
     LOG(FATAL) << "Failed to create runtime";
