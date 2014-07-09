@@ -781,6 +781,8 @@ static void GenIgetCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_obj
       is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Instance)
           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGetObjInstance)
               : QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet32Instance));
+  // Second argument of pGetXXInstance is always of type void*.
+  DCHECK_EQ(static_cast<unsigned int>(rl_obj.wide), 0U);
   mir_to_lir->CallRuntimeHelperImmRegLocation(getter_offset, field_info->FieldIndex(), rl_obj,
                                               true);
 }
@@ -819,11 +821,12 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
     } else {
       GenIgetCall<4>(this, is_long_or_double, is_object, &field_info, rl_obj);
     }
+    // FIXME: pGetXXInstance always return an int or int64 regardless of rl_dest.fp.
     if (is_long_or_double) {
-      RegLocation rl_result = GetReturnWide(LocToRegClass(rl_dest));
+      RegLocation rl_result = GetReturnWide(kCoreReg);
       StoreValueWide(rl_dest, rl_result);
     } else {
-      RegLocation rl_result = GetReturn(LocToRegClass(rl_dest));
+      RegLocation rl_result = GetReturn(rl_dest.ref ? kRefReg : kCoreReg);
       StoreValue(rl_dest, rl_result);
     }
   }

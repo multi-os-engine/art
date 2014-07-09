@@ -47,6 +47,8 @@ class MipsMir2Lir FINAL : public Mir2Lir {
                           OpSize size) OVERRIDE;
     LIR* StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale, int displacement,
                               RegStorage r_src, OpSize size) OVERRIDE;
+    LIR* GenAtomic64Load(RegStorage r_base, int displacement, RegStorage r_dest);
+    LIR* GenAtomic64Store(RegStorage r_base, int displacement, RegStorage r_src);
     void MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg);
 
     // Required for target - register utilities.
