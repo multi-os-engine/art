@@ -951,10 +951,10 @@ class MIRGraph {
   void ComputeTopologicalSortOrder();
   BasicBlock* CreateNewBB(BBType block_type);
 
-  bool InlineCallsGate();
-  void InlineCallsStart();
-  void InlineCalls(BasicBlock* bb);
-  void InlineCallsEnd();
+  bool SpecialMethodInlinerGate();
+  void SpecialMethodInlinerStart();
+  void SpecialMethodInliner(BasicBlock* bb);
+  void SpecialMethodInlinerEnd();
 
   /**
    * @brief Perform the initial preparation for the Method Uses.
