@@ -24,7 +24,7 @@ ART_TARGET_DALVIK_CACHE_DIR := /data/dalvik-cache
 
 # Directory used for gtests on device.
 ART_TARGET_NATIVETEST_DIR := /data/nativetest/art
-ART_TARGET_NATIVETEST_OUT := $(TARGET_OUT_DATA_NATIVE_TESTS)/art
+ART_TARGET_NATIVETEST_OUT := $(TARGET_OUT_DATA)/nativetest
 
 # Directory used for oat tests on device.
 ART_TARGET_TEST_DIR := /data/art-test
