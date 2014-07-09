@@ -1467,7 +1467,8 @@ static void CheckAndClearResolveException(Thread* self)
   mirror::Throwable* exception = self->GetException(nullptr);
   std::string descriptor = exception->GetClass()->GetDescriptor();
   if (descriptor != "Ljava/lang/IncompatibleClassChangeError;" &&
-      descriptor != "Ljava/lang/NoClassDefFoundError;") {
+      descriptor != "Ljava/lang/NoClassDefFoundError;" &&
+      descriptor != "Ljava/lang/IllegalAccessError;") {
     LOG(FATAL) << "Unexpected exeption " << exception->Dump();
   }
   self->ClearException();
