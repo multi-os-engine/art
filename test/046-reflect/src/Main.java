@@ -296,6 +296,8 @@ public class Main {
             printFieldInfo(field);
             int superClassIntVal = field.getInt(instance);
             System.out.println("  superClassInt value is " + superClassIntVal);
+            field.setInt(instance, 2020201);
+            System.out.println("  superClassInt value is now " + field.getInt(instance));
 
             field = target.getField("staticDouble");
             printFieldInfo(field);
@@ -341,6 +343,19 @@ public class Main {
             }
             intVal = field.getInt(instance);
             System.out.println("  cantTouchThis is still " + intVal);
+
+            field = target.getField("cantTouchThat");
+            printFieldInfo(field);
+            intVal = field.getInt(instance);
+            System.out.println("  cantTouchThat is " + intVal);
+            try {
+                field.setInt(instance, 99);
+                System.out.println("ERROR: set-final did not throw exception");
+            } catch (IllegalAccessException iae) {
+                System.out.println("  as expected: set-final throws exception");
+            }
+            intVal = field.getInt(instance);
+            System.out.println("  cantTouchThat is still " + intVal);
 
             System.out.println("  " + field + " accessible=" + field.isAccessible());
             field.setAccessible(true);
@@ -653,6 +668,7 @@ class Target extends SuperTarget {
     private int aPrivateInt;
 
     public final int cantTouchThis = 77;
+    public static final int cantTouchThat = 88;
 
     public long pubLong = 0x1122334455667788L;
 
