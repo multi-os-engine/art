@@ -573,6 +573,14 @@ bool ParsedOptions::Parse(const Runtime::Options& options, bool ignore_unrecogni
       if (!ParseUnsignedInteger(option, ':', &profiler_options_.max_stack_depth_)) {
         return false;
       }
+    } else if (StartsWith(option, "-Xvtune-package:")) {
+      if (!ParseStringAfterChar(option, ':', &vtune_package_)) {
+        return false;
+      }
+    } else if (StartsWith(option, "-Xvtune-map:")) {
+      if (!ParseStringAfterChar(option, ':', &vtune_map_)) {
+        return false;
+      }
     } else if (StartsWith(option, "-implicit-checks:")) {
       std::string checks;
       if (!ParseStringAfterChar(option, ':', &checks)) {
@@ -818,6 +826,8 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -Xprofile-top-k-change-threshold:doublevalue\n");
   UsageMessage(stream, "  -Xprofile-type:{method,stack}\n");
   UsageMessage(stream, "  -Xprofile-max-stack-depth:integervalue\n");
+  UsageMessage(stream, "  -Xvtune-package:[core]:[package]\n");
+  UsageMessage(stream, "  -Xvtune-map:[java|dex|none]\n");
   UsageMessage(stream, "  -Xcompiler:filename\n");
   UsageMessage(stream, "  -Xcompiler-option dex2oat-option\n");
   UsageMessage(stream, "  -Ximage-compiler-option dex2oat-option\n");

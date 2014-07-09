@@ -28,6 +28,10 @@
 #include "space-inl.h"
 #include "utils.h"
 
+#ifdef HAVE_ANDROID_OS
+#include "cutils/properties.h"
+#endif
+
 namespace art {
 namespace gc {
 namespace space {
@@ -43,7 +47,7 @@ ImageSpace::ImageSpace(const std::string& image_filename, const char* image_loca
   live_bitmap_.reset(live_bitmap);
 }
 
-static bool GenerateImage(const std::string& image_filename, std::string* error_msg) {
+static bool GenerateImage(const std::string& image_filename, std::string* error_msg, const char * compileOptions) {
   const std::string boot_class_path_string(Runtime::Current()->GetBootClassPathString());
   std::vector<std::string> boot_class_path;
   Split(boot_class_path_string, ':', boot_class_path);
@@ -87,6 +91,14 @@ static bool GenerateImage(const std::string& image_filename, std::string* error_
     arg_vector.push_back(compiler_options[i].c_str());
   }
 
+  if (compileOptions != nullptr) {
+    std::vector<std::string> compileOptionsVec;
+    Split(compileOptions, ' ', compileOptionsVec);
+    for (auto compileOption : compileOptionsVec) {
+      arg_vector.push_back(compileOption);
+    }
+  }
+
   std::string command_line(Join(arg_vector, ' '));
   LOG(INFO) << "GenerateImage: " << command_line;
   return Exec(arg_vector, error_msg);
@@ -95,16 +107,7 @@ static bool GenerateImage(const std::string& image_filename, std::string* error_
 bool ImageSpace::FindImageFilename(const char* image_location,
                                    const InstructionSet image_isa,
                                    std::string* image_filename,
-                                   bool *is_system) {
-  // image_location = /system/framework/boot.art
-  // system_image_location = /system/framework/<image_isa>/boot.art
-  std::string system_image_filename(GetSystemImageFilename(image_location, image_isa));
-  if (OS::FileExists(system_image_filename.c_str())) {
-    *image_filename = system_image_filename;
-    *is_system = true;
-    return true;
-  }
-
+                                   bool *is_system, bool cachedOnly) {
   const std::string dalvik_cache = GetDalvikCacheOrDie(GetInstructionSetString(image_isa));
 
   // Always set output location even if it does not exist,
@@ -114,7 +117,22 @@ bool ImageSpace::FindImageFilename(const char* image_location,
   // *image_filename = /data/dalvik-cache/<image_isa>/boot.art
   *image_filename = GetDalvikCacheFilenameOrDie(image_location, dalvik_cache.c_str());
   *is_system = false;
-  return OS::FileExists(image_filename->c_str());
+  if (OS::FileExists(image_filename->c_str())) {
+    return true;
+  }
+
+  if (!cachedOnly) {
+    // image_location = /system/framework/boot.art
+    // system_image_location = /system/framework/<image_isa>/boot.art
+    std::string system_image_filename(GetSystemImageFilename(image_location, image_isa));
+    if (OS::FileExists(system_image_filename.c_str())) {
+      *image_filename = system_image_filename;
+      *is_system = true;
+      return true;
+    }
+  }
+
+  return false;
 }
 
 ImageHeader* ImageSpace::ReadImageHeaderOrDie(const char* image_location,
@@ -142,8 +160,19 @@ ImageSpace* ImageSpace::Create(const char* image_location,
   std::string image_filename;
   std::string error_msg;
   bool is_system = false;
-  const bool found_image = FindImageFilename(image_location, image_isa, &image_filename,
-                                             &is_system);
+
+#ifdef HAVE_ANDROID_OS
+#define DALVIK_VM_RECOMPILE_PROPERTY "persist.sys.dalvik.vm.oat-img"
+  char img_recompile_opt_bug[PROPERTY_VALUE_MAX];
+  char *imageRecompileOptions =
+        property_get(DALVIK_VM_RECOMPILE_PROPERTY, img_recompile_opt_bug, "") > 0
+        ? img_recompile_opt_bug : nullptr;
+#else
+  char *imageRecompileOptions = NULL;
+#endif
+
+  const bool found_image = FindImageFilename(image_location, image_isa, &image_filename, 
+                                             &is_system, imageRecompileOptions != nullptr);
 
   // Note that we must not use the file descriptor associated with
   // ScopedFlock::GetFile to Init the image file. We want the file
@@ -152,7 +181,44 @@ ImageSpace* ImageSpace::Create(const char* image_location,
   ScopedFlock image_lock;
   image_lock.Init(image_filename.c_str(), &error_msg);
 
-  if (found_image) {
+#ifdef HAVE_ANDROID_OS
+  if (imageRecompileOptions != nullptr && found_image) {
+    // to not recompile twice just compare the modification times of the property and the image
+    // 1. prop_value = [timestamp:]value
+    // 2. modification time of /data/property/PROPERTY
+    long long prop_set_time;
+    char suffix[PROPERTY_VALUE_MAX];
+    int scan_count = sscanf(imageRecompileOptions, "%20lld:%[^\x1]s", &prop_set_time, suffix);
+    do {
+      struct stat file_info;
+      if (scan_count == 2) {
+        strncpy(imageRecompileOptions, suffix, sizeof(suffix));
+      } else if (stat("/data/property/" DALVIK_VM_RECOMPILE_PROPERTY, &file_info) == 0) {
+        prop_set_time = (long long)file_info.st_mtime;
+      } else {
+        imageRecompileOptions = nullptr;
+        break; // no property time
+      }
+      if (stat(image_filename.c_str(), &file_info) != 0) {
+        imageRecompileOptions = nullptr; // cannot get image time (permissions?)
+      } else {
+        LOG(INFO) << "file-timestamp=" << ((long long)file_info.st_mtime) << ": " << image_filename;
+        LOG(INFO) << "prop-timestamp=" << prop_set_time << ": " << DALVIK_VM_RECOMPILE_PROPERTY;
+        if (((long long)file_info.st_mtime) > prop_set_time) {
+          // the image file was compiled after the property was set
+          imageRecompileOptions = nullptr;
+        }
+      }
+    } while(false);
+
+    if (imageRecompileOptions != nullptr) {
+      LOG(INFO) << "Image " << image_filename << " will be re-generated with options "
+                << DALVIK_VM_RECOMPILE_PROPERTY << '=' << imageRecompileOptions;
+    }
+  }
+#endif
+
+  if (imageRecompileOptions == nullptr && found_image) {
     ImageSpace* space = ImageSpace::Init(image_filename.c_str(), image_location, !is_system,
                                          &error_msg);
     if (space != nullptr) {
@@ -169,7 +235,7 @@ ImageSpace* ImageSpace::Create(const char* image_location,
     }
   }
 
-  CHECK(GenerateImage(image_filename, &error_msg))
+  CHECK(GenerateImage(image_filename, &error_msg, imageRecompileOptions))
       << "Failed to generate image '" << image_filename << "': " << error_msg;
   ImageSpace* space = ImageSpace::Init(image_filename.c_str(), image_location, true, &error_msg);
   if (space == nullptr) {

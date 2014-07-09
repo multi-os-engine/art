@@ -110,16 +110,16 @@ class ImageSpace : public MemMapSpace {
                           bool validate_oat_file, std::string* error_msg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Returns the filename of the image corresponding to
-  // requested image_location, or the filename where a new image
-  // should be written if one doesn't exist. Looks for a generated
-  // image in the specified location and then in the dalvik-cache.
+  // Returns the filename in the dalvik cache where a new image
+  // can be or have been created. If this file does not exist and
+  // cachedOnly is set to false (default) and the generated image exists
+  // then returns the build-generated image's filename.
   //
-  // Returns true if an image was found, false otherwise.
+  // Returns true if an image file exists, false otherwise.
   static bool FindImageFilename(const char* image_location,
                                 InstructionSet image_isa,
                                 std::string* location,
-                                bool* is_system);
+                                bool* is_system, bool cachedOnly = false);
 
   OatFile* OpenOatFile(const char* image, std::string* error_msg) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
