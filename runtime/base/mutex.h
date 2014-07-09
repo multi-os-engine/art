@@ -239,7 +239,7 @@ class LOCKABLE Mutex : public BaseMutex {
  private:
 #if ART_USE_FUTEXES
   // 0 is unheld, 1 is held.
-  volatile int32_t state_;
+  AtomicInteger state_;
   // Exclusive owner.
   volatile uint64_t exclusive_owner_;
   // Number of waiting contenders.
@@ -351,11 +351,11 @@ class LOCKABLE ReaderWriterMutex : public BaseMutex {
  private:
 #if ART_USE_FUTEXES
   // -1 implies held exclusive, +ve shared held by state_ many owners.
-  volatile int32_t state_;
+  AtomicInteger state_;
   // Exclusive owner.
   volatile uint64_t exclusive_owner_;
   // Pending readers.
-  volatile int32_t num_pending_readers_;
+  AtomicInteger num_pending_readers_;
   // Pending writers.
   AtomicInteger num_pending_writers_;
 #else
