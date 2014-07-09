@@ -568,6 +568,10 @@ enum X86OpCode {
   Binary0fOpCode(kX86Phaddd),   // parallel horizontal addition 32 bits x 4
   Binary0fOpCode(kX86Haddpd),   // parallel FP horizontal addition 64 bits x 2
   Binary0fOpCode(kX86Haddps),   // parallel FP horizontal addition 32 bits x 4
+  Binary0fOpCode(kX86Maxss),    // float Max
+  Binary0fOpCode(kX86Maxsd),    // double Max
+  Binary0fOpCode(kX86Minss),    // float Min
+  Binary0fOpCode(kX86Minsd),    // double Min
   kX86PextrbRRI,                // Extract 8 bits from XMM into GPR
   kX86PextrwRRI,                // Extract 16 bits from XMM into GPR
   kX86PextrdRRI,                // Extract 32 bits from XMM into GPR

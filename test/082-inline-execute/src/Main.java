@@ -431,6 +431,8 @@ public class Main {
   }
 
   public static void test_StrictMath_min_F() {
+    Assert.assertTrue(Float.isNaN(StrictMath.min(1.0f, Float.NaN)));
+    Assert.assertTrue(Float.isNaN(StrictMath.min(Float.NaN, 1.0f)));
     Assert.assertTrue(approxEqual(StrictMath.min(0.0f, 0.0f), 0.0f, 0.001f));
     Assert.assertTrue(approxEqual(StrictMath.min(1.0f, 0.0f), 0.0f, 0.001f));
     Assert.assertTrue(approxEqual(StrictMath.min(0.0f, 1.0f), 0.0f, 0.001f));
@@ -440,6 +442,8 @@ public class Main {
   }
 
   public static void test_StrictMath_max_F() {
+    Assert.assertTrue(Float.isNaN(StrictMath.max(1.0f, Float.NaN)));
+    Assert.assertTrue(Float.isNaN(StrictMath.max(Float.NaN, 1.0f)));
     Assert.assertTrue(approxEqual(StrictMath.max(0.0f, 0.0f), 0.0f, 0.001f));
     Assert.assertTrue(approxEqual(StrictMath.max(1.0f, 0.0f), 1.0f, 0.001f));
     Assert.assertTrue(approxEqual(StrictMath.max(0.0f, 1.0f), 1.0f, 0.001f));
@@ -449,6 +453,8 @@ public class Main {
   }
 
   public static void test_StrictMath_min_D() {
+    Assert.assertTrue(Double.isNaN(StrictMath.min(1.0d, Double.NaN)));
+    Assert.assertTrue(Double.isNaN(StrictMath.min(Double.NaN, 1.0d)));
     Assert.assertTrue(approxEqual(StrictMath.min(0.0d, 0.0d), 0.0d, 0.001d));
     Assert.assertTrue(approxEqual(StrictMath.min(1.0d, 0.0d), 0.0d, 0.001d));
     Assert.assertTrue(approxEqual(StrictMath.min(0.0d, 1.0d), 0.0d, 0.001d));
@@ -458,6 +464,8 @@ public class Main {
   }
 
   public static void test_StrictMath_max_D() {
+    Assert.assertTrue(Double.isNaN(StrictMath.max(1.0d, Double.NaN)));
+    Assert.assertTrue(Double.isNaN(StrictMath.max(Double.NaN, 1.0d)));
     Assert.assertTrue(approxEqual(StrictMath.max(0.0d, 0.0d), 0.0d, 0.001d));
     Assert.assertTrue(approxEqual(StrictMath.max(1.0d, 0.0d), 1.0d, 0.001d));
     Assert.assertTrue(approxEqual(StrictMath.max(0.0d, 1.0d), 1.0d, 0.001d));
