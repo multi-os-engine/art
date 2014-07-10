@@ -278,23 +278,33 @@ class GlobalValueNumberingTest : public testing::Test {
     cu_.mir_graph->ComputeDominators();
     cu_.mir_graph->ComputeTopologicalSortOrder();
     cu_.mir_graph->SSATransformationEnd();
-    DoPerformGVN<RepeatingPreOrderDfsIterator>();
+    ASSERT_TRUE(gvn_ == nullptr);
+    gvn_.reset(new (allocator_.get()) GlobalValueNumbering(&cu_, allocator_.get()));
+    ASSERT_FALSE(gvn_->CanModify());
+    value_names_.resize(mir_count_, 0xffffu);
+    LocalValueNumbering* lvn = gvn_->PrepareNextBasicBlock();
+    while (lvn != nullptr) {
+      for (MIR* mir = lvn->GetBasicBlock()->first_mir_insn; mir != nullptr; mir = mir->next) {
+        value_names_[mir - mirs_] = lvn->GetValueNumber(mir);
+      }
+      gvn_->FinishBasicBlock(lvn);
+      ASSERT_TRUE(gvn_->Good());
+      lvn = gvn_->PrepareNextBasicBlock();
+    }
+    ASSERT_TRUE(gvn_->Good());
   }
 
   void PerformPreOrderDfsGVN() {
     cu_.mir_graph->SSATransformationStart();
     cu_.mir_graph->ComputeDFSOrders();
+    cu_.mir_graph->ComputeDominators();
+    cu_.mir_graph->ComputeTopologicalSortOrder();
     cu_.mir_graph->SSATransformationEnd();
-    DoPerformGVN<RepeatingPreOrderDfsIterator>();
-  }
-
-  template <typename IteratorType>
-  void DoPerformGVN() {
     ASSERT_TRUE(gvn_ == nullptr);
     gvn_.reset(new (allocator_.get()) GlobalValueNumbering(&cu_, allocator_.get()));
     ASSERT_FALSE(gvn_->CanModify());
     value_names_.resize(mir_count_, 0xffffu);
-    IteratorType iterator(cu_.mir_graph.get());
+    RepeatingPreOrderDfsIterator iterator(cu_.mir_graph.get());
     bool change = false;
     for (BasicBlock* bb = iterator.Next(change); bb != nullptr; bb = iterator.Next(change)) {
       LocalValueNumbering* lvn = gvn_->PrepareBasicBlock(bb);
@@ -303,7 +313,7 @@ class GlobalValueNumberingTest : public testing::Test {
           value_names_[mir - mirs_] = lvn->GetValueNumber(mir);
         }
       }
-      change = (lvn != nullptr) && gvn_->FinishBasicBlock(bb);
+      change = (lvn != nullptr) && gvn_->FinishBasicBlock(lvn);
       ASSERT_TRUE(gvn_->Good());
     }
   }
@@ -316,13 +326,12 @@ class GlobalValueNumberingTest : public testing::Test {
     PreOrderDfsIterator iterator(cu_.mir_graph.get());
     for (BasicBlock* bb = iterator.Next(); bb != nullptr; bb = iterator.Next()) {
       LocalValueNumbering* lvn = gvn_->PrepareBasicBlock(bb);
-      if (lvn != nullptr) {
-        for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
-          uint16_t value_name = lvn->GetValueNumber(mir);
-          ASSERT_EQ(value_name, value_names_[mir - mirs_]);
-        }
+      ASSERT_NE(lvn, nullptr);
+      for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+        uint16_t value_name = lvn->GetValueNumber(mir);
+        ASSERT_EQ(value_name, value_names_[mir - mirs_]);
       }
-      bool change = (lvn != nullptr) && gvn_->FinishBasicBlock(bb);
+      bool change = gvn_->FinishBasicBlock(lvn);
       ASSERT_FALSE(change);
       ASSERT_TRUE(gvn_->Good());
     }
@@ -1917,7 +1926,7 @@ TEST_F(GlobalValueNumberingTest, InfiniteLocationLoop) {
   PerformPreOrderDfsGVN();
 }
 
-TEST_F(GlobalValueNumberingTestTwoConsecutiveLoops, DISABLED_IFieldAndPhi) {
+TEST_F(GlobalValueNumberingTestTwoConsecutiveLoops, IFieldAndPhi) {
   static const IFieldDef ifields[] = {
       { 0u, 1u, 0u, false },  // Int.
   };
@@ -1954,7 +1963,7 @@ TEST_F(GlobalValueNumberingTestTwoConsecutiveLoops, DISABLED_IFieldAndPhi) {
   EXPECT_EQ(value_names_[5], value_names_[12]);
 }
 
-TEST_F(GlobalValueNumberingTestTwoConsecutiveLoops, DISABLED_NullCheck) {
+TEST_F(GlobalValueNumberingTestTwoConsecutiveLoops, NullCheck) {
   static const IFieldDef ifields[] = {
       { 0u, 1u, 0u, false },  // Int.
   };
@@ -2024,14 +2033,10 @@ TEST_F(GlobalValueNumberingTestTwoConsecutiveLoops, DISABLED_NullCheck) {
   EXPECT_NE(value_names_[2], value_names_[6]);
   EXPECT_NE(value_names_[3], value_names_[7]);
   EXPECT_NE(value_names_[4], value_names_[8]);
-  EXPECT_NE(value_names_[0], value_names_[12]);
-  EXPECT_NE(value_names_[1], value_names_[13]);
-  EXPECT_NE(value_names_[2], value_names_[14]);
-  EXPECT_NE(value_names_[3], value_names_[15]);
   EXPECT_EQ(value_names_[4], value_names_[12]);
-  EXPECT_NE(value_names_[5], value_names_[13]);
-  EXPECT_NE(value_names_[6], value_names_[14]);
-  EXPECT_NE(value_names_[7], value_names_[15]);
+  EXPECT_EQ(value_names_[5], value_names_[13]);
+  EXPECT_EQ(value_names_[6], value_names_[14]);
+  EXPECT_EQ(value_names_[7], value_names_[15]);
   EXPECT_EQ(value_names_[12], value_names_[20]);
   EXPECT_EQ(value_names_[13], value_names_[21]);
   EXPECT_EQ(value_names_[14], value_names_[22]);
@@ -2049,7 +2054,7 @@ TEST_F(GlobalValueNumberingTestTwoConsecutiveLoops, DISABLED_NullCheck) {
   }
 }
 
-TEST_F(GlobalValueNumberingTestTwoNestedLoops, DISABLED_IFieldAndPhi) {
+TEST_F(GlobalValueNumberingTestTwoNestedLoops, IFieldAndPhi) {
   static const IFieldDef ifields[] = {
       { 0u, 1u, 0u, false },  // Int.
   };
