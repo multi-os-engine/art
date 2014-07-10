@@ -207,27 +207,25 @@ class ClassInitCheckElimination : public PassME {
 class GlobalValueNumberingPass : public PassME {
  public:
   GlobalValueNumberingPass()
-    : PassME("GVN", kRepeatingTopologicalSortTraversal, "4_post_gvn_cfg") {
+    : PassME("GVN", kNoNodes, "4_post_gvn_cfg") {
   }
 
-  bool Gate(const PassDataHolder* data) const {
+  bool Gate(const PassDataHolder* data) const OVERRIDE {
     DCHECK(data != nullptr);
     CompilationUnit* cUnit = down_cast<const PassMEDataHolder*>(data)->c_unit;
     DCHECK(cUnit != nullptr);
     return cUnit->mir_graph->ApplyGlobalValueNumberingGate();
   }
 
-  bool Worker(const PassDataHolder* data) const {
+  void Start(PassDataHolder* data) const OVERRIDE {
     DCHECK(data != nullptr);
-    const PassMEDataHolder* pass_me_data_holder = down_cast<const PassMEDataHolder*>(data);
+    const PassMEDataHolder* pass_me_data_holder = down_cast<PassMEDataHolder*>(data);
     CompilationUnit* cUnit = pass_me_data_holder->c_unit;
     DCHECK(cUnit != nullptr);
-    BasicBlock* bb = pass_me_data_holder->bb;
-    DCHECK(bb != nullptr);
-    return cUnit->mir_graph->ApplyGlobalValueNumbering(bb);
+    return cUnit->mir_graph->ApplyGlobalValueNumbering();
   }
 
-  void End(PassDataHolder* data) const {
+  void End(PassDataHolder* data) const OVERRIDE {
     DCHECK(data != nullptr);
     CompilationUnit* cUnit = down_cast<PassMEDataHolder*>(data)->c_unit;
     DCHECK(cUnit != nullptr);
