@@ -321,7 +321,7 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
     return true;
   }
   // Don't do a separate LVN if we did the GVN.
-  bool use_lvn = bb->use_lvn && (cu_->disable_opt & (1 << kGlobalValueNumbering)) != 0;
+  bool use_lvn = bb->use_lvn && (cu_->disable_opt & (1u << kGlobalValueNumbering)) != 0u;
   std::unique_ptr<ScopedArenaAllocator> allocator;
   std::unique_ptr<GlobalValueNumbering> global_valnum;
   std::unique_ptr<LocalValueNumbering> local_valnum;
@@ -1142,7 +1142,7 @@ void MIRGraph::EliminateClassInitChecksEnd() {
 }
 
 bool MIRGraph::ApplyGlobalValueNumberingGate() {
-  if ((cu_->disable_opt & (1 << kGlobalValueNumbering)) != 0) {
+  if ((cu_->disable_opt & (1u << kGlobalValueNumbering)) != 0u) {
     return false;
   }
 
@@ -1176,13 +1176,14 @@ void MIRGraph::ApplyGlobalValueNumberingEnd() {
     temp_gvn_->AllowModifications();
     PreOrderDfsIterator iter(this);
     for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
-      LocalValueNumbering* lvn = temp_gvn_->PrepareBasicBlock(bb);
-      if (lvn != nullptr) {
+      if (bb->use_lvn) {
+        LocalValueNumbering* lvn = temp_gvn_->PrepareBasicBlock(bb);
+        DCHECK(lvn != nullptr);
         for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
           lvn->GetValueNumber(mir);
         }
         bool change = temp_gvn_->FinishBasicBlock(bb);
-        DCHECK(!change);
+        DCHECK(!change) << PrettyMethod(cu_->method_idx, *cu_->dex_file);
       }
     }
   } else {
