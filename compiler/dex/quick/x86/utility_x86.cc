@@ -593,16 +593,27 @@ LIR* X86Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
         res->flags.fixup = kFixupLoad;
         store_method_addr_used_ = true;
       } else {
-        if (val_lo == 0) {
-          res = NewLIR2(kX86XorpsRR, low_reg_val, low_reg_val);
+        if (cu_->target64) {
+          if (value == 0) {
+            res = NewLIR2(kX86XorpsRR, r_dest.GetReg(), r_dest.GetReg());
+          } else {
+            RegStorage r_temp = AllocTypedTempWide(false, kCoreReg);
+            res = LoadConstantWide(r_temp, value);
+            OpRegCopyWide(r_dest, r_temp);
+            FreeTemp(r_temp);
+          }
         } else {
-          res = LoadConstantNoClobber(RegStorage::FloatSolo32(low_reg_val), val_lo);
-        }
-        if (val_hi != 0) {
-          RegStorage r_dest_hi = AllocTempDouble();
-          LoadConstantNoClobber(r_dest_hi, val_hi);
-          NewLIR2(kX86PunpckldqRR, low_reg_val, r_dest_hi.GetReg());
-          FreeTemp(r_dest_hi);
+          if (val_lo == 0) {
+            res = NewLIR2(kX86XorpsRR, low_reg_val, low_reg_val);
+          } else {
+            res = LoadConstantNoClobber(RegStorage::FloatSolo32(low_reg_val), val_lo);
+          }
+          if (val_hi != 0) {
+            RegStorage r_dest_hi = AllocTempDouble();
+            LoadConstantNoClobber(r_dest_hi, val_hi);
+            NewLIR2(kX86PunpckldqRR, low_reg_val, r_dest_hi.GetReg());
+            FreeTemp(r_dest_hi);
+          }
         }
       }
     } else {
