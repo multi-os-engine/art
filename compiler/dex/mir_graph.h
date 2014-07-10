@@ -908,7 +908,7 @@ class MIRGraph {
   bool EliminateClassInitChecks(BasicBlock* bb);
   void EliminateClassInitChecksEnd();
   bool ApplyGlobalValueNumberingGate();
-  bool ApplyGlobalValueNumbering(BasicBlock* bb);
+  void ApplyGlobalValueNumbering();
   void ApplyGlobalValueNumberingEnd();
   /*
    * Type inference handling helpers.  Because Dalvik's bytecode is not fully typed,

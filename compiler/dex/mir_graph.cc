@@ -1520,112 +1520,153 @@ void MIRGraph::SSATransformationEnd() {
 }
 
 void MIRGraph::ComputeTopologicalSortOrder() {
-  // Clear the nodes.
-  ClearAllVisitedFlags();
+  ScopedArenaAllocator allocator(&cu_->arena_stack);
+  unsigned int num_blocks = GetNumBlocks();
 
   // Create the topological order if need be.
   if (topological_order_ == nullptr) {
-    topological_order_ = new (arena_) GrowableArray<BasicBlockId>(arena_, GetNumBlocks());
+    topological_order_ = new (arena_) GrowableArray<BasicBlockId>(arena_, num_blocks);
   }
   topological_order_->Reset();
 
-  ScopedArenaAllocator allocator(&cu_->arena_stack);
   ScopedArenaQueue<BasicBlock*> q(allocator.Adapter());
-  ScopedArenaVector<size_t> visited_cnt_values(GetNumBlocks(), 0u, allocator.Adapter());
+  ScopedArenaVector<size_t> visited_cnt_values(num_blocks, 0u, allocator.Adapter());
 
-  // Set up visitedCntValues map for all BB. The default value for this counters in the map is zero.
-  // also fill initial queue.
+  // Count the number of blocks to process and add the entry block(s).
   GrowableArray<BasicBlock*>::Iterator iterator(&block_list_);
-
-  size_t num_blocks = 0u;
-  while (true) {
-    BasicBlock* bb = iterator.Next();
-
-    if (bb == nullptr) {
-      break;
-    }
-
+  unsigned int num_blocks_to_process = 0u;
+  for (BasicBlock* bb = iterator.Next(); bb != nullptr; bb = iterator.Next()) {
     if (bb->hidden == true) {
       continue;
     }
 
-    num_blocks += 1u;
-    size_t unvisited_predecessor_count = bb->predecessors->Size();
+    num_blocks_to_process += 1u;
 
-    GrowableArray<BasicBlockId>::Iterator pred_iterator(bb->predecessors);
-    // To process loops we should not wait for dominators.
-    while (true) {
-      BasicBlock* pred_bb = GetBasicBlock(pred_iterator.Next());
-
-      if (pred_bb == nullptr) {
-        break;
-      }
-
-      // Skip the backward branch or hidden predecessor.
-      if (pred_bb->hidden ||
-          (pred_bb->dominators != nullptr && pred_bb->dominators->IsBitSet(bb->id))) {
-        unvisited_predecessor_count -= 1u;
-      }
-    }
-
-    visited_cnt_values[bb->id] = unvisited_predecessor_count;
-
-    // Add entry block to queue.
-    if (unvisited_predecessor_count == 0) {
+    if (bb->predecessors->Size() == 0u) {
+      // Add entry block to the queue.
       q.push(bb);
     }
   }
 
-  // We can get a cycle where none of the blocks dominates the other. Therefore don't
-  // stop when the queue is empty, continue until we've processed all the blocks.
-  AllNodesIterator candidate_iter(this);  // For the empty queue case.
-  while (num_blocks != 0u) {
-    num_blocks -= 1u;
+  // Use the visited flag to mark loop heads. Initially, clear the flags.
+  ClearAllVisitedFlags();
+
+  // For loop heads, keep track from which blocks they are reachable not going through other
+  // loop heads. Other loop heads are excluded to detect the heads of nested loops. The children
+  // in this set go into the loop body, the other children are jumping over the loop.
+  ScopedArenaVector<ArenaBitVector*> loop_head_reachable_from(allocator.Adapter());
+  loop_head_reachable_from.resize(num_blocks, nullptr);
+  // Reuse the same temp stack whenever calculating a loop_head_reachable_from[id].
+  ScopedArenaVector<BasicBlockId> temp_unprocessed_bbs(allocator.Adapter());
+
+  while (num_blocks_to_process != 0u) {
     BasicBlock* bb = nullptr;
+    bool new_loop_head = false;
     if (!q.empty()) {
+      num_blocks_to_process -= 1u;
       // Get top.
       bb = q.front();
       q.pop();
     } else {
-      // Find some block we didn't visit yet that has at least one visited predecessor.
-      while (bb == nullptr) {
-        BasicBlock* candidate = candidate_iter.Next();
-        DCHECK(candidate != nullptr);
-        if (candidate->visited || candidate->hidden) {
+      new_loop_head = true;
+      // Find the new loop head.
+      AllNodesIterator iter(this);
+      BasicBlock* fall_back = nullptr;  // Just in case we don't find a loop head.
+      while (true) {
+        BasicBlock* candidate = iter.Next();
+        if (candidate == nullptr) {
+          DCHECK(fall_back != nullptr) << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+          // We did not find a true loop head, fall back to any reachable unprocessed block.
+          if (kIsDebugBuild) {
+            LOG(INFO) << "Topological sort order: Using fall-back in "
+                << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " BB #" << fall_back->id
+                << " @0x" << std::hex << fall_back->start_offset
+                << ", num_blockd = " << std::dec << num_blocks;
+          }
+          bb = fall_back;
+          break;
+        }
+        if (candidate->hidden ||
+            candidate->visited ||                                  // Already marked as loop head.
+            visited_cnt_values[candidate->id] == 0u ||               // No processed predecessors.
+            visited_cnt_values[candidate->id] == candidate->predecessors->Size()) {  // Processed.
           continue;
         }
-        GrowableArray<BasicBlockId>::Iterator iter(candidate->predecessors);
-        for (BasicBlock* pred_bb = GetBasicBlock(iter.Next()); pred_bb != nullptr;
-            pred_bb = GetBasicBlock(iter.Next())) {
-          if (!pred_bb->hidden && pred_bb->visited) {
-            bb = candidate;
-            break;
+        if (fall_back == nullptr) {
+          fall_back = candidate;  // Reachable, unproccessed block.
+        }
+        // Calculate all children from which the candidate is reachable without going through
+        // an already marked loop head.
+        ArenaBitVector* reachable_from = loop_head_reachable_from[candidate->id];
+        if (reachable_from == nullptr) {
+          reachable_from = loop_head_reachable_from[candidate->id] =
+              new (&allocator) ArenaBitVector(&allocator, num_blocks, false, kBitMapMisc);
+        }
+        reachable_from->ClearAllBits();
+        reachable_from->SetBit(candidate->id);
+        temp_unprocessed_bbs.push_back(candidate->id);
+        while (!temp_unprocessed_bbs.empty()) {
+          BasicBlockId current_id = temp_unprocessed_bbs.back();
+          temp_unprocessed_bbs.pop_back();
+          BasicBlock* current_bb = GetBasicBlock(current_id);
+          DCHECK(current_bb != nullptr);
+          GrowableArray<BasicBlockId>::Iterator iter(current_bb->predecessors);
+          BasicBlock* pred_bb = GetBasicBlock(iter.Next());
+          for ( ; pred_bb != nullptr; pred_bb = GetBasicBlock(iter.Next())) {
+            if (!pred_bb->visited && !reachable_from->IsBitSet(pred_bb->id)) {
+              reachable_from->SetBit(pred_bb->id);
+              temp_unprocessed_bbs.push_back(pred_bb->id);
+            }
           }
         }
+        ChildBlockIterator child_iter(candidate, this);
+        BasicBlock* child = child_iter.Next();
+        for ( ; child != nullptr; child = child_iter.Next()) {
+          if (child != candidate && reachable_from->IsBitSet(child->id) &&
+              !child->dominators->IsBitSet(candidate->id)) {
+            break;  // Keep non-null child to indicate failure.
+          }
+        }
+        if (child == nullptr) {
+          bb = candidate;
+          break;
+        }
       }
+      // Mark as loop head. (Even if it's only a fall back when we don't find a true loop.)
+      bb->visited = true;
     }
 
     DCHECK_EQ(bb->hidden, false);
-    DCHECK_EQ(bb->visited, false);
 
-    // We've visited all the predecessors. So, we can visit bb.
-    bb->visited = true;
+    // Now add the basic block unless we're processing the loop head for the second time.
+    if (new_loop_head || !bb->visited) {
+      topological_order_->Insert(bb->id);
+    }
 
-    // Now add the basic block.
-    topological_order_->Insert(bb->id);
-
-    // Reduce visitedCnt for all the successors and add into the queue ones with visitedCnt equals to zero.
+    // Update visited_cnt_values for children.
     ChildBlockIterator succIter(bb, this);
     BasicBlock* successor = succIter.Next();
     for ( ; successor != nullptr; successor = succIter.Next()) {
-      if (successor->visited || successor->hidden) {
+      if (successor->hidden) {
         continue;
       }
+      if (new_loop_head) {
+        // When processing the loop head for the first time, update only children in the loop body.
+        DCHECK(loop_head_reachable_from[bb->id] != nullptr);
+        if (!loop_head_reachable_from[bb->id]->IsBitSet(successor->id)) {
+          continue;
+        }
+      } else if (bb->visited) {
+        // When processing the loop head for the second time, update the rest of the children.
+        DCHECK(loop_head_reachable_from[bb->id] != nullptr);
+        if (loop_head_reachable_from[bb->id]->IsBitSet(successor->id)) {
+          continue;
+        }
+      }
 
-      // one more predecessor was visited.
-      DCHECK_NE(visited_cnt_values[successor->id], 0u);
-      visited_cnt_values[successor->id] -= 1u;
-      if (visited_cnt_values[successor->id] == 0u) {
+      // One more predecessor was visited.
+      visited_cnt_values[successor->id] += 1u;
+      if (visited_cnt_values[successor->id] == successor->predecessors->Size()) {
         q.push(successor);
       }
     }
