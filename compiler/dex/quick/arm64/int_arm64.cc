@@ -100,8 +100,10 @@ void Arm64Mir2Lir::GenSelect(BasicBlock* bb, MIR* mir) {
   rl_false = LoadValue(rl_false, result_reg_class);
   rl_result = EvalLoc(rl_dest, result_reg_class, true);
   OpRegImm(kOpCmp, rl_src.reg, 0);
-  NewLIR4(kA64Csel4rrrc, rl_result.reg.GetReg(), rl_true.reg.GetReg(),
-          rl_false.reg.GetReg(), code);
+  bool is_wide = rl_dest.ref || rl_dest.wide;
+  int opcode = is_wide ? WIDE(kA64Csel4rrrc) : kA64Csel4rrrc;
+  NewLIR4(opcode, rl_result.reg.GetReg(),
+          rl_true.reg.GetReg(), rl_false.reg.GetReg(), code);
   StoreValue(rl_dest, rl_result);
 }
 
