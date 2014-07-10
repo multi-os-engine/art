@@ -42,6 +42,10 @@ class LocalValueNumbering {
     return id_;
   }
 
+  BasicBlock* GetBasicBlock() const {
+    return gvn_->GetMirGraph()->GetBasicBlock(Id());
+  }
+
   bool Equals(const LocalValueNumbering& other) const;
 
   // Set non-static method's "this".

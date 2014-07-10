@@ -529,6 +529,10 @@ void LocalValueNumbering::InPlaceIntersectMaps(Map* work_map, const Map& other_m
          (!cmp(entry, *work_it) && !(work_it->second == entry.second)))) {
       work_it = work_map->erase(work_it);
     }
+    if (work_it == work_end) {
+      return;
+    }
+    ++work_it;
   }
 }
 
@@ -1356,7 +1360,7 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::MONITOR_EXIT:
       HandleNullCheck(mir, GetOperandValue(mir->ssa_rep->uses[0]));
       // If we're running GVN and CanModify(), uneliminated null check indicates bytecode error.
-      if ((gvn_->cu_->disable_opt & (1 << kGlobalValueNumbering)) == 0 && gvn_->CanModify() &&
+      if ((gvn_->cu_->disable_opt & (1u << kGlobalValueNumbering)) == 0u && gvn_->CanModify() &&
           (mir->optimization_flags & MIR_IGNORE_NULL_CHECK) == 0) {
         LOG(WARNING) << "Bytecode error: MONITOR_EXIT is still null checked at 0x" << std::hex
             << mir->offset << " in " << PrettyMethod(gvn_->cu_->method_idx, *gvn_->cu_->dex_file);
