@@ -493,7 +493,6 @@ CompilationUnit::CompilationUnit(ArenaPool* pool)
     compiler(nullptr),
     instruction_set(kNone),
     target64(false),
-    num_dalvik_registers(0),
     insns(nullptr),
     num_ins(0),
     num_outs(0),
@@ -555,8 +554,8 @@ static bool CanCompileShorty(const char* shorty, InstructionSet instruction_set)
 static bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file,
                              CompilationUnit& cu) {
   // This is a limitation in mir_graph. See MirGraph::SetNumSSARegs.
-  if (cu.num_dalvik_registers > kMaxAllowedDalvikRegisters) {
-    VLOG(compiler) << "Too many dalvik registers : " << cu.num_dalvik_registers;
+  if (cu.mir_graph->GetNumOfCodeAndTempVRs() > kMaxAllowedDalvikRegisters) {
+    VLOG(compiler) << "Too many dalvik registers : " << cu.mir_graph->GetNumOfCodeAndTempVRs();
     return false;
   }
 
@@ -653,7 +652,6 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
         (cu.instruction_set == kMips));
 
   /* Adjust this value accordingly once inlining is performed */
-  cu.num_dalvik_registers = code_item->registers_size_;
   // TODO: set this from command line
   cu.compiler_flip_match = false;
   bool use_match = !cu.compiler_method_match.empty();

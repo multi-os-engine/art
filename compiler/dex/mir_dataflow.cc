@@ -930,11 +930,11 @@ bool MIRGraph::FindLocalLiveIn(BasicBlock* bb) {
   if (bb->data_flow_info == NULL) return false;
 
   use_v = bb->data_flow_info->use_v =
-      new (arena_) ArenaBitVector(arena_, cu_->num_dalvik_registers, false, kBitMapUse);
+      new (arena_) ArenaBitVector(arena_, GetNumOfCodeAndTempVRs(), false, kBitMapUse);
   def_v = bb->data_flow_info->def_v =
-      new (arena_) ArenaBitVector(arena_, cu_->num_dalvik_registers, false, kBitMapDef);
+      new (arena_) ArenaBitVector(arena_, GetNumOfCodeAndTempVRs(), false, kBitMapDef);
   live_in_v = bb->data_flow_info->live_in_v =
-      new (arena_) ArenaBitVector(arena_, cu_->num_dalvik_registers, false, kBitMapLiveIn);
+      new (arena_) ArenaBitVector(arena_, GetNumOfCodeAndTempVRs(), false, kBitMapLiveIn);
 
   for (mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
     uint64_t df_attributes = GetDataFlowAttributes(mir);
@@ -1002,13 +1002,13 @@ int MIRGraph::AddNewSReg(int v_reg) {
 
 /* Find out the latest SSA register for a given Dalvik register */
 void MIRGraph::HandleSSAUse(int* uses, int dalvik_reg, int reg_index) {
-  DCHECK((dalvik_reg >= 0) && (dalvik_reg < cu_->num_dalvik_registers));
+  DCHECK((dalvik_reg >= 0) && (dalvik_reg < static_cast<int>(GetNumOfCodeAndTempVRs())));
   uses[reg_index] = vreg_to_ssa_map_[dalvik_reg];
 }
 
 /* Setup a new SSA register for a given Dalvik register */
 void MIRGraph::HandleSSADef(int* defs, int dalvik_reg, int reg_index) {
-  DCHECK((dalvik_reg >= 0) && (dalvik_reg < cu_->num_dalvik_registers));
+  DCHECK((dalvik_reg >= 0) && (dalvik_reg < static_cast<int>(GetNumOfCodeAndTempVRs())));
   int ssa_reg = AddNewSReg(dalvik_reg);
   vreg_to_ssa_map_[dalvik_reg] = ssa_reg;
   defs[reg_index] = ssa_reg;
@@ -1188,34 +1188,34 @@ bool MIRGraph::DoSSAConversion(BasicBlock* bb) {
    * predecessor blocks.
    */
   bb->data_flow_info->vreg_to_ssa_map_exit =
-      static_cast<int*>(arena_->Alloc(sizeof(int) * cu_->num_dalvik_registers,
+      static_cast<int*>(arena_->Alloc(sizeof(int) * GetNumOfCodeAndTempVRs(),
                                       kArenaAllocDFInfo));
 
   memcpy(bb->data_flow_info->vreg_to_ssa_map_exit, vreg_to_ssa_map_,
-         sizeof(int) * cu_->num_dalvik_registers);
+         sizeof(int) * GetNumOfCodeAndTempVRs());
   return true;
 }
 
 /* Setup the basic data structures for SSA conversion */
 void MIRGraph::CompilerInitializeSSAConversion() {
-  size_t num_dalvik_reg = cu_->num_dalvik_registers;
+  size_t num_reg = GetNumOfCodeAndTempVRs();
 
-  ssa_base_vregs_ = new (arena_) GrowableArray<int>(arena_, num_dalvik_reg + GetDefCount() + 128,
+  ssa_base_vregs_ = new (arena_) GrowableArray<int>(arena_, num_reg + GetDefCount() + 128,
                                                     kGrowableArraySSAtoDalvikMap);
-  ssa_subscripts_ = new (arena_) GrowableArray<int>(arena_, num_dalvik_reg + GetDefCount() + 128,
+  ssa_subscripts_ = new (arena_) GrowableArray<int>(arena_, num_reg + GetDefCount() + 128,
                                                     kGrowableArraySSAtoDalvikMap);
   /*
    * Initial number of SSA registers is equal to the number of Dalvik
    * registers.
    */
-  SetNumSSARegs(num_dalvik_reg);
+  SetNumSSARegs(num_reg);
 
   /*
-   * Initialize the SSA2Dalvik map list. For the first num_dalvik_reg elements,
+   * Initialize the SSA2Dalvik map list. For the first num_reg elements,
    * the subscript is 0 so we use the ENCODE_REG_SUB macro to encode the value
    * into "(0 << 16) | i"
    */
-  for (unsigned int i = 0; i < num_dalvik_reg; i++) {
+  for (unsigned int i = 0; i < num_reg; i++) {
     ssa_base_vregs_->Insert(i);
     ssa_subscripts_->Insert(0);
   }
@@ -1225,14 +1225,14 @@ void MIRGraph::CompilerInitializeSSAConversion() {
    * Dalvik register, and the SSA names for those are the same.
    */
   vreg_to_ssa_map_ =
-      static_cast<int*>(arena_->Alloc(sizeof(int) * num_dalvik_reg,
+      static_cast<int*>(arena_->Alloc(sizeof(int) * num_reg,
                                       kArenaAllocDFInfo));
   /* Keep track of the higest def for each dalvik reg */
   ssa_last_defs_ =
-      static_cast<int*>(arena_->Alloc(sizeof(int) * num_dalvik_reg,
+      static_cast<int*>(arena_->Alloc(sizeof(int) * num_reg,
                                       kArenaAllocDFInfo));
 
-  for (unsigned int i = 0; i < num_dalvik_reg; i++) {
+  for (unsigned int i = 0; i < num_reg; i++) {
     vreg_to_ssa_map_[i] = i;
     ssa_last_defs_[i] = 0;
   }

@@ -63,7 +63,7 @@ LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb) {
   if (bb->block_type == kEntryBlock) {
     if ((cu_->access_flags & kAccStatic) == 0) {
       // If non-static method, mark "this" as non-null
-      int this_reg = cu_->num_dalvik_registers - cu_->num_ins;
+      int this_reg = cu_->mir_graph->GetFirstInVR();
       work_lvn_->SetSRegNullChecked(this_reg);
     }
   } else {
