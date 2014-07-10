@@ -121,6 +121,54 @@ inline BasicBlock* AllNodesIterator::Next(bool had_change) {
   return res;
 }
 
+inline BasicBlock* RepeatingTopologicalSortIterator::Next(bool had_change) {
+  if (idx_ != 0) {
+    // Mark last processed block visited.
+    BasicBlock* bb = mir_graph_->GetBasicBlock(block_id_list_->Get(idx_ - 1));
+    bb->visited = true;
+    if (had_change) {
+      // If we had a change we need to revisit the children.
+      ChildBlockIterator iter(bb, mir_graph_);
+      for (BasicBlock* child_bb = iter.Next(); child_bb != nullptr; child_bb = iter.Next()) {
+        child_bb->visited = false;
+      }
+    }
+  }
+
+  while (true) {
+    // Pop loops we have left and check if we need to reprocess one of them.
+    // NOTE: We need to do this even if idx_ == end_idx_.
+    while (loop_head_stack_->Size() != 0u &&
+        loop_ends_->Get(loop_head_stack_->Peek().first) == idx_) {
+      uint16_t loop_head_idx = loop_head_stack_->Peek().first;
+      loop_head_stack_->Pop();
+      BasicBlock* loop_head = mir_graph_->GetBasicBlock(block_id_list_->Get(loop_head_idx));
+      DCHECK(loop_head != nullptr);
+      if (!loop_head->visited) {
+        loop_head_stack_->Insert(std::make_pair(loop_head_idx, true));  // Reprocessing this loop.
+        idx_ = loop_head_idx + 1;
+        return loop_head;
+      }
+    }
+
+    if (idx_ == end_idx_) {
+      return nullptr;
+    }
+
+    // Get next block and return it if unvisited.
+    BasicBlockId idx = idx_;
+    idx_ += 1;
+    BasicBlock* bb = mir_graph_->GetBasicBlock(block_id_list_->Get(idx));
+    DCHECK(bb != nullptr);
+    if (!bb->visited) {
+      if (loop_ends_->Get(idx) != 0u) {
+        loop_head_stack_->Insert(std::make_pair(idx, false));  // Not reprocessing.
+      }
+      return bb;
+    }
+  }
+}
+
 }  // namespace art
 
 #endif  // ART_COMPILER_DEX_DATAFLOW_ITERATOR_INL_H_
