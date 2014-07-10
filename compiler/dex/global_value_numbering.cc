@@ -22,8 +22,16 @@ namespace art {
 
 GlobalValueNumbering::GlobalValueNumbering(CompilationUnit* cu, ScopedArenaAllocator* allocator)
     : cu_(cu),
+      mir_graph_(cu->mir_graph.get()),
       allocator_(allocator),
-      repeat_count_(0u),
+      topological_order_(nullptr),
+      topological_order_indexes_(nullptr),
+      last_back_edge_indexes_(allocator->Adapter()),
+      loop_repeat_ranges_(allocator->Adapter()),
+      current_idx_(0u),
+      end_idx_(0u),
+      bbs_processed_(0u),
+      max_bbs_to_process_(kMaxBbsToProcessMultiplyFactor * mir_graph_->GetNumReachableBlocks()),
       last_value_(0u),
       modifications_allowed_(false),
       global_value_map_(std::less<uint64_t>(), allocator->Adapter()),
@@ -32,40 +40,72 @@ GlobalValueNumbering::GlobalValueNumbering(CompilationUnit* cu, ScopedArenaAlloc
       array_location_map_(ArrayLocationComparator(), allocator->Adapter()),
       array_location_reverse_map_(allocator->Adapter()),
       ref_set_map_(std::less<ValueNameSet>(), allocator->Adapter()),
-      lvns_(cu_->mir_graph->GetNumBlocks(), nullptr, allocator->Adapter()),
+      lvns_(mir_graph_->GetNumBlocks(), nullptr, allocator->Adapter()),
       work_lvn_(nullptr),
+      work_lvn_uses_internal_ordering_(false),
       merge_lvns_(allocator->Adapter()) {
-  cu_->mir_graph->ClearAllVisitedFlags();
+  // If we're actually running GVN (rather than LVN), prepare data for correct ordering.
+  if ((cu_->disable_opt & (1u << kGlobalValueNumbering)) == 0u) {
+    topological_order_ = mir_graph_->GetTopologicalSortOrder();
+    topological_order_indexes_ = mir_graph_->GetTopologicalSortOrderIndexes();
+    const size_t size = topological_order_->Size();
+    DCHECK_NE(size, 0u);
+    end_idx_ = size;
+    // Create a map from BB indexes to the latest predecessor index in topological_order_.
+    last_back_edge_indexes_.reserve(size);
+    for (size_t i = 0u; i != size; ++i) {
+      // Arbitrarily assign its own index at the beginning. If it isn't overwritten later,
+      // the node has no latter predecessors and any number in the range [0, i] would be OK.
+      last_back_edge_indexes_.push_back(i);
+      BasicBlock* bb = mir_graph_->GetBasicBlock(topological_order_->Get(i));
+      ChildBlockIterator iter(bb, mir_graph_);
+      for (BasicBlock* child_bb = iter.Next(); child_bb != nullptr; child_bb = iter.Next()) {
+        size_t pred_idx = topological_order_indexes_->Get(child_bb->id);
+        if (pred_idx < i) {
+          last_back_edge_indexes_[pred_idx] = i;
+        }
+      }
+    }
+    mir_graph_->ClearAllVisitedFlags();
+    DCHECK(mir_graph_->GetBasicBlock(topological_order_->Get(0))->data_flow_info != nullptr);
+  }
 }
 
 GlobalValueNumbering::~GlobalValueNumbering() {
   STLDeleteElements(&lvns_);
 }
 
+LocalValueNumbering* GlobalValueNumbering::PrepareNextBasicBlock() {
+  DCHECK_EQ((cu_->disable_opt & (1u << kGlobalValueNumbering)), 0u);
+  if (current_idx_ != end_idx_) {
+    BasicBlock* bb = mir_graph_->GetBasicBlock(topological_order_->Get(current_idx_));
+    DCHECK(!bb->visited);
+    return DoPrepareBasicBlock(bb, true);
+  }
+  return nullptr;
+}
+
 LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb) {
+  return DoPrepareBasicBlock(bb, false);
+}
+
+LocalValueNumbering* GlobalValueNumbering::DoPrepareBasicBlock(BasicBlock* bb,
+                                                               bool internal_ordering) {
+  DCHECK(bb->data_flow_info != nullptr);
   if (UNLIKELY(!Good())) {
     return nullptr;
   }
-  if (bb->data_flow_info == nullptr) {
-    return nullptr;
-  }
-  if (bb->block_type == kEntryBlock) {
-    repeat_count_ += 1u;
-    if (repeat_count_ > kMaxRepeatCount) {
-      last_value_ = kNoValue;  // Make bad.
-      return nullptr;
-    }
-  }
-  if (bb->block_type == kExitBlock) {
-    DCHECK(bb->first_mir_insn == nullptr);
-    return nullptr;
-  }
-  if (bb->visited) {
+  if (UNLIKELY(bbs_processed_ == max_bbs_to_process_)) {
+    last_value_ = kNoValue;  // Make bad.
     return nullptr;
   }
   DCHECK(work_lvn_.get() == nullptr);
   work_lvn_.reset(new (allocator_) LocalValueNumbering(this, bb->id));
-  if (bb->block_type == kEntryBlock) {
+  work_lvn_uses_internal_ordering_ = internal_ordering;
+  if (bb->block_type == kExitBlock) {
+    // No instructions in the exit block. Don't merge anything.
+    DCHECK(bb->first_mir_insn == nullptr);
+  } else if (bb->block_type == kEntryBlock) {
     if ((cu_->access_flags & kAccStatic) == 0) {
       // If non-static method, mark "this" as non-null
       int this_reg = cu_->num_dalvik_registers - cu_->num_ins;
@@ -75,10 +115,23 @@ LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb) {
     // Merge all incoming arcs.
     // To avoid repeated allocation on the ArenaStack, reuse a single vector kept as a member.
     DCHECK(merge_lvns_.empty());
+    // When we encounter the head of an inner loop for the first time during recalculation
+    // of an outer loop, we must not take the inner loop's body into account. Therefore use all
+    // predecessors only if we're at the head of the current loop or in the odd situations when
+    // the last predecessor is at the end (==) or beyond (>) the current loop. This takes into
+    // account SSA graphs that have a last node of a loop with two back-egdes (==) or two
+    // outright overlapping loops (>).
+    size_t idx = topological_order_indexes_->Get(bb->id);
+    bool use_all_predecessors = (!internal_ordering) ||
+        (!loop_repeat_ranges_.empty() &&
+         (loop_repeat_ranges_.back().first == idx ||
+          loop_repeat_ranges_.back().second <= last_back_edge_indexes_[idx]));
     GrowableArray<BasicBlockId>::Iterator iter(bb->predecessors);
-    for (BasicBlock* pred_bb = cu_->mir_graph->GetBasicBlock(iter.Next());
-         pred_bb != nullptr; pred_bb = cu_->mir_graph->GetBasicBlock(iter.Next())) {
-      if (lvns_[pred_bb->id] != nullptr) {
+    for (BasicBlock* pred_bb = mir_graph_->GetBasicBlock(iter.Next());
+         pred_bb != nullptr; pred_bb = mir_graph_->GetBasicBlock(iter.Next())) {
+      if (lvns_[pred_bb->id] != nullptr &&
+          (use_all_predecessors || topological_order_indexes_->Get(pred_bb->id) < idx ||
+           !pred_bb->dominators->IsBitSet(bb->id))) {
         merge_lvns_.push_back(lvns_[pred_bb->id]);
       }
     }
@@ -99,7 +152,7 @@ LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb) {
     CHECK(!merge_lvns_.empty());
     if (merge_lvns_.size() == 1u) {
       work_lvn_->MergeOne(*merge_lvns_[0], merge_type);
-      BasicBlock* pred_bb = cu_->mir_graph->GetBasicBlock(merge_lvns_[0]->Id());
+      BasicBlock* pred_bb = mir_graph_->GetBasicBlock(merge_lvns_[0]->Id());
       if (HasNullCheckLastInsn(pred_bb, bb->id)) {
         work_lvn_->SetSRegNullChecked(pred_bb->last_mir_insn->ssa_rep->uses[0]);
       }
@@ -110,15 +163,17 @@ LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb) {
   return work_lvn_.get();
 }
 
-bool GlobalValueNumbering::FinishBasicBlock(BasicBlock* bb) {
-  DCHECK(work_lvn_ != nullptr);
-  DCHECK(bb->id == work_lvn_->Id());
+bool GlobalValueNumbering::FinishBasicBlock(LocalValueNumbering* lvn) {
+  DCHECK(lvn != nullptr);
+  DCHECK(work_lvn_.get() == lvn);
+  ++bbs_processed_;
   merge_lvns_.clear();
 
+  BasicBlock* bb = lvn->GetBasicBlock();
   bool change = false;
   // Look for a branch to self or an already processed child.
   // (No need to repeat the LVN if all children are processed later.)
-  ChildBlockIterator iter(bb, cu_->mir_graph.get());
+  ChildBlockIterator iter(bb, mir_graph_);
   for (BasicBlock* child = iter.Next(); child != nullptr; child = iter.Next()) {
     if (child == bb || lvns_[child->id] != nullptr) {
       // If we found an already processed child, check if the LVN actually differs.
@@ -130,13 +185,43 @@ bool GlobalValueNumbering::FinishBasicBlock(BasicBlock* bb) {
   std::unique_ptr<const LocalValueNumbering> old_lvn(lvns_[bb->id]);
   lvns_[bb->id] = work_lvn_.release();
 
-  bb->visited = true;
-  if (change) {
-    ChildBlockIterator iter(bb, cu_->mir_graph.get());
-    for (BasicBlock* child = iter.Next(); child != nullptr; child = iter.Next()) {
-      child->visited = false;
+  if (work_lvn_uses_internal_ordering_) {
+    // Find the next basic block in the internal ordering.
+    bb->visited = true;
+    size_t next_idx = current_idx_ + 1u;
+    BasicBlock* last_bb = mir_graph_->GetBasicBlock(topological_order_->Get(current_idx_));
+    ChildBlockIterator iter(last_bb, mir_graph_);
+    for (BasicBlock* child_bb = iter.Next(); child_bb != nullptr; child_bb = iter.Next()) {
+      if (change) {
+        child_bb->visited = false;
+      }
+      // If the head of the loop has more than one incoming back-edge, once we reach the
+      // last we need to check the loop head even if the last didn't actually change.
+      // Therefore this check needs to be outside the "if (change)" block.
+      size_t child_idx = topological_order_indexes_->Get(child_bb->id);
+      if (!child_bb->visited &&
+          child_idx < next_idx && last_back_edge_indexes_[child_idx] == current_idx_) {
+        // Rerun the loop in range [child_idx, current_idx_].
+        next_idx = child_idx;
+      }
+    }
+    if (next_idx <= current_idx_) {
+      // We're going to recalculate a loop.
+      loop_repeat_ranges_.push_back(std::make_pair(next_idx, current_idx_));
+    }
+    for (current_idx_ = next_idx; current_idx_ != end_idx_; ++current_idx_) {
+      BasicBlock* next_bb = mir_graph_->GetBasicBlock(topological_order_->Get(current_idx_));
+      if (next_bb->data_flow_info != nullptr && !next_bb->visited) {
+        break;
+      }
+    }
+    // Drop loops that we have left.
+    while (!loop_repeat_ranges_.empty() &&
+        loop_repeat_ranges_.back().second < current_idx_) {
+      loop_repeat_ranges_.pop_back();
     }
   }
+
   return change;
 }
 
@@ -188,7 +273,7 @@ bool GlobalValueNumbering::NullCheckedInAllPredecessors(
     uint16_t value_name = merge_names[i];
     if (!pred_lvn->IsValueNullChecked(value_name)) {
       // Check if the predecessor has an IF_EQZ/IF_NEZ as the last insn.
-      const BasicBlock* pred_bb = cu_->mir_graph->GetBasicBlock(pred_lvn->Id());
+      const BasicBlock* pred_bb = mir_graph_->GetBasicBlock(pred_lvn->Id());
       if (!HasNullCheckLastInsn(pred_bb, work_lvn_->Id())) {
         return false;
       }
