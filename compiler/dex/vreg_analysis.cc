@@ -456,7 +456,7 @@ void MIRGraph::InitRegLocations() {
 
   reg_location_ = loc;
 
-  int num_regs = cu_->num_dalvik_registers;
+  int num_regs = GetNumOfCodeVRs();
 
   /* Add types of incoming arguments based on signature */
   int num_ins = cu_->num_ins;
@@ -514,11 +514,9 @@ void MIRGraph::InitRegLocations() {
  */
 void MIRGraph::RemapRegLocations() {
   for (int i = 0; i < GetNumSSARegs(); i++) {
-    if (reg_location_[i].location != kLocCompilerTemp) {
-      int orig_sreg = reg_location_[i].s_reg_low;
-      reg_location_[i].orig_sreg = orig_sreg;
-      reg_location_[i].s_reg_low = SRegToVReg(orig_sreg);
-    }
+    int orig_sreg = reg_location_[i].s_reg_low;
+    reg_location_[i].orig_sreg = orig_sreg;
+    reg_location_[i].s_reg_low = SRegToVReg(orig_sreg);
   }
 }
 

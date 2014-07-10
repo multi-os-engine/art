@@ -236,6 +236,14 @@ size_t MIRGraph::GetNumAvailableNonSpecialCompilerTemps() {
   }
 }
 
+size_t MIRGraph::GetNumAvailableSpecialCompilerTemps() {
+  if (num_special_compiler_temps_ >= max_available_special_compiler_temps_) {
+    return 0;
+  } else {
+    return max_available_special_compiler_temps_ - num_special_compiler_temps_;
+  }
+}
+
 
 // FIXME - will probably need to revisit all uses of this, as type not defined.
 static const RegLocation temp_loc = {kLocCompilerTemp,
@@ -243,14 +251,6 @@ static const RegLocation temp_loc = {kLocCompilerTemp,
                                      RegStorage(), INVALID_SREG, INVALID_SREG};
 
 CompilerTemp* MIRGraph::GetNewCompilerTemp(CompilerTempType ct_type, bool wide) {
-  // There is a limit to the number of non-special temps so check to make sure it wasn't exceeded.
-  if (ct_type == kCompilerTempVR) {
-    size_t available_temps = GetNumAvailableNonSpecialCompilerTemps();
-    if (available_temps <= 0 || (available_temps <= 1 && wide)) {
-      return 0;
-    }
-  }
-
   CompilerTemp *compiler_temp = static_cast<CompilerTemp *>(arena_->Alloc(sizeof(CompilerTemp),
                                                             kArenaAllocRegAlloc));
 
@@ -258,7 +258,10 @@ CompilerTemp* MIRGraph::GetNewCompilerTemp(CompilerTempType ct_type, bool wide) 
   // they have a specific virtual register assignment.
   if (ct_type == kCompilerTempSpecialMethodPtr) {
     DCHECK_EQ(wide, false);
-    compiler_temp->v_reg = static_cast<int>(kVRegMethodPtrBaseReg);
+    DCHECK_NE(static_cast<int>(GetNumAvailableSpecialCompilerTemps()), 0);
+
+    compiler_temp->v_reg = GetFirstSpecialTempVR() + num_special_compiler_temps_;
+    num_special_compiler_temps_++;
     compiler_temp->s_reg_low = AddNewSReg(compiler_temp->v_reg);
 
     // The MIR graph keeps track of the sreg for method pointer specially, so record that now.
@@ -266,11 +269,16 @@ CompilerTemp* MIRGraph::GetNewCompilerTemp(CompilerTempType ct_type, bool wide) 
   } else {
     DCHECK_EQ(ct_type, kCompilerTempVR);
 
-    // The new non-special compiler temp must receive a unique v_reg with a negative value.
-    compiler_temp->v_reg = static_cast<int>(kVRegNonSpecialTempBaseReg) -
-        num_non_special_compiler_temps_;
-    compiler_temp->s_reg_low = AddNewSReg(compiler_temp->v_reg);
+    // There is a limit to the number of non-special temps so check to make sure it wasn't exceeded.
+    size_t available_temps = GetNumAvailableNonSpecialCompilerTemps();
+    if (available_temps <= 0 || (available_temps <= 1 && wide)) {
+      return 0;
+    }
+
+    // The new non-special compiler temp must receive a unique v_reg.
+    compiler_temp->v_reg = GetFirstNonSpecialTempVR() + num_non_special_compiler_temps_;
     num_non_special_compiler_temps_++;
+    compiler_temp->s_reg_low = AddNewSReg(compiler_temp->v_reg);
 
     if (wide) {
       // Create a new CompilerTemp for the high part.
@@ -280,13 +288,9 @@ CompilerTemp* MIRGraph::GetNewCompilerTemp(CompilerTempType ct_type, bool wide) 
       compiler_temp_high->s_reg_low = compiler_temp->s_reg_low;
       compiler_temps_.Insert(compiler_temp_high);
 
-      // Ensure that the two registers are consecutive. Since the virtual registers used for temps
-      // grow in a negative fashion, we need the smaller to refer to the low part. Thus, we
-      // redefine the v_reg and s_reg_low.
-      compiler_temp->v_reg--;
-      int ssa_reg_high = compiler_temp->s_reg_low;
-      compiler_temp->s_reg_low = AddNewSReg(compiler_temp->v_reg);
+      // Ensure that the two registers are consecutive.
       int ssa_reg_low = compiler_temp->s_reg_low;
+      int ssa_reg_high = AddNewSReg(compiler_temp->v_reg + 1);
 
       // If needed initialize the register location for the high part.
       // The low part is handled later in this method on a common path.
@@ -739,13 +743,13 @@ bool MIRGraph::EliminateNullChecksAndInferTypes(BasicBlock* bb) {
     if ((bb->block_type == kEntryBlock) | bb->catch_entry) {
       ssa_regs_to_check->ClearAllBits();
       // Assume all ins are objects.
-      for (uint16_t in_reg = cu_->num_dalvik_registers - cu_->num_ins;
-           in_reg < cu_->num_dalvik_registers; in_reg++) {
+      for (uint16_t in_reg = GetNumOfLocalCodeVRs();
+           in_reg < GetNumOfCodeVRs(); in_reg++) {
         ssa_regs_to_check->SetBit(in_reg);
       }
       if ((cu_->access_flags & kAccStatic) == 0) {
         // If non-static method, mark "this" as non-null
-        int this_reg = cu_->num_dalvik_registers - cu_->num_ins;
+        int this_reg = GetNumOfLocalCodeVRs();
         ssa_regs_to_check->ClearBit(this_reg);
       }
     } else if (bb->predecessors->Size() == 1) {
