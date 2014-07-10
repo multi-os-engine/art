@@ -1134,7 +1134,7 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
 
   if (bb->block_type == kEntryBlock) {
     ResetRegPool();
-    int start_vreg = cu_->num_dalvik_registers - cu_->num_ins;
+    int start_vreg = mir_graph_->GetNumOfLocalCodeVRs();
     GenEntrySequence(&mir_graph_->reg_location_[start_vreg],
                          mir_graph_->reg_location_[mir_graph_->GetMethodSReg()]);
   } else if (bb->block_type == kExitBlock) {
