@@ -589,14 +589,6 @@ uint64_t Thread::GetCpuMicroTime() const {
 #endif
 }
 
-void Thread::AtomicSetFlag(ThreadFlag flag) {
-  android_atomic_or(flag, &tls32_.state_and_flags.as_int);
-}
-
-void Thread::AtomicClearFlag(ThreadFlag flag) {
-  android_atomic_and(-1 ^ flag, &tls32_.state_and_flags.as_int);
-}
-
 // Attempt to rectify locks so that we dump thread list with required locks before exiting.
 static void UnsafeLogFatalForSuspendCount(Thread* self, Thread* thread) NO_THREAD_SAFETY_ANALYSIS {
   LOG(ERROR) << *thread << " suspend count already zero.";
