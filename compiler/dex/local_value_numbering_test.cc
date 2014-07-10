@@ -193,6 +193,7 @@ class LocalValueNumberingTest : public testing::Test {
         gvn_(),
         lvn_(),
         value_names_() {
+    cu_.disable_opt |= 1u << kGlobalValueNumbering;  // Don't update block ordering data in GVN.
     cu_.mir_graph.reset(new MIRGraph(&cu_, &cu_.arena));
     allocator_.reset(ScopedArenaAllocator::Create(&cu_.arena_stack));
     gvn_.reset(new (allocator_.get()) GlobalValueNumbering(&cu_, allocator_.get()));

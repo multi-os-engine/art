@@ -31,8 +31,15 @@ class GlobalValueNumbering {
   GlobalValueNumbering(CompilationUnit* cu, ScopedArenaAllocator* allocator);
   ~GlobalValueNumbering();
 
+  // Prepare the next basic block based on GVN's internal ordering.
+  LocalValueNumbering* PrepareNextBasicBlock();
+
+  // Prepare the next basic block based on external ordering. This should be used
+  // after the GVN has converged to prepare modifying LVNs for individual basic blocks.
   LocalValueNumbering* PrepareBasicBlock(BasicBlock* bb);
-  bool FinishBasicBlock(BasicBlock* bb);
+
+  // Finish processing the basic block.
+  bool FinishBasicBlock(LocalValueNumbering* lvn);
 
   // Checks that the value names didn't overflow.
   bool Good() const {
@@ -42,7 +49,7 @@ class GlobalValueNumbering {
   // Allow modifications.
   void AllowModifications() {
     DCHECK(Good());
-    cu_->mir_graph->ClearAllVisitedFlags();
+    mir_graph_->ClearAllVisitedFlags();
     modifications_allowed_ = true;
   }
 
@@ -61,6 +68,8 @@ class GlobalValueNumbering {
 
  private:
   static constexpr uint16_t kNoValue = 0xffffu;
+
+  LocalValueNumbering* DoPrepareBasicBlock(BasicBlock* bb, bool internal_ordering);
 
   // Allocate a new value name.
   uint16_t NewValueName() {
@@ -182,7 +191,7 @@ class GlobalValueNumbering {
   }
 
   const BasicBlock* GetBasicBlock(uint16_t bb_id) const {
-    return cu_->mir_graph->GetBasicBlock(bb_id);
+    return mir_graph_->GetBasicBlock(bb_id);
   }
 
   static bool HasNullCheckLastInsn(const BasicBlock* pred_bb, BasicBlockId succ_id);
@@ -194,7 +203,7 @@ class GlobalValueNumbering {
   }
 
   MIRGraph* GetMirGraph() const {
-    return cu_->mir_graph.get();
+    return mir_graph_;
   }
 
   ScopedArenaAllocator* Allocator() const {
@@ -202,12 +211,24 @@ class GlobalValueNumbering {
   }
 
   CompilationUnit* const cu_;
+  MIRGraph* mir_graph_;
   ScopedArenaAllocator* const allocator_;
 
-  static constexpr uint32_t kMaxRepeatCount = 10u;
+  // Helper data for BB evaluation ordering.
+  const GrowableArray<BasicBlockId>* topological_order_;
+  const GrowableArray<BasicBlockId>* topological_order_indexes_;
+  ScopedArenaVector<size_t> last_back_edge_indexes_;
+  ScopedArenaVector<std::pair<size_t, size_t>> loop_repeat_ranges_;
+  size_t current_idx_;
+  size_t end_idx_;
 
-  // Track the repeat count to make sure the GVN converges quickly and abort the GVN otherwise.
-  uint32_t repeat_count_;
+  // The number of BBs that we need to process grows exponentially with the number
+  // of nested loops. Don't allow excessive processing for too many nested loops or
+  // otherwise expensive methods.
+  static constexpr uint32_t kMaxBbsToProcessMultiplyFactor = 20u;
+
+  uint32_t bbs_processed_;
+  uint32_t max_bbs_to_process_;
 
   // We have 32-bit last_value_ so that we can detect when we run out of value names, see Good().
   // We usually don't check Good() until the end of LVN unless we're about to modify code.
@@ -227,6 +248,7 @@ class GlobalValueNumbering {
 
   ScopedArenaVector<const LocalValueNumbering*> lvns_;        // Owning.
   std::unique_ptr<LocalValueNumbering> work_lvn_;
+  bool work_lvn_uses_internal_ordering_;
   ScopedArenaVector<const LocalValueNumbering*> merge_lvns_;  // Not owning.
 
   friend class LocalValueNumbering;
