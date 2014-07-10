@@ -55,6 +55,7 @@ ART_GTEST_jni_internal_test_DEX_DEPS := AllFields StaticLeafMethods
 ART_GTEST_object_test_DEX_DEPS := ProtoCompare ProtoCompare2 StaticsFromCode XandY
 ART_GTEST_proxy_test_DEX_DEPS := Interfaces
 ART_GTEST_reflection_test_DEX_DEPS := Main NonStaticLeafMethods StaticLeafMethods
+ART_GTEST_selectivity_test_DEX_DEPS := Main
 ART_GTEST_stub_test_DEX_DEPS := AllFields
 ART_GTEST_transaction_test_DEX_DEPS := Transaction
 
@@ -126,6 +127,7 @@ COMPILER_GTEST_COMMON_SRC_FILES := \
   runtime/reflection_test.cc \
   compiler/dex/local_value_numbering_test.cc \
   compiler/dex/mir_optimization_test.cc \
+  compiler/dex/selectivity_test.cc \
   compiler/driver/compiler_driver_test.cc \
   compiler/elf_writer_test.cc \
   compiler/image_test.cc \
@@ -459,6 +461,7 @@ ART_GTEST_jni_internal_test_DEX_DEPS :=
 ART_GTEST_object_test_DEX_DEPS :=
 ART_GTEST_proxy_test_DEX_DEPS :=
 ART_GTEST_reflection_test_DEX_DEPS :=
+ART_GTEST_selectivity_test_DEX_DEPS :=
 ART_GTEST_stub_test_DEX_DEPS :=
 ART_GTEST_transaction_test_DEX_DEPS :=
 $(foreach dir,$(GTEST_DEX_DIRECTORIES), $(eval ART_TEST_TARGET_GTEST_$(dir)_DEX :=))
