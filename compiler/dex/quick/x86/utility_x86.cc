@@ -565,8 +565,14 @@ LIR* X86Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
     bool is_fp = r_dest.IsFloat();
     // TODO: clean this up once we fully recognize 64-bit storage containers.
     if (is_fp) {
+      DCHECK(r_dest.IsDouble());
       if (value == 0) {
         return NewLIR2(kX86XorpsRR, low_reg_val, low_reg_val);
+      } else if (cu_->target64) {
+        RegStorage r_temp = AllocTypedTempWide(false, kCoreReg);
+        res = LoadConstantWide(r_temp, value);
+        OpRegCopyWide(r_dest, r_temp);
+        FreeTemp(r_temp);
       } else if (base_of_code_ != nullptr) {
         // We will load the value from the literal area.
         LIR* data_target = ScanLiteralPoolWide(literal_list_, val_lo, val_hi);
@@ -1007,8 +1013,8 @@ void X86Mir2Lir::AnalyzeFPInstruction(int opcode, BasicBlock * bb, MIR *mir) {
 }
 
 void X86Mir2Lir::AnalyzeDoubleUse(RegLocation use) {
-  // If this is a double literal, we will want it in the literal pool.
-  if (use.is_const) {
+  // If this is a double literal, we will want it in the literal pool on 32b platforms.
+  if (use.is_const && !cu_->target64) {
     store_method_addr_ = true;
   }
 }
@@ -1042,12 +1048,18 @@ RegLocation X86Mir2Lir::UpdateLocWideTyped(RegLocation loc, int reg_class) {
 }
 
 void X86Mir2Lir::AnalyzeInvokeStatic(int opcode, BasicBlock * bb, MIR *mir) {
+  // For now this is only actual for x86-32.
+  if (cu_->target64) {
+    return;
+  }
+
   uint32_t index = mir->dalvikInsn.vB;
   if (!(mir->optimization_flags & MIR_INLINED)) {
     DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
+    DexFileMethodInliner* method_inliner =
+      cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file);
     InlineMethod method;
-    if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
-        ->IsIntrinsic(index, &method)) {
+    if (method_inliner->IsIntrinsic(index, &method)) {
       switch (method.opcode) {
         case kIntrinsicAbsDouble:
           store_method_addr_ = true;
