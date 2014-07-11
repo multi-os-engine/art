@@ -54,8 +54,6 @@ FaultManager::FaultManager() {
 }
 
 FaultManager::~FaultManager() {
-  UnclaimSignalChain(SIGSEGV);
-  sigaction(SIGSEGV, &oldaction_, nullptr);   // Restore old handler.
 }
 
 
