@@ -54,7 +54,9 @@ FaultManager::FaultManager() {
 }
 
 FaultManager::~FaultManager() {
+#ifdef HAVE_ANDROID_OS
   UnclaimSignalChain(SIGSEGV);
+#endif
   sigaction(SIGSEGV, &oldaction_, nullptr);   // Restore old handler.
 }
 
@@ -73,8 +75,10 @@ void FaultManager::Init() {
   if (e != 0) {
     VLOG(signals) << "Failed to claim SEGV: " << strerror(errno);
   }
+#ifdef HAVE_ANDROID_OS
   // Make sure our signal handler is called before any user handlers.
   ClaimSignalChain(SIGSEGV, &oldaction_);
+#endif
 }
 
 void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
@@ -103,8 +107,12 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
   }
   art_sigsegv_fault();
 
+#ifdef HAVE_ANDROID_OS
   // Pass this on to the next handler in the chain, or the default if none.
   InvokeUserSignalHandler(sig, info, context);
+#else
+  oldaction_.sa_sigaction(sig, info, context);
+#endif
 }
 
 void FaultManager::AddHandler(FaultHandler* handler, bool generated_code) {
