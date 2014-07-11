@@ -158,7 +158,10 @@ ResourceMask Arm64Mir2Lir::GetRegMaskCommon(const RegStorage& reg) const {
 }
 
 ResourceMask Arm64Mir2Lir::GetPCUseDefEncoding() const {
-  LOG(FATAL) << "Unexpected call to GetPCUseDefEncoding for Arm64";
+  // Note: On arm64, we are not able to set pc except branch instructions,
+  //       which is regarded as a kind of barrier.
+  //       All other instructions only use pc, which has no dependency between any of them.
+  //       So it would be fine to just return kEncodeNone here.
   return kEncodeNone;
 }
 
@@ -168,6 +171,7 @@ void Arm64Mir2Lir::SetupTargetResourceMasks(LIR* lir, uint64_t flags,
   DCHECK_EQ(cu_->instruction_set, kArm64);
   DCHECK(!lir->flags.use_def_invalid);
 
+  // Note: REG_USE_PC is ignored, the reason is the same with what we do in GetPCUseDefEncoding().
   // These flags are somewhat uncommon - bypass if we can.
   if ((flags & (REG_DEF_SP | REG_USE_SP | REG_DEF_LR)) != 0) {
     if (flags & REG_DEF_SP) {
