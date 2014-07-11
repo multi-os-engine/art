@@ -742,11 +742,16 @@ bool MIRGraph::EliminateNullChecksAndInferTypes(BasicBlock* bb) {
      * status (except for "this").
      */
     if ((bb->block_type == kEntryBlock) | bb->catch_entry) {
-      ssa_regs_to_check->ClearAllBits();
-      // Assume all ins are objects.
-      for (uint16_t in_reg = cu_->num_dalvik_registers - cu_->num_ins;
-           in_reg < cu_->num_dalvik_registers; in_reg++) {
-        ssa_regs_to_check->SetBit(in_reg);
+      if (bb->block_type == kEntryBlock) {
+        ssa_regs_to_check->ClearAllBits();
+        // Assume all ins are objects.
+        for (uint16_t in_reg = cu_->num_dalvik_registers - cu_->num_ins;
+             in_reg < cu_->num_dalvik_registers; in_reg++) {
+          ssa_regs_to_check->SetBit(in_reg);
+        }
+      } else {
+        // Assume all regs are objects.
+        ssa_regs_to_check->SetInitialBits(GetNumSSARegs());
       }
       if ((cu_->access_flags & kAccStatic) == 0) {
         // If non-static method, mark "this" as non-null
