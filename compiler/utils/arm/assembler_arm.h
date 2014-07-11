@@ -37,6 +37,7 @@ class ShifterOperand {
 
   explicit ShifterOperand(uint32_t immed) : type_(kImmediate), rm_(kNoRegister), rs_(kNoRegister),
       is_rotate_(false), is_shift_(false), shift_(kNoShift), rotate_(0), immed_(immed) {
+    CHECK_LT(immed, (1u << 12));
   }
 
   // Data-processing operands - Register
