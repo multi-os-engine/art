@@ -1046,19 +1046,9 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
     }
     // Push a marker to take place of lr.
     vmap_encoder.PushBackUnsigned(VmapTable::kAdjustedFpMarker);
-    if (cu_->instruction_set == kThumb2) {
-      // fp regs already sorted.
-      for (uint32_t i = 0; i < fp_vmap_table_.size(); i++) {
-        vmap_encoder.PushBackUnsigned(fp_vmap_table_[i] + VmapTable::kEntryAdjustment);
-      }
-    } else {
-      // For other platforms regs may have been inserted out of order - sort first.
-      std::sort(fp_vmap_table_.begin(), fp_vmap_table_.end());
-      for (size_t i = 0 ; i < fp_vmap_table_.size(); ++i) {
-        // Copy, stripping out the phys register sort key.
-        vmap_encoder.PushBackUnsigned(
-            ~(-1 << VREG_NUM_WIDTH) & (fp_vmap_table_[i] + VmapTable::kEntryAdjustment));
-      }
+    // fp regs already sorted.
+    for (uint32_t i = 0; i < fp_vmap_table_.size(); i++) {
+      vmap_encoder.PushBackUnsigned(fp_vmap_table_[i] + VmapTable::kEntryAdjustment);
     }
   } else {
     DCHECK_EQ(POPCOUNT(core_spill_mask_), 0);

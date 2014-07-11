@@ -66,9 +66,7 @@ namespace art {
  *  XMM6: caller | caller, arg7 | caller, scratch            | caller, arg7, scratch
  *  XMM7: caller | caller, arg8 | caller, scratch            | caller, arg8, scratch
  *  ---  x86-64/x32 registers
- *  XMM8 .. 11: caller save available as scratch registers for ART.
- *  XMM12 .. 15: callee save available as promoted registers for ART.
- *  This change (XMM12..15) is for QCG only, for others they are caller save.
+ *  XMM8 .. 15: caller save available as scratch registers for ART.
  *
  * X87 is a necessary evil outside of ART code for x86:
  *  ST0:  x86 float/double native return value, caller save
