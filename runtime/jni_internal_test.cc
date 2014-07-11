@@ -949,8 +949,8 @@ TEST_F(JniInternalTest, IsAssignableFrom) {
   jclass string_class = env_->FindClass("java/lang/String");
   ASSERT_NE(string_class, nullptr);
 
-  ASSERT_TRUE(env_->IsAssignableFrom(object_class, string_class));
-  ASSERT_FALSE(env_->IsAssignableFrom(string_class, object_class));
+  ASSERT_FALSE(env_->IsAssignableFrom(object_class, string_class));
+  ASSERT_TRUE(env_->IsAssignableFrom(string_class, object_class));
 
   // Null as either class should fail.
   CheckJniAbortCatcher jni_abort_catcher;
