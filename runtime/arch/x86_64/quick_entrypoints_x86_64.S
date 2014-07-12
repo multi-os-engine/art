@@ -1581,3 +1581,14 @@ DEFINE_FUNCTION art_quick_assignable_from_code
     RESTORE_FP_CALLEE_SAVE_FRAME
     ret
 END_FUNCTION art_quick_assignable_from_code
+
+DEFINE_FUNCTION art_quick_throw_stack_overflow_from_signal
+    // Here, the RSP is above the protected region.  We need to create a
+    // callee save frame and then move RSP down to the overflow region.
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    mov %rsp, %rsi                    // get current stack pointer, pass SP as second arg
+    mov %rax, %rsp                    // move RSP to the overflow region.
+    mov %gs:THREAD_SELF_OFFSET, %rdi  // pass Thread::Current() as first arg
+    call PLT_SYMBOL(artThrowStackOverflowFromCode)    // artThrowStackOverflowFromCode(Thread*, SP)
+    int3                              // unreached
+END_FUNCTION art_quick_throw_stack_overflow_from_signal
