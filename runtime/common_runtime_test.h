@@ -290,7 +290,11 @@ class CommonRuntimeTest : public testing::Test {
       filename += getenv("ANDROID_HOST_OUT");
       filename += "/framework/";
     } else {
-      filename += "/data/nativetest/art/";
+      filename += "/data/nativetest";
+      if (Is64BitInstructionSet(kRuntimeISA)) {
+        filename += "64";
+      }
+      filename += "/art/";
     }
     filename += "art-gtest-";
     filename += name;
