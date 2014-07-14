@@ -394,6 +394,11 @@ bool HGraphBuilder::BuildFieldAccess(const Instruction& instruction,
     return false;
   }
 
+  Primitive::Type field_type = resolved_field->GetTypeAsPrimitiveType();
+  if (field_type == Primitive::kPrimFloat || field_type == Primitive::kPrimDouble) {
+    return false;
+  }
+
   HInstruction* object = LoadLocal(obj_reg, Primitive::kPrimNot);
   current_block_->AddInstruction(new (arena_) HNullCheck(object, dex_offset));
   if (is_put) {
@@ -401,7 +406,7 @@ bool HGraphBuilder::BuildFieldAccess(const Instruction& instruction,
     HInstruction* null_check = current_block_->GetLastInstruction();
     // We need one temporary for the null check.
     temps.Add(null_check);
-    HInstruction* value = LoadLocal(source_or_dest_reg, resolved_field->GetTypeAsPrimitiveType());
+    HInstruction* value = LoadLocal(source_or_dest_reg, field_type);
     current_block_->AddInstruction(new (arena_) HInstanceFieldSet(
         null_check,
         value,
@@ -409,7 +414,7 @@ bool HGraphBuilder::BuildFieldAccess(const Instruction& instruction,
   } else {
     current_block_->AddInstruction(new (arena_) HInstanceFieldGet(
         current_block_->GetLastInstruction(),
-        resolved_field->GetTypeAsPrimitiveType(),
+        field_type,
         resolved_field->GetOffset()));
 
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
