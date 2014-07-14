@@ -83,6 +83,33 @@ size_t GetInstructionSetAlignment(InstructionSet isa) {
   }
 }
 
+static constexpr size_t kDefaultStackOverflowReservedBytes = 16 * KB;
+
+static constexpr size_t kMipsStackOverflowReservedBytes = kDefaultStackOverflowReservedBytes;
+
+// TODO: shrink reserved space, in particular for 64bit.
+
+static constexpr size_t kArmStackOverflowReservedBytes = (kIsDebugBuild ? 16 : 16) * KB;
+// Worst-case, we would need about 2.6x the amount of x86_64 for many more registers.
+// But this one works rather well.
+static constexpr size_t kArm64StackOverflowReservedBytes = 32 * KB;
+// TODO: Bumped to workaround regression (http://b/14982147) Specifically to fix:
+// test-art-host-run-test-interpreter-018-stack-overflow
+// test-art-host-run-test-interpreter-107-int-math2
+static constexpr size_t kX86StackOverflowReservedBytes = (kIsDebugBuild ? 32 : 16) * KB;
+static constexpr size_t kX86_64StackOverflowReservedBytes = 32 * KB;
+
+size_t GetStackOverflowReservedBytes(InstructionSet isa) {
+  return (isa == kArm || isa == kThumb2) ? kArmStackOverflowReservedBytes :
+           isa == kArm64 ? kArm64StackOverflowReservedBytes :
+           isa == kMips ? kMipsStackOverflowReservedBytes :
+           isa == kX86 ? kX86StackOverflowReservedBytes :
+           isa == kX86_64 ? kX86_64StackOverflowReservedBytes :
+           isa == kNone ? (LOG(FATAL) << "kNone has no stack overflow size", 0) :
+           (LOG(FATAL) << "Unknown instruction set" << isa, 0);
+}
+
+
 std::string InstructionSetFeatures::GetFeatureString() const {
   std::string result;
   if ((mask_ & kHwDiv) != 0) {

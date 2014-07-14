@@ -75,6 +75,8 @@ namespace art {
 bool Thread::is_started_ = false;
 pthread_key_t Thread::pthread_key_self_;
 ConditionVariable* Thread::resume_cond_ = nullptr;
+const size_t Thread::kStackOverflowImplicitCheckSize = kStackOverflowProtectedSize +
+    kRuntimeStackOverflowReservedBytes;
 
 static const char* kThreadNameDuringStartup = "<native thread without managed peer>";
 
@@ -266,7 +268,7 @@ void Thread::InstallImplicitProtection(bool is_main_stack) {
 
   if (mprotect(pregion, kStackOverflowProtectedSize, PROT_NONE) == -1) {
     LOG(FATAL) << "Unable to create protected region in stack for implicit overflow check. Reason:"
-        << strerror(errno);
+        << strerror(errno) << kStackOverflowProtectedSize;
   }
 
   // Tell the kernel that we won't be needing these pages any more.
