@@ -83,6 +83,56 @@ size_t GetInstructionSetAlignment(InstructionSet isa) {
   }
 }
 
+static constexpr size_t kDefaultStackOverflowReservedBytes = 16 * KB;
+
+static constexpr size_t kMipsStackOverflowReservedBytes = kDefaultStackOverflowReservedBytes;
+
+// TODO: shrink reserved space, in particular for 64bit.
+
+// TODO: This number should be shrinkable, but implicit checks have some hard-wired constants.
+static constexpr size_t kArmStackOverflowReservedBytes = (kIsDebugBuild ? 16 : 16) * KB;
+
+// Worst-case, we would need about 2.6x the amount of x86_64 for many more registers.
+// But this one works rather well.
+static constexpr size_t kArm64StackOverflowReservedBytes = (kIsDebugBuild ? 23 : 13) * KB;
+
+// TODO: Bumped to workaround regression (http://b/14982147) Specifically to fix:
+// test-art-host-run-test-interpreter-018-stack-overflow
+// test-art-host-run-test-interpreter-107-int-math2
+// TODO: Lower once implicit stack-overflow checks can work with less than 16K.
+static constexpr size_t kX86StackOverflowReservedBytes = (kIsDebugBuild ? 16 : 16) * KB;
+
+// TODO: Lower once implicit stack-overflow checks can work with less than 16K.
+static constexpr size_t kX86_64StackOverflowReservedBytes = (kIsDebugBuild ? 16 : 16) * KB;
+
+size_t GetStackOverflowReservedBytes(InstructionSet isa) {
+  switch (isa) {
+    case kArm:      // Intentional fall-through.
+    case kThumb2:
+      return kArmStackOverflowReservedBytes;
+
+    case kArm64:
+      return kArm64StackOverflowReservedBytes;
+
+    case kMips:
+      return kMipsStackOverflowReservedBytes;
+
+    case kX86:
+      return kX86StackOverflowReservedBytes;
+
+    case kX86_64:
+      return kX86_64StackOverflowReservedBytes;
+
+    case kNone:
+      LOG(FATAL) << "kNone has no stack overflow size";
+      return 0;
+
+    default:
+      LOG(FATAL) << "Unknown instruction set" << isa;
+      return 0;
+  }
+}
+
 std::string InstructionSetFeatures::GetFeatureString() const {
   std::string result;
   if ((mask_ & kHwDiv) != 0) {
