@@ -187,6 +187,8 @@ class X86Mir2Lir : public Mir2Lir {
                   RegLocation rl_src2);
   void GenXorLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,
                   RegLocation rl_src2);
+  void GenDivRemLongLit(RegLocation rl_dest, RegLocation rl_src,
+                        int64_t imm, bool is_div);
   void GenDivRemLong(Instruction::Code, RegLocation rl_dest, RegLocation rl_src1,
                      RegLocation rl_src2, bool is_div);
   // TODO: collapse reg_lo, reg_hi
@@ -736,8 +738,9 @@ class X86Mir2Lir : public Mir2Lir {
    * @param divisor divisor number for calculation
    * @param magic hold calculated magic number
    * @param shift hold calculated shift
+   * @param is_long 'true' if divisor is jlong, 'false' for jint.
    */
-  void CalculateMagicAndShift(int divisor, int& magic, int& shift);
+  void CalculateMagicAndShift(int64_t divisor, int64_t& magic, int& shift, bool is_long);
 
   /*
    * @brief Generate an integer div or rem operation.
