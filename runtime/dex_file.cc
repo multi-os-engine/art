@@ -951,6 +951,43 @@ std::pair<const char*, const char*> DexFile::SplitMultiDexLocation(
   return std::make_pair(tmp, colon_ptr + 1);
 }
 
+std::string DexFile::GetMultiDexClassesDexName(size_t number, const char* dex_location) {
+  if (number == 0) {
+    return dex_location;
+  } else {
+    return StringPrintf("%s" kMultiDexSeparatorString "classes%zu.dex", dex_location, number + 1);
+  }
+}
+
+const char* DexFile::GetDexCanonicalLocation(const char* dex_location) {
+  if (dex_location == nullptr) {
+    return nullptr;
+  }
+  char* path = nullptr;
+  if (!IsMultiDexLocation(dex_location)) {
+    path = realpath(dex_location, nullptr);
+  } else {
+    std::pair<const char*, const char*> pair = DexFile::SplitMultiDexLocation(dex_location);
+    const char* dex_real_location(realpath(pair.first, nullptr));
+    delete pair.first;
+    if (dex_real_location != nullptr) {
+      int length = strlen(dex_real_location) + strlen(pair.second) + strlen(kMultiDexSeparatorString) + 1;
+      char* multidex_canonical_location = reinterpret_cast<char*>(malloc(sizeof(char) * length));
+      sprintf(multidex_canonical_location, "%s" kMultiDexSeparatorString "%s", dex_real_location, pair.second);
+      free(const_cast<char*>(dex_real_location));
+      path = multidex_canonical_location;
+    }
+  }
+  // If realpath fails then we just copy the argument.
+  if (path == nullptr) {
+    path = reinterpret_cast<char*>(malloc(sizeof(char) * (strlen(dex_location)  + 1)));
+    strcpy(path, dex_location);
+    LOG(WARNING) << "Cannot get realpath for: " << dex_location;
+  }
+
+  return path;
+}
+
 std::ostream& operator<<(std::ostream& os, const DexFile& dex_file) {
   os << StringPrintf("[DexFile: %s dex-checksum=%08x location-checksum=%08x %p-%p]",
                      dex_file.GetLocation().c_str(),

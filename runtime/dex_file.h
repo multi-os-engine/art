@@ -827,6 +827,12 @@ class DexFile {
     return size_;
   }
 
+  static std::string GetMultiDexClassesDexName(size_t number, const char* dex_location);
+
+  // Returns the canonical location of the argument.
+  // Note: It's the caller job to deallocate the result using free().
+  static const char* GetDexCanonicalLocation(const char* dex_location);
+
  private:
   // Opens a .dex file
   static const DexFile* OpenFile(int fd, const char* location, bool verify, std::string* error_msg);
