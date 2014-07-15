@@ -508,7 +508,10 @@ enum OpFeatureFlags {
   kUseHi,
   kUseLo,
   kDefHi,
-  kDefLo
+  kDefLo,
+  kDefScaledOffset,
+  kDefMove,
+  kLoadStoreExclusive
 };
 
 enum SelectInstructionKind {
