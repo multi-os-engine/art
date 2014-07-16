@@ -169,9 +169,6 @@ bool ShifterOperand::CanHoldThumb(Register rd, Register rn, Opcode opcode,
       return ArmAssembler::ModifiedImmediate(immediate) != kInvalidModifiedImmediate;
 
     case MOV:
-      if (immediate < (1 << 12)) {    // Less than (or equal to) 12 bits can always be done.
-        return true;
-      }
       return ArmAssembler::ModifiedImmediate(immediate) != kInvalidModifiedImmediate;
     case MVN:
     default:

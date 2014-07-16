@@ -80,12 +80,12 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                                                const DexFile& dex_file) const {
   InstructionSet instruction_set = GetCompilerDriver()->GetInstructionSet();
   // The optimizing compiler currently does not have a Thumb2 assembler.
-  if (instruction_set == kThumb2) {
-    instruction_set = kArm;
+  if (instruction_set == kArm) {
+    instruction_set = kThumb2;
   }
 
   // Do not attempt to compile on architectures we do not support.
-  if (instruction_set != kX86 && instruction_set != kX86_64 && instruction_set != kArm) {
+  if (instruction_set != kX86 && instruction_set != kX86_64 && instruction_set != kThumb2) {
     return nullptr;
   }
 

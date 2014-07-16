@@ -749,9 +749,9 @@ void InstructionCodeGeneratorARM::VisitInvokeStatic(HInvokeStatic* invoke) {
   // LR = temp[offset_of_quick_compiled_code]
   __ ldr(LR, Address(temp,
                      mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value()));
+
   // LR()
   __ blx(LR);
-
   codegen_->RecordPcInfo(invoke->GetDexPc());
 }
 
@@ -948,9 +948,9 @@ void InstructionCodeGeneratorARM::VisitCompare(HCompare* compare) {
              ShifterOperand(right.AsRegisterPairHigh()));  // Signed compare.
       __ b(&less, LT);
       __ b(&greater, GT);
+      __ LoadImmediate(output, 0);
       __ cmp(left.AsRegisterPairLow(),
              ShifterOperand(right.AsRegisterPairLow()));  // Unsigned compare.
-      __ LoadImmediate(output, 0);
       __ b(&done, EQ);
       __ b(&less, CC);
 
