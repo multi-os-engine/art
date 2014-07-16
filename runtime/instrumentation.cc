@@ -81,11 +81,31 @@ bool Instrumentation::InstallStubsForClass(mirror::Class* klass) {
   return true;
 }
 
+static bool RefreshEmbeddedVTableEntryClassVisitor(mirror::Class* c, void* arg)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::ArtMethod* method = reinterpret_cast<mirror::ArtMethod*>(arg);
+  size_t index = method->GetVtableIndex();
+  if (c->IsResolved() && c->ShouldHaveEmbeddedImtAndVTable() &&
+      static_cast<int32_t>(index) < c->GetEmbeddedVTableLength() &&
+      c->GetEmbeddedVTableEntry(index) == method) {
+    // This will update the quick entry point in embedded vtable.
+    c->SetEmbeddedVTableEntry(method->GetVtableIndex(), method);
+  }
+  return true;
+}
+
 static void UpdateEntrypoints(mirror::ArtMethod* method, const void* quick_code,
-                              const void* portable_code, bool have_portable_code)
+                              const void* portable_code, bool have_portable_code,
+                              bool fixup_embedded_vtable)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   method->SetEntryPointFromPortableCompiledCode(portable_code);
+
   method->SetEntryPointFromQuickCompiledCode(quick_code);
+  if (fixup_embedded_vtable) {
+    Runtime::Current()->GetClassLinker()->VisitClasses(
+        RefreshEmbeddedVTableEntryClassVisitor, method);
+  }
+
   bool portable_enabled = method->IsPortableCompiled();
   if (have_portable_code && !portable_enabled) {
     method->SetIsPortableCompiled();
@@ -161,7 +181,7 @@ void Instrumentation::InstallStubsForMethod(mirror::ArtMethod* method) {
       }
     }
   }
-  UpdateEntrypoints(method, new_quick_code, new_portable_code, have_portable_code);
+  UpdateEntrypoints(method, new_quick_code, new_portable_code, have_portable_code, true);
 }
 
 // Places the instrumentation exit pc as the return PC for every quick frame. This also allows
@@ -614,7 +634,7 @@ void Instrumentation::UpdateMethodsCode(mirror::ArtMethod* method, const void* q
       }
     }
   }
-  UpdateEntrypoints(method, new_quick_code, new_portable_code, new_have_portable_code);
+  UpdateEntrypoints(method, new_quick_code, new_portable_code, new_have_portable_code, false);
 }
 
 bool Instrumentation::AddDeoptimizedMethod(mirror::ArtMethod* method) {
@@ -690,7 +710,7 @@ void Instrumentation::Deoptimize(mirror::ArtMethod* method) {
   }
   if (!interpreter_stubs_installed_) {
     UpdateEntrypoints(method, GetQuickInstrumentationEntryPoint(), GetPortableToInterpreterBridge(),
-                      false);
+                      false, true);
 
     // Install instrumentation exit stub and instrumentation frames. We may already have installed
     // these previously so it will only cover the newly created frames.
@@ -723,12 +743,12 @@ void Instrumentation::Undeoptimize(mirror::ArtMethod* method) {
         !method->GetDeclaringClass()->IsInitialized()) {
       // TODO: we're updating to entrypoints in the image here, we can avoid the trampoline.
       UpdateEntrypoints(method, class_linker->GetQuickResolutionTrampoline(),
-                        class_linker->GetPortableResolutionTrampoline(), false);
+                        class_linker->GetPortableResolutionTrampoline(), false, true);
     } else {
       bool have_portable_code = false;
       const void* quick_code = class_linker->GetQuickOatCodeFor(method);
       const void* portable_code = class_linker->GetPortableOatCodeFor(method, &have_portable_code);
-      UpdateEntrypoints(method, quick_code, portable_code, have_portable_code);
+      UpdateEntrypoints(method, quick_code, portable_code, have_portable_code, true);
     }
 
     // If there is no deoptimized method left, we can restore the stack of each thread.

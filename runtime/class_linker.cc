@@ -1607,7 +1607,17 @@ void ClassLinker::VisitClasses(ClassVisitor* visitor, void* arg) {
   if (dex_cache_image_class_lookup_required_) {
     MoveImageClassesToClassTable();
   }
+
+  if (Locks::classlinker_classes_lock_->IsExclusiveHeld(Thread::Current())) {
+    VisitClassesTableLockHeld(visitor, arg);
+    return;
+  }
+
   WriterMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
+  VisitClassesTableLockHeld(visitor, arg);
+}
+
+void ClassLinker::VisitClassesTableLockHeld(ClassVisitor* visitor, void* arg) {
   for (std::pair<const size_t, mirror::Class*>& it : class_table_) {
     mirror::Class** root = &it.second;
     mirror::Class* c = ReadBarrier::BarrierForRoot<mirror::Class, kWithReadBarrier>(root);

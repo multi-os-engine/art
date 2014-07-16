@@ -367,6 +367,32 @@ void PatchOat::PatchVisitor::operator() (mirror::Class* cls, mirror::Reference* 
   copy_->SetFieldObjectWithoutWriteBarrier<false, true, kVerifyNone>(off, moved_object);
 }
 
+void PatchOat::PatchClassVisitor::operator() (mirror::Object* obj, MemberOffset off,
+                                         bool is_static_unused) const {
+  PatchOat::PatchVisitor::operator()(obj, off, is_static_unused);
+
+  if (off.Uint32Value() < mirror::Class::EmbeddedVTableOffset().Uint32Value()) {
+    return;
+  }
+
+  // Set quick entry point for embedded vtable.
+  mirror::Object* ref = obj->GetFieldObject<mirror::Object, kVerifyNone>(off);
+  if (ref != nullptr && ref->IsArtMethod()) {
+    mirror::ArtMethod* method = ref->AsArtMethod<kVerifyNone>();
+    uintptr_t quick = reinterpret_cast<uintptr_t>
+        (method->GetEntryPointFromQuickCompiledCode<kVerifyNone>());
+    if (quick != 0) {
+      quick += patcher_->delta_;
+    }
+    copy_->SetField64<false>(mirror::Class::GetEmbeddedTableEntryPointOffset(off),
+                             static_cast<int64_t>(quick));
+  }
+}
+
+void PatchOat::PatchClassVisitor::operator() (mirror::Class* cls, mirror::Reference* ref) const {
+  LOG(FATAL) << "Reference not expected here.";
+}
+
 mirror::Object* PatchOat::RelocatedCopyOf(mirror::Object* obj) {
   if (obj == nullptr) {
     return nullptr;
@@ -399,8 +425,13 @@ void PatchOat::VisitObject(mirror::Object* object) {
       DCHECK_EQ(copy->GetReadBarrierPointer(), moved_to);
     }
   }
-  PatchOat::PatchVisitor visitor(this, copy);
-  object->VisitReferences<true, kVerifyNone>(visitor, visitor);
+  if (object->IsClass()) {
+    PatchOat::PatchClassVisitor visitor(this, copy);
+    object->VisitReferences<true, kVerifyNone>(visitor, visitor);
+  } else {
+    PatchOat::PatchVisitor visitor(this, copy);
+    object->VisitReferences<true, kVerifyNone>(visitor, visitor);
+  }
   if (object->IsArtMethod<kVerifyNone>()) {
     FixupMethod(static_cast<mirror::ArtMethod*>(object),
                 static_cast<mirror::ArtMethod*>(copy));

@@ -195,7 +195,8 @@ inline ArtMethod* Class::GetEmbeddedVTableEntry(uint32_t i) {
 inline void Class::SetEmbeddedVTableEntry(uint32_t i, ArtMethod* method) {
   uint32_t offset = EmbeddedVTableOffset().Uint32Value() + i * sizeof(VTableEntry);
   SetFieldObject<false>(MemberOffset(offset), method);
-  CHECK(method == GetVTableDuringLinking()->Get(i));
+  SetField64<false>(GetEmbeddedTableEntryPointOffset(MemberOffset(offset)),
+                    reinterpret_cast<int64_t>(method->GetEntryPointFromQuickCompiledCode()));
 }
 
 inline bool Class::Implements(Class* klass) {
