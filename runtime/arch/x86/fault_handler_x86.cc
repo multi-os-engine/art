@@ -31,14 +31,20 @@
 #define CTX_ESP uc_mcontext->__ss.__esp
 #define CTX_EIP uc_mcontext->__ss.__eip
 #define CTX_EAX uc_mcontext->__ss.__eax
+#elif defined(__x86_64__)
+#define CTX_ESP uc_mcontext.gregs[REG_RSP]
+#define CTX_EIP uc_mcontext.gregs[REG_RIP]
+#define CTX_EAX uc_mcontext.gregs[REG_RAX]
+#define CTX_METHOD uc_mcontext.gregs[REG_RDI]
 #else
 #define CTX_ESP uc_mcontext.gregs[REG_ESP]
 #define CTX_EIP uc_mcontext.gregs[REG_EIP]
 #define CTX_EAX uc_mcontext.gregs[REG_EAX]
+#define CTX_METHOD uc_mcontext.gregs[REG_EAX]
 #endif
 
 //
-// X86 specific fault handler functions.
+// X86 (and X86_64) specific fault handler functions.
 //
 
 namespace art {
@@ -86,35 +92,47 @@ static uint32_t GetInstructionSize(uint8_t* pc) {
         have_prefixes = false;
         break;
     }
+#if defined(__x86_64__)
+    // Skip REX if present.
+    if (*pc >= 0x40 && *pc <= 0x4F) {
+      have_prefixes = true;
+    }
+#endif
     if (have_prefixes) {
       pc++;
     }
   } while (have_prefixes);
 
-#if defined(__x86_64__)
-  // Skip REX is present.
-  if (*pc >= 0x40 && *pc <= 0x4F) {
-    ++pc;
-  }
-#endif
-
   // Check for known instructions.
-  uint32_t known_length = 0;
-  switch (*pc) {
-  case 0x83:                // cmp [r + v], b: 4 byte instruction
-    known_length = 4;
-    break;
-  }
+  uint8_t opcode = *pc++;
+  if (opcode == 0x81 || opcode == 0x83) {
+    uint8_t modrm = *pc;
+    uint8_t mod = (modrm >> 6) & 0b11;
+    uint8_t reg = (modrm >> 3) & 0b111;
+    uint8_t rm = (modrm >> 0) & 0b111;
+    if (reg == 7 && mod == 1) {
+      pc++;
+      if (rm == 4) {
+        // SIB + 1 byte displacement.
+        pc += 2;
+      } else {
+        pc += 1;
+      }
 
-  if (known_length > 0) {
-    VLOG(signals) << "known instruction with length " << known_length;
-    return known_length;
+      // immediate byte
+      if (opcode == 0x81) {
+        pc += 4;
+      } else if (opcode == 0x83) {
+        pc += 1;
+      }
+
+      return pc - instruction_start;
+    }
   }
 
   // Unknown instruction, work out length.
 
   // Work out if we have a ModR/M byte.
-  uint8_t opcode = *pc++;
   if (opcode == 0xf) {
     two_byte = true;
     opcode = *pc++;
@@ -144,12 +162,12 @@ static uint32_t GetInstructionSize(uint8_t* pc) {
   if (has_modrm) {
     uint8_t modrm = *pc++;
     uint8_t mod = (modrm >> 6) & 0b11;
-    uint8_t reg = (modrm >> 3) & 0b111;
+    uint8_t rm = (modrm >> 0) & 0b111;
     switch (mod) {
       case 0:
         break;
       case 1:
-        if (reg == 4) {
+        if (rm == 4) {
           // SIB + 1 byte displacement.
           pc += 2;
         } else {
@@ -171,7 +189,7 @@ static uint32_t GetInstructionSize(uint8_t* pc) {
 
 void FaultManager::GetMethodAndReturnPCAndSP(siginfo_t* siginfo, void* context,
                                              mirror::ArtMethod** out_method,
-                                             uintptr_t* out_return_pc, uintptr_t* out_sp) {
+                                             uintptr_t* out_return_pc, uintptr_t* out_sp) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
   *out_sp = static_cast<uintptr_t>(uc->CTX_ESP);
   VLOG(signals) << "sp: " << std::hex << *out_sp;
@@ -180,15 +198,19 @@ void FaultManager::GetMethodAndReturnPCAndSP(siginfo_t* siginfo, void* context,
   }
 
   // In the case of a stack overflow, the stack is not valid and we can't
-  // get the method from the top of the stack.  However it's in EAX.
+  // get the method from the top of the stack.  However it's in EAX(x86)/RDI(x86_64).
   uintptr_t* fault_addr = reinterpret_cast<uintptr_t*>(siginfo->si_addr);
   uintptr_t* overflow_addr = reinterpret_cast<uintptr_t*>(
+#if defined(__x86_64__)
+      reinterpret_cast<uint8_t*>(*out_sp) - GetStackOverflowReservedBytes(kX86_64));
+#else
       reinterpret_cast<uint8_t*>(*out_sp) - GetStackOverflowReservedBytes(kX86));
+#endif
   if (overflow_addr == fault_addr) {
-    *out_method = reinterpret_cast<mirror::ArtMethod*>(uc->CTX_EAX);
+    *out_method = reinterpret_cast<mirror::ArtMethod*>(uc->CTX_METHOD);
   } else {
     // The method is at the top of the stack.
-    *out_method = reinterpret_cast<mirror::ArtMethod*>(reinterpret_cast<uintptr_t*>(*out_sp)[0]);
+    *out_method = (reinterpret_cast<StackReference<mirror::ArtMethod>* >(*out_sp)[0]).AsMirrorPtr();
   }
 
   uint8_t* pc = reinterpret_cast<uint8_t*>(uc->CTX_EIP);
@@ -210,10 +232,10 @@ bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
   // is on the stack at the top address of the current frame.
 
   // Push the return address onto the stack.
-  uint32_t retaddr = reinterpret_cast<uint32_t>(pc + instr_size);
-  uint32_t* next_sp = reinterpret_cast<uint32_t*>(sp - 4);
+  uintptr_t retaddr = reinterpret_cast<uintptr_t>(pc + instr_size);
+  uintptr_t* next_sp = reinterpret_cast<uintptr_t*>(sp - sizeof(uintptr_t));
   *next_sp = retaddr;
-  uc->CTX_ESP = reinterpret_cast<uint32_t>(next_sp);
+  uc->CTX_ESP = reinterpret_cast<uintptr_t>(next_sp);
 
   uc->CTX_EIP = reinterpret_cast<uintptr_t>(art_quick_throw_null_pointer_exception);
   VLOG(signals) << "Generating null pointer exception";
@@ -270,10 +292,10 @@ bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
     // is on the stack at the top address of the current frame.
 
     // Push the return address onto the stack.
-    uint32_t retaddr = reinterpret_cast<uint32_t>(pc + 2);
-    uint32_t* next_sp = reinterpret_cast<uint32_t*>(sp - 4);
+    uintptr_t retaddr = reinterpret_cast<uintptr_t>(pc + 2);
+    uintptr_t* next_sp = reinterpret_cast<uintptr_t*>(sp - sizeof(uintptr_t));
     *next_sp = retaddr;
-    uc->CTX_ESP = reinterpret_cast<uint32_t>(next_sp);
+    uc->CTX_ESP = reinterpret_cast<uintptr_t>(next_sp);
 
     uc->CTX_EIP = reinterpret_cast<uintptr_t>(art_quick_test_suspend);
 
@@ -302,7 +324,11 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   VLOG(signals) << "checking for stack overflow, sp: " << std::hex << sp <<
     ", fault_addr: " << fault_addr;
 
+#if defined(__x86_64__)
+  uintptr_t overflow_addr = sp - GetStackOverflowReservedBytes(kX86_64);
+#else
   uintptr_t overflow_addr = sp - GetStackOverflowReservedBytes(kX86);
+#endif
 
   Thread* self = Thread::Current();
   uintptr_t pregion = reinterpret_cast<uintptr_t>(self->GetStackEnd()) -
