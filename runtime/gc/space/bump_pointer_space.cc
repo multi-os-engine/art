@@ -258,6 +258,13 @@ bool BumpPointerSpace::AllocNewTlab(Thread* self, size_t bytes) {
   return true;
 }
 
+void BumpPointerSpace::LogFragmentationAllocFailure(std::ostream& os,
+                                                    size_t /* failed_alloc_bytes */) {
+  size_t max_contiguous_allocation = Limit() - End();
+  os << "; failed due to fragmentation (largest possible contiguous allocation "
+     <<  max_contiguous_allocation << " bytes)";
+}
+
 }  // namespace space
 }  // namespace gc
 }  // namespace art
