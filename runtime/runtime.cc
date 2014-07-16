@@ -630,9 +630,11 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   // Change the implicit checks flags based on runtime architecture.
   switch (kRuntimeISA) {
+    case kX86:
+    case kX86_64:
+      implicit_suspend_checks_ = true;
     case kArm:
     case kThumb2:
-    case kX86:
       implicit_null_checks_ = true;
       implicit_so_checks_ = true;
       break;

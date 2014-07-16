@@ -1174,9 +1174,11 @@ static int dex2oat(int argc, char** argv) {
 
   // Set the compilation target's implicit checks options.
   switch (instruction_set) {
+    case kX86:
+    case kX86_64:
+      implicit_suspend_checks = true;
     case kArm:
     case kThumb2:
-    case kX86:
       implicit_null_checks = true;
       implicit_so_checks = true;
       break;
