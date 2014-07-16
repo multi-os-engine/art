@@ -589,8 +589,17 @@ static int NextVCallInsn(CompilationUnit* cu, CallInfo* info,
       // Get this->klass_.embedded_vtable[method_idx] [usr kArg0, set kArg0]
       int32_t offset = mirror::Class::EmbeddedVTableOffset().Uint32Value() +
           method_idx * sizeof(mirror::Class::VTableEntry);
+      if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
+        // Load quick entry point from embedded vtable to kInvokeTgt [use kArg0, set kInvokeTgt]
+        cg->LoadWordDisp(cg->TargetReg(kArg0, kRef),
+                         offset + sizeof(mirror::HeapReference<mirror::ArtMethod>),
+                         cg->TargetPtrReg(kInvokeTgt));
+      }
       // Load target method from embedded vtable to kArg0 [use kArg0, set kArg0]
       cg->LoadRefDisp(cg->TargetReg(kArg0, kRef), offset, cg->TargetReg(kArg0, kRef), kNotVolatile);
+      if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
+        return -1;
+      }
       break;
     }
     case 3:

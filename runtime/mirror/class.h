@@ -91,6 +91,7 @@ class MANAGED Class FINAL : public Object {
   // vtable entry embedded in class object.
   struct MANAGED VTableEntry {
     HeapReference<ArtMethod> method;
+    uint64_t entry_point_from_quick_compiled_code;
   };
 
   // Class Status
@@ -723,6 +724,12 @@ class MANAGED Class FINAL : public Object {
   void SetEmbeddedVTableEntry(uint32_t i, ArtMethod* method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void PopulateEmbeddedImtAndVTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Return offset of entry point that's paired with the method at method_offset
+  // in the embedded vtable.
+  static MemberOffset GetEmbeddedTableEntryPointOffset(MemberOffset method_offset) {
+    return MemberOffset(method_offset.Uint32Value() + sizeof(HeapReference<ArtMethod>));
+  }
 
   // Given a method implemented by this class but potentially from a super class, return the
   // specific implementation method for this class.

@@ -648,6 +648,15 @@ class FixupClassVisitor FINAL : public FixupVisitor {
     if (offset.Uint32Value() < mirror::Class::EmbeddedVTableOffset().Uint32Value()) {
       return;
     }
+
+    // Set quick entry point for embedded vtable.
+    Object* ref = obj->GetFieldObject<Object, kVerifyNone>(offset);
+    if (ref != nullptr && ref->IsArtMethod()) {
+      ArtMethod* method = ref->AsArtMethod<kVerifyNone>();
+      const byte* quick_entry_point = image_writer_->GetQuickEntryPoint(method);
+      copy_->SetField64<false>(mirror::Class::GetEmbeddedTableEntryPointOffset(offset),
+                               reinterpret_cast<int64_t>(quick_entry_point));
+    }
   }
 
   void operator()(mirror::Class* /*klass*/, mirror::Reference* ref) const
