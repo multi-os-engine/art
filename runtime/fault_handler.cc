@@ -76,6 +76,7 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
   // Also, there is only an 8K stack available here to logging can cause memory
   // overwrite issues if you are unlucky.  If you want to enable logging and
   // are getting crashes, allocate more space for the alternate signal stack.
+
   VLOG(signals) << "Handling fault";
   if (IsInGeneratedCode(info, context, true)) {
     VLOG(signals) << "in generated code, looking for handler";
@@ -91,6 +92,7 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
       return;
     }
   }
+
   art_sigsegv_fault();
 
   // Pass this on to the next handler in the chain, or the default if none.
