@@ -398,26 +398,26 @@ static inline mirror::ArtMethod* FindMethodFromCode(uint32_t method_idx,
     case kDirect:
       return resolved_method;
     case kVirtual: {
-      mirror::ObjectArray<mirror::ArtMethod>* vtable = (*this_object)->GetClass()->GetVTable();
+      mirror::Class* klass = (*this_object)->GetClass();
       uint16_t vtable_index = resolved_method->GetMethodIndex();
       if (access_check &&
-          (vtable == nullptr || vtable_index >= static_cast<uint32_t>(vtable->GetLength()))) {
+          (!klass->ShouldHaveEmbeddedImtAndVTable() ||
+           vtable_index >= static_cast<uint32_t>(klass->GetEmbeddedVTableLength()))) {
         // Behavior to agree with that of the verifier.
         ThrowNoSuchMethodError(type, resolved_method->GetDeclaringClass(),
                                resolved_method->GetName(), resolved_method->GetSignature());
         return nullptr;  // Failure.
       }
-      DCHECK(vtable != nullptr);
-      return vtable->GetWithoutChecks(vtable_index);
+      DCHECK(klass->ShouldHaveEmbeddedImtAndVTable()) << PrettyClass(klass);
+      return klass->GetEmbeddedVTableEntry(vtable_index);
     }
     case kSuper: {
       mirror::Class* super_class = (*referrer)->GetDeclaringClass()->GetSuperClass();
       uint16_t vtable_index = resolved_method->GetMethodIndex();
-      mirror::ObjectArray<mirror::ArtMethod>* vtable;
       if (access_check) {
         // Check existence of super class.
-        vtable = (super_class != nullptr) ? super_class->GetVTable() : nullptr;
-        if (vtable == nullptr || vtable_index >= static_cast<uint32_t>(vtable->GetLength())) {
+        if (super_class == nullptr || !super_class->ShouldHaveEmbeddedImtAndVTable() ||
+            vtable_index >= static_cast<uint32_t>(super_class->GetEmbeddedVTableLength())) {
           // Behavior to agree with that of the verifier.
           ThrowNoSuchMethodError(type, resolved_method->GetDeclaringClass(),
                                  resolved_method->GetName(), resolved_method->GetSignature());
@@ -426,10 +426,9 @@ static inline mirror::ArtMethod* FindMethodFromCode(uint32_t method_idx,
       } else {
         // Super class must exist.
         DCHECK(super_class != nullptr);
-        vtable = super_class->GetVTable();
       }
-      DCHECK(vtable != nullptr);
-      return vtable->GetWithoutChecks(vtable_index);
+      DCHECK(super_class->ShouldHaveEmbeddedImtAndVTable());
+      return super_class->GetEmbeddedVTableEntry(vtable_index);
     }
     case kInterface: {
       uint32_t imt_index = resolved_method->GetDexMethodIndex() % mirror::Class::kImtSize;
@@ -565,11 +564,11 @@ static inline mirror::ArtMethod* FindMethodFast(uint32_t method_idx,
   } else if (is_direct) {
     return resolved_method;
   } else if (type == kSuper) {
-    return referrer->GetDeclaringClass()->GetSuperClass()->GetVTable()->
-        Get(resolved_method->GetMethodIndex());
+    return referrer->GetDeclaringClass()->GetSuperClass()
+                   ->GetEmbeddedVTableEntry(resolved_method->GetMethodIndex());
   } else {
     DCHECK(type == kVirtual);
-    return this_object->GetClass()->GetVTable()->Get(resolved_method->GetMethodIndex());
+    return this_object->GetClass()->GetEmbeddedVTableEntry(resolved_method->GetMethodIndex());
   }
 }
 
