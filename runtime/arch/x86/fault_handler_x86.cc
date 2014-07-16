@@ -31,6 +31,10 @@
 #define CTX_ESP uc_mcontext->__ss.__esp
 #define CTX_EIP uc_mcontext->__ss.__eip
 #define CTX_EAX uc_mcontext->__ss.__eax
+#elif defined(__x86_64__)
+#define CTX_ESP uc_mcontext.gregs[REG_RSP]
+#define CTX_EIP uc_mcontext.gregs[REG_RIP]
+#define CTX_EAX uc_mcontext.gregs[REG_RAX]
 #else
 #define CTX_ESP uc_mcontext.gregs[REG_ESP]
 #define CTX_EIP uc_mcontext.gregs[REG_EIP]
@@ -38,7 +42,7 @@
 #endif
 
 //
-// X86 specific fault handler functions.
+// X86 (and X86_64) specific fault handler functions.
 //
 
 namespace art {
@@ -86,6 +90,12 @@ static uint32_t GetInstructionSize(uint8_t* pc) {
         have_prefixes = false;
         break;
     }
+#if defined(__x86_64__)
+    // Skip REX is present.
+    if (*pc >= 0x40 && *pc <= 0x4F) {
+      have_prefixes = true;
+    }
+#endif
     if (have_prefixes) {
       pc++;
     }
@@ -171,7 +181,8 @@ static uint32_t GetInstructionSize(uint8_t* pc) {
 
 void FaultManager::GetMethodAndReturnPCAndSP(siginfo_t* siginfo, void* context,
                                              mirror::ArtMethod** out_method,
-                                             uintptr_t* out_return_pc, uintptr_t* out_sp) {
+                                             uintptr_t* out_return_pc, uintptr_t* out_sp)
+    NO_THREAD_SAFETY_ANALYSIS {
   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
   *out_sp = static_cast<uintptr_t>(uc->CTX_ESP);
   VLOG(signals) << "sp: " << std::hex << *out_sp;
@@ -188,7 +199,7 @@ void FaultManager::GetMethodAndReturnPCAndSP(siginfo_t* siginfo, void* context,
     *out_method = reinterpret_cast<mirror::ArtMethod*>(uc->CTX_EAX);
   } else {
     // The method is at the top of the stack.
-    *out_method = reinterpret_cast<mirror::ArtMethod*>(reinterpret_cast<uintptr_t*>(*out_sp)[0]);
+    *out_method = (reinterpret_cast<StackReference<mirror::ArtMethod>* >(*out_sp)[0]).AsMirrorPtr();
   }
 
   uint8_t* pc = reinterpret_cast<uint8_t*>(uc->CTX_EIP);
@@ -210,10 +221,10 @@ bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
   // is on the stack at the top address of the current frame.
 
   // Push the return address onto the stack.
-  uint32_t retaddr = reinterpret_cast<uint32_t>(pc + instr_size);
-  uint32_t* next_sp = reinterpret_cast<uint32_t*>(sp - 4);
+  uintptr_t retaddr = reinterpret_cast<uintptr_t>(pc + instr_size);
+  uintptr_t* next_sp = reinterpret_cast<uintptr_t*>(sp - sizeof(uintptr_t));
   *next_sp = retaddr;
-  uc->CTX_ESP = reinterpret_cast<uint32_t>(next_sp);
+  uc->CTX_ESP = reinterpret_cast<uintptr_t>(next_sp);
 
   uc->CTX_EIP = reinterpret_cast<uintptr_t>(art_quick_throw_null_pointer_exception);
   VLOG(signals) << "Generating null pointer exception";
@@ -270,10 +281,10 @@ bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
     // is on the stack at the top address of the current frame.
 
     // Push the return address onto the stack.
-    uint32_t retaddr = reinterpret_cast<uint32_t>(pc + 2);
-    uint32_t* next_sp = reinterpret_cast<uint32_t*>(sp - 4);
+    uintptr_t retaddr = reinterpret_cast<uintptr_t>(pc + 2);
+    uintptr_t* next_sp = reinterpret_cast<uintptr_t*>(sp - sizeof(uintptr_t));
     *next_sp = retaddr;
-    uc->CTX_ESP = reinterpret_cast<uint32_t>(next_sp);
+    uc->CTX_ESP = reinterpret_cast<uintptr_t>(next_sp);
 
     uc->CTX_EIP = reinterpret_cast<uintptr_t>(art_quick_test_suspend);
 
