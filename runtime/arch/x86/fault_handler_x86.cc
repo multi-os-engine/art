@@ -25,20 +25,28 @@
 #include "mirror/art_method-inl.h"
 #include "thread.h"
 #include "thread-inl.h"
+#include "arch/x86/x86_inst_len.h"
 
 #if defined(__APPLE__)
 #define ucontext __darwin_ucontext
 #define CTX_ESP uc_mcontext->__ss.__esp
 #define CTX_EIP uc_mcontext->__ss.__eip
 #define CTX_EAX uc_mcontext->__ss.__eax
+#define CTX_METHOD uc_mcontext->__ss.__eax
+#elif defined(__x86_64__)
+#define CTX_ESP uc_mcontext.gregs[REG_RSP]
+#define CTX_EIP uc_mcontext.gregs[REG_RIP]
+#define CTX_EAX uc_mcontext.gregs[REG_RAX]
+#define CTX_METHOD uc_mcontext.gregs[REG_RDI]
 #else
 #define CTX_ESP uc_mcontext.gregs[REG_ESP]
 #define CTX_EIP uc_mcontext.gregs[REG_EIP]
 #define CTX_EAX uc_mcontext.gregs[REG_EAX]
+#define CTX_METHOD uc_mcontext.gregs[REG_EAX]
 #endif
 
 //
-// X86 specific fault handler functions.
+// X86 (and X86_64) specific fault handler functions.
 //
 
 namespace art {
@@ -59,119 +67,16 @@ enum SegmentPrefix {
 
 // Get the size of an instruction in bytes.
 static uint32_t GetInstructionSize(uint8_t* pc) {
-  uint8_t* instruction_start = pc;
-  bool have_prefixes = true;
-  bool two_byte = false;
+  X86InstructionLengthCalculator calc;
+  uint32_t len = calc.Calculate(pc);
 
-  // Skip all the prefixes.
-  do {
-    switch (*pc) {
-        // Group 1 - lock and repeat prefixes:
-      case 0xF0:
-      case 0xF2:
-      case 0xF3:
-        // Group 2 - segment override prefixes:
-      case kCs:
-      case kSs:
-      case kDs:
-      case kEs:
-      case kFs:
-      case kGs:
-        // Group 3 - operand size override:
-      case 0x66:
-        // Group 4 - address size override:
-      case 0x67:
-        break;
-      default:
-        have_prefixes = false;
-        break;
-    }
-    if (have_prefixes) {
-      pc++;
-    }
-  } while (have_prefixes);
-
-#if defined(__x86_64__)
-  // Skip REX is present.
-  if (*pc >= 0x40 && *pc <= 0x4F) {
-    ++pc;
-  }
-#endif
-
-  // Check for known instructions.
-  uint32_t known_length = 0;
-  switch (*pc) {
-  case 0x83:                // cmp [r + v], b: 4 byte instruction
-    known_length = 4;
-    break;
-  }
-
-  if (known_length > 0) {
-    VLOG(signals) << "known instruction with length " << known_length;
-    return known_length;
-  }
-
-  // Unknown instruction, work out length.
-
-  // Work out if we have a ModR/M byte.
-  uint8_t opcode = *pc++;
-  if (opcode == 0xf) {
-    two_byte = true;
-    opcode = *pc++;
-  }
-
-  bool has_modrm = false;         // Is ModR/M byte present?
-  uint8_t hi = opcode >> 4;       // Opcode high nybble.
-  uint8_t lo = opcode & 0b1111;   // Opcode low nybble.
-
-  // From the Intel opcode tables.
-  if (two_byte) {
-    has_modrm = true;   // TODO: all of these?
-  } else if (hi < 4) {
-    has_modrm = lo < 4 || (lo >= 8 && lo <= 0xb);
-  } else if (hi == 6) {
-    has_modrm = lo == 3 || lo == 9 || lo == 0xb;
-  } else if (hi == 8) {
-    has_modrm = lo != 0xd;
-  } else if (hi == 0xc) {
-    has_modrm = lo == 1 || lo == 2 || lo == 6 || lo == 7;
-  } else if (hi == 0xd) {
-    has_modrm = lo < 4;
-  } else if (hi == 0xf) {
-    has_modrm = lo == 6 || lo == 7;
-  }
-
-  if (has_modrm) {
-    uint8_t modrm = *pc++;
-    uint8_t mod = (modrm >> 6) & 0b11;
-    uint8_t reg = (modrm >> 3) & 0b111;
-    switch (mod) {
-      case 0:
-        break;
-      case 1:
-        if (reg == 4) {
-          // SIB + 1 byte displacement.
-          pc += 2;
-        } else {
-          pc += 1;
-        }
-        break;
-      case 2:
-        // SIB + 4 byte displacement.
-        pc += 5;
-        break;
-      case 3:
-        break;
-    }
-  }
-
-  VLOG(signals) << "calculated X86 instruction size is " << (pc - instruction_start);
-  return pc - instruction_start;
+  VLOG(signals) << "calculated X86 instruction size is " << len;
+  return len;
 }
 
 void FaultManager::GetMethodAndReturnPCAndSP(siginfo_t* siginfo, void* context,
                                              mirror::ArtMethod** out_method,
-                                             uintptr_t* out_return_pc, uintptr_t* out_sp) {
+                                             uintptr_t* out_return_pc, uintptr_t* out_sp) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
   *out_sp = static_cast<uintptr_t>(uc->CTX_ESP);
   VLOG(signals) << "sp: " << std::hex << *out_sp;
@@ -180,15 +85,19 @@ void FaultManager::GetMethodAndReturnPCAndSP(siginfo_t* siginfo, void* context,
   }
 
   // In the case of a stack overflow, the stack is not valid and we can't
-  // get the method from the top of the stack.  However it's in EAX.
+  // get the method from the top of the stack.  However it's in EAX(x86)/RDI(x86_64).
   uintptr_t* fault_addr = reinterpret_cast<uintptr_t*>(siginfo->si_addr);
   uintptr_t* overflow_addr = reinterpret_cast<uintptr_t*>(
+#if defined(__x86_64__)
+      reinterpret_cast<uint8_t*>(*out_sp) - GetStackOverflowReservedBytes(kX86_64));
+#else
       reinterpret_cast<uint8_t*>(*out_sp) - GetStackOverflowReservedBytes(kX86));
+#endif
   if (overflow_addr == fault_addr) {
-    *out_method = reinterpret_cast<mirror::ArtMethod*>(uc->CTX_EAX);
+    *out_method = reinterpret_cast<mirror::ArtMethod*>(uc->CTX_METHOD);
   } else {
     // The method is at the top of the stack.
-    *out_method = reinterpret_cast<mirror::ArtMethod*>(reinterpret_cast<uintptr_t*>(*out_sp)[0]);
+    *out_method = (reinterpret_cast<StackReference<mirror::ArtMethod>* >(*out_sp)[0]).AsMirrorPtr();
   }
 
   uint8_t* pc = reinterpret_cast<uint8_t*>(uc->CTX_EIP);
@@ -210,10 +119,10 @@ bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
   // is on the stack at the top address of the current frame.
 
   // Push the return address onto the stack.
-  uint32_t retaddr = reinterpret_cast<uint32_t>(pc + instr_size);
-  uint32_t* next_sp = reinterpret_cast<uint32_t*>(sp - 4);
+  uintptr_t retaddr = reinterpret_cast<uintptr_t>(pc + instr_size);
+  uintptr_t* next_sp = reinterpret_cast<uintptr_t*>(sp - sizeof(uintptr_t));
   *next_sp = retaddr;
-  uc->CTX_ESP = reinterpret_cast<uint32_t>(next_sp);
+  uc->CTX_ESP = reinterpret_cast<uintptr_t>(next_sp);
 
   uc->CTX_EIP = reinterpret_cast<uintptr_t>(art_quick_throw_null_pointer_exception);
   VLOG(signals) << "Generating null pointer exception";
@@ -221,9 +130,14 @@ bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
 }
 
 // A suspend check is done using the following instruction sequence:
+// (x86)
 // 0xf720f1df:         648B058C000000      mov     eax, fs:[0x8c]  ; suspend_trigger
 // .. some intervening instructions.
 // 0xf720f1e6:                   8500      test    eax, [eax]
+// (x86_64)
+// 0x7f579de45d9e: 65488B0425A8000000      movq    rax, gs:[0xa8]  ; suspend_trigger
+// .. some intervening instructions.
+// 0x7f579de45da7:               8500      test    eax, [eax]
 
 // The offset from fs is Thread::ThreadSuspendTriggerOffset().
 // To check for a suspend check, we examine the instructions that caused
@@ -231,11 +145,20 @@ bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
 bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
   // These are the instructions to check for.  The first one is the mov eax, fs:[xxx]
   // where xxx is the offset of the suspend trigger.
+#if defined(__x86_64__)
+  uint32_t trigger = Thread::ThreadSuspendTriggerOffset<8>().Int32Value();
+#else
   uint32_t trigger = Thread::ThreadSuspendTriggerOffset<4>().Int32Value();
+#endif
 
   VLOG(signals) << "Checking for suspension point";
+#if defined(__x86_64__)
+  uint8_t checkinst1[] = {0x65, 0x48, 0x8b, 0x04, 0x25, static_cast<uint8_t>(trigger & 0xff),
+      static_cast<uint8_t>((trigger >> 8) & 0xff), 0, 0};
+#else
   uint8_t checkinst1[] = {0x64, 0x8b, 0x05, static_cast<uint8_t>(trigger & 0xff),
       static_cast<uint8_t>((trigger >> 8) & 0xff), 0, 0};
+#endif
   uint8_t checkinst2[] = {0x85, 0x00};
 
   struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
@@ -270,10 +193,10 @@ bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
     // is on the stack at the top address of the current frame.
 
     // Push the return address onto the stack.
-    uint32_t retaddr = reinterpret_cast<uint32_t>(pc + 2);
-    uint32_t* next_sp = reinterpret_cast<uint32_t*>(sp - 4);
+    uintptr_t retaddr = reinterpret_cast<uintptr_t>(pc + 2);
+    uintptr_t* next_sp = reinterpret_cast<uintptr_t*>(sp - sizeof(uintptr_t));
     *next_sp = retaddr;
-    uc->CTX_ESP = reinterpret_cast<uint32_t>(next_sp);
+    uc->CTX_ESP = reinterpret_cast<uintptr_t>(next_sp);
 
     uc->CTX_EIP = reinterpret_cast<uintptr_t>(art_quick_test_suspend);
 
@@ -302,7 +225,11 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   VLOG(signals) << "checking for stack overflow, sp: " << std::hex << sp <<
     ", fault_addr: " << fault_addr;
 
+#if defined(__x86_64__)
+  uintptr_t overflow_addr = sp - GetStackOverflowReservedBytes(kX86_64);
+#else
   uintptr_t overflow_addr = sp - GetStackOverflowReservedBytes(kX86);
+#endif
 
   Thread* self = Thread::Current();
   uintptr_t pregion = reinterpret_cast<uintptr_t>(self->GetStackEnd()) -

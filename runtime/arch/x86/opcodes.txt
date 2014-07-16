@@ -1,0 +1,958 @@
+#
+# Copyright (C) 2014 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This file contains the data from the Intel instruction set opcode tables.
+# It is processed by buildx86opcodes.py to produce opcodes.cc - a C++ data structure
+# that can be read to determine the length of an Intel instruction.
+
+# These tables follow the same order as the Intel manual.  They are in two halves, appended
+# into one array.  The first half is for the low values of the low nybble (0...7), the second
+# half is for the upper (8...f).
+#
+# This means that opcode 0x00 (add Eb,Gb) is in the first half, while opcode 0x08 (or Eb, Gb) is
+# in the second half.
+
+# If the opcode for an instruction is 'group' it is followed by a group number.  This group
+# is also defined in this file and consists of a set of 8 instructions identified by a group
+# number and opcode.
+
+# The opcode field for each instruction is for docmentation only and is not used unless
+# is it 'group'.  
+
+# An operand with value 'r' is a register.  We don't care which one.
+
+# Table A-2: One-byte Opcode Map
+table a2_one_byte
+
+# 00-F7
+add Eb,Gb
+add Ev,Gv
+add Gb,Ev
+add Gv,Ev
+add r,Ib
+add r,Iv
+push r
+pop r
+
+adc Eb,Gb
+adc Ev,Gv
+adc Gb,Ev
+adc Gv,Ev
+adc r,Ib
+adc r,Iv
+push r
+pop r
+
+and Eb,Gb
+and Ev,Gv
+and Gb,Ev
+and Gv,Ev
+and r,Ib
+and r,Iv
+undefined
+daa
+
+xor Eb,Gb
+xor Ev,Gv
+xor Gb,Ev
+xor Gv,Ev
+xor r,Ib
+xor r,Iv
+undefined
+aaa
+
+inc r
+inc r
+inc r
+inc r
+inc r
+inc r
+inc r
+inc r
+
+push r
+push r
+push r
+push r
+push r
+push r
+push r
+push r
+
+pushad
+popad
+bound Gv,Ma
+arpl Gv,Ed
+undefined
+undefined
+undefined
+undefined
+
+jo Jb
+jno Jb
+jb/nae/c Jb
+jnb/ae/nc Jb
+jz/e Jb
+jnz/ne Jb
+jbe/na Jb
+jnbe/a Jb
+
+group 1
+group 1
+group 1
+group 1
+test Eb,Gb
+test Ev,Gv
+xchg Eb,Gb
+xchg Ev,Gv
+
+xchg r
+xchg r
+xchg r
+xchg r
+xchg r
+xchg r
+xchg r
+xchg r
+
+mov r,Ob
+mov r,Ov
+mov Ob,r
+mov Ov,r
+movs Yb,Xb
+movs Yv,Xv
+cmps Yb,Xb
+cmps Xv,Yv
+
+mov r,Ib
+mov r,Ib
+mov r,Ib
+mov r,Ib
+mov r,Ib
+mov r,Ib
+mov r,Ib
+mov r,Ib
+
+group 2
+group 2
+ret Iw
+ret
+les Gv,Mp
+lds Gv,Mp
+group 11
+group 11
+
+group 2
+group 2
+group 2
+group 2
+aam Ib
+aad Ib
+undefined
+xlat
+
+loopne Jb
+loope Jb
+loop Jb
+jcxz Jb
+in r,Ib
+in r,Ib
+out Ib,r
+out Ib,r
+
+lock
+undefined
+repne
+rep
+hlt
+cmc
+group 3
+group 3
+
+# 08-FF
+or Eb,Gb
+or Ev,Gv
+or Gb,Eb
+or Gv,Ev
+or r,Ib
+or r,Iz
+push r
+undefined
+
+sbb Eb,Gb
+sbb Ev,Gv
+sbb Gb,Eb
+sbb Gv,Ev
+sbb r,Ib
+sbb r,Iz
+push r
+pop r
+
+sub Eb,Gb
+sub Ev,Gv
+sub Gb,Eb
+sub Gv,Ev
+sub r,Ib
+sub r,Iz
+undefined
+das
+
+
+cmp Eb,Gb
+cmp Ev,Gv
+cmp Gb,Eb
+cmp Gv,Ev
+cmp r,Ib
+cmp r,Iz
+undefined
+aas
+
+dec r
+dec r
+dec r
+dec r
+dec r
+dec r
+dec r
+dec r
+
+pop r
+pop r
+pop r
+pop r
+pop r
+pop r
+pop r
+pop r
+
+push Iz
+imul Gv,Ev,Iz
+push Ib
+imul Gv,Ev,Ib
+ins Yb,r
+ins Yz,r
+outs r,Xb
+outs r,Xz
+
+jo Jb
+jno Jb
+jb/cnae Jb
+jae/nb/nc Jb
+je/z Jb
+jne/nz Jb
+jbe/na Jb
+ja/nbe Jb
+
+mov Eb,Gb
+mov Ev,Gv
+mov Gb,Eb
+mov Gv,Ev
+mov Ew,Sw
+lea Gv,M
+mov Sw,Ew
+group 1
+
+cbw/cwde/cdqe
+cwd/cdq/cqo
+call Ap
+fwait
+pushf/d/q Fv
+popf/d/q Fv
+sahf
+lahf
+
+test r,Ib
+test r,Iz
+stos/b Yb,r
+stos/w/d/q Yv,r
+lods/b r,Xb
+lods/w/d/q r,Xv
+scas/b r,Yb
+scas/w/d/q r,Yv
+
+mov r,Iv
+mov r,Iv
+mov r,Iv
+mov r,Iv
+mov r,Iv
+mov r,Iv
+mov r,Iv
+mov r,Iv
+
+enter Iw,Ib
+leave
+retf Iw
+retf
+int3
+int Ib
+into
+iret/d/q
+
+esc
+esc
+esc
+esc
+esc
+esc
+esc
+esc
+
+call Jz
+jmp Jz
+jmp Ap
+jmp Jb
+in r,r
+in r,r
+out r,r
+out r,r
+
+clc
+stc
+cli
+sti
+cld
+std
+group 4
+group 5
+
+end
+
+# Table A-3: Two-byte Opcode Map
+# Note that the manual has the tables in a funny order.  To match the one-byte
+# table we need to reorder the tables as 1,3,2,4.  We need the high nybbles adjacent with
+# the low nybbles split.
+
+table a3_two_byte
+
+# 00-77
+group 6
+group 7
+lar Gv,Ew
+lsl Gv,Ew
+undefined
+syscall
+clts
+sysret
+
+vmovups Vps,Wps
+vmovups Wps,Vps
+vmovlps Vps,Mq
+vmovlps Mq,Vps
+vunpcklps Vps,Wq
+vunpckhps Vps,Wq
+vmovhps Vps,Mq
+vmovhps Mq,Vps
+
+mov Rd,Cd
+mov Rd,Dd
+mov Cd,Rd
+mov Dd,Rd
+undefined
+undefined
+undefined
+undefined
+
+wrmsr
+rdtsc
+rdmsr
+rdpmc
+sysenter
+sysexit
+undefined
+getsec
+
+cmovo Gv,Ev
+cmovno Gv,Ev
+cmovb Gv,Ev
+cmovnb Gv,Ev
+cmovz Gv,Ev
+cmovnz Gv,Ev
+cmovbe Gv,Ev
+cmovnbe Gv,Ev
+
+
+vmovmskps Gd,VRps
+vsqrtps Vps,Wps
+vrsqrtps Vps,Wps
+vrcpps Vps,Wps
+vandps Vps,Wps
+vandnps Vps,Wps
+vorps Vps,Wps
+vxorps Vps,Wps
+
+
+punpcklbw Pq,Qd
+punpcklwd Pq,Qd
+punpckldq Pq,Qd
+packsswb Pq,Qd
+pcmpgtb Pq,Qd
+pcmpgtw Pq,Qd
+pcmpgtd Pq,Qd
+packuswb Pq,Qd
+
+pshufw Pq,Qd,Ib
+group 12
+group 13
+group 14
+pcmpeqb Pq,Qd
+pcmpeqw Pq,Qd
+pcmpeqd Pq,Qd
+emms
+
+# 80-F7
+jo Jz
+jno Jz
+jb/cnae Jz
+jae/nb/nc Jz
+je/z Jz
+jne/nz Jz
+jbe/na Jz
+ja/nbe Jz
+
+seto Eb
+setno Eb
+setb/cnae Eb
+setae/nb/nc Eb
+sete/z Eb
+setne/nEb
+setbe/na Eb
+seta/nbe Eb
+
+push r
+pop r
+cpuid
+bt Ev,Gv
+shld Ev,Gv,Ib
+shld Ev,Gv,r
+undefined
+undefined
+
+cmpxchg Eb,Gb
+cmpxchg Ev,Gv
+lss Gz,Mp
+btr Ev,Gv
+lfs Gz,Mp
+lgs Gz,Mp
+movzx Gv,Eb
+movzx Gv,Ew
+
+xadd Eb,Gb
+xadd Ev,Gv
+vcmpps Vps,Wps,Ib
+movnti Md,Gd
+pinsrw Pq,Ew,Ib
+pextrw Gd,PRq,Ib
+vshufps Vps,Wps,Ib
+group 9
+
+undefined
+psrlw Pq,Qd
+psrld Pq,Qd
+psrlq Pq,Qd
+paddq Pq,Qd
+pmullw Pq,Qd
+undefined
+pmovmskb Pq,PRd
+
+pavgb Pq,Qd
+psraw Pq,Qd
+psrad Pq,Qd
+pavgw Pq,Qd
+pmulhuw Pq,Qd
+pmulhw Pq,Qd
+undefined
+movntq Mq,Pq
+
+undefined
+psllw Pq,Qd
+pslld Pq,Qd
+psllq Pq,Qd
+pmuludq Pq,Qd
+pmaddwd Pq,Qd
+psadbw Pq,Qd
+maskmovq Pq,PRd
+
+# 08-7F
+invd
+wbinvd
+undefined
+ud2
+undefined
+group 17
+undefined
+undefined
+
+group 16
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+nop
+
+vmovaps Vps,Wps
+vmovaps Wps,Vps
+cvtpi2ps Vps,Qd
+vmovntps Mdq,Vps
+cvttps2pi Pq,Wps
+cvtps2pi Pq,Wps
+vucomiss Vss,Wss
+vcomiss Vps,Wps
+
+3byte
+undefined
+3byte
+undefined
+undefined
+undefined
+undefined
+undefined
+
+cmovs Gv,Ev
+cmovns Gv,Ev
+cmovp Gv,Ev
+cmovnp Gv,Ev
+cmovl Gv,Ev
+cmovnl Gv,Ev
+cmovle Gv,Ev
+cmovnle Gv,Ev
+
+vaddps Vps,Wps
+vmulps Vps,Wps
+vcvtps2pd Vps,Wps
+vcvtdq2ps Vps,Wps
+vsubps Vps,Wps
+vminps Vps,Wps
+vdivps Vps,Wps
+vmaxps Vps,Wps
+
+punpckhbw Pq,Qd
+punpckhwd Pq,Qd
+punpckhdq Pq,Qd
+packssdw Pq,Qd
+undefined
+undefined
+movd/q Pq,Ed
+movq Pq,Qd
+
+vmread Ey,Gy
+vmwrite Gy,Ey
+undefined
+undefined
+undefined
+undefined
+movd/q Ed,Pd
+movq Qd,Pq
+
+# 88-FF
+js Jz
+jns Jz
+jp/pe Jz
+jnp/po Jz
+jl/nge Jz
+jnl/ge Jz
+jle/ng Jz
+jnle/g Jz
+
+sets Eb
+setns Eb
+setp/pe Eb
+setnp/po Eb
+setl/nge Eb
+setl/ge/n Eb
+setle/ng Eb
+setle/g Eb
+
+push r
+pop r
+rsm
+bts Ev,Gv
+shrd Ev,Gv,Ib
+shrd Ev,Gv,r
+group 15
+imul Gv,Ev
+
+jmpe
+group 10
+group 8
+btc Ev,Gv
+bsf Gv,Ev
+bsr Gv,Ev
+movsx Gv,Eb
+movsx Gv,Ew
+
+bswap r,r
+bswap r,r
+bswap r,r
+bswap r,r
+bswap r,r
+bswap r,r
+bswap r,r
+bswap r,r
+
+psubusb Pq,Qd
+psubusw Pq,Qd
+pminub Pq,Qd
+pand Pq,Qd
+paddusb Pq,Qd
+paddusw Pq,Qd
+pmaxub Pq,Qd
+pandn Pq,Qd
+
+
+psubsb Pq,Qd
+psubsw Pq,Qd
+pminsw Pq,Qd
+por Pq,Qd
+paddsb Pq,Qd
+paddsw Pq,Qd
+pmaxsw Pq,Qd
+pxor Pq,Qd
+
+
+psubb Pq,Qd
+psubw Pq,Qd
+psubd Pq,Qd
+psubq Pq,Qd
+paddb Pq,Qd
+paddw Pq,Qd
+paddd Pq,Qd
+undefined
+
+end
+
+
+# Now for the groups.  Each group has an id and an opcode.  It contains exactly 8 instructions
+# in the same form as the opcode tables.
+
+# For example, 'group 1 80' refers to Table A-2 row 8 column 0 (Immediate Grp 1 (Eb,Ib)).
+
+group 1 80
+add Eb,Ib
+or Eb,Ib
+adc Eb,Ib
+sbb Eb,Ib
+and Eb,Ib
+sub Eb,Ib
+xor Eb,Ib
+cmp Eb,Ib
+
+group 1 81
+add Ev,Iz
+or Ev,Iz
+adc Ev,Iz
+sbb Ev,Iz
+and Ev,Iz
+sub Ev,Iz
+xor Ev,Iz
+cmp Ev,Iz
+
+group 1 82
+add Eb,Ib
+or Eb,Ib
+adc Eb,Ib
+sbb Eb,Ib
+and Eb,Ib
+sub Eb,Ib
+xor Eb,Ib
+cmp Eb,Ib
+
+group 1 83
+add Ev,Ib
+or Ev,Ib
+adc Ev,Ib
+sbb Ev,Ib
+and Ev,Ib
+sub Ev,Ib
+xor Ev,Ib
+cmp Ev,Ib
+
+
+group 1 8f
+pop
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+
+group 2 c0
+rol Eb,Ib
+ror Eb,Ib
+rcl Eb,Ib
+rcr Eb,Ib
+shl Eb,Ib
+shr Eb,Ib
+undefined
+sar Eb,Ib
+
+group 2 c1
+rol Ev,Ib
+ror Ev,Ib
+rcl Ev,Ib
+rcr Ev,Ib
+shl Ev,Ib
+shr Ev,Ib
+undefined
+sar Ev,Ib
+
+group 2 d0
+rol Eb,1
+ror Eb,1
+rcl Eb,1
+rcr Eb,1
+shl Eb,1
+shr Eb,1
+undefined
+sar Eb,1
+
+group 2 d1
+rol Ev,1
+ror Ev,1
+rcl Ev,1
+rcr Ev,1
+shl Ev,1
+shr Ev,1
+undefined
+sar Ev,1
+
+group 2 d2
+rol Eb,r
+ror Eb,r
+rcl Eb,r
+rcr Eb,r
+shl Eb,r
+shr Eb,r
+undefined
+sar Eb,r
+
+group 2 d3
+rol Ev,r
+ror Ev,r
+rcl Ev,r
+rcr Ev,r
+shl Ev,r
+shr Ev,r
+undefined
+sar Ev,r
+
+group 3 f6
+test Eb,Ib
+undefined
+not Eb
+neg Eb
+mul Eb
+imul Eb
+div Eb
+idiv Eb
+
+group 3 f7
+test Ev,Iz
+undefined
+not Ev
+neg Ev
+mul Ev
+imul Ev
+div Ev
+idiv Ev
+
+group 4 fe
+inc Eb
+dec Eb
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+
+group 5 ff
+inc Ev
+dec Ev
+call Ev
+call Ep
+jmp Ev
+jmp Ep
+push Ev
+undefined
+
+group 6 0f00
+sldt Mw,Rv
+str Mw,Rv
+lldt Ew
+ltr Ew
+verr Ew
+verw Ew
+undefined
+undefined
+
+group 7 0f01
+sgdt Ms
+sidt Ms
+lgdt Ms
+lidt Ms
+smsw Mw
+undefined
+lmsw Ew
+invlpg Mb
+
+group 8 0fba
+undefined
+undefined
+undefined
+undefined
+bt Ev,Ib
+bts Ev,Ib
+btr Ev,Ib
+btc Ev,Ib
+
+group 9 0fc7
+undefined
+cmpxchg8b Mq
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+
+group 10 0fb9
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+
+group 11 c6
+mov Eb,Ib
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+
+group 11 c7
+mov Ev,Iz
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+undefined
+
+group 12 0f71
+undefined
+undefined
+psrlw PRq,Ib
+undefined
+psraw PRq,Ib
+undefined
+psllw PRq,Ib
+undefined
+
+group 12 660f71
+undefined
+undefined
+psrlw VRdq,Ib
+undefined
+psraw VRdq,Ib
+undefined
+psllw VRdq,Ib
+undefined
+
+group 13 0f72
+undefined
+undefined
+psrld PRq,Ib
+undefined
+psrad PRq,Ib
+undefined
+pslld PRq,Ib
+undefined
+
+
+group 13 660f72
+undefined
+undefined
+psrld VRdq,Ib
+undefined
+psrad VRdq,Ib
+undefined
+pslld VRdq,Ib
+undefined
+
+
+group 14 0f73
+undefined
+undefined
+psrlq PRq,Ib
+undefined
+undefined
+undefined
+psllq PRq,Ib
+undefined
+
+group 14 660f73
+undefined
+undefined
+psrlq VRdq,Ib
+psrldq VRdq,Ib
+undefined
+undefined
+psllq VRdq,Ib
+pslldq VRdq,Ib
+
+group 15 0fae
+fxsave M
+fsrstor M
+ldmxcsr Md
+stmxcsr Md
+undefined
+lfence
+mfence
+sfence
+
+group 16 0f18
+prefetch
+prefetch
+prefetch
+prefetch
+nop
+nop
+nop
+nop
+
+
+group 17 0f0d
+prefetch
+prefetch
+undefined
+prefetch
+undefined
+undefined
+undefined
+undefined
+
+
+
