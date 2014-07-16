@@ -93,7 +93,7 @@ class PatchOat {
   // Walks through the old image and patches the mmap'd copy of it to the new offset. It does not
   // change the heap.
   class PatchVisitor {
-  public:
+   public:
     PatchVisitor(PatchOat* patcher, mirror::Object* copy) : patcher_(patcher), copy_(copy) {}
     ~PatchVisitor() {}
     void operator() (mirror::Object* obj, MemberOffset off, bool b) const
@@ -101,9 +101,22 @@ class PatchOat {
     // For reference classes.
     void operator() (mirror::Class* cls, mirror::Reference* ref) const
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::heap_bitmap_lock_);
-  private:
+   protected:
     PatchOat* patcher_;
     mirror::Object* copy_;
+  };
+
+  // Walks through the old image and patches the mmap'd copy of it to the new offset. It does not
+  // change the heap.
+  class PatchClassVisitor FINAL : public PatchVisitor {
+   public:
+    PatchClassVisitor(PatchOat* patcher, mirror::Object* copy) : PatchVisitor(patcher, copy) {}
+    ~PatchClassVisitor() {}
+    void operator() (mirror::Object* obj, MemberOffset off, bool b) const
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::heap_bitmap_lock_);
+    // For reference classes.
+    void operator() (mirror::Class* cls, mirror::Reference* ref) const
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::heap_bitmap_lock_);
   };
 
   // The elf file we are patching.

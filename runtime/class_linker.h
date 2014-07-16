@@ -238,6 +238,9 @@ class ClassLinker {
   void VisitClasses(ClassVisitor* visitor, void* arg)
       LOCKS_EXCLUDED(dex_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void VisitClassesTableLockHeld(ClassVisitor* visitor, void* arg)
+      LOCKS_EXCLUDED(dex_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   // Less efficient variant of VisitClasses that doesn't hold the classlinker_classes_lock_
   // when calling the visitor.
   void VisitClassesWithoutClassesLock(ClassVisitor* visitor, void* arg)
