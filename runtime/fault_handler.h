@@ -43,8 +43,12 @@ class FaultManager {
   void HandleFault(int sig, siginfo_t* info, void* context);
   void AddHandler(FaultHandler* handler, bool generated_code);
   void RemoveHandler(FaultHandler* handler);
+
+  // Note that we following two functions are called in the context of a signal handler and
+  // therefore we cannot perform thread safety analysis on them.
   void GetMethodAndReturnPCAndSP(siginfo_t* siginfo, void* context, mirror::ArtMethod** out_method,
-                                 uintptr_t* out_return_pc, uintptr_t* out_sp);
+                                 uintptr_t* out_return_pc, uintptr_t* out_sp)
+                                 NO_THREAD_SAFETY_ANALYSIS;
   bool IsInGeneratedCode(siginfo_t* siginfo, void *context, bool check_dex_pc)
                          NO_THREAD_SAFETY_ANALYSIS;
 
