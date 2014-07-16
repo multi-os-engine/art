@@ -206,6 +206,12 @@ void X86Mir2Lir::OpRegCopyWide(RegStorage r_dest, RegStorage r_src) {
   }
 }
 
+void X86Mir2Lir::GenSelect(RegStorage left_op, RegStorage right_op, ConditionCode code,
+                           uint32_t true_val, uint32_t false_val, RegStorage rs_dest,
+                           int dest_reg_class) {
+  LOG(FATAL) << "GenSelect(left_op, right_op, ...) unimplemented. Do not use for x86!";
+}
+
 void X86Mir2Lir::GenSelect(BasicBlock* bb, MIR* mir) {
   RegLocation rl_result;
   RegLocation rl_src = mir_graph_->GetSrc(mir, 0);

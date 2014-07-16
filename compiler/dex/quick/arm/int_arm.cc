@@ -203,6 +203,18 @@ void ArmMir2Lir::GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
   OpCmpImmBranch(ccode, low_reg, val_lo, taken);
 }
 
+void ArmMir2Lir::GenSelect(RegStorage left_op, RegStorage right_op, ConditionCode code,
+                           uint32_t true_val, uint32_t false_val, RegStorage rl_dest,
+                           int dest_reg_class) {
+  OpRegReg(kOpCmp, left_op, right_op);  // Same?
+  LIR* it = OpIT(code, "E");   // if-convert the test
+  DCHECK(InexpensiveConstantInt(true_val));
+  DCHECK(InexpensiveConstantInt(false_val));
+  LoadConstant(rl_dest, true_val);      // .eq case - load true
+  LoadConstant(rl_dest, false_val);     // .eq case - load true
+  OpEndIT(it);
+}
+
 void ArmMir2Lir::GenSelect(BasicBlock* bb, MIR* mir) {
   RegLocation rl_result;
   RegLocation rl_src = mir_graph_->GetSrc(mir, 0);
