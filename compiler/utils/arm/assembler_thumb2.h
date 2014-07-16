@@ -29,6 +29,8 @@
 namespace art {
 namespace arm {
 
+// TODO: Remove when/if the optimizing compiler relocates PC descriptors.
+static constexpr bool kForce32BitBranches = true;
 
 class Thumb2Assembler FINAL : public ArmAssembler {
  public:
@@ -605,6 +607,9 @@ class Thumb2Assembler FINAL : public ArmAssembler {
    private:
     // Calculate the size of the branch instruction based on its type and offset.
     Size CalculateSize() const {
+      if (kForce32BitBranches) {
+        return k32Bit;
+      }
       if (target_ == kUnresolved) {
         if (assembler_->IsForced32Bit() && (type_ == kUnconditional || type_ == kConditional)) {
           return k32Bit;

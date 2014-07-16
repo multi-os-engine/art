@@ -948,9 +948,11 @@ void InstructionCodeGeneratorARM::VisitCompare(HCompare* compare) {
              ShifterOperand(right.AsRegisterPairHigh()));  // Signed compare.
       __ b(&less, LT);
       __ b(&greater, GT);
+      // Do LoadImmediate before any `cmp`, as LoadImmediate might affect
+      // the status flags.
+      __ LoadImmediate(output, 0);
       __ cmp(left.AsRegisterPairLow(),
              ShifterOperand(right.AsRegisterPairLow()));  // Unsigned compare.
-      __ LoadImmediate(output, 0);
       __ b(&done, EQ);
       __ b(&less, CC);
 
