@@ -405,6 +405,10 @@ class Runtime {
   }
   void EnterTransactionMode(Transaction* transaction);
   void ExitTransactionMode();
+  void RecordWriteField8(mirror::Object* obj, MemberOffset field_offset, uint8_t value,
+                         bool is_volatile) const;
+  void RecordWriteField16(mirror::Object* obj, MemberOffset field_offset, uint16_t value,
+                          bool is_volatile) const;
   void RecordWriteField32(mirror::Object* obj, MemberOffset field_offset, uint32_t value,
                           bool is_volatile) const;
   void RecordWriteField64(mirror::Object* obj, MemberOffset field_offset, uint64_t value,

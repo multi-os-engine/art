@@ -19,6 +19,7 @@
 
 #include "object_reference.h"
 #include "offsets.h"
+#include "runtime.h"
 #include "verify_object.h"
 
 namespace art {
@@ -280,6 +281,125 @@ class MANAGED LOCKABLE Object {
       VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool CasFieldStrongSequentiallyConsistent32(MemberOffset field_offset, int32_t old_value,
                                               int32_t new_value) ALWAYS_INLINE
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kIsVolatile = false>
+  int8_t GetField8(MemberOffset field_offset)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (kVerifyFlags & kVerifyThis) {
+      VerifyObject(this);
+    }
+    const byte* raw_addr = reinterpret_cast<const byte*>(this) + field_offset.Int32Value();
+    const int8_t* addr = reinterpret_cast<const int8_t*>(raw_addr);
+    if (kIsVolatile) {
+      return reinterpret_cast<const Atomic<int8_t>*>(addr)->LoadSequentiallyConsistent();
+    } else {
+      return reinterpret_cast<const Atomic<int8_t>*>(addr)->LoadJavaData();
+    }
+  }
+
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  int8_t GetField8Volatile(MemberOffset field_offset)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetField8<kVerifyFlags, true>(field_offset);
+  }
+
+  template<bool kTransactionActive, bool kCheckTransaction = true,
+      VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kIsVolatile = false>
+  void SetField8(MemberOffset field_offset, int8_t new_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (kCheckTransaction) {
+      DCHECK_EQ(kTransactionActive, Runtime::Current()->IsActiveTransaction());
+    }
+    if (kTransactionActive) {
+      Runtime::Current()->RecordWriteField8(this, field_offset,
+                                             GetField8<kVerifyFlags, kIsVolatile>(field_offset),
+                                             kIsVolatile);
+    }
+    if (kVerifyFlags & kVerifyThis) {
+      VerifyObject(this);
+    }
+    byte* raw_addr = reinterpret_cast<byte*>(this) + field_offset.Int32Value();
+    int8_t* word_addr = reinterpret_cast<int8_t*>(raw_addr);
+    if (kIsVolatile) {
+      reinterpret_cast<Atomic<int8_t>*>(word_addr)->StoreSequentiallyConsistent(new_value);
+    } else {
+      reinterpret_cast<Atomic<int8_t>*>(word_addr)->StoreJavaData(new_value);
+    }
+  }
+
+  template<bool kTransactionActive, bool kCheckTransaction = true,
+      VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  void SetField8Volatile(MemberOffset field_offset, int8_t new_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return SetField8<kTransactionActive, kCheckTransaction, kVerifyFlags, true>(field_offset, new_value);
+  }
+
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kIsVolatile = false>
+  int16_t GetField16(MemberOffset field_offset)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (kVerifyFlags & kVerifyThis) {
+      VerifyObject(this);
+    }
+    const byte* raw_addr = reinterpret_cast<const byte*>(this) + field_offset.Int32Value();
+    const int16_t* addr = reinterpret_cast<const int16_t*>(raw_addr);
+    if (kIsVolatile) {
+      return reinterpret_cast<const Atomic<int16_t>*>(addr)->LoadSequentiallyConsistent();
+    } else {
+      return reinterpret_cast<const Atomic<int16_t>*>(addr)->LoadJavaData();
+    }
+  }
+
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  int16_t GetField16Volatile(MemberOffset field_offset)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetField16<kVerifyFlags, true>(field_offset);
+  }
+
+  template<bool kTransactionActive, bool kCheckTransaction = true,
+      VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kIsVolatile = false>
+  void SetField16(MemberOffset field_offset, int16_t new_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (kCheckTransaction) {
+      DCHECK_EQ(kTransactionActive, Runtime::Current()->IsActiveTransaction());
+    }
+    if (kTransactionActive) {
+      Runtime::Current()->RecordWriteField16(this, field_offset,
+                                             GetField16<kVerifyFlags, kIsVolatile>(field_offset),
+                                             kIsVolatile);
+    }
+    if (kVerifyFlags & kVerifyThis) {
+      VerifyObject(this);
+    }
+    byte* raw_addr = reinterpret_cast<byte*>(this) + field_offset.Int32Value();
+    int16_t* halfword_addr = reinterpret_cast<int16_t*>(raw_addr);
+    if (kIsVolatile) {
+      reinterpret_cast<Atomic<int16_t>*>(halfword_addr)->StoreSequentiallyConsistent(new_value);
+    } else {
+      reinterpret_cast<Atomic<int16_t>*>(halfword_addr)->StoreJavaData(new_value);
+    }
+  }
+
+  template<bool kTransactionActive, bool kCheckTransaction = true,
+      VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  void SetField16Volatile(MemberOffset field_offset, int16_t new_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return SetField16<kTransactionActive, kCheckTransaction, kVerifyFlags, true>(field_offset, new_value);
+  }
+
+  template<bool kTransactionActive, bool kCheckTransaction = true,
+      VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  bool CasFieldWeakSequentiallyConsistent16(MemberOffset field_offset, int16_t old_value,
+                                            int16_t new_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    LOG(FATAL) << "Not implemented";
+    return false;
+  }
+
+  template<bool kTransactionActive, bool kCheckTransaction = true,
+      VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  bool CasFieldStrongSequentiallyConsistent16(MemberOffset field_offset, int16_t old_value,
+                                              int16_t new_value)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kIsVolatile = false>
