@@ -56,8 +56,8 @@ void Arm64Mir2Lir::GenArithOpFloat(Instruction::Code opcode, RegLocation rl_dest
     default:
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
-  rl_src1 = LoadValue(rl_src1, kFPReg);
-  rl_src2 = LoadValue(rl_src2, kFPReg);
+  rl_src1 = LoadValue32(rl_src1, kFPReg);
+  rl_src2 = LoadValue32(rl_src2, kFPReg);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR3(op, rl_result.reg.GetReg(), rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   StoreValue(rl_dest, rl_result);
@@ -91,8 +91,8 @@ void Arm64Mir2Lir::GenArithOpDouble(Instruction::Code opcode,
       {
         ThreadOffset<8> helper_offset = QUICK_ENTRYPOINT_OFFSET(8, pFmod);
         RegStorage r_tgt = CallHelperSetup(helper_offset);
-        LoadValueDirectWideFixed(rl_src1, rs_d0);
-        LoadValueDirectWideFixed(rl_src2, rs_d1);
+        LoadValueDirect64Fixed(rl_src1, rs_d0);
+        LoadValueDirect64Fixed(rl_src2, rs_d1);
         ClobberCallerSave();
         CallHelper(r_tgt, helper_offset, false);
       }
@@ -106,9 +106,9 @@ void Arm64Mir2Lir::GenArithOpDouble(Instruction::Code opcode,
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
 
-  rl_src1 = LoadValueWide(rl_src1, kFPReg);
+  rl_src1 = LoadValue64(rl_src1, kFPReg);
   DCHECK(rl_src1.wide);
-  rl_src2 = LoadValueWide(rl_src2, kFPReg);
+  rl_src2 = LoadValue64(rl_src2, kFPReg);
   DCHECK(rl_src2.wide);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   DCHECK(rl_dest.wide);
@@ -184,9 +184,9 @@ void Arm64Mir2Lir::GenConversion(Instruction::Code opcode,
   DCHECK_NE(op, kA64Brk1d);
 
   if (rl_src.wide) {
-    rl_src = LoadValueWide(rl_src, src_reg_class);
+    rl_src = LoadValue64(rl_src, src_reg_class);
   } else {
-    rl_src = LoadValue(rl_src, src_reg_class);
+    rl_src = LoadValue32(rl_src, src_reg_class);
   }
 
   rl_result = EvalLoc(rl_dest, dst_reg_class, true);
@@ -207,14 +207,14 @@ void Arm64Mir2Lir::GenFusedFPCmpBranch(BasicBlock* bb, MIR* mir, bool gt_bias,
   if (is_double) {
     rl_src1 = mir_graph_->GetSrcWide(mir, 0);
     rl_src2 = mir_graph_->GetSrcWide(mir, 2);
-    rl_src1 = LoadValueWide(rl_src1, kFPReg);
-    rl_src2 = LoadValueWide(rl_src2, kFPReg);
+    rl_src1 = LoadValue64(rl_src1, kFPReg);
+    rl_src2 = LoadValue64(rl_src2, kFPReg);
     NewLIR2(FWIDE(kA64Fcmp2ff), rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   } else {
     rl_src1 = mir_graph_->GetSrc(mir, 0);
     rl_src2 = mir_graph_->GetSrc(mir, 1);
-    rl_src1 = LoadValue(rl_src1, kFPReg);
-    rl_src2 = LoadValue(rl_src2, kFPReg);
+    rl_src1 = LoadValue32(rl_src1, kFPReg);
+    rl_src2 = LoadValue32(rl_src2, kFPReg);
     NewLIR2(kA64Fcmp2ff, rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   }
   ConditionCode ccode = mir->meta.ccode;
@@ -276,16 +276,16 @@ void Arm64Mir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
   if (is_double) {
-    rl_src1 = LoadValueWide(rl_src1, kFPReg);
-    rl_src2 = LoadValueWide(rl_src2, kFPReg);
+    rl_src1 = LoadValue64(rl_src1, kFPReg);
+    rl_src2 = LoadValue64(rl_src2, kFPReg);
     // In case result vreg is also a src vreg, break association to avoid useless copy by EvalLoc()
     ClobberSReg(rl_dest.s_reg_low);
     rl_result = EvalLoc(rl_dest, kCoreReg, true);
     LoadConstant(rl_result.reg, default_result);
     NewLIR2(FWIDE(kA64Fcmp2ff), rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   } else {
-    rl_src1 = LoadValue(rl_src1, kFPReg);
-    rl_src2 = LoadValue(rl_src2, kFPReg);
+    rl_src1 = LoadValue32(rl_src1, kFPReg);
+    rl_src2 = LoadValue32(rl_src2, kFPReg);
     // In case result vreg is also a srcvreg, break association to avoid useless copy by EvalLoc()
     ClobberSReg(rl_dest.s_reg_low);
     rl_result = EvalLoc(rl_dest, kCoreReg, true);
@@ -309,7 +309,7 @@ void Arm64Mir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
 
 void Arm64Mir2Lir::GenNegFloat(RegLocation rl_dest, RegLocation rl_src) {
   RegLocation rl_result;
-  rl_src = LoadValue(rl_src, kFPReg);
+  rl_src = LoadValue32(rl_src, kFPReg);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR2(kA64Fneg2ff, rl_result.reg.GetReg(), rl_src.reg.GetReg());
   StoreValue(rl_dest, rl_result);
@@ -317,7 +317,7 @@ void Arm64Mir2Lir::GenNegFloat(RegLocation rl_dest, RegLocation rl_src) {
 
 void Arm64Mir2Lir::GenNegDouble(RegLocation rl_dest, RegLocation rl_src) {
   RegLocation rl_result;
-  rl_src = LoadValueWide(rl_src, kFPReg);
+  rl_src = LoadValue64(rl_src, kFPReg);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR2(FWIDE(kA64Fneg2ff), rl_result.reg.GetReg(), rl_src.reg.GetReg());
   StoreValueWide(rl_dest, rl_result);
@@ -325,7 +325,7 @@ void Arm64Mir2Lir::GenNegDouble(RegLocation rl_dest, RegLocation rl_src) {
 
 bool Arm64Mir2Lir::GenInlinedAbsDouble(CallInfo* info) {
   RegLocation rl_src = info->args[0];
-  rl_src = LoadValueWide(rl_src, kCoreReg);
+  rl_src = LoadValue64(rl_src, kCoreReg);
   RegLocation rl_dest = InlineTargetWide(info);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   NewLIR4(WIDE(kA64Ubfm4rrdd), rl_result.reg.GetReg(), rl_src.reg.GetReg(), 0, 62);
@@ -336,7 +336,7 @@ bool Arm64Mir2Lir::GenInlinedAbsDouble(CallInfo* info) {
 bool Arm64Mir2Lir::GenInlinedSqrt(CallInfo* info) {
   RegLocation rl_src = info->args[0];
   RegLocation rl_dest = InlineTargetWide(info);  // double place for result
-  rl_src = LoadValueWide(rl_src, kFPReg);
+  rl_src = LoadValue64(rl_src, kFPReg);
   RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR2(FWIDE(kA64Fsqrt2ff), rl_result.reg.GetReg(), rl_src.reg.GetReg());
   StoreValueWide(rl_dest, rl_result);
@@ -349,8 +349,8 @@ bool Arm64Mir2Lir::GenInlinedMinMaxFP(CallInfo* info, bool is_min, bool is_doubl
   ArmOpcode wide = (is_double) ? FWIDE(0) : FUNWIDE(0);
   RegLocation rl_src1 = info->args[0];
   RegLocation rl_src2 = (is_double) ? info->args[2] : info->args[1];
-  rl_src1 = (is_double) ? LoadValueWide(rl_src1, kFPReg) : LoadValue(rl_src1, kFPReg);
-  rl_src2 = (is_double) ? LoadValueWide(rl_src2, kFPReg) : LoadValue(rl_src2, kFPReg);
+  rl_src1 = (is_double) ? LoadValue64(rl_src1, kFPReg) : LoadValue32(rl_src1, kFPReg);
+  rl_src2 = (is_double) ? LoadValue64(rl_src2, kFPReg) : LoadValue32(rl_src2, kFPReg);
   RegLocation rl_dest = (is_double) ? InlineTargetWide(info) : InlineTarget(info);
   RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR3(op | wide, rl_result.reg.GetReg(), rl_src1.reg.GetReg(), rl_src2.reg.GetReg());

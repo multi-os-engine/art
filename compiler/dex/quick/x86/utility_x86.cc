@@ -577,9 +577,9 @@ LIR* X86Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
         // Address the start of the method
         RegLocation rl_method = mir_graph_->GetRegLocation(base_of_code_->s_reg_low);
         if (rl_method.wide) {
-          rl_method = LoadValueWide(rl_method, kCoreReg);
+          rl_method = LoadValue64(rl_method, kCoreReg);
         } else {
-          rl_method = LoadValue(rl_method, kCoreReg);
+          rl_method = LoadValue32(rl_method, kCoreReg);
         }
 
         // Load the proper value from the literal area.
@@ -660,17 +660,13 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
       }
       DCHECK_EQ((displacement & 0x3), 0);
       break;
+    case k16:
     case kUnsignedHalf:
-      opcode = is_array ? kX86Movzx16RA : kX86Movzx16RM;
-      DCHECK_EQ((displacement & 0x1), 0);
-      break;
     case kSignedHalf:
       opcode = is_array ? kX86Movsx16RA : kX86Movsx16RM;
       DCHECK_EQ((displacement & 0x1), 0);
       break;
     case kUnsignedByte:
-      opcode = is_array ? kX86Movzx8RA : kX86Movzx8RM;
-      break;
     case kSignedByte:
       opcode = is_array ? kX86Movsx8RA : kX86Movsx8RM;
       break;
@@ -807,6 +803,7 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int
       }
       DCHECK_EQ((displacement & 0x3), 0);
       break;
+    case k16:
     case kUnsignedHalf:
     case kSignedHalf:
       opcode = is_array ? kX86Mov16AR : kX86Mov16MR;

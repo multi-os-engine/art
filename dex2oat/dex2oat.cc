@@ -792,7 +792,8 @@ static int dex2oat(int argc, char** argv) {
   uintptr_t image_base = 0;
   std::string android_root;
   std::vector<const char*> runtime_args;
-  int thread_count = sysconf(_SC_NPROCESSORS_CONF);
+  // int thread_count = sysconf(_SC_NPROCESSORS_CONF);
+  int thread_count = 1;
   Compiler::Kind compiler_kind = kUsePortableCompiler
       ? Compiler::kPortable
       : Compiler::kQuick;

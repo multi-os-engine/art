@@ -59,7 +59,7 @@ void ArmMir2Lir::GenSparseSwitch(MIR* mir, uint32_t table_offset,
   switch_tables_.Insert(tab_rec);
 
   // Get the switch value
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   RegStorage r_base = AllocTemp();
   /* Allocate key and disp temps */
   RegStorage r_key = AllocTemp();
@@ -109,7 +109,7 @@ void ArmMir2Lir::GenPackedSwitch(MIR* mir, uint32_t table_offset,
   switch_tables_.Insert(tab_rec);
 
   // Get the switch value
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   RegStorage table_base = AllocTemp();
   // Materialize a pointer to the switch table
   NewLIR3(kThumb2Adr, table_base.GetReg(), 0, WrapPointer(tab_rec));
@@ -164,7 +164,7 @@ void ArmMir2Lir::GenFillArrayData(uint32_t table_offset, RegLocation rl_src) {
 
   // Making a call - use explicit registers
   FlushAllRegs();   /* Everything to home location */
-  LoadValueDirectFixed(rl_src, rs_r0);
+  LoadValueDirect32Fixed(rl_src, rs_r0);
   LoadWordDisp(rs_rARM_SELF, QUICK_ENTRYPOINT_OFFSET(4, pHandleFillArrayData).Int32Value(),
                rs_rARM_LR);
   // Materialize a pointer to the fill data image
@@ -181,7 +181,7 @@ void ArmMir2Lir::GenFillArrayData(uint32_t table_offset, RegLocation rl_src) {
 void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
   FlushAllRegs();
   // FIXME: need separate LoadValues for object references.
-  LoadValueDirectFixed(rl_src, rs_r0);  // Get obj
+  LoadValueDirect32Fixed(rl_src, rs_r0);  // Get obj
   LockCallTemps();  // Prepare for explicit register usage
   constexpr bool kArchVariantHasGoodBranchPredictor = false;  // TODO: true if cortex-A15.
   if (kArchVariantHasGoodBranchPredictor) {
@@ -251,7 +251,7 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
  */
 void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
   FlushAllRegs();
-  LoadValueDirectFixed(rl_src, rs_r0);  // Get obj
+  LoadValueDirect32Fixed(rl_src, rs_r0);  // Get obj
   LockCallTemps();  // Prepare for explicit register usage
   LIR* null_check_branch = nullptr;
   Load32Disp(rs_rARM_SELF, Thread::ThinLockIdOffset<4>().Int32Value(), rs_r2);

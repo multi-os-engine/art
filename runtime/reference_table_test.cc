@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "mirror/class-inl.h"
 #include "reference_table.h"
 
 #include "common_runtime_test.h"
