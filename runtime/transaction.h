@@ -41,6 +41,9 @@ class Transaction {
   ~Transaction();
 
   // Record object field changes.
+  void RecordWriteField16(mirror::Object* obj, MemberOffset field_offset, uint16_t value,
+                          bool is_volatile)
+      LOCKS_EXCLUDED(log_lock_);
   void RecordWriteField32(mirror::Object* obj, MemberOffset field_offset, uint32_t value,
                           bool is_volatile)
       LOCKS_EXCLUDED(log_lock_);
@@ -82,6 +85,7 @@ class Transaction {
  private:
   class ObjectLog {
    public:
+    void Log16BitsValue(MemberOffset offset, uint16_t value, bool is_volatile);
     void Log32BitsValue(MemberOffset offset, uint32_t value, bool is_volatile);
     void Log64BitsValue(MemberOffset offset, uint64_t value, bool is_volatile);
     void LogReferenceValue(MemberOffset offset, mirror::Object* obj, bool is_volatile);
@@ -95,6 +99,7 @@ class Transaction {
 
    private:
     enum FieldValueKind {
+      k16Bits,
       k32Bits,
       k64Bits,
       kReference

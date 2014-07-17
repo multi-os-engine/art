@@ -596,7 +596,7 @@ class Mir2Lir : public Backend {
         return kRefReg;
       } else {
         return (size == kUnsignedHalf || size == kSignedHalf || size == kUnsignedByte ||
-                size == kSignedByte) ? kCoreReg : kAnyReg;
+                size == kSignedByte || size == k16) ? kCoreReg : kAnyReg;
       }
     }
 
@@ -850,13 +850,13 @@ class Mir2Lir : public Backend {
                      RegLocation rl_src);
     void GenFilledNewArray(CallInfo* info);
     void GenSput(MIR* mir, RegLocation rl_src,
-                 bool is_long_or_double, bool is_object);
+                 size_t component_size, bool is_object);
     void GenSget(MIR* mir, RegLocation rl_dest,
-                 bool is_long_or_double, bool is_object);
+                 size_t component_size, bool is_object);
     void GenIGet(MIR* mir, int opt_flags, OpSize size,
-                 RegLocation rl_dest, RegLocation rl_obj, bool is_long_or_double, bool is_object);
+                 RegLocation rl_dest, RegLocation rl_obj, size_t component_size, bool is_object);
     void GenIPut(MIR* mir, int opt_flags, OpSize size,
-                 RegLocation rl_src, RegLocation rl_obj, bool is_long_or_double, bool is_object);
+                 RegLocation rl_src, RegLocation rl_obj, size_t component_size, bool is_object);
     void GenArrayObjPut(int opt_flags, RegLocation rl_array, RegLocation rl_index,
                         RegLocation rl_src);
 
@@ -1030,20 +1030,26 @@ class Mir2Lir : public Backend {
                                 int scale) {
       return LoadBaseIndexed(r_base, r_index, r_dest, scale, kReference);
     }
+    // Load Dalvik value with 16-bit memory storage.
+    virtual RegLocation LoadValue16(RegLocation rl_src, RegisterClass op_kind);
     // Load Dalvik value with 32-bit memory storage.  If compressed object reference, decompress.
-    virtual RegLocation LoadValue(RegLocation rl_src, RegisterClass op_kind);
+    virtual RegLocation LoadValue32(RegLocation rl_src, RegisterClass op_kind);
     // Same as above, but derive the target register class from the location record.
-    virtual RegLocation LoadValue(RegLocation rl_src);
+    virtual RegLocation LoadValue32(RegLocation rl_src);
     // Load Dalvik value with 64-bit memory storage.
-    virtual RegLocation LoadValueWide(RegLocation rl_src, RegisterClass op_kind);
+    virtual RegLocation LoadValue64(RegLocation rl_src, RegisterClass op_kind);
+    // Load Dalvik value with 16-bit memory storage.
+    virtual void LoadValueDirect16(RegLocation rl_src, RegStorage r_dest);
+    // Load Dalvik value with 16-bit memory storage.
+    virtual void LoadValueDirect16Fixed(RegLocation rl_src, RegStorage r_dest);
     // Load Dalvik value with 32-bit memory storage.  If compressed object reference, decompress.
-    virtual void LoadValueDirect(RegLocation rl_src, RegStorage r_dest);
+    virtual void LoadValueDirect32(RegLocation rl_src, RegStorage r_dest);
     // Load Dalvik value with 32-bit memory storage.  If compressed object reference, decompress.
-    virtual void LoadValueDirectFixed(RegLocation rl_src, RegStorage r_dest);
+    virtual void LoadValueDirect32Fixed(RegLocation rl_src, RegStorage r_dest);
     // Load Dalvik value with 64-bit memory storage.
-    virtual void LoadValueDirectWide(RegLocation rl_src, RegStorage r_dest);
+    virtual void LoadValueDirect64(RegLocation rl_src, RegStorage r_dest);
     // Load Dalvik value with 64-bit memory storage.
-    virtual void LoadValueDirectWideFixed(RegLocation rl_src, RegStorage r_dest);
+    virtual void LoadValueDirect64Fixed(RegLocation rl_src, RegStorage r_dest);
     // Store an item of natural word size.
     virtual LIR* StoreWordDisp(RegStorage r_base, int displacement, RegStorage r_src) {
       return StoreBaseDisp(r_base, displacement, r_src, kWord, kNotVolatile);
@@ -1061,6 +1067,10 @@ class Mir2Lir : public Backend {
     // Store 32 bits, regardless of target.
     virtual LIR* Store32Disp(RegStorage r_base, int displacement, RegStorage r_src) {
       return StoreBaseDisp(r_base, displacement, r_src, k32, kNotVolatile);
+    }
+    // Store 16 bits, regardless of target.
+    virtual LIR* Store16Disp(RegStorage r_base, int displacement, RegStorage r_src) {
+      return StoreBaseDisp(r_base, displacement, r_src, k16, kNotVolatile);
     }
 
     /**
@@ -1527,8 +1537,9 @@ class Mir2Lir : public Backend {
      */
     virtual RegLocation ForceTempWide(RegLocation loc);
 
-    static constexpr OpSize LoadStoreOpSize(bool wide, bool ref) {
-      return wide ? k64 : ref ? kReference : k32;
+    static constexpr OpSize LoadStoreOpSize(size_t component_size, bool ref) {
+      // WIP!
+      return component_size == 8? k64 : (component_size == 4? (ref? kReference : k32) : k16);
     }
 
     virtual void GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,

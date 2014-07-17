@@ -525,6 +525,7 @@ inline Object* Class::AllocNonMovableObject(Thread* self) {
 
 inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
                                         uint32_t num_vtable_entries,
+                                        uint32_t num_16bit_static_fields,
                                         uint32_t num_32bit_static_fields,
                                         uint32_t num_64bit_static_fields,
                                         uint32_t num_ref_static_fields) {
@@ -539,12 +540,17 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
   // Space used by reference statics.
   size +=  num_ref_static_fields * sizeof(HeapReference<Object>);
   // Possible pad for alignment.
-  if (((size & 7) != 0) && (num_64bit_static_fields > 0) && (num_32bit_static_fields == 0)) {
+  if (((size & 7) != 0) && (num_64bit_static_fields > 0) && (num_32bit_static_fields == 0) &&
+      (num_16bit_static_fields < 2)) {
     size += sizeof(uint32_t);
   }
   // Space used for primitive static fields.
-  size += (num_32bit_static_fields * sizeof(uint32_t)) +
+  size += (num_16bit_static_fields * sizeof(uint16_t)) +
+      (num_32bit_static_fields * sizeof(uint32_t)) +
       (num_64bit_static_fields * sizeof(uint64_t));
+  if ((size & (0x4 - 1)) != 0) {
+    size += sizeof(uint16_t);
+  }
   return size;
 }
 

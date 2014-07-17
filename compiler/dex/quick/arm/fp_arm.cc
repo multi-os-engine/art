@@ -60,8 +60,8 @@ void ArmMir2Lir::GenArithOpFloat(Instruction::Code opcode, RegLocation rl_dest,
     default:
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
-  rl_src1 = LoadValue(rl_src1, kFPReg);
-  rl_src2 = LoadValue(rl_src2, kFPReg);
+  rl_src1 = LoadValue32(rl_src1, kFPReg);
+  rl_src2 = LoadValue32(rl_src2, kFPReg);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR3(op, rl_result.reg.GetReg(), rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   StoreValue(rl_dest, rl_result);
@@ -104,9 +104,9 @@ void ArmMir2Lir::GenArithOpDouble(Instruction::Code opcode,
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
 
-  rl_src1 = LoadValueWide(rl_src1, kFPReg);
+  rl_src1 = LoadValue64(rl_src1, kFPReg);
   DCHECK(rl_src1.wide);
-  rl_src2 = LoadValueWide(rl_src2, kFPReg);
+  rl_src2 = LoadValue64(rl_src2, kFPReg);
   DCHECK(rl_src2.wide);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   DCHECK(rl_dest.wide);
@@ -140,7 +140,7 @@ void ArmMir2Lir::GenConversion(Instruction::Code opcode, RegLocation rl_dest, Re
       op = kThumb2VcvtDI;
       break;
     case Instruction::LONG_TO_DOUBLE: {
-      rl_src = LoadValueWide(rl_src, kFPReg);
+      rl_src = LoadValue64(rl_src, kFPReg);
       RegisterInfo* info = GetRegInfo(rl_src.reg);
       RegStorage src_low = info->FindMatchingView(RegisterInfo::kLowSingleStorageMask)->GetReg();
       DCHECK(src_low.Valid());
@@ -163,7 +163,7 @@ void ArmMir2Lir::GenConversion(Instruction::Code opcode, RegLocation rl_dest, Re
       GenConversionCall(QUICK_ENTRYPOINT_OFFSET(4, pF2l), rl_dest, rl_src);
       return;
     case Instruction::LONG_TO_FLOAT: {
-      rl_src = LoadValueWide(rl_src, kFPReg);
+      rl_src = LoadValue64(rl_src, kFPReg);
       RegisterInfo* info = GetRegInfo(rl_src.reg);
       RegStorage src_low = info->FindMatchingView(RegisterInfo::kLowSingleStorageMask)->GetReg();
       DCHECK(src_low.Valid());
@@ -196,10 +196,10 @@ void ArmMir2Lir::GenConversion(Instruction::Code opcode, RegLocation rl_dest, Re
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
   if (rl_src.wide) {
-    rl_src = LoadValueWide(rl_src, kFPReg);
+    rl_src = LoadValue64(rl_src, kFPReg);
     src_reg = rl_src.reg.GetReg();
   } else {
-    rl_src = LoadValue(rl_src, kFPReg);
+    rl_src = LoadValue32(rl_src, kFPReg);
     src_reg = rl_src.reg.GetReg();
   }
   if (rl_dest.wide) {
@@ -221,14 +221,14 @@ void ArmMir2Lir::GenFusedFPCmpBranch(BasicBlock* bb, MIR* mir, bool gt_bias,
   if (is_double) {
     rl_src1 = mir_graph_->GetSrcWide(mir, 0);
     rl_src2 = mir_graph_->GetSrcWide(mir, 2);
-    rl_src1 = LoadValueWide(rl_src1, kFPReg);
-    rl_src2 = LoadValueWide(rl_src2, kFPReg);
+    rl_src1 = LoadValue64(rl_src1, kFPReg);
+    rl_src2 = LoadValue64(rl_src2, kFPReg);
     NewLIR2(kThumb2Vcmpd, rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   } else {
     rl_src1 = mir_graph_->GetSrc(mir, 0);
     rl_src2 = mir_graph_->GetSrc(mir, 1);
-    rl_src1 = LoadValue(rl_src1, kFPReg);
-    rl_src2 = LoadValue(rl_src2, kFPReg);
+    rl_src1 = LoadValue32(rl_src1, kFPReg);
+    rl_src2 = LoadValue32(rl_src2, kFPReg);
     NewLIR2(kThumb2Vcmps, rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   }
   NewLIR0(kThumb2Fmstat);
@@ -291,16 +291,16 @@ void ArmMir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
   if (is_double) {
-    rl_src1 = LoadValueWide(rl_src1, kFPReg);
-    rl_src2 = LoadValueWide(rl_src2, kFPReg);
+    rl_src1 = LoadValue64(rl_src1, kFPReg);
+    rl_src2 = LoadValue64(rl_src2, kFPReg);
     // In case result vreg is also a src vreg, break association to avoid useless copy by EvalLoc()
     ClobberSReg(rl_dest.s_reg_low);
     rl_result = EvalLoc(rl_dest, kCoreReg, true);
     LoadConstant(rl_result.reg, default_result);
     NewLIR2(kThumb2Vcmpd, rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   } else {
-    rl_src1 = LoadValue(rl_src1, kFPReg);
-    rl_src2 = LoadValue(rl_src2, kFPReg);
+    rl_src1 = LoadValue32(rl_src1, kFPReg);
+    rl_src2 = LoadValue32(rl_src2, kFPReg);
     // In case result vreg is also a srcvreg, break association to avoid useless copy by EvalLoc()
     ClobberSReg(rl_dest.s_reg_low);
     rl_result = EvalLoc(rl_dest, kCoreReg, true);
@@ -324,7 +324,7 @@ void ArmMir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
 
 void ArmMir2Lir::GenNegFloat(RegLocation rl_dest, RegLocation rl_src) {
   RegLocation rl_result;
-  rl_src = LoadValue(rl_src, kFPReg);
+  rl_src = LoadValue32(rl_src, kFPReg);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR2(kThumb2Vnegs, rl_result.reg.GetReg(), rl_src.reg.GetReg());
   StoreValue(rl_dest, rl_result);
@@ -332,7 +332,7 @@ void ArmMir2Lir::GenNegFloat(RegLocation rl_dest, RegLocation rl_src) {
 
 void ArmMir2Lir::GenNegDouble(RegLocation rl_dest, RegLocation rl_src) {
   RegLocation rl_result;
-  rl_src = LoadValueWide(rl_src, kFPReg);
+  rl_src = LoadValue64(rl_src, kFPReg);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR2(kThumb2Vnegd, rl_result.reg.GetReg(), rl_src.reg.GetReg());
   StoreValueWide(rl_dest, rl_result);
@@ -342,7 +342,7 @@ bool ArmMir2Lir::GenInlinedSqrt(CallInfo* info) {
   DCHECK_EQ(cu_->instruction_set, kThumb2);
   RegLocation rl_src = info->args[0];
   RegLocation rl_dest = InlineTargetWide(info);  // double place for result
-  rl_src = LoadValueWide(rl_src, kFPReg);
+  rl_src = LoadValue64(rl_src, kFPReg);
   RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR2(kThumb2Vsqrtd, rl_result.reg.GetReg(), rl_src.reg.GetReg());
   StoreValueWide(rl_dest, rl_result);

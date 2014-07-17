@@ -43,8 +43,8 @@ namespace art {
  */
 void MipsMir2Lir::GenCmpLong(RegLocation rl_dest, RegLocation rl_src1,
                              RegLocation rl_src2) {
-  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-  rl_src2 = LoadValueWide(rl_src2, kCoreReg);
+  rl_src1 = LoadValue64(rl_src1, kCoreReg);
+  rl_src2 = LoadValue64(rl_src2, kCoreReg);
   RegStorage t0 = AllocTemp();
   RegStorage t1 = AllocTemp();
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
@@ -292,7 +292,7 @@ bool MipsMir2Lir::GenInlinedPeek(CallInfo* info, OpSize size) {
   RegLocation rl_src_address = info->args[0];  // long address
   rl_src_address = NarrowRegLoc(rl_src_address);  // ignore high half in info->args[1]
   RegLocation rl_dest = InlineTarget(info);
-  RegLocation rl_address = LoadValue(rl_src_address, kCoreReg);
+  RegLocation rl_address = LoadValue32(rl_src_address, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   DCHECK(size == kSignedByte);
   LoadBaseDisp(rl_address.reg, 0, rl_result.reg, size, kNotVolatile);
@@ -308,9 +308,9 @@ bool MipsMir2Lir::GenInlinedPoke(CallInfo* info, OpSize size) {
   RegLocation rl_src_address = info->args[0];  // long address
   rl_src_address = NarrowRegLoc(rl_src_address);  // ignore high half in info->args[1]
   RegLocation rl_src_value = info->args[2];  // [size] value
-  RegLocation rl_address = LoadValue(rl_src_address, kCoreReg);
+  RegLocation rl_address = LoadValue32(rl_src_address, kCoreReg);
   DCHECK(size == kSignedByte);
-  RegLocation rl_value = LoadValue(rl_src_value, kCoreReg);
+  RegLocation rl_value = LoadValue32(rl_src_value, kCoreReg);
   StoreBaseDisp(rl_address.reg, 0, rl_value.reg, size, kNotVolatile);
   return true;
 }
@@ -390,8 +390,8 @@ void MipsMir2Lir::GenMulLong(Instruction::Code opcode, RegLocation rl_dest,
 
 void MipsMir2Lir::GenAddLong(Instruction::Code opcode, RegLocation rl_dest,
                              RegLocation rl_src1, RegLocation rl_src2) {
-  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-  rl_src2 = LoadValueWide(rl_src2, kCoreReg);
+  rl_src1 = LoadValue64(rl_src1, kCoreReg);
+  rl_src2 = LoadValue64(rl_src2, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   /*
    *  [v1 v0] =  [a1 a0] + [a3 a2];
@@ -412,8 +412,8 @@ void MipsMir2Lir::GenAddLong(Instruction::Code opcode, RegLocation rl_dest,
 
 void MipsMir2Lir::GenSubLong(Instruction::Code opcode, RegLocation rl_dest,
                              RegLocation rl_src1, RegLocation rl_src2) {
-  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-  rl_src2 = LoadValueWide(rl_src2, kCoreReg);
+  rl_src1 = LoadValue64(rl_src1, kCoreReg);
+  rl_src2 = LoadValue64(rl_src2, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   /*
    *  [v1 v0] =  [a1 a0] - [a3 a2];
@@ -442,7 +442,7 @@ void MipsMir2Lir::GenDivRemLong(Instruction::Code, RegLocation rl_dest, RegLocat
 }
 
 void MipsMir2Lir::GenNegLong(RegLocation rl_dest, RegLocation rl_src) {
-  rl_src = LoadValueWide(rl_src, kCoreReg);
+  rl_src = LoadValue64(rl_src, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   /*
    *  [v1 v0] =  -[a1 a0]
@@ -486,8 +486,8 @@ void MipsMir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
   int len_offset = mirror::Array::LengthOffset().Int32Value();
   int data_offset;
   RegLocation rl_result;
-  rl_array = LoadValue(rl_array, kRefReg);
-  rl_index = LoadValue(rl_index, kCoreReg);
+  rl_array = LoadValue32(rl_array, kRefReg);
+  rl_index = LoadValue32(rl_index, kCoreReg);
 
   // FIXME: need to add support for rl_index.is_const.
 
@@ -561,8 +561,8 @@ void MipsMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
     data_offset = mirror::Array::DataOffset(sizeof(int32_t)).Int32Value();
   }
 
-  rl_array = LoadValue(rl_array, kRefReg);
-  rl_index = LoadValue(rl_index, kCoreReg);
+  rl_array = LoadValue32(rl_array, kRefReg);
+  rl_index = LoadValue32(rl_index, kCoreReg);
 
   // FIXME: need to add support for rl_index.is_const.
 
@@ -601,7 +601,7 @@ void MipsMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
     } else {
       OpRegReg(kOpAdd, reg_ptr, rl_index.reg);
     }
-    rl_src = LoadValueWide(rl_src, reg_class);
+    rl_src = LoadValue64(rl_src, reg_class);
 
     if (needs_range_check) {
       GenArrayBoundsCheck(rl_index.reg, reg_len);
@@ -610,7 +610,7 @@ void MipsMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
 
     StoreBaseDisp(reg_ptr, 0, rl_src.reg, size, kNotVolatile);
   } else {
-    rl_src = LoadValue(rl_src, reg_class);
+    rl_src = LoadValue32(rl_src, reg_class);
     if (needs_range_check) {
        GenArrayBoundsCheck(rl_index.reg, reg_len);
       FreeTemp(reg_len);

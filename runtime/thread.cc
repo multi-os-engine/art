@@ -1869,6 +1869,8 @@ void Thread::DumpThreadOffset(std::ostream& os, uint32_t offset) {
   QUICK_ENTRY_POINT_INFO(pInitializeTypeAndVerifyAccess)
   QUICK_ENTRY_POINT_INFO(pInitializeType)
   QUICK_ENTRY_POINT_INFO(pResolveString)
+  QUICK_ENTRY_POINT_INFO(pSet16Instance)
+  QUICK_ENTRY_POINT_INFO(pSet16Static)
   QUICK_ENTRY_POINT_INFO(pSet32Instance)
   QUICK_ENTRY_POINT_INFO(pSet32Static)
   QUICK_ENTRY_POINT_INFO(pSet64Instance)
