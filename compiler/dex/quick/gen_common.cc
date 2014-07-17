@@ -567,21 +567,22 @@ class StaticFieldSlowPath : public Mir2Lir::LIRSlowPath {
 };
 
 template <size_t pointer_size>
-static void GenSputCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_object,
+static void GenSputCall(Mir2Lir* mir_to_lir, size_t component_size, bool is_object,
                         const MirSFieldLoweringInfo* field_info, RegLocation rl_src) {
   ThreadOffset<pointer_size> setter_offset =
-      is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet64Static)
+      component_size == 8 ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet64Static)
           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSetObjStatic)
-              : QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet32Static));
+              : (component_size == 2? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet16Static) :
+                QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet32Static)));
   mir_to_lir->CallRuntimeHelperImmRegLocation(setter_offset, field_info->FieldIndex(), rl_src,
                                               true);
 }
 
-void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
+void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, size_t component_size,
                       bool is_object) {
   const MirSFieldLoweringInfo& field_info = mir_graph_->GetSFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedStaticField(field_info.FastPut(), field_info.IsReferrersClass());
-  OpSize store_size = LoadStoreOpSize(is_long_or_double, is_object);
+  OpSize store_size = LoadStoreOpSize(component_size, is_object);
   if (!SLOW_FIELD_PATH && field_info.FastPut()) {
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
     RegStorage r_base;
@@ -641,7 +642,7 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
     }
     // rBase now holds static storage base
     RegisterClass reg_class = RegClassForFieldLoadStore(store_size, field_info.IsVolatile());
-    if (is_long_or_double) {
+    if (component_size == 8) {
       rl_src = LoadValueWide(rl_src, reg_class);
     } else {
       rl_src = LoadValue(rl_src, reg_class);
@@ -660,28 +661,29 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
   } else {
     FlushAllRegs();  // Everything to home locations
     if (cu_->target64) {
-      GenSputCall<8>(this, is_long_or_double, is_object, &field_info, rl_src);
+      GenSputCall<8>(this, component_size, is_object, &field_info, rl_src);
     } else {
-      GenSputCall<4>(this, is_long_or_double, is_object, &field_info, rl_src);
+      GenSputCall<4>(this, component_size, is_object, &field_info, rl_src);
     }
   }
 }
 
 template <size_t pointer_size>
-static void GenSgetCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_object,
+static void GenSgetCall(Mir2Lir* mir_to_lir, size_t component_size, bool is_object,
                         const MirSFieldLoweringInfo* field_info) {
   ThreadOffset<pointer_size> getter_offset =
-      is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Static)
+      component_size == 8 ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Static)
           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGetObjStatic)
-              : QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet32Static));
+              : (component_size == 2? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet16Static) : QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet32Static)));
   mir_to_lir->CallRuntimeHelperImm(getter_offset, field_info->FieldIndex(), true);
 }
 
-void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
-                      bool is_long_or_double, bool is_object) {
+void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest, OpSize size,
+                      size_t component_size, bool is_object) {
   const MirSFieldLoweringInfo& field_info = mir_graph_->GetSFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedStaticField(field_info.FastGet(), field_info.IsReferrersClass());
-  OpSize load_size = LoadStoreOpSize(is_long_or_double, is_object);
+  OpSize load_size = LoadStoreOpSize(component_size, is_object);
+
   if (!SLOW_FIELD_PATH && field_info.FastGet()) {
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
     RegStorage r_base;
@@ -737,15 +739,16 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
 
     int field_offset = field_info.FieldOffset().Int32Value();
     if (is_object) {
+      // TODO: DCHECK?
       LoadRefDisp(r_base, field_offset, rl_result.reg, field_info.IsVolatile() ? kVolatile :
           kNotVolatile);
     } else {
-      LoadBaseDisp(r_base, field_offset, rl_result.reg, load_size, field_info.IsVolatile() ?
+      LoadBaseDisp(r_base, field_offset, rl_result.reg, component_size == 2? size : load_size, field_info.IsVolatile() ?
           kVolatile : kNotVolatile);
     }
     FreeTemp(r_base);
 
-    if (is_long_or_double) {
+    if (component_size == 8) {
       StoreValueWide(rl_dest, rl_result);
     } else {
       StoreValue(rl_dest, rl_result);
@@ -753,12 +756,12 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
   } else {
     FlushAllRegs();  // Everything to home locations
     if (cu_->target64) {
-      GenSgetCall<8>(this, is_long_or_double, is_object, &field_info);
+      GenSgetCall<8>(this, component_size, is_object, &field_info);
     } else {
-      GenSgetCall<4>(this, is_long_or_double, is_object, &field_info);
+      GenSgetCall<4>(this, component_size, is_object, &field_info);
     }
     // FIXME: pGetXXStatic always return an int or int64 regardless of rl_dest.fp.
-    if (is_long_or_double) {
+    if (component_size == 8) {
       RegLocation rl_result = GetReturnWide(kCoreReg);
       StoreValueWide(rl_dest, rl_result);
     } else {
@@ -780,12 +783,12 @@ void Mir2Lir::HandleSlowPaths() {
 }
 
 template <size_t pointer_size>
-static void GenIgetCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_object,
+static void GenIgetCall(Mir2Lir* mir_to_lir, size_t component_size, bool is_object,
                         const MirIFieldLoweringInfo* field_info, RegLocation rl_obj) {
   ThreadOffset<pointer_size> getter_offset =
-      is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Instance)
+      component_size == 8 ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Instance)
           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGetObjInstance)
-              : QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet32Instance));
+              : (component_size == 2? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet16Instance) : QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet32Instance)));
   // Second argument of pGetXXInstance is always a reference.
   DCHECK_EQ(static_cast<unsigned int>(rl_obj.wide), 0U);
   mir_to_lir->CallRuntimeHelperImmRegLocation(getter_offset, field_info->FieldIndex(), rl_obj,
@@ -793,11 +796,11 @@ static void GenIgetCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_obj
 }
 
 void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
-                      RegLocation rl_dest, RegLocation rl_obj, bool is_long_or_double,
+                      RegLocation rl_dest, RegLocation rl_obj, size_t component_size,
                       bool is_object) {
   const MirIFieldLoweringInfo& field_info = mir_graph_->GetIFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedInstanceField(field_info.FastGet());
-  OpSize load_size = LoadStoreOpSize(is_long_or_double, is_object);
+  OpSize load_size = LoadStoreOpSize(component_size, is_object);
   if (!SLOW_FIELD_PATH && field_info.FastGet()) {
     RegisterClass reg_class = RegClassForFieldLoadStore(load_size, field_info.IsVolatile());
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
@@ -810,23 +813,23 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
       load_lir = LoadRefDisp(rl_obj.reg, field_offset, rl_result.reg, field_info.IsVolatile() ?
           kVolatile : kNotVolatile);
     } else {
-      load_lir = LoadBaseDisp(rl_obj.reg, field_offset, rl_result.reg, load_size,
+      load_lir = LoadBaseDisp(rl_obj.reg, field_offset, rl_result.reg, (component_size == 2)? size : load_size,
                               field_info.IsVolatile() ? kVolatile : kNotVolatile);
     }
     MarkPossibleNullPointerExceptionAfter(opt_flags, load_lir);
-    if (is_long_or_double) {
+    if (component_size == 8) {
       StoreValueWide(rl_dest, rl_result);
     } else {
       StoreValue(rl_dest, rl_result);
     }
   } else {
     if (cu_->target64) {
-      GenIgetCall<8>(this, is_long_or_double, is_object, &field_info, rl_obj);
+      GenIgetCall<8>(this, component_size, is_object, &field_info, rl_obj);
     } else {
-      GenIgetCall<4>(this, is_long_or_double, is_object, &field_info, rl_obj);
+      GenIgetCall<4>(this, component_size, is_object, &field_info, rl_obj);
     }
     // FIXME: pGetXXInstance always return an int or int64 regardless of rl_dest.fp.
-    if (is_long_or_double) {
+    if (component_size == 8) {
       RegLocation rl_result = GetReturnWide(kCoreReg);
       StoreValueWide(rl_dest, rl_result);
     } else {
@@ -837,28 +840,29 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
 }
 
 template <size_t pointer_size>
-static void GenIputCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_object,
+static void GenIputCall(Mir2Lir* mir_to_lir, size_t component_size, bool is_object,
                         const MirIFieldLoweringInfo* field_info, RegLocation rl_obj,
                         RegLocation rl_src) {
   ThreadOffset<pointer_size> setter_offset =
-      is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet64Instance)
+      component_size == 8 ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet64Instance)
           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSetObjInstance)
-              : QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet32Instance));
+              : (component_size == 2? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet16Instance) :
+                QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet32Instance)));
   mir_to_lir->CallRuntimeHelperImmRegLocationRegLocation(setter_offset, field_info->FieldIndex(),
                                                          rl_obj, rl_src, true);
 }
 
 void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
-                      RegLocation rl_src, RegLocation rl_obj, bool is_long_or_double,
+                      RegLocation rl_src, RegLocation rl_obj, size_t component_size,
                       bool is_object) {
   const MirIFieldLoweringInfo& field_info = mir_graph_->GetIFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedInstanceField(field_info.FastPut());
-  OpSize store_size = LoadStoreOpSize(is_long_or_double, is_object);
+  OpSize store_size = LoadStoreOpSize(component_size, is_object);
   if (!SLOW_FIELD_PATH && field_info.FastPut()) {
     RegisterClass reg_class = RegClassForFieldLoadStore(store_size, field_info.IsVolatile());
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
     rl_obj = LoadValue(rl_obj, kRefReg);
-    if (is_long_or_double) {
+    if (component_size == 8) {
       rl_src = LoadValueWide(rl_src, reg_class);
     } else {
       rl_src = LoadValue(rl_src, reg_class);
@@ -879,9 +883,9 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
     }
   } else {
     if (cu_->target64) {
-      GenIputCall<8>(this, is_long_or_double, is_object, &field_info, rl_obj, rl_src);
+      GenIputCall<8>(this, component_size, is_object, &field_info, rl_obj, rl_src);
     } else {
-      GenIputCall<4>(this, is_long_or_double, is_object, &field_info, rl_obj, rl_src);
+      GenIputCall<4>(this, component_size, is_object, &field_info, rl_obj, rl_src);
     }
   }
 }

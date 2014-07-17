@@ -1292,12 +1292,12 @@ bool Mir2Lir::GenInlinedGet(CallInfo* info) {
 
   // intrinsic logic start.
   RegLocation rl_obj = info->args[0];
-  rl_obj = LoadValue(rl_obj);
+  rl_obj = LoadValue(rl_obj, kRefReg);
 
   RegStorage reg_slow_path = AllocTemp();
   RegStorage reg_disabled = AllocTemp();
-  Load32Disp(reg_class, slow_path_flag_offset, reg_slow_path);
-  Load32Disp(reg_class, disable_flag_offset, reg_disabled);
+  Load8Disp(reg_class, slow_path_flag_offset, reg_slow_path);
+  Load8Disp(reg_class, disable_flag_offset, reg_disabled);
   FreeTemp(reg_class);
   LIR* or_inst = OpRegRegReg(kOpOr, reg_slow_path, reg_slow_path, reg_disabled);
   FreeTemp(reg_disabled);

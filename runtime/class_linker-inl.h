@@ -17,6 +17,8 @@
 #ifndef ART_RUNTIME_CLASS_LINKER_INL_H_
 #define ART_RUNTIME_CLASS_LINKER_INL_H_
 
+#include <deque>
+
 #include "class_linker.h"
 #include "gc/heap-inl.h"
 #include "mirror/art_field.h"
@@ -217,6 +219,80 @@ inline mirror::DexCache* ClassLinker::GetDexCache(size_t idx) {
   dex_lock_.AssertSharedHeld(Thread::Current());
   DCHECK(idx < dex_caches_.size());
   return ReadBarrier::BarrierForRoot<mirror::DexCache, kWithReadBarrier>(&dex_caches_[idx]);
+}
+
+template<int n>
+void ClassLinker::AlignFields(size_t& current_field, const size_t num_fields,
+                              MemberOffset& field_offset,
+                              mirror::ObjectArray<mirror::ArtField>* fields,
+                              std::deque<mirror::ArtField*>& grouped_and_sorted_fields) {
+  if (current_field != num_fields && !IsAligned<n>(field_offset.Uint32Value())) {
+    size_t gap = (field_offset.Uint32Value()) & (n - 1);
+    DCHECK(gap == 0 || gap == (n / 2)) << "Expected gap to be zero or half of alignment";
+    // Avoid padding unless a field that requires alignment actually exists.
+    bool needs_padding = false;
+    for (size_t i = 0; i < grouped_and_sorted_fields.size(); ++i) {
+      mirror::ArtField* field = grouped_and_sorted_fields[i];
+      Primitive::Type type = field->GetTypeAsPrimitiveType();
+      CHECK(type != Primitive::kPrimNot) << PrettyField(field);  // should be primitive types
+      // Too big to fill the gap.
+      if (Primitive::ComponentSize(type) >= n) {
+        needs_padding = true;
+        continue;
+      }
+      // Shift as many fields as possible to fill the gaps.
+      size_t cursor = i;
+      mirror::ArtField* shift_field;
+      Primitive::Type shift_type;
+      while (cursor < grouped_and_sorted_fields.size() && needs_padding && gap > 0) {
+        do {
+          shift_field = grouped_and_sorted_fields[cursor];
+          shift_type = shift_field->GetTypeAsPrimitiveType();
+          // le can fit
+          if (Primitive::ComponentSize(shift_type) <= gap) {
+            break;
+          }
+          ++cursor;
+        } while (cursor < grouped_and_sorted_fields.size());
+        // Need to check again, messy!
+        if (cursor < grouped_and_sorted_fields.size() && Primitive::ComponentSize(shift_type) <= gap) {
+          fields->Set<false>(current_field++, shift_field);
+          shift_field->SetOffset(field_offset);
+          field_offset = MemberOffset(field_offset.Uint32Value() + Primitive::ComponentSize(shift_type));
+          gap -= Primitive::ComponentSize(shift_type);
+          grouped_and_sorted_fields.erase(grouped_and_sorted_fields.begin() + cursor);
+        }
+      }
+    }
+    if (needs_padding) {
+      field_offset = MemberOffset(field_offset.Uint32Value() + gap);
+    }
+    DCHECK(!needs_padding || IsAligned<n>(field_offset.Uint32Value())) << "Needed " << n << " byte alignment, but not aligned after align with offset: " << field_offset.Uint32Value();;
+  }
+}
+
+template<int n>
+void ClassLinker::ShuffleForward(size_t &current_field, const size_t num_fields,
+                                 MemberOffset& field_offset,
+                                 mirror::ObjectArray<mirror::ArtField>* fields,
+                                 std::deque<mirror::ArtField*>& grouped_and_sorted_fields) {
+  AlignFields<n>(current_field, num_fields, field_offset, fields, grouped_and_sorted_fields);
+  while (!grouped_and_sorted_fields.empty() && current_field != num_fields) {
+    // Do not attempt to verify alignment here, it is likely that AlignFields has determined that
+    // it is unnecessary.
+    mirror::ArtField* field = grouped_and_sorted_fields.front();
+    Primitive::Type type = field->GetTypeAsPrimitiveType();
+    CHECK(type != Primitive::kPrimNot) << PrettyField(field);  // should be primitive types
+    if (Primitive::ComponentSize(type) < n) {
+      // We should've shuffled all field of size n forward by this point.
+      break;
+    }
+    grouped_and_sorted_fields.pop_front();
+    DCHECK(Primitive::ComponentSize(type) == n) << PrettyField(field);
+    fields->Set<false>(current_field++, field);
+    field->SetOffset(field_offset);
+    field_offset = MemberOffset(field_offset.Uint32Value() + n);
+  }
 }
 
 }  // namespace art

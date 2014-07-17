@@ -38,7 +38,7 @@ inline ALWAYS_INLINE void* RosAlloc::Alloc(Thread* self, size_t size, size_t* by
   if (kCheckZeroMemory && m != nullptr) {
     byte* bytes = reinterpret_cast<byte*>(m);
     for (size_t i = 0; i < size; ++i) {
-      DCHECK_EQ(bytes[i], 0);
+      DCHECK_EQ(bytes[i], 0) << "expected zero but got: " << bytes[i];
     }
   }
   return m;
