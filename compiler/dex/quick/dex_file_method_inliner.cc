@@ -353,6 +353,7 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
     INTRINSIC(SunMiscUnsafe, PutOrdered ## type, ObjectJ ## code ## _V, kIntrinsicUnsafePut, \
               type_flags | kIntrinsicFlagIsOrdered)
 
+    // Note that only 4 and 8 byte loads are supported.
     UNSAFE_GET_PUT(Int, I, kIntrinsicFlagNone),
     UNSAFE_GET_PUT(Long, J, kIntrinsicFlagIsLong),
     UNSAFE_GET_PUT(Object, Object, kIntrinsicFlagIsObject),

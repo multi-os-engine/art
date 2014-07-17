@@ -1489,6 +1489,21 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
           }
           break;
         }
+        case 0x19: {
+          // TODO properly format
+          // TODO have dis work for other instructions (probably being dishonest for a few...)
+          // Load signed byte
+          // |332|22|22|22|22|2|1111|1111|000000000000|
+          // |1 9|87|65|43|21|0|3  0|3  0|11         0|
+          // |---|--|--|--|--|-|----|----|------------|
+          // |111|11|00|11|00|1| Rn | Rt | imm12      |
+          ArmRegister Rn(instr, 16);
+          ArmRegister Rt(instr, 12);
+          uint32_t imm12 = instr & 0xFFF;
+          opcode << "ldrsb";
+          args << Rt << ", " << "[" << Rn << ", #" << imm12 << "]";
+          break;
+        }
       default:      // more formats
         if ((op2 >> 4) == 2) {      // 010xxxx
           // data processing (register)

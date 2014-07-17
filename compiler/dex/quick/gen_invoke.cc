@@ -1292,12 +1292,12 @@ bool Mir2Lir::GenInlinedGet(CallInfo* info) {
 
   // intrinsic logic start.
   RegLocation rl_obj = info->args[0];
-  rl_obj = LoadValue(rl_obj);
+  rl_obj = LoadValue(rl_obj, kRefReg);
 
   RegStorage reg_slow_path = AllocTemp();
   RegStorage reg_disabled = AllocTemp();
-  Load32Disp(reg_class, slow_path_flag_offset, reg_slow_path);
-  Load32Disp(reg_class, disable_flag_offset, reg_disabled);
+  Load8Disp(reg_class, slow_path_flag_offset, reg_slow_path);
+  Load8Disp(reg_class, disable_flag_offset, reg_disabled);
   FreeTemp(reg_class);
   LIR* or_inst = OpRegRegReg(kOpOr, reg_slow_path, reg_slow_path, reg_disabled);
   FreeTemp(reg_disabled);
@@ -1459,6 +1459,8 @@ bool Mir2Lir::GenInlinedReverseBytes(CallInfo* info, OpSize size) {
     // TODO - add Mips implementation.
     return false;
   }
+  // TODO
+  return false;
   RegLocation rl_src_i = info->args[0];
   RegLocation rl_i = (size == k64) ? LoadValueWide(rl_src_i, kCoreReg) : LoadValue(rl_src_i, kCoreReg);
   RegLocation rl_dest = (size == k64) ? InlineTargetWide(info) : InlineTarget(info);  // result reg
@@ -1553,6 +1555,20 @@ bool Mir2Lir::GenInlinedAbsLong(CallInfo* info) {
   return true;
 }
 
+bool Mir2Lir::GenInlinedAbsFloat(CallInfo* info) {
+  if (cu_->instruction_set == kMips) {
+    // TODO - add Mips implementation
+    return false;
+  }
+  RegLocation rl_src = info->args[0];
+  rl_src = LoadValue(rl_src, kCoreReg);
+  RegLocation rl_dest = InlineTarget(info);
+  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
+  OpRegRegImm(kOpAnd, rl_result.reg, rl_src.reg, 0x7fffffff);
+  StoreValue(rl_dest, rl_result);
+  return true;
+}
+
 bool Mir2Lir::GenInlinedReverseBits(CallInfo* info, OpSize size) {
   // Currently implemented only for ARM64
   return false;
@@ -1563,11 +1579,28 @@ bool Mir2Lir::GenInlinedMinMaxFP(CallInfo* info, bool is_min, bool is_double) {
   return false;
 }
 
+bool Mir2Lir::GenInlinedAbsDouble(CallInfo* info) {
+  if (cu_->instruction_set == kMips) {
+    // TODO - add Mips implementation
+    return false;
+  }
+  RegLocation rl_src = info->args[0];
+  rl_src = LoadValueWide(rl_src, kCoreReg);
+  RegLocation rl_dest = InlineTargetWide(info);
+  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
+
+  OpRegCopyWide(rl_result.reg, rl_src.reg);
+  OpRegImm(kOpAnd, rl_result.reg.GetHigh(), 0x7fffffff);
+  StoreValueWide(rl_dest, rl_result);
+  return true;
+}
+
 bool Mir2Lir::GenInlinedFloatCvt(CallInfo* info) {
   if (cu_->instruction_set == kMips) {
     // TODO - add Mips implementation
     return false;
   }
+  return false;
   RegLocation rl_src = info->args[0];
   RegLocation rl_dest = InlineTarget(info);
   StoreValue(rl_dest, rl_src);
@@ -1579,6 +1612,7 @@ bool Mir2Lir::GenInlinedDoubleCvt(CallInfo* info) {
     // TODO - add Mips implementation
     return false;
   }
+  return false;
   RegLocation rl_src = info->args[0];
   RegLocation rl_dest = InlineTargetWide(info);
   StoreValueWide(rl_dest, rl_src);
@@ -1735,6 +1769,7 @@ bool Mir2Lir::GenInlinedCurrentThread(CallInfo* info) {
   return true;
 }
 
+// Only supports 4 and 8 byte operations.
 bool Mir2Lir::GenInlinedUnsafeGet(CallInfo* info,
                                   bool is_long, bool is_volatile) {
   if (cu_->instruction_set == kMips) {
@@ -1780,12 +1815,14 @@ bool Mir2Lir::GenInlinedUnsafeGet(CallInfo* info,
   return true;
 }
 
+// Only supports 4 and 8 byte operations.
 bool Mir2Lir::GenInlinedUnsafePut(CallInfo* info, bool is_long,
                                   bool is_object, bool is_volatile, bool is_ordered) {
   if (cu_->instruction_set == kMips) {
     // TODO - add Mips implementation
     return false;
   }
+  return false;
   // Unused - RegLocation rl_src_unsafe = info->args[0];
   RegLocation rl_src_obj = info->args[1];  // Object
   RegLocation rl_src_offset = info->args[2];  // long low
