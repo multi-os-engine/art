@@ -2648,7 +2648,7 @@ int X86Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
             if (rl_arg.location == kLocPhysReg) {
               StoreBaseDisp(rs_rX86_SP, out_offset, rl_arg.reg, k64, kNotVolatile);
             } else {
-              LoadValueDirectWideFixed(rl_arg, regWide);
+              LoadValueDirect64Fixed(rl_arg, regWide);
               StoreBaseDisp(rs_rX86_SP, out_offset, regWide, k64, kNotVolatile);
             }
           } else {
@@ -2676,7 +2676,7 @@ int X86Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
     RegStorage reg = in_to_reg_storage_mapping.Get(i);
     if (reg.Valid()) {
       if (rl_arg.wide) {
-        LoadValueDirectWideFixed(rl_arg, reg);
+        LoadValueDirect64Fixed(rl_arg, reg);
       } else {
         LoadValueDirectFixed(rl_arg, reg);
       }

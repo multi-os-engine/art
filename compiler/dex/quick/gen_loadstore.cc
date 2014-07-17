@@ -116,7 +116,7 @@ void Mir2Lir::LoadValueDirectFixed(RegLocation rl_src, RegStorage r_dest) {
  * using this routine, as it doesn't perform any bookkeeping regarding
  * register liveness.  That is the responsibility of the caller.
  */
-void Mir2Lir::LoadValueDirectWide(RegLocation rl_src, RegStorage r_dest) {
+void Mir2Lir::LoadValueDirect64(RegLocation rl_src, RegStorage r_dest) {
   rl_src = UpdateLocWide(rl_src);
   if (rl_src.location == kLocPhysReg) {
     OpRegCopyWide(r_dest, rl_src.reg);
@@ -135,10 +135,10 @@ void Mir2Lir::LoadValueDirectWide(RegLocation rl_src, RegStorage r_dest) {
  * registers.  Should be used when loading to a fixed registers (for example,
  * loading arguments to an out of line call.
  */
-void Mir2Lir::LoadValueDirectWideFixed(RegLocation rl_src, RegStorage r_dest) {
+void Mir2Lir::LoadValueDirect64Fixed(RegLocation rl_src, RegStorage r_dest) {
   Clobber(r_dest);
   MarkInUse(r_dest);
-  LoadValueDirectWide(rl_src, r_dest);
+  LoadValueDirect64(rl_src, r_dest);
 }
 
 RegLocation Mir2Lir::LoadValue(RegLocation rl_src, RegisterClass op_kind) {
@@ -248,7 +248,7 @@ RegLocation Mir2Lir::LoadValueWide(RegLocation rl_src, RegisterClass op_kind) {
   DCHECK_NE(rl_src.s_reg_low, INVALID_SREG);
   DCHECK_NE(GetSRegHi(rl_src.s_reg_low), INVALID_SREG);
   rl_src.reg = AllocTypedTempWide(rl_src.fp, op_kind);
-  LoadValueDirectWide(rl_src, rl_src.reg);
+  LoadValueDirect64(rl_src, rl_src.reg);
   rl_src.location = kLocPhysReg;
   MarkLive(rl_src);
   return rl_src;
@@ -290,7 +290,7 @@ void Mir2Lir::StoreValueWide(RegLocation rl_dest, RegLocation rl_src) {
   } else {
     // Load Src either into promoted Dest or temps allocated for Dest
     rl_dest = EvalLoc(rl_dest, kAnyReg, false);
-    LoadValueDirectWide(rl_src, rl_dest.reg);
+    LoadValueDirect64(rl_src, rl_dest.reg);
   }
 
   // Dest is now live and dirty (until/if we flush it to home location)

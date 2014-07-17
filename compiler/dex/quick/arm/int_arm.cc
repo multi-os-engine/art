@@ -903,13 +903,13 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   if (is_long) {
     RegStorage r_tmp_high = AllocTemp();
     if (!load_early) {
-      LoadValueDirectWide(rl_src_expected, rl_expected.reg);
+      LoadValueDirect64(rl_src_expected, rl_expected.reg);
     }
     NewLIR3(kThumb2Ldrexd, r_tmp.GetReg(), r_tmp_high.GetReg(), r_ptr.GetReg());
     OpRegReg(kOpSub, r_tmp, rl_expected.reg.GetLow());
     OpRegReg(kOpSub, r_tmp_high, rl_expected.reg.GetHigh());
     if (!load_early) {
-      LoadValueDirectWide(rl_src_new_value, rl_new_value.reg);
+      LoadValueDirect64(rl_src_new_value, rl_new_value.reg);
     }
     // Make sure we use ORR that sets the ccode
     if (r_tmp.Low8() && r_tmp_high.Low8()) {

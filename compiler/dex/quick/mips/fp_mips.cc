@@ -195,8 +195,8 @@ void MipsMir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
   if (wide) {
     RegStorage r_tmp1(RegStorage::k64BitPair, rMIPS_FARG0, rMIPS_FARG1);
     RegStorage r_tmp2(RegStorage::k64BitPair, rMIPS_FARG2, rMIPS_FARG3);
-    LoadValueDirectWideFixed(rl_src1, r_tmp1);
-    LoadValueDirectWideFixed(rl_src2, r_tmp2);
+    LoadValueDirect64Fixed(rl_src1, r_tmp1);
+    LoadValueDirect64Fixed(rl_src2, r_tmp2);
   } else {
     LoadValueDirectFixed(rl_src1, rs_rMIPS_FARG0);
     LoadValueDirectFixed(rl_src2, rs_rMIPS_FARG2);

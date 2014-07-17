@@ -53,8 +53,8 @@ void X86Mir2Lir::GenCmpLong(RegLocation rl_dest, RegLocation rl_src1,
   LockCallTemps();  // Prepare for explicit register usage
   RegStorage r_tmp1 = RegStorage::MakeRegPair(rs_r0, rs_r1);
   RegStorage r_tmp2 = RegStorage::MakeRegPair(rs_r2, rs_r3);
-  LoadValueDirectWideFixed(rl_src1, r_tmp1);
-  LoadValueDirectWideFixed(rl_src2, r_tmp2);
+  LoadValueDirect64Fixed(rl_src1, r_tmp1);
+  LoadValueDirect64Fixed(rl_src2, r_tmp2);
   // Compute (r1:r0) = (r1:r0) - (r3:r2)
   OpRegReg(kOpSub, rs_r0, rs_r2);  // r0 = r0 - r2
   OpRegReg(kOpSbc, rs_r1, rs_r3);  // r1 = r1 - r3 - CF
@@ -373,8 +373,8 @@ void X86Mir2Lir::GenFusedLongCmpBranch(BasicBlock* bb, MIR* mir) {
   LockCallTemps();  // Prepare for explicit register usage
   RegStorage r_tmp1 = RegStorage::MakeRegPair(rs_r0, rs_r1);
   RegStorage r_tmp2 = RegStorage::MakeRegPair(rs_r2, rs_r3);
-  LoadValueDirectWideFixed(rl_src1, r_tmp1);
-  LoadValueDirectWideFixed(rl_src2, r_tmp2);
+  LoadValueDirect64Fixed(rl_src1, r_tmp1);
+  LoadValueDirect64Fixed(rl_src2, r_tmp2);
 
   // Swap operands and condition code to prevent use of zero flag.
   if (ccode == kCondLe || ccode == kCondGt) {
@@ -889,7 +889,7 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     RegLocation rl_object = LoadValue(rl_src_obj, kRefReg);
     RegLocation rl_new_value = LoadValueWide(rl_src_new_value, kCoreReg);
     RegLocation rl_offset = LoadValueWide(rl_src_offset, kCoreReg);
-    LoadValueDirectWide(rl_src_expected, rs_r0q);
+    LoadValueDirect64(rl_src_expected, rs_r0q);
     NewLIR5(kX86LockCmpxchg64AR, rl_object.reg.GetReg(), rl_offset.reg.GetReg(), 0, 0,
             rl_new_value.reg.GetReg());
 
@@ -905,8 +905,8 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     LockCallTemps();
     RegStorage r_tmp1 = RegStorage::MakeRegPair(rs_rAX, rs_rDX);
     RegStorage r_tmp2 = RegStorage::MakeRegPair(rs_rBX, rs_rCX);
-    LoadValueDirectWideFixed(rl_src_expected, r_tmp1);
-    LoadValueDirectWideFixed(rl_src_new_value, r_tmp2);
+    LoadValueDirect64Fixed(rl_src_expected, r_tmp1);
+    LoadValueDirect64Fixed(rl_src_new_value, r_tmp2);
     // FIXME: needs 64-bit update.
     const bool obj_in_di = IsInReg(this, rl_src_obj, rs_rDI);
     const bool obj_in_si = IsInReg(this, rl_src_obj, rs_rSI);
@@ -1023,7 +1023,7 @@ LIR* X86Mir2Lir::OpPcRelLoad(RegStorage reg, LIR* target) {
   // Address the start of the method
   RegLocation rl_method = mir_graph_->GetRegLocation(base_of_code_->s_reg_low);
   if (rl_method.wide) {
-    LoadValueDirectWideFixed(rl_method, reg);
+    LoadValueDirect64Fixed(rl_method, reg);
   } else {
     LoadValueDirectFixed(rl_method, reg);
   }
@@ -1697,10 +1697,10 @@ void X86Mir2Lir::GenDivRemLong(Instruction::Code, RegLocation rl_dest, RegLocati
   LockCallTemps();  // Prepare for explicit register usage.
 
   // Load LHS into RAX.
-  LoadValueDirectWideFixed(rl_src1, rs_r0q);
+  LoadValueDirect64Fixed(rl_src1, rs_r0q);
 
   // Load RHS into RCX.
-  LoadValueDirectWideFixed(rl_src2, rs_r1q);
+  LoadValueDirect64Fixed(rl_src2, rs_r1q);
 
   // Copy LHS sign bit into RDX.
   NewLIR0(kx86Cqo64Da);
