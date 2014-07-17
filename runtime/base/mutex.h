@@ -73,7 +73,6 @@ enum LockLevel {
   kDefaultMutexLevel,
   kMarkSweepLargeObjectLock,
   kPinTableLock,
-  kLoadLibraryLock,
   kJdwpObjectRegistryLock,
   kModifyLdtLock,
   kAllocatedThreadIdsLock,
@@ -82,6 +81,7 @@ enum LockLevel {
   kBreakpointLock,
   kMonitorLock,
   kMonitorListLock,
+  kJniLoadLibraryLock,
   kThreadListLock,
   kBreakpointInvokeLock,
   kDeoptimizationLock,
@@ -560,8 +560,11 @@ class Locks {
   // attaching and detaching.
   static Mutex* thread_list_lock_ ACQUIRED_AFTER(trace_lock_);
 
+  // Guards maintaining loading library data structures.
+  static Mutex* jni_libraries_lock_ ACQUIRED_AFTER(thread_list_lock_);
+
   // Guards breakpoints.
-  static Mutex* breakpoint_lock_ ACQUIRED_AFTER(thread_list_lock_);
+  static Mutex* breakpoint_lock_ ACQUIRED_AFTER(jni_libraries_lock_);
 
   // Guards lists of classes within the class linker.
   static ReaderWriterMutex* classlinker_classes_lock_ ACQUIRED_AFTER(breakpoint_lock_);
