@@ -574,12 +574,25 @@ void Thread::InitStackHwm() {
   }
 #endif
 
-  // Set stack_end_ to the bottom of the stack saving space of stack overflows
   bool implicit_stack_check = !Runtime::Current()->ExplicitStackOverflowChecks();
-  ResetDefaultStackEnd(implicit_stack_check);
+
+  // Warn if the stack is too small.
+  uint32_t min_implicit_stack_size =
+      kRuntimeStackOverflowReservedBytes + kStackOverflowImplicitCheckSize;
+  bool stack_too_small = read_stack_size < min_implicit_stack_size;
+  if (implicit_stack_check && stack_too_small) {
+    LOG(ERROR) << "Thread stack is too small to handle implicit stack overflow checks, "
+         "minimum stack size is " << PrettySize(min_implicit_stack_size) <<
+         " and this stack's size is " << PrettySize(read_stack_size);
+  }
+
+  // Set stack_end_ to the bottom of the stack saving space of stack overflows
+  ResetDefaultStackEnd(implicit_stack_check && !stack_too_small);
 
   // Install the protected region if we are doing implicit overflow checks.
-  if (implicit_stack_check) {
+  // Note that if the stack is too small we don't install this as it is not possible.
+
+  if (implicit_stack_check && !stack_too_small) {
     if (is_main_thread) {
       size_t guardsize;
       pthread_attr_t attributes;
