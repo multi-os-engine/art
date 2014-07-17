@@ -819,14 +819,12 @@ class Mir2Lir : public Backend {
     void GenNewArray(uint32_t type_idx, RegLocation rl_dest,
                      RegLocation rl_src);
     void GenFilledNewArray(CallInfo* info);
-    void GenSput(MIR* mir, RegLocation rl_src,
-                 bool is_long_or_double, bool is_object);
-    void GenSget(MIR* mir, RegLocation rl_dest,
-                 bool is_long_or_double, bool is_object);
+    void GenSput(MIR* mir, RegLocation rl_src, OpSize size, bool is_object);
+    void GenSget(MIR* mir, RegLocation rl_dest, OpSize size, bool is_object);
     void GenIGet(MIR* mir, int opt_flags, OpSize size,
-                 RegLocation rl_dest, RegLocation rl_obj, bool is_long_or_double, bool is_object);
+                 RegLocation rl_dest, RegLocation rl_obj, bool is_object);
     void GenIPut(MIR* mir, int opt_flags, OpSize size,
-                 RegLocation rl_src, RegLocation rl_obj, bool is_long_or_double, bool is_object);
+                 RegLocation rl_src, RegLocation rl_obj, bool is_object);
     void GenArrayObjPut(int opt_flags, RegLocation rl_array, RegLocation rl_index,
                         RegLocation rl_src);
 
@@ -985,6 +983,10 @@ class Mir2Lir : public Backend {
     // Natural word size.
     virtual LIR* LoadWordDisp(RegStorage r_base, int displacement, RegStorage r_dest) {
       return LoadBaseDisp(r_base, displacement, r_dest, kWord, kNotVolatile);
+    }
+    // Load 8 bits, regardless of target.
+    virtual LIR* Load8Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
+      return LoadBaseDisp(r_base, displacement, r_dest, kSignedByte, kNotVolatile);
     }
     // Load 32 bits, regardless of target.
     virtual LIR* Load32Disp(RegStorage r_base, int displacement, RegStorage r_dest)  {
@@ -1158,6 +1160,40 @@ class Mir2Lir : public Backend {
       RegisterInfo* info2 = GetRegInfo(reg2);
       return (info1->Master() == info2->Master() &&
              (info1->StorageMask() & info2->StorageMask()) != 0);
+    }
+
+    static bool IsWide(OpSize size) {
+      // TODO maybe comparing vs k64 and kDouble is sufficient?
+      return ComponentSize(size) == 8;
+    }
+
+    static constexpr bool IsRef(OpSize size) {
+      return size == kReference;
+    }
+
+    static size_t ComponentSize(OpSize size) {
+      // TODO what do about kWord?
+      switch (size) {
+        case kReference:
+          return Primitive::ComponentSize(Primitive::kPrimNot);
+        case k64:
+        case kDouble:
+          return Primitive::ComponentSize(Primitive::kPrimDouble);
+        case k32:
+        case kSingle:
+          return Primitive::ComponentSize(Primitive::kPrimInt);
+        case kUnsignedHalf:
+        case kSignedHalf:
+          return Primitive::ComponentSize(Primitive::kPrimShort);
+        case kUnsignedByte:
+        case kSignedByte:
+          return Primitive::ComponentSize(Primitive::kPrimByte);
+        case kWord:
+        // Intentional fallthrough, this is architecture dependent
+        default:
+          LOG(FATAL) << "Unknown op size: " << size;
+          return 0;
+      }
     }
 
     /**
@@ -1503,10 +1539,6 @@ class Mir2Lir : public Backend {
      * @returns update location
      */
     virtual RegLocation ForceTempWide(RegLocation loc);
-
-    static constexpr OpSize LoadStoreOpSize(bool wide, bool ref) {
-      return wide ? k64 : ref ? kReference : k32;
-    }
 
     virtual void GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,
                                     RegLocation rl_dest, RegLocation rl_src);
