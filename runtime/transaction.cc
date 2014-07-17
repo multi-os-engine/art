@@ -57,6 +57,14 @@ Transaction::~Transaction() {
   }
 }
 
+void Transaction::RecordWriteField16(mirror::Object* obj, MemberOffset field_offset, uint16_t value,
+                                     bool is_volatile) {
+  DCHECK(obj != nullptr);
+  MutexLock mu(Thread::Current(), log_lock_);
+  ObjectLog& object_log = object_logs_[obj];
+  object_log.Log16BitsValue(field_offset, value, is_volatile);
+}
+
 void Transaction::RecordWriteField32(mirror::Object* obj, MemberOffset field_offset, uint32_t value,
                                      bool is_volatile) {
   DCHECK(obj != nullptr);
@@ -223,6 +231,17 @@ void Transaction::VisitStringLogs(RootCallback* callback, void* arg) {
   }
 }
 
+void Transaction::ObjectLog::Log16BitsValue(MemberOffset offset, uint16_t value, bool is_volatile) {
+  auto it = field_values_.find(offset.Uint32Value());
+  if (it == field_values_.end()) {
+    ObjectLog::FieldValue field_value;
+    field_value.value = value;
+    field_value.is_volatile = is_volatile;
+    field_value.kind = ObjectLog::k16Bits;
+    field_values_.insert(std::make_pair(offset.Uint32Value(), field_value));
+  }
+}
+
 void Transaction::ObjectLog::Log32BitsValue(MemberOffset offset, uint32_t value, bool is_volatile) {
   auto it = field_values_.find(offset.Uint32Value());
   if (it == field_values_.end()) {
@@ -281,6 +300,15 @@ void Transaction::ObjectLog::UndoFieldWrite(mirror::Object* obj, MemberOffset fi
   // we'd need to disable the check.
   constexpr bool kCheckTransaction = true;
   switch (field_value.kind) {
+    case k16Bits:
+      if (UNLIKELY(field_value.is_volatile)) {
+        obj->SetField16Volatile<false, kCheckTransaction>(field_offset,
+                                                          static_cast<uint16_t>(field_value.value));
+      } else {
+        obj->SetField16<false, kCheckTransaction>(field_offset,
+                                                  static_cast<uint16_t>(field_value.value));
+      }
+      break;
     case k32Bits:
       if (UNLIKELY(field_value.is_volatile)) {
         obj->SetField32Volatile<false, kCheckTransaction>(field_offset,

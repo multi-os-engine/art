@@ -559,6 +559,8 @@ LIR* MipsMir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r
   // TODO: base this on target.
   if (size == kWord) {
     size = k32;
+  } else if (size == k16) {
+    LOG(FATAL) << "Not implemented";
   }
   LIR* load;
   load = LoadBaseDispBody(r_base, displacement, r_dest, size);
@@ -657,6 +659,10 @@ LIR* MipsMir2Lir::StoreBaseDisp(RegStorage r_base, int displacement, RegStorage 
   if (is_volatile == kVolatile) {
     // Ensure that prior accesses become visible to other threads first.
     GenMemBarrier(kAnyStore);
+  }
+
+  if (size == k16) {
+    LOG(FATAL) << "Not implemented";
   }
 
   LIR* store;
