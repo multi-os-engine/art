@@ -735,6 +735,7 @@ LIR* ArmMir2Lir::LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStora
     case kUnsignedHalf:
       opcode = (thumb_form) ? kThumbLdrhRRR : kThumb2LdrhRRR;
       break;
+    case k16:
     case kSignedHalf:
       opcode = (thumb_form) ? kThumbLdrshRRR : kThumb2LdrshRRR;
       break;
@@ -801,6 +802,7 @@ LIR* ArmMir2Lir::StoreBaseIndexed(RegStorage r_base, RegStorage r_index, RegStor
       break;
     case kUnsignedHalf:
     // Intentional fall-though.
+    case k16:
     case kSignedHalf:
       opcode = (thumb_form) ? kThumbStrhRRR : kThumb2StrhRRR;
       break;
@@ -917,6 +919,7 @@ LIR* ArmMir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStorag
         opcode = kThumb2LdrhRRI12;
       }
       break;
+    case k16:
     case kSignedHalf:
       if (thumb2Form) {
         short_form = true;
@@ -1040,6 +1043,7 @@ LIR* ArmMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegStora
         opcode = kThumb2StrRRI12;
       }
       break;
+    case k16:
     case kUnsignedHalf:
     case kSignedHalf:
       if (all_low && displacement < 64 && displacement >= 0) {
