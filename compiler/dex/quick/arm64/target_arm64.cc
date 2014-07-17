@@ -1150,11 +1150,11 @@ int Arm64Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
             } else {
               if (rl_arg.ref) {
                 RegStorage regSingle = TargetReg(kArg2, kRef);
-                LoadValueDirectFixed(rl_arg, regSingle);
+                LoadValueDirectWideFixed(rl_arg, regSingle);
                 StoreRefDisp(TargetPtrReg(kSp), out_offset, regSingle, kNotVolatile);
               } else {
                 RegStorage regSingle = TargetReg(kArg2, kNotWide);
-                LoadValueDirectFixed(rl_arg, regSingle);
+                LoadValueDirectWideFixed(rl_arg, regSingle);
                 StoreBaseDisp(TargetPtrReg(kSp), out_offset, regSingle, k32, kNotVolatile);
               }
             }

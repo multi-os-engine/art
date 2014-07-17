@@ -1726,6 +1726,7 @@ uint32_t ClassLinker::SizeOfClassWithoutEmbeddedTables(const DexFile& dex_file,
                                                        const DexFile::ClassDef& dex_class_def) {
   const byte* class_data = dex_file.GetClassData(dex_class_def);
   size_t num_ref = 0;
+  size_t num_16 = 0;
   size_t num_32 = 0;
   size_t num_64 = 0;
   if (class_data != NULL) {
@@ -1737,12 +1738,14 @@ uint32_t ClassLinker::SizeOfClassWithoutEmbeddedTables(const DexFile& dex_file,
         num_ref++;
       } else if (c == 'J' || c == 'D') {
         num_64++;
+      } else if (c == 'Z') {
+        num_16++;
       } else {
         num_32++;
       }
     }
   }
-  return mirror::Class::ComputeClassSize(false, 0, num_32, num_64, num_ref);
+  return mirror::Class::ComputeClassSize(false, 0, num_16, num_32, num_64, num_ref);
 }
 
 OatFile::OatClass ClassLinker::GetOatClass(const DexFile& dex_file, uint16_t class_def_idx) {
@@ -4226,7 +4229,7 @@ struct LinkFieldsComparator {
   // No thread safety analysis as will be called from STL. Checked lock held in constructor.
   bool operator()(mirror::ArtField* field1, mirror::ArtField* field2)
       NO_THREAD_SAFETY_ANALYSIS {
-    // First come reference fields, then 64-bit, and finally 32-bit
+    // First come reference fields, then 64-bit, then 32-bit, and finally 16-bit bool
     Primitive::Type type1 = field1->GetTypeAsPrimitiveType();
     Primitive::Type type2 = field2->GetTypeAsPrimitiveType();
     if (type1 != type2) {
@@ -4236,8 +4239,13 @@ struct LinkFieldsComparator {
                                         type1 == Primitive::kPrimDouble);
       bool is64bit2 = is_primitive2 && (type2 == Primitive::kPrimLong ||
                                         type2 == Primitive::kPrimDouble);
-      int order1 = !is_primitive1 ? 0 : (is64bit1 ? 1 : 2);
-      int order2 = !is_primitive2 ? 0 : (is64bit2 ? 1 : 2);
+      // we need to go deeper
+      bool is32bit1 = is_primitive1 && !is64bit1 &&
+          (type1 != Primitive::kPrimBoolean);
+      bool is32bit2 = is_primitive2 && !is64bit2 &&
+          (type2 != Primitive::kPrimBoolean);
+      int order1 = !is_primitive1 ? 0 : (is64bit1 ? 1 : (is32bit1? 2 : 3));
+      int order2 = !is_primitive2 ? 0 : (is64bit2 ? 1 : (is32bit2? 2 : 3));
       if (order1 != order2) {
         return order1 < order2;
       }
@@ -4261,7 +4269,7 @@ bool ClassLinker::LinkFields(Handle<mirror::Class> klass, bool is_static, size_t
     if (klass->ShouldHaveEmbeddedImtAndVTable()) {
       // Static fields come after the embedded tables.
       base = mirror::Class::ComputeClassSize(true, klass->GetVTableDuringLinking()->GetLength(),
-                                             0, 0, 0);
+                                             0, 0, 0, 0);
     }
     field_offset = MemberOffset(base);
   } else {
@@ -4314,10 +4322,21 @@ bool ClassLinker::LinkFields(Handle<mirror::Class> klass, bool is_static, size_t
       if (type == Primitive::kPrimLong || type == Primitive::kPrimDouble) {
         continue;
       }
+      // TODO: this currently only assumes booleans are size 2, use ComponentSize for more
+      // correct results.
       fields->Set<false>(current_field++, field);
       field->SetOffset(field_offset);
       // drop the consumed field
       grouped_and_sorted_fields.erase(grouped_and_sorted_fields.begin() + i);
+      // if it was a boolean and we haven't consumed all fields, shuffle another bool forward
+      if (type == Primitive::kPrimBoolean && i < grouped_and_sorted_fields.size()) {
+        field = grouped_and_sorted_fields[i];
+        CHECK(field->GetTypeAsPrimitiveType() == Primitive::kPrimBoolean);
+        // check to see if there's another bool following
+        fields->Set<false>(current_field++, field);
+        field->SetOffset(MemberOffset(field_offset.Uint32Value() + sizeof(uint16_t)));
+        grouped_and_sorted_fields.erase(grouped_and_sorted_fields.begin() + i);
+      }
       break;
     }
     // whether we found a 32-bit field for padding or not, we advance
@@ -4338,8 +4357,12 @@ bool ClassLinker::LinkFields(Handle<mirror::Class> klass, bool is_static, size_t
     field_offset = MemberOffset(field_offset.Uint32Value() +
                                 ((type == Primitive::kPrimLong || type == Primitive::kPrimDouble)
                                  ? sizeof(uint64_t)
-                                 : sizeof(uint32_t)));
+                                 : (type == Primitive::kPrimBoolean? sizeof(uint16_t) : sizeof(uint32_t))));
     current_field++;
+  }
+  // pad the end if it is not architecture aligned
+  if (!IsAligned<4>(field_offset.Uint32Value())) {
+    field_offset = MemberOffset(field_offset.Uint32Value() + sizeof(uint16_t));
   }
 
   // We lie to the GC about the java.lang.ref.Reference.referent field, so it doesn't scan it.
