@@ -2526,8 +2526,22 @@ void Heap::RevokeAllThreadLocalAllocationStacks(Thread* self) {
   }
 }
 
+void Heap::AssertThreadLocalBuffersAreRevoked(Thread* thread) {
+  if (kIsDebugBuild) {
+    if (rosalloc_space_ != nullptr) {
+      rosalloc_space_->AssertThreadLocalBuffersAreRevoked(thread);
+    }
+    if (bump_pointer_space_ != nullptr) {
+      bump_pointer_space_->AssertThreadLocalBuffersAreRevoked(thread);
+    }
+  }
+}
+
 void Heap::AssertAllBumpPointerSpaceThreadLocalBuffersAreRevoked() {
   if (kIsDebugBuild) {
+    if (rosalloc_space_ != nullptr) {
+      rosalloc_space_->AssertAllThreadLocalBuffersAreRevoked();
+    }
     if (bump_pointer_space_ != nullptr) {
       bump_pointer_space_->AssertAllThreadLocalBuffersAreRevoked();
     }
