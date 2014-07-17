@@ -46,7 +46,8 @@ class HGraphBuilder : public ValueObject {
         constant1_(nullptr),
         dex_file_(dex_file),
         dex_compilation_unit_(dex_compilation_unit),
-        compiler_driver_(driver) {}
+        compiler_driver_(driver),
+        number_of_calls_(0) {}
 
   HGraph* BuildGraph(const DexFile::CodeItem& code);
 
@@ -123,6 +124,8 @@ class HGraphBuilder : public ValueObject {
   const DexFile* const dex_file_;
   DexCompilationUnit* const dex_compilation_unit_;
   CompilerDriver* const compiler_driver_;
+
+  size_t number_of_calls_;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphBuilder);
 };
