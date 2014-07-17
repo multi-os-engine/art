@@ -1201,7 +1201,7 @@ void X86_64Assembler::mull(const Address& address) {
 
 
 void X86_64Assembler::shll(CpuRegister reg, const Immediate& imm) {
-  EmitGenericShift(4, reg, imm);
+  EmitGenericShift(false, 4, reg, imm);
 }
 
 
@@ -1211,7 +1211,12 @@ void X86_64Assembler::shll(CpuRegister operand, CpuRegister shifter) {
 
 
 void X86_64Assembler::shrl(CpuRegister reg, const Immediate& imm) {
-  EmitGenericShift(5, reg, imm);
+  EmitGenericShift(false, 5, reg, imm);
+}
+
+
+void X86_64Assembler::shrq(CpuRegister reg, const Immediate& imm) {
+  EmitGenericShift(true, 5, reg, imm);
 }
 
 
@@ -1221,7 +1226,7 @@ void X86_64Assembler::shrl(CpuRegister operand, CpuRegister shifter) {
 
 
 void X86_64Assembler::sarl(CpuRegister reg, const Immediate& imm) {
-  EmitGenericShift(7, reg, imm);
+  EmitGenericShift(false, 7, reg, imm);
 }
 
 
@@ -1537,11 +1542,15 @@ void X86_64Assembler::EmitLabelLink(Label* label) {
 }
 
 
-void X86_64Assembler::EmitGenericShift(int reg_or_opcode,
-                                    CpuRegister reg,
-                                    const Immediate& imm) {
+void X86_64Assembler::EmitGenericShift(bool wide,
+                                       int reg_or_opcode,
+                                       CpuRegister reg,
+                                       const Immediate& imm) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   CHECK(imm.is_int8());
+  if (wide) {
+    EmitRex64(reg);
+  }
   if (imm.value() == 1) {
     EmitUint8(0xD1);
     EmitOperand(reg_or_opcode, Operand(reg));
@@ -1554,8 +1563,8 @@ void X86_64Assembler::EmitGenericShift(int reg_or_opcode,
 
 
 void X86_64Assembler::EmitGenericShift(int reg_or_opcode,
-                                    CpuRegister operand,
-                                    CpuRegister shifter) {
+                                       CpuRegister operand,
+                                       CpuRegister shifter) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   CHECK_EQ(shifter.AsRegister(), RCX);
   EmitUint8(0xD3);
