@@ -967,6 +967,8 @@ LIR* ArmMir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_
   // TODO: base this on target.
   if (size == kWord) {
     size = k32;
+  } else if (size == k16) {
+    LOG(FATAL) << "Not implemented";
   }
   LIR* load;
   if (UNLIKELY(is_volatile == kVolatile &&
@@ -1090,6 +1092,9 @@ LIR* ArmMir2Lir::StoreBaseDisp(RegStorage r_base, int displacement, RegStorage r
   if (UNLIKELY(is_volatile == kVolatile)) {
     // Ensure that prior accesses become visible to other threads first.
     GenMemBarrier(kAnyStore);
+  }
+  if (size == k16) {
+    LOG(FATAL) << "Not implemented";
   }
 
   LIR* store;

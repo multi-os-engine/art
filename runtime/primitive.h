@@ -87,6 +87,9 @@ class Primitive {
   }
 
   static size_t FieldSize(Type type) {
+    if (type == kPrimBoolean || type == kPrimShort || type == kPrimChar) {
+      return 2;
+    }
     return ComponentSize(type) <= 4 ? 4 : 8;
   }
 

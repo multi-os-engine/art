@@ -59,12 +59,16 @@ struct PACKED(4) QuickEntryPoints {
   void* (*pResolveString)(void*, uint32_t);
 
   // Field
+  int (*pSet16Instance)(uint32_t, void*, int16_t);
+  int (*pSet16Static)(uint32_t, int16_t);
   int (*pSet32Instance)(uint32_t, void*, int32_t);  // field_idx, obj, src
   int (*pSet32Static)(uint32_t, int32_t);
   int (*pSet64Instance)(uint32_t, void*, int64_t);
   int (*pSet64Static)(uint32_t, int64_t);
   int (*pSetObjInstance)(uint32_t, void*, void*);
   int (*pSetObjStatic)(uint32_t, void*);
+  int16_t (*pGet16Instance)(uint32_t, void*);
+  int16_t (*pGet16Static)(uint32_t);
   int32_t (*pGet32Instance)(uint32_t, void*);
   int32_t (*pGet32Static)(uint32_t);
   int64_t (*pGet64Instance)(uint32_t, void*);

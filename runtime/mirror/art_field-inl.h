@@ -31,7 +31,7 @@ namespace mirror {
 
 inline uint32_t ArtField::ClassSize() {
   uint32_t vtable_entries = Object::kVTableLength + 6;
-  return Class::ComputeClassSize(true, vtable_entries, 0, 0, 0);
+  return Class::ComputeClassSize(true, vtable_entries, 0, 0, 0, 0);
 }
 
 inline Class* ArtField::GetDeclaringClass() {
@@ -60,6 +60,25 @@ inline MemberOffset ArtField::GetOffsetDuringLinking() {
   return MemberOffset(GetField32(OFFSET_OF_OBJECT_MEMBER(ArtField, offset_)));
 }
 
+inline uint16_t ArtField::Get16(Object* object) {
+  DCHECK(object != nullptr) << PrettyField(this);
+  DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
+  if (UNLIKELY(IsVolatile())) {
+    return object->GetField16Volatile(GetOffset());
+  }
+  return object->GetField16(GetOffset());
+}
+
+template<bool kTransactionActive>
+inline void ArtField::Set16(Object* object, uint16_t new_value) {
+  DCHECK(object != nullptr) << PrettyField(this);
+  DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
+  if (UNLIKELY(IsVolatile())) {
+    object->SetField16Volatile<kTransactionActive>(GetOffset(), new_value);
+  } else {
+    object->SetField16<kTransactionActive>(GetOffset(), new_value);
+  }
+}
 inline uint32_t ArtField::Get32(Object* object) {
   DCHECK(object != nullptr) << PrettyField(this);
   DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
@@ -122,13 +141,13 @@ inline void ArtField::SetObj(Object* object, Object* new_value) {
 
 inline bool ArtField::GetBoolean(Object* object) {
   DCHECK_EQ(Primitive::kPrimBoolean, GetTypeAsPrimitiveType()) << PrettyField(this);
-  return Get32(object);
+  return Get16(object);
 }
 
 template<bool kTransactionActive>
 inline void ArtField::SetBoolean(Object* object, bool z) {
   DCHECK_EQ(Primitive::kPrimBoolean, GetTypeAsPrimitiveType()) << PrettyField(this);
-  Set32<kTransactionActive>(object, z);
+  Set16<kTransactionActive>(object, z);
 }
 
 inline int8_t ArtField::GetByte(Object* object) {
@@ -144,24 +163,24 @@ inline void ArtField::SetByte(Object* object, int8_t b) {
 
 inline uint16_t ArtField::GetChar(Object* object) {
   DCHECK_EQ(Primitive::kPrimChar, GetTypeAsPrimitiveType()) << PrettyField(this);
-  return Get32(object);
+  return Get16(object);
 }
 
 template<bool kTransactionActive>
 inline void ArtField::SetChar(Object* object, uint16_t c) {
   DCHECK_EQ(Primitive::kPrimChar, GetTypeAsPrimitiveType()) << PrettyField(this);
-  Set32<kTransactionActive>(object, c);
+  Set16<kTransactionActive>(object, c);
 }
 
 inline int16_t ArtField::GetShort(Object* object) {
   DCHECK_EQ(Primitive::kPrimShort, GetTypeAsPrimitiveType()) << PrettyField(this);
-  return Get32(object);
+  return Get16(object);
 }
 
 template<bool kTransactionActive>
 inline void ArtField::SetShort(Object* object, int16_t s) {
   DCHECK_EQ(Primitive::kPrimShort, GetTypeAsPrimitiveType()) << PrettyField(this);
-  Set32<kTransactionActive>(object, s);
+  Set16<kTransactionActive>(object, s);
 }
 
 inline int32_t ArtField::GetInt(Object* object) {
