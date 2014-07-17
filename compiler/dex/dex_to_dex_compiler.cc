@@ -121,12 +121,6 @@ void DexCompiler::Compile() {
         break;
 
       case Instruction::IPUT:
-      case Instruction::IPUT_BOOLEAN:
-      case Instruction::IPUT_BYTE:
-      case Instruction::IPUT_CHAR:
-      case Instruction::IPUT_SHORT:
-        // These opcodes have the same implementation in interpreter so group
-        // them under IPUT_QUICK.
         CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_QUICK, true);
         break;
 
