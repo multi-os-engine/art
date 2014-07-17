@@ -32,7 +32,7 @@ bool DoFieldGet(Thread* self, ShadowFrame& shadow_frame, const Instruction* inst
   const bool is_static = (find_type == StaticObjectRead) || (find_type == StaticPrimitiveRead);
   const uint32_t field_idx = is_static ? inst->VRegB_21c() : inst->VRegC_22c();
   ArtField* f = FindFieldFromCode<find_type, do_access_check>(field_idx, shadow_frame.GetMethod(), self,
-                                                              Primitive::FieldSize(field_type));
+                                                              Primitive::ComponentSize(field_type));
   if (UNLIKELY(f == nullptr)) {
     CHECK(self->IsExceptionPending());
     return false;
@@ -208,7 +208,7 @@ bool DoFieldPut(Thread* self, const ShadowFrame& shadow_frame, const Instruction
   bool is_static = (find_type == StaticObjectWrite) || (find_type == StaticPrimitiveWrite);
   uint32_t field_idx = is_static ? inst->VRegB_21c() : inst->VRegC_22c();
   ArtField* f = FindFieldFromCode<find_type, do_access_check>(field_idx, shadow_frame.GetMethod(), self,
-                                                              Primitive::FieldSize(field_type));
+                                                              Primitive::ComponentSize(field_type));
   if (UNLIKELY(f == nullptr)) {
     CHECK(self->IsExceptionPending());
     return false;

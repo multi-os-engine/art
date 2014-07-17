@@ -1158,6 +1158,20 @@ void Runtime::ExitTransactionMode() {
   preinitialization_transaction_ = nullptr;
 }
 
+void Runtime::RecordWriteField8(mirror::Object* obj, MemberOffset field_offset,
+                                uint8_t value, bool is_volatile) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction_->RecordWriteField8(obj, field_offset, value, is_volatile);
+}
+
+void Runtime::RecordWriteField16(mirror::Object* obj, MemberOffset field_offset,
+                                 uint16_t value, bool is_volatile) const {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction_->RecordWriteField16(obj, field_offset, value, is_volatile);
+}
+
 void Runtime::RecordWriteField32(mirror::Object* obj, MemberOffset field_offset,
                                  uint32_t value, bool is_volatile) const {
   DCHECK(IsCompiler());
