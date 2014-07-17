@@ -18,6 +18,7 @@
 #include "dex/dataflow_iterator-inl.h"
 #include "dex/quick/dex_file_method_inliner.h"
 #include "mir_to_lir-inl.h"
+#include "primitive.h"
 #include "thread-inl.h"
 
 namespace art {
@@ -223,9 +224,23 @@ bool Mir2Lir::GenSpecialIGet(MIR* mir, const InlineMethod& special) {
     return false;
   }
 
-  bool wide = (data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET_WIDE));
-  bool ref = (data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET_OBJECT));
-  OpSize size = LoadStoreOpSize(wide, ref);
+  // TODO refactor
+  OpSize size = k32;
+  if (data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET_OBJECT)) {
+    size = kReference;
+  } else if (data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET_WIDE)) {
+    size = k64;
+  } else if (data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET_SHORT)) {
+    size = kSignedHalf;
+  } else if (data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET_CHAR)) {
+    size = kUnsignedHalf;
+  } else if (data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET_BOOLEAN) || data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET_BYTE)) {
+    size = kSignedByte;
+  } else if (data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET)) {
+  } else {
+    LOG(FATAL) << "Unexpected variant " << data.op_variant;
+  }
+  // TODO fall through case
 
   // Point of no return - no aborts after this
   GenPrintLabel(mir);
@@ -233,20 +248,20 @@ bool Mir2Lir::GenSpecialIGet(MIR* mir, const InlineMethod& special) {
   RegStorage reg_obj = LoadArg(data.object_arg, kRefReg);
   RegisterClass reg_class = RegClassForFieldLoadStore(size, data.is_volatile);
   RegisterClass ret_reg_class = ShortyToRegClass(cu_->shorty[0]);
-  RegLocation rl_dest = wide ? GetReturnWide(ret_reg_class) : GetReturn(ret_reg_class);
+  RegLocation rl_dest = IsWide(size) ? GetReturnWide(ret_reg_class) : GetReturn(ret_reg_class);
   RegStorage r_result = rl_dest.reg;
   if (!RegClassMatches(reg_class, r_result)) {
-    r_result = wide ? AllocTypedTempWide(rl_dest.fp, reg_class)
-                    : AllocTypedTemp(rl_dest.fp, reg_class);
+    r_result = IsWide(size) ? AllocTypedTempWide(rl_dest.fp, reg_class)
+                            : AllocTypedTemp(rl_dest.fp, reg_class);
   }
-  if (ref) {
+  if (IsRef(size)) {
     LoadRefDisp(reg_obj, data.field_offset, r_result, data.is_volatile ? kVolatile : kNotVolatile);
   } else {
     LoadBaseDisp(reg_obj, data.field_offset, r_result, size, data.is_volatile ? kVolatile :
         kNotVolatile);
   }
   if (r_result.NotExactlyEquals(rl_dest.reg)) {
-    if (wide) {
+    if (IsWide(size)) {
       OpRegCopyWide(rl_dest.reg, r_result);
     } else {
       OpRegCopy(rl_dest.reg, r_result);
@@ -267,24 +282,34 @@ bool Mir2Lir::GenSpecialIPut(MIR* mir, const InlineMethod& special) {
     return false;
   }
 
-  bool wide = (data.op_variant == InlineMethodAnalyser::IPutVariant(Instruction::IPUT_WIDE));
-  bool ref = (data.op_variant == InlineMethodAnalyser::IGetVariant(Instruction::IGET_OBJECT));
-  OpSize size = LoadStoreOpSize(wide, ref);
+  OpSize size = k32;
+  if (data.op_variant == InlineMethodAnalyser::IPutVariant(Instruction::IPUT_OBJECT)) {
+    size = kReference;
+  } else if (data.op_variant == InlineMethodAnalyser::IPutVariant(Instruction::IPUT_WIDE)) {
+    size = k64;
+  } else if (data.op_variant == InlineMethodAnalyser::IPutVariant(Instruction::IPUT_SHORT)) {
+    size = kSignedHalf;
+  } else if (data.op_variant == InlineMethodAnalyser::IPutVariant(Instruction::IPUT_CHAR)) {
+    size = kUnsignedHalf;
+  } else if (data.op_variant == InlineMethodAnalyser::IPutVariant(Instruction::IPUT_BOOLEAN) || data.op_variant == InlineMethodAnalyser::IPutVariant(Instruction::IPUT_BYTE)) {
+    size = kSignedByte;
+  }
+  // TODO fall through case
 
   // Point of no return - no aborts after this
   GenPrintLabel(mir);
   LockArg(data.object_arg);
-  LockArg(data.src_arg, wide);
+  LockArg(data.src_arg, IsWide(size));
   RegStorage reg_obj = LoadArg(data.object_arg, kRefReg);
   RegisterClass reg_class = RegClassForFieldLoadStore(size, data.is_volatile);
-  RegStorage reg_src = LoadArg(data.src_arg, reg_class, wide);
-  if (ref) {
+  RegStorage reg_src = LoadArg(data.src_arg, reg_class, IsWide(size));
+  if (IsRef(size)) {
     StoreRefDisp(reg_obj, data.field_offset, reg_src, data.is_volatile ? kVolatile : kNotVolatile);
   } else {
     StoreBaseDisp(reg_obj, data.field_offset, reg_src, size, data.is_volatile ? kVolatile :
         kNotVolatile);
   }
-  if (ref) {
+  if (IsRef(size)) {
     MarkGCCard(reg_src, reg_obj);
   }
   return true;
@@ -720,84 +745,110 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       break;
 
     case Instruction::IGET_OBJECT:
-      GenIGet(mir, opt_flags, kReference, rl_dest, rl_src[0], false, true);
+      GenIGet(mir, opt_flags, kReference, rl_dest, rl_src[0]);
       break;
 
     case Instruction::IGET_WIDE:
-      GenIGet(mir, opt_flags, k64, rl_dest, rl_src[0], true, false);
+      GenIGet(mir, opt_flags, k64, rl_dest, rl_src[0]);
       break;
 
     case Instruction::IGET:
-      GenIGet(mir, opt_flags, k32, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, k32, rl_dest, rl_src[0]);
       break;
 
     case Instruction::IGET_CHAR:
-      GenIGet(mir, opt_flags, kUnsignedHalf, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kUnsignedHalf, rl_dest, rl_src[0]);
       break;
 
     case Instruction::IGET_SHORT:
-      GenIGet(mir, opt_flags, kSignedHalf, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kSignedHalf, rl_dest, rl_src[0]);
       break;
 
     case Instruction::IGET_BOOLEAN:
+      GenIGet(mir, opt_flags, kUnsignedByte, rl_dest, rl_src[0]);
+      break;
+
     case Instruction::IGET_BYTE:
-      GenIGet(mir, opt_flags, kUnsignedByte, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kSignedByte, rl_dest, rl_src[0]);
       break;
 
     case Instruction::IPUT_WIDE:
-      GenIPut(mir, opt_flags, k64, rl_src[0], rl_src[1], true, false);
+      GenIPut(mir, opt_flags, k64, rl_src[0], rl_src[1]);
       break;
 
     case Instruction::IPUT_OBJECT:
-      GenIPut(mir, opt_flags, kReference, rl_src[0], rl_src[1], false, true);
+      GenIPut(mir, opt_flags, kReference, rl_src[0], rl_src[1]);
       break;
 
     case Instruction::IPUT:
-      GenIPut(mir, opt_flags, k32, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, k32, rl_src[0], rl_src[1]);
       break;
 
-    case Instruction::IPUT_BOOLEAN:
     case Instruction::IPUT_BYTE:
-      GenIPut(mir, opt_flags, kUnsignedByte, rl_src[0], rl_src[1], false, false);
+    case Instruction::IPUT_BOOLEAN:
+      GenIPut(mir, opt_flags, kUnsignedByte, rl_src[0], rl_src[1]);
       break;
 
     case Instruction::IPUT_CHAR:
-      GenIPut(mir, opt_flags, kUnsignedHalf, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, kUnsignedHalf, rl_src[0], rl_src[1]);
       break;
 
     case Instruction::IPUT_SHORT:
-      GenIPut(mir, opt_flags, kSignedHalf, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, kSignedHalf, rl_src[0], rl_src[1]);
       break;
 
     case Instruction::SGET_OBJECT:
-      GenSget(mir, rl_dest, false, true);
+      GenSget(mir, rl_dest, kReference);
       break;
+
     case Instruction::SGET:
-    case Instruction::SGET_BOOLEAN:
-    case Instruction::SGET_BYTE:
+      GenSget(mir, rl_dest, k32);
+      break;
+
     case Instruction::SGET_CHAR:
+      GenSget(mir, rl_dest, kUnsignedHalf);
+      break;
+
     case Instruction::SGET_SHORT:
-      GenSget(mir, rl_dest, false, false);
+      GenSget(mir, rl_dest, kSignedHalf);
+      break;
+
+    case Instruction::SGET_BOOLEAN:
+      GenSget(mir, rl_dest, kUnsignedByte);
+      break;
+
+    case Instruction::SGET_BYTE:
+      GenSget(mir, rl_dest, kSignedByte);
       break;
 
     case Instruction::SGET_WIDE:
-      GenSget(mir, rl_dest, true, false);
+      GenSget(mir, rl_dest, k64);
       break;
 
     case Instruction::SPUT_OBJECT:
-      GenSput(mir, rl_src[0], false, true);
+      GenSput(mir, rl_src[0], kReference);
       break;
 
     case Instruction::SPUT:
-    case Instruction::SPUT_BOOLEAN:
-    case Instruction::SPUT_BYTE:
-    case Instruction::SPUT_CHAR:
-    case Instruction::SPUT_SHORT:
-      GenSput(mir, rl_src[0], false, false);
+      GenSput(mir, rl_src[0], k32);
       break;
 
+    case Instruction::SPUT_BYTE:
+    case Instruction::SPUT_BOOLEAN:
+      GenSput(mir, rl_src[0], kUnsignedByte);
+      break;
+
+    case Instruction::SPUT_CHAR:
+      GenSput(mir, rl_src[0], kUnsignedHalf);
+      break;
+
+    case Instruction::SPUT_SHORT:
+      GenSput(mir, rl_src[0], kSignedHalf);
+      break;
+
+
     case Instruction::SPUT_WIDE:
-      GenSput(mir, rl_src[0], true, false);
+      GenSput(mir, rl_src[0], k64);
       break;
 
     case Instruction::INVOKE_STATIC_RANGE:
