@@ -59,7 +59,7 @@ void Arm64Mir2Lir::GenSparseSwitch(MIR* mir, uint32_t table_offset,
   switch_tables_.Insert(tab_rec);
 
   // Get the switch value
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   RegStorage r_base = AllocTempWide();
   // Allocate key and disp temps.
   RegStorage r_key = AllocTemp();
@@ -113,7 +113,7 @@ void Arm64Mir2Lir::GenPackedSwitch(MIR* mir, uint32_t table_offset,
   switch_tables_.Insert(tab_rec);
 
   // Get the switch value
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   RegStorage table_base = AllocTempWide();
   // Materialize a pointer to the switch table
   NewLIR3(kA64Adr2xd, table_base.GetReg(), 0, WrapPointer(tab_rec));
@@ -173,7 +173,7 @@ void Arm64Mir2Lir::GenFillArrayData(uint32_t table_offset, RegLocation rl_src) {
 
   // Making a call - use explicit registers
   FlushAllRegs();   /* Everything to home location */
-  LoadValueDirectFixed(rl_src, rs_x0);
+  LoadValueDirect32Fixed(rl_src, rs_x0);
   LoadWordDisp(rs_xSELF, QUICK_ENTRYPOINT_OFFSET(8, pHandleFillArrayData).Int32Value(),
                rs_xLR);
   // Materialize a pointer to the fill data image
@@ -195,7 +195,7 @@ void Arm64Mir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
   // TUNING: How much performance we get when we inline this?
   // Since we've already flush all register.
   FlushAllRegs();
-  LoadValueDirectFixed(rl_src, rs_x0);  // = TargetReg(kArg0, kRef)
+  LoadValueDirect32Fixed(rl_src, rs_x0);  // = TargetReg(kArg0, kRef)
   LockCallTemps();  // Prepare for explicit register usage
   LIR* null_check_branch = nullptr;
   if ((opt_flags & MIR_IGNORE_NULL_CHECK) && !(cu_->disable_opt & (1 << kNullCheckElimination))) {
@@ -243,7 +243,7 @@ void Arm64Mir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
   // TUNING: How much performance we get when we inline this?
   // Since we've already flush all register.
   FlushAllRegs();
-  LoadValueDirectFixed(rl_src, rs_x0);  // Get obj
+  LoadValueDirect32Fixed(rl_src, rs_x0);  // Get obj
   LockCallTemps();  // Prepare for explicit register usage
   LIR* null_check_branch = nullptr;
   if ((opt_flags & MIR_IGNORE_NULL_CHECK) && !(cu_->disable_opt & (1 << kNullCheckElimination))) {

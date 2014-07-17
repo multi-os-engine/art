@@ -18,6 +18,7 @@
 #include "dex/dataflow_iterator-inl.h"
 #include "dex/quick/dex_file_method_inliner.h"
 #include "mir_to_lir-inl.h"
+#include "primitive.h"
 #include "thread-inl.h"
 
 namespace art {
@@ -544,7 +545,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::ARRAY_LENGTH:
       int len_offset;
       len_offset = mirror::Array::LengthOffset().Int32Value();
-      rl_src[0] = LoadValue(rl_src[0], kRefReg);
+      rl_src[0] = LoadValue32(rl_src[0], kRefReg);
       GenNullCheck(rl_src[0].reg, opt_flags);
       rl_result = EvalLoc(rl_dest, kCoreReg, true);
       Load32Disp(rl_src[0].reg, len_offset, rl_result.reg);
@@ -720,84 +721,95 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       break;
 
     case Instruction::IGET_OBJECT:
-      GenIGet(mir, opt_flags, kReference, rl_dest, rl_src[0], false, true);
+      GenIGet(mir, opt_flags, kReference, rl_dest, rl_src[0], Primitive::ComponentSize(Primitive::kPrimNot), true);
       break;
 
     case Instruction::IGET_WIDE:
-      GenIGet(mir, opt_flags, k64, rl_dest, rl_src[0], true, false);
+      GenIGet(mir, opt_flags, k64, rl_dest, rl_src[0], 8, false);
       break;
 
     case Instruction::IGET:
-      GenIGet(mir, opt_flags, k32, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, k32, rl_dest, rl_src[0], 4, false);
       break;
 
     case Instruction::IGET_CHAR:
-      GenIGet(mir, opt_flags, kUnsignedHalf, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kUnsignedHalf, rl_dest, rl_src[0], 4, false);
       break;
 
     case Instruction::IGET_SHORT:
-      GenIGet(mir, opt_flags, kSignedHalf, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kSignedHalf, rl_dest, rl_src[0], 4, false);
       break;
 
     case Instruction::IGET_BOOLEAN:
+      GenIGet(mir, opt_flags, kUnsignedByte, rl_dest, rl_src[0], 2, false);
+      break;
+
     case Instruction::IGET_BYTE:
-      GenIGet(mir, opt_flags, kUnsignedByte, rl_dest, rl_src[0], false, false);
+      GenIGet(mir, opt_flags, kUnsignedByte, rl_dest, rl_src[0], 4, false);
       break;
 
     case Instruction::IPUT_WIDE:
-      GenIPut(mir, opt_flags, k64, rl_src[0], rl_src[1], true, false);
+      GenIPut(mir, opt_flags, k64, rl_src[0], rl_src[1], 8, false);
       break;
 
     case Instruction::IPUT_OBJECT:
-      GenIPut(mir, opt_flags, kReference, rl_src[0], rl_src[1], false, true);
+      GenIPut(mir, opt_flags, kReference, rl_src[0], rl_src[1], Primitive::ComponentSize(Primitive::kPrimNot), true);
       break;
 
     case Instruction::IPUT:
-      GenIPut(mir, opt_flags, k32, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, k32, rl_src[0], rl_src[1], 4, false);
       break;
 
     case Instruction::IPUT_BOOLEAN:
+      GenIPut(mir, opt_flags, k32, rl_src[0], rl_src[1], 2, false);
+      break;
+
     case Instruction::IPUT_BYTE:
-      GenIPut(mir, opt_flags, kUnsignedByte, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, kUnsignedByte, rl_src[0], rl_src[1], 4, false);
       break;
 
     case Instruction::IPUT_CHAR:
-      GenIPut(mir, opt_flags, kUnsignedHalf, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, kUnsignedHalf, rl_src[0], rl_src[1], 4, false);
       break;
 
     case Instruction::IPUT_SHORT:
-      GenIPut(mir, opt_flags, kSignedHalf, rl_src[0], rl_src[1], false, false);
+      GenIPut(mir, opt_flags, kSignedHalf, rl_src[0], rl_src[1], 4, false);
       break;
 
     case Instruction::SGET_OBJECT:
-      GenSget(mir, rl_dest, false, true);
+      GenSget(mir, rl_dest, 4, true);
       break;
     case Instruction::SGET:
-    case Instruction::SGET_BOOLEAN:
     case Instruction::SGET_BYTE:
     case Instruction::SGET_CHAR:
     case Instruction::SGET_SHORT:
-      GenSget(mir, rl_dest, false, false);
+      GenSget(mir, rl_dest, 4, false);
+      break;
+    case Instruction::SGET_BOOLEAN:
+      GenSget(mir, rl_dest, 2, false);
       break;
 
     case Instruction::SGET_WIDE:
-      GenSget(mir, rl_dest, true, false);
+      GenSget(mir, rl_dest, 8, false);
       break;
 
     case Instruction::SPUT_OBJECT:
-      GenSput(mir, rl_src[0], false, true);
+      GenSput(mir, rl_src[0], 4, true);
       break;
 
     case Instruction::SPUT:
-    case Instruction::SPUT_BOOLEAN:
     case Instruction::SPUT_BYTE:
     case Instruction::SPUT_CHAR:
     case Instruction::SPUT_SHORT:
-      GenSput(mir, rl_src[0], false, false);
+      GenSput(mir, rl_src[0], 4, false);
+      break;
+    case Instruction::SPUT_BOOLEAN:
+      GenSput(mir, rl_src[0], 2, false);
       break;
 
+
     case Instruction::SPUT_WIDE:
-      GenSput(mir, rl_src[0], true, false);
+      GenSput(mir, rl_src[0], 8, false);
       break;
 
     case Instruction::INVOKE_STATIC_RANGE:

@@ -25,6 +25,24 @@
 
 namespace art {
 
+// TODO
+extern "C" uint16_t artGet16StaticFromCode(uint32_t field_idx,
+                                           mirror::ArtMethod* referrer,
+                                           Thread* self, StackReference<mirror::ArtMethod>* sp)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::ArtField* field = FindFieldFast(field_idx, referrer, StaticPrimitiveRead,
+                                          sizeof(int16_t));
+  if (LIKELY(field != NULL)) {
+    return field->Get16(field->GetDeclaringClass());
+  }
+  FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsOnly);
+  field = FindFieldFromCode<StaticPrimitiveRead, true>(field_idx, referrer, self, sizeof(int16_t));
+  if (LIKELY(field != NULL)) {
+    return field->Get16(field->GetDeclaringClass());
+  }
+  return 0;  // Will throw exception by checking with Thread::Current
+}
+
 extern "C" uint32_t artGet32StaticFromCode(uint32_t field_idx,
                                            mirror::ArtMethod* referrer,
                                            Thread* self, StackReference<mirror::ArtMethod>* sp)
@@ -76,6 +94,29 @@ extern "C" mirror::Object* artGetObjStaticFromCode(uint32_t field_idx,
     return field->GetObj(field->GetDeclaringClass());
   }
   return NULL;  // Will throw exception by checking with Thread::Current
+}
+
+extern "C" uint16_t artGet16InstanceFromCode(uint32_t field_idx, mirror::Object* obj,
+                                             mirror::ArtMethod* referrer, Thread* self,
+                                             StackReference<mirror::ArtMethod>* sp)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::ArtField* field = FindFieldFast(field_idx, referrer, InstancePrimitiveRead,
+                                          sizeof(int16_t));
+  if (LIKELY(field != NULL && obj != NULL)) {
+    return field->Get16(obj);
+  }
+  FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsOnly);
+  field = FindFieldFromCode<InstancePrimitiveRead, true>(field_idx, referrer, self,
+                                                         sizeof(int16_t));
+  if (LIKELY(field != NULL)) {
+    if (UNLIKELY(obj == NULL)) {
+      ThrowLocation throw_location = self->GetCurrentLocationForThrow();
+      ThrowNullPointerExceptionForFieldAccess(throw_location, field, true);
+    } else {
+      return field->Get16(obj);
+    }
+  }
+  return 0;  // Will throw exception by checking with Thread::Current
 }
 
 extern "C" uint32_t artGet32InstanceFromCode(uint32_t field_idx, mirror::Object* obj,
@@ -148,6 +189,28 @@ extern "C" mirror::Object* artGetObjInstanceFromCode(uint32_t field_idx, mirror:
   return NULL;  // Will throw exception by checking with Thread::Current
 }
 
+// TODO
+extern "C" int artSet16StaticFromCode(uint32_t field_idx, uint16_t new_value,
+                                      mirror::ArtMethod* referrer, Thread* self,
+                                      StackReference<mirror::ArtMethod>* sp)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::ArtField* field = FindFieldFast(field_idx, referrer, StaticPrimitiveWrite,
+                                          sizeof(int16_t));
+  if (LIKELY(field != NULL)) {
+    // Compiled code can't use transactional mode.
+    field->Set16<false>(field->GetDeclaringClass(), new_value);
+    return 0;  // success
+  }
+  FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsOnly);
+  field = FindFieldFromCode<StaticPrimitiveWrite, true>(field_idx, referrer, self, sizeof(int16_t));
+  if (LIKELY(field != NULL)) {
+    // Compiled code can't use transactional mode.
+    field->Set16<false>(field->GetDeclaringClass(), new_value);
+    return 0;  // success
+  }
+  return -1;  // failure
+}
+
 extern "C" int artSet32StaticFromCode(uint32_t field_idx, uint32_t new_value,
                                       mirror::ArtMethod* referrer, Thread* self,
                                       StackReference<mirror::ArtMethod>* sp)
@@ -210,6 +273,37 @@ extern "C" int artSetObjStaticFromCode(uint32_t field_idx, mirror::Object* new_v
     // Compiled code can't use transactional mode.
     field->SetObj<false>(field->GetDeclaringClass(), new_value);
     return 0;  // success
+  }
+  return -1;  // failure
+}
+
+extern "C" int artSet16InstanceFromCode(uint32_t field_idx, mirror::Object* obj, uint16_t new_value,
+                                        mirror::ArtMethod* referrer, Thread* self,
+                                        StackReference<mirror::ArtMethod>* sp)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::ArtField* field = FindFieldFast(field_idx, referrer, InstancePrimitiveWrite,
+                                          sizeof(int16_t));
+  if (LIKELY(field != NULL && obj != NULL)) {
+    // Compiled code can't use transactional mode.
+    field->Set16<false>(obj, new_value);
+    return 0;  // success
+  }
+  FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsOnly);
+  {
+    StackHandleScope<1> hs(self);
+    HandleWrapper<mirror::Object> h_obj(hs.NewHandleWrapper(&obj));
+    field = FindFieldFromCode<InstancePrimitiveWrite, true>(field_idx, referrer, self,
+                                                            sizeof(int16_t));
+  }
+  if (LIKELY(field != NULL)) {
+    if (UNLIKELY(obj == NULL)) {
+      ThrowLocation throw_location = self->GetCurrentLocationForThrow();
+      ThrowNullPointerExceptionForFieldAccess(throw_location, field, false);
+    } else {
+      // Compiled code can't use transactional mode.
+      field->Set16<false>(obj, new_value);
+      return 0;  // success
+    }
   }
   return -1;  // failure
 }
