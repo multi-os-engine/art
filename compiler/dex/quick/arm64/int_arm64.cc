@@ -181,6 +181,7 @@ void Arm64Mir2Lir::GenSelectConst32(RegStorage left_op, RegStorage right_op, Con
 
 void Arm64Mir2Lir::GenSelect(BasicBlock* bb, MIR* mir) {
   RegLocation rl_src = mir_graph_->GetSrc(mir, 0);
+  // TODO maybe not...
   rl_src = LoadValue(rl_src, rl_src.ref ? kRefReg : kCoreReg);
   // rl_src may be aliased with rl_result/rl_dest, so do compare early.
   OpRegImm(kOpCmp, rl_src.reg, 0);

@@ -160,7 +160,7 @@ void Mir2Lir::CallRuntimeHelperRegLocation(ThreadOffset<pointer_size> helper_off
   if (arg0.wide == 0) {
     LoadValueDirectFixed(arg0, TargetReg(arg0.fp ? kFArg0 : kArg0, arg0));
   } else {
-    LoadValueDirectWideFixed(arg0, TargetReg(arg0.fp ? kFArg0 : kArg0, kWide));
+    LoadValueDirect64Fixed(arg0, TargetReg(arg0.fp ? kFArg0 : kArg0, kWide));
   }
   ClobberCallerSave();
   CallHelper<pointer_size>(r_tgt, helper_offset, safepoint_pc);
@@ -187,7 +187,7 @@ void Mir2Lir::CallRuntimeHelperImmRegLocation(ThreadOffset<pointer_size> helper_
     LoadValueDirectFixed(arg1, TargetReg(kArg1, arg1));
   } else {
     RegStorage r_tmp = TargetReg(cu_->instruction_set == kMips ? kArg2 : kArg1, kWide);
-    LoadValueDirectWideFixed(arg1, r_tmp);
+    LoadValueDirect64Fixed(arg1, r_tmp);
   }
   LoadConstant(TargetReg(kArg0, kNotWide), arg0);
   ClobberCallerSave();
@@ -293,13 +293,13 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocation(ThreadOffset<pointer_size>
     if (arg0.wide == 0) {
       LoadValueDirectFixed(arg0, arg0_reg);
     } else {
-      LoadValueDirectWideFixed(arg0, arg0_reg);
+      LoadValueDirect64Fixed(arg0, arg0_reg);
     }
 
     if (arg1.wide == 0) {
       LoadValueDirectFixed(arg1, arg1_reg);
     } else {
-      LoadValueDirectWideFixed(arg1, arg1_reg);
+      LoadValueDirect64Fixed(arg1, arg1_reg);
     }
   } else {
     DCHECK(!cu_->target64);
@@ -313,17 +313,17 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocation(ThreadOffset<pointer_size>
         }
       } else {
         if (cu_->instruction_set == kMips) {
-          LoadValueDirectWideFixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg2, kWide));
+          LoadValueDirect64Fixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg2, kWide));
         } else {
-          LoadValueDirectWideFixed(arg1, TargetReg(kArg1, kWide));
+          LoadValueDirect64Fixed(arg1, TargetReg(kArg1, kWide));
         }
       }
     } else {
-      LoadValueDirectWideFixed(arg0, TargetReg(arg0.fp ? kFArg0 : kArg0, kWide));
+      LoadValueDirect64Fixed(arg0, TargetReg(arg0.fp ? kFArg0 : kArg0, kWide));
       if (arg1.wide == 0) {
         LoadValueDirectFixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg2, kNotWide));
       } else {
-        LoadValueDirectWideFixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg2, kWide));
+        LoadValueDirect64Fixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg2, kWide));
       }
     }
   }
@@ -411,7 +411,7 @@ void Mir2Lir::CallRuntimeHelperImmRegLocationRegLocation(ThreadOffset<pointer_si
   if (arg2.wide == 0) {
     LoadValueDirectFixed(arg2, TargetReg(kArg2, arg2));
   } else {
-    LoadValueDirectWideFixed(arg2, TargetReg(kArg2, kWide));
+    LoadValueDirect64Fixed(arg2, TargetReg(kArg2, kWide));
   }
   LoadConstant(TargetReg(kArg0, kNotWide), arg0);
   ClobberCallerSave();
@@ -841,7 +841,7 @@ int Mir2Lir::LoadArgRegs(CallInfo* info, int call_state,
     rl_arg = UpdateRawLoc(rl_arg);
     if (rl_arg.wide && (next_reg <= last_arg_reg - 1)) {
       RegStorage r_tmp(RegStorage::k64BitPair, arg_regs[next_reg], arg_regs[next_reg + 1]);
-      LoadValueDirectWideFixed(rl_arg, r_tmp);
+      LoadValueDirect64Fixed(rl_arg, r_tmp);
       next_reg++;
       next_arg++;
     } else {
@@ -929,7 +929,7 @@ int Mir2Lir::GenDalvikArgsNoRange(CallInfo* info,
       } else {
         arg_reg = TargetReg(kArg2, rl_arg.wide ? kWide : kNotWide);
         if (rl_arg.wide) {
-          LoadValueDirectWideFixed(rl_arg, arg_reg);
+          LoadValueDirect64Fixed(rl_arg, arg_reg);
         } else {
           LoadValueDirectFixed(rl_arg, arg_reg);
         }
@@ -1292,12 +1292,12 @@ bool Mir2Lir::GenInlinedGet(CallInfo* info) {
 
   // intrinsic logic start.
   RegLocation rl_obj = info->args[0];
-  rl_obj = LoadValue(rl_obj);
+  rl_obj = LoadValue(rl_obj, kRefReg);
 
   RegStorage reg_slow_path = AllocTemp();
   RegStorage reg_disabled = AllocTemp();
-  Load32Disp(reg_class, slow_path_flag_offset, reg_slow_path);
-  Load32Disp(reg_class, disable_flag_offset, reg_disabled);
+  Load16Disp(reg_class, slow_path_flag_offset, reg_slow_path);
+  Load16Disp(reg_class, disable_flag_offset, reg_disabled);
   FreeTemp(reg_class);
   LIR* or_inst = OpRegRegReg(kOpOr, reg_slow_path, reg_slow_path, reg_disabled);
   FreeTemp(reg_disabled);

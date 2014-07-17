@@ -1143,6 +1143,9 @@ LIR* Arm64Mir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage 
                                 OpSize size, VolatileKind is_volatile) {
   // LoadBaseDisp() will emit correct insn for atomic load on arm64
   // assuming r_dest is correctly prepared using RegClassForFieldLoadStore().
+  if (size == k16) {
+    LOG(FATAL) << "Not implemented";
+  }
 
   LIR* load = LoadBaseDispBody(r_base, displacement, r_dest, size);
 
@@ -1236,6 +1239,10 @@ LIR* Arm64Mir2Lir::StoreBaseDisp(RegStorage r_base, int displacement, RegStorage
   if (UNLIKELY(is_volatile == kVolatile)) {
     // Ensure that prior accesses become visible to other threads first.
     GenMemBarrier(kAnyStore);
+  }
+
+  if (size == k16) {
+    LOG(FATAL) << "Not implemented";
   }
 
   // StoreBaseDisp() will emit correct insn for atomic store on arm64

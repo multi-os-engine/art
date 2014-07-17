@@ -91,8 +91,8 @@ void Arm64Mir2Lir::GenArithOpDouble(Instruction::Code opcode,
       {
         ThreadOffset<8> helper_offset = QUICK_ENTRYPOINT_OFFSET(8, pFmod);
         RegStorage r_tgt = CallHelperSetup(helper_offset);
-        LoadValueDirectWideFixed(rl_src1, rs_d0);
-        LoadValueDirectWideFixed(rl_src2, rs_d1);
+        LoadValueDirect64Fixed(rl_src1, rs_d0);
+        LoadValueDirect64Fixed(rl_src2, rs_d1);
         ClobberCallerSave();
         CallHelper(r_tgt, helper_offset, false);
       }

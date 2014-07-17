@@ -161,7 +161,7 @@ void X86Mir2Lir::GenFillArrayData(DexOffset table_offset, RegLocation rl_src) {
     // We can use the saved value.
     RegLocation rl_method = mir_graph_->GetRegLocation(base_of_code_->s_reg_low);
     if (rl_method.wide) {
-      LoadValueDirectWide(rl_method, method_start);
+      LoadValueDirect64(rl_method, method_start);
     } else {
       LoadValueDirect(rl_method, method_start);
     }

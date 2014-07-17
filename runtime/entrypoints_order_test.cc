@@ -181,13 +181,17 @@ class EntrypointsOrderTest : public CommonRuntimeTest {
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pInitializeTypeAndVerifyAccess, pInitializeType,
                          kPointerSize);
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pInitializeType, pResolveString, kPointerSize);
-    EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pResolveString, pSet32Instance, kPointerSize);
+    EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pResolveString, pSet16Instance, kPointerSize);
+    EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pSet16Instance, pSet16Static, kPointerSize);
+    EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pSet16Static, pSet32Instance, kPointerSize);
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pSet32Instance, pSet32Static, kPointerSize);
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pSet32Static, pSet64Instance, kPointerSize);
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pSet64Instance, pSet64Static, kPointerSize);
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pSet64Static, pSetObjInstance, kPointerSize);
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pSetObjInstance, pSetObjStatic, kPointerSize);
-    EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pSetObjStatic, pGet32Instance, kPointerSize);
+    EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pSetObjStatic, pGet16Instance, kPointerSize);
+    EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pGet16Instance, pGet16Static, kPointerSize);
+    EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pGet16Static, pGet32Instance, kPointerSize);
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pGet32Instance, pGet32Static, kPointerSize);
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pGet32Static, pGet64Instance, kPointerSize);
     EXPECT_OFFSET_DIFFNP(QuickEntryPoints, pGet64Instance, pGet64Static, kPointerSize);
