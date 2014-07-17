@@ -739,6 +739,33 @@ ENTRY art_quick_initialize_type_and_verify_access
     move    $a3, $sp                           # pass $sp
     RETURN_IF_RESULT_IS_NON_ZERO
 END art_quick_initialize_type_and_verify_access
+    /*
+     * Called by managed code to resolve a static field and load a 8-bit primitive value.
+     */
+    .extern artGet8StaticFromCode
+ENTRY art_quick_get8_static
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    lw     $a1, 64($sp)                  # pass referrer's Method*
+    move   $a2, rSELF                    # pass Thread::Current
+    jal    artGet8StaticFromCode         # (uint32_t field_idx, const Method* referrer, Thread*, $sp)
+    move   $a3, $sp                      # pass $sp
+    RETURN_IF_NO_EXCEPTION
+END art_quick_get8_static
+
+    /*
+     * Called by managed code to resolve a static field and load a 16-bit primitive value.
+     */
+    .extern artGet16StaticFromCode
+ENTRY art_quick_get16_static
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    lw     $a1, 64($sp)                  # pass referrer's Method*
+    move   $a2, rSELF                    # pass Thread::Current
+    jal    artGet16StaticFromCode        # (uint32_t field_idx, const Method* referrer, Thread*, $sp)
+    move   $a3, $sp                      # pass $sp
+    RETURN_IF_NO_EXCEPTION
+END art_quick_get16_static
 
     /*
      * Called by managed code to resolve a static field and load a 32-bit primitive value.
@@ -783,6 +810,34 @@ ENTRY art_quick_get_obj_static
 END art_quick_get_obj_static
 
     /*
+     * Called by managed code to resolve an instance field and load a 8-bit primitive value.
+     */
+    .extern artGet8InstanceFromCode
+ENTRY art_quick_get8_instance
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    lw     $a2, 64($sp)                  # pass referrer's Method*
+    move   $a3, rSELF                    # pass Thread::Current
+    jal    artGet8InstanceFromCode       # (field_idx, Object*, referrer, Thread*, $sp)
+    sw     $sp, 16($sp)                  # pass $sp
+    RETURN_IF_NO_EXCEPTION
+END art_quick_get8_instance
+
+    /*
+     * Called by managed code to resolve an instance field and load a 16-bit primitive value.
+     */
+    .extern artGet16InstanceFromCode
+ENTRY art_quick_get16_instance
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    lw     $a2, 64($sp)                  # pass referrer's Method*
+    move   $a3, rSELF                    # pass Thread::Current
+    jal    artGet16InstanceFromCode      # (field_idx, Object*, referrer, Thread*, $sp)
+    sw     $sp, 16($sp)                  # pass $sp
+    RETURN_IF_NO_EXCEPTION
+END art_quick_get16_instance
+
+    /*
      * Called by managed code to resolve an instance field and load a 32-bit primitive value.
      */
     .extern artGet32InstanceFromCode
@@ -825,6 +880,34 @@ ENTRY art_quick_get_obj_instance
 END art_quick_get_obj_instance
 
     /*
+     * Called by managed code to resolve a static field and store a 8-bit primitive value.
+     */
+    .extern artSet8StaticFromCode
+ENTRY art_quick_set8_static
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    lw     $a2, 64($sp)                  # pass referrer's Method*
+    move   $a3, rSELF                    # pass Thread::Current
+    jal    artSet8StaticFromCode         # (field_idx, new_val, referrer, Thread*, $sp)
+    sw     $sp, 16($sp)                  # pass $sp
+    RETURN_IF_ZERO
+END art_quick_set8_static
+
+    /*
+     * Called by managed code to resolve a static field and store a 16-bit primitive value.
+     */
+    .extern artSet16StaticFromCode
+ENTRY art_quick_set16_static
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    lw     $a2, 64($sp)                  # pass referrer's Method*
+    move   $a3, rSELF                    # pass Thread::Current
+    jal    artSet16StaticFromCode        # (field_idx, new_val, referrer, Thread*, $sp)
+    sw     $sp, 16($sp)                  # pass $sp
+    RETURN_IF_ZERO
+END art_quick_set16_static
+
+    /*
      * Called by managed code to resolve a static field and store a 32-bit primitive value.
      */
     .extern artSet32StaticFromCode
@@ -841,7 +924,7 @@ END art_quick_set32_static
     /*
      * Called by managed code to resolve a static field and store a 64-bit primitive value.
      */
-    .extern artSet32StaticFromCode
+    .extern artSet64StaticFromCode
 ENTRY art_quick_set64_static
     GENERATE_GLOBAL_POINTER
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
@@ -867,6 +950,34 @@ ENTRY art_quick_set_obj_static
 END art_quick_set_obj_static
 
     /*
+     * Called by managed code to resolve an instance field and store a 8-bit primitive value.
+     */
+    .extern artSet8InstanceFromCode
+ENTRY art_quick_set8_instance
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    lw     $a3, 64($sp)                  # pass referrer's Method*
+    sw     rSELF, 16($sp)                # pass Thread::Current
+    jal    artSet8InstanceFromCode      # (field_idx, Object*, new_val, referrer, Thread*, $sp)
+    sw     $sp, 20($sp)                  # pass $sp
+    RETURN_IF_ZERO
+END art_quick_set8_instance
+
+    /*
+     * Called by managed code to resolve an instance field and store a 16-bit primitive value.
+     */
+    .extern artSet16InstanceFromCode
+ENTRY art_quick_set16_instance
+    GENERATE_GLOBAL_POINTER
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    lw     $a3, 64($sp)                  # pass referrer's Method*
+    sw     rSELF, 16($sp)                # pass Thread::Current
+    jal    artSet16InstanceFromCode      # (field_idx, Object*, new_val, referrer, Thread*, $sp)
+    sw     $sp, 20($sp)                  # pass $sp
+    RETURN_IF_ZERO
+END art_quick_set16_instance
+
+    /*
      * Called by managed code to resolve an instance field and store a 32-bit primitive value.
      */
     .extern artSet32InstanceFromCode
@@ -883,7 +994,7 @@ END art_quick_set32_instance
     /*
      * Called by managed code to resolve an instance field and store a 64-bit primitive value.
      */
-    .extern artSet32InstanceFromCode
+    .extern artSet64InstanceFromCode
 ENTRY art_quick_set64_instance
     GENERATE_GLOBAL_POINTER
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC

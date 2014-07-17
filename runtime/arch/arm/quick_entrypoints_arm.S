@@ -623,6 +623,42 @@ ENTRY art_quick_initialize_type_and_verify_access
 END art_quick_initialize_type_and_verify_access
 
     /*
+     * Called by managed code to resolve a static field and load a 8-bit primitive value.
+     */
+    .extern artGet8StaticFromCode
+ENTRY art_quick_get8_static
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    ldr    r1, [sp, #32]                 @ pass referrer
+    mov    r2, r9                        @ pass Thread::Current
+    mov    r3, sp                        @ pass SP
+    bl     artGet8StaticFromCode         @ (uint32_t field_idx, const Method* referrer, Thread*, SP)
+    ldr    r1, [r9, #THREAD_EXCEPTION_OFFSET]  @ load Thread::Current()->exception_
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    cbnz   r1, 1f                        @ success if no exception pending
+    bx     lr                            @ return on success
+1:
+    DELIVER_PENDING_EXCEPTION
+END art_quick_get8_static
+
+    /*
+     * Called by managed code to resolve a static field and load a 16-bit primitive value.
+     */
+    .extern artGet16StaticFromCode
+ENTRY art_quick_get16_static
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    ldr    r1, [sp, #32]                 @ pass referrer
+    mov    r2, r9                        @ pass Thread::Current
+    mov    r3, sp                        @ pass SP
+    bl     artGet16StaticFromCode        @ (uint32_t field_idx, const Method* referrer, Thread*, SP)
+    ldr    r1, [r9, #THREAD_EXCEPTION_OFFSET]  @ load Thread::Current()->exception_
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    cbnz   r1, 1f                        @ success if no exception pending
+    bx     lr                            @ return on success
+1:
+    DELIVER_PENDING_EXCEPTION
+END art_quick_get16_static
+
+    /*
      * Called by managed code to resolve a static field and load a 32-bit primitive value.
      */
     .extern artGet32StaticFromCode
@@ -675,6 +711,48 @@ ENTRY art_quick_get_obj_static
 1:
     DELIVER_PENDING_EXCEPTION
 END art_quick_get_obj_static
+
+    /*
+     * Called by managed code to resolve an instance field and load a 8-bit primitive value.
+     */
+    .extern artGet8InstanceFromCode
+ENTRY art_quick_get8_instance
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    ldr    r2, [sp, #32]                 @ pass referrer
+    mov    r3, r9                        @ pass Thread::Current
+    mov    r12, sp
+    str    r12, [sp, #-16]!              @ expand the frame and pass SP
+    bl     artGet8InstanceFromCode       @ (field_idx, Object*, referrer, Thread*, SP)
+    add    sp, #16                       @ strip the extra frame
+    ldr    r1, [r9, #THREAD_EXCEPTION_OFFSET]  @ load Thread::Current()->exception_
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    cbnz   r1, 1f                        @ success if no exception pending
+    bx     lr                            @ return on success
+1:
+    DELIVER_PENDING_EXCEPTION
+END art_quick_get8_instance
+
+
+    /*
+     * Called by managed code to resolve an instance field and load a 16-bit primitive value.
+     */
+    .extern artGet16InstanceFromCode
+ENTRY art_quick_get16_instance
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    ldr    r2, [sp, #32]                 @ pass referrer
+    mov    r3, r9                        @ pass Thread::Current
+    mov    r12, sp
+    str    r12, [sp, #-16]!              @ expand the frame and pass SP
+    bl     artGet16InstanceFromCode      @ (field_idx, Object*, referrer, Thread*, SP)
+    add    sp, #16                       @ strip the extra frame
+    ldr    r1, [r9, #THREAD_EXCEPTION_OFFSET]  @ load Thread::Current()->exception_
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    cbnz   r1, 1f                        @ success if no exception pending
+    bx     lr                            @ return on success
+1:
+    DELIVER_PENDING_EXCEPTION
+END art_quick_get16_instance
+
 
     /*
      * Called by managed code to resolve an instance field and load a 32-bit primitive value.
@@ -743,6 +821,48 @@ ENTRY art_quick_get_obj_instance
 END art_quick_get_obj_instance
 
     /*
+     * Called by managed code to resolve a static field and store a 8-bit primitive value.
+     */
+    .extern artSet8StaticFromCode
+ENTRY art_quick_set8_static
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    ldr    r2, [sp, #32]                 @ pass referrer
+    mov    r3, r9                        @ pass Thread::Current
+    mov    r12, sp
+    str    r12, [sp, #-16]!              @ expand the frame and pass SP
+    .pad #16
+    .cfi_adjust_cfa_offset 16
+    bl     artSet8StaticFromCode        @ (field_idx, new_val, referrer, Thread*, SP)
+    add    sp, #16                       @ strip the extra frame
+    .cfi_adjust_cfa_offset -16
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RETURN_IF_RESULT_IS_ZERO
+    DELIVER_PENDING_EXCEPTION
+END art_quick_set8_static
+
+
+    /*
+     * Called by managed code to resolve a static field and store a 16-bit primitive value.
+     */
+    .extern artSet16StaticFromCode
+ENTRY art_quick_set16_static
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    ldr    r2, [sp, #32]                 @ pass referrer
+    mov    r3, r9                        @ pass Thread::Current
+    mov    r12, sp
+    str    r12, [sp, #-16]!              @ expand the frame and pass SP
+    .pad #16
+    .cfi_adjust_cfa_offset 16
+    bl     artSet16StaticFromCode        @ (field_idx, new_val, referrer, Thread*, SP)
+    add    sp, #16                       @ strip the extra frame
+    .cfi_adjust_cfa_offset -16
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RETURN_IF_RESULT_IS_ZERO
+    DELIVER_PENDING_EXCEPTION
+END art_quick_set16_static
+
+
+    /*
      * Called by managed code to resolve a static field and store a 32-bit primitive value.
      */
     .extern artSet32StaticFromCode
@@ -809,6 +929,56 @@ ENTRY art_quick_set_obj_static
 END art_quick_set_obj_static
 
     /*
+     * Called by managed code to resolve an instance field and store a 8-bit primitive value.
+     */
+    .extern artSet8InstanceFromCode
+ENTRY art_quick_set8_instance
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    ldr    r3, [sp, #32]                 @ pass referrer
+    mov    r12, sp                       @ save SP
+    sub    sp, #8                        @ grow frame for alignment with stack args
+    .pad #8
+    .cfi_adjust_cfa_offset 8
+    push   {r9, r12}                     @ pass Thread::Current and SP
+    .save {r9, r12}
+    .cfi_adjust_cfa_offset 8
+    .cfi_rel_offset r9, 0
+    .cfi_rel_offset r12, 4
+    bl     artSet8InstanceFromCode      @ (field_idx, Object*, new_val, referrer, Thread*, SP)
+    add    sp, #16                       @ release out args
+    .cfi_adjust_cfa_offset -16
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME   @ TODO: we can clearly save an add here
+    RETURN_IF_RESULT_IS_ZERO
+    DELIVER_PENDING_EXCEPTION
+END art_quick_set8_instance
+
+
+    /*
+     * Called by managed code to resolve an instance field and store a 16-bit primitive value.
+     */
+    .extern artSet16InstanceFromCode
+ENTRY art_quick_set16_instance
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    ldr    r3, [sp, #32]                 @ pass referrer
+    mov    r12, sp                       @ save SP
+    sub    sp, #8                        @ grow frame for alignment with stack args
+    .pad #8
+    .cfi_adjust_cfa_offset 8
+    push   {r9, r12}                     @ pass Thread::Current and SP
+    .save {r9, r12}
+    .cfi_adjust_cfa_offset 8
+    .cfi_rel_offset r9, 0
+    .cfi_rel_offset r12, 4
+    bl     artSet16InstanceFromCode      @ (field_idx, Object*, new_val, referrer, Thread*, SP)
+    add    sp, #16                       @ release out args
+    .cfi_adjust_cfa_offset -16
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME   @ TODO: we can clearly save an add here
+    RETURN_IF_RESULT_IS_ZERO
+    DELIVER_PENDING_EXCEPTION
+END art_quick_set16_instance
+
+
+    /*
      * Called by managed code to resolve an instance field and store a 32-bit primitive value.
      */
     .extern artSet32InstanceFromCode
@@ -835,7 +1005,7 @@ END art_quick_set32_instance
     /*
      * Called by managed code to resolve an instance field and store a 64-bit primitive value.
      */
-    .extern artSet32InstanceFromCode
+    .extern artSet64InstanceFromCode
 ENTRY art_quick_set64_instance
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
     mov    r12, sp                       @ save SP
