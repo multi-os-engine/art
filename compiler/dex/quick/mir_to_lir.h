@@ -819,14 +819,12 @@ class Mir2Lir : public Backend {
     void GenNewArray(uint32_t type_idx, RegLocation rl_dest,
                      RegLocation rl_src);
     void GenFilledNewArray(CallInfo* info);
-    void GenSput(MIR* mir, RegLocation rl_src,
-                 bool is_long_or_double, bool is_object);
-    void GenSget(MIR* mir, RegLocation rl_dest,
-                 bool is_long_or_double, bool is_object);
+    void GenSput(MIR* mir, RegLocation rl_src, OpSize size);
+    void GenSget(MIR* mir, RegLocation rl_dest, OpSize size);
     void GenIGet(MIR* mir, int opt_flags, OpSize size,
-                 RegLocation rl_dest, RegLocation rl_obj, bool is_long_or_double, bool is_object);
+                 RegLocation rl_dest, RegLocation rl_obj);
     void GenIPut(MIR* mir, int opt_flags, OpSize size,
-                 RegLocation rl_src, RegLocation rl_obj, bool is_long_or_double, bool is_object);
+                 RegLocation rl_src, RegLocation rl_obj);
     void GenArrayObjPut(int opt_flags, RegLocation rl_array, RegLocation rl_index,
                         RegLocation rl_src);
 
@@ -944,8 +942,8 @@ class Mir2Lir : public Backend {
     virtual bool GenInlinedIndexOf(CallInfo* info, bool zero_based);
     bool GenInlinedStringCompareTo(CallInfo* info);
     bool GenInlinedCurrentThread(CallInfo* info);
-    bool GenInlinedUnsafeGet(CallInfo* info, bool is_long, bool is_volatile);
-    bool GenInlinedUnsafePut(CallInfo* info, bool is_long, bool is_object,
+    bool GenInlinedUnsafeGet(CallInfo* info, bool component_size, bool is_volatile);
+    bool GenInlinedUnsafePut(CallInfo* info, bool component_size, bool is_object,
                              bool is_volatile, bool is_ordered);
     virtual int LoadArgRegs(CallInfo* info, int call_state,
                     NextCallInsn next_call_insn,
@@ -961,6 +959,10 @@ class Mir2Lir : public Backend {
     // Natural word size.
     virtual LIR* LoadWordDisp(RegStorage r_base, int displacement, RegStorage r_dest) {
       return LoadBaseDisp(r_base, displacement, r_dest, kWord, kNotVolatile);
+    }
+    // Load 8 bits, regardless of target.
+    virtual LIR* Load8Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
+      return LoadBaseDisp(r_base, displacement, r_dest, kSignedByte, kNotVolatile);
     }
     // Load 32 bits, regardless of target.
     virtual LIR* Load32Disp(RegStorage r_base, int displacement, RegStorage r_dest)  {
@@ -1129,6 +1131,14 @@ class Mir2Lir : public Backend {
       RegisterInfo* info2 = GetRegInfo(reg2);
       return (info1->Master() == info2->Master() &&
              (info1->StorageMask() & info2->StorageMask()) != 0);
+    }
+
+    static constexpr bool IsWide(OpSize size) {
+      return size == k64 || size == kDouble;
+    }
+
+    static constexpr bool IsRef(OpSize size) {
+      return size == kReference;
     }
 
     /**
@@ -1469,10 +1479,6 @@ class Mir2Lir : public Backend {
      * @returns update location
      */
     virtual RegLocation ForceTempWide(RegLocation loc);
-
-    static constexpr OpSize LoadStoreOpSize(bool wide, bool ref) {
-      return wide ? k64 : ref ? kReference : k32;
-    }
 
     virtual void GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,
                                     RegLocation rl_dest, RegLocation rl_src);
