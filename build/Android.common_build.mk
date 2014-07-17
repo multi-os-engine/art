@@ -184,7 +184,7 @@ art_non_debug_cflags := \
   -O3
 
 ifeq ($(HOST_OS),linux)
-  art_non_debug_cflags += -Wframe-larger-than=1728
+  art_non_debug_cflags += -Wframe-larger-than=2440
 endif
 
 # FIXME: upstream LLVM has a vectorizer bug that needs to be fixed
