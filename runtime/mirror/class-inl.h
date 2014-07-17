@@ -525,6 +525,8 @@ inline Object* Class::AllocNonMovableObject(Thread* self) {
 
 inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
                                         uint32_t num_vtable_entries,
+                                        uint32_t num_8bit_static_fields,
+                                        uint32_t num_16bit_static_fields,
                                         uint32_t num_32bit_static_fields,
                                         uint32_t num_64bit_static_fields,
                                         uint32_t num_ref_static_fields) {
@@ -536,15 +538,60 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
     uint32_t embedded_vtable_size = num_vtable_entries * sizeof(VTableEntry);
     size += embedded_imt_size + embedded_vtable_size;
   }
+
   // Space used by reference statics.
   size +=  num_ref_static_fields * sizeof(HeapReference<Object>);
   // Possible pad for alignment.
-  if (((size & 7) != 0) && (num_64bit_static_fields > 0) && (num_32bit_static_fields == 0)) {
-    size += sizeof(uint32_t);
+  // TODO CLEANUP!
+  // Note that alignment is necessary for each type of load for older ARM chips.
+  // 8 byte align
+  if ((size & 0x7) != 0 && num_64bit_static_fields > 0) {
+    uint32_t gap = 8 - (size & 0x7);
+    size += gap;  // will be padded
+    while (gap >= sizeof(uint32_t) && num_32bit_static_fields != 0) {
+      --num_32bit_static_fields;
+      gap -= sizeof(uint32_t);
+    }
+    while (gap >= sizeof(uint16_t) && num_16bit_static_fields != 0) {
+      --num_16bit_static_fields;
+      gap -= sizeof(uint16_t);
+    }
+    while (gap >= sizeof(uint8_t) && num_8bit_static_fields != 0) {
+      --num_8bit_static_fields;
+      gap -= sizeof(uint8_t);
+    }
   }
+  // 4 byte align
+  if ((size & 0x3) != 0 && num_32bit_static_fields > 0) {
+    uint32_t gap = 4 - (size & 0x3);
+    size += gap;  // will be padded
+    while (gap >= sizeof(uint16_t) && num_16bit_static_fields != 0) {
+      --num_16bit_static_fields;
+      gap -= sizeof(uint16_t);
+    }
+    while (gap >= sizeof(uint8_t) && num_8bit_static_fields != 0) {
+      --num_8bit_static_fields;
+      gap -= sizeof(uint8_t);
+    }
+  }
+  // 2 byte align
+  if ((size & 0x1) != 0 && num_16bit_static_fields > 0) {
+    uint32_t gap = size & 0x1;
+    size += gap;  // will be padded
+    while (gap >= sizeof(uint8_t) && num_8bit_static_fields != 0) {
+      --num_8bit_static_fields;
+      gap -= sizeof(uint8_t);
+    }
+  }
+
   // Space used for primitive static fields.
-  size += (num_32bit_static_fields * sizeof(uint32_t)) +
+  size += (num_8bit_static_fields * sizeof(uint8_t)) +
+      (num_16bit_static_fields * sizeof(uint16_t)) +
+      (num_32bit_static_fields * sizeof(uint32_t)) +
       (num_64bit_static_fields * sizeof(uint64_t));
+  if (size & 0x3) {
+    size += 0x4 - (size & 0x3);
+  }
   return size;
 }
 
@@ -665,11 +712,11 @@ inline MemberOffset Class::GetSlowPathFlagOffset() {
 }
 
 inline bool Class::GetSlowPathEnabled() {
-  return GetField32(GetSlowPathFlagOffset());
+  return GetField16(GetSlowPathFlagOffset());
 }
 
 inline void Class::SetSlowPath(bool enabled) {
-  SetField32<false>(GetSlowPathFlagOffset(), enabled);
+  SetField16<false>(GetSlowPathFlagOffset(), enabled);
 }
 
 inline void Class::InitializeClassVisitor::operator()(
