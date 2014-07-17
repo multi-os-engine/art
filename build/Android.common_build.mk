@@ -150,7 +150,7 @@ ART_C_INCLUDES := \
 art_cflags := \
   -fno-rtti \
   -std=gnu++11 \
-  -ggdb3 \
+  -g3 \
   -Wall \
   -Werror \
   -Wextra \
@@ -200,7 +200,7 @@ ART_TARGET_CLANG_CFLAGS_arm64 += \
   -fno-vectorize
 
 art_debug_cflags := \
-  -O1 \
+  -O0 \
   -DDYNAMIC_ANNOTATIONS_ENABLED=1 \
   -UNDEBUG
 
