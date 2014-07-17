@@ -124,6 +124,12 @@ class MANAGED ArtField FINAL : public Object {
   void SetObject(Object* object, Object* l) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Raw field accesses.
+  uint8_t Get8(Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
+  void Set8(Object* object, uint8_t new_value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  uint16_t Get16(Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  template<bool kTransactionActive>
+  void Set16(Object* object, uint16_t new_value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   uint32_t Get32(Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   template<bool kTransactionActive>
   void Set32(Object* object, uint32_t new_value) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

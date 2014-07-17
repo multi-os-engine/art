@@ -832,6 +832,48 @@ DEFINE_FUNCTION art_quick_lushr
     ret
 END_FUNCTION art_quick_lushr
 
+DEFINE_FUNCTION art_quick_set8_instance
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    mov %esp, %ebx                // remember SP
+    subl LITERAL(8), %esp         // alignment padding
+    CFI_ADJUST_CFA_OFFSET(8)
+    PUSH ebx                      // pass SP
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    mov 32(%ebx), %ebx            // get referrer
+    PUSH ebx                      // pass referrer
+    PUSH edx                      // pass new_val
+    PUSH ecx                      // pass object
+    PUSH eax                      // pass field_idx
+    SETUP_GOT_NOSAVE              // clobbers EBX
+    call PLT_SYMBOL(artSet8InstanceFromCode)  // (field_idx, Object*, new_val, referrer, Thread*, SP)
+    addl LITERAL(32), %esp        // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-32)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
+    RETURN_IF_EAX_ZERO            // return or deliver exception
+END_FUNCTION art_quick_set8_instance
+
+DEFINE_FUNCTION art_quick_set16_instance
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    mov %esp, %ebx                // remember SP
+    subl LITERAL(8), %esp         // alignment padding
+    CFI_ADJUST_CFA_OFFSET(8)
+    PUSH ebx                      // pass SP
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    mov 32(%ebx), %ebx            // get referrer
+    PUSH ebx                      // pass referrer
+    PUSH edx                      // pass new_val
+    PUSH ecx                      // pass object
+    PUSH eax                      // pass field_idx
+    SETUP_GOT_NOSAVE              // clobbers EBX
+    call PLT_SYMBOL(artSet16InstanceFromCode)  // (field_idx, Object*, new_val, referrer, Thread*, SP)
+    addl LITERAL(32), %esp        // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-32)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
+    RETURN_IF_EAX_ZERO            // return or deliver exception
+END_FUNCTION art_quick_set16_instance
+
 DEFINE_FUNCTION art_quick_set32_instance
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
@@ -894,6 +936,46 @@ DEFINE_FUNCTION art_quick_set_obj_instance
     RETURN_IF_EAX_ZERO            // return or deliver exception
 END_FUNCTION art_quick_set_obj_instance
 
+DEFINE_FUNCTION art_quick_get8_instance
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    mov %esp, %ebx                // remember SP
+    mov 32(%esp), %edx            // get referrer
+    subl LITERAL(12), %esp        // alignment padding
+    CFI_ADJUST_CFA_OFFSET(12)
+    PUSH ebx                      // pass SP
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH edx                      // pass referrer
+    PUSH ecx                      // pass object
+    PUSH eax                      // pass field_idx
+    SETUP_GOT_NOSAVE              // clobbers EBX
+    call PLT_SYMBOL(artGet8InstanceFromCode)  // (field_idx, Object*, referrer, Thread*, SP)
+    addl LITERAL(32), %esp        // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-32)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
+    RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
+END_FUNCTION art_quick_get8_instance
+
+DEFINE_FUNCTION art_quick_get16_instance
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    mov %esp, %ebx                // remember SP
+    mov 32(%esp), %edx            // get referrer
+    subl LITERAL(12), %esp        // alignment padding
+    CFI_ADJUST_CFA_OFFSET(12)
+    PUSH ebx                      // pass SP
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH edx                      // pass referrer
+    PUSH ecx                      // pass object
+    PUSH eax                      // pass field_idx
+    SETUP_GOT_NOSAVE              // clobbers EBX
+    call PLT_SYMBOL(artGet16InstanceFromCode)  // (field_idx, Object*, referrer, Thread*, SP)
+    addl LITERAL(32), %esp        // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-32)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
+    RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
+END_FUNCTION art_quick_get16_instance
+
 DEFINE_FUNCTION art_quick_get32_instance
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
@@ -954,6 +1036,46 @@ DEFINE_FUNCTION art_quick_get_obj_instance
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_get_obj_instance
 
+DEFINE_FUNCTION art_quick_set8_static
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    mov %esp, %ebx                // remember SP
+    mov 32(%esp), %edx            // get referrer
+    subl LITERAL(12), %esp        // alignment padding
+    CFI_ADJUST_CFA_OFFSET(12)
+    PUSH ebx                      // pass SP
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH edx                      // pass referrer
+    PUSH ecx                      // pass new_val
+    PUSH eax                      // pass field_idx
+    SETUP_GOT_NOSAVE              // clobbers EBX
+    call PLT_SYMBOL(artSet8StaticFromCode)  // (field_idx, new_val, referrer, Thread*, SP)
+    addl LITERAL(32), %esp        // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-32)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
+    RETURN_IF_EAX_ZERO            // return or deliver exception
+END_FUNCTION art_quick_set8_static
+
+DEFINE_FUNCTION art_quick_set16_static
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    mov %esp, %ebx                // remember SP
+    mov 32(%esp), %edx            // get referrer
+    subl LITERAL(12), %esp        // alignment padding
+    CFI_ADJUST_CFA_OFFSET(12)
+    PUSH ebx                      // pass SP
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH edx                      // pass referrer
+    PUSH ecx                      // pass new_val
+    PUSH eax                      // pass field_idx
+    SETUP_GOT_NOSAVE              // clobbers EBX
+    call PLT_SYMBOL(artSet16StaticFromCode)  // (field_idx, new_val, referrer, Thread*, SP)
+    addl LITERAL(32), %esp        // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-32)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
+    RETURN_IF_EAX_ZERO            // return or deliver exception
+END_FUNCTION art_quick_set16_static
+
 DEFINE_FUNCTION art_quick_set32_static
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
@@ -1013,6 +1135,40 @@ DEFINE_FUNCTION art_quick_set_obj_static
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     RETURN_IF_EAX_ZERO            // return or deliver exception
 END_FUNCTION art_quick_set_obj_static
+
+DEFINE_FUNCTION art_quick_get8_static
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    mov %esp, %edx                // remember SP
+    mov 32(%esp), %ecx            // get referrer
+    PUSH edx                      // pass SP
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH ecx                      // pass referrer
+    PUSH eax                      // pass field_idx
+    SETUP_GOT_NOSAVE              // clobbers EBX
+    call PLT_SYMBOL(artGet8StaticFromCode)    // (field_idx, referrer, Thread*, SP)
+    addl LITERAL(16), %esp        // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-16)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
+    RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
+END_FUNCTION art_quick_get8_static
+
+DEFINE_FUNCTION art_quick_get16_static
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    mov %esp, %edx                // remember SP
+    mov 32(%esp), %ecx            // get referrer
+    PUSH edx                      // pass SP
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH ecx                      // pass referrer
+    PUSH eax                      // pass field_idx
+    SETUP_GOT_NOSAVE              // clobbers EBX
+    call PLT_SYMBOL(artGet16StaticFromCode)    // (field_idx, referrer, Thread*, SP)
+    addl LITERAL(16), %esp        // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-16)
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
+    RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
+END_FUNCTION art_quick_get16_static
 
 DEFINE_FUNCTION art_quick_get32_static
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
