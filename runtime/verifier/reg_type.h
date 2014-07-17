@@ -25,6 +25,7 @@
 #include "jni.h"
 
 #include "base/macros.h"
+#include "base/mutex.h"
 #include "globals.h"
 #include "object_callbacks.h"
 #include "primitive.h"

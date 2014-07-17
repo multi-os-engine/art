@@ -14,31 +14,12 @@
  * limitations under the License.
  */
 
-#include "primitive.h"
+#ifndef ART_RUNTIME_CHECK_JNI_H_
+#define ART_RUNTIME_CHECK_JNI_H_
 
-namespace art {
+#include <jni.h>
 
-static const char* kTypeNames[] = {
-  "PrimNot",
-  "PrimBoolean",
-  "PrimByte",
-  "PrimChar",
-  "PrimShort",
-  "PrimInt",
-  "PrimLong",
-  "PrimFloat",
-  "PrimDouble",
-  "PrimVoid",
-};
+const JNINativeInterface* GetCheckJniNativeInterface();
+const JNIInvokeInterface* GetCheckJniInvokeInterface();
 
-std::ostream& operator<<(std::ostream& os, const Primitive::Type& type) {
-  int32_t int_type = static_cast<int32_t>(type);
-  if (type >= Primitive::kPrimNot && type <= Primitive::kPrimVoid) {
-    os << kTypeNames[int_type];
-  } else {
-    os << "Type[" << int_type << "]";
-  }
-  return os;
-}
-
-}  // namespace art
+#endif  // ART_RUNTIME_CHECK_JNI_H_
