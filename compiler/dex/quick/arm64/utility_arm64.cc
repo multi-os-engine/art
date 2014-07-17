@@ -1143,7 +1143,6 @@ LIR* Arm64Mir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage 
                                 OpSize size, VolatileKind is_volatile) {
   // LoadBaseDisp() will emit correct insn for atomic load on arm64
   // assuming r_dest is correctly prepared using RegClassForFieldLoadStore().
-
   LIR* load = LoadBaseDispBody(r_base, displacement, r_dest, size);
 
   if (UNLIKELY(is_volatile == kVolatile)) {
