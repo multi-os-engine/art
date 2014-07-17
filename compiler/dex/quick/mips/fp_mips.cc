@@ -61,8 +61,8 @@ void MipsMir2Lir::GenArithOpFloat(Instruction::Code opcode,
     default:
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
-  rl_src1 = LoadValue(rl_src1, kFPReg);
-  rl_src2 = LoadValue(rl_src2, kFPReg);
+  rl_src1 = LoadValue32(rl_src1, kFPReg);
+  rl_src2 = LoadValue32(rl_src2, kFPReg);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR3(op, rl_result.reg.GetReg(), rl_src1.reg.GetReg(), rl_src2.reg.GetReg());
   StoreValue(rl_dest, rl_result);
@@ -104,9 +104,9 @@ void MipsMir2Lir::GenArithOpDouble(Instruction::Code opcode,
     default:
       LOG(FATAL) << "Unpexpected opcode: " << opcode;
   }
-  rl_src1 = LoadValueWide(rl_src1, kFPReg);
+  rl_src1 = LoadValue64(rl_src1, kFPReg);
   DCHECK(rl_src1.wide);
-  rl_src2 = LoadValueWide(rl_src2, kFPReg);
+  rl_src2 = LoadValue64(rl_src2, kFPReg);
   DCHECK(rl_src2.wide);
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   DCHECK(rl_dest.wide);
@@ -154,9 +154,9 @@ void MipsMir2Lir::GenConversion(Instruction::Code opcode, RegLocation rl_dest,
       LOG(FATAL) << "Unexpected opcode: " << opcode;
   }
   if (rl_src.wide) {
-    rl_src = LoadValueWide(rl_src, kFPReg);
+    rl_src = LoadValue64(rl_src, kFPReg);
   } else {
-    rl_src = LoadValue(rl_src, kFPReg);
+    rl_src = LoadValue32(rl_src, kFPReg);
   }
   rl_result = EvalLoc(rl_dest, kFPReg, true);
   NewLIR2(op, rl_result.reg.GetReg(), rl_src.reg.GetReg());
@@ -195,11 +195,11 @@ void MipsMir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
   if (wide) {
     RegStorage r_tmp1(RegStorage::k64BitPair, rMIPS_FARG0, rMIPS_FARG1);
     RegStorage r_tmp2(RegStorage::k64BitPair, rMIPS_FARG2, rMIPS_FARG3);
-    LoadValueDirectWideFixed(rl_src1, r_tmp1);
-    LoadValueDirectWideFixed(rl_src2, r_tmp2);
+    LoadValueDirect64Fixed(rl_src1, r_tmp1);
+    LoadValueDirect64Fixed(rl_src2, r_tmp2);
   } else {
-    LoadValueDirectFixed(rl_src1, rs_rMIPS_FARG0);
-    LoadValueDirectFixed(rl_src2, rs_rMIPS_FARG2);
+    LoadValueDirect32Fixed(rl_src1, rs_rMIPS_FARG0);
+    LoadValueDirect32Fixed(rl_src2, rs_rMIPS_FARG2);
   }
   RegStorage r_tgt = LoadHelper(offset);
   // NOTE: not a safepoint
@@ -215,7 +215,7 @@ void MipsMir2Lir::GenFusedFPCmpBranch(BasicBlock* bb, MIR* mir,
 
 void MipsMir2Lir::GenNegFloat(RegLocation rl_dest, RegLocation rl_src) {
   RegLocation rl_result;
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   rl_result = EvalLoc(rl_dest, kCoreReg, true);
   OpRegRegImm(kOpAdd, rl_result.reg, rl_src.reg, 0x80000000);
   StoreValue(rl_dest, rl_result);
@@ -223,7 +223,7 @@ void MipsMir2Lir::GenNegFloat(RegLocation rl_dest, RegLocation rl_src) {
 
 void MipsMir2Lir::GenNegDouble(RegLocation rl_dest, RegLocation rl_src) {
   RegLocation rl_result;
-  rl_src = LoadValueWide(rl_src, kCoreReg);
+  rl_src = LoadValue64(rl_src, kCoreReg);
   rl_result = EvalLoc(rl_dest, kCoreReg, true);
   OpRegRegImm(kOpAdd, rl_result.reg.GetHigh(), rl_src.reg.GetHigh(), 0x80000000);
   OpRegCopy(rl_result.reg, rl_src.reg);

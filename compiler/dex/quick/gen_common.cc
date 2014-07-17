@@ -268,7 +268,7 @@ void Mir2Lir::GenCompareAndBranch(Instruction::Code opcode, RegLocation rl_src1,
     cond = FlipComparisonOrder(cond);
   }
 
-  rl_src1 = LoadValue(rl_src1);
+  rl_src1 = LoadValue32(rl_src1);
   // Is this really an immediate comparison?
   if (rl_src2.is_const) {
     // If it's already live in a register or not easily materialized, just keep going
@@ -280,7 +280,7 @@ void Mir2Lir::GenCompareAndBranch(Instruction::Code opcode, RegLocation rl_src1,
       return;
     }
   }
-  rl_src2 = LoadValue(rl_src2);
+  rl_src2 = LoadValue32(rl_src2);
   OpCmpBranch(cond, rl_src1.reg, rl_src2.reg, taken);
 }
 
@@ -288,7 +288,7 @@ void Mir2Lir::GenCompareZeroAndBranch(Instruction::Code opcode, RegLocation rl_s
                                       LIR* fall_through) {
   ConditionCode cond;
   DCHECK(!rl_src.fp);
-  rl_src = LoadValue(rl_src);
+  rl_src = LoadValue32(rl_src);
   switch (opcode) {
     case Instruction::IF_EQZ:
       cond = kCondEq;
@@ -320,7 +320,7 @@ void Mir2Lir::GenIntToLong(RegLocation rl_dest, RegLocation rl_src) {
   if (rl_src.location == kLocPhysReg) {
     OpRegCopy(rl_result.reg, rl_src.reg);
   } else {
-    LoadValueDirect(rl_src, rl_result.reg.GetLow());
+    LoadValueDirect32(rl_src, rl_result.reg.GetLow());
   }
   OpRegRegImm(kOpAsr, rl_result.reg.GetHigh(), rl_result.reg.GetLow(), 31);
   StoreValueWide(rl_dest, rl_result);
@@ -328,7 +328,7 @@ void Mir2Lir::GenIntToLong(RegLocation rl_dest, RegLocation rl_src) {
 
 void Mir2Lir::GenIntNarrowing(Instruction::Code opcode, RegLocation rl_dest,
                               RegLocation rl_src) {
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   OpKind op = kOpInvalid;
   switch (opcode) {
@@ -519,7 +519,7 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
   } else if (!info->is_range) {
     // TUNING: interleave
     for (int i = 0; i < elems; i++) {
-      RegLocation rl_arg = LoadValue(info->args[i], kCoreReg);
+      RegLocation rl_arg = LoadValue32(info->args[i], kCoreReg);
       Store32Disp(ref_reg,
                   mirror::Array::DataOffset(component_size).Int32Value() + i * 4, rl_arg.reg);
       // If the LoadValue caused a temp to be allocated, free it
@@ -567,21 +567,25 @@ class StaticFieldSlowPath : public Mir2Lir::LIRSlowPath {
 };
 
 template <size_t pointer_size>
-static void GenSputCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_object,
+static void GenSputCall(Mir2Lir* mir_to_lir, size_t component_size, bool is_object,
                         const MirSFieldLoweringInfo* field_info, RegLocation rl_src) {
   ThreadOffset<pointer_size> setter_offset =
-      is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet64Static)
+      component_size == 8 ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet64Static)
           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSetObjStatic)
-              : QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet32Static));
+              : (component_size == 2? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet16Static) :
+                QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet32Static)));
   mir_to_lir->CallRuntimeHelperImmRegLocation(setter_offset, field_info->FieldIndex(), rl_src,
                                               true);
 }
 
-void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
+void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, size_t component_size,
                       bool is_object) {
   const MirSFieldLoweringInfo& field_info = mir_graph_->GetSFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedStaticField(field_info.FastPut(), field_info.IsReferrersClass());
-  OpSize store_size = LoadStoreOpSize(is_long_or_double, is_object);
+  OpSize store_size = LoadStoreOpSize(component_size, is_object);
+  if (store_size == k16) {
+    LOG(FATAL) << "Not yet supported";
+  }
   if (!SLOW_FIELD_PATH && field_info.FastPut()) {
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
     RegStorage r_base;
@@ -641,10 +645,10 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
     }
     // rBase now holds static storage base
     RegisterClass reg_class = RegClassForFieldLoadStore(store_size, field_info.IsVolatile());
-    if (is_long_or_double) {
-      rl_src = LoadValueWide(rl_src, reg_class);
+    if (component_size == 8) {
+      rl_src = LoadValue64(rl_src, reg_class);
     } else {
-      rl_src = LoadValue(rl_src, reg_class);
+      rl_src = LoadValue32(rl_src, reg_class);
     }
     if (is_object) {
       StoreRefDisp(r_base, field_info.FieldOffset().Int32Value(), rl_src.reg,
@@ -660,28 +664,31 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, bool is_long_or_double,
   } else {
     FlushAllRegs();  // Everything to home locations
     if (cu_->target64) {
-      GenSputCall<8>(this, is_long_or_double, is_object, &field_info, rl_src);
+      GenSputCall<8>(this, component_size, is_object, &field_info, rl_src);
     } else {
-      GenSputCall<4>(this, is_long_or_double, is_object, &field_info, rl_src);
+      GenSputCall<4>(this, component_size, is_object, &field_info, rl_src);
     }
   }
 }
 
 template <size_t pointer_size>
-static void GenSgetCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_object,
+static void GenSgetCall(Mir2Lir* mir_to_lir, size_t component_size, bool is_object,
                         const MirSFieldLoweringInfo* field_info) {
   ThreadOffset<pointer_size> getter_offset =
-      is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Static)
+      component_size == 8 ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Static)
           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGetObjStatic)
               : QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet32Static));
   mir_to_lir->CallRuntimeHelperImm(getter_offset, field_info->FieldIndex(), true);
 }
 
 void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
-                      bool is_long_or_double, bool is_object) {
+                      size_t component_size, bool is_object) {
   const MirSFieldLoweringInfo& field_info = mir_graph_->GetSFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedStaticField(field_info.FastGet(), field_info.IsReferrersClass());
-  OpSize load_size = LoadStoreOpSize(is_long_or_double, is_object);
+  OpSize load_size = LoadStoreOpSize(component_size, is_object);
+  if (load_size == k16) {
+    LOG(FATAL) << "Not yet supported";
+  }
   if (!SLOW_FIELD_PATH && field_info.FastGet()) {
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
     RegStorage r_base;
@@ -745,7 +752,7 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
     }
     FreeTemp(r_base);
 
-    if (is_long_or_double) {
+    if (component_size == 8) {
       StoreValueWide(rl_dest, rl_result);
     } else {
       StoreValue(rl_dest, rl_result);
@@ -753,12 +760,12 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest,
   } else {
     FlushAllRegs();  // Everything to home locations
     if (cu_->target64) {
-      GenSgetCall<8>(this, is_long_or_double, is_object, &field_info);
+      GenSgetCall<8>(this, component_size, is_object, &field_info);
     } else {
-      GenSgetCall<4>(this, is_long_or_double, is_object, &field_info);
+      GenSgetCall<4>(this, component_size, is_object, &field_info);
     }
     // FIXME: pGetXXStatic always return an int or int64 regardless of rl_dest.fp.
-    if (is_long_or_double) {
+    if (component_size == 8) {
       RegLocation rl_result = GetReturnWide(kCoreReg);
       StoreValueWide(rl_dest, rl_result);
     } else {
@@ -780,10 +787,10 @@ void Mir2Lir::HandleSlowPaths() {
 }
 
 template <size_t pointer_size>
-static void GenIgetCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_object,
+static void GenIgetCall(Mir2Lir* mir_to_lir, size_t component_size, bool is_object,
                         const MirIFieldLoweringInfo* field_info, RegLocation rl_obj) {
   ThreadOffset<pointer_size> getter_offset =
-      is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Instance)
+      component_size == 8 ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Instance)
           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pGetObjInstance)
               : QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet32Instance));
   // Second argument of pGetXXInstance is always a reference.
@@ -793,15 +800,18 @@ static void GenIgetCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_obj
 }
 
 void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
-                      RegLocation rl_dest, RegLocation rl_obj, bool is_long_or_double,
+                      RegLocation rl_dest, RegLocation rl_obj, size_t component_size,
                       bool is_object) {
   const MirIFieldLoweringInfo& field_info = mir_graph_->GetIFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedInstanceField(field_info.FastGet());
-  OpSize load_size = LoadStoreOpSize(is_long_or_double, is_object);
+  OpSize load_size = LoadStoreOpSize(component_size, is_object);
+  if (load_size == k16) {
+    LOG(FATAL) << "Not yet supported";
+  }
   if (!SLOW_FIELD_PATH && field_info.FastGet()) {
     RegisterClass reg_class = RegClassForFieldLoadStore(load_size, field_info.IsVolatile());
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
-    rl_obj = LoadValue(rl_obj, kRefReg);
+    rl_obj = LoadValue32(rl_obj, kRefReg);
     GenNullCheck(rl_obj.reg, opt_flags);
     RegLocation rl_result = EvalLoc(rl_dest, reg_class, true);
     int field_offset = field_info.FieldOffset().Int32Value();
@@ -814,19 +824,19 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
                               field_info.IsVolatile() ? kVolatile : kNotVolatile);
     }
     MarkPossibleNullPointerExceptionAfter(opt_flags, load_lir);
-    if (is_long_or_double) {
+    if (component_size == 8) {
       StoreValueWide(rl_dest, rl_result);
     } else {
       StoreValue(rl_dest, rl_result);
     }
   } else {
     if (cu_->target64) {
-      GenIgetCall<8>(this, is_long_or_double, is_object, &field_info, rl_obj);
+      GenIgetCall<8>(this, component_size, is_object, &field_info, rl_obj);
     } else {
-      GenIgetCall<4>(this, is_long_or_double, is_object, &field_info, rl_obj);
+      GenIgetCall<4>(this, component_size, is_object, &field_info, rl_obj);
     }
     // FIXME: pGetXXInstance always return an int or int64 regardless of rl_dest.fp.
-    if (is_long_or_double) {
+    if (component_size == 8) {
       RegLocation rl_result = GetReturnWide(kCoreReg);
       StoreValueWide(rl_dest, rl_result);
     } else {
@@ -837,31 +847,32 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
 }
 
 template <size_t pointer_size>
-static void GenIputCall(Mir2Lir* mir_to_lir, bool is_long_or_double, bool is_object,
+static void GenIputCall(Mir2Lir* mir_to_lir, size_t component_size, bool is_object,
                         const MirIFieldLoweringInfo* field_info, RegLocation rl_obj,
                         RegLocation rl_src) {
   ThreadOffset<pointer_size> setter_offset =
-      is_long_or_double ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet64Instance)
+      component_size == 8 ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet64Instance)
           : (is_object ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSetObjInstance)
-              : QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet32Instance));
+              : (component_size == 2? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet16Instance) :
+                QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet32Instance)));
   mir_to_lir->CallRuntimeHelperImmRegLocationRegLocation(setter_offset, field_info->FieldIndex(),
                                                          rl_obj, rl_src, true);
 }
 
 void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
-                      RegLocation rl_src, RegLocation rl_obj, bool is_long_or_double,
+                      RegLocation rl_src, RegLocation rl_obj, size_t component_size,
                       bool is_object) {
   const MirIFieldLoweringInfo& field_info = mir_graph_->GetIFieldLoweringInfo(mir);
   cu_->compiler_driver->ProcessedInstanceField(field_info.FastPut());
-  OpSize store_size = LoadStoreOpSize(is_long_or_double, is_object);
+  OpSize store_size = LoadStoreOpSize(component_size, is_object);
   if (!SLOW_FIELD_PATH && field_info.FastPut()) {
     RegisterClass reg_class = RegClassForFieldLoadStore(store_size, field_info.IsVolatile());
     DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
-    rl_obj = LoadValue(rl_obj, kRefReg);
-    if (is_long_or_double) {
-      rl_src = LoadValueWide(rl_src, reg_class);
+    rl_obj = LoadValue32(rl_obj, kRefReg);
+    if (component_size == 8) {
+      rl_src = LoadValue64(rl_src, reg_class);
     } else {
-      rl_src = LoadValue(rl_src, reg_class);
+      rl_src = LoadValue32(rl_src, reg_class);
     }
     GenNullCheck(rl_obj.reg, opt_flags);
     int field_offset = field_info.FieldOffset().Int32Value();
@@ -879,9 +890,9 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
     }
   } else {
     if (cu_->target64) {
-      GenIputCall<8>(this, is_long_or_double, is_object, &field_info, rl_obj, rl_src);
+      GenIputCall<8>(this, component_size, is_object, &field_info, rl_obj, rl_src);
     } else {
-      GenIputCall<4>(this, is_long_or_double, is_object, &field_info, rl_obj, rl_src);
+      GenIputCall<4>(this, component_size, is_object, &field_info, rl_obj, rl_src);
     }
   }
 }
@@ -1138,7 +1149,7 @@ void Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx, Re
   // X86 has its own implementation.
   DCHECK(cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64);
 
-  RegLocation object = LoadValue(rl_src, kRefReg);
+  RegLocation object = LoadValue32(rl_src, kRefReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   RegStorage result_reg = rl_result.reg;
   if (IsSameReg(result_reg, object.reg)) {
@@ -1216,14 +1227,14 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
                            type_idx, true);
     }
     OpRegCopy(class_reg, TargetReg(kRet0, kRef));  // Align usage with fast path
-    LoadValueDirectFixed(rl_src, TargetReg(kArg0, kRef));  // kArg0 <= ref
+    LoadValueDirect32Fixed(rl_src, TargetReg(kArg0, kRef));  // kArg0 <= ref
   } else if (use_declaring_class) {
-    LoadValueDirectFixed(rl_src, TargetReg(kArg0, kRef));  // kArg0 <= ref
+    LoadValueDirect32Fixed(rl_src, TargetReg(kArg0, kRef));  // kArg0 <= ref
     LoadRefDisp(method_reg, mirror::ArtMethod::DeclaringClassOffset().Int32Value(),
                 class_reg, kNotVolatile);
   } else {
     // Load dex cache entry into class_reg (kArg2)
-    LoadValueDirectFixed(rl_src, TargetReg(kArg0, kRef));  // kArg0 <= ref
+    LoadValueDirect32Fixed(rl_src, TargetReg(kArg0, kRef));  // kArg0 <= ref
     LoadRefDisp(method_reg, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                 class_reg, kNotVolatile);
     int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
@@ -1239,7 +1250,7 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
         CallRuntimeHelperImm(QUICK_ENTRYPOINT_OFFSET(4, pInitializeType), type_idx, true);
       }
       OpRegCopy(TargetReg(kArg2, kRef), TargetReg(kRet0, kRef));  // Align usage with fast path
-      LoadValueDirectFixed(rl_src, TargetReg(kArg0, kRef));  /* reload Ref */
+      LoadValueDirect32Fixed(rl_src, TargetReg(kArg0, kRef));  /* reload Ref */
       // Rejoin code paths
       LIR* hop_target = NewLIR0(kPseudoTargetLabel);
       hop_branch->target = hop_target;
@@ -1416,7 +1427,7 @@ void Mir2Lir::GenCheckCast(uint32_t insn_idx, uint32_t type_idx, RegLocation rl_
     }
   }
   // At this point, class_reg (kArg2) has class
-  LoadValueDirectFixed(rl_src, TargetReg(kArg0, kRef));  // kArg0 <= ref
+  LoadValueDirect32Fixed(rl_src, TargetReg(kArg0, kRef));  // kArg0 <= ref
 
   // Slow path for the case where the classes are not equal.  In this case we need
   // to call a helper function to do the check.
@@ -1493,8 +1504,8 @@ void Mir2Lir::GenLong3Addr(OpKind first_op, OpKind second_op, RegLocation rl_des
     MarkTemp(TargetReg(kLr, kNotWide));   // Add lr to the temp pool
     FreeTemp(TargetReg(kLr, kNotWide));   // and make it available
   }
-  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-  rl_src2 = LoadValueWide(rl_src2, kCoreReg);
+  rl_src1 = LoadValue64(rl_src1, kCoreReg);
+  rl_src2 = LoadValue64(rl_src2, kCoreReg);
   rl_result = EvalLoc(rl_dest, kCoreReg, true);
   // The longs may overlap - use intermediate temp if so
   if ((rl_result.reg.GetLowReg() == rl_src1.reg.GetHighReg()) || (rl_result.reg.GetLowReg() == rl_src2.reg.GetHighReg())) {
@@ -1636,21 +1647,21 @@ void Mir2Lir::GenArithOpInt(Instruction::Code opcode, RegLocation rl_dest,
   }
   if (!is_div_rem) {
     if (unary) {
-      rl_src1 = LoadValue(rl_src1, kCoreReg);
+      rl_src1 = LoadValue32(rl_src1, kCoreReg);
       rl_result = EvalLoc(rl_dest, kCoreReg, true);
       OpRegReg(op, rl_result.reg, rl_src1.reg);
     } else {
       if ((shift_op) && (cu_->instruction_set != kArm64)) {
-        rl_src2 = LoadValue(rl_src2, kCoreReg);
+        rl_src2 = LoadValue32(rl_src2, kCoreReg);
         RegStorage t_reg = AllocTemp();
         OpRegRegImm(kOpAnd, t_reg, rl_src2.reg, 31);
-        rl_src1 = LoadValue(rl_src1, kCoreReg);
+        rl_src1 = LoadValue32(rl_src1, kCoreReg);
         rl_result = EvalLoc(rl_dest, kCoreReg, true);
         OpRegRegReg(op, rl_result.reg, rl_src1.reg, t_reg);
         FreeTemp(t_reg);
       } else {
-        rl_src1 = LoadValue(rl_src1, kCoreReg);
-        rl_src2 = LoadValue(rl_src2, kCoreReg);
+        rl_src1 = LoadValue32(rl_src1, kCoreReg);
+        rl_src2 = LoadValue32(rl_src2, kCoreReg);
         rl_result = EvalLoc(rl_dest, kCoreReg, true);
         OpRegRegReg(op, rl_result.reg, rl_src1.reg, rl_src2.reg);
       }
@@ -1659,8 +1670,8 @@ void Mir2Lir::GenArithOpInt(Instruction::Code opcode, RegLocation rl_dest,
   } else {
     bool done = false;      // Set to true if we happen to find a way to use a real instruction.
     if (cu_->instruction_set == kMips || cu_->instruction_set == kArm64) {
-      rl_src1 = LoadValue(rl_src1, kCoreReg);
-      rl_src2 = LoadValue(rl_src2, kCoreReg);
+      rl_src1 = LoadValue32(rl_src1, kCoreReg);
+      rl_src2 = LoadValue32(rl_src2, kCoreReg);
       if (check_zero) {
         GenDivZeroCheck(rl_src2.reg);
       }
@@ -1670,8 +1681,8 @@ void Mir2Lir::GenArithOpInt(Instruction::Code opcode, RegLocation rl_dest,
       if (cu_->GetInstructionSetFeatures().HasDivideInstruction()) {
         // Use ARM SDIV instruction for division.  For remainder we also need to
         // calculate using a MUL and subtract.
-        rl_src1 = LoadValue(rl_src1, kCoreReg);
-        rl_src2 = LoadValue(rl_src2, kCoreReg);
+        rl_src1 = LoadValue32(rl_src1, kCoreReg);
+        rl_src2 = LoadValue32(rl_src2, kCoreReg);
         if (check_zero) {
           GenDivZeroCheck(rl_src2.reg);
         }
@@ -1683,11 +1694,11 @@ void Mir2Lir::GenArithOpInt(Instruction::Code opcode, RegLocation rl_dest,
     // If we haven't already generated the code use the callout function.
     if (!done) {
       FlushAllRegs();   /* Send everything to home location */
-      LoadValueDirectFixed(rl_src2, TargetReg(kArg1, kNotWide));
+      LoadValueDirect32Fixed(rl_src2, TargetReg(kArg1, kNotWide));
       RegStorage r_tgt = cu_->target64 ?
           CallHelperSetup(QUICK_ENTRYPOINT_OFFSET(8, pIdivmod)) :
           CallHelperSetup(QUICK_ENTRYPOINT_OFFSET(4, pIdivmod));
-      LoadValueDirectFixed(rl_src1, TargetReg(kArg0, kNotWide));
+      LoadValueDirect32Fixed(rl_src1, TargetReg(kArg0, kNotWide));
       if (check_zero) {
         GenDivZeroCheck(TargetReg(kArg1, kNotWide));
       }
@@ -1734,7 +1745,7 @@ bool Mir2Lir::HandleEasyDivRem(Instruction::Code dalvik_opcode, bool is_div,
     // Avoid special cases.
     return false;
   }
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   if (is_div) {
     RegStorage t_reg = AllocTemp();
@@ -1782,7 +1793,7 @@ bool Mir2Lir::HandleEasyMultiply(RegLocation rl_src, RegLocation rl_dest, int li
     return true;
   }
   if (lit == 1) {
-    rl_src = LoadValue(rl_src, kCoreReg);
+    rl_src = LoadValue32(rl_src, kCoreReg);
     RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
     OpRegCopy(rl_result.reg, rl_src.reg);
     StoreValue(rl_dest, rl_result);
@@ -1805,7 +1816,7 @@ bool Mir2Lir::HandleEasyMultiply(RegLocation rl_src, RegLocation rl_dest, int li
   } else {
     return false;
   }
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   if (power_of_two) {
     // Shift.
@@ -1837,7 +1848,7 @@ void Mir2Lir::GenArithOpIntLit(Instruction::Code opcode, RegLocation rl_dest, Re
   switch (opcode) {
     case Instruction::RSUB_INT_LIT8:
     case Instruction::RSUB_INT: {
-      rl_src = LoadValue(rl_src, kCoreReg);
+      rl_src = LoadValue32(rl_src, kCoreReg);
       rl_result = EvalLoc(rl_dest, kCoreReg, true);
       if (cu_->instruction_set == kThumb2) {
         OpRegRegImm(kOpRsub, rl_result.reg, rl_src.reg, lit);
@@ -1935,7 +1946,7 @@ void Mir2Lir::GenArithOpIntLit(Instruction::Code opcode, RegLocation rl_dest, Re
 
       bool done = false;
       if (cu_->instruction_set == kMips || cu_->instruction_set == kArm64) {
-        rl_src = LoadValue(rl_src, kCoreReg);
+        rl_src = LoadValue32(rl_src, kCoreReg);
         rl_result = GenDivRemLit(rl_dest, rl_src.reg, lit, is_div);
         done = true;
       } else if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
@@ -1945,7 +1956,7 @@ void Mir2Lir::GenArithOpIntLit(Instruction::Code opcode, RegLocation rl_dest, Re
         if (cu_->GetInstructionSetFeatures().HasDivideInstruction()) {
           // Use ARM SDIV instruction for division.  For remainder we also need to
           // calculate using a MUL and subtract.
-          rl_src = LoadValue(rl_src, kCoreReg);
+          rl_src = LoadValue32(rl_src, kCoreReg);
           rl_result = GenDivRemLit(rl_dest, rl_src.reg, lit, is_div);
           done = true;
         }
@@ -1953,7 +1964,7 @@ void Mir2Lir::GenArithOpIntLit(Instruction::Code opcode, RegLocation rl_dest, Re
 
       if (!done) {
         FlushAllRegs();   /* Everything to home location. */
-        LoadValueDirectFixed(rl_src, TargetReg(kArg0, kNotWide));
+        LoadValueDirect32Fixed(rl_src, TargetReg(kArg0, kNotWide));
         Clobber(TargetReg(kArg0, kNotWide));
         if (cu_->target64) {
           CallRuntimeHelperRegImm(QUICK_ENTRYPOINT_OFFSET(8, pIdivmod), TargetReg(kArg0, kNotWide),
@@ -1973,7 +1984,7 @@ void Mir2Lir::GenArithOpIntLit(Instruction::Code opcode, RegLocation rl_dest, Re
     default:
       LOG(FATAL) << "Unexpected opcode " << opcode;
   }
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   rl_result = EvalLoc(rl_dest, kCoreReg, true);
   // Avoid shifts by literal 0 - no support in Thumb.  Change to copy.
   if (shift_op && (lit == 0)) {
@@ -2001,7 +2012,7 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
         mir_to_lir->GenNotLong(rl_dest, rl_src2);
         return;
       }
-      rl_src2 = mir_to_lir->LoadValueWide(rl_src2, kCoreReg);
+      rl_src2 = mir_to_lir->LoadValue64(rl_src2, kCoreReg);
       rl_result = mir_to_lir->EvalLoc(rl_dest, kCoreReg, true);
       // Check for destructive overlap
       if (rl_result.reg.GetLowReg() == rl_src2.reg.GetHighReg()) {
@@ -2112,10 +2123,10 @@ static void GenArithOpLongImpl(Mir2Lir* mir_to_lir, CompilationUnit* cu, Instruc
     if (check_zero) {
       RegStorage r_tmp1 = mir_to_lir->TargetReg(kArg0, kWide);
       RegStorage r_tmp2 = mir_to_lir->TargetReg(kArg2, kWide);
-      mir_to_lir->LoadValueDirectWideFixed(rl_src2, r_tmp2);
+      mir_to_lir->LoadValueDirect64Fixed(rl_src2, r_tmp2);
       RegStorage r_tgt = mir_to_lir->CallHelperSetup(func_offset);
       mir_to_lir->GenDivZeroCheckWide(r_tmp2);
-      mir_to_lir->LoadValueDirectWideFixed(rl_src1, r_tmp1);
+      mir_to_lir->LoadValueDirect64Fixed(rl_src1, r_tmp1);
       // NOTE: callout here is not a safepoint
       mir_to_lir->CallHelper(r_tgt, func_offset, false /* not safepoint */);
     } else {

@@ -107,7 +107,7 @@ void MipsMir2Lir::GenSparseSwitch(MIR* mir, DexOffset table_offset,
   OpRegRegReg(kOpAdd, r_end, r_end, r_base);
 
   // Grab switch test value
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
 
   // Test loop
   RegStorage r_key = AllocTemp();
@@ -156,7 +156,7 @@ void MipsMir2Lir::GenPackedSwitch(MIR* mir, DexOffset table_offset,
   switch_tables_.Insert(tab_rec);
 
   // Get the switch value
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
 
   // Prepare the bias.  If too big, handle 1st stage here
   int low_key = s4FromSwitchData(&table[2]);
@@ -239,7 +239,7 @@ void MipsMir2Lir::GenFillArrayData(DexOffset table_offset, RegLocation rl_src) {
   // Making a call - use explicit registers
   FlushAllRegs();   /* Everything to home location */
   LockCallTemps();
-  LoadValueDirectFixed(rl_src, rs_rMIPS_ARG0);
+  LoadValueDirect32Fixed(rl_src, rs_rMIPS_ARG0);
 
   // Must prevent code motion for the curr pc pair
   GenBarrier();

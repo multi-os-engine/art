@@ -122,8 +122,8 @@ void ArmMir2Lir::OpEndIT(LIR* it) {
 void ArmMir2Lir::GenCmpLong(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) {
   LIR* target1;
   LIR* target2;
-  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-  rl_src2 = LoadValueWide(rl_src2, kCoreReg);
+  rl_src1 = LoadValue64(rl_src1, kCoreReg);
+  rl_src2 = LoadValue64(rl_src2, kCoreReg);
   RegStorage t_reg = AllocTemp();
   LoadConstant(t_reg, -1);
   OpRegReg(kOpCmp, rl_src1.reg.GetHigh(), rl_src2.reg.GetHigh());
@@ -160,7 +160,7 @@ void ArmMir2Lir::GenFusedLongCmpImmBranch(BasicBlock* bb, RegLocation rl_src1,
   DCHECK_GE(ModifiedImmediate(val_hi), 0);
   LIR* taken = &block_label_list_[bb->taken];
   LIR* not_taken = &block_label_list_[bb->fall_through];
-  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
+  rl_src1 = LoadValue64(rl_src1, kCoreReg);
   RegStorage low_reg = rl_src1.reg.GetLow();
   RegStorage high_reg = rl_src1.reg.GetHigh();
 
@@ -210,7 +210,7 @@ void ArmMir2Lir::GenSelect(BasicBlock* bb, MIR* mir) {
   // Avoid using float regs here.
   RegisterClass src_reg_class = rl_src.ref ? kRefReg : kCoreReg;
   RegisterClass result_reg_class = rl_dest.ref ? kRefReg : kCoreReg;
-  rl_src = LoadValue(rl_src, src_reg_class);
+  rl_src = LoadValue32(rl_src, src_reg_class);
   ConditionCode ccode = mir->meta.ccode;
   if (mir->ssa_rep->num_uses == 1) {
     // CONST case
@@ -257,8 +257,8 @@ void ArmMir2Lir::GenSelect(BasicBlock* bb, MIR* mir) {
     // MOVE case
     RegLocation rl_true = mir_graph_->reg_location_[mir->ssa_rep->uses[1]];
     RegLocation rl_false = mir_graph_->reg_location_[mir->ssa_rep->uses[2]];
-    rl_true = LoadValue(rl_true, result_reg_class);
-    rl_false = LoadValue(rl_false, result_reg_class);
+    rl_true = LoadValue32(rl_true, result_reg_class);
+    rl_false = LoadValue32(rl_false, result_reg_class);
     rl_result = EvalLoc(rl_dest, result_reg_class, true);
     OpRegImm(kOpCmp, rl_src.reg, 0);
     LIR* it = nullptr;
@@ -299,8 +299,8 @@ void ArmMir2Lir::GenFusedLongCmpBranch(BasicBlock* bb, MIR* mir) {
   }
   LIR* taken = &block_label_list_[bb->taken];
   LIR* not_taken = &block_label_list_[bb->fall_through];
-  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-  rl_src2 = LoadValueWide(rl_src2, kCoreReg);
+  rl_src1 = LoadValue64(rl_src1, kCoreReg);
+  rl_src2 = LoadValue64(rl_src2, kCoreReg);
   OpRegReg(kOpCmp, rl_src1.reg.GetHigh(), rl_src2.reg.GetHigh());
   switch (ccode) {
     case kCondEq:
@@ -477,7 +477,7 @@ bool ArmMir2Lir::SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div
 
   RegStorage r_magic = AllocTemp();
   LoadConstant(r_magic, magic_table[lit].magic);
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   RegStorage r_hi = AllocTemp();
   RegStorage r_lo = AllocTemp();
@@ -641,7 +641,7 @@ bool ArmMir2Lir::EasyMultiply(RegLocation rl_src, RegLocation rl_dest, int lit) 
     return false;
   }
 
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
 
   GenEasyMultiplyTwoOps(rl_result.reg, rl_src.reg, ops);
@@ -703,8 +703,8 @@ bool ArmMir2Lir::GenInlinedMinMax(CallInfo* info, bool is_min, bool is_long) {
   }
   RegLocation rl_src1 = info->args[0];
   RegLocation rl_src2 = info->args[1];
-  rl_src1 = LoadValue(rl_src1, kCoreReg);
-  rl_src2 = LoadValue(rl_src2, kCoreReg);
+  rl_src1 = LoadValue32(rl_src1, kCoreReg);
+  rl_src2 = LoadValue32(rl_src2, kCoreReg);
   RegLocation rl_dest = InlineTarget(info);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   OpRegReg(kOpCmp, rl_src1.reg, rl_src2.reg);
@@ -720,7 +720,7 @@ bool ArmMir2Lir::GenInlinedPeek(CallInfo* info, OpSize size) {
   RegLocation rl_src_address = info->args[0];  // long address
   rl_src_address = NarrowRegLoc(rl_src_address);  // ignore high half in info->args[1]
   RegLocation rl_dest = InlineTarget(info);
-  RegLocation rl_address = LoadValue(rl_src_address, kCoreReg);
+  RegLocation rl_address = LoadValue32(rl_src_address, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   if (size == k64) {
     // Fake unaligned LDRD by two unaligned LDR instructions on ARMv7 with SCTLR.A set to 0.
@@ -745,16 +745,16 @@ bool ArmMir2Lir::GenInlinedPoke(CallInfo* info, OpSize size) {
   RegLocation rl_src_address = info->args[0];  // long address
   rl_src_address = NarrowRegLoc(rl_src_address);  // ignore high half in info->args[1]
   RegLocation rl_src_value = info->args[2];  // [size] value
-  RegLocation rl_address = LoadValue(rl_src_address, kCoreReg);
+  RegLocation rl_address = LoadValue32(rl_src_address, kCoreReg);
   if (size == k64) {
     // Fake unaligned STRD by two unaligned STR instructions on ARMv7 with SCTLR.A set to 0.
-    RegLocation rl_value = LoadValueWide(rl_src_value, kCoreReg);
+    RegLocation rl_value = LoadValue64(rl_src_value, kCoreReg);
     StoreBaseDisp(rl_address.reg, 0, rl_value.reg.GetLow(), k32, kNotVolatile);
     StoreBaseDisp(rl_address.reg, 4, rl_value.reg.GetHigh(), k32, kNotVolatile);
   } else {
     DCHECK(size == kSignedByte || size == kSignedHalf || size == k32);
     // Unaligned store with STR and STRSH is allowed on ARMv7 with SCTLR.A set to 0.
-    RegLocation rl_value = LoadValue(rl_src_value, kCoreReg);
+    RegLocation rl_value = LoadValue32(rl_src_value, kCoreReg);
     StoreBaseDisp(rl_address.reg, 0, rl_value.reg, size, kNotVolatile);
   }
   return true;
@@ -830,12 +830,12 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   // Prevent reordering with prior memory operations.
   GenMemBarrier(kAnyStore);
 
-  RegLocation rl_object = LoadValue(rl_src_obj, kRefReg);
+  RegLocation rl_object = LoadValue32(rl_src_obj, kRefReg);
   RegLocation rl_new_value;
   if (!is_long) {
-    rl_new_value = LoadValue(rl_src_new_value);
+    rl_new_value = LoadValue32(rl_src_new_value);
   } else if (load_early) {
-    rl_new_value = LoadValueWide(rl_src_new_value, kCoreReg);
+    rl_new_value = LoadValue64(rl_src_new_value, kCoreReg);
   }
 
   if (is_object && !mir_graph_->IsConstantNullRef(rl_new_value)) {
@@ -843,7 +843,7 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     MarkGCCard(rl_new_value.reg, rl_object.reg);
   }
 
-  RegLocation rl_offset = LoadValue(rl_src_offset, kCoreReg);
+  RegLocation rl_offset = LoadValue32(rl_src_offset, kCoreReg);
 
   RegStorage r_ptr = rs_rARM_LR;
   OpRegRegReg(kOpAdd, r_ptr, rl_object.reg, rl_offset.reg);
@@ -856,9 +856,9 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
 
   RegLocation rl_expected;
   if (!is_long) {
-    rl_expected = LoadValue(rl_src_expected);
+    rl_expected = LoadValue32(rl_src_expected);
   } else if (load_early) {
-    rl_expected = LoadValueWide(rl_src_expected, kCoreReg);
+    rl_expected = LoadValue64(rl_src_expected, kCoreReg);
   } else {
     // NOTE: partially defined rl_expected & rl_new_value - but we just want the regs.
     RegStorage low_reg = AllocTemp();
@@ -879,13 +879,13 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   if (is_long) {
     RegStorage r_tmp_high = AllocTemp();
     if (!load_early) {
-      LoadValueDirectWide(rl_src_expected, rl_expected.reg);
+      LoadValueDirect64(rl_src_expected, rl_expected.reg);
     }
     NewLIR3(kThumb2Ldrexd, r_tmp.GetReg(), r_tmp_high.GetReg(), r_ptr.GetReg());
     OpRegReg(kOpSub, r_tmp, rl_expected.reg.GetLow());
     OpRegReg(kOpSub, r_tmp_high, rl_expected.reg.GetHigh());
     if (!load_early) {
-      LoadValueDirectWide(rl_src_new_value, rl_new_value.reg);
+      LoadValueDirect64(rl_src_new_value, rl_new_value.reg);
     }
     // Make sure we use ORR that sets the ccode
     if (r_tmp.Low8() && r_tmp_high.Low8()) {
@@ -1037,7 +1037,7 @@ void ArmMir2Lir::GenDivRemLong(Instruction::Code, RegLocation rl_dest, RegLocati
 }
 
 void ArmMir2Lir::GenNegLong(RegLocation rl_dest, RegLocation rl_src) {
-  rl_src = LoadValueWide(rl_src, kCoreReg);
+  rl_src = LoadValue64(rl_src, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   RegStorage z_reg = AllocTemp();
   LoadConstantNoClobber(z_reg, 0);
@@ -1081,8 +1081,8 @@ void ArmMir2Lir::GenMulLong(Instruction::Code opcode, RegLocation rl_dest,
       return;
     }
 
-    rl_src1 = LoadValueWide(rl_src1, kCoreReg);
-    rl_src2 = LoadValueWide(rl_src2, kCoreReg);
+    rl_src1 = LoadValue64(rl_src1, kCoreReg);
+    rl_src2 = LoadValue64(rl_src2, kCoreReg);
 
     int reg_status = 0;
     RegStorage res_lo;
@@ -1197,9 +1197,9 @@ void ArmMir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
   int data_offset;
   RegLocation rl_result;
   bool constant_index = rl_index.is_const;
-  rl_array = LoadValue(rl_array, kRefReg);
+  rl_array = LoadValue32(rl_array, kRefReg);
   if (!constant_index) {
-    rl_index = LoadValue(rl_index, kCoreReg);
+    rl_index = LoadValue32(rl_index, kCoreReg);
   }
 
   if (rl_dest.wide) {
@@ -1296,9 +1296,9 @@ void ArmMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
     data_offset += mir_graph_->ConstantValue(rl_index) << scale;
   }
 
-  rl_array = LoadValue(rl_array, kRefReg);
+  rl_array = LoadValue32(rl_array, kRefReg);
   if (!constant_index) {
-    rl_index = LoadValue(rl_index, kCoreReg);
+    rl_index = LoadValue32(rl_index, kCoreReg);
   }
 
   RegStorage reg_ptr;
@@ -1330,9 +1330,9 @@ void ArmMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
   /* at this point, reg_ptr points to array, 2 live temps */
   if (rl_src.wide || rl_src.fp || constant_index) {
     if (rl_src.wide) {
-      rl_src = LoadValueWide(rl_src, reg_class);
+      rl_src = LoadValue64(rl_src, reg_class);
     } else {
-      rl_src = LoadValue(rl_src, reg_class);
+      rl_src = LoadValue32(rl_src, reg_class);
     }
     if (!constant_index) {
       OpRegRegRegShift(kOpAdd, reg_ptr, rl_array.reg, rl_index.reg, EncodeShift(kArmLsl, scale));
@@ -1351,7 +1351,7 @@ void ArmMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
   } else {
     /* reg_ptr -> array data */
     OpRegRegImm(kOpAdd, reg_ptr, rl_array.reg, data_offset);
-    rl_src = LoadValue(rl_src, reg_class);
+    rl_src = LoadValue32(rl_src, reg_class);
     if (needs_range_check) {
       GenArrayBoundsCheck(rl_index.reg, reg_len);
       FreeTemp(reg_len);
@@ -1370,7 +1370,7 @@ void ArmMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
 
 void ArmMir2Lir::GenShiftImmOpLong(Instruction::Code opcode,
                                    RegLocation rl_dest, RegLocation rl_src, RegLocation rl_shift) {
-  rl_src = LoadValueWide(rl_src, kCoreReg);
+  rl_src = LoadValue64(rl_src, kCoreReg);
   // Per spec, we only care about low 6 bits of shift amount.
   int shift_amount = mir_graph_->ConstantValue(rl_shift) & 0x3f;
   if (shift_amount == 0) {
@@ -1481,7 +1481,7 @@ void ArmMir2Lir::GenArithImmOpLong(Instruction::Code opcode,
     default:
       break;
   }
-  rl_src1 = LoadValueWide(rl_src1, kCoreReg);
+  rl_src1 = LoadValue64(rl_src1, kCoreReg);
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   // NOTE: once we've done the EvalLoc on dest, we can no longer bail.
   switch (opcode) {

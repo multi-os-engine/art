@@ -1122,20 +1122,20 @@ bool X86Mir2Lir::GenInlinedArrayCopyCharArray(CallInfo* info) {
   }
   ClobberCallerSave();
   LockCallTemps();  // Using fixed registers
-  LoadValueDirectFixed(rl_src , rs_rAX);
-  LoadValueDirectFixed(rl_dst , rs_rCX);
+  LoadValueDirect32Fixed(rl_src , rs_rAX);
+  LoadValueDirect32Fixed(rl_dst , rs_rCX);
   LIR* src_dst_same  = OpCmpBranch(kCondEq, rs_rAX , rs_rCX, nullptr);
   LIR* src_null_branch = OpCmpImmBranch(kCondEq, rs_rAX , 0, nullptr);
   LIR* dst_null_branch = OpCmpImmBranch(kCondEq, rs_rCX , 0, nullptr);
-  LoadValueDirectFixed(rl_length , rs_rDX);
+  LoadValueDirect32Fixed(rl_length , rs_rDX);
   LIR* len_negative  = OpCmpImmBranch(kCondLt, rs_rDX , 0, nullptr);
   LIR* len_too_big  = OpCmpImmBranch(kCondGt, rs_rDX , 128, nullptr);
-  LoadValueDirectFixed(rl_src , rs_rAX);
+  LoadValueDirect32Fixed(rl_src , rs_rAX);
   LoadWordDisp(rs_rAX , mirror::Array::LengthOffset().Int32Value(), rs_rAX);
   LIR* src_bad_len  = nullptr;
   LIR* srcPos_negative  = nullptr;
   if (!rl_srcPos.is_const) {
-    LoadValueDirectFixed(rl_srcPos , rs_rBX);
+    LoadValueDirect32Fixed(rl_srcPos , rs_rBX);
     srcPos_negative  = OpCmpImmBranch(kCondLt, rs_rBX , 0, nullptr);
     OpRegReg(kOpAdd, rs_rBX, rs_rDX);
     src_bad_len  = OpCmpBranch(kCondLt, rs_rAX , rs_rBX, nullptr);
@@ -1150,10 +1150,10 @@ bool X86Mir2Lir::GenInlinedArrayCopyCharArray(CallInfo* info) {
   }
   LIR* dstPos_negative = nullptr;
   LIR* dst_bad_len = nullptr;
-  LoadValueDirectFixed(rl_dst, rs_rAX);
+  LoadValueDirect32Fixed(rl_dst, rs_rAX);
   LoadWordDisp(rs_rAX, mirror::Array::LengthOffset().Int32Value(), rs_rAX);
   if (!rl_dstPos.is_const) {
-    LoadValueDirectFixed(rl_dstPos , rs_rBX);
+    LoadValueDirect32Fixed(rl_dstPos , rs_rBX);
     dstPos_negative = OpCmpImmBranch(kCondLt, rs_rBX , 0, nullptr);
     OpRegRegReg(kOpAdd, rs_rBX, rs_rBX, rs_rDX);
     dst_bad_len = OpCmpBranch(kCondLt, rs_rAX , rs_rBX, nullptr);
@@ -1167,14 +1167,14 @@ bool X86Mir2Lir::GenInlinedArrayCopyCharArray(CallInfo* info) {
     }
   }
   // everything is checked now
-  LoadValueDirectFixed(rl_src , rs_rAX);
-  LoadValueDirectFixed(rl_dst , rs_rBX);
-  LoadValueDirectFixed(rl_srcPos , rs_rCX);
+  LoadValueDirect32Fixed(rl_src , rs_rAX);
+  LoadValueDirect32Fixed(rl_dst , rs_rBX);
+  LoadValueDirect32Fixed(rl_srcPos , rs_rCX);
   NewLIR5(kX86Lea32RA, rs_rAX.GetReg(), rs_rAX.GetReg(),
        rs_rCX.GetReg() , 1, mirror::Array::DataOffset(2).Int32Value());
   // RAX now holds the address of the first src element to be copied
 
-  LoadValueDirectFixed(rl_dstPos , rs_rCX);
+  LoadValueDirect32Fixed(rl_dstPos , rs_rCX);
   NewLIR5(kX86Lea32RA, rs_rBX.GetReg(), rs_rBX.GetReg(),
        rs_rCX.GetReg() , 1, mirror::Array::DataOffset(2).Int32Value() );
   // RBX now holds the address of the first dst element to be copied
@@ -1182,7 +1182,7 @@ bool X86Mir2Lir::GenInlinedArrayCopyCharArray(CallInfo* info) {
   // check if the number of elements to be copied is odd or even. If odd
   // then copy the first element (so that the remaining number of elements
   // is even).
-  LoadValueDirectFixed(rl_length , rs_rCX);
+  LoadValueDirect32Fixed(rl_length , rs_rCX);
   OpRegImm(kOpAnd, rs_rCX, 1);
   LIR* jmp_to_begin_loop  = OpCmpImmBranch(kCondEq, rs_rCX, 0, nullptr);
   OpRegImm(kOpSub, rs_rDX, 1);
@@ -1252,7 +1252,7 @@ bool X86Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
   RegLocation rl_dest = InlineTarget(info);
 
   // Is the string non-NULL?
-  LoadValueDirectFixed(rl_obj, rs_rDX);
+  LoadValueDirect32Fixed(rl_obj, rs_rDX);
   GenNullCheck(rs_rDX, info->opt_flags);
   // uint32_t opt_flags = info->opt_flags;
   info->opt_flags |= MIR_IGNORE_NULL_CHECK;  // Record that we've null checked.
@@ -1264,7 +1264,7 @@ bool X86Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
     LoadConstantNoClobber(rs_rAX, char_value);
   } else {
     // Character is not a constant; compare at runtime.
-    LoadValueDirectFixed(rl_char, rs_rAX);
+    LoadValueDirect32Fixed(rl_char, rs_rAX);
     slowpath_branch = OpCmpImmBranch(kCondGt, rs_rAX, 0xFFFF, nullptr);
   }
 
@@ -1691,9 +1691,9 @@ void X86Mir2Lir::AppendOpcodeWithConst(X86OpCode opcode, int reg, MIR* mir) {
   // Address the start of the method.
   RegLocation rl_method = mir_graph_->GetRegLocation(base_of_code_->s_reg_low);
   if (rl_method.wide) {
-    rl_method = LoadValueWide(rl_method, kCoreReg);
+    rl_method = LoadValue64(rl_method, kCoreReg);
   } else {
-    rl_method = LoadValue(rl_method, kCoreReg);
+    rl_method = LoadValue32(rl_method, kCoreReg);
   }
 
   // Load the proper value from the literal area.
@@ -2199,9 +2199,9 @@ void X86Mir2Lir::GenSetVector(BasicBlock *bb, MIR *mir) {
 
   // Load the value from the VR into the reg.
   if (rl_src.wide == 0) {
-    rl_src = LoadValue(rl_src, reg_type);
+    rl_src = LoadValue32(rl_src, reg_type);
   } else {
-    rl_src = LoadValueWide(rl_src, reg_type);
+    rl_src = LoadValue64(rl_src, reg_type);
   }
 
   // If opsize is 8 bits wide then double value and use 16 bit shuffle instead.
@@ -2648,14 +2648,14 @@ int X86Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
             if (rl_arg.location == kLocPhysReg) {
               StoreBaseDisp(rs_rX86_SP, out_offset, rl_arg.reg, k64, kNotVolatile);
             } else {
-              LoadValueDirectWideFixed(rl_arg, regWide);
+              LoadValueDirect64Fixed(rl_arg, regWide);
               StoreBaseDisp(rs_rX86_SP, out_offset, regWide, k64, kNotVolatile);
             }
           } else {
             if (rl_arg.location == kLocPhysReg) {
               StoreBaseDisp(rs_rX86_SP, out_offset, rl_arg.reg, k32, kNotVolatile);
             } else {
-              LoadValueDirectFixed(rl_arg, regSingle);
+              LoadValueDirect32Fixed(rl_arg, regSingle);
               StoreBaseDisp(rs_rX86_SP, out_offset, regSingle, k32, kNotVolatile);
             }
           }
@@ -2676,9 +2676,9 @@ int X86Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
     RegStorage reg = in_to_reg_storage_mapping.Get(i);
     if (reg.Valid()) {
       if (rl_arg.wide) {
-        LoadValueDirectWideFixed(rl_arg, reg);
+        LoadValueDirect64Fixed(rl_arg, reg);
       } else {
-        LoadValueDirectFixed(rl_arg, reg);
+        LoadValueDirect32Fixed(rl_arg, reg);
       }
       call_state = next_call_insn(cu_, info, call_state, target_method, vtable_idx,
                                direct_code, direct_method, type);

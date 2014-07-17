@@ -36,7 +36,7 @@ void X86Mir2Lir::GenSparseSwitch(MIR* mir, DexOffset table_offset,
   int entries = table[1];
   const int32_t* keys = reinterpret_cast<const int32_t*>(&table[2]);
   const int32_t* targets = &keys[entries];
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   for (int i = 0; i < entries; i++) {
     int key = keys[i];
     BasicBlock* case_block =
@@ -78,7 +78,7 @@ void X86Mir2Lir::GenPackedSwitch(MIR* mir, DexOffset table_offset,
   switch_tables_.Insert(tab_rec);
 
   // Get the switch value
-  rl_src = LoadValue(rl_src, kCoreReg);
+  rl_src = LoadValue32(rl_src, kCoreReg);
   // NewLIR0(kX86Bkpt);
 
   // Materialize a pointer to the switch table
@@ -87,9 +87,9 @@ void X86Mir2Lir::GenPackedSwitch(MIR* mir, DexOffset table_offset,
     // We can use the saved value.
     RegLocation rl_method = mir_graph_->GetRegLocation(base_of_code_->s_reg_low);
     if (rl_method.wide) {
-      rl_method = LoadValueWide(rl_method, kCoreReg);
+      rl_method = LoadValue64(rl_method, kCoreReg);
     } else {
-      rl_method = LoadValue(rl_method, kCoreReg);
+      rl_method = LoadValue32(rl_method, kCoreReg);
     }
     start_of_method_reg = rl_method.reg;
     store_method_addr_used_ = true;
@@ -155,15 +155,15 @@ void X86Mir2Lir::GenFillArrayData(DexOffset table_offset, RegLocation rl_src) {
   RegStorage payload = TargetPtrReg(kArg1);
   RegStorage method_start = TargetPtrReg(kArg2);
 
-  LoadValueDirectFixed(rl_src, array_ptr);
+  LoadValueDirect32Fixed(rl_src, array_ptr);
   // Materialize a pointer to the fill data image
   if (base_of_code_ != nullptr) {
     // We can use the saved value.
     RegLocation rl_method = mir_graph_->GetRegLocation(base_of_code_->s_reg_low);
     if (rl_method.wide) {
-      LoadValueDirectWide(rl_method, method_start);
+      LoadValueDirect64(rl_method, method_start);
     } else {
-      LoadValueDirect(rl_method, method_start);
+      LoadValueDirect32(rl_method, method_start);
     }
     store_method_addr_used_ = true;
   } else {
