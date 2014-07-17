@@ -664,13 +664,12 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
       opcode = is_array ? kX86Movzx16RA : kX86Movzx16RM;
       DCHECK_EQ((displacement & 0x1), 0);
       break;
+    case k16:
     case kSignedHalf:
       opcode = is_array ? kX86Movsx16RA : kX86Movsx16RM;
       DCHECK_EQ((displacement & 0x1), 0);
       break;
     case kUnsignedByte:
-      opcode = is_array ? kX86Movzx8RA : kX86Movzx8RM;
-      break;
     case kSignedByte:
       opcode = is_array ? kX86Movsx8RA : kX86Movsx8RM;
       break;
@@ -807,6 +806,7 @@ LIR* X86Mir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int
       }
       DCHECK_EQ((displacement & 0x3), 0);
       break;
+    case k16:
     case kUnsignedHalf:
     case kSignedHalf:
       opcode = is_array ? kX86Mov16AR : kX86Mov16MR;
