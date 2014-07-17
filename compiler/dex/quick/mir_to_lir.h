@@ -745,14 +745,13 @@ class Mir2Lir : public Backend {
     virtual RegStorage AllocPreservedSingle(int s_reg);
     virtual RegStorage AllocPreservedDouble(int s_reg);
     RegStorage AllocTempBody(GrowableArray<RegisterInfo*> &regs, int* next_temp, bool required);
-    virtual RegStorage AllocFreeTemp();
-    virtual RegStorage AllocTemp();
-    virtual RegStorage AllocTempWide();
-    virtual RegStorage AllocTempRef();
-    virtual RegStorage AllocTempSingle();
-    virtual RegStorage AllocTempDouble();
-    virtual RegStorage AllocTypedTemp(bool fp_hint, int reg_class);
-    virtual RegStorage AllocTypedTempWide(bool fp_hint, int reg_class);
+    virtual RegStorage AllocTemp(bool required = true);
+    virtual RegStorage AllocTempWide(bool required = true);
+    virtual RegStorage AllocTempRef(bool required = true);
+    virtual RegStorage AllocTempSingle(bool required = true);
+    virtual RegStorage AllocTempDouble(bool required = true);
+    virtual RegStorage AllocTypedTemp(bool fp_hint, int reg_class, bool required = true);
+    virtual RegStorage AllocTypedTempWide(bool fp_hint, int reg_class, bool required = true);
     void FlushReg(RegStorage reg);
     void FlushRegWide(RegStorage reg);
     RegStorage AllocLiveReg(int s_reg, int reg_class, bool wide);
@@ -1382,7 +1381,6 @@ class Mir2Lir : public Backend {
 
     /**
      * @brief Generates code to select one of the given constants depending on the given opcode.
-     * @note Will neither call EvalLoc nor StoreValue for rl_dest.
      */
     virtual void GenSelectConst32(RegStorage left_op, RegStorage right_op, ConditionCode code,
                                   int32_t true_val, int32_t false_val, RegStorage rs_dest,
@@ -1544,7 +1542,19 @@ class Mir2Lir : public Backend {
 
     void AddSlowPath(LIRSlowPath* slowpath);
 
-    virtual void GenInstanceofCallingHelper(bool needs_access_check, bool type_known_final,
+    /*
+    *
+     * @brief Implement Set up instanceof a class.
+     * @param needs_access_check 'true' if we must check the access.
+     * @param type_known_final 'true' if the type is known to be a final class.
+     * @param type_known_abstract 'true' if the type is known to be an abstract class.
+     * @param use_declaring_class 'true' if the type can be loaded off the current Method*.
+     * @param can_assume_type_is_in_dex_cache 'true' if the type is known to be in the cache.
+     * @param type_idx Type index to use if use_declaring_class is 'false'.
+     * @param rl_dest Result to be set to 0 or 1.
+     * @param rl_src Object to be tested.
+     */
+    void GenInstanceofCallingHelper(bool needs_access_check, bool type_known_final,
                                             bool type_known_abstract, bool use_declaring_class,
                                             bool can_assume_type_is_in_dex_cache,
                                             uint32_t type_idx, RegLocation rl_dest,
