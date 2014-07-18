@@ -663,6 +663,12 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
       if (!ParseStringAfterChar(option, '=', &native_bridge_library_filename_)) {
         return false;
       }
+    } else if (StartsWith(option, "--cpu-abilist=")) {
+      std::string cpu_abilist_str;
+      if (!ParseStringAfterChar(option, '=', &cpu_abilist_str)) {
+        return false;
+      }
+      Split(cpu_abilist_str, ',', &cpu_abilist_);
     } else if (StartsWith(option, "-ea") ||
                StartsWith(option, "-da") ||
                StartsWith(option, "-enableassertions") ||

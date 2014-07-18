@@ -102,6 +102,7 @@ class ParsedOptions {
   TraceClockSource profile_clock_source_;
   bool verify_;
   InstructionSet image_isa_;
+  std::vector<std::string> cpu_abilist_;
 
   // Whether or not we use homogeneous space compaction to avoid OOM errors. If enabled,
   // the heap will attempt to create an extra space which enables compacting from a malloc space to

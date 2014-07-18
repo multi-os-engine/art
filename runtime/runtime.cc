@@ -759,6 +759,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   intern_table_ = new InternTable;
 
   verify_ = options->verify_;
+  cpu_abilist_ = options->cpu_abilist_;
 
   if (options->interpreter_only_) {
     GetInstrumentation()->ForceInterpretOnly();
