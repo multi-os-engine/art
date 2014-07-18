@@ -2767,8 +2767,15 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
     CatchHandlerIterator iterator(*code_item_, work_insn_idx_);
 
     for (; iterator.HasNext(); iterator.Next()) {
-      if (iterator.GetHandlerTypeIndex() == DexFile::kDexNoIndex16) {
+      uint16_t handler_type_idx = iterator.GetHandlerTypeIndex();
+      if (handler_type_idx == DexFile::kDexNoIndex16) {
         within_catch_all = true;
+      } else {
+        // It is also a catch-all if it is java.lang.Throwable.
+        mirror::Class* klass = (*dex_cache_)->GetResolvedType(handler_type_idx);
+        if (klass != nullptr && klass == mirror::Throwable::GetJavaLangThrowable()) {
+          within_catch_all = true;
+        }
       }
       /*
        * Merge registers into the "catch" block. We want to use the "savedRegs" rather than
