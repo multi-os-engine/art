@@ -762,6 +762,8 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   verify_ = runtime_options.GetOrDefault(Opt::Verify);
 
+  Split(runtime_options.GetOrDefault(Opt::CpuAbiList), ',', &cpu_abilist_);
+
   if (runtime_options.GetOrDefault(Opt::Interpret)) {
     GetInstrumentation()->ForceInterpretOnly();
   }

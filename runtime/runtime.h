@@ -504,6 +504,10 @@ class Runtime {
     return verify_;
   }
 
+  const std::vector<std::string>& GetCpuAbilist() const {
+    return cpu_abilist_;
+  }
+
   bool RunningOnValgrind() const {
     return running_on_valgrind_;
   }
@@ -662,6 +666,9 @@ class Runtime {
 
   // If false, verification is disabled. True by default.
   bool verify_;
+
+  // List of supported cpu abis
+  std::vector<std::string> cpu_abilist_;
 
   // Specifies target SDK version to allow workarounds for certain API levels.
   int32_t target_sdk_version_;
