@@ -762,6 +762,13 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   verify_ = runtime_options.GetOrDefault(Opt::Verify);
 
+  if (!runtime_options.Exists(Opt::CpuAbiList)) {
+    LOG(ERROR) << "Cpu Abilist option is not set.";
+    return false;
+  }
+
+  Split(runtime_options.GetOrDefault(Opt::CpuAbiList), ',', &cpu_abilist_);
+
   if (runtime_options.GetOrDefault(Opt::Interpret)) {
     GetInstrumentation()->ForceInterpretOnly();
   }
