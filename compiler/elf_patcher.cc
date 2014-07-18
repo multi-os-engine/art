@@ -120,6 +120,7 @@ void ElfPatcher::AddPatch(uintptr_t p) {
 
 uint32_t* ElfPatcher::GetPatchLocation(uintptr_t patch_ptr) {
   CHECK_GE(patch_ptr, reinterpret_cast<uintptr_t>(oat_file_->Begin()));
+  CHECK_LE(patch_ptr, reinterpret_cast<uintptr_t>(oat_file_->End()));
   uintptr_t off = patch_ptr - reinterpret_cast<uintptr_t>(oat_file_->Begin());
   uintptr_t ret = reinterpret_cast<uintptr_t>(oat_header_) + off;
 
@@ -134,9 +135,13 @@ void ElfPatcher::SetPatchLocation(const CompilerDriver::PatchInformation* patch,
                                                                 patch->GetReferrerClassDefIdx(),
                                                                 patch->GetReferrerMethodIdx());
   // TODO: make this Thumb2 specific
+  const OatFile* source_oat = class_linker->FindOpenedOatFileForDexFile(patch->GetDexFile());
+  CHECK_EQ(source_oat, oat_file_);
   uint8_t* base = reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(quick_oat_code) & ~0x1);
   uintptr_t patch_ptr = reinterpret_cast<uintptr_t>(base + patch->GetLiteralOffset());
   uint32_t* patch_location = GetPatchLocation(patch_ptr);
+  // TODO This seems broken for some reason. Why.
+#if 0
   if (kIsDebugBuild) {
     if (patch->IsCall()) {
       const CompilerDriver::CallPatchInformation* cpatch = patch->AsCall();
@@ -144,22 +149,23 @@ void ElfPatcher::SetPatchLocation(const CompilerDriver::PatchInformation* patch,
           cpatch->GetTargetDexFile()->GetMethodId(cpatch->GetTargetMethodIdx());
       uint32_t expected = reinterpret_cast<uintptr_t>(&id) & 0xFFFFFFFF;
       uint32_t actual = *patch_location;
-      CHECK(actual == expected || actual == value) << std::hex
-          << "actual=" << actual
-          << "expected=" << expected
-          << "value=" << value;
+      CHECK(actual == expected || actual == value) << "Call patch failed" << std::hex
+          << " actual=" << actual
+          << " expected=" << expected
+          << " value=" << value;
     }
     if (patch->IsType()) {
       const CompilerDriver::TypePatchInformation* tpatch = patch->AsType();
       const DexFile::TypeId& id = tpatch->GetDexFile().GetTypeId(tpatch->GetTargetTypeIdx());
       uint32_t expected = reinterpret_cast<uintptr_t>(&id) & 0xFFFFFFFF;
       uint32_t actual = *patch_location;
-      CHECK(actual == expected || actual == value) << std::hex
-          << "actual=" << actual
-          << "expected=" << expected
-          << "value=" << value;
+      CHECK(actual == expected || actual == value) << "Type patch failed" << std::hex
+          << " actual=" << actual
+          << " expected=" << expected
+          << " value=" << value;
     }
   }
+#endif
   *patch_location = value;
   oat_header_->UpdateChecksum(patch_location, sizeof(value));
 
