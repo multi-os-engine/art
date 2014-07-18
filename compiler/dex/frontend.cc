@@ -548,6 +548,13 @@ static bool CanCompileShorty(const char* shorty, InstructionSet instruction_set)
 // Skip the method that we do not support currently.
 static bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file,
                              CompilationUnit& cu) {
+  // This is a limitation in mir_graph. See MirGraph::SetNumSSARegs. Test for half the number of
+  // supported registers so we have a chance to allocate enough SSA regs.
+  if (cu.num_dalvik_registers > 32767 / 2) {
+    VLOG(compiler) << "Too many dalvik registers : " << cu.num_dalvik_registers;
+    return false;
+  }
+
   // Check whether we do have limitations at all.
   if (kSupportedTypes[cu.instruction_set] == nullptr &&
       kUnsupportedOpcodesSize[cu.instruction_set] == 0U) {
