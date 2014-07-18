@@ -237,6 +237,9 @@ std::unique_ptr<RuntimeParser> ParsedOptions::MakeParser(bool ignore_unrecognize
       .Define("-XX:NativeBridge=_")
           .WithType<std::string>()
           .IntoKey(M::NativeBridge)
+      .Define("--cpu-abilist=_")
+          .WithType<std::string>()
+          .IntoKey(M::CpuAbiList)
       .Ignore({
           "-ea", "-da", "-enableassertions", "-disableassertions", "--runtime-arg", "-esa",
           "-dsa", "-enablesystemassertions", "-disablesystemassertions", "-Xrs", "-Xint:_",
