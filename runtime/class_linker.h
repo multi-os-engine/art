@@ -272,6 +272,9 @@ class ClassLinker {
                            std::vector<const DexFile*>* dex_files)
       LOCKS_EXCLUDED(dex_lock_, Locks::mutator_lock_);
 
+  static bool IsOatFilePatchable(const OatFile* oat_file, const InstructionSet instruction_set);
+  static bool VerifyOatChecksums(const OatFile* oat_file, const InstructionSet instruction_set,
+                                 std::string* error_msg);
   // Returns true if oat file contains the dex file with the given location and checksum.
   static bool VerifyOatFileChecksums(const OatFile* oat_file,
                                      const char* dex_location,
