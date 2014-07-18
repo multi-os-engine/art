@@ -42,7 +42,11 @@ class PassMEDataHolder: public PassDataHolder {
   public:
     CompilationUnit* c_unit;
     BasicBlock* bb;
-    void* data;
+    void* data;               /**< @brief Any data the pass wants to use */
+    bool dirty;               /**< @brief Has the pass rendered the CFG dirty?
+                               *   @details If the Pass requests the post-opt
+                               *   passes and is dirty, the post-opt passes get executed.
+                               **/
 };
 
 enum DataFlowAnalysisMode {
