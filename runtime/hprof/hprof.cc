@@ -846,8 +846,12 @@ static int StackTraceSerialNumber(const mirror::Object* /*obj*/) {
 
 int Hprof::DumpHeapObject(mirror::Object* obj) {
   HprofRecord* rec = &current_record_;
-  HprofHeapId desiredHeap = false ? HPROF_HEAP_ZYGOTE : HPROF_HEAP_APP;  // TODO: zygote objects?
-
+  gc::space::ContinuousSpace* space =
+      Runtime::Current()->GetHeap()->FindContinuousSpaceFromObject(obj, true);
+  HprofHeapId desiredHeap = HPROF_HEAP_APP;
+  if (space != nullptr && space->IsZygoteSpace()) {
+    desiredHeap = HPROF_HEAP_ZYGOTE;
+  }
   if (objects_in_segment_ >= OBJECTS_PER_SEGMENT || rec->Size() >= BYTES_PER_SEGMENT) {
     StartNewHeapDumpSegment();
   }
