@@ -43,6 +43,7 @@
 #include "interpreter/interpreter.h"
 #include "leb128.h"
 #include "method_helper.h"
+#include "method_helper-inl.h"
 #include "oat.h"
 #include "oat_file.h"
 #include "object_lock.h"
