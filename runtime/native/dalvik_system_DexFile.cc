@@ -114,7 +114,7 @@ static jlong DexFile_openDexFileNative(JNIEnv* env, jclass, jstring javaSourceNa
   bool success = linker->OpenDexFilesFromOat(sourceName.c_str(), outputName.c_str(), &error_msgs,
                                              dex_files.get());
 
-  if (success) {
+  if (success || !dex_files->empty()) {
     return static_cast<jlong>(reinterpret_cast<uintptr_t>(dex_files.release()));
   } else {
     // The vector should be empty after a failed loading attempt.

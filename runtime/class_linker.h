@@ -537,6 +537,10 @@ class ClassLinker {
   }
   mirror::DexCache* GetDexCache(size_t idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, dex_lock_);
 
+  bool HasAssociatedOatFile(const DexFile& dex_file)
+      LOCKS_EXCLUDED(dex_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   const OatFile* FindOpenedOatFileForDexFile(const DexFile& dex_file)
       LOCKS_EXCLUDED(dex_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
