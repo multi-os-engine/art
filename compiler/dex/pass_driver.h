@@ -109,18 +109,21 @@ class PassDriver {
   }
 
   static void CreateDefaultPassList(const std::string& disable_passes) {
+    std::vector<const Pass*> tmp_list;
+
     // Insert each pass from g_passes into g_default_pass_list.
-    PassDriverType::g_default_pass_list.clear();
-    PassDriverType::g_default_pass_list.reserve(PassDriver<PassDriverType>::g_passes_size);
-    for (uint16_t i = 0; i < PassDriver<PassDriverType>::g_passes_size; ++i) {
-      const Pass* pass = PassDriver<PassDriverType>::g_passes[i];
+    for (auto iter : PassDriver<PassDriverType>::g_default_pass_list) {
+      const Pass* pass = iter;
       // Check if we should disable this pass.
       if (disable_passes.find(pass->GetName()) != std::string::npos) {
         LOG(INFO) << "Skipping " << pass->GetName();
       } else {
-        PassDriver<PassDriverType>::g_default_pass_list.push_back(pass);
+        tmp_list.push_back(pass);
       }
     }
+
+    // Copy it back.
+    PassDriver<PassDriverType>::g_default_pass_list = tmp_list;
   }
 
   /**

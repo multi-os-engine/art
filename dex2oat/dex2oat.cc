@@ -852,6 +852,7 @@ static int dex2oat(int argc, char** argv) {
   bool dump_slow_timing = kIsDebugBuild;
   bool watch_dog_enabled = true;
   bool generate_gdb_information = kIsDebugBuild;
+  std::string disable_passes = "";
 
   // Checks are all explicit until we know the architecture.
   bool implicit_null_checks = false;
@@ -1023,8 +1024,7 @@ static int dex2oat(int argc, char** argv) {
     } else if (option == "--print-pass-names") {
       PassDriverMEOpts::PrintPassNames();
     } else if (option.starts_with("--disable-passes=")) {
-      std::string disable_passes = option.substr(strlen("--disable-passes=")).data();
-      PassDriverMEOpts::CreateDefaultPassList(disable_passes);
+      disable_passes = option.substr(strlen("--disable-passes=")).data();
     } else if (option.starts_with("--print-passes=")) {
       std::string print_passes = option.substr(strlen("--print-passes=")).data();
       PassDriverMEOpts::SetPrintPassList(print_passes);
@@ -1040,6 +1040,10 @@ static int dex2oat(int argc, char** argv) {
     } else {
       Usage("Unknown argument %s", option.data());
     }
+  }
+
+  if (disable_passes != "") {
+      PassDriverMEOpts::CreateDefaultPassList(disable_passes);
   }
 
   if (oat_filename.empty() && oat_fd == -1) {
