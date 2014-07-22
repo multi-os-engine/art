@@ -204,9 +204,9 @@ Runtime::~Runtime() {
   CHECK(instance_ == nullptr || instance_ == this);
   instance_ = nullptr;
 
-  delete null_pointer_handler_;
-  delete suspend_handler_;
-  delete stack_overflow_handler_;
+//  delete null_pointer_handler_;
+//  delete suspend_handler_;
+//  delete stack_overflow_handler_;
 }
 
 struct AbortState {
@@ -629,8 +629,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
       break;
   }
 
-  if (!options->interpreter_only_ &&
-    (implicit_null_checks_ || implicit_so_checks_ || implicit_suspend_checks_)) {
+  if (implicit_null_checks_ || implicit_so_checks_ || implicit_suspend_checks_) {
     fault_manager.Init();
 
     // These need to be in a specific order.  The null point check handler must be
