@@ -197,6 +197,11 @@ while true; do
 done
 mkdir -p $tmp_dir
 
+# Special case this test to never run prebuild.
+if [ "$1" == "116-nodex2oat" -o "$1" == "116" ]; then
+    prebuild_mode="no"
+fi
+
 if [ "$trace" = "true" ]; then
     run_args="${run_args} --runtime-option -Xmethod-trace --runtime-option -Xmethod-trace-file:${DEX_LOCATION}/trace.bin --runtime-option -Xmethod-trace-file-size:2000000"
 fi
