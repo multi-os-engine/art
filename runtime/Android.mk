@@ -255,7 +255,7 @@ LIBART_SRC_FILES_x86_64 := \
   arch/x86_64/quick_entrypoints_x86_64.S \
   arch/x86_64/thread_x86_64.cc \
   monitor_pool.cc \
-  arch/x86_64/fault_handler_x86_64.cc
+  arch/x86/fault_handler_x86.cc
 
 LIBART_TARGET_SRC_FILES_x86_64 := \
   $(LIBART_SRC_FILES_x86_64) \
