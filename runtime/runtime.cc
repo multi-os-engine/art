@@ -101,6 +101,8 @@ Runtime::Runtime()
       must_relocate_(false),
       is_concurrent_gc_enabled_(true),
       is_explicit_gc_disabled_(false),
+      no_oat_(false),
+      no_oat_image_(false),
       default_stack_size_(0),
       heap_(nullptr),
       max_spins_before_thin_lock_inflation_(Monitor::kDefaultMaxSpinsBeforeThinLockInflation),
@@ -558,6 +560,8 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   must_relocate_ = options->must_relocate_;
   is_zygote_ = options->is_zygote_;
   is_explicit_gc_disabled_ = options->is_explicit_gc_disabled_;
+  no_oat_ = options->no_oat_;
+  no_oat_image_ = options->no_oat_image_;
 
   vfprintf_ = options->hook_vfprintf_;
   exit_ = options->hook_exit_;
