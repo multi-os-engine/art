@@ -105,6 +105,10 @@ class Runtime {
     return must_relocate_;
   }
 
+  bool NoOat() const {
+    return no_oat_;
+  }
+
   CompilerCallbacks* GetCompilerCallbacks() {
     return compiler_callbacks_;
   }
@@ -503,6 +507,8 @@ class Runtime {
   bool must_relocate_;
   bool is_concurrent_gc_enabled_;
   bool is_explicit_gc_disabled_;
+  bool no_oat_;
+  bool no_oat_image_;
 
   std::string compiler_executable_;
   std::string patchoat_executable_;

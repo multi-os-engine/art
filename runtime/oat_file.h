@@ -131,6 +131,8 @@ class OatFile {
               const uint32_t code_offset,
               const uint32_t gc_map_offset);
 
+    OatMethod() {}
+
    private:
     template<class T>
     T GetOatPointer(uint32_t offset) const {
@@ -164,6 +166,8 @@ class OatFile {
     // methods are not included.
     const OatMethod GetOatMethod(uint32_t method_index) const;
 
+    OatClass() {}
+
    private:
     OatClass(const OatFile* oat_file,
              mirror::Class::Status status,
@@ -172,13 +176,13 @@ class OatFile {
              const uint32_t* bitmap_pointer,
              const OatMethodOffsets* methods_pointer);
 
-    const OatFile* const oat_file_;
+    const OatFile* oat_file_;
 
-    const mirror::Class::Status status_;
+    mirror::Class::Status status_;
 
-    const OatClassType type_;
+    OatClassType type_;
 
-    const uint32_t* const bitmap_;
+    const uint32_t* bitmap_;
 
     const OatMethodOffsets* methods_pointer_;
 
