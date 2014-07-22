@@ -24,6 +24,9 @@
 // Register holding suspend check count down.
 // 32-bit is enough for the suspend register.
 #define wSUSPEND w19
+// xSUSPEND is 64-bit view of wSUSPEND.
+// Used to save/restore the register scratched by managed code.
+#define xSUSPEND x19
 // Register holding Thread::Current().
 #define xSELF x18
 // Frame Pointer
@@ -32,7 +35,9 @@
 #define xLR   x30
 // Define the intraprocedural linkage temporary registers.
 #define xIP0 x16
+#define wIP0 w16
 #define xIP1 x17
+#define wIP1 w17
 
 
 .macro ENTRY name

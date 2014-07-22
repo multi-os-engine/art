@@ -644,20 +644,46 @@ void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
 
   // TODO: *create APCS FP - end of FP chain;
   //       *add support for saving a different set of callee regs.
-  // For now we check that the size of callee regs vector is 20
-  // equivalent to the APCS callee saved regs [X19, x30] [D8, D15].
-  CHECK_EQ(callee_save_regs.size(), kCalleeSavedRegsSize);
-  ___ PushCalleeSavedRegisters();
+  // For now we check that the size of callee regs vector is 3.
+  // All callee-saved registers(managed code) will be preserved by native code.
+  // X18(thread register) will be scratched by native code.
+  // But X18 is not saved, we scratch X19 to save X18 instead.
+  CHECK_EQ(callee_save_regs.size(), kJniRefSpillRegsSize);
+  // Increase frame to required size - must be at least space to push StackReference<Method>.
+  CHECK_GT(frame_size, kJniRefSpillRegsSize * kFramePointerSize);
+  IncreaseFrameSize(frame_size);
+
+  // TODO: Ugly hard code...
+  // Should generate these according to the spill mask automatically.
+  // TUNING: Use stp.
+  size_t reg_offset = frame_size;
+  reg_offset -= 8;
+  StoreToOffset(LR, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X29, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X28, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X27, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X26, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X25, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X24, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X23, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X22, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X21, SP, reg_offset);
+  reg_offset -= 8;
+  StoreToOffset(X20, SP, reg_offset);
 
   // Move TR(Caller saved) to ETR(Callee saved). The original X19 has been
   // saved by PushCalleeSavedRegisters(). This way we make sure that TR is not
   // trashed by native code.
   ___ Mov(reg_x(ETR), reg_x(TR));
-
-  // Increase frame to required size - must be at least space to push StackReference<Method>.
-  CHECK_GT(frame_size, kCalleeSavedRegsSize * kFramePointerSize);
-  size_t adjust = frame_size - (kCalleeSavedRegsSize * kFramePointerSize);
-  IncreaseFrameSize(adjust);
 
   // Write StackReference<Method>.
   DCHECK_EQ(4U, sizeof(StackReference<mirror::ArtMethod>));
@@ -690,22 +716,46 @@ void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
 void Arm64Assembler::RemoveFrame(size_t frame_size, const std::vector<ManagedRegister>& callee_save_regs) {
   CHECK_ALIGNED(frame_size, kStackAlignment);
 
-  // For now we only check that the size of the frame is greater than the
-  // no of APCS callee saved regs [X19, X30] [D8, D15].
-  CHECK_EQ(callee_save_regs.size(), kCalleeSavedRegsSize);
-  CHECK_GT(frame_size, kCalleeSavedRegsSize * kFramePointerSize);
-
-  // Decrease frame size to start of callee saved regs.
-  size_t adjust = frame_size - (kCalleeSavedRegsSize * kFramePointerSize);
-  DecreaseFrameSize(adjust);
+  // For now we only check that the size of the frame is greater than the spill size.
+  CHECK_EQ(callee_save_regs.size(), kJniRefSpillRegsSize);
+  CHECK_GT(frame_size, kJniRefSpillRegsSize * kFramePointerSize);
 
   // We move ETR (Callee Saved) back to TR (Caller Saved) which might have
   // been trashed in the native call. The original X19 (ETR) is restored as
   // part of PopCalleeSavedRegisters().
   ___ Mov(reg_x(TR), reg_x(ETR));
 
+  // TODO: Ugly hard code...
+  // Should generate these according to the spill mask automatically.
+  // TUNING: Use ldp.
+  size_t reg_offset = frame_size;
+  reg_offset -= 8;
+  LoadFromOffset(LR, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X29, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X28, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X27, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X26, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X25, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X24, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X23, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X22, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X21, SP, reg_offset);
+  reg_offset -= 8;
+  LoadFromOffset(X20, SP, reg_offset);
+
+  // Decrease frame size to start of callee saved regs.
+  DecreaseFrameSize(frame_size);
+
   // Pop callee saved and return to LR.
-  ___ PopCalleeSavedRegisters();
   ___ Ret();
 }
 

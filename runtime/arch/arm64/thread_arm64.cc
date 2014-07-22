@@ -26,6 +26,13 @@ void Thread::InitCpu() {
   CHECK_EQ(THREAD_CARD_TABLE_OFFSET, CardTableOffset<8>().Int32Value());
   CHECK_EQ(THREAD_EXCEPTION_OFFSET, ExceptionOffset<8>().Int32Value());
   CHECK_EQ(THREAD_ID_OFFSET, ThinLockIdOffset<8>().Int32Value());
+
+  CHECK_EQ(static_cast<size_t>(RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET),
+      Runtime::GetCalleeSaveMethodOffset(Runtime::kSaveAll));
+  CHECK_EQ(static_cast<size_t>(RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET),
+      Runtime::GetCalleeSaveMethodOffset(Runtime::kRefsOnly));
+  CHECK_EQ(static_cast<size_t>(RUNTIME_REF_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET),
+      Runtime::GetCalleeSaveMethodOffset(Runtime::kRefsAndArgs));
 }
 
 void Thread::CleanupCpu() {

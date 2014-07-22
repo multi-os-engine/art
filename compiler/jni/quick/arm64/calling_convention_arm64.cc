@@ -152,7 +152,8 @@ const ManagedRegisterEntrySpills& Arm64ManagedRuntimeCallingConvention::EntrySpi
 Arm64JniCallingConvention::Arm64JniCallingConvention(bool is_static, bool is_synchronized,
                                                      const char* shorty)
     : JniCallingConvention(is_static, is_synchronized, shorty, kFramePointerSize) {
-  callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X19));
+  // TODO: Ugly hard code...
+  // Should generate these according to the spill mask automatically.
   callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X20));
   callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X21));
   callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X22));
@@ -164,30 +165,17 @@ Arm64JniCallingConvention::Arm64JniCallingConvention(bool is_static, bool is_syn
   callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X28));
   callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X29));
   callee_save_regs_.push_back(Arm64ManagedRegister::FromCoreRegister(X30));
-  callee_save_regs_.push_back(Arm64ManagedRegister::FromDRegister(D8));
-  callee_save_regs_.push_back(Arm64ManagedRegister::FromDRegister(D9));
-  callee_save_regs_.push_back(Arm64ManagedRegister::FromDRegister(D10));
-  callee_save_regs_.push_back(Arm64ManagedRegister::FromDRegister(D11));
-  callee_save_regs_.push_back(Arm64ManagedRegister::FromDRegister(D12));
-  callee_save_regs_.push_back(Arm64ManagedRegister::FromDRegister(D13));
-  callee_save_regs_.push_back(Arm64ManagedRegister::FromDRegister(D14));
-  callee_save_regs_.push_back(Arm64ManagedRegister::FromDRegister(D15));
 }
 
 uint32_t Arm64JniCallingConvention::CoreSpillMask() const {
   // Compute spill mask to agree with callee saves initialized in the constructor
-  uint32_t result = 0;
-  result =  1 << X19 | 1 << X20 | 1 << X21 | 1 << X22 | 1 << X23 | 1 << X24 |
-            1 << X25 | 1 << X26 | 1 << X27 | 1 << X28 | 1 << X29 | 1 << LR;
-  return result;
+  return 1 << X20 | 1 << X21 | 1 << X22 | 1 << X23 | 1 << X24 | 1 << X25 |
+         1 << X26 | 1 << X27 | 1 << X28 | 1 << X29 | 1 << LR;
 }
 
 uint32_t Arm64JniCallingConvention::FpSpillMask() const {
   // Compute spill mask to agree with callee saves initialized in the constructor
-  uint32_t result = 0;
-  result = 1 << D8 | 1 << D9 | 1 << D10 | 1 << D11 | 1 << D12 | 1 << D13 |
-           1 << D14 | 1 << D15;
-  return result;
+  return 0;
 }
 
 ManagedRegister Arm64JniCallingConvention::ReturnScratchRegister() const {

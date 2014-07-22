@@ -19,14 +19,12 @@
 
 #include "asm_support.h"
 
-// TODO Thread offsets need to be checked when on Aarch64.
-
 // Note: these callee save methods loads require read barriers.
-// Offset of field Runtime::callee_save_methods_[kSaveAll]
+// Offset of field Runtime::callee_save_methods_[kSaveAll] verified in InitCpu
 #define RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET 0
-// Offset of field Runtime::callee_save_methods_[kRefsOnly]
+// Offset of field Runtime::callee_save_methods_[kRefsOnly] verified in InitCpu
 #define RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET 8
-// Offset of field Runtime::callee_save_methods_[kRefsAndArgs]
+// Offset of field Runtime::callee_save_methods_[kRefsAndArgs] verified in InitCpu
 #define RUNTIME_REF_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET 16
 
 // Offset of field Thread::suspend_count_ verified in InitCpu
@@ -38,9 +36,10 @@
 // Offset of field Thread::thin_lock_thread_id_ verified in InitCpu
 #define THREAD_ID_OFFSET 12
 
-#define FRAME_SIZE_SAVE_ALL_CALLEE_SAVE 368
-#define FRAME_SIZE_REFS_ONLY_CALLEE_SAVE 176
-#define FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE 304
+// CalleeSaveMethod frame sizes verified in asm_support_arm64.cc and asm_support_arm64.S
+#define FRAME_SIZE_SAVE_ALL_CALLEE_SAVE 176
+#define FRAME_SIZE_REFS_ONLY_CALLEE_SAVE 112
+#define FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE 224
 
 // Expected size of a heap reference
 #define HEAP_REFERENCE_SIZE 4

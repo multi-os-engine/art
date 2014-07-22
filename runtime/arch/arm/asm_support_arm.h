@@ -28,6 +28,7 @@
 // Offset of field Thread::tlsPtr_.exception verified in InitCpu
 #define THREAD_EXCEPTION_OFFSET 116
 
+// CalleeSaveMethod frame sizes verified in asm_support_arm.cc and asm_support_arm.S
 #define FRAME_SIZE_SAVE_ALL_CALLEE_SAVE 176
 #define FRAME_SIZE_REFS_ONLY_CALLEE_SAVE 32
 #define FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE 48

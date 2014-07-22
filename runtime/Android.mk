@@ -213,6 +213,7 @@ LIBART_TARGET_SRC_FILES := \
   thread_android.cc
 
 LIBART_TARGET_SRC_FILES_arm := \
+  arch/arm/asm_support_arm.cc \
   arch/arm/context_arm.cc.arm \
   arch/arm/entrypoints_init_arm.cc \
   arch/arm/jni_entrypoints_arm.S \
@@ -224,6 +225,7 @@ LIBART_TARGET_SRC_FILES_arm := \
   arch/arm/fault_handler_arm.cc
 
 LIBART_TARGET_SRC_FILES_arm64 := \
+  arch/arm64/asm_support_arm64.cc \
   arch/arm64/context_arm64.cc \
   arch/arm64/entrypoints_init_arm64.cc \
   arch/arm64/jni_entrypoints_arm64.S \

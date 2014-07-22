@@ -14,27 +14,23 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_UTILS_ARM64_CONSTANTS_ARM64_H_
-#define ART_COMPILER_UTILS_ARM64_CONSTANTS_ARM64_H_
-
-#include <stdint.h>
-#include <iosfwd>
-#include "arch/arm64/registers_arm64.h"
-#include "base/casts.h"
-#include "base/logging.h"
-#include "globals.h"
-
-// TODO: Extend this file by adding missing functionality.
+#include "quick_method_frame_info_arm64.h"
+#include "asm_support_arm64.h"
 
 namespace art {
 namespace arm64 {
 
-constexpr unsigned int kJniRefSpillRegsSize = 11;
-
-// Vixl buffer size.
-constexpr size_t kBufferSizeArm64 = 4096*2;
+// Note: Some sanity check for assembly macros can not be done in compile time.
+// Those are checked in Thread::InitCpu().
+COMPILE_ASSERT(Arm64CalleeSaveFrameSize(Runtime::kSaveAll) ==
+    FRAME_SIZE_SAVE_ALL_CALLEE_SAVE,
+    arm64_CalleeSaveMethod_SaveAll_frame_size_mismatch);
+COMPILE_ASSERT(Arm64CalleeSaveFrameSize(Runtime::kRefsOnly) ==
+    FRAME_SIZE_REFS_ONLY_CALLEE_SAVE,
+    arm64_CalleeSaveMethod_RefsOnly_frame_size_mismatch);
+COMPILE_ASSERT(Arm64CalleeSaveFrameSize(Runtime::kRefsAndArgs) ==
+    FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE,
+    arm64_CalleeSaveMethod_RefsAndArgs_frame_size_mismatch);
 
 }  // namespace arm64
 }  // namespace art
-
-#endif  // ART_COMPILER_UTILS_ARM64_CONSTANTS_ARM64_H_
