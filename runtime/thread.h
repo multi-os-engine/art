@@ -297,6 +297,7 @@ class Thread {
     return tlsPtr_.exception;
   }
 
+  void AssertPendingException() const;
   void AssertNoPendingException() const;
   void AssertNoPendingExceptionForNewException(const char* msg) const;
 
