@@ -222,6 +222,7 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
   compiler_callbacks_ = nullptr;
   is_zygote_ = false;
   must_relocate_ = kDefaultMustRelocate;
+  dex2oat_enabled_ = true;
   if (kPoisonHeapReferences) {
     // kPoisonHeapReferences currently works only with the interpreter only.
     // TODO: make it work with the compiler.
@@ -418,6 +419,10 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
       must_relocate_ = true;
     } else if (option == "-Xnorelocate") {
       must_relocate_ = false;
+    } else if (option == "-Xnodex2oat") {
+      dex2oat_enabled_ = false;
+    } else if (option == "-Xdex2oat") {
+      dex2oat_enabled_ = true;
     } else if (option == "-Xint") {
       interpreter_only_ = true;
     } else if (StartsWith(option, "-Xgc:")) {
@@ -774,6 +779,7 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -Ximage-compiler-option dex2oat-option\n");
   UsageMessage(stream, "  -Xpatchoat:filename\n");
   UsageMessage(stream, "  -X[no]relocate\n");
+  UsageMessage(stream, "  -X[no]dex2oat  (Whether to invoke dex2oat on the application)\n");
   UsageMessage(stream, "\n");
 
   UsageMessage(stream, "The following previously supported Dalvik options are ignored:\n");
