@@ -222,6 +222,8 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
   compiler_callbacks_ = nullptr;
   is_zygote_ = false;
   must_relocate_ = kDefaultMustRelocate;
+  no_oat_image_ = false;
+  no_oat_ = false;
   if (kPoisonHeapReferences) {
     // kPoisonHeapReferences currently works only with the interpreter only.
     // TODO: make it work with the compiler.
@@ -418,6 +420,10 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
       must_relocate_ = true;
     } else if (option == "-Xnorelocate") {
       must_relocate_ = false;
+    } else if (option == "-Xnooatimage") {
+      no_oat_image_ = true;
+    } else if (option == "-Xnooat") {
+      no_oat_ = true;
     } else if (option == "-Xint") {
       interpreter_only_ = true;
     } else if (StartsWith(option, "-Xgc:")) {
@@ -642,6 +648,16 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
     }
   }
 
+  if (!image_.empty() && no_oat_image_) {
+    Usage("Cannot use a combination of -Ximage and -Xnooatimage");
+    return false;
+  }
+
+  if (no_oat_image_ && !no_oat_) {
+    Usage("-Xnooatimage cannot be set when -Xnooat is set");
+    return false;
+  }
+
   // If a reference to the dalvik core.jar snuck in, replace it with
   // the art specific version. This can happen with on device
   // boot.art/boot.oat generation by GenerateImage which relies on the
@@ -659,7 +675,7 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
     boot_class_path_string_.replace(core_jar_pos, core_jar.size(), core_libart_jar);
   }
 
-  if (compiler_callbacks_ == nullptr && image_.empty()) {
+  if (compiler_callbacks_ == nullptr && image_.empty() && !no_oat_image_) {
     image_ += GetAndroidRoot();
     image_ += "/framework/boot.art";
   }
@@ -774,6 +790,8 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -Ximage-compiler-option dex2oat-option\n");
   UsageMessage(stream, "  -Xpatchoat:filename\n");
   UsageMessage(stream, "  -X[no]relocate\n");
+  UsageMessage(stream, "  -Xno-oat-image\n");
+  UsageMessage(stream, "  -Xno-oat\n");
   UsageMessage(stream, "\n");
 
   UsageMessage(stream, "The following previously supported Dalvik options are ignored:\n");
