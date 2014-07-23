@@ -71,5 +71,14 @@ TEST_F(HeapTest, HeapBitmapCapacityTest) {
   bitmap->Set(fake_end_of_heap_object);
 }
 
+TEST_F(HeapTest, HeapTotalAllocAndFree) {
+  Heap* heap = Runtime::Current()->GetHeap();
+  size_t total_memory = heap->GetTotalMemory();
+  size_t free_memory = heap->GetFreeMemory();
+  size_t alloc = heap->GetBytesAllocated();
+
+  EXPECT_EQ(total_memory, free_memory + alloc);
+}
+
 }  // namespace gc
 }  // namespace art

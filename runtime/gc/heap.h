@@ -430,10 +430,7 @@ class Heap {
 
   // Implements java.lang.Runtime.freeMemory.
   size_t GetFreeMemory() const {
-    size_t byte_allocated = num_bytes_allocated_.LoadSequentiallyConsistent();
-    // Make sure we don't get a negative number since the max allowed footprint is only updated
-    // after the GC. But we can still allocate even if bytes_allocated > max_allowed_footprint_.
-    return std::max(max_allowed_footprint_, byte_allocated) - byte_allocated;
+    return GetTotalMemory() - GetBytesAllocated();
   }
 
   // get the space that corresponds to an object's address. Current implementation searches all
