@@ -107,6 +107,11 @@ size_t Arm64Mir2Lir::GetInstructionOffset(LIR* lir) {
   return offset;
 }
 
+bool Arm64Mir2Lir::IsLSECandidate(LIR* lir) {
+  // TODO: List the TERTIARY opcodes which load/store general/float/double register from/to memory.
+  return true;
+}
+
 LIR* Arm64Mir2Lir::LoadFPConstantValue(RegStorage r_dest, int32_t value) {
   DCHECK(r_dest.IsSingle());
   if (value == 0) {

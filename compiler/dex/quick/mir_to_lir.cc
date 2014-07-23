@@ -1388,4 +1388,9 @@ size_t Mir2Lir::GetInstructionOffset(LIR* lir) {
   return 0;
 }
 
+bool Mir2Lir::IsLSECandidate(LIR* lir) {
+  UNIMPLEMENTED(FATAL) << "Unsuppored IsLSECandidate()";
+  return false;
+}
+
 }  // namespace art

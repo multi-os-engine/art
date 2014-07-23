@@ -98,10 +98,8 @@ static constexpr uint32_t kDisabledOptimizationsPerISA[] = {
     // 3 = kThumb2.
     0,
     // 4 = kX86.
-    (1 << kLoadStoreElimination) |
     0,
     // 5 = kX86_64.
-    (1 << kLoadStoreElimination) |
     0,
     // 6 = kMips.
     (1 << kLoadStoreElimination) |

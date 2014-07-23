@@ -258,6 +258,7 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
   }
 
   size_t GetInstructionOffset(LIR* lir) OVERRIDE;
+  bool IsLSECandidate(LIR* lir);
 
   LIR* InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) OVERRIDE;
 

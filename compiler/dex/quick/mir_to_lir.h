@@ -559,6 +559,7 @@ class Mir2Lir : public Backend {
      * @return Returns the scaled offset of LIR.
      */
     virtual size_t GetInstructionOffset(LIR* lir);
+    virtual bool IsLSECandidate(LIR* lir);
 
     int32_t s4FromSwitchData(const void* switch_data) {
       return *reinterpret_cast<const int32_t*>(switch_data);

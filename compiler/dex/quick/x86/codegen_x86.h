@@ -375,6 +375,8 @@ class X86Mir2Lir : public Mir2Lir {
   std::vector<uint8_t>* ReturnFrameDescriptionEntry() OVERRIDE;
 
   LIR* InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) OVERRIDE;
+  size_t GetInstructionOffset(LIR* lir);
+  bool IsLSECandidate(LIR* lir);
 
  protected:
   RegStorage TargetReg32(SpecialTargetRegister reg);

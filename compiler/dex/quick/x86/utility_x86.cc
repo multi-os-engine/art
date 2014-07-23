@@ -1139,4 +1139,37 @@ LIR* X86Mir2Lir::InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEn
   }
 }
 
+size_t X86Mir2Lir::GetInstructionOffset(LIR* lir) {
+  uint64_t flags = GetTargetInstFlags(lir->opcode);
+  DCHECK(((flags & (IS_LOAD | IS_STORE)) != (IS_LOAD | IS_STORE)) &&
+         ((flags & IS_LOAD) || (flags & IS_STORE)));
+  DCHECK((flags & IS_TERTIARY_OP) || (flags & IS_BINARY_OP) || (flags & IS_UNARY_OP));
+  size_t offset = 0;
+  if (flags & IS_TERTIARY_OP) {
+    offset = flags & IS_STORE ? lir->operands[1] : lir->operands[2];
+  } else if (flags & IS_BINARY_OP) {
+    if (flags & IS_STORE) {
+      if (flags & USE_FP_STACK) {
+        offset = lir->operands[1];
+      } else {
+        offset = lir->operands[0];
+      }
+    } else {
+      offset = lir->operands[1];
+    }
+  } else {
+    if ((flags & REG_DEF_SP) != 0) {
+      offset = lir->operands[0];
+    }
+  }
+  return offset;
+}
+
+bool X86Mir2Lir::IsLSECandidate(LIR* lir) {
+  return (lir->opcode == kX86Mov32RM || lir->opcode == kX86Mov32MR ||
+          lir->opcode == kX86MovssRM || lir->opcode == kX86MovssMR ||
+          lir->opcode == kX86Mov64RM || lir->opcode == kX86Mov64MR ||
+          lir->opcode == kX86MovsdRM || lir->opcode == kX86MovsdMR);
+}
+
 }  // namespace art

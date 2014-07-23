@@ -1182,4 +1182,9 @@ size_t ArmMir2Lir::GetInstructionOffset(LIR* lir) {
   return offset;
 }
 
+bool ArmMir2Lir::IsLSECandidate(LIR* lir) {
+  // TODO: List the TERTIARY opcodes which load/store general/float/double register from/to memory.
+  return true;
+}
+
 }  // namespace art
