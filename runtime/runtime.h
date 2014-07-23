@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "gc_root.h"
 #include "instrumentation.h"
 #include "instruction_set.h"
 #include "jobject_comparator.h"
@@ -269,11 +270,11 @@ class Runtime {
   mirror::ArtMethod* GetResolutionMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool HasResolutionMethod() const {
-    return resolution_method_ != nullptr;
+    return !resolution_method_.IsNull();
   }
 
   void SetResolutionMethod(mirror::ArtMethod* method) {
-    resolution_method_ = method;
+    resolution_method_ = GcRoot<mirror::ArtMethod>(method);
   }
 
   mirror::ArtMethod* CreateResolutionMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -282,11 +283,11 @@ class Runtime {
   mirror::ArtMethod* GetImtConflictMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool HasImtConflictMethod() const {
-    return imt_conflict_method_ != nullptr;
+    return !imt_conflict_method_.IsNull();
   }
 
   void SetImtConflictMethod(mirror::ArtMethod* method) {
-    imt_conflict_method_ = method;
+    imt_conflict_method_ = GcRoot<mirror::ArtMethod>(method);
   }
 
   mirror::ArtMethod* CreateImtConflictMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -296,11 +297,11 @@ class Runtime {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool HasDefaultImt() const {
-    return default_imt_ != nullptr;
+    return !default_imt_.IsNull();
   }
 
   void SetDefaultImt(mirror::ObjectArray<mirror::ArtMethod>* imt) {
-    default_imt_ = imt;
+    default_imt_ = GcRoot<mirror::ObjectArray<mirror::ArtMethod>>(imt);
   }
 
   mirror::ObjectArray<mirror::ArtMethod>* CreateDefaultImt(ClassLinker* cl)
@@ -315,7 +316,7 @@ class Runtime {
   };
 
   bool HasCalleeSaveMethod(CalleeSaveType type) const {
-    return callee_save_methods_[type] != NULL;
+    return !callee_save_methods_[type].IsNull();
   }
 
   mirror::ArtMethod* GetCalleeSaveMethod(CalleeSaveType type)
@@ -475,11 +476,11 @@ class Runtime {
   static constexpr int kProfileForground = 0;
   static constexpr int kProfileBackgrouud = 1;
 
-  mirror::ArtMethod* callee_save_methods_[kLastCalleeSaveType];
-  mirror::Throwable* pre_allocated_OutOfMemoryError_;
-  mirror::ArtMethod* resolution_method_;
-  mirror::ArtMethod* imt_conflict_method_;
-  mirror::ObjectArray<mirror::ArtMethod>* default_imt_;
+  GcRoot<mirror::ArtMethod> callee_save_methods_[kLastCalleeSaveType];
+  GcRoot<mirror::Throwable> pre_allocated_OutOfMemoryError_;
+  GcRoot<mirror::ArtMethod> resolution_method_;
+  GcRoot<mirror::ArtMethod> imt_conflict_method_;
+  GcRoot<mirror::ObjectArray<mirror::ArtMethod>> default_imt_;
 
   InstructionSet instruction_set_;
   QuickMethodFrameInfo callee_save_method_frame_infos_[kLastCalleeSaveType];
