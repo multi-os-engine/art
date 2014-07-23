@@ -29,6 +29,7 @@
 #include "base/stl_util.h"
 #include "class_linker-inl.h"
 #include "dex_file-inl.h"
+#include "gc_root.h"
 #include "gc/accounting/card_table-inl.h"
 #include "indirect_reference_table-inl.h"
 #include "interpreter/interpreter.h"
@@ -362,7 +363,7 @@ class SharedLibrary {
   SharedLibrary(const std::string& path, void* handle, mirror::Object* class_loader)
       : path_(path),
         handle_(handle),
-        class_loader_(class_loader),
+        class_loader_(GcRoot<mirror::Object>(class_loader)),
         jni_on_load_lock_("JNI_OnLoad lock"),
         jni_on_load_cond_("JNI_OnLoad condition variable", jni_on_load_lock_),
         jni_on_load_thread_id_(Thread::Current()->GetThreadId()),
@@ -370,8 +371,7 @@ class SharedLibrary {
   }
 
   mirror::Object* GetClassLoader() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::Object** root = &class_loader_;
-    return ReadBarrier::BarrierForRoot<mirror::Object, kWithReadBarrier>(root);
+    return class_loader_.Read();
   }
 
   std::string GetPath() {
@@ -427,8 +427,8 @@ class SharedLibrary {
   }
 
   void VisitRoots(RootCallback* visitor, void* arg) {
-    if (class_loader_ != nullptr) {
-      visitor(&class_loader_, arg, 0, kRootVMInternal);
+    if (!class_loader_.IsNull()) {
+      class_loader_.VisitRoot(visitor, arg, 0, kRootVMInternal);
     }
   }
 
@@ -446,7 +446,7 @@ class SharedLibrary {
   void* handle_;
 
   // The ClassLoader this library is associated with.
-  mirror::Object* class_loader_;
+  GcRoot<mirror::Object> class_loader_;
 
   // Guards remaining items.
   Mutex jni_on_load_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
