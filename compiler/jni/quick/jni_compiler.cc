@@ -195,13 +195,13 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
                                                 : QUICK_ENTRYPOINT_OFFSET(4, pJniMethodStart);
   ThreadOffset<8> jni_start64 = is_synchronized ? QUICK_ENTRYPOINT_OFFSET(8, pJniMethodStartSynchronized)
                                                 : QUICK_ENTRYPOINT_OFFSET(8, pJniMethodStart);
-  main_jni_conv->ResetIterator(FrameOffset(main_out_arg_size));
+  main_jni_conv->ResetIterator(FrameOffset(max_out_arg_size));
   FrameOffset locked_object_handle_scope_offset(0);
   if (is_synchronized) {
     // Pass object for locking.
     main_jni_conv->Next();  // Skip JNIEnv.
     locked_object_handle_scope_offset = main_jni_conv->CurrentParamHandleScopeEntryOffset();
-    main_jni_conv->ResetIterator(FrameOffset(main_out_arg_size));
+    main_jni_conv->ResetIterator(FrameOffset(max_out_arg_size));
     if (main_jni_conv->IsCurrentParamOnStack()) {
       FrameOffset out_off = main_jni_conv->CurrentParamStackOffset();
       __ CreateHandleScopeEntry(out_off, locked_object_handle_scope_offset,
@@ -233,7 +233,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
     }
   }
   if (is_synchronized) {  // Check for exceptions from monitor enter.
-    __ ExceptionPoll(main_jni_conv->InterproceduralScratchRegister(), main_out_arg_size);
+    __ ExceptionPoll(main_jni_conv->InterproceduralScratchRegister(), max_out_arg_size);
   }
   FrameOffset saved_cookie_offset = main_jni_conv->SavedLocalReferenceCookieOffset();
   __ Store(saved_cookie_offset, main_jni_conv->IntReturnRegister(), 4);
@@ -244,7 +244,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   //    NULL (which must be encoded as NULL).
   //    Note: we do this prior to materializing the JNIEnv* and static's jclass to
   //    give as many free registers for the shuffle as possible
-  mr_conv->ResetIterator(FrameOffset(frame_size+main_out_arg_size));
+  mr_conv->ResetIterator(FrameOffset(frame_size + max_out_arg_size));
   uint32_t args_count = 0;
   while (mr_conv->HasNext()) {
     args_count++;
@@ -255,8 +255,8 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   // R2, R3; mov R1, R2" instead of "mov R1, R2; mov R2, R3."
   // TODO: A reverse iterator to improve readability.
   for (uint32_t i = 0; i < args_count; ++i) {
-    mr_conv->ResetIterator(FrameOffset(frame_size + main_out_arg_size));
-    main_jni_conv->ResetIterator(FrameOffset(main_out_arg_size));
+    mr_conv->ResetIterator(FrameOffset(frame_size + max_out_arg_size));
+    main_jni_conv->ResetIterator(FrameOffset(max_out_arg_size));
     main_jni_conv->Next();  // Skip JNIEnv*.
     if (is_static) {
       main_jni_conv->Next();  // Skip Class for now.
@@ -266,12 +266,12 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
       mr_conv->Next();
       main_jni_conv->Next();
     }
-    CopyParameter(jni_asm.get(), mr_conv.get(), main_jni_conv.get(), frame_size, main_out_arg_size);
+    CopyParameter(jni_asm.get(), mr_conv.get(), main_jni_conv.get(), frame_size, max_out_arg_size);
   }
   if (is_static) {
     // Create argument for Class
-    mr_conv->ResetIterator(FrameOffset(frame_size+main_out_arg_size));
-    main_jni_conv->ResetIterator(FrameOffset(main_out_arg_size));
+    mr_conv->ResetIterator(FrameOffset(frame_size + max_out_arg_size));
+    main_jni_conv->ResetIterator(FrameOffset(max_out_arg_size));
     main_jni_conv->Next();  // Skip JNIEnv*
     FrameOffset handle_scope_offset = main_jni_conv->CurrentParamHandleScopeEntryOffset();
     if (main_jni_conv->IsCurrentParamOnStack()) {
@@ -287,7 +287,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   }
 
   // 8. Create 1st argument, the JNI environment ptr.
-  main_jni_conv->ResetIterator(FrameOffset(main_out_arg_size));
+  main_jni_conv->ResetIterator(FrameOffset(max_out_arg_size));
   // Register that will hold local indirect reference table
   if (main_jni_conv->IsCurrentParamInRegister()) {
     ManagedRegister jni_env = main_jni_conv->CurrentParamRegister();
@@ -333,7 +333,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
       // Ensure doubles are 8-byte aligned for MIPS
       return_save_location = FrameOffset(return_save_location.Uint32Value() + kMipsPointerSize);
     }
-    CHECK_LT(return_save_location.Uint32Value(), frame_size+main_out_arg_size);
+    CHECK_LT(return_save_location.Uint32Value(), frame_size + max_out_arg_size);
     __ Store(return_save_location, main_jni_conv->ReturnRegister(), main_jni_conv->SizeOfReturnValue());
   }
 
