@@ -89,6 +89,10 @@ class CommonRuntimeTest : public testing::Test {
 
   std::string GetDexFileName(const std::string& jar_prefix);
 
+  std::string GetLibCoreOatFileName();
+
+  std::string GetOatFileName(const std::string& jar_prefix);
+
   std::string GetTestAndroidRoot();
 
   std::vector<const DexFile*> OpenTestDexFiles(const char* name)
