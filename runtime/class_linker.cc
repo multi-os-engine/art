@@ -3502,6 +3502,9 @@ mirror::ArtMethod* ClassLinker::CreateProxyConstructor(Thread* self,
     CHECK(self->IsExceptionPending());  // OOME.
     return NULL;
   }
+  // Make proxy constructor point to uninstrumented code while tracing.
+  constructor->SetEntryPointFromQuickCompiledCode(GetQuickOatCodeFor(proxy_constructor));
+
   // Make this constructor public and fix the class to be our Proxy version
   constructor->SetAccessFlags((constructor->GetAccessFlags() & ~kAccProtected) | kAccPublic);
   constructor->SetDeclaringClass(klass.Get());
