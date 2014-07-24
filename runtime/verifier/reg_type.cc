@@ -898,7 +898,12 @@ const RegType& RegType::Merge(const RegType& incoming_type, RegTypeCache* reg_ty
       } else if (c2 == join_class && !incoming_type.IsPreciseReference()) {
         return incoming_type;
       } else {
-        return reg_types->FromClass(join_class->GetDescriptor().c_str(), join_class, false);
+        if (join_class == nullptr) {
+          // Could not resolve array class.
+          return reg_types->Conflict();
+        } else {
+          return reg_types->FromClass(join_class->GetDescriptor().c_str(), join_class, false);
+        }
       }
     }
   } else {
@@ -927,9 +932,19 @@ mirror::Class* RegType::ClassJoin(mirror::Class* s, mirror::Class* t) {
       return result;
     }
     mirror::Class* common_elem = ClassJoin(s_ct, t_ct);
-    ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-    mirror::Class* array_class = class_linker->FindArrayClass(Thread::Current(), &common_elem);
-    DCHECK(array_class != NULL);
+    mirror::Class* array_class = nullptr;
+    if (common_elem != nullptr) {
+      ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+      array_class = class_linker->FindArrayClass(Thread::Current(), &common_elem);
+    }
+
+    if (array_class == nullptr) {
+      // Could not resolve array class in recursive call, or could not load the array class.
+      // Swallow the exception.
+      Thread* self = Thread::Current();
+      self->ClearException();
+      return nullptr;
+    }
     return array_class;
   } else {
     size_t s_depth = s->Depth();
