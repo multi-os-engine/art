@@ -3059,8 +3059,17 @@ mirror::ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(uint32_t dex_meth
       (method_type == METHOD_STATIC && !res_method->IsStatic()) ||
       ((method_type == METHOD_VIRTUAL || method_type == METHOD_INTERFACE) && res_method->IsDirect())
       ) {
-    Fail(VERIFY_ERROR_CLASS_CHANGE) << "invoke type (" << method_type << ") does not match method "
-                                       " type of " << PrettyMethod(res_method);
+    // Check whether it is something the compiler cares about, e.g., for inlining.
+    std::string descriptor(klass->GetDescriptor());
+    if (descriptor.compare(0, 6, "Ljava/") == 0 ||
+        descriptor.compare("Lsun/misc/Unsafe;") == 0 ||
+        descriptor.compare("Llibcore/io/Memory;") == 0) {
+      Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "invoke type (" << method_type << ") does not match "
+                                           "method type of " << PrettyMethod(res_method);
+    } else {
+      Fail(VERIFY_ERROR_CLASS_CHANGE) << "invoke type (" << method_type << ") does not match "
+                                         "method type of " << PrettyMethod(res_method);
+    }
     return NULL;
   }
   return res_method;
