@@ -108,7 +108,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   HGraph* graph = builder.BuildGraph(*code_item);
   if (graph == nullptr) {
     if (shouldCompile) {
-      LOG(FATAL) << "Could not build graph in optimizing compiler";
+      LOG(FATAL) << "Could not build graph in optimizing compiler: "
+                 << PrettyMethod(method_idx, dex_file);
     }
     return nullptr;
   }

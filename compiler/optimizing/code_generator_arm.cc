@@ -943,7 +943,7 @@ void InstructionCodeGeneratorARM::VisitSub(HSub* sub) {
   }
 }
 
-static constexpr Register kRuntimeParameterCoreRegisters[] = { R0, R1 };
+static constexpr Register kRuntimeParameterCoreRegisters[] = { R0, R1, R2 };
 static constexpr size_t kRuntimeParameterCoreRegistersLength =
     arraysize(kRuntimeParameterCoreRegisters);
 
@@ -1193,6 +1193,89 @@ void InstructionCodeGeneratorARM::VisitInstanceFieldGet(HInstanceFieldGet* instr
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
   }
+}
+
+// TODO: move to super class to be accessible to all targets.
+template<size_t pointer_size>
+static ThreadOffset<pointer_size> GetStaticFieldAccessEntrypoint(Primitive::Type type,
+                                                                 bool is_put) {
+  switch (type) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimInt:
+    case Primitive::kPrimFloat:
+      return is_put ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet32Static) :
+                      QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet32Static);
+    case Primitive::kPrimLong:
+    case Primitive::kPrimDouble:
+      return is_put ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSet64Static) :
+                      QUICK_ENTRYPOINT_OFFSET(pointer_size, pGet64Static);
+    case Primitive::kPrimNot:
+      return is_put ? QUICK_ENTRYPOINT_OFFSET(pointer_size, pSetObjStatic) :
+                      QUICK_ENTRYPOINT_OFFSET(pointer_size, pGetObjStatic);
+    default:
+      LOG(FATAL) << "Unsupported static field access type: " << type;
+      return ThreadOffset<pointer_size>(0);
+  }
+}
+void LocationsBuilderARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
+  codegen_->MarkNotLeaf();
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->AddTemp(ArmCoreLocation(calling_convention.GetRegisterAt(0)));  // field_index.
+  Primitive::Type value_type = instruction->InputAt(0)->GetType();
+  if (value_type == Primitive::kPrimLong) {
+    // TODO: add the notion of register pair to calling convention?
+    locations->SetInAt(0, Location::RegisterLocation(ArmManagedRegister::FromCoreRegisterPair(calling_convention.GetRegisterAt(1))));
+  } else {
+    DCHECK_NE(value_type, Primitive::kPrimDouble);
+    DCHECK_NE(value_type, Primitive::kPrimVoid);
+    locations->SetInAt(0, ArmCoreLocation(calling_convention.GetRegisterAt(1)));
+  }
+  instruction->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
+  InvokeRuntimeCallingConvention calling_convention;
+  __ LoadImmediate(calling_convention.GetRegisterAt(0), instruction->GetFieldIndex());
+
+  int32_t offset =
+      GetStaticFieldAccessEntrypoint<kArmWordSize>(instruction->InputAt(0)->GetType(), true).Int32Value();
+  __ ldr(LR, Address(TR, offset));
+  __ blx(LR);
+
+  codegen_->RecordPcInfo(instruction->GetDexPc());
+  DCHECK(!codegen_->IsLeafMethod());
+}
+
+void LocationsBuilderARM::VisitStaticFieldGet(HStaticFieldGet* instruction) {
+  codegen_->MarkNotLeaf();
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->AddTemp(ArmCoreLocation(calling_convention.GetRegisterAt(0)));  // field_index.
+  if (instruction->GetType() == Primitive::kPrimLong) {
+    locations->SetOut(Location::RegisterLocation(ArmManagedRegister::FromRegisterPair(R0_R1)));
+  } else {
+    DCHECK_NE(instruction->GetType(), Primitive::kPrimDouble);
+    DCHECK_NE(instruction->GetType(), Primitive::kPrimVoid);
+    locations->SetOut(ArmCoreLocation(R0));
+  }
+  instruction->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorARM::VisitStaticFieldGet(HStaticFieldGet* instruction) {
+  InvokeRuntimeCallingConvention calling_convention;
+  __ LoadImmediate(calling_convention.GetRegisterAt(0), instruction->GetFieldIndex());
+
+  int32_t offset =
+      GetStaticFieldAccessEntrypoint<kArmWordSize>(instruction->GetType(), false).Int32Value();
+  __ ldr(LR, Address(TR, offset));
+  __ blx(LR);
+
+  codegen_->RecordPcInfo(instruction->GetDexPc());
+  DCHECK(!codegen_->IsLeafMethod());
 }
 
 void LocationsBuilderARM::VisitNullCheck(HNullCheck* instruction) {

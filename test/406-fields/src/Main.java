@@ -15,13 +15,14 @@
  */
 
 // Simple test for field accesses.
-
+// TODO: float and double.
 public class Main extends TestCase {
   public static void main(String[] args) {
-    $opt$testAll();
+    $opt$testInstanceFields();
+    $opt$testStaticFields();
   }
 
-  static void $opt$testAll() {
+  static void $opt$testInstanceFields() {
     AllFields fields = new AllFields();
 
     assertEquals(false, fields.iZ);
@@ -50,6 +51,34 @@ public class Main extends TestCase {
     assertEquals(fields, fields.iObject);
   }
 
+  static void $opt$testStaticFields() {
+    assertEquals(false, AllFields.sZ);
+    assertEquals(0, AllFields.sB);
+    assertEquals(0, AllFields.sC);
+    assertEquals(0, AllFields.sI);
+    assertEquals(0, AllFields.sJ);
+    assertEquals(0, AllFields.sS);
+    assertNull(AllFields.sObject);
+
+    long longValue = -1122198787987987987L;
+    Object fields = new AllFields();
+    AllFields.sZ = true;
+    AllFields.sB = -2;
+    AllFields.sC = 'c';
+    AllFields.sI = 42;
+    AllFields.sJ = longValue;
+    AllFields.sS = 68;
+    AllFields.sObject = fields;
+
+    assertEquals(true, AllFields.sZ);
+    assertEquals(-2, AllFields.sB);
+    assertEquals('c', AllFields.sC);
+    assertEquals(42, AllFields.sI);
+    assertEquals(longValue, AllFields.sJ);
+    assertEquals(68, AllFields.sS);
+    assertEquals(fields, AllFields.sObject);
+  }
+
   static class AllFields {
     boolean iZ;
     byte iB;
@@ -60,5 +89,15 @@ public class Main extends TestCase {
     long iJ;
     short iS;
     Object iObject;
+
+    static boolean sZ;
+    static byte sB;
+    static char sC;
+    static double sD;
+    static float sF;
+    static int sI;
+    static long sJ;
+    static short sS;
+    static Object sObject;
   }
 }
