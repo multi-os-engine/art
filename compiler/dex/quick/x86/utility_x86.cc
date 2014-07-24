@@ -185,6 +185,19 @@ LIR* X86Mir2Lir::OpRegImm(OpKind op, RegStorage r_dest_src1, int value) {
         opcode = kX86Mov32RI;
         value = -value;
         break;
+      case kOpRev:
+        opcode = kX86Mov32RI;
+        // Swap the bytes in an int.
+        value = (value & 0x0000FFFF) << 16 | (value & 0xFFFF0000) >> 16;
+        value = (value & 0x00FF00FF) << 8  | (value & 0xFF00FF00) >> 8;
+        break;
+      case kOpRevsh:
+        opcode = kX86Mov32RI;
+        // Swap the bytes in a short.
+        value = ((value >> 8) & 0xFF) | ((value << 8) & 0xFF00);
+        // Sign extend to an int.
+        value = (value << 16) >> 16;
+        break;
       default:
         LOG(FATAL) << "Bad case in OpRegImm " << op;
     }
