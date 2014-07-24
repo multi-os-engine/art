@@ -1176,6 +1176,22 @@ void InstructionCodeGeneratorX86::VisitInstanceFieldGet(HInstanceFieldGet* instr
   }
 }
 
+void LocationsBuilderX86::VisitStaticFieldSet(HStaticFieldSet* instruction) {
+  UNIMPLEMENTED(FATAL);
+}
+
+void InstructionCodeGeneratorX86::VisitStaticFieldSet(HStaticFieldSet* instruction) {
+  UNIMPLEMENTED(FATAL);
+}
+
+void LocationsBuilderX86::VisitStaticFieldGet(HStaticFieldGet* instruction) {
+  UNIMPLEMENTED(FATAL);
+}
+
+void InstructionCodeGeneratorX86::VisitStaticFieldGet(HStaticFieldGet* instruction) {
+  UNIMPLEMENTED(FATAL);
+}
+
 void LocationsBuilderX86::VisitNullCheck(HNullCheck* instruction) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
   locations->SetInAt(0, Location::Any());

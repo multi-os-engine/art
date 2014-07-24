@@ -378,9 +378,8 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   return true;
 }
 
-bool HGraphBuilder::BuildFieldAccess(const Instruction& instruction,
-                                     uint32_t dex_offset,
-                                     bool is_put) {
+bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction, uint32_t dex_offset,
+                                             bool is_put) {
   uint32_t source_or_dest_reg = instruction.VRegA_22c();
   uint32_t obj_reg = instruction.VRegB_22c();
   uint16_t field_index = instruction.VRegC_22c();
@@ -420,6 +419,60 @@ bool HGraphBuilder::BuildFieldAccess(const Instruction& instruction,
         field_type,
         resolved_field->GetOffset()));
 
+    UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
+  }
+  return true;
+}
+
+struct StaticFieldAccessInfo {
+  StaticFieldAccessInfo() : field_offset(0), storage_index(0), is_volatile(false),
+      is_referrers_class(false), is_initialized(false) {}
+
+  MemberOffset field_offset;
+  uint32_t storage_index;
+  bool is_volatile;
+  bool is_referrers_class;
+  bool is_initialized;
+};
+
+bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction, uint32_t dex_offset,
+                                           bool is_put) {
+  uint32_t source_or_dest_reg = instruction.VRegA_21c();
+  uint16_t field_index = instruction.VRegB_21c();
+
+  StaticFieldAccessInfo info;
+  ScopedObjectAccess soa(Thread::Current());
+  StackHandleScope<1> hs(soa.Self());
+  Handle<mirror::ArtField> resolved_field(hs.NewHandle(
+      compiler_driver_->ComputeStaticFieldInfo(field_index, dex_compilation_unit_, is_put, soa,
+                                               &info.storage_index, &info.is_referrers_class,
+                                               &info.is_initialized)));
+  if (resolved_field.Get() == nullptr) {
+    return false;
+  }
+  if (resolved_field->IsVolatile()) {
+    return false;
+  }
+
+  Primitive::Type field_type = resolved_field->GetTypeAsPrimitiveType();
+  if (!IsTypeSupported(field_type)) {
+    return false;
+  }
+
+  info.field_offset = resolved_field->GetOffset();
+  info.is_volatile = resolved_field->IsVolatile();
+
+  // TODO: we use only slow path now by calling artGet32Static or artSet64Static. Optimize this
+  // by using fast path, avoid useless initialization , ...
+
+  if (is_put) {
+    HInstruction* value = LoadLocal(source_or_dest_reg, field_type);
+    DCHECK_EQ(value->GetType(), field_type);
+    current_block_->AddInstruction(new (arena_) HStaticFieldSet(value, field_index,
+                                                                dex_offset));
+  } else {
+    current_block_->AddInstruction(new (arena_) HStaticFieldGet(field_type, field_index,
+                                                                dex_offset));
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
   return true;
@@ -678,7 +731,7 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
     case Instruction::IGET_BYTE:
     case Instruction::IGET_CHAR:
     case Instruction::IGET_SHORT: {
-      if (!BuildFieldAccess(instruction, dex_offset, false)) {
+      if (!BuildInstanceFieldAccess(instruction, dex_offset, false)) {
         return false;
       }
       break;
@@ -691,7 +744,33 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, int32_
     case Instruction::IPUT_BYTE:
     case Instruction::IPUT_CHAR:
     case Instruction::IPUT_SHORT: {
-      if (!BuildFieldAccess(instruction, dex_offset, true)) {
+      if (!BuildInstanceFieldAccess(instruction, dex_offset, true)) {
+        return false;
+      }
+      break;
+    }
+
+    case Instruction::SGET:
+    case Instruction::SGET_WIDE:
+    case Instruction::SGET_OBJECT:
+    case Instruction::SGET_BOOLEAN:
+    case Instruction::SGET_BYTE:
+    case Instruction::SGET_CHAR:
+    case Instruction::SGET_SHORT: {
+      if (!BuildStaticFieldAccess(instruction, dex_offset, false)) {
+        return false;
+      }
+      break;
+    }
+
+    case Instruction::SPUT:
+    case Instruction::SPUT_WIDE:
+    case Instruction::SPUT_OBJECT:
+    case Instruction::SPUT_BOOLEAN:
+    case Instruction::SPUT_BYTE:
+    case Instruction::SPUT_CHAR:
+    case Instruction::SPUT_SHORT: {
+      if (!BuildStaticFieldAccess(instruction, dex_offset, true)) {
         return false;
       }
       break;

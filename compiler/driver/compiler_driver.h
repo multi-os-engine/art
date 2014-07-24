@@ -253,7 +253,7 @@ class CompilerDriver {
   // class is the referrer's class or at least can be assumed to be initialized.
   std::pair<bool, bool> IsFastStaticField(
       mirror::DexCache* dex_cache, mirror::Class* referrer_class,
-      mirror::ArtField* resolved_field, uint16_t field_idx, MemberOffset* field_offset,
+      mirror::ArtField* resolved_field, uint16_t field_idx,
       uint32_t* storage_index, bool* is_referrers_class, bool* is_initialized)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -311,6 +311,15 @@ class CompilerDriver {
                               MemberOffset* field_offset, uint32_t* storage_index,
                               bool* is_referrers_class, bool* is_volatile, bool* is_initialized)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
+
+  mirror::ArtField* ComputeStaticFieldInfo(uint32_t field_idx,
+                                           const DexCompilationUnit* mUnit,
+                                           bool is_put,
+                                           const ScopedObjectAccess& soa,
+                                           uint32_t* storage_index,
+                                           bool* is_referrers_class,
+                                           bool* is_initialized)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Can we fastpath a interface, super class or virtual method call? Computes method's vtable
   // index.

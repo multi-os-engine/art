@@ -437,6 +437,8 @@ class HBasicBlock : public ArenaObject {
   M(Compare)                                               \
   M(InstanceFieldGet)                                      \
   M(InstanceFieldSet)                                      \
+  M(StaticFieldGet)                                        \
+  M(StaticFieldSet)                                        \
   M(NullCheck)                                             \
   M(Temporary)                                             \
 
@@ -1365,6 +1367,42 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
   const FieldInfo field_info_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldSet);
+};
+
+class HStaticFieldGet : public HExpression<0> {
+ public:
+  HStaticFieldGet(Primitive::Type field_type, uint32_t field_idx, uint32_t dex_pc)
+      : HExpression(field_type), field_idx_(field_idx), dex_pc_(dex_pc) {}
+
+  uint32_t GetFieldIndex() const { return field_idx_; }
+  uint32_t GetDexPc() const { return dex_pc_; }
+
+  DECLARE_INSTRUCTION(StaticFieldGet);
+
+ private:
+  const uint32_t field_idx_;
+  const uint32_t dex_pc_;
+
+  DISALLOW_COPY_AND_ASSIGN(HStaticFieldGet);
+};
+
+class HStaticFieldSet : public HTemplateInstruction<1> {
+ public:
+  HStaticFieldSet(HInstruction* value, uint32_t field_idx, uint32_t dex_pc)
+      : field_idx_(field_idx), dex_pc_(dex_pc) {
+    SetRawInputAt(0, value);
+  }
+
+  uint32_t GetFieldIndex() const { return field_idx_; }
+  uint32_t GetDexPc() const { return dex_pc_; }
+
+  DECLARE_INSTRUCTION(StaticFieldSet);
+
+ private:
+  const uint32_t field_idx_;
+  const uint32_t dex_pc_;
+
+  DISALLOW_COPY_AND_ASSIGN(HStaticFieldSet);
 };
 
 /**

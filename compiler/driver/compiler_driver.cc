@@ -1047,6 +1047,30 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
                                             uint32_t* storage_index, bool* is_referrers_class,
                                             bool* is_volatile, bool* is_initialized) {
   ScopedObjectAccess soa(Thread::Current());
+  StackHandleScope<1> hs(soa.Self());
+  Handle<mirror::ArtField> resolved_field(hs.NewHandle(
+      ComputeStaticFieldInfo(field_idx, mUnit, is_put, soa, storage_index, is_referrers_class,
+                             is_initialized)));
+
+  if (resolved_field.Get() == nullptr) {
+    // Conservative defaults.
+    *is_volatile = true;
+    *field_offset = MemberOffset(static_cast<size_t>(-1));
+    return false;
+  } else {
+    *is_volatile = resolved_field->IsVolatile();
+    *field_offset = resolved_field->GetOffset();
+    return true;
+  }
+}
+
+mirror::ArtField* CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx,
+                                                         const DexCompilationUnit* mUnit,
+                                                         bool is_put,
+                                                         const ScopedObjectAccess& soa,
+                                                         uint32_t* storage_index,
+                                                         bool* is_referrers_class,
+                                                         bool* is_initialized) {
   // Try to resolve the field and compiling method's class.
   mirror::ArtField* resolved_field;
   mirror::Class* referrer_class;
@@ -1066,22 +1090,19 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
   }
   bool result = false;
   if (resolved_field != nullptr && referrer_class != nullptr) {
-    *is_volatile = IsFieldVolatile(resolved_field);
-    std::pair<bool, bool> fast_path = IsFastStaticField(
-        dex_cache, referrer_class, resolved_field, field_idx, field_offset,
-        storage_index, is_referrers_class, is_initialized);
+    std::pair<bool, bool> fast_path = IsFastStaticField(dex_cache, referrer_class, resolved_field,
+                                                        field_idx, storage_index,
+                                                        is_referrers_class, is_initialized);
     result = is_put ? fast_path.second : fast_path.first;
   }
   if (!result) {
     // Conservative defaults.
-    *is_volatile = true;
-    *field_offset = MemberOffset(static_cast<size_t>(-1));
     *storage_index = -1;
     *is_referrers_class = false;
     *is_initialized = false;
   }
   ProcessedStaticField(result, *is_referrers_class);
-  return result;
+  return resolved_field;
 }
 
 void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType sharp_type,
