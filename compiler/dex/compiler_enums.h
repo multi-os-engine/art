@@ -234,6 +234,9 @@ enum ExtendedMIROpcode {
   // @note: All currently reserved vector registers are returned to the temporary pool.
   kMirOpReturnVectorRegisters,
 
+  // @brief Create a memory barrier to serialize all previous stores.
+  kMirOpMemoryBarrierForStores,
+
   kMirOpLast,
 };
 
@@ -249,6 +252,7 @@ enum MIROptimizationFlagPositions {
   kMIRIgnoreSuspendCheck,
   kMIRDup,
   kMIRMark,                           // Temporary node mark.
+  kMIRStoreNonTemporal,
   kMIRLastMIRFlag,
 };
 
