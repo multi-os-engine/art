@@ -597,6 +597,12 @@ bool X86Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
       mem_barrier = NewLIR0(kX86Mfence);
       ret = true;
     }
+  } else if (barrier_kind == kLoadFence) {
+      mem_barrier = NewLIR0(kX86Lfence);
+      ret = true;
+  } else if (barrier_kind == kStoreFence) {
+      mem_barrier = NewLIR0(kX86Sfence);
+      ret = true;
   }
 
   // Now ensure that a scheduling barrier is in place.
@@ -1529,6 +1535,9 @@ void X86Mir2Lir::GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
       break;
     case kMirOpPackedSet:
       GenSetVector(bb, mir);
+      break;
+    case kMirOpMemBarrier:
+      GenMemBarrier(static_cast<MemBarrierKind>(mir->dalvikInsn.vA));
       break;
     default:
       break;
