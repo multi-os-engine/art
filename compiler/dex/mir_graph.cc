@@ -65,6 +65,7 @@ const char* MIRGraph::extended_mir_op_names_[kMirOpLast - kMirOpFirst] = {
   "PackedSet",
   "ReserveVectorRegisters",
   "ReturnVectorRegisters",
+  "SFence",
 };
 
 MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
@@ -939,7 +940,7 @@ void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suff
                         mir->next ? " | " : " ");
               }
             } else {
-              fprintf(file, "    {%04x %s %s %s %s\\l}%s\\\n", mir->offset,
+              fprintf(file, "    {%04x %s %s %s %s %s\\l}%s\\\n", mir->offset,
                       mir->ssa_rep ? GetDalvikDisassembly(mir) :
                       !MIR::DecodedInstruction::IsPseudoMirOp(opcode) ?
                         Instruction::Name(mir->dalvikInsn.opcode) :
@@ -947,6 +948,7 @@ void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suff
                       (mir->optimization_flags & MIR_IGNORE_RANGE_CHECK) != 0 ? " no_rangecheck" : " ",
                       (mir->optimization_flags & MIR_IGNORE_NULL_CHECK) != 0 ? " no_nullcheck" : " ",
                       (mir->optimization_flags & MIR_IGNORE_SUSPEND_CHECK) != 0 ? " no_suspendcheck" : " ",
+                      (mir->optimization_flags & MIR_STORE_TO_MOVE) != 0 ? " store_to_move" : " ",
                       mir->next ? " | " : " ");
             }
         }

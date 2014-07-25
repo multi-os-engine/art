@@ -1554,6 +1554,9 @@ void X86Mir2Lir::GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
     case kMirOpPackedSet:
       GenSetVector(bb, mir);
       break;
+    case kMirOpSFence:
+      GenSFence(mir);
+      break;
     default:
       break;
   }
@@ -1653,6 +1656,10 @@ void X86Mir2Lir::GenMoveVector(BasicBlock *bb, MIR *mir) {
   RegStorage rs_dest = RegStorage::Solo128(mir->dalvikInsn.vA);
   RegStorage rs_src = RegStorage::Solo128(mir->dalvikInsn.vB);
   NewLIR2(kX86Mova128RR, rs_dest.GetReg(), rs_src.GetReg());
+}
+
+void X86Mir2Lir::GenSFence(MIR *mir) {
+  NewLIR0(kX86Sfence);
 }
 
 void X86Mir2Lir::GenMultiplyVectorSignedByte(BasicBlock *bb, MIR *mir) {

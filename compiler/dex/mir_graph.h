@@ -194,6 +194,7 @@ enum OatMethodAttributes {
 #define MIR_CALLEE                      (1 << kMIRCallee)
 #define MIR_IGNORE_SUSPEND_CHECK        (1 << kMIRIgnoreSuspendCheck)
 #define MIR_DUP                         (1 << kMIRDup)
+#define MIR_STORE_TO_MOVE               (1 << kMIRStoreToMove)
 
 #define BLOCK_NAME_LEN 80
 
