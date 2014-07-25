@@ -35,7 +35,7 @@
 namespace art {
 
 extern "C" void art_quick_throw_null_pointer_exception();
-extern "C" void art_quick_throw_stack_overflow_from_signal();
+extern "C" void art_quick_throw_stack_overflow();
 extern "C" void art_quick_implicit_suspend();
 
 // Get the size of a thumb2 instruction in bytes.
@@ -221,13 +221,13 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   sc->arm_sp = prevsp;
 
   // Tell the stack overflow code where the new stack pointer should be.
-  sc->arm_ip = sp;      // aka r12
+  // sc->arm_ip = sp;      // aka r12
 
-  // Now arrange for the signal handler to return to art_quick_throw_stack_overflow_from_signal.
+  // Now arrange for the signal handler to return to art_quick_throw_stack_overflow_from.
   // The value of LR must be the same as it was when we entered the code that
   // caused this fault.  This will be inserted into a callee save frame by
-  // the function to which this handler returns (art_quick_throw_stack_overflow_from_signal).
-  sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow_from_signal);
+  // the function to which this handler returns (art_quick_throw_stack_overflow).
+  sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow);
 
   // The kernel will now return to the address in sc->arm_pc.
   return true;

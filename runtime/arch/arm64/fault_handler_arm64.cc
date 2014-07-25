@@ -27,7 +27,7 @@
 #include "thread.h"
 #include "thread-inl.h"
 
-extern "C" void art_quick_throw_stack_overflow_from_signal();
+extern "C" void art_quick_throw_stack_overflow();
 extern "C" void art_quick_throw_null_pointer_exception();
 extern "C" void art_quick_implicit_suspend();
 
@@ -183,14 +183,11 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   // Now establish the stack pointer for the signal return.
   sc->sp = prevsp;
 
-  // Tell the stack overflow code where the new stack pointer should be.
-  sc->regs[art::arm64::IP0] = sp;      // aka x16
-
-  // Now arrange for the signal handler to return to art_quick_throw_stack_overflow_from_signal.
+  // Now arrange for the signal handler to return to art_quick_throw_stack_overflow.
   // The value of LR must be the same as it was when we entered the code that
   // caused this fault.  This will be inserted into a callee save frame by
-  // the function to which this handler returns (art_quick_throw_stack_overflow_from_signal).
-  sc->pc = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow_from_signal);
+  // the function to which this handler returns (art_quick_throw_stack_overflow).
+  sc->pc = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow);
 
   // The kernel will now return to the address in sc->pc.
   return true;
