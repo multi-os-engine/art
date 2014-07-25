@@ -100,6 +100,83 @@ class CompiledCode {
   std::vector<uint32_t> oatdata_offsets_to_compiled_code_offset_;
 };
 
+struct SrcMapElem {
+  uint32_t from_;
+  int32_t to_;
+
+  bool operator<(const SrcMapElem &y) const {
+    return (((uint64_t)from_)<<32) + to_ < (((uint64_t)(y.from_))<<32) + y.to_;
+  }
+};
+
+class SrcMap : public std::vector<SrcMapElem> {
+ public:
+  static const uint32_t NOT_FOUND = 0 - 1;
+
+  struct CompareByTo {
+    bool operator()(const SrcMapElem &lhs, const SrcMapElem &rhs) {
+      return lhs.to_ < rhs.to_;
+    }
+  };
+
+  struct CompareByFrom {
+    bool operator()(const SrcMapElem &lhs, const SrcMapElem &rhs) {
+      return lhs.from_ < rhs.from_;
+    }
+  };
+
+  void SortByTo() {
+    std::sort(begin(), end(), CompareByTo());
+  }
+
+  void SortByFrom() {
+    std::sort(begin(), end(), CompareByFrom());
+  }
+
+  const_iterator FindByTo(int32_t to) const {
+    return std::lower_bound(begin(), end(), SrcMapElem({0, to}), CompareByTo());
+  }
+
+  SrcMap& Arrange() {
+    SortByTo();
+
+    // remove duplicate pairs
+    if (!empty()) {
+      SrcMap tmp;
+      tmp.swap(*this);
+      iterator it = tmp.begin();
+      iterator prev;
+      push_back(*(prev = it++));
+      for(; it != tmp.end(); it++) {
+        if (prev->from_ != it->from_ || prev->to_ != it->to_) {
+          push_back(*(prev = it));
+        }
+      }
+    }
+
+    return *this;
+  }
+
+  void DeltaFormat(const SrcMapElem &start) {
+    // convert from abs values to deltas
+    if (empty()) {
+      return;
+    }
+
+    SortByFrom();
+
+    // TODO: one PC can be mapped to several Java src lines.
+    // do we want such a one-to-many correspondense?
+
+    for(int i = size(); --i >= 1; ) {
+      (*this)[i].from_ -= (*this)[i-1].from_;
+      (*this)[i].to_ -= (*this)[i-1].to_;
+    }
+    (*this)[0].from_ -= start.from_;
+    (*this)[0].to_ -= start.to_;
+  }
+};
+
 class CompiledMethod : public CompiledCode {
  public:
   // Constructs a CompiledMethod for the non-LLVM compilers.
@@ -109,6 +186,7 @@ class CompiledMethod : public CompiledCode {
                  const size_t frame_size_in_bytes,
                  const uint32_t core_spill_mask,
                  const uint32_t fp_spill_mask,
+                 SrcMap& src_mapping_table,
                  const std::vector<uint8_t>& mapping_table,
                  const std::vector<uint8_t>& vmap_table,
                  const std::vector<uint8_t>& native_gc_map,
@@ -144,6 +222,11 @@ class CompiledMethod : public CompiledCode {
     return fp_spill_mask_;
   }
 
+  const SrcMap& GetSrcMappingTable() const {
+    DCHECK(src_mapping_table_ != nullptr);
+    return *src_mapping_table_;
+  }
+
   const std::vector<uint8_t>& GetMappingTable() const {
     DCHECK(mapping_table_ != nullptr);
     return *mapping_table_;
@@ -170,6 +253,8 @@ class CompiledMethod : public CompiledCode {
   const uint32_t core_spill_mask_;
   // For quick code, a bit mask describing spilled FPR callee-save registers.
   const uint32_t fp_spill_mask_;
+  // For quick code, a set of pairs (PC, Line) mapping from native PC offset to Java line
+  SrcMap *src_mapping_table_;
   // For quick code, a uleb128 encoded map from native PC offset to dex PC aswell as dex PC to
   // native PC offset. Size prefixed.
   std::vector<uint8_t>* mapping_table_;
