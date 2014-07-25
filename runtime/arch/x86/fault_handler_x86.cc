@@ -51,7 +51,7 @@
 namespace art {
 
 extern "C" void art_quick_throw_null_pointer_exception();
-extern "C" void art_quick_throw_stack_overflow_from_signal();
+extern "C" void art_quick_throw_stack_overflow();
 extern "C" void art_quick_test_suspend();
 
 // Get the size of an instruction in bytes.
@@ -379,11 +379,8 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   // check before the callee save instructions, the SP is already pointing to
   // the previous frame.
 
-  // Tell the stack overflow code where the new stack pointer should be.
-  uc->CTX_EAX = pregion;
-
-  // Now arrange for the signal handler to return to art_quick_throw_stack_overflow_from_signal.
-  uc->CTX_EIP = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow_from_signal);
+  // Now arrange for the signal handler to return to art_quick_throw_stack_overflow.
+  uc->CTX_EIP = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow);
 
   return true;
 }

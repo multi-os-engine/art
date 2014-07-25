@@ -356,11 +356,11 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
    */
   bool skip_overflow_check = mir_graph_->MethodIsLeaf() && !IsLargeFrame(frame_size_, kArm);
   NewLIR0(kPseudoMethodEntry);
-  const size_t kStackOverflowReservedUsableBytes = GetStackOverflowReservedBytes(kArm) -
-      Thread::kStackOverflowSignalReservedBytes;
+  const size_t kStackOverflowReservedUsableBytes = GetStackOverflowReservedBytes(kArm);
   bool large_frame = (static_cast<size_t>(frame_size_) > kStackOverflowReservedUsableBytes);
   if (!skip_overflow_check) {
-    if (!cu_->compiler_driver->GetCompilerOptions().GetImplicitStackOverflowChecks()) {
+    if (large_frame ||
+        !cu_->compiler_driver->GetCompilerOptions().GetImplicitStackOverflowChecks()) {
       if (!large_frame) {
         /* Load stack limit */
         LockTemp(rs_r12);
@@ -399,7 +399,8 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   const int spill_size = spill_count * 4;
   const int frame_size_without_spills = frame_size_ - spill_size;
   if (!skip_overflow_check) {
-    if (!cu_->compiler_driver->GetCompilerOptions().GetImplicitStackOverflowChecks()) {
+    if (large_frame ||
+        !cu_->compiler_driver->GetCompilerOptions().GetImplicitStackOverflowChecks()) {
       class StackOverflowSlowPath : public LIRSlowPath {
        public:
         StackOverflowSlowPath(Mir2Lir* m2l, LIR* branch, bool restore_lr, size_t sp_displace)

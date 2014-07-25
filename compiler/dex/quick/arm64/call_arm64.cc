@@ -333,12 +333,15 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
 
   NewLIR0(kPseudoMethodEntry);
 
+  const size_t kStackOverflowReservedUsableBytes = GetStackOverflowReservedBytes(kArm64);
+  const bool large_frame = static_cast<size_t>(frame_size_) > kStackOverflowReservedUsableBytes;
   const int spill_count = num_core_spills_ + num_fp_spills_;
   const int spill_size = (spill_count * kArm64PointerSize + 15) & ~0xf;  // SP 16 byte alignment.
   const int frame_size_without_spills = frame_size_ - spill_size;
 
   if (!skip_overflow_check) {
-    if (!cu_->compiler_driver->GetCompilerOptions().GetImplicitStackOverflowChecks()) {
+    if (large_frame ||
+        !cu_->compiler_driver->GetCompilerOptions().GetImplicitStackOverflowChecks()) {
       // Load stack limit
       LoadWordDisp(rs_xSELF, Thread::StackEndOffset<8>().Int32Value(), rs_xIP1);
     } else {
@@ -365,7 +368,8 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
   }
 
   if (!skip_overflow_check) {
-    if (!cu_->compiler_driver->GetCompilerOptions().GetImplicitStackOverflowChecks()) {
+    if (large_frame ||
+        !cu_->compiler_driver->GetCompilerOptions().GetImplicitStackOverflowChecks()) {
       class StackOverflowSlowPath: public LIRSlowPath {
       public:
         StackOverflowSlowPath(Mir2Lir* m2l, LIR* branch, size_t sp_displace) :
