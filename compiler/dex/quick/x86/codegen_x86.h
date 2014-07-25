@@ -408,7 +408,7 @@ class X86Mir2Lir : public Mir2Lir {
   LIR* LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale, int displacement,
                            RegStorage r_dest, OpSize size);
   LIR* StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale, int displacement,
-                            RegStorage r_src, OpSize size);
+                            RegStorage r_src, OpSize size, int opt_flags = 0);
 
   RegStorage GetCoreArgMappingToPhysicalReg(int core_arg_num);
 
@@ -480,6 +480,8 @@ class X86Mir2Lir : public Mir2Lir {
                                 int64_t val, ConditionCode ccode);
   void GenConstWide(RegLocation rl_dest, int64_t value);
   void GenMultiplyVectorSignedByte(BasicBlock *bb, MIR *mir);
+  void GenLFence();
+  void GenSFence();
   void GenShiftByteVector(BasicBlock *bb, MIR *mir);
   void AndMaskVectorRegister(RegStorage rs_src1, uint32_t m1, uint32_t m2, uint32_t m3,
                              uint32_t m4);

@@ -597,6 +597,15 @@ bool X86Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
       mem_barrier = NewLIR0(kX86Mfence);
       ret = true;
     }
+  } else if (barrier_kind == kLoadFence) {
+      mem_barrier = NewLIR0(kX86Lfence);
+      ret = true;
+  } else if (barrier_kind == kStoreFence) {
+      mem_barrier = NewLIR0(kX86Sfence);
+      ret = true;
+  } else if (barrier_kind == kMemoryFence) {
+      mem_barrier = NewLIR0(kX86Mfence);
+      ret = true;
   }
 
   // Now ensure that a scheduling barrier is in place.
@@ -1530,6 +1539,9 @@ void X86Mir2Lir::GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
     case kMirOpPackedSet:
       GenSetVector(bb, mir);
       break;
+    case kMirOpMemBarrier:
+      GenMemBarrier(static_cast<MemBarrierKind>(mir->dalvikInsn.vA));
+      break;
     default:
       break;
   }
@@ -1629,6 +1641,14 @@ void X86Mir2Lir::GenMoveVector(BasicBlock *bb, MIR *mir) {
   RegStorage rs_dest = RegStorage::Solo128(mir->dalvikInsn.vA);
   RegStorage rs_src = RegStorage::Solo128(mir->dalvikInsn.vB);
   NewLIR2(kX86Mova128RR, rs_dest.GetReg(), rs_src.GetReg());
+}
+
+void X86Mir2Lir::GenLFence() {
+  NewLIR0(kX86Lfence);
+}
+
+void X86Mir2Lir::GenSFence() {
+  NewLIR0(kX86Sfence);
 }
 
 void X86Mir2Lir::GenMultiplyVectorSignedByte(BasicBlock *bb, MIR *mir) {
