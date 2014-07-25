@@ -431,8 +431,12 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
             // report.
             name += " [ DEDUPED ]";
           }
-          writer_->method_info_.push_back(DebugInfo(name, quick_code_start,
-                                                    quick_code_start + code_size));
+          const DexFile::CodeItem *code_item = it.GetMethodCodeItem();
+          writer_->method_info_.push_back(DebugInfo(name,
+                dex_file_->GetSourceFile(dex_file_->GetClassDef(class_def_index_)),
+                quick_code_start, quick_code_start + code_size,
+                code_item == nullptr ? nullptr : dex_file_->GetDebugInfoStream(code_item),
+                compiled_method->GetSrcMappingTable()));
         }
       }
 

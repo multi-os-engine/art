@@ -355,6 +355,7 @@ CompilerDriver::CompilerDriver(const CompilerOptions* compiler_options,
       support_boot_image_fixup_(instruction_set != kMips),
       cfi_info_(nullptr),
       dedupe_code_("dedupe code"),
+      dedupe_src_mapping_table_("dedupe source mapping table"),
       dedupe_mapping_table_("dedupe mapping table"),
       dedupe_vmap_table_("dedupe vmap table"),
       dedupe_gc_map_("dedupe gc map"),
@@ -394,6 +395,18 @@ CompilerDriver::CompilerDriver(const CompilerOptions* compiler_options,
 
 std::vector<uint8_t>* CompilerDriver::DeduplicateCode(const std::vector<uint8_t>& code) {
   return dedupe_code_.Add(Thread::Current(), code);
+}
+
+SrcMap* CompilerDriver::DeduplicateSrcMappingTable(const SrcMap& src_map) {
+  return dedupe_src_mapping_table_.Add(Thread::Current(), src_map);
+}
+
+template<> uint8_t CompilerDriver::DedupeHashFunc<std::vector<uint8_t>>::GetByte(const std::vector<uint8_t> &array, int index) {
+  return array[index];
+}
+
+template<> uint8_t CompilerDriver::DedupeHashFunc<SrcMap>::GetByte(const SrcMap &array, int index) {
+  return static_cast<uint8_t>(array[index].from_ + array[index].to_);
 }
 
 std::vector<uint8_t>* CompilerDriver::DeduplicateMappingTable(const std::vector<uint8_t>& code) {
