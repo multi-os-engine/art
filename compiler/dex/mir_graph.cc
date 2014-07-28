@@ -878,6 +878,21 @@ void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suff
                       GetBasicBlock(GetEntryBlock()->fall_through)->start_offset,
                       suffix == nullptr ? "" : suffix,
                       cnt.LoadRelaxed());
+
+  // Check to see if dirname exists
+  struct stat fstat;
+  lstat(dir_prefix, &fstat);
+
+  if (!S_ISDIR(fstat.st_mode))
+  {
+    // if it doesn't, try and create it
+    int dir = mkdir(dir_prefix, S_IRUSR | S_IWUSR);
+	if (0 != dir)
+	{
+	  return;
+	}
+  }
+
   file = fopen(fname.c_str(), "w");
   if (file == NULL) {
     return;
