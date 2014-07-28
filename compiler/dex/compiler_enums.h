@@ -256,13 +256,16 @@ enum ExtendedMIROpcode {
   // vC: TypeSize
   kMirOpPackedSet,
 
-  // @brief Reserve N vector registers (named 0..N-1)
-  // vA: Number of registers
+  // @brief Reserve a range of vector registers.
+  // vA: Start vector register to reserve.
+  // vB: Inclusive end vector register to reserve.
   // @note: The backend may choose to map vector numbers used in vector opcodes.
   //  Reserved registers are removed from the list of backend temporary pool.
   kMirOpReserveVectorRegisters,
 
-  // @brief Free Reserved vector registers
+  // @brief Free a range of reserved vector registers
+  // vA: Start vector register to unreserve.
+  // vB: Inclusive end vector register to unreserve.
   // @note: All currently reserved vector registers are returned to the temporary pool.
   kMirOpReturnVectorRegisters,
 
