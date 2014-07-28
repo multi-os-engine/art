@@ -582,6 +582,24 @@ std::string PrintableString(const std::string& utf) {
   return result;
 }
 
+bool IsValidDirectory(const char* dir_name) {
+  // Check to see if dirname exists
+  struct stat fstat;
+  lstat(dir_name, &fstat);
+  if (!S_ISDIR(fstat.st_mode)) {
+    return false;
+  }
+  return true;
+}
+
+bool CreateDirectory(const char* dir_name) {
+  int dir = mkdir(dir_name, S_IRUSR | S_IWUSR);
+  if (0 != dir) {
+    return false;
+  }
+  return true;
+}
+
 // See http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/design.html#wp615 for the full rules.
 std::string MangleForJni(const std::string& s) {
   std::string result;

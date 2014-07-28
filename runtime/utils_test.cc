@@ -200,6 +200,22 @@ TEST_F(UtilsTest, MangleForJni) {
   EXPECT_EQ("_3C", MangleForJni("[C"));
 }
 
+TEST_F(UtilsTest, IsValidDirectory) {
+  ScopedObjectAccess soa(Thread::Current());
+  EXPECT_EQ(1U, IsValidDirectory("/data"));
+  char tmpdir[L_tmpnam];
+  mkstemp(tmpdir);
+  EXPECT_EQ(0U, IsValidDirectory(tmpdir));
+}
+
+TEST_F(UtilsTest, CreateDirectory) {
+  ScopedObjectAccess soa(Thread::Current());
+  char tmpdir[L_tmpnam];
+  mkstemp(tmpdir);
+  EXPECT_EQ(1U, CreateDirectory(tmpdir));
+  EXPECT_EQ(0U, CreateDirectory(tmpdir));
+}
+
 TEST_F(UtilsTest, JniShortName_JniLongName) {
   ScopedObjectAccess soa(Thread::Current());
   mirror::Class* c = class_linker_->FindSystemClass(soa.Self(), "Ljava/lang/String;");

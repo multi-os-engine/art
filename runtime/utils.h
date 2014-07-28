@@ -330,6 +330,12 @@ TimeUnit GetAppropriateTimeUnit(uint64_t nano_duration);
 // Get the divisor to convert from a nanoseconds to a time unit.
 uint64_t GetNsToTimeUnitDivisor(TimeUnit time_unit);
 
+// Check to see whether a specified directory exists
+bool IsValidDirectory(const char* dir_name);
+
+// Try to create the specified directory
+bool CreateDirectory(const char* dir_name);
+
 // Performs JNI name mangling as described in section 11.3 "Linking Native Methods"
 // of the JNI spec.
 std::string MangleForJni(const std::string& s);
