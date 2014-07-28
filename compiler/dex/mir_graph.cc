@@ -68,6 +68,8 @@ const char* MIRGraph::extended_mir_op_names_[kMirOpLast - kMirOpFirst] = {
   "ReserveVectorRegisters",
   "ReturnVectorRegisters",
   "MemBarrier",
+  "PackedArrayGet",
+  "PackedArrayPut",
 };
 
 MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
@@ -1211,8 +1213,10 @@ MIR* BasicBlock::GetNextUnconditionalMir(MIRGraph* mir_graph, MIR* current) {
   return next_mir;
 }
 
-static void FillTypeSizeString(const MIR* mir, std::string& decoded_mir) {
-  OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
+static void FillTypeSizeString(const uint32_t type_size, std::string& decoded_mir) {
+  // The lower bits contain information on size of vector.
+  // The upper bits contain information about the type.
+  OpSize opsize = static_cast<OpSize>(type_size >> 16);
   decoded_mir.append(" (");
   switch (opsize) {
     case k32:
@@ -1280,7 +1284,7 @@ void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string& decoded_mir
           decoded_mir.append(StringPrintf(", %s", GetSSANameWithConst(ssa_rep->uses[1], false).c_str()));
         }
       } else {
-        decoded_mir.append(StringPrintf(" %d = %d", mir->dalvikInsn.vA, mir->dalvikInsn.vB));
+        decoded_mir.append(StringPrintf(" v%d = v%d", mir->dalvikInsn.vA, mir->dalvikInsn.vB));
       }
       break;
     case kMirOpFusedCmplFloat:
@@ -1299,43 +1303,43 @@ void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string& decoded_mir
       break;
     case kMirOpMoveVector:
       decoded_mir.append(StringPrintf(" vect%d = vect%d", mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedAddition:
       decoded_mir.append(StringPrintf(" vect%d = vect%d + vect%d", mir->dalvikInsn.vA, mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedMultiply:
       decoded_mir.append(StringPrintf(" vect%d = vect%d * vect%d", mir->dalvikInsn.vA, mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedSubtract:
       decoded_mir.append(StringPrintf(" vect%d = vect%d - vect%d", mir->dalvikInsn.vA, mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedAnd:
       decoded_mir.append(StringPrintf(" vect%d = vect%d & vect%d", mir->dalvikInsn.vA, mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedOr:
       decoded_mir.append(StringPrintf(" vect%d = vect%d \\| vect%d", mir->dalvikInsn.vA, mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedXor:
       decoded_mir.append(StringPrintf(" vect%d = vect%d ^ vect%d", mir->dalvikInsn.vA, mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedShiftLeft:
       decoded_mir.append(StringPrintf(" vect%d = vect%d \\<\\< %d", mir->dalvikInsn.vA, mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedUnsignedShiftRight:
       decoded_mir.append(StringPrintf(" vect%d = vect%d \\>\\>\\> %d", mir->dalvikInsn.vA, mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedSignedShiftRight:
       decoded_mir.append(StringPrintf(" vect%d = vect%d \\>\\> %d", mir->dalvikInsn.vA, mir->dalvikInsn.vA, mir->dalvikInsn.vB));
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpConstVector:
       decoded_mir.append(StringPrintf(" vect%d = %x, %x, %x, %x", mir->dalvikInsn.vA, mir->dalvikInsn.arg[0],
@@ -1349,9 +1353,9 @@ void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string& decoded_mir
           decoded_mir.append(StringPrintf(", %s", GetSSANameWithConst(ssa_rep->uses[1], false).c_str()));
         }
       } else {
-        decoded_mir.append(StringPrintf(" vect%d = %d", mir->dalvikInsn.vA, mir->dalvikInsn.vB));
+        decoded_mir.append(StringPrintf(" vect%d = v%d", mir->dalvikInsn.vA, mir->dalvikInsn.vB));
       }
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedAddReduce:
       if (ssa_rep != nullptr) {
@@ -1365,9 +1369,9 @@ void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string& decoded_mir
           decoded_mir.append(StringPrintf(", %s", GetSSANameWithConst(ssa_rep->uses[1], false).c_str()));
         }
       } else {
-        decoded_mir.append(StringPrintf("%d = vect%d + %d", mir->dalvikInsn.vA, mir->dalvikInsn.vB, mir->dalvikInsn.vA));
+        decoded_mir.append(StringPrintf(" v%d = vect%d + v%d", mir->dalvikInsn.vA, mir->dalvikInsn.vB, mir->dalvikInsn.vA));
       }
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpPackedReduce:
       if (ssa_rep != nullptr) {
@@ -1377,9 +1381,9 @@ void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string& decoded_mir
         }
         decoded_mir.append(StringPrintf(" = vect%d", mir->dalvikInsn.vB));
       } else {
-        decoded_mir.append(StringPrintf(" %d = vect%d", mir->dalvikInsn.vA, mir->dalvikInsn.vB));
+        decoded_mir.append(StringPrintf(" v%d = vect%d", mir->dalvikInsn.vA, mir->dalvikInsn.vB));
       }
-      FillTypeSizeString(mir, decoded_mir);
+      FillTypeSizeString(mir->dalvikInsn.vC, decoded_mir);
       break;
     case kMirOpReserveVectorRegisters:
     case kMirOpReturnVectorRegisters:
@@ -1392,6 +1396,18 @@ void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string& decoded_mir
       decoded_mir.append(ss.str());
       break;
     }
+    case kMirOpPackedArrayGet:
+    case kMirOpPackedArrayPut:
+      decoded_mir.append(StringPrintf(" vect%d", mir->dalvikInsn.vA));
+      if (ssa_rep != nullptr) {
+        decoded_mir.append(StringPrintf(", %s[%s]",
+                                        GetSSANameWithConst(ssa_rep->uses[0], false).c_str(),
+                                        GetSSANameWithConst(ssa_rep->uses[1], false).c_str()));
+      } else {
+        decoded_mir.append(StringPrintf(", v%d[v%d]", mir->dalvikInsn.vB, mir->dalvikInsn.vC));
+      }
+      FillTypeSizeString(mir->dalvikInsn.arg[0], decoded_mir);
+      break;
     default:
       break;
   }
