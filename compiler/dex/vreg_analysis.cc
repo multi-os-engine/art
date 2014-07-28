@@ -517,11 +517,9 @@ void MIRGraph::InitRegLocations() {
  */
 void MIRGraph::RemapRegLocations() {
   for (int i = 0; i < GetNumSSARegs(); i++) {
-    if (reg_location_[i].location != kLocCompilerTemp) {
-      int orig_sreg = reg_location_[i].s_reg_low;
-      reg_location_[i].orig_sreg = orig_sreg;
-      reg_location_[i].s_reg_low = SRegToVReg(orig_sreg);
-    }
+    int orig_sreg = reg_location_[i].s_reg_low;
+    reg_location_[i].orig_sreg = orig_sreg;
+    reg_location_[i].s_reg_low = SRegToVReg(orig_sreg);
   }
 }
 
