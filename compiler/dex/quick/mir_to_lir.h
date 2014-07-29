@@ -1110,6 +1110,14 @@ class Mir2Lir : public Backend {
 
     // Routines that work for the generic case, but may be overriden by target.
     /*
+     * @brief Generate a relative call to the method that will be patched at link time.
+     * @param target_method The MethodReference of the method to be invoked.
+     * @param type How the method will be invoked.
+     * @returns Call instruction
+     */
+    virtual LIR* CallWithLinkerFixup(const MethodReference& target_method, InvokeType type);
+
+    /*
      * @brief Compare memory to immediate, and branch if condition true.
      * @param cond The condition code that when true will branch to the target.
      * @param temp_reg A temporary register that can be used if compare to memory is not

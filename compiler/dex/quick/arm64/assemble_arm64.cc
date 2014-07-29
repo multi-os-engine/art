@@ -146,6 +146,16 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kA64Last] = {
                  kFmtBitBlt, 3, 0, kFmtBitBlt, 23, 5, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_BINARY_OP | IS_BRANCH | USES_CCODES |
                  NEEDS_FIXUP, "b.!0c", "!1t", kFixupCondBranch),
+    ENCODING_MAP(kA64Bl1t, NO_VARIANTS(0x94000000),
+                 kFmtBitBlt, 25, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_UNARY_OP | IS_BRANCH | REG_DEF_LR | NEEDS_FIXUP,
+                 "bl", "!0t", kFixupT1Branch),
+    ENCODING_MAP(kA64BlPatch1t, NO_VARIANTS(0xd4200000),
+                 kFmtBitBlt, 25, 0, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1,
+                 IS_UNARY_OP | IS_BRANCH | REG_DEF_LR | NEEDS_FIXUP,
+                 "bl", "!0t", kFixupLabel),
     ENCODING_MAP(kA64Blr1x, NO_VARIANTS(0xd63f0000),
                  kFmtRegX, 9, 5, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,
@@ -451,6 +461,10 @@ const ArmEncodingMap Arm64Mir2Lir::EncodingMap[kA64Last] = {
                  kFmtRegR, 4, 0, kFmtBitBlt, 20, 5, kFmtBitBlt, 22, 21,
                  kFmtUnused, -1, -1, IS_TERTIARY_OP | REG_DEF0,
                  "movz", "!0r, #!1d!2M", kFixupNone),
+    ENCODING_MAP(WIDE(kA64MovzPatch2rd), SF_VARIANTS(0x52800000),
+                 kFmtRegR, 4, 0, kFmtBitBlt, 20, 5, kFmtUnused, -1, -1,
+                 kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0 | NEEDS_FIXUP,
+                 "movz", "!0r, #!1d", kFixupLabel),
     ENCODING_MAP(WIDE(kA64Mov2rr), SF_VARIANTS(0x2a0003e0),
                  kFmtRegR, 4, 0, kFmtRegR, 20, 16, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_BINARY_OP | REG_DEF0_USE1 | IS_MOVE,
@@ -872,8 +886,7 @@ void Arm64Mir2Lir::AssembleLIR() {
           CodeOffset target = target_lir->offset +
               ((target_lir->flags.generation == lir->flags.generation) ? 0 : offset_adjustment);
           int32_t delta = target - pc;
-          DCHECK_EQ(delta & 0x3, 0);
-          if (!IS_SIGNED_IMM19(delta >> 2)) {
+          if (!((delta & 0x3) == 0 && IS_SIGNED_IMM26(delta >> 2))) {
             LOG(FATAL) << "Invalid jump range in kFixupT1Branch";
           }
           lir->operands[0] = delta >> 2;

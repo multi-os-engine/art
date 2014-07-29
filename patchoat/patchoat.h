@@ -75,10 +75,11 @@ class PatchOat {
   bool InHeap(mirror::Object*);
 
   // Patches oat in place, modifying the oat_file given to the constructor.
-  bool PatchElf();
-  bool PatchTextSection();
+  bool PatchElf(InstructionSet instruction_set);
+  bool PatchTextSection(InstructionSet instruction_set);
   // Templatized version to actually do the patching with the right sized offsets.
-  template <typename ptr_t> bool PatchTextSection(const Elf32_Shdr& patches_sec);
+  template <typename ptr_t> bool PatchTextSection(InstructionSet instruction_set,
+                                                  const Elf32_Shdr& patches_sec);
   template <typename ptr_t> bool CheckOatFile(const Elf32_Shdr& patches_sec);
   bool PatchOatHeader();
   bool PatchSymbols(Elf32_Shdr* section);

@@ -46,6 +46,7 @@
 #include "scoped_thread_state_change.h"
 #include "thread.h"
 #include "utils.h"
+#include "patch_writer.h"
 
 namespace art {
 
@@ -269,7 +270,7 @@ bool PatchOat::Patch(const File* input_oat, const std::string& image_location, o
   PatchOat p(elf.release(), image.release(), ispc->GetLiveBitmap(), ispc->GetMemMap(),
              delta, timings);
   t.NewTiming("Patching files");
-  if (!p.PatchElf()) {
+  if (!p.PatchElf(isa)) {
     LOG(ERROR) << "Failed to patch oat file " << input_oat->GetPath();
     return false;
   }
@@ -455,7 +456,7 @@ bool PatchOat::Patch(File* input_oat, off_t delta, File* output_oat, TimingLogge
 
   PatchOat p(elf.release(), delta, timings);
   t.NewTiming("Patch Oat file");
-  if (!p.PatchElf()) {
+  if (!p.PatchElf(kNone)) {
     return false;
   }
 
@@ -508,9 +509,15 @@ bool PatchOat::PatchOatHeader() {
   return true;
 }
 
-bool PatchOat::PatchElf() {
+bool PatchOat::PatchElf(InstructionSet instruction_set) {
   TimingLogger::ScopedTiming t("Fixup Elf Text Section", timings_);
-  if (!PatchTextSection()) {
+
+  if (instruction_set == kNone) {
+    instruction_set = ElfISAToInstructionSet(oat_file_->GetHeader().e_machine);
+    CHECK_NE(instruction_set, kNone);
+  }
+
+  if (!PatchTextSection(instruction_set)) {
     return false;
   }
 
@@ -595,7 +602,7 @@ bool PatchOat::PatchSymbols(Elf32_Shdr* section) {
   return true;
 }
 
-bool PatchOat::PatchTextSection() {
+bool PatchOat::PatchTextSection(InstructionSet instruction_set) {
   Elf32_Shdr* patches_sec = oat_file_->FindSectionByName(".oat_patches");
   if (patches_sec == nullptr) {
     LOG(ERROR) << ".oat_patches section not found. Aborting patch";
@@ -608,9 +615,9 @@ bool PatchOat::PatchTextSection() {
 
   switch (patches_sec->sh_entsize) {
     case sizeof(uint32_t):
-      return PatchTextSection<uint32_t>(*patches_sec);
+      return PatchTextSection<uint32_t>(instruction_set, *patches_sec);
     case sizeof(uint64_t):
-      return PatchTextSection<uint64_t>(*patches_sec);
+      return PatchTextSection<uint64_t>(instruction_set, *patches_sec);
     default:
       LOG(ERROR) << ".oat_patches Entsize of " << patches_sec->sh_entsize << "bits "
                  << "is not valid";
@@ -619,7 +626,7 @@ bool PatchOat::PatchTextSection() {
 }
 
 template <typename ptr_t>
-bool PatchOat::PatchTextSection(const Elf32_Shdr& patches_sec) {
+bool PatchOat::PatchTextSection(InstructionSet instruction_set, const Elf32_Shdr& patches_sec) {
   DCHECK(CheckOatFile<ptr_t>(patches_sec)) << "Oat file invalid";
   ptr_t* patches = reinterpret_cast<ptr_t*>(oat_file_->Begin() + patches_sec.sh_offset);
   ptr_t* patches_end = patches + (patches_sec.sh_size / sizeof(ptr_t));
@@ -628,12 +635,15 @@ bool PatchOat::PatchTextSection(const Elf32_Shdr& patches_sec) {
   byte* to_patch = oat_file_->Begin() + oat_text_sec->sh_offset;
   uintptr_t to_patch_end = reinterpret_cast<uintptr_t>(to_patch) + oat_text_sec->sh_size;
 
+  PatchWriter* patch_writer = PatchWriter::CreatePatchWriter(instruction_set);
   for (; patches < patches_end; patches++) {
     CHECK_LT(*patches, oat_text_sec->sh_size) << "Bad Patch";
     uint32_t* patch_loc = reinterpret_cast<uint32_t*>(to_patch + *patches);
     CHECK_LT(reinterpret_cast<uintptr_t>(patch_loc), to_patch_end);
-    *patch_loc += delta_;
+    patch_writer->UpdatePatch(kAbsoluteAddressPatch, patch_loc, delta_);
   }
+  delete patch_writer;
+
   return true;
 }
 

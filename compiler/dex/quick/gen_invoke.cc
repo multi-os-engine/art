@@ -474,7 +474,7 @@ static void CommonCallCodeLoadClassIntoArg0(const CallInfo* info, Mir2Lir* cg) {
 static bool CommonCallCodeLoadCodePointerIntoInvokeTgt(const CallInfo* info,
                                                        const RegStorage* alt_from,
                                                        const CompilationUnit* cu, Mir2Lir* cg) {
-  if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
+  if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64 && cu->instruction_set != kArm64) {
     // Get the compiled code address [use *alt_from or kArg0, set kInvokeTgt]
     cg->LoadWordDisp(alt_from == nullptr ? cg->TargetReg(kArg0, kRef) : *alt_from,
                      mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value(),
@@ -497,12 +497,13 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
   if (direct_code != 0 && direct_method != 0) {
     switch (state) {
     case 0:  // Get the current Method* [sets kArg0]
-      if (direct_code != static_cast<uintptr_t>(-1)) {
-        if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
+      if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64 &&
+          cu->instruction_set != kArm64) {
+        if (direct_code != static_cast<uintptr_t>(-1)) {
           cg->LoadConstant(cg->TargetPtrReg(kInvokeTgt), direct_code);
+        } else {
+          cg->LoadCodeAddress(target_method, type, kInvokeTgt);
         }
-      } else if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
-        cg->LoadCodeAddress(target_method, type, kInvokeTgt);
       }
       if (direct_method != static_cast<uintptr_t>(-1)) {
         cg->LoadConstant(cg->TargetReg(kArg0, kRef), direct_method);
@@ -529,7 +530,8 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
       if (direct_code != 0) {
         if (direct_code != static_cast<uintptr_t>(-1)) {
           cg->LoadConstant(cg->TargetPtrReg(kInvokeTgt), direct_code);
-        } else if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
+        } else if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64 &&
+                   cu->instruction_set != kArm64) {
           CHECK_LT(target_method.dex_method_index, target_method.dex_file->NumMethodIds());
           cg->LoadCodeAddress(target_method, type, kInvokeTgt);
         }
@@ -1756,14 +1758,13 @@ void Mir2Lir::GenInvokeNoInline(CallInfo* info) {
                                 method_info.DirectCode(), method_info.DirectMethod(), original_type);
   }
   LIR* call_inst;
-  if (cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64) {
-    call_inst = OpReg(kOpBlx, TargetPtrReg(kInvokeTgt));
-  } else {
+  switch (cu_->instruction_set) {
+  case kX86:
+  case kX86_64:
     if (fast_path) {
       if (method_info.DirectCode() == static_cast<uintptr_t>(-1)) {
         // We can have the linker fixup a call relative.
-        call_inst =
-          reinterpret_cast<X86Mir2Lir*>(this)->CallWithLinkerFixup(target_method, info->type);
+        call_inst = CallWithLinkerFixup(target_method, info->type);
       } else {
         call_inst = OpMem(kOpBlx, TargetReg(kArg0, kRef),
                           mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value());
@@ -1771,6 +1772,22 @@ void Mir2Lir::GenInvokeNoInline(CallInfo* info) {
     } else {
       call_inst = GenInvokeNoInlineCall(this, info->type);
     }
+    break;
+  case kArm64:
+    if (fast_path) {
+      if (method_info.DirectCode() == static_cast<uintptr_t>(-1)) {
+        call_inst = CallWithLinkerFixup(target_method, info->type);
+        break;
+      } else {
+        LoadWordDisp(TargetReg(kArg0, kRef),
+                     mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value(),
+                     TargetPtrReg(kInvokeTgt));
+      }
+    }
+    call_inst = OpReg(kOpBlx, TargetPtrReg(kInvokeTgt));
+    break;
+  default:
+    call_inst = OpReg(kOpBlx, TargetPtrReg(kInvokeTgt));
   }
   EndInvoke(info);
   MarkSafepointPC(call_inst);

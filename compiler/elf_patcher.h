@@ -26,6 +26,7 @@
 #include "oat_file.h"
 #include "oat.h"
 #include "os.h"
+#include "patch_writer.h"
 
 namespace art {
 
@@ -86,7 +87,8 @@ class ElfPatcher {
 
   void AddPatch(uintptr_t off);
 
-  void SetPatchLocation(const CompilerDriver::PatchInformation* patch, uint32_t value)
+  void SetPatchLocation(const PatchWriter* patch_writer,
+                        const CompilerDriver::PatchInformation* patch, uint32_t value)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Takes the pointer into the oat_file_ and get the pointer in to the ElfFile.

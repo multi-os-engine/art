@@ -250,6 +250,17 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
                          uintptr_t direct_code, uintptr_t direct_method, InvokeType type,
                          bool skip_this) OVERRIDE;
 
+  // Methods to insert code which need fixing by the linker.
+  void LoadMethodAddress(const MethodReference& target_method, InvokeType type,
+                         SpecialTargetRegister symbolic_reg) OVERRIDE;
+  void LoadClassType(const DexFile& dex_file, uint32_t type_idx,
+                     SpecialTargetRegister symbolic_reg) OVERRIDE;
+
+  LIR* CallWithLinkerFixup(const MethodReference& target_method, InvokeType type);
+
+  // Overridden to pass arm64-specific entries to the linker.
+  void InstallLiteralPools();
+
   bool WideGPRsAreAliases() OVERRIDE {
     return true;  // 64b architecture.
   }
@@ -262,6 +273,15 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
   LIR* InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) OVERRIDE;
 
  private:
+  // movz/movk instructions (used to load method addresses) that need to be patched at link time.
+  GrowableArray<LIR*> method_address_insns_;
+
+  // movz/movk instructions (used to load class types) that need to be patched at link time.
+  GrowableArray<LIR*> class_type_address_insns_;
+
+  // bl instructions that need to be patched at link time.
+  GrowableArray<LIR*> call_method_insns_;
+
   /**
    * @brief Given register xNN (dNN), returns register wNN (sNN).
    * @param reg #RegStorage containing a Solo64 input register (e.g. @c x1 or @c d2).

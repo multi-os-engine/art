@@ -582,7 +582,10 @@ RegisterClass Arm64Mir2Lir::RegClassForFieldLoadStore(OpSize size, bool is_volat
 }
 
 Arm64Mir2Lir::Arm64Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
-    : Mir2Lir(cu, mir_graph, arena) {
+    : Mir2Lir(cu, mir_graph, arena),
+      method_address_insns_(arena, 100, kGrowableArrayMisc),
+      class_type_address_insns_(arena, 100, kGrowableArrayMisc),
+      call_method_insns_(arena, 100, kGrowableArrayMisc) {
   // Sanity check - make sure encoding map lines up.
   for (int i = 0; i < kA64Last; i++) {
     if (UNWIDE(Arm64Mir2Lir::EncodingMap[i].opcode) != i) {
@@ -789,6 +792,108 @@ const char* Arm64Mir2Lir::GetTargetInstFmt(int opcode) {
   return Arm64Mir2Lir::EncodingMap[UNWIDE(opcode)].fmt;
 }
 
+void Arm64Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeType type,
+                                     SpecialTargetRegister symbolic_reg) {
+  // Generate a pair (movz, movk) of instructions and leave the fixup to the linker.
+  int target_method_idx = target_method.dex_method_index;
+  const DexFile* target_dex_file = target_method.dex_file;
+  const DexFile::MethodId& target_method_id = target_dex_file->GetMethodId(target_method_idx);
+  uintptr_t target_method_id_ptr = reinterpret_cast<uintptr_t>(&target_method_id);
+  int low_halfword = static_cast<int>(target_method_id_ptr & 0xffff);
+  int high_halfword = static_cast<int>((target_method_id_ptr >> 16) & 0xffff);
+
+  LIR* movz = RawLIR(current_dalvik_offset_, kA64MovzPatch2rd,
+                     TargetReg(symbolic_reg, kNotWide).GetReg(), low_halfword, target_method_idx,
+                     WrapPointer(const_cast<DexFile*>(target_dex_file)), type);
+  AppendLIR(movz);
+  NewLIR3(kA64Movk3rdM, TargetReg(symbolic_reg, kNotWide).GetReg(), high_halfword, /* shift */ 1);
+
+  // TODO(Arm64): temporary hack to keep load hoisting from inserting instructions between movz and
+  //   movk. (movz will be treated as a barrier itself, as it is marked as a label in the fixup.)
+  GenBarrier();
+
+  method_address_insns_.Insert(movz);
+}
+
+void Arm64Mir2Lir::LoadClassType(const DexFile& dex_file, uint32_t type_idx,
+                                 SpecialTargetRegister symbolic_reg) {
+  // Generate a pair (movz, movk) of instructions and leave the fixup to the linker.
+  const DexFile::TypeId& id = dex_file.GetTypeId(type_idx);
+  uintptr_t ptr = reinterpret_cast<uintptr_t>(&id);
+  int low_halfword = static_cast<int>(ptr & 0xffff);
+  int high_halfword = static_cast<int>((ptr >> 16) & 0xffff);
+
+  LIR* movz = RawLIR(current_dalvik_offset_, kA64MovzPatch2rd,
+                     TargetReg(symbolic_reg, kNotWide).GetReg(), low_halfword, type_idx,
+                     WrapPointer(const_cast<DexFile*>(&dex_file)));
+  AppendLIR(movz);
+  NewLIR3(kA64Movk3rdM, TargetReg(symbolic_reg, kNotWide).GetReg(), high_halfword, /* shift */ 1);
+
+  // TODO(Arm64): temporary hack to keep load hoisting from inserting instructions between movz and
+  //   movk. (movz will be treated as a barrier itself, as it is marked as a label in the fixup.)
+  GenBarrier();
+
+  class_type_address_insns_.Insert(movz);
+}
+
+LIR* Arm64Mir2Lir::CallWithLinkerFixup(const MethodReference& target_method, InvokeType type) {
+  int target_method_idx = target_method.dex_method_index;
+  const DexFile* target_dex_file = target_method.dex_file;
+  const DexFile::MethodId& target_method_id = target_dex_file->GetMethodId(target_method_idx);
+  uintptr_t target_method_id_ptr = reinterpret_cast<uintptr_t>(&target_method_id);
+
+  // Generate a bl instruction and leave the fixup to the linker.
+  LIR *call = RawLIR(current_dalvik_offset_, kA64BlPatch1t, static_cast<int>(target_method_id_ptr),
+                     target_method_idx, WrapPointer(const_cast<DexFile*>(target_dex_file)), type);
+  AppendLIR(call);
+  call_method_insns_.Insert(call);
+  return call;
+}
+
+void Arm64Mir2Lir::InstallLiteralPools() {
+  // Pass the list of movz/movk to the linker so that they can be fixed at link-time.
+  for (uint32_t i = 0; i < method_address_insns_.Size(); i++) {
+    LIR* p = method_address_insns_.Get(i);
+    DCHECK_EQ(p->opcode, kA64MovzPatch2rd);
+    uint32_t target_method_idx = p->operands[2];
+    const DexFile* target_dex_file =
+      reinterpret_cast<const DexFile*>(UnwrapPointer(p->operands[3]));
+    cu_->compiler_driver->AddMethodPatch(cu_->dex_file, cu_->class_def_idx,
+                                         cu_->method_idx, cu_->invoke_type,
+                                         target_method_idx, target_dex_file,
+                                         static_cast<InvokeType>(p->operands[4]),
+                                         p->offset);
+  }
+
+  // Pass the list of movz/movk to the linker so that they can be fixed at link-time.
+  for (uint32_t i = 0; i < class_type_address_insns_.Size(); i++) {
+    LIR* p = class_type_address_insns_.Get(i);
+    DCHECK_EQ(p->opcode, kA64MovzPatch2rd);
+    const DexFile* class_dex_file =
+      reinterpret_cast<const DexFile*>(UnwrapPointer(p->operands[3]));
+    uint32_t target_method_idx = p->operands[2];
+    cu_->compiler_driver->AddClassPatch(cu_->dex_file, cu_->class_def_idx,
+                                        cu_->method_idx, target_method_idx,
+                                        class_dex_file, p->offset);
+  }
+
+  // Pass the list of bl calls to the linker so that they can be fixed at link-time.
+  for (uint32_t i = 0; i < call_method_insns_.Size(); i++) {
+    LIR* p = call_method_insns_.Get(i);
+    DCHECK_EQ(p->opcode, kA64BlPatch1t);
+    uint32_t target_method_idx = p->operands[1];
+    const DexFile* target_dex_file =
+      reinterpret_cast<const DexFile*>(UnwrapPointer(p->operands[2]));
+    cu_->compiler_driver->AddRelativeCodePatch(cu_->dex_file, cu_->class_def_idx,
+                                               cu_->method_idx, cu_->invoke_type,
+                                               target_method_idx, target_dex_file,
+                                               static_cast<InvokeType>(p->operands[3]),
+                                               p->offset, /* offset */ 0);
+  }
+
+  Mir2Lir::InstallLiteralPools();
+}
+
 RegStorage Arm64Mir2Lir::InToRegStorageArm64Mapper::GetNextReg(bool is_double_or_float,
                                                                bool is_wide,
                                                                bool is_ref) {
@@ -854,7 +959,6 @@ void Arm64Mir2Lir::InToRegStorageMapping::Initialize(RegLocation* arg_locs, int 
   }
   initialized_ = true;
 }
-
 
 // Deprecate.  Use the new mechanism.
 // TODO(Arm64): reuse info in QuickArgumentVisitor?

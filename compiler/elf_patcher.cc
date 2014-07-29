@@ -34,6 +34,7 @@
 #include "oat.h"
 #include "os.h"
 #include "utils.h"
+#include "patch_writer.h"
 
 namespace art {
 
@@ -132,7 +133,8 @@ uint32_t* ElfPatcher::GetPatchLocation(uintptr_t patch_ptr) {
   return reinterpret_cast<uint32_t*>(ret);
 }
 
-void ElfPatcher::SetPatchLocation(const CompilerDriver::PatchInformation* patch, uint32_t value) {
+void ElfPatcher::SetPatchLocation(const PatchWriter* patch_writer,
+                                  const CompilerDriver::PatchInformation* patch, uint32_t value) {
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   const void* quick_oat_code = class_linker->GetQuickOatCodeFor(patch->GetDexFile(),
                                                                 patch->GetReferrerClassDefIdx(),
@@ -141,7 +143,9 @@ void ElfPatcher::SetPatchLocation(const CompilerDriver::PatchInformation* patch,
   uint8_t* base = reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(quick_oat_code) & ~0x1);
   uintptr_t patch_ptr = reinterpret_cast<uintptr_t>(base + patch->GetLiteralOffset());
   uint32_t* patch_location = GetPatchLocation(patch_ptr);
-  if (kIsDebugBuild) {
+  if (kIsDebugBuild && compiler_driver_->GetInstructionSet() != kArm64) {
+    // For Arm64 these checks are carried out by the PatchWriter.WritePatch method.
+    // TODO: move the code below into the PatchWriter.WritePatch.
     if (patch->IsCall()) {
       const CompilerDriver::CallPatchInformation* cpatch = patch->AsCall();
       const DexFile::MethodId& id =
@@ -164,10 +168,12 @@ void ElfPatcher::SetPatchLocation(const CompilerDriver::PatchInformation* patch,
           << " value=" << value;
     }
   }
-  *patch_location = value;
+  PatchFormat patch_format = ((patch->IsCall() && patch->AsCall()->IsRelative()) ?
+                              kRelativeCallPatch : kAbsoluteAddressPatch);
+  patch_writer->WritePatch(patch_format, patch_location, value);
   oat_header_->UpdateChecksum(patch_location, sizeof(value));
 
-  if (patch->IsCall() && patch->AsCall()->IsRelative()) {
+  if (patch_format == kRelativeCallPatch) {
     // We never record relative patches.
     return;
   }
@@ -191,6 +197,9 @@ bool ElfPatcher::PatchElf() {
   Thread* self = Thread::Current();
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   const char* old_cause = self->StartAssertNoThreadSuspension("ElfPatcher");
+
+  PatchWriter* patch_writer =
+    PatchWriter::CreatePatchWriter(compiler_driver_->GetInstructionSet());
 
   typedef std::vector<const CompilerDriver::CallPatchInformation*> CallPatches;
   const CallPatches& code_to_patch = compiler_driver_->GetCodeToPatch();
@@ -240,14 +249,15 @@ bool ElfPatcher::PatchElf() {
     } else {
       value = 0;
     }
-    SetPatchLocation(patch, value);
+    SetPatchLocation(patch_writer, patch, value);
   }
 
   const CallPatches& methods_to_patch = compiler_driver_->GetMethodsToPatch();
   for (size_t i = 0; i < methods_to_patch.size(); i++) {
     const CompilerDriver::CallPatchInformation* patch = methods_to_patch[i];
     mirror::ArtMethod* target = GetTargetMethod(patch);
-    SetPatchLocation(patch, PointerToLowMemUInt32(get_image_address_(cb_data_, target)));
+    SetPatchLocation(patch_writer, patch,
+                     PointerToLowMemUInt32(get_image_address_(cb_data_, target)));
   }
 
   const std::vector<const CompilerDriver::TypePatchInformation*>& classes_to_patch =
@@ -255,8 +265,11 @@ bool ElfPatcher::PatchElf() {
   for (size_t i = 0; i < classes_to_patch.size(); i++) {
     const CompilerDriver::TypePatchInformation* patch = classes_to_patch[i];
     mirror::Class* target = GetTargetType(patch);
-    SetPatchLocation(patch, PointerToLowMemUInt32(get_image_address_(cb_data_, target)));
+    SetPatchLocation(patch_writer, patch,
+                     PointerToLowMemUInt32(get_image_address_(cb_data_, target)));
   }
+
+  delete patch_writer;
 
   self->EndAssertNoThreadSuspension(old_cause);
 

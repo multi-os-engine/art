@@ -351,7 +351,7 @@ class X86Mir2Lir : public Mir2Lir {
    * @param type How the method will be invoked.
    * @returns Call instruction
    */
-  virtual LIR * CallWithLinkerFixup(const MethodReference& target_method, InvokeType type);
+  LIR* CallWithLinkerFixup(const MethodReference& target_method, InvokeType type) OVERRIDE;
 
   /*
    * @brief Handle x86 specific literals

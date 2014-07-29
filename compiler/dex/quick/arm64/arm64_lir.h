@@ -119,6 +119,7 @@ enum Arm64ResourceEncodingPos {
 #define IS_SIGNED_IMM14(value) IS_SIGNED_IMM(14, value)
 #define IS_SIGNED_IMM19(value) IS_SIGNED_IMM(19, value)
 #define IS_SIGNED_IMM21(value) IS_SIGNED_IMM(21, value)
+#define IS_SIGNED_IMM26(value) IS_SIGNED_IMM(26, value)
 
 // Quick macro used to define the registers.
 #define A64_REGISTER_CODE_LIST(R) \
@@ -240,10 +241,12 @@ enum ArmOpcode {
   kA64Asr3rrd,       // asr [0001001100] immr[21-16] imms[15-10] rn[9-5] rd[4-0].
   kA64Asr3rrr,       // asr alias of "sbfm arg0, arg1, arg2, {#31/#63}".
   kA64B2ct,          // b.cond [01010100] imm_19[23-5] [0] cond[3-0].
+  kA64Bl1t,          // bl  [100101] offset_26[25-0]
+  kA64BlPatch1t,     // as above, but patched during linking.
   kA64Blr1x,         // blr [1101011000111111000000] rn[9-5] [00000].
   kA64Br1x,          // br  [1101011000011111000000] rn[9-5] [00000].
   kA64Brk1d,         // brk [11010100001] imm_16[20-5] [00000].
-  kA64B1t,           // b   [00010100] offset_26[25-0].
+  kA64B1t,           // b   [000101] offset_26[25-0].
   kA64Cbnz2rt,       // cbnz[00110101] imm_19[23-5] rt[4-0].
   kA64Cbz2rt,        // cbz [00110100] imm_19[23-5] rt[4-0].
   kA64Cmn3rro,       // cmn [s0101011] shift[23-22] [0] rm[20-16] imm_6[15-10] rn[9-5] [11111].
@@ -315,6 +318,7 @@ enum ArmOpcode {
   kA64Movk3rdM,      // mov [010100101] hw[22-21] imm_16[20-5] rd[4-0].
   kA64Movn3rdM,      // mov [000100101] hw[22-21] imm_16[20-5] rd[4-0].
   kA64Movz3rdM,      // mov [011100101] hw[22-21] imm_16[20-5] rd[4-0].
+  kA64MovzPatch2rd,  // as above, but patched during linking (must be followed by movk).
   kA64Mov2rr,        // mov [00101010000] rm[20-16] [000000] [11111] rd[4-0].
   kA64Mvn2rr,        // mov [00101010001] rm[20-16] [000000] [11111] rd[4-0].
   kA64Mul3rrr,       // mul [00011011000] rm[20-16] [011111] rn[9-5] rd[4-0].

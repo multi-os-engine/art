@@ -1266,6 +1266,11 @@ void Mir2Lir::LoadClassType(const DexFile& dex_file, uint32_t type_idx,
   AppendLIR(load_pc_rel);
 }
 
+LIR* Mir2Lir::CallWithLinkerFixup(const MethodReference& target_method, InvokeType type) {
+  LOG(FATAL) << "Unexpected usage of CallWithLinkerFixup for " << cu_->instruction_set;
+  return nullptr;
+}
+
 std::vector<uint8_t>* Mir2Lir::ReturnFrameDescriptionEntry() {
   // Default case is to do nothing.
   return nullptr;
