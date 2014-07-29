@@ -57,7 +57,7 @@ class CopyReferenceFieldsWithReadBarrierVisitor {
       ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // Copy java.lang.ref.Reference.referent which isn't visited in
     // Object::VisitReferences().
-    DCHECK(klass->IsTypeOfReferenceClass());
+    DCHECK(klass->IsReferenceClass());
     this->operator()(ref, mirror::Reference::ReferentOffset(), false);
   }
 
