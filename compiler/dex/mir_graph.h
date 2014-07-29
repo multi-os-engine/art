@@ -297,37 +297,37 @@ struct MIR {
     }
 
     bool IsInvoke() const {
-      return !IsPseudoMirOp(opcode) && ((Instruction::FlagsOf(opcode) & Instruction::kInvoke) == Instruction::kInvoke);
+      return ((Instruction::FlagsOf(opcode) & Instruction::kInvoke) == Instruction::kInvoke);
     }
 
     bool IsStore() const {
-      return !IsPseudoMirOp(opcode) && ((Instruction::FlagsOf(opcode) & Instruction::kStore) == Instruction::kStore);
+      return ((Instruction::FlagsOf(opcode) & Instruction::kStore) == Instruction::kStore);
     }
 
     bool IsLoad() const {
-      return !IsPseudoMirOp(opcode) && ((Instruction::FlagsOf(opcode) & Instruction::kLoad) == Instruction::kLoad);
+      return ((Instruction::FlagsOf(opcode) & Instruction::kLoad) == Instruction::kLoad);
     }
 
     bool IsConditionalBranch() const {
-      return !IsPseudoMirOp(opcode) && (Instruction::FlagsOf(opcode) == (Instruction::kContinue | Instruction::kBranch));
+      return (Instruction::FlagsOf(opcode) == (Instruction::kContinue | Instruction::kBranch));
     }
 
     /**
      * @brief Is the register C component of the decoded instruction a constant?
      */
     bool IsCFieldOrConstant() const {
-      return !IsPseudoMirOp(opcode) && ((Instruction::FlagsOf(opcode) & Instruction::kRegCFieldOrConstant) == Instruction::kRegCFieldOrConstant);
+      return ((Instruction::FlagsOf(opcode) & Instruction::kRegCFieldOrConstant) == Instruction::kRegCFieldOrConstant);
     }
 
     /**
      * @brief Is the register C component of the decoded instruction a constant?
      */
     bool IsBFieldOrConstant() const {
-      return !IsPseudoMirOp(opcode) && ((Instruction::FlagsOf(opcode) & Instruction::kRegBFieldOrConstant) == Instruction::kRegBFieldOrConstant);
+      return ((Instruction::FlagsOf(opcode) & Instruction::kRegBFieldOrConstant) == Instruction::kRegBFieldOrConstant);
     }
 
     bool IsCast() const {
-      return !IsPseudoMirOp(opcode) && ((Instruction::FlagsOf(opcode) & Instruction::kCast) == Instruction::kCast);
+      return ((Instruction::FlagsOf(opcode) & Instruction::kCast) == Instruction::kCast);
     }
 
     /**
@@ -337,11 +337,11 @@ struct MIR {
      *            when crossing such an instruction.
      */
     bool Clobbers() const {
-      return !IsPseudoMirOp(opcode) && ((Instruction::FlagsOf(opcode) & Instruction::kClobber) == Instruction::kClobber);
+      return ((Instruction::FlagsOf(opcode) & Instruction::kClobber) == Instruction::kClobber);
     }
 
     bool IsLinear() const {
-      return !IsPseudoMirOp(opcode) && (Instruction::FlagsOf(opcode) & (Instruction::kAdd | Instruction::kSubtract)) != 0;
+      return (Instruction::FlagsOf(opcode) & (Instruction::kAdd | Instruction::kSubtract)) != 0;
     }
   } dalvikInsn;
 

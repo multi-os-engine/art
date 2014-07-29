@@ -23,6 +23,7 @@
 #include "base/stringprintf.h"
 #include "dex_file-inl.h"
 #include "utils.h"
+#include "../compiler/dex/compiler_enums.h"
 
 namespace art {
 
@@ -384,6 +385,83 @@ std::string Instruction::DumpString(const DexFile* file) const {
 
 std::ostream& operator<<(std::ostream& os, const Instruction::Code& code) {
   return os << Instruction::Name(code);
+}
+
+int Instruction::ExtendedFlagsOf(Code code) {
+  // Calculate new index.
+  int idx = static_cast<int>(code) - kNumPackedOpcodes;
+
+  // Check if it is an extended or not.
+  if (idx < 0) {
+    return kInstructionFlags[code];
+  }
+
+  // For extended, we use a switch.
+  switch (static_cast<int>(code)) {
+    case kMirOpPhi:
+      return kContinue;
+    case kMirOpCopy:
+      return kContinue;
+    case kMirOpFusedCmplFloat:
+      return kContinue | kBranch;
+    case kMirOpFusedCmpgFloat:
+      return kContinue | kBranch;
+    case kMirOpFusedCmplDouble:
+      return kContinue | kBranch;
+    case kMirOpFusedCmpgDouble:
+      return kContinue | kBranch;
+    case kMirOpFusedCmpLong:
+      return kContinue | kBranch;
+    case kMirOpNop:
+      return kContinue;
+    case kMirOpNullCheck:
+      return kContinue | kThrow;
+    case kMirOpRangeCheck:
+      return kContinue | kThrow;
+    case kMirOpDivZeroCheck:
+      return kContinue | kThrow;
+    case kMirOpCheck:
+      return 0;
+    case kMirOpCheckPart2:
+      return 0;
+    case kMirOpSelect:
+      return kContinue;
+    case kMirOpConstVector:
+      return kContinue;
+    case kMirOpMoveVector:
+      return kContinue;
+    case kMirOpPackedMultiply:
+      return kContinue;
+    case kMirOpPackedAddition:
+      return kContinue;
+    case kMirOpPackedSubtract:
+      return kContinue;
+    case kMirOpPackedShiftLeft:
+      return kContinue;
+    case kMirOpPackedSignedShiftRight:
+      return kContinue;
+    case kMirOpPackedUnsignedShiftRight:
+      return kContinue;
+    case kMirOpPackedAnd:
+      return kContinue;
+    case kMirOpPackedOr:
+      return kContinue;
+    case kMirOpPackedXor:
+      return kContinue;
+    case kMirOpPackedAddReduce:
+      return kContinue;
+    case kMirOpPackedReduce:
+      return kContinue;
+    case kMirOpPackedSet:
+      return kContinue;
+    case kMirOpReserveVectorRegisters:
+      return kContinue;
+    case kMirOpReturnVectorRegisters:
+      return kContinue;
+    default:
+      LOG(WARNING) << "ExtendedFlagsOf: Unhandled case: " << static_cast<int> (code);
+      return 0;
+  }
 }
 
 }  // namespace art

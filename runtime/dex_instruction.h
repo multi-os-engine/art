@@ -442,7 +442,7 @@ class Instruction {
 
   // Returns the flags for the given opcode.
   static int FlagsOf(Code opcode) {
-    return kInstructionFlags[opcode];
+    return ExtendedFlagsOf(opcode);
   }
 
   // Return the verify flags for the given opcode.
@@ -565,6 +565,8 @@ class Instruction {
     DCHECK_EQ(inst_data, Fetch16(0));
     return static_cast<uint8_t>(inst_data >> 8);
   }
+
+  static int ExtendedFlagsOf(Code opcode);
 
   static const char* const kInstructionNames[];
   static Format const kInstructionFormats[];
