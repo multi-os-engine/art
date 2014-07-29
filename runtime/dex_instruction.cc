@@ -385,5 +385,4 @@ std::string Instruction::DumpString(const DexFile* file) const {
 std::ostream& operator<<(std::ostream& os, const Instruction::Code& code) {
   return os << Instruction::Name(code);
 }
-
 }  // namespace art
