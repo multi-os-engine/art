@@ -294,7 +294,6 @@ size_t ThreadList::RunCheckpointOnRunnableThreads(Closure* checkpoint_function) 
 
 void ThreadList::SuspendAll() {
   Thread* self = Thread::Current();
-  DCHECK(self != nullptr);
 
   VLOG(threads) << *self << " SuspendAll starting...";
   ATRACE_BEGIN("Suspending mutator threads");
@@ -303,7 +302,7 @@ void ThreadList::SuspendAll() {
   Locks::mutator_lock_->AssertNotHeld(self);
   Locks::thread_list_lock_->AssertNotHeld(self);
   Locks::thread_suspend_count_lock_->AssertNotHeld(self);
-  if (kDebugLocking) {
+  if (kDebugLocking && self != nullptr) {
     CHECK_NE(self->GetState(), kRunnable);
   }
   {
@@ -349,7 +348,6 @@ void ThreadList::SuspendAll() {
 
 void ThreadList::ResumeAll() {
   Thread* self = Thread::Current();
-  DCHECK(self != nullptr);
 
   VLOG(threads) << *self << " ResumeAll starting";
 
