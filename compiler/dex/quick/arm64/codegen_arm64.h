@@ -225,6 +225,13 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
     void UnSpillFPRegs(RegStorage base, int offset, uint32_t reg_mask);
     void SpillFPRegs(RegStorage base, int offset, uint32_t reg_mask);
 
+    // Spill core and FP registers. Returns the SP difference: either spill size, or whole
+    // frame size.
+    int SpillRegs(RegStorage base, uint32_t core_reg_mask, uint32_t fp_reg_mask, int frame_size);
+    // Special version of the above for when the offsets are small enough.
+    int SpillRegsFrameSize(RegStorage base, uint32_t core_reg_mask, uint32_t fp_reg_mask,
+                           int frame_size);
+
     // Required for target - single operation generators.
     LIR* OpUnconditionalBranch(LIR* target);
     LIR* OpCmpBranch(ConditionCode cond, RegStorage src1, RegStorage src2, LIR* target);
