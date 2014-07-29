@@ -43,7 +43,8 @@ GlobalValueNumbering::~GlobalValueNumbering() {
   STLDeleteElements(&lvns_);
 }
 
-LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb) {
+LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb,
+                                                             ScopedArenaAllocator* allocator) {
   if (UNLIKELY(!Good())) {
     return nullptr;
   }
@@ -58,8 +59,11 @@ LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb) {
     last_value_ = kNoValue;  // Make bad.
     return nullptr;
   }
+  if (allocator == nullptr) {
+    allocator = allocator_;
+  }
   DCHECK(work_lvn_.get() == nullptr);
-  work_lvn_.reset(new (allocator_) LocalValueNumbering(this, bb->id));
+  work_lvn_.reset(new (allocator) LocalValueNumbering(this, bb->id, allocator));
   if (bb->block_type == kEntryBlock) {
     if ((cu_->access_flags & kAccStatic) == 0) {
       // If non-static method, mark "this" as non-null
@@ -135,9 +139,14 @@ bool GlobalValueNumbering::FinishBasicBlock(BasicBlock* bb) {
   ++bbs_processed_;
   merge_lvns_.clear();
 
-  std::unique_ptr<const LocalValueNumbering> old_lvn(lvns_[bb->id]);
-  lvns_[bb->id] = work_lvn_.release();
-  return (old_lvn == nullptr) || !old_lvn->Equals(*lvns_[bb->id]);
+  bool change = (lvns_[bb->id] == nullptr) || !lvns_[bb->id]->Equals(*work_lvn_);
+  if (change) {
+    std::unique_ptr<const LocalValueNumbering> old_lvn(lvns_[bb->id]);
+    lvns_[bb->id] = work_lvn_.release();
+  } else {
+    work_lvn_.reset();
+  }
+  return change;
 }
 
 uint16_t GlobalValueNumbering::GetFieldId(const MirFieldInfo& field_info, uint16_t type) {
