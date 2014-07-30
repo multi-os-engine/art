@@ -1451,7 +1451,126 @@ bool Mir2Lir::GenInlinedDoubleCvt(CallInfo* info) {
 }
 
 bool Mir2Lir::GenInlinedArrayCopyCharArray(CallInfo* info) {
-  return false;
+  if (cu_->instruction_set == kMips ||
+      cu_->instruction_set == kX86 ||
+      cu_->instruction_set == kX86_64) {
+    // TODO - add Mips implementation
+    // NOTE - kX86 and kX86_64 have its own overridden version.
+    return false;
+  }
+
+  RegLocation rl_src = info->args[0];
+  RegLocation rl_src_pos = info->args[1];
+  RegLocation rl_dst = info->args[2];
+  RegLocation rl_dst_pos = info->args[3];
+  RegLocation rl_length = info->args[4];
+  // Compile time check, handle exception by non-inline method to reduce related meta-data.
+  if ((rl_src_pos.is_const && (mir_graph_->ConstantValue(rl_src_pos) < 0)) ||
+      (rl_dst_pos.is_const && (mir_graph_->ConstantValue(rl_dst_pos) < 0)) ||
+      (rl_length.is_const && (mir_graph_->ConstantValue(rl_length) < 0))) {
+    return false;
+  }
+
+  ClobberCallerSave();
+  LockCallTemps();  // Using fixed registers
+  RegStorage rs_src = TargetReg(kArg0, kRef);
+  RegStorage rs_dst = TargetReg(kArg1, kRef);
+  LoadValueDirectFixed(rl_src, rs_src);
+  LoadValueDirectFixed(rl_dst, rs_dst);
+
+  // Null check.
+  int opt_flags = info->mir->optimization_flags;
+  LIR* src_check_branch = nullptr;
+  LIR* dst_check_branch = nullptr;
+  if ((opt_flags & MIR_IGNORE_NULL_CHECK) && !(cu_->disable_opt & (1 << kNullCheckElimination))) {
+    src_check_branch = nullptr;  // No null check.
+    dst_check_branch = nullptr;  // No null check.
+  } else {
+    // If the null-check fails its handled by the slow-path to reduce exception related meta-data.
+    if (!cu_->compiler_driver->GetCompilerOptions().GetImplicitNullChecks()) {
+      src_check_branch = OpCmpImmBranch(kCondEq, rs_src, 0, nullptr);
+      dst_check_branch = OpCmpImmBranch(kCondEq, rs_dst, 0, nullptr);
+    }
+  }
+  // Handle potential overlapping in slow-path.
+  LIR* src_dst_same = OpCmpBranch(kCondEq, rs_src , rs_dst, nullptr);
+  // Handle exception or big length in slow-path.
+  RegStorage rs_length = TargetReg(kArg2, kNotWide);
+  LoadValueDirectFixed(rl_length , rs_length);
+  LIR* len_negative = OpCmpImmBranch(kCondLt, rs_length , 0, nullptr);
+  LIR* len_too_big = OpCmpImmBranch(kCondGt, rs_length , 128, nullptr);
+  // Src bounds check.
+  RegStorage rs_pos = TargetReg(kArg3, kNotWide);
+  // Re-use rs_src to fit in limited caller registers for some backends.
+  RegStorage rs_arr_length = TargetReg(kArg0, kNotWide);
+  LoadValueDirectFixed(rl_src_pos , rs_pos);
+  LIR* src_pos_negative = OpCmpImmBranch(kCondLt, rs_pos , 0, nullptr);
+  Load32Disp(rs_src , mirror::Array::LengthOffset().Int32Value(), rs_arr_length);
+  OpRegReg(kOpSub, rs_arr_length, rs_pos);
+  LIR* src_bad_len = OpCmpBranch(kCondLt, rs_arr_length, rs_length, nullptr);
+  // Dst bounds check.
+  LoadValueDirectFixed(rl_dst_pos , rs_pos);
+  LIR* dst_pos_negative = OpCmpImmBranch(kCondLt, rs_pos , 0, nullptr);
+  Load32Disp(rs_dst , mirror::Array::LengthOffset().Int32Value(), rs_arr_length);
+  OpRegReg(kOpSub, rs_arr_length, rs_pos);
+  LIR* dst_bad_len = OpCmpBranch(kCondLt, rs_arr_length, rs_length, nullptr);
+
+  // Everything is checked now.
+  // TODO: Is there a better way to get the reference wide view of the register?
+  // Or should we allow src/dst registers to have different width?
+  // Note: rs_pos and rs_pos_ref hold the same value even if the width is different,
+  // since they are positive.
+  RegStorage rs_pos_ref = TargetReg(kArg3, kRef);
+  OpRegImm(kOpAdd, rs_dst, mirror::Array::DataOffset(2).Int32Value());
+  OpRegReg(kOpAdd, rs_dst, rs_pos_ref);
+  OpRegReg(kOpAdd, rs_dst, rs_pos_ref);
+  // Reload rs_src since it is dirty.
+  LoadValueDirectFixed(rl_src , rs_src);
+  OpRegImm(kOpAdd, rs_src, mirror::Array::DataOffset(2).Int32Value());
+  LoadValueDirectFixed(rl_src_pos , rs_pos);
+  OpRegReg(kOpAdd, rs_src, rs_pos_ref);
+  OpRegReg(kOpAdd, rs_src, rs_pos_ref);
+
+  // Copy the first element if the number of elements to be copied is odd.
+  RegStorage rs_tmp = rs_pos;
+  OpRegRegImm(kOpLsl, rs_length, rs_length, 1);
+  OpRegRegImm(kOpAnd, rs_tmp, rs_length, 2);
+  LIR* jmp_to_begin_loop = OpCmpImmBranch(kCondEq, rs_tmp, 0, nullptr);
+  OpRegImm(kOpSub, rs_length, 2);
+  LoadBaseIndexed(rs_src, rs_length, rs_tmp, 0, kSignedHalf);
+  StoreBaseIndexed(rs_dst, rs_length, rs_tmp, 0, kSignedHalf);
+
+  // Since the remaining number of elements is even, we will copy by two elements at a time.
+  LIR *beginLoop = NewLIR0(kPseudoTargetLabel);
+  LIR* jmp_to_ret = OpCmpImmBranch(kCondEq, rs_length , 0, nullptr);
+  OpRegImm(kOpSub, rs_length, 4);
+  LoadBaseIndexed(rs_src, rs_length, rs_tmp, 0, kSingle);
+  StoreBaseIndexed(rs_dst, rs_length, rs_tmp, 0, kSingle);
+  OpUnconditionalBranch(beginLoop);
+
+  LIR *check_failed = NewLIR0(kPseudoTargetLabel);
+  LIR* launchpad_branch = OpUnconditionalBranch(nullptr);
+  LIR* return_point = NewLIR0(kPseudoTargetLabel);
+
+  if (src_check_branch != nullptr) {
+    src_check_branch->target = check_failed;
+  }
+  if (dst_check_branch != nullptr) {
+    dst_check_branch->target = check_failed;
+  }
+  src_dst_same->target = check_failed;
+  len_negative->target = check_failed;
+  len_too_big->target = check_failed;
+  src_pos_negative->target = check_failed;
+  src_bad_len->target = check_failed;
+  dst_pos_negative->target = check_failed;
+  dst_bad_len->target = check_failed;
+  jmp_to_begin_loop->target = beginLoop;
+  jmp_to_ret->target = return_point;
+
+  AddIntrinsicSlowPath(info, launchpad_branch, return_point);
+
+  return true;
 }
 
 
