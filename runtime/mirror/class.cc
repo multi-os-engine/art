@@ -827,17 +827,9 @@ void Class::PopulateEmbeddedImtAndVTable() SHARED_LOCKS_REQUIRED(Locks::mutator_
   }
 
   table = GetVTableDuringLinking();
-  CHECK(table != nullptr) << PrettyClass(this);
-  SetEmbeddedVTableLength(table->GetLength());
+  CHECK(table != nullptr);
   for (int32_t i = 0; i < table->GetLength(); i++) {
     SetEmbeddedVTableEntry(i, table->Get(i));
-  }
-
-  SetImTable(nullptr);
-  // Keep java.lang.Object class's vtable around for since it's easier
-  // to be reused by array classes during their linking.
-  if (!IsObjectClass()) {
-    SetVTable(nullptr);
   }
 }
 

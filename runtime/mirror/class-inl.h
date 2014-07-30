@@ -161,37 +161,6 @@ inline void Class::SetEmbeddedImTableEntry(uint32_t i, ArtMethod* method) {
   CHECK(method == GetImTable()->Get(i));
 }
 
-inline bool Class::HasVTable() {
-  return (GetVTable() != nullptr) || ShouldHaveEmbeddedImtAndVTable();
-}
-
-inline int32_t Class::GetVTableLength() {
-  if (ShouldHaveEmbeddedImtAndVTable()) {
-    return GetEmbeddedVTableLength();
-  }
-  return (GetVTable() != nullptr) ? GetVTable()->GetLength() : 0;
-}
-
-inline ArtMethod* Class::GetVTableEntry(uint32_t i) {
-  if (ShouldHaveEmbeddedImtAndVTable()) {
-    return GetEmbeddedVTableEntry(i);
-  }
-  return (GetVTable() != nullptr) ? GetVTable()->Get(i) : nullptr;
-}
-
-inline int32_t Class::GetEmbeddedVTableLength() {
-  return GetField32(EmbeddedVTableLengthOffset());
-}
-
-inline void Class::SetEmbeddedVTableLength(int32_t len) {
-  SetField32<false>(EmbeddedVTableLengthOffset(), len);
-}
-
-inline ArtMethod* Class::GetEmbeddedVTableEntry(uint32_t i) {
-  uint32_t offset = EmbeddedVTableOffset().Uint32Value() + i * sizeof(VTableEntry);
-  return GetFieldObject<mirror::ArtMethod>(MemberOffset(offset));
-}
-
 inline void Class::SetEmbeddedVTableEntry(uint32_t i, ArtMethod* method) {
   uint32_t offset = EmbeddedVTableOffset().Uint32Value() + i * sizeof(VTableEntry);
   SetFieldObject<false>(MemberOffset(offset), method);
@@ -371,12 +340,12 @@ inline ArtMethod* Class::FindVirtualMethodForVirtual(ArtMethod* method) {
   DCHECK(!method->GetDeclaringClass()->IsInterface() || method->IsMiranda());
   // The argument method may from a super class.
   // Use the index to a potentially overridden one for this instance's class.
-  return GetVTableEntry(method->GetMethodIndex());
+  return GetVTable()->Get(method->GetMethodIndex());
 }
 
 inline ArtMethod* Class::FindVirtualMethodForSuper(ArtMethod* method) {
   DCHECK(!method->GetDeclaringClass()->IsInterface());
-  return GetSuperClass()->GetVTableEntry(method->GetMethodIndex());
+  return GetSuperClass()->GetVTable()->Get(method->GetMethodIndex());
 }
 
 inline ArtMethod* Class::FindVirtualMethodForVirtualOrInterface(ArtMethod* method) {
@@ -565,19 +534,13 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
   if (has_embedded_tables) {
     uint32_t embedded_imt_size = kImtSize * sizeof(ImTableEntry);
     uint32_t embedded_vtable_size = num_vtable_entries * sizeof(VTableEntry);
-    size += embedded_imt_size +
-            sizeof(int32_t) /* vtable len */ +
-            embedded_vtable_size;
+    size += embedded_imt_size + embedded_vtable_size;
   }
   // Space used by reference statics.
   size +=  num_ref_static_fields * sizeof(HeapReference<Object>);
   // Possible pad for alignment.
-  if (((size & 7) != 0) && (num_64bit_static_fields > 0)) {
+  if (((size & 7) != 0) && (num_64bit_static_fields > 0) && (num_32bit_static_fields == 0)) {
     size += sizeof(uint32_t);
-    if (num_32bit_static_fields != 0) {
-      // Shuffle one 32 bit static field forward.
-      num_32bit_static_fields--;
-    }
   }
   // Space used for primitive static fields.
   size += (num_32bit_static_fields * sizeof(uint32_t)) +
@@ -611,10 +574,7 @@ inline void Class::VisitEmbeddedImtAndVTable(const Visitor& visitor) {
     pos += sizeof(ImTableEntry);
   }
 
-  // Skip vtable length.
-  pos += sizeof(int32_t);
-
-  count = GetEmbeddedVTableLength();
+  count = ((GetVTable() != NULL) ? GetVTable()->GetLength() : 0);
   for (size_t i = 0; i < count; ++i) {
     MemberOffset offset = MemberOffset(pos);
     visitor(this, offset, true);
