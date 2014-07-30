@@ -365,6 +365,9 @@ define define-test-art-run-test
   else
     ifeq ($(2),target)
       uc_host_or_target := TARGET
+      ifeq ($(ART_TEST_RUN_TEST_ALWAYS_CLEAN),true)
+        run_test_options += --always-clean
+      endif
       prereq_rule := test-art-target-sync
     else
       $$(error found $(2) expected host or target)
