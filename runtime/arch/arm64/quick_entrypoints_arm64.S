@@ -1755,7 +1755,7 @@ ENTRY art_quick_string_compareto
 
     // TODO: Tune this value.
     // Check for long string, do memcmp16 for them.
-    cmp w3, #28  // Constant from arm32.
+    cmp w3, #30  // Constant from arm32.
     bgt .Ldo_memcmp16
 
     /*
