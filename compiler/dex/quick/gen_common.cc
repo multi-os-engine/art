@@ -722,7 +722,7 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size,
   OpSize load_size = LoadStoreOpSize(is_long_or_double, is_object);
   if (!SLOW_FIELD_PATH && field_info.FastGet()) {
     RegisterClass reg_class = RegClassForFieldLoadStore(load_size, field_info.IsVolatile());
-    DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
+    DCHECK_GT(field_info.FieldOffset().Int32Value(), 0);
     rl_obj = LoadValue(rl_obj, kRefReg);
     GenNullCheck(rl_obj.reg, opt_flags);
     RegLocation rl_result = EvalLoc(rl_dest, reg_class, true);
@@ -768,7 +768,7 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
   OpSize store_size = LoadStoreOpSize(is_long_or_double, is_object);
   if (!SLOW_FIELD_PATH && field_info.FastPut()) {
     RegisterClass reg_class = RegClassForFieldLoadStore(store_size, field_info.IsVolatile());
-    DCHECK_GE(field_info.FieldOffset().Int32Value(), 0);
+    DCHECK_GT(field_info.FieldOffset().Int32Value(), 0);
     rl_obj = LoadValue(rl_obj, kRefReg);
     if (is_long_or_double) {
       rl_src = LoadValueWide(rl_src, reg_class);
