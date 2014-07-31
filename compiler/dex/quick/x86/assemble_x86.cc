@@ -478,7 +478,7 @@ ENCODING_MAP(Cmp, IS_LOAD, 0, 0,
   { kX86MovsxdRM, kRegMem,      IS_LOAD | IS_TERTIARY_OP | REG_DEF0 | REG_USE1,  { REX_W, 0, 0x63, 0, 0, 0, 0, 0, false }, "MovsxdRM", "!0r,[!1r+!2d]" },
   { kX86MovsxdRA, kRegArray,    IS_LOAD | IS_QUIN_OP     | REG_DEF0 | REG_USE12, { REX_W, 0, 0x63, 0, 0, 0, 0, 0, false }, "MovsxdRA", "!0r,[!1r+!2r<<!3d+!4d]" },
 
-  { kX86Set8R, kRegCond,              IS_BINARY_OP   | REG_DEF0  | USES_CCODES, { 0, 0, 0x0F, 0x90, 0, 0, 0, 0, true }, "Set8R", "!1c !0r" },
+  { kX86Set8R, kRegCond,   IS_BINARY_OP | REG_USE0   | REG_DEF0  | USES_CCODES, { 0, 0, 0x0F, 0x90, 0, 0, 0, 0, true }, "Set8R", "!1c !0r" },
   { kX86Set8M, kMemCond,   IS_STORE | IS_TERTIARY_OP | REG_USE0  | USES_CCODES, { 0, 0, 0x0F, 0x90, 0, 0, 0, 0, false }, "Set8M", "!2c [!0r+!1d]" },
   { kX86Set8A, kArrayCond, IS_STORE | IS_QUIN_OP     | REG_USE01 | USES_CCODES, { 0, 0, 0x0F, 0x90, 0, 0, 0, 0, false }, "Set8A", "!4c [!0r+!1r<<!2d+!3d]" },
 
