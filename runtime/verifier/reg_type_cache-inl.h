@@ -40,6 +40,10 @@ inline const ConstantType& RegTypeCache::FromCat1Const(int32_t value, bool preci
   return FromCat1NonSmallConstant(value, precise);
 }
 
+inline void RegTypeCache::AddEntry(RegType* new_entry) {
+  entries_.push_back(new_entry);
+}
+
 }  // namespace verifier
 }  // namespace art
 #endif  // ART_RUNTIME_VERIFIER_REG_TYPE_CACHE_INL_H_
