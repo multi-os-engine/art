@@ -27,6 +27,10 @@
 
 namespace art {
 
+// Adapter for use of ScopedArenaAllocator in STL containers.
+template <typename T>
+class ScopedArenaAllocatorAdapter;
+
 template <typename T>
 using ScopedArenaDeque = std::deque<T, ScopedArenaAllocatorAdapter<T>>;
 

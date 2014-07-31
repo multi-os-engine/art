@@ -20,6 +20,7 @@
 #include "base/logging.h"
 #include "base/macros.h"
 #include "utils/arena_allocator.h"
+#include "utils/arena_containers.h"  // For ArenaAllocatorAdapterKind.
 #include "utils/debug_stack.h"
 #include "globals.h"
 
@@ -121,7 +122,7 @@ class ScopedArenaAllocator
   }
 
   // ScopedArenaAllocatorAdapter is incomplete here, we need to define this later.
-  ScopedArenaAllocatorAdapter<void> Adapter();
+  ScopedArenaAllocatorAdapter<void> Adapter(ArenaAllocKind kind = kArenaAllocSTL);
 
   // Allow a delete-expression to destroy but not deallocate allocators created by Create().
   static void operator delete(void* ptr) { UNUSED(ptr); }
@@ -140,7 +141,8 @@ class ScopedArenaAllocator
 
 template <>
 class ScopedArenaAllocatorAdapter<void>
-    : private DebugStackReference, private DebugStackIndirectTopRef {
+    : private DebugStackReference, private DebugStackIndirectTopRef,
+      private ArenaAllocatorAdapterKind {
  public:
   typedef void value_type;
   typedef void* pointer;
@@ -151,15 +153,18 @@ class ScopedArenaAllocatorAdapter<void>
     typedef ScopedArenaAllocatorAdapter<U> other;
   };
 
-  explicit ScopedArenaAllocatorAdapter(ScopedArenaAllocator* arena_allocator)
+  explicit ScopedArenaAllocatorAdapter(ScopedArenaAllocator* arena_allocator,
+                                       ArenaAllocKind kind = kArenaAllocSTL)
       : DebugStackReference(arena_allocator),
         DebugStackIndirectTopRef(arena_allocator),
+        ArenaAllocatorAdapterKind(kind),
         arena_stack_(arena_allocator->arena_stack_) {
   }
   template <typename U>
   ScopedArenaAllocatorAdapter(const ScopedArenaAllocatorAdapter<U>& other)
       : DebugStackReference(other),
         DebugStackIndirectTopRef(other),
+        ArenaAllocatorAdapterKind(other),
         arena_stack_(other.arena_stack_) {
   }
   ScopedArenaAllocatorAdapter(const ScopedArenaAllocatorAdapter& other) = default;
@@ -173,9 +178,10 @@ class ScopedArenaAllocatorAdapter<void>
   friend class ScopedArenaAllocatorAdapter;
 };
 
-// Adapter for use of ScopedArenaAllocator in STL containers.
 template <typename T>
-class ScopedArenaAllocatorAdapter : private DebugStackReference, private DebugStackIndirectTopRef {
+class ScopedArenaAllocatorAdapter
+    : private DebugStackReference, private DebugStackIndirectTopRef,
+      private ArenaAllocatorAdapterKind {
  public:
   typedef T value_type;
   typedef T* pointer;
@@ -190,15 +196,18 @@ class ScopedArenaAllocatorAdapter : private DebugStackReference, private DebugSt
     typedef ScopedArenaAllocatorAdapter<U> other;
   };
 
-  explicit ScopedArenaAllocatorAdapter(ScopedArenaAllocator* arena_allocator)
+  explicit ScopedArenaAllocatorAdapter(ScopedArenaAllocator* arena_allocator,
+                                       ArenaAllocKind kind = kArenaAllocSTL)
       : DebugStackReference(arena_allocator),
         DebugStackIndirectTopRef(arena_allocator),
+        ArenaAllocatorAdapterKind(kind),
         arena_stack_(arena_allocator->arena_stack_) {
   }
   template <typename U>
   ScopedArenaAllocatorAdapter(const ScopedArenaAllocatorAdapter<U>& other)
       : DebugStackReference(other),
         DebugStackIndirectTopRef(other),
+        ArenaAllocatorAdapterKind(other),
         arena_stack_(other.arena_stack_) {
   }
   ScopedArenaAllocatorAdapter(const ScopedArenaAllocatorAdapter& other) = default;
@@ -215,7 +224,8 @@ class ScopedArenaAllocatorAdapter : private DebugStackReference, private DebugSt
   pointer allocate(size_type n, ScopedArenaAllocatorAdapter<void>::pointer hint = nullptr) {
     DCHECK_LE(n, max_size());
     DebugStackIndirectTopRef::CheckTop();
-    return reinterpret_cast<T*>(arena_stack_->Alloc(n * sizeof(T), kArenaAllocSTL));
+    return reinterpret_cast<T*>(arena_stack_->Alloc(n * sizeof(T),
+                                                    ArenaAllocatorAdapterKind::Kind()));
   }
   void deallocate(pointer p, size_type n) {
     DebugStackIndirectTopRef::CheckTop();
@@ -253,8 +263,8 @@ inline bool operator!=(const ScopedArenaAllocatorAdapter<T>& lhs,
   return !(lhs == rhs);
 }
 
-inline ScopedArenaAllocatorAdapter<void> ScopedArenaAllocator::Adapter() {
-  return ScopedArenaAllocatorAdapter<void>(this);
+inline ScopedArenaAllocatorAdapter<void> ScopedArenaAllocator::Adapter(ArenaAllocKind kind) {
+  return ScopedArenaAllocatorAdapter<void>(this, kind);
 }
 
 }  // namespace art
