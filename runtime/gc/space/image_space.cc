@@ -357,7 +357,7 @@ ImageSpace* ImageSpace::Create(const char* image_location,
       LOG(INFO) << "Using image file " << image_filename->c_str() << " for image location "
                 << image_location;
       space = ImageSpace::Init(image_filename->c_str(), image_location,
-                               !is_system, &error_msg);
+                               !(is_system || relocated_version_used), &error_msg);
     }
     if (space != nullptr) {
       return space;
