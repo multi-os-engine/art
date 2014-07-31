@@ -35,6 +35,7 @@
 #include "safe_map.h"
 #include "scoped_thread_state_change.h"
 #include "handle_scope-inl.h"
+#include "utils/scoped_arena_containers.h"
 #include "verifier/method_verifier.h"
 
 namespace art {
@@ -327,7 +328,10 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
 class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
  public:
   InitCodeMethodVisitor(OatWriter* writer, size_t offset)
-    : OatDexMethodVisitor(writer, offset) {
+    : OatDexMethodVisitor(writer, offset),
+      arena_stack_(writer->compiler_driver_->GetArenaPool()),
+      allocator_(&arena_stack_),
+      dedupe_map_(CodeOffsetsKeyComparator(), allocator_.Adapter()) {
   }
 
   bool VisitMethod(size_t class_def_method_index, const ClassDataItemIterator& it)
@@ -478,14 +482,19 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
  private:
   // Deduplication is already done on a pointer basis by the compiler driver,
   // so we can simply compare the pointers to find out if things are duplicated.
-  SafeMap<const CompiledMethod*, uint32_t, CodeOffsetsKeyComparator> dedupe_map_;
+  ArenaStack arena_stack_;
+  ScopedArenaAllocator allocator_;
+  ScopedArenaSafeMap<const CompiledMethod*, uint32_t, CodeOffsetsKeyComparator> dedupe_map_;
 };
 
 template <typename DataAccess>
 class OatWriter::InitMapMethodVisitor : public OatDexMethodVisitor {
  public:
   InitMapMethodVisitor(OatWriter* writer, size_t offset)
-    : OatDexMethodVisitor(writer, offset) {
+    : OatDexMethodVisitor(writer, offset),
+      arena_stack_(writer->compiler_driver_->GetArenaPool()),
+      allocator_(&arena_stack_),
+      dedupe_map_(std::less<const std::vector<uint8_t>*>(), allocator_.Adapter()) {
   }
 
   bool VisitMethod(size_t class_def_method_index, const ClassDataItemIterator& it)
@@ -519,7 +528,9 @@ class OatWriter::InitMapMethodVisitor : public OatDexMethodVisitor {
  private:
   // Deduplication is already done on a pointer basis by the compiler driver,
   // so we can simply compare the pointers to find out if things are duplicated.
-  SafeMap<const std::vector<uint8_t>*, uint32_t> dedupe_map_;
+  ArenaStack arena_stack_;
+  ScopedArenaAllocator allocator_;
+  ScopedArenaSafeMap<const std::vector<uint8_t>*, uint32_t> dedupe_map_;
 };
 
 class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {

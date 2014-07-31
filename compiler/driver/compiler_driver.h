@@ -367,7 +367,7 @@ class CompilerDriver {
     support_boot_image_fixup_ = support_boot_image_fixup;
   }
 
-  ArenaPool* GetArenaPool() {
+  ArenaPool* GetArenaPool() const {
     return &arena_pool_;
   }
 
@@ -755,7 +755,7 @@ class CompilerDriver {
   pthread_key_t tls_key_;
 
   // Arena pool used by the compiler.
-  ArenaPool arena_pool_;
+  mutable ArenaPool arena_pool_;  // Mutable: not really a part of the driver's state.
 
   typedef void (*CompilerEnableAutoElfLoadingFn)(CompilerDriver& driver);
   CompilerEnableAutoElfLoadingFn compiler_enable_auto_elf_loading_;
