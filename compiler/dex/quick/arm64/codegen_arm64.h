@@ -176,6 +176,10 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
     bool GenInlinedMinMax(CallInfo* info, bool is_min, bool is_long);
     bool GenInlinedMinMaxFP(CallInfo* info, bool is_min, bool is_double);
     bool GenInlinedSqrt(CallInfo* info);
+    bool GenInlinedCeil(CallInfo* info);
+    bool GenInlinedFloor(CallInfo* info);
+    bool GenInlinedRint(CallInfo* info);
+    bool GenInlinedRound(CallInfo* info, bool is_double);
     bool GenInlinedPeek(CallInfo* info, OpSize size);
     bool GenInlinedPoke(CallInfo* info, OpSize size);
     bool GenInlinedAbsLong(CallInfo* info);
@@ -374,6 +378,8 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
       return reg;
     }
 
+    int32_t EncodeImmSingle(uint32_t bits);
+    int32_t EncodeImmDouble(uint64_t bits);
     LIR* LoadFPConstantValue(RegStorage r_dest, int32_t value);
     LIR* LoadFPConstantValueWide(RegStorage r_dest, int64_t value);
     void ReplaceFixup(LIR* prev_lir, LIR* orig_lir, LIR* new_lir);
