@@ -97,9 +97,10 @@ TEST_F(ImageTest, WriteRead) {
 
   const uintptr_t requested_image_base = ART_BASE_ADDRESS;
   {
-    ImageWriter writer(*compiler_driver_.get());
-    bool success_image = writer.Write(image_file.GetFilename(), requested_image_base,
-                                      dup_oat->GetPath(), dup_oat->GetPath());
+    ImageWriter writer(*compiler_driver_, requested_image_base);
+    bool success_image =
+        writer.PrepareImageAddressSpace() &&
+        writer.Write(image_file.GetFilename(), dup_oat->GetPath(), dup_oat->GetPath());
     ASSERT_TRUE(success_image);
     bool success_fixup = ElfFixup::Fixup(dup_oat.get(), writer.GetOatDataBegin());
     ASSERT_TRUE(success_fixup);

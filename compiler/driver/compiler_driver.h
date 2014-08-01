@@ -169,6 +169,8 @@ class CompilerDriver {
 
   CompiledMethod* GetCompiledMethod(MethodReference ref) const
       LOCKS_EXCLUDED(compiled_methods_lock_);
+  size_t GetNonRelativeLinkerPatchCount() const
+      LOCKS_EXCLUDED(compiled_methods_lock_);
 
   void AddRequiresConstructorBarrier(Thread* self, const DexFile* dex_file,
                                      uint16_t class_def_index);
@@ -314,6 +316,7 @@ class CompilerDriver {
   bool IsSafeCast(const DexCompilationUnit* mUnit, uint32_t dex_pc);
 
   // Record patch information for later fix up.
+  // TODO: Migrate to CompiledMethod (see LinkerPatch in compiled_method.h).
   void AddCodePatch(const DexFile* dex_file,
                     uint16_t referrer_class_def_idx,
                     uint32_t referrer_method_idx,
@@ -322,16 +325,6 @@ class CompilerDriver {
                     const DexFile* target_dex_file,
                     InvokeType target_invoke_type,
                     size_t literal_offset)
-      LOCKS_EXCLUDED(compiled_methods_lock_);
-  void AddRelativeCodePatch(const DexFile* dex_file,
-                            uint16_t referrer_class_def_idx,
-                            uint32_t referrer_method_idx,
-                            InvokeType referrer_invoke_type,
-                            uint32_t target_method_idx,
-                            const DexFile* target_dex_file,
-                            InvokeType target_invoke_type,
-                            size_t literal_offset,
-                            int32_t pc_relative_offset)
       LOCKS_EXCLUDED(compiled_methods_lock_);
   void AddMethodPatch(const DexFile* dex_file,
                       uint16_t referrer_class_def_idx,
@@ -708,6 +701,7 @@ class CompilerDriver {
   // All method references that this compiler has compiled.
   mutable Mutex compiled_methods_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   MethodTable compiled_methods_ GUARDED_BY(compiled_methods_lock_);
+  size_t non_relative_linker_patch_count_ GUARDED_BY(compiled_methods_lock_);
 
   const bool image_;
 

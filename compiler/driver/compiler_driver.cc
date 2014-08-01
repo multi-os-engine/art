@@ -342,6 +342,8 @@ CompilerDriver::CompilerDriver(const CompilerOptions* compiler_options,
       freezing_constructor_lock_("freezing constructor lock"),
       compiled_classes_lock_("compiled classes lock"),
       compiled_methods_lock_("compiled method lock"),
+      compiled_methods_(),
+      non_relative_linker_patch_count_(0u),
       image_(image),
       image_classes_(image_classes),
       thread_count_(thread_count),
@@ -1338,26 +1340,6 @@ void CompilerDriver::AddCodePatch(const DexFile* dex_file,
                                                     target_invoke_type,
                                                     literal_offset));
 }
-void CompilerDriver::AddRelativeCodePatch(const DexFile* dex_file,
-                                          uint16_t referrer_class_def_idx,
-                                          uint32_t referrer_method_idx,
-                                          InvokeType referrer_invoke_type,
-                                          uint32_t target_method_idx,
-                                          const DexFile* target_dex_file,
-                                          InvokeType target_invoke_type,
-                                          size_t literal_offset,
-                                          int32_t pc_relative_offset) {
-  MutexLock mu(Thread::Current(), compiled_methods_lock_);
-  code_to_patch_.push_back(new RelativeCallPatchInformation(dex_file,
-                                                            referrer_class_def_idx,
-                                                            referrer_method_idx,
-                                                            referrer_invoke_type,
-                                                            target_method_idx,
-                                                            target_dex_file,
-                                                            target_invoke_type,
-                                                            literal_offset,
-                                                            pc_relative_offset));
-}
 void CompilerDriver::AddMethodPatch(const DexFile* dex_file,
                                     uint16_t referrer_class_def_idx,
                                     uint32_t referrer_method_idx,
@@ -2022,11 +2004,19 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
 
   Thread* self = Thread::Current();
   if (compiled_method != NULL) {
+    // Count non-relative linker patches.
+    size_t non_relative_linker_patch_count = 0u;
+    for (const LinkerPatch& patch : compiled_method->GetPatches()) {
+      if (patch.Type() != kLinkerPatchCallRelative) {
+        ++non_relative_linker_patch_count;
+      }
+    }
     MethodReference ref(&dex_file, method_idx);
     DCHECK(GetCompiledMethod(ref) == NULL) << PrettyMethod(method_idx, dex_file);
     {
       MutexLock mu(self, compiled_methods_lock_);
       compiled_methods_.Put(ref, compiled_method);
+      non_relative_linker_patch_count_ += non_relative_linker_patch_count;
     }
     DCHECK(GetCompiledMethod(ref) != NULL) << PrettyMethod(method_idx, dex_file);
   }
@@ -2082,6 +2072,11 @@ CompiledMethod* CompilerDriver::GetCompiledMethod(MethodReference ref) const {
   }
   CHECK(it->second != NULL);
   return it->second;
+}
+
+size_t CompilerDriver::GetNonRelativeLinkerPatchCount() const {
+  MutexLock mu(Thread::Current(), compiled_methods_lock_);
+  return non_relative_linker_patch_count_;
 }
 
 void CompilerDriver::AddRequiresConstructorBarrier(Thread* self, const DexFile* dex_file,
