@@ -141,36 +141,9 @@ void ElfPatcher::SetPatchLocation(const CompilerDriver::PatchInformation* patch,
   uint8_t* base = reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(quick_oat_code) & ~0x1);
   uintptr_t patch_ptr = reinterpret_cast<uintptr_t>(base + patch->GetLiteralOffset());
   uint32_t* patch_location = GetPatchLocation(patch_ptr);
-  if (kIsDebugBuild) {
-    if (patch->IsCall()) {
-      const CompilerDriver::CallPatchInformation* cpatch = patch->AsCall();
-      const DexFile::MethodId& id =
-          cpatch->GetTargetDexFile()->GetMethodId(cpatch->GetTargetMethodIdx());
-      uint32_t expected = reinterpret_cast<uintptr_t>(&id) & 0xFFFFFFFF;
-      uint32_t actual = *patch_location;
-      CHECK(actual == expected || actual == value) << "Patching call failed: " << std::hex
-          << " actual=" << actual
-          << " expected=" << expected
-          << " value=" << value;
-    }
-    if (patch->IsType()) {
-      const CompilerDriver::TypePatchInformation* tpatch = patch->AsType();
-      const DexFile::TypeId& id = tpatch->GetTargetTypeDexFile().GetTypeId(tpatch->GetTargetTypeIdx());
-      uint32_t expected = reinterpret_cast<uintptr_t>(&id) & 0xFFFFFFFF;
-      uint32_t actual = *patch_location;
-      CHECK(actual == expected || actual == value) << "Patching type failed: " << std::hex
-          << " actual=" << actual
-          << " expected=" << expected
-          << " value=" << value;
-    }
-  }
-  *patch_location = value;
-  oat_header_->UpdateChecksum(patch_location, sizeof(value));
+  CHECK_EQ(*patch_location, value);
 
-  if (patch->IsCall() && patch->AsCall()->IsRelative()) {
-    // We never record relative patches.
-    return;
-  }
+  CHECK(!(patch->IsCall() && patch->AsCall()->IsRelative()));
   uintptr_t loc = patch_ptr - (reinterpret_cast<uintptr_t>(oat_file_->Begin()) +
                                oat_header_->GetExecutableOffset());
   CHECK_GT(patch_ptr, reinterpret_cast<uintptr_t>(oat_file_->Begin()) +
@@ -184,9 +157,7 @@ bool ElfPatcher::PatchElf() {
   // potentially rather large amount of free space where patches might have been
   // placed. We should adjust the ELF file to get rid of this excess space.
   if (write_patches_) {
-    patches_.reserve(compiler_driver_->GetCodeToPatch().size() +
-                     compiler_driver_->GetMethodsToPatch().size() +
-                     compiler_driver_->GetClassesToPatch().size());
+    patches_.reserve(compiler_driver_->GetNonRelativeLinkerPatchCount());
   }
   Thread* self = Thread::Current();
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
@@ -272,7 +243,7 @@ bool ElfPatcher::WriteOutPatchData() {
   if (shdr != nullptr) {
     CHECK_EQ(shdr, elf_file_->FindSectionByType(SHT_OAT_PATCH))
         << "Incorrect type for .oat_patches section";
-    CHECK_LE(patches_.size() * sizeof(uintptr_t), shdr->sh_size)
+    CHECK_EQ(patches_.size() * sizeof(uintptr_t), shdr->sh_size)
         << "We got more patches than anticipated";
     CHECK_LE(reinterpret_cast<uintptr_t>(elf_file_->Begin()) + shdr->sh_offset + shdr->sh_size,
               reinterpret_cast<uintptr_t>(elf_file_->End())) << "section is too large";
@@ -280,12 +251,10 @@ bool ElfPatcher::WriteOutPatchData() {
           shdr->sh_offset + shdr->sh_size <= (shdr + 1)->sh_offset)
         << "Section overlaps onto next section";
     // It's mmap'd so we can just memcpy.
-    memcpy(elf_file_->Begin() + shdr->sh_offset, patches_.data(),
-           patches_.size() * sizeof(uintptr_t));
-    // TODO We should fill in the newly empty space between the last patch and
-    // the start of the next section by moving the following sections down if
-    // possible.
-    shdr->sh_size = patches_.size() * sizeof(uintptr_t);
+    std::sort(patches_.begin(), patches_.end());
+    int cmp = memcmp(elf_file_->Begin() + shdr->sh_offset, patches_.data(),
+                     patches_.size() * sizeof(uintptr_t));
+    CHECK_EQ(cmp, 0);
     return true;
   } else {
     LOG(ERROR) << "Unable to find section header for SHT_OAT_PATCH";
