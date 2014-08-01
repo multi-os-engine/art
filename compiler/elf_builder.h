@@ -356,6 +356,7 @@ class ElfSymtabBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>
 
 class CodeOutput {
  public:
+  virtual void SetCodeOffset(size_t offset) = 0;
   virtual bool Write(OutputStream* out) = 0;
   virtual ~CodeOutput() {}
 };
@@ -868,6 +869,7 @@ class ElfBuilder FINAL {
     }
     std::unique_ptr<BufferedOutputStream> output_stream(
         new BufferedOutputStream(new FileOutputStream(elf_file_)));
+    oat_writer_->SetCodeOffset(oat_data_offset);
     if (!oat_writer_->Write(output_stream.get())) {
       PLOG(ERROR) << "Failed to write .rodata and .text for " << elf_file_->GetPath();
       return false;
