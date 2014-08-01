@@ -144,6 +144,7 @@ void ElfPatcher::SetPatchLocation(const CompilerDriver::PatchInformation* patch,
   if (kIsDebugBuild) {
     if (patch->IsCall()) {
       const CompilerDriver::CallPatchInformation* cpatch = patch->AsCall();
+      CHECK(!cpatch->IsRelative());
       const DexFile::MethodId& id =
           cpatch->GetTargetDexFile()->GetMethodId(cpatch->GetTargetMethodIdx());
       uint32_t expected = reinterpret_cast<uintptr_t>(&id) & 0xFFFFFFFF;
@@ -167,10 +168,7 @@ void ElfPatcher::SetPatchLocation(const CompilerDriver::PatchInformation* patch,
   *patch_location = value;
   oat_header_->UpdateChecksum(patch_location, sizeof(value));
 
-  if (patch->IsCall() && patch->AsCall()->IsRelative()) {
-    // We never record relative patches.
-    return;
-  }
+  CHECK(!(patch->IsCall() && patch->AsCall()->IsRelative()));
   uintptr_t loc = patch_ptr - (reinterpret_cast<uintptr_t>(oat_file_->Begin()) +
                                oat_header_->GetExecutableOffset());
   CHECK_GT(patch_ptr, reinterpret_cast<uintptr_t>(oat_file_->Begin()) +

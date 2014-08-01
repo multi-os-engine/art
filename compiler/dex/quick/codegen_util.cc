@@ -1021,6 +1021,7 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       live_sreg_(0),
       core_vmap_table_(mir_graph->GetArena()->Adapter()),
       fp_vmap_table_(mir_graph->GetArena()->Adapter()),
+      patches_(mir_graph->GetArena()->Adapter()),
       num_core_spills_(0),
       num_fp_spills_(0),
       frame_size_(0),
@@ -1110,7 +1111,8 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
   CompiledMethod* result =
       new CompiledMethod(cu_->compiler_driver, cu_->instruction_set, code_buffer_, frame_size_,
                          core_spill_mask_, fp_spill_mask_, &src_mapping_table_, encoded_mapping_table_,
-                         vmap_encoder.GetData(), native_gc_map_, cfi_info.get());
+                         vmap_encoder.GetData(), native_gc_map_, cfi_info.get(),
+                         ArrayRef<LinkerPatch>(patches_));
   return result;
 }
 

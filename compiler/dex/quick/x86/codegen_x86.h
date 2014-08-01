@@ -341,6 +341,7 @@ class X86Mir2Lir : public Mir2Lir {
 
   void FlushIns(RegLocation* ArgLocs, RegLocation rl_method) OVERRIDE;
 
+  NextCallInsn GetNextSDCallInsn() OVERRIDE;
   int GenDalvikArgsNoRange(CallInfo* info, int call_state, LIR** pcrLabel,
                            NextCallInsn next_call_insn,
                            const MethodReference& target_method,

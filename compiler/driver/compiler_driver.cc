@@ -1338,26 +1338,6 @@ void CompilerDriver::AddCodePatch(const DexFile* dex_file,
                                                     target_invoke_type,
                                                     literal_offset));
 }
-void CompilerDriver::AddRelativeCodePatch(const DexFile* dex_file,
-                                          uint16_t referrer_class_def_idx,
-                                          uint32_t referrer_method_idx,
-                                          InvokeType referrer_invoke_type,
-                                          uint32_t target_method_idx,
-                                          const DexFile* target_dex_file,
-                                          InvokeType target_invoke_type,
-                                          size_t literal_offset,
-                                          int32_t pc_relative_offset) {
-  MutexLock mu(Thread::Current(), compiled_methods_lock_);
-  code_to_patch_.push_back(new RelativeCallPatchInformation(dex_file,
-                                                            referrer_class_def_idx,
-                                                            referrer_method_idx,
-                                                            referrer_invoke_type,
-                                                            target_method_idx,
-                                                            target_dex_file,
-                                                            target_invoke_type,
-                                                            literal_offset,
-                                                            pc_relative_offset));
-}
 void CompilerDriver::AddMethodPatch(const DexFile* dex_file,
                                     uint16_t referrer_class_def_idx,
                                     uint32_t referrer_method_idx,
