@@ -472,12 +472,15 @@ void Mir2Lir::InstallLiteralPools() {
     Push32(code_buffer_, data_lir->operands[0]);
     data_lir = NEXT_LIR(data_lir);
   }
+  // TODO: patches_.reserve() as needed.
   // Push code and method literals, record offsets for the compiler to patch.
   data_lir = code_literal_list_;
   while (data_lir != NULL) {
     uint32_t target_method_idx = data_lir->operands[0];
     const DexFile* target_dex_file =
         reinterpret_cast<const DexFile*>(UnwrapPointer(data_lir->operands[1]));
+    patches_.push_back(LinkerPatch::CodePatch(code_buffer_.size(),
+                                              target_dex_file, target_method_idx));
     cu_->compiler_driver->AddCodePatch(cu_->dex_file,
                                        cu_->class_def_idx,
                                        cu_->method_idx,
@@ -496,6 +499,8 @@ void Mir2Lir::InstallLiteralPools() {
     uint32_t target_method_idx = data_lir->operands[0];
     const DexFile* target_dex_file =
         reinterpret_cast<const DexFile*>(UnwrapPointer(data_lir->operands[1]));
+    patches_.push_back(LinkerPatch::MethodPatch(code_buffer_.size(),
+                                                target_dex_file, target_method_idx));
     cu_->compiler_driver->AddMethodPatch(cu_->dex_file,
                                          cu_->class_def_idx,
                                          cu_->method_idx,
@@ -512,16 +517,18 @@ void Mir2Lir::InstallLiteralPools() {
   // Push class literals.
   data_lir = class_literal_list_;
   while (data_lir != NULL) {
-    uint32_t target_method_idx = data_lir->operands[0];
+    uint32_t target_type_idx = data_lir->operands[0];
     const DexFile* class_dex_file =
       reinterpret_cast<const DexFile*>(UnwrapPointer(data_lir->operands[1]));
+    patches_.push_back(LinkerPatch::TypePatch(code_buffer_.size(),
+                                              class_dex_file, target_type_idx));
     cu_->compiler_driver->AddClassPatch(cu_->dex_file,
                                         cu_->class_def_idx,
                                         cu_->method_idx,
-                                        target_method_idx,
+                                        target_type_idx,
                                         class_dex_file,
                                         code_buffer_.size());
-    const DexFile::TypeId& target_method_id = class_dex_file->GetTypeId(target_method_idx);
+    const DexFile::TypeId& target_method_id = class_dex_file->GetTypeId(target_type_idx);
     // unique value based on target to ensure code deduplication works
     PushPointer(code_buffer_, &target_method_id, cu_->target64);
     data_lir = NEXT_LIR(data_lir);
@@ -1021,6 +1028,7 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       live_sreg_(0),
       core_vmap_table_(mir_graph->GetArena()->Adapter()),
       fp_vmap_table_(mir_graph->GetArena()->Adapter()),
+      patches_(mir_graph->GetArena()->Adapter()),
       num_core_spills_(0),
       num_fp_spills_(0),
       frame_size_(0),
@@ -1110,7 +1118,8 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
   CompiledMethod* result =
       new CompiledMethod(cu_->compiler_driver, cu_->instruction_set, code_buffer_, frame_size_,
                          core_spill_mask_, fp_spill_mask_, &src_mapping_table_, encoded_mapping_table_,
-                         vmap_encoder.GetData(), native_gc_map_, cfi_info.get());
+                         vmap_encoder.GetData(), native_gc_map_, cfi_info.get(),
+                         ArrayRef<LinkerPatch>(patches_));
   return result;
 }
 
