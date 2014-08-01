@@ -37,17 +37,27 @@ namespace art {
 // Write a Space built during compilation for use during execution.
 class ImageWriter {
  public:
-  explicit ImageWriter(const CompilerDriver& compiler_driver)
-      : compiler_driver_(compiler_driver), oat_file_(NULL), image_end_(0), image_begin_(NULL),
+  ImageWriter(const CompilerDriver& compiler_driver, uintptr_t image_begin)
+      : compiler_driver_(compiler_driver), image_begin_(reinterpret_cast<byte*>(image_begin)),
+        image_end_(0), image_roots_address_(0), oat_file_(NULL),
         oat_data_begin_(NULL), interpreter_to_interpreter_bridge_offset_(0),
-        interpreter_to_compiled_code_bridge_offset_(0), portable_imt_conflict_trampoline_offset_(0),
-        portable_resolution_trampoline_offset_(0), quick_generic_jni_trampoline_offset_(0),
-        quick_imt_conflict_trampoline_offset_(0), quick_resolution_trampoline_offset_(0) {}
+        interpreter_to_compiled_code_bridge_offset_(0), jni_dlsym_lookup_offset_(0),
+        portable_imt_conflict_trampoline_offset_(0), portable_resolution_trampoline_offset_(0),
+        portable_to_interpreter_bridge_offset_(0), quick_generic_jni_trampoline_offset_(0),
+        quick_imt_conflict_trampoline_offset_(0), quick_resolution_trampoline_offset_(0),
+        quick_to_interpreter_bridge_offset_(0) {
+    CHECK_NE(image_begin, 0U);
+  }
 
   ~ImageWriter() {}
 
+  bool PrepareImageAddressSpace();
+
+  bool IsImageAddressSpaceReady() const {
+    return image_roots_address_ != 0u;
+  }
+
   bool Write(const std::string& image_filename,
-             uintptr_t image_begin,
              const std::string& oat_filename,
              const std::string& oat_location)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
@@ -131,7 +141,9 @@ class ImageWriter {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Lays out where the image objects will be at runtime.
-  void CalculateNewObjectOffsets(size_t oat_loaded_size, size_t oat_data_offset)
+  void CalculateNewObjectOffsets()
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void CreateHeader(size_t oat_loaded_size, size_t oat_data_offset)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   mirror::ObjectArray<mirror::Object>* CreateImageRoots() const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -167,17 +179,20 @@ class ImageWriter {
 
   const CompilerDriver& compiler_driver_;
 
+  // Beginning target image address for the output image.
+  byte* image_begin_;
+
+  // Offset to the free space in image_.
+  size_t image_end_;
+
+  // The image roots address in the image.
+  uint32_t image_roots_address_;
+
   // oat file with code for this image
   OatFile* oat_file_;
 
   // Memory mapped for generating the image.
   std::unique_ptr<MemMap> image_;
-
-  // Offset to the free space in image_.
-  size_t image_end_;
-
-  // Beginning target image address for the output image.
-  byte* image_begin_;
 
   // Saved hashes (objects are inside of the image so that they don't move).
   std::vector<std::pair<mirror::Object*, uint32_t>> saved_hashes_;

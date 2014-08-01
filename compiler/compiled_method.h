@@ -22,7 +22,9 @@
 #include <vector>
 
 #include "instruction_set.h"
+#include "method_reference.h"
 #include "utils.h"
+#include "utils/array_ref.h"
 
 namespace llvm {
   class Function;
@@ -100,6 +102,77 @@ class CompiledCode {
   std::vector<uint32_t> oatdata_offsets_to_compiled_code_offset_;
 };
 
+enum LinkerPatchType {
+  kLinkerPatchMethod,
+  kLinkerPatchCall,
+  kLinkerPatchCallRelative,  // NOTE: Actual patching is instruction_set-dependent.
+  kLinkerPatchType,
+};
+
+class LinkerPatch {
+ public:
+  static LinkerPatch MethodPatch(size_t literal_offset,
+                                 const DexFile* target_dex_file,
+                                 uint32_t target_method_idx) {
+    return LinkerPatch(literal_offset, kLinkerPatchMethod,
+                       target_method_idx, target_dex_file);
+  }
+
+  static LinkerPatch CodePatch(size_t literal_offset,
+                               const DexFile* target_dex_file,
+                               uint32_t target_method_idx) {
+    return LinkerPatch(literal_offset, kLinkerPatchCall,
+                       target_method_idx, target_dex_file);
+  }
+
+  static LinkerPatch RelativeCodePatch(size_t literal_offset,
+                                       const DexFile* target_dex_file,
+                                       uint32_t target_method_idx) {
+    return LinkerPatch(literal_offset, kLinkerPatchCallRelative,
+                       target_method_idx, target_dex_file);
+  }
+
+  static LinkerPatch TypePatch(size_t literal_offset, uint32_t type_idx) {
+    return LinkerPatch(literal_offset, kLinkerPatchType, type_idx, nullptr);
+  }
+
+  LinkerPatch(const LinkerPatch& other) = default;
+  LinkerPatch& operator=(const LinkerPatch& other) = default;
+
+  size_t LiteralOffset() const {
+    return literal_offset_;
+  }
+
+  LinkerPatchType Type() const {
+    return patch_type_;
+  }
+
+  MethodReference TargetMethod() const {
+    DCHECK(patch_type_ == kLinkerPatchMethod ||
+           patch_type_ == kLinkerPatchCall || patch_type_ == kLinkerPatchCallRelative);
+    return MethodReference(target_dex_file_, target_idx_);
+  }
+
+  uint32_t TargetTypeIndex() const {
+    DCHECK(patch_type_ == kLinkerPatchType);
+    return target_idx_;
+  }
+
+ private:
+  LinkerPatch(size_t literal_offset, LinkerPatchType patch_type,
+                       uint32_t target_idx, const DexFile* target_dex_file)
+      : literal_offset_(literal_offset),
+        patch_type_(patch_type),
+        target_idx_(target_idx),
+        target_dex_file_(target_dex_file) {
+  }
+
+  size_t literal_offset_;
+  LinkerPatchType patch_type_;
+  uint32_t target_idx_;  // Method index (Call/Method patches) or type index (Type patches).
+  const DexFile* target_dex_file_;  // Only for
+};
+
 class CompiledMethod : public CompiledCode {
  public:
   // Constructs a CompiledMethod for the non-LLVM compilers.
@@ -112,7 +185,8 @@ class CompiledMethod : public CompiledCode {
                  const std::vector<uint8_t>& mapping_table,
                  const std::vector<uint8_t>& vmap_table,
                  const std::vector<uint8_t>& native_gc_map,
-                 const std::vector<uint8_t>* cfi_info);
+                 const std::vector<uint8_t>* cfi_info,
+                 const ArrayRef<LinkerPatch>& patches = ArrayRef<LinkerPatch>());
 
   // Constructs a CompiledMethod for the QuickJniCompiler.
   CompiledMethod(CompilerDriver* driver,
@@ -163,6 +237,10 @@ class CompiledMethod : public CompiledCode {
     return cfi_info_;
   }
 
+  const std::vector<LinkerPatch> GetPatches() const {
+    return patches_;
+  }
+
  private:
   // For quick code, the size of the activation used by the code.
   const size_t frame_size_in_bytes_;
@@ -180,6 +258,8 @@ class CompiledMethod : public CompiledCode {
   std::vector<uint8_t>* gc_map_;
   // For quick code, a FDE entry for the debug_frame section.
   std::vector<uint8_t>* cfi_info_;
+  // For quick code, linker patches needed by the method.
+  std::vector<LinkerPatch> patches_;
 };
 
 }  // namespace art
