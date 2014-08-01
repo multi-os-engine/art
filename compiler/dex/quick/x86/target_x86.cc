@@ -1054,6 +1054,8 @@ void X86Mir2Lir::InstallLiteralPools() {
 
       // The offset to patch is the last 4 bytes of the instruction.
       int patch_offset = p->offset + p->flags.size - 4;
+      patches_.push_back(LinkerPatch::MethodPatch(patch_offset,
+                                                  target_dex_file, target_method_idx));
       cu_->compiler_driver->AddMethodPatch(cu_->dex_file, cu_->class_def_idx,
                                            cu_->method_idx, cu_->invoke_type,
                                            target_method_idx, target_dex_file,
@@ -1068,16 +1070,19 @@ void X86Mir2Lir::InstallLiteralPools() {
 
       const DexFile* class_dex_file =
         reinterpret_cast<const DexFile*>(UnwrapPointer(p->operands[3]));
-      uint32_t target_method_idx = p->operands[2];
+      uint32_t target_type_idx = p->operands[2];
 
       // The offset to patch is the last 4 bytes of the instruction.
       int patch_offset = p->offset + p->flags.size - 4;
+      patches_.push_back(LinkerPatch::TypePatch(patch_offset,
+                                                class_dex_file, target_type_idx));
       cu_->compiler_driver->AddClassPatch(cu_->dex_file, cu_->class_def_idx,
-                                          cu_->method_idx, target_method_idx, class_dex_file,
+                                          cu_->method_idx, target_type_idx, class_dex_file,
                                           patch_offset);
   }
 
   // And now the PC-relative calls to methods.
+  patches_.reserve(call_method_insns_.Size());
   for (uint32_t i = 0; i < call_method_insns_.Size(); i++) {
       LIR* p = call_method_insns_.Get(i);
       DCHECK_EQ(p->opcode, kX86CallI);
@@ -1087,11 +1092,8 @@ void X86Mir2Lir::InstallLiteralPools() {
 
       // The offset to patch is the last 4 bytes of the instruction.
       int patch_offset = p->offset + p->flags.size - 4;
-      cu_->compiler_driver->AddRelativeCodePatch(cu_->dex_file, cu_->class_def_idx,
-                                                 cu_->method_idx, cu_->invoke_type,
-                                                 target_method_idx, target_dex_file,
-                                                 static_cast<InvokeType>(p->operands[3]),
-                                                 patch_offset, -4 /* offset */);
+      patches_.push_back(LinkerPatch::RelativeCodePatch(patch_offset,
+                                                        target_dex_file, target_method_idx));
   }
 
   // And do the normal processing.

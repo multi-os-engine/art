@@ -89,10 +89,7 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
 // identifies an offset from the start of the text section
 static void ReservePatchSpace(const CompilerDriver* compiler_driver, std::vector<uint8_t>* buffer,
                               bool debug) {
-  size_t size =
-      compiler_driver->GetCodeToPatch().size() +
-      compiler_driver->GetMethodsToPatch().size() +
-      compiler_driver->GetClassesToPatch().size();
+  size_t size = compiler_driver->GetNonRelativeLinkerPatchCount();
   if (size == 0) {
     if (debug) {
       LOG(INFO) << "No patches to record";

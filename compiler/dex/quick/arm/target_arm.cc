@@ -452,6 +452,11 @@ std::string ArmMir2Lir::BuildInsnString(const char* fmt, LIR* lir, unsigned char
                  reinterpret_cast<uintptr_t>(base_addr) + lir->offset + 4 + (operand << 1),
                  lir->target);
              break;
+           case 'T':
+             snprintf(tbuf, arraysize(tbuf), "%s", PrettyMethod(
+                 static_cast<uint32_t>(lir->operands[1]),
+                 *reinterpret_cast<const DexFile*>(UnwrapPointer(lir->operands[2]))).c_str());
+             break;
            case 'u': {
              int offset_1 = lir->operands[0];
              int offset_2 = NEXT_LIR(lir)->operands[0];
@@ -551,7 +556,9 @@ RegisterClass ArmMir2Lir::RegClassForFieldLoadStore(OpSize size, bool is_volatil
 }
 
 ArmMir2Lir::ArmMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
-    : Mir2Lir(cu, mir_graph, arena) {
+    : Mir2Lir(cu, mir_graph, arena),
+      call_method_insns_(arena->Adapter()) {
+  call_method_insns_.reserve(100);
   // Sanity check - make sure encoding map lines up.
   for (int i = 0; i < kArmLast; i++) {
     if (ArmMir2Lir::EncodingMap[i].opcode != i) {
@@ -823,6 +830,49 @@ RegStorage ArmMir2Lir::AllocPreservedSingle(int s_reg) {
     }
   }
   return res;
+}
+
+LIR* ArmMir2Lir::CallWithLinkerFixup(const MethodReference& target_method, InvokeType type) {
+  /*
+   * For x86, just generate a 32 bit call relative instruction, that will be filled
+   * in at 'link time'.  For now, put a unique value based on target to ensure that
+   * code deduplication works.
+   */
+  int target_method_idx = target_method.dex_method_index;
+  const DexFile* target_dex_file = target_method.dex_file;
+  const DexFile::MethodId& target_method_id = target_dex_file->GetMethodId(target_method_idx);
+  uintptr_t target_method_id_ptr = reinterpret_cast<uintptr_t>(&target_method_id);
+
+  // TODO: Find a way to generate unique 24-bit id based on the target method. Otherwise
+  // we risk deduplicating methods that shouldn't be deduplicated! Alternatively, we could
+  // compare the patch sets in OatWriter::CodeOffsetsKeyComparator.
+  // Since method id is 8 bytes, we can ignore the lowest 3 bits but we can still get
+  // a collision because of the lost high bits.
+  int32_t id = static_cast<int32_t>(target_method_id_ptr << 5) >> 8;
+
+  // Generate the call instruction with the unique pointer and save index, dex_file, and type.
+  LIR *call = RawLIR(current_dalvik_offset_, kThumb2Call, id,
+                     target_method_idx, WrapPointer(const_cast<DexFile*>(target_dex_file)), type);
+  AppendLIR(call);
+  call_method_insns_.push_back(call);
+  return call;
+}
+
+void ArmMir2Lir::InstallLiteralPools() {
+  // PC-relative calls to methods.
+  patches_.reserve(call_method_insns_.size());
+  for (LIR* p : call_method_insns_) {
+      DCHECK_EQ(p->opcode, kThumb2Call);
+      uint32_t target_method_idx = p->operands[1];
+      const DexFile* target_dex_file =
+          reinterpret_cast<const DexFile*>(UnwrapPointer(p->operands[2]));
+
+      patches_.push_back(LinkerPatch::RelativeCodePatch(p->offset,
+                                                        target_dex_file, target_method_idx));
+  }
+
+  // And do the normal processing.
+  Mir2Lir::InstallLiteralPools();
 }
 
 }  // namespace art

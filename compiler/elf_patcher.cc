@@ -141,36 +141,11 @@ void ElfPatcher::SetPatchLocation(const CompilerDriver::PatchInformation* patch,
   uint8_t* base = reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(quick_oat_code) & ~0x1);
   uintptr_t patch_ptr = reinterpret_cast<uintptr_t>(base + patch->GetLiteralOffset());
   uint32_t* patch_location = GetPatchLocation(patch_ptr);
-  if (kIsDebugBuild) {
-    if (patch->IsCall()) {
-      const CompilerDriver::CallPatchInformation* cpatch = patch->AsCall();
-      const DexFile::MethodId& id =
-          cpatch->GetTargetDexFile()->GetMethodId(cpatch->GetTargetMethodIdx());
-      uint32_t expected = reinterpret_cast<uintptr_t>(&id) & 0xFFFFFFFF;
-      uint32_t actual = *patch_location;
-      CHECK(actual == expected || actual == value) << "Patching call failed: " << std::hex
-          << " actual=" << actual
-          << " expected=" << expected
-          << " value=" << value;
-    }
-    if (patch->IsType()) {
-      const CompilerDriver::TypePatchInformation* tpatch = patch->AsType();
-      const DexFile::TypeId& id = tpatch->GetTargetTypeDexFile().GetTypeId(tpatch->GetTargetTypeIdx());
-      uint32_t expected = reinterpret_cast<uintptr_t>(&id) & 0xFFFFFFFF;
-      uint32_t actual = *patch_location;
-      CHECK(actual == expected || actual == value) << "Patching type failed: " << std::hex
-          << " actual=" << actual
-          << " expected=" << expected
-          << " value=" << value;
-    }
-  }
-  *patch_location = value;
+  CHECK_EQ(*patch_location, value);
+  // TODO: Move the checksum update to OatWriter and get rid of everything but AddPatch().
   oat_header_->UpdateChecksum(patch_location, sizeof(value));
 
-  if (patch->IsCall() && patch->AsCall()->IsRelative()) {
-    // We never record relative patches.
-    return;
-  }
+  CHECK(!(patch->IsCall() && patch->AsCall()->IsRelative()));
   uintptr_t loc = patch_ptr - (reinterpret_cast<uintptr_t>(oat_file_->Begin()) +
                                oat_header_->GetExecutableOffset());
   CHECK_GT(patch_ptr, reinterpret_cast<uintptr_t>(oat_file_->Begin()) +
@@ -184,9 +159,7 @@ bool ElfPatcher::PatchElf() {
   // potentially rather large amount of free space where patches might have been
   // placed. We should adjust the ELF file to get rid of this excess space.
   if (write_patches_) {
-    patches_.reserve(compiler_driver_->GetCodeToPatch().size() +
-                     compiler_driver_->GetMethodsToPatch().size() +
-                     compiler_driver_->GetClassesToPatch().size());
+    patches_.reserve(compiler_driver_->GetNonRelativeLinkerPatchCount());
   }
   Thread* self = Thread::Current();
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
