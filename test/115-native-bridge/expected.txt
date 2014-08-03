@@ -1,13 +1,55 @@
 Ready for native bridge tests.
 Native bridge initialized.
 Checking for support.
-Getting trampoline.
-Getting trampoline.
-Getting trampoline.
-Getting trampoline.
-Getting trampoline.
-Getting trampoline.
-Getting trampoline.
-Getting trampoline.
-Getting trampoline.
-Getting trampoline.
+Getting trampoline for JNI_OnLoad with shorty (null).
+Test ART callbacks: all JNI function number is 9.
+    name:booleanMethod, signature:(ZZZZZZZZZZ)Z, short:ZZZZZZZZZZZ.
+    name:byteMethod, signature:(BBBBBBBBBB)B, short:BBBBBBBBBBB.
+    name:charMethod, signature:(CCCCCCCCCC)C, short:CCCCCCCCCCC.
+    name:shortMethod, signature:(SSSSSSSSSS)S, short:SSSSSSSSSSS.
+    name:testCallStaticVoidMethodOnSubClassNative, signature:()V, short:V.
+    name:testFindClassOnAttachedNativeThread, signature:()V, short:V.
+    name:testFindFieldOnAttachedNativeThreadNative, signature:()V, short:V.
+    name:testGetMirandaMethodNative, signature:()Ljava/lang/reflect/Method;, short:L.
+    name:testZeroLengthByteBuffers, signature:()V, short:V.
+trampoline_JNI_OnLoad called!
+Getting trampoline for Java_Main_testFindClassOnAttachedNativeThread with shorty V.
+trampoline_Java_Main_testFindClassOnAttachedNativeThread called!
+Getting trampoline for Java_Main_testFindFieldOnAttachedNativeThreadNative with shorty V.
+trampoline_Java_Main_testFindFieldOnAttachedNativeThreadNative called!
+Getting trampoline for Java_Main_testCallStaticVoidMethodOnSubClassNative with shorty V.
+trampoline_Java_Main_testCallStaticVoidMethodOnSubClassNative called!
+Getting trampoline for Java_Main_testGetMirandaMethodNative with shorty L.
+trampoline_Java_Main_testGetMirandaMethodNative called!
+Getting trampoline for Java_Main_testZeroLengthByteBuffers with shorty V.
+trampoline_Java_Main_testZeroLengthByteBuffers called!
+Getting trampoline for Java_Main_byteMethod with shorty BBBBBBBBBBB.
+trampoline_Java_Main_byteMethod called!
+trampoline_Java_Main_byteMethod called!
+trampoline_Java_Main_byteMethod called!
+trampoline_Java_Main_byteMethod called!
+trampoline_Java_Main_byteMethod called!
+trampoline_Java_Main_byteMethod called!
+trampoline_Java_Main_byteMethod called!
+Getting trampoline for Java_Main_shortMethod with shorty SSSSSSSSSSS.
+trampoline_Java_Main_shortMethod called!
+trampoline_Java_Main_shortMethod called!
+trampoline_Java_Main_shortMethod called!
+trampoline_Java_Main_shortMethod called!
+trampoline_Java_Main_shortMethod called!
+trampoline_Java_Main_shortMethod called!
+trampoline_Java_Main_shortMethod called!
+trampoline_Java_Main_shortMethod called!
+trampoline_Java_Main_shortMethod called!
+Getting trampoline for Java_Main_booleanMethod with shorty ZZZZZZZZZZZ.
+trampoline_Java_Main_booleanMethod called!
+trampoline_Java_Main_booleanMethod called!
+Getting trampoline for Java_Main_charMethod with shorty CCCCCCCCCCC.
+trampoline_Java_Main_charMethod called!
+trampoline_Java_Main_charMethod called!
+trampoline_Java_Main_charMethod called!
+trampoline_Java_Main_charMethod called!
+trampoline_Java_Main_charMethod called!
+trampoline_Java_Main_charMethod called!
+trampoline_Java_Main_charMethod called!
+trampoline_Java_Main_charMethod called!
