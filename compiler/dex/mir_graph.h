@@ -724,11 +724,21 @@ class MIRGraph {
     return constant_values_[s_reg];
   }
 
+  int64_t ConstantValueWide(int32_t s_reg_low, int32_t s_reg_high) const {
+    DCHECK(IsConst(s_reg_low));
+    DCHECK(IsConst(s_reg_high));
+    return (static_cast<int64_t>(constant_values_[s_reg_high]) << 32) |
+        Low32Bits(static_cast<int64_t>(constant_values_[s_reg_low]));
+  }
+
   int64_t ConstantValueWide(RegLocation loc) const {
     DCHECK(IsConst(loc));
     return (static_cast<int64_t>(constant_values_[loc.orig_sreg + 1]) << 32) |
         Low32Bits(static_cast<int64_t>(constant_values_[loc.orig_sreg]));
   }
+
+  void SetConstant(int32_t ssa_reg, int value);
+  void SetConstantWide(int ssa_reg, int64_t value);
 
   bool IsConstantNullRef(RegLocation loc) const {
     return loc.ref && loc.is_const && (ConstantValue(loc) == 0);
@@ -1114,8 +1124,6 @@ class MIRGraph {
   void MarkPreOrder(BasicBlock* bb);
   void RecordDFSOrders(BasicBlock* bb);
   void ComputeDomPostOrderTraversal(BasicBlock* bb);
-  void SetConstant(int32_t ssa_reg, int value);
-  void SetConstantWide(int ssa_reg, int64_t value);
   int GetSSAUseCount(int s_reg);
   bool BasicBlockOpt(BasicBlock* bb);
   bool BuildExtendedBBList(struct BasicBlock* bb);
