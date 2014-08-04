@@ -26,22 +26,7 @@ namespace art {
 
 /*
  * The sparse table in the literal pool is an array of <key,displacement>
- * pairs.  For each set, we'll load them as a pair using ldmia.
- * This means that the register number of the temp we use for the key
- * must be lower than the reg for the displacement.
- *
- * The test loop will look something like:
- *
- *   adr   r_base, <table>
- *   ldr   r_val, [rARM_SP, v_reg_off]
- *   mov   r_idx, #table_size
- * lp:
- *   ldmia r_base!, {r_key, r_disp}
- *   sub   r_idx, #1
- *   cmp   r_val, r_key
- *   ifeq
- *   add   rARM_PC, r_disp   ; This is the branch from which we compute displacement
- *   cbnz  r_idx, lp
+ * pairs.
  */
 void ArmMir2Lir::GenSparseSwitch(MIR* mir, uint32_t table_offset,
                                  RegLocation rl_src) {
@@ -49,46 +34,17 @@ void ArmMir2Lir::GenSparseSwitch(MIR* mir, uint32_t table_offset,
   if (cu_->verbose) {
     DumpSparseSwitchTable(table);
   }
-  // Add the table to the list - we'll process it later
-  SwitchTable *tab_rec =
-      static_cast<SwitchTable*>(arena_->Alloc(sizeof(SwitchTable), kArenaAllocData));
-  tab_rec->table = table;
-  tab_rec->vaddr = current_dalvik_offset_;
-  uint32_t size = table[1];
-  tab_rec->targets = static_cast<LIR**>(arena_->Alloc(size * sizeof(LIR*), kArenaAllocLIR));
-  switch_tables_.Insert(tab_rec);
 
-  // Get the switch value
+  int entries = table[1];
+  const int32_t* keys = reinterpret_cast<const int32_t*>(&table[2]);
+  const int32_t* targets = &keys[entries];
   rl_src = LoadValue(rl_src, kCoreReg);
-  RegStorage r_base = AllocTemp();
-  /* Allocate key and disp temps */
-  RegStorage r_key = AllocTemp();
-  RegStorage r_disp = AllocTemp();
-  // Make sure r_key's register number is less than r_disp's number for ldmia
-  if (r_key.GetReg() > r_disp.GetReg()) {
-    RegStorage tmp = r_disp;
-    r_disp = r_key;
-    r_key = tmp;
+  for (int i = 0; i < entries; i++) {
+    int key = keys[i];
+    BasicBlock* case_block =
+        mir_graph_->FindBlock(current_dalvik_offset_ + targets[i]);
+    OpCmpImmBranch(kCondEq, rl_src.reg, key, &block_label_list_[case_block->id]);
   }
-  // Materialize a pointer to the switch table
-  NewLIR3(kThumb2Adr, r_base.GetReg(), 0, WrapPointer(tab_rec));
-  // Set up r_idx
-  RegStorage r_idx = AllocTemp();
-  LoadConstant(r_idx, size);
-  // Establish loop branch target
-  LIR* target = NewLIR0(kPseudoTargetLabel);
-  // Load next key/disp
-  NewLIR2(kThumb2LdmiaWB, r_base.GetReg(), (1 << r_key.GetRegNum()) | (1 << r_disp.GetRegNum()));
-  OpRegReg(kOpCmp, r_key, rl_src.reg);
-  // Go if match. NOTE: No instruction set switch here - must stay Thumb2
-  LIR* it = OpIT(kCondEq, "");
-  LIR* switch_branch = NewLIR1(kThumb2AddPCR, r_disp.GetReg());
-  OpEndIT(it);
-  tab_rec->anchor = switch_branch;
-  // Needs to use setflags encoding here
-  OpRegRegImm(kOpSub, r_idx, r_idx, 1);  // For value == 1, this should set flags.
-  DCHECK(last_lir_insn_->u.m.def_mask->HasBit(ResourceMask::kCCode));
-  OpCondBranch(kCondNe, target);
 }
 
 
