@@ -172,6 +172,13 @@ BasicBlock* MIRGraph::SplitBlock(DexOffset code_offset,
   bottom_block->terminated_by_return = orig_block->terminated_by_return;
   orig_block->terminated_by_return = false;
 
+  /*
+   * If this block was terminated by a conditional branch,
+   * the flag needs to go with the bottom block
+   */
+  bottom_block->conditional_branch = orig_block->conditional_branch;
+  orig_block->conditional_branch = false;
+
   /* Handle the taken path */
   bottom_block->taken = orig_block->taken;
   if (bottom_block->taken != NullBasicBlockId) {
