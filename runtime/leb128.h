@@ -137,10 +137,10 @@ static inline uint8_t* EncodeSignedLeb128(uint8_t* dest, int32_t value) {
   return dest;
 }
 
-// An encoder with an API similar to vector<uint32_t> where the data is captured in ULEB128 format.
-class Leb128EncodingVector {
+class Leb128Encoder {
  public:
-  Leb128EncodingVector() {
+  Leb128Encoder(std::vector<uint8_t> &data) : data_(data) {
+    ;
   }
 
   void Reserve(uint32_t size) {
@@ -188,9 +188,20 @@ class Leb128EncodingVector {
     return data_;
   }
 
- private:
-  std::vector<uint8_t> data_;
+ protected:
+  std::vector<uint8_t> &data_;
 
+  DISALLOW_COPY_AND_ASSIGN(Leb128Encoder);
+};
+
+// An encoder with an API similar to vector<uint32_t> where the data is captured in ULEB128 format.
+class Leb128EncodingVector : private std::vector<uint8_t>, public Leb128Encoder {
+ public:
+  Leb128EncodingVector() : Leb128Encoder(static_cast<std::vector<uint8_t>&>(*this)) {
+    ;
+  }
+
+ private:
   DISALLOW_COPY_AND_ASSIGN(Leb128EncodingVector);
 };
 

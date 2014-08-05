@@ -24,6 +24,7 @@
 #include "memory_region.h"
 #include "nodes.h"
 #include "utils/assembler.h"
+#include "compiled_method.h"
 
 namespace art {
 
@@ -126,7 +127,7 @@ class CodeGenerator : public ArenaObject {
 
   void GenerateSlowPaths();
 
-  void BuildMappingTable(std::vector<uint8_t>* vector) const;
+  void BuildMappingTable(std::vector<uint8_t>* vector, SrcMap* src_map) const;
   void BuildVMapTable(std::vector<uint8_t>* vector) const;
   void BuildNativeGCMap(
       std::vector<uint8_t>* vector, const DexCompilationUnit& dex_compilation_unit) const;

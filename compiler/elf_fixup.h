@@ -48,6 +48,9 @@ class ElfFixup {
   // Fixup dynamic relocations
   static bool FixupRelocations(ElfFile& elf_file, uintptr_t base_address);
 
+  // Fixup dynamic relocations
+  static bool FixupDebugSections(ElfFile& elf_file, uintptr_t base_address);
+
   DISALLOW_IMPLICIT_CONSTRUCTORS(ElfFixup);
 };
 
