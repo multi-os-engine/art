@@ -30,7 +30,7 @@ namespace arm {
 // Include results file (generated manually)
 #include "assembler_thumb_test_expected.cc.inc"
 
-#ifndef HAVE_ANDROID_OS
+#if !defined(HAVE_ANDROID_OS) && !defined(__APPLE__)
 // This controls whether the results are printed to the
 // screen or compared against the expected output.
 // To generate new expected output, set this to true and
@@ -134,9 +134,9 @@ std::string GetAndroidToolsDir() {
 }
 
 void dump(std::vector<uint8_t>& code, const char* testname) {
-  // This will only work on the host.  There is no as, objcopy or objdump on the
+  // This will only work on a Linux host.  There is no as, objcopy or objdump on the
   // device.
-#ifndef HAVE_ANDROID_OS
+#if !defined(HAVE_ANDROID_OS) && !defined(__APPLE__)
   static bool results_ok = false;
   static std::string toolsdir;
 

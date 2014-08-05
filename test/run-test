@@ -377,7 +377,12 @@ chmod 755 "$check_cmd"
 export TEST_NAME=`basename ${test_dir}`
 
 # To cause tests to fail fast, limit the file sizes created by dx, dex2oat and ART output to 2MB.
-file_size_limit=2048
+if [ "$target_mode" = "yes" ] || [ "$relocate" = "no" ]; then
+  file_size_limit=2048
+else
+  # With relocation on the host, we bump this to 200MB to account for rewriting the core.oat/art.
+  file_size_limit=204800
+fi
 if echo "$test_dir" | grep 089; then
   file_size_limit=5120
 elif echo "$test_dir" | grep 083; then

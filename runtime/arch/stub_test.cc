@@ -75,7 +75,7 @@ class StubTest : public CommonRuntimeTest {
 
     size_t result;
     size_t fpr_result = 0;
-#if defined(__i386__)
+#if defined(__i386__) && !defined(__APPLE__)
     // TODO: Set the thread?
     __asm__ __volatile__(
         "subl $12, %%esp\n\t"       // Align stack.
@@ -298,7 +298,7 @@ class StubTest : public CommonRuntimeTest {
 
     size_t result;
     size_t fpr_result = 0;
-#if defined(__i386__)
+#if defined(__i386__) && !defined(__APPLE__)
     // TODO: Set the thread?
     __asm__ __volatile__(
         "movd %[hidden], %%xmm0\n\t"

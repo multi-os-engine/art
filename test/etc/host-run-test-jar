@@ -160,11 +160,6 @@ fi
 if [ "$RELOCATE" = "y" ]; then
   FLAGS="${FLAGS} -Xrelocate"
   COMPILER_FLAGS="${COMPILER_FLAGS} --runtime-arg -Xnorelocate --include-patch-information"
-  # Run test sets a fairly draconian ulimit that we will likely blow right over
-  # since we are relocating. Get the total size of the /system/framework directory
-  # in 512 byte blocks and set it as the ulimit. This should be more than enough
-  # room.
-  ulimit -S $(du -c -B512 ${ANDROID_ROOT}/framework | tail -1 | cut -f1) || exit 1
 else
   FLAGS="${FLAGS} -Xnorelocate"
   COMPILER_FLAGS="${COMPILER_FLAGS} --runtime-arg -Xnorelocate --no-include-patch-information"
@@ -189,5 +184,12 @@ if [ "$DEV_MODE" = "y" ]; then
   fi
 fi
 
-cd $ANDROID_BUILD_TOP
-$mkdir_cmd && $prebuild_cmd && LD_PRELOAD=libsigchain.so $cmdline "$@"
+cd $ANDROID_BUILD_TO
+
+if [ `uname` = "Darwin" ]; then
+  preload_cmd=
+  set env DYLD_INSERT_LIBRARIES=/home/irogers/Android/aosp/out/host//darwin-x86/lib/libsigchain.dylib
+else
+  preload_cmd="LD_PRELOAD=libsigchain.so"
+fi
+$mkdir_cmd && $prebuild_cmd && $preload_cmd $cmdline "$@"

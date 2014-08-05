@@ -335,6 +335,9 @@ class AssemblerTest : public testing::Test {
   // disassembler, disassemble both and check whether they have the same mnemonics (in which case
   // we just warn).
   void Driver(std::string assembly_text, std::string test_name) {
+#if defined(__APPLE__)
+    LOG(WARNING) << "Comparing assembler output isn't supported on the Mac";
+#else
     EXPECT_NE(assembly_text.length(), 0U) << "Empty assembly";
 
     NativeAssemblerResult res;
@@ -368,6 +371,7 @@ class AssemblerTest : public testing::Test {
         EXPECT_EQ(*data, *res.code) << "Outputs (and disassembly) not identical.";
       }
     }
+#endif
   }
 
   // Structure to store intermediates and results.
