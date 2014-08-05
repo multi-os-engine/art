@@ -88,6 +88,21 @@ const int kNumberOfAllocIds = kNumberOfCpuAllocIds + kNumberOfXmmAllocIds +
 // There is a one-to-one mapping between ManagedRegister and register id.
 class X86ManagedRegister : public ManagedRegister {
  public:
+  int DWARFRegId() const {
+    CHECK(IsCpuRegister());
+    switch (id_) {
+      case EAX: return 0;
+      case ECX: return 1;
+      case EDX: return 2;
+      case EBX: return 3;
+      case ESP: return 4;
+      case EBP: return 5;
+      case ESI: return 6;
+      case EDI: return 7;
+      default: CHECK(0); return -1;  // Should not get here
+    }
+  }
+
   ByteRegister AsByteRegister() const {
     CHECK(IsCpuRegister());
     CHECK_LT(AsCpuRegister(), ESP);  // ESP, EBP, ESI and EDI cannot be encoded as byte registers.
