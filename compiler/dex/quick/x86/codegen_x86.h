@@ -355,16 +355,16 @@ class X86Mir2Lir : public Mir2Lir {
   void InstallLiteralPools() OVERRIDE;
 
   /*
-   * @brief Generate the debug_frame CFI information.
-   * @returns pointer to vector containing CFE information
+   * @brief Generate the eh_frame CIE.
+   * @returns pointer to vector containing CIE
    */
-  static std::vector<uint8_t>* ReturnCommonCallFrameInformation(bool is_x86_64);
+  static std::vector<uint8_t>* ReturnCommonInformationEntry(bool is_x86_64);
 
   /*
-   * @brief Generate the debug_frame FDE information.
-   * @returns pointer to vector containing CFE information
+   * @brief Generate the eh_frame FDE.
+   * @returns pointer to vector containing FDE
    */
-  std::vector<uint8_t>* ReturnCallFrameInformation() OVERRIDE;
+  std::vector<uint8_t>* ReturnFrameDescriptionEntry() OVERRIDE;
 
   LIR* InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) OVERRIDE;
 
