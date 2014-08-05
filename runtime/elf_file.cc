@@ -1042,7 +1042,7 @@ static bool IsFDE(FDE* frame) {
 }
 
 // TODO This only works for 32-bit Elf Files.
-static bool FixupEHFrame(uintptr_t text_start, byte* eh_frame, size_t eh_frame_size) {
+static bool FixupEHFrame(uintptr_t text_start, uintptr_t eh_frame_start, byte* eh_frame, size_t eh_frame_size) {
   FDE* last_frame = reinterpret_cast<FDE*>(eh_frame + eh_frame_size);
   FDE* frame = NextFDE(reinterpret_cast<FDE*>(eh_frame));
   for (; frame < last_frame; frame = NextFDE(frame)) {
@@ -1050,6 +1050,7 @@ static bool FixupEHFrame(uintptr_t text_start, byte* eh_frame, size_t eh_frame_s
       return false;
     }
     frame->initial_location += text_start;
+    frame->initial_location -= eh_frame_start;
   }
   return true;
 }
@@ -1298,8 +1299,8 @@ static bool FixupDebugInfo(uint32_t text_start, DebugInfoIterator* iter) {
   return true;
 }
 
-static bool FixupDebugSections(const byte* dbg_abbrev, size_t dbg_abbrev_size,
-                               uintptr_t text_start,
+static bool FixupDebugSections(uintptr_t text_start, uintptr_t eh_frame_start,
+                               const byte* dbg_abbrev, size_t dbg_abbrev_size,
                                byte* dbg_info, size_t dbg_info_size,
                                byte* eh_frame, size_t eh_frame_size) {
   std::unique_ptr<DebugAbbrev> abbrev(DebugAbbrev::Create(dbg_abbrev, dbg_abbrev_size));
@@ -1313,7 +1314,7 @@ static bool FixupDebugSections(const byte* dbg_abbrev, size_t dbg_abbrev_size,
     return false;
   }
   return FixupDebugInfo(text_start, iter.get())
-      && FixupEHFrame(text_start, eh_frame, eh_frame_size);
+      && FixupEHFrame(text_start, eh_frame_start, eh_frame, eh_frame_size);
 }
 
 void ElfFile::GdbJITSupport() {
@@ -1358,7 +1359,8 @@ void ElfFile::GdbJITSupport() {
   text_sec->sh_offset = 0;
 
   if (!FixupDebugSections(
-        all.Begin() + debug_abbrev->sh_offset, debug_abbrev->sh_size, text_sec->sh_addr,
+        text_sec->sh_addr, eh_frame->sh_addr,
+        all.Begin() + debug_abbrev->sh_offset, debug_abbrev->sh_size,
         all.Begin() + debug_info->sh_offset, debug_info->sh_size,
         all.Begin() + eh_frame->sh_offset, eh_frame->sh_size)) {
     LOG(ERROR) << "Failed to load GDB data";
