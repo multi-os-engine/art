@@ -552,6 +552,7 @@ class HInstruction : public ArenaObject {
   bool HasEnvironment() const { return environment_ != nullptr; }
   HEnvironment* GetEnvironment() const { return environment_; }
   void SetEnvironment(HEnvironment* environment) { environment_ = environment; }
+  size_t EnvironmentSize() const;
 
   LocationSummary* GetLocations() const { return locations_; }
   void SetLocations(LocationSummary* locations) { locations_ = locations; }
@@ -659,9 +660,15 @@ class HEnvironment : public ArenaObject {
     vregs_.Put(index, instruction);
   }
 
+  HInstruction* GetInstructionAt(size_t index) const {
+    return vregs_.Get(index);
+  }
+
   GrowableArray<HInstruction*>* GetVRegs() {
     return &vregs_;
   }
+
+  size_t Size() const { return vregs_.Size(); }
 
  private:
   GrowableArray<HInstruction*> vregs_;
@@ -1323,13 +1330,15 @@ class HNullCheck : public HExpression<1> {
 
 class FieldInfo : public ValueObject {
  public:
-  explicit FieldInfo(MemberOffset field_offset)
-      : field_offset_(field_offset) {}
+  explicit FieldInfo(MemberOffset field_offset, Primitive::Type field_type)
+      : field_offset_(field_offset), field_type_(field_type) {}
 
   MemberOffset GetFieldOffset() const { return field_offset_; }
+  Primitive::Type GetFieldType() const { return field_type_; }
 
  private:
   const MemberOffset field_offset_;
+  Primitive::Type field_type_;
 };
 
 class HInstanceFieldGet : public HExpression<1> {
@@ -1337,11 +1346,12 @@ class HInstanceFieldGet : public HExpression<1> {
   HInstanceFieldGet(HInstruction* value,
                     Primitive::Type field_type,
                     MemberOffset field_offset)
-      : HExpression(field_type), field_info_(field_offset) {
+      : HExpression(field_type), field_info_(field_offset, field_type) {
     SetRawInputAt(0, value);
   }
 
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
+  Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
 
   DECLARE_INSTRUCTION(InstanceFieldGet);
 
@@ -1355,13 +1365,15 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
  public:
   HInstanceFieldSet(HInstruction* object,
                     HInstruction* value,
+                    Primitive::Type field_type,
                     MemberOffset field_offset)
-      : field_info_(field_offset) {
+      : field_info_(field_offset, field_type) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, value);
   }
 
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
+  Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
 
   DECLARE_INSTRUCTION(InstanceFieldSet);
 
@@ -1390,7 +1402,8 @@ class HArraySet : public HTemplateInstruction<3> {
   HArraySet(HInstruction* array,
             HInstruction* index,
             HInstruction* value,
-            uint32_t dex_pc) : dex_pc_(dex_pc) {
+            Primitive::Type component_type,
+            uint32_t dex_pc) : dex_pc_(dex_pc), component_type_(component_type) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
     SetRawInputAt(2, value);
@@ -1404,10 +1417,13 @@ class HArraySet : public HTemplateInstruction<3> {
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
+  Primitive::Type GetComponentType() const { return component_type_; }
+
   DECLARE_INSTRUCTION(ArraySet);
 
  private:
   const uint32_t dex_pc_;
+  Primitive::Type component_type_;
 
   DISALLOW_COPY_AND_ASSIGN(HArraySet);
 };

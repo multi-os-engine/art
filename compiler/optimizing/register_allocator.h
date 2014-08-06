@@ -59,6 +59,7 @@ class RegisterAllocator {
   // Helper method for validation. Used by unit testing.
   static bool ValidateIntervals(const GrowableArray<LiveInterval*>& intervals,
                                 size_t number_of_spill_slots,
+                                size_t number_of_out_slots,
                                 const CodeGenerator& codegen,
                                 ArenaAllocator* allocator,
                                 bool processing_core_registers,
@@ -83,8 +84,8 @@ class RegisterAllocator {
   bool AllocateBlockedReg(LiveInterval* interval);
   void Resolve();
 
-  // Add `interval` in the sorted list of unhandled intervals.
-  void AddToUnhandled(LiveInterval* interval);
+  // Add `interval` in the given sorted list.
+  static void AddSorted(GrowableArray<LiveInterval*>* array, LiveInterval* interval);
 
   // Split `interval` at the position `at`. The new interval starts at `at`.
   LiveInterval* Split(LiveInterval* interval, size_t at);
@@ -115,6 +116,7 @@ class RegisterAllocator {
 
   // Helper methods.
   void AllocateRegistersInternal();
+  void ProcessInstruction(HInstruction* instruction);
   bool ValidateInternal(bool log_fatal_on_failure) const;
   void DumpInterval(std::ostream& stream, LiveInterval* interval) const;
 
@@ -124,7 +126,9 @@ class RegisterAllocator {
 
   // List of intervals that must be processed, ordered by start position. Last entry
   // is the interval that has the lowest start position.
-  GrowableArray<LiveInterval*> unhandled_;
+  GrowableArray<LiveInterval*> unhandled_core_intervals_;
+  GrowableArray<LiveInterval*> unhandled_fp_intervals_;
+  GrowableArray<LiveInterval*>* unhandled_;
 
   // List of intervals that have been processed.
   GrowableArray<LiveInterval*> handled_;
@@ -137,12 +141,19 @@ class RegisterAllocator {
   // That is, they have a lifetime hole that spans the start of the new interval.
   GrowableArray<LiveInterval*> inactive_;
 
-  // Fixed intervals for physical registers. Such an interval covers the positions
+  // Fixed intervals for physical registers. Such intervals cover the positions
   // where an instruction requires a specific register.
   GrowableArray<LiveInterval*> physical_register_intervals_;
 
+  // Intervals for temporaries. Such intervals cover the positions
+  // where an instruction requires a temporary.
+  GrowableArray<LiveInterval*> temp_intervals_;
+
   // The spill slots allocated for live intervals.
   GrowableArray<size_t> spill_slots_;
+
+  // Instructions that need a safepoint.
+  GrowableArray<HInstruction*> safepoints_;
 
   // True if processing core registers. False if processing floating
   // point registers.
@@ -156,6 +167,9 @@ class RegisterAllocator {
 
   // Blocked registers, as decided by the code generator.
   bool* const blocked_registers_;
+
+  // Slots reserved for out arguments.
+  size_t reserved_out_slots_;
 
   DISALLOW_COPY_AND_ASSIGN(RegisterAllocator);
 };
