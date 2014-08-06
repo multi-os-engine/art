@@ -193,12 +193,12 @@ class ClassInitCheckEliminationTest : public testing::Test {
     cu_.mir_graph->ComputeDominators();
     cu_.mir_graph->ComputeTopologicalSortOrder();
     cu_.mir_graph->SSATransformationEnd();
-    bool gate_result = cu_.mir_graph->EliminateClassInitChecksGate();
+    bool gate_result = cu_.mir_graph->EliminateClassInitChecksGate(true, false);
     ASSERT_TRUE(gate_result);
     LoopRepeatingTopologicalSortIterator iterator(cu_.mir_graph.get());
     bool change = false;
     for (BasicBlock* bb = iterator.Next(change); bb != nullptr; bb = iterator.Next(change)) {
-      change = cu_.mir_graph->EliminateClassInitChecks(bb);
+      change = cu_.mir_graph->EliminateClassInitChecks(bb, true);
     }
     cu_.mir_graph->EliminateClassInitChecksEnd();
   }
