@@ -115,18 +115,21 @@ uint32_t StackVisitor::GetDexPc(bool abort_on_failure) const {
 mirror::Object* StackVisitor::GetThisObject() const {
   mirror::ArtMethod* m = GetMethod();
   if (m->IsStatic()) {
-    return NULL;
+    return nullptr;
   } else if (m->IsNative()) {
-    if (cur_quick_frame_ != NULL) {
+    if (cur_quick_frame_ != nullptr) {
       HandleScope* hs = reinterpret_cast<HandleScope*>(
           reinterpret_cast<char*>(cur_quick_frame_) + m->GetHandleScopeOffsetInBytes());
       return hs->GetReference(0);
     } else {
       return cur_shadow_frame_->GetVRegReference(0);
     }
+  } else if (m->IsOptimized()) {
+    // TODO: Implement, currently only used for exceptions and jdwp enabled.
+    return nullptr;
   } else {
     const DexFile::CodeItem* code_item = m->GetCodeItem();
-    if (code_item == NULL) {
+    if (code_item == nullptr) {
       UNIMPLEMENTED(ERROR) << "Failed to determine this object of abstract or proxy method: "
           << PrettyMethod(m);
       return nullptr;

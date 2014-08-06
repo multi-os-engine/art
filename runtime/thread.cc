@@ -2099,6 +2099,28 @@ class ReferenceMapVisitor : public StackVisitor {
 
     // Process register map (which native and runtime methods don't have)
     if (!m->IsNative() && !m->IsRuntimeMethod() && !m->IsProxyMethod()) {
+      if (m->IsOptimized()) {
+        Runtime* runtime = Runtime::Current();
+        const void* entry_point = runtime->GetInstrumentation()->GetQuickCodeFor(m);
+        uintptr_t native_pc_offset = m->NativePcOffset(GetCurrentQuickFramePc(), entry_point);
+        StackMap map = m->GetStackMap(native_pc_offset);
+        MemoryRegion mask = map.GetStackMask();
+        for (size_t i = 0; i < mask.size_in_bits(); ++i) {
+          if (mask.LoadBit(i)) {
+            StackReference<mirror::Object>* ref_addr =
+                  reinterpret_cast<StackReference<mirror::Object>*>(cur_quick_frame) + i;
+            mirror::Object* ref = ref_addr->AsMirrorPtr();
+            if (ref != nullptr) {
+              mirror::Object* new_ref = ref;
+              visitor_(&new_ref, -1, this);
+              if (ref != new_ref) {
+                ref_addr->Assign(new_ref);
+              }
+            }
+          }
+        }
+        return;
+      }
       const uint8_t* native_gc_map = m->GetNativeGcMap();
       CHECK(native_gc_map != nullptr) << PrettyMethod(m);
       const DexFile::CodeItem* code_item = m->GetCodeItem();

@@ -145,8 +145,24 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
 
     visualizer.DumpGraph(kRegisterAllocatorPassName);
     codegen->CompileOptimized(&allocator);
+
+    std::vector<uint8_t> mapping_table;
+    codegen->BuildMappingTable(&mapping_table);
+
+    std::vector<uint8_t> stack_map;
+    codegen->BuildStackMaps(&stack_map);
+
+    return new CompiledMethod(GetCompilerDriver(),
+                              instruction_set,
+                              allocator.GetMemory(),
+                              codegen->GetFrameSize(),
+                              codegen->GetCoreSpillMask(),
+                              0, /* FPR spill mask, unused */
+                              mapping_table,
+                              stack_map);
   } else if (shouldOptimize && RegisterAllocator::Supports(instruction_set)) {
     LOG(FATAL) << "Could not allocate registers in optimizing compiler";
+    return nullptr;
   } else {
     codegen->CompileBaseline(&allocator);
 
@@ -158,25 +174,25 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     SsaLivenessAnalysis liveness(*graph, codegen);
     liveness.Analyze();
     visualizer.DumpGraph(kLivenessPassName);
+
+    std::vector<uint8_t> mapping_table;
+    codegen->BuildMappingTable(&mapping_table);
+    std::vector<uint8_t> vmap_table;
+    codegen->BuildVMapTable(&vmap_table);
+    std::vector<uint8_t> gc_map;
+    codegen->BuildNativeGCMap(&gc_map, dex_compilation_unit);
+
+    return new CompiledMethod(GetCompilerDriver(),
+                              instruction_set,
+                              allocator.GetMemory(),
+                              codegen->GetFrameSize(),
+                              codegen->GetCoreSpillMask(),
+                              0, /* FPR spill mask, unused */
+                              mapping_table,
+                              vmap_table,
+                              gc_map,
+                              nullptr);
   }
-
-  std::vector<uint8_t> mapping_table;
-  codegen->BuildMappingTable(&mapping_table);
-  std::vector<uint8_t> vmap_table;
-  codegen->BuildVMapTable(&vmap_table);
-  std::vector<uint8_t> gc_map;
-  codegen->BuildNativeGCMap(&gc_map, dex_compilation_unit);
-
-  return new CompiledMethod(GetCompilerDriver(),
-                            instruction_set,
-                            allocator.GetMemory(),
-                            codegen->GetFrameSize(),
-                            codegen->GetCoreSpillMask(),
-                            0, /* FPR spill mask, unused */
-                            mapping_table,
-                            vmap_table,
-                            gc_map,
-                            nullptr);
 }
 
 }  // namespace art
