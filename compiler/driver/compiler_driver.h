@@ -594,6 +594,7 @@ class CompilerDriver {
       LOCKS_EXCLUDED(compiled_classes_lock_);
 
   std::vector<uint8_t>* DeduplicateCode(const std::vector<uint8_t>& code);
+  SrcMap* DeduplicateSrcMappingTable(const SrcMap& src_map);
   std::vector<uint8_t>* DeduplicateMappingTable(const std::vector<uint8_t>& code);
   std::vector<uint8_t>* DeduplicateVMapTable(const std::vector<uint8_t>& code);
   std::vector<uint8_t>* DeduplicateGCMap(const std::vector<uint8_t>& code);
@@ -770,15 +771,17 @@ class CompilerDriver {
   std::unique_ptr<std::vector<uint8_t>> cfi_info_;
 
   // DeDuplication data structures, these own the corresponding byte arrays.
+  template <typename Array>
   class DedupeHashFunc {
    public:
-    size_t operator()(const std::vector<uint8_t>& array) const {
+    static uint8_t GetByte(const Array& array, int index);
+    size_t operator()(const Array& array) const {
       // For small arrays compute a hash using every byte.
       static const size_t kSmallArrayThreshold = 16;
       size_t hash = 0x811c9dc5;
       if (array.size() <= kSmallArrayThreshold) {
-        for (uint8_t b : array) {
-          hash = (hash * 16777619) ^ b;
+        for (size_t  i = 0; i < array.size(); ++i) {
+          hash = (hash * 16777619) ^ GetByte(array, i);
         }
       } else {
         // For larger arrays use the 2 bytes at 6 bytes (the location of a push registers
@@ -786,12 +789,12 @@ class CompilerDriver {
         // values at random.
         static const size_t kRandomHashCount = 16;
         for (size_t i = 0; i < 2; ++i) {
-          uint8_t b = array[i + 6];
+          uint8_t b = GetByte(array, i + 6);
           hash = (hash * 16777619) ^ b;
         }
         for (size_t i = 2; i < kRandomHashCount; ++i) {
           size_t r = i * 1103515245 + 12345;
-          uint8_t b = array[r % array.size()];
+          uint8_t b = GetByte(array , r % array.size());
           hash = (hash * 16777619) ^ b;
         }
       }
@@ -803,11 +806,13 @@ class CompilerDriver {
       return hash;
     }
   };
-  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_code_;
-  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_mapping_table_;
-  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_vmap_table_;
-  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_gc_map_;
-  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc, 4> dedupe_cfi_info_;
+
+  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc<std::vector<uint8_t>>, 4> dedupe_code_;
+  DedupeSet<SrcMap, size_t, DedupeHashFunc<SrcMap>, 4> dedupe_src_mapping_table_;
+  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc<std::vector<uint8_t>>, 4> dedupe_mapping_table_;
+  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc<std::vector<uint8_t>>, 4> dedupe_vmap_table_;
+  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc<std::vector<uint8_t>>, 4> dedupe_gc_map_;
+  DedupeSet<std::vector<uint8_t>, size_t, DedupeHashFunc<std::vector<uint8_t>>, 4> dedupe_cfi_info_;
 
   DISALLOW_COPY_AND_ASSIGN(CompilerDriver);
 };

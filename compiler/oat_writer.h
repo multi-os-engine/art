@@ -97,12 +97,19 @@ class OatWriter {
   ~OatWriter();
 
   struct DebugInfo {
-    DebugInfo(const std::string& method_name, uint32_t low_pc, uint32_t high_pc)
-      : method_name_(method_name), low_pc_(low_pc), high_pc_(high_pc) {
+    DebugInfo(const std::string& method_name, const char* src_file_name,
+              uint32_t low_pc, uint32_t high_pc, const uint8_t* dbgstream,
+              const SrcMap& pc2dex_map)
+      : method_name_(method_name), src_file_name_(src_file_name),
+        low_pc_(low_pc), high_pc_(high_pc), dbgstream_(dbgstream),
+        pc2dex_map_(pc2dex_map) {
     }
     std::string method_name_;
+    const char* src_file_name_;
     uint32_t    low_pc_;
     uint32_t    high_pc_;
+    const uint8_t* dbgstream_;
+    const SrcMap& pc2dex_map_;
   };
 
   const std::vector<DebugInfo>& GetCFIMethodInfo() const {
