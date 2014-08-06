@@ -128,6 +128,16 @@ class ElfFile {
   // executable is true at run time, false at compile time.
   bool Load(bool executable, std::string* error_msg);
 
+  enum DEBUG_SECTION_INDEX {
+    END = 0,
+    INFO,
+    LINE,
+    FRAME,
+  };
+
+  bool FixupDebugSections(uintptr_t base_address);
+  static bool FixupEHFrame(uintptr_t offset, byte* eh_frame, size_t eh_frame_size);
+
  private:
   ElfFile(File* file, bool writable, bool program_header_only);
 
@@ -188,7 +198,7 @@ class ElfFile {
   byte* jit_elf_image_;
   JITCodeEntry* jit_gdb_entry_;
   std::unique_ptr<ElfFile> gdb_file_mapping_;
-  void GdbJITSupport();
+  void GdbJITSupport(intptr_t reloc_offset);
 };
 
 }  // namespace art
