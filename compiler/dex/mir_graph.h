@@ -108,6 +108,16 @@ enum DataFlowAttributePos {
   kUsesIField,           // Accesses an instance field (IGET/IPUT).
   kUsesSField,           // Accesses a static field (SGET/SPUT).
   kDoLVN,                // Worth computing local value numbers.
+
+  /**
+   * @brief Ensures that clinit for a class is done.
+   * @details The following conditions ensure that class initialization is done
+   * (as per JLS 12.4.1):
+   * -# Instance of class is created
+   * -# Static method is invoked
+   * -# Static field is assigned or used (and for latter is not constant)
+   */
+  kClInit,
 };
 
 #define DF_NOP                  UINT64_C(0)
@@ -147,6 +157,7 @@ enum DataFlowAttributePos {
 #define DF_IFIELD               (UINT64_C(1) << kUsesIField)
 #define DF_SFIELD               (UINT64_C(1) << kUsesSField)
 #define DF_LVN                  (UINT64_C(1) << kDoLVN)
+#define DF_CLINIT               (UINT64_C(1) << kClInit)
 
 #define DF_HAS_USES             (DF_UA | DF_UB | DF_UC)
 
@@ -581,8 +592,19 @@ class MIRGraph {
     return num_blocks_;
   }
 
+  /**
+   * @brief Includes all methods in compilation unit when providing the num dalvik instructions.
+   * @return Returns the cumulative sum of all insn sizes (in code units).
+   */
   size_t GetNumDalvikInsns() const {
-    return cu_->code_item->insns_size_in_code_units_;
+    size_t cumulative_size = 0u;
+    for (auto it : m_units_) {
+      const DexFile::CodeItem* code_item = it->GetCodeItem();
+      // Even if the code item is null, we still count non-zero value so that
+      // each m_unit is counted as having impact.
+      cumulative_size += (code_item == nullptr ? 1 : code_item->insns_size_in_code_units_);
+    }
+    return cumulative_size;
   }
 
   ArenaBitVector* GetTryBlockAddr() const {
@@ -659,6 +681,10 @@ class MIRGraph {
   bool HasInvokes() const {
     // NOTE: These formats include the rare filled-new-array/range.
     return (merged_df_flags_ & (DF_FORMAT_35C | DF_FORMAT_3RC)) != 0u;
+  }
+
+  bool HasClassInitializerBytecodes() const {
+    return (merged_df_flags_ & DF_CLINIT) != 0u;
   }
 
   void DoCacheFieldLoweringInfo();
@@ -952,9 +978,21 @@ class MIRGraph {
   void EliminateNullChecksAndInferTypesStart();
   bool EliminateNullChecksAndInferTypes(BasicBlock* bb);
   void EliminateNullChecksAndInferTypesEnd();
-  bool EliminateClassInitChecksGate();
-  bool EliminateClassInitChecks(BasicBlock* bb);
+
+  /**
+   * @brief Used to eliminate class initialization checks.
+   * @param bb The basic block to consider.
+   * @param only_sgetsput_variant This is a special variant of the class
+   * init check elimination which only eliminates checks for sgets/sputs
+   * and does not count any other potential class initializers. This is done
+   * because sgets and sputs need type to be in dex cache, something that
+   * is not guaranteed by all initializers.
+   * @return Returns true if there are any changes.
+   */
+  bool EliminateClassInitChecks(BasicBlock* bb, bool only_sgetsput_variant);
+  bool EliminateClassInitChecksGate(bool only_sgetsput_variant);
   void EliminateClassInitChecksEnd();
+
   bool ApplyGlobalValueNumberingGate();
   bool ApplyGlobalValueNumbering(BasicBlock* bb);
   void ApplyGlobalValueNumberingEnd();
