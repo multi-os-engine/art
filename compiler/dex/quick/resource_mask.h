@@ -148,6 +148,7 @@ constexpr ResourceMask kEncodeDalvikReg = ResourceMask::Bit(ResourceMask::kDalvi
 constexpr ResourceMask kEncodeMem = kEncodeLiteral.Union(kEncodeDalvikReg).Union(
     kEncodeHeapRef).Union(ResourceMask::Bit(ResourceMask::kMustNotAlias));
 
+// The top few bits of the resource mask are reserved for special purposes so the
 class ResourceMaskCache {
  public:
   explicit ResourceMaskCache(ArenaAllocator* allocator)
