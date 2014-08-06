@@ -61,6 +61,10 @@ bool ElfFixup::Fixup(File* file, uintptr_t oat_data_begin) {
       LOG(WARNING) << "Failed fo fixup .rel.dyn in " << file->GetPath();
       return false;
   }
+  if (!elf_file->FixupDebugSections(base_address)) {
+      LOG(WARNING) << "Failed fo fixup debug sections in " << file->GetPath();
+      return false;
+  }
   return true;
 }
 
