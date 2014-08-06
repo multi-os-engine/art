@@ -948,10 +948,22 @@ void MIRGraph::EliminateNullChecksAndInferTypesEnd() {
 }
 
 bool MIRGraph::EliminateClassInitChecksGate() {
-  if ((cu_->disable_opt & (1 << kClassInitCheckElimination)) != 0 ||
-      !cu_->mir_graph->HasStaticFieldAccess()) {
+  if ((cu_->disable_opt & (1 << kClassInitCheckElimination)) != 0) {
+    // If optimization is disabled, return false.
     return false;
   }
+
+  if (cu_->mir_graph->HasStaticFieldAccess() == false && cu_->mir_graph->HasInvokes() == false) {
+    // If there are no static field access and no invokes, then we have nothing to do.
+    // We would prefer if we knew if any static invokes are in place, but currently
+    // that information is not available.
+    return false;
+  }
+
+  // Class initialization check elimination happens early on, before BB calculation
+  // is done for first time. We make sure now that we calculate the DF information before
+  // this pass starts.
+  CalculateBasicBlockInformation();
 
   if (kIsDebugBuild) {
     AllNodesIterator iter(this);
@@ -1002,15 +1014,30 @@ bool MIRGraph::EliminateClassInitChecksGate() {
         if (mir->dalvikInsn.opcode >= Instruction::SGET &&
             mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) {
           const MirSFieldLoweringInfo& field_info = GetSFieldLoweringInfo(mir);
-          uint16_t index = 0xffffu;
+          uint16_t index = std::numeric_limits<uint16_t>::max();
           if (!field_info.IsInitialized()) {
-            DCHECK_LT(class_to_index_map.size(), 0xffffu);
+            DCHECK_LT(class_to_index_map.size(), std::numeric_limits<uint16_t>::max());
             MapEntry entry = {
                 // Treat unresolved fields as if each had its own class.
                 field_info.IsResolved() ? field_info.DeclaringDexFile()
                                         : nullptr,
                 field_info.IsResolved() ? field_info.DeclaringClassIndex()
                                         : field_info.FieldIndex(),
+                static_cast<uint16_t>(class_to_index_map.size())
+            };
+            index = class_to_index_map.insert(entry).first->index;
+          }
+          // Using offset/2 for index into temp_insn_data_.
+          temp_insn_data_[mir->offset / 2u] = index;
+        } else if (mir->dalvikInsn.opcode == Instruction::INVOKE_STATIC ||
+                   mir->dalvikInsn.opcode == Instruction::INVOKE_STATIC_RANGE) {
+          const MirMethodLoweringInfo& method_info = GetMethodLoweringInfo(mir);
+          uint16_t index = std::numeric_limits<uint16_t>::max();
+          if (method_info.NeedsClassInitialization()) {
+            DCHECK_LT(class_to_index_map.size(), std::numeric_limits<uint16_t>::max());
+            MapEntry entry = {
+                method_info.DeclaringDexFile(),
+                method_info.DeclaringClassIndex(),
                 static_cast<uint16_t>(class_to_index_map.size())
             };
             index = class_to_index_map.insert(entry).first->index;
@@ -1087,19 +1114,18 @@ bool MIRGraph::EliminateClassInitChecks(BasicBlock* bb) {
 
   // Walk through the instruction in the block, updating as necessary
   for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
-    if (mir->dalvikInsn.opcode >= Instruction::SGET &&
-        mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) {
+    if ((mir->dalvikInsn.opcode >= Instruction::SGET &&
+         mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) ||
+         mir->dalvikInsn.opcode == Instruction::INVOKE_STATIC ||
+         mir->dalvikInsn.opcode == Instruction::INVOKE_STATIC_RANGE) {
       uint16_t index = temp_insn_data_[mir->offset / 2u];
-      if (index != 0xffffu) {
-        if (mir->dalvikInsn.opcode >= Instruction::SGET &&
-            mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) {
-          if (!classes_to_check->IsBitSet(index)) {
-            // Eliminate the class init check.
-            mir->optimization_flags |= MIR_IGNORE_CLINIT_CHECK;
-          } else {
-            // Do the class init check.
-            mir->optimization_flags &= ~MIR_IGNORE_CLINIT_CHECK;
-          }
+      if (index != std::numeric_limits<uint16_t>::max()) {
+        if (!classes_to_check->IsBitSet(index)) {
+          // Eliminate the class init check.
+          mir->optimization_flags |= MIR_IGNORE_CLINIT_CHECK;
+        } else {
+          // Do the class init check.
+          mir->optimization_flags &= ~MIR_IGNORE_CLINIT_CHECK;
         }
         // Mark the class as initialized.
         classes_to_check->ClearBit(index);
@@ -1258,10 +1284,19 @@ void MIRGraph::InlineSpecialMethods(BasicBlock* bb) {
       continue;
     }
     InvokeType sharp_type = method_info.GetSharpType();
-    if ((sharp_type != kDirect) &&
-        (sharp_type != kStatic || method_info.NeedsClassInitialization())) {
+
+    if ((sharp_type != kDirect) && (sharp_type != kStatic)) {
       continue;
     }
+
+    if (sharp_type == kStatic) {
+      bool needs_clinit = method_info.NeedsClassInitialization() &&
+          ((mir->optimization_flags & MIR_IGNORE_CLINIT_CHECK) == 0);
+      if (needs_clinit) {
+        continue;
+      }
+    }
+
     DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
     MethodReference target = method_info.GetTargetMethod();
     if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(target.dex_file)

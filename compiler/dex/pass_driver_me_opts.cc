@@ -35,10 +35,10 @@ template<>
 const Pass* const PassDriver<PassDriverMEOpts>::g_passes[] = {
   GetPassInstance<CacheFieldLoweringInfo>(),
   GetPassInstance<CacheMethodLoweringInfo>(),
+  GetPassInstance<ClassInitCheckElimination>(),
   GetPassInstance<SpecialMethodInliner>(),
   GetPassInstance<CodeLayout>(),
   GetPassInstance<NullCheckEliminationAndTypeInference>(),
-  GetPassInstance<ClassInitCheckElimination>(),
   GetPassInstance<GlobalValueNumberingPass>(),
   GetPassInstance<BBCombine>(),
   GetPassInstance<BBOptimizations>(),
