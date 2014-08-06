@@ -922,7 +922,9 @@ class MIRGraph {
   bool EliminateNullChecksAndInferTypes(BasicBlock* bb);
   void EliminateNullChecksAndInferTypesEnd();
   bool EliminateClassInitChecksGate();
-  bool EliminateClassInitChecks(BasicBlock* bb);
+  typedef bool (*CanEliminateCheckFnPtr)(MIR*);
+  typedef bool (*CanCountEliminationFnPtr)(MIR *);
+  bool EliminateClassInitChecks(CanEliminateCheckFnPtr, CanCountEliminationFnPtr, BasicBlock* bb);
   void EliminateClassInitChecksEnd();
   bool ApplyGlobalValueNumberingGate();
   bool ApplyGlobalValueNumbering(BasicBlock* bb);
