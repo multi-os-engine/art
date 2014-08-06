@@ -137,25 +137,25 @@ static inline uint8_t* EncodeSignedLeb128(uint8_t* dest, int32_t value) {
   return dest;
 }
 
-// An encoder with an API similar to vector<uint32_t> where the data is captured in ULEB128 format.
-class Leb128EncodingVector {
+class Leb128Encoder {
  public:
-  Leb128EncodingVector() {
+  Leb128Encoder(std::vector<uint8_t>* data) : data_(data) {
+    DCHECK(data);
   }
 
   void Reserve(uint32_t size) {
-    data_.reserve(size);
+    data_->reserve(size);
   }
 
   void PushBackUnsigned(uint32_t value) {
     uint8_t out = value & 0x7f;
     value >>= 7;
     while (value != 0) {
-      data_.push_back(out | 0x80);
+      data_->push_back(out | 0x80);
       out = value & 0x7f;
       value >>= 7;
     }
-    data_.push_back(out);
+    data_->push_back(out);
   }
 
   template<typename It>
@@ -169,12 +169,12 @@ class Leb128EncodingVector {
     uint32_t extra_bits = static_cast<uint32_t>(value ^ (value >> 31)) >> 6;
     uint8_t out = value & 0x7f;
     while (extra_bits != 0u) {
-      data_.push_back(out | 0x80);
+      data_->push_back(out | 0x80);
       value >>= 7;
       out = value & 0x7f;
       extra_bits >>= 7;
     }
-    data_.push_back(out);
+    data_->push_back(out);
   }
 
   template<typename It>
@@ -185,12 +185,23 @@ class Leb128EncodingVector {
   }
 
   const std::vector<uint8_t>& GetData() const {
-    return data_;
+    return *data_;
+  }
+
+ protected:
+  std::vector<uint8_t>* const data_;
+
+  DISALLOW_COPY_AND_ASSIGN(Leb128Encoder);
+};
+
+// An encoder with an API similar to vector<uint32_t> where the data is captured in ULEB128 format.
+class Leb128EncodingVector : private std::vector<uint8_t>, public Leb128Encoder {
+ public:
+  Leb128EncodingVector() : Leb128Encoder(&static_cast<std::vector<uint8_t>&>(*this)) {
+    ;
   }
 
  private:
-  std::vector<uint8_t> data_;
-
   DISALLOW_COPY_AND_ASSIGN(Leb128EncodingVector);
 };
 
