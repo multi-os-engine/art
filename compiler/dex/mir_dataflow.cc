@@ -133,7 +133,7 @@ const uint64_t MIRGraph::oat_data_flow_attributes_[kMirOpLast] = {
   DF_DA | DF_UB | DF_NULL_CHK_0 | DF_CORE_A | DF_REF_B,
 
   // 22 NEW_INSTANCE vAA, type@BBBB
-  DF_DA | DF_NON_NULL_DST | DF_REF_A | DF_UMS,
+  DF_DA | DF_NON_NULL_DST | DF_REF_A | DF_UMS | DF_CLINIT,
 
   // 23 NEW_ARRAY vA, vB, type@CCCC
   DF_DA | DF_UB | DF_NON_NULL_DST | DF_REF_A | DF_CORE_B | DF_UMS,
@@ -319,46 +319,46 @@ const uint64_t MIRGraph::oat_data_flow_attributes_[kMirOpLast] = {
   DF_UA | DF_UB | DF_NULL_CHK_1 | DF_REF_B | DF_IFIELD | DF_LVN,
 
   // 60 SGET vAA, field@BBBB
-  DF_DA | DF_SFIELD | DF_UMS,
+  DF_DA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 61 SGET_WIDE vAA, field@BBBB
-  DF_DA | DF_A_WIDE | DF_SFIELD | DF_UMS,
+  DF_DA | DF_A_WIDE | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 62 SGET_OBJECT vAA, field@BBBB
-  DF_DA | DF_REF_A | DF_SFIELD | DF_UMS,
+  DF_DA | DF_REF_A | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 63 SGET_BOOLEAN vAA, field@BBBB
-  DF_DA | DF_SFIELD | DF_UMS,
+  DF_DA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 64 SGET_BYTE vAA, field@BBBB
-  DF_DA | DF_SFIELD | DF_UMS,
+  DF_DA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 65 SGET_CHAR vAA, field@BBBB
-  DF_DA | DF_SFIELD | DF_UMS,
+  DF_DA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 66 SGET_SHORT vAA, field@BBBB
-  DF_DA | DF_SFIELD | DF_UMS,
+  DF_DA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 67 SPUT vAA, field@BBBB
-  DF_UA | DF_SFIELD | DF_UMS,
+  DF_UA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 68 SPUT_WIDE vAA, field@BBBB
-  DF_UA | DF_A_WIDE | DF_SFIELD | DF_UMS,
+  DF_UA | DF_A_WIDE | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 69 SPUT_OBJECT vAA, field@BBBB
-  DF_UA | DF_REF_A | DF_SFIELD | DF_UMS,
+  DF_UA | DF_REF_A | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 6A SPUT_BOOLEAN vAA, field@BBBB
-  DF_UA | DF_SFIELD | DF_UMS,
+  DF_UA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 6B SPUT_BYTE vAA, field@BBBB
-  DF_UA | DF_SFIELD | DF_UMS,
+  DF_UA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 6C SPUT_CHAR vAA, field@BBBB
-  DF_UA | DF_SFIELD | DF_UMS,
+  DF_UA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 6D SPUT_SHORT vAA, field@BBBB
-  DF_UA | DF_SFIELD | DF_UMS,
+  DF_UA | DF_SFIELD | DF_UMS | DF_CLINIT,
 
   // 6E INVOKE_VIRTUAL {vD, vE, vF, vG, vA}
   DF_FORMAT_35C | DF_NULL_CHK_OUT0 | DF_UMS,
@@ -370,7 +370,7 @@ const uint64_t MIRGraph::oat_data_flow_attributes_[kMirOpLast] = {
   DF_FORMAT_35C | DF_NULL_CHK_OUT0 | DF_UMS,
 
   // 71 INVOKE_STATIC {vD, vE, vF, vG, vA}
-  DF_FORMAT_35C | DF_UMS,
+  DF_FORMAT_35C | DF_UMS | DF_CLINIT,
 
   // 72 INVOKE_INTERFACE {vD, vE, vF, vG, vA}
   DF_FORMAT_35C | DF_NULL_CHK_OUT0 | DF_UMS,
@@ -388,7 +388,7 @@ const uint64_t MIRGraph::oat_data_flow_attributes_[kMirOpLast] = {
   DF_FORMAT_3RC | DF_NULL_CHK_OUT0 | DF_UMS,
 
   // 77 INVOKE_STATIC_RANGE {vCCCC .. vNNNN}
-  DF_FORMAT_3RC | DF_UMS,
+  DF_FORMAT_3RC | DF_UMS | DF_CLINIT,
 
   // 78 INVOKE_INTERFACE_RANGE {vCCCC .. vNNNN}
   DF_FORMAT_3RC | DF_NULL_CHK_OUT0 | DF_UMS,
@@ -1198,6 +1198,31 @@ bool MIRGraph::DoSSAConversion(BasicBlock* bb) {
   return true;
 }
 
+void MIRGraph::InitializeBlockDF() {
+  /*
+   * Allocate the BasicBlockDataFlow structure for the entry and code blocks
+   */
+  GrowableArray<BasicBlock*>::Iterator iterator(&block_list_);
+
+  while (true) {
+    BasicBlock* bb = iterator.Next();
+    if (bb == NULL) break;
+    if (bb->hidden == true) continue;
+    if (bb->block_type == kDalvikByteCode ||
+      bb->block_type == kEntryBlock ||
+      bb->block_type == kExitBlock) {
+        // Check if already allocated. If yes, simply clear it out.
+        if (bb->data_flow_info == nullptr) {
+          bb->data_flow_info =
+              static_cast<BasicBlockDataFlow*>(arena_->Alloc(sizeof(BasicBlockDataFlow),
+                                                             kArenaAllocDFInfo));
+        } else {
+          memset(bb->data_flow_info, 0, sizeof(*bb->data_flow_info));
+        }
+      }
+  }
+}
+
 /* Setup the basic data structures for SSA conversion */
 void MIRGraph::CompilerInitializeSSAConversion() {
   size_t num_reg = GetNumOfCodeAndTempVRs();
@@ -1244,23 +1269,8 @@ void MIRGraph::CompilerInitializeSSAConversion() {
   // The MIR graph keeps track of the sreg for method pointer specially, so record that now.
   method_sreg_ = method_temp->s_reg_low;
 
-  /*
-   * Allocate the BasicBlockDataFlow structure for the entry and code blocks
-   */
-  GrowableArray<BasicBlock*>::Iterator iterator(&block_list_);
-
-  while (true) {
-    BasicBlock* bb = iterator.Next();
-    if (bb == NULL) break;
-    if (bb->hidden == true) continue;
-    if (bb->block_type == kDalvikByteCode ||
-      bb->block_type == kEntryBlock ||
-      bb->block_type == kExitBlock) {
-      bb->data_flow_info =
-          static_cast<BasicBlockDataFlow*>(arena_->Alloc(sizeof(BasicBlockDataFlow),
-                                                         kArenaAllocDFInfo));
-      }
-  }
+  // Finish up by initializing the block dataflow field.
+  InitializeBlockDF();
 }
 
 /*

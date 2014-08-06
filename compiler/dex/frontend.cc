@@ -177,6 +177,9 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
     return nullptr;
   }
 
+  /* Before creating pass driver, prepare it by running one time through the BB calculations. */
+  cu.mir_graph->CalculateBasicBlockInformation();
+
   /* Create the pass driver and launch it */
   PassDriverMEOpts pass_driver(&cu);
   pass_driver.Launch();

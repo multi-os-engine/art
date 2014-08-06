@@ -29,16 +29,27 @@ namespace art {
  * Advantage is that there will be no race conditions here.
  * Disadvantage is the passes can't change their internal states depending on CompilationUnit:
  *   - This is not yet an issue: no current pass would require it.
+ *
+ * Passes are ordered in a logical manner:
+ * -# First, cache information about igets, sgets, and invokes which can be used for later passes.
+ * -# Before inlining, do invoke clinit elimination. This makes inliner more powerful because
+ * it can inline static invokes to other classes.
+ * -# After inlining, finish up with clinit elimination. This is because the inliner may have
+ * brought in new sgets/sputs.
+ * -# GVN, type inference, and null check elimination happen before the optimizations to reduce
+ * barriers to optimizations.
+ * -# Finally, optimizations on the CFG are applied.
  */
 // The initial list of passes to be used by the PassDriveMEOpts.
 template<>
 const Pass* const PassDriver<PassDriverMEOpts>::g_passes[] = {
   GetPassInstance<CacheFieldLoweringInfo>(),
   GetPassInstance<CacheMethodLoweringInfo>(),
+  GetPassInstance<StaticInvokeClassInitCheckElimination>(),
   GetPassInstance<SpecialMethodInliner>(),
+  GetPassInstance<StaticGetterSetterClassInitCheckElimination>(),
   GetPassInstance<CodeLayout>(),
   GetPassInstance<NullCheckEliminationAndTypeInference>(),
-  GetPassInstance<ClassInitCheckElimination>(),
   GetPassInstance<GlobalValueNumberingPass>(),
   GetPassInstance<BBCombine>(),
   GetPassInstance<BBOptimizations>(),
