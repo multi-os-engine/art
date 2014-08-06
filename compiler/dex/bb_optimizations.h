@@ -171,8 +171,8 @@ class NullCheckEliminationAndTypeInference : public PassME {
 
 class ClassInitCheckElimination : public PassME {
  public:
-  ClassInitCheckElimination()
-    : PassME("ClInitCheckElimination", kLoopRepeatingTopologicalSortTraversal) {
+  explicit ClassInitCheckElimination(const char* name)
+    : PassME(name, kLoopRepeatingTopologicalSortTraversal) {
   }
 
   bool Gate(const PassDataHolder* data) const {
@@ -182,6 +182,20 @@ class ClassInitCheckElimination : public PassME {
     return cUnit->mir_graph->EliminateClassInitChecksGate();
   }
 
+  void End(PassDataHolder* data) const {
+    DCHECK(data != nullptr);
+    CompilationUnit* cUnit = down_cast<PassMEDataHolder*>(data)->c_unit;
+    DCHECK(cUnit != nullptr);
+    cUnit->mir_graph->EliminateClassInitChecksEnd();
+  }
+};
+
+class StaticGetterSetterClassInitCheckElimination : public ClassInitCheckElimination {
+ public:
+  StaticGetterSetterClassInitCheckElimination()
+    : ClassInitCheckElimination("StaticSetterGetterClInitCheckElimination") {
+  }
+
   bool Worker(const PassDataHolder* data) const {
     DCHECK(data != nullptr);
     const PassMEDataHolder* pass_me_data_holder = down_cast<const PassMEDataHolder*>(data);
@@ -189,14 +203,24 @@ class ClassInitCheckElimination : public PassME {
     DCHECK(cUnit != nullptr);
     BasicBlock* bb = pass_me_data_holder->bb;
     DCHECK(bb != nullptr);
-    return cUnit->mir_graph->EliminateClassInitChecks(bb);
+    return cUnit->mir_graph->EliminateClassInitChecks(bb, true);
+  }
+};
+
+class StaticInvokeClassInitCheckElimination : public ClassInitCheckElimination {
+ public:
+    StaticInvokeClassInitCheckElimination()
+    : ClassInitCheckElimination("StaticInvokeClassInitCheckElimination") {
   }
 
-  void End(PassDataHolder* data) const {
+  bool Worker(const PassDataHolder* data) const {
     DCHECK(data != nullptr);
-    CompilationUnit* cUnit = down_cast<PassMEDataHolder*>(data)->c_unit;
+    const PassMEDataHolder* pass_me_data_holder = down_cast<const PassMEDataHolder*>(data);
+    CompilationUnit* cUnit = pass_me_data_holder->c_unit;
     DCHECK(cUnit != nullptr);
-    cUnit->mir_graph->EliminateClassInitChecksEnd();
+    BasicBlock* bb = pass_me_data_holder->bb;
+    DCHECK(bb != nullptr);
+    return cUnit->mir_graph->EliminateClassInitChecks(bb, false);
   }
 };
 

@@ -198,7 +198,7 @@ class ClassInitCheckEliminationTest : public testing::Test {
     LoopRepeatingTopologicalSortIterator iterator(cu_.mir_graph.get());
     bool change = false;
     for (BasicBlock* bb = iterator.Next(change); bb != nullptr; bb = iterator.Next(change)) {
-      change = cu_.mir_graph->EliminateClassInitChecks(bb);
+      change = cu_.mir_graph->EliminateClassInitChecks(bb, true);
     }
     cu_.mir_graph->EliminateClassInitChecksEnd();
   }
