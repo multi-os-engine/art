@@ -42,6 +42,12 @@ class MappedFileTest : public RandomAccessFileTest {
     ASSERT_TRUE(CopyFile(src, &dst));
   }
 
+  void TearDown() {
+    ASSERT_EQ(unlink(good_path_.c_str()), 0);
+
+    RandomAccessFileTest::TearDown();
+  }
+
   virtual RandomAccessFile* MakeTestFile() {
     TEMP_FAILURE_RETRY(truncate(good_path_.c_str(), 0));
     MappedFile* f = new MappedFile;

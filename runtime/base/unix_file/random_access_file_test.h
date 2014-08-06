@@ -38,6 +38,10 @@ class RandomAccessFileTest : public testing::Test {
     art::CommonRuntimeTest::SetEnvironmentVariables(android_data_);
   }
 
+  virtual void TearDown() {
+    ASSERT_EQ(rmdir(android_data_.c_str()), 0);
+  }
+
   std::string GetTmpPath(const std::string& name) {
     std::string path;
     path = android_data_;
