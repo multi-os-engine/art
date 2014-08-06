@@ -171,8 +171,8 @@ class NullCheckEliminationAndTypeInference : public PassME {
 
 class ClassInitCheckElimination : public PassME {
  public:
-  ClassInitCheckElimination()
-    : PassME("ClInitCheckElimination", kLoopRepeatingTopologicalSortTraversal) {
+  explicit ClassInitCheckElimination(const char* name)
+    : PassME(name, kLoopRepeatingTopologicalSortTraversal) {
   }
 
   bool Gate(const PassDataHolder* data) const {
@@ -182,6 +182,32 @@ class ClassInitCheckElimination : public PassME {
     return cUnit->mir_graph->EliminateClassInitChecksGate();
   }
 
+  void End(PassDataHolder* data) const {
+    DCHECK(data != nullptr);
+    CompilationUnit* cUnit = down_cast<PassMEDataHolder*>(data)->c_unit;
+    DCHECK(cUnit != nullptr);
+    cUnit->mir_graph->EliminateClassInitChecksEnd();
+  }
+};
+
+class StaticGetterSetterClassInitCheckElimination : public ClassInitCheckElimination {
+ public:
+  StaticGetterSetterClassInitCheckElimination()
+    : ClassInitCheckElimination("StaticSetterGetterClInitCheckElimination") {
+  }
+
+  static bool CanEliminateCheck(MIR* mir) {
+    // This pass only eliminates checks for sgets and sputs.
+    return (mir->dalvikInsn.opcode >= Instruction::SGET && mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT);
+  }
+
+  static bool CanCountEliminatedCheck(MIR* mir) {
+    // Sgets and sputs also require that the type is in dex cache.
+    // Therefore, even if other bytecodes ensure class init, we only allow counting
+    // if sget/sput itself caused the cl init to be eliminated.
+    return (mir->dalvikInsn.opcode >= Instruction::SGET && mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT);
+  }
+
   bool Worker(const PassDataHolder* data) const {
     DCHECK(data != nullptr);
     const PassMEDataHolder* pass_me_data_holder = down_cast<const PassMEDataHolder*>(data);
@@ -189,14 +215,39 @@ class ClassInitCheckElimination : public PassME {
     DCHECK(cUnit != nullptr);
     BasicBlock* bb = pass_me_data_holder->bb;
     DCHECK(bb != nullptr);
-    return cUnit->mir_graph->EliminateClassInitChecks(bb);
+    return cUnit->mir_graph->EliminateClassInitChecks(CanEliminateCheck, CanCountEliminatedCheck, bb);
+  }
+};
+
+class StaticInvokeClassInitCheckElimination : public ClassInitCheckElimination {
+ public:
+    StaticInvokeClassInitCheckElimination()
+    : ClassInitCheckElimination("StaticInvokeClassInitCheckElimination") {
   }
 
-  void End(PassDataHolder* data) const {
+  static bool CanEliminateCheck(MIR* mir) {
+    // This pass only eliminates checks for static invokes.
+    return (mir->dalvikInsn.opcode == Instruction::INVOKE_STATIC
+        || mir->dalvikInsn.opcode == Instruction::INVOKE_STATIC_RANGE);
+  }
+
+  static bool CanCountEliminatedCheck(MIR* mir) {
+    // Any type that ensures clinit can be counted towards being able to do elimination
+    // of clinit for invokes.
+    return ((mir->dalvikInsn.opcode >= Instruction::SGET &&
+            mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) ||
+            mir->dalvikInsn.opcode == Instruction::INVOKE_STATIC ||
+            mir->dalvikInsn.opcode == Instruction::INVOKE_STATIC_RANGE);
+  }
+
+  bool Worker(const PassDataHolder* data) const {
     DCHECK(data != nullptr);
-    CompilationUnit* cUnit = down_cast<PassMEDataHolder*>(data)->c_unit;
+    const PassMEDataHolder* pass_me_data_holder = down_cast<const PassMEDataHolder*>(data);
+    CompilationUnit* cUnit = pass_me_data_holder->c_unit;
     DCHECK(cUnit != nullptr);
-    cUnit->mir_graph->EliminateClassInitChecksEnd();
+    BasicBlock* bb = pass_me_data_holder->bb;
+    DCHECK(bb != nullptr);
+    return cUnit->mir_graph->EliminateClassInitChecks(CanEliminateCheck, CanCountEliminatedCheck, bb);
   }
 };
 
