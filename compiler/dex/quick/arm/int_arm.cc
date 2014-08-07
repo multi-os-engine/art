@@ -949,6 +949,20 @@ bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   return true;
 }
 
+bool ArmMir2Lir::GenInlinedReverseBits(CallInfo* info, OpSize size) {
+  if (size == k64) {
+    return false;
+  }
+  CHECK(size == k32);
+  RegLocation rl_src_i = info->args[0];
+  RegLocation rl_dest = InlineTarget(info);  // result reg
+  RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
+  RegLocation rl_i = LoadValue(rl_src_i, kCoreReg);
+  NewLIR3(kThumb2RbitRR, rl_result.reg.GetReg(), rl_i.reg.GetReg(), rl_i.reg.GetReg());
+  StoreValue(rl_dest, rl_result);
+  return true;
+}
+
 LIR* ArmMir2Lir::OpPcRelLoad(RegStorage reg, LIR* target) {
   return RawLIR(current_dalvik_offset_, kThumb2LdrPcRel12, reg.GetReg(), 0, 0, 0, 0, target);
 }

@@ -401,5 +401,46 @@ bool ArmMir2Lir::GenInlinedSqrt(CallInfo* info) {
   return true;
 }
 
+// Available only on ARMv8 CPUs
+bool ArmMir2Lir::GenInlinedCeil(CallInfo* info) {
+  if (!cu_->GetInstructionSetFeatures().HasAArch32()) {
+    return false;
+  }
+  RegLocation rl_src = info->args[0];
+  RegLocation rl_dest = InlineTargetWide(info);
+  rl_src = LoadValueWide(rl_src, kFPReg);
+  RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
+  NewLIR2(kThumb2Vrintpd, rl_result.reg.GetReg(), rl_src.reg.GetReg());
+  StoreValueWide(rl_dest, rl_result);
+  return true;
+}
+
+// Available only on ARMv8 CPUs
+bool ArmMir2Lir::GenInlinedFloor(CallInfo* info) {
+  if (!cu_->GetInstructionSetFeatures().HasAArch32()) {
+    return false;
+  }
+  RegLocation rl_src = info->args[0];
+  RegLocation rl_dest = InlineTargetWide(info);
+  rl_src = LoadValueWide(rl_src, kFPReg);
+  RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
+  NewLIR2(kThumb2Vrintmd, rl_result.reg.GetReg(), rl_src.reg.GetReg());
+  StoreValueWide(rl_dest, rl_result);
+  return true;
+}
+
+// Available only on ARMv8 CPUs
+bool ArmMir2Lir::GenInlinedRint(CallInfo* info) {
+if (!cu_->GetInstructionSetFeatures().HasAArch32()) {
+    return false;
+  }
+  RegLocation rl_src = info->args[0];
+  RegLocation rl_dest = InlineTargetWide(info);
+  rl_src = LoadValueWide(rl_src, kFPReg);
+  RegLocation rl_result = EvalLoc(rl_dest, kFPReg, true);
+  NewLIR2(kThumb2Vrintnd, rl_result.reg.GetReg(), rl_src.reg.GetReg());
+  StoreValueWide(rl_dest, rl_result);
+  return true;
+}
 
 }  // namespace art

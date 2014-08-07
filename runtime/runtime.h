@@ -460,7 +460,11 @@ class Runtime {
     return target_sdk_version_;
   }
 
-  static const char* GetDefaultInstructionSetFeatures() {
+  static const std::string GetDefaultInstructionSetFeatures(const InstructionSet isa) {
+    if (!k2ndArchInstructionSetFeatures.empty() &&
+        !Is64BitInstructionSet(isa)) {
+        return k2ndArchInstructionSetFeatures;
+    }
     return kDefaultInstructionSetFeatures;
   }
 
@@ -483,7 +487,8 @@ class Runtime {
   // A pointer to the active runtime or NULL.
   static Runtime* instance_;
 
-  static const char* kDefaultInstructionSetFeatures;
+  static const std::string kDefaultInstructionSetFeatures;
+  static const std::string k2ndArchInstructionSetFeatures;
 
   // NOTE: these must match the gc::ProcessState values as they come directly from the framework.
   static constexpr int kProfileForground = 0;

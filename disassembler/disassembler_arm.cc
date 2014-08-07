@@ -123,6 +123,10 @@ static const char* kThumbReverseOperations[] = {
     "rev", "rev16", "rbit", "revsh"
 };
 
+static const char* kThumbRintOperations[] = {
+  "vrinta", "vrintn", "vrintp", "vrintm"
+};
+
 struct ArmRegister {
   explicit ArmRegister(uint32_t r) : r(r) { CHECK_LE(r, 15U); }
   ArmRegister(uint32_t instruction, uint32_t at_bit) : r((instruction >> at_bit) & 0xf) { CHECK_LE(r, 15U); }
@@ -1592,6 +1596,17 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
           case 5:
           case 6:
             break;      // TODO: when we generate these...
+          }
+        } else if ((op2 >> 3) == 13) {      // 1101xxx
+          // ARMv8 VFP
+          uint32_t S = (instr >> 8) & 1;
+          if ((op2 & 3) == 3) {   // 1101x11
+            // VRINTA, VRINTN, VRINTP, VRINTM
+            FpRegister d(instr, 12, 22);
+            FpRegister m(instr, 0, 5);
+            uint32_t op3 = (instr >> 16) & 0x3;
+            opcode << kThumbRintOperations[op3] << (S != 0 ? ".f64" : ".f32");
+            args << d << ", " << m;
           }
         }
       }

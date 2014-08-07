@@ -108,6 +108,10 @@ class ArmMir2Lir FINAL : public Mir2Lir {
     bool GenInlinedSqrt(CallInfo* info);
     bool GenInlinedPeek(CallInfo* info, OpSize size);
     bool GenInlinedPoke(CallInfo* info, OpSize size);
+    bool GenInlinedCeil(CallInfo* info) OVERRIDE;
+    bool GenInlinedFloor(CallInfo* info) OVERRIDE;
+    bool GenInlinedRint(CallInfo* info) OVERRIDE;
+    bool GenInlinedReverseBits(CallInfo* info, OpSize size) OVERRIDE;
     RegLocation GenDivRem(RegLocation rl_dest, RegStorage reg_lo, RegStorage reg_hi, bool is_div);
     RegLocation GenDivRemLit(RegLocation rl_dest, RegStorage reg_lo, int lit, bool is_div);
     void GenCmpLong(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2);

@@ -731,6 +731,8 @@ static InstructionSetFeatures ParseFeatureList(std::string str) {
     } else if (feature == "nolpae") {
       // Turn off support for Large Physical Address Extension.
       result.SetHasLpae(false);
+    } else if (feature == "aarch32") {
+      result.SetHasAArch32(true);
     } else {
       Usage("Unknown instruction set feature: '%s'", feature.c_str());
     }
@@ -835,7 +837,7 @@ static int dex2oat(int argc, char** argv) {
 
   // Take the default set of instruction features from the build.
   InstructionSetFeatures instruction_set_features =
-      ParseFeatureList(Runtime::GetDefaultInstructionSetFeatures());
+      ParseFeatureList(Runtime::GetDefaultInstructionSetFeatures(kRuntimeISA));
 
   InstructionSet instruction_set = kRuntimeISA;
 

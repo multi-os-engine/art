@@ -174,6 +174,7 @@ size_t GetStackOverflowReservedBytes(InstructionSet isa);
 enum InstructionFeatures {
   kHwDiv  = 0x1,              // Supports hardware divide.
   kHwLpae = 0x2,              // Supports Large Physical Address Extension.
+  kHwAArch32 = 0x4,           // Supports AArch32 - ARMv8
 };
 
 // This is a bitmask of supported features per architecture.
@@ -200,6 +201,13 @@ class PACKED(4) InstructionSetFeatures {
     mask_ = (mask_ & ~kHwLpae) | (v ? kHwLpae : 0);
   }
 
+  bool HasAArch32() const {
+    return (mask_ & kHwAArch32) != 0;
+  }
+
+  void SetHasAArch32(bool v) {
+    mask_ = (mask_ & ~kHwAArch32) | (v ? (kHwDiv|kHwLpae|kHwAArch32) : 0);
+  }
   std::string GetFeatureString() const;
 
   // Other features in here.

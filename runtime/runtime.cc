@@ -90,8 +90,12 @@
 namespace art {
 
 static constexpr bool kEnableJavaStackTraceHandler = true;
-const char* Runtime::kDefaultInstructionSetFeatures =
+const std::string Runtime::kDefaultInstructionSetFeatures =
     STRINGIFY(ART_DEFAULT_INSTRUCTION_SET_FEATURES);
+
+const std::string Runtime::k2ndArchInstructionSetFeatures =
+    STRINGIFY(ART_2ND_ARCH_INSTRUCTION_SET_FEATURES);
+
 Runtime* Runtime::instance_ = NULL;
 
 Runtime::Runtime()
@@ -1233,7 +1237,7 @@ void Runtime::AddCurrentRuntimeFeaturesAsDex2OatArguments(std::vector<std::strin
   argv->push_back(instruction_set);
 
   std::string features("--instruction-set-features=");
-  features += GetDefaultInstructionSetFeatures();
+  features += GetDefaultInstructionSetFeatures(kRuntimeISA);
   argv->push_back(features);
 }
 

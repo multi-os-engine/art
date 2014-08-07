@@ -1391,12 +1391,10 @@ bool Mir2Lir::GenInlinedAbsLong(CallInfo* info) {
 }
 
 bool Mir2Lir::GenInlinedReverseBits(CallInfo* info, OpSize size) {
-  // Currently implemented only for ARM64
   return false;
 }
 
 bool Mir2Lir::GenInlinedMinMaxFP(CallInfo* info, bool is_min, bool is_double) {
-  // Currently implemented only for ARM64
   return false;
 }
 

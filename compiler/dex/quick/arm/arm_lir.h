@@ -422,6 +422,9 @@ enum ArmOpcode {
   kThumb2VcvtF64U32,  // vcvt.F64.U32 vd, vm [1110111010111000] vd[15..12] [10110100] vm[3..0].
   kThumb2Vsqrts,     // vsqrt.f32 vd, vm [1110111010110001] vd[15..12] [10101100] vm[3..0].
   kThumb2Vsqrtd,     // vsqrt.f64 vd, vm [1110111010110001] vd[15..12] [10111100] vm[3..0].
+  kThumb2Vrintpd,    // vrintp.f64 vd, vm [1111 11101 0 1110 10] vd[15..12] [10110100] vm[3..0].
+  kThumb2Vrintmd,    // vrintm.f64 vd, vm [1111 11101 0 1110 11] vd[15..12] [10110100] vm[3..0].
+  kThumb2Vrintnd,    // vrintn.f64 vd, vm [1111 11101 0 1110 00] vd[15..12] [10110100] vm[3..0].
   kThumb2MovI8M,     // mov(T2) rd, #<const> [11110] i [00001001111] imm3 rd[11..8] imm8.
   kThumb2MovImm16,   // mov(T3) rd, #<const> [11110] i [0010100] imm4 [0] imm3 rd[11..8] imm8.
   kThumb2StrRRI12,   // str(Imm,T3) rd,[rn,#imm12] [111110001100] rn[19..16] rt[15..12] imm12[11..0].
@@ -492,6 +495,7 @@ enum ArmOpcode {
   kThumb2AdcRRI8M,   // adc rd, rn, #<const> [11110] i [010101] rn[19..16] [0] imm3[14..12] rd[11..8] imm8[7..0].
   kThumb2SubRRI8M,   // sub rd, rn, #<const> [11110] i [011011] rn[19..16] [0] imm3[14..12] rd[11..8] imm8[7..0].
   kThumb2SbcRRI8M,   // sub rd, rn, #<const> [11110] i [010111] rn[19..16] [0] imm3[14..12] rd[11..8] imm8[7..0].
+  kThumb2RbitRR,     // rbit[111110101001] rm[19..16] [1111] rd[11..8] 1010 rm[3..0]
   kThumb2RevRR,      // rev [111110101001] rm[19..16] [1111] rd[11..8] 1000 rm[3..0]
   kThumb2RevshRR,    // rev [111110101001] rm[19..16] [1111] rd[11..8] 1011 rm[3..0]
   kThumb2It,         // it [10111111] firstcond[7-4] mask[3-0].

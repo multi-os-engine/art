@@ -44,8 +44,8 @@ extern "C" void art_quick_generic_jni_trampoline(mirror::ArtMethod*);
 #if defined(__arm__)
 // A signal handler called when have an illegal instruction.  We record the fact in
 // a global boolean and then increment the PC in the signal context to return to
-// the next instruction.  We know the instruction is an sdiv (4 bytes long).
-static void baddivideinst(int signo, siginfo *si, void *data) {
+// the next instruction. This handler only works for 4 bytes instructions (sdiv, vrinta, etc).
+static void bad4ByteInstr(int signo, siginfo *si, void *data) {
   UNUSED(signo);
   UNUSED(si);
   struct ucontext *uc = (struct ucontext *)data;
@@ -54,17 +54,18 @@ static void baddivideinst(int signo, siginfo *si, void *data) {
   sc->arm_pc += 4;    // skip offending instruction
 }
 
-// This is in arch/arm/arm_sdiv.S.  It does the following:
+// This is in arch/arm/arm_features.S.  It does the following:
 // mov r1,#1
 // sdiv r0,r1,r1
 // bx lr
 //
 // the result will be the value 1 if sdiv is supported.  If it is not supported
-// a SIGILL signal will be raised and the signal handler (baddivideinst) called.
+// a SIGILL signal will be raised and the signal handler (bad4ByteInstr) called.
 // The signal handler sets r0 to #0 and then increments pc beyond the failed instruction.
 // Thus if the instruction is not supported, the result of this function will be #0
 
 extern "C" bool CheckForARMSDIVInstruction();
+extern "C" bool CheckForARMAArch32Instuction();
 
 static InstructionSetFeatures GuessInstructionFeatures() {
   InstructionSetFeatures f;
@@ -98,11 +99,15 @@ static InstructionSetFeatures GuessInstructionFeatures() {
   // feature in the list.
   struct sigaction sa, osa;
   sa.sa_flags = SA_ONSTACK | SA_RESTART | SA_SIGINFO;
-  sa.sa_sigaction = baddivideinst;
+  sa.sa_sigaction = bad4ByteInstr;
   sigaction(SIGILL, &sa, &osa);
 
   if (CheckForARMSDIVInstruction()) {
     f.SetHasDivideInstruction(true);
+  }
+
+  if (CheckForARMAArch32Instuction()) {
+    f.SetHasAArch32(true);
   }
 
   // Restore the signal handler.
@@ -131,6 +136,9 @@ static InstructionSetFeatures ParseFeatureList(std::string str) {
     } else if (feature == "nodiv") {
       // Turn off support for divide instruction.
       result.SetHasDivideInstruction(false);
+    } else if (feature == "aarch32") {
+      // ARMv8 - AArch32.
+      result.SetHasAArch32(true);
     } else {
       LOG(FATAL) << "Unknown instruction set feature: '" << feature << "'";
     }
@@ -286,7 +294,7 @@ void CommonCompilerTest::SetUp() {
 
     // Take the default set of instruction features from the build.
     InstructionSetFeatures instruction_set_features =
-        ParseFeatureList(Runtime::GetDefaultInstructionSetFeatures());
+        ParseFeatureList(Runtime::GetDefaultInstructionSetFeatures(kRuntimeISA));
 
 #if defined(__arm__)
     InstructionSetFeatures runtime_features = GuessInstructionFeatures();
