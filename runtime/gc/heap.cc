@@ -787,10 +787,15 @@ void Heap::DumpGcPerformanceInfo(std::ostream& os) {
     os << "Mean GC object throughput: "
        << (GetObjectsFreedEver() / total_seconds) << " objects/s\n";
   }
-  size_t total_objects_allocated = GetObjectsAllocatedEver();
+  uint64_t total_objects_allocated = GetObjectsAllocatedEver();
   os << "Total number of allocations: " << total_objects_allocated << "\n";
-  size_t total_bytes_allocated = GetBytesAllocatedEver();
+  uint64_t total_bytes_allocated = GetBytesAllocatedEver();
   os << "Total bytes allocated " << PrettySize(total_bytes_allocated) << "\n";
+  os << "Free memory" << PrettySize(GetFreeMemoryUntilGC()) << "\n";
+  os << "Free memory until GC " << PrettySize(GetFreeMemoryUntilGC()) << "\n";
+  os << "Free memory until OOME " << PrettySize(GetFreeMemoryUntilOOME()) << "\n";
+  os << "Total memory" << PrettySize(GetTotalMemory()) << "\n";
+  os << "Max memory" << PrettySize(GetMaxMemory()) << "\n";
   if (kMeasureAllocationTime) {
     os << "Total time spent allocating: " << PrettyDuration(allocation_time) << "\n";
     os << "Mean allocation time: " << PrettyDuration(allocation_time / total_objects_allocated)
@@ -1313,11 +1318,11 @@ size_t Heap::GetObjectsAllocated() const {
   return total;
 }
 
-size_t Heap::GetObjectsAllocatedEver() const {
+uint64_t Heap::GetObjectsAllocatedEver() const {
   return GetObjectsFreedEver() + GetObjectsAllocated();
 }
 
-size_t Heap::GetBytesAllocatedEver() const {
+uint64_t Heap::GetBytesAllocatedEver() const {
   return GetBytesFreedEver() + GetBytesAllocated();
 }
 
@@ -2847,7 +2852,7 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran) {
         remaining_bytes = kMinConcurrentRemainingBytes;
       }
       DCHECK_LE(remaining_bytes, max_allowed_footprint_);
-      DCHECK_LE(max_allowed_footprint_, growth_limit_);
+      DCHECK_LE(max_allowed_footprint_, GetMaxMemory());
       // Start a concurrent GC when we get close to the estimated remaining bytes. When the
       // allocation rate is very high, remaining_bytes could tell us that we should start a GC
       // right away.
@@ -3077,19 +3082,7 @@ void Heap::RegisterNativeFree(JNIEnv* env, int bytes) {
 }
 
 size_t Heap::GetTotalMemory() const {
-  size_t ret = 0;
-  for (const auto& space : continuous_spaces_) {
-    // Currently don't include the image space.
-    if (!space->IsImageSpace()) {
-      ret += space->Size();
-    }
-  }
-  for (const auto& space : discontinuous_spaces_) {
-    if (space->IsLargeObjectSpace()) {
-      ret += space->AsLargeObjectSpace()->GetBytesAllocated();
-    }
-  }
-  return ret;
+  return std::max(max_allowed_footprint_, GetBytesAllocated());
 }
 
 void Heap::AddModUnionTable(accounting::ModUnionTable* mod_union_table) {
