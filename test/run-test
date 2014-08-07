@@ -471,7 +471,7 @@ fi
 # Clean up test files.
 if [ "$always_clean" = "yes" -o "$good" = "yes" ]; then
     cd "$oldwd"
-    rm -rf "$tmp_dir"
+#    rm -rf "$tmp_dir"
     if [ "$target_mode" = "yes" -a "$build_exit" = "0" ]; then
         adb shell rm -rf $DEX_LOCATION
     fi
