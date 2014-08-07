@@ -34,22 +34,6 @@
 
 namespace art {
 
-// Is native-bridge support enabled?
-static constexpr bool kNativeBridgeEnabled = true;
-
-// Default library name for native-bridge.
-static constexpr const char* kDefaultNativeBridge = "libnativebridge.so";
-
-#ifdef HAVE_ANDROID_OS
-// TODO: This will be removed once we have native-bridge command-line arguments.
-
-// Property that defines the library name of native-bridge.
-static constexpr const char* kPropNativeBridge = "persist.native.bridge";
-
-// Property that enables native-bridge.
-static constexpr const char* kPropEnableNativeBridge = "persist.enable.native.bridge";
-#endif
-
 // The symbol name exposed by native-bridge with the type of NativeBridgeCallbacks.
 static constexpr const char* kNativeBridgeInterfaceSymbol = "NativeBridgeItf";
 
@@ -193,16 +177,18 @@ NativeBridgeArtCallbacks NativeBridgeArtItf = {
 };
 
 void NativeBridge::SetNativeBridgeLibraryString(std::string& native_bridge_library_string) {
+  // This is called when the runtime starts and nothing is working concurrently
+  // so we don't need a lock here.
+
   native_bridge_library_string_ = native_bridge_library_string;
-  // TODO: when given an empty string, set initialized_ to true and available_ to false. This
-  //       change is dependent on the property removal in Initialize().
+
+  if (native_bridge_library_string_.empty()) {
+    initialized_ = true;
+    available_ = false;
+  }
 }
 
 bool NativeBridge::Initialize() {
-  if (!kNativeBridgeEnabled) {
-    return false;
-  }
-
   MutexLock mu(Thread::Current(), lock_);
 
   if (initialized_) {
@@ -212,30 +198,7 @@ bool NativeBridge::Initialize() {
 
   available_ = false;
 
-  const char* libnb_path;
-
-  if (!native_bridge_library_string_.empty()) {
-    libnb_path = native_bridge_library_string_.c_str();
-  } else {
-    // TODO: Remove this once the frameworks side is completely implemented.
-
-    libnb_path = kDefaultNativeBridge;
-#ifdef HAVE_ANDROID_OS
-    char prop_buf[PROP_VALUE_MAX];
-    property_get(kPropEnableNativeBridge, prop_buf, "false");
-    if (strcmp(prop_buf, "true") != 0) {
-      initialized_ = true;
-      return false;
-    }
-
-    // If prop persist.native.bridge set, overwrite the default name.
-    int name_len = property_get(kPropNativeBridge, prop_buf, kDefaultNativeBridge);
-    if (name_len > 0)
-      libnb_path = prop_buf;
-#endif
-  }
-
-  void* handle = dlopen(libnb_path, RTLD_LAZY);
+  void* handle = dlopen(native_bridge_library_string_.c_str(), RTLD_LAZY);
   if (handle != nullptr) {
     callbacks_ = reinterpret_cast<NativeBridgeCallbacks*>(dlsym(handle,
                                                                 kNativeBridgeInterfaceSymbol));
