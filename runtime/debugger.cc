@@ -3912,7 +3912,7 @@ void Dbg::DdmSendHeapInfo(HpifWhen reason) {
   JDWP::Append1BE(bytes, reason);
   JDWP::Append4BE(bytes, heap->GetMaxMemory());  // Max allowed heap size in bytes.
   JDWP::Append4BE(bytes, heap->GetTotalMemory());  // Current heap size in bytes.
-  JDWP::Append4BE(bytes, heap->GetBytesAllocated());
+  JDWP::Append4BE(bytes, heap->GetTotalMemory() - heap->GetFreeMemory());
   JDWP::Append4BE(bytes, heap->GetObjectsAllocated());
   CHECK_EQ(bytes.size(), 4U + (heap_count * (4 + 8 + 1 + 4 + 4 + 4 + 4)));
   Dbg::DdmSendChunk(CHUNK_TYPE("HPIF"), bytes);
