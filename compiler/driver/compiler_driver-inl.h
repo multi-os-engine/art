@@ -48,7 +48,7 @@ inline mirror::Class* CompilerDriver::ResolveCompilingMethodsClass(
   const DexFile::MethodId& referrer_method_id =
       mUnit->GetDexFile()->GetMethodId(mUnit->GetDexMethodIndex());
   mirror::Class* referrer_class = mUnit->GetClassLinker()->ResolveType(
-      *mUnit->GetDexFile(), referrer_method_id.class_idx_, dex_cache, class_loader);
+      soa.Self(), *mUnit->GetDexFile(), referrer_method_id.class_idx_, dex_cache, class_loader);
   DCHECK_EQ(referrer_class == nullptr, soa.Self()->IsExceptionPending());
   if (UNLIKELY(referrer_class == nullptr)) {
     // Clean up any exception left by type resolution.

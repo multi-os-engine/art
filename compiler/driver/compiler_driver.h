@@ -111,8 +111,7 @@ class CompilerDriver {
 
   ~CompilerDriver();
 
-  void CompileAll(jobject class_loader, const std::vector<const DexFile*>& dex_files,
-                  TimingLogger* timings)
+  void CompileAll(jobject class_loader, const ClassPath* class_path, TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
   // Compile a single Method.
@@ -634,6 +633,10 @@ class CompilerDriver {
   static constexpr int kFlagsMethodResolvedPreciseTypeDevirtualization =
       kFlagsMethodResolvedVirtualMadeDirect | kFlagPreciseTypeDevirtualization;
 
+  void InitializeClasses(jobject class_loader, const DexFile& dex_file, const ClassPath* class_path,
+                         ThreadPool* thread_pool, TimingLogger* timings)
+      LOCKS_EXCLUDED(Locks::mutator_lock_, compiled_classes_lock_);
+
  public:  // TODO make private or eliminate.
   // Compute constant code and method pointers when possible.
   void GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType sharp_type,
@@ -646,7 +649,7 @@ class CompilerDriver {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
-  void PreCompile(jobject class_loader, const std::vector<const DexFile*>& dex_files,
+  void PreCompile(jobject class_loader, const ClassPath* class_path,
                   ThreadPool* thread_pool, TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
@@ -655,37 +658,31 @@ class CompilerDriver {
   // Attempt to resolve all type, methods, fields, and strings
   // referenced from code in the dex file following PathClassLoader
   // ordering semantics.
-  void Resolve(jobject class_loader, const std::vector<const DexFile*>& dex_files,
+  void Resolve(jobject class_loader, const ClassPath* class_path,
                ThreadPool* thread_pool, TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
-  void ResolveDexFile(jobject class_loader, const DexFile& dex_file,
-                      const std::vector<const DexFile*>& dex_files,
+  void ResolveDexFile(jobject class_loader, const DexFile& dex_file, const ClassPath* class_path,
                       ThreadPool* thread_pool, TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
-  void Verify(jobject class_loader, const std::vector<const DexFile*>& dex_files,
+  void Verify(jobject class_loader, const ClassPath* class_path,
               ThreadPool* thread_pool, TimingLogger* timings);
-  void VerifyDexFile(jobject class_loader, const DexFile& dex_file,
-                     const std::vector<const DexFile*>& dex_files,
+  void VerifyDexFile(jobject class_loader, const DexFile& dex_file, const ClassPath* class_path,
                      ThreadPool* thread_pool, TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
-  void InitializeClasses(jobject class_loader, const std::vector<const DexFile*>& dex_files,
-                         ThreadPool* thread_pool, TimingLogger* timings)
+  void InitializeClasses(jobject class_loader, const ClassPath* class_path, ThreadPool* thread_pool,
+                         TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
-  void InitializeClasses(jobject class_loader, const DexFile& dex_file,
-                         const std::vector<const DexFile*>& dex_files,
-                         ThreadPool* thread_pool, TimingLogger* timings)
-      LOCKS_EXCLUDED(Locks::mutator_lock_, compiled_classes_lock_);
 
   void UpdateImageClasses(TimingLogger* timings) LOCKS_EXCLUDED(Locks::mutator_lock_);
   static void FindClinitImageClassesCallback(mirror::Object* object, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void Compile(jobject class_loader, const std::vector<const DexFile*>& dex_files,
+  void Compile(jobject class_loader, const ClassPath* class_path,
                ThreadPool* thread_pool, TimingLogger* timings);
   void CompileDexFile(jobject class_loader, const DexFile& dex_file,
-                      const std::vector<const DexFile*>& dex_files,
+                      const ClassPath* class_path,
                       ThreadPool* thread_pool, TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
   void CompileMethod(const DexFile::CodeItem* code_item, uint32_t access_flags,

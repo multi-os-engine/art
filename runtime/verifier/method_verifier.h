@@ -697,6 +697,9 @@ class MethodVerifier {
   // Indicates the method being verified contains at least one invoke-virtual/range
   // or invoke-interface/range.
   bool has_virtual_or_interface_invokes_;
+
+  // Self ptr.
+  Thread* const self_;
 };
 std::ostream& operator<<(std::ostream& os, const MethodVerifier::FailureKind& rhs);
 

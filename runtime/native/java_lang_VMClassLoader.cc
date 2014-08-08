@@ -44,7 +44,7 @@ static jclass VMClassLoader_findLoadedClass(JNIEnv* env, jclass, jobject javaLoa
 }
 
 static jint VMClassLoader_getBootClassPathSize(JNIEnv*, jclass) {
-  return Runtime::Current()->GetClassLinker()->GetBootClassPath().size();
+  return Runtime::Current()->GetClassLinker()->GetBootClassPath()->GetDexFiles()->size();
 }
 
 /*
@@ -66,7 +66,8 @@ static jstring VMClassLoader_getBootClassPathResource(JNIEnv* env, jclass, jstri
     return nullptr;
   }
 
-  const std::vector<const DexFile*>& path = Runtime::Current()->GetClassLinker()->GetBootClassPath();
+  const std::vector<const DexFile*>& path =
+      *Runtime::Current()->GetClassLinker()->GetBootClassPath()->GetDexFiles();
   if (index < 0 || size_t(index) >= path.size()) {
     return nullptr;
   }

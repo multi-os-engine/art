@@ -97,7 +97,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(mirror::Class* klass,
   const DexFile& dex_file = klass->GetDexFile();
   const DexFile::ClassDef* class_def = klass->GetClassDef();
   mirror::Class* super = klass->GetSuperClass();
-  if (super == NULL && "Ljava/lang/Object;" != klass->GetDescriptor()) {
+  if (super == NULL && !klass->DescriptorEquals("Ljava/lang/Object;")) {
     early_failure = true;
     failure_message = " that has no super class";
   } else if (super != NULL && super->IsFinal()) {
@@ -327,7 +327,8 @@ MethodVerifier::MethodVerifier(const DexFile* dex_file, Handle<mirror::DexCache>
       allow_soft_failures_(allow_soft_failures),
       need_precise_constants_(need_precise_constants),
       has_check_casts_(false),
-      has_virtual_or_interface_invokes_(false) {
+      has_virtual_or_interface_invokes_(false),
+      self_(Thread::Current()) {
   Runtime::Current()->AddMethodVerifier(this);
   DCHECK(class_def != nullptr);
 }
@@ -617,12 +618,11 @@ bool MethodVerifier::ScanTryCatchBlocks() {
       // Ensure exception types are resolved so that they don't need resolution to be delivered,
       // unresolved exception types will be ignored by exception delivery
       if (iterator.GetHandlerTypeIndex() != DexFile::kDexNoIndex16) {
-        mirror::Class* exception_type = linker->ResolveType(*dex_file_,
-                                                            iterator.GetHandlerTypeIndex(),
-                                                            *dex_cache_, *class_loader_);
+        mirror::Class* exception_type = linker->ResolveType(
+            self_, *dex_file_, iterator.GetHandlerTypeIndex(), *dex_cache_, *class_loader_);
         if (exception_type == NULL) {
           DCHECK(Thread::Current()->IsExceptionPending());
-          Thread::Current()->ClearException();
+          self_->ClearException();
         }
       }
     }
@@ -2185,8 +2185,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
                                                               is_super);
       RegType* return_type = nullptr;
       if (called_method != nullptr) {
-        Thread* self = Thread::Current();
-        StackHandleScope<1> hs(self);
+        StackHandleScope<1> hs(self_);
         Handle<mirror::ArtMethod> h_called_method(hs.NewHandle(called_method));
         MethodHelper mh(h_called_method);
         mirror::Class* return_type_class = mh.GetReturnType(can_load_classes_);
@@ -2195,8 +2194,8 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
                                               return_type_class,
                                               return_type_class->CannotBeAssignedFromOtherTypes());
         } else {
-          DCHECK(!can_load_classes_ || self->IsExceptionPending());
-          self->ClearException();
+          DCHECK(!can_load_classes_ || self_->IsExceptionPending());
+          self_->ClearException();
         }
       }
       if (return_type == nullptr) {
@@ -2787,8 +2786,8 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
         has_catch_all_handler = true;
       } else {
         // It is also a catch-all if it is java.lang.Throwable.
-        mirror::Class* klass = linker->ResolveType(*dex_file_, handler_type_idx, *dex_cache_,
-                                                   *class_loader_);
+        mirror::Class* klass = linker->ResolveType(self_, *dex_file_, handler_type_idx,
+                                                   *dex_cache_, *class_loader_);
         if (klass != nullptr) {
           if (klass == mirror::Throwable::GetJavaLangThrowable()) {
             has_catch_all_handler = true;

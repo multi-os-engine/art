@@ -21,6 +21,7 @@
 #include "base/stringpiece.h"
 #include "dex_file.h"
 #include "leb128.h"
+#include "utf-inl.h"
 #include "utils.h"
 
 namespace art {
@@ -54,7 +55,7 @@ static inline bool DexFileStringEquals(const DexFile* df1, uint32_t sidx1,
   const char* s1_data = df1->StringDataAndUtf16LengthByIdx(sidx1, &s1_len);
   uint32_t s2_len;
   const char* s2_data = df2->StringDataAndUtf16LengthByIdx(sidx2, &s2_len);
-  return (s1_len == s2_len) && (strcmp(s1_data, s2_data) == 0);
+  return s1_len == s2_len && memcmp(s1_data, s2_data, s1_len) == 0;
 }
 
 inline bool Signature::operator==(const Signature& rhs) const {
@@ -112,6 +113,24 @@ inline bool Signature::operator==(const Signature& rhs) const {
   return true;
 }
 
+inline const DexFile::StringId* DexFile::FindStringId(const char* string) const {
+  size_t lo = 0;
+  size_t hi = NumStringIds() - 1;
+  while (hi >= lo) {
+    size_t mid = (hi + lo) / 2;
+    const DexFile::StringId& str_id = GetStringId(mid);
+    const char* str = GetStringData(str_id);
+    int compare = CompareModifiedUtf8ToModifiedUtf8AsUtf16CodePointValues(string, str);
+    if (compare > 0) {
+      lo = mid + 1;
+    } else if (compare < 0) {
+      hi = mid - 1;
+    } else {
+      return &str_id;
+    }
+  }
+  return NULL;
+}
 
 }  // namespace art
 

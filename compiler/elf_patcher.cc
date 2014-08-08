@@ -101,9 +101,9 @@ mirror::Class* ElfPatcher::GetTargetType(const CompilerDriver::TypePatchInformat
   StackHandleScope<2> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(class_linker->FindDexCache(
           patch->GetTargetTypeDexFile())));
-  mirror::Class* klass = class_linker->ResolveType(patch->GetTargetTypeDexFile(),
-                                                   patch->GetTargetTypeIdx(),
-                                                   dex_cache, NullHandle<mirror::ClassLoader>());
+  mirror::Class* klass = class_linker->ResolveType(
+      hs.Self(), patch->GetTargetTypeDexFile(), patch->GetTargetTypeIdx(), dex_cache,
+      NullHandle<mirror::ClassLoader>());
   CHECK(klass != NULL)
     << patch->GetTargetTypeDexFile().GetLocation() << " " << patch->GetTargetTypeIdx();
   CHECK(dex_cache->GetResolvedTypes()->Get(patch->GetTargetTypeIdx()) == klass)

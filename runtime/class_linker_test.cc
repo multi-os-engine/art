@@ -997,7 +997,8 @@ TEST_F(ClassLinkerTest, ResolveVerifyAndClinit) {
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::ClassLoader> class_loader(
       hs.NewHandle(soa.Decode<mirror::ClassLoader*>(jclass_loader)));
-  const DexFile* dex_file = Runtime::Current()->GetCompileTimeClassPath(jclass_loader)[0];
+  const DexFile* dex_file =
+      Runtime::Current()->GetCompileTimeClassPath(jclass_loader)->GetDexFiles()->at(0);
   CHECK(dex_file != NULL);
   mirror::Class* klass = class_linker_->FindClass(soa.Self(), "LStaticsFromCode;", class_loader);
   mirror::ArtMethod* clinit = klass->FindClassInitializer();

@@ -117,7 +117,7 @@ TEST_F(OatTest, WriteRead) {
   ScratchFile tmp;
   SafeMap<std::string, std::string> key_value_store;
   key_value_store.Put(OatHeader::kImageLocationKey, "lue.art");
-  OatWriter oat_writer(class_linker->GetBootClassPath(),
+  OatWriter oat_writer(*class_linker->GetBootClassPath()->GetDexFiles(),
                        42U,
                        4096U,
                        0,
@@ -126,7 +126,7 @@ TEST_F(OatTest, WriteRead) {
                        &key_value_store);
   bool success = compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                             !kIsTargetBuild,
-                                            class_linker->GetBootClassPath(),
+                                            *class_linker->GetBootClassPath()->GetDexFiles(),
                                             &oat_writer,
                                             tmp.GetFile());
   ASSERT_TRUE(success);
@@ -136,7 +136,7 @@ TEST_F(OatTest, WriteRead) {
   }
   std::string error_msg;
   std::unique_ptr<OatFile> oat_file(OatFile::Open(tmp.GetFilename(), tmp.GetFilename(), NULL, false,
-                                            &error_msg));
+                                                  &error_msg));
   ASSERT_TRUE(oat_file.get() != nullptr) << error_msg;
   const OatHeader& oat_header = oat_file->GetOatHeader();
   ASSERT_TRUE(oat_header.IsValid());

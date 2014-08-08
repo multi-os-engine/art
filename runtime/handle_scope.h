@@ -197,6 +197,10 @@ class PACKED(4) StackHandleScope FINAL : public HandleScope {
     return HandleWrapper<T>(object, h);
   }
 
+  Thread* Self() {
+    return self_;
+  }
+
  private:
   // References_storage_ needs to be first so that it appears in the same location as
   // HandleScope::references_.
