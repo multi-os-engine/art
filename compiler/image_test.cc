@@ -72,7 +72,7 @@ TEST_F(ImageTest, WriteRead) {
         //       We shouldn't need to do this.
         compiler_options_->SetCompilerFilter(CompilerOptions::kInterpretOnly);
       }
-      for (const DexFile* dex_file : class_linker->GetBootClassPath()) {
+      for (const DexFile* dex_file : *class_linker->GetBootClassPath()->GetDexFiles()) {
         dex_file->EnableWrite();
       }
       compiler_driver_->CompileAll(class_loader, class_linker->GetBootClassPath(), &timings);
@@ -80,11 +80,11 @@ TEST_F(ImageTest, WriteRead) {
       t.NewTiming("WriteElf");
       ScopedObjectAccess soa(Thread::Current());
       SafeMap<std::string, std::string> key_value_store;
-      OatWriter oat_writer(class_linker->GetBootClassPath(), 0, 0, 0, compiler_driver_.get(), &timings,
-                           &key_value_store);
+      OatWriter oat_writer(*class_linker->GetBootClassPath()->GetDexFiles(), 0, 0, 0,
+                           compiler_driver_.get(), &timings, &key_value_store);
       bool success = compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                                 !kIsTargetBuild,
-                                                class_linker->GetBootClassPath(),
+                                                *class_linker->GetBootClassPath()->GetDexFiles(),
                                                 &oat_writer,
                                                 oat_file.GetFile());
       ASSERT_TRUE(success);

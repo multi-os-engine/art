@@ -50,20 +50,6 @@ namespace art {
 const byte DexFile::kDexMagic[] = { 'd', 'e', 'x', '\n' };
 const byte DexFile::kDexMagicVersion[] = { '0', '3', '5', '\0' };
 
-DexFile::ClassPathEntry DexFile::FindInClassPath(const char* descriptor,
-                                                 const ClassPath& class_path) {
-  for (size_t i = 0; i != class_path.size(); ++i) {
-    const DexFile* dex_file = class_path[i];
-    const DexFile::ClassDef* dex_class_def = dex_file->FindClassDef(descriptor);
-    if (dex_class_def != NULL) {
-      return ClassPathEntry(dex_file, dex_class_def);
-    }
-  }
-  // TODO: remove reinterpret_cast when issue with -std=gnu++0x host issue resolved
-  return ClassPathEntry(reinterpret_cast<const DexFile*>(NULL),
-                        reinterpret_cast<const DexFile::ClassDef*>(NULL));
-}
-
 static int OpenAndReadMagic(const char* filename, uint32_t* magic, std::string* error_msg) {
   CHECK(magic != NULL);
   ScopedFd fd(open(filename, O_RDONLY, 0));
@@ -425,7 +411,7 @@ uint32_t DexFile::GetVersion() const {
 
 const DexFile::ClassDef* DexFile::FindClassDef(const char* descriptor) const {
   size_t num_class_defs = NumClassDefs();
-  if (num_class_defs == 0) {
+  if (UNLIKELY(num_class_defs == 0)) {
     return NULL;
   }
   const StringId* string_id = FindStringId(descriptor);
@@ -436,14 +422,7 @@ const DexFile::ClassDef* DexFile::FindClassDef(const char* descriptor) const {
   if (type_id == NULL) {
     return NULL;
   }
-  uint16_t type_idx = GetIndexForTypeId(*type_id);
-  for (size_t i = 0; i < num_class_defs; ++i) {
-    const ClassDef& class_def = GetClassDef(i);
-    if (class_def.class_idx_ == type_idx) {
-      return &class_def;
-    }
-  }
-  return NULL;
+  return FindClassDef(GetIndexForTypeId(*type_id));
 }
 
 const DexFile::ClassDef* DexFile::FindClassDef(uint16_t type_idx) const {
@@ -522,25 +501,6 @@ const DexFile::MethodId* DexFile::FindMethodId(const DexFile::TypeId& declaring_
           return &method;
         }
       }
-    }
-  }
-  return NULL;
-}
-
-const DexFile::StringId* DexFile::FindStringId(const char* string) const {
-  int32_t lo = 0;
-  int32_t hi = NumStringIds() - 1;
-  while (hi >= lo) {
-    int32_t mid = (hi + lo) / 2;
-    const DexFile::StringId& str_id = GetStringId(mid);
-    const char* str = GetStringData(str_id);
-    int compare = CompareModifiedUtf8ToModifiedUtf8AsUtf16CodePointValues(string, str);
-    if (compare > 0) {
-      lo = mid + 1;
-    } else if (compare < 0) {
-      hi = mid - 1;
-    } else {
-      return &str_id;
     }
   }
   return NULL;
@@ -1219,8 +1179,8 @@ void EncodedStaticFieldValueIterator::ReadValueToField(mirror::ArtField* field) 
     }
     case kType: {
       CHECK(!kMovingFields);
-      mirror::Class* resolved = linker_->ResolveType(dex_file_, jval_.i, *dex_cache_,
-                                                     *class_loader_);
+      mirror::Class* resolved = linker_->ResolveType(Thread::Current(), dex_file_, jval_.i,
+                                                     *dex_cache_, *class_loader_);
       field->SetObject<kTransactionActive>(field->GetDeclaringClass(), resolved);
       break;
     }

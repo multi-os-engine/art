@@ -195,6 +195,7 @@ Runtime::~Runtime() {
   delete null_pointer_handler_;
   delete suspend_handler_;
   delete stack_overflow_handler_;
+  STLDeleteValues(&compile_time_class_paths_);
 }
 
 struct AbortState {
@@ -1107,7 +1108,7 @@ void Runtime::SetCalleeSaveMethod(mirror::ArtMethod* method, CalleeSaveType type
   callee_save_methods_[type] = GcRoot<mirror::ArtMethod>(method);
 }
 
-const std::vector<const DexFile*>& Runtime::GetCompileTimeClassPath(jobject class_loader) {
+const ClassPath* Runtime::GetCompileTimeClassPath(jobject class_loader) {
   if (class_loader == NULL) {
     return GetClassLinker()->GetBootClassPath();
   }
@@ -1117,8 +1118,7 @@ const std::vector<const DexFile*>& Runtime::GetCompileTimeClassPath(jobject clas
   return it->second;
 }
 
-void Runtime::SetCompileTimeClassPath(jobject class_loader,
-                                      std::vector<const DexFile*>& class_path) {
+void Runtime::SetCompileTimeClassPath(jobject class_loader, ClassPath* class_path) {
   CHECK(!IsStarted());
   use_compile_time_class_path_ = true;
   compile_time_class_paths_.Put(class_loader, class_path);

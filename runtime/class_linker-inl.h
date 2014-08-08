@@ -30,8 +30,7 @@
 namespace art {
 
 inline bool ClassLinker::IsInBootClassPath(const char* descriptor) {
-  DexFile::ClassPathEntry pair = DexFile::FindInClassPath(descriptor, boot_class_path_);
-  return pair.second != nullptr;
+  return boot_class_path_.Find(descriptor).second != nullptr;
 }
 
 inline mirror::Class* ClassLinker::FindSystemClass(Thread* self, const char* descriptor) {
@@ -84,7 +83,7 @@ inline mirror::Class* ClassLinker::ResolveType(uint16_t type_idx,
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
     Handle<mirror::ClassLoader> class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
     const DexFile& dex_file = *dex_cache->GetDexFile();
-    resolved_type = ResolveType(dex_file, type_idx, dex_cache, class_loader);
+    resolved_type = ResolveType(hs.Self(), dex_file, type_idx, dex_cache, class_loader);
     // Note: We cannot check here to see whether we added the type to the cache. The type
     //       might be an erroneous class, which results in it being hidden from us.
   }
@@ -100,7 +99,7 @@ inline mirror::Class* ClassLinker::ResolveType(uint16_t type_idx, mirror::ArtFie
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(dex_cache_ptr));
     Handle<mirror::ClassLoader> class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
     const DexFile& dex_file = *dex_cache->GetDexFile();
-    resolved_type = ResolveType(dex_file, type_idx, dex_cache, class_loader);
+    resolved_type = ResolveType(hs.Self(), dex_file, type_idx, dex_cache, class_loader);
     // Note: We cannot check here to see whether we added the type to the cache. The type
     //       might be an erroneous class, which results in it being hidden from us.
   }

@@ -40,9 +40,8 @@ class CompilerDriverTest : public CommonCompilerTest {
   void CompileAll(jobject class_loader) LOCKS_EXCLUDED(Locks::mutator_lock_) {
     TimingLogger timings("CompilerDriverTest::CompileAll", false, false);
     TimingLogger::ScopedTiming t(__FUNCTION__, &timings);
-    compiler_driver_->CompileAll(class_loader,
-                                 Runtime::Current()->GetCompileTimeClassPath(class_loader),
-                                 &timings);
+    compiler_driver_->CompileAll(
+        class_loader, Runtime::Current()->GetCompileTimeClassPath(class_loader), &timings);
     t.NewTiming("MakeAllExecutable");
     MakeAllExecutable(class_loader);
   }
@@ -66,10 +65,8 @@ class CompilerDriverTest : public CommonCompilerTest {
   }
 
   void MakeAllExecutable(jobject class_loader) {
-    const std::vector<const DexFile*>& class_path
-        = Runtime::Current()->GetCompileTimeClassPath(class_loader);
-    for (size_t i = 0; i != class_path.size(); ++i) {
-      const DexFile* dex_file = class_path[i];
+    for (const DexFile* dex_file :
+        *Runtime::Current()->GetCompileTimeClassPath(class_loader)->GetDexFiles()) {
       CHECK(dex_file != NULL);
       MakeDexFileExecutable(class_loader, *dex_file);
     }

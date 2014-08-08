@@ -351,8 +351,10 @@ const DexFile* CommonRuntimeTest::OpenTestDexFile(const char* name) {
 jobject CommonRuntimeTest::LoadDex(const char* dex_name) {
   std::vector<const DexFile*> dex_files = OpenTestDexFiles(dex_name);
   CHECK_NE(0U, dex_files.size());
+  ClassPath* class_path = new ClassPath;
   for (const DexFile* dex_file : dex_files) {
     class_linker_->RegisterDexFile(*dex_file);
+    class_path->AddDexFile(dex_file);
   }
   Thread* self = Thread::Current();
   JNIEnvExt* env = self->GetJniEnv();
@@ -360,7 +362,7 @@ jobject CommonRuntimeTest::LoadDex(const char* dex_name) {
       env->AllocObject(WellKnownClasses::dalvik_system_PathClassLoader));
   jobject class_loader = env->NewGlobalRef(class_loader_local.get());
   self->SetClassLoaderOverride(class_loader_local.get());
-  Runtime::Current()->SetCompileTimeClassPath(class_loader, dex_files);
+  Runtime::Current()->SetCompileTimeClassPath(class_loader, class_path);
   return class_loader;
 }
 
