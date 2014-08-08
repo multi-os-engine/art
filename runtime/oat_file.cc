@@ -121,14 +121,12 @@ OatFile* OatFile::OpenElfFile(File* file,
 }
 
 OatFile::OatFile(const std::string& location)
-    : location_(location), begin_(NULL), end_(NULL), dlopen_handle_(NULL) {
+    : location_(location), begin_(NULL), end_(NULL), dlopen_handle_(NULL),
+      last_failed_canonicalized_dex_location_("") {
   CHECK(!location_.empty());
 }
 
 OatFile::~OatFile() {
-  for (auto it : oat_dex_files_) {
-     delete it.first.data();
-  }
   STLDeleteValues(&oat_dex_files_);
   if (dlopen_handle_ != NULL) {
     dlclose(dlopen_handle_);
@@ -310,13 +308,8 @@ bool OatFile::Setup(std::string* error_msg) {
                                               dex_file_pointer,
                                               methods_offsets_pointer);
 
-    std::string dex_canonical_location_str = DexFile::GetDexCanonicalLocation(dex_file_location.c_str());
-    // make a copy since we need to persist it as a key in the object's field.
-    int location_size = dex_canonical_location_str.size() + 1;
-    char* dex_canonical_location = new char[location_size ];
-    strncpy(dex_canonical_location, dex_canonical_location_str.c_str(), location_size);
-
-    StringPiece key(dex_canonical_location);
+    // Use a StringPiece backed by the oat_dex_file's internal std::string as the key.
+    StringPiece key(oat_dex_file->GetDexFileLocation());
     oat_dex_files_.Put(key, oat_dex_file);
   }
   return true;
@@ -339,15 +332,41 @@ const byte* OatFile::End() const {
 const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
                                                   const uint32_t* dex_location_checksum,
                                                   bool warn_if_not_found) const {
-  std::string dex_canonical_location = DexFile::GetDexCanonicalLocation(dex_location);
-
-  Table::const_iterator it = oat_dex_files_.find(dex_canonical_location);
+  StringPiece key(dex_location);
+  Table::const_iterator it = oat_dex_files_.find(key);
   if (it != oat_dex_files_.end()) {
     const OatFile::OatDexFile* oat_dex_file = it->second;
     if (dex_location_checksum == NULL ||
         oat_dex_file->GetDexFileLocationChecksum() == *dex_location_checksum) {
       return oat_dex_file;
     }
+  } else if (last_failed_canonicalized_dex_location_ == dex_location) {
+    // We were asked about this before and got to the canonicalization stage, just to not find
+    // anything.
+    return nullptr;
+  } else {
+    // Did not find it, and it's not the one we tried before. Try canonical names. Slowpath, not
+    // expected to happen often.
+    std::string dex_canonical_location = DexFile::GetDexCanonicalLocation(dex_location);
+
+    it = oat_dex_files_.begin();
+    Table::const_iterator it_end = oat_dex_files_.end();
+    for (; it != it_end; ++it) {
+      const OatFile::OatDexFile* oat_dex_file = it->second;
+      if (DexFile::GetDexCanonicalLocation(oat_dex_file->GetDexFileLocation().c_str()) ==
+          dex_canonical_location) {
+        if (dex_location_checksum == NULL ||
+            oat_dex_file->GetDexFileLocationChecksum() == *dex_location_checksum) {
+          LOG(WARNING) << "Needed a canonicalized dex location: " << dex_location <<
+              " ( canonical path " << dex_canonical_location << " )";
+          return oat_dex_file;
+        }
+        break;  // Don't look for more.
+      }
+    }
+    // Did not find anything, record. This is racy, but we do not care about the result, as we won't
+    // get a false positive.
+    last_failed_canonicalized_dex_location_ = dex_location;
   }
 
   if (warn_if_not_found) {
@@ -355,6 +374,7 @@ const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
     if (dex_location_checksum != NULL) {
       checksum = StringPrintf("0x%08x", *dex_location_checksum);
     }
+    std::string dex_canonical_location = DexFile::GetDexCanonicalLocation(dex_location);
     LOG(WARNING) << "Failed to find OatDexFile for DexFile " << dex_location
                  << " ( canonical path " << dex_canonical_location << ")"
                  << " with checksum " << checksum << " in OatFile " << GetLocation();
