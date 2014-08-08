@@ -782,8 +782,8 @@ mirror::Class* Class::GetDirectInterface(Thread* self, Handle<mirror::Class> kla
     uint16_t type_idx = klass->GetDirectInterfaceTypeIdx(idx);
     mirror::Class* interface = klass->GetDexCache()->GetResolvedType(type_idx);
     if (interface == nullptr) {
-      interface = Runtime::Current()->GetClassLinker()->ResolveType(klass->GetDexFile(), type_idx,
-                                                                    klass.Get());
+      interface = Runtime::Current()->GetClassLinker()->ResolveType(
+          self, klass->GetDexFile(), type_idx, klass.Get());
       CHECK(interface != nullptr || self->IsExceptionPending());
     }
     return interface;

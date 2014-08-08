@@ -35,6 +35,7 @@
 #include "base/timing_logger.h"
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
+#include "class_path.h"
 #include "compiler.h"
 #include "compiler_callbacks.h"
 #include "dex_file-inl.h"
@@ -373,9 +374,12 @@ class Dex2Oat {
       ScopedLocalRef<jobject> class_loader_local(soa.Env(),
           soa.Env()->AllocObject(WellKnownClasses::dalvik_system_PathClassLoader));
       class_loader = soa.Env()->NewGlobalRef(class_loader_local.get());
-      Runtime::Current()->SetCompileTimeClassPath(class_loader, class_path_files);
+      ClassPath* class_path = new ClassPath;
+      for (const DexFile* dex_file : class_path_files) {
+        class_path->AddDexFile(dex_file);
+      }
+      Runtime::Current()->SetCompileTimeClassPath(class_loader, class_path);
     }
-
     std::unique_ptr<CompilerDriver> driver(new CompilerDriver(compiler_options_,
                                                               verification_results_,
                                                               method_inliner_map_,
@@ -392,7 +396,11 @@ class Dex2Oat {
 
     driver->GetCompiler()->SetBitcodeFileName(*driver.get(), bitcode_filename);
 
-    driver->CompileAll(class_loader, dex_files, &timings);
+    ClassPath dex_class_path;
+    for (const DexFile* dex_file : dex_files) {
+      dex_class_path.AddDexFile(dex_file);
+    }
+    driver->CompileAll(class_loader, &dex_class_path, &timings);
 
     TimingLogger::ScopedTiming t2("dex2oat OatWriter", &timings);
     std::string image_file_location;
@@ -1297,7 +1305,7 @@ static int dex2oat(int argc, char** argv) {
 
   std::vector<const DexFile*> dex_files;
   if (boot_image_option.empty()) {
-    dex_files = Runtime::Current()->GetClassLinker()->GetBootClassPath();
+    dex_files = *Runtime::Current()->GetClassLinker()->GetBootClassPath()->GetDexFiles();
   } else {
     if (dex_filenames.empty()) {
       ATRACE_BEGIN("Opening zip archive from file descriptor");

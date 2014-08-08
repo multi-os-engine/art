@@ -383,9 +383,8 @@ static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
   // TODO: We're assuming that the 64 and 32 bit runtimes have identical
   // class paths. isDexOptNeeded will not necessarily be called on a runtime
   // that has the same instruction set as the file being dexopted.
-  const std::vector<const DexFile*>& boot_class_path = class_linker->GetBootClassPath();
-  for (size_t i = 0; i < boot_class_path.size(); i++) {
-    if (boot_class_path[i]->GetLocation() == filename) {
+  for (const DexFile* dex_file : *class_linker->GetBootClassPath()->GetDexFiles()) {
+    if (dex_file->GetLocation() == filename) {
       if (kVerboseLogging) {
         LOG(INFO) << "DexFile_isDexOptNeeded ignoring boot class path file: " << filename;
       }

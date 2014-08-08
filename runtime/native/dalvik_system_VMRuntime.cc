@@ -357,9 +357,8 @@ static void PreloadDexCachesStatsTotal(DexCacheStats* total) {
   }
 
   ClassLinker* linker = Runtime::Current()->GetClassLinker();
-  const std::vector<const DexFile*>& boot_class_path = linker->GetBootClassPath();
-  for (size_t i = 0; i< boot_class_path.size(); i++) {
-    const DexFile* dex_file = boot_class_path[i];
+  const ClassPath* boot_class_path = linker->GetBootClassPath();
+  for (const DexFile* dex_file : *boot_class_path->GetDexFiles()) {
     CHECK(dex_file != NULL);
     total->num_strings += dex_file->NumStringIds();
     total->num_fields += dex_file->NumFieldIds();
@@ -374,9 +373,7 @@ static void PreloadDexCachesStatsFilled(DexCacheStats* filled)
       return;
   }
   ClassLinker* linker = Runtime::Current()->GetClassLinker();
-  const std::vector<const DexFile*>& boot_class_path = linker->GetBootClassPath();
-  for (size_t i = 0; i< boot_class_path.size(); i++) {
-    const DexFile* dex_file = boot_class_path[i];
+  for (const DexFile* dex_file : *linker->GetBootClassPath()->GetDexFiles()) {
     CHECK(dex_file != NULL);
     mirror::DexCache* dex_cache = linker->FindDexCache(*dex_file);
     for (size_t i = 0; i < dex_cache->NumStrings(); i++) {
@@ -435,10 +432,7 @@ static void VMRuntime_preloadDexCaches(JNIEnv* env, jobject) {
     runtime->GetInternTable()->VisitRoots(PreloadDexCachesStringsCallback, &strings,
                                           kVisitRootFlagAllRoots);
   }
-
-  const std::vector<const DexFile*>& boot_class_path = linker->GetBootClassPath();
-  for (size_t i = 0; i< boot_class_path.size(); i++) {
-    const DexFile* dex_file = boot_class_path[i];
+  for (const DexFile* dex_file : *linker->GetBootClassPath()->GetDexFiles()) {
     CHECK(dex_file != NULL);
     StackHandleScope<1> hs(self);
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(linker->FindDexCache(*dex_file)));

@@ -346,13 +346,6 @@ class DexFile {
     DISALLOW_COPY_AND_ASSIGN(AnnotationItem);
   };
 
-  typedef std::pair<const DexFile*, const DexFile::ClassDef*> ClassPathEntry;
-  typedef std::vector<const DexFile*> ClassPath;
-
-  // Search a collection of DexFiles for a descriptor
-  static ClassPathEntry FindInClassPath(const char* descriptor,
-                                        const ClassPath& class_path);
-
   // Returns the checksum of a file for comparison with GetLocationChecksum().
   // For .dex files, this is the header checksum.
   // For zip files, this is the classes.dex zip entry CRC32 checksum.
@@ -480,10 +473,8 @@ class DexFile {
   }
 
   uint16_t GetIndexForTypeId(const TypeId& type_id) const {
-    CHECK_GE(&type_id, type_ids_) << GetLocation();
-    CHECK_LT(&type_id, type_ids_ + header_->type_ids_size_) << GetLocation();
     size_t result = &type_id - type_ids_;
-    DCHECK_LT(result, 65536U) << GetLocation();
+    CHECK_LT(result, header_->type_ids_size_) << GetLocation();
     return static_cast<uint16_t>(result);
   }
 
@@ -493,9 +484,12 @@ class DexFile {
     return StringDataAndUtf16LengthByIdx(type_id.descriptor_idx_, unicode_length);
   }
 
+  uint32_t StringIdxFromTypeIdx(uint32_t idx) const {
+    return GetTypeId(idx).descriptor_idx_;
+  }
+
   const char* StringByTypeIdx(uint32_t idx) const {
-    const TypeId& type_id = GetTypeId(idx);
-    return StringDataByIdx(type_id.descriptor_idx_);
+    return StringDataByIdx(StringIdxFromTypeIdx(idx));
   }
 
   // Returns the type descriptor string of a type id.

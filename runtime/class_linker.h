@@ -23,6 +23,7 @@
 
 #include "base/macros.h"
 #include "base/mutex.h"
+#include "class_path.h"
 #include "dex_file.h"
 #include "gc_root.h"
 #include "gtest/gtest.h"
@@ -139,7 +140,8 @@ class ClassLinker {
   // Resolve a Type with the given index from the DexFile, storing the
   // result in the DexCache. The referrer is used to identity the
   // target DexCache and ClassLoader to use for resolution.
-  mirror::Class* ResolveType(const DexFile& dex_file, uint16_t type_idx, mirror::Class* referrer)
+  mirror::Class* ResolveType(Thread* self, const DexFile& dex_file, uint16_t type_idx,
+                             mirror::Class* referrer)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Resolve a Type with the given index from the DexFile, storing the
@@ -155,7 +157,7 @@ class ClassLinker {
   // result in DexCache. The ClassLoader is used to search for the
   // type, since it may be referenced from but not contained within
   // the given DexFile.
-  mirror::Class* ResolveType(const DexFile& dex_file, uint16_t type_idx,
+  mirror::Class* ResolveType(Thread* self, const DexFile& dex_file, uint16_t type_idx,
                              Handle<mirror::DexCache> dex_cache,
                              Handle<mirror::ClassLoader> class_loader)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -231,8 +233,8 @@ class ClassLinker {
   const OatFile* RegisterOatFile(const OatFile* oat_file)
       LOCKS_EXCLUDED(dex_lock_);
 
-  const std::vector<const DexFile*>& GetBootClassPath() {
-    return boot_class_path_;
+  const ClassPath* GetBootClassPath() {
+    return &boot_class_path_;
   }
 
   void VisitClasses(ClassVisitor* visitor, void* arg)
@@ -497,7 +499,7 @@ class ClassLinker {
   bool LinkSuperClass(Handle<mirror::Class> klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool LoadSuperAndInterfaces(Handle<mirror::Class> klass, const DexFile& dex_file)
+  bool LoadSuperAndInterfaces(Thread* self, Handle<mirror::Class> klass, const DexFile& dex_file)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool LinkMethods(Thread* self, Handle<mirror::Class> klass,
@@ -611,7 +613,7 @@ class ClassLinker {
                                        Handle<mirror::ArtMethod> prototype)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  std::vector<const DexFile*> boot_class_path_;
+  ClassPath boot_class_path_;
 
   mutable ReaderWriterMutex dex_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   std::vector<size_t> new_dex_cache_roots_ GUARDED_BY(dex_lock_);;

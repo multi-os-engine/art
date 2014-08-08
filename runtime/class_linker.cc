@@ -1667,8 +1667,8 @@ ClassLinker::~ClassLinker() {
   mirror::ShortArray::ResetArrayClass();
   mirror::Throwable::ResetClass();
   mirror::StackTraceElement::ResetClass();
-  STLDeleteElements(&boot_class_path_);
   STLDeleteElements(&oat_files_);
+  STLDeleteElements(boot_class_path_.GetDexFiles());
 }
 
 mirror::DexCache* ClassLinker::AllocDexCache(Thread* self, const DexFile& dex_file) {
@@ -1820,9 +1820,8 @@ mirror::Class* ClassLinker::FindClass(Thread* self, const char* descriptor,
   if (descriptor[0] == '[') {
     return CreateArrayClass(self, descriptor, class_loader);
   } else if (class_loader.Get() == nullptr) {
-    DexFile::ClassPathEntry pair = DexFile::FindInClassPath(descriptor, boot_class_path_);
-    if (pair.second != NULL) {
-      StackHandleScope<1> hs(self);
+    ClassPath::Entry pair = boot_class_path_.Find(descriptor);
+    if (pair.second != nullptr) {
       return DefineClass(descriptor, NullHandle<mirror::ClassLoader>(), *pair.first, *pair.second);
     }
   } else if (Runtime::Current()->UseCompileTimeClassPath()) {
@@ -1834,19 +1833,17 @@ mirror::Class* ClassLinker::FindClass(Thread* self, const char* descriptor,
       return system_class;
     }
     // Next try the compile time class path.
-    const std::vector<const DexFile*>* class_path;
+    const ClassPath* class_path;
     {
       ScopedObjectAccessUnchecked soa(self);
       ScopedLocalRef<jobject> jclass_loader(soa.Env(),
                                             soa.AddLocalReference<jobject>(class_loader.Get()));
-      class_path = &Runtime::Current()->GetCompileTimeClassPath(jclass_loader.get());
+      class_path = Runtime::Current()->GetCompileTimeClassPath(jclass_loader.get());
     }
-
-    DexFile::ClassPathEntry pair = DexFile::FindInClassPath(descriptor, *class_path);
-    if (pair.second != NULL) {
+    ClassPath::Entry pair = class_path->Find(descriptor);
+    if (pair.second != nullptr) {
       return DefineClass(descriptor, class_loader, *pair.first, *pair.second);
     }
-
   } else {
     ScopedObjectAccessUnchecked soa(self);
     ScopedLocalRef<jobject> class_loader_object(soa.Env(),
@@ -1950,7 +1947,7 @@ mirror::Class* ClassLinker::DefineClass(const char* descriptor,
 
   // Finish loading (if necessary) by finding parents
   CHECK(!klass->IsLoaded());
-  if (!LoadSuperAndInterfaces(klass, dex_file)) {
+  if (!LoadSuperAndInterfaces(self, klass, dex_file)) {
     // Loading failed.
     if (!klass->IsErroneous()) {
       klass->SetStatus(mirror::Class::kStatusError, self);
@@ -2528,7 +2525,7 @@ void ClassLinker::AppendToBootClassPath(const DexFile& dex_file) {
 void ClassLinker::AppendToBootClassPath(const DexFile& dex_file,
                                         Handle<mirror::DexCache> dex_cache) {
   CHECK(dex_cache.Get() != NULL) << dex_file.GetLocation();
-  boot_class_path_.push_back(&dex_file);
+  boot_class_path_.AddDexFile(&dex_file);
   RegisterDexFile(dex_file, dex_cache);
 }
 
@@ -4010,12 +4007,13 @@ bool ClassLinker::LinkClass(Thread* self, const char* descriptor, Handle<mirror:
   return true;
 }
 
-bool ClassLinker::LoadSuperAndInterfaces(Handle<mirror::Class> klass, const DexFile& dex_file) {
+bool ClassLinker::LoadSuperAndInterfaces(Thread* self, Handle<mirror::Class> klass,
+                                         const DexFile& dex_file) {
   CHECK_EQ(mirror::Class::kStatusIdx, klass->GetStatus());
   const DexFile::ClassDef& class_def = dex_file.GetClassDef(klass->GetDexClassDefIndex());
   uint16_t super_class_idx = class_def.superclass_idx_;
   if (super_class_idx != DexFile::kDexNoIndex16) {
-    mirror::Class* super_class = ResolveType(dex_file, super_class_idx, klass.Get());
+    mirror::Class* super_class = ResolveType(self, dex_file, super_class_idx, klass.Get());
     if (super_class == NULL) {
       DCHECK(Thread::Current()->IsExceptionPending());
       return false;
@@ -4034,7 +4032,7 @@ bool ClassLinker::LoadSuperAndInterfaces(Handle<mirror::Class> klass, const DexF
   if (interfaces != NULL) {
     for (size_t i = 0; i < interfaces->Size(); i++) {
       uint16_t idx = interfaces->GetTypeItem(i).type_idx_;
-      mirror::Class* interface = ResolveType(dex_file, idx, klass.Get());
+      mirror::Class* interface = ResolveType(self, dex_file, idx, klass.Get());
       if (interface == NULL) {
         DCHECK(Thread::Current()->IsExceptionPending());
         return false;
@@ -4755,24 +4753,24 @@ mirror::String* ClassLinker::ResolveString(const DexFile& dex_file, uint32_t str
   return string;
 }
 
-mirror::Class* ClassLinker::ResolveType(const DexFile& dex_file, uint16_t type_idx,
+mirror::Class* ClassLinker::ResolveType(Thread* self, const DexFile& dex_file, uint16_t type_idx,
                                         mirror::Class* referrer) {
-  StackHandleScope<2> hs(Thread::Current());
+  StackHandleScope<2> hs(self);
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(referrer->GetDexCache()));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(referrer->GetClassLoader()));
-  return ResolveType(dex_file, type_idx, dex_cache, class_loader);
+  return ResolveType(self, dex_file, type_idx, dex_cache, class_loader);
 }
 
-mirror::Class* ClassLinker::ResolveType(const DexFile& dex_file, uint16_t type_idx,
+mirror::Class* ClassLinker::ResolveType(Thread* self, const DexFile& dex_file, uint16_t type_idx,
                                         Handle<mirror::DexCache> dex_cache,
                                         Handle<mirror::ClassLoader> class_loader) {
   DCHECK(dex_cache.Get() != NULL);
   mirror::Class* resolved = dex_cache->GetResolvedType(type_idx);
-  if (resolved == NULL) {
-    Thread* self = Thread::Current();
-    const char* descriptor = dex_file.StringByTypeIdx(type_idx);
+  if (resolved == nullptr) {
+    const uint32_t string_idx = dex_file.StringIdxFromTypeIdx(type_idx);
+    const char* descriptor = dex_file.StringDataByIdx(string_idx);
     resolved = FindClass(self, descriptor, class_loader);
-    if (resolved != NULL) {
+    if (LIKELY(resolved != NULL)) {
       // TODO: we used to throw here if resolved's class loader was not the
       //       boot class loader. This was to permit different classes with the
       //       same name to be loaded simultaneously by different loaders
@@ -4809,9 +4807,10 @@ mirror::ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file, uint32_t 
   }
   // Fail, get the declaring class.
   const DexFile::MethodId& method_id = dex_file.GetMethodId(method_idx);
-  mirror::Class* klass = ResolveType(dex_file, method_id.class_idx_, dex_cache, class_loader);
+  Thread* self = Thread::Current();
+  mirror::Class* klass = ResolveType(self, dex_file, method_id.class_idx_, dex_cache, class_loader);
   if (klass == NULL) {
-    DCHECK(Thread::Current()->IsExceptionPending());
+    DCHECK(self->IsExceptionPending());
     return NULL;
   }
   // Scan using method_idx, this saves string compares but will only hit for matching dex
@@ -4937,7 +4936,7 @@ mirror::ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file, uint32_t 
         }
         break;
     }
-    DCHECK(Thread::Current()->IsExceptionPending());
+    DCHECK(self->IsExceptionPending());
     return NULL;
   }
 }
@@ -4955,9 +4954,9 @@ mirror::ArtField* ClassLinker::ResolveField(const DexFile& dex_file, uint32_t fi
   Thread* const self = Thread::Current();
   StackHandleScope<1> hs(self);
   Handle<mirror::Class> klass(
-      hs.NewHandle(ResolveType(dex_file, field_id.class_idx_, dex_cache, class_loader)));
+      hs.NewHandle(ResolveType(self, dex_file, field_id.class_idx_, dex_cache, class_loader)));
   if (klass.Get() == nullptr) {
-    DCHECK(Thread::Current()->IsExceptionPending());
+    DCHECK(self->IsExceptionPending());
     return nullptr;
   }
 
@@ -4997,9 +4996,9 @@ mirror::ArtField* ClassLinker::ResolveFieldJLS(const DexFile& dex_file,
   Thread* self = Thread::Current();
   StackHandleScope<1> hs(self);
   Handle<mirror::Class> klass(
-      hs.NewHandle(ResolveType(dex_file, field_id.class_idx_, dex_cache, class_loader)));
+      hs.NewHandle(ResolveType(self, dex_file, field_id.class_idx_, dex_cache, class_loader)));
   if (klass.Get() == NULL) {
-    DCHECK(Thread::Current()->IsExceptionPending());
+    DCHECK(self->IsExceptionPending());
     return NULL;
   }
 
