@@ -693,6 +693,19 @@ public class Main {
         }
     }
 
+    private static void classNewInstance() {
+      try {
+        Class.class.getDeclaredConstructor().setAccessible(true);
+        Class.class.getDeclaredConstructor().newInstance();
+        System.out.print(
+            "Didn't get an exception from Class.class.getDeclaredConstructor().newInstance()");
+      } catch (UnsupportedOperationException e) {
+        return;
+      } catch (Exception e) {
+        System.out.print(e.getMessage());
+      }
+    }
+
     public static void main(String[] args) throws Exception {
         Main test = new Main();
         test.run();
@@ -705,6 +718,7 @@ public class Main {
         checkUnique();
         checkParametrizedTypeEqualsAndHashCode();
         checkGenericArrayTypeEqualsAndHashCode();
+        classNewInstance();
     }
 }
 

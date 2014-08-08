@@ -58,8 +58,11 @@ static jobject Constructor_newInstance(JNIEnv* env, jobject javaMethod, jobjectA
     movable = false;
   } else if (!kMovingFields && c->IsArtFieldClass()) {
     movable = false;
-  } else if (!kMovingClasses && c->IsClassClass()) {
-    movable = false;
+  } else if (c->IsClassClass()) {
+    ThrowLocation throw_location = soa.Self()->GetCurrentLocationForThrow();
+    soa.Self()->ThrowNewException(throw_location, "Ljava/lang/UnsupportedOperationException;",
+                                  nullptr);
+    return nullptr;
   }
   mirror::Object* receiver =
       movable ? c->AllocObject(soa.Self()) : c->AllocNonMovableObject(soa.Self());
