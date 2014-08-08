@@ -284,6 +284,14 @@ class OatFile {
   typedef SafeMap<StringPiece, const OatDexFile*> Table;
   Table oat_dex_files_;
 
+  // Canonical dex location optimizations.
+  bool has_oat_files_with_different_canonical_location_;  // Records whether we have dex files
+                                                          // that change location under
+                                                          // canonicalization.
+  mutable std::string last_failed_canonicalized_dex_location_;  // The last location we needed to
+                                                                // canonicalize and failed to find
+                                                                // a dex file for.
+
   friend class OatClass;
   friend class OatDexFile;
   friend class OatDumper;  // For GetBase and GetLimit
