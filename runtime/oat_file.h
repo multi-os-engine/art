@@ -284,6 +284,19 @@ class OatFile {
   typedef SafeMap<StringPiece, const OatDexFile*> Table;
   Table oat_dex_files_;
 
+  // Canonical dex location optimization:
+  // In the common case, GetOatDexFile will be asked to return a file for a location that is
+  // actually the location of the embedded dex file - mostly because symlinks are rarely involved.
+  // To avoid costly canonicalization, we will first try the fast table lookup in oat_dex_files_.
+  // Only if the table lookup fails we will try canonicalized paths. A simple observation is that
+  // even if we arrive at the miss case, we are usually only ever asked for one dex location, and it
+  // will be a miss anyways. This is, for example, the case when pre-opting apps. We can use a
+  // one-element cache to record this miss and avoid another canonicalization the next time around.
+  //
+  // The field is mutable as OatFile references in the runtime are normally const, so GetOatDexFile
+  // is a const function - but we want to update our cache.
+  mutable std::string last_failed_canonicalized_dex_location_;
+
   friend class OatClass;
   friend class OatDexFile;
   friend class OatDumper;  // For GetBase and GetLimit
