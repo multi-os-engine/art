@@ -987,7 +987,7 @@ bool ElfFile::Load(bool executable, std::string* error_msg) {
 
   // Use GDB JIT support to do stack backtrace, etc.
   if (executable) {
-    GdbJITSupport();
+    GdbJITSupport(reinterpret_cast<intptr_t>(base_address_));
   }
 
   return true;
@@ -1002,7 +1002,6 @@ bool ElfFile::ValidPointer(const byte* start) const {
   }
   return false;
 }
-
 
 Elf32_Shdr* ElfFile::FindSectionByName(const std::string& name) const {
   CHECK(!program_header_only_);
@@ -1042,281 +1041,59 @@ static bool IsFDE(FDE* frame) {
 }
 
 // TODO This only works for 32-bit Elf Files.
-static bool FixupEHFrame(uintptr_t text_start, byte* eh_frame, size_t eh_frame_size) {
+static bool FixupEHFrame(uintptr_t offset, byte* eh_frame, size_t eh_frame_size) {
+  if (offset == 0) {
+    return true;
+  }
+
   FDE* last_frame = reinterpret_cast<FDE*>(eh_frame + eh_frame_size);
   FDE* frame = NextFDE(reinterpret_cast<FDE*>(eh_frame));
   for (; frame < last_frame; frame = NextFDE(frame)) {
     if (!IsFDE(frame)) {
       return false;
     }
-    frame->initial_location += text_start;
+    frame->initial_location += offset;
   }
   return true;
 }
 
-struct PACKED(1) DebugInfoHeader {
-  uint32_t unit_length;  // TODO 32-bit specific size
-  uint16_t version;
-  uint32_t debug_abbrev_offset;  // TODO 32-bit specific size
-  uint8_t  address_size;
-};
-
-// Returns -1 if it is variable length, which we will just disallow for now.
-static int32_t FormLength(uint32_t att) {
-  switch (att) {
-    case DW_FORM_data1:
-    case DW_FORM_flag:
-    case DW_FORM_flag_present:
-    case DW_FORM_ref1:
-      return 1;
-
-    case DW_FORM_data2:
-    case DW_FORM_ref2:
-      return 2;
-
-    case DW_FORM_addr:        // TODO 32-bit only
-    case DW_FORM_ref_addr:    // TODO 32-bit only
-    case DW_FORM_sec_offset:  // TODO 32-bit only
-    case DW_FORM_strp:        // TODO 32-bit only
-    case DW_FORM_data4:
-    case DW_FORM_ref4:
-      return 4;
-
-    case DW_FORM_data8:
-    case DW_FORM_ref8:
-    case DW_FORM_ref_sig8:
-      return 8;
-
-    case DW_FORM_block:
-    case DW_FORM_block1:
-    case DW_FORM_block2:
-    case DW_FORM_block4:
-    case DW_FORM_exprloc:
-    case DW_FORM_indirect:
-    case DW_FORM_ref_udata:
-    case DW_FORM_sdata:
-    case DW_FORM_string:
-    case DW_FORM_udata:
-    default:
-      return -1;
+bool ElfFile::FixupDebugSections(uintptr_t base_address) {
+  const Elf32_Shdr* rel_debug = FindSectionByName(".rel.debug");
+  if (rel_debug == nullptr || base_address == 0) {
+    return true;
   }
+
+  const Elf32_Shdr* debug_info = FindSectionByName(".debug_info");
+  const Elf32_Shdr* eh_frame = FindSectionByName(".eh_frame");
+  const Elf32_Shdr* debug_line = FindSectionByName(".debug_line");
+
+  Elf32_Off patched_sections[4] = {  // Corresponds to DEBUG_SECTION_INDEX.
+    0,
+    debug_info->sh_offset,
+    debug_line == nullptr ? 0 : debug_line->sh_offset,
+    eh_frame == nullptr ? 0 : eh_frame->sh_offset,
+  };
+
+  DCHECK_EQ(rel_debug->sh_entsize, 5U);
+  byte* rel_table = Begin() + rel_debug->sh_offset;
+  for (size_t entry = 0; entry < rel_debug->sh_size; entry += rel_debug->sh_entsize) {
+    unsigned sec_id = rel_table[entry];
+    DCHECK(sec_id < sizeof(patched_sections)/sizeof(patched_sections[0]));
+    if (patched_sections[sec_id]) {
+      uintptr_t offset = ((0x0ff & rel_table[entry + 1]) << 0) |
+                         ((0x0ff & rel_table[entry + 2]) << 8) |
+                         ((0x0ff & rel_table[entry + 3]) << 16) |
+                         ((0x0ff & rel_table[entry + 4]) << 24);
+      byte* vaddr_entry = Begin() + patched_sections[sec_id] + offset;
+      *(reinterpret_cast<Elf32_Addr*>(vaddr_entry)) += base_address;
+    }
+  }
+
+  return eh_frame == nullptr ||
+         FixupEHFrame(base_address, Begin() + eh_frame->sh_offset, eh_frame->sh_size);
 }
 
-class DebugTag {
- public:
-  const uint32_t index_;
-  ~DebugTag() {}
-  // Creates a new tag and moves data pointer up to the start of the next one.
-  // nullptr means error.
-  static DebugTag* Create(const byte** data_pointer) {
-    const byte* data = *data_pointer;
-    uint32_t index = DecodeUnsignedLeb128(&data);
-    std::unique_ptr<DebugTag> tag(new DebugTag(index));
-    tag->size_ = static_cast<uint32_t>(
-        reinterpret_cast<uintptr_t>(data) - reinterpret_cast<uintptr_t>(*data_pointer));
-    // skip the abbrev
-    tag->tag_ = DecodeUnsignedLeb128(&data);
-    tag->has_child_ = (*data == 0);
-    data++;
-    while (true) {
-      uint32_t attr = DecodeUnsignedLeb128(&data);
-      uint32_t form = DecodeUnsignedLeb128(&data);
-      if (attr == 0 && form == 0) {
-        break;
-      } else if (attr == 0 || form == 0) {
-        // Bad abbrev.
-        return nullptr;
-      }
-      int32_t size = FormLength(form);
-      if (size == -1) {
-        return nullptr;
-      }
-      tag->AddAttribute(attr, static_cast<uint32_t>(size));
-    }
-    *data_pointer = data;
-    return tag.release();
-  }
-
-  uint32_t GetSize() const {
-    return size_;
-  }
-
-  bool HasChild() {
-    return has_child_;
-  }
-
-  uint32_t GetTagNumber() {
-    return tag_;
-  }
-
-  // Gets the offset of a particular attribute in this tag structure.
-  // Interpretation of the data is left to the consumer. 0 is returned if the
-  // tag does not contain the attribute.
-  uint32_t GetOffsetOf(uint32_t dwarf_attribute) const {
-    auto it = off_map_.find(dwarf_attribute);
-    if (it == off_map_.end()) {
-      return 0;
-    } else {
-      return it->second;
-    }
-  }
-
-  // Gets the size of attribute
-  uint32_t GetAttrSize(uint32_t dwarf_attribute) const {
-    auto it = size_map_.find(dwarf_attribute);
-    if (it == size_map_.end()) {
-      return 0;
-    } else {
-      return it->second;
-    }
-  }
-
- private:
-  explicit DebugTag(uint32_t index) : index_(index) {}
-  void AddAttribute(uint32_t type, uint32_t attr_size) {
-    off_map_.insert(std::pair<uint32_t, uint32_t>(type, size_));
-    size_map_.insert(std::pair<uint32_t, uint32_t>(type, attr_size));
-    size_ += attr_size;
-  }
-  std::map<uint32_t, uint32_t> off_map_;
-  std::map<uint32_t, uint32_t> size_map_;
-  uint32_t size_;
-  uint32_t tag_;
-  bool has_child_;
-};
-
-class DebugAbbrev {
- public:
-  ~DebugAbbrev() {}
-  static DebugAbbrev* Create(const byte* dbg_abbrev, size_t dbg_abbrev_size) {
-    std::unique_ptr<DebugAbbrev> abbrev(new DebugAbbrev);
-    const byte* last = dbg_abbrev + dbg_abbrev_size;
-    while (dbg_abbrev < last) {
-      std::unique_ptr<DebugTag> tag(DebugTag::Create(&dbg_abbrev));
-      if (tag.get() == nullptr) {
-        return nullptr;
-      } else {
-        abbrev->tags_.insert(std::pair<uint32_t, uint32_t>(tag->index_, abbrev->tag_list_.size()));
-        abbrev->tag_list_.push_back(std::move(tag));
-      }
-    }
-    return abbrev.release();
-  }
-
-  DebugTag* ReadTag(const byte* entry) {
-    uint32_t tag_num = DecodeUnsignedLeb128(&entry);
-    auto it = tags_.find(tag_num);
-    if (it == tags_.end()) {
-      return nullptr;
-    } else {
-      CHECK_GT(tag_list_.size(), it->second);
-      return tag_list_.at(it->second).get();
-    }
-  }
-
- private:
-  DebugAbbrev() {}
-  std::map<uint32_t, uint32_t> tags_;
-  std::vector<std::unique_ptr<DebugTag>> tag_list_;
-};
-
-class DebugInfoIterator {
- public:
-  static DebugInfoIterator* Create(DebugInfoHeader* header, size_t frame_size,
-                                   DebugAbbrev* abbrev) {
-    std::unique_ptr<DebugInfoIterator> iter(new DebugInfoIterator(header, frame_size, abbrev));
-    if (iter->GetCurrentTag() == nullptr) {
-      return nullptr;
-    } else {
-      return iter.release();
-    }
-  }
-  ~DebugInfoIterator() {}
-
-  // Moves to the next DIE. Returns false if at last entry.
-  // TODO Handle variable length attributes.
-  bool next() {
-    if (current_entry_ == nullptr || current_tag_ == nullptr) {
-      return false;
-    }
-    current_entry_ += current_tag_->GetSize();
-    if (current_entry_ >= last_entry_) {
-      current_entry_ = nullptr;
-      return false;
-    }
-    current_tag_ = abbrev_->ReadTag(current_entry_);
-    if (current_tag_ == nullptr) {
-      current_entry_ = nullptr;
-      return false;
-    } else {
-      return true;
-    }
-  }
-
-  const DebugTag* GetCurrentTag() {
-    return const_cast<DebugTag*>(current_tag_);
-  }
-  byte* GetPointerToField(uint8_t dwarf_field) {
-    if (current_tag_ == nullptr || current_entry_ == nullptr || current_entry_ >= last_entry_) {
-      return nullptr;
-    }
-    uint32_t off = current_tag_->GetOffsetOf(dwarf_field);
-    if (off == 0) {
-      // tag does not have that field.
-      return nullptr;
-    } else {
-      DCHECK_LT(off, current_tag_->GetSize());
-      return current_entry_ + off;
-    }
-  }
-
- private:
-  DebugInfoIterator(DebugInfoHeader* header, size_t frame_size, DebugAbbrev* abbrev)
-      : abbrev_(abbrev),
-        last_entry_(reinterpret_cast<byte*>(header) + frame_size),
-        current_entry_(reinterpret_cast<byte*>(header) + sizeof(DebugInfoHeader)),
-        current_tag_(abbrev_->ReadTag(current_entry_)) {}
-  DebugAbbrev* abbrev_;
-  byte* last_entry_;
-  byte* current_entry_;
-  DebugTag* current_tag_;
-};
-
-static bool FixupDebugInfo(uint32_t text_start, DebugInfoIterator* iter) {
-  do {
-    if (iter->GetCurrentTag()->GetAttrSize(DW_AT_low_pc) != sizeof(int32_t) ||
-        iter->GetCurrentTag()->GetAttrSize(DW_AT_high_pc) != sizeof(int32_t)) {
-      return false;
-    }
-    uint32_t* PC_low = reinterpret_cast<uint32_t*>(iter->GetPointerToField(DW_AT_low_pc));
-    uint32_t* PC_high = reinterpret_cast<uint32_t*>(iter->GetPointerToField(DW_AT_high_pc));
-    if (PC_low != nullptr && PC_high != nullptr) {
-      *PC_low  += text_start;
-      *PC_high += text_start;
-    }
-  } while (iter->next());
-  return true;
-}
-
-static bool FixupDebugSections(const byte* dbg_abbrev, size_t dbg_abbrev_size,
-                               uintptr_t text_start,
-                               byte* dbg_info, size_t dbg_info_size,
-                               byte* eh_frame, size_t eh_frame_size) {
-  std::unique_ptr<DebugAbbrev> abbrev(DebugAbbrev::Create(dbg_abbrev, dbg_abbrev_size));
-  if (abbrev.get() == nullptr) {
-    return false;
-  }
-  std::unique_ptr<DebugInfoIterator> iter(
-      DebugInfoIterator::Create(reinterpret_cast<DebugInfoHeader*>(dbg_info),
-                                dbg_info_size, abbrev.get()));
-  if (iter.get() == nullptr) {
-    return false;
-  }
-  return FixupDebugInfo(text_start, iter.get())
-      && FixupEHFrame(text_start, eh_frame, eh_frame_size);
-}
-
-void ElfFile::GdbJITSupport() {
+void ElfFile::GdbJITSupport(intptr_t reloc_offset) {
   // We only get here if we only are mapping the program header.
   DCHECK(program_header_only_);
 
@@ -1334,16 +1111,22 @@ void ElfFile::GdbJITSupport() {
   // Do we have interesting sections?
   const Elf32_Shdr* debug_info = all.FindSectionByName(".debug_info");
   const Elf32_Shdr* debug_abbrev = all.FindSectionByName(".debug_abbrev");
-  const Elf32_Shdr* eh_frame = all.FindSectionByName(".eh_frame");
   const Elf32_Shdr* debug_str = all.FindSectionByName(".debug_str");
   const Elf32_Shdr* strtab_sec = all.FindSectionByName(".strtab");
   const Elf32_Shdr* symtab_sec = all.FindSectionByName(".symtab");
   Elf32_Shdr* text_sec = all.FindSectionByName(".text");
-  if (debug_info == nullptr || debug_abbrev == nullptr || eh_frame == nullptr ||
+
+  if (debug_info == nullptr || debug_abbrev == nullptr ||
       debug_str == nullptr || text_sec == nullptr || strtab_sec == nullptr ||
       symtab_sec == nullptr) {
     return;
   }
+
+  if (!all.FixupDebugSections(reloc_offset)) {
+    LOG(ERROR) << "Failed to load debug sections for GDB";
+    return;
+  }
+
   // We need to add in a strtab and symtab to the image.
   // all is MAP_PRIVATE so it can be written to freely.
   // We also already have strtab and symtab so we are fine there.
@@ -1356,14 +1139,6 @@ void ElfFile::GdbJITSupport() {
 
   text_sec->sh_type = SHT_NOBITS;
   text_sec->sh_offset = 0;
-
-  if (!FixupDebugSections(
-        all.Begin() + debug_abbrev->sh_offset, debug_abbrev->sh_size, text_sec->sh_addr,
-        all.Begin() + debug_info->sh_offset, debug_info->sh_size,
-        all.Begin() + eh_frame->sh_offset, eh_frame->sh_size)) {
-    LOG(ERROR) << "Failed to load GDB data";
-    return;
-  }
 
   jit_gdb_entry_ = CreateCodeEntry(all.Begin(), all.Size());
   gdb_file_mapping_.reset(all_ptr.release());

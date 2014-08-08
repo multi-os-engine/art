@@ -128,6 +128,27 @@ class ElfFile {
   // executable is true at run time, false at compile time.
   bool Load(bool executable, std::string* error_msg);
 
+  // Normally debug sections do not have relocation tables in Elf files.
+  // But we need to be able to fixup addresses in the debug sections
+  // when we patchoat the file or prepare the sections for gdb. For these
+  // purposes we maintain .rel.debug section, which contains a sequence
+  // of addresses to patch:
+  // struct {
+  //   byte section_index; // DEBUG_SECTION_INDEX
+  //   Elf32_Offs offset_to_patch;
+  // }
+  // offset_to_patch refers to a relocated address in the debug section
+  // pointed by the section_index (either .debug_info, .debug_line
+  // or eh_frame)
+  enum DEBUG_SECTION_INDEX {
+    END = 0,
+    INFO,
+    LINE,
+    FRAME,
+  };
+
+  bool FixupDebugSections(uintptr_t base_address);
+
  private:
   ElfFile(File* file, bool writable, bool program_header_only);
 
@@ -188,7 +209,7 @@ class ElfFile {
   byte* jit_elf_image_;
   JITCodeEntry* jit_gdb_entry_;
   std::unique_ptr<ElfFile> gdb_file_mapping_;
-  void GdbJITSupport();
+  void GdbJITSupport(intptr_t reloc_offset);
 };
 
 }  // namespace art
