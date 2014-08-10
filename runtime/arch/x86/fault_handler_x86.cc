@@ -28,10 +28,17 @@
 
 #if defined(__APPLE__)
 #define ucontext __darwin_ucontext
+#if defined(__x86_64__)
+#define CTX_ESP uc_mcontext->__ss.__rsp
+#define CTX_EIP uc_mcontext->__ss.__rip
+#define CTX_EAX uc_mcontext->__ss.__rax
+#define CTX_METHOD uc_mcontext->__ss.__rax
+#else
 #define CTX_ESP uc_mcontext->__ss.__esp
 #define CTX_EIP uc_mcontext->__ss.__eip
 #define CTX_EAX uc_mcontext->__ss.__eax
 #define CTX_METHOD uc_mcontext->__ss.__eax
+#endif
 #elif defined(__x86_64__)
 #define CTX_ESP uc_mcontext.gregs[REG_RSP]
 #define CTX_EIP uc_mcontext.gregs[REG_RIP]
