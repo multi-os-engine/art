@@ -116,6 +116,7 @@ enum Arm64ResourceEncodingPos {
 #define IS_SIGNED_IMM7(value) IS_SIGNED_IMM(7, value)
 #define IS_SIGNED_IMM9(value) IS_SIGNED_IMM(9, value)
 #define IS_SIGNED_IMM12(value) IS_SIGNED_IMM(12, value)
+#define IS_SIGNED_IMM14(value) IS_SIGNED_IMM(14, value)
 #define IS_SIGNED_IMM19(value) IS_SIGNED_IMM(19, value)
 #define IS_SIGNED_IMM21(value) IS_SIGNED_IMM(21, value)
 
@@ -355,7 +356,12 @@ enum ArmOpcode {
   kA64Sub4rrro,      // sub [s1001011000] rm[20-16] imm_6[15-10] rn[9-5] rd[4-0].
   kA64Sub4RRre,      // sub [s1001011001] rm[20-16] option[15-13] imm_3[12-10] rn[9-5] rd[4-0].
   kA64Subs3rRd,      // subs[s111000100] imm_12[21-10] rn[9-5] rd[4-0].
+  kA64Tst2rl,        // tst alias of "ands rzr, rn, #imm".
   kA64Tst3rro,       // tst alias of "ands rzr, arg1, arg2, arg3".
+  // In tbz/tbnz, s(bit31) has additional meaning.
+  // The number is encoded in "s:imm5". opcode, register and number need fix-up.
+  kA64Tbnz3rdt,      // tbnz [s0110111] imm_5[23-19] imm_14[18-5] rt[4-0].
+  kA64Tbz3rdt,       // tbz [s0110110] imm_5[23-19] imm_14[18-5] rt[4-0].
   kA64Ubfm4rrdd,     // ubfm[s10100110] N[22] imm_r[21-16] imm_s[15-10] rn[9-5] rd[4-0].
   kA64Last,
   kA64NotWide = 0,   // Flag used to select the first instruction variant.
