@@ -440,7 +440,7 @@ ONE_ARG_RUNTIME_EXCEPTION art_quick_throw_no_such_method, artThrowNoSuchMethodFr
    * On entry:
    * xSELF: thread
    * SP: address of last known frame
-   * IP0: address of next valid SP below protected region in stack
+   * IP1: address of next valid SP below protected region in stack
    *
    * This is deceptively simple but hides some complexity.  It is called in the case of
    * a stack overflow condition during implicit checks.  The signal handler has been
@@ -448,7 +448,7 @@ ONE_ARG_RUNTIME_EXCEPTION art_quick_throw_no_such_method, artThrowNoSuchMethodFr
    * works out the address of the previous frame and passes this in SP.  However there
    * is a piece of memory somewhere below the current SP that is not accessible (the
    * memory that caused the signal).  The signal handler works out the next
-   * accessible value of SP and passes this in x16/IP0.  This code then sets up the SP
+   * accessible value of SP and passes this in x17/IP1.  This code then sets up the SP
    * to be this new value and calls the code to create and throw the stack overflow
    * exception.
    */
@@ -456,7 +456,7 @@ ENTRY art_quick_throw_stack_overflow_from_signal
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
     mov x0, xSELF                   // pass Thread::Current
     mov x1, sp                      // pass SP
-    mov sp, xIP0                    // move SP down to below protected region.
+    mov sp, xIP1                    // move SP down to below protected region.
     b   artThrowStackOverflowFromCode                  // artThrowStackOverflowFromCode(Thread*, SP)
 END art_quick_throw_stack_overflow_from_signal
 

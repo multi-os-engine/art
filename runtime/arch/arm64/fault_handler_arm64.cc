@@ -184,7 +184,7 @@ bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
   sc->sp = prevsp;
 
   // Tell the stack overflow code where the new stack pointer should be.
-  sc->regs[art::arm64::IP0] = sp;      // aka x16
+  sc->regs[art::arm64::IP1] = sp;      // aka x17
 
   // Now arrange for the signal handler to return to art_quick_throw_stack_overflow_from_signal.
   // The value of LR must be the same as it was when we entered the code that
