@@ -1,0 +1,7 @@
+Code-Review+2: Ian Rogers <irogers@google.com>
+Verified+1: Nicolas Geoffray <ngeoffray@google.com>
+Submitted-by: Nicolas Geoffray <ngeoffray@google.com>
+Submitted-at: Mon, 11 Aug 2014 18:06:44 +0000
+Reviewed-on: https://android-review.googlesource.com/103911
+Project: platform/art
+Branch: refs/heads/master
