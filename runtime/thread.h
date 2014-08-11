@@ -274,8 +274,12 @@ class Thread {
     return tlsPtr_.opeer;
   }
 
+  bool HasJniPeer() const {
+    return tlsPtr_.jpeer != nullptr;
+  }
+
   bool HasPeer() const {
-    return tlsPtr_.jpeer != nullptr || tlsPtr_.opeer != nullptr;
+    return HasJniPeer() || tlsPtr_.opeer != nullptr;
   }
 
   RuntimeStats* GetStats() {
