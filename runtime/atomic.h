@@ -187,7 +187,7 @@ class QuasiAtomic {
 template<typename T>
 class PACKED(sizeof(T)) Atomic : public std::atomic<T> {
  public:
-  Atomic<T>() : std::atomic<T>() { }
+  Atomic<T>() : std::atomic<T>(0) { }
 
   explicit Atomic<T>(T value) : std::atomic<T>(value) { }
 
