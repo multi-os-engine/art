@@ -31,6 +31,7 @@
 #include "instrumentation.h"
 #include "instruction_set.h"
 #include "jobject_comparator.h"
+#include "nativebridge/native_bridge.h"
 #include "object_callbacks.h"
 #include "offsets.h"
 #include "profiler_options.h"
@@ -610,6 +611,11 @@ class Runtime {
   bool implicit_null_checks_;       // NullPointer checks are implicit.
   bool implicit_so_checks_;         // StackOverflow checks are implicit.
   bool implicit_suspend_checks_;    // Thread suspension checks are implicit.
+
+  // Native bridge library path.
+  std::string native_bridge_library_path_;
+  // Native bridge library runtime callbacks.
+  android::NativeBridgeRuntimeCallbacks native_bridge_art_callbacks_;
 
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };
