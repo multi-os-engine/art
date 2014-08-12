@@ -54,7 +54,7 @@ static inline bool DexFileStringEquals(const DexFile* df1, uint32_t sidx1,
   const char* s1_data = df1->StringDataAndUtf16LengthByIdx(sidx1, &s1_len);
   uint32_t s2_len;
   const char* s2_data = df2->StringDataAndUtf16LengthByIdx(sidx2, &s2_len);
-  return (s1_len == s2_len) && (strcmp(s1_data, s2_data) == 0);
+  return (s1_len == s2_len) && (memcmp(s1_data, s2_data, s1_len) == 0);
 }
 
 inline bool Signature::operator==(const Signature& rhs) const {

@@ -272,7 +272,7 @@ else
   endif
 endif
 # We compile with GCC 4.6 or clang on the host, both of which support -Wthread-safety.
-ART_HOST_CFLAGS += -Wthread-safety
+ART_HOST_CFLAGS += -Wthread-safety -fno-omit-frame-pointer
 
 # To use oprofile_android --callgraph, uncomment this and recompile with "mmm art -B -j16"
 # ART_TARGET_CFLAGS += -fno-omit-frame-pointer -marm -mapcs

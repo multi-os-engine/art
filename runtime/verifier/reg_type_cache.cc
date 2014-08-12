@@ -564,13 +564,14 @@ RegType& RegTypeCache::GetComponentType(RegType& array, mirror::ClassLoader* loa
     return FromDescriptor(loader, component.c_str(), false);
   } else {
     mirror::Class* klass = array.GetClass()->GetComponentType();
+    std::string temp;
     if (klass->IsErroneous()) {
       // Arrays may have erroneous component types, use unresolved in that case.
       // We assume that the primitive classes are not erroneous, so we know it is a
       // reference type.
-      return FromDescriptor(loader, klass->GetDescriptor().c_str(), false);
+      return FromDescriptor(loader, klass->GetDescriptor(&temp), false);
     } else {
-      return FromClass(klass->GetDescriptor().c_str(), klass,
+      return FromClass(klass->GetDescriptor(&temp), klass,
                        klass->CannotBeAssignedFromOtherTypes());
     }
   }
