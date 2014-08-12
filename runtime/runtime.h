@@ -611,6 +611,9 @@ class Runtime {
   bool implicit_so_checks_;         // StackOverflow checks are implicit.
   bool implicit_suspend_checks_;    // Thread suspension checks are implicit.
 
+  // Native bridge library path.
+  char* native_bridge_library_path_;
+
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };
 
