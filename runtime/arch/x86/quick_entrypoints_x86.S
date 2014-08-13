@@ -1186,7 +1186,7 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     //  fs:...  eax:edx   xmm0      <= where they are
 
     subl LITERAL(20), %esp         // Padding & pass float result.
-    movsd %xmm0, (%esp)
+    fstpl (%esp)
     pushl %edx                    // Pass int result.
     pushl %eax
     pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
