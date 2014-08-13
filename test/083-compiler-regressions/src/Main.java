@@ -9295,6 +9295,7 @@ class SpinThread extends Thread {
 
     public void run() {
         setPriority(mPriority);
+        Object o = System.out;
         while (true) {}
     }
 }
