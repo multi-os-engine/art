@@ -1679,6 +1679,7 @@ extern "C" TwoWordReturn artQuickGenericJniTrampoline(Thread* self,
  */
 extern "C" uint64_t artQuickGenericJniEndTrampoline(Thread* self, jvalue result, uint64_t result_f)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      fprintf(stderr, "IN HERE\n");
   StackReference<mirror::ArtMethod>* sp = self->GetManagedStack()->GetTopQuickFrame();
   uint32_t* sp32 = reinterpret_cast<uint32_t*>(sp);
   mirror::ArtMethod* called = sp->AsMirrorPtr();

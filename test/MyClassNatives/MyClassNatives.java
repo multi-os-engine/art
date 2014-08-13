@@ -92,4 +92,6 @@ class MyClassNatives {
     native static void stackArgsMixed(int i1, float f1, int i2, float f2, int i3, float f3, int i4,
         float f4, int i5, float f5, int i6, float f6, int i7, float f7, int i8, float f8, int i9,
         float f9, int i10, float f10);
+
+    static native double log(double f);
 }
