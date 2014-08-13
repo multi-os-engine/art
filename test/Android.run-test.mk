@@ -19,6 +19,11 @@ include art/build/Android.common_test.mk
 
 # List of all tests of the form 003-omnibus-opcodes.
 TEST_ART_RUN_TESTS := $(wildcard $(LOCAL_PATH)/[0-9]*)
+TEST_ART_RUN_TESTS := $(subst $(LOCAL_PATH)/911,, $(TEST_ART_RUN_TESTS))
+TEST_ART_911_TESTS := $(wildcard $(LOCAL_PATH)/911/src/*Test.java)
+TEST_ART_911_TESTS := $(subst /src/,-, $(TEST_ART_911_TESTS))
+TEST_ART_911_TESTS := $(subst .java,, $(TEST_ART_911_TESTS))
+TEST_ART_RUN_TESTS += $(TEST_ART_911_TESTS)
 TEST_ART_RUN_TESTS := $(subst $(LOCAL_PATH)/,, $(TEST_ART_RUN_TESTS))
 
 # List all the test names for host and target and compiler variants.

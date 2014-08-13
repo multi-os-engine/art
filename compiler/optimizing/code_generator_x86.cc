@@ -20,6 +20,7 @@
 #include "gc/accounting/card_table.h"
 #include "mirror/array.h"
 #include "mirror/art_method.h"
+#include "mirror/class.h"
 #include "thread.h"
 #include "utils/assembler.h"
 #include "utils/stack_checks.h"
@@ -796,6 +797,63 @@ void InstructionCodeGeneratorX86::VisitInvokeStatic(HInvokeStatic* invoke) {
   // temp = temp[index_in_cache]
   __ movl(temp, Address(temp, index_in_cache));
   // (temp + offset_of_quick_compiled_code)()
+  __ call(Address(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value()));
+
+  DCHECK(!codegen_->IsLeafMethod());
+  codegen_->RecordPcInfo(invoke->GetDexPc());
+}
+
+void LocationsBuilderX86::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+  codegen_->MarkNotLeaf();
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(invoke);
+  locations->AddTemp(X86CpuLocation(EAX));
+
+  InvokeDexCallingConventionVisitor calling_convention_visitor;
+  for (size_t i = 0; i < invoke->InputCount(); i++) {
+    HInstruction* input = invoke->InputAt(i);
+    locations->SetInAt(i, calling_convention_visitor.GetNextLocation(input->GetType()));
+  }
+
+  switch (invoke->GetType()) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimInt:
+    case Primitive::kPrimNot:
+      locations->SetOut(X86CpuLocation(EAX));
+      break;
+
+    case Primitive::kPrimLong:
+      locations->SetOut(Location::RegisterLocation(X86ManagedRegister::FromRegisterPair(EAX_EDX)));
+      break;
+
+    case Primitive::kPrimVoid:
+      break;
+
+    case Primitive::kPrimDouble:
+    case Primitive::kPrimFloat:
+      LOG(FATAL) << "Unimplemented return type " << invoke->GetType();
+      break;
+  }
+
+  invoke->SetLocations(locations);
+}
+
+void InstructionCodeGeneratorX86::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+  Register temp = invoke->GetLocations()->GetTemp(0).AsX86().AsCpuRegister();
+  uint32_t method_offset = mirror::Class::EmbeddedVTableOffset().Uint32Value() +
+          invoke->GetVTableIndex() * sizeof(mirror::Class::VTableEntry);
+  LocationSummary* locations = invoke->GetLocations();
+  Location receiver = locations->InAt(0);
+  uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
+  if (receiver.IsStackSlot()) {
+    __ movl(temp, Address(ESP, receiver.GetStackIndex()));
+    __ movl(temp, Address(temp, class_offset));
+  } else {
+    __ movl(temp, Address(receiver.AsX86().AsCpuRegister(), class_offset));
+  }
+  __ movl(temp, Address(temp, method_offset));
   __ call(Address(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value()));
 
   DCHECK(!codegen_->IsLeafMethod());

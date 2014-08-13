@@ -745,6 +745,12 @@ void InstructionCodeGeneratorX86_64::VisitInvokeStatic(HInvokeStatic* invoke) {
   codegen_->RecordPcInfo(invoke->GetDexPc());
 }
 
+void LocationsBuilderX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+}
+
+void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+}
+
 void LocationsBuilderX86_64::VisitAdd(HAdd* add) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(add);
   switch (add->GetResultType()) {

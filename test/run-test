@@ -78,6 +78,7 @@ build_only="no"
 suffix64=""
 trace="false"
 always_clean="no"
+test_name_911=
 
 while true; do
     if [ "x$1" = "x--host" ]; then
@@ -279,7 +280,12 @@ if [ "$usage" = "no" ]; then
         test_dir="$1"
     fi
 
-    if [ '!' -d "$test_dir" ]; then
+    if [[ $test_dir == 911-* ]]; then
+      td2=911
+      test_name_911=${test_dir:4}
+      test_dir=911
+
+    elif [ '!' -d "$test_dir" ]; then
         td2=`echo ${test_dir}-*`
         if [ '!' -d "$td2" ]; then
             echo "${test_dir}: no such test directory" 1>&2
@@ -401,7 +407,7 @@ if [ "$dev_mode" = "yes" ]; then
     echo "build exit status: $build_exit" 1>&2
     if [ "$build_exit" = '0' ]; then
         echo "${test_dir}: running..." 1>&2
-        "./${run}" $run_args "$@" 2>&1
+        "./${run}" $run_args "$@" $test_name_911 2>&1
         run_exit="$?"
         echo "run exit status: $run_exit" 1>&2
         if [ "$run_exit" = "0" ]; then
@@ -413,7 +419,7 @@ elif [ "$update_mode" = "yes" ]; then
     build_exit="$?"
     if [ "$build_exit" = '0' ]; then
         echo "${test_dir}: running..." 1>&2
-        "./${run}" $run_args "$@" >"$output" 2>&1
+        "./${run}" $run_args "$@" $test_name_911 >"$output" 2>&1
         sed -e 's/[[:cntrl:]]$//g' < "$output" >"${td_expected}"
         good="yes"
     else
@@ -441,7 +447,7 @@ else
     build_exit="$?"
     if [ "$build_exit" = '0' ]; then
         echo "${test_dir}: running..." 1>&2
-        "./${run}" $run_args "$@" >"$output" 2>&1
+        "./${run}" $run_args "$@" $test_name_911 >"$output" 2>&1
     else
         cp "$build_output" "$output"
         echo "build exit status: $build_exit" >>"$output"

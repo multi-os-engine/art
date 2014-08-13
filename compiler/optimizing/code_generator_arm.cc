@@ -830,6 +830,9 @@ void LocationsBuilderARM::VisitInvokeStatic(HInvokeStatic* invoke) {
   invoke->SetLocations(locations);
 }
 
+void LocationsBuilderARM::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+}
+
 void InstructionCodeGeneratorARM::LoadCurrentMethod(Register reg) {
   __ ldr(reg, Address(SP, kCurrentMethodStackOffset));
 }
@@ -861,6 +864,9 @@ void InstructionCodeGeneratorARM::VisitInvokeStatic(HInvokeStatic* invoke) {
 
   codegen_->RecordPcInfo(invoke->GetDexPc());
   DCHECK(!codegen_->IsLeafMethod());
+}
+
+void InstructionCodeGeneratorARM::VisitInvokeVirtual(HInvokeVirtual* invoke) {
 }
 
 void LocationsBuilderARM::VisitAdd(HAdd* add) {
