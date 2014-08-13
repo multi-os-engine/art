@@ -865,11 +865,6 @@ X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator*
   num_reserved_vector_regs_ = -1;
 }
 
-Mir2Lir* X86CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
-                          ArenaAllocator* const arena) {
-  return new X86Mir2Lir(cu, mir_graph, arena);
-}
-
 // Not used in x86(-64)
 RegStorage X86Mir2Lir::LoadHelper(QuickEntrypointEnum trampoline) {
   LOG(FATAL) << "Unexpected use of LoadHelper in x86";

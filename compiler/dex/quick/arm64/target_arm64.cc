@@ -592,11 +592,6 @@ Arm64Mir2Lir::Arm64Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAlloca
   }
 }
 
-Mir2Lir* Arm64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
-                            ArenaAllocator* const arena) {
-  return new Arm64Mir2Lir(cu, mir_graph, arena);
-}
-
 void Arm64Mir2Lir::CompilerInitializeRegAlloc() {
   reg_pool_ = new (arena_) RegisterPool(this, arena_, core_regs, core64_regs, sp_regs, dp_regs,
                                         reserved_regs, reserved64_regs, core_temps, core64_temps,
