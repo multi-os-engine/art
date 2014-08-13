@@ -109,12 +109,15 @@ class Operand {
   void SetModRM(uint8_t mod, CpuRegister rm) {
     CHECK_EQ(mod & ~3, 0);
     if (rm.NeedsRex()) {
-      rex_ |= 0x41;  // REX.000B
+      rex_ = 0x41;  // REX.000B
+    } else {
+      rex_ = 0;
     }
     encoding_[0] = (mod << 6) | rm.LowBits();
     length_ = 1;
   }
 
+  // NOTE: SetModRM must be called before SetSIB.
   void SetSIB(ScaleFactor scale, CpuRegister index, CpuRegister base) {
     CHECK_EQ(length_, 1);
     CHECK_EQ(scale & ~3, 0);
