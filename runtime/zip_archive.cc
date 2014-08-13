@@ -123,7 +123,10 @@ ZipEntry* ZipArchive::Find(const char* name, std::string* error_msg) const {
 
   // Resist the urge to delete the space. <: is a bigraph sequence.
   std::unique_ptr< ::ZipEntry> zip_entry(new ::ZipEntry);
-  const int32_t error = FindEntry(handle_, name, zip_entry.get());
+  ZipEntryName entry_name;
+  entry_name.name = reinterpret_cast<const uint8_t*>(name);
+  entry_name.name_length = strlen(name);
+  const int32_t error = FindEntry(handle_, entry_name, zip_entry.get());
   if (error) {
     *error_msg = std::string(ErrorCodeString(error));
     return nullptr;
