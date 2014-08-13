@@ -202,7 +202,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   mark_bitmap_.reset(new accounting::HeapBitmap(this));
   // Requested begin for the alloc space, to follow the mapped image and oat files
   byte* requested_alloc_space_begin = nullptr;
-  if (!image_file_name.empty()) {
+  if (!image_file_name.empty() && Runtime::Current()->IsImageDex2OatEnabled()) {
     space::ImageSpace* image_space = space::ImageSpace::Create(image_file_name.c_str(),
                                                                image_instruction_set);
     CHECK(image_space != nullptr) << "Failed to create space for " << image_file_name;

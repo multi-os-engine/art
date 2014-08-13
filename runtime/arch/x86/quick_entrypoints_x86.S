@@ -1183,10 +1183,10 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     // prepare for artQuickGenericJniEndTrampoline call
     // (Thread*, result, result_f)
     //  (esp)    4(esp)  12(esp)    <= C calling convention
-    //  fs:...  eax:edx   xmm0      <= where they are
+    //  fs:...  eax:edx   fp      <= where they are
 
     subl LITERAL(20), %esp         // Padding & pass float result.
-    movsd %xmm0, (%esp)
+    fstpl (%esp)
     pushl %edx                    // Pass int result.
     pushl %eax
     pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
