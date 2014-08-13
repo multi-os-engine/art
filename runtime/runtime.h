@@ -94,7 +94,8 @@ class Runtime {
   }
 
   bool CanRelocate() const {
-    return !IsCompiler() || compiler_callbacks_->IsRelocationPossible();
+    return IsImageDex2OatEnabled()
+        && (!IsCompiler() || compiler_callbacks_->IsRelocationPossible());
   }
 
   bool ShouldRelocate() const {
@@ -107,6 +108,10 @@ class Runtime {
 
   bool IsDex2OatEnabled() const {
     return dex2oat_enabled_;
+  }
+
+  bool IsImageDex2OatEnabled() const {
+    return image_dex2oat_enabled_;
   }
 
   CompilerCallbacks* GetCompilerCallbacks() {
@@ -508,6 +513,7 @@ class Runtime {
   bool is_concurrent_gc_enabled_;
   bool is_explicit_gc_disabled_;
   bool dex2oat_enabled_;
+  bool image_dex2oat_enabled_;
 
   std::string compiler_executable_;
   std::string patchoat_executable_;

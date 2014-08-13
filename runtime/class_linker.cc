@@ -195,10 +195,13 @@ ClassLinker::ClassLinker(InternTable* intern_table)
 
 // To set a value for generic JNI. May be necessary in compiler tests.
 extern "C" void art_quick_generic_jni_trampoline(mirror::ArtMethod*);
+extern "C" void art_quick_resolution_trampoline(mirror::ArtMethod*);
+extern "C" void art_quick_imt_conflict_trampoline(mirror::ArtMethod*);
+extern "C" void art_quick_to_interpreter_bridge(mirror::ArtMethod*);
 
-void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class_path) {
+void ClassLinker::InitWithoutImage(const std::vector<const DexFile*>& boot_class_path) {
   VLOG(startup) << "ClassLinker::Init";
-  CHECK(Runtime::Current()->IsCompiler());
+  CHECK(Runtime::Current()->IsCompiler() || !Runtime::Current()->IsImageDex2OatEnabled());
 
   CHECK(!init_done_);
 
@@ -370,6 +373,9 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   // Set up GenericJNI entrypoint. That is mainly a hack for common_compiler_test.h so that
   // we do not need friend classes or a publicly exposed setter.
   quick_generic_jni_trampoline_ = reinterpret_cast<void*>(art_quick_generic_jni_trampoline);
+  quick_resolution_trampoline_ = reinterpret_cast<void*>(art_quick_resolution_trampoline);
+  quick_imt_conflict_trampoline_ = reinterpret_cast<void*>(art_quick_imt_conflict_trampoline);
+  quick_to_interpreter_bridge_trampoline_ = reinterpret_cast<void*>(art_quick_to_interpreter_bridge);
 
   // Object, String and DexCache need to be rerun through FindSystemClass to finish init
   java_lang_Object->SetStatus(mirror::Class::kStatusNotReady, self);
@@ -2218,8 +2224,11 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
   }
   Runtime* runtime = Runtime::Current();
   if (!runtime->IsStarted() || runtime->UseCompileTimeClassPath()) {
-    return;  // OAT file unavailable.
+    if (runtime->IsImageDex2OatEnabled()) {
+      return;  // OAT file unavailable.
+    }
   }
+  
   const DexFile& dex_file = klass->GetDexFile();
   const DexFile::ClassDef* dex_class_def = klass->GetClassDef();
   CHECK(dex_class_def != nullptr);
