@@ -16,6 +16,8 @@
 
 #include <memory>
 
+#include <math.h>
+
 #include "class_linker.h"
 #include "common_compiler_test.h"
 #include "dex_file.h"
@@ -47,7 +49,7 @@ namespace art {
 class JniCompilerTest : public CommonCompilerTest {
  protected:
   void CompileForTest(jobject class_loader, bool direct,
-                      const char* method_name, const char* method_sig) {
+                      const char* method_name, const char* method_sig, bool generic = false) {
     ScopedObjectAccess soa(Thread::Current());
     StackHandleScope<1> hs(soa.Self());
     Handle<mirror::ClassLoader> loader(
@@ -61,25 +63,29 @@ class JniCompilerTest : public CommonCompilerTest {
       method = c->FindVirtualMethod(method_name, method_sig);
     }
     ASSERT_TRUE(method != nullptr) << method_name << " " << method_sig;
-    if (method->GetEntryPointFromQuickCompiledCode() == nullptr ||
-        method->GetEntryPointFromQuickCompiledCode() == class_linker_->GetQuickGenericJniTrampoline()) {
-      CompileMethod(method);
-      ASSERT_TRUE(method->GetEntryPointFromQuickCompiledCode() != nullptr)
-          << method_name << " " << method_sig;
-      ASSERT_TRUE(method->GetEntryPointFromPortableCompiledCode() != nullptr)
-          << method_name << " " << method_sig;
+    if (generic) {
+      method->SetEntryPointFromQuickCompiledCode(class_linker_->GetQuickGenericJniTrampoline());
+    } else {
+      if (method->GetEntryPointFromQuickCompiledCode() == nullptr ||
+          method->GetEntryPointFromQuickCompiledCode() == class_linker_->GetQuickGenericJniTrampoline()) {
+        CompileMethod(method);
+        ASSERT_TRUE(method->GetEntryPointFromQuickCompiledCode() != nullptr)
+            << method_name << " " << method_sig;
+        ASSERT_TRUE(method->GetEntryPointFromPortableCompiledCode() != nullptr)
+            << method_name << " " << method_sig;
+      }
     }
   }
 
   void SetUpForTest(bool direct, const char* method_name, const char* method_sig,
-                    void* native_fnptr) {
+                    void* native_fnptr, bool generic = false) {
     // Initialize class loader and compile method when runtime not started.
     if (!runtime_->IsStarted()) {
       {
         ScopedObjectAccess soa(Thread::Current());
         class_loader_ = LoadDex("MyClassNatives");
       }
-      CompileForTest(class_loader_, direct, method_name, method_sig);
+      CompileForTest(class_loader_, direct, method_name, method_sig, generic);
       // Start runtime.
       Thread::Current()->TransitionFromSuspendedToRunnable();
       bool started = runtime_->Start();
@@ -422,6 +428,22 @@ TEST_F(JniCompilerTest, CompileAndRunStaticDoubleDoubleMethod) {
   result = env_->CallStaticDoubleMethod(jklass_, jmethod_, a, b);
   EXPECT_EQ(a - b, result);
   EXPECT_EQ(2, gJava_MyClassNatives_fooSDD_calls);
+}
+
+jdouble Java_MyClassNatives_log(JNIEnv* env, jclass klass, jdouble x) {
+  return log(x);
+}
+
+// The x86 generic JNI code had a bug where it assumed a floating
+// point return value would be in xmm0. We use log, to somehow ensure
+// the compiler will use the floating point stack.
+TEST_F(JniCompilerTest, RunGenericStaticLogMethod) {
+  TEST_DISABLED_FOR_PORTABLE();
+  SetUpForTest(true, "log", "(D)D",
+               reinterpret_cast<void*>(&Java_MyClassNatives_log), true);
+
+  jdouble result = env_->CallStaticDoubleMethod(jklass_, jmethod_, 2.0);
+  EXPECT_EQ(log(2.0), result);
 }
 
 int gJava_MyClassNatives_fooSIOO_calls = 0;
