@@ -729,8 +729,11 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   switch (kRuntimeISA) {
     case kArm:
     case kThumb2:
-    case kX86:
     case kArm64:
+     implicit_suspend_checks_ = true;
+      // Deliberate fall through.
+
+    case kX86:
     case kX86_64:
       implicit_null_checks_ = true;
       implicit_so_checks_ = true;

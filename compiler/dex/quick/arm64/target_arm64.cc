@@ -771,9 +771,7 @@ RegStorage Arm64Mir2Lir::LoadHelper(QuickEntrypointEnum trampoline) {
 }
 
 LIR* Arm64Mir2Lir::CheckSuspendUsingLoad() {
-  RegStorage tmp = rs_x0;
-  LoadWordDisp(rs_xSELF, Thread::ThreadSuspendTriggerOffset<8>().Int32Value(), tmp);
-  LIR* load2 = LoadWordDisp(tmp, 0, tmp);
+  LIR* load2 = LoadWordDisp(rs_x19, 0, rs_x19);
   return load2;
 }
 

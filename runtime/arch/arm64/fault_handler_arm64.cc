@@ -97,62 +97,36 @@ bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
   return true;
 }
 
-// A suspend check is done using the following instruction sequence:
-//      0xf7223228: f9405640  ldr x0, [x18, #168]
-// .. some intervening instructions
-//      0xf7223230: f9400000  ldr x0, [x0]
+// A suspend check is done using the following instruction:
+//      0xf725a228: f9400273  ldr x19, [x19]
 
-// The offset from r18 is Thread::ThreadSuspendTriggerOffset().
-// To check for a suspend check, we examine the instructions that caused
-// the fault (at PC-4 and PC).
 bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
-  // These are the instructions to check for.  The first one is the ldr x0,[r18,#xxx]
-  // where xxx is the offset of the suspend trigger.
-  uint32_t checkinst1 = 0xf9400240 | (Thread::ThreadSuspendTriggerOffset<8>().Int32Value() << 7);
-  uint32_t checkinst2 = 0xf9400000;
+  uint32_t checkinst = 0xf9400273;
 
   struct ucontext *uc = reinterpret_cast<struct ucontext *>(context);
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
-  uint8_t* ptr2 = reinterpret_cast<uint8_t*>(sc->pc);
-  uint8_t* ptr1 = ptr2 - 4;
-  VLOG(signals) << "checking suspend";
+  uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->pc);
 
-  uint32_t inst2 = *reinterpret_cast<uint32_t*>(ptr2);
-  VLOG(signals) << "inst2: " << std::hex << inst2 << " checkinst2: " << checkinst2;
-  if (inst2 != checkinst2) {
-    // Second instruction is not good, not ours.
+  uint32_t inst = *reinterpret_cast<uint32_t*>(ptr);
+  VLOG(signals) << "inst: " << std::hex << inst << " checkinst: " << checkinst;
+  if (inst != checkinst) {
+    // Instruction is not good, not ours.
     return false;
   }
 
-  // The first instruction can a little bit up the stream due to load hoisting
-  // in the compiler.
-  uint8_t* limit = ptr1 - 80;   // Compiler will hoist to a max of 20 instructions.
-  bool found = false;
-  while (ptr1 > limit) {
-    uint32_t inst1 = *reinterpret_cast<uint32_t*>(ptr1);
-    VLOG(signals) << "inst1: " << std::hex << inst1 << " checkinst1: " << checkinst1;
-    if (inst1 == checkinst1) {
-      found = true;
-      break;
-    }
-    ptr1 -= 4;
-  }
-  if (found) {
-    VLOG(signals) << "suspend check match";
-    // This is a suspend check.  Arrange for the signal handler to return to
-    // art_quick_implicit_suspend.  Also set LR so that after the suspend check it
-    // will resume the instruction (current PC + 4).  PC points to the
-    // ldr x0,[x0,#0] instruction (r0 will be 0, set by the trigger).
+  VLOG(signals) << "suspend check match";
+  // This is a suspend check.  Arrange for the signal handler to return to
+  // art_quick_implicit_suspend.  Also set LR so that after the suspend check it
+  // will resume the instruction (current PC + 4).  PC points to the
+  // ldr x0,[x0,#0] instruction (r0 will be 0, set by the trigger).
 
-    sc->regs[30] = sc->pc + 4;
-    sc->pc = reinterpret_cast<uintptr_t>(art_quick_implicit_suspend);
+  sc->regs[30] = sc->pc + 4;
+  sc->pc = reinterpret_cast<uintptr_t>(art_quick_implicit_suspend);
 
-    // Now remove the suspend trigger that caused this fault.
-    Thread::Current()->RemoveSuspendTrigger();
-    VLOG(signals) << "removed suspend trigger invoking test suspend";
-    return true;
-  }
-  return false;
+  // Now remove the suspend trigger that caused this fault.
+  Thread::Current()->RemoveSuspendTrigger();
+  VLOG(signals) << "removed suspend trigger invoking test suspend";
+  return true;
 }
 
 bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
