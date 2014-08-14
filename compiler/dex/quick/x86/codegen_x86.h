@@ -457,6 +457,7 @@ class X86Mir2Lir : public Mir2Lir {
   void EmitShiftRegImm(const X86EncodingMap* entry, int32_t raw_reg, int32_t imm);
   void EmitShiftRegCl(const X86EncodingMap* entry, int32_t raw_reg, int32_t raw_cl);
   void EmitShiftMemCl(const X86EncodingMap* entry, int32_t raw_base, int32_t disp, int32_t raw_cl);
+  void EmitShiftRegRegCl(const X86EncodingMap* entry, int32_t raw_reg1, int32_t raw_reg2, int32_t raw_cl);
   void EmitShiftMemImm(const X86EncodingMap* entry, int32_t raw_base, int32_t disp, int32_t imm);
   void EmitRegCond(const X86EncodingMap* entry, int32_t raw_reg, int32_t cc);
   void EmitMemCond(const X86EncodingMap* entry, int32_t raw_base, int32_t disp, int32_t cc);
