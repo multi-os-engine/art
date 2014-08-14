@@ -1168,6 +1168,9 @@ static int dex2oat(int argc, char** argv) {
     case kArm:
     case kThumb2:
     case kArm64:
+      implicit_suspend_checks = true;
+      // Deliberate fall through.
+
     case kX86:
     case kX86_64:
       implicit_null_checks = true;

@@ -33,6 +33,8 @@
 #define THREAD_CARD_TABLE_OFFSET 120
 // Offset of field Thread::exception_
 #define THREAD_EXCEPTION_OFFSET 128
+// Offset of field Thread::tlsPtr_.suspend_trigger verified in InitCpu
+#define THREAD_SUSPEND_TRIGGER_OFFSET 160
 // Offset of field Thread::thin_lock_thread_id_
 #define THREAD_ID_OFFSET 12
 
