@@ -397,7 +397,8 @@ ENTRY art_quick_invoke_stub
     .cfi_def_cfa_register r11
     mov    r9, r3                          @ move managed thread pointer into r9
 #ifdef ARM_R4_SUSPEND_FLAG
-    mov    r4, #SUSPEND_CHECK_INTERVAL     @ reset r4 to suspend check interval
+    // Load suspend trigger from the TLS to rSUSPEND(r4).
+    ldr    rSUSPEND, [rSELF, #THREAD_SUSPEND_TRIGGER_OFFSET]
 #endif
     add    r5, r2, #4                      @ create space for method pointer in frame
 
@@ -838,7 +839,6 @@ GENERATE_ALL_ALLOC_ENTRYPOINTS
 ENTRY art_quick_test_suspend
 #ifdef ARM_R4_SUSPEND_FLAG
     ldrh   r0, [rSELF, #THREAD_FLAGS_OFFSET]
-    mov    rSUSPEND, #SUSPEND_CHECK_INTERVAL  @ reset rSUSPEND to SUSPEND_CHECK_INTERVAL
     cbnz   r0, 1f                             @ check Thread::Current()->suspend_count_ == 0
     bx     lr                                 @ return if suspend_count_ == 0
 1:
@@ -850,10 +850,14 @@ ENTRY art_quick_test_suspend
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
 END art_quick_test_suspend
 
+// This is called from the suspend signal handler.  It must restore rSUSPEND
+// to point to the suspend trigger.
 ENTRY art_quick_implicit_suspend
     mov    r0, rSELF
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r1, r2   @ save callee saves for stack crawl
     bl     artTestSuspendFromCode             @ (Thread*)
+    // Load suspend trigger from the TLS to rSUSPEND(r4).
+    ldr    rSUSPEND, [rSELF, #THREAD_SUSPEND_TRIGGER_OFFSET]
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
 END art_quick_implicit_suspend
 

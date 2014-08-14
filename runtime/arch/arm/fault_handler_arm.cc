@@ -120,65 +120,40 @@ bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
 }
 
 // A suspend check is done using the following instruction sequence:
-// 0xf723c0b2: f8d902c0  ldr.w   r0, [r9, #704]  ; suspend_trigger_
-// .. some intervening instruction
-// 0xf723c0b6: 6800      ldr     r0, [r0, #0]
+// 0xf723c0b6: 6824      ldr     r4, [r4, #0]
 
-// The offset from r9 is Thread::ThreadSuspendTriggerOffset().
-// To check for a suspend check, we examine the instructions that caused
-// the fault (at PC-4 and PC).
 bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
-  // These are the instructions to check for.  The first one is the ldr r0,[r9,#xxx]
-  // where xxx is the offset of the suspend trigger.
-  uint32_t checkinst1 = 0xf8d90000 + Thread::ThreadSuspendTriggerOffset<4>().Int32Value();
-  uint16_t checkinst2 = 0x6800;
+  uint16_t checkinst = 0x6824;
 
   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
-  uint8_t* ptr2 = reinterpret_cast<uint8_t*>(sc->arm_pc);
-  uint8_t* ptr1 = ptr2 - 4;
+  uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->arm_pc);
   VLOG(signals) << "checking suspend";
 
-  uint16_t inst2 = ptr2[0] | ptr2[1] << 8;
-  VLOG(signals) << "inst2: " << std::hex << inst2 << " checkinst2: " << checkinst2;
-  if (inst2 != checkinst2) {
-    // Second instruction is not good, not ours.
+  uint16_t inst = ptr[0] | ptr[1] << 8;
+  VLOG(signals) << "inst: " << std::hex << inst << " checkinst: " << checkinst;
+  if (inst != checkinst) {
+    // Instruction is not good, not ours.
     return false;
   }
 
-  // The first instruction can a little bit up the stream due to load hoisting
-  // in the compiler.
-  uint8_t* limit = ptr1 - 40;   // Compiler will hoist to a max of 20 instructions.
-  bool found = false;
-  while (ptr1 > limit) {
-    uint32_t inst1 = ((ptr1[0] | ptr1[1] << 8) << 16) | (ptr1[2] | ptr1[3] << 8);
-    VLOG(signals) << "inst1: " << std::hex << inst1 << " checkinst1: " << checkinst1;
-    if (inst1 == checkinst1) {
-      found = true;
-      break;
-    }
-    ptr1 -= 2;      // Min instruction size is 2 bytes.
-  }
-  if (found) {
-    VLOG(signals) << "suspend check match";
-    // This is a suspend check.  Arrange for the signal handler to return to
-    // art_quick_implicit_suspend.  Also set LR so that after the suspend check it
-    // will resume the instruction (current PC + 2).  PC points to the
-    // ldr r0,[r0,#0] instruction (r0 will be 0, set by the trigger).
+  VLOG(signals) << "suspend check match";
+  // This is a suspend check.  Arrange for the signal handler to return to
+  // art_quick_implicit_suspend.  Also set LR so that after the suspend check it
+  // will resume the instruction (current PC + 2).  PC points to the
+  // ldr r4,[r4,#0] instruction (r4 will be 0, set by the trigger).
 
-    // NB: remember that we need to set the bottom bit of the LR register
-    // to switch to thumb mode.
-    VLOG(signals) << "arm lr: " << std::hex << sc->arm_lr;
-    VLOG(signals) << "arm pc: " << std::hex << sc->arm_pc;
-    sc->arm_lr = sc->arm_pc + 3;      // +2 + 1 (for thumb)
-    sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_implicit_suspend);
+  // NB: remember that we need to set the bottom bit of the LR register
+  // to switch to thumb mode.
+  VLOG(signals) << "arm lr: " << std::hex << sc->arm_lr;
+  VLOG(signals) << "arm pc: " << std::hex << sc->arm_pc;
+  sc->arm_lr = sc->arm_pc + 3;      // +2 + 1 (for thumb)
+  sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_implicit_suspend);
 
-    // Now remove the suspend trigger that caused this fault.
-    Thread::Current()->RemoveSuspendTrigger();
-    VLOG(signals) << "removed suspend trigger invoking test suspend";
-    return true;
-  }
-  return false;
+  // Now remove the suspend trigger that caused this fault.
+  Thread::Current()->RemoveSuspendTrigger();
+  VLOG(signals) << "removed suspend trigger invoking test suspend";
+  return true;
 }
 
 // Stack overflow fault handler.
