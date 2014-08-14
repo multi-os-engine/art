@@ -530,7 +530,8 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
     mov xFP, x10                           // Use xFP now, as it's callee-saved.
     .cfi_def_cfa_register x29
     mov xSELF, x3                          // Move thread pointer into SELF register.
-    mov wSUSPEND, #SUSPEND_CHECK_INTERVAL  // reset wSUSPEND to suspend check interval
+    // mov wSUSPEND, #SUSPEND_CHECK_INTERVAL  // reset wSUSPEND to suspend check interval
+    add xSUSPEND, xSELF, #THREAD_SUSPEND_TRIGGER_OFFSET
 
     // Copy arguments into stack frame.
     // Use simple copy routine for now.
@@ -1318,7 +1319,6 @@ GENERATE_ALL_ALLOC_ENTRYPOINTS
     .extern artTestSuspendFromCode
 ENTRY art_quick_test_suspend
     ldrh   w0, [xSELF, #THREAD_FLAGS_OFFSET]  // get xSELF->state_and_flags.as_struct.flags
-    mov    wSUSPEND, #SUSPEND_CHECK_INTERVAL  // reset wSUSPEND to SUSPEND_CHECK_INTERVAL
     cbnz   w0, .Lneed_suspend                 // check flags == 0
     ret                                       // return if flags == 0
 .Lneed_suspend:
@@ -1331,6 +1331,7 @@ END art_quick_test_suspend
 ENTRY art_quick_implicit_suspend
     mov    x0, xSELF
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME          // save callee saves for stack crawl
+    add xSUSPEND, xSELF, #THREAD_SUSPEND_TRIGGER_OFFSET
     bl     artTestSuspendFromCode             // (Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
 END art_quick_implicit_suspend
