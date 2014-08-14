@@ -1,0 +1,8 @@
+Code-Review+2: Nicolas Geoffray <ngeoffray@google.com>
+Code-Review+2: Ian Rogers <irogers@google.com>
+Verified+1: Andreas Gampe <agampe@google.com>
+Submitted-by: Andreas Gampe <agampe@google.com>
+Submitted-at: Thu, 14 Aug 2014 00:19:43 +0000
+Reviewed-on: https://android-review.googlesource.com/104080
+Project: platform/art
+Branch: refs/heads/master
