@@ -224,7 +224,6 @@ void CodeGeneratorX86_64::GenerateFrameEntry() {
   if (!skip_overflow_check && kExplicitStackOverflowCheck) {
     SlowPathCode* slow_path = new (GetGraph()->GetArena()) StackOverflowCheckSlowPathX86_64();
     AddSlowPath(slow_path);
-
     __ gs()->cmpq(CpuRegister(RSP),
                   Address::Absolute(Thread::StackEndOffset<kX86_64WordSize>(), true));
     __ j(kLess, slow_path->GetEntryLabel());
