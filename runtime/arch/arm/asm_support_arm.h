@@ -27,6 +27,8 @@
 #define THREAD_CARD_TABLE_OFFSET 120
 // Offset of field Thread::tlsPtr_.exception verified in InitCpu
 #define THREAD_EXCEPTION_OFFSET 124
+// Offset of field Thread::tlsPtr_.suspend_trigger verified in InitCpu
+#define THREAD_SUSPEND_TRIGGER_OFFSET 148
 
 #define FRAME_SIZE_SAVE_ALL_CALLEE_SAVE 176
 #define FRAME_SIZE_REFS_ONLY_CALLEE_SAVE 32
