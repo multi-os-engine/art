@@ -980,6 +980,7 @@ void X86Mir2Lir::AnalyzeMIR(int opcode, BasicBlock * bb, MIR *mir) {
       store_method_addr_ = true;
       break;
     case Instruction::INVOKE_STATIC:
+    case Instruction::INVOKE_STATIC_RANGE:
       AnalyzeInvokeStatic(opcode, bb, mir);
       break;
     default:
