@@ -499,9 +499,9 @@ std::ostream& MethodVerifier::Fail(VerifyError error) {
     }
   }
   failures_.push_back(error);
-  std::string location(StringPrintf("%s: [0x%X]", PrettyMethod(dex_method_idx_, *dex_file_).c_str(),
+  std::string location(StringPrintf("%s: [0x%X] ", PrettyMethod(dex_method_idx_, *dex_file_).c_str(),
                                     work_insn_idx_));
-  std::ostringstream* failure_message = new std::ostringstream(location);
+  std::ostringstream* failure_message = new std::ostringstream(location, std::ostringstream::ate);
   failure_messages_.push_back(failure_message);
   return *failure_message;
 }
