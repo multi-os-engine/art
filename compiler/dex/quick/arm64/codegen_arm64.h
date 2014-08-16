@@ -255,7 +255,7 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
     return true;  // 64b architecture.
   }
 
-  size_t GetInstructionOffset(LIR* lir) OVERRIDE;
+  ssize_t GetInstructionOffset(LIR* lir) OVERRIDE;
 
   LIR* InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) OVERRIDE;
 

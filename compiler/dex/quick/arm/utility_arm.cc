@@ -1169,10 +1169,16 @@ LIR* ArmMir2Lir::InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEn
   return OpReg(op, r_tgt);
 }
 
-size_t ArmMir2Lir::GetInstructionOffset(LIR* lir) {
+ssize_t ArmMir2Lir::GetInstructionOffset(LIR* lir) {
   uint64_t check_flags = GetTargetInstFlags(lir->opcode);
   DCHECK((check_flags & IS_LOAD) || (check_flags & IS_STORE));
-  size_t offset = (check_flags & IS_TERTIARY_OP) ? lir->operands[2] : 0;
+  ssize_t offset;
+  if ((check_flags & IS_TERTIARY_OP) != 0 && (check_flags & REG_USE2) == 0) {
+    // Op with three operands, and the third one is not a register.
+    offset = lir->operands[2];
+  } else {
+    offset = -1;
+  }
 
   if (check_flags & SCALED_OFFSET_X2) {
     offset = offset * 2;
