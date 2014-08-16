@@ -1169,10 +1169,33 @@ LIR* ArmMir2Lir::InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEn
   return OpReg(op, r_tgt);
 }
 
-size_t ArmMir2Lir::GetInstructionOffset(LIR* lir) {
+static bool IsFPLoadOrStore(LIR* lir) {
+  int opcode = lir->opcode;
+  return (opcode == kThumb2Vldrs || opcode == kThumb2Vldrs || opcode == kThumb2Vstrs ||
+          opcode == kThumb2Vldrd);
+}
+
+ssize_t ArmMir2Lir::GetInstructionOffset(LIR* lir) {
   uint64_t check_flags = GetTargetInstFlags(lir->opcode);
   DCHECK((check_flags & IS_LOAD) || (check_flags & IS_STORE));
-  size_t offset = (check_flags & IS_TERTIARY_OP) ? lir->operands[2] : 0;
+  ssize_t offset;
+  if ((check_flags & IS_TERTIARY_OP) != 0 && (check_flags & REG_USE2) == 0) {
+    // Op with three operands, and the third one is not a register.
+    offset = lir->operands[2];
+  } else {
+    offset = -1;
+  }
+
+  if (IsFPLoadOrStore(lir) && offset != -1) {
+    // If the displacement is not zero, then it is the one we are looking for. Else, set offset=-1
+    // to signal we can't correctly compute the offset from the operands.
+    //
+    // Note: we could check the LIR just before, and check whether it's an ADD. But then the caller
+    // would also have to update the base register it's tracking.
+    if (lir->operands[2] == 0) {
+      offset = -1;
+    }
+  }
 
   if (check_flags & SCALED_OFFSET_X2) {
     offset = offset * 2;

@@ -185,7 +185,7 @@ class ArmMir2Lir FINAL : public Mir2Lir {
     }
 
     LIR* InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) OVERRIDE;
-    size_t GetInstructionOffset(LIR* lir);
+    ssize_t GetInstructionOffset(LIR* lir);
 
   private:
     void GenNegLong(RegLocation rl_dest, RegLocation rl_src);

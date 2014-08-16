@@ -126,6 +126,110 @@ inline void Mir2Lir::EliminateLoad(LIR* lir, int reg_id) {
   return;
 }
 
+// Check LIRs for load/store for Dalvik regs.
+static bool CheckEliminateDalvikReg(LIR* this_lir, LIR* check_lir,
+                                    bool reg_compatible,
+                                    bool is_check_lir_load,
+                                    bool is_this_lir_load,
+                                    int native_reg_id,
+                                    bool this_is_64bit,
+                                    Mir2Lir* m2l) {
+  // Check whether we're accessing the same register.
+  uint32_t this_alias_reg = DECODE_ALIAS_INFO_REG(this_lir->flags.alias_info);
+  uint32_t check_alias_reg = DECODE_ALIAS_INFO_REG(check_lir->flags.alias_info);
+  bool same_offset = this_alias_reg == check_alias_reg;
+
+  // TODO: Can we relax reg_compatible?
+  if (reg_compatible && same_offset) {
+    if (!is_check_lir_load) {
+      // Can only eliminate if it has the same source, else it's a stop.
+      if (check_lir->operands[0] != native_reg_id) {
+        DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "STORE STOP"));
+        return true;
+      }
+    }
+
+    if ((is_this_lir_load && is_check_lir_load)     /* LDR - LDR */ ||
+        (!is_this_lir_load && is_check_lir_load)    /* STR - LDR */ ||
+        (!is_this_lir_load && !is_check_lir_load))  /* STR - STR */ {
+      DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "LOAD STORE DALVIK"));
+      m2l->EliminateLoad(check_lir, native_reg_id);
+      return false;
+    }
+  }
+
+  // Check whether something might have gotten clobbered.
+  if (!is_check_lir_load &&
+      (same_offset || IsDalvikRegisterClobbered(this_lir, check_lir))) {
+    DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "CONSERVATIVE STORE STOP"));
+    return true;
+  }
+
+  return false;
+}
+
+static bool CheckEliminateHeapRefs(LIR* this_lir, LIR* check_lir,
+                                   bool reg_compatible,
+                                   bool is_check_lir_load,
+                                   bool is_this_lir_load,
+                                   ssize_t this_lir_offset,
+                                   int native_reg_id,
+                                   ResourceMask& alias_reg_list_mask,
+                                   Mir2Lir* m2l) {
+  ssize_t check_lir_offset = m2l->GetInstructionOffset(check_lir);
+  bool same_offset = (this_lir_offset == check_lir_offset);
+
+  // Base registers are aliases, and we have a case with good offsets.
+  if (alias_reg_list_mask.Intersects((check_lir->u.m.use_mask)->Without(kEncodeMem)) &&
+      check_lir_offset >= 0) {
+    if (same_offset) {
+      if (!is_check_lir_load) {
+        // Can only eliminate if it has the same source, else it's a stop.
+        if (check_lir->operands[0] != native_reg_id) {
+          DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "STORE STOP"));
+          return true;
+        }
+        // check_lir is a store. Stores have multiple used registers. Avoid wrong
+        // eliminations of the form "str r1, [r1, x] ; str r1, [r2, x]". This is
+        // conservative.
+        ResourceMask op0_mask;
+        m2l->SetupRegMask(&op0_mask, native_reg_id);
+        ResourceMask use_minus_mask = check_lir->u.m.use_mask->Without(op0_mask);
+        if (!alias_reg_list_mask.Intersects(use_minus_mask.Without(kEncodeMem))) {
+          DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "CONSERVATIVE STORE STOP"));
+          return true;
+        }
+      }
+
+      // TODO: Can we relax reg_compatible?
+      if (reg_compatible &&
+          ((is_this_lir_load && is_check_lir_load)    /* LDR - LDR */ ||
+           (!is_this_lir_load && is_check_lir_load)   /* STR - LDR */ ||
+           (!is_this_lir_load && !is_check_lir_load)  /* STR - STR */)) {
+        DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "LOAD STORE"));
+        m2l->EliminateLoad(check_lir, native_reg_id);
+      }
+    }
+    // Note: it is not possible to store to Java memory with overlaps (as in the dalvik reg
+    // case above). So we cannot clobber with stores that are not at the same offset. (Also,
+    // indexed stores are filtered out by LOAD_STORE_FILTER.)
+  } else if (!is_check_lir_load) {
+    // In case these were heap references, the references could be aliased. Be conservative
+    // and assume they are if the offsets are the same. Java doesn't allow to view objects
+    // partially (have pointers into the middle of the object), so this should be correct. We cover
+    // any "weird" cases like missing isa support for certain types of loads and stores by expecting
+    // the backend to set the offset to a negative value.
+    //
+    // (Note: as above, indexed stores are filtered out by LOAD_STORE_FILTER.)
+    if (same_offset || check_lir_offset < 0) {
+      DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "CONSERVATIVE STORE STOP"));
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /*
  * Perform a pass of top-down walk, from the first to the last instruction in the
  * superblock, to eliminate redundant loads and stores.
@@ -157,6 +261,8 @@ void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
       continue;
     }
 
+    ResourceMask this_mem_mask = kEncodeMem.Intersection(this_lir->u.m.use_mask->Union(
+                                                        *this_lir->u.m.def_mask));
     uint64_t target_flags = GetTargetInstFlags(this_lir->opcode);
     /* Target LIR - skip if instr is:
      *  - NOP
@@ -165,8 +271,10 @@ void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
      *  - Wide load
      *  - Wide store
      *  - Exclusive load/store
+     *
+     *  But go on in case of a dalvik reg, as we can disambiguate those by alias info.
      */
-    if (LOAD_STORE_FILTER(target_flags) ||
+    if ((LOAD_STORE_FILTER(target_flags) && !this_mem_mask.Intersects(kEncodeDalvikReg)) ||
         ((target_flags & (IS_LOAD | IS_STORE)) == (IS_LOAD | IS_STORE)) ||
         !(target_flags & (IS_LOAD | IS_STORE))) {
       continue;
@@ -174,8 +282,13 @@ void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
     int native_reg_id = this_lir->operands[0];
     int dest_reg_id = this_lir->operands[1];
     bool is_this_lir_load = target_flags & IS_LOAD;
-    ResourceMask this_mem_mask = kEncodeMem.Intersection(this_lir->u.m.use_mask->Union(
-                                                        *this_lir->u.m.def_mask));
+    bool this_is_64bit = DECODE_ALIAS_INFO_WIDE(this_lir->flags.alias_info);
+    bool this_is_dalvik_reg = this_mem_mask.Intersects(kEncodeDalvikReg);
+    ssize_t this_lir_offset = GetInstructionOffset(this_lir);
+    if (this_lir_offset < 0 && !this_is_dalvik_reg) {
+      // Indicates something we cannot disambiguate correctly.
+      continue;
+    }
 
     /* Memory region */
     if (!this_mem_mask.Intersects(kEncodeLiteral.Union(kEncodeDalvikReg)) &&
@@ -222,7 +335,7 @@ void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
       bool stop_here = false;
       bool pass_over = false;
 
-      /* Check LIR - skip if instr is:
+      /* Check LIR - stop if instr is:
        *  - Wide Load
        *  - Wide Store
        *  - Branch
@@ -230,8 +343,11 @@ void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
        *  - Exclusive load/store
        *  - IT blocks
        *  - Quad loads
+       *
+       *  Do not stop if we're a dalvik reg, though, as we can disambiguate this by register alias
+       *  information.
        */
-      if (LOAD_STORE_FILTER(check_flags)) {
+      if (LOAD_STORE_FILTER(check_flags) && !this_is_dalvik_reg) {
         stop_here = true;
         /* Possible alias or result of earlier pass */
       } else if (check_flags & IS_MOVE) {
@@ -255,23 +371,16 @@ void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
             DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "LITERAL"));
             EliminateLoad(check_lir, native_reg_id);
           }
-        } else if (((alias_mem_mask.Equals(kEncodeDalvikReg)) || (alias_mem_mask.Equals(kEncodeHeapRef))) &&
-                   alias_reg_list_mask.Intersects((check_lir->u.m.use_mask)->Without(kEncodeMem))) {
-          bool same_offset = (GetInstructionOffset(this_lir) == GetInstructionOffset(check_lir));
-          if (same_offset && !is_check_lir_load) {
-            if (check_lir->operands[0] != native_reg_id) {
-              DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "STORE STOP"));
-              stop_here = true;
-              break;
-            }
+        } else if (alias_mem_mask.Equals(kEncodeDalvikReg)) {
+          if (CheckEliminateDalvikReg(this_lir, check_lir, reg_compatible, is_check_lir_load,
+                                      is_this_lir_load, native_reg_id, this_is_64bit, this)) {
+            break;  // Stop here.
           }
-
-          if (reg_compatible && same_offset &&
-              ((is_this_lir_load && is_check_lir_load)  /* LDR - LDR */ ||
-              (!is_this_lir_load && is_check_lir_load)  /* STR - LDR */ ||
-              (!is_this_lir_load && !is_check_lir_load) /* STR - STR */)) {
-            DEBUG_OPT(DumpDependentInsnPair(check_lir, this_lir, "LOAD STORE"));
-            EliminateLoad(check_lir, native_reg_id);
+        } else if (alias_mem_mask.Equals(kEncodeHeapRef)) {
+          if (CheckEliminateHeapRefs(this_lir, check_lir, reg_compatible, is_check_lir_load,
+                                     is_this_lir_load, this_lir_offset, native_reg_id,
+                                     alias_reg_list_mask, this)) {
+            break;  // Stop here.
           }
         } else {
           /* Unsupported memory region */
@@ -279,6 +388,14 @@ void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
       }
 
       if (pass_over) {
+        // The move might have clobbered our source reg. Check and potentially stop. Note the
+        // difference to below: we explicitly check for a clobber of native_reg_id only.
+        ResourceMask stop_native_reg_clobbered_mask;
+        SetupRegMask(&stop_native_reg_clobbered_mask, native_reg_id);
+        stop_here = LOAD_STORE_CHECK_REG_DEP(stop_native_reg_clobbered_mask, check_lir);
+        if (stop_here) {
+          break;
+        }
         continue;
       }
 
@@ -299,7 +416,6 @@ void Mir2Lir::ApplyLoadStoreElimination(LIR* head_lir, LIR* tail_lir) {
           }
         }
         ResourceMask stop_search_mask = stop_def_reg_mask.Union(stop_use_reg_mask);
-        stop_search_mask = stop_search_mask.Union(alias_reg_list_mask);
         stop_here = LOAD_STORE_CHECK_REG_DEP(stop_search_mask, check_lir);
         if (stop_here) {
           break;

@@ -574,9 +574,9 @@ class Mir2Lir : public Backend {
 
     /**
      * @brief Decodes the LIR offset.
-     * @return Returns the scaled offset of LIR.
+     * @return Returns the scaled offset of LIR, or a negative value if this is not a fixed offset.
      */
-    virtual size_t GetInstructionOffset(LIR* lir);
+    virtual ssize_t GetInstructionOffset(LIR* lir);
 
     int32_t s4FromSwitchData(const void* switch_data) {
       return *reinterpret_cast<const int32_t*>(switch_data);

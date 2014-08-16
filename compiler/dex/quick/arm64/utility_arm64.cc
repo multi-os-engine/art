@@ -96,10 +96,18 @@ size_t Arm64Mir2Lir::GetLoadStoreSize(LIR* lir) {
   return (bits >> 30);
 }
 
-size_t Arm64Mir2Lir::GetInstructionOffset(LIR* lir) {
-  size_t offset = lir->operands[2];
+ssize_t Arm64Mir2Lir::GetInstructionOffset(LIR* lir) {
   uint64_t check_flags = GetTargetInstFlags(lir->opcode);
   DCHECK((check_flags & IS_LOAD) || (check_flags & IS_STORE));
+
+  ssize_t offset;
+  if ((check_flags & IS_TERTIARY_OP) != 0 && (check_flags & REG_USE2) == 0) {
+    // Op with three operands, and the third one is not a register.
+    offset = lir->operands[2];
+  } else {
+    offset = -1;
+  }
+
   if (check_flags & SCALED_OFFSET_X0) {
     DCHECK(check_flags & IS_TERTIARY_OP);
     offset = offset * (1 << GetLoadStoreSize(lir));
