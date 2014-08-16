@@ -96,10 +96,24 @@ size_t Arm64Mir2Lir::GetLoadStoreSize(LIR* lir) {
   return (bits >> 30);
 }
 
-size_t Arm64Mir2Lir::GetInstructionOffset(LIR* lir) {
-  size_t offset = lir->operands[2];
+ssize_t Arm64Mir2Lir::GetInstructionOffset(LIR* lir) {
   uint64_t check_flags = GetTargetInstFlags(lir->opcode);
   DCHECK((check_flags & IS_LOAD) || (check_flags & IS_STORE));
+
+  ssize_t offset;
+  if (kEncodeHeapRef.Intersects(lir->u.m.use_mask->Union(*lir->u.m.def_mask))) {
+    // Heap op. It has the displacement (or 0 for ambiguous) in alias_info.
+    offset = lir->flags.alias_info;
+    if (offset == 0) {
+      offset = -1;
+    }
+  } else if ((check_flags & IS_TERTIARY_OP) != 0 && (check_flags & REG_USE2) == 0) {
+    // Op with three operands, and the third one is not a register.
+    offset = lir->operands[2];
+  } else {
+    offset = -1;
+  }
+
   if (check_flags & SCALED_OFFSET_X0) {
     DCHECK(check_flags & IS_TERTIARY_OP);
     offset = offset * (1 << GetLoadStoreSize(lir));
@@ -1267,6 +1281,8 @@ LIR* Arm64Mir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStor
   if (mem_ref_type_ == ResourceMask::kDalvikReg) {
     DCHECK(r_base == rs_sp);
     AnnotateDalvikRegAccess(load, displacement >> 2, true /* is_load */, r_dest.Is64Bit());
+  } else if (mem_ref_type_ == ResourceMask::kHeapRef) {
+    AnnotateHeapRefAccess(load, displacement, true /* is_load */);
   }
   return load;
 }
@@ -1358,6 +1374,8 @@ LIR* Arm64Mir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegSto
   if (mem_ref_type_ == ResourceMask::kDalvikReg) {
     DCHECK(r_base == rs_sp);
     AnnotateDalvikRegAccess(store, displacement >> 2, false /* is_load */, r_src.Is64Bit());
+  } else if (mem_ref_type_ == ResourceMask::kHeapRef) {
+    AnnotateHeapRefAccess(store, displacement, false /* is_load */);
   }
   return store;
 }

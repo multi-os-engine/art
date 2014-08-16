@@ -174,6 +174,20 @@ void Mir2Lir::AnnotateDalvikRegAccess(LIR* lir, int reg_id, bool is_load,
   lir->flags.alias_info = ENCODE_ALIAS_INFO(reg_id, is64bit);
 }
 
+void Mir2Lir::AnnotateHeapRefAccess(LIR* lir, int displacement, bool is_load) {
+  DCHECK((is_load ? lir->u.m.use_mask : lir->u.m.def_mask)->Intersection(kEncodeMem).Equals(
+        kEncodeHeapRef));
+  DCHECK_GE(displacement, 0);
+
+  /*
+   * Store the displacement in alias_info. A value of 0 means it's ambiguous (or overflowed).
+   */
+  if (displacement > kAliasInfoMask) {
+    displacement = 0;
+  }
+  lir->flags.alias_info = displacement;
+}
+
 /*
  * Debugging macros
  */

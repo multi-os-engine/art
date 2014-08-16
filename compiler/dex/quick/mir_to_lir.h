@@ -187,6 +187,8 @@ struct LIR {
   int32_t operands[5];           // [0..4] = [dest, src1, src2, extra, extra2].
 };
 
+static constexpr int32_t kAliasInfoMask = 0x1FFFF;
+
 // Target-specific initialization.
 Mir2Lir* ArmCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
                           ArenaAllocator* const arena);
@@ -574,9 +576,9 @@ class Mir2Lir : public Backend {
 
     /**
      * @brief Decodes the LIR offset.
-     * @return Returns the scaled offset of LIR.
+     * @return Returns the scaled offset of LIR, or a negative value if this is not a fixed offset.
      */
-    virtual size_t GetInstructionOffset(LIR* lir);
+    virtual ssize_t GetInstructionOffset(LIR* lir);
 
     int32_t s4FromSwitchData(const void* switch_data) {
       return *reinterpret_cast<const int32_t*>(switch_data);
@@ -666,6 +668,7 @@ class Mir2Lir : public Backend {
     void SetupResourceMasks(LIR* lir);
     void SetMemRefType(LIR* lir, bool is_load, int mem_type);
     void AnnotateDalvikRegAccess(LIR* lir, int reg_id, bool is_load, bool is64bit);
+    void AnnotateHeapRefAccess(LIR* lir, int displacement, bool is_load);
     void SetupRegMask(ResourceMask* mask, int reg);
     void ClearRegMask(ResourceMask* mask, int reg);
     void DumpLIRInsn(LIR* arg, unsigned char* base_addr);
