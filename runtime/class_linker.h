@@ -61,7 +61,7 @@ class ClassLinker {
   ~ClassLinker();
 
   // Initialize class linker by bootstraping from dex files
-  void InitFromCompiler(const std::vector<const DexFile*>& boot_class_path)
+  void InitWithoutImage(const std::vector<const DexFile*>& boot_class_path)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Initialize class linker from one or more images.
