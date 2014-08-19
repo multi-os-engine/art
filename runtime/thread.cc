@@ -539,7 +539,10 @@ void Thread::InitStackHwm() {
 #endif
 
   // Set stack_end_ to the bottom of the stack saving space of stack overflows
-  bool implicit_stack_check = !Runtime::Current()->ExplicitStackOverflowChecks();
+
+  Runtime* runtime = Runtime::Current();
+  bool implicit_stack_check = !Runtime::Current()->ExplicitStackOverflowChecks() &&
+      !runtime->IsCompiler();
   ResetDefaultStackEnd();
 
   // Install the protected region if we are doing implicit overflow checks.
