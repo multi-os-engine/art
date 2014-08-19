@@ -593,6 +593,7 @@ class Heap {
   bool RunningOnValgrind() const {
     return running_on_valgrind_;
   }
+  // TODO Make all of these faster.
   bool HasImageSpace() const;
 
   ReferenceProcessor* GetReferenceProcessor() {
