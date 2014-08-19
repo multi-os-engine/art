@@ -307,7 +307,45 @@ inline bool Heap::IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t
 
 inline void Heap::CheckConcurrentGC(Thread* self, size_t new_num_bytes_allocated,
                                     mirror::Object** obj) {
+  // if background concurrent gc already requested. simple return
+  if (request_concurrent_gc_ == true) {
+    return;
+  }
+
   if (UNLIKELY(new_num_bytes_allocated >= concurrent_start_bytes_)) {
+    request_concurrent_gc_ = true;
+  } else {
+    // when most of allocation_stack entries has been filled. request background GC
+    if (allocation_stack_->Size() > (allocation_stack_->Capacity()* 2 / 3)) {
+      // the number of remained blank entries of allocation stack
+      size_t allocation_stack_remain = allocation_stack_->GrowthLimit() - allocation_stack_->Size();
+      // calculate the allocation rate of object count since last GC
+      uint64_t ms_allocation_delta = NsToMs(NanoTime() - last_gc_time_ns_);
+      if (ms_allocation_delta == 0) {
+         // allocation stack exhausted very fast, start background GC
+         request_concurrent_gc_ = true;
+      } else {
+        uint64_t allocation_count_rate = allocation_stack_->Size() / ms_allocation_delta;
+        // using the allocation rate calculated in last GC
+        // estimate the time when next backgroud GC triggered
+        size_t remain_bytes_before_gc = concurrent_start_bytes_ - new_num_bytes_allocated;
+        if (allocation_rate_ == 0) {
+          // not trigger background GC since no allocation
+          request_concurrent_gc_ = false;
+        } else {
+          uint64_t ms_to_next_gc = remain_bytes_before_gc / allocation_rate_;
+          // estimate the count of object allocated when next backgroud GC triggered
+          size_t allocated_object_count_to_next_gc = allocation_count_rate * ms_to_next_gc;
+          // if the estimated number of objects to be allocated is larger than
+          // remained entries on allocation stack, trigger the Background GC
+          if (allocated_object_count_to_next_gc >= allocation_stack_remain) {
+            request_concurrent_gc_ = true;
+          }
+        }
+      }
+    }
+  }
+  if (request_concurrent_gc_ == true) {
     RequestConcurrentGCAndSaveObject(self, obj);
   }
 }

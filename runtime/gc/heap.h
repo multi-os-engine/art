@@ -926,6 +926,10 @@ class Heap {
   bool verify_pre_sweeping_rosalloc_;
   bool verify_post_gc_rosalloc_;
 
+  // Request concurrent gc
+  bool request_concurrent_gc_;
+
+
   // RAII that temporarily disables the rosalloc verification during
   // the zygote fork.
   class ScopedDisableRosAllocVerification {
