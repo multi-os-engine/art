@@ -538,7 +538,8 @@ void Thread::InitStackHwm() {
 #endif
 
   // Set stack_end_ to the bottom of the stack saving space of stack overflows
-  bool implicit_stack_check = !Runtime::Current()->ExplicitStackOverflowChecks();
+  Runtime* runtime = Runtime::Current();
+  bool implicit_stack_check = !runtime->ExplicitStackOverflowChecks();
   ResetDefaultStackEnd(implicit_stack_check);
 
   // Install the protected region if we are doing implicit overflow checks.
@@ -555,7 +556,9 @@ void Thread::InitStackHwm() {
     tlsPtr_.stack_end += guardsize;
     tlsPtr_.stack_size -= guardsize;
 
-    InstallImplicitProtection();
+    if (!runtime->IsCompiler()) {
+      InstallImplicitProtection();
+    }
   }
 
   // Sanity check.

@@ -189,7 +189,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   }
   // If we aren't the zygote, switch to the default non zygote allocator. This may update the
   // entrypoints.
-  if (!Runtime::Current()->IsZygote()) {
+  const bool is_zygote = Runtime::Current()->IsZygote();
+  if (!is_zygote) {
     large_object_threshold_ = kDefaultLargeObjectThreshold;
     // Background compaction is currently not supported for command line runs.
     if (background_collector_type_ != foreground_collector_type_) {
@@ -217,6 +218,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   requested_alloc_space_begin ->     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
                                      +-  nonmoving space (kNonMovingSpaceCapacity) +-
                                      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+                                     +-????????????????????????????????????????????+-
+                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
                                      +-main alloc space / bump space 1 (capacity_) +-
                                      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
                                      +-????????????????????????????????????????????+-
@@ -225,13 +228,12 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
                                      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
   */
   bool support_homogeneous_space_compaction =
-      background_collector_type == gc::kCollectorTypeHomogeneousSpaceCompact ||
+      background_collector_type_ == gc::kCollectorTypeHomogeneousSpaceCompact ||
       use_homogeneous_space_compaction_for_oom;
   // We may use the same space the main space for the non moving space if we don't need to compact
   // from the main space.
   // This is not the case if we support homogeneous compaction or have a moving background
   // collector type.
-  const bool is_zygote = Runtime::Current()->IsZygote();
   bool separate_non_moving_space = is_zygote ||
       support_homogeneous_space_compaction || IsMovingGc(foreground_collector_type_) ||
       IsMovingGc(background_collector_type_);
