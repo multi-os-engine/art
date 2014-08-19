@@ -109,7 +109,11 @@ static constexpr size_t kNumRosAllocThreadLocalSizeBrackets = 34;
 //   |                     |
 //   | Protected region    |
 //   |                     |
-//   +---------------------+  <- lowest address of stack memory
+//   +---------------------+
+//   |                     |
+//   | stack guard area    |
+//   |                     |
+//   +---------------------+  <- stack_base, lowest address of stack memory
 //
 // The stack always grows down in memory.  At the lowest address is a region of memory
 // that is set mprotect(PROT_NONE).  Any attempt to read/write to this region will

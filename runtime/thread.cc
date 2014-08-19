@@ -495,12 +495,32 @@ void Thread::InitStackHwm() {
   tlsPtr_.stack_begin = reinterpret_cast<byte*>(read_stack_base);
   tlsPtr_.stack_size = read_stack_size;
 
-  // The minimum stack size we can cope with is the overflow reserved bytes (typically
-  // 8K) + the protected region size (4K) + another page (4K).  Typically this will
-  // be 8+4+4 = 16K.  The thread won't be able to do much with this stack even the GC takes
-  // between 8K and 12K.
-  uint32_t min_stack = GetStackOverflowReservedBytes(kRuntimeISA) + kStackOverflowProtectedSize
-    + 4 * KB;
+  uint32_t min_stack = GetStackOverflowReservedBytes(kRuntimeISA);
+
+  size_t guardsize = 0;
+  pthread_attr_t attributes;
+  CHECK_PTHREAD_CALL(pthread_attr_init, (&attributes), "guard size query");
+  CHECK_PTHREAD_CALL(pthread_attr_getguardsize, (&attributes, &guardsize), "guard size query");
+  CHECK_PTHREAD_CALL(pthread_attr_destroy, (&attributes), "guard size query");
+  // The thread might have protected region at the bottom.  We need
+  // to install our own region so we need to move the limits
+  // of the stack to make room for it.
+  tlsPtr_.stack_begin += guardsize;
+  tlsPtr_.stack_size -= guardsize;
+  min_stack += guardsize;
+
+  bool implicit_stack_check = !Runtime::Current()->ExplicitStackOverflowChecks();
+  if (implicit_stack_check) {
+    // Reserve stack protected region.
+    tlsPtr_.stack_begin += kStackOverflowProtectedSize;
+    tlsPtr_.stack_size -= kStackOverflowProtectedSize;
+    // The minimum stack size we can cope with is the overflow reserved bytes (typically
+    // 8K) + the protected region size (4K) + pthread guard size (4K).  Typically this will
+    // be 8+4+4 = 16K.  The thread won't be able to do much with this stack even the GC takes
+    // between 8K and 12K.
+    min_stack += kStackOverflowProtectedSize;
+  }
+
   if (read_stack_size <= min_stack) {
     LOG(FATAL) << "Attempt to attach a thread with a too-small stack (" << read_stack_size
         << " bytes)";
@@ -538,23 +558,10 @@ void Thread::InitStackHwm() {
 #endif
 
   // Set stack_end_ to the bottom of the stack saving space of stack overflows
-  bool implicit_stack_check = !Runtime::Current()->ExplicitStackOverflowChecks();
   ResetDefaultStackEnd(implicit_stack_check);
 
   // Install the protected region if we are doing implicit overflow checks.
   if (implicit_stack_check) {
-    size_t guardsize;
-    pthread_attr_t attributes;
-    CHECK_PTHREAD_CALL(pthread_attr_init, (&attributes), "guard size query");
-    CHECK_PTHREAD_CALL(pthread_attr_getguardsize, (&attributes, &guardsize), "guard size query");
-    CHECK_PTHREAD_CALL(pthread_attr_destroy, (&attributes), "guard size query");
-    // The thread might have protected region at the bottom.  We need
-    // to install our own region so we need to move the limits
-    // of the stack to make room for it.
-    tlsPtr_.stack_begin += guardsize;
-    tlsPtr_.stack_end += guardsize;
-    tlsPtr_.stack_size -= guardsize;
-
     InstallImplicitProtection();
   }
 
