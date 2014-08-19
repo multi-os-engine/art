@@ -152,6 +152,10 @@ class AtomicStack {
     return capacity_;
   }
 
+  size_t GrowthLimit() const {
+    return growth_limit_;
+  }
+
   // Will clear the stack.
   void Resize(size_t new_capacity) {
     capacity_ = new_capacity;
