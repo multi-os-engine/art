@@ -243,6 +243,12 @@ void Mir2Lir::DumpLIRInsn(LIR* lir, unsigned char* base_addr) {
                 << std::hex << lir->operands[0] << "|" << std::dec <<
         lir->operands[0];
       break;
+    case kPseudoPrologueEnd:
+      LOG(INFO) << "-------- End of prologue";
+      break;
+    case kPseudoEpilogueStart:
+      LOG(INFO) << "-------- Start of epilogue";
+      break;
     default:
       if (lir->flags.is_nop && !dump_nop) {
         break;
