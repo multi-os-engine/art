@@ -833,8 +833,9 @@ class X86Mir2Lir : public Mir2Lir {
   void GenDivRemLong(Instruction::Code, RegLocation rl_dest, RegLocation rl_src1,
                      RegLocation rl_src2, bool is_div);
 
-  void SpillCoreRegs();
-  void UnSpillCoreRegs();
+  void SpillRegs();
+  void UnSpillRegs();
+
   void UnSpillFPRegs();
   void SpillFPRegs();
 

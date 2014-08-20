@@ -232,14 +232,11 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
     MarkPossibleStackOverflowException();
   }
 
-  /* Build frame, return address already on stack */
-  stack_decrement_ = OpRegImm(kOpSub, rs_rX86_SP, frame_size_ -
-                              GetInstructionSetPointerSize(cu_->instruction_set));
-
   NewLIR0(kPseudoMethodEntry);
-  /* Spill core callee saves */
-  SpillCoreRegs();
-  SpillFPRegs();
+
+  /* Spill callee saves. Includes the stack decrement. */
+  SpillRegs();
+
   if (!skip_overflow_check) {
     class StackOverflowSlowPath : public LIRSlowPath {
      public:
@@ -309,10 +306,10 @@ void X86Mir2Lir::GenExitSequence() {
   LockTemp(rs_rX86_RET1);
 
   NewLIR0(kPseudoMethodExit);
-  UnSpillCoreRegs();
-  UnSpillFPRegs();
-  /* Remove frame except for return address */
-  stack_increment_ = OpRegImm(kOpAdd, rs_rX86_SP, frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set));
+
+  /* Unspill callee saves. Includes the stack increment. */
+  UnSpillRegs();
+
   NewLIR0(kX86Ret);
 }
 

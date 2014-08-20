@@ -689,37 +689,45 @@ int X86Mir2Lir::NumReservableVectorRegisters(bool fp_used) {
   return fp_used ? 5 : 7;
 }
 
-void X86Mir2Lir::SpillCoreRegs() {
-  if (num_core_spills_ == 0) {
-    return;
-  }
-  // Spill mask not including fake return address register
+// Spill registers. This uses PUSH for the core registers, and stores for the FP regs.
+void X86Mir2Lir::SpillRegs() {
+  // Push the registers from largest number to smallest to keep the right order.
   uint32_t mask = core_spill_mask_ & ~(1 << rs_rRET.GetRegNum());
-  int offset = frame_size_ - (GetInstructionSetPointerSize(cu_->instruction_set) * num_core_spills_);
-  OpSize size = cu_->target64 ? k64 : k32;
-  for (int reg = 0; mask; mask >>= 1, reg++) {
-    if (mask & 0x1) {
-      StoreBaseDisp(rs_rX86_SP, offset, cu_->target64 ? RegStorage::Solo64(reg) :  RegStorage::Solo32(reg),
-                   size, kNotVolatile);
-      offset += GetInstructionSetPointerSize(cu_->instruction_set);
-    }
+  size_t count = POPCOUNT(mask);
+  while (mask != 0) {
+    int reg = 31 - CLZ(mask);
+    int op = (cu_->target64 ? RegStorage::Solo64(reg) :  RegStorage::Solo32(reg)).GetReg();
+    NewLIR1(kX86Push32R, op);
+    mask ^= (1 << reg);
   }
+
+  // Reserve the rest of the stack.
+  stack_decrement_ = OpRegImm(kOpSub, rs_rX86_SP, frame_size_ -
+                              GetInstructionSetPointerSize(cu_->instruction_set) -          // ret.
+                              count * GetInstructionSetPointerSize(cu_->instruction_set));  // core.
+
+  // Spill FP regs.
+  SpillFPRegs();
 }
 
-void X86Mir2Lir::UnSpillCoreRegs() {
-  if (num_core_spills_ == 0) {
-    return;
-  }
-  // Spill mask not including fake return address register
+// Unspill registers. This uses POP for the core registers and loads for the FP regs.
+void X86Mir2Lir::UnSpillRegs() {
+  // Unspill FP regs.
+  UnSpillFPRegs();
+
+  // Release low part of the stack.
   uint32_t mask = core_spill_mask_ & ~(1 << rs_rRET.GetRegNum());
-  int offset = frame_size_ - (GetInstructionSetPointerSize(cu_->instruction_set) * num_core_spills_);
-  OpSize size = cu_->target64 ? k64 : k32;
-  for (int reg = 0; mask; mask >>= 1, reg++) {
-    if (mask & 0x1) {
-      LoadBaseDisp(rs_rX86_SP, offset, cu_->target64 ? RegStorage::Solo64(reg) :  RegStorage::Solo32(reg),
-                   size, kNotVolatile);
-      offset += GetInstructionSetPointerSize(cu_->instruction_set);
-    }
+  size_t count = POPCOUNT(mask);
+  stack_increment_ = OpRegImm(kOpAdd, rs_rX86_SP, frame_size_ -
+                              GetInstructionSetPointerSize(cu_->instruction_set) -          // ret.
+                              count * GetInstructionSetPointerSize(cu_->instruction_set));  // core.
+
+  // Use POP for the core regs. Go from smallest to largest to keep the right order.
+  while (mask != 0) {
+    int reg = CTZ(mask);
+    int op = (cu_->target64 ? RegStorage::Solo64(reg) :  RegStorage::Solo32(reg)).GetReg();
+    NewLIR1(kX86Pop32R, op);
+    mask ^= (1 << reg);
   }
 }
 
@@ -728,7 +736,8 @@ void X86Mir2Lir::SpillFPRegs() {
     return;
   }
   uint32_t mask = fp_spill_mask_;
-  int offset = frame_size_ - (GetInstructionSetPointerSize(cu_->instruction_set) * (num_fp_spills_ + num_core_spills_));
+  int offset = frame_size_ - (GetInstructionSetPointerSize(cu_->instruction_set) *
+                              (num_fp_spills_ + num_core_spills_));
   for (int reg = 0; mask; mask >>= 1, reg++) {
     if (mask & 0x1) {
       StoreBaseDisp(rs_rX86_SP, offset, RegStorage::FloatSolo64(reg),
