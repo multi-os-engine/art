@@ -512,7 +512,7 @@ enum X86OpCode {
   kx86Cqo64Da,
   kX86Bswap32R,
   kX86Bswap64R,
-  kX86Push32R, kX86Pop32R,
+  kX86PushR, kX86PopR,
 #undef UnaryOpcode
 #define Binary0fOpCode(opcode) \
   opcode ## RR, opcode ## RM, opcode ## RA

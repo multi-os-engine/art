@@ -52,6 +52,10 @@ void DW_CFA_offset(std::vector<uint8_t>* buf, int reg, uint32_t offset) {
   EncodeUnsignedLeb128(offset, buf);
 }
 
+void DW_CFA_restore(std::vector<uint8_t>* buf, int reg) {
+  buf->push_back((0x3 << 6) | reg);
+}
+
 void DW_CFA_def_cfa_offset(std::vector<uint8_t>* buf, int32_t offset) {
   buf->push_back(0x0e);
   EncodeUnsignedLeb128(offset, buf);

@@ -45,6 +45,13 @@ void DW_CFA_offset_extended_sf(std::vector<uint8_t>* buf, int reg, int32_t offse
 void DW_CFA_offset(std::vector<uint8_t>* buf, int reg, uint32_t offset);
 
 /**
+ * @brief Enter a 'DW_CFA_restore' into an FDE buffer
+ * @param buf FDE buffer.
+ * @param reg Register number.
+ */
+void DW_CFA_restore(std::vector<uint8_t>* buf, int reg);
+
+/**
  * @brief Enter a 'DW_CFA_def_cfa_offset' into an FDE buffer
  * @param buf FDE buffer.
  * @param offset New offset of CFA.

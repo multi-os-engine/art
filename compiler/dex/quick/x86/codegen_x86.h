@@ -833,8 +833,9 @@ class X86Mir2Lir : public Mir2Lir {
   void GenDivRemLong(Instruction::Code, RegLocation rl_dest, RegLocation rl_src1,
                      RegLocation rl_src2, bool is_div);
 
-  void SpillCoreRegs();
-  void UnSpillCoreRegs();
+  void SpillRegs();
+  void UnSpillRegs();
+
   void UnSpillFPRegs();
   void SpillFPRegs();
 
@@ -932,8 +933,14 @@ class X86Mir2Lir : public Mir2Lir {
   // Prologue decrement of stack pointer.
   LIR* stack_decrement_;
 
+  // Method entry LIR.
+  LIR* method_entry_;
+
   // Epilogue increment of stack pointer.
   LIR* stack_increment_;
+
+  // Start of epilogue.
+  LIR* epilogue_start_;
 
   // The list of const vector literals.
   LIR *const_vectors_;
