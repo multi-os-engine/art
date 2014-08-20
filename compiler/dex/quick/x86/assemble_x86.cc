@@ -322,8 +322,8 @@ ENCODING_MAP(Cmp, IS_LOAD, 0, 0,
   { kx86Cqo64Da, kRegOpcode, NO_OPERAND | REG_DEFAD_USEA,                                  { REX_W, 0, 0x99, 0,    0, 0, 0, 0, false }, "Cqo", "" },
   { kX86Bswap32R, kRegOpcode, IS_UNARY_OP | REG_DEF0_USE0,                                 { 0,     0, 0x0F, 0xC8, 0, 0, 0, 0, false }, "Bswap32R", "!0r" },
   { kX86Bswap64R, kRegOpcode, IS_UNARY_OP | REG_DEF0_USE0,                                 { REX_W, 0, 0x0F, 0xC8, 0, 0, 0, 0, false }, "Bswap64R", "!0r" },
-  { kX86Push32R,  kRegOpcode, IS_UNARY_OP | REG_USE0 | REG_USE_SP | REG_DEF_SP | IS_STORE, { 0,     0, 0x50, 0,    0, 0, 0, 0, false }, "Push32R",  "!0r" },
-  { kX86Pop32R,   kRegOpcode, IS_UNARY_OP | REG_DEF0 | REG_USE_SP | REG_DEF_SP | IS_LOAD,  { 0,     0, 0x58, 0,    0, 0, 0, 0, false }, "Pop32R",   "!0r" },
+  { kX86PushR,    kRegOpcode, IS_UNARY_OP | REG_USE0 | REG_USE_SP | REG_DEF_SP | IS_STORE, { 0,     0, 0x50, 0,    0, 0, 0, 0, false }, "Push32R",  "!0r" },
+  { kX86PopR,     kRegOpcode, IS_UNARY_OP | REG_DEF0 | REG_USE_SP | REG_DEF_SP | IS_LOAD,  { 0,     0, 0x58, 0,    0, 0, 0, 0, false }, "Pop32R",   "!0r" },
 
 #define EXT_0F_ENCODING_MAP(opname, prefix, opcode, reg_def) \
 { kX86 ## opname ## RR, kRegReg,             IS_BINARY_OP   | reg_def | REG_USE1,  { prefix, 0, 0x0F, opcode, 0, 0, 0, 0, false }, #opname "RR", "!0r,!1r" }, \

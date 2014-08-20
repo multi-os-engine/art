@@ -86,6 +86,8 @@ enum BBType {
 
 // Shared pseudo opcodes - must be < 0.
 enum LIRPseudoOpcode {
+  kPseudoEpilogueStart = -18,
+  kPseudoPrologueEnd = -17,
   kPseudoExportedPC = -16,
   kPseudoSafepointPC = -15,
   kPseudoIntrinsicRetry = -14,

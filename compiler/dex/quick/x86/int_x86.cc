@@ -882,7 +882,7 @@ bool X86Mir2Lir::GenInlinedMinMax(CallInfo* info, bool is_min, bool is_long) {
               IsTemp(rl_result.reg.GetLow()) &&
               IsTemp(rl_result.reg.GetHigh()));
        tmp = rs_rDI;
-       NewLIR1(kX86Push32R, tmp.GetReg());
+       NewLIR1(kX86PushR, tmp.GetReg());
     }
 
     // Now we are ready to do calculations.
@@ -893,7 +893,7 @@ bool X86Mir2Lir::GenInlinedMinMax(CallInfo* info, bool is_min, bool is_long) {
 
     // Let's put pop 'edi' here to break a bit the dependency chain.
     if (tmp == rs_rDI) {
-      NewLIR1(kX86Pop32R, tmp.GetReg());
+      NewLIR1(kX86PopR, tmp.GetReg());
     }
 
     // Conditionally move the other integer into the destination register.
@@ -1071,12 +1071,12 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     bool push_di = (!obj_in_di && !off_in_di) && (rs_obj == rs_rDI || rs_off == rs_rDI);
     bool push_si = (!obj_in_si && !off_in_si) && (rs_obj == rs_rSI || rs_off == rs_rSI);
     if (push_di) {
-      NewLIR1(kX86Push32R, rs_rDI.GetReg());
+      NewLIR1(kX86PushR, rs_rDI.GetReg());
       MarkTemp(rs_rDI);
       LockTemp(rs_rDI);
     }
     if (push_si) {
-      NewLIR1(kX86Push32R, rs_rSI.GetReg());
+      NewLIR1(kX86PushR, rs_rSI.GetReg());
       MarkTemp(rs_rSI);
       LockTemp(rs_rSI);
     }
@@ -1107,12 +1107,12 @@ bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
     if (push_si) {
       FreeTemp(rs_rSI);
       UnmarkTemp(rs_rSI);
-      NewLIR1(kX86Pop32R, rs_rSI.GetReg());
+      NewLIR1(kX86PopR, rs_rSI.GetReg());
     }
     if (push_di) {
       FreeTemp(rs_rDI);
       UnmarkTemp(rs_rDI);
-      NewLIR1(kX86Pop32R, rs_rDI.GetReg());
+      NewLIR1(kX86PopR, rs_rDI.GetReg());
     }
     FreeCallTemps();
   } else {

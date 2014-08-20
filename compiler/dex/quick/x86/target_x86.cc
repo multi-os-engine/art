@@ -689,37 +689,47 @@ int X86Mir2Lir::NumReservableVectorRegisters(bool fp_used) {
   return fp_used ? 5 : 7;
 }
 
-void X86Mir2Lir::SpillCoreRegs() {
-  if (num_core_spills_ == 0) {
-    return;
-  }
-  // Spill mask not including fake return address register
+// Spill registers. This uses PUSH for the core registers, and stores for the FP regs.
+void X86Mir2Lir::SpillRegs() {
+  // Push the registers from largest number to smallest to keep the right order.
   uint32_t mask = core_spill_mask_ & ~(1 << rs_rRET.GetRegNum());
-  int offset = frame_size_ - (GetInstructionSetPointerSize(cu_->instruction_set) * num_core_spills_);
-  OpSize size = cu_->target64 ? k64 : k32;
-  for (int reg = 0; mask; mask >>= 1, reg++) {
-    if (mask & 0x1) {
-      StoreBaseDisp(rs_rX86_SP, offset, cu_->target64 ? RegStorage::Solo64(reg) :  RegStorage::Solo32(reg),
-                   size, kNotVolatile);
-      offset += GetInstructionSetPointerSize(cu_->instruction_set);
-    }
+  size_t count = POPCOUNT(mask);
+  while (mask != 0) {
+    int reg_num = 31 - CLZ(mask);
+    int reg = (cu_->target64 ? RegStorage::Solo64(reg_num) :  RegStorage::Solo32(reg_num)).GetReg();
+    NewLIR1(kX86PushR, reg);
+    mask ^= (1 << reg);
   }
+
+  // Reserve the rest of the stack.
+  size_t ptr_size = GetInstructionSetPointerSize(cu_->instruction_set);
+  stack_decrement_ = OpRegImm(kOpSub, rs_rX86_SP, frame_size_ -
+                              ptr_size -          // Return address.
+                              count * ptr_size);  // Core registers.
+
+  // Spill FP regs.
+  SpillFPRegs();
 }
 
-void X86Mir2Lir::UnSpillCoreRegs() {
-  if (num_core_spills_ == 0) {
-    return;
-  }
-  // Spill mask not including fake return address register
+// Unspill registers. This uses POP for the core registers and loads for the FP regs.
+void X86Mir2Lir::UnSpillRegs() {
+  // Unspill FP regs.
+  UnSpillFPRegs();
+
+  // Release low part of the stack.
   uint32_t mask = core_spill_mask_ & ~(1 << rs_rRET.GetRegNum());
-  int offset = frame_size_ - (GetInstructionSetPointerSize(cu_->instruction_set) * num_core_spills_);
-  OpSize size = cu_->target64 ? k64 : k32;
-  for (int reg = 0; mask; mask >>= 1, reg++) {
-    if (mask & 0x1) {
-      LoadBaseDisp(rs_rX86_SP, offset, cu_->target64 ? RegStorage::Solo64(reg) :  RegStorage::Solo32(reg),
-                   size, kNotVolatile);
-      offset += GetInstructionSetPointerSize(cu_->instruction_set);
-    }
+  size_t count = POPCOUNT(mask);
+  size_t ptr_size = GetInstructionSetPointerSize(cu_->instruction_set);
+  stack_increment_ = OpRegImm(kOpAdd, rs_rX86_SP, frame_size_ -
+                              ptr_size -          // Return address.
+                              count * ptr_size);  // Core registers.
+
+  // Use POP for the core regs. Go from smallest to largest to keep the right order.
+  while (mask != 0) {
+    int reg_num = CTZ(mask);
+    int reg = (cu_->target64 ? RegStorage::Solo64(reg_num) :  RegStorage::Solo32(reg_num)).GetReg();
+    NewLIR1(kX86PopR, reg);
+    mask ^= (1 << reg);
   }
 }
 
@@ -728,7 +738,8 @@ void X86Mir2Lir::SpillFPRegs() {
     return;
   }
   uint32_t mask = fp_spill_mask_;
-  int offset = frame_size_ - (GetInstructionSetPointerSize(cu_->instruction_set) * (num_fp_spills_ + num_core_spills_));
+  int offset = frame_size_ - (GetInstructionSetPointerSize(cu_->instruction_set) *
+                              (num_fp_spills_ + num_core_spills_));
   for (int reg = 0; mask; mask >>= 1, reg++) {
     if (mask & 0x1) {
       StoreBaseDisp(rs_rX86_SP, offset, RegStorage::FloatSolo64(reg),
@@ -779,8 +790,8 @@ X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator*
       method_address_insns_(arena, 100, kGrowableArrayMisc),
       class_type_address_insns_(arena, 100, kGrowableArrayMisc),
       call_method_insns_(arena, 100, kGrowableArrayMisc),
-      stack_decrement_(nullptr), stack_increment_(nullptr),
-      const_vectors_(nullptr) {
+      stack_decrement_(nullptr), method_entry_(nullptr), stack_increment_(nullptr),
+      epilogue_start_(nullptr), const_vectors_(nullptr) {
   store_method_addr_used_ = false;
   if (kIsDebugBuild) {
     for (int i = 0; i < kX86Last; i++) {
@@ -1292,7 +1303,7 @@ bool X86Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
 
   if (!cu_->target64) {
     // EDI is callee-save register in 32-bit mode.
-    NewLIR1(kX86Push32R, rs_rDI.GetReg());
+    NewLIR1(kX86PushR, rs_rDI.GetReg());
   }
 
   if (zero_based) {
@@ -1387,7 +1398,7 @@ bool X86Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
   all_done->target = NewLIR0(kPseudoTargetLabel);
 
   if (!cu_->target64)
-    NewLIR1(kX86Pop32R, rs_rDI.GetReg());
+    NewLIR1(kX86PopR, rs_rDI.GetReg());
 
   // Out of line code returns here.
   if (slowpath_branch != nullptr) {
@@ -1441,51 +1452,87 @@ std::vector<uint8_t>* X86Mir2Lir::ReturnFrameDescriptionEntry() {
 
   // The instructions in the FDE.
   if (stack_decrement_ != nullptr) {
+    DCHECK(method_entry_ != nullptr);
+
+    uint32_t pc = 0;  // Start from zero.
+    LIR* cur_lir = NEXT_LIR(method_entry_);
+    int offset = GetInstructionSetPointerSize(cu_->instruction_set);
+
+    while (cur_lir->opcode == kX86PushR) {
+      LIR* next_lir = NEXT_LIR(cur_lir);
+      uint32_t new_pc = next_lir->offset;
+
+      // Advance LOC to pass this instruction
+      DW_CFA_advance_loc(cfi_info, new_pc - pc);
+
+      // A push increases the offset.
+      offset += GetInstructionSetPointerSize(cu_->instruction_set);
+      DW_CFA_def_cfa_offset(cfi_info, offset);
+
+      int reg = RegStorage::RegNum(cur_lir->operands[0]);
+      int dwarf_reg_id;
+      if (ARTRegIDToDWARFRegID(cu_->target64, reg, &dwarf_reg_id)) {
+        // New store is at offset 0 right now.
+        // DW_CFA_offset_extended_sf reg offset
+        DW_CFA_offset_extended_sf(cfi_info, dwarf_reg_id, 0);
+      }
+
+      cur_lir = next_lir;
+      pc = new_pc;
+    }
+    // Should have a very well-defined offset now.
+    DCHECK_EQ(num_core_spills_ * GetInstructionSetPointerSize(cu_->instruction_set),
+              static_cast<size_t>(offset));
+    // Should have the stack decrement now.
+    DCHECK_EQ(stack_decrement_, cur_lir);
+
     // Advance LOC to just past the stack decrement.
-    uint32_t pc = NEXT_LIR(stack_decrement_)->offset;
-    DW_CFA_advance_loc(cfi_info, pc);
+    uint32_t new_pc = NEXT_LIR(stack_decrement_)->offset;
+    DW_CFA_advance_loc(cfi_info, new_pc - pc);
+    pc = new_pc;
 
     // Now update the offset to the call frame: DW_CFA_def_cfa_offset frame_size.
     DW_CFA_def_cfa_offset(cfi_info, frame_size_);
 
-    // Handle register spills
-    const uint32_t kSpillInstLen = (cu_->target64) ? 5 : 4;
-    const int kDataAlignmentFactor = (cu_->target64) ? -8 : -4;
-    uint32_t mask = core_spill_mask_ & ~(1 << rs_rRET.GetRegNum());
-    int offset = -(GetInstructionSetPointerSize(cu_->instruction_set) * num_core_spills_);
-    for (int reg = 0; mask; mask >>= 1, reg++) {
-      if (mask & 0x1) {
-        pc += kSpillInstLen;
-
-        // Advance LOC to pass this instruction
-        DW_CFA_advance_loc(cfi_info, kSpillInstLen);
-
-        int dwarf_reg_id;
-        if (ARTRegIDToDWARFRegID(cu_->target64, reg, &dwarf_reg_id)) {
-          // DW_CFA_offset_extended_sf reg offset
-          DW_CFA_offset_extended_sf(cfi_info, dwarf_reg_id, offset / kDataAlignmentFactor);
-        }
-
-        offset += GetInstructionSetPointerSize(cu_->instruction_set);
-      }
-    }
-
     // We continue with that stack until the epilogue.
-    if (stack_increment_ != nullptr) {
-      uint32_t new_pc = NEXT_LIR(stack_increment_)->offset;
+    if (epilogue_start_ != nullptr) {
+      DCHECK(stack_increment_ != nullptr);
+
+      // TODO: FP spills.
+
+      LIR* cur_lir = NEXT_LIR(stack_increment_);
+      new_pc = cur_lir->offset;
       DW_CFA_advance_loc(cfi_info, new_pc - pc);
+
+      // Then the core spills, which are POP instructions.
+      // We have now popped the FP/method + alignment stack. Core spills (including return address)
+      // are on the stack now.
+      int32_t cur_offset = num_core_spills_ * GetInstructionSetPointerSize(cu_->instruction_set);
+      DW_CFA_def_cfa_offset(cfi_info, cur_offset);
+
+      while (cur_lir->opcode == kX86PopR) {
+        // Advance to the next lir.
+        LIR* next_lir = NEXT_LIR(cur_lir);
+        pc = new_pc;
+        new_pc = next_lir->offset;
+        DW_CFA_advance_loc(cfi_info, new_pc - pc);
+        cur_offset -= GetInstructionSetPointerSize(cu_->instruction_set);
+        DW_CFA_def_cfa_offset(cfi_info, cur_offset);
+
+        // TODO: CFA restore
+
+        cur_lir = next_lir;
+      }
+      // Should be the method exit now.
+      DCHECK_EQ(kPseudoMethodExit, cur_lir->opcode);
 
       // We probably have code snippets after the epilogue, so save the
       // current state: DW_CFA_remember_state.
       DW_CFA_remember_state(cfi_info);
 
-      // We have now popped the stack: DW_CFA_def_cfa_offset 4/8.
-      // There is only the return PC on the stack now.
-      DW_CFA_def_cfa_offset(cfi_info, GetInstructionSetPointerSize(cu_->instruction_set));
-
       // Everything after that is the same as before the epilogue.
-      // Stack bump was followed by RET instruction.
-      LIR *post_ret_insn = NEXT_LIR(NEXT_LIR(stack_increment_));
+      // We have method exit pseudo op and then RET.
+      LIR *post_ret_insn = NEXT_LIR(NEXT_LIR(cur_lir));
       if (post_ret_insn != nullptr) {
         pc = new_pc;
         new_pc = post_ret_insn->offset;
