@@ -1,0 +1,8 @@
+Code-Review+1: Nikolay Serdjuk <nikolay.y.serdjuk@intel.com>
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Code-Review+2: Ian Rogers <irogers@google.com>
+Submitted-by: Ian Rogers <irogers@google.com>
+Submitted-at: Thu, 21 Aug 2014 18:49:06 +0000
+Reviewed-on: https://android-review.googlesource.com/104211
+Project: platform/art
+Branch: refs/heads/master
