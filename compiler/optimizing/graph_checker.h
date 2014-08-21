@@ -47,6 +47,22 @@ class GraphChecker : public HGraphVisitor {
   DISALLOW_COPY_AND_ASSIGN(GraphChecker);
 };
 
+
+// An SSA graph visitor performing various checks.
+class SSAChecker : public GraphChecker {
+ public:
+  typedef GraphChecker super_type;
+
+  explicit SSAChecker(ArenaAllocator* arena, HGraph* graph)
+    : GraphChecker(arena, graph) {}
+
+  // Perform checks on `block`.
+  virtual void VisitBasicBlock(HBasicBlock* block);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(SSAChecker);
+};
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_GRAPH_CHECKER_H_
