@@ -18,6 +18,21 @@
 
 namespace art {
 
+namespace {
+
+  // Is `inst` a branch instruction?
+  inline bool IsBranchInstruction(HInstruction& inst) {
+    return
+      inst.IsExit()
+      || inst.IsGoto()
+      || inst.IsIf()
+      || inst.IsReturn()
+      || inst.IsReturnVoid();
+  }
+
+}  // namespace
+
+
 void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
   // Check consistency wrt predecessors of `block`.
   const GrowableArray<HBasicBlock*>& predecessors = block->GetPredecessors();
@@ -61,6 +76,15 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
             << block->GetBlockId() << " as predecessor.";
       errors_.Insert(error.str());
     }
+  }
+
+  // Ensure `block` ends with a branch instruction.
+  HInstruction* last_inst = block->GetLastInstruction();
+  if (last_inst == nullptr || !IsBranchInstruction(*last_inst)) {
+    std::stringstream error;
+    error  << "Block " << block->GetBlockId()
+           << " does not end with a branch instruction.";
+    errors_.Insert(error.str());
   }
 }
 

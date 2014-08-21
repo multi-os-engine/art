@@ -118,4 +118,23 @@ TEST(GraphChecker, InconsistentPredecessorsAndSuccessors) {
   ASSERT_FALSE(graph_checker.IsValid());
 }
 
+// Test case with an invalid graph containing a non-branch last
+// instruction in a block.
+TEST(GraphChecker, BlockEndingWithNonBranchInstruction) {
+  ArenaPool pool;
+  ArenaAllocator allocator(&pool);
+
+  HGraph* graph = CreateSimpleCFG(&allocator);
+  // Remove the sole instruction of the exit block (composed of a
+  // single Exit instruction) to make it invalid (i.e. not ending by a
+  // branch instruction).
+  HBasicBlock* exit_block = graph->GetExitBlock();
+  HInstruction* last_inst = exit_block->GetLastInstruction();
+  exit_block->RemoveInstruction(last_inst);
+
+  GraphChecker graph_checker(&allocator, graph);
+  graph_checker.VisitInsertionOrder();
+  ASSERT_FALSE(graph_checker.IsValid());
+}
+
 }  // namespace art
