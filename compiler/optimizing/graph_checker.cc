@@ -30,6 +30,15 @@ namespace {
       || inst.IsReturnVoid();
   }
 
+  // Is `inst` an arihmetic operation?
+  inline bool IsArithmeticOperation(HInstruction& inst) {
+    return
+      inst.IsCondition()
+      || inst.IsCompare()
+      || inst.IsAdd()
+      || inst.IsSub();
+  }
+
 }  // namespace
 
 
@@ -139,6 +148,29 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
       else
         error << "not associated with any block.";
       errors_.Insert(error.str());
+    }
+  }
+
+  // Ensure constants used as inputs of an arithmetic operation appear
+  // at the end only.
+  for (HInstructionIterator it(block->GetInstructions()); !it.Done();
+       it.Advance()) {
+    HInstruction* inst = it.Current();
+    if (inst != nullptr && IsArithmeticOperation(*inst)) {
+      bool constant_seen = false;
+      for (HInputIterator it(inst); !it.Done(); it.Advance()) {
+        HInstruction* input = it.Current();
+        if (input != nullptr && input->IsConstant())
+          constant_seen = true;
+        else
+          if (constant_seen) {
+            std::stringstream error;
+            error << "Arithmetic operation " << inst->GetId()
+                  << " in block " << block->GetBlockId()
+                  << " uses a constant not located at the end of its inputs.";
+            errors_.Insert(error.str());
+          }
+      }
     }
   }
 }
