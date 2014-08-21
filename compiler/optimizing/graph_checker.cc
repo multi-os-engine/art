@@ -183,4 +183,48 @@ const GrowableArray<std::string>& GraphChecker::GetErrors() const {
   return errors_;
 }
 
+
+void SSAChecker::VisitBasicBlock(HBasicBlock* block) {
+  super_type::VisitBasicBlock(block);
+
+  // Ensure an instruction dominates all its uses (or in the present
+  // case, that all uses of an instruction (used as input) are
+  // dominated by its definition).
+  for (HInstructionIterator inst_it(block->GetInstructions()); !inst_it.Done();
+       inst_it.Advance()) {
+    HInstruction* inst = inst_it.Current();
+    for (HInputIterator input_it(inst); !input_it.Done(); input_it.Advance()) {
+      HInstruction* input = input_it.Current();
+      HBasicBlock* def_block = input->GetBlock();
+      // Ensure `def_block` dominates `block`.
+      HBasicBlock* b = block;
+      while (b != nullptr && b != def_block)
+        b = b->GetDominator();
+      if (b != def_block) {
+        std::stringstream error;
+        error << "Instruction " << input->GetId()
+              << " in block " << def_block->GetBlockId()
+              << " does not dominate use " << inst->GetId()
+              << " in block " << block->GetBlockId() << ".";
+        errors_.Insert(error.str());
+      }
+    }
+  }
+
+  // Ensure there is no critical edge (i.e., an edge connecting a
+  // block with multiple successors to a block with multiple
+  // predecessors).
+  if (block->GetSuccessors().Size() > 1) {
+    for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
+      HBasicBlock* successor = block->GetSuccessors().Get(j);
+      if (successor->GetPredecessors().Size() > 1) {
+        std::stringstream error;
+        error << "Critical edge between blocks " << block->GetBlockId()
+              << " and "  << successor->GetBlockId() << ".";
+        errors_.Insert(error.str());
+      }
+    }
+  }
+}
+
 }  // namespace art
