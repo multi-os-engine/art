@@ -109,6 +109,38 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
       errors_.Insert(error.str());
     }
   }
+
+  // Ensure this block's instructions are associated with this very block.
+  for (HInstructionIterator it(block->GetInstructions()); !it.Done();
+       it.Advance()) {
+    HInstruction* inst = it.Current();
+    if (inst->GetBlock() != block) {
+      std::stringstream error;
+      error << "Instruction " << inst->GetId() << "in block "
+            << block->GetBlockId();
+      if (inst->GetBlock() != nullptr)
+        error << " associated with block "
+              << inst->GetBlock()->GetBlockId() << ".";
+      else
+        error << "not associated with any block.";
+      errors_.Insert(error.str());
+    }
+  }
+  // Ensure this block's phi functions are associated with this very block.
+  for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
+    HInstruction* phi = it.Current();
+    if (phi->GetBlock() != block) {
+      std::stringstream error;
+      error << "Phi function " << phi->GetId() << "in block "
+            << block->GetBlockId();
+      if (phi->GetBlock() != nullptr)
+        error << " associated with block "
+              << phi->GetBlock()->GetBlockId() << ".";
+      else
+        error << "not associated with any block.";
+      errors_.Insert(error.str());
+    }
+  }
 }
 
 bool GraphChecker::IsValid() const {
