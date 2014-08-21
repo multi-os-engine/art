@@ -86,6 +86,29 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
            << " does not end with a branch instruction.";
     errors_.Insert(error.str());
   }
+
+  // Ensure this block's list of phi functions contains only phi functions.
+  for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
+    HInstruction* phi = it.Current();
+    if (!phi->IsPhi()) {
+      std::stringstream error;
+      error  << "Block " << block->GetBlockId()
+             << " has a non-phi function in its phi list";
+      errors_.Insert(error.str());
+    }
+  }
+  // Ensure this block's list of instructions does not contains phi
+  // functions.
+  for (HInstructionIterator it(block->GetInstructions()); !it.Done();
+       it.Advance()) {
+    HInstruction* inst = it.Current();
+    if (inst->IsPhi()) {
+      std::stringstream error;
+      error  << "Block " << block->GetBlockId()
+             << " has a phi function in its non-phi list";
+      errors_.Insert(error.str());
+    }
+  }
 }
 
 bool GraphChecker::IsValid() const {
