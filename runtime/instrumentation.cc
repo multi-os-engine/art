@@ -1041,7 +1041,8 @@ TwoWordReturn Instrumentation::PopInstrumentationStackFrame(Thread* self, uintpt
   NthCallerVisitor visitor(self, 1, true);
   visitor.WalkStack(true);
   bool deoptimize = (visitor.caller != NULL) &&
-                    (interpreter_stubs_installed_ || IsDeoptimized(visitor.caller));
+                    (interpreter_stubs_installed_ || IsDeoptimized(visitor.caller) ||
+                     Dbg::IsForcedInterpreterNeededForUpcall(self, visitor.caller));
   if (deoptimize && kVerboseInstrumentation) {
     LOG(INFO) << "Deoptimizing into " << PrettyMethod(visitor.caller);
   }

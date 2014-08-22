@@ -323,7 +323,6 @@ Dbg::TypeCache Dbg::type_cache_;
 // Deoptimization support.
 std::vector<DeoptimizationRequest> Dbg::deoptimization_requests_;
 size_t Dbg::full_deoptimization_event_count_ = 0;
-size_t Dbg::delayed_full_undeoptimization_count_ = 0;
 
 // Instrumentation event reference counters.
 size_t Dbg::dex_pc_change_event_ref_count_ = 0;
@@ -751,7 +750,6 @@ void Dbg::GoActive() {
     MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
     CHECK_EQ(deoptimization_requests_.size(), 0U);
     CHECK_EQ(full_deoptimization_event_count_, 0U);
-    CHECK_EQ(delayed_full_undeoptimization_count_, 0U);
     CHECK_EQ(dex_pc_change_event_ref_count_, 0U);
     CHECK_EQ(method_enter_event_ref_count_, 0U);
     CHECK_EQ(method_exit_event_ref_count_, 0U);
@@ -796,7 +794,6 @@ void Dbg::Disconnected() {
       MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
       deoptimization_requests_.clear();
       full_deoptimization_event_count_ = 0U;
-      delayed_full_undeoptimization_count_ = 0U;
     }
     if (instrumentation_events_ != 0) {
       runtime->GetInstrumentation()->RemoveListener(&gDebugInstrumentationListener,
@@ -3028,27 +3025,6 @@ void Dbg::ProcessDeoptimizationRequest(const DeoptimizationRequest& request) {
   }
 }
 
-void Dbg::DelayFullUndeoptimization() {
-  MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-  ++delayed_full_undeoptimization_count_;
-  DCHECK_LE(delayed_full_undeoptimization_count_, full_deoptimization_event_count_);
-}
-
-void Dbg::ProcessDelayedFullUndeoptimizations() {
-  // TODO: avoid taking the lock twice (once here and once in ManageDeoptimization).
-  {
-    MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
-    while (delayed_full_undeoptimization_count_ > 0) {
-      DeoptimizationRequest req;
-      req.SetKind(DeoptimizationRequest::kFullUndeoptimization);
-      req.SetMethod(nullptr);
-      RequestDeoptimizationLocked(req);
-      --delayed_full_undeoptimization_count_;
-    }
-  }
-  ManageDeoptimization();
-}
-
 void Dbg::RequestDeoptimization(const DeoptimizationRequest& req) {
   if (req.GetKind() == DeoptimizationRequest::kNothing) {
     // Nothing to do.
@@ -3289,6 +3265,129 @@ void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location, DeoptimizationRequ
       SanityCheckExistingBreakpoints(m, need_full_deoptimization);
     }
   }
+}
+
+bool Dbg::IsForcedInterpreterNeededForCalling(Thread* thread, mirror::ArtMethod* m) {
+  if (IsDebuggerActive()) {
+    instrumentation::Instrumentation* instrumentation =
+    Runtime::Current()->GetInstrumentation();
+
+    // If we are in interpreter only mode, then we don't have to force interpreter.
+    if (!instrumentation->InterpretOnly()) {
+      if (!m->IsNative() && !m->IsProxyMethod()) {
+        const SingleStepControl* ssc = thread->GetSingleStepControl();
+        if (ssc->is_active) {
+          // If we want to step into a method, then we have to force interpreter on that call.
+          if (ssc->step_depth == JDWP::SD_INTO) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+bool Dbg::IsForcedInterpreterNeededForResolution(Thread* thread, mirror::ArtMethod* m) {
+  if (IsDebuggerActive()) {
+    instrumentation::Instrumentation* instrumentation =
+    Runtime::Current()->GetInstrumentation();
+
+    // If we are in interpreter only mode, then we don't have to force interpreter.
+    if (!instrumentation->InterpretOnly()) {
+      if (!m->IsNative() && !m->IsProxyMethod()) {
+        const SingleStepControl* ssc = thread->GetSingleStepControl();
+        if (ssc->is_active) {
+          // If we want to step into a method, then we have to force interpreter on that call.
+          if (ssc->step_depth == JDWP::SD_INTO) {
+            return true;
+          }
+          // If we are stepping out from a static initializer, by issuing a step
+          // in or step over, that was implicitly invoked by calling a static method,
+          // then we need to step into that method. Having a lower stack depth than
+          // the one the single step control has indicates that the step originates
+          // from the static initializer.
+          if (ssc->step_depth != JDWP::SD_OUT &&
+              ssc->stack_depth > GetStackDepth(thread)) {
+            return true;
+          }
+        }
+        // There are cases where we have to force interpreter on deoptimized methods,
+        // because in some cases the call will not be performed by invoking an entry
+        // point that has been replaced by the deoptimization, but instead by directly
+        // invoking the quick oat code of the method, for example.
+        return instrumentation->IsDeoptimized(m);
+      }
+    }
+  }
+  return false;
+}
+
+bool Dbg::IsForcedInstrumentationNeededForResolution(Thread* thread, mirror::ArtMethod* m) {
+  // The upcall can be nullptr and in that case we don't need to do anything.
+  if (m) {
+    if (IsDebuggerActive()) {
+      instrumentation::Instrumentation* instrumentation =
+      Runtime::Current()->GetInstrumentation();
+
+      // If we are in interpreter only mode, then we don't have to force interpreter.
+      if (!instrumentation->InterpretOnly()) {
+        if (!m->IsNative() && !m->IsProxyMethod()) {
+          const SingleStepControl* ssc = thread->GetSingleStepControl();
+          if (ssc->is_active) {
+            // If we are stepping out from a static initializer, by issuing a step
+            // out, that was implicitly invoked by calling a static method, then we
+            // need to step into the caller of that method. Having a lower stack
+            // depth than the one the single step control has indicates that the
+            // step originates from the static initializer.
+            if (ssc->step_depth == JDWP::SD_OUT &&
+                ssc->stack_depth > GetStackDepth(thread)) {
+              return true;
+            }
+          }
+          // If we are returning from a static intializer, that was implicitly
+          // invoked by calling a static method and the caller is deoptimized,
+          // then we have to deoptimize the stack without forcing interpreter
+          // on the static method that was called originally. This problem can
+          // be solved easily by forcing instrumentation on the called method,
+          // because the instrumentation exit hook will recognise the need of
+          // stack deoptimization by calling IsForcedInterpreterNeededForUpcall.
+          return instrumentation->IsDeoptimized(m);
+        }
+      }
+    }
+  }
+  return false;
+}
+
+bool Dbg::IsForcedInterpreterNeededForUpcall(Thread* thread, mirror::ArtMethod* m) {
+  // The upcall can be nullptr and in that case we don't need to do anything.
+  if (m) {
+    if (IsDebuggerActive()) {
+      instrumentation::Instrumentation* instrumentation =
+      Runtime::Current()->GetInstrumentation();
+
+      // If we are in interpreter only mode, then we don't have to force interpreter.
+      if (!instrumentation->InterpretOnly()) {
+        if (!m->IsNative() && !m->IsProxyMethod()) {
+          const SingleStepControl* ssc = thread->GetSingleStepControl();
+          if (ssc->is_active) {
+            // The debugger is not interested in what is happening under the level
+            // of the step, thus we only force interpreter when we are not below of
+            // the step.
+            if (ssc->stack_depth >= GetStackDepth(thread)) {
+              return true;
+            }
+          }
+          // We have to require stack deoptimization if the upcall is deoptimized.
+          if (instrumentation->IsDeoptimized(m)) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
 }
 
 // Scoped utility class to suspend a thread so that we may do tasks such as walk its stack. Doesn't
