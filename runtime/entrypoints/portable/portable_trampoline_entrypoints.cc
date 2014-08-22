@@ -23,6 +23,7 @@
 #include "mirror/art_method-inl.h"
 #include "mirror/object-inl.h"
 #include "scoped_thread_state_change.h"
+#include "debugger.h"
 
 namespace art {
 
@@ -190,6 +191,8 @@ extern "C" uint64_t artPortableToInterpreterBridge(mirror::ArtMethod* method, Th
   // frame.
   // FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsAndArgs);
 
+  mirror::ArtMethod* caller = self->GetCurrentMethod(nullptr);
+
   if (method->IsAbstract()) {
     ThrowAbstractMethodError(method);
     return 0;
@@ -225,6 +228,13 @@ extern "C" uint64_t artPortableToInterpreterBridge(mirror::ArtMethod* method, Th
     JValue result = interpreter::EnterInterpreterFromStub(self, mh, code_item, *shadow_frame);
     // Pop transition.
     self->PopManagedStackFragment(fragment);
+
+    // Request a stack deoptimization if needed
+    if (UNLIKELY(Dbg::IsForcedInterpreterNeededForUpcall(self, caller))) {
+      self->SetException(ThrowLocation(), Thread::GetDeoptimizationException());
+      self->SetDeoptimizationReturnValue(result);
+    }
+
     return result.GetJ();
   }
 }
@@ -401,14 +411,26 @@ extern "C" const void* artPortableResolutionTrampoline(mirror::ArtMethod* called
     Handle<mirror::Class> called_class(hs.NewHandle(called->GetDeclaringClass()));
     linker->EnsureInitialized(self, called_class, true, true);
     if (LIKELY(called_class->IsInitialized())) {
-      code = called->GetEntryPointFromPortableCompiledCode();
-      // TODO: remove this after we solve the link issue.
-      if (code == nullptr) {
-        bool have_portable_code;
-        code = linker->GetPortableOatCodeFor(called, &have_portable_code);
+      if (UNLIKELY(Dbg::IsForcedInterpreterNeededForCalling(self, called))) {
+        // If we are returning from the static initializer and have an active single step or
+        // the called method is deoptimized (by a breakpoint, for example), then we have to
+        // run the called method in interpreter.
+        code = GetPortableToInterpreterBridge();
+      } else {
+        code = called->GetEntryPointFromPortableCompiledCode();
+        // TODO: remove this after we solve the link issue.
+        if (code == nullptr) {
+          bool have_portable_code;
+          code = linker->GetPortableOatCodeFor(called, &have_portable_code);
+        }
       }
     } else if (called_class->IsInitializing()) {
-      if (invoke_type == kStatic) {
+      if (UNLIKELY(Dbg::IsForcedInterpreterNeededForCalling(self, called))) {
+        // If we are returning from the static initializer and have an active single step or
+        // the called method is deoptimized (by a breakpoint, for example), then we have to
+        // run the called method in interpreter.
+        code = GetPortableToInterpreterBridge();
+      } else if (invoke_type == kStatic) {
         // Class is still initializing, go to oat and grab code (trampoline must be left in place
         // until class is initialized to stop races between threads).
         bool have_portable_code;
