@@ -75,6 +75,12 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // InstrumentationListener implementation.
+  void MethodWillBeEntered(Thread* thread, mirror::Object* this_object,
+                           mirror::ArtMethod* method)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
+  void InterpreterWillBeExited(Thread* thread, mirror::Object* this_object,
+                               mirror::ArtMethod* method, uint32_t dex_pc, const JValue& return_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
   void MethodEntered(Thread* thread, mirror::Object* this_object,
                      mirror::ArtMethod* method, uint32_t dex_pc)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;

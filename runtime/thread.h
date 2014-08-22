@@ -66,7 +66,7 @@ class BaseMutex;
 class ClassLinker;
 class Closure;
 class Context;
-struct DebugInvokeReq;
+class DebugInvokeReq;
 class DexFile;
 class JavaVMExt;
 struct JNIEnvExt;
@@ -74,7 +74,7 @@ class Monitor;
 class Runtime;
 class ScopedObjectAccessAlreadyRunnable;
 class ShadowFrame;
-struct SingleStepControl;
+class SingleStepControl;
 class Thread;
 class ThreadList;
 

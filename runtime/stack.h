@@ -150,6 +150,10 @@ class ShadowFrame {
 #endif
   }
 
+  bool IsInterpreted() const {
+    return HasReferenceArray();
+  }
+
   uint32_t NumberOfVRegs() const {
 #if defined(ART_USE_PORTABLE_COMPILER)
     return number_of_vregs_ & ~kHasReferenceArray;
@@ -713,6 +717,8 @@ class StackVisitor {
   }
 
   std::string DescribeLocation() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static uintptr_t GetTopStackFrameId(Thread* thread) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static size_t ComputeNumFrames(Thread* thread) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

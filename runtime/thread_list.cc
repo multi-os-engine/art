@@ -652,13 +652,13 @@ void ThreadList::SuspendSelfForDebugger() {
   // Tell JDWP we've completed invocation and are ready to suspend.
   DebugInvokeReq* pReq = self->GetInvokeReq();
   DCHECK(pReq != NULL);
-  if (pReq->invoke_needed) {
+  if (pReq->invoke_needed_) {
     // Clear this before signaling.
     pReq->Clear();
 
     VLOG(jdwp) << "invoke complete, signaling";
-    MutexLock mu(self, pReq->lock);
-    pReq->cond.Signal(self);
+    MutexLock mu(self, pReq->lock_);
+    pReq->cond_.Signal(self);
   }
 
   // Tell JDWP that we've completed suspension. The JDWP thread can't

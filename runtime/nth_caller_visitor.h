@@ -28,7 +28,7 @@ class Thread;
 struct NthCallerVisitor : public StackVisitor {
   NthCallerVisitor(Thread* thread, size_t n, bool include_runtime_and_upcalls = false)
       : StackVisitor(thread, NULL), n(n), include_runtime_and_upcalls_(include_runtime_and_upcalls),
-        count(0), caller(NULL) {}
+        count(0), caller(NULL), caller_id(0), is_interpreted(false) {}
 
   bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     mirror::ArtMethod* m = GetMethod();
@@ -43,6 +43,8 @@ struct NthCallerVisitor : public StackVisitor {
       DCHECK(caller == NULL);
       if (count == n) {
         caller = m;
+        caller_id = GetFrameId();
+        is_interpreted = IsShadowFrame() && GetCurrentShadowFrame()->IsInterpreted();
         return false;
       }
       count++;
@@ -54,6 +56,8 @@ struct NthCallerVisitor : public StackVisitor {
   const bool include_runtime_and_upcalls_;
   size_t count;
   mirror::ArtMethod* caller;
+  uintptr_t caller_id;
+  bool is_interpreted;
 };
 
 }  // namespace art

@@ -62,6 +62,7 @@ Instrumentation::Instrumentation()
     : instrumentation_stubs_installed_(false), entry_exit_stubs_installed_(false),
       interpreter_stubs_installed_(false),
       interpret_only_(false), forced_interpret_only_(false),
+      have_method_pre_entry_listeners_(false), have_interpreter_pre_exit_listeners_(false),
       have_method_entry_listeners_(false), have_method_exit_listeners_(false),
       have_method_unwind_listeners_(false), have_dex_pc_listeners_(false),
       have_field_read_listeners_(false), have_field_write_listeners_(false),
@@ -153,13 +154,16 @@ void Instrumentation::InstallStubsForMethod(mirror::ArtMethod* method) {
       // class, all its static methods code will be set to the instrumentation entry point.
       // For more details, see ClassLinker::FixupStaticTrampolines.
       if (is_class_initialized || !method->IsStatic() || method->IsConstructor()) {
-        if (entry_exit_stubs_installed_) {
+        // Do not overwrite interpreter to prevent from posting method entry/exit events twice.
+        new_portable_code = class_linker->GetPortableOatCodeFor(method, &have_portable_code);
+        new_quick_code = class_linker->GetQuickOatCodeFor(method);
+        DCHECK(new_quick_code != class_linker->GetQuickToInterpreterBridgeTrampoline());
+        if (entry_exit_stubs_installed_ && new_quick_code != GetQuickToInterpreterBridge()) {
+          // TODO: portable to quick bridge. Bug: 8196384. We cannot enable the check below as long
+          // as GetPortableToQuickBridge() == GetPortableToInterpreterBridge().
+          // DCHECK(new_portable_code != GetPortableToInterpreterBridge());
           new_portable_code = GetPortableToInterpreterBridge();
           new_quick_code = GetQuickInstrumentationEntryPoint();
-        } else {
-          new_portable_code = class_linker->GetPortableOatCodeFor(method, &have_portable_code);
-          new_quick_code = class_linker->GetQuickOatCodeFor(method);
-          DCHECK(new_quick_code != class_linker->GetQuickToInterpreterBridgeTrampoline());
         }
       } else {
         new_portable_code = class_linker->GetPortableResolutionTrampoline();
@@ -179,6 +183,7 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
   struct InstallStackVisitor : public StackVisitor {
     InstallStackVisitor(Thread* thread, Context* context, uintptr_t instrumentation_exit_pc)
         : StackVisitor(thread, context),  instrumentation_stack_(thread->GetInstrumentationStack()),
+          existing_instrumentation_frames_count_(instrumentation_stack_->size()),
           instrumentation_exit_pc_(instrumentation_exit_pc),
           reached_existing_instrumentation_frames_(false), instrumentation_stack_depth_(0),
           last_return_pc_(0) {
@@ -193,10 +198,18 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
         last_return_pc_ = 0;
         return true;  // Ignore upcalls.
       }
+      if (m->IsRuntimeMethod()) {
+        if (kVerboseInstrumentation) {
+          LOG(INFO) << "  Skipping runtime method. Frame " << GetFrameId();
+        }
+        last_return_pc_ = GetReturnPc();
+        return true;  // Ignore unresolved methods since they will be instrumented after resolution.
+      }
+      if (kVerboseInstrumentation) {
+        LOG(INFO) << "  Installing exit stub in " << DescribeLocation();
+      }
       if (GetCurrentQuickFrame() == NULL) {
-        bool interpreter_frame = !m->IsPortableCompiled();
-        InstrumentationStackFrame instrumentation_frame(GetThisObject(), m, 0, GetFrameId(),
-                                                        interpreter_frame);
+        InstrumentationStackFrame instrumentation_frame(GetThisObject(), m, 0, GetFrameId(), false);
         if (kVerboseInstrumentation) {
           LOG(INFO) << "Pushing shadow frame " << instrumentation_frame.Dump();
         }
@@ -204,33 +217,6 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
         return true;  // Continue.
       }
       uintptr_t return_pc = GetReturnPc();
-      if (m->IsRuntimeMethod()) {
-        if (return_pc == instrumentation_exit_pc_) {
-          if (kVerboseInstrumentation) {
-            LOG(INFO) << "  Handling quick to interpreter transition. Frame " << GetFrameId();
-          }
-          CHECK_LT(instrumentation_stack_depth_, instrumentation_stack_->size());
-          const InstrumentationStackFrame& frame =
-              instrumentation_stack_->at(instrumentation_stack_depth_);
-          CHECK(frame.interpreter_entry_);
-          // This is an interpreter frame so method enter event must have been reported. However we
-          // need to push a DEX pc into the dex_pcs_ list to match size of instrumentation stack.
-          // Since we won't report method entry here, we can safely push any DEX pc.
-          dex_pcs_.push_back(0);
-          last_return_pc_ = frame.return_pc_;
-          ++instrumentation_stack_depth_;
-          return true;
-        } else {
-          if (kVerboseInstrumentation) {
-            LOG(INFO) << "  Skipping runtime method. Frame " << GetFrameId();
-          }
-          last_return_pc_ = GetReturnPc();
-          return true;  // Ignore unresolved methods since they will be instrumented after resolution.
-        }
-      }
-      if (kVerboseInstrumentation) {
-        LOG(INFO) << "  Installing exit stub in " << DescribeLocation();
-      }
       if (return_pc == instrumentation_exit_pc_) {
         // We've reached a frame which has already been installed with instrumentation exit stub.
         // We should have already installed instrumentation on previous frames.
@@ -254,15 +240,8 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
           LOG(INFO) << "Pushing frame " << instrumentation_frame.Dump();
         }
 
-        // Insert frame at the right position so we do not corrupt the instrumentation stack.
-        // Instrumentation stack frames are in descending frame id order.
-        auto it = instrumentation_stack_->begin();
-        for (auto end = instrumentation_stack_->end(); it != end; ++it) {
-          const InstrumentationStackFrame& current = *it;
-          if (instrumentation_frame.frame_id_ >= current.frame_id_) {
-            break;
-          }
-        }
+        // Insert frame before old ones so we do not corrupt the instrumentation stack.
+        auto it = instrumentation_stack_->end() - existing_instrumentation_frames_count_;
         instrumentation_stack_->insert(it, instrumentation_frame);
         SetReturnPc(instrumentation_exit_pc_);
       }
@@ -273,6 +252,7 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
     }
     std::deque<InstrumentationStackFrame>* const instrumentation_stack_;
     std::vector<InstrumentationStackFrame> shadow_stack_;
+    const size_t existing_instrumentation_frames_count_;
     std::vector<uint32_t> dex_pcs_;
     const uintptr_t instrumentation_exit_pc_;
     bool reached_existing_instrumentation_frames_;
@@ -298,7 +278,7 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
     auto ssi = visitor.shadow_stack_.rbegin();
     for (auto isi = thread->GetInstrumentationStack()->rbegin(),
         end = thread->GetInstrumentationStack()->rend(); isi != end; ++isi) {
-      while (ssi != visitor.shadow_stack_.rend() && (*ssi).frame_id_ < (*isi).frame_id_) {
+      while (ssi != visitor.shadow_stack_.rend() && (*ssi).frame_id_ > (*isi).frame_id_) {
         instrumentation->MethodEnterEvent(thread, (*ssi).this_object_, (*ssi).method_, 0);
         ++ssi;
       }
@@ -344,7 +324,7 @@ static void InstrumentationRestoreStack(Thread* thread, void* arg)
       }
       bool removed_stub = false;
       // TODO: make this search more efficient?
-      const size_t frameId = GetFrameId();
+      const uintptr_t frameId = GetFrameId();
       for (const InstrumentationStackFrame& instrumentation_frame : *instrumentation_stack_) {
         if (instrumentation_frame.frame_id_ == frameId) {
           if (kVerboseInstrumentation) {
@@ -400,6 +380,15 @@ static void InstrumentationRestoreStack(Thread* thread, void* arg)
 
 void Instrumentation::AddListener(InstrumentationListener* listener, uint32_t events) {
   Locks::mutator_lock_->AssertExclusiveHeld(Thread::Current());
+
+  if ((events & kMethodWillBeEntered) != 0) {
+    method_pre_entry_listeners_.push_back(listener);
+    have_method_pre_entry_listeners_ = true;
+  }
+  if ((events & kInterpreterWillBeExited) != 0) {
+    interpreter_pre_exit_listeners_.push_back(listener);
+    have_interpreter_pre_exit_listeners_ = true;
+  }
   if ((events & kMethodEntered) != 0) {
     method_entry_listeners_.push_back(listener);
     have_method_entry_listeners_ = true;
@@ -462,6 +451,18 @@ void Instrumentation::AddListener(InstrumentationListener* listener, uint32_t ev
 void Instrumentation::RemoveListener(InstrumentationListener* listener, uint32_t events) {
   Locks::mutator_lock_->AssertExclusiveHeld(Thread::Current());
 
+  if ((events & kMethodWillBeEntered) != 0) {
+    if (have_method_pre_entry_listeners_) {
+      method_pre_entry_listeners_.remove(listener);
+      have_method_pre_entry_listeners_ = !method_pre_entry_listeners_.empty();
+    }
+  }
+  if ((events & kInterpreterWillBeExited) != 0) {
+    if (have_interpreter_pre_exit_listeners_) {
+      interpreter_pre_exit_listeners_.remove(listener);
+      have_interpreter_pre_exit_listeners_ = !interpreter_pre_exit_listeners_.empty();
+    }
+  }
   if ((events & kMethodEntered) != 0) {
     if (have_method_entry_listeners_) {
       method_entry_listeners_.remove(listener);
@@ -686,23 +687,26 @@ bool Instrumentation::AddDeoptimizedMethod(mirror::ArtMethod* method) {
   // FindDeoptimizedMethod() call is necessary or else we would end up
   // storing the same method twice in the map (the from-space and the
   // to-space ones).
-  if (FindDeoptimizedMethod(method)) {
+  if (FindDeoptimizedMethod(method, true)) {
     // Already in the map. Return.
     return false;
   }
   // Not found. Add it.
   int32_t hash_code = method->IdentityHashCode();
-  deoptimized_methods_.insert(std::make_pair(hash_code, GcRoot<mirror::ArtMethod>(method)));
+  deoptimized_methods_.insert(std::make_pair(hash_code, std::make_pair(GcRoot<mirror::ArtMethod>(method), 1)));
   return true;
 }
 
-bool Instrumentation::FindDeoptimizedMethod(mirror::ArtMethod* method) {
+bool Instrumentation::FindDeoptimizedMethod(mirror::ArtMethod* method, bool increment) {
   int32_t hash_code = method->IdentityHashCode();
   auto range = deoptimized_methods_.equal_range(hash_code);
   for (auto it = range.first; it != range.second; ++it) {
-    mirror::ArtMethod* m = it->second.Read();
+    mirror::ArtMethod* m = it->second.first.Read();
     if (m == method) {
       // Found.
+      if (increment) {
+        it->second.second++;
+      }
       return true;
     }
   }
@@ -716,18 +720,22 @@ mirror::ArtMethod* Instrumentation::BeginDeoptimizedMethod() {
     // Empty.
     return nullptr;
   }
-  return it->second.Read();
+  return it->second.first.Read();
 }
 
 bool Instrumentation::RemoveDeoptimizedMethod(mirror::ArtMethod* method) {
   int32_t hash_code = method->IdentityHashCode();
   auto range = deoptimized_methods_.equal_range(hash_code);
   for (auto it = range.first; it != range.second; ++it) {
-    mirror::ArtMethod* m = it->second.Read();
+    mirror::ArtMethod* m = it->second.first.Read();
     if (m == method) {
       // Found. Erase and return.
-      deoptimized_methods_.erase(it);
-      return true;
+      it->second.second--;
+      if (!it->second.second) {
+        deoptimized_methods_.erase(it);
+        return true;
+      }
+      return false;
     }
   }
   // Not found.
@@ -747,11 +755,13 @@ void Instrumentation::Deoptimize(mirror::ArtMethod* method) {
   {
     WriterMutexLock mu(self, deoptimized_methods_lock_);
     bool has_not_been_deoptimized = AddDeoptimizedMethod(method);
-    CHECK(has_not_been_deoptimized) << "Method " << PrettyMethod(method)
-        << " is already deoptimized";
+    if (!has_not_been_deoptimized) {
+      return;
+    }
   }
+
   if (!interpreter_stubs_installed_) {
-    UpdateEntrypoints(method, GetQuickInstrumentationEntryPoint(), GetPortableToInterpreterBridge(),
+    UpdateEntrypoints(method, GetQuickToInterpreterBridge(), GetPortableToInterpreterBridge(),
                       false);
 
     // Install instrumentation exit stub and instrumentation frames. We may already have installed
@@ -772,8 +782,9 @@ void Instrumentation::Undeoptimize(mirror::ArtMethod* method) {
   {
     WriterMutexLock mu(self, deoptimized_methods_lock_);
     bool found_and_erased = RemoveDeoptimizedMethod(method);
-    CHECK(found_and_erased) << "Method " << PrettyMethod(method)
-        << " is not deoptimized";
+    if (!found_and_erased) {
+      return;
+    }
     empty = IsDeoptimizedMethodsEmpty();
   }
 
@@ -876,6 +887,33 @@ const void* Instrumentation::GetQuickCodeFor(mirror::ArtMethod* method) const {
   return runtime->GetClassLinker()->GetQuickOatCodeFor(method);
 }
 
+void Instrumentation::MethodPreEnterEventImpl(Thread* thread, mirror::Object* this_object,
+                                              mirror::ArtMethod* method) const {
+  auto it = method_pre_entry_listeners_.begin();
+  bool is_end = (it == method_pre_entry_listeners_.end());
+  // Implemented this way to prevent problems caused by modification of the list while iterating.
+  while (!is_end) {
+    InstrumentationListener* cur = *it;
+    ++it;
+    is_end = (it == method_pre_entry_listeners_.end());
+    cur->MethodWillBeEntered(thread, this_object, method);
+  }
+}
+
+void Instrumentation::InterpreterPreExitEventImpl(Thread* thread, mirror::Object* this_object,
+                                                  mirror::ArtMethod* method,
+                                                  uint32_t dex_pc, const JValue& return_value) const {
+  auto it = interpreter_pre_exit_listeners_.begin();
+  bool is_end = (it == interpreter_pre_exit_listeners_.end());
+  // Implemented this way to prevent problems caused by modification of the list while iterating.
+  while (!is_end) {
+    InstrumentationListener* cur = *it;
+    ++it;
+    is_end = (it == interpreter_pre_exit_listeners_.end());
+    cur->InterpreterWillBeExited(thread, this_object, method, dex_pc, return_value);
+  }
+}
+
 void Instrumentation::MethodEnterEventImpl(Thread* thread, mirror::Object* this_object,
                                            mirror::ArtMethod* method,
                                            uint32_t dex_pc) const {
@@ -965,23 +1003,11 @@ void Instrumentation::ExceptionCaughtEvent(Thread* thread, const ThrowLocation& 
   }
 }
 
-static void CheckStackDepth(Thread* self, const InstrumentationStackFrame& instrumentation_frame,
-                            int delta)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  size_t frame_id = StackVisitor::ComputeNumFrames(self) + delta;
-  if (frame_id != instrumentation_frame.frame_id_) {
-    LOG(ERROR) << "Expected frame_id=" << frame_id << " but found "
-        << instrumentation_frame.frame_id_;
-    StackVisitor::DescribeStack(self);
-    CHECK_EQ(frame_id, instrumentation_frame.frame_id_);
-  }
-}
-
 void Instrumentation::PushInstrumentationStackFrame(Thread* self, mirror::Object* this_object,
                                                     mirror::ArtMethod* method,
                                                     uintptr_t lr, bool interpreter_entry) {
   // We have a callee-save frame meaning this value is guaranteed to never be 0.
-  size_t frame_id = StackVisitor::ComputeNumFrames(self);
+  JDWP::FrameId frame_id = StackVisitor::GetTopStackFrameId(self);
   std::deque<instrumentation::InstrumentationStackFrame>* stack = self->GetInstrumentationStack();
   if (kVerboseInstrumentation) {
     LOG(INFO) << "Entering " << PrettyMethod(method) << " from PC " << reinterpret_cast<void*>(lr);
@@ -1004,9 +1030,8 @@ TwoWordReturn Instrumentation::PopInstrumentationStackFrame(Thread* self, uintpt
   InstrumentationStackFrame instrumentation_frame = stack->front();
   stack->pop_front();
 
-  // Set return PC and check the sanity of the stack.
+  // Set return PC
   *return_pc = instrumentation_frame.return_pc_;
-  CheckStackDepth(self, instrumentation_frame, 0);
 
   mirror::ArtMethod* method = instrumentation_frame.method_;
   uint32_t length;
@@ -1085,7 +1110,7 @@ void Instrumentation::VisitRoots(RootCallback* callback, void* arg) {
     return;
   }
   for (auto pair : deoptimized_methods_) {
-    pair.second.VisitRoot(callback, arg, 0, kRootVMInternal);
+    pair.second.first.VisitRoot(callback, arg, 0, kRootVMInternal);
   }
 }
 

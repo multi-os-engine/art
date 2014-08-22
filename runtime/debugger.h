@@ -27,6 +27,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "jdwp/jdwp.h"
 #include "jni.h"
@@ -49,75 +50,51 @@ class ThrowLocation;
 /*
  * Invoke-during-breakpoint support.
  */
-struct DebugInvokeReq {
-  DebugInvokeReq()
-      : ready(false), invoke_needed(false),
-        receiver(NULL), thread(NULL), klass(NULL), method(NULL),
-        arg_count(0), arg_values(NULL), options(0), error(JDWP::ERR_NONE),
-        result_tag(JDWP::JT_VOID), exception(0),
-        lock("a DebugInvokeReq lock", kBreakpointInvokeLock),
-        cond("a DebugInvokeReq condition variable", lock) {
-  }
-
-  /* boolean; only set when we're in the tail end of an event handler */
-  bool ready;
-
-  /* boolean; set if the JDWP thread wants this thread to do work */
-  bool invoke_needed;
-
-  /* request */
-  mirror::Object* receiver;      /* not used for ClassType.InvokeMethod */
-  mirror::Object* thread;
-  mirror::Class* klass;
-  mirror::ArtMethod* method;
-  uint32_t arg_count;
-  uint64_t* arg_values;   /* will be NULL if arg_count_ == 0 */
-  uint32_t options;
-
-  /* result */
-  JDWP::JdwpError error;
-  JDWP::JdwpTag result_tag;
-  JValue result_value;
-  JDWP::ObjectId exception;
-
-  /* condition variable to wait on while the method executes */
-  Mutex lock DEFAULT_MUTEX_ACQUIRED_AFTER;
-  ConditionVariable cond GUARDED_BY(lock);
+class DebugInvokeReq {
+ public:
+  DebugInvokeReq();
 
   void VisitRoots(RootCallback* callback, void* arg, uint32_t tid, RootType root_type)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void Clear();
 
+  /* boolean; only set when we're in the tail end of an event handler */
+  bool ready_;
+
+  /* boolean; set if the JDWP thread wants this thread to do work */
+  bool invoke_needed_;
+
+  /* request */
+  mirror::Object* receiver_;      /* not used for ClassType.InvokeMethod */
+  mirror::Object* thread_;
+  mirror::Class* klass_;
+  mirror::ArtMethod* method_;
+  uint32_t arg_count_;
+  uint64_t* arg_values_;   /* will be NULL if arg_count_ == 0 */
+  uint32_t options_;
+
+  /* result */
+  JDWP::JdwpError error_;
+  JDWP::JdwpTag result_tag_;
+  JValue result_value_;
+  JDWP::ObjectId exception_;
+
+  /* condition variable to wait on while the method executes */
+  Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
+  ConditionVariable cond_ GUARDED_BY(lock_);
+
  private:
   DISALLOW_COPY_AND_ASSIGN(DebugInvokeReq);
 };
 
 // Thread local data-structure that holds fields for controlling single-stepping.
-struct SingleStepControl {
+class SingleStepControl {
+ public:
   SingleStepControl()
-      : is_active(false), step_size(JDWP::SS_MIN), step_depth(JDWP::SD_INTO),
-        method(nullptr), stack_depth(0) {
+      : is_active_(false), step_size_(JDWP::SS_MIN), step_depth_(JDWP::SD_INTO),
+        method_(nullptr), frame_id_(0) {
   }
-
-  // Are we single-stepping right now?
-  bool is_active;
-
-  // See JdwpStepSize and JdwpStepDepth for details.
-  JDWP::JdwpStepSize step_size;
-  JDWP::JdwpStepDepth step_depth;
-
-  // The location this single-step was initiated from.
-  // A single-step is initiated in a suspended thread. We save here the current method and the
-  // set of DEX pcs associated to the source line number where the suspension occurred.
-  // This is used to support SD_INTO and SD_OVER single-step depths so we detect when a single-step
-  // causes the execution of an instruction in a different method or at a different line number.
-  mirror::ArtMethod* method;
-  std::set<uint32_t> dex_pcs;
-
-  // The stack depth when this single-step was initiated. This is used to support SD_OVER and SD_OUT
-  // single-step depth.
-  int stack_depth;
 
   void VisitRoots(RootCallback* callback, void* arg, uint32_t tid, RootType root_type)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -127,6 +104,44 @@ struct SingleStepControl {
   void Clear();
 
  private:
+  friend class Dbg;
+
+  struct PendingDeoptimization {
+    bool operator==(const PendingDeoptimization& rhs) {
+      return frame_id == rhs.frame_id && method == rhs.method && is_upcall == rhs.is_upcall;
+    }
+
+    JDWP::FrameId frame_id;
+    mirror::ArtMethod* method;
+    bool is_upcall;
+  };
+
+  // Unhandled method deoptimizations.
+  std::vector<PendingDeoptimization> pending_deoptimizations_;
+
+  // Are we single-stepping right now?
+  bool is_active_;
+
+  // See JdwpStepSize and JdwpStepDepth for details.
+  JDWP::JdwpStepSize step_size_;
+  JDWP::JdwpStepDepth step_depth_;
+
+  // The location this single-step was initiated from.
+  // A single-step is initiated in a suspended thread. We save here the current method and the
+  // set of DEX pcs associated to the source line number where the suspension occurred.
+  // This is used to support SD_INTO and SD_OVER single-step depths so we detect when a single-step
+  // causes the execution of an instruction in a different method or at a different line number.
+  mirror::ArtMethod* method_;
+  std::set<uint32_t> dex_pcs_;
+
+  // The stack frame ID when this single-step was initiated. This is used to support SD_OVER and
+  // SD_OUT single-step depth.
+  JDWP::FrameId frame_id_;
+
+  // With this map we keep track of the methods we have deoptimized for the single step control.
+  // The key specifies which frame id is deoptimized by the deoptimization request.
+  std::map<JDWP::FrameId, mirror::ArtMethod*> deoptimized_methods_;
+
   DISALLOW_COPY_AND_ASSIGN(SingleStepControl);
 };
 
@@ -462,10 +477,12 @@ class Dbg {
    * Debugger notification
    */
   enum {
-    kBreakpoint     = 0x01,
-    kSingleStep     = 0x02,
-    kMethodEntry    = 0x04,
-    kMethodExit     = 0x08,
+    kBreakpoint         = 0x01,
+    kSingleStep         = 0x02,
+    kMethodPreEntry     = 0x04,
+    kInterpreterPreExit = 0x08,
+    kMethodEntry        = 0x10,
+    kMethodExit         = 0x20,
   };
   static void PostFieldAccessEvent(mirror::ArtMethod* m, int dex_pc, mirror::Object* this_object,
                                    mirror::ArtField* f)
@@ -492,13 +509,6 @@ class Dbg {
 
   // Records deoptimization request in the queue.
   static void RequestDeoptimization(const DeoptimizationRequest& req)
-      LOCKS_EXCLUDED(deoptimization_lock_)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  // Support delayed full undeoptimization requests. This is currently only used for single-step
-  // events.
-  static void DelayFullUndeoptimization() LOCKS_EXCLUDED(deoptimization_lock_);
-  static void ProcessDelayedFullUndeoptimizations()
       LOCKS_EXCLUDED(deoptimization_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -642,10 +652,6 @@ class Dbg {
   // undeoptimize when the last event is unregistered (when the counter is set to 0).
   static size_t full_deoptimization_event_count_ GUARDED_BY(deoptimization_lock_);
 
-  // Count the number of full undeoptimization requests delayed to next resume or end of debug
-  // session.
-  static size_t delayed_full_undeoptimization_count_ GUARDED_BY(deoptimization_lock_);
-
   static size_t* GetReferenceCounterForEvent(uint32_t instrumentation_event);
 
   // Weak global type cache, TODO improve this.
@@ -655,6 +661,8 @@ class Dbg {
   // TODO we could use an array instead of having all these dedicated counters. Instrumentation
   // events are bits of a mask so we could convert them to array index.
   static size_t dex_pc_change_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static size_t method_pre_enter_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static size_t interpreter_pre_exit_event_ref_count_ GUARDED_BY(deoptimization_lock_);
   static size_t method_enter_event_ref_count_ GUARDED_BY(deoptimization_lock_);
   static size_t method_exit_event_ref_count_ GUARDED_BY(deoptimization_lock_);
   static size_t field_read_event_ref_count_ GUARDED_BY(deoptimization_lock_);

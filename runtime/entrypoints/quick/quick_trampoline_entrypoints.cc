@@ -508,6 +508,13 @@ extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Threa
     JValue result = interpreter::EnterInterpreterFromStub(self, mh, code_item, *shadow_frame);
     // Pop transition.
     self->PopManagedStackFragment(fragment);
+
+    // Notify instrumentation about that we are going to exit from the interpreter
+    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+    if (UNLIKELY(instrumentation->HasInterpreterPreExitListeners())) {
+      instrumentation->InterpreterPreExitEvent(self, shadow_frame->GetThisObject(code_item->ins_size_), method, 0, result);
+    }
+
     // No need to restore the args since the method has already been run by the interpreter.
     return result.GetJ();
   }
@@ -805,10 +812,22 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
         }
       }
     }
+
+    // The called method should be above of the class initializer in the call stack
+    void* memory = alloca(ShadowFrame::ComputeSize(0));
+    ShadowFrame* shadow_frame(ShadowFrame::Create(0, nullptr, called, 0, memory));
+    ManagedStack fragment;
+    self->PushManagedStackFragment(&fragment);
+    self->PushShadowFrame(shadow_frame);
+
     // Ensure that the called method's class is initialized.
     StackHandleScope<1> hs(soa.Self());
     Handle<mirror::Class> called_class(hs.NewHandle(called->GetDeclaringClass()));
     linker->EnsureInitialized(called_class, true, true);
+
+    // Remove temporal shadow frame
+    self->PopManagedStackFragment(fragment);
+
     if (LIKELY(called_class->IsInitialized())) {
       code = called->GetEntryPointFromQuickCompiledCode();
     } else if (called_class->IsInitializing()) {
