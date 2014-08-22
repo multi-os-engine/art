@@ -18,6 +18,7 @@
 
 #include "field_helper.h"
 #include "mirror/array-inl.h"
+#include "debugger.h"
 
 namespace art {
 namespace interpreter {
@@ -666,7 +667,14 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
         mh.Get()->GetEntryPointFromInterpreter() == artInterpreterToCompiledCodeBridge) {
       LOG(FATAL) << "Attempt to call compiled code when -Xint: " << PrettyMethod(mh.Get());
     }
-    (mh.Get()->GetEntryPointFromInterpreter())(self, mh, code_item, new_shadow_frame, result);
+    // Force the use of interpreter when it is required by the debugger.
+    mirror::EntryPointFromInterpreter* entry;
+    if (UNLIKELY(Dbg::IsForcedInterpreterNeededForCalling(self, mh.Get()))) {
+      entry = &art::interpreter::artInterpreterToInterpreterBridge;
+    } else {
+      entry = mh.Get()->GetEntryPointFromInterpreter();
+    }
+    entry(self, mh, code_item, new_shadow_frame, result);
   } else {
     UnstartedRuntimeInvoke(self, mh, code_item, new_shadow_frame, result, first_dest_reg);
   }
