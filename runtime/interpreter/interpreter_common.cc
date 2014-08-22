@@ -19,6 +19,7 @@
 #include <cmath>
 
 #include "mirror/array-inl.h"
+#include "debugger.h"
 
 namespace art {
 namespace interpreter {
@@ -696,8 +697,14 @@ bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
           << PrettyMethod(new_shadow_frame->GetMethod());
       UNREACHABLE();
     }
-    (new_shadow_frame->GetMethod()->GetEntryPointFromInterpreter())(self, code_item,
-                                                                    new_shadow_frame, result);
+    // Force the use of interpreter when it is required by the debugger.
+    mirror::EntryPointFromInterpreter* entry;
+    if (UNLIKELY(Dbg::IsForcedInterpreterNeededForCalling(self, new_shadow_frame->GetMethod()))) {
+      entry = &art::artInterpreterToInterpreterBridge;
+    } else {
+      entry = new_shadow_frame->GetMethod()->GetEntryPointFromInterpreter();
+    }
+    entry(self, code_item, new_shadow_frame, result);
   } else {
     UnstartedRuntimeInvoke(self, code_item, new_shadow_frame, result, first_dest_reg);
   }
