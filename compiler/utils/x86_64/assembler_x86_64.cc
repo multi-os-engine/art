@@ -839,6 +839,26 @@ void X86_64Assembler::xchgl(CpuRegister reg, const Address& address) {
 }
 
 
+void X86_64Assembler::cmpb(CpuRegister reg, const Immediate& imm) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitOptionalRex32(reg);
+  EmitUint8(0x80);
+  EmitOperand(7, Operand(reg));
+  DCHECK(imm.is_int8());
+  EmitUint8(imm.value() & 0xFF);
+}
+
+
+void X86_64Assembler::cmpb(const Address& address, const Immediate& imm) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitOptionalRex32(address);
+  EmitUint8(0x38);
+  EmitOperand(7, address);
+  DCHECK(imm.is_int8());
+  EmitUint8(imm.value() & 0xFF);
+}
+
+
 void X86_64Assembler::cmpl(CpuRegister reg, const Immediate& imm) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitOptionalRex32(reg);

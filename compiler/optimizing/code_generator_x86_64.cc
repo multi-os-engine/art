@@ -403,11 +403,11 @@ void InstructionCodeGeneratorX86_64::VisitIf(HIf* if_instr) {
     // Materialized condition, compare against 0.
     Location lhs = if_instr->GetLocations()->InAt(0);
     if (lhs.IsRegister()) {
-      __ cmpl(lhs.AsX86_64().AsCpuRegister(), Immediate(0));
+      __ cmpb(lhs.AsX86_64().AsCpuRegister(), Immediate(0));
     } else {
-      __ cmpl(Address(CpuRegister(RSP), lhs.GetStackIndex()), Immediate(0));
+      __ cmpb(Address(CpuRegister(RSP), lhs.GetStackIndex()), Immediate(0));
     }
-    __ j(kEqual, codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+    __ j(kNotEqual, codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
   } else {
     Location lhs = condition->GetLocations()->InAt(0);
     Location rhs = condition->GetLocations()->InAt(1);
