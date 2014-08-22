@@ -51,6 +51,7 @@
 #include "mirror/throwable.h"
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
+#include "selectivity.h"
 #include "handle_scope-inl.h"
 #include "thread.h"
 #include "thread_pool.h"
@@ -497,6 +498,7 @@ void CompilerDriver::CompileAll(jobject class_loader,
   Compile(class_loader, dex_files, thread_pool.get(), timings);
   if (dump_stats_) {
     stats_->Dump();
+    Selectivity::GetInstance()->DumpSelectivityStats();
   }
 }
 
@@ -603,6 +605,8 @@ void CompilerDriver::PreCompile(jobject class_loader, const std::vector<const De
   InitializeClasses(class_loader, dex_files, thread_pool, timings);
 
   UpdateImageClasses(timings);
+
+  PreCompileSummary();
 }
 
 bool CompilerDriver::IsImageClass(const char* descriptor) const {
@@ -787,6 +791,10 @@ void CompilerDriver::UpdateImageClasses(TimingLogger* timings) {
     WriterMutexLock mu(soa.Self(), *Locks::heap_bitmap_lock_);
     heap->VisitObjects(FindClinitImageClassesCallback, this);
   }
+}
+
+void CompilerDriver::PreCompileSummary() {
+  Selectivity::GetInstance()->PreCompileSummaryLogic(this, verification_results_);
 }
 
 bool CompilerDriver::CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file, uint32_t type_idx) {
@@ -1423,6 +1431,20 @@ class ParallelCompilationManager {
   DISALLOW_COPY_AND_ASSIGN(ParallelCompilationManager);
 };
 
+// Return true if the method should be skipped during compilation.
+//
+// The logic that determines if we should skip is a function pointer set
+// within the Selectivity class. We can set this logic by calling
+// Selectivity::SetSkipMethodCompile.
+// If function pointer not set, will return false.
+static bool SkipMethodCompile(const DexFile::CodeItem* code_item, uint32_t method_idx,
+                              uint32_t* access_flags, uint16_t* class_def_idx,
+                              const DexFile& dex_file,
+                              DexToDexCompilationLevel* dex_to_dex_compilation_level) {
+  return Selectivity::GetInstance()->SkipMethodCompile(code_item, method_idx, access_flags,
+                                        class_def_idx, dex_file, dex_to_dex_compilation_level);
+}
+
 // A fast version of SkipClass above if the class pointer is available
 // that avoids the expensive FindInClassPath search.
 static bool SkipClass(jobject class_loader, const DexFile& dex_file, mirror::Class* klass)
@@ -1465,6 +1487,28 @@ static void CheckAndClearResolveException(Thread* self)
     LOG(FATAL) << "Unexpected exception " << exception->Dump();
   }
   self->ClearException();
+}
+
+// Return true if the class should be skipped during compilation.
+//
+// The logic that determines if we should skip is a function pointer set
+// within the Selectivity class. We can set this logic by calling
+// Selectivity::SetSkipClassCompile.
+// If function pointer not set, will return false.
+//
+// This version differs from the others by the two other SkipClass functions by enabling
+// this class selectivity ONLY in the compile phase whereas the others are also used in the
+// Resolve and Verify stages.
+static bool SkipClassCompilation(jobject class_loader, const DexFile& dex_file,
+                                 mirror::Class* klass,
+                                 const DexFile::ClassDef& class_def)
+                                 SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  if (Selectivity::GetInstance()->SkipClassCompile(dex_file, class_def)) {
+    return true;
+  } else {
+    // If we set no selectivity logic or it returned false, use default SkipClass logic.
+    return SkipClass(class_loader, dex_file, klass);
+  }
 }
 
 static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manager,
@@ -1554,6 +1598,7 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
         if (method == nullptr) {
           CheckAndClearResolveException(soa.Self());
         }
+        Selectivity::GetInstance()->AnalyzeResolvedMethod(method, dex_file);
         it.Next();
       }
       while (it.HasNextVirtualMethod()) {
@@ -1564,6 +1609,7 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
         if (method == nullptr) {
           CheckAndClearResolveException(soa.Self());
         }
+        Selectivity::GetInstance()->AnalyzeResolvedMethod(method, dex_file);
         it.Next();
       }
       DCHECK(!it.HasNext());
@@ -1882,7 +1928,7 @@ void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, siz
     if (klass.Get() == nullptr) {
       CHECK(soa.Self()->IsExceptionPending());
       soa.Self()->ClearException();
-    } else if (SkipClass(jclass_loader, dex_file, klass.Get())) {
+    } else if (SkipClassCompilation(jclass_loader, dex_file, klass.Get(), class_def)) {
       return;
     }
   }
@@ -1995,6 +2041,11 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
   } else {
     MethodReference method_ref(&dex_file, method_idx);
     bool compile = verification_results_->IsCandidateForCompilation(method_ref, access_flags);
+    if (SkipMethodCompile(code_item, method_idx, &access_flags, &class_def_idx, dex_file,
+                          &dex_to_dex_compilation_level)) {
+      compile = false;
+      dex_to_dex_compilation_level = kDontDexToDexCompile;
+    }
     if (compile) {
       // NOTE: if compiler declines to compile this method, it will return nullptr.
       compiled_method = compiler_->Compile(code_item, access_flags, invoke_type, class_def_idx,

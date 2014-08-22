@@ -550,6 +550,10 @@ class MIRGraph {
     return current_code_item_->insns_;
   }
 
+  uint32_t GetInsnsSizeInCodeUnits() const {
+    return current_code_item_->insns_size_in_code_units_;
+  }
+
   /**
    * @brief Used to obtain the raw dex bytecode instruction pointer.
    * @param m_unit_index The method index in MIRGraph (caused by having multiple methods).

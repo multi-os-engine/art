@@ -21,12 +21,11 @@
 
 #include "compiler_ir.h"
 #include "base/logging.h"
+#include "mir_graph.h"
 
 namespace art {
 
 // Forward declarations.
-class BasicBlock;
-struct CompilationUnit;
 class Pass;
 
 // Empty Pass Data Class, can be extended by any pass extending the base Pass class.

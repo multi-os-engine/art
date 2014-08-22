@@ -50,6 +50,7 @@
 #include "driver/compiler_options.h"
 #include "elf_file.h"
 #include "elf_writer.h"
+#include "driver/selectivity.h"
 #include "gc/space/image_space.h"
 #include "gc/space/space-inl.h"
 #include "image_writer.h"
@@ -436,7 +437,8 @@ class Dex2Oat FINAL {
       dump_passes_(false),
       dump_timing_(false),
       dump_slow_timing_(kIsDebugBuild),
-      timings_(timings) {}
+      timings_(timings),
+      use_selectivity_analysis_(false) {}
 
   ~Dex2Oat() {
     if (kIsDebugBuild || (RUNNING_ON_VALGRIND != 0)) {
@@ -661,11 +663,13 @@ class Dex2Oat FINAL {
         // No profile
       } else if (option.starts_with("--top-k-profile-threshold=")) {
         ParseDouble(option.data(), '=', 0.0, 100.0, &top_k_profile_threshold);
+      } else if (option == "--use-selectivity-analysis") {
+        use_selectivity_analysis_ = true;
       } else if (option == "--print-pass-names") {
         PassDriverMEOpts::PrintPassNames();
       } else if (option.starts_with("--disable-passes=")) {
-        std::string disable_passes = option.substr(strlen("--disable-passes=")).data();
-        PassDriverMEOpts::CreateDefaultPassList(disable_passes);
+        disable_passes_ = option.substr(strlen("--disable-passes=")).data();
+        PassDriverMEOpts::CreateDefaultPassList(disable_passes_);
       } else if (option.starts_with("--print-passes=")) {
         std::string print_passes = option.substr(strlen("--print-passes=")).data();
         PassDriverMEOpts::SetPrintPassList(print_passes);
@@ -832,6 +836,10 @@ class Dex2Oat FINAL {
     } else {
       Usage("Unknown --compiler-filter value %s", compiler_filter_string);
     }
+
+    // Store the compiler_filter for the selectivity system.
+    Selectivity::GetInstance()->SetOriginalCompilerFilter(compiler_filter);
+    Selectivity::GetInstance()->ToggleAnalysis(use_selectivity_analysis_, disable_passes_);
 
     // Checks are all explicit until we know the architecture.
     bool implicit_null_checks = false;
@@ -1529,6 +1537,10 @@ class Dex2Oat FINAL {
   std::string profile_file_;  // Profile file to use
   TimingLogger* timings_;
   std::unique_ptr<CumulativeLogger> compiler_phases_timings_;
+
+  // Selectivity Data.
+  std::string disable_passes_;
+  bool use_selectivity_analysis_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(Dex2Oat);
 };

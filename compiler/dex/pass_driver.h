@@ -18,12 +18,10 @@
 #define ART_COMPILER_DEX_PASS_DRIVER_H_
 
 #include <vector>
+#include "compiler_internals.h"
 #include "pass.h"
 #include "safe_map.h"
 
-// Forward Declarations.
-class Pass;
-class PassDriver;
 namespace art {
 /**
  * @brief Helper function to create a single instance of a given Pass and can be shared across
@@ -46,8 +44,8 @@ class PassDriverDataHolder {
 template <typename PassDriverType>
 class PassDriver {
  public:
-  explicit PassDriver() {
-    InitializePasses();
+  explicit PassDriver(CompilationUnit* cu = nullptr) {
+    InitializePasses(cu);
   }
 
   virtual ~PassDriver() {
@@ -109,18 +107,21 @@ class PassDriver {
   }
 
   static void CreateDefaultPassList(const std::string& disable_passes) {
+    std::vector<const Pass*> tmp_list;
+
     // Insert each pass from g_passes into g_default_pass_list.
-    PassDriverType::g_default_pass_list.clear();
-    PassDriverType::g_default_pass_list.reserve(PassDriver<PassDriverType>::g_passes_size);
-    for (uint16_t i = 0; i < PassDriver<PassDriverType>::g_passes_size; ++i) {
-      const Pass* pass = PassDriver<PassDriverType>::g_passes[i];
+    for (auto iter : PassDriver<PassDriverType>::g_default_pass_list) {
+      const Pass* pass = iter;
       // Check if we should disable this pass.
       if (disable_passes.find(pass->GetName()) != std::string::npos) {
         LOG(INFO) << "Skipping " << pass->GetName();
       } else {
-        PassDriver<PassDriverType>::g_default_pass_list.push_back(pass);
+        tmp_list.push_back(pass);
       }
     }
+
+    // Copy it back.
+    PassDriver<PassDriverType>::g_default_pass_list = tmp_list;
   }
 
   /**
@@ -176,11 +177,6 @@ class PassDriver {
     pass_list_ = PassDriver<PassDriverType>::g_default_pass_list;
   }
 
- protected:
-  virtual void InitializePasses() {
-    SetDefaultPasses();
-  }
-
   /**
    * @brief Apply a patch: perform start/work/end functions.
    */
@@ -197,6 +193,15 @@ class PassDriver {
     UNUSED(pass);
   }
 
+  static void SetSpecialDriverSelection(void (*value)(PassDriver*, CompilationUnit* cu)) {
+    special_pass_driver_selection_ = value;
+  }
+
+  void CopyPasses(std::vector<const Pass*> &passes) {
+    pass_list_ = passes;
+  }
+
+ protected:
   /** @brief List of passes: provides the order to execute the passes. */
   std::vector<const Pass*> pass_list_;
 
@@ -208,6 +213,19 @@ class PassDriver {
 
   /** @brief The default pass list is used to initialize pass_list_. */
   static std::vector<const Pass*> g_default_pass_list;
+
+  /** @brief Dump CFG base folder: where is the base folder for dumping CFGs. */
+  const char* dump_cfg_folder_;
+
+  static void (*special_pass_driver_selection_)(PassDriver*, CompilationUnit*);
+
+  void InitializePasses(CompilationUnit* cu = nullptr) {
+    if (special_pass_driver_selection_ != nullptr) {
+      special_pass_driver_selection_(this, cu);
+    } else {
+      SetDefaultPasses();
+    }
+  }
 
   /** @brief Do we, by default, want to be printing the log messages? */
   static bool default_print_passes_;
