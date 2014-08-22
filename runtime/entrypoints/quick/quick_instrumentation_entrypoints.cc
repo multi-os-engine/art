@@ -32,12 +32,7 @@ extern "C" const void* artInstrumentationMethodEntryFromCode(mirror::ArtMethod* 
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsAndArgs);
   instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
-  const void* result;
-  if (instrumentation->IsDeoptimized(method)) {
-    result = GetQuickToInterpreterBridge();
-  } else {
-    result = instrumentation->GetQuickCodeFor(method);
-  }
+  const void* result = instrumentation->GetQuickCodeFor(method);
   DCHECK(result != Runtime::Current()->GetClassLinker()->GetQuickToInterpreterBridgeTrampoline());
   bool interpreter_entry = (result == GetQuickToInterpreterBridge());
   instrumentation->PushInstrumentationStackFrame(self, method->IsStatic() ? nullptr : this_object,

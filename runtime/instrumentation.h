@@ -57,6 +57,17 @@ struct InstrumentationListener {
   InstrumentationListener() {}
   virtual ~InstrumentationListener() {}
 
+  // Call-back for before the callback is entered.
+  virtual void MethodWillBeEntered(Thread* thread, mirror::Object* this_object,
+                                   mirror::ArtMethod* method)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+  // Call-back for before the interpreter is exited.
+  virtual void InterpreterWillBeExited(Thread* thread, mirror::Object* this_object,
+                                       mirror::ArtMethod* method, uint32_t dex_pc,
+                                       const JValue& return_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
   // Call-back for when a method is entered.
   virtual void MethodEntered(Thread* thread, mirror::Object* this_object,
                              mirror::ArtMethod* method,
@@ -103,13 +114,15 @@ struct InstrumentationListener {
 class Instrumentation {
  public:
   enum InstrumentationEvent {
-    kMethodEntered =   1 << 0,
-    kMethodExited =    1 << 1,
-    kMethodUnwind =    1 << 2,
-    kDexPcMoved =      1 << 3,
-    kFieldRead =       1 << 4,
-    kFieldWritten =    1 << 5,
-    kExceptionCaught = 1 << 6,
+    kMethodWillBeEntered        = 1 << 0,
+    kInterpreterWillBeExited    = 1 << 1,
+    kMethodEntered              = 1 << 2,
+    kMethodExited               = 1 << 3,
+    kMethodUnwind               = 1 << 4,
+    kDexPcMoved                 = 1 << 5,
+    kFieldRead                  = 1 << 6,
+    kFieldWritten               = 1 << 7,
+    kExceptionCaught            = 1 << 8,
   };
 
   Instrumentation();
@@ -220,6 +233,14 @@ class Instrumentation {
     return instrumentation_stubs_installed_;
   }
 
+  bool HasMethodPreEntryListeners() const {
+    return have_method_pre_entry_listeners_;
+  }
+
+  bool HasInterpreterPreExitListeners() const {
+    return have_interpreter_pre_exit_listeners_;
+  }
+
   bool HasMethodEntryListeners() const {
     return have_method_entry_listeners_;
   }
@@ -248,6 +269,25 @@ class Instrumentation {
     return have_dex_pc_listeners_ || have_method_entry_listeners_ || have_method_exit_listeners_ ||
         have_field_read_listeners_ || have_field_write_listeners_ ||
         have_exception_caught_listeners_ || have_method_unwind_listeners_;
+  }
+
+  // Inform listeners that a method will be invoked (only supported by the interpreter).
+  void MethodPreEnterEvent(Thread* thread, mirror::Object* this_object,
+                           mirror::ArtMethod* method) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (UNLIKELY(HasMethodPreEntryListeners())) {
+      MethodPreEnterEventImpl(thread, this_object, method);
+    }
+  }
+
+  // Inform listeners that we are going to exit from interpreter.
+  void InterpreterPreExitEvent(Thread* thread, mirror::Object* this_object,
+                               mirror::ArtMethod* method, uint32_t dex_pc,
+                               const JValue& return_value) const
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (UNLIKELY(HasInterpreterPreExitListeners())) {
+      InterpreterPreExitEventImpl(thread, this_object, method, dex_pc, return_value);
+    }
   }
 
   // Inform listeners that a method has been entered. A dex PC is provided as we may install
@@ -351,6 +391,13 @@ class Instrumentation {
   // exclusive access to mutator lock which you can't get if the runtime isn't started.
   void SetEntrypointsInstrumented(bool instrumented) NO_THREAD_SAFETY_ANALYSIS;
 
+  void MethodPreEnterEventImpl(Thread* thread, mirror::Object* this_object,
+                               mirror::ArtMethod* method) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void InterpreterPreExitEventImpl(Thread* thread, mirror::Object* this_object,
+                                   mirror::ArtMethod* method,
+                                   uint32_t dex_pc, const JValue& return_value) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void MethodEnterEventImpl(Thread* thread, mirror::Object* this_object,
                             mirror::ArtMethod* method, uint32_t dex_pc) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -362,8 +409,8 @@ class Instrumentation {
                            mirror::ArtMethod* method, uint32_t dex_pc) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void FieldReadEventImpl(Thread* thread, mirror::Object* this_object,
-                           mirror::ArtMethod* method, uint32_t dex_pc,
-                           mirror::ArtField* field) const
+                          mirror::ArtMethod* method, uint32_t dex_pc,
+                          mirror::ArtField* field) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void FieldWriteEventImpl(Thread* thread, mirror::Object* this_object,
                            mirror::ArtMethod* method, uint32_t dex_pc,
@@ -374,7 +421,7 @@ class Instrumentation {
   bool AddDeoptimizedMethod(mirror::ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(deoptimized_methods_lock_);
-  bool FindDeoptimizedMethod(mirror::ArtMethod* method)
+  bool FindDeoptimizedMethod(mirror::ArtMethod* method, bool increment = false)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       SHARED_LOCKS_REQUIRED(deoptimized_methods_lock_);
   bool RemoveDeoptimizedMethod(mirror::ArtMethod* method)
@@ -401,6 +448,14 @@ class Instrumentation {
 
   // Did the runtime request we only run in the interpreter? ie -Xint mode.
   bool forced_interpret_only_;
+
+  // Do we have any listeners for method pre entry events? Short-cut to avoid taking the
+  // instrumentation_lock_.
+  bool have_method_pre_entry_listeners_;
+
+  // Do we have any listeners for interpreter pre exit events? Short-cut to avoid taking the
+  // instrumentation_lock_.
+  bool have_interpreter_pre_exit_listeners_;
 
   // Do we have any listeners for method entry events? Short-cut to avoid taking the
   // instrumentation_lock_.
@@ -430,6 +485,8 @@ class Instrumentation {
   bool have_exception_caught_listeners_;
 
   // The event listeners, written to with the mutator_lock_ exclusively held.
+  std::list<InstrumentationListener*> method_pre_entry_listeners_ GUARDED_BY(Locks::mutator_lock_);
+  std::list<InstrumentationListener*> interpreter_pre_exit_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> method_entry_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> method_exit_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> method_unwind_listeners_ GUARDED_BY(Locks::mutator_lock_);
@@ -445,7 +502,7 @@ class Instrumentation {
   // The set of methods being deoptimized (by the debugger) which must be executed with interpreter
   // only.
   mutable ReaderWriterMutex deoptimized_methods_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
-  std::multimap<int32_t, GcRoot<mirror::ArtMethod>> deoptimized_methods_
+  std::multimap<int32_t, std::pair<GcRoot<mirror::ArtMethod>, uint32_t>> deoptimized_methods_
       GUARDED_BY(deoptimized_methods_lock_);
   bool deoptimization_enabled_;
 
@@ -463,7 +520,7 @@ class Instrumentation {
 // An element in the instrumentation side stack maintained in art::Thread.
 struct InstrumentationStackFrame {
   InstrumentationStackFrame(mirror::Object* this_object, mirror::ArtMethod* method,
-                            uintptr_t return_pc, size_t frame_id, bool interpreter_entry)
+                            uintptr_t return_pc, uintptr_t frame_id, bool interpreter_entry)
       : this_object_(this_object), method_(method), return_pc_(return_pc), frame_id_(frame_id),
         interpreter_entry_(interpreter_entry) {
   }
@@ -473,7 +530,7 @@ struct InstrumentationStackFrame {
   mirror::Object* this_object_;
   mirror::ArtMethod* method_;
   uintptr_t return_pc_;
-  size_t frame_id_;
+  uintptr_t frame_id_;
   bool interpreter_entry_;
 };
 

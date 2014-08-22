@@ -121,6 +121,11 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
     result->SetJ(0);
     return false;
   } else {
+    // Notify instrumentation about that we are going to enter into a method
+    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+    if (UNLIKELY(instrumentation->HasMethodPreEntryListeners())) {
+      instrumentation->MethodPreEnterEvent(self, receiver, method);
+    }
     return DoCall<is_range, do_access_check>(method, self, shadow_frame, inst, inst_data, result);
   }
 }

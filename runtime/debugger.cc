@@ -53,6 +53,7 @@
 #include "utf.h"
 #include "verifier/method_verifier-inl.h"
 #include "well_known_classes.h"
+#include "nth_caller_visitor.h"
 
 #ifdef HAVE_ANDROID_OS
 #include "cutils/properties.h"
@@ -220,6 +221,25 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
   DebugInstrumentationListener() {}
   virtual ~DebugInstrumentationListener() {}
 
+  void MethodWillBeEntered(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method)
+  OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (method->IsNative()) {
+      // TODO: post location events is a suspension point and native method entry stubs aren't.
+      return;
+    }
+    Dbg::UpdateDebugger(thread, this_object, method, 0, Dbg::kMethodPreEntry, nullptr);
+  }
+
+  void InterpreterWillBeExited(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
+                           uint32_t dex_pc, const JValue& return_value)
+  OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (method->IsNative()) {
+      // TODO: post location events is a suspension point and native method entry stubs aren't.
+      return;
+    }
+    Dbg::UpdateDebugger(thread, this_object, method, 0, Dbg::kInterpreterPreExit, &return_value);
+  }
+
   void MethodEntered(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
                      uint32_t dex_pc)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -315,10 +335,11 @@ Dbg::TypeCache Dbg::type_cache_;
 Mutex* Dbg::deoptimization_lock_ = nullptr;
 std::vector<DeoptimizationRequest> Dbg::deoptimization_requests_;
 size_t Dbg::full_deoptimization_event_count_ = 0;
-size_t Dbg::delayed_full_undeoptimization_count_ = 0;
 
 // Instrumentation event reference counters.
 size_t Dbg::dex_pc_change_event_ref_count_ = 0;
+size_t Dbg::method_pre_enter_event_ref_count_ = 0;
+size_t Dbg::interpreter_pre_exit_event_ref_count_ = 0;
 size_t Dbg::method_enter_event_ref_count_ = 0;
 size_t Dbg::method_exit_event_ref_count_ = 0;
 size_t Dbg::field_read_event_ref_count_ = 0;
@@ -748,8 +769,9 @@ void Dbg::GoActive() {
     MutexLock mu(Thread::Current(), *deoptimization_lock_);
     CHECK_EQ(deoptimization_requests_.size(), 0U);
     CHECK_EQ(full_deoptimization_event_count_, 0U);
-    CHECK_EQ(delayed_full_undeoptimization_count_, 0U);
     CHECK_EQ(dex_pc_change_event_ref_count_, 0U);
+    CHECK_EQ(method_pre_enter_event_ref_count_, 0U);
+    CHECK_EQ(interpreter_pre_exit_event_ref_count_, 0U);
     CHECK_EQ(method_enter_event_ref_count_, 0U);
     CHECK_EQ(method_exit_event_ref_count_, 0U);
     CHECK_EQ(field_read_event_ref_count_, 0U);
@@ -793,7 +815,6 @@ void Dbg::Disconnected() {
       MutexLock mu(Thread::Current(), *deoptimization_lock_);
       deoptimization_requests_.clear();
       full_deoptimization_event_count_ = 0U;
-      delayed_full_undeoptimization_count_ = 0U;
     }
     if (instrumentation_events_ != 0) {
       runtime->GetInstrumentation()->RemoveListener(&gDebugInstrumentationListener,
@@ -2751,6 +2772,8 @@ void Dbg::PostClassPrepare(mirror::Class* c) {
   gJdwpState->PostClassPrepare(tag, gRegistry->Add(c), c->GetDescriptor(&temp), state);
 }
 
+static const Breakpoint* FindFirstBreakpointForMethod(mirror::ArtMethod* m);
+
 void Dbg::UpdateDebugger(Thread* thread, mirror::Object* this_object,
                          mirror::ArtMethod* m, uint32_t dex_pc,
                          int event_flags, const JValue* return_value) {
@@ -2758,79 +2781,194 @@ void Dbg::UpdateDebugger(Thread* thread, mirror::Object* this_object,
     return;
   }
 
-  if (IsBreakpoint(m, dex_pc)) {
+  // For handling interpreter pre exit event we need return_value set
+  DCHECK((event_flags & kInterpreterPreExit) == 0 || return_value != nullptr);
+
+  // Pre events must come alone
+  const int pre_events = kMethodPreEntry | kInterpreterPreExit;
+  bool is_pre_event = (event_flags & pre_events) != 0;
+  CHECK(!is_pre_event || ((event_flags & ~pre_events) == 0));
+
+  if (!is_pre_event && IsBreakpoint(m, dex_pc)) {
     event_flags |= kBreakpoint;
   }
 
-  // If the debugger is single-stepping one of our threads, check to
-  // see if we're that thread and we've reached a step point.
-  const SingleStepControl* single_step_control = thread->GetSingleStepControl();
+  // We need to check whether we are in a previously deoptimized method and in
+  // that case we need to save the frame identifier that will be needed by the
+  // undeoptimization logics.
+  SingleStepControl* single_step_control = thread->GetSingleStepControl();
+  JDWP::FrameId frame_id = StackVisitor::GetTopStackFrameId(thread);
+  bool deoptimize_frame = false;
   DCHECK(single_step_control != nullptr);
+  if (!single_step_control->pending_deoptimizations.empty()) {
+    const auto& last = single_step_control->pending_deoptimizations.back();
+    if (last.method == m) {
+      bool match;
+      if (last.is_upcall) {
+        match = last.frame_id == frame_id;
+      } else {
+        NthCallerVisitor visitor(thread, 1, false);
+        visitor.WalkStack();
+        match = visitor.caller_id == last.frame_id;
+      }
+      if (match) {
+        single_step_control->deoptimized_methods[frame_id] = m;
+        single_step_control->pending_deoptimizations.pop_back();
+      }
+    }
+  }
+
   if (single_step_control->is_active) {
     CHECK(!m->IsNative());
-    if (single_step_control->step_depth == JDWP::SD_INTO) {
-      // Step into method calls.  We break when the line number
-      // or method pointer changes.  If we're in SS_MIN mode, we
-      // always stop.
-      if (single_step_control->method != m) {
-        event_flags |= kSingleStep;
-        VLOG(jdwp) << "SS new method";
-      } else if (single_step_control->step_size == JDWP::SS_MIN) {
-        event_flags |= kSingleStep;
-        VLOG(jdwp) << "SS new instruction";
-      } else if (single_step_control->ContainsDexPc(dex_pc)) {
-        event_flags |= kSingleStep;
-        VLOG(jdwp) << "SS new line";
+
+    // There are two cases we need to handle here: stepping into and out from methods.
+    // Either case will be handled differently to minimize the number of deoptizations.
+    // If we want to step into a method then we need to deoptimize it before doing so.
+    // If we want to step out from the interpretered stack interval we have two
+    // choices: to deoptimize the stack or just the parent call.
+    // In case of stepping out from a class initializer we follow the first one
+    // and in any other cases the second one.
+    if (event_flags & kMethodPreEntry) {
+      if (!m->IsClassInitializer() && !m->IsProxyMethod() &&
+          single_step_control->step_depth == JDWP::SD_INTO) {
+        single_step_control->pending_deoptimizations.push_back({frame_id, m, false});
+        DeoptimizationRequest req;
+        req.SetMethod(m);
+        req.SetKind(DeoptimizationRequest::kSelectiveDeoptimization);
+        RequestDeoptimization(req);
+        ManageDeoptimization();
       }
-    } else if (single_step_control->step_depth == JDWP::SD_OVER) {
-      // Step over method calls.  We break when the line number is
-      // different and the frame depth is <= the original frame
-      // depth.  (We can't just compare on the method, because we
-      // might get unrolled past it by an exception, and it's tricky
-      // to identify recursion.)
+    } else if (event_flags & kInterpreterPreExit) {
+      NthCallerVisitor visitor(thread, 0, false);
+      visitor.WalkStack();
+      if (single_step_control->frame_id <= frame_id ||
+          FindFirstBreakpointForMethod(visitor.caller) != nullptr) {
+        if (visitor.caller && !visitor.caller->IsNative()) {
+          if (m->IsClassInitializer() && !visitor.caller->IsProxyMethod()) {
+            if (visitor.is_shadow_frame) {
+                NthCallerVisitor super_visitor(thread, 1, false);
+                super_visitor.WalkStack();
+                SingleStepControl::PendingDeoptimization deopt =
+                    {super_visitor.caller_id, visitor.caller, false};
+                single_step_control->pending_deoptimizations.push_back(deopt);
+                DeoptimizationRequest req;
+                req.SetMethod(visitor.caller);
+                req.SetKind(DeoptimizationRequest::kSelectiveDeoptimization);
+                RequestDeoptimization(req);
+                ManageDeoptimization();
+            }
+          } else if (!visitor.is_shadow_frame) {
+            deoptimize_frame = true;
+          }
+        }
+      }
+    }
 
-      int stack_depth = GetStackDepth(thread);
-
-      if (stack_depth < single_step_control->stack_depth) {
-        // Popped up one or more frames, always trigger.
-        event_flags |= kSingleStep;
-        VLOG(jdwp) << "SS method pop";
-      } else if (stack_depth == single_step_control->stack_depth) {
-        // Same depth, see if we moved.
-        if (single_step_control->step_size == JDWP::SS_MIN) {
+    // If the debugger is single-stepping one of our threads, check to
+    // see if we're that thread and we've reached a step point.
+    if (!is_pre_event) {
+      if (single_step_control->step_depth == JDWP::SD_INTO) {
+        // Step into method calls.  We break when the line number
+        // or method pointer changes.  If we're in SS_MIN mode, we
+        // always stop.
+        if (single_step_control->method != m) {
+          event_flags |= kSingleStep;
+          VLOG(jdwp) << "SS new method";
+        } else if (single_step_control->step_size == JDWP::SS_MIN) {
           event_flags |= kSingleStep;
           VLOG(jdwp) << "SS new instruction";
         } else if (single_step_control->ContainsDexPc(dex_pc)) {
           event_flags |= kSingleStep;
           VLOG(jdwp) << "SS new line";
         }
-      }
-    } else {
-      CHECK_EQ(single_step_control->step_depth, JDWP::SD_OUT);
-      // Return from the current method.  We break when the frame
-      // depth pops up.
+      } else if (single_step_control->step_depth == JDWP::SD_OVER) {
+        // Step over method calls.  We break when the line number is
+        // different and the frame depth is <= the original frame
+        // depth.  (We can't just compare on the method, because we
+        // might get unrolled past it by an exception, and it's tricky
+        // to identify recursion.)
 
-      // This differs from the "method exit" break in that it stops
-      // with the PC at the next instruction in the returned-to
-      // function, rather than the end of the returning function.
+        if (frame_id > single_step_control->frame_id) {
+          // Popped up one or more frames, always trigger.
+          event_flags |= kSingleStep;
+          VLOG(jdwp) << "SS method pop";
+        } else if (frame_id == single_step_control->frame_id) {
+          // Same depth, see if we moved.
+          if (single_step_control->step_size == JDWP::SS_MIN) {
+            event_flags |= kSingleStep;
+            VLOG(jdwp) << "SS new instruction";
+          } else if (single_step_control->ContainsDexPc(dex_pc)) {
+            event_flags |= kSingleStep;
+            VLOG(jdwp) << "SS new line";
+          }
+        }
+      } else {
+        CHECK_EQ(single_step_control->step_depth, JDWP::SD_OUT);
+        // Return from the current method.  We break when the frame
+        // depth pops up.
 
-      int stack_depth = GetStackDepth(thread);
-      if (stack_depth < single_step_control->stack_depth) {
-        event_flags |= kSingleStep;
-        VLOG(jdwp) << "SS method pop";
+        // This differs from the "method exit" break in that it stops
+        // with the PC at the next instruction in the returned-to
+        // function, rather than the end of the returning function.
+
+        if (frame_id > single_step_control->frame_id) {
+          event_flags |= kSingleStep;
+          VLOG(jdwp) << "SS method pop";
+        }
       }
     }
   }
 
+  // For every deoptimization we no longer need, based on the frame identifier,
+  // request an undeoptimization.
+  for (auto it = single_step_control->deoptimized_methods.begin();
+       it != single_step_control->deoptimized_methods.end();) {
+    auto it2 = it;
+    it2++;
+    if (it->first < frame_id) {
+      DeoptimizationRequest req;
+      req.SetMethod(it->second);
+      req.SetKind(DeoptimizationRequest::kSelectiveUndeoptimization);
+      RequestDeoptimization(req);
+      ManageDeoptimization();
+      single_step_control->deoptimized_methods.erase(it);
+    } else {
+      break;
+    }
+    it = it2;
+  }
+
+  // We need to catch breakpoints in compiled parent frames.
+  if ((event_flags & kInterpreterPreExit) && !deoptimize_frame &&
+      !single_step_control->is_active) {
+    NthCallerVisitor visitor(thread, 0, false);
+    visitor.WalkStack();
+    if (visitor.caller && !visitor.is_shadow_frame &&
+        !visitor.caller->IsNative() && !visitor.caller->IsClassInitializer() &&
+        FindFirstBreakpointForMethod(visitor.caller) != nullptr) {
+      deoptimize_frame = true;
+    }
+  }
+
+  // Request a stack deoptimization by throwing a deoptimization exception.
+  if (deoptimize_frame) {
+    thread->SetException(ThrowLocation(), Thread::GetDeoptimizationException());
+    thread->SetDeoptimizationReturnValue(*return_value);
+  }
+
   // If there's something interesting going on, see if it matches one
   // of the debugger filters.
-  if (event_flags != 0) {
+  if (!is_pre_event && event_flags != 0) {
     Dbg::PostLocationEvent(m, dex_pc, this_object, event_flags, return_value);
   }
 }
 
 size_t* Dbg::GetReferenceCounterForEvent(uint32_t instrumentation_event) {
   switch (instrumentation_event) {
+    case instrumentation::Instrumentation::kMethodWillBeEntered:
+      return &method_pre_enter_event_ref_count_;
+    case instrumentation::Instrumentation::kInterpreterWillBeExited:
+      return &interpreter_pre_exit_event_ref_count_;
     case instrumentation::Instrumentation::kMethodEntered:
       return &method_enter_event_ref_count_;
     case instrumentation::Instrumentation::kMethodExited:
@@ -2894,27 +3032,6 @@ void Dbg::ProcessDeoptimizationRequest(const DeoptimizationRequest& request) {
   }
 }
 
-void Dbg::DelayFullUndeoptimization() {
-  MutexLock mu(Thread::Current(), *deoptimization_lock_);
-  ++delayed_full_undeoptimization_count_;
-  DCHECK_LE(delayed_full_undeoptimization_count_, full_deoptimization_event_count_);
-}
-
-void Dbg::ProcessDelayedFullUndeoptimizations() {
-  // TODO: avoid taking the lock twice (once here and once in ManageDeoptimization).
-  {
-    MutexLock mu(Thread::Current(), *deoptimization_lock_);
-    while (delayed_full_undeoptimization_count_ > 0) {
-      DeoptimizationRequest req;
-      req.SetKind(DeoptimizationRequest::kFullUndeoptimization);
-      req.SetMethod(nullptr);
-      RequestDeoptimizationLocked(req);
-      --delayed_full_undeoptimization_count_;
-    }
-  }
-  ManageDeoptimization();
-}
-
 void Dbg::RequestDeoptimization(const DeoptimizationRequest& req) {
   if (req.GetKind() == DeoptimizationRequest::kNothing) {
     // Nothing to do.
@@ -2968,7 +3085,7 @@ void Dbg::RequestDeoptimizationLocked(const DeoptimizationRequest& req) {
       --full_deoptimization_event_count_;
       if (full_deoptimization_event_count_ == 0) {
         VLOG(jdwp) << "Queue request #" << deoptimization_requests_.size()
-                   << " for full undeoptimization";
+        << " for full undeoptimization";
         deoptimization_requests_.push_back(req);
       }
       break;
@@ -3228,7 +3345,7 @@ JDWP::JdwpError Dbg::ConfigureStep(JDWP::ObjectId thread_id, JDWP::JdwpStepSize 
           line_number_(line_number) {
       DCHECK_EQ(single_step_control_, thread->GetSingleStepControl());
       single_step_control_->method = NULL;
-      single_step_control_->stack_depth = 0;
+      single_step_control_->frame_id = 0;
     }
 
     // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
@@ -3236,7 +3353,9 @@ JDWP::JdwpError Dbg::ConfigureStep(JDWP::ObjectId thread_id, JDWP::JdwpStepSize 
     bool VisitFrame() NO_THREAD_SAFETY_ANALYSIS {
       mirror::ArtMethod* m = GetMethod();
       if (!m->IsRuntimeMethod()) {
-        ++single_step_control_->stack_depth;
+        if (!single_step_control_->frame_id) {
+          single_step_control_->frame_id = GetFrameId();
+        }
         if (single_step_control_->method == NULL) {
           mirror::DexCache* dex_cache = m->GetDeclaringClass()->GetDexCache();
           single_step_control_->method = m;
@@ -3331,7 +3450,7 @@ JDWP::JdwpError Dbg::ConfigureStep(JDWP::ObjectId thread_id, JDWP::JdwpStepSize 
     VLOG(jdwp) << "Single-step step depth: " << single_step_control->step_depth;
     VLOG(jdwp) << "Single-step current method: " << PrettyMethod(single_step_control->method);
     VLOG(jdwp) << "Single-step current line: " << line_number;
-    VLOG(jdwp) << "Single-step current stack depth: " << single_step_control->stack_depth;
+    VLOG(jdwp) << "Single-step current stack frame id: " << single_step_control->frame_id;
     VLOG(jdwp) << "Single-step dex_pc values:";
     for (uint32_t dex_pc : single_step_control->dex_pcs) {
       VLOG(jdwp) << StringPrintf(" %#x", dex_pc);

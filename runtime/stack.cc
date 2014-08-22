@@ -401,6 +401,18 @@ void StackVisitor::SetReturnPc(uintptr_t new_ret_pc) {
   *reinterpret_cast<uintptr_t*>(pc_addr) = new_ret_pc;
 }
 
+uintptr_t StackVisitor::GetTopStackFrameId(Thread* thread) {
+  const ManagedStack* managed_stack = thread->GetManagedStack();
+  uintptr_t frame_id = reinterpret_cast<uintptr_t>(managed_stack->GetTopQuickFrame());
+  if (frame_id == 0) {
+    ShadowFrame* sf = managed_stack->GetTopShadowFrame();
+    if (sf != nullptr) {
+      frame_id = reinterpret_cast<uintptr_t>(sf->GetAlias());
+    }
+  }
+  return frame_id;
+}
+
 size_t StackVisitor::ComputeNumFrames(Thread* thread) {
   struct NumFramesVisitor : public StackVisitor {
     explicit NumFramesVisitor(Thread* thread)

@@ -225,6 +225,13 @@ extern "C" uint64_t artPortableToInterpreterBridge(mirror::ArtMethod* method, Th
     JValue result = interpreter::EnterInterpreterFromStub(self, mh, code_item, *shadow_frame);
     // Pop transition.
     self->PopManagedStackFragment(fragment);
+
+    // Notify instrumentation about that we are going to exit from the interpreter
+    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+    if (UNLIKELY(instrumentation->HasInterpreterPreExitListeners())) {
+      instrumentation->InterpreterPreExitEvent(self, shadow_frame->GetThisObject(code_item->ins_size_), method, 0, result);
+    }
+
     return result.GetJ();
   }
 }
