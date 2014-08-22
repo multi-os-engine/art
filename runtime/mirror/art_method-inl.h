@@ -398,6 +398,8 @@ inline QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo() {
                                 kStackAlignment);
 
     return QuickMethodFrameInfo(frame_size, callee_info.CoreSpillMask(), callee_info.FpSpillMask());
+  } else if (UNLIKELY(entry_point == GetQuickProxyInvokeHandler())) {
+    entry_point = GetEntryPointFromQuickCompiledCode();
   }
 
   const void* code_pointer = EntryPointToCodePointer(entry_point);
