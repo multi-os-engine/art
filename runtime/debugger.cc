@@ -315,7 +315,6 @@ Dbg::TypeCache Dbg::type_cache_;
 Mutex* Dbg::deoptimization_lock_ = nullptr;
 std::vector<DeoptimizationRequest> Dbg::deoptimization_requests_;
 size_t Dbg::full_deoptimization_event_count_ = 0;
-size_t Dbg::delayed_full_undeoptimization_count_ = 0;
 
 // Instrumentation event reference counters.
 size_t Dbg::dex_pc_change_event_ref_count_ = 0;
@@ -748,7 +747,6 @@ void Dbg::GoActive() {
     MutexLock mu(Thread::Current(), *deoptimization_lock_);
     CHECK_EQ(deoptimization_requests_.size(), 0U);
     CHECK_EQ(full_deoptimization_event_count_, 0U);
-    CHECK_EQ(delayed_full_undeoptimization_count_, 0U);
     CHECK_EQ(dex_pc_change_event_ref_count_, 0U);
     CHECK_EQ(method_enter_event_ref_count_, 0U);
     CHECK_EQ(method_exit_event_ref_count_, 0U);
@@ -793,7 +791,6 @@ void Dbg::Disconnected() {
       MutexLock mu(Thread::Current(), *deoptimization_lock_);
       deoptimization_requests_.clear();
       full_deoptimization_event_count_ = 0U;
-      delayed_full_undeoptimization_count_ = 0U;
     }
     if (instrumentation_events_ != 0) {
       runtime->GetInstrumentation()->RemoveListener(&gDebugInstrumentationListener,
@@ -2895,27 +2892,6 @@ void Dbg::ProcessDeoptimizationRequest(const DeoptimizationRequest& request) {
   }
 }
 
-void Dbg::DelayFullUndeoptimization() {
-  MutexLock mu(Thread::Current(), *deoptimization_lock_);
-  ++delayed_full_undeoptimization_count_;
-  DCHECK_LE(delayed_full_undeoptimization_count_, full_deoptimization_event_count_);
-}
-
-void Dbg::ProcessDelayedFullUndeoptimizations() {
-  // TODO: avoid taking the lock twice (once here and once in ManageDeoptimization).
-  {
-    MutexLock mu(Thread::Current(), *deoptimization_lock_);
-    while (delayed_full_undeoptimization_count_ > 0) {
-      DeoptimizationRequest req;
-      req.SetKind(DeoptimizationRequest::kFullUndeoptimization);
-      req.SetMethod(nullptr);
-      RequestDeoptimizationLocked(req);
-      --delayed_full_undeoptimization_count_;
-    }
-  }
-  ManageDeoptimization();
-}
-
 void Dbg::RequestDeoptimization(const DeoptimizationRequest& req) {
   if (req.GetKind() == DeoptimizationRequest::kNothing) {
     // Nothing to do.
@@ -3143,6 +3119,36 @@ void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location, DeoptimizationRequ
     req->SetMethod(nullptr);
     SanityCheckExistingBreakpoints(m, need_full_deoptimization);
   }
+}
+
+bool Dbg::IsForcedInterpreterNeededForCalling(Thread* thread, mirror::ArtMethod* m) {
+  if (Dbg::IsDebuggerActive()) {
+    const SingleStepControl* ssc = thread->GetSingleStepControl();
+    if (ssc->is_active && !m->IsNative() && !m->IsProxyMethod()) {
+      if (ssc->step_depth == JDWP::SD_INTO || (m->IsStatic() &&
+          ssc->stack_depth > GetStackDepth(thread))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool Dbg::IsForcedInterpreterNeededForUpcall(Thread* thread, mirror::ArtMethod* m) {
+  // The upcall can be nullptr and in that case we don't need to do anything.
+  if (m && Dbg::IsDebuggerActive()) {
+    const SingleStepControl* ssc = thread->GetSingleStepControl();
+    if (ssc->is_active && !m->IsNative() && !m->IsProxyMethod()) {
+      if (ssc->stack_depth >= GetStackDepth(thread)) {
+        return true;
+      }
+      MutexLock mu(Thread::Current(), *Locks::breakpoint_lock_);
+      if (FindFirstBreakpointForMethod(m) != nullptr) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // Scoped utility class to suspend a thread so that we may do tasks such as walk its stack. Doesn't
