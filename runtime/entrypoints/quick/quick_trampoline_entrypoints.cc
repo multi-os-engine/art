@@ -29,6 +29,7 @@
 #include "mirror/object_array-inl.h"
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
+#include "debugger.h"
 
 namespace art {
 
@@ -467,6 +468,8 @@ extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Threa
   // frame.
   FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsAndArgs);
 
+  mirror::ArtMethod* caller = QuickArgumentVisitor::GetCallingMethod(sp);
+
   if (method->IsAbstract()) {
     ThrowAbstractMethodError(method);
     return 0;
@@ -508,6 +511,14 @@ extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Threa
     JValue result = interpreter::EnterInterpreterFromStub(self, mh, code_item, *shadow_frame);
     // Pop transition.
     self->PopManagedStackFragment(fragment);
+
+    // Request a stack deoptimization if needed
+    if (Dbg::IsDebuggerActive() &&
+      Dbg::IsForcedInterpreterNeededForUpcall(self, caller)) {
+      self->SetException(ThrowLocation(), Thread::GetDeoptimizationException());
+      self->SetDeoptimizationReturnValue(result);
+    }
+
     // No need to restore the args since the method has already been run by the interpreter.
     return result.GetJ();
   }
@@ -805,14 +816,34 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
         }
       }
     }
+
+    // The called method should be above of the class initializer in the call stack
+    void* memory = alloca(ShadowFrame::ComputeSize(0));
+    ShadowFrame* shadow_frame(ShadowFrame::Create(0, nullptr, called, 0, memory));
+    ManagedStack fragment;
+    self->PushManagedStackFragment(&fragment);
+    self->PushShadowFrame(shadow_frame);
+
     // Ensure that the called method's class is initialized.
     StackHandleScope<1> hs(soa.Self());
     Handle<mirror::Class> called_class(hs.NewHandle(called->GetDeclaringClass()));
     linker->EnsureInitialized(called_class, true, true);
+
+    // Remove temporal shadow frame
+    self->PopManagedStackFragment(fragment);
+
     if (LIKELY(called_class->IsInitialized())) {
-      code = called->GetEntryPointFromQuickCompiledCode();
+      if (Dbg::IsDebuggerActive() &&
+        Dbg::IsForcedInterpreterNeededForCalling(self, called)) {
+        code = GetQuickToInterpreterBridge();
+      } else {
+        code = called->GetEntryPointFromQuickCompiledCode();
+      }
     } else if (called_class->IsInitializing()) {
-      if (invoke_type == kStatic) {
+      if (Dbg::IsDebuggerActive() &&
+        Dbg::IsForcedInterpreterNeededForCalling(self, called)) {
+        code = GetQuickToInterpreterBridge();
+      } else if (invoke_type == kStatic) {
         // Class is still initializing, go to oat and grab code (trampoline must be left in place
         // until class is initialized to stop races between threads).
         code = linker->GetQuickOatCodeFor(called);
