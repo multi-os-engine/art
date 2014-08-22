@@ -24,6 +24,7 @@
 
 #include "base/stl_util.h"
 #include "base/timing_logger.h"
+#include "base/chronicler.h"
 #include "class_linker.h"
 #include "compiled_class.h"
 #include "compiler.h"
@@ -1925,6 +1926,7 @@ void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, siz
   ATRACE_CALL();
   const DexFile& dex_file = *manager->GetDexFile();
   const DexFile::ClassDef& class_def = dex_file.GetClassDef(class_def_index);
+  CHRONICLER_LOG_EVENT( art::base::Chronicler::BEGIN, "Class", dex_file.GetClassDescriptor(class_def), "");
   ClassLinker* class_linker = manager->GetClassLinker();
   jobject jclass_loader = manager->GetClassLoader();
   {
@@ -1989,6 +1991,8 @@ void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, siz
                           method_idx, jclass_loader, dex_file, dex_to_dex_compilation_level);
     it.Next();
   }
+  CHRONICLER_LOG_EVENT( art::base::Chronicler::MID, "Class", dex_file.GetClassDescriptor(class_def),
+          "Finished compiling direct methods in the class. Now starting virtual methods.");
   // Compile virtual methods
   int64_t previous_virtual_method_idx = -1;
   while (it.HasNextVirtualMethod()) {
@@ -2006,15 +2010,19 @@ void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, siz
     it.Next();
   }
   DCHECK(!it.HasNext());
+  CHRONICLER_LOG_EVENT( art::base::Chronicler::END, "Class", dex_file.GetClassDescriptor(class_def), "");
 }
 
 void CompilerDriver::CompileDexFile(jobject class_loader, const DexFile& dex_file,
                                     const std::vector<const DexFile*>& dex_files,
                                     ThreadPool* thread_pool, TimingLogger* timings) {
   TimingLogger::ScopedTiming t("Compile Dex File", timings);
+  CHRONICLER_LOG_EVENT( art::base::Chronicler::BEGIN, "Dex-file", dex_file.GetLocation().c_str(), "");
   ParallelCompilationManager context(Runtime::Current()->GetClassLinker(), class_loader, this,
                                      &dex_file, dex_files, thread_pool);
   context.ForAll(0, dex_file.NumClassDefs(), CompilerDriver::CompileClass, thread_count_);
+  CHRONICLER_LOG_EVENT( art::base::Chronicler::END, "Dex-file", dex_file.GetLocation().c_str(), "");
+  CHRONICLER_FLUSH_ALL_BUFFERS(); // TODO: This is thread-unsafe. Can it be done in a better way?
 }
 
 void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t access_flags,
@@ -2025,6 +2033,7 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
   CompiledMethod* compiled_method = NULL;
   uint64_t start_ns = NanoTime();
 
+  CHRONICLER_LOG_EVENT( art::base::Chronicler::BEGIN, "Method", PrettyMethod( method_idx, dex_file).c_str(), "");
   if ((access_flags & kAccNative) != 0) {
     // Are we interpreting only and have support for generic JNI down calls?
     if (!compiler_options_->IsCompilationEnabled() &&
@@ -2056,6 +2065,7 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
     LOG(WARNING) << "Compilation of " << PrettyMethod(method_idx, dex_file)
                  << " took " << PrettyDuration(duration_ns);
   }
+  CHRONICLER_LOG_EVENT( art::base::Chronicler::END, "Method", PrettyMethod( method_idx, dex_file).c_str(), "");
 
   Thread* self = Thread::Current();
   if (compiled_method != NULL) {
