@@ -563,6 +563,20 @@ void Trace::FieldWritten(Thread* /*thread*/, mirror::Object* this_object,
   LOG(ERROR) << "Unexpected field write event in tracing " << PrettyMethod(method) << " " << dex_pc;
 }
 
+void Trace::MethodWillBeEntered(Thread* /*thread*/, mirror::Object* this_object,
+                                mirror::ArtMethod* method)
+  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  // We're not recorded to listen to this kind of event, so complain.
+  LOG(ERROR) << "Unexpected method will be entered event in tracing " << PrettyMethod(method);
+}
+
+void Trace::InterpreterWillBeExited(Thread* /*thread*/, mirror::Object* this_object,
+                                    mirror::ArtMethod* method, uint32_t dex_pc, const JValue& return_value)
+  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  // We're not recorded to listen to this kind of event, so complain.
+  LOG(ERROR) << "Unexpected interpreter will be exited event in tracing " << PrettyMethod(method) << " " << dex_pc;
+}
+
 void Trace::MethodEntered(Thread* thread, mirror::Object* this_object,
                           mirror::ArtMethod* method, uint32_t dex_pc) {
   uint32_t thread_clock_diff = 0;

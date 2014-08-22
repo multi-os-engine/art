@@ -128,16 +128,17 @@ class ShadowFrame {
   }
 
   // Create ShadowFrame in heap for deoptimization.
-  static ShadowFrame* Create(uint32_t num_vregs, ShadowFrame* link,
-                             mirror::ArtMethod* method, uint32_t dex_pc) {
+  static ShadowFrame* CreateAlias(uint32_t num_vregs, ShadowFrame* link,
+                             mirror::ArtMethod* method, uint32_t dex_pc, void* original) {
     uint8_t* memory = new uint8_t[ComputeSize(num_vregs)];
-    return Create(num_vregs, link, method, dex_pc, memory);
+    ShadowFrame* sf = new (memory) ShadowFrame(num_vregs, link, method, dex_pc, true, original);
+    return sf;
   }
 
   // Create ShadowFrame for interpreter using provided memory.
   static ShadowFrame* Create(uint32_t num_vregs, ShadowFrame* link,
                              mirror::ArtMethod* method, uint32_t dex_pc, void* memory) {
-    ShadowFrame* sf = new (memory) ShadowFrame(num_vregs, link, method, dex_pc, true);
+    ShadowFrame* sf = new (memory) ShadowFrame(num_vregs, link, method, dex_pc, true, memory);
     return sf;
   }
   ~ShadowFrame() {}
@@ -173,6 +174,14 @@ class ShadowFrame {
 
   void SetDexPC(uint32_t dex_pc) {
     dex_pc_ = dex_pc;
+  }
+
+  void* GetAlias() const {
+    return alias_;
+  }
+
+  void SetAlias(void* alias) {
+    alias_ = alias;
   }
 
   ShadowFrame* GetLink() const {
@@ -354,10 +363,14 @@ class ShadowFrame {
     return OFFSETOF_MEMBER(ShadowFrame, vregs_);
   }
 
+  static size_t AliasOffset() {
+    return OFFSETOF_MEMBER(ShadowFrame, alias_);
+  }
+
  private:
   ShadowFrame(uint32_t num_vregs, ShadowFrame* link, mirror::ArtMethod* method,
-              uint32_t dex_pc, bool has_reference_array)
-      : number_of_vregs_(num_vregs), link_(link), method_(method), dex_pc_(dex_pc) {
+              uint32_t dex_pc, bool has_reference_array, void* alias)
+      : number_of_vregs_(num_vregs), link_(link), method_(method), dex_pc_(dex_pc), alias_(alias) {
     if (has_reference_array) {
 #if defined(ART_USE_PORTABLE_COMPILER)
       CHECK_LT(num_vregs, static_cast<uint32_t>(kHasReferenceArray));
@@ -392,6 +405,7 @@ class ShadowFrame {
   ShadowFrame* link_;
   mirror::ArtMethod* method_;
   uint32_t dex_pc_;
+  void* alias_;
   uint32_t vregs_[0];
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(ShadowFrame);
@@ -541,9 +555,16 @@ class StackVisitor {
     return GetNumFrames() - cur_depth_ - 1;
   }
 
-  // Returns a frame ID for JDWP use, starting from 1.
-  size_t GetFrameId() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFrameHeight() + 1;
+  // Returns a frame ID for JDWP use.
+  uintptr_t GetFrameId() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      uintptr_t frame_id = reinterpret_cast<uintptr_t>(GetCurrentQuickFrame());
+      if (frame_id == 0) {
+          ShadowFrame* sf = GetCurrentShadowFrame();
+          if (sf != nullptr) {
+              frame_id = reinterpret_cast<uintptr_t>(sf->GetAlias());
+          }
+      }
+      return frame_id;
   }
 
   size_t GetNumFrames() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -713,6 +734,8 @@ class StackVisitor {
   }
 
   std::string DescribeLocation() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static uintptr_t GetTopStackFrameId(Thread* thread) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static size_t ComputeNumFrames(Thread* thread) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

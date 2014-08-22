@@ -127,7 +127,6 @@ static bool NeedsFullDeoptimization(JdwpEventKind eventKind) {
       case EK_METHOD_ENTRY:
       case EK_METHOD_EXIT:
       case EK_METHOD_EXIT_WITH_RETURN_VALUE:
-      case EK_SINGLE_STEP:
       case EK_FIELD_ACCESS:
       case EK_FIELD_MODIFICATION:
         return true;
@@ -136,25 +135,27 @@ static bool NeedsFullDeoptimization(JdwpEventKind eventKind) {
     }
 }
 
-uint32_t GetInstrumentationEventFor(JdwpEventKind eventKind) {
+std::vector<uint32_t> GetInstrumentationEventFor(JdwpEventKind eventKind) {
   switch (eventKind) {
     case EK_BREAKPOINT:
     case EK_SINGLE_STEP:
-      return instrumentation::Instrumentation::kDexPcMoved;
+      return {instrumentation::Instrumentation::kDexPcMoved,
+              instrumentation::Instrumentation::kMethodWillBeEntered,
+              instrumentation::Instrumentation::kInterpreterWillBeExited};  // NOLINT(readability/braces)
     case EK_EXCEPTION:
     case EK_EXCEPTION_CATCH:
-      return instrumentation::Instrumentation::kExceptionCaught;
+      return {instrumentation::Instrumentation::kExceptionCaught};  // NOLINT(readability/braces)
     case EK_METHOD_ENTRY:
-      return instrumentation::Instrumentation::kMethodEntered;
+      return {instrumentation::Instrumentation::kMethodEntered};  // NOLINT(readability/braces)
     case EK_METHOD_EXIT:
     case EK_METHOD_EXIT_WITH_RETURN_VALUE:
-      return instrumentation::Instrumentation::kMethodExited;
+      return {instrumentation::Instrumentation::kMethodExited};  // NOLINT(readability/braces)
     case EK_FIELD_ACCESS:
-      return instrumentation::Instrumentation::kFieldRead;
+      return {instrumentation::Instrumentation::kFieldRead};  // NOLINT(readability/braces)
     case EK_FIELD_MODIFICATION:
-      return instrumentation::Instrumentation::kFieldWritten;
+      return {instrumentation::Instrumentation::kFieldWritten};  // NOLINT(readability/braces)
     default:
-      return 0;
+      return {};  // NOLINT(readability/braces)
   }
 }
 
@@ -198,12 +199,13 @@ JdwpError JdwpState::RegisterEvent(JdwpEvent* pEvent) {
     }
     Dbg::RequestDeoptimization(req);
   }
-  uint32_t instrumentation_event = GetInstrumentationEventFor(pEvent->eventKind);
-  if (instrumentation_event != 0) {
+  {
     DeoptimizationRequest req;
     req.SetKind(DeoptimizationRequest::kRegisterForEvent);
-    req.SetInstrumentationEvent(instrumentation_event);
-    Dbg::RequestDeoptimization(req);
+    for (uint32_t instrumentation_event : GetInstrumentationEventFor(pEvent->eventKind)) {
+      req.SetInstrumentationEvent(instrumentation_event);
+      Dbg::RequestDeoptimization(req);
+    }
   }
 
   {
@@ -264,28 +266,20 @@ void JdwpState::UnregisterEvent(JdwpEvent* pEvent) {
         Dbg::UnconfigureStep(pMod->step.threadId);
       }
     }
-    if (pEvent->eventKind == EK_SINGLE_STEP) {
-      // Special case for single-steps where we want to avoid the slow pattern deoptimize/undeoptimize
-      // loop between each single-step. In a IDE, this would happens each time the user click on the
-      // "single-step" button. Here we delay the full undeoptimization to the next resume
-      // (VM.Resume or ThreadReference.Resume) or the end of the debugging session (VM.Dispose or
-      // runtime shutdown).
-      // Therefore, in a singles-stepping sequence, only the first single-step will trigger a full
-      // deoptimization and only the last single-step will trigger a full undeoptimization.
-      Dbg::DelayFullUndeoptimization();
-    } else if (NeedsFullDeoptimization(pEvent->eventKind)) {
+    if (NeedsFullDeoptimization(pEvent->eventKind)) {
       CHECK_EQ(req.GetKind(), DeoptimizationRequest::kNothing);
       CHECK(req.Method() == nullptr);
       req.SetKind(DeoptimizationRequest::kFullUndeoptimization);
     }
     Dbg::RequestDeoptimization(req);
   }
-  uint32_t instrumentation_event = GetInstrumentationEventFor(pEvent->eventKind);
-  if (instrumentation_event != 0) {
+  {
     DeoptimizationRequest req;
     req.SetKind(DeoptimizationRequest::kUnregisterForEvent);
-    req.SetInstrumentationEvent(instrumentation_event);
-    Dbg::RequestDeoptimization(req);
+    for (uint32_t instrumentation_event : GetInstrumentationEventFor(pEvent->eventKind)) {
+      req.SetInstrumentationEvent(instrumentation_event);
+      Dbg::RequestDeoptimization(req);
+    }
   }
 
   --event_list_size_;

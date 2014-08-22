@@ -33,7 +33,7 @@ class ShadowFrameCopyVisitor : public StackVisitor {
       size_t num_regs = cur_frame->NumberOfVRegs();
       mirror::ArtMethod* method = cur_frame->GetMethod();
       uint32_t dex_pc = cur_frame->GetDexPC();
-      ShadowFrame* new_frame = ShadowFrame::Create(num_regs, NULL, method, dex_pc);
+      ShadowFrame* new_frame = ShadowFrame::CreateAlias(num_regs, NULL, method, dex_pc, reinterpret_cast<void*>(GetFrameId()));
 
       const uint8_t* gc_map = method->GetNativeGcMap();
       verifier::DexPcToReferenceMap dex_gc_map(gc_map);

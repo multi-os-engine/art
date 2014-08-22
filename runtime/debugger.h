@@ -27,6 +27,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "jdwp/jdwp.h"
 #include "jni.h"
@@ -97,7 +98,7 @@ struct DebugInvokeReq {
 struct SingleStepControl {
   SingleStepControl()
       : is_active(false), step_size(JDWP::SS_MIN), step_depth(JDWP::SD_INTO),
-        method(nullptr), stack_depth(0) {
+        method(nullptr), frame_id(0) {
   }
 
   // Are we single-stepping right now?
@@ -115,9 +116,26 @@ struct SingleStepControl {
   mirror::ArtMethod* method;
   std::set<uint32_t> dex_pcs;
 
-  // The stack depth when this single-step was initiated. This is used to support SD_OVER and SD_OUT
+  // The stack frame ID when this single-step was initiated. This is used to support SD_OVER and SD_OUT
   // single-step depth.
-  int stack_depth;
+  JDWP::FrameId frame_id;
+
+  // With this map we keep track of the methods we have deoptimized for the single step control.
+  // The key specifies which frame id is deoptimized by the deoptimization request.
+  std::map<JDWP::FrameId, mirror::ArtMethod*> deoptimized_methods;
+
+  struct PendingDeoptimization {
+    JDWP::FrameId frame_id;
+    mirror::ArtMethod* method;
+    bool is_upcall;
+
+    bool operator==(const PendingDeoptimization& rhs) {
+      return frame_id == rhs.frame_id && method == rhs.method && is_upcall == rhs.is_upcall;
+    }
+  };
+
+  // Unhandled method deoptimizations
+  std::vector<PendingDeoptimization> pending_deoptimizations;
 
   void VisitRoots(RootCallback* callback, void* arg, uint32_t tid, RootType root_type)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -462,10 +480,12 @@ class Dbg {
    * Debugger notification
    */
   enum {
-    kBreakpoint     = 0x01,
-    kSingleStep     = 0x02,
-    kMethodEntry    = 0x04,
-    kMethodExit     = 0x08,
+    kBreakpoint         = 0x01,
+    kSingleStep         = 0x02,
+    kMethodPreEntry     = 0x04,
+    kInterpreterPreExit = 0x08,
+    kMethodEntry        = 0x10,
+    kMethodExit         = 0x20,
   };
   static void PostFieldAccessEvent(mirror::ArtMethod* m, int dex_pc, mirror::Object* this_object,
                                    mirror::ArtField* f)
@@ -492,13 +512,6 @@ class Dbg {
 
   // Records deoptimization request in the queue.
   static void RequestDeoptimization(const DeoptimizationRequest& req)
-      LOCKS_EXCLUDED(deoptimization_lock_)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  // Support delayed full undeoptimization requests. This is currently only used for single-step
-  // events.
-  static void DelayFullUndeoptimization() LOCKS_EXCLUDED(deoptimization_lock_);
-  static void ProcessDelayedFullUndeoptimizations()
       LOCKS_EXCLUDED(deoptimization_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -642,10 +655,6 @@ class Dbg {
   // undeoptimize when the last event is unregistered (when the counter is set to 0).
   static size_t full_deoptimization_event_count_ GUARDED_BY(deoptimization_lock_);
 
-  // Count the number of full undeoptimization requests delayed to next resume or end of debug
-  // session.
-  static size_t delayed_full_undeoptimization_count_ GUARDED_BY(deoptimization_lock_);
-
   static size_t* GetReferenceCounterForEvent(uint32_t instrumentation_event);
 
   // Weak global type cache, TODO improve this.
@@ -655,6 +664,8 @@ class Dbg {
   // TODO we could use an array instead of having all these dedicated counters. Instrumentation
   // events are bits of a mask so we could convert them to array index.
   static size_t dex_pc_change_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static size_t method_pre_enter_event_ref_count_ GUARDED_BY(deoptimization_lock_);
+  static size_t interpreter_pre_exit_event_ref_count_ GUARDED_BY(deoptimization_lock_);
   static size_t method_enter_event_ref_count_ GUARDED_BY(deoptimization_lock_);
   static size_t method_exit_event_ref_count_ GUARDED_BY(deoptimization_lock_);
   static size_t field_read_event_ref_count_ GUARDED_BY(deoptimization_lock_);
