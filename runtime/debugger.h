@@ -523,13 +523,6 @@ class Dbg {
       LOCKS_EXCLUDED(Locks::deoptimization_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Support delayed full undeoptimization requests. This is currently only used for single-step
-  // events.
-  static void DelayFullUndeoptimization() LOCKS_EXCLUDED(Locks::deoptimization_lock_);
-  static void ProcessDelayedFullUndeoptimizations()
-      LOCKS_EXCLUDED(Locks::deoptimization_lock_)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   // Manage deoptimization after updating JDWP events list. Suspends all threads, processes each
   // request and finally resumes all threads.
   static void ManageDeoptimization()
@@ -542,6 +535,27 @@ class Dbg {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static void UnwatchLocation(const JDWP::JdwpLocation* pLoc, DeoptimizationRequest* req)
       LOCKS_EXCLUDED(Locks::breakpoint_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  /*
+   * Forced interpreter checkers for single-step and continue support.
+   */
+
+  // Indicates whether we need to force the use of interpreter to invoke a method.
+  // This allows to single-step or continue into the called method.
+  static bool IsForcedInterpreterNeededForCalling(Thread* thread, mirror::ArtMethod* m)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Indicates whether we need to force the use of instrumentation entrypoint when calling
+  // a method through the resolution trampoline. This allows to deoptimize the stack for
+  // debugging when we returned from the called method.
+  static bool IsForcedInstrumentationNeededForResolution(Thread* thread, mirror::ArtMethod* m)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Indicates whether we need to force the use of interpreter when returning from the
+  // interpreter into the runtime. This allows to deoptimize the stack and continue
+  // execution with interpreter for debugging.
+  static bool IsForcedInterpreterNeededForUpcall(Thread* thread, mirror::ArtMethod* m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Single-stepping.
@@ -684,10 +698,6 @@ class Dbg {
   // Note: we fully deoptimize on the first event only (when the counter is set to 1). We fully
   // undeoptimize when the last event is unregistered (when the counter is set to 0).
   static size_t full_deoptimization_event_count_ GUARDED_BY(Locks::deoptimization_lock_);
-
-  // Count the number of full undeoptimization requests delayed to next resume or end of debug
-  // session.
-  static size_t delayed_full_undeoptimization_count_ GUARDED_BY(Locks::deoptimization_lock_);
 
   static size_t* GetReferenceCounterForEvent(uint32_t instrumentation_event);
 
