@@ -1076,6 +1076,7 @@ class MIRGraph {
     punt_to_interpreter_ = val;
   }
 
+  void DisassembleExtendedInstr(const MIR* mir, std::string& decoded_mir);
   char* GetDalvikDisassembly(const MIR* mir);
   void ReplaceSpecialChars(std::string& str);
   std::string GetSSAName(int ssa_reg);
