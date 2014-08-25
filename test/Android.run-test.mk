@@ -25,29 +25,50 @@ TEST_ART_RUN_TESTS := $(subst $(LOCAL_PATH)/,, $(TEST_ART_RUN_TESTS))
 # $(1): test name, e.g. 003-omnibus-opcodes
 # $(2): undefined, -trace, -gcverify or -gcstress
 # $(3): -relocate, -norelocate, -no-prebuild, or undefined.
+# $(4): -no-dex2oat, -no-patchoat, no-image-dex2oat, or undefined.
+define all-run-test-names-full
+  test-art-host-run-test$(2)-default$(3)$(4)-$(1)32 \
+  test-art-host-run-test$(2)-optimizing$(3)$(4)-$(1)32 \
+  test-art-host-run-test$(2)-interpreter$(3)$(4)-$(1)32 \
+  test-art-host-run-test$(2)-default$(3)$(4)-$(1)64 \
+  test-art-host-run-test$(2)-optimizing$(3)$(4)-$(1)64 \
+  test-art-host-run-test$(2)-interpreter$(3)$(4)-$(1)64 \
+  test-art-target-run-test$(2)-default$(3)$(4)-$(1)32 \
+  test-art-target-run-test$(2)-optimizing$(3)$(4)-$(1)32 \
+  test-art-target-run-test$(2)-interpreter$(3)$(4)-$(1)32 \
+  test-art-target-run-test$(2)-default$(3)$(4)-$(1)64 \
+  test-art-target-run-test$(2)-optimizing$(3)$(4)-$(1)64 \
+  test-art-target-run-test$(2)-interpreter$(3)$(4)-$(1)64
+endef  # all-run-test-names-full
+
+# Subset of the above for target only.
+define all-run-test-target-names-full
+  test-art-target-run-test$(2)-default$(3)$(4)-$(1)32 \
+  test-art-target-run-test$(2)-optimizing$(3)$(4)-$(1)32 \
+  test-art-target-run-test$(2)-interpreter$(3)$(4)-$(1)32 \
+  test-art-target-run-test$(2)-default$(3)$(4)-$(1)64 \
+  test-art-target-run-test$(2)-optimizing$(3)$(4)-$(1)64 \
+  test-art-target-run-test$(2)-interpreter$(3)$(4)-$(1)64
+endef  # all-run-test-target-names-full
+
+# List all the test names for host and target and compiler variants, automatically including all
+# the dexopt-failure variants.
+# $(1): test name, e.g. 003-omnibus-opcodes
+# $(2): undefined, -trace, -gcverify or -gcstress
+# $(3): -relocate, -norelocate, -no-prebuild, or undefined.
 define all-run-test-names
-  test-art-host-run-test$(2)-default$(3)-$(1)32 \
-  test-art-host-run-test$(2)-optimizing$(3)-$(1)32 \
-  test-art-host-run-test$(2)-interpreter$(3)-$(1)32 \
-  test-art-host-run-test$(2)-default$(3)-$(1)64 \
-  test-art-host-run-test$(2)-optimizing$(3)-$(1)64 \
-  test-art-host-run-test$(2)-interpreter$(3)-$(1)64 \
-  test-art-target-run-test$(2)-default$(3)-$(1)32 \
-  test-art-target-run-test$(2)-optimizing$(3)-$(1)32 \
-  test-art-target-run-test$(2)-interpreter$(3)-$(1)32 \
-  test-art-target-run-test$(2)-default$(3)-$(1)64 \
-  test-art-target-run-test$(2)-optimizing$(3)-$(1)64 \
-  test-art-target-run-test$(2)-interpreter$(3)-$(1)64
+	$(call all-run-test-names-full, $(1),$(2),$(3),) \
+	$(call all-run-test-names-full, $(1),$(2),$(3),-no-dex2oat) \
+	$(call all-run-test-names-full, $(1),$(2),$(3),-no-patchoat) \
+	$(call all-run-test-names-full, $(1),$(2),$(3),-no-image-dex2oat)
 endef  # all-run-test-names
 
 # Subset of the above for target only.
 define all-run-test-target-names
-  test-art-target-run-test$(2)-default$(3)-$(1)32 \
-  test-art-target-run-test$(2)-optimizing$(3)-$(1)32 \
-  test-art-target-run-test$(2)-interpreter$(3)-$(1)32 \
-  test-art-target-run-test$(2)-default$(3)-$(1)64 \
-  test-art-target-run-test$(2)-optimizing$(3)-$(1)64 \
-  test-art-target-run-test$(2)-interpreter$(3)-$(1)64
+	$(call all-run-test-target-names-full, $(1),$(2),$(3),) \
+	$(call all-run-test-target-names-full, $(1),$(2),$(3),-no-dex2oat) \
+	$(call all-run-test-target-names-full, $(1),$(2),$(3),-no-patchoat) \
+	$(call all-run-test-target-names-full, $(1),$(2),$(3),-no-image-dex2oat)
 endef  # all-run-test-target-names
 
 # Tests that are timing sensitive and flaky on heavily loaded systems.
@@ -160,6 +181,45 @@ ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_NO_PREBUILD_TESTS), $
 ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_NO_PREBUILD_TESTS), $(call all-run-test-names,$(test),-gcverify,-no-prebuild))
 ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_NO_PREBUILD_TESTS), $(call all-run-test-names,$(test),-gcstress,-no-prebuild))
 
+# List all the test names for host and target and compiler variants, automatically including all
+# the dexopt-failure variants.
+# $(1): test name, e.g. 003-omnibus-opcodes
+# $(2): undefined, -trace, -gcverify or -gcstress
+# $(3): -relocate, -norelocate, -no-prebuild, or undefined.
+define all-run-test-names-dexopt
+	$(call all-run-test-names-full, $(1),$(2),$(3),-no-dex2oat) \
+	$(call all-run-test-names-full, $(1),$(2),$(3),-no-patchoat) \
+	$(call all-run-test-names-full, $(1),$(2),$(3),-no-image-dex2oat)
+endef  # all-run-test-names-dexopt
+
+
+TEST_ART_BROKEN_DEXOPT_FAILURE := \
+  116-nodex2oat \
+  117-nopatchoat \
+  118-noimage-dex2oat \
+  119-noimage-patchoat
+
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),,))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-trace,))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcverify,))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcstress,))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),,-relocate))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-trace,-relocate))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcverify,-relocate))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcstress,-relocate))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),,-norelocate))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-trace,-norelocate))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcverify,-norelocate))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcstress,-norelocate))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),,-prebuild))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-trace,-prebuild))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcverify,-prebuild))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcstress,-prebuild))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),,-no-prebuild))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-trace,-no-prebuild))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcverify,-no-prebuild))
+ART_TEST_KNOWN_BROKEN += $(foreach test, $(TEST_ART_BROKEN_DEXOPT_FAILURE), $(call all-run-test-names-dexopt,$(test),-gcstress,-no-prebuild))
+
 # The path where build only targets will be output, e.g.
 # out/target/product/generic_x86_64/obj/PACKAGING/art-run-tests_intermediates/DATA
 art_run_tests_dir := $(call intermediates-dir-for,PACKAGING,art-run-tests)/DATA
@@ -224,6 +284,10 @@ ART_TEST_TARGET_RUN_TEST_INTERPRETER_NO_PREBUILD_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER_PREBUILD_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING_NO_PREBUILD_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING_PREBUILD_RULES :=
+ART_TEST_TARGET_RUN_TEST_DEXOPT_NORMAL_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_DEX2OAT_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_PATCHOAT_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_IMAGE_DEX2OAT_RULES :=
 ART_TEST_TARGET_RUN_TEST_ALL$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_GCSTRESS$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_DEFAULT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
@@ -243,6 +307,10 @@ ART_TEST_TARGET_RUN_TEST_DEFAULT_NO_PREBUILD$(ART_PHONY_TEST_TARGET_SUFFIX)_RULE
 ART_TEST_TARGET_RUN_TEST_DEFAULT_PREBUILD$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER_NO_PREBUILD$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER_PREBUILD$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_DEXOPT_NORMAL$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_DEX2OAT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_PATCHOAT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_IMAGE_DEX2OAT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_ALL$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_DEFAULT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
@@ -263,6 +331,10 @@ ART_TEST_TARGET_RUN_TEST_INTERPRETER_NO_PREBUILD$(2ND_ART_PHONY_TEST_TARGET_SUFF
 ART_TEST_TARGET_RUN_TEST_INTERPRETER_PREBUILD$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING_NO_PREBUILD$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING_PREBUILD$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_DEXOPT_NORMAL$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_DEX2OAT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_PATCHOAT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_IMAGE_DEX2OAT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_ALL_RULES :=
 ART_TEST_HOST_RUN_TEST_GCSTRESS_RULES :=
 ART_TEST_HOST_RUN_TEST_DEFAULT_RULES :=
@@ -284,6 +356,10 @@ ART_TEST_HOST_RUN_TEST_INTERPRETER_NO_PREBUILD_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER_PREBUILD_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING_NO_PREBUILD_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING_PREBUILD_RULES :=
+ART_TEST_HOST_RUN_TEST_DEXOPT_NORMAL_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_DEX2OAT_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_PATCHOAT_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_IMAGE_DEX2OAT_RULES :=
 ART_TEST_HOST_RUN_TEST_ALL$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_GCSTRESS$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_DEFAULT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
@@ -303,6 +379,10 @@ ART_TEST_HOST_RUN_TEST_DEFAULT_NO_PREBUILD$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_DEFAULT_PREBUILD$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER_NO_PREBUILD$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER_PREBUILD$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_DEXOPT_NORMAL$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_DEX2OAT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_PATCHOAT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_IMAGE_DEX2OAT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_ALL$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_DEFAULT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
@@ -323,6 +403,10 @@ ART_TEST_HOST_RUN_TEST_INTERPRETER_NO_PREBUILD$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_
 ART_TEST_HOST_RUN_TEST_INTERPRETER_PREBUILD$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING_NO_PREBUILD$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING_PREBUILD$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_DEXOPT_NORMAL$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_DEX2OAT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_PATCHOAT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_IMAGE_DEX2OAT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 
 # We need dex2oat and dalvikvm on the target as well as the core image.
 TEST_ART_TARGET_SYNC_DEPS += $(ART_TARGET_EXECUTABLES) $(TARGET_CORE_IMG_OUT) $(2ND_TARGET_CORE_IMG_OUT)
@@ -363,6 +447,7 @@ endif
 # $(4): 32 or 64
 # $(5): run tests with tracing or GC verification enabled or not: trace, gcverify or undefined
 # $(6): relocate, norelocate, no-prebuild or undefined.
+# $(7): -no-dex2oat, -no-patchoat, -no-image-dex2oat, or undefined.
 define define-test-art-run-test
   run_test_options := $(addprefix --runtime-option ,$(DALVIKVM_FLAGS))
   run_test_rule_name :=
@@ -370,6 +455,7 @@ define define-test-art-run-test
   prereq_rule :=
   skip_test := false
   uc_reloc_type :=
+  uc_dexopt_type := DEXOPT_NORMAL
   uc_run_type :=
   ifeq ($(ART_TEST_RUN_TEST_ALWAYS_CLEAN),true)
     run_test_options += --always-clean
@@ -415,6 +501,33 @@ define define-test-art-run-test
       endif
     endif
   endif
+  ifeq ($(7),-no-dex2oat)
+    uc_reloc_type := NO_DEX2OAT
+    run_test_options += --no-dex2oat --no-patchoat
+    ifneq ($(ART_TEST_RUN_TEST_NO_DEX2OAT),true)
+      skip_test := true
+    endif
+  else
+    ifeq ($(7),-no-patchoat)
+      uc_reloc_type := NO_PATCHOAT
+      run_test_options += --no-patchoat
+      ifneq ($(ART_TEST_RUN_TEST_NO_PATCHOAT),true)
+        skip_test := true
+      endif
+    else
+      ifeq ($(7),-no-image-dex2oat)
+        uc_reloc_type := NO_IMAGE_DEX2OAT
+        run_test_options += --no-image --no-dex2oat
+        ifneq ($(ART_TEST_RUN_TEST_NO_IMAGE_DEX2OAT),true)
+          skip_test := true
+        endif
+      else
+        ifneq ($(ART_TEST_RUN_TEST_NORMAL_DEXOPT),true)
+          skip_test := true
+        endif
+      endif
+    endif
+  endif
   uc_compiler :=
   ifeq ($(3),optimizing)
     uc_compiler := OPTIMIZING
@@ -444,7 +557,7 @@ define define-test-art-run-test
   ifeq ($(5),trace)
     uc_run_type := TRACE
     run_test_options += --trace
-    run_test_rule_name := test-art-$(2)-run-test-trace-$(3)-$(6)-$(1)$(4)
+    run_test_rule_name := test-art-$(2)-run-test-trace-$(3)-$(6)$(7)-$(1)$(4)
     ifneq ($$(ART_TEST_TRACE),true)
       skip_test := true
     endif
@@ -452,7 +565,7 @@ define define-test-art-run-test
     ifeq ($(5),gcverify)
       uc_run_type := GCVERIFY
       run_test_options += --gcverify
-      run_test_rule_name := test-art-$(2)-run-test-gcverify-$(3)-$(6)-$(1)$(4)
+      run_test_rule_name := test-art-$(2)-run-test-gcverify-$(3)-$(6)$(7)-$(1)$(4)
       ifneq ($$(ART_TEST_GC_VERIFY),true)
         skip_test := true
       endif
@@ -460,7 +573,7 @@ define define-test-art-run-test
       ifeq ($(5),gcstress)
         uc_run_type := GCSTRESS
         run_test_options += --gcstress
-        run_test_rule_name := test-art-$(2)-run-test-gcstress-$(3)-$(6)-$(1)$(4)
+        run_test_rule_name := test-art-$(2)-run-test-gcstress-$(3)-$(6)$(7)-$(1)$(4)
         ifneq ($$(ART_TEST_GC_STRESS),true)
           skip_test := true
         endif
@@ -468,7 +581,7 @@ define define-test-art-run-test
         ifneq (,$(5))
           $$(error found $(5) expected undefined or gcverify, gcstress or trace)
         endif
-        run_test_rule_name := test-art-$(2)-run-test-$(3)-$(6)-$(1)$(4)
+        run_test_rule_name := test-art-$(2)-run-test-$(3)-$(6)$(7)-$(1)$(4)
       endif
     endif
   endif
@@ -498,6 +611,7 @@ $$(run_test_rule_name):
   ART_TEST_$$(uc_host_or_target)_RUN_TEST_$(1)$(4)_RULES += $$(run_test_rule_name)
   ART_TEST_$$(uc_host_or_target)_RUN_TEST_ALL_RULES += $$(run_test_rule_name)
   ART_TEST_$$(uc_host_or_target)_RUN_TEST_$$(uc_reloc_type)_RULES += $$(run_test_rule_name)
+  ART_TEST_$$(uc_host_or_target)_RUN_TEST_$$(uc_dexopt_type)_RULES += $$(run_test_rule_name)
   ART_TEST_$$(uc_host_or_target)_RUN_TEST_ALL$(4)_RULES += $$(run_test_rule_name)
   ART_TEST_$$(uc_host_or_target)_RUN_TEST_$$(uc_run_type)_RULES += $$(run_test_rule_name)
 
@@ -508,6 +622,7 @@ $$(run_test_rule_name):
   uc_host_or_target :=
   prereq_rule :=
   uc_reloc_type :=
+  uc_dexopt_type :=
   uc_compiler :=
 endef  # define-test-art-run-test
 
@@ -537,18 +652,54 @@ define define-test-art-run-test-group-type
     endif
   endif
 
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3)))
-  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3)))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-patchoat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-image-dex2oat))
+  $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-image-dex2oat))
   do_second := false
   ifeq ($(2),host)
     ifneq ($$(HOST_PREFER_32_BIT),true)
@@ -560,18 +711,54 @@ define define-test-art-run-test-group-type
     endif
   endif
   ifeq (true,$$(do_second))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3)))
-    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3)))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-patchoat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),trace,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcverify,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),default,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),interpreter,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-image-dex2oat))
+    $$(eval $$(call define-test-art-run-test,$(1),$(2),optimizing,$$(2ND_ART_PHONY_TEST_$$(group_uc_host_or_target)_SUFFIX),gcstress,$(3),-no-image-dex2oat))
   endif
 endef  # define-test-art-run-test-group-type
 
@@ -684,6 +871,14 @@ $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-inter
   $(ART_TEST_TARGET_RUN_TEST_INTERPRETER_RELOCATE_RULES)))
 $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-optimizing-relocate, \
   $(ART_TEST_TARGET_RUN_TEST_OPTIMIZING_RELOCATE_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-dexopt-normal, \
+  $(ART_TEST_TARGET_RUN_TEST_DEXOPT_NORMAL_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-no-dex2oat, \
+  $(ART_TEST_TARGET_RUN_TEST_NO_DEX2OAT_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-no-patchoat, \
+  $(ART_TEST_TARGET_RUN_TEST_NO_PATCHOAT_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-no-image-dex2oat, \
+  $(ART_TEST_TARGET_RUN_TEST_NO_IMAGE_DEX2OAT_RULES)))
 $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test$(ART_PHONY_TEST_TARGET_SUFFIX), \
   $(ART_TEST_TARGET_RUN_TEST_ALL$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
 $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-default$(ART_PHONY_TEST_TARGET_SUFFIX), \
@@ -724,6 +919,14 @@ $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-inter
   $(ART_TEST_TARGET_RUN_TEST_INTERPRETER_RELOCATE$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
 $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-optimizing-relocate$(ART_PHONY_TEST_TARGET_SUFFIX), \
   $(ART_TEST_TARGET_RUN_TEST_OPTIMIZING_RELOCATE$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-dexopt-normal$(ART_PHONY_TEST_TARGET_SUFFIX), \
+  $(ART_TEST_TARGET_RUN_TEST_DEXOPT_NORMAL$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-no-dex2oat$(ART_PHONY_TEST_TARGET_SUFFIX), \
+  $(ART_TEST_TARGET_RUN_TEST_NO_DEX2OAT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-no-patchoat$(ART_PHONY_TEST_TARGET_SUFFIX), \
+  $(ART_TEST_TARGET_RUN_TEST_NO_PATCHOAT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-no-image-dex2oat$(ART_PHONY_TEST_TARGET_SUFFIX), \
+  $(ART_TEST_TARGET_RUN_TEST_NO_IMAGE_DEX2OAT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
 ifdef TARGET_2ND_ARCH
   $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test$(2ND_ART_PHONY_TEST_TARGET_SUFFIX), \
     $(ART_TEST_TARGET_RUN_TEST_ALL$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
@@ -767,6 +970,14 @@ ifdef TARGET_2ND_ARCH
     $(ART_TEST_TARGET_RUN_TEST_INTERPRETER_RELOCATE$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
   $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-optimizing-relocate$(2ND_ART_PHONY_TEST_TARGET_SUFFIX), \
     $(ART_TEST_TARGET_RUN_TEST_OPTIMIZING_RELOCATE$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
+  $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-dexopt-normal$(2ND_ART_PHONY_TEST_TARGET_SUFFIX), \
+    $(ART_TEST_TARGET_RUN_TEST_DEXOPT_NORMAL$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
+  $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-no-dex2oat$(2ND_ART_PHONY_TEST_TARGET_SUFFIX), \
+    $(ART_TEST_TARGET_RUN_TEST_NO_DEX2OAT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
+  $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-no-patchoat$(2ND_ART_PHONY_TEST_TARGET_SUFFIX), \
+    $(ART_TEST_TARGET_RUN_TEST_NO_PATCHOAT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
+  $(eval $(call define-test-art-run-test-group-rule,test-art-target-run-test-no-image-dex2oat$(2ND_ART_PHONY_TEST_TARGET_SUFFIX), \
+    $(ART_TEST_TARGET_RUN_TEST_NO_IMAGE_DEX2OAT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES)))
 endif
 
 $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-prebuild, \
@@ -811,6 +1022,14 @@ $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-interpr
   $(ART_TEST_HOST_RUN_TEST_INTERPRETER_RELOCATE_RULES)))
 $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-optimizing-relocate, \
   $(ART_TEST_HOST_RUN_TEST_OPTIMIZING_RELOCATE_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-dexopt-normal, \
+  $(ART_TEST_HOST_RUN_TEST_DEXOPT_NORMAL_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-dex2oat, \
+  $(ART_TEST_HOST_RUN_TEST_NO_DEX2OAT_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-patchoat, \
+  $(ART_TEST_HOST_RUN_TEST_NO_PATCHOAT_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-image-dex2oat, \
+  $(ART_TEST_HOST_RUN_TEST_NO_IMAGE_DEX2OAT_RULES)))
 $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test$(ART_PHONY_TEST_HOST_SUFFIX), \
   $(ART_TEST_HOST_RUN_TEST_ALL$(ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
 $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-default$(ART_PHONY_TEST_HOST_SUFFIX), \
@@ -851,6 +1070,14 @@ $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-interpr
   $(ART_TEST_HOST_RUN_TEST_INTERPRETER_RELOCATE$(ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
 $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-optimizing-relocate$(ART_PHONY_TEST_HOST_SUFFIX), \
   $(ART_TEST_HOST_RUN_TEST_OPTIMIZING_RELOCATE$(ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-dexopt-normal$(ART_PHONY_TEST_HOST_SUFFIX), \
+  $(ART_TEST_HOST_RUN_TEST_DEXOPT_NORMAL$(ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-dex2oat$(ART_PHONY_TEST_HOST_SUFFIX), \
+  $(ART_TEST_HOST_RUN_TEST_NO_DEX2OAT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-patchoat$(ART_PHONY_TEST_HOST_SUFFIX), \
+  $(ART_TEST_HOST_RUN_TEST_NO_PATCHOAT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
+$(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-image-dex2oat$(ART_PHONY_TEST_HOST_SUFFIX), \
+  $(ART_TEST_HOST_RUN_TEST_NO_IMAGE_DEX2OAT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
 ifneq ($(HOST_PREFER_32_BIT),true)
   $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test$(2ND_ART_PHONY_TEST_HOST_SUFFIX), \
     $(ART_TEST_HOST_RUN_TEST_ALL$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
@@ -894,6 +1121,14 @@ ifneq ($(HOST_PREFER_32_BIT),true)
     $(ART_TEST_HOST_RUN_TEST_INTERPRETER_RELOCATE$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
   $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-optimizing-relocate$(2ND_ART_PHONY_TEST_HOST_SUFFIX), \
     $(ART_TEST_HOST_RUN_TEST_OPTIMIZING_RELOCATE$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
+  $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-dexopt-normal$(2ND_ART_PHONY_TEST_HOST_SUFFIX), \
+    $(ART_TEST_HOST_RUN_TEST_DEXOPT_NORMAL$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
+  $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-dex2oat$(2ND_ART_PHONY_TEST_HOST_SUFFIX), \
+    $(ART_TEST_HOST_RUN_TEST_NO_DEX2OAT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
+  $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-patchoat$(2ND_ART_PHONY_TEST_HOST_SUFFIX), \
+    $(ART_TEST_HOST_RUN_TEST_NO_PATCHOAT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
+  $(eval $(call define-test-art-run-test-group-rule,test-art-host-run-test-no-image-dex2oat$(2ND_ART_PHONY_TEST_HOST_SUFFIX), \
+    $(ART_TEST_HOST_RUN_TEST_NO_IMAGE_DEX2OAT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES)))
 endif
 
 # include libarttest build rules.
@@ -907,6 +1142,7 @@ define-test-art-run-test-group-rule :=
 define-test-art-run-test-group :=
 TEST_ART_RUN_TESTS :=
 ART_TEST_TARGET_RUN_TEST_ALL_RULES :=
+ART_TEST_TARGET_RUN_TEST_GCSTRESS_RULES :=
 ART_TEST_TARGET_RUN_TEST_DEFAULT_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING_RULES :=
@@ -926,7 +1162,12 @@ ART_TEST_TARGET_RUN_TEST_INTERPRETER_NO_PREBUILD_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER_PREBUILD_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING_NO_PREBUILD_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING_PREBUILD_RULES :=
+ART_TEST_TARGET_RUN_TEST_DEXOPT_NORMAL_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_DEX2OAT_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_PATCHOAT_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_IMAGE_DEX2OAT_RULES :=
 ART_TEST_TARGET_RUN_TEST_ALL$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_GCSTRESS$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_DEFAULT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
@@ -944,6 +1185,10 @@ ART_TEST_TARGET_RUN_TEST_DEFAULT_NO_PREBUILD$(ART_PHONY_TEST_TARGET_SUFFIX)_RULE
 ART_TEST_TARGET_RUN_TEST_DEFAULT_PREBUILD$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER_NO_PREBUILD$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER_PREBUILD$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_DEXOPT_NORMAL$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_DEX2OAT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_PATCHOAT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_IMAGE_DEX2OAT$(ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_ALL$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_DEFAULT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_INTERPRETER$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
@@ -964,7 +1209,12 @@ ART_TEST_TARGET_RUN_TEST_INTERPRETER_NO_PREBUILD$(2ND_ART_PHONY_TEST_TARGET_SUFF
 ART_TEST_TARGET_RUN_TEST_INTERPRETER_PREBUILD$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING_NO_PREBUILD$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_TARGET_RUN_TEST_OPTIMIZING_PREBUILD$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_DEXOPT_NORMAL$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_DEX2OAT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_PATCHOAT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
+ART_TEST_TARGET_RUN_TEST_NO_IMAGE_DEX2OAT$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_ALL_RULES :=
+ART_TEST_HOST_RUN_TEST_GCSTRESS_RULES :=
 ART_TEST_HOST_RUN_TEST_DEFAULT_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING_RULES :=
@@ -984,7 +1234,12 @@ ART_TEST_HOST_RUN_TEST_INTERPRETER_NO_PREBUILD_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER_PREBUILD_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING_NO_PREBUILD_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING_PREBUILD_RULES :=
+ART_TEST_HOST_RUN_TEST_DEXOPT_NORMAL_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_DEX2OAT_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_PATCHOAT_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_IMAGE_DEX2OAT_RULES :=
 ART_TEST_HOST_RUN_TEST_ALL$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_GCSTRESS$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_DEFAULT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
@@ -1002,6 +1257,10 @@ ART_TEST_HOST_RUN_TEST_DEFAULT_NO_PREBUILD$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_DEFAULT_PREBUILD$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER_NO_PREBUILD$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER_PREBUILD$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_DEXOPT_NORMAL$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_DEX2OAT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_PATCHOAT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_IMAGE_DEX2OAT$(ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_ALL$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_DEFAULT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_INTERPRETER$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
@@ -1022,3 +1281,7 @@ ART_TEST_HOST_RUN_TEST_INTERPRETER_NO_PREBUILD$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_
 ART_TEST_HOST_RUN_TEST_INTERPRETER_PREBUILD$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING_NO_PREBUILD$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
 ART_TEST_HOST_RUN_TEST_OPTIMIZING_PREBUILD$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_DEXOPT_NORMAL$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_DEX2OAT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_PATCHOAT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=
+ART_TEST_HOST_RUN_TEST_NO_IMAGE_DEX2OAT$(2ND_ART_PHONY_TEST_HOST_SUFFIX)_RULES :=

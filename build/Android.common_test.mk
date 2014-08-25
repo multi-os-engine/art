@@ -75,6 +75,18 @@ ART_TEST_RUN_TEST_NO_PREBUILD ?= $(ART_TEST_FULL)
 # Do you want run-tests with prebuild enabled?
 ART_TEST_RUN_TEST_PREBUILD ?= true
 
+# Do you want run-tests with normal dexopt?
+ART_TEST_RUN_TEST_NORMAL_DEXOPT ?= true
+
+# Do you want run-tests with dex2oat & patchoat disabled?
+ART_TEST_RUN_TEST_NO_DEX2OAT ?= $(ART_TEST_FULL)
+
+# Do you want run-tests with patchoat disabled?
+ART_TEST_RUN_TEST_NO_PATCHOAT ?= $(ART_TEST_FULL)
+
+# Do you want run-tests without a core.art image and no dex2oat disabled?
+ART_TEST_RUN_TEST_NO_IMAGE_DEX2OAT ?= $(ART_TEST_FULL)
+
 # Do you want failed tests to have their artifacts cleaned up?
 ART_TEST_RUN_TEST_ALWAYS_CLEAN ?= true
 
