@@ -18,6 +18,7 @@
 #define ART_RUNTIME_CLASS_LINKER_H_
 
 #include <deque>
+#include <queue>
 #include <string>
 #include <utility>
 #include <vector>
@@ -527,17 +528,29 @@ class ClassLinker {
   void LinkCode(ConstHandle<mirror::ArtMethod> method, const OatFile::OatClass* oat_class,
                 const DexFile& dex_file, uint32_t dex_method_index, uint32_t method_index)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  struct FieldGap {
+    uint32_t start_offset;
+    size_t size;
+  };
+  struct FieldGapsComparator {
+    explicit FieldGapsComparator() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    }
+    // No thread safety analysis as will be called from STL. Checked lock held in constructor.
+    bool operator() (const FieldGap& lhs, const FieldGap& rhs)
+        NO_THREAD_SAFETY_ANALYSIS {
+      // Sort by gap size, largest first.
+      return lhs.size > rhs.size;
+    }
+  };
+  typedef std::priority_queue<FieldGap, std::vector<FieldGap>, FieldGapsComparator> FieldGaps;
+  void AddGap(uint32_t gap_start, uint32_t gap_end, FieldGaps* gaps) HOT_ATTR;
   template<int n>
-  void AlignFields(size_t& current_field, const size_t num_fields,
-                   MemberOffset& field_offset,
-                   mirror::ObjectArray<mirror::ArtField>* fields,
-                   std::deque<mirror::ArtField*>& grouped_and_sorted_fields)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  template<int n>
-  void ShuffleForward(size_t& current_field, const size_t num_fields,
-                      MemberOffset& field_offset,
+  void ShuffleForward(const size_t num_fields, size_t* current_field_idx,
+                      MemberOffset* field_offset,
                       mirror::ObjectArray<mirror::ArtField>* fields,
-                      std::deque<mirror::ArtField*>& grouped_and_sorted_fields)
+                      std::deque<mirror::ArtField*>* grouped_and_sorted_fields,
+                      FieldGaps* gaps)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void CreateReferenceInstanceOffsets(ConstHandle<mirror::Class> klass)

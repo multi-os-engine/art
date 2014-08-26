@@ -571,39 +571,40 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
             sizeof(int32_t) /* vtable len */ +
             embedded_vtable_size;
   }
-
-  // Space used by reference statics.
+  // Reference fields.
+  if (!IsAligned<4>(size) && num_ref_static_fields != 0) {
+    uint32_t gap = 4 - (size & 0x3);
+    size += gap;
+    FillGapWithShuffle(sizeof(uint16_t), &num_16bit_static_fields, &gap);
+    FillGapWithShuffle(sizeof(uint8_t), &num_8bit_static_fields, &gap);
+  }
   size +=  num_ref_static_fields * sizeof(HeapReference<Object>);
-  if (!IsAligned<8>(size) && num_64bit_static_fields > 0) {
+  // Wide fields.
+  if (!IsAligned<8>(size) && num_64bit_static_fields != 0) {
     uint32_t gap = 8 - (size & 0x7);
-    size += gap;  // will be padded
-    // Shuffle 4-byte fields forward.
-    while (gap >= sizeof(uint32_t) && num_32bit_static_fields != 0) {
-      --num_32bit_static_fields;
-      gap -= sizeof(uint32_t);
-    }
-    // Shuffle 2-byte fields forward.
-    while (gap >= sizeof(uint16_t) && num_16bit_static_fields != 0) {
-      --num_16bit_static_fields;
-      gap -= sizeof(uint16_t);
-    }
-    // Shuffle byte fields forward.
-    while (gap >= sizeof(uint8_t) && num_8bit_static_fields != 0) {
+    size += gap;
+    FillGapWithShuffle(sizeof(uint32_t), &num_32bit_static_fields, &gap);
+    FillGapWithShuffle(sizeof(uint16_t), &num_16bit_static_fields, &gap);
+    FillGapWithShuffle(sizeof(uint8_t), &num_8bit_static_fields, &gap);
+  }
+  size += num_64bit_static_fields * sizeof(uint64_t);
+  // Word fields.
+  if (!IsAligned<4>(size) && num_32bit_static_fields != 0) {
+    uint32_t gap = 4 - (size & 0x3);
+    size += gap;
+    FillGapWithShuffle(sizeof(uint16_t), &num_16bit_static_fields, &gap);
+    FillGapWithShuffle(sizeof(uint8_t), &num_8bit_static_fields, &gap);
+  }
+  size += num_32bit_static_fields * sizeof(uint32_t);
+  // Halfword fields.
+  if (!IsAligned<2>(size) && num_64bit_static_fields != 0) {
+    ++size;
+    if (num_8bit_static_fields != 0) {
       --num_8bit_static_fields;
-      gap -= sizeof(uint8_t);
     }
   }
-  // Guaranteed to be at least 4 byte aligned. No need for further alignments.
-  // Space used for primitive static fields.
-  size += (num_8bit_static_fields * sizeof(uint8_t)) +
-      (num_16bit_static_fields * sizeof(uint16_t)) +
-      (num_32bit_static_fields * sizeof(uint32_t)) +
-      (num_64bit_static_fields * sizeof(uint64_t));
-  // For now, the start of of subclass expects to be 4-byte aligned, pad end of object to ensure
-  // alignment.
-  if (!IsAligned<4>(size)) {
-    size = RoundUp(size, 4);
-  }
+  size += num_16bit_static_fields * sizeof(uint16_t);
+  size += num_8bit_static_fields;
   return size;
 }
 
