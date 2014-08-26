@@ -554,6 +554,14 @@ inline Object* Class::AllocNonMovableObject(Thread* self) {
   return Alloc<true>(self, Runtime::Current()->GetHeap()->GetCurrentNonMovingAllocator());
 }
 
+#define SHUFFLE_FORWARD(g, bs, s) \
+  { \
+    if (g != 0) { \
+      uint32_t shuffle = FieldsToShuffleForward(g, s, num_ ## bs ## _static_fields); \
+      g -= shuffle * s; \
+      num_ ## bs ## _static_fields -= shuffle; \
+    } \
+  }
 inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
                                         uint32_t num_vtable_entries,
                                         uint32_t num_8bit_static_fields,
@@ -571,41 +579,43 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
             sizeof(int32_t) /* vtable len */ +
             embedded_vtable_size;
   }
-
-  // Space used by reference statics.
+  // Reference fields.
+  if (!IsAligned<4>(size) && num_ref_static_fields != 0) {
+    uint32_t gap = 4 - (size & 0x3);
+    size += gap;
+    SHUFFLE_FORWARD(gap, 16bit, sizeof(uint16_t));
+    SHUFFLE_FORWARD(gap, 8bit, sizeof(uint8_t));
+  }
   size +=  num_ref_static_fields * sizeof(HeapReference<Object>);
-  if (!IsAligned<8>(size) && num_64bit_static_fields > 0) {
+  // Wide fields.
+  if (!IsAligned<8>(size) && num_64bit_static_fields != 0) {
     uint32_t gap = 8 - (size & 0x7);
-    size += gap;  // will be padded
-    // Shuffle 4-byte fields forward.
-    while (gap >= sizeof(uint32_t) && num_32bit_static_fields != 0) {
-      --num_32bit_static_fields;
-      gap -= sizeof(uint32_t);
-    }
-    // Shuffle 2-byte fields forward.
-    while (gap >= sizeof(uint16_t) && num_16bit_static_fields != 0) {
-      --num_16bit_static_fields;
-      gap -= sizeof(uint16_t);
-    }
-    // Shuffle byte fields forward.
-    while (gap >= sizeof(uint8_t) && num_8bit_static_fields != 0) {
+    size += gap;
+    SHUFFLE_FORWARD(gap, 32bit, sizeof(uint32_t));
+    SHUFFLE_FORWARD(gap, 16bit, sizeof(uint16_t));
+    SHUFFLE_FORWARD(gap, 8bit, sizeof(uint8_t));
+  }
+  size += num_64bit_static_fields * sizeof(uint64_t);
+  // Word fields.
+  if (!IsAligned<4>(size) && num_32bit_static_fields != 0) {
+    uint32_t gap = 4 - (size & 0x3);
+    size += gap;
+    SHUFFLE_FORWARD(gap, 16bit, sizeof(uint16_t));
+    SHUFFLE_FORWARD(gap, 8bit, sizeof(uint8_t));
+  }
+  size += num_32bit_static_fields * sizeof(uint32_t);
+  // Halfword fields.
+  if (!IsAligned<2>(size) && num_64bit_static_fields != 0) {
+    ++size;
+    if (num_8bit_static_fields != 0) {
       --num_8bit_static_fields;
-      gap -= sizeof(uint8_t);
     }
   }
-  // Guaranteed to be at least 4 byte aligned. No need for further alignments.
-  // Space used for primitive static fields.
-  size += (num_8bit_static_fields * sizeof(uint8_t)) +
-      (num_16bit_static_fields * sizeof(uint16_t)) +
-      (num_32bit_static_fields * sizeof(uint32_t)) +
-      (num_64bit_static_fields * sizeof(uint64_t));
-  // For now, the start of of subclass expects to be 4-byte aligned, pad end of object to ensure
-  // alignment.
-  if (!IsAligned<4>(size)) {
-    size = RoundUp(size, 4);
-  }
+  size += num_16bit_static_fields * sizeof(uint16_t);
+  size += num_8bit_static_fields;
   return size;
 }
+#undef SHUFFLE_FORWARD
 
 template <bool kVisitClass, typename Visitor>
 inline void Class::VisitReferences(mirror::Class* klass, const Visitor& visitor) {
