@@ -507,6 +507,11 @@ class MANAGED Class FINAL : public Object {
                                    uint32_t num_32bit_static_fields,
                                    uint32_t num_64bit_static_fields,
                                    uint32_t num_ref_static_fields);
+  static inline uint32_t FieldsToShuffleForward(uint32_t gap,
+                                                uint32_t field_size, uint32_t field_count) {
+    uint32_t max_fit = gap / field_size;
+    return max_fit <= field_count ? max_fit : field_count;
+  }
 
   // The size of java.lang.Class.class.
   static uint32_t ClassClassSize() {
