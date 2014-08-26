@@ -2483,86 +2483,67 @@ void ClassLinker::LinkCode(ConstHandle<mirror::ArtMethod> method,
                                                    have_portable_code);
 }
 
-template<int n>
-void ClassLinker::AlignFields(size_t& current_field, const size_t num_fields,
-                              MemberOffset& field_offset,
-                              mirror::ObjectArray<mirror::ArtField>* fields,
-                              std::deque<mirror::ArtField*>& grouped_and_sorted_fields) {
-  if (current_field != num_fields && !IsAligned<n>(field_offset.Uint32Value())) {
-    size_t gap = (n - (field_offset.Uint32Value() & (n - 1)));
-    // Avoid padding unless a field that requires alignment actually exists.
-    bool needs_padding = false;
-    for (size_t i = 0; i < grouped_and_sorted_fields.size(); ++i) {
-      mirror::ArtField* field = grouped_and_sorted_fields[i];
-      Primitive::Type type = field->GetTypeAsPrimitiveType();
-      CHECK(type != Primitive::kPrimNot) << PrettyField(field);  // should be primitive types
-      // Too big to fill the gap.
-      if (Primitive::ComponentSize(type) >= n) {
-        needs_padding = true;
-        continue;
-      }
-      if (needs_padding) {
-        // Shift as many fields as possible to fill the gaps.
-        size_t cursor = i;
-        mirror::ArtField* shift_field;
-        Primitive::Type shift_type;
-        while (cursor < grouped_and_sorted_fields.size() && gap > 0) {
-          // Find field that can current in current gap.
-          do {
-            DCHECK_LT(cursor, grouped_and_sorted_fields.size()) << "Cursor overran fields.";
-            shift_field = grouped_and_sorted_fields[cursor];
-            shift_type = shift_field->GetTypeAsPrimitiveType();
-            CHECK(shift_type != Primitive::kPrimNot) << PrettyField(shift_field);
-            // Can fit.
-            if (Primitive::ComponentSize(shift_type) <= gap) {
-              break;
-            }
-            ++cursor;
-          } while (cursor < grouped_and_sorted_fields.size());
+inline void ClassLinker::AddGap(uint32_t gap_start, uint32_t gap_end, FieldGaps* gaps) {
+  DCHECK(gaps != nullptr);
 
-          if (cursor < grouped_and_sorted_fields.size()) {
-            fields->Set<false>(current_field++, shift_field);
-            shift_field->SetOffset(field_offset);
-            field_offset = MemberOffset(field_offset.Uint32Value() +
-                Primitive::ComponentSize(shift_type));
-            gap -= Primitive::ComponentSize(shift_type);
-            grouped_and_sorted_fields.erase(grouped_and_sorted_fields.begin() + cursor);
-          }
-        }
-      }
-      break;
+  uint32_t current_offset = gap_start;
+  // Slice, but maintain largest aligned blocks.
+  while (current_offset != gap_end) {
+    size_t remaining = gap_end - current_offset;
+    if (remaining >= sizeof(uint32_t) && IsAligned<4>(current_offset)) {
+      gaps->push(FieldGap {current_offset, sizeof(uint32_t)});
+      current_offset += sizeof(uint32_t);
+    } else if (remaining >= sizeof(uint16_t) && IsAligned<2>(current_offset)) {
+      gaps->push(FieldGap {current_offset, sizeof(uint16_t)});
+      current_offset += sizeof(uint16_t);
+    } else {
+      gaps->push(FieldGap {current_offset, sizeof(uint8_t)});
+      current_offset += sizeof(uint8_t);
     }
-    // No further shuffling available, pad whatever space is left.
-    if (needs_padding) {
-      field_offset = MemberOffset(field_offset.Uint32Value() + gap);
-    }
-    DCHECK(!needs_padding || IsAligned<n>(field_offset.Uint32Value())) << "Needed " <<
-      n << " byte alignment, but not aligned after align with offset: " <<
-      field_offset.Uint32Value();
+    DCHECK_LE(current_offset, gap_end) << "Overran gap";
   }
 }
-
 template<int n>
-void ClassLinker::ShuffleForward(size_t &current_field, const size_t num_fields,
-                                 MemberOffset& field_offset,
+void ClassLinker::ShuffleForward(const size_t num_fields, size_t* current_field_idx,
+                                 MemberOffset* field_offset,
                                  mirror::ObjectArray<mirror::ArtField>* fields,
-                                 std::deque<mirror::ArtField*>& grouped_and_sorted_fields) {
-  while (!grouped_and_sorted_fields.empty() && current_field != num_fields) {
-    mirror::ArtField* field = grouped_and_sorted_fields.front();
+                                 std::deque<mirror::ArtField*>* grouped_and_sorted_fields,
+                                 FieldGaps* gaps) {
+  DCHECK(current_field_idx != nullptr);
+  DCHECK(grouped_and_sorted_fields != nullptr);
+  DCHECK(fields != nullptr || (num_fields == 0 && grouped_and_sorted_fields->empty()));
+  DCHECK(gaps != nullptr);
+  DCHECK(field_offset != nullptr);
+
+  DCHECK(IsPowerOfTwo(n));
+  while (!grouped_and_sorted_fields->empty()) {
+    mirror::ArtField* field = grouped_and_sorted_fields->front();
     Primitive::Type type = field->GetTypeAsPrimitiveType();
-    CHECK(type != Primitive::kPrimNot) << PrettyField(field);  // should be primitive types
-    if (Primitive::ComponentSize(type) != n) {
-      DCHECK_LT(Primitive::ComponentSize(type), static_cast<unsigned int>(n)) <<
-          "Encountered a larger field (" << Primitive::ComponentSize(type) << ") " <<
-          "while shuffling fields of size: " << n;
-      // We should've shuffled all field of size n forward by this point.
+    if (Primitive::ComponentSize(type) < n) {
       break;
     }
-    DCHECK(IsAligned<n>(field_offset.Uint32Value()));
-    grouped_and_sorted_fields.pop_front();
-    fields->Set<false>(current_field++, field);
-    field->SetOffset(field_offset);
-    field_offset = MemberOffset(field_offset.Uint32Value() + n);
+    if (!IsAligned<n>(field_offset->Uint32Value())) {
+      MemberOffset old_offset = *field_offset;
+      *field_offset = MemberOffset(RoundUp(field_offset->Uint32Value(), n));
+      AddGap(old_offset.Uint32Value(), field_offset->Uint32Value(), gaps);
+    }
+    CHECK(type != Primitive::kPrimNot) << PrettyField(field);  // should be primitive types
+    grouped_and_sorted_fields->pop_front();
+    fields->Set<false>(*current_field_idx, field);
+    if (!gaps->empty() && gaps->top().size >= n) {
+      FieldGap gap = gaps->top();
+      gaps->pop();
+      DCHECK(IsAligned<n>(gap.start_offset));
+      field->SetOffset(MemberOffset(gap.start_offset));
+      if (gap.size > n) {
+        AddGap(gap.start_offset + n, gap.start_offset + gap.size, gaps);
+      }
+    } else {
+      DCHECK(IsAligned<n>(field_offset->Uint32Value()));
+      field->SetOffset(*field_offset);
+      *field_offset = MemberOffset(field_offset->Uint32Value() + n);
+    }
+    ++(*current_field_idx);
   }
 }
 
@@ -4830,9 +4811,11 @@ bool ClassLinker::LinkFields(ConstHandle<mirror::Class> klass, bool is_static, s
   std::sort(grouped_and_sorted_fields.begin(), grouped_and_sorted_fields.end(),
             LinkFieldsComparator());
 
-  // References should be at the front, unless we need to pad.
+  // References should be at the front.
   size_t current_field = 0;
   size_t num_reference_fields = 0;
+  FieldGaps gaps;
+
   for (; current_field < num_fields; current_field++) {
     mirror::ArtField* field = grouped_and_sorted_fields.front();
     Primitive::Type type = field->GetTypeAsPrimitiveType();
@@ -4840,27 +4823,31 @@ bool ClassLinker::LinkFields(ConstHandle<mirror::Class> klass, bool is_static, s
     if (isPrimitive) {
       break;  // past last reference, move on to the next phase
     }
+    if (UNLIKELY(!IsAligned<4>(field_offset.Uint32Value()))) {
+      MemberOffset old_offset = field_offset;
+      field_offset = MemberOffset(RoundUp(field_offset.Uint32Value(), 4));
+      AddGap(old_offset.Uint32Value(), field_offset.Uint32Value(), &gaps);
+    }
+    DCHECK(IsAligned<4>(field_offset.Uint32Value()));
     grouped_and_sorted_fields.pop_front();
     num_reference_fields++;
     fields->Set<false>(current_field, field);
     field->SetOffset(field_offset);
     field_offset = MemberOffset(field_offset.Uint32Value() + sizeof(uint32_t));
   }
-
-  AlignFields<8>(current_field, num_fields, field_offset, fields, grouped_and_sorted_fields);
-  ShuffleForward<8>(current_field, num_fields, field_offset, fields, grouped_and_sorted_fields);
-  // No need for further alignment, start of object is 4-byte aligned.
-  ShuffleForward<4>(current_field, num_fields, field_offset, fields, grouped_and_sorted_fields);
-  ShuffleForward<2>(current_field, num_fields, field_offset, fields, grouped_and_sorted_fields);
-  ShuffleForward<1>(current_field, num_fields, field_offset, fields, grouped_and_sorted_fields);
+  // Gaps are stored as a max heap which means that we must shuffle from largest to smallest
+  // otherwise we could end up with suboptimal gap fills.
+  ShuffleForward<8>(num_fields, &current_field, &field_offset,
+                    fields, &grouped_and_sorted_fields, &gaps);
+  ShuffleForward<4>(num_fields, &current_field, &field_offset,
+                    fields, &grouped_and_sorted_fields, &gaps);
+  ShuffleForward<2>(num_fields, &current_field, &field_offset,
+                    fields, &grouped_and_sorted_fields, &gaps);
+  ShuffleForward<1>(num_fields, &current_field, &field_offset,
+                    fields, &grouped_and_sorted_fields, &gaps);
   CHECK(grouped_and_sorted_fields.empty()) << "Missed " << grouped_and_sorted_fields.size() <<
       " fields.";
 
-  // Subclass expects superclass to be 4 byte aligned at end.
-  if (!IsAligned<4>(field_offset.Uint32Value())) {
-    field_offset = MemberOffset(RoundUp(field_offset.Uint32Value(), 4));
-  }
-  CHECK(IsAligned<4>(field_offset.Uint32Value()));
   Thread::Current()->EndAssertNoThreadSuspension(old_no_suspend_cause);
 
   // We lie to the GC about the java.lang.ref.Reference.referent field, so it doesn't scan it.
