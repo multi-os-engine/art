@@ -224,6 +224,7 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
   compiler_callbacks_ = nullptr;
   is_zygote_ = false;
   must_relocate_ = kDefaultMustRelocate;
+  should_prune_dex_cache_ = true;
   dex2oat_enabled_ = true;
   image_dex2oat_enabled_ = true;
   if (kPoisonHeapReferences) {
@@ -436,6 +437,10 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
       must_relocate_ = true;
     } else if (option == "-Xnorelocate") {
       must_relocate_ = false;
+    } else if (option == "-Xnoprune-dex-cache") {
+      should_prune_dex_cache_ = false;
+    } else if (option == "-Xprune-dex-cache") {
+      should_prune_dex_cache_ = true;
     } else if (option == "-Xnodex2oat") {
       dex2oat_enabled_ = false;
     } else if (option == "-Xdex2oat") {
@@ -802,6 +807,7 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -X[no]relocate\n");
   UsageMessage(stream, "  -X[no]dex2oat (Whether to invoke dex2oat on the application)\n");
   UsageMessage(stream, "  -X[no]image-dex2oat (Whether to create and use a boot image)\n");
+  UsageMessage(stream, "  -X[no]prune-dex-cache\n");
   UsageMessage(stream, "\n");
 
   UsageMessage(stream, "The following previously supported Dalvik options are ignored:\n");

@@ -194,6 +194,8 @@ if [ "$INTERPRETER" = "y" ]; then
 fi
 
 JNI_OPTS="-Xjnigreflimit:512 -Xcheck:jni"
+# We don't want to prune the prebuilt test.
+FLAGS="${FLAGS} -Xnoprune-dex-cache"
 
 if [ "$RELOCATE" = "y" ]; then
     RELOCATE_OPT="-Xrelocate"

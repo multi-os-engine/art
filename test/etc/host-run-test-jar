@@ -190,6 +190,7 @@ fi
 
 mkdir_cmd="mkdir -p ${DEX_LOCATION}/dalvik-cache/$ISA"
 if [ "$PREBUILD" = "y" ]; then
+  FLAGS="${FLAGS} -Xnoprune-dex-cache"
   prebuild_cmd="${ANDROID_HOST_OUT}/bin/dex2oatd $COMPILER_FLAGS --instruction-set=$ISA $BUILD_BOOT_OPT --dex-file=$DEX_LOCATION/$TEST_NAME.jar --oat-file=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g")"
 else
   prebuild_cmd="true"

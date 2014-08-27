@@ -106,6 +106,10 @@ class Runtime {
     return must_relocate_;
   }
 
+  bool ShouldPruneDexCache() const {
+    return should_prune_dex_cache_;
+  }
+
   bool IsDex2OatEnabled() const {
     return dex2oat_enabled_ && IsImageDex2OatEnabled();
   }
@@ -520,6 +524,7 @@ class Runtime {
   bool must_relocate_;
   bool is_concurrent_gc_enabled_;
   bool is_explicit_gc_disabled_;
+  bool should_prune_dex_cache_;
   bool dex2oat_enabled_;
   bool image_dex2oat_enabled_;
 
