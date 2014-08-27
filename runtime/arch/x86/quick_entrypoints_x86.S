@@ -1254,6 +1254,7 @@ DEFINE_FUNCTION art_quick_instrumentation_entry
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // Pass receiver.
     PUSH eax                      // Pass Method*.
+    SETUP_GOT_NOSAVE
     call SYMBOL(artInstrumentationMethodEntryFromCode) // (Method*, Object*, Thread*, SP, LR)
     addl LITERAL(28), %esp        // Pop arguments upto saved Method*.
     movl 28(%esp), %edi           // Restore edi.
