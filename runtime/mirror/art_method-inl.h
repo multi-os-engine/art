@@ -515,8 +515,10 @@ inline ArtMethod* ArtMethod::GetInterfaceMethodIfProxy() {
   if (LIKELY(!klass->IsProxyClass())) {
     return this;
   }
-  mirror::ArtMethod* interface_method = GetDexCacheResolvedMethods()->Get(GetDexMethodIndex());
-  DCHECK(interface_method != nullptr);
+  uint32_t dex_method_index = GetDexMethodIndex();
+  mirror::ArtMethod* interface_method = GetDexCacheResolvedMethods()->Get(dex_method_index);
+  DCHECK(interface_method != nullptr) << "Method not found at index " << dex_method_index
+      << " in resolved methods of dex cache of class " << PrettyDescriptor(klass);
   DCHECK_EQ(interface_method,
             Runtime::Current()->GetClassLinker()->FindMethodForProxy(klass, this));
   return interface_method;
