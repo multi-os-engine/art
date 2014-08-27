@@ -24,6 +24,7 @@
 #include "dex/quick/mir_to_lir.h"
 #include "driver/compiler_driver.h"
 #include "elf_writer_quick.h"
+#include "elf_writer_quick-inl.h"
 #include "jni/quick/jni_compiler.h"
 #include "mirror/art_method-inl.h"
 #include "base/logging.h"
@@ -608,7 +609,7 @@ bool QuickCompiler::WriteElf(art::File* file,
                              const std::vector<const art::DexFile*>& dex_files,
                              const std::string& android_root,
                              bool is_host) const {
-  return art::ElfWriterQuick::Create(file, oat_writer, dex_files, android_root, is_host,
+  return art::ElfWriterQuick32::Create(file, oat_writer, dex_files, android_root, is_host,
                                      *GetCompilerDriver());
 }
 
