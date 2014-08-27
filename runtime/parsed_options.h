@@ -50,6 +50,7 @@ class ParsedOptions {
   CompilerCallbacks* compiler_callbacks_;
   bool is_zygote_;
   bool must_relocate_;
+  bool should_prune_dex_cache_;
   bool dex2oat_enabled_;
   bool image_dex2oat_enabled_;
   std::string patchoat_executable_;
