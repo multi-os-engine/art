@@ -80,6 +80,7 @@ LIBART_COMMON_SRC_FILES := \
   intern_table.cc \
   interpreter/interpreter.cc \
   interpreter/interpreter_common.cc \
+  interpreter/interpreter_goto_table_impl.cc \
   interpreter/interpreter_switch_impl.cc \
   java_vm_ext.cc \
   jdwp/jdwp_event.cc \
@@ -201,8 +202,7 @@ LIBART_COMMON_SRC_FILES += \
   entrypoints/quick/quick_trampoline_entrypoints.cc
 
 # Source files that only compile with GCC.
-LIBART_GCC_ONLY_SRC_FILES := \
-  interpreter/interpreter_goto_table_impl.cc
+LIBART_GCC_ONLY_SRC_FILES :=
 
 LIBART_TARGET_LDFLAGS :=
 LIBART_HOST_LDFLAGS :=
