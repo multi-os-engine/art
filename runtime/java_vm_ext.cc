@@ -473,7 +473,15 @@ jweak JavaVMExt::AddWeakGlobalRef(Thread* self, mirror::Object* obj) {
   }
   MutexLock mu(self, weak_globals_lock_);
   while (UNLIKELY(!allow_new_weak_globals_)) {
-    weak_globals_add_condition_.WaitHoldingLocks(self);
+    weak_globals_lock_.Unlock(self);
+    self->TransitionFromRunnableToSuspended(kWaitingForGcRefSystemWeakProc);
+    weak_globals_lock_.Lock(self);
+    if (!allow_new_weak_globals_) {
+      weak_globals_add_condition_.Wait(self);
+    }
+    weak_globals_lock_.Unlock(self);
+    self->TransitionFromSuspendedToRunnable();
+    weak_globals_lock_.Lock(self);
   }
   IndirectRef ref = weak_globals_.Add(IRT_FIRST_SEGMENT, obj);
   return reinterpret_cast<jweak>(ref);
@@ -562,7 +570,15 @@ mirror::Object* JavaVMExt::DecodeGlobal(Thread* self, IndirectRef ref) {
 mirror::Object* JavaVMExt::DecodeWeakGlobal(Thread* self, IndirectRef ref) {
   MutexLock mu(self, weak_globals_lock_);
   while (UNLIKELY(!allow_new_weak_globals_)) {
-    weak_globals_add_condition_.WaitHoldingLocks(self);
+    weak_globals_lock_.Unlock(self);
+    self->TransitionFromRunnableToSuspended(kWaitingForGcRefSystemWeakProc);
+    weak_globals_lock_.Lock(self);
+    if (!allow_new_weak_globals_) {
+      weak_globals_add_condition_.Wait(self);
+    }
+    weak_globals_lock_.Unlock(self);
+    self->TransitionFromSuspendedToRunnable();
+    weak_globals_lock_.Lock(self);
   }
   return weak_globals_.Get(ref);
 }
