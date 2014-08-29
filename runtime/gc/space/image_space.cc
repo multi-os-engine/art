@@ -105,10 +105,20 @@ static void RealPruneDexCache(const std::string& cache_dir_path) {
       }
       continue;
     }
+#if defined(__APPLE__)
+    std::string cache_file(cache_dir_path);
+    cache_file += '/';
+    cache_file += name;
+    if (TEMP_FAILURE_RETRY(unlink(cache_file.c_str())) != 0) {
+      PLOG(ERROR) << "Unable to unlink " << cache_file;
+      continue;
+    }
+#else
     if (TEMP_FAILURE_RETRY(unlinkat(dir_fd, name, 0)) != 0) {
       PLOG(ERROR) << "Unable to unlink " << cache_dir_path << "/" << name;
       continue;
     }
+#endif
   }
   CHECK_EQ(0, TEMP_FAILURE_RETRY(closedir(cache_dir))) << "Unable to close directory.";
 }
