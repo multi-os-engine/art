@@ -28,7 +28,7 @@ static constexpr size_t kObjectReferenceSize = 4;
 
 class Primitive {
  public:
-  enum Type {
+  enum Type : int8_t {
     kPrimNot = 0,
     kPrimBoolean,
     kPrimByte,

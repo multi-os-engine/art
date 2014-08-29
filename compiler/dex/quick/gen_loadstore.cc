@@ -35,6 +35,30 @@ LIR* Mir2Lir::LoadConstant(RegStorage r_dest, int value) {
   return LoadConstantNoClobber(r_dest, value);
 }
 
+LIR* Mir2Lir::LoadDisp(OpSize op_size, RegStorage r_base, int displacement, RegStorage result) {
+  switch (op_size) {
+    case kUnsignedByte:
+      return LoadUnsigned8Disp(r_base, displacement, result);
+    case kSignedByte:
+      return LoadSigned8Disp(r_base, displacement, result);
+    case kUnsignedHalf:
+      return LoadSigned16Disp(r_base, displacement, result);
+    case kSignedHalf:
+      return LoadUnsigned16Disp(r_base, displacement, result);
+    case kWord:
+      return LoadWordDisp(r_base, displacement, result);
+    case k32:
+    case kSingle:
+      return Load32Disp(r_base, displacement, result);
+    case kReference:
+    case k64:
+    case kDouble:
+      return Load64Disp(r_base, displacement, result);
+  }
+  LOG(FATAL) << "An OpSize case was not accounted for: " << op_size;
+  return nullptr;
+}
+
 /*
  * Temporary workaround for Issue 7250540.  If we're loading a constant zero into a
  * promoted floating point register, also copy a zero into the int/ref identity of

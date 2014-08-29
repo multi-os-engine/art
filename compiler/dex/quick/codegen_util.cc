@@ -1204,10 +1204,10 @@ bool Mir2Lir::BadOverlap(RegLocation rl_src, RegLocation rl_dest) {
   return (abs(mir_graph_->SRegToVReg(rl_src.s_reg_low) - mir_graph_->SRegToVReg(rl_dest.s_reg_low)) == 1);
 }
 
-LIR *Mir2Lir::OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, RegStorage base_reg,
+LIR *Mir2Lir::OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, OpSize size, RegStorage base_reg,
                                 int offset, int check_value, LIR* target, LIR** compare) {
   // Handle this for architectures that can't compare to memory.
-  LIR* inst = Load32Disp(base_reg, offset, temp_reg);
+  LIR* inst = LoadDisp(size, base_reg, offset, temp_reg);
   if (compare != nullptr) {
     *compare = inst;
   }

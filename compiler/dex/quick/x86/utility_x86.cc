@@ -931,15 +931,33 @@ LIR* X86Mir2Lir::StoreBaseDisp(RegStorage r_base, int displacement, RegStorage r
   return store;
 }
 
-LIR* X86Mir2Lir::OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, RegStorage base_reg,
+LIR* X86Mir2Lir::OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, OpSize size, RegStorage base_reg,
                                    int offset, int check_value, LIR* target, LIR** compare) {
-    LIR* inst = NewLIR3(IS_SIMM8(check_value) ? kX86Cmp32MI8 : kX86Cmp32MI, base_reg.GetReg(),
-            offset, check_value);
-    if (compare != nullptr) {
-        *compare = inst;
-    }
-    LIR* branch = OpCondBranch(cond, target);
-    return branch;
+  int opcode = 0;
+  switch (size) {
+    case k32:
+    case kSingle:
+      opcode = IS_SIMM8(check_value) ? kX86Cmp32MI8 : kX86Cmp32MI;
+      break;
+    case kSignedHalf:
+      DCHECK(IS_SIMM16(check_value) || IS_SIMM8(check_value)) << check_value << " is not a valid number for compare";
+      opcode = IS_SIMM8(check_value) ? kX86Cmp16MI8 : kX86Cmp16MI;
+      break;
+    case kSignedByte:
+      DCHECK(IS_SIMM8(check_value)) << check_value << " out of range for byte compare";
+      opcode = kX86Cmp8MI;
+      break;
+    default:
+      LOG(FATAL) << "Don't know how to generate comparison for size: " << size;
+      break;
+  }
+  DCHECK_NE(0, opcode);
+  LIR* inst = NewLIR3(opcode, base_reg.GetReg(), offset, check_value);
+  if (compare != nullptr) {
+      *compare = inst;
+  }
+  LIR* branch = OpCondBranch(cond, target);
+  return branch;
 }
 
 void X86Mir2Lir::AnalyzeMIR() {
