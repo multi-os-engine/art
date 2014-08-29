@@ -71,4 +71,40 @@ TEST(HandleScopeTest, Offsets) NO_THREAD_SAFETY_ANALYSIS {
   }
 }
 
+TEST(HandleScopeTest, VarHandleScopeHolder) NO_THREAD_SAFETY_ANALYSIS {
+  // Initialize test data.
+  const size_t kTestSize = 1000;
+  mirror::Object* old_obj[kTestSize];
+  mirror::Object* obj[kTestSize];
+  mirror::Object* new_obj[kTestSize];
+  for (size_t i = 0; i < kTestSize; ++i) {
+    old_obj[i] = reinterpret_cast<mirror::Object*>(i);
+    obj[i] = old_obj[i];
+  }
+  for (size_t i = 0; i < kTestSize; ++i) {
+    new_obj[i] = reinterpret_cast<mirror::Object*>(i + kTestSize);
+  }
+  mirror::Object* handle_result[kTestSize];
+
+  // Use VarHandleScopeHolder.
+  {
+    VarHandleScopeHolder<true> hs(nullptr, kTestSize);
+    Handle<mirror::Object> handle[kTestSize];
+    for (size_t i = 0; i < kTestSize; ++i) {
+      handle[i] = hs.NewHandle(obj[i]);
+    }
+    for (size_t i = 0; i < kTestSize; ++i) {
+      handle[i].Assign(new_obj[i]);
+    }
+    for (size_t i = 0; i < kTestSize; ++i) {
+      handle_result[i] = handle[i].Get();
+    }
+  }
+
+  // Check results.
+  for (size_t i = 0; i < kTestSize; ++i) {
+    EXPECT_EQ(handle_result[i], new_obj[i]);
+  }
+}
+
 }  // namespace art
