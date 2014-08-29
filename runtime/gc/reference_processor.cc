@@ -36,10 +36,12 @@ ReferenceProcessor::ReferenceProcessor()
 
 void ReferenceProcessor::EnableSlowPath() {
   mirror::Reference::GetJavaLangRefReference()->SetSlowPath(true);
+  slow_path_enabled_ = true;
 }
 
 void ReferenceProcessor::DisableSlowPath(Thread* self) {
   mirror::Reference::GetJavaLangRefReference()->SetSlowPath(false);
+  slow_path_enabled_ = false;
   condition_.Broadcast(self);
 }
 
@@ -51,7 +53,7 @@ mirror::Object* ReferenceProcessor::GetReferent(Thread* self, mirror::Reference*
     return referent;
   }
   MutexLock mu(self, lock_);
-  while (SlowPathEnabled()) {
+  while (slow_path_enabled_) {
     mirror::HeapReference<mirror::Object>* const referent_addr =
         reference->GetReferentReferenceAddr();
     // If the referent became cleared, return it. Don't need barrier since thread roots can't get
@@ -77,7 +79,16 @@ mirror::Object* ReferenceProcessor::GetReferent(Thread* self, mirror::Reference*
         }
       }
     }
-    condition_.WaitHoldingLocks(self);
+
+    lock_.Unlock(self);
+    self->TransitionFromRunnableToSuspended(kWaitingForGcRefSystemWeakProc);
+    lock_.Lock(self);
+    while (slow_path_enabled_) {
+      condition_.Wait(self);
+    }
+    lock_.Unlock(self);
+    self->TransitionFromSuspendedToRunnable();
+    lock_.Lock(self);
   }
   return reference->GetReferent();
 }

@@ -210,7 +210,15 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong) {
   DCHECK(s != NULL);
 
   while (UNLIKELY(!allow_new_interns_)) {
-    new_intern_condition_.WaitHoldingLocks(self);
+    Locks::intern_table_lock_->Unlock(self);
+    self->TransitionFromRunnableToSuspended(kWaitingForGcRefSystemWeakProc);
+    Locks::intern_table_lock_->Lock(self);
+    while (!allow_new_interns_) {
+      new_intern_condition_.Wait(self);
+    }
+    Locks::intern_table_lock_->Unlock(self);
+    self->TransitionFromSuspendedToRunnable();
+    Locks::intern_table_lock_->Lock(self);
   }
 
   if (is_strong) {

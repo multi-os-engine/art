@@ -49,9 +49,9 @@ class ReferenceProcessor {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
       LOCKS_EXCLUDED(lock_);
-  // The slow path bool is contained in the reference class object, can only be set once
-  // Only allow setting this with mutators suspended so that we can avoid using a lock in the
-  // GetReferent fast path as an optimization.
+  // Only allow setting the slow path bool flag with mutators
+  // suspended so that we can avoid using a lock in the GetReferent
+  // fast path as an optimization.
   void EnableSlowPath() EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
   // Decode the referent, may block if references are being processed.
   mirror::Object* GetReferent(Thread* self, mirror::Reference* reference)
@@ -92,6 +92,11 @@ class ReferenceProcessor {
   bool preserving_references_ GUARDED_BY(lock_);
   // Lock that guards the reference processing.
   Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
+  // The slow path bool flag. The java.lang.Reference.slowPathEnabled
+  // field is a copy of this flag on the Java side that's read by
+  // the intrinsified GetReferent().
+  bool slow_path_enabled_;
+
   // Condition that people wait on if they attempt to get the referent of a reference while
   // processing is in progress.
   ConditionVariable condition_ GUARDED_BY(lock_);
