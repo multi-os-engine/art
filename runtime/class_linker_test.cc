@@ -521,15 +521,17 @@ struct ClassOffsets : public CheckOffsets<mirror::Class> {
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, access_flags_),                  "accessFlags"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, class_size_),                    "classSize"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, clinit_thread_id_),              "clinitThreadId"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_class_def_idx_),             "dexClassDefIndex"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_type_idx_),                  "dexTypeIndex"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, num_reference_instance_fields_), "numReferenceInstanceFields"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, num_reference_static_fields_),   "numReferenceStaticFields"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, object_size_),                   "objectSize"));
-    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, primitive_type_),                "primitiveType"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_instance_offsets_),    "referenceInstanceOffsets"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, reference_static_offsets_),      "referenceStaticOffsets"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_class_def_idx_),             "dexClassDefIndex"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, dex_type_idx_),                  "dexTypeIndex"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, primitive_type_),                "primitiveType"));
     offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, status_),                        "status"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, x_padding1),                        "xPadding1"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::Class, x_padding2),                        "xPadding2"));
   };
 };
 

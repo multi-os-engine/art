@@ -1159,8 +1159,8 @@ bool Mir2Lir::GenInlinedReferenceGet(CallInfo* info) {
 
   RegStorage reg_slow_path = AllocTemp();
   RegStorage reg_disabled = AllocTemp();
-  Load8Disp(reg_class, slow_path_flag_offset, reg_slow_path);
-  Load8Disp(reg_class, disable_flag_offset, reg_disabled);
+  LoadUnsigned8Disp(reg_class, slow_path_flag_offset, reg_slow_path);
+  LoadUnsigned8Disp(reg_class, disable_flag_offset, reg_disabled);
   FreeTemp(reg_class);
   LIR* or_inst = OpRegRegReg(kOpOr, reg_slow_path, reg_slow_path, reg_disabled);
   FreeTemp(reg_disabled);

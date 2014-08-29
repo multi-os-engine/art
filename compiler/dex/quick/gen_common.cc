@@ -566,7 +566,7 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, OpSize size) {
         LIR* unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, NULL);
         RegStorage r_tmp = TargetReg(kArg2, kNotWide);
         LockTemp(r_tmp);
-        LIR* uninit_branch = OpCmpMemImmBranch(kCondLt, r_tmp, r_base,
+        LIR* uninit_branch = OpCmpMemImmBranch(kCondLt, r_tmp, kSignedByte, r_base,
                                           mirror::Class::StatusOffset().Int32Value(),
                                           mirror::Class::kStatusInitialized, nullptr, nullptr);
         LIR* cont = NewLIR0(kPseudoTargetLabel);
@@ -673,7 +673,7 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest, OpSize size, Primitive::Typ
         LIR* unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, NULL);
         RegStorage r_tmp = TargetReg(kArg2, kNotWide);
         LockTemp(r_tmp);
-        LIR* uninit_branch = OpCmpMemImmBranch(kCondLt, r_tmp, r_base,
+        LIR* uninit_branch = OpCmpMemImmBranch(kCondLt, r_tmp, kSignedByte, r_base,
                                           mirror::Class::StatusOffset().Int32Value(),
                                           mirror::Class::kStatusInitialized, nullptr, nullptr);
         LIR* cont = NewLIR0(kPseudoTargetLabel);

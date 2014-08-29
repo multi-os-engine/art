@@ -132,7 +132,7 @@ class MANAGED Class FINAL : public Object {
   // again at runtime.
   //
   // TODO: Explain the other states
-  enum Status {
+  enum Status : int8_t {
     kStatusRetired = -2,
     kStatusError = -1,
     kStatusNotReady = 0,
@@ -151,9 +151,9 @@ class MANAGED Class FINAL : public Object {
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   Status GetStatus() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    COMPILE_ASSERT(sizeof(Status) == sizeof(uint32_t), size_of_status_not_uint32);
+    COMPILE_ASSERT(sizeof(Status) == sizeof(uint8_t), size_of_status_not_uint8);
     return static_cast<Status>(
-        GetField32Volatile<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, status_)));
+        GetFieldByteVolatile<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, status_)));
   }
 
   void SetStatus(Status new_status, Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -331,8 +331,8 @@ class MANAGED Class FINAL : public Object {
   Primitive::Type GetPrimitiveType() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetPrimitiveType(Primitive::Type new_type) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK_EQ(sizeof(Primitive::Type), sizeof(int32_t));
-    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, primitive_type_), new_type);
+    DCHECK_EQ(sizeof(Primitive::Type), sizeof(int8_t));
+    SetFieldByte<false>(OFFSET_OF_OBJECT_MEMBER(Class, primitive_type_), new_type);
   }
 
   // Returns true if the class is a primitive type.
@@ -512,7 +512,7 @@ class MANAGED Class FINAL : public Object {
   static uint32_t ClassClassSize() {
     // The number of vtable entries in java.lang.Class.
     uint32_t vtable_entries = Object::kVTableLength + 64;
-    return ComputeClassSize(true, vtable_entries, 0, 0, 0, 1, 0);
+    return ComputeClassSize(true, vtable_entries, 0, 1, 0, 1, 0);
   }
 
   // The size of a java.lang.Class representing a primitive such as int.class.
@@ -929,21 +929,21 @@ class MANAGED Class FINAL : public Object {
   }
 
   uint16_t GetDexClassDefIndex() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_));
+    return GetFieldChar(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_));
   }
 
   void SetDexClassDefIndex(uint16_t class_def_idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // Not called within a transaction.
-    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_), class_def_idx);
+    SetFieldShort<false>(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_), class_def_idx);
   }
 
   uint16_t GetDexTypeIndex() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_));
+    return GetFieldShort(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_));
   }
 
   void SetDexTypeIndex(uint16_t type_idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // Not called within a transaction.
-    SetField32<false>(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_), type_idx);
+    SetFieldShort<false>(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_), type_idx);
   }
 
   static Class* GetJavaLangClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -1125,14 +1125,6 @@ class MANAGED Class FINAL : public Object {
   // Tid used to check for recursive <clinit> invocation.
   pid_t clinit_thread_id_;
 
-  // ClassDef index in dex file, -1 if no class definition such as an array.
-  // TODO: really 16bits
-  int32_t dex_class_def_idx_;
-
-  // Type index in dex file.
-  // TODO: really 16bits
-  int32_t dex_type_idx_;
-
   // Number of instance fields that are object refs.
   uint32_t num_reference_instance_fields_;
 
@@ -1144,17 +1136,27 @@ class MANAGED Class FINAL : public Object {
   // See also class_size_.
   uint32_t object_size_;
 
-  // Primitive type value, or Primitive::kPrimNot (0); set for generated primitive classes.
-  Primitive::Type primitive_type_;
-
   // Bitmap of offsets of ifields.
   uint32_t reference_instance_offsets_;
 
   // Bitmap of offsets of sfields.
   uint32_t reference_static_offsets_;
 
+  // ClassDef index in dex file, kDexNoIndex(65335) if no class definition such as an array.
+  uint16_t dex_class_def_idx_;
+
+  // Type index in dex file.
+  uint16_t dex_type_idx_;
+
+  // Primitive type value, or Primitive::kPrimNot (0); set for generated primitive classes.
+  int8_t primitive_type_;
+
   // State of class initialization.
-  Status status_;
+  int8_t status_;
+
+  // Padding used to ensure that vtables always start on 4 byte aligned addresses.
+  int8_t x_padding1;
+  int8_t x_padding2;
 
   // TODO: ?
   // initiating class loader list
