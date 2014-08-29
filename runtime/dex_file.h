@@ -58,6 +58,7 @@ class DexFile {
   static const char* kClassesDex;
 
   // The value of an invalid index.
+  // TODO should just replace this everywhere with 16 version?
   static const uint32_t kDexNoIndex = 0xFFFFFFFF;
 
   // The value of an invalid index.

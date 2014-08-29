@@ -974,17 +974,37 @@ class Mir2Lir : public Backend {
     RegLocation LoadCurrMethod();
     void LoadCurrMethodDirect(RegStorage r_tgt);
     virtual LIR* LoadConstant(RegStorage r_dest, int value);
+    LIR* LoadDisp(OpSize op_size, RegStorage r_base, int displacement, RegStorage r_dest);
     // Natural word size.
     virtual LIR* LoadWordDisp(RegStorage r_base, int displacement, RegStorage r_dest) {
       return LoadBaseDisp(r_base, displacement, r_dest, kWord, kNotVolatile);
     }
-    // Load 8 bits, regardless of target.
-    virtual LIR* Load8Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
+    // Load 8 bits, sign extended, regardless of target.
+    virtual LIR* LoadSigned8Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
       return LoadBaseDisp(r_base, displacement, r_dest, kSignedByte, kNotVolatile);
+    }
+    // Load 8 bits, zero extended, regardless of target.
+    virtual LIR* LoadUnsigned8Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
+      return LoadBaseDisp(r_base, displacement, r_dest, kUnsignedByte, kNotVolatile);
+    }
+    // Load 16 bits, signed extended, regardess of target. Nothing uses this at the moment.
+    virtual LIR* LoadSigned16Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
+      LOG(FATAL) << "Not implemented";
+      return nullptr;
+    }
+    // Load 16 bits, zero extended, regardless of target. Nothing uses this at the moment.
+    virtual LIR* LoadUnsigned16Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
+      LOG(FATAL) << "Not implemented";
+      return nullptr;
     }
     // Load 32 bits, regardless of target.
     virtual LIR* Load32Disp(RegStorage r_base, int displacement, RegStorage r_dest)  {
       return LoadBaseDisp(r_base, displacement, r_dest, k32, kNotVolatile);
+    }
+    // Load 64 bits, regardless of target. Nothing uses this at the moment.
+    virtual LIR* Load64Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
+      LOG(FATAL) << "Not implemented";
+      return nullptr;
     }
     // Load a reference at base + displacement and decompress into register.
     virtual LIR* LoadRefDisp(RegStorage r_base, int displacement, RegStorage r_dest,
@@ -1114,6 +1134,7 @@ class Mir2Lir : public Backend {
      * @param cond The condition code that when true will branch to the target.
      * @param temp_reg A temporary register that can be used if compare to memory is not
      * supported by the architecture.
+     * @param size The size of the load operation (8, 16, 32).
      * @param base_reg The register holding the base address.
      * @param offset The offset from the base.
      * @param check_value The immediate to compare to.
@@ -1121,8 +1142,9 @@ class Mir2Lir : public Backend {
      * @param compare output for getting LIR for comparison (or nullptr)
      * @returns The branch instruction that was generated.
      */
-    virtual LIR* OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, RegStorage base_reg,
-                                   int offset, int check_value, LIR* target, LIR** compare);
+    virtual LIR* OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, OpSize size,
+                                   RegStorage base_reg, int offset, int check_value,
+                                   LIR* target, LIR** compare);
 
     // Required for target - codegen helpers.
     virtual bool SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div,

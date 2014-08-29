@@ -511,7 +511,7 @@ template<VerifyObjectFlags kVerifyFlags>
 inline Primitive::Type Class::GetPrimitiveType() {
   DCHECK_EQ(sizeof(Primitive::Type), sizeof(int32_t));
   return static_cast<Primitive::Type>(
-      GetField32<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, primitive_type_)));
+      GetFieldByte<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, primitive_type_)));
 }
 
 inline void Class::CheckObjectAlloc() {

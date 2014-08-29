@@ -781,6 +781,7 @@ class X86Mir2Lir : public Mir2Lir {
    * @brief Compare memory to immediate, and branch if condition true.
    * @param cond The condition code that when true will branch to the target.
    * @param temp_reg A temporary register that can be used if compare memory is not
+   * @param size The size of the load operation (8, 16, 32).
    * supported by the architecture.
    * @param base_reg The register holding the base address.
    * @param offset The offset from the base.
@@ -788,7 +789,7 @@ class X86Mir2Lir : public Mir2Lir {
    * @param target branch target (or nullptr)
    * @param compare output for getting LIR for comparison (or nullptr)
    */
-  LIR* OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, RegStorage base_reg,
+  LIR* OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, OpSize size, RegStorage base_reg,
                          int offset, int check_value, LIR* target, LIR** compare);
 
   void GenRemFP(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2, bool is_double);

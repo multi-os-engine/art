@@ -119,9 +119,9 @@ void Class::SetStatus(Status new_status, Thread* self) {
   }
   COMPILE_ASSERT(sizeof(Status) == sizeof(uint32_t), size_of_status_not_uint32);
   if (Runtime::Current()->IsActiveTransaction()) {
-    SetField32Volatile<true>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
+    SetFieldByteVolatile<true>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
   } else {
-    SetField32Volatile<false>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
+    SetFieldByteVolatile<false>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
   }
 
   if (!class_linker_initialized) {
