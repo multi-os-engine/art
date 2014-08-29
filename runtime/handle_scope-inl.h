@@ -41,6 +41,31 @@ inline StackHandleScope<kNumReferences>::~StackHandleScope() {
   DCHECK_EQ(top_handle_scope, this);
 }
 
+template<bool kNoThread>
+inline VarHandleScopeHolder<kNoThread>::VarHandleScopeHolder(Thread* self, size_t num_refs)
+    : handle_scope_(nullptr), self_(self), pos_(0) {
+  size_t storage_size = HandleScope::SizeOf(num_refs);
+  void* storage = malloc(storage_size);
+  CHECK(storage != nullptr) << "Failed to allocate variable-size HandleScope of size "
+                            << storage_size << " bytes.";
+  memset(storage, 0, storage_size);
+  handle_scope_ = reinterpret_cast<HandleScope*>(storage);
+  handle_scope_->SetNumberOfReferences(num_refs);
+  DCHECK_EQ(handle_scope_->NumberOfReferences(), num_refs);
+  DCHECK(handle_scope_->GetLink() == nullptr);
+  if (!kNoThread) {
+    self_->PushHandleScope(handle_scope_);
+  }
+}
+
+template<bool kNoThread>
+inline VarHandleScopeHolder<kNoThread>::~VarHandleScopeHolder() {
+  if (!kNoThread) {
+    HandleScope* top_handle_scope = self_->PopHandleScope();
+    DCHECK_EQ(top_handle_scope, handle_scope_);
+  }
+}
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_HANDLE_SCOPE_INL_H_

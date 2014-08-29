@@ -132,6 +132,7 @@ class PACKED(4) HandleScope {
 
  private:
   template<size_t kNumReferences> friend class StackHandleScope;
+  template<bool kNoThread> friend class VarHandleScopeHolder;
 
   DISALLOW_COPY_AND_ASSIGN(HandleScope);
 };
@@ -210,6 +211,41 @@ class PACKED(4) StackHandleScope FINAL : public HandleScope {
   size_t pos_;
 
   template<size_t kNumRefs> friend class StackHandleScope;
+};
+
+// Dynamically-size handle scope. This is an RAII object that wraps a
+// heap-allocated HandleScope. kNoThread == true only for the tests.
+template<bool kNoThread = false>
+class PACKED(4) VarHandleScopeHolder {
+ public:
+  VarHandleScopeHolder(Thread* self, size_t num_refs);
+  ~VarHandleScopeHolder();
+
+  template<class T>
+  Handle<T> NewHandle(T* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    handle_scope_->SetReference(pos_, object);
+    Handle<T> h(handle_scope_->GetHandle(pos_));
+    pos_++;
+    return h;
+  }
+
+  template<class T>
+  HandleWrapper<T> NewHandleWrapper(T** object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    handle_scope_->SetReference(pos_, *object);
+    Handle<T> h(handle_scope_->GetHandle(pos_));
+    pos_++;
+    return HandleWrapper<T>(object, h);
+  }
+
+ private:
+  // The handler scope. This is heap-allocated.
+  HandleScope* handle_scope_;
+
+  // The thread.
+  Thread* const self_;
+
+  // Position new handles will be created.
+  size_t pos_;
 };
 
 }  // namespace art
