@@ -77,7 +77,7 @@ mirror::Object* ReferenceProcessor::GetReferent(Thread* self, mirror::Reference*
         }
       }
     }
-    condition_.WaitHoldingLocks(self);
+    condition_.WaitSuspended(self, kWaitingForGcRefSystemWeakProc);
   }
   return reference->GetReferent();
 }

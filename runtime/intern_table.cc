@@ -221,7 +221,7 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong) {
   uint32_t hash_code = s->GetHashCode();
 
   while (UNLIKELY(!allow_new_interns_)) {
-    new_intern_condition_.WaitHoldingLocks(self);
+    new_intern_condition_.WaitSuspended(self, kWaitingForGcRefSystemWeakProc);
   }
 
   if (is_strong) {

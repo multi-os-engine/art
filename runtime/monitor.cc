@@ -1102,7 +1102,7 @@ void MonitorList::Add(Monitor* m) {
   Thread* self = Thread::Current();
   MutexLock mu(self, monitor_list_lock_);
   while (UNLIKELY(!allow_new_monitors_)) {
-    monitor_add_condition_.WaitHoldingLocks(self);
+    monitor_add_condition_.WaitSuspended(self, kWaitingForGcRefSystemWeakProc);
   }
   list_.push_front(m);
 }

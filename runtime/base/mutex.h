@@ -27,6 +27,7 @@
 #include "base/logging.h"
 #include "base/macros.h"
 #include "globals.h"
+#include "thread_state.h"
 
 #if defined(__APPLE__)
 #define ART_USE_FUTEXES 0
@@ -386,6 +387,10 @@ class ConditionVariable {
   // when waiting.
   // TODO: remove this.
   void WaitHoldingLocks(Thread* self) NO_THREAD_SAFETY_ANALYSIS;
+  // Variant of Wait that transitions the thread from the runnable
+  // state to a suspend state (releasing the mutator lock share)
+  // before waiting and does the reverse after.
+  void WaitSuspended(Thread* self, ThreadState new_state) NO_THREAD_SAFETY_ANALYSIS;
 
  private:
   const char* const name_;

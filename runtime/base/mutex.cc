@@ -736,6 +736,20 @@ void ConditionVariable::Wait(Thread* self) {
   WaitHoldingLocks(self);
 }
 
+void ConditionVariable::WaitSuspended(Thread* self, ThreadState new_state) {
+  DCHECK_EQ(self->GetState(), kRunnable);
+  DCHECK_NE(new_state, kRunnable);
+  guard_.Unlock(self);
+  {
+    ScopedThreadStateChange tsc(self, new_state);
+    {
+      MutexLock mu(self, guard_);
+      Wait(self);
+    }
+  }
+  guard_.Lock(self);
+}
+
 void ConditionVariable::WaitHoldingLocks(Thread* self) {
   DCHECK(self == NULL || self == Thread::Current());
   guard_.AssertExclusiveHeld(self);
