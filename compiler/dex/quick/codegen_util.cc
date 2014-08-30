@@ -75,20 +75,25 @@ bool Mir2Lir::IsInexpensiveConstant(RegLocation rl_src) {
 
 void Mir2Lir::MarkSafepointPC(LIR* inst) {
   DCHECK(!inst->flags.use_def_invalid);
-  inst->u.m.def_mask = &kEncodeAll;
+  LIR* barrier = RawLIR(current_dalvik_offset_, kPseudoBarrier);
+  barrier->u.m.def_mask = &kEncodeAll;
+  InsertLIRBefore(inst, barrier);
   LIR* safepoint_pc = NewLIR0(kPseudoSafepointPC);
   DCHECK(safepoint_pc->u.m.def_mask->Equals(kEncodeAll));
 }
 
 void Mir2Lir::MarkSafepointPCAfter(LIR* after) {
   DCHECK(!after->flags.use_def_invalid);
-  after->u.m.def_mask = &kEncodeAll;
+  LIR* barrier = RawLIR(current_dalvik_offset_, kPseudoBarrier);
+  barrier->u.m.def_mask = &kEncodeAll;
   // As NewLIR0 uses Append, we need to create the LIR by hand.
   LIR* safepoint_pc = RawLIR(current_dalvik_offset_, kPseudoSafepointPC);
   if (after->next == nullptr) {
     DCHECK_EQ(after, last_lir_insn_);
+    InsertLIRBefore(after, barrier);
     AppendLIR(safepoint_pc);
   } else {
+    InsertLIRBefore(after, barrier);
     InsertLIRAfter(after, safepoint_pc);
   }
   DCHECK(safepoint_pc->u.m.def_mask->Equals(kEncodeAll));
