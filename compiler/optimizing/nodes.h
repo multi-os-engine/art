@@ -49,6 +49,11 @@ enum IfCondition {
   kCondGE,
 };
 
+enum ArithmeticOperation {
+  kArithOpAdd,
+  kArithOpSub,
+};
+
 class HInstructionList {
  public:
   HInstructionList() : first_instruction_(nullptr), last_instruction_(nullptr) {}
@@ -414,6 +419,7 @@ class HBasicBlock : public ArenaObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION(M)                   \
   M(Add)                                                   \
+  M(ArithmeticBinaryOperation)                             \
   M(BinaryOperation)                                       \
   M(Condition)                                             \
   M(Equal)                                                 \
@@ -1230,10 +1236,24 @@ class HNewInstance : public HExpression<0> {
   DISALLOW_COPY_AND_ASSIGN(HNewInstance);
 };
 
-class HAdd : public HBinaryOperation {
+class HArithmeticBinaryOperation : public HBinaryOperation {
+ public:
+  HArithmeticBinaryOperation(Primitive::Type result_type,
+                             HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  DECLARE_INSTRUCTION(ArithmeticBinaryOperation);
+
+  virtual ArithmeticOperation GetArithmeticOperation() const = 0;
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HArithmeticBinaryOperation);
+};
+
+class HAdd : public HArithmeticBinaryOperation {
  public:
   HAdd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+      : HArithmeticBinaryOperation(result_type, left, right) {}
 
   virtual bool IsCommutative() { return true; }
 
@@ -1247,18 +1267,26 @@ class HAdd : public HBinaryOperation {
 
   DECLARE_INSTRUCTION(Add);
 
+  virtual ArithmeticOperation GetArithmeticOperation() const {
+    return kArithOpAdd;
+  }
+
  private:
   DISALLOW_COPY_AND_ASSIGN(HAdd);
 };
 
-class HSub : public HBinaryOperation {
+class HSub : public HArithmeticBinaryOperation {
  public:
   HSub(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+      : HArithmeticBinaryOperation(result_type, left, right) {}
 
   virtual bool IsCommutative() { return false; }
 
   DECLARE_INSTRUCTION(Sub);
+
+  virtual ArithmeticOperation GetArithmeticOperation() const {
+    return kArithOpSub;
+  }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HSub);
