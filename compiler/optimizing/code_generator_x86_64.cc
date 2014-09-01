@@ -753,9 +753,18 @@ void InstructionCodeGeneratorX86_64::VisitInvokeStatic(HInvokeStatic* invoke) {
   codegen_->RecordPcInfo(invoke->GetDexPc());
 }
 
-void LocationsBuilderX86_64::VisitAdd(HAdd* add) {
-  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(add);
-  switch (add->GetResultType()) {
+void LocationsBuilderX86_64::VisitArithmeticBinaryOperation(art::HArithmeticBinaryOperation* binop) {
+  const char* op;
+  switch (binop->GetArithmeticOperation()) {
+    case kArithOpAdd: op = "add"; break;
+    case kArithOpSub: op = "sub"; break;
+    default:
+      op = nullptr;
+      LOG(FATAL) << "Unreachable";
+  }
+
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(binop);
+  switch (binop->GetResultType()) {
     case Primitive::kPrimInt: {
       locations->SetInAt(0, Location::RequiresRegister());
       locations->SetInAt(1, Location::Any());
@@ -773,21 +782,21 @@ void LocationsBuilderX86_64::VisitAdd(HAdd* add) {
     case Primitive::kPrimByte:
     case Primitive::kPrimChar:
     case Primitive::kPrimShort:
-      LOG(FATAL) << "Unexpected add type " << add->GetResultType();
+      LOG(FATAL) << "Unexpected " << op << " type " << binop->GetResultType();
       break;
 
     default:
-      LOG(FATAL) << "Unimplemented add type " << add->GetResultType();
+      LOG(FATAL) << "Unimplemented " << op << " type " << binop->GetResultType();
   }
-  add->SetLocations(locations);
-}
-
-void LocationsBuilderX86_64::VisitArithmeticBinaryOperation(art::HArithmeticBinaryOperation*) {
-  LOG(FATAL) << "Unreachable";
+  binop->SetLocations(locations);
 }
 
 void InstructionCodeGeneratorX86_64::VisitArithmeticBinaryOperation(art::HArithmeticBinaryOperation*) {
   LOG(FATAL) << "Unreachable";
+}
+
+void LocationsBuilderX86_64::VisitAdd(HAdd* add) {
+  VisitArithmeticBinaryOperation(add);
 }
 
 void InstructionCodeGeneratorX86_64::VisitAdd(HAdd* add) {
@@ -828,32 +837,7 @@ void InstructionCodeGeneratorX86_64::VisitAdd(HAdd* add) {
 }
 
 void LocationsBuilderX86_64::VisitSub(HSub* sub) {
-  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(sub);
-  switch (sub->GetResultType()) {
-    case Primitive::kPrimInt: {
-      locations->SetInAt(0, Location::RequiresRegister());
-      locations->SetInAt(1, Location::Any());
-      locations->SetOut(Location::SameAsFirstInput());
-      break;
-    }
-    case Primitive::kPrimLong: {
-      locations->SetInAt(0, Location::RequiresRegister());
-      locations->SetInAt(1, Location::RequiresRegister());
-      locations->SetOut(Location::SameAsFirstInput());
-      break;
-    }
-
-    case Primitive::kPrimBoolean:
-    case Primitive::kPrimByte:
-    case Primitive::kPrimChar:
-    case Primitive::kPrimShort:
-      LOG(FATAL) << "Unexpected sub type " << sub->GetResultType();
-      break;
-
-    default:
-      LOG(FATAL) << "Unimplemented sub type " << sub->GetResultType();
-  }
-  sub->SetLocations(locations);
+  VisitArithmeticBinaryOperation(sub);
 }
 
 void InstructionCodeGeneratorX86_64::VisitSub(HSub* sub) {
