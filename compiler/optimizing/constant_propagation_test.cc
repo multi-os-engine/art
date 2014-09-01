@@ -52,7 +52,7 @@ static void TestCode(const uint16_t* data) {
 }
 
 
-/* Tiny three-register program.
+/* Tiny three-register program exercising constant folding on addition.
 
                                 16-bit
                                 offset
@@ -62,7 +62,7 @@ static void TestCode(const uint16_t* data) {
        v2 <- v0 + v1            2.      add-int v2, v0, v1
        return v2                4.      return v2
 */
-TEST(ConstantPropagation, ConstantFolding1) {
+TEST(ConstantPropagation, ConstantFoldingOnAddition1) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 1 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -72,7 +72,7 @@ TEST(ConstantPropagation, ConstantFolding1) {
   TestCode(data);
 }
 
-/* Small three-register program.
+/* Small three-register program exercising constant folding on addition.
 
                                 16-bit
                                 offset
@@ -86,7 +86,7 @@ TEST(ConstantPropagation, ConstantFolding1) {
        v2 <- v0 + v1            6.      add-int v2, v0, v1
        return v2                8.      return v2
 */
-TEST(ConstantPropagation, ConstantFolding2) {
+TEST(ConstantPropagation, ConstantFoldingOnAddition2) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 1 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -95,6 +95,26 @@ TEST(ConstantPropagation, ConstantFolding2) {
     Instruction::CONST_4 | 2 << 8 | 4 << 12,
     Instruction::ADD_INT_2ADDR | 1 << 8 | 2 << 12,
     Instruction::ADD_INT | 2 << 8, 0 | 1 << 8,
+    Instruction::RETURN | 2 << 8);
+
+  TestCode(data);
+}
+
+/* Tiny three-register program exercising constant folding on subtraction.
+
+                                16-bit
+                                offset
+                                ------
+       v0 <- 3                  0.      const/4 v0, #+3
+       v1 <- 2                  1.      const/4 v1, #+2
+       v2 <- v0 - v1            2.      sub-int v2, v0, v1
+       return v2                4.      return v2
+*/
+TEST(ConstantPropagation, ConstantFoldingOnSubtraction) {
+  const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 0 << 8 | 3 << 12,
+    Instruction::CONST_4 | 1 << 8 | 2 << 12,
+    Instruction::SUB_INT | 2 << 8, 0 | 1 << 8,
     Instruction::RETURN | 2 << 8);
 
   TestCode(data);
