@@ -1132,7 +1132,8 @@ class HIntConstant : public HConstant {
 
   // Statically apply the binary operation associated to `binop` to
   // this node and `rhs`, and return the result as a constant node.
-  virtual HConstant* StaticEvaluation(const HAdd* binop, HConstant* rhs);
+  virtual HConstant* StaticEvaluation(const HArithmeticBinaryOperation* binop,
+                                      HConstant* rhs);
 
   DECLARE_INSTRUCTION(IntConstant);
 
@@ -1242,6 +1243,14 @@ class HArithmeticBinaryOperation : public HBinaryOperation {
                              HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
+  // If this node can be evaluated statically, return a node
+  // containing the result of the evaluation.  Otherwise, return
+  // nullptr.
+  HConstant* TryStaticEvaluation() const;
+
+  // Apply the operation of this instruction to `a` and `b`.
+  virtual int32_t Evaluate(int32_t a, int32_t b) const = 0;
+
   DECLARE_INSTRUCTION(ArithmeticBinaryOperation);
 
   virtual ArithmeticOperation GetArithmeticOperation() const = 0;
@@ -1256,11 +1265,6 @@ class HAdd : public HArithmeticBinaryOperation {
       : HArithmeticBinaryOperation(result_type, left, right) {}
 
   virtual bool IsCommutative() { return true; }
-
-  // If this node can be evaluated statically, return a node
-  // containing the result of the evaluation.  Otherwise, return
-  // nullptr.
-  HConstant* TryStaticEvaluation() const;
 
   // Apply the operation of this instruction (addition) to `a` and `b`.
   virtual int32_t Evaluate(int32_t a, int32_t b) const { return a + b; }
@@ -1281,6 +1285,9 @@ class HSub : public HArithmeticBinaryOperation {
       : HArithmeticBinaryOperation(result_type, left, right) {}
 
   virtual bool IsCommutative() { return false; }
+
+  // Apply the operation of this instruction (subtraction) to `a` and `b`.
+  virtual int32_t Evaluate(int32_t a, int32_t b) const { return a - b; }
 
   DECLARE_INSTRUCTION(Sub);
 

@@ -31,9 +31,9 @@ void ConstantPropagation::Run() {
 
       /* Constant folding: replace `c <- a op b' with a compile-time
          evaluation of `a op b' if `a' and `b' are constant.  */
-      if (inst != nullptr && inst->IsAdd()) {
-        HAdd* add = inst->AsAdd();
-        HConstant* constant = add->TryStaticEvaluation();
+      if (inst != nullptr && inst->IsArithmeticBinaryOperation()) {
+        HArithmeticBinaryOperation* binop = inst->AsArithmeticBinaryOperation();
+        HConstant* constant = binop->TryStaticEvaluation();
         if (constant != nullptr) {
           // Replace `inst` with a compile-time constant.
           inst->GetBlock()->InsertInstructionBefore(constant, inst);

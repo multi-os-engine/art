@@ -414,7 +414,7 @@ void HInstruction::ReplaceWith(HInstruction* other) {
   env_uses_ = nullptr;
 }
 
-HConstant* HIntConstant::StaticEvaluation(const HAdd* binop,
+HConstant* HIntConstant::StaticEvaluation(const HArithmeticBinaryOperation* binop,
                                           HConstant* rhs) {
   HIntConstant* right = rhs->AsIntConstant();
   if (right == nullptr) {
@@ -425,7 +425,7 @@ HConstant* HIntConstant::StaticEvaluation(const HAdd* binop,
                                                  right->GetValue()));
 }
 
-HConstant* HAdd::TryStaticEvaluation() const {
+HConstant* HArithmeticBinaryOperation::TryStaticEvaluation() const {
   HIntConstant* left = GetLeft()->AsIntConstant();
   if (left == nullptr) {
     return nullptr;
