@@ -40,18 +40,22 @@ void ConstantPropagation::Run() {
 
     /* Constant folding: replace `c <- a op b' with a compile-time
        evaluation of `a op b' if `a' and `b' are constant.  */
-    if (inst != nullptr && inst->IsAdd()) {
-      HAdd* add = inst->AsAdd();
-      if (add->GetLeft()->IsIntConstant()
-          && add->GetRight()->IsIntConstant()) {
-        // Replace `inst` with a compile-time constant.
-        int32_t lhs_val = add->GetLeft()->AsIntConstant()->GetValue();
-        int32_t rhs_val = add->GetRight()->AsIntConstant()->GetValue();
-        int32_t value = lhs_val + rhs_val;
+    if (inst != nullptr && inst->IsArithmeticBinaryOperation()) {
+      HArithmeticBinaryOperation* binop = inst->AsArithmeticBinaryOperation();
+      if (binop->GetLeft()->IsIntConstant()
+          && binop->GetRight()->IsIntConstant()) {
+        // Replace `binop` with a compile-time constant.
+        int32_t lhs_val = binop->GetLeft()->AsIntConstant()->GetValue();
+        int32_t rhs_val = binop->GetRight()->AsIntConstant()->GetValue();
+        int32_t value;
+        switch (binop->GetArithmeticOperation()) {
+          case kArithOpAdd: value = lhs_val + rhs_val; break;
+          case kArithOpSub: value = lhs_val - rhs_val; break;
+        }
         HIntConstant* constant = new(graph_->GetArena()) HIntConstant(value);
-        inst->GetBlock()->InsertInstructionBefore(constant, inst);
-        inst->ReplaceWith(constant);
-        inst->GetBlock()->RemoveInstruction(inst);
+        binop->GetBlock()->InsertInstructionBefore(constant, binop);
+        binop->ReplaceWith(constant);
+        binop->GetBlock()->RemoveInstruction(binop);
         // Add users of `constant` to the work-list.
         for (HUseIterator<HInstruction> it(constant->GetUses()); !it.Done();
              it.Advance()) {
