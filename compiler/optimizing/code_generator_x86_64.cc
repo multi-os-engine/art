@@ -782,6 +782,14 @@ void LocationsBuilderX86_64::VisitAdd(HAdd* add) {
   add->SetLocations(locations);
 }
 
+void LocationsBuilderX86_64::VisitArithmeticBinaryOperation(art::HArithmeticBinaryOperation*) {
+  LOG(FATAL) << "Unreachable";
+}
+
+void InstructionCodeGeneratorX86_64::VisitArithmeticBinaryOperation(art::HArithmeticBinaryOperation*) {
+  LOG(FATAL) << "Unreachable";
+}
+
 void InstructionCodeGeneratorX86_64::VisitAdd(HAdd* add) {
   LocationSummary* locations = add->GetLocations();
   DCHECK_EQ(locations->InAt(0).AsX86_64().AsCpuRegister().AsRegister(),
