@@ -935,7 +935,7 @@ const ArmEncodingMap ArmMir2Lir::EncodingMap[kArmLast] = {
                  IS_BINARY_OP | REG_DEF0 | REG_USE_PC | IS_LOAD_OFF,
                  "ldr", "!0C, [r15pc, -#!1d]", 4, kFixupNone),
     ENCODING_MAP(kThumb2Stm,          0xe9000000,
-                 kFmtBitBlt, 19, 16, kFmtBitBlt, 12, 0, kFmtUnused, -1, -1,
+                 kFmtBitBlt, 19, 16, kFmtBitBlt, 15, 0, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,
                  IS_BINARY_OP | REG_USE0 | REG_USE_LIST1 | IS_STORE,
                  "stm", "!0C, <!1R>", 4, kFixupNone),
