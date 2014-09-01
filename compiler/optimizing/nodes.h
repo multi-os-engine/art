@@ -318,6 +318,10 @@ class HBasicBlock : public ArenaObject {
     successors_.Put(successor_index, new_block);
   }
 
+  void RemoveSuccessor(HBasicBlock* block) {
+    successors_.Delete(block);
+  }
+
   void RemovePredecessor(HBasicBlock* block) {
     predecessors_.Delete(block);
   }
