@@ -1114,6 +1114,8 @@ class HIntConstant : public HConstant {
 
   int32_t GetValue() const { return value_; }
 
+  typedef int32_t ValueType;
+
   DECLARE_INSTRUCTION(IntConstant);
 
  private:
@@ -1127,6 +1129,8 @@ class HLongConstant : public HConstant {
   explicit HLongConstant(int64_t value) : HConstant(Primitive::kPrimLong), value_(value) {}
 
   int64_t GetValue() const { return value_; }
+
+  typedef int64_t ValueType;
 
   DECLARE_INSTRUCTION(LongConstant);
 

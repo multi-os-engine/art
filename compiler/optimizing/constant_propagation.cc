@@ -43,25 +43,15 @@ void ConstantPropagation::Run() {
     if (inst != nullptr && inst->IsArithmeticBinaryOperation()) {
       HArithmeticBinaryOperation* binop = inst->AsArithmeticBinaryOperation();
       if (binop->GetLeft()->IsIntConstant()
-          && binop->GetRight()->IsIntConstant()) {
-        // Replace `binop` with a compile-time constant.
-        int32_t lhs_val = binop->GetLeft()->AsIntConstant()->GetValue();
-        int32_t rhs_val = binop->GetRight()->AsIntConstant()->GetValue();
-        int32_t value;
-        switch (binop->GetArithmeticOperation()) {
-          case kArithOpAdd: value = lhs_val + rhs_val; break;
-          case kArithOpSub: value = lhs_val - rhs_val; break;
-        }
-        HIntConstant* constant = new(graph_->GetArena()) HIntConstant(value);
-        binop->GetBlock()->InsertInstructionBefore(constant, binop);
-        binop->ReplaceWith(constant);
-        binop->GetBlock()->RemoveInstruction(binop);
-        // Add users of `constant` to the work-list.
-        for (HUseIterator<HInstruction> it(constant->GetUses()); !it.Done();
-             it.Advance()) {
-          Push(it.Current()->GetUser());
-        }
-      }
+          && binop->GetRight()->IsIntConstant())
+        FoldConstant(binop,
+                     binop->GetLeft()->AsIntConstant(),
+                     binop->GetRight()->AsIntConstant());
+      else if(binop->GetLeft()->IsLongConstant()
+              && binop->GetRight()->IsLongConstant())
+        FoldConstant(binop,
+                     binop->GetLeft()->AsLongConstant(),
+                     binop->GetRight()->AsLongConstant());
     }
 
     // Constant condition.
@@ -125,6 +115,28 @@ void ConstantPropagation::Push(HInstruction* inst) {
   }
   if (!found) {
     worklist_.Insert(inst);
+  }
+}
+
+template <typename BinopType, typename ConstantType>
+void ConstantPropagation::FoldConstant(BinopType* binop,
+                                       ConstantType* lhs, ConstantType* rhs) {
+  typedef typename ConstantType::ValueType ValueType;
+  ValueType lhs_val = lhs->GetValue();
+  ValueType rhs_val = rhs->GetValue();
+  ValueType value;
+  switch (binop->GetArithmeticOperation()) {
+    case kArithOpAdd: value = lhs_val + rhs_val; break;
+    case kArithOpSub: value = lhs_val - rhs_val; break;
+  }
+  ConstantType* constant = new(graph_->GetArena()) ConstantType(value);
+  binop->GetBlock()->InsertInstructionBefore(constant, binop);
+  binop->ReplaceWith(constant);
+  binop->GetBlock()->RemoveInstruction(binop);
+  // Add users of `constant` to the work-list.
+  for (HUseIterator<HInstruction> it(constant->GetUses()); !it.Done();
+       it.Advance()) {
+    Push(it.Current()->GetUser());
   }
 }
 
