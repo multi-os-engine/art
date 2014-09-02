@@ -78,6 +78,15 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
       errors_.Insert(error.str());
     }
   }
+
+  // Ensure `block` ends with a branch instruction.
+  HInstruction* last_inst = block->GetLastInstruction();
+  if (last_inst == nullptr || !last_inst->IsControlFlow()) {
+    std::stringstream error;
+    error  << "Block " << block->GetBlockId()
+           << " does not end with a branch instruction.";
+    errors_.Insert(error.str());
+  }
 }
 
 bool GraphChecker::IsValid() const {
