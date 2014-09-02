@@ -19,6 +19,8 @@
 namespace art {
 
 void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
+  current_block_ = block;
+
   // Check consistency with respect to predecessors of `block`.
   const GrowableArray<HBasicBlock*>& predecessors = block->GetPredecessors();
   std::map<HBasicBlock*, size_t> predecessors_count;
@@ -88,27 +90,61 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
     errors_.Insert(error.str());
   }
 
-  // Ensure this block's list of phi functions contains only phi functions.
+  // Visit this block's list of phis.
+  within_phi_list_ = true;
   for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
-    HInstruction* phi = it.Current();
-    if (!phi->IsPhi()) {
-      std::stringstream error;
-      error  << "Block " << block->GetBlockId()
-             << " has a non-phi function in its phi list";
-      errors_.Insert(error.str());
-    }
+    it.Current()->Accept(this);
   }
-  // Ensure this block's list of instructions does not contains phi
-  // functions.
+  within_phi_list_ = false;
+  // Visit this block's list of instructions.
   for (HInstructionIterator it(block->GetInstructions()); !it.Done();
        it.Advance()) {
-    HInstruction* inst = it.Current();
-    if (inst->IsPhi()) {
-      std::stringstream error;
-      error  << "Block " << block->GetBlockId()
-             << " has a phi function in its non-phi list";
-      errors_.Insert(error.str());
+    it.Current()->Accept(this);
+  }
+}
+
+void GraphChecker::VisitPhi(HPhi* phi) {
+  VisitInstruction(phi, true);
+}
+
+void GraphChecker::VisitInstruction(HInstruction* instruction) {
+  VisitInstruction(instruction, false);
+}
+
+void GraphChecker::VisitInstruction(HInstruction* instruction, bool is_phi) {
+  // Ensure this block's list of phis contains only phis.
+  if (within_phi_list_ && !is_phi) {
+    std::stringstream error;
+    error << "Block " << current_block_->GetBlockId()
+          << " has a non-phi in its phi list.";
+    errors_.Insert(error.str());
+  }
+
+  // Ensure this block's list of instructions does not contains phis.
+  if (!within_phi_list_ && is_phi) {
+    std::stringstream error;
+    error << "Block " << current_block_->GetBlockId()
+          << " has a phi in its non-phi list.";
+    errors_.Insert(error.str());
+  }
+
+  // Ensure `instruction` is associated with `current_block_`.
+  if (instruction->GetBlock() != current_block_) {
+    std::stringstream error;
+    if (is_phi) {
+      error << "Phi ";
+    } else {
+      error << "Instruction ";
     }
+    error << instruction->GetId() << " in block "
+          << current_block_->GetBlockId();
+    if (instruction->GetBlock() != nullptr) {
+      error << " associated with block "
+            << instruction->GetBlock()->GetBlockId() << ".";
+    } else {
+      error << " not associated with any block.";
+    }
+    errors_.Insert(error.str());
   }
 }
 
