@@ -32,6 +32,11 @@ class GraphChecker : public HGraphVisitor {
   // Perform checks on `block`.
   virtual void VisitBasicBlock(HBasicBlock* block);
 
+  virtual void VisitPhi(HPhi* phi);
+  virtual void VisitInstruction(HInstruction* instruction);
+  // Factored visit code.
+  void VisitInstruction(HInstruction* instruction, bool is_phi);
+
   // Was the last visited graph valid?
   bool IsValid() const;
 
@@ -40,6 +45,10 @@ class GraphChecker : public HGraphVisitor {
 
  private:
   ArenaAllocator* const arena_;
+  // The block currently visited.
+  HBasicBlock* current_block_ = nullptr;
+  // Are we traversing the phi list of a block?
+  bool within_phi_list_ = false;
   // Errors encountered while checking the graph.
   GrowableArray<std::string> errors_;
 
