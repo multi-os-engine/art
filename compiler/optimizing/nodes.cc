@@ -392,6 +392,53 @@ void HInstructionList::RemoveInstruction(HInstruction* instruction) {
   }
 }
 
+bool HInstructionList::FoundBefore(const HInstruction* instruction1,
+                                   const HInstruction* instruction2) const {
+  for (HInstructionIterator it(*this);
+       !it.Done() && it.Current() != instruction1; it.Advance()) {
+    if (it.Current() == instruction1) {
+      return true;
+    }
+    if (it.Current() == instruction2) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool HInstruction::Dominates(HInstruction* other_instruction) {
+  HBasicBlock* block = GetBlock();
+  HBasicBlock* other_block = other_instruction->GetBlock();
+  if (block != other_block) {
+    return GetBlock()->Dominates(other_instruction->GetBlock());
+  } else {
+    // If both instructions are in the same block, ensure this
+    // instruction comes before `other_instruction`.
+    if (IsPhi()) {
+      if (!other_instruction->IsPhi()) {
+        // Phis appear before non phi-instructions so this instruction
+        // dominates `other_instruction`.
+        return true;
+      } else {
+        // Check whether this instruction comes before
+        // `other_instruction` in the phi list.
+        return block->GetPhis().FoundBefore(this, other_instruction);
+      }
+    } else {
+      // `this` is not a phi.
+      if (other_instruction->IsPhi()) {
+        // Phis appear before non phi-instructions so this instruction
+        // does not dominate `other_instruction`.
+        return false;
+      } else {
+        // Check whether this instruction comes before
+        // `other_instruction` in the instruction list.
+        return block->GetInstructions().FoundBefore(this, other_instruction);
+      }
+    }
+  }
+}
+
 void HInstruction::ReplaceWith(HInstruction* other) {
   DCHECK(other != nullptr);
   for (HUseIterator<HInstruction> it(GetUses()); !it.Done(); it.Advance()) {

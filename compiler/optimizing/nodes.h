@@ -56,6 +56,12 @@ class HInstructionList {
   void AddInstruction(HInstruction* instruction);
   void RemoveInstruction(HInstruction* instruction);
 
+  // Return true if `instruction1` is found before `instruction2` in
+  // this instruction list and false otherwise.  Return true is none
+  // of these instructions are found.
+  bool FoundBefore(const HInstruction* instruction1,
+                   const HInstruction* instruction2) const;
+
  private:
   HInstruction* first_instruction_;
   HInstruction* last_instruction_;
@@ -446,7 +452,8 @@ class HBasicBlock : public ArenaObject {
 
 #define FOR_EACH_INSTRUCTION(M)                            \
   FOR_EACH_CONCRETE_INSTRUCTION(M)                         \
-  M(Constant)
+  M(Constant)                                              \
+  M(BinaryOperation)
 
 #define FORWARD_DECLARATION(type) class H##type;
 FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
@@ -579,6 +586,9 @@ class HInstruction : public ArenaObject {
     }
     return result;
   }
+
+  // Does this instruction dominates `other_instruction`?
+  bool Dominates(HInstruction* other_instruction);
 
   int GetId() const { return id_; }
   void SetId(int id) { id_ = id; }
@@ -981,6 +991,8 @@ class HBinaryOperation : public HExpression<2> {
 
   virtual bool CanBeMoved() const { return true; }
   virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+
+  DECLARE_INSTRUCTION(BinaryOperation);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HBinaryOperation);
