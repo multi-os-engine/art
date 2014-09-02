@@ -410,6 +410,7 @@ class HBasicBlock : public ArenaObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION(M)                   \
   M(Add)                                                   \
+  M(BinaryOperation)                                       \
   M(Condition)                                             \
   M(Equal)                                                 \
   M(NotEqual)                                              \
@@ -909,6 +910,8 @@ class HBinaryOperation : public HExpression<2> {
   Primitive::Type GetResultType() const { return GetType(); }
 
   virtual bool IsCommutative() { return false; }
+
+  DECLARE_INSTRUCTION(BinaryOperation);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HBinaryOperation);

@@ -594,6 +594,14 @@ void InstructionCodeGeneratorARM::VisitIf(HIf* if_instr) {
 }
 
 
+void LocationsBuilderARM::VisitBinaryOperation(HBinaryOperation* instruction) {
+  LOG(FATAL) << "Unreachable";
+}
+
+void InstructionCodeGeneratorARM::VisitBinaryOperation(HBinaryOperation* instruction) {
+  LOG(FATAL) << "Unreachable";
+}
+
 void LocationsBuilderARM::VisitCondition(HCondition* comp) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(comp);
   locations->SetInAt(0, Location::RequiresRegister());

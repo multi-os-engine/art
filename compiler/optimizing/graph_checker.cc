@@ -109,6 +109,24 @@ void GraphChecker::VisitPhi(HPhi* phi) {
 
 void GraphChecker::VisitInstruction(HInstruction* instruction) {
   VisitInstruction(instruction, false);
+
+  // Ensure constants used as inputs of an arithmetic operation appear
+  // at the end only.
+  if (instruction != nullptr && instruction->IsBinaryOperation()) {
+    bool constant_seen = false;
+    for (HInputIterator it(instruction); !it.Done(); it.Advance()) {
+      HInstruction* input = it.Current();
+      if (input != nullptr && input->IsConstant()) {
+        constant_seen = true;
+      } else if (constant_seen) {
+        std::stringstream error;
+        error << "Arithmetic operation " << instruction->GetId()
+              << " in block " << current_block_->GetBlockId()
+              << " uses a constant not located at the end of its inputs.";
+        errors_.Insert(error.str());
+      }
+    }
+  }
 }
 
 void GraphChecker::VisitInstruction(HInstruction* instruction, bool is_phi) {
