@@ -89,7 +89,6 @@ void PassDriverMEOpts::ApplyPass(PassDataHolder* data, const Pass* pass) {
   if ((pass_me->GetFlag(kOptimizationBasicBlockChange) == true) ||
       (pass_me->GetFlag(kOptimizationDefUsesChange) == true)) {
     CompilationUnit* c_unit = pass_me_data_holder->c_unit;
-    c_unit->mir_graph.get()->CalculateBasicBlockInformation();
 
     // Is it dirty at least?
     if (pass_me_data_holder->dirty == true) {
