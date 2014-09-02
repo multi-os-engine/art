@@ -468,6 +468,14 @@ void LocationsBuilderX86_64::VisitStoreLocal(HStoreLocal* store) {
 void InstructionCodeGeneratorX86_64::VisitStoreLocal(HStoreLocal* store) {
 }
 
+void LocationsBuilderX86_64::VisitBinaryOperation(HBinaryOperation* instruction) {
+  LOG(FATAL) << "Unreachable";
+}
+
+void InstructionCodeGeneratorX86_64::VisitBinaryOperation(HBinaryOperation* instruction) {
+  LOG(FATAL) << "Unreachable";
+}
+
 void LocationsBuilderX86_64::VisitCondition(HCondition* comp) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(comp);
   locations->SetInAt(0, Location::RequiresRegister());
