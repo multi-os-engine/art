@@ -36,6 +36,11 @@ class ConstantPropagation : public ValueObject {
   // Push instruction `inst` into the work-list.
   void Push(HInstruction* inst);
 
+  // Replace node `binop` (having `lhs` and `rhs` as constant
+  // operands) with a compile-time constant.
+  template <typename BinopType, typename ConstantType>
+  void FoldConstant(BinopType* binop, ConstantType* lhs, ConstantType* rhs);
+
  private:
   HGraph* const graph_;
   GrowableArray<HInstruction*> worklist_;

@@ -52,7 +52,7 @@ static void TestCode(const uint16_t* data) {
 }
 
 
-/* Tiny three-register program exercising constant folding on addition.
+/* Tiny three-register program exercising int constant folding on addition.
 
                                 16-bit
                                 offset
@@ -62,7 +62,7 @@ static void TestCode(const uint16_t* data) {
        v2 <- v0 + v1            2.      add-int v2, v0, v1
        return v2                4.      return v2
 */
-TEST(ConstantPropagation, ConstantFoldingOnAddition1) {
+TEST(ConstantPropagation, IntConstantFoldingOnAddition1) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 1 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -72,7 +72,7 @@ TEST(ConstantPropagation, ConstantFoldingOnAddition1) {
   TestCode(data);
 }
 
-/* Small three-register program exercising constant folding on addition.
+/* Small three-register program exercising int constant folding on addition.
 
                                 16-bit
                                 offset
@@ -86,7 +86,7 @@ TEST(ConstantPropagation, ConstantFoldingOnAddition1) {
        v2 <- v0 + v1            6.      add-int v2, v0, v1
        return v2                8.      return v2
 */
-TEST(ConstantPropagation, ConstantFoldingOnAddition2) {
+TEST(ConstantPropagation, IntConstantFoldingOnAddition2) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 1 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -100,7 +100,7 @@ TEST(ConstantPropagation, ConstantFoldingOnAddition2) {
   TestCode(data);
 }
 
-/* Tiny three-register program exercising constant folding on subtraction.
+/* Tiny three-register program exercising int constant folding on subtraction.
 
                                 16-bit
                                 offset
@@ -110,12 +110,59 @@ TEST(ConstantPropagation, ConstantFoldingOnAddition2) {
        v2 <- v0 - v1            2.      sub-int v2, v0, v1
        return v2                4.      return v2
 */
-TEST(ConstantPropagation, ConstantFoldingOnSubtraction) {
+TEST(ConstantPropagation, IntConstantFoldingOnSubtraction) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 3 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
     Instruction::SUB_INT | 2 << 8, 0 | 1 << 8,
     Instruction::RETURN | 2 << 8);
+
+  TestCode(data);
+}
+
+#define SIX_REGISTERS_CODE_ITEM(...)                                     \
+    { 6, 0, 0, 0, 0, 0, NUM_INSTRUCTIONS(__VA_ARGS__), 0, __VA_ARGS__ }
+
+/* Tiny three-register-pair program exercising long constant folding
+   on addition.
+
+                                16-bit
+                                offset
+                                ------
+       (v0, v1) <- 1            0.      const-wide/16 v0, #+1
+       (v2, v3) <- 2            2.      const-wide/16 v2, #+2
+       (v4, v5) <-
+         (v0, v1) + (v1, v2)    4.      add-long v4, v0, v2
+       return (v4, v5)          6.      return-wide v4
+*/
+TEST(ConstantPropagation, LongConstantFoldingOnAddition) {
+  const uint16_t data[] = SIX_REGISTERS_CODE_ITEM(
+    Instruction::CONST_WIDE_16 | 0 << 8, 1,
+    Instruction::CONST_WIDE_16 | 2 << 8, 2,
+    Instruction::ADD_LONG | 4 << 8, 0 | 2 << 8,
+    Instruction::RETURN_WIDE | 4 << 8);
+
+  TestCode(data);
+}
+
+/* Tiny three-register-pair program exercising long constant folding
+   on subtraction.
+
+                                16-bit
+                                offset
+                                ------
+       (v0, v1) <- 3            0.      const-wide/16 v0, #+3
+       (v2, v3) <- 2            2.      const-wide/16 v2, #+2
+       (v4, v5) <-
+         (v0, v1) - (v1, v2)    4.      sub-long v4, v0, v2
+       return (v4, v5)          6.      return-wide v4
+*/
+TEST(ConstantPropagation, LongConstantFoldingOnSubtraction) {
+  const uint16_t data[] = SIX_REGISTERS_CODE_ITEM(
+    Instruction::CONST_WIDE_16 | 0 << 8, 3,
+    Instruction::CONST_WIDE_16 | 2 << 8, 2,
+    Instruction::SUB_LONG | 4 << 8, 0 | 2 << 8,
+    Instruction::RETURN_WIDE | 4 << 8);
 
   TestCode(data);
 }
