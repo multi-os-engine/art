@@ -389,7 +389,7 @@ class Runtime {
 
   void PreZygoteFork();
   bool InitZygote();
-  void DidForkFromZygote();
+  void DidForkFromZygote(bool initialize_native_bridge);
 
   const instrumentation::Instrumentation* GetInstrumentation() const {
     return &instrumentation_;
