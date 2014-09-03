@@ -16,44 +16,23 @@
 
 #include "dead_code_elimination.h"
 
+#include "base/bit_vector-inl.h"
+
 namespace art {
 
 void DeadCodeElimination::Run() {
-  // Collect all variables.
-  const GrowableArray<HBasicBlock*>& blocks = graph_->GetBlocks();
-  for (size_t i = 0 ; i < blocks.Size(); i++) {
-    HBasicBlock* block = blocks.Get(i);
-    // Only process instructions (not phis).
-    for (HInstructionIterator it(block->GetInstructions()); !it.Done();
-         it.Advance()) {
+  // Process nodes (basic blocks) in reverse post-order in the
+  // dominator tree.
+  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+    HBasicBlock* block = it.Current();
+    // Traverse this block's instructions in reverse order and remove
+    // the unused ones.
+    for (HBackwardInstructionIterator it(block->GetInstructions());
+         !it.Done(); it.Advance()) {
       HInstruction* inst = it.Current();
-      if (!inst->HasSideEffects()) {
-        worklist_.Insert(inst);
+      if (!inst->HasSideEffects() && !inst->HasUses()) {
+        block->RemoveInstruction(inst);
       }
-    }
-  }
-
-  while (!worklist_.IsEmpty()) {
-    HInstruction* inst = worklist_.Pop();
-    if (!inst->HasUses()) {
-      // Add variables (inputs) used by `inst` to the work-list.
-      for (HInputIterator it(inst); !it.Done(); it.Advance()) {
-        HInstruction* input = it.Current();
-        // If `input` is not part of `worklist_`, insert it.
-        bool found = false;
-        for (size_t i = 0; i < worklist_.Size(); ++i) {
-          if (worklist_.Get(i) == input) {
-            found = true;
-            break;
-          }
-        }
-        if (!found && !input->IsPhi() && !input->HasSideEffects()) {
-          worklist_.Insert(input);
-        }
-      }
-      // Remove `inst` from the graph.
-      HBasicBlock* block = inst->GetBlock();
-      block->RemoveInstruction(inst);
     }
   }
 }

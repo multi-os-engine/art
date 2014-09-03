@@ -28,15 +28,12 @@ namespace art {
 class DeadCodeElimination : public ValueObject {
  public:
   explicit DeadCodeElimination(HGraph* graph)
-      : graph_(graph), worklist_(graph->GetArena(), kDefaultWorklistSize) {}
+      : graph_(graph) {}
 
   void Run();
 
  private:
   HGraph* const graph_;
-  GrowableArray<HInstruction*> worklist_;
-
-  static constexpr size_t kDefaultWorklistSize = 8;
 
   DISALLOW_COPY_AND_ASSIGN(DeadCodeElimination);
 };
