@@ -54,6 +54,15 @@ std::ostream& operator<<(std::ostream& os, const MutatorLockedDumpable<T>& rhs)
   return os;
 }
 
+void IrtIterator::SkipNullsAndTombstones() {
+  // We skip NULLs and tombstones. Clients don't want to see implementation details.
+  while (i_ < capacity_ &&
+         (table_[i_].IsNull() ||
+          Runtime::Current()->IsClearedJniWeakGlobal(table_[i_].Read<kWithoutReadBarrier>()))) {
+    ++i_;
+  }
+}
+
 void IndirectReferenceTable::AbortIfNoCheckJNI() {
   // If -Xcheck:jni is on, it'll give a more detailed error before aborting.
   JavaVMExt* vm = Runtime::Current()->GetJavaVM();
@@ -276,10 +285,6 @@ void IndirectReferenceTable::Dump(std::ostream& os) const {
     mirror::Object* obj = table_[i].Read<kWithoutReadBarrier>();
     if (UNLIKELY(obj == nullptr)) {
       // Remove NULLs.
-    } else if (UNLIKELY(obj == kClearedJniWeakGlobal)) {
-      // ReferenceTable::Dump() will handle kClearedJniWeakGlobal
-      // while the read barrier won't.
-      entries.push_back(GcRoot<mirror::Object>(obj));
     } else {
       obj = table_[i].Read();
       entries.push_back(GcRoot<mirror::Object>(obj));
