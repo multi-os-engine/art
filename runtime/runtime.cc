@@ -428,7 +428,7 @@ bool Runtime::Start() {
       return false;
     }
   } else {
-    DidForkFromZygote();
+    DidForkFromZygote(true);
   }
 
   StartDaemonThreads();
@@ -506,8 +506,14 @@ bool Runtime::InitZygote() {
 #endif
 }
 
-void Runtime::DidForkFromZygote() {
+void Runtime::DidForkFromZygote(bool initialize_native_bridge) {
   is_zygote_ = false;
+
+  if (initialize_native_bridge) {
+    android::InitializeNativeBridge();
+  } else {
+    android::UnloadNativeBridge();
+  }
 
   // Create the thread pool.
   heap_->CreateThreadPool();
@@ -830,7 +836,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   // Look for a native bridge.
   native_bridge_library_filename_ = options->native_bridge_library_filename_;
-  android::SetupNativeBridge(native_bridge_library_filename_.c_str(), &native_bridge_art_callbacks_);
+  android::LoadNativeBridge(native_bridge_library_filename_.c_str(), &native_bridge_art_callbacks_);
   VLOG(startup) << "Runtime::Setup native bridge library: "
                 << (native_bridge_library_filename_.empty() ?
                     "(empty)" : native_bridge_library_filename_);

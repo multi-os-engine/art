@@ -102,17 +102,18 @@ static jlong ZygoteHooks_nativePreFork(JNIEnv* env, jclass) {
   return reinterpret_cast<jlong>(self);
 }
 
-static void ZygoteHooks_nativePostForkChild(JNIEnv* env, jclass, jlong token, jint debug_flags) {
+static void ZygoteHooks_nativePostForkChild(JNIEnv* env, jclass, jlong token, jint debug_flags,
+                                            jboolean initialize_native_bridge) {
   Thread* thread = reinterpret_cast<Thread*>(token);
   // Our system thread ID, etc, has changed so reset Thread state.
   thread->InitAfterFork();
   EnableDebugFeatures(debug_flags);
-  Runtime::Current()->DidForkFromZygote();
+  Runtime::Current()->DidForkFromZygote(initialize_native_bridge == JNI_TRUE);
 }
 
 static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(ZygoteHooks, nativePreFork, "()J"),
-  NATIVE_METHOD(ZygoteHooks, nativePostForkChild, "(JI)V"),
+  NATIVE_METHOD(ZygoteHooks, nativePostForkChild, "(JIZ)V"),
 };
 
 void register_dalvik_system_ZygoteHooks(JNIEnv* env) {
