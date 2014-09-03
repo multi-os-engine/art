@@ -464,4 +464,16 @@ bool HCondition::NeedsMaterialization() const {
   return false;
 }
 
+bool HInstruction::Equals(HInstruction* other) const {
+  if (!KindEquals(other)) return false;
+  if (!DataEquals(other)) return false;
+  if (GetType() != other->GetType()) return false;
+  if (InputCount() != other->InputCount()) return false;
+
+  for (size_t i = 0, e = InputCount(); i < e; ++i) {
+    if (InputAt(i) != other->InputAt(i)) return false;
+  }
+  return true;
+}
+
 }  // namespace art
