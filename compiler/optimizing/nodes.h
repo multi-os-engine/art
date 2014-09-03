@@ -544,6 +544,11 @@ class HInstruction : public ArenaObject {
     return result;
   }
 
+  // Does this instruction dominates the instruction passed as argument?
+  bool Dominates(HInstruction* instruction) const {
+    return GetBlock()->Dominates(instruction->GetBlock());
+  }
+
   int GetId() const { return id_; }
   void SetId(int id) { id_ = id; }
 
