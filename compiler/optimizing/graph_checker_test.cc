@@ -67,6 +67,20 @@ static void TestCode(const uint16_t* data) {
   ASSERT_TRUE(graph_checker.IsValid());
 }
 
+static void TestCodeSSA(const uint16_t* data) {
+  ArenaPool pool;
+  ArenaAllocator allocator(&pool);
+  HGraph* graph = CreateCFG(&allocator, data);
+  ASSERT_NE(graph, nullptr);
+
+  graph->BuildDominatorTree();
+  graph->TransformToSSA();
+
+  SSAChecker ssa_checker(&allocator, graph);
+  ssa_checker.VisitInsertionOrder();
+  ASSERT_TRUE(ssa_checker.IsValid());
+}
+
 
 TEST(GraphChecker, ReturnVoid) {
   const uint16_t data[] = ZERO_REGISTER_CODE_ITEM(
@@ -136,6 +150,17 @@ TEST(GraphChecker, BlockEndingWithNonBranchInstruction) {
   GraphChecker graph_checker(&allocator, graph);
   graph_checker.VisitInsertionOrder();
   ASSERT_FALSE(graph_checker.IsValid());
+}
+
+TEST(GraphChecker, SSAPhi) {
+  // This code creates one Phi function during the conversion to SSA form.
+  const uint16_t data[] = ONE_REGISTER_CODE_ITEM(
+    Instruction::CONST_4 | 0 | 0,
+    Instruction::IF_EQ, 3,
+    Instruction::CONST_4 | 4 << 12 | 0,
+    Instruction::RETURN | 0 << 8);
+
+  TestCodeSSA(data);
 }
 
 }  // namespace art

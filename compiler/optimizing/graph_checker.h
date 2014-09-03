@@ -43,7 +43,7 @@ class GraphChecker : public HGraphVisitor {
   // Get the list of detected errors.
   const GrowableArray<std::string>& GetErrors() const;
 
- private:
+ protected:
   ArenaAllocator* const arena_;
   // The block currently visited.
   HBasicBlock* current_block_ = nullptr;
@@ -54,6 +54,24 @@ class GraphChecker : public HGraphVisitor {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(GraphChecker);
+};
+
+
+// An SSA graph visitor performing various checks.
+class SSAChecker : public GraphChecker {
+ public:
+  typedef GraphChecker super_type;
+
+  SSAChecker(ArenaAllocator* arena, HGraph* graph)
+    : GraphChecker(arena, graph) {}
+
+  // Perform SSA form checks on `block`.
+  virtual void VisitBasicBlock(HBasicBlock* block);
+  // Perform SSA form checks on `instruction`.
+  virtual void VisitInstruction(HInstruction* instruction);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(SSAChecker);
 };
 
 }  // namespace art
