@@ -16,44 +16,66 @@
 
 #include "dead_code_elimination.h"
 
+#include "base/bit_vector-inl.h"
+
 namespace art {
 
 void DeadCodeElimination::Run() {
-  // Collect all variables.
   const GrowableArray<HBasicBlock*>& blocks = graph_->GetBlocks();
-  for (size_t i = 0 ; i < blocks.Size(); i++) {
-    HBasicBlock* block = blocks.Get(i);
-    // Only process instructions (not phis).
-    for (HInstructionIterator it(block->GetInstructions()); !it.Done();
-         it.Advance()) {
-      HInstruction* inst = it.Current();
-      if (!inst->HasSideEffects()) {
-        worklist_.Insert(inst);
-      }
+
+  // Identify leaf nodes in the dominator tree.  We actually register
+  // non-leaf nodes, as this enables us to use
+  // ArenaBitVector::ClearAllBits() to initialize the bit vector
+  // (ArenaBitVector does not provide a SetAllBits() method for
+  // implementation reasons).
+  ArenaBitVector is_non_leaf(graph_->GetArena(), blocks.Size(), false);
+  is_non_leaf.ClearAllBits();
+  for (size_t i = 0 ; i < blocks.Size(); ++i) {
+    // An (immediate) dominator is by definition a non-leaf node.
+    HBasicBlock* dominator = blocks.Get(i)->GetDominator();
+    if (dominator != nullptr
+        && is_non_leaf.IsBitSet(dominator->GetBlockId())) {
+      is_non_leaf.SetBit(dominator->GetBlockId());
     }
   }
 
-  while (!worklist_.IsEmpty()) {
-    HInstruction* inst = worklist_.Pop();
-    if (!inst->HasUses()) {
-      // Add variables (inputs) used by `inst` to the work-list.
-      for (HInputIterator it(inst); !it.Done(); it.Advance()) {
-        HInstruction* input = it.Current();
-        // If `input` is not part of `worklist_`, insert it.
-        bool found = false;
-        for (size_t i = 0; i < worklist_.Size(); ++i) {
-          if (worklist_.Get(i) == input) {
-            found = true;
-            break;
-          }
-        }
-        if (!found && !input->IsPhi() && !input->HasSideEffects()) {
-          worklist_.Insert(input);
-        }
+  // Sort nodes in reverse level-order in the dominator tree (i.e.,
+  // all leaves first, then the parents of these nodes, then their
+  // parents, etc. up to the root node).
+  GrowableArray<HBasicBlock*> dominator_reverse_level_order(graph_->GetArena(),
+                                                            blocks.Size());
+  // Auxiliary bit vector to keep track of nodes (blocks) inserted in
+  // `dominator_reverse_level_order`.
+  ArenaBitVector inserted(graph_->GetArena(), blocks.Size(), false);
+  inserted.ClearAllBits();
+
+  // Insert the leaves of the dominator tree.
+  for (size_t i = 0 ; i < blocks.Size(); ++i) {
+    if (!is_non_leaf.IsBitSet(i)) {
+      dominator_reverse_level_order.Insert(blocks.Get(i));
+      inserted.SetBit(i);
+    }
+  }
+
+  // Browse, process and populate blocks registered in
+  // `dominator_reverse_level_order`.
+  for (size_t j = 0 ; j < dominator_reverse_level_order.Size(); ++j) {
+    HBasicBlock* block = dominator_reverse_level_order.Get(j);
+    // Traverse this block's instructions in reverse order and remove
+    // the unused ones.
+    for (HBackwardInstructionIterator it(block->GetInstructions());
+         !it.Done(); it.Advance()) {
+      HInstruction* inst = it.Current();
+      if (!inst->HasSideEffects() && !inst->HasUses()) {
+        block->RemoveInstruction(inst);
       }
-      // Remove `inst` from the graph.
-      HBasicBlock* block = inst->GetBlock();
-      block->RemoveInstruction(inst);
+    }
+    // Add parent node (dominator block) to the list of blocks to be
+    // processed, if it has not yet been queued.
+    HBasicBlock* dominator = block->GetDominator();
+    if (dominator != nullptr && !inserted.IsBitSet(dominator->GetBlockId())) {
+      dominator_reverse_level_order.Insert(dominator);
+      inserted.SetBit(dominator->GetBlockId());
     }
   }
 }
