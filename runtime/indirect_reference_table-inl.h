@@ -73,15 +73,11 @@ inline bool IndirectReferenceTable::CheckEntry(const char* what, IndirectRef ire
 template<ReadBarrierOption kReadBarrierOption>
 inline mirror::Object* IndirectReferenceTable::Get(IndirectRef iref) const {
   if (!GetChecked(iref)) {
-    return kInvalidIndirectRefObject;
+    return nullptr;
   }
   uint32_t idx = ExtractIndex(iref);
-  mirror::Object* obj = table_[idx].Read<kWithoutReadBarrier>();
-  if (LIKELY(obj != kClearedJniWeakGlobal)) {
-    // The read barrier or VerifyObject won't handle kClearedJniWeakGlobal.
-    obj = table_[idx].Read<kReadBarrierOption>();
-    VerifyObject(obj);
-  }
+  mirror::Object* obj = table_[idx].Read<kReadBarrierOption>();
+  VerifyObject(obj);
   return obj;
 }
 

@@ -796,6 +796,10 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     class_linker_->InitWithoutImage(*options->boot_class_path_);
   }
   CHECK(class_linker_ != nullptr);
+
+  // Initialize the special sentinel_ value early.
+  sentinel_ = GcRoot<mirror::Object>(class_linker_->AllocObject(self));
+
   verifier::MethodVerifier::Init();
 
   method_trace_ = options->method_trace_;
