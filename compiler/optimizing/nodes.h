@@ -515,6 +515,7 @@ class HInstruction : public ArenaObject {
 
   virtual bool NeedsEnvironment() const { return false; }
   virtual bool IsControlFlow() const { return false; }
+  virtual bool HasSideEffects() const { return false; }
 
   void AddUseAt(HInstruction* user, size_t index) {
     uses_ = new (block_->GetGraph()->GetArena()) HUseListNode<HInstruction>(user, index, uses_);
@@ -819,6 +820,7 @@ class HReturnVoid : public HTemplateInstruction<0> {
   HReturnVoid() {}
 
   virtual bool IsControlFlow() const { return true; }
+  virtual bool HasSideEffects() const { return true; }
 
   DECLARE_INSTRUCTION(ReturnVoid);
 
@@ -835,6 +837,7 @@ class HReturn : public HTemplateInstruction<1> {
   }
 
   virtual bool IsControlFlow() const { return true; }
+  virtual bool HasSideEffects() const { return true; }
 
   DECLARE_INSTRUCTION(Return);
 
@@ -850,6 +853,7 @@ class HExit : public HTemplateInstruction<0> {
   HExit() {}
 
   virtual bool IsControlFlow() const { return true; }
+  virtual bool HasSideEffects() const { return true; }
 
   DECLARE_INSTRUCTION(Exit);
 
@@ -867,6 +871,7 @@ class HGoto : public HTemplateInstruction<0> {
   }
 
   virtual bool IsControlFlow() const { return true; }
+  virtual bool HasSideEffects() const { return true; }
 
   DECLARE_INSTRUCTION(Goto);
 
@@ -892,6 +897,7 @@ class HIf : public HTemplateInstruction<1> {
   }
 
   virtual bool IsControlFlow() const { return true; }
+  virtual bool HasSideEffects() const { return true; }
 
   DECLARE_INSTRUCTION(If);
 
@@ -1087,6 +1093,8 @@ class HStoreLocal : public HTemplateInstruction<2> {
   }
 
   HLocal* GetLocal() const { return reinterpret_cast<HLocal*>(InputAt(0)); }
+
+  virtual bool HasSideEffects() const { return true; }
 
   DECLARE_INSTRUCTION(StoreLocal);
 
@@ -1372,6 +1380,8 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
 
+  virtual bool HasSideEffects() const { return true; }
+
   DECLARE_INSTRUCTION(InstanceFieldSet);
 
  private:
@@ -1412,6 +1422,8 @@ class HArraySet : public HTemplateInstruction<3> {
   }
 
   uint32_t GetDexPc() const { return dex_pc_; }
+
+  virtual bool HasSideEffects() const { return true; }
 
   DECLARE_INSTRUCTION(ArraySet);
 
