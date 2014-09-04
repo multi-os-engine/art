@@ -92,7 +92,8 @@ class ElfPatcher {
   // Takes the pointer into the oat_file_ and get the pointer in to the ElfFile.
   uint32_t* GetPatchLocation(uintptr_t patch_ptr);
 
-  bool WriteOutPatchData();
+  template <typename ElfFileImpl>
+  bool WriteOutPatchData(ElfFileImpl* elf_file);
 
   uintptr_t GetBaseAddressFor(const OatFile* f) {
     if (f == oat_file_) {

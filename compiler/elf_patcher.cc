@@ -21,6 +21,7 @@
 
 #include "class_linker.h"
 #include "elf_file.h"
+#include "elf_file_impl.h"
 #include "elf_utils.h"
 #include "mirror/art_field-inl.h"
 #include "mirror/art_method-inl.h"
@@ -60,12 +61,13 @@ bool ElfPatcher::Patch(const CompilerDriver* driver, ElfFile* elf_file,
 bool ElfPatcher::Patch(const CompilerDriver* driver, ElfFile* elf, const OatFile* oat_file,
                        uintptr_t oat_data_start, ImageAddressCallback cb, void* cb_data,
                        std::string* error_msg) {
-  Elf32_Shdr* data_sec = elf->FindSectionByName(".rodata");
-  if (data_sec == nullptr) {
+  uint64_t data_sec_offset;
+  bool has_data_sec = elf->GetSectionOffsetAndSize(".rodata", &data_sec_offset, nullptr);
+  if (!has_data_sec) {
     *error_msg = "Unable to find .rodata section and oat header";
     return false;
   }
-  OatHeader* oat_header = reinterpret_cast<OatHeader*>(elf->Begin() + data_sec->sh_offset);
+  OatHeader* oat_header = reinterpret_cast<OatHeader*>(elf->Begin() + data_sec_offset);
   if (!oat_header->IsValid()) {
     *error_msg = "Oat header was not valid";
     return false;
@@ -262,25 +264,29 @@ bool ElfPatcher::PatchElf() {
   self->EndAssertNoThreadSuspension(old_cause);
 
   if (write_patches_) {
-    return WriteOutPatchData();
+    if (elf_file_->is_elf64_)
+      WriteOutPatchData<ElfFileImpl64>(elf_file_->GetImpl64());
+    else
+      WriteOutPatchData<ElfFileImpl32>(elf_file_->GetImpl32());
   }
   return true;
 }
 
-bool ElfPatcher::WriteOutPatchData() {
-  Elf32_Shdr* shdr = elf_file_->FindSectionByName(".oat_patches");
+template <typename ElfFileImpl>
+bool ElfPatcher::WriteOutPatchData(ElfFileImpl* elf_file) {
+  auto shdr = elf_file->FindSectionByName(".oat_patches");
   if (shdr != nullptr) {
-    CHECK_EQ(shdr, elf_file_->FindSectionByType(SHT_OAT_PATCH))
+    CHECK_EQ(shdr, elf_file->FindSectionByType(SHT_OAT_PATCH))
         << "Incorrect type for .oat_patches section";
     CHECK_LE(patches_.size() * sizeof(uintptr_t), shdr->sh_size)
         << "We got more patches than anticipated";
-    CHECK_LE(reinterpret_cast<uintptr_t>(elf_file_->Begin()) + shdr->sh_offset + shdr->sh_size,
-              reinterpret_cast<uintptr_t>(elf_file_->End())) << "section is too large";
-    CHECK(shdr == &elf_file_->GetSectionHeader(elf_file_->GetSectionHeaderNum() - 1) ||
+    CHECK_LE(reinterpret_cast<uintptr_t>(elf_file->Begin()) + shdr->sh_offset + shdr->sh_size,
+              reinterpret_cast<uintptr_t>(elf_file->End())) << "section is too large";
+    CHECK(shdr == &elf_file->GetSectionHeader(elf_file->GetSectionHeaderNum() - 1) ||
           shdr->sh_offset + shdr->sh_size <= (shdr + 1)->sh_offset)
         << "Section overlaps onto next section";
     // It's mmap'd so we can just memcpy.
-    memcpy(elf_file_->Begin() + shdr->sh_offset, patches_.data(),
+    memcpy(elf_file->Begin() + shdr->sh_offset, patches_.data(),
            patches_.size() * sizeof(uintptr_t));
     // TODO We should fill in the newly empty space between the last patch and
     // the start of the next section by moving the following sections down if
@@ -290,7 +296,7 @@ bool ElfPatcher::WriteOutPatchData() {
   } else {
     LOG(ERROR) << "Unable to find section header for SHT_OAT_PATCH";
     *error_msg_ = "Unable to find section to write patch information to in ";
-    *error_msg_ += elf_file_->GetFile().GetPath();
+    *error_msg_ += elf_file->GetFile().GetPath();
     return false;
   }
 }
