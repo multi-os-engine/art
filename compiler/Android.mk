@@ -120,9 +120,7 @@ LIBART_COMPILER_SRC_FILES := \
 	utils/scoped_arena_allocator.cc \
 	buffered_output_stream.cc \
 	compiler.cc \
-	elf_fixup.cc \
 	elf_patcher.cc \
-	elf_stripper.cc \
 	elf_writer.cc \
 	elf_writer_quick.cc \
 	file_output_stream.cc \
