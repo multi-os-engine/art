@@ -34,6 +34,7 @@
 #include "utils/arena_allocator.h"
 #include "utils/arena_containers.h"
 #include "utils/stack_checks.h"
+#include "quick/inline_method_analyser.h"
 
 namespace art {
 
@@ -966,6 +967,7 @@ class Mir2Lir : public Backend {
     virtual bool GenInlinedFloor(CallInfo* info);
     virtual bool GenInlinedRint(CallInfo* info);
     virtual bool GenInlinedRound(CallInfo* info, bool is_double);
+    bool GenInlinedMathNatives(CallInfo* info, InlineMethodOpcode methodOp);
     virtual bool GenInlinedArrayCopyCharArray(CallInfo* info);
     virtual bool GenInlinedIndexOf(CallInfo* info, bool zero_based);
     bool GenInlinedStringCompareTo(CallInfo* info);

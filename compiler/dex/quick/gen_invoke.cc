@@ -1420,6 +1420,37 @@ bool Mir2Lir::GenInlinedRound(CallInfo* info, bool is_double) {
   return false;
 }
 
+bool Mir2Lir::GenInlinedMathNatives(CallInfo *info, InlineMethodOpcode methodOp) {
+  if (cu_->instruction_set != kThumb2 && cu_->instruction_set != kArm64) {
+    // no entrypoint for other targets
+    return false;
+  }
+  RegLocation rl_src = info->args[0];
+  DCHECK(rl_src.wide);
+  RegLocation rl_dest = InlineTargetWide(info);
+  rl_src = LoadValueWide(rl_src, kFPReg);
+  switch (methodOp) {
+    case kIntrinsicSin:
+      CallRuntimeHelperRegLocation(kQuickSin, rl_src, false);
+      break;
+    case kIntrinsicCos:
+      CallRuntimeHelperRegLocation(kQuickCos, rl_src, false);
+      break;
+    case kIntrinsicExp:
+      CallRuntimeHelperRegLocation(kQuickExp, rl_src, false);
+      break;
+    case kIntrinsicLog:
+      CallRuntimeHelperRegLocation(kQuickLog, rl_src, false);
+      break;
+    default:
+      LOG(FATAL) << "Unexpected invoke type";
+      break;
+  }
+  RegLocation rl_return = GetReturnWide(kFPReg);
+  StoreValueWide(rl_dest, rl_return);
+  return true;
+}
+
 bool Mir2Lir::GenInlinedFloatCvt(CallInfo* info) {
   if (cu_->instruction_set == kMips) {
     // TODO - add Mips implementation

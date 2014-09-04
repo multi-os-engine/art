@@ -87,6 +87,10 @@ extern "C" float art_quick_fmodf(float a, float b);          // REM_FLOAT[_2ADDR
 
 // Double-precision FP arithmetics.
 extern "C" double art_quick_fmod(double a, double b);         // REM_DOUBLE[_2ADDR]
+extern "C" double art_quick_sin(double);
+extern "C" double art_quick_cos(double);
+extern "C" double art_quick_exp(double);
+extern "C" double art_quick_log(double);
 
 // Memcpy
 extern "C" void* art_quick_memcpy(void* __restrict, const void* __restrict, size_t);
@@ -213,6 +217,10 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pShlLong = nullptr;
   qpoints->pShrLong = nullptr;
   qpoints->pUshrLong = nullptr;
+  qpoints->pSin = art_quick_sin;
+  qpoints->pCos = art_quick_cos;
+  qpoints->pExp = art_quick_exp;
+  qpoints->pLog = art_quick_log;
 
   // Intrinsics
   qpoints->pIndexOf = art_quick_indexof;

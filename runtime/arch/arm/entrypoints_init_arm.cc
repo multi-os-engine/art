@@ -230,6 +230,10 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pShlLong = art_quick_shl_long;
   qpoints->pShrLong = art_quick_shr_long;
   qpoints->pUshrLong = art_quick_ushr_long;
+  qpoints->pSin = sin;
+  qpoints->pCos = cos;
+  qpoints->pExp = exp;
+  qpoints->pLog = log;
 
   // Intrinsics
   qpoints->pIndexOf = art_quick_indexof;

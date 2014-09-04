@@ -39,6 +39,10 @@ public class Main {
     test_Math_rint();
     test_Math_round_D();
     test_Math_round_F();
+    test_Math_sin();
+    test_Math_cos();
+    test_Math_exp();
+    test_Math_log();
     test_Short_reverseBytes();
     test_Integer_reverseBytes();
     test_Long_reverseBytes();
@@ -482,6 +486,50 @@ public class Main {
     Assert.assertEquals(Math.round(Integer.MIN_VALUE - 1.0f), Integer.MIN_VALUE);
     Assert.assertEquals(Math.round(Float.POSITIVE_INFINITY), Integer.MAX_VALUE);
     Assert.assertEquals(Math.round(Float.NEGATIVE_INFINITY), Integer.MIN_VALUE);
+  }
+
+  public static boolean approxEqual(double a, double b, double maxDelta) {
+    if (a > b) {
+      return (a - b) < maxDelta;
+    } else {
+      return (b - a) < maxDelta;
+    }
+  }
+
+  public static void test_Math_sin() {
+    Assert.assertTrue(approxEqual(Math.sin(Math.PI/2), 1.0, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.sin(Math.PI), 0.0, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.sin(0), 0.0, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.sin(2.0), 0.9092974268256817, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.sin(-2.0), -0.9092974268256817, 0.00000001));
+    Assert.assertTrue(Double.isNaN(Math.sin(Double.NaN)));
+  }
+
+  public static void test_Math_cos() {
+    Assert.assertTrue(approxEqual(Math.cos(Math.PI/2), 0, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.cos(Math.PI), -1.0, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.cos(0), 1.0, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.cos(2.0), -0.4161468365471424, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.cos(-2.0), -0.4161468365471424, 0.00000001));
+    Assert.assertTrue(Double.isNaN(Math.cos(Double.NaN)));
+  }
+
+  public static void test_Math_exp() {
+    Assert.assertTrue(approxEqual(Math.exp(0.0), 1.0, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.exp(1.0), Math.E, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.exp(-1.0), 0.36787944117144233, 0.00000001));
+    Assert.assertTrue(Double.isNaN(Math.exp(Double.NaN)));
+    Assert.assertTrue(Double.isInfinite(Math.exp(Double.POSITIVE_INFINITY)));
+    Assert.assertTrue(approxEqual(Math.exp(Double.NEGATIVE_INFINITY), 0.0, 0.00000001));
+  }
+
+  public static void test_Math_log() {
+    Assert.assertTrue(Double.isInfinite(Math.log(0.0)));
+    Assert.assertTrue(approxEqual(Math.log(1.0), 0.0, 0.00000001));
+    Assert.assertTrue(approxEqual(Math.log(Math.E), 1.0, 0.00000001));
+    Assert.assertTrue(Double.isNaN(Math.log(-1.0)));
+    Assert.assertTrue(Double.isNaN(Math.log(Double.NaN)));
+    Assert.assertTrue(Double.isInfinite(Math.log(Double.POSITIVE_INFINITY)));
   }
 
   public static void test_StrictMath_abs_I() {

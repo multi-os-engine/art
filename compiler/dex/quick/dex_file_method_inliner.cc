@@ -55,6 +55,10 @@ static constexpr bool kIntrinsicIsStatic[] = {
     true,   // kIntrinsicRint
     true,   // kIntrinsicRoundFloat
     true,   // kIntrinsicRoundDouble
+    true,   // kIntrinsicSin
+    true,   // kIntrinsicCos
+    true,   // kIntrinsicExp
+    true,   // kIntrinsicLog
     false,  // kIntrinsicReferenceGetReferent
     false,  // kIntrinsicCharAt
     false,  // kIntrinsicCompareTo
@@ -87,6 +91,10 @@ COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicFloor], Floor_must_be_static);
 COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicRint], Rint_must_be_static);
 COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicRoundFloat], RoundFloat_must_be_static);
 COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicRoundDouble], RoundDouble_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicSin], Sin_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicCos], Cos_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicExp], Exp_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicLog], Log_must_be_static);
 COMPILE_ASSERT(!kIntrinsicIsStatic[kIntrinsicReferenceGetReferent], Get_must_not_be_static);
 COMPILE_ASSERT(!kIntrinsicIsStatic[kIntrinsicCharAt], CharAt_must_not_be_static);
 COMPILE_ASSERT(!kIntrinsicIsStatic[kIntrinsicCompareTo], CompareTo_must_not_be_static);
@@ -171,6 +179,10 @@ const char* const DexFileMethodInliner::kNameCacheNames[] = {
     "floor",                 // kNameCacheFloor
     "rint",                  // kNameCacheRint
     "round",                 // kNameCacheRound
+    "sin",                   // kNameCacheSin
+    "cos",                   // kNameCacheCos
+    "exp",                   // kNameCacheExp
+    "log",                   // kNameCacheLog
     "getReferent",           // kNameCacheReferenceGet
     "charAt",                // kNameCacheCharAt
     "compareTo",             // kNameCacheCompareTo
@@ -340,6 +352,10 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
     INTRINSIC(JavaLangStrictMath, Round, F_I, kIntrinsicRoundFloat, 0),
     INTRINSIC(JavaLangMath,       Round, D_J, kIntrinsicRoundDouble, 0),
     INTRINSIC(JavaLangStrictMath, Round, D_J, kIntrinsicRoundDouble, 0),
+    INTRINSIC(JavaLangMath,       Sin,   D_D, kIntrinsicSin, 0),
+    INTRINSIC(JavaLangMath,       Cos,   D_D, kIntrinsicCos, 0),
+    INTRINSIC(JavaLangMath,       Exp,   D_D, kIntrinsicExp, 0),
+    INTRINSIC(JavaLangMath,       Log,   D_D, kIntrinsicLog, 0),
 
     INTRINSIC(JavaLangRefReference, ReferenceGetReferent, _Object, kIntrinsicReferenceGetReferent, 0),
 
@@ -473,6 +489,11 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
       return backend->GenInlinedRound(info, false /* is_double */);
     case kIntrinsicRoundDouble:
       return backend->GenInlinedRound(info, true /* is_double */);
+    case kIntrinsicSin:
+    case kIntrinsicCos:
+    case kIntrinsicExp:
+    case kIntrinsicLog:
+      return backend->GenInlinedMathNatives(info, intrinsic.opcode);
     case kIntrinsicReferenceGetReferent:
       return backend->GenInlinedReferenceGetReferent(info);
     case kIntrinsicCharAt:

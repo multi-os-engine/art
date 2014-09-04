@@ -1861,3 +1861,7 @@ NATIVE_DOWNCALL art_quick_fmod fmod
 NATIVE_DOWNCALL art_quick_fmodf fmodf
 NATIVE_DOWNCALL art_quick_memcpy memcpy
 NATIVE_DOWNCALL art_quick_assignable_from_code artIsAssignableFromCode
+NATIVE_DOWNCALL art_quick_sin sin
+NATIVE_DOWNCALL art_quick_cos cos
+NATIVE_DOWNCALL art_quick_exp exp
+NATIVE_DOWNCALL art_quick_log log
