@@ -33,21 +33,6 @@ class ElfFixup {
   static bool Fixup(File* file, uintptr_t oat_data_begin);
 
  private:
-  // Fixup .dynamic d_ptr values for the expected base_address.
-  static bool FixupDynamic(ElfFile& elf_file, uintptr_t base_address);
-
-  // Fixup Elf32_Shdr p_vaddr to load at the desired address.
-  static bool FixupSectionHeaders(ElfFile& elf_file, uintptr_t base_address);
-
-  // Fixup Elf32_Phdr p_vaddr to load at the desired address.
-  static bool FixupProgramHeaders(ElfFile& elf_file, uintptr_t base_address);
-
-  // Fixup symbol table
-  static bool FixupSymbols(ElfFile& elf_file, uintptr_t base_address, bool dynamic);
-
-  // Fixup dynamic relocations
-  static bool FixupRelocations(ElfFile& elf_file, uintptr_t base_address);
-
   DISALLOW_IMPLICIT_CONSTRUCTORS(ElfFixup);
 };
 

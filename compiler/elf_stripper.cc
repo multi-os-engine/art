@@ -35,15 +35,27 @@ bool ElfStripper::Strip(File* file, std::string* error_msg) {
     return false;
   }
 
+  if (elf_file->is_elf64_)
+    return elf_file->elf_.elf64_->Strip(error_msg);
+  else
+    return elf_file->elf_.elf32_->Strip(error_msg);
+}
+
+template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_Word,
+          typename Elf_Sword, typename Elf_Addr, typename Elf_Sym, typename Elf_Rel,
+          typename Elf_Rela, typename Elf_Dyn, typename Elf_Off>
+bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
+    Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
+    ::Strip(std::string* error_msg) {
   // ELF files produced by MCLinker look roughly like this
   //
   // +------------+
-  // | Elf32_Ehdr | contains number of Elf32_Shdr and offset to first
+  // | Elf_Ehdr   | contains number of Elf_Shdr and offset to first
   // +------------+
-  // | Elf32_Phdr | program headers
-  // | Elf32_Phdr |
+  // | Elf_Phdr   | program headers
+  // | Elf_Phdr   |
   // | ...        |
-  // | Elf32_Phdr |
+  // | Elf_Phdr   |
   // +------------+
   // | section    | mixture of needed and unneeded sections
   // +------------+
@@ -53,29 +65,29 @@ bool ElfStripper::Strip(File* file, std::string* error_msg) {
   // +------------+
   // | section    |
   // +------------+
-  // | Elf32_Shdr | section headers
-  // | Elf32_Shdr |
+  // | Elf_Shdr   | section headers
+  // | Elf_Shdr   |
   // | ...        | contains offset to section start
-  // | Elf32_Shdr |
+  // | Elf_Shdr   |
   // +------------+
   //
   // To strip:
-  // - leave the Elf32_Ehdr and Elf32_Phdr values in place.
-  // - walk the sections making a new set of Elf32_Shdr section headers for what we want to keep
+  // - leave the Elf_Ehdr and Elf_Phdr values in place.
+  // - walk the sections making a new set of Elf_Shdr section headers for what we want to keep
   // - move the sections are keeping up to fill in gaps of sections we want to strip
-  // - write new Elf32_Shdr section headers to end of file, updating Elf32_Ehdr
+  // - write new Elf_Shdr section headers to end of file, updating Elf_Ehdr
   // - truncate rest of file
   //
 
-  std::vector<Elf32_Shdr> section_headers;
-  std::vector<Elf32_Word> section_headers_original_indexes;
-  section_headers.reserve(elf_file->GetSectionHeaderNum());
+  std::vector<Elf_Shdr> section_headers;
+  std::vector<Elf_Word> section_headers_original_indexes;
+  section_headers.reserve(GetSectionHeaderNum());
 
 
-  Elf32_Shdr& string_section = elf_file->GetSectionNameStringSection();
-  for (Elf32_Word i = 0; i < elf_file->GetSectionHeaderNum(); i++) {
-    Elf32_Shdr& sh = elf_file->GetSectionHeader(i);
-    const char* name = elf_file->GetString(string_section, sh.sh_name);
+  Elf_Shdr& string_section = GetSectionNameStringSection();
+  for (Elf_Word i = 0; i < GetSectionHeaderNum(); i++) {
+    Elf_Shdr& sh = GetSectionHeader(i);
+    const char* name = GetString(string_section, sh.sh_name);
     if (name == NULL) {
       CHECK_EQ(0U, i);
       section_headers.push_back(sh);
@@ -94,10 +106,10 @@ bool ElfStripper::Strip(File* file, std::string* error_msg) {
   CHECK_EQ(section_headers.size(), section_headers_original_indexes.size());
 
   // section 0 is the NULL section, sections start at offset of first section
-  Elf32_Off offset = elf_file->GetSectionHeader(1).sh_offset;
+  Elf_Off offset = GetSectionHeader(1).sh_offset;
   for (size_t i = 1; i < section_headers.size(); i++) {
-    Elf32_Shdr& new_sh = section_headers[i];
-    Elf32_Shdr& old_sh = elf_file->GetSectionHeader(section_headers_original_indexes[i]);
+    Elf_Shdr& new_sh = section_headers[i];
+    Elf_Shdr& old_sh = GetSectionHeader(section_headers_original_indexes[i]);
     CHECK_EQ(new_sh.sh_name, old_sh.sh_name);
     if (old_sh.sh_addralign > 1) {
       offset = RoundUp(offset, old_sh.sh_addralign);
@@ -108,24 +120,24 @@ bool ElfStripper::Strip(File* file, std::string* error_msg) {
       continue;
     }
     // shift section earlier
-    memmove(elf_file->Begin() + offset,
-            elf_file->Begin() + old_sh.sh_offset,
+    memmove(Begin() + offset,
+            Begin() + old_sh.sh_offset,
             old_sh.sh_size);
     new_sh.sh_offset = offset;
     offset += old_sh.sh_size;
   }
 
-  Elf32_Off shoff = offset;
-  size_t section_headers_size_in_bytes = section_headers.size() * sizeof(Elf32_Shdr);
-  memcpy(elf_file->Begin() + offset, &section_headers[0], section_headers_size_in_bytes);
+  Elf_Off shoff = offset;
+  size_t section_headers_size_in_bytes = section_headers.size() * sizeof(Elf_Shdr);
+  memcpy(Begin() + offset, &section_headers[0], section_headers_size_in_bytes);
   offset += section_headers_size_in_bytes;
 
-  elf_file->GetHeader().e_shnum = section_headers.size();
-  elf_file->GetHeader().e_shoff = shoff;
-  int result = ftruncate(file->Fd(), offset);
+  GetHeader().e_shnum = section_headers.size();
+  GetHeader().e_shoff = shoff;
+  int result = ftruncate(file_->Fd(), offset);
   if (result != 0) {
     *error_msg = StringPrintf("Failed to truncate while stripping ELF file: '%s': %s",
-                              file->GetPath().c_str(), strerror(errno));
+                              file_->GetPath().c_str(), strerror(errno));
     return false;
   }
   return true;

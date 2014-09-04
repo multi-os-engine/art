@@ -31,7 +31,7 @@
 namespace art {
 
 uint32_t ElfWriter::GetOatDataAddress(ElfFile* elf_file) {
-  Elf32_Addr oatdata_address = elf_file->FindSymbolAddress(SHT_DYNSYM,
+  uintptr_t oatdata_address = elf_file->FindSymbolAddress(SHT_DYNSYM,
                                                            "oatdata",
                                                            false);
   CHECK_NE(0U, oatdata_address);

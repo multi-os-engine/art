@@ -466,15 +466,166 @@ bool PatchOat::Patch(File* input_oat, off_t delta, File* output_oat, TimingLogge
   return true;
 }
 
-template <typename ptr_t>
-bool PatchOat::CheckOatFile(const Elf32_Shdr& patches_sec) {
+bool PatchOat::PatchElf() {
+  if (oat_file_->is_elf64_)
+    return oat_file_->elf_.elf64_->PatchElf(timings_, delta_);
+  else
+    return oat_file_->elf_.elf32_->PatchElf(timings_, delta_);
+}
+
+template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_Word,
+          typename Elf_Sword, typename Elf_Addr, typename Elf_Sym, typename Elf_Rel,
+          typename Elf_Rela, typename Elf_Dyn, typename Elf_Off>
+bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
+    Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
+    ::PatchElf(TimingLogger* timings, uintptr_t delta) {
+  TimingLogger::ScopedTiming t("Fixup Elf Text Section", timings);
+  if (!PatchTextSection(delta)) {
+    return false;
+  }
+
+  if (!PatchOatHeader(delta)) {
+    return false;
+  }
+
+  bool need_fixup = false;
+  t.NewTiming("Fixup Elf Headers");
+  // Fixup Phdr's
+  for (unsigned int i = 0; i < GetProgramHeaderNum(); i++) {
+    Elf_Phdr& hdr = GetProgramHeader(i);
+    if (hdr.p_vaddr != 0 && hdr.p_vaddr != hdr.p_offset) {
+      need_fixup = true;
+      hdr.p_vaddr += delta;
+    }
+    if (hdr.p_paddr != 0 && hdr.p_paddr != hdr.p_offset) {
+      need_fixup = true;
+      hdr.p_paddr += delta;
+    }
+  }
+  if (!need_fixup) {
+    // This was never passed through ElfFixup so all headers/symbols just have their offset as
+    // their addr. Therefore we do not need to update these parts.
+    return true;
+  }
+  t.NewTiming("Fixup Section Headers");
+  for (unsigned int i = 0; i < GetSectionHeaderNum(); i++) {
+    Elf_Shdr& hdr = GetSectionHeader(i);
+    if (hdr.sh_addr != 0) {
+      hdr.sh_addr += delta;
+    }
+  }
+
+  t.NewTiming("Fixup Dynamics");
+  for (Elf_Word i = 0; i < GetDynamicNum(); i++) {
+    Elf_Dyn& dyn = GetDynamic(i);
+    if (IsDynamicSectionPointer(dyn.d_tag, GetHeader().e_machine)) {
+      dyn.d_un.d_ptr += delta;
+    }
+  }
+
+  t.NewTiming("Fixup Elf Symbols");
+  // Fixup dynsym
+  Elf_Shdr* dynsym_sec = FindSectionByName(".dynsym");
+  CHECK(dynsym_sec != nullptr);
+  if (!PatchSymbols(dynsym_sec, delta)) {
+    return false;
+  }
+
+  // Fixup symtab
+  Elf_Shdr* symtab_sec = FindSectionByName(".symtab");
+  if (symtab_sec != nullptr) {
+    if (!PatchSymbols(symtab_sec, delta)) {
+      return false;
+    }
+  }
+
+  t.NewTiming("Fixup Debug Sections");
+  if (!FixupDebugSections(delta)) {
+    return false;
+  }
+
+  return true;
+}
+
+template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_Word,
+          typename Elf_Sword, typename Elf_Addr, typename Elf_Sym, typename Elf_Rel,
+          typename Elf_Rela, typename Elf_Dyn, typename Elf_Off>
+bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
+    Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
+    ::PatchSymbols(Elf_Shdr* section, uintptr_t delta) {
+  Elf_Sym* syms = reinterpret_cast<Elf_Sym*>(Begin() + section->sh_offset);
+  const Elf_Sym* last_sym =
+      reinterpret_cast<Elf_Sym*>(Begin() + section->sh_offset + section->sh_size);
+  CHECK_EQ(section->sh_size % sizeof(Elf_Sym), 0u)
+      << "Symtab section size is not multiple of symbol size";
+  for (; syms < last_sym; syms++) {
+    uint8_t sttype = ELF32_ST_TYPE(syms->st_info);
+    Elf_Word shndx = syms->st_shndx;
+    if (shndx != SHN_ABS && shndx != SHN_COMMON && shndx != SHN_UNDEF &&
+        (sttype == STT_FUNC || sttype == STT_OBJECT)) {
+      CHECK_NE(syms->st_value, 0u);
+      syms->st_value += delta;
+    }
+  }
+  return true;
+}
+
+template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_Word,
+          typename Elf_Sword, typename Elf_Addr, typename Elf_Sym, typename Elf_Rel,
+          typename Elf_Rela, typename Elf_Dyn, typename Elf_Off>
+bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
+    Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
+    ::PatchTextSection(uintptr_t delta) {
+  Elf_Shdr* patches_sec = FindSectionByName(".oat_patches");
+  if (patches_sec == nullptr) {
+    LOG(ERROR) << ".oat_patches section not found. Aborting patch";
+    return false;
+  }
+  if (patches_sec->sh_type != SHT_OAT_PATCH) {
+    LOG(ERROR) << "Unexpected type of .oat_patches";
+    return false;
+  }
+
+  CHECK_EQ(patches_sec->sh_entsize, sizeof(uintptr_t));
+  return PatchTextSection(*patches_sec, delta);
+}
+
+template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_Word,
+          typename Elf_Sword, typename Elf_Addr, typename Elf_Sym, typename Elf_Rel,
+          typename Elf_Rela, typename Elf_Dyn, typename Elf_Off>
+bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
+    Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
+    ::PatchTextSection(const Elf_Shdr& patches_sec, uintptr_t delta) {
+  DCHECK(CheckOatFile(patches_sec)) << "Oat file invalid";
+  uintptr_t* patches = reinterpret_cast<uintptr_t*>(Begin() + patches_sec.sh_offset);
+  uintptr_t* patches_end = patches + (patches_sec.sh_size / sizeof(uintptr_t));
+  Elf_Shdr* oat_text_sec = FindSectionByName(".text");
+  CHECK(oat_text_sec != nullptr);
+  byte* to_patch = Begin() + oat_text_sec->sh_offset;
+  uintptr_t to_patch_end = reinterpret_cast<uintptr_t>(to_patch) + oat_text_sec->sh_size;
+
+  for (; patches < patches_end; patches++) {
+    CHECK_LT(*patches, oat_text_sec->sh_size) << "Bad Patch";
+    uint32_t* patch_loc = reinterpret_cast<uint32_t*>(to_patch + *patches);
+    CHECK_LT(reinterpret_cast<uintptr_t>(patch_loc), to_patch_end);
+    *patch_loc += delta;
+  }
+  return true;
+}
+
+template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_Word,
+          typename Elf_Sword, typename Elf_Addr, typename Elf_Sym, typename Elf_Rel,
+          typename Elf_Rela, typename Elf_Dyn, typename Elf_Off>
+bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
+    Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
+    ::CheckOatFile(const Elf_Shdr& patches_sec) {
   if (patches_sec.sh_type != SHT_OAT_PATCH) {
     return false;
   }
-  ptr_t* patches = reinterpret_cast<ptr_t*>(oat_file_->Begin() + patches_sec.sh_offset);
-  ptr_t* patches_end = patches + (patches_sec.sh_size / sizeof(ptr_t));
-  Elf32_Shdr* oat_data_sec = oat_file_->FindSectionByName(".rodata");
-  Elf32_Shdr* oat_text_sec = oat_file_->FindSectionByName(".text");
+  uintptr_t* patches = reinterpret_cast<uintptr_t*>(Begin() + patches_sec.sh_offset);
+  uintptr_t* patches_end = patches + (patches_sec.sh_size / sizeof(uintptr_t));
+  Elf_Shdr* oat_data_sec = FindSectionByName(".rodata");
+  Elf_Shdr* oat_text_sec = FindSectionByName(".text");
   if (oat_data_sec == nullptr) {
     return false;
   }
@@ -494,146 +645,22 @@ bool PatchOat::CheckOatFile(const Elf32_Shdr& patches_sec) {
   return true;
 }
 
-bool PatchOat::PatchOatHeader() {
-  Elf32_Shdr *rodata_sec = oat_file_->FindSectionByName(".rodata");
+template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_Word,
+          typename Elf_Sword, typename Elf_Addr, typename Elf_Sym, typename Elf_Rel,
+          typename Elf_Rela, typename Elf_Dyn, typename Elf_Off>
+bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
+    Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
+    ::PatchOatHeader(uintptr_t delta) {
+  Elf_Shdr *rodata_sec = FindSectionByName(".rodata");
   if (rodata_sec == nullptr) {
     return false;
   }
-  OatHeader* oat_header = reinterpret_cast<OatHeader*>(oat_file_->Begin() + rodata_sec->sh_offset);
+  OatHeader* oat_header = reinterpret_cast<OatHeader*>(Begin() + rodata_sec->sh_offset);
   if (!oat_header->IsValid()) {
-    LOG(ERROR) << "Elf file " << oat_file_->GetFile().GetPath() << " has an invalid oat header";
+    LOG(ERROR) << "Elf file " << GetFile().GetPath() << " has an invalid oat header";
     return false;
   }
-  oat_header->RelocateOat(delta_);
-  return true;
-}
-
-bool PatchOat::PatchElf() {
-  TimingLogger::ScopedTiming t("Fixup Elf Text Section", timings_);
-  if (!PatchTextSection()) {
-    return false;
-  }
-
-  if (!PatchOatHeader()) {
-    return false;
-  }
-
-  bool need_fixup = false;
-  t.NewTiming("Fixup Elf Headers");
-  // Fixup Phdr's
-  for (unsigned int i = 0; i < oat_file_->GetProgramHeaderNum(); i++) {
-    Elf32_Phdr& hdr = oat_file_->GetProgramHeader(i);
-    if (hdr.p_vaddr != 0 && hdr.p_vaddr != hdr.p_offset) {
-      need_fixup = true;
-      hdr.p_vaddr += delta_;
-    }
-    if (hdr.p_paddr != 0 && hdr.p_paddr != hdr.p_offset) {
-      need_fixup = true;
-      hdr.p_paddr += delta_;
-    }
-  }
-  if (!need_fixup) {
-    // This was never passed through ElfFixup so all headers/symbols just have their offset as
-    // their addr. Therefore we do not need to update these parts.
-    return true;
-  }
-  t.NewTiming("Fixup Section Headers");
-  for (unsigned int i = 0; i < oat_file_->GetSectionHeaderNum(); i++) {
-    Elf32_Shdr& hdr = oat_file_->GetSectionHeader(i);
-    if (hdr.sh_addr != 0) {
-      hdr.sh_addr += delta_;
-    }
-  }
-
-  t.NewTiming("Fixup Dynamics");
-  for (Elf32_Word i = 0; i < oat_file_->GetDynamicNum(); i++) {
-    Elf32_Dyn& dyn = oat_file_->GetDynamic(i);
-    if (IsDynamicSectionPointer(dyn.d_tag, oat_file_->GetHeader().e_machine)) {
-      dyn.d_un.d_ptr += delta_;
-    }
-  }
-
-  t.NewTiming("Fixup Elf Symbols");
-  // Fixup dynsym
-  Elf32_Shdr* dynsym_sec = oat_file_->FindSectionByName(".dynsym");
-  CHECK(dynsym_sec != nullptr);
-  if (!PatchSymbols(dynsym_sec)) {
-    return false;
-  }
-
-  // Fixup symtab
-  Elf32_Shdr* symtab_sec = oat_file_->FindSectionByName(".symtab");
-  if (symtab_sec != nullptr) {
-    if (!PatchSymbols(symtab_sec)) {
-      return false;
-    }
-  }
-
-  t.NewTiming("Fixup Debug Sections");
-  if (!oat_file_->FixupDebugSections(delta_)) {
-    return false;
-  }
-
-  return true;
-}
-
-bool PatchOat::PatchSymbols(Elf32_Shdr* section) {
-  Elf32_Sym* syms = reinterpret_cast<Elf32_Sym*>(oat_file_->Begin() + section->sh_offset);
-  const Elf32_Sym* last_sym =
-      reinterpret_cast<Elf32_Sym*>(oat_file_->Begin() + section->sh_offset + section->sh_size);
-  CHECK_EQ(section->sh_size % sizeof(Elf32_Sym), 0u)
-      << "Symtab section size is not multiple of symbol size";
-  for (; syms < last_sym; syms++) {
-    uint8_t sttype = ELF32_ST_TYPE(syms->st_info);
-    Elf32_Word shndx = syms->st_shndx;
-    if (shndx != SHN_ABS && shndx != SHN_COMMON && shndx != SHN_UNDEF &&
-        (sttype == STT_FUNC || sttype == STT_OBJECT)) {
-      CHECK_NE(syms->st_value, 0u);
-      syms->st_value += delta_;
-    }
-  }
-  return true;
-}
-
-bool PatchOat::PatchTextSection() {
-  Elf32_Shdr* patches_sec = oat_file_->FindSectionByName(".oat_patches");
-  if (patches_sec == nullptr) {
-    LOG(ERROR) << ".oat_patches section not found. Aborting patch";
-    return false;
-  }
-  if (patches_sec->sh_type != SHT_OAT_PATCH) {
-    LOG(ERROR) << "Unexpected type of .oat_patches";
-    return false;
-  }
-
-  switch (patches_sec->sh_entsize) {
-    case sizeof(uint32_t):
-      return PatchTextSection<uint32_t>(*patches_sec);
-    case sizeof(uint64_t):
-      return PatchTextSection<uint64_t>(*patches_sec);
-    default:
-      LOG(ERROR) << ".oat_patches Entsize of " << patches_sec->sh_entsize << "bits "
-                 << "is not valid";
-      return false;
-  }
-}
-
-template <typename ptr_t>
-bool PatchOat::PatchTextSection(const Elf32_Shdr& patches_sec) {
-  DCHECK(CheckOatFile<ptr_t>(patches_sec)) << "Oat file invalid";
-  ptr_t* patches = reinterpret_cast<ptr_t*>(oat_file_->Begin() + patches_sec.sh_offset);
-  ptr_t* patches_end = patches + (patches_sec.sh_size / sizeof(ptr_t));
-  Elf32_Shdr* oat_text_sec = oat_file_->FindSectionByName(".text");
-  CHECK(oat_text_sec != nullptr);
-  byte* to_patch = oat_file_->Begin() + oat_text_sec->sh_offset;
-  uintptr_t to_patch_end = reinterpret_cast<uintptr_t>(to_patch) + oat_text_sec->sh_size;
-
-  for (; patches < patches_end; patches++) {
-    CHECK_LT(*patches, oat_text_sec->sh_size) << "Bad Patch";
-    uint32_t* patch_loc = reinterpret_cast<uint32_t*>(to_patch + *patches);
-    CHECK_LT(reinterpret_cast<uintptr_t>(patch_loc), to_patch_end);
-    *patch_loc += delta_;
-  }
+  oat_header->RelocateOat(delta);
   return true;
 }
 
