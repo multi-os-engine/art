@@ -102,4 +102,29 @@ TEST(ConstantPropagation, ConstantFolding2) {
   TestCode(data);
 }
 
+/**
+ * Three-register program with a constant (static) condition.
+ *
+ *                              16-bit
+ *                              offset
+ *                              ------
+ *     v1 <- 1                  0.      const/4 v1, #+1
+ *     v0 <- 0                  1.      const/4 v0, #+0
+ *     if v1 >= 0 goto L1       2.      if-gez v1, +3
+ *     v0 <- v1                 4.      move v0, v1
+ * L1: v2 <- v0 + v1            5.      add-int v2, v0, v1
+ *     return-void              7.      return
+ */
+TEST(ConstantPropagation, ConstantCondition) {
+  const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 1 << 8 | 1 << 12,
+    Instruction::CONST_4 | 0 << 8 | 0 << 12,
+    Instruction::IF_GEZ | 1 << 8, 3,
+    Instruction::MOVE | 0 << 8 | 1 << 12,
+    Instruction::ADD_INT | 2 << 8, 0 | 1 << 8,
+    Instruction::RETURN_VOID);
+
+  TestCode(data);
+}
+
 }  // namespace art

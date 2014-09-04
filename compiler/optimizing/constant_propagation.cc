@@ -41,6 +41,57 @@ void ConstantPropagation::Run() {
           inst->GetBlock()->RemoveInstruction(inst);
         }
       }
+
+      // Constant condition.
+      /* TODO: Also process `HCondition' nodes separately from `HIf'
+         nodes, e.g. to replace a constant condition used as an
+         expression?  */
+      if (inst != nullptr && inst->IsIf()) {
+        HIf* if_inst = inst->AsIf();
+        HInstruction* cond_inst = if_inst->InputAt(0);
+        DCHECK(cond_inst->IsCondition());
+        HCondition* condition = cond_inst->AsCondition();
+        if (condition->GetLeft()->IsIntConstant()
+            && condition->GetRight()->IsIntConstant()) {
+          // Install a `HGoto' node at the end of the block that will
+          // eventually replace the `HIf' node.
+          HGoto* goto_inst = new(graph_->GetArena()) HGoto();
+          HBasicBlock* current_block = if_inst->GetBlock();
+          DCHECK(current_block->GetLastInstruction() == if_inst);
+          current_block->AddInstruction(goto_inst);
+
+          // Evaluate the condition and remove the link between the
+          // current block and the unreached successor.
+          int32_t lhs_val = condition->GetLeft()->AsIntConstant()->GetValue();
+          int32_t rhs_val = condition->GetRight()->AsIntConstant()->GetValue();
+          bool cond;
+          switch (condition->GetCondition()) {
+            case kCondEQ: cond = lhs_val == rhs_val; break;
+            case kCondNE: cond = lhs_val != rhs_val; break;
+            case kCondLT: cond = lhs_val <  rhs_val; break;
+            case kCondLE: cond = lhs_val <= rhs_val; break;
+            case kCondGT: cond = lhs_val >  rhs_val; break;
+            case kCondGE: cond = lhs_val >= rhs_val; break;
+            default:
+              cond = true;
+              LOG(FATAL) << "Unreachable";
+          }
+          HBasicBlock* unreached_block =
+            cond ? if_inst->IfFalseSuccessor() : if_inst->IfTrueSuccessor();
+          unreached_block->RemovePredecessor(current_block);
+          current_block->RemoveSuccessor(unreached_block);
+
+          // Remove instruction(s) from current block.
+          bool condition_needs_materialization =
+            condition->NeedsMaterialization();
+          current_block->RemoveInstruction(if_inst);
+          /* Remove the condition if it does not need materialization.
+             We could also leave this task a dead code elimination
+             pass.  */
+          if (!condition_needs_materialization)
+            current_block->RemoveInstruction(condition);
+        }
+      }
     }
   }
 }
