@@ -61,6 +61,8 @@ class ElfPatcher {
                              DefaultImageAddressCallback, nullptr, error_msg);
   }
 
+  static bool Fixup(File* file, uintptr_t oat_data_begin);
+
  private:
   ElfPatcher(const CompilerDriver* driver, ElfFile* elf_file, const OatFile* oat_file,
              OatHeader* oat_header, uintptr_t oat_data_begin,
@@ -91,8 +93,6 @@ class ElfPatcher {
 
   // Takes the pointer into the oat_file_ and get the pointer in to the ElfFile.
   uint32_t* GetPatchLocation(uintptr_t patch_ptr);
-
-  bool WriteOutPatchData();
 
   uintptr_t GetBaseAddressFor(const OatFile* f) {
     if (f == oat_file_) {

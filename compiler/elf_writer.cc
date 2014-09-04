@@ -30,10 +30,10 @@
 
 namespace art {
 
-uint32_t ElfWriter::GetOatDataAddress(ElfFile* elf_file) {
-  Elf32_Addr oatdata_address = elf_file->FindSymbolAddress(SHT_DYNSYM,
-                                                           "oatdata",
-                                                           false);
+uint64_t ElfWriter::GetOatDataAddress(ElfFile* elf_file) {
+  uint64_t oatdata_address = elf_file->FindSymbolAddress(SHT_DYNSYM,
+                                                         "oatdata",
+                                                         false);
   CHECK_NE(0U, oatdata_address);
   return oatdata_address;
 }
