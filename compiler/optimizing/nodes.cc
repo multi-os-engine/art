@@ -414,6 +414,29 @@ void HInstruction::ReplaceWith(HInstruction* other) {
   env_uses_ = nullptr;
 }
 
+HConstant* HIntConstant::StaticEvaluation(const HAdd* binop,
+                                          HConstant* rhs) {
+  HIntConstant* right = rhs->AsIntConstant();
+  if (right == nullptr) {
+    return nullptr;
+  }
+  ArenaAllocator* arena = GetBlock()->GetGraph()->GetArena();
+  return new(arena) HIntConstant(binop->Evaluate(GetValue(),
+                                                 right->GetValue()));
+}
+
+HConstant* HAdd::TryStaticEvaluation() const {
+  HIntConstant* left = GetLeft()->AsIntConstant();
+  if (left == nullptr) {
+    return nullptr;
+  }
+  HConstant* right = GetRight()->AsConstant();
+  if (right == nullptr) {
+    return nullptr;
+  }
+  return left->StaticEvaluation(this, right);
+}
+
 void HPhi::AddInput(HInstruction* input) {
   DCHECK(input->GetBlock() != nullptr);
   inputs_.Add(input);

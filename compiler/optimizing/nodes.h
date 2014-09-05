@@ -1120,6 +1120,10 @@ class HIntConstant : public HConstant {
 
   int32_t GetValue() const { return value_; }
 
+  // Statically apply the binary operation associated to `binop` to
+  // this node and `rhs`, and return the result as a constant node.
+  virtual HConstant* StaticEvaluation(const HAdd* binop, HConstant* rhs);
+
   DECLARE_INSTRUCTION(IntConstant);
 
  private:
@@ -1228,6 +1232,14 @@ class HAdd : public HBinaryOperation {
       : HBinaryOperation(result_type, left, right) {}
 
   virtual bool IsCommutative() { return true; }
+
+  // If this node can be evaluated statically, return a node
+  // containing the result of the evaluation.  Otherwise, return
+  // nullptr.
+  HConstant* TryStaticEvaluation() const;
+
+  // Apply the operation of this instruction (addition) to `a` and `b`.
+  virtual int32_t Evaluate(int32_t a, int32_t b) const { return a + b; }
 
   DECLARE_INSTRUCTION(Add);
 
