@@ -73,10 +73,11 @@ static jstring VMClassLoader_getBootClassPathResource(JNIEnv* env, jclass, jstri
   const DexFile* dex_file = path[index];
 
   // For multidex locations, e.g., x.jar:classes2.dex, we want to look into x.jar.
-  const std::string& location(dex_file->GetBaseLocation());
+  std::string temp;
+  const char* location = dex_file->GetBaseLocation(&temp);
 
   std::string error_msg;
-  std::unique_ptr<ZipArchive> zip_archive(ZipArchive::Open(location.c_str(), &error_msg));
+  std::unique_ptr<ZipArchive> zip_archive(ZipArchive::Open(location, &error_msg));
   if (zip_archive.get() == nullptr) {
     LOG(WARNING) << "Failed to open zip archive '" << location << "': " << error_msg;
     return nullptr;
@@ -87,7 +88,7 @@ static jstring VMClassLoader_getBootClassPathResource(JNIEnv* env, jclass, jstri
   }
 
   std::string url;
-  StringAppendF(&url, "jar:file://%s!/%s", location.c_str(), name.c_str());
+  StringAppendF(&url, "jar:file://%s!/%s", location, name.c_str());
   return env->NewStringUTF(url.c_str());
 }
 

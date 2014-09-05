@@ -549,14 +549,15 @@ class ClassLinker {
   }
   mirror::DexCache* GetDexCache(size_t idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, dex_lock_);
 
-  const OatFile* FindOpenedOatFileForDexFile(const DexFile& dex_file)
+  const OatFile::OatDexFile* FindOpenedOatDexFileForDexFile(const DexFile& dex_file)
       LOCKS_EXCLUDED(dex_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Find an opened oat file that contains dex_location. If oat_location is not nullptr, the file
-  // must have that location, else any oat location is accepted.
-  const OatFile* FindOpenedOatFile(const char* oat_location, const char* dex_location,
-                                   const uint32_t* const dex_location_checksum)
+  // Find an opened oat dex file that contains dex_location. If oat_location is not nullptr,
+  // the file must have that location, else any oat location is accepted.
+  const OatFile::OatDexFile* FindOpenedOatDexFile(const char* oat_location,
+                                                  const char* dex_location,
+                                                  const uint32_t* dex_location_checksum)
       LOCKS_EXCLUDED(dex_lock_);
 
   // Will open the oat file directly without relocating, even if we could/should do relocation.

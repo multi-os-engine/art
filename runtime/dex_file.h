@@ -389,15 +389,18 @@ class DexFile {
   // For normal dex files, location and base location coincide. If a dex file is part of a multidex
   // archive, the base location is the name of the originating jar/apk, stripped of any internal
   // classes*.dex path.
-  const std::string GetBaseLocation() const {
-    if (IsMultiDexLocation(location_.c_str())) {
-      std::pair<const char*, const char*> pair = SplitMultiDexLocation(location_.c_str());
-      std::string res(pair.first);
-      delete[] pair.first;
-      return res;
-    } else {
-      return location_;
+  static const char* GetBaseLocation(const char* location, std::string* storage) {
+    const char* loc = location;
+    const char* pos = strrchr(loc, kMultiDexSeparator);
+    if (pos != nullptr) {
+      storage->assign(loc, pos - loc);
+      loc = storage->c_str();
     }
+    return loc;
+  }
+
+  const char* GetBaseLocation(std::string* storage) const {
+    return GetBaseLocation(location_.c_str(), storage);
   }
 
   // For DexFiles directly from .dex files, this is the checksum from the DexFile::Header.
@@ -860,7 +863,7 @@ class DexFile {
   //     and possibly some multidex annotation to uniquely identify it.
   // canonical_dex_location:
   //     the dex_location where it's file name part has been made canonical.
-  static std::string GetDexCanonicalLocation(const char* dex_location);
+  static const char* GetDexCanonicalLocation(const char* dex_location, std::string* storage);
 
  private:
   // Opens a .dex file
@@ -923,7 +926,8 @@ class DexFile {
   //
   // Note: It's the caller's job to free the first component of the returned pair.
   // Bug 15313523: gcc/libc++ don't allow a unique_ptr for the first component
-  static std::pair<const char*, const char*> SplitMultiDexLocation(const char* location);
+  static std::pair<const char*, const char*> SplitMultiDexLocation(const char* location,
+                                                                   std::string* storage);
 
 
   // The base address of the memory mapping.
