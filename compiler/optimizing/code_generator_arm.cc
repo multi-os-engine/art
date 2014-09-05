@@ -886,6 +886,14 @@ void LocationsBuilderARM::VisitAdd(HAdd* add) {
   }
 }
 
+void LocationsBuilderARM::VisitArithmeticBinaryOperation(art::HArithmeticBinaryOperation*) {
+  LOG(FATAL) << "Unreachable";
+}
+
+void InstructionCodeGeneratorARM::VisitArithmeticBinaryOperation(art::HArithmeticBinaryOperation*) {
+  LOG(FATAL) << "Unreachable";
+}
+
 void InstructionCodeGeneratorARM::VisitAdd(HAdd* add) {
   LocationSummary* locations = add->GetLocations();
   switch (add->GetResultType()) {

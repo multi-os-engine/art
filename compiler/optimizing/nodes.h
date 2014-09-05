@@ -49,6 +49,11 @@ enum IfCondition {
   kCondGE,
 };
 
+enum ArithmeticOperation {
+  kArithOpAdd,
+  kArithOpSub,
+};
+
 class HInstructionList {
  public:
   HInstructionList() : first_instruction_(nullptr), last_instruction_(nullptr) {}
@@ -418,6 +423,7 @@ class HBasicBlock : public ArenaObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION(M)                   \
   M(Add)                                                   \
+  M(ArithmeticBinaryOperation)                             \
   M(Condition)                                             \
   M(Equal)                                                 \
   M(NotEqual)                                              \
@@ -1017,6 +1023,15 @@ class HCondition : public HBinaryOperation {
   virtual bool IsCommutative() { return true; }
   bool NeedsMaterialization() const;
 
+  // If this node can be evaluated statically, return a node
+  // containing the result of the evaluation.  Otherwise, return
+  // nullptr.
+  HConstant* TryStaticEvaluation() const;
+
+  // Apply the operation of this instruction to `a` and `b`.
+  virtual bool Evaluate(int32_t a, int32_t b) const = 0;
+  virtual bool Evaluate(int64_t a, int64_t b) const = 0;
+
   DECLARE_INSTRUCTION(Condition);
 
   virtual IfCondition GetCondition() const = 0;
@@ -1030,6 +1045,9 @@ class HEqual : public HCondition {
  public:
   HEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
+
+  virtual bool Evaluate(int32_t a, int32_t b) const { return a == b; }
+  virtual bool Evaluate(int64_t a, int64_t b) const { return a == b; }
 
   DECLARE_INSTRUCTION(Equal);
 
@@ -1046,6 +1064,9 @@ class HNotEqual : public HCondition {
   HNotEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
+  virtual bool Evaluate(int32_t a, int32_t b) const { return a != b; }
+  virtual bool Evaluate(int64_t a, int64_t b) const { return a != b; }
+
   DECLARE_INSTRUCTION(NotEqual);
 
   virtual IfCondition GetCondition() const {
@@ -1060,6 +1081,9 @@ class HLessThan : public HCondition {
  public:
   HLessThan(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
+
+  virtual bool Evaluate(int32_t a, int32_t b) const { return a < b; }
+  virtual bool Evaluate(int64_t a, int64_t b) const { return a < b; }
 
   DECLARE_INSTRUCTION(LessThan);
 
@@ -1076,6 +1100,9 @@ class HLessThanOrEqual : public HCondition {
   HLessThanOrEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
+  virtual bool Evaluate(int32_t a, int32_t b) const { return a <= b; }
+  virtual bool Evaluate(int64_t a, int64_t b) const { return a <= b; }
+
   DECLARE_INSTRUCTION(LessThanOrEqual);
 
   virtual IfCondition GetCondition() const {
@@ -1091,6 +1118,9 @@ class HGreaterThan : public HCondition {
   HGreaterThan(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
+  virtual bool Evaluate(int32_t a, int32_t b) const { return a > b; }
+  virtual bool Evaluate(int64_t a, int64_t b) const { return a > b; }
+
   DECLARE_INSTRUCTION(GreaterThan);
 
   virtual IfCondition GetCondition() const {
@@ -1105,6 +1135,9 @@ class HGreaterThanOrEqual : public HCondition {
  public:
   HGreaterThanOrEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
+
+  virtual bool Evaluate(int32_t a, int32_t b) const { return a >= b; }
+  virtual bool Evaluate(int64_t a, int64_t b) const { return a >= b; }
 
   DECLARE_INSTRUCTION(GreaterThanOrEqual);
 
@@ -1191,6 +1224,16 @@ class HConstant : public HExpression<0> {
 
   virtual bool CanBeMoved() const { return true; }
 
+  // Statically compute the condition associated to `binop` to
+  // this node and `rhs`, and return the result as a constant node.
+  virtual HConstant* StaticEvaluation(const HCondition* binop,
+                                      HConstant* rhs) = 0;
+
+  // Statically apply the binary operation associated to `binop` to
+  // this node and `rhs`, and return the result as a constant node.
+  virtual HConstant* StaticEvaluation(const HArithmeticBinaryOperation* binop,
+                                      HConstant* rhs) = 0;
+
   DECLARE_INSTRUCTION(Constant);
 
  private:
@@ -1209,6 +1252,12 @@ class HIntConstant : public HConstant {
     return other->AsIntConstant()->value_ == value_;
   }
 
+  virtual HConstant* StaticEvaluation(const HCondition* binop,
+                                      HConstant* rhs);
+
+  virtual HConstant* StaticEvaluation(const HArithmeticBinaryOperation* binop,
+                                      HConstant* rhs);
+
   DECLARE_INSTRUCTION(IntConstant);
 
  private:
@@ -1226,6 +1275,12 @@ class HLongConstant : public HConstant {
   virtual bool InstructionDataEquals(HInstruction* other) const {
     return other->AsLongConstant()->value_ == value_;
   }
+
+  virtual HConstant* StaticEvaluation(const HCondition* binop,
+                                      HConstant* rhs);
+
+  virtual HConstant* StaticEvaluation(const HArithmeticBinaryOperation* binop,
+                                      HConstant* rhs);
 
   DECLARE_INSTRUCTION(LongConstant);
 
@@ -1318,27 +1373,66 @@ class HNewInstance : public HExpression<0> {
   DISALLOW_COPY_AND_ASSIGN(HNewInstance);
 };
 
-class HAdd : public HBinaryOperation {
+class HArithmeticBinaryOperation : public HBinaryOperation {
+ public:
+  HArithmeticBinaryOperation(Primitive::Type result_type,
+                             HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  // If this node can be evaluated statically, return a node
+  // containing the result of the evaluation.  Otherwise, return
+  // nullptr.
+  HConstant* TryStaticEvaluation() const;
+
+  // Apply the operation of this instruction to `a` and `b`.
+  virtual int32_t Evaluate(int32_t a, int32_t b) const = 0;
+  virtual int64_t Evaluate(int64_t a, int64_t b) const = 0;
+
+  DECLARE_INSTRUCTION(ArithmeticBinaryOperation);
+
+  virtual ArithmeticOperation GetArithmeticOperation() const = 0;
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HArithmeticBinaryOperation);
+};
+
+class HAdd : public HArithmeticBinaryOperation {
  public:
   HAdd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+      : HArithmeticBinaryOperation(result_type, left, right) {}
 
   virtual bool IsCommutative() { return true; }
 
+  // Apply the operation of this instruction (addition) to `a` and `b`.
+  virtual int32_t Evaluate(int32_t a, int32_t b) const { return a + b; }
+  virtual int64_t Evaluate(int64_t a, int64_t b) const { return a + b; }
+
   DECLARE_INSTRUCTION(Add);
+
+  virtual ArithmeticOperation GetArithmeticOperation() const {
+    return kArithOpAdd;
+  }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HAdd);
 };
 
-class HSub : public HBinaryOperation {
+class HSub : public HArithmeticBinaryOperation {
  public:
   HSub(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+      : HArithmeticBinaryOperation(result_type, left, right) {}
 
   virtual bool IsCommutative() { return false; }
 
+  // Apply the operation of this instruction (subtraction) to `a` and `b`.
+  virtual int32_t Evaluate(int32_t a, int32_t b) const { return a - b; }
+  virtual int64_t Evaluate(int64_t a, int64_t b) const { return a - b; }
+
   DECLARE_INSTRUCTION(Sub);
+
+  virtual ArithmeticOperation GetArithmeticOperation() const {
+    return kArithOpSub;
+  }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HSub);
