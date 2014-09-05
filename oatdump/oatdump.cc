@@ -55,6 +55,10 @@
 #include "verifier/method_verifier.h"
 #include "vmap_table.h"
 
+// The following entries are for the symbolizer.
+#include "elf_writer_quick.h"
+#include "output_stream.h"
+
 namespace art {
 
 static void usage() {
@@ -103,6 +107,160 @@ const char* image_roots_descriptions_[] = {
   "kRefsAndArgsSaveMethod",
   "kDexCaches",
   "kClassRoots",
+};
+
+class OatSymbolizer : public CodeOutput {
+ public:
+  explicit OatSymbolizer(const OatFile* oat_file) : oat_file_(oat_file), builder_(nullptr),
+                                                    elf_output_(nullptr) {}
+
+  bool Init() {
+    Elf32_Word oat_data_size = oat_file_->GetOatHeader().GetExecutableOffset();
+
+    uint32_t diff = static_cast<uint32_t>(oat_file_->End() - oat_file_->Begin());
+    uint32_t oat_exec_size = diff - oat_data_size;
+
+    elf_output_ = OS::CreateEmptyFile("symbolized.oat");
+
+    builder_.reset(new ElfBuilder<Elf32_Word, Elf32_Sword, Elf32_Addr, Elf32_Dyn,
+                                  Elf32_Sym, Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr>(
+        this,
+        elf_output_,
+        oat_file_->GetOatHeader().GetInstructionSet(),
+        0,
+        oat_data_size,
+        oat_data_size,
+        oat_exec_size,
+        true,
+        false));
+
+    if (!builder_->Init()) {
+      builder_.reset(nullptr);
+      return false;
+    }
+
+    return true;
+  }
+
+  bool Symbolize() {
+    if (builder_.get() == nullptr) {
+      return false;
+    }
+
+    Walk();  // Adds the symbols.
+
+    bool result = builder_->Write();
+
+    elf_output_->Flush();
+    elf_output_->Close();
+
+    return result;
+  }
+
+  void Walk() {
+    std::vector<const OatFile::OatDexFile*> oat_dex_files = oat_file_->GetOatDexFiles();
+    for (size_t i = 0; i < oat_dex_files.size(); i++) {
+      const OatFile::OatDexFile* oat_dex_file = oat_dex_files[i];
+      CHECK(oat_dex_file != NULL);
+      WalkOatDexFile(oat_dex_file);
+    }
+  }
+
+  void WalkOatDexFile(const OatFile::OatDexFile* oat_dex_file) {
+    std::string error_msg;
+    std::unique_ptr<const DexFile> dex_file(oat_dex_file->OpenDexFile(&error_msg));
+    if (dex_file.get() == nullptr) {
+      return;
+    }
+    for (size_t class_def_index = 0;
+        class_def_index < dex_file->NumClassDefs();
+        class_def_index++) {
+      const DexFile::ClassDef& class_def = dex_file->GetClassDef(class_def_index);
+      const OatFile::OatClass oat_class = oat_dex_file->GetOatClass(class_def_index);
+      OatClassType type = oat_class.GetType();
+      switch (type) {
+        case kOatClassAllCompiled:
+        case kOatClassSomeCompiled:
+          WalkOatClass(oat_class, *dex_file.get(), class_def);
+          break;
+
+        case kOatClassNoneCompiled:
+        case kOatClassMax:
+          // Ignore.
+          break;
+      }
+    }
+  }
+
+  void WalkOatClass(const OatFile::OatClass& oat_class, const DexFile& dex_file,
+                    const DexFile::ClassDef& class_def) {
+    const byte* class_data = dex_file.GetClassData(class_def);
+    if (class_data == nullptr) {  // empty class such as a marker interface?
+      return;
+    }
+    // Note: even if this is an interface or a native class, we still have to walk it, as there
+    //       might be a static initializer.
+    ClassDataItemIterator it(dex_file, class_data);
+    SkipAllFields(&it);
+    uint32_t class_method_idx = 0;
+    while (it.HasNextDirectMethod()) {
+      const OatFile::OatMethod oat_method = oat_class.GetOatMethod(class_method_idx);
+      WalkOatMethod(class_def, class_method_idx, oat_method, dex_file,
+                    it.GetMemberIndex(), it.GetMethodCodeItem(), it.GetMemberAccessFlags());
+      class_method_idx++;
+      it.Next();
+    }
+    while (it.HasNextVirtualMethod()) {
+      const OatFile::OatMethod oat_method = oat_class.GetOatMethod(class_method_idx);
+      WalkOatMethod(class_def, class_method_idx, oat_method, dex_file,
+                    it.GetMemberIndex(), it.GetMethodCodeItem(), it.GetMemberAccessFlags());
+      class_method_idx++;
+      it.Next();
+    }
+    DCHECK(!it.HasNext());
+  }
+
+  void WalkOatMethod(const DexFile::ClassDef& class_def, uint32_t class_method_index,
+                     const OatFile::OatMethod& oat_method, const DexFile& dex_file,
+                     uint32_t dex_method_idx, const DexFile::CodeItem* code_item,
+                     uint32_t method_access_flags) {
+    if ((method_access_flags & kAccAbstract) != 0) {
+      // Abstract method, no code.
+      return;
+    }
+    if (oat_method.GetCodeOffset() == 0) {
+      // No code.
+      return;
+    }
+
+    // TODO: Deduplication.
+    std::string pretty_name = PrettyMethod(dex_method_idx, dex_file, true);
+    ElfSymtabBuilder<Elf32_Word, Elf32_Sword, Elf32_Addr,
+                     Elf32_Sym, Elf32_Shdr>* symtab = &builder_->symtab_builder_;
+
+    symtab->AddSymbol(pretty_name, &builder_->text_builder_, oat_method.GetCodeOffset(), true,
+                      oat_method.GetQuickCodeSize(), STB_GLOBAL, STT_FUNC);
+  }
+
+  // Write oat code. Required by ElfBuilder/CodeOutput.
+  bool Write(OutputStream* out) {
+    return out->WriteFully(oat_file_->Begin(), oat_file_->End() - oat_file_->Begin());
+  }
+
+ private:
+  static void SkipAllFields(ClassDataItemIterator* it) {
+    while (it->HasNextStaticField()) {
+      it->Next();
+    }
+    while (it->HasNextInstanceField()) {
+      it->Next();
+    }
+  }
+
+  const OatFile* oat_file_;
+  std::unique_ptr<ElfBuilder<Elf32_Word, Elf32_Sword, Elf32_Addr, Elf32_Dyn,
+                              Elf32_Sym, Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr> > builder_;
+  File* elf_output_;
 };
 
 class OatDumper {
@@ -1539,6 +1697,7 @@ static int oatdump(int argc, char** argv) {
   std::unique_ptr<std::ofstream> out;
   bool dump_raw_mapping_table = false;
   bool dump_raw_gc_map = false;
+  bool symbolize = false;
 
   for (int i = 0; i < argc; i++) {
     const StringPiece option(argv[i]);
@@ -1578,6 +1737,11 @@ static int oatdump(int argc, char** argv) {
         usage();
       }
       os = out.get();
+    } else if (option.starts_with("--symbolize=")) {
+      oat_filename = option.substr(strlen("--symbolize=")).data();
+      symbolize = true;
+      // Just symbolize.
+      break;
     } else {
       fprintf(stderr, "Unknown argument %s\n", option.data());
       usage();
@@ -1602,8 +1766,20 @@ static int oatdump(int argc, char** argv) {
       fprintf(stderr, "Failed to open oat file from '%s': %s\n", oat_filename, error_msg.c_str());
       return EXIT_FAILURE;
     }
-    OatDumper oat_dumper(*oat_file, dump_raw_mapping_table, dump_raw_gc_map);
-    oat_dumper.Dump(*os);
+    if (symbolize) {
+      OatSymbolizer oat_symbolizer(oat_file);
+      if (!oat_symbolizer.Init()) {
+        fprintf(stderr, "Failed to initialize symbolizer\n");
+        return EXIT_FAILURE;
+      }
+      if (!oat_symbolizer.Symbolize()) {
+        fprintf(stderr, "Failed to symbolize\n");
+        return EXIT_FAILURE;
+      }
+    } else {
+      OatDumper oat_dumper(*oat_file, dump_raw_mapping_table, dump_raw_gc_map);
+      oat_dumper.Dump(*os);
+    }
     return EXIT_SUCCESS;
   }
 

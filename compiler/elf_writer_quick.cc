@@ -82,8 +82,8 @@ static void PushHalf(std::vector<uint8_t>* buf, int data) {
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
           typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
           typename Elf_Phdr, typename Elf_Shdr>
-bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfBuilder::Init() {
+bool ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::Init() {
   // The basic layout of the elf file. Order may be different in final output.
   // +-------------------------+
   // | Elf_Ehdr                |
@@ -251,9 +251,9 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   dynsym_builder_.section_index_ = section_index_++;
 
   // Setup .dynstr
-  section_ptrs_.push_back(&dynsym_builder_.strtab_.section_);
-  AssignSectionStr(&dynsym_builder_.strtab_, &shstrtab_);
-  dynsym_builder_.strtab_.section_index_ = section_index_++;
+  section_ptrs_.push_back(&dynsym_builder_.GetStrTab()->section_);
+  AssignSectionStr(dynsym_builder_.GetStrTab(), &shstrtab_);
+  dynsym_builder_.GetStrTab()->section_index_ = section_index_++;
 
   // Setup .hash
   section_ptrs_.push_back(&hash_builder_.section_);
@@ -294,17 +294,17 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   dynsym_builder_.section_.sh_link = dynsym_builder_.GetLink();
 
   // Get the layout of the dynstr section.
-  dynsym_builder_.strtab_.section_.sh_offset = NextOffset<Elf_Word, Elf_Shdr>
-                                               (dynsym_builder_.strtab_.section_,
+  dynsym_builder_.GetStrTab()->section_.sh_offset = NextOffset<Elf_Word, Elf_Shdr>
+                                               (dynsym_builder_.GetStrTab()->section_,
                                                 dynsym_builder_.section_);
-  dynsym_builder_.strtab_.section_.sh_addr = dynsym_builder_.strtab_.section_.sh_offset;
-  dynsym_builder_.strtab_.section_.sh_size = dynstr_.size();
-  dynsym_builder_.strtab_.section_.sh_link = dynsym_builder_.strtab_.GetLink();
+  dynsym_builder_.GetStrTab()->section_.sh_addr = dynsym_builder_.GetStrTab()->section_.sh_offset;
+  dynsym_builder_.GetStrTab()->section_.sh_size = dynstr_.size();
+  dynsym_builder_.GetStrTab()->section_.sh_link = dynsym_builder_.GetStrTab()->GetLink();
 
   // Get the layout of the hash section
   hash_builder_.section_.sh_offset = NextOffset<Elf_Word, Elf_Shdr>
                                      (hash_builder_.section_,
-                                      dynsym_builder_.strtab_.section_);
+                                      dynsym_builder_.GetStrTab()->section_);
   hash_builder_.section_.sh_addr = hash_builder_.section_.sh_offset;
   hash_builder_.section_.sh_size = hash_.size() * sizeof(Elf_Word);
   hash_builder_.section_.sh_link = hash_builder_.GetLink();
@@ -314,14 +314,14 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
                                        (rodata_builder_.section_,
                                         hash_builder_.section_);
   rodata_builder_.section_.sh_addr = rodata_builder_.section_.sh_offset;
-  rodata_builder_.section_.sh_size = rodata_builder_.size_;
+  rodata_builder_.section_.sh_size = rodata_builder_.GetSize();
   rodata_builder_.section_.sh_link = rodata_builder_.GetLink();
 
   // Get the layout of the text section.
   text_builder_.section_.sh_offset = NextOffset<Elf_Word, Elf_Shdr>
                                      (text_builder_.section_, rodata_builder_.section_);
   text_builder_.section_.sh_addr = text_builder_.section_.sh_offset;
-  text_builder_.section_.sh_size = text_builder_.size_;
+  text_builder_.section_.sh_size = text_builder_.GetSize();
   text_builder_.section_.sh_link = text_builder_.GetLink();
   CHECK_ALIGNED(rodata_builder_.section_.sh_offset + rodata_builder_.section_.sh_size, kPageSize);
 
@@ -336,8 +336,8 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   if (debug_logging_) {
     LOG(INFO) << "dynsym off=" << dynsym_builder_.section_.sh_offset
               << " dynsym size=" << dynsym_builder_.section_.sh_size;
-    LOG(INFO) << "dynstr off=" << dynsym_builder_.strtab_.section_.sh_offset
-              << " dynstr size=" << dynsym_builder_.strtab_.section_.sh_size;
+    LOG(INFO) << "dynstr off=" << dynsym_builder_.GetStrTab()->section_.sh_offset
+              << " dynstr size=" << dynsym_builder_.GetStrTab()->section_.sh_size;
     LOG(INFO) << "hash off=" << hash_builder_.section_.sh_offset
               << " hash size=" << hash_builder_.section_.sh_size;
     LOG(INFO) << "rodata off=" << rodata_builder_.section_.sh_offset
@@ -354,8 +354,8 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
           typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
           typename Elf_Phdr, typename Elf_Shdr>
-bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfBuilder::Write() {
+bool ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::Write() {
   std::vector<ElfFilePiece> pieces;
   Elf_Shdr prev = dynamic_builder_.section_;
   std::string strtab;
@@ -367,9 +367,9 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
     symtab_builder_.section_index_ = section_index_++;
 
     // Setup .strtab
-    section_ptrs_.push_back(&symtab_builder_.strtab_.section_);
-    AssignSectionStr(&symtab_builder_.strtab_, &shstrtab_);
-    symtab_builder_.strtab_.section_index_ = section_index_++;
+    section_ptrs_.push_back(&symtab_builder_.GetStrTab()->section_);
+    AssignSectionStr(symtab_builder_.GetStrTab(), &shstrtab_);
+    symtab_builder_.GetStrTab()->section_index_ = section_index_++;
 
     strtab = symtab_builder_.GenerateStrtab();
     if (debug_logging_) {
@@ -381,8 +381,8 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   }
 
   // Setup all the other sections.
-  for (ElfRawSectionBuilder *builder = other_builders_.data(),
-                            *end = builder + other_builders_.size();
+  for (ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> *builder = other_builders_.data(),
+       *end = builder + other_builders_.size();
        builder != end; ++builder) {
     section_ptrs_.push_back(&builder->section_);
     AssignSectionStr(builder, &shstrtab_);
@@ -412,19 +412,19 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
     symtab_builder_.section_.sh_link = symtab_builder_.GetLink();
 
     // Get the layout of the dynstr section.
-    symtab_builder_.strtab_.section_.sh_offset = NextOffset<Elf_Word, Elf_Shdr>
-                                                 (symtab_builder_.strtab_.section_,
+    symtab_builder_.GetStrTab()->section_.sh_offset = NextOffset<Elf_Word, Elf_Shdr>
+                                                 (symtab_builder_.GetStrTab()->section_,
                                                   symtab_builder_.section_);
-    symtab_builder_.strtab_.section_.sh_addr = 0;
-    symtab_builder_.strtab_.section_.sh_size = strtab.size();
-    symtab_builder_.strtab_.section_.sh_link = symtab_builder_.strtab_.GetLink();
+    symtab_builder_.GetStrTab()->section_.sh_addr = 0;
+    symtab_builder_.GetStrTab()->section_.sh_size = strtab.size();
+    symtab_builder_.GetStrTab()->section_.sh_link = symtab_builder_.GetStrTab()->GetLink();
 
-    prev = symtab_builder_.strtab_.section_;
+    prev = symtab_builder_.GetStrTab()->section_;
     if (debug_logging_) {
       LOG(INFO) << "symtab off=" << symtab_builder_.section_.sh_offset
                 << " symtab size=" << symtab_builder_.section_.sh_size;
-      LOG(INFO) << "strtab off=" << symtab_builder_.strtab_.section_.sh_offset
-                << " strtab size=" << symtab_builder_.strtab_.section_.sh_size;
+      LOG(INFO) << "strtab off=" << symtab_builder_.GetStrTab()->section_.sh_offset
+                << " strtab size=" << symtab_builder_.GetStrTab()->section_.sh_size;
     }
   }
 
@@ -440,7 +440,7 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
     prev = it->section_;
     if (debug_logging_) {
       LOG(INFO) << it->name_ << " off=" << it->section_.sh_offset
-                << " " << it->name_ << " size=" << it->section_.sh_size;
+                << " size=" << it->section_.sh_size;
     }
   }
 
@@ -520,7 +520,7 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
                                 dynamic.data(), dynamic_builder_.section_.sh_size));
   pieces.push_back(ElfFilePiece(".dynsym", dynsym_builder_.section_.sh_offset,
                                 dynsym.data(), dynsym.size() * sizeof(Elf_Sym)));
-  pieces.push_back(ElfFilePiece(".dynstr", dynsym_builder_.strtab_.section_.sh_offset,
+  pieces.push_back(ElfFilePiece(".dynstr", dynsym_builder_.GetStrTab()->section_.sh_offset,
                                 dynstr_.c_str(), dynstr_.size()));
   pieces.push_back(ElfFilePiece(".hash", hash_builder_.section_.sh_offset,
                                 hash_.data(), hash_.size() * sizeof(Elf_Word)));
@@ -531,7 +531,7 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   if (IncludingDebugSymbols()) {
     pieces.push_back(ElfFilePiece(".symtab", symtab_builder_.section_.sh_offset,
                                   symtab.data(), symtab.size() * sizeof(Elf_Sym)));
-    pieces.push_back(ElfFilePiece(".strtab", symtab_builder_.strtab_.section_.sh_offset,
+    pieces.push_back(ElfFilePiece(".strtab", symtab_builder_.GetStrTab()->section_.sh_offset,
                                   strtab.c_str(), strtab.size()));
   }
   pieces.push_back(ElfFilePiece(".shstrtab", shstrtab_builder_.section_.sh_offset,
@@ -568,8 +568,9 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
           typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
           typename Elf_Phdr, typename Elf_Shdr>
-bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfBuilder::WriteOutFile(const std::vector<ElfFilePiece>& pieces) {
+bool ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::WriteOutFile(
+                    const std::vector<ElfFilePiece>& pieces) {
   // TODO It would be nice if this checked for overlap.
   for (auto it = pieces.begin(); it != pieces.end(); ++it) {
     if (it->data_) {
@@ -590,10 +591,10 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
           typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
           typename Elf_Phdr, typename Elf_Shdr>
-void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfBuilder::SetupDynamic() {
+void ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::SetupDynamic() {
   dynamic_builder_.AddDynamicTag(DT_HASH, 0, &hash_builder_);
-  dynamic_builder_.AddDynamicTag(DT_STRTAB, 0, &dynsym_builder_.strtab_);
+  dynamic_builder_.AddDynamicTag(DT_STRTAB, 0, dynsym_builder_.GetStrTab());
   dynamic_builder_.AddDynamicTag(DT_SYMTAB, 0, &dynsym_builder_);
   dynamic_builder_.AddDynamicTag(DT_SYMENT, sizeof(Elf_Sym));
 }
@@ -601,45 +602,37 @@ void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
           typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
           typename Elf_Phdr, typename Elf_Shdr>
-void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfBuilder::SetupRequiredSymbols() {
+void ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::SetupRequiredSymbols() {
   dynsym_builder_.AddSymbol("oatdata", &rodata_builder_, 0, true,
-                            rodata_builder_.size_, STB_GLOBAL, STT_OBJECT);
+                            rodata_builder_.GetSize(), STB_GLOBAL, STT_OBJECT);
   dynsym_builder_.AddSymbol("oatexec", &text_builder_, 0, true,
-                            text_builder_.size_, STB_GLOBAL, STT_OBJECT);
-  dynsym_builder_.AddSymbol("oatlastword", &text_builder_, text_builder_.size_ - 4,
+                            text_builder_.GetSize(), STB_GLOBAL, STT_OBJECT);
+  dynsym_builder_.AddSymbol("oatlastword", &text_builder_, text_builder_.GetSize() - 4,
                             true, 4, STB_GLOBAL, STT_OBJECT);
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfDynamicBuilder::AddDynamicTag(Elf_Sword tag, Elf_Word d_un) {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Dyn, typename Elf_Shdr>
+void ElfDynamicBuilder<Elf_Word, Elf_Sword, Elf_Dyn, Elf_Shdr>::AddDynamicTag(
+    Elf_Sword tag, Elf_Word d_un) {
   if (tag == DT_NULL) {
     return;
   }
   dynamics_.push_back({nullptr, tag, d_un});
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfDynamicBuilder::AddDynamicTag(Elf_Sword tag, Elf_Word d_un,
-                                                      ElfSectionBuilder* section) {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Dyn, typename Elf_Shdr>
+void ElfDynamicBuilder<Elf_Word, Elf_Sword, Elf_Dyn, Elf_Shdr>::AddDynamicTag(
+    Elf_Sword tag, Elf_Word d_un, ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>* section) {
   if (tag == DT_NULL) {
     return;
   }
   dynamics_.push_back({section, tag, d_un});
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-std::vector<Elf_Dyn> ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfDynamicBuilder::GetDynamics(Elf_Word strsz,
-                                                                    Elf_Word soname) {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Dyn, typename Elf_Shdr>
+std::vector<Elf_Dyn> ElfDynamicBuilder<Elf_Word, Elf_Sword, Elf_Dyn, Elf_Shdr>::GetDynamics(
+    Elf_Word strsz, Elf_Word soname) {
   std::vector<Elf_Dyn> ret;
   for (auto it = dynamics_.cbegin(); it != dynamics_.cend(); ++it) {
     if (it->section_) {
@@ -656,11 +649,10 @@ std::vector<Elf_Dyn> ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   return ret;
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-std::vector<Elf_Sym> ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfSymtabBuilder::GenerateSymtab() {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr, typename Elf_Sym,
+          typename Elf_Shdr>
+std::vector<Elf_Sym>
+ElfSymtabBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Sym, Elf_Shdr>::GenerateSymtab() {
   std::vector<Elf_Sym> ret;
   Elf_Sym undef_sym;
   memset(&undef_sym, 0, sizeof(undef_sym));
@@ -686,11 +678,9 @@ std::vector<Elf_Sym> ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   return ret;
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-std::string ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfSymtabBuilder::GenerateStrtab() {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr, typename Elf_Sym,
+          typename Elf_Shdr>
+std::string ElfSymtabBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Sym, Elf_Shdr>::GenerateStrtab() {
   std::string tab;
   tab += '\0';
   for (auto it = symbols_.begin(); it != symbols_.end(); ++it) {
@@ -702,12 +692,11 @@ std::string ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   return tab;
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfBuilder::AssignSectionStr(
-    ElfSectionBuilder* builder, std::string* strtab) {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr, typename Elf_Dyn,
+          typename Elf_Sym, typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr>
+void ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::AssignSectionStr(
+    ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>* builder, std::string* strtab) {
   builder->section_.sh_name = strtab->size();
   *strtab += builder->name_;
   *strtab += '\0';
@@ -731,11 +720,10 @@ static unsigned elfhash(const char *_name) {
   return h;
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-std::vector<Elf_Word> ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfSymtabBuilder::GenerateHashContents() {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr, typename Elf_Sym,
+          typename Elf_Shdr>
+std::vector<Elf_Word>
+ElfSymtabBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Sym, Elf_Shdr>::GenerateHashContents() {
   // Here is how The ELF hash table works.
   // There are 3 arrays to worry about.
   // * The symbol table where the symbol information is.
@@ -817,11 +805,10 @@ std::vector<Elf_Word> ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   return hash;
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfBuilder::SetupEhdr() {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr, typename Elf_Dyn,
+          typename Elf_Sym, typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr>
+void ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::SetupEhdr() {
   memset(&elf_header_, 0, sizeof(elf_header_));
   elf_header_.e_ident[EI_MAG0]       = ELFMAG0;
   elf_header_.e_ident[EI_MAG1]       = ELFMAG1;
@@ -841,11 +828,10 @@ void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   elf_header_.e_phoff = sizeof(Elf_Ehdr);
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfBuilder::SetISA(InstructionSet isa) {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr, typename Elf_Dyn,
+          typename Elf_Sym, typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr>
+void ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::SetISA(InstructionSet isa) {
   switch (isa) {
     case kArm:
       // Fall through.
@@ -886,13 +872,11 @@ void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   }
 }
 
-template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
-          typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
-          typename Elf_Phdr, typename Elf_Shdr>
-void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::ElfSymtabBuilder::AddSymbol(
-    const std::string& name, const ElfSectionBuilder* section, Elf_Addr addr,
-    bool is_relative, Elf_Word size, uint8_t binding, uint8_t type, uint8_t other) {
+template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr, typename Elf_Sym,
+          typename Elf_Shdr>
+void ElfSymtabBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Sym, Elf_Shdr>::AddSymbol(
+    const std::string& name, const ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>* section,
+    Elf_Addr addr, bool is_relative, Elf_Word size, uint8_t binding, uint8_t type, uint8_t other) {
   CHECK(section);
   ElfSymtabBuilder::ElfSymbolState state {name, section, addr, size, is_relative,
                                           MakeStInfo(binding, type), other, 0};
@@ -1046,6 +1030,17 @@ std::vector<uint8_t>* ConstructCIEFrame(InstructionSet isa) {
   }
 }
 
+class OatWriterWrapper : public CodeOutput {
+ public:
+  explicit OatWriterWrapper(OatWriter* oat_writer) : oat_writer_(oat_writer) {}
+
+  bool Write(OutputStream* out) OVERRIDE {
+    return oat_writer_->Write(out);
+  }
+ private:
+  OatWriter* oat_writer_;
+};
+
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
           typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
           typename Elf_Phdr, typename Elf_Shdr>
@@ -1059,16 +1054,21 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   Elf_Word oat_data_size = oat_header.GetExecutableOffset();
   uint32_t oat_exec_size = oat_writer->GetSize() - oat_data_size;
 
-  std::unique_ptr<ElfBuilder> builder(new ElfBuilder(
-      oat_writer,
-      elf_file_,
-      compiler_driver_->GetInstructionSet(),
-      0,
-      oat_data_size,
-      oat_data_size,
-      oat_exec_size,
-      compiler_driver_->GetCompilerOptions().GetIncludeDebugSymbols(),
-      debug));
+  OatWriterWrapper wrapper(oat_writer);
+
+  std::unique_ptr<ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                             Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr> > builder(
+      new ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                     Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>(
+          &wrapper,
+          elf_file_,
+          compiler_driver_->GetInstructionSet(),
+          0,
+          oat_data_size,
+          oat_data_size,
+          oat_exec_size,
+          compiler_driver_->GetCompilerOptions().GetIncludeDebugSymbols(),
+          debug));
 
   if (!builder->Init()) {
     return false;
@@ -1079,8 +1079,8 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   }
 
   if (compiler_driver_->GetCompilerOptions().GetIncludePatchInformation()) {
-    ElfRawSectionBuilder oat_patches(".oat_patches", SHT_OAT_PATCH, 0, NULL, 0,
-                                     sizeof(uintptr_t), sizeof(uintptr_t));
+    ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> oat_patches(
+        ".oat_patches", SHT_OAT_PATCH, 0, NULL, 0, sizeof(uintptr_t), sizeof(uintptr_t));
     ReservePatchSpace(oat_patches.GetBuffer(), debug);
     builder->RegisterRawSection(oat_patches);
   }
@@ -1092,7 +1092,10 @@ template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
           typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
           typename Elf_Phdr, typename Elf_Shdr>
 void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
-  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::WriteDebugSymbols(ElfBuilder* builder, OatWriter* oat_writer) {
+  Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>::WriteDebugSymbols(
+      ElfBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
+                 Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>* builder,
+                 OatWriter* oat_writer) {
   std::unique_ptr<std::vector<uint8_t>> cfi_info(
       ConstructCIEFrame(compiler_driver_->GetInstructionSet()));
 
@@ -1100,7 +1103,8 @@ void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
 
   // Iterate over the compiled methods.
   const std::vector<OatWriter::DebugInfo>& method_info = oat_writer->GetCFIMethodInfo();
-  ElfSymtabBuilder* symtab = &builder->symtab_builder_;
+  ElfSymtabBuilder<Elf_Word, Elf_Sword, Elf_Addr,
+                   Elf_Sym, Elf_Shdr>* symtab = &builder->symtab_builder_;
   for (auto it = method_info.begin(); it != method_info.end(); ++it) {
     symtab->AddSymbol(it->method_name_, &builder->text_builder_, it->low_pc_, true,
                       it->high_pc_ - it->low_pc_, STB_GLOBAL, STT_FUNC);
@@ -1171,10 +1175,18 @@ void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   }
 
   if (hasLineInfo || hasCFI) {
-    ElfRawSectionBuilder debug_info(".debug_info",     SHT_PROGBITS, 0, nullptr, 0, 1, 0);
-    ElfRawSectionBuilder debug_abbrev(".debug_abbrev", SHT_PROGBITS, 0, nullptr, 0, 1, 0);
-    ElfRawSectionBuilder debug_str(".debug_str",       SHT_PROGBITS, 0, nullptr, 0, 1, 0);
-    ElfRawSectionBuilder debug_line(".debug_line",     SHT_PROGBITS, 0, nullptr, 0, 1, 0);
+    ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> debug_info(".debug_info",
+                                                                   SHT_PROGBITS,
+                                                                   0, nullptr, 0, 1, 0);
+    ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> debug_abbrev(".debug_abbrev",
+                                                                     SHT_PROGBITS,
+                                                                     0, nullptr, 0, 1, 0);
+    ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> debug_str(".debug_str",
+                                                                  SHT_PROGBITS,
+                                                                  0, nullptr, 0, 1, 0);
+    ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> debug_line(".debug_line",
+                                                                   SHT_PROGBITS,
+                                                                   0, nullptr, 0, 1, 0);
 
     FillInCFIInformation(oat_writer, debug_info.GetBuffer(),
                          debug_abbrev.GetBuffer(), debug_str.GetBuffer(),
@@ -1185,7 +1197,10 @@ void ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
     builder->RegisterRawSection(debug_abbrev);
 
     if (hasCFI) {
-      ElfRawSectionBuilder eh_frame(".eh_frame",  SHT_PROGBITS, SHF_ALLOC, nullptr, 0, 4, 0);
+      ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> eh_frame(".eh_frame",
+                                                                   SHT_PROGBITS,
+                                                                   SHF_ALLOC,
+                                                                   nullptr, 0, 4, 0);
       eh_frame.SetBuffer(std::move(*cfi_info.get()));
       builder->RegisterRawSection(eh_frame);
     }
@@ -1596,5 +1611,9 @@ template class ElfWriterQuick<Elf32_Word, Elf32_Sword, Elf32_Addr, Elf32_Dyn,
                               Elf32_Sym, Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr>;
 template class ElfWriterQuick<Elf64_Word, Elf64_Sword, Elf64_Addr, Elf64_Dyn,
                               Elf64_Sym, Elf64_Ehdr, Elf64_Phdr, Elf64_Shdr>;
+
+// Explicit instantiations. Necessary for oatdump.
+template class ElfBuilder<Elf32_Word, Elf32_Sword, Elf32_Addr, Elf32_Dyn,
+                          Elf32_Sym, Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr>;
 
 }  // namespace art
