@@ -77,12 +77,10 @@ bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string*
   // Strip ":...", which is the location
   const char* zip_entry_name = kClassesDex;
   const char* file_part = filename;
-  std::unique_ptr<const char> file_part_ptr;
-
+  std::string file_part_storage;
 
   if (IsMultiDexLocation(filename)) {
-    std::pair<const char*, const char*> pair = SplitMultiDexLocation(filename);
-    file_part_ptr.reset(pair.first);
+    std::pair<const char*, const char*> pair = SplitMultiDexLocation(filename, &file_part_storage);
     file_part = pair.first;
     zip_entry_name = pair.second;
   }
@@ -303,7 +301,7 @@ bool DexFile::OpenFromZip(const ZipArchive& zip_archive, const std::string& loca
 
     while (i < 100) {
       std::string name = StringPrintf("classes%zu.dex", i);
-      std::string fake_location = location + ":" + name;
+      std::string fake_location = location + kMultiDexSeparator + name;
       std::unique_ptr<const DexFile> next_dex_file(Open(zip_archive, name.c_str(), fake_location,
                                                         error_msg, &error_code));
       if (next_dex_file.get() == nullptr) {
@@ -951,50 +949,51 @@ bool DexFile::IsMultiDexLocation(const char* location) {
   return strrchr(location, kMultiDexSeparator) != nullptr;
 }
 
-std::pair<const char*, const char*> DexFile::SplitMultiDexLocation(
-    const char* location) {
+std::pair<const char*, const char*> DexFile::SplitMultiDexLocation(const char* location,
+                                                                   std::string* storage) {
   const char* colon_ptr = strrchr(location, kMultiDexSeparator);
 
   // Check it's synthetic.
   CHECK_NE(colon_ptr, static_cast<const char*>(nullptr));
 
-  size_t colon_index = colon_ptr - location;
-  char* tmp = new char[colon_index + 1];
-  strncpy(tmp, location, colon_index);
-  tmp[colon_index] = 0;
-
-  return std::make_pair(tmp, colon_ptr + 1);
+  storage->assign(location, colon_ptr - location);
+  return std::make_pair(storage->c_str(), colon_ptr + 1);
 }
 
-std::string DexFile::GetMultiDexClassesDexName(size_t number, const char* dex_location) {
+const char* DexFile::GetMultiDexClassesDexName(size_t number, const char* dex_location,
+                                               std::string* storage) {
   if (number == 0) {
     return dex_location;
   } else {
-    return StringPrintf("%s" kMultiDexSeparatorString "classes%zu.dex", dex_location, number + 1);
+    storage->clear();
+    StringAppendF(storage, "%s" kMultiDexSeparatorString "classes%zu.dex",
+                  dex_location, number + 1);
+    return storage->c_str();
   }
 }
 
-std::string DexFile::GetDexCanonicalLocation(const char* dex_location) {
+const char* DexFile::GetDexCanonicalLocation(const char* dex_location, std::string* storage) {
   CHECK_NE(dex_location, static_cast<const char*>(nullptr));
-  char* path = nullptr;
-  if (!IsMultiDexLocation(dex_location)) {
-    path = realpath(dex_location, nullptr);
-  } else {
-    std::pair<const char*, const char*> pair = DexFile::SplitMultiDexLocation(dex_location);
-    const char* dex_real_location(realpath(pair.first, nullptr));
-    delete pair.first;
-    if (dex_real_location != nullptr) {
-      int length = strlen(dex_real_location) + strlen(pair.second) + strlen(kMultiDexSeparatorString) + 1;
-      char* multidex_canonical_location = reinterpret_cast<char*>(malloc(sizeof(char) * length));
-      snprintf(multidex_canonical_location, length, "%s" kMultiDexSeparatorString "%s", dex_real_location, pair.second);
-      free(const_cast<char*>(dex_real_location));
-      path = multidex_canonical_location;
+  const char* base_location = GetBaseLocation(dex_location, storage);
+  UniqueCPtr<const char[]> path(realpath(base_location, nullptr));
+  const char* result = dex_location;  // By default, return the argument.
+  if (path != nullptr && strcmp(path.get(), base_location) != 0) {
+    // The real path actually differs. Copy the path to storage and append suffix if multi-dex.
+    if (base_location != dex_location) {
+      // Multi-dex location.
+      DCHECK_EQ(base_location, storage->c_str());  // strlen(base_location) == storage->size().
+      const char* suffix = dex_location + storage->size();  // Including the separator.
+      DCHECK_EQ(suffix[0], kMultiDexSeparator);
+      size_t path_len = strlen(path.get());
+      size_t suffix_len = strlen(suffix);
+      storage->reserve(path_len + suffix_len);
+      storage->assign(path.get(), path_len);
+      storage->append(suffix, suffix_len);
+    } else {
+      storage->assign(path.get());
     }
+    result = storage->c_str();
   }
-
-  // If realpath fails then we just copy the argument.
-  std::string result(path == nullptr ? dex_location : path);
-  free(path);
   return result;
 }
 

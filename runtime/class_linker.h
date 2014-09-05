@@ -285,7 +285,7 @@ class ClassLinker {
                                  std::string* error_msg);
   // Returns true if oat file contains the dex file with the given location and checksum.
   static bool VerifyOatAndDexFileChecksums(const OatFile* oat_file,
-                                           const char* dex_location,
+                                           DexFile::LocationHelper* dex_location,
                                            uint32_t dex_location_checksum,
                                            InstructionSet instruction_set,
                                            std::string* error_msg);
@@ -549,14 +549,15 @@ class ClassLinker {
   }
   mirror::DexCache* GetDexCache(size_t idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, dex_lock_);
 
-  const OatFile* FindOpenedOatFileForDexFile(const DexFile& dex_file)
+  const OatFile::OatDexFile* FindOpenedOatDexFileForDexFile(const DexFile& dex_file)
       LOCKS_EXCLUDED(dex_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Find an opened oat file that contains dex_location. If oat_location is not nullptr, the file
-  // must have that location, else any oat location is accepted.
-  const OatFile* FindOpenedOatFile(const char* oat_location, const char* dex_location,
-                                   const uint32_t* const dex_location_checksum)
+  // Find an opened oat dex file that contains dex_location. If oat_location is not nullptr,
+  // the file must have that location, else any oat location is accepted.
+  const OatFile::OatDexFile* FindOpenedOatDexFile(const char* oat_location,
+                                                  DexFile::LocationHelper* dex_location,
+                                                  const uint32_t* dex_location_checksum)
       LOCKS_EXCLUDED(dex_lock_);
 
   // Will open the oat file directly without relocating, even if we could/should do relocation.
@@ -588,7 +589,7 @@ class ClassLinker {
   int32_t GetRequiredDelta(const OatFile* oat_file, InstructionSet isa);
 
   // Note: will not register the oat file.
-  const OatFile* FindOatFileInOatLocationForDexFile(const char* dex_location,
+  const OatFile* FindOatFileInOatLocationForDexFile(DexFile::LocationHelper* dex_location,
                                                     uint32_t dex_location_checksum,
                                                     const char* oat_location,
                                                     std::string* error_msg)
@@ -606,7 +607,7 @@ class ClassLinker {
   // Note 1: this will not check open oat files, which are assumed to be stale when this is run.
   // Note 2: Does not register the oat file. It is the caller's job to register if the file is to
   //         be kept.
-  const OatFile* FindOatFileContainingDexFileFromDexLocation(const char* location,
+  const OatFile* FindOatFileContainingDexFileFromDexLocation(DexFile::LocationHelper* dex_location,
                                                              const uint32_t* const location_checksum,
                                                              InstructionSet isa,
                                                              std::vector<std::string>* error_msgs,
@@ -623,7 +624,7 @@ class ClassLinker {
   //
   // The dex_location is the dex location as stored in the oat file header.
   // (see DexFile::GetDexCanonicalLocation for a description of location conventions)
-  bool VerifyOatWithDexFile(const OatFile* oat_file, const char* dex_location,
+  bool VerifyOatWithDexFile(const OatFile* oat_file, DexFile::LocationHelper* dex_location,
                             const uint32_t* dex_location_checksum,
                             std::string* error_msg);
 

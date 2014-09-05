@@ -756,18 +756,18 @@ OatFile& ClassLinker::GetImageOatFile(gc::space::ImageSpace* space) {
   return *oat_file;
 }
 
-const OatFile* ClassLinker::FindOpenedOatFileForDexFile(const DexFile& dex_file) {
-  const char* dex_location = dex_file.GetLocation().c_str();
+const OatFile::OatDexFile* ClassLinker::FindOpenedOatDexFileForDexFile(const DexFile& dex_file) {
+  DexFile::LocationHelper dex_location(dex_file.GetLocation().c_str());
   uint32_t dex_location_checksum = dex_file.GetLocationChecksum();
-  return FindOpenedOatFile(nullptr, dex_location, &dex_location_checksum);
+  return FindOpenedOatDexFile(nullptr, &dex_location, &dex_location_checksum);
 }
 
-const OatFile* ClassLinker::FindOpenedOatFile(const char* oat_location, const char* dex_location,
-                                              const uint32_t* const dex_location_checksum) {
+const OatFile::OatDexFile* ClassLinker::FindOpenedOatDexFile(const char* oat_location,
+                                                             DexFile::LocationHelper* dex_location,
+                                                             const uint32_t* dex_location_checksum) {
   ReaderMutexLock mu(Thread::Current(), dex_lock_);
-  for (size_t i = 0; i < oat_files_.size(); i++) {
-    const OatFile* oat_file = oat_files_[i];
-    DCHECK(oat_file != NULL);
+  for (const OatFile* oat_file : oat_files_) {
+    DCHECK(oat_file != nullptr);
 
     if (oat_location != nullptr) {
       if (oat_file->GetLocation() != oat_location) {
@@ -778,11 +778,11 @@ const OatFile* ClassLinker::FindOpenedOatFile(const char* oat_location, const ch
     const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(dex_location,
                                                                       dex_location_checksum,
                                                                       false);
-    if (oat_dex_file != NULL) {
-      return oat_file;
+    if (oat_dex_file != nullptr) {
+      return oat_dex_file;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 
@@ -796,7 +796,7 @@ const OatFile* ClassLinker::FindOpenedOatFile(const char* oat_location, const ch
 //   error_msgs - any error messages will be appended here
 //   dex_files - the loaded dex_files will be appended here (only if the loading succeeds)
 static bool LoadMultiDexFilesFromOatFile(const OatFile* oat_file,
-                                         const char* dex_location,
+                                         DexFile::LocationHelper* dex_location,
                                          const uint32_t* dex_location_checksum,
                                          bool generated,
                                          std::vector<std::string>* error_msgs,
@@ -807,15 +807,17 @@ static bool LoadMultiDexFilesFromOatFile(const OatFile* oat_file,
 
   size_t old_size = dex_files->size();  // To rollback on error.
 
+  std::string plain_name_storage;
+  std::string canonical_name_storage;
   bool success = true;
   for (size_t i = 0; success; ++i) {
-    std::string next_name_str = DexFile::GetMultiDexClassesDexName(i, dex_location);
-    const char* next_name = next_name_str.c_str();
+    const char* next_name = DexFile::GetMultiDexClassesDexName(
+        i, dex_location->GetDexLocation(), &plain_name_storage);
 
     uint32_t next_location_checksum;
     uint32_t* next_location_checksum_pointer = &next_location_checksum;
     std::string error_msg;
-    if ((i == 0) && (strcmp(next_name, dex_location) == 0)) {
+    if ((i == 0) && (strcmp(next_name, dex_location->GetDexLocation()) == 0)) {
       // When i=0 the multidex name should be the same as the location name. We already have the
       // checksum it so we don't need to recompute it.
       if (dex_location_checksum == nullptr) {
@@ -828,14 +830,30 @@ static bool LoadMultiDexFilesFromOatFile(const OatFile* oat_file,
       next_location_checksum_pointer = nullptr;
     }
 
-    const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(next_name, nullptr, false);
+    const char* next_canonical_name = next_name;
+    if (!dex_location->IsCanonicalDexLocationCalculated()) {
+      // If the dex_location wasn't canonicalized yet, we must have found an OatDexFile by its
+      // plain location and we assume that we can find all the other dex files of a multi-dex
+      // oat file using the plain location as well. To prevent unnecessary canonicalization at
+      // the end of the loop, we need to supply the plain name as the canonical name.
+    } else if (dex_location->GetDexLocation() != dex_location->GetCanonicalDexLocation()) {
+      DCHECK_STRNE(dex_location->GetCanonicalDexLocation(), dex_location->GetDexLocation());
+      next_canonical_name = DexFile::GetMultiDexClassesDexName(
+          i, dex_location->GetCanonicalDexLocation(), &canonical_name_storage);
+    } else {
+      // Canonical name is the same as plain name.
+    }
+    DexFile::LocationHelper next_location(next_name, next_canonical_name);
+
+    const OatFile::OatDexFile* oat_dex_file =
+        oat_file->GetOatDexFile(&next_location, nullptr, false);
 
     if (oat_dex_file == nullptr) {
       if (i == 0 && generated) {
         std::string error_msg;
         error_msg = StringPrintf("\nFailed to find dex file '%s' (checksum 0x%x) in generated out "
-                                 " file'%s'", dex_location, next_location_checksum,
-                                 oat_file->GetLocation().c_str());
+                                 " file'%s'", dex_location->GetDexLocation(),
+                                 next_location_checksum, oat_file->GetLocation().c_str());
         error_msgs->push_back(error_msg);
       }
       break;  // Not found, done.
@@ -904,8 +922,11 @@ bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_
 
   bool needs_registering = false;
 
-  std::unique_ptr<const OatFile> open_oat_file(FindOpenedOatFile(oat_location, dex_location,
-                                                                 dex_location_checksum_pointer));
+  DexFile::LocationHelper dex_loc(dex_location);
+  const OatFile::OatDexFile* oat_dex_file = FindOpenedOatDexFile(oat_location, &dex_loc,
+                                                                 dex_location_checksum_pointer);
+  std::unique_ptr<const OatFile> open_oat_file(
+      oat_dex_file != nullptr ? oat_dex_file->GetOatFile() : nullptr);
 
   // 2) If we do not have an open one, maybe there's one on disk already.
 
@@ -934,7 +955,7 @@ bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_
       }
 
       // TODO Caller specifically asks for this oat_location. We should honor it. Probably?
-      open_oat_file.reset(FindOatFileInOatLocationForDexFile(dex_location, dex_location_checksum,
+      open_oat_file.reset(FindOatFileInOatLocationForDexFile(&dex_loc, dex_location_checksum,
                                                              oat_location, &error_msg));
 
       if (open_oat_file.get() == nullptr) {
@@ -946,7 +967,7 @@ bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_
     } else {
       // TODO: What to lock here?
       bool obsolete_file_cleanup_failed;
-      open_oat_file.reset(FindOatFileContainingDexFileFromDexLocation(dex_location,
+      open_oat_file.reset(FindOatFileContainingDexFileFromDexLocation(&dex_loc,
                                                                       dex_location_checksum_pointer,
                                                                       kRuntimeISA, error_msgs,
                                                                       &obsolete_file_cleanup_failed));
@@ -963,7 +984,7 @@ bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_
 
   // 3) If we have an oat file, check all contained multidex files for our dex_location.
   // Note: LoadMultiDexFilesFromOatFile will check for nullptr in the first argument.
-  bool success = LoadMultiDexFilesFromOatFile(open_oat_file.get(), dex_location,
+  bool success = LoadMultiDexFilesFromOatFile(open_oat_file.get(), &dex_loc,
                                               dex_location_checksum_pointer,
                                               false, error_msgs, dex_files);
   if (success) {
@@ -1026,7 +1047,8 @@ bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_
   }
 
   // Try to load again, but stronger checks.
-  success = LoadMultiDexFilesFromOatFile(open_oat_file.get(), dex_location, dex_location_checksum_pointer,
+  success = LoadMultiDexFilesFromOatFile(open_oat_file.get(), &dex_loc,
+                                         dex_location_checksum_pointer,
                                          true, error_msgs, dex_files);
   if (success) {
     RegisterOatFile(open_oat_file.release());
@@ -1036,10 +1058,9 @@ bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_
   }
 }
 
-const OatFile* ClassLinker::FindOatFileInOatLocationForDexFile(const char* dex_location,
-                                                               uint32_t dex_location_checksum,
-                                                               const char* oat_location,
-                                                               std::string* error_msg) {
+const OatFile* ClassLinker::FindOatFileInOatLocationForDexFile(
+    DexFile::LocationHelper* dex_location, uint32_t dex_location_checksum,
+    const char* oat_location, std::string* error_msg) {
   std::unique_ptr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, NULL,
                                             !Runtime::Current()->IsCompiler(),
                                             error_msg));
@@ -1082,7 +1103,7 @@ const OatFile* ClassLinker::FindOatFileInOatLocationForDexFile(const char* dex_l
                                                                     &dex_location_checksum);
   if (oat_dex_file == nullptr) {
     *error_msg = StringPrintf("Failed to find oat file at '%s' containing '%s'", oat_location,
-                              dex_location);
+                              dex_location->GetDexLocation());
     return nullptr;
   }
   uint32_t expected_dex_checksum = dex_location_checksum;
@@ -1188,7 +1209,7 @@ bool ClassLinker::VerifyOatChecksums(const OatFile* oat_file,
 }
 
 bool ClassLinker::VerifyOatAndDexFileChecksums(const OatFile* oat_file,
-                                               const char* dex_location,
+                                               DexFile::LocationHelper* dex_location,
                                                uint32_t dex_location_checksum,
                                                const InstructionSet instruction_set,
                                                std::string* error_msg) {
@@ -1200,13 +1221,13 @@ bool ClassLinker::VerifyOatAndDexFileChecksums(const OatFile* oat_file,
                                                                     &dex_location_checksum);
   if (oat_dex_file == NULL) {
     *error_msg = StringPrintf("oat file '%s' does not contain contents for '%s' with checksum 0x%x",
-                              oat_file->GetLocation().c_str(), dex_location, dex_location_checksum);
-    std::vector<const OatFile::OatDexFile*> oat_dex_files = oat_file->GetOatDexFiles();
-    for (size_t i = 0; i < oat_dex_files.size(); i++) {
-      const OatFile::OatDexFile* oat_dex_file = oat_dex_files[i];
-      *error_msg  += StringPrintf("\noat file '%s' contains contents for '%s'",
+                              oat_file->GetLocation().c_str(), dex_location->GetDexLocation(),
+                              dex_location_checksum);
+    for (const OatFile::OatDexFile* oat_dex_file : oat_file->GetOatDexFiles()) {
+      *error_msg  += StringPrintf("\noat file '%s' contains contents for '%s' with checksum 0x%x",
                                   oat_file->GetLocation().c_str(),
-                                  oat_dex_file->GetDexFileLocation().c_str());
+                                  oat_dex_file->GetDexFileLocation().c_str(),
+                                  oat_dex_file->GetDexFileLocationChecksum());
     }
     return false;
   }
@@ -1216,21 +1237,21 @@ bool ClassLinker::VerifyOatAndDexFileChecksums(const OatFile* oat_file,
 }
 
 bool ClassLinker::VerifyOatWithDexFile(const OatFile* oat_file,
-                                       const char* dex_location,
+                                       DexFile::LocationHelper* dex_location,
                                        const uint32_t* dex_location_checksum,
                                        std::string* error_msg) {
   CHECK(oat_file != nullptr);
-  CHECK(dex_location != nullptr);
+  CHECK(dex_location != nullptr && dex_location->GetDexLocation() != nullptr);
   std::unique_ptr<const DexFile> dex_file;
   if (dex_location_checksum == nullptr) {
     // If no classes.dex found in dex_location, it has been stripped or is corrupt, assume oat is
     // up-to-date. This is the common case in user builds for jar's and apk's in the /system
     // directory.
-    const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(dex_location, NULL);
+    const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(dex_location, nullptr);
     if (oat_dex_file == nullptr) {
       *error_msg = StringPrintf("Dex checksum mismatch for location '%s' and failed to find oat "
-                                "dex file '%s': %s", oat_file->GetLocation().c_str(), dex_location,
-                                error_msg->c_str());
+                                "dex file '%s': %s", oat_file->GetLocation().c_str(),
+                                dex_location->GetDexLocation(), error_msg->c_str());
       return false;
     }
     dex_file.reset(oat_dex_file->OpenDexFile(error_msg));
@@ -1247,14 +1268,14 @@ bool ClassLinker::VerifyOatWithDexFile(const OatFile* oat_file,
 }
 
 const OatFile* ClassLinker::FindOatFileContainingDexFileFromDexLocation(
-    const char* dex_location,
+    DexFile::LocationHelper* dex_location,
     const uint32_t* const dex_location_checksum,
     InstructionSet isa,
     std::vector<std::string>* error_msgs,
     bool* obsolete_file_cleanup_failed) {
   *obsolete_file_cleanup_failed = false;
   bool already_opened = false;
-  std::string dex_location_str(dex_location);
+  std::string dex_location_str(dex_location->GetDexLocation());
   std::unique_ptr<const OatFile> oat_file(OpenOatFileFromDexLocation(dex_location_str, isa,
                                                                      &already_opened,
                                                                      obsolete_file_cleanup_failed,
@@ -1262,21 +1283,22 @@ const OatFile* ClassLinker::FindOatFileContainingDexFileFromDexLocation(
   std::string error_msg;
   if (oat_file.get() == nullptr) {
     error_msgs->push_back(StringPrintf("Failed to open oat file from dex location '%s'",
-                                       dex_location));
+                                       dex_location->GetDexLocation()));
     return nullptr;
   } else if (oat_file->IsExecutable() &&
              !VerifyOatWithDexFile(oat_file.get(), dex_location,
                                    dex_location_checksum, &error_msg)) {
     error_msgs->push_back(StringPrintf("Failed to verify oat file '%s' found for dex location "
-                                       "'%s': %s", oat_file->GetLocation().c_str(), dex_location,
-                                       error_msg.c_str()));
+                                       "'%s': %s", oat_file->GetLocation().c_str(),
+                                       dex_location->GetDexLocation(), error_msg.c_str()));
     return nullptr;
   } else if (!oat_file->IsExecutable() &&
              Runtime::Current()->GetHeap()->HasImageSpace() &&
              !VerifyOatImageChecksum(oat_file.get(), isa)) {
     error_msgs->push_back(StringPrintf("Failed to verify non-executable oat file '%s' found for "
                                        "dex location '%s'. Image checksum incorrect.",
-                                       oat_file->GetLocation().c_str(), dex_location));
+                                       oat_file->GetLocation().c_str(),
+                                       dex_location->GetDexLocation()));
     return nullptr;
   } else {
     return oat_file.release();
@@ -1691,10 +1713,11 @@ void ClassLinker::InitFromImage() {
   for (int32_t i = 0; i < dex_caches->GetLength(); i++) {
     StackHandleScope<1> hs(self);
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(dex_caches->Get(i)));
-    const std::string& dex_file_location(dex_cache->GetLocation()->ToModifiedUtf8());
-    const OatFile::OatDexFile* oat_dex_file = oat_file.GetOatDexFile(dex_file_location.c_str(),
-                                                                     nullptr);
+    const std::string dex_file_location(dex_cache->GetLocation()->ToModifiedUtf8());
+    DexFile::LocationHelper location(dex_file_location.c_str());
+    const OatFile::OatDexFile* oat_dex_file = oat_file.GetOatDexFile(&location, nullptr);
     CHECK(oat_dex_file != NULL) << oat_file.GetLocation() << " " << dex_file_location;
+    DCHECK_EQ(location.IsCanonicalDexLocationCalculated(), false);
     std::string error_msg;
     const DexFile* dex_file = oat_dex_file->OpenDexFile(&error_msg);
     if (dex_file == NULL) {
@@ -2322,15 +2345,11 @@ uint32_t ClassLinker::SizeOfClassWithoutEmbeddedTables(const DexFile& dex_file,
 OatFile::OatClass ClassLinker::FindOatClass(const DexFile& dex_file, uint16_t class_def_idx,
                                             bool* found) {
   DCHECK_NE(class_def_idx, DexFile::kDexNoIndex16);
-  const OatFile* oat_file = FindOpenedOatFileForDexFile(dex_file);
-  if (oat_file == nullptr) {
+  const OatFile::OatDexFile* oat_dex_file = FindOpenedOatDexFileForDexFile(dex_file);
+  if (oat_dex_file == nullptr) {
     *found = false;
     return OatFile::OatClass::Invalid();
   }
-  uint dex_location_checksum = dex_file.GetLocationChecksum();
-  const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(dex_file.GetLocation().c_str(),
-                                                                    &dex_location_checksum);
-  CHECK(oat_dex_file != NULL) << dex_file.GetLocation();
   *found = true;
   return oat_dex_file->GetOatClass(class_def_idx);
 }
@@ -3603,17 +3622,13 @@ bool ClassLinker::VerifyClassUsingOatFile(const DexFile& dex_file, mirror::Class
     }
   }
 
-  const OatFile* oat_file = FindOpenedOatFileForDexFile(dex_file);
+  const OatFile::OatDexFile* oat_dex_file = FindOpenedOatDexFileForDexFile(dex_file);
   // Make this work with gtests, which do not set up the image properly.
   // TODO: we should clean up gtests to set up the image path properly.
-  if (Runtime::Current()->IsCompiler() || (oat_file == NULL)) {
+  if (Runtime::Current()->IsCompiler() || (oat_dex_file == nullptr)) {
     return false;
   }
 
-  CHECK(oat_file != NULL) << dex_file.GetLocation() << " " << PrettyClass(klass);
-  uint dex_location_checksum = dex_file.GetLocationChecksum();
-  const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(dex_file.GetLocation().c_str(),
-                                                                    &dex_location_checksum);
   CHECK(oat_dex_file != NULL) << dex_file.GetLocation() << " " << PrettyClass(klass);
   uint16_t class_def_index = klass->GetDexClassDefIndex();
   oat_file_class_status = oat_dex_file->GetOatClass(class_def_index).GetStatus();
