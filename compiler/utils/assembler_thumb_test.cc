@@ -116,6 +116,12 @@ std::string GetAndroidToolsDir() {
     std::string subdir = toolsdir + std::string("/") + std::string(entry->d_name);
     size_t eabi = subdir.find(TOOL_PREFIX);
     if (eabi != std::string::npos) {
+      // Check if "bin/" exist under this folder.
+      struct stat bin_st;
+      std::string bin_dir = subdir + "/bin/";
+      if (stat(bin_dir.c_str(), &bin_st) != 0)
+        continue;
+
       std::string suffix = subdir.substr(eabi + strlen(TOOL_PREFIX));
       double version = strtod(suffix.c_str(), nullptr);
       if (version > maxversion) {
