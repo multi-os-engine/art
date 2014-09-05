@@ -1195,7 +1195,9 @@ void Mir2Lir::DumpCounts(const RefCounts* arr, int size, const char* msg) {
  */
 void Mir2Lir::DoPromotion() {
   int num_regs = mir_graph_->GetNumOfCodeAndTempVRs();
-  const int promotion_threshold = 1;
+  // For Arm64, a threshold of 2 allows removing some 64-bit stp, ldp, mov instructions with a
+  // possible reduction of the frame size in favour of more ldr, str instructions.
+  const int promotion_threshold = (cu_->instruction_set == kArm64) ? 2 : 1;
   // Allocate the promotion map - one entry for each Dalvik vReg or compiler temp
   promotion_map_ = static_cast<PromotionMap*>
       (arena_->Alloc(num_regs * sizeof(promotion_map_[0]), kArenaAllocRegAlloc));

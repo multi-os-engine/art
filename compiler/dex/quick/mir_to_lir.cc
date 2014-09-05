@@ -1195,8 +1195,13 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
     head_lir = NewLIR0(kPseudoExportedPC);
   }
 
-  // Free temp registers and reset redundant store tracking.
-  ClobberAllTemps();
+  // Free temp registers and reset store tracking. However, skip this if the _single_ predecessor
+  // of this BB is the entry BB. This allows us to eliminate some unnecessary loads of arguments
+  // that are already available in registers.
+  if (!(bb->predecessors->Size() == 1 &&
+        mir_graph_->GetBasicBlock(bb->predecessors->Get(0))->block_type == kEntryBlock)) {
+    ClobberAllTemps();
+  }
 
   if (bb->block_type == kEntryBlock) {
     ResetRegPool();

@@ -956,11 +956,14 @@ void Arm64Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
         OpRegCopy(t_loc->reg, reg);
       } else {
         // Needs flush.
-        if (t_loc->ref) {
-          StoreRefDisp(TargetPtrReg(kSp), SRegOffset(start_vreg + i), reg, kNotVolatile);
+        RegLocation rl_arg = *t_loc;
+        rl_arg.location = kLocPhysReg;
+        rl_arg.reg = reg;
+        rl_arg.home = false;
+        if (t_loc->wide) {
+          StoreValueWide(*t_loc, rl_arg);
         } else {
-          StoreBaseDisp(TargetPtrReg(kSp), SRegOffset(start_vreg + i), reg, t_loc->wide ? k64 : k32,
-              kNotVolatile);
+          StoreValue(*t_loc, rl_arg);
         }
       }
     } else {
@@ -978,28 +981,6 @@ void Arm64Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
       // Increment i to skip the next one.
       i++;
     }
-    //      if ((v_map->core_location == kLocPhysReg) && !t_loc->fp) {
-    //        OpRegCopy(RegStorage::Solo32(v_map->core_reg), reg);
-    //      } else if ((v_map->fp_location == kLocPhysReg) && t_loc->fp) {
-    //        OpRegCopy(RegStorage::Solo32(v_map->fp_reg), reg);
-    //      } else {
-    //        StoreBaseDisp(TargetReg(kSp), SRegOffset(start_vreg + i), reg, op_size, kNotVolatile);
-    //        if (reg.Is64Bit()) {
-    //          if (SRegOffset(start_vreg + i) + 4 != SRegOffset(start_vreg + i + 1)) {
-    //            LOG(FATAL) << "64 bit value stored in non-consecutive 4 bytes slots";
-    //          }
-    //          i += 1;
-    //        }
-    //      }
-    //    } else {
-    //      // If arriving in frame & promoted
-    //      if (v_map->core_location == kLocPhysReg) {
-    //        LoadWordDisp(TargetReg(kSp), SRegOffset(start_vreg + i),
-    //                     RegStorage::Solo32(v_map->core_reg));
-    //      }
-    //      if (v_map->fp_location == kLocPhysReg) {
-    //        LoadWordDisp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->fp_reg));
-    //      }
   }
 }
 
