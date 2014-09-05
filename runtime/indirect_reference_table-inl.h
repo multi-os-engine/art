@@ -31,7 +31,7 @@ inline void IrtIterator::SkipNullsAndTombstones() {
   // We skip NULLs and tombstones. Clients don't want to see implementation details.
   while (i_ < capacity_ &&
          (table_[i_].IsNull() ||
-          Runtime::Current()->IsClearedJniWeakGlobal(table_[i_].Read<kWithoutReadBarrier>()))) {
+          Runtime::Current()->IsClearedJniWeakGlobal(table_[i_].Read()))) {
     ++i_;
   }
 }
