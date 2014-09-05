@@ -301,8 +301,9 @@ static jbyte IsDexOptNeededForFile(const std::string& oat_filename, const char* 
   }
   bool should_relocate_if_possible = Runtime::Current()->ShouldRelocate();
   uint32_t location_checksum = 0;
-  const art::OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(filename, nullptr,
-                                                                          kReasonLogging);
+  DexFile::LocationHelper dex_location(filename);
+  const art::OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(&dex_location, nullptr,
+                                                                         kReasonLogging);
   if (oat_dex_file != nullptr) {
     // If its not possible to read the classes.dex assume up-to-date as we won't be able to
     // compile it anyway.
@@ -333,8 +334,9 @@ static jbyte IsDexOptNeededForFile(const std::string& oat_filename, const char* 
       }
       // If we get here the file is out of date and we should use the system one to relocate.
     } else {
-      if (ClassLinker::VerifyOatAndDexFileChecksums(oat_file.get(), filename, location_checksum,
-                                                    target_instruction_set, &error_msg)) {
+      if (ClassLinker::VerifyOatAndDexFileChecksums(oat_file.get(), &dex_location,
+                                                    location_checksum, target_instruction_set,
+                                                    &error_msg)) {
         if (kVerboseLogging) {
           LOG(INFO) << "DexFile_isDexOptNeeded file " << oat_filename
                     << " is up-to-date for " << filename;

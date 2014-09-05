@@ -148,7 +148,8 @@ TEST_F(OatTest, WriteRead) {
 
   const DexFile* dex_file = java_lang_dex_file_;
   uint32_t dex_file_checksum = dex_file->GetLocationChecksum();
-  const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(dex_file->GetLocation().c_str(),
+  DexFile::LocationHelper dex_location(dex_file->GetLocation().c_str());
+  const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(&dex_location,
                                                                     &dex_file_checksum);
   ASSERT_TRUE(oat_dex_file != nullptr);
   CHECK_EQ(dex_file->GetLocationChecksum(), oat_dex_file->GetDexFileLocationChecksum());
