@@ -1116,6 +1116,11 @@ class HConstant : public HExpression<0> {
  public:
   explicit HConstant(Primitive::Type type) : HExpression(type) {}
 
+  // Statically apply the binary operation associated to `binop` to
+  // this node and `rhs`, and return the result as a constant node.
+  virtual HConstant* StaticEvaluation(const HArithmeticBinaryOperation* binop,
+                                      HConstant* rhs) = 0;
+
   DECLARE_INSTRUCTION(Constant);
 
  private:
@@ -1130,8 +1135,6 @@ class HIntConstant : public HConstant {
 
   int32_t GetValue() const { return value_; }
 
-  // Statically apply the binary operation associated to `binop` to
-  // this node and `rhs`, and return the result as a constant node.
   virtual HConstant* StaticEvaluation(const HArithmeticBinaryOperation* binop,
                                       HConstant* rhs);
 
@@ -1148,6 +1151,9 @@ class HLongConstant : public HConstant {
   explicit HLongConstant(int64_t value) : HConstant(Primitive::kPrimLong), value_(value) {}
 
   int64_t GetValue() const { return value_; }
+
+  virtual HConstant* StaticEvaluation(const HArithmeticBinaryOperation* binop,
+                                      HConstant* rhs);
 
   DECLARE_INSTRUCTION(LongConstant);
 
@@ -1250,6 +1256,7 @@ class HArithmeticBinaryOperation : public HBinaryOperation {
 
   // Apply the operation of this instruction to `a` and `b`.
   virtual int32_t Evaluate(int32_t a, int32_t b) const = 0;
+  virtual int64_t Evaluate(int64_t a, int64_t b) const = 0;
 
   DECLARE_INSTRUCTION(ArithmeticBinaryOperation);
 
@@ -1268,6 +1275,7 @@ class HAdd : public HArithmeticBinaryOperation {
 
   // Apply the operation of this instruction (addition) to `a` and `b`.
   virtual int32_t Evaluate(int32_t a, int32_t b) const { return a + b; }
+  virtual int64_t Evaluate(int64_t a, int64_t b) const { return a + b; }
 
   DECLARE_INSTRUCTION(Add);
 
@@ -1288,6 +1296,7 @@ class HSub : public HArithmeticBinaryOperation {
 
   // Apply the operation of this instruction (subtraction) to `a` and `b`.
   virtual int32_t Evaluate(int32_t a, int32_t b) const { return a - b; }
+  virtual int64_t Evaluate(int64_t a, int64_t b) const { return a - b; }
 
   DECLARE_INSTRUCTION(Sub);
 

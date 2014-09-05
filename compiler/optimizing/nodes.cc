@@ -425,8 +425,19 @@ HConstant* HIntConstant::StaticEvaluation(const HArithmeticBinaryOperation* bino
                                                  right->GetValue()));
 }
 
+HConstant* HLongConstant::StaticEvaluation(const HArithmeticBinaryOperation* binop,
+                                          HConstant* rhs) {
+  HLongConstant* right = rhs->AsLongConstant();
+  if (right == nullptr) {
+    return nullptr;
+  }
+  ArenaAllocator* arena = GetBlock()->GetGraph()->GetArena();
+  return new(arena) HLongConstant(binop->Evaluate(GetValue(),
+                                                  right->GetValue()));
+}
+
 HConstant* HArithmeticBinaryOperation::TryStaticEvaluation() const {
-  HIntConstant* left = GetLeft()->AsIntConstant();
+  HConstant* left = GetLeft()->AsConstant();
   if (left == nullptr) {
     return nullptr;
   }
