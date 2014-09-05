@@ -154,6 +154,7 @@ class X86Mir2Lir : public Mir2Lir {
   RegisterClass RegClassForFieldLoadStore(OpSize size, bool is_volatile) OVERRIDE;
 
   // Required for target - Dalvik-level generators.
+  void CheckIndexForArrayAccess(RegLocation rl_index);
   void GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array, RegLocation rl_index,
                    RegLocation rl_dest, int scale) OVERRIDE;
   void GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
@@ -187,6 +188,7 @@ class X86Mir2Lir : public Mir2Lir {
                          RegLocation rl_src1, RegLocation rl_shift) OVERRIDE;
   void GenCmpLong(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) OVERRIDE;
   void GenIntToLong(RegLocation rl_dest, RegLocation rl_src) OVERRIDE;
+  void GenLongToInt(RegLocation rl_dest, RegLocation rl_src) OVERRIDE;
   void GenShiftOpLong(Instruction::Code opcode, RegLocation rl_dest,
                       RegLocation rl_src1, RegLocation rl_shift) OVERRIDE;
 
@@ -992,6 +994,7 @@ class X86Mir2Lir : public Mir2Lir {
 
   static const X86EncodingMap EncodingMap[kX86Last];
 
+  std::map<int16_t, LIR *> dangerous_narrowed_long_to_int_;
  private:
   void SwapBits(RegStorage result_reg, int shift, int32_t value);
   void SwapBits64(RegStorage result_reg, int shift, int64_t value);

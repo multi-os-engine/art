@@ -826,6 +826,7 @@ class Mir2Lir : public Backend {
     void GenCompareZeroAndBranch(Instruction::Code opcode, RegLocation rl_src,
                                  LIR* taken, LIR* fall_through);
     virtual void GenIntToLong(RegLocation rl_dest, RegLocation rl_src);
+    virtual void GenLongToInt(RegLocation rl_dest, RegLocation rl_src);
     void GenIntNarrowing(Instruction::Code opcode, RegLocation rl_dest,
                          RegLocation rl_src);
     void GenNewArray(uint32_t type_idx, RegLocation rl_dest,

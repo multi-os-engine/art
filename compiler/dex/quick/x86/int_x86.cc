@@ -2271,6 +2271,19 @@ void X86Mir2Lir::OpRegThreadMem(OpKind op, RegStorage r_dest, ThreadOffset<8> th
   NewLIR2(opcode, r_dest.GetReg(), thread_offset.Int32Value());
 }
 
+
+void X86Mir2Lir::CheckIndexForArrayAccess(RegLocation rl_index) {
+  if (cu_->target64) {
+    // Be careful with index for 64 bit - it can contain garbage in the high part
+    // But it is used as 64-bit register for computation of address
+    auto it = dangerous_narrowed_long_to_int_.find(rl_index.s_reg_low);
+    if (it != dangerous_narrowed_long_to_int_.end()) {
+      it->second->flags.is_nop = false;
+      dangerous_narrowed_long_to_int_.erase(it);
+    }
+  }
+}
+
 /*
  * Generate array load
  */
@@ -2311,6 +2324,7 @@ void X86Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
     }
   }
   rl_result = EvalLoc(rl_dest, reg_class, true);
+  CheckIndexForArrayAccess(rl_index);
   LoadBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_result.reg, size);
   if ((size == k64) || (size == kDouble)) {
     StoreValueWide(rl_dest, rl_result);
@@ -2363,6 +2377,7 @@ void X86Mir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
   } else {
     rl_src = LoadValue(rl_src, reg_class);
   }
+  CheckIndexForArrayAccess(rl_index);
   // If the src reg can't be byte accessed, move it to a temp first.
   if ((size == kSignedByte || size == kUnsignedByte) && !IsByteRegister(rl_src.reg)) {
     RegStorage temp = AllocTemp();
@@ -3158,6 +3173,32 @@ bool X86Mir2Lir::IsOperationSafeWithoutTemps(RegLocation rl_lhs, RegLocation rl_
 
   // Everything will be fine :-).
   return true;
+}
+
+void X86Mir2Lir::GenLongToInt(RegLocation rl_dest, RegLocation rl_src) {
+  if (!cu_->target64) {
+    Mir2Lir::GenLongToInt(rl_dest, rl_src);
+    return;
+  }
+  rl_src = UpdateLocWide(rl_src);
+  rl_src = NarrowRegLoc(rl_src);
+
+  StoreValue(rl_dest, rl_src);
+
+  if (cu_->target64) {
+    // Try to find whether it is a dangerous narrow
+    rl_dest = UpdateLoc(rl_dest);
+    if (rl_src.location == kLocPhysReg && rl_dest.location == kLocPhysReg
+           && IsSameReg(rl_src.reg, rl_dest.reg)) {
+      // Prepare the zero extension 32-bit to 64-bit and nop it.
+      // nop will be removed if needed.
+      LIR* res = RawLIR(current_dalvik_offset_, kX86Mov32RR,
+                    rl_dest.reg.GetReg(), rl_dest.reg.GetReg());
+      res->flags.is_nop = true;
+      AppendLIR(res);
+      dangerous_narrowed_long_to_int_[rl_dest.s_reg_low] = res;
+    }
+  }
 }
 
 void X86Mir2Lir::GenIntToLong(RegLocation rl_dest, RegLocation rl_src) {
