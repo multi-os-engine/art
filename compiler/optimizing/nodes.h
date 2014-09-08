@@ -38,6 +38,7 @@ class LocationSummary;
 static const int kDefaultNumberOfBlocks = 8;
 static const int kDefaultNumberOfSuccessors = 2;
 static const int kDefaultNumberOfPredecessors = 2;
+static const int kDefaultNumberOfDominatedBlocks = 1;
 static const int kDefaultNumberOfBackEdges = 1;
 
 enum IfCondition {
@@ -265,6 +266,7 @@ class HBasicBlock : public ArenaObject {
         successors_(graph->GetArena(), kDefaultNumberOfSuccessors),
         loop_information_(nullptr),
         dominator_(nullptr),
+        dominated_blocks_(graph->GetArena(), kDefaultNumberOfDominatedBlocks),
         block_id_(-1),
         lifetime_start_(kNoLifetime),
         lifetime_end_(kNoLifetime) {}
@@ -275,6 +277,10 @@ class HBasicBlock : public ArenaObject {
 
   const GrowableArray<HBasicBlock*>& GetSuccessors() const {
     return successors_;
+  }
+
+  const GrowableArray<HBasicBlock*>& GetDominatedBlocks() const {
+    return dominated_blocks_;
   }
 
   void AddBackEdge(HBasicBlock* back_edge) {
@@ -292,6 +298,7 @@ class HBasicBlock : public ArenaObject {
 
   HBasicBlock* GetDominator() const { return dominator_; }
   void SetDominator(HBasicBlock* dominator) { dominator_ = dominator; }
+  void AddDominatedBlock(HBasicBlock* block) { dominated_blocks_.Add(block); }
 
   int NumberOfBackEdges() const {
     return loop_information_ == nullptr
@@ -401,6 +408,7 @@ class HBasicBlock : public ArenaObject {
   HInstructionList phis_;
   HLoopInformation* loop_information_;
   HBasicBlock* dominator_;
+  GrowableArray<HBasicBlock*> dominated_blocks_;
   int block_id_;
   size_t lifetime_start_;
   size_t lifetime_end_;
@@ -452,13 +460,14 @@ class HBasicBlock : public ArenaObject {
 FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
 #undef FORWARD_DECLARATION
 
-#define DECLARE_INSTRUCTION(type)                          \
-  virtual const char* DebugName() const { return #type; }  \
-  virtual H##type* As##type() { return this; }             \
+#define DECLARE_INSTRUCTION(type)                                     \
+  virtual InstructionKind GetKind() const { return k##type; }         \
+  virtual const char* DebugName() const { return #type; }             \
+  virtual H##type* As##type() { return this; }                        \
   virtual bool InstructionTypeEquals(HInstruction* other) const {     \
-    return other->Is##type();                              \
-  }                                                        \
-  virtual void Accept(HGraphVisitor* visitor)              \
+    return other->Is##type();                                         \
+  }                                                                   \
+  virtual void Accept(HGraphVisitor* visitor)                         \
 
 template <typename T>
 class HUseListNode : public ArenaObject {
@@ -483,6 +492,8 @@ class HUseListNode : public ArenaObject {
 // Represents the side effects an instruction may have.
 class SideEffects : public ValueObject {
  public:
+  SideEffects() : flags_(0) {}
+
   static SideEffects None() {
     return SideEffects(0);
   }
@@ -500,6 +511,31 @@ class SideEffects : public ValueObject {
     return SideEffects(((1 << count) - 1) << kFlagChangesCount);
   }
 
+  SideEffects Union(SideEffects other) const {
+    return SideEffects(flags_ | other.flags_);
+  }
+
+  bool HasSideEffects() const {
+    size_t all_bits_set = (1 << kFlagChangesCount) - 1;
+    return (flags_ & all_bits_set) != 0;
+  }
+
+  bool HasAllSideEffects() const {
+    size_t all_bits_set = (1 << kFlagChangesCount) - 1;
+    return all_bits_set == (flags_ & all_bits_set);
+  }
+
+  bool DependsOn(SideEffects other) const {
+    size_t depends_flags = other.ComputeDependsFlags();
+    return (flags_ & depends_flags) != 0;
+  }
+
+  bool HasDependencies() const {
+    int count = kFlagDependsOnCount - kFlagChangesCount;
+    size_t all_bits_set = (1 << count) - 1;
+    return ((flags_ >> kFlagChangesCount) & all_bits_set) != 0;
+  }
+
  private:
   static constexpr int kFlagChangesSomething = 0;
   static constexpr int kFlagChangesCount = kFlagChangesSomething + 1;
@@ -507,10 +543,13 @@ class SideEffects : public ValueObject {
   static constexpr int kFlagDependsOnSomething = kFlagChangesCount;
   static constexpr int kFlagDependsOnCount = kFlagDependsOnSomething + 1;
 
- private:
   explicit SideEffects(size_t flags) : flags_(flags) {}
 
-  const size_t flags_;
+  size_t ComputeDependsFlags() const {
+    return flags_ << kFlagChangesCount;
+  }
+
+  size_t flags_;
 };
 
 class HInstruction : public ArenaObject {
@@ -530,6 +569,12 @@ class HInstruction : public ArenaObject {
         side_effects_(side_effects) {}
 
   virtual ~HInstruction() {}
+
+#define DECLARE_KIND(type) k##type,
+  enum InstructionKind {
+    FOR_EACH_INSTRUCTION(DECLARE_KIND)
+  };
+#undef DECLARE_KIND
 
   HInstruction* GetNext() const { return next_; }
   HInstruction* GetPrevious() const { return previous_; }
@@ -626,6 +671,18 @@ class HInstruction : public ArenaObject {
   // 1) They have the same type and contain the same data,
   // 2) Their inputs are identical.
   bool Equals(HInstruction* other) const;
+
+  virtual InstructionKind GetKind() const = 0;
+
+  virtual size_t ComputeHashCode() const {
+    size_t result = GetKind();
+    for (size_t i = 0, e = InputCount(); i < e; ++i) {
+      result = (result * 31) + InputAt(i)->GetId();
+    }
+    return result;
+  }
+
+  SideEffects GetSideEffects() const { return side_effects_; }
 
   size_t GetLifetimePosition() const { return lifetime_position_; }
   void SetLifetimePosition(size_t position) { lifetime_position_ = position; }
@@ -1184,6 +1241,8 @@ class HIntConstant : public HConstant {
     return other->AsIntConstant()->value_ == value_;
   }
 
+  virtual size_t ComputeHashCode() const { return GetValue(); }
+
   DECLARE_INSTRUCTION(IntConstant);
 
  private:
@@ -1201,6 +1260,8 @@ class HLongConstant : public HConstant {
   virtual bool InstructionDataEquals(HInstruction* other) const {
     return other->AsLongConstant()->value_ == value_;
   }
+
+  virtual size_t ComputeHashCode() const { return static_cast<size_t>(GetValue()); }
 
   DECLARE_INSTRUCTION(LongConstant);
 
@@ -1443,6 +1504,10 @@ class HInstanceFieldGet : public HExpression<1> {
   virtual bool InstructionDataEquals(HInstruction* other) const {
     size_t other_offset = other->AsInstanceFieldGet()->GetFieldOffset().SizeValue();
     return other_offset == GetFieldOffset().SizeValue();
+  }
+
+  virtual size_t ComputeHashCode() const {
+    return (HInstruction::ComputeHashCode() << 7) | GetFieldOffset().SizeValue();
   }
 
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
