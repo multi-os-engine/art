@@ -357,19 +357,15 @@ build-art-target: $(ART_TARGET_EXECUTABLES) $(ART_TARGET_GTEST_EXECUTABLES) $(TA
 ########################################################################
 # "m art-host" for just building the files needed to run the art script on the host.
 .PHONY: art-host
-ifeq ($(HOST_PREFER_32_BIT),true)
-art-host:   $(HOST_OUT_EXECUTABLES)/art $(HOST_OUT)/bin/dalvikvm32 $(HOST_OUT)/lib/libart.so $(HOST_OUT)/bin/dex2oat $(HOST_OUT)/bin/patchoat $(HOST_CORE_IMG_OUT) $(HOST_OUT)/lib/libjavacore.so $(HOST_OUT)/bin/dalvikvm
-else
-art-host:   $(HOST_OUT_EXECUTABLES)/art $(HOST_OUT)/bin/dalvikvm64 $(HOST_OUT)/bin/dalvikvm32 $(HOST_OUT)/lib/libart.so $(HOST_OUT)/bin/dex2oat $(HOST_OUT)/bin/patchoat $(HOST_CORE_IMG_OUT) $(HOST_OUT)/lib/libjavacore.so $(HOST_OUT)/lib64/libjavacore.so $(HOST_OUT)/bin/dalvikvm
-endif
+art-host: $(HOST_OUT_EXECUTABLES)/art build-art-host
+
+.PHONY: art-host-debug
+art-host-debug: art-host $(HOST_OUT)/lib/libartd.so $(HOST_OUT)/bin/dex2oatd $(HOST_OUT)/bin/patchoatd
 
 # "m art-target" for just building the files needed to run the art script on the target.
 # Note that the script can run a dalvikvm executable that is not necessarily /system/bin/dalvikvm.
 .PHONY: art-target
-art-target: adb build-art-target art libnativehelper libjavacore
-
-.PHONY: art-host-debug
-art-host-debug:   art-host $(HOST_OUT)/lib/libartd.so $(HOST_OUT)/bin/dex2oatd $(HOST_OUT)/bin/patchoatd
+art-target: $(TARGET_OUT_EXECUTABLES)/art build-art-target $(HOST_OUT_EXECUTABLES)/adb
 
 ########################################################################
 # targets to switch back and forth from libdvm to libart
