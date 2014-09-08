@@ -52,7 +52,7 @@ while true; do
     invoke_with="$1"
     shift
   elif [ "$1" = "-d" ]; then
-    lib="-XXlib:$LIBDIR/libartd.so"
+    lib="-XXlib:$ANDROID_ROOT/$LIBDIR/libartd.so"
     shift
   elif expr "$1" : "--" >/dev/null 2>&1; then
     echo "unknown option: $1" 1>&2
