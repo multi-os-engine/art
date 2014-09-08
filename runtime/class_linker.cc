@@ -1364,7 +1364,6 @@ const OatFile* ClassLinker::OpenOatFileFromDexLocation(const std::string& dex_lo
     if (odex_oat_file.get() != nullptr && CheckOatFile(odex_oat_file.get(), isa,
                                                        &odex_checksum_verified,
                                                        &odex_error_msg)) {
-      error_msgs->push_back(odex_error_msg);
       return odex_oat_file.release();
     } else {
       if (odex_checksum_verified) {
@@ -1387,7 +1386,6 @@ const OatFile* ClassLinker::OpenOatFileFromDexLocation(const std::string& dex_lo
     if (cache_oat_file.get() != nullptr && CheckOatFile(cache_oat_file.get(), isa,
                                                         &cache_checksum_verified,
                                                         &cache_error_msg)) {
-      error_msgs->push_back(cache_error_msg);
       return cache_oat_file.release();
     } else if (cache_checksum_verified) {
       // We can just relocate
@@ -1611,7 +1609,7 @@ bool ClassLinker::CheckOatFile(const OatFile* oat_file, InstructionSet isa,
   }
 
   bool ret = (*checksum_verified && offset_verified && patch_delta_verified);
-  if (ret) {
+  if (!ret) {
     *error_msg = compound_msg;
   }
   return ret;
