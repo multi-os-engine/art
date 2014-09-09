@@ -2420,9 +2420,9 @@ int MIR::DecodedInstruction::FlagsOf() const {
     case kMirOpDivZeroCheck:
       return Instruction::kContinue | Instruction::kThrow;
     case kMirOpCheck:
-      return 0;
+      return Instruction::kContinue | Instruction::kThrow;
     case kMirOpCheckPart2:
-      return 0;
+      return Instruction::kContinue;
     case kMirOpSelect:
       return Instruction::kContinue;
     case kMirOpConstVector:
