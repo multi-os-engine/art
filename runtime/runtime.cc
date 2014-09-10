@@ -343,7 +343,7 @@ jobject CreateSystemClassLoader() {
   StackHandleScope<2> hs(soa.Self());
   Handle<mirror::Class> class_loader_class(
       hs.NewHandle(soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_ClassLoader)));
-  CHECK(cl->EnsureInitialized(class_loader_class, true, true));
+  CHECK(cl->EnsureInitialized(soa.Self(), class_loader_class, true, true));
 
   mirror::ArtMethod* getSystemClassLoader =
       class_loader_class->FindDirectMethod("getSystemClassLoader", "()Ljava/lang/ClassLoader;");
@@ -359,7 +359,7 @@ jobject CreateSystemClassLoader() {
 
   Handle<mirror::Class> thread_class(
       hs.NewHandle(soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_Thread)));
-  CHECK(cl->EnsureInitialized(thread_class, true, true));
+  CHECK(cl->EnsureInitialized(soa.Self(), thread_class, true, true));
 
   mirror::ArtField* contextClassLoader =
       thread_class->FindDeclaredInstanceField("contextClassLoader", "Ljava/lang/ClassLoader;");
@@ -404,7 +404,7 @@ bool Runtime::Start() {
     ScopedObjectAccess soa(Thread::Current());
     StackHandleScope<1> hs(soa.Self());
     auto klass(hs.NewHandle<mirror::Class>(mirror::Class::GetJavaLangClass()));
-    class_linker_->EnsureInitialized(klass, true, true);
+    class_linker_->EnsureInitialized(soa.Self(), klass, true, true);
   }
 
   // InitNativeMethods needs to be after started_ so that the classes

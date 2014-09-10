@@ -23,6 +23,7 @@
 
 #include "base/casts.h"
 #include "base/mutex-inl.h"
+#include "entrypoints/entrypoint_utils-inl.h"
 #include "gc/heap.h"
 #include "jni_env_ext.h"
 
@@ -32,6 +33,12 @@ namespace art {
 static inline Thread* ThreadForEnv(JNIEnv* env) {
   JNIEnvExt* full_env(down_cast<JNIEnvExt*>(env));
   return full_env->self;
+}
+
+static inline void AllowThreadSuspension(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  if (UNLIKELY(self->TestAllFlags())) {
+    CheckSuspend(self);
+  }
 }
 
 inline Thread* Thread::Current() {

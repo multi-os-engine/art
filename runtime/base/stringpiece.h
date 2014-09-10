@@ -184,7 +184,15 @@ inline bool operator==(const StringPiece& x, const StringPiece& y) {
   return memcmp(p1, p2, len) == 0;
 }
 
+inline bool operator==(const StringPiece& x, const char* y) {
+  return strncmp(x.data(), y, x.size()) == 0 && y[x.size()] == '\0';
+}
+
 inline bool operator!=(const StringPiece& x, const StringPiece& y) {
+  return !(x == y);
+}
+
+inline bool operator!=(const StringPiece& x, const char* y) {
   return !(x == y);
 }
 
