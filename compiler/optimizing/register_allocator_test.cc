@@ -41,10 +41,10 @@ static bool Check(const uint16_t* data) {
   graph->BuildDominatorTree();
   graph->TransformToSSA();
   graph->FindNaturalLoops();
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, kX86);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, kX86));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
-  RegisterAllocator register_allocator(&allocator, codegen, liveness);
+  RegisterAllocator register_allocator(&allocator, codegen.get(), liveness);
   register_allocator.AllocateRegisters();
   return register_allocator.Validate(false);
 }
@@ -57,7 +57,7 @@ TEST(RegisterAllocatorTest, ValidateIntervals) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = new (&allocator) HGraph(&allocator);
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, kX86);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, kX86));
   GrowableArray<LiveInterval*> intervals(&allocator, 0);
 
   // Test with two intervals of the same range.
@@ -298,10 +298,10 @@ TEST(RegisterAllocatorTest, Loop3) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildSSAGraph(data, &allocator);
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, kX86);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, kX86));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
-  RegisterAllocator register_allocator(&allocator, codegen, liveness);
+  RegisterAllocator register_allocator(&allocator, codegen.get(), liveness);
   register_allocator.AllocateRegisters();
   ASSERT_TRUE(register_allocator.Validate(false));
 
@@ -330,8 +330,8 @@ TEST(RegisterAllocatorTest, FirstRegisterUse) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildSSAGraph(data, &allocator);
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, kArm);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, kArm));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
 
   HAdd* first_add = graph->GetBlocks().Get(1)->GetFirstInstruction()->AsAdd();
@@ -383,10 +383,10 @@ TEST(RegisterAllocatorTest, DeadPhi) {
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildSSAGraph(data, &allocator);
   SsaDeadPhiElimination(graph).Run();
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, kX86);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, kX86));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
-  RegisterAllocator register_allocator(&allocator, codegen, liveness);
+  RegisterAllocator register_allocator(&allocator, codegen.get(), liveness);
   register_allocator.AllocateRegisters();
   ASSERT_TRUE(register_allocator.Validate(false));
 }

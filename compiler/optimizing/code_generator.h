@@ -137,6 +137,8 @@ class CodeGenerator : public ArenaObject {
     is_leaf_ = false;
   }
 
+  virtual ~CodeGenerator() {}
+
  protected:
   CodeGenerator(HGraph* graph, size_t number_of_registers)
       : frame_size_(kUninitializedFrameSize),
@@ -148,7 +150,6 @@ class CodeGenerator : public ArenaObject {
         blocked_registers_(graph->GetArena()->AllocArray<bool>(number_of_registers)),
         is_leaf_(true),
         stack_map_stream_(graph->GetArena()) {}
-  ~CodeGenerator() {}
 
   // Register allocation logic.
   void AllocateRegistersLocally(HInstruction* instruction) const;
@@ -186,6 +187,15 @@ class CodeGenerator : public ArenaObject {
 
   DISALLOW_COPY_AND_ASSIGN(CodeGenerator);
 };
+
+static void DeleteFuncImpl(CodeGenerator* cg) {
+    cg->~CodeGenerator();
+}
+
+static inline std::unique_ptr<CodeGenerator, void(*)(CodeGenerator*)> MakeCGUniquePtr(
+    CodeGenerator* cg) {
+  return std::unique_ptr<CodeGenerator, void(*)(CodeGenerator*)>(cg, DeleteFuncImpl);
+}
 
 template <typename T>
 class CallingConvention {
