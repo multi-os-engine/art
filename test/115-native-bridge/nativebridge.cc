@@ -263,11 +263,30 @@ extern "C" bool native_bridge_isSupported(const char* libpath) {
   return strcmp(libpath, "libjavacore.so") != 0;
 }
 
+const struct android::NativeBridgeEnv nb_env {
+    .cpu_abi = "cpu_abi",
+    .cpu_abi2 = "cpu_abi2",
+    .os_arch = "os.arch",
+    .lib_path = "/system/lib",
+    .cpuinfo_path = "/proc/cpuinfo"
+};
+
+extern "C" const struct android::NativeBridgeEnv* native_bridge_getAppEnv(const char* abi,
+        const char* private_dir) {
+  printf("Checking for getEnvValues.\n");
+
+  if (abi == NULL)
+      return NULL;
+
+  return &nb_env;
+}
+
 // "NativeBridgeItf" is effectively an API (it is the name of the symbol that will be loaded
 // by the native bridge library).
 android::NativeBridgeCallbacks NativeBridgeItf {
   .initialize = &native_bridge_initialize,
   .loadLibrary = &native_bridge_loadLibrary,
   .getTrampoline = &native_bridge_getTrampoline,
-  .isSupported = &native_bridge_isSupported
+  .isSupported = &native_bridge_isSupported,
+  .getAppEnv = &native_bridge_getAppEnv
 };
