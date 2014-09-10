@@ -22,171 +22,72 @@
 namespace art {
 namespace arm64 {
 
+#define LIST_0_TO_31(M)                                                                       \
+  M(0) M(1) M(2) M(3) M(4) M(5) M(6) M(7) M(8) M(9) M(10) M(11) M(12) M(13) M(14) M(15) M(16) \
+  M(17) M(18) M(19) M(20) M(21) M(22) M(23) M(24) M(25) M(26) M(27) M(28) M(29) M(30) M(31)
+
+#define REG_ENUM(T, N) T##N,
+
+// The enum register mappings are expected to be identical to VIXL register
+// codes except for the stack pointer register.
+// TODO: static asserts to check this.
+
 // Values for GP XRegisters - 64bit registers.
 enum Register {
-  X0  =  0,
-  X1  =  1,
-  X2  =  2,
-  X3  =  3,
-  X4  =  4,
-  X5  =  5,
-  X6  =  6,
-  X7  =  7,
-  X8  =  8,
-  X9  =  9,
-  X10 = 10,
-  X11 = 11,
-  X12 = 12,
-  X13 = 13,
-  X14 = 14,
-  X15 = 15,
-  X16 = 16,
-  X17 = 17,
-  X18 = 18,
-  X19 = 19,
-  X20 = 20,
-  X21 = 21,
-  X22 = 22,
-  X23 = 23,
-  X24 = 24,
-  X25 = 25,
-  X26 = 26,
-  X27 = 27,
-  X28 = 28,
-  X29 = 29,
-  X30 = 30,
-  X31 = 31,
-  TR  = 18,     // ART Thread Register - Managed Runtime (Caller Saved Reg)
-  ETR = 21,     // ART Thread Register - External Calls  (Callee Saved Reg)
-  IP0 = 16,     // Used as scratch by VIXL.
-  IP1 = 17,     // Used as scratch by ART JNI Assembler.
-  FP  = 29,
-  LR  = 30,
-  SP  = 31,     // SP is X31 and overlaps with XRZ but we encode it as a
-                // special register, due to the different instruction semantics.
-  XZR = 32,
-  kNumberOfCoreRegisters = 33,
+#define X_REG_ENUM(N) REG_ENUM(X, N)
+  LIST_0_TO_31(X_REG_ENUM)
+#undef X_REG_ENUM
+  SP,         // SP and XZR are encoded in instructions using the register
+              // code 31, the context deciding which is used. We use a
+              // differrent enum value to distinguish between the two.
+  kNumberOfCoreRegisters,
+  // Aliases.
+  TR  = X18,  // ART Thread Register - Managed Runtime (Caller Saved Reg)
+  ETR = X21,  // ART Thread Register - External Calls  (Callee Saved Reg)
+  IP0 = X16,  // Used as scratch by VIXL.
+  IP1 = X17,  // Used as scratch by ART JNI Assembler.
+  FP  = X29,
+  LR  = X30,
+  XZR = X31,
   kNoRegister = -1,
 };
 std::ostream& operator<<(std::ostream& os, const Register& rhs);
 
 // Values for GP WRegisters - 32bit registers.
 enum WRegister {
-  W0  =  0,
-  W1  =  1,
-  W2  =  2,
-  W3  =  3,
-  W4  =  4,
-  W5  =  5,
-  W6  =  6,
-  W7  =  7,
-  W8  =  8,
-  W9  =  9,
-  W10 = 10,
-  W11 = 11,
-  W12 = 12,
-  W13 = 13,
-  W14 = 14,
-  W15 = 15,
-  W16 = 16,
-  W17 = 17,
-  W18 = 18,
-  W19 = 19,
-  W20 = 20,
-  W21 = 21,
-  W22 = 22,
-  W23 = 23,
-  W24 = 24,
-  W25 = 25,
-  W26 = 26,
-  W27 = 27,
-  W28 = 28,
-  W29 = 29,
-  W30 = 30,
-  W31 = 31,
-  WZR = 31,
-  kNumberOfWRegisters = 32,
+#define W_REG_ENUM(N) REG_ENUM(W, N)
+  LIST_0_TO_31(W_REG_ENUM)
+#undef W_REG_ENUM
+  WSP,  // See the comment for SP above.
+  kNumberOfWRegisters,
+  // Aliases.
+  WZR = W31,
   kNoWRegister = -1,
 };
 std::ostream& operator<<(std::ostream& os, const WRegister& rhs);
 
 // Values for FP DRegisters - double precision floating point.
 enum DRegister {
-  D0  =  0,
-  D1  =  1,
-  D2  =  2,
-  D3  =  3,
-  D4  =  4,
-  D5  =  5,
-  D6  =  6,
-  D7  =  7,
-  D8  =  8,
-  D9  =  9,
-  D10 = 10,
-  D11 = 11,
-  D12 = 12,
-  D13 = 13,
-  D14 = 14,
-  D15 = 15,
-  D16 = 16,
-  D17 = 17,
-  D18 = 18,
-  D19 = 19,
-  D20 = 20,
-  D21 = 21,
-  D22 = 22,
-  D23 = 23,
-  D24 = 24,
-  D25 = 25,
-  D26 = 26,
-  D27 = 27,
-  D28 = 28,
-  D29 = 29,
-  D30 = 30,
-  D31 = 31,
-  kNumberOfDRegisters = 32,
+#define D_REG_ENUM(N) REG_ENUM(D, N)
+  LIST_0_TO_31(D_REG_ENUM)
+#undef D_REG_ENUM
+  kNumberOfDRegisters,
   kNoDRegister = -1,
 };
 std::ostream& operator<<(std::ostream& os, const DRegister& rhs);
 
 // Values for FP SRegisters - single precision floating point.
 enum SRegister {
-  S0  =  0,
-  S1  =  1,
-  S2  =  2,
-  S3  =  3,
-  S4  =  4,
-  S5  =  5,
-  S6  =  6,
-  S7  =  7,
-  S8  =  8,
-  S9  =  9,
-  S10 = 10,
-  S11 = 11,
-  S12 = 12,
-  S13 = 13,
-  S14 = 14,
-  S15 = 15,
-  S16 = 16,
-  S17 = 17,
-  S18 = 18,
-  S19 = 19,
-  S20 = 20,
-  S21 = 21,
-  S22 = 22,
-  S23 = 23,
-  S24 = 24,
-  S25 = 25,
-  S26 = 26,
-  S27 = 27,
-  S28 = 28,
-  S29 = 29,
-  S30 = 30,
-  S31 = 31,
-  kNumberOfSRegisters = 32,
+#define S_REG_ENUM(N) REG_ENUM(S, N)
+  LIST_0_TO_31(S_REG_ENUM)
+#undef S_REG_ENUM
+  kNumberOfSRegisters,
   kNoSRegister = -1,
 };
 std::ostream& operator<<(std::ostream& os, const SRegister& rhs);
+
+#undef LIST_0_TO_31
+#undef REG_ENUM
 
 }  // namespace arm64
 }  // namespace art
