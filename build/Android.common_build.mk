@@ -302,6 +302,8 @@ define set-target-local-cflags-vars
     LOCAL_CFLAGS += $(ART_TARGET_DEBUG_CFLAGS)
   else
     LOCAL_CFLAGS += $(ART_TARGET_NON_DEBUG_CFLAGS)
+    # Clang uses more stack space than gcc.
+    LOCAL_CLANG_CFLAGS += -Wframe-larger-than=2400
   endif
 
   # TODO: Also set when ART_TARGET_CLANG_$(arch)!=false and ART_TARGET_CLANG==true
