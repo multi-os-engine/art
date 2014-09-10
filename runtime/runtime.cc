@@ -418,17 +418,22 @@ bool Runtime::Start() {
 
   Thread::FinishStartup();
 
+  system_class_loader_ = CreateSystemClassLoader();
+
   if (is_zygote_) {
     if (!InitZygote()) {
       return false;
     }
   } else {
-    DidForkFromZygote(NativeBridgeAction::kInitialize);
+    bool have_native_bridge = !native_bridge_library_filename_.empty();
+    if (have_native_bridge) {
+      android::EarlyInitializeNativeBridge(".", false);
+    }
+    DidForkFromZygote(self->GetJniEnv(), have_native_bridge ? NativeBridgeAction::kInitialize :
+        NativeBridgeAction::kUnload, GetInstructionSetString(kRuntimeISA));
   }
 
   StartDaemonThreads();
-
-  system_class_loader_ = CreateSystemClassLoader();
 
   {
     ScopedObjectAccess soa(self);
@@ -501,7 +506,7 @@ bool Runtime::InitZygote() {
 #endif
 }
 
-void Runtime::DidForkFromZygote(NativeBridgeAction action) {
+void Runtime::DidForkFromZygote(JNIEnv* env, NativeBridgeAction action, const char* isa) {
   is_zygote_ = false;
 
   switch (action) {
@@ -510,7 +515,7 @@ void Runtime::DidForkFromZygote(NativeBridgeAction action) {
       break;
 
     case NativeBridgeAction::kInitialize:
-      android::InitializeNativeBridge();
+      android::InitializeNativeBridge(env, isa);
       break;
   }
 

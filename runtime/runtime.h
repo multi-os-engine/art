@@ -398,7 +398,7 @@ class Runtime {
   };
   void PreZygoteFork();
   bool InitZygote();
-  void DidForkFromZygote(NativeBridgeAction action);
+  void DidForkFromZygote(JNIEnv* env, NativeBridgeAction action, const char* isa);
 
   const instrumentation::Instrumentation* GetInstrumentation() const {
     return &instrumentation_;
