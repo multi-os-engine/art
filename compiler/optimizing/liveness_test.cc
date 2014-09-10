@@ -49,8 +49,8 @@ static void TestCode(const uint16_t* data, const char* expected) {
   graph->BuildDominatorTree();
   graph->TransformToSSA();
   graph->FindNaturalLoops();
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, InstructionSet::kX86);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, InstructionSet::kX86));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
 
   std::ostringstream buffer;

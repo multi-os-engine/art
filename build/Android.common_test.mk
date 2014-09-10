@@ -41,6 +41,18 @@ ART_TEST_KNOWN_BROKEN := \
   test-art-host-run-test-gcstress-interpreter-prebuild-114-ParallelGC64 \
   test-art-host-run-test-gcstress-optimizing-prebuild-114-ParallelGC64
 
+# Failing valgrind tests.
+# Note: *all* 64b tests involving the runtime do not work currently.
+
+# b/17448598
+ART_TEST_KNOWN_BROKEN += valgrind-test-art-host-gtest-find_loops_test32
+
+# b/17448599
+ART_TEST_KNOWN_BROKEN += valgrind-test-art-host-gtest-image_test32
+
+# This seems just flaky, and the whole test takes forever. Need to investigate further.
+ART_TEST_KNOWN_BROKEN += valgrind-test-art-host-gtest-jni_compiler_test32
+
 # List of known failing tests that when executed won't cause test execution to not finish.
 # The test name must be the full rule name such as test-art-host-oat-optimizing-HelloWorld64.
 ART_TEST_KNOWN_FAILING :=

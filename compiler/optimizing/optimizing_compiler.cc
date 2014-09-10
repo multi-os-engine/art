@@ -208,8 +208,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     return nullptr;
   }
 
-  CodeGenerator* codegen = CodeGenerator::Create(&arena, graph, instruction_set);
-  if (codegen == nullptr) {
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&arena, graph, instruction_set));
+  if (codegen.get() == nullptr) {
     if (shouldCompile) {
       LOG(FATAL) << "Could not find code generator for optimizing compiler";
     }
@@ -231,11 +231,11 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     SsaRedundantPhiElimination(graph).Run();
     SsaDeadPhiElimination(graph).Run();
 
-    SsaLivenessAnalysis liveness(*graph, codegen);
+    SsaLivenessAnalysis liveness(*graph, codegen.get());
     liveness.Analyze();
     visualizer.DumpGraph(kLivenessPassName);
 
-    RegisterAllocator register_allocator(graph->GetArena(), codegen, liveness);
+    RegisterAllocator register_allocator(graph->GetArena(), codegen.get(), liveness);
     register_allocator.AllocateRegisters();
 
     visualizer.DumpGraph(kRegisterAllocatorPassName);
@@ -269,7 +269,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     graph->TransformToSSA();
     visualizer.DumpGraph("ssa");
     graph->FindNaturalLoops();
-    SsaLivenessAnalysis liveness(*graph, codegen);
+    SsaLivenessAnalysis liveness(*graph, codegen.get());
     liveness.Analyze();
     visualizer.DumpGraph(kLivenessPassName);
 

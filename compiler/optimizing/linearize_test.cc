@@ -45,8 +45,8 @@ static void TestCode(const uint16_t* data, const int* expected_order, size_t num
   graph->TransformToSSA();
   graph->FindNaturalLoops();
 
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, InstructionSet::kX86);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, InstructionSet::kX86));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
 
   ASSERT_EQ(liveness.GetLinearPostOrder().Size(), number_of_blocks);

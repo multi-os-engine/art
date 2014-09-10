@@ -75,7 +75,7 @@ static void TestCode(const uint16_t* data, bool has_result = false, int32_t expe
   ASSERT_NE(graph, nullptr);
   InternalCodeAllocator allocator;
 
-  CodeGenerator* codegen = CodeGenerator::Create(&arena, graph, kX86);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&arena, graph, kX86));
   // We avoid doing a stack overflow check that requires the runtime being setup,
   // by making sure the compiler knows the methods we are running are leaf methods.
   codegen->CompileBaseline(&allocator, true);
@@ -83,13 +83,14 @@ static void TestCode(const uint16_t* data, bool has_result = false, int32_t expe
   Run(allocator, *codegen, has_result, expected);
 #endif
 
-  codegen = CodeGenerator::Create(&arena, graph, kArm);
+
+  codegen.reset(CodeGenerator::Create(&arena, graph, kArm));
   codegen->CompileBaseline(&allocator, true);
 #if defined(__arm__)
   Run(allocator, *codegen, has_result, expected);
 #endif
 
-  codegen = CodeGenerator::Create(&arena, graph, kX86_64);
+  codegen.reset(CodeGenerator::Create(&arena, graph, kX86_64));
   codegen->CompileBaseline(&allocator, true);
 #if defined(__x86_64__)
   Run(allocator, *codegen, has_result, expected);
