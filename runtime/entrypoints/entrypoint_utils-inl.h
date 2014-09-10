@@ -264,7 +264,8 @@ static inline mirror::Array* AllocArrayFromCodeResolved(mirror::Class* klass,
 
 template<FindFieldType type, bool access_check>
 static inline mirror::ArtField* FindFieldFromCode(uint32_t field_idx, mirror::ArtMethod* referrer,
-                                                  Thread* self, size_t expected_size) {
+                                                  Thread* self, size_t expected_size,
+                                                  mirror::Object* obj) {
   bool is_primitive;
   bool is_set;
   bool is_static;
@@ -313,6 +314,16 @@ static inline mirror::ArtField* FindFieldFromCode(uint32_t field_idx, mirror::Ar
         return nullptr;  // Failure.
       }
     }
+    // We're checking an instance field, so make sure, if we have a non-null object,
+    // that it is legal to access this object with the resolved field
+    if (!is_static && (obj != nullptr)) {
+      if (!resolved_field->GetDeclaringClass()->IsAssignableFrom(obj->GetClass())) {
+        ThrowVerifyError(NULL, "Unable to access field, type '%s' is not assignable to '%s'",
+            PrettyDescriptor(obj->GetClass()).c_str(),
+            PrettyDescriptor(resolved_field->GetDeclaringClass()).c_str());
+        return nullptr;
+      }
+    }
   }
   if (!is_static) {
     // instance fields must be being accessed on an initialized class
@@ -339,7 +350,8 @@ static inline mirror::ArtField* FindFieldFromCode(uint32_t field_idx, mirror::Ar
 template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) ALWAYS_INLINE \
 mirror::ArtField* FindFieldFromCode<_type, _access_check>(uint32_t field_idx, \
                                                           mirror::ArtMethod* referrer, \
-                                                          Thread* self, size_t expected_size) \
+                                                          Thread* self, size_t expected_size, \
+                                                          mirror::Object* obj) \
 
 #define EXPLICIT_FIND_FIELD_FROM_CODE_TYPED_TEMPLATE_DECL(_type) \
     EXPLICIT_FIND_FIELD_FROM_CODE_TEMPLATE_DECL(_type, false); \
@@ -479,7 +491,8 @@ EXPLICIT_FIND_METHOD_FROM_CODE_TYPED_TEMPLATE_DECL(kInterface);
 // Fast path field resolution that can't initialize classes or throw exceptions.
 static inline mirror::ArtField* FindFieldFast(uint32_t field_idx,
                                               mirror::ArtMethod* referrer,
-                                              FindFieldType type, size_t expected_size) {
+                                              FindFieldType type, size_t expected_size,
+                                              mirror::Object* obj) {
   mirror::ArtField* resolved_field =
       referrer->GetDeclaringClass()->GetDexCache()->GetResolvedField(field_idx);
   if (UNLIKELY(resolved_field == nullptr)) {
@@ -528,6 +541,14 @@ static inline mirror::ArtField* FindFieldFast(uint32_t field_idx,
   if (UNLIKELY(resolved_field->IsPrimitiveType() != is_primitive ||
                resolved_field->FieldSize() != expected_size)) {
     return nullptr;
+  }
+  // We're checking an instance field, so make sure, if we have a non-null object,
+  // that it is legal to access this object with the resolved field
+  if (!is_static && (obj != nullptr)) {
+    if (!resolved_field->GetDeclaringClass()->IsAssignableFrom(obj->GetClass())) {
+      // Just return nullptr for now, FindFieldFromCode will throw the exception
+      return nullptr;
+    }
   }
   return resolved_field;
 }

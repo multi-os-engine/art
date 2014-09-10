@@ -31,17 +31,19 @@ bool DoFieldGet(Thread* self, ShadowFrame& shadow_frame, const Instruction* inst
                 uint16_t inst_data) {
   const bool is_static = (find_type == StaticObjectRead) || (find_type == StaticPrimitiveRead);
   const uint32_t field_idx = is_static ? inst->VRegB_21c() : inst->VRegC_22c();
+  Object* obj = nullptr;
+  if (!is_static) {
+    obj = shadow_frame.GetVRegReference(inst->VRegB_22c(inst_data));
+  }
   ArtField* f = FindFieldFromCode<find_type, do_access_check>(field_idx, shadow_frame.GetMethod(), self,
-                                                              Primitive::ComponentSize(field_type));
+                                                              Primitive::ComponentSize(field_type), obj);
   if (UNLIKELY(f == nullptr)) {
     CHECK(self->IsExceptionPending());
     return false;
   }
-  Object* obj;
   if (is_static) {
     obj = f->GetDeclaringClass();
   } else {
-    obj = shadow_frame.GetVRegReference(inst->VRegB_22c(inst_data));
     if (UNLIKELY(obj == nullptr)) {
       ThrowNullPointerExceptionForFieldAccess(shadow_frame.GetCurrentLocationForThrow(), f, true);
       return false;
@@ -207,17 +209,19 @@ bool DoFieldPut(Thread* self, const ShadowFrame& shadow_frame, const Instruction
   bool do_assignability_check = do_access_check;
   bool is_static = (find_type == StaticObjectWrite) || (find_type == StaticPrimitiveWrite);
   uint32_t field_idx = is_static ? inst->VRegB_21c() : inst->VRegC_22c();
+  Object* obj = nullptr;
+  if (!is_static) {
+    obj = shadow_frame.GetVRegReference(inst->VRegB_22c(inst_data));
+  }
   ArtField* f = FindFieldFromCode<find_type, do_access_check>(field_idx, shadow_frame.GetMethod(), self,
-                                                              Primitive::ComponentSize(field_type));
+                                                              Primitive::ComponentSize(field_type), obj);
   if (UNLIKELY(f == nullptr)) {
     CHECK(self->IsExceptionPending());
     return false;
   }
-  Object* obj;
   if (is_static) {
     obj = f->GetDeclaringClass();
   } else {
-    obj = shadow_frame.GetVRegReference(inst->VRegB_22c(inst_data));
     if (UNLIKELY(obj == nullptr)) {
       ThrowNullPointerExceptionForFieldAccess(shadow_frame.GetCurrentLocationForThrow(),
                                               f, false);

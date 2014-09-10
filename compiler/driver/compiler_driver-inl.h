@@ -98,7 +98,9 @@ inline std::pair<bool, bool> CompilerDriver::IsFastInstanceField(
     mirror::ArtField* resolved_field, uint16_t field_idx) {
   DCHECK(!resolved_field->IsStatic());
   mirror::Class* fields_class = resolved_field->GetDeclaringClass();
-  bool fast_get = referrer_class != nullptr &&
+  // If the referrer class did not verify, it may be because one of its field accesses
+  // returned a VERIFY_ERROR_NO_FIELD error, so to be safe, do not allow fast-path codegen.
+  bool fast_get = referrer_class != nullptr && referrer_class->IsVerified() &&
       referrer_class->CanAccessResolvedField(fields_class, resolved_field,
                                              dex_cache, field_idx);
   bool fast_put = fast_get && (!resolved_field->IsFinal() || fields_class == referrer_class);
