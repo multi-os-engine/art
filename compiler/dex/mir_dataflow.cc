@@ -1327,13 +1327,15 @@ void MIRGraph::CompilerInitializeSSAConversion() {
     BasicBlock* bb = iterator.Next();
     if (bb == NULL) break;
     if (bb->hidden == true) continue;
-    if (bb->block_type == kDalvikByteCode ||
-      bb->block_type == kEntryBlock ||
-      bb->block_type == kExitBlock) {
+
+    if (bb->data_flow_info == nullptr) {
       bb->data_flow_info =
           static_cast<BasicBlockDataFlow*>(arena_->Alloc(sizeof(BasicBlockDataFlow),
                                                          kArenaAllocDFInfo));
-      }
+    } else {
+      // Instead of reallocating, just clear it out.
+      memset(bb->data_flow_info, 0, sizeof(*(bb->data_flow_info)));
+    }
   }
 }
 
