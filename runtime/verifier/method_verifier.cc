@@ -124,8 +124,8 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(mirror::Class* klass,
 }
 
 MethodVerifier::FailureKind MethodVerifier::VerifyClass(const DexFile* dex_file,
-                                                        ConstHandle<mirror::DexCache> dex_cache,
-                                                        ConstHandle<mirror::ClassLoader> class_loader,
+                                                        Handle<mirror::DexCache> dex_cache,
+                                                        Handle<mirror::ClassLoader> class_loader,
                                                         const DexFile::ClassDef* class_def,
                                                         bool allow_soft_failures,
                                                         std::string* error) {
@@ -244,11 +244,11 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(const DexFile* dex_file,
 
 MethodVerifier::FailureKind MethodVerifier::VerifyMethod(uint32_t method_idx,
                                                          const DexFile* dex_file,
-                                                         ConstHandle<mirror::DexCache> dex_cache,
-                                                         ConstHandle<mirror::ClassLoader> class_loader,
+                                                         Handle<mirror::DexCache> dex_cache,
+                                                         Handle<mirror::ClassLoader> class_loader,
                                                          const DexFile::ClassDef* class_def,
                                                          const DexFile::CodeItem* code_item,
-                                                         ConstHandle<mirror::ArtMethod> method,
+                                                         Handle<mirror::ArtMethod> method,
                                                          uint32_t method_access_flags,
                                                          bool allow_soft_failures,
                                                          bool need_precise_constants) {
@@ -293,11 +293,11 @@ MethodVerifier::FailureKind MethodVerifier::VerifyMethod(uint32_t method_idx,
 
 void MethodVerifier::VerifyMethodAndDump(std::ostream& os, uint32_t dex_method_idx,
                                          const DexFile* dex_file,
-                                         ConstHandle<mirror::DexCache> dex_cache,
-                                         ConstHandle<mirror::ClassLoader> class_loader,
+                                         Handle<mirror::DexCache> dex_cache,
+                                         Handle<mirror::ClassLoader> class_loader,
                                          const DexFile::ClassDef* class_def,
                                          const DexFile::CodeItem* code_item,
-                                         ConstHandle<mirror::ArtMethod> method,
+                                         Handle<mirror::ArtMethod> method,
                                          uint32_t method_access_flags) {
   MethodVerifier verifier(dex_file, dex_cache, class_loader, class_def, code_item,
                           dex_method_idx, method, method_access_flags, true, true, true);
@@ -307,11 +307,11 @@ void MethodVerifier::VerifyMethodAndDump(std::ostream& os, uint32_t dex_method_i
   verifier.Dump(os);
 }
 
-MethodVerifier::MethodVerifier(const DexFile* dex_file, ConstHandle<mirror::DexCache> dex_cache,
-                               ConstHandle<mirror::ClassLoader> class_loader,
+MethodVerifier::MethodVerifier(const DexFile* dex_file, Handle<mirror::DexCache> dex_cache,
+                               Handle<mirror::ClassLoader> class_loader,
                                const DexFile::ClassDef* class_def,
                                const DexFile::CodeItem* code_item, uint32_t dex_method_idx,
-                               ConstHandle<mirror::ArtMethod> method, uint32_t method_access_flags,
+                               Handle<mirror::ArtMethod> method, uint32_t method_access_flags,
                                bool can_load_classes, bool allow_soft_failures,
                                bool need_precise_constants)
     : reg_types_(can_load_classes),
