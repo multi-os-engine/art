@@ -165,6 +165,7 @@ static uint32_t GetInstructionSize(const uint8_t* pc) {
     }
   } else {
     switch (opcode) {
+      case 0x88:            // mov
       case 0x89:            // mov
       case 0x8b:
       case 0x38:        // cmp with memory.
