@@ -25,7 +25,7 @@ namespace art {
 
 class FieldHelper {
  public:
-  explicit FieldHelper(Handle<mirror::ArtField> f) : field_(f) {}
+  explicit FieldHelper(MutableHandle<mirror::ArtField> f) : field_(f) {}
 
   void ChangeField(mirror::ArtField* new_f) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK(new_f != nullptr);
@@ -43,7 +43,7 @@ class FieldHelper {
   const char* GetDeclaringClassDescriptor() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
-  Handle<mirror::ArtField> field_;
+  MutableHandle<mirror::ArtField> field_;
   std::string declaring_class_descriptor_;
 
   DISALLOW_COPY_AND_ASSIGN(FieldHelper);
