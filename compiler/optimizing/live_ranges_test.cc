@@ -58,8 +58,8 @@ TEST(LiveRangesTest, CFG1) {
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
 
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, InstructionSet::kX86);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, InstructionSet::kX86));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
 
   LiveInterval* interval = liveness.GetInstructionFromSsaIndex(0)->GetLiveInterval();
@@ -104,8 +104,8 @@ TEST(LiveRangesTest, CFG2) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, InstructionSet::kX86);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, InstructionSet::kX86));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
 
   LiveInterval* interval = liveness.GetInstructionFromSsaIndex(0)->GetLiveInterval();
@@ -153,8 +153,8 @@ TEST(LiveRangesTest, CFG3) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, InstructionSet::kX86);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, InstructionSet::kX86));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
 
   // Test for the 4 constant.
@@ -229,8 +229,8 @@ TEST(LiveRangesTest, Loop) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
-  CodeGenerator* codegen = CodeGenerator::Create(&allocator, graph, InstructionSet::kX86);
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  auto codegen = MakeCGUniquePtr(CodeGenerator::Create(&allocator, graph, InstructionSet::kX86));
+  SsaLivenessAnalysis liveness(*graph, codegen.get());
   liveness.Analyze();
 
   // Test for the 0 constant.
