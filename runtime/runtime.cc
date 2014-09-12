@@ -141,6 +141,7 @@ Runtime::Runtime()
       dump_gc_performance_on_shutdown_(false),
       preinitialization_transaction_(nullptr),
       verify_(false),
+      continue_without_dex_(true),
       target_sdk_version_(0),
       implicit_null_checks_(false),
       implicit_so_checks_(false),
@@ -687,6 +688,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   intern_table_ = new InternTable;
 
   verify_ = options->verify_;
+  continue_without_dex_ = options->continue_without_dex_;
 
   if (options->interpreter_only_) {
     GetInstrumentation()->ForceInterpretOnly();

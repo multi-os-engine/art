@@ -470,6 +470,10 @@ class Runtime {
     return verify_;
   }
 
+  bool GetContinueWithoutDex() const {
+    return continue_without_dex_;
+  }
+
   bool RunningOnValgrind() const {
     return running_on_valgrind_;
   }
@@ -630,6 +634,7 @@ class Runtime {
 
   // If false, verification is disabled. True by default.
   bool verify_;
+  bool continue_without_dex_;
 
   // Specifies target SDK version to allow workarounds for certain API levels.
   int32_t target_sdk_version_;

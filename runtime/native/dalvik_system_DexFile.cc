@@ -112,16 +112,25 @@ static jlong DexFile_openDexFileNative(JNIEnv* env, jclass, jstring javaSourceNa
   std::unique_ptr<std::vector<const DexFile*>> dex_files(new std::vector<const DexFile*>());
   std::vector<std::string> error_msgs;
 
-  bool success = linker->OpenDexFilesFromOat(sourceName.c_str(), outputName.c_str(), &error_msgs,
+  bool open_success = linker->OpenDexFilesFromOat(sourceName.c_str(), outputName.c_str(), &error_msgs,
                                              dex_files.get());
 
-  if (success || !dex_files->empty()) {
+  // Take into account the dex_files' contents if opening the files did not succeed
+  bool success = (open_success || !dex_files->empty());
+
+  bool continue_without = Runtime::Current()->GetContinueWithoutDex();
+  // If we did not succeed in emptying the dex_files, do we have an option to say: still bail for debugging reasons.
+  if (open_success == false && dex_files->empty() == false && continue_without == false) {
+    success = false;
+  }
+
+  if (success) {
     // In the case of non-success, we have not found or could not generate the oat file.
     // But we may still have found a dex file that we can use.
     return static_cast<jlong>(reinterpret_cast<uintptr_t>(dex_files.release()));
   } else {
-    // The vector should be empty after a failed loading attempt.
-    DCHECK_EQ(0U, dex_files->size());
+    // If we did not continue without the dex file, the vector should be empty after a failed loading attempt.
+    DCHECK(!continue_without || !dex_files->size());
 
     ScopedObjectAccess soa(env);
     CHECK(!error_msgs.empty());
