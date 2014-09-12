@@ -101,6 +101,7 @@ class ParsedOptions {
   std::string profile_output_filename_;
   TraceClockSource profile_clock_source_;
   bool verify_;
+  bool continue_without_dex_;
   InstructionSet image_isa_;
 
   // Whether or not we use homogeneous space compaction to avoid OOM errors. If enabled,
