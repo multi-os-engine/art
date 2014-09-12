@@ -103,6 +103,7 @@ ParsedOptions::ParsedOptions()
                                                     // Runtime::Abort.
     profile_clock_source_(kDefaultTraceClockSource),
     verify_(true),
+    allow_dex_file_fallback_(true),
     image_isa_(kRuntimeISA),
     use_homogeneous_space_compaction_for_oom_(true),  // Enable hspace compaction on OOM by default.
     min_interval_homogeneous_space_compaction_by_oom_(MsToNs(100 * 1000))  // 100s.
@@ -652,6 +653,8 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
         Usage("Unknown -Xverify option %s\n", verify_mode.c_str());
         return false;
       }
+    } else if (option == "-Xno-dex-file-fallback") {
+      allow_dex_file_fallback_ = false;
     } else if (StartsWith(option, "-XX:NativeBridge=")) {
       if (!ParseStringAfterChar(option, '=', &native_bridge_library_filename_)) {
         return false;
