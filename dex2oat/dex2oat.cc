@@ -1180,6 +1180,8 @@ static int dex2oat(int argc, char** argv) {
     compiler_filter = CompilerOptions::kSpeed;
   } else if (strcmp(compiler_filter_string, "everything") == 0) {
     compiler_filter = CompilerOptions::kEverything;
+  } else if (strcmp(compiler_filter_string, "time") == 0) {
+    compiler_filter = CompilerOptions::kTime;
   } else {
     Usage("Unknown --compiler-filter value %s", compiler_filter_string);
   }
