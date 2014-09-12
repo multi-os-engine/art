@@ -1009,8 +1009,11 @@ bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_
   if (open_oat_file.get() == nullptr) {
     std::string error_msg;
     // dex2oat was disabled or crashed. Add the dex file in the list of dex_files to make progress.
-    DexFile::Open(dex_location, dex_location, &error_msg, dex_files);
-    error_msgs->push_back(error_msg);
+    if (Runtime::Current()->IsDexFileFallbackEnabled()) {
+      if (!DexFile::Open(dex_location, dex_location, &error_msg, dex_files)) {
+        error_msgs->push_back(error_msg);
+      }
+    }
     return false;
   }
 
