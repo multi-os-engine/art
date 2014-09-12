@@ -962,6 +962,8 @@ static int dex2oat(int argc, char** argv) {
       StringPiece backend_str = option.substr(strlen("--compiler-backend=")).data();
       if (backend_str == "Quick") {
         compiler_kind = Compiler::kQuick;
+      } else if (backend_str == "Baseline") {
+        compiler_kind = Compiler::kBaseline;
       } else if (backend_str == "Optimizing") {
         compiler_kind = Compiler::kOptimizing;
       } else if (backend_str == "Portable") {

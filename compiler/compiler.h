@@ -42,6 +42,7 @@ class CompilerTls {
 class Compiler {
  public:
   enum Kind {
+    kBaseline,
     kQuick,
     kOptimizing,
     kPortable

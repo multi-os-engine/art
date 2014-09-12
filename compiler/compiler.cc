@@ -64,7 +64,10 @@ Compiler* Compiler::Create(CompilerDriver* driver, Compiler::Kind kind) {
       return CreateQuickCompiler(driver);
 
     case kOptimizing:
-      return CreateOptimizingCompiler(driver);
+      return CreateOptimizingCompiler(driver, false);
+
+    case kBaseline:
+      return CreateOptimizingCompiler(driver, true);
 
     case kPortable:
       {

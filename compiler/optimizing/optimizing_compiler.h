@@ -22,7 +22,7 @@ namespace art {
 class Compiler;
 class CompilerDriver;
 
-Compiler* CreateOptimizingCompiler(CompilerDriver* driver);
+Compiler* CreateOptimizingCompiler(CompilerDriver* driver, bool baseline);
 
 }
 

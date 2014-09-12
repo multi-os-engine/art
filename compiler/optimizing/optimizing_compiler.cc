@@ -38,7 +38,7 @@ namespace art {
  */
 class CodeVectorAllocator FINAL : public CodeAllocator {
  public:
-  CodeVectorAllocator() { }
+  CodeVectorAllocator() {}
 
   virtual uint8_t* Allocate(size_t size) {
     size_ = size;
@@ -69,7 +69,8 @@ static const char* kStringFilter = "";
 
 class OptimizingCompiler FINAL : public Compiler {
  public:
-  explicit OptimizingCompiler(CompilerDriver* driver);
+  explicit OptimizingCompiler(CompilerDriver* driver, bool baseline);
+  ~OptimizingCompiler();
 
   bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file, CompilationUnit* cu) const
       OVERRIDE;
@@ -113,6 +114,12 @@ class OptimizingCompiler FINAL : public Compiler {
   void UnInit() const OVERRIDE;
 
  private:
+  // Whether we should run any optimization.
+  const bool baseline_;
+  mutable AtomicInteger total_compiled_methods_;
+  mutable AtomicInteger baseline_compiled_methods_;
+  mutable AtomicInteger optimized_compiled_methods_;
+
   std::unique_ptr<std::ostream> visualizer_output_;
 
   // Delegate to another compiler in case the optimizing compiler cannot compile a method.
@@ -122,8 +129,15 @@ class OptimizingCompiler FINAL : public Compiler {
   DISALLOW_COPY_AND_ASSIGN(OptimizingCompiler);
 };
 
-OptimizingCompiler::OptimizingCompiler(CompilerDriver* driver) : Compiler(driver, 100),
-    delegate_(Create(driver, Compiler::Kind::kQuick)) {
+static const int kMaximumCompilationTimeBeforeWarning = 100; /* ms */
+
+OptimizingCompiler::OptimizingCompiler(CompilerDriver* driver, bool baseline)
+    : Compiler(driver, kMaximumCompilationTimeBeforeWarning),
+      baseline_(baseline),
+      total_compiled_methods_(0),
+      baseline_compiled_methods_(0),
+      optimized_compiled_methods_(0),
+      delegate_(Create(driver, Compiler::Kind::kQuick)) {
   if (kIsVisualizerEnabled) {
     visualizer_output_.reset(new std::ofstream("art.cfg"));
   }
@@ -135,6 +149,14 @@ void OptimizingCompiler::Init() const {
 
 void OptimizingCompiler::UnInit() const {
   delegate_->UnInit();
+}
+
+OptimizingCompiler::~OptimizingCompiler() {
+  size_t baseline_percent = (baseline_compiled_methods_ * 100 / total_compiled_methods_);
+  size_t optimized_percent = (optimized_compiled_methods_ * 100 / total_compiled_methods_);
+  LOG(INFO) << "Compiled " << total_compiled_methods_ << " methods: "
+            << baseline_percent << "\% (" << baseline_compiled_methods_ << ") baseline "
+            << optimized_percent << "\% (" << optimized_compiled_methods_ << ") optimized.";
 }
 
 bool OptimizingCompiler::CanCompileMethod(uint32_t method_idx, const DexFile& dex_file,
@@ -173,6 +195,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                                                uint32_t method_idx,
                                                jobject class_loader,
                                                const DexFile& dex_file) const {
+  total_compiled_methods_++;
   InstructionSet instruction_set = GetCompilerDriver()->GetInstructionSet();
   // Always use the thumb2 assembler: some runtime functionality (like implicit stack
   // overflow checks) assume thumb2.
@@ -222,7 +245,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
 
   CodeVectorAllocator allocator;
 
-  if (RegisterAllocator::CanAllocateRegistersFor(*graph, instruction_set)) {
+  if (!baseline_ && RegisterAllocator::CanAllocateRegistersFor(*graph, instruction_set)) {
+    optimized_compiled_methods_++;
     graph->BuildDominatorTree();
     graph->TransformToSSA();
     visualizer.DumpGraph("ssa");
@@ -262,6 +286,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     LOG(FATAL) << "Could not allocate registers in optimizing compiler";
     return nullptr;
   } else {
+    baseline_compiled_methods_++;
     codegen->CompileBaseline(&allocator);
 
     // Run these phases to get some test coverage.
@@ -314,8 +339,8 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
                             class_loader, dex_file);
 }
 
-Compiler* CreateOptimizingCompiler(CompilerDriver* driver) {
-  return new OptimizingCompiler(driver);
+Compiler* CreateOptimizingCompiler(CompilerDriver* driver, bool baseline) {
+  return new OptimizingCompiler(driver, baseline);
 }
 
 }  // namespace art
