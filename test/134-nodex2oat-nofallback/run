@@ -16,14 +16,5 @@
 
 flags="${@}"
 
-# Make sure we can run without an oat file.
-echo "Run -Xnodex2oat"
-${RUN} ${flags} --runtime-option -Xnodex2oat
-
-# Make sure we can run with the oat file.
-echo "Run -Xdex2oat"
-${RUN} ${flags} --runtime-option -Xdex2oat
-
-# Make sure we can run with the default settings.
-echo "Run default"
-${RUN} ${flags}
+# Make sure we cannot run without an oat file without fallback.
+${RUN} ${flags} --runtime-option -Xnodex2oat --runtime-option -Xno-dex-file-fallback

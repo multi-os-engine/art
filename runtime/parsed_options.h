@@ -101,6 +101,9 @@ class ParsedOptions {
   std::string profile_output_filename_;
   TraceClockSource profile_clock_source_;
   bool verify_;
+  // When true, use the interpreter to run directly out of dex files in case an oat file can't be
+  // found, generated or used. This includes the boot image.
+  bool allow_dex_file_fallback_;
   InstructionSet image_isa_;
 
   // Whether or not we use homogeneous space compaction to avoid OOM errors. If enabled,
