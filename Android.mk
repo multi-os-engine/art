@@ -77,6 +77,7 @@ endif
 
 .PHONY: clean-oat-target
 clean-oat-target:
+	adb root && sleep 3
 	adb remount
 	adb shell rm -rf $(ART_TARGET_NATIVETEST_DIR)
 	adb shell rm -rf $(ART_TARGET_TEST_DIR)
@@ -140,6 +141,7 @@ include $(art_path)/test/Android.run-test.mk
 # Sync test files to the target, depends upon all things that must be pushed to the target.
 .PHONY: test-art-target-sync
 test-art-target-sync: $(TEST_ART_TARGET_SYNC_DEPS)
+	adb root && sleep 3
 	adb remount
 	adb sync
 
@@ -348,6 +350,7 @@ oat-target: $(ART_TARGET_DEPENDENCIES) $(DEFAULT_DEX_PREOPT_INSTALLED_IMAGE) $(O
 
 .PHONY: oat-target-sync
 oat-target-sync: oat-target
+	adb root && sleep 3
 	adb remount
 	adb sync
 
