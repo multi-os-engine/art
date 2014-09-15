@@ -1142,7 +1142,12 @@ static JdwpError TGR_Name(JdwpState*, Request* request, ExpandBuf* pReply)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   ObjectId thread_group_id = request->ReadThreadGroupId();
 
-  expandBufAddUtf8String(pReply, Dbg::GetThreadGroupName(thread_group_id));
+  std::string thread_group_name;
+  JdwpError error = Dbg::GetThreadGroupName(thread_group_id, &thread_group_name);
+  if (error != ERR_NONE) {
+    return error;
+  }
+  expandBufAddUtf8String(pReply, thread_group_name);
 
   return ERR_NONE;
 }

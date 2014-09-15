@@ -394,7 +394,8 @@ class Dbg {
       LOCKS_EXCLUDED(Locks::thread_list_lock_);
   static JDWP::JdwpError GetThreadGroup(JDWP::ObjectId thread_id, JDWP::ExpandBuf* pReply)
       LOCKS_EXCLUDED(Locks::thread_list_lock_);
-  static std::string GetThreadGroupName(JDWP::ObjectId thread_group_id);
+  static JDWP::JdwpError Dbg::GetThreadGroupName(JDWP::ObjectId thread_group_id, std::string* str)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static JDWP::ObjectId GetThreadGroupParent(JDWP::ObjectId thread_group_id)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static JDWP::ObjectId GetSystemThreadGroupId()

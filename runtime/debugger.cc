@@ -1970,19 +1970,29 @@ JDWP::JdwpError Dbg::GetThreadGroup(JDWP::ObjectId thread_id, JDWP::ExpandBuf* p
   return error;
 }
 
-std::string Dbg::GetThreadGroupName(JDWP::ObjectId thread_group_id) {
+JDWP::JdwpError Dbg::GetThreadGroupName(JDWP::ObjectId thread_group_id, std::string* str) {
   ScopedObjectAccess soa(Thread::Current());
   JDWP::JdwpError error;
   mirror::Object* thread_group = gRegistry->Get<mirror::Object*>(thread_group_id, &error);
-  CHECK(thread_group != nullptr) << error;
+  if (thread_group == nullptr) {
+    return JDWP::ERR_INVALID_OBJECT;
+  }
+  if (error != JDWP::ERR_NONE) {
+    return error;
+  }
   const char* old_cause = soa.Self()->StartAssertNoThreadSuspension("Debugger: GetThreadGroupName");
   mirror::Class* c = soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_ThreadGroup);
   CHECK(c != nullptr);
+  if (!c->IsAssignableFrom(thread_group->GetClass())) {
+    // This is not a java.lang.ThreadGroup.
+    return JDWP::ERR_INVALID_THREAD_GROUP;
+  }
   mirror::ArtField* f = c->FindInstanceField("name", "Ljava/lang/String;");
   CHECK(f != nullptr);
   mirror::String* s = reinterpret_cast<mirror::String*>(f->GetObject(thread_group));
   soa.Self()->EndAssertNoThreadSuspension(old_cause);
-  return s->ToModifiedUtf8();
+  *str = s->ToModifiedUtf8();
+  return JDWP::ERR_NONE;
 }
 
 JDWP::ObjectId Dbg::GetThreadGroupParent(JDWP::ObjectId thread_group_id) {
