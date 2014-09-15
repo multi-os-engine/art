@@ -1034,6 +1034,9 @@ class HEqual : public HCondition {
   HEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
+  template <typename T>
+  bool Evaluate(const T& x, const T& y) const { return x == y; }
+
   DECLARE_INSTRUCTION(Equal);
 
   virtual IfCondition GetCondition() const {
@@ -1048,6 +1051,9 @@ class HNotEqual : public HCondition {
  public:
   HNotEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
+
+  template <typename T>
+  bool Evaluate(const T& x, const T& y) const { return x != y; }
 
   DECLARE_INSTRUCTION(NotEqual);
 
@@ -1064,6 +1070,9 @@ class HLessThan : public HCondition {
   HLessThan(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
+  template <typename T>
+  bool Evaluate(const T& x, const T& y) const { return x < y; }
+
   DECLARE_INSTRUCTION(LessThan);
 
   virtual IfCondition GetCondition() const {
@@ -1078,6 +1087,9 @@ class HLessThanOrEqual : public HCondition {
  public:
   HLessThanOrEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
+
+  template <typename T>
+  bool Evaluate(const T& x, const T& y) const { return x <= y; }
 
   DECLARE_INSTRUCTION(LessThanOrEqual);
 
@@ -1094,6 +1106,9 @@ class HGreaterThan : public HCondition {
   HGreaterThan(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
+  template <typename T>
+  bool Evaluate(const T& x, const T& y) const { return x > y; }
+
   DECLARE_INSTRUCTION(GreaterThan);
 
   virtual IfCondition GetCondition() const {
@@ -1108,6 +1123,9 @@ class HGreaterThanOrEqual : public HCondition {
  public:
   HGreaterThanOrEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
+
+  template <typename T>
+  bool Evaluate(const T& x, const T& y) const { return x >= y; }
 
   DECLARE_INSTRUCTION(GreaterThanOrEqual);
 
@@ -1128,6 +1146,14 @@ class HCompare : public HBinaryOperation {
       : HBinaryOperation(Primitive::kPrimInt, first, second) {
     DCHECK_EQ(type, first->GetType());
     DCHECK_EQ(type, second->GetType());
+  }
+
+  template <typename T>
+  int Evaluate(const T& x, const T& y) const {
+    return
+      x == y ? 0 :
+      x > y ? 1 :
+      -1;
   }
 
   DECLARE_INSTRUCTION(Compare);
@@ -1346,6 +1372,9 @@ class HAdd : public HBinaryOperation {
 
   virtual bool IsCommutative() { return true; }
 
+  template <typename T>
+  T Evaluate(const T& x, const T& y) const { return x + y; }
+
   DECLARE_INSTRUCTION(Add);
 
  private:
@@ -1358,6 +1387,9 @@ class HSub : public HBinaryOperation {
       : HBinaryOperation(result_type, left, right) {}
 
   virtual bool IsCommutative() { return false; }
+
+  template <typename T>
+  T Evaluate(const T& x, const T& y) const { return x - y; }
 
   DECLARE_INSTRUCTION(Sub);
 
