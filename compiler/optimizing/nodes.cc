@@ -474,6 +474,82 @@ size_t HInstruction::EnvironmentSize() const {
   return HasEnvironment() ? environment_->Size() : 0;
 }
 
+HConstant* HIntConstant::StaticEvaluation(const HCondition* cond,
+                                          HConstant* rhs) {
+  HIntConstant* right = rhs->AsIntConstant();
+  if (right == nullptr) {
+    return nullptr;
+  }
+  ArenaAllocator* arena = GetBlock()->GetGraph()->GetArena();
+  // TODO: We may want to produce a boolean constant instead here, but
+  // it will require changes in the code generators.
+  return new(arena) HIntConstant(cond->Evaluate(GetValue(),
+                                                right->GetValue())
+                                 ? 1
+                                 : 0);
+}
+
+HConstant* HIntConstant::StaticEvaluation(const HArithmeticBinaryOperation* binop,
+                                          HConstant* rhs) {
+  HIntConstant* right = rhs->AsIntConstant();
+  if (right == nullptr) {
+    return nullptr;
+  }
+  ArenaAllocator* arena = GetBlock()->GetGraph()->GetArena();
+  return new(arena) HIntConstant(binop->Evaluate(GetValue(),
+                                                 right->GetValue()));
+}
+
+HConstant* HLongConstant::StaticEvaluation(const HCondition* cond,
+                                           HConstant* rhs) {
+  HLongConstant* right = rhs->AsLongConstant();
+  if (right == nullptr) {
+    return nullptr;
+  }
+  ArenaAllocator* arena = GetBlock()->GetGraph()->GetArena();
+  // TODO: We may want to produce a boolean constant instead here, but
+  // it will require changes in the code generators.
+  return new(arena) HLongConstant(cond->Evaluate(GetValue(),
+                                                 right->GetValue())
+                                  ? 1
+                                  : 0);
+}
+
+HConstant* HLongConstant::StaticEvaluation(const HArithmeticBinaryOperation* binop,
+                                           HConstant* rhs) {
+  HLongConstant* right = rhs->AsLongConstant();
+  if (right == nullptr) {
+    return nullptr;
+  }
+  ArenaAllocator* arena = GetBlock()->GetGraph()->GetArena();
+  return new(arena) HLongConstant(binop->Evaluate(GetValue(),
+                                                  right->GetValue()));
+}
+
+HConstant* HCondition::TryStaticEvaluation() const {
+  HConstant* left = GetLeft()->AsConstant();
+  if (left == nullptr) {
+    return nullptr;
+  }
+  HConstant* right = GetRight()->AsConstant();
+  if (right == nullptr) {
+    return nullptr;
+  }
+  return left->StaticEvaluation(this, right);
+}
+
+HConstant* HArithmeticBinaryOperation::TryStaticEvaluation() const {
+  HConstant* left = GetLeft()->AsConstant();
+  if (left == nullptr) {
+    return nullptr;
+  }
+  HConstant* right = GetRight()->AsConstant();
+  if (right == nullptr) {
+    return nullptr;
+  }
+  return left->StaticEvaluation(this, right);
+}
+
 void HPhi::AddInput(HInstruction* input) {
   DCHECK(input->GetBlock() != nullptr);
   inputs_.Add(input);
