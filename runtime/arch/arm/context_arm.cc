@@ -41,8 +41,8 @@ void ArmContext::Reset() {
   pc_ = ArmContext::kBadGprBase + PC;
 }
 
-void ArmContext::FillCalleeSaves(const StackVisitor& fr) {
-  mirror::ArtMethod* method = fr.GetMethod();
+void ArmContext::FillCalleeSaves(const QuickFrame& frame) {
+  mirror::ArtMethod* method = frame.GetMethod();
   const QuickMethodFrameInfo frame_info = method->GetQuickFrameInfo();
   size_t spill_count = POPCOUNT(frame_info.CoreSpillMask());
   size_t fp_spill_count = POPCOUNT(frame_info.FpSpillMask());
@@ -51,7 +51,7 @@ void ArmContext::FillCalleeSaves(const StackVisitor& fr) {
     int j = 1;
     for (size_t i = 0; i < kNumberOfCoreRegisters; i++) {
       if (((frame_info.CoreSpillMask() >> i) & 1) != 0) {
-        gprs_[i] = fr.CalleeSaveAddress(spill_count - j, frame_info.FrameSizeInBytes());
+        gprs_[i] = frame.CalleeSaveAddress(spill_count - j, frame_info.FrameSizeInBytes());
         j++;
       }
     }
@@ -61,8 +61,8 @@ void ArmContext::FillCalleeSaves(const StackVisitor& fr) {
     int j = 1;
     for (size_t i = 0; i < kNumberOfSRegisters; i++) {
       if (((frame_info.FpSpillMask() >> i) & 1) != 0) {
-        fprs_[i] = fr.CalleeSaveAddress(spill_count + fp_spill_count - j,
-                                        frame_info.FrameSizeInBytes());
+        fprs_[i] = frame.CalleeSaveAddress(spill_count + fp_spill_count - j,
+                                           frame_info.FrameSizeInBytes());
         j++;
       }
     }

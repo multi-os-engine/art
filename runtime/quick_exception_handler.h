@@ -49,12 +49,12 @@ class QuickExceptionHandler {
   void UpdateInstrumentationStack() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void DoLongJump() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void SetHandlerQuickFrame(StackReference<mirror::ArtMethod>* handler_quick_frame) {
-    handler_quick_frame_ = handler_quick_frame;
+  void SetHandlerCompiledFrameSp(uintptr_t handler_compiled_frame_sp) {
+    handler_compiled_frame_sp_ = handler_compiled_frame_sp;
   }
 
-  void SetHandlerQuickFramePc(uintptr_t handler_quick_frame_pc) {
-    handler_quick_frame_pc_ = handler_quick_frame_pc;
+  void SetHandlerCompiledFramePc(uintptr_t handler_compiled_frame_pc) {
+    handler_compiled_frame_pc_ = handler_compiled_frame_pc;
   }
 
   mirror::ArtMethod* GetHandlerMethod() const {
@@ -87,10 +87,10 @@ class QuickExceptionHandler {
   const bool is_deoptimization_;
   // Is method tracing active?
   const bool method_tracing_active_;
-  // Quick frame with found handler or last frame if no handler found.
-  StackReference<mirror::ArtMethod>* handler_quick_frame_;
+  // Frame with found handler or last frame if no handler found.
+  uintptr_t handler_compiled_frame_sp_;
   // PC to branch to for the handler.
-  uintptr_t handler_quick_frame_pc_;
+  uintptr_t handler_compiled_frame_pc_;
   // The handler method to report to the debugger.
   mirror::ArtMethod* handler_method_;
   // The handler's dex PC, zero implies an uncaught exception.

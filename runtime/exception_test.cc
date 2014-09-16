@@ -163,13 +163,27 @@ TEST_F(ExceptionTest, StackTraceElement) {
   ScopedObjectAccess soa(env);
 
   std::vector<uintptr_t> fake_stack;
+  Runtime* r = Runtime::Current();
+  r->SetInstructionSet(kRuntimeISA);
+  mirror::ArtMethod* save_method = r->CreateCalleeSaveMethod(Runtime::kSaveAll);
+  r->SetCalleeSaveMethod(save_method, Runtime::kSaveAll);
+  QuickMethodFrameInfo frame_info = save_method->GetQuickFrameInfo();
+
   ASSERT_EQ(kStackAlignment, 16U);
   // ASSERT_EQ(sizeof(uintptr_t), sizeof(uint32_t));
 
   if (!kUsePortableCompiler) {
-    // Create two fake stack frames with mapping data created in SetUp. We map offset 3 in the code
+    // Create three fake stack frames with mapping data created in SetUp. We map offset 3 in the code
     // to dex pc 3.
     const uint32_t dex_pc = 3;
+
+    // Create the stack frame for the callee save method, expected by the runtime.
+    fake_stack.push_back(reinterpret_cast<uintptr_t>(save_method));
+    for (size_t i = 0; i < frame_info.FrameSizeInBytes() - 2 * sizeof(uintptr_t); i += sizeof(uintptr_t)) {
+      fake_stack.push_back(0);
+    }
+
+    fake_stack.push_back(method_g_->ToNativePc(dex_pc));  // return pc
 
     // Create/push fake 16byte stack frame for method g
     fake_stack.push_back(reinterpret_cast<uintptr_t>(method_g_));
@@ -191,10 +205,11 @@ TEST_F(ExceptionTest, StackTraceElement) {
     fake_stack.push_back(0);
     fake_stack.push_back(0);
 
+
     // Set up thread to appear as if we called out of method_g_ at pc dex 3
     thread->SetTopOfStack(
         reinterpret_cast<StackReference<mirror::ArtMethod>*>(&fake_stack[0]),
-        method_g_->ToNativePc(dex_pc));  // return pc
+        0);
   } else {
     // Create/push fake 20-byte shadow frame for method g
     fake_stack.push_back(0);
@@ -236,12 +251,12 @@ TEST_F(ExceptionTest, StackTraceElement) {
   EXPECT_STREQ("f", trace_array->Get(1)->GetMethodName()->ToModifiedUtf8().c_str());
   EXPECT_EQ(22, trace_array->Get(1)->GetLineNumber());
 
-#if !defined(ART_USE_PORTABLE_COMPILER)
-  thread->SetTopOfStack(NULL, 0);  // Disarm the assertion that no code is running when we detach.
-#else
-  thread->PopShadowFrame();
-  thread->PopShadowFrame();
-#endif
+  if (!kUsePortableCompiler) {
+    thread->SetTopOfStack(nullptr, 0);  // Disarm the assertion that no code is running when we detach.
+  } else {
+    thread->PopShadowFrame();
+    thread->PopShadowFrame();
+  }
 }
 
 }  // namespace art

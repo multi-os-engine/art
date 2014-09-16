@@ -363,8 +363,8 @@ class Thread {
   ThrowLocation GetCurrentLocationForThrow() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetTopOfStack(StackReference<mirror::ArtMethod>* top_method, uintptr_t pc) {
-    tlsPtr_.managed_stack.SetTopQuickFrame(top_method);
-    tlsPtr_.managed_stack.SetTopQuickFramePc(pc);
+    DCHECK_EQ(pc, 0u);
+    tlsPtr_.managed_stack.SetTopCompiledFrameSp(reinterpret_cast<uintptr_t>(top_method));
   }
 
   void SetTopOfShadowStack(ShadowFrame* top) {
@@ -372,7 +372,7 @@ class Thread {
   }
 
   bool HasManagedStack() const {
-    return (tlsPtr_.managed_stack.GetTopQuickFrame() != nullptr) ||
+    return (tlsPtr_.managed_stack.GetTopCompiledFrameSp() != 0) ||
         (tlsPtr_.managed_stack.GetTopShadowFrame() != nullptr);
   }
 
@@ -631,14 +631,7 @@ class Thread {
   static ThreadOffset<pointer_size> TopOfManagedStackOffset() {
     return ThreadOffsetFromTlsPtr<pointer_size>(
         OFFSETOF_MEMBER(tls_ptr_sized_values, managed_stack) +
-        ManagedStack::TopQuickFrameOffset());
-  }
-
-  template<size_t pointer_size>
-  static ThreadOffset<pointer_size> TopOfManagedStackPcOffset() {
-    return ThreadOffsetFromTlsPtr<pointer_size>(
-        OFFSETOF_MEMBER(tls_ptr_sized_values, managed_stack) +
-        ManagedStack::TopQuickFramePcOffset());
+        ManagedStack::TopCompiledFrameSpOffset());
   }
 
   const ManagedStack* GetManagedStack() const {
@@ -649,6 +642,7 @@ class Thread {
   void PushManagedStackFragment(ManagedStack* fragment) {
     tlsPtr_.managed_stack.PushManagedStackFragment(fragment);
   }
+
   void PopManagedStackFragment(const ManagedStack& fragment) {
     tlsPtr_.managed_stack.PopManagedStackFragment(fragment);
   }

@@ -71,12 +71,49 @@ class MANAGED StackReference : public mirror::ObjectReference<false, MirrorType>
       : mirror::ObjectReference<false, MirrorType>(p) {}
 };
 
+// Super class of our stack frame representations.
+class ManagedFrame {
+ public:
+  virtual bool IsShadowFrame() const { return false; }
+  virtual bool IsQuickFrame() const { return false; }
+
+  virtual mirror::ArtMethod* GetMethod() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+  virtual uint32_t GetDexPc(bool abort_on_failure = true) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+  virtual bool GetVReg(uint16_t vreg, VRegKind kind, uint32_t* val) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+  virtual bool SetVReg(uint16_t vreg, uint32_t new_value, VRegKind kind)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+  virtual bool GetVRegPair(uint16_t vreg, VRegKind kind_lo, VRegKind kind_hi, uint64_t* val) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+  virtual bool SetVRegPair(uint16_t vreg, uint64_t new_value, VRegKind kind_lo, VRegKind kind_hi)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+  virtual void SanityCheckFrame() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+  virtual mirror::Object* GetThisObject() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+ protected:
+  virtual ~ManagedFrame() {}
+};
+
 // ShadowFrame has 3 possible layouts:
 //  - portable - a unified array of VRegs and references. Precise references need GC maps.
 //  - interpreter - separate VRegs and reference arrays. References are in the reference array.
 //  - JNI - just VRegs, but where every VReg holds a reference.
-class ShadowFrame {
+class ShadowFrame : public ManagedFrame {
  public:
+  virtual bool IsShadowFrame() const OVERRIDE { return true; }
+  virtual void SanityCheckFrame() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE {}
+
   // Compute size of ShadowFrame in bytes assuming it has a reference array.
   static size_t ComputeSize(uint32_t num_vregs) {
     return sizeof(ShadowFrame) + (sizeof(uint32_t) * num_vregs) +
@@ -96,38 +133,35 @@ class ShadowFrame {
     ShadowFrame* sf = new (memory) ShadowFrame(num_vregs, link, method, dex_pc, true);
     return sf;
   }
-  ~ShadowFrame() {}
+
+  virtual ~ShadowFrame() {}
 
   bool HasReferenceArray() const {
-#if defined(ART_USE_PORTABLE_COMPILER)
-    return (number_of_vregs_ & kHasReferenceArray) != 0;
-#else
-    return true;
-#endif
+    return kUsePortableCompiler
+        ? (number_of_vregs_ & kHasReferenceArray) != 0
+        : true;
   }
 
   uint32_t NumberOfVRegs() const {
-#if defined(ART_USE_PORTABLE_COMPILER)
-    return number_of_vregs_ & ~kHasReferenceArray;
-#else
-    return number_of_vregs_;
-#endif
+    return kUsePortableCompiler
+        ? number_of_vregs_ & ~kHasReferenceArray
+        : number_of_vregs_;
   }
 
   void SetNumberOfVRegs(uint32_t number_of_vregs) {
-#if defined(ART_USE_PORTABLE_COMPILER)
-    number_of_vregs_ = number_of_vregs | (number_of_vregs_ & kHasReferenceArray);
-#else
-    UNUSED(number_of_vregs);
-    UNIMPLEMENTED(FATAL) << "Should only be called when portable is enabled";
-#endif
+    if (kUsePortableCompiler) {
+      number_of_vregs_ = number_of_vregs | (number_of_vregs_ & kHasReferenceArray);
+    } else {
+      UNUSED(number_of_vregs);
+      UNIMPLEMENTED(FATAL) << "Should only be called when portable is enabled";
+    }
   }
 
-  uint32_t GetDexPC() const {
+  uint32_t GetDexPc(bool abort_on_failure = true) const {
     return dex_pc_;
   }
 
-  void SetDexPC(uint32_t dex_pc) {
+  void SetDexPc(uint32_t dex_pc) {
     dex_pc_ = dex_pc;
   }
 
@@ -140,7 +174,31 @@ class ShadowFrame {
     link_ = frame;
   }
 
-  int32_t GetVReg(size_t i) const {
+  virtual bool GetVReg(uint16_t i, VRegKind unused, uint32_t* value) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE {
+    *value = GetVReg(i);
+    return true;
+  }
+
+  virtual bool SetVReg(uint16_t i, uint32_t new_value, VRegKind unused)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE {
+    SetVReg(i, new_value);
+    return true;
+  }
+
+  virtual bool GetVRegPair(uint16_t i, VRegKind low, VRegKind high, uint64_t* value) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE {
+    *value = GetVRegLong(i);
+    return true;
+  }
+
+  virtual bool SetVRegPair(uint16_t i, uint64_t new_value, VRegKind lo, VRegKind high)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE {
+    SetVRegLong(i, new_value);
+    return true;
+  }
+
+  int32_t GetVReg(uint16_t i) const {
     DCHECK_LT(i, NumberOfVRegs());
     const uint32_t* vreg = &vregs_[i];
     return *reinterpret_cast<const int32_t*>(vreg);
@@ -253,7 +311,7 @@ class ShadowFrame {
     }
   }
 
-  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  virtual mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE {
     DCHECK(method_ != nullptr);
     return method_;
   }
@@ -263,20 +321,22 @@ class ShadowFrame {
     return &method_;
   }
 
-  mirror::Object* GetThisObject() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  virtual mirror::Object* GetThisObject() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
 
-  mirror::Object* GetThisObject(uint16_t num_ins) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  mirror::Object* GetThisObject(uint16_t num_ins) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   ThrowLocation GetCurrentLocationForThrow() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetMethod(mirror::ArtMethod* method) {
-#if defined(ART_USE_PORTABLE_COMPILER)
-    DCHECK(method != nullptr);
-    method_ = method;
-#else
-    UNUSED(method);
-    UNIMPLEMENTED(FATAL) << "Should only be called when portable is enabled";
-#endif
+    if (kUsePortableCompiler) {
+      DCHECK(method != nullptr);
+      method_ = method;
+    } else {
+      UNUSED(method);
+      UNIMPLEMENTED(FATAL) << "Should only be called when portable is enabled";
+    }
   }
 
   bool Contains(StackReference<mirror::Object>* shadow_frame_entry_obj) const {
@@ -315,10 +375,10 @@ class ShadowFrame {
               uint32_t dex_pc, bool has_reference_array)
       : number_of_vregs_(num_vregs), link_(link), method_(method), dex_pc_(dex_pc) {
     if (has_reference_array) {
-#if defined(ART_USE_PORTABLE_COMPILER)
-      CHECK_LT(num_vregs, static_cast<uint32_t>(kHasReferenceArray));
-      number_of_vregs_ |= kHasReferenceArray;
-#endif
+      if (kUsePortableCompiler) {
+        CHECK_LT(num_vregs, static_cast<uint32_t>(kHasReferenceArray));
+        number_of_vregs_ |= kHasReferenceArray;
+      }
       memset(vregs_, 0, num_vregs * (sizeof(uint32_t) + sizeof(StackReference<mirror::Object>)));
     } else {
       memset(vregs_, 0, num_vregs * sizeof(uint32_t));
@@ -335,15 +395,10 @@ class ShadowFrame {
     return const_cast<StackReference<mirror::Object>*>(const_cast<const ShadowFrame*>(this)->References());
   }
 
-#if defined(ART_USE_PORTABLE_COMPILER)
-  enum ShadowFrameFlag {
-    kHasReferenceArray = 1ul << 31
-  };
-  // TODO: make const in the portable case.
-  uint32_t number_of_vregs_;
-#else
-  const uint32_t number_of_vregs_;
-#endif
+  // TODO: Make const with portable enabled.
+  /* const */ uint32_t number_of_vregs_;
+  static const bool kHasReferenceArray = false;
+
   // Link to previous shadow frame or NULL.
   ShadowFrame* link_;
   mirror::ArtMethod* method_;
@@ -353,217 +408,105 @@ class ShadowFrame {
   DISALLOW_IMPLICIT_CONSTRUCTORS(ShadowFrame);
 };
 
-// The managed stack is used to record fragments of managed code stacks. Managed code stacks
-// may either be shadow frames or lists of frames using fixed frame sizes. Transition records are
-// necessary for transitions between code using different frame layouts and transitions into native
-// code.
-class PACKED(4) ManagedStack {
+/**
+ * Represents a frame compiled with Quick. The layout is the following:
+ *
+ *     +-------------------------------+
+ *     | IN[ins-1]                     |  {Note: resides in caller's frame}
+ *     |       .                       |
+ *     | IN[0]                         |
+ *     | caller's ArtMethod            |  ... StackReference<ArtMethod>
+ *     +===============================+  {Note: start of callee's frame}
+ *     | core callee-save spill        |  {variable sized}
+ *     +-------------------------------+
+ *     | fp callee-save spill          |
+ *     +-------------------------------+
+ *     | filler word                   |  {For compatibility, if V[locals-1] used as wide
+ *     +-------------------------------+
+ *     | V[locals-1]                   |
+ *     | V[locals-2]                   |
+ *     |      .                        |
+ *     |      .                        |  ... (reg == 2)
+ *     | V[1]                          |  ... (reg == 1)
+ *     | V[0]                          |  ... (reg == 0) <---- "locals_start"
+ *     +-------------------------------+
+ *     | stack alignment padding       |  {0 to (kStackAlignWords-1) of padding}
+ *     +-------------------------------+
+ *     | Compiler temp region          |  ... (reg >= max_num_special_temps)
+ *     |      .                        |
+ *     |      .                        |
+ *     | V[max_num_special_temps + 1]  |
+ *     | V[max_num_special_temps + 0]  |
+ *     +-------------------------------+
+ *     | OUT[outs-1]                   |
+ *     | OUT[outs-2]                   |
+ *     |       .                       |
+ *     | OUT[0]                        |
+ *     | StackReference<ArtMethod>     |  ... (reg == num_total_code_regs == special_temp_value) <<== sp, 16-byte aligned
+ *     +===============================+
+ */
+class QuickFrame : public ManagedFrame {
  public:
-  ManagedStack()
-      : link_(NULL), top_shadow_frame_(NULL), top_quick_frame_(NULL), top_quick_frame_pc_(0) {}
+  QuickFrame(uintptr_t sp, uintptr_t pc, Context* context) : sp_(sp), pc_(pc), context_(context) {}
 
-  void PushManagedStackFragment(ManagedStack* fragment) {
-    // Copy this top fragment into given fragment.
-    memcpy(fragment, this, sizeof(ManagedStack));
-    // Clear this fragment, which has become the top.
-    memset(this, 0, sizeof(ManagedStack));
-    // Link our top fragment onto the given fragment.
-    link_ = fragment;
+  virtual bool IsQuickFrame() const OVERRIDE { return true; }
+
+  virtual uint32_t GetDexPc(bool abort_on_failure = true) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
+
+  virtual void SanityCheckFrame() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
+
+  virtual mirror::Object* GetThisObject() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
+
+  virtual bool GetVReg(uint16_t vreg, VRegKind kind, uint32_t* val) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
+
+  virtual bool SetVReg(uint16_t vreg, uint32_t new_value, VRegKind kind)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;;
+
+  virtual bool GetVRegPair(uint16_t vreg, VRegKind kind_lo, VRegKind kind_hi, uint64_t* val) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
+
+  virtual bool SetVRegPair(uint16_t vreg, uint64_t new_value, VRegKind kind_lo, VRegKind kind_hi)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE;
+
+  mirror::Object* GetJniThis() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static int GetOutVROffset(uint16_t out_num, InstructionSet isa) {
+    // According to stack model, the first out is above the Method referernce.
+    return sizeof(StackReference<mirror::ArtMethod>) + (out_num * sizeof(uint32_t));
   }
 
-  void PopManagedStackFragment(const ManagedStack& fragment) {
-    DCHECK(&fragment == link_);
-    // Copy this given fragment back to the top.
-    memcpy(this, &fragment, sizeof(ManagedStack));
+  virtual mirror::ArtMethod* GetMethod() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) OVERRIDE {
+    return reinterpret_cast<StackReference<mirror::ArtMethod>*>(sp_)->AsMirrorPtr();
   }
 
-  ManagedStack* GetLink() const {
-    return link_;
+  uintptr_t GetReturnPc() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetReturnPc(uintptr_t new_ret_pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  QuickFrame GetCaller() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  uintptr_t GetPc() const { return pc_; }
+  void SetPc(uintptr_t pc) { pc_ = pc; }
+  uintptr_t GetSp() const { return sp_; }
+  Context* GetContext() const { return context_; }
+
+  void SetMethod(mirror::ArtMethod* method) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    reinterpret_cast<StackReference<mirror::ArtMethod>*>(sp_)->Assign(method);
   }
-
-  StackReference<mirror::ArtMethod>* GetTopQuickFrame() const {
-    return top_quick_frame_;
-  }
-
-  void SetTopQuickFrame(StackReference<mirror::ArtMethod>* top) {
-    DCHECK(top_shadow_frame_ == NULL);
-    top_quick_frame_ = top;
-  }
-
-  uintptr_t GetTopQuickFramePc() const {
-    return top_quick_frame_pc_;
-  }
-
-  void SetTopQuickFramePc(uintptr_t pc) {
-    DCHECK(top_shadow_frame_ == NULL);
-    top_quick_frame_pc_ = pc;
-  }
-
-  static size_t TopQuickFrameOffset() {
-    return OFFSETOF_MEMBER(ManagedStack, top_quick_frame_);
-  }
-
-  static size_t TopQuickFramePcOffset() {
-    return OFFSETOF_MEMBER(ManagedStack, top_quick_frame_pc_);
-  }
-
-  ShadowFrame* PushShadowFrame(ShadowFrame* new_top_frame) {
-    DCHECK(top_quick_frame_ == NULL);
-    ShadowFrame* old_frame = top_shadow_frame_;
-    top_shadow_frame_ = new_top_frame;
-    new_top_frame->SetLink(old_frame);
-    return old_frame;
-  }
-
-  ShadowFrame* PopShadowFrame() {
-    DCHECK(top_quick_frame_ == NULL);
-    CHECK(top_shadow_frame_ != NULL);
-    ShadowFrame* frame = top_shadow_frame_;
-    top_shadow_frame_ = frame->GetLink();
-    return frame;
-  }
-
-  ShadowFrame* GetTopShadowFrame() const {
-    return top_shadow_frame_;
-  }
-
-  void SetTopShadowFrame(ShadowFrame* top) {
-    DCHECK(top_quick_frame_ == NULL);
-    top_shadow_frame_ = top;
-  }
-
-  static size_t TopShadowFrameOffset() {
-    return OFFSETOF_MEMBER(ManagedStack, top_shadow_frame_);
-  }
-
-  size_t NumJniShadowFrameReferences() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  bool ShadowFramesContain(StackReference<mirror::Object>* shadow_frame_entry) const;
-
- private:
-  ManagedStack* link_;
-  ShadowFrame* top_shadow_frame_;
-  StackReference<mirror::ArtMethod>* top_quick_frame_;
-  uintptr_t top_quick_frame_pc_;
-};
-
-class StackVisitor {
- protected:
-  StackVisitor(Thread* thread, Context* context) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
- public:
-  virtual ~StackVisitor() {}
-
-  // Return 'true' if we should continue to visit more frames, 'false' to stop.
-  virtual bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
-
-  void WalkStack(bool include_transitions = false)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    if (cur_shadow_frame_ != nullptr) {
-      return cur_shadow_frame_->GetMethod();
-    } else if (cur_quick_frame_ != nullptr) {
-      return cur_quick_frame_->AsMirrorPtr();
-    } else {
-      return nullptr;
-    }
-  }
-
-  bool IsShadowFrame() const {
-    return cur_shadow_frame_ != nullptr;
-  }
-
-  uint32_t GetDexPc(bool abort_on_failure = true) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  mirror::Object* GetThisObject() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  size_t GetNativePcOffset() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  uintptr_t* CalleeSaveAddress(int num, size_t frame_size) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    // Callee saves are held at the top of the frame
-    DCHECK(GetMethod() != nullptr);
-    byte* save_addr =
-        reinterpret_cast<byte*>(cur_quick_frame_) + frame_size - ((num + 1) * kPointerSize);
-#if defined(__i386__) || defined(__x86_64__)
-    save_addr -= kPointerSize;  // account for return address
-#endif
-    return reinterpret_cast<uintptr_t*>(save_addr);
-  }
-
-  // Returns the height of the stack in the managed stack frames, including transitions.
-  size_t GetFrameHeight() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetNumFrames() - cur_depth_ - 1;
-  }
-
-  // Returns a frame ID for JDWP use, starting from 1.
-  size_t GetFrameId() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFrameHeight() + 1;
-  }
-
-  size_t GetNumFrames() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    if (num_frames_ == 0) {
-      num_frames_ = ComputeNumFrames(thread_);
-    }
-    return num_frames_;
-  }
-
-  size_t GetFrameDepth() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return cur_depth_;
-  }
-
-  // Get the method and dex pc immediately after the one that's currently being visited.
-  bool GetNextMethodAndDexPc(mirror::ArtMethod** next_method, uint32_t* next_dex_pc)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  bool GetVReg(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind, uint32_t* val) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  uint32_t GetVReg(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    uint32_t val;
-    bool success = GetVReg(m, vreg, kind, &val);
-    CHECK(success) << "Failed to read vreg " << vreg << " of kind " << kind;
-    return val;
-  }
-
-  bool GetVRegPair(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind_lo, VRegKind kind_hi,
-                   uint64_t* val) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  uint64_t GetVRegPair(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind_lo,
-                       VRegKind kind_hi) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    uint64_t val;
-    bool success = GetVRegPair(m, vreg, kind_lo, kind_hi, &val);
-    CHECK(success) << "Failed to read vreg pair " << vreg
-                   << " of kind [" << kind_lo << "," << kind_hi << "]";
-    return val;
-  }
-
-  bool SetVReg(mirror::ArtMethod* m, uint16_t vreg, uint32_t new_value, VRegKind kind)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  bool SetVRegPair(mirror::ArtMethod* m, uint16_t vreg, uint64_t new_value,
-                   VRegKind kind_lo, VRegKind kind_hi)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   uintptr_t* GetGPRAddress(uint32_t reg) const;
 
   // This is a fast-path for getting/setting values in a quick frame.
-  uint32_t* GetVRegAddr(StackReference<mirror::ArtMethod>* cur_quick_frame,
-                        const DexFile::CodeItem* code_item,
+  uint32_t* GetVRegAddr(const DexFile::CodeItem* code_item,
                         uint32_t core_spills, uint32_t fp_spills, size_t frame_size,
                         uint16_t vreg) const {
     int offset = GetVRegOffset(code_item, core_spills, fp_spills, frame_size, vreg, kRuntimeISA);
-    DCHECK_EQ(cur_quick_frame, GetCurrentQuickFrame());
-    byte* vreg_addr = reinterpret_cast<byte*>(cur_quick_frame) + offset;
+    uintptr_t vreg_addr = sp_ + offset;
     return reinterpret_cast<uint32_t*>(vreg_addr);
   }
-
-  uintptr_t GetReturnPc() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  void SetReturnPc(uintptr_t new_ret_pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   /*
    * Return sp-relative offset for a Dalvik virtual register, compiler
@@ -579,40 +522,6 @@ class StackVisitor {
    * one whose location in frame is well known while non-special ones
    * do not have a requirement on location in frame as long as code
    * generator itself knows how to access them.
-   *
-   *     +-------------------------------+
-   *     | IN[ins-1]                     |  {Note: resides in caller's frame}
-   *     |       .                       |
-   *     | IN[0]                         |
-   *     | caller's ArtMethod            |  ... StackReference<ArtMethod>
-   *     +===============================+  {Note: start of callee's frame}
-   *     | core callee-save spill        |  {variable sized}
-   *     +-------------------------------+
-   *     | fp callee-save spill          |
-   *     +-------------------------------+
-   *     | filler word                   |  {For compatibility, if V[locals-1] used as wide
-   *     +-------------------------------+
-   *     | V[locals-1]                   |
-   *     | V[locals-2]                   |
-   *     |      .                        |
-   *     |      .                        |  ... (reg == 2)
-   *     | V[1]                          |  ... (reg == 1)
-   *     | V[0]                          |  ... (reg == 0) <---- "locals_start"
-   *     +-------------------------------+
-   *     | stack alignment padding       |  {0 to (kStackAlignWords-1) of padding}
-   *     +-------------------------------+
-   *     | Compiler temp region          |  ... (reg >= max_num_special_temps)
-   *     |      .                        |
-   *     |      .                        |
-   *     | V[max_num_special_temps + 1]  |
-   *     | V[max_num_special_temps + 0]  |
-   *     +-------------------------------+
-   *     | OUT[outs-1]                   |
-   *     | OUT[outs-2]                   |
-   *     |       .                       |
-   *     | OUT[0]                        |
-   *     | StackReference<ArtMethod>     |  ... (reg == num_total_code_regs == special_temp_value) <<== sp, 16-byte aligned
-   *     +===============================+
    */
   static int GetVRegOffset(const DexFile::CodeItem* code_item,
                            uint32_t core_spills, uint32_t fp_spills,
@@ -646,27 +555,209 @@ class StackVisitor {
     }
   }
 
-  static int GetOutVROffset(uint16_t out_num, InstructionSet isa) {
-    // According to stack model, the first out is above the Method referernce.
-    return sizeof(StackReference<mirror::ArtMethod>) + (out_num * sizeof(uint32_t));
+  uintptr_t* CalleeSaveAddress(int num, size_t frame_size) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // Callee saves are held at the top of the frame
+    DCHECK(GetMethod() != nullptr);
+    uintptr_t save_addr = sp_ + frame_size - ((num + 1) * kPointerSize);
+#if defined(__i386__) || defined(__x86_64__)
+    save_addr -= kPointerSize;  // account for return address
+#endif
+    return reinterpret_cast<uintptr_t*>(save_addr);
   }
 
-  uintptr_t GetCurrentQuickFramePc() const {
-    return cur_quick_frame_pc_;
+  size_t GetNativePcOffset() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+ private:
+  bool GetGPR(uint32_t reg, uintptr_t* val) const;
+  bool SetGPR(uint32_t reg, uintptr_t value);
+  bool GetFPR(uint32_t reg, uintptr_t* val) const;
+  bool SetFPR(uint32_t reg, uintptr_t value);
+
+  uintptr_t sp_;
+  uintptr_t pc_;
+  Context* context_;
+};
+
+// The managed stack is used to record fragments of managed code stacks. Managed code stacks
+// may either be shadow frames or lists of frames using fixed frame sizes. Transition records are
+// necessary for transitions between code using different frame layouts and transitions into native
+// code.
+class PACKED(4) ManagedStack {
+ public:
+  ManagedStack()
+      : link_(NULL), top_shadow_frame_(NULL), top_compiled_frame_sp_(0) {}
+
+  void PushManagedStackFragment(ManagedStack* fragment) {
+    // Copy this top fragment into given fragment.
+    memcpy(fragment, this, sizeof(ManagedStack));
+    // Clear this fragment, which has become the top.
+    memset(this, 0, sizeof(ManagedStack));
+    // Link our top fragment onto the given fragment.
+    link_ = fragment;
   }
 
-  StackReference<mirror::ArtMethod>* GetCurrentQuickFrame() const {
-    return cur_quick_frame_;
+  void PopManagedStackFragment(const ManagedStack& fragment) {
+    DCHECK(&fragment == link_);
+    // Copy this given fragment back to the top.
+    memcpy(this, &fragment, sizeof(ManagedStack));
   }
 
-  ShadowFrame* GetCurrentShadowFrame() const {
-    return cur_shadow_frame_;
+  ManagedStack* GetLink() const {
+    return link_;
   }
 
-  HandleScope* GetCurrentHandleScope() const {
-    StackReference<mirror::ArtMethod>* sp = GetCurrentQuickFrame();
-    ++sp;  // Skip Method*; handle scope comes next;
-    return reinterpret_cast<HandleScope*>(sp);
+  uintptr_t GetTopCompiledFrameSp() const {
+    return top_compiled_frame_sp_;
+  }
+
+  void SetTopCompiledFrameSp(uintptr_t sp) {
+    top_compiled_frame_sp_ = sp;
+  }
+
+  static size_t TopCompiledFrameSpOffset() {
+    return OFFSETOF_MEMBER(ManagedStack, top_compiled_frame_sp_);
+  }
+
+  ShadowFrame* PushShadowFrame(ShadowFrame* new_top_frame) {
+    DCHECK_EQ(top_compiled_frame_sp_, 0u);
+    ShadowFrame* old_frame = top_shadow_frame_;
+    top_shadow_frame_ = new_top_frame;
+    new_top_frame->SetLink(old_frame);
+    return old_frame;
+  }
+
+  ShadowFrame* PopShadowFrame() {
+    DCHECK_EQ(top_compiled_frame_sp_, 0u);
+    DCHECK(top_shadow_frame_ != nullptr);
+    ShadowFrame* frame = top_shadow_frame_;
+    top_shadow_frame_ = frame->GetLink();
+    return frame;
+  }
+
+  ShadowFrame* GetTopShadowFrame() const {
+    return top_shadow_frame_;
+  }
+
+  void SetTopShadowFrame(ShadowFrame* top) {
+    DCHECK_EQ(top_compiled_frame_sp_, 0u);
+    top_shadow_frame_ = top;
+  }
+
+  static size_t TopShadowFrameOffset() {
+    return OFFSETOF_MEMBER(ManagedStack, top_shadow_frame_);
+  }
+
+  mirror::ArtMethod* GetTopMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return top_shadow_frame_ != nullptr
+        ? top_shadow_frame_->GetMethod()
+        : QuickFrame(top_compiled_frame_sp_, 0, nullptr).GetMethod();
+  }
+
+  size_t NumJniShadowFrameReferences() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  bool ShadowFramesContain(StackReference<mirror::Object>* shadow_frame_entry) const;
+
+ private:
+  ManagedStack* link_;
+  ShadowFrame* top_shadow_frame_;
+  uintptr_t top_compiled_frame_sp_;
+};
+
+class StackVisitor {
+ protected:
+  StackVisitor(Thread* thread, Context* context) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+ public:
+  virtual ~StackVisitor() {}
+
+  // Return 'true' if we should continue to visit more frames, 'false' to stop.
+  virtual bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
+
+  void WalkStack(bool include_transitions = false) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return current_frame_ == nullptr
+        ? nullptr
+        : current_frame_->GetMethod();
+  }
+
+  bool IsShadowFrame() const {
+    return current_frame_ != nullptr && current_frame_->IsShadowFrame();
+  }
+
+  bool IsQuickFrame() const {
+    return current_frame_ != nullptr && current_frame_->IsQuickFrame();
+  }
+
+  uint32_t GetDexPc(bool abort_on_failure = true) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return current_frame_->GetDexPc(abort_on_failure);
+  }
+
+  mirror::Object* GetThisObject() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return current_frame_->GetThisObject();
+  }
+
+  // Returns the height of the stack in the managed stack frames, including transitions.
+  size_t GetFrameHeight() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetNumFrames() - cur_depth_ - 1;
+  }
+
+  // Returns a frame ID for JDWP use, starting from 1.
+  size_t GetFrameId() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetFrameHeight() + 1;
+  }
+
+  size_t GetNumFrames() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (num_frames_ == 0) {
+      num_frames_ = ComputeNumFrames(thread_);
+    }
+    return num_frames_;
+  }
+
+  size_t GetFrameDepth() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return cur_depth_;
+  }
+
+  // Get the method and dex pc immediately after the one that's currently being visited.
+  bool GetNextMethodAndDexPc(mirror::ArtMethod** next_method, uint32_t* next_dex_pc)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  bool GetVReg(uint16_t vreg, VRegKind kind, uint32_t* val) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return current_frame_->GetVReg(vreg, kind, val);
+  }
+
+  uint32_t GetVReg(uint16_t vreg, VRegKind kind) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    uint32_t val;
+    bool success = GetVReg(vreg, kind, &val);
+    CHECK(success) << "Failed to read vreg " << vreg << " of kind " << kind;
+    return val;
+  }
+
+  bool GetVRegPair(uint16_t vreg, VRegKind kind_lo, VRegKind kind_hi, uint64_t* val) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return current_frame_->GetVRegPair(vreg, kind_lo, kind_hi, val);
+  }
+
+  uint64_t GetVRegPair(uint16_t vreg, VRegKind kind_lo, VRegKind kind_hi) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    uint64_t val;
+    bool success = GetVRegPair(vreg, kind_lo, kind_hi, &val);
+    CHECK(success) << "Failed to read vreg pair " << vreg
+                   << " of kind [" << kind_lo << "," << kind_hi << "]";
+    return val;
+  }
+
+  bool SetVReg(uint16_t vreg, uint32_t new_value, VRegKind kind)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return current_frame_->SetVReg(vreg, new_value, kind);
+  }
+
+  bool SetVRegPair(uint16_t vreg, uint64_t new_value, VRegKind kind_lo, VRegKind kind_hi)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return current_frame_->SetVRegPair(vreg, new_value, kind_lo, kind_hi);
   }
 
   std::string DescribeLocation() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -675,22 +766,25 @@ class StackVisitor {
 
   static void DescribeStack(Thread* thread) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  QuickFrame* GetQuickFrame() const {
+    DCHECK(current_frame_->IsQuickFrame());
+    return reinterpret_cast<QuickFrame*>(current_frame_);
+  }
+
+  ShadowFrame* GetShadowFrame() const {
+    DCHECK(current_frame_->IsShadowFrame());
+    return reinterpret_cast<ShadowFrame*>(current_frame_);
+  }
+
  private:
   // Private constructor known in the case that num_frames_ has already been computed.
   StackVisitor(Thread* thread, Context* context, size_t num_frames)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool GetGPR(uint32_t reg, uintptr_t* val) const;
-  bool SetGPR(uint32_t reg, uintptr_t value);
-  bool GetFPR(uint32_t reg, uintptr_t* val) const;
-  bool SetFPR(uint32_t reg, uintptr_t value);
-
   void SanityCheckFrame() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   Thread* const thread_;
-  ShadowFrame* cur_shadow_frame_;
-  StackReference<mirror::ArtMethod>* cur_quick_frame_;
-  uintptr_t cur_quick_frame_pc_;
+  ManagedFrame* current_frame_;
   // Lazily computed, number of frames in the stack.
   size_t num_frames_;
   // Depth of the frame we're currently at.
@@ -698,6 +792,8 @@ class StackVisitor {
 
  protected:
   Context* const context_;
+
+  friend class QuickFrameIterator;
 };
 
 }  // namespace art
