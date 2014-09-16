@@ -207,7 +207,7 @@ TEST_F(ExceptionTest, StackTraceElement) {
     fake_stack.push_back(0);
     fake_stack.push_back(0);
 
-    // Set up thread to appear as if we called out of method_g_ at pc dex 3
+
     thread->SetTopOfStack(reinterpret_cast<StackReference<mirror::ArtMethod>*>(&fake_stack[0]));
   } else {
     // Create/push fake 20-byte shadow frame for method g

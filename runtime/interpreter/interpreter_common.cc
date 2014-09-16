@@ -53,7 +53,7 @@ bool DoFieldGet(Thread* self, ShadowFrame& shadow_frame, const Instruction* inst
   if (UNLIKELY(instrumentation->HasFieldReadListeners())) {
     Object* this_object = f->IsStatic() ? nullptr : obj;
     instrumentation->FieldReadEvent(self, this_object, shadow_frame.GetMethod(),
-                                    shadow_frame.GetDexPC(), f);
+                                    shadow_frame.GetDexPc(), f);
   }
   uint32_t vregA = is_static ? inst->VRegA_21c(inst_data) : inst->VRegA_22c(inst_data);
   switch (field_type) {
@@ -138,7 +138,7 @@ bool DoIGetQuick(ShadowFrame& shadow_frame, const Instruction* inst, uint16_t in
     DCHECK(f != nullptr);
     DCHECK(!f->IsStatic());
     instrumentation->FieldReadEvent(Thread::Current(), obj, shadow_frame.GetMethod(),
-                                    shadow_frame.GetDexPC(), f);
+                                    shadow_frame.GetDexPc(), f);
   }
   // Note: iget-x-quick instructions are only for non-volatile fields.
   const uint32_t vregA = inst->VRegA_22c(inst_data);
@@ -235,7 +235,7 @@ bool DoFieldPut(Thread* self, const ShadowFrame& shadow_frame, const Instruction
     JValue field_value = GetFieldValue<field_type>(shadow_frame, vregA);
     Object* this_object = f->IsStatic() ? nullptr : obj;
     instrumentation->FieldWriteEvent(self, this_object, shadow_frame.GetMethod(),
-                                     shadow_frame.GetDexPC(), f, field_value);
+                                     shadow_frame.GetDexPc(), f, field_value);
   }
   switch (field_type) {
     case Primitive::kPrimBoolean:
@@ -345,7 +345,7 @@ bool DoIPutQuick(const ShadowFrame& shadow_frame, const Instruction* inst, uint1
     DCHECK(!f->IsStatic());
     JValue field_value = GetFieldValue<field_type>(shadow_frame, vregA);
     instrumentation->FieldWriteEvent(Thread::Current(), obj, shadow_frame.GetMethod(),
-                                     shadow_frame.GetDexPC(), f, field_value);
+                                     shadow_frame.GetDexPc(), f, field_value);
   }
   // Note: iput-x-quick instructions are only for non-volatile fields.
   switch (field_type) {

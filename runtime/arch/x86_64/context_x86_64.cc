@@ -39,8 +39,8 @@ void X86_64Context::Reset() {
   rip_ = X86_64Context::kBadGprBase + kNumberOfCpuRegisters;
 }
 
-void X86_64Context::FillCalleeSaves(const StackVisitor& fr) {
-  mirror::ArtMethod* method = fr.GetMethod();
+void X86_64Context::FillCalleeSaves(const QuickFrame& frame) {
+  mirror::ArtMethod* method = frame.GetMethod();
   const QuickMethodFrameInfo frame_info = method->GetQuickFrameInfo();
   size_t spill_count = POPCOUNT(frame_info.CoreSpillMask());
   size_t fp_spill_count = POPCOUNT(frame_info.FpSpillMask());
@@ -49,7 +49,7 @@ void X86_64Context::FillCalleeSaves(const StackVisitor& fr) {
     size_t j = 2;  // Offset j to skip return address spill.
     for (size_t i = 0; i < kNumberOfCpuRegisters; ++i) {
       if (((frame_info.CoreSpillMask() >> i) & 1) != 0) {
-        gprs_[i] = fr.CalleeSaveAddress(spill_count - j, frame_info.FrameSizeInBytes());
+        gprs_[i] = frame.CalleeSaveAddress(spill_count - j, frame_info.FrameSizeInBytes());
         j++;
       }
     }
@@ -60,7 +60,7 @@ void X86_64Context::FillCalleeSaves(const StackVisitor& fr) {
     for (size_t i = 0; i < kNumberOfFloatRegisters; ++i) {
       if (((frame_info.FpSpillMask() >> i) & 1) != 0) {
         fprs_[i] = reinterpret_cast<uint64_t*>(
-            fr.CalleeSaveAddress(spill_count + fp_spill_count - j, frame_info.FrameSizeInBytes()));
+            frame.CalleeSaveAddress(spill_count + fp_spill_count - j, frame_info.FrameSizeInBytes()));
         j++;
       }
     }

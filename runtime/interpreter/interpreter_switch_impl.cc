@@ -65,7 +65,7 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
   }
   self->VerifyStack();
 
-  uint32_t dex_pc = shadow_frame.GetDexPC();
+  uint32_t dex_pc = shadow_frame.GetDexPc();
   bool notified_method_entry_event = false;
   const instrumentation::Instrumentation* const instrumentation = Runtime::Current()->GetInstrumentation();
   if (LIKELY(dex_pc == 0)) {  // We are entering the method as opposed to deoptimizing..
@@ -80,7 +80,7 @@ JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem
   uint16_t inst_data;
   while (true) {
     dex_pc = inst->GetDexPc(insns);
-    shadow_frame.SetDexPC(dex_pc);
+    shadow_frame.SetDexPc(dex_pc);
     TraceExecution(shadow_frame, inst, dex_pc, mh);
     inst_data = inst->Fetch16(0);
     switch (inst->Opcode(inst_data)) {

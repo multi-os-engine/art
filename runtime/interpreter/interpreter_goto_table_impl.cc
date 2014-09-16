@@ -34,7 +34,7 @@ namespace interpreter {
     int32_t disp = static_cast<int32_t>(_offset);                           \
     inst = inst->RelativeAt(disp);                                          \
     dex_pc = static_cast<uint32_t>(static_cast<int32_t>(dex_pc) + disp);    \
-    shadow_frame.SetDexPC(dex_pc);                                          \
+    shadow_frame.SetDexPc(dex_pc);                                          \
     TraceExecution(shadow_frame, inst, dex_pc, mh);                         \
     inst_data = inst->Fetch16(0);                                           \
     goto *currentHandlersTable[inst->Opcode(inst_data)];                    \
@@ -141,7 +141,7 @@ JValue ExecuteGotoImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem* 
   }
   self->VerifyStack();
 
-  uint32_t dex_pc = shadow_frame.GetDexPC();
+  uint32_t dex_pc = shadow_frame.GetDexPc();
   const Instruction* inst = Instruction::At(code_item->insns_ + dex_pc);
   uint16_t inst_data;
   const void* const* currentHandlersTable;

@@ -953,7 +953,7 @@ void Monitor::VisitLocks(StackVisitor* stack_visitor, void (*callback)(mirror::O
   // TODO: use the JNI implementation's table of explicit MonitorEnter calls and dump those too.
   if (m->IsNative()) {
     if (m->IsSynchronized()) {
-      mirror::Object* jni_this = stack_visitor->GetCurrentHandleScope()->GetReference(0);
+      mirror::Object* jni_this = stack_visitor->GetQuickFrame()->GetJniThis();
       callback(jni_this, callback_context);
     }
     return;
@@ -1002,7 +1002,7 @@ void Monitor::VisitLocks(StackVisitor* stack_visitor, void (*callback)(mirror::O
     }
 
     uint16_t monitor_register = ((monitor_enter_instruction >> 8) & 0xff);
-    mirror::Object* o = reinterpret_cast<mirror::Object*>(stack_visitor->GetVReg(m, monitor_register,
+    mirror::Object* o = reinterpret_cast<mirror::Object*>(stack_visitor->GetVReg(monitor_register,
                                                                                  kReferenceVReg));
     callback(o, callback_context);
   }

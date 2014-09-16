@@ -55,8 +55,8 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
     exception_handler_->SetHandlerFrameDepth(GetFrameDepth());
     if (method == nullptr) {
       // This is the upcall, we remember the frame and last pc so that we may long jump to them.
-      exception_handler_->SetHandlerQuickFramePc(GetCurrentQuickFramePc());
-      exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
+      exception_handler_->SetHandlerQuickFramePc(GetQuickFrame()->GetPc());
+      exception_handler_->SetHandlerQuickFrame(GetQuickFrame()->GetStackReference());
       uint32_t next_dex_pc;
       mirror::ArtMethod* next_art_method;
       bool has_next = GetNextMethodAndDexPc(&next_art_method, &next_dex_pc);
@@ -98,7 +98,7 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
         exception_handler_->SetHandlerMethod(method.Get());
         exception_handler_->SetHandlerDexPc(found_dex_pc);
         exception_handler_->SetHandlerQuickFramePc(method->ToNativeQuickPc(found_dex_pc));
-        exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
+        exception_handler_->SetHandlerQuickFrame(GetQuickFrame()->GetStackReference());
         return false;  // End stack walk.
       }
     }
@@ -182,8 +182,8 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     mirror::ArtMethod* method = GetMethod();
     if (method == nullptr) {
       // This is the upcall, we remember the frame and last pc so that we may long jump to them.
-      exception_handler_->SetHandlerQuickFramePc(GetCurrentQuickFramePc());
-      exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
+      exception_handler_->SetHandlerQuickFramePc(GetQuickFrame()->GetPc());
+      exception_handler_->SetHandlerQuickFrame(GetQuickFrame()->GetStackReference());
       return false;  // End stack walk.
     } else if (method->IsRuntimeMethod()) {
       // Ignore callee save method.
@@ -228,40 +228,40 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
           break;
         case kReferenceVReg:
           new_frame->SetVRegReference(reg,
-                                      reinterpret_cast<mirror::Object*>(GetVReg(m, reg, kind)));
+                                      reinterpret_cast<mirror::Object*>(GetVReg(reg, kind)));
           break;
         case kLongLoVReg:
           if (GetVRegKind(reg + 1, kinds) == kLongHiVReg) {
             // Treat it as a "long" register pair.
-            new_frame->SetVRegLong(reg, GetVRegPair(m, reg, kLongLoVReg, kLongHiVReg));
+            new_frame->SetVRegLong(reg, GetVRegPair(reg, kLongLoVReg, kLongHiVReg));
           } else {
-            new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+            new_frame->SetVReg(reg, GetVReg(reg, kind));
           }
           break;
         case kLongHiVReg:
           if (GetVRegKind(reg - 1, kinds) == kLongLoVReg) {
             // Nothing to do: we treated it as a "long" register pair.
           } else {
-            new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+            new_frame->SetVReg(reg, GetVReg(reg, kind));
           }
           break;
         case kDoubleLoVReg:
           if (GetVRegKind(reg + 1, kinds) == kDoubleHiVReg) {
             // Treat it as a "double" register pair.
-            new_frame->SetVRegLong(reg, GetVRegPair(m, reg, kDoubleLoVReg, kDoubleHiVReg));
+            new_frame->SetVRegLong(reg, GetVRegPair(reg, kDoubleLoVReg, kDoubleHiVReg));
           } else {
-            new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+            new_frame->SetVReg(reg, GetVReg(reg, kind));
           }
           break;
         case kDoubleHiVReg:
           if (GetVRegKind(reg - 1, kinds) == kDoubleLoVReg) {
             // Nothing to do: we treated it as a "double" register pair.
           } else {
-            new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+            new_frame->SetVReg(reg, GetVReg(reg, kind));
           }
           break;
         default:
-          new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+          new_frame->SetVReg(reg, GetVReg(reg, kind));
           break;
       }
     }
@@ -309,7 +309,8 @@ class InstrumentationStackVisitor : public StackVisitor {
     size_t current_frame_depth = GetFrameDepth();
     if (current_frame_depth < frame_depth_) {
       CHECK(GetMethod() != nullptr);
-      if (UNLIKELY(reinterpret_cast<uintptr_t>(GetQuickInstrumentationExitPc()) == GetReturnPc())) {
+      if (UNLIKELY(reinterpret_cast<uintptr_t>(GetQuickInstrumentationExitPc())
+                   == GetQuickFrame()->GetReturnPc())) {
         ++instrumentation_frames_to_pop_;
       }
       return true;

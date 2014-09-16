@@ -28,10 +28,10 @@ class ShadowFrameCopyVisitor : public StackVisitor {
 
   bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (IsShadowFrame()) {
-      ShadowFrame* cur_frame = GetCurrentShadowFrame();
+      ShadowFrame* cur_frame = GetShadowFrame();
       size_t num_regs = cur_frame->NumberOfVRegs();
       mirror::ArtMethod* method = cur_frame->GetMethod();
-      uint32_t dex_pc = cur_frame->GetDexPC();
+      uint32_t dex_pc = cur_frame->GetDexPc();
       ShadowFrame* new_frame = ShadowFrame::Create(num_regs, NULL, method, dex_pc);
 
       const uint8_t* gc_map = method->GetNativeGcMap();

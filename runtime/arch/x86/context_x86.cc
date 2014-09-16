@@ -36,8 +36,8 @@ void X86Context::Reset() {
   eip_ = X86Context::kBadGprBase + kNumberOfCpuRegisters;
 }
 
-void X86Context::FillCalleeSaves(const StackVisitor& fr) {
-  mirror::ArtMethod* method = fr.GetMethod();
+void X86Context::FillCalleeSaves(const QuickFrame& quick_frame) {
+  mirror::ArtMethod* method = quick_frame.GetMethod();
   const QuickMethodFrameInfo frame_info = method->GetQuickFrameInfo();
   size_t spill_count = POPCOUNT(frame_info.CoreSpillMask());
   DCHECK_EQ(frame_info.FpSpillMask(), 0u);
@@ -46,7 +46,7 @@ void X86Context::FillCalleeSaves(const StackVisitor& fr) {
     int j = 2;  // Offset j to skip return address spill.
     for (int i = 0; i < kNumberOfCpuRegisters; i++) {
       if (((frame_info.CoreSpillMask() >> i) & 1) != 0) {
-        gprs_[i] = fr.CalleeSaveAddress(spill_count - j, frame_info.FrameSizeInBytes());
+        gprs_[i] = quick_frame.CalleeSaveAddress(spill_count - j, frame_info.FrameSizeInBytes());
         j++;
       }
     }
