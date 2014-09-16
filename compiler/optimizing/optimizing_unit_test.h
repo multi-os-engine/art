@@ -17,6 +17,10 @@
 #ifndef ART_COMPILER_OPTIMIZING_OPTIMIZING_UNIT_TEST_H_
 #define ART_COMPILER_OPTIMIZING_OPTIMIZING_UNIT_TEST_H_
 
+#include "nodes.h"
+#include "builder.h"
+#include "dex_file.h"
+#include "dex_instruction.h"
 #include "ssa_liveness_analysis.h"
 
 namespace art {
@@ -46,6 +50,15 @@ LiveInterval* BuildInterval(const size_t ranges[][2],
   }
   interval->SetRegister(reg);
   return interval;
+}
+
+// Create a control-flow graph from Dex instructions.
+inline HGraph* CreateCFG(ArenaAllocator* allocator, const uint16_t* data) {
+  HGraphBuilder builder(allocator);
+  const DexFile::CodeItem* item =
+    reinterpret_cast<const DexFile::CodeItem*>(data);
+  HGraph* graph = builder.BuildGraph(*item);
+  return graph;
 }
 
 }  // namespace art
