@@ -24,7 +24,7 @@
 
 namespace art {
 
-class StackVisitor;
+class QuickFrame;
 
 // Representation of a thread's context on the executing machine, used to implement long jumps in
 // the quick stack frame layout.
@@ -40,7 +40,7 @@ class Context {
 
   // Reads values from callee saves in the given frame. The frame also holds
   // the method that holds the layout.
-  virtual void FillCalleeSaves(const StackVisitor& fr)
+  virtual void FillCalleeSaves(const QuickFrame& quick_frame)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
 
   // Sets the stack pointer value.

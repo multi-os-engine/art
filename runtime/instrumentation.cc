@@ -193,7 +193,7 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
         last_return_pc_ = 0;
         return true;  // Ignore upcalls.
       }
-      if (GetCurrentQuickFrame() == NULL) {
+      if (!IsQuickFrame()) {
         bool interpreter_frame = !m->IsPortableCompiled();
         InstrumentationStackFrame instrumentation_frame(GetThisObject(), m, 0, GetFrameId(),
                                                         interpreter_frame);
@@ -203,7 +203,8 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
         shadow_stack_.push_back(instrumentation_frame);
         return true;  // Continue.
       }
-      uintptr_t return_pc = GetReturnPc();
+      QuickFrame* quick_frame = GetQuickFrame();
+      uintptr_t return_pc = quick_frame->GetReturnPc();
       if (m->IsRuntimeMethod()) {
         if (return_pc == instrumentation_exit_pc_) {
           if (kVerboseInstrumentation) {
@@ -224,7 +225,7 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
           if (kVerboseInstrumentation) {
             LOG(INFO) << "  Skipping runtime method. Frame " << GetFrameId();
           }
-          last_return_pc_ = GetReturnPc();
+          last_return_pc_ = quick_frame->GetReturnPc();
           return true;  // Ignore unresolved methods since they will be instrumented after resolution.
         }
       }
@@ -264,7 +265,7 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
           }
         }
         instrumentation_stack_->insert(it, instrumentation_frame);
-        SetReturnPc(instrumentation_exit_pc_);
+        quick_frame->SetReturnPc(instrumentation_exit_pc_);
       }
       dex_pcs_.push_back(m->ToDexPc(last_return_pc_));
       last_return_pc_ = return_pc;
@@ -329,7 +330,7 @@ static void InstrumentationRestoreStack(Thread* thread, void* arg)
         return false;  // Stop.
       }
       mirror::ArtMethod* m = GetMethod();
-      if (GetCurrentQuickFrame() == NULL) {
+      if (!IsQuickFrame()) {
         if (kVerboseInstrumentation) {
           LOG(INFO) << "  Ignoring a shadow frame. Frame " << GetFrameId()
               << " Method=" << PrettyMethod(m);
@@ -342,6 +343,7 @@ static void InstrumentationRestoreStack(Thread* thread, void* arg)
         }
         return true;  // Ignore upcalls.
       }
+      QuickFrame* quick_frame = GetQuickFrame();
       bool removed_stub = false;
       // TODO: make this search more efficient?
       const size_t frameId = GetFrameId();
@@ -355,7 +357,7 @@ static void InstrumentationRestoreStack(Thread* thread, void* arg)
           } else {
             CHECK(m == instrumentation_frame.method_) << PrettyMethod(m);
           }
-          SetReturnPc(instrumentation_frame.return_pc_);
+          quick_frame->SetReturnPc(instrumentation_frame.return_pc_);
           if (instrumentation_->ShouldNotifyMethodEnterExitEvents()) {
             // Create the method exit events. As the methods didn't really exit the result is 0.
             // We only do this if no debugger is attached to prevent from posting events twice.

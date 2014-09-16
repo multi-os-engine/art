@@ -69,7 +69,7 @@ void Mir2Lir::LockArg(int in_position, bool wide) {
 // TODO: simplify when 32-bit targets go hard-float.
 RegStorage Mir2Lir::LoadArg(int in_position, RegisterClass reg_class, bool wide) {
   ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
-  int offset = StackVisitor::GetOutVROffset(in_position, cu_->instruction_set);
+  int offset = QuickFrame::GetOutVROffset(in_position, cu_->instruction_set);
 
   if (cu_->instruction_set == kX86) {
     /*
@@ -163,7 +163,7 @@ RegStorage Mir2Lir::LoadArg(int in_position, RegisterClass reg_class, bool wide)
 // TODO: simpilfy when 32-bit targets go hard float.
 void Mir2Lir::LoadArgDirect(int in_position, RegLocation rl_dest) {
   ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
-  int offset = StackVisitor::GetOutVROffset(in_position, cu_->instruction_set);
+  int offset = QuickFrame::GetOutVROffset(in_position, cu_->instruction_set);
   if (cu_->instruction_set == kX86) {
     /*
      * When doing a call for x86, it moves the stack pointer in order to push return.
