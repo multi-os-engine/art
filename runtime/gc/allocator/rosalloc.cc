@@ -537,30 +537,33 @@ RosAlloc::Run* RosAlloc::AllocRun(Thread* self, size_t idx) {
   {
     MutexLock mu(self, lock_);
     new_run = reinterpret_cast<Run*>(AllocPages(self, numOfPages[idx], kPageMapRun));
-  }
-  if (LIKELY(new_run != nullptr)) {
+    if (UNLIKELY(new_run == nullptr)) {
+      return nullptr;
+    }
+    // Need to do this while holding lock_ since InspectAll reads these fields holding lock_ and
+    // we want to prevent races where InspectAll could read stale values.
     if (kIsDebugBuild) {
       new_run->magic_num_ = kMagicNum;
     }
     new_run->size_bracket_idx_ = idx;
-    new_run->SetAllocBitMapBitsForInvalidSlots();
-    DCHECK(!new_run->IsThreadLocal());
-    DCHECK_EQ(new_run->first_search_vec_idx_, 0U);
-    DCHECK(!new_run->to_be_bulk_freed_);
-    if (kUsePrefetchDuringAllocRun && idx < kNumThreadLocalSizeBrackets) {
-      // Take ownership of the cache lines if we are likely to be thread local run.
-      if (kPrefetchNewRunDataByZeroing) {
-        // Zeroing the data is sometimes faster than prefetching but it increases memory usage
-        // since we end up dirtying zero pages which may have been madvised.
-        new_run->ZeroData();
-      } else {
-        const size_t num_of_slots = numOfSlots[idx];
-        const size_t bracket_size = bracketSizes[idx];
-        const size_t num_of_bytes = num_of_slots * bracket_size;
-        byte* begin = reinterpret_cast<byte*>(new_run) + headerSizes[idx];
-        for (size_t i = 0; i < num_of_bytes; i += kPrefetchStride) {
-          __builtin_prefetch(begin + i);
-        }
+  }
+  new_run->SetAllocBitMapBitsForInvalidSlots();
+  DCHECK(!new_run->IsThreadLocal());
+  DCHECK_EQ(new_run->first_search_vec_idx_, 0U);
+  DCHECK(!new_run->to_be_bulk_freed_);
+  if (kUsePrefetchDuringAllocRun && idx < kNumThreadLocalSizeBrackets) {
+    // Take ownership of the cache lines if we are likely to be thread local run.
+    if (kPrefetchNewRunDataByZeroing) {
+      // Zeroing the data is sometimes faster than prefetching but it increases memory usage
+      // since we end up dirtying zero pages which may have been madvised.
+      new_run->ZeroData();
+    } else {
+      const size_t num_of_slots = numOfSlots[idx];
+      const size_t bracket_size = bracketSizes[idx];
+      const size_t num_of_bytes = num_of_slots * bracket_size;
+      byte* begin = reinterpret_cast<byte*>(new_run) + headerSizes[idx];
+      for (size_t i = 0; i < num_of_bytes; i += kPrefetchStride) {
+        __builtin_prefetch(begin + i);
       }
     }
   }
