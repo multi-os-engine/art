@@ -2504,7 +2504,7 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_BOOLEAN: {
           CHECK_EQ(width_, 1U);
           uint32_t intVal;
-          if (GetVReg(m, reg, kIntVReg, &intVal)) {
+          if (GetVReg(reg, kIntVReg, &intVal)) {
             VLOG(jdwp) << "get boolean local " << reg << " = " << intVal;
             JDWP::Set1(buf_+1, intVal != 0);
           } else {
@@ -2516,7 +2516,7 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_BYTE: {
           CHECK_EQ(width_, 1U);
           uint32_t intVal;
-          if (GetVReg(m, reg, kIntVReg, &intVal)) {
+          if (GetVReg(reg, kIntVReg, &intVal)) {
             VLOG(jdwp) << "get byte local " << reg << " = " << intVal;
             JDWP::Set1(buf_+1, intVal);
           } else {
@@ -2529,7 +2529,7 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_CHAR: {
           CHECK_EQ(width_, 2U);
           uint32_t intVal;
-          if (GetVReg(m, reg, kIntVReg, &intVal)) {
+          if (GetVReg(reg, kIntVReg, &intVal)) {
             VLOG(jdwp) << "get short/char local " << reg << " = " << intVal;
             JDWP::Set2BE(buf_+1, intVal);
           } else {
@@ -2541,7 +2541,7 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_INT: {
           CHECK_EQ(width_, 4U);
           uint32_t intVal;
-          if (GetVReg(m, reg, kIntVReg, &intVal)) {
+          if (GetVReg(reg, kIntVReg, &intVal)) {
             VLOG(jdwp) << "get int local " << reg << " = " << intVal;
             JDWP::Set4BE(buf_+1, intVal);
           } else {
@@ -2553,7 +2553,7 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_FLOAT: {
           CHECK_EQ(width_, 4U);
           uint32_t intVal;
-          if (GetVReg(m, reg, kFloatVReg, &intVal)) {
+          if (GetVReg(reg, kFloatVReg, &intVal)) {
             VLOG(jdwp) << "get float local " << reg << " = " << intVal;
             JDWP::Set4BE(buf_+1, intVal);
           } else {
@@ -2571,7 +2571,7 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_THREAD_GROUP: {
           CHECK_EQ(width_, sizeof(JDWP::ObjectId));
           uint32_t intVal;
-          if (GetVReg(m, reg, kReferenceVReg, &intVal)) {
+          if (GetVReg(reg, kReferenceVReg, &intVal)) {
             mirror::Object* o = reinterpret_cast<mirror::Object*>(intVal);
             VLOG(jdwp) << "get " << tag_ << " object local " << reg << " = " << o;
             if (!Runtime::Current()->GetHeap()->IsValidObjectAddress(o)) {
@@ -2588,7 +2588,7 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_DOUBLE: {
           CHECK_EQ(width_, 8U);
           uint64_t longVal;
-          if (GetVRegPair(m, reg, kDoubleLoVReg, kDoubleHiVReg, &longVal)) {
+          if (GetVRegPair(reg, kDoubleLoVReg, kDoubleHiVReg, &longVal)) {
             VLOG(jdwp) << "get double local " << reg << " = " << longVal;
             JDWP::Set8BE(buf_+1, longVal);
           } else {
@@ -2600,7 +2600,7 @@ JDWP::JdwpError Dbg::GetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_LONG: {
           CHECK_EQ(width_, 8U);
           uint64_t longVal;
-          if (GetVRegPair(m, reg, kLongLoVReg, kLongHiVReg, &longVal)) {
+          if (GetVRegPair(reg, kLongLoVReg, kLongHiVReg, &longVal)) {
             VLOG(jdwp) << "get long local " << reg << " = " << longVal;
             JDWP::Set8BE(buf_+1, longVal);
           } else {
@@ -2672,7 +2672,7 @@ JDWP::JdwpError Dbg::SetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_BOOLEAN:
         case JDWP::JT_BYTE:
           CHECK_EQ(width_, 1U);
-          if (!SetVReg(m, reg, static_cast<uint32_t>(value_), kIntVReg)) {
+          if (!SetVReg(reg, static_cast<uint32_t>(value_), kIntVReg)) {
             VLOG(jdwp) << "failed to set boolean/byte local " << reg << " = "
                        << static_cast<uint32_t>(value_);
             error_ = kFailureErrorCode;
@@ -2681,7 +2681,7 @@ JDWP::JdwpError Dbg::SetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         case JDWP::JT_SHORT:
         case JDWP::JT_CHAR:
           CHECK_EQ(width_, 2U);
-          if (!SetVReg(m, reg, static_cast<uint32_t>(value_), kIntVReg)) {
+          if (!SetVReg(reg, static_cast<uint32_t>(value_), kIntVReg)) {
             VLOG(jdwp) << "failed to set short/char local " << reg << " = "
                        << static_cast<uint32_t>(value_);
             error_ = kFailureErrorCode;
@@ -2689,7 +2689,7 @@ JDWP::JdwpError Dbg::SetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
           break;
         case JDWP::JT_INT:
           CHECK_EQ(width_, 4U);
-          if (!SetVReg(m, reg, static_cast<uint32_t>(value_), kIntVReg)) {
+          if (!SetVReg(reg, static_cast<uint32_t>(value_), kIntVReg)) {
             VLOG(jdwp) << "failed to set int local " << reg << " = "
                        << static_cast<uint32_t>(value_);
             error_ = kFailureErrorCode;
@@ -2697,7 +2697,7 @@ JDWP::JdwpError Dbg::SetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
           break;
         case JDWP::JT_FLOAT:
           CHECK_EQ(width_, 4U);
-          if (!SetVReg(m, reg, static_cast<uint32_t>(value_), kFloatVReg)) {
+          if (!SetVReg(reg, static_cast<uint32_t>(value_), kFloatVReg)) {
             VLOG(jdwp) << "failed to set float local " << reg << " = "
                        << static_cast<uint32_t>(value_);
             error_ = kFailureErrorCode;
@@ -2717,7 +2717,7 @@ JDWP::JdwpError Dbg::SetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
           if (error != JDWP::ERR_NONE) {
             VLOG(jdwp) << tag_ << " object " << value_ << " is an invalid object";
             error_ = JDWP::ERR_INVALID_OBJECT;
-          } else if (!SetVReg(m, reg, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(o)),
+          } else if (!SetVReg(reg, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(o)),
                               kReferenceVReg)) {
             VLOG(jdwp) << "failed to set " << tag_ << " object local " << reg << " = " << o;
             error_ = kFailureErrorCode;
@@ -2726,7 +2726,7 @@ JDWP::JdwpError Dbg::SetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         }
         case JDWP::JT_DOUBLE: {
           CHECK_EQ(width_, 8U);
-          bool success = SetVRegPair(m, reg, value_, kDoubleLoVReg, kDoubleHiVReg);
+          bool success = SetVRegPair(reg, value_, kDoubleLoVReg, kDoubleHiVReg);
           if (!success) {
             VLOG(jdwp) << "failed to set double local " << reg << " = " << value_;
             error_ = kFailureErrorCode;
@@ -2735,7 +2735,7 @@ JDWP::JdwpError Dbg::SetLocalValue(JDWP::ObjectId thread_id, JDWP::FrameId frame
         }
         case JDWP::JT_LONG: {
           CHECK_EQ(width_, 8U);
-          bool success = SetVRegPair(m, reg, value_, kLongLoVReg, kLongHiVReg);
+          bool success = SetVRegPair(reg, value_, kLongLoVReg, kLongHiVReg);
           if (!success) {
             VLOG(jdwp) << "failed to set double local " << reg << " = " << value_;
             error_ = kFailureErrorCode;

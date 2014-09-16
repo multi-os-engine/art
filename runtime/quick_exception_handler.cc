@@ -35,7 +35,7 @@ QuickExceptionHandler::QuickExceptionHandler(Thread* self, bool is_deoptimizatio
   : self_(self), context_(self->GetLongJumpContext()), is_deoptimization_(is_deoptimization),
     method_tracing_active_(is_deoptimization ||
                            Runtime::Current()->GetInstrumentation()->AreExitStubsInstalled()),
-    handler_quick_frame_(nullptr), handler_quick_frame_pc_(0), handler_method_(nullptr),
+    handler_compiled_frame_sp_(0), handler_compiled_frame_pc_(0), handler_method_(nullptr),
     handler_dex_pc_(0), clear_exception_(false), handler_frame_depth_(kInvalidFrameDepth) {
 }
 
@@ -54,8 +54,8 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
     exception_handler_->SetHandlerFrameDepth(GetFrameDepth());
     if (method == nullptr) {
       // This is the upcall, we remember the frame and last pc so that we may long jump to them.
-      exception_handler_->SetHandlerQuickFramePc(GetCurrentQuickFramePc());
-      exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
+      exception_handler_->SetHandlerCompiledFramePc(GetQuickFrame()->GetPc());
+      exception_handler_->SetHandlerCompiledFrameSp(GetQuickFrame()->GetSp());
       uint32_t next_dex_pc;
       mirror::ArtMethod* next_art_method;
       bool has_next = GetNextMethodAndDexPc(&next_art_method, &next_dex_pc);
@@ -96,8 +96,8 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
       if (found_dex_pc != DexFile::kDexNoIndex) {
         exception_handler_->SetHandlerMethod(method.Get());
         exception_handler_->SetHandlerDexPc(found_dex_pc);
-        exception_handler_->SetHandlerQuickFramePc(method->ToNativePc(found_dex_pc));
-        exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
+        exception_handler_->SetHandlerCompiledFramePc(method->ToNativePc(found_dex_pc));
+        exception_handler_->SetHandlerCompiledFrameSp(GetQuickFrame()->GetSp());
         return false;  // End stack walk.
       }
     }
@@ -131,7 +131,7 @@ void QuickExceptionHandler::FindCatch(const ThrowLocation& throw_location,
   visitor.WalkStack(true);
 
   if (kDebugExceptionDelivery) {
-    if (handler_quick_frame_->AsMirrorPtr() == nullptr) {
+    if (QuickFrame(handler_compiled_frame_sp_, handler_compiled_frame_pc_, context_).GetMethod() == nullptr) {
       LOG(INFO) << "Handler is upcall";
     }
     if (handler_method_ != nullptr) {
@@ -181,8 +181,8 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     mirror::ArtMethod* method = GetMethod();
     if (method == nullptr) {
       // This is the upcall, we remember the frame and last pc so that we may long jump to them.
-      exception_handler_->SetHandlerQuickFramePc(GetCurrentQuickFramePc());
-      exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
+      exception_handler_->SetHandlerCompiledFramePc(GetQuickFrame()->GetPc());
+      exception_handler_->SetHandlerCompiledFrameSp(GetQuickFrame()->GetSp());
       return false;  // End stack walk.
     } else if (method->IsRuntimeMethod()) {
       // Ignore callee save method.
@@ -226,41 +226,40 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
           new_frame->SetVReg(reg, kinds.at((reg * 2) + 1));
           break;
         case kReferenceVReg:
-          new_frame->SetVRegReference(reg,
-                                      reinterpret_cast<mirror::Object*>(GetVReg(m, reg, kind)));
+          new_frame->SetVRegReference(reg, reinterpret_cast<mirror::Object*>(GetVReg(reg, kind)));
           break;
         case kLongLoVReg:
           if (GetVRegKind(reg + 1, kinds), kLongHiVReg) {
             // Treat it as a "long" register pair.
-            new_frame->SetVRegLong(reg, GetVRegPair(m, reg, kLongLoVReg, kLongHiVReg));
+            new_frame->SetVRegLong(reg, GetVRegPair(reg, kLongLoVReg, kLongHiVReg));
           } else {
-            new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+            new_frame->SetVReg(reg, GetVReg(reg, kind));
           }
           break;
         case kLongHiVReg:
           if (GetVRegKind(reg - 1, kinds), kLongLoVReg) {
             // Nothing to do: we treated it as a "long" register pair.
           } else {
-            new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+            new_frame->SetVReg(reg, GetVReg(reg, kind));
           }
           break;
         case kDoubleLoVReg:
           if (GetVRegKind(reg + 1, kinds), kDoubleHiVReg) {
             // Treat it as a "double" register pair.
-            new_frame->SetVRegLong(reg, GetVRegPair(m, reg, kDoubleLoVReg, kDoubleHiVReg));
+            new_frame->SetVRegLong(reg, GetVRegPair(reg, kDoubleLoVReg, kDoubleHiVReg));
           } else {
-            new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+            new_frame->SetVReg(reg, GetVReg(reg, kind));
           }
           break;
         case kDoubleHiVReg:
           if (GetVRegKind(reg - 1, kinds), kDoubleLoVReg) {
             // Nothing to do: we treated it as a "double" register pair.
           } else {
-            new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+            new_frame->SetVReg(reg, GetVReg(reg, kind));
           }
           break;
         default:
-          new_frame->SetVReg(reg, GetVReg(m, reg, kind));
+          new_frame->SetVReg(reg, GetVReg(reg, kind));
           break;
       }
     }
@@ -308,7 +307,7 @@ class InstrumentationStackVisitor : public StackVisitor {
     size_t current_frame_depth = GetFrameDepth();
     if (current_frame_depth < frame_depth_) {
       CHECK(GetMethod() != nullptr);
-      if (UNLIKELY(GetQuickInstrumentationExitPc() == GetReturnPc())) {
+      if (UNLIKELY(GetQuickInstrumentationExitPc() == GetQuickFrame()->GetReturnPc())) {
         ++instrumentation_frames_to_pop_;
       }
       return true;
@@ -346,9 +345,9 @@ void QuickExceptionHandler::UpdateInstrumentationStack() {
 void QuickExceptionHandler::DoLongJump() {
   // Place context back on thread so it will be available when we continue.
   self_->ReleaseLongJumpContext(context_);
-  context_->SetSP(reinterpret_cast<uintptr_t>(handler_quick_frame_));
-  CHECK_NE(handler_quick_frame_pc_, 0u);
-  context_->SetPC(handler_quick_frame_pc_);
+  context_->SetSP(handler_compiled_frame_sp_);
+  CHECK_NE(handler_compiled_frame_pc_, 0u);
+  context_->SetPC(handler_compiled_frame_pc_);
   context_->SmashCallerSaves();
   context_->DoLongJump();
 }

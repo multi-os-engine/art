@@ -1086,8 +1086,8 @@ int Arm64Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
 
     // The rest can be copied together
     int start_offset = SRegOffset(info->args[last_mapped_in + 1].s_reg_low);
-    int outs_offset = StackVisitor::GetOutVROffset(last_mapped_in + 1,
-                                                   cu_->instruction_set);
+    int outs_offset = QuickFrame::GetOutVROffset(last_mapped_in + 1,
+                                                 cu_->instruction_set);
 
     int current_src_offset = start_offset;
     int current_dest_offset = outs_offset;
@@ -1126,7 +1126,7 @@ int Arm64Mir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
       rl_arg = UpdateRawLoc(rl_arg);
       RegStorage reg = in_to_reg_storage_mapping.Get(i);
       if (!reg.Valid()) {
-        int out_offset = StackVisitor::GetOutVROffset(i, cu_->instruction_set);
+        int out_offset = QuickFrame::GetOutVROffset(i, cu_->instruction_set);
 
         {
           ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
