@@ -537,12 +537,14 @@ RosAlloc::Run* RosAlloc::AllocRun(Thread* self, size_t idx) {
   {
     MutexLock mu(self, lock_);
     new_run = reinterpret_cast<Run*>(AllocPages(self, numOfPages[idx], kPageMapRun));
+    if (LIKELY(new_run != nullptr)) {
+      if (kIsDebugBuild) {
+        new_run->magic_num_ = kMagicNum;
+      }
+      new_run->size_bracket_idx_ = idx;
+    }
   }
   if (LIKELY(new_run != nullptr)) {
-    if (kIsDebugBuild) {
-      new_run->magic_num_ = kMagicNum;
-    }
-    new_run->size_bracket_idx_ = idx;
     new_run->SetAllocBitMapBitsForInvalidSlots();
     DCHECK(!new_run->IsThreadLocal());
     DCHECK_EQ(new_run->first_search_vec_idx_, 0U);
