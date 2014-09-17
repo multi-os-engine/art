@@ -59,13 +59,13 @@ class CodeVectorAllocator FINAL : public CodeAllocator {
 /**
  * If set to true, generates a file suitable for the c1visualizer tool and IRHydra.
  */
-static bool kIsVisualizerEnabled = false;
+static bool kIsVisualizerEnabled = true;
 
 /**
  * Filter to apply to the visualizer. Methods whose name contain that filter will
  * be in the file.
  */
-static const char* kStringFilter = "";
+static const char* kStringFilter = "hasNext";
 
 class OptimizingCompiler FINAL : public Compiler {
  public:
@@ -248,6 +248,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   CodeVectorAllocator allocator;
 
   if (run_optimizations_ && RegisterAllocator::CanAllocateRegistersFor(*graph, instruction_set)) {
+    fprintf(stderr, "compiling %s\n", dex_compilation_unit.GetSymbol().c_str());
     optimized_compiled_methods_++;
     graph->BuildDominatorTree();
     graph->TransformToSSA();
