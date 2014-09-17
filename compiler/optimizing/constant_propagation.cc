@@ -34,7 +34,8 @@ void ConstantPropagation::Run() {
       // Constant folding: replace `c <- a op b' with a compile-time
       // evaluation of `a op b' if `a' and `b' are constant.
       if (inst->IsBinaryOperation()) {
-        HConstant* constant = inst->AsBinaryOperation()->TryStaticEvaluation();
+        inst->AsBinaryOperation()->Accept(&static_evaluator_);
+        HConstant* constant = static_evaluator_.GetResult();
         if (constant != nullptr) {
           inst->GetBlock()->ReplaceAndRemoveInstructionWith(inst, constant);
         }
