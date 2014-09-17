@@ -86,6 +86,7 @@ class HGraph : public ArenaObject {
         number_of_temporaries_(0),
         current_instruction_id_(0) {}
 
+  // TODO: arena -> allocator (and elsewhere as well).
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
 
@@ -1004,36 +1005,9 @@ class HBinaryOperation : public HExpression<2> {
   virtual bool CanBeMoved() const { return true; }
   virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
 
-  // If this node can be evaluated statically, return a node
-  // containing the result of the evaluation.  Otherwise, return
-  // nullptr.
-  virtual HConstant* TryStaticEvaluation() const = 0;
-
   DECLARE_INSTRUCTION(BinaryOperation);
 
- protected:
-  template <typename O>
-  HConstant* TryStaticEvaluationDispatch(O* operation) const {
-    if (GetLeft()->IsIntConstant() && GetRight()->IsIntConstant()) {
-      return StaticEvaluation(operation,
-                              GetLeft()->AsIntConstant(),
-                              GetRight()->AsIntConstant());
-    } else if (GetLeft()->IsLongConstant() && GetRight()->IsLongConstant()) {
-      return StaticEvaluation(operation,
-                              GetLeft()->AsLongConstant(),
-                              GetRight()->AsLongConstant());
-    }
-    return nullptr;
-  }
-
  private:
-  template <typename O, typename T>
-    T* StaticEvaluation(O* operation, T* left, T* right) const {
-      ArenaAllocator* arena = GetBlock()->GetGraph()->GetArena();
-      return new(arena) T(operation->Evaluate(left->GetValue(),
-                                              right->GetValue()));
-  }
-
   DISALLOW_COPY_AND_ASSIGN(HBinaryOperation);
 };
 
@@ -1059,10 +1033,6 @@ class HEqual : public HCondition {
   HEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
-  virtual HConstant* TryStaticEvaluation() const {
-    return TryStaticEvaluationDispatch(this);
-  }
-
   template <typename T>
   bool Evaluate(const T& x, const T& y) const { return x == y; }
 
@@ -1080,10 +1050,6 @@ class HNotEqual : public HCondition {
  public:
   HNotEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
-
-  virtual HConstant* TryStaticEvaluation() const {
-    return TryStaticEvaluationDispatch(this);
-  }
 
   template <typename T>
   bool Evaluate(const T& x, const T& y) const { return x != y; }
@@ -1103,10 +1069,6 @@ class HLessThan : public HCondition {
   HLessThan(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
-  virtual HConstant* TryStaticEvaluation() const {
-    return TryStaticEvaluationDispatch(this);
-  }
-
   template <typename T>
   bool Evaluate(const T& x, const T& y) const { return x < y; }
 
@@ -1124,10 +1086,6 @@ class HLessThanOrEqual : public HCondition {
  public:
   HLessThanOrEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
-
-  virtual HConstant* TryStaticEvaluation() const {
-    return TryStaticEvaluationDispatch(this);
-  }
 
   template <typename T>
   bool Evaluate(const T& x, const T& y) const { return x <= y; }
@@ -1147,10 +1105,6 @@ class HGreaterThan : public HCondition {
   HGreaterThan(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
-  virtual HConstant* TryStaticEvaluation() const {
-    return TryStaticEvaluationDispatch(this);
-  }
-
   template <typename T>
   bool Evaluate(const T& x, const T& y) const { return x > y; }
 
@@ -1168,10 +1122,6 @@ class HGreaterThanOrEqual : public HCondition {
  public:
   HGreaterThanOrEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
-
-  virtual HConstant* TryStaticEvaluation() const {
-    return TryStaticEvaluationDispatch(this);
-  }
 
   template <typename T>
   bool Evaluate(const T& x, const T& y) const { return x >= y; }
@@ -1195,10 +1145,6 @@ class HCompare : public HBinaryOperation {
       : HBinaryOperation(Primitive::kPrimInt, first, second) {
     DCHECK_EQ(type, first->GetType());
     DCHECK_EQ(type, second->GetType());
-  }
-
-  virtual HConstant* TryStaticEvaluation() const {
-    return TryStaticEvaluationDispatch(this);
   }
 
   template <typename T>
@@ -1405,10 +1351,6 @@ class HAdd : public HBinaryOperation {
 
   virtual bool IsCommutative() { return true; }
 
-  virtual HConstant* TryStaticEvaluation() const {
-    return TryStaticEvaluationDispatch(this);
-  }
-
   template <typename T>
   T Evaluate(const T& x, const T& y) const { return x + y; }
 
@@ -1424,10 +1366,6 @@ class HSub : public HBinaryOperation {
       : HBinaryOperation(result_type, left, right) {}
 
   virtual bool IsCommutative() { return false; }
-
-  virtual HConstant* TryStaticEvaluation() const {
-    return TryStaticEvaluationDispatch(this);
-  }
 
   template <typename T>
   T Evaluate(const T& x, const T& y) const { return x - y; }
