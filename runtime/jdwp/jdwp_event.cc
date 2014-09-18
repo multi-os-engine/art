@@ -317,7 +317,7 @@ void JdwpState::UnregisterEventById(uint32_t requestId) {
   if (found) {
     Dbg::ManageDeoptimization();
   } else {
-    LOG(WARNING) << StringPrintf("Odd: no match when removing event reqId=0x%04x", requestId);
+    VLOG(jdwp) << StringPrintf("Odd: no match when removing event reqId=0x%04x", requestId);
   }
 }
 
