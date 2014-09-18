@@ -158,6 +158,15 @@ void SSAChecker::VisitBasicBlock(HBasicBlock* block) {
       }
     }
   }
+
+  // Ensure the pre-header block is first in the list of predecessors
+  // of a loop header.
+  if (block->IsLoopHeader() && !block->IsLoopPreHeaderFirstPredecessor()) {
+      std::stringstream error;
+      error << "Pre-header of loop header block " << block
+            << " is not the first predecessor the latter.";
+      errors_.Insert(error.str());
+    }
 }
 
 void SSAChecker::VisitInstruction(HInstruction* instruction) {
@@ -177,6 +186,19 @@ void SSAChecker::VisitInstruction(HInstruction* instruction) {
             << " in block " << current_block_->GetBlockId() << ".";
       errors_.Insert(error.str());
     }
+  }
+}
+
+void SSAChecker::VisitPhi(HPhi* phi) {
+  VisitInstruction(phi);
+
+  // Ensure the first input of a phi in a loop is not itself.
+  if (phi->IsInLoop() && phi->InputAt(0) == phi) {
+      std::stringstream error;
+      error << "Loop phi " << phi->GetId()
+            << " in block " << phi->GetBlock()->GetBlockId()
+            << " is its own first input.";
+      errors_.Insert(error.str());
   }
 }
 
