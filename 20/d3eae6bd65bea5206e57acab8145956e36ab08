@@ -1,0 +1,7 @@
+Code-Review+2: Brian Carlstrom <bdc@google.com>
+Verified+1: Nicolas Geoffray <ngeoffray@google.com>
+Submitted-by: Nicolas Geoffray <ngeoffray@google.com>
+Submitted-at: Fri, 19 Sep 2014 08:29:26 +0000
+Reviewed-on: https://android-review.googlesource.com/108021
+Project: platform/art
+Branch: refs/heads/master
