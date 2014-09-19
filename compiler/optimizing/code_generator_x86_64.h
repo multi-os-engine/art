@@ -131,6 +131,8 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   virtual void GenerateFrameExit() OVERRIDE;
   virtual void Bind(Label* label) OVERRIDE;
   virtual void Move(HInstruction* instruction, Location location, HInstruction* move_for) OVERRIDE;
+  virtual void SaveCpuRegister(Location stack_location, uint32_t reg_id) OVERRIDE;
+  virtual void RestoreCpuRegister(Location stack_location, uint32_t reg_id) OVERRIDE;
 
   virtual size_t GetWordSize() const OVERRIDE {
     return kX86_64WordSize;
