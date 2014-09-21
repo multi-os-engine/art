@@ -127,6 +127,11 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       }
     } else if (location.IsConstant()) {
       output_ << "constant";
+      if (location.GetConstant()->IsIntConstant()) {
+        output_ << " " << location.GetConstant()->AsIntConstant()->GetValue();
+      } else if (location.GetConstant()->IsLongConstant()) {
+        output_ << " " << location.GetConstant()->AsLongConstant()->GetValue();
+      }
     } else if (location.IsInvalid()) {
       output_ << "invalid";
     } else if (location.IsStackSlot()) {

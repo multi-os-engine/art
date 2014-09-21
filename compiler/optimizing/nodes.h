@@ -629,6 +629,7 @@ class HInstruction : public ArenaObject {
   }
 
   void RemoveUser(HInstruction* user, size_t index);
+  void RemoveEnvironmentUser(HInstruction* user, size_t index);
 
   HUseListNode<HInstruction>* GetUses() const { return uses_; }
   HUseListNode<HEnvironment>* GetEnvUses() const { return env_uses_; }

@@ -577,7 +577,7 @@ void LocationsBuilderARM::VisitIf(HIf* if_instr) {
   DCHECK(cond->IsCondition());
   HCondition* condition = cond->AsCondition();
   if (condition->NeedsMaterialization()) {
-    locations->SetInAt(0, Location::Any());
+    locations->SetInAt(0, Location::RequiresRegister());
   }
 }
 
