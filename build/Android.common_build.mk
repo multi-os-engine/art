@@ -157,7 +157,7 @@ art_cflags := \
   -Wno-sign-promo \
   -Wno-unused-parameter \
   -Wstrict-aliasing \
-  -fstrict-aliasing \
+  -fno-strict-aliasing \
   -fvisibility=protected
 
 ART_TARGET_CLANG_CFLAGS :=
