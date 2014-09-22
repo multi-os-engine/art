@@ -160,6 +160,15 @@ art_cflags := \
   -fstrict-aliasing \
   -fvisibility=protected
 
+ifeq ($(TARGET_ARCH),$(filter $(TARGET_ARCH),mips mips64))
+  ifeq ($(ART_TARGET_CLANG),)
+    # Workaround codeopt problem seen in CreateMultiArray
+    #   when compiled by mips 4.9 gcc
+    #   blamed on class-based address analysis of handle.h
+    art_cflags += -fno-strict-aliasing
+  endif  # not clang
+endif  # mips
+
 ART_TARGET_CLANG_CFLAGS :=
 ART_TARGET_CLANG_CFLAGS_arm :=
 ART_TARGET_CLANG_CFLAGS_arm64 :=
