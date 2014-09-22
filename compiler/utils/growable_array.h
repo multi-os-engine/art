@@ -26,19 +26,14 @@ namespace art {
 // Type of growable list for memory tuning.
 enum OatListKind {
   kGrowableArrayMisc = 0,
-  kGrowableArrayBlockList,
-  kGrowableArraySSAtoDalvikMap,
-  kGrowableArrayDfsOrder,
-  kGrowableArrayDfsPostOrder,
-  kGrowableArrayDomPostOrderTraversal,
   kGrowableArraySwitchTables,
   kGrowableArrayFillArrayData,
-  kGrowableArraySuccessorBlocks,
-  kGrowableArrayPredecessors,
   kGrowableArraySlowPaths,
   kGNumListKinds
 };
 
+// Deprecated
+// TODO: Replace all uses with ArenaVector<T>.
 template<typename T>
 class GrowableArray {
   public:
