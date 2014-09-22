@@ -2201,8 +2201,6 @@ void X86Mir2Lir::GenReduceVector(BasicBlock *bb, MIR *mir) {
   OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
   RegLocation rl_dest = mir_graph_->GetDest(mir);
   RegStorage vector_src = RegStorage::Solo128(mir->dalvikInsn.vB);
-  int extract_index = mir->dalvikInsn.arg[0];
-  int extr_opcode = 0;
   RegLocation rl_result;
   bool is_wide = false;
 
@@ -2256,16 +2254,21 @@ void X86Mir2Lir::GenReduceVector(BasicBlock *bb, MIR *mir) {
 
     StoreValueWide(rl_dest, rl_result);
   } else {
+    int extract_index = mir->dalvikInsn.arg[0];
+    int extr_opcode = 0;
+    rl_result = UpdateLocTyped(rl_dest, kCoreReg);
+
     // Handle the rest of integral types now.
     switch (opsize) {
       case k32:
-        rl_result = UpdateLocTyped(rl_dest, kCoreReg);
-        extr_opcode = (rl_result.location == kLocPhysReg) ? kX86PextrdMRI : kX86PextrdRRI;
+        extr_opcode = (rl_result.location == kLocPhysReg) ? kX86PextrdRRI : kX86PextrdMRI;
         break;
       case kSignedHalf:
       case kUnsignedHalf:
-        rl_result= UpdateLocTyped(rl_dest, kCoreReg);
-        extr_opcode = (rl_result.location == kLocPhysReg) ? kX86PextrwMRI : kX86PextrwRRI;
+        extr_opcode = (rl_result.location == kLocPhysReg) ? kX86PextrwRRI : kX86PextrwMRI;
+        break;
+      case kSignedByte:
+        extr_opcode = (rl_result.location == kLocPhysReg) ? kX86PextrbRRI : kX86PextrbMRI;
         break;
       default:
         LOG(FATAL) << "Unsupported vector reduce " << opsize;
@@ -2274,11 +2277,7 @@ void X86Mir2Lir::GenReduceVector(BasicBlock *bb, MIR *mir) {
 
     if (rl_result.location == kLocPhysReg) {
       NewLIR3(extr_opcode, rl_result.reg.GetReg(), vector_src.GetReg(), extract_index);
-      if (is_wide == true) {
-        StoreFinalValue(rl_dest, rl_result);
-      } else {
-        StoreFinalValueWide(rl_dest, rl_result);
-      }
+      StoreFinalValue(rl_dest, rl_result);
     } else {
       int displacement = SRegOffset(rl_result.s_reg_low);
       LIR *l = NewLIR3(extr_opcode, rs_rX86_SP.GetReg(), displacement, vector_src.GetReg());
