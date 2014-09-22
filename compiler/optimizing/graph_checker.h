@@ -67,9 +67,12 @@ class SSAChecker : public GraphChecker {
 
   // Perform SSA form checks on `block`.
   virtual void VisitBasicBlock(HBasicBlock* block) OVERRIDE;
+  // Loop-related checks on loop header `block`.
+  void CheckLoop(HBasicBlock* block);
 
-  // Perform SSA form checks on `instruction`.
+  // Perform SSA form checks on instructions.
   virtual void VisitInstruction(HInstruction* instruction) OVERRIDE;
+  virtual void VisitPhi(HPhi* phi) OVERRIDE;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SSAChecker);
