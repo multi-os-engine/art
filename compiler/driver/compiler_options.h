@@ -185,6 +185,14 @@ class CompilerOptions {
     implicit_suspend_checks_ = new_val;
   }
 
+  bool GetFailOnSoftErrors() const {
+    return fail_on_soft_errors_;
+  }
+
+  void SetFailOnSoftErrors(bool new_val) {
+    fail_on_soft_errors_ = new_val;
+  }
+
 #ifdef ART_SEA_IR_MODE
   bool GetSeaIrMode();
 #endif
@@ -212,6 +220,7 @@ class CompilerOptions {
   bool implicit_null_checks_;
   bool implicit_so_checks_;
   bool implicit_suspend_checks_;
+  bool fail_on_soft_errors_;
 #ifdef ART_SEA_IR_MODE
   bool sea_ir_mode_;
 #endif

@@ -515,8 +515,14 @@ std::ostream& MethodVerifier::Fail(VerifyError error) {
       break;
       // Indication that verification should be retried at runtime.
     case VERIFY_ERROR_BAD_CLASS_SOFT:
-      if (!allow_soft_failures_) {
+      if (!allow_soft_failures_ || Runtime::Current()->GetFailOnSoftErrors()) {
         have_pending_hard_failure_ = true;
+        // If we're in the compiler, and we got here because we're forcing soft errors
+        // to be treated as hard, then set this soft error as hard explicitly, or the
+        // assertion that the last error should be hard will fail.
+        if (Runtime::Current()->GetFailOnSoftErrors() && Runtime::Current()->IsCompiler()) {
+          error = VERIFY_ERROR_BAD_CLASS_HARD;
+        }
       }
       break;
       // Hard verification failures at compile time will still fail at runtime, so the class is

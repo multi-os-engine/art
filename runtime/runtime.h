@@ -133,6 +133,14 @@ class Runtime {
     return compiler_options_;
   }
 
+  bool GetFailOnSoftErrors() const {
+    return fail_on_soft_errors_;
+  }
+
+  void SetFailOnSoftErrors(bool new_val) {
+    fail_on_soft_errors_ = new_val;
+  }
+
   const std::vector<std::string>& GetImageCompilerOptions() const {
     return image_compiler_options_;
   }
@@ -637,6 +645,8 @@ class Runtime {
   bool implicit_null_checks_;       // NullPointer checks are implicit.
   bool implicit_so_checks_;         // StackOverflow checks are implicit.
   bool implicit_suspend_checks_;    // Thread suspension checks are implicit.
+
+  bool fail_on_soft_errors_;
 
   // The filename to the native bridge library. If this is not empty the native bridge will be
   // initialized and loaded from the given file (initialized and available). An empty value means

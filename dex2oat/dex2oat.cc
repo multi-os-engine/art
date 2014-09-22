@@ -211,6 +211,8 @@ static void Usage(const char* fmt, ...) {
   UsageError("");
   UsageError("  --dump-timing: display a breakdown of where time was spent");
   UsageError("");
+  UsageError("  --fail-on-soft-errors: force soft verification errors to be treated as hard ones");
+  UsageError("");
   UsageError("  --include-patch-information: Include patching information so the generated code");
   UsageError("      can have its base address moved without full recompilation.");
   UsageError("");
@@ -880,6 +882,7 @@ static int dex2oat(int argc, char** argv) {
   bool implicit_null_checks = false;
   bool implicit_so_checks = false;
   bool implicit_suspend_checks = false;
+  bool fail_on_soft_errors = false;
 
   for (int i = 0; i < argc; i++) {
     const StringPiece option(argv[i]);
@@ -1032,6 +1035,8 @@ static int dex2oat(int argc, char** argv) {
       dump_passes = true;
     } else if (option == "--dump-stats") {
       dump_stats = true;
+    } else if (option == "--fail-on-soft-errors") {
+      fail_on_soft_errors = true;
     } else if (option == "--include-debug-symbols" || option == "--no-strip-symbols") {
       include_debug_symbols = true;
     } else if (option == "--no-include-debug-symbols" || option == "--strip-symbols") {
@@ -1233,6 +1238,8 @@ static int dex2oat(int argc, char** argv) {
 #endif
   ));  // NOLINT(whitespace/parens)
 
+  compiler_options->SetFailOnSoftErrors(fail_on_soft_errors);
+
   // Done with usage checks, enable watchdog if requested
   WatchDog watch_dog(watch_dog_enabled);
 
@@ -1300,6 +1307,10 @@ static int dex2oat(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   std::unique_ptr<Dex2Oat> dex2oat(p_dex2oat);
+
+  if (compiler_options->GetFailOnSoftErrors()) {
+    Runtime::Current()->SetFailOnSoftErrors(true);
+  }
 
   // Runtime::Create acquired the mutator_lock_ that is normally given away when we Runtime::Start,
   // give it away now so that we don't starve GC.

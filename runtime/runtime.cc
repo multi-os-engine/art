@@ -144,7 +144,8 @@ Runtime::Runtime()
       target_sdk_version_(0),
       implicit_null_checks_(false),
       implicit_so_checks_(false),
-      implicit_suspend_checks_(false) {
+      implicit_suspend_checks_(false),
+      fail_on_soft_errors_(false) {
 }
 
 Runtime::~Runtime() {
