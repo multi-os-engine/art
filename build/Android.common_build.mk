@@ -196,6 +196,15 @@ art_cflags := \
   -fvisibility=protected \
   $(art_default_gc_type_cflags)
 
+ifeq ($(TARGET_ARCH),$(filter $(TARGET_ARCH),mips mips64))
+  ifeq ($(ART_TARGET_CLANG),)
+    # Workaround codeopt problem seen in CreateMultiArray
+    #   when compiled by mips 4.9 gcc
+    #   blamed on class-based address analysis of handle.h
+    art_cflags += -fno-strict-aliasing
+  endif  # not clang
+endif  # mips
+
 ifeq ($(ART_SMALL_MODE),true)
   art_cflags += -DART_SMALL_MODE=1
 endif
