@@ -39,6 +39,8 @@ enum OatListKind {
   kGNumListKinds
 };
 
+// Deprecated
+// TODO: Replace all uses with ArenaVector<T>.
 template<typename T>
 class GrowableArray {
   public:
