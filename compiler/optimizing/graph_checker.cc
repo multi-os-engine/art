@@ -158,6 +158,42 @@ void SSAChecker::VisitBasicBlock(HBasicBlock* block) {
       }
     }
   }
+
+  if (block->IsLoopHeader()) {
+    // Ensure the pre-header block is first in the list of
+    // predecessors of a loop header.
+    if (!block->IsLoopPreHeaderFirstPredecessor()) {
+      std::stringstream error;
+      error
+        << "Loop pre-header is not the first predecessor of the loop header "
+        << block->GetBlockId() << ".";
+      errors_.Insert(error.str());
+    }
+
+    // Ensure the loop header has only two predecessors and that the
+    // last one is the back edge.
+    if (block->GetPredecessors().Size() < 2) {
+      std::stringstream error;
+      error << "Loop header " << block->GetBlockId()
+            << " has less than two predecessors.";
+      errors_.Insert(error.str());
+    } else {
+      HLoopInformation* loop_information = block->GetLoopInformation();
+      HBasicBlock* second_predecessor = block->GetPredecessors().Get(1);
+      if (!loop_information->IsBackEdge(second_predecessor)) {
+        std::stringstream error;
+        error << "Second predecessor of loop header " << block->GetBlockId()
+              << " is not a back edge.";
+        errors_.Insert(error.str());
+      }
+      if (block->GetPredecessors().Size() > 2) {
+        std::stringstream error;
+        error << "Loop header " << block->GetBlockId()
+              << " has more than two predecessors.";
+        errors_.Insert(error.str());
+      }
+    }
+  }
 }
 
 void SSAChecker::VisitInstruction(HInstruction* instruction) {
@@ -175,6 +211,57 @@ void SSAChecker::VisitInstruction(HInstruction* instruction) {
             << " in block " << input->GetBlock()->GetBlockId()
             << " does not dominate use " << instruction->GetId()
             << " in block " << current_block_->GetBlockId() << ".";
+      errors_.Insert(error.str());
+    }
+  }
+}
+
+void SSAChecker::VisitPhi(HPhi* phi) {
+  VisitInstruction(phi);
+
+  // Ensure the first input of a phi is not itself.
+  if (phi->InputAt(0) == phi) {
+      std::stringstream error;
+      error << "Loop phi " << phi->GetId()
+            << " in block " << phi->GetBlock()->GetBlockId()
+            << " is its own first input.";
+      errors_.Insert(error.str());
+  }
+
+  // Ensure the number of phi inputs is the same as the number of
+  // its predecessors.
+  const GrowableArray<HBasicBlock*>& predecessors =
+    phi->GetBlock()->GetPredecessors();
+  if (phi->InputCount() != predecessors.Size()) {
+    std::stringstream error;
+    error << "Phi " << phi->GetId()
+          << " in block " << phi->GetBlock()->GetBlockId()
+          << " has " << phi->InputCount() << " inputs, but block "
+          << phi->GetBlock()->GetBlockId() << " has "
+          << predecessors.Size() << " predecessors.";
+    errors_.Insert(error.str());
+  }
+
+  // Ensure each phi input is either in a predecessor of the phi, or
+  // in a block that dominates a predecessor.
+  for (HInputIterator input_it(phi); !input_it.Done(); input_it.Advance()) {
+    HInstruction* input = input_it.Current();
+    bool input_in_predecessor_or_predecessor_dominator = false;
+    for (size_t i = 0; i < predecessors.Size(); ++i) {
+      HBasicBlock* predecessor = predecessors.Get(i);
+      if (input->GetBlock() == predecessor
+          || input->GetBlock()->Dominates(predecessor)) {
+        input_in_predecessor_or_predecessor_dominator = true;
+        break;
+      }
+    }
+    if (!input_in_predecessor_or_predecessor_dominator) {
+      std::stringstream error;
+      error << "Input " << input->GetId() << " of phi " << phi->GetId()
+            << " from block " << phi->GetBlock()->GetBlockId()
+            << " is defined in block " << input->GetBlock()->GetBlockId()
+            << " which is neither a predecessor nor a dominator of a"
+            << " predecessor of block "<< phi->GetBlock()->GetBlockId() << ".";
       errors_.Insert(error.str());
     }
   }
