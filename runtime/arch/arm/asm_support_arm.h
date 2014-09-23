@@ -19,6 +19,14 @@
 
 #include "asm_support.h"
 
+// Note: these callee save methods loads require read barriers.
+// Offset of field Runtime::callee_save_methods_[kSaveAll]
+#define RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET 0
+// Offset of field Runtime::callee_save_methods_[kRefsOnly]
+#define RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET 4
+// Offset of field Runtime::callee_save_methods_[kRefsAndArgs]
+#define RUNTIME_REF_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET 8
+
 // Offset of field Thread::tls32_.state_and_flags verified in InitCpu
 #define THREAD_FLAGS_OFFSET 0
 // Offset of field Thread::tls32_.thin_lock_thread_id verified in InitCpu
@@ -27,6 +35,8 @@
 #define THREAD_CARD_TABLE_OFFSET 120
 // Offset of field Thread::tlsPtr_.exception verified in InitCpu
 #define THREAD_EXCEPTION_OFFSET 124
+// Offset of field Thread::tlsPtr_.exception verified in InitCpu
+#define THREAD_TOP_QUICK_FRAME_OFFSET 124
 
 #define FRAME_SIZE_SAVE_ALL_CALLEE_SAVE 176
 #define FRAME_SIZE_REFS_ONLY_CALLEE_SAVE 32

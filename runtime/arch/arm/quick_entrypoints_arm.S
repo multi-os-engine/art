@@ -24,11 +24,27 @@
     .extern artDeliverPendingException
 
     /*
+     * Place the specified runtime callee save method into [SP] and place SP in the TLS top quick
+     * frame.
+     */
+.macro WRITE_CALLEE_SAVE_ANCHOR anchor_offset, rTemp1, rTemp2
+    ldr \rTemp1, .Lgot  @ Load Runtime::instance_[kSaveAll]
+    ldr \rTemp2, .Lruntime_instance
+    add \rTemp1, pc
+.Lload_got:
+    ldr \rTemp1, [\rTemp1, \rTemp2]
+    THIS_LOAD_REQUIRES_READ_BARRIER
+    ldr \rTemp1, [\rTemp1, #\anchor_offset]
+    str \rTemp1, [sp, #0]  @ Place Method* at bottom of stack.
+    str sp, [r9, #THREAD_TOP_QUICK_FRAME_OFFSET]  @ Place sp in Thread::Current()->top_quick_frame.
+.endm
+
+    /*
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kSaveAll)
      */
-.macro SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
-    push {r4-r11, lr} @ 9 words of callee saves
+.macro SETUP_SAVE_ALL_CALLEE_SAVE_FRAME rTemp1, rTemp2
+    push {r4-r11, lr}  @ 9 words (36 bytes) of callee saves
     .save {r4-r11, lr}
     .cfi_adjust_cfa_offset 36
     .cfi_rel_offset r4, 0
@@ -40,12 +56,13 @@
     .cfi_rel_offset r10, 24
     .cfi_rel_offset r11, 28
     .cfi_rel_offset lr, 32
-    vpush {s0-s31}
+    vpush {s0-s31}  @ 32 words (128 bytes) of floats
     .pad #128
     .cfi_adjust_cfa_offset 128
-    sub sp, #12       @ 3 words of space, bottom word will hold Method*
+    sub sp, #12     @ 3 words of space, bottom word will hold Method*
     .pad #12
     .cfi_adjust_cfa_offset 12
+    WRITE_CALLEE_SAVE_ANCHOR RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET, \rTemp1, \rTemp2
 
      // Ugly compile-time check, but we only have the preprocessor.
 #if (FRAME_SIZE_SAVE_ALL_CALLEE_SAVE != 36 + 128 + 12)
@@ -57,7 +74,7 @@
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kRefsOnly).
      */
-.macro SETUP_REF_ONLY_CALLEE_SAVE_FRAME
+.macro SETUP_REF_ONLY_CALLEE_SAVE_FRAME rTemp1, rTemp2
     push {r5-r8, r10-r11, lr} @ 7 words of callee saves
     .save {r5-r8, r10-r11, lr}
     .cfi_adjust_cfa_offset 28
@@ -71,6 +88,7 @@
     sub sp, #4                @ bottom word will hold Method*
     .pad #4
     .cfi_adjust_cfa_offset 4
+    WRITE_CALLEE_SAVE_ANCHOR RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET, \rTemp1, \rTemp2
 
     // Ugly compile-time check, but we only have the preprocessor.
 #if (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE != 28 + 4)
@@ -107,7 +125,7 @@
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kRefsAndArgs).
      */
-.macro SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
+.macro SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME rTemp1, rTemp2
     push {r1-r3, r5-r8, r10-r11, lr}  @ 10 words of callee saves
     .save {r1-r3, r5-r8, r10-r11, lr}
     .cfi_rel_offset r1, 0
@@ -124,6 +142,7 @@
     sub sp, #8                        @ 2 words of space, bottom word will hold Method*
     .pad #8
     .cfi_adjust_cfa_offset 8
+    WRITE_CALLEE_SAVE_ANCHOR RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET, \rTemp1, \rTemp2
 
     // Ugly compile-time check, but we only have the preprocessor.
 #if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != 40 + 8)
@@ -146,6 +165,18 @@
     .cfi_adjust_cfa_offset -48
 .endm
 
+    /*
+     * Declare symbols used by SETUP_..._CALLEE_SAVE_FRAME.
+     * TODO: why is it so painful on ARM to address a global variable in the same .so, 3 loads and
+     *       an add?!?
+     */
+.macro DECLARE_CALLEE_SAVE_GOT_SYMBOLS
+.Lgot:
+    .word   _GLOBAL_OFFSET_TABLE_-(.Lload_got)
+.Lruntime_instance:
+    .word   _ZN3art7Runtime9instance_E(GOT)
+.endm
+
 .macro RETURN_IF_RESULT_IS_ZERO
     cbnz   r0, 1f              @ result non-zero branch over
     bx     lr                  @ return
@@ -165,41 +196,43 @@
 .macro DELIVER_PENDING_EXCEPTION
     .fnend
     .fnstart
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME           @ save callee saves for throw
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r0, r1    @ save callee saves for throw
     mov    r0, r9                              @ pass Thread::Current
     mov    r1, sp                              @ pass SP
     b      artDeliverPendingExceptionFromCode  @ artDeliverPendingExceptionFromCode(Thread*, SP)
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 .endm
 
 .macro NO_ARG_RUNTIME_EXCEPTION c_name, cxx_name
     .extern \cxx_name
 ENTRY \c_name
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  r0, r1 // save all registers as basis for long jump context
     mov r0, r9                      @ pass Thread::Current
     mov r1, sp                      @ pass SP
     b   \cxx_name                   @ \cxx_name(Thread*, SP)
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END \c_name
 .endm
 
 .macro ONE_ARG_RUNTIME_EXCEPTION c_name, cxx_name
     .extern \cxx_name
 ENTRY \c_name
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r1, r2  // save all registers as basis for long jump context
     mov r1, r9                      @ pass Thread::Current
     mov r2, sp                      @ pass SP
     b   \cxx_name                   @ \cxx_name(Thread*, SP)
-    bkpt
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END \c_name
 .endm
 
 .macro TWO_ARG_RUNTIME_EXCEPTION c_name, cxx_name
     .extern \cxx_name
 ENTRY \c_name
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  r2, r3  // save all registers as basis for long jump context
     mov r2, r9                      @ pass Thread::Current
     mov r3, sp                      @ pass SP
     b   \cxx_name                   @ \cxx_name(Thread*, SP)
-    bkpt
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END \c_name
 .endm
 
@@ -224,20 +257,21 @@ END \c_name
 .macro  ONE_ARG_REF_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME r1, r2  @ save callee saves in case of GC
     ldr    r1, [sp, #32]                 @ pass referrer
     mov    r2, r9                        @ pass Thread::Current
     mov    r3, sp                        @ pass SP
     bl     \entrypoint                   @ (uint32_t field_idx, const Method* referrer, Thread*, SP)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     \return
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END \name
 .endm
 
 .macro  TWO_ARG_REF_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME r2, r3  @ save callee saves in case of GC
     ldr    r2, [sp, #32]                 @ pass referrer
     mov    r3, r9                        @ pass Thread::Current
     mov    r12, sp
@@ -249,13 +283,14 @@ ENTRY \name
     .cfi_adjust_cfa_offset -16
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     \return
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END \name
 .endm
 
 .macro  THREE_ARG_REF_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME     @ save callee saves in case of GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME r3, r12  @ save callee saves in case of GC
     ldr    r3, [sp, #32]                 @ pass referrer
     mov    r12, sp                       @ save SP
     sub    sp, #8                        @ grow frame for alignment with stack args
@@ -271,6 +306,7 @@ ENTRY \name
     .cfi_adjust_cfa_offset -16
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME   @ TODO: we can clearly save an add here
     \return
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END \name
 .endm
 
@@ -325,7 +361,7 @@ ONE_ARG_RUNTIME_EXCEPTION art_quick_throw_no_such_method, artThrowNoSuchMethodFr
 .macro INVOKE_TRAMPOLINE c_name, cxx_name
     .extern \cxx_name
 ENTRY \c_name
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME  @ save callee saves in case allocation triggers GC
+    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME r2, r3  @ save callee saves in case allocation triggers GC
     ldr    r2, [sp, #48]                  @ pass caller Method*
     mov    r3, r9                         @ pass Thread::Current
     mov    r12, sp
@@ -341,6 +377,7 @@ ENTRY \c_name
     bx     r12                            @ tail call to target
 1:
     DELIVER_PENDING_EXCEPTION
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END \c_name
 .endm
 
@@ -428,13 +465,15 @@ END art_quick_do_long_jump
      */
     .extern artHandleFillArrayDataFromCode
 ENTRY art_quick_handle_fill_data
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  @ save callee saves in case exception allocation triggers GC
+    @ save callee saves in case exception allocation triggers GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME r2, r3
     mov    r2, r9                          @ pass Thread::Current
     mov    r3, sp                          @ pass SP
     bl     artHandleFillArrayDataFromCode  @ (Array*, const DexFile::Payload*, Thread*, SP)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     RETURN_IF_RESULT_IS_ZERO
     DELIVER_PENDING_EXCEPTION
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END art_quick_handle_fill_data
 
     /*
@@ -468,13 +507,14 @@ ENTRY art_quick_lock_object
     str    r2, [r0, #LOCK_WORD_OFFSET] @ no need for strex as we hold the lock
     bx lr
 .Lslow_lock:
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  @ save callee saves in case we block
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME r1, r2  @ save callee saves in case we block
     mov    r1, r9                     @ pass Thread::Current
     mov    r2, sp                     @ pass SP
     bl     artLockObjectFromCode      @ (Object* obj, Thread*, SP)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     RETURN_IF_RESULT_IS_ZERO
     DELIVER_PENDING_EXCEPTION
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END art_quick_lock_object
 
     /*
@@ -502,13 +542,15 @@ ENTRY art_quick_unlock_object
     str    r1, [r0, #LOCK_WORD_OFFSET]
     bx     lr
 .Lslow_unlock:
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  @ save callee saves in case exception allocation triggers GC
+    @ save callee saves in case exception allocation triggers GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME r1, r2
     mov    r1, r9                     @ pass Thread::Current
     mov    r2, sp                     @ pass SP
     bl     artUnlockObjectFromCode    @ (Object* obj, Thread*, SP)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     RETURN_IF_RESULT_IS_ZERO
     DELIVER_PENDING_EXCEPTION
+    DECLARE_CALLEE_SAVE_GOT_SYMBOLS
 END art_quick_unlock_object
 
     /*

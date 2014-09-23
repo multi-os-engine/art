@@ -192,9 +192,7 @@ TEST_F(ExceptionTest, StackTraceElement) {
     fake_stack.push_back(0);
 
     // Set up thread to appear as if we called out of method_g_ at pc dex 3
-    thread->SetTopOfStack(
-        reinterpret_cast<StackReference<mirror::ArtMethod>*>(&fake_stack[0]),
-        method_g_->ToNativePc(dex_pc));  // return pc
+    thread->SetTopOfStack(reinterpret_cast<StackReference<mirror::ArtMethod>*>(&fake_stack[0]));
   } else {
     // Create/push fake 20-byte shadow frame for method g
     fake_stack.push_back(0);
@@ -237,7 +235,7 @@ TEST_F(ExceptionTest, StackTraceElement) {
   EXPECT_EQ(22, trace_array->Get(1)->GetLineNumber());
 
 #if !defined(ART_USE_PORTABLE_COMPILER)
-  thread->SetTopOfStack(NULL, 0);  // Disarm the assertion that no code is running when we detach.
+  thread->SetTopOfStack(NULL);  // Disarm the assertion that no code is running when we detach.
 #else
   thread->PopShadowFrame();
   thread->PopShadowFrame();

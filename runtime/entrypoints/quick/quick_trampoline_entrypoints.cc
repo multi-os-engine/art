@@ -593,7 +593,7 @@ extern "C" uint64_t artQuickProxyInvokeHandler(mirror::ArtMethod* proxy_method,
       self->StartAssertNoThreadSuspension("Adding to IRT proxy object arguments");
   // Register the top of the managed stack, making stack crawlable.
   DCHECK_EQ(sp->AsMirrorPtr(), proxy_method) << PrettyMethod(proxy_method);
-  self->SetTopOfStack(sp, 0);
+  // self->SetTopOfStack(sp, 0);
   DCHECK_EQ(proxy_method->GetFrameSizeInBytes(),
             Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes())
       << PrettyMethod(proxy_method);
@@ -1617,7 +1617,7 @@ extern "C" TwoWordReturn artQuickGenericJniTrampoline(Thread* self,
   visitor.FinalizeHandleScope(self);
 
   // Fix up managed-stack things in Thread.
-  self->SetTopOfStack(sp, 0);
+  // self->SetTopOfStack(sp, 0);
 
   self->VerifyStack();
 

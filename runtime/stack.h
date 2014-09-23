@@ -360,7 +360,7 @@ class ShadowFrame {
 class PACKED(4) ManagedStack {
  public:
   ManagedStack()
-      : link_(NULL), top_shadow_frame_(NULL), top_quick_frame_(NULL), top_quick_frame_pc_(0) {}
+      : link_(NULL), top_shadow_frame_(NULL), top_quick_frame_(NULL) {}
 
   void PushManagedStackFragment(ManagedStack* fragment) {
     // Copy this top fragment into given fragment.
@@ -390,21 +390,8 @@ class PACKED(4) ManagedStack {
     top_quick_frame_ = top;
   }
 
-  uintptr_t GetTopQuickFramePc() const {
-    return top_quick_frame_pc_;
-  }
-
-  void SetTopQuickFramePc(uintptr_t pc) {
-    DCHECK(top_shadow_frame_ == NULL);
-    top_quick_frame_pc_ = pc;
-  }
-
   static size_t TopQuickFrameOffset() {
     return OFFSETOF_MEMBER(ManagedStack, top_quick_frame_);
-  }
-
-  static size_t TopQuickFramePcOffset() {
-    return OFFSETOF_MEMBER(ManagedStack, top_quick_frame_pc_);
   }
 
   ShadowFrame* PushShadowFrame(ShadowFrame* new_top_frame) {
@@ -444,7 +431,6 @@ class PACKED(4) ManagedStack {
   ManagedStack* link_;
   ShadowFrame* top_shadow_frame_;
   StackReference<mirror::ArtMethod>* top_quick_frame_;
-  uintptr_t top_quick_frame_pc_;
 };
 
 class StackVisitor {
