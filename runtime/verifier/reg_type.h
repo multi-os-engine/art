@@ -358,6 +358,7 @@ class IntegerType : public Cat1Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const IntegerType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   IntegerType(mirror::Class* klass, const std::string& descriptor,
@@ -376,6 +377,7 @@ class BooleanType FINAL : public Cat1Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const BooleanType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   BooleanType(mirror::Class* klass, const std::string& descriptor,
@@ -395,6 +397,7 @@ class ByteType FINAL : public Cat1Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const ByteType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   ByteType(mirror::Class* klass, const std::string& descriptor,
@@ -413,6 +416,7 @@ class ShortType FINAL : public Cat1Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const ShortType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   ShortType(mirror::Class* klass, const std::string& descriptor,
@@ -431,6 +435,7 @@ class CharType FINAL : public Cat1Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const CharType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   CharType(mirror::Class* klass, const std::string& descriptor,
@@ -449,6 +454,7 @@ class FloatType FINAL : public Cat1Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const FloatType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   FloatType(mirror::Class* klass, const std::string& descriptor,
@@ -474,6 +480,7 @@ class LongLoType FINAL : public Cat2Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const LongLoType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   LongLoType(mirror::Class* klass, const std::string& descriptor,
@@ -492,6 +499,7 @@ class LongHiType FINAL : public Cat2Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const LongHiType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   LongHiType(mirror::Class* klass, const std::string& descriptor,
@@ -511,6 +519,7 @@ class DoubleLoType FINAL : public Cat2Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const DoubleLoType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   DoubleLoType(mirror::Class* klass, const std::string& descriptor,
@@ -529,6 +538,7 @@ class DoubleHiType FINAL : public Cat2Type {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static const DoubleHiType* GetInstance() PURE;
   static void Destroy();
+  bool HasClassVirtual() const OVERRIDE { return true; }
 
  private:
   DoubleHiType(mirror::Class* klass, const std::string& descriptor,
