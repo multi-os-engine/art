@@ -593,7 +593,7 @@ extern "C" uint64_t artQuickProxyInvokeHandler(mirror::ArtMethod* proxy_method,
       self->StartAssertNoThreadSuspension("Adding to IRT proxy object arguments");
   // Register the top of the managed stack, making stack crawlable.
   DCHECK_EQ(sp->AsMirrorPtr(), proxy_method) << PrettyMethod(proxy_method);
-  self->SetTopOfStack(sp, 0);
+  // self->SetTopOfStack(sp, 0);
   DCHECK_EQ(proxy_method->GetFrameSizeInBytes(),
             Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs)->GetFrameSizeInBytes())
       << PrettyMethod(proxy_method);
@@ -1216,6 +1216,7 @@ class ComputeNativeCallFrameSize {
       Primitive::Type cur_type_ = Primitive::GetType(shorty[i]);
       switch (cur_type_) {
         case Primitive::kPrimNot:
+          // TODO: fix abuse of mirror types.
           sm.AdvanceHandleScope(
               reinterpret_cast<mirror::Object*>(0x12345678));
           break;
@@ -1611,13 +1612,13 @@ extern "C" TwoWordReturn artQuickGenericJniTrampoline(Thread* self,
   uint32_t shorty_len = 0;
   const char* shorty = called->GetShorty(&shorty_len);
 
-  // Run the visitor.
+  // Run the visitor and update sp.
   BuildGenericJniFrameVisitor visitor(&sp, called->IsStatic(), shorty, shorty_len, self);
   visitor.VisitArguments();
   visitor.FinalizeHandleScope(self);
 
   // Fix up managed-stack things in Thread.
-  self->SetTopOfStack(sp, 0);
+  self->SetTopOfStack(sp);
 
   self->VerifyStack();
 
@@ -1746,6 +1747,7 @@ template<InvokeType type, bool access_check>
 static TwoWordReturn artInvokeCommon(uint32_t method_idx, mirror::Object* this_object,
                                      mirror::ArtMethod* caller_method,
                                      Thread* self, StackReference<mirror::ArtMethod>* sp) {
+  CHECK_EQ(sp->AsMirrorPtr(), Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs));
   mirror::ArtMethod* method = FindMethodFast(method_idx, this_object, caller_method, access_check,
                                              type);
   if (UNLIKELY(method == nullptr)) {

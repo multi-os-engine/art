@@ -42,8 +42,8 @@ static inline void FinishCalleeSaveFrameSetup(Thread* self, StackReference<mirro
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   // Be aware the store below may well stomp on an incoming argument.
   Locks::mutator_lock_->AssertSharedHeld(self);
-  sp->Assign(Runtime::Current()->GetCalleeSaveMethod(type));
-  self->SetTopOfStack(sp, 0);
+  CHECK_EQ(sp->AsMirrorPtr(), Runtime::Current()->GetCalleeSaveMethod(type));
+  // self->SetTopOfStack(sp, 0);
   self->VerifyStack();
 }
 

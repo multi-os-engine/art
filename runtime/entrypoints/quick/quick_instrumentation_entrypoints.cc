@@ -63,7 +63,7 @@ extern "C" TwoWordReturn artInstrumentationMethodExitFromCode(Thread* self,
   uintptr_t* return_pc = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp) +
                                                       return_pc_offset);
   CHECK_EQ(*return_pc, 0U);
-  self->SetTopOfStack(sp, 0);
+  // self->SetTopOfStack(sp, 0);
   self->VerifyStack();
   instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
   TwoWordReturn return_or_deoptimize_pc = instrumentation->PopInstrumentationStackFrame(
