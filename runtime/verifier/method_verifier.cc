@@ -3737,7 +3737,14 @@ void MethodVerifier::VerifyISGet(const Instruction* inst, const RegType& insn_ty
     field = GetStaticField(field_idx);
   } else {
     const RegType& object_type = work_line_->GetRegisterType(this, inst->VRegB_22c());
+    bool had_pending_hard_failure = have_pending_hard_failure_;
     field = GetInstanceField(object_type, field_idx);
+    if (!had_pending_hard_failure && have_pending_hard_failure_) {
+      // GetInstanceField caused a hard error so leave now, rather than potentially
+      // raising another soft error, which breaks an assertion at the end of the switch
+      // statement in CodeFlowVerifyInstruction
+      return;
+    }
   }
   const RegType* field_type = nullptr;
   if (field != nullptr) {
@@ -3802,7 +3809,14 @@ void MethodVerifier::VerifyISPut(const Instruction* inst, const RegType& insn_ty
     field = GetStaticField(field_idx);
   } else {
     const RegType& object_type = work_line_->GetRegisterType(this, inst->VRegB_22c());
+    bool had_pending_hard_failure = have_pending_hard_failure_;
     field = GetInstanceField(object_type, field_idx);
+    if (!had_pending_hard_failure && have_pending_hard_failure_) {
+      // GetInstanceField caused a hard error so leave now, rather than potentially
+      // raising another soft error, which breaks an assertion at the end of the switch
+      // statement in CodeFlowVerifyInstruction
+      return;
+    }
   }
   const RegType* field_type = nullptr;
   if (field != nullptr) {
