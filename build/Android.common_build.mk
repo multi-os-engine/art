@@ -196,7 +196,7 @@ ART_TARGET_CLANG_CFLAGS_arm64 += \
   -fno-vectorize
 
 art_debug_cflags := \
-  -O2 \
+  -O1 \
   -DDYNAMIC_ANNOTATIONS_ENABLED=1 \
   -UNDEBUG
 

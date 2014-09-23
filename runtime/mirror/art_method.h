@@ -329,9 +329,11 @@ class MANAGED ArtMethod FINAL : public Object {
   void SetQuickOatCodeOffset(uint32_t code_offset) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void SetPortableOatCodeOffset(uint32_t code_offset) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  static const void* EntryPointToCodePointer(const void* entry_point) ALWAYS_INLINE {
+  ALWAYS_INLINE static const void* EntryPointToCodePointer(const void* entry_point) {
     uintptr_t code = reinterpret_cast<uintptr_t>(entry_point);
-    code &= ~0x1;  // TODO: Make this Thumb2 specific.
+    // TODO: Make this Thumb2 specific, its benign on other architectures as code is always 2 byte
+    //       aligned.
+    code &= ~0x1;
     return reinterpret_cast<const void*>(code);
   }
 
