@@ -58,7 +58,7 @@ MACRO0(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME)
     PUSH rbp  // Callee save.
     PUSH rbx  // Callee save.
     // Create space for FPR args, plus padding for alignment
-    subq LITERAL(4 * 8), %rsp
+    subq MACRO_LITERAL(4 * 8), %rsp
     CFI_ADJUST_CFA_OFFSET(4 * 8)
     // Save FPRs.
     movq %xmm12, 0(%rsp)
@@ -72,6 +72,8 @@ MACRO0(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME)
     movq RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
+    // Store rsp as the stop quick frame.
+    movq %rsp, %gs:THREAD_TOP_QUICK_FRAME_OFFSET
 
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +8: implicit return address pushed on stack when caller made call.
@@ -113,6 +115,8 @@ MACRO0(SETUP_REF_ONLY_CALLEE_SAVE_FRAME)
     movq RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
+    // Store rsp as the stop quick frame.
+    movq %rsp, %gs:THREAD_TOP_QUICK_FRAME_OFFSET
 
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +8: implicit return address pushed on stack when caller made call.
@@ -142,7 +146,7 @@ END_MACRO
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kRefsAndArgs)
      */
-MACRO0(SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME)
+MACRO0(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME)
 #if defined(__APPLE__)
     int3
     int3
@@ -167,7 +171,7 @@ MACRO0(SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME)
     CFI_ADJUST_CFA_OFFSET(80 + 4 * 8)
     // R10 := ArtMethod* for ref and args callee save frame method.
     THIS_LOAD_REQUIRES_READ_BARRIER
-    movq RUNTIME_REF_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
+    movq RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
     // Save FPRs.
     movq %xmm0, 16(%rsp)
     movq %xmm1, 24(%rsp)
@@ -183,6 +187,8 @@ MACRO0(SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME)
     movq %xmm15, 104(%rsp)
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
+    // Store rsp as the stop quick frame.
+    movq %rsp, %gs:THREAD_TOP_QUICK_FRAME_OFFSET
 
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +8: implicit return address pushed on stack when caller made call.
@@ -321,7 +327,7 @@ TWO_ARG_RUNTIME_EXCEPTION art_quick_throw_array_bounds, artThrowArrayBoundsFromC
      */
 MACRO2(INVOKE_TRAMPOLINE, c_name, cxx_name)
     DEFINE_FUNCTION VAR(c_name, 0)
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME  // save callee saves in case allocation triggers GC
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME  // save callee saves in case allocation triggers GC
     // Helper signature is always
     // (method_idx, *this_object, *caller_method, *self, sp)
 
@@ -481,7 +487,7 @@ DEFINE_FUNCTION art_quick_invoke_stub
     LOOP_OVER_SHORTY_LOADING_GPRS r8, r8d, .Lgpr_setup_finished
     LOOP_OVER_SHORTY_LOADING_GPRS r9, r9d, .Lgpr_setup_finished
 .Lgpr_setup_finished:
-    call *METHOD_QUICK_CODE_OFFSET(%rdi) // Call the method.
+    call *MIRROR_ART_METHOD_QUICK_CODE_OFFSET(%rdi) // Call the method.
     movq %rbp, %rsp               // Restore stack pointer.
     CFI_DEF_CFA_REGISTER(rsp)
     POP r9                        // Pop r9 - shorty*.
@@ -564,7 +570,7 @@ DEFINE_FUNCTION art_quick_invoke_static_stub
     LOOP_OVER_SHORTY_LOADING_GPRS r8, r8d, .Lgpr_setup_finished2
     LOOP_OVER_SHORTY_LOADING_GPRS r9, r9d, .Lgpr_setup_finished2
 .Lgpr_setup_finished2:
-    call *METHOD_QUICK_CODE_OFFSET(%rdi) // Call the method.
+    call *MIRROR_ART_METHOD_QUICK_CODE_OFFSET(%rdi) // Call the method.
     movq %rbp, %rsp               // Restore stack pointer.
     CFI_DEF_CFA_REGISTER(rsp)
     POP r9                        // Pop r9 - shorty*.
@@ -864,7 +870,7 @@ DEFINE_FUNCTION art_quick_lock_object
     testl %edi, %edi                      // Null check object/rdi.
     jz   .Lslow_lock
 .Lretry_lock:
-    movl LOCK_WORD_OFFSET(%edi), %ecx     // ecx := lock word.
+    movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi), %ecx  // ecx := lock word.
     test LITERAL(0xC0000000), %ecx        // Test the 2 high bits.
     jne  .Lslow_lock                      // Slow path if either of the two high bits are set.
     movl %gs:THREAD_ID_OFFSET, %edx       // edx := thread id
@@ -872,7 +878,7 @@ DEFINE_FUNCTION art_quick_lock_object
     jnz  .Lalready_thin                   // Lock word contains a thin lock.
     // unlocked case - %edx holds thread id with count of 0
     xor  %eax, %eax                       // eax == 0 for comparison with lock word in cmpxchg
-    lock cmpxchg  %edx, LOCK_WORD_OFFSET(%edi)
+    lock cmpxchg  %edx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi)
     jnz  .Lretry_lock                     // cmpxchg failed retry
     ret
 .Lalready_thin:
@@ -881,13 +887,14 @@ DEFINE_FUNCTION art_quick_lock_object
     addl LITERAL(65536), %ecx             // increment recursion count
     test LITERAL(0xC0000000), %ecx        // overflowed if either of top two bits are set
     jne  .Lslow_lock                      // count overflowed so go slow
-    movl %ecx, LOCK_WORD_OFFSET(%edi)     // update lockword, cmpxchg not necessary as we hold lock
+    // update lockword, cmpxchg not necessary as we hold lock
+    movl %ecx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi)
     ret
 .Lslow_lock:
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME
     movq %gs:THREAD_SELF_OFFSET, %rsi     // pass Thread::Current()
     movq %rsp, %rdx                       // pass SP
-    call SYMBOL(artLockObjectFromCode)  // artLockObjectFromCode(object, Thread*, SP)
+    call SYMBOL(artLockObjectFromCode)    // artLockObjectFromCode(object, Thread*, SP)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME    // restore frame up to return address
     RETURN_IF_EAX_ZERO
 END_FUNCTION art_quick_lock_object
@@ -895,7 +902,7 @@ END_FUNCTION art_quick_lock_object
 DEFINE_FUNCTION art_quick_unlock_object
     testl %edi, %edi                      // null check object/edi
     jz   .Lslow_unlock
-    movl LOCK_WORD_OFFSET(%edi), %ecx     // ecx := lock word
+    movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi), %ecx  // ecx := lock word
     movl %gs:THREAD_ID_OFFSET, %edx       // edx := thread id
     test LITERAL(0xC0000000), %ecx
     jnz  .Lslow_unlock                    // lock word contains a monitor
@@ -903,11 +910,11 @@ DEFINE_FUNCTION art_quick_unlock_object
     jne  .Lslow_unlock
     cmpl LITERAL(65536), %ecx
     jae  .Lrecursive_thin_unlock
-    movl LITERAL(0), LOCK_WORD_OFFSET(%edi)
+    movl LITERAL(0), MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi)
     ret
 .Lrecursive_thin_unlock:
     subl LITERAL(65536), %ecx
-    mov  %ecx, LOCK_WORD_OFFSET(%edi)
+    mov  %ecx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi)
     ret
 .Lslow_unlock:
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME
@@ -969,8 +976,8 @@ DEFINE_FUNCTION art_quick_aput_obj_with_bound_check
     int3
     int3
 #else
-    movl ARRAY_LENGTH_OFFSET(%edi), %ecx
-//  movl ARRAY_LENGTH_OFFSET(%rdi), %ecx      // This zero-extends, so value(%rcx)=value(%ecx)
+    movl MIRROR_ARRAY_LENGTH_OFFSET(%edi), %ecx
+//  movl MIRROR_ARRAY_LENGTH_OFFSET(%rdi), %ecx  // This zero-extends, so value(%rcx)=value(%ecx)
     cmpl %ecx, %esi
     jb art_quick_aput_obj
     mov %esi, %edi
@@ -986,24 +993,24 @@ DEFINE_FUNCTION art_quick_aput_obj
     testl %edx, %edx                // store of null
 //  test %rdx, %rdx
     jz .Ldo_aput_null
-    movl CLASS_OFFSET(%edi), %ecx
-//  movq CLASS_OFFSET(%rdi), %rcx
-    movl CLASS_COMPONENT_TYPE_OFFSET(%ecx), %ecx
-//  movq CLASS_COMPONENT_TYPE_OFFSET(%rcx), %rcx
-    cmpl CLASS_OFFSET(%edx), %ecx // value's type == array's component type - trivial assignability
-//  cmpq CLASS_OFFSET(%rdx), %rcx
+    movl MIRROR_OBJECT_CLASS_OFFSET(%edi), %ecx
+//  movq MIRROR_OBJECT_CLASS_OFFSET(%rdi), %rcx
+    movl MIRROR_CLASS_COMPONENT_TYPE_OFFSET(%ecx), %ecx
+//  movq MIRROR_CLASS_COMPONENT_TYPE_OFFSET(%rcx), %rcx
+    cmpl MIRROR_OBJECT_CLASS_OFFSET(%edx), %ecx // value's type == array's component type - trivial assignability
+//  cmpq MIRROR_CLASS_OFFSET(%rdx), %rcx
     jne .Lcheck_assignability
 .Ldo_aput:
-    movl %edx, OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
-//  movq %rdx, OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
+    movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
+//  movq %rdx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
     movq %gs:THREAD_CARD_TABLE_OFFSET, %rdx
     shrl LITERAL(7), %edi
 //  shrl LITERAL(7), %rdi
     movb %dl, (%rdx, %rdi)                       // Note: this assumes that top 32b of %rdi are zero
     ret
 .Ldo_aput_null:
-    movl %edx, OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
-//  movq %rdx, OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
+    movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
+//  movq %rdx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
     ret
 .Lcheck_assignability:
     // Save arguments.
@@ -1015,7 +1022,7 @@ DEFINE_FUNCTION art_quick_aput_obj
     SETUP_FP_CALLEE_SAVE_FRAME
 
                                   // "Uncompress" = do nothing, as already zero-extended on load.
-    movl CLASS_OFFSET(%edx), %esi // Pass arg2 = value's class.
+    movl MIRROR_OBJECT_CLASS_OFFSET(%edx), %esi // Pass arg2 = value's class.
     movq %rcx, %rdi               // Pass arg1 = array's component type.
 
     call SYMBOL(artIsAssignableFromCode)  // (Class* a, Class* b)
@@ -1032,8 +1039,8 @@ DEFINE_FUNCTION art_quick_aput_obj
     POP  rsi
     POP  rdi
 
-    movl %edx, OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
-//  movq %rdx, OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
+    movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
+//  movq %rdx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
     movq %gs:THREAD_CARD_TABLE_OFFSET, %rdx
     shrl LITERAL(7), %edi
 //  shrl LITERAL(7), %rdi
@@ -1149,6 +1156,9 @@ DEFINE_FUNCTION art_quick_proxy_invoke_handler
     movq %xmm15, 104(%rsp)
     // Store proxy method to bottom of stack.
     movq %rdi, 0(%rsp)
+    // Store rsp as the stop quick frame.
+    movq %rsp, %gs:THREAD_TOP_QUICK_FRAME_OFFSET
+
     movq %gs:THREAD_SELF_OFFSET, %rdx  // Pass Thread::Current().
     movq %rsp, %rcx                    // Pass SP.
     call SYMBOL(artQuickProxyInvokeHandler) // (proxy method, receiver, Thread*, SP)
@@ -1168,14 +1178,14 @@ DEFINE_FUNCTION art_quick_imt_conflict_trampoline
     int3
 #else
     movl 8(%rsp), %edi            // load caller Method*
-    movl METHOD_DEX_CACHE_METHODS_OFFSET(%rdi), %edi  // load dex_cache_resolved_methods
-    movl OBJECT_ARRAY_DATA_OFFSET(%rdi, %rax, 4), %edi  // load the target method
+    movl MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET(%rdi), %edi  // load dex_cache_resolved_methods
+    movl MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rax, 4), %edi  // load the target method
     jmp art_quick_invoke_interface_trampoline
 #endif  // __APPLE__
 END_FUNCTION art_quick_imt_conflict_trampoline
 
 DEFINE_FUNCTION art_quick_resolution_trampoline
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     movq %gs:THREAD_SELF_OFFSET, %rdx
     movq %rsp, %rcx
     call SYMBOL(artQuickResolutionTrampoline) // (called, receiver, Thread*, SP)
@@ -1298,6 +1308,9 @@ DEFINE_FUNCTION_NO_HIDE art_quick_generic_jni_trampoline
     movq %rdi, 0(%rsp)              // Store native ArtMethod* to bottom of stack.
     movq %rsp, %rbp                 // save SP at (old) callee-save frame
     CFI_DEF_CFA_REGISTER(rbp)
+    // Store rsp as the stop quick frame.
+    movq %rbp, %gs:THREAD_TOP_QUICK_FRAME_OFFSET
+
     //
     // reserve a lot of space
     //
@@ -1454,7 +1467,7 @@ END_FUNCTION art_quick_generic_jni_trampoline
      * RSI, RDX, RCX, R8, R9 are arguments to that method.
      */
 DEFINE_FUNCTION_NO_HIDE art_quick_to_interpreter_bridge
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME   // Set up frame and save arguments.
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME   // Set up frame and save arguments.
     movq %gs:THREAD_SELF_OFFSET, %rsi      // RSI := Thread::Current()
     movq %rsp, %rdx                        // RDX := sp
     call SYMBOL(artQuickToInterpreterBridge)  // (method, Thread*, SP)
@@ -1471,7 +1484,7 @@ DEFINE_FUNCTION art_quick_instrumentation_entry
     int3
     int3
 #else
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME
 
     movq %rdi, %r12               // Preserve method pointer in a callee-save.
 
@@ -1551,15 +1564,15 @@ END_FUNCTION art_quick_deoptimize
      *    rsi:   comp string object (known non-null)
      */
 DEFINE_FUNCTION art_quick_string_compareto
-    movl STRING_COUNT_OFFSET(%edi), %r8d
-    movl STRING_COUNT_OFFSET(%esi), %r9d
-    movl STRING_VALUE_OFFSET(%edi), %r10d
-    movl STRING_VALUE_OFFSET(%esi), %r11d
-    movl STRING_OFFSET_OFFSET(%edi), %eax
-    movl STRING_OFFSET_OFFSET(%esi), %ecx
+    movl MIRROR_STRING_COUNT_OFFSET(%edi), %r8d
+    movl MIRROR_STRING_COUNT_OFFSET(%esi), %r9d
+    movl MIRROR_STRING_VALUE_OFFSET(%edi), %r10d
+    movl MIRROR_STRING_VALUE_OFFSET(%esi), %r11d
+    movl MIRROR_STRING_OFFSET_OFFSET(%edi), %eax
+    movl MIRROR_STRING_OFFSET_OFFSET(%esi), %ecx
     /* Build pointers to the start of string data */
-    leal STRING_DATA_OFFSET(%r10d, %eax, 2), %esi
-    leal STRING_DATA_OFFSET(%r11d, %ecx, 2), %edi
+    leal MIRROR_CHAR_ARRAY_DATA_OFFSET(%r10d, %eax, 2), %esi
+    leal MIRROR_CHAR_ARRAY_DATA_OFFSET(%r11d, %ecx, 2), %edi
     /* Calculate min length and count diff */
     movl  %r8d, %ecx
     movl  %r8d, %eax

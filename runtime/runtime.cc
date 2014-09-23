@@ -43,6 +43,7 @@
 #include "arch/x86/registers_x86.h"
 #include "arch/x86_64/quick_method_frame_info_x86_64.h"
 #include "arch/x86_64/registers_x86_64.h"
+#include "asm_support.h"
 #include "atomic.h"
 #include "class_linker.h"
 #include "debugger.h"
@@ -145,6 +146,7 @@ Runtime::Runtime()
       implicit_null_checks_(false),
       implicit_so_checks_(false),
       implicit_suspend_checks_(false) {
+  CheckAsmSupportOffsetsAndSizes();
 }
 
 Runtime::~Runtime() {

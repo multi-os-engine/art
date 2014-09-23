@@ -22,12 +22,21 @@
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kSaveAll)
      */
-MACRO0(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME)
+MACRO2(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME, got_reg, temp_reg)
     PUSH edi  // Save callee saves (ebx is saved/restored by the upcall)
     PUSH esi
     PUSH ebp
-    subl  MACRO_LITERAL(16), %esp  // Grow stack by 4 words, bottom word will hold Method*
-    CFI_ADJUST_CFA_OFFSET(16)
+    subl  MACRO_LITERAL(12), %esp  // Grow stack by 3 words.
+    CFI_ADJUST_CFA_OFFSET(12)
+    SETUP_GOT_NOSAVE RAW_VAR(got_reg, 0)
+    // Load Runtime::instance_ from GOT.
+    movl _ZN3art7Runtime9instance_E@GOT(REG_VAR(got_reg, 0)), REG_VAR(temp_reg, 1)
+    movl (REG_VAR(temp_reg, 1)), REG_VAR(temp_reg, 1)
+    // Push save all callee-save method.
+    pushl RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET(REG_VAR(temp_reg, 1))
+    CFI_ADJUST_CFA_OFFSET(4)
+    // Store esp as the stop quick frame.
+    movl %esp, %fs:THREAD_TOP_QUICK_FRAME_OFFSET
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +4: implicit return address pushed on stack when caller made call.
 #if (FRAME_SIZE_SAVE_ALL_CALLEE_SAVE != 3*4 + 16 + 4)
@@ -39,12 +48,21 @@ END_MACRO
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kRefsOnly)
      */
-MACRO0(SETUP_REF_ONLY_CALLEE_SAVE_FRAME)
+MACRO2(SETUP_REF_ONLY_CALLEE_SAVE_FRAME, got_reg, temp_reg)
     PUSH edi  // Save callee saves (ebx is saved/restored by the upcall)
     PUSH esi
     PUSH ebp
-    subl  MACRO_LITERAL(16), %esp  // Grow stack by 4 words, bottom word will hold Method*
-    CFI_ADJUST_CFA_OFFSET(16)
+    subl  MACRO_LITERAL(12), %esp  // Grow stack by 3 words.
+    CFI_ADJUST_CFA_OFFSET(12)
+    SETUP_GOT_NOSAVE VAR(got_reg, 0)
+    // Load Runtime::instance_ from GOT.
+    movl _ZN3art7Runtime9instance_E@GOT(REG_VAR(got_reg, 0)), REG_VAR(temp_reg, 1)
+    movl (REG_VAR(temp_reg, 1)), REG_VAR(temp_reg, 1)
+    // Push save all callee-save method.
+    pushl RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET(REG_VAR(temp_reg, 1))
+    CFI_ADJUST_CFA_OFFSET(4)
+    // Store esp as the stop quick frame.
+    movl %esp, %fs:THREAD_TOP_QUICK_FRAME_OFFSET
 
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +4: implicit return address pushed on stack when caller made call.
@@ -65,14 +83,22 @@ END_MACRO
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kRefsAndArgs)
      */
-MACRO0(SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME)
+MACRO2(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME, got_reg, temp_reg)
     PUSH edi  // Save callee saves
     PUSH esi
     PUSH ebp
     PUSH ebx  // Save args
     PUSH edx
     PUSH ecx
-    PUSH eax   // Align stack, eax will be clobbered by Method*
+    SETUP_GOT_NOSAVE VAR(got_reg, 0)
+    // Load Runtime::instance_ from GOT.
+    movl _ZN3art7Runtime9instance_E@GOT(REG_VAR(got_reg, 0)), REG_VAR(temp_reg, 1)
+    movl (REG_VAR(temp_reg, 1)), REG_VAR(temp_reg, 1)
+    // Push save all callee-save method.
+    pushl RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET(REG_VAR(temp_reg, 1))
+    CFI_ADJUST_CFA_OFFSET(4)
+    // Store esp as the stop quick frame.
+    movl %esp, %fs:THREAD_TOP_QUICK_FRAME_OFFSET
 
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +4: implicit return address pushed on stack when caller made call.
@@ -97,21 +123,21 @@ END_MACRO
      * exception is Thread::Current()->exception_.
      */
 MACRO0(DELIVER_PENDING_EXCEPTION)
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME         // save callee saves for throw
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ecx  // save callee saves for throw
     mov %esp, %ecx
     // Outgoing argument set up
-    subl  MACRO_LITERAL(8), %esp             // Alignment padding
+    subl  MACRO_LITERAL(8), %esp               // Alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
-    PUSH ecx                                 // pass SP
-    pushl %fs:THREAD_SELF_OFFSET             // pass Thread::Current()
+    PUSH ecx                                   // pass SP
+    pushl %fs:THREAD_SELF_OFFSET               // pass Thread::Current()
     CFI_ADJUST_CFA_OFFSET(4)
     call SYMBOL(artDeliverPendingExceptionFromCode)  // artDeliverPendingExceptionFromCode(Thread*, SP)
-    int3                                     // unreached
+    int3                                       // unreached
 END_MACRO
 
 MACRO2(NO_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  ebx, ebx  // save all registers as basis for long jump context
     mov %esp, %ecx
     // Outgoing argument set up
     subl  MACRO_LITERAL(8), %esp  // alignment padding
@@ -126,7 +152,7 @@ END_MACRO
 
 MACRO2(ONE_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx  // save all registers as basis for long jump context
     mov %esp, %ecx
     // Outgoing argument set up
     PUSH eax                      // alignment padding
@@ -141,7 +167,7 @@ END_MACRO
 
 MACRO2(TWO_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx  // save all registers as basis for long jump context
     mov %esp, %edx
     // Outgoing argument set up
     PUSH edx                      // pass SP
@@ -204,15 +230,7 @@ TWO_ARG_RUNTIME_EXCEPTION art_quick_throw_array_bounds, artThrowArrayBoundsFromC
      */
 MACRO2(INVOKE_TRAMPOLINE, c_name, cxx_name)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    // Set up the callee save frame to conform with Runtime::CreateCalleeSaveMethod(kRefsAndArgs)
-    // return address
-    PUSH edi
-    PUSH esi
-    PUSH ebp
-    PUSH ebx  // Save args
-    PUSH edx
-    PUSH ecx
-    PUSH eax    // <-- callee save Method* to go here
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME ebx, ebx
     movl %esp, %edx  // remember SP
     // Outgoing argument set up
     subl MACRO_LITERAL(12), %esp  // alignment padding
@@ -275,7 +293,7 @@ DEFINE_FUNCTION art_quick_invoke_stub
     andl LITERAL(0xFFFFFFF0), %ebx    // align frame size to 16 bytes
     subl LITERAL(12), %ebx        // remove space for return address, ebx, and ebp
     subl %ebx, %esp               // reserve stack space for argument array
-    SETUP_GOT_NOSAVE              // clobbers ebx (harmless here)
+    SETUP_GOT_NOSAVE ebx          // clobbers ebx (harmless here)
     lea  4(%esp), %eax            // use stack pointer + method ptr as dest for memcpy
     pushl 20(%ebp)                // push size of region to memcpy
     pushl 16(%ebp)                // push arg array as source of memcpy
@@ -287,7 +305,7 @@ DEFINE_FUNCTION art_quick_invoke_stub
     mov 4(%esp), %ecx             // copy arg1 into ecx
     mov 8(%esp), %edx             // copy arg2 into edx
     mov 12(%esp), %ebx            // copy arg3 into ebx
-    call *METHOD_QUICK_CODE_OFFSET(%eax) // call the method
+    call *MIRROR_ART_METHOD_QUICK_CODE_OFFSET(%eax) // call the method
     mov %ebp, %esp                // restore stack pointer
     CFI_DEF_CFA_REGISTER(esp)
     POP ebx                       // pop ebx
@@ -311,7 +329,7 @@ END_FUNCTION art_quick_invoke_stub
 
 MACRO3(NO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx  // save ref containing registers for GC
     mov %esp, %edx                // remember SP
     // Outgoing argument set up
     subl MACRO_LITERAL(8), %esp   // push padding
@@ -329,7 +347,7 @@ END_MACRO
 
 MACRO3(ONE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     mov %esp, %edx                // remember SP
     // Outgoing argument set up
     PUSH eax                      // push padding
@@ -347,7 +365,7 @@ END_MACRO
 
 MACRO3(TWO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     mov %esp, %edx                // remember SP
     // Outgoing argument set up
     PUSH edx                      // pass SP
@@ -365,7 +383,7 @@ END_MACRO
 
 MACRO3(THREE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     // Outgoing argument set up
     subl MACRO_LITERAL(12), %esp  // alignment padding
@@ -386,7 +404,7 @@ END_MACRO
 
 MACRO3(ONE_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx // save ref containing registers for GC
     mov %esp, %edx                // remember SP
     mov 32(%esp), %ecx            // get referrer
     // Outgoing argument set up
@@ -405,7 +423,7 @@ END_MACRO
 
 MACRO3(TWO_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION RAW_VAR(c_name, 0)
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl MACRO_LITERAL(12), %esp  // alignment padding
@@ -566,7 +584,7 @@ DEFINE_FUNCTION art_quick_lock_object
     testl %eax, %eax                      // null check object/eax
     jz   .Lslow_lock
 .Lretry_lock:
-    movl LOCK_WORD_OFFSET(%eax), %ecx     // ecx := lock word
+    movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax), %ecx  // ecx := lock word
     test LITERAL(0xC0000000), %ecx        // test the 2 high bits.
     jne  .Lslow_lock                      // slow path if either of the two high bits are set.
     movl %fs:THREAD_ID_OFFSET, %edx       // edx := thread id
@@ -575,11 +593,11 @@ DEFINE_FUNCTION art_quick_lock_object
     // unlocked case - %edx holds thread id with count of 0
     movl %eax, %ecx                       // remember object in case of retry
     xor  %eax, %eax                       // eax == 0 for comparison with lock word in cmpxchg
-    lock cmpxchg  %edx, LOCK_WORD_OFFSET(%ecx)
+    lock cmpxchg  %edx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%ecx)
     jnz  .Lcmpxchg_fail                   // cmpxchg failed retry
     ret
 .Lcmpxchg_fail:
-    movl  %ecx, %eax                       // restore eax
+    movl  %ecx, %eax                      // restore eax
     jmp  .Lretry_lock
 .Lalready_thin:
     cmpw %cx, %dx                         // do we hold the lock already?
@@ -587,10 +605,11 @@ DEFINE_FUNCTION art_quick_lock_object
     addl LITERAL(65536), %ecx             // increment recursion count
     test LITERAL(0xC0000000), %ecx        // overflowed if either of top two bits are set
     jne  .Lslow_lock                      // count overflowed so go slow
-    movl %ecx, LOCK_WORD_OFFSET(%eax)     // update lockword, cmpxchg not necessary as we hold lock
+    // update lockword, cmpxchg not necessary as we hold lock
+    movl %ecx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax)
     ret
 .Lslow_lock:
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     mov %esp, %edx                // remember SP
     // Outgoing argument set up
     PUSH eax                      // push padding
@@ -608,7 +627,7 @@ END_FUNCTION art_quick_lock_object
 DEFINE_FUNCTION art_quick_unlock_object
     testl %eax, %eax                      // null check object/eax
     jz   .Lslow_unlock
-    movl LOCK_WORD_OFFSET(%eax), %ecx     // ecx := lock word
+    movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax), %ecx  // ecx := lock word
     movl %fs:THREAD_ID_OFFSET, %edx       // edx := thread id
     test LITERAL(0xC0000000), %ecx
     jnz  .Lslow_unlock                    // lock word contains a monitor
@@ -616,14 +635,14 @@ DEFINE_FUNCTION art_quick_unlock_object
     jne  .Lslow_unlock
     cmpl LITERAL(65536), %ecx
     jae  .Lrecursive_thin_unlock
-    movl LITERAL(0), LOCK_WORD_OFFSET(%eax)
+    movl LITERAL(0), MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax)
     ret
 .Lrecursive_thin_unlock:
     subl LITERAL(65536), %ecx
-    mov  %ecx, LOCK_WORD_OFFSET(%eax)
+    mov  %ecx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax)
     ret
 .Lslow_unlock:
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     mov %esp, %edx                // remember SP
     // Outgoing argument set up
     PUSH eax                      // push padding
@@ -663,7 +682,7 @@ DEFINE_FUNCTION art_quick_check_cast
     POP ecx
     addl LITERAL(4), %esp
     CFI_ADJUST_CFA_OFFSET(-12)
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  ebx, ebx  // save all registers as basis for long jump context
     mov %esp, %edx
     // Outgoing argument set up
     PUSH edx                      // pass SP
@@ -687,7 +706,7 @@ DEFINE_FUNCTION art_quick_aput_obj_with_null_and_bound_check
 END_FUNCTION art_quick_aput_obj_with_null_and_bound_check
 
 DEFINE_FUNCTION art_quick_aput_obj_with_bound_check
-    movl ARRAY_LENGTH_OFFSET(%eax), %ebx
+    movl MIRROR_ARRAY_LENGTH_OFFSET(%eax), %ebx
     cmpl %ebx, %ecx
     jb SYMBOL(art_quick_aput_obj)
     mov %ecx, %eax
@@ -698,18 +717,19 @@ END_FUNCTION art_quick_aput_obj_with_bound_check
 DEFINE_FUNCTION art_quick_aput_obj
     test %edx, %edx              // store of null
     jz .Ldo_aput_null
-    movl CLASS_OFFSET(%eax), %ebx
-    movl CLASS_COMPONENT_TYPE_OFFSET(%ebx), %ebx
-    cmpl CLASS_OFFSET(%edx), %ebx // value's type == array's component type - trivial assignability
+    movl MIRROR_OBJECT_CLASS_OFFSET(%eax), %ebx
+    movl MIRROR_CLASS_COMPONENT_TYPE_OFFSET(%ebx), %ebx
+    // value's type == array's component type - trivial assignability
+    cmpl MIRROR_OBJECT_CLASS_OFFSET(%edx), %ebx
     jne .Lcheck_assignability
 .Ldo_aput:
-    movl %edx, OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4)
+    movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4)
     movl %fs:THREAD_CARD_TABLE_OFFSET, %edx
     shrl LITERAL(7), %eax
     movb %dl, (%edx, %eax)
     ret
 .Ldo_aput_null:
-    movl %edx, OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4)
+    movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4)
     ret
 .Lcheck_assignability:
     PUSH eax                     // save arguments
@@ -717,7 +737,7 @@ DEFINE_FUNCTION art_quick_aput_obj
     PUSH edx
     subl LITERAL(8), %esp        // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
-    pushl CLASS_OFFSET(%edx)     // pass arg2 - type of the value to be stored
+    pushl MIRROR_OBJECT_CLASS_OFFSET(%edx)  // pass arg2 - type of the value to be stored
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ebx                     // pass arg1 - component type of the array
     call SYMBOL(artIsAssignableFromCode)  // (Class* a, Class* b)
@@ -728,7 +748,7 @@ DEFINE_FUNCTION art_quick_aput_obj
     POP  edx
     POP  ecx
     POP  eax
-    movl %edx, OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4)  // do the aput
+    movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4)  // do the aput
     movl %fs:THREAD_CARD_TABLE_OFFSET, %edx
     shrl LITERAL(7), %eax
     movb %dl, (%edx, %eax)
@@ -737,7 +757,7 @@ DEFINE_FUNCTION art_quick_aput_obj
     POP  edx
     POP  ecx
     POP  eax
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx // save all registers as basis for long jump context
     mov %esp, %ecx
     // Outgoing argument set up
     PUSH ecx                      // pass SP
@@ -750,7 +770,7 @@ DEFINE_FUNCTION art_quick_aput_obj
 END_FUNCTION art_quick_aput_obj
 
 DEFINE_FUNCTION art_quick_memcpy
-    SETUP_GOT_NOSAVE              // clobbers EBX
+    SETUP_GOT_NOSAVE ebx          // clobbers EBX
     PUSH edx                      // pass arg3
     PUSH ecx                      // pass arg2
     PUSH eax                      // pass arg1
@@ -857,7 +877,7 @@ DEFINE_FUNCTION art_quick_lushr
 END_FUNCTION art_quick_lushr
 
 DEFINE_FUNCTION art_quick_set8_instance
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     subl LITERAL(8), %esp         // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
@@ -869,7 +889,7 @@ DEFINE_FUNCTION art_quick_set8_instance
     PUSH edx                      // pass new_val
     PUSH ecx                      // pass object
     PUSH eax                      // pass field_idx
-    call PLT_SYMBOL(artSet8InstanceFromCode)  // (field_idx, Object*, new_val, referrer, Thread*, SP)
+    call SYMBOL(artSet8InstanceFromCode)  // (field_idx, Object*, new_val, referrer, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
     CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
@@ -877,7 +897,7 @@ DEFINE_FUNCTION art_quick_set8_instance
 END_FUNCTION art_quick_set8_instance
 
 DEFINE_FUNCTION art_quick_set16_instance
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     subl LITERAL(8), %esp         // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
@@ -889,7 +909,7 @@ DEFINE_FUNCTION art_quick_set16_instance
     PUSH edx                      // pass new_val
     PUSH ecx                      // pass object
     PUSH eax                      // pass field_idx
-    call PLT_SYMBOL(artSet16InstanceFromCode)  // (field_idx, Object*, new_val, referrer, Thread*, SP)
+    call SYMBOL(artSet16InstanceFromCode)  // (field_idx, Object*, new_val, referrer, Thread*, SP)
     addl LITERAL(32), %esp        // pop arguments
     CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
@@ -897,7 +917,7 @@ DEFINE_FUNCTION art_quick_set16_instance
 END_FUNCTION art_quick_set16_instance
 
 DEFINE_FUNCTION art_quick_set32_instance
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     subl LITERAL(8), %esp         // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
@@ -917,7 +937,7 @@ DEFINE_FUNCTION art_quick_set32_instance
 END_FUNCTION art_quick_set32_instance
 
 DEFINE_FUNCTION art_quick_set64_instance
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx  // save ref containing registers for GC
     subl LITERAL(8), %esp         // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
     PUSH esp                      // pass SP-8
@@ -936,7 +956,7 @@ DEFINE_FUNCTION art_quick_set64_instance
 END_FUNCTION art_quick_set64_instance
 
 DEFINE_FUNCTION art_quick_set_obj_instance
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     subl LITERAL(8), %esp         // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
@@ -963,7 +983,7 @@ TWO_ARG_REF_DOWNCALL art_quick_get32_instance, artGet32InstanceFromCode, RETURN_
 TWO_ARG_REF_DOWNCALL art_quick_get_obj_instance, artGetObjInstanceFromCode, RETURN_OR_DELIVER_PENDING_EXCEPTION
 
 DEFINE_FUNCTION art_quick_get64_instance
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
@@ -982,7 +1002,7 @@ DEFINE_FUNCTION art_quick_get64_instance
 END_FUNCTION art_quick_get64_instance
 
 DEFINE_FUNCTION art_quick_set8_static
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
@@ -1001,7 +1021,7 @@ DEFINE_FUNCTION art_quick_set8_static
 END_FUNCTION art_quick_set8_static
 
 DEFINE_FUNCTION art_quick_set16_static
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
@@ -1020,7 +1040,7 @@ DEFINE_FUNCTION art_quick_set16_static
 END_FUNCTION art_quick_set16_static
 
 DEFINE_FUNCTION art_quick_set32_static
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME       // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
@@ -1039,7 +1059,7 @@ DEFINE_FUNCTION art_quick_set32_static
 END_FUNCTION art_quick_set32_static
 
 DEFINE_FUNCTION art_quick_set64_static
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     subl LITERAL(8), %esp         // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
@@ -1059,7 +1079,7 @@ DEFINE_FUNCTION art_quick_set64_static
 END_FUNCTION art_quick_set64_static
 
 DEFINE_FUNCTION art_quick_set_obj_static
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME  // save ref containing registers for GC
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx  // save ref containing registers for GC
     mov %esp, %ebx                // remember SP
     mov 32(%esp), %edx            // get referrer
     subl LITERAL(12), %esp        // alignment padding
@@ -1085,7 +1105,16 @@ ONE_ARG_REF_DOWNCALL art_quick_get64_static, artGet64StaticFromCode, RETURN_OR_D
 ONE_ARG_REF_DOWNCALL art_quick_get_obj_static, artGetObjStaticFromCode, RETURN_OR_DELIVER_PENDING_EXCEPTION
 
 DEFINE_FUNCTION art_quick_proxy_invoke_handler
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME   // save frame and Method*
+    // Setup stack frame follow kRefsAndArgs conventions except for the Method*
+    PUSH edi  // Save callee saves
+    PUSH esi
+    PUSH ebp
+    PUSH ebx  // Save args
+    PUSH edx
+    PUSH ecx
+    PUSH eax  // Store the proxy ArtMethod reference at the bottom of the stack.
+    // Store esp as the stop quick frame.
+    movl %esp, %fs:THREAD_TOP_QUICK_FRAME_OFFSET
     PUSH esp                      // pass SP
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
     CFI_ADJUST_CFA_OFFSET(4)
@@ -1107,15 +1136,15 @@ END_FUNCTION art_quick_proxy_invoke_handler
 DEFINE_FUNCTION art_quick_imt_conflict_trampoline
     PUSH ecx
     movl 8(%esp), %eax            // load caller Method*
-    movl METHOD_DEX_CACHE_METHODS_OFFSET(%eax), %eax  // load dex_cache_resolved_methods
+    movl MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET(%eax), %eax  // load dex_cache_resolved_methods
     movd %xmm0, %ecx              // get target method index stored in xmm0
-    movl OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4), %eax  // load the target method
+    movl MIRROR_OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4), %eax  // load the target method
     POP ecx
     jmp SYMBOL(art_quick_invoke_interface_trampoline)
 END_FUNCTION art_quick_imt_conflict_trampoline
 
 DEFINE_FUNCTION art_quick_resolution_trampoline
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME ebx, ebx
     movl %esp, %edi
     PUSH EDI                      // pass SP. do not just PUSH ESP; that messes up unwinding
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
@@ -1141,8 +1170,16 @@ DEFINE_FUNCTION art_quick_resolution_trampoline
 END_FUNCTION art_quick_resolution_trampoline
 
 DEFINE_FUNCTION_NO_HIDE art_quick_generic_jni_trampoline
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
-    // This also stores the native ArtMethod reference at the bottom of the stack.
+    // Setup stack frame follow kRefsAndArgs conventions except for the Method*
+    PUSH edi  // Save callee saves
+    PUSH esi
+    PUSH ebp
+    PUSH ebx  // Save args
+    PUSH edx
+    PUSH ecx
+    PUSH eax  // Store the native ArtMethod reference at the bottom of the stack.
+    // Store esp as the stop quick frame.
+    movl %esp, %fs:THREAD_TOP_QUICK_FRAME_OFFSET
 
     movl %esp, %ebp                 // save SP at callee-save frame
     CFI_DEF_CFA_REGISTER(ebp)
@@ -1151,7 +1188,6 @@ DEFINE_FUNCTION_NO_HIDE art_quick_generic_jni_trampoline
     // (Thread*,  SP)
     //  (esp)    4(esp)   <= C calling convention
     //  fs:...    ebp     <= where they are
-    // Also: PLT, so need GOT in ebx.
 
     subl LITERAL(8), %esp         // Padding for 16B alignment.
     pushl %ebp                    // Pass SP (to ArtMethod).
@@ -1221,7 +1257,7 @@ DEFINE_FUNCTION_NO_HIDE art_quick_generic_jni_trampoline
 END_FUNCTION art_quick_generic_jni_trampoline
 
 DEFINE_FUNCTION_NO_HIDE art_quick_to_interpreter_bridge
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME   // save frame
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME  ebx, ebx  // save frame
     mov %esp, %edx                // remember SP
     PUSH eax                      // alignment padding
     PUSH edx                      // pass SP
@@ -1242,7 +1278,7 @@ END_FUNCTION art_quick_to_interpreter_bridge
      * Routine that intercepts method calls and returns.
      */
 DEFINE_FUNCTION art_quick_instrumentation_entry
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME ebx, edx
     movl  %esp, %edx              // Save SP.
     PUSH eax                      // Save eax which will be clobbered by the callee-save method.
     subl LITERAL(8), %esp         // Align stack.
@@ -1255,13 +1291,12 @@ DEFINE_FUNCTION art_quick_instrumentation_entry
     PUSH ecx                      // Pass receiver.
     PUSH eax                      // Pass Method*.
     call SYMBOL(artInstrumentationMethodEntryFromCode) // (Method*, Object*, Thread*, SP, LR)
-    SETUP_GOT_NOSAVE
     addl LITERAL(28), %esp        // Pop arguments upto saved Method*.
     movl 28(%esp), %edi           // Restore edi.
     movl %eax, 28(%esp)           // Place code* over edi, just under return pc.
     movl SYMBOL(art_quick_instrumentation_exit)@GOT(%ebx), %ebx
+    // Place instrumentation exit as return pc. ebx holds the GOT computed on entry.
     movl %ebx, 32(%esp)
-                                  // Place instrumentation exit as return pc.
     movl (%esp), %eax             // Restore eax.
     movl 8(%esp), %ecx            // Restore ecx.
     movl 12(%esp), %edx           // Restore edx.
@@ -1274,7 +1309,7 @@ END_FUNCTION art_quick_instrumentation_entry
 
 DEFINE_FUNCTION art_quick_instrumentation_exit
     pushl LITERAL(0)              // Push a fake return PC as there will be none on the stack.
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME ebx, ebx
     mov  %esp, %ecx               // Remember SP
     subl LITERAL(8), %esp         // Save float return value.
     CFI_ADJUST_CFA_OFFSET(8)
@@ -1311,7 +1346,7 @@ END_FUNCTION art_quick_instrumentation_exit
      */
 DEFINE_FUNCTION art_quick_deoptimize
     pushl %ebx                    // Fake that we were called.
-    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx
     mov  %esp, %ecx               // Remember SP.
     subl LITERAL(8), %esp         // Align stack.
     CFI_ADJUST_CFA_OFFSET(8)
@@ -1332,15 +1367,15 @@ END_FUNCTION art_quick_deoptimize
 DEFINE_FUNCTION art_quick_string_compareto
     PUSH esi                    // push callee save reg
     PUSH edi                    // push callee save reg
-    mov STRING_COUNT_OFFSET(%eax), %edx
-    mov STRING_COUNT_OFFSET(%ecx), %ebx
-    mov STRING_VALUE_OFFSET(%eax), %esi
-    mov STRING_VALUE_OFFSET(%ecx), %edi
-    mov STRING_OFFSET_OFFSET(%eax), %eax
-    mov STRING_OFFSET_OFFSET(%ecx), %ecx
+    mov MIRROR_STRING_COUNT_OFFSET(%eax), %edx
+    mov MIRROR_STRING_COUNT_OFFSET(%ecx), %ebx
+    mov MIRROR_STRING_VALUE_OFFSET(%eax), %esi
+    mov MIRROR_STRING_VALUE_OFFSET(%ecx), %edi
+    mov MIRROR_STRING_OFFSET_OFFSET(%eax), %eax
+    mov MIRROR_STRING_OFFSET_OFFSET(%ecx), %ecx
     /* Build pointers to the start of string data */
-    lea  STRING_DATA_OFFSET(%esi, %eax, 2), %esi
-    lea  STRING_DATA_OFFSET(%edi, %ecx, 2), %edi
+    lea  MIRROR_CHAR_ARRAY_DATA_OFFSET(%esi, %eax, 2), %esi
+    lea  MIRROR_CHAR_ARRAY_DATA_OFFSET(%edi, %ecx, 2), %edi
     /* Calculate min length and count diff */
     mov   %edx, %ecx
     mov   %edx, %eax
@@ -1375,7 +1410,7 @@ END_FUNCTION art_quick_string_compareto
 //  eax: address of jmp_buf in TLS
 
 DEFINE_FUNCTION art_nested_signal_return
-    SETUP_GOT_NOSAVE                // sets %ebx for call into PLT
+    SETUP_GOT_NOSAVE ebx            // sets %ebx for call into PLT
     movl LITERAL(1), %ecx
     pushl %ecx                      // second arg to longjmp (1)
     pushl %eax                      // first arg to longjmp (jmp_buf)

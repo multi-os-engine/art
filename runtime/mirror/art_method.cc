@@ -357,7 +357,7 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
         // stack. Continue execution in the interpreter.
         self->ClearException();
         ShadowFrame* shadow_frame = self->GetAndClearDeoptimizationShadowFrame(result);
-        self->SetTopOfStack(nullptr, 0);
+        self->SetTopOfStack(nullptr);
         self->SetTopOfShadowStack(shadow_frame);
         interpreter::EnterInterpreterFromDeoptimize(self, shadow_frame, result);
       }
