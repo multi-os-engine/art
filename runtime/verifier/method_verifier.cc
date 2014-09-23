@@ -3760,6 +3760,11 @@ void MethodVerifier::VerifyISGet(const Instruction* inst, const RegType& insn_ty
   } else {
     const RegType& object_type = work_line_->GetRegisterType(this, inst->VRegB_22c());
     field = GetInstanceField(object_type, field_idx);
+    if (have_pending_hard_failure_) {
+      // Exit early rather than potentially raising a soft error,
+      // breaking a later assertion.
+      return;
+    }
   }
   const RegType* field_type = nullptr;
   if (field != nullptr) {
@@ -3825,6 +3830,11 @@ void MethodVerifier::VerifyISPut(const Instruction* inst, const RegType& insn_ty
   } else {
     const RegType& object_type = work_line_->GetRegisterType(this, inst->VRegB_22c());
     field = GetInstanceField(object_type, field_idx);
+    if (have_pending_hard_failure_) {
+      // Exit early rather than potentially raising a soft error,
+      // breaking a later assertion.
+      return;
+    }
   }
   const RegType* field_type = nullptr;
   if (field != nullptr) {
