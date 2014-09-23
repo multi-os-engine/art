@@ -68,8 +68,8 @@ ART_GTEST_proxy_test_HOST_DEPS := $(HOST_CORE_OAT_OUT) $(2ND_HOST_CORE_OAT_OUT)
 # The path for which all the source files are relative, not actually the current directory.
 LOCAL_PATH := art
 
+# TODO: re-enable runtime/arch/arch_test.cc
 RUNTIME_GTEST_COMMON_SRC_FILES := \
-  runtime/arch/arch_test.cc \
   runtime/arch/memcmp16_test.cc \
   runtime/arch/stub_test.cc \
   runtime/barrier_test.cc \

@@ -569,8 +569,6 @@ extern "C" int artSet64InstanceFromCode(uint32_t field_idx, mirror::Object* obj,
     field->Set64<false>(obj, new_value);
     return 0;  // success
   }
-  sp->Assign(Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsOnly));
-  self->SetTopOfStack(sp, 0);
   field = FindFieldFromCode<InstancePrimitiveWrite, true>(field_idx, referrer, self,
                                                           sizeof(int64_t));
   if (LIKELY(field != NULL)) {

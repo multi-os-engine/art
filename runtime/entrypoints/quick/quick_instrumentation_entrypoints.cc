@@ -27,10 +27,8 @@ namespace art {
 extern "C" const void* artInstrumentationMethodEntryFromCode(mirror::ArtMethod* method,
                                                              mirror::Object* this_object,
                                                              Thread* self,
-                                                             StackReference<mirror::ArtMethod>* sp,
                                                              uintptr_t lr)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  FinishCalleeSaveFrameSetup(self, sp, Runtime::kRefsAndArgs);
   instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
   const void* result;
   if (instrumentation->IsDeoptimized(method)) {
@@ -63,7 +61,6 @@ extern "C" TwoWordReturn artInstrumentationMethodExitFromCode(Thread* self,
   uintptr_t* return_pc = reinterpret_cast<uintptr_t*>(reinterpret_cast<byte*>(sp) +
                                                       return_pc_offset);
   CHECK_EQ(*return_pc, 0U);
-  self->SetTopOfStack(sp, 0);
   self->VerifyStack();
   instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
   TwoWordReturn return_or_deoptimize_pc = instrumentation->PopInstrumentationStackFrame(

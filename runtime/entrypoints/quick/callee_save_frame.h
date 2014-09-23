@@ -36,14 +36,47 @@ namespace mirror {
 class ArtMethod;
 }  // namespace mirror
 
+class ScopedQuickEntrypointChecks {
+ public:
+  explicit ScopedQuickEntrypointChecks(Thread *self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      : self_(self) {
+    if (kIsDebugBuild) {
+      TestsOnEntry();
+    }
+  }
+
+  explicit ScopedQuickEntrypointChecks() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      : self_(kIsDebugBuild ? Thread::Current() : nullptr) {
+    if (kIsDebugBuild) {
+      TestsOnEntry();
+    }
+  }
+
+  ~ScopedQuickEntrypointChecks() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (kIsDebugBuild) {
+      TestsOnExit();
+    }
+  }
+
+ private:
+  void TestsOnEntry() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    self_->VerifyStack();
+  }
+
+  void TestsOnExit() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    self_->VerifyStack();
+  }
+
+  Thread* const self_;
+};
 // Place a special frame at the TOS that will save the callee saves for the given type.
 static inline void FinishCalleeSaveFrameSetup(Thread* self, StackReference<mirror::ArtMethod>* sp,
                                               Runtime::CalleeSaveType type)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   // Be aware the store below may well stomp on an incoming argument.
   Locks::mutator_lock_->AssertSharedHeld(self);
-  sp->Assign(Runtime::Current()->GetCalleeSaveMethod(type));
-  self->SetTopOfStack(sp, 0);
+  CHECK_EQ(sp->AsMirrorPtr(), Runtime::Current()->GetCalleeSaveMethod(type));
+  // self->SetTopOfStack(sp, 0);
   self->VerifyStack();
 }
 
