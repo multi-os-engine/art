@@ -33,14 +33,15 @@ namespace arm64 {
 // TODO: static asserts to check this.
 
 // Values for GP XRegisters - 64bit registers.
-enum Register {
+// TODO: static asserts
+enum XRegister {
 #define X_REG_ENUM(N) REG_ENUM(X, N)
   LIST_0_TO_31(X_REG_ENUM)
 #undef X_REG_ENUM
   SP,         // SP and XZR are encoded in instructions using the register
               // code 31, the context deciding which is used. We use a
               // differrent enum value to distinguish between the two.
-  kNumberOfCoreRegisters,
+  kNumberOfXRegisters,
   // Aliases.
   TR  = X18,  // ART Thread Register - Managed Runtime (Caller Saved Reg)
   ETR = X21,  // ART Thread Register - External Calls  (Callee Saved Reg)
@@ -51,7 +52,7 @@ enum Register {
   XZR = X31,
   kNoRegister = -1,
 };
-std::ostream& operator<<(std::ostream& os, const Register& rhs);
+std::ostream& operator<<(std::ostream& os, const XRegister& rhs);
 
 // Values for GP WRegisters - 32bit registers.
 enum WRegister {

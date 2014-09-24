@@ -35,7 +35,7 @@ static const char* kWRegisterNames[] = {
   "w30", "wzr", "wsp"
 };
 
-std::ostream& operator<<(std::ostream& os, const Register& rhs) {
+std::ostream& operator<<(std::ostream& os, const XRegister& rhs) {
   if (rhs >= X0 && rhs <= XZR) {
     os << kRegisterNames[rhs];
   } else {
