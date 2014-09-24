@@ -368,6 +368,11 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
     OpRegImm(kOpSub, rs_sp, frame_size_without_spills);
   }
 
+  if (!cu_->compiler_driver->GetCompilerOptions().GetOmitFramePointer()) {
+    // fp register points to previous fp and lr pair
+    OpRegRegImm(kOpAdd, rs_xFP, rs_sp, frame_size_ - 2 * kArm64PointerSize);
+  }
+
   if (!skip_overflow_check) {
     if (generate_explicit_stack_overflow_check) {
       class StackOverflowSlowPath: public LIRSlowPath {

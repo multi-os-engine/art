@@ -53,8 +53,12 @@ static constexpr RegStorage dp_regs_arr[] =
 // preserved but would be scratched by native functions follow aapcs64.
 static constexpr RegStorage reserved_regs_arr[] =
     {rs_wSUSPEND, rs_wSELF, rs_wsp, rs_wLR, rs_wzr};
+static constexpr RegStorage reserved_regs_with_fp_arr[] =
+    {rs_wSUSPEND, rs_wSELF, rs_wsp, rs_wFP, rs_wLR, rs_wzr};
 static constexpr RegStorage reserved64_regs_arr[] =
     {rs_xSUSPEND, rs_xSELF, rs_sp, rs_xLR, rs_xzr};
+static constexpr RegStorage reserved64_regs_with_fp_arr[] =
+    {rs_xSUSPEND, rs_xSELF, rs_sp, rs_xFP, rs_xLR, rs_xzr};
 static constexpr RegStorage core_temps_arr[] =
     {rs_w0, rs_w1, rs_w2, rs_w3, rs_w4, rs_w5, rs_w6, rs_w7,
      rs_w8, rs_w9, rs_w10, rs_w11, rs_w12, rs_w13, rs_w14, rs_w15, rs_w16,
@@ -77,7 +81,10 @@ static constexpr ArrayRef<const RegStorage> core64_regs(core64_regs_arr);
 static constexpr ArrayRef<const RegStorage> sp_regs(sp_regs_arr);
 static constexpr ArrayRef<const RegStorage> dp_regs(dp_regs_arr);
 static constexpr ArrayRef<const RegStorage> reserved_regs(reserved_regs_arr);
+static constexpr ArrayRef<const RegStorage> reserved_regs_with_fp(reserved_regs_with_fp_arr);
 static constexpr ArrayRef<const RegStorage> reserved64_regs(reserved64_regs_arr);
+static constexpr ArrayRef<const RegStorage> reserved64_regs_with_fp(
+    reserved64_regs_with_fp_arr);
 static constexpr ArrayRef<const RegStorage> core_temps(core_temps_arr);
 static constexpr ArrayRef<const RegStorage> core64_temps(core64_temps_arr);
 static constexpr ArrayRef<const RegStorage> sp_temps(sp_temps_arr);
@@ -602,9 +609,17 @@ Mir2Lir* Arm64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph
 }
 
 void Arm64Mir2Lir::CompilerInitializeRegAlloc() {
-  reg_pool_.reset(new (arena_) RegisterPool(this, arena_, core_regs, core64_regs, sp_regs, dp_regs,
-                                            reserved_regs, reserved64_regs,
-                                            core_temps, core64_temps, sp_temps, dp_temps));
+  if (cu_->compiler_driver->GetCompilerOptions().GetOmitFramePointer()) {
+    reg_pool_.reset(new (arena_) RegisterPool(this, arena_, core_regs, core64_regs,
+                                              sp_regs, dp_regs, reserved_regs,
+                                              reserved64_regs, core_temps,
+                                              core64_temps, sp_temps, dp_temps));
+  } else {
+    reg_pool_.reset(new (arena_) RegisterPool(this, arena_, core_regs, core64_regs,
+                                              sp_regs, dp_regs, reserved_regs_with_fp,
+                                              reserved64_regs_with_fp, core_temps,
+                                              core64_temps, sp_temps, dp_temps));
+  }
 
   // Target-specific adjustments.
   // Alias single precision float registers to corresponding double registers.
@@ -647,6 +662,10 @@ void Arm64Mir2Lir::CompilerInitializeRegAlloc() {
  */
 
 void Arm64Mir2Lir::AdjustSpillMask() {
+  if (!cu_->compiler_driver->GetCompilerOptions().GetOmitFramePointer()) {
+    core_spill_mask_ |= (1 << rs_xFP.GetRegNum());  // spill fp
+    num_core_spills_++;
+  }
   core_spill_mask_ |= (1 << rs_xLR.GetRegNum());
   num_core_spills_++;
 }

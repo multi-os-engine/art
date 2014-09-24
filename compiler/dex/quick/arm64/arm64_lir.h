@@ -147,6 +147,7 @@ enum A64NativeRegisterPool {
   rxIP1 = rx17,
   rxSUSPEND = rx19,
   rxSELF = rx18,
+  rxFP = rx29,
   rxLR = rx30,
   /*
    * FIXME: It's a bit awkward to define both 32 and 64-bit views of these - we'll only ever use
@@ -157,6 +158,7 @@ enum A64NativeRegisterPool {
   rwIP1 = rw17,
   rwSUSPEND = rw19,
   rwSELF = rw18,
+  rwFP = rw29,
   rwLR = rw30,
 };
 
@@ -178,11 +180,13 @@ constexpr RegStorage rs_wIP1(RegStorage::kValid | rwIP1);
 constexpr RegStorage rs_xSUSPEND(RegStorage::kValid | rxSUSPEND);
 constexpr RegStorage rs_xSELF(RegStorage::kValid | rxSELF);
 constexpr RegStorage rs_sp(RegStorage::kValid | rsp);
+constexpr RegStorage rs_xFP(RegStorage::kValid | rxFP);
 constexpr RegStorage rs_xLR(RegStorage::kValid | rxLR);
 // TODO: eliminate the need for these.
 constexpr RegStorage rs_wSUSPEND(RegStorage::kValid | rwSUSPEND);
 constexpr RegStorage rs_wSELF(RegStorage::kValid | rwSELF);
 constexpr RegStorage rs_wsp(RegStorage::kValid | rwsp);
+constexpr RegStorage rs_wFP(RegStorage::kValid | rwFP);
 constexpr RegStorage rs_wLR(RegStorage::kValid | rwLR);
 
 // RegisterLocation templates return values (following the hard-float calling convention).

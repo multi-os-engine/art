@@ -220,6 +220,10 @@ static void Usage(const char* fmt, ...) {
   UsageError("");
   UsageError("  --no-include-debug-symbols: Do not include ELF symbols in this oat file");
   UsageError("");
+  UsageError("  --omit-frame-pointer: Omit frame pointer. Default option.");
+  UsageError("");
+  UsageError("  --no-omit-frame-pointer: Do not omit frame pointer.");
+  UsageError("");
   UsageError("  --runtime-arg <argument>: used to specify various arguments for the runtime,");
   UsageError("      such as initial heap size, maximum heap size, and verbose output.");
   UsageError("      Use a separate --runtime-arg switch for each argument.");
@@ -880,6 +884,7 @@ static int dex2oat(int argc, char** argv) {
   bool implicit_null_checks = false;
   bool implicit_so_checks = false;
   bool implicit_suspend_checks = false;
+  bool omit_frame_pointer = true;
 
   for (int i = 0; i < argc; i++) {
     const StringPiece option(argv[i]);
@@ -928,6 +933,10 @@ static int dex2oat(int argc, char** argv) {
       if (!ParseInt(thread_count_str, &thread_count)) {
         Usage("Failed to parse -j argument '%s' as an integer", thread_count_str);
       }
+    } else if (option == "--omit-frame-pointer") {
+      omit_frame_pointer = true;
+    } else if (option == "--no-omit-frame-pointer") {
+      omit_frame_pointer = false;
     } else if (option.starts_with("--oat-location=")) {
       oat_location = option.substr(strlen("--oat-location=")).data();
     } else if (option.starts_with("--bitcode=")) {
@@ -1224,6 +1233,7 @@ static int dex2oat(int argc, char** argv) {
                                                                         include_patch_information,
                                                                         top_k_profile_threshold,
                                                                         include_debug_symbols,
+                                                                        omit_frame_pointer,
                                                                         implicit_null_checks,
                                                                         implicit_so_checks,
                                                                         implicit_suspend_checks

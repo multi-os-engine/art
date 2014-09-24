@@ -104,6 +104,9 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   const size_t frame_size(main_jni_conv->FrameSize());
   const std::vector<ManagedRegister>& callee_save_regs = main_jni_conv->CalleeSaveRegisters();
   __ BuildFrame(frame_size, mr_conv->MethodRegister(), callee_save_regs, mr_conv->EntrySpills());
+  if (!driver->GetCompilerOptions().GetOmitFramePointer()) {
+    __ SetupFramePointer(frame_size);
+  }
 
   // 2. Set up the HandleScope
   mr_conv->ResetIterator(FrameOffset(frame_size));

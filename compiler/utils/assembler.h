@@ -372,6 +372,9 @@ class Assembler {
                           const std::vector<ManagedRegister>& callee_save_regs,
                           const ManagedRegisterEntrySpills& entry_spills) = 0;
 
+  // Setup frame pointer to meet target ABI requirements
+  virtual void SetupFramePointer(size_t frame_size) { }
+
   // Emit code that will remove an activation from the stack
   virtual void RemoveFrame(size_t frame_size,
                            const std::vector<ManagedRegister>& callee_save_regs) = 0;

@@ -81,6 +81,9 @@ class Arm64Assembler FINAL : public Assembler {
                   const std::vector<ManagedRegister>& callee_save_regs,
                   const ManagedRegisterEntrySpills& entry_spills) OVERRIDE;
 
+  // Setup frame pointer according to ABI
+  void SetupFramePointer(size_t frame_size) OVERRIDE;
+
   // Emit code that will remove an activation from the stack.
   void RemoveFrame(size_t frame_size, const std::vector<ManagedRegister>& callee_save_regs)
       OVERRIDE;

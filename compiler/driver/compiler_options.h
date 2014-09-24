@@ -57,6 +57,7 @@ class CompilerOptions {
     include_patch_information_(kDefaultIncludePatchInformation),
     top_k_profile_threshold_(kDefaultTopKProfileThreshold),
     include_debug_symbols_(kDefaultIncludeDebugSymbols),
+    omit_frame_pointer_(true),
     implicit_null_checks_(false),
     implicit_so_checks_(false),
     implicit_suspend_checks_(false)
@@ -75,6 +76,7 @@ class CompilerOptions {
                   bool include_patch_information,
                   double top_k_profile_threshold,
                   bool include_debug_symbols,
+                  bool omit_frame_pointer,
                   bool implicit_null_checks,
                   bool implicit_so_checks,
                   bool implicit_suspend_checks
@@ -92,6 +94,7 @@ class CompilerOptions {
     include_patch_information_(include_patch_information),
     top_k_profile_threshold_(top_k_profile_threshold),
     include_debug_symbols_(include_debug_symbols),
+    omit_frame_pointer_(omit_frame_pointer),
     implicit_null_checks_(implicit_null_checks),
     implicit_so_checks_(implicit_so_checks),
     implicit_suspend_checks_(implicit_suspend_checks)
@@ -161,6 +164,10 @@ class CompilerOptions {
     return include_debug_symbols_;
   }
 
+  bool GetOmitFramePointer() const {
+    return omit_frame_pointer_;
+  }
+
   bool GetImplicitNullChecks() const {
     return implicit_null_checks_;
   }
@@ -209,6 +216,7 @@ class CompilerOptions {
   // When using a profile file only the top K% of the profiled samples will be compiled.
   double top_k_profile_threshold_;
   bool include_debug_symbols_;
+  bool omit_frame_pointer_;
   bool implicit_null_checks_;
   bool implicit_so_checks_;
   bool implicit_suspend_checks_;

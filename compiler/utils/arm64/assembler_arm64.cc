@@ -712,6 +712,11 @@ void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
   }
 }
 
+void Arm64Assembler::SetupFramePointer(size_t frame_size) {
+  // fp register points to previous fp and lr pair
+  ___ Add(reg_x(FP), reg_x(SP), frame_size - 2 * kFramePointerSize);
+}
+
 void Arm64Assembler::RemoveFrame(size_t frame_size, const std::vector<ManagedRegister>& callee_save_regs) {
   CHECK_ALIGNED(frame_size, kStackAlignment);
 
