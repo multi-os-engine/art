@@ -1761,7 +1761,8 @@ NextCallInsn Mir2Lir::GetNextSDCallInsn() {
 
 LIR* Mir2Lir::GenCallInsn(const MirMethodLoweringInfo& method_info) {
   DCHECK(cu_->instruction_set != kX86 && cu_->instruction_set != kX86_64 &&
-         cu_->instruction_set != kThumb2 && cu_->instruction_set != kArm);
+         cu_->instruction_set != kThumb2 && cu_->instruction_set != kArm &&
+         cu_->instruction_set != kArm64);
   return OpReg(kOpBlx, TargetPtrReg(kInvokeTgt));
 }
 
