@@ -157,7 +157,8 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
         output_ << ", ";
       }
     }
-    output_ << ")";
+    output_ << "), liveness ";
+    output_ << instruction->GetLifetimePosition();
   }
 
   void VisitInstruction(HInstruction* instruction) {
@@ -169,7 +170,7 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       }
       output_ << "]";
     }
-    if (pass_name_ == kLivenessPassName && instruction->GetLifetimePosition() != kNoLifetime) {
+    if (pass_name_ == kLivenessPassName) {
       output_ << " (liveness: " << instruction->GetLifetimePosition();
       if (instruction->HasLiveInterval()) {
         output_ << " ";
@@ -177,7 +178,9 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
         interval.Dump(output_);
       }
       output_ << ")";
-    } else if (pass_name_ == kRegisterAllocatorPassName) {
+    }
+    if (pass_name_ == kRegisterAllocatorPassName) {
+      output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
       LocationSummary* locations = instruction->GetLocations();
       if (locations != nullptr) {
         output_ << " ( ";
