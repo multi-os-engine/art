@@ -294,7 +294,7 @@ void Class::SetReferenceInstanceOffsets(uint32_t new_reference_offsets) {
 
 bool Class::IsInSamePackage(const StringPiece& descriptor1, const StringPiece& descriptor2) {
   size_t i = 0;
-  while (descriptor1[i] != '\0' && descriptor1[i] == descriptor2[i]) {
+  while (i < descriptor1.size() && i < descriptor2.size() && descriptor1[i] == descriptor2[i]) {
     ++i;
   }
   if (descriptor1.find('/', i) != StringPiece::npos ||
