@@ -98,6 +98,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/instruction_simplifier.cc \
 	optimizing/locations.cc \
 	optimizing/nodes.cc \
+	optimizing/optimization.cc \
 	optimizing/optimizing_compiler.cc \
 	optimizing/parallel_move_resolver.cc \
 	optimizing/register_allocator.cc \

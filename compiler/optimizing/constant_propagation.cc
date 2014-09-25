@@ -44,4 +44,7 @@ void ConstantPropagation::Run() {
   }
 }
 
+const char* ConstantPropagation::kConstantPropagationPassName =
+  "constant_propagation";
+
 }  // namespace art

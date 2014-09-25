@@ -42,4 +42,7 @@ void DeadCodeElimination::Run() {
   }
 }
 
+const char* DeadCodeElimination::kDeadCodeEliminationPassName =
+  "dead_code_elimination";
+
 }  // namespace art
