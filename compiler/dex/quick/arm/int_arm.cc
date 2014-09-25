@@ -438,6 +438,12 @@ void ArmMir2Lir::OpRegCopyWide(RegStorage r_dest, RegStorage r_src) {
     bool src_fp = r_src.IsFloat();
     DCHECK(r_dest.Is64Bit());
     DCHECK(r_src.Is64Bit());
+    if (dest_fp && r_dest.IsPair()) {
+      r_dest = As64BitFloatReg(r_dest);
+    }
+    if (src_fp && r_src.IsPair()) {
+      r_src = As64BitFloatReg(r_src);
+    }
     if (dest_fp) {
       if (src_fp) {
         OpRegCopy(r_dest, r_src);
@@ -1173,7 +1179,7 @@ void ArmMir2Lir::GenMulLong(Instruction::Code opcode, RegLocation rl_dest,
     if (BadOverlap(rl_src1, rl_dest) || (BadOverlap(rl_src2, rl_dest))) {
       FlushAllRegs();
       CallRuntimeHelperRegLocationRegLocation(kQuickLmul, rl_src1, rl_src2, false);
-      rl_result = GetReturnWide(kCoreReg);
+      rl_result = GetCReturnWide(kCoreReg);
       StoreValueWide(rl_dest, rl_result);
       return;
     }
@@ -1252,7 +1258,7 @@ void ArmMir2Lir::GenMulLong(Instruction::Code opcode, RegLocation rl_dest,
     if (reg_status != 0) {
       // We had manually allocated registers for rl_result.
       // Now construct a RegLocation.
-      rl_result = GetReturnWide(kCoreReg);  // Just using as a template.
+      rl_result = GetCReturnWide(kCoreReg);  // Just using as a template.
       rl_result.reg = RegStorage::MakeRegPair(res_lo, res_hi);
     }
 

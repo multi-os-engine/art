@@ -94,33 +94,33 @@ class X86Mir2Lir : public Mir2Lir {
   void GenImplicitNullCheck(RegStorage reg, int opt_flags) OVERRIDE;
 
   // Required for target - register utilities.
-  RegStorage TargetReg(SpecialTargetRegister reg) OVERRIDE;
-  RegStorage TargetReg(SpecialTargetRegister symbolic_reg, WideKind wide_kind) OVERRIDE {
+  RegStorage CTargetReg(SpecialTargetRegister reg) OVERRIDE;
+  RegStorage CTargetReg(SpecialTargetRegister symbolic_reg, WideKind wide_kind) OVERRIDE {
     if (wide_kind == kWide) {
       if (cu_->target64) {
-        return As64BitReg(TargetReg32(symbolic_reg));
+        return As64BitReg(CTargetReg32(symbolic_reg));
       } else {
         // x86: construct a pair.
         DCHECK((kArg0 <= symbolic_reg && symbolic_reg < kArg3) ||
                (kFArg0 <= symbolic_reg && symbolic_reg < kFArg3) ||
                (kRet0 == symbolic_reg));
-        return RegStorage::MakeRegPair(TargetReg32(symbolic_reg),
-                                 TargetReg32(static_cast<SpecialTargetRegister>(symbolic_reg + 1)));
+        return RegStorage::MakeRegPair(CTargetReg32(symbolic_reg),
+                                 CTargetReg32(static_cast<SpecialTargetRegister>(symbolic_reg + 1)));
       }
     } else if (wide_kind == kRef && cu_->target64) {
-      return As64BitReg(TargetReg32(symbolic_reg));
+      return As64BitReg(CTargetReg32(symbolic_reg));
     } else {
-      return TargetReg32(symbolic_reg);
+      return CTargetReg32(symbolic_reg);
     }
   }
-  RegStorage TargetPtrReg(SpecialTargetRegister symbolic_reg) OVERRIDE {
-    return TargetReg(symbolic_reg, cu_->target64 ? kWide : kNotWide);
+  RegStorage CTargetPtrReg(SpecialTargetRegister symbolic_reg) OVERRIDE {
+    return CTargetReg(symbolic_reg, cu_->target64 ? kWide : kNotWide);
   }
 
   RegStorage GetArgMappingToPhysicalReg(int arg_num) OVERRIDE;
 
-  RegLocation GetReturnAlt() OVERRIDE;
-  RegLocation GetReturnWideAlt() OVERRIDE;
+  RegLocation GetCReturnAlt() OVERRIDE;
+  RegLocation GetCReturnWideAlt() OVERRIDE;
   RegLocation LocCReturn() OVERRIDE;
   RegLocation LocCReturnRef() OVERRIDE;
   RegLocation LocCReturnDouble() OVERRIDE;
@@ -377,7 +377,7 @@ class X86Mir2Lir : public Mir2Lir {
   LIR* InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) OVERRIDE;
 
  protected:
-  RegStorage TargetReg32(SpecialTargetRegister reg);
+  RegStorage CTargetReg32(SpecialTargetRegister reg);
   // Casting of RegStorage
   RegStorage As32BitReg(RegStorage reg) {
     DCHECK(!reg.IsPair());

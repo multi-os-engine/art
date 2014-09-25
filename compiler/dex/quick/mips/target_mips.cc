@@ -84,7 +84,7 @@ RegStorage MipsMir2Lir::Solo64ToPair64(RegStorage reg) {
 }
 
 // Return a target-dependent special register.
-RegStorage MipsMir2Lir::TargetReg(SpecialTargetRegister reg) {
+RegStorage MipsMir2Lir::CTargetReg(SpecialTargetRegister reg) {
   RegStorage res_reg;
   switch (reg) {
     case kSelf: res_reg = rs_rMIPS_SELF; break;
@@ -392,14 +392,14 @@ void MipsMir2Lir::ClobberCallerSave() {
   Clobber(rs_rD7);
 }
 
-RegLocation MipsMir2Lir::GetReturnWideAlt() {
-  UNIMPLEMENTED(FATAL) << "No GetReturnWideAlt for MIPS";
+RegLocation MipsMir2Lir::GetCReturnWideAlt() {
+  UNIMPLEMENTED(FATAL) << "No GetCReturnWideAlt for MIPS";
   RegLocation res = LocCReturnWide();
   return res;
 }
 
-RegLocation MipsMir2Lir::GetReturnAlt() {
-  UNIMPLEMENTED(FATAL) << "No GetReturnAlt for MIPS";
+RegLocation MipsMir2Lir::GetCReturnAlt() {
+  UNIMPLEMENTED(FATAL) << "No GetCReturnAlt for MIPS";
   RegLocation res = LocCReturn();
   return res;
 }
@@ -497,11 +497,11 @@ LIR* MipsMir2Lir::GenAtomic64Load(RegStorage r_base, int displacement, RegStorag
   DCHECK(r_dest.IsPair());
   ClobberCallerSave();
   LockCallTemps();  // Using fixed registers
-  RegStorage reg_ptr = TargetReg(kArg0);
+  RegStorage reg_ptr = CTargetReg(kArg0);
   OpRegRegImm(kOpAdd, reg_ptr, r_base, displacement);
   RegStorage r_tgt = LoadHelper(kQuickA64Load);
   LIR *ret = OpReg(kOpBlx, r_tgt);
-  RegStorage reg_ret = RegStorage::MakeRegPair(TargetReg(kRet0), TargetReg(kRet1));
+  RegStorage reg_ret = RegStorage::MakeRegPair(CTargetReg(kRet0), CTargetReg(kRet1));
   OpRegCopyWide(r_dest, reg_ret);
   return ret;
 }
@@ -515,9 +515,9 @@ LIR* MipsMir2Lir::GenAtomic64Store(RegStorage r_base, int displacement, RegStora
   OpRegRegImm(kOpAdd, temp_ptr, r_base, displacement);
   RegStorage temp_value = AllocTempWide();
   OpRegCopyWide(temp_value, r_src);
-  RegStorage reg_ptr = TargetReg(kArg0);
+  RegStorage reg_ptr = CTargetReg(kArg0);
   OpRegCopy(reg_ptr, temp_ptr);
-  RegStorage reg_value = RegStorage::MakeRegPair(TargetReg(kArg2), TargetReg(kArg3));
+  RegStorage reg_value = RegStorage::MakeRegPair(CTargetReg(kArg2), CTargetReg(kArg3));
   OpRegCopyWide(reg_value, temp_value);
   FreeTemp(temp_ptr);
   FreeTemp(temp_value);

@@ -795,6 +795,8 @@ class Mir2Lir : public Backend {
     void DoPromotion();
     int VRegOffset(int v_reg);
     int SRegOffset(int s_reg);
+    RegLocation GetCReturnWide(RegisterClass reg_class);
+    RegLocation GetCReturn(RegisterClass reg_class);
     RegLocation GetReturnWide(RegisterClass reg_class);
     RegLocation GetReturn(RegisterClass reg_class);
     RegisterInfo* GetRegInfo(RegStorage reg);
@@ -1168,7 +1170,7 @@ class Mir2Lir : public Backend {
      * @note This function is currently allowed to return any suitable view of the registers
      *   (e.g. this could be 64-bit solo or 32-bit solo for 64-bit backends).
      */
-    virtual RegStorage TargetReg(SpecialTargetRegister reg) = 0;
+    virtual RegStorage CTargetReg(SpecialTargetRegister reg) = 0;
 
     /**
      * @brief Portable way of getting special registers from the backend.
@@ -1180,7 +1182,7 @@ class Mir2Lir : public Backend {
      *       return. In that case, this function should return a pair where the first component of
      *       the result will be the indicated special register.
      */
-    virtual RegStorage TargetReg(SpecialTargetRegister reg, WideKind wide_kind) {
+    virtual RegStorage CTargetReg(SpecialTargetRegister reg, WideKind wide_kind) {
       if (wide_kind == kWide) {
         DCHECK((kArg0 <= reg && reg < kArg7) || (kFArg0 <= reg && reg < kFArg7) || (kRet0 == reg));
         COMPILE_ASSERT((kArg1 == kArg0 + 1) && (kArg2 == kArg1 + 1) && (kArg3 == kArg2 + 1) &&
@@ -1188,40 +1190,77 @@ class Mir2Lir : public Backend {
                        (kArg7 == kArg6 + 1), kargs_range_unexpected);
         COMPILE_ASSERT((kFArg1 == kFArg0 + 1) && (kFArg2 == kFArg1 + 1) && (kFArg3 == kFArg2 + 1) &&
                        (kFArg4 == kFArg3 + 1) && (kFArg5 == kFArg4 + 1) && (kFArg6 == kFArg5 + 1) &&
-                       (kFArg7 == kFArg6 + 1), kfargs_range_unexpected);
+                       (kFArg7 == kFArg6 + 1) && (kFArg8 == kFArg7 + 1) && (kFArg9 == kFArg8 + 1) &&
+                       (kFArg10 == kFArg9 + 1) && (kFArg11 == kFArg10 + 1) &&
+                       (kFArg12 == kFArg11 + 1) && (kFArg13 == kFArg12 + 1) &&
+                       (kFArg14 == kFArg13 + 1) && (kFArg15 == kFArg14 + 1),
+                       kfargs_range_unexpected);
         COMPILE_ASSERT(kRet1 == kRet0 + 1, kret_range_unexpected);
-        return RegStorage::MakeRegPair(TargetReg(reg),
-                                       TargetReg(static_cast<SpecialTargetRegister>(reg + 1)));
+        return RegStorage::MakeRegPair(CTargetReg(reg),
+                                       CTargetReg(static_cast<SpecialTargetRegister>(reg + 1)));
       } else {
-        return TargetReg(reg);
+        return CTargetReg(reg);
       }
     }
 
     /**
      * @brief Portable way of getting a special register for storing a pointer.
-     * @see TargetReg()
+     * @see CTargetReg()
      */
-    virtual RegStorage TargetPtrReg(SpecialTargetRegister reg) {
-      return TargetReg(reg);
+    virtual RegStorage CTargetPtrReg(SpecialTargetRegister reg) {
+      return CTargetReg(reg);
     }
 
     // Get a reg storage corresponding to the wide & ref flags of the reg location.
-    virtual RegStorage TargetReg(SpecialTargetRegister reg, RegLocation loc) {
+    virtual RegStorage CTargetReg(SpecialTargetRegister reg, RegLocation loc) {
       if (loc.ref) {
-        return TargetReg(reg, kRef);
+        return CTargetReg(reg, kRef);
       } else {
-        return TargetReg(reg, loc.wide ? kWide : kNotWide);
+        return CTargetReg(reg, loc.wide ? kWide : kNotWide);
       }
     }
 
+    // Note: Implement target specific TargetReg if ABI is different between quick code and C.
+    virtual RegStorage TargetReg(SpecialTargetRegister reg) {
+      return CTargetReg(reg);
+    }
+
+    virtual RegStorage TargetReg(SpecialTargetRegister reg, WideKind wide_kind) {
+      return CTargetReg(reg, wide_kind);
+    }
+
+    virtual RegStorage TargetPtrReg(SpecialTargetRegister reg) {
+      return CTargetPtrReg(reg);
+    }
+
+    virtual RegStorage TargetReg(SpecialTargetRegister reg, RegLocation loc) {
+      return CTargetReg(reg, loc);
+    }
+
     virtual RegStorage GetArgMappingToPhysicalReg(int arg_num) = 0;
-    virtual RegLocation GetReturnAlt() = 0;
-    virtual RegLocation GetReturnWideAlt() = 0;
+    virtual RegLocation GetCReturnAlt() = 0;
+    virtual RegLocation GetCReturnWideAlt() = 0;
     virtual RegLocation LocCReturn() = 0;
     virtual RegLocation LocCReturnRef() = 0;
     virtual RegLocation LocCReturnDouble() = 0;
     virtual RegLocation LocCReturnFloat() = 0;
     virtual RegLocation LocCReturnWide() = 0;
+    // Note: Implement target specific return location if ABI is different between quick code and C.
+    virtual RegLocation LocReturn() {
+      return LocCReturn();
+    }
+    virtual RegLocation LocReturnRef() {
+      return LocCReturnRef();
+    }
+    virtual RegLocation LocReturnDouble() {
+      return LocCReturnDouble();
+    }
+    virtual RegLocation LocReturnFloat() {
+      return LocCReturnFloat();
+    }
+    virtual RegLocation LocReturnWide() {
+      return LocCReturnWide();
+    }
     virtual ResourceMask GetRegMaskCommon(const RegStorage& reg) const = 0;
     virtual void AdjustSpillMask() = 0;
     virtual void ClobberCallerSave() = 0;

@@ -95,20 +95,20 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
                          int offset, int check_value, LIR* target, LIR** compare) OVERRIDE;
 
   // Required for target - register utilities.
-  RegStorage TargetReg(SpecialTargetRegister reg) OVERRIDE;
-  RegStorage TargetReg(SpecialTargetRegister symbolic_reg, WideKind wide_kind) OVERRIDE {
+  RegStorage CTargetReg(SpecialTargetRegister reg) OVERRIDE;
+  RegStorage CTargetReg(SpecialTargetRegister symbolic_reg, WideKind wide_kind) OVERRIDE {
     if (wide_kind == kWide || wide_kind == kRef) {
-      return As64BitReg(TargetReg(symbolic_reg));
+      return As64BitReg(CTargetReg(symbolic_reg));
     } else {
-      return Check32BitReg(TargetReg(symbolic_reg));
+      return Check32BitReg(CTargetReg(symbolic_reg));
     }
   }
-  RegStorage TargetPtrReg(SpecialTargetRegister symbolic_reg) OVERRIDE {
-    return As64BitReg(TargetReg(symbolic_reg));
+  RegStorage CTargetPtrReg(SpecialTargetRegister symbolic_reg) OVERRIDE {
+    return As64BitReg(CTargetReg(symbolic_reg));
   }
   RegStorage GetArgMappingToPhysicalReg(int arg_num) OVERRIDE;
-  RegLocation GetReturnAlt() OVERRIDE;
-  RegLocation GetReturnWideAlt() OVERRIDE;
+  RegLocation GetCReturnAlt() OVERRIDE;
+  RegLocation GetCReturnWideAlt() OVERRIDE;
   RegLocation LocCReturn() OVERRIDE;
   RegLocation LocCReturnRef() OVERRIDE;
   RegLocation LocCReturnDouble() OVERRIDE;

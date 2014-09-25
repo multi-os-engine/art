@@ -24,6 +24,9 @@
 #include "dex/compiler_internals.h"
 #include "dex/quick/mir_to_lir-inl.h"
 
+// TODO: Remove SoftFp support to make code clean.
+// #define ARM32_QUICKCODE_USE_SOFTFP
+
 namespace art {
 
 #ifdef ARM_R4_SUSPEND_FLAG
@@ -87,8 +90,16 @@ RegLocation ArmMir2Lir::LocCReturnDouble() {
   return arm_loc_c_return_double;
 }
 
+RegLocation ArmMir2Lir::LocReturnFloat() {
+  return arm_loc_return_float;
+}
+
+RegLocation ArmMir2Lir::LocReturnDouble() {
+  return arm_loc_return_double;
+}
+
 // Return a target-dependent special register.
-RegStorage ArmMir2Lir::TargetReg(SpecialTargetRegister reg) {
+RegStorage ArmMir2Lir::CTargetReg(SpecialTargetRegister reg) {
   RegStorage res_reg = RegStorage::InvalidReg();
   switch (reg) {
     case kSelf: res_reg = rs_rARM_SELF; break;
@@ -119,18 +130,54 @@ RegStorage ArmMir2Lir::TargetReg(SpecialTargetRegister reg) {
   return res_reg;
 }
 
-RegStorage ArmMir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
-  // For the 32-bit internal ABI, the first 3 arguments are passed in registers.
-  switch (arg_num) {
-    case 0:
-      return rs_r1;
-    case 1:
-      return rs_r2;
-    case 2:
-      return rs_r3;
-    default:
-      return RegStorage::InvalidReg();
+RegStorage ArmMir2Lir::TargetReg(SpecialTargetRegister reg) {
+  RegStorage res_reg = RegStorage::InvalidReg();
+  switch (reg) {
+    case kSelf: res_reg = rs_rARM_SELF; break;
+#ifdef ARM_R4_SUSPEND_FLAG
+    case kSuspend: res_reg =  rs_rARM_SUSPEND; break;
+#else
+    case kSuspend: res_reg = RegStorage::InvalidReg(); break;
+#endif
+    case kLr: res_reg =  rs_rARM_LR; break;
+    case kPc: res_reg =  rs_rARM_PC; break;
+    case kSp: res_reg =  rs_rARM_SP; break;
+    case kArg0: res_reg = rs_r0; break;
+    case kArg1: res_reg = rs_r1; break;
+    case kArg2: res_reg = rs_r2; break;
+    case kArg3: res_reg = rs_r3; break;
+#ifdef ARM32_QUICKCODE_USE_SOFTFP
+    case kFArg0: res_reg = rs_r0; break;
+    case kFArg1: res_reg = rs_r1; break;
+    case kFArg2: res_reg = rs_r2; break;
+    case kFArg3: res_reg = rs_r3; break;
+#else
+    case kFArg0: res_reg = rs_fr0; break;
+    case kFArg1: res_reg = rs_fr1; break;
+    case kFArg2: res_reg = rs_fr2; break;
+    case kFArg3: res_reg = rs_fr3; break;
+    case kFArg4: res_reg = rs_fr4; break;
+    case kFArg5: res_reg = rs_fr5; break;
+    case kFArg6: res_reg = rs_fr6; break;
+    case kFArg7: res_reg = rs_fr7; break;
+    case kFArg8: res_reg = rs_fr8; break;
+    case kFArg9: res_reg = rs_fr9; break;
+    case kFArg10: res_reg = rs_fr10; break;
+    case kFArg11: res_reg = rs_fr11; break;
+    case kFArg12: res_reg = rs_fr12; break;
+    case kFArg13: res_reg = rs_fr13; break;
+    case kFArg14: res_reg = rs_fr14; break;
+    case kFArg15: res_reg = rs_fr15; break;
+#endif
+    case kRet0: res_reg = rs_r0; break;
+    case kRet1: res_reg = rs_r1; break;
+    case kInvokeTgt: res_reg = rs_rARM_LR; break;
+    case kHiddenArg: res_reg = rs_r12; break;
+    case kHiddenFpArg: res_reg = RegStorage::InvalidReg(); break;
+    case kCount: res_reg = RegStorage::InvalidReg(); break;
+    default: res_reg = RegStorage::InvalidReg();
   }
+  return res_reg;
 }
 
 /*
@@ -685,7 +732,7 @@ void ArmMir2Lir::ClobberCallerSave() {
   Clobber(rs_dr7);
 }
 
-RegLocation ArmMir2Lir::GetReturnWideAlt() {
+RegLocation ArmMir2Lir::GetCReturnWideAlt() {
   RegLocation res = LocCReturnWide();
   res.reg.SetLowReg(rs_r2.GetReg());
   res.reg.SetHighReg(rs_r3.GetReg());
@@ -697,7 +744,7 @@ RegLocation ArmMir2Lir::GetReturnWideAlt() {
   return res;
 }
 
-RegLocation ArmMir2Lir::GetReturnAlt() {
+RegLocation ArmMir2Lir::GetCReturnAlt() {
   RegLocation res = LocCReturn();
   res.reg.SetReg(rs_r1.GetReg());
   Clobber(rs_r1);
@@ -711,6 +758,32 @@ void ArmMir2Lir::LockCallTemps() {
   LockTemp(rs_r1);
   LockTemp(rs_r2);
   LockTemp(rs_r3);
+#ifndef ARM32_QUICKCODE_USE_SOFTFP
+  LockTemp(rs_fr0);
+  LockTemp(rs_fr1);
+  LockTemp(rs_fr2);
+  LockTemp(rs_fr3);
+  LockTemp(rs_fr4);
+  LockTemp(rs_fr5);
+  LockTemp(rs_fr6);
+  LockTemp(rs_fr7);
+  LockTemp(rs_fr8);
+  LockTemp(rs_fr9);
+  LockTemp(rs_fr10);
+  LockTemp(rs_fr11);
+  LockTemp(rs_fr12);
+  LockTemp(rs_fr13);
+  LockTemp(rs_fr14);
+  LockTemp(rs_fr15);
+  LockTemp(rs_dr0);
+  LockTemp(rs_dr1);
+  LockTemp(rs_dr2);
+  LockTemp(rs_dr3);
+  LockTemp(rs_dr4);
+  LockTemp(rs_dr5);
+  LockTemp(rs_dr6);
+  LockTemp(rs_dr7);
+#endif
 }
 
 /* To be used when explicitly managing register use */
@@ -719,6 +792,32 @@ void ArmMir2Lir::FreeCallTemps() {
   FreeTemp(rs_r1);
   FreeTemp(rs_r2);
   FreeTemp(rs_r3);
+#ifndef ARM32_QUICKCODE_USE_SOFTFP
+  FreeTemp(rs_fr0);
+  FreeTemp(rs_fr1);
+  FreeTemp(rs_fr2);
+  FreeTemp(rs_fr3);
+  FreeTemp(rs_fr4);
+  FreeTemp(rs_fr5);
+  FreeTemp(rs_fr6);
+  FreeTemp(rs_fr7);
+  FreeTemp(rs_fr8);
+  FreeTemp(rs_fr9);
+  FreeTemp(rs_fr10);
+  FreeTemp(rs_fr11);
+  FreeTemp(rs_fr12);
+  FreeTemp(rs_fr13);
+  FreeTemp(rs_fr14);
+  FreeTemp(rs_fr15);
+  FreeTemp(rs_dr0);
+  FreeTemp(rs_dr1);
+  FreeTemp(rs_dr2);
+  FreeTemp(rs_dr3);
+  FreeTemp(rs_dr4);
+  FreeTemp(rs_dr5);
+  FreeTemp(rs_dr6);
+  FreeTemp(rs_dr7);
+#endif
 }
 
 RegStorage ArmMir2Lir::LoadHelper(QuickEntrypointEnum trampoline) {
@@ -821,6 +920,121 @@ RegStorage ArmMir2Lir::AllocPreservedSingle(int s_reg) {
     }
   }
   return res;
+}
+
+// RegStorage ArmMir2Lir::InToRegStorageArmMapper::GetNextReg(bool is_double_or_float, bool is_wide, bool is_ref) {
+//
+// }
+
+RegStorage ArmMir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
+  // For the 32-bit internal ABI, the first 3 arguments are passed in registers.
+  switch (arg_num) {
+    case 0:
+      return rs_r1;
+    case 1:
+      return rs_r2;
+    case 2:
+      return rs_r3;
+    default:
+      return RegStorage::InvalidReg();
+  }
+}
+
+void ArmMir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
+#ifdef ARM32_QUICKCODE_USE_SOFTFP
+  Mir2Lir::FlushIns(ArgLocs, rl_method);
+#else
+  /*
+   * Dummy up a RegLocation for the incoming StackReference<mirror::ArtMethod>
+   * It will attempt to keep kArg0 live (or copy it to home location
+   * if promoted).
+   */
+  RegLocation rl_src = rl_method;
+  rl_src.location = kLocPhysReg;
+  rl_src.reg = Mir2Lir::TargetReg(kArg0, kRef);
+  rl_src.home = false;
+  MarkLive(rl_src);
+  StoreValue(rl_method, rl_src);
+  // If Method* has been promoted, explicitly flush
+  if (rl_method.location == kLocPhysReg) {
+    StoreRefDisp(TargetPtrReg(kSp), 0, rl_src.reg, kNotVolatile);
+  }
+
+  if (mir_graph_->GetNumOfInVRs() == 0) {
+    return;
+  }
+
+  int start_vreg = mir_graph_->GetFirstInVR();
+  /*
+   * Copy incoming arguments to their proper home locations.
+   * NOTE: an older version of dx had an issue in which
+   * it would reuse static method argument registers.
+   * This could result in the same Dalvik virtual register
+   * being promoted to both core and fp regs. To account for this,
+   * we only copy to the corresponding promoted physical register
+   * if it matches the type of the SSA name for the incoming
+   * argument.  It is also possible that long and double arguments
+   * end up half-promoted.  In those cases, we must flush the promoted
+   * half to memory as well.
+   */
+  ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
+  for (uint32_t i = 0; i < mir_graph_->GetNumOfInVRs(); i++) {
+    PromotionMap* v_map = &promotion_map_[start_vreg + i];
+    RegStorage reg = GetArgMappingToPhysicalReg(i);
+
+    if (reg.Valid()) {
+      // If arriving in register
+      bool need_flush = true;
+      RegLocation* t_loc = &ArgLocs[i];
+      if ((v_map->core_location == kLocPhysReg) && !t_loc->fp) {
+        OpRegCopy(RegStorage::Solo32(v_map->core_reg), reg);
+        need_flush = false;
+      } else if ((v_map->fp_location == kLocPhysReg) && t_loc->fp) {
+        OpRegCopy(RegStorage::Solo32(v_map->fp_reg), reg);
+        need_flush = false;
+      } else {
+        need_flush = true;
+      }
+
+      // For wide args, force flush if not fully promoted
+      if (t_loc->wide) {
+        PromotionMap* p_map = v_map + (t_loc->high_word ? -1 : +1);
+        // Is only half promoted?
+        need_flush |= (p_map->core_location != v_map->core_location) ||
+            (p_map->fp_location != v_map->fp_location);
+        if ((cu_->instruction_set == kThumb2) && t_loc->fp && !need_flush) {
+          /*
+           * In Arm, a double is represented as a pair of consecutive single float
+           * registers starting at an even number.  It's possible that both Dalvik vRegs
+           * representing the incoming double were independently promoted as singles - but
+           * not in a form usable as a double.  If so, we need to flush - even though the
+           * incoming arg appears fully in register.  At this point in the code, both
+           * halves of the double are promoted.  Make sure they are in a usable form.
+           */
+          int lowreg_index = start_vreg + i + (t_loc->high_word ? -1 : 0);
+          int low_reg = promotion_map_[lowreg_index].fp_reg;
+          int high_reg = promotion_map_[lowreg_index + 1].fp_reg;
+          if (((low_reg & 0x1) != 0) || (high_reg != (low_reg + 1))) {
+            need_flush = true;
+          }
+        }
+      }
+      if (need_flush) {
+        Store32Disp(TargetPtrReg(kSp), SRegOffset(start_vreg + i), reg);
+      }
+    } else {
+      // If arriving in frame & promoted
+      if (v_map->core_location == kLocPhysReg) {
+        Load32Disp(TargetPtrReg(kSp), SRegOffset(start_vreg + i),
+                   RegStorage::Solo32(v_map->core_reg));
+      }
+      if (v_map->fp_location == kLocPhysReg) {
+        Load32Disp(TargetPtrReg(kSp), SRegOffset(start_vreg + i),
+                   RegStorage::Solo32(v_map->fp_reg));
+      }
+    }
+  }
+#endif
 }
 
 }  // namespace art

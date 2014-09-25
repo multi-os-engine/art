@@ -19,6 +19,9 @@
 
 #include "dex/compiler_internals.h"
 
+// TODO: Remove SoftFp support to make code clean.
+// #define ARM32_QUICKCODE_USE_SOFTFP
+
 namespace art {
 
 /*
@@ -298,18 +301,23 @@ constexpr RegStorage rs_dr31(RegStorage::kValid | dr31);
 #endif
 
 // RegisterLocation templates return values (r0, or r0/r1).
-const RegLocation arm_loc_c_return
-    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1,
-     RegStorage(RegStorage::k32BitSolo, r0), INVALID_SREG, INVALID_SREG};
-const RegLocation arm_loc_c_return_wide
+const RegLocation arm_loc_c_return =
+    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1, rs_r0, INVALID_SREG, INVALID_SREG};
+const RegLocation arm_loc_c_return_wide =
     {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1,
-     RegStorage(RegStorage::k64BitPair, r0, r1), INVALID_SREG, INVALID_SREG};
-const RegLocation arm_loc_c_return_float
-    {kLocPhysReg, 0, 0, 0, 0, 0, 0, 0, 1,
-     RegStorage(RegStorage::k32BitSolo, r0), INVALID_SREG, INVALID_SREG};
-const RegLocation arm_loc_c_return_double
-    {kLocPhysReg, 1, 0, 0, 0, 0, 0, 0, 1,
-     RegStorage(RegStorage::k64BitPair, r0, r1), INVALID_SREG, INVALID_SREG};
+     RegStorage::MakeRegPair(rs_r0, rs_r1), INVALID_SREG, INVALID_SREG};
+const RegLocation arm_loc_c_return_float = arm_loc_c_return;
+const RegLocation arm_loc_c_return_double = arm_loc_c_return_wide;
+
+#ifdef ARM32_QUICKCODE_USE_SOFTFP
+const RegLocation arm_loc_return_float = arm_loc_c_return_float;
+const RegLocation arm_loc_return_double = arm_loc_c_return_double;
+#else
+const RegLocation arm_loc_return_float =
+    {kLocPhysReg, 0, 0, 0, 1, 0, 0, 0, 1, rs_fr0, INVALID_SREG, INVALID_SREG};
+const RegLocation arm_loc_return_double =
+    {kLocPhysReg, 1, 0, 0, 1, 0, 0, 0, 1, rs_dr0, INVALID_SREG, INVALID_SREG};
+#endif
 
 enum ArmShiftEncodings {
   kArmLsl = 0x0,

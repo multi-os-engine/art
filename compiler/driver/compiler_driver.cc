@@ -2041,9 +2041,12 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
   uint64_t start_ns = kTimeCompileMethod ? NanoTime() : 0;
 
   if ((access_flags & kAccNative) != 0) {
+    // TODO: enable JNI compiler when supporting to generate hardfp code.
+    if (instruction_set_ == kThumb2) {
+    } else if (!compiler_options_->IsCompilationEnabled() && (instruction_set_ == kX86_64
     // Are we interpreting only and have support for generic JNI down calls?
-    if (!compiler_options_->IsCompilationEnabled() &&
-        (instruction_set_ == kX86_64 || instruction_set_ == kArm64)) {
+//    if (!compiler_options_->IsCompilationEnabled() && (instruction_set_ == kX86_64
+        || instruction_set_ == kArm64 || instruction_set_ == kThumb2)) {
       // Leaving this empty will trigger the generic JNI version
     } else {
       compiled_method = compiler_->JniCompile(access_flags, method_idx, dex_file);
