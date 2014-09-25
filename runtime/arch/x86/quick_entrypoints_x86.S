@@ -1385,3 +1385,56 @@ END_FUNCTION art_nested_signal_return
 
     // TODO: implement these!
 UNIMPLEMENTED art_quick_memcmp16
+
+MACRO2(QUICK_MATH_1ARG, quick_name, c_name)
+    DEFINE_FUNCTION quick_name
+        PUSH eax                      // alignment padding
+        PUSH ecx                      // pass arg2 a.hi
+        PUSH eax                      // pass arg1 a.lo
+        SETUP_GOT_NOSAVE              // clobbers EBX
+        call PLT_SYMBOL(c_name)       // (jdouble a)
+        fstpl (%esp)                  // put result on stack
+        movq (%esp), %xmm0            // store result in XMM0
+        addl LITERAL(12), %esp        // pop arguments
+        CFI_ADJUST_CFA_OFFSET(-12)
+        ret
+    END_FUNCTION quick_name
+END_MACRO
+
+MACRO2(QUICK_MATH_2ARG, quick_name, c_name)
+    DEFINE_FUNCTION quick_name
+        PUSH eax                      // alignment padding
+        PUSH ebx                      // pass arg4 b.hi
+        PUSH edx                      // pass arg3 b.lo
+        PUSH ecx                      // pass arg2 a.hi
+        PUSH eax                      // pass arg1 a.lo
+        SETUP_GOT_NOSAVE              // clobbers EBX
+        call PLT_SYMBOL(c_name)       // (jdouble a)
+        fstpl (%esp)                  // put result on stack
+        movq (%esp), %xmm0            // store result in XMM0
+        addl LITERAL(20), %esp        // pop argument
+        CFI_ADJUST_CFA_OFFSET(-20)
+        ret
+    END_FUNCTION quick_name
+END_MACRO
+
+QUICK_MATH_1ARG art_quick_cos, cos
+QUICK_MATH_1ARG art_quick_sin, sin
+QUICK_MATH_1ARG art_quick_acos, acos
+QUICK_MATH_1ARG art_quick_asin, asin
+QUICK_MATH_1ARG art_quick_atan, atan
+QUICK_MATH_2ARG art_quick_atan2, atan2
+QUICK_MATH_1ARG art_quick_cbrt, cbrt
+QUICK_MATH_1ARG art_quick_ceil, ceil
+QUICK_MATH_1ARG art_quick_cosh, cosh
+QUICK_MATH_1ARG art_quick_exp, exp
+QUICK_MATH_1ARG art_quick_expm1, expm1
+QUICK_MATH_1ARG art_quick_floor, floor
+QUICK_MATH_2ARG art_quick_hypot, hypot
+QUICK_MATH_1ARG art_quick_log, log
+QUICK_MATH_1ARG art_quick_log10, log10
+QUICK_MATH_2ARG art_quick_nextafter, nextafter
+QUICK_MATH_1ARG art_quick_rint, rint
+QUICK_MATH_1ARG art_quick_sinh, sinh
+QUICK_MATH_1ARG art_quick_tan, tan
+QUICK_MATH_1ARG art_quick_tanh, tanh

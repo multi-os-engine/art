@@ -1606,4 +1606,38 @@ DEFINE_FUNCTION art_nested_signal_return
     int3                            // won't get here
 END_FUNCTION art_nested_signal_return
 
+MACRO2(QUICK_MATH, quick_name, c_name)
+    DEFINE_FUNCTION quick_name
+        // Alignment padding.
+        subq LITERAL(8), %rsp
+        CFI_ADJUST_CFA_OFFSET(8)
+        SETUP_FP_CALLEE_SAVE_FRAME
+        call PLT_SYMBOL(c_name)
+        RESTORE_FP_CALLEE_SAVE_FRAME
+        // Restore arguments.
+        addq LITERAL(8), %rsp
+        CFI_ADJUST_CFA_OFFSET(-8)
+        ret
+    END_FUNCTION quick_name
+END_MACRO
 
+QUICK_MATH art_quick_cos, cos
+QUICK_MATH art_quick_sin, sin
+QUICK_MATH art_quick_acos, acos
+QUICK_MATH art_quick_asin, asin
+QUICK_MATH art_quick_atan, atan
+QUICK_MATH art_quick_atan2, atan2
+QUICK_MATH art_quick_cbrt, cbrt
+QUICK_MATH art_quick_ceil, ceil
+QUICK_MATH art_quick_cosh, cosh
+QUICK_MATH art_quick_exp, exp
+QUICK_MATH art_quick_expm1, expm1
+QUICK_MATH art_quick_floor, floor
+QUICK_MATH art_quick_hypot, hypot
+QUICK_MATH art_quick_log, log
+QUICK_MATH art_quick_log10, log10
+QUICK_MATH art_quick_nextafter, nextafter
+QUICK_MATH art_quick_rint, rint
+QUICK_MATH art_quick_sinh, sinh
+QUICK_MATH art_quick_tan, tan
+QUICK_MATH art_quick_tanh, tanh

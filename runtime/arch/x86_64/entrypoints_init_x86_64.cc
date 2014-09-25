@@ -84,6 +84,26 @@ extern "C" void art_quick_lock_object(void*);
 extern "C" void art_quick_unlock_object(void*);
 
 // Math entrypoints.
+extern "C" double art_quick_cos(double);
+extern "C" double art_quick_sin(double);
+extern "C" double art_quick_acos(double);
+extern "C" double art_quick_asin(double);
+extern "C" double art_quick_atan(double);
+extern "C" double art_quick_atan2(double, double);
+extern "C" double art_quick_cbrt(double);
+extern "C" double art_quick_ceil(double);
+extern "C" double art_quick_cosh(double);
+extern "C" double art_quick_exp(double);
+extern "C" double art_quick_expm1(double);
+extern "C" double art_quick_floor(double);
+extern "C" double art_quick_hypot(double, double);
+extern "C" double art_quick_log(double);
+extern "C" double art_quick_log10(double);
+extern "C" double art_quick_nextafter(double, double);
+extern "C" double art_quick_rint(double);
+extern "C" double art_quick_sinh(double);
+extern "C" double art_quick_tan(double);
+extern "C" double art_quick_tanh(double);
 extern "C" int64_t art_quick_d2l(double);
 extern "C" int64_t art_quick_f2l(float);
 extern "C" int64_t art_quick_ldiv(int64_t, int64_t);
@@ -198,17 +218,37 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pUnlockObject = art_quick_unlock_object;
 
   // Math
-  // points->pCmpgDouble = NULL;  // Not needed on x86.
-  // points->pCmpgFloat = NULL;  // Not needed on x86.
-  // points->pCmplDouble = NULL;  // Not needed on x86.
-  // points->pCmplFloat = NULL;  // Not needed on x86.
-  // qpoints->pFmod = NULL;  // Not needed on x86.
-  // qpoints->pL2d = NULL;  // Not needed on x86.
-  // qpoints->pFmodf = NULL;  // Not needed on x86.
-  // qpoints->pL2f = NULL;  // Not needed on x86.
-  // points->pD2iz = NULL;  // Not needed on x86.
-  // points->pF2iz = NULL;  // Not needed on x86.
-  // qpoints->pIdivmod = NULL;  // Not needed on x86.
+  // qpoints->pCmpgDouble = nullptr;  // Not needed on x86.
+  // qpoints->pCmpgFloat = nullptr;  // Not needed on x86.
+  // qpoints->pCmplDouble = nullptr;  // Not needed on x86.
+  // qpoints->pCmplFloat = nullptr;  // Not needed on x86.
+  // qpoints->pFmod = nullptr;  // Not needed on x86.
+  // qpoints->pL2d = nullptr;  // Not needed on x86.
+  // qpoints->pFmodf = nullptr;  // Not needed on x86.
+  // qpoints->pL2f = nullptr;  // Not needed on x86.
+  // qpoints->pD2iz = nullptr;  // Not needed on x86.
+  // qpoints->pF2iz = nullptr;  // Not needed on x86.
+  // qpoints->pIdivmod = nullptr;  // Not needed on x86.
+  qpoints->pCos = art_quick_cos;
+  qpoints->pSin = art_quick_sin;
+  qpoints->pAcos = art_quick_acos;
+  qpoints->pAsin = art_quick_asin;
+  qpoints->pAtan = art_quick_atan;
+  qpoints->pAtan2 = art_quick_atan2;
+  qpoints->pCbrt = art_quick_cbrt;
+  qpoints->pCeil = art_quick_ceil;
+  qpoints->pCosh = art_quick_cosh;
+  qpoints->pExp = art_quick_exp;
+  qpoints->pExpm1 = art_quick_expm1;
+  qpoints->pFloor = art_quick_floor;
+  qpoints->pHypot = art_quick_hypot;
+  qpoints->pLog = art_quick_log;
+  qpoints->pLog10 = art_quick_log10;
+  qpoints->pNextAfter = art_quick_nextafter;
+  qpoints->pRint = art_quick_rint;
+  qpoints->pSinh = art_quick_sinh;
+  qpoints->pTan = art_quick_tan;
+  qpoints->pTanh = art_quick_tanh;
   qpoints->pD2l = art_d2l;
   qpoints->pF2l = art_f2l;
   qpoints->pLdiv = art_quick_ldiv;
@@ -219,7 +259,7 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pUshrLong = art_quick_lushr;
 
   // Intrinsics
-  // qpoints->pIndexOf = NULL;  // Not needed on x86.
+  // qpoints->pIndexOf = nullptr;  // Not needed on x86.
   qpoints->pStringCompareTo = art_quick_string_compareto;
   qpoints->pMemcpy = art_quick_memcpy;
 

@@ -21,6 +21,29 @@
 
 namespace art {
 
+#define INLINED_EXTRA_MATH_1ARG(FUNC_NAME) \
+bool X86Mir2Lir::GenInlined##FUNC_NAME(CallInfo* info) { \
+  FlushAllRegs(); \
+  RegLocation rl_src = info->args[0]; \
+  RegLocation rl_dest = InlineTargetWide(info); \
+  CallRuntimeHelperRegLocation(QuickEntrypointEnum::kQuick##FUNC_NAME, rl_src, false); \
+  RegLocation rl_result = GetReturnWide(kFPReg); \
+  StoreFinalValueWide(rl_dest, rl_result); \
+  return true; \
+}
+
+#define INLINED_EXTRA_MATH_2ARG(FUNC_NAME) \
+bool X86Mir2Lir::GenInlined##FUNC_NAME(CallInfo* info) { \
+  FlushAllRegs(); \
+  RegLocation rl_src1 = LoadValueWide(info->args[0], kFPReg); \
+  RegLocation rl_src2 = LoadValueWide(info->args[2], kFPReg); \
+  RegLocation rl_dest = InlineTargetWide(info); \
+  CallRuntimeHelperRegLocationRegLocation(QuickEntrypointEnum::kQuick##FUNC_NAME, rl_src1, rl_src2, false); \
+  RegLocation rl_result = GetReturnWide(kFPReg); \
+  StoreFinalValueWide(rl_dest, rl_result); \
+  return true; \
+}
+
 void X86Mir2Lir::GenArithOpFloat(Instruction::Code opcode,
                                  RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) {
   X86OpCode op = kX86Nop;
@@ -797,4 +820,27 @@ bool X86Mir2Lir::GenInlinedMinMaxFP(CallInfo* info, bool is_min, bool is_double)
   return true;
 }
 
+INLINED_EXTRA_MATH_1ARG(Cos)
+INLINED_EXTRA_MATH_1ARG(Sin)
+INLINED_EXTRA_MATH_1ARG(Acos)
+INLINED_EXTRA_MATH_1ARG(Asin)
+INLINED_EXTRA_MATH_1ARG(Atan)
+INLINED_EXTRA_MATH_2ARG(Atan2)
+INLINED_EXTRA_MATH_1ARG(Cbrt)
+INLINED_EXTRA_MATH_1ARG(Ceil)
+INLINED_EXTRA_MATH_1ARG(Cosh)
+INLINED_EXTRA_MATH_1ARG(Exp)
+INLINED_EXTRA_MATH_1ARG(Expm1)
+INLINED_EXTRA_MATH_1ARG(Floor)
+INLINED_EXTRA_MATH_2ARG(Hypot)
+INLINED_EXTRA_MATH_1ARG(Log)
+INLINED_EXTRA_MATH_1ARG(Log10)
+INLINED_EXTRA_MATH_2ARG(NextAfter)
+INLINED_EXTRA_MATH_1ARG(Rint)
+INLINED_EXTRA_MATH_1ARG(Sinh)
+INLINED_EXTRA_MATH_1ARG(Tan)
+INLINED_EXTRA_MATH_1ARG(Tanh)
+
+#undef INLINED_EXTRA_MATH_1ARG
+#undef INLINED_EXTRA_MATH_2ARG
 }  // namespace art

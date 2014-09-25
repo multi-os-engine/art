@@ -1283,6 +1283,23 @@ class Mir2Lir : public Backend {
     virtual bool GenInlinedMinMax(CallInfo* info, bool is_min, bool is_long) = 0;
     virtual bool GenInlinedMinMaxFP(CallInfo* info, bool is_min, bool is_double);
 
+    virtual bool GenInlinedCos(CallInfo* info) { return false; }
+    virtual bool GenInlinedSin(CallInfo* info) { return false; }
+    virtual bool GenInlinedAcos(CallInfo* info) { return false; }
+    virtual bool GenInlinedAsin(CallInfo* info) { return false; }
+    virtual bool GenInlinedAtan(CallInfo* info) {return false; }
+    virtual bool GenInlinedAtan2(CallInfo* info) { return false; }
+    virtual bool GenInlinedCbrt(CallInfo* info) {return false; }
+    virtual bool GenInlinedCosh(CallInfo* info) { return false; }
+    virtual bool GenInlinedExp(CallInfo* info) { return false; }
+    virtual bool GenInlinedExpm1(CallInfo* info) { return false; }
+    virtual bool GenInlinedHypot(CallInfo* info) { return false; }
+    virtual bool GenInlinedLog(CallInfo* info) { return false; }
+    virtual bool GenInlinedLog10(CallInfo* info) { return false; }
+    virtual bool GenInlinedNextAfter(CallInfo* info) { return false; }
+    virtual bool GenInlinedSinh(CallInfo* info) { return false; }
+    virtual bool GenInlinedTan(CallInfo* info) { return false; }
+    virtual bool GenInlinedTanh(CallInfo* info) { return false; }
     virtual bool GenInlinedSqrt(CallInfo* info) = 0;
     virtual bool GenInlinedPeek(CallInfo* info, OpSize size) = 0;
     virtual bool GenInlinedPoke(CallInfo* info, OpSize size) = 0;

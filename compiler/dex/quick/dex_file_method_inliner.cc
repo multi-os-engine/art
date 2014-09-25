@@ -49,6 +49,23 @@ static constexpr bool kIntrinsicIsStatic[] = {
     true,   // kIntrinsicMinMaxLong
     true,   // kIntrinsicMinMaxFloat
     true,   // kIntrinsicMinMaxDouble
+    true,   // kIntrinsicCos
+    true,   // kIntrinsicSin
+    true,   // kIntrinsicAcos
+    true,   // kIntrinsicAsin
+    true,   // kIntrinsicAtan
+    true,   // kIntrinsicAtan2
+    true,   // kIntrinsicCbrt
+    true,   // kIntrinsicCosh
+    true,   // kIntrinsicExp
+    true,   // kIntrinsicExpm1
+    true,   // kIntrinsicHypot
+    true,   // kIntrinsicLog
+    true,   // kIntrinsicLog10
+    true,   // kIntrinsicNextAfter
+    true,   // kIntrinsicSinh
+    true,   // kIntrinsicTan
+    true,   // kIntrinsicTanh
     true,   // kIntrinsicSqrt
     true,   // kIntrinsicCeil
     true,   // kIntrinsicFloor
@@ -81,6 +98,23 @@ COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicMinMaxInt], MinMaxInt_must_be_static
 COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicMinMaxLong], MinMaxLong_must_be_static);
 COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicMinMaxFloat], MinMaxFloat_must_be_static);
 COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicMinMaxDouble], MinMaxDouble_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicCos], Cos_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicSin], Sin_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicAcos], Acos_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicAsin], Asin_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicAtan], Atan_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicAtan2], Atan2_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicCbrt], Cbrt_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicCosh], Cosh_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicExp], Exp_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicExpm1], Expm1_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicHypot], Hypot_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicLog], Log_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicLog10], Log10_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicNextAfter], NextAfter_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicSinh], Sinh_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicTan], Tan_must_be_static);
+COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicTanh], Tanh_must_be_static);
 COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicSqrt], Sqrt_must_be_static);
 COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicCeil], Ceil_must_be_static);
 COMPILE_ASSERT(kIntrinsicIsStatic[kIntrinsicFloor], Floor_must_be_static);
@@ -166,6 +200,23 @@ const char* const DexFileMethodInliner::kNameCacheNames[] = {
     "abs",                   // kNameCacheAbs
     "max",                   // kNameCacheMax
     "min",                   // kNameCacheMin
+    "cos",                   // kNameCacheCos
+    "sin",                   // kNameCacheSin
+    "acos",                  // kNameCacheAcos
+    "asin",                  // kNameCacheAsin
+    "atan",                  // kNameCacheAtan
+    "atan2",                 // kNameCacheAtan2
+    "cbrt",                  // kNameCacheCbrt
+    "cosh",                  // kNameCacheCosh
+    "exp",                   // kNameCacheExp
+    "expm1",                 // kNameCacheExpm1
+    "hypot",                 // kNameCacheHypot
+    "log",                   // kNameCacheLog
+    "log10",                 // kNameCacheLog10
+    "nextAfter",             // kNameCacheNextAfter
+    "sinh",                  // kNameCacheSinh
+    "tan",                   // kNameCacheTan
+    "tanh",                  // kNameCacheTanh
     "sqrt",                  // kNameCacheSqrt
     "ceil",                  // kNameCacheCeil
     "floor",                 // kNameCacheFloor
@@ -327,6 +378,23 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
     INTRINSIC(JavaLangMath,       Max, DD_D, kIntrinsicMinMaxDouble, kIntrinsicFlagMax),
     INTRINSIC(JavaLangStrictMath, Max, DD_D, kIntrinsicMinMaxDouble, kIntrinsicFlagMax),
 
+    INTRINSIC(JavaLangMath,       Cos, D_D, kIntrinsicCos, 0),
+    INTRINSIC(JavaLangMath,       Sin, D_D, kIntrinsicSin, 0),
+    INTRINSIC(JavaLangMath,       Acos, D_D, kIntrinsicAcos, 0),
+    INTRINSIC(JavaLangMath,       Asin, D_D, kIntrinsicAsin, 0),
+    INTRINSIC(JavaLangMath,       Atan, D_D, kIntrinsicAtan, 0),
+    INTRINSIC(JavaLangMath,       Atan2, DD_D, kIntrinsicAtan2, 0),
+    INTRINSIC(JavaLangMath,       Cbrt, D_D, kIntrinsicCbrt, 0),
+    INTRINSIC(JavaLangMath,       Cosh, D_D, kIntrinsicCosh, 0),
+    INTRINSIC(JavaLangMath,       Exp, D_D, kIntrinsicExp, 0),
+    INTRINSIC(JavaLangMath,       Expm1, D_D, kIntrinsicExpm1, 0),
+    INTRINSIC(JavaLangMath,       Hypot, DD_D, kIntrinsicHypot, 0),
+    INTRINSIC(JavaLangMath,       Log, D_D, kIntrinsicLog, 0),
+    INTRINSIC(JavaLangMath,       Log10, D_D, kIntrinsicLog10, 0),
+    INTRINSIC(JavaLangMath,       NextAfter, DD_D, kIntrinsicNextAfter, 0),
+    INTRINSIC(JavaLangMath,       Sinh, D_D, kIntrinsicSinh, 0),
+    INTRINSIC(JavaLangMath,       Tan, D_D, kIntrinsicTan, 0),
+    INTRINSIC(JavaLangMath,       Tanh, D_D, kIntrinsicTanh, 0),
     INTRINSIC(JavaLangMath,       Sqrt, D_D, kIntrinsicSqrt, 0),
     INTRINSIC(JavaLangStrictMath, Sqrt, D_D, kIntrinsicSqrt, 0),
 
@@ -461,6 +529,40 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
       return backend->GenInlinedMinMaxFP(info, intrinsic.d.data & kIntrinsicFlagMin, false /* is_double */);
     case kIntrinsicMinMaxDouble:
       return backend->GenInlinedMinMaxFP(info, intrinsic.d.data & kIntrinsicFlagMin, true /* is_double */);
+    case kIntrinsicCos:
+      return backend->GenInlinedCos(info);
+    case kIntrinsicSin:
+      return backend->GenInlinedSin(info);
+    case kIntrinsicAcos:
+      return backend->GenInlinedAcos(info);
+    case kIntrinsicAsin:
+      return backend->GenInlinedAsin(info);
+    case kIntrinsicAtan:
+      return backend->GenInlinedAtan(info);
+    case kIntrinsicAtan2:
+      return backend->GenInlinedAtan2(info);
+    case kIntrinsicCbrt:
+      return backend->GenInlinedCbrt(info);
+    case kIntrinsicCosh:
+      return backend->GenInlinedCosh(info);
+    case kIntrinsicExp:
+      return backend->GenInlinedExp(info);
+    case kIntrinsicExpm1:
+      return backend->GenInlinedExpm1(info);
+    case kIntrinsicHypot:
+      return backend->GenInlinedHypot(info);
+    case kIntrinsicLog:
+      return backend->GenInlinedLog(info);
+    case kIntrinsicLog10:
+      return backend->GenInlinedLog10(info);
+    case kIntrinsicNextAfter:
+      return backend->GenInlinedNextAfter(info);
+    case kIntrinsicSinh:
+      return backend->GenInlinedSinh(info);
+    case kIntrinsicTan:
+      return backend->GenInlinedTan(info);
+    case kIntrinsicTanh:
+      return backend->GenInlinedTanh(info);
     case kIntrinsicSqrt:
       return backend->GenInlinedSqrt(info);
     case kIntrinsicCeil:
