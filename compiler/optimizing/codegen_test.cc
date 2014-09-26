@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "base/macros.h"
 #include "builder.h"
 #include "code_generator_arm.h"
 #include "code_generator_x86.h"
@@ -66,12 +67,7 @@ static void Run(const InternalCodeAllocator& allocator,
   }
 }
 
-static void TestCode(const uint16_t* data, bool has_result = false, int32_t expected = 0) {
-  ArenaPool pool;
-  ArenaAllocator arena(&pool);
-  HGraphBuilder builder(&arena);
-  const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
-  HGraph* graph = builder.BuildGraph(*item);
+static void TestGraph(HGraph* graph, bool has_result = false, int32_t expected = 0) {
   // Remove suspend checks, they cannot be executed in this context.
   RemoveSuspendChecks(graph);
   ASSERT_NE(graph, nullptr);
@@ -96,6 +92,16 @@ static void TestCode(const uint16_t* data, bool has_result = false, int32_t expe
   if (kRuntimeISA == kX86_64) {
     Run(allocator, codegenX86_64, has_result, expected);
   }
+}
+
+static void TestCode(const uint16_t* data, bool has_result = false, int32_t expected = 0) {
+  ArenaPool pool;
+  ArenaAllocator arena(&pool);
+  HGraphBuilder builder(&arena);
+  const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
+  HGraph* graph = builder.BuildGraph(*item);
+
+  TestGraph(graph, has_result, expected);
 }
 
 TEST(CodegenTest, ReturnVoid) {
@@ -254,6 +260,124 @@ TEST(CodegenTest, ReturnAdd4) {
     Instruction::RETURN);
 
   TestCode(data, true, 7);
+}
+
+static HBasicBlock* CreateEntryBlock(HGraph* graph, ArenaAllocator* allocator) {
+  HBasicBlock* block = new (allocator) HBasicBlock(graph);
+  graph->AddBlock(block);
+  block->AddInstruction(new (allocator) HGoto());
+  return block;
+}
+
+static HBasicBlock* CreateBlock(HGraph* graph, ArenaAllocator* arena) {
+  HBasicBlock* block = new (arena) HBasicBlock(graph);
+  graph->AddBlock(block);
+  return block;
+}
+
+static HBasicBlock* CreateExitBlock(HGraph* graph, ArenaAllocator* allocator) {
+  HBasicBlock* block = new (allocator) HBasicBlock(graph);
+  graph->AddBlock(block);
+  block->AddInstruction(new (allocator) HExit());
+  return block;
+}
+
+
+TEST(CodegenTest, MaterializedCond1) {
+  // Check that condition are materialized correctly. A materialized condition
+  // should yield `1` if it evaluated to true, and `0` otherwise.
+  // We force the materialization of comparisons for different combinations of
+  // inputs and check the results.
+
+  int less = 1;
+  int greater_equal = 0;
+
+  int lhs[] = {-1, 2, 0xabc};
+  int rhs[] = {2, 1, 0xabc};
+  int expected_res[] = {less, greater_equal, greater_equal};
+
+  for (size_t i = 0; i < arraysize(expected_res); i++) {
+    ArenaPool pool;
+    ArenaAllocator arena(&pool);
+    HGraph* graph = new (&arena) HGraph(&arena);
+
+    HBasicBlock* entry_block = CreateEntryBlock(graph, &arena);
+    HBasicBlock* cond_block = CreateBlock(graph, &arena);
+    HBasicBlock* exit_block = CreateExitBlock(graph, &arena);
+
+    graph->SetEntryBlock(entry_block);
+    entry_block->AddSuccessor(cond_block);
+    cond_block->AddSuccessor(exit_block);
+    graph->SetExitBlock(exit_block);
+
+    HIntConstant cst_lhs(lhs[i]);
+    HIntConstant cst_rhs(rhs[i]);
+    HLessThan cmp_lt(&cst_lhs, &cst_rhs);
+    cmp_lt.SetForceMaterialization(true);
+    HReturn ret(&cmp_lt);
+
+    cond_block->AddInstruction(&cst_lhs);
+    cond_block->AddInstruction(&cst_rhs);
+    cond_block->AddInstruction(&cmp_lt);
+    cond_block->AddInstruction(&ret);
+
+    TestGraph(graph, true, expected_res[i]);
+  }
+}
+
+TEST(CodegenTest, MaterializedCond2) {
+  // Check that HIf correctly interprets a materialized condition.
+  // We force the materialization of comparisons for different combinations of
+  // inputs. An HIf takes the materialized combination as input and returns a
+  // value that we verify.
+
+  int less = 314;
+  int greater_equal = 2718;
+
+  int lhs[] = {-1, 2, 0xabc};
+  int rhs[] = {2, 1, 0xabc};
+  int expected_res[] = {less, greater_equal, greater_equal};
+
+  for (size_t i = 0; i < arraysize(expected_res); i++) {
+    ArenaPool pool;
+    ArenaAllocator arena(&pool);
+    HGraph* graph = new (&arena) HGraph(&arena);
+
+    HBasicBlock* entry_block = CreateEntryBlock(graph, &arena);
+    HBasicBlock* if_block = CreateBlock(graph, &arena);
+    HBasicBlock* if_true_block = CreateBlock(graph, &arena);
+    HBasicBlock* if_false_block = CreateBlock(graph, &arena);
+    HBasicBlock* exit_block = CreateExitBlock(graph, &arena);
+
+    graph->SetEntryBlock(entry_block);
+    entry_block->AddSuccessor(if_block);
+    if_block->AddSuccessor(if_true_block);
+    if_block->AddSuccessor(if_false_block);
+    if_true_block->AddSuccessor(exit_block);
+    if_false_block->AddSuccessor(exit_block);
+    graph->SetExitBlock(exit_block);
+
+    HIntConstant cst_lhs(lhs[i]);
+    if_block->AddInstruction(&cst_lhs);
+    HIntConstant cst_rhs(rhs[i]);
+    if_block->AddInstruction(&cst_rhs);
+    HLessThan cmp_lt(&cst_lhs, &cst_rhs);
+    cmp_lt.SetForceMaterialization(true);
+    if_block->AddInstruction(&cmp_lt);
+    HIf if_lt(&cmp_lt);
+    if_block->AddInstruction(&if_lt);
+
+    HIntConstant cst_ls(less);
+    if_true_block->AddInstruction(&cst_ls);
+    HReturn ret_ls(&cst_ls);
+    if_true_block->AddInstruction(&ret_ls);
+    HIntConstant cst_ge(greater_equal);
+    if_false_block->AddInstruction(&cst_ge);
+    HReturn ret_ge(&cst_ge);
+    if_false_block->AddInstruction(&ret_ge);
+
+    TestGraph(graph, true, expected_res[i]);
+  }
 }
 
 }  // namespace art

@@ -1117,7 +1117,7 @@ class HBinaryOperation : public HExpression<2> {
 class HCondition : public HBinaryOperation {
  public:
   HCondition(HInstruction* first, HInstruction* second)
-      : HBinaryOperation(Primitive::kPrimBoolean, first, second) {}
+      : HBinaryOperation(Primitive::kPrimBoolean, first, second), force_materialization_(false) {}
 
   virtual bool IsCommutative() { return true; }
 
@@ -1133,7 +1133,13 @@ class HCondition : public HBinaryOperation {
 
   virtual IfCondition GetCondition() const = 0;
 
+  // Used to force materialization for testing, which should not depends on the
+  // compiler materialization heuristics.
+  void SetForceMaterialization(bool force) { force_materialization_ = force; }
+  bool ForceMaterialization() const { return force_materialization_; }
+
  private:
+  bool force_materialization_;
   DISALLOW_COPY_AND_ASSIGN(HCondition);
 };
 
