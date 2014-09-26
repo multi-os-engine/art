@@ -3853,6 +3853,10 @@ mirror::ArtField* MethodVerifier::GetQuickFieldAccess(const Instruction* inst,
          inst->Opcode() == Instruction::IGET_WIDE_QUICK ||
          inst->Opcode() == Instruction::IGET_OBJECT_QUICK ||
          inst->Opcode() == Instruction::IPUT_QUICK ||
+         inst->Opcode() == Instruction::IPUT_BOOLEAN_QUICK ||
+         inst->Opcode() == Instruction::IPUT_BYTE_QUICK ||
+         inst->Opcode() == Instruction::IPUT_CHAR_QUICK ||
+         inst->Opcode() == Instruction::IPUT_SHORT_QUICK ||
          inst->Opcode() == Instruction::IPUT_WIDE_QUICK ||
          inst->Opcode() == Instruction::IPUT_OBJECT_QUICK);
   const RegType& object_type = reg_line->GetRegisterType(this, inst->VRegB_22c());
