@@ -783,12 +783,58 @@ static void MaybeAddToImageClasses(Handle<mirror::Class> c, std::set<std::string
   }
 }
 
+static void MaybeAddClassesReferencedFromFields(mirror::ObjectArray<mirror::ArtField>* fields,
+                                                mirror::Object* field_receiver,
+                                                std::set<std::string>* image_classes)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  if (fields == nullptr) {
+    // No fields.
+    return;
+  }
+  for (int32_t i = 0; i < fields->GetLength(); ++i) {
+    mirror::ArtField* static_field = fields->GetWithoutChecks(i);
+    if (static_field->IsPrimitiveType()) {
+      // We're only looking for fields with reference.
+      continue;
+    }
+    mirror::Object* field_value = static_field->GetObject(field_receiver);
+    if (field_value != nullptr && field_value->IsClass()) {
+      // The field holds a reference to a class so add it to the image classes.
+      StackHandleScope<1> hs(Thread::Current());
+      MaybeAddToImageClasses(hs.NewHandle(field_value->AsClass()), image_classes);
+    }
+  }
+}
+
 void CompilerDriver::FindClinitImageClassesCallback(mirror::Object* object, void* arg) {
   DCHECK(object != nullptr);
   DCHECK(arg != nullptr);
   CompilerDriver* compiler_driver = reinterpret_cast<CompilerDriver*>(arg);
-  StackHandleScope<1> hs(Thread::Current());
-  MaybeAddToImageClasses(hs.NewHandle(object->GetClass()), compiler_driver->image_classes_.get());
+  {
+    StackHandleScope<1> hs(Thread::Current());
+    // Add object's class to image classes.
+    MaybeAddToImageClasses(hs.NewHandle(object->GetClass()), compiler_driver->image_classes_.get());
+  }
+  // If a class is referenced from a field, add it to the image classes.
+  if (object->IsClass()) {
+    // Add classes referenced from static fields.
+    StackHandleScope<1> hs(Thread::Current());
+    Handle<mirror::Class> current_klass(hs.NewHandle(object->AsClass()));
+    while (current_klass.Get() != nullptr) {
+      MaybeAddClassesReferencedFromFields(current_klass->GetSFields(), current_klass.Get(),
+                                          compiler_driver->image_classes_.get());
+      current_klass.Assign(current_klass->GetSuperClass());
+    }
+  } else {
+    // Add classes referenced from instance fields.
+    StackHandleScope<1> hs(Thread::Current());
+    Handle<mirror::Class> current_klass(hs.NewHandle(object->GetClass()));
+    while (current_klass.Get() != nullptr) {
+      MaybeAddClassesReferencedFromFields(current_klass.Get()->GetIFields(), object,
+                                          compiler_driver->image_classes_.get());
+      current_klass.Assign(current_klass->GetSuperClass());
+    }
+  }
 }
 
 void CompilerDriver::UpdateImageClasses(TimingLogger* timings) {
