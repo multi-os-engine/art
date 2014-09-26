@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_CONSTANT_PROPAGATION_H_
 
 #include "nodes.h"
+#include "optimization.h"
 
 namespace art {
 
@@ -25,16 +26,18 @@ namespace art {
  * Optimization pass performing a simple constant propagation on the
  * SSA form.
  */
-class ConstantPropagation : public ValueObject {
+class ConstantPropagation : public Optimization {
  public:
-  explicit ConstantPropagation(HGraph* graph)
-    : graph_(graph) {}
+  explicit ConstantPropagation(HGraph* graph,
+                               HGraphVisualizer* visualizer = nullptr)
+      : Optimization(graph, true, kConstantPropagationPassName, visualizer) {}
 
-  void Run();
+  virtual void Run() OVERRIDE;
+
+  static constexpr const char* kConstantPropagationPassName =
+    "constant_propagation";
 
  private:
-  HGraph* const graph_;
-
   DISALLOW_COPY_AND_ASSIGN(ConstantPropagation);
 };
 
