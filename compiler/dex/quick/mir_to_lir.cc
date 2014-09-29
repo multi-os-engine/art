@@ -934,12 +934,12 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
 
     case Instruction::NEG_INT:
     case Instruction::NOT_INT:
-      GenArithOpInt(opcode, rl_dest, rl_src[0], rl_src[0]);
+      GenArithOpInt(opcode, rl_dest, rl_src[0], rl_src[0], opt_flags);
       break;
 
     case Instruction::NEG_LONG:
     case Instruction::NOT_LONG:
-      GenArithOpLong(opcode, rl_dest, rl_src[0], rl_src[0]);
+      GenArithOpLong(opcode, rl_dest, rl_src[0], rl_src[0], opt_flags);
       break;
 
     case Instruction::NEG_FLOAT:
@@ -999,7 +999,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
         GenArithOpIntLit(opcode, rl_dest, rl_src[0],
                              mir_graph_->ConstantValue(rl_src[1].orig_sreg));
       } else {
-        GenArithOpInt(opcode, rl_dest, rl_src[0], rl_src[1]);
+        GenArithOpInt(opcode, rl_dest, rl_src[0], rl_src[1], opt_flags);
       }
       break;
 
@@ -1019,7 +1019,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
           InexpensiveConstantInt(mir_graph_->ConstantValue(rl_src[1]), opcode)) {
         GenArithOpIntLit(opcode, rl_dest, rl_src[0], mir_graph_->ConstantValue(rl_src[1]));
       } else {
-        GenArithOpInt(opcode, rl_dest, rl_src[0], rl_src[1]);
+        GenArithOpInt(opcode, rl_dest, rl_src[0], rl_src[1], opt_flags);
       }
       break;
 
@@ -1034,7 +1034,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::OR_LONG_2ADDR:
     case Instruction::XOR_LONG_2ADDR:
       if (rl_src[0].is_const || rl_src[1].is_const) {
-        GenArithImmOpLong(opcode, rl_dest, rl_src[0], rl_src[1]);
+        GenArithImmOpLong(opcode, rl_dest, rl_src[0], rl_src[1], opt_flags);
         break;
       }
       // Note: intentional fallthrough.
@@ -1045,7 +1045,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::MUL_LONG_2ADDR:
     case Instruction::DIV_LONG_2ADDR:
     case Instruction::REM_LONG_2ADDR:
-      GenArithOpLong(opcode, rl_dest, rl_src[0], rl_src[1]);
+      GenArithOpLong(opcode, rl_dest, rl_src[0], rl_src[1], opt_flags);
       break;
 
     case Instruction::SHL_LONG:
@@ -1055,7 +1055,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::SHR_LONG_2ADDR:
     case Instruction::USHR_LONG_2ADDR:
       if (rl_src[1].is_const) {
-        GenShiftImmOpLong(opcode, rl_dest, rl_src[0], rl_src[1]);
+        GenShiftImmOpLong(opcode, rl_dest, rl_src[0], rl_src[1], opt_flags);
       } else {
         GenShiftOpLong(opcode, rl_dest, rl_src[0], rl_src[1]);
       }
