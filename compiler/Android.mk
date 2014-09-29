@@ -70,6 +70,7 @@ LIBART_COMPILER_SRC_FILES := \
 	dex/post_opt_passes.cc \
 	dex/pass_driver_me_opts.cc \
 	dex/pass_driver_me_post_opt.cc \
+	dex/reference_map_calculator.cc \
 	dex/ssa_transformation.cc \
 	dex/verified_method.cc \
 	dex/verification_results.cc \
