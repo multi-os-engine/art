@@ -21,6 +21,7 @@
 #include "dataflow_iterator-inl.h"
 #include "pass_driver_me_opts.h"
 #include "post_opt_passes.h"
+#include "reference_map_calculator.h"
 
 namespace art {
 
@@ -46,6 +47,7 @@ const Pass* const PassDriver<PassDriverMEOpts>::g_passes[] = {
   GetPassInstance<TypeInference>(),
   GetPassInstance<GlobalValueNumberingPass>(),
   GetPassInstance<BBOptimizations>(),
+  GetPassInstance<ReferenceMapCalculator>(),
 };
 
 // The number of the passes in the initial list of Passes (g_passes).
