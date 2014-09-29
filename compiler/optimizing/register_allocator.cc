@@ -1018,6 +1018,18 @@ void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,
     return;
   }
 
+  if (destination == nullptr) {
+    fprintf(stderr, "i have %s\n", interval->GetDefinedBy()->DebugName());
+    current = interval;
+    while ((current != nullptr)) {
+      DumpInterval(std::cerr, current);
+      current = current->GetNextSibling();
+    }
+    fprintf(stderr, "Blocks are %zu and %zu\n", from_position, to_position);
+  }
+
+  DCHECK(destination != nullptr && source != nullptr);
+
   if (!destination->HasRegister()) {
     // Values are eagerly spilled. Spill slot already contains appropriate value.
     return;
