@@ -20,6 +20,7 @@
 #include "dataflow_iterator.h"
 #include "dataflow_iterator-inl.h"
 #include "pass_driver_me_opts.h"
+#include "reference_map_calculator.h"
 
 namespace art {
 
@@ -43,6 +44,7 @@ const Pass* const PassDriver<PassDriverMEOpts>::g_passes[] = {
   GetPassInstance<GlobalValueNumberingPass>(),
   GetPassInstance<BBCombine>(),
   GetPassInstance<BBOptimizations>(),
+  GetPassInstance<ReferenceMapCalculator>(),
 };
 
 // The number of the passes in the initial list of Passes (g_passes).

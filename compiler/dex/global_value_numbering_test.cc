@@ -19,11 +19,11 @@
 #include "dataflow_iterator-inl.h"
 #include "global_value_numbering.h"
 #include "local_value_numbering.h"
-#include "gtest/gtest.h"
+#include "mir_graph_test.h"
 
 namespace art {
 
-class GlobalValueNumberingTest : public testing::Test {
+class GlobalValueNumberingTest : public MirGraphTest {
  protected:
   struct IFieldDef {
     uint16_t field_idx;
@@ -39,17 +39,6 @@ class GlobalValueNumberingTest : public testing::Test {
     bool is_volatile;
   };
 
-  struct BBDef {
-    static constexpr size_t kMaxSuccessors = 4;
-    static constexpr size_t kMaxPredecessors = 4;
-
-    BBType type;
-    size_t num_successors;
-    BasicBlockId successors[kMaxPredecessors];
-    size_t num_predecessors;
-    BasicBlockId predecessors[kMaxPredecessors];
-  };
-
   struct MIRDef {
     static constexpr size_t kMaxSsaDefs = 2;
     static constexpr size_t kMaxSsaUses = 4;
@@ -63,29 +52,6 @@ class GlobalValueNumberingTest : public testing::Test {
     size_t num_defs;
     int32_t defs[kMaxSsaDefs];
   };
-
-#define DEF_SUCC0() \
-    0u, { }
-#define DEF_SUCC1(s1) \
-    1u, { s1 }
-#define DEF_SUCC2(s1, s2) \
-    2u, { s1, s2 }
-#define DEF_SUCC3(s1, s2, s3) \
-    3u, { s1, s2, s3 }
-#define DEF_SUCC4(s1, s2, s3, s4) \
-    4u, { s1, s2, s3, s4 }
-#define DEF_PRED0() \
-    0u, { }
-#define DEF_PRED1(p1) \
-    1u, { p1 }
-#define DEF_PRED2(p1, p2) \
-    2u, { p1, p2 }
-#define DEF_PRED3(p1, p2, p3) \
-    3u, { p1, p2, p3 }
-#define DEF_PRED4(p1, p2, p3, p4) \
-    4u, { p1, p2, p3, p4 }
-#define DEF_BB(type, succ, pred) \
-    { type, succ, pred }
 
 #define DEF_CONST(bb, opcode, reg, value) \
     { bb, opcode, value, 0u, 0, { }, 1, { reg } }

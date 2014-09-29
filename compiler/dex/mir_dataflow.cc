@@ -1277,14 +1277,28 @@ void MIRGraph::InitializeBasicBlockDataFlow() {
    * Allocate the BasicBlockDataFlow structure for the entry and code blocks.
    */
   for (BasicBlock* bb : block_list_) {
-    if (bb->hidden == true) continue;
+    // Hidden blocks do not need handled since they are not visible.
+    if (bb->hidden == true) {
+      continue;
+    }
+
+    // Algorithms like GC map calculator need all DF calculated.
+    bool should_calculate_all_blocks = NeedGcMapRecalculation();
+
     if (bb->block_type == kDalvikByteCode ||
         bb->block_type == kEntryBlock ||
-        bb->block_type == kExitBlock) {
-      bb->data_flow_info =
-          static_cast<BasicBlockDataFlow*>(arena_->Alloc(sizeof(BasicBlockDataFlow),
-                                                         kArenaAllocDFInfo));
+        bb->block_type == kExitBlock ||
+        should_calculate_all_blocks) {
+      size_t df_info_size = sizeof(BasicBlockDataFlow);
+      if (bb->data_flow_info == nullptr) {
+        bb->data_flow_info =
+            static_cast<BasicBlockDataFlow*>(arena_->Alloc(df_info_size,
+                                                           kArenaAllocDFInfo));
+      } else {
+        // Instead of reallocating, just clear it out.
+        memset(bb->data_flow_info, 0, df_info_size);
       }
+    }
   }
 }
 

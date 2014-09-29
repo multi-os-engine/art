@@ -27,10 +27,13 @@
 #include "dex/global_value_numbering.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/quick/dex_file_method_inliner.h"
+#include "dex/verified_method.h"
 #include "leb128.h"
 #include "pass_driver_me_post_opt.h"
 #include "stack.h"
 #include "utils/scoped_arena_containers.h"
+#include "verifier/dex_gc_map.h"
+#include "verifier/method_verifier.h"
 
 namespace art {
 
@@ -108,6 +111,7 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       current_code_item_(NULL),
       dex_pc_to_block_map_(arena->Adapter()),
       m_units_(arena->Adapter()),
+      compiler_assigned_insn_size_(0u),
       method_stack_(arena->Adapter()),
       current_method_(kInvalidEntry),
       current_offset_(kInvalidEntry),
@@ -130,12 +134,16 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       ifield_lowering_infos_(arena->Adapter(kArenaAllocLoweringInfo)),
       sfield_lowering_infos_(arena->Adapter(kArenaAllocLoweringInfo)),
       method_lowering_infos_(arena->Adapter(kArenaAllocLoweringInfo)),
-      gen_suspend_test_list_(arena->Adapter()) {
+      gen_suspend_test_list_(arena->Adapter()),
+      recalculate_gc_maps_(false),
+      offset_to_gc_map_(std::less<DexOffset>(), arena->Adapter()),
+      gc_map_entry_size_(0u),
+      gc_map_cache_(nullptr),
+      shorty_for_test_(nullptr) {
   use_counts_.reserve(256);
   raw_use_counts_.reserve(256);
   block_list_.reserve(100);
   try_block_addr_ = new (arena_) ArenaBitVector(arena_, 0, true /* expandable */);
-
 
   if (cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) {
     // X86 requires a temp to keep track of the method address.
@@ -890,14 +898,19 @@ uint64_t MIRGraph::GetDataFlowAttributes(MIR* mir) {
 
 // TODO: use a configurable base prefix, and adjust callers to supply pass name.
 /* Dump the CFG into a DOT graph */
-void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suffix) {
+void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suffix, const char* filename) {
   FILE* file;
   static AtomicInteger cnt(0);
 
   // Increment counter to get a unique file number.
   cnt++;
 
-  std::string fname(PrettyMethod(cu_->method_idx, *cu_->dex_file));
+  std::string fname;
+  if (filename == nullptr) {
+    fname.append(PrettyMethod(cu_->method_idx, *cu_->dex_file));
+  } else {
+    fname.append(filename);
+  }
   ReplaceSpecialChars(fname);
   fname = StringPrintf("%s%s%x%s_%d.dot", dir_prefix, fname.c_str(),
                       GetBasicBlock(GetEntryBlock()->fall_through)->start_offset,
@@ -1588,6 +1601,11 @@ void MIRGraph::GetBlockName(BasicBlock* bb, char* name) {
 }
 
 const char* MIRGraph::GetShortyFromTargetIdx(int target_idx) {
+  if (shorty_for_test_ != nullptr) {
+    // To facilitate unit testing when no code item is available,
+    // the testing facility can set up the shorty information.
+    return shorty_for_test_[target_idx];
+  }
   // TODO: for inlining support, use current code unit.
   const DexFile::MethodId& method_id = cu_->dex_file->GetMethodId(target_idx);
   return cu_->dex_file->GetShorty(method_id.proto_idx_);
@@ -1738,7 +1756,20 @@ size_t MIRGraph::GetNumDalvikInsns() const {
         size_for_null_code_item : current_code_item_->insns_size_in_code_units_);
   }
 
+  // Finally, count the size of offsets compiler assigned.
+  cumulative_size += compiler_assigned_insn_size_;
+
   return cumulative_size;
+}
+
+DexOffset MIRGraph::GetNewOffset() {
+  // Getting the size in code units is good enough for providing a non-overlapping offset.
+  DexOffset new_offset = GetNumDalvikInsns();
+
+  // Now that we got a new offset, we need to keep track of size of this instruction.
+  compiler_assigned_insn_size_ += 2u;
+
+  return new_offset;
 }
 
 static BasicBlock* SelectTopologicalSortOrderFallBack(
@@ -2446,4 +2477,322 @@ int MIR::DecodedInstruction::FlagsOf() const {
       return 0;
   }
 }
+
+void MIRGraph::RecordNewMirGCMap(MIR* mir, ArenaBitVector* gc_bit_map) {
+  // First record the new GC map.
+  auto it = offset_to_gc_map_.find(mir->offset);
+  if (it != offset_to_gc_map_.end()) {
+    // Make sure both vectors have the same map.
+    DCHECK(gc_bit_map->Equal(it->second) == true);
+  } else {
+    offset_to_gc_map_.Put(mir->offset, gc_bit_map);
+  }
+
+  // Now compute how many bytes are needed for the GC map.
+  // If larger than before, make sure that all maps that already exist are expanded.
+  int last_bit = gc_bit_map->GetHighestBitSet();
+  size_t bytes_needed = last_bit < 0 ? 1 : ((last_bit / kBitsPerByte) + 1);
+  ExpandGcMapEntries(bytes_needed);
+}
+
+void MIRGraph::ExpandGcMapEntries(size_t new_size_in_bytes) {
+  if (new_size_in_bytes > gc_map_entry_size_) {
+    // We have increased the entry size. Do a sanity check to make sure that the allocated
+    // size can account for this new entry size. We do not need to expand anything because
+    // we should've allocated the internal map to be as big as all of the posible registers.
+    if (kIsDebugBuild) {
+      for (auto entry = offset_to_gc_map_.begin(); entry != offset_to_gc_map_.end(); entry++) {
+        ArenaBitVector* gc_bit_map = entry->second;
+        size_t size_raw_map = gc_bit_map->GetSizeOf();
+        CHECK_GE(size_raw_map, new_size_in_bytes);
+      }
+    }
+
+    gc_map_entry_size_ = new_size_in_bytes;
+  }
+}
+
+size_t MIRGraph::GetGCMapEntrySize() {
+  // In order to provide a correct size for GC map, we also check the entry size
+  // for the gc_map calculated by the verifier.
+  const std::vector<uint8_t>& gc_map_raw = GetCurrentDexCompilationUnit()->GetVerifiedMethod()->GetDexGcMap();
+  verifier::DexPcToReferenceMap dex_gc_map(&(gc_map_raw)[0]);
+  DCHECK_EQ(gc_map_raw.size(), dex_gc_map.RawSize());
+
+  // Expand the gc map entries if needed.
+  ExpandGcMapEntries(dex_gc_map.RegWidth());
+
+  return gc_map_entry_size_;
+}
+
+void MIRGraph::ExpandGcMapEntriesToAtLeastVerifierSize() {
+  // When asking for size, it will always make sure to provide the size that takes
+  // into account all current maps generated by compiler and also all maps from
+  // verifier.
+  GetGCMapEntrySize();
+}
+
+const uint8_t* MIRGraph::GetVerifierGCMap(DexOffset offset) {
+  const std::vector<uint8_t>& gc_map_raw = GetCurrentDexCompilationUnit()->GetVerifiedMethod()->GetDexGcMap();
+  verifier::DexPcToReferenceMap dex_gc_map(&(gc_map_raw)[0]);
+  DCHECK_EQ(gc_map_raw.size(), dex_gc_map.RawSize());
+
+  return dex_gc_map.FindBitMap(offset, false);
+}
+
+const ArenaBitVector* MIRGraph::GetGCMapAsBitVector(DexOffset offset) {
+  // If we have already computed map for this offset, retrieve that.
+  auto it = offset_to_gc_map_.find(offset);
+  if (it != offset_to_gc_map_.end()) {
+    ArenaBitVector* gc_map = it->second;
+    return gc_map;
+  }
+
+  // Return nullptr if no BitVector exists for this offset.
+  return nullptr;
+}
+
+const uint8_t* MIRGraph::GetGCMap(DexOffset offset, bool verifier_map_as_backup) {
+  const uint8_t* gc_map = nullptr;
+
+  // If we have already computed a map for this offset, retrieve that.
+  const ArenaBitVector* gc_bit_map = GetGCMapAsBitVector(offset);
+  if (gc_bit_map != nullptr) {
+    // Make sure that we have expanded our entries to maximum size.
+    ExpandGcMapEntriesToAtLeastVerifierSize();
+    gc_map = reinterpret_cast<const uint8_t*>(gc_bit_map->GetRawStorage());
+  } else {
+    // Not in precomputed map, now check if we can get one from verifier.
+    if (verifier_map_as_backup) {
+      gc_map = GetVerifierGCMap(offset);
+
+      const std::vector<uint8_t>& gc_map_raw = GetCurrentDexCompilationUnit()->GetVerifiedMethod()->GetDexGcMap();
+      verifier::DexPcToReferenceMap dex_gc_map(&(gc_map_raw)[0]);
+      DCHECK_EQ(gc_map_raw.size(), dex_gc_map.RawSize());
+
+      // Since we may have a mix of verifier and compiler generated maps, make sure
+      // we return a map that is the maximum entry width. So therefore prepare
+      // our map cache to store this expanded map.
+      size_t verifier_map_size = dex_gc_map.RegWidth();
+      size_t compiler_map_size = GetGCMapEntrySize();
+      if (verifier_map_size < compiler_map_size) {
+        // The verifier map is smaller than compiler generated map.
+        // Since we provide a single size, we need to provide a map that is the desired size.
+        if (gc_map_cache_ == nullptr) {
+          size_t total_size = std::max<size_t>(GetNumOfCodeAndTempVRs(), compiler_map_size);
+          gc_map_cache_ = new (GetArena()) ArenaBitVector(GetArena(), total_size, false);
+        }
+        gc_map_cache_->ClearAllBits();
+
+        // Convert to BitVector.
+        for (size_t reg = 0; reg < verifier_map_size; reg++) {
+          if (((gc_map[reg / kBitsPerByte] >> (reg % kBitsPerByte)) & 0x01) != 0) {
+            gc_map_cache_->SetBit(reg);
+          }
+        }
+
+        // Provide the expanded gc map.
+        gc_map = reinterpret_cast<const uint8_t*>(gc_map_cache_->GetRawStorage());
+      }
+    }
+  }
+
+  return gc_map;
+}
+
+bool MIRGraph::IsCodeMotionAcrossSafepointAllowed() const {
+  return (cu_->disable_opt & (1 << kSuppressCodeMotionAcrossSafepoint)) == 0;
+}
+
+bool MIRGraph::HasSafepoint(MIR* mir) const {
+  int opcode = mir->dalvikInsn.opcode;
+  if (opcode == kMirOpCheck) {
+    // The check instruction is simply for modeling. We need to check the real instruction.
+    mir = mir->meta.throw_insn;
+    opcode = mir->dalvikInsn.opcode;
+  }
+
+  switch (opcode) {
+    case Instruction::MOVE_EXCEPTION:
+      // Move-exceptions don't automatically have safepoints themselves.
+      // But a PC export tends to be generated at beginning of catch block, so might
+      // as well capture it here so we can show the map. However, it is not a
+      // real safepoint since no interaction with runtime happens here. If any GC
+      // would run, it would be with offset of thrower before we enter catch.
+      return true;
+
+    case Instruction::SGET:
+    case Instruction::SGET_WIDE:
+    case Instruction::SGET_OBJECT:
+    case Instruction::SGET_BOOLEAN:
+    case Instruction::SGET_BYTE:
+    case Instruction::SGET_CHAR:
+    case Instruction::SGET_SHORT:
+    case Instruction::SPUT:
+    case Instruction::SPUT_WIDE:
+    case Instruction::SPUT_OBJECT:
+    case Instruction::SPUT_BOOLEAN:
+    case Instruction::SPUT_BYTE:
+    case Instruction::SPUT_CHAR:
+    case Instruction::SPUT_SHORT: {
+      // For sgets/sputs we have additional logic to make it possible to
+      // better capture when it will generate safepoint.
+      const MirSFieldLoweringInfo& field_info = GetSFieldLoweringInfo(mir);
+      if (field_info.FastGet() || field_info.FastPut()) {
+        if (field_info.IsReferrersClass()) {
+          // Everything already initialized.
+          return false;
+        } else {
+          if (field_info.IsInitialized() ||
+              (mir->optimization_flags & MIR_IGNORE_CLINIT_CHECK) != 0) {
+            // Everything already initialized.
+            return false;
+          }
+        }
+      }
+
+      // Possible call to class initialization/resolution.
+      return true;
+    }
+
+    case Instruction::INVOKE_VIRTUAL:
+    case Instruction::INVOKE_SUPER:
+    case Instruction::INVOKE_DIRECT:
+    case Instruction::INVOKE_STATIC:
+    case Instruction::INVOKE_INTERFACE:
+    case Instruction::INVOKE_VIRTUAL_RANGE:
+    case Instruction::INVOKE_SUPER_RANGE:
+    case Instruction::INVOKE_DIRECT_RANGE:
+    case Instruction::INVOKE_STATIC_RANGE:
+    case Instruction::INVOKE_INTERFACE_RANGE:
+    case Instruction::INVOKE_VIRTUAL_QUICK: {
+      if ((mir->optimization_flags & MIR_INLINED) != 0) {
+        // So the invoke has been marked as being inlined.
+        // Check if it still has null check side effect.
+        bool is_static = opcode == Instruction::INVOKE_STATIC || Instruction::INVOKE_STATIC_RANGE;
+        if (is_static || ((mir->optimization_flags & MIR_IGNORE_NULL_CHECK) != 0)) {
+          return false;
+        }
+      }
+
+      // TODO We can do a better job with intrinsics if they have no slow path.
+      return true;
+    }
+
+    case Instruction::DIV_INT:
+    case Instruction::REM_INT:
+    case Instruction::DIV_INT_2ADDR:
+    case Instruction::REM_INT_2ADDR: {
+      // Check for division by zero.
+      if (mir->ssa_rep != nullptr) {
+        if (IsConst(mir->ssa_rep->uses[1]) == true) {
+          return (ConstantValue(mir->ssa_rep->uses[1]) == 0);
+        }
+      }
+
+      // We don't know value of denominator but check if it has proven it won't throw.
+      return (mir->optimization_flags & MIR_IGNORE_DIV_ZERO_CHECK) == 0;
+    }
+
+    case Instruction::DIV_LONG:
+    case Instruction::REM_LONG:
+    case Instruction::DIV_LONG_2ADDR:
+    case Instruction::REM_LONG_2ADDR: {
+      if (mir->ssa_rep != nullptr) {
+        if (IsConst(mir->ssa_rep->uses[2]) == true && IsConst(mir->ssa_rep->uses[3]) == true) {
+          return ConstantValue(mir->ssa_rep->uses[2]) == 0 && ConstantValue(mir->ssa_rep->uses[3]) == 0;
+        }
+      }
+
+      // We don't know value of denominator but check if it has proven it won't throw.
+      return (mir->optimization_flags & MIR_IGNORE_DIV_ZERO_CHECK) == 0;
+    }
+
+    case Instruction::DIV_INT_LIT16:
+    case Instruction::REM_INT_LIT16:
+    case Instruction::DIV_INT_LIT8:
+    case Instruction::REM_INT_LIT8:
+      return mir->dalvikInsn.vC == 0;
+
+    case Instruction::AGET:
+    case Instruction::AGET_WIDE:
+    case Instruction::AGET_OBJECT:
+    case Instruction::AGET_BOOLEAN:
+    case Instruction::AGET_BYTE:
+    case Instruction::AGET_CHAR:
+    case Instruction::AGET_SHORT:
+    case Instruction::APUT:
+    case Instruction::APUT_WIDE:
+    case Instruction::APUT_OBJECT:
+    case Instruction::APUT_BOOLEAN:
+    case Instruction::APUT_BYTE:
+    case Instruction::APUT_CHAR:
+    case Instruction::APUT_SHORT:
+    case kMirOpPackedArrayGet:
+    case kMirOpPackedArrayPut: {
+      if (opcode == Instruction::APUT_OBJECT) {
+        // Possible call to helper routine for type checking.
+        return true;
+      }
+
+      // No exceptions only if both null and range checks have been eliminated.
+      uint32_t needed_flags = MIR_IGNORE_RANGE_CHECK | MIR_IGNORE_NULL_CHECK;
+      return ((mir->optimization_flags & needed_flags) == needed_flags);
+    }
+
+    case Instruction::IGET:
+    case Instruction::IGET_WIDE:
+    case Instruction::IGET_OBJECT:
+    case Instruction::IGET_BOOLEAN:
+    case Instruction::IGET_BYTE:
+    case Instruction::IGET_CHAR:
+    case Instruction::IGET_SHORT:
+    case Instruction::IPUT:
+    case Instruction::IPUT_WIDE:
+    case Instruction::IPUT_OBJECT:
+    case Instruction::IPUT_BOOLEAN:
+    case Instruction::IPUT_BYTE:
+    case Instruction::IPUT_CHAR:
+    case Instruction::IPUT_SHORT:
+    case Instruction::IGET_QUICK:
+    case Instruction::IGET_WIDE_QUICK:
+    case Instruction::IGET_OBJECT_QUICK:
+    case Instruction::IPUT_QUICK:
+    case Instruction::IPUT_WIDE_QUICK:
+    case Instruction::IPUT_OBJECT_QUICK: {
+      const MirIFieldLoweringInfo& field_info = GetIFieldLoweringInfo(mir);
+      if (field_info.FastGet() || field_info.FastPut()) {
+        return (mir->optimization_flags & MIR_IGNORE_NULL_CHECK) == 0;
+      }
+
+      // Has safepoint because calls runtime helper.
+      return true;
+    }
+
+    case Instruction::ARRAY_LENGTH:
+    case kMirOpNullCheck:
+      // No exceptions only if null check has been eliminated.
+      return (mir->optimization_flags & MIR_IGNORE_NULL_CHECK) == 0;
+
+    default:
+      break;
+  }
+
+  // Returns and branches may also have suspend checks.
+  int flags = mir->dalvikInsn.FlagsOf();
+  if (flags == Instruction::kReturn || mir->dalvikInsn.IsConditionalBranch()
+      || (flags & Instruction::kUnconditional) != 0) {
+    return (mir->optimization_flags & MIR_IGNORE_SUSPEND_CHECK) == 0;
+  }
+
+  // Some of the throwers have already been handled in the special logic which considers
+  // check elimination flags as well.
+  if ((flags & Instruction::kThrow) != 0) {
+    return true;
+  }
+
+  // The throwers have already been captured. It is not expected that anything else will have safepoint.
+  return false;
+}
+
 }  // namespace art

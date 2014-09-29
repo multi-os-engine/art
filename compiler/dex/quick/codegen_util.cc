@@ -745,19 +745,16 @@ void Mir2Lir::CreateNativeGcMap() {
     }
   }
   MethodReference method_ref(cu_->dex_file, cu_->method_idx);
-  const std::vector<uint8_t>& gc_map_raw =
-      mir_graph_->GetCurrentDexCompilationUnit()->GetVerifiedMethod()->GetDexGcMap();
-  verifier::DexPcToReferenceMap dex_gc_map(&(gc_map_raw)[0]);
-  DCHECK_EQ(gc_map_raw.size(), dex_gc_map.RawSize());
+
   // Compute native offset to references size.
   GcMapBuilder native_gc_map_builder(&native_gc_map_,
                                      mapping_table.PcToDexSize(),
-                                     max_native_offset, dex_gc_map.RegWidth());
+                                     max_native_offset, mir_graph_->GetGCMapEntrySize());
 
   for (auto it = mapping_table.PcToDexBegin(), end = mapping_table.PcToDexEnd(); it != end; ++it) {
     uint32_t native_offset = it.NativePcOffset();
     uint32_t dex_pc = it.DexPc();
-    const uint8_t* references = dex_gc_map.FindBitMap(dex_pc, false);
+    const uint8_t* references = mir_graph_->GetGCMap(dex_pc, true);
     CHECK(references != NULL) << "Missing ref for dex pc 0x" << std::hex << dex_pc <<
         ": " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
     native_gc_map_builder.AddEntry(native_offset, references);

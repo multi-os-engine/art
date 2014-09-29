@@ -50,6 +50,7 @@ enum opt_control_vector {
   kBranchFusing,
   kSuppressExceptionEdges,
   kSuppressMethodInlining,
+  kSuppressCodeMotionAcrossSafepoint,    /**!< Used to prevent optimizers from moving instructions across safepoints. */
 };
 
 // Force code generation paths for testing.

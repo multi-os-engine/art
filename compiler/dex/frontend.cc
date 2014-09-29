@@ -33,7 +33,15 @@
 
 namespace art {
 
-/* Default optimizer/debug setting for the compiler. */
+/**
+ * @brief Default optimizer/debug setting for the compiler.
+ * @details The following are disabled by default:
+ * -# kSuppressCodeMotionAcrossSafepoint - Code motion across safepoints is disabled
+ * because there isn't a clear contract between runtime and compiler. Namely, anything
+ * can happen at safepoint: GC, profiling, debugging, deoptimization, etc. Once the
+ * interaction is better defined (like some safepoints can only be GC) and compiler can
+ * also provide better deoptimization points, this can be enabled.
+ */
 static uint32_t kCompilerOptimizerDisableFlags = 0 |  // Disable specific optimizations
   // (1 << kLoadStoreElimination) |
   // (1 << kLoadHoisting) |
@@ -49,6 +57,7 @@ static uint32_t kCompilerOptimizerDisableFlags = 0 |  // Disable specific optimi
   // (1 << kPromoteCompilerTemps) |
   // (1 << kSuppressExceptionEdges) |
   // (1 << kSuppressMethodInlining) |
+  (1 << kSuppressCodeMotionAcrossSafepoint) |
   0;
 
 static uint32_t kCompilerDebugFlags = 0 |     // Enable debug/testing modes

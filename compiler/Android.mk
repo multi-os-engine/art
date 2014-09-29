@@ -70,6 +70,7 @@ LIBART_COMPILER_SRC_FILES := \
 	dex/frontend.cc \
 	dex/mir_graph.cc \
 	dex/mir_analysis.cc \
+	dex/reference_map_calculator.cc \
 	dex/verified_method.cc \
 	dex/verification_results.cc \
 	dex/vreg_analysis.cc \

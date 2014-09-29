@@ -712,6 +712,12 @@ int32_t DexFile::GetLineNumFromPC(mirror::ArtMethod* method, uint32_t rel_pc) co
   const CodeItem* code_item = GetCodeItem(method->GetCodeItemOffset());
   DCHECK(code_item != NULL) << PrettyMethod(method) << " " << GetLocation();
 
+  // Currently, compiler assigned offsets do not have debug information.
+  if (rel_pc >= code_item->insns_size_in_code_units_) {
+    // A method with no line number information should return -1.
+    return -1;
+  }
+
   // A method with no line number info should return -1
   LineNumFromPcContext context(rel_pc, -1);
   DecodeDebugInfo(code_item, method->IsStatic(), method->GetDexMethodIndex(), LineNumForPcCb,
