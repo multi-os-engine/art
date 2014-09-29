@@ -38,6 +38,7 @@ public class Main {
         b13679511Test();
         b16177324TestWrapper();
         b16230771TestWrapper();
+        b17689750Test();
         largeFrameTest();
         largeFrameTestFloat();
         mulBy1Test();
@@ -974,6 +975,20 @@ public class Main {
           // The bug was a missing null check, so this would actually cause SIGSEGV.
           System.out.println("Unexpectedly retrieved value " + value + " in NPE catch handler");
         }
+      }
+    }
+
+    static void b17689750Test() {
+      final B17689750Test test = new B17689750Test();
+      new Thread() {
+        public void run() {
+          test.thread1();
+        }
+      }.start();
+      try {
+        test.thread2();
+      } catch (NullPointerException expected) {
+        System.out.println("b17689750Test passed.");
       }
     }
 
@@ -9824,5 +9839,35 @@ class B16177324ValuesKiller {
   public static int values[] = { 1234 };
   static {
     B16177324Values.values = null;
+  }
+}
+
+class B17689750Test {
+  private volatile int state = 0;
+  private Object lock = new Object();
+  private int[] values = { 42 };
+
+  void thread1() {
+    while (state != 1) { }  // Busy loop.
+    synchronized (lock) {
+      values = null;
+      state = 2;
+    }
+  }
+
+  void thread2() {
+    int[] vs1;
+    synchronized (lock) {
+      vs1 = values;
+      state = 1;
+    }
+    while (state != 2) { }  // Busy loop.
+    int[] vs2;
+    synchronized (lock) {
+      vs2 = values;
+    }
+    int v1 = vs1[0];
+    int v2 = vs2[0];
+    System.out.println("b17689750Test failed: " + v1 + ", " + v2);
   }
 }

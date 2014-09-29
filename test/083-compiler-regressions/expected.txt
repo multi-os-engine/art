@@ -16,6 +16,7 @@ false
 b13679511Test finishing
 b16177324TestWrapper caught NPE as expected.
 b16230771TestWrapper caught NPE as expected.
+b17689750Test passed.
 largeFrame passes
 largeFrameFloat passes
 mulBy1Test passes
