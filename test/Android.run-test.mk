@@ -155,7 +155,14 @@ ifdef dist_goal
         $(IMAGE_TYPES), $(TEST_ART_TIMING_SENSITIVE_RUN_TESTS), $(ALL_ADDRESS_SIZES))
 endif
 
-TEST_ART_TIMING_SENSITIVE_RUN_TESTS :=
+TEST_ART_FLAKY_RUN_TESTS := \
+  004-ThreadStress
+
+ifeq ($(ART_TEST_RUN_FLAKY_TESTS), false)
+ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(PREBUILD_TYPES), \
+      $(COMPILER_TYPES),$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+      $(IMAGE_TYPES), $(TEST_ART_FLAKY_RUN_TESTS), $(ALL_ADDRESS_SIZES))
+endif
 
 # Note 116-nodex2oat is not broken per-se it just doesn't (and isn't meant to) work with --prebuild.
 TEST_ART_BROKEN_PREBUILD_RUN_TESTS := \

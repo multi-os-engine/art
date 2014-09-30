@@ -54,6 +54,9 @@ ART_TEST_KEEP_GOING ?= true
 # Do you want all tests, even those that are time consuming?
 ART_TEST_FULL ?= false
 
+# Do you want to run flaky tests?
+ART_TEST_RUN_FLAKY_TESTS ?= true
+
 # Do you want default compiler tests run?
 ART_TEST_DEFAULT_COMPILER ?= true
 
