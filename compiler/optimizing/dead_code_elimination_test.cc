@@ -39,7 +39,11 @@ static void TestCode(const uint16_t* data,
   std::string actual_before = printer_before.str();
   ASSERT_EQ(actual_before, expected_before);
 
-  DeadCodeElimination(graph).Run();
+  // Dummy code generator used to instantiate HGraphVisualizer
+  // thereafter, but never actually used.
+  CodeGenerator* codegen = nullptr;
+  HGraphVisualizer visualizer(nullptr, graph, *codegen, "");
+  HDeadCodeElimination(graph, visualizer).Run();
 
   StringPrettyPrinter printer_after(graph);
   printer_after.VisitInsertionOrder();
@@ -94,6 +98,7 @@ TEST(DeadCodeElimination, AdditionAndConditionalJump) {
     "BasicBlock 5, pred: 1, succ: 3\n"
     "  21: Goto 3\n";
 
+  // Expected difference after dead code elimination.
   diff_t expected_diff = {
     { "  3: IntConstant [15, 22, 8]\n", "  3: IntConstant [22, 8]\n" },
     { "  22: Phi(3, 5) [15]\n",         "  22: Phi(3, 5)\n" },
@@ -164,7 +169,7 @@ TEST(DeadCodeElimination, AdditionsAndInconditionalJumps) {
     "BasicBlock 5, pred: 4\n"
     "  28: Exit\n";
 
-  // Expected difference after constant propagation.
+  // Expected difference after dead code elimination.
   diff_t expected_diff = {
     { "  13: IntConstant [14]\n", removed },
     { "  24: IntConstant [25]\n", removed },
