@@ -28,6 +28,11 @@ class MirFieldInfo;
 
 class GlobalValueNumbering {
  public:
+  static bool Skip(CompilationUnit* cu) {
+    return (cu->disable_opt & (1u << kGlobalValueNumbering)) != 0u ||
+        cu->mir_graph->GetMaxNestedLoops() > kMaxAllowedNestedLoops;
+  }
+
   GlobalValueNumbering(CompilationUnit* cu, ScopedArenaAllocator* allocator);
   ~GlobalValueNumbering();
 
@@ -207,6 +212,9 @@ class GlobalValueNumbering {
   CompilationUnit* const cu_;
   MIRGraph* mir_graph_;
   ScopedArenaAllocator* const allocator_;
+
+  // The maximum number of nested loops that we accept for GVN.
+  static constexpr size_t kMaxAllowedNestedLoops = 6u;
 
   // The number of BBs that we need to process grows exponentially with the number
   // of nested loops. Don't allow excessive processing for too many nested loops or

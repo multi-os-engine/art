@@ -404,8 +404,7 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
   if (bb->block_type == kDead) {
     return true;
   }
-  // Don't do a separate LVN if we did the GVN.
-  bool use_lvn = bb->use_lvn && (cu_->disable_opt & (1u << kGlobalValueNumbering)) != 0u;
+  bool use_lvn = bb->use_lvn && (cu_->disable_opt & (1u << kLocalValueNumbering)) == 0u;
   std::unique_ptr<ScopedArenaAllocator> allocator;
   std::unique_ptr<GlobalValueNumbering> global_valnum;
   std::unique_ptr<LocalValueNumbering> local_valnum;
@@ -1239,7 +1238,7 @@ void MIRGraph::EliminateClassInitChecksEnd() {
 }
 
 bool MIRGraph::ApplyGlobalValueNumberingGate() {
-  if ((cu_->disable_opt & (1u << kGlobalValueNumbering)) != 0u) {
+  if (GlobalValueNumbering::Skip(cu_)) {
     return false;
   }
 
@@ -1279,6 +1278,8 @@ void MIRGraph::ApplyGlobalValueNumberingEnd() {
         DCHECK(!change) << PrettyMethod(cu_->method_idx, *cu_->dex_file);
       }
     }
+    // GVN was successful, running the LVN would be useless.
+    cu_->disable_opt |= (1u << kLocalValueNumbering);
   } else {
     LOG(WARNING) << "GVN failed for " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
   }
