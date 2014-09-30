@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "constant_propagation.h"
+#include "constant_folding.h"
 #include "dead_code_elimination.h"
 #include "pretty_printer.h"
 #include "graph_checker.h"
@@ -41,7 +41,7 @@ static void TestCode(const uint16_t* data,
   std::string actual_before = printer_before.str();
   ASSERT_EQ(expected_before, actual_before);
 
-  ConstantPropagation(graph).Run();
+  ConstantFolding(graph).Run();
 
   StringPrettyPrinter printer_after_cp(graph);
   printer_after_cp.VisitInsertionOrder();
@@ -72,7 +72,7 @@ static void TestCode(const uint16_t* data,
  *     v2 <- v0 + v1            2.      add-int v2, v0, v1
  *     return v2                4.      return v2
  */
-TEST(ConstantPropagation, IntConstantFoldingOnAddition1) {
+TEST(ConstantFolding, IntConstantFoldingOnAddition1) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 1 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -91,7 +91,7 @@ TEST(ConstantPropagation, IntConstantFoldingOnAddition1) {
     "BasicBlock 2, pred: 1\n"
     "  13: Exit\n";
 
-  // Expected difference after constant propagation.
+  // Expected difference after constant folding.
   diff_t expected_cp_diff = {
     { "  3: IntConstant [9]\n", "  3: IntConstant\n" },
     { "  5: IntConstant [9]\n", "  5: IntConstant\n" },
@@ -125,7 +125,7 @@ TEST(ConstantPropagation, IntConstantFoldingOnAddition1) {
  *     v2 <- v0 + v1            6.      add-int v2, v0, v1
  *     return v2                8.      return v2
  */
-TEST(ConstantPropagation, IntConstantFoldingOnAddition2) {
+TEST(ConstantFolding, IntConstantFoldingOnAddition2) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 1 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -152,7 +152,7 @@ TEST(ConstantPropagation, IntConstantFoldingOnAddition2) {
     "BasicBlock 2, pred: 1\n"
     "  25: Exit\n";
 
-  // Expected difference after constant propagation.
+  // Expected difference after constant folding.
   diff_t expected_cp_diff = {
     { "  3: IntConstant [9]\n",   "  3: IntConstant\n" },
     { "  5: IntConstant [9]\n",   "  5: IntConstant\n" },
@@ -190,7 +190,7 @@ TEST(ConstantPropagation, IntConstantFoldingOnAddition2) {
  *     v2 <- v0 - v1            2.      sub-int v2, v0, v1
  *     return v2                4.      return v2
  */
-TEST(ConstantPropagation, IntConstantFoldingOnSubtraction) {
+TEST(ConstantFolding, IntConstantFoldingOnSubtraction) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 3 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -209,7 +209,7 @@ TEST(ConstantPropagation, IntConstantFoldingOnSubtraction) {
     "BasicBlock 2, pred: 1\n"
     "  13: Exit\n";
 
-  // Expected difference after constant propagation.
+  // Expected difference after constant folding.
   diff_t expected_cp_diff = {
     { "  3: IntConstant [9]\n", "  3: IntConstant\n" },
     { "  5: IntConstant [9]\n", "  5: IntConstant\n" },
@@ -244,7 +244,7 @@ TEST(ConstantPropagation, IntConstantFoldingOnSubtraction) {
  *       (v0, v1) + (v1, v2)    4.      add-long v4, v0, v2
  *     return (v4, v5)          6.      return-wide v4
  */
-TEST(ConstantPropagation, LongConstantFoldingOnAddition) {
+TEST(ConstantFolding, LongConstantFoldingOnAddition) {
   const uint16_t data[] = SIX_REGISTERS_CODE_ITEM(
     Instruction::CONST_WIDE_16 | 0 << 8, 1,
     Instruction::CONST_WIDE_16 | 2 << 8, 2,
@@ -263,7 +263,7 @@ TEST(ConstantPropagation, LongConstantFoldingOnAddition) {
     "BasicBlock 2, pred: 1\n"
     "  16: Exit\n";
 
-  // Expected difference after constant propagation.
+  // Expected difference after constant folding.
   diff_t expected_cp_diff = {
     { "  6: LongConstant [12]\n", "  6: LongConstant\n" },
     { "  8: LongConstant [12]\n", "  8: LongConstant\n" },
@@ -295,7 +295,7 @@ TEST(ConstantPropagation, LongConstantFoldingOnAddition) {
  *       (v0, v1) - (v1, v2)    4.      sub-long v4, v0, v2
  *     return (v4, v5)          6.      return-wide v4
  */
-TEST(ConstantPropagation, LongConstantFoldingOnSubtraction) {
+TEST(ConstantFolding, LongConstantFoldingOnSubtraction) {
   const uint16_t data[] = SIX_REGISTERS_CODE_ITEM(
     Instruction::CONST_WIDE_16 | 0 << 8, 3,
     Instruction::CONST_WIDE_16 | 2 << 8, 2,
@@ -314,7 +314,7 @@ TEST(ConstantPropagation, LongConstantFoldingOnSubtraction) {
     "BasicBlock 2, pred: 1\n"
     "  16: Exit\n";
 
-  // Expected difference after constant propagation.
+  // Expected difference after constant folding.
   diff_t expected_cp_diff = {
     { "  6: LongConstant [12]\n", "  6: LongConstant\n" },
     { "  8: LongConstant [12]\n", "  8: LongConstant\n" },
@@ -355,7 +355,7 @@ TEST(ConstantPropagation, LongConstantFoldingOnSubtraction) {
  * L3: v2 <- v1 + 4             11.     add-int/lit16 v2, v1, #+4
  *     return v2                13.     return v2
  */
-TEST(ConstantPropagation, IntConstantFoldingAndJumps) {
+TEST(ConstantFolding, IntConstantFoldingAndJumps) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 0 << 12,
     Instruction::CONST_4 | 1 << 8 | 1 << 12,
@@ -393,7 +393,7 @@ TEST(ConstantPropagation, IntConstantFoldingAndJumps) {
     "BasicBlock 5, pred: 4\n"
     "  29: Exit\n";
 
-  // Expected difference after constant propagation.
+  // Expected difference after constant folding.
   diff_t expected_cp_diff = {
     { "  3: IntConstant [9]\n",   "  3: IntConstant\n" },
     { "  5: IntConstant [9]\n",   "  5: IntConstant []\n" },
@@ -435,7 +435,7 @@ TEST(ConstantPropagation, IntConstantFoldingAndJumps) {
  * L1: v2 <- v0 + v1            5.      add-int v2, v0, v1
  *     return-void              7.      return
  */
-TEST(ConstantPropagation, ConstantCondition) {
+TEST(ConstantFolding, ConstantCondition) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 1 << 8 | 1 << 12,
     Instruction::CONST_4 | 0 << 8 | 0 << 12,
@@ -464,7 +464,7 @@ TEST(ConstantPropagation, ConstantCondition) {
     "BasicBlock 5, pred: 1, succ: 3\n"
     "  21: Goto 3\n";
 
-  // Expected difference after constant propagation.
+  // Expected difference after constant folding.
   diff_t expected_cp_diff = {
     { "  3: IntConstant [15, 22, 8]\n",      "  3: IntConstant [15, 22]\n" },
     { "  5: IntConstant [22, 8]\n",          "  5: IntConstant [22]\n" },

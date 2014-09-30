@@ -94,6 +94,7 @@ TEST(DeadCodeElimination, AdditionAndConditionalJump) {
     "BasicBlock 5, pred: 1, succ: 3\n"
     "  21: Goto 3\n";
 
+  // Expected difference after dead code elimination.
   diff_t expected_diff = {
     { "  3: IntConstant [15, 22, 8]\n", "  3: IntConstant [22, 8]\n" },
     { "  22: Phi(3, 5) [15]\n",         "  22: Phi(3, 5)\n" },
@@ -164,7 +165,7 @@ TEST(DeadCodeElimination, AdditionsAndInconditionalJumps) {
     "BasicBlock 5, pred: 4\n"
     "  28: Exit\n";
 
-  // Expected difference after constant propagation.
+  // Expected difference after dead code elimination.
   diff_t expected_diff = {
     { "  13: IntConstant [14]\n", removed },
     { "  24: IntConstant [25]\n", removed },
