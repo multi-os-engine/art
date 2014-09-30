@@ -219,6 +219,7 @@ class Location : public ValueObject {
   }
 
   static Location RegisterOrConstant(HInstruction* instruction);
+  static Location ByteRegisterOrConstant(ManagedRegister reg, HInstruction* instruction);
 
   // The location of the first input to the instruction will be
   // used to replace this unallocated location.
@@ -415,6 +416,8 @@ class LocationSummary : public ArenaObject {
 
   DISALLOW_COPY_AND_ASSIGN(LocationSummary);
 };
+
+std::ostream& operator<<(std::ostream& os, const Location& location);
 
 }  // namespace art
 
