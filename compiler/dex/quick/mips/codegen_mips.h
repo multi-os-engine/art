@@ -49,10 +49,10 @@ class MipsMir2Lir FINAL : public Mir2Lir {
 
     // Required for target - register utilities.
     RegStorage Solo64ToPair64(RegStorage reg);
-    RegStorage TargetReg(SpecialTargetRegister reg);
+    RegStorage CTargetReg(SpecialTargetRegister reg);
     RegStorage GetArgMappingToPhysicalReg(int arg_num);
-    RegLocation GetReturnAlt();
-    RegLocation GetReturnWideAlt();
+    RegLocation GetCReturnAlt();
+    RegLocation GetCReturnWideAlt();
     RegLocation LocCReturn();
     RegLocation LocCReturnRef();
     RegLocation LocCReturnDouble();

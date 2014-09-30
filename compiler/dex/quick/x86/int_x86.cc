@@ -1364,20 +1364,20 @@ void X86Mir2Lir::GenArrayBoundsCheck(RegStorage index,
       RegStorage new_index = index_;
       // Move index out of kArg1, either directly to kArg0, or to kArg2.
       // TODO: clean-up to check not a number but with type
-      if (index_ == m2l_->TargetReg(kArg1, kNotWide)) {
-        if (array_base_ == m2l_->TargetReg(kArg0, kRef)) {
-          m2l_->OpRegCopy(m2l_->TargetReg(kArg2, kNotWide), index_);
-          new_index = m2l_->TargetReg(kArg2, kNotWide);
+      if (index_ == m2l_->CTargetReg(kArg1, kNotWide)) {
+        if (array_base_ == m2l_->CTargetReg(kArg0, kRef)) {
+          m2l_->OpRegCopy(m2l_->CTargetReg(kArg2, kNotWide), index_);
+          new_index = m2l_->CTargetReg(kArg2, kNotWide);
         } else {
-          m2l_->OpRegCopy(m2l_->TargetReg(kArg0, kNotWide), index_);
-          new_index = m2l_->TargetReg(kArg0, kNotWide);
+          m2l_->OpRegCopy(m2l_->CTargetReg(kArg0, kNotWide), index_);
+          new_index = m2l_->CTargetReg(kArg0, kNotWide);
         }
       }
       // Load array length to kArg1.
       X86Mir2Lir* x86_m2l = static_cast<X86Mir2Lir*>(m2l_);
-      x86_m2l->OpRegMem(kOpMov, m2l_->TargetReg(kArg1, kNotWide), array_base_, len_offset_);
+      x86_m2l->OpRegMem(kOpMov, m2l_->CTargetReg(kArg1, kNotWide), array_base_, len_offset_);
       x86_m2l->CallRuntimeHelperRegReg(kQuickThrowArrayBounds, new_index,
-                                       m2l_->TargetReg(kArg1, kNotWide), true);
+                                       m2l_->CTargetReg(kArg1, kNotWide), true);
     }
 
    private:
@@ -1411,10 +1411,10 @@ void X86Mir2Lir::GenArrayBoundsCheck(int32_t index,
 
       // Load array length to kArg1.
       X86Mir2Lir* x86_m2l = static_cast<X86Mir2Lir*>(m2l_);
-      x86_m2l->OpRegMem(kOpMov, m2l_->TargetReg(kArg1, kNotWide), array_base_, len_offset_);
-      x86_m2l->LoadConstant(m2l_->TargetReg(kArg0, kNotWide), index_);
-      x86_m2l->CallRuntimeHelperRegReg(kQuickThrowArrayBounds, m2l_->TargetReg(kArg0, kNotWide),
-                                       m2l_->TargetReg(kArg1, kNotWide), true);
+      x86_m2l->OpRegMem(kOpMov, m2l_->CTargetReg(kArg1, kNotWide), array_base_, len_offset_);
+      x86_m2l->LoadConstant(m2l_->CTargetReg(kArg0, kNotWide), index_);
+      x86_m2l->CallRuntimeHelperRegReg(kQuickThrowArrayBounds, m2l_->CTargetReg(kArg0, kNotWide),
+                                       m2l_->CTargetReg(kArg1, kNotWide), true);
     }
 
    private:

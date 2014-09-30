@@ -104,7 +104,7 @@ RegLocation Arm64Mir2Lir::LocCReturnDouble() {
 }
 
 // Return a target-dependent special register.
-RegStorage Arm64Mir2Lir::TargetReg(SpecialTargetRegister reg) {
+RegStorage Arm64Mir2Lir::CTargetReg(SpecialTargetRegister reg) {
   RegStorage res_reg = RegStorage::InvalidReg();
   switch (reg) {
     case kSelf: res_reg = rs_wSELF; break;
@@ -699,7 +699,7 @@ void Arm64Mir2Lir::ClobberCallerSave() {
   Clobber(rs_f31);
 }
 
-RegLocation Arm64Mir2Lir::GetReturnWideAlt() {
+RegLocation Arm64Mir2Lir::GetCReturnWideAlt() {
   RegLocation res = LocCReturnWide();
   res.reg.SetReg(rx2);
   res.reg.SetHighReg(rx3);
@@ -711,7 +711,7 @@ RegLocation Arm64Mir2Lir::GetReturnWideAlt() {
   return res;
 }
 
-RegLocation Arm64Mir2Lir::GetReturnAlt() {
+RegLocation Arm64Mir2Lir::GetCReturnAlt() {
   RegLocation res = LocCReturn();
   res.reg.SetReg(rx1);
   Clobber(rs_x1);

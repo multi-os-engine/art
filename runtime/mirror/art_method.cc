@@ -41,7 +41,7 @@ namespace mirror {
 extern "C" void art_portable_invoke_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*, char);
 extern "C" void art_quick_invoke_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*,
                                       const char*);
-#ifdef __LP64__
+#if defined(__LP64__) || defined(__arm__)
 extern "C" void art_quick_invoke_static_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*,
                                              const char*);
 #endif
@@ -339,7 +339,7 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
       }
 
       if (!IsPortableCompiled()) {
-#ifdef __LP64__
+#if defined(__LP64__) || defined(__arm__)
         if (!IsStatic()) {
           (*art_quick_invoke_stub)(this, args, args_size, self, result, shorty);
         } else {

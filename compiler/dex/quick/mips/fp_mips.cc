@@ -51,7 +51,7 @@ void MipsMir2Lir::GenArithOpFloat(Instruction::Code opcode,
     case Instruction::REM_FLOAT:
       FlushAllRegs();   // Send everything to home location
       CallRuntimeHelperRegLocationRegLocation(kQuickFmodf, rl_src1, rl_src2, false);
-      rl_result = GetReturn(kFPReg);
+      rl_result = GetCReturn(kFPReg);
       StoreValue(rl_dest, rl_result);
       return;
     case Instruction::NEG_FLOAT:
@@ -93,7 +93,7 @@ void MipsMir2Lir::GenArithOpDouble(Instruction::Code opcode,
     case Instruction::REM_DOUBLE:
       FlushAllRegs();   // Send everything to home location
       CallRuntimeHelperRegLocationRegLocation(kQuickFmod, rl_src1, rl_src2, false);
-      rl_result = GetReturnWide(kFPReg);
+      rl_result = GetCReturnWide(kFPReg);
       StoreValueWide(rl_dest, rl_result);
       return;
     case Instruction::NEG_DOUBLE:
@@ -203,7 +203,7 @@ void MipsMir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
   RegStorage r_tgt = LoadHelper(target);
   // NOTE: not a safepoint
   OpReg(kOpBlx, r_tgt);
-  RegLocation rl_result = GetReturn(kCoreReg);
+  RegLocation rl_result = GetCReturn(kCoreReg);
   StoreValue(rl_dest, rl_result);
 }
 

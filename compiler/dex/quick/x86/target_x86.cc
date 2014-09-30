@@ -202,7 +202,7 @@ RegLocation X86Mir2Lir::LocCReturnDouble() {
 }
 
 // Return a target-dependent special register for 32-bit.
-RegStorage X86Mir2Lir::TargetReg32(SpecialTargetRegister reg) {
+RegStorage X86Mir2Lir::CTargetReg32(SpecialTargetRegister reg) {
   RegStorage res_reg = RegStorage::InvalidReg();
   switch (reg) {
     case kSelf: res_reg = RegStorage::InvalidReg(); break;
@@ -236,7 +236,7 @@ RegStorage X86Mir2Lir::TargetReg32(SpecialTargetRegister reg) {
   return res_reg;
 }
 
-RegStorage X86Mir2Lir::TargetReg(SpecialTargetRegister reg) {
+RegStorage X86Mir2Lir::CTargetReg(SpecialTargetRegister reg) {
   LOG(FATAL) << "Do not use this function!!!";
   return RegStorage::InvalidReg();
 }
@@ -499,7 +499,7 @@ void X86Mir2Lir::ClobberCallerSave() {
   Clobber(rs_fr7);
 }
 
-RegLocation X86Mir2Lir::GetReturnWideAlt() {
+RegLocation X86Mir2Lir::GetCReturnWideAlt() {
   RegLocation res = LocCReturnWide();
   DCHECK(res.reg.GetLowReg() == rs_rAX.GetReg());
   DCHECK(res.reg.GetHighReg() == rs_rDX.GetReg());
@@ -511,7 +511,7 @@ RegLocation X86Mir2Lir::GetReturnWideAlt() {
   return res;
 }
 
-RegLocation X86Mir2Lir::GetReturnAlt() {
+RegLocation X86Mir2Lir::GetCReturnAlt() {
   RegLocation res = LocCReturn();
   res.reg.SetReg(rs_rDX.GetReg());
   Clobber(rs_rDX);
@@ -1294,7 +1294,7 @@ bool X86Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
 
   FlushAllRegs();
 
-  RegLocation rl_return = GetReturn(kCoreReg);
+  RegLocation rl_return = GetCReturn(kCoreReg);
   RegLocation rl_dest = InlineTarget(info);
 
   // Is the string non-NULL?

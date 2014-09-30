@@ -1334,7 +1334,7 @@ int Mir2Lir::SRegOffset(int s_reg) {
 }
 
 /* Mark register usage state and return long retloc */
-RegLocation Mir2Lir::GetReturnWide(RegisterClass reg_class) {
+RegLocation Mir2Lir::GetCReturnWide(RegisterClass reg_class) {
   RegLocation res;
   switch (reg_class) {
     case kRefReg: LOG(FATAL); break;
@@ -1348,12 +1348,43 @@ RegLocation Mir2Lir::GetReturnWide(RegisterClass reg_class) {
   return res;
 }
 
-RegLocation Mir2Lir::GetReturn(RegisterClass reg_class) {
+RegLocation Mir2Lir::GetCReturn(RegisterClass reg_class) {
   RegLocation res;
   switch (reg_class) {
     case kRefReg: res = LocCReturnRef(); break;
     case kFPReg: res = LocCReturnFloat(); break;
     default: res = LocCReturn(); break;
+  }
+  Clobber(res.reg);
+  if (cu_->instruction_set == kMips) {
+    MarkInUse(res.reg);
+  } else {
+    LockTemp(res.reg);
+  }
+  CheckRegLocation(res);
+  return res;
+}
+
+RegLocation Mir2Lir::GetReturnWide(RegisterClass reg_class) {
+  RegLocation res;
+  switch (reg_class) {
+    case kRefReg: LOG(FATAL); break;
+    case kFPReg: res = LocReturnDouble(); break;
+    default: res = LocReturnWide(); break;
+  }
+  Clobber(res.reg);
+  LockTemp(res.reg);
+  MarkWide(res.reg);
+  CheckRegLocation(res);
+  return res;
+}
+
+RegLocation Mir2Lir::GetReturn(RegisterClass reg_class) {
+  RegLocation res;
+  switch (reg_class) {
+    case kRefReg: res = LocReturnRef(); break;
+    case kFPReg: res = LocReturnFloat(); break;
+    default: res = LocReturn(); break;
   }
   Clobber(res.reg);
   if (cu_->instruction_set == kMips) {

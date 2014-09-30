@@ -1007,7 +1007,12 @@ LIR* ArmMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegStora
     // Intentional fall-though.
     case k64:
       if (r_src.IsFloat()) {
-        DCHECK(!r_src.IsPair());
+        // Note: If the register is get by register allocator, it should never be a pair.
+        // But some functions in mir_2_lir assume 64-bit registers are 32-bit register pairs.
+        // TODO: Rework mir_2_lir common code.
+        if (r_src.IsPair()) {
+          r_src = As64BitFloatReg(r_src);
+        }
         store = LoadStoreUsingInsnWithOffsetImm8Shl2(kThumb2Vstrd, r_base, displacement, r_src);
       } else {
         DCHECK(r_src.IsPair());
