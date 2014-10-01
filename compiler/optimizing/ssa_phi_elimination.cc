@@ -18,7 +18,7 @@
 
 namespace art {
 
-void SsaDeadPhiElimination::Run() {
+void HSsaDeadPhiElimination::Run() {
   // Add to the worklist phis referenced by non-phi instructions.
   for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
@@ -83,7 +83,7 @@ void SsaDeadPhiElimination::Run() {
   }
 }
 
-void SsaRedundantPhiElimination::Run() {
+void HSsaRedundantPhiElimination::Run() {
   // Add all phis in the worklist.
   for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
