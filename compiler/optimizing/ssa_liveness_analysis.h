@@ -23,6 +23,8 @@ namespace art {
 
 class CodeGenerator;
 
+static constexpr int kNoRegister = -1;
+
 class BlockInfo : public ArenaObject {
  public:
   BlockInfo(ArenaAllocator* allocator, const HBasicBlock& block, size_t number_of_ssa_values)
@@ -166,10 +168,8 @@ class LiveInterval : public ArenaObject {
     return new (allocator) LiveInterval(allocator, type, nullptr, true, reg, false);
   }
 
-  static LiveInterval* MakeTempInterval(ArenaAllocator* allocator,
-                                        HInstruction* defined_by,
-                                        Primitive::Type type) {
-    return new (allocator) LiveInterval(allocator, type, defined_by, false, kNoRegister, true);
+  static LiveInterval* MakeTempInterval(ArenaAllocator* allocator, Primitive::Type type) {
+    return new (allocator) LiveInterval(allocator, type, nullptr, false, kNoRegister, true);
   }
 
   bool IsFixed() const { return is_fixed_; }
@@ -483,6 +483,29 @@ class LiveInterval : public ArenaObject {
   }
 
   LiveInterval* GetNextSibling() const { return next_sibling_; }
+
+  // Returns the first register hint that is at least free before
+  // the value contained in `free_until`. If none is found, returns
+  // `kNoRegister`.
+  int FindFirstRegisterHint(size_t* free_until) const;
+
+  // If there is enough at the definition site to find a register (for example
+  // it uses the same input as the first input), returns the register as a hint.
+  // Returns kNoRegister otherwise.
+  int FindHintAtDefinition() const;
+
+  // Returns whether the interval needs two (Dex virtual register size `kVRegSize`)
+  // slots for spilling.
+  bool NeedsTwoSpillSlots() const;
+
+  // Converts the location of the interval to a `Location` object.
+  Location ToLocation() const;
+
+  // Returns the location of the interval following its siblings at `position`.
+  Location GetLocationAt(size_t position) const;
+
+  // Finds the interval that covers `position`.
+  const LiveInterval& GetIntervalAt(size_t position) const;
 
  private:
   ArenaAllocator* const allocator_;
