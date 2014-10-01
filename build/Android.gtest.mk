@@ -260,7 +260,7 @@ $$(gtest_rule): test-art-target-sync
 	$(hide) adb shell rm $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID
 	$(hide) adb shell chmod 755 $(ART_TARGET_NATIVETEST_DIR)/$(TARGET_$(2)ARCH)/$(1)
 	$(hide) $$(call ART_TEST_SKIP,$$@) && \
-	  (adb shell "$(ART_TARGET_NATIVETEST_DIR)/$(TARGET_$(2)ARCH)/$(1) && touch $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID" \
+	  (adb shell "GCOV_PREFIX=/data/local/tmp/gcov GCOV_PREFIX_STRIP=3 $(ART_TARGET_NATIVETEST_DIR)/$(TARGET_$(2)ARCH)/$(1) && touch $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID" \
 	  && (adb pull $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID /tmp/ \
 	      && $$(call ART_TEST_PASSED,$$@)) \
 	  || $$(call ART_TEST_FAILED,$$@))

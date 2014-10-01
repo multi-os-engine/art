@@ -20,6 +20,8 @@ ANDROID_COMMON_MK = true
 ART_TARGET_SUPPORTED_ARCH := arm arm64 mips x86 x86_64
 ART_HOST_SUPPORTED_ARCH := x86 x86_64
 
+ART_COVERAGE := true
+
 ifeq (,$(filter $(TARGET_ARCH),$(ART_TARGET_SUPPORTED_ARCH)))
 $(warning unsupported TARGET_ARCH=$(TARGET_ARCH))
 endif

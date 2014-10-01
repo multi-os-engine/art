@@ -93,6 +93,8 @@ define build-art-executable
   endif
   LOCAL_MULTILIB := $$(art_multilib)
 
+  LOCAL_NATIVE_COVERAGE := $(ART_COVERAGE)
+
   include external/libcxx/libcxx.mk
   ifeq ($$(art_target_or_host),target)
     include $(BUILD_EXECUTABLE)
