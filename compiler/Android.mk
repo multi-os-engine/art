@@ -263,6 +263,9 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
   endif
   LOCAL_ADDITIONAL_DEPENDENCIES := art/build/Android.common_build.mk
   LOCAL_ADDITIONAL_DEPENDENCIES += $(LOCAL_PATH)/Android.mk
+
+  LOCAL_NATIVE_COVERAGE := $(ART_COVERAGE)
+
   ifeq ($$(art_target_or_host),target)
     LOCAL_SHARED_LIBRARIES += libcutils libvixl
     include $(BUILD_SHARED_LIBRARY)

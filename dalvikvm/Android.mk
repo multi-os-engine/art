@@ -33,6 +33,7 @@ LOCAL_ADDITIONAL_DEPENDENCIES += art/build/Android.common.mk
 LOCAL_MULTILIB := both
 LOCAL_MODULE_STEM_32 := dalvikvm32
 LOCAL_MODULE_STEM_64 := dalvikvm64
+LOCAL_NATIVE_COVERAGE := $(ART_COVERAGE)
 include external/libcxx/libcxx.mk
 include $(BUILD_EXECUTABLE)
 
@@ -61,6 +62,7 @@ LOCAL_IS_HOST_MODULE := true
 LOCAL_MULTILIB := both
 LOCAL_MODULE_STEM_32 := dalvikvm32
 LOCAL_MODULE_STEM_64 := dalvikvm64
+LOCAL_NATIVE_COVERAGE := $(ART_COVERAGE)
 include external/libcxx/libcxx.mk
 include $(BUILD_HOST_EXECUTABLE)
 

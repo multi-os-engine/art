@@ -82,6 +82,7 @@ define build-libart-disassembler
 
   LOCAL_ADDITIONAL_DEPENDENCIES := art/build/Android.common_build.mk
   LOCAL_ADDITIONAL_DEPENDENCIES += $(LOCAL_PATH)/Android.mk
+  LOCAL_NATIVE_COVERAGE := $(ART_COVERAGE)
   include external/libcxx/libcxx.mk
   ifeq ($$(art_target_or_host),target)
     LOCAL_SHARED_LIBRARIES += libcutils libvixl
