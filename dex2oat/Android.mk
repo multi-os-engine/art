@@ -21,6 +21,10 @@ include art/build/Android.executable.mk
 DEX2OAT_SRC_FILES := \
 	dex2oat.cc
 
+# stack frame in art::dex2oat is 3104 -- bigger than what clang warns
+# about on ARM
+ART_EXECUTABLES_CLANG_CFLAGS := -Wframe-larger-than=3584
+
 # TODO: Remove this when the framework (installd) supports pushing the
 # right instruction-set parameter for the primary architecture.
 ifneq ($(filter ro.zygote=zygote64,$(PRODUCT_DEFAULT_PROPERTY_OVERRIDES)),)

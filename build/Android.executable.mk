@@ -65,6 +65,7 @@ define build-art-executable
   endif
 
   LOCAL_CFLAGS := $(ART_EXECUTABLES_CFLAGS)
+  LOCAL_CLANG_CFLAGS := $(ART_EXECUTABLES_CLANG_CFLAGS)
   ifeq ($$(art_target_or_host),target)
   	$(call set-target-local-clang-vars)
   	$(call set-target-local-cflags-vars,$(6))
