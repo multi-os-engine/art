@@ -33,6 +33,9 @@ class GraphChecker : public HGraphVisitor {
       errors_(allocator, 0),
       dump_prefix_(dump_prefix) {}
 
+  // Check the whole graph (in insertion order).
+  virtual void Run() { VisitInsertionOrder(); }
+
   // Check `block`.
   virtual void VisitBasicBlock(HBasicBlock* block) OVERRIDE;
 
@@ -78,6 +81,14 @@ class SSAChecker : public GraphChecker {
 
   SSAChecker(ArenaAllocator* allocator, HGraph* graph)
     : GraphChecker(allocator, graph, "art::SSAChecker: ") {}
+
+  // Check the whole graph (in reverse post-order).
+  virtual void Run() {
+    // VisitReversePostOrder is used instead of VisitInsertionOrder,
+    // as the latter might visit dead blocks removed by the dominator
+    // computation.
+    VisitReversePostOrder();
+  }
 
   // Perform SSA form checks on `block`.
   virtual void VisitBasicBlock(HBasicBlock* block) OVERRIDE;
