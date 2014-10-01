@@ -51,19 +51,11 @@ class HOptimization : public ValueObject {
   // Verify the graph; abort if it is not valid.
   void Check();
 
-  template <typename T>
-  void CheckInternal(T* checker) {
-    checker->VisitInsertionOrder();
-    if (!checker->IsValid()) {
-      LOG(FATAL) << Dumpable<T>(*checker);
-    }
-  }
-
  protected:
   HGraph* const graph_;
 
  private:
-  // Does the analyzed graph use SSA form?
+  // Does the analyzed graph use the SSA form?
   bool is_in_ssa_form_;
   // Optimization pass name.
   const char* pass_name_;

@@ -33,6 +33,15 @@ class GraphChecker : public HGraphVisitor {
       errors_(allocator, 0),
       dump_prefix_(dump_prefix) {}
 
+  // Visit the graph in reverse post-order.  This method should be
+  // called instead of VisitInsertionOrder, as the latter might visit
+  // dead blocks removed by the dominator computation.
+  void VisitReversePostOrder() {
+    for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
+      VisitBasicBlock(it.Current());
+    }
+  }
+
   // Check `block`.
   virtual void VisitBasicBlock(HBasicBlock* block) OVERRIDE;
 

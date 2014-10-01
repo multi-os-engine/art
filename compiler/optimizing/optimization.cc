@@ -30,10 +30,16 @@ void HOptimization::Check() {
   if (kIsDebugBuild) {
     if (is_in_ssa_form_) {
       SSAChecker checker(graph_->GetArena(), graph_);
-      CheckInternal(&checker);
+      checker.VisitReversePostOrder();
+      if (!checker.IsValid()) {
+        LOG(FATAL) << Dumpable<SSAChecker>(checker);
+      }
     } else {
       GraphChecker checker(graph_->GetArena(), graph_);
-      CheckInternal(&checker);
+      checker.VisitInsertionOrder();
+      if (!checker.IsValid()) {
+        LOG(FATAL) << Dumpable<GraphChecker>(checker);
+      }
     }
   }
 }

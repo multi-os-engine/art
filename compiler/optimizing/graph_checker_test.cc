@@ -65,7 +65,7 @@ static void TestCodeSSA(const uint16_t* data) {
   graph->TransformToSSA();
 
   SSAChecker ssa_checker(&allocator, graph);
-  ssa_checker.VisitInsertionOrder();
+  ssa_checker.VisitReversePostOrder();
   ASSERT_TRUE(ssa_checker.IsValid());
 }
 

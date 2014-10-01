@@ -44,7 +44,7 @@ static void TestCode(const uint16_t* data,
   HGraphVisualizer visualizer(nullptr, graph, codegen, "");
   HDeadCodeElimination(graph, visualizer).Run();
   SSAChecker ssa_checker(&allocator, graph);
-  ssa_checker.VisitInsertionOrder();
+  ssa_checker.VisitReversePostOrder();
   ASSERT_TRUE(ssa_checker.IsValid());
 
   StringPrettyPrinter printer_after(graph);
