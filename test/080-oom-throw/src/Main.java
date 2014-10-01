@@ -21,7 +21,7 @@ public class Main {
         static void blowup(char[][] holder) {
             try {
                 for (int i = 0; i < holder.length; ++i) {
-                    holder[i] = new char[1024 * 1024];
+                    holder[i] = new char[1022 * 1024];
                 }
             } catch (OutOfMemoryError oome) {
                 ArrayMemEater.sawOome = true;
@@ -50,8 +50,30 @@ public class Main {
         }
     }
 
-    static boolean triggerArrayOOM() {
-        ArrayMemEater.blowup(new char[128 * 1024][]);
+    static class InstanceFinalizerMemEater {
+        static boolean sawOome;
+        static InstanceFinalizerMemEater hook;
+
+        InstanceFinalizerMemEater next;
+
+        static InstanceFinalizerMemEater allocate() {
+            try {
+                return new InstanceFinalizerMemEater();
+            } catch (OutOfMemoryError e) {
+                InstanceFinalizerMemEater.sawOome = true;
+                return null;
+            }
+        }
+
+        static void confuseCompilerOptimization(InstanceFinalizerMemEater instance) {
+          hook = instance;
+        }
+
+        protected void finalize() {}
+    }
+
+    static boolean triggerArrayOOM(char[][] holder) {
+        ArrayMemEater.blowup(holder);
         return ArrayMemEater.sawOome;
     }
 
@@ -67,9 +89,27 @@ public class Main {
         return InstanceMemEater.sawOome;
     }
 
+    static boolean triggerInstanceFinalizerOOM() {
+        InstanceFinalizerMemEater memEater = InstanceFinalizerMemEater.allocate();
+        InstanceFinalizerMemEater lastMemEater = memEater;
+        do {
+            lastMemEater.next = InstanceFinalizerMemEater.allocate();
+            lastMemEater = lastMemEater.next;
+        } while (lastMemEater != null);
+        memEater.confuseCompilerOptimization(memEater);
+        InstanceFinalizerMemEater.hook = null;
+        return InstanceFinalizerMemEater.sawOome;
+    }
+
     public static void main(String[] args) {
-        if (triggerArrayOOM()) {
+        // Keep holder alive to make instance OOM happen faster
+        char [][] holder = new char[128 * 1024][];
+        if (triggerArrayOOM(holder)) {
             System.out.println("NEW_ARRAY correctly threw OOME");
+        }
+
+        if (!triggerInstanceFinalizerOOM()) {
+            System.out.println("NEW_INSTANCE (finalize) did not threw OOME");
         }
 
         if (triggerInstanceOOM()) {
