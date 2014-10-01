@@ -20,6 +20,16 @@ ANDROID_COMMON_MK = true
 ART_TARGET_SUPPORTED_ARCH := arm arm64 mips x86 x86_64
 ART_HOST_SUPPORTED_ARCH := x86 x86_64
 
+ART_COVERAGE := true
+
+ifeq ($(ART_COVERAGE),true)
+GCOV_PREFIX := /data/local/tmp/gcov
+GCOV_PREFIX_STRIP := $(shell echo $(ANDROID_BUILD_TOP) | grep -o / | wc -l)
+GCOV_ENV := GCOV_PREFIX=$(GCOV_PREFIX) GCOV_PREFIX_STRIP=$(GCOV_PREFIX_STRIP)
+else
+GCOV_ENV :=
+endif
+
 ifeq (,$(filter $(TARGET_ARCH),$(ART_TARGET_SUPPORTED_ARCH)))
 $(warning unsupported TARGET_ARCH=$(TARGET_ARCH))
 endif
