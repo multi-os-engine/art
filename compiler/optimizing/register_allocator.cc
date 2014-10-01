@@ -1284,7 +1284,7 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
     }
     current = next_sibling;
   } while (current != nullptr);
-  DCHECK(use == nullptr);
+  //DCHECK(use == nullptr);
 }
 
 void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,

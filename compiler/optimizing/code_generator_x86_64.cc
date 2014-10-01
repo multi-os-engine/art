@@ -37,7 +37,7 @@ static constexpr bool kExplicitStackOverflowCheck = false;
 // Some x86_64 instructions require a register to be available as temp.
 static constexpr Register TMP = R11;
 
-static constexpr int kNumberOfPushedRegistersAtEntry = 1;
+static constexpr int kNumberOfPushedRegistersAtEntry = 7;
 static constexpr int kCurrentMethodStackOffset = 0;
 
 static constexpr Register kRuntimeParameterCoreRegisters[] = { RDI, RSI, RDX };
@@ -481,6 +481,12 @@ void CodeGeneratorX86_64::GenerateFrameEntry() {
     RecordPcInfo(nullptr, 0);
   }
 
+  __ pushq(CpuRegister(RBX));
+  __ pushq(CpuRegister(RBP));
+  __ pushq(CpuRegister(R12));
+  __ pushq(CpuRegister(R13));
+  __ pushq(CpuRegister(R14));
+  __ pushq(CpuRegister(R15));
   // The return PC has already been pushed on the stack.
   __ subq(CpuRegister(RSP),
           Immediate(GetFrameSize() - kNumberOfPushedRegistersAtEntry * kX86_64WordSize));
@@ -500,6 +506,12 @@ void CodeGeneratorX86_64::GenerateFrameEntry() {
 void CodeGeneratorX86_64::GenerateFrameExit() {
   __ addq(CpuRegister(RSP),
           Immediate(GetFrameSize() - kNumberOfPushedRegistersAtEntry * kX86_64WordSize));
+  __ popq(CpuRegister(R15));
+  __ popq(CpuRegister(R14));
+  __ popq(CpuRegister(R13));
+  __ popq(CpuRegister(R12));
+  __ popq(CpuRegister(RBP));
+  __ popq(CpuRegister(RBX));
 }
 
 void CodeGeneratorX86_64::Bind(HBasicBlock* block) {

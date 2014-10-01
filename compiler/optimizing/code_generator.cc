@@ -628,6 +628,11 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
         break;
       }
 
+      case Location::kInvalid: {
+        stack_map_stream_.AddDexRegisterEntry(DexRegisterMap::kConstant, 0);
+        break;
+      }
+
       default:
         LOG(FATAL) << "Unexpected kind " << location.GetKind();
     }

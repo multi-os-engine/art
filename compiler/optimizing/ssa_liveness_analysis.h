@@ -206,26 +206,28 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       return;
     }
 
-    size_t start_block_position = instruction->GetBlock()->GetLifetimeStart();
-    if (first_range_ == nullptr) {
-      // First time we see a use of that interval.
-      first_range_ = last_range_ = new (allocator_) LiveRange(
-          start_block_position, position, nullptr);
-    } else if (first_range_->GetStart() == start_block_position) {
-      // There is a use later in the same block or in a following block.
-      // Note that in such a case, `AddRange` for the whole blocks has been called
-      // before arriving in this method, and this is the reason the start of
-      // `first_range_` is before the given `position`.
-      DCHECK_LE(position, first_range_->GetEnd());
-    } else {
-      DCHECK(first_range_->GetStart() > position);
-      // There is a hole in the interval. Create a new range.
-      // Note that the start of `first_range_` can be equal to `end`: two blocks
-      // having adjacent lifetime positions are not necessarily
-      // predecessor/successor. When two blocks are predecessor/successor, the
-      // liveness algorithm has called `AddRange` before arriving in this method,
-      // and the check line 205 would succeed.
-      first_range_ = new (allocator_) LiveRange(start_block_position, position, first_range_);
+    if (!is_environment) {
+      size_t start_block_position = instruction->GetBlock()->GetLifetimeStart();
+      if (first_range_ == nullptr) {
+        // First time we see a use of that interval.
+        first_range_ = last_range_ = new (allocator_) LiveRange(
+            start_block_position, position, nullptr);
+      } else if (first_range_->GetStart() == start_block_position) {
+        // There is a use later in the same block or in a following block.
+        // Note that in such a case, `AddRange` for the whole blocks has been called
+        // before arriving in this method, and this is the reason the start of
+        // `first_range_` is before the given `position`.
+        DCHECK_LE(position, first_range_->GetEnd());
+      } else {
+        DCHECK(first_range_->GetStart() > position);
+        // There is a hole in the interval. Create a new range.
+        // Note that the start of `first_range_` can be equal to `end`: two blocks
+        // having adjacent lifetime positions are not necessarily
+        // predecessor/successor. When two blocks are predecessor/successor, the
+        // liveness algorithm has called `AddRange` before arriving in this method,
+        // and the check line 205 would succeed.
+        first_range_ = new (allocator_) LiveRange(start_block_position, position, first_range_);
+      }
     }
     first_use_ = new (allocator_) UsePosition(
         instruction, input_index, is_environment, position, first_use_);
@@ -280,7 +282,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       first_range_->start_ = from;
     } else {
       // Instruction without uses.
-      DCHECK(!defined_by_->HasUses());
+      //DCHECK(!defined_by_->HasUses());
       DCHECK(from == defined_by_->GetLifetimePosition());
       first_range_ = last_range_ = new (allocator_) LiveRange(from, from + 2, nullptr);
     }
