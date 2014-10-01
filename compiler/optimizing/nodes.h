@@ -436,6 +436,7 @@ class HBasicBlock : public ArenaObject {
   bool IsInLoop() const { return loop_information_ != nullptr; }
 
   // Returns wheter this block dominates the blocked passed as parameter.
+  // An instruction dominates itself (that is, `i.Dominates(i)' returns true).
   bool Dominates(HBasicBlock* block) const;
 
   size_t GetLifetimeStart() const { return lifetime_start_; }

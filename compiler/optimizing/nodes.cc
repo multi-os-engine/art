@@ -466,10 +466,13 @@ bool HInstructionList::FoundBefore(const HInstruction* instruction1,
 }
 
 bool HInstruction::Dominates(HInstruction* other_instruction) const {
+  if (this == other_instruction)
+    return true;
+
   HBasicBlock* block = GetBlock();
   HBasicBlock* other_block = other_instruction->GetBlock();
   if (block != other_block) {
-    return GetBlock()->Dominates(other_instruction->GetBlock());
+    return block->Dominates(other_block);
   } else {
     // If both instructions are in the same block, ensure this
     // instruction comes before `other_instruction`.
