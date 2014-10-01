@@ -265,8 +265,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     HDeadCodeElimination(graph, visualizer).Execute();
     HConstantFolding(graph, visualizer).Execute();
 
-    SsaRedundantPhiElimination(graph).Run();
-    SsaDeadPhiElimination(graph).Run();
+    HSsaRedundantPhiElimination(graph, visualizer).Run();
+    HSsaDeadPhiElimination(graph, visualizer).Run();
     InstructionSimplifier(graph).Run();
     GlobalValueNumberer(graph->GetArena(), graph).Run();
     visualizer.DumpGraph(kGVNPassName);
@@ -310,8 +310,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     graph->TransformToSSA();
     visualizer.DumpGraph("ssa");
     graph->FindNaturalLoops();
-    SsaRedundantPhiElimination(graph).Run();
-    SsaDeadPhiElimination(graph).Run();
+    HSsaRedundantPhiElimination(graph, visualizer).Run();
+    HSsaDeadPhiElimination(graph, visualizer).Run();
     GlobalValueNumberer(graph->GetArena(), graph).Run();
     SsaLivenessAnalysis liveness(*graph, codegen);
     liveness.Analyze();
