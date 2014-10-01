@@ -38,4 +38,19 @@ void InstructionSimplifier::VisitSuspendCheck(HSuspendCheck* check) {
   block->RemoveInstruction(check);
 }
 
+void InstructionSimplifier::VisitEqual(HEqual* equal) {
+  HInstruction* input1 = equal->InputAt(0);
+  HInstruction* input2 = equal->InputAt(1);
+  if (input1->GetType() == Primitive::kPrimBoolean && input2->IsIntConstant()) {
+    if (input2->AsIntConstant()->GetValue() == 1) {
+      equal->ReplaceWith(equal->InputAt(0));
+      equal->GetBlock()->RemoveInstruction(equal);
+    } else {
+      DCHECK_EQ(input2->AsIntConstant()->GetValue(), 0);
+      equal->GetBlock()->ReplaceAndRemoveInstructionWith(
+          equal, new (GetGraph()->GetArena()) HNot(input1));
+    }
+  }
+}
+
 }  // namespace art
