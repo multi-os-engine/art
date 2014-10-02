@@ -410,7 +410,8 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
       }
 
       // Ensure that we won't be accidentally calling quick compiled code when -Xint.
-      if (kIsDebugBuild && Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly()) {
+      if (kIsDebugBuild && !runtime->UseJit() &&
+          runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
         CHECK(IsEntrypointInterpreter())
             << "Don't call compiled code when -Xint " << PrettyMethod(this);
       }

@@ -541,7 +541,7 @@ bool Thread::InitStackHwm() {
   // Set stack_end_ to the bottom of the stack saving space of stack overflows
 
   Runtime* runtime = Runtime::Current();
-  bool implicit_stack_check = !runtime->ExplicitStackOverflowChecks() && !runtime->IsCompiler();
+  bool implicit_stack_check = !runtime->ExplicitStackOverflowChecks() && !runtime->IsAotCompiler();
   ResetDefaultStackEnd();
 
   // Install the protected region if we are doing implicit overflow checks.
@@ -989,6 +989,10 @@ struct StackDumpVisitor : public StackVisitor {
 static bool ShouldShowNativeStack(const Thread* thread)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   ThreadState state = thread->GetState();
+
+  if (thread == Thread::Current()) {
+    return true;
+  }
 
   // In native code somewhere in the VM (one of the kWaitingFor* states)? That's interesting.
   if (state > kWaiting && state < kStarting) {

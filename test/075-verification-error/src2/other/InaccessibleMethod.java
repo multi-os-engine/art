@@ -17,5 +17,7 @@
 package other;
 
 public class InaccessibleMethod {
-    /*package*/ static void test() {}
+    /*package*/ static void test() {
+      // System.err.println("ERROR: invalid access");
+    }
 }
