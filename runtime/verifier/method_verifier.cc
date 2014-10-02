@@ -1375,7 +1375,9 @@ bool MethodVerifier::CodeFlowVerifyMethod() {
 
   /* Continue until no instructions are marked "changed". */
   while (true) {
-    self_->AllowThreadSuspension();
+    if (can_load_classes_) {
+      self_->AllowThreadSuspension();
+    }
     // Find the first marked one. Use "start_guess" as a way to find one quickly.
     uint32_t insn_idx = start_guess;
     for (; insn_idx < insns_size; insn_idx++) {
@@ -4241,6 +4243,84 @@ void MethodVerifier::VisitStaticRoots(RootCallback* callback, void* arg) {
 
 void MethodVerifier::VisitRoots(RootCallback* callback, void* arg) {
   reg_types_.VisitRoots(callback, arg);
+}
+
+void MethodVerifier::ComputeGcMapSizes(size_t* gc_points, size_t* ref_bitmap_bits,
+                                       size_t* log2_max_gc_pc) {
+  size_t local_gc_points = 0;
+  size_t max_insn = 0;
+  size_t max_ref_reg = -1;
+  const DexFile::CodeItem* code_item = CodeItem();
+  for (size_t i = 0; i < code_item->insns_size_in_code_units_; i++) {
+    if (GetInstructionFlags(i).IsCompileTimeInfoPoint()) {
+      local_gc_points++;
+      max_insn = i;
+      max_ref_reg = GetRegLine(i)->GetMaxNonZeroReferenceReg(this, max_ref_reg);
+    }
+  }
+  *gc_points = local_gc_points;
+  *ref_bitmap_bits = max_ref_reg + 1;  // If max register is 0 we need 1 bit to encode (ie +1).
+  size_t i = 0;
+  while ((1U << i) <= max_insn) {
+    i++;
+  }
+  *log2_max_gc_pc = i;
+}
+
+bool MethodVerifier::GenerateGcMap(std::vector<uint8_t>* dex_gc_map) {
+  DCHECK(dex_gc_map->empty());
+  size_t num_entries, ref_bitmap_bits, pc_bits;
+  ComputeGcMapSizes(&num_entries, &ref_bitmap_bits, &pc_bits);
+  // There's a single byte to encode the size of each bitmap.
+  if (ref_bitmap_bits >= (8 /* bits per byte */ * 8192 /* 13-bit size */ )) {
+    // TODO: either a better GC map format or per method failures
+    Fail(VERIFY_ERROR_BAD_CLASS_HARD)
+        << "Cannot encode GC map for method with " << ref_bitmap_bits << " registers";
+    return false;
+  }
+  size_t ref_bitmap_bytes = (ref_bitmap_bits + 7) / 8;
+  // There are 2 bytes to encode the number of entries.
+  if (num_entries >= 65536) {
+    // TODO: Either a better GC map format or per method failures.
+    Fail(VERIFY_ERROR_BAD_CLASS_HARD)
+        << "Cannot encode GC map for method with " << num_entries << " entries";
+    return false;
+  }
+  size_t pc_bytes;
+  RegisterMapFormat format;
+  if (pc_bits <= 8) {
+    format = kRegMapFormatCompact8;
+    pc_bytes = 1;
+  } else if (pc_bits <= 16) {
+    format = kRegMapFormatCompact16;
+    pc_bytes = 2;
+  } else {
+    // TODO: Either a better GC map format or per method failures.
+    Fail(verifier::VERIFY_ERROR_BAD_CLASS_HARD)
+        << "Cannot encode GC map for method with "
+        << (1 << pc_bits) << " instructions (number is rounded up to nearest power of 2)";
+    return false;
+  }
+  size_t table_size = ((pc_bytes + ref_bitmap_bytes) * num_entries) + 4;
+  dex_gc_map->reserve(table_size);
+  // Write table header.
+  dex_gc_map->push_back(format | ((ref_bitmap_bytes & ~0xFF) >> 5));
+  dex_gc_map->push_back(ref_bitmap_bytes & 0xFF);
+  dex_gc_map->push_back(num_entries & 0xFF);
+  dex_gc_map->push_back((num_entries >> 8) & 0xFF);
+  // Write table data.
+  const DexFile::CodeItem* code_item = CodeItem();
+  for (size_t i = 0; i < code_item->insns_size_in_code_units_; i++) {
+    if (GetInstructionFlags(i).IsCompileTimeInfoPoint()) {
+      dex_gc_map->push_back(i & 0xFF);
+      if (pc_bytes == 2) {
+        dex_gc_map->push_back((i >> 8) & 0xFF);
+      }
+      GetRegLine(i)->WriteReferenceBitMap(this, dex_gc_map, ref_bitmap_bytes);
+    }
+  }
+  DCHECK_EQ(dex_gc_map->size(), table_size);
+  return true;
 }
 
 }  // namespace verifier

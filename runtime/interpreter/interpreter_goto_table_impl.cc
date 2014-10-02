@@ -135,10 +135,6 @@ JValue ExecuteGotoImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem* 
   };
 
   const bool do_assignability_check = do_access_check;
-  if (UNLIKELY(!shadow_frame.HasReferenceArray())) {
-    LOG(FATAL) << "Invalid shadow frame for interpreter use";
-    return JValue();
-  }
   self->VerifyStack();
 
   uint32_t dex_pc = shadow_frame.GetDexPC();

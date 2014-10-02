@@ -79,8 +79,11 @@ class ShadowFrame {
  public:
   // Compute size of ShadowFrame in bytes assuming it has a reference array.
   static size_t ComputeSize(uint32_t num_vregs) {
-    return sizeof(ShadowFrame) + (sizeof(uint32_t) * num_vregs) +
-           (sizeof(StackReference<mirror::Object>) * num_vregs);
+    size_t size = sizeof(ShadowFrame) + sizeof(uint32_t) * num_vregs;
+#if defined(ART_USE_PORTABLE_COMPILER)
+    size += sizeof(StackReference<mirror::Object>) * num_vregs;
+#endif
+     return size;
   }
 
   // Create ShadowFrame in heap for deoptimization.
@@ -93,8 +96,13 @@ class ShadowFrame {
   // Create ShadowFrame for interpreter using provided memory.
   static ShadowFrame* Create(uint32_t num_vregs, ShadowFrame* link,
                              mirror::ArtMethod* method, uint32_t dex_pc, void* memory) {
-    ShadowFrame* sf = new (memory) ShadowFrame(num_vregs, link, method, dex_pc, true);
-    return sf;
+    bool use_reference_array;
+#if defined(ART_USE_PORTABLE_COMPILER)
+    use_reference_array = true;
+#else
+    use_reference_array = false;
+#endif
+    return new (memory) ShadowFrame(num_vregs, link, method, dex_pc, use_reference_array);
   }
   ~ShadowFrame() {}
 
@@ -102,7 +110,7 @@ class ShadowFrame {
 #if defined(ART_USE_PORTABLE_COMPILER)
     return (number_of_vregs_ & kHasReferenceArray) != 0;
 #else
-    return true;
+    return false;
 #endif
   }
 
@@ -318,6 +326,8 @@ class ShadowFrame {
 #if defined(ART_USE_PORTABLE_COMPILER)
       CHECK_LT(num_vregs, static_cast<uint32_t>(kHasReferenceArray));
       number_of_vregs_ |= kHasReferenceArray;
+#else
+      LOG(FATAL) << "Unsupported";
 #endif
       memset(vregs_, 0, num_vregs * (sizeof(uint32_t) + sizeof(StackReference<mirror::Object>)));
     } else {

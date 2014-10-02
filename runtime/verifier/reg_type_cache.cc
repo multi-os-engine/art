@@ -238,7 +238,7 @@ const RegType& RegTypeCache::FromClass(const char* descriptor, mirror::Class* kl
 }
 
 RegTypeCache::RegTypeCache(bool can_load_classes) : can_load_classes_(can_load_classes) {
-  if (kIsDebugBuild) {
+  if (false && kIsDebugBuild) {
     Thread::Current()->AssertThreadSuspensionIsAllowable(gAborting == 0);
   }
   entries_.reserve(64);

@@ -59,10 +59,6 @@ template<bool do_access_check, bool transaction_active>
 JValue ExecuteSwitchImpl(Thread* self, MethodHelper& mh, const DexFile::CodeItem* code_item,
                          ShadowFrame& shadow_frame, JValue result_register) {
   bool do_assignability_check = do_access_check;
-  if (UNLIKELY(!shadow_frame.HasReferenceArray())) {
-    LOG(FATAL) << "Invalid shadow frame for interpreter use";
-    return JValue();
-  }
   self->VerifyStack();
 
   uint32_t dex_pc = shadow_frame.GetDexPC();

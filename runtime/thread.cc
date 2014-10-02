@@ -67,6 +67,7 @@
 #include "thread-inl.h"
 #include "utils.h"
 #include "verifier/dex_gc_map.h"
+#include "verifier/method_verifier.h"
 #include "verify_object-inl.h"
 #include "vmap_table.h"
 #include "well_known_classes.h"
@@ -2046,6 +2047,20 @@ class ReferenceMapVisitor : public StackVisitor {
       // Java method.
       // Portable path use DexGcMap and store in Method.native_gc_map_.
       const uint8_t* gc_map = m->GetNativeGcMap();
+      std::vector<uint8_t> gc_map_storage;
+      if (true || gc_map == nullptr) {
+        Thread* self = Thread::Current();
+        StackHandleScope<3> hs(self);
+        Handle<mirror::DexCache> dex_cache(hs.NewHandle(m->GetDexCache()));
+        Handle<mirror::ClassLoader> class_loader(hs.NewHandle(m->GetClassLoader()));
+        Handle<mirror::ArtMethod> method(hs.NewHandle(m));
+        verifier::MethodVerifier verifier(
+            self, m->GetDexFile(), dex_cache, class_loader, &m->GetClassDef(), m->GetCodeItem(),
+            m->GetDexMethodIndex(), method, m->GetAccessFlags(), false, true, false);
+        verifier.Verify();
+        verifier.GenerateGcMap(&gc_map_storage);
+        gc_map = &gc_map_storage[0];
+      }
       CHECK(gc_map != nullptr) << PrettyMethod(m);
       verifier::DexPcToReferenceMap dex_gc_map(gc_map);
       uint32_t dex_pc = shadow_frame->GetDexPC();

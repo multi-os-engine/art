@@ -242,6 +242,7 @@ class MethodVerifier {
   bool HasFailures() const;
   const RegType& ResolveCheckedClass(uint32_t class_idx)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  bool GenerateGcMap(std::vector<uint8_t>* dex_gc_map);
 
  private:
   // Private constructor for dumping.
@@ -651,6 +652,8 @@ class MethodVerifier {
 
   // Get a type representing the declaring class of the method.
   const RegType& GetDeclaringClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void ComputeGcMapSizes(size_t* gc_points, size_t* ref_bitmap_bits, size_t* log2_max_gc_pc);
 
   InstructionFlags* CurrentInsnFlags();
 
