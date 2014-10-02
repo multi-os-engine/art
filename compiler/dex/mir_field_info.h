@@ -19,8 +19,8 @@
 
 #include "base/macros.h"
 #include "dex_file.h"
+#include "dex_instruction_utils.h"
 #include "offsets.h"
-#include "utils/dex_instruction_utils.h"
 
 namespace art {
 
@@ -50,6 +50,9 @@ class MirFieldInfo {
 
   const DexFile* DeclaringDexFile() const {
     return declaring_dex_file_;
+  }
+  void SetDeclaringDexFile(const DexFile* dex_file) {
+    declaring_dex_file_ = dex_file;
   }
 
   uint16_t DeclaringClassIndex() const {

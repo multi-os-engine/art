@@ -53,9 +53,24 @@ void MirIFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
   // definition) we still want to resolve fields and record all available info.
 
   for (auto it = field_infos, end = field_infos + count; it != end; ++it) {
-    uint32_t field_idx = it->field_idx_;
-    mirror::ArtField* resolved_field =
-        compiler_driver->ResolveField(soa, dex_cache, class_loader, mUnit, field_idx, false);
+    const uint32_t field_idx = it->field_idx_;
+    mirror::ArtField* resolved_field;
+    if (it->declaring_dex_file_ == nullptr ||
+        it->declaring_dex_file_ == mUnit->GetDexFile()) {
+      resolved_field =
+          compiler_driver->ResolveField(soa, dex_cache, class_loader, mUnit, field_idx, false);
+    } else {
+      StackHandleScope<1> hs2(soa.Self());
+      auto* const cl = mUnit->GetClassLinker();
+      auto h_dex_cache = hs2.NewHandle(cl->FindDexCache(*it->declaring_dex_file_));
+      resolved_field =
+          cl->ResolveField(*it->declaring_dex_file_, field_idx, h_dex_cache, class_loader, false);
+      if (resolved_field == nullptr) {
+        soa.Self()->ClearException();
+      } else if (UNLIKELY(resolved_field->IsStatic() != false)) {
+        continue;
+      }
+    }
     if (UNLIKELY(resolved_field == nullptr)) {
       continue;
     }

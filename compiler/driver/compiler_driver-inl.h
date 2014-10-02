@@ -227,7 +227,6 @@ inline int CompilerDriver::IsFastInvoke(
                                                         target_method->dex_method_index))) {
     return 0;
   }
-
   // Sharpen a virtual call into a direct call when the target is known not to have been
   // overridden (ie is final).
   bool can_sharpen_virtual_based_on_type =
@@ -243,10 +242,10 @@ inline int CompilerDriver::IsFastInvoke(
   if (can_sharpen_virtual_based_on_type || can_sharpen_super_based_on_type) {
     // Sharpen a virtual call into a direct call. The method_idx is into referrer's
     // dex cache, check that this resolved method is where we expect it.
-    CHECK(target_method->dex_file == mUnit->GetDexFile());
-    DCHECK(dex_cache.Get() == mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile()));
-    CHECK(referrer_class->GetDexCache()->GetResolvedMethod(target_method->dex_method_index) ==
-        resolved_method) << PrettyMethod(resolved_method);
+    CHECK_EQ(target_method->dex_file, mUnit->GetDexFile());
+    DCHECK_EQ(dex_cache.Get(), mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile()));
+    CHECK_EQ(referrer_class->GetDexCache()->GetResolvedMethod(target_method->dex_method_index),
+             resolved_method) << PrettyMethod(resolved_method);
     int stats_flags = kFlagMethodResolved;
     GetCodeAndMethodForDirectCall(/*out*/invoke_type,
                                   kDirect,  // Sharp type

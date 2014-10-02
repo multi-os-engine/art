@@ -416,8 +416,8 @@ static const uint16_t kAnalysisAttributes[kMirOpLast] = {
   // 72 INVOKE_INTERFACE {vD, vE, vF, vG, vA}
   kAnInvoke | kAnHeavyWeight,
 
-  // 73 UNUSED_73
-  kAnNone,
+  // 73 RETURN_VOID_BARRIER
+  kAnBranch,
 
   // 74 INVOKE_VIRTUAL_RANGE {vCCCC .. vNNNN}
   kAnInvoke | kAnHeavyWeight,
@@ -752,67 +752,67 @@ static const uint16_t kAnalysisAttributes[kMirOpLast] = {
   // E2 USHR_INT_LIT8 vAA, vBB, #+CC
   kAnMath | kAnInt,
 
-  // E3 IGET_VOLATILE
+  // E3 IGET_QUICK
   kAnNone,
 
-  // E4 IPUT_VOLATILE
+  // E4 IGET_WIDE_QUICK
   kAnNone,
 
-  // E5 SGET_VOLATILE
+  // E5 IGET_OBJECT_QUICK
   kAnNone,
 
-  // E6 SPUT_VOLATILE
+  // E6 IPUT_QUICK
   kAnNone,
 
-  // E7 IGET_OBJECT_VOLATILE
+  // E7 IPUT_WIDE_QUICK
   kAnNone,
 
-  // E8 IGET_WIDE_VOLATILE
+  // E8 IPUT_OBJECT_QUICK
   kAnNone,
 
-  // E9 IPUT_WIDE_VOLATILE
-  kAnNone,
-
-  // EA SGET_WIDE_VOLATILE
-  kAnNone,
-
-  // EB SPUT_WIDE_VOLATILE
-  kAnNone,
-
-  // EC BREAKPOINT
-  kAnNone,
-
-  // ED THROW_VERIFICATION_ERROR
-  kAnHeavyWeight | kAnBranch,
-
-  // EE EXECUTE_INLINE
-  kAnNone,
-
-  // EF EXECUTE_INLINE_RANGE
-  kAnNone,
-
-  // F0 INVOKE_OBJECT_INIT_RANGE
+  // E9 INVOKE_VIRTUAL_QUICK
   kAnInvoke | kAnHeavyWeight,
 
-  // F1 RETURN_VOID_BARRIER
-  kAnBranch,
+  // EA INVOKE_VIRTUAL_RANGE_QUICK
+  kAnInvoke | kAnHeavyWeight,
 
-  // F2 IGET_QUICK
+  // EB IPUT_BOOLEAN_QUICK
   kAnNone,
 
-  // F3 IGET_WIDE_QUICK
+  // EC IPUT_BYTE_QUICK
   kAnNone,
 
-  // F4 IGET_OBJECT_QUICK
+  // ED IPUT_CHAR_QUICK
   kAnNone,
 
-  // F5 IPUT_QUICK
+  // EE IPUT_SHORT_QUICK
   kAnNone,
 
-  // F6 IPUT_WIDE_QUICK
+  // EF IGET_BOOLEAN_QUICK
   kAnNone,
 
-  // F7 IPUT_OBJECT_QUICK
+  // F0 IGET_BYTE_QUICK
+  kAnNone,
+
+  // F1 IGET_CHAR_QUICK
+  kAnNone,
+
+  // F2 IGET_SHORT_QUICK
+  kAnNone,
+
+  // F3 IPUT_VOLATILE
+  kAnNone,
+
+  // F4 SGET_VOLATILE
+  kAnNone,
+
+  // F5 UNUSED_F5
+  kAnNone,
+
+  // F6 UNUSED_F6
+  kAnNone,
+
+  // F7 UNUSED_F7
   kAnNone,
 
   // F8 INVOKE_VIRTUAL_QUICK
@@ -1206,8 +1206,8 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
   // All IGET/IPUT/SGET/SPUT instructions take 2 code units and there must also be a RETURN.
   const uint32_t max_refs = (GetNumDalvikInsns() - 1u) / 2u;
   ScopedArenaAllocator allocator(&cu_->arena_stack);
-  uint16_t* field_idxs =
-      reinterpret_cast<uint16_t*>(allocator.Alloc(max_refs * sizeof(uint16_t), kArenaAllocMisc));
+  auto * field_refs = reinterpret_cast<MethodReference*>(
+      allocator.Alloc(max_refs * sizeof(MethodReference), kArenaAllocMisc));
   DexMemAccessType* field_types = reinterpret_cast<DexMemAccessType*>(
       allocator.Alloc(max_refs * sizeof(DexMemAccessType), kArenaAllocMisc));
 
@@ -1215,6 +1215,8 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
   size_t ifield_pos = 0u;
   size_t sfield_pos = max_refs;
   AllNodesIterator iter(this);
+  const DexFile* const dex_file = GetCurrentDexCompilationUnit()->GetDexFile();
+  const VerifiedMethod* const verified_method = GetCurrentDexCompilationUnit()->GetVerifiedMethod();
   for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
     if (bb->block_type != kDalvikByteCode) {
       continue;
@@ -1223,25 +1225,44 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
       // Get field index and try to find it among existing indexes. If found, it's usually among
       // the last few added, so we'll start the search from ifield_pos/sfield_pos. Though this
       // is a linear search, it actually performs much better than map based approach.
-      if (IsInstructionIGetOrIPut(mir->dalvikInsn.opcode)) {
-        uint16_t field_idx = mir->dalvikInsn.vC;
+      const bool is_iget_or_iput = IsInstructionIGetOrIPut(mir->dalvikInsn.opcode);
+      const bool is_iget_or_iput_quick = IsInstructionIGetQuickOrIPutQuick(mir->dalvikInsn.opcode);
+      if (is_iget_or_iput || is_iget_or_iput_quick) {
+        MethodReference field_ref(dex_file, 0);
+        if (is_iget_or_iput) {
+          field_ref.dex_method_index = mir->dalvikInsn.vC;
+        } else {
+          DCHECK(is_iget_or_iput_quick);
+          // For quickened instructions, vC contains the field offset. We need to use the
+          // de-quickening info to get the field idx.
+          auto* field_idx_ptr = verified_method->GetDequickenIndex(mir->offset);
+          CHECK(field_idx_ptr != nullptr);
+          field_ref = *field_idx_ptr;
+          LOG(INFO) << "DEQUICKENED DEX_FILE " << field_ref.dex_file << " : "
+              << field_ref.dex_method_index;
+        }
         size_t i = ifield_pos;
-        while (i != 0u && field_idxs[i - 1] != field_idx) {
+        while (i != 0u &&
+            (field_refs[i - 1].dex_file != field_ref.dex_file ||
+                field_refs[i - 1].dex_method_index != field_ref.dex_method_index)) {
           --i;
         }
+        const auto access_type = is_iget_or_iput_quick ?
+            IGetQuickOrIPutQuickMemAccessType(mir->dalvikInsn.opcode) :
+            IGetOrIPutMemAccessType(mir->dalvikInsn.opcode);
         if (i != 0u) {
           mir->meta.ifield_lowering_info = i - 1;
-          DCHECK_EQ(field_types[i - 1], IGetOrIPutMemAccessType(mir->dalvikInsn.opcode));
+          DCHECK_EQ(field_types[i - 1], access_type);
         } else {
           mir->meta.ifield_lowering_info = ifield_pos;
-          field_idxs[ifield_pos] = field_idx;
-          field_types[ifield_pos] = IGetOrIPutMemAccessType(mir->dalvikInsn.opcode);
+          field_refs[ifield_pos] = field_ref;
+          field_types[ifield_pos] = access_type;
           ++ifield_pos;
         }
       } else if (IsInstructionSGetOrSPut(mir->dalvikInsn.opcode)) {
-        uint16_t field_idx = mir->dalvikInsn.vB;
+        MethodReference field_ref(dex_file, mir->dalvikInsn.vB);
         size_t i = sfield_pos;
-        while (i != max_refs && field_idxs[i] != field_idx) {
+        while (i != max_refs && field_refs[i].dex_method_index != field_ref.dex_method_index) {
           ++i;
         }
         if (i != max_refs) {
@@ -1250,7 +1271,7 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
         } else {
           mir->meta.sfield_lowering_info = max_refs - sfield_pos;
           --sfield_pos;
-          field_idxs[sfield_pos] = field_idx;
+          field_refs[sfield_pos] = field_ref;
           field_types[sfield_pos] = SGetOrSPutMemAccessType(mir->dalvikInsn.opcode);
         }
       }
@@ -1263,7 +1284,9 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
     DCHECK_EQ(ifield_lowering_infos_.size(), 0u);
     ifield_lowering_infos_.reserve(ifield_pos);
     for (size_t pos = 0u; pos != ifield_pos; ++pos) {
-      ifield_lowering_infos_.push_back(MirIFieldLoweringInfo(field_idxs[pos], field_types[pos]));
+      ifield_lowering_infos_.push_back(
+          MirIFieldLoweringInfo(field_refs[pos].dex_method_index, field_types[pos]));
+      ifield_lowering_infos_.back().SetDeclaringDexFile(field_refs[pos].dex_file);
     }
     MirIFieldLoweringInfo::Resolve(cu_->compiler_driver, GetCurrentDexCompilationUnit(),
                                    ifield_lowering_infos_.data(), ifield_pos);
@@ -1275,7 +1298,8 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
     sfield_lowering_infos_.reserve(max_refs - sfield_pos);
     for (size_t pos = max_refs; pos != sfield_pos;) {
       --pos;
-      sfield_lowering_infos_.push_back(MirSFieldLoweringInfo(field_idxs[pos], field_types[pos]));
+      sfield_lowering_infos_.push_back(MirSFieldLoweringInfo(field_refs[pos].dex_method_index,
+                                                             field_types[pos]));
     }
     MirSFieldLoweringInfo::Resolve(cu_->compiler_driver, GetCurrentDexCompilationUnit(),
                                    sfield_lowering_infos_.data(), max_refs - sfield_pos);

@@ -410,7 +410,8 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
       }
 
       // Ensure that we won't be accidentally calling quick compiled code when -Xint.
-      if (kIsDebugBuild && Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly()) {
+      if (kIsDebugBuild && !runtime->UseJit() &&
+          runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
         CHECK(IsEntrypointInterpreter())
             << "Don't call compiled code when -Xint " << PrettyMethod(this);
       }
@@ -497,7 +498,10 @@ QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo() {
   // On failure, instead of nullptr we get the quick-generic-jni-trampoline for native method
   // indicating the generic JNI, or the quick-to-interpreter-bridge (but not the trampoline)
   // for non-native methods. And we really shouldn't see a failure for non-native methods here.
-  DCHECK(!class_linker->IsQuickToInterpreterBridge(entry_point));
+  if (class_linker->IsQuickToInterpreterBridge(entry_point)) {
+    LOG(FATAL) << PrettyMethod(this) << "@" << this << " " << entry_point << "/" << GetEntryPointFromQuickCompiledCode();
+    return runtime->GetCalleeSaveMethodFrameInfo(Runtime::kRefsAndArgs);
+  }
 
   if (class_linker->IsQuickGenericJniStub(entry_point)) {
     // Generic JNI frame.
