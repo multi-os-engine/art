@@ -582,6 +582,7 @@ void BuildQuickShadowFrameVisitor::Visit() {
 extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Thread* self,
                                                 StackReference<mirror::ArtMethod>* sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  // LOG(INFO) << "Entering: " << PrettyMethod(method) << " @ " << method->GetEntryPointFromQuickCompiledCode();
   // Ensure we don't get thread suspension until the object arguments are safely in the shadow
   // frame.
   ScopedQuickEntrypointChecks sqec(self);
@@ -594,7 +595,7 @@ extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Threa
     const char* old_cause = self->StartAssertNoThreadSuspension(
         "Building interpreter shadow frame");
     const DexFile::CodeItem* code_item = method->GetCodeItem();
-    DCHECK(code_item != nullptr) << PrettyMethod(method);
+    DCHECK(code_item != nullptr) << PrettyMethod(method) << " entry " << method->GetEntryPointFromQuickCompiledCode();
     uint16_t num_regs = code_item->registers_size_;
     void* memory = alloca(ShadowFrame::ComputeSize(num_regs));
     // No last shadow coming from quick.

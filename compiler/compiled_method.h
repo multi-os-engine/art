@@ -27,10 +27,6 @@
 #include "utils/array_ref.h"
 #include "utils/swap_space.h"
 
-namespace llvm {
-  class Function;
-}  // namespace llvm
-
 namespace art {
 
 class CompilerDriver;
@@ -347,9 +343,9 @@ class CompiledMethod FINAL : public CompiledCode {
     return mapping_table_;
   }
 
-  const SwapVector<uint8_t>& GetVmapTable() const {
+  const SwapVector<uint8_t>* GetVmapTable() const {
     DCHECK(vmap_table_ != nullptr);
-    return *vmap_table_;
+    return vmap_table_;
   }
 
   SwapVector<uint8_t> const* GetGcMap() const {

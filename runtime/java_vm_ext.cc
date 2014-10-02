@@ -336,7 +336,8 @@ class JII {
       thread_group = args->group;
     }
 
-    if (!runtime->AttachCurrentThread(thread_name, as_daemon, thread_group, !runtime->IsCompiler())) {
+    if (!runtime->AttachCurrentThread(thread_name, as_daemon, thread_group,
+                                      !runtime->IsAotCompiler())) {
       *p_env = nullptr;
       return JNI_ERR;
     } else {

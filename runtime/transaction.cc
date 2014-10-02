@@ -31,7 +31,7 @@ namespace art {
 static constexpr bool kEnableTransactionStats = false;
 
 Transaction::Transaction() : log_lock_("transaction log lock", kTransactionLogLock) {
-  CHECK(Runtime::Current()->IsCompiler());
+  CHECK(Runtime::Current()->IsAotCompiler());
 }
 
 Transaction::~Transaction() {

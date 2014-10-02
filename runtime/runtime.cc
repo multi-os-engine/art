@@ -62,6 +62,8 @@
 #include "image.h"
 #include "instrumentation.h"
 #include "intern_table.h"
+#include "interpreter/interpreter.h"
+#include "jit/jit.h"
 #include "jni_internal.h"
 #include "mirror/art_field-inl.h"
 #include "mirror/art_method-inl.h"
@@ -227,6 +229,7 @@ Runtime::~Runtime() {
   // Make sure to let the GC complete if it is running.
   heap_->WaitForGcToComplete(gc::kGcCauseBackground, self);
   heap_->DeleteThreadPool();
+  jit_.reset(nullptr);
 
   // Make sure our internal threads are dead before we start tearing down things they're using.
   Dbg::StopJdwp();
@@ -457,14 +460,20 @@ bool Runtime::Start() {
 
   started_ = true;
 
-  // Use !IsCompiler so that we get test coverage, tests are never the zygote.
-  if (!IsCompiler()) {
+  // Use !IsAotCompiler so that we get test coverage, tests are never the zygote.
+  if (!IsAotCompiler()) {
     ScopedObjectAccess soa(self);
     gc::space::ImageSpace* image_space = heap_->GetImageSpace();
     if (image_space != nullptr) {
       Runtime::Current()->GetInternTable()->AddImageStringsToTable(image_space);
       Runtime::Current()->GetClassLinker()->MoveImageClassesToClassTable();
     }
+  }
+
+  LOG(INFO) << "INSTRUMENTATION CHECK " << UseJit();
+  if (UseJit()) {
+    LOG(INFO) << "CREATING INSTRUMENTATION CACHE";
+    jit_->CreateInstrumentationCache();
   }
 
   if (!IsImageDex2OatEnabled() || !Runtime::Current()->GetHeap()->HasImageSpace()) {
@@ -586,8 +595,11 @@ void Runtime::DidForkFromZygote(JNIEnv* env, NativeBridgeAction action, const ch
     }
   }
 
-  // Create the thread pool.
+  // Create the thread pools.
   heap_->CreateThreadPool();
+  if (UseJit()) {
+    jit_->CreateThreadPool();
+  }
 
   StartSignalCatcher();
 
@@ -795,6 +807,15 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
                        options->min_interval_homogeneous_space_compaction_by_oom_);
 
   dump_gc_performance_on_shutdown_ = options->dump_gc_performance_on_shutdown_;
+
+  if (!IsAotCompiler() && options->use_jit_) {
+    jit_.reset(jit::Jit::Create());
+    if (jit_.get() != nullptr) {
+      compiler_callbacks_ = jit_->GetCompilerCallbacks();
+    } else {
+      LOG(WARNING) << "Failed to create JIT";
+    }
+  }
 
   BlockSignals();
   InitPlatformSignalHandlers();
@@ -1014,26 +1035,26 @@ void Runtime::InitThreadGroups(Thread* self) {
       env->NewGlobalRef(env->GetStaticObjectField(
           WellKnownClasses::java_lang_ThreadGroup,
           WellKnownClasses::java_lang_ThreadGroup_mainThreadGroup));
-  CHECK(main_thread_group_ != NULL || IsCompiler());
+  CHECK(main_thread_group_ != NULL || IsAotCompiler());
   system_thread_group_ =
       env->NewGlobalRef(env->GetStaticObjectField(
           WellKnownClasses::java_lang_ThreadGroup,
           WellKnownClasses::java_lang_ThreadGroup_systemThreadGroup));
-  CHECK(system_thread_group_ != NULL || IsCompiler());
+  CHECK(system_thread_group_ != NULL || IsAotCompiler());
 }
 
 jobject Runtime::GetMainThreadGroup() const {
-  CHECK(main_thread_group_ != NULL || IsCompiler());
+  CHECK(main_thread_group_ != NULL || IsAotCompiler());
   return main_thread_group_;
 }
 
 jobject Runtime::GetSystemThreadGroup() const {
-  CHECK(system_thread_group_ != NULL || IsCompiler());
+  CHECK(system_thread_group_ != NULL || IsAotCompiler());
   return system_thread_group_;
 }
 
 jobject Runtime::GetSystemClassLoader() const {
-  CHECK(system_class_loader_ != NULL || IsCompiler());
+  CHECK(system_class_loader_ != NULL || IsAotCompiler());
   return system_class_loader_;
 }
 
@@ -1276,7 +1297,7 @@ mirror::ArtMethod* Runtime::CreateImtConflictMethod() {
   // TODO: use a special method for imt conflict method saves.
   method->SetDexMethodIndex(DexFile::kDexNoIndex);
   // When compiling, the code pointer will get set later when the image is loaded.
-  if (runtime->IsCompiler()) {
+  if (runtime->IsAotCompiler()) {
     method->SetEntryPointFromQuickCompiledCode(nullptr);
   } else {
     method->SetEntryPointFromQuickCompiledCode(GetQuickImtConflictStub());
@@ -1294,7 +1315,7 @@ mirror::ArtMethod* Runtime::CreateResolutionMethod() {
   // TODO: use a special method for resolution method saves
   method->SetDexMethodIndex(DexFile::kDexNoIndex);
   // When compiling, the code pointer will get set later when the image is loaded.
-  if (runtime->IsCompiler()) {
+  if (runtime->IsAotCompiler()) {
     method->SetEntryPointFromQuickCompiledCode(nullptr);
   } else {
     method->SetEntryPointFromQuickCompiledCode(GetQuickResolutionStub());
@@ -1415,14 +1436,14 @@ void Runtime::StartProfiler(const char* profile_output_filename) {
 
 // Transaction support.
 void Runtime::EnterTransactionMode(Transaction* transaction) {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(transaction != nullptr);
   DCHECK(!IsActiveTransaction());
   preinitialization_transaction_ = transaction;
 }
 
 void Runtime::ExitTransactionMode() {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction_ = nullptr;
 }
@@ -1457,51 +1478,51 @@ void Runtime::RecordWriteFieldShort(mirror::Object* obj, MemberOffset field_offs
 
 void Runtime::RecordWriteField32(mirror::Object* obj, MemberOffset field_offset,
                                  uint32_t value, bool is_volatile) const {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction_->RecordWriteField32(obj, field_offset, value, is_volatile);
 }
 
 void Runtime::RecordWriteField64(mirror::Object* obj, MemberOffset field_offset,
                                  uint64_t value, bool is_volatile) const {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction_->RecordWriteField64(obj, field_offset, value, is_volatile);
 }
 
 void Runtime::RecordWriteFieldReference(mirror::Object* obj, MemberOffset field_offset,
                                         mirror::Object* value, bool is_volatile) const {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction_->RecordWriteFieldReference(obj, field_offset, value, is_volatile);
 }
 
 void Runtime::RecordWriteArray(mirror::Array* array, size_t index, uint64_t value) const {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction_->RecordWriteArray(array, index, value);
 }
 
 void Runtime::RecordStrongStringInsertion(mirror::String* s) const {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction_->RecordStrongStringInsertion(s);
 }
 
 void Runtime::RecordWeakStringInsertion(mirror::String* s) const {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction_->RecordWeakStringInsertion(s);
 }
 
 void Runtime::RecordStrongStringRemoval(mirror::String* s) const {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction_->RecordStrongStringRemoval(s);
 }
 
 void Runtime::RecordWeakStringRemoval(mirror::String* s) const {
-  DCHECK(IsCompiler());
+  DCHECK(IsAotCompiler());
   DCHECK(IsActiveTransaction());
   preinitialization_transaction_->RecordWeakStringRemoval(s);
 }

@@ -685,6 +685,7 @@ bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
       UNREACHABLE();
     }
     if (kIsDebugBuild && Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly() &&
+        !Runtime::Current()->UseJit() &&
         !new_shadow_frame->GetMethod()->IsNative() &&
         !new_shadow_frame->GetMethod()->IsProxyMethod() &&
         new_shadow_frame->GetMethod()->GetEntryPointFromInterpreter()
