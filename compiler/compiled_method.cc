@@ -46,11 +46,11 @@ bool CompiledCode::operator==(const CompiledCode& rhs) const {
   return (rhs.quick_code_ == nullptr);
 }
 
-uint32_t CompiledCode::AlignCode(uint32_t offset) const {
+size_t CompiledCode::AlignCode(size_t offset) const {
   return AlignCode(offset, instruction_set_);
 }
 
-uint32_t CompiledCode::AlignCode(uint32_t offset, InstructionSet instruction_set) {
+size_t CompiledCode::AlignCode(size_t offset, InstructionSet instruction_set) {
   return RoundUp(offset, GetInstructionSetAlignment(instruction_set));
 }
 
