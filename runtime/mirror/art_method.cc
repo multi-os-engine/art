@@ -27,6 +27,8 @@
 #include "entrypoints/runtime_asm_entrypoints.h"
 #include "gc/accounting/card_table-inl.h"
 #include "interpreter/interpreter.h"
+#include "jit/jit.h"
+#include "jit/jit_code_cache.h"
 #include "jni_internal.h"
 #include "mapping_table.h"
 #include "object_array-inl.h"
@@ -329,6 +331,14 @@ void ArtMethod::AssertPcIsWithinQuickCode(uintptr_t pc) {
       class_linker->IsQuickResolutionStub(code)) {
     return;
   }
+  const bool pc_within_quick_code = PcIsWithinQuickCode(reinterpret_cast<uintptr_t>(code), pc);
+  // If we are the JIT then we may have just compiled the method after the
+  // IsQuickToInterpreterBridge check.
+  jit::Jit* const jit = Runtime::Current()->GetJit();
+  if (jit != nullptr &&
+      jit->GetCodeCache()->ContainsCodePtr(reinterpret_cast<const void*>(code))) {
+    return;
+  }
   /*
    * During a stack walk, a return PC may point past-the-end of the code
    * in the case that the last instruction is a call that isn't expected to
@@ -336,11 +346,11 @@ void ArtMethod::AssertPcIsWithinQuickCode(uintptr_t pc) {
    *
    * NOTE: For Thumb both pc and code are offset by 1 indicating the Thumb state.
    */
-  CHECK(PcIsWithinQuickCode(pc))
+  CHECK(pc_within_quick_code)
       << PrettyMethod(this)
       << " pc=" << std::hex << pc
       << " code=" << code
-      << " size=" << GetCodeSize();
+      << " size=" << GetCodeSize(reinterpret_cast<const void*>(code));
 }
 
 bool ArtMethod::IsEntrypointInterpreter() {
@@ -410,7 +420,8 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
       }
 
       // Ensure that we won't be accidentally calling quick compiled code when -Xint.
-      if (kIsDebugBuild && Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly()) {
+      if (kIsDebugBuild && !runtime->UseJit() &&
+          runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
         CHECK(IsEntrypointInterpreter())
             << "Don't call compiled code when -Xint " << PrettyMethod(this);
       }

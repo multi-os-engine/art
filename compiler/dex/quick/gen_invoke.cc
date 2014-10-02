@@ -864,11 +864,12 @@ RegLocation Mir2Lir::InlineTarget(CallInfo* info) {
   RegLocation res;
   if (info->result.location == kLocInvalid) {
     // If result is unused, return a sink target based on type of invoke target.
-    res = GetReturn(ShortyToRegClass(mir_graph_->GetShortyFromTargetIdx(info->index)[0]));
+    res = GetReturn(
+        ShortyToRegClass(mir_graph_->GetShortyFromMethodReference(info->method_ref)[0]));
   } else {
     res = info->result;
     DCHECK_EQ(LocToRegClass(res),
-              ShortyToRegClass(mir_graph_->GetShortyFromTargetIdx(info->index)[0]));
+              ShortyToRegClass(mir_graph_->GetShortyFromMethodReference(info->method_ref)[0]));
   }
   return res;
 }
@@ -877,11 +878,12 @@ RegLocation Mir2Lir::InlineTargetWide(CallInfo* info) {
   RegLocation res;
   if (info->result.location == kLocInvalid) {
     // If result is unused, return a sink target based on type of invoke target.
-    res = GetReturnWide(ShortyToRegClass(mir_graph_->GetShortyFromTargetIdx(info->index)[0]));
+    res = GetReturnWide(ShortyToRegClass(
+        mir_graph_->GetShortyFromMethodReference(info->method_ref)[0]));
   } else {
     res = info->result;
     DCHECK_EQ(LocToRegClass(res),
-              ShortyToRegClass(mir_graph_->GetShortyFromTargetIdx(info->index)[0]));
+              ShortyToRegClass(mir_graph_->GetShortyFromMethodReference(info->method_ref)[0]));
   }
   return res;
 }
@@ -1419,7 +1421,8 @@ bool Mir2Lir::GenInlinedUnsafePut(CallInfo* info, bool is_long,
 
 void Mir2Lir::GenInvoke(CallInfo* info) {
   DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
-  if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
+  const DexFile* dex_file = info->method_ref.dex_file;
+  if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(dex_file)
       ->GenIntrinsic(this, info)) {
     return;
   }
@@ -1429,18 +1432,20 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
 void Mir2Lir::GenInvokeNoInline(CallInfo* info) {
   int call_state = 0;
   LIR* null_ck;
-  LIR** p_null_ck = NULL;
+  LIR** p_null_ck = nullptr;
   NextCallInsn next_call_insn;
   FlushAllRegs();  /* Everything to home location */
   // Explicit register usage
   LockCallTemps();
 
-  const MirMethodLoweringInfo& method_info = mir_graph_->GetMethodLoweringInfo(info->mir);
-  cu_->compiler_driver->ProcessedInvoke(method_info.GetInvokeType(), method_info.StatsFlags());
-  InvokeType original_type = static_cast<InvokeType>(method_info.GetInvokeType());
-  info->type = method_info.GetSharpType();
-  bool fast_path = method_info.FastPath();
+  const MirMethodLoweringInfo* method_info = mir_graph_->GetMethodLoweringInfo(info->mir);
+  DCHECK(method_info != nullptr);
+  cu_->compiler_driver->ProcessedInvoke(method_info->GetInvokeType(), method_info->StatsFlags());
+  InvokeType original_type = static_cast<InvokeType>(method_info->GetInvokeType());
+  info->type = method_info->GetSharpType();
+  bool fast_path = method_info->FastPath();
   bool skip_this;
+
   if (info->type == kInterface) {
     next_call_insn = fast_path ? NextInterfaceCallInsn : NextInterfaceCallInsnWithAccessCheck;
     skip_this = fast_path;
@@ -1462,17 +1467,18 @@ void Mir2Lir::GenInvokeNoInline(CallInfo* info) {
     next_call_insn = fast_path ? NextVCallInsn : NextVCallInsnSP;
     skip_this = fast_path;
   }
-  MethodReference target_method = method_info.GetTargetMethod();
+  MethodReference target_method = method_info->GetTargetMethod();
   call_state = GenDalvikArgs(info, call_state, p_null_ck,
-                             next_call_insn, target_method, method_info.VTableIndex(),
-                             method_info.DirectCode(), method_info.DirectMethod(),
+                             next_call_insn, target_method, method_info->VTableIndex(),
+                             method_info->DirectCode(), method_info->DirectMethod(),
                              original_type, skip_this);
   // Finish up any of the call sequence not interleaved in arg loading
   while (call_state >= 0) {
-    call_state = next_call_insn(cu_, info, call_state, target_method, method_info.VTableIndex(),
-                                method_info.DirectCode(), method_info.DirectMethod(), original_type);
+    call_state = next_call_insn(cu_, info, call_state, target_method, method_info->VTableIndex(),
+                                method_info->DirectCode(), method_info->DirectMethod(),
+                                original_type);
   }
-  LIR* call_insn = GenCallInsn(method_info);
+  LIR* call_insn = GenCallInsn(*method_info);
   MarkSafepointPC(call_insn);
 
   FreeCallTemps();

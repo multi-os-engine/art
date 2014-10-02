@@ -427,7 +427,7 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
   InlineMethod intrinsic;
   {
     ReaderMutexLock mu(Thread::Current(), lock_);
-    auto it = inline_methods_.find(info->index);
+    auto it = inline_methods_.find(info->method_ref.dex_method_index);
     if (it == inline_methods_.end() || (it->second.flags & kInlineIntrinsic) == 0) {
       return false;
     }
@@ -806,7 +806,7 @@ bool DexFileMethodInliner::GenInlineIGet(MIRGraph* mir_graph, BasicBlock* bb, MI
     // TODO: Implement inlining of IGET on non-"this" registers (needs correct stack trace for NPE).
     // Allow synthetic accessors. We don't care about losing their stack frame in NPE.
     if (!InlineMethodAnalyser::IsSyntheticAccessor(
-        mir_graph->GetMethodLoweringInfo(invoke).GetTargetMethod())) {
+        mir_graph->GetMethodLoweringInfo(invoke)->GetTargetMethod())) {
       return false;
     }
   }
@@ -865,7 +865,7 @@ bool DexFileMethodInliner::GenInlineIPut(MIRGraph* mir_graph, BasicBlock* bb, MI
     // TODO: Implement inlining of IPUT on non-"this" registers (needs correct stack trace for NPE).
     // Allow synthetic accessors. We don't care about losing their stack frame in NPE.
     if (!InlineMethodAnalyser::IsSyntheticAccessor(
-        mir_graph->GetMethodLoweringInfo(invoke).GetTargetMethod())) {
+        mir_graph->GetMethodLoweringInfo(invoke)->GetTargetMethod())) {
       return false;
     }
   }

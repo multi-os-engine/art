@@ -231,6 +231,7 @@ struct SSARepresentation {
  */
 class MIR : public ArenaObject<kArenaAllocMIR> {
  public:
+  static constexpr uint32_t kInvalidIndex = std::numeric_limits<uint32_t>::max();
   /*
    * TODO: remove embedded DecodedInstruction to save space, keeping only opcode.  Recover
    * additional fields on as-needed basis.  Question: how to support MIR Pseudo-ops; probably
@@ -338,6 +339,7 @@ class MIR : public ArenaObject<kArenaAllocMIR> {
   explicit MIR() : offset(0), optimization_flags(0), m_unit_index(0), bb(NullBasicBlockId),
                  next(nullptr), ssa_rep(nullptr) {
     memset(&meta, 0, sizeof(meta));
+    meta.method_lowering_info = kInvalidIndex;
   }
 
   uint32_t GetStartUseIndex() const {
@@ -503,7 +505,8 @@ struct CallInfo {
   int opt_flags;
   InvokeType type;
   uint32_t dex_idx;
-  uint32_t index;       // Method idx for invokes, type idx for FilledNewArray.
+  MethodReference method_ref;
+  uint32_t index;       // Type idx for FilledNewArray.
   uintptr_t direct_code;
   uintptr_t direct_method;
   RegLocation target;    // Target of following move_result.
@@ -687,9 +690,13 @@ class MIRGraph {
 
   void DoCacheMethodLoweringInfo();
 
-  const MirMethodLoweringInfo& GetMethodLoweringInfo(MIR* mir) {
-    DCHECK_LT(mir->meta.method_lowering_info, method_lowering_infos_.size());
-    return method_lowering_infos_[mir->meta.method_lowering_info];
+  const MirMethodLoweringInfo* GetMethodLoweringInfo(MIR* mir) const {
+    const auto idx = mir->meta.method_lowering_info;
+    if (idx == MIR::kInvalidIndex) {
+      return nullptr;
+    }
+    DCHECK_LT(idx, method_lowering_infos_.size());
+    return &method_lowering_infos_[idx];
   }
 
   void ComputeInlineIFieldLoweringInfo(uint16_t field_idx, MIR* invoke, MIR* iget_or_iput);
@@ -1126,7 +1133,6 @@ class MIRGraph {
   std::string GetSSAName(int ssa_reg);
   std::string GetSSANameWithConst(int ssa_reg, bool singles_only);
   void GetBlockName(BasicBlock* bb, char* name);
-  const char* GetShortyFromTargetIdx(int);
   const char* GetShortyFromMethodReference(const MethodReference& target_method);
   void DumpMIRGraph();
   CallInfo* NewMemCallInfo(BasicBlock* bb, MIR* mir, InvokeType type, bool is_range);

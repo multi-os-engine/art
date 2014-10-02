@@ -19,8 +19,8 @@
 
 #include "base/macros.h"
 #include "dex_file.h"
+#include "dex_instruction_utils.h"
 #include "offsets.h"
-#include "utils/dex_instruction_utils.h"
 
 namespace art {
 
@@ -51,6 +51,9 @@ class MirFieldInfo {
   const DexFile* DeclaringDexFile() const {
     return declaring_dex_file_;
   }
+  void SetDeclaringDexFile(const DexFile* dex_file) {
+    declaring_dex_file_ = dex_file;
+  }
 
   uint16_t DeclaringClassIndex() const {
     return declaring_class_idx_;
@@ -66,6 +69,14 @@ class MirFieldInfo {
 
   DexMemAccessType MemAccessType() const {
     return static_cast<DexMemAccessType>((flags_ >> kBitMemAccessTypeBegin) & kMemAccessTypeMask);
+  }
+
+  void CheckEquals(const MirFieldInfo& other) const {
+    CHECK_EQ(field_idx_, other.field_idx_);
+    CHECK_EQ(flags_, other.flags_);
+    CHECK_EQ(declaring_field_idx_, other.declaring_field_idx_);
+    CHECK_EQ(declaring_class_idx_, other.declaring_class_idx_);
+    CHECK_EQ(declaring_dex_file_, other.declaring_dex_file_);
   }
 
  protected:
@@ -132,6 +143,11 @@ class MirIFieldLoweringInfo : public MirFieldInfo {
 
   MemberOffset FieldOffset() const {
     return field_offset_;
+  }
+
+  void CheckEquals(const MirIFieldLoweringInfo& other) const {
+    MirFieldInfo::CheckEquals(other);
+    CHECK_EQ(field_offset_.Uint32Value(), other.field_offset_.Uint32Value());
   }
 
  private:

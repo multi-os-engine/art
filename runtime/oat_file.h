@@ -127,7 +127,7 @@ class OatFile {
     uint32_t GetGcMapOffsetOffset() const;
 
     // Create an OatMethod with offsets relative to the given base address
-    OatMethod(const uint8_t* base, const uint32_t code_offset)
+    OatMethod(const uint8_t* base = nullptr, const uint32_t code_offset = 0)
         : begin_(base), code_offset_(code_offset) {
     }
     ~OatMethod() {}
@@ -147,8 +147,8 @@ class OatFile {
       return reinterpret_cast<T>(begin_ + offset);
     }
 
-    const uint8_t* const begin_;
-    const uint32_t code_offset_;
+    const uint8_t* begin_;
+    uint32_t code_offset_;
 
     friend class OatClass;
   };

@@ -300,12 +300,12 @@ class MANAGED ArtMethod FINAL : public Object {
   }
 
   uint32_t GetCodeSize() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  static uint32_t GetCodeSize(const void* code);
 
   // Check whether the given PC is within the quick compiled code associated with this method's
   // quick entrypoint. This code isn't robust for instrumentation, etc. and is only used for
   // debug purposes.
-  bool PcIsWithinQuickCode(uintptr_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    uintptr_t code = reinterpret_cast<uintptr_t>(GetEntryPointFromQuickCompiledCode());
+  static bool PcIsWithinQuickCode(uintptr_t code, uintptr_t pc) {
     if (code == 0) {
       return pc == 0;
     }
@@ -316,7 +316,7 @@ class MANAGED ArtMethod FINAL : public Object {
      *
      * NOTE: For Thumb both pc and code are offset by 1 indicating the Thumb state.
      */
-    return code <= pc && pc <= code + GetCodeSize();
+    return code <= pc && pc <= code + GetCodeSize(reinterpret_cast<const void*>(code));
   }
 
   void AssertPcIsWithinQuickCode(uintptr_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
