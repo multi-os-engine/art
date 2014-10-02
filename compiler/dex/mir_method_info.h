@@ -46,6 +46,9 @@ class MirMethodInfo {
   const DexFile* DeclaringDexFile() const {
     return declaring_dex_file_;
   }
+  void SetDeclaringDexFile(const DexFile* dex_file) {
+    declaring_dex_file_ = dex_file;
+  }
 
   uint16_t DeclaringClassIndex() const {
     return declaring_class_idx_;
@@ -98,7 +101,7 @@ class MirMethodLoweringInfo : public MirMethodInfo {
                       MirMethodLoweringInfo* method_infos, size_t count)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
-  MirMethodLoweringInfo(uint16_t method_idx, InvokeType type)
+  MirMethodLoweringInfo(uint16_t method_idx, InvokeType type, bool is_quick)
       : MirMethodInfo(method_idx,
                       ((type == kStatic) ? kFlagIsStatic : 0u) |
                       (static_cast<uint16_t>(type) << kBitInvokeTypeBegin) |
@@ -108,7 +111,8 @@ class MirMethodLoweringInfo : public MirMethodInfo {
         target_dex_file_(nullptr),
         target_method_idx_(0u),
         vtable_idx_(0u),
-        stats_flags_(0) {
+        stats_flags_(0),
+        is_quick_(is_quick) {
   }
 
   void SetDevirtualizationTarget(const MethodReference& ref) {
@@ -131,6 +135,10 @@ class MirMethodLoweringInfo : public MirMethodInfo {
     return (flags_ & kFlagClassIsInitialized) != 0u;
   }
 
+  bool IsQuick() {
+    return is_quick_;
+  }
+
   InvokeType GetInvokeType() const {
     return static_cast<InvokeType>((flags_ >> kBitInvokeTypeBegin) & kInvokeTypeMask);
   }
@@ -146,6 +154,9 @@ class MirMethodLoweringInfo : public MirMethodInfo {
   uint16_t VTableIndex() const {
     return vtable_idx_;
   }
+  void SetVTableIndex(uint16_t index) {
+    vtable_idx_ = index;
+  }
 
   uintptr_t DirectCode() const {
     return direct_code_;
@@ -157,6 +168,20 @@ class MirMethodLoweringInfo : public MirMethodInfo {
 
   int StatsFlags() const {
     return stats_flags_;
+  }
+
+  void CheckEquals(const MirMethodLoweringInfo& info) const {
+    CHECK_EQ(method_idx_, info.method_idx_);
+    CHECK_EQ(flags_, info.flags_);
+    CHECK_EQ(declaring_method_idx_, info.declaring_method_idx_);
+    CHECK_EQ(declaring_class_idx_, info.declaring_class_idx_);
+    CHECK_EQ(declaring_dex_file_, info.declaring_dex_file_);
+    CHECK_EQ(direct_code_, info.direct_code_);
+    CHECK_EQ(direct_method_, info.direct_method_);
+    CHECK_EQ(target_dex_file_, info.target_dex_file_);
+    CHECK_EQ(target_method_idx_, info.target_method_idx_);
+    CHECK_EQ(vtable_idx_, info.vtable_idx_);
+    CHECK_EQ(stats_flags_, info.stats_flags_);
   }
 
  private:
@@ -190,6 +215,7 @@ class MirMethodLoweringInfo : public MirMethodInfo {
   uint16_t target_method_idx_;
   uint16_t vtable_idx_;
   int stats_flags_;
+  bool is_quick_;
 
   friend class MirOptimizationTest;
 };

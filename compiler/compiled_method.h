@@ -27,10 +27,6 @@
 #include "utils/array_ref.h"
 #include "utils/swap_space.h"
 
-namespace llvm {
-  class Function;
-}  // namespace llvm
-
 namespace art {
 
 class CompilerDriver;
@@ -56,8 +52,8 @@ class CompiledCode {
   // To align an offset from a page-aligned value to make it suitable
   // for code storage. For example on ARM, to ensure that PC relative
   // valu computations work out as expected.
-  uint32_t AlignCode(uint32_t offset) const;
-  static uint32_t AlignCode(uint32_t offset, InstructionSet instruction_set);
+  size_t AlignCode(size_t offset) const;
+  static size_t AlignCode(size_t offset, InstructionSet instruction_set);
 
   // returns the difference between the code address and a usable PC.
   // mainly to cope with kThumb2 where the lower bit must be set.
@@ -347,9 +343,9 @@ class CompiledMethod FINAL : public CompiledCode {
     return mapping_table_;
   }
 
-  const SwapVector<uint8_t>& GetVmapTable() const {
+  const SwapVector<uint8_t>* GetVmapTable() const {
     DCHECK(vmap_table_ != nullptr);
-    return *vmap_table_;
+    return vmap_table_;
   }
 
   SwapVector<uint8_t> const* GetGcMap() const {

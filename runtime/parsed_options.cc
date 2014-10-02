@@ -347,19 +347,20 @@ bool ParsedOptions::ProcessSpecialOptions(const RuntimeOptions& options,
 
 bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognized,
                           RuntimeArgumentMap* runtime_options) {
-//  gLogVerbosity.class_linker = true;  // TODO: don't check this in!
-//  gLogVerbosity.compiler = true;  // TODO: don't check this in!
-//  gLogVerbosity.gc = true;  // TODO: don't check this in!
-//  gLogVerbosity.heap = true;  // TODO: don't check this in!
-//  gLogVerbosity.jdwp = true;  // TODO: don't check this in!
-//  gLogVerbosity.jni = true;  // TODO: don't check this in!
-//  gLogVerbosity.monitor = true;  // TODO: don't check this in!
-//  gLogVerbosity.profiler = true;  // TODO: don't check this in!
-//  gLogVerbosity.signals = true;  // TODO: don't check this in!
-//  gLogVerbosity.startup = true;  // TODO: don't check this in!
-//  gLogVerbosity.third_party_jni = true;  // TODO: don't check this in!
-//  gLogVerbosity.threads = true;  // TODO: don't check this in!
-//  gLogVerbosity.verifier = true;  // TODO: don't check this in!
+  //  gLogVerbosity.class_linker = true;  // TODO: don't check this in!
+  //  gLogVerbosity.compiler = true;  // TODO: don't check this in!
+  //  gLogVerbosity.gc = true;  // TODO: don't check this in!
+  //  gLogVerbosity.heap = true;  // TODO: don't check this in!
+  //  gLogVerbosity.jdwp = true;  // TODO: don't check this in!
+  gLogVerbosity.jit = true;  // TODO: don't check this in!
+  //  gLogVerbosity.jni = true;  // TODO: don't check this in!
+  //  gLogVerbosity.monitor = true;  // TODO: don't check this in!
+  //  gLogVerbosity.profiler = true;  // TODO: don't check this in!
+  //  gLogVerbosity.signals = true;  // TODO: don't check this in!
+  //  gLogVerbosity.startup = true;  // TODO: don't check this in!
+  //  gLogVerbosity.third_party_jni = true;  // TODO: don't check this in!
+  //  gLogVerbosity.threads = true;  // TODO: don't check this in!
+  //  gLogVerbosity.verifier = true;  // TODO: don't check this in!
 
   for (size_t i = 0; i < options.size(); ++i) {
     if (true && options[0].first == "-Xzygote") {
