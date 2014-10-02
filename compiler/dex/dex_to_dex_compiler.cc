@@ -104,10 +104,6 @@ void DexCompiler::Compile() {
         CompileReturnVoid(inst, dex_pc);
         break;
 
-      case Instruction::CHECK_CAST:
-        inst = CompileCheckCast(inst, dex_pc);
-        break;
-
       case Instruction::IGET:
         CompileInstanceFieldAccess(inst, dex_pc, Instruction::IGET_QUICK, false);
         break;
@@ -118,6 +114,26 @@ void DexCompiler::Compile() {
 
       case Instruction::IGET_OBJECT:
         CompileInstanceFieldAccess(inst, dex_pc, Instruction::IGET_OBJECT_QUICK, false);
+        break;
+
+      case Instruction::IPUT:
+        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_QUICK, true);
+        break;
+
+      case Instruction::IPUT_WIDE:
+        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_WIDE_QUICK, true);
+        break;
+
+      case Instruction::IPUT_OBJECT:
+        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_OBJECT_QUICK, true);
+        break;
+
+      case Instruction::IPUT_BOOLEAN:
+        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_BOOLEAN_QUICK, true);
+        break;
+
+      case Instruction::IPUT_BYTE:
+        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_BYTE_QUICK, true);
         break;
 
       case Instruction::IGET_BOOLEAN:
@@ -136,18 +152,6 @@ void DexCompiler::Compile() {
         CompileInstanceFieldAccess(inst, dex_pc, Instruction::IGET_SHORT_QUICK, false);
         break;
 
-      case Instruction::IPUT:
-        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_QUICK, true);
-        break;
-
-      case Instruction::IPUT_BOOLEAN:
-        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_BOOLEAN_QUICK, true);
-        break;
-
-      case Instruction::IPUT_BYTE:
-        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_BYTE_QUICK, true);
-        break;
-
       case Instruction::IPUT_CHAR:
         CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_CHAR_QUICK, true);
         break;
@@ -156,20 +160,16 @@ void DexCompiler::Compile() {
         CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_SHORT_QUICK, true);
         break;
 
-      case Instruction::IPUT_WIDE:
-        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_WIDE_QUICK, true);
-        break;
-
-      case Instruction::IPUT_OBJECT:
-        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_OBJECT_QUICK, true);
-        break;
-
       case Instruction::INVOKE_VIRTUAL:
         CompileInvokeVirtual(inst, dex_pc, Instruction::INVOKE_VIRTUAL_QUICK, false);
         break;
 
       case Instruction::INVOKE_VIRTUAL_RANGE:
         CompileInvokeVirtual(inst, dex_pc, Instruction::INVOKE_VIRTUAL_RANGE_QUICK, true);
+        break;
+
+      case Instruction::CHECK_CAST:
+        inst = CompileCheckCast(inst, dex_pc);
         break;
 
       default:
@@ -252,10 +252,8 @@ void DexCompiler::CompileInstanceFieldAccess(Instruction* inst,
   }
 }
 
-void DexCompiler::CompileInvokeVirtual(Instruction* inst,
-                                uint32_t dex_pc,
-                                Instruction::Code new_opcode,
-                                bool is_range) {
+void DexCompiler::CompileInvokeVirtual(Instruction* inst, uint32_t dex_pc,
+                                       Instruction::Code new_opcode, bool is_range) {
   if (!kEnableQuickening || !PerformOptimizations()) {
     return;
   }

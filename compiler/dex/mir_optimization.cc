@@ -1185,12 +1185,13 @@ bool MIRGraph::EliminateClassInitChecksGate() {
               temp_.cice.indexes[mir->offset / 2u] = index;
             }
           } else if (IsInstructionInvokeStatic(mir->dalvikInsn.opcode)) {
-            const MirMethodLoweringInfo& method_info = GetMethodLoweringInfo(mir);
-            DCHECK(method_info.IsStatic());
-            if (method_info.FastPath() && !method_info.IsReferrersClass()) {
+            const MirMethodLoweringInfo* method_info = GetMethodLoweringInfo(mir);
+            DCHECK(method_info != nullptr);
+            DCHECK(method_info->IsStatic());
+            if (method_info->FastPath() && !method_info->IsReferrersClass()) {
               MapEntry entry = {
-                  method_info.DeclaringDexFile(),
-                  method_info.DeclaringClassIndex(),
+                  method_info->DeclaringDexFile(),
+                  method_info->DeclaringClassIndex(),
                   static_cast<uint16_t>(class_to_index_map.size())
               };
               uint16_t index = class_to_index_map.insert(entry).first->index;
@@ -1401,8 +1402,8 @@ void MIRGraph::ComputeInlineIFieldLoweringInfo(uint16_t field_idx, MIR* invoke, 
     return;
   }
 
-  const MirMethodLoweringInfo& method_info = GetMethodLoweringInfo(invoke);
-  MethodReference target = method_info.GetTargetMethod();
+  const MirMethodLoweringInfo* method_info = GetMethodLoweringInfo(invoke);
+  MethodReference target = method_info->GetTargetMethod();
   DexCompilationUnit inlined_unit(
       cu_, cu_->class_loader, cu_->class_linker, *target.dex_file,
       nullptr /* code_item not used */, 0u /* class_def_idx not used */, target.dex_method_index,
@@ -1456,18 +1457,19 @@ void MIRGraph::InlineSpecialMethods(BasicBlock* bb) {
     if (!(mir->dalvikInsn.FlagsOf() & Instruction::kInvoke)) {
       continue;
     }
-    const MirMethodLoweringInfo& method_info = GetMethodLoweringInfo(mir);
-    if (!method_info.FastPath()) {
+    const MirMethodLoweringInfo* method_info = GetMethodLoweringInfo(mir);
+    DCHECK(method_info != nullptr);
+    if (method_info->FastPath()) {
       continue;
     }
 
-    InvokeType sharp_type = method_info.GetSharpType();
+    InvokeType sharp_type = method_info->GetSharpType();
     if ((sharp_type != kDirect) && (sharp_type != kStatic)) {
       continue;
     }
 
     if (sharp_type == kStatic) {
-      bool needs_clinit = !method_info.IsClassInitialized() &&
+      bool needs_clinit = !method_info->IsClassInitialized() &&
           ((mir->optimization_flags & MIR_CLASS_IS_INITIALIZED) == 0);
       if (needs_clinit) {
         continue;
@@ -1475,11 +1477,11 @@ void MIRGraph::InlineSpecialMethods(BasicBlock* bb) {
     }
 
     DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
-    MethodReference target = method_info.GetTargetMethod();
+    MethodReference target = method_info->GetTargetMethod();
     if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(target.dex_file)
             ->GenInline(this, bb, mir, target.dex_method_index)) {
       if (cu_->verbose || cu_->print_pass) {
-        LOG(INFO) << "SpecialMethodInliner: Inlined " << method_info.GetInvokeType() << " ("
+        LOG(INFO) << "SpecialMethodInliner: Inlined " << method_info->GetInvokeType() << " ("
             << sharp_type << ") call to \"" << PrettyMethod(target.dex_method_index, *target.dex_file)
             << "\" from \"" << PrettyMethod(cu_->method_idx, *cu_->dex_file)
             << "\" @0x" << std::hex << mir->offset;

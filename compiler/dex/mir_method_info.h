@@ -46,6 +46,9 @@ class MirMethodInfo {
   const DexFile* DeclaringDexFile() const {
     return declaring_dex_file_;
   }
+  void SetDeclaringDexFile(const DexFile* dex_file) {
+    declaring_dex_file_ = dex_file;
+  }
 
   uint16_t DeclaringClassIndex() const {
     return declaring_class_idx_;
@@ -157,6 +160,20 @@ class MirMethodLoweringInfo : public MirMethodInfo {
 
   int StatsFlags() const {
     return stats_flags_;
+  }
+
+  void CheckEquals(const MirMethodLoweringInfo& info) const {
+    CHECK_EQ(method_idx_, info.method_idx_);
+    CHECK_EQ(flags_, info.flags_);
+    CHECK_EQ(declaring_method_idx_, info.declaring_method_idx_);
+    CHECK_EQ(declaring_class_idx_, info.declaring_class_idx_);
+    CHECK_EQ(declaring_dex_file_, info.declaring_dex_file_);
+    CHECK_EQ(direct_code_, info.direct_code_);
+    CHECK_EQ(direct_method_, info.direct_method_);
+    CHECK_EQ(target_dex_file_, info.target_dex_file_);
+    CHECK_EQ(target_method_idx_, info.target_method_idx_);
+    CHECK_EQ(vtable_idx_, info.vtable_idx_);
+    CHECK_EQ(stats_flags_, info.stats_flags_);
   }
 
  private:
