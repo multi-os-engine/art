@@ -107,8 +107,11 @@ class CompilerDriver {
                   TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
+  CompiledMethod* CompileMethod(Thread* self, mirror::ArtMethod*)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) WARN_UNUSED;
+
   // Compile a single Method.
-  void CompileOne(mirror::ArtMethod* method, TimingLogger* timings)
+  void CompileOne(Thread* self, mirror::ArtMethod* method, TimingLogger* timings)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   VerificationResults* GetVerificationResults() const {
@@ -171,6 +174,9 @@ class CompilerDriver {
       LOCKS_EXCLUDED(compiled_methods_lock_);
   size_t GetNonRelativeLinkerPatchCount() const
       LOCKS_EXCLUDED(compiled_methods_lock_);
+
+  // Remove and delete a compiled method.
+  void RemoveCompiledMethod(const MethodReference& method_ref);
 
   void AddRequiresConstructorBarrier(Thread* self, const DexFile* dex_file,
                                      uint16_t class_def_index);
@@ -295,6 +301,18 @@ class CompilerDriver {
   void ProcessedStaticField(bool resolved, bool local);
   void ProcessedInvoke(InvokeType invoke_type, int flags);
 
+  // Compute the field index for an offset, used for compiling quickend puts and gets.
+  // TODO: This doesn't work.
+  uint16_t ComputeFieldIndex(const DexCompilationUnit* mUnit, uint32_t field_offset)
+      LOCKS_EXCLUDED(Locks::mutator_lock_);
+
+  void ComputeFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit,
+                        const ScopedObjectAccess& soa, bool is_static,
+                        mirror::ArtField** resolved_field,
+                        mirror::Class** referrer_class,
+                        mirror::DexCache** dex_cache)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Can we fast path instance field access? Computes field's offset and volatility.
   bool ComputeInstanceFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit, bool is_put,
                                 MemberOffset* field_offset, bool* is_volatile)
@@ -378,6 +396,13 @@ class CompilerDriver {
 
   CumulativeLogger* GetTimingsLogger() const {
     return timings_logger_;
+  }
+
+  void SetDedupeEnabled(bool enable_dedupe) {
+    enable_dedupe_ = enable_dedupe;
+  }
+  bool DedupeEnabled() const {
+    return enable_dedupe_;
   }
 
   // Checks if class specified by type_idx is one of the image_classes_
@@ -484,7 +509,7 @@ class CompilerDriver {
                       const std::vector<const DexFile*>& dex_files,
                       ThreadPool* thread_pool, TimingLogger* timings)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
-  void CompileMethod(const DexFile::CodeItem* code_item, uint32_t access_flags,
+  void CompileMethod(Thread* self, const DexFile::CodeItem* code_item, uint32_t access_flags,
                      InvokeType invoke_type, uint16_t class_def_idx, uint32_t method_idx,
                      jobject class_loader, const DexFile& dex_file,
                      DexToDexCompilationLevel dex_to_dex_compilation_level,
@@ -545,6 +570,7 @@ class CompilerDriver {
   class AOTCompilationStats;
   std::unique_ptr<AOTCompilationStats> stats_;
 
+  bool enable_dedupe_;
   bool dump_stats_;
   const bool dump_passes_;
   const std::string& dump_cfg_file_name_;
