@@ -390,6 +390,10 @@ void Instrumentation::AddListener(InstrumentationListener* listener, uint32_t ev
     method_unwind_listeners_.push_back(listener);
     have_method_unwind_listeners_ = true;
   }
+  if ((events & kBackwardBranch) != 0) {
+    backward_branch_listeners_.push_back(listener);
+    have_backward_branch_listeners_ = true;
+  }
   if ((events & kDexPcMoved) != 0) {
     std::list<InstrumentationListener*>* modified;
     if (have_dex_pc_listeners_) {
@@ -889,6 +893,13 @@ void Instrumentation::DexPcMovedEventImpl(Thread* thread, mirror::Object* this_o
     for (InstrumentationListener* listener : *original.get()) {
       listener->DexPcMoved(thread, this_object, method, dex_pc);
     }
+  }
+}
+
+void Instrumentation::BackwardBranchImpl(Thread* thread, mirror::ArtMethod* method,
+                                         int32_t offset) const {
+  for (InstrumentationListener* listener : backward_branch_listeners_) {
+    listener->BackwardBranch(thread, method, offset);
   }
 }
 

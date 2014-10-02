@@ -51,19 +51,19 @@ void CommonCompilerTest::MakeExecutable(mirror::ArtMethod* method) {
     const SwapVector<uint8_t>* code = compiled_method->GetQuickCode();
     uint32_t code_size = code->size();
     CHECK_NE(0u, code_size);
-    const SwapVector<uint8_t>& vmap_table = compiled_method->GetVmapTable();
-    uint32_t vmap_table_offset = vmap_table.empty() ? 0u
-        : sizeof(OatQuickMethodHeader) + vmap_table.size();
+    const SwapVector<uint8_t>* vmap_table = compiled_method->GetVmapTable();
+    uint32_t vmap_table_offset = vmap_table->empty() ? 0u
+        : sizeof(OatQuickMethodHeader) + vmap_table->size();
     const SwapVector<uint8_t>* mapping_table = compiled_method->GetMappingTable();
     bool mapping_table_used = mapping_table != nullptr && !mapping_table->empty();
     size_t mapping_table_size = mapping_table_used ? mapping_table->size() : 0U;
     uint32_t mapping_table_offset = !mapping_table_used ? 0u
-        : sizeof(OatQuickMethodHeader) + vmap_table.size() + mapping_table_size;
+        : sizeof(OatQuickMethodHeader) + vmap_table->size() + mapping_table_size;
     const SwapVector<uint8_t>* gc_map = compiled_method->GetGcMap();
     bool gc_map_used = gc_map != nullptr && !gc_map->empty();
     size_t gc_map_size = gc_map_used ? gc_map->size() : 0U;
     uint32_t gc_map_offset = !gc_map_used ? 0u
-        : sizeof(OatQuickMethodHeader) + vmap_table.size() + mapping_table_size + gc_map_size;
+        : sizeof(OatQuickMethodHeader) + vmap_table->size() + mapping_table_size + gc_map_size;
     OatQuickMethodHeader method_header(mapping_table_offset, vmap_table_offset, gc_map_offset,
                                        compiled_method->GetFrameSizeInBytes(),
                                        compiled_method->GetCoreSpillMask(),
@@ -71,14 +71,14 @@ void CommonCompilerTest::MakeExecutable(mirror::ArtMethod* method) {
 
     header_code_and_maps_chunks_.push_back(std::vector<uint8_t>());
     std::vector<uint8_t>* chunk = &header_code_and_maps_chunks_.back();
-    size_t size = sizeof(method_header) + code_size + vmap_table.size() + mapping_table_size +
+    size_t size = sizeof(method_header) + code_size + vmap_table->size() + mapping_table_size +
         gc_map_size;
     size_t code_offset = compiled_method->AlignCode(size - code_size);
     size_t padding = code_offset - (size - code_size);
     chunk->reserve(padding + size);
     chunk->resize(sizeof(method_header));
     memcpy(&(*chunk)[0], &method_header, sizeof(method_header));
-    chunk->insert(chunk->begin(), vmap_table.begin(), vmap_table.end());
+    chunk->insert(chunk->begin(), vmap_table->begin(), vmap_table->end());
     if (mapping_table_used) {
       chunk->insert(chunk->begin(), mapping_table->begin(), mapping_table->end());
     }
@@ -164,7 +164,7 @@ void CommonCompilerTest::SetUp() {
                                               compiler_kind, instruction_set,
                                               instruction_set_features_.get(),
                                               true, new std::set<std::string>, nullptr,
-                                              2, true, true, timer_.get(), -1, ""));
+                                              2, true, true, "", timer_.get(), -1, ""));
   }
   // We typically don't generate an image in unit tests, disable this optimization by default.
   compiler_driver_->SetSupportBootImageFixup(false);
@@ -211,7 +211,7 @@ void CommonCompilerTest::CompileMethod(mirror::ArtMethod* method) {
   CHECK(method != nullptr);
   TimingLogger timings("CommonTest::CompileMethod", false, false);
   TimingLogger::ScopedTiming t(__FUNCTION__, &timings);
-  compiler_driver_->CompileOne(method, &timings);
+  compiler_driver_->CompileOne(Thread::Current(), method, &timings);
   TimingLogger::ScopedTiming t2("MakeExecutable", &timings);
   MakeExecutable(method);
 }

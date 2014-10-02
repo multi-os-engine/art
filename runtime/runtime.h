@@ -44,6 +44,9 @@ namespace art {
 namespace gc {
   class Heap;
 }  // namespace gc
+namespace jit {
+  class JitInstrumentationCache;
+}  // namespace jit
 namespace mirror {
   class ArtMethod;
   class ClassLoader;
@@ -90,12 +93,16 @@ class Runtime {
   static bool Create(const RuntimeOptions& options, bool ignore_unrecognized)
       SHARED_TRYLOCK_FUNCTION(true, Locks::mutator_lock_);
 
+  bool IsAotCompiler() const {
+    return jit_handle_ == nullptr && IsCompiler();
+  }
+
   bool IsCompiler() const {
     return compiler_callbacks_ != nullptr;
   }
 
   bool CanRelocate() const {
-    return !IsCompiler() || compiler_callbacks_->IsRelocationPossible();
+    return !IsAotCompiler() || compiler_callbacks_->IsRelocationPossible();
   }
 
   bool ShouldRelocate() const {
@@ -385,6 +392,9 @@ class Runtime {
 
   mirror::ArtMethod* CreateCalleeSaveMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  bool JitCompileMethod(mirror::ArtMethod* method, Thread* self)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   int32_t GetStat(int kind);
 
   RuntimeStats* GetStats() {
@@ -404,6 +414,13 @@ class Runtime {
     kUnload,
     kInitialize
   };
+
+  void JitLoad() NO_THREAD_SAFETY_ANALYSIS;
+
+  bool UseJit() const {
+    return jit_handle_ != NULL;
+  }
+
   void PreZygoteFork();
   bool InitZygote();
   void DidForkFromZygote(JNIEnv* env, NativeBridgeAction action, const char* isa);
@@ -568,6 +585,13 @@ class Runtime {
   std::string stack_trace_file_;
 
   JavaVMExt* java_vm_;
+
+  // JIT
+  void* jit_library_handle_;
+  void* jit_handle_;
+  void* (*jit_load_)(CompilerCallbacks**);
+  bool (*jit_compile_method_)(void*, mirror::ArtMethod*, Thread*);
+  std::unique_ptr<jit::JitInstrumentationCache> jit_instrumentation_cache_;
 
   // Fault message, printed when we get a SIGSEGV.
   Mutex fault_message_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;

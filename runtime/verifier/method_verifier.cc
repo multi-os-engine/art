@@ -111,6 +111,20 @@ static void SafelyMarkAllRegistersAsConflicts(MethodVerifier* verifier, Register
   reg_line->MarkAllRegistersAsConflicts(verifier);
 }
 
+MethodVerifier::FailureKind MethodVerifier::VerifyMethod(
+    mirror::ArtMethod* method, bool allow_soft_failures, std::string* /*error*/) {
+  Thread* self = Thread::Current();
+  StackHandleScope<3> hs(self);
+  mirror::Class* klass = method->GetDeclaringClass();
+  auto h_dex_cache(hs.NewHandle(klass->GetDexCache()));
+  auto h_class_loader(hs.NewHandle(klass->GetClassLoader()));
+  auto h_method = hs.NewHandle(method);
+  return VerifyMethod(self, method->GetDexMethodIndex(), method->GetDexFile(), h_dex_cache,
+                      h_class_loader, klass->GetClassDef(), method->GetCodeItem(), h_method,
+                      method->GetAccessFlags(), allow_soft_failures, false);
+}
+
+
 MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                         mirror::Class* klass,
                                                         bool allow_soft_failures,
@@ -136,7 +150,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
   }
   if (early_failure) {
     *error = "Verifier rejected class " + PrettyDescriptor(klass) + failure_message;
-    if (Runtime::Current()->IsCompiler()) {
+    if (Runtime::Current()->IsAotCompiler()) {
       ClassReference ref(&dex_file, klass->GetDexClassDefIndex());
       Runtime::Current()->GetCompilerCallbacks()->ClassRejected(ref);
     }
@@ -544,7 +558,7 @@ std::ostream& MethodVerifier::Fail(VerifyError error) {
     case VERIFY_ERROR_ACCESS_METHOD:
     case VERIFY_ERROR_INSTANTIATION:
     case VERIFY_ERROR_CLASS_CHANGE:
-      if (Runtime::Current()->IsCompiler() || !can_load_classes_) {
+      if (Runtime::Current()->IsAotCompiler() || !can_load_classes_) {
         // If we're optimistically running verification at compile time, turn NO_xxx, ACCESS_xxx,
         // class change and instantiation errors into soft verification errors so that we re-verify
         // at runtime. We may fail to find or to agree on access because of not yet available class
@@ -844,7 +858,7 @@ bool MethodVerifier::VerifyInstruction(const Instruction* inst, uint32_t code_of
       result = false;
       break;
   }
-  if (inst->GetVerifyIsRuntimeOnly() && Runtime::Current()->IsCompiler() && !verify_to_dump_) {
+  if (inst->GetVerifyIsRuntimeOnly() && Runtime::Current()->IsAotCompiler() && !verify_to_dump_) {
     Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "opcode only expected at runtime " << inst->Name();
     result = false;
   }

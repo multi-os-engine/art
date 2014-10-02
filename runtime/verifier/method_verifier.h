@@ -156,6 +156,9 @@ class MethodVerifier {
                                              uint32_t method_access_flags)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  static FailureKind VerifyMethod(mirror::ArtMethod* method, bool allow_soft_failures,
+                                  std::string* error) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   uint8_t EncodePcToReferenceMapData() const;
 
   uint32_t DexFileVersion() const {
