@@ -31,8 +31,8 @@ namespace art {
  */
 template <typename PassType>
 const Pass* GetPassInstance() {
-  static const PassType pass;
-  return &pass;
+  static const PassType* pass = new PassType;
+  return pass;
 }
 
 // Empty holder for the constructor.

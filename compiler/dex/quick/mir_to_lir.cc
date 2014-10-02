@@ -405,6 +405,8 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       GenMoveException(rl_dest);
       break;
 
+    case Instruction::RETURN_VOID_BARRIER:
+      // Fall through.
     case Instruction::RETURN_VOID:
       if (((cu_->access_flags & kAccConstructor) != 0) &&
           cu_->compiler_driver->RequiresConstructorBarrier(Thread::Current(), cu_->dex_file,
@@ -655,10 +657,14 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       GenArrayPut(opt_flags, kUnsignedByte, rl_src[1], rl_src[2], rl_src[0], 0, false);
       break;
 
+    case Instruction::IGET_OBJECT_QUICK:
+      // Fall-through.
     case Instruction::IGET_OBJECT:
       GenIGet(mir, opt_flags, kReference, Primitive::kPrimNot, rl_dest, rl_src[0]);
       break;
 
+    case Instruction::IGET_WIDE_QUICK:
+      // Fall-through.
     case Instruction::IGET_WIDE:
       // kPrimLong and kPrimDouble share the same entrypoints.
       if (rl_dest.fp) {
@@ -668,6 +674,8 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       }
       break;
 
+    case Instruction::IGET_QUICK:
+      // Fall-through.
     case Instruction::IGET:
       if (rl_dest.fp) {
         GenIGet(mir, opt_flags, kSingle, Primitive::kPrimFloat, rl_dest, rl_src[0]);
@@ -692,14 +700,20 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       GenIGet(mir, opt_flags, kSignedByte, Primitive::kPrimByte, rl_dest, rl_src[0]);
       break;
 
+    case Instruction::IPUT_WIDE_QUICK:
+      // Fall-through.
     case Instruction::IPUT_WIDE:
       GenIPut(mir, opt_flags, rl_src[0].fp ? kDouble : k64, rl_src[0], rl_src[1]);
       break;
 
+    case Instruction::IPUT_OBJECT_QUICK:
+      // Fall-through.
     case Instruction::IPUT_OBJECT:
       GenIPut(mir, opt_flags, kReference, rl_src[0], rl_src[1]);
       break;
 
+    case Instruction::IPUT_QUICK:
+      // Fall-through.
     case Instruction::IPUT:
       GenIPut(mir, opt_flags, rl_src[0].fp ? kSingle : k32, rl_src[0], rl_src[1]);
       break;
@@ -786,9 +800,14 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kDirect, true));
       break;
 
+    case Instruction::INVOKE_VIRTUAL_QUICK:
+      // Fall-through.
     case Instruction::INVOKE_VIRTUAL:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kVirtual, false));
       break;
+
+    case Instruction::INVOKE_VIRTUAL_RANGE_QUICK:
+    // Fall-through.
     case Instruction::INVOKE_VIRTUAL_RANGE:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kVirtual, true));
       break;

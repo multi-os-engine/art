@@ -586,6 +586,7 @@ void BuildQuickShadowFrameVisitor::Visit() {
 extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Thread* self,
                                                 StackReference<mirror::ArtMethod>* sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  // LOG(INFO) << "Entering: " << PrettyMethod(method) << " @ " << method->GetEntryPointFromQuickCompiledCode();
   // Ensure we don't get thread suspension until the object arguments are safely in the shadow
   // frame.
   ScopedQuickEntrypointChecks sqec(self);
@@ -598,7 +599,7 @@ extern "C" uint64_t artQuickToInterpreterBridge(mirror::ArtMethod* method, Threa
     const char* old_cause = self->StartAssertNoThreadSuspension(
         "Building interpreter shadow frame");
     const DexFile::CodeItem* code_item = method->GetCodeItem();
-    DCHECK(code_item != nullptr) << PrettyMethod(method);
+    DCHECK(code_item != nullptr) << method << " " << PrettyMethod(method) << " entry " << method->GetEntryPointFromQuickCompiledCode() << " " << GetQuickToInterpreterBridge();
     uint16_t num_regs = code_item->registers_size_;
     void* memory = alloca(ShadowFrame::ComputeSize(num_regs));
     // No last shadow coming from quick.
@@ -937,14 +938,17 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
     linker->EnsureInitialized(soa.Self(), called_class, true, true);
     if (LIKELY(called_class->IsInitialized())) {
       code = called->GetEntryPointFromQuickCompiledCode();
+      CHECK_EQ(code == nullptr, self->IsExceptionPending());
     } else if (called_class->IsInitializing()) {
       if (invoke_type == kStatic) {
         // Class is still initializing, go to oat and grab code (trampoline must be left in place
         // until class is initialized to stop races between threads).
         code = linker->GetQuickOatCodeFor(called);
+        CHECK_EQ(code == nullptr, self->IsExceptionPending());
       } else {
         // No trampoline for non-static methods.
         code = called->GetEntryPointFromQuickCompiledCode();
+        CHECK_EQ(code == nullptr, self->IsExceptionPending());
       }
     } else {
       DCHECK(called_class->IsErroneous());

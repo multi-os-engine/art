@@ -113,8 +113,8 @@ void DexCompiler::Compile() {
         break;
 
       case Instruction::IGET_WIDE:
-        CompileInstanceFieldAccess(inst, dex_pc, Instruction::IGET_WIDE_QUICK, false);
-        break;
+          CompileInstanceFieldAccess(inst, dex_pc, Instruction::IGET_WIDE_QUICK, false);
+          break;
 
       case Instruction::IGET_OBJECT:
         CompileInstanceFieldAccess(inst, dex_pc, Instruction::IGET_OBJECT_QUICK, false);
@@ -164,6 +164,7 @@ void DexCompiler::Compile() {
         CompileInstanceFieldAccess(inst, dex_pc, Instruction::IPUT_OBJECT_QUICK, true);
         break;
 
+#if 0
       case Instruction::INVOKE_VIRTUAL:
         CompileInvokeVirtual(inst, dex_pc, Instruction::INVOKE_VIRTUAL_QUICK, false);
         break;
@@ -171,6 +172,7 @@ void DexCompiler::Compile() {
       case Instruction::INVOKE_VIRTUAL_RANGE:
         CompileInvokeVirtual(inst, dex_pc, Instruction::INVOKE_VIRTUAL_RANGE_QUICK, true);
         break;
+#endif
 
       default:
         // Nothing to do.
@@ -252,10 +254,8 @@ void DexCompiler::CompileInstanceFieldAccess(Instruction* inst,
   }
 }
 
-void DexCompiler::CompileInvokeVirtual(Instruction* inst,
-                                uint32_t dex_pc,
-                                Instruction::Code new_opcode,
-                                bool is_range) {
+void DexCompiler::CompileInvokeVirtual(Instruction* inst, uint32_t dex_pc,
+                                       Instruction::Code new_opcode, bool is_range) {
   if (!kEnableQuickening || !PerformOptimizations()) {
     return;
   }

@@ -413,8 +413,8 @@ static const uint16_t kAnalysisAttributes[kMirOpLast] = {
   // 72 INVOKE_INTERFACE {vD, vE, vF, vG, vA}
   kAnInvoke | kAnHeavyWeight,
 
-  // 73 UNUSED_73
-  kAnNone,
+  // 73 RETURN_VOID_BARRIER
+  kAnBranch,
 
   // 74 INVOKE_VIRTUAL_RANGE {vCCCC .. vNNNN}
   kAnInvoke | kAnHeavyWeight,
@@ -749,22 +749,22 @@ static const uint16_t kAnalysisAttributes[kMirOpLast] = {
   // E2 USHR_INT_LIT8 vAA, vBB, #+CC
   kAnMath | kAnInt,
 
-  // E3 IGET_VOLATILE
+  // E3 IGET_QUICK
   kAnNone,
 
-  // E4 IPUT_VOLATILE
+  // E4 IGET_WIDE_QUICK
   kAnNone,
 
-  // E5 SGET_VOLATILE
+  // E5 IGET_OBJECT_QUICK
   kAnNone,
 
-  // E6 SPUT_VOLATILE
+  // E6 IPUT_QUICK
   kAnNone,
 
-  // E7 IGET_OBJECT_VOLATILE
+  // E7 IPUT_WIDE_QUICK
   kAnNone,
 
-  // E8 IGET_WIDE_VOLATILE
+  // E8 IPUT_OBJECT_QUICK
   kAnNone,
 
   // E9 IPUT_WIDE_VOLATILE
@@ -791,25 +791,25 @@ static const uint16_t kAnalysisAttributes[kMirOpLast] = {
   // F0 INVOKE_OBJECT_INIT_RANGE
   kAnInvoke | kAnHeavyWeight,
 
-  // F1 RETURN_VOID_BARRIER
-  kAnBranch,
-
-  // F2 IGET_QUICK
+  // F1 UNUSED_F1
   kAnNone,
 
-  // F3 IGET_WIDE_QUICK
+  // F2 IGET_VOLATILE
   kAnNone,
 
-  // F4 IGET_OBJECT_QUICK
+  // F3 IPUT_VOLATILE
   kAnNone,
 
-  // F5 IPUT_QUICK
+  // F4 SGET_VOLATILE
   kAnNone,
 
-  // F6 IPUT_WIDE_QUICK
+  // F5 UNUSED_F5
   kAnNone,
 
-  // F7 IPUT_OBJECT_QUICK
+  // F6 UNUSED_F6
+  kAnNone,
+
+  // F7 UNUSED_F7
   kAnNone,
 
   // F8 INVOKE_VIRTUAL_QUICK
