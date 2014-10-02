@@ -577,7 +577,7 @@ const OatFile::OatMethod OatFile::OatClass::GetOatMethod(uint32_t method_index) 
   }
   if (oat_file_->IsExecutable() ||
       Runtime::Current() == nullptr ||        // This case applies for oatdump.
-      Runtime::Current()->IsCompiler()) {
+      Runtime::Current()->IsAotCompiler()) {
     return OatMethod(oat_file_->Begin(), oat_method_offsets->code_offset_);
   } else {
     // We aren't allowed to use the compiled code. We just force it down the interpreted version.

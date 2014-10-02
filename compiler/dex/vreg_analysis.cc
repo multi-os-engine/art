@@ -259,8 +259,8 @@ bool MIRGraph::InferTypeAndSize(BasicBlock* bb, MIR* mir, bool changed) {
     if ((flags & Instruction::kInvoke) &&
         (attrs & (DF_FORMAT_35C | DF_FORMAT_3RC))) {
       DCHECK_EQ(next, 0);
-      int target_idx = mir->dalvikInsn.vB;
-      const char* shorty = GetShortyFromTargetIdx(target_idx);
+      const char* shorty =
+          GetShortyFromMethodReference(GetMethodLoweringInfo(mir).GetTargetMethod());
       // Handle result type if floating point
       if ((shorty[0] == 'F') || (shorty[0] == 'D')) {
         MIR* move_result_mir = FindMoveResult(bb, mir);

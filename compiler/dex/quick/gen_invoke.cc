@@ -864,11 +864,12 @@ RegLocation Mir2Lir::InlineTarget(CallInfo* info) {
   RegLocation res;
   if (info->result.location == kLocInvalid) {
     // If result is unused, return a sink target based on type of invoke target.
-    res = GetReturn(ShortyToRegClass(mir_graph_->GetShortyFromTargetIdx(info->index)[0]));
+    res = GetReturn(
+        ShortyToRegClass(mir_graph_->GetShortyFromMethodReference(info->method_ref)[0]));
   } else {
     res = info->result;
     DCHECK_EQ(LocToRegClass(res),
-              ShortyToRegClass(mir_graph_->GetShortyFromTargetIdx(info->index)[0]));
+              ShortyToRegClass(mir_graph_->GetShortyFromMethodReference(info->method_ref)[0]));
   }
   return res;
 }
@@ -877,11 +878,12 @@ RegLocation Mir2Lir::InlineTargetWide(CallInfo* info) {
   RegLocation res;
   if (info->result.location == kLocInvalid) {
     // If result is unused, return a sink target based on type of invoke target.
-    res = GetReturnWide(ShortyToRegClass(mir_graph_->GetShortyFromTargetIdx(info->index)[0]));
+    res = GetReturnWide(ShortyToRegClass(
+        mir_graph_->GetShortyFromMethodReference(info->method_ref)[0]));
   } else {
     res = info->result;
     DCHECK_EQ(LocToRegClass(res),
-              ShortyToRegClass(mir_graph_->GetShortyFromTargetIdx(info->index)[0]));
+              ShortyToRegClass(mir_graph_->GetShortyFromMethodReference(info->method_ref)[0]));
   }
   return res;
 }
