@@ -257,11 +257,17 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
   // Default to number of processors minus one since the main GC thread also does work.
   parallel_gc_threads_ = sysconf(_SC_NPROCESSORS_CONF) - 1;
 
+  use_jit_ = true;
+#if ART_JIT
+  use_jit_ = true;
+#endif
+
 //  gLogVerbosity.class_linker = true;  // TODO: don't check this in!
 //  gLogVerbosity.compiler = true;  // TODO: don't check this in!
 //  gLogVerbosity.gc = true;  // TODO: don't check this in!
 //  gLogVerbosity.heap = true;  // TODO: don't check this in!
 //  gLogVerbosity.jdwp = true;  // TODO: don't check this in!
+  gLogVerbosity.jit = true;  // TODO: don't check this in!
 //  gLogVerbosity.jni = true;  // TODO: don't check this in!
 //  gLogVerbosity.monitor = true;  // TODO: don't check this in!
 //  gLogVerbosity.profiler = true;  // TODO: don't check this in!
@@ -453,6 +459,13 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
       image_dex2oat_enabled_ = true;
     } else if (option == "-Xint") {
       interpreter_only_ = true;
+    } else if (option == "-Xjit") {
+      use_jit_ = true;
+    } else if (option == "-Xnojit") {
+      use_jit_ = false;
+    } else if (option == "use_jit") {
+      use_jit_ = static_cast<bool>(const_cast<void*>(options[i].second));
+      LOG(INFO) << "use_jit set to " << use_jit_;
     } else if (StartsWith(option, "-Xgc:")) {
       if (!ParseXGcOption(option)) {
         return false;
@@ -516,7 +529,9 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
           gLogVerbosity.heap = true;
         } else if (verbose_options[j] == "jdwp") {
           gLogVerbosity.jdwp = true;
-        } else if (verbose_options[j] == "jni") {
+        } else if (verbose_options[i] == "jit") {
+          gLogVerbosity.jit = true;
+        } else if (verbose_options[i] == "jni") {
           gLogVerbosity.jni = true;
         } else if (verbose_options[j] == "monitor") {
           gLogVerbosity.monitor = true;
