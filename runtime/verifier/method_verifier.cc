@@ -43,7 +43,6 @@
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
 #include "handle_scope-inl.h"
-#include "verifier/dex_gc_map.h"
 
 namespace art {
 namespace verifier {
