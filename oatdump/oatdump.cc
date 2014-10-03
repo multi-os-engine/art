@@ -32,7 +32,7 @@
 #include "disassembler.h"
 #include "elf_builder.h"
 #include "field_helper.h"
-#include "gc_map.h"
+#include "gc_map-inl.h"
 #include "gc/space/image_space.h"
 #include "gc/space/large_object_space.h"
 #include "gc/space/space-inl.h"
@@ -55,7 +55,6 @@
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
 #include "thread_list.h"
-#include "verifier/dex_gc_map.h"
 #include "verifier/method_verifier.h"
 #include "vmap_table.h"
 #include "well_known_classes.h"
@@ -995,10 +994,11 @@ class OatDumper {
 
   void DumpGcMapRegisters(std::ostream& os, const OatFile::OatMethod& oat_method,
                           const DexFile::CodeItem* code_item,
-                          size_t num_regs, const uint8_t* reg_bitmap) {
+                          GcMap* gc_map, size_t entry) {
+    size_t bit_index = gc_map->BitmapPosForIndex(entry);
     bool first = true;
-    for (size_t reg = 0; reg < num_regs; reg++) {
-      if (((reg_bitmap[reg / 8] >> (reg % 8)) & 0x01) != 0) {
+    for (size_t reg = 0; reg < gc_map->BitmapBits(); reg++) {
+      if (gc_map->GetBit(bit_index + reg)) {
         if (first) {
           os << "  v" << reg << " (";
           DescribeVReg(os, oat_method, code_item, reg, kReferenceVReg);
@@ -1023,24 +1023,22 @@ class OatDumper {
     if (gc_map_raw == nullptr) {
       return;  // No GC map.
     }
+    GcMap gc_map(gc_map_raw);
     const void* quick_code = oat_method.GetQuickCode();
-    if (quick_code != nullptr) {
-      NativePcOffsetToReferenceMap map(gc_map_raw);
-      for (size_t entry = 0; entry < map.NumEntries(); entry++) {
-        const uint8_t* native_pc = reinterpret_cast<const uint8_t*>(quick_code) +
-            map.GetNativePcOffset(entry);
+    for (size_t entry = 0; entry < gc_map.NumEntries(); entry++) {
+      size_t key = gc_map.GetKey(entry);
+      if (quick_code != nullptr) {
+        // If we have quick code then we are keyed off the native PC.
+        const uint8_t* native_pc = reinterpret_cast<const uint8_t*>(quick_code) + key;
         os << StringPrintf("%p", native_pc);
-        DumpGcMapRegisters(os, oat_method, code_item, map.RegWidth() * 8, map.GetBitMap(entry));
-      }
-    } else {
-      const void* portable_code = oat_method.GetPortableCode();
-      CHECK(portable_code != nullptr);
-      verifier::DexPcToReferenceMap map(gc_map_raw);
-      for (size_t entry = 0; entry < map.NumEntries(); entry++) {
-        uint32_t dex_pc = map.GetDexPc(entry);
+      } else {
+        // Must be portable.
+        const void* portable_code = oat_method.GetPortableCode();
+        CHECK(portable_code != nullptr);
+        const uint32_t dex_pc = entry;
         os << StringPrintf("0x%08x", dex_pc);
-        DumpGcMapRegisters(os, oat_method, code_item, map.RegWidth() * 8, map.GetBitMap(entry));
       }
+      DumpGcMapRegisters(os, oat_method, code_item, &gc_map, entry);
     }
   }
 
@@ -1099,13 +1097,12 @@ class OatDumper {
                                  const DexFile::CodeItem* code_item, size_t native_pc_offset) {
     const uint8_t* gc_map_raw = oat_method.GetNativeGcMap();
     if (gc_map_raw != nullptr) {
-      NativePcOffsetToReferenceMap map(gc_map_raw);
-      if (map.HasEntry(native_pc_offset)) {
-        size_t num_regs = map.RegWidth() * 8;
-        const uint8_t* reg_bitmap = map.FindBitMap(native_pc_offset);
+      GcMap gc_map(gc_map_raw);
+      size_t bit_index = gc_map.Find(native_pc_offset);
+      if (bit_index != 0) {  // Non zero means we have the entry.
         bool first = true;
-        for (size_t reg = 0; reg < num_regs; reg++) {
-          if (((reg_bitmap[reg / 8] >> (reg % 8)) & 0x01) != 0) {
+        for (size_t reg = 0; reg < gc_map.BitmapBits(); reg++) {
+          if (gc_map.GetBit(bit_index + reg)) {
             if (first) {
               os << "GC map objects:  v" << reg << " (";
               DescribeVReg(os, oat_method, code_item, reg, kReferenceVReg);

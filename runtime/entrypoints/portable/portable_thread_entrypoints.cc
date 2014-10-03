@@ -15,7 +15,7 @@
  */
 
 #include "mirror/art_method-inl.h"
-#include "verifier/dex_gc_map.h"
+#include "gc_map-inl.h"
 #include "stack.h"
 #include "thread-inl.h"
 
@@ -35,10 +35,11 @@ class ShadowFrameCopyVisitor : public StackVisitor {
       ShadowFrame* new_frame = ShadowFrame::Create(num_regs, NULL, method, dex_pc);
 
       const uint8_t* gc_map = method->GetNativeGcMap();
-      verifier::DexPcToReferenceMap dex_gc_map(gc_map);
-      const uint8_t* reg_bitmap = dex_gc_map.FindBitMap(dex_pc);
+      GcMap dex_gc_map(gc_map);
+      const size_t bitmap_offset = dex_gc_map.Find(dex_pc);
+      DCHECK_NE(bitmap_offset, 0U);
       for (size_t reg = 0; reg < num_regs; ++reg) {
-        if (TestBitmap(reg, reg_bitmap)) {
+        if (dex_gc_map.GetBit(bitmap_offset + reg)) {
           new_frame->SetVRegReference(reg, cur_frame->GetVRegReference(reg));
         } else {
           new_frame->SetVReg(reg, cur_frame->GetVReg(reg));
