@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <functional>
+
 #include "constant_propagation.h"
 #include "dead_code_elimination.h"
 #include "pretty_printer.h"
@@ -27,7 +29,9 @@ namespace art {
 static void TestCode(const uint16_t* data,
                      const std::string& expected_before,
                      const std::string& expected_after_cp,
-                     const std::string& expected_after_dce) {
+                     const std::string& expected_after_dce,
+                     std::function<bool(HGraph*)> check_after_cp  // NOLINT(readability/casting)
+                     = [](HGraph*) { return true; }) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = CreateCFG(&allocator, data);
@@ -47,6 +51,8 @@ static void TestCode(const uint16_t* data,
   printer_after_cp.VisitInsertionOrder();
   std::string actual_after_cp = printer_after_cp.str();
   ASSERT_EQ(expected_after_cp, actual_after_cp);
+
+  ASSERT_TRUE(check_after_cp(graph));
 
   DeadCodeElimination(graph).Run();
 
@@ -100,6 +106,12 @@ TEST(ConstantPropagation, IntConstantFoldingOnAddition1) {
   };
   std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
+  // Check the value of the computed constant.
+  auto check_after_cp = [](HGraph* graph) -> bool {
+    HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
+    return inst->IsIntConstant() && inst->AsIntConstant()->GetValue() == 3;
+  };
+
   // Expected difference after dead code elimination.
   diff_t expected_dce_diff = {
     { "  3: IntConstant\n", removed },
@@ -107,7 +119,11 @@ TEST(ConstantPropagation, IntConstantFoldingOnAddition1) {
   };
   std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
-  TestCode(data, expected_before, expected_after_cp, expected_after_dce);
+  TestCode(data,
+           expected_before,
+           expected_after_cp,
+           expected_after_dce,
+           check_after_cp);
 }
 
 /**
@@ -165,6 +181,16 @@ TEST(ConstantPropagation, IntConstantFoldingOnAddition2) {
   };
   std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
+  // Check the values of the computed constants.
+  auto check_after_cp = [](HGraph* graph) -> bool {
+    HInstruction* inst1 = graph->GetBlock(1)->GetFirstInstruction();
+    HInstruction* inst2 = inst1->GetNext();
+    HInstruction* inst3 = inst2->GetNext();
+    return inst1->IsIntConstant() && inst1->AsIntConstant()->GetValue() ==  3
+        && inst2->IsIntConstant() && inst2->AsIntConstant()->GetValue() ==  7
+        && inst3->IsIntConstant() && inst3->AsIntConstant()->GetValue() == 10;
+  };
+
   // Expected difference after dead code elimination.
   diff_t expected_dce_diff = {
     { "  3: IntConstant\n",  removed },
@@ -176,7 +202,11 @@ TEST(ConstantPropagation, IntConstantFoldingOnAddition2) {
   };
   std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
-  TestCode(data, expected_before, expected_after_cp, expected_after_dce);
+  TestCode(data,
+           expected_before,
+           expected_after_cp,
+           expected_after_dce,
+           check_after_cp);
 }
 
 /**
@@ -218,6 +248,12 @@ TEST(ConstantPropagation, IntConstantFoldingOnSubtraction) {
   };
   std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
+  // Check the value of the computed constant.
+  auto check_after_cp = [](HGraph* graph) -> bool {
+    HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
+    return inst->IsIntConstant() && inst->AsIntConstant()->GetValue() == 1;
+  };
+
   // Expected difference after dead code elimination.
   diff_t expected_dce_diff = {
     { "  3: IntConstant\n", removed },
@@ -225,7 +261,11 @@ TEST(ConstantPropagation, IntConstantFoldingOnSubtraction) {
   };
   std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
-  TestCode(data, expected_before, expected_after_cp, expected_after_dce);
+  TestCode(data,
+           expected_before,
+           expected_after_cp,
+           expected_after_dce,
+           check_after_cp);
 }
 
 #define SIX_REGISTERS_CODE_ITEM(...)                                     \
@@ -272,6 +312,12 @@ TEST(ConstantPropagation, LongConstantFoldingOnAddition) {
   };
   std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
+  // Check the value of the computed constant.
+  auto check_after_cp = [](HGraph* graph) -> bool {
+    HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
+    return inst->IsLongConstant() && inst->AsLongConstant()->GetValue() == 3;
+  };
+
   // Expected difference after dead code elimination.
   diff_t expected_dce_diff = {
     { "  6: LongConstant\n", removed },
@@ -279,7 +325,11 @@ TEST(ConstantPropagation, LongConstantFoldingOnAddition) {
   };
   std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
-  TestCode(data, expected_before, expected_after_cp, expected_after_dce);
+  TestCode(data,
+           expected_before,
+           expected_after_cp,
+           expected_after_dce,
+           check_after_cp);
 }
 
 /**
@@ -323,6 +373,12 @@ TEST(ConstantPropagation, LongConstantFoldingOnSubtraction) {
   };
   std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
+  // Check the value of the computed constant.
+  auto check_after_cp = [](HGraph* graph) -> bool {
+    HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
+    return inst->IsLongConstant() && inst->AsLongConstant()->GetValue() == 1;
+  };
+
   // Expected difference after dead code elimination.
   diff_t expected_dce_diff = {
     { "  6: LongConstant\n", removed },
@@ -330,7 +386,11 @@ TEST(ConstantPropagation, LongConstantFoldingOnSubtraction) {
   };
   std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
-  TestCode(data, expected_before, expected_after_cp, expected_after_dce);
+  TestCode(data,
+           expected_before,
+           expected_after_cp,
+           expected_after_dce,
+           check_after_cp);
 }
 
 /**
@@ -370,26 +430,26 @@ TEST(ConstantPropagation, IntConstantFoldingAndJumps) {
 
   std::string expected_before =
     "BasicBlock 0, succ: 1\n"
-    "  3: IntConstant [9]\n"
-    "  5: IntConstant [9]\n"
-    "  13: IntConstant [14]\n"
-    "  18: IntConstant [19]\n"
-    "  24: IntConstant [25]\n"
+    "  3: IntConstant [9]\n"            // v0 <- 0
+    "  5: IntConstant [9]\n"            // v1 <- 1
+    "  13: IntConstant [14]\n"          // const 3
+    "  18: IntConstant [19]\n"          // const 2
+    "  24: IntConstant [25]\n"          // const 4
     "  30: SuspendCheck\n"
     "  31: Goto 1\n"
     "BasicBlock 1, pred: 0, succ: 3\n"
-    "  9: Add(3, 5) [19]\n"
-    "  11: Goto 3\n"
-    "BasicBlock 2, pred: 3, succ: 4\n"
-    "  14: Add(19, 13) [25]\n"
-    "  16: Goto 4\n"
-    "BasicBlock 3, pred: 1, succ: 2\n"
-    "  19: Add(9, 18) [14]\n"
+    "  9: Add(3, 5) [19]\n"             // v2 <- v0 + v1 = 0 + 1 = 1
+    "  11: Goto 3\n"                    // goto L2
+    "BasicBlock 2, pred: 3, succ: 4\n"  // L1:
+    "  14: Add(19, 13) [25]\n"          // v1 <- v0 + 3 = 3 + 3 = 6
+    "  16: Goto 4\n"                    // goto L3
+    "BasicBlock 3, pred: 1, succ: 2\n"  // L2:
+    "  19: Add(9, 18) [14]\n"           // v0 <- v2 + 2 = 1 + 2 = 3
     "  21: SuspendCheck\n"
-    "  22: Goto 2\n"
-    "BasicBlock 4, pred: 2, succ: 5\n"
-    "  25: Add(14, 24) [28]\n"
-    "  28: Return(25)\n"
+    "  22: Goto 2\n"                    // goto L1
+    "BasicBlock 4, pred: 2, succ: 5\n"  // L3:
+    "  25: Add(14, 24) [28]\n"          // v2 <- v1 + 4 = 6 + 4 = 10
+    "  28: Return(25)\n"                // return v2
     "BasicBlock 5, pred: 4\n"
     "  29: Exit\n";
 
@@ -408,6 +468,18 @@ TEST(ConstantPropagation, IntConstantFoldingAndJumps) {
   };
   std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
+  // Check the values of the computed constants.
+  auto check_after_cp = [](HGraph* graph) -> bool {
+    HInstruction* inst1 = graph->GetBlock(1)->GetFirstInstruction();
+    HInstruction* inst2 = graph->GetBlock(2)->GetFirstInstruction();
+    HInstruction* inst3 = graph->GetBlock(3)->GetFirstInstruction();
+    HInstruction* inst4 = graph->GetBlock(4)->GetFirstInstruction();
+    return inst1->IsIntConstant() && inst1->AsIntConstant()->GetValue() ==  1
+        && inst2->IsIntConstant() && inst2->AsIntConstant()->GetValue() ==  6
+        && inst3->IsIntConstant() && inst3->AsIntConstant()->GetValue() ==  3
+        && inst4->IsIntConstant() && inst4->AsIntConstant()->GetValue() == 10;
+  };
+
   // Expected difference after dead code elimination.
   diff_t expected_dce_diff = {
     { "  3: IntConstant\n",     removed },
@@ -418,7 +490,11 @@ TEST(ConstantPropagation, IntConstantFoldingAndJumps) {
   };
   std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
-  TestCode(data, expected_before, expected_after_cp, expected_after_dce);
+  TestCode(data,
+           expected_before,
+           expected_after_cp,
+           expected_after_dce,
+           check_after_cp);
 }
 
 
@@ -473,6 +549,12 @@ TEST(ConstantPropagation, ConstantCondition) {
   };
   std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
+  // Check the values of the computed constants.
+  auto check_after_cp = [](HGraph* graph) -> bool {
+    HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
+    return inst->IsIntConstant() && inst->AsIntConstant()->GetValue() != 0;
+  };
+
   // Expected difference after dead code elimination.
   diff_t expected_dce_diff = {
     { "  3: IntConstant [15, 22]\n", "  3: IntConstant [22]\n" },
@@ -481,7 +563,11 @@ TEST(ConstantPropagation, ConstantCondition) {
   };
   std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
-  TestCode(data, expected_before, expected_after_cp, expected_after_dce);
+  TestCode(data,
+           expected_before,
+           expected_after_cp,
+           expected_after_dce,
+           check_after_cp);
 }
 
 }  // namespace art
