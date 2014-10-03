@@ -560,45 +560,63 @@ void LocationsBuilderX86::VisitIf(HIf* if_instr) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(if_instr, LocationSummary::kNoCall);
   HInstruction* cond = if_instr->InputAt(0);
-  DCHECK(cond->IsCondition());
-  HCondition* condition = cond->AsCondition();
-  if (condition->NeedsMaterialization()) {
+  if (cond->IsConstant()) {
     locations->SetInAt(0, Location::Any());
+  } else {
+    DCHECK(cond->IsCondition());
+    HCondition* condition = cond->AsCondition();
+    if (condition->NeedsMaterialization()) {
+      locations->SetInAt(0, Location::Any());
+    }
   }
 }
 
 void InstructionCodeGeneratorX86::VisitIf(HIf* if_instr) {
   HInstruction* cond = if_instr->InputAt(0);
-  DCHECK(cond->IsCondition());
-  HCondition* condition = cond->AsCondition();
-  if (condition->NeedsMaterialization()) {
-    // Moves do not affect the eflags register, so if the condition is evaluated
-    // just before the if, we don't need to evaluate it again.
-    if (!condition->IsBeforeWhenDisregardMoves(if_instr)) {
-      // Materialized condition, compare against 0
-      Location lhs = if_instr->GetLocations()->InAt(0);
-      if (lhs.IsRegister()) {
-        __ cmpl(lhs.AsX86().AsCpuRegister(), Immediate(0));
-      } else {
-        __ cmpl(Address(ESP, lhs.GetStackIndex()), Immediate(0));
-      }
+  if (cond->IsIntConstant()) {
+    // Constant condition, statically compare against 0.
+    if (cond->AsIntConstant()->GetValue() != 0) {
+      __ jmp(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
     }
-    __ j(kNotEqual,  codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  } else if (cond->IsLongConstant()) {
+    // Constant condition, statically compare against 0.
+    if (cond->AsLongConstant()->GetValue() != 0) {
+      __ jmp(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+    }
   } else {
-    Location lhs = condition->GetLocations()->InAt(0);
-    Location rhs = condition->GetLocations()->InAt(1);
-    // LHS is guaranteed to be in a register (see LocationsBuilderX86::VisitCondition).
-    if (rhs.IsRegister()) {
-      __ cmpl(lhs.AsX86().AsCpuRegister(), rhs.AsX86().AsCpuRegister());
-    } else if (rhs.IsConstant()) {
-      HIntConstant* instruction = rhs.GetConstant()->AsIntConstant();
-      Immediate imm(instruction->AsIntConstant()->GetValue());
-      __ cmpl(lhs.AsX86().AsCpuRegister(), imm);
+    DCHECK(cond->IsCondition());
+    HCondition* condition = cond->AsCondition();
+    if (condition->NeedsMaterialization()) {
+      // Moves do not affect the eflags register, so if the condition
+      // is evaluated just before the if, we don't need to evaluate it
+      // again.
+      if (!condition->IsBeforeWhenDisregardMoves(if_instr)) {
+        // Materialized condition, compare against 0
+        Location lhs = if_instr->GetLocations()->InAt(0);
+        if (lhs.IsRegister()) {
+          __ cmpl(lhs.AsX86().AsCpuRegister(), Immediate(0));
+        } else {
+          __ cmpl(Address(ESP, lhs.GetStackIndex()), Immediate(0));
+        }
+      }
+      __ j(kNotEqual,  codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
     } else {
-      __ cmpl(lhs.AsX86().AsCpuRegister(), Address(ESP, rhs.GetStackIndex()));
+      Location lhs = condition->GetLocations()->InAt(0);
+      Location rhs = condition->GetLocations()->InAt(1);
+      // LHS is guaranteed to be in a register (see
+      // LocationsBuilderX86::VisitCondition).
+      if (rhs.IsRegister()) {
+        __ cmpl(lhs.AsX86().AsCpuRegister(), rhs.AsX86().AsCpuRegister());
+      } else if (rhs.IsConstant()) {
+        HIntConstant* instruction = rhs.GetConstant()->AsIntConstant();
+        Immediate imm(instruction->AsIntConstant()->GetValue());
+        __ cmpl(lhs.AsX86().AsCpuRegister(), imm);
+      } else {
+        __ cmpl(lhs.AsX86().AsCpuRegister(), Address(ESP, rhs.GetStackIndex()));
+      }
+      __ j(X86Condition(condition->GetCondition()),
+           codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
     }
-    __ j(X86Condition(condition->GetCondition()),
-         codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
   }
   if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor())) {
     __ jmp(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
@@ -733,6 +751,7 @@ void LocationsBuilderX86::VisitIntConstant(HIntConstant* constant) {
 }
 
 void InstructionCodeGeneratorX86::VisitIntConstant(HIntConstant* constant) {
+  // Will be generated at use site.
 }
 
 void LocationsBuilderX86::VisitLongConstant(HLongConstant* constant) {
