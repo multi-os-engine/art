@@ -93,6 +93,7 @@ class HGraph : public ArenaObject {
 
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
+  HBasicBlock* GetBlock(size_t id) const { return blocks_.Get(id); }
 
   HBasicBlock* GetEntryBlock() const { return entry_block_; }
   HBasicBlock* GetExitBlock() const { return exit_block_; }
@@ -1507,8 +1508,8 @@ class HSub : public HBinaryOperation {
 
   virtual bool IsCommutative() { return false; }
 
-  virtual int32_t Evaluate(int32_t x, int32_t y) const { return x + y; }
-  virtual int64_t Evaluate(int64_t x, int64_t y) const { return x + y; }
+  virtual int32_t Evaluate(int32_t x, int32_t y) const { return x - y; }
+  virtual int64_t Evaluate(int64_t x, int64_t y) const { return x - y; }
 
   DECLARE_INSTRUCTION(Sub);
 
