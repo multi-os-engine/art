@@ -22,12 +22,12 @@
 #include "compiled_method.h"
 #include "dex/verified_method.h"
 #include "driver/dex_compilation_unit.h"
+#include "gc_map-inl.h"
 #include "gc_map_builder.h"
 #include "leb128.h"
 #include "mapping_table.h"
 #include "ssa_liveness_analysis.h"
 #include "utils/assembler.h"
-#include "verifier/dex_gc_map.h"
 #include "vmap_table.h"
 
 namespace art {
@@ -292,7 +292,7 @@ void CodeGenerator::BuildNativeGCMap(
     std::vector<uint8_t>* data, const DexCompilationUnit& dex_compilation_unit) const {
   const std::vector<uint8_t>& gc_map_raw =
       dex_compilation_unit.GetVerifiedMethod()->GetDexGcMap();
-  verifier::DexPcToReferenceMap dex_gc_map(&(gc_map_raw)[0]);
+  GcMap dex_gc_map(&(gc_map_raw)[0]);
 
   uint32_t max_native_offset = 0;
   for (size_t i = 0; i < pc_infos_.Size(); i++) {
@@ -301,15 +301,20 @@ void CodeGenerator::BuildNativeGCMap(
       max_native_offset = native_offset;
     }
   }
-
-  GcMapBuilder builder(data, pc_infos_.Size(), max_native_offset, dex_gc_map.RegWidth());
+  max_native_offset = std::max(max_native_offset, 1U);  // Add one so that CLZ works.
+  CHECK(data->empty());
+  const size_t bitmap_bits = dex_gc_map.BitmapBits();
+  GcMapBuilder builder(data, pc_infos_.Size(),
+                       sizeof(max_native_offset) * kBitsPerByte - CLZ(max_native_offset),
+                       bitmap_bits);
   for (size_t i = 0; i < pc_infos_.Size(); i++) {
     struct PcInfo pc_info = pc_infos_.Get(i);
     uint32_t native_offset = pc_info.native_pc;
     uint32_t dex_pc = pc_info.dex_pc;
-    const uint8_t* references = dex_gc_map.FindBitMap(dex_pc, false);
-    CHECK(references != NULL) << "Missing ref for dex pc 0x" << std::hex << dex_pc;
-    builder.AddEntry(native_offset, references);
+    size_t bitmap_offset = dex_gc_map.Find(dex_pc);
+    CHECK_NE(bitmap_offset, 0U) << "Missing ref for dex pc 0x" << std::hex << dex_pc;
+    builder.WriteKey(native_offset);
+    builder.WriteBitsFromMap(&dex_gc_map, bitmap_offset, bitmap_bits);
   }
 }
 
