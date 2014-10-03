@@ -443,43 +443,60 @@ void LocationsBuilderX86_64::VisitIf(HIf* if_instr) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(if_instr, LocationSummary::kNoCall);
   HInstruction* cond = if_instr->InputAt(0);
-  DCHECK(cond->IsCondition());
-  HCondition* condition = cond->AsCondition();
-  if (condition->NeedsMaterialization()) {
+  if (cond->IsConstant()) {
     locations->SetInAt(0, Location::Any());
+  } else {
+    DCHECK(cond->IsCondition());
+    HCondition* condition = cond->AsCondition();
+    if (condition->NeedsMaterialization()) {
+      locations->SetInAt(0, Location::Any());
+    }
   }
 }
 
 void InstructionCodeGeneratorX86_64::VisitIf(HIf* if_instr) {
   HInstruction* cond = if_instr->InputAt(0);
-  DCHECK(cond->IsCondition());
-  HCondition* condition = cond->AsCondition();
-  if (condition->NeedsMaterialization()) {
-    // Moves do not affect the eflags register, so if the condition is evaluated
-    // just before the if, we don't need to evaluate it again.
-    if (!condition->IsBeforeWhenDisregardMoves(if_instr)) {
-      // Materialized condition, compare against 0.
-      Location lhs = if_instr->GetLocations()->InAt(0);
-      if (lhs.IsRegister()) {
-        __ cmpl(lhs.AsX86_64().AsCpuRegister(), Immediate(0));
-      } else {
-        __ cmpl(Address(CpuRegister(RSP), lhs.GetStackIndex()), Immediate(0));
-      }
+  if (cond->IsIntConstant()) {
+    // Constant condition, statically compare against 0.
+    if (cond->AsIntConstant()->GetValue() != 0) {
+      __ jmp(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
     }
-    __ j(kNotEqual, codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+  } else if (cond->IsLongConstant()) {
+    // Constant condition, statically compare against 0.
+    if (cond->AsLongConstant()->GetValue() != 0) {
+      __ jmp(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+    }
   } else {
-    Location lhs = condition->GetLocations()->InAt(0);
-    Location rhs = condition->GetLocations()->InAt(1);
-    if (rhs.IsRegister()) {
-      __ cmpl(lhs.AsX86_64().AsCpuRegister(), rhs.AsX86_64().AsCpuRegister());
-    } else if (rhs.IsConstant()) {
-      __ cmpl(lhs.AsX86_64().AsCpuRegister(),
-              Immediate(rhs.GetConstant()->AsIntConstant()->GetValue()));
+    DCHECK(cond->IsCondition());
+    HCondition* condition = cond->AsCondition();
+    if (condition->NeedsMaterialization()) {
+      // Moves do not affect the eflags register, so if the condition
+      // is evaluated just before the if, we don't need to evaluate it
+      // again.
+      if (!condition->IsBeforeWhenDisregardMoves(if_instr)) {
+        // Materialized condition, compare against 0.
+        Location lhs = if_instr->GetLocations()->InAt(0);
+        if (lhs.IsRegister()) {
+          __ cmpl(lhs.AsX86_64().AsCpuRegister(), Immediate(0));
+        } else {
+          __ cmpl(Address(CpuRegister(RSP), lhs.GetStackIndex()), Immediate(0));
+        }
+      }
+      __ j(kNotEqual, codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
     } else {
-      __ cmpl(lhs.AsX86_64().AsCpuRegister(), Address(CpuRegister(RSP), rhs.GetStackIndex()));
+      Location lhs = condition->GetLocations()->InAt(0);
+      Location rhs = condition->GetLocations()->InAt(1);
+      if (rhs.IsRegister()) {
+        __ cmpl(lhs.AsX86_64().AsCpuRegister(), rhs.AsX86_64().AsCpuRegister());
+      } else if (rhs.IsConstant()) {
+        __ cmpl(lhs.AsX86_64().AsCpuRegister(),
+                Immediate(rhs.GetConstant()->AsIntConstant()->GetValue()));
+      } else {
+        __ cmpl(lhs.AsX86_64().AsCpuRegister(), Address(CpuRegister(RSP), rhs.GetStackIndex()));
+      }
+      __ j(X86_64Condition(condition->GetCondition()),
+           codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
     }
-    __ j(X86_64Condition(condition->GetCondition()),
-         codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
   }
   if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor())) {
     __ jmp(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
@@ -645,6 +662,7 @@ void LocationsBuilderX86_64::VisitIntConstant(HIntConstant* constant) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitIntConstant(HIntConstant* constant) {
+  // Will be generated at use site.
 }
 
 void LocationsBuilderX86_64::VisitLongConstant(HLongConstant* constant) {
@@ -654,6 +672,7 @@ void LocationsBuilderX86_64::VisitLongConstant(HLongConstant* constant) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitLongConstant(HLongConstant* constant) {
+  // Will be generated at use site.
 }
 
 void LocationsBuilderX86_64::VisitReturnVoid(HReturnVoid* ret) {
