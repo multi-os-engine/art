@@ -22,7 +22,7 @@
 #include "compiled_method.h"
 #include "dex/verified_method.h"
 #include "driver/dex_compilation_unit.h"
-#include "gc_map_builder.h"
+#include "gc_map.h"
 #include "leb128.h"
 #include "mapping_table.h"
 #include "ssa_liveness_analysis.h"
@@ -295,6 +295,7 @@ void CodeGenerator::BuildNativeGCMap(
     }
   }
 
+#if 0
   GcMapBuilder builder(data, pc_infos_.Size(), max_native_offset, dex_gc_map.RegWidth());
   for (size_t i = 0; i < pc_infos_.Size(); i++) {
     struct PcInfo pc_info = pc_infos_.Get(i);
@@ -304,6 +305,7 @@ void CodeGenerator::BuildNativeGCMap(
     CHECK(references != NULL) << "Missing ref for dex pc 0x" << std::hex << dex_pc;
     builder.AddEntry(native_offset, references);
   }
+#endif
 }
 
 void CodeGenerator::BuildMappingTable(std::vector<uint8_t>* data, SrcMap* src_map) const {

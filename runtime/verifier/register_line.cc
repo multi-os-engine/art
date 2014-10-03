@@ -18,6 +18,7 @@
 
 #include "base/stringprintf.h"
 #include "dex_instruction-inl.h"
+#include "gc_map.h"
 #include "method_verifier.h"
 #include "register_line-inl.h"
 #include "reg_type-inl.h"
@@ -372,22 +373,9 @@ bool RegisterLine::MergeRegisters(MethodVerifier* verifier, const RegisterLine* 
   return changed;
 }
 
-void RegisterLine::WriteReferenceBitMap(MethodVerifier* verifier,
-                                        std::vector<uint8_t>* data, size_t max_bytes) {
-  for (size_t i = 0; i < num_regs_; i += 8) {
-    uint8_t val = 0;
-    for (size_t j = 0; j < 8 && (i + j) < num_regs_; j++) {
-      // Note: we write 1 for a Reference but not for Null
-      if (GetRegisterType(verifier, i + j).IsNonZeroReferenceTypes()) {
-        val |= 1 << j;
-      }
-    }
-    if ((i / 8) >= max_bytes) {
-      DCHECK_EQ(0, val);
-      continue;
-    }
-    DCHECK_LT(i / 8, max_bytes) << "val=" << static_cast<uint32_t>(val);
-    data->push_back(val);
+void RegisterLine::WriteReferenceBitMap(MethodVerifier* verifier, GcMapBuilder* builder) {
+  for (size_t i = 0; i < builder->GetGcMap()->BitmapBits(); ++i) {
+    builder->WriteBit(GetRegisterType(verifier, i).IsNonZeroReferenceTypes() ? 1U : 0U);
   }
 }
 

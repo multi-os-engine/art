@@ -25,6 +25,9 @@
 #include "safe_map.h"
 
 namespace art {
+
+class GcMapBuilder;
+
 namespace verifier {
 
 class MethodVerifier;
@@ -277,18 +280,19 @@ class RegisterLine {
   bool MergeRegisters(MethodVerifier* verifier, const RegisterLine* incoming_line)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  size_t GetMaxNonZeroReferenceReg(MethodVerifier* verifier, size_t max_ref_reg) {
-    size_t i = static_cast<int>(max_ref_reg) < 0 ? 0 : max_ref_reg;
-    for (; i < num_regs_; i++) {
+  // Returns the index after the first reference register, or 0 if there are none.
+  size_t GetMaxNonZeroReferenceReg(MethodVerifier* verifier, size_t start_index) {
+    size_t max_reg = start_index;
+    for (size_t i = start_index; i < num_regs_; i++) {
       if (GetRegisterType(verifier, i).IsNonZeroReferenceTypes()) {
-        max_ref_reg = i;
+        max_reg = i + 1;
       }
     }
-    return max_ref_reg;
+    return max_reg;
   }
 
   // Write a bit at each register location that holds a reference.
-  void WriteReferenceBitMap(MethodVerifier* verifier, std::vector<uint8_t>* data, size_t max_bytes);
+  void WriteReferenceBitMap(MethodVerifier* verifier, GcMapBuilder* builder);
 
   size_t GetMonitorEnterCount() {
     return monitors_.size();
