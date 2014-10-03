@@ -608,47 +608,66 @@ void LocationsBuilderARM::VisitIf(HIf* if_instr) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(if_instr, LocationSummary::kNoCall);
   HInstruction* cond = if_instr->InputAt(0);
-  DCHECK(cond->IsCondition());
-  HCondition* condition = cond->AsCondition();
-  if (condition->NeedsMaterialization()) {
-    locations->SetInAt(0, Location::RequiresRegister());
+  if (cond->IsConstant()) {
+    locations->SetInAt(0, Location::Any());
+  } else {
+    DCHECK(cond->IsCondition());
+    HCondition* condition = cond->AsCondition();
+    if (condition->NeedsMaterialization()) {
+      locations->SetInAt(0, Location::RequiresRegister());
+    }
   }
 }
 
 void InstructionCodeGeneratorARM::VisitIf(HIf* if_instr) {
   HInstruction* cond = if_instr->InputAt(0);
-  DCHECK(cond->IsCondition());
-  HCondition* condition = cond->AsCondition();
-  if (condition->NeedsMaterialization()) {
-    // Condition has been materialized, compare the output to 0
-    DCHECK(if_instr->GetLocations()->InAt(0).IsRegister());
-    __ cmp(if_instr->GetLocations()->InAt(0).AsArm().AsCoreRegister(),
-           ShifterOperand(0));
-    __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()), NE);
-  } else {
-    // Condition has not been materialized, use its inputs as the comparison and its
-    // condition as the branch condition.
-    LocationSummary* locations = condition->GetLocations();
-    if (locations->InAt(1).IsRegister()) {
-      __ cmp(locations->InAt(0).AsArm().AsCoreRegister(),
-             ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
-    } else {
-      DCHECK(locations->InAt(1).IsConstant());
-      int32_t value = locations->InAt(1).GetConstant()->AsIntConstant()->GetValue();
-      ShifterOperand operand;
-      if (ShifterOperand::CanHoldArm(value, &operand)) {
-        __ cmp(locations->InAt(0).AsArm().AsCoreRegister(), ShifterOperand(value));
-      } else {
-        Register temp = IP;
-        __ LoadImmediate(temp, value);
-        __ cmp(locations->InAt(0).AsArm().AsCoreRegister(), ShifterOperand(temp));
-      }
+  if (cond->IsIntConstant()) {
+    // Constant condition, statically compare against 0.
+    if (cond->AsIntConstant()->GetValue() != 0) {
+      __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
     }
-    __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()),
-         ARMCondition(condition->GetCondition()));
+  } else if (cond->IsLongConstant()) {
+    // Constant condition, statically compare against 0.
+    if (cond->AsLongConstant()->GetValue() != 0) {
+      __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+    }
+  } else {
+    DCHECK(cond->IsCondition());
+    HCondition* condition = cond->AsCondition();
+    if (condition->NeedsMaterialization()) {
+      // Condition has been materialized, compare the output to 0
+      DCHECK(if_instr->GetLocations()->InAt(0).IsRegister());
+      __ cmp(if_instr->GetLocations()->InAt(0).AsArm().AsCoreRegister(),
+             ShifterOperand(0));
+      __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()), NE);
+    } else {
+      // Condition has not been materialized, use its inputs as the
+      // comparison and its condition as the branch condition.
+      LocationSummary* locations = condition->GetLocations();
+      if (locations->InAt(1).IsRegister()) {
+        __ cmp(locations->InAt(0).AsArm().AsCoreRegister(),
+               ShifterOperand(locations->InAt(1).AsArm().AsCoreRegister()));
+      } else {
+        DCHECK(locations->InAt(1).IsConstant());
+        int32_t value =
+          locations->InAt(1).GetConstant()->AsIntConstant()->GetValue();
+        ShifterOperand operand;
+        if (ShifterOperand::CanHoldArm(value, &operand)) {
+          __ cmp(locations->InAt(0).AsArm().AsCoreRegister(),
+                 ShifterOperand(value));
+        } else {
+          Register temp = IP;
+          __ LoadImmediate(temp, value);
+          __ cmp(locations->InAt(0).AsArm().AsCoreRegister(),
+                 ShifterOperand(temp));
+        }
+      }
+      __ b(codegen_->GetLabelOf(if_instr->IfTrueSuccessor()),
+           ARMCondition(condition->GetCondition()));
+    }
   }
-
-  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor())) {
+  if (!codegen_->GoesToNextBlock(if_instr->GetBlock(),
+                                 if_instr->IfFalseSuccessor())) {
     __ b(codegen_->GetLabelOf(if_instr->IfFalseSuccessor()));
   }
 }
@@ -786,6 +805,7 @@ void LocationsBuilderARM::VisitIntConstant(HIntConstant* constant) {
 }
 
 void InstructionCodeGeneratorARM::VisitIntConstant(HIntConstant* constant) {
+  // Will be generated at use site.
 }
 
 void LocationsBuilderARM::VisitLongConstant(HLongConstant* constant) {
