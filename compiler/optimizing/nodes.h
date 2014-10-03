@@ -1507,8 +1507,8 @@ class HSub : public HBinaryOperation {
 
   virtual bool IsCommutative() { return false; }
 
-  virtual int32_t Evaluate(int32_t x, int32_t y) const { return x + y; }
-  virtual int64_t Evaluate(int64_t x, int64_t y) const { return x + y; }
+  virtual int32_t Evaluate(int32_t x, int32_t y) const { return x - y; }
+  virtual int64_t Evaluate(int64_t x, int64_t y) const { return x - y; }
 
   DECLARE_INSTRUCTION(Sub);
 
