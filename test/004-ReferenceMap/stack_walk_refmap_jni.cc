@@ -15,6 +15,7 @@
  */
 
 #include "check_reference_map_visitor.h"
+#include "gc_map-inl.h"
 #include "jni.h"
 
 namespace art {

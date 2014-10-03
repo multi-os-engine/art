@@ -94,14 +94,13 @@ class CheckReferenceMapVisitor : public StackVisitor {
   void CheckQuickMethod(int* registers, int number_of_references, uint32_t native_pc_offset)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     mirror::ArtMethod* m = GetMethod();
-    NativePcOffsetToReferenceMap map(m->GetNativeGcMap());
-    const uint8_t* ref_bitmap = map.FindBitMap(native_pc_offset);
-    CHECK(ref_bitmap);
+    GcMap map(m->GetNativeGcMap());
+    const size_t bitmap_index = map.Find(native_pc_offset);
+    CHECK_NE(bitmap_index, 0U);
     for (int i = 0; i < number_of_references; ++i) {
-      int reg = registers[i];
+      const int reg = registers[i];
       CHECK(reg < m->GetCodeItem()->registers_size_);
-      CHECK((*((ref_bitmap) + reg / 8) >> (reg % 8) ) & 0x01)
-          << "Error: Reg @" << i << " is not in GC map";
+      CHECK_EQ(map.GetBit(bitmap_index + reg), 1U) << "Error: Reg @" << i << " is not in GC map";
     }
   }
 };

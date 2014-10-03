@@ -17,7 +17,7 @@
 #include "dex/compiler_internals.h"
 #include "driver/compiler_options.h"
 #include "dex_file-inl.h"
-#include "gc_map.h"
+#include "gc_map-inl.h"
 #include "gc_map_builder.h"
 #include "mapping_table.h"
 #include "mir_to_lir-inl.h"
@@ -25,7 +25,6 @@
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/verification_results.h"
 #include "dex/verified_method.h"
-#include "verifier/dex_gc_map.h"
 #include "verifier/method_verifier.h"
 #include "vmap_table.h"
 
@@ -735,32 +734,30 @@ void Mir2Lir::CreateMappingTables() {
 }
 
 void Mir2Lir::CreateNativeGcMap() {
+  const std::vector<uint8_t>& gc_map_raw =
+      mir_graph_->GetCurrentDexCompilationUnit()->GetVerifiedMethod()->GetDexGcMap();
   DCHECK(!encoded_mapping_table_.empty());
   MappingTable mapping_table(&encoded_mapping_table_[0]);
   uint32_t max_native_offset = 0;
   for (auto it = mapping_table.PcToDexBegin(), end = mapping_table.PcToDexEnd(); it != end; ++it) {
-    uint32_t native_offset = it.NativePcOffset();
-    if (native_offset > max_native_offset) {
-      max_native_offset = native_offset;
-    }
+    max_native_offset = std::max(max_native_offset, it.NativePcOffset());
   }
-  MethodReference method_ref(cu_->dex_file, cu_->method_idx);
-  const std::vector<uint8_t>& gc_map_raw =
-      mir_graph_->GetCurrentDexCompilationUnit()->GetVerifiedMethod()->GetDexGcMap();
-  verifier::DexPcToReferenceMap dex_gc_map(&(gc_map_raw)[0]);
-  DCHECK_EQ(gc_map_raw.size(), dex_gc_map.RawSize());
-  // Compute native offset to references size.
-  GcMapBuilder native_gc_map_builder(&native_gc_map_,
-                                     mapping_table.PcToDexSize(),
-                                     max_native_offset, dex_gc_map.RegWidth());
-
+  GcMap dex_gc_map(const_cast<uint8_t*>(&gc_map_raw[0]));
+  // Max one so that CLZ works.
+  size_t max_key = std::max(std::max(max_native_offset, mapping_table.PcToDexSize()), 1U);
+  size_t key_bits = kBitsPerByte * sizeof(max_key) - CLZ(max_key);
+  const size_t bitmap_bits = dex_gc_map.BitmapBits();
+  GcMapBuilder native_builder(&native_gc_map_, mapping_table.PcToDexSize(), key_bits, bitmap_bits);
+  DCHECK_EQ(native_builder.BitmapBits(), bitmap_bits);
+  // Create the new GC map using native PC as keys instead of dex PC.
   for (auto it = mapping_table.PcToDexBegin(), end = mapping_table.PcToDexEnd(); it != end; ++it) {
     uint32_t native_offset = it.NativePcOffset();
     uint32_t dex_pc = it.DexPc();
-    const uint8_t* references = dex_gc_map.FindBitMap(dex_pc, false);
-    CHECK(references != NULL) << "Missing ref for dex pc 0x" << std::hex << dex_pc <<
-        ": " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
-    native_gc_map_builder.AddEntry(native_offset, references);
+    size_t bitmap_offset = dex_gc_map.Find(dex_pc);
+    CHECK_NE(bitmap_offset, 0U) << "Missing ref for dex pc 0x" << std::hex << dex_pc << ": "
+        << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+    native_builder.WriteKey(native_offset);
+    native_builder.WriteBitsFromMap(&dex_gc_map, bitmap_offset, bitmap_bits);
   }
 }
 

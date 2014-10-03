@@ -155,7 +155,6 @@ LIBART_COMMON_SRC_FILES := \
   fault_handler.cc \
   utf.cc \
   utils.cc \
-  verifier/dex_gc_map.cc \
   verifier/instruction_flags.cc \
   verifier/method_verifier.cc \
   verifier/reg_type.cc \
