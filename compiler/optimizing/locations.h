@@ -51,6 +51,8 @@ class Location : public ValueObject {
     // a policy that specifies what kind of location is suitable. Payload
     // contains register allocation policy.
     kUnallocated = 7,
+
+    kFpuRegister = 8,
   };
 
   Location() : value_(kInvalid) {
@@ -61,6 +63,7 @@ class Location : public ValueObject {
     COMPILE_ASSERT((kDoubleStackSlot & kLocationTagMask) != kConstant, TagError);
     COMPILE_ASSERT((kRegister & kLocationTagMask) != kConstant, TagError);
     COMPILE_ASSERT((kQuickParameter & kLocationTagMask) != kConstant, TagError);
+    COMPILE_ASSERT((kFpuRegister & kLocationTagMask) != kConstant, TagError);
     COMPILE_ASSERT((kConstant & kLocationTagMask) == kConstant, TagError);
 
     DCHECK(!IsValid());
@@ -104,13 +107,21 @@ class Location : public ValueObject {
   static Location RegisterLocation(ManagedRegister reg) {
     return Location(kRegister, reg.RegId());
   }
+  
+  static Location FpuRegisterLocation(ManagedRegister reg) {
+    return Location(kFpuRegister, reg.RegId());
+  }
 
   bool IsRegister() const {
     return GetKind() == kRegister;
   }
+  
+  bool IsFpuRegister() const {
+    return GetKind() == kFpuRegister;
+  }
 
   ManagedRegister reg() const {
-    DCHECK(IsRegister());
+    DCHECK(IsRegister() || IsFpuRegister());
     return static_cast<ManagedRegister>(GetPayload());
   }
 
@@ -190,6 +201,7 @@ class Location : public ValueObject {
       case kQuickParameter: return "Q";
       case kUnallocated: return "U";
       case kConstant: return "C";
+      case kFpuRegister: return "F";
     }
     return "?";
   }
@@ -198,6 +210,7 @@ class Location : public ValueObject {
   enum Policy {
     kAny,
     kRequiresRegister,
+    kRequiresFpuRegister,
     kSameAsFirstInput,
   };
 
@@ -216,6 +229,10 @@ class Location : public ValueObject {
 
   static Location RequiresRegister() {
     return UnallocatedLocation(kRequiresRegister);
+  }
+  
+  static Location RequiresFpuRegister() {
+    return UnallocatedLocation(kRequiresFpuRegister);
   }
 
   static Location RegisterOrConstant(HInstruction* instruction);
