@@ -56,6 +56,8 @@
 
 namespace art {
 
+static constexpr bool kWarnJniAbort = false;
+
 // Section 12.3.2 of the JNI spec describes JNI class descriptors. They're
 // separated with slashes but aren't wrapped with "L;" like regular descriptors
 // (i.e. "a/b/C" rather than "La/b/C;"). Arrays of reference types are an
@@ -2376,9 +2378,14 @@ class JNI {
         return;
       }
     }
-    // Don't need to copy if we had a direct pointer.
-    if (mode != JNI_ABORT && is_copy) {
-      memcpy(array_data, elements, bytes);
+    if (is_copy) {
+      if (mode != JNI_ABORT) {
+        memcpy(array_data, elements, bytes);
+      } else if (kWarnJniAbort && memcmp(array_data, elements, bytes) != 0) {
+        // Warn if we have JNI_ABORT and the arrays don't match since this is usually an error.
+        LOG(WARNING) << "Possibly incorrect JNI abort";
+        soa.Self()->DumpJavaStack(LOG(WARNING));
+      }
     }
     if (mode != JNI_COMMIT) {
       if (is_copy) {
