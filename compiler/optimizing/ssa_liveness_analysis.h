@@ -174,6 +174,7 @@ class LiveInterval : public ArenaObject {
 
   bool IsFixed() const { return is_fixed_; }
   bool IsSlowPathSafepoint() const { return is_slow_path_safepoint_; }
+  bool IsSplit() const { return parent_ != this; }
 
   void AddUse(HInstruction* instruction, size_t input_index, bool is_environment) {
     // Set the use within the instruction.
