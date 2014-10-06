@@ -100,6 +100,10 @@ void RegisterAllocator::BlockRegister(Location location,
   if (interval == nullptr) {
     interval = LiveInterval::MakeFixedInterval(allocator_, reg, type);
     physical_register_intervals_.Put(reg, interval);
+    // Fixed interval is added to inactive_ instead of unhandled_.
+    // It's also the only type of inactive interval whose start position
+    // can be after the current interval during linear scan.
+    // Fixed interval is never split and never moves to unhandled_.
     inactive_.Add(interval);
   }
   DCHECK(interval->GetRegister() == reg);
@@ -385,6 +389,25 @@ void RegisterAllocator::DumpInterval(std::ostream& stream, LiveInterval* interva
   stream << std::endl;
 }
 
+void RegisterAllocator::DumpIntervals(std::ostream& stream) const {
+  stream << "inactive: " << std::endl;
+  for (size_t i = 0; i < inactive_.Size(); i ++) {
+    DumpInterval(stream, inactive_.Get(i));
+  }
+  stream << "active: " << std::endl;
+  for (size_t i = 0; i < active_.Size(); i ++) {
+    DumpInterval(stream, active_.Get(i));
+  }
+  stream << "unhandled: " << std::endl;
+  for (size_t i = 0; i < unhandled_core_intervals_.Size(); i ++) {
+    DumpInterval(stream, unhandled_core_intervals_.Get(i));
+  }
+  stream << "handled: " << std::endl;
+  for (size_t i = 0; i < handled_.Size(); i ++) {
+    DumpInterval(stream, handled_.Get(i));
+  }
+}
+
 // By the book implementation of a linear scan register allocator.
 void RegisterAllocator::LinearScan() {
   while (!unhandled_->IsEmpty()) {
@@ -392,6 +415,10 @@ void RegisterAllocator::LinearScan() {
     LiveInterval* current = unhandled_->Pop();
     DCHECK(!current->IsFixed() && !current->HasSpillSlot());
     size_t position = current->GetStart();
+
+    // Remember the inactive_ size here since the ones moved to inactive_ from
+    // active_ below shouldn't need to be re-checked.
+    size_t inactive_intervals_to_handle = inactive_.Size();
 
     // (2) Remove currently active intervals that are dead at this position.
     //     Move active intervals that have a lifetime hole at this position
@@ -411,15 +438,18 @@ void RegisterAllocator::LinearScan() {
 
     // (3) Remove currently inactive intervals that are dead at this position.
     //     Move inactive intervals that cover this position to active.
-    for (size_t i = 0; i < inactive_.Size(); ++i) {
+    for (size_t i = 0; i < inactive_intervals_to_handle; ++i) {
       LiveInterval* interval = inactive_.Get(i);
+      DCHECK(interval->GetStart() < position || interval->IsFixed());
       if (interval->IsDeadAt(position)) {
         inactive_.Delete(interval);
         --i;
+        --inactive_intervals_to_handle;
         handled_.Add(interval);
       } else if (interval->Covers(position)) {
         inactive_.Delete(interval);
         --i;
+        --inactive_intervals_to_handle;
         active_.Add(interval);
       }
     }
@@ -458,25 +488,40 @@ bool RegisterAllocator::TryAllocateFreeReg(LiveInterval* current) {
     free_until[i] = kMaxLifetimePosition;
   }
 
-  // For each inactive interval, set its register to be free until
-  // the next intersection with `current`.
-  // Thanks to SSA, this should only be needed for intervals
-  // that are the result of a split.
-  for (size_t i = 0, e = inactive_.Size(); i < e; ++i) {
-    LiveInterval* inactive = inactive_.Get(i);
-    DCHECK(inactive->HasRegister());
-    size_t next_intersection = inactive->FirstIntersectionWith(current);
-    if (next_intersection != kNoLifetime) {
-      free_until[inactive->GetRegister()] =
-          std::min(free_until[inactive->GetRegister()], next_intersection);
-    }
-  }
-
   // For each active interval, set its register to not free.
   for (size_t i = 0, e = active_.Size(); i < e; ++i) {
     LiveInterval* interval = active_.Get(i);
     DCHECK(interval->HasRegister());
     free_until[interval->GetRegister()] = 0;
+  }
+
+  // For each inactive interval, set its register to be free until
+  // the next intersection with `current`.
+  for (size_t i = 0, e = inactive_.Size(); i < e; ++i) {
+    LiveInterval* inactive = inactive_.Get(i);
+    // Temp/Slow-path-safepoint interval has no holes.
+    DCHECK(!inactive->IsTemp() && !inactive->IsSlowPathSafepoint());
+    if (!current->IsSplit() && !inactive->IsFixed()) {
+      // Neither current nor inactive are fixed.
+      // Thanks to SSA, a non-split interval starting in a hole of an
+      // inactive interval should never intersect with that inactive interval.
+      if (!kIsDebugBuild) {
+        continue;
+      }
+    }
+    DCHECK(inactive->HasRegister());
+    if (free_until[inactive->GetRegister()] == 0) {
+      // Already used by some active interval. No need to intersect.
+      continue;
+    }
+    size_t next_intersection = inactive->FirstIntersectionWith(current);
+    if (!current->IsSplit() && !inactive->IsFixed()) {
+      DCHECK_EQ(next_intersection, kNoLifetime);
+    }
+    if (next_intersection != kNoLifetime) {
+      free_until[inactive->GetRegister()] =
+          std::min(free_until[inactive->GetRegister()], next_intersection);
+    }
   }
 
   int reg = -1;
@@ -558,12 +603,23 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
 
   // For each inactive interval, find the next use of its register after the
   // start of current.
-  // Thanks to SSA, this should only be needed for intervals
-  // that are the result of a split.
   for (size_t i = 0, e = inactive_.Size(); i < e; ++i) {
     LiveInterval* inactive = inactive_.Get(i);
+    // Temp/Slow-path-safepoint interval has no holes.
+    DCHECK(!inactive->IsTemp() && !inactive->IsSlowPathSafepoint());
+    if (!current->IsSplit() && !inactive->IsFixed()) {
+      // Neither current nor inactive are fixed.
+      // Thanks to SSA, a non-split interval starting in a hole of an
+      // inactive interval should never intersect with that inactive interval.
+      if (!kIsDebugBuild) {
+        continue;
+      }
+    }
     DCHECK(inactive->HasRegister());
     size_t next_intersection = inactive->FirstIntersectionWith(current);
+    if (!current->IsSplit() && !inactive->IsFixed()) {
+      DCHECK_EQ(next_intersection, kNoLifetime);
+    }
     if (next_intersection != kNoLifetime) {
       if (inactive->IsFixed()) {
         next_use[inactive->GetRegister()] =
@@ -611,7 +667,7 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
       }
     }
 
-    for (size_t i = 0; i < inactive_.Size(); ++i) {
+    for (size_t i = 0, e = inactive_.Size(); i < e; ++i) {
       LiveInterval* inactive = inactive_.Get(i);
       if (inactive->GetRegister() == reg) {
         size_t next_intersection = inactive->FirstIntersectionWith(current);
@@ -620,11 +676,12 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
             LiveInterval* split = Split(current, next_intersection);
             AddSorted(unhandled_, split);
           } else {
-            LiveInterval* split = Split(inactive, current->GetStart());
+            LiveInterval* split = Split(inactive, next_intersection);
             inactive_.DeleteAt(i);
+            --i;
+            --e;
             handled_.Add(inactive);
             AddSorted(unhandled_, split);
-            --i;
           }
         }
       }
@@ -768,7 +825,7 @@ void RegisterAllocator::InsertParallelMoveAt(size_t position,
 
   HInstruction* at = liveness_.GetInstructionFromPosition(position / 2);
   if (at == nullptr) {
-    // Block boundary, don't no anything the connection of split siblings will handle it.
+    // Block boundary, don't do anything the connection of split siblings will handle it.
     return;
   }
   HParallelMove* move;
@@ -967,7 +1024,7 @@ void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,
   }
 
   size_t from_position = from->GetLifetimeEnd() - 1;
-  // When an instructions dies at entry of another, and the latter is the beginning
+  // When an instruction dies at entry of another, and the latter is the beginning
   // of a block, the register allocator ensures the former has a register
   // at block->GetLifetimeStart() + 1. Since this is at a block boundary, it must
   // must be handled in this method.
