@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Run the code in test.jar on the device. The jar should contain a top-level
 # class named Main to run.
@@ -12,25 +12,29 @@ msg() {
 ARCHITECTURES_32="(arm|x86|mips|none)"
 ARCHITECTURES_64="(arm64|x86_64|none)"
 ARCHITECTURES_PATTERN="${ARCHITECTURES_32}"
-RELOCATE="y"
-GDB="n"
-DEBUGGER="n"
-INTERPRETER="n"
-VERIFY="y"
-OPTIMIZE="y"
-ZYGOTE=""
-QUIET="n"
-DEV_MODE="n"
-INVOKE_WITH=""
-FLAGS=""
-TARGET_SUFFIX="32"
-GDB_TARGET_SUFFIX=""
 COMPILE_FLAGS=""
-FALSE_BIN="/system/bin/false"
-PATCHOAT=""
+DALVIKVM="dalvikvm32"
+DEBUGGER="n"
+DEV_MODE="n"
 DEX2OAT=""
+GDB_SERVER="gdbserver"
+FALSE_BIN="/system/bin/false"
+FLAGS=""
+GDB=""
 HAVE_IMAGE="y"
+HOST="n"
+INTERPRETER="n"
+INVOKE_WITH=""
+ISA=x86
+OPTIMIZE="y"
+PATCHOAT=""
 PREBUILD="y"
+QUIET="n"
+RELOCATE="y"
+USE_GDB="n"
+VERIFY="y"
+ZYGOTE=""
+MAIN=""
 
 while true; do
     if [ "x$1" = "x--quiet" ]; then
@@ -57,8 +61,8 @@ while true; do
         shift
     elif [ "x$1" = "x--boot" ]; then
         shift
-        BOOT_OPT="$1"
-        BUILD_BOOT_OPT="--boot-image=${1#-Ximage:}"
+        DALVIKVM_BOOT_OPT="$1"
+        DEX2OAT_BOOT_OPT="--boot-image=${1#-Ximage:}"
         shift
     elif [ "x$1" = "x--no-dex2oat" ]; then
         DEX2OAT="-Xcompiler:${FALSE_BIN}"
@@ -75,6 +79,9 @@ while true; do
     elif [ "x$1" = "x--prebuild" ]; then
         PREBUILD="y"
         shift
+    elif [ "x$1" = "x--host" ]; then
+        HOST="y"
+        shift
     elif [ "x$1" = "x--no-prebuild" ]; then
         PREBUILD="n"
         shift
@@ -85,11 +92,11 @@ while true; do
         DEBUGGER="y"
         shift
     elif [ "x$1" = "x--gdb" ]; then
-        GDB="y"
+        USE_GDB="y"
         DEV_MODE="y"
         shift
     elif [ "x$1" = "x--zygote" ]; then
-        ZYGOTE="--zygote"
+        ZYGOTE="-Xzygote"
         msg "Spawning from zygote"
         shift
     elif [ "x$1" = "x--dev" ]; then
@@ -120,8 +127,9 @@ while true; do
         shift
         break
     elif [ "x$1" = "x--64" ]; then
-        TARGET_SUFFIX="64"
-        GDB_TARGET_SUFFIX="64"
+        ISA="x86_64"
+        GDB_SERVER="gdbserver64"
+        DALVIKVM="dalvikvm64"
         ARCHITECTURES_PATTERN="${ARCHITECTURES_64}"
         shift
     elif expr "x$1" : "x--" >/dev/null 2>&1; then
@@ -131,6 +139,12 @@ while true; do
         break
     fi
 done
+
+if [ "x$1" = "x" ] ; then
+  MAIN="Main"
+else
+  MAIN="$1"
+fi
 
 if [ "$ZYGOTE" = "" ]; then
     if [ "$OPTIMIZE" = "y" ]; then
@@ -160,24 +174,6 @@ if [ "$HAVE_IMAGE" = "n" ]; then
     BOOT_OPT="-Ximage:/system/non-existant/core.art"
 fi
 
-ARCH=$(adb shell ls -F /data/dalvik-cache | grep -Ewo "${ARCHITECTURES_PATTERN}")
-if [ x"$ARCH" = "x" ]; then
-  echo "Unable to determine architecture"
-  exit 1
-fi
-
-if [ "$QUIET" = "n" ]; then
-  adb shell rm -r $DEX_LOCATION
-  adb shell mkdir -p $DEX_LOCATION
-  adb push $TEST_NAME.jar $DEX_LOCATION
-  adb push $TEST_NAME-ex.jar $DEX_LOCATION
-else
-  adb shell rm -r $DEX_LOCATION >/dev/null 2>&1
-  adb shell mkdir -p $DEX_LOCATION >/dev/null 2>&1
-  adb push $TEST_NAME.jar $DEX_LOCATION >/dev/null 2>&1
-  adb push $TEST_NAME-ex.jar $DEX_LOCATION >/dev/null 2>&1
-fi
-
 if [ "$DEBUGGER" = "y" ]; then
   # Use this instead for ddms and connect by running 'ddms':
   # DEBUGGER_OPTS="-agentlib:jdwp=transport=dt_android_adb,server=y,suspend=y"
@@ -185,14 +181,29 @@ if [ "$DEBUGGER" = "y" ]; then
 
   PORT=12345
   msg "Waiting for jdb to connect:"
-  msg "    adb forward tcp:$PORT tcp:$PORT"
+  if [ "$HOST" = "n" ]; then
+    msg "    adb forward tcp:$PORT tcp:$PORT"
+  fi
   msg "    jdb -attach localhost:$PORT"
   DEBUGGER_OPTS="-agentlib:jdwp=transport=dt_socket,address=$PORT,server=y,suspend=y"
 fi
 
-if [ "$GDB" = "y" ]; then
-    gdb="gdbserver$GDB_TARGET_SUFFIX :5039"
-    gdbargs="$exe"
+if [ "$USE_GDB" = "y" ]; then
+  if [ "$HOST" = "n" ]; then
+    GDB="$GDB_SERVER :5039"
+    GDB_ARGS="$DALVIKVM"
+  else
+    if [ `uname` = "Darwin" ]; then
+        GDB=lldb
+        GDB_ARGS="-- $DALVIKVM"
+        DALVIKVM=
+    else
+        GDB=gdb
+        GDB_ARGS="--args $DALVIKVM"
+        # Enable for Emacs "M-x gdb" support. TODO: allow extra gdb arguments on command line.
+        # gdbargs="--annotate=3 $gdbargs"
+    fi
+  fi
 fi
 
 if [ "$INTERPRETER" = "y" ]; then
@@ -203,60 +214,143 @@ fi
 JNI_OPTS="-Xjnigreflimit:512 -Xcheck:jni"
 
 if [ "$RELOCATE" = "y" ]; then
-    RELOCATE_OPT="-Xrelocate"
-    BUILD_RELOCATE_OPT="--runtime-arg -Xnorelocate"
-    COMPILE_FLAGS="${COMPILE_FLAGS} --include-patch-information"
-    FLAGS="${FLAGS} -Xcompiler-option --include-patch-information"
+    COMPILE_FLAGS="${COMPILE_FLAGS} --include-patch-information --runtime-arg -Xnorelocate"
+    FLAGS="${FLAGS} -Xrelocate -Xcompiler-option --include-patch-information"
+    if [ "$HOST" = "y" ]; then
+        # Run test sets a fairly draconian ulimit that we will likely blow right over
+        # since we are relocating. Get the total size of the /system/framework directory
+        # in 512 byte blocks and set it as the ulimit. This should be more than enough
+        # room.
+        if [ ! `uname` = "Darwin" ]; then  # TODO: Darwin doesn't support "du -B..."
+          ulimit -S $(du -c -B512 ${ANDROID_HOST_OUT}/framework | tail -1 | cut -f1) || exit 1
+        fi
+    fi
 else
-    RELOCATE_OPT="-Xnorelocate"
-    BUILD_RELOCATE_OPT="--runtime-arg -Xnorelocate"
+    FLAGS="$FLAGS -Xnorelocate"
+    COMPILE_FLAGS="${COMPILE_FLAGS} --runtime-arg -Xnorelocate"
 fi
 
-# Create a script with the command. The command can get longer than the longest
-# allowed adb command and there is no way to get the exit status from a adb shell
-# command.
-cmdline="cd $DEX_LOCATION && \
-         export ANDROID_DATA=$DEX_LOCATION && \
-         export DEX_LOCATION=$DEX_LOCATION && "
+if [ "$HOST" = "n" ]; then
+  ISA=$(adb shell ls -F /data/dalvik-cache | grep -Ewo "${ARCHITECTURES_PATTERN}")
+  if [ x"$ISA" = "x" ]; then
+    echo "Unable to determine architecture"
+    exit 1
+  fi
+fi
+
+dex2oat_cmdline="true"
+mkdir_cmdline="mkdir -p ${DEX_LOCATION}/dalvik-cache/$ISA"
+
 if [ "$PREBUILD" = "y" ]; then
-  cmdline+="mkdir -p $DEX_LOCATION/dalvik-cache/$ARCH/ && \
-            $INVOKE_WITH /system/bin/dex2oatd \
-                $COMPILE_FLAGS \
-                $BUILD_BOOT_OPT \
-                $BUILD_RELOCATE_OPT  \
-                --runtime-arg -classpath --runtime-arg $DEX_LOCATION/$TEST_NAME.jar \
-                --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
-                --oat-file=$DEX_LOCATION/dalvik-cache/$ARCH/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g") \
-                --instruction-set=$ARCH && "
+  dex2oat_cmdline="$INVOKE_WITH dex2oatd \
+                      $COMPILE_FLAGS \
+                      $DEX2OAT_BOOT_OPT \
+                      --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
+                      --oat-file=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g") \
+                      --instruction-set=$ISA"
 fi
 
-cmdline+="$INVOKE_WITH $gdb /system/bin/dalvikvm$TARGET_SUFFIX \
-            $FLAGS \
-            $gdbargs \
-            -XXlib:$LIB \
-            $PATCHOAT \
-            $DEX2OAT \
-            $ZYGOTE \
-            $JNI_OPTS \
-            $RELOCATE_OPT \
-            $INT_OPTS \
-            $DEBUGGER_OPTS \
-            $BOOT_OPT \
-            -cp $DEX_LOCATION/$TEST_NAME.jar Main"
+dalvikvm_cmdline="$INVOKE_WITH $GDB $DALVIKVM \
+                  $GDB_ARGS \
+                  $FLAGS \
+                  -XXlib:$LIB \
+                  $PATCHOAT \
+                  $DEX2OAT \
+                  $ZYGOTE \
+                  $JNI_OPTS \
+                  $INT_OPTS \
+                  $DEBUGGER_OPTS \
+                  $DALVIKVM_BOOT_OPT \
+                  -cp $DEX_LOCATION/$TEST_NAME.jar $MAIN"
 
-cmdfile=$(tempfile -p "cmd-" -s "-$TEST_NAME")
-echo "$cmdline" > $cmdfile
 
-if [ "$DEV_MODE" = "y" ]; then
-  echo $cmdline
-fi
+if [ "$HOST" = "n" ]; then
+    adb root > /dev/null
+    adb wait-for-device
+    if [ "$QUIET" = "n" ]; then
+      adb shell rm -r $DEX_LOCATION
+      adb shell mkdir -p $DEX_LOCATION
+      adb push $TEST_NAME.jar $DEX_LOCATION
+      adb push $TEST_NAME-ex.jar $DEX_LOCATION
+    else
+      adb shell rm -r $DEX_LOCATION >/dev/null 2>&1
+      adb shell mkdir -p $DEX_LOCATION >/dev/null 2>&1
+      adb push $TEST_NAME.jar $DEX_LOCATION >/dev/null 2>&1
+      adb push $TEST_NAME-ex.jar $DEX_LOCATION >/dev/null 2>&1
+    fi
 
-if [ "$QUIET" = "n" ]; then
-  adb push $cmdfile $DEX_LOCATION/cmdline.sh
+    # Create a script with the command. The command can get longer than the longest
+    # allowed adb command and there is no way to get the exit status from a adb shell
+    # command.
+    cmdline="cd $DEX_LOCATION && \
+             export ANDROID_DATA=$DEX_LOCATION && \
+             export DEX_LOCATION=$DEX_LOCATION && \
+             $mkdir_cmdline && \
+             $dex2oat_cmdline && \
+             $dalvikvm_cmdline"
+
+    cmdfile=$(tempfile -p "cmd-" -s "-$TEST_NAME")
+    echo "$cmdline" > $cmdfile
+
+    if [ "$DEV_MODE" = "y" ]; then
+      echo $cmdline
+    fi
+
+    if [ "$QUIET" = "n" ]; then
+      adb push $cmdfile $DEX_LOCATION/cmdline.sh
+    else
+      adb push $cmdfile $DEX_LOCATION/cmdline.sh > /dev/null 2>&1
+    fi
+
+    adb shell sh $DEX_LOCATION/cmdline.sh
+
+    rm -f $cmdfile
 else
-  adb push $cmdfile $DEX_LOCATION/cmdline.sh > /dev/null 2>&1
+    export ANDROID_PRINTF_LOG=brief
+    if [ "$DEV_MODE" = "y" ]; then
+        export ANDROID_LOG_TAGS='*:d'
+    else
+        export ANDROID_LOG_TAGS='*:s'
+    fi
+    export ANDROID_DATA="$DEX_LOCATION"
+    export ANDROID_ROOT="${ANDROID_HOST_OUT}"
+    export LD_LIBRARY_PATH="${ANDROID_ROOT}/lib"
+    export DYLD_LIBRARY_PATH="${ANDROID_ROOT}/lib"
+    export PATH="$PATH:${ANDROID_ROOT}/bin"
+
+    cmdline="$dalvikvm_cmdline"
+
+    if [ "$TIME_OUT" = "y" ]; then
+      # Add timeout command if time out is desired.
+      cmdline="timeout $TIME_OUT_VALUE $cmdline"
+    fi
+
+    if [ "$DEV_MODE" = "y" ]; then
+      if [ "$PREBUILD" = "y" ]; then
+        echo "$mkdir_cmdline && $dex2oat_cmdline && $cmdline"
+      elif [ "$RELOCATE" = "y" ]; then
+        echo "$mkdir_cmdline && $cmdline"
+      else
+        echo $cmdline
+      fi
+    fi
+
+    cd $ANDROID_BUILD_TOP
+
+    $mkdir_cmdline || exit 1
+    $dex2oat_cmdline || exit 2
+
+    if [ "$USE_GDB" = "y" ]; then
+      # When running under gdb, we cannot do piping and grepping...
+      LD_PRELOAD=libsigchain.so $cmdline "$@"
+    else
+      # If we are execing /bin/false we might not be on the same ISA as libsigchain.so
+      # ld.so will helpfully warn us of this. Unfortunately this messes up our error
+      # checking so we will just filter out the error with a grep.
+      LD_PRELOAD=libsigchain.so $cmdline "$@" 2>&1 | grep -v -E "^ERROR: ld\.so: object '.+\.so' from LD_PRELOAD cannot be preloaded.*: ignored\.$"
+      # Add extra detail if time out is enabled.
+      if [ ${PIPESTATUS[0]} = 124 ] && [ "$TIME_OUT" = "y" ]; then
+        echo -e "\e[91mTEST TIMED OUT!\e[0m" >&2
+      fi
+    fi
 fi
-
-adb shell sh $DEX_LOCATION/cmdline.sh
-
-rm -f $cmdfile
