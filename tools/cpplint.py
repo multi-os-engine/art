@@ -3225,11 +3225,13 @@ def CheckLanguage(filename, clean_lines, linenum, file_extension, include_state,
     # gMock methods are defined using some variant of MOCK_METHODx(name, type)
     # where type may be float(), int(string), etc.  Without context they are
     # virtually indistinguishable from int(x) casts. Likewise, gMock's
-    # MockCallback takes a template parameter of the form return_type(arg_type),
-    # which looks much like the cast we're trying to detect.
+    # MockCallback and std::function take a template parameter of the form
+    # return_type(arg_type), which looks much like the cast we're trying to
+    # detect.
     if (match.group(1) is None and  # If new operator, then this isn't a cast
         not (Match(r'^\s*MOCK_(CONST_)?METHOD\d+(_T)?\(', line) or
-             Match(r'^\s*MockCallback<.*>', line))):
+             Match(r'^\s*MockCallback<.*>', line) or
+             Match(r'^\s*std::function<.*>', line))):
       # Try a bit harder to catch gmock lines: the only place where
       # something looks like an old-style cast is where we declare the
       # return type of the mocked method, and the only time when we
