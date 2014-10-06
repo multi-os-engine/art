@@ -298,6 +298,8 @@ class X86_64Assembler FINAL : public Assembler {
 
   void leaq(CpuRegister dst, const Address& src);
 
+  void movaps(XmmRegister dst, XmmRegister src);
+
   void movss(XmmRegister dst, const Address& src);
   void movss(const Address& dst, XmmRegister src);
   void movss(XmmRegister dst, XmmRegister src);
