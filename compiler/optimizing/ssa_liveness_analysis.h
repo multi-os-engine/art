@@ -159,6 +159,12 @@ class LiveInterval : public ArenaObject {
         is_slow_path_safepoint_(is_slow_path_safepoint),
         defined_by_(defined_by) {}
 
+  static LiveInterval* MakeInterval(ArenaAllocator* allocator,
+                                    HInstruction* defined_by,
+                                    Primitive::Type type) {
+    return new (allocator) LiveInterval(allocator, type, defined_by);
+  }
+
   static LiveInterval* MakeSlowPathInterval(ArenaAllocator* allocator, HInstruction* instruction) {
     return new (allocator) LiveInterval(
         allocator, Primitive::kPrimVoid, instruction, false, kNoRegister, false, true);
@@ -173,7 +179,10 @@ class LiveInterval : public ArenaObject {
   }
 
   bool IsFixed() const { return is_fixed_; }
+  bool IsTemp() const { return is_temp_; }
   bool IsSlowPathSafepoint() const { return is_slow_path_safepoint_; }
+  // This interval is the result of a split.
+  bool IsSplit() const { return parent_ != this; }
 
   void AddUse(HInstruction* instruction, size_t input_index, bool is_environment) {
     // Set the use within the instruction.
@@ -480,6 +489,7 @@ class LiveInterval : public ArenaObject {
       } while ((use = use->GetNext()) != nullptr);
     }
     stream << "}";
+    stream << " is_fixed: " << is_fixed_ << ", is_split: " << IsSplit();
   }
 
   LiveInterval* GetNextSibling() const { return next_sibling_; }
@@ -506,8 +516,6 @@ class LiveInterval : public ArenaObject {
 
   // Finds the interval that covers `position`.
   const LiveInterval& GetIntervalAt(size_t position) const;
-
-  bool IsTemp() const { return is_temp_; }
 
  private:
   ArenaAllocator* const allocator_;
