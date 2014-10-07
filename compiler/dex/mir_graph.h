@@ -132,9 +132,10 @@ enum DataFlowAttributePos {
 #define DF_A_IS_REG             (DF_UA | DF_DA)
 #define DF_B_IS_REG             (DF_UB)
 #define DF_C_IS_REG             (DF_UC)
-#define DF_IS_GETTER_OR_SETTER  (DF_IS_GETTER | DF_IS_SETTER)
 #define DF_USES_FP              (DF_FP_A | DF_FP_B | DF_FP_C)
 #define DF_NULL_TRANSFER        (DF_NULL_TRANSFER_0 | DF_NULL_TRANSFER_N)
+#define DF_IS_INVOKE            (DF_FORMAT_35C | DF_FORMAT_3RC)
+
 enum OatMethodAttributes {
   kIsLeaf,            // Method is leaf.
   kHasLoop,           // Method contains simple loop.
@@ -198,7 +199,6 @@ struct BasicBlockDataFlow {
   ArenaBitVector* use_v;
   ArenaBitVector* def_v;
   ArenaBitVector* live_in_v;
-  ArenaBitVector* phi_v;
   int32_t* vreg_to_ssa_map_exit;
   ArenaBitVector* ending_check_v;  // For null check and class init check elimination.
 };
@@ -579,6 +579,18 @@ class MIRGraph {
     return num_blocks_;
   }
 
+  unsigned int GetNumLiveBlocks() const {
+    unsigned int num = 0u;
+    for (BasicBlock* bb : block_list_) {
+      if (bb->block_type == kDalvikByteCode ||
+          bb->block_type == kEntryBlock ||
+          bb->block_type == kExitBlock) {
+        num += 1u;
+      }
+    }
+    return num;
+  }
+
   /**
    * @brief Provides the total size in code units of all instructions in MIRGraph.
    * @details Includes the sizes of all methods in compilation unit.
@@ -666,12 +678,14 @@ class MIRGraph {
   void DoCacheFieldLoweringInfo();
 
   const MirIFieldLoweringInfo& GetIFieldLoweringInfo(MIR* mir) const {
-    DCHECK_LT(mir->meta.ifield_lowering_info, ifield_lowering_infos_.size());
+    DCHECK_LT(mir->meta.ifield_lowering_info, ifield_lowering_infos_.size())
+        << PrettyMethod(cu_->method_idx, *cu_->dex_file);
     return ifield_lowering_infos_[mir->meta.ifield_lowering_info];
   }
 
   const MirSFieldLoweringInfo& GetSFieldLoweringInfo(MIR* mir) const {
-    DCHECK_LT(mir->meta.sfield_lowering_info, sfield_lowering_infos_.size());
+    DCHECK_LT(mir->meta.sfield_lowering_info, sfield_lowering_infos_.size())
+            << PrettyMethod(cu_->method_idx, *cu_->dex_file);
     return sfield_lowering_infos_[mir->meta.sfield_lowering_info];
   }
 
@@ -1015,6 +1029,10 @@ class MIRGraph {
   uint32_t GetFirstNonSpecialTempVR() const {
     // We always leave space for all the special temps before the non-special ones.
     return GetFirstSpecialTempVR() + max_available_special_compiler_temps_;
+  }
+
+  bool HasTryCatchBlocks() const {
+    return current_code_item_->tries_size_ != 0;
   }
 
   void DumpCheckStats();

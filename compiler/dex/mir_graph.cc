@@ -2321,16 +2321,34 @@ void BasicBlock::ErasePredecessor(BasicBlockId old_pred) {
   auto pos = std::find(predecessors.begin(), predecessors.end(), old_pred);
   DCHECK(pos != predecessors.end());
   predecessors.erase(pos);
+  size_t idx = std::distance(predecessors.begin(), pos);
+  size_t remaining = predecessors.size() - idx;
+  for (MIR* mir = first_mir_insn; mir != nullptr; mir = mir->next) {
+    if (static_cast<int>(mir->dalvikInsn.opcode) != kMirOpPhi) {
+      break;
+    }
+    // Erase the mir->mir->meta.phi_incoming[idx] and mir->ssa_rep->uses[idx].
+    BasicBlockId* incoming = &mir->meta.phi_incoming[idx];
+    int32_t* uses = &mir->ssa_rep->uses[idx];
+    CHECK_EQ(*incoming, old_pred);  // TODO: DCHECK
+    std::memcpy(incoming, incoming + 1, sizeof(*incoming) * remaining);
+    std::memcpy(uses, uses + 1, sizeof(*uses) * remaining);
+    mir->ssa_rep->num_uses -= 1u;
+  }
 }
 
 void BasicBlock::UpdatePredecessor(BasicBlockId old_pred, BasicBlockId new_pred) {
   DCHECK_NE(new_pred, NullBasicBlockId);
   auto pos = std::find(predecessors.begin(), predecessors.end(), old_pred);
-  if (pos != predecessors.end()) {
-    *pos = new_pred;
-  } else {
-    // If not found, add it.
-    predecessors.push_back(new_pred);
+  CHECK(pos != predecessors.end());  // TODO: DCHECK
+  *pos = new_pred;
+  size_t idx = std::distance(predecessors.begin(), pos);
+  for (MIR* mir = first_mir_insn; mir != nullptr; mir = mir->next) {
+    if (static_cast<int>(mir->dalvikInsn.opcode) != kMirOpPhi) {
+      break;
+    }
+    CHECK_EQ(mir->meta.phi_incoming[idx], old_pred);  // TODO: DCHECK
+    mir->meta.phi_incoming[idx] = new_pred;
   }
 }
 
