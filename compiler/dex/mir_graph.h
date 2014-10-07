@@ -132,9 +132,10 @@ enum DataFlowAttributePos {
 #define DF_A_IS_REG             (DF_UA | DF_DA)
 #define DF_B_IS_REG             (DF_UB)
 #define DF_C_IS_REG             (DF_UC)
-#define DF_IS_GETTER_OR_SETTER  (DF_IS_GETTER | DF_IS_SETTER)
 #define DF_USES_FP              (DF_FP_A | DF_FP_B | DF_FP_C)
 #define DF_NULL_TRANSFER        (DF_NULL_TRANSFER_0 | DF_NULL_TRANSFER_N)
+#define DF_IS_INVOKE            (DF_FORMAT_35C | DF_FORMAT_3RC)
+
 enum OatMethodAttributes {
   kIsLeaf,            // Method is leaf.
   kHasLoop,           // Method contains simple loop.
@@ -198,7 +199,6 @@ struct BasicBlockDataFlow {
   ArenaBitVector* use_v;
   ArenaBitVector* def_v;
   ArenaBitVector* live_in_v;
-  ArenaBitVector* phi_v;
   int32_t* vreg_to_ssa_map_exit;
   ArenaBitVector* ending_check_v;  // For null check and class init check elimination.
 };
