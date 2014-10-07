@@ -1008,6 +1008,10 @@ class MIRGraph {
     return GetFirstSpecialTempVR() + max_available_special_compiler_temps_;
   }
 
+  bool HasTryCatchBlocks() const {
+    return current_code_item_->tries_size_ != 0;
+  }
+
   void DumpCheckStats();
   MIR* FindMoveResult(BasicBlock* bb, MIR* mir);
   int SRegToVReg(int ssa_reg) const;
@@ -1143,6 +1147,10 @@ class MIRGraph {
   void InsertPhiNodes();
   void DoDFSPreOrderSSARename(BasicBlock* block);
 
+  bool DfsOrdersUpToDate() const {
+    return dfs_orders_up_to_date_;
+  }
+
   /*
    * IsDebugBuild sanity check: keep track of the Dex PCs for catch entries so that later on
    * we can verify that all catch entries have native PC entries.
@@ -1189,6 +1197,7 @@ class MIRGraph {
                          BasicBlock** immed_pred_block_p);
   BasicBlock* FindBlock(DexOffset code_offset, bool split, bool create,
                         BasicBlock** immed_pred_block_p);
+  void KillUnreachableBlocks(BasicBlock* bb);
   void ProcessTryCatchBlocks();
   bool IsBadMonitorExitCatch(NarrowDexOffset monitor_exit_offset, NarrowDexOffset catch_offset);
   BasicBlock* ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
@@ -1239,6 +1248,7 @@ class MIRGraph {
   ArenaVector<uint32_t> raw_use_counts_;  // Not weighted
   unsigned int num_reachable_blocks_;
   unsigned int max_num_reachable_blocks_;
+  bool dfs_orders_up_to_date_;
   ArenaVector<BasicBlockId> dfs_order_;
   ArenaVector<BasicBlockId> dfs_post_order_;
   ArenaVector<BasicBlockId> dom_post_order_traversal_;

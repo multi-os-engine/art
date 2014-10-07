@@ -122,7 +122,7 @@ LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb,
       merge_type = LocalValueNumbering::kReturnMerge;
     }
     // At least one predecessor must have been processed before this bb.
-    CHECK(!merge_lvns_.empty());
+    CHECK(!merge_lvns_.empty()) << PrettyMethod(cu_->method_idx, *cu_->dex_file);
     if (merge_lvns_.size() == 1u) {
       work_lvn_->MergeOne(*merge_lvns_[0], merge_type);
       BasicBlock* pred_bb = mir_graph_->GetBasicBlock(merge_lvns_[0]->Id());

@@ -112,6 +112,7 @@ void MIRGraph::ComputeDFSOrders() {
       }
     }
   }
+  dfs_orders_up_to_date_ = true;
 }
 
 /*
