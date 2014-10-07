@@ -331,6 +331,33 @@ BasicBlock* MIRGraph::FindBlock(DexOffset code_offset, bool split, bool create,
   return bb;
 }
 
+/*
+ * Kill an unreachable block and all blocks that become unreachable by killing this one.
+ */
+void MIRGraph::KillUnreachableBlocks(BasicBlock* bb) {
+  DCHECK(bb->predecessors.empty());  // Unreachable.
+  bb->block_type = kDead;
+  bb->hidden = true;
+  bb->first_mir_insn = nullptr;
+  bb->last_mir_insn = nullptr;
+  bb->data_flow_info = nullptr;
+  ChildBlockIterator iter(bb, this);
+  for (BasicBlock* succ_bb = iter.Next(); succ_bb != nullptr; succ_bb = iter.Next()) {
+    succ_bb->ErasePredecessor(bb->id);
+    if (succ_bb->predecessors.empty()) {
+      KillUnreachableBlocks(succ_bb);
+    }
+  }
+  bb->fall_through = NullBasicBlockId;
+  bb->taken = NullBasicBlockId;
+  bb->successor_block_list_type = kNotUsed;
+  if (kIsDebugBuild) {
+    if (bb->catch_entry) {
+      DCHECK_EQ(catches_.count(bb->start_offset), 1u);
+      catches_.erase(bb->start_offset);
+    }
+  }
+}
 
 /* Identify code range in try blocks and set up the empty catch blocks */
 void MIRGraph::ProcessTryCatchBlocks() {
@@ -2333,17 +2360,34 @@ bool BasicBlock::ReplaceChild(BasicBlockId old_bb, BasicBlockId new_bb) {
 void BasicBlock::ErasePredecessor(BasicBlockId old_pred) {
   auto pos = std::find(predecessors.begin(), predecessors.end(), old_pred);
   DCHECK(pos != predecessors.end());
-  predecessors.erase(pos);
+  // It's faster to move the back() to *pos than erase(pos).
+  *pos = predecessors.back();
+  predecessors.pop_back();
+  size_t idx = std::distance(predecessors.begin(), pos);
+  for (MIR* mir = first_mir_insn; mir != nullptr; mir = mir->next) {
+    if (static_cast<int>(mir->dalvikInsn.opcode) != kMirOpPhi) {
+      break;
+    }
+    CHECK_EQ(mir->ssa_rep->num_uses - 1u, predecessors.size());  // TODO: DCHECK
+    CHECK_EQ(mir->meta.phi_incoming[idx], old_pred);  // TODO: DCHECK
+    mir->meta.phi_incoming[idx] = mir->meta.phi_incoming[predecessors.size()];
+    mir->ssa_rep->uses[idx] = mir->ssa_rep->uses[predecessors.size()];
+    mir->ssa_rep->num_uses = predecessors.size();
+  }
 }
 
 void BasicBlock::UpdatePredecessor(BasicBlockId old_pred, BasicBlockId new_pred) {
   DCHECK_NE(new_pred, NullBasicBlockId);
   auto pos = std::find(predecessors.begin(), predecessors.end(), old_pred);
-  if (pos != predecessors.end()) {
-    *pos = new_pred;
-  } else {
-    // If not found, add it.
-    predecessors.push_back(new_pred);
+  CHECK(pos != predecessors.end());  // TODO: DCHECK
+  *pos = new_pred;
+  size_t idx = std::distance(predecessors.begin(), pos);
+  for (MIR* mir = first_mir_insn; mir != nullptr; mir = mir->next) {
+    if (static_cast<int>(mir->dalvikInsn.opcode) != kMirOpPhi) {
+      break;
+    }
+    CHECK_EQ(mir->meta.phi_incoming[idx], old_pred);  // TODO: DCHECK
+    mir->meta.phi_incoming[idx] = new_pred;
   }
 }
 

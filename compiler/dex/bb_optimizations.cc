@@ -51,6 +51,13 @@ bool BBCombine::Worker(PassDataHolder* data) const {
   return false;
 }
 
+void BBCombine::End(PassDataHolder* data) const {
+  DCHECK(data != nullptr);
+  CompilationUnit* c_unit = down_cast<PassMEDataHolder*>(data)->c_unit;
+  DCHECK(c_unit != nullptr);
+  c_unit->mir_graph->CombineBlocksEnd();
+}
+
 /*
  * BasicBlock Optimization pass implementation start.
  */

@@ -1007,6 +1007,10 @@ class MIRGraph {
     return GetFirstSpecialTempVR() + max_available_special_compiler_temps_;
   }
 
+  bool HasTryCatchBlocks() const {
+    return current_code_item_->tries_size_ != 0;
+  }
+
   void DumpCheckStats();
   MIR* FindMoveResult(BasicBlock* bb, MIR* mir);
   int SRegToVReg(int ssa_reg) const;
@@ -1128,6 +1132,7 @@ class MIRGraph {
    * @param the BasicBlock we are considering
    */
   void CombineBlocks(BasicBlock* bb);
+  void CombineBlocksEnd();
 
   void ClearAllVisitedFlags();
 
@@ -1189,6 +1194,7 @@ class MIRGraph {
                          BasicBlock** immed_pred_block_p);
   BasicBlock* FindBlock(DexOffset code_offset, bool split, bool create,
                         BasicBlock** immed_pred_block_p);
+  void KillUnreachableBlocks(BasicBlock* bb);
   void ProcessTryCatchBlocks();
   bool IsBadMonitorExitCatch(NarrowDexOffset monitor_exit_offset, NarrowDexOffset catch_offset);
   BasicBlock* ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
