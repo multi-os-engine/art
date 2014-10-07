@@ -40,10 +40,10 @@ const Pass* const PassDriver<PassDriverMEOpts>::g_passes[] = {
   GetPassInstance<CalculatePredecessors>(),
   GetPassInstance<NullCheckElimination>(),
   GetPassInstance<ClassInitCheckElimination>(),
+  GetPassInstance<BBCombine>(),
   GetPassInstance<CodeLayout>(),
   GetPassInstance<TypeInference>(),
   GetPassInstance<GlobalValueNumberingPass>(),
-  GetPassInstance<BBCombine>(),
   GetPassInstance<BBOptimizations>(),
 };
 
