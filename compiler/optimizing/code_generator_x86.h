@@ -123,6 +123,11 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
 
   X86Assembler* GetAssembler() const { return assembler_; }
 
+  template <typename T>
+  void LongMul(Register eax, Register edx,
+               Register in1_hi, Register in1_lo,
+               const T& in2_hi, const T& in2_lo);
+
  private:
   // Generate code for the given suspend check. If not null, `successor`
   // is the block to branch to if the suspend check is not needed, and after
@@ -166,6 +171,7 @@ class CodeGeneratorX86 : public CodeGenerator {
   }
 
   virtual void SetupBlockedRegisters() const OVERRIDE;
+  virtual void UpdateBlockedPairRegisters() const OVERRIDE;
   virtual Location AllocateFreeRegister(Primitive::Type type) const OVERRIDE;
 
   virtual Location GetStackLocation(HLoadLocal* load) const OVERRIDE;

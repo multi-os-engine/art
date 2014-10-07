@@ -199,6 +199,7 @@ void CodeGenerator::AllocateRegistersLocally(HInstruction* instruction) const {
   }
 
   SetupBlockedRegisters();
+  UpdateBlockedPairRegisters();
 
   // Allocate all unallocated input locations.
   for (size_t i = 0, e = locations->GetInputCount(); i < e; ++i) {

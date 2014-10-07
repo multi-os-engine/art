@@ -220,19 +220,12 @@ Location CodeGeneratorARM::AllocateFreeRegister(Primitive::Type type) const {
       size_t reg = FindFreeEntry(blocked_register_pairs_, kNumberOfRegisterPairs);
       ArmManagedRegister pair =
           ArmManagedRegister::FromRegisterPair(static_cast<RegisterPair>(reg));
+      DCHECK(!blocked_core_registers_[pair.AsRegisterPairLow()]);
+      DCHECK(!blocked_core_registers_[pair.AsRegisterPairHigh()]);
+
       blocked_core_registers_[pair.AsRegisterPairLow()] = true;
       blocked_core_registers_[pair.AsRegisterPairHigh()] = true;
-       // Block all other register pairs that share a register with `pair`.
-      for (int i = 0; i < kNumberOfRegisterPairs; i++) {
-        ArmManagedRegister current =
-            ArmManagedRegister::FromRegisterPair(static_cast<RegisterPair>(i));
-        if (current.AsRegisterPairLow() == pair.AsRegisterPairLow()
-            || current.AsRegisterPairLow() == pair.AsRegisterPairHigh()
-            || current.AsRegisterPairHigh() == pair.AsRegisterPairLow()
-            || current.AsRegisterPairHigh() == pair.AsRegisterPairHigh()) {
-          blocked_register_pairs_[i] = true;
-        }
-      }
+      UpdateBlockedPairRegisters();
       return Location::RegisterPairLocation(pair.AsRegisterPairLow(), pair.AsRegisterPairHigh());
     }
 
@@ -302,6 +295,17 @@ void CodeGeneratorARM::SetupBlockedRegisters() const {
   blocked_fpu_registers_[D13] = true;
   blocked_fpu_registers_[D14] = true;
   blocked_fpu_registers_[D15] = true;
+}
+
+void CodeGeneratorARM::UpdateBlockedPairRegisters() const {
+  for (int i = 0; i < kNumberOfRegisterPairs; i++) {
+    ArmManagedRegister current =
+        ArmManagedRegister::FromRegisterPair(static_cast<RegisterPair>(i));
+    if (blocked_core_registers_[current.AsRegisterPairLow()]
+        || blocked_core_registers_[current.AsRegisterPairHigh()]) {
+      blocked_register_pairs_[i] = true;
+    }
+  }
 }
 
 InstructionCodeGeneratorARM::InstructionCodeGeneratorARM(HGraph* graph, CodeGeneratorARM* codegen)
@@ -1104,6 +1108,102 @@ void InstructionCodeGeneratorARM::VisitSub(HSub* sub) {
 
     default:
       LOG(FATAL) << "Unimplemented sub type " << sub->GetResultType();
+  }
+}
+
+void LocationsBuilderARM::VisitMul(HMul* mul) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mul, LocationSummary::kNoCall);
+  // The reference mentions that R15 should bot be used for mul operations.
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt: {
+      locations->SetInAt(0, Location::RegisterLocation(R0), Location::kDiesAtEntry);
+      locations->SetInAt(1, Location::ByteRegisterOrConstant(R1, mul->InputAt(1)), Location::kDiesAtEntry);
+      locations->SetOut(Location::RegisterLocation(R2));
+      break;
+    }
+    case Primitive::kPrimLong:  {
+      // This Safe because there's no pair with R15.
+      locations->SetInAt(0, Location::RequiresRegister(), Location::kDiesAtEntry);
+      locations->SetInAt(1, Location::RequiresRegister(), Location::kDiesAtEntry);
+      locations->SetOut(Location::RequiresRegister());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM::VisitMul(HMul* mul) {
+  LocationSummary* locations = mul->GetLocations();
+  Location out = locations->Out();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt: {
+      Register first_reg = first.As<Register>();
+      Register out_reg = out.As<Register>();
+      DCHECK_NE(R15, first_reg);
+      DCHECK_NE(R15, out_reg);
+      if (second.IsRegister()) {
+        Register second_reg = second.As<Register>();
+        DCHECK_NE(R15, second_reg);
+        __ mul(out_reg, first_reg, second_reg);
+      } else {
+        DCHECK(second.IsConstant());
+        __ LoadImmediate(IP, second.GetConstant()->AsIntConstant()->GetValue());
+        __ mul(out_reg, first_reg, IP);
+      }
+      break;
+    }
+    case Primitive::kPrimLong: {
+      // There's no pair with R15 so we're ok to skip the checks.
+      Register out_hi = out.AsRegisterPairHigh<Register>();
+      Register out_lo = out.AsRegisterPairLow<Register>();
+      Register in1_hi = first.AsRegisterPairHigh<Register>();
+      Register in1_lo = first.AsRegisterPairLow<Register>();
+      Register in2_hi = second.AsRegisterPairHigh<Register>();
+      Register in2_lo = second.AsRegisterPairLow<Register>();
+
+      // Extra checks to protect caused by the existence of R1_R2.
+      // The algorithm is wrong if out.hi is either in1.lo or in2.lo:
+      // (e.g. in1=r0_r1, in2=r2_r3 and out=r1_r2);
+      DCHECK_NE(out_hi, in1_lo);
+      DCHECK_NE(out_hi, in2_lo);
+
+      // input: in1 - 64 bits, in2 - 64 bits
+      // output: out
+      // formula: out.hi : out.lo = (in1.lo * in2.hi + in1.hi * in2.lo)* 2^32 + in1.lo * in2.lo
+      // parts: out.hi = in1.lo * in2.hi + in1.hi * in2.lo + (in1.lo * in2.lo)[63:32]
+      // parts: out.lo = (in1.lo * in2.lo)[31:0]
+
+      // IP <- in1.lo * in2.hi
+      __ mul(IP, in1_lo, in2_hi);
+      // out.hi <- in1.lo * in2.hi + in1.hi * in2.lo
+      __ mla(out_hi, in1_hi, in2_lo, IP);
+      // out.lo <- (in1.lo * in2.lo)[31:0];
+      __ umull(out_lo, IP, in1_lo, in2_lo);
+      // out.hi <- in2.hi * in1.lo +  in2.lo * in1.hi + (in1.lo * in2.lo)[63:32]
+      __ add(out_hi, out_hi, ShifterOperand(IP));
+      break;
+    }
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
   }
 }
 
