@@ -247,6 +247,10 @@ void CodeGeneratorX86_64::SetupBlockedRegisters() const {
   blocked_fpu_registers_[XMM15] = true;
 }
 
+void CodeGeneratorX86_64::UpdateBlockedPairRegisters() const {
+  // No op: no pair registers on x64_64.
+}
+
 void CodeGeneratorX86_64::GenerateFrameEntry() {
   // Create a fake register to mimic Quick.
   static const int kFakeReturnRegister = 16;
@@ -1040,6 +1044,75 @@ void InstructionCodeGeneratorX86_64::VisitSub(HSub* sub) {
 
     default:
       LOG(FATAL) << "Unimplemented sub type " << sub->GetResultType();
+  }
+}
+
+void LocationsBuilderX86_64::VisitMul(HMul* mul) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mul, LocationSummary::kNoCall);
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorX86_64::VisitMul(HMul* mul) {
+  LocationSummary* locations = mul->GetLocations();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  DCHECK(first.Equals(locations->Out()));
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt: {
+      if (second.IsRegister()) {
+        __ imull(first.As<CpuRegister>(), second.As<CpuRegister>());
+      } else if (second.IsConstant()) {
+        Immediate imm(second.GetConstant()->AsIntConstant()->GetValue());
+        __ imull(first.As<CpuRegister>(), imm);
+      } else {
+        __ imull(first.As<CpuRegister>(), Address(CpuRegister(RSP), second.GetStackIndex()));
+      }
+      break;
+    }
+    case Primitive::kPrimLong: {
+      // no imul-long/lit. TODO: consider optimizations?
+      DCHECK(!second.IsConstant());
+      if (second.IsRegister()) {
+        __ imulq(first.As<CpuRegister>(), second.As<CpuRegister>());
+      } else {
+        __ imulq(first.As<CpuRegister>(), Address(CpuRegister(RSP), second.GetStackIndex()));
+      }
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
   }
 }
 

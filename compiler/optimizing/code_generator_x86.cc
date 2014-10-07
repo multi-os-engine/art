@@ -191,19 +191,11 @@ Location CodeGeneratorX86::AllocateFreeRegister(Primitive::Type type) const {
       size_t reg = FindFreeEntry(blocked_register_pairs_, kNumberOfRegisterPairs);
       X86ManagedRegister pair =
           X86ManagedRegister::FromRegisterPair(static_cast<RegisterPair>(reg));
+      DCHECK(!blocked_core_registers_[pair.AsRegisterPairLow()]);
+      DCHECK(!blocked_core_registers_[pair.AsRegisterPairHigh()]);
       blocked_core_registers_[pair.AsRegisterPairLow()] = true;
       blocked_core_registers_[pair.AsRegisterPairHigh()] = true;
-      // Block all other register pairs that share a register with `pair`.
-      for (int i = 0; i < kNumberOfRegisterPairs; i++) {
-        X86ManagedRegister current =
-            X86ManagedRegister::FromRegisterPair(static_cast<RegisterPair>(i));
-        if (current.AsRegisterPairLow() == pair.AsRegisterPairLow()
-            || current.AsRegisterPairLow() == pair.AsRegisterPairHigh()
-            || current.AsRegisterPairHigh() == pair.AsRegisterPairLow()
-            || current.AsRegisterPairHigh() == pair.AsRegisterPairHigh()) {
-          blocked_register_pairs_[i] = true;
-        }
-      }
+      UpdateBlockedPairRegisters();
       return Location::RegisterPairLocation(pair.AsRegisterPairLow(), pair.AsRegisterPairHigh());
     }
 
@@ -254,6 +246,17 @@ void CodeGeneratorX86::SetupBlockedRegisters() const {
   blocked_register_pairs_[EDX_EDI] = true;
   blocked_register_pairs_[ECX_EDI] = true;
   blocked_register_pairs_[EBX_EDI] = true;
+}
+
+void CodeGeneratorX86::UpdateBlockedPairRegisters() const {
+  for (int i = 0; i < kNumberOfRegisterPairs; i++) {
+    X86ManagedRegister current =
+        X86ManagedRegister::FromRegisterPair(static_cast<RegisterPair>(i));
+    if (blocked_core_registers_[current.AsRegisterPairLow()]
+        || blocked_core_registers_[current.AsRegisterPairHigh()]) {
+      blocked_register_pairs_[i] = true;
+    }
+  }
 }
 
 InstructionCodeGeneratorX86::InstructionCodeGeneratorX86(HGraph* graph, CodeGeneratorX86* codegen)
@@ -1083,6 +1086,122 @@ void InstructionCodeGeneratorX86::VisitSub(HSub* sub) {
   }
 }
 
+void LocationsBuilderX86::VisitMul(HMul* mul) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mul, LocationSummary::kNoCall);
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::SameAsFirstInput());
+      locations->AddTemp(Location::RegisterLocation(EAX));
+      locations->AddTemp(Location::RegisterLocation(EDX));
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorX86::VisitMul(HMul* mul) {
+  LocationSummary* locations = mul->GetLocations();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  Location out = locations->Out();
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt: {
+      DCHECK_EQ(first.As<Register>(), out.As<Register>());
+      if (second.IsRegister()) {
+        __ imull(first.As<Register>(), second.As<Register>());
+      } else if (second.IsConstant()) {
+        HConstant* instruction = second.GetConstant();
+        Immediate imm(instruction->AsIntConstant()->GetValue());
+        __ imull(first.As<Register>(), imm);
+      } else {
+        __ imull(first.As<Register>(), Address(ESP, second.GetStackIndex()));
+      }
+      break;
+    }
+
+    case Primitive::kPrimLong: {
+      Register in1_reg_hi = first.AsRegisterPairHigh<Register>();
+      Register in1_reg_lo = first.AsRegisterPairLow<Register>();
+      DCHECK_EQ(in1_reg_hi, locations->Out().AsRegisterPairHigh<Register>());
+      DCHECK_EQ(in1_reg_lo, locations->Out().AsRegisterPairLow<Register>());
+
+      Register eax = locations->GetTemp(0).As<Register>();
+      Register edx = locations->GetTemp(1).As<Register>();
+      Register in2_reg_H, in2_reg_L;
+      int32_t in2_addr_off_H, in2_addr_off_L;
+      bool inuput_in_register = second.IsRegister();
+      if (inuput_in_register) {
+        in2_reg_H = second.AsRegisterPairHigh<Register>();
+        in2_reg_L = second.AsRegisterPairLow<Register>();
+      } else {
+        in2_addr_off_H = second.GetHighStackIndex(kX86WordSize);
+        in2_addr_off_L = second.GetStackIndex();
+      }
+
+      // input: in1 - 64 bits, in2 - 64 bits
+      // outut: in1
+      // formula: in1.hi : in1.lo = (in1.lo * in2.hi + in1.hi * in2.lo)* 2^32 + in1.lo * in2.lo
+      // parts: in1.hi = in1.lo * in2.hi + in1.hi * in2.lo + (in1.lo * in2.lo)[63:32]
+      // parts: in1.lo = (in1.lo * in2.lo)[31:0]
+      if (inuput_in_register) {
+        __ movl(eax, in2_reg_H);
+      } else {
+        __ movl(eax, Address(ESP, in2_addr_off_H));
+      }
+      // eax <- in1.lo * in2.hi
+      __ imull(eax, in1_reg_lo);
+      // in1.hi <- in1.hi * in2.lo
+      if (inuput_in_register) {
+        __ imull(in1_reg_hi, in2_reg_L);
+      } else {
+        __ imull(in1_reg_hi, Address(ESP, in2_addr_off_L));
+      }
+      // in1.hi <- in1.lo * in2.hi + in1.hi * in2.lo
+      __ addl(in1_reg_hi, eax);
+      // move in1_reg_lo to eax to prepare for double precision
+      __ movl(eax, in1_reg_lo);
+      // edx:eax <- in1.lo * in2.lo
+      if (inuput_in_register) {
+        __ imull(in2_reg_L);
+      } else {
+        __ imull(Address(ESP, in2_addr_off_L));
+      }
+      // in1.hi <- in2.hi * in1.lo +  in2.lo * in1.hi + (in1.lo * in2.lo)[63:32]
+      __ addl(in1_reg_hi, edx);
+      // in1.lo <- (in1.lo * in2.lo)[31:0];
+      __ movl(in1_reg_lo, eax);
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
 void LocationsBuilderX86::VisitNewInstance(HNewInstance* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
@@ -1819,3 +1938,4 @@ void ParallelMoveResolverX86::RestoreScratch(int reg) {
 
 }  // namespace x86
 }  // namespace art
+

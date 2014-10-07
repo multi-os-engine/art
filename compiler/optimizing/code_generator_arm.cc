@@ -220,19 +220,12 @@ Location CodeGeneratorARM::AllocateFreeRegister(Primitive::Type type) const {
       size_t reg = FindFreeEntry(blocked_register_pairs_, kNumberOfRegisterPairs);
       ArmManagedRegister pair =
           ArmManagedRegister::FromRegisterPair(static_cast<RegisterPair>(reg));
+      DCHECK(!blocked_core_registers_[pair.AsRegisterPairLow()]);
+      DCHECK(!blocked_core_registers_[pair.AsRegisterPairHigh()]);
+
       blocked_core_registers_[pair.AsRegisterPairLow()] = true;
       blocked_core_registers_[pair.AsRegisterPairHigh()] = true;
-       // Block all other register pairs that share a register with `pair`.
-      for (int i = 0; i < kNumberOfRegisterPairs; i++) {
-        ArmManagedRegister current =
-            ArmManagedRegister::FromRegisterPair(static_cast<RegisterPair>(i));
-        if (current.AsRegisterPairLow() == pair.AsRegisterPairLow()
-            || current.AsRegisterPairLow() == pair.AsRegisterPairHigh()
-            || current.AsRegisterPairHigh() == pair.AsRegisterPairLow()
-            || current.AsRegisterPairHigh() == pair.AsRegisterPairHigh()) {
-          blocked_register_pairs_[i] = true;
-        }
-      }
+      UpdateBlockedPairRegisters();
       return Location::RegisterPairLocation(pair.AsRegisterPairLow(), pair.AsRegisterPairHigh());
     }
 
@@ -302,6 +295,17 @@ void CodeGeneratorARM::SetupBlockedRegisters() const {
   blocked_fpu_registers_[D13] = true;
   blocked_fpu_registers_[D14] = true;
   blocked_fpu_registers_[D15] = true;
+}
+
+void CodeGeneratorARM::UpdateBlockedPairRegisters() const {
+  for (int i = 0; i < kNumberOfRegisterPairs; i++) {
+    ArmManagedRegister current =
+        ArmManagedRegister::FromRegisterPair(static_cast<RegisterPair>(i));
+    if (blocked_core_registers_[current.AsRegisterPairLow()]
+        || blocked_core_registers_[current.AsRegisterPairHigh()]) {
+      blocked_register_pairs_[i] = true;
+    }
+  }
 }
 
 InstructionCodeGeneratorARM::InstructionCodeGeneratorARM(HGraph* graph, CodeGeneratorARM* codegen)
@@ -1104,6 +1108,59 @@ void InstructionCodeGeneratorARM::VisitSub(HSub* sub) {
 
     default:
       LOG(FATAL) << "Unimplemented sub type " << sub->GetResultType();
+  }
+}
+
+void LocationsBuilderARM::VisitMul(HMul* mul) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mul, LocationSummary::kNoCall);
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RegisterOrConstant(mul->InputAt(1)));
+      locations->SetOut(Location::RequiresRegister());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM::VisitMul(HMul* mul) {
+  LocationSummary* locations = mul->GetLocations();
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt:
+      if (locations->InAt(1).IsRegister()) {
+        __ mul(locations->Out().As<Register>(),
+               locations->InAt(0).As<Register>(),
+               locations->InAt(1).As<Register>());
+      } else {
+        LOG(FATAL) << "Unimplemented: mul-int/lit";
+      }
+      break;
+
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unimplemented: mul-long";
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
   }
 }
 
