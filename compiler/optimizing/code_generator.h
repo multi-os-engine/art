@@ -113,6 +113,9 @@ class CodeGenerator : public ArenaObject {
   size_t GetNumberOfFloatingPointRegisters() const { return number_of_fpu_registers_; }
   virtual void SetupBlockedRegisters() const = 0;
 
+  // Blocks all pair registers made out of blocked core registers.
+  virtual void UpdateBlockedPairRegisters() const = 0;
+
   virtual void DumpCoreRegister(std::ostream& stream, int reg) const = 0;
   virtual void DumpFloatingPointRegister(std::ostream& stream, int reg) const = 0;
   virtual InstructionSet GetInstructionSet() const = 0;

@@ -164,6 +164,8 @@ class CodeGeneratorARM : public CodeGenerator {
   }
 
   virtual void SetupBlockedRegisters() const OVERRIDE;
+  virtual void UpdateBlockedPairRegisters() const OVERRIDE;
+
   virtual Location AllocateFreeRegister(Primitive::Type type) const OVERRIDE;
 
   virtual Location GetStackLocation(HLoadLocal* load) const OVERRIDE;

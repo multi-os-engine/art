@@ -191,19 +191,11 @@ Location CodeGeneratorX86::AllocateFreeRegister(Primitive::Type type) const {
       size_t reg = FindFreeEntry(blocked_register_pairs_, kNumberOfRegisterPairs);
       X86ManagedRegister pair =
           X86ManagedRegister::FromRegisterPair(static_cast<RegisterPair>(reg));
+      DCHECK(!blocked_core_registers_[pair.AsRegisterPairLow()]);
+      DCHECK(!blocked_core_registers_[pair.AsRegisterPairHigh()]);
       blocked_core_registers_[pair.AsRegisterPairLow()] = true;
       blocked_core_registers_[pair.AsRegisterPairHigh()] = true;
-      // Block all other register pairs that share a register with `pair`.
-      for (int i = 0; i < kNumberOfRegisterPairs; i++) {
-        X86ManagedRegister current =
-            X86ManagedRegister::FromRegisterPair(static_cast<RegisterPair>(i));
-        if (current.AsRegisterPairLow() == pair.AsRegisterPairLow()
-            || current.AsRegisterPairLow() == pair.AsRegisterPairHigh()
-            || current.AsRegisterPairHigh() == pair.AsRegisterPairLow()
-            || current.AsRegisterPairHigh() == pair.AsRegisterPairHigh()) {
-          blocked_register_pairs_[i] = true;
-        }
-      }
+      UpdateBlockedPairRegisters();
       return Location::RegisterPairLocation(pair.AsRegisterPairLow(), pair.AsRegisterPairHigh());
     }
 
@@ -254,6 +246,17 @@ void CodeGeneratorX86::SetupBlockedRegisters() const {
   blocked_register_pairs_[EDX_EDI] = true;
   blocked_register_pairs_[ECX_EDI] = true;
   blocked_register_pairs_[EBX_EDI] = true;
+}
+
+void CodeGeneratorX86::UpdateBlockedPairRegisters() const {
+  for (int i = 0; i < kNumberOfRegisterPairs; i++) {
+    X86ManagedRegister current =
+        X86ManagedRegister::FromRegisterPair(static_cast<RegisterPair>(i));
+    if (blocked_core_registers_[current.AsRegisterPairLow()]
+        || blocked_core_registers_[current.AsRegisterPairHigh()]) {
+      blocked_register_pairs_[i] = true;
+    }
+  }
 }
 
 InstructionCodeGeneratorX86::InstructionCodeGeneratorX86(HGraph* graph, CodeGeneratorX86* codegen)
@@ -1080,6 +1083,116 @@ void InstructionCodeGeneratorX86::VisitSub(HSub* sub) {
 
     default:
       LOG(FATAL) << "Unimplemented sub type " << sub->GetResultType();
+  }
+}
+
+void LocationsBuilderX86::VisitMul(HMul* mul) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mul, LocationSummary::kNoCall);
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::SameAsFirstInput());
+      // Needed for imul on 32bits with 64bits output.
+      locations->AddTemp(Location::RegisterLocation(EAX));
+      locations->AddTemp(Location::RegisterLocation(EDX));
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
+template <typename T>
+void InstructionCodeGeneratorX86::LongMul(const Register& eax, const Register& edx,
+             const Register& in1_hi, const Register& in1_lo,
+             const T& in2_hi, const T& in2_lo) {
+  // input: in1 - 64 bits, in2 - 64 bits
+  // outut: in1
+  // formula: in1.hi : in1.lo = (in1.lo * in2.hi + in1.hi * in2.lo)* 2^32 + in1.lo * in2.lo
+  // parts: in1.hi = in1.lo * in2.hi + in1.hi * in2.lo + (in1.lo * in2.lo)[63:32]
+  // parts: in1.lo = (in1.lo * in2.lo)[31:0]
+
+  __ movl(eax, in2_hi);
+  // eax <- in1.lo * in2.hi
+  __ imull(eax, in1_lo);
+  // in1.hi <- in1.hi * in2.lo
+  __ imull(in1_hi, in2_lo);
+  // in1.hi <- in1.lo * in2.hi + in1.hi * in2.lo
+  __ addl(in1_hi, eax);
+  // move in1_lo to eax to prepare for double precision
+  __ movl(eax, in1_lo);
+  // edx:eax <- in1.lo * in2.lo
+  __ mull(in2_lo);
+  // in1.hi <- in2.hi * in1.lo +  in2.lo * in1.hi + (in1.lo * in2.lo)[63:32]
+  __ addl(in1_hi, edx);
+  // in1.lo <- (in1.lo * in2.lo)[31:0];
+  __ movl(in1_lo, eax);
+}
+
+void InstructionCodeGeneratorX86::VisitMul(HMul* mul) {
+  LocationSummary* locations = mul->GetLocations();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  DCHECK(first.Equals(locations->Out()));
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt: {
+      if (second.IsRegister()) {
+        __ imull(first.As<Register>(), second.As<Register>());
+      } else if (second.IsConstant()) {
+        Immediate imm(second.GetConstant()->AsIntConstant()->GetValue());
+        __ imull(first.As<Register>(), imm);
+      } else {
+        DCHECK(second.IsStackSlot());
+        __ imull(first.As<Register>(), Address(ESP, second.GetStackIndex()));
+      }
+      break;
+    }
+
+    case Primitive::kPrimLong: {
+      Register in1_hi = first.AsRegisterPairHigh<Register>();
+      Register in1_lo = first.AsRegisterPairLow<Register>();
+      Register eax = locations->GetTemp(0).As<Register>();
+      Register edx = locations->GetTemp(1).As<Register>();
+
+      // TODO: constants
+      if (second.IsRegisterPair()) {
+        LongMul(eax, edx, in1_hi, in1_lo,
+                second.AsRegisterPairHigh<Register>(),
+                second.AsRegisterPairLow<Register>());
+      } else {
+        DCHECK(second.IsDoubleStackSlot());
+        LongMul(eax, edx, in1_hi, in1_lo,
+                Address(ESP, second.GetHighStackIndex(kX86WordSize)),
+                Address(ESP, second.GetStackIndex()));
+      }
+
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
   }
 }
 
