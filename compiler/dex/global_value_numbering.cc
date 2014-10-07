@@ -122,7 +122,16 @@ LocalValueNumbering* GlobalValueNumbering::PrepareBasicBlock(BasicBlock* bb,
       merge_type = LocalValueNumbering::kReturnMerge;
     }
     // At least one predecessor must have been processed before this bb.
-    CHECK(!merge_lvns_.empty());
+    // TODO: FIXME Blocks could have been killed by BBCombine.
+    // CHECK(!merge_lvns_.empty());
+    if (merge_lvns_.empty()) {
+#if 0
+      LOG(INFO) << "VMarko: GVN DEAD " << PrettyMethod(cu_->method_idx, *cu_->dex_file)
+            << " @0x" << std::hex << bb->start_offset;
+#endif
+      work_lvn_.reset();
+      return nullptr;
+    }
     if (merge_lvns_.size() == 1u) {
       work_lvn_->MergeOne(*merge_lvns_[0], merge_type);
       BasicBlock* pred_bb = mir_graph_->GetBasicBlock(merge_lvns_[0]->Id());

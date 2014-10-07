@@ -1016,6 +1016,10 @@ class MIRGraph {
     return GetFirstSpecialTempVR() + max_available_special_compiler_temps_;
   }
 
+  bool HasTryCatchBlocks() const {
+    return current_code_item_->tries_size_ != 0;
+  }
+
   void DumpCheckStats();
   MIR* FindMoveResult(BasicBlock* bb, MIR* mir);
   int SRegToVReg(int ssa_reg) const;
