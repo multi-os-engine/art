@@ -107,7 +107,7 @@ static void CheckSignalValid(int signal) {
   }
 }
 
-
+extern "C" {
 // Claim a signal chain for a particular signal.
 void ClaimSignalChain(int signal, struct sigaction* oldaction) {
   CheckSignalValid(signal);
@@ -148,7 +148,6 @@ void InvokeUserSignalHandler(int sig, siginfo_t* info, void* context) {
   }
 }
 
-extern "C" {
 // These functions are C linkage since they replace the functions in libc.
 
 int sigaction(int signal, const struct sigaction* new_action, struct sigaction* old_action) {
@@ -258,7 +257,6 @@ int sigprocmask(int how, const sigset_t* bionic_new_set, sigset_t* bionic_old_se
   SigProcMask linked_sigprocmask= reinterpret_cast<SigProcMask>(linked_sigprocmask_sym);
   return linked_sigprocmask(how, new_set_ptr, bionic_old_set);
 }
-}   // extern "C"
 
 void InitializeSignalChain() {
   // Warning.
@@ -290,5 +288,6 @@ void InitializeSignalChain() {
   }
   initialized = true;
 }
+}   // extern "C"
 }   // namespace art
 
