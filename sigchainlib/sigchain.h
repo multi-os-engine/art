@@ -19,8 +19,7 @@
 
 #include <signal.h>
 
-namespace art {
-
+extern "C" {
 void InitializeSignalChain();
 
 void ClaimSignalChain(int signal, struct sigaction* oldaction);
@@ -28,7 +27,6 @@ void ClaimSignalChain(int signal, struct sigaction* oldaction);
 void UnclaimSignalChain(int signal);
 
 void InvokeUserSignalHandler(int sig, siginfo_t* info, void* context);
-
-}   // namespace art
+}   // extern "C"
 
 #endif  // ART_SIGCHAINLIB_SIGCHAIN_H_
