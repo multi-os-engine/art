@@ -501,6 +501,7 @@ class HBasicBlock : public ArenaObject {
   M(NullCheck)                                             \
   M(Temporary)                                             \
   M(SuspendCheck)                                          \
+  M(Mul)                                                   \
 
 #define FOR_EACH_INSTRUCTION(M)                            \
   FOR_EACH_CONCRETE_INSTRUCTION(M)                         \
@@ -1513,6 +1514,22 @@ class HSub : public HBinaryOperation {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HSub);
+};
+
+class HMul : public HBinaryOperation {
+ public:
+  HMul(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  virtual bool IsCommutative() { return true; }
+
+  virtual int32_t Evaluate(int32_t x, int32_t y) const { return x * y; }
+  virtual int64_t Evaluate(int64_t x, int64_t y) const { return x * y; }
+
+  DECLARE_INSTRUCTION(Mul);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HMul);
 };
 
 // The value of a parameter in this method. Its location depends on

@@ -967,6 +967,71 @@ void InstructionCodeGeneratorX86_64::VisitSub(HSub* sub) {
   }
 }
 
+void LocationsBuilderX86_64::VisitMul(HMul* mul) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mul, LocationSummary::kNoCall);
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorX86_64::VisitMul(HMul* mul) {
+  LocationSummary* locations = mul->GetLocations();
+  DCHECK_EQ(locations->InAt(0).AsX86_64().AsCpuRegister().AsRegister(),
+            locations->Out().AsX86_64().AsCpuRegister().AsRegister());
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt: {
+      if (locations->InAt(1).IsRegister()) {
+        __ imull(locations->InAt(0).AsX86_64().AsCpuRegister(),
+                locations->InAt(1).AsX86_64().AsCpuRegister());
+      } else if (locations->InAt(1).IsConstant()) {
+        HConstant* instruction = locations->InAt(1).GetConstant();
+        Immediate imm(instruction->AsIntConstant()->GetValue());
+        __ imull(locations->InAt(0).AsX86_64().AsCpuRegister(), imm);
+      } else {
+        __ imull(locations->InAt(0).AsX86_64().AsCpuRegister(),
+                Address(CpuRegister(RSP), locations->InAt(1).GetStackIndex()));
+      }
+      break;
+    }
+    case Primitive::kPrimLong: {
+      LOG(FATAL) << "Unimplemented mul-long ";
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
 void LocationsBuilderX86_64::VisitNewInstance(HNewInstance* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);

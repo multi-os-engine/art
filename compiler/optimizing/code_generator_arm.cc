@@ -1077,6 +1077,59 @@ void InstructionCodeGeneratorARM::VisitSub(HSub* sub) {
   }
 }
 
+void LocationsBuilderARM::VisitMul(HMul* mul) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mul, LocationSummary::kNoCall);
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RegisterOrConstant(mul->InputAt(1)));
+      locations->SetOut(Location::RequiresRegister());
+      break;
+    }
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM::VisitMul(HMul* mul) {
+  LocationSummary* locations = mul->GetLocations();
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt:
+      if (locations->InAt(1).IsRegister()) {
+        __ mul(locations->Out().AsArm().AsCoreRegister(),
+               locations->InAt(0).AsArm().AsCoreRegister(),
+               locations->InAt(1).AsArm().AsCoreRegister());
+      } else {
+        LOG(FATAL) << "Unimplemented: mul-int/lit";
+      }
+      break;
+
+    case Primitive::kPrimLong:
+      LOG(FATAL) << "Unimplemented: mul-long";
+      break;
+
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unimplemented mul type " << mul->GetResultType();
+  }
+}
+
 void LocationsBuilderARM::VisitNewInstance(HNewInstance* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
