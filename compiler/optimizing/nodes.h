@@ -464,50 +464,51 @@ class HBasicBlock : public ArenaObject {
   DISALLOW_COPY_AND_ASSIGN(HBasicBlock);
 };
 
-#define FOR_EACH_CONCRETE_INSTRUCTION(M)                   \
-  M(Add)                                                   \
-  M(Condition)                                             \
-  M(Equal)                                                 \
-  M(NotEqual)                                              \
-  M(LessThan)                                              \
-  M(LessThanOrEqual)                                       \
-  M(GreaterThan)                                           \
-  M(GreaterThanOrEqual)                                    \
-  M(Exit)                                                  \
-  M(Goto)                                                  \
-  M(If)                                                    \
-  M(IntConstant)                                           \
-  M(InvokeStatic)                                          \
-  M(InvokeVirtual)                                         \
-  M(LoadLocal)                                             \
-  M(Local)                                                 \
-  M(LongConstant)                                          \
-  M(NewInstance)                                           \
-  M(Not)                                                   \
-  M(ParameterValue)                                        \
-  M(ParallelMove)                                          \
-  M(Phi)                                                   \
-  M(Return)                                                \
-  M(ReturnVoid)                                            \
-  M(StoreLocal)                                            \
-  M(Sub)                                                   \
-  M(Compare)                                               \
-  M(InstanceFieldGet)                                      \
-  M(InstanceFieldSet)                                      \
-  M(ArrayGet)                                              \
-  M(ArraySet)                                              \
-  M(ArrayLength)                                           \
-  M(BoundsCheck)                                           \
-  M(NullCheck)                                             \
-  M(Temporary)                                             \
-  M(SuspendCheck)                                          \
+#define FOR_EACH_CONCRETE_INSTRUCTION(M)                                \
+  M(Add, BinaryOperation)                                               \
+  M(Condition, BinaryOperation)                                         \
+  M(Equal, Condition)                                                   \
+  M(NotEqual, Condition)                                                \
+  M(LessThan, Condition)                                                \
+  M(LessThanOrEqual, Condition)                                         \
+  M(GreaterThan, Condition)                                             \
+  M(GreaterThanOrEqual, Condition)                                      \
+  M(Exit, Instruction)                                                  \
+  M(Goto, Instruction)                                                  \
+  M(If, Instruction)                                                    \
+  M(IntConstant, Constant)                                              \
+  M(InvokeStatic, Invoke)                                               \
+  M(InvokeVirtual, Invoke)                                              \
+  M(LoadLocal, Instruction)                                             \
+  M(Local, Instruction)                                                 \
+  M(LongConstant, Constant)                                             \
+  M(NewInstance, Instruction)                                           \
+  M(Not, Instruction)                                                   \
+  M(ParameterValue, Instruction)                                        \
+  M(ParallelMove, Instruction)                                          \
+  M(Phi, Instruction)                                                   \
+  M(Return, Instruction)                                                \
+  M(ReturnVoid, Instruction)                                            \
+  M(StoreLocal, Instruction)                                            \
+  M(Sub, BinaryOperation)                                               \
+  M(Compare, BinaryOperation)                                           \
+  M(InstanceFieldGet, Instruction)                                      \
+  M(InstanceFieldSet, Instruction)                                      \
+  M(ArrayGet, Instruction)                                              \
+  M(ArraySet, Instruction)                                              \
+  M(ArrayLength, Instruction)                                           \
+  M(BoundsCheck, Instruction)                                           \
+  M(NullCheck, Instruction)                                             \
+  M(Temporary, Instruction)                                             \
+  M(SuspendCheck, Instruction)                                          \
 
-#define FOR_EACH_INSTRUCTION(M)                            \
-  FOR_EACH_CONCRETE_INSTRUCTION(M)                         \
-  M(Constant)                                              \
-  M(BinaryOperation)
+#define FOR_EACH_INSTRUCTION(M)                                         \
+  FOR_EACH_CONCRETE_INSTRUCTION(M)                                      \
+  M(Constant, Instruction)                                              \
+  M(BinaryOperation, Instruction) \
+  M(Invoke, Instruction)
 
-#define FORWARD_DECLARATION(type) class H##type;
+#define FORWARD_DECLARATION(type, super) class H##type;
 FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
 #undef FORWARD_DECLARATION
 
@@ -622,7 +623,7 @@ class HInstruction : public ArenaObject {
 
   virtual ~HInstruction() {}
 
-#define DECLARE_KIND(type) k##type,
+#define DECLARE_KIND(type, super) k##type,
   enum InstructionKind {
     FOR_EACH_INSTRUCTION(DECLARE_KIND)
   };
@@ -708,7 +709,7 @@ class HInstruction : public ArenaObject {
     return uses_ != nullptr && uses_->GetTail() == nullptr;
   }
 
-#define INSTRUCTION_TYPE_CHECK(type)                                           \
+#define INSTRUCTION_TYPE_CHECK(type, super)                                    \
   bool Is##type() const { return (As##type() != nullptr); }                    \
   virtual const H##type* As##type() const { return nullptr; }                  \
   virtual H##type* As##type() { return nullptr; }
@@ -1117,13 +1118,13 @@ class HBinaryOperation : public HExpression<2> {
 class HCondition : public HBinaryOperation {
  public:
   HCondition(HInstruction* first, HInstruction* second)
-      : HBinaryOperation(Primitive::kPrimBoolean, first, second) {}
+      : HBinaryOperation(Primitive::kPrimBoolean, first, second),
+        needs_materialization_(true) {}
 
   virtual bool IsCommutative() { return true; }
 
-  // For register allocation purposes, returns whether this instruction needs to be
-  // materialized (that is, not just be in the processor flags).
-  bool NeedsMaterialization() const;
+  bool NeedsMaterialization() const { return needs_materialization_; }
+  void ClearNeedsMaterialization() { needs_materialization_ = false; }
 
   // For code generation purposes, returns whether this instruction is just before
   // `if_`, and disregard moves in between.
@@ -1134,6 +1135,10 @@ class HCondition : public HBinaryOperation {
   virtual IfCondition GetCondition() const = 0;
 
  private:
+  // For register allocation purposes, returns whether this instruction needs to be
+  // materialized (that is, not just be in the processor flags).
+  bool needs_materialization_;
+
   DISALLOW_COPY_AND_ASSIGN(HCondition);
 };
 
@@ -1411,6 +1416,8 @@ class HInvoke : public HInstruction {
   virtual Primitive::Type GetType() const { return return_type_; }
 
   uint32_t GetDexPc() const { return dex_pc_; }
+
+  DECLARE_INSTRUCTION(Invoke);
 
  protected:
   GrowableArray<HInstruction*> inputs_;
@@ -1921,7 +1928,7 @@ class HGraphVisitor : public ValueObject {
   HGraph* GetGraph() const { return graph_; }
 
   // Visit functions for instruction classes.
-#define DECLARE_VISIT_INSTRUCTION(name)                                        \
+#define DECLARE_VISIT_INSTRUCTION(name, super)                                        \
   virtual void Visit##name(H##name* instr) { VisitInstruction(instr); }
 
   FOR_EACH_INSTRUCTION(DECLARE_VISIT_INSTRUCTION)
@@ -1932,6 +1939,23 @@ class HGraphVisitor : public ValueObject {
   HGraph* graph_;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphVisitor);
+};
+
+class HGraphDelegateVisitor : public HGraphVisitor {
+ public:
+  explicit HGraphDelegateVisitor(HGraph* graph) : HGraphVisitor(graph) {}
+  virtual ~HGraphDelegateVisitor() {}
+
+  // Visit functions that delegate to to super class.
+#define DECLARE_VISIT_INSTRUCTION(name, super)                                        \
+  virtual void Visit##name(H##name* instr) OVERRIDE { Visit##super(instr); }
+
+  FOR_EACH_INSTRUCTION(DECLARE_VISIT_INSTRUCTION)
+
+#undef DECLARE_VISIT_INSTRUCTION
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HGraphDelegateVisitor);
 };
 
 class HInsertionOrderIterator : public ValueObject {
