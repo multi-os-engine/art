@@ -23,7 +23,7 @@ namespace art {
 namespace arm64 {
 
 // Values for GP XRegisters - 64bit registers.
-enum Register {
+enum XRegister {
   X0  =  0,
   X1  =  1,
   X2  =  2,
@@ -68,7 +68,7 @@ enum Register {
   LR  = X30,
   kNoRegister = -1,
 };
-std::ostream& operator<<(std::ostream& os, const Register& rhs);
+std::ostream& operator<<(std::ostream& os, const XRegister& rhs);
 
 // Values for GP WRegisters - 32bit registers.
 enum WRegister {
