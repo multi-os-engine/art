@@ -92,29 +92,29 @@ class X86ManagedRegister : public ManagedRegister {
     CHECK(IsCpuRegister());
     // For all the X86 registers we care about:
     // EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI,
-    // DWARF register id is the same as id_.
-    return static_cast<int>(id_);
+    // DWARF register id is the same id.
+    return static_cast<int>(RegId());
   }
 
   ByteRegister AsByteRegister() const {
     CHECK(IsCpuRegister());
     CHECK_LT(AsCpuRegister(), ESP);  // ESP, EBP, ESI and EDI cannot be encoded as byte registers.
-    return static_cast<ByteRegister>(id_);
+    return static_cast<ByteRegister>(RegId());
   }
 
   Register AsCpuRegister() const {
     CHECK(IsCpuRegister());
-    return static_cast<Register>(id_);
+    return static_cast<Register>(RegId());
   }
 
   XmmRegister AsXmmRegister() const {
     CHECK(IsXmmRegister());
-    return static_cast<XmmRegister>(id_ - kNumberOfCpuRegIds);
+    return static_cast<XmmRegister>(RegId() - kNumberOfCpuRegIds);
   }
 
   X87Register AsX87Register() const {
     CHECK(IsX87Register());
-    return static_cast<X87Register>(id_ -
+    return static_cast<X87Register>(RegId() -
                                     (kNumberOfCpuRegIds + kNumberOfXmmRegIds));
   }
 
@@ -132,30 +132,30 @@ class X86ManagedRegister : public ManagedRegister {
 
   RegisterPair AsRegisterPair() const {
     CHECK(IsRegisterPair());
-    return static_cast<RegisterPair>(id_ -
+    return static_cast<RegisterPair>(RegId() -
         (kNumberOfCpuRegIds + kNumberOfXmmRegIds + kNumberOfX87RegIds));
   }
 
   bool IsCpuRegister() const {
     CHECK(IsValidManagedRegister());
-    return (0 <= id_) && (id_ < kNumberOfCpuRegIds);
+    return (0 <= RegId()) && (RegId() < kNumberOfCpuRegIds);
   }
 
   bool IsXmmRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - kNumberOfCpuRegIds;
+    const int test = RegId() - kNumberOfCpuRegIds;
     return (0 <= test) && (test < kNumberOfXmmRegIds);
   }
 
   bool IsX87Register() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - (kNumberOfCpuRegIds + kNumberOfXmmRegIds);
+    const int test = RegId() - (kNumberOfCpuRegIds + kNumberOfXmmRegIds);
     return (0 <= test) && (test < kNumberOfX87RegIds);
   }
 
   bool IsRegisterPair() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ -
+    const int test = RegId() -
         (kNumberOfCpuRegIds + kNumberOfXmmRegIds + kNumberOfX87RegIds);
     return (0 <= test) && (test < kNumberOfPairRegIds);
   }
@@ -190,18 +190,18 @@ class X86ManagedRegister : public ManagedRegister {
 
  private:
   bool IsValidManagedRegister() const {
-    return (0 <= id_) && (id_ < kNumberOfRegIds);
+    return (0 <= RegId()) && (RegId() < kNumberOfRegIds);
   }
 
   int RegId() const {
     CHECK(!IsNoRegister());
-    return id_;
+    return ManagedRegister::RegId();
   }
 
   int AllocId() const {
     CHECK(IsValidManagedRegister() && !IsRegisterPair());
-    CHECK_LT(id_, kNumberOfAllocIds);
-    return id_;
+    CHECK_LT(RegId(), kNumberOfAllocIds);
+    return RegId();
   }
 
   int AllocIdLow() const;
@@ -223,7 +223,7 @@ std::ostream& operator<<(std::ostream& os, const X86ManagedRegister& reg);
 }  // namespace x86
 
 inline x86::X86ManagedRegister ManagedRegister::AsX86() const {
-  x86::X86ManagedRegister reg(id_);
+  x86::X86ManagedRegister reg(RegId());
   CHECK(reg.IsNoRegister() || reg.IsValidManagedRegister());
   return reg;
 }

@@ -86,17 +86,17 @@ class ArmManagedRegister : public ManagedRegister {
  public:
   Register AsCoreRegister() const {
     CHECK(IsCoreRegister());
-    return static_cast<Register>(id_);
+    return static_cast<Register>(RegId());
   }
 
   SRegister AsSRegister() const {
     CHECK(IsSRegister());
-    return static_cast<SRegister>(id_ - kNumberOfCoreRegIds);
+    return static_cast<SRegister>(RegId() - kNumberOfCoreRegIds);
   }
 
   DRegister AsDRegister() const {
     CHECK(IsDRegister());
-    return static_cast<DRegister>(id_ - kNumberOfCoreRegIds - kNumberOfSRegIds);
+    return static_cast<DRegister>(RegId() - kNumberOfCoreRegIds - kNumberOfSRegIds);
   }
 
   SRegister AsOverlappingDRegisterLow() const {
@@ -135,32 +135,32 @@ class ArmManagedRegister : public ManagedRegister {
 
   bool IsCoreRegister() const {
     CHECK(IsValidManagedRegister());
-    return (0 <= id_) && (id_ < kNumberOfCoreRegIds);
+    return (0 <= RegId()) && (RegId() < kNumberOfCoreRegIds);
   }
 
   bool IsSRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - kNumberOfCoreRegIds;
+    const int test = RegId() - kNumberOfCoreRegIds;
     return (0 <= test) && (test < kNumberOfSRegIds);
   }
 
   bool IsDRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - (kNumberOfCoreRegIds + kNumberOfSRegIds);
+    const int test = RegId() - (kNumberOfCoreRegIds + kNumberOfSRegIds);
     return (0 <= test) && (test < kNumberOfDRegIds);
   }
 
   // Returns true if this DRegister overlaps SRegisters.
   bool IsOverlappingDRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - (kNumberOfCoreRegIds + kNumberOfSRegIds);
+    const int test = RegId() - (kNumberOfCoreRegIds + kNumberOfSRegIds);
     return (0 <= test) && (test < kNumberOfOverlappingDRegIds);
   }
 
   bool IsRegisterPair() const {
     CHECK(IsValidManagedRegister());
     const int test =
-        id_ - (kNumberOfCoreRegIds + kNumberOfSRegIds + kNumberOfDRegIds);
+        RegId() - (kNumberOfCoreRegIds + kNumberOfSRegIds + kNumberOfDRegIds);
     return (0 <= test) && (test < kNumberOfPairRegIds);
   }
 
@@ -226,18 +226,18 @@ class ArmManagedRegister : public ManagedRegister {
 
  private:
   bool IsValidManagedRegister() const {
-    return (0 <= id_) && (id_ < kNumberOfRegIds);
+    return (0 <= RegId()) && (RegId() < kNumberOfRegIds);
   }
 
   int RegId() const {
     CHECK(!IsNoRegister());
-    return id_;
+    return ManagedRegister::RegId();
   }
 
   int AllocId() const {
     CHECK(IsValidManagedRegister() &&
            !IsOverlappingDRegister() && !IsRegisterPair());
-    int r = id_;
+    int r = RegId();
     if ((kNumberOfDAllocIds > 0) && IsDRegister()) {  // VFPv3-D32 only.
       r -= kNumberOfOverlappingDRegIds;
     }
@@ -264,7 +264,7 @@ std::ostream& operator<<(std::ostream& os, const ArmManagedRegister& reg);
 }  // namespace arm
 
 inline arm::ArmManagedRegister ManagedRegister::AsArm() const {
-  arm::ArmManagedRegister reg(id_);
+  arm::ArmManagedRegister reg(RegId());
   CHECK(reg.IsNoRegister() || reg.IsValidManagedRegister());
   return reg;
 }

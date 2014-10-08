@@ -57,22 +57,22 @@ class Arm64ManagedRegister : public ManagedRegister {
  public:
   XRegister AsXRegister() const {
     CHECK(IsXRegister());
-    return static_cast<XRegister>(id_);
+    return static_cast<XRegister>(RegId());
   }
 
   WRegister AsWRegister() const {
     CHECK(IsWRegister());
-    return static_cast<WRegister>(id_ - kNumberOfXRegIds);
+    return static_cast<WRegister>(RegId() - kNumberOfXRegIds);
   }
 
   DRegister AsDRegister() const {
     CHECK(IsDRegister());
-    return static_cast<DRegister>(id_ - kNumberOfXRegIds - kNumberOfWRegIds);
+    return static_cast<DRegister>(RegId() - kNumberOfXRegIds - kNumberOfWRegIds);
   }
 
   SRegister AsSRegister() const {
     CHECK(IsSRegister());
-    return static_cast<SRegister>(id_ - kNumberOfXRegIds - kNumberOfWRegIds -
+    return static_cast<SRegister>(RegId() - kNumberOfXRegIds - kNumberOfWRegIds -
                                   kNumberOfDRegIds);
   }
 
@@ -99,25 +99,25 @@ class Arm64ManagedRegister : public ManagedRegister {
 
   bool IsXRegister() const {
     CHECK(IsValidManagedRegister());
-    return (0 <= id_) && (id_ < kNumberOfXRegIds);
+    return (0 <= RegId()) && (RegId() < kNumberOfXRegIds);
   }
 
   bool IsWRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - kNumberOfXRegIds;
+    const int test = RegId() - kNumberOfXRegIds;
     return (0 <= test) && (test < kNumberOfWRegIds);
   }
 
   bool IsDRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - (kNumberOfXRegIds + kNumberOfWRegIds);
+    const int test = RegId() - (kNumberOfXRegIds + kNumberOfWRegIds);
     return (0 <= test) && (test < kNumberOfDRegIds);
   }
 
   bool IsSRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - (kNumberOfXRegIds + kNumberOfWRegIds +
-                            kNumberOfDRegIds);
+    const int test = RegId() - (kNumberOfXRegIds + kNumberOfWRegIds +
+                                kNumberOfDRegIds);
     return (0 <= test) && (test < kNumberOfSRegIds);
   }
 
@@ -180,20 +180,20 @@ class Arm64ManagedRegister : public ManagedRegister {
 
  private:
   bool IsValidManagedRegister() const {
-    return (0 <= id_) && (id_ < kNumberOfRegIds);
+    return (0 <= RegId()) && (RegId() < kNumberOfRegIds);
   }
 
   bool IsStackPointer() const {
-    return IsXRegister() && (id_ == SP);
+    return IsXRegister() && (RegId() == SP);
   }
 
   bool IsZeroRegister() const {
-    return IsXRegister() && (id_ == XZR);
+    return IsXRegister() && (RegId() == XZR);
   }
 
   int RegId() const {
     CHECK(!IsNoRegister());
-    return id_;
+    return ManagedRegister::RegId();
   }
 
   int RegNo() const;
@@ -216,7 +216,7 @@ std::ostream& operator<<(std::ostream& os, const Arm64ManagedRegister& reg);
 }  // namespace arm64
 
 inline arm64::Arm64ManagedRegister ManagedRegister::AsArm64() const {
-  arm64::Arm64ManagedRegister reg(id_);
+  arm64::Arm64ManagedRegister reg(RegId());
   CHECK(reg.IsNoRegister() || reg.IsValidManagedRegister());
   return reg;
 }

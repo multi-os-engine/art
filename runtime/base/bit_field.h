@@ -77,6 +77,42 @@ class BitField {
   }
 };
 
+template<typename T>
+T signed_bitfield_extract(int msb, int lsb, T value) {
+  int T_top_bit = sizeof(T) * kBitsPerByte - 1;
+  return static_cast<T>((value << (T_top_bit - msb)) >> (lsb + T_top_bit - msb));
+}
+
+// SignedBitField works as its parent BitField, but works with sign extension.
+template<typename T, int position, int size>
+class SignedBitField : public BitField<T, position, size> {
+ public:
+  static bool IsValid(T value) {
+      // For signed types we must consider sign extension.
+      DCHECK_LT(size, static_cast<int>(sizeof(T) * kBitsPerByte));
+      T limit = static_cast<T>(kUwordOne << (size - 1));
+      return (-limit <= value) && (value < limit);
+  }
+
+  static uword Encode(T value) {
+    DCHECK(IsValid(value));
+    return static_cast<uword>(value & BitField<T, position, size>::Mask()) << position;
+  }
+
+  static T Decode(uword value) {
+    return signed_bitfield_extract<T>(position + size - 1,
+                                      position,
+                                      static_cast<T>(value));
+  }
+  static uword Update(T value, uword original) {
+    DCHECK(IsValid(value));
+    uword mask = BitField<T, position, size>::Mask();
+    uword mask_in_place = BitField<T, position, size>::MaskInPlace();
+    return (static_cast<uword>(value & mask) << position) |
+        (~mask_in_place & original);
+  }
+};
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_BASE_BIT_FIELD_H_

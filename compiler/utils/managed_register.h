@@ -19,6 +19,8 @@
 
 #include <vector>
 
+#include "base/bit_field.h"
+
 namespace art {
 
 namespace arm {
@@ -44,10 +46,11 @@ class ManagedRegister {
   // ManagedRegister is a value class. There exists no method to change the
   // internal state. We therefore allow a copy constructor and an
   // assignment-operator.
-  ManagedRegister(const ManagedRegister& other) : id_(other.id_) { }
+  ManagedRegister(const ManagedRegister& other) : value_(other.value_) { }
+  explicit ManagedRegister(int reg_id) : value_(RegIdField::Encode(reg_id)) { }
 
   ManagedRegister& operator=(const ManagedRegister& other) {
-    id_ = other.id_;
+    value_ = other.value_;
     return *this;
   }
 
@@ -59,26 +62,36 @@ class ManagedRegister {
 
   // It is valid to invoke Equals on and with a NoRegister.
   bool Equals(const ManagedRegister& other) const {
-    return id_ == other.id_;
+    return value_ == other.value_;
   }
 
   bool IsNoRegister() const {
-    return id_ == kNoRegister;
+    return RegId() == kNoRegister;
   }
 
   static ManagedRegister NoRegister() {
     return ManagedRegister();
   }
 
-  int RegId() const { return id_; }
-  explicit ManagedRegister(int reg_id) : id_(reg_id) { }
+  int RegId() const { return RegIdField::Decode(value_); }
+  void SetRegId(int reg_id) { value_ = RegIdField::Update(reg_id, value_); }
 
  protected:
+  // Ten bits should allow ample room for register id encoding. The other bits
+  // are available to architecture specific sub-classes to encode more
+  // information.
+  static constexpr uint32_t kBitsForRegId = 10;
+  typedef SignedBitField<int, 0, kBitsForRegId> RegIdField;
+  // Update this as necessary.
+  static constexpr uint32_t kArchIndependentNBitsUsed = kBitsForRegId;
+
   static const int kNoRegister = -1;
 
-  ManagedRegister() : id_(kNoRegister) { }
+  ManagedRegister() : value_(0) {
+    SetRegId(kNoRegister);
+  }
 
-  int id_;
+  uword value_;
 };
 
 class ManagedRegisterSpill : public ManagedRegister {

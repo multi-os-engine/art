@@ -88,17 +88,17 @@ class MipsManagedRegister : public ManagedRegister {
  public:
   Register AsCoreRegister() const {
     CHECK(IsCoreRegister());
-    return static_cast<Register>(id_);
+    return static_cast<Register>(RegId());
   }
 
   FRegister AsFRegister() const {
     CHECK(IsFRegister());
-    return static_cast<FRegister>(id_ - kNumberOfCoreRegIds);
+    return static_cast<FRegister>(RegId() - kNumberOfCoreRegIds);
   }
 
   DRegister AsDRegister() const {
     CHECK(IsDRegister());
-    return static_cast<DRegister>(id_ - kNumberOfCoreRegIds - kNumberOfFRegIds);
+    return static_cast<DRegister>(RegId() - kNumberOfCoreRegIds - kNumberOfFRegIds);
   }
 
   FRegister AsOverlappingDRegisterLow() const {
@@ -127,32 +127,32 @@ class MipsManagedRegister : public ManagedRegister {
 
   bool IsCoreRegister() const {
     CHECK(IsValidManagedRegister());
-    return (0 <= id_) && (id_ < kNumberOfCoreRegIds);
+    return (0 <= RegId()) && (RegId() < kNumberOfCoreRegIds);
   }
 
   bool IsFRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - kNumberOfCoreRegIds;
+    const int test = RegId() - kNumberOfCoreRegIds;
     return (0 <= test) && (test < kNumberOfFRegIds);
   }
 
   bool IsDRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - (kNumberOfCoreRegIds + kNumberOfFRegIds);
+    const int test = RegId() - (kNumberOfCoreRegIds + kNumberOfFRegIds);
     return (0 <= test) && (test < kNumberOfDRegIds);
   }
 
   // Returns true if this DRegister overlaps FRegisters.
   bool IsOverlappingDRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = id_ - (kNumberOfCoreRegIds + kNumberOfFRegIds);
+    const int test = RegId() - (kNumberOfCoreRegIds + kNumberOfFRegIds);
     return (0 <= test) && (test < kNumberOfOverlappingDRegIds);
   }
 
   bool IsRegisterPair() const {
     CHECK(IsValidManagedRegister());
     const int test =
-        id_ - (kNumberOfCoreRegIds + kNumberOfFRegIds + kNumberOfDRegIds);
+        RegId() - (kNumberOfCoreRegIds + kNumberOfFRegIds + kNumberOfDRegIds);
     return (0 <= test) && (test < kNumberOfPairRegIds);
   }
 
@@ -185,18 +185,18 @@ class MipsManagedRegister : public ManagedRegister {
 
  private:
   bool IsValidManagedRegister() const {
-    return (0 <= id_) && (id_ < kNumberOfRegIds);
+    return (0 <= RegId()) && (RegId() < kNumberOfRegIds);
   }
 
   int RegId() const {
     CHECK(!IsNoRegister());
-    return id_;
+    return ManagedRegister::RegId();
   }
 
   int AllocId() const {
     CHECK(IsValidManagedRegister() && !IsOverlappingDRegister() && !IsRegisterPair());
-    CHECK_LT(id_, kNumberOfAllocIds);
-    return id_;
+    CHECK_LT(RegId(), kNumberOfAllocIds);
+    return RegId();
   }
 
   int AllocIdLow() const;
@@ -218,7 +218,7 @@ std::ostream& operator<<(std::ostream& os, const MipsManagedRegister& reg);
 }  // namespace mips
 
 inline mips::MipsManagedRegister ManagedRegister::AsMips() const {
-  mips::MipsManagedRegister reg(id_);
+  mips::MipsManagedRegister reg(RegId());
   CHECK(reg.IsNoRegister() || reg.IsValidManagedRegister());
   return reg;
 }
