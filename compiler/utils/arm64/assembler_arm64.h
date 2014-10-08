@@ -59,7 +59,7 @@ class Arm64Exception;
 
 class Arm64Assembler FINAL : public Assembler {
  public:
-  Arm64Assembler() : vixl_buf_(new byte[kBufferSizeArm64]),
+  Arm64Assembler() : vixl_buf_(new uint8_t[kBufferSizeArm64]),
   vixl_masm_(new vixl::MacroAssembler(vixl_buf_, kBufferSizeArm64)) {}
 
   virtual ~Arm64Assembler() {
@@ -214,7 +214,7 @@ class Arm64Assembler FINAL : public Assembler {
   void AddConstant(Register rd, Register rn, int32_t value, vixl::Condition cond = vixl::al);
 
   // Vixl buffer.
-  byte* vixl_buf_;
+  uint8_t* vixl_buf_;
 
   // Vixl assembler.
   vixl::MacroAssembler* vixl_masm_;
