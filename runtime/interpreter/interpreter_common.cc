@@ -537,29 +537,27 @@ void AbortTransaction(Thread* self, const char* fmt, ...) {
 }
 
 template<bool is_range, bool do_assignability_check>
-bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
+bool DoCall(MethodHelper& mh, Thread* self, ShadowFrame& shadow_frame,
             const Instruction* inst, uint16_t inst_data, JValue* result) {
   // Compute method information.
-  const DexFile::CodeItem* code_item = method->GetCodeItem();
+  const DexFile::CodeItem* code_item = mh.Get()->GetCodeItem();
   const uint16_t num_ins = (is_range) ? inst->VRegA_3rc(inst_data) : inst->VRegA_35c(inst_data);
   uint16_t num_regs;
   if (LIKELY(code_item != NULL)) {
     num_regs = code_item->registers_size_;
     DCHECK_EQ(num_ins, code_item->ins_size_);
   } else {
-    DCHECK(method->IsNative() || method->IsProxyMethod());
+    DCHECK(mh.Get()->IsNative() || mh.Get()->IsProxyMethod());
     num_regs = num_ins;
   }
 
   // Allocate shadow frame on the stack.
   const char* old_cause = self->StartAssertNoThreadSuspension("DoCall");
   void* memory = alloca(ShadowFrame::ComputeSize(num_regs));
-  ShadowFrame* new_shadow_frame(ShadowFrame::Create(num_regs, &shadow_frame, method, 0, memory));
+  ShadowFrame* new_shadow_frame(ShadowFrame::Create(num_regs, &shadow_frame, mh.Get(), 0, memory));
 
   // Initialize new shadow frame.
   const size_t first_dest_reg = num_regs - num_ins;
-  StackHandleScope<1> hs(self);
-  MethodHelper mh(hs.NewHandle(method));
   if (do_assignability_check) {
     // Slow path.
     // We might need to do class loading, which incurs a thread state change to kNative. So
@@ -938,7 +936,7 @@ static void UnstartedRuntimeInvoke(Thread* self, MethodHelper& mh,
 // Explicit DoCall template function declarations.
 #define EXPLICIT_DO_CALL_TEMPLATE_DECL(_is_range, _do_assignability_check)                      \
   template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)                                          \
-  bool DoCall<_is_range, _do_assignability_check>(ArtMethod* method, Thread* self,              \
+  bool DoCall<_is_range, _do_assignability_check>(MethodHelper& mh, Thread* self,               \
                                                   ShadowFrame& shadow_frame,                    \
                                                   const Instruction* inst, uint16_t inst_data,  \
                                                   JValue* result)
