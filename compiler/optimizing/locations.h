@@ -188,6 +188,7 @@ class Location : public ValueObject {
   }
 
   arm::ArmManagedRegister AsArm() const;
+  arm64::Arm64ManagedRegister AsArm64() const;
   x86::X86ManagedRegister AsX86() const;
   x86_64::X86_64ManagedRegister AsX86_64() const;
 

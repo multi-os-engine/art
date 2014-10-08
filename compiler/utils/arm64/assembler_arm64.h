@@ -18,6 +18,7 @@
 #define ART_COMPILER_UTILS_ARM64_ASSEMBLER_ARM64_H_
 
 #include <stdint.h>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -171,7 +172,6 @@ class Arm64Assembler FINAL : public Assembler {
   // and branch to a ExceptionSlowPath if it is.
   void ExceptionPoll(ManagedRegister scratch, size_t stack_adjust) OVERRIDE;
 
- private:
   static vixl::Register reg_x(int code) {
     CHECK(code < kNumberOfXRegisters) << code;
     if (code == SP) {
@@ -200,6 +200,98 @@ class Arm64Assembler FINAL : public Assembler {
     return vixl::FPRegister::SRegFromCode(code);
   }
 
+  // Branching.
+  //
+  // ART and VIXL use different label classes. We leave the work of resolving
+  // branches to VIXL by translating art::Label to vixl::Label.
+  // For unbound labels we keep a mapping from art::Label to vixl::Label. Bound
+  // labels can be resolved locally.
+  // We only need to keep a mapping for unbound labels, as branches to bound
+  // labels can be resolved locally.
+
+  // Bind an unused vixl::Label to the same location as the art::Label.
+  vixl::Label* AttachVIXLLabel(vixl::MacroAssembler* masm,
+                               vixl::Label* vixl_label, art::Label* art_label) {
+    DCHECK(!vixl_label->IsBound() && !vixl_label->IsLinked());
+    masm->BindToOffset(vixl_label, art_label->Position());
+    return vixl_label;
+  }
+
+  // Get the vixl::Label mapped for the art::Label we are branching to.
+  vixl::Label* LinkAndGetVIXLLabel(art::Label* label) {
+    if (kIsDebugBuild) {
+      label->LinkTo(CodeSize());
+    } else {
+      label->LinkTo(0);
+    }
+    return &label_maps_[label];
+  }
+
+  // Helper function to handle translation of art::Label to vixl::Label for use
+  // by branch instructions. This must be used *immediately* before the branch
+  // instruction is generated, ie. no code should be generated between this code
+  // and the branch instruction.
+  vixl::Label* VIXLLabelFromARTLabel(vixl::MacroAssembler* masm,
+                                     vixl::Label* vixl_label,
+                                     art::Label* art_label) {
+    return art_label->IsBound() ? AttachVIXLLabel(masm, vixl_label, art_label)
+                                : LinkAndGetVIXLLabel(art_label);
+  }
+
+  void Bind(Label* art_label) {
+    if (!art_label->IsLinked()) {
+      // There are no pending branches to this label.
+      DCHECK(label_maps_.find(art_label) == label_maps_.end());
+    } else {
+      DCHECK(label_maps_.find(art_label) != label_maps_.end());
+      // Find the matching VIXL label and bind it.
+      std::map<art::Label*, vixl::Label>::iterator it = label_maps_.find(art_label);
+      vixl::Label* vixl_label = &(it->second);
+      vixl_masm_->Bind(vixl_label);
+      // Further branches to this label can be resolved directly.
+      label_maps_.erase(it);
+    }
+    art_label->BindTo(CodeSize());
+  }
+
+
+  // Wrappers around VIXL branches.
+  void B(art::Label* art_label) {
+    vixl::Label tmp_vixl_label;
+    vixl_masm_->B(VIXLLabelFromARTLabel(vixl_masm_, &tmp_vixl_label, art_label));
+  }
+  void B(Label* art_label, vixl::Condition cond) {
+    vixl::Label tmp_vixl_label;
+    vixl::Label* target = VIXLLabelFromARTLabel(vixl_masm_, &tmp_vixl_label, art_label);
+    vixl_masm_->B(target, cond);
+  }
+  void B(vixl::Condition cond, Label* art_label) { B(art_label, cond); }
+  void Bl(Label* art_label) {
+    vixl::Label tmp_vixl_label;
+    vixl_masm_->Bl(VIXLLabelFromARTLabel(vixl_masm_, &tmp_vixl_label, art_label));
+  }
+  void Cbnz(const vixl::Register& rt, Label* art_label) {
+    vixl::Label tmp_vixl_label;
+    vixl::Label* target = VIXLLabelFromARTLabel(vixl_masm_, &tmp_vixl_label, art_label);
+    vixl_masm_->Cbnz(rt, target);
+  }
+  void Cbz(const vixl::Register& rt, Label* art_label) {
+    vixl::Label tmp_vixl_label;
+    vixl::Label* target = VIXLLabelFromARTLabel(vixl_masm_, &tmp_vixl_label, art_label);
+    vixl_masm_->Cbz(rt, target);
+  }
+  void Tbnz(const vixl::Register& rt, unsigned bit_pos, Label* art_label) {
+    vixl::Label tmp_vixl_label;
+    vixl::Label* target = VIXLLabelFromARTLabel(vixl_masm_, &tmp_vixl_label, art_label);
+    vixl_masm_->Tbnz(rt, bit_pos, target);
+  }
+  void Tbz(const vixl::Register& rt, unsigned bit_pos, Label* art_label) {
+    vixl::Label tmp_vixl_label;
+    vixl::Label* target = VIXLLabelFromARTLabel(vixl_masm_, &tmp_vixl_label, art_label);
+    vixl_masm_->Tbz(rt, bit_pos, target);
+  }
+
+ private:
   // Emits Exception block.
   void EmitExceptionPoll(Arm64Exception *exception);
 
@@ -219,14 +311,19 @@ class Arm64Assembler FINAL : public Assembler {
   void AddConstant(XRegister rd, int32_t value, vixl::Condition cond = vixl::al);
   void AddConstant(XRegister rd, XRegister rn, int32_t value, vixl::Condition cond = vixl::al);
 
-  // Vixl assembler.
-  vixl::MacroAssembler* vixl_masm_;
-
   // List of exception blocks to generate at the end of the code cache.
   std::vector<Arm64Exception*> exception_blocks_;
 
-  // Used for testing.
-  friend class Arm64ManagedRegister_VixlRegisters_Test;
+  // Maps ART labels to VIXL labels.
+  // Only linked ART labels should have an entry in this table.
+  //
+  // TODO: A custom implementation avoiding frequent allocations and deletions
+  // may be worth the work.
+  std::map<art::Label*, vixl::Label> label_maps_;
+
+ public:
+  // VIXL assembler.
+  vixl::MacroAssembler* vixl_masm_;
 };
 
 class Arm64Exception {

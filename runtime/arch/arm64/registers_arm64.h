@@ -22,6 +22,11 @@
 namespace art {
 namespace arm64 {
 
+
+// The enum register mappings are expected to be identical to VIXL register
+// codes except for the stack pointer register.
+// TODO: static asserts to check this.
+
 // Values for GP XRegisters - 64bit registers.
 enum XRegister {
   X0  =  0,

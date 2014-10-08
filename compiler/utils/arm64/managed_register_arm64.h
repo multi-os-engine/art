@@ -19,31 +19,13 @@
 
 #include "base/logging.h"
 #include "constants_arm64.h"
+#include "primitive.h"
 #include "utils/managed_register.h"
+#include "a64/macro-assembler-a64.h"
 
 namespace art {
 namespace arm64 {
 
-const int kNumberOfXRegIds = kNumberOfXRegisters;
-const int kNumberOfWRegIds = kNumberOfWRegisters;
-const int kNumberOfDRegIds = kNumberOfDRegisters;
-const int kNumberOfSRegIds = kNumberOfSRegisters;
-
-const int kNumberOfRegIds = kNumberOfXRegIds + kNumberOfWRegIds +
-  kNumberOfDRegIds + kNumberOfSRegIds;
-
-// Register ids map:
-//  [0..X[  core registers 64bit (enum XRegister)
-//  [X..W[  core registers 32bit (enum WRegister)
-//  [W..D[  double precision VFP registers (enum DRegister)
-//  [D..S[  single precision VFP registers (enum SRegister)
-//
-// where:
-//  X = kNumberOfXRegIds
-//  W = X + kNumberOfWRegIds
-//  D = W + kNumberOfDRegIds
-//  S = D + kNumberOfSRegIds
-//
 // An instance of class 'ManagedRegister' represents a single Arm64
 // register. A register can be one of the following:
 //  * core register 64bit context (enum XRegister)
@@ -55,6 +37,27 @@ const int kNumberOfRegIds = kNumberOfXRegIds + kNumberOfWRegIds +
 
 class Arm64ManagedRegister : public ManagedRegister {
  public:
+  enum RegisterType {
+    // The 'invalid' type should be zero to ensure that a ManagedRegister
+    // improperly converted to an Arm64ManagedRegister shows this type and
+    // hits the appropriate checks.
+    kInvalidRegisterType = 0,
+    kXRegisterType = 1 << 0,
+    kWRegisterType = 1 << 1,
+    kDRegisterType = 1 << 2,
+    kSRegisterType = 1 << 3
+  };
+
+  explicit Arm64ManagedRegister(uword value) : ManagedRegister() {
+    value_ = value;
+    DCHECK(IsValidManagedRegister());
+  }
+
+  Arm64ManagedRegister(RegisterType type, int reg_id) : ManagedRegister(reg_id) {
+    SetRegType(type);
+    DCHECK(IsValidManagedRegister());
+  }
+
   XRegister AsXRegister() const {
     CHECK(IsXRegister());
     return static_cast<XRegister>(RegId());
@@ -62,63 +65,53 @@ class Arm64ManagedRegister : public ManagedRegister {
 
   WRegister AsWRegister() const {
     CHECK(IsWRegister());
-    return static_cast<WRegister>(RegId() - kNumberOfXRegIds);
+    return static_cast<WRegister>(RegId());
   }
 
   DRegister AsDRegister() const {
     CHECK(IsDRegister());
-    return static_cast<DRegister>(RegId() - kNumberOfXRegIds - kNumberOfWRegIds);
+    return static_cast<DRegister>(RegId());
   }
 
   SRegister AsSRegister() const {
     CHECK(IsSRegister());
-    return static_cast<SRegister>(RegId() - kNumberOfXRegIds - kNumberOfWRegIds -
-                                  kNumberOfDRegIds);
-  }
-
-  WRegister AsOverlappingWRegister() const {
-    CHECK(IsValidManagedRegister());
-    if (IsZeroRegister()) return WZR;
-    return static_cast<WRegister>(AsXRegister());
+    return static_cast<SRegister>(RegId());
   }
 
   XRegister AsOverlappingXRegister() const {
-    CHECK(IsValidManagedRegister());
     return static_cast<XRegister>(AsWRegister());
   }
 
-  SRegister AsOverlappingSRegister() const {
-    CHECK(IsValidManagedRegister());
-    return static_cast<SRegister>(AsDRegister());
+  WRegister AsOverlappingWRegister() const {
+    return static_cast<WRegister>(AsXRegister());
   }
 
   DRegister AsOverlappingDRegister() const {
-    CHECK(IsValidManagedRegister());
     return static_cast<DRegister>(AsSRegister());
+  }
+
+  SRegister AsOverlappingSRegister() const {
+    return static_cast<SRegister>(AsDRegister());
   }
 
   bool IsXRegister() const {
     CHECK(IsValidManagedRegister());
-    return (0 <= RegId()) && (RegId() < kNumberOfXRegIds);
+    return RegType() == kXRegisterType;
   }
 
   bool IsWRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = RegId() - kNumberOfXRegIds;
-    return (0 <= test) && (test < kNumberOfWRegIds);
+    return RegType() == kWRegisterType;
   }
 
   bool IsDRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = RegId() - (kNumberOfXRegIds + kNumberOfWRegIds);
-    return (0 <= test) && (test < kNumberOfDRegIds);
+    return RegType() == kDRegisterType;
   }
 
   bool IsSRegister() const {
     CHECK(IsValidManagedRegister());
-    const int test = RegId() - (kNumberOfXRegIds + kNumberOfWRegIds +
-                                kNumberOfDRegIds);
-    return (0 <= test) && (test < kNumberOfSRegIds);
+    return RegType() == kSRegisterType;
   }
 
   bool IsGPRegister() const {
@@ -129,86 +122,140 @@ class Arm64ManagedRegister : public ManagedRegister {
     return IsDRegister() || IsSRegister();
   }
 
-  bool IsSameType(Arm64ManagedRegister test) const {
-    CHECK(IsValidManagedRegister() && test.IsValidManagedRegister());
-    return
-      (IsXRegister() && test.IsXRegister()) ||
-      (IsWRegister() && test.IsWRegister()) ||
-      (IsDRegister() && test.IsDRegister()) ||
-      (IsSRegister() && test.IsSRegister());
+  bool Is64Bits() const {
+    return IsXRegister() || IsDRegister();
+  }
+  bool Is32Bits() const {
+    return IsWRegister() || IsSRegister();
   }
 
-  // Returns true if the two managed-registers ('this' and 'other') overlap.
-  // Either managed-register may be the NoRegister. If both are the NoRegister
-  // then false is returned.
+  bool IsSameSizeAndType(Arm64ManagedRegister other) const {
+    DCHECK(IsValidManagedRegister() && other.IsValidManagedRegister());
+    return RegType() == other.RegType();
+  }
+
+  // Returns true if this managed-register overlaps the other managed-register.
+  // If either or both are a 'no register', the function returns false.
   bool Overlaps(const Arm64ManagedRegister& other) const;
 
   void Print(std::ostream& os) const;
 
   static Arm64ManagedRegister FromXRegister(XRegister r) {
-    CHECK_NE(r, kNoRegister);
-    return FromRegId(r);
+    return Arm64ManagedRegister(kXRegisterType, r);
   }
 
   static Arm64ManagedRegister FromWRegister(WRegister r) {
-    CHECK_NE(r, kNoWRegister);
-    return FromRegId(r + kNumberOfXRegIds);
+    return Arm64ManagedRegister(kWRegisterType, r);
   }
 
   static Arm64ManagedRegister FromDRegister(DRegister r) {
-    CHECK_NE(r, kNoDRegister);
-    return FromRegId(r + (kNumberOfXRegIds + kNumberOfWRegIds));
+    return Arm64ManagedRegister(kDRegisterType, r);
   }
 
   static Arm64ManagedRegister FromSRegister(SRegister r) {
-    CHECK_NE(r, kNoSRegister);
-    return FromRegId(r + (kNumberOfXRegIds + kNumberOfWRegIds +
-                          kNumberOfDRegIds));
+    return Arm64ManagedRegister(kSRegisterType, r);
   }
 
-  // Returns the X register overlapping W register r.
-  static Arm64ManagedRegister FromWRegisterX(WRegister r) {
-    CHECK_NE(r, kNoWRegister);
-    return FromRegId(r);
+  static int NumberOfRegisters(RegisterType type) {
+    switch (type) {
+      case kXRegisterType: return kNumberOfXRegisters;
+      case kWRegisterType: return kNumberOfWRegisters;
+      case kDRegisterType: return kNumberOfDRegisters;
+      case kSRegisterType: return kNumberOfSRegisters;
+      default:
+      LOG(FATAL) << "Unreachable";
+      return -1;
+    }
   }
 
-  // Return the D register overlapping S register r.
-  static Arm64ManagedRegister FromSRegisterD(SRegister r) {
-    CHECK_NE(r, kNoSRegister);
-    return FromRegId(r + (kNumberOfXRegIds + kNumberOfWRegIds));
+  void SetRegType(RegisterType type) { value_ = RegTypeField::Update(type, value_); }
+  RegisterType RegType() const { return RegTypeField::Decode(value_); }
+
+  vixl::CPURegister AsVixlCPURegister() const {
+    DCHECK(IsValidManagedRegister());
+    // The stack pointer is encoded differently in VIXL and ART.
+    if (RegId() == SP) {
+      return Is64Bits() ? vixl::sp : vixl::wsp;
+    } else if (RegId() == XZR) {
+      return Is64Bits() ? vixl::xzr : vixl::wzr;
+    } else {
+      return vixl::CPURegister(
+          RegId(),
+          Is32Bits() ? vixl::kWRegSize : vixl::kXRegSize,
+          IsFPRegister() ? vixl::CPURegister::kFPRegister : vixl::CPURegister::kRegister);
+    }
+  }
+
+  vixl::Register AsVixlRegister() const { return vixl::Register(AsVixlCPURegister()); }
+  vixl::FPRegister AsVixlFPRegister() const { return vixl::FPRegister(AsVixlCPURegister()); }
+
+  static Arm64ManagedRegister FromVixlReg(vixl::CPURegister reg) {
+    DCHECK(reg.IsValid());
+    // SP and zero registers are encoded differently in VIXL and ART.
+    if (reg.Is(vixl::sp)) {
+      return FromXRegister(SP);
+    } else if (reg.Is(vixl::wsp)) {
+      return FromWRegister(WSP);
+    }
+    if (reg.Is(vixl::xzr)) {
+      return FromXRegister(XZR);
+    } else if (reg.Is(vixl::wzr)) {
+      return FromWRegister(WZR);
+    }
+
+    RegisterType type = kInvalidRegisterType;
+    switch (reg.type()) {
+      case vixl::CPURegister::kRegister:
+        type = reg.Is64Bits() ? kXRegisterType : kWRegisterType;
+        break;
+      case vixl::CPURegister::kFPRegister:
+        type = reg.Is64Bits() ? kDRegisterType : kSRegisterType;
+      default:
+        LOG(FATAL) << "Unreachable";
+    }
+    return Arm64ManagedRegister(type, reg.code());
+  }
+
+  static RegisterType RegTypeFor(Primitive::Type type) {
+    switch (type) {
+      case Primitive::kPrimNot:
+      case Primitive::kPrimBoolean:
+      case Primitive::kPrimByte:
+      case Primitive::kPrimChar:
+      case Primitive::kPrimShort:
+      case Primitive::kPrimInt:
+        return kWRegisterType;
+      case Primitive::kPrimLong:
+        return kXRegisterType;
+      case Primitive::kPrimFloat:
+        return kSRegisterType;
+      case Primitive::kPrimDouble:
+        return kDRegisterType;
+      case Primitive::kPrimVoid:
+      default:
+        LOG(FATAL) << "Unreachable";
+        return kInvalidRegisterType;
+    }
   }
 
  private:
+  static constexpr uint32_t kBitsForRegType = 4;
+  typedef BitField<RegisterType, kArchIndependentNBitsUsed, kBitsForRegType> RegTypeField;
+
+
   bool IsValidManagedRegister() const {
-    return (0 <= RegId()) && (RegId() < kNumberOfRegIds);
-  }
-
-  bool IsStackPointer() const {
-    return IsXRegister() && (RegId() == SP);
-  }
-
-  bool IsZeroRegister() const {
-    return IsXRegister() && (RegId() == XZR);
+    RegisterType type = RegType();
+    int id = ManagedRegister::RegId();
+    return (type != kInvalidRegisterType && id <= NumberOfRegisters(type)) ||
+        (id == kNoRegister);
   }
 
   int RegId() const {
-    CHECK(!IsNoRegister());
+    DCHECK(IsValidManagedRegister());
     return ManagedRegister::RegId();
   }
 
-  int RegNo() const;
-  int RegIdLow() const;
-  int RegIdHigh() const;
-
   friend class ManagedRegister;
-
-  explicit Arm64ManagedRegister(int reg_id) : ManagedRegister(reg_id) {}
-
-  static Arm64ManagedRegister FromRegId(int reg_id) {
-    Arm64ManagedRegister reg(reg_id);
-    CHECK(reg.IsValidManagedRegister());
-    return reg;
-  }
 };
 
 std::ostream& operator<<(std::ostream& os, const Arm64ManagedRegister& reg);
@@ -216,9 +263,7 @@ std::ostream& operator<<(std::ostream& os, const Arm64ManagedRegister& reg);
 }  // namespace arm64
 
 inline arm64::Arm64ManagedRegister ManagedRegister::AsArm64() const {
-  arm64::Arm64ManagedRegister reg(RegId());
-  CHECK(reg.IsNoRegister() || reg.IsValidManagedRegister());
-  return reg;
+  return arm64::Arm64ManagedRegister(value_);
 }
 
 }  // namespace art

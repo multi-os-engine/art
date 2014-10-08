@@ -20,19 +20,8 @@
 namespace art {
 namespace arm64 {
 
-// TODO: Define convention
-//
-// Do not use APCS callee saved regs for now. Use:
-//  * [X0, X15]
-//  * [W0, W15]
-//  * [D0, D31]
-//  * [S0, S31]
-// static const int kNumberOfAvailableXRegisters = (X15 - X0) + 1;
-// static const int kNumberOfAvailableWRegisters = (W15 - W0) + 1;
-// static const int kNumberOfAvailableDRegisters = kNumberOfDRegisters;
-// static const int kNumberOfAvailableSRegisters = kNumberOfSRegisters;
-
 // Returns true if this managed-register overlaps the other managed-register.
+// If either or both are a 'no register', the function returns false.
 // GP Register Bank:
 //       31____0 W[n]
 // 63__________0 X[n]
@@ -41,46 +30,9 @@ namespace arm64 {
 //       31____0 S[n]
 // 63__________0 D[n]
 bool Arm64ManagedRegister::Overlaps(const Arm64ManagedRegister& other) const {
-  if (IsNoRegister() || other.IsNoRegister()) return false;
-  return (IsGPRegister() == other.IsGPRegister()) && (RegNo() == other.RegNo());
-}
-
-int Arm64ManagedRegister::RegNo() const {
-  CHECK(!IsNoRegister());
-  int no;
-  if (IsXRegister()) {
-    no = static_cast<int>(AsXRegister());
-  } else if (IsWRegister()) {
-    no = static_cast<int>(AsWRegister());
-  } else if (IsDRegister()) {
-    no = static_cast<int>(AsDRegister());
-  } else if (IsSRegister()) {
-    no = static_cast<int>(AsSRegister());
-  } else {
-    no = kNoRegister;
-  }
-  return no;
-}
-
-int Arm64ManagedRegister::RegIdLow() const {
-  CHECK(IsXRegister() || IsDRegister());
-  int low = RegNo();
-  if (IsXRegister()) {
-    low += kNumberOfXRegIds;
-  } else if (IsDRegister()) {
-    low += kNumberOfXRegIds + kNumberOfWRegIds + kNumberOfDRegIds;
-  }
-  return low;
-}
-
-// FIXME: Find better naming.
-int Arm64ManagedRegister::RegIdHigh() const {
-  CHECK(IsWRegister() || IsSRegister());
-  int high = RegNo();
-  if (IsSRegister()) {
-    high += kNumberOfXRegIds + kNumberOfWRegIds;
-  }
-  return high;
+  return (RegId() == other.RegId()) &&
+      (RegId() != kNoRegister) &&
+      (IsGPRegister() == other.IsGPRegister());
 }
 
 void Arm64ManagedRegister::Print(std::ostream& os) const {
