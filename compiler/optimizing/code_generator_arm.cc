@@ -71,7 +71,7 @@ class NullCheckSlowPathARM : public SlowPathCode {
   virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
     int32_t offset = QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pThrowNullPointer).Int32Value();
-    __ ldr(LR, Address(TR, offset));
+    __ LoadFromOffset(kLoadWord, LR, TR, offset);
     __ blx(LR);
     codegen->RecordPcInfo(instruction_, instruction_->GetDexPc());
   }
@@ -104,7 +104,7 @@ class SuspendCheckSlowPathARM : public SlowPathCode {
     __ Bind(GetEntryLabel());
     codegen->SaveLiveRegisters(instruction_->GetLocations());
     int32_t offset = QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pTestSuspend).Int32Value();
-    __ ldr(LR, Address(TR, offset));
+    __ LoadFromOffset(kLoadWord, LR, TR, offset);
     __ blx(LR);
     codegen->RecordPcInfo(instruction_, instruction_->GetDexPc());
     codegen->RestoreLiveRegisters(instruction_->GetLocations());
@@ -147,7 +147,7 @@ class BoundsCheckSlowPathARM : public SlowPathCode {
     arm_codegen->Move32(ArmCoreLocation(calling_convention.GetRegisterAt(0)), index_location_);
     arm_codegen->Move32(ArmCoreLocation(calling_convention.GetRegisterAt(1)), length_location_);
     int32_t offset = QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pThrowArrayBounds).Int32Value();
-    __ ldr(LR, Address(TR, offset));
+    __ LoadFromOffset(kLoadWord, LR, TR, offset);
     __ blx(LR);
     codegen->RecordPcInfo(instruction_, instruction_->GetDexPc());
   }
@@ -200,11 +200,11 @@ void CodeGeneratorARM::DumpFloatingPointRegister(std::ostream& stream, int reg) 
 }
 
 void CodeGeneratorARM::SaveCoreRegister(Location stack_location, uint32_t reg_id) {
-  __ str(static_cast<Register>(reg_id), Address(SP, stack_location.GetStackIndex()));
+  __ StoreToOffset(kStoreWord, static_cast<Register>(reg_id), SP, stack_location.GetStackIndex());
 }
 
 void CodeGeneratorARM::RestoreCoreRegister(Location stack_location, uint32_t reg_id) {
-  __ ldr(static_cast<Register>(reg_id), Address(SP, stack_location.GetStackIndex()));
+  __ LoadFromOffset(kLoadWord, static_cast<Register>(reg_id), SP, stack_location.GetStackIndex());
 }
 
 CodeGeneratorARM::CodeGeneratorARM(HGraph* graph)
@@ -343,7 +343,7 @@ void CodeGeneratorARM::GenerateFrameEntry() {
       __ b(slow_path->GetEntryLabel(), CC);
     } else {
       __ AddConstant(IP, SP, -static_cast<int32_t>(GetStackOverflowReservedBytes(kArm)));
-      __ ldr(IP, Address(IP, 0));
+      __ LoadFromOffset(kLoadWord, IP, IP, 0);
       RecordPcInfo(nullptr, 0);
     }
   }
@@ -353,7 +353,7 @@ void CodeGeneratorARM::GenerateFrameEntry() {
 
   // The return PC has already been pushed on the stack.
   __ AddConstant(SP, -(GetFrameSize() - kNumberOfPushedRegistersAtEntry * kArmWordSize));
-  __ str(R0, Address(SP, 0));
+  __ StoreToOffset(kStoreWord, R0, SP, 0);
 }
 
 void CodeGeneratorARM::GenerateFrameExit() {
@@ -438,7 +438,7 @@ void CodeGeneratorARM::Move32(Location destination, Location source) {
       __ vmovrs(destination.AsArm().AsCoreRegister(),
                 source.AsArm().AsOverlappingDRegisterLow());
     } else {
-      __ ldr(destination.AsArm().AsCoreRegister(), Address(SP, source.GetStackIndex()));
+      __ LoadFromOffset(kLoadWord, destination.AsArm().AsCoreRegister(), SP, source.GetStackIndex());
     }
   } else if (destination.IsFpuRegister()) {
     if (source.IsRegister()) {
@@ -454,14 +454,15 @@ void CodeGeneratorARM::Move32(Location destination, Location source) {
   } else {
     DCHECK(destination.IsStackSlot());
     if (source.IsRegister()) {
-      __ str(source.AsArm().AsCoreRegister(), Address(SP, destination.GetStackIndex()));
+      __ StoreToOffset(
+          kStoreWord, source.AsArm().AsCoreRegister(), SP, destination.GetStackIndex());
     } else if (source.IsFpuRegister()) {
       __ vstrs(source.AsArm().AsOverlappingDRegisterLow(),
                Address(SP, destination.GetStackIndex()));
     } else {
       DCHECK(source.IsStackSlot());
-      __ ldr(IP, Address(SP, source.GetStackIndex()));
-      __ str(IP, Address(SP, destination.GetStackIndex()));
+      __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
+      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
     }
   }
 }
@@ -481,13 +482,13 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
       InvokeDexCallingConvention calling_convention;
       __ Mov(destination.AsArm().AsRegisterPairLow(),
              calling_convention.GetRegisterAt(argument_index));
-      __ ldr(destination.AsArm().AsRegisterPairHigh(),
-             Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1) + GetFrameSize()));
+      __ LoadFromOffset(kLoadWord, destination.AsArm().AsRegisterPairHigh(),
+             SP, calling_convention.GetStackOffsetOf(argument_index + 1) + GetFrameSize());
     } else {
       DCHECK(source.IsDoubleStackSlot());
       if (destination.AsArm().AsRegisterPair() == R1_R2) {
-        __ ldr(R1, Address(SP, source.GetStackIndex()));
-        __ ldr(R2, Address(SP, source.GetHighStackIndex(kArmWordSize)));
+        __ LoadFromOffset(kLoadWord, R1, SP, source.GetStackIndex());
+        __ LoadFromOffset(kLoadWord, R2, SP, source.GetHighStackIndex(kArmWordSize));
       } else {
         __ LoadFromOffset(kLoadWordPair, destination.AsArm().AsRegisterPairLow(),
                           SP, source.GetStackIndex());
@@ -504,22 +505,22 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
     uint32_t argument_index = destination.GetQuickParameterIndex();
     if (source.IsRegister()) {
       __ Mov(calling_convention.GetRegisterAt(argument_index), source.AsArm().AsRegisterPairLow());
-      __ str(source.AsArm().AsRegisterPairHigh(),
-             Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1)));
+      __ StoreToOffset(kStoreWord, source.AsArm().AsRegisterPairHigh(),
+             SP, calling_convention.GetStackOffsetOf(argument_index + 1));
     } else if (source.IsFpuRegister()) {
       LOG(FATAL) << "Unimplemented";
     } else {
       DCHECK(source.IsDoubleStackSlot());
-      __ ldr(calling_convention.GetRegisterAt(argument_index), Address(SP, source.GetStackIndex()));
-      __ ldr(R0, Address(SP, source.GetHighStackIndex(kArmWordSize)));
-      __ str(R0, Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1)));
+      __ LoadFromOffset(kLoadWord, calling_convention.GetRegisterAt(argument_index), SP, source.GetStackIndex());
+      __ LoadFromOffset(kLoadWord, R0, SP, source.GetHighStackIndex(kArmWordSize));
+      __ StoreToOffset(kStoreWord, R0, SP, calling_convention.GetStackOffsetOf(argument_index + 1));
     }
   } else {
     DCHECK(destination.IsDoubleStackSlot());
     if (source.IsRegister()) {
       if (source.AsArm().AsRegisterPair() == R1_R2) {
-        __ str(R1, Address(SP, destination.GetStackIndex()));
-        __ str(R2, Address(SP, destination.GetHighStackIndex(kArmWordSize)));
+        __ StoreToOffset(kStoreWord, R1, SP, destination.GetStackIndex());
+        __ StoreToOffset(kStoreWord, R2, SP, destination.GetHighStackIndex(kArmWordSize));
       } else {
         __ StoreToOffset(kStoreWordPair, source.AsArm().AsRegisterPairLow(),
                          SP, destination.GetStackIndex());
@@ -527,19 +528,19 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
     } else if (source.IsQuickParameter()) {
       InvokeDexCallingConvention calling_convention;
       uint32_t argument_index = source.GetQuickParameterIndex();
-      __ str(calling_convention.GetRegisterAt(argument_index),
-             Address(SP, destination.GetStackIndex()));
-      __ ldr(R0,
-             Address(SP, calling_convention.GetStackOffsetOf(argument_index + 1) + GetFrameSize()));
-      __ str(R0, Address(SP, destination.GetHighStackIndex(kArmWordSize)));
+      __ StoreToOffset(kStoreWord, calling_convention.GetRegisterAt(argument_index),
+             SP, destination.GetStackIndex());
+      __ LoadFromOffset(kLoadWord, R0,
+             SP, calling_convention.GetStackOffsetOf(argument_index + 1) + GetFrameSize());
+      __ StoreToOffset(kStoreWord, R0, SP, destination.GetHighStackIndex(kArmWordSize));
     } else if (source.IsFpuRegister()) {
       __ vstrd(source.AsArm().AsDRegister(), Address(SP, destination.GetStackIndex()));
     } else {
       DCHECK(source.IsDoubleStackSlot());
-      __ ldr(IP, Address(SP, source.GetStackIndex()));
-      __ str(IP, Address(SP, destination.GetStackIndex()));
-      __ ldr(IP, Address(SP, source.GetHighStackIndex(kArmWordSize)));
-      __ str(IP, Address(SP, destination.GetHighStackIndex(kArmWordSize)));
+      __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
+      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+      __ LoadFromOffset(kLoadWord, IP, SP, source.GetHighStackIndex(kArmWordSize));
+      __ StoreToOffset(kStoreWord, IP, SP, destination.GetHighStackIndex(kArmWordSize));
     }
   }
 }
@@ -557,7 +558,7 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
     } else {
       DCHECK(location.IsStackSlot());
       __ LoadImmediate(IP, value);
-      __ str(IP, Address(SP, location.GetStackIndex()));
+      __ StoreToOffset(kStoreWord, IP, SP, location.GetStackIndex());
     }
   } else if (instruction->AsLongConstant() != nullptr) {
     int64_t value = instruction->AsLongConstant()->GetValue();
@@ -567,9 +568,9 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
     } else {
       DCHECK(location.IsDoubleStackSlot());
       __ LoadImmediate(IP, Low32Bits(value));
-      __ str(IP, Address(SP, location.GetStackIndex()));
+      __ StoreToOffset(kStoreWord, IP, SP, location.GetStackIndex());
       __ LoadImmediate(IP, High32Bits(value));
-      __ str(IP, Address(SP, location.GetHighStackIndex(kArmWordSize)));
+      __ StoreToOffset(kStoreWord, IP, SP, location.GetHighStackIndex(kArmWordSize));
     }
   } else if (instruction->AsLoadLocal() != nullptr) {
     uint32_t stack_slot = GetStackSlot(instruction->AsLoadLocal()->GetLocal());
@@ -908,7 +909,7 @@ void LocationsBuilderARM::VisitInvokeStatic(HInvokeStatic* invoke) {
 }
 
 void InstructionCodeGeneratorARM::LoadCurrentMethod(Register reg) {
-  __ ldr(reg, Address(SP, kCurrentMethodStackOffset));
+  __ LoadFromOffset(kLoadWord, reg, SP, kCurrentMethodStackOffset);
 }
 
 void InstructionCodeGeneratorARM::VisitInvokeStatic(HInvokeStatic* invoke) {
@@ -927,12 +928,12 @@ void InstructionCodeGeneratorARM::VisitInvokeStatic(HInvokeStatic* invoke) {
   // temp = method;
   LoadCurrentMethod(temp);
   // temp = temp->dex_cache_resolved_methods_;
-  __ ldr(temp, Address(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value()));
+  __ LoadFromOffset(kLoadWord, temp, temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
   // temp = temp[index_in_cache]
-  __ ldr(temp, Address(temp, index_in_cache));
+  __ LoadFromOffset(kLoadWord, temp, temp, index_in_cache);
   // LR = temp[offset_of_quick_compiled_code]
-  __ ldr(LR, Address(temp,
-                     mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value()));
+  __ LoadFromOffset(kLoadWord, LR, temp,
+                     mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value());
   // LR()
   __ blx(LR);
 
@@ -986,16 +987,16 @@ void InstructionCodeGeneratorARM::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
   // temp = object->GetClass();
   if (receiver.IsStackSlot()) {
-    __ ldr(temp, Address(SP, receiver.GetStackIndex()));
-    __ ldr(temp, Address(temp, class_offset));
+    __ LoadFromOffset(kLoadWord, temp, SP, receiver.GetStackIndex());
+    __ LoadFromOffset(kLoadWord, temp, temp, class_offset);
   } else {
-    __ ldr(temp, Address(receiver.AsArm().AsCoreRegister(), class_offset));
+    __ LoadFromOffset(kLoadWord, temp, receiver.AsArm().AsCoreRegister(), class_offset);
   }
   // temp = temp->GetMethodAt(method_offset);
   uint32_t entry_point = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset().Int32Value();
-  __ ldr(temp, Address(temp, method_offset));
+  __ LoadFromOffset(kLoadWord, temp, temp, method_offset);
   // LR = temp->GetEntryPoint();
-  __ ldr(LR, Address(temp, entry_point));
+  __ LoadFromOffset(kLoadWord, LR, temp, entry_point);
   // LR();
   __ blx(LR);
   DCHECK(!codegen_->IsLeafMethod());
@@ -1146,7 +1147,7 @@ void InstructionCodeGeneratorARM::VisitNewInstance(HNewInstance* instruction) {
   __ LoadImmediate(calling_convention.GetRegisterAt(0), instruction->GetTypeIndex());
 
   int32_t offset = QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pAllocObjectWithAccessCheck).Int32Value();
-  __ ldr(LR, Address(TR, offset));
+  __ LoadFromOffset(kLoadWord, LR, TR, offset);
   __ blx(LR);
 
   codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
@@ -1559,7 +1560,7 @@ void InstructionCodeGeneratorARM::VisitArraySet(HArraySet* instruction) {
 
     case Primitive::kPrimNot: {
       int32_t offset = QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pAputObject).Int32Value();
-      __ ldr(LR, Address(TR, offset));
+      __ LoadFromOffset(kLoadWord, LR, TR, offset);
       __ blx(LR);
       codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
       DCHECK(!codegen_->IsLeafMethod());
@@ -1720,7 +1721,7 @@ void ParallelMoveResolverARM::EmitMove(size_t index) {
     } else {
       DCHECK(destination.IsStackSlot());
       __ LoadImmediate(IP, value);
-      __ str(IP, Address(SP, destination.GetStackIndex()));
+      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
     }
   }
 }

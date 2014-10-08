@@ -490,10 +490,13 @@ void LocationsBuilderX86_64::VisitIf(HIf* if_instr) {
 
 void InstructionCodeGeneratorX86_64::VisitIf(HIf* if_instr) {
   HInstruction* cond = if_instr->InputAt(0);
-  if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
-    // Moves do not affect the eflags register, so if the condition is evaluated
-    // just before the if, we don't need to evaluate it again.
-    if (!cond->IsCondition() || !cond->AsCondition()->IsBeforeWhenDisregardMoves(if_instr)) {
+  bool materialized = !cond->IsCondition() || cond->AsCondition()->NeedsMaterialization();
+  // Moves do not affect the eflags register, so if the condition is evaluated
+  // just before the if, we don't need to evaluate it again.
+  bool eflags_set = cond->IsCondition()
+      && cond->AsCondition()->IsBeforeWhenDisregardMoves(if_instr);
+  if (materialized) {
+    if (!eflags_set) {
       // Materialized condition, compare against 0.
       Location lhs = if_instr->GetLocations()->InAt(0);
       if (lhs.IsRegister()) {
@@ -501,8 +504,11 @@ void InstructionCodeGeneratorX86_64::VisitIf(HIf* if_instr) {
       } else {
         __ cmpl(Address(CpuRegister(RSP), lhs.GetStackIndex()), Immediate(0));
       }
+      __ j(kNotEqual, codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
+    } else {
+      __ j(X86_64Condition(cond->AsCondition()->GetCondition()),
+           codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
     }
-    __ j(kNotEqual, codegen_->GetLabelOf(if_instr->IfTrueSuccessor()));
   } else {
     Location lhs = cond->GetLocations()->InAt(0);
     Location rhs = cond->GetLocations()->InAt(1);
@@ -582,13 +588,13 @@ void InstructionCodeGeneratorX86_64::VisitCondition(HCondition* comp) {
     // Clear register: setcc only sets the low byte.
     __ xorq(reg, reg);
     if (locations->InAt(1).IsRegister()) {
-      __ cmpq(locations->InAt(0).AsX86_64().AsCpuRegister(),
+      __ cmpl(locations->InAt(0).AsX86_64().AsCpuRegister(),
               locations->InAt(1).AsX86_64().AsCpuRegister());
     } else if (locations->InAt(1).IsConstant()) {
-      __ cmpq(locations->InAt(0).AsX86_64().AsCpuRegister(),
+      __ cmpl(locations->InAt(0).AsX86_64().AsCpuRegister(),
               Immediate(locations->InAt(1).GetConstant()->AsIntConstant()->GetValue()));
     } else {
-      __ cmpq(locations->InAt(0).AsX86_64().AsCpuRegister(),
+      __ cmpl(locations->InAt(0).AsX86_64().AsCpuRegister(),
               Address(CpuRegister(RSP), locations->InAt(1).GetStackIndex()));
     }
     __ setcc(X86_64Condition(comp->GetCondition()), reg);
@@ -889,10 +895,10 @@ void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) 
   size_t class_offset = mirror::Object::ClassOffset().SizeValue();
   // temp = object->GetClass();
   if (receiver.IsStackSlot()) {
-    __ movq(temp, Address(CpuRegister(RSP), receiver.GetStackIndex()));
-    __ movq(temp, Address(temp, class_offset));
+    __ movl(temp, Address(CpuRegister(RSP), receiver.GetStackIndex()));
+    __ movl(temp, Address(temp, class_offset));
   } else {
-    __ movq(temp, Address(receiver.AsX86_64().AsCpuRegister(), class_offset));
+    __ movl(temp, Address(receiver.AsX86_64().AsCpuRegister(), class_offset));
   }
   // temp = temp->GetMethodAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
