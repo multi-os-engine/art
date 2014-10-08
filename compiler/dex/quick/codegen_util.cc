@@ -1191,6 +1191,12 @@ bool Mir2Lir::BadOverlap(RegLocation rl_src, RegLocation rl_dest) {
   return (abs(mir_graph_->SRegToVReg(rl_src.s_reg_low) - mir_graph_->SRegToVReg(rl_dest.s_reg_low)) == 1);
 }
 
+bool Mir2Lir::IsIntersect(RegLocation rl_src, RegLocation rl_dest) {
+  DCHECK(rl_src.wide);
+  DCHECK(rl_dest.wide);
+  return (abs(mir_graph_->SRegToVReg(rl_src.s_reg_low) - mir_graph_->SRegToVReg(rl_dest.s_reg_low)) <= 1);
+}
+
 LIR *Mir2Lir::OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, RegStorage base_reg,
                                 int offset, int check_value, LIR* target, LIR** compare) {
   // Handle this for architectures that can't compare to memory.

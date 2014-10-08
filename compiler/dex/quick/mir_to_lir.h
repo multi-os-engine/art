@@ -1490,6 +1490,17 @@ class Mir2Lir : public Backend {
     bool BadOverlap(RegLocation rl_op1, RegLocation rl_op2);
 
     /*
+     * @brief Do these SRs intersect?
+     * @param rl_op1 One RegLocation
+     * @param rl_op2 The other RegLocation
+     * @return 'true' if the VR pairs intersect
+     *
+     * Check to see if a result pair has misaligned overlap or
+     * full overlap with an operand pair.
+     */
+    bool IsIntersect(RegLocation rl_op1, RegLocation rl_op2);
+
+    /*
      * @brief Force a location (in a register) into a temporary register
      * @param loc location of result
      * @returns update location
