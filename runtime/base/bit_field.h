@@ -22,7 +22,7 @@
 
 namespace art {
 
-static const uword kUwordOne = 1U;
+static const uintptr_t kUwordOne = 1U;
 
 // BitField is a template for encoding and decoding a bit field inside
 // an unsigned machine word.
@@ -31,17 +31,17 @@ class BitField {
  public:
   // Tells whether the provided value fits into the bit field.
   static bool IsValid(T value) {
-    return (static_cast<uword>(value) & ~((kUwordOne << size) - 1)) == 0;
+    return (static_cast<uintptr_t>(value) & ~((kUwordOne << size) - 1)) == 0;
   }
 
   // Returns a uword mask of the bit field.
-  static uword Mask() {
+  static uintptr_t Mask() {
     return (kUwordOne << size) - 1;
   }
 
   // Returns a uword mask of the bit field which can be applied directly to
   // the raw unshifted bits.
-  static uword MaskInPlace() {
+  static uintptr_t MaskInPlace() {
     return ((kUwordOne << size) - 1) << position;
   }
 
@@ -57,22 +57,22 @@ class BitField {
   }
 
   // Returns a uword with the bit field value encoded.
-  static uword Encode(T value) {
+  static uintptr_t Encode(T value) {
     DCHECK(IsValid(value));
-    return static_cast<uword>(value) << position;
+    return static_cast<uintptr_t>(value) << position;
   }
 
   // Extracts the bit field from the value.
-  static T Decode(uword value) {
+  static T Decode(uintptr_t value) {
     return static_cast<T>((value >> position) & ((kUwordOne << size) - 1));
   }
 
   // Returns a uword with the bit field value encoded based on the
   // original value. Only the bits corresponding to this bit field
   // will be changed.
-  static uword Update(T value, uword original) {
+  static uintptr_t Update(T value, uintptr_t original) {
     DCHECK(IsValid(value));
-    return (static_cast<uword>(value) << position) |
+    return (static_cast<uintptr_t>(value) << position) |
         (~MaskInPlace() & original);
   }
 };
