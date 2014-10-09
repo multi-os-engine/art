@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_MIRROR_OBJECT_H_
 #define ART_RUNTIME_MIRROR_OBJECT_H_
 
+#include "globals.h"
 #include "object_reference.h"
 #include "offsets.h"
 #include "verify_object.h"
@@ -63,6 +64,9 @@ static constexpr bool kCheckFieldAssignments = false;
 // C++ mirror of java.lang.Object
 class MANAGED LOCKABLE Object {
  public:
+  // Size of Object.
+  static constexpr uint32_t kObjectHeaderSize = kUseBrooksReadBarrier ? 16 : 8;
+
   // The number of vtable entries in java.lang.Object.
   static constexpr size_t kVTableLength = 11;
 
