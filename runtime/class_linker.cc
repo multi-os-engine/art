@@ -4280,6 +4280,11 @@ bool ClassLinker::InitializeClass(Thread* self, Handle<mirror::Class> klass,
       WrapExceptionInInitializer();
       klass->SetStatus(mirror::Class::kStatusError, self);
       success = false;
+      if (VLOG_IS_ON(class_linker)) {
+        std::string temp;
+        LOG(INFO) << "Failed to initialize class " << klass->GetDescriptor(&temp) << " from " <<
+            klass->GetLocation() << "\n" << self->GetException(nullptr)->Dump();
+      }
     } else {
       RuntimeStats* global_stats = Runtime::Current()->GetStats();
       RuntimeStats* thread_stats = self->GetStats();
@@ -4315,6 +4320,11 @@ bool ClassLinker::WaitForInitializeClass(Handle<mirror::Class> klass, Thread* se
     if (self->IsExceptionPending()) {
       WrapExceptionInInitializer();
       klass->SetStatus(mirror::Class::kStatusError, self);
+      if (VLOG_IS_ON(class_linker)) {
+        std::string temp;
+        LOG(INFO) << "Failed to initialize class " << klass->GetDescriptor(&temp) << " from " <<
+            klass->GetLocation() << "\n" << self->GetException(nullptr)->Dump();
+      }
       return false;
     }
     // Spurious wakeup? Go back to waiting.
