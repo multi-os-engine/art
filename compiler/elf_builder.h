@@ -18,6 +18,7 @@
 #define ART_COMPILER_ELF_BUILDER_H_
 
 #include "base/stl_util.h"
+#include "base/value_object.h"
 #include "buffered_output_stream.h"
 #include "elf_utils.h"
 #include "file_output_stream.h"
@@ -26,11 +27,12 @@
 namespace art {
 
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Shdr>
-class ElfSectionBuilder {
+class ElfSectionBuilder : public ValueObject {
  public:
   ElfSectionBuilder(const std::string& sec_name, Elf_Word type, Elf_Word flags,
                     const ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> *link, Elf_Word info,
-                    Elf_Word align, Elf_Word entsize) : name_(sec_name), link_(link) {
+                    Elf_Word align, Elf_Word entsize)
+      : section_index_(0), name_(sec_name), link_(link) {
     memset(&section_, 0, sizeof(section_));
     section_.sh_type = type;
     section_.sh_flags = flags;
@@ -39,23 +41,25 @@ class ElfSectionBuilder {
     section_.sh_entsize = entsize;
   }
 
-  virtual ~ElfSectionBuilder() {}
+  ~ElfSectionBuilder() {}
 
-  Elf_Shdr section_;
-  Elf_Word section_index_ = 0;
-
-  Elf_Word GetLink() {
+  Elf_Word GetLink() const {
     return (link_) ? link_->section_index_ : 0;
   }
 
-  const std::string name_;
+  const Elf_Shdr& GetSection() const {
+    return section_;
+  }
 
- protected:
-  const ElfSectionBuilder* link_;
+ private:
+  Elf_Shdr section_;
+  Elf_Word section_index_;
+  const std::string name_;
+  const ElfSectionBuilder* const link_;
 };
 
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Dyn, typename Elf_Shdr>
-class ElfDynamicBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> {
+class ElfDynamicBuilder FINAL : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> {
  public:
   void AddDynamicTag(Elf_Sword tag, Elf_Word d_un) {
     if (tag == DT_NULL) {
@@ -78,7 +82,7 @@ class ElfDynamicBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr
                                                      link, 0, kPageSize, sizeof(Elf_Dyn)) {}
   ~ElfDynamicBuilder() {}
 
-  Elf_Word GetSize() {
+  Elf_Word GetSize() const {
     // Add 1 for the DT_NULL, 1 for DT_STRSZ, and 1 for DT_SONAME. All of
     // these must be added when we actually put the file together because
     // their values are very dependent on state.
@@ -89,10 +93,10 @@ class ElfDynamicBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr
   // table and soname_off should be the offset of the soname in .dynstr.
   // Since niether can be found prior to final layout we will wait until here
   // to add them.
-  std::vector<Elf_Dyn> GetDynamics(Elf_Word strsz, Elf_Word soname) {
+  std::vector<Elf_Dyn> GetDynamics(Elf_Word strsz, Elf_Word soname) const {
     std::vector<Elf_Dyn> ret;
     for (auto it = dynamics_.cbegin(); it != dynamics_.cend(); ++it) {
-      if (it->section_) {
+      if (it->section_ != nullptr) {
         // We are adding an address relative to a section.
         ret.push_back(
             {it->tag_, {it->off_ + it->section_->section_.sh_addr}});
@@ -106,7 +110,7 @@ class ElfDynamicBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr
     return ret;
   }
 
- protected:
+ private:
   struct ElfDynamicState {
     ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>* section_;
     Elf_Sword tag_;
@@ -116,39 +120,50 @@ class ElfDynamicBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr
 };
 
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Shdr>
-class ElfRawSectionBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> {
+class ElfRawSectionBuilder FINAL : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> {
  public:
   ElfRawSectionBuilder(const std::string& sec_name, Elf_Word type, Elf_Word flags,
                        const ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>* link, Elf_Word info,
                        Elf_Word align, Elf_Word entsize)
     : ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>(sec_name, type, flags, link, info, align,
-                                                       entsize) {}
-  ~ElfRawSectionBuilder() {}
-  std::vector<uint8_t>* GetBuffer() { return &buf_; }
-  void SetBuffer(std::vector<uint8_t>&& buf) { buf_ = buf; }
+                                                       entsize) {
+  }
 
- protected:
+  ~ElfRawSectionBuilder() {}
+
+  std::vector<uint8_t>* GetBuffer() const {
+    return &buf_;
+  }
+
+  void SetBuffer(const std::vector<uint8_t>& buf) {
+    buf_ = buf;
+  }
+
+ private:
   std::vector<uint8_t> buf_;
 };
 
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Shdr>
-class ElfOatSectionBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> {
+class ElfOatSectionBuilder FINAL : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> {
  public:
   ElfOatSectionBuilder(const std::string& sec_name, Elf_Word size, Elf_Word offset,
                        Elf_Word type, Elf_Word flags)
     : ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>(sec_name, type, flags, nullptr, 0, kPageSize,
-                                                       0), offset_(offset), size_(size) {}
+                                                       0),
+      offset_(offset), size_(size) {
+  }
+
   ~ElfOatSectionBuilder() {}
 
-  Elf_Word GetOffset() {
+  Elf_Word GetOffset() const {
     return offset_;
   }
 
-  Elf_Word GetSize() {
+  Elf_Word GetSize() const {
     return size_;
   }
 
- protected:
+ private:
   // Offset of the content within the file.
   Elf_Word offset_;
   // Size of the content within the file.
@@ -175,7 +190,7 @@ static inline unsigned elfhash(const char *_name) {
 
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr, typename Elf_Sym,
           typename Elf_Shdr>
-class ElfSymtabBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> {
+class ElfSymtabBuilder FINAL : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> {
  public:
   // Add a symbol with given name to this symtab. The symbol refers to
   // 'relative_addr' within the given section and has the given attributes.
@@ -202,10 +217,12 @@ class ElfSymtabBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>
                                                      strtab_(str_name,
                                                              str_type,
                                                              ((alloc) ? SHF_ALLOC : 0U),
-                                                             nullptr, 0, 1, 1) {}
+                                                             nullptr, 0, 1, 1) {
+  }
+
   ~ElfSymtabBuilder() {}
 
-  std::vector<Elf_Word> GenerateHashContents() {
+  std::vector<Elf_Word> GenerateHashContents() const {
     // Here is how The ELF hash table works.
     // There are 3 arrays to worry about.
     // * The symbol table where the symbol information is.
@@ -325,16 +342,16 @@ class ElfSymtabBuilder : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>
     return ret;
   }
 
-  Elf_Word GetSize() {
+  Elf_Word GetSize() const {
     // 1 is for the implicit NULL symbol.
     return symbols_.size() + 1;
   }
 
-  ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>* GetStrTab() {
+  ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>* GetStrTab() const {
     return &strtab_;
   }
 
- protected:
+ private:
   struct ElfSymbolState {
     const std::string name_;
     const ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>* section_;
@@ -380,11 +397,14 @@ class ElfFilePiece {
   virtual std::string GetDescription() = 0;
   virtual bool DoActualWrite(File* elf_file) = 0;
 
-  Elf_Word offset_;
+ private:
+  const Elf_Word offset_;
+
+  DISALLOW_COPY_AND_ASSIGN(ElfFilePiece);
 };
 
 template <typename Elf_Word>
-class ElfFileMemoryPiece : public ElfFilePiece<Elf_Word> {
+class ElfFileMemoryPiece FINAL : public ElfFilePiece<Elf_Word> {
  public:
   ElfFileMemoryPiece(const std::string& name, Elf_Word offset, const void* data, Elf_Word size)
       : ElfFilePiece<Elf_Word>(offset), dbg_name_(name), data_(data), size_(size) {}
@@ -418,7 +438,7 @@ class CodeOutput {
 };
 
 template <typename Elf_Word>
-class ElfFileRodataPiece : public ElfFilePiece<Elf_Word> {
+class ElfFileRodataPiece FINAL : public ElfFilePiece<Elf_Word> {
  public:
   ElfFileRodataPiece(Elf_Word offset, CodeOutput* output) : ElfFilePiece<Elf_Word>(offset),
       output_(output) {}
@@ -440,11 +460,13 @@ class ElfFileRodataPiece : public ElfFilePiece<Elf_Word> {
   }
 
  private:
-  CodeOutput* output_;
+  CodeOutput* const output_;
+
+  DISALLOW_COPY_AND_ASSIGN(ElfFileRodataPiece);
 };
 
 template <typename Elf_Word>
-class ElfFileOatTextPiece : public ElfFilePiece<Elf_Word> {
+class ElfFileOatTextPiece FINAL : public ElfFilePiece<Elf_Word> {
  public:
   ElfFileOatTextPiece(Elf_Word offset, CodeOutput* output) : ElfFilePiece<Elf_Word>(offset),
       output_(output) {}
@@ -461,7 +483,9 @@ class ElfFileOatTextPiece : public ElfFilePiece<Elf_Word> {
   }
 
  private:
-  CodeOutput* output_;
+  CodeOutput* const output_;
+
+  DISALLOW_COPY_AND_ASSIGN(ElfFileOatTextPiece);
 };
 
 template <typename Elf_Word>
@@ -676,7 +700,7 @@ class ElfBuilder FINAL {
     section_index_ = 1;
 
     // setup .dynsym
-    section_ptrs_.push_back(&dynsym_builder_.section_);
+    section_ptrs_.push_back(&dynsym_builder_.GetSection());
     AssignSectionStr(&dynsym_builder_, &shstrtab_);
     dynsym_builder_.section_index_ = section_index_++;
 
@@ -1006,47 +1030,6 @@ class ElfBuilder FINAL {
   }
 
  private:
-  CodeOutput* oat_writer_;
-  File* elf_file_;
-  const bool add_symbols_;
-  const bool debug_logging_;
-
-  bool fatal_error_ = false;
-
-  // What phdr is.
-  static const uint32_t PHDR_OFFSET = sizeof(Elf_Ehdr);
-  enum : uint8_t {
-    PH_PHDR     = 0,
-        PH_LOAD_R__ = 1,
-        PH_LOAD_R_X = 2,
-        PH_LOAD_RW_ = 3,
-        PH_DYNAMIC  = 4,
-        PH_NUM      = 5,
-  };
-  static const uint32_t PHDR_SIZE = sizeof(Elf_Phdr) * PH_NUM;
-  Elf_Phdr program_headers_[PH_NUM];
-
-  Elf_Ehdr elf_header_;
-
-  Elf_Shdr null_hdr_;
-  std::string shstrtab_;
-  uint32_t section_index_;
-  std::string dynstr_;
-  uint32_t dynstr_soname_offset_;
-  std::vector<Elf_Shdr*> section_ptrs_;
-  std::vector<Elf_Word> hash_;
-
- public:
-  ElfOatSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> text_builder_;
-  ElfOatSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> rodata_builder_;
-  ElfSymtabBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Sym, Elf_Shdr> dynsym_builder_;
-  ElfSymtabBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Sym, Elf_Shdr> symtab_builder_;
-  ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> hash_builder_;
-  ElfDynamicBuilder<Elf_Word, Elf_Sword, Elf_Dyn, Elf_Shdr> dynamic_builder_;
-  ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> shstrtab_builder_;
-  std::vector<ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>> other_builders_;
-
- private:
   void SetISA(InstructionSet isa) {
     switch (isa) {
       case kArm:
@@ -1163,7 +1146,51 @@ class ElfBuilder FINAL {
     return true;
   }
 
-  bool IncludingDebugSymbols() { return add_symbols_ && symtab_builder_.GetSize() > 1; }
+  bool IncludingDebugSymbols() const {
+    return add_symbols_ && symtab_builder_.GetSize() > 1;
+  }
+
+ private:
+  CodeOutput* const oat_writer_;
+  File* const elf_file_;
+  const bool add_symbols_;
+  const bool debug_logging_;
+
+  bool fatal_error_ = false;
+
+  // What phdr is.
+  static const uint32_t PHDR_OFFSET = sizeof(Elf_Ehdr);
+  enum : uint8_t {
+    PH_PHDR     = 0,
+        PH_LOAD_R__ = 1,
+        PH_LOAD_R_X = 2,
+        PH_LOAD_RW_ = 3,
+        PH_DYNAMIC  = 4,
+        PH_NUM      = 5,
+  };
+  static const uint32_t PHDR_SIZE = sizeof(Elf_Phdr) * PH_NUM;
+  Elf_Phdr program_headers_[PH_NUM];
+
+  Elf_Ehdr elf_header_;
+
+  Elf_Shdr null_hdr_;
+  std::string shstrtab_;
+  uint32_t section_index_;
+  std::string dynstr_;
+  uint32_t dynstr_soname_offset_;
+  std::vector<const Elf_Shdr*> section_ptrs_;
+  std::vector<Elf_Word> hash_;
+
+  ElfOatSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> text_builder_;
+  ElfOatSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> rodata_builder_;
+  ElfSymtabBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Sym, Elf_Shdr> dynsym_builder_;
+  ElfSymtabBuilder<Elf_Word, Elf_Sword, Elf_Addr, Elf_Sym, Elf_Shdr> symtab_builder_;
+  ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> hash_builder_;
+  ElfDynamicBuilder<Elf_Word, Elf_Sword, Elf_Dyn, Elf_Shdr> dynamic_builder_;
+  ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> shstrtab_builder_;
+  std::vector<ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>> other_builders_;
+
+  DISALLOW_COPY_AND_ASSIGN(ElfBuilder);
 };
 
 }  // namespace art

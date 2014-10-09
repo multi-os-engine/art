@@ -20,7 +20,7 @@
 #include "base/bit_vector.h"
 #include "memory_region.h"
 #include "stack_map.h"
-#include "utils/allocation.h"
+#include "utils/arena_object.h"
 #include "utils/growable_array.h"
 
 namespace art {

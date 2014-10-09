@@ -195,7 +195,7 @@ std::vector<uint8_t>* ConstructCIEFrame(InstructionSet isa) {
   }
 }
 
-class OatWriterWrapper : public CodeOutput {
+class OatWriterWrapper FINAL : public CodeOutput {
  public:
   explicit OatWriterWrapper(OatWriter* oat_writer) : oat_writer_(oat_writer) {}
 
@@ -206,7 +206,7 @@ class OatWriterWrapper : public CodeOutput {
     return oat_writer_->Write(out);
   }
  private:
-  OatWriter* oat_writer_;
+  OatWriter* const oat_writer_;
 };
 
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
