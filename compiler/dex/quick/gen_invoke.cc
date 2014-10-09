@@ -248,13 +248,13 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocation(QuickEntrypointEnum trampo
         if (cu_->instruction_set == kMips) {
           LoadValueDirectFixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg1, kNotWide));
         } else {
-          LoadValueDirectFixed(arg1, TargetReg(kArg1, kNotWide));
+          LoadValueDirectFixed(arg1, TargetReg(arg1.fp ? kFArg1 : kArg1, kNotWide));
         }
       } else {
         if (cu_->instruction_set == kMips) {
           LoadValueDirectWideFixed(arg1, TargetReg(arg1.fp ? kFArg2 : kArg2, kWide));
         } else {
-          LoadValueDirectWideFixed(arg1, TargetReg(kArg1, kWide));
+          LoadValueDirectWideFixed(arg1, TargetReg(arg1.fp ? kFArg1 : kArg1, kWide));
         }
       }
     } else {

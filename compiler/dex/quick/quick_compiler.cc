@@ -425,6 +425,21 @@ static int kAllOpcodes[] = {
     kMirOpSelect,
 };
 
+static int kInvokeOpcodes[] = {
+    Instruction::INVOKE_VIRTUAL,
+    Instruction::INVOKE_SUPER,
+    Instruction::INVOKE_DIRECT,
+    Instruction::INVOKE_STATIC,
+    Instruction::INVOKE_INTERFACE,
+    Instruction::INVOKE_VIRTUAL_RANGE,
+    Instruction::INVOKE_SUPER_RANGE,
+    Instruction::INVOKE_DIRECT_RANGE,
+    Instruction::INVOKE_STATIC_RANGE,
+    Instruction::INVOKE_INTERFACE_RANGE,
+    Instruction::INVOKE_VIRTUAL_QUICK,
+    Instruction::INVOKE_VIRTUAL_RANGE_QUICK,
+};
+
 // Unsupported opcodes. nullptr can be used when everything is supported. Size of the lists is
 // recorded below.
 static const int* kUnsupportedOpcodes[] = {
@@ -535,11 +550,8 @@ bool QuickCompiler::CanCompileMethod(uint32_t method_idx, const DexFile& dex_fil
         return false;
       }
       // Check if it invokes a prototype that we cannot support.
-      if (Instruction::INVOKE_VIRTUAL == opcode ||
-          Instruction::INVOKE_SUPER == opcode ||
-          Instruction::INVOKE_DIRECT == opcode ||
-          Instruction::INVOKE_STATIC == opcode ||
-          Instruction::INVOKE_INTERFACE == opcode) {
+      if (std::find(kInvokeOpcodes, kInvokeOpcodes + arraysize(kInvokeOpcodes),
+          opcode) != kInvokeOpcodes + arraysize(kInvokeOpcodes)) {
         uint32_t invoke_method_idx = mir->dalvikInsn.vB;
         const char* invoke_method_shorty = dex_file.GetMethodShorty(
             dex_file.GetMethodId(invoke_method_idx));
