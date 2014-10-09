@@ -595,7 +595,13 @@ void LocationsBuilderX86::VisitIf(HIf* if_instr) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(if_instr, LocationSummary::kNoCall);
   HInstruction* cond = if_instr->InputAt(0);
-  if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
+  if (cond->IsConstant()) {
+    // Move the condition to a register if it is a constant, as the
+    // `cmpl' instruction cannot take an immediate value (literal
+    // constant) as left operand in InstructionCodeGeneratorX86::VisitIf.
+    locations->SetInAt(0, Location::RequiresRegister(), Location::kDiesAtEntry);
+  } else if (!cond->IsCondition()
+             || cond->AsCondition()->NeedsMaterialization()) {
     locations->SetInAt(0, Location::Any(), Location::kDiesAtEntry);
   }
 }
