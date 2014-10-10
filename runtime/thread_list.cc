@@ -182,8 +182,15 @@ void ThreadList::Dump(std::ostream& os) {
     MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
     os << "DALVIK THREADS (" << list_.size() << "):\n";
   }
+  size_t threads_running_checkpoint;
   DumpCheckpoint checkpoint(&os);
-  size_t threads_running_checkpoint = RunCheckpoint(&checkpoint);
+  {
+    // We need avoid threads suspending each other at this point.
+    // If don't do it, threads could suspend holding thread_list_suspend_thread_lock_.
+    // It will lead deadlock situation while current thread will perform DumpLockedObject.
+    MutexLock mu(Thread::Current(), *Locks::thread_list_suspend_thread_lock_);
+    threads_running_checkpoint = RunCheckpoint(&checkpoint);
+  }
   checkpoint.WaitForThreadsToRunThroughCheckpoint(threads_running_checkpoint);
 }
 
@@ -494,7 +501,7 @@ static void ThreadSuspendByPeerWarning(Thread* self, int level, const char* mess
   }
 }
 
-Thread* ThreadList::SuspendThreadByPeer(jobject peer, bool request_suspension,
+Thread* ThreadList::SuspendThreadByPeerHelper(jobject peer, bool request_suspension,
                                         bool debug_suspension, bool* timed_out) {
   static const useconds_t kTimeoutUs = 30 * 1000000;  // 30s.
   useconds_t total_delay_us = 0;
@@ -562,11 +569,23 @@ Thread* ThreadList::SuspendThreadByPeer(jobject peer, bool request_suspension,
   }
 }
 
+Thread* ThreadList::SuspendThreadByPeer(jobject peer, bool request_suspension,
+                                        bool debug_suspension, bool* timed_out) {
+  // If current thread is owner of lock we simply suspend required thread.
+  // Otherwise we take suspend thread lock to avoid races with threads trying to suspend this one.
+  if (static_cast<uint64_t>(Thread::Current()->GetTid()) !=
+      Locks::thread_list_suspend_thread_lock_->GetExclusiveOwnerTid()) {
+    MutexLock mu(Thread::Current(), *Locks::thread_list_suspend_thread_lock_);
+    return SuspendThreadByPeerHelper(peer, request_suspension, debug_suspension, timed_out);
+  }
+  return SuspendThreadByPeerHelper(peer, request_suspension, debug_suspension, timed_out);
+}
+
 static void ThreadSuspendByThreadIdWarning(int level, const char* message, uint32_t thread_id) {
   LOG(level) << StringPrintf("%s: %d", message, thread_id);
 }
 
-Thread* ThreadList::SuspendThreadByThreadId(uint32_t thread_id, bool debug_suspension,
+Thread* ThreadList::SuspendThreadByThreadIdHelper(uint32_t thread_id, bool debug_suspension,
                                             bool* timed_out) {
   static const useconds_t kTimeoutUs = 30 * 1000000;  // 30s.
   useconds_t total_delay_us = 0;
@@ -637,6 +656,18 @@ Thread* ThreadList::SuspendThreadByThreadId(uint32_t thread_id, bool debug_suspe
     VLOG(threads) << "SuspendThreadByThreadId sleeping to allow thread chance to suspend";
     ThreadSuspendSleep(self, &delay_us, &total_delay_us);
   }
+}
+
+Thread* ThreadList::SuspendThreadByThreadId(uint32_t thread_id, bool debug_suspension,
+                                            bool* timed_out) {
+  // If current thread is owner of lock we simply suspend required thread.
+  // Otherwise we take suspend thread lock to avoid races with threads trying to suspend this one.
+  if (static_cast<uint64_t>(Thread::Current()->GetTid()) !=
+      Locks::thread_list_suspend_thread_lock_->GetExclusiveOwnerTid()) {
+    MutexLock mu(Thread::Current(), *Locks::thread_list_suspend_thread_lock_);
+    return SuspendThreadByThreadIdHelper(thread_id, debug_suspension, timed_out);
+  }
+  return SuspendThreadByThreadIdHelper(thread_id, debug_suspension, timed_out);
 }
 
 Thread* ThreadList::FindThreadByThreadId(uint32_t thin_lock_id) {

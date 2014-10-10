@@ -60,7 +60,6 @@ class ThreadList {
       LOCKS_EXCLUDED(Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_);
 
-
   // Suspend a thread using a peer, typically used by the debugger. Returns the thread on success,
   // else NULL. The peer is used to identify the thread to avoid races with the thread terminating.
   // If the thread should be suspended then value of request_suspension should be true otherwise
@@ -68,7 +67,6 @@ class ThreadList {
   // is set to true.
   Thread* SuspendThreadByPeer(jobject peer, bool request_suspension, bool debug_suspension,
                               bool* timed_out)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_list_suspend_thread_lock_)
       LOCKS_EXCLUDED(Locks::mutator_lock_,
                      Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_);
@@ -78,7 +76,6 @@ class ThreadList {
   // the thread terminating. Note that as thread ids are recycled this may not suspend the expected
   // thread, that may be terminating. If the suspension times out then *timeout is set to true.
   Thread* SuspendThreadByThreadId(uint32_t thread_id, bool debug_suspension, bool* timed_out)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_list_suspend_thread_lock_)
       LOCKS_EXCLUDED(Locks::mutator_lock_,
                      Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_);
@@ -152,6 +149,19 @@ class ThreadList {
 
   void AssertThreadsAreSuspended(Thread* self, Thread* ignore1, Thread* ignore2 = NULL)
       LOCKS_EXCLUDED(Locks::thread_list_lock_,
+                     Locks::thread_suspend_count_lock_);
+
+  // Helper method for SuspendThreadByPeer. This method actually does all the work to suspend thread.
+  Thread* SuspendThreadByPeerHelper(jobject peer, bool request_suspension, bool debug_suspension,
+                              bool* timed_out)
+      LOCKS_EXCLUDED(Locks::mutator_lock_,
+                     Locks::thread_list_lock_,
+                     Locks::thread_suspend_count_lock_);
+
+  // Helper method for SuspendThreadByThreadId. This method actually does all the work to suspend thread.
+  Thread* SuspendThreadByThreadIdHelper(uint32_t thread_id, bool debug_suspension, bool* timed_out)
+      LOCKS_EXCLUDED(Locks::mutator_lock_,
+                     Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_);
 
   std::bitset<kMaxThreadId> allocated_ids_ GUARDED_BY(Locks::allocated_thread_ids_lock_);
