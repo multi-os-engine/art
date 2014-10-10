@@ -827,6 +827,8 @@ bool MIRGraph::EliminateNullChecksGate() {
 
   DCHECK(temp_scoped_alloc_.get() == nullptr);
   temp_scoped_alloc_.reset(ScopedArenaAllocator::Create(&cu_->arena_stack));
+  ComputeDFSOrders();
+  temp_scoped_alloc_->Reset();
   temp_bit_vector_size_ = GetNumOfCodeVRs();
   temp_bit_vector_ = new (temp_scoped_alloc_.get()) ArenaBitVector(
       temp_scoped_alloc_.get(), temp_bit_vector_size_, false, kBitMapNullCheck);
@@ -909,11 +911,7 @@ bool MIRGraph::EliminateNullChecks(BasicBlock* bb) {
 
     uint64_t df_attributes = GetDataFlowAttributes(mir);
 
-    // TODO: Perform this pass before SSA transformation.
-    // DCHECK_EQ(df_attributes & DF_NULL_TRANSFER_N, 0);  // No Phis yet.
-    if (df_attributes & DF_NULL_TRANSFER_N) {
-      continue;
-    }
+    DCHECK_EQ(df_attributes & DF_NULL_TRANSFER_N, 0u);  // No Phis yet.
 
     // Might need a null check?
     if (df_attributes & DF_HAS_NULL_CHKS) {
@@ -1077,26 +1075,27 @@ bool MIRGraph::EliminateClassInitChecksGate() {
     // First, find all SGET/SPUTs that may need class initialization checks, record INVOKE_STATICs.
     AllNodesIterator iter(this);
     for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
-      for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
-        DCHECK(bb->data_flow_info != nullptr);
-        if (mir->dalvikInsn.opcode >= Instruction::SGET &&
-            mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) {
-          const MirSFieldLoweringInfo& field_info = GetSFieldLoweringInfo(mir);
-          uint16_t index = 0xffffu;
-          if (!field_info.IsInitialized()) {
-            DCHECK_LT(class_to_index_map.size(), 0xffffu);
-            MapEntry entry = {
-                // Treat unresolved fields as if each had its own class.
-                field_info.IsResolved() ? field_info.DeclaringDexFile()
-                                        : nullptr,
-                field_info.IsResolved() ? field_info.DeclaringClassIndex()
-                                        : field_info.FieldIndex(),
-                static_cast<uint16_t>(class_to_index_map.size())
-            };
-            index = class_to_index_map.insert(entry).first->index;
+      if (bb->block_type == kDalvikByteCode) {
+        for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+          if (mir->dalvikInsn.opcode >= Instruction::SGET &&
+              mir->dalvikInsn.opcode <= Instruction::SPUT_SHORT) {
+            const MirSFieldLoweringInfo& field_info = GetSFieldLoweringInfo(mir);
+            uint16_t index = 0xffffu;
+            if (!field_info.IsInitialized()) {
+              DCHECK_LT(class_to_index_map.size(), 0xffffu);
+              MapEntry entry = {
+                  // Treat unresolved fields as if each had its own class.
+                  field_info.IsResolved() ? field_info.DeclaringDexFile()
+                                          : nullptr,
+                  field_info.IsResolved() ? field_info.DeclaringClassIndex()
+                                          : field_info.FieldIndex(),
+                  static_cast<uint16_t>(class_to_index_map.size())
+              };
+              index = class_to_index_map.insert(entry).first->index;
+            }
+            // Using offset/2 for index into temp_insn_data_.
+            temp_insn_data_[mir->offset / 2u] = index;
           }
-          // Using offset/2 for index into temp_insn_data_.
-          temp_insn_data_[mir->offset / 2u] = index;
         }
       }
     }
@@ -1125,7 +1124,9 @@ bool MIRGraph::EliminateClassInitChecksGate() {
  */
 bool MIRGraph::EliminateClassInitChecks(BasicBlock* bb) {
   DCHECK_EQ((cu_->disable_opt & (1 << kClassInitCheckElimination)), 0u);
-  if (bb->data_flow_info == nullptr) {
+  if (bb->block_type != kDalvikByteCode && bb->block_type != kEntryBlock) {
+    // Ignore the kExitBlock as well.
+    DCHECK(bb->first_mir_insn == nullptr);
     return false;
   }
 
@@ -1140,7 +1141,6 @@ bool MIRGraph::EliminateClassInitChecks(BasicBlock* bb) {
     BasicBlock* pred_bb = GetBasicBlock(bb->predecessors[0]);
     // pred_bb must have already been processed at least once.
     DCHECK(pred_bb != nullptr);
-    DCHECK(pred_bb->data_flow_info != nullptr);
     DCHECK(temp_bit_matrix_[pred_bb->id] != nullptr);
     classes_to_check->Copy(temp_bit_matrix_[pred_bb->id]);
   } else {
@@ -1149,7 +1149,6 @@ bool MIRGraph::EliminateClassInitChecks(BasicBlock* bb) {
     for (BasicBlockId pred_id : bb->predecessors) {
       BasicBlock* pred_bb = GetBasicBlock(pred_id);
       DCHECK(pred_bb != nullptr);
-      DCHECK(pred_bb->data_flow_info != nullptr);
       if (temp_bit_matrix_[pred_bb->id] == nullptr) {
         continue;
       }
