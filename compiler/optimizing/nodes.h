@@ -683,8 +683,9 @@ class HInstruction : public ArenaObject {
     return result;
   }
 
-  // Does this instruction dominate `other_instruction`?  Aborts if
-  // this instruction and `other_instruction` are both phis.
+  // Does this instruction strictly dominate `other_instruction`?
+  // Returns false if this instruction and `other_instruction` are the same.
+  // Aborts if this instruction and `other_instruction` are both phis.
   bool Dominates(HInstruction* other_instruction) const;
 
   int GetId() const { return id_; }
