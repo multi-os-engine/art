@@ -18,9 +18,9 @@
 
 namespace art {
 
-void SsaDeadPhiElimination::Run() {
+void HSsaDeadPhiElimination::Run() {
   // Add to the worklist phis referenced by non-phi instructions.
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+  for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
       HPhi* phi = it.Current()->AsPhi();
@@ -58,7 +58,7 @@ void SsaDeadPhiElimination::Run() {
   // Remove phis that are not live. Visit in post order so that phis
   // that are not inputs of loop phis can be removed when they have
   // no users left (dead phis might use dead phis).
-  for (HPostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+  for (HPostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     HInstruction* current = block->GetFirstPhi();
     HInstruction* next = nullptr;
@@ -83,9 +83,9 @@ void SsaDeadPhiElimination::Run() {
   }
 }
 
-void SsaRedundantPhiElimination::Run() {
+void HSsaRedundantPhiElimination::Run() {
   // Add all phis in the worklist.
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+  for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
       worklist_.Add(it.Current()->AsPhi());

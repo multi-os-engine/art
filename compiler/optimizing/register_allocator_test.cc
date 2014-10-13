@@ -19,6 +19,7 @@
 #include "code_generator_x86.h"
 #include "dex_file.h"
 #include "dex_instruction.h"
+#include "graph_checker.h"
 #include "nodes.h"
 #include "optimizing_unit_test.h"
 #include "register_allocator.h"
@@ -383,8 +384,12 @@ TEST(RegisterAllocatorTest, DeadPhi) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildSSAGraph(data, &allocator);
-  SsaDeadPhiElimination(graph).Run();
   x86::CodeGeneratorX86 codegen(graph);
+  HGraphVisualizer visualizer(nullptr, graph, codegen, "");
+  HSsaDeadPhiElimination(graph, visualizer).Run();
+  SSAChecker ssa_checker(&allocator, graph);
+  ssa_checker.Run();
+  ASSERT_TRUE(ssa_checker.IsValid());
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
   RegisterAllocator register_allocator(&allocator, &codegen, liveness);
@@ -405,8 +410,12 @@ TEST(RegisterAllocatorTest, FreeUntil) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildSSAGraph(data, &allocator);
-  SsaDeadPhiElimination(graph).Run();
   x86::CodeGeneratorX86 codegen(graph);
+  HGraphVisualizer visualizer(nullptr, graph, codegen, "");
+  HSsaDeadPhiElimination(graph, visualizer).Run();
+  SSAChecker ssa_checker(&allocator, graph);
+  ssa_checker.Run();
+  ASSERT_TRUE(ssa_checker.IsValid());
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
   RegisterAllocator register_allocator(&allocator, &codegen, liveness);
