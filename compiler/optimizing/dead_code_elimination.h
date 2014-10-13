@@ -33,6 +33,9 @@ class HDeadCodeElimination : public HOptimization {
 
   virtual void Run() OVERRIDE;
 
+  virtual void VisitBasicBlock(HBasicBlock* block) OVERRIDE;
+  virtual void VisitInstruction(HInstruction* instruction) OVERRIDE;
+
   static constexpr const char* kDeadCodeEliminationPassName =
     "dead_code_elimination";
 
