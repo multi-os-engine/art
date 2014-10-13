@@ -18,26 +18,26 @@
 
 namespace art {
 
-void GlobalValueNumberer::Run() {
+void HGlobalValueNumberer::Run() {
   ComputeSideEffects();
 
-  sets_.Put(graph_->GetEntryBlock()->GetBlockId(), new (allocator_) ValueSet(allocator_));
+  sets_.Put(GetGraph()->GetEntryBlock()->GetBlockId(), new (allocator_) ValueSet(allocator_));
 
   // Do reverse post order to ensure the non back-edge predecessors of a block are
   // visited before the block itself.
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+  for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
     VisitBasicBlock(it.Current());
   }
 }
 
-void GlobalValueNumberer::UpdateLoopEffects(HLoopInformation* info, SideEffects effects) {
+void HGlobalValueNumberer::UpdateLoopEffects(HLoopInformation* info, SideEffects effects) {
   int id = info->GetHeader()->GetBlockId();
   loop_effects_.Put(id, loop_effects_.Get(id).Union(effects));
 }
 
-void GlobalValueNumberer::ComputeSideEffects() {
+void HGlobalValueNumberer::ComputeSideEffects() {
   if (kIsDebugBuild) {
-    for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+    for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
       HBasicBlock* block = it.Current();
       SideEffects effects = GetBlockEffects(block);
       DCHECK(!effects.HasSideEffects() && !effects.HasDependencies());
@@ -49,7 +49,7 @@ void GlobalValueNumberer::ComputeSideEffects() {
   }
 
   // Do a post order visit to ensure we visit a loop header after its loop body.
-  for (HPostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+  for (HPostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
 
     SideEffects effects = SideEffects::None();
@@ -81,12 +81,12 @@ void GlobalValueNumberer::ComputeSideEffects() {
   }
 }
 
-SideEffects GlobalValueNumberer::GetLoopEffects(HBasicBlock* block) const {
+SideEffects HGlobalValueNumberer::GetLoopEffects(HBasicBlock* block) const {
   DCHECK(block->IsLoopHeader());
   return loop_effects_.Get(block->GetBlockId());
 }
 
-SideEffects GlobalValueNumberer::GetBlockEffects(HBasicBlock* block) const {
+SideEffects HGlobalValueNumberer::GetBlockEffects(HBasicBlock* block) const {
   return block_effects_.Get(block->GetBlockId());
 }
 
@@ -96,7 +96,7 @@ static bool IsLoopExit(HBasicBlock* block, HBasicBlock* successor) {
   return block_info != other_info && (other_info == nullptr || block_info->IsIn(*other_info));
 }
 
-void GlobalValueNumberer::VisitBasicBlock(HBasicBlock* block) {
+void HGlobalValueNumberer::VisitBasicBlock(HBasicBlock* block) {
   if (kIsDebugBuild) {
     // Check that all non back-edge processors have been visited.
     for (size_t i = 0, e = block->GetPredecessors().Size(); i < e; ++i) {
@@ -131,7 +131,7 @@ void GlobalValueNumberer::VisitBasicBlock(HBasicBlock* block) {
     current = next;
   }
 
-  if (block == graph_->GetEntryBlock()) {
+  if (block == GetGraph()->GetEntryBlock()) {
     // The entry block should only accumulate constant instructions, and
     // the builder puts constants only in the entry block.
     // Therefore, there is no need to propagate the value set to the next block.

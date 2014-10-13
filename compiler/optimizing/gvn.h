@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_GVN_H_
 
 #include "nodes.h"
+#include "optimization.h"
 
 namespace art {
 
@@ -165,11 +166,13 @@ class ValueSet : public ArenaObject {
 /**
  * Optimization phase that removes redundant instruction.
  */
-class GlobalValueNumberer : public ValueObject {
+class HGlobalValueNumberer : public HOptimization {
  public:
-  GlobalValueNumberer(ArenaAllocator* allocator, HGraph* graph)
-      : allocator_(allocator),
-        graph_(graph),
+  HGlobalValueNumberer(ArenaAllocator* allocator,
+                       HGraph* graph,
+                       const HGraphVisualizer& visualizer)
+      : HOptimization(graph, true, kGVNPassName, visualizer),
+        allocator_(allocator),
         block_effects_(allocator, graph->GetBlocks().Size()),
         loop_effects_(allocator, graph->GetBlocks().Size()),
         sets_(allocator, graph->GetBlocks().Size()),
@@ -201,8 +204,9 @@ class GlobalValueNumberer : public ValueObject {
   SideEffects GetLoopEffects(HBasicBlock* block) const;
   SideEffects GetBlockEffects(HBasicBlock* block) const;
 
+  static constexpr const char* kGVNPassName = "gvn";
+
   ArenaAllocator* const allocator_;
-  HGraph* const graph_;
 
   // Side effects of individual blocks, that is the union of the side effects
   // of the instructions in the block.
@@ -221,7 +225,7 @@ class GlobalValueNumberer : public ValueObject {
   GrowableArray<bool> visited_;
 
   ART_FRIEND_TEST(GVNTest, LoopSideEffects);
-  DISALLOW_COPY_AND_ASSIGN(GlobalValueNumberer);
+  DISALLOW_COPY_AND_ASSIGN(HGlobalValueNumberer);
 };
 
 }  // namespace art
