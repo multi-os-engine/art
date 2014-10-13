@@ -299,6 +299,19 @@ ifeq ($(TARGET_ARCH),arm)
   endif
 endif
 
+# The ccache utility invokes compiler preprocessor to create a hash code.
+# In contrast to GCC, clang's preprocessor fails if option -Wa,--noexecstack
+# is passed together with -E. The option -Wno-error=unused-command-line-argument
+# helps to fix this issue.
+ifneq ($(USE_CCACHE),)
+  ifeq ($(ART_HOST_CLANG),true)
+    ART_HOST_CFLAGS += -Wno-error=unused-command-line-argument
+  endif
+  ifeq ($(ART_TARGET_CLANG),true)
+    ART_TARGET_CFLAGS += -Wno-error=unused-command-line-argument
+  endif
+endif
+
 ART_HOST_NON_DEBUG_CFLAGS := $(art_host_non_debug_cflags)
 ART_TARGET_NON_DEBUG_CFLAGS := $(art_target_non_debug_cflags)
 
