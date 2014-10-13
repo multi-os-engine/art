@@ -557,6 +557,12 @@ void HGraphVisitor::VisitInsertionOrder() {
   }
 }
 
+void HGraphVisitor::VisitPostOrder() {
+  for (HPostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+    VisitBasicBlock(it.Current());
+  }
+}
+
 void HGraphVisitor::VisitReversePostOrder() {
   for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     VisitBasicBlock(it.Current());

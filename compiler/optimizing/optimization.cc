@@ -29,13 +29,13 @@ void HOptimization::Execute() {
 void HOptimization::Check() {
   if (kIsDebugBuild) {
     if (is_in_ssa_form_) {
-      SSAChecker checker(graph_->GetArena(), graph_);
+      SSAChecker checker(GetGraph()->GetArena(), GetGraph());
       checker.Run();
       if (!checker.IsValid()) {
         LOG(FATAL) << Dumpable<SSAChecker>(checker);
       }
     } else {
-      GraphChecker checker(graph_->GetArena(), graph_);
+      GraphChecker checker(GetGraph()->GetArena(), GetGraph());
       checker.Run();
       if (!checker.IsValid()) {
         LOG(FATAL) << Dumpable<GraphChecker>(checker);

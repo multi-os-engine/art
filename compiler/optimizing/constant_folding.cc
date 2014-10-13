@@ -23,23 +23,25 @@ void HConstantFolding::Run() {
   // so that an instruction turned into a constant, used as input of
   // another instruction, may possibly be used to turn that second
   // instruction into a constant as well.
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
-    HBasicBlock* block = it.Current();
-    // Traverse this block's instructions in (forward) order and
-    // replace the ones that can be statically evaluated by a
-    // compile-time counterpart.
-    for (HInstructionIterator it(block->GetInstructions());
-         !it.Done(); it.Advance()) {
-      HInstruction* inst = it.Current();
-      // Constant folding: replace `c <- a op b' with a compile-time
-      // evaluation of `a op b' if `a' and `b' are constant.
-      if (inst->IsBinaryOperation()) {
-        HConstant* constant =
-          inst->AsBinaryOperation()->TryStaticEvaluation(graph_->GetArena());
-        if (constant != nullptr) {
-          inst->GetBlock()->ReplaceAndRemoveInstructionWith(inst, constant);
-        }
-      }
+  VisitReversePostOrder();
+}
+
+void HConstantFolding::VisitBasicBlock(HBasicBlock* block) {
+  // Traverse this block's instructions in (forward) order and
+  // replace the ones that can be statically evaluated by a
+  // compile-time counterpart.
+  for (HInstructionIterator it(block->GetInstructions());
+       !it.Done(); it.Advance()) {
+    it.Current()->Accept(this);
+  }
+}
+
+void HConstantFolding::VisitBinaryOperation(HBinaryOperation* inst) {
+  if (inst->IsBinaryOperation()) {
+    HConstant* constant =
+        inst->AsBinaryOperation()->TryStaticEvaluation(GetGraph()->GetArena());
+    if (constant != nullptr) {
+      inst->GetBlock()->ReplaceAndRemoveInstructionWith(inst, constant);
     }
   }
 }
