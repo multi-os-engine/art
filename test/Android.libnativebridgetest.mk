@@ -75,10 +75,10 @@ define build-libnativebridgetest
   art_target_or_host :=
 endef
 
-ifeq ($(ART_BUILD_TARGET),true)
+ifeq ($(ART_BUILD_TARGET_DEBUG),true)
   $(eval $(call build-libnativebridgetest,target))
 endif
-ifeq ($(ART_BUILD_HOST),true)
+ifeq ($(ART_BUILD_HOST_DEBUG),true)
   $(eval $(call build-libnativebridgetest,host))
 endif
 
