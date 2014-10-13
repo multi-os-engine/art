@@ -1965,6 +1965,9 @@ class HGraphVisitor : public ValueObject {
   // Visit the graph following basic block insertion order.
   void VisitInsertionOrder();
 
+  // Visit the graph following dominator tree post-order.
+  void VisitPostOrder();
+
   // Visit the graph following dominator tree reverse post-order.
   void VisitReversePostOrder();
 

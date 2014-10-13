@@ -37,6 +37,10 @@ class HConstantFolding : public HOptimization {
 
   virtual void Run() OVERRIDE;
 
+  virtual void VisitBasicBlock(HBasicBlock* block) OVERRIDE;
+  // Replace `inst` with a constant if its inputs are constant.
+  virtual void VisitBinaryOperation(HBinaryOperation* inst) OVERRIDE;
+
   static constexpr const char* kConstantFoldingPassName = "constant_folding";
 
  private:
