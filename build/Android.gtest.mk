@@ -413,11 +413,11 @@ valgrind-test-art-host-gtest-$$(art_gtest_name): $$(ART_TEST_HOST_VALGRIND_GTEST
   art_gtest_name :=
 endef  # define-art-gtest
 
-ifeq ($(ART_BUILD_TARGET),true)
+ifeq ($(ART_BUILD_TARGET_DEBUG),true)
   $(foreach file,$(RUNTIME_GTEST_TARGET_SRC_FILES), $(eval $(call define-art-gtest,target,$(file),,)))
   $(foreach file,$(COMPILER_GTEST_TARGET_SRC_FILES), $(eval $(call define-art-gtest,target,$(file),art/compiler,libartd-compiler)))
 endif
-ifeq ($(ART_BUILD_HOST),true)
+ifeq ($(ART_BUILD_HOST_DEBUG),true)
   $(foreach file,$(RUNTIME_GTEST_HOST_SRC_FILES), $(eval $(call define-art-gtest,host,$(file),,)))
   $(foreach file,$(COMPILER_GTEST_HOST_SRC_FILES), $(eval $(call define-art-gtest,host,$(file),art/compiler,libartd-compiler)))
 endif
