@@ -864,7 +864,8 @@ bool X86Mir2Lir::GenInlinedMinMax(CallInfo* info, bool is_min, bool is_long) {
      * inadvertently clobber the second element with the first one thus
      * yielding the wrong result. Thus we do a swap in that case.
      */
-    res_vreg = mir_graph_->SRegToVReg(rl_dest.s_reg_low);
+    res_vreg = rl_dest.s_reg_low == INVALID_SREG ?
+               -1 : mir_graph_->SRegToVReg(rl_dest.s_reg_low);
     src2_vreg = mir_graph_->SRegToVReg(rl_src2.s_reg_low);
     if (res_vreg == src2_vreg) {
       std::swap(rl_src1, rl_src2);
