@@ -18,11 +18,11 @@
 
 namespace art {
 
-void InstructionSimplifier::Run() {
+void HInstructionSimplifier::Run() {
   VisitInsertionOrder();
 }
 
-void InstructionSimplifier::VisitSuspendCheck(HSuspendCheck* check) {
+void HInstructionSimplifier::VisitSuspendCheck(HSuspendCheck* check) {
   HBasicBlock* block = check->GetBlock();
   // Currently always keep the suspend check at entry.
   if (block->IsEntryBlock()) return;
@@ -38,7 +38,7 @@ void InstructionSimplifier::VisitSuspendCheck(HSuspendCheck* check) {
   block->RemoveInstruction(check);
 }
 
-void InstructionSimplifier::VisitEqual(HEqual* equal) {
+void HInstructionSimplifier::VisitEqual(HEqual* equal) {
   HInstruction* input1 = equal->InputAt(0);
   HInstruction* input2 = equal->InputAt(1);
   if (input1->GetType() == Primitive::kPrimBoolean && input2->IsIntConstant()) {
