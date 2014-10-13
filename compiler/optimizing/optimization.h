@@ -23,15 +23,15 @@
 namespace art {
 
 /**
- * Abstraction to implement an optimization pass.
+ * Abstraction to implement an optimization pass, implemented as a visitor.
  */
-class HOptimization : public ValueObject {
+class HOptimization : public HGraphDelegateVisitor {
  public:
   HOptimization(HGraph* graph,
                 bool is_in_ssa_form,
                 const char* pass_name,
                 const HGraphVisualizer& visualizer)
-      : graph_(graph),
+      : HGraphDelegateVisitor(graph),
         is_in_ssa_form_(is_in_ssa_form),
         pass_name_(pass_name),
         visualizer_(visualizer) {}
@@ -50,9 +50,6 @@ class HOptimization : public ValueObject {
  private:
   // Verify the graph; abort if it is not valid.
   void Check();
-
- protected:
-  HGraph* const graph_;
 
  private:
   // Does the analyzed graph use the SSA form?
