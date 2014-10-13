@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <string>
 
+#include "instruction_set.h"
+
 namespace art {
 
 // Mirror libnativebridge interface. Done to have the ART callbacks out of line, and not require
@@ -29,7 +31,7 @@ namespace art {
 void LoadNativeBridge(std::string& native_bridge_library_filename);
 
 // This is mostly for testing purposes, as in a full system this is called by Zygote code.
-void PreInitializeNativeBridge(std::string dir);
+void PreInitializeNativeBridge(std::string dir, const char* instruction_set);
 
 void InitializeNativeBridge(JNIEnv* env, const char* instruction_set);
 

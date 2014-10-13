@@ -36,6 +36,7 @@ ParsedOptions::ParsedOptions()
     check_jni_(kIsDebugBuild),                      // -Xcheck:jni is off by default for regular
                                                     // builds but on by default in debug builds.
     force_copy_(false),
+    native_bridge_target_isa_(kNone),
     compiler_callbacks_(nullptr),
     is_zygote_(false),
     must_relocate_(kDefaultMustRelocate),
@@ -654,6 +655,16 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
       }
     } else if (StartsWith(option, "-XX:NativeBridge=")) {
       if (!ParseStringAfterChar(option, '=', &native_bridge_library_filename_)) {
+        return false;
+      }
+    } else if (StartsWith(option, "-XX:NativeBridgeTargetIsa=")) {
+      std::string isa_str;
+      if (!ParseStringAfterChar(option, '=', &isa_str)) {
+        return false;
+      }
+      native_bridge_target_isa_ = GetInstructionSetFromString(isa_str.c_str());
+      if (native_bridge_target_isa_ == kNone) {
+        Usage("%s is not a valid instruction set.", isa_str.c_str());
         return false;
       }
     } else if (StartsWith(option, "-ea") ||

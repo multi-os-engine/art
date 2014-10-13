@@ -113,14 +113,14 @@ void LoadNativeBridge(std::string& native_bridge_library_filename) {
       << (native_bridge_library_filename.empty() ? "(empty)" : native_bridge_library_filename);
 }
 
-void PreInitializeNativeBridge(std::string dir) {
+void PreInitializeNativeBridge(std::string dir, const char* instruction_set) {
   VLOG(startup) << "Runtime::Pre-initialize native bridge";
 #ifndef __APPLE__  // Mac OS does not support CLONE_NEWNS.
   if (unshare(CLONE_NEWNS) == -1) {
     LOG(WARNING) << "Could not create mount namespace.";
     return;
   }
-  android::PreInitializeNativeBridge(dir.c_str(), GetInstructionSetString(kRuntimeISA));
+  android::PreInitializeNativeBridge(dir.c_str(), instruction_set);
 #endif
 }
 

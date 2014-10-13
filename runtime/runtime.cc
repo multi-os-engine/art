@@ -426,11 +426,16 @@ bool Runtime::Start() {
     }
   } else {
     bool have_native_bridge = !native_bridge_library_filename_.empty();
-    if (have_native_bridge) {
-      PreInitializeNativeBridge(".");
+    bool need_native_bridge = have_native_bridge
+      && native_bridge_target_isa_ != kRuntimeISA
+      && native_bridge_target_isa_ != kNone;
+    const char* isa_str = GetInstructionSetString(native_bridge_target_isa_);
+    if (need_native_bridge) {
+      PreInitializeNativeBridge(".", isa_str);
     }
-    DidForkFromZygote(self->GetJniEnv(), have_native_bridge ? NativeBridgeAction::kInitialize :
-        NativeBridgeAction::kUnload, GetInstructionSetString(kRuntimeISA));
+    DidForkFromZygote(self->GetJniEnv(),
+      need_native_bridge ? NativeBridgeAction::kInitialize : NativeBridgeAction::kUnload,
+      isa_str);
   }
 
   StartDaemonThreads();
@@ -506,16 +511,20 @@ bool Runtime::InitZygote() {
 #endif
 }
 
-void Runtime::DidForkFromZygote(JNIEnv* env, NativeBridgeAction action, const char* isa) {
+void Runtime::DidForkFromZygote(JNIEnv* env, NativeBridgeAction action, const char* isa_str) {
   is_zygote_ = false;
 
   switch (action) {
     case NativeBridgeAction::kUnload:
+      native_bridge_target_isa_ = kNone;
       UnloadNativeBridge();
       break;
 
     case NativeBridgeAction::kInitialize:
-      InitializeNativeBridge(env, isa);
+      InstructionSet isa = GetInstructionSetFromString(isa_str);
+      CHECK_NE(kNone, isa);
+      native_bridge_target_isa_ = isa;
+      InitializeNativeBridge(env, isa_str);
       break;
   }
 
@@ -883,6 +892,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   //   DidForkFromZygote(kInitialize) -> try to initialize any native bridge given.
   //   No-op wrt native bridge.
   native_bridge_library_filename_ = options->native_bridge_library_filename_;
+  native_bridge_target_isa_ = options->native_bridge_target_isa_;
   LoadNativeBridge(native_bridge_library_filename_);
 
   VLOG(startup) << "Runtime::Init exiting";
