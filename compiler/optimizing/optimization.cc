@@ -22,7 +22,7 @@ namespace art {
 
 void HOptimization::Execute() {
   Run();
-  visualizer_.DumpGraph(pass_name_);
+  DumpGraph();
   Check();
 }
 
