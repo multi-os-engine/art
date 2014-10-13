@@ -15,6 +15,7 @@
  */
 
 #include "builder.h"
+#include "code_generator_x86.h"
 #include "gvn.h"
 #include "nodes.h"
 #include "optimizing_unit_test.h"
@@ -61,7 +62,9 @@ TEST(GVNTest, LocalFieldElimination) {
 
   graph->BuildDominatorTree();
   graph->TransformToSSA();
-  GlobalValueNumberer(&allocator, graph).Run();
+  x86::CodeGeneratorX86 codegen(graph);
+  HGraphVisualizer visualizer(nullptr, graph, codegen, "");
+  HGlobalValueNumberer(&allocator, graph, visualizer).Run();
 
   ASSERT_TRUE(to_remove->GetBlock() == nullptr);
   ASSERT_EQ(different_offset->GetBlock(), block);
@@ -110,7 +113,9 @@ TEST(GVNTest, GlobalFieldElimination) {
 
   graph->BuildDominatorTree();
   graph->TransformToSSA();
-  GlobalValueNumberer(&allocator, graph).Run();
+  x86::CodeGeneratorX86 codegen(graph);
+  HGraphVisualizer visualizer(nullptr, graph, codegen, "");
+  HGlobalValueNumberer(&allocator, graph, visualizer).Run();
 
   // Check that all field get instructions have been GVN'ed.
   ASSERT_TRUE(then->GetFirstInstruction()->IsGoto());
@@ -176,7 +181,9 @@ TEST(GVNTest, LoopFieldElimination) {
   graph->BuildDominatorTree();
   graph->TransformToSSA();
   graph->FindNaturalLoops();
-  GlobalValueNumberer(&allocator, graph).Run();
+  x86::CodeGeneratorX86 codegen(graph);
+  HGraphVisualizer visualizer(nullptr, graph, codegen, "");
+  HGlobalValueNumberer(&allocator, graph, visualizer).Run();
 
   // Check that all field get instructions are still there.
   ASSERT_EQ(field_get_in_loop_header->GetBlock(), loop_header);
@@ -187,7 +194,7 @@ TEST(GVNTest, LoopFieldElimination) {
 
   // Now remove the field set, and check that all field get instructions have been GVN'ed.
   loop_body->RemoveInstruction(field_set);
-  GlobalValueNumberer(&allocator, graph).Run();
+  HGlobalValueNumberer(&allocator, graph, visualizer).Run();
 
   ASSERT_TRUE(field_get_in_loop_header->GetBlock() == nullptr);
   ASSERT_TRUE(field_get_in_loop_body->GetBlock() == nullptr);
@@ -250,7 +257,9 @@ TEST(GVNTest, LoopSideEffects) {
     entry->AddInstruction(new (&allocator) HInstanceFieldSet(
         parameter, parameter, Primitive::kPrimNot, MemberOffset(42)));
 
-    GlobalValueNumberer gvn(&allocator, graph);
+    x86::CodeGeneratorX86 codegen(graph);
+    HGraphVisualizer visualizer(nullptr, graph, codegen, "");
+    HGlobalValueNumberer gvn(&allocator, graph, visualizer);
     gvn.Run();
 
     ASSERT_TRUE(gvn.GetBlockEffects(entry).HasSideEffects());
@@ -265,7 +274,9 @@ TEST(GVNTest, LoopSideEffects) {
             parameter, parameter, Primitive::kPrimNot, MemberOffset(42)),
         outer_loop_body->GetLastInstruction());
 
-    GlobalValueNumberer gvn(&allocator, graph);
+    x86::CodeGeneratorX86 codegen(graph);
+    HGraphVisualizer visualizer(nullptr, graph, codegen, "");
+    HGlobalValueNumberer gvn(&allocator, graph, visualizer);
     gvn.Run();
 
     ASSERT_TRUE(gvn.GetBlockEffects(entry).HasSideEffects());
@@ -282,7 +293,9 @@ TEST(GVNTest, LoopSideEffects) {
             parameter, parameter, Primitive::kPrimNot, MemberOffset(42)),
         inner_loop_body->GetLastInstruction());
 
-    GlobalValueNumberer gvn(&allocator, graph);
+    x86::CodeGeneratorX86 codegen(graph);
+    HGraphVisualizer visualizer(nullptr, graph, codegen, "");
+    HGlobalValueNumberer gvn(&allocator, graph, visualizer);
     gvn.Run();
 
     ASSERT_TRUE(gvn.GetBlockEffects(entry).HasSideEffects());

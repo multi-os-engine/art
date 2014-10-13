@@ -48,6 +48,9 @@ class HOptimization : public HGraphDelegateVisitor {
   virtual void Run() = 0;
 
  private:
+  // Dump the graph.
+  void DumpGraph() { visualizer_.DumpGraph(pass_name_); }
+
   // Verify the graph; abort if it is not valid.
   void Check();
 
