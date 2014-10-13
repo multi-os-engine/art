@@ -24,24 +24,28 @@ void HDeadCodeElimination::Run() {
   // Process basic blocks in post-order in the dominator tree, so that
   // a dead instruction depending on another dead instruction is
   // removed.
-  for (HPostOrderIterator b(*graph_); !b.Done(); b.Advance()) {
-    HBasicBlock* block = b.Current();
-    // Traverse this block's instructions in backward order and remove
-    // the unused ones.
-    HBackwardInstructionIterator i(block->GetInstructions());
-    // Skip the first iteration, as the last instruction of a block is
-    // a branching instruction.
-    DCHECK(i.Current()->IsControlFlow());
-    for (i.Advance(); !i.Done(); i.Advance()) {
-      HInstruction* inst = i.Current();
-      DCHECK(!inst->IsControlFlow());
-      if (!inst->HasSideEffects()
-          && !inst->CanThrow()
-          && !inst->IsSuspendCheck()
-          && !inst->HasUses()) {
-        block->RemoveInstruction(inst);
-      }
-    }
+  HGraphVisitor::VisitPostOrder();
+}
+
+void HDeadCodeElimination::VisitBasicBlock(HBasicBlock* block) {
+  // Traverse this block's instructions in backward order and remove
+  // the unused ones.
+  HBackwardInstructionIterator i(block->GetInstructions());
+  // Skip the first iteration, as the last instruction of a block is
+  // a branching instruction.
+  DCHECK(i.Current()->IsControlFlow());
+  for (i.Advance(); !i.Done(); i.Advance()) {
+    i.Current()->Accept(this);
+  }
+}
+
+void HDeadCodeElimination::VisitInstruction(HInstruction* instruction) {
+  DCHECK(!instruction->IsControlFlow());
+  if (!instruction->HasSideEffects()
+      && !instruction->CanThrow()
+      && !instruction->IsSuspendCheck()
+      && !instruction->HasUses()) {
+    instruction->GetBlock()->RemoveInstruction(instruction);
   }
 }
 
