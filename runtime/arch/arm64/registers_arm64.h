@@ -188,6 +188,9 @@ enum SRegister {
 };
 std::ostream& operator<<(std::ostream& os, const SRegister& rhs);
 
+extern const char* kRegisterNames[kNumberOfCoreRegisters];
+extern const char* kWRegisterNames[kNumberOfWRegisters];
+
 }  // namespace arm64
 }  // namespace art
 
