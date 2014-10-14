@@ -2386,7 +2386,20 @@ void Dbg::SuspendVM() {
 }
 
 void Dbg::ResumeVM() {
-  Runtime::Current()->GetThreadList()->UndoDebuggerSuspensions();
+  ScopedObjectAccess soa(Thread::Current());
+  bool needs_resume;
+  {
+    MutexLock mu(soa.Self(), *Locks::thread_suspend_count_lock_);
+    needs_resume = Runtime::Current()->GetThreadList()->GetDebugSuspendCount() > 0;
+  }
+  if (needs_resume) {
+    Runtime::Current()->GetThreadList()->ResumeAllForDebugger();
+  } else {
+    // We've been asked to resume all threads without being asked to suspend them all before.
+    // Let's print a warning
+    LOG(WARNING) << "Debugger attempted to resume all threads without "
+                 << "having suspended them all before.";
+  }
 }
 
 JDWP::JdwpError Dbg::SuspendThread(JDWP::ObjectId thread_id, bool request_suspension) {

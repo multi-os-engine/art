@@ -105,6 +105,11 @@ class ThreadList {
   void SuspendSelfForDebugger()
       LOCKS_EXCLUDED(Locks::thread_suspend_count_lock_);
 
+  // Resume all threads
+  void ResumeAllForDebugger()
+      LOCKS_EXCLUDED(Locks::thread_list_lock_,
+                     Locks::thread_suspend_count_lock_);
+
   void UndoDebuggerSuspensions()
       LOCKS_EXCLUDED(Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_);
@@ -128,6 +133,10 @@ class ThreadList {
   // Return a copy of the thread list.
   std::list<Thread*> GetList() EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_list_lock_) {
     return list_;
+  }
+
+  int GetDebugSuspendCount() const EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_suspend_count_lock_) {
+    return debug_suspend_all_count_;
   }
 
   void DumpNativeStacks(std::ostream& os)
