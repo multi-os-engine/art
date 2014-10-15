@@ -93,9 +93,12 @@
 namespace art {
 
 static constexpr bool kEnableJavaStackTraceHandler = false;
-const char* Runtime::kDefaultInstructionSetFeatures =
-    STRINGIFY(ART_DEFAULT_INSTRUCTION_SET_FEATURES);
-Runtime* Runtime::instance_ = NULL;
+#ifndef ART_DEFAULT_INSTRUCTION_SET_FEATURES
+#error "ART_DEFAULT_INSTRUCTION_SET_FEATURES is undefined"
+#endif
+const char* Runtime::kDefaultInstructionSetFeatures ="";
+//    STRINGIFY(ART_DEFAULT_INSTRUCTION_SET_FEATURES);
+Runtime* Runtime::instance_ = nullptr;
 
 Runtime::Runtime()
     : instruction_set_(kNone),
@@ -803,7 +806,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     }
   } else if (!IsCompiler() || !image_dex2oat_enabled_) {
     std::vector<std::string> dex_filenames;
-    Split(boot_class_path_string_, ':', dex_filenames);
+    Split(boot_class_path_string_, ':', &dex_filenames);
     std::vector<const DexFile*> boot_class_path;
     OpenDexFiles(dex_filenames, options->image_, boot_class_path);
     class_linker_->InitWithoutImage(boot_class_path);

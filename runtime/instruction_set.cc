@@ -16,6 +16,12 @@
 
 #include "instruction_set.h"
 
+#include <fstream>
+
+#include "base/casts.h"
+#include "base/stringprintf.h"
+#include "utils.h"
+
 namespace art {
 
 const char* GetInstructionSetString(const InstructionSet isa) {
@@ -117,15 +123,210 @@ size_t GetStackOverflowReservedBytes(InstructionSet isa) {
   }
 }
 
-std::string InstructionSetFeatures::GetFeatureString() const {
-  std::string result;
-  if ((mask_ & kHwDiv) != 0) {
-    result += "div";
+const InstructionSetFeatures* InstructionSetFeatures::FromFeatureString(InstructionSet isa,
+                                                                        const std::string& feature_list,
+                                                                        std::string* error_msg) {
+  const InstructionSetFeatures* result;
+  switch (isa) {
+    case kArm:
+    case kThumb2:
+      result = ArmInstructionSetFeatures::FromFeatureString(feature_list, error_msg);
+      break;
+    default:
+      result = UnknownInstructionSetFeatures::Unknown(isa);
+      break;
   }
-  if (result.size() == 0) {
-    result = "none";
+  // TODO: warn if feature_list doesn't agree with result's GetFeatureList().
+  return result;
+}
+
+const InstructionSetFeatures* InstructionSetFeatures::FromBitmap(InstructionSet isa,
+                                                                 uint32_t bitmap) {
+  const InstructionSetFeatures* result;
+  switch (isa) {
+    case kArm:
+    case kThumb2:
+      result = ArmInstructionSetFeatures::FromBitmap(bitmap);
+      break;
+    default:
+      result = UnknownInstructionSetFeatures::Unknown(isa);
+      break;
+  }
+  CHECK_EQ(bitmap, result->AsBitmap());
+  return result;
+}
+
+const InstructionSetFeatures* InstructionSetFeatures::FromCpuInfo() {
+  const InstructionSetFeatures* result;
+  switch (kRuntimeISA) {
+    case kArm:
+    case kThumb2:
+      result = ArmInstructionSetFeatures::FromCpuInfo();
+      break;
+    default:
+      result = UnknownInstructionSetFeatures::Unknown(kRuntimeISA);
+      break;
   }
   return result;
+}
+
+const InstructionSetFeatures* InstructionSetFeatures::FromHwcap() {
+  const InstructionSetFeatures* result;
+  switch (kRuntimeISA) {
+    case kArm:
+    case kThumb2:
+      result = ArmInstructionSetFeatures::FromHwcap();
+      break;
+    default:
+      result = UnknownInstructionSetFeatures::Unknown(kRuntimeISA);
+      break;
+  }
+  return result;
+}
+
+const ArmInstructionSetFeatures* InstructionSetFeatures::AsArmInstructionSetFeatures() const {
+  DCHECK_EQ(kArm, GetInstructionSet());
+  return down_cast<const ArmInstructionSetFeatures*>(this);
+}
+
+std::ostream& operator<<(std::ostream& os, const InstructionSetFeatures& rhs) {
+  os << "ISA: " << rhs.GetInstructionSet() << " Feature string: " << rhs.GetFeatureString();
+  return os;
+}
+
+const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromFeatureString(
+    const std::string& feature_list, std::string* error_msg) {
+  std::vector<std::string> features;
+  Split(feature_list, ',', &features);
+  bool has_lpae = false;
+  bool has_div = false;
+  for (auto i = features.begin(); i != features.end(); i++) {
+    std::string feature = Trim(*i);
+    if (feature == "default" || feature == "none") {
+      // Nothing to do.
+    } else if (feature == "div") {
+      has_div = true;
+    } else if (feature == "nodiv") {
+      has_div = false;
+    } else if (feature == "lpae") {
+      has_lpae = true;
+    } else if (feature == "nolpae") {
+      has_lpae = false;
+    } else {
+      *error_msg = StringPrintf("Unknown instruction set feature: '%s'", feature.c_str());
+      return nullptr;
+    }
+  }
+  return new ArmInstructionSetFeatures(has_lpae, has_div);
+}
+
+const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromBitmap(uint32_t bitmap) {
+  bool has_lpae = (bitmap & kLpaeBitfield) != 0;
+  bool has_div = (bitmap & kDivBitfield) != 0;
+  return new ArmInstructionSetFeatures(has_lpae, has_div);
+}
+
+const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromCppDefines() {
+#if defined(__ARM_ARCH_EXT_IDIV__)
+  bool has_div = true;
+#else
+  bool has_div = false;
+#endif
+#if defined(__ARM_FEATURE_LPAE)
+  bool has_lpae = true;
+#else
+  bool has_lpae = false;
+#endif
+  return new ArmInstructionSetFeatures(has_lpae, has_div);
+}
+
+const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromCpuInfo() {
+  // Look in /proc/cpuinfo for features we need.  Only use this when we can guarantee that
+  // the kernel puts the appropriate feature flags in here.  Sometimes it doesn't.
+  bool has_lpae = false;
+  bool has_div = false;
+
+  std::ifstream in("/proc/cpuinfo");
+  if (!in.fail()) {
+    while (!in.eof()) {
+      std::string line;
+      std::getline(in, line);
+      if (!in.eof()) {
+        LOG(INFO) << "cpuinfo line: " << line;
+        if (line.find("Features") != std::string::npos) {
+          LOG(INFO) << "found features";
+          if (line.find("idivt") != std::string::npos) {
+            // We always expect both ARM and Thumb divide instructions to be available or not
+            // available.
+            CHECK_NE(line.find("idiva"), std::string::npos);
+            has_div = true;
+          }
+          if (line.find("lpae") != std::string::npos) {
+            has_lpae = true;
+          }
+        }
+      }
+    }
+    in.close();
+  } else {
+    LOG(INFO) << "Failed to open /proc/cpuinfo";
+  }
+  return new ArmInstructionSetFeatures(has_lpae, has_div);
+}
+
+#if defined(HAVE_ANDROID_OS) && defined(__arm__)
+#include <sys/auxv.h>
+#include <asm/hwcap.h>
+#endif
+
+const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromHwcap() {
+  bool has_lpae = false;
+  bool has_div = false;
+
+#if defined(HAVE_ANDROID_OS) && defined(__arm__)
+  uint64_t hwcaps = getauxval(AT_HWCAP);
+  LOG(INFO) << "hwcaps=" << hwcaps;
+  if ((hwcaps & HWCAP_IDIVT) != 0) {
+    // We always expect both ARM and Thumb divide instructions to be available or not
+    // available.
+    CHECK_NE(hwcaps & HWCAP_IDIVA, 0U);
+    has_div = true;
+  }
+  if ((hwcaps & HWCAP_LPAE) != 0) {
+    has_lpae = true;
+  }
+#endif
+
+  return new ArmInstructionSetFeatures(has_lpae, has_div);
+}
+
+
+bool ArmInstructionSetFeatures::Equals(const InstructionSetFeatures* other) const {
+  if (kArm != other->GetInstructionSet()) {
+    return false;
+  }
+  const ArmInstructionSetFeatures* other_as_arm = other->AsArmInstructionSetFeatures();
+  return has_lpae_ == other_as_arm->has_lpae_ && has_div_ == other_as_arm->has_div_;
+}
+
+uint32_t ArmInstructionSetFeatures::AsBitmap() const {
+  return (has_lpae_ ? kLpaeBitfield : 0) | (has_div_ ? kDivBitfield : 0);
+}
+
+std::string ArmInstructionSetFeatures::GetFeatureString() const {
+  std::string result;
+  if (has_div_) {
+    result += ",div";
+  }
+  if (has_lpae_) {
+    result += ",lpae";
+  }
+  if (result.size() == 0) {
+    return "none";
+  } else {
+    // Strip leading comma.
+    return result.substr(1, result.size());
+  }
 }
 
 }  // namespace art

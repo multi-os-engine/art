@@ -19,6 +19,7 @@
 #include "arch/context.h"
 #include "dex_instruction.h"
 #include "entrypoints/entrypoint_utils.h"
+#include "entrypoints/runtime_asm_entrypoints.h"
 #include "handle_scope-inl.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
@@ -96,7 +97,7 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
       if (found_dex_pc != DexFile::kDexNoIndex) {
         exception_handler_->SetHandlerMethod(method.Get());
         exception_handler_->SetHandlerDexPc(found_dex_pc);
-        exception_handler_->SetHandlerQuickFramePc(method->ToNativePc(found_dex_pc));
+        exception_handler_->SetHandlerQuickFramePc(method->ToNativeQuickPc(found_dex_pc));
         exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
         return false;  // End stack walk.
       }
