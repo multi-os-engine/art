@@ -396,8 +396,13 @@ class OatDumper {
     os << "INSTRUCTION SET:\n";
     os << oat_header.GetInstructionSet() << "\n\n";
 
-    os << "INSTRUCTION SET FEATURES:\n";
-    os << oat_header.GetInstructionSetFeatures().GetFeatureString() << "\n\n";
+    {
+      std::unique_ptr<const InstructionSetFeatures> features(
+          InstructionSetFeatures::FromBitmap(oat_header.GetInstructionSet(),
+                                             oat_header.GetInstructionSetFeaturesBitmap()));
+      os << "INSTRUCTION SET FEATURES:\n";
+      os << features->GetFeatureString() << "\n\n";
+    }
 
     os << "DEX FILE COUNT:\n";
     os << oat_header.GetDexFileCount() << "\n\n";

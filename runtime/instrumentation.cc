@@ -25,6 +25,7 @@
 #include "debugger.h"
 #include "dex_file-inl.h"
 #include "entrypoints/quick/quick_alloc_entrypoints.h"
+#include "entrypoints/runtime_asm_entrypoints.h"
 #include "gc_root-inl.h"
 #include "interpreter/interpreter.h"
 #include "mirror/art_method-inl.h"
@@ -109,7 +110,7 @@ static void UpdateEntrypoints(mirror::ArtMethod* method, const void* quick_code,
       }
       DCHECK(!method->IsNative()) << PrettyMethod(method);
       DCHECK(!method->IsProxyMethod()) << PrettyMethod(method);
-      method->SetEntryPointFromInterpreter(art::interpreter::artInterpreterToInterpreterBridge);
+      method->SetEntryPointFromInterpreter(art::artInterpreterToInterpreterBridge);
     } else {
       method->SetEntryPointFromInterpreter(art::artInterpreterToCompiledCodeBridge);
     }
