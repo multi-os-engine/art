@@ -18,12 +18,14 @@
 #define ART_RUNTIME_OFFSETS_H_
 
 #include <iostream>  // NOLINT
+#include "base/macros.h"
+#include "base/value_object.h"
 #include "globals.h"
 
 namespace art {
 
 // Allow the meaning of offsets to be strongly typed.
-class Offset {
+class Offset : public ValueObject {
  public:
   explicit Offset(size_t val) : val_(val) {}
   int32_t Int32Value() const {
@@ -37,12 +39,12 @@ class Offset {
   }
 
  protected:
-  size_t val_;
+  size_t val_;  // Mutable to allow copy assignment
 };
 std::ostream& operator<<(std::ostream& os, const Offset& offs);
 
 // Offsets relative to the current frame.
-class FrameOffset : public Offset {
+class FrameOffset FINAL : public Offset {
  public:
   explicit FrameOffset(size_t val) : Offset(val) {}
   bool operator>(FrameOffset other) const { return val_ > other.val_; }
@@ -51,13 +53,13 @@ class FrameOffset : public Offset {
 
 // Offsets relative to the current running thread.
 template<size_t pointer_size>
-class ThreadOffset : public Offset {
+class ThreadOffset FINAL : public Offset {
  public:
   explicit ThreadOffset(size_t val) : Offset(val) {}
 };
 
 // Offsets relative to an object.
-class MemberOffset : public Offset {
+class MemberOffset FINAL : public Offset {
  public:
   explicit MemberOffset(size_t val) : Offset(val) {}
 };

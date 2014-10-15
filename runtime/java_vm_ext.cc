@@ -42,7 +42,7 @@ static size_t gGlobalsMax = 51200;  // Arbitrary sanity check. (Must fit in 16 b
 static const size_t kWeakGlobalsInitial = 16;  // Arbitrary.
 static const size_t kWeakGlobalsMax = 51200;  // Arbitrary sanity check. (Must fit in 16 bits.)
 
-static bool IsBadJniVersion(int version) {
+static bool IsBadJniVersion(jint version) {
   // We don't support JNI_VERSION_1_1. These are the only other valid versions.
   return version != JNI_VERSION_1_2 && version != JNI_VERSION_1_4 && version != JNI_VERSION_1_6;
 }
@@ -762,6 +762,10 @@ void JavaVMExt::VisitRoots(RootCallback* callback, void* arg) {
 // JNI Invocation interface.
 
 extern "C" jint JNI_CreateJavaVM(JavaVM** p_vm, JNIEnv** p_env, void* vm_args) {
+  CHECK(p_vm != nullptr);
+  CHECK(p_env != nullptr);
+  CHECK(vm_args != nullptr);
+
   const JavaVMInitArgs* args = static_cast<JavaVMInitArgs*>(vm_args);
   if (IsBadJniVersion(args->version)) {
     LOG(ERROR) << "Bad JNI version passed to CreateJavaVM: " << args->version;

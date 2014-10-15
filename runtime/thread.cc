@@ -942,7 +942,7 @@ static bool ShouldShowNativeStack(const Thread* thread)
   // We don't just check kNative because native methods will be in state kSuspended if they're
   // calling back into the VM, or kBlocked if they're blocked on a monitor, or one of the
   // thread-startup states if it's early enough in their life cycle (http://b/7432159).
-  mirror::ArtMethod* current_method = thread->GetCurrentMethod(nullptr);
+  mirror::ArtMethod* current_method = thread->GetCurrentMethod(/*dex_pc*/nullptr);
   return current_method != nullptr && current_method->IsNative();
 }
 
@@ -994,7 +994,7 @@ void Thread::DumpStack(std::ostream& os) const {
     // If we're currently in native code, dump that stack before dumping the managed stack.
     if (dump_for_abort || ShouldShowNativeStack(this)) {
       DumpKernelStack(os, GetTid(), "  kernel: ", false);
-      DumpNativeStack(os, GetTid(), "  native: ", GetCurrentMethod(nullptr, !dump_for_abort));
+      DumpNativeStack(os, GetTid(), "  native: ", GetCurrentMethod(/*dex_pc*/nullptr, !dump_for_abort));
     }
     DumpJavaStack(os);
   } else {
@@ -2005,8 +2005,8 @@ struct CurrentMethodVisitor FINAL : public StackVisitor {
 };
 
 mirror::ArtMethod* Thread::GetCurrentMethod(uint32_t* dex_pc, bool abort_on_error) const {
-  CurrentMethodVisitor visitor(const_cast<Thread*>(this), nullptr, abort_on_error);
-  visitor.WalkStack(false);
+  CurrentMethodVisitor visitor(const_cast<Thread*>(this), /*context*/nullptr, abort_on_error);
+  visitor.WalkStack(/*include_transitions*/false);
   if (dex_pc != nullptr) {
     *dex_pc = visitor.dex_pc_;
   }
@@ -2015,8 +2015,8 @@ mirror::ArtMethod* Thread::GetCurrentMethod(uint32_t* dex_pc, bool abort_on_erro
 
 ThrowLocation Thread::GetCurrentLocationForThrow() {
   Context* context = GetLongJumpContext();
-  CurrentMethodVisitor visitor(this, context, true);
-  visitor.WalkStack(false);
+  CurrentMethodVisitor visitor(this, context, /*abort_on_error*/true);
+  visitor.WalkStack(/*include_transitions*/false);
   ReleaseLongJumpContext(context);
   return ThrowLocation(visitor.this_object_, visitor.method_, visitor.dex_pc_);
 }

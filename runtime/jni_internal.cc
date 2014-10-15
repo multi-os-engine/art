@@ -147,7 +147,7 @@ static jmethodID FindMethodID(ScopedObjectAccess& soa, jclass jni_class,
 
 static mirror::ClassLoader* GetClassLoader(const ScopedObjectAccess& soa)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::ArtMethod* method = soa.Self()->GetCurrentMethod(nullptr);
+  mirror::ArtMethod* method = soa.Self()->GetCurrentMethod(/*dex_pc*/nullptr);
   // If we are running Runtime.nativeLoad, use the overriding ClassLoader it set.
   if (method == soa.DecodeMethod(WellKnownClasses::java_lang_Runtime_nativeLoad)) {
     return soa.Decode<mirror::ClassLoader*>(soa.Self()->GetClassLoaderOverride());

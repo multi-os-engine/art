@@ -30,20 +30,21 @@ namespace art {
 
 // Determine whether or not the specified method is public.
 static bool IsMethodPublic(JNIEnv* env, jclass c, jmethodID method_id) {
-  ScopedLocalRef<jobject> reflected(env, env->ToReflectedMethod(c, method_id, JNI_FALSE));
-  if (reflected.get() == NULL) {
+  ScopedLocalRef<jobject> reflected(env, env->ToReflectedMethod(c, method_id,
+                                                                JNI_FALSE));  // Not static
+  if (reflected.get() == nullptr) {
     fprintf(stderr, "Failed to get reflected method\n");
     return false;
   }
   // We now have a Method instance.  We need to call its
   // getModifiers() method.
   jclass method_class = env->FindClass("java/lang/reflect/Method");
-  if (method_class == NULL) {
+  if (method_class == nullptr) {
     fprintf(stderr, "Failed to find class java.lang.reflect.Method\n");
     return false;
   }
   jmethodID mid = env->GetMethodID(method_class, "getModifiers", "()I");
-  if (mid == NULL) {
+  if (mid == nullptr) {
     fprintf(stderr, "Failed to find java.lang.reflect.Method.getModifiers\n");
     return false;
   }
@@ -55,12 +56,13 @@ static bool IsMethodPublic(JNIEnv* env, jclass c, jmethodID method_id) {
   return true;
 }
 
-static int InvokeMain(JNIEnv* env, char** argv) {
+// Invoke the main function, passing in an array of strings with a NULL string denoting the end
+static int InvokeMain(JNIEnv* env, const char* const* argv) {
   // We want to call main() with a String array with our arguments in
   // it.  Create an array and populate it.  Note argv[0] is not
   // included.
   ScopedLocalRef<jobjectArray> args(env, toStringArray(env, argv + 1));
-  if (args.get() == NULL) {
+  if (args.get() == nullptr) {
     env->ExceptionDescribe();
     return EXIT_FAILURE;
   }
@@ -72,14 +74,14 @@ static int InvokeMain(JNIEnv* env, char** argv) {
   std::replace(class_name.begin(), class_name.end(), '.', '/');
 
   ScopedLocalRef<jclass> klass(env, env->FindClass(class_name.c_str()));
-  if (klass.get() == NULL) {
+  if (klass.get() == nullptr) {
     fprintf(stderr, "Unable to locate class '%s'\n", class_name.c_str());
     env->ExceptionDescribe();
     return EXIT_FAILURE;
   }
 
   jmethodID method = env->GetStaticMethodID(klass.get(), "main", "([Ljava/lang/String;)V");
-  if (method == NULL) {
+  if (method == nullptr) {
     fprintf(stderr, "Unable to find static main(String[]) in '%s'\n", class_name.c_str());
     env->ExceptionDescribe();
     return EXIT_FAILURE;
@@ -105,7 +107,11 @@ static int InvokeMain(JNIEnv* env, char** argv) {
 // Parse arguments.  Most of it just gets passed through to the runtime.
 // The JNI spec defines a handful of standard arguments.
 static int dalvikvm(int argc, char** argv) {
-  setvbuf(stdout, NULL, _IONBF, 0);
+  // Set the stdout stream to be unbuffered
+  setvbuf(stdout,
+          nullptr,  // No buffer
+          _IONBF,   // Unbuffered
+          0);       // No buffer size
 
   // Skip over argv[0].
   argv++;
@@ -124,8 +130,8 @@ static int dalvikvm(int argc, char** argv) {
   //
   // [Do we need to catch & handle "-jar" here?]
   bool need_extra = false;
-  const char* lib = NULL;
-  const char* what = NULL;
+  const char* lib = nullptr;
+  const char* what = nullptr;
   int curr_opt, arg_idx;
   for (curr_opt = arg_idx = 0; arg_idx < argc; arg_idx++) {
     if (argv[arg_idx][0] != '-' && !need_extra) {
@@ -168,11 +174,12 @@ static int dalvikvm(int argc, char** argv) {
   init_args.version = JNI_VERSION_1_6;
   init_args.options = options.get();
   init_args.nOptions = curr_opt;
-  init_args.ignoreUnrecognized = JNI_FALSE;
+  init_args.ignoreUnrecognized = JNI_FALSE;  // Error out if the VM encounters any unrecognized
+                                             // option strings
 
   // Start the runtime. The current thread becomes the main thread.
-  JavaVM* vm = NULL;
-  JNIEnv* env = NULL;
+  JavaVM* vm = nullptr;
+  JNIEnv* env = nullptr;
   if (JNI_CreateJavaVM(&vm, &env, &init_args) != JNI_OK) {
     fprintf(stderr, "Failed to initialize runtime (check log for details)\n");
     return EXIT_FAILURE;
@@ -197,7 +204,7 @@ static int dalvikvm(int argc, char** argv) {
   }
 #endif
 
-  if (vm->DestroyJavaVM() != 0) {
+  if (vm->DestroyJavaVM() != JNI_OK) {
     fprintf(stderr, "Warning: runtime did not shut down cleanly\n");
     rc = EXIT_FAILURE;
   }

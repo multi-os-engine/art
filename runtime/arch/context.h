@@ -49,23 +49,23 @@ class Context {
   // Sets the program counter value.
   virtual void SetPC(uintptr_t new_pc) = 0;
 
-  // Gets the given GPRs address.
+  // Gets the given general purpose register's address.
   virtual uintptr_t* GetGPRAddress(uint32_t reg) = 0;
 
-  // Reads the given GPR. Returns true if we successfully read the register and
-  // set its value into 'val', returns false otherwise.
+  // Reads the given general purpose register. Returns true if we successfully
+  // read the register and set its value into 'val', returns false otherwise.
   virtual bool GetGPR(uint32_t reg, uintptr_t* val) = 0;
 
-  // Sets the given GPR. Returns true if we successfully write the given value
-  // into the register, returns false otherwise.
+  // Sets the given general purpose register. Returns true if we successfully
+  // write the given value into the register, returns false otherwise.
   virtual bool SetGPR(uint32_t reg, uintptr_t value) = 0;
 
-  // Reads the given FPR. Returns true if we successfully read the register and
-  // set its value into 'val', returns false otherwise.
+  // Reads the given floating point register. Returns true if we successfully
+  // read the register and set its value into 'val', returns false otherwise.
   virtual bool GetFPR(uint32_t reg, uintptr_t* val) = 0;
 
-  // Sets the given FPR. Returns true if we successfully write the given value
-  // into the register, returns false otherwise.
+  // Sets the given floating point register. Returns true if we successfully
+  // write the given value into the register, returns false otherwise.
   virtual bool SetFPR(uint32_t reg, uintptr_t value) = 0;
 
   // Smashes the caller save registers. If we're throwing, we don't want to return bogus values.

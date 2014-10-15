@@ -95,7 +95,7 @@ namespace art {
 static constexpr bool kEnableJavaStackTraceHandler = false;
 const char* Runtime::kDefaultInstructionSetFeatures =
     STRINGIFY(ART_DEFAULT_INSTRUCTION_SET_FEATURES);
-Runtime* Runtime::instance_ = NULL;
+Runtime* Runtime::instance_ = nullptr;
 
 Runtime::Runtime()
     : instruction_set_(kNone),
@@ -206,7 +206,7 @@ struct AbortState {
     }
     gAborting++;
     os << "Runtime aborting...\n";
-    if (Runtime::Current() == NULL) {
+    if (Runtime::Current() == nullptr) {
       os << "(Runtime does not yet exist!)\n";
       return;
     }
@@ -270,7 +270,7 @@ void Runtime::Abort() {
   MutexLock mu(Thread::Current(), *Locks::abort_lock_);
 
   // Get any pending output out of the way.
-  fflush(NULL);
+  fflush(/*stream*/nullptr);  // Flush all open output streams
 
   // Many people have difficulty distinguish aborts from crashes,
   // so be explicit.
@@ -278,7 +278,7 @@ void Runtime::Abort() {
   LOG(INTERNAL_FATAL) << Dumpable<AbortState>(state);
 
   // Call the abort hook if we have one.
-  if (Runtime::Current() != NULL && Runtime::Current()->abort_ != NULL) {
+  if (Runtime::Current() != nullptr && Runtime::Current()->abort_ != nullptr) {
     LOG(INTERNAL_FATAL) << "Calling abort hook...";
     Runtime::Current()->abort_();
     // notreached
@@ -294,7 +294,7 @@ void Runtime::Abort() {
   syscall(__NR_tgkill, getpid(), GetTid(), SIGABRT);
   // TODO: LLVM installs it's own SIGABRT handler so exit to be safe... Can we disable that in LLVM?
   // If not, we could use sigaction(3) before calling tgkill(2) and lose this call to exit(3).
-  exit(1);
+  exit(/*status*/1);
 #else
   abort();
 #endif
@@ -306,7 +306,7 @@ void Runtime::PreZygoteFork() {
 }
 
 void Runtime::CallExitHook(jint status) {
-  if (exit_ != NULL) {
+  if (exit_ != nullptr) {
     ScopedThreadStateChange tsc(Thread::Current(), kNative);
     exit_(status);
     LOG(WARNING) << "Exit hook returned instead of exiting!";
@@ -321,14 +321,14 @@ void Runtime::SweepSystemWeaks(IsMarkedCallback* visitor, void* arg) {
 
 bool Runtime::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
   // TODO: acquire a static mutex on Runtime to avoid racing.
-  if (Runtime::instance_ != NULL) {
+  if (Runtime::instance_ != nullptr) {
     return false;
   }
-  InitLogging(NULL);  // Calls Locks::Init() as a side effect.
+  InitLogging(/*argv*/nullptr);  // Calls Locks::Init() as a side effect.
   instance_ = new Runtime;
   if (!instance_->Init(options, ignore_unrecognized)) {
     delete instance_;
-    instance_ = NULL;
+    instance_ = nullptr;
     return false;
   }
   return true;
@@ -336,7 +336,7 @@ bool Runtime::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
 
 jobject CreateSystemClassLoader() {
   if (Runtime::Current()->UseCompileTimeClassPath()) {
-    return NULL;
+    return nullptr;
   }
 
   ScopedObjectAccess soa(Thread::Current());
@@ -345,13 +345,15 @@ jobject CreateSystemClassLoader() {
   StackHandleScope<2> hs(soa.Self());
   Handle<mirror::Class> class_loader_class(
       hs.NewHandle(soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_ClassLoader)));
-  CHECK(cl->EnsureInitialized(soa.Self(), class_loader_class, true, true));
+  CHECK(cl->EnsureInitialized(soa.Self(), class_loader_class,
+                              /*can_init_fields*/true, /*can_init_parents*/true));
 
   mirror::ArtMethod* getSystemClassLoader =
       class_loader_class->FindDirectMethod("getSystemClassLoader", "()Ljava/lang/ClassLoader;");
-  CHECK(getSystemClassLoader != NULL);
+  CHECK(getSystemClassLoader != nullptr);
 
-  JValue result = InvokeWithJValues(soa, nullptr, soa.EncodeMethod(getSystemClassLoader), nullptr);
+  JValue result = InvokeWithJValues(soa, /*receiver*/nullptr,
+                                    soa.EncodeMethod(getSystemClassLoader), /*args*/nullptr);
   JNIEnv* env = soa.Self()->GetJniEnv();
   ScopedLocalRef<jobject> system_class_loader(env,
                                               soa.AddLocalReference<jobject>(result.GetL()));
@@ -361,14 +363,15 @@ jobject CreateSystemClassLoader() {
 
   Handle<mirror::Class> thread_class(
       hs.NewHandle(soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_Thread)));
-  CHECK(cl->EnsureInitialized(soa.Self(), thread_class, true, true));
+  CHECK(cl->EnsureInitialized(soa.Self(), thread_class,
+                              /*can_init_fields*/true, /*can_init_parents*/true));
 
   mirror::ArtField* contextClassLoader =
       thread_class->FindDeclaredInstanceField("contextClassLoader", "Ljava/lang/ClassLoader;");
-  CHECK(contextClassLoader != NULL);
+  CHECK(contextClassLoader != nullptr);
 
   // We can't run in a transaction yet.
-  contextClassLoader->SetObject<false>(soa.Self()->GetPeer(),
+  contextClassLoader->SetObject</*kTransactionActive*/false>(soa.Self()->GetPeer(),
                                        soa.Decode<mirror::ClassLoader*>(system_class_loader.get()));
 
   return env->NewGlobalRef(system_class_loader.get());
@@ -406,7 +409,8 @@ bool Runtime::Start() {
     ScopedObjectAccess soa(Thread::Current());
     StackHandleScope<1> hs(soa.Self());
     auto klass(hs.NewHandle<mirror::Class>(mirror::Class::GetJavaLangClass()));
-    class_linker_->EnsureInitialized(soa.Self(), klass, true, true);
+    class_linker_->EnsureInitialized(soa.Self(), klass,
+                                     /*can_init_fields*/true, /*can_init_parents*/true);
   }
 
   // InitNativeMethods needs to be after started_ so that the classes
@@ -427,7 +431,7 @@ bool Runtime::Start() {
   } else {
     bool have_native_bridge = !native_bridge_library_filename_.empty();
     if (have_native_bridge) {
-      PreInitializeNativeBridge(".");
+      PreInitializeNativeBridge(/*app_data_dir_in*/".");
     }
     DidForkFromZygote(self->GetJniEnv(), have_native_bridge ? NativeBridgeAction::kInitialize :
         NativeBridgeAction::kUnload, GetInstructionSetString(kRuntimeISA));
@@ -446,7 +450,9 @@ bool Runtime::Start() {
   if (profiler_options_.IsEnabled() && !profile_output_filename_.empty()) {
     // User has asked for a profile using -Xenable-profiler.
     // Create the profile file if it doesn't exist.
-    int fd = open(profile_output_filename_.c_str(), O_RDWR|O_CREAT|O_EXCL, 0660);
+    int fd = open(profile_output_filename_.c_str(),
+                  /*flags*/O_RDWR|O_CREAT|O_EXCL,  // Create file for R/W iff not exists
+                  /*mode*/0660);                   // User,group = RW; Other = None
     if (fd >= 0) {
       close(fd);
     } else if (errno != EEXIST) {
@@ -471,7 +477,7 @@ void Runtime::EndThreadBirth() EXCLUSIVE_LOCKS_REQUIRED(Locks::runtime_shutdown_
 bool Runtime::InitZygote() {
 #ifdef __linux__
   // zygote goes into its own process group
-  setpgid(0, 0);
+  setpgid(/*pid*/0, /*pgid*/0);  // Set current process's group ID to that of the current process ID
 
   // See storage config details at http://source.android.com/tech/storage/
   // Create private mount namespace shared by all children
@@ -482,7 +488,11 @@ bool Runtime::InitZygote() {
 
   // Mark rootfs as being a slave so that changes from default
   // namespace only flow into our children.
-  if (mount("rootfs", "/", NULL, (MS_SLAVE | MS_REC), NULL) == -1) {
+  if (mount(/*source*/"rootfs",
+            /*target*/"/",
+            /*filesystemtype*/nullptr,
+            /*mountflags*/(MS_SLAVE | MS_REC),
+            /*data*/nullptr) == -1) {
     PLOG(WARNING) << "Failed to mount() rootfs as MS_SLAVE";
     return false;
   }
@@ -491,9 +501,12 @@ bool Runtime::InitZygote() {
   // bind mount storage into their respective private namespaces, which
   // are isolated from each other.
   const char* target_base = getenv("EMULATED_STORAGE_TARGET");
-  if (target_base != NULL) {
-    if (mount("tmpfs", target_base, "tmpfs", MS_NOSUID | MS_NODEV,
-              "uid=0,gid=1028,mode=0751") == -1) {
+  if (target_base != nullptr) {
+    if (mount(/*source*/"tmpfs",
+              target_base,
+              /*filesystemtype*/"tmpfs",
+              /*mountflags*/MS_NOSUID | MS_NODEV,
+              /*data*/"uid=0,gid=1028,mode=0751") == -1) {
       LOG(WARNING) << "Failed to mount tmpfs to " << target_base;
       return false;
     }
@@ -562,7 +575,7 @@ void Runtime::StartDaemonThreads() {
 static bool OpenDexFilesFromImage(const std::vector<std::string>& dex_filenames,
                                   const std::string& image_location,
                                   std::vector<const DexFile*>& dex_files,
-                                  size_t* failures) {
+                                  /*out*/size_t* failures) {
   std::string system_filename;
   bool has_system = false;
   std::string cache_filename_unused;
@@ -590,7 +603,10 @@ static bool OpenDexFilesFromImage(const std::vector<std::string>& dex_filenames,
   if (file.get() == nullptr) {
     return false;
   }
-  std::unique_ptr<ElfFile> elf_file(ElfFile::Open(file.release(), false, false, &error_msg));
+  std::unique_ptr<ElfFile> elf_file(ElfFile::Open(file.release(),
+                                                  /*writable*/false,
+                                                  /*program_header_only*/false,
+                                                  &error_msg));
   if (elf_file.get() == nullptr) {
     return false;
   }
@@ -620,7 +636,7 @@ static bool OpenDexFilesFromImage(const std::vector<std::string>& dex_filenames,
 
 static size_t OpenDexFiles(const std::vector<std::string>& dex_filenames,
                            const std::string& image_location,
-                           std::vector<const DexFile*>& dex_files) {
+                           /*out*/std::vector<const DexFile*>& dex_files) {
   size_t failure_count = 0;
   if (!image_location.empty() && OpenDexFilesFromImage(dex_filenames, image_location, dex_files,
                                                        &failure_count)) {
@@ -634,7 +650,10 @@ static size_t OpenDexFiles(const std::vector<std::string>& dex_filenames,
       LOG(WARNING) << "Skipping non-existent dex file '" << dex_filename << "'";
       continue;
     }
-    if (!DexFile::Open(dex_filename, dex_filename, &error_msg, &dex_files)) {
+    if (!DexFile::Open(dex_filename,
+                       dex_filename,
+                       /*out*/&error_msg,
+                       /*out*/&dex_files)) {
       LOG(WARNING) << "Failed to open .dex from file '" << dex_filename << "': " << error_msg;
       ++failure_count;
     }
@@ -702,7 +721,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
                        options->heap_maximum_size_,
                        options->heap_non_moving_space_capacity_,
                        options->image_,
-                       options->image_isa_,
+                       options->image_isa_,  // Image instruction set
                        options->collector_type_,
                        options->background_collector_type_,
                        options->large_object_space_type_,
@@ -713,7 +732,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
                        options->long_pause_log_threshold_,
                        options->long_gc_log_threshold_,
                        options->ignore_max_footprint_,
-                       options->use_tlab_,
+                       options->use_tlab_,   // Use TLAB Allocator?
                        options->verify_pre_gc_heap_,
                        options->verify_pre_sweeping_heap_,
                        options->verify_post_gc_heap_,
@@ -770,6 +789,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     }
 
     if (kEnableJavaStackTraceHandler) {
+      // FIXME: This should probably be captured
       new JavaStackTraceHandler(&fault_manager);
     }
   }
@@ -781,7 +801,10 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   // ClassLinker needs an attached thread, but we can't fully attach a thread without creating
   // objects. We can't supply a thread group yet; it will be fixed later. Since we are the main
   // thread, we do not get a java peer.
-  Thread* self = Thread::Attach("main", false, nullptr, false);
+  Thread* self = Thread::Attach("main",
+                                /*as_daemon*/false,
+                                /*thread_group*/nullptr,
+                                /*create_peer*/false);
   CHECK_EQ(self->GetThreadId(), ThreadList::kMainThreadId);
   CHECK(self != nullptr);
 
@@ -801,8 +824,10 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   } else if (!IsCompiler() || !image_dex2oat_enabled_) {
     std::vector<std::string> dex_filenames;
     Split(boot_class_path_string_, ':', dex_filenames);
+
     std::vector<const DexFile*> boot_class_path;
-    OpenDexFiles(dex_filenames, options->image_, boot_class_path);
+    OpenDexFiles(dex_filenames, options->image_, /*out*/boot_class_path);
+
     class_linker_->InitWithoutImage(boot_class_path);
     // TODO: Should we move the following to InitWithoutImage?
     SetInstructionSet(kRuntimeISA);
@@ -837,22 +862,29 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   if (options->method_trace_) {
     ScopedThreadStateChange tsc(self, kWaitingForMethodTracingStart);
-    Trace::Start(options->method_trace_file_.c_str(), -1, options->method_trace_file_size_, 0,
-                 false, false, 0);
+    Trace::Start(options->method_trace_file_.c_str(),
+                 /*trace_fd*/-1,
+                 options->method_trace_file_size_,
+                 /*flags*/0,
+                 /*direct_to_ddms*/false,
+                 /*sampling_enabled*/false,
+                 /*interval_us*/0);
   }
 
   // Pre-allocate an OutOfMemoryError for the double-OOME case.
   self->ThrowNewException(ThrowLocation(), "Ljava/lang/OutOfMemoryError;",
                           "OutOfMemoryError thrown while trying to throw OutOfMemoryError; "
                           "no stack available");
-  pre_allocated_OutOfMemoryError_ = GcRoot<mirror::Throwable>(self->GetException(NULL));
+  pre_allocated_OutOfMemoryError_ =
+      GcRoot<mirror::Throwable>(self->GetException(/*throw_location*/nullptr));
   self->ClearException();
 
   // Pre-allocate a NoClassDefFoundError for the common case of failing to find a system class
   // ahead of checking the application's class loader.
   self->ThrowNewException(ThrowLocation(), "Ljava/lang/NoClassDefFoundError;",
                           "Class not found using the boot class loader; no stack available");
-  pre_allocated_NoClassDefFoundError_ = GcRoot<mirror::Throwable>(self->GetException(NULL));
+  pre_allocated_NoClassDefFoundError_ =
+      GcRoot<mirror::Throwable>(self->GetException(/*throw_location*/nullptr));
   self->ClearException();
 
   // Look for a native bridge.
@@ -911,7 +943,8 @@ void Runtime::InitNativeMethods() {
   {
     std::string mapped_name(StringPrintf(OS_SHARED_LIB_FORMAT_STR, "javacore"));
     std::string reason;
-    if (!instance_->java_vm_->LoadNativeLibrary(env, mapped_name, nullptr, &reason)) {
+    if (!instance_->java_vm_->LoadNativeLibrary(env, mapped_name, /*class_loader*/nullptr,
+                                                /*out*/&reason)) {
       LOG(FATAL) << "LoadNativeLibrary failed for \"" << mapped_name << "\": " << reason;
     }
   }
@@ -929,26 +962,26 @@ void Runtime::InitThreadGroups(Thread* self) {
       env->NewGlobalRef(env->GetStaticObjectField(
           WellKnownClasses::java_lang_ThreadGroup,
           WellKnownClasses::java_lang_ThreadGroup_mainThreadGroup));
-  CHECK(main_thread_group_ != NULL || IsCompiler());
+  CHECK(main_thread_group_ != nullptr || IsCompiler());
   system_thread_group_ =
       env->NewGlobalRef(env->GetStaticObjectField(
           WellKnownClasses::java_lang_ThreadGroup,
           WellKnownClasses::java_lang_ThreadGroup_systemThreadGroup));
-  CHECK(system_thread_group_ != NULL || IsCompiler());
+  CHECK(system_thread_group_ != nullptr || IsCompiler());
 }
 
 jobject Runtime::GetMainThreadGroup() const {
-  CHECK(main_thread_group_ != NULL || IsCompiler());
+  CHECK(main_thread_group_ != nullptr || IsCompiler());
   return main_thread_group_;
 }
 
 jobject Runtime::GetSystemThreadGroup() const {
-  CHECK(system_thread_group_ != NULL || IsCompiler());
+  CHECK(system_thread_group_ != nullptr || IsCompiler());
   return system_thread_group_;
 }
 
 jobject Runtime::GetSystemClassLoader() const {
-  CHECK(system_class_loader_ != NULL || IsCompiler());
+  CHECK(system_class_loader_ != nullptr || IsCompiler());
   return system_class_loader_;
 }
 
@@ -1077,12 +1110,12 @@ void Runtime::BlockSignals() {
 
 bool Runtime::AttachCurrentThread(const char* thread_name, bool as_daemon, jobject thread_group,
                                   bool create_peer) {
-  return Thread::Attach(thread_name, as_daemon, thread_group, create_peer) != NULL;
+  return Thread::Attach(thread_name, as_daemon, thread_group, create_peer) != nullptr;
 }
 
 void Runtime::DetachCurrentThread() {
   Thread* self = Thread::Current();
-  if (self == NULL) {
+  if (self == nullptr) {
     LOG(FATAL) << "attempting to detach thread that is not attached";
   }
   if (self->HasManagedStack()) {
@@ -1191,10 +1224,10 @@ mirror::ObjectArray<mirror::ArtMethod>* Runtime::CreateDefaultImt(ClassLinker* c
   Thread* self = Thread::Current();
   StackHandleScope<1> hs(self);
   Handle<mirror::ObjectArray<mirror::ArtMethod>> imtable(
-      hs.NewHandle(cl->AllocArtMethodArray(self, 64)));
+      hs.NewHandle(cl->AllocArtMethodArray(self, /*length*/64)));
   mirror::ArtMethod* imt_conflict_method = Runtime::Current()->GetImtConflictMethod();
   for (size_t i = 0; i < static_cast<size_t>(imtable->GetLength()); i++) {
-    imtable->Set<false>(i, imt_conflict_method);
+    imtable->Set</*kTransactionActive*/false>(i, imt_conflict_method);
   }
   return imtable.Get();
 }
@@ -1304,7 +1337,7 @@ void Runtime::SetCalleeSaveMethod(mirror::ArtMethod* method, CalleeSaveType type
 }
 
 const std::vector<const DexFile*>& Runtime::GetCompileTimeClassPath(jobject class_loader) {
-  if (class_loader == NULL) {
+  if (class_loader == nullptr) {
     return GetClassLinker()->GetBootClassPath();
   }
   CHECK(UseCompileTimeClassPath());
@@ -1438,8 +1471,9 @@ void Runtime::SetFaultMessage(const std::string& message) {
   fault_message_ = message;
 }
 
-void Runtime::AddCurrentRuntimeFeaturesAsDex2OatArguments(std::vector<std::string>* argv)
-    const {
+void Runtime::AddCurrentRuntimeFeaturesAsDex2OatArguments(std::vector<std::string>* argv) const {
+  CHECK(argv != nullptr);
+
   if (GetInstrumentation()->InterpretOnly()) {
     argv->push_back("--compiler-filter=interpret-only");
   }

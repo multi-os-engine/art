@@ -73,8 +73,12 @@ IndirectReferenceTable::IndirectReferenceTable(size_t initialCount,
 
   std::string error_str;
   const size_t table_bytes = maxCount * sizeof(IrtEntry);
-  table_mem_map_.reset(MemMap::MapAnonymous("indirect ref table", nullptr, table_bytes,
-                                            PROT_READ | PROT_WRITE, false, &error_str));
+  table_mem_map_.reset(MemMap::MapAnonymous("indirect ref table",
+                                            /*expected_ptr*/nullptr,
+                                            table_bytes,
+                                            PROT_READ | PROT_WRITE,
+                                            /*low_4gb*/false,
+                                            /*out*/&error_str));
   CHECK(table_mem_map_.get() != nullptr) << error_str;
   CHECK_EQ(table_mem_map_->Size(), table_bytes);
   table_ = reinterpret_cast<IrtEntry*>(table_mem_map_->Begin());
@@ -238,6 +242,8 @@ bool IndirectReferenceTable::Remove(uint32_t cookie, IndirectRef iref) {
 
 void IndirectReferenceTable::VisitRoots(RootCallback* callback, void* arg, uint32_t tid,
                                         RootType root_type) {
+  CHECK(callback != nullptr);
+
   for (auto ref : *this) {
     if (*ref == nullptr) {
       // Need to skip null entries to make it possible to do the
