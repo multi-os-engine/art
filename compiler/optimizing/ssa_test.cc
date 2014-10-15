@@ -22,6 +22,7 @@
 #include "optimizing_unit_test.h"
 #include "pretty_printer.h"
 #include "ssa_builder.h"
+#include "ssa_phi_elimination.h"
 #include "utils/arena_allocator.h"
 
 #include "gtest/gtest.h"
@@ -88,6 +89,7 @@ static void TestCode(const uint16_t* data, const char* expected) {
   // on how instructions are ordered.
   RemoveSuspendChecks(graph);
   graph->TransformToSSA();
+  SsaDeadPhiElimination(graph).RemoveStorePhis();
   ReNumberInstructions(graph);
 
   // Test that phis had their type set.

@@ -22,6 +22,8 @@
 namespace art {
 
 void SsaBuilder::BuildSsa() {
+  InitializeStoreStates();
+
   // 1) Visit in reverse post order. We need to have all predecessors of a block visited
   // (with the exception of loops) in order to create the right environment for that
   // block. For loops, we create phis whose inputs will be set in 2).
@@ -57,6 +59,21 @@ void SsaBuilder::BuildSsa() {
   }
 }
 
+void SsaBuilder::InitializeStoreState(size_t index) {
+  HBasicBlock* entry_block = GetGraph()->GetEntryBlock();
+  HStorePhi* pseudo_store_phi = new (GetGraph()->GetArena()) HStorePhi(
+      GetGraph()->GetArena(), index, 0, Primitive::kPrimVoid);
+  GrowableArray<HInstruction*>* locals = GetLocalsFor(entry_block);
+  locals->Put(index, pseudo_store_phi);
+  pseudo_store_phi->SetBlock(entry_block);
+}
+
+void SsaBuilder::InitializeStoreStates() {
+  for (size_t idx = 0; idx < kNumberOfStores; idx++) {
+    InitializeStoreState(GetGraph()->GetNumberOfVRegs() + kNumberOfStores - 1 - idx);
+  }
+}
+
 HInstruction* SsaBuilder::ValueOfLocal(HBasicBlock* block, size_t local) {
   return GetLocalsFor(block)->Get(local);
 }
@@ -72,8 +89,14 @@ void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
     for (size_t local = 0; local < current_locals_->Size(); local++) {
       HInstruction* incoming = ValueOfLocal(block->GetLoopInformation()->GetPreHeader(), local);
       if (incoming != nullptr) {
-        HPhi* phi = new (GetGraph()->GetArena()) HPhi(
+        HPhi* phi;
+        if (local < GetGraph()->GetNumberOfVRegs()) {
+          phi = new (GetGraph()->GetArena()) HPhi(
+              GetGraph()->GetArena(), local, 0, Primitive::kPrimVoid);
+        } else {
+          phi = new (GetGraph()->GetArena()) HStorePhi(
             GetGraph()->GetArena(), local, 0, Primitive::kPrimVoid);
+        }
         block->AddPhi(phi);
         current_locals_->Put(local, phi);
       }
@@ -106,8 +129,14 @@ void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
       }
 
       if (is_different) {
-        HPhi* phi = new (GetGraph()->GetArena()) HPhi(
-            GetGraph()->GetArena(), local, block->GetPredecessors().Size(), Primitive::kPrimVoid);
+        HPhi* phi;
+        if (local < GetGraph()->GetNumberOfVRegs()) {
+          phi = new (GetGraph()->GetArena()) HPhi(
+              GetGraph()->GetArena(), local, block->GetPredecessors().Size(), Primitive::kPrimVoid);
+        } else {
+          phi = new (GetGraph()->GetArena()) HStorePhi(
+              GetGraph()->GetArena(), local, block->GetPredecessors().Size(), Primitive::kPrimVoid);
+        }
         for (size_t i = 0; i < block->GetPredecessors().Size(); i++) {
           HInstruction* value = ValueOfLocal(block->GetPredecessors().Get(i), local);
           phi->SetRawInputAt(i, value);
@@ -139,12 +168,61 @@ void SsaBuilder::VisitStoreLocal(HStoreLocal* store) {
   store->GetBlock()->RemoveInstruction(store);
 }
 
+void SsaBuilder::VisitInstanceFieldGet(HInstanceFieldGet* instance_field_get) {
+  HInstruction* inst = current_locals_
+      ->Get(current_locals_->Size() - 1 - kInstanceFieldStoreIndex);
+  instance_field_get->SetStore(inst);
+  if (inst->IsStorePhi()) {
+    inst->AsStorePhi()->AddStoreUse(instance_field_get);
+  } else if (inst->IsInstanceFieldSet() || inst->IsInvoke()) {
+    // No need to track this use since we don't eliminate
+    // HInstanceFieldSet or HInvoke.
+  } else {
+    LOG(FATAL) << "Unreachable";
+  }
+}
+
+void SsaBuilder::VisitInstanceFieldSet(HInstanceFieldSet* instance_field_set) {
+  current_locals_->Put(
+      current_locals_->Size() - 1 - kInstanceFieldStoreIndex,
+      instance_field_set);
+}
+
+void SsaBuilder::VisitArrayGet(HArrayGet* array_get) {
+  HInstruction* inst = current_locals_
+      ->Get(current_locals_->Size() - 1 - kArrayStoreIndex);
+  array_get->SetStore(inst);
+  if (inst->IsStorePhi()) {
+    inst->AsStorePhi()->AddStoreUse(array_get);
+  } else if (inst->IsArraySet() || inst->IsInvoke()) {
+    // No need to track this use since we don't eliminate
+    // HArraySet or HInvoke.
+  } else {
+    LOG(FATAL) << "Unreachable";
+  }
+}
+
+void SsaBuilder::VisitArraySet(HArraySet* array_set) {
+  current_locals_->Put(
+      current_locals_->Size() - 1 - kArrayStoreIndex,
+      array_set);
+}
+
+void SsaBuilder::VisitInvoke(HInvoke* invoke) {
+  VisitInstruction(invoke);
+  for (size_t store = 0; store < kNumberOfStores; store++) {
+    current_locals_->Put(
+        current_locals_->Size() - 1 - store,
+        invoke);
+  }
+}
+
 void SsaBuilder::VisitInstruction(HInstruction* instruction) {
   if (!instruction->NeedsEnvironment()) {
     return;
   }
   HEnvironment* environment = new (GetGraph()->GetArena()) HEnvironment(
-      GetGraph()->GetArena(), current_locals_->Size());
+      GetGraph()->GetArena(), GetGraph()->GetNumberOfVRegs());
   environment->Populate(*current_locals_);
   instruction->SetEnvironment(environment);
 }

@@ -146,6 +146,10 @@ void GraphChecker::VisitInstruction(HInstruction* instruction) {
   for (HInputIterator input_it(instruction); !input_it.Done();
        input_it.Advance()) {
     HInstruction* input = input_it.Current();
+    if (input->IsStorePhi() && input->InputCount() == 0) {
+      // The special HStorePhi used to initialize store states.
+      continue;
+    }
     const HInstructionList& list = input->IsPhi()
         ? input->GetBlock()->GetPhis()
         : input->GetBlock()->GetInstructions();

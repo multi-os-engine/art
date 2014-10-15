@@ -28,6 +28,7 @@
 #include "pretty_printer.h"
 #include "ssa_builder.h"
 #include "ssa_liveness_analysis.h"
+#include "ssa_phi_elimination.h"
 #include "utils/arena_allocator.h"
 
 #include "gtest/gtest.h"
@@ -44,6 +45,7 @@ static void TestCode(const uint16_t* data, const int* expected_order, size_t num
 
   graph->BuildDominatorTree();
   graph->TransformToSSA();
+  SsaDeadPhiElimination(graph).RemoveStorePhis();
   graph->FindNaturalLoops();
 
   x86::CodeGeneratorX86 codegen(graph);

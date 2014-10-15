@@ -1204,8 +1204,16 @@ void LocationsBuilderX86_64::VisitPhi(HPhi* instruction) {
   locations->SetOut(Location::Any());
 }
 
+void LocationsBuilderX86_64::VisitStorePhi(HStorePhi* instruction) {
+  LOG(FATAL) << "Unreachable";
+}
+
 void InstructionCodeGeneratorX86_64::VisitPhi(HPhi* instruction) {
   LOG(FATAL) << "Unimplemented";
+}
+
+void InstructionCodeGeneratorX86_64::VisitStorePhi(HStorePhi* instruction) {
+  LOG(FATAL) << "Unreachable";
 }
 
 void LocationsBuilderX86_64::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {

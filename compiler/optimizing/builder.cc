@@ -445,6 +445,7 @@ bool HGraphBuilder::BuildFieldAccess(const Instruction& instruction,
     temps.Add(null_check);
     HInstruction* value = LoadLocal(source_or_dest_reg, field_type);
     current_block_->AddInstruction(new (arena_) HInstanceFieldSet(
+        arena_,
         null_check,
         value,
         field_type,

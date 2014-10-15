@@ -44,9 +44,7 @@ class ValueSetNode : public ArenaObject {
 };
 
 /**
- * A ValueSet holds instructions that can replace other instructions. It is updated
- * through the `Add` method, and the `Kill` method. The `Kill` method removes
- * instructions that are affected by the given side effect.
+ * A ValueSet holds instructions that can replace other instructions.
  *
  * The `Lookup` method returns an equivalent instruction to the given instruction
  * if there is one in the set. In GVN, we would say those instructions have the
@@ -93,34 +91,6 @@ class ValueSet : public ArenaObject {
       }
     }
     return nullptr;
-  }
-
-  // Removes all instructions in the set that are affected by the given side effects.
-  void Kill(SideEffects side_effects) {
-    for (size_t i = 0; i < kDefaultNumberOfEntries; ++i) {
-      HInstruction* instruction = table_[i];
-      if (instruction != nullptr && instruction->GetSideEffects().DependsOn(side_effects)) {
-        table_[i] = nullptr;
-        --number_of_entries_;
-      }
-    }
-
-    ValueSetNode* current = collisions_;
-    ValueSetNode* previous = nullptr;
-    while (current != nullptr) {
-      HInstruction* instruction = current->GetInstruction();
-      if (instruction->GetSideEffects().DependsOn(side_effects)) {
-        if (previous == nullptr) {
-          collisions_ = current->GetNext();
-        } else {
-          previous->SetNext(current->GetNext());
-        }
-        --number_of_entries_;
-      } else {
-        previous = current;
-      }
-      current = current->GetNext();
-    }
   }
 
   // Returns a copy of this set.
@@ -170,20 +140,11 @@ class GlobalValueNumberer : public ValueObject {
   GlobalValueNumberer(ArenaAllocator* allocator, HGraph* graph)
       : allocator_(allocator),
         graph_(graph),
-        block_effects_(allocator, graph->GetBlocks().Size()),
-        loop_effects_(allocator, graph->GetBlocks().Size()),
         sets_(allocator, graph->GetBlocks().Size()),
         visited_(allocator, graph->GetBlocks().Size()) {
     size_t number_of_blocks = graph->GetBlocks().Size();
-    block_effects_.SetSize(number_of_blocks);
-    loop_effects_.SetSize(number_of_blocks);
     sets_.SetSize(number_of_blocks);
     visited_.SetSize(number_of_blocks);
-
-    for (size_t i = 0; i < number_of_blocks; ++i) {
-      block_effects_.Put(i, SideEffects::None());
-      loop_effects_.Put(i, SideEffects::None());
-    }
   }
 
   void Run();
@@ -193,24 +154,8 @@ class GlobalValueNumberer : public ValueObject {
   // successor blocks.
   void VisitBasicBlock(HBasicBlock* block);
 
-  // Compute side effects of individual blocks and loops. The GVN algorithm
-  // will use these side effects to update the ValueSet of individual blocks.
-  void ComputeSideEffects();
-
-  void UpdateLoopEffects(HLoopInformation* info, SideEffects effects);
-  SideEffects GetLoopEffects(HBasicBlock* block) const;
-  SideEffects GetBlockEffects(HBasicBlock* block) const;
-
   ArenaAllocator* const allocator_;
   HGraph* const graph_;
-
-  // Side effects of individual blocks, that is the union of the side effects
-  // of the instructions in the block.
-  GrowableArray<SideEffects> block_effects_;
-
-  // Side effects of loops, that is the union of the side effects of the
-  // blocks contained in that loop.
-  GrowableArray<SideEffects> loop_effects_;
 
   // ValueSet for blocks. Initially null, but for an individual block they
   // are allocated and populated by the dominator, and updated by all blocks
@@ -220,7 +165,6 @@ class GlobalValueNumberer : public ValueObject {
   // Mark visisted blocks. Only used for debugging.
   GrowableArray<bool> visited_;
 
-  ART_FRIEND_TEST(GVNTest, LoopSideEffects);
   DISALLOW_COPY_AND_ASSIGN(GlobalValueNumberer);
 };
 

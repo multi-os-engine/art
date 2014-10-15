@@ -23,6 +23,10 @@ namespace art {
 
 static constexpr int kDefaultNumberOfLoops = 2;
 
+static constexpr int kNumberOfStores = 2;
+static constexpr int kInstanceFieldStoreIndex = 0;
+static constexpr int kArrayStoreIndex = 1;
+
 class SsaBuilder : public HGraphVisitor {
  public:
   explicit SsaBuilder(HGraph* graph)
@@ -39,7 +43,7 @@ class SsaBuilder : public HGraphVisitor {
     HEnvironment* env = locals_for_.Get(block->GetBlockId());
     if (env == nullptr) {
       env = new (GetGraph()->GetArena()) HEnvironment(
-          GetGraph()->GetArena(), GetGraph()->GetNumberOfVRegs());
+          GetGraph()->GetArena(), GetGraph()->GetNumberOfVRegs() + kNumberOfStores);
       locals_for_.Put(block->GetBlockId(), env);
     }
     return env->GetVRegs();
@@ -50,9 +54,17 @@ class SsaBuilder : public HGraphVisitor {
   void VisitBasicBlock(HBasicBlock* block);
   void VisitLoadLocal(HLoadLocal* load);
   void VisitStoreLocal(HStoreLocal* store);
+  void VisitInstanceFieldGet(HInstanceFieldGet* instance_field_get);
+  void VisitInstanceFieldSet(HInstanceFieldSet* instance_field_set);
+  void VisitArrayGet(HArrayGet* array_get);
+  void VisitArraySet(HArraySet* array_set);
+  void VisitInvoke(HInvoke* invoke);
   void VisitInstruction(HInstruction* instruction);
 
  private:
+  void InitializeStoreStates();
+  void InitializeStoreState(size_t index);
+
   // Locals for the current block being visited.
   GrowableArray<HInstruction*>* current_locals_;
 

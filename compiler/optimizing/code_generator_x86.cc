@@ -1336,7 +1336,15 @@ void LocationsBuilderX86::VisitPhi(HPhi* instruction) {
   locations->SetOut(Location::Any());
 }
 
+void LocationsBuilderX86::VisitStorePhi(HStorePhi* instruction) {
+  LOG(FATAL) << "Unreachable";
+}
+
 void InstructionCodeGeneratorX86::VisitPhi(HPhi* instruction) {
+  LOG(FATAL) << "Unreachable";
+}
+
+void InstructionCodeGeneratorX86::VisitStorePhi(HStorePhi* instruction) {
   LOG(FATAL) << "Unreachable";
 }
 

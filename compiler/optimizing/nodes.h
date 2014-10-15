@@ -32,6 +32,7 @@ class HInstruction;
 class HIntConstant;
 class HGraphVisitor;
 class HPhi;
+class HStorePhi;
 class HSuspendCheck;
 class LiveInterval;
 class LocationSummary;
@@ -400,6 +401,8 @@ class HBasicBlock : public ArenaObject {
                                        HInstruction* replacement);
   void AddPhi(HPhi* phi);
   void RemovePhi(HPhi* phi);
+  // Used by test code to take out store phis by brute force.
+  void RemoveStorePhi(HStorePhi* phi);
 
   bool IsLoopHeader() const {
     return (loop_information_ != nullptr) && (loop_information_->GetHeader() == this);
@@ -503,6 +506,7 @@ class HBasicBlock : public ArenaObject {
   M(Temporary, Instruction)                                             \
   M(SuspendCheck, Instruction)                                          \
   M(Mul, BinaryOperation)                                               \
+  M(StorePhi, Instruction)                                              \
 
 #define FOR_EACH_INSTRUCTION(M)                                         \
   FOR_EACH_CONCRETE_INSTRUCTION(M)                                      \
@@ -707,7 +711,7 @@ class HInstruction : public ArenaObject {
   LocationSummary* GetLocations() const { return locations_; }
   void SetLocations(LocationSummary* locations) { locations_ = locations; }
 
-  void ReplaceWith(HInstruction* instruction);
+  virtual void ReplaceWith(HInstruction* instruction);
 
   bool HasOnlyOneUse() const {
     return uses_ != nullptr && uses_->GetTail() == nullptr;
@@ -830,7 +834,8 @@ class HEnvironment : public ArenaObject {
   }
 
   void Populate(const GrowableArray<HInstruction*>& env) {
-    for (size_t i = 0; i < env.Size(); i++) {
+    // env may have HStorePhi's at the end, use vregs_'s size.
+    for (size_t i = 0; i < vregs_.Size(); i++) {
       HInstruction* instruction = env.Get(i);
       vregs_.Put(i, instruction);
       if (instruction != nullptr) {
@@ -1686,6 +1691,27 @@ class FieldInfo : public ValueObject {
   const Primitive::Type field_type_;
 };
 
+// Used for merging store values generated from HInstanceFieldSet, etc.
+// Will be eliminated by dead phi elimination phase since it's not
+// officially tracked by inputs to HInstanceFieldGet, etc.
+class HStorePhi : public HPhi {
+ public:
+  HStorePhi(ArenaAllocator* arena, uint32_t reg_number,
+            size_t number_of_inputs, Primitive::Type type)
+      : HPhi(arena, reg_number, number_of_inputs, type),
+        store_uses_(arena, 0) {
+  }
+  void AddStoreUse(HInstruction* instruction) {
+    store_uses_.Add(instruction);
+  }
+  void ReplaceWith(HInstruction* instruction);
+
+  DECLARE_INSTRUCTION(StorePhi);
+
+ private:
+  GrowableArray<HInstruction*> store_uses_;
+};
+
 class HInstanceFieldGet : public HExpression<1> {
  public:
   HInstanceFieldGet(HInstruction* value,
@@ -1699,27 +1725,36 @@ class HInstanceFieldGet : public HExpression<1> {
   virtual bool CanBeMoved() const { return true; }
   virtual bool InstructionDataEquals(HInstruction* other) const {
     size_t other_offset = other->AsInstanceFieldGet()->GetFieldOffset().SizeValue();
-    return other_offset == GetFieldOffset().SizeValue();
+    return (other_offset == GetFieldOffset().SizeValue()) &&
+           store_ == other->AsInstanceFieldGet()->store_;
   }
 
   virtual size_t ComputeHashCode() const {
-    return (HInstruction::ComputeHashCode() << 7) | GetFieldOffset().SizeValue();
+    return ((HInstruction::ComputeHashCode() + store_->GetId()) << 7) |
+           GetFieldOffset().SizeValue();
   }
 
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
+  void SetStore(HInstruction* instruction) {
+    store_ = instruction;
+  }
 
   DECLARE_INSTRUCTION(InstanceFieldGet);
 
  private:
   const FieldInfo field_info_;
+  // Previous instruction that stores into instance fields.
+  // Should be HInstanceFieldSet, HInvoke or HStorePhi.
+  HInstruction* store_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldGet);
 };
 
 class HInstanceFieldSet : public HTemplateInstruction<2> {
  public:
-  HInstanceFieldSet(HInstruction* object,
+  HInstanceFieldSet(ArenaAllocator* arena,
+                    HInstruction* object,
                     HInstruction* value,
                     Primitive::Type field_type,
                     MemberOffset field_offset)
@@ -1749,11 +1784,18 @@ class HArrayGet : public HExpression<2> {
   }
 
   virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const { return false; }
+  void SetStore(HInstruction* instruction) {
+    store_ = instruction;
+  }
 
   DECLARE_INSTRUCTION(ArrayGet);
 
  private:
+  // Previous instruction that stores into arrays.
+  // Should be HAraySet, HInvoke or HStorePhi.
+  HInstruction* store_;
+
   DISALLOW_COPY_AND_ASSIGN(HArrayGet);
 };
 

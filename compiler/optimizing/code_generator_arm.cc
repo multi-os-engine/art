@@ -1324,7 +1324,15 @@ void LocationsBuilderARM::VisitPhi(HPhi* instruction) {
   locations->SetOut(Location::Any());
 }
 
+void LocationsBuilderARM::VisitStorePhi(HStorePhi* instruction) {
+  LOG(FATAL) << "Unreachable";
+}
+
 void InstructionCodeGeneratorARM::VisitPhi(HPhi* instruction) {
+  LOG(FATAL) << "Unreachable";
+}
+
+void InstructionCodeGeneratorARM::VisitStorePhi(HStorePhi* instruction) {
   LOG(FATAL) << "Unreachable";
 }
 

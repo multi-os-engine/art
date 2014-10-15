@@ -81,6 +81,37 @@ void SsaDeadPhiElimination::Run() {
       current = next;
     }
   }
+
+  // Make sure HStorePhi's are all eliminated as part of dead phi elimination.
+  if (kIsDebugBuild) {
+    for (HPostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+      HBasicBlock* block = it.Current();
+      HInstruction* current = block->GetFirstPhi();
+      HInstruction* next = nullptr;
+      while (current != nullptr) {
+        next = current->GetNext();
+        if (current->IsStorePhi()) {
+          LOG(FATAL) << "Unreachable";
+        }
+        current = next;
+      }
+    }
+  }
+}
+
+void SsaDeadPhiElimination::RemoveStorePhis() {
+  for (HPostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+    HBasicBlock* block = it.Current();
+    HInstruction* current = block->GetFirstPhi();
+    HInstruction* next = nullptr;
+    while (current != nullptr) {
+      next = current->GetNext();
+      if (current->IsStorePhi()) {
+        block->RemoveStorePhi(current->AsStorePhi());
+      }
+      current = next;
+    }
+  }
 }
 
 void SsaRedundantPhiElimination::Run() {

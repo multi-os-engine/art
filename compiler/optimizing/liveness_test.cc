@@ -23,6 +23,7 @@
 #include "optimizing_unit_test.h"
 #include "prepare_for_register_allocation.h"
 #include "ssa_liveness_analysis.h"
+#include "ssa_phi_elimination.h"
 #include "utils/arena_allocator.h"
 
 #include "gtest/gtest.h"
@@ -50,6 +51,7 @@ static void TestCode(const uint16_t* data, const char* expected) {
   ASSERT_NE(graph, nullptr);
   graph->BuildDominatorTree();
   graph->TransformToSSA();
+  SsaDeadPhiElimination(graph).RemoveStorePhis();
   graph->FindNaturalLoops();
   // `Inline` conditions into ifs.
   PrepareForRegisterAllocation(graph).Run();

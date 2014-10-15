@@ -32,6 +32,9 @@ class SsaDeadPhiElimination : public ValueObject {
 
   void Run();
 
+  // Used by test code to take out store phis by brute force.
+  void RemoveStorePhis();
+
  private:
   HGraph* const graph_;
   GrowableArray<HPhi*> worklist_;

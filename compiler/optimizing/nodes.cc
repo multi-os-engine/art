@@ -395,6 +395,14 @@ void HBasicBlock::RemovePhi(HPhi* phi) {
   Remove(&phis_, this, phi);
 }
 
+void HBasicBlock::RemoveStorePhi(HStorePhi* phi) {
+  phi->SetBlock(nullptr);
+  instructions_.RemoveInstruction(phi);
+  for (size_t i = 0; i < phi->InputCount(); i++) {
+    phi->InputAt(i)->RemoveUser(phi, i);
+  }
+}
+
 template <typename T>
 static void RemoveFromUseList(T* user,
                               size_t input_index,
@@ -539,6 +547,21 @@ void HPhi::AddInput(HInstruction* input) {
   DCHECK(input->GetBlock() != nullptr);
   inputs_.Add(input);
   input->AddUseAt(this, inputs_.Size() - 1);
+}
+
+void HStorePhi::ReplaceWith(HInstruction* other) {
+  HPhi::ReplaceWith(other);
+  for (size_t i = 0; i < store_uses_.Size(); i++) {
+    HInstruction* inst = store_uses_.Get(i);
+    if (inst->IsInstanceFieldGet()) {
+      inst->AsInstanceFieldGet()->SetStore(other);
+    } else if (inst->IsArrayGet()) {
+      inst->AsArrayGet()->SetStore(other);
+    } else {
+      LOG(FATAL) << "Unreachable";
+    }
+  }
+  store_uses_.Reset();
 }
 
 #define DEFINE_ACCEPT(name, super)                                             \
