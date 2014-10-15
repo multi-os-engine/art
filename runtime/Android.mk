@@ -317,7 +317,7 @@ LIBART_ENUM_OPERATOR_OUT_HEADER_FILES := \
   thread_state.h \
   verifier/method_verifier.h
 
-LIBART_CFLAGS :=
+LIBART_CFLAGS := -DBUILDING_LIBART=1
 ifeq ($(ART_USE_PORTABLE_COMPILER),true)
   LIBART_CFLAGS += -DART_USE_PORTABLE_COMPILER=1
 endif
@@ -401,18 +401,23 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
       LOCAL_SRC_FILES_$$(TARGET_2ND_ARCH) += $$(LIBART_GCC_ONLY_SRC_FILES)
     endif
   else # host
-    LOCAL_CLANG := $$(ART_HOST_CLANG)
-    ifeq ($$(ART_HOST_CLANG),false)
+    ifneq ($$(ART_HOST_CLANG),true)
+      # Add files only built with GCC on the host.
       LOCAL_SRC_FILES += $$(LIBART_GCC_ONLY_SRC_FILES)
+    endif
+    LOCAL_CLANG := $$(ART_HOST_CLANG)
+    LOCAL_LDLIBS := $$(ART_HOST_LDLIBS)
+    LOCAL_LDLIBS += -ldl -lpthread
+    ifeq ($$(HOST_OS),linux)
+      LOCAL_LDLIBS += -lrt
     endif
     LOCAL_CFLAGS += $$(ART_HOST_CFLAGS)
     ifeq ($$(art_ndebug_or_debug),debug)
       LOCAL_CFLAGS += $$(ART_HOST_DEBUG_CFLAGS)
-      LOCAL_LDLIBS += $$(ART_HOST_DEBUG_LDLIBS)
-      LOCAL_STATIC_LIBRARIES := libgtest_host
     else
       LOCAL_CFLAGS += $$(ART_HOST_NON_DEBUG_CFLAGS)
     endif
+    LOCAL_MULTILIB := both
   endif
 
   LOCAL_C_INCLUDES += $$(ART_C_INCLUDES)
@@ -427,11 +432,6 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
   else # host
     LOCAL_STATIC_LIBRARIES += libcutils libziparchive-host libz libutils
     LOCAL_SHARED_LIBRARIES += libsigchain
-    LOCAL_LDLIBS += -ldl -lpthread
-    ifeq ($$(HOST_OS),linux)
-      LOCAL_LDLIBS += -lrt
-    endif
-    LOCAL_MULTILIB := both
   endif
   ifeq ($$(ART_USE_PORTABLE_COMPILER),true)
     include $$(LLVM_GEN_INTRINSICS_MK)

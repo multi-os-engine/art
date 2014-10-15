@@ -18,6 +18,7 @@
 
 #include <fstream>
 #include <sys/uio.h>
+#include <sys/stat.h>
 #include <sys/file.h>
 
 #include "base/stl_util.h"

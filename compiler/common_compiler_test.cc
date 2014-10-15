@@ -27,7 +27,6 @@
 #include "dex/verification_results.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "driver/compiler_driver.h"
-#include "entrypoints/entrypoint_utils.h"
 #include "interpreter/interpreter.h"
 #include "mirror/art_method.h"
 #include "mirror/dex_cache.h"
@@ -37,9 +36,6 @@
 #include "utils.h"
 
 namespace art {
-
-// Normally the ClassLinker supplies this.
-extern "C" void art_quick_generic_jni_trampoline(mirror::ArtMethod*);
 
 #if defined(__arm__)
 // A signal handler called when have an illegal instruction.  We record the fact in
@@ -142,24 +138,6 @@ static InstructionSetFeatures ParseFeatureList(std::string str) {
 CommonCompilerTest::CommonCompilerTest() {}
 CommonCompilerTest::~CommonCompilerTest() {}
 
-OatFile::OatMethod CommonCompilerTest::CreateOatMethod(const void* code, const uint8_t* gc_map) {
-  CHECK(code != nullptr);
-  const uint8_t* base;
-  uint32_t code_offset, gc_map_offset;
-  if (gc_map == nullptr) {
-    base = reinterpret_cast<const uint8_t*>(code);  // Base of data points at code.
-    base -= sizeof(void*);  // Move backward so that code_offset != 0.
-    code_offset = sizeof(void*);
-    gc_map_offset = 0;
-  } else {
-    // TODO: 64bit support.
-    base = nullptr;  // Base of data in oat file, ie 0.
-    code_offset = PointerToLowMemUInt32(code);
-    gc_map_offset = PointerToLowMemUInt32(gc_map);
-  }
-  return OatFile::OatMethod(base, code_offset, gc_map_offset);
-}
-
 void CommonCompilerTest::MakeExecutable(mirror::ArtMethod* method) {
   CHECK(method != nullptr);
 
@@ -174,6 +152,7 @@ void CommonCompilerTest::MakeExecutable(mirror::ArtMethod* method) {
   if (compiled_method != nullptr) {
     const std::vector<uint8_t>* code = compiled_method->GetQuickCode();
     const void* code_ptr;
+    bool is_portable;
     if (code != nullptr) {
       uint32_t code_size = code->size();
       CHECK_NE(0u, code_size);
@@ -202,41 +181,21 @@ void CommonCompilerTest::MakeExecutable(mirror::ArtMethod* method) {
       chunk->insert(chunk->end(), code->begin(), code->end());
       CHECK_EQ(padding + size, chunk->size());
       code_ptr = &(*chunk)[code_offset];
+      is_portable = false;
     } else {
       code = compiled_method->GetPortableCode();
       code_ptr = &(*code)[0];
+      is_portable = true;
     }
     MakeExecutable(code_ptr, code->size());
     const void* method_code = CompiledMethod::CodePointer(code_ptr,
                                                           compiled_method->GetInstructionSet());
     LOG(INFO) << "MakeExecutable " << PrettyMethod(method) << " code=" << method_code;
-    OatFile::OatMethod oat_method = CreateOatMethod(method_code, nullptr);
-    oat_method.LinkMethod(method);
-    method->SetEntryPointFromInterpreter(artInterpreterToCompiledCodeBridge);
+    class_linker_->SetEntryPointsToCompiledCode(method, method_code, is_portable);
   } else {
     // No code? You must mean to go into the interpreter.
     // Or the generic JNI...
-    if (!method->IsNative()) {
-      const void* method_code = kUsePortableCompiler ? GetPortableToInterpreterBridge()
-          : GetQuickToInterpreterBridge();
-      OatFile::OatMethod oat_method = CreateOatMethod(method_code, nullptr);
-      oat_method.LinkMethod(method);
-      method->SetEntryPointFromInterpreter(interpreter::artInterpreterToInterpreterBridge);
-    } else {
-      const void* method_code = reinterpret_cast<void*>(art_quick_generic_jni_trampoline);
-
-      OatFile::OatMethod oat_method = CreateOatMethod(method_code, nullptr);
-      oat_method.LinkMethod(method);
-      method->SetEntryPointFromInterpreter(artInterpreterToCompiledCodeBridge);
-    }
-  }
-  // Create bridges to transition between different kinds of compiled bridge.
-  if (method->GetEntryPointFromPortableCompiledCode() == nullptr) {
-    method->SetEntryPointFromPortableCompiledCode(GetPortableToQuickBridge());
-  } else {
-    CHECK(method->GetEntryPointFromQuickCompiledCode() == nullptr);
-    method->SetEntryPointFromQuickCompiledCode(GetQuickToPortableBridge());
-    method->SetIsPortableCompiled();
+    class_linker_->SetEntryPointsToInterpreter(method);
   }
 }
 

@@ -19,6 +19,7 @@
 #include "arch/context.h"
 #include "dex_instruction.h"
 #include "entrypoints/entrypoint_utils.h"
+#include "entrypoints/runtime_asm_entrypoints.h"
 #include "handle_scope-inl.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"

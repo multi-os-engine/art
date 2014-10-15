@@ -39,7 +39,7 @@ class ShadowFrame;
 
 namespace mirror {
 
-typedef void (EntryPointFromInterpreter)(Thread* self, MethodHelper& mh,
+typedef void (EntryPointFromInterpreter)(Thread* self, MethodHelper* mh,
     const DexFile::CodeItem* code_item, ShadowFrame* shadow_frame, JValue* result);
 
 // C++ mirror of java.lang.reflect.ArtMethod.
@@ -302,7 +302,10 @@ class MANAGED ArtMethod FINAL : public Object {
 
   uint32_t GetCodeSize() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool IsWithinQuickCode(uintptr_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  // Check whether the given PC is within the quick compiled code associated with this method's
+  // quick entrypoint. This code isn't robust for instrumentation, etc. and is only used for
+  // debug purposes.
+  bool PcIsWithinQuickCode(uintptr_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     uintptr_t code = reinterpret_cast<uintptr_t>(GetEntryPointFromQuickCompiledCode());
     if (code == 0) {
       return pc == 0;
@@ -338,7 +341,9 @@ class MANAGED ArtMethod FINAL : public Object {
   // Actual entry point pointer to compiled oat code or nullptr.
   const void* GetQuickOatEntryPoint() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   // Actual pointer to compiled oat code or nullptr.
-  const void* GetQuickOatCodePointer() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  const void* GetQuickOatCodePointer() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return EntryPointToCodePointer(GetQuickOatEntryPoint());
+  }
 
   // Callers should wrap the uint8_t* in a MappingTable instance for convenient access.
   const uint8_t* GetMappingTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -378,18 +383,19 @@ class MANAGED ArtMethod FINAL : public Object {
   QuickMethodFrameInfo GetQuickFrameInfo(const void* code_pointer)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  size_t GetReturnPcOffsetInBytes() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetReturnPcOffsetInBytes(GetFrameSizeInBytes());
+  FrameOffset GetReturnPcOffset() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetReturnPcOffset(GetFrameSizeInBytes());
   }
 
-  size_t GetReturnPcOffsetInBytes(uint32_t frame_size_in_bytes)
+  FrameOffset GetReturnPcOffset(uint32_t frame_size_in_bytes)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK_EQ(frame_size_in_bytes, GetFrameSizeInBytes());
-    return frame_size_in_bytes - sizeof(void*);
+    return FrameOffset(frame_size_in_bytes - sizeof(void*));
   }
 
-  size_t GetHandleScopeOffsetInBytes() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return sizeof(void*);
+  FrameOffset GetHandleScopeOffset() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK_LT(sizeof(void*), GetFrameSizeInBytes());
+    return FrameOffset(sizeof(void*));
   }
 
   void RegisterNative(Thread* self, const void* native_method, bool is_fast)
@@ -423,9 +429,16 @@ class MANAGED ArtMethod FINAL : public Object {
 
   bool IsImtConflictMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  uintptr_t NativePcOffset(const uintptr_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  uintptr_t NativePcOffset(const uintptr_t pc, const void* quick_entry_point)
+  uintptr_t NativeQuickPcOffset(const uintptr_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+#ifdef NDEBUG
+  uintptr_t NativeQuickPcOffset(const uintptr_t pc, const void* quick_entry_point)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return pc - reinterpret_cast<uintptr_t>(quick_entry_point);
+  }
+#else
+  uintptr_t NativeQuickPcOffset(const uintptr_t pc, const void* quick_entry_point)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+#endif
 
   // Converts a native PC to a dex PC.
   uint32_t ToDexPc(const uintptr_t pc, bool abort_on_failure = true)

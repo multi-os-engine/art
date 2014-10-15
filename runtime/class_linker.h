@@ -27,7 +27,6 @@
 #include "base/mutex.h"
 #include "dex_file.h"
 #include "gc_root.h"
-#include "gtest/gtest.h"
 #include "jni.h"
 #include "oat_file.h"
 #include "object_callbacks.h"
@@ -60,6 +59,46 @@ enum VisitRootFlags : uint8_t;
 
 class ClassLinker {
  public:
+  // Well known mirror::Class roots accessed via GetClassRoot.
+  enum ClassRoot {
+    kJavaLangClass,
+    kJavaLangObject,
+    kClassArrayClass,
+    kObjectArrayClass,
+    kJavaLangString,
+    kJavaLangDexCache,
+    kJavaLangRefReference,
+    kJavaLangReflectArtField,
+    kJavaLangReflectArtMethod,
+    kJavaLangReflectProxy,
+    kJavaLangStringArrayClass,
+    kJavaLangReflectArtFieldArrayClass,
+    kJavaLangReflectArtMethodArrayClass,
+    kJavaLangClassLoader,
+    kJavaLangThrowable,
+    kJavaLangClassNotFoundException,
+    kJavaLangStackTraceElement,
+    kPrimitiveBoolean,
+    kPrimitiveByte,
+    kPrimitiveChar,
+    kPrimitiveDouble,
+    kPrimitiveFloat,
+    kPrimitiveInt,
+    kPrimitiveLong,
+    kPrimitiveShort,
+    kPrimitiveVoid,
+    kBooleanArrayClass,
+    kByteArrayClass,
+    kCharArrayClass,
+    kDoubleArrayClass,
+    kFloatArrayClass,
+    kIntArrayClass,
+    kLongArrayClass,
+    kShortArrayClass,
+    kJavaLangStackTraceElementArrayClass,
+    kClassRootsMax,
+  };
+
   explicit ClassLinker(InternTable* intern_table);
   ~ClassLinker();
 
@@ -371,6 +410,10 @@ class ClassLinker {
   pid_t GetClassesLockOwner();  // For SignalCatcher.
   pid_t GetDexLockOwner();  // For SignalCatcher.
 
+  mirror::Class* GetClassRoot(ClassRoot class_root) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static const char* GetClassRootDescriptor(ClassRoot class_root);
+
   const void* GetPortableResolutionTrampoline() const {
     return portable_resolution_trampoline_;
   }
@@ -398,6 +441,15 @@ class ClassLinker {
   InternTable* GetInternTable() const {
     return intern_table_;
   }
+
+  // Set the entrypoints up for method to the given code.
+  void SetEntryPointsToCompiledCode(mirror::ArtMethod* method, const void* method_code,
+                                    bool is_portable) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Set the entrypoints up for method to the enter the interpreter.
+  void SetEntryPointsToInterpreter(mirror::ArtMethod* method) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Attempts to insert a class into a class table.  Returns NULL if
   // the class was inserted, otherwise returns an existing class with
@@ -668,6 +720,9 @@ class ClassLinker {
   void FixupTemporaryDeclaringClass(mirror::Class* temp_class, mirror::Class* new_class)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  void SetClassRoot(ClassRoot class_root, mirror::Class* klass)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   std::vector<const DexFile*> boot_class_path_;
 
   mutable ReaderWriterMutex dex_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
@@ -691,60 +746,8 @@ class ClassLinker {
   // the classes into the class_table_ to avoid dex cache based searches.
   Atomic<uint32_t> failed_dex_cache_class_lookups_;
 
-  // indexes into class_roots_.
-  // needs to be kept in sync with class_roots_descriptors_.
-  enum ClassRoot {
-    kJavaLangClass,
-    kJavaLangObject,
-    kClassArrayClass,
-    kObjectArrayClass,
-    kJavaLangString,
-    kJavaLangDexCache,
-    kJavaLangRefReference,
-    kJavaLangReflectArtField,
-    kJavaLangReflectArtMethod,
-    kJavaLangReflectProxy,
-    kJavaLangStringArrayClass,
-    kJavaLangReflectArtFieldArrayClass,
-    kJavaLangReflectArtMethodArrayClass,
-    kJavaLangClassLoader,
-    kJavaLangThrowable,
-    kJavaLangClassNotFoundException,
-    kJavaLangStackTraceElement,
-    kPrimitiveBoolean,
-    kPrimitiveByte,
-    kPrimitiveChar,
-    kPrimitiveDouble,
-    kPrimitiveFloat,
-    kPrimitiveInt,
-    kPrimitiveLong,
-    kPrimitiveShort,
-    kPrimitiveVoid,
-    kBooleanArrayClass,
-    kByteArrayClass,
-    kCharArrayClass,
-    kDoubleArrayClass,
-    kFloatArrayClass,
-    kIntArrayClass,
-    kLongArrayClass,
-    kShortArrayClass,
-    kJavaLangStackTraceElementArrayClass,
-    kClassRootsMax,
-  };
+  // Well known mirror::Class roots.
   GcRoot<mirror::ObjectArray<mirror::Class>> class_roots_;
-
-  mirror::Class* GetClassRoot(ClassRoot class_root) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  void SetClassRoot(ClassRoot class_root, mirror::Class* klass)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  static const char* class_roots_descriptors_[];
-
-  const char* GetClassRootDescriptor(ClassRoot class_root) {
-    const char* descriptor = class_roots_descriptors_[class_root];
-    CHECK(descriptor != NULL);
-    return descriptor;
-  }
 
   // The interface table used by all arrays.
   GcRoot<mirror::IfTable> array_iftable_;
@@ -775,10 +778,8 @@ class ClassLinker {
   friend class ElfPatcher;  // for FindOpenedOatFileForDexFile & FindOpenedOatFileFromOatLocation
   friend class NoDex2OatTest;  // for FindOpenedOatFileForDexFile
   friend class NoPatchoatTest;  // for FindOpenedOatFileForDexFile
-  FRIEND_TEST(ClassLinkerTest, ClassRootDescriptors);
-  FRIEND_TEST(mirror::DexCacheTest, Open);
-  FRIEND_TEST(ExceptionTest, FindExceptionHandler);
-  FRIEND_TEST(ObjectTest, AllocObjectArray);
+  ART_FRIEND_TEST(mirror::DexCacheTest, Open);  // for AllocDexCache
+
   DISALLOW_COPY_AND_ASSIGN(ClassLinker);
 };
 
