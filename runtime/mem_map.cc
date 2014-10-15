@@ -395,6 +395,7 @@ MemMap* MemMap::MapFileAtAddress(uint8_t* expected_ptr, size_t byte_count, int p
     // reuse means it is okay that it overlaps an existing page mapping.
     // Only use this if you actually made the page reservation yourself.
     CHECK(expected_ptr != nullptr);
+    CHECK_GE(expected_ptr, reinterpret_cast<byte *>(0x00008000)); // MMAP_MIN_ADDR restrictions
 
     DCHECK(ContainedWithinExistingMap(expected, limit, error_msg));
     flags |= MAP_FIXED;
@@ -521,6 +522,7 @@ MemMap* MemMap::RemapAtEnd(uint8_t* new_end, const char* tail_name, int tail_pro
   debug_friendly_name += tail_name;
   ScopedFd fd(ashmem_create_region(debug_friendly_name.c_str(), tail_base_size));
   int flags = MAP_PRIVATE | MAP_FIXED;
+  CHECK_GE(tail_base_begin, reinterpret_cast<byte *>(0x00008000)); // MMAP_MIN_ADDR restrictions
   if (fd.get() == -1) {
     *error_msg = StringPrintf("ashmem_create_region failed for '%s': %s",
                               tail_name, strerror(errno));
