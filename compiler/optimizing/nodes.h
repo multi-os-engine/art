@@ -399,6 +399,7 @@ class HBasicBlock : public ArenaObject {
   void ReplaceAndRemoveInstructionWith(HInstruction* initial,
                                        HInstruction* replacement);
   void AddPhi(HPhi* phi);
+  void InsertPhiAfter(HPhi* instruction, HPhi* cursor);
   void RemovePhi(HPhi* phi);
 
   bool IsLoopHeader() const {
@@ -502,6 +503,8 @@ class HBasicBlock : public ArenaObject {
   M(NullCheck, Instruction)                                             \
   M(Temporary, Instruction)                                             \
   M(SuspendCheck, Instruction)                                          \
+  M(FloatConstant, Constant)                                            \
+  M(DoubleConstant, Constant)                                           \
 
 #define FOR_EACH_INSTRUCTION(M)                                         \
   FOR_EACH_CONCRETE_INSTRUCTION(M)                                      \
@@ -705,6 +708,7 @@ class HInstruction : public ArenaObject {
   void SetLocations(LocationSummary* locations) { locations_ = locations; }
 
   void ReplaceWith(HInstruction* instruction);
+  void ReplaceInput(HInstruction* replacement, size_t index);
 
   bool HasOnlyOneUse() const {
     return uses_ != nullptr && uses_->GetTail() == nullptr;
@@ -990,8 +994,8 @@ class HExpression : public HTemplateInstruction<N> {
 
   virtual Primitive::Type GetType() const { return type_; }
 
- private:
-  const Primitive::Type type_;
+ protected:
+  Primitive::Type type_;
 };
 
 // Represents dex's RETURN_VOID opcode. A HReturnVoid is a control flow
@@ -1368,6 +1372,48 @@ class HConstant : public HExpression<0> {
   DISALLOW_COPY_AND_ASSIGN(HConstant);
 };
 
+class HFloatConstant : public HConstant {
+ public:
+  explicit HFloatConstant(float value) : HConstant(Primitive::kPrimFloat), value_(value) {}
+
+  float GetValue() const { return value_; }
+
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    return bit_cast<float, int32_t>(other->AsFloatConstant()->value_) ==
+        bit_cast<float, int32_t>(value_);
+  }
+
+  virtual size_t ComputeHashCode() const { return static_cast<size_t>(GetValue()); }
+
+  DECLARE_INSTRUCTION(FloatConstant);
+
+ private:
+  const float value_;
+
+  DISALLOW_COPY_AND_ASSIGN(HFloatConstant);
+};
+
+class HDoubleConstant : public HConstant {
+ public:
+  explicit HDoubleConstant(double value) : HConstant(Primitive::kPrimDouble), value_(value) {}
+
+  double GetValue() const { return value_; }
+
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    return bit_cast<double, int64_t>(other->AsDoubleConstant()->value_) ==
+        bit_cast<double, int64_t>(value_);
+  }
+
+  virtual size_t ComputeHashCode() const { return static_cast<size_t>(GetValue()); }
+
+  DECLARE_INSTRUCTION(DoubleConstant);
+
+ private:
+  const double value_;
+
+  DISALLOW_COPY_AND_ASSIGN(HDoubleConstant);
+};
+
 // Constants of the type int. Those can be from Dex instructions, or
 // synthesized (for example with the if-eqz instruction).
 class HIntConstant : public HConstant {
@@ -1381,6 +1427,19 @@ class HIntConstant : public HConstant {
   }
 
   virtual size_t ComputeHashCode() const { return GetValue(); }
+
+  HFloatConstant* GetFloatEquivalent() {
+    HFloatConstant* result = GetNext()->AsFloatConstant();
+    if (result == nullptr) {
+      HGraph* graph = GetBlock()->GetGraph();
+      ArenaAllocator* allocator = graph->GetArena();
+      result = new (allocator) HFloatConstant(bit_cast<int32_t, float>(value_));
+      GetBlock()->InsertInstructionBefore(result, GetNext());
+    } else {
+      DCHECK_EQ((bit_cast<float, int32_t>(result->GetValue())), value_);
+    }
+    return result;
+  }
 
   DECLARE_INSTRUCTION(IntConstant);
 
@@ -1400,12 +1459,26 @@ class HLongConstant : public HConstant {
     return other->AsLongConstant()->value_ == value_;
   }
 
+  HDoubleConstant* GetDoubleEquivalent() {
+    HDoubleConstant* result = GetNext()->AsDoubleConstant();
+    if (result == nullptr) {
+      HGraph* graph = GetBlock()->GetGraph();
+      ArenaAllocator* allocator = graph->GetArena();
+      result = new (allocator) HDoubleConstant(bit_cast<int64_t, double>(value_));
+      GetBlock()->InsertInstructionBefore(result, GetNext());
+    } else {
+      DCHECK_EQ((bit_cast<double, int64_t>(result->GetValue())), value_);
+    }
+    return result;
+  }
+
   virtual size_t ComputeHashCode() const { return static_cast<size_t>(GetValue()); }
 
   DECLARE_INSTRUCTION(LongConstant);
 
  private:
   const int64_t value_;
+  HDoubleConstant* double_equivalent_;
 
   DISALLOW_COPY_AND_ASSIGN(HLongConstant);
 };
@@ -1619,6 +1692,30 @@ class HPhi : public HInstruction {
   bool IsDead() const { return !is_live_; }
   bool IsLive() const { return is_live_; }
 
+  HPhi* GetFloatOrDoubleEquivalent(Primitive::Type type) {
+    if (next_ == nullptr
+        || (next_->type_ != Primitive::kPrimDouble && next_->type_ != Primitive::kPrimFloat)) {
+      ArenaAllocator* allocator = GetBlock()->GetGraph()->GetArena();
+      HPhi* phi = new (allocator) HPhi(allocator, reg_number_, inputs_.Size(), type);
+      for (size_t i = 0, e = InputCount(); i < e; ++i) {
+        phi->SetRawInputAt(i, InputAt(i));
+      }
+      GetBlock()->InsertPhiAfter(phi, this);
+      return phi;
+    } else {
+      DCHECK_EQ(next_->AsPhi()->reg_number_, reg_number_); 
+      return next_->AsPhi();
+    }
+  }
+
+  bool HasFloatOrDoubleEquivalent() const {
+    if (GetNext() == nullptr) {
+      return false;
+    }
+    Primitive::Type type = GetNext()->GetType();
+    return (type == Primitive::kPrimFloat || type == Primitive::kPrimDouble);
+  }
+
   DECLARE_INSTRUCTION(Phi);
 
  private:
@@ -1729,6 +1826,7 @@ class HArrayGet : public HExpression<2> {
 
   virtual bool CanBeMoved() const { return true; }
   virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+  void SetType(Primitive::Type type) { type_ = type; }
 
   DECLARE_INSTRUCTION(ArrayGet);
 
@@ -1741,11 +1839,11 @@ class HArraySet : public HTemplateInstruction<3> {
   HArraySet(HInstruction* array,
             HInstruction* index,
             HInstruction* value,
-            Primitive::Type component_type,
+            Primitive::Type expected_component_type,
             uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
         dex_pc_(dex_pc),
-        component_type_(component_type) {
+        expected_component_type_(expected_component_type) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
     SetRawInputAt(2, value);
@@ -1759,13 +1857,20 @@ class HArraySet : public HTemplateInstruction<3> {
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
-  Primitive::Type GetComponentType() const { return component_type_; }
+  HInstruction* GetValue() const { return InputAt(2); }
+
+  Primitive::Type GetComponentType() const {
+    Primitive::Type value_type = GetValue()->GetType();
+    return ((value_type == Primitive::kPrimFloat) || (value_type == Primitive::kPrimDouble))
+        ? value_type
+        : expected_component_type_;
+  }
 
   DECLARE_INSTRUCTION(ArraySet);
 
  private:
   const uint32_t dex_pc_;
-  const Primitive::Type component_type_;
+  const Primitive::Type expected_component_type_;
 
   DISALLOW_COPY_AND_ASSIGN(HArraySet);
 };
