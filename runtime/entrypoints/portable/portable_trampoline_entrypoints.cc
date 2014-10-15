@@ -222,7 +222,7 @@ extern "C" uint64_t artPortableToInterpreterBridge(mirror::ArtMethod* method, Th
       }
     }
 
-    JValue result = interpreter::EnterInterpreterFromStub(self, mh, code_item, *shadow_frame);
+    JValue result = interpreter::EnterInterpreterFromEntryPoint(self, &mh, code_item, shadow_frame);
     // Pop transition.
     self->PopManagedStackFragment(fragment);
     return result.GetJ();
