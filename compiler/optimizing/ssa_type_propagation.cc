@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "ssa_builder.h"
 #include "ssa_type_propagation.h"
 
 #include "nodes.h"
@@ -38,15 +39,29 @@ static Primitive::Type MergeTypes(Primitive::Type existing, Primitive::Type new_
 
 // Re-compute and update the type of the instruction. Returns
 // whether or not the type was changed.
-static bool UpdateType(HPhi* phi) {
+bool SsaTypePropagation::UpdateType(HPhi* phi) {
   Primitive::Type existing = phi->GetType();
 
-  Primitive::Type new_type = Primitive::kPrimVoid;
+  Primitive::Type new_type = existing;
   for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
     Primitive::Type input_type = phi->InputAt(i)->GetType();
     new_type = MergeTypes(new_type, input_type);
   }
   phi->SetType(new_type);
+
+  if (new_type == Primitive::kPrimDouble || new_type == Primitive::kPrimFloat) {
+    for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
+      HInstruction* input = phi->InputAt(i);
+      if (input->GetType() != new_type) {
+        HInstruction* equivalent = SsaBuilder::GetFloatOrDoubleEquivalent(input, new_type);
+        phi->ReplaceInput(equivalent, i);
+        if (equivalent->IsPhi()) {
+          AddToWorklist(equivalent->AsPhi());
+        }
+      }
+    }
+  }
+
   return existing != new_type;
 }
 
@@ -63,7 +78,7 @@ void SsaTypePropagation::VisitBasicBlock(HBasicBlock* block) {
       HPhi* phi = it.Current()->AsPhi();
       // Set the initial type for the phi. Use the non back edge input for reaching
       // a fixed point faster.
-      phi->SetType(phi->InputAt(0)->GetType());
+      phi->SetType(MergeTypes(phi->InputAt(0)->GetType(), phi->GetType()));
       AddToWorklist(phi);
     }
   } else {

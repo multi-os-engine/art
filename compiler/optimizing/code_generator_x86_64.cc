@@ -176,12 +176,20 @@ void CodeGeneratorX86_64::DumpFloatingPointRegister(std::ostream& stream, int re
   stream << X86_64ManagedRegister::FromXmmRegister(FloatRegister(reg));
 }
 
-void CodeGeneratorX86_64::SaveCoreRegister(Location stack_location, uint32_t reg_id) {
-  __ movq(Address(CpuRegister(RSP), stack_location.GetStackIndex()), CpuRegister(reg_id));
+void CodeGeneratorX86_64::SaveCoreRegister(size_t stack_index, uint32_t reg_id) {
+  __ movq(Address(CpuRegister(RSP), stack_index), CpuRegister(reg_id));
 }
 
-void CodeGeneratorX86_64::RestoreCoreRegister(Location stack_location, uint32_t reg_id) {
-  __ movq(CpuRegister(reg_id), Address(CpuRegister(RSP), stack_location.GetStackIndex()));
+void CodeGeneratorX86_64::RestoreCoreRegister(size_t stack_index, uint32_t reg_id) {
+  __ movq(CpuRegister(reg_id), Address(CpuRegister(RSP), stack_index));
+}
+
+void CodeGeneratorX86_64::SaveFloatingPointRegister(size_t stack_index, uint32_t reg_id) {
+  __ movsd(Address(CpuRegister(RSP), stack_index), XmmRegister(reg_id));
+}
+
+void CodeGeneratorX86_64::RestoreFloatingPointRegister(size_t stack_index, uint32_t reg_id) {
+  __ movsd(XmmRegister(reg_id), Address(CpuRegister(RSP), stack_index));
 }
 
 CodeGeneratorX86_64::CodeGeneratorX86_64(HGraph* graph)
@@ -690,6 +698,24 @@ void LocationsBuilderX86_64::VisitLongConstant(HLongConstant* constant) {
 void InstructionCodeGeneratorX86_64::VisitLongConstant(HLongConstant* constant) {
 }
 
+void LocationsBuilderX86_64::VisitFloatConstant(HFloatConstant* constant) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(constant, LocationSummary::kNoCall);
+  locations->SetOut(Location::ConstantLocation(constant));
+}
+
+void InstructionCodeGeneratorX86_64::VisitFloatConstant(HFloatConstant* constant) {
+}
+
+void LocationsBuilderX86_64::VisitDoubleConstant(HDoubleConstant* constant) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(constant, LocationSummary::kNoCall);
+  locations->SetOut(Location::ConstantLocation(constant));
+}
+
+void InstructionCodeGeneratorX86_64::VisitDoubleConstant(HDoubleConstant* constant) {
+}
+
 void LocationsBuilderX86_64::VisitReturnVoid(HReturnVoid* ret) {
   ret->SetLocations(nullptr);
 }
@@ -710,13 +736,13 @@ void LocationsBuilderX86_64::VisitReturn(HReturn* ret) {
     case Primitive::kPrimInt:
     case Primitive::kPrimNot:
     case Primitive::kPrimLong:
-      locations->SetInAt(0, Location::RegisterLocation(RAX));
+      locations->SetInAt(0, Location::RegisterLocation(RAX), Location::kDiesAtEntry);
       break;
 
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble:
       locations->SetInAt(0,
-          Location::FpuRegisterLocation(XMM0));
+          Location::FpuRegisterLocation(XMM0), Location::kDiesAtEntry);
       break;
 
     default:
@@ -917,7 +943,7 @@ void LocationsBuilderX86_64::VisitAdd(HAdd* add) {
     case Primitive::kPrimDouble:
     case Primitive::kPrimFloat: {
       locations->SetInAt(0, Location::RequiresFpuRegister());
-      locations->SetInAt(1, Location::Any());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
       locations->SetOut(Location::SameAsFirstInput());
       break;
     }
@@ -954,21 +980,12 @@ void InstructionCodeGeneratorX86_64::VisitAdd(HAdd* add) {
     }
 
     case Primitive::kPrimFloat: {
-      if (second.IsFpuRegister()) {
-        __ addss(first.As<XmmRegister>(), second.As<XmmRegister>());
-      } else {
-        __ addss(first.As<XmmRegister>(),
-                 Address(CpuRegister(RSP), second.GetStackIndex()));
-      }
+      __ addss(first.As<XmmRegister>(), second.As<XmmRegister>());
       break;
     }
 
     case Primitive::kPrimDouble: {
-      if (second.IsFpuRegister()) {
-        __ addsd(first.As<XmmRegister>(), second.As<XmmRegister>());
-      } else {
-        __ addsd(first.As<XmmRegister>(), Address(CpuRegister(RSP), second.GetStackIndex()));
-      }
+      __ addsd(first.As<XmmRegister>(), second.As<XmmRegister>());
       break;
     }
 
@@ -1341,10 +1358,30 @@ void InstructionCodeGeneratorX86_64::VisitArrayGet(HArrayGet* instruction) {
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << instruction->GetType();
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      uint32_t data_offset = mirror::Array::DataOffset(sizeof(float)).Uint32Value();
+      XmmRegister out = locations->Out().As<XmmRegister>();
+      if (index.IsConstant()) {
+        __ movss(out, Address(obj,
+            (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_8) + data_offset));
+      } else {
+        __ movss(out, Address(obj, index.As<CpuRegister>(), TIMES_8, data_offset));
+      }
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      uint32_t data_offset = mirror::Array::DataOffset(sizeof(double)).Uint32Value();
+      XmmRegister out = locations->Out().As<XmmRegister>();
+      if (index.IsConstant()) {
+        __ movsd(out, Address(obj,
+            (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_8) + data_offset));
+      } else {
+        __ movsd(out, Address(obj, index.As<CpuRegister>(), TIMES_8, data_offset));
+      }
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
@@ -1368,6 +1405,8 @@ void LocationsBuilderX86_64::VisitArraySet(HArraySet* instruction) {
     locations->SetInAt(2, Location::RequiresRegister(), Location::kDiesAtEntry);
     if (value_type == Primitive::kPrimLong) {
       locations->SetInAt(2, Location::RequiresRegister(), Location::kDiesAtEntry);
+    } else if (value_type == Primitive::kPrimFloat || value_type == Primitive::kPrimDouble) {
+      locations->SetInAt(2, Location::RequiresFpuRegister(), Location::kDiesAtEntry);
     } else {
       locations->SetInAt(2, Location::RegisterOrConstant(instruction->InputAt(2)), Location::kDiesAtEntry);
     }
@@ -1440,6 +1479,7 @@ void InstructionCodeGeneratorX86_64::VisitArraySet(HArraySet* instruction) {
           __ movl(Address(obj, index.As<CpuRegister>(), TIMES_4, data_offset),
                   value.As<CpuRegister>());
         } else {
+          DCHECK(value.IsConstant()) << value;
           __ movl(Address(obj, index.As<CpuRegister>(), TIMES_4, data_offset),
                   Immediate(value.GetConstant()->AsIntConstant()->GetValue()));
         }
@@ -1468,10 +1508,34 @@ void InstructionCodeGeneratorX86_64::VisitArraySet(HArraySet* instruction) {
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << instruction->GetType();
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      uint32_t data_offset = mirror::Array::DataOffset(sizeof(float)).Uint32Value();
+      if (index.IsConstant()) {
+        size_t offset = (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_8) + data_offset;
+        DCHECK(value.IsFpuRegister());
+        __ movss(Address(obj, offset), value.As<XmmRegister>());
+      } else {
+        DCHECK(value.IsFpuRegister());
+        __ movss(Address(obj, index.As<CpuRegister>(), TIMES_8, data_offset),
+                value.As<XmmRegister>());
+      }
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      uint32_t data_offset = mirror::Array::DataOffset(sizeof(double)).Uint32Value();
+      if (index.IsConstant()) {
+        size_t offset = (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_8) + data_offset;
+        DCHECK(value.IsFpuRegister());
+        __ movsd(Address(obj, offset), value.As<XmmRegister>());
+      } else {
+        DCHECK(value.IsFpuRegister());
+        __ movsd(Address(obj, index.As<CpuRegister>(), TIMES_8, data_offset),
+                value.As<XmmRegister>());
+      }
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
@@ -1605,6 +1669,9 @@ void ParallelMoveResolverX86_64::EmitMove(size_t index) {
     if (destination.IsRegister()) {
       __ movl(destination.As<CpuRegister>(),
               Address(CpuRegister(RSP), source.GetStackIndex()));
+    } else if (destination.IsFpuRegister()) {
+      __ movss(destination.As<XmmRegister>(),
+              Address(CpuRegister(RSP), source.GetStackIndex()));
     } else {
       DCHECK(destination.IsStackSlot());
       __ movl(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
@@ -1614,6 +1681,8 @@ void ParallelMoveResolverX86_64::EmitMove(size_t index) {
     if (destination.IsRegister()) {
       __ movq(destination.As<CpuRegister>(),
               Address(CpuRegister(RSP), source.GetStackIndex()));
+    } else if (destination.IsFpuRegister()) {
+      __ movsd(destination.As<XmmRegister>(), Address(CpuRegister(RSP), source.GetStackIndex()));
     } else {
       DCHECK(destination.IsDoubleStackSlot());
       __ movq(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
@@ -1626,6 +1695,7 @@ void ParallelMoveResolverX86_64::EmitMove(size_t index) {
       if (destination.IsRegister()) {
         __ movl(destination.As<CpuRegister>(), imm);
       } else {
+        DCHECK(destination.IsStackSlot()) << destination;
         __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), imm);
       }
     } else if (constant->IsLongConstant()) {
@@ -1633,14 +1703,42 @@ void ParallelMoveResolverX86_64::EmitMove(size_t index) {
       if (destination.IsRegister()) {
         __ movq(destination.As<CpuRegister>(), Immediate(value));
       } else {
+        DCHECK(destination.IsDoubleStackSlot()) << destination;
         __ movq(CpuRegister(TMP), Immediate(value));
         __ movq(Address(CpuRegister(RSP), destination.GetStackIndex()), CpuRegister(TMP));
       }
+    } else if (constant->IsFloatConstant()) {
+      Immediate imm(bit_cast<float, int32_t>(constant->AsFloatConstant()->GetValue()));
+      if (destination.IsFpuRegister()) {
+        __ movl(CpuRegister(TMP), imm);
+        __ movd(destination.As<XmmRegister>(), CpuRegister(TMP));
+      } else {
+        DCHECK(destination.IsStackSlot()) << destination;
+        __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), imm);
+      }
     } else {
-      LOG(FATAL) << "Unimplemented constant type";
+      DCHECK(constant->IsDoubleConstant()) << constant->DebugName();
+      Immediate imm(bit_cast<double, int64_t>(constant->AsDoubleConstant()->GetValue()));
+      if (destination.IsFpuRegister()) {
+        __ movq(CpuRegister(TMP), imm);
+        __ movd(destination.As<XmmRegister>(), CpuRegister(TMP));
+      } else {
+        DCHECK(destination.IsDoubleStackSlot()) << destination;
+        __ movq(CpuRegister(TMP), imm);
+        __ movq(Address(CpuRegister(RSP), destination.GetStackIndex()), CpuRegister(TMP));
+      }
     }
-  } else {
-    LOG(FATAL) << "Unimplemented";
+  } else if (source.IsFpuRegister()) {
+    if (destination.IsFpuRegister()) {
+      __ movaps(destination.As<XmmRegister>(), source.As<XmmRegister>());
+    } else if (destination.IsStackSlot()) {
+      __ movss(Address(CpuRegister(RSP), destination.GetStackIndex()),
+               source.As<XmmRegister>());
+    } else {
+      DCHECK(destination.IsDoubleStackSlot());
+      __ movsd(Address(CpuRegister(RSP), destination.GetStackIndex()),
+               source.As<XmmRegister>());
+    }
   }
 }
 
@@ -1682,6 +1780,18 @@ void ParallelMoveResolverX86_64::Exchange64(int mem1, int mem2) {
           CpuRegister(ensure_scratch.GetRegister()));
 }
 
+void ParallelMoveResolverX86_64::Exchange32(XmmRegister reg, int mem) {
+  __ movl(CpuRegister(TMP), Address(CpuRegister(RSP), mem));
+  __ movss(Address(CpuRegister(RSP), mem), reg);
+  __ movd(reg, CpuRegister(TMP));
+}
+
+void ParallelMoveResolverX86_64::Exchange64(XmmRegister reg, int mem) {
+  __ movq(CpuRegister(TMP), Address(CpuRegister(RSP), mem));
+  __ movsd(Address(CpuRegister(RSP), mem), reg);
+  __ movd(reg, CpuRegister(TMP));
+}
+
 void ParallelMoveResolverX86_64::EmitSwap(size_t index) {
   MoveOperands* move = moves_.Get(index);
   Location source = move->GetSource();
@@ -1701,8 +1811,20 @@ void ParallelMoveResolverX86_64::EmitSwap(size_t index) {
     Exchange64(destination.As<CpuRegister>(), source.GetStackIndex());
   } else if (source.IsDoubleStackSlot() && destination.IsDoubleStackSlot()) {
     Exchange64(destination.GetStackIndex(), source.GetStackIndex());
+  } else if (source.IsFpuRegister() && destination.IsFpuRegister()) {
+    __ movd(CpuRegister(TMP), source.As<XmmRegister>());
+    __ movaps(source.As<XmmRegister>(), destination.As<XmmRegister>());
+    __ movd(destination.As<XmmRegister>(), CpuRegister(TMP));
+  } else if (source.IsFpuRegister() && destination.IsStackSlot()) {
+    Exchange32(source.As<XmmRegister>(), destination.GetStackIndex());
+  } else if (source.IsStackSlot() && destination.IsFpuRegister()) {
+    Exchange32(destination.As<XmmRegister>(), source.GetStackIndex());
+  } else if (source.IsFpuRegister() && destination.IsDoubleStackSlot()) {
+    Exchange64(source.As<XmmRegister>(), destination.GetStackIndex());
+  } else if (source.IsDoubleStackSlot() && destination.IsFpuRegister()) {
+    Exchange64(destination.As<XmmRegister>(), source.GetStackIndex());
   } else {
-    LOG(FATAL) << "Unimplemented";
+    LOG(FATAL) << "Unimplemented swap between " << source << " and " << destination;
   }
 }
 

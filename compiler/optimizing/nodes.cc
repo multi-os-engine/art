@@ -363,6 +363,24 @@ void HBasicBlock::AddPhi(HPhi* phi) {
   Add(&phis_, this, phi);
 }
 
+void HBasicBlock::InsertPhiAfter(HPhi* instruction, HPhi* cursor) {
+  DCHECK_EQ(instruction->GetId(), -1);
+  DCHECK_NE(cursor->GetId(), -1);
+  DCHECK_EQ(cursor->GetBlock(), this);
+  if (cursor->next_ == nullptr) {
+    cursor->next_ = instruction;
+    instruction->previous_ = cursor;
+  } else {
+    instruction->next_ = cursor->next_;
+    instruction->previous_ = cursor;
+    cursor->next_ = instruction;
+    instruction->next_->previous_ = instruction;
+  }
+  instruction->SetBlock(this);
+  instruction->SetId(GetGraph()->GetNextInstructionId());
+  UpdateInputsUsers(instruction);
+}
+
 static void Remove(HInstructionList* instruction_list,
                    HBasicBlock* block,
                    HInstruction* instruction) {
@@ -525,6 +543,12 @@ void HInstruction::ReplaceWith(HInstruction* other) {
 
   uses_ = nullptr;
   env_uses_ = nullptr;
+}
+
+void HInstruction::ReplaceInput(HInstruction* replacement, size_t index) {
+  InputAt(index)->RemoveUser(this, index);
+  SetRawInputAt(index, replacement);
+  replacement->AddUseAt(this, index);
 }
 
 size_t HInstruction::EnvironmentSize() const {

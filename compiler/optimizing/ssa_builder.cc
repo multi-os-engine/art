@@ -129,8 +129,28 @@ void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
   }
 }
 
+HInstruction* SsaBuilder::GetFloatOrDoubleEquivalent(HInstruction* value, Primitive::Type type) {
+  if (value->IsArrayGet()) {
+    value->AsArrayGet()->SetType(type);
+    return value;
+  } else if (value->IsLongConstant()) {
+    return value->AsLongConstant()->GetDoubleEquivalent();
+  } else if (value->IsIntConstant()) {
+    return value->AsIntConstant()->GetFloatEquivalent();
+  } else if (value->IsPhi()) {
+    return value->AsPhi()->GetFloatOrDoubleEquivalent(type);
+  } else {
+    return value;
+  }
+}
+
 void SsaBuilder::VisitLoadLocal(HLoadLocal* load) {
-  load->ReplaceWith(current_locals_->Get(load->GetLocal()->GetRegNumber()));
+  HInstruction* value = current_locals_->Get(load->GetLocal()->GetRegNumber());
+  if (load->GetType() != value->GetType()
+      && (load->GetType() == Primitive::kPrimFloat || load->GetType() == Primitive::kPrimDouble)) {
+    value = GetFloatOrDoubleEquivalent(value, load->GetType());
+  }
+  load->ReplaceWith(value);
   load->GetBlock()->RemoveInstruction(load);
 }
 
