@@ -500,10 +500,10 @@ ENTRY art_quick_invoke_stub
     .cfi_def_cfa_register 30
     move  $s1, $a3              # move managed thread pointer into s1
     addiu $s0, $zero, SUSPEND_CHECK_INTERVAL  # reset s0 to suspend check interval
-    addiu $t0, $a2, 16          # create space for method pointer in frame
-    srl   $t0, $t0, 4           # shift the frame size right 4
-    sll   $t0, $t0, 4           # shift the frame size left 4 to align to 16 bytes
-    subu  $sp, $sp, $t0         # reserve stack space for argument array
+    addiu $t0, $a2, 4           # create space for method pointer in frame.
+    subu  $t0, $sp, $t0         # reserve & align *stack* to 16 bytes:
+    srl   $t0, $t0, 4           # native calling convention only aligns to 8B,
+    sll   $sp, $t0, 4           # so we have to ensure ART 16B alignment ourselves.
     addiu $a0, $sp, 4           # pass stack pointer + method ptr as dest for memcpy
     jal   memcpy                # (dest, src, bytes)
     addiu $sp, $sp, -16         # make space for argument slots for memcpy
@@ -549,9 +549,11 @@ END art_quick_invoke_stub
     .extern artHandleFillArrayDataFromCode
 ENTRY art_quick_handle_fill_data
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case exception allocation triggers GC
-    lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)                   # pass referrer's Method*
-    jal    artHandleFillArrayDataFromCode # (payload offset, Array*, method, Thread*)
+    lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)   # pass referrer's Method*
     move   $a3, rSELF                     # pass Thread::Current
+    jal    artHandleFillArrayDataFromCode # (payload offset, Array*, method, Thread*)
+    addiu   $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     RETURN_IF_ZERO
 END art_quick_handle_fill_data
 
@@ -562,9 +564,11 @@ END art_quick_handle_fill_data
 ENTRY art_quick_lock_object
     beqz    $a0, .Lart_quick_throw_null_pointer_exception_gp_set
     nop
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME      # save callee saves in case we block
-    jal     artLockObjectFromCode         # (Object* obj, Thread*)
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case we block
     move    $a1, rSELF                    # pass Thread::Current
+    jal     artLockObjectFromCode         # (Object* obj, Thread*)
+    addiu   $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     RETURN_IF_ZERO
 END art_quick_lock_object
 
@@ -575,9 +579,11 @@ END art_quick_lock_object
 ENTRY art_quick_unlock_object
     beqz    $a0, .Lart_quick_throw_null_pointer_exception_gp_set
     nop
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case exception allocation triggers GC
-    jal     artUnlockObjectFromCode   # (Object* obj, Thread*)
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME # save callee saves in case exception allocation triggers GC
     move    $a1, rSELF                # pass Thread::Current
+    jal     artUnlockObjectFromCode   # (Object* obj, Thread*)
+    addiu   $sp, $sp, -16             # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     RETURN_IF_ZERO
 END art_quick_unlock_object
 
@@ -594,7 +600,8 @@ ENTRY art_quick_check_cast
     sw     $a1, 4($sp)
     sw     $a0, 0($sp)
     jal    artIsAssignableFromCode
-    nop
+    addiu  $sp, $sp, -16             # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     beqz   $v0, .Lthrow_class_cast_exception
     lw     $ra, 12($sp)
     jr     $ra
@@ -670,7 +677,8 @@ ENTRY art_quick_aput_obj
     move   $a1, $t1
     move   $a0, $t0
     jal    artIsAssignableFromCode  # (Class*, Class*)
-    nop
+    addiu $sp, $sp, -16     # reserve argument slots on the stack
+    addiu $sp, $sp, 16
     lw     $ra, 28($sp)
     lw     $t9, 12($sp)
     lw     $a2, 8($sp)
@@ -694,10 +702,12 @@ END art_quick_aput_obj
      */
     .extern artInitializeStaticStorageFromCode
 ENTRY art_quick_initialize_static_storage
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME            # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME           # save callee saves in case of GC
     # artInitializeStaticStorageFromCode(uint32_t type_idx, Method* referrer, Thread*)
-    jal     artInitializeStaticStorageFromCode
     move    $a2, rSELF                          # pass Thread::Current
+    jal     artInitializeStaticStorageFromCode
+    addiu   $sp, $sp, -16                       # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     RETURN_IF_RESULT_IS_NON_ZERO
 END art_quick_initialize_static_storage
 
@@ -706,10 +716,12 @@ END art_quick_initialize_static_storage
      */
     .extern artInitializeTypeFromCode
 ENTRY art_quick_initialize_type
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME           # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME          # save callee saves in case of GC
     # artInitializeTypeFromCode(uint32_t type_idx, Method* referrer, Thread*)
-    jal     artInitializeTypeFromCode
     move    $a2, rSELF                         # pass Thread::Current
+    jal     artInitializeTypeFromCode
+    addiu   $sp, $sp, -16                      # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     RETURN_IF_RESULT_IS_NON_ZERO
 END art_quick_initialize_type
 
@@ -719,10 +731,12 @@ END art_quick_initialize_type
      */
     .extern artInitializeTypeAndVerifyAccessFromCode
 ENTRY art_quick_initialize_type_and_verify_access
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME           # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME          # save callee saves in case of GC
     # artInitializeTypeFromCode(uint32_t type_idx, Method* referrer, Thread*)
-    jal     artInitializeTypeAndVerifyAccessFromCode
     move    $a2, rSELF                         # pass Thread::Current
+    jal     artInitializeTypeAndVerifyAccessFromCode
+    addiu   $sp, $sp, -16                      # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     RETURN_IF_RESULT_IS_NON_ZERO
 END art_quick_initialize_type_and_verify_access
     /*
@@ -730,10 +744,12 @@ END art_quick_initialize_type_and_verify_access
      */
     .extern artGetBooleanStaticFromCode
 ENTRY art_quick_get_boolean_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a1, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetBooleanStaticFromCode   # (uint32_t field_idx, const Method* referrer, Thread*)
     move   $a2, rSELF                    # pass Thread::Current
+    jal    artGetBooleanStaticFromCode   # (uint32_t field_idx, const Method* referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_boolean_static
     /*
@@ -741,10 +757,12 @@ END art_quick_get_boolean_static
      */
     .extern artGetByteStaticFromCode
 ENTRY art_quick_get_byte_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a1, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetByteStaticFromCode      # (uint32_t field_idx, const Method* referrer, Thread*)
     move   $a2, rSELF                    # pass Thread::Current
+    jal    artGetByteStaticFromCode      # (uint32_t field_idx, const Method* referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_byte_static
 
@@ -753,10 +771,12 @@ END art_quick_get_byte_static
      */
     .extern artGetCharStaticFromCode
 ENTRY art_quick_get_char_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a1, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetCharStaticFromCode      # (uint32_t field_idx, const Method* referrer, Thread*)
     move   $a2, rSELF                    # pass Thread::Current
+    jal    artGetCharStaticFromCode      # (uint32_t field_idx, const Method* referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_char_static
     /*
@@ -764,10 +784,12 @@ END art_quick_get_char_static
      */
     .extern artGetShortStaticFromCode
 ENTRY art_quick_get_short_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a1, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetShortStaticFromCode     # (uint32_t field_idx, const Method* referrer, Thread*)
     move   $a2, rSELF                    # pass Thread::Current
+    jal    artGetShortStaticFromCode     # (uint32_t field_idx, const Method* referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_short_static
 
@@ -776,10 +798,12 @@ END art_quick_get_short_static
      */
     .extern artGet32StaticFromCode
 ENTRY art_quick_get32_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a1, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGet32StaticFromCode        # (uint32_t field_idx, const Method* referrer, Thread*)
     move   $a2, rSELF                    # pass Thread::Current
+    jal    artGet32StaticFromCode        # (uint32_t field_idx, const Method* referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get32_static
 
@@ -788,10 +812,12 @@ END art_quick_get32_static
      */
     .extern artGet64StaticFromCode
 ENTRY art_quick_get64_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a1, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGet64StaticFromCode        # (uint32_t field_idx, const Method* referrer, Thread*)
     move   $a2, rSELF                    # pass Thread::Current
+    jal    artGet64StaticFromCode        # (uint32_t field_idx, const Method* referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get64_static
 
@@ -800,10 +826,12 @@ END art_quick_get64_static
      */
     .extern artGetObjStaticFromCode
 ENTRY art_quick_get_obj_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a1, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetObjStaticFromCode       # (uint32_t field_idx, const Method* referrer, Thread*)
     move   $a2, rSELF                    # pass Thread::Current
+    jal    artGetObjStaticFromCode       # (uint32_t field_idx, const Method* referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_obj_static
 
@@ -812,10 +840,12 @@ END art_quick_get_obj_static
      */
     .extern artGetBooleanInstanceFromCode
 ENTRY art_quick_get_boolean_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetBooleanInstanceFromCode # (field_idx, Object*, referrer, Thread*)
     move   $a3, rSELF                    # pass Thread::Current
+    jal    artGetBooleanInstanceFromCode # (field_idx, Object*, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_boolean_instance
     /*
@@ -823,10 +853,12 @@ END art_quick_get_boolean_instance
      */
     .extern artGetByteInstanceFromCode
 ENTRY art_quick_get_byte_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetByteInstanceFromCode    # (field_idx, Object*, referrer, Thread*)
     move   $a3, rSELF                    # pass Thread::Current
+    jal    artGetByteInstanceFromCode    # (field_idx, Object*, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_byte_instance
 
@@ -835,10 +867,12 @@ END art_quick_get_byte_instance
      */
     .extern artGetCharInstanceFromCode
 ENTRY art_quick_get_char_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetCharInstanceFromCode    # (field_idx, Object*, referrer, Thread*)
     move   $a3, rSELF                    # pass Thread::Current
+    jal    artGetCharInstanceFromCode    # (field_idx, Object*, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_char_instance
     /*
@@ -846,10 +880,12 @@ END art_quick_get_char_instance
      */
     .extern artGetShortInstanceFromCode
 ENTRY art_quick_get_short_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetShortInstanceFromCode      # (field_idx, Object*, referrer, Thread*)
     move   $a3, rSELF                    # pass Thread::Current
+    jal    artGetShortInstanceFromCode   # (field_idx, Object*, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_short_instance
 
@@ -858,11 +894,12 @@ END art_quick_get_short_instance
      */
     .extern artGet32InstanceFromCode
 ENTRY art_quick_get32_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
     move   $a3, rSELF                    # pass Thread::Current
-    jal    artGet32InstanceFromCode      # (field_idx, Object*, referrer, Thread*, $sp)
-    sw     $sp, 16($sp)                  # pass $sp
+    jal    artGet32InstanceFromCode      # (field_idx, Object*, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get32_instance
 
@@ -871,11 +908,12 @@ END art_quick_get32_instance
      */
     .extern artGet64InstanceFromCode
 ENTRY art_quick_get64_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
     move   $a3, rSELF                    # pass Thread::Current
-    jal    artGet64InstanceFromCode      # (field_idx, Object*, referrer, Thread*, $sp)
-    sw     $sp, 16($sp)                  # pass $sp
+    jal    artGet64InstanceFromCode      # (field_idx, Object*, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get64_instance
 
@@ -884,10 +922,12 @@ END art_quick_get64_instance
      */
     .extern artGetObjInstanceFromCode
 ENTRY art_quick_get_obj_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artGetObjInstanceFromCode     # (field_idx, Object*, referrer, Thread*)
     move   $a3, rSELF                    # pass Thread::Current
+    jal    artGetObjInstanceFromCode     # (field_idx, Object*, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_obj_instance
 
@@ -896,10 +936,12 @@ END art_quick_get_obj_instance
      */
     .extern artSet8StaticFromCode
 ENTRY art_quick_set8_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artSet8StaticFromCode         # (field_idx, new_val, referrer, Thread*)
     move   $a3, rSELF                    # pass Thread::Current
+    jal    artSet8StaticFromCode         # (field_idx, new_val, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_ZERO
 END art_quick_set8_static
 
@@ -908,10 +950,12 @@ END art_quick_set8_static
      */
     .extern artSet16StaticFromCode
 ENTRY art_quick_set16_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artSet16StaticFromCode        # (field_idx, new_val, referrer, Thread*, $sp)
     move   $a3, rSELF                    # pass Thread::Current
+    jal    artSet16StaticFromCode        # (field_idx, new_val, referrer, Thread*, $sp)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_ZERO
 END art_quick_set16_static
 
@@ -920,10 +964,12 @@ END art_quick_set16_static
      */
     .extern artSet32StaticFromCode
 ENTRY art_quick_set32_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artSet32StaticFromCode        # (field_idx, new_val, referrer, Thread*)
     move   $a3, rSELF                    # pass Thread::Current
+    jal    artSet32StaticFromCode        # (field_idx, new_val, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_ZERO
 END art_quick_set32_static
 
@@ -932,10 +978,12 @@ END art_quick_set32_static
      */
     .extern artSet64StaticFromCode
 ENTRY art_quick_set64_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a1, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
+    addiu  $sp, $sp, -32                 # reserve argument slots on the stack
     jal    artSet64StaticFromCode        # (field_idx, referrer, new_val, Thread*)
     sw     rSELF, 16($sp)                # pass Thread::Current
+    addiu  $sp, $sp, 32
     RETURN_IF_ZERO
 END art_quick_set64_static
 
@@ -944,10 +992,12 @@ END art_quick_set64_static
      */
     .extern artSetObjStaticFromCode
 ENTRY art_quick_set_obj_static
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a2, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artSetObjStaticFromCode       # (field_idx, new_val, referrer, Thread*)
     move   $a3, rSELF                    # pass Thread::Current
+    jal    artSetObjStaticFromCode       # (field_idx, new_val, referrer, Thread*)
+    addiu  $sp, $sp, -16                 # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RETURN_IF_ZERO
 END art_quick_set_obj_static
 
@@ -956,10 +1006,12 @@ END art_quick_set_obj_static
      */
     .extern artSet8InstanceFromCode
 ENTRY art_quick_set8_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a3, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
-    jal    artSet8InstanceFromCode      # (field_idx, Object*, new_val, referrer, Thread*)
+    addiu  $sp, $sp, -32                 # reserve argument slots on the stack
+    jal    artSet8InstanceFromCode       # (field_idx, Object*, new_val, referrer, Thread*)
     sw     rSELF, 16($sp)                # pass Thread::Current
+    addiu  $sp, $sp, 32
     RETURN_IF_ZERO
 END art_quick_set8_instance
 
@@ -968,10 +1020,12 @@ END art_quick_set8_instance
      */
     .extern artSet16InstanceFromCode
 ENTRY art_quick_set16_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a3, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
+    addiu  $sp, $sp, -32                 # reserve argument slots on the stack
     jal    artSet16InstanceFromCode      # (field_idx, Object*, new_val, referrer, Thread*)
     sw     rSELF, 16($sp)                # pass Thread::Current
+    addiu  $sp, $sp, 32
     RETURN_IF_ZERO
 END art_quick_set16_instance
 
@@ -980,10 +1034,12 @@ END art_quick_set16_instance
      */
     .extern artSet32InstanceFromCode
 ENTRY art_quick_set32_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a3, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
+    addiu  $sp, $sp, -32                 # reserve argument slots on the stack
     jal    artSet32InstanceFromCode      # (field_idx, Object*, new_val, referrer, Thread*)
     sw     rSELF, 16($sp)                # pass Thread::Current
+    addiu  $sp, $sp, 32
     RETURN_IF_ZERO
 END art_quick_set32_instance
 
@@ -992,11 +1048,13 @@ END art_quick_set32_instance
      */
     .extern artSet64InstanceFromCode
 ENTRY art_quick_set64_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $t0, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # load referrer's Method*
+    addiu  $sp, $sp, -32                 # reserve argument slots on the stack
     sw     rSELF, 20($sp)                # pass Thread::Current
     jal    artSet64InstanceFromCode      # (field_idx, Object*, new_val, referrer, Thread*)
     sw     $t0, 16($sp)                  # pass referrer's Method*
+    addiu  $sp, $sp, 32
     RETURN_IF_ZERO
 END art_quick_set64_instance
 
@@ -1005,10 +1063,12 @@ END art_quick_set64_instance
      */
     .extern artSetObjInstanceFromCode
 ENTRY art_quick_set_obj_instance
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    # save callee saves in case of GC
     lw     $a3, FRAME_SIZE_REFS_ONLY_CALLEE_SAVE($sp)  # pass referrer's Method*
+    addiu  $sp, $sp, -32                 # reserve argument slots on the stack
     jal    artSetObjInstanceFromCode     # (field_idx, Object*, new_val, referrer, Thread*)
     sw     rSELF, 16($sp)                # pass Thread::Current
+    addiu  $sp, $sp, 32
     RETURN_IF_ZERO
 END art_quick_set_obj_instance
 
@@ -1020,10 +1080,12 @@ END art_quick_set_obj_instance
      */
     .extern artResolveStringFromCode
 ENTRY art_quick_resolve_string
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case of GC
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME # save callee saves in case of GC
     # artResolveStringFromCode(Method* referrer, uint32_t string_idx, Thread*)
-    jal     artResolveStringFromCode
     move    $a2, rSELF                # pass Thread::Current
+    jal     artResolveStringFromCode
+    addiu   $sp, $sp, -16             # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     RETURN_IF_RESULT_IS_NON_ZERO
 END art_quick_resolve_string
 
@@ -1032,9 +1094,11 @@ END art_quick_resolve_string
 .macro TWO_ARG_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case of GC
-    jal     \entrypoint
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME # save callee saves in case of GC
     move    $a2, rSELF                # pass Thread::Current
+    jal     \entrypoint
+    addiu   $sp, $sp, -16             # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     \return
 END \name
 .endm
@@ -1042,9 +1106,11 @@ END \name
 .macro THREE_ARG_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case of GC
-    jal     \entrypoint
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME # save callee saves in case of GC
     move    $a3, rSELF                # pass Thread::Current
+    jal     \entrypoint
+    addiu   $sp, $sp, -16             # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     \return
 END \name
 .endm
@@ -1064,8 +1130,10 @@ ENTRY art_quick_test_suspend
     nop
 1:
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME          # save callee saves for stack crawl
-    jal    artTestSuspendFromCode              # (Thread*)
     move   $a0, rSELF
+    jal    artTestSuspendFromCode              # (Thread*)
+    addiu  $sp, $sp, -16                       # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
 END art_quick_test_suspend
 
@@ -1078,8 +1146,10 @@ ENTRY art_quick_proxy_invoke_handler
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     sw      $a0, 0($sp)            # place proxy method at bottom of frame
     move    $a2, rSELF             # pass Thread::Current
-    jal     artQuickProxyInvokeHandler  # (Method* proxy method, receiver, Thread*, SP)
     move    $a3, $sp               # pass $sp
+    jal     artQuickProxyInvokeHandler  # (Method* proxy method, receiver, Thread*, SP)
+    addiu   $sp, $sp, -16          # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     lw      $t0, THREAD_EXCEPTION_OFFSET(rSELF) # load Thread::Current()->exception_
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     bnez    $t0, 1f
@@ -1108,8 +1178,10 @@ END art_quick_imt_conflict_trampoline
 ENTRY art_quick_resolution_trampoline
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     move    $a2, rSELF             # pass Thread::Current
-    jal     artQuickResolutionTrampoline  # (Method* called, receiver, Thread*, SP)
     move    $a3, $sp               # pass $sp
+    jal     artQuickResolutionTrampoline  # (Method* called, receiver, Thread*, SP)
+    addiu   $sp, $sp, -16          # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     beqz    $v0, 1f
     lw      $a0, 0($sp)            # load resolved method to $a0
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
@@ -1121,14 +1193,75 @@ ENTRY art_quick_resolution_trampoline
     DELIVER_PENDING_EXCEPTION
 END art_quick_resolution_trampoline
 
-UNIMPLEMENTED art_quick_generic_jni_trampoline
+    .extern artQuickGenericJniTrampoline
+    .extern artQuickGenericJniEndTrampoline
+ENTRY art_quick_generic_jni_trampoline
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME
+    sw      $a0, 0($sp)            # store native ArtMethod* to bottom of stack
+    move    $s8, $sp               # save $sp
+    move    $s3, $gp               # store $gp to $s3
+
+    # prepare for call to artQuickGenericJniTrampoline(Thread*, SP)
+    move    $a0, rSELF             # pass Thread::Current
+    move    $a1, $sp               # pass $sp
+    jal     artQuickGenericJniTrampoline   # (Thread*, SP)
+    addiu   $sp, $sp, -5120        # reserve space on the stack
+
+    # The C call will have registered the complete save-frame on success.
+    # The result of the call is:
+    # v0: ptr to native code, 0 on error.
+    # v1: ptr to the bottom of the used area of the alloca, can restore stack till here.
+    beq     $v0, $zero, 1f         # check entry error
+    move    $t9, $v0               # save the code ptr
+    move    $sp, $v1               # release part of the alloca
+
+    # Load parameters from stack into registers
+    lw      $a0,   0($sp)
+    lw      $a1,   4($sp)
+    lw      $a2,   8($sp)
+
+    # Load FPRs the same as GPRs. Look at BuildNativeCallFrameStateMachine.
+    jalr    $t9                    # native call
+    lw      $a3,  12($sp)
+    addiu   $sp, $sp, 16
+
+    move    $gp, $s3   # restore $gp from $s3
+
+    # result sign extension is handled in C code
+    # prepare for call to artQuickGenericJniEndTrampoline(Thread*, result, result_f)
+    move    $a0, rSELF             # pass Thread::Current
+    move    $a2, $v0               # pass result
+    move    $a3, $v1
+    addiu   $sp, $sp, -24
+    jal     artQuickGenericJniEndTrampoline
+    s.d     $f0, 16($sp)           # pass result_f
+    addiu   $sp, $sp, 24
+
+    lw      $t0, THREAD_EXCEPTION_OFFSET(rSELF) # load Thread::Current()->exception_
+    bne     $t0, $zero, 2f         # check for pending exceptions
+    move    $sp, $s8               # tear down the alloca
+
+    # tear dpown the callee-save frame
+    RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
+
+    jr      $ra
+    nop
+
+1:
+    move    $sp, $s8               # tear down the alloca
+2:
+    RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
+    DELIVER_PENDING_EXCEPTION
+END art_quick_generic_jni_trampoline
 
     .extern artQuickToInterpreterBridge
 ENTRY art_quick_to_interpreter_bridge
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     move    $a1, rSELF             # pass Thread::Current
-    jal     artQuickToInterpreterBridge    # (Method* method, Thread*, SP)
     move    $a2, $sp               # pass $sp
+    jal     artQuickToInterpreterBridge    # (Method* method, Thread*, SP)
+    addiu   $sp, $sp, -16          # reserve argument slots on the stack
+    addiu   $sp, $sp, 16
     lw      $t0, THREAD_EXCEPTION_OFFSET(rSELF) # load Thread::Current()->exception_
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     bnez    $t0, 1f
@@ -1192,8 +1325,8 @@ art_quick_instrumentation_exit:
     l.s      $f0, 40($sp)
     l.s      $f1, 44($sp)
     jr       $t0            # return
-    addiu    $sp, $sp, 112  # 48 bytes of args + 64 bytes of callee save frame
-    .cfi_adjust_cfa_offset -112
+    addiu    $sp, $sp, 48+FRAME_SIZE_REFS_ONLY_CALLEE_SAVE  # 48 bytes of args + refs_only callee save frame
+    .cfi_adjust_cfa_offset -(48+FRAME_SIZE_REFS_ONLY_CALLEE_SAVE)
 END art_quick_instrumentation_exit
 
     /*
@@ -1203,9 +1336,11 @@ END art_quick_instrumentation_exit
     .extern artDeoptimize
 ENTRY art_quick_deoptimize
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
+    move     $a0, rSELF     # pass Thread::current
     jal      artDeoptimize  # artDeoptimize(Thread*)
                             # Returns caller method's frame size.
-    move     $a0, rSELF     # pass Thread::current
+    addiu    $sp, $sp, -16  # reserve argument slots on the stack
+    addiu    $sp, $sp, 16
 END art_quick_deoptimize
 
     /*
