@@ -537,29 +537,27 @@ void AbortTransaction(Thread* self, const char* fmt, ...) {
 }
 
 template<bool is_range, bool do_assignability_check>
-bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
+bool DoCall(MethodHelper& mh, Thread* self, ShadowFrame& shadow_frame,
             const Instruction* inst, uint16_t inst_data, JValue* result) {
   // Compute method information.
-  const DexFile::CodeItem* code_item = method->GetCodeItem();
+  const DexFile::CodeItem* code_item = mh->GetCodeItem();
   const uint16_t num_ins = (is_range) ? inst->VRegA_3rc(inst_data) : inst->VRegA_35c(inst_data);
   uint16_t num_regs;
   if (LIKELY(code_item != NULL)) {
     num_regs = code_item->registers_size_;
     DCHECK_EQ(num_ins, code_item->ins_size_);
   } else {
-    DCHECK(method->IsNative() || method->IsProxyMethod());
+    DCHECK(mh->IsNative() || mh->IsProxyMethod());
     num_regs = num_ins;
   }
 
   // Allocate shadow frame on the stack.
   const char* old_cause = self->StartAssertNoThreadSuspension("DoCall");
   void* memory = alloca(ShadowFrame::ComputeSize(num_regs));
-  ShadowFrame* new_shadow_frame(ShadowFrame::Create(num_regs, &shadow_frame, method, 0, memory));
+  ShadowFrame* new_shadow_frame(ShadowFrame::Create(num_regs, &shadow_frame, mh.Get(), 0, memory));
 
   // Initialize new shadow frame.
   const size_t first_dest_reg = num_regs - num_ins;
-  StackHandleScope<1> hs(self);
-  MethodHelper mh(hs.NewHandle(method));
   if (do_assignability_check) {
     // Slow path.
     // We might need to do class loading, which incurs a thread state change to kNative. So
@@ -569,9 +567,9 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
 
     // We need to do runtime check on reference assignment. We need to load the shorty
     // to get the exact type of each reference argument.
-    const DexFile::TypeList* params = mh.Get()->GetParameterTypeList();
+    const DexFile::TypeList* params = mh->GetParameterTypeList();
     uint32_t shorty_len = 0;
-    const char* shorty = mh.Get()->GetShorty(&shorty_len);
+    const char* shorty = mh->GetShorty(&shorty_len);
 
     // TODO: find a cleaner way to separate non-range and range information without duplicating code.
     uint32_t arg[5];  // only used in invoke-XXX.
@@ -585,7 +583,7 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
     // Handle receiver apart since it's not part of the shorty.
     size_t dest_reg = first_dest_reg;
     size_t arg_offset = 0;
-    if (!mh.Get()->IsStatic()) {
+    if (!mh->IsStatic()) {
       size_t receiver_reg = is_range ? vregC : arg[0];
       new_shadow_frame->SetVRegReference(dest_reg, shadow_frame.GetVRegReference(receiver_reg));
       ++dest_reg;
@@ -609,7 +607,7 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
               self->ThrowNewExceptionF(self->GetCurrentLocationForThrow(),
                                        "Ljava/lang/VirtualMachineError;",
                                        "Invoking %s with bad arg %d, type '%s' not instance of '%s'",
-                                       mh.Get()->GetName(), shorty_pos,
+                                       mh->GetName(), shorty_pos,
                                        o->GetClass()->GetDescriptor(&temp1),
                                        arg_type->GetDescriptor(&temp2));
               return false;
@@ -658,15 +656,15 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
 
   // Do the call now.
   if (LIKELY(Runtime::Current()->IsStarted())) {
-    if (kIsDebugBuild && mh.Get()->GetEntryPointFromInterpreter() == nullptr) {
+    if (kIsDebugBuild && mh->GetEntryPointFromInterpreter() == nullptr) {
       LOG(FATAL) << "Attempt to invoke non-executable method: " << PrettyMethod(mh.Get());
     }
     if (kIsDebugBuild && Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly() &&
-        !mh.Get()->IsNative() && !mh.Get()->IsProxyMethod() &&
-        mh.Get()->GetEntryPointFromInterpreter() == artInterpreterToCompiledCodeBridge) {
+        !mh->IsNative() && !mh->IsProxyMethod() &&
+        mh->GetEntryPointFromInterpreter() == artInterpreterToCompiledCodeBridge) {
       LOG(FATAL) << "Attempt to call compiled code when -Xint: " << PrettyMethod(mh.Get());
     }
-    (mh.Get()->GetEntryPointFromInterpreter())(self, mh, code_item, new_shadow_frame, result);
+    (mh->GetEntryPointFromInterpreter())(self, mh, code_item, new_shadow_frame, result);
   } else {
     UnstartedRuntimeInvoke(self, mh, code_item, new_shadow_frame, result, first_dest_reg);
   }
@@ -938,7 +936,7 @@ static void UnstartedRuntimeInvoke(Thread* self, MethodHelper& mh,
 // Explicit DoCall template function declarations.
 #define EXPLICIT_DO_CALL_TEMPLATE_DECL(_is_range, _do_assignability_check)                      \
   template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)                                          \
-  bool DoCall<_is_range, _do_assignability_check>(ArtMethod* method, Thread* self,              \
+  bool DoCall<_is_range, _do_assignability_check>(MethodHelper& mh, Thread* self,               \
                                                   ShadowFrame& shadow_frame,                    \
                                                   const Instruction* inst, uint16_t inst_data,  \
                                                   JValue* result)

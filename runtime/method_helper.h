@@ -40,6 +40,10 @@ class MethodHelperT {
     return method_.Get();
   }
 
+  mirror::ArtMethod* operator->() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return Get();
+  }
+
   mirror::String* GetNameAsString(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   const char* GetShorty() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
