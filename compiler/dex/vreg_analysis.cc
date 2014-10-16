@@ -378,7 +378,20 @@ bool MIRGraph::InferTypeAndSize(BasicBlock* bb, MIR* mir, bool changed) {
         changed |= SetWide(defs[1]);
         changed |= SetHigh(defs[1]);
       }
+
+      bool has_ins = (GetNumOfInVRs() > 0);
+      uint32_t first_in_vr = GetFirstInVR();
+      uint32_t last_in_vr = (GetFirstInVR() + GetNumOfInVRs()) - 1;
+
       for (int i = 0; i < ssa_rep->num_uses; i++) {
+        if (has_ins && ((uint32_t) uses[i] >= first_in_vr && (uint32_t) uses[i] <= last_in_vr)) {
+          if (!reg_location_[uses[i]].fp && defined_fp) {
+            // If the SSA register falls within [FirstIn,LastIn] then it is the first
+            // definition of a vreg that is a parameter to this method. If we were about to
+            // infer that it is a float when it wasn't previously, do not do this.
+            continue;
+          }
+        }
         changed |= SetFp(uses[i], defined_fp);
         changed |= SetCore(uses[i], defined_core);
         changed |= SetRef(uses[i], defined_ref);
