@@ -90,6 +90,9 @@ ART_TEST_RUN_TEST_RELOCATE_NO_PATCHOAT ?= $(ART_TEST_FULL)
 # Do you want run-tests without a dex2oat?
 ART_TEST_RUN_TEST_NO_DEX2OAT ?= $(ART_TEST_FULL)
 
+ART_TEST_RUN_TEST_DEBUG ?= true
+ART_TEST_RUN_TEST_NDEBUG ?= $(ART_TEST_FULL)
+
 # Do you want failed tests to have their artifacts cleaned up?
 ART_TEST_RUN_TEST_ALWAYS_CLEAN ?= true
 
