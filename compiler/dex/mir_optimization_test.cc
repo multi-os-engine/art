@@ -251,7 +251,7 @@ class ClassInitCheckEliminationTest : public MirOptimizationTest {
         field_info.flags_ = MirSFieldLoweringInfo::kFlagIsStatic;
       }
       ASSERT_EQ(def->declaring_dex_file != 0u, field_info.IsResolved());
-      ASSERT_FALSE(field_info.IsInitialized());
+      ASSERT_FALSE(field_info.IsClassInitialized());
       cu_.mir_graph->sfield_lowering_infos_.push_back(field_info);
     }
   }
@@ -365,7 +365,7 @@ TEST_F(ClassInitCheckEliminationTest, SingleBlock) {
   ASSERT_EQ(arraysize(expected_ignore_clinit_check), mir_count_);
   for (size_t i = 0u; i != arraysize(mirs); ++i) {
     EXPECT_EQ(expected_ignore_clinit_check[i],
-              (mirs_[i].optimization_flags & MIR_IGNORE_CLINIT_CHECK) != 0) << i;
+              (mirs_[i].optimization_flags & MIR_CLASS_IS_INITIALIZED) != 0) << i;
   }
 }
 
@@ -429,7 +429,7 @@ TEST_F(ClassInitCheckEliminationTest, Diamond) {
   ASSERT_EQ(arraysize(expected_ignore_clinit_check), mir_count_);
   for (size_t i = 0u; i != arraysize(mirs); ++i) {
     EXPECT_EQ(expected_ignore_clinit_check[i],
-              (mirs_[i].optimization_flags & MIR_IGNORE_CLINIT_CHECK) != 0) << i;
+              (mirs_[i].optimization_flags & MIR_CLASS_IS_INITIALIZED) != 0) << i;
   }
 }
 
@@ -455,7 +455,7 @@ TEST_F(ClassInitCheckEliminationTest, Loop) {
   ASSERT_EQ(arraysize(expected_ignore_clinit_check), mir_count_);
   for (size_t i = 0u; i != arraysize(mirs); ++i) {
     EXPECT_EQ(expected_ignore_clinit_check[i],
-              (mirs_[i].optimization_flags & MIR_IGNORE_CLINIT_CHECK) != 0) << i;
+              (mirs_[i].optimization_flags & MIR_CLASS_IS_INITIALIZED) != 0) << i;
   }
 }
 
@@ -489,7 +489,7 @@ TEST_F(ClassInitCheckEliminationTest, Catch) {
   ASSERT_EQ(arraysize(expected_ignore_clinit_check), mir_count_);
   for (size_t i = 0u; i != arraysize(mirs); ++i) {
     EXPECT_EQ(expected_ignore_clinit_check[i],
-              (mirs_[i].optimization_flags & MIR_IGNORE_CLINIT_CHECK) != 0) << i;
+              (mirs_[i].optimization_flags & MIR_CLASS_IS_INITIALIZED) != 0) << i;
   }
 }
 

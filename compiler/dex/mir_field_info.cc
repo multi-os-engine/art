@@ -110,16 +110,28 @@ void MirSFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
         &it->declaring_dex_file_, &it->declaring_class_idx_, &it->declaring_field_idx_);
     bool is_volatile = compiler_driver->IsFieldVolatile(resolved_field) ? 1u : 0u;
 
-    bool is_referrers_class, is_initialized;
     std::pair<bool, bool> fast_path = compiler_driver->IsFastStaticField(
-        dex_cache.Get(), referrer_class.Get(), resolved_field, field_idx, &it->field_offset_,
-        &it->storage_index_, &is_referrers_class, &is_initialized);
-    it->flags_ = kFlagIsStatic |
+        dex_cache.Get(), referrer_class.Get(), resolved_field, field_idx, &it->storage_index_);
+    uint16_t flags = kFlagIsStatic |
         (is_volatile ? kFlagIsVolatile : 0u) |
         (fast_path.first ? kFlagFastGet : 0u) |
-        (fast_path.second ? kFlagFastPut : 0u) |
-        (is_referrers_class ? kFlagIsReferrersClass : 0u) |
-        (is_initialized ? kFlagIsInitialized : 0u);
+        (fast_path.second ? kFlagFastPut : 0u);
+    if (fast_path.first) {
+      it->field_offset_ = resolved_field->GetOffset();
+      mirror::Class* fields_class = resolved_field->GetDeclaringClass();
+      if (fields_class == referrer_class.Get()) {
+        flags |= kFlagIsReferrersClass | kFlagClassIsInitialized;
+      } else {
+        if (fields_class->IsInitialized()) {
+          flags |= kFlagClassIsInitialized;
+        }
+        if (compiler_driver->CanAssumeTypeIsPresentInDexCache(*dex_cache->GetDexFile(),
+                                                              it->storage_index_)) {
+          flags |= kFlagClassIsInDexCache;
+        }
+      }
+    }
+    it->flags_ = flags;
   }
 }
 

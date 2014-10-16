@@ -240,13 +240,11 @@ class CompilerDriver {
       mirror::ArtField* resolved_field, uint16_t field_idx)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Can we fast-path an SGET/SPUT access to a static field? If yes, compute the field offset,
-  // the type index of the declaring class in the referrer's dex file and whether the declaring
-  // class is the referrer's class or at least can be assumed to be initialized.
+  // Can we fast-path an SGET/SPUT access to a static field? If yes, compute the type index
+  // of the declaring class in the referrer's dex file.
   std::pair<bool, bool> IsFastStaticField(
       mirror::DexCache* dex_cache, mirror::Class* referrer_class,
-      mirror::ArtField* resolved_field, uint16_t field_idx, MemberOffset* field_offset,
-      uint32_t* storage_index, bool* is_referrers_class, bool* is_initialized)
+      mirror::ArtField* resolved_field, uint16_t field_idx, uint32_t* storage_index)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Resolve a method. Returns nullptr on failure, including incompatible class change.

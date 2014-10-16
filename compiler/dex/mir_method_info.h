@@ -123,6 +123,10 @@ class MirMethodLoweringInfo : public MirMethodInfo {
     return (flags_ & kFlagFastPath) != 0u;
   }
 
+  bool IsReferrersClass() const {
+    return (flags_ & kFlagIsReferrersClass) != 0;
+  }
+
   bool NeedsClassInitialization() const {
     return (flags_ & kFlagNeedsClassInitialization) != 0u;
   }
@@ -162,11 +166,13 @@ class MirMethodLoweringInfo : public MirMethodInfo {
     kBitInvokeTypeEnd = kBitInvokeTypeBegin + 3,  // 3 bits for invoke type.
     kBitSharpTypeBegin,
     kBitSharpTypeEnd = kBitSharpTypeBegin + 3,  // 3 bits for sharp type.
-    kBitNeedsClassInitialization = kBitSharpTypeEnd,
+    kBitIsReferrersClass = kBitSharpTypeEnd,
+    kBitNeedsClassInitialization,
     kMethodLoweringInfoEnd
   };
   COMPILE_ASSERT(kMethodLoweringInfoEnd <= 16, too_many_flags);
   static constexpr uint16_t kFlagFastPath = 1u << kBitFastPath;
+  static constexpr uint16_t kFlagIsReferrersClass = 1u << kBitIsReferrersClass;
   static constexpr uint16_t kFlagNeedsClassInitialization = 1u << kBitNeedsClassInitialization;
   static constexpr uint16_t kInvokeTypeMask = 7u;
   COMPILE_ASSERT((1u << (kBitInvokeTypeEnd - kBitInvokeTypeBegin)) - 1u == kInvokeTypeMask,
