@@ -35,8 +35,13 @@ class MethodHelperT {
     return method_->GetInterfaceMethodIfProxy();
   }
 
-  // GetMethod() != Get() for proxy methods.
+  // Returns the wrapped method. Note GetMethod() != Get() for proxy methods.
   mirror::ArtMethod* Get() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return method_.Get();
+  }
+
+  // Returns the wrapped method. This is to shorten "mh.Get()->" to "mh->" for convenience.
+  mirror::ArtMethod* operator->() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return method_.Get();
   }
 

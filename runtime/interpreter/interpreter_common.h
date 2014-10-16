@@ -97,7 +97,7 @@ void RecordArrayElementsInTransaction(mirror::Array* array, int32_t count)
 // DoInvokeVirtualQuick functions.
 // Returns true on success, otherwise throws an exception and returns false.
 template<bool is_range, bool do_assignability_check>
-bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
+bool DoCall(MethodHelper& mh, Thread* self, ShadowFrame& shadow_frame,
             const Instruction* inst, uint16_t inst_data, JValue* result);
 
 // Handles invoke-XXX/range instructions.
@@ -109,19 +109,20 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
   const uint32_t vregC = (is_range) ? inst->VRegC_3rc() : inst->VRegC_35c();
   Object* receiver = (type == kStatic) ? nullptr : shadow_frame.GetVRegReference(vregC);
   mirror::ArtMethod* sf_method = shadow_frame.GetMethod();
-  ArtMethod* const method = FindMethodFromCode<type, do_access_check>(
-      method_idx, &receiver, &sf_method, self);
+  StackHandleScope<1> hs(self);
+  MethodHelper mh(hs.NewHandle(FindMethodFromCode<type, do_access_check>(
+      method_idx, &receiver, &sf_method, self)));
   // The shadow frame should already be pushed, so we don't need to update it.
-  if (UNLIKELY(method == nullptr)) {
+  if (UNLIKELY(mh.Get() == nullptr)) {
     CHECK(self->IsExceptionPending());
     result->SetJ(0);
     return false;
-  } else if (UNLIKELY(method->IsAbstract())) {
-    ThrowAbstractMethodError(method);
+  } else if (UNLIKELY(mh->IsAbstract())) {
+    ThrowAbstractMethodError(mh.Get());
     result->SetJ(0);
     return false;
   } else {
-    return DoCall<is_range, do_access_check>(method, self, shadow_frame, inst, inst_data, result);
+    return DoCall<is_range, do_access_check>(mh, self, shadow_frame, inst, inst_data, result);
   }
 }
 
@@ -141,18 +142,19 @@ static inline bool DoInvokeVirtualQuick(Thread* self, ShadowFrame& shadow_frame,
   }
   const uint32_t vtable_idx = (is_range) ? inst->VRegB_3rc() : inst->VRegB_35c();
   CHECK(receiver->GetClass()->ShouldHaveEmbeddedImtAndVTable());
-  ArtMethod* const method = receiver->GetClass()->GetEmbeddedVTableEntry(vtable_idx);
-  if (UNLIKELY(method == nullptr)) {
+  StackHandleScope<1> hs(self);
+  MethodHelper mh(hs.NewHandle(receiver->GetClass()->GetEmbeddedVTableEntry(vtable_idx)));
+  if (UNLIKELY(mh.Get() == nullptr)) {
     CHECK(self->IsExceptionPending());
     result->SetJ(0);
     return false;
-  } else if (UNLIKELY(method->IsAbstract())) {
-    ThrowAbstractMethodError(method);
+  } else if (UNLIKELY(mh->IsAbstract())) {
+    ThrowAbstractMethodError(mh.Get());
     result->SetJ(0);
     return false;
   } else {
     // No need to check since we've been quickened.
-    return DoCall<is_range, false>(method, self, shadow_frame, inst, inst_data, result);
+    return DoCall<is_range, false>(mh, self, shadow_frame, inst, inst_data, result);
   }
 }
 
