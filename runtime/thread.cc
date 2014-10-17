@@ -409,6 +409,8 @@ Thread* Thread::Attach(const char* thread_name, bool as_daemon, jobject thread_g
     }
   }
 
+  Dbg::PostThreadStart(self);
+
   return self;
 }
 
