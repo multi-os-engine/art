@@ -34,7 +34,7 @@ class HInstruction;
  */
 class Location : public ValueObject {
  public:
-  static constexpr bool kDiesAtEntry = true;
+  static constexpr bool kNoOutputOverlap = false;
 
   enum Kind {
     kInvalid = 0,
@@ -373,8 +373,7 @@ class LocationSummary : public ArenaObject {
 
   LocationSummary(HInstruction* instruction, CallKind call_kind = kNoCall);
 
-  void SetInAt(uint32_t at, Location location, bool dies_at_entry = false) {
-    dies_at_entry_.Put(at, dies_at_entry);
+  void SetInAt(uint32_t at, Location location) {
     inputs_.Put(at, location);
   }
 
@@ -386,7 +385,8 @@ class LocationSummary : public ArenaObject {
     return inputs_.Size();
   }
 
-  void SetOut(Location location) {
+  void SetOut(Location location, bool overlaps = true) {
+    output_overlaps_ = overlaps;
     output_ = Location(location);
   }
 
@@ -451,21 +451,26 @@ class LocationSummary : public ArenaObject {
 
   bool InputOverlapsWithOutputOrTemp(uint32_t input, bool is_environment) const {
     if (is_environment) return true;
-    Location location = Out();
-    if (input == 0 && location.IsUnallocated() && location.GetPolicy() == Location::kSameAsFirstInput) {
+    if ((input == 0)
+        && output_.IsUnallocated()
+        && (output_.GetPolicy() == Location::kSameAsFirstInput)) {
       return false;
     }
-    if (dies_at_entry_.Get(input)) {
+    if (inputs_.Get(input).IsRegister() || inputs_.Get(input).IsFpuRegister()) {
       return false;
     }
     return true;
+  }
+
+  bool OutputOverlapsWithInputs() const {
+    return output_overlaps_;
   }
 
  private:
   GrowableArray<Location> inputs_;
   GrowableArray<Location> temps_;
   GrowableArray<Location> environment_;
-  GrowableArray<bool> dies_at_entry_;
+  bool output_overlaps_;
   Location output_;
   const CallKind call_kind_;
 
