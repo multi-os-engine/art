@@ -16,8 +16,17 @@
 
 #include "compiler_driver.h"
 
+#if defined(HAVE_ANDROID_OS) && defined(__i386__)
+#undef HAVE_ANDROID_OS
+#define WORK_AROUND_BUGGY_TRACE 1
+#endif
+
 #define ATRACE_TAG ATRACE_TAG_DALVIK
 #include <utils/Trace.h>
+
+#ifdef WORK_AROUND_BUGGY_TRACE
+#define HAVE_ANDROID_OS 1
+#endif
 
 #include <vector>
 #include <unistd.h>
