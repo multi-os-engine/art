@@ -1781,9 +1781,8 @@ static int32_t FormLength(uint32_t att) {
   }
 }
 
-class DebugTag {
+class DebugTag FINAL {
  public:
-  const uint32_t index_;
   ~DebugTag() {}
   // Creates a new tag and moves data pointer up to the start of the next one.
   // nullptr means error.
@@ -1820,12 +1819,16 @@ class DebugTag {
     return size_;
   }
 
-  bool HasChild() {
+  bool HasChild() const {
     return has_child_;
   }
 
-  uint32_t GetTagNumber() {
+  uint32_t GetTagNumber() const {
     return tag_;
+  }
+
+  uint32_t GetIndex() const {
+    return index_;
   }
 
   // Gets the offset of a particular attribute in this tag structure.
@@ -1857,6 +1860,8 @@ class DebugTag {
     size_map_.insert(std::pair<uint32_t, uint32_t>(type, attr_size));
     size_ += attr_size;
   }
+
+  const uint32_t index_;
   std::map<uint32_t, uint32_t> off_map_;
   std::map<uint32_t, uint32_t> size_map_;
   uint32_t size_;
@@ -1884,7 +1889,7 @@ class DebugAbbrev {
       if (tag.get() == nullptr) {
         return false;
       } else {
-        tags_.insert(std::pair<uint32_t, uint32_t>(tag->index_, tag_list_.size()));
+        tags_.insert(std::pair<uint32_t, uint32_t>(tag->GetIndex(), tag_list_.size()));
         tag_list_.push_back(std::move(tag));
       }
     }
