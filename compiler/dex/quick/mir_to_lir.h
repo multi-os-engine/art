@@ -1322,6 +1322,25 @@ class Mir2Lir : public Backend {
     virtual void GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir);
 
     /**
+     * @brief Used as a transition gate for generalization of the select instruction.
+     * @details The select instruction used to encode information differently, but was
+     * not general enough. It has been extended to allow define and uses of wide, and
+     * also different types (constant, VR, or wide VR) for the values being compared
+     * and the result used after comparison. However, the implementations of the backends
+     * still only supports the subset. Until they get generalized, they should use
+     * this transition gate.
+     * Old meaning: Single define of VR. The first use was of VR being compared to zero.
+     * The second and third uses were VRs for the non-const case.
+     * New meaning: Can define non-wide or wide VR. The uses in order: LHS operand of
+     * comparison, RHS of comparison, true case result, false case result. For each
+     * of these, the type can be constant, VR, or wide VR.
+     * @param select_mir The select instruction.
+     * @return Returns true if the current encoding is fully representable via the
+     * implementation of the old meaning.
+     */
+    virtual bool GenSelectGate(MIR* select_mir);
+
+    /**
      * @brief Lowers the kMirOpSelect MIR into LIR.
      * @param bb The basic block in which the MIR is from.
      * @param mir The MIR whose opcode is kMirOpSelect.

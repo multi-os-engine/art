@@ -54,6 +54,8 @@ class MirOptimizationTest : public testing::Test {
     uint32_t vA;
     uint32_t vB;
     uint32_t vC;
+    uint32_t arg0;
+    uint32_t arg1;
   };
 
 #define DEF_SUCC0() \
@@ -80,17 +82,19 @@ class MirOptimizationTest : public testing::Test {
     { type, succ, pred }
 
 #define DEF_SGET_SPUT(bb, opcode, vA, field_info) \
-    { bb, opcode, field_info, vA, 0u, 0u }
+    { bb, opcode, field_info, vA, 0u, 0u, 0u, 0u }
 #define DEF_IGET_IPUT(bb, opcode, vA, vB, field_info) \
-    { bb, opcode, field_info, vA, vB, 0u }
+    { bb, opcode, field_info, vA, vB, 0u, 0u, 0u }
 #define DEF_AGET_APUT(bb, opcode, vA, vB, vC) \
-    { bb, opcode, 0u, vA, vB, vC }
+    { bb, opcode, 0u, vA, vB, vC, 0u, 0u }
 #define DEF_INVOKE(bb, opcode, vC, method_info) \
-    { bb, opcode, method_info, 0u, 0u, vC }
+    { bb, opcode, method_info, 0u, 0u, vC, 0u, 0u }
 #define DEF_OTHER1(bb, opcode, vA) \
-    { bb, opcode, 0u, vA, 0u, 0u }
+    { bb, opcode, 0u, vA, 0u, 0u, 0u, 0u }
 #define DEF_OTHER2(bb, opcode, vA, vB) \
-    { bb, opcode, 0u, vA, vB, 0u }
+    { bb, opcode, 0u, vA, vB, 0u, 0u, 0u }
+#define DEF_OTHER5(bb, opcode, vA, vB, vC, arg0, arg1) \
+    { bb, opcode, 0u, vA, vB, vC, arg0, arg1 }
 
   void DoPrepareBasicBlocks(const BBDef* defs, size_t count) {
     cu_.mir_graph->block_id_map_.clear();
@@ -160,6 +164,18 @@ class MirOptimizationTest : public testing::Test {
         DEF_BB(kDalvikByteCode, DEF_SUCC1(2), DEF_PRED2(4, 5)),
     };
     PrepareBasicBlocks(bbs);
+  }
+
+  /**
+   * @brief Used to prepare a diamond shape CFG.
+   * @details This differs from PrepareDiamond in that one of the predecessors
+   * of the merge point gets there via use of goto (a common pattern caused
+   * by dex code).
+   */
+  void PrepareDiamondGoto() {
+    PrepareDiamond();
+    BasicBlock* bb = cu_.mir_graph->GetBasicBlock(5);
+    std::swap(bb->taken, bb->fall_through);
   }
 
   void PrepareLoop() {
@@ -251,6 +267,8 @@ class MirOptimizationTest : public testing::Test {
       mir->dalvikInsn.vA = def->vA;
       mir->dalvikInsn.vB = def->vB;
       mir->dalvikInsn.vC = def->vC;
+      mir->dalvikInsn.arg[0] = def->arg0;
+      mir->dalvikInsn.arg[1] = def->arg1;
       mir->ssa_rep = nullptr;
       mir->offset = 2 * i;  // All insns need to be at least 2 code units long.
       mir->optimization_flags = 0u;
@@ -262,6 +280,7 @@ class MirOptimizationTest : public testing::Test {
         cu_.arena.Alloc(sizeof(DexFile::CodeItem), kArenaAllocMisc));
     memset(code_item_, 0, sizeof(DexFile::CodeItem));
     code_item_->insns_size_in_code_units_ = 2u * count;
+    code_item_->registers_size_ = 10;
     cu_.mir_graph->current_code_item_ = code_item_;
   }
 
@@ -878,5 +897,99 @@ TEST_F(NullCheckEliminationTest, Catch) {
 
 // Undefine MIR_DEF for null check elimination.
 #undef MIR_DEF
+
+class SelectOptimizationTest : public MirOptimizationTest {
+ protected:
+  void PerformBBOptimizations() {
+    cu_.mir_graph->CalculateBasicBlockInformation();
+    PreOrderDfsIterator iter(cu_.mir_graph.get());
+    for (BasicBlock* bb = iter.Next(); bb != NULL; bb = iter.Next()) {
+      cu_.mir_graph->BasicBlockOptSelect(bb, bb->last_mir_insn);
+    }
+  }
+
+  void CheckMirEquality(MIR* mir1, MIRDef mir2) {
+    EXPECT_EQ(mir1->dalvikInsn.opcode, mir2.opcode);
+    EXPECT_EQ(mir1->dalvikInsn.vA, mir2.vA);
+    EXPECT_EQ(mir1->dalvikInsn.vB, mir2.vB);
+    EXPECT_EQ(mir1->dalvikInsn.vC, mir2.vC);
+    EXPECT_EQ(mir1->dalvikInsn.arg[0], mir2.arg0);
+    EXPECT_EQ(mir1->dalvikInsn.arg[1], mir2.arg1);
+  }
+
+  bool CheckBbEquality(BasicBlock* bb1, BBDef bb2) {
+    if (bb1->block_type != bb2.type) {
+      return false;
+    }
+
+    return true;
+  }
+
+  template <size_t mir_count, size_t bb_count>
+  void TestExpected(const MIRDef (&expected_mirs)[mir_count], const BBDef (&expected_bbs)[bb_count]) {
+    EXPECT_EQ(mir_count, mir_count_);
+    EXPECT_EQ(bb_count, cu_.mir_graph->num_blocks_);
+    for (size_t i = 0u; i < mir_count; i++) {
+      CheckMirEquality(&mirs_[i], expected_mirs[i]);
+    }
+    // Skip null block.
+    for (size_t i = 1u; i < bb_count; i++) {
+      EXPECT_TRUE(CheckBbEquality(cu_.mir_graph->GetBasicBlock(i), expected_bbs[i]));
+    }
+  }
+
+  SelectOptimizationTest() : MirOptimizationTest() {
+  }
+};
+
+TEST_F(SelectOptimizationTest, DiamondConst) {
+  static const MIRDef mirs[] = {
+    DEF_OTHER1(3u, Instruction::IF_EQZ, 1u),
+    DEF_OTHER2(4u, Instruction::CONST, 0u, 3u),
+    DEF_OTHER2(5u, Instruction::CONST, 0u, 4u),
+    DEF_OTHER1(6u, Instruction::RETURN, 0u),
+  };
+
+  static const MIRDef expected_mirs[] = {
+    // TODO The select instruction format has been changed. Update test to match it.
+    DEF_OTHER5(3u, static_cast<Instruction::Code>(kMirOpSelect), 0u, 4u, 3u, 1u, 1u),
+    DEF_OTHER2(4u, static_cast<Instruction::Code>(kMirOpNop), 0u, 3u),
+    DEF_OTHER2(5u, static_cast<Instruction::Code>(kMirOpNop), 0u, 4u),
+    DEF_OTHER1(6u, Instruction::RETURN, 0u),
+  };
+
+  static const BBDef expected_bbs[] = {
+      DEF_BB(kNullBlock, DEF_SUCC0(), DEF_PRED0()),
+      DEF_BB(kEntryBlock, DEF_SUCC1(3), DEF_PRED0()),
+      DEF_BB(kExitBlock, DEF_SUCC0(), DEF_PRED1(6)),
+      DEF_BB(kDalvikByteCode, DEF_SUCC1(4), DEF_PRED1(1)),
+      DEF_BB(kDalvikByteCode, DEF_SUCC1(6), DEF_PRED1(3)),
+      DEF_BB(kDead, DEF_SUCC0(), DEF_PRED0()),
+      DEF_BB(kDalvikByteCode, DEF_SUCC1(2), DEF_PRED1(4)),
+  };
+
+  PrepareDiamond();
+  PrepareMIRs(mirs);
+  PerformBBOptimizations();
+  TestExpected(expected_mirs, expected_bbs);
+}
+
+TEST_F(SelectOptimizationTest, DiamondGotoConst) {
+}
+
+TEST_F(SelectOptimizationTest, DiamondMove) {
+}
+
+TEST_F(SelectOptimizationTest, DiamondGotoMove) {
+}
+
+TEST_F(SelectOptimizationTest, DifferentDefs) {
+}
+
+TEST_F(SelectOptimizationTest, MismatchedMoveConst) {
+}
+
+TEST_F(SelectOptimizationTest, BinaryConditional) {
+}
 
 }  // namespace art
