@@ -33,6 +33,7 @@ public class Main {
 
   public static void main(String[] args) {
     mul();
+    neg();
   }
 
   public static void mul() {
@@ -51,6 +52,25 @@ public class Main {
     expectEquals(36L, $opt$Mul(-12L, -3L));
     expectEquals(33L, $opt$Mul(1L, 3L) * 11);
     expectEquals(240518168583L, $opt$Mul(34359738369L, 7L)); // (2^35 + 1) * 7
+
+    $opt$InplaceNegOne(1);
+  }
+
+  public static void neg() {
+    expectEquals(-1, $opt$Neg(1));
+    expectEquals(1, $opt$Neg(-1));
+    expectEquals(0, $opt$Neg(0));
+    expectEquals(51, $opt$Neg(-51));
+    expectEquals(-51, $opt$Neg(51));
+    expectEquals(2147483647, $opt$Neg(-2147483647));  // (2^31 - 1)
+    expectEquals(-2147483647, $opt$Neg(2147483647));  // -(2^31 - 1)
+    // In two's complement negate, -INT_MIN == INT_MIN.
+    expectEquals(-2147483648, $opt$Neg(-2147483648)); // -(2^31)
+  }
+
+  public static void $opt$InplaceNegOne(int a) {
+    a = -a;
+    expectEquals(-1, a);
   }
 
   static int $opt$Mul(int a, int b) {
@@ -61,4 +81,7 @@ public class Main {
     return a * b;
   }
 
+  static int $opt$Neg(int a){
+    return -a;
+  }
 }
