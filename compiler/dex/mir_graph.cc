@@ -877,14 +877,20 @@ uint64_t MIRGraph::GetDataFlowAttributes(MIR* mir) {
 
 // TODO: use a configurable base prefix, and adjust callers to supply pass name.
 /* Dump the CFG into a DOT graph */
-void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suffix) {
+void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suffix, const char* filename) {
   FILE* file;
   static AtomicInteger cnt(0);
 
   // Increment counter to get a unique file number.
   cnt++;
 
-  std::string fname(PrettyMethod(cu_->method_idx, *cu_->dex_file));
+  std::string fname;
+  if (filename == nullptr) {
+    fname.append(PrettyMethod(cu_->method_idx, *cu_->dex_file));
+  } else {
+    fname.append(filename);
+  }
+
   ReplaceSpecialChars(fname);
   fname = StringPrintf("%s%s%x%s_%d.dot", dir_prefix, fname.c_str(),
                       GetBasicBlock(GetEntryBlock()->fall_through)->start_offset,
@@ -1206,6 +1212,46 @@ static void FillTypeSizeString(uint32_t type_size, std::string* decoded_mir) {
   decoded_mir->append(ss.str());
 }
 
+/**
+ * @brief Helper function to print the uses in the select instructions.
+ * @details Contains logic to deal with printing a specific use whose
+ * type can be constant, VR, or wide VR. It also handles case when ssa
+ * representation does not exist.
+ * @param ss The string stream to print to.
+ * @param mir_graph The MIRGraph.
+ * @param ssa_rep The ssa representation of the select instruction.
+ * @param operand_value The value in the operand currently being handled.
+ * @param operand_kind The type of the operand being handled.
+ * @param use_idx The use index in the ssa representation of the current
+ * operand.
+ * @return Returns an updated use_idx after including the ssa uses for
+ * the operand.
+ */
+static int SelectOperandHelper(std::stringstream& ss, MIRGraph* mir_graph,
+                               SSARepresentation* ssa_rep, uint32_t operand_value,
+                               SelectInstructionKind operand_kind, int use_idx) {
+  if (operand_kind == kSelectConst) {
+    ss << " #" << operand_value;
+  } else {
+    DCHECK(operand_kind == kSelectMove || operand_kind == kSelectMoveWide);
+    if (ssa_rep != nullptr) {
+      DCHECK_LT(use_idx, ssa_rep->num_uses);
+      ss << " " << mir_graph->GetSSANameWithConst(ssa_rep->uses[use_idx++], false);
+      if (operand_kind == kSelectMoveWide) {
+        DCHECK_LT(use_idx, ssa_rep->num_uses);
+        ss << ", " << mir_graph->GetSSANameWithConst(ssa_rep->uses[use_idx++], false);
+      }
+    } else {
+      ss << " v" << operand_value;
+      if (operand_kind == kSelectMoveWide) {
+        ss << ", v" << (operand_value + 1);
+      }
+    }
+  }
+
+  return use_idx;
+}
+
 void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string* decoded_mir) {
   DCHECK(decoded_mir != nullptr);
   int opcode = mir->dalvikInsn.opcode;
@@ -1248,6 +1294,54 @@ void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string* decoded_mir
         decoded_mir->append(StringPrintf(" v%d = v%d", mir->dalvikInsn.vA, mir->dalvikInsn.vB));
       }
       break;
+    case kMirOpCondSelect: {
+      const MIR::DecodedInstruction& d_insn = mir->dalvikInsn;
+      SelectInstructionKind type_a0 = static_cast<SelectInstructionKind>(d_insn.arg[3] & 0xffff);
+      SelectInstructionKind type_a1 = static_cast<SelectInstructionKind>((d_insn.arg[3] >> 16) & 0xffff);
+      SelectInstructionKind type_b = static_cast<SelectInstructionKind>(d_insn.arg[2] & 0xffff);
+      SelectInstructionKind type_c = static_cast<SelectInstructionKind>((d_insn.arg[2] >> 16) & 0xffff);
+      SelectInstructionKind type_a = static_cast<SelectInstructionKind>(d_insn.arg[4] & 0xffff);
+      std::stringstream ss;
+
+      // 1) Print the VRs that are being defined.
+      if (ssa_rep != nullptr) {
+        DCHECK_GE(ssa_rep->num_defs, 1);
+        ss << " " << GetSSANameWithConst(ssa_rep->defs[0], false);
+        if (type_a == kSelectMoveWide) {
+          DCHECK_GT(ssa_rep->num_defs, 1);
+          ss << ", " << GetSSANameWithConst(ssa_rep->defs[1], false);
+        }
+        ss << " =";
+      } else {
+        ss << " v" << d_insn.vA;
+        if (type_a == kSelectMoveWide) {
+          ss << ", v" << d_insn.vA + 1;
+        }
+        ss << " =";
+      }
+
+      // 2) Print the LHS of the comparison.
+      int vr_use_num = 0;
+      vr_use_num = SelectOperandHelper(ss, this, ssa_rep, d_insn.arg[0], type_a0, vr_use_num);
+
+      // 3) Print the comparison.
+      ss << " " << mir->meta.ccode;
+
+      // 4) Print the RHS of the comparison.
+      vr_use_num = SelectOperandHelper(ss, this, ssa_rep, d_insn.arg[1], type_a1, vr_use_num);
+
+      // 5) Print the result in case of true.
+      ss << " ?";
+      vr_use_num = SelectOperandHelper(ss, this, ssa_rep, d_insn.vB, type_b, vr_use_num);
+
+      // 6) Print the result in case of false.
+      ss << " :";
+      vr_use_num = SelectOperandHelper(ss, this, ssa_rep, d_insn.vC, type_c, vr_use_num);
+
+      //
+      decoded_mir->append(ss.str());
+      break;
+    }
     case kMirOpFusedCmplFloat:
     case kMirOpFusedCmpgFloat:
     case kMirOpFusedCmplDouble:
@@ -2448,7 +2542,7 @@ int MIR::DecodedInstruction::FlagsOf() const {
       return Instruction::kContinue | Instruction::kThrow;
     case kMirOpCheckPart2:
       return Instruction::kContinue;
-    case kMirOpSelect:
+    case kMirOpCondSelect:
       return Instruction::kContinue;
     case kMirOpConstVector:
       return Instruction::kContinue;

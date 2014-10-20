@@ -839,7 +839,7 @@ const uint64_t MIRGraph::oat_data_flow_attributes_[kMirOpLast] = {
   0,
 
   // 10D MIR_SELECT
-  DF_DA | DF_UB,
+  DF_FORMAT_EXTENDED,
 
   // 10E MirOpConstVector
   0,
@@ -951,6 +951,47 @@ void MIRGraph::HandleExtended(ArenaBitVector* use_v, ArenaBitVector* def_v,
         HandleLiveInUse(use_v, def_v, live_in_v, d_insn.vB + 1);
       }
       break;
+    case kMirOpCondSelect: {
+      SelectInstructionKind type_a0 = static_cast<SelectInstructionKind>(d_insn.arg[3] & 0xffff);
+      SelectInstructionKind type_a1 = static_cast<SelectInstructionKind>((d_insn.arg[3] >> 16) & 0xffff);
+      SelectInstructionKind type_b = static_cast<SelectInstructionKind>(d_insn.arg[2] & 0xffff);
+      SelectInstructionKind type_c = static_cast<SelectInstructionKind>((d_insn.arg[2] >> 16) & 0xffff);
+      SelectInstructionKind type_a = static_cast<SelectInstructionKind>(d_insn.arg[4] & 0xffff);
+      DCHECK(type_a0 == kSelectConst || type_a0 == kSelectMove || type_a0 == kSelectMoveWide);
+      DCHECK(type_a1 == kSelectConst || type_a1 == kSelectMove || type_a1 == kSelectMoveWide);
+      DCHECK(type_b == kSelectConst || type_b == kSelectMove || type_b == kSelectMoveWide);
+      DCHECK(type_c == kSelectConst || type_c == kSelectMove || type_c == kSelectMoveWide);
+      DCHECK(type_a == kSelectMove || type_a == kSelectMoveWide);
+      if (type_a0 == kSelectMove || type_a0 == kSelectMoveWide) {
+        HandleLiveInUse(use_v, def_v, live_in_v, d_insn.arg[0]);
+        if (type_a0 == kSelectMoveWide) {
+          HandleLiveInUse(use_v, def_v, live_in_v, d_insn.arg[0] + 1);
+        }
+      }
+      if (type_a1 == kSelectMove || type_a1 == kSelectMoveWide) {
+        HandleLiveInUse(use_v, def_v, live_in_v, d_insn.arg[1]);
+        if (type_a1 == kSelectMoveWide) {
+          HandleLiveInUse(use_v, def_v, live_in_v, d_insn.arg[1] + 1);
+        }
+      }
+      if (type_b == kSelectMove || type_b == kSelectMoveWide) {
+        HandleLiveInUse(use_v, def_v, live_in_v, d_insn.vB);
+        if (type_b == kSelectMoveWide) {
+          HandleLiveInUse(use_v, def_v, live_in_v, d_insn.vB + 1);
+        }
+      }
+      if (type_c == kSelectMove || type_c == kSelectMoveWide) {
+        HandleLiveInUse(use_v, def_v, live_in_v, d_insn.vC);
+        if (type_c == kSelectMoveWide) {
+          HandleLiveInUse(use_v, def_v, live_in_v, d_insn.vC + 1);
+        }
+      }
+      HandleDef(def_v, d_insn.vA);
+      if (type_a == kSelectMoveWide) {
+        HandleDef(def_v, d_insn.vA + 1);
+      }
+      break;
+    }
     default:
       LOG(ERROR) << "Unexpected Extended Opcode " << d_insn.opcode;
       break;
@@ -1139,6 +1180,64 @@ void MIRGraph::DataFlowSSAFormatExtended(MIR* mir) {
         HandleSSAUse(mir->ssa_rep->uses, d_insn.vB + 1, 1);
       }
       break;
+    case kMirOpCondSelect: {
+      SelectInstructionKind type_a0 = static_cast<SelectInstructionKind>(d_insn.arg[3] & 0xffff);
+      SelectInstructionKind type_a1 = static_cast<SelectInstructionKind>((d_insn.arg[3] >> 16) & 0xffff);
+      SelectInstructionKind type_b = static_cast<SelectInstructionKind>(d_insn.arg[2] & 0xffff);
+      SelectInstructionKind type_c = static_cast<SelectInstructionKind>((d_insn.arg[2] >> 16) & 0xffff);
+      SelectInstructionKind type_a = static_cast<SelectInstructionKind>(d_insn.arg[4] & 0xffff);
+      DCHECK(type_a0 == kSelectConst || type_a0 == kSelectMove || type_a0 == kSelectMoveWide);
+      DCHECK(type_a1 == kSelectConst || type_a1 == kSelectMove || type_a1 == kSelectMoveWide);
+      DCHECK(type_b == kSelectConst || type_b == kSelectMove || type_b == kSelectMoveWide);
+      DCHECK(type_c == kSelectConst || type_c == kSelectMove || type_c == kSelectMoveWide);
+      DCHECK(type_a == kSelectMove || type_a == kSelectMoveWide);
+      // Compute number of uses based on types. VR type is 1 use. Wide VR is 2 uses.
+      int num_uses = (type_a0 == kSelectMove ? 1 : 0) + (type_a1 == kSelectMove ? 1 : 0) +
+          (type_b == kSelectMove ? 1 : 0) + (type_c == kSelectMove ? 1 : 0);
+      num_uses += (type_a0 == kSelectMoveWide ? 2 : 0) + (type_a1 == kSelectMoveWide ? 2 : 0) +
+                (type_b == kSelectMoveWide ? 2 : 0) + (type_c == kSelectMoveWide ? 2 : 0);
+      AllocateSSAUseData(mir, num_uses);
+      int use_pos = 0;
+      if (type_a0 == kSelectMove || type_a0 == kSelectMoveWide) {
+        HandleSSAUse(mir->ssa_rep->uses, d_insn.arg[0], use_pos);
+        use_pos++;
+        if (type_a0 == kSelectMoveWide) {
+          HandleSSAUse(mir->ssa_rep->uses, d_insn.arg[0] + 1, use_pos);
+          use_pos++;
+        }
+      }
+      if (type_a1 == kSelectMove || type_a1 == kSelectMoveWide) {
+        HandleSSAUse(mir->ssa_rep->uses, d_insn.arg[1], use_pos);
+        use_pos++;
+        if (type_a1 == kSelectMoveWide) {
+          HandleSSAUse(mir->ssa_rep->uses, d_insn.arg[1] + 1, use_pos);
+          use_pos++;
+        }
+      }
+      if (type_b == kSelectMove || type_b == kSelectMoveWide) {
+        HandleSSAUse(mir->ssa_rep->uses, d_insn.vB, use_pos);
+        use_pos++;
+        if (type_b == kSelectMoveWide) {
+          HandleSSAUse(mir->ssa_rep->uses, d_insn.vB + 1, use_pos);
+          use_pos++;
+        }
+      }
+      if (type_c == kSelectMove || type_c == kSelectMoveWide) {
+        HandleSSAUse(mir->ssa_rep->uses, d_insn.vC, use_pos);
+        use_pos++;
+        if (type_c == kSelectMoveWide) {
+          HandleSSAUse(mir->ssa_rep->uses, d_insn.vC + 1, use_pos);
+          use_pos++;
+        }
+      }
+      int num_defs = (type_a == kSelectMoveWide ? 2 : 1);
+      AllocateSSADefData(mir, num_defs);
+      HandleSSADef(mir->ssa_rep->defs, d_insn.vA, 0);
+      if (num_defs > 1) {
+        HandleSSADef(mir->ssa_rep->defs, d_insn.vA + 1, 1);
+      }
+      break;
+    }
     default:
       LOG(ERROR) << "Missing case for extended MIR: " << mir->dalvikInsn.opcode;
       break;
