@@ -839,7 +839,7 @@ const uint64_t MIRGraph::oat_data_flow_attributes_[kMirOpLast] = {
   0,
 
   // 10D MIR_SELECT
-  DF_DA | DF_UB,
+  DF_FORMAT_EXTENDED,
 
   // 10E MirOpConstVector
   0,
@@ -949,6 +949,14 @@ void MIRGraph::HandleExtended(ArenaBitVector* use_v, ArenaBitVector* def_v,
       HandleLiveInUse(use_v, def_v, live_in_v, d_insn.vB);
       if (is_vector_type_wide == true) {
         HandleLiveInUse(use_v, def_v, live_in_v, d_insn.vB + 1);
+      }
+      break;
+    case kMirOpSelect:
+      HandleDef(def_v, d_insn.vA);
+      HandleLiveInUse(use_v, def_v, live_in_v, d_insn.arg[0]);
+      if (d_insn.arg[1] != 1) {
+        HandleLiveInUse(use_v, def_v, live_in_v, d_insn.vB);
+        HandleLiveInUse(use_v, def_v, live_in_v, d_insn.vC);
       }
       break;
     default:
@@ -1138,6 +1146,19 @@ void MIRGraph::DataFlowSSAFormatExtended(MIR* mir) {
       if (is_vector_type_wide == true) {
         HandleSSAUse(mir->ssa_rep->uses, d_insn.vB + 1, 1);
       }
+      break;
+    case kMirOpSelect:
+      if (d_insn.arg[1] == 1) {
+        AllocateSSAUseData(mir, 1);
+        HandleSSAUse(mir->ssa_rep->uses, d_insn.arg[0], 0);
+      } else {
+        AllocateSSAUseData(mir, 3);
+        HandleSSAUse(mir->ssa_rep->uses, d_insn.arg[0], 0);
+        HandleSSAUse(mir->ssa_rep->uses, d_insn.vB, 1);
+        HandleSSAUse(mir->ssa_rep->uses, d_insn.vC, 2);
+      }
+      AllocateSSADefData(mir, 1);
+      HandleSSADef(mir->ssa_rep->defs, d_insn.vA, 0);
       break;
     default:
       LOG(ERROR) << "Missing case for extended MIR: " << mir->dalvikInsn.opcode;
