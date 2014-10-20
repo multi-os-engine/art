@@ -1,0 +1,8 @@
+Code-Review+1: Maxim Kazantsev <maxim.kazantsev@intel.com>
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Code-Review+2: Hiroshi Yamauchi <yamauchi@google.com>
+Submitted-by: Hiroshi Yamauchi <yamauchi@google.com>
+Submitted-at: Mon, 20 Oct 2014 17:18:50 +0000
+Reviewed-on: https://android-review.googlesource.com/110904
+Project: platform/art
+Branch: refs/heads/master
