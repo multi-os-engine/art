@@ -53,6 +53,12 @@ while true; do
   elif [ "$1" = "--64" ]; then
     DALVIKVM=dalvikvm64
     shift
+  elif [ "$1" = "--prec" ]; then
+    PERF="record"
+    shift
+  elif [ "$1" = "--prep" ]; then
+    PERF="report"
+    shift
   elif expr "$1" : "--" >/dev/null 2>&1; then
     echo "unknown option: $1" 1>&2
     exit 1
@@ -64,10 +70,19 @@ done
 PROG_NAME="$(follow_links)"
 PROG_DIR="$(cd "${PROG_NAME%/*}" ; pwd -P)"
 ANDROID_ROOT=$PROG_DIR/..
-ANDROID_DATA=$PWD/android-data$$
+ANDROID_DATA=$PWD/android-data-tmp
 LIBDIR=$(find_libdir)
 LD_LIBRARY_PATH=$ANDROID_ROOT/$LIBDIR
 
+echo abc
+if [ z"$PERF" = zrecord ]; then
+  invoke_with="perf record -o $ANDROID_DATA/perf.data -e cycles:u $invoke_with"
+elif [ z"$PERF" = zreport ]; then
+  perf report -i $ANDROID_DATA/perf.data
+  exit
+fi
+
+rm -rf $ANDROID_DATA
 mkdir -p $ANDROID_DATA/dalvik-cache/{arm,arm64,x86,x86_64}
 ANDROID_DATA=$ANDROID_DATA \
   ANDROID_ROOT=$ANDROID_ROOT \
@@ -75,7 +90,15 @@ ANDROID_DATA=$ANDROID_DATA \
   $invoke_with $ANDROID_ROOT/bin/$DALVIKVM $lib \
     -XXlib:$LIBART \
     -Ximage:$ANDROID_ROOT/framework/core.art \
-     "$@"
+    -Xcompiler-option --include-debug-symbols \
+    "$@"
+
 EXIT_STATUS=$?
-rm -rf $ANDROID_DATA
+
+if [ z"$PERF" == zrecord ]; then
+  echo "To see perf data use:"
+  echo "perf report $ANDROID_DATA/perf.data"
+else
+  rm -rf $ANDROID_DATA
+fi
 exit $EXIT_STATUS
