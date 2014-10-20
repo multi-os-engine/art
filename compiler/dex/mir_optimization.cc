@@ -512,141 +512,11 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
       // Is this the select pattern?
       // TODO: flesh out support for Mips.  NOTE: llvm's select op doesn't quite work here.
       // TUNING: expand to support IF_xx compare & branches
-      if (!cu_->compiler->IsPortable() &&
+      if ((cu_->compiler == nullptr || !cu_->compiler->IsPortable()) &&
           (cu_->instruction_set == kArm64 || cu_->instruction_set == kThumb2 ||
            cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64) &&
           IsInstructionIfCcZ(mir->dalvikInsn.opcode)) {
-        BasicBlock* ft = GetBasicBlock(bb->fall_through);
-        DCHECK(ft != NULL);
-        BasicBlock* ft_ft = GetBasicBlock(ft->fall_through);
-        BasicBlock* ft_tk = GetBasicBlock(ft->taken);
-
-        BasicBlock* tk = GetBasicBlock(bb->taken);
-        DCHECK(tk != NULL);
-        BasicBlock* tk_ft = GetBasicBlock(tk->fall_through);
-        BasicBlock* tk_tk = GetBasicBlock(tk->taken);
-
-        /*
-         * In the select pattern, the taken edge goes to a block that unconditionally
-         * transfers to the rejoin block and the fall_though edge goes to a block that
-         * unconditionally falls through to the rejoin block.
-         */
-        if ((tk_ft == NULL) && (ft_tk == NULL) && (tk_tk == ft_ft) &&
-            (Predecessors(tk) == 1) && (Predecessors(ft) == 1)) {
-          /*
-           * Okay - we have the basic diamond shape.  At the very least, we can eliminate the
-           * suspend check on the taken-taken branch back to the join point.
-           */
-          if (SelectKind(tk->last_mir_insn) == kSelectGoto) {
-              tk->last_mir_insn->optimization_flags |= (MIR_IGNORE_SUSPEND_CHECK);
-          }
-
-          // TODO: Add logic for LONG.
-          // Are the block bodies something we can handle?
-          if ((ft->first_mir_insn == ft->last_mir_insn) &&
-              (tk->first_mir_insn != tk->last_mir_insn) &&
-              (tk->first_mir_insn->next == tk->last_mir_insn) &&
-              ((SelectKind(ft->first_mir_insn) == kSelectMove) ||
-              (SelectKind(ft->first_mir_insn) == kSelectConst)) &&
-              (SelectKind(ft->first_mir_insn) == SelectKind(tk->first_mir_insn)) &&
-              (SelectKind(tk->last_mir_insn) == kSelectGoto)) {
-            // Almost there.  Are the instructions targeting the same vreg?
-            MIR* if_true = tk->first_mir_insn;
-            MIR* if_false = ft->first_mir_insn;
-            // It's possible that the target of the select isn't used - skip those (rare) cases.
-            MIR* phi = FindPhi(tk_tk, if_true->ssa_rep->defs[0]);
-            if ((phi != NULL) && (if_true->dalvikInsn.vA == if_false->dalvikInsn.vA)) {
-              /*
-               * We'll convert the IF_EQZ/IF_NEZ to a SELECT.  We need to find the
-               * Phi node in the merge block and delete it (while using the SSA name
-               * of the merge as the target of the SELECT.  Delete both taken and
-               * fallthrough blocks, and set fallthrough to merge block.
-               * NOTE: not updating other dataflow info (no longer used at this point).
-               * If this changes, need to update i_dom, etc. here (and in CombineBlocks).
-               */
-              mir->meta.ccode = ConditionCodeForIfCcZ(mir->dalvikInsn.opcode);
-              mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpSelect);
-              bool const_form = (SelectKind(if_true) == kSelectConst);
-              if ((SelectKind(if_true) == kSelectMove)) {
-                if (IsConst(if_true->ssa_rep->uses[0]) &&
-                    IsConst(if_false->ssa_rep->uses[0])) {
-                    const_form = true;
-                    if_true->dalvikInsn.vB = ConstantValue(if_true->ssa_rep->uses[0]);
-                    if_false->dalvikInsn.vB = ConstantValue(if_false->ssa_rep->uses[0]);
-                }
-              }
-              if (const_form) {
-                /*
-                 * TODO: If both constants are the same value, then instead of generating
-                 * a select, we should simply generate a const bytecode. This should be
-                 * considered after inlining which can lead to CFG of this form.
-                 */
-                // "true" set val in vB
-                mir->dalvikInsn.vB = if_true->dalvikInsn.vB;
-                // "false" set val in vC
-                mir->dalvikInsn.vC = if_false->dalvikInsn.vB;
-              } else {
-                DCHECK_EQ(SelectKind(if_true), kSelectMove);
-                DCHECK_EQ(SelectKind(if_false), kSelectMove);
-                int* src_ssa =
-                    static_cast<int*>(arena_->Alloc(sizeof(int) * 3, kArenaAllocDFInfo));
-                src_ssa[0] = mir->ssa_rep->uses[0];
-                src_ssa[1] = if_true->ssa_rep->uses[0];
-                src_ssa[2] = if_false->ssa_rep->uses[0];
-                mir->ssa_rep->uses = src_ssa;
-                mir->ssa_rep->num_uses = 3;
-              }
-              mir->ssa_rep->num_defs = 1;
-              mir->ssa_rep->defs =
-                  static_cast<int*>(arena_->Alloc(sizeof(int) * 1, kArenaAllocDFInfo));
-              mir->ssa_rep->fp_def =
-                  static_cast<bool*>(arena_->Alloc(sizeof(bool) * 1, kArenaAllocDFInfo));
-              mir->ssa_rep->fp_def[0] = if_true->ssa_rep->fp_def[0];
-              // Match type of uses to def.
-              mir->ssa_rep->fp_use =
-                  static_cast<bool*>(arena_->Alloc(sizeof(bool) * mir->ssa_rep->num_uses,
-                                                   kArenaAllocDFInfo));
-              for (int i = 0; i < mir->ssa_rep->num_uses; i++) {
-                mir->ssa_rep->fp_use[i] = mir->ssa_rep->fp_def[0];
-              }
-              /*
-               * There is usually a Phi node in the join block for our two cases.  If the
-               * Phi node only contains our two cases as input, we will use the result
-               * SSA name of the Phi node as our select result and delete the Phi.  If
-               * the Phi node has more than two operands, we will arbitrarily use the SSA
-               * name of the "true" path, delete the SSA name of the "false" path from the
-               * Phi node (and fix up the incoming arc list).
-               */
-              if (phi->ssa_rep->num_uses == 2) {
-                mir->ssa_rep->defs[0] = phi->ssa_rep->defs[0];
-                phi->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
-              } else {
-                int dead_def = if_false->ssa_rep->defs[0];
-                int live_def = if_true->ssa_rep->defs[0];
-                mir->ssa_rep->defs[0] = live_def;
-                BasicBlockId* incoming = phi->meta.phi_incoming;
-                for (int i = 0; i < phi->ssa_rep->num_uses; i++) {
-                  if (phi->ssa_rep->uses[i] == live_def) {
-                    incoming[i] = bb->id;
-                  }
-                }
-                for (int i = 0; i < phi->ssa_rep->num_uses; i++) {
-                  if (phi->ssa_rep->uses[i] == dead_def) {
-                    int last_slot = phi->ssa_rep->num_uses - 1;
-                    phi->ssa_rep->uses[i] = phi->ssa_rep->uses[last_slot];
-                    incoming[i] = incoming[last_slot];
-                  }
-                }
-              }
-              phi->ssa_rep->num_uses--;
-              bb->taken = NullBasicBlockId;
-              tk->block_type = kDead;
-              for (MIR* tmir = ft->first_mir_insn; tmir != NULL; tmir = tmir->next) {
-                tmir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
-              }
-            }
-          }
-        }
+        BasicBlockOptSelect(bb, mir);
       }
     }
     bb = ((cu_->disable_opt & (1 << kSuppressExceptionEdges)) != 0) ? NextDominatedBlock(bb) : NULL;
@@ -656,6 +526,202 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
   }
 
   return true;
+}
+
+bool MIRGraph::BasicBlockOptSelect(BasicBlock* bb, MIR* mir) {
+  if (mir == nullptr || IsInstructionIfCcZ(mir->dalvikInsn.opcode) == false) {
+    return false;
+  }
+
+  BasicBlock* ft = GetBasicBlock(bb->fall_through);
+  DCHECK(ft != NULL);
+  BasicBlock* ft_ft = GetBasicBlock(ft->fall_through);
+  BasicBlock* ft_tk = GetBasicBlock(ft->taken);
+
+  BasicBlock* tk = GetBasicBlock(bb->taken);
+  DCHECK(tk != NULL);
+  BasicBlock* tk_ft = GetBasicBlock(tk->fall_through);
+  BasicBlock* tk_tk = GetBasicBlock(tk->taken);
+
+  /*
+   * In the select pattern, the taken edge goes to a block that unconditionally
+   * transfers to the rejoin block and the fall_though edge goes to a block that
+   * unconditionally falls through to the rejoin block.
+   */
+  // The condition that there is only one path from taken block to merge.
+  bool cond_tk = ((tk_ft != nullptr) && (tk_tk == nullptr)) ||
+      ((tk_ft == nullptr) && (tk_tk != nullptr));
+
+  // The condition that there is only one path from fallthrough block to merge.
+  bool cond_ft = ((ft_tk != nullptr) && (ft_ft == nullptr)) ||
+      ((ft_tk == nullptr) && (ft_ft != nullptr));
+
+  // The condition that the path from taken block of the bb and the path from fallthrough
+  // block of the bb will join. Since below we require only that a goto can only exist
+  // from taken path, we require ft_ft to not be null.
+  bool cond_join = (ft_ft != nullptr && ((tk_tk == ft_ft) || (tk_ft == ft_ft)));
+
+  if (cond_tk && cond_ft && cond_join && (Predecessors(tk) == 1) && (Predecessors(ft) == 1)) {
+    /*
+     * Okay - we have the basic diamond shape.  At the very least, we can eliminate the
+     * suspend check on the taken-taken branch back to the join point.
+     */
+    if (SelectKind(tk->last_mir_insn) == kSelectGoto) {
+        tk->last_mir_insn->optimization_flags |= (MIR_IGNORE_SUSPEND_CHECK);
+    }
+
+    // TODO: Add logic for LONG.
+    // Are the block bodies something we can handle?
+    if ((ft->first_mir_insn == ft->last_mir_insn) &&
+        // taken block of bb either have one mir or have two mirs and the last mir is a GOTO
+        ((tk->first_mir_insn == tk->last_mir_insn) ||
+        ((tk->first_mir_insn->next == tk->last_mir_insn) &&
+         (SelectKind(tk->last_mir_insn) == kSelectGoto))) &&
+        // fallthrough block of bb contains either a move mir or a const mir and
+        // the first mir in taken block of bb should have the same type as the first mir
+        // in fallthrough block of bb
+        ((SelectKind(ft->first_mir_insn) == kSelectMove) ||
+         (SelectKind(ft->first_mir_insn) == kSelectConst)) &&
+        (SelectKind(ft->first_mir_insn) == SelectKind(tk->first_mir_insn))) {
+      // Almost there.  Are the instructions targeting the same vreg?
+      MIR* if_true = tk->first_mir_insn;
+      MIR* if_false = ft->first_mir_insn;
+      // It's possible that the target of the select isn't used - skip those (rare) cases.
+      MIR* phi;
+      // If taken block of taken path is not null, find the merge phi node using the taken
+      // block of the taken path, otherwise, fallthrough block of taken path must not be NULL
+      // and find the merge phi node using the fallthrough block of the taken path
+      if (tk_tk != nullptr) {
+        phi = FindPhi(tk_tk, if_true->ssa_rep->defs[0]);
+      } else {
+        DCHECK(tk_ft != nullptr);
+        phi = FindPhi(tk_ft, if_true->ssa_rep->defs[0]);
+      }
+      if ((phi != NULL) && (if_true->dalvikInsn.vA == if_false->dalvikInsn.vA)) {
+        /*
+         * We'll convert the IF_EQZ/IF_NEZ to a SELECT.  We need to find the
+         * Phi node in the merge block and delete it (while using the SSA name
+         * of the merge as the target of the SELECT.  Delete both taken and
+         * fallthrough blocks, and set fallthrough to merge block.
+         * NOTE: not updating other dataflow info (no longer used at this point).
+         * If this changes, need to update i_dom, etc. here (and in CombineBlocks).
+         */
+        mir->meta.ccode = ConditionCodeForIfCcZ(mir->dalvikInsn.opcode);
+        mir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpCondSelect);
+        bool const_form = (SelectKind(if_true) == kSelectConst);
+        if ((SelectKind(if_true) == kSelectMove)) {
+          if (IsConst(if_true->ssa_rep->uses[0]) &&
+              IsConst(if_false->ssa_rep->uses[0])) {
+              const_form = true;
+              if_true->dalvikInsn.vB = ConstantValue(if_true->ssa_rep->uses[0]);
+              if_false->dalvikInsn.vB = ConstantValue(if_false->ssa_rep->uses[0]);
+          }
+        }
+        // The "mir" is the "if" instruction. The first operand of what is being compared
+        // is in vA. The second operand is 0 because it is if-ccz opcode.
+        mir->dalvikInsn.arg[0] = mir->dalvikInsn.vA;
+        mir->dalvikInsn.arg[1] = 0;
+        // Already checked that both paths write to same VR. Set it in vA.
+        // We set type of vA as non-wide since we know we do not handle those other cases now.
+        mir->dalvikInsn.vA = if_true->dalvikInsn.vA;
+        mir->dalvikInsn.arg[4] = (mir->meta.ccode << 16) | kSelectMove;
+        // arg[3] contains the type of the operands being compared. Currently,
+        // since we transform if-ccz bytecodes, the type of arg[0] is VR and
+        // type of arg[1] is constant.
+        mir->dalvikInsn.arg[3] = (kSelectConst << 16) | kSelectMove;
+        if (const_form) {
+          /*
+           * TODO: If both constants are the same value, then instead of generating
+           * a select, we should simply generate a const bytecode. This should be
+           * considered after inlining which can lead to CFG of this form.
+           */
+
+          // vB is supposed to hold the constant in case of true (and vC for false case).
+          // Even if the original code was not in constant form, the earlier part of this
+          // pass will update vB to contain the constant.
+          mir->dalvikInsn.vB = if_true->dalvikInsn.vB;
+          mir->dalvikInsn.vC = if_false->dalvikInsn.vB;
+          // Set appropriate flags to note that constants are being compared.
+          mir->dalvikInsn.arg[2] = (kSelectConst << 16) | kSelectConst;
+        } else {
+          DCHECK_EQ(SelectKind(if_true), kSelectMove);
+          DCHECK_EQ(SelectKind(if_false), kSelectMove);
+
+          // vB is supposed to hold the VR source in case of true (and vC for false case).
+          mir->dalvikInsn.vB = if_true->dalvikInsn.vB;
+          mir->dalvikInsn.vC = if_false->dalvikInsn.vB;
+          // This is the move form.
+          mir->dalvikInsn.arg[2] = (kSelectMove << 16) | kSelectMove;
+          int* src_ssa =
+              static_cast<int*>(arena_->Alloc(sizeof(int) * 3, kArenaAllocDFInfo));
+          src_ssa[0] = mir->ssa_rep->uses[0];
+          src_ssa[1] = if_true->ssa_rep->uses[0];
+          src_ssa[2] = if_false->ssa_rep->uses[0];
+          mir->ssa_rep->uses = src_ssa;
+          mir->ssa_rep->num_uses = 3;
+        }
+        mir->ssa_rep->num_defs = 1;
+        mir->ssa_rep->defs =
+            static_cast<int*>(arena_->Alloc(sizeof(int) * 1, kArenaAllocDFInfo));
+        mir->ssa_rep->fp_def =
+            static_cast<bool*>(arena_->Alloc(sizeof(bool) * 1, kArenaAllocDFInfo));
+        mir->ssa_rep->fp_def[0] = if_true->ssa_rep->fp_def[0];
+        // Match type of uses to def.
+        mir->ssa_rep->fp_use =
+            static_cast<bool*>(arena_->Alloc(sizeof(bool) * mir->ssa_rep->num_uses,
+                                             kArenaAllocDFInfo));
+        for (int i = 0; i < mir->ssa_rep->num_uses; i++) {
+          mir->ssa_rep->fp_use[i] = mir->ssa_rep->fp_def[0];
+        }
+        /*
+         * There is usually a Phi node in the join block for our two cases.  If the
+         * Phi node only contains our two cases as input, we will use the result
+         * SSA name of the Phi node as our select result and delete the Phi.  If
+         * the Phi node has more than two operands, we will arbitrarily use the SSA
+         * name of the "true" path, delete the SSA name of the "false" path from the
+         * Phi node (and fix up the incoming arc list).
+         */
+        if (phi->ssa_rep->num_uses == 2) {
+          mir->ssa_rep->defs[0] = phi->ssa_rep->defs[0];
+          phi->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+        } else {
+          int dead_def = if_false->ssa_rep->defs[0];
+          int live_def = if_true->ssa_rep->defs[0];
+          mir->ssa_rep->defs[0] = live_def;
+          BasicBlockId* incoming = phi->meta.phi_incoming;
+          for (int i = 0; i < phi->ssa_rep->num_uses; i++) {
+            if (phi->ssa_rep->uses[i] == live_def) {
+              incoming[i] = bb->id;
+            }
+          }
+          for (int i = 0; i < phi->ssa_rep->num_uses; i++) {
+            if (phi->ssa_rep->uses[i] == dead_def) {
+              int last_slot = phi->ssa_rep->num_uses - 1;
+              phi->ssa_rep->uses[i] = phi->ssa_rep->uses[last_slot];
+              incoming[i] = incoming[last_slot];
+            }
+          }
+        }
+        phi->ssa_rep->num_uses--;
+        bb->taken = NullBasicBlockId;
+        tk->block_type = kDead;
+        tk->fall_through = NullBasicBlockId;
+        tk->taken = NullBasicBlockId;
+        for (MIR* tmir = tk->first_mir_insn; tmir != NULL; tmir = tmir->next) {
+          tmir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+        }
+        for (MIR* tmir = ft->first_mir_insn; tmir != NULL; tmir = tmir->next) {
+          tmir->dalvikInsn.opcode = static_cast<Instruction::Code>(kMirOpNop);
+        }
+
+        // The optimization was applied.
+        return true;
+      }
+    }
+  }
+
+  // Assume if we reach here, no update was made.
+  return false;
 }
 
 /* Collect stats on number of checks removed */

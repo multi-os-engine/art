@@ -642,8 +642,9 @@ class MIRGraph {
    * @param dir_prefix the directory the file will be created in.
    * @param all_blocks does the dumper use all the basic blocks or use the reachable blocks.
    * @param suffix does the filename require a suffix or not (default = nullptr).
+   * @param filename required file name.
    */
-  void DumpCFG(const char* dir_prefix, bool all_blocks, const char* suffix = nullptr);
+  void DumpCFG(const char* dir_prefix, bool all_blocks, const char* suffix = nullptr, const char* filename = nullptr);
 
   bool HasFieldAccess() const {
     return (merged_df_flags_ & (DF_IFIELD | DF_SFIELD)) != 0u;
@@ -1226,6 +1227,7 @@ class MIRGraph {
   void RecordDFSOrders(BasicBlock* bb);
   void ComputeDomPostOrderTraversal(BasicBlock* bb);
   int GetSSAUseCount(int s_reg);
+  bool BasicBlockOptSelect(BasicBlock* bb, MIR* if_instruction);
   bool BasicBlockOpt(BasicBlock* bb);
   bool BuildExtendedBBList(class BasicBlock* bb);
   bool FillDefBlockMatrix(BasicBlock* bb);
@@ -1319,6 +1321,7 @@ class MIRGraph {
   friend class MirOptimizationTest;
   friend class ClassInitCheckEliminationTest;
   friend class NullCheckEliminationTest;
+  friend class SelectOptimizationTest;
   friend class GlobalValueNumberingTest;
   friend class LocalValueNumberingTest;
   friend class TopologicalSortOrderTest;

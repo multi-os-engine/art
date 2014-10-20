@@ -423,7 +423,7 @@ static int kAllOpcodes[] = {
     kMirOpDivZeroCheck,
     kMirOpCheck,
     kMirOpCheckPart2,
-    kMirOpSelect,
+    kMirOpCondSelect,
 };
 
 static int kInvokeOpcodes[] = {
