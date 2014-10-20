@@ -1123,6 +1123,66 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
   DCHECK(CheckCorePoolSanity());
 }  // NOLINT(readability/fn_size)
 
+bool Mir2Lir::GenSelectGate(MIR* select_mir) {
+  // Ssa representation is required by the implementations.
+  SSARepresentation* ssa_rep = select_mir->ssa_rep;
+  if (ssa_rep == nullptr) {
+    return false;
+  }
+
+  // Only one define for old case (did not handle wides).
+  if (ssa_rep->num_defs != 1) {
+    return false;
+  }
+
+  // Now check the number of uses, must be either 1 (for const case) or 3 (VR case).
+  int num_uses = ssa_rep->num_uses;
+  if (num_uses != 1 && num_uses != 3) {
+    return false;
+  }
+
+  // Start testing the new encoding for the correct expect types.
+  const MIR::DecodedInstruction& d_insn = select_mir->dalvikInsn;
+  SelectInstructionKind type_a0 = static_cast<SelectInstructionKind>(d_insn.arg[3] & 0xffff);
+  SelectInstructionKind type_a1 = static_cast<SelectInstructionKind>((d_insn.arg[3] >> 16) & 0xffff);
+  SelectInstructionKind type_b = static_cast<SelectInstructionKind>(d_insn.arg[2] & 0xffff);
+  SelectInstructionKind type_c = static_cast<SelectInstructionKind>((d_insn.arg[2] >> 16) & 0xffff);
+  SelectInstructionKind type_a = static_cast<SelectInstructionKind>(d_insn.arg[4] & 0xffff);
+
+  if (type_a != kSelectMove) {
+    // The define is only supported as VR type.
+    return false;
+  }
+
+  if (type_a0 != kSelectMove) {
+    // The LHS of comparison is only supported as VR type.
+    return false;
+  }
+
+  if (type_a1 != kSelectConst || d_insn.arg[1] != 0) {
+    // The RHS of comparison is only supported as constant 0.
+    return false;
+  }
+
+  if (type_b != kSelectConst && type_b != kSelectMove) {
+    // The true case is only supported as constant or VR.
+    return false;
+  }
+
+  if (type_c != kSelectConst && type_c != kSelectMove) {
+    // The false case is only supported as constant or VR.
+    return false;
+  }
+
+  if (type_b != type_c) {
+    // The types of true and false cases must match.
+    return false;
+  }
+
+  // This instruction is supported by old implementation.
+  return true;
+}
+
 // Process extended MIR instructions
 void Mir2Lir::HandleExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
   switch (static_cast<ExtendedMIROpcode>(mir->dalvikInsn.opcode)) {
@@ -1148,6 +1208,9 @@ void Mir2Lir::HandleExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
       GenFusedLongCmpBranch(bb, mir);
       break;
     case kMirOpSelect:
+      if (GenSelectGate(mir) == false) {
+        UNIMPLEMENTED(FATAL) << "Found unimplemented variant of select";
+      }
       GenSelect(bb, mir);
       break;
     case kMirOpNullCheck: {

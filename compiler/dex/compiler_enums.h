@@ -171,6 +171,27 @@ enum ExtendedMIROpcode {
   kMirOpDivZeroCheck,
   kMirOpCheck,
   kMirOpCheckPart2,
+
+  // @brief Opcode for the select pattern.
+  // @details The comparison type in arg[4] is used to compare arg[0] and arg[1].
+  // The destination vA is written with vB if result is true, or vC if result is false.
+  // vA = (arg[0] cmp-arg[4] arg[1]) ? vB : vC;
+  // vA: destination VR
+  // vB: Value set if true. Can be either VR or constant. Type is in arg[2].
+  // vC: Value set if false. Can be either VR or constant. Type is in arg[2].
+  // arg[0]: First operand to compare with. Type is in arg[3].
+  // arg[1]: Second operand to compare with. Type is in arg[3].
+  // arg[2]: Low 16-bits contains type of vB, either virtual register or constant.
+  // High 16-bits contains type of vC, either virtual register or constant.
+  // Type is SelectInstructionKind with kSelectConst for constant type, kSelectMove
+  // for VR type, and kSelectMoveWide for wide VR type.
+  // arg[3]: Low 16-bits contains type of arg[0], either virtual register or constant.
+  // High 16-bits contains type of arg[1], either virtual register or constant.
+  // Type is SelectInstructionKind with kSelectConst for constant type, kSelectMove
+  // for VR type, and kSelectMoveWide for wide VR type.
+  // arg[4]: High 16-bits hold the condition code for comparison (which is also recorded in
+  // MIR::meta::ccode. Low 16-bits hold the type of vA. Type is kSelectMove
+  // for VR type, and kSelectMoveWide for wide VR type.
   kMirOpSelect,
 
   // Vector opcodes:
@@ -603,6 +624,7 @@ enum SelectInstructionKind {
   kSelectNone,
   kSelectConst,
   kSelectMove,
+  kSelectMoveWide,
   kSelectGoto
 };
 std::ostream& operator<<(std::ostream& os, const SelectInstructionKind& kind);
