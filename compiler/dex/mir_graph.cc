@@ -877,14 +877,20 @@ uint64_t MIRGraph::GetDataFlowAttributes(MIR* mir) {
 
 // TODO: use a configurable base prefix, and adjust callers to supply pass name.
 /* Dump the CFG into a DOT graph */
-void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suffix) {
+void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suffix, const char* filename) {
   FILE* file;
   static AtomicInteger cnt(0);
 
   // Increment counter to get a unique file number.
   cnt++;
 
-  std::string fname(PrettyMethod(cu_->method_idx, *cu_->dex_file));
+  std::string fname;
+  if (filename == nullptr) {
+    fname.append(PrettyMethod(cu_->method_idx, *cu_->dex_file));
+  } else {
+    fname.append(filename);
+  }
+
   ReplaceSpecialChars(fname);
   fname = StringPrintf("%s%s%x%s_%d.dot", dir_prefix, fname.c_str(),
                       GetBasicBlock(GetEntryBlock()->fall_through)->start_offset,
@@ -1248,6 +1254,40 @@ void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string* decoded_mir
         decoded_mir->append(StringPrintf(" v%d = v%d", mir->dalvikInsn.vA, mir->dalvikInsn.vB));
       }
       break;
+    case kMirOpSelect: {
+      std::stringstream ss;
+      if (ssa_rep != nullptr) {
+        ss << " " << GetSSANameWithConst(ssa_rep->defs[0], false) << " = ";
+      } else {
+        ss << " v" << mir->dalvikInsn.vA << " = ";
+      }
+
+      ss << mir->meta.ccode << " ";
+      if (ssa_rep != nullptr) {
+        // First print what is being compared.
+        ss << GetSSANameWithConst(ssa_rep->uses[0], false) << " ? ";
+        // Check if constant form needs to be handled.
+        if (ssa_rep->num_uses == 1) {
+          DCHECK_EQ(mir->dalvikInsn.arg[1], 1u);
+          ss << "#" << mir->dalvikInsn.vB << " : #" << mir->dalvikInsn.vC;
+        } else {
+          DCHECK_EQ(ssa_rep->num_uses, 3);
+          ss << GetSSANameWithConst(ssa_rep->uses[1], false) << " : ";
+          ss << GetSSANameWithConst(ssa_rep->uses[2], false);
+        }
+      } else {
+        // First print what is being compared.
+        ss << "v" << mir->dalvikInsn.arg[0] << " ? ";
+        // Check if constant form needs to be handled.
+        if (mir->dalvikInsn.arg[1] == 1) {
+          ss << "#" << mir->dalvikInsn.vB << " : #" << mir->dalvikInsn.vC;
+        } else {
+          ss << "v" << mir->dalvikInsn.vB << " : v" << mir->dalvikInsn.vC;
+        }
+      }
+      decoded_mir->append(ss.str());
+      break;
+    }
     case kMirOpFusedCmplFloat:
     case kMirOpFusedCmpgFloat:
     case kMirOpFusedCmplDouble:

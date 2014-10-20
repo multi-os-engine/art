@@ -169,6 +169,14 @@ enum ExtendedMIROpcode {
   kMirOpDivZeroCheck,
   kMirOpCheck,
   kMirOpCheckPart2,
+
+  // Select opcodes:
+  // @brief MIR for a select pattern
+  // vA: destination VR
+  // vB: true set val
+  // vC: false set val
+  // arg[0]: source to compare in if
+  // arg[1]: 1 if true and false branch are constant form, else 0
   kMirOpSelect,
 
   // Vector opcodes:
