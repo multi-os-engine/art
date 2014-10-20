@@ -31,11 +31,21 @@ void HConstantFolding::Run() {
     for (HInstructionIterator it(block->GetInstructions());
          !it.Done(); it.Advance()) {
       HInstruction* inst = it.Current();
-      // Constant folding: replace `c <- a op b' with a compile-time
-      // evaluation of `a op b' if `a' and `b' are constant.
+      // Constant folding: replace `op(a, b)' with a constant at
+      // compile time if `a' and `b' are both constants.
       if (inst->IsBinaryOperation()) {
         HConstant* constant =
           inst->AsBinaryOperation()->TryStaticEvaluation(graph_->GetArena());
+        if (constant != nullptr) {
+          inst->GetBlock()->ReplaceAndRemoveInstructionWith(inst, constant);
+        }
+      }
+
+      // Constant folding: replace `op(a)' with a constant at compile
+      // time if `a' is a constant.
+      if (inst->IsUnaryOperation()) {
+        HConstant* constant =
+          inst->AsUnaryOperation()->TryStaticEvaluation(graph_->GetArena());
         if (constant != nullptr) {
           inst->GetBlock()->ReplaceAndRemoveInstructionWith(inst, constant);
         }

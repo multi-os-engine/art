@@ -572,6 +572,17 @@ void HGraphVisitor::VisitBasicBlock(HBasicBlock* block) {
   }
 }
 
+HConstant* HUnaryOperation::TryStaticEvaluation(ArenaAllocator* allocator) const {
+  if (GetInput()->IsIntConstant()) {
+    int32_t value = Evaluate(GetInput()->AsIntConstant()->GetValue());
+    return new(allocator) HIntConstant(value);
+  } else if (GetInput()->IsLongConstant()) {
+    int64_t value = Evaluate(GetInput()->AsLongConstant()->GetValue());
+    return new(allocator) HLongConstant(value);
+  }
+  return nullptr;
+}
+
 HConstant* HBinaryOperation::TryStaticEvaluation(ArenaAllocator* allocator) const {
   if (GetLeft()->IsIntConstant() && GetRight()->IsIntConstant()) {
     int32_t value = Evaluate(GetLeft()->AsIntConstant()->GetValue(),
