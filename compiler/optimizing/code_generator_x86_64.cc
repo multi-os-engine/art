@@ -959,7 +959,7 @@ void InstructionCodeGeneratorX86_64::VisitNeg(HNeg* neg) {
   Location in = locations->InAt(0);
   switch (neg->GetResultType()) {
     case Primitive::kPrimInt:
-      // Constant operands will be addressed by the constant folding pass.
+      // Constant operands are addressed by the constant folding pass.
       DCHECK(!in.IsConstant());
       __ negl(out.As<CpuRegister>());
       break;
