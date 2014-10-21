@@ -1965,8 +1965,7 @@ void CompilerDriver::CompileMethod(const DexFile::CodeItem* code_item, uint32_t 
 
   if ((access_flags & kAccNative) != 0) {
     // Are we interpreting only and have support for generic JNI down calls?
-    if (!compiler_options_->IsCompilationEnabled() &&
-        (instruction_set_ == kX86_64 || instruction_set_ == kArm64)) {
+    if (!compiler_options_->IsCompilationEnabled() && instruction_set_ != kMips) {
       // Leaving this empty will trigger the generic JNI version
     } else {
       compiled_method = compiler_->JniCompile(access_flags, method_idx, dex_file);
