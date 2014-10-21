@@ -25,7 +25,7 @@ class ValueObject {
  public:
   void* operator new(size_t size) {
     LOG(FATAL) << "UNREACHABLE";
-    abort();
+    UNREACHABLE();
   }
   void operator delete(void*, size_t) {
     LOG(FATAL) << "UNREACHABLE";
