@@ -82,6 +82,8 @@ dev_mode="no"
 update_mode="no"
 debug_mode="no"
 relocate="yes"
+compile_pic="yes"
+#compile_pic="no"
 runtime="art"
 usage="no"
 build_only="no"
@@ -319,6 +321,10 @@ elif [ "$runtime" = "art" ]; then
     else
       run_args="${run_args} --no-relocate"
     fi
+
+    if [ "$compile_pic" = "yes" ]; then
+      run_args="${run_args} --compile-pic"
+    fi
 fi
 
 if [ "$have_image" = "no" ]; then
@@ -404,6 +410,7 @@ if [ "$usage" = "yes" ]; then
         echo "    --relocate           Force the use of relocating in the test, making"
         echo "                         the image and oat files be relocated to a random"
         echo "                         address before running. (default)"
+        echo "    --compile-pic        Force indirect use of code, methods, and classes"
         echo "    --no-relocate        Force the use of no relocating in the test"
         echo "    --host               Use the host-mode virtual machine."
         echo "    --invoke-with        Pass --invoke-with option to runtime."
