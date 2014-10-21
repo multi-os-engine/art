@@ -18,6 +18,7 @@
 
 #include "builder.h"
 #include "code_generator_arm.h"
+#include "code_generator_arm64.h"
 #include "code_generator_x86.h"
 #include "code_generator_x86_64.h"
 #include "common_compiler_test.h"
@@ -92,6 +93,12 @@ static void RunCodeBaseline(HGraph* graph, bool has_result, int32_t expected) {
   codegenX86_64.CompileBaseline(&allocator, true);
   if (kRuntimeISA == kX86_64) {
     Run(allocator, codegenX86_64, has_result, expected);
+  }
+
+  arm64::CodeGeneratorARM64 codegenARM64(graph);
+  codegenARM64.CompileBaseline(&allocator, true);
+  if (kRuntimeISA == kArm64) {
+    Run(allocator, codegenARM64, has_result, expected);
   }
 }
 
