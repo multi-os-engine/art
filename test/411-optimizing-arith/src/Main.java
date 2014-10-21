@@ -17,6 +17,8 @@
 // Note that $opt$ is a marker for the optimizing compiler to ensure
 // it does compile the method.
 
+// Note that these are just smoke tests for the optimizing compiler.
+// More comprehensive tests can be found in 003-omnibus-opcodes/*Math.java.
 public class Main {
 
   public static void expectEquals(int expected, int result) {
@@ -31,6 +33,36 @@ public class Main {
     }
   }
 
+  public static void expectEquals(float expected, float result) {
+    if (expected != result) {
+      throw new Error("Expected: " + expected + ", found: " + result);
+    }
+  }
+
+  public static void expectEquals(double expected, double result) {
+    if (expected != result) {
+      throw new Error("Expected: " + expected + ", found: " + result);
+    }
+  }
+
+  public static void expectApproxEquals(float a, float b, float maxDelta) {
+    boolean aproxEquals = (a > b)
+      ? ((a - b) < maxDelta)
+      : ((b - a) < maxDelta);
+    if (!aproxEquals) {
+      throw new Error("Expected: " + a + ", found: " + b + ", with delta: " + maxDelta);
+    }
+  }
+
+  public static void expectApproxEquals(double a, double b, double maxDelta) {
+    boolean aproxEquals = (a > b)
+      ? ((a - b) < maxDelta)
+      : ((b - a) < maxDelta);
+    if (!aproxEquals) {
+      throw new Error("Expected: " + a + ", found: " + b + ", with delta: " + maxDelta);
+    }
+  }
+
   public static void main(String[] args) {
     mul();
     neg();
@@ -38,6 +70,7 @@ public class Main {
 
   public static void mul() {
     expectEquals(15, $opt$Mul(5, 3));
+    expectEquals(0, $opt$Mul(0, 0));
     expectEquals(0, $opt$Mul(0, 3));
     expectEquals(0, $opt$Mul(3, 0));
     expectEquals(-3, $opt$Mul(1, -3));
@@ -46,12 +79,33 @@ public class Main {
     expectEquals(671088645, $opt$Mul(134217729, 5)); // (2^27 + 1) * 5
 
     expectEquals(15L, $opt$Mul(5L, 3L));
+    expectEquals(0L, $opt$Mul(0L, 0L));
     expectEquals(0L, $opt$Mul(0L, 3L));
     expectEquals(0L, $opt$Mul(3L, 0L));
     expectEquals(-3L, $opt$Mul(1L, -3L));
     expectEquals(36L, $opt$Mul(-12L, -3L));
-    expectEquals(33L, $opt$Mul(1L, 3L) * 11);
+    expectEquals(33L, $opt$Mul(1L, 3L) * 11F);
     expectEquals(240518168583L, $opt$Mul(34359738369L, 7L)); // (2^35 + 1) * 7
+
+    expectApproxEquals(15F, $opt$Mul(5F, 3F), 0.0001F);
+    expectApproxEquals(0F, $opt$Mul(0F, 0F), 0.0001F);
+    expectApproxEquals(0F, $opt$Mul(0F, 3F), 0.0001F);
+    expectApproxEquals(0F, $opt$Mul(3F, 0F), 0.0001F);
+    expectApproxEquals(-3F, $opt$Mul(1F, -3F), 0.0001F);
+    expectApproxEquals(36F, $opt$Mul(-12F, -3F), 0.0001F);
+    expectApproxEquals(33F, $opt$Mul(1F, 3F) * 11F, 0.0001F);
+    expectApproxEquals(0.02F, 0.1F * 0.2F, 0.0001F);
+    expectApproxEquals(-0.1F, -0.5F * 0.2F, 0.0001F);
+
+    expectApproxEquals(15D, $opt$Mul(5D, 3D), 0.0001D);
+    expectApproxEquals(0D, $opt$Mul(0D, 0D), 0.0001D);
+    expectApproxEquals(0D, $opt$Mul(0D, 3D), 0.0001D);
+    expectApproxEquals(0D, $opt$Mul(3D, 0D), 0.0001D);
+    expectApproxEquals(-3D, $opt$Mul(1D, -3D), 0.0001D);
+    expectApproxEquals(36D, $opt$Mul(-12D, -3D), 0.0001D);
+    expectApproxEquals(33D, $opt$Mul(1D, 3D) * 11D, 0.0001D);
+    expectApproxEquals(0.02D, 0.1D * 0.2D, 0.0001D);
+    expectApproxEquals(-0.1D, -0.5D * 0.2D, 0.0001D);
 
     $opt$InplaceNegOne(1);
   }
@@ -90,7 +144,16 @@ public class Main {
     return a * b;
   }
 
+  static float $opt$Mul(float a, float b) {
+    return a * b;
+  }
+
+  static double $opt$Mul(double a, double b) {
+    return a * b;
+  }
+
   static int $opt$Neg(int a){
     return -a;
   }
+
 }

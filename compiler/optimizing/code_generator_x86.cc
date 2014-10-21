@@ -1206,7 +1206,13 @@ void LocationsBuilderX86::VisitMul(HMul* mul) {
       locations->AddTemp(Location::RegisterLocation(EDX));
       break;
     }
-
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble: {
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
     case Primitive::kPrimBoolean:
     case Primitive::kPrimByte:
     case Primitive::kPrimChar:
@@ -1275,6 +1281,24 @@ void InstructionCodeGeneratorX86::VisitMul(HMul* mul) {
       __ movl(in1_lo, eax);
 
       break;
+    }
+
+    case Primitive::kPrimFloat: {
+       if (second.IsFpuRegister()) {
+        __ mulss(first.As<XmmRegister>(), second.As<XmmRegister>());
+      } else {
+        DCHECK(second.IsStackSlot()) << second;
+        __ mulss(first.As<XmmRegister>(), Address(ESP, second.GetStackIndex()));
+      }
+    }
+
+    case Primitive::kPrimDouble: {
+      if (second.IsFpuRegister()) {
+        __ mulsd(first.As<XmmRegister>(), second.As<XmmRegister>());
+      } else {
+        DCHECK(second.IsDoubleStackSlot()) << second;
+        __ mulsd(first.As<XmmRegister>(), Address(ESP, second.GetStackIndex()));
+      }
     }
 
     case Primitive::kPrimBoolean:

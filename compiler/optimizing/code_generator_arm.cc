@@ -1219,6 +1219,14 @@ void LocationsBuilderARM::VisitMul(HMul* mul) {
       break;
     }
 
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble: {
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister());
+      break;
+    }
+
     case Primitive::kPrimBoolean:
     case Primitive::kPrimByte:
     case Primitive::kPrimChar:
@@ -1271,6 +1279,17 @@ void InstructionCodeGeneratorARM::VisitMul(HMul* mul) {
       __ add(out_hi, out_hi, ShifterOperand(IP));
       break;
     }
+
+    case Primitive::kPrimFloat:
+      __ vmuls(FromDToLowS(out.As<DRegister>()),
+               FromDToLowS(first.As<DRegister>()),
+               FromDToLowS(second.As<DRegister>()));
+      break;
+
+    case Primitive::kPrimDouble:
+      __ vmuld(out.As<DRegister>(), first.As<DRegister>(), second.As<DRegister>());
+      break;
+
     case Primitive::kPrimBoolean:
     case Primitive::kPrimByte:
     case Primitive::kPrimChar:

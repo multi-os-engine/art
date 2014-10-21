@@ -1196,6 +1196,24 @@ void InstructionCodeGeneratorX86_64::VisitMul(HMul* mul) {
       break;
     }
 
+    case Primitive::kPrimFloat: {
+       if (second.IsFpuRegister()) {
+        __ mulss(first.As<XmmRegister>(), second.As<XmmRegister>());
+      } else {
+        DCHECK(second.IsStackSlot()) << second;
+        __ mulss(first.As<XmmRegister>(), Address(CpuRegister(RSP), second.GetStackIndex()));
+      }
+    }
+
+    case Primitive::kPrimDouble: {
+      if (second.IsFpuRegister()) {
+        __ mulsd(first.As<XmmRegister>(), second.As<XmmRegister>());
+      } else {
+        DCHECK(second.IsDoubleStackSlot()) << second;
+        __ mulsd(first.As<XmmRegister>(), Address(CpuRegister(RSP), second.GetStackIndex()));
+      }
+    }
+
     case Primitive::kPrimBoolean:
     case Primitive::kPrimByte:
     case Primitive::kPrimChar:
