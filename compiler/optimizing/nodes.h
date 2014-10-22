@@ -747,7 +747,7 @@ class HInstruction : public ArenaObject {
   // Returns whether two instructions are equal, that is:
   // 1) They have the same type and contain the same data,
   // 2) Their inputs are identical.
-  bool Equals(HInstruction* other) const;
+  virtual bool Equals(HInstruction* other) const;
 
   virtual InstructionKind GetKind() const = 0;
 
@@ -1948,6 +1948,29 @@ class HArrayLength : public HExpression<1> {
 
   virtual bool CanBeMoved() const { return true; }
   virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+
+  size_t ComputeHashCode() const {
+    HInstruction* input = InputAt(0);
+    if (input->IsNullCheck()) {
+      input = input->InputAt(0);
+    }
+    return GetKind() * 31 + input->GetId();
+  }
+
+  bool Equals(HInstruction* other) const {
+    if (!other->IsArrayLength()) {
+      return false;
+    }
+    HInstruction* input = InputAt(0);
+    if (input->IsNullCheck()) {
+      input = input->InputAt(0);
+    }
+    HInstruction* input_other = other->InputAt(0);
+    if (input_other->IsNullCheck()) {
+      input_other = input_other->InputAt(0);
+    }
+    return input == input_other;
+  }
 
   DECLARE_INSTRUCTION(ArrayLength);
 
