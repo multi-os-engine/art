@@ -160,16 +160,6 @@ art_clang_cflags += -Wimplicit-fallthrough
 # Enable float equality warnings.
 art_clang_cflags += -Wfloat-equal
 
-ifeq ($(ART_HOST_CLANG),true)
-  ART_HOST_CFLAGS += $(art_clang_cflags)
-endif
-ifeq ($(ART_TARGET_CLANG),true)
-  ART_TARGET_CFLAGS += $(art_clang_cflags)
-endif
-
-# Clear local variable now its use has ended.
-art_clang_cflags :=
-
 ART_CPP_EXTENSION := .cc
 
 ART_C_INCLUDES := \
@@ -228,11 +218,21 @@ ifndef LIBART_IMG_HOST_BASE_ADDRESS
 endif
 ART_HOST_CFLAGS := $(art_cflags) -DANDROID_SMP=1 -DART_BASE_ADDRESS=$(LIBART_IMG_HOST_BASE_ADDRESS)
 ART_HOST_CFLAGS += -DART_DEFAULT_INSTRUCTION_SET_FEATURES=default
+ifeq ($(ART_HOST_CLANG),true)
+  ART_HOST_CFLAGS += $(art_clang_cflags)
+endif
 
 ifndef LIBART_IMG_TARGET_BASE_ADDRESS
   $(error LIBART_IMG_TARGET_BASE_ADDRESS unset)
 endif
 ART_TARGET_CFLAGS := $(art_cflags) -DART_TARGET -DART_BASE_ADDRESS=$(LIBART_IMG_TARGET_BASE_ADDRESS)
+ifeq ($(ART_TARGET_CLANG),true)
+  ART_TARGET_CFLAGS += $(art_clang_cflags)
+endif
+
+# Clear local variable now its use has ended.
+art_clang_cflags :=
+
 
 ART_HOST_NON_DEBUG_CFLAGS := $(art_host_non_debug_cflags)
 ART_TARGET_NON_DEBUG_CFLAGS := $(art_target_non_debug_cflags)
