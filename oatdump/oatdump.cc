@@ -1267,6 +1267,8 @@ class ImageDumper {
 
     os << "PATCH DELTA:" << image_header_.GetPatchDelta() << "\n\n";
 
+    os << "COMPILE PIC: " << (image_header_.CompilePic() ? "yes" : "no") << "\n\n";
+
     {
       os << "ROOTS: " << reinterpret_cast<void*>(image_header_.GetImageRoots()) << "\n";
       Indenter indent1_filter(os.rdbuf(), kIndentChar, kIndentBy1Count);

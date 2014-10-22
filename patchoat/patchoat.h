@@ -40,14 +40,33 @@ class ArtMethod;
 
 class PatchOat {
  public:
+  // Patch only the oat file
   static bool Patch(File* oat_in, off_t delta, File* oat_out, TimingLogger* timings);
 
+  // Patch only the image (art file)
   static bool Patch(const std::string& art_location, off_t delta, File* art_out, InstructionSet isa,
                     TimingLogger* timings);
 
+  // Patch both the image and the oat file
   static bool Patch(const File* oat_in, const std::string& art_location,
                     off_t delta, File* oat_out, File* art_out, InstructionSet isa,
                     TimingLogger* timings);
+
+  enum PicPrepare {
+      NOT_PIC,            // Code not pic. Nothing happened.
+      PIC,                // Code was pic. Symlink created.
+      ERROR_FILE_EXISTS,  // Oat file already exists
+      ERROR_IMAGE_FILE,   // Failed to parse image file
+      ERROR_OAT_FILE,     // Failed to symlink oat file
+      ERROR_FIRST = ERROR_FILE_EXISTS,
+  };
+
+  // Check if it's possible to patchoat to the output file; creating a symlink if its PIC
+  static PicPrepare PrepareCompilePic(const std::string& art_location,
+                                      const std::string& input_oat_filename,
+                                      const std::string& output_oat_filename,
+                                      bool new_oat_out,
+                                      InstructionSet isa);
 
  private:
   // Takes ownership only of the ElfFile. All other pointers are only borrowed.

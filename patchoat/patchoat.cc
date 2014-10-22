@@ -48,6 +48,9 @@
 #include "thread.h"
 #include "utils.h"
 
+// TODO: remove before merging
+#define kIsDebugBuild true
+
 namespace art {
 
 static InstructionSet ElfISAToInstructionSet(Elf32_Word isa) {
@@ -72,7 +75,7 @@ static bool LocationToFilename(const std::string& location, InstructionSet isa,
   bool has_system = false;
   bool has_cache = false;
   // image_location = /system/framework/boot.art
-  // system_image_location = /system/framework/<image_isa>/boot.art
+  // system_image_filename = /system/framework/<image_isa>/boot.art
   std::string system_filename(GetSystemImageFilename(location.c_str(), isa));
   if (OS::FileExists(system_filename.c_str())) {
     has_system = true;
@@ -322,6 +325,81 @@ bool PatchOat::WriteImage(File* out) {
     LOG(ERROR) << "Writing to image file " << out->GetPath() << " failed.";
     return false;
   }
+}
+
+PatchOat::PicPrepare PatchOat::PrepareCompilePic(const std::string& art_location,
+                                                 const std::string& input_oat_filename,
+                                                 const std::string& output_oat_filename,
+                                                 bool new_oat_out,
+                                                 InstructionSet isa) {
+  // If there was no image file name, then we have no idea if it was PIC or not. Assume not.
+  if (art_location.empty()) {
+    LOG(WARNING) << "no image at location " << art_location << "; so can't query for pic";
+    return NOT_PIC;
+  }
+
+  // Open the image file from 'art_location' and check if it was compiled with PIC
+
+  std::string image_filename;
+  if (!LocationToFilename(art_location, isa, &image_filename)) {
+    LOG(ERROR) << "Unable to find image at location " << art_location;
+    return ERROR_IMAGE_FILE;
+  }
+  std::unique_ptr<File> input_image(OS::OpenFileForReading(image_filename.c_str()));
+  if (input_image.get() == nullptr) {
+    LOG(ERROR) << "unable to open input image file at " << image_filename
+               << " for location " << art_location;
+    return ERROR_IMAGE_FILE;
+  }
+  int64_t image_len = input_image->GetLength();
+  if (image_len < 0) {
+    LOG(ERROR) << "Error while getting image length";
+    return ERROR_IMAGE_FILE;
+  }
+  ImageHeader image_header;
+  if (sizeof(image_header) != input_image->Read(reinterpret_cast<char*>(&image_header),
+                                                sizeof(image_header), 0)) {
+    LOG(ERROR) << "Unable to read image header from image file " << input_image->GetPath();
+    return ERROR_IMAGE_FILE;
+  }
+
+  if (!image_header.CompilePic()) {
+    if (kIsDebugBuild) {
+      LOG(VERBOSE) << "image at location " << art_location << " was not compiled pic";
+    }
+    return NOT_PIC;
+  }
+
+  // If there was no input oat file name, then we don't need to do anything.
+  if (input_oat_filename.empty()) {
+    return PIC;
+  }
+
+  // Image was PIC. Create symlink where the oat is supposed to go.
+  if (!new_oat_out) {
+    LOG(ERROR) << "Oat file " << output_oat_filename << " already exists, refusing to overwrite";
+    return ERROR_FILE_EXISTS;
+  }
+
+  // Need a file when we are PIC, since we symlink over it. Refusing to symlink into FD.
+  if (output_oat_filename.empty()) {
+    // TODO: installd uses --output-oat-fd. Should we change class linking logic for PIC?
+    LOG(ERROR) << "No output oat filename specified, needs filename for when we are PIC";
+    return ERROR_OAT_FILE;
+  }
+
+  // Delete the original file, since we won't need it.
+  TEMP_FAILURE_RETRY(unlink(output_oat_filename.c_str()));
+
+  // Create a symlink from the old oat to the new oat
+  if (symlink(input_oat_filename.c_str(), output_oat_filename.c_str()) < 0) {
+    int err = errno;
+    LOG(ERROR) << "Failed to create symlink at " << output_oat_filename
+               << " error(" << err << "): " << strerror(err);
+    return ERROR_OAT_FILE;
+  }
+
+  return PIC;
 }
 
 bool PatchOat::PatchImage() {
@@ -1084,6 +1162,48 @@ static int patchoat(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
+
+  if (debug) {
+    LOG(INFO) << "moving offset by " << base_delta
+              << " (0x" << std::hex << base_delta << ") bytes or "
+              << std::dec << (base_delta/kPageSize) << " pages.";
+  }
+
+  // Presumably first-boot uses --input-image-location and installd uses --patched-image-location
+  std::string candidate_art_location = input_image_location.empty() ?
+                                           patched_image_location :
+                                           input_image_location;
+  // Check if this image was PIC, creating a symlink to the oat file in the process
+  PatchOat::PicPrepare is_pic = PatchOat::PrepareCompilePic(candidate_art_location,
+                                                            input_oat_filename,
+                                                            output_oat_filename,
+                                                            new_oat_out,
+                                                            isa);
+  if (is_pic >= PatchOat::ERROR_FIRST) {
+    // Error already logged by previous function
+    cleanup(false);
+    return EXIT_FAILURE;
+  } else if (is_pic == PatchOat::PIC) {
+    if (input_oat_fd >= 0 || output_oat_fd >= 0) {
+      // Shouldn't be a problem in practice since only installd uses these
+      // and installd will never try patching boot.art
+      LOG(ERROR) << "Do not support --input-oat-fd or --output-oat-fd for PIC images";
+      cleanup(false);
+      return EXIT_FAILURE;
+    }
+
+    // Do not make a copy of the oat files for PIC. Symlink instead.
+    have_oat_files = false;
+    // Do not lock since we aren't writing the file anymore.
+    // Sidenote: installd uses --no-lock-output so is it safe?
+    if (lock_output) {
+      LOG(WARNING) << "Ignoring --lock-output due to boot.art being --compile-pic";
+      lock_output = false;
+    }
+  } else {
+    CHECK(is_pic == PatchOat::NOT_PIC);
+  }
+
   ScopedFlock output_oat_lock;
   if (lock_output) {
     std::string error_msg;
@@ -1092,12 +1212,6 @@ static int patchoat(int argc, char **argv) {
       cleanup(false);
       return EXIT_FAILURE;
     }
-  }
-
-  if (debug) {
-    LOG(INFO) << "moving offset by " << base_delta
-              << " (0x" << std::hex << base_delta << ") bytes or "
-              << std::dec << (base_delta/kPageSize) << " pages.";
   }
 
   bool ret;
