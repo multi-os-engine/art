@@ -153,6 +153,9 @@ static void UsageError(const char* fmt, ...) {
   UsageError("      Example: --instruction-set-features=div");
   UsageError("      Default: default");
   UsageError("");
+  UsageError("  --compile-pic: Force indirect use of code, methods, and classes");
+  UsageError("      Default: disabled");
+  UsageError("");
   UsageError("  --compiler-backend=(Quick|Optimizing|Portable): select compiler backend");
   UsageError("      set.");
   UsageError("      Example: --compiler-backend=Portable");
@@ -387,7 +390,7 @@ class Dex2Oat {
   }
 
   void PrepareImageWriter(uintptr_t image_base) {
-    image_writer_.reset(new ImageWriter(*driver_, image_base));
+    image_writer_.reset(new ImageWriter(*driver_, image_base, compiler_options_->GetCompilePic()));
   }
 
   bool CreateOatFile(const std::vector<const DexFile*>& dex_files,
@@ -471,10 +474,15 @@ class Dex2Oat {
       PLOG(ERROR) << "Failed to open ELF file: " << oat_filename;
       return false;
     }
-    if (!ElfWriter::Fixup(oat_file.get(), oat_data_begin)) {
-      LOG(ERROR) << "Failed to fixup ELF file " << oat_file->GetPath();
-      return false;
+
+    // Do not fix up the ELF file if we are --compile-pic
+    if (!compiler_options_->GetCompilePic()) {
+      if (!ElfWriter::Fixup(oat_file.get(), oat_data_begin)) {
+        LOG(ERROR) << "Failed to fixup ELF file " << oat_file->GetPath();
+        return false;
+      }
     }
+
     return true;
   }
 
