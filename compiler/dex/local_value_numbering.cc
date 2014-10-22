@@ -374,6 +374,12 @@ void LocalValueNumbering::MergeOne(const LocalValueNumbering& other, MergeType m
   range_checked_ = other.range_checked_;
   null_checked_ = other.null_checked_;
 
+  const BasicBlock* pred_bb = gvn_->GetBasicBlock(other.Id());
+  if (GlobalValueNumbering::HasNullCheckLastInsn(pred_bb, Id())) {
+    int s_reg = pred_bb->last_mir_insn->ssa_rep->uses[0];
+    null_checked_.insert(GetOperandValue(s_reg));
+  }
+
   if (merge_type == kCatchMerge) {
     // Memory is clobbered. Use new memory version and don't merge aliasing locations.
     global_memory_version_ = NewMemoryVersion(&merge_new_memory_version_);
@@ -681,7 +687,7 @@ void LocalValueNumbering::MergeNullChecked() {
   const BasicBlock* least_entries_bb = gvn_->GetBasicBlock(least_entries_lvn->Id());
   if (gvn_->HasNullCheckLastInsn(least_entries_bb, id_)) {
     int s_reg = least_entries_bb->last_mir_insn->ssa_rep->uses[0];
-    uint32_t value_name = least_entries_lvn->GetSRegValueName(s_reg);
+    uint32_t value_name = least_entries_lvn->GetOperandValue(s_reg);
     merge_names_.clear();
     merge_names_.resize(gvn_->merge_lvns_.size(), value_name);
     if (gvn_->NullCheckedInAllPredecessors(merge_names_)) {
@@ -953,6 +959,26 @@ void LocalValueNumbering::Merge(MergeType merge_type) {
                 AliasingArrayVersions>>();
 }
 
+void LocalValueNumbering::PrepareEntryBlock() {
+  uint32_t vreg = gvn_->GetMirGraph()->GetFirstInVR();
+  CompilationUnit* cu = gvn_->GetCompilationUnit();
+  const char* shorty = cu->shorty;
+  ++shorty;  // Skip return value.
+  if ((cu->access_flags & kAccStatic) == 0) {
+    // If non-static method, mark "this" as non-null
+    uint16_t value_name = GetOperandValue(vreg);
+    ++vreg;
+    null_checked_.insert(value_name);
+  }
+  for ( ; *shorty != 0; ++shorty, ++vreg) {
+    if (*shorty == 'J' || *shorty == 'D') {
+      uint16_t value_name = GetOperandValueWide(vreg);
+      SetOperandValueWide(vreg, value_name);
+      ++vreg;
+    }
+  }
+}
+
 uint16_t LocalValueNumbering::MarkNonAliasingNonNull(MIR* mir) {
   uint16_t res = GetOperandValue(mir->ssa_rep->defs[0]);
   DCHECK(null_checked_.find(res) == null_checked_.end());
@@ -1044,7 +1070,6 @@ uint16_t LocalValueNumbering::HandlePhi(MIR* mir) {
     // Running LVN without a full GVN?
     return kNoValue;
   }
-  int16_t num_uses = mir->ssa_rep->num_uses;
   int32_t* uses = mir->ssa_rep->uses;
   // Try to find out if this is merging wide regs.
   if (mir->ssa_rep->defs[0] != 0 &&
@@ -1052,18 +1077,20 @@ uint16_t LocalValueNumbering::HandlePhi(MIR* mir) {
     // This is the high part of a wide reg. Ignore the Phi.
     return kNoValue;
   }
-  bool wide = false;
-  for (int16_t i = 0; i != num_uses; ++i) {
-    if (sreg_wide_value_map_.count(uses[i]) != 0u) {
-      wide = true;
-      break;
-    }
+  BasicBlockId* incoming = mir->meta.phi_incoming;
+  int16_t pos = 0;
+  // Check if we're merging a wide value based on the first merged LVN.
+  const LocalValueNumbering* first_lvn = gvn_->merge_lvns_[0];
+  DCHECK_LT(pos, mir->ssa_rep->num_uses);
+  while (incoming[pos] != first_lvn->Id()) {
+    ++pos;
+    DCHECK_LT(pos, mir->ssa_rep->num_uses);
   }
+  int first_s_reg = uses[pos];
+  bool wide = (first_lvn->sreg_wide_value_map_.count(first_s_reg) != 0u);
   // Iterate over *merge_lvns_ and skip incoming sregs for BBs without associated LVN.
   uint16_t value_name = kNoValue;
   merge_names_.clear();
-  BasicBlockId* incoming = mir->meta.phi_incoming;
-  int16_t pos = 0;
   bool same_values = true;
   for (const LocalValueNumbering* lvn : gvn_->merge_lvns_) {
     DCHECK_LT(pos, mir->ssa_rep->num_uses);
