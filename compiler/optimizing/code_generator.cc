@@ -26,12 +26,20 @@
 #include "gc_map_builder.h"
 #include "leb128.h"
 #include "mapping_table.h"
+#include "mirror/array-inl.h"
+#include "mirror/object_reference.h"
 #include "ssa_liveness_analysis.h"
 #include "utils/assembler.h"
 #include "verifier/dex_gc_map.h"
 #include "vmap_table.h"
 
 namespace art {
+
+size_t CodeGenerator::GetCacheOffset(uint32_t index) {
+  uint32_t heap_reference_size = sizeof(mirror::HeapReference<mirror::Object>);
+  return mirror::Array::DataOffset(heap_reference_size).Int32Value() +
+      index * heap_reference_size;
+}
 
 void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
   const GrowableArray<HBasicBlock*>& blocks = GetGraph()->GetBlocks();
