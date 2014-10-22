@@ -669,9 +669,7 @@ void Dbg::StartJdwp() {
   // This may cause us to suspend all threads.
   if (gJdwpState->IsActive()) {
     ScopedObjectAccess soa(Thread::Current());
-    if (!gJdwpState->PostVMStart()) {
-      LOG(WARNING) << "Failed to post 'start' message to debugger";
-    }
+    gJdwpState->PostVMStart();
   }
 }
 
@@ -4443,7 +4441,7 @@ void Dbg::DdmSendHeapSegments(bool native) {
 #if defined(HAVE_ANDROID_OS) && defined(USE_DLMALLOC)
     ReaderMutexLock mu(self, *Locks::heap_bitmap_lock_);
     dlmalloc_inspect_all(HeapChunkContext::HeapChunkCallback, &context);
-    HeapChunkContext::HeapChunkCallback(NULL, NULL, 0, &context);  // Indicate end of a space.
+    HeapChunkContext::HeapChunkCallback(nullptr, nullptr, 0, &context);  // Indicate end of a space.
 #else
     UNIMPLEMENTED(WARNING) << "Native heap inspection is only supported with dlmalloc";
 #endif
