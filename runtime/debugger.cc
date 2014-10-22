@@ -664,9 +664,7 @@ void Dbg::StartJdwp() {
   // This may cause us to suspend all threads.
   if (gJdwpState->IsActive()) {
     ScopedObjectAccess soa(Thread::Current());
-    if (!gJdwpState->PostVMStart()) {
-      LOG(WARNING) << "Failed to post 'start' message to debugger";
-    }
+    gJdwpState->PostVMStart();
   }
 }
 
