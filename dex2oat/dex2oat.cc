@@ -153,6 +153,9 @@ static void UsageError(const char* fmt, ...) {
   UsageError("      Example: --instruction-set-features=div");
   UsageError("      Default: default");
   UsageError("");
+  UsageError("  --compile-pic: Force indirect use of code, methods, and classes");
+  UsageError("      Default: disabled");
+  UsageError("");
   UsageError("  --compiler-backend=(Quick|Optimizing|Portable): select compiler backend");
   UsageError("      set.");
   UsageError("      Example: --compiler-backend=Portable");
@@ -387,7 +390,7 @@ class Dex2Oat {
   }
 
   void PrepareImageWriter(uintptr_t image_base) {
-    image_writer_.reset(new ImageWriter(*driver_, image_base));
+    image_writer_.reset(new ImageWriter(*driver_, image_base, compiler_options_->GetCompilePic()));
   }
 
   bool CreateOatFile(const std::vector<const DexFile*>& dex_files,
