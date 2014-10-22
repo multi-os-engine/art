@@ -19,6 +19,7 @@
 #include <fstream>
 #include <stdint.h>
 
+#include "bounds_check_elimination.h"
 #include "builder.h"
 #include "code_generator.h"
 #include "compiler.h"
@@ -197,9 +198,10 @@ static void RunOptimizations(HGraph* graph, const HGraphVisualizer& visualizer) 
   SsaDeadPhiElimination opt4(graph);
   InstructionSimplifier opt5(graph);
   GlobalValueNumberer opt6(graph->GetArena(), graph);
-  InstructionSimplifier opt7(graph);
+  BoundsCheckElimination opt7(graph);
+  InstructionSimplifier opt8(graph);
 
-  HOptimization* optimizations[] = { &opt1, &opt2, &opt3, &opt4, &opt5, &opt6, &opt7 };
+  HOptimization* optimizations[] = { &opt1, &opt2, &opt3, &opt4, &opt5, &opt6, &opt7, &opt8 };
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
     HOptimization* optimization = optimizations[i];
@@ -322,6 +324,7 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
       SsaRedundantPhiElimination(graph).Run();
       SsaDeadPhiElimination(graph).Run();
       GlobalValueNumberer(graph->GetArena(), graph).Run();
+      BoundsCheckElimination(graph).Run();
       SsaLivenessAnalysis liveness(*graph, codegen);
       liveness.Analyze();
       visualizer.DumpGraph(kLivenessPassName);
