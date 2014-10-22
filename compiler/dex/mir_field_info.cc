@@ -112,8 +112,9 @@ void MirSFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
 
     bool is_referrers_class, is_initialized;
     std::pair<bool, bool> fast_path = compiler_driver->IsFastStaticField(
-        dex_cache.Get(), referrer_class.Get(), resolved_field, field_idx, &it->field_offset_,
+        dex_cache.Get(), referrer_class.Get(), resolved_field, field_idx,
         &it->storage_index_, &is_referrers_class, &is_initialized);
+    it->field_offset_ = resolved_field->GetOffset();
     it->flags_ = kFlagIsStatic |
         (is_volatile ? kFlagIsVolatile : 0u) |
         (fast_path.first ? kFlagFastGet : 0u) |

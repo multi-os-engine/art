@@ -508,6 +508,10 @@ class HBasicBlock : public ArenaObject {
   M(FloatConstant, Constant)                                            \
   M(DoubleConstant, Constant)                                           \
   M(NewArray, Instruction)                                              \
+  M(ClinitCheck, Instruction)                                           \
+  M(StaticFieldGet, Instruction)                                        \
+  M(StaticFieldSet, Instruction)                                        \
+  M(LoadClass, Instruction)                                             \
 
 #define FOR_EACH_INSTRUCTION(M)                                         \
   FOR_EACH_CONCRETE_INSTRUCTION(M)                                      \
@@ -2002,6 +2006,125 @@ class HSuspendCheck : public HTemplateInstruction<0> {
   const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HSuspendCheck);
+};
+
+class HLoadClass : public HExpression<0> {
+ public:
+  HLoadClass(uint16_t type_index,
+             bool is_referrers_class,
+             bool is_initialized,
+             uint32_t dex_pc)
+      : HExpression(Primitive::kPrimNot, SideEffects::None()),
+        type_index_(type_index),
+        is_referrers_class_(is_referrers_class),
+        is_initialized_(is_initialized),
+        dex_pc_(dex_pc) {}
+
+  virtual bool CanBeMoved() const { return false; }
+
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    return other->AsLoadClass()->type_index_ == type_index_;
+  }
+
+  virtual size_t ComputeHashCode() const { return type_index_; }
+
+  uint32_t GetDexPc() const { return dex_pc_; }
+  uint16_t GetTypeIndex() const { return type_index_; }
+
+  bool NeedsInitialization() const {
+    return !is_initialized_ && !is_referrers_class_;
+  }
+
+  bool IsReferrersClass() const { return is_referrers_class_; }
+
+  DECLARE_INSTRUCTION(LoadClass);
+
+ private:
+  const uint16_t type_index_;
+  const bool is_referrers_class_;
+  const bool is_initialized_;
+  const uint32_t dex_pc_;
+
+  DISALLOW_COPY_AND_ASSIGN(HLoadClass);
+};
+
+// TODO: Pass this check to HInvokeStatic nodes.
+class HClinitCheck : public HExpression<1> {
+ public:
+  explicit HClinitCheck(HLoadClass* constant, uint32_t dex_pc)
+      : HExpression(Primitive::kPrimNot, SideEffects::All()),
+        dex_pc_(dex_pc) {
+    SetRawInputAt(0, constant);
+  }
+
+  virtual bool NeedsEnvironment() const {
+    return true;
+  }
+
+  uint32_t GetDexPc() const { return dex_pc_; }
+
+  HLoadClass* GetLoadClass() const { return InputAt(0)->AsLoadClass(); }
+
+  DECLARE_INSTRUCTION(ClinitCheck);
+
+ private:
+  const uint32_t dex_pc_;
+
+  DISALLOW_COPY_AND_ASSIGN(HClinitCheck);
+};
+
+class HStaticFieldGet : public HExpression<1> {
+ public:
+  HStaticFieldGet(HInstruction* cls,
+                  Primitive::Type field_type,
+                  MemberOffset field_offset)
+      : HExpression(field_type, SideEffects::DependsOnSomething()),
+        field_info_(field_offset, field_type) {
+    SetRawInputAt(0, cls);
+  }
+
+  virtual bool CanBeMoved() const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    size_t other_offset = other->AsStaticFieldGet()->GetFieldOffset().SizeValue();
+    return other_offset == GetFieldOffset().SizeValue();
+  }
+
+  virtual size_t ComputeHashCode() const {
+    return (HInstruction::ComputeHashCode() << 7) | GetFieldOffset().SizeValue();
+  }
+
+  MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
+  Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
+
+  DECLARE_INSTRUCTION(StaticFieldGet);
+
+ private:
+  FieldInfo field_info_;
+
+  DISALLOW_COPY_AND_ASSIGN(HStaticFieldGet);
+};
+
+class HStaticFieldSet : public HTemplateInstruction<2> {
+ public:
+  HStaticFieldSet(HInstruction* cls,
+                  HInstruction* value,
+                  Primitive::Type field_type,
+                  MemberOffset field_offset)
+      : HTemplateInstruction(SideEffects::ChangesSomething()),
+        field_info_(field_offset, field_type) {
+    SetRawInputAt(0, cls);
+    SetRawInputAt(1, value);
+  }
+
+  MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
+  Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
+
+  DECLARE_INSTRUCTION(StaticFieldSet);
+
+ private:
+  const FieldInfo field_info_;
+
+  DISALLOW_COPY_AND_ASSIGN(HStaticFieldSet);
 };
 
 class MoveOperands : public ArenaObject {

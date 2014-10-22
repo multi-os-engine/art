@@ -171,6 +171,34 @@ class BoundsCheckSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(BoundsCheckSlowPathARM);
 };
 
+class ClinitCheckSlowPathARM : public SlowPathCodeARM {
+ public:
+  explicit ClinitCheckSlowPathARM(HClinitCheck* instruction) : instruction_(instruction) {}
+
+  virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
+    __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
+
+    HLoadClass* cls = instruction_->GetLoadClass();
+    InvokeRuntimeCallingConvention calling_convention;
+    __ LoadImmediate(calling_convention.GetRegisterAt(0), cls->GetTypeIndex());
+    arm_codegen->LoadCurrentMethod(calling_convention.GetRegisterAt(1));
+    int32_t offset = QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pInitializeStaticStorage).Int32Value();
+    __ LoadFromOffset(kLoadWord, LR, TR, offset);
+    __ blx(LR);
+    codegen->RecordPcInfo(instruction_, instruction_->GetDexPc());
+    arm_codegen->Move32(instruction_->GetLocations()->InAt(0), Location::RegisterLocation(R0));
+    codegen->RestoreLiveRegisters(instruction_->GetLocations());
+    __ b(GetExitLabel());
+  }
+
+ private:
+  HClinitCheck* const instruction_;
+
+  DISALLOW_COPY_AND_ASSIGN(ClinitCheckSlowPathARM);
+};
+
 #undef __
 #define __ reinterpret_cast<ArmAssembler*>(GetAssembler())->
 
@@ -943,7 +971,7 @@ void LocationsBuilderARM::VisitInvokeStatic(HInvokeStatic* invoke) {
   HandleInvoke(invoke);
 }
 
-void InstructionCodeGeneratorARM::LoadCurrentMethod(Register reg) {
+void CodeGeneratorARM::LoadCurrentMethod(Register reg) {
   __ LoadFromOffset(kLoadWord, reg, SP, kCurrentMethodStackOffset);
 }
 
@@ -961,7 +989,7 @@ void InstructionCodeGeneratorARM::VisitInvokeStatic(HInvokeStatic* invoke) {
   // Currently we implement the app -> app logic, which looks up in the resolve cache.
 
   // temp = method;
-  LoadCurrentMethod(temp);
+  codegen_->LoadCurrentMethod(temp);
   // temp = temp->dex_cache_resolved_methods_;
   __ LoadFromOffset(kLoadWord, temp, temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
   // temp = temp[index_in_cache]
@@ -1301,7 +1329,7 @@ void LocationsBuilderARM::VisitNewInstance(HNewInstance* instruction) {
 
 void InstructionCodeGeneratorARM::VisitNewInstance(HNewInstance* instruction) {
   InvokeRuntimeCallingConvention calling_convention;
-  LoadCurrentMethod(calling_convention.GetRegisterAt(1));
+  codegen_->LoadCurrentMethod(calling_convention.GetRegisterAt(1));
   __ LoadImmediate(calling_convention.GetRegisterAt(0), instruction->GetTypeIndex());
 
   int32_t offset = QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pAllocObjectWithAccessCheck).Int32Value();
@@ -1324,7 +1352,7 @@ void LocationsBuilderARM::VisitNewArray(HNewArray* instruction) {
 
 void InstructionCodeGeneratorARM::VisitNewArray(HNewArray* instruction) {
   InvokeRuntimeCallingConvention calling_convention;
-  LoadCurrentMethod(calling_convention.GetRegisterAt(1));
+  codegen_->LoadCurrentMethod(calling_convention.GetRegisterAt(1));
   __ LoadImmediate(calling_convention.GetRegisterAt(0), instruction->GetTypeIndex());
 
   int32_t offset = QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pAllocArrayWithAccessCheck).Int32Value();
@@ -1969,6 +1997,181 @@ void ParallelMoveResolverARM::SpillScratch(int reg) {
 
 void ParallelMoveResolverARM::RestoreScratch(int reg) {
   __ Pop(static_cast<Register>(reg));
+}
+
+void LocationsBuilderARM::VisitLoadClass(HLoadClass* cls) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(cls, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorARM::VisitLoadClass(HLoadClass* cls) {
+  Register out = cls->GetLocations()->Out().As<Register>();
+  if (cls->IsReferrersClass()) {
+    codegen_->LoadCurrentMethod(out);
+    __ LoadFromOffset(kLoadWord, out, out, mirror::ArtMethod::DeclaringClassOffset().Int32Value());
+  } else {
+    uint32_t heap_reference_size = sizeof(mirror::HeapReference<mirror::Object>);
+    size_t index_in_cache = mirror::Array::DataOffset(heap_reference_size).Int32Value() +
+        cls->GetTypeIndex() * heap_reference_size;
+    codegen_->LoadCurrentMethod(out);
+    __ LoadFromOffset(
+        kLoadWord, out, out, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value());
+    __ LoadFromOffset(kLoadWord, out, out, index_in_cache);
+  }
+}
+
+void LocationsBuilderARM::VisitClinitCheck(HClinitCheck* check) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(check, LocationSummary::kCallOnSlowPath);
+  locations->SetInAt(0, Location::RequiresRegister());
+  if (check->HasUses()) {
+    locations->SetOut(Location::SameAsFirstInput());
+  }
+}
+
+void InstructionCodeGeneratorARM::VisitClinitCheck(HClinitCheck* check) {
+  SlowPathCodeARM* slow_path = new (GetGraph()->GetArena()) ClinitCheckSlowPathARM(check);
+  codegen_->AddSlowPath(slow_path);
+
+  LocationSummary* locations = check->GetLocations();
+  // We remove the class as a live register, we know it's null or unused in the slow path.
+  RegisterSet* register_set = locations->GetLiveRegisters();
+  register_set->Remove(locations->InAt(0));
+
+  Register in = locations->InAt(0).As<Register>();
+  __ cmp(in, ShifterOperand(0));
+  __ b(slow_path->GetEntryLabel(), EQ);
+  __ LoadFromOffset(kLoadWord, IP, in, mirror::Class::StatusOffset().Int32Value());
+  __ cmp(IP, ShifterOperand(mirror::Class::kStatusInitialized));
+  __ b(slow_path->GetEntryLabel(), LT);
+  // Even if the initialized flag is set, we may be in a situation where caches are not synced
+  // properly. Therefore, we do a memory fence.
+  __ dmb(ISH);
+  __ Bind(slow_path->GetExitLabel());
+}
+
+void LocationsBuilderARM::VisitStaticFieldGet(HStaticFieldGet* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM::VisitStaticFieldGet(HStaticFieldGet* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  Register cls = locations->InAt(0).As<Register>();
+  uint32_t offset = instruction->GetFieldOffset().Uint32Value();
+
+  switch (instruction->GetType()) {
+    case Primitive::kPrimBoolean: {
+      Register out = locations->Out().As<Register>();
+      __ LoadFromOffset(kLoadUnsignedByte, out, cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimByte: {
+      Register out = locations->Out().As<Register>();
+      __ LoadFromOffset(kLoadSignedByte, out, cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimShort: {
+      Register out = locations->Out().As<Register>();
+      __ LoadFromOffset(kLoadSignedHalfword, out, cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimChar: {
+      Register out = locations->Out().As<Register>();
+      __ LoadFromOffset(kLoadUnsignedHalfword, out, cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimInt:
+    case Primitive::kPrimNot: {
+      Register out = locations->Out().As<Register>();
+      __ LoadFromOffset(kLoadWord, out, cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimLong: {
+      // TODO: support volatile.
+      Location out = locations->Out();
+      __ LoadFromOffset(kLoadWordPair, out.AsRegisterPairLow<Register>(), cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      LOG(FATAL) << "Unimplemented register type " << instruction->GetType();
+      UNREACHABLE();
+    case Primitive::kPrimVoid:
+      LOG(FATAL) << "Unreachable type " << instruction->GetType();
+      UNREACHABLE();
+  }
+}
+
+void LocationsBuilderARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  bool is_object_type = instruction->GetFieldType() == Primitive::kPrimNot;
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+  // Temporary registers for the write barrier.
+  if (is_object_type) {
+    locations->AddTemp(Location::RequiresRegister());
+    locations->AddTemp(Location::RequiresRegister());
+  }
+}
+
+void InstructionCodeGeneratorARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  Register cls = locations->InAt(0).As<Register>();
+  uint32_t offset = instruction->GetFieldOffset().Uint32Value();
+  Primitive::Type field_type = instruction->GetFieldType();
+
+  switch (field_type) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte: {
+      Register value = locations->InAt(1).As<Register>();
+      __ StoreToOffset(kStoreByte, value, cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar: {
+      Register value = locations->InAt(1).As<Register>();
+      __ StoreToOffset(kStoreHalfword, value, cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimInt:
+    case Primitive::kPrimNot: {
+      Register value = locations->InAt(1).As<Register>();
+      __ StoreToOffset(kStoreWord, value, cls, offset);
+      if (field_type == Primitive::kPrimNot) {
+        Register temp = locations->GetTemp(0).As<Register>();
+        Register card = locations->GetTemp(1).As<Register>();
+        codegen_->MarkGCCard(temp, card, cls, value);
+      }
+      break;
+    }
+
+    case Primitive::kPrimLong: {
+      Location value = locations->InAt(1);
+      __ StoreToOffset(kStoreWordPair, value.AsRegisterPairLow<Register>(), cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      LOG(FATAL) << "Unimplemented register type " << field_type;
+      UNREACHABLE();
+    case Primitive::kPrimVoid:
+      LOG(FATAL) << "Unreachable type " << field_type;
+      UNREACHABLE();
+  }
 }
 
 }  // namespace arm

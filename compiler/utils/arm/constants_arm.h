@@ -47,6 +47,15 @@ namespace arm {
 #error "Exactly one of VFPv3_D16 or VFPv3_D32 can be defined at a time."
 #endif
 
+// Options for the dmb instruction.
+enum DmbOptions {
+  SY = 0xf,
+  ST = 0xe,
+  ISH = 0xb,
+  ISHST = 0xa,
+  NSH = 0x7,
+  NSHST = 0x6
+};
 
 enum ScaleFactor {
   TIMES_1 = 0,

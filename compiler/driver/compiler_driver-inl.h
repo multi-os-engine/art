@@ -107,13 +107,12 @@ inline std::pair<bool, bool> CompilerDriver::IsFastInstanceField(
 
 inline std::pair<bool, bool> CompilerDriver::IsFastStaticField(
     mirror::DexCache* dex_cache, mirror::Class* referrer_class,
-    mirror::ArtField* resolved_field, uint16_t field_idx, MemberOffset* field_offset,
+    mirror::ArtField* resolved_field, uint16_t field_idx,
     uint32_t* storage_index, bool* is_referrers_class, bool* is_initialized) {
   DCHECK(resolved_field->IsStatic());
   if (LIKELY(referrer_class != nullptr)) {
     mirror::Class* fields_class = resolved_field->GetDeclaringClass();
     if (fields_class == referrer_class) {
-      *field_offset = resolved_field->GetOffset();
       *storage_index = fields_class->GetDexTypeIndex();
       *is_referrers_class = true;  // implies no worrying about class initialization
       *is_initialized = true;
@@ -148,7 +147,6 @@ inline std::pair<bool, bool> CompilerDriver::IsFastStaticField(
         }
       }
       if (storage_idx != DexFile::kDexNoIndex) {
-        *field_offset = resolved_field->GetOffset();
         *storage_index = storage_idx;
         *is_referrers_class = false;
         *is_initialized = fields_class->IsInitialized() &&
@@ -158,7 +156,6 @@ inline std::pair<bool, bool> CompilerDriver::IsFastStaticField(
     }
   }
   // Conservative defaults.
-  *field_offset = MemberOffset(0u);
   *storage_index = DexFile::kDexNoIndex;
   *is_referrers_class = false;
   *is_initialized = false;
