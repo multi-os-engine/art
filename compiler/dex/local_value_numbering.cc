@@ -466,8 +466,11 @@ void LocalValueNumbering::PruneNonAliasingRefsForCatch() {
     // Only INVOKEs can leak and clobber non-aliasing references if they throw.
     if ((mir->dalvikInsn.FlagsOf() & Instruction::kInvoke) != 0) {
       for (uint16_t i = 0u; i != mir->ssa_rep->num_uses; ++i) {
-        uint16_t value_name = lvn->GetOperandValue(mir->ssa_rep->uses[i]);
-        non_aliasing_refs_.erase(value_name);
+        // NOTE: Avoiding GetOperandValue(). We don't want to LookupValue() here.
+        auto it = lvn->sreg_value_map_.find(mir->ssa_rep->uses[i]);
+        if (it != lvn->sreg_value_map_.end()) {
+          non_aliasing_refs_.erase(it->second);
+        }
       }
     }
   }
@@ -1044,7 +1047,6 @@ uint16_t LocalValueNumbering::HandlePhi(MIR* mir) {
     // Running LVN without a full GVN?
     return kNoValue;
   }
-  int16_t num_uses = mir->ssa_rep->num_uses;
   int32_t* uses = mir->ssa_rep->uses;
   // Try to find out if this is merging wide regs.
   if (mir->ssa_rep->defs[0] != 0 &&
@@ -1052,9 +1054,19 @@ uint16_t LocalValueNumbering::HandlePhi(MIR* mir) {
     // This is the high part of a wide reg. Ignore the Phi.
     return kNoValue;
   }
+  BasicBlockId* incoming = mir->meta.phi_incoming;
+  // Iterate over *merge_lvns_ and check if we're merging a wide value.
   bool wide = false;
-  for (int16_t i = 0; i != num_uses; ++i) {
-    if (sreg_wide_value_map_.count(uses[i]) != 0u) {
+  int16_t pos = 0;
+  for (const LocalValueNumbering* lvn : gvn_->merge_lvns_) {
+    DCHECK_LT(pos, mir->ssa_rep->num_uses);
+    while (incoming[pos] != lvn->Id()) {
+      ++pos;
+      DCHECK_LT(pos, mir->ssa_rep->num_uses);
+    }
+    int s_reg = uses[pos];
+    ++pos;
+    if (lvn->sreg_wide_value_map_.count(s_reg) != 0u) {
       wide = true;
       break;
     }
@@ -1062,8 +1074,7 @@ uint16_t LocalValueNumbering::HandlePhi(MIR* mir) {
   // Iterate over *merge_lvns_ and skip incoming sregs for BBs without associated LVN.
   uint16_t value_name = kNoValue;
   merge_names_.clear();
-  BasicBlockId* incoming = mir->meta.phi_incoming;
-  int16_t pos = 0;
+  pos = 0;
   bool same_values = true;
   for (const LocalValueNumbering* lvn : gvn_->merge_lvns_) {
     DCHECK_LT(pos, mir->ssa_rep->num_uses);
@@ -1469,8 +1480,11 @@ uint16_t LocalValueNumbering::GetValueNumber(MIR* mir) {
     case Instruction::INVOKE_STATIC_RANGE:
       // Make ref args aliasing.
       for (size_t i = 0u, count = mir->ssa_rep->num_uses; i != count; ++i) {
-        uint16_t reg = GetOperandValue(mir->ssa_rep->uses[i]);
-        non_aliasing_refs_.erase(reg);
+        // NOTE: Avoiding GetOperandValue(). We don't want to LookupValue() here.
+        auto it = sreg_value_map_.find(mir->ssa_rep->uses[i]);
+        if (it != sreg_value_map_.end()) {
+          non_aliasing_refs_.erase(it->second);
+        }
       }
       HandleInvokeOrClInitOrAcquireOp(mir);
       break;
