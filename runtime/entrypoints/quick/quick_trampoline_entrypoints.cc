@@ -50,15 +50,19 @@ class QuickArgumentVisitor {
   // | arg1 spill |  |
   // | Method*    | ---
   // | LR         |
-  // | ...        |    callee saves
-  // | R3         |    arg3
-  // | R2         |    arg2
-  // | R1         |    arg1
-  // | R0         |    padding
+  // | ...        |    4x6 bytes callee saves
+  // | R3         |
+  // | R2         |
+  // | R1         |
+  // | S15        |
+  // | :          |
+  // | S0         |
+  // |            |    4x2 bytes padding
   // | Method*    |  <- sp
-  static constexpr bool kQuickSoftFloatAbi = true;  // This is a soft float ABI.
-  static constexpr size_t kNumQuickGprArgs = 3;  // 3 arguments passed in GPRs.
-  static constexpr size_t kNumQuickFprArgs = 0;  // 0 arguments passed in FPRs.
+  static constexpr bool kQuickSoftFloatAbi = kArm32QuickCodeUseSoftFloat;
+  static constexpr bool kQuickDoubleRegistersAligned = kArm32QuickCodeUseSoftFloat ? false : true;
+  static constexpr size_t kNumQuickGprArgs = 3;
+  static constexpr size_t kNumQuickFprArgs = kArm32QuickCodeUseSoftFloat ? 0 : 16;
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset =
       arm::ArmCalleeSaveFpr1Offset(Runtime::kRefsAndArgs);  // Offset of first FPR arg.
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Gpr1Offset =
@@ -90,6 +94,7 @@ class QuickArgumentVisitor {
   // |            |    padding
   // | Method*    |  <- sp
   static constexpr bool kQuickSoftFloatAbi = false;  // This is a hard float ABI.
+  static constexpr bool kQuickDoubleRegistersAligned = false;
   static constexpr size_t kNumQuickGprArgs = 7;  // 7 arguments passed in GPRs.
   static constexpr size_t kNumQuickFprArgs = 8;  // 8 arguments passed in FPRs.
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset =
@@ -117,6 +122,7 @@ class QuickArgumentVisitor {
   // | A1         |    arg1
   // | A0/Method* |  <- sp
   static constexpr bool kQuickSoftFloatAbi = true;  // This is a soft float ABI.
+  static constexpr bool kQuickDoubleRegistersAligned = false;
   static constexpr size_t kNumQuickGprArgs = 3;  // 3 arguments passed in GPRs.
   static constexpr size_t kNumQuickFprArgs = 0;  // 0 arguments passed in FPRs.
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset = 0;  // Offset of first FPR arg.
@@ -141,6 +147,7 @@ class QuickArgumentVisitor {
   // | ECX         |    arg1
   // | EAX/Method* |  <- sp
   static constexpr bool kQuickSoftFloatAbi = true;  // This is a soft float ABI.
+  static constexpr bool kQuickDoubleRegistersAligned = false;
   static constexpr size_t kNumQuickGprArgs = 3;  // 3 arguments passed in GPRs.
   static constexpr size_t kNumQuickFprArgs = 0;  // 0 arguments passed in FPRs.
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset = 0;  // Offset of first FPR arg.
@@ -178,6 +185,7 @@ class QuickArgumentVisitor {
   // | Padding         |
   // | RDI/Method*     |  <- sp
   static constexpr bool kQuickSoftFloatAbi = false;  // This is a hard float ABI.
+  static constexpr bool kQuickDoubleRegistersAligned = false;
   static constexpr size_t kNumQuickGprArgs = 5;  // 5 arguments passed in GPRs.
   static constexpr size_t kNumQuickFprArgs = 8;  // 8 arguments passed in FPRs.
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset = 16;  // Offset of first FPR arg.
@@ -222,8 +230,15 @@ class QuickArgumentVisitor {
           fpr_args_(reinterpret_cast<uint8_t*>(sp) + kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset),
           stack_args_(reinterpret_cast<uint8_t*>(sp) + kQuickCalleeSaveFrame_RefAndArgs_FrameSize
                       + StackArgumentStartFromShorty(is_static, shorty, shorty_len)),
-          gpr_index_(0), fpr_index_(0), stack_index_(0), cur_type_(Primitive::kPrimVoid),
-          is_split_long_or_double_(false) {}
+          gpr_index_(0), fpr_index_(0), fpr_double_index_(0), stack_index_(0),
+          cur_type_(Primitive::kPrimVoid), is_split_long_or_double_(false) {
+    COMPILE_ASSERT(kQuickSoftFloatAbi == (kNumQuickFprArgs == 0), knum_of_quick_fpr_arg_unexpected);
+    COMPILE_ASSERT(!(kQuickSoftFloatAbi && kQuickDoubleRegistersAligned), kdouble_align_unexpected);
+    // For register alignment, we want to assume that counters(fpr_double_index_) are even if the
+    // next register is even.
+    COMPILE_ASSERT(!kQuickDoubleRegistersAligned || kNumQuickFprArgs % 2 == 0,
+        knum_quick_fpr_args_not_even);
+  }
 
   virtual ~QuickArgumentVisitor() {}
 
@@ -237,7 +252,12 @@ class QuickArgumentVisitor {
     if (!kQuickSoftFloatAbi) {
       Primitive::Type type = GetParamPrimitiveType();
       if (UNLIKELY((type == Primitive::kPrimDouble) || (type == Primitive::kPrimFloat))) {
-        if ((kNumQuickFprArgs != 0) && (fpr_index_ + 1 < kNumQuickFprArgs + 1)) {
+        // Note: Clang is unhappy on using UNLIKELY to wrap the following condition.
+        if (type == Primitive::kPrimDouble && kQuickDoubleRegistersAligned) {
+          if (fpr_double_index_ + 2 < kNumQuickFprArgs + 1) {
+            return fpr_args_ + (fpr_double_index_ * GetBytesPerFprSpillLocation(kRuntimeISA));
+          }
+        } else if (fpr_index_ + 1 < kNumQuickFprArgs + 1) {
           return fpr_args_ + (fpr_index_ * GetBytesPerFprSpillLocation(kRuntimeISA));
         }
         return stack_args_ + (stack_index_ * kBytesStackArgLocation);
@@ -269,27 +289,26 @@ class QuickArgumentVisitor {
   uint64_t ReadSplitLongParam() const {
     DCHECK(IsSplitLongOrDouble());
     uint64_t low_half = *reinterpret_cast<uint32_t*>(GetParamAddress());
-    uint64_t high_half = *reinterpret_cast<uint32_t*>(stack_args_);
+    uint64_t high_half = *reinterpret_cast<uint32_t*>(stack_args_
+        + (stack_index_ + 1) * kBytesStackArgLocation);
     return (low_half & 0xffffffffULL) | (high_half << 32);
   }
 
   void VisitArguments() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    // This implementation doesn't support reg-spill area for hard float
-    // ABI targets such as x86_64 and aarch64. So, for those targets whose
-    // 'kQuickSoftFloatAbi' is 'false':
-    //     (a) 'stack_args_' should point to the first method's argument
-    //     (b) whatever the argument type it is, the 'stack_index_' should
-    //         be moved forward along with every visiting.
+    // (a) 'stack_args_' should point to the first method's argument
+    // (b) whatever the argument type it is, the 'stack_index_' should
+    //     be moved forward along with every visiting.
     gpr_index_ = 0;
     fpr_index_ = 0;
+    if (kQuickDoubleRegistersAligned) {
+      fpr_double_index_ = 0;
+    }
     stack_index_ = 0;
     if (!is_static_) {  // Handle this.
       cur_type_ = Primitive::kPrimNot;
       is_split_long_or_double_ = false;
       Visit();
-      if (!kQuickSoftFloatAbi || kNumQuickGprArgs == 0) {
-        stack_index_++;
-      }
+      stack_index_++;
       if (kNumQuickGprArgs > 0) {
         gpr_index_++;
       }
@@ -305,9 +324,7 @@ class QuickArgumentVisitor {
         case Primitive::kPrimInt:
           is_split_long_or_double_ = false;
           Visit();
-          if (!kQuickSoftFloatAbi || kNumQuickGprArgs == gpr_index_) {
-            stack_index_++;
-          }
+          stack_index_++;
           if (gpr_index_ < kNumQuickGprArgs) {
             gpr_index_++;
           }
@@ -315,17 +332,24 @@ class QuickArgumentVisitor {
         case Primitive::kPrimFloat:
           is_split_long_or_double_ = false;
           Visit();
+          stack_index_++;
           if (kQuickSoftFloatAbi) {
             if (gpr_index_ < kNumQuickGprArgs) {
               gpr_index_++;
-            } else {
-              stack_index_++;
             }
           } else {
-            if ((kNumQuickFprArgs != 0) && (fpr_index_ + 1 < kNumQuickFprArgs + 1)) {
+            if (fpr_index_ + 1 < kNumQuickFprArgs + 1) {
               fpr_index_++;
+              if (kQuickDoubleRegistersAligned) {
+                // Double should not overlap with float.
+                // For example, if fpr_index_ = 3, fpr_double_index_ should be at least 4.
+                fpr_double_index_ = std::max(fpr_double_index_, RoundUp(fpr_index_, 2));
+                // Float should not overlap with double.
+                if (fpr_index_ % 2 == 0) {
+                  fpr_index_ = std::max(fpr_double_index_, fpr_index_);
+                }
+              }
             }
-            stack_index_++;
           }
           break;
         case Primitive::kPrimDouble:
@@ -334,41 +358,45 @@ class QuickArgumentVisitor {
             is_split_long_or_double_ = (GetBytesPerGprSpillLocation(kRuntimeISA) == 4) &&
                 ((gpr_index_ + 1) == kNumQuickGprArgs);
             Visit();
-            if (!kQuickSoftFloatAbi || kNumQuickGprArgs == gpr_index_) {
-              if (kBytesStackArgLocation == 4) {
-                stack_index_+= 2;
-              } else {
-                CHECK_EQ(kBytesStackArgLocation, 8U);
-                stack_index_++;
-              }
+            if (kBytesStackArgLocation == 4) {
+              stack_index_+= 2;
+            } else {
+              CHECK_EQ(kBytesStackArgLocation, 8U);
+              stack_index_++;
             }
             if (gpr_index_ < kNumQuickGprArgs) {
               gpr_index_++;
               if (GetBytesPerGprSpillLocation(kRuntimeISA) == 4) {
                 if (gpr_index_ < kNumQuickGprArgs) {
                   gpr_index_++;
-                } else if (kQuickSoftFloatAbi) {
-                  stack_index_++;
                 }
               }
             }
           } else {
             is_split_long_or_double_ = (GetBytesPerFprSpillLocation(kRuntimeISA) == 4) &&
-                ((fpr_index_ + 1) == kNumQuickFprArgs);
+                ((fpr_index_ + 1) == kNumQuickFprArgs) && !kQuickDoubleRegistersAligned;
             Visit();
-            if ((kNumQuickFprArgs != 0) && (fpr_index_ + 1 < kNumQuickFprArgs + 1)) {
-              fpr_index_++;
-              if (GetBytesPerFprSpillLocation(kRuntimeISA) == 4) {
-                if ((kNumQuickFprArgs != 0) && (fpr_index_ + 1 < kNumQuickFprArgs + 1)) {
-                  fpr_index_++;
-                }
-              }
-            }
             if (kBytesStackArgLocation == 4) {
               stack_index_+= 2;
             } else {
               CHECK_EQ(kBytesStackArgLocation, 8U);
               stack_index_++;
+            }
+            if (kQuickDoubleRegistersAligned) {
+              if (fpr_double_index_ + 2 < kNumQuickFprArgs + 1) {
+                fpr_double_index_ += 2;
+                // Float should not overlap with double.
+                if (fpr_index_ % 2 == 0) {
+                  fpr_index_ = std::max(fpr_double_index_, fpr_index_);
+                }
+              }
+            } else if (fpr_index_ + 1 < kNumQuickFprArgs + 1) {
+              fpr_index_++;
+              if (GetBytesPerFprSpillLocation(kRuntimeISA) == 4) {
+                if (fpr_index_ + 1 < kNumQuickFprArgs + 1) {
+                  fpr_index_++;
+                }
+              }
             }
           }
           break;
@@ -381,16 +409,8 @@ class QuickArgumentVisitor {
  private:
   static size_t StackArgumentStartFromShorty(bool is_static, const char* shorty,
                                              uint32_t shorty_len) {
-    if (kQuickSoftFloatAbi) {
-      CHECK_EQ(kNumQuickFprArgs, 0U);
-      return (kNumQuickGprArgs * GetBytesPerGprSpillLocation(kRuntimeISA))
-          + sizeof(StackReference<mirror::ArtMethod>) /* StackReference<ArtMethod> */;
-    } else {
-      // For now, there is no reg-spill area for the targets with
-      // hard float ABI. So, the offset pointing to the first method's
-      // parameter ('this' for non-static methods) should be returned.
-      return sizeof(StackReference<mirror::ArtMethod>);  // Skip StackReference<ArtMethod>.
-    }
+    // 'stack_args_' points to the first method's argument
+    return sizeof(StackReference<mirror::ArtMethod>);  // Skip StackReference<ArtMethod>.
   }
 
  protected:
@@ -404,6 +424,7 @@ class QuickArgumentVisitor {
   uint8_t* const stack_args_;  // Address of stack arguments in caller's frame.
   uint32_t gpr_index_;  // Index into spilled GPRs.
   uint32_t fpr_index_;  // Index into spilled FPRs.
+  uint32_t fpr_double_index_;  // Index into spilled FPRs for aligned double.
   uint32_t stack_index_;  // Index into arguments on the stack.
   // The current type of argument during VisitArguments.
   Primitive::Type cur_type_;
@@ -943,8 +964,8 @@ template<class T> class BuildNativeCallFrameStateMachine {
         delegate_(delegate) {
     // For register alignment, we want to assume that counters (gpr_index_, fpr_index_) are even iff
     // the next register is even; counting down is just to make the compiler happy...
-    CHECK_EQ(kNumNativeGprArgs % 2, 0U);
-    CHECK_EQ(kNumNativeFprArgs % 2, 0U);
+    COMPILE_ASSERT(kNumNativeGprArgs % 2 == 0U, knum_native_gpr_args_not_even);
+    COMPILE_ASSERT(kNumNativeFprArgs % 2 == 0U, knum_native_fpr_args_not_even);
   }
 
   virtual ~BuildNativeCallFrameStateMachine() {}
