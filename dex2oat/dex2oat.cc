@@ -752,6 +752,16 @@ static InstructionSetFeatures ParseFeatureList(std::string str) {
     } else if (feature == "nolpae") {
       // Turn off support for Large Physical Address Extension.
       result.SetHasLpae(false);
+    } else if (feature == "ssse3") {
+      result.SetHasSSSE3();
+    } else if (feature == "sse4_1") {
+      result.SetHasSSE4_1();
+    } else if (feature == "sse4_2") {
+      result.SetHasSSE4_2();
+    } else if (feature == "avx") {
+      result.SetHasAVX();
+    } else if (feature == "avx2") {
+      result.SetHasAVX2();
     } else {
       Usage("Unknown instruction set feature: '%s'", feature.c_str());
     }
