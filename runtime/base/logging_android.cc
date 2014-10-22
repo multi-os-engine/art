@@ -25,16 +25,19 @@
 
 namespace art {
 
-static const int kLogSeverityToAndroidLogPriority[] = {
+static const android_LogPriority kLogSeverityToAndroidLogPriority[] = {
   ANDROID_LOG_VERBOSE, ANDROID_LOG_DEBUG, ANDROID_LOG_INFO, ANDROID_LOG_WARN,
   ANDROID_LOG_ERROR, ANDROID_LOG_FATAL, ANDROID_LOG_FATAL
 };
+COMPILE_ASSERT(arraysize(kLogSeverityToAndroidLogPriority) == INTERNAL_FATAL + 1,
+               mismatch_in_size_of_kLogSeverityToAndroidLogPriority_and_values_in_LogSeverity);
 
-void LogMessage::LogLine(const LogMessageData& data, const char* message) {
+void LogMessage::LogLine(const char* file, unsigned int line, LogSeverity log_severity,
+                         const char* message) {
   const char* tag = ProgramInvocationShortName();
-  int priority = kLogSeverityToAndroidLogPriority[data.severity];
+  int priority = kLogSeverityToAndroidLogPriority[log_severity];
   if (priority == ANDROID_LOG_FATAL) {
-    LOG_PRI(priority, tag, "%s:%d] %s", data.file, data.line_number, message);
+    LOG_PRI(priority, tag, "%s:%u] %s", file, line, message);
   } else {
     LOG_PRI(priority, tag, "%s", message);
   }

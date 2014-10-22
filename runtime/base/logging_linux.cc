@@ -19,20 +19,17 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <cstdio>
-#include <cstring>
-#include <iostream>
-
-#include "base/stringprintf.h"
 #include "utils.h"
 
 namespace art {
 
-void LogMessage::LogLine(const LogMessageData& data, const char* message) {
-  char severity = "VDIWEFF"[data.severity];
-  fprintf(stderr, "%s %c %5d %5d %s:%d] %s\n",
-          ProgramInvocationShortName(), severity, getpid(), ::art::GetTid(),
-          data.file, data.line_number, message);
+void LogMessage::LogLine(const char* file, unsigned int line, LogSeverity log_severity,
+                         const char* message) {
+  static const char* log_characters = "VDIWEFF";
+  CHECK_EQ(strlen(log_characters), INTERNAL_FATAL + 1U);
+  char severity = log_characters[log_severity];
+  fprintf(stderr, "%s %c %5d %5d %s:%u] %s\n",
+          ProgramInvocationShortName(), severity, getpid(), ::art::GetTid(), file, line, message);
 }
 
 }  // namespace art

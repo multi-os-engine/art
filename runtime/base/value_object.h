@@ -23,12 +23,14 @@ namespace art {
 
 class ValueObject {
  public:
-  void* operator new(size_t size) {
-    LOG(FATAL) << "UNREACHABLE";
-    abort();
-  }
   void operator delete(void*, size_t) {
     LOG(FATAL) << "UNREACHABLE";
+  }
+
+ private:
+  void* operator new(size_t size) {
+    LOG(FATAL) << "UNREACHABLE";
+    UNREACHABLE();
   }
 };
 

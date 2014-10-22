@@ -14,12 +14,37 @@
  * limitations under the License.
  */
 
-#ifndef ART_RUNTIME_LOG_SEVERITY_H_
-#define ART_RUNTIME_LOG_SEVERITY_H_
+#ifndef ART_RUNTIME_BASE_TO_STR_H_
+#define ART_RUNTIME_BASE_TO_STR_H_
 
-typedef int LogSeverity;
+#include <sstream>
 
-const int VERBOSE = 0, DEBUG = 1, INFO = 2, WARNING = 3, ERROR = 4, FATAL = 5;
-const int INTERNAL_FATAL = 6;  // For Runtime::Abort.
+namespace art {
 
-#endif  // ART_RUNTIME_LOG_SEVERITY_H_
+// Helps you use operator<< in a const char*-like context such as our various 'F' methods with
+// format strings.
+template<typename T>
+class ToStr {
+ public:
+  explicit ToStr(const T& value) {
+    std::ostringstream os;
+    os << value;
+    s_ = os.str();
+  }
+
+  const char* c_str() const {
+    return s_.c_str();
+  }
+
+  const std::string& str() const {
+    return s_;
+  }
+
+ private:
+  std::string s_;
+  DISALLOW_COPY_AND_ASSIGN(ToStr);
+};
+
+}  // namespace art
+
+#endif  // ART_RUNTIME_BASE_TO_STR_H_
