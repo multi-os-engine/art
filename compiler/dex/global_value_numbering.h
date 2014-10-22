@@ -253,6 +253,7 @@ class GlobalValueNumbering {
   ScopedArenaVector<const LocalValueNumbering*> merge_lvns_;  // Not owning.
 
   friend class LocalValueNumbering;
+  friend class GlobalValueNumberingTest;
 
   DISALLOW_COPY_AND_ASSIGN(GlobalValueNumbering);
 };
