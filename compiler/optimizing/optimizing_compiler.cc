@@ -19,6 +19,7 @@
 #include <fstream>
 #include <stdint.h>
 
+#include "bounds_check_elimination.h"
 #include "builder.h"
 #include "code_generator.h"
 #include "compiler.h"
@@ -285,6 +286,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     SsaDeadPhiElimination(graph).Run();
     InstructionSimplifier(graph).Run();
     GlobalValueNumberer(graph->GetArena(), graph).Run();
+    BoundsCheckElimination(graph).Run();
     visualizer.DumpGraph(kGVNPassName);
     PrepareForRegisterAllocation(graph).Run();
 
@@ -331,6 +333,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
       SsaRedundantPhiElimination(graph).Run();
       SsaDeadPhiElimination(graph).Run();
       GlobalValueNumberer(graph->GetArena(), graph).Run();
+      BoundsCheckElimination(graph).Run();
       SsaLivenessAnalysis liveness(*graph, codegen);
       liveness.Analyze();
       visualizer.DumpGraph(kLivenessPassName);
