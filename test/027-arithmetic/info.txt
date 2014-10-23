@@ -3,4 +3,4 @@ runtime test framework. The test is intended to exercise basic features,
 and as such cannot be build on top of junit, since failure of such basic
 features might disrupt junit.
 
-TODO: Real description goes here.
+Test arithmetic operations

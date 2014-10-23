@@ -1455,6 +1455,26 @@ class Mir2Lir : public Backend {
       return InexpensiveConstantInt(value);
     }
 
+    /**
+     * @brief Whether division by the given dividend can be converted to multiply by its reciprocal.
+     * @param dividend A constant dividend bits of float type
+     * @return Returns true iff, x/dividend == x*(1.0f/dividend), for every float x.
+     */
+    bool CanDivideByReciprocalMultiplyFloat(int32_t dividend) {
+      // True, if float significand bits are 0
+      return ((dividend & 0x7fffff) == 0);
+    }
+
+    /**
+     * @brief Whether division by the given dividend can be converted to multiply by its reciprocal.
+     * @param dividend A constant dividend bits of double type
+     * @return Returns true iff, x/dividend == x*(1.0/dividend), for every double x.
+     */
+    bool CanDivideByReciprocalMultiplyDouble(int64_t dividend) {
+      // True, if double significand bits are 0
+      return ((dividend & ((UINT64_C(1) << 52) - 1)) == 0);
+    }
+
     // May be optimized by targets.
     virtual void GenMonitorEnter(int opt_flags, RegLocation rl_src);
     virtual void GenMonitorExit(int opt_flags, RegLocation rl_src);

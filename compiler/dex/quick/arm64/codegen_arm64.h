@@ -415,6 +415,9 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
   void GenDivRemLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,
                      RegLocation rl_src2, bool is_div, int flags);
 
+  bool GenEasyDivFloat(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2);
+  bool GenEasyDivDouble(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2);
+
   InToRegStorageMapping in_to_reg_storage_mapping_;
   static const A64EncodingMap EncodingMap[kA64Last];
 

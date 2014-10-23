@@ -146,10 +146,76 @@ public class Main {
             + ", i=0x" + Integer.toHexString(i));
     }
 
+    public static void expectEquals(long expected, long result) {
+        if (expected != result) {
+            throw new Error("Expected: " + expected + ", found: " + result);
+        }
+    }
+
+    public static void expectEquals(int expected, int result) {
+        if (expected != result) {
+            throw new Error("Expected: " + expected + ", found: " + result);
+        }
+    }
+
+    static void divDoubleTest() {
+        double d1 = 0x1.0p1023;
+        double d2 = -2.0;
+        double d3 = 0.0;
+        double d4 = Double.MIN_NORMAL;
+        double d5 = Double.POSITIVE_INFINITY;
+        double d6 = Double.NEGATIVE_INFINITY;
+        double d7 = -0.0;
+        double d8 = Double.MAX_VALUE;
+        double d9 = Double.MIN_VALUE;
+        double d0 = Double.NaN;
+        double pi = Math.PI;
+
+        expectEquals(Double.doubleToRawLongBits(pi/d1), 0x1921fb54442d18L);
+        expectEquals(Double.doubleToRawLongBits(pi/d2), 0xbff921fb54442d18L);
+        expectEquals(Double.doubleToRawLongBits(pi/d3), 0x7ff0000000000000L);
+        expectEquals(Double.doubleToRawLongBits(pi/d4), 0x7fe921fb54442d18L);
+        expectEquals(Double.doubleToRawLongBits(pi/d5), 0x0L);
+        expectEquals(Double.doubleToRawLongBits(pi/d6), 0x8000000000000000L);
+        expectEquals(Double.doubleToRawLongBits(pi/d7), 0xfff0000000000000L);
+
+        expectEquals(Double.doubleToRawLongBits(pi/d8), 0xc90fdaa22168cL);
+        expectEquals(Double.doubleToRawLongBits(pi/d9), 0x7ff0000000000000L);
+        expectEquals(Double.doubleToRawLongBits(pi/d0), 0x7ff8000000000000L);
+    }
+
+    static void divFloatTest() {
+        float f1 = 0x1.0p127f;
+        float f2 = -2.0f;
+        float f3 = 0.0f;
+        float f4 = Float.MIN_NORMAL;
+        float f5 = Float.POSITIVE_INFINITY;
+        float f6 = Float.NEGATIVE_INFINITY;
+        float f7 = -0.0f;
+        float f8 = Float.MAX_VALUE;
+        float f9 = Float.MIN_VALUE;
+        float f0 = Float.NaN;
+        float pi = (float)Math.PI;
+
+        expectEquals(Float.floatToRawIntBits(pi/f1), 0xc90fdb);
+        expectEquals(Float.floatToRawIntBits(pi/f2), 0xbfc90fdb);
+        expectEquals(Float.floatToRawIntBits(pi/f3), 0x7f800000);
+        expectEquals(Float.floatToRawIntBits(pi/f4), 0x7f490fdb);
+        expectEquals(Float.floatToRawIntBits(pi/f5), 0x0);
+        expectEquals(Float.floatToRawIntBits(pi/f6), 0x80000000);
+        expectEquals(Float.floatToRawIntBits(pi/f7), 0xff800000);
+
+        expectEquals(Float.floatToRawIntBits(pi/f8), 0x6487ee);
+        expectEquals(Float.floatToRawIntBits(pi/f9), 0x7f800000);
+        expectEquals(Float.floatToRawIntBits(pi/f0), 0x7fc00000);
+    }
+
     public static void main(String[] args) {
         convTest();
         shiftTest1();
         shiftTest2();
         unsignedShiftTest();
+        divDoubleTest();
+        divFloatTest();
     }
 }

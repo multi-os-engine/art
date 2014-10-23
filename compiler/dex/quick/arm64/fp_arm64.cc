@@ -21,6 +21,27 @@
 
 namespace art {
 
+bool Arm64Mir2Lir::GenEasyDivFloat(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) {
+  DCHECK(!rl_src2.wide);
+  if (!rl_src2.is_const) {
+    return false;
+  }
+  int32_t value = mir_graph_->ConstantValue(rl_src2);
+  if (!CanDivideByReciprocalMultiplyFloat(value)) {
+    return false;
+  }
+  // Generate fmul instead of fdiv
+  RegLocation rl_result;
+  float recip = 1.0f/bit_cast<int32_t, float>(value);
+  RegStorage r_tmp = AllocTempSingle();
+  LoadConstantNoClobber(r_tmp, bit_cast<float, int>(recip));
+  rl_src1 = LoadValue(rl_src1, kFPReg);
+  rl_result = EvalLoc(rl_dest, kFPReg, true);
+  NewLIR3(kA64Fmul3fff, rl_result.reg.GetReg(), rl_src1.reg.GetReg(), r_tmp.GetReg());
+  StoreValue(rl_dest, rl_result);
+  return true;
+}
+
 void Arm64Mir2Lir::GenArithOpFloat(Instruction::Code opcode, RegLocation rl_dest,
                                    RegLocation rl_src1, RegLocation rl_src2) {
   int op = kA64Brk1d;
@@ -37,6 +58,9 @@ void Arm64Mir2Lir::GenArithOpFloat(Instruction::Code opcode, RegLocation rl_dest
       break;
     case Instruction::DIV_FLOAT_2ADDR:
     case Instruction::DIV_FLOAT:
+      if (GenEasyDivFloat(rl_dest, rl_src1, rl_src2)) {
+        return;
+      }
       op = kA64Fdiv3fff;
       break;
     case Instruction::MUL_FLOAT_2ADDR:
@@ -63,6 +87,31 @@ void Arm64Mir2Lir::GenArithOpFloat(Instruction::Code opcode, RegLocation rl_dest
   StoreValue(rl_dest, rl_result);
 }
 
+bool Arm64Mir2Lir::GenEasyDivDouble(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) {
+  DCHECK(rl_src2.wide);
+  if (!rl_src2.is_const) {
+    return false;
+  }
+  int64_t value = mir_graph_->ConstantValueWide(rl_src2);
+  if (!CanDivideByReciprocalMultiplyDouble(value)) {
+    return false;
+  }
+  // Generate fmul instead of fdiv
+  RegLocation rl_result;
+  double recip = 1.0/bit_cast<int64_t, double>(value);
+  RegStorage r_tmp = AllocTempDouble();
+  DCHECK(r_tmp.IsDouble());
+  LoadConstantWide(r_tmp, bit_cast<double, int64_t>(recip));
+  rl_src1 = LoadValueWide(rl_src1, kFPReg);
+  DCHECK(rl_src1.wide);
+  rl_result = EvalLocWide(rl_dest, kFPReg, true);
+  DCHECK(rl_dest.wide);
+  DCHECK(rl_result.wide);
+  NewLIR3(WIDE(kA64Fmul3fff), rl_result.reg.GetReg(), rl_src1.reg.GetReg(), r_tmp.GetReg());
+  StoreValueWide(rl_dest, rl_result);
+  return true;
+}
+
 void Arm64Mir2Lir::GenArithOpDouble(Instruction::Code opcode,
                                     RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2) {
   int op = kA64Brk1d;
@@ -79,6 +128,9 @@ void Arm64Mir2Lir::GenArithOpDouble(Instruction::Code opcode,
       break;
     case Instruction::DIV_DOUBLE_2ADDR:
     case Instruction::DIV_DOUBLE:
+      if (GenEasyDivDouble(rl_dest, rl_src1, rl_src2)) {
+        return;
+      }
       op = kA64Fdiv3fff;
       break;
     case Instruction::MUL_DOUBLE_2ADDR:

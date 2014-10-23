@@ -320,6 +320,9 @@ class ArmMir2Lir FINAL : public Mir2Lir {
     bool GetEasyMultiplyTwoOps(int lit, EasyMultiplyOp* ops);
     void GenEasyMultiplyTwoOps(RegStorage r_dest, RegStorage r_src, EasyMultiplyOp* ops);
 
+    bool GenEasyDivFloat(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2);
+    bool GenEasyDivDouble(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2);
+
     static constexpr ResourceMask GetRegMaskArm(RegStorage reg);
     static constexpr ResourceMask EncodeArmRegList(int reg_list);
     static constexpr ResourceMask EncodeArmRegFpcsList(int reg_list);
