@@ -397,8 +397,6 @@ TEST(CodegenTest, NonMaterializedCondition) {
 
 MUL_TEST(INT, MulInt);
 MUL_TEST(LONG, MulLong);
-// MUL_TEST(FLOAT, Float);
-// MUL_TEST(DOUBLE, Double);
 
 TEST(CodegenTest, ReturnMulIntLit8) {
   const uint16_t data[] = ONE_REGISTER_CODE_ITEM(
