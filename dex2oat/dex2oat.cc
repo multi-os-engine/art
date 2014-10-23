@@ -474,10 +474,15 @@ class Dex2Oat {
       PLOG(ERROR) << "Failed to open ELF file: " << oat_filename;
       return false;
     }
-    if (!ElfWriter::Fixup(oat_file.get(), oat_data_begin)) {
-      LOG(ERROR) << "Failed to fixup ELF file " << oat_file->GetPath();
-      return false;
+
+    // Do not fix up the ELF file if we are --compile-pic
+    if (!compiler_options_->GetCompilePic()) {
+      if (!ElfWriter::Fixup(oat_file.get(), oat_data_begin)) {
+        LOG(ERROR) << "Failed to fixup ELF file " << oat_file->GetPath();
+        return false;
+      }
     }
+
     return true;
   }
 

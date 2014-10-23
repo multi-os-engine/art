@@ -1059,7 +1059,7 @@ const OatFile* ClassLinker::FindOatFileInOatLocationForDexFile(const char* dex_l
                                                                uint32_t dex_location_checksum,
                                                                const char* oat_location,
                                                                std::string* error_msg) {
-  std::unique_ptr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, nullptr,
+  std::unique_ptr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, nullptr, nullptr,
                                             !Runtime::Current()->IsCompiler(),
                                             error_msg));
   if (oat_file.get() == nullptr) {
@@ -1131,7 +1131,7 @@ const OatFile* ClassLinker::CreateOatFileForDexLocation(const char* dex_location
     error_msgs->push_back(error_msg);
     return nullptr;
   }
-  std::unique_ptr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, nullptr,
+  std::unique_ptr<OatFile> oat_file(OatFile::Open(oat_location, oat_location, nullptr, nullptr,
                                             !Runtime::Current()->IsCompiler(),
                                             &error_msg));
   if (oat_file.get() == nullptr) {
@@ -1379,6 +1379,7 @@ const OatFile* ClassLinker::OpenOatFileFromDexLocation(const std::string& dex_lo
     // There is a high probability that these both these oat files map similar/the same address
     // spaces so we must scope them like this so they each gets its turn.
     std::unique_ptr<OatFile> odex_oat_file(OatFile::Open(odex_filename, odex_filename, nullptr,
+                                                         nullptr,
                                                          executable, &odex_error_msg));
     if (odex_oat_file.get() != nullptr && CheckOatFile(odex_oat_file.get(), isa,
                                                        &odex_checksum_verified,
@@ -1401,6 +1402,7 @@ const OatFile* ClassLinker::OpenOatFileFromDexLocation(const std::string& dex_lo
   bool cache_checksum_verified = false;
   if (have_dalvik_cache) {
     std::unique_ptr<OatFile> cache_oat_file(OatFile::Open(cache_filename, cache_filename, nullptr,
+                                                          nullptr,
                                                           executable, &cache_error_msg));
     if (cache_oat_file.get() != nullptr && CheckOatFile(cache_oat_file.get(), isa,
                                                         &cache_checksum_verified,
@@ -1477,7 +1479,7 @@ const OatFile* ClassLinker::GetInterpretedOnlyOat(const std::string& oat_path,
                                                   InstructionSet isa,
                                                   std::string* error_msg) {
   // We open it non-executable
-  std::unique_ptr<OatFile> output(OatFile::Open(oat_path, oat_path, nullptr, false, error_msg));
+  std::unique_ptr<OatFile> output(OatFile::Open(oat_path, oat_path, nullptr, nullptr, false, error_msg));
   if (output.get() == nullptr) {
     return nullptr;
   }
@@ -1532,7 +1534,7 @@ const OatFile* ClassLinker::PatchAndRetrieveOat(const std::string& input_oat,
   LOG(INFO) << "Relocate Oat File: " << command_line;
   bool success = Exec(argv, error_msg);
   if (success) {
-    std::unique_ptr<OatFile> output(OatFile::Open(output_oat, output_oat, nullptr,
+    std::unique_ptr<OatFile> output(OatFile::Open(output_oat, output_oat, nullptr, nullptr,
                                                   !Runtime::Current()->IsCompiler(), error_msg));
     bool checksum_verified = false;
     if (output.get() != nullptr && CheckOatFile(output.get(), isa, &checksum_verified, error_msg)) {
@@ -1641,7 +1643,7 @@ const OatFile* ClassLinker::FindOatFileFromOatLocation(const std::string& oat_lo
     return oat_file;
   }
 
-  return OatFile::Open(oat_location, oat_location, nullptr, !Runtime::Current()->IsCompiler(),
+  return OatFile::Open(oat_location, oat_location, nullptr, nullptr, !Runtime::Current()->IsCompiler(),
                        error_msg);
 }
 

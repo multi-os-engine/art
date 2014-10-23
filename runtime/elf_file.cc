@@ -112,7 +112,7 @@ template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_
           typename Elf_Rela, typename Elf_Dyn, typename Elf_Off>
 ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
     Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
-    ::ElfFileImpl(File* file, bool writable, bool program_header_only)
+    ::ElfFileImpl(File* file, bool writable, bool program_header_only, uint8_t* requested_base)
   : file_(file),
     writable_(writable),
     program_header_only_(program_header_only),
@@ -130,7 +130,8 @@ ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
     symtab_symbol_table_(nullptr),
     dynsym_symbol_table_(nullptr),
     jit_elf_image_(nullptr),
-    jit_gdb_entry_(nullptr) {
+    jit_gdb_entry_(nullptr),
+    requested_base_(requested_base) {
   CHECK(file != nullptr);
 }
 
@@ -142,12 +143,12 @@ ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
     ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
     Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
     ::Open(File* file, bool writable, bool program_header_only,
-           std::string* error_msg) {
+           std::string* error_msg, uint8_t* requested_base) {
   std::unique_ptr<ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
     Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>>
     elf_file(new ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
                  Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
-                 (file, writable, program_header_only));
+                 (file, writable, program_header_only, requested_base));
   int prot;
   int flags;
   if (writable) {
@@ -175,7 +176,8 @@ ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
     Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>>
     elf_file(new ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
                  Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
-                 (file, (prot & PROT_WRITE) == PROT_WRITE, false));
+                 (file, (prot & PROT_WRITE) == PROT_WRITE, /*program_header_only*/false,
+                 /*requested_base*/nullptr));
   if (!elf_file->Setup(prot, flags, error_msg)) {
     return nullptr;
   }
@@ -1363,6 +1365,10 @@ bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
     if (!reserved) {
       uint8_t* reserve_base = ((program_header->p_vaddr != 0) ?
                             reinterpret_cast<uint8_t*>(program_header->p_vaddr) : nullptr);
+      // Override the base (e.g. when compiling with --compile-pic)
+      if (requested_base_ != nullptr) {
+          reserve_base = requested_base_;
+      }
       std::string reservation_name("ElfFile reservation for ");
       reservation_name += file_->GetPath();
       std::unique_ptr<MemMap> reserve(MemMap::MapAnonymous(reservation_name.c_str(),
@@ -1375,7 +1381,7 @@ bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
         return false;
       }
       reserved = true;
-      if (reserve_base == nullptr) {
+      if (reserve_base == nullptr || requested_base_ != nullptr) {
         base_address_ = reserve->Begin();
       }
       segments_.push_back(reserve.release());
@@ -2426,7 +2432,8 @@ ElfFile::~ElfFile() {
   }
 }
 
-ElfFile* ElfFile::Open(File* file, bool writable, bool program_header_only, std::string* error_msg) {
+ElfFile* ElfFile::Open(File* file, bool writable, bool program_header_only, std::string* error_msg,
+                       uint8_t* requested_base) {
   if (file->GetLength() < EI_NIDENT) {
     *error_msg = StringPrintf("File %s is too short to be a valid ELF file",
                               file->GetPath().c_str());
@@ -2439,12 +2446,14 @@ ElfFile* ElfFile::Open(File* file, bool writable, bool program_header_only, std:
   }
   uint8_t* header = map->Begin();
   if (header[EI_CLASS] == ELFCLASS64) {
-    ElfFileImpl64* elf_file_impl = ElfFileImpl64::Open(file, writable, program_header_only, error_msg);
+    ElfFileImpl64* elf_file_impl = ElfFileImpl64::Open(file, writable, program_header_only,
+                                                       error_msg, requested_base);
     if (elf_file_impl == nullptr)
       return nullptr;
     return new ElfFile(elf_file_impl);
   } else if (header[EI_CLASS] == ELFCLASS32) {
-    ElfFileImpl32* elf_file_impl = ElfFileImpl32::Open(file, writable, program_header_only, error_msg);
+    ElfFileImpl32* elf_file_impl = ElfFileImpl32::Open(file, writable, program_header_only,
+                                                       error_msg, requested_base);
     if (elf_file_impl == nullptr)
       return nullptr;
     return new ElfFile(elf_file_impl);

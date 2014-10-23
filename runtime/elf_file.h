@@ -29,7 +29,8 @@ namespace art {
 // ELFObjectFile.
 class ElfFile {
  public:
-  static ElfFile* Open(File* file, bool writable, bool program_header_only, std::string* error_msg);
+  static ElfFile* Open(File* file, bool writable, bool program_header_only, std::string* error_msg,
+                       uint8_t* requested_base = nullptr);
   // Open with specific mmap flags, Always maps in the whole file, not just the
   // program header sections.
   static ElfFile* Open(File* file, int mmap_prot, int mmap_flags, std::string* error_msg);

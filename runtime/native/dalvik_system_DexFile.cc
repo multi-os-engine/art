@@ -290,6 +290,7 @@ static jbyte IsDexOptNeededForFile(const std::string& oat_filename, const char* 
                                    InstructionSet target_instruction_set) {
   std::string error_msg;
   std::unique_ptr<const OatFile> oat_file(OatFile::Open(oat_filename, oat_filename, nullptr,
+                                                        nullptr,
                                                         false, &error_msg));
   if (oat_file.get() == nullptr) {
     if (kReasonLogging) {
