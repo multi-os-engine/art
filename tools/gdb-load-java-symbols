@@ -1,0 +1,57 @@
+# Copyright (C) 2014 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+#
+# Gdb script used to load C/C++ and Java symbols for gdb-gdbserver environment.
+# Sample :
+#   shell> ./test/run-test --gdb 002
+#   shell> gdbclient dalvikvm32
+#   (gdb) source tools/gdb-load-java-symbols
+#   (gdb) break 'void Main.main(java.lang.String[])'
+#   (gdb) continue
+#   (gdb) continue
+#   (gdb) backtrace
+#   #0  void Main.main(java.lang.String[]) () at Main.java:21
+#   #1  0xf6a9c246 in art_quick_invoke_stub_internal () at ...
+#   (gdb) disassemble $pc,+14
+#   Dump of assembler code from 0xf6906070 to 0xf690607e:
+#   => 0xf6906070 <void Main.main...+0>:   subs.w  r12, sp, #8192  ; 0x2000
+#      0xf6906074 <void Main.main...+3>:     ldr.w   r12, [r12]
+#      0xf6906078 <void Main.main...+7>:     stmdb   sp!, {r5, r6, r7, r8, r10, r11, lr}
+#      0xf690607c <void Main.main...+11>:    sub     sp, #68 ; 0x44
+#   End of assembler dump.
+
+define save_pid
+  set logging overwrite
+  set logging file /tmp/run-test-info-inferiors
+  set logging on
+  info inferiors
+  set logging off
+end
+
+# Break before InvokeMain(), when oat files have been loaded but not executed.
+# As InvokeMain() is a static function which might be inlined, do this in an alternative way.
+shell echo break dalvikvm.cc:`grep -n InvokeMain $ANDROID_BUILD_TOP/art/dalvikvm/dalvikvm.cc \
+      | head -n 1 | cut -d ':' -f1` > /tmp/run-test-set-breakpoint
+source /tmp/run-test-set-breakpoint
+
+# Following commands will be executed when hitting the above breakpoint.
+commands
+  # Save process pid.
+  save_pid
+  # Execute shell script to generate gdb settings
+  shell $ANDROID_BUILD_TOP/art/tools/gdb-load-java-symbols-helper.sh
+  # Load gdb settings for symbols
+  source /tmp/run-test-load-symbols
+end
