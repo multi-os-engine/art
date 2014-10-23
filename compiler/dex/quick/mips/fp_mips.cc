@@ -113,6 +113,18 @@ void MipsMir2Lir::GenArithOpDouble(Instruction::Code opcode,
   StoreValueWide(rl_dest, rl_result);
 }
 
+void MipsMir2Lir::GenMultiplyByConstantFloat(RegLocation rl_dest, RegLocation rl_src1,
+                                             int32_t constant) {
+  // TODO: need mips implementation.
+  LOG(FATAL) << "Unimplemented GenMultiplyByConstantFloat in mips";
+}
+
+void MipsMir2Lir::GenMultiplyByConstantDouble(RegLocation rl_dest, RegLocation rl_src1,
+                                              int64_t constant) {
+  // TODO: need mips implementation.
+  LOG(FATAL) << "Unimplemented GenMultiplyByConstantDouble in mips";
+}
+
 void MipsMir2Lir::GenConversion(Instruction::Code opcode, RegLocation rl_dest,
                                 RegLocation rl_src) {
   int op = kMipsNop;
