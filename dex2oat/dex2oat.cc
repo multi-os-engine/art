@@ -1425,6 +1425,7 @@ static int dex2oat(int argc, char** argv) {
   oss.str("");  // Reset.
   oss << kRuntimeISA;
   key_value_store->Put(OatHeader::kDex2OatHostKey, oss.str());
+  key_value_store->Put(OatHeader::kPicKey, compile_pic ? "true" : "false");
 
   dex2oat->Compile(boot_image_option,
                    dex_files,
