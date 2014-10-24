@@ -121,8 +121,8 @@ class AssemblerTest : public testing::Test {
         (assembler_.get()->*f)(*reg, new_imm);
         std::string base = fmt;
 
-        size_t reg_index = base.find("{reg}");
-        if (reg_index != std::string::npos) {
+        size_t reg_index; 
+        while ((reg_index = base.find("{reg}")) != std::string::npos) {
           std::ostringstream sreg;
           sreg << *reg;
           std::string reg_string = sreg.str();
