@@ -684,7 +684,15 @@ inline void X86_64Assembler::EmitInt32(int32_t value) {
 }
 
 inline void X86_64Assembler::EmitInt64(int64_t value) {
+#if defined(__arm__)
+  // ARM does not allow unaligned accesses, which may happen here when
+  // we try to write write a 64-bit value.  Split this 64-bit in two
+  // 32-bit words.  We assume little-endianness here.
+  buffer_.Emit<int32_t>(value & 0x00000000FFFFFFFF);
+  buffer_.Emit<int32_t>(value >> 32);
+#else
   buffer_.Emit<int64_t>(value);
+#endif
 }
 
 inline void X86_64Assembler::EmitRegisterOperand(uint8_t rm, uint8_t reg) {

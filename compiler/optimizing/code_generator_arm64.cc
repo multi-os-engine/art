@@ -1017,11 +1017,8 @@ void InstructionCodeGeneratorARM64::VisitNot(HNot* instruction) {
       break;
 
     case Primitive::kPrimInt:
-      __ Mvn(OutputRegister(instruction), InputOperandAt(instruction, 0));
-      break;
-
     case Primitive::kPrimLong:
-      LOG(FATAL) << "Not yet implemented type for not operation " << instruction->GetResultType();
+      __ Mvn(OutputRegister(instruction), InputOperandAt(instruction, 0));
       break;
 
     default:
