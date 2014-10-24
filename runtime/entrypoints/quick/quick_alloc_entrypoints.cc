@@ -18,6 +18,7 @@
 
 #include "callee_save_frame.h"
 #include "entrypoints/entrypoint_utils-inl.h"
+#include "mirror/array-inl.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/object_array-inl.h"
@@ -26,6 +27,12 @@
 namespace art {
 
 static constexpr bool kUseTlabFastPath = true;
+
+// This will be set by Heap::Heap().
+static size_t tlab_fast_path_array_length_threshold = 0;
+void SetTlabFastPathArrayLengthThreshold(size_t threshold) {
+  tlab_fast_path_array_length_threshold = threshold;
+}
 
 #define GENERATE_ENTRYPOINTS_FOR_ALLOCATOR_INST(suffix, suffix2, instrumented_bool, allocator_type) \
 extern "C" mirror::Object* artAllocObjectFromCode ##suffix##suffix2( \
@@ -116,6 +123,34 @@ extern "C" mirror::Array* artAllocArrayFromCode##suffix##suffix2( \
     uint32_t type_idx, mirror::ArtMethod* method, int32_t component_count, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
+  if (kUseTlabFastPath && !instrumented_bool && allocator_type == gc::kAllocatorTypeTLAB) { \
+    mirror::Class* klass = method->GetDexCacheResolvedType<false>(type_idx); \
+    if (LIKELY(klass != nullptr)) { \
+      DCHECK(klass->IsArrayClass()); \
+      /* This condition checks a negative lenth, the large object threshold, and the size_t overflow */ \
+      if (LIKELY(static_cast<size_t>(component_count) < tlab_fast_path_array_length_threshold)) { \
+        size_t component_size_shift = klass->GetComponentSizeShift(); \
+        size_t header_size = mirror::Array::DataOffset(1U << component_size_shift).SizeValue(); \
+        size_t data_size = static_cast<size_t>(component_count) << component_size_shift; \
+        size_t byte_count = header_size + data_size; \
+        byte_count = RoundUp(byte_count, gc::space::BumpPointerSpace::kAlignment); \
+        if (LIKELY(byte_count < self->TlabSize())) { \
+          mirror::Array* arr = down_cast<mirror::Array*>(self->AllocTlab(byte_count)); \
+          DCHECK(arr != nullptr) << "AllocTlab can't fail"; \
+          arr->SetClass(klass); \
+          if (kUseBakerOrBrooksReadBarrier) { \
+            if (kUseBrooksReadBarrier) { \
+              arr->SetReadBarrierPointer(arr); \
+            } \
+            arr->AssertReadBarrierPointer(); \
+          } \
+          arr->SetLength(component_count); \
+          QuasiAtomic::ThreadFenceForConstructor(); \
+          return arr; \
+        } \
+      } \
+    } \
+  } \
   return AllocArrayFromCode<false, instrumented_bool>(type_idx, method, component_count, self, \
                                                       allocator_type); \
 } \
@@ -123,6 +158,31 @@ extern "C" mirror::Array* artAllocArrayFromCodeResolved##suffix##suffix2( \
     mirror::Class* klass, mirror::ArtMethod* method, int32_t component_count, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
+  if (kUseTlabFastPath && !instrumented_bool && allocator_type == gc::kAllocatorTypeTLAB) { \
+    DCHECK(klass != nullptr && klass->IsArrayClass()); \
+    /* This condition checks a negative lenth, the large object threshold, and the size_t overflow */ \
+    if (LIKELY(static_cast<size_t>(component_count) < tlab_fast_path_array_length_threshold)) { \
+      size_t component_size_shift = klass->GetComponentSizeShift(); \
+      size_t header_size = mirror::Array::DataOffset(1U << component_size_shift).SizeValue(); \
+      size_t data_size = static_cast<size_t>(component_count) << component_size_shift; \
+      size_t byte_count = header_size + data_size; \
+      byte_count = RoundUp(byte_count, gc::space::BumpPointerSpace::kAlignment); \
+      if (LIKELY(byte_count < self->TlabSize())) { \
+        mirror::Array* arr = down_cast<mirror::Array*>(self->AllocTlab(byte_count)); \
+        DCHECK(arr != nullptr) << "AllocTlab can't fail"; \
+        arr->SetClass(klass); \
+        if (kUseBakerOrBrooksReadBarrier) { \
+          if (kUseBrooksReadBarrier) { \
+            arr->SetReadBarrierPointer(arr); \
+          } \
+          arr->AssertReadBarrierPointer(); \
+        } \
+        arr->SetLength(component_count); \
+        QuasiAtomic::ThreadFenceForConstructor(); \
+        return arr; \
+      } \
+    } \
+  } \
   return AllocArrayFromCodeResolved<false, instrumented_bool>(klass, method, component_count, self, \
                                                               allocator_type); \
 } \

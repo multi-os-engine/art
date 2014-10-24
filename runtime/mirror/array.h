@@ -64,7 +64,7 @@ class MANAGED Array : public Object {
     return OFFSET_OF_OBJECT_MEMBER(Array, length_);
   }
 
-  static MemberOffset DataOffset(size_t component_size);
+  ALWAYS_INLINE static MemberOffset DataOffset(size_t component_size);
 
   void* GetRawData(size_t component_size, int32_t index)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {

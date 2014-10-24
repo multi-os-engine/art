@@ -348,6 +348,21 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   if (large_object_space_ != nullptr) {
     AddSpace(large_object_space_);
   }
+  {
+    // Compute the long array length that corresponds to the large
+    // object threshold and use it as the array length threshold for
+    // the tlab fast path. Use the long array type because the other
+    // array types of a given array length threshold are known to be
+    // smaller.
+    size_t long_array_header_size = mirror::Array::DataOffset(sizeof(uint64_t)).SizeValue();
+    size_t long_array_length_threshold = large_object_threshold_ < long_array_header_size
+        ? 0U
+        : (large_object_threshold_ - long_array_header_size) / sizeof(uint64_t);
+    CHECK_LE(long_array_header_size + long_array_length_threshold * sizeof(uint64_t),
+             large_object_threshold_);
+    SetTlabFastPathArrayLengthThreshold(long_array_length_threshold);
+  }
+
   // Compute heap capacity. Continuous spaces are sorted in order of Begin().
   CHECK(!continuous_spaces_.empty());
   // Relies on the spaces being sorted.

@@ -36,6 +36,8 @@ void SetQuickAllocEntryPointsAllocator(gc::AllocatorType allocator)
 void SetQuickAllocEntryPointsInstrumented(bool instrumented)
     EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::runtime_shutdown_lock_);
 
+void SetTlabFastPathArrayLengthThreshold(size_t threshold);
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_ENTRYPOINTS_QUICK_QUICK_ALLOC_ENTRYPOINTS_H_
