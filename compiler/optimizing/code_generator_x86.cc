@@ -1360,20 +1360,24 @@ void LocationsBuilderX86::VisitNot(HNot* not_) {
 
 void InstructionCodeGeneratorX86::VisitNot(HNot* not_) {
   LocationSummary* locations = not_->GetLocations();
-  DCHECK_EQ(locations->InAt(0).As<Register>(), locations->Out().As<Register>());
+  Location in = locations->InAt(0);
   Location out = locations->Out();
-  DCHECK_EQ(locations->InAt(0).As<Register>(), out.As<Register>());
   switch (not_->InputAt(0)->GetType()) {
     case Primitive::kPrimBoolean:
+      DCHECK_EQ(in.As<Register>(), out.As<Register>());
       __ xorl(out.As<Register>(), Immediate(1));
       break;
 
     case Primitive::kPrimInt:
+      DCHECK_EQ(in.As<Register>(), out.As<Register>());
       __ notl(out.As<Register>());
       break;
 
     case Primitive::kPrimLong:
-      LOG(FATAL) << "Not yet implemented type for not operation " << not_->GetResultType();
+      DCHECK_EQ(in.AsRegisterPairLow<Register>(), out.AsRegisterPairLow<Register>());
+      DCHECK_EQ(in.AsRegisterPairHigh<Register>(), out.AsRegisterPairHigh<Register>());
+      __ notl(out.AsRegisterPairLow<Register>());
+      __ notl(out.AsRegisterPairHigh<Register>());
       break;
 
     default:
