@@ -1,0 +1,9 @@
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Code-Review+1: Ian Rogers <irogers@google.com>
+Code-Review+2: Mathieu Chartier <mathieuc@google.com>
+Verified+1: Mathieu Chartier <mathieuc@google.com>
+Submitted-by: Mathieu Chartier <mathieuc@google.com>
+Submitted-at: Fri, 24 Oct 2014 01:03:32 +0000
+Reviewed-on: https://android-review.googlesource.com/111840
+Project: platform/art
+Branch: refs/heads/master
