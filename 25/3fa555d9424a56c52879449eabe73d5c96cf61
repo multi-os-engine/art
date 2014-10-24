@@ -1,0 +1,7 @@
+Code-Review+2: Elliott Hughes <enh@google.com>
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Submitted-by: Sebastien Hertz <shertz@google.com>
+Submitted-at: Fri, 24 Oct 2014 07:49:38 +0000
+Reviewed-on: https://android-review.googlesource.com/110810
+Project: platform/art
+Branch: refs/heads/master
