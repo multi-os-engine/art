@@ -1,0 +1,7 @@
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Code-Review+2: Roland Levillain <rpl@google.com>
+Submitted-by: Nicolas Geoffray <ngeoffray@google.com>
+Submitted-at: Fri, 24 Oct 2014 10:44:50 +0000
+Reviewed-on: https://android-review.googlesource.com/111900
+Project: platform/art
+Branch: refs/heads/master
