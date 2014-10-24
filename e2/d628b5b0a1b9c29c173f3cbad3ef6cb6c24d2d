@@ -1,0 +1,7 @@
+Code-Review+2: Hiroshi Yamauchi <yamauchi@google.com>
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Submitted-by: Sebastien Hertz <shertz@google.com>
+Submitted-at: Fri, 24 Oct 2014 14:22:05 +0000
+Reviewed-on: https://android-review.googlesource.com/111785
+Project: platform/art
+Branch: refs/heads/master
