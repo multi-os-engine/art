@@ -704,6 +704,22 @@ class Thread {
                                                                 top_handle_scope));
   }
 
+  template<size_t pointer_size>
+  static ThreadOffset<pointer_size> ThreadLocalPosOffset() {
+    return ThreadOffsetFromTlsPtr<pointer_size>(OFFSETOF_MEMBER(tls_ptr_sized_values,
+                                                                thread_local_pos));
+  }
+  template<size_t pointer_size>
+  static ThreadOffset<pointer_size> ThreadLocalEndOffset() {
+    return ThreadOffsetFromTlsPtr<pointer_size>(OFFSETOF_MEMBER(tls_ptr_sized_values,
+                                                                thread_local_end));
+  }
+  template<size_t pointer_size>
+  static ThreadOffset<pointer_size> ThreadLocalObjectsOffset() {
+    return ThreadOffsetFromTlsPtr<pointer_size>(OFFSETOF_MEMBER(tls_ptr_sized_values,
+                                                                thread_local_objects));
+  }
+
   DebugInvokeReq* GetInvokeReq() const {
     return tlsPtr_.debug_invoke_req;
   }

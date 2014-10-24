@@ -1260,6 +1260,19 @@ void Mir2Lir::LoadClassType(const DexFile& dex_file, uint32_t type_idx,
   AppendLIR(load_pc_rel);
 }
 
+void Mir2Lir::LoadClassType(const DexFile& dex_file, uint32_t type_idx,
+                            RegStorage reg) {
+  // Use the literal pool and a PC-relative load from a data word.
+  LIR* data_target = ScanLiteralPoolClass(class_literal_list_, dex_file, type_idx);
+  if (data_target == nullptr) {
+    data_target = AddWordData(&class_literal_list_, type_idx);
+    data_target->operands[1] = WrapPointer(const_cast<DexFile*>(&dex_file));
+  }
+  // Loads a Class pointer, which is a reference as it lives in the heap.
+  LIR* load_pc_rel = OpPcRelLoad(reg, data_target);
+  AppendLIR(load_pc_rel);
+}
+
 std::vector<uint8_t>* Mir2Lir::ReturnFrameDescriptionEntry() {
   // Default case is to do nothing.
   return nullptr;

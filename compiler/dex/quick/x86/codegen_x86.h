@@ -337,6 +337,8 @@ class X86Mir2Lir : public Mir2Lir {
    */
   void LoadClassType(const DexFile& dex_file, uint32_t type_idx,
                      SpecialTargetRegister symbolic_reg) OVERRIDE;
+  void LoadClassType(const DexFile& dex_file, uint32_t type_idx,
+                     RegStorage reg) OVERRIDE;
 
   void FlushIns(RegLocation* ArgLocs, RegLocation rl_method) OVERRIDE;
 

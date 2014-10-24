@@ -200,6 +200,10 @@ class MANAGED Class FINAL : public Object {
 
   void SetAccessFlags(uint32_t new_access_flags) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  static MemberOffset AccessFlagsOffset() {
+    return OFFSET_OF_OBJECT_MEMBER(Class, access_flags_);
+  }
+
   // Returns true if the class is an interface.
   bool IsInterface() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccInterface) != 0;
@@ -520,6 +524,10 @@ class MANAGED Class FINAL : public Object {
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   uint32_t GetObjectSize() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static MemberOffset ObjectSizeOffset() {
+    return MemberOffset(OFFSETOF_MEMBER(Class, object_size_));
+  }
 
   void SetObjectSize(uint32_t new_object_size) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK(!IsVariableSize());

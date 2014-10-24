@@ -1003,6 +1003,25 @@ void X86Mir2Lir::LoadClassType(const DexFile& dex_file, uint32_t type_idx,
   class_type_address_insns_.push_back(move);
 }
 
+void X86Mir2Lir::LoadClassType(const DexFile& dex_file, uint32_t type_idx,
+                               RegStorage reg) {
+  /*
+   * For x86, just generate a 32 bit move immediate instruction, that will be filled
+   * in at 'link time'.  For now, put a unique value based on target to ensure that
+   * code deduplication works.
+   */
+  const DexFile::TypeId& id = dex_file.GetTypeId(type_idx);
+  uintptr_t ptr = reinterpret_cast<uintptr_t>(&id);
+
+  // Generate the move instruction with the unique pointer and save index and type.
+  LIR *move = RawLIR(current_dalvik_offset_, kX86Mov32RI,
+                     reg.GetReg(),
+                     static_cast<int>(ptr), type_idx,
+                     WrapPointer(const_cast<DexFile*>(&dex_file)));
+  AppendLIR(move);
+  class_type_address_insns_.push_back(move);
+}
+
 LIR* X86Mir2Lir::CallWithLinkerFixup(const MethodReference& target_method, InvokeType type) {
   /*
    * For x86, just generate a 32 bit call relative instruction, that will be filled

@@ -1116,6 +1116,8 @@ class Mir2Lir : public Backend {
      */
     virtual void LoadClassType(const DexFile& dex_file, uint32_t type_idx,
                                SpecialTargetRegister symbolic_reg);
+    virtual void LoadClassType(const DexFile& dex_file, uint32_t type_idx,
+                               RegStorage reg);
 
     // Routines that work for the generic case, but may be overriden by target.
     /*

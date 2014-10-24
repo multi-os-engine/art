@@ -1055,11 +1055,139 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
   }
 }
 
+static constexpr bool kUseInlinedTlabFastPath = false;
+
 /*
  * Let helper function take care of everything.  Will
  * call Class::NewInstanceFromCode(type_idx, method);
  */
 void Mir2Lir::GenNewInstance(uint32_t type_idx, RegLocation rl_dest) {
+  LIR* branch_to_end = nullptr;
+  if (kUseInlinedTlabFastPath && (cu_->instruction_set == kThumb2 || cu_->instruction_set == kArm)) {
+    const DexFile* dex_file = cu_->dex_file;
+    CompilerDriver* driver = cu_->compiler_driver;
+    if (driver->CanAccessInstantiableTypeWithoutChecks(cu_->method_idx, *dex_file, type_idx)) {
+      // Note the following four params are usable only when CanEmbedTypeInCode returned true.
+      bool is_type_initialized;
+      bool use_direct_type_ptr;
+      uintptr_t direct_type_ptr;
+      bool is_finalizable;
+      bool is_resolved_or_initialized = kEmbedClassInCode &&
+          driver->CanEmbedTypeInCode(*dex_file, type_idx, &is_type_initialized,
+                                     &use_direct_type_ptr, &direct_type_ptr, &is_finalizable) &&
+          !is_finalizable;
+      {
+        const int32_t thread_local_pos_offset = cu_->target64
+            ? Thread::ThreadLocalPosOffset<8>().Int32Value()
+            : Thread::ThreadLocalPosOffset<4>().Int32Value();
+        const int32_t thread_local_end_offset = cu_->target64
+            ? Thread::ThreadLocalEndOffset<8>().Int32Value()
+            : Thread::ThreadLocalEndOffset<4>().Int32Value();
+        const int32_t thread_local_objects_offset = cu_->target64
+            ? Thread::ThreadLocalObjectsOffset<8>().Int32Value()
+            : Thread::ThreadLocalObjectsOffset<4>().Int32Value();
+        const int32_t object_array_data_offset =
+            mirror::Array::DataOffset(kObjectReferenceSize).Int32Value();
+        const int32_t class_status_offset = mirror::Class::StatusOffset().Int32Value();
+        const int32_t method_dex_cache_resolved_types_offset =
+            mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value();
+        RegStorage r_self = TargetReg(kSelf);
+        RegStorage r_tmp1 = AllocTemp();
+        RegStorage r_tmp2 = AllocTemp();
+        // Load the class ptr.
+        LIR* branch_to_slow_path0 = nullptr;
+        LIR* branch_to_slow_path1 = nullptr;
+        if (is_resolved_or_initialized) {
+          if (use_direct_type_ptr) {
+            LoadConstant(r_tmp1, direct_type_ptr);
+          } else {
+            LoadClassType(*dex_file, type_idx, r_tmp1);
+          }
+        } else {
+          // Load the class from the method's resolved types array.
+          LoadCurrMethodDirect(r_tmp2);
+          LoadRefDisp(r_tmp2, method_dex_cache_resolved_types_offset, r_tmp2, kNotVolatile);
+          LoadRefDisp(r_tmp2, object_array_data_offset + type_idx * kObjectReferenceSize,
+                      r_tmp1, kNotVolatile);
+          // Check for a null class.
+          branch_to_slow_path0 = OpCmpImmBranch(kCondEq, r_tmp1, 0, NULL);
+        }
+        LIR* branch_to_slow_path2 = nullptr;
+        if (!is_resolved_or_initialized || !is_type_initialized) {
+          Load32Disp(r_tmp1, class_status_offset, r_tmp2);
+          branch_to_slow_path2 = OpCmpImmBranch(kCondNe, r_tmp2, mirror::Class::kStatusInitialized,
+                                                NULL);
+        }
+        LIR* branch_to_slow_path3 = nullptr;
+        if (!is_resolved_or_initialized) {
+          // If finalizable, go to the slow path.
+          Load32Disp(r_tmp1, mirror::Class::AccessFlagsOffset().Int32Value(), r_tmp2);
+          OpRegImm(kOpAnd, r_tmp2, kAccClassIsFinalizable);
+          branch_to_slow_path3 = OpCmpImmBranch(kCondNe, r_tmp2, 0, NULL);
+        }
+        // Load the object size.
+        Load32Disp(r_tmp1, mirror::Class::ObjectSizeOffset().Int32Value(), r_tmp1);
+        // RoundUp object size by the alignment.
+        const int alignment = static_cast<int>(gc::space::BumpPointerSpace::kAlignment);
+        OpRegImm(kOpAdd, r_tmp1, alignment - 1);
+        OpRegRegImm(kOpAnd, r_tmp1, r_tmp1, ~(alignment - 1));
+        // Load the tlab position.
+        LoadWordDisp(r_self, thread_local_pos_offset, r_tmp2);
+        // Check if tlab is big enough.
+        OpRegRegReg(kOpAdd, r_tmp2, r_tmp2, r_tmp1);
+        LoadWordDisp(r_self, thread_local_end_offset, r_tmp1);
+        LIR* branch_to_slow_path4 = OpCmpBranch(kCondLt, r_tmp1, r_tmp2, NULL);
+        // Reload the (old) tlab pos.
+        LoadWordDisp(r_self, thread_local_pos_offset, r_tmp1);
+        // Update the tlab pos.
+        StoreWordDisp(r_self, thread_local_pos_offset, r_tmp2);
+        // Add to the tlab obj counter.
+        LoadWordDisp(r_self, thread_local_objects_offset, r_tmp2);
+        OpRegImm(kOpAdd, r_tmp2, 1);
+        StoreWordDisp(r_self, thread_local_objects_offset, r_tmp2);
+        // Reload the class ptr.
+        if (is_resolved_or_initialized) {
+          if (use_direct_type_ptr) {
+            LoadConstant(r_tmp2, direct_type_ptr);
+          } else {
+            LoadClassType(*dex_file, type_idx, r_tmp2);
+          }
+        } else {
+          LoadCurrMethodDirect(r_tmp2);
+          LoadRefDisp(r_tmp2, method_dex_cache_resolved_types_offset, r_tmp2, kNotVolatile);
+          LoadRefDisp(r_tmp2, object_array_data_offset + type_idx * kObjectReferenceSize,
+                      r_tmp2, kNotVolatile);
+        }
+        // Set the class with a barrier.
+        StoreRefDisp(r_tmp1, mirror::Object::ClassOffset().Int32Value(), r_tmp2, kNotVolatile);
+        GenMemBarrier(kStoreStore);
+        RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
+        OpRegCopy(rl_result.reg, r_tmp1);
+        StoreValue(rl_dest, rl_result);
+        // Done. Jump over the slow path code below.
+        branch_to_end = OpUnconditionalBranch(nullptr);
+        // Set the slow path jump targets.
+        LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);
+        if (branch_to_slow_path0 != nullptr) {
+          branch_to_slow_path0->target = slow_path_target;
+        }
+        if (branch_to_slow_path1 != nullptr) {
+          branch_to_slow_path1->target = slow_path_target;
+        }
+        if (branch_to_slow_path2 != nullptr) {
+          branch_to_slow_path2->target = slow_path_target;
+        }
+        if (branch_to_slow_path3 != nullptr) {
+          branch_to_slow_path3->target = slow_path_target;
+        }
+        branch_to_slow_path4->target = slow_path_target;
+        FreeTemp(r_tmp1);
+        FreeTemp(r_tmp2);
+        ClobberSReg(rl_dest.s_reg_low);
+      }
+    }
+  }
+
   FlushAllRegs();  /* Everything to home location */
   // alloc will always check for resolution, do we also need to verify
   // access because the verifier was unable to?
@@ -1098,6 +1226,10 @@ void Mir2Lir::GenNewInstance(uint32_t type_idx, RegLocation rl_dest) {
     CallRuntimeHelperImmMethod(kQuickAllocObjectWithAccessCheck, type_idx, true);
   }
   StoreValue(rl_dest, GetReturn(kRefReg));
+
+  if (branch_to_end != nullptr) {
+    branch_to_end->target = NewLIR0(kPseudoTargetLabel);
+  }
 }
 
 void Mir2Lir::GenThrow(RegLocation rl_src) {
