@@ -2449,24 +2449,29 @@ void Dbg::SuspendSelf() {
   Runtime::Current()->GetThreadList()->SuspendSelfForDebugger();
 }
 
-struct GetThisVisitor : public StackVisitor {
-  GetThisVisitor(Thread* thread, Context* context, JDWP::FrameId frame_id)
+// Walks the stack until we find the frame with the given FrameId.
+class FindFrameVisitor FINAL : public StackVisitor {
+ public:
+  FindFrameVisitor(Thread* thread, Context* context, JDWP::FrameId frame_id)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : StackVisitor(thread, context), this_object(nullptr), frame_id(frame_id) {}
+      : StackVisitor(thread, context), frame_id_(frame_id), error_(JDWP::ERR_INVALID_FRAMEID) {}
 
-  // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
-  // annotalysis.
-  virtual bool VisitFrame() NO_THREAD_SAFETY_ANALYSIS {
-    if (frame_id != GetFrameId()) {
-      return true;  // continue
+  bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (GetFrameId() != frame_id_) {
+      return true;  // Not our frame, carry on.
     } else {
-      this_object = GetThisObject();
-      return false;
+      error_ = JDWP::ERR_NONE;
+      return false;  // We found our frame, stop.
     }
   }
 
-  mirror::Object* this_object;
-  JDWP::FrameId frame_id;
+  JDWP::JdwpError GetError() const {
+    return error_;
+  }
+
+ private:
+  const JDWP::FrameId frame_id_;
+  JDWP::JdwpError error_;
 };
 
 JDWP::JdwpError Dbg::GetThisObject(JDWP::ObjectId thread_id, JDWP::FrameId frame_id,
@@ -2485,44 +2490,14 @@ JDWP::JdwpError Dbg::GetThisObject(JDWP::ObjectId thread_id, JDWP::FrameId frame
     }
   }
   std::unique_ptr<Context> context(Context::Create());
-  GetThisVisitor visitor(thread, context.get(), frame_id);
+  FindFrameVisitor visitor(thread, context.get(), frame_id);
   visitor.WalkStack();
-  *result = gRegistry->Add(visitor.this_object);
+  if (visitor.GetError() != JDWP::ERR_NONE) {
+    return visitor.GetError();
+  }
+  *result = gRegistry->Add(visitor.GetThisObject());
   return JDWP::ERR_NONE;
 }
-
-// Walks the stack until we find the frame with the given FrameId.
-class FindFrameVisitor FINAL : public StackVisitor {
- public:
-  FindFrameVisitor(Thread* thread, Context* context, JDWP::FrameId frame_id)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : StackVisitor(thread, context), frame_id_(frame_id), error_(JDWP::ERR_INVALID_FRAMEID) {}
-
-  // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
-  // annotalysis.
-  bool VisitFrame() NO_THREAD_SAFETY_ANALYSIS {
-    if (GetFrameId() != frame_id_) {
-      return true;  // Not our frame, carry on.
-    }
-    mirror::ArtMethod* m = GetMethod();
-    if (m->IsNative()) {
-      // We can't read/write local value from/into native method.
-      error_ = JDWP::ERR_OPAQUE_FRAME;
-    } else {
-      // We found our frame.
-      error_ = JDWP::ERR_NONE;
-    }
-    return false;
-  }
-
-  JDWP::JdwpError GetError() const {
-    return error_;
-  }
-
- private:
-  const JDWP::FrameId frame_id_;
-  JDWP::JdwpError error_;
-};
 
 JDWP::JdwpError Dbg::GetLocalValues(JDWP::Request* request, JDWP::ExpandBuf* pReply) {
   JDWP::ObjectId thread_id = request->ReadThreadId();
@@ -2544,6 +2519,14 @@ JDWP::JdwpError Dbg::GetLocalValues(JDWP::Request* request, JDWP::ExpandBuf* pRe
   visitor.WalkStack();
   if (visitor.GetError() != JDWP::ERR_NONE) {
     return visitor.GetError();
+  }
+  if (visitor.GetMethod()->IsNative()) {
+    // We can't read local value from native method.
+    return JDWP::ERR_OPAQUE_FRAME;
+  }
+  if (visitor.GetMethod()->IsProxyMethod()) {
+    // We don't support reading local value from proxy method.
+    return JDWP::ERR_OPAQUE_FRAME;
   }
 
   // Read the values from visitor's context.
@@ -2711,6 +2694,14 @@ JDWP::JdwpError Dbg::SetLocalValues(JDWP::Request* request) {
   visitor.WalkStack();
   if (visitor.GetError() != JDWP::ERR_NONE) {
     return visitor.GetError();
+  }
+  if (visitor.GetMethod()->IsNative()) {
+    // We can't write local value into native method.
+    return JDWP::ERR_OPAQUE_FRAME;
+  }
+  if (visitor.GetMethod()->IsProxyMethod()) {
+    // We don't support writing local value into proxy method.
+    return JDWP::ERR_OPAQUE_FRAME;
   }
 
   // Writes the values into visitor's context.
