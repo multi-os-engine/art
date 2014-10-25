@@ -128,9 +128,19 @@ class DlMallocSpace : public MallocSpace {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  protected:
-  DlMallocSpace(const std::string& name, MemMap* mem_map, void* mspace, uint8_t* begin, uint8_t* end,
-                uint8_t* limit, size_t growth_limit, bool can_move_objects, size_t starting_size,
-                size_t initial_size);
+  struct DlMallocSpaceConstructorParams {
+    const std::string& name;
+    MemMap* mem_map;
+    void* mspace;
+    uint8_t* begin;
+    uint8_t* end;
+    uint8_t* limit;
+    size_t growth_limit;
+    bool can_move_objects;
+    size_t starting_size;
+    size_t initial_size;
+  };
+  explicit DlMallocSpace(DlMallocSpaceConstructorParams&& params);
 
  private:
   mirror::Object* AllocWithoutGrowthLocked(Thread* self, size_t num_bytes, size_t* bytes_allocated,

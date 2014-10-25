@@ -19,9 +19,15 @@
 
 #include "rosalloc.h"
 
+#include <valgrind.h>
+
 namespace art {
 namespace gc {
 namespace allocator {
+
+inline ALWAYS_INLINE bool RosAlloc::DoCheckZeroMemory() {
+  return kCheckZeroMemory && (RUNNING_ON_VALGRIND == 0);
+}
 
 template<bool kThreadSafe>
 inline ALWAYS_INLINE void* RosAlloc::Alloc(Thread* self, size_t size, size_t* bytes_allocated) {
@@ -35,7 +41,7 @@ inline ALWAYS_INLINE void* RosAlloc::Alloc(Thread* self, size_t size, size_t* by
     m = AllocFromRunThreadUnsafe(self, size, bytes_allocated);
   }
   // Check if the returned memory is really all zero.
-  if (kCheckZeroMemory && m != nullptr) {
+  if (DoCheckZeroMemory() && m != nullptr) {
     uint8_t* bytes = reinterpret_cast<uint8_t*>(m);
     for (size_t i = 0; i < size; ++i) {
       DCHECK_EQ(bytes[i], 0);
