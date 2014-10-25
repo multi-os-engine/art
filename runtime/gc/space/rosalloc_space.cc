@@ -35,6 +35,9 @@ namespace art {
 namespace gc {
 namespace space {
 
+template class ValgrindMallocSpace<RosAllocSpace, void*,
+                                   RosAllocSpace::RosAllocSpaceConstructorParams, 0>;
+
 static constexpr bool kPrefetchDuringRosAllocFreeList = false;
 static constexpr size_t kPrefetchLookAhead = 8;
 // Use this only for verification, it is not safe to use since the class of the object may have
@@ -44,14 +47,12 @@ static constexpr bool kVerifyFreedBytes = false;
 // TODO: Fix
 // template class ValgrindMallocSpace<RosAllocSpace, allocator::RosAlloc*>;
 
-RosAllocSpace::RosAllocSpace(const std::string& name, MemMap* mem_map,
-                             art::gc::allocator::RosAlloc* rosalloc, uint8_t* begin, uint8_t* end,
-                             uint8_t* limit, size_t growth_limit, bool can_move_objects,
-                             size_t starting_size, size_t initial_size, bool low_memory_mode)
-    : MallocSpace(name, mem_map, begin, end, limit, growth_limit, true, can_move_objects,
-                  starting_size, initial_size),
-      rosalloc_(rosalloc), low_memory_mode_(low_memory_mode) {
-  CHECK(rosalloc != nullptr);
+RosAllocSpace::RosAllocSpace(RosAllocSpaceConstructorParams&& params)
+    : MallocSpace(params.name, params.mem_map, params.begin, params.end, params.limit,
+                  params.growth_limit, true, params.can_move_objects,
+                  params.starting_size, params.initial_size),
+      rosalloc_(params.rosalloc), low_memory_mode_(params.low_memory_mode) {
+  CHECK(params.rosalloc != nullptr);
 }
 
 RosAllocSpace* RosAllocSpace::CreateFromMemMap(MemMap* mem_map, const std::string& name,
@@ -77,11 +78,12 @@ RosAllocSpace* RosAllocSpace::CreateFromMemMap(MemMap* mem_map, const std::strin
   // TODO: Fix RosAllocSpace to support valgrind. There is currently some issues with
   // AllocationSize caused by redzones. b/12944686
   if (Runtime::Current()->RunningOnValgrind()) {
-    UNIMPLEMENTED(FATAL);
-    UNREACHABLE();
+    return new ValgrindMallocSpace<RosAllocSpace, void*, RosAllocSpaceConstructorParams, 0>(
+        {name, mem_map, rosalloc, begin, end, begin + capacity, growth_limit,
+         can_move_objects, starting_size, initial_size, low_memory_mode});
   } else {
-    return new RosAllocSpace(name, mem_map, rosalloc, begin, end, begin + capacity, growth_limit,
-                             can_move_objects, starting_size, initial_size, low_memory_mode);
+    return new RosAllocSpace({name, mem_map, rosalloc, begin, end, begin + capacity, growth_limit,
+                              can_move_objects, starting_size, initial_size, low_memory_mode});
   }
 }
 
@@ -170,9 +172,9 @@ mirror::Object* RosAllocSpace::AllocWithGrowth(Thread* self, size_t num_bytes,
 MallocSpace* RosAllocSpace::CreateInstance(const std::string& name, MemMap* mem_map, void* allocator,
                                            uint8_t* begin, uint8_t* end, uint8_t* limit, size_t growth_limit,
                                            bool can_move_objects) {
-  return new RosAllocSpace(name, mem_map, reinterpret_cast<allocator::RosAlloc*>(allocator),
-                           begin, end, limit, growth_limit, can_move_objects, starting_size_,
-                           initial_size_, low_memory_mode_);
+  return new RosAllocSpace({name, mem_map, reinterpret_cast<allocator::RosAlloc*>(allocator),
+                            begin, end, limit, growth_limit, can_move_objects, starting_size_,
+                            initial_size_, low_memory_mode_});
 }
 
 size_t RosAllocSpace::Free(Thread* self, mirror::Object* ptr) {

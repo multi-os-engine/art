@@ -126,9 +126,20 @@ class RosAllocSpace : public MallocSpace {
   }
 
  protected:
-  RosAllocSpace(const std::string& name, MemMap* mem_map, allocator::RosAlloc* rosalloc,
-                uint8_t* begin, uint8_t* end, uint8_t* limit, size_t growth_limit, bool can_move_objects,
-                size_t starting_size, size_t initial_size, bool low_memory_mode);
+  struct RosAllocSpaceConstructorParams {
+    const std::string& name;
+    MemMap* mem_map;
+    allocator::RosAlloc* rosalloc;
+    uint8_t* begin;
+    uint8_t* end;
+    uint8_t* limit;
+    size_t growth_limit;
+    bool can_move_objects;
+    size_t starting_size;
+    size_t initial_size;
+    bool low_memory_mode;
+  };
+  explicit RosAllocSpace(RosAllocSpaceConstructorParams&& params);
 
  private:
   template<bool kThreadSafe = true>

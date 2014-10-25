@@ -33,16 +33,16 @@ namespace space {
 
 static constexpr bool kPrefetchDuringDlMallocFreeList = true;
 
-template class ValgrindMallocSpace<DlMallocSpace, void*>;
+template class ValgrindMallocSpace<DlMallocSpace, void*,
+                                   DlMallocSpace::DlMallocSpaceConstructorParams,
+                                   kDefaultValgrindRedZoneBytes>;
 
-DlMallocSpace::DlMallocSpace(const std::string& name, MemMap* mem_map, void* mspace, uint8_t* begin,
-                             uint8_t* end, uint8_t* limit, size_t growth_limit,
-                             bool can_move_objects, size_t starting_size,
-                             size_t initial_size)
-    : MallocSpace(name, mem_map, begin, end, limit, growth_limit, true, can_move_objects,
-                  starting_size, initial_size),
-      mspace_(mspace) {
-  CHECK(mspace != NULL);
+DlMallocSpace::DlMallocSpace(DlMallocSpaceConstructorParams&& params)
+    : MallocSpace(params.name, params.mem_map, params.begin, params.end, params.limit,
+                  params.growth_limit, true, params.can_move_objects,
+                  params.starting_size, params.initial_size),
+      mspace_(params.mspace) {
+  CHECK(params.mspace != NULL);
 }
 
 DlMallocSpace* DlMallocSpace::CreateFromMemMap(MemMap* mem_map, const std::string& name,
@@ -65,12 +65,13 @@ DlMallocSpace* DlMallocSpace::CreateFromMemMap(MemMap* mem_map, const std::strin
   // Everything is set so record in immutable structure and leave
   uint8_t* begin = mem_map->Begin();
   if (Runtime::Current()->RunningOnValgrind()) {
-    return new ValgrindMallocSpace<DlMallocSpace, void*>(
-        name, mem_map, mspace, begin, end, begin + capacity, growth_limit, initial_size,
-        can_move_objects, starting_size);
+    return new ValgrindMallocSpace<DlMallocSpace, void*, DlMallocSpaceConstructorParams,
+                                   kDefaultValgrindRedZoneBytes>(
+        {name, mem_map, mspace, begin, end, begin + capacity, growth_limit, can_move_objects,
+         starting_size, initial_size});
   } else {
-    return new DlMallocSpace(name, mem_map, mspace, begin, end, begin + capacity, growth_limit,
-                             can_move_objects, starting_size, initial_size);
+    return new DlMallocSpace({name, mem_map, mspace, begin, end, begin + capacity, growth_limit,
+                              can_move_objects, starting_size, initial_size});
   }
 }
 
@@ -152,8 +153,8 @@ MallocSpace* DlMallocSpace::CreateInstance(const std::string& name, MemMap* mem_
                                            void* allocator, uint8_t* begin, uint8_t* end,
                                            uint8_t* limit, size_t growth_limit,
                                            bool can_move_objects) {
-  return new DlMallocSpace(name, mem_map, allocator, begin, end, limit, growth_limit,
-                           can_move_objects, starting_size_, initial_size_);
+  return new DlMallocSpace({name, mem_map, allocator, begin, end, limit, growth_limit,
+                            can_move_objects, starting_size_, initial_size_});
 }
 
 size_t DlMallocSpace::Free(Thread* self, mirror::Object* ptr) {
