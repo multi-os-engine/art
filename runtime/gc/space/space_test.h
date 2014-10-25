@@ -66,6 +66,9 @@ class SpaceTest : public CommonRuntimeTest {
     StackHandleScope<1> hs(self);
     Handle<mirror::Class> byte_array_class(hs.NewHandle(GetByteArrayClass(self)));
     mirror::Object* obj = alloc_space->Alloc(self, bytes, bytes_allocated, usable_size);
+    if (usable_size != nullptr && obj != nullptr) {
+      EXPECT_GE(*usable_size, bytes);
+    }
     if (obj != nullptr) {
       InstallClass(obj, byte_array_class.Get(), bytes);
     }

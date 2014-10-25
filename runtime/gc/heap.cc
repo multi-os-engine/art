@@ -455,7 +455,9 @@ space::MallocSpace* Heap::CreateMallocSpaceFromMemMap(MemMap* mem_map, size_t in
   space::MallocSpace* malloc_space = nullptr;
   if (kUseRosAlloc) {
     // Create rosalloc space.
-    malloc_space = space::RosAllocSpace::CreateFromMemMap(mem_map, name, kDefaultStartingSize,
+    size_t starting_size = kDefaultStartingSize + (kIsDebugBuild ? kPageSize : 0);
+    DCHECK_LE(starting_size, capacity);
+    malloc_space = space::RosAllocSpace::CreateFromMemMap(mem_map, name, starting_size,
                                                           initial_size, growth_limit, capacity,
                                                           low_memory_mode_, can_move_objects);
   } else {
