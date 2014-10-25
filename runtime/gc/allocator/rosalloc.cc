@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
+#include "rosalloc.h"
+
 #include "base/mutex-inl.h"
+#include "gc/space/valgrind_settings.h"
 #include "mirror/class-inl.h"
 #include "mirror/object.h"
 #include "mirror/object-inl.h"
 #include "thread-inl.h"
 #include "thread_list.h"
-#include "rosalloc.h"
 
 #include <map>
 #include <list>
@@ -319,7 +321,7 @@ size_t RosAlloc::FreePages(Thread* self, void* ptr, bool already_zero) {
   }
   const size_t byte_size = num_pages * kPageSize;
   if (already_zero) {
-    if (kCheckZeroMemory) {
+    if (ShouldCheckZeroMemory()) {
       const uintptr_t* word_ptr = reinterpret_cast<uintptr_t*>(ptr);
       for (size_t i = 0; i < byte_size / sizeof(uintptr_t); ++i) {
         CHECK_EQ(word_ptr[i], 0U) << "words don't match at index " << i;
@@ -473,7 +475,7 @@ void* RosAlloc::AllocLargeObject(Thread* self, size_t size, size_t* bytes_alloca
               << "(" << std::dec << (num_pages * kPageSize) << ")";
   }
   // Check if the returned memory is really all zero.
-  if (kCheckZeroMemory) {
+  if (ShouldCheckZeroMemory()) {
     CHECK_EQ(total_bytes % sizeof(uintptr_t), 0U);
     const uintptr_t* words = reinterpret_cast<uintptr_t*>(r);
     for (size_t i = 0; i < total_bytes / sizeof(uintptr_t); ++i) {
@@ -1868,6 +1870,7 @@ void RosAlloc::ObjectsAllocatedCallback(void* start, void* end, size_t used_byte
 }
 
 void RosAlloc::Verify() {
+  bool running_on_valgrind = RUNNING_ON_VALGRIND != 0;
   Thread* self = Thread::Current();
   CHECK(Locks::mutator_lock_->IsExclusiveHeld(self))
       << "The mutator locks isn't exclusively locked at " << __PRETTY_FUNCTION__;
@@ -1916,6 +1919,9 @@ void RosAlloc::Verify() {
             idx++;
           }
           void* start = base_ + i * kPageSize;
+          if (running_on_valgrind) {
+            start = base_ + i * kPageSize + ::art::gc::space::kDefaultValgrindRedZoneBytes;
+          }
           mirror::Object* obj = reinterpret_cast<mirror::Object*>(start);
           size_t obj_size = obj->SizeOf();
           CHECK_GT(obj_size, kLargeSizeThreshold)
@@ -1991,6 +1997,7 @@ void RosAlloc::Verify() {
 }
 
 void RosAlloc::Run::Verify(Thread* self, RosAlloc* rosalloc) {
+  bool running_on_valgrind = RUNNING_ON_VALGRIND != 0;
   DCHECK_EQ(magic_num_, kMagicNum) << "Bad magic number : " << Dump();
   const size_t idx = size_bracket_idx_;
   CHECK_LT(idx, kNumOfSizeBrackets) << "Out of range size bracket index : " << Dump();
@@ -2073,6 +2080,9 @@ void RosAlloc::Run::Verify(Thread* self, RosAlloc* rosalloc) {
   }
   // Check each slot.
   size_t slots = 0;
+  size_t valgrind_modifier = running_on_valgrind ?
+      2 * ::art::gc::space::kDefaultValgrindRedZoneBytes :
+      0U;
   for (size_t v = 0; v < num_vec; v++, slots += 32) {
     DCHECK_GE(num_slots, slots) << "Out of bounds";
     uint32_t vec = alloc_bit_map_[v];
@@ -2085,8 +2095,11 @@ void RosAlloc::Run::Verify(Thread* self, RosAlloc* rosalloc) {
       bool is_thread_local_freed = IsThreadLocal() && ((thread_local_free_vec >> i) & 0x1) != 0;
       if (is_allocated && !is_thread_local_freed) {
         uint8_t* slot_addr = slot_base + (slots + i) * bracket_size;
+        if (running_on_valgrind) {
+          slot_addr += ::art::gc::space::kDefaultValgrindRedZoneBytes;
+        }
         mirror::Object* obj = reinterpret_cast<mirror::Object*>(slot_addr);
-        size_t obj_size = obj->SizeOf();
+        size_t obj_size = obj->SizeOf() + valgrind_modifier;
         CHECK_LE(obj_size, kLargeSizeThreshold)
             << "A run slot contains a large object " << Dump();
         CHECK_EQ(SizeToIndex(obj_size), idx)
