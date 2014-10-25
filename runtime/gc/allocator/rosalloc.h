@@ -246,7 +246,7 @@ class RosAlloc {
     // Dump the run metadata for debugging.
     std::string Dump();
     // Verify for debugging.
-    void Verify(Thread* self, RosAlloc* rosalloc)
+    void Verify(Thread* self, RosAlloc* rosalloc, bool running_on_valgrind)
         EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_)
         EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_list_lock_);
 
@@ -372,6 +372,9 @@ class RosAlloc {
 
   // If true, check that the returned memory is actually zero.
   static constexpr bool kCheckZeroMemory = kIsDebugBuild;
+  // Valgrind doesn't zero memory, so do not check memory when running under valgrind. In a normal
+  // build with kCheckZeroMemory the whole test should be optimized away.
+  ALWAYS_INLINE bool ShouldCheckZeroMemory();
 
   // If true, log verbose details of operations.
   static constexpr bool kTraceRosAlloc = false;
@@ -480,6 +483,9 @@ class RosAlloc {
   // greater than or equal to this value, release pages.
   const size_t page_release_size_threshold_;
 
+  // Whether this allocator is running under Valgrind.
+  bool running_on_valgrind_;
+
   // The base address of the memory region that's managed by this allocator.
   uint8_t* Begin() { return base_; }
   // The end address of the memory region that's managed by this allocator.
@@ -529,7 +535,8 @@ class RosAlloc {
  public:
   RosAlloc(void* base, size_t capacity, size_t max_capacity,
            PageReleaseMode page_release_mode,
-           size_t page_release_size_threshold = kDefaultPageReleaseSizeThreshold);
+           size_t page_release_size_threshold = kDefaultPageReleaseSizeThreshold,
+           bool running_on_valgrind = false);
   ~RosAlloc();
   // If kThreadUnsafe is true then the allocator may avoid acquiring some locks as an optimization.
   // If used, this may cause race conditions if multiple threads are allocating at the same time.
