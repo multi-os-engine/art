@@ -1121,48 +1121,51 @@ std::string GetSchedulerGroupName(pid_t tid) {
 void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix,
     mirror::ArtMethod* current_method) {
 #ifdef __linux__
-  std::unique_ptr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid));
-  if (!backtrace->Unwind(0)) {
-    os << prefix << "(backtrace::Unwind failed for thread " << tid << ")\n";
-    return;
-  } else if (backtrace->NumFrames() == 0) {
-    os << prefix << "(no native stack frames for thread " << tid << ")\n";
-    return;
-  }
-
-  for (Backtrace::const_iterator it = backtrace->begin();
-       it != backtrace->end(); ++it) {
-    // We produce output like this:
-    // ]    #00 pc 000075bb8  /system/lib/libc.so (unwind_backtrace_thread+536)
-    // In order for parsing tools to continue to function, the stack dump
-    // format must at least adhere to this format:
-    //  #XX pc <RELATIVE_ADDR>  <FULL_PATH_TO_SHARED_LIBRARY> ...
-    // The parsers require a single space before and after pc, and two spaces
-    // after the <RELATIVE_ADDR>. There can be any prefix data before the
-    // #XX. <RELATIVE_ADDR> has to be a hex number but with no 0x prefix.
-    os << prefix << StringPrintf("#%02zu pc ", it->num);
-    if (!it->map) {
-      os << StringPrintf("%08" PRIxPTR "  ???", it->pc);
-    } else {
-      os << StringPrintf("%08" PRIxPTR "  ", it->pc - it->map->start)
-         << it->map->name << " (";
-      if (!it->func_name.empty()) {
-        os << it->func_name;
-        if (it->func_offset != 0) {
-          os << "+" << it->func_offset;
-        }
-      } else if (current_method != nullptr &&
-                 Locks::mutator_lock_->IsSharedHeld(Thread::Current()) &&
-                 current_method->PcIsWithinQuickCode(it->pc)) {
-        const void* start_of_code = current_method->GetEntryPointFromQuickCompiledCode();
-        os << JniLongName(current_method) << "+"
-           << (it->pc - reinterpret_cast<uintptr_t>(start_of_code));
-      } else {
-        os << "???";
-      }
-      os << ")";
+  // b/18119146
+  if (RUNNING_ON_VALGRIND == 0) {
+    std::unique_ptr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid));
+    if (!backtrace->Unwind(0)) {
+      os << prefix << "(backtrace::Unwind failed for thread " << tid << ")\n";
+      return;
+    } else if (backtrace->NumFrames() == 0) {
+      os << prefix << "(no native stack frames for thread " << tid << ")\n";
+      return;
     }
-    os << "\n";
+
+    for (Backtrace::const_iterator it = backtrace->begin();
+        it != backtrace->end(); ++it) {
+      // We produce output like this:
+      // ]    #00 pc 000075bb8  /system/lib/libc.so (unwind_backtrace_thread+536)
+      // In order for parsing tools to continue to function, the stack dump
+      // format must at least adhere to this format:
+      //  #XX pc <RELATIVE_ADDR>  <FULL_PATH_TO_SHARED_LIBRARY> ...
+      // The parsers require a single space before and after pc, and two spaces
+      // after the <RELATIVE_ADDR>. There can be any prefix data before the
+      // #XX. <RELATIVE_ADDR> has to be a hex number but with no 0x prefix.
+      os << prefix << StringPrintf("#%02zu pc ", it->num);
+      if (!it->map) {
+        os << StringPrintf("%08" PRIxPTR "  ???", it->pc);
+      } else {
+        os << StringPrintf("%08" PRIxPTR "  ", it->pc - it->map->start)
+             << it->map->name << " (";
+        if (!it->func_name.empty()) {
+          os << it->func_name;
+          if (it->func_offset != 0) {
+            os << "+" << it->func_offset;
+          }
+        } else if (current_method != nullptr &&
+            Locks::mutator_lock_->IsSharedHeld(Thread::Current()) &&
+            current_method->PcIsWithinQuickCode(it->pc)) {
+          const void* start_of_code = current_method->GetEntryPointFromQuickCompiledCode();
+          os << JniLongName(current_method) << "+"
+              << (it->pc - reinterpret_cast<uintptr_t>(start_of_code));
+        } else {
+          os << "???";
+        }
+        os << ")";
+      }
+      os << "\n";
+    }
   }
 #endif
 }

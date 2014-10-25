@@ -27,7 +27,8 @@ namespace space {
 
 // A specialization of DlMallocSpace/RosAllocSpace that places valgrind red zones around
 // allocations.
-template <typename BaseMallocSpaceType, typename AllocatorType>
+template <typename BaseMallocSpaceType, typename AllocatorType, typename ConstructorParamsType,
+          size_t kValgrindRedZoneBytes>
 class ValgrindMallocSpace FINAL : public BaseMallocSpaceType {
  public:
   mirror::Object* AllocWithGrowth(Thread* self, size_t num_bytes, size_t* bytes_allocated,
@@ -46,9 +47,7 @@ class ValgrindMallocSpace FINAL : public BaseMallocSpaceType {
   void RegisterRecentFree(mirror::Object* ptr) OVERRIDE {
   }
 
-  ValgrindMallocSpace(const std::string& name, MemMap* mem_map, AllocatorType allocator,
-                      uint8_t* begin, uint8_t* end, uint8_t* limit, size_t growth_limit,
-                      size_t initial_size, bool can_move_objects, size_t starting_size);
+  explicit ValgrindMallocSpace(ConstructorParamsType&& type);
   virtual ~ValgrindMallocSpace() {}
 
  private:

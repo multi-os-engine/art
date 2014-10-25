@@ -372,6 +372,9 @@ class RosAlloc {
 
   // If true, check that the returned memory is actually zero.
   static constexpr bool kCheckZeroMemory = kIsDebugBuild;
+  // Valgrind doesn't zero memory, so do not check memory when running under valgrind. In a normal
+  // build with kCheckZeroMemory the whole test should be optimized away.
+  static bool DoCheckZeroMemory();
 
   // If true, log verbose details of operations.
   static constexpr bool kTraceRosAlloc = false;

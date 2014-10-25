@@ -319,7 +319,7 @@ size_t RosAlloc::FreePages(Thread* self, void* ptr, bool already_zero) {
   }
   const size_t byte_size = num_pages * kPageSize;
   if (already_zero) {
-    if (kCheckZeroMemory) {
+    if (DoCheckZeroMemory()) {
       const uintptr_t* word_ptr = reinterpret_cast<uintptr_t*>(ptr);
       for (size_t i = 0; i < byte_size / sizeof(uintptr_t); ++i) {
         CHECK_EQ(word_ptr[i], 0U) << "words don't match at index " << i;
@@ -473,7 +473,7 @@ void* RosAlloc::AllocLargeObject(Thread* self, size_t size, size_t* bytes_alloca
               << "(" << std::dec << (num_pages * kPageSize) << ")";
   }
   // Check if the returned memory is really all zero.
-  if (kCheckZeroMemory) {
+  if (DoCheckZeroMemory()) {
     CHECK_EQ(total_bytes % sizeof(uintptr_t), 0U);
     const uintptr_t* words = reinterpret_cast<uintptr_t*>(r);
     for (size_t i = 0; i < total_bytes / sizeof(uintptr_t); ++i) {
