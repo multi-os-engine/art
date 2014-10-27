@@ -1,0 +1,1 @@
+Test that write barriers are properly run in filled-new-array.
