@@ -114,6 +114,9 @@ static constexpr bool kDefaultMustRelocate = true;
 
 static constexpr bool kArm32QuickCodeUseSoftFloat = false;
 
+// If true, makes sure Art won't emit code that could trigger Cortex A53's erratum 835769.
+static constexpr bool kFixCortexA53Erratum835769 = true;
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_GLOBALS_H_
