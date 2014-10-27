@@ -287,7 +287,8 @@ TEST_ART_BROKEN_NDEBUG_TESTS :=
 
 # Known broken tests for the default compiler (Quick).
 TEST_ART_BROKEN_DEFAULT_RUN_TESTS := \
-  412-new-array
+  412-new-array \       # b/18084375
+  416-filled-new-array  # b/18084375
 
 ifneq (,$(filter default,$(COMPILER_TYPES)))
   ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES),$(PREBUILD_TYPES), \
