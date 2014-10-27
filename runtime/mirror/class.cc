@@ -57,8 +57,11 @@ void Class::VisitRoots(RootCallback* callback, void* arg) {
   }
 }
 
-void Class::SetStatus(Status new_status, Thread* self) {
-  Status old_status = GetStatus();
+void Class::SetStatus(Status new_status, Thread* self, Status old_status) {
+  // NOTE: SetStatus() is called either before the Class can leak to other threads, or under
+  // the ObjectLock. In both cases, we can safely DCHECK that old_status matches GetStatus().
+  DCHECK_EQ(old_status, GetStatus());
+
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   bool class_linker_initialized = class_linker != nullptr && class_linker->IsInitialized();
   if (LIKELY(class_linker_initialized)) {
@@ -75,7 +78,7 @@ void Class::SetStatus(Status new_status, Thread* self) {
     }
   }
   if (UNLIKELY(new_status == kStatusError)) {
-    CHECK_NE(GetStatus(), kStatusError)
+    CHECK_NE(old_status, kStatusError)
         << "Attempt to set as erroneous an already erroneous class " << PrettyClass(this);
 
     // Stash current exception.
@@ -131,7 +134,7 @@ void Class::SetStatus(Status new_status, Thread* self) {
   } else {
     // Classes that are being resolved or initialized need to notify waiters that the class status
     // changed. See ClassLinker::EnsureResolved and ClassLinker::WaitForInitializeClass.
-    if (IsTemp()) {
+    if (IsTemp(new_status)) {
       // Class is a temporary one, ensure that waiters for resolution get notified of retirement
       // so that they can grab the new version of the class from the class linker's table.
       CHECK_LT(new_status, kStatusResolved) << PrettyDescriptor(this);
