@@ -491,8 +491,6 @@ class MANAGED ArtMethod FINAL : public Object {
 
   const DexFile::CodeItem* GetCodeItem() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool IsResolvedTypeIdx(uint16_t type_idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   int32_t GetLineNumFromDexPC(uint32_t dex_pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   const DexFile::ProtoId& GetPrototype() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

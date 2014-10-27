@@ -50,7 +50,12 @@ static inline mirror::Class* CheckFilledNewArrayAlloc(uint32_t type_idx,
       DCHECK(self->IsExceptionPending());
       return nullptr;  // Failure
     }
+    CHECK(klass->IsArrayClass()) << PrettyClass(klass);
   }
+
+  // Array types are never erroneous.
+  DCHECK(!klass->IsErroneous());
+
   if (UNLIKELY(klass->IsPrimitive() && !klass->IsPrimitiveInt())) {
     if (klass->IsPrimitiveLong() || klass->IsPrimitiveDouble()) {
       ThrowRuntimeException("Bad filled array request for type %s",

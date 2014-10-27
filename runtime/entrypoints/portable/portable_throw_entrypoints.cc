@@ -104,6 +104,10 @@ extern "C" int32_t art_portable_find_catch_block_from_code(mirror::ArtMethod* cu
       //       classes early.
       LOG(WARNING) << "Unresolved exception class when finding catch block: "
           << current_method->GetTypeDescriptorFromTypeIdx(iter_type_idx);
+    } else if (UNLIKELY(iter_exception_type->IsErroneous())) {
+      // NOTE: We can't construct an exception of an erroneous type, so it cannot be thrown/caught.
+      LOG(WARNING) << "Erroneous exception class when finding catch block: "
+          << current_method->GetTypeDescriptorFromTypeIdx(iter_type_idx);
     } else if (iter_exception_type->IsAssignableFrom(exception_type)) {
       catch_dex_pc = it.GetHandlerAddress();
       result = iter_index;

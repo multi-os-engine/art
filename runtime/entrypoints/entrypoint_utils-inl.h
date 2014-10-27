@@ -190,6 +190,10 @@ static inline mirror::Class* CheckArrayAlloc(uint32_t type_idx,
     }
     CHECK(klass->IsArrayClass()) << PrettyClass(klass);
   }
+
+  // Array types are never erroneous.
+  DCHECK(!klass->IsErroneous());
+
   if (kAccessCheck) {
     mirror::Class* referrer = method->GetDeclaringClass();
     if (UNLIKELY(!referrer->CanAccess(klass))) {
