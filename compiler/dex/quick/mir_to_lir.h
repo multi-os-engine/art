@@ -691,7 +691,7 @@ class Mir2Lir : public Backend {
     int AssignSwitchTablesOffset(CodeOffset offset);
     int AssignFillArrayDataOffset(CodeOffset offset);
     virtual LIR* InsertCaseLabel(DexOffset vaddr, int keyVal);
-    void MarkPackedCaseLabels(Mir2Lir::SwitchTable* tab_rec);
+    virtual void MarkPackedCaseLabels(Mir2Lir::SwitchTable* tab_rec);
     void MarkSparseCaseLabels(Mir2Lir::SwitchTable* tab_rec);
 
     virtual void StartSlowPath(LIRSlowPath* slowpath) {}
