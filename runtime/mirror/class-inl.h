@@ -608,7 +608,8 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
 template <bool kVisitClass, typename Visitor>
 inline void Class::VisitReferences(mirror::Class* klass, const Visitor& visitor) {
   VisitInstanceFieldsReferences<kVisitClass>(klass, visitor);
-  if (!IsTemp() && IsResolved()) {
+  if (GetStatus().IsResolved()) {
+    DCHECK(!IsTemp());  // Temp classes fail the IsResolved() check.
     // Temp classes don't ever populate imt/vtable or static fields and they are not even
     // allocated with the right size for those. Also, unresolved classes don't have fields
     // linked yet.

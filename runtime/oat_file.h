@@ -210,8 +210,8 @@ class OatFile {
     // A representation of an invalid OatClass, used when an OatClass can't be found.
     // See ClassLinker::FindOatClass.
     static OatClass Invalid() {
-      return OatClass(nullptr, mirror::Class::kStatusError, kOatClassNoneCompiled, 0, nullptr,
-                      nullptr);
+      return OatClass(nullptr, mirror::Class::Status(mirror::Class::kStatusError),
+                      kOatClassNoneCompiled, 0, nullptr, nullptr);
     }
 
    private:
