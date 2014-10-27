@@ -113,7 +113,6 @@ define create-core-oat-host-rule-combination
 endef
 
 $(eval $(call create-core-oat-host-rule-combination,default))
-$(eval $(call create-core-oat-host-rule-combination,optimizing))
 $(eval $(call create-core-oat-host-rule-combination,interpreter))
 
 
@@ -205,5 +204,4 @@ define create-core-oat-target-rule-combination
 endef
 
 $(eval $(call create-core-oat-target-rule-combination,default))
-$(eval $(call create-core-oat-target-rule-combination,optimizing))
 $(eval $(call create-core-oat-target-rule-combination,interpreter))
