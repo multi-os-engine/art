@@ -401,14 +401,15 @@ extern "C" const void* artPortableResolutionTrampoline(mirror::ArtMethod* called
     StackHandleScope<1> hs(self);
     Handle<mirror::Class> called_class(hs.NewHandle(called->GetDeclaringClass()));
     class_linker->EnsureInitialized(self, called_class, true, true);
-    if (LIKELY(called_class->IsInitialized())) {
+    mirror::Class::Status called_status = called_class->GetStatus();
+    if (LIKELY(called_status.IsInitialized())) {
       code = called->GetEntryPointFromPortableCompiledCode();
       // TODO: remove this after we solve the link issue.
       if (code == nullptr) {
         bool have_portable_code;
         code = class_linker->GetPortableOatCodeFor(called, &have_portable_code);
       }
-    } else if (called_class->IsInitializing()) {
+    } else if (called_status.IsInitializing()) {
       if (invoke_type == kStatic) {
         // Class is still initializing, go to oat and grab code (trampoline must be left in place
         // until class is initialized to stop races between threads).
@@ -424,7 +425,7 @@ extern "C" const void* artPortableResolutionTrampoline(mirror::ArtMethod* called
         }
       }
     } else {
-      DCHECK(called_class->IsErroneous());
+      DCHECK(called_status.IsErroneous());
     }
   }
   if (LIKELY(code != nullptr)) {

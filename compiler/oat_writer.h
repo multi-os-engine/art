@@ -231,10 +231,12 @@ class OatWriter {
 
     // data to write
 
-    static_assert(mirror::Class::Status::kStatusMax < (2 ^ 16), "class status won't fit in 16bits");
-    int16_t status_;
+    static_assert(mirror::Class::kStatusMax <= std::numeric_limits<int16_t>::max(),
+                  "class status won't fit in int16_t");
+    int16_t status_;  // Signed, kStatusErroneous is negative.
 
-    static_assert(OatClassType::kOatClassMax < (2 ^ 16), "oat_class type won't fit in 16bits");
+    static_assert(OatClassType::kOatClassMax <= std::numeric_limits<uint16_t>::max(),
+                  "oat_class type won't fit in uint16_t");
     uint16_t type_;
 
     uint32_t method_bitmap_size_;

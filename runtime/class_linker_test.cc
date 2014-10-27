@@ -73,7 +73,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     EXPECT_TRUE(primitive->GetSuperClass() == nullptr);
     EXPECT_FALSE(primitive->HasSuperClass());
     EXPECT_TRUE(primitive->GetClassLoader() == nullptr);
-    EXPECT_EQ(mirror::Class::kStatusInitialized, primitive->GetStatus());
+    EXPECT_EQ(mirror::Class::kStatusInitialized, primitive->GetStatus().Value());
     EXPECT_FALSE(primitive->IsErroneous());
     EXPECT_TRUE(primitive->IsLoaded());
     EXPECT_TRUE(primitive->IsResolved());
@@ -128,7 +128,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     EXPECT_TRUE(array->HasSuperClass());
     ASSERT_TRUE(array->GetComponentType() != nullptr);
     ASSERT_GT(strlen(array->GetComponentType()->GetDescriptor(&temp)), 0U);
-    EXPECT_EQ(mirror::Class::kStatusInitialized, array->GetStatus());
+    EXPECT_EQ(mirror::Class::kStatusInitialized, array->GetStatus().Value());
     EXPECT_FALSE(array->IsErroneous());
     EXPECT_TRUE(array->IsLoaded());
     EXPECT_TRUE(array->IsResolved());
@@ -689,7 +689,7 @@ TEST_F(ClassLinkerTest, FindClass) {
   EXPECT_TRUE(JavaLangObject->GetSuperClass() == nullptr);
   EXPECT_FALSE(JavaLangObject->HasSuperClass());
   EXPECT_TRUE(JavaLangObject->GetClassLoader() == nullptr);
-  EXPECT_EQ(mirror::Class::kStatusInitialized, JavaLangObject->GetStatus());
+  EXPECT_EQ(mirror::Class::kStatusInitialized, JavaLangObject->GetStatus().Value());
   EXPECT_FALSE(JavaLangObject->IsErroneous());
   EXPECT_TRUE(JavaLangObject->IsLoaded());
   EXPECT_TRUE(JavaLangObject->IsResolved());
@@ -733,7 +733,7 @@ TEST_F(ClassLinkerTest, FindClass) {
   EXPECT_TRUE(MyClass->GetSuperClass() == JavaLangObject);
   EXPECT_TRUE(MyClass->HasSuperClass());
   EXPECT_EQ(class_loader.Get(), MyClass->GetClassLoader());
-  EXPECT_EQ(mirror::Class::kStatusResolved, MyClass->GetStatus());
+  EXPECT_EQ(mirror::Class::kStatusResolved, MyClass->GetStatus().Value());
   EXPECT_FALSE(MyClass->IsErroneous());
   EXPECT_TRUE(MyClass->IsLoaded());
   EXPECT_TRUE(MyClass->IsResolved());

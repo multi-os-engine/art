@@ -94,11 +94,7 @@ inline ObjectArray<ArtMethod>* ArtMethod::GetDexCacheResolvedMethods() {
 
 inline ArtMethod* ArtMethod::GetDexCacheResolvedMethod(uint16_t method_index) {
   ArtMethod* method = GetDexCacheResolvedMethods()->Get(method_index);
-  if (method != nullptr && !method->GetDeclaringClass()->IsErroneous()) {
-    return method;
-  } else {
-    return nullptr;
-  }
+  return method;  // May be nullptr or have erroneous declaring class.
 }
 
 inline void ArtMethod::SetDexCacheResolvedMethod(uint16_t method_idx, ArtMethod* new_method) {
@@ -131,7 +127,7 @@ inline Class* ArtMethod::GetDexCacheResolvedType(uint32_t type_index) {
   } else {
     klass = GetDexCacheResolvedTypes()->GetWithoutChecks(type_index);
   }
-  return (klass != nullptr && !klass->IsErroneous()) ? klass : nullptr;
+  return klass;  // May be nullptr or erroneous.
 }
 
 inline bool ArtMethod::HasDexCacheResolvedTypes() {
@@ -375,11 +371,6 @@ inline const char* ArtMethod::GetName() {
 inline const DexFile::CodeItem* ArtMethod::GetCodeItem() {
   mirror::ArtMethod* method = GetInterfaceMethodIfProxy();
   return method->GetDexFile()->GetCodeItem(method->GetCodeItemOffset());
-}
-
-inline bool ArtMethod::IsResolvedTypeIdx(uint16_t type_idx) {
-  mirror::ArtMethod* method = GetInterfaceMethodIfProxy();
-  return method->GetDexCacheResolvedType(type_idx) != nullptr;
 }
 
 inline int32_t ArtMethod::GetLineNumFromDexPC(uint32_t dex_pc) {
