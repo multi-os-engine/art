@@ -612,6 +612,46 @@ class Mir2Lir : public Backend {
     void InsertLIRAfter(LIR* current_lir, LIR* new_lir);
 
     /**
+     * @brief Return the kinds of calls performed in the implementation of the given MIR opcode.
+     * @details If the MIR opcode is not calling any external method, kNoCallTargets is returned.
+     * @note Note the returned call targets refer to immediate calls made by the opcode and do not
+     *   refer in any ways to what the call target may itself call. In other words, the fact that
+     *   kCallHelper is returned for a given opcode, means that the opcode calls a helper.
+     *   The latter, however, may be calling a Java method or another helper.
+     * @see CallTargets
+     */
+    virtual CallTargets GetOpcodeCallTargets(MIR* mir) {
+      UNUSED(mir);
+      // Pessimistically assume the MIR may be calling anything.
+      return kAllCallTargets;
+    }
+
+    /**
+     * @brief Gets the call targets for the entire method.
+     * @note If kCallHelper is returned, it means the current method calls one or more helpers.
+     *   The helpers, however, may well call one or more Java methods or other helpers. No
+     *   information is given about what the call targets may themselves call.
+     */
+    CallTargets GetMethodCallTargets();
+
+    /**
+     * @brief Whether the generated code is guaranteed to be a leaf method.
+     * @return true if the MIR graph is guaranteed to generate a leaf method with this backend.
+     */
+    bool MethodIsTrueLeaf() { return call_targets_ == kNoCallTargets; }
+
+    /**
+     * @brief Use to mark generation of LIR nodes that implicitly assume the method is non-leaf.
+     * @details This can be used for debugging, to guarantee that methods that are predicted to
+     *   be true-leaves really are true-leaves.
+     */
+    void CheckMethodCanCall() {
+      CHECK(!MethodIsTrueLeaf()) << "attempt to emit leaf-unsafe code in true leaf method "
+                                 << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " @ 0x"
+                                 << std::hex << current_dalvik_offset_;
+    }
+
+    /**
      * @brief Provides the maximum number of compiler temporaries that the backend can/wants
      * to place in a frame.
      * @return Returns the maximum number of compiler temporaries.
@@ -1759,6 +1799,7 @@ class Mir2Lir : public Backend {
     ArenaVector<uint32_t> fp_vmap_table_;
     std::vector<uint8_t> native_gc_map_;
     ArenaVector<LinkerPatch> patches_;
+    CallTargets call_targets_;
     int num_core_spills_;
     int num_fp_spills_;
     int frame_size_;

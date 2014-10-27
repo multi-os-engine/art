@@ -640,15 +640,12 @@ void Arm64Mir2Lir::CompilerInitializeRegAlloc() {
   reg_pool_->next_dp_reg_ = 0;
 }
 
-/*
- * TUNING: is true leaf?  Can't just use METHOD_IS_LEAF to determine as some
- * instructions might call out to C/assembly helper functions.  Until
- * machinery is in place, always spill lr.
- */
-
 void Arm64Mir2Lir::AdjustSpillMask() {
-  core_spill_mask_ |= (1 << rs_xLR.GetRegNum());
-  num_core_spills_++;
+  // Spill lr if the method is not a true leaf.
+  if (!MethodIsTrueLeaf()) {
+    core_spill_mask_ |= (1 << rs_xLR.GetRegNum());
+    num_core_spills_++;
+  }
 }
 
 /* Clobber all regs that might be used by an external C call */
@@ -1216,6 +1213,163 @@ void Arm64Mir2Lir::InstallLiteralPools() {
 
   // And do the normal processing.
   Mir2Lir::InstallLiteralPools();
+}
+
+CallTargets Arm64Mir2Lir::GetOpcodeCallTargets(MIR* mir) {
+  int mir_opcode = mir->dalvikInsn.opcode;
+  switch (mir_opcode) {
+  case Instruction::INVOKE_VIRTUAL:     // Call to Java method.
+  case Instruction::INVOKE_SUPER:
+  case Instruction::INVOKE_DIRECT:
+  case Instruction::INVOKE_STATIC:
+  case Instruction::INVOKE_INTERFACE:
+  case Instruction::INVOKE_VIRTUAL_RANGE:
+  case Instruction::INVOKE_SUPER_RANGE:
+  case Instruction::INVOKE_DIRECT_RANGE:
+  case Instruction::INVOKE_STATIC_RANGE:
+  case Instruction::INVOKE_INTERFACE_RANGE:
+  case Instruction::INVOKE_VIRTUAL_QUICK:
+  case Instruction::INVOKE_VIRTUAL_RANGE_QUICK:
+    return kCallJavaMethod;
+  case Instruction::IF_EQ:              // IF_* cause insertion of suspend checks.
+  case Instruction::IF_NE:
+  case Instruction::IF_LT:
+  case Instruction::IF_GE:
+  case Instruction::IF_GT:
+  case Instruction::IF_LE:
+  case Instruction::IF_EQZ:
+  case Instruction::IF_NEZ:
+  case Instruction::IF_LTZ:
+  case Instruction::IF_GEZ:
+  case Instruction::IF_GTZ:
+  case Instruction::IF_LEZ:
+  case Instruction::GOTO:
+  case Instruction::GOTO_16:
+  case Instruction::GOTO_32:
+  case Instruction::MONITOR_ENTER:      // Implemented calling external helpers.
+  case Instruction::MONITOR_EXIT:
+  case Instruction::NEW_INSTANCE:
+  case Instruction::NEW_ARRAY:
+  case Instruction::THROW:
+  case Instruction::AGET:               // Call index-range check.
+  case Instruction::AGET_WIDE:
+  case Instruction::AGET_OBJECT:
+  case Instruction::AGET_BOOLEAN:
+  case Instruction::AGET_BYTE:
+  case Instruction::AGET_CHAR:
+  case Instruction::AGET_SHORT:
+  case Instruction::APUT:
+  case Instruction::APUT_WIDE:
+  case Instruction::APUT_OBJECT:
+  case Instruction::APUT_BOOLEAN:
+  case Instruction::APUT_BYTE:
+  case Instruction::APUT_CHAR:
+  case Instruction::APUT_SHORT:
+  case Instruction::CHECK_CAST:
+  case Instruction::INSTANCE_OF:
+  case Instruction::DIV_INT:            // Call div-by-zero check.
+  case Instruction::REM_INT:
+  case Instruction::DIV_LONG:
+  case Instruction::REM_LONG:
+  case Instruction::DIV_INT_2ADDR:
+  case Instruction::REM_INT_2ADDR:
+  case Instruction::DIV_LONG_2ADDR:
+  case Instruction::REM_LONG_2ADDR:
+    // DIV_FLOAT, DIV_FLOAT_2ADDR, DIV_DOUBLE, DIV_DOUBLE_2ADDR return NaN for zero divisor.
+  case Instruction::REM_FLOAT:          // FP remainders are implemented by calling helpers.
+  case Instruction::REM_DOUBLE:
+  case Instruction::REM_FLOAT_2ADDR:
+  case Instruction::REM_DOUBLE_2ADDR:
+  case Instruction::ARRAY_LENGTH:       // Possible null-pointer exception.
+  case Instruction::IGET:
+  case Instruction::IGET_WIDE:
+  case Instruction::IGET_OBJECT:
+  case Instruction::IGET_BOOLEAN:
+  case Instruction::IGET_BYTE:
+  case Instruction::IGET_CHAR:
+  case Instruction::IGET_SHORT:
+  case Instruction::IPUT:
+  case Instruction::IPUT_WIDE:
+  case Instruction::IPUT_OBJECT:
+  case Instruction::IPUT_BOOLEAN:
+  case Instruction::IPUT_BYTE:
+  case Instruction::IPUT_CHAR:
+  case Instruction::IPUT_SHORT:
+    return kCallHelper;
+  case Instruction::CONST_STRING:
+  case Instruction::CONST_STRING_JUMBO:
+    {
+      uint32_t string_idx = mir->dalvikInsn.vB;
+      return (!cu_->compiler_driver->CanAssumeStringIsPresentInDexCache(*cu_->dex_file, string_idx)
+              || SLOW_STRING_PATH) ? kCallHelper : kNoCallTargets;
+    }
+  case Instruction::CONST_CLASS:
+    {
+      uint32_t type_idx = mir->dalvikInsn.vB;
+      if (cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx, *cu_->dex_file,
+                                                           type_idx)) {
+        return (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file, type_idx)
+                || SLOW_TYPE_PATH) ? kCallHelper : kNoCallTargets;
+      }
+      return kCallHelper;
+    }
+  case Instruction::DIV_INT_LIT16:
+  case Instruction::REM_INT_LIT16:
+  case Instruction::DIV_INT_LIT8:
+  case Instruction::REM_INT_LIT8:
+    // These instructions will generate a divide-by-zero exception only if the literal is zero.
+    return (mir->dalvikInsn.vC == 0) ? kCallHelper : kNoCallTargets;
+  case Instruction::SGET:
+  case Instruction::SGET_WIDE:
+  case Instruction::SGET_OBJECT:
+  case Instruction::SGET_BOOLEAN:
+  case Instruction::SGET_BYTE:
+  case Instruction::SGET_CHAR:
+  case Instruction::SGET_SHORT:
+    {
+      const MirSFieldLoweringInfo& field_info = mir_graph_->GetSFieldLoweringInfo(mir);
+      if (!SLOW_FIELD_PATH && field_info.FastGet()) {
+        if (field_info.IsReferrersClass()) {
+          return kNoCallTargets;
+        } else {
+          bool unresolved_branch = (!field_info.IsClassInDexCache() &&
+                                    (mir->optimization_flags & MIR_CLASS_IS_IN_DEX_CACHE) == 0);
+          bool uninit_branch = (!field_info.IsClassInitialized() &&
+                                (mir->optimization_flags & MIR_CLASS_IS_INITIALIZED) == 0);
+          return (unresolved_branch || uninit_branch) ? kCallHelper : kNoCallTargets;
+        }
+      }
+      return kCallHelper;
+    }
+  case Instruction::SPUT:
+  case Instruction::SPUT_WIDE:
+  case Instruction::SPUT_OBJECT:
+  case Instruction::SPUT_BOOLEAN:
+  case Instruction::SPUT_BYTE:
+  case Instruction::SPUT_CHAR:
+  case Instruction::SPUT_SHORT:
+    {
+      const MirSFieldLoweringInfo& field_info = mir_graph_->GetSFieldLoweringInfo(mir);
+      if (!SLOW_FIELD_PATH && field_info.FastPut()) {
+        if (field_info.IsReferrersClass()) {
+          return kNoCallTargets;
+        } else {
+          bool unresolved_branch = (!field_info.IsClassInDexCache() &&
+                                    (mir->optimization_flags & MIR_CLASS_IS_IN_DEX_CACHE) == 0);
+          bool uninit_branch = (!field_info.IsClassInitialized() &&
+                                (mir->optimization_flags & MIR_CLASS_IS_INITIALIZED) == 0);
+          return (unresolved_branch || uninit_branch) ? kCallHelper : kNoCallTargets;
+        }
+      }
+      return kCallHelper;
+    }
+  case kMirOpNullCheck:
+    return (((cu_->disable_opt & (1 << kNullCheckElimination)) != 0
+             || (mir->optimization_flags & MIR_IGNORE_NULL_CHECK) == 0) ?
+            kCallHelper : kNoCallTargets);
+  }
+
+  return kNoCallTargets;
 }
 
 }  // namespace art

@@ -641,6 +641,16 @@ enum WideKind {
 };
 std::ostream& operator<<(std::ostream& os, const WideKind& kind);
 
+enum CallTargets {
+  kNoCallTargets = 0,      // Leaf method.
+  kCallHelper = 1,         // Method calling helpers.
+  kCallJavaMethod = 2,     // Method calling other Java methods.
+  kAllCallTargets = 3,     // Method calling all types of targets.
+  kUnknownCallTargets = 4  // No calling information is available.
+};
+
+std::ostream& operator<<(std::ostream& os, const CallTargets& kind);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_DEX_COMPILER_ENUMS_H_

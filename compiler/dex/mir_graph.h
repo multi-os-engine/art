@@ -162,7 +162,7 @@ enum OatMethodAttributes {
 
 typedef uint16_t BasicBlockId;
 static const BasicBlockId NullBasicBlockId = 0;
-static constexpr bool kLeafOptimization = false;
+static constexpr bool kLeafOptimization = true;
 
 /*
  * In general, vreg/sreg describe Dalvik registers that originated with dx.  However,

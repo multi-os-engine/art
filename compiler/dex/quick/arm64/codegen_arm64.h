@@ -287,6 +287,9 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
    */
   void InstallLiteralPools() OVERRIDE;
 
+  // Return the kinds of calls performed in the implementation of the given MIR opcode.
+  CallTargets GetOpcodeCallTargets(MIR* mir) OVERRIDE;
+
   LIR* InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) OVERRIDE;
 
  private:

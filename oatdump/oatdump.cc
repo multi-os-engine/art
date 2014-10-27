@@ -942,23 +942,30 @@ class OatDumper {
     if (raw_table != nullptr) {
       const VmapTable vmap_table(raw_table);
       bool first = true;
-      bool processing_fp = false;
-      uint32_t spill_mask = oat_method.GetCoreSpillMask();
+      bool processing_core = true;
+      uint32_t core_spill_mask = oat_method.GetCoreSpillMask();
+      uint32_t fp_spill_mask = oat_method.GetFpSpillMask();
       for (size_t i = 0; i < vmap_table.Size(); i++) {
         uint16_t dex_reg = vmap_table[i];
-        uint32_t cpu_reg = vmap_table.ComputeRegister(spill_mask, i,
-                                                      processing_fp ? kFloatVReg : kIntVReg);
-        os << (first ? "v" : ", v")  << dex_reg;
-        if (!processing_fp) {
-          os << "/r" << cpu_reg;
-        } else {
-          os << "/fr" << cpu_reg;
+        int32_t cpu_reg;
+        const char* cpu_reg_kind;
+        if (processing_core) {
+          if (dex_reg == 0xFFFF) {
+            processing_core = false;
+            if (i == static_cast<size_t>(POPCOUNT(core_spill_mask))) {
+              os << " (lr not spilled)";
+              continue;
+            }
+          }
+          cpu_reg = vmap_table.ComputeRegister(core_spill_mask, i, kIntVReg);
+          cpu_reg_kind = "/r";
+         } else {
+          cpu_reg = vmap_table.ComputeRegister(fp_spill_mask, i, kFloatVReg);
+          cpu_reg_kind = "/fr";
         }
+
+        os << (first ? "v" : ", v") << dex_reg << cpu_reg_kind << cpu_reg;
         first = false;
-        if (!processing_fp && dex_reg == 0xFFFF) {
-          processing_fp = true;
-          spill_mask = oat_method.GetFpSpillMask();
-        }
       }
       os << "\n";
     }

@@ -85,6 +85,7 @@ void Mir2Lir::MarkSafepointPC(LIR* inst) {
   inst->u.m.def_mask = &kEncodeAll;
   LIR* safepoint_pc = NewLIR0(kPseudoSafepointPC);
   DCHECK(safepoint_pc->u.m.def_mask->Equals(kEncodeAll));
+  CheckMethodCanCall();
 }
 
 void Mir2Lir::MarkSafepointPCAfter(LIR* after) {
@@ -99,6 +100,7 @@ void Mir2Lir::MarkSafepointPCAfter(LIR* after) {
     InsertLIRAfter(after, safepoint_pc);
   }
   DCHECK(safepoint_pc->u.m.def_mask->Equals(kEncodeAll));
+  CheckMethodCanCall();
 }
 
 /* Remove a LIR from the list. */
@@ -1003,6 +1005,7 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       core_vmap_table_(mir_graph->GetArena()->Adapter()),
       fp_vmap_table_(mir_graph->GetArena()->Adapter()),
       patches_(mir_graph->GetArena()->Adapter()),
+      call_targets_(kUnknownCallTargets),
       num_core_spills_(0),
       num_fp_spills_(0),
       frame_size_(0),
@@ -1026,6 +1029,12 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
 
 void Mir2Lir::Materialize() {
   cu_->NewTimingSplit("RegisterAllocation");
+
+  // Find out whether this is a leaf method or not.
+  if (mir_graph_->MethodIsLeaf()) {
+    call_targets_ = GetMethodCallTargets();
+  }
+
   CompilerInitializeRegAlloc();  // Needs to happen after SSA naming
 
   /* Allocate Registers using simple local allocation scheme */
@@ -1106,6 +1115,24 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
                          vmap_encoder.GetData(), native_gc_map_, cfi_info.get(),
                          ArrayRef<LinkerPatch>(patches_));
   return result;
+}
+
+CallTargets Mir2Lir::GetMethodCallTargets() {
+  int call_targets = kNoCallTargets;
+  for (unsigned int idx = 0; idx < mir_graph_->GetNumBlocks(); idx++) {
+    BasicBlock* bb = mir_graph_->GetBasicBlock(idx);
+    if (bb == NULL || bb->block_type == kDead) {
+      continue;
+    }
+    for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+      call_targets = call_targets | GetOpcodeCallTargets(mir);
+      if (call_targets == kAllCallTargets) {
+        return static_cast<CallTargets>(call_targets);
+      }
+    }
+  }
+
+  return static_cast<CallTargets>(call_targets);
 }
 
 size_t Mir2Lir::GetMaxPossibleCompilerTemps() const {
@@ -1223,6 +1250,7 @@ LIR *Mir2Lir::OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, RegStor
 }
 
 void Mir2Lir::AddSlowPath(LIRSlowPath* slowpath) {
+  CheckMethodCanCall();
   slow_paths_.push_back(slowpath);
   ResetDefTracking();
 }

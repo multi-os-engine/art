@@ -551,6 +551,7 @@ LIR* Arm64Mir2Lir::OpReg(OpKind op, RegStorage r_dest_src) {
   A64Opcode opcode = kA64Brk1d;
   switch (op) {
     case kOpBlx:
+      CheckMethodCanCall();
       opcode = kA64Blr1x;
       break;
     default:

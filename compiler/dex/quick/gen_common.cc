@@ -166,6 +166,7 @@ LIR* Mir2Lir::GenNullCheck(RegStorage m_reg, int opt_flags) {
   if ((opt_flags & MIR_IGNORE_NULL_CHECK) == 0) {
     ResetDefTracking();
   }
+  CheckMethodCanCall();
   return nullptr;
 }
 
@@ -1040,7 +1041,7 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
       AddSlowPath(new (arena_) SlowPath(this, branch, cont, type_idx, rl_method, rl_result));
 
       StoreValue(rl_dest, rl_result);
-     } else {
+    } else {
       // Fast path, we're done - just store result
       StoreValue(rl_dest, rl_result);
     }
