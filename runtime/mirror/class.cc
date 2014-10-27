@@ -57,25 +57,28 @@ void Class::VisitRoots(RootCallback* callback, void* arg) {
   }
 }
 
-void Class::SetStatus(Status new_status, Thread* self) {
-  Status old_status = GetStatus();
+void Class::SetStatus(Status new_status, Thread* self, Status old_status) {
+  // NOTE: SetStatus() is called either before the Class can leak to other threads, or under
+  // the ObjectLock. In both cases, we can safely DCHECK that old_status matches GetStatus().
+  DCHECK_EQ(old_status, GetStatus());
+
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   bool class_linker_initialized = class_linker != nullptr && class_linker->IsInitialized();
   if (LIKELY(class_linker_initialized)) {
-    if (UNLIKELY(new_status <= old_status && new_status != kStatusError &&
-                 new_status != kStatusRetired)) {
+    if (UNLIKELY(new_status.Value() <= old_status.Value() &&
+                 !new_status.IsErroneous() && !new_status.IsRetired())) {
       LOG(FATAL) << "Unexpected change back of class status for " << PrettyClass(this) << " "
           << old_status << " -> " << new_status;
     }
-    if (new_status >= kStatusResolved || old_status >= kStatusResolved) {
+    if (new_status.IsResolved() || old_status.IsResolved()) {
       // When classes are being resolved the resolution code should hold the lock.
       CHECK_EQ(GetLockOwnerThreadId(), self->GetThreadId())
             << "Attempt to change status of class while not holding its lock: "
             << PrettyClass(this) << " " << old_status << " -> " << new_status;
     }
   }
-  if (UNLIKELY(new_status == kStatusError)) {
-    CHECK_NE(GetStatus(), kStatusError)
+  if (UNLIKELY(new_status.IsErroneous())) {
+    CHECK(!old_status.IsErroneous())
         << "Attempt to set as erroneous an already erroneous class " << PrettyClass(this);
 
     // Stash current exception.
@@ -117,11 +120,11 @@ void Class::SetStatus(Status new_status, Thread* self) {
     self->SetException(gc_safe_throw_location, old_exception.Get());
     self->SetExceptionReportedToInstrumentation(is_exception_reported);
   }
-  static_assert(sizeof(Status) == sizeof(uint32_t), "Size of status not equal to uint32");
+  static_assert(sizeof(StatusValue) == sizeof(int32_t), "Size of status not equal to int32");
   if (Runtime::Current()->IsActiveTransaction()) {
-    SetField32Volatile<true>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
+    SetField32Volatile<true>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status.Value());
   } else {
-    SetField32Volatile<false>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status);
+    SetField32Volatile<false>(OFFSET_OF_OBJECT_MEMBER(Class, status_), new_status.Value());
   }
 
   if (!class_linker_initialized) {
@@ -131,16 +134,16 @@ void Class::SetStatus(Status new_status, Thread* self) {
   } else {
     // Classes that are being resolved or initialized need to notify waiters that the class status
     // changed. See ClassLinker::EnsureResolved and ClassLinker::WaitForInitializeClass.
-    if (IsTemp()) {
+    if (IsTemp(new_status)) {
       // Class is a temporary one, ensure that waiters for resolution get notified of retirement
       // so that they can grab the new version of the class from the class linker's table.
-      CHECK_LT(new_status, kStatusResolved) << PrettyDescriptor(this);
-      if (new_status == kStatusRetired || new_status == kStatusError) {
+      CHECK(!new_status.IsResolved()) << PrettyDescriptor(this);
+      if (new_status.IsRetired() || new_status.IsErroneous()) {
         NotifyAll(self);
       }
     } else {
-      CHECK_NE(new_status, kStatusRetired);
-      if (old_status >= kStatusResolved || new_status >= kStatusResolved) {
+      CHECK(!new_status.IsRetired());
+      if (old_status.IsResolved() || new_status.IsResolved()) {
         NotifyAll(self);
       }
     }

@@ -112,7 +112,7 @@ class MANAGED Class FINAL : public Object {
   // again at runtime.
   //
   // TODO: Explain the other states
-  enum Status {
+  enum StatusValue {
     kStatusRetired = -2,  // Retired, should not be used. Use the newly cloned one instead.
     kStatusError = -1,
     kStatusNotReady = 0,
@@ -129,14 +129,91 @@ class MANAGED Class FINAL : public Object {
     kStatusMax = 11,
   };
 
+  class Status {
+   public:
+    explicit constexpr Status(StatusValue value) : value_(value) { }
+
+    Status& operator=(StatusValue value) {
+      value_ = value;
+      return *this;
+    }
+
+    // Returns true if the class has been retired.
+    bool IsRetired() const {
+      return value_ == kStatusRetired;
+    }
+
+    // Returns true if the class has failed to link.
+    bool IsErroneous() const {
+      return value_ == kStatusError;
+    }
+
+    // Returns true if the class information from the dex file has been loaded.
+    bool IsIdxLoaded() const {
+      return value_ >= kStatusIdx;
+    }
+
+    // Returns true if the class has been loaded.
+    bool IsLoaded() const {
+      return value_ >= kStatusLoaded;
+    }
+
+    // Returns true if the class has been linked.
+    bool IsResolved() const {
+      return value_ >= kStatusResolved;
+    }
+
+    // Returns true if the class was compile-time verified.
+    bool IsCompileTimeVerified() const {
+      return value_ >= kStatusRetryVerificationAtRuntime;
+    }
+
+    // Returns true if the class has been verified.
+    bool IsVerified() const {
+      return value_ >= kStatusVerified;
+    }
+
+    // Returns true if the class is initializing.
+    bool IsInitializing() const {
+      return value_ >= kStatusInitializing;
+    }
+
+    // Returns true if the class is initialized.
+    bool IsInitialized() const {
+      return value_ == kStatusInitialized;
+    }
+
+    StatusValue Value() const {
+      return value_;
+    }
+
+   private:
+    StatusValue value_;
+  };
+
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   Status GetStatus() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    static_assert(sizeof(Status) == sizeof(uint32_t), "Size of status not equal to uint32");
-    return static_cast<Status>(
-        GetField32Volatile<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, status_)));
+    static_assert(sizeof(StatusValue) == sizeof(int32_t), "Size of status not equal to int32");
+    return Status(static_cast<StatusValue>(
+        GetField32Volatile<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, status_))));
   }
 
-  void SetStatus(Status new_status, Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetStatus(StatusValue new_status, Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SetStatus(Status(new_status), self, GetStatus());
+  }
+
+  void SetStatus(StatusValue new_status, Thread* self, Status old_status)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SetStatus(Status(new_status), self, old_status);
+  }
+
+  void SetStatus(StatusValue new_status, Thread* self, StatusValue old_status)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SetStatus(Status(new_status), self, Status(old_status));
+  }
+
+  void SetStatus(Status new_status, Thread* self, Status old_status)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static MemberOffset StatusOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Class, status_);
@@ -145,55 +222,56 @@ class MANAGED Class FINAL : public Object {
   // Returns true if the class has been retired.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsRetired() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() == kStatusRetired;
+    return GetStatus<kVerifyFlags>().IsRetired();
   }
 
   // Returns true if the class has failed to link.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsErroneous() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() == kStatusError;
+    return GetStatus<kVerifyFlags>().IsErroneous();
   }
+
 
   // Returns true if the class has been loaded.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsIdxLoaded() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusIdx;
+    return GetStatus<kVerifyFlags>().IsIdxLoaded();
   }
 
   // Returns true if the class has been loaded.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsLoaded() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusLoaded;
+    return GetStatus<kVerifyFlags>().IsLoaded();
   }
 
   // Returns true if the class has been linked.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsResolved() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusResolved;
+    return GetStatus<kVerifyFlags>().IsResolved();
   }
 
   // Returns true if the class was compile-time verified.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsCompileTimeVerified() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusRetryVerificationAtRuntime;
+    return GetStatus<kVerifyFlags>().IsCompileTimeVerified();
   }
 
   // Returns true if the class has been verified.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsVerified() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusVerified;
+    return GetStatus<kVerifyFlags>().IsVerified();
   }
 
   // Returns true if the class is initializing.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsInitializing() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusInitializing;
+    return GetStatus<kVerifyFlags>().IsInitializing();
   }
 
   // Returns true if the class is initialized.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsInitialized() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() == kStatusInitialized;
+    return GetStatus<kVerifyFlags>().IsInitialized();
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
@@ -296,8 +374,14 @@ class MANAGED Class FINAL : public Object {
   // Returns true if this class is the placeholder and should retire and
   // be replaced with a class with the right size for embedded imt/vtable.
   bool IsTemp() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    Status s = GetStatus();
-    return s < Status::kStatusResolving && ShouldHaveEmbeddedImtAndVTable();
+    return IsTemp(GetStatus());
+  }
+
+  // Returns true if this class is the placeholder and should retire and
+  // be replaced with a class with the right size for embedded imt/vtable.
+  // Uses previously retrieved status.
+  bool IsTemp(Status status) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return status.Value() < kStatusResolving && ShouldHaveEmbeddedImtAndVTable();
   }
 
   String* GetName() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);  // Returns the cached name.
@@ -1137,7 +1221,7 @@ class MANAGED Class FINAL : public Object {
   uint32_t reference_instance_offsets_;
 
   // State of class initialization.
-  Status status_;
+  StatusValue status_;
 
   // TODO: ?
   // initiating class loader list
@@ -1160,7 +1244,19 @@ class MANAGED Class FINAL : public Object {
   DISALLOW_IMPLICIT_CONSTRUCTORS(Class);
 };
 
-std::ostream& operator<<(std::ostream& os, const Class::Status& rhs);
+std::ostream& operator<<(std::ostream& os, const Class::StatusValue& rhs);
+
+inline std::ostream& operator<<(std::ostream& os, const Class::Status& rhs) {
+  return os << rhs.Value();
+}
+
+inline bool operator==(Class::Status lhs, Class::Status rhs) {
+  return lhs.Value() == rhs.Value();
+}
+
+inline bool operator!=(Class::Status lhs, Class::Status rhs) {
+  return !(lhs == rhs);
+}
 
 }  // namespace mirror
 }  // namespace art

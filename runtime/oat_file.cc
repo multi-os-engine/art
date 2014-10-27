@@ -475,9 +475,9 @@ OatFile::OatClass OatFile::OatDexFile::GetOatClass(uint16_t class_def_index) con
 
   const uint8_t* status_pointer = oat_class_pointer;
   CHECK_LT(status_pointer, oat_file_->End()) << oat_file_->GetLocation();
-  mirror::Class::Status status =
-      static_cast<mirror::Class::Status>(*reinterpret_cast<const int16_t*>(status_pointer));
-  CHECK_LT(status, mirror::Class::kStatusMax);
+  mirror::Class::StatusValue status =
+      static_cast<mirror::Class::StatusValue>(*reinterpret_cast<const int16_t*>(status_pointer));
+  // Defer status CHECK to ClassLinker::VerifyClassUsingOatFile().
 
   const uint8_t* type_pointer = status_pointer + sizeof(uint16_t);
   CHECK_LT(type_pointer, oat_file_->End()) << oat_file_->GetLocation();
@@ -503,7 +503,7 @@ OatFile::OatClass OatFile::OatDexFile::GetOatClass(uint16_t class_def_index) con
   }
 
   return OatClass(oat_file_,
-                  status,
+                  mirror::Class::Status(status),
                   type,
                   bitmap_size,
                   reinterpret_cast<const uint32_t*>(bitmap_pointer),

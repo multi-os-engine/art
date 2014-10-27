@@ -669,7 +669,7 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
   bool EndClass() {
     ClassReference class_ref(dex_file_, class_def_index_);
     CompiledClass* compiled_class = writer_->compiler_driver_->GetCompiledClass(class_ref);
-    mirror::Class::Status status;
+    mirror::Class::Status status(mirror::Class::kStatusNotReady);
     if (compiled_class != NULL) {
       status = compiled_class->GetStatus();
     } else if (writer_->compiler_driver_->GetVerificationResults()->IsClassRejected(class_ref)) {
@@ -822,7 +822,7 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
         const CompilerDriver* compiler_driver = writer_->compiler_driver_;
         ClassReference class_ref(dex_file_, class_def_index_);
         CompiledClass* compiled_class = compiler_driver->GetCompiledClass(class_ref);
-        mirror::Class::Status status;
+        mirror::Class::Status status(mirror::Class::kStatusNotReady);
         if (compiled_class != NULL) {
           status = compiled_class->GetStatus();
         } else if (compiler_driver->GetVerificationResults()->IsClassRejected(class_ref)) {
@@ -834,9 +834,9 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
         if (gc_map != nullptr) {
           size_t gc_map_size = gc_map->size() * sizeof(gc_map[0]);
           bool is_native = it.MemberIsNative();
-          CHECK(gc_map_size != 0 || is_native || status < mirror::Class::kStatusVerified)
+          CHECK(gc_map_size != 0 || is_native || !status.IsVerified())
               << gc_map << " " << gc_map_size << " " << (is_native ? "true" : "false") << " "
-              << (status < mirror::Class::kStatusVerified) << " " << status << " "
+              << (!status.IsVerified()) << " " << status << " "
               << PrettyMethod(it.GetMemberIndex(), *dex_file_);
         }
       }
@@ -1730,7 +1730,7 @@ OatWriter::OatClass::OatClass(size_t offset,
     type_ = kOatClassSomeCompiled;
   }
 
-  status_ = status;
+  status_ = status.Value();
   method_offsets_.resize(num_non_null_compiled_methods);
   method_headers_.resize(num_non_null_compiled_methods);
 

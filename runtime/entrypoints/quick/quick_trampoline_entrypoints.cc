@@ -831,9 +831,10 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
     StackHandleScope<1> hs(soa.Self());
     Handle<mirror::Class> called_class(hs.NewHandle(called->GetDeclaringClass()));
     linker->EnsureInitialized(soa.Self(), called_class, true, true);
-    if (LIKELY(called_class->IsInitialized())) {
+    mirror::Class::Status called_status = called_class->GetStatus();
+    if (LIKELY(called_status.IsInitialized())) {
       code = called->GetEntryPointFromQuickCompiledCode();
-    } else if (called_class->IsInitializing()) {
+    } else if (called_status.IsInitializing()) {
       if (invoke_type == kStatic) {
         // Class is still initializing, go to oat and grab code (trampoline must be left in place
         // until class is initialized to stop races between threads).
@@ -843,7 +844,7 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
         code = called->GetEntryPointFromQuickCompiledCode();
       }
     } else {
-      DCHECK(called_class->IsErroneous());
+      DCHECK(called_status.IsErroneous());
     }
   }
   CHECK_EQ(code == NULL, self->IsExceptionPending());

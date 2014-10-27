@@ -517,12 +517,13 @@ static DexToDexCompilationLevel GetDexToDexCompilationlevel(
   // We store the verification information in the class status in the oat file, which the linker
   // can validate (checksums) and use to skip load-time verification. It is thus safe to
   // optimize when a class has been fully verified before.
-  if (klass->IsVerified()) {
+  mirror::Class::Status status = klass->GetStatus();
+  if (status.IsVerified()) {
     // Class is verified so we can enable DEX-to-DEX compilation for performance.
     return kOptimize;
-  } else if (klass->IsCompileTimeVerified()) {
+  } else if (status.IsCompileTimeVerified()) {
     // Class verification has soft-failed. Anyway, ensure at least correctness.
-    DCHECK_EQ(klass->GetStatus(), mirror::Class::kStatusRetryVerificationAtRuntime);
+    DCHECK_EQ(mirror::Class::kStatusRetryVerificationAtRuntime, status.Value());
     return kRequired;
   } else {
     // Class verification has failed: do not run DEX-to-DEX compilation.
@@ -1672,14 +1673,15 @@ static void VerifyClass(const ParallelCompilationManager* manager, size_t class_
     CHECK(klass->IsResolved()) << PrettyClass(klass.Get());
     class_linker->VerifyClass(soa.Self(), klass);
 
-    if (klass->IsErroneous()) {
+    mirror::Class::Status status = klass->GetStatus();
+    if (status.IsErroneous()) {
       // ClassLinker::VerifyClass throws, which isn't useful in the compiler.
       CHECK(soa.Self()->IsExceptionPending());
       soa.Self()->ClearException();
     }
 
-    CHECK(klass->IsCompileTimeVerified() || klass->IsErroneous())
-        << PrettyDescriptor(klass.Get()) << ": state=" << klass->GetStatus();
+    CHECK(status.IsCompileTimeVerified() || status.IsErroneous())
+        << PrettyDescriptor(klass.Get()) << ": state=" << status;
   }
   soa.Self()->AssertNoPendingException();
 }
@@ -1712,14 +1714,17 @@ static void SetVerifiedClass(const ParallelCompilationManager* manager, size_t c
   if (klass.Get() != nullptr) {
     // Only do this if the class is resolved. If even resolution fails, quickening will go very,
     // very wrong.
-    if (klass->IsResolved()) {
-      if (klass->GetStatus() < mirror::Class::kStatusVerified) {
+    mirror::Class::Status status = klass->GetStatus();
+    if (status.IsResolved()) {
+      if (!status.IsVerified()) {
         ObjectLock<mirror::Class> lock(soa.Self(), klass);
-        klass->SetStatus(mirror::Class::kStatusVerified, soa.Self());
+        status = klass->GetStatus();  // May be different after lock acquisition.
+        klass->SetStatus(mirror::Class::kStatusVerified, soa.Self(), status);
+        status = mirror::Class::kStatusVerified;
       }
       // Record the final class status if necessary.
       ClassReference ref(manager->GetDexFile(), class_def_index);
-      manager->GetCompiler()->RecordClassStatus(ref, klass->GetStatus());
+      manager->GetCompiler()->RecordClassStatus(ref, status);
     }
   } else {
     Thread* self = soa.Self();
@@ -2062,10 +2067,10 @@ void CompilerDriver::RecordClassStatus(ClassReference ref, mirror::Class::Status
   if (it == compiled_classes_.end() || it->second->GetStatus() != status) {
     // An entry doesn't exist or the status is lower than the new status.
     if (it != compiled_classes_.end()) {
-      CHECK_GT(status, it->second->GetStatus());
+      CHECK_GT(status.Value(), it->second->GetStatus().Value());
       delete it->second;
     }
-    switch (status) {
+    switch (status.Value()) {
       case mirror::Class::kStatusNotReady:
       case mirror::Class::kStatusError:
       case mirror::Class::kStatusRetryVerificationAtRuntime:
