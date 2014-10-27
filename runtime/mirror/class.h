@@ -135,7 +135,12 @@ class MANAGED Class FINAL : public Object {
         GetField32Volatile<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, status_)));
   }
 
-  void SetStatus(Status new_status, Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetStatus(Status new_status, Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SetStatus(new_status, self, GetStatus());
+  }
+
+  void SetStatus(Status new_status, Thread* self, Status old_status)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static MemberOffset StatusOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Class, status_);
@@ -144,13 +149,25 @@ class MANAGED Class FINAL : public Object {
   // Returns true if the class has been retired.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsRetired() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() == kStatusRetired;
+    return IsRetired(GetStatus<kVerifyFlags>());
+  }
+
+  // Returns true if the class has been retired based on a previously retrieved status.
+  bool IsRetired(Status status) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // NOTE: DCHECK_EQ(status, GetStatus()) would be prone to races.
+    return status == kStatusRetired;
   }
 
   // Returns true if the class has failed to link.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsErroneous() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() == kStatusError;
+    return IsErroneous(GetStatus<kVerifyFlags>());
+  }
+
+  // Returns true if the class has failed to link based on a previously retrieved status.
+  bool IsErroneous(Status status) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // NOTE: DCHECK_EQ(status, GetStatus()) would be prone to races.
+    return status == kStatusError;
   }
 
   // Returns true if the class has been loaded.
@@ -162,25 +179,47 @@ class MANAGED Class FINAL : public Object {
   // Returns true if the class has been loaded.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsLoaded() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusLoaded;
+    return IsLoaded(GetStatus<kVerifyFlags>());
+  }
+
+  // Returns true if the class has been loaded based on a previously retrieved status.
+  bool IsLoaded(Status status) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // NOTE: DCHECK_EQ(status, GetStatus()) would be prone to races.
+    return status >= kStatusLoaded;
   }
 
   // Returns true if the class has been linked.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsResolved() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusResolved;
+    return IsResolved(GetStatus<kVerifyFlags>());
+  }
+
+  // Returns true if the class has been linked based on a previously retrieved status.
+  bool IsResolved(Status status) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return status >= kStatusResolved;
   }
 
   // Returns true if the class was compile-time verified.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsCompileTimeVerified() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusRetryVerificationAtRuntime;
+    return IsCompileTimeVerified(GetStatus<kVerifyFlags>());
+  }
+
+  // Returns true if the class was compile-time verified based on a previously retrieved status.
+  bool IsCompileTimeVerified(Status status) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return status >= kStatusRetryVerificationAtRuntime;
   }
 
   // Returns true if the class has been verified.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsVerified() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() >= kStatusVerified;
+    return IsVerified(GetStatus<kVerifyFlags>());
+  }
+
+  // Returns true if the class has been verified based on a previously retrieved status.
+  bool IsVerified(Status status) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // NOTE: DCHECK_EQ(status, GetStatus()) would be prone to races.
+    return status >= kStatusVerified;
   }
 
   // Returns true if the class is initializing.
@@ -192,7 +231,13 @@ class MANAGED Class FINAL : public Object {
   // Returns true if the class is initialized.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsInitialized() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStatus<kVerifyFlags>() == kStatusInitialized;
+    return IsInitialized(GetStatus<kVerifyFlags>());
+  }
+
+  // Returns true if the class is initialized based on a previously retrieved status.
+  bool IsInitialized(Status status) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // NOTE: DCHECK_EQ(status, GetStatus()) would be prone to races.
+    return status == kStatusInitialized;
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
@@ -295,8 +340,15 @@ class MANAGED Class FINAL : public Object {
   // Returns true if this class is the placeholder and should retire and
   // be replaced with a class with the right size for embedded imt/vtable.
   bool IsTemp() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    Status s = GetStatus();
-    return s < Status::kStatusResolving && ShouldHaveEmbeddedImtAndVTable();
+    return IsTemp(GetStatus());
+  }
+
+  // Returns true if this class is the placeholder and should retire and
+  // be replaced with a class with the right size for embedded imt/vtable.
+  // Uses previously retrieved status.
+  bool IsTemp(Status status) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // NOTE: DCHECK_EQ(status, GetStatus()) would be prone to races.
+    return status < Status::kStatusResolving && ShouldHaveEmbeddedImtAndVTable();
   }
 
   String* GetName() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);  // Returns the cached name.
