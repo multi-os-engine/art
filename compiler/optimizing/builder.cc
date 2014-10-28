@@ -828,6 +828,16 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       break;
     }
 
+    case Instruction::DIV_FLOAT: {
+      Binop_23x<HDiv>(instruction, Primitive::kPrimFloat);
+      break;
+    }
+
+    case Instruction::DIV_DOUBLE: {
+      Binop_23x<HDiv>(instruction, Primitive::kPrimDouble);
+      break;
+    }
+
     case Instruction::ADD_LONG_2ADDR: {
       Binop_12x<HAdd>(instruction, Primitive::kPrimLong);
       break;
