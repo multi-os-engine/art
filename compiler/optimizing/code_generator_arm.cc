@@ -1061,9 +1061,12 @@ void LocationsBuilderARM::VisitNeg(HNeg* neg) {
     }
 
     case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Not yet implemented neg type " << neg->GetResultType();
+    case Primitive::kPrimDouble: {
+      bool output_overlaps = (neg->GetResultType() == Primitive::kPrimDouble);
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister(), output_overlaps);
       break;
+    }
 
     default:
       LOG(FATAL) << "Unexpected neg type " << neg->GetResultType();
@@ -1102,8 +1105,14 @@ void InstructionCodeGeneratorARM::VisitNeg(HNeg* neg) {
       break;
 
     case Primitive::kPrimFloat:
+      DCHECK(in.IsFpuRegister());
+      __ vnegs(out.As<SRegister>(), in.As<SRegister>());
+      break;
+
     case Primitive::kPrimDouble:
-      LOG(FATAL) << "Not yet implemented neg type " << neg->GetResultType();
+      DCHECK(in.IsFpuRegisterPair());
+      __ vnegd(FromLowSToD(out.AsFpuRegisterPairLow<SRegister>()),
+               FromLowSToD(in.AsFpuRegisterPairLow<SRegister>()));
       break;
 
     default:
