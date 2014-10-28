@@ -198,7 +198,12 @@ TEST_F(InstructionSetTest, FeaturesFromSystemPropertyVariant) {
   }
 }
 
+#if defined(__arm__)
+// Disabled because of b/18149698.
+TEST_F(InstructionSetTest, DISABLED_FeaturesFromSystemPropertyString) {
+#else
 TEST_F(InstructionSetTest, FeaturesFromSystemPropertyString) {
+#endif
   // Take the default set of instruction features from the build.
   std::unique_ptr<const InstructionSetFeatures> instruction_set_features(
       InstructionSetFeatures::FromCppDefines());
