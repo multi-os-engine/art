@@ -113,6 +113,9 @@ IMAGE_TYPES := image
 ifeq ($(ART_TEST_RUN_TEST_NO_IMAGE),true)
   IMAGE_TYPES += no-image
 endif
+ifeq ($(ART_TEST_PIC_IMAGE),true)
+  IMAGE_TYPES += picimage
+endif
 RUN_TYPES :=
 ifeq ($(ART_TEST_RUN_TEST_DEBUG),true)
   RUN_TYPES += debug
@@ -470,12 +473,6 @@ define define-test-art-run-test
       endif
     endif
   endif
-  # Add the core dependency.
-  ifeq ($(1),host)
-    prereq_rule += $(HOST_CORE_IMAGE_$(4)_$(11))
-  else
-    prereq_rule += $(TARGET_CORE_IMAGE_$(4)_$(11))
-  endif
 
   ifeq ($(5),relocate)
     test_groups += ART_RUN_TEST_$$(uc_host_or_target)_RELOCATE_RULES
@@ -542,8 +539,24 @@ define define-test-art-run-test
   else
     ifeq ($(9),image)
       test_groups += ART_RUN_TEST_$$(uc_host_or_target)_IMAGE_RULES
+      # Add the core dependency.
+      ifeq ($(1),host)
+        prereq_rule += $(HOST_CORE_IMAGE_$(4)_no-pic_$(11))
+      else
+        prereq_rule += $(TARGET_CORE_IMAGE_$(4)_no-pic_$(11))
+      endif
     else
-      $$(error found $(9) expected $(IMAGE_TYPES))
+      ifeq ($(9),picimage)
+        test_groups += ART_RUN_TEST_$$(uc_host_or_target)_PICIMAGE_RULES
+        run_test_options += --pic-image
+        ifeq ($(1),host)
+          prereq_rule += $(HOST_CORE_IMAGE_$(4)_pic_$(11))
+        else
+          prereq_rule += $(TARGET_CORE_IMAGE_$(4)_pic_$(11))
+        endif
+      else
+        $$(error found $(9) expected $(IMAGE_TYPES))
+      endif
     endif
   endif
   # $(10) is the test name
