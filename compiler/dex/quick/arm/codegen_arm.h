@@ -73,7 +73,7 @@ class ArmMir2Lir FINAL : public Mir2Lir {
       return initialized_;
     }
 
-    void Initialize(RegLocation* arg_locs, int count, InToRegStorageMapper* mapper);
+    void Initialize(const char* shorty, bool is_static, int count, InToRegStorageMapper* mapper);
     RegStorage Get(int in_position) const;
 
    private:

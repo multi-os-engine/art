@@ -954,29 +954,64 @@ RegStorage ArmMir2Lir::InToRegStorageMapping::Get(int in_position) const {
   return res != mapping_.end() ? res->second : RegStorage::InvalidReg();
 }
 
-void ArmMir2Lir::InToRegStorageMapping::Initialize(RegLocation* arg_locs, int count,
+void ArmMir2Lir::InToRegStorageMapping::Initialize(const char* shorty, bool is_static, int count,
                                                    InToRegStorageMapper* mapper) {
   DCHECK(mapper != nullptr);
   max_mapped_in_ = -1;
   is_there_stack_mapped_ = false;
+
+  int shorty_position = 0;
+  if (is_static) {
+    shorty_position = 1;
+  }
+
+  bool delay_update = false;
+
   for (int in_position = 0; in_position < count; in_position++) {
-     RegStorage reg = mapper->GetNextReg(arg_locs[in_position].fp,
-                                         arg_locs[in_position].wide);
-     if (reg.Valid()) {
-       mapping_[in_position] = reg;
-       // TODO: Enable the following code when FlushIns() support 64-bit argument registers.
-       // if (arg_locs[in_position].wide) {
-       //  if (reg.Is32Bit()) {
-       //    // As it is a split long, the hi-part is on stack.
-       //    is_there_stack_mapped_ = true;
-       //  }
-       //  // We covered 2 v-registers, so skip the next one
-       //  in_position++;
-       // }
-       max_mapped_in_ = std::max(max_mapped_in_, in_position);
-     } else {
-       is_there_stack_mapped_ = true;
-     }
+    char type;
+    if (shorty_position == 0) {
+      // We're loading the first in for a non-static method, so
+      // generate the fake L that the shorty doesn't give us.
+      type = 'L';
+    } else {
+      type = shorty[shorty_position];
+    }
+
+    // Use shorty information to calculate register attributes
+    bool is_fp = (type == 'D' || type == 'F');
+    bool is_wide = (type == 'D' || type == 'J');
+
+    RegStorage reg = mapper->GetNextReg(is_fp, is_wide);
+
+    if (reg.Valid()) {
+      mapping_[in_position] = reg;
+      // TODO: Enable the following code when FlushIns() support 64-bit argument registers.
+      // if (arg_locs[in_position].wide) {
+      //  if (reg.Is32Bit()) {
+      //    // As it is a split long, the hi-part is on stack.
+      //    is_there_stack_mapped_ = true;
+      //  }
+      //  // We covered 2 v-registers, so skip the next one
+      //  in_position++;
+      // }
+      max_mapped_in_ = std::max(max_mapped_in_, in_position);
+    } else {
+      is_there_stack_mapped_ = true;
+    }
+
+    // If we have a wide register, we want to make sure we point at the
+    // same spot in the shorty across two mapping slots.
+    // So only update if the register is non-wide, or we've come to the end
+    // of a delay.
+    // TODO: Update this when we support 64-bit argument registers.
+    if (!is_wide || delay_update) {
+      shorty_position++;
+      if (delay_update) {
+        delay_update = false;
+      }
+    } else {
+      delay_update = true;
+    }
   }
   initialized_ = true;
 }
@@ -985,11 +1020,13 @@ void ArmMir2Lir::InToRegStorageMapping::Initialize(RegLocation* arg_locs, int co
 // Need check some common code as it will break some assumption.
 RegStorage ArmMir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
   if (!in_to_reg_storage_mapping_.IsInitialized()) {
-    int start_vreg = mir_graph_->GetFirstInVR();
-    RegLocation* arg_locs = &mir_graph_->reg_location_[start_vreg];
-
+    // Use the shorty to initialise the mapping.
     InToRegStorageArmMapper mapper;
-    in_to_reg_storage_mapping_.Initialize(arg_locs, mir_graph_->GetNumOfInVRs(), &mapper);
+    // TODO: when a single CompilationUnit no longer represents a single method
+    // due to inlining, change this to instead get the "current" method
+    bool is_static = (cu_->invoke_type == kStatic);
+    in_to_reg_storage_mapping_.Initialize(cu_->shorty, is_static, mir_graph_->GetNumOfInVRs(),
+                                          &mapper);
   }
   return in_to_reg_storage_mapping_.Get(arg_num);
 }
@@ -1027,9 +1064,12 @@ int ArmMir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
 
   const int start_index = skip_this ? 1 : 0;
 
+  const char* target_shorty = mir_graph_->GetShortyFromMethodReference(target_method);
+
   InToRegStorageArmMapper mapper;
   InToRegStorageMapping in_to_reg_storage_mapping;
-  in_to_reg_storage_mapping.Initialize(info->args, info->num_arg_words, &mapper);
+  in_to_reg_storage_mapping.Initialize(target_shorty, (type == kStatic), info->num_arg_words,
+                                       &mapper);
   const int last_mapped_in = in_to_reg_storage_mapping.GetMaxMappedIn();
   int regs_left_to_pass_via_stack = info->num_arg_words - (last_mapped_in + 1);
 

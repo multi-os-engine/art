@@ -48,7 +48,7 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
    public:
     InToRegStorageMapping() : max_mapped_in_(0), is_there_stack_mapped_(false),
     initialized_(false) {}
-    void Initialize(RegLocation* arg_locs, int count, InToRegStorageMapper* mapper);
+    void Initialize(const char* shorty, bool is_static, int count, InToRegStorageMapper* mapper);
     int GetMaxMappedIn() { return max_mapped_in_; }
     bool IsThereStackMapped() { return is_there_stack_mapped_; }
     RegStorage Get(int in_position);
