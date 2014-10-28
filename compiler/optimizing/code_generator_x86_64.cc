@@ -983,7 +983,8 @@ void LocationsBuilderX86_64::VisitNeg(HNeg* neg) {
 
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble:
-      LOG(FATAL) << "Not yet implemented neg type " << neg->GetResultType();
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister());
       break;
 
     default:
@@ -998,17 +999,34 @@ void InstructionCodeGeneratorX86_64::VisitNeg(HNeg* neg) {
   switch (neg->GetResultType()) {
     case Primitive::kPrimInt:
       DCHECK(in.IsRegister());
+      DCHECK(in.Equals(out));
       __ negl(out.As<CpuRegister>());
       break;
 
     case Primitive::kPrimLong:
       DCHECK(in.IsRegister());
+      DCHECK(in.Equals(out));
       __ negq(out.As<CpuRegister>());
       break;
 
     case Primitive::kPrimFloat:
+      DCHECK(in.IsFpuRegister());
+      DCHECK(out.IsFpuRegister());
+      DCHECK(!in.Equals(out));
+      // out = 0
+      __ xorps(out.As<XmmRegister>(), out.As<XmmRegister>());
+      // out = out - in
+      __ subss(out.As<XmmRegister>(), in.As<XmmRegister>());
+      break;
+
     case Primitive::kPrimDouble:
-      LOG(FATAL) << "Not yet implemented neg type " << neg->GetResultType();
+      DCHECK(in.IsFpuRegister());
+      DCHECK(out.IsFpuRegister());
+      DCHECK(!in.Equals(out));
+      // out = 0
+      __ xorpd(out.As<XmmRegister>(), out.As<XmmRegister>());
+      // out = out - in
+      __ subsd(out.As<XmmRegister>(), in.As<XmmRegister>());
       break;
 
     default:

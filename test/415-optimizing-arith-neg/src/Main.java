@@ -30,12 +30,39 @@ public class Main {
     }
   }
 
+  public static void expectEquals(float expected, float result) {
+    if (expected != result) {
+      throw new Error("Expected: " + expected + ", found: " + result);
+    }
+  }
+
+  public static void expectEquals(double expected, double result) {
+    if (expected != result) {
+      throw new Error("Expected: " + expected + ", found: " + result);
+    }
+  }
+
+  public static void expectNaN(float result) {
+    if (!Float.isNaN(result)) {
+      throw new Error("Expected NaN: " + result);
+    }
+  }
+
+  public static void expectNaN(double result) {
+    if (!Double.isNaN(result)) {
+      throw new Error("Expected NaN: " + result);
+    }
+  }
+
   public static void main(String[] args) {
     negInt();
     $opt$InplaceNegOneInt(1);
 
     negLong();
     $opt$InplaceNegOneLong(1L);
+
+    negFloat();
+    negDouble();
   }
 
   private static void negInt() {
@@ -88,11 +115,67 @@ public class Main {
     expectEquals(-1L, a);
   }
 
+  private static void negFloat() {
+     expectEquals(-1F, $opt$NegFloat(1F));
+     expectEquals(1F, $opt$NegFloat(-1F));
+     expectEquals(0F, $opt$NegFloat(0F));
+     expectEquals(51F, $opt$NegFloat(-51F));
+     expectEquals(-51F, $opt$NegFloat(51F));
+
+     expectEquals(-0.1F, $opt$NegFloat(0.1F));
+     expectEquals(0.1F, $opt$NegFloat(-0.1F));
+     expectEquals(343597.38362F, $opt$NegFloat(-343597.38362F));
+     expectEquals(-343597.38362F, $opt$NegFloat(343597.38362F));
+
+     expectEquals(-Float.MIN_NORMAL, $opt$NegFloat(Float.MIN_NORMAL));
+     expectEquals(Float.MIN_NORMAL, $opt$NegFloat(-Float.MIN_NORMAL));
+     expectEquals(-Float.MIN_VALUE, $opt$NegFloat(Float.MIN_VALUE));
+     expectEquals(Float.MIN_VALUE, $opt$NegFloat(-Float.MIN_VALUE));
+     expectEquals(-Float.MAX_VALUE, $opt$NegFloat(Float.MAX_VALUE));
+     expectEquals(Float.MAX_VALUE, $opt$NegFloat(-Float.MAX_VALUE));
+
+     expectEquals(Float.NEGATIVE_INFINITY, $opt$NegFloat(Float.POSITIVE_INFINITY));
+     expectEquals(Float.POSITIVE_INFINITY, $opt$NegFloat(Float.NEGATIVE_INFINITY));
+     expectNaN($opt$NegFloat(Float.NaN));
+  }
+
+  private static void negDouble() {
+     expectEquals(-1D, $opt$NegDouble(1D));
+     expectEquals(1D, $opt$NegDouble(-1D));
+     expectEquals(0D, $opt$NegDouble(0D));
+     expectEquals(51D, $opt$NegDouble(-51D));
+     expectEquals(-51D, $opt$NegDouble(51D));
+
+     expectEquals(-0.1D, $opt$NegDouble(0.1D));
+     expectEquals(0.1D, $opt$NegDouble(-0.1D));
+     expectEquals(343597.38362D, $opt$NegDouble(-343597.38362D));
+     expectEquals(-343597.38362D, $opt$NegDouble(343597.38362D));
+
+     expectEquals(-Double.MIN_NORMAL, $opt$NegDouble(Double.MIN_NORMAL));
+     expectEquals(Double.MIN_NORMAL, $opt$NegDouble(-Double.MIN_NORMAL));
+     expectEquals(-Double.MIN_VALUE, $opt$NegDouble(Double.MIN_VALUE));
+     expectEquals(Double.MIN_VALUE, $opt$NegDouble(-Double.MIN_VALUE));
+     expectEquals(-Double.MAX_VALUE, $opt$NegDouble(Double.MAX_VALUE));
+     expectEquals(Double.MAX_VALUE, $opt$NegDouble(-Double.MAX_VALUE));
+
+     expectEquals(Double.NEGATIVE_INFINITY, $opt$NegDouble(Double.POSITIVE_INFINITY));
+     expectEquals(Double.POSITIVE_INFINITY, $opt$NegDouble(Double.NEGATIVE_INFINITY));
+     expectNaN($opt$NegDouble(Double.NaN));
+  }
+
   static int $opt$NegInt(int a){
     return -a;
   }
 
   static long $opt$NegLong(long a){
+    return -a;
+  }
+
+  static float $opt$NegFloat(float a){
+    return -a;
+  }
+
+  static double $opt$NegDouble(double a){
     return -a;
   }
 }
