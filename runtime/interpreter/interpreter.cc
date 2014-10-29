@@ -352,6 +352,7 @@ static JValue Execute(Thread* self, MethodHelper& mh, const DexFile::CodeItem* c
 
 static inline JValue Execute(Thread* self, MethodHelper& mh, const DexFile::CodeItem* code_item,
                              ShadowFrame& shadow_frame, JValue result_register) {
+  self->AssertNoPendingException();
   DCHECK(shadow_frame.GetMethod() == mh.GetMethod() ||
          shadow_frame.GetMethod()->GetDeclaringClass()->IsProxyClass());
   DCHECK(!shadow_frame.GetMethod()->IsAbstract());
