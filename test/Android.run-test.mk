@@ -335,6 +335,7 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   414-optimizing-arith-sub \
   415-optimizing-arith-neg \
   417-optimizing-arith-div \
+  418-optimizing-type-conversion \
   700-LoadArgRegs \
   800-smali
 

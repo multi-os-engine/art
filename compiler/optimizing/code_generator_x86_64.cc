@@ -1042,6 +1042,92 @@ void InstructionCodeGeneratorX86_64::VisitNeg(HNeg* neg) {
   }
 }
 
+void LocationsBuilderX86_64::VisitConversion(HConversion* conversion) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(conversion, LocationSummary::kNoCall);
+  Primitive::Type result_type = conversion->GetResultType();
+  Primitive::Type input_type = conversion->GetInputType();
+  switch (result_type) {
+    case Primitive::kPrimLong:
+      switch (input_type) {
+        case Primitive::kPrimInt:
+          // int -> long
+          locations->SetInAt(0, Location::Any());
+          locations->SetOut(Location::RequiresRegister());
+          break;
+
+        case Primitive::kPrimFloat:
+        case Primitive::kPrimDouble:
+          LOG(FATAL) << "Conversion from " << input_type << " to "
+                     << result_type << " not yet implemented";
+          break;
+
+        default:
+          LOG(FATAL) << "Unexpected conversion from " << input_type
+                     << " to " << result_type;
+      }
+      break;
+
+    case Primitive::kPrimInt:
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      LOG(FATAL) << "Conversion from " << input_type
+                 << " to " << result_type << " not yet implemented";
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected conversion from " << input_type
+                 << " to " << result_type;
+  }
+}
+
+void InstructionCodeGeneratorX86_64::VisitConversion(HConversion* conversion) {
+  LocationSummary* locations = conversion->GetLocations();
+  Location out = locations->Out();
+  Location in = locations->InAt(0);
+  Primitive::Type result_type = conversion->GetResultType();
+  Primitive::Type input_type = conversion->GetInputType();
+  switch (result_type) {
+    case Primitive::kPrimLong:
+      locations->SetOut(Location::RequiresRegister());
+      switch (input_type) {
+        DCHECK(out.IsRegister());
+        case Primitive::kPrimInt:
+          // int -> long
+          if (in.IsRegister()) {
+            __ movsxd(out.As<CpuRegister>(), in.As<CpuRegister>());
+          } else {
+            DCHECK(in.IsStackSlot());
+            __ movsxd(out.As<CpuRegister>(),
+                      Address(CpuRegister(RSP), in.GetStackIndex()));
+          }
+          break;
+
+        case Primitive::kPrimFloat:
+        case Primitive::kPrimDouble:
+          LOG(FATAL) << "Conversion from " << input_type << " to "
+                     << result_type << " not yet implemented";
+          break;
+
+        default:
+          LOG(FATAL) << "Unexpected conversion from " << input_type
+                     << " to " << result_type;
+      }
+      break;
+
+    case Primitive::kPrimInt:
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      LOG(FATAL) << "Conversion from " << input_type
+                 << " to " << result_type << " not yet implemented";
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected conversion from " << input_type
+                 << " to " << result_type;
+  }
+}
+
 void LocationsBuilderX86_64::VisitAdd(HAdd* add) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(add, LocationSummary::kNoCall);
