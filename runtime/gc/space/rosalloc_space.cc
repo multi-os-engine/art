@@ -76,7 +76,7 @@ RosAllocSpace* RosAllocSpace::CreateFromMemMap(MemMap* mem_map, const std::strin
   uint8_t* begin = mem_map->Begin();
   // TODO: Fix RosAllocSpace to support valgrind. There is currently some issues with
   // AllocationSize caused by redzones. b/12944686
-  if (Runtime::Current()->RunningOnValgrind()) {
+  if (false && Runtime::Current()->RunningOnValgrind()) {
     UNIMPLEMENTED(FATAL);
     UNREACHABLE();
   } else {
