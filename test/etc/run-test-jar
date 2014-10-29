@@ -17,7 +17,8 @@ COMPILE_FLAGS=""
 DALVIKVM="dalvikvm32"
 DEBUGGER="n"
 DEV_MODE="n"
-DEX2OAT=""
+DEX2OAT="dex2oat"
+DEX2OAT_OPTION=""
 FALSE_BIN="/system/bin/false"
 FLAGS=""
 GDB=""
@@ -51,6 +52,9 @@ while true; do
             exit 1
         fi
         LIB="$1"
+        if [ "x$1" = "xlibart.so" ]; then
+          DEX2OAT=dex2oat
+        fi
         shift
     elif [ "x$1" = "x-Xcompiler-option" ]; then
         shift
@@ -68,7 +72,7 @@ while true; do
         BOOT_IMAGE="$1"
         shift
     elif [ "x$1" = "x--no-dex2oat" ]; then
-        DEX2OAT="-Xcompiler:${FALSE_BIN}"
+        DEX2OAT_OPTION="-Xcompiler:${FALSE_BIN}"
         shift
     elif [ "x$1" = "x--no-patchoat" ]; then
         PATCHOAT="-Xpatchoat:${FALSE_BIN}"
@@ -269,7 +273,7 @@ dex2oat_cmdline="true"
 mkdir_cmdline="mkdir -p ${DEX_LOCATION}/dalvik-cache/$ISA"
 
 if [ "$PREBUILD" = "y" ]; then
-  dex2oat_cmdline="$INVOKE_WITH $ANDROID_ROOT/bin/dex2oatd \
+  dex2oat_cmdline="$INVOKE_WITH $ANDROID_ROOT/bin/$DEX2OAT \
                       $COMPILE_FLAGS \
                       $DEX2OAT_BOOT_OPT \
                       --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
@@ -282,7 +286,7 @@ dalvikvm_cmdline="$INVOKE_WITH $GDB $ANDROID_ROOT/bin/$DALVIKVM \
                   $FLAGS \
                   -XXlib:$LIB \
                   $PATCHOAT \
-                  $DEX2OAT \
+                  $DEX2OAT_OPTION \
                   $ZYGOTE \
                   $JNI_OPTS \
                   $INT_OPTS \
