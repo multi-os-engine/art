@@ -252,13 +252,18 @@ define define-art-gtest-rule-target
     $$(ART_TARGET_NATIVETEST_OUT)/$$(TARGET_$(2)ARCH)/$(1) \
     $$($(2)TARGET_OUT_SHARED_LIBRARIES)/libjavacore.so
 
+  android_root := '/system'
+  ifneq ($$(ART_TEST_ANDROID_ROOT),)
+    android_root := $$(ART_TEST_ANDROID_ROOT)
+  endif
+
 .PHONY: $$(gtest_rule)
 $$(gtest_rule): test-art-target-sync
 	$(hide) adb shell touch $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID
 	$(hide) adb shell rm $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID
 	$(hide) adb shell chmod 755 $(ART_TARGET_NATIVETEST_DIR)/$(TARGET_$(2)ARCH)/$(1)
 	$(hide) $$(call ART_TEST_SKIP,$$@) && \
-	  (adb shell "LD_LIBRARY_PATH=$(3) \
+	  (adb shell "LD_LIBRARY_PATH=$(3) ANDROID_ROOT=$$(android_root) \
 	    $(ART_TARGET_NATIVETEST_DIR)/$(TARGET_$(2)ARCH)/$(1) && touch $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID" \
 	  && (adb pull $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID /tmp/ \
 	      && $$(call ART_TEST_PASSED,$$@)) \
