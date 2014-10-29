@@ -475,6 +475,7 @@ class HBasicBlock : public ArenaObject {
   M(ClinitCheck, Instruction)                                           \
   M(Compare, BinaryOperation)                                           \
   M(Condition, BinaryOperation)                                         \
+  M(Conversion, Instruction)                                            \
   M(Div, BinaryOperation)                                               \
   M(DoubleConstant, Constant)                                           \
   M(Equal, Condition)                                                   \
@@ -1740,6 +1741,40 @@ class HNot : public HUnaryOperation {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HNot);
+};
+
+class HConversion : public HExpression<1> {
+ public:
+  // Instantiate a conversion of `input` from `input_type` to `result_type`.
+  HConversion(Primitive::Type result_type,
+              Primitive::Type input_type,
+              HInstruction* input)
+      : HExpression(result_type, SideEffects::None()),
+        input_type_(input_type) {
+    SetRawInputAt(0, input);
+    // TODO: Keep these checks?  The verifier may have done these
+    // before.  If so, we may even be able to get rid of `input_type`
+    // and get it from `input` instead.
+    DCHECK_EQ(input_type, input->GetType());
+    DCHECK_NE(input_type, result_type);
+  }
+
+  HInstruction* GetInput() const { return InputAt(0); }
+  Primitive::Type GetResultType() const { return GetType(); }
+  Primitive::Type GetInputType() const { return input_type_; }
+
+  virtual bool CanBeMoved() const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    return other->AsConversion()->input_type_ == input_type_;
+  }
+
+  DECLARE_INSTRUCTION(Conversion);
+
+ private:
+  // The type of the input to be converted.
+  Primitive::Type input_type_;
+
+  DISALLOW_COPY_AND_ASSIGN(HConversion);
 };
 
 class HPhi : public HInstruction {
