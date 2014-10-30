@@ -273,8 +273,10 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
       // Nothing to do, we won't allocate a register for this value.
     }
   } else {
-    DCHECK(unhandled.IsEmpty() || current->StartsBeforeOrAt(unhandled.Peek()));
-    unhandled.Add(current);
+    // Don't add direclty to `unhandled`, temp or safepoint intervals
+    // for this instruction may have been added, and those can be
+    // processed first.
+    AddSorted(&unhandled, current);
   }
 }
 
@@ -973,7 +975,14 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
       HInstruction* safepoint = safepoints_.Get(i);
       size_t position = safepoint->GetLifetimePosition();
       LocationSummary* locations = safepoint->GetLocations();
-      if (!current->Covers(position)) continue;
+      if (!current->Covers(position)) {
+        continue;
+      }
+      if (interval->GetStart() == position) {
+        // The safepoint is for this instruction, so the location of the instruction
+        // does not need to be saved.
+        continue;
+      }
 
       if ((current->GetType() == Primitive::kPrimNot) && current->GetParent()->HasSpillSlot()) {
         locations->SetStackBit(current->GetParent()->GetSpillSlot() / kVRegSize);
