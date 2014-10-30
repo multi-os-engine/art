@@ -2378,7 +2378,7 @@ void Thumb2Assembler::LoadFromOffset(LoadOperandType type,
                                      int32_t offset,
                                      Condition cond) {
   if (!Address::CanHoldLoadOffsetThumb(type, offset)) {
-    CHECK(base != IP);
+    CHECK_NE(base, IP);
     LoadImmediate(IP, offset, cond);
     add(IP, IP, ShifterOperand(base), cond);
     base = IP;
@@ -2455,8 +2455,8 @@ void Thumb2Assembler::StoreToOffset(StoreOperandType type,
                                     int32_t offset,
                                     Condition cond) {
   if (!Address::CanHoldStoreOffsetThumb(type, offset)) {
-    CHECK(reg != IP);
-    CHECK(base != IP);
+    CHECK_NE(reg, IP);
+    CHECK_NE(base, IP);
     LoadImmediate(IP, offset, cond);
     add(IP, IP, ShifterOperand(base), cond);
     base = IP;
@@ -2479,6 +2479,51 @@ void Thumb2Assembler::StoreToOffset(StoreOperandType type,
     default:
       LOG(FATAL) << "UNREACHABLE";
       UNREACHABLE();
+  }
+}
+
+// Implementation note: this method must emit at most one instruction when
+// Address::CanHoldStoreOffsetThumb.
+void Thumb2Assembler::StoreToOffsetWithoutUsingIP(StoreOperandType type,
+                                    Register reg,
+                                    Register base,
+                                    int32_t offset,
+                                    Condition cond) {
+  int32_t max_offset = Address::MaxStoreOffsetThumb(type);
+  int32_t quot = offset / max_offset;
+  int32_t rem = offset - quot * max_offset;
+  if (quot != 0) {
+    // Add `offset` to `base` by increments of max_offset.
+    for (int32_t i = 0; i < quot; ++i)
+      add(base, base, ShifterOperand(max_offset), cond);
+    // Add the remainder of the division.
+    add(base, base, ShifterOperand(rem), cond);
+    offset = 0;
+  }
+  CHECK(Address::CanHoldStoreOffsetThumb(type, offset));
+  switch (type) {
+    case kStoreByte:
+      strb(reg, Address(base, offset), cond);
+      break;
+    case kStoreHalfword:
+      strh(reg, Address(base, offset), cond);
+      break;
+    case kStoreWord:
+      str(reg, Address(base, offset), cond);
+      break;
+    case kStoreWordPair:
+      strd(reg, Address(base, offset), cond);
+      break;
+    default:
+      LOG(FATAL) << "UNREACHABLE";
+      UNREACHABLE();
+  }
+  if (quot != 0) {
+    // Subtract `offset` from `base` by decrements of max_offset.
+    for (int32_t i = 0; i < quot; ++i)
+      sub(base, base, ShifterOperand(max_offset), cond);
+    // Subtract the remainder of the division.
+    sub(base, base, ShifterOperand(rem), cond);
   }
 }
 

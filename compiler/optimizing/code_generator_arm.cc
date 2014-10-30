@@ -545,7 +545,7 @@ void CodeGeneratorARM::Move32(Location destination, Location source) {
     } else {
       DCHECK(source.IsStackSlot());
       __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+      __ StoreToOffsetWithoutUsingIP(kStoreWord, IP, SP, destination.GetStackIndex());
     }
   }
 }
@@ -629,9 +629,10 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
     } else {
       DCHECK(source.IsDoubleStackSlot());
       __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+
+      __ StoreToOffsetWithoutUsingIP(kStoreWord, IP, SP, destination.GetStackIndex());
       __ LoadFromOffset(kLoadWord, IP, SP, source.GetHighStackIndex(kArmWordSize));
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetHighStackIndex(kArmWordSize));
+      __ StoreToOffsetWithoutUsingIP(kStoreWord, IP, SP, destination.GetHighStackIndex(kArmWordSize));
     }
   }
 }

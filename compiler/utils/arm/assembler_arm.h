@@ -222,6 +222,8 @@ class Address {
   static bool CanHoldLoadOffsetThumb(LoadOperandType type, int offset);
   static bool CanHoldStoreOffsetThumb(StoreOperandType type, int offset);
 
+  static int MaxStoreOffsetThumb(StoreOperandType type);
+
   uint32_t encodingArm() const;
   uint32_t encodingThumb(bool is_32bit) const;
 
@@ -556,6 +558,15 @@ class ArmAssembler : public Assembler {
                              Register base,
                              int32_t offset,
                              Condition cond = AL) = 0;
+  // Same as StoreToOffset, but does not trash register IP when the
+  // offset is to large to be loaded as an immediate value.
+  virtual void StoreToOffsetWithoutUsingIP(StoreOperandType type,
+                                           Register reg,
+                                           Register base,
+                                           int32_t offset,
+                                           Condition cond = AL) {
+    LOG(FATAL) << "UNREACHED";
+  }
   virtual void LoadSFromOffset(SRegister reg,
                                Register base,
                                int32_t offset,

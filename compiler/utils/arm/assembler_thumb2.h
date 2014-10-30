@@ -288,6 +288,11 @@ class Thumb2Assembler FINAL : public ArmAssembler {
                      Register base,
                      int32_t offset,
                      Condition cond = AL) OVERRIDE;
+  void StoreToOffsetWithoutUsingIP(StoreOperandType type,
+                                   Register reg,
+                                   Register base,
+                                   int32_t offset,
+                                   Condition cond = AL) OVERRIDE;
   void LoadSFromOffset(SRegister reg,
                        Register base,
                        int32_t offset,
