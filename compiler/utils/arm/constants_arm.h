@@ -105,6 +105,7 @@ enum DRegister {
   kNumberOfDRegisters = 32,
 #endif
   kNumberOfOverlappingDRegisters = 16,
+  DTMP = STMP0 / 2,  // Temporary D register reserved for code generation.
   kNoDRegister = -1,
 };
 std::ostream& operator<<(std::ostream& os, const DRegister& rhs);

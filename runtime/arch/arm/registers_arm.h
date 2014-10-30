@@ -87,6 +87,8 @@ enum SRegister {
   S30 = 30,
   S31 = 31,
   kNumberOfSRegisters = 32,
+  STMP0 = 24,  // Temporary S register reserved for code generation.
+  STMP1 = 25,  // Temporary S register reserved for code generation.
   kNoSRegister = -1,
 };
 std::ostream& operator<<(std::ostream& os, const SRegister& rhs);
