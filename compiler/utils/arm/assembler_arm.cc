@@ -383,6 +383,24 @@ bool Address::CanHoldStoreOffsetThumb(StoreOperandType type, int offset) {
   }
 }
 
+int Address::MaxStoreOffsetThumb(StoreOperandType type) {
+  switch (type) {
+    case kStoreHalfword:
+    case kStoreByte:
+    case kStoreWord:
+      return 1 << 12;
+    case kStoreSWord:
+    case kStoreDWord:
+      return 1 << 10;  // VFP addressing mode.
+    case kStoreWordPair:
+      return 1 << 10;
+    default:
+      LOG(FATAL) << "UNREACHABLE";
+      UNREACHABLE();
+  }
+}
+
+
 void ArmAssembler::Pad(uint32_t bytes) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   for (uint32_t i = 0; i < bytes; ++i) {

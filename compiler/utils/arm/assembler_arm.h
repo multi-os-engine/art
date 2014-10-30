@@ -222,6 +222,8 @@ class Address {
   static bool CanHoldLoadOffsetThumb(LoadOperandType type, int offset);
   static bool CanHoldStoreOffsetThumb(StoreOperandType type, int offset);
 
+  static int MaxStoreOffsetThumb(StoreOperandType type);
+
   uint32_t encodingArm() const;
   uint32_t encodingThumb(bool is_32bit) const;
 

@@ -342,6 +342,9 @@ void CodeGeneratorARM::SetupBlockedRegisters() const {
   blocked_fpu_registers_[S22] = true;
   blocked_fpu_registers_[S23] = true;
 
+  blocked_fpu_registers_[STMP0] = true;  // Also DTMP low bits.
+  blocked_fpu_registers_[STMP1] = true;  // Also DTMP high bits.
+
   UpdateBlockedPairRegisters();
 }
 
@@ -544,8 +547,8 @@ void CodeGeneratorARM::Move32(Location destination, Location source) {
       __ StoreSToOffset(source.As<SRegister>(), SP, destination.GetStackIndex());
     } else {
       DCHECK(source.IsStackSlot());
-      __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+      __ LoadSFromOffset(STMP0, SP, source.GetStackIndex());
+      __ StoreSToOffset(STMP0, SP, destination.GetStackIndex());
     }
   }
 }
@@ -628,10 +631,8 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
                         destination.GetStackIndex());
     } else {
       DCHECK(source.IsDoubleStackSlot());
-      __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
-      __ LoadFromOffset(kLoadWord, IP, SP, source.GetHighStackIndex(kArmWordSize));
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetHighStackIndex(kArmWordSize));
+      __ LoadDFromOffset(DTMP, SP, source.GetStackIndex());
+      __ StoreDToOffset(DTMP, SP, destination.GetStackIndex());
     }
   }
 }
@@ -649,7 +650,8 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
     } else {
       DCHECK(location.IsStackSlot());
       __ LoadImmediate(IP, value);
-      __ StoreToOffset(kStoreWord, IP, SP, location.GetStackIndex());
+      __ vmovsr(STMP0, IP);
+      __ StoreSToOffset(STMP0, SP, location.GetStackIndex());
     }
   } else if (instruction->IsLongConstant()) {
     int64_t value = instruction->AsLongConstant()->GetValue();
@@ -659,9 +661,10 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
     } else {
       DCHECK(location.IsDoubleStackSlot());
       __ LoadImmediate(IP, Low32Bits(value));
-      __ StoreToOffset(kStoreWord, IP, SP, location.GetStackIndex());
+      __ vmovsr(STMP0, IP);
       __ LoadImmediate(IP, High32Bits(value));
-      __ StoreToOffset(kStoreWord, IP, SP, location.GetHighStackIndex(kArmWordSize));
+      __ vmovsr(STMP1, IP);
+      __ StoreDToOffset(DTMP, SP, location.GetStackIndex());
     }
   } else if (instruction->IsLoadLocal()) {
     uint32_t stack_slot = GetStackSlot(instruction->AsLoadLocal()->GetLocal());
@@ -2022,8 +2025,8 @@ void ParallelMoveResolverARM::EmitMove(size_t index) {
                         SP, source.GetStackIndex());
     } else {
       DCHECK(destination.IsStackSlot());
-      __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+      __ LoadSFromOffset(STMP0, SP, source.GetStackIndex());
+      __ StoreSToOffset(STMP0, SP, destination.GetStackIndex());
     }
   } else {
     DCHECK(source.IsConstant());
@@ -2034,15 +2037,16 @@ void ParallelMoveResolverARM::EmitMove(size_t index) {
     } else {
       DCHECK(destination.IsStackSlot());
       __ LoadImmediate(IP, value);
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+      __ vmovsr(STMP0, IP);
+      __ StoreSToOffset(STMP0, SP, destination.GetStackIndex());
     }
   }
 }
 
 void ParallelMoveResolverARM::Exchange(Register reg, int mem) {
-  __ Mov(IP, reg);
+  __ vmovsr(STMP0, reg);
   __ LoadFromOffset(kLoadWord, reg, SP, mem);
-  __ StoreToOffset(kStoreWord, IP, SP, mem);
+  __ StoreSToOffset(STMP0, SP, mem);
 }
 
 void ParallelMoveResolverARM::Exchange(int mem1, int mem2) {
@@ -2050,10 +2054,10 @@ void ParallelMoveResolverARM::Exchange(int mem1, int mem2) {
   int stack_offset = ensure_scratch.IsSpilled() ? kArmWordSize : 0;
   __ LoadFromOffset(kLoadWord, static_cast<Register>(ensure_scratch.GetRegister()),
                     SP, mem1 + stack_offset);
-  __ LoadFromOffset(kLoadWord, IP, SP, mem2 + stack_offset);
+  __ LoadSFromOffset(STMP0, SP, mem2 + stack_offset);
   __ StoreToOffset(kStoreWord, static_cast<Register>(ensure_scratch.GetRegister()),
                    SP, mem2 + stack_offset);
-  __ StoreToOffset(kStoreWord, IP, SP, mem1 + stack_offset);
+  __ StoreSToOffset(STMP0, SP, mem1 + stack_offset);
 }
 
 void ParallelMoveResolverARM::EmitSwap(size_t index) {

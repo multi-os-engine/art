@@ -2378,7 +2378,7 @@ void Thumb2Assembler::LoadFromOffset(LoadOperandType type,
                                      int32_t offset,
                                      Condition cond) {
   if (!Address::CanHoldLoadOffsetThumb(type, offset)) {
-    CHECK(base != IP);
+    CHECK_NE(base, IP);
     LoadImmediate(IP, offset, cond);
     add(IP, IP, ShifterOperand(base), cond);
     base = IP;
@@ -2455,8 +2455,8 @@ void Thumb2Assembler::StoreToOffset(StoreOperandType type,
                                     int32_t offset,
                                     Condition cond) {
   if (!Address::CanHoldStoreOffsetThumb(type, offset)) {
-    CHECK(reg != IP);
-    CHECK(base != IP);
+    CHECK_NE(reg, IP);
+    CHECK_NE(base, IP);
     LoadImmediate(IP, offset, cond);
     add(IP, IP, ShifterOperand(base), cond);
     base = IP;
