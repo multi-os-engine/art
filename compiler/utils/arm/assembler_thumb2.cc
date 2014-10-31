@@ -2354,6 +2354,14 @@ void Thumb2Assembler::AddConstantSetFlags(Register rd, Register rn, int32_t valu
   }
 }
 
+void Thumb2Assembler::AddConstantWithCarry(Register rd, Register rn, int32_t value,
+                                           Condition cond) {
+  UNUSED(rd);
+  UNUSED(rn);
+  UNUSED(value);
+  UNUSED(cond);
+  UNIMPLEMENTED(FATAL);
+}
 
 void Thumb2Assembler::LoadImmediate(Register rd, int32_t value, Condition cond) {
   ShifterOperand shifter_op;
@@ -2368,6 +2376,20 @@ void Thumb2Assembler::LoadImmediate(Register rd, int32_t value, Condition cond) 
       movt(rd, value_high, cond);
     }
   }
+}
+
+void Thumb2Assembler::LoadSImmediate(SRegister sd, float value, Condition cond) {
+  UNUSED(sd);
+  UNUSED(value);
+  UNUSED(cond);
+  UNIMPLEMENTED(FATAL);
+}
+void Thumb2Assembler::LoadDImmediate(DRegister dd, double value, Register scratch, Condition cond) {
+  UNUSED(dd);
+  UNUSED(value);
+  UNUSED(scratch);
+  UNUSED(cond);
+  UNIMPLEMENTED(FATAL);
 }
 
 // Implementation note: this method must emit at most one instruction when

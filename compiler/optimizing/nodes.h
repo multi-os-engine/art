@@ -79,12 +79,14 @@ class HInstructionList {
 };
 
 // Control-flow graph of a method. Contains a list of basic blocks.
-class HGraph : public ArenaObject {
+class HGraph : public ArenaObject<kArenaAllocMisc> {
  public:
   explicit HGraph(ArenaAllocator* arena)
       : arena_(arena),
         blocks_(arena, kDefaultNumberOfBlocks),
         reverse_post_order_(arena, kDefaultNumberOfBlocks),
+        entry_block_(nullptr),
+        exit_block_(nullptr),
         maximum_number_of_out_vregs_(0),
         number_of_vregs_(0),
         number_of_in_vregs_(0),
@@ -199,7 +201,7 @@ class HGraph : public ArenaObject {
   DISALLOW_COPY_AND_ASSIGN(HGraph);
 };
 
-class HLoopInformation : public ArenaObject {
+class HLoopInformation : public ArenaObject<kArenaAllocMisc> {
  public:
   HLoopInformation(HBasicBlock* header, HGraph* graph)
       : header_(header),
@@ -278,7 +280,7 @@ static constexpr uint32_t kNoDexPc = -1;
 // as a double linked list. Each block knows its predecessors and
 // successors.
 
-class HBasicBlock : public ArenaObject {
+class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
  public:
   explicit HBasicBlock(HGraph* graph, uint32_t dex_pc = kNoDexPc)
       : graph_(graph),
@@ -536,7 +538,7 @@ FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
   virtual void Accept(HGraphVisitor* visitor)
 
 template <typename T>
-class HUseListNode : public ArenaObject {
+class HUseListNode : public ArenaObject<kArenaAllocMisc> {
  public:
   HUseListNode(T* user, size_t index, HUseListNode* tail)
       : user_(user), index_(index), tail_(tail) {}
@@ -618,7 +620,7 @@ class SideEffects : public ValueObject {
   size_t flags_;
 };
 
-class HInstruction : public ArenaObject {
+class HInstruction : public ArenaObject<kArenaAllocMisc> {
  public:
   explicit HInstruction(SideEffects side_effects)
       : previous_(nullptr),
@@ -737,12 +739,18 @@ class HInstruction : public ArenaObject {
   virtual bool CanBeMoved() const { return false; }
 
   // Returns whether the two instructions are of the same kind.
-  virtual bool InstructionTypeEquals(HInstruction* other) const { return false; }
+  virtual bool InstructionTypeEquals(HInstruction* other) const {
+    UNUSED(other);
+    return false;
+  }
 
   // Returns whether any data encoded in the two instructions is equal.
   // This method does not look at the inputs. Both instructions must be
   // of the same type, otherwise the method has undefined behavior.
-  virtual bool InstructionDataEquals(HInstruction* other) const { return false; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return false;
+  }
 
   // Returns whether two instructions are equal, that is:
   // 1) They have the same type and contain the same data,
@@ -832,7 +840,7 @@ class HUseIterator : public ValueObject {
 };
 
 // A HEnvironment object contains the values of virtual registers at a given location.
-class HEnvironment : public ArenaObject {
+class HEnvironment : public ArenaObject<kArenaAllocMisc> {
  public:
   HEnvironment(ArenaAllocator* arena, size_t number_of_vregs) : vregs_(arena, number_of_vregs) {
     vregs_.SetSize(number_of_vregs);
@@ -964,14 +972,14 @@ class EmbeddedArray<T, 0> {
  public:
   intptr_t length() const { return 0; }
   const T& operator[](intptr_t i) const {
+    UNUSED(i);
     LOG(FATAL) << "Unreachable";
-    static T sentinel = 0;
-    return sentinel;
+    UNREACHABLE();
   }
   T& operator[](intptr_t i) {
+    UNUSED(i);
     LOG(FATAL) << "Unreachable";
-    static T sentinel = 0;
-    return sentinel;
+    UNREACHABLE();
   }
 };
 
@@ -1109,7 +1117,10 @@ class HUnaryOperation : public HExpression<1> {
   Primitive::Type GetResultType() const { return GetType(); }
 
   virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return true;
+  }
 
   // Try to statically evaluate `operation` and return a HConstant
   // containing the result of this evaluation.  If `operation` cannot
@@ -1142,7 +1153,10 @@ class HBinaryOperation : public HExpression<2> {
   virtual bool IsCommutative() { return false; }
 
   virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return true;
+  }
 
   // Try to statically evaluate `operation` and return a HConstant
   // containing the result of this evaluation.  If `operation` cannot
@@ -1731,7 +1745,10 @@ class HNot : public HUnaryOperation {
       : HUnaryOperation(result_type, input) {}
 
   virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return true;
+  }
 
   virtual int32_t Evaluate(int32_t x) const OVERRIDE { return ~x; }
   virtual int64_t Evaluate(int64_t x) const OVERRIDE { return ~x; }
@@ -1791,7 +1808,10 @@ class HNullCheck : public HExpression<1> {
   }
 
   virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return true;
+  }
 
   virtual bool NeedsEnvironment() const { return true; }
 
@@ -1883,7 +1903,10 @@ class HArrayGet : public HExpression<2> {
   }
 
   virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return true;
+  }
   void SetType(Primitive::Type type) { type_ = type; }
 
   DECLARE_INSTRUCTION(ArrayGet);
@@ -1947,7 +1970,10 @@ class HArrayLength : public HExpression<1> {
   }
 
   virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return true;
+  }
 
   DECLARE_INSTRUCTION(ArrayLength);
 
@@ -1965,7 +1991,10 @@ class HBoundsCheck : public HExpression<2> {
   }
 
   virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return true;
+  }
 
   virtual bool NeedsEnvironment() const { return true; }
 
@@ -2147,7 +2176,7 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldSet);
 };
 
-class MoveOperands : public ArenaObject {
+class MoveOperands : public ArenaObject<kArenaAllocMisc> {
  public:
   MoveOperands(Location source, Location destination, HInstruction* instruction)
       : source_(source), destination_(destination), instruction_(instruction) {}
@@ -2248,7 +2277,7 @@ class HGraphVisitor : public ValueObject {
   explicit HGraphVisitor(HGraph* graph) : graph_(graph) {}
   virtual ~HGraphVisitor() {}
 
-  virtual void VisitInstruction(HInstruction* instruction) {}
+  virtual void VisitInstruction(HInstruction* instruction) { UNUSED(instruction); }
   virtual void VisitBasicBlock(HBasicBlock* block);
 
   // Visit the graph following basic block insertion order.

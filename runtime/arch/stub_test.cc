@@ -41,7 +41,7 @@ class StubTest : public CommonRuntimeTest {
       for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
         Runtime::CalleeSaveType type = Runtime::CalleeSaveType(i);
         if (!runtime_->HasCalleeSaveMethod(type)) {
-          runtime_->SetCalleeSaveMethod(runtime_->CreateCalleeSaveMethod(type), type);
+          runtime_->SetCalleeSaveMethod(runtime_->CreateCalleeSaveMethod(), type);
         }
       }
     }

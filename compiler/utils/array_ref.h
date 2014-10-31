@@ -66,32 +66,38 @@ class ArrayRef {
     : array_(array), size_(size) {
   }
 
+#if 0
   template <typename U, size_t size>
   constexpr ArrayRef(U (&array)[size],
                      typename std::enable_if<std::is_same<T, const U>::value, tag>::type t = tag())
     : array_(array), size_(size) {
   }
+#endif
 
   constexpr ArrayRef(T* array, size_t size)
       : array_(array), size_(size) {
   }
 
+#if 0
   template <typename U>
   constexpr ArrayRef(U* array, size_t size,
                      typename std::enable_if<std::is_same<T, const U>::value, tag>::type t = tag())
       : array_(array), size_(size) {
   }
+#endif
 
   template <typename Alloc>
   explicit ArrayRef(std::vector<T, Alloc>& v)
       : array_(v.data()), size_(v.size()) {
   }
 
+#if 0
   template <typename U, typename Alloc>
   ArrayRef(const std::vector<U, Alloc>& v,
            typename std::enable_if<std::is_same<T, const U>::value, tag>::tag t = tag())
       : array_(v.data()), size_(v.size()) {
   }
+#endif
 
   // Assignment operators.
 
@@ -164,8 +170,8 @@ class ArrayRef {
   const value_type* data() const { return array_; }
 
  private:
-  T* array_;
-  size_t size_;
+  T* const array_;
+  const size_t size_;
 };
 
 template <typename T>

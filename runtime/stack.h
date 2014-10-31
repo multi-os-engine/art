@@ -633,6 +633,7 @@ class StackVisitor {
   }
 
   static int GetOutVROffset(uint16_t out_num, InstructionSet isa) {
+    UNUSED(isa);
     // According to stack model, the first out is above the Method referernce.
     return sizeof(StackReference<mirror::ArtMethod>) + (out_num * sizeof(uint32_t));
   }

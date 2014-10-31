@@ -31,7 +31,7 @@ class DexFile;
 // Enable/disable tracking values stored in the FILLED_NEW_ARRAY result.
 static constexpr bool kLocalValueNumberingEnableFilledNewArrayTracking = true;
 
-class LocalValueNumbering {
+class LocalValueNumbering : public ArenaObject<kArenaAllocMisc> {
  private:
   static constexpr uint16_t kNoValue = GlobalValueNumbering::kNoValue;
 
@@ -68,14 +68,6 @@ class LocalValueNumbering {
   void PrepareEntryBlock();
 
   uint16_t GetValueNumber(MIR* mir);
-
-  // LocalValueNumbering should be allocated on the ArenaStack (or the native stack).
-  static void* operator new(size_t size, ScopedArenaAllocator* allocator) {
-    return allocator->Alloc(sizeof(LocalValueNumbering), kArenaAllocMisc);
-  }
-
-  // Allow delete-expression to destroy a LocalValueNumbering object without deallocation.
-  static void operator delete(void* ptr) { UNUSED(ptr); }
 
  private:
   // A set of value names.

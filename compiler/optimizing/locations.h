@@ -401,7 +401,7 @@ class RegisterSet : public ValueObject {
  * The intent is to have the code for generating the instruction independent of
  * register allocation. A register allocator just has to provide a LocationSummary.
  */
-class LocationSummary : public ArenaObject {
+class LocationSummary : public ArenaObject<kArenaAllocMisc> {
  public:
   enum CallKind {
     kNoCall,

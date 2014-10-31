@@ -270,13 +270,12 @@ class Thumb2Assembler FINAL : public ArmAssembler {
   void AddConstantSetFlags(Register rd, Register rn, int32_t value,
                            Condition cond = AL) OVERRIDE;
   void AddConstantWithCarry(Register rd, Register rn, int32_t value,
-                            Condition cond = AL) {}
+                            Condition cond = AL) OVERRIDE;
 
   // Load and Store. May clobber IP.
   void LoadImmediate(Register rd, int32_t value, Condition cond = AL) OVERRIDE;
-  void LoadSImmediate(SRegister sd, float value, Condition cond = AL) {}
-  void LoadDImmediate(DRegister dd, double value,
-                      Register scratch, Condition cond = AL) {}
+  void LoadSImmediate(SRegister sd, float value, Condition cond = AL) OVERRIDE;
+  void LoadDImmediate(DRegister dd, double value, Register scratch, Condition cond = AL) OVERRIDE;
   void MarkExceptionHandler(Label* label) OVERRIDE;
   void LoadFromOffset(LoadOperandType type,
                       Register reg,

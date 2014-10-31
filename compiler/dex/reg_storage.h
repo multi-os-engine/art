@@ -18,6 +18,7 @@
 #define ART_COMPILER_DEX_REG_STORAGE_H_
 
 #include "base/logging.h"
+#include "base/value_object.h"
 #include "compiler_enums.h"  // For WideKind
 
 namespace art {
@@ -72,7 +73,7 @@ namespace art {
  * records.
  */
 
-class RegStorage {
+class RegStorage : public ValueObject {
  public:
   enum RegStorageKind {
     kValidMask     = 0x8000,
@@ -331,9 +332,8 @@ class RegStorage {
       case k256BitSolo: return 32;
       case k512BitSolo: return 64;
       case k1024BitSolo: return 128;
-      default: LOG(FATAL) << "Unexpected shape";
+      default: LOG(FATAL) << "Unexpected shape"; UNREACHABLE();
     }
-    return 0;
   }
 
  private:

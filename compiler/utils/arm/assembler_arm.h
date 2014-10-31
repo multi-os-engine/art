@@ -451,6 +451,10 @@ class ArmAssembler : public Assembler {
   virtual void it(Condition firstcond, ItState i1 = kItOmitted,
                   ItState i2 = kItOmitted, ItState i3 = kItOmitted) {
     // Ignored if not supported.
+    UNUSED(firstcond);
+    UNUSED(i1);
+    UNUSED(i2);
+    UNUSED(i3);
   }
 
   virtual void cbz(Register rn, Label* target) = 0;

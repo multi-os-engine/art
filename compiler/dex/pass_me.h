@@ -23,7 +23,7 @@
 namespace art {
 
 // Forward declarations.
-struct BasicBlock;
+class BasicBlock;
 struct CompilationUnit;
 class Pass;
 

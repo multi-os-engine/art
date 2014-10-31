@@ -135,6 +135,7 @@ inline void Object::SetReadBarrierPointer(Object* rb_ptr) {
 #else
   LOG(FATAL) << "Unreachable";
   UNREACHABLE();
+  UNUSED(rb_ptr);
 #endif
 }
 
@@ -158,6 +159,8 @@ inline bool Object::AtomicSetReadBarrierPointer(Object* expected_rb_ptr, Object*
 #else
   LOG(FATAL) << "Unreachable";
   UNREACHABLE();
+  UNUSED(expected_rb_ptr);
+  UNUSED(rb_ptr);
 #endif
 }
 

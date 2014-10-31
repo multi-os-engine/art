@@ -379,8 +379,7 @@ class Runtime {
 
   void SetCalleeSaveMethod(mirror::ArtMethod* method, CalleeSaveType type);
 
-  mirror::ArtMethod* CreateCalleeSaveMethod(CalleeSaveType type)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  mirror::ArtMethod* CreateCalleeSaveMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   int32_t GetStat(int kind);
 

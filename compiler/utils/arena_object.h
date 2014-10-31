@@ -19,14 +19,20 @@
 
 #include "arena_allocator.h"
 #include "base/logging.h"
+#include "scoped_arena_allocator.h"
 
 namespace art {
 
+template<enum ArenaAllocKind kAllocKind>
 class ArenaObject {
  public:
   // Allocate a new ArenaObject of 'size' bytes in the Arena.
   void* operator new(size_t size, ArenaAllocator* allocator) {
-    return allocator->Alloc(size, kArenaAllocMisc);
+    return allocator->Alloc(size, kAllocKind);
+  }
+
+  static void* operator new(size_t size, ScopedArenaAllocator* arena) {
+    return arena->Alloc(size, kAllocKind);
   }
 
   void operator delete(void*, size_t) {

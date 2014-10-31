@@ -535,7 +535,7 @@ class Dex2Oat {
     for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
       Runtime::CalleeSaveType type = Runtime::CalleeSaveType(i);
       if (!runtime->HasCalleeSaveMethod(type)) {
-        runtime->SetCalleeSaveMethod(runtime->CreateCalleeSaveMethod(type), type);
+        runtime->SetCalleeSaveMethod(runtime->CreateCalleeSaveMethod(), type);
       }
     }
     runtime->GetClassLinker()->FixupDexCaches(runtime->GetResolutionMethod());

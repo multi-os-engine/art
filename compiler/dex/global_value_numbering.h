@@ -26,7 +26,7 @@ namespace art {
 class LocalValueNumbering;
 class MirFieldInfo;
 
-class GlobalValueNumbering {
+class GlobalValueNumbering : public ArenaObject<kArenaAllocMisc> {
  public:
   enum Mode {
     kModeGvn,
@@ -64,14 +64,6 @@ class GlobalValueNumbering {
   bool CanModify() const {
     return modifications_allowed_ && Good();
   }
-
-  // GlobalValueNumbering should be allocated on the ArenaStack (or the native stack).
-  static void* operator new(size_t size, ScopedArenaAllocator* allocator) {
-    return allocator->Alloc(sizeof(GlobalValueNumbering), kArenaAllocMisc);
-  }
-
-  // Allow delete-expression to destroy a GlobalValueNumbering object without deallocation.
-  static void operator delete(void* ptr) { UNUSED(ptr); }
 
  private:
   static constexpr uint16_t kNoValue = 0xffffu;
@@ -228,7 +220,7 @@ class GlobalValueNumbering {
   }
 
   CompilationUnit* const cu_;
-  MIRGraph* mir_graph_;
+  MIRGraph* const mir_graph_;
   ScopedArenaAllocator* const allocator_;
 
   // The maximum number of nested loops that we accept for GVN.

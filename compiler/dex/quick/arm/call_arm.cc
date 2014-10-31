@@ -477,9 +477,11 @@ static bool ArmUseRelativeCall(CompilationUnit* cu, const MethodReference& targe
  */
 static int ArmNextSDCallInsn(CompilationUnit* cu, CallInfo* info,
                              int state, const MethodReference& target_method,
-                             uint32_t unused,
+                             uint32_t unused_idx,
                              uintptr_t direct_code, uintptr_t direct_method,
                              InvokeType type) {
+  UNUSED(info);
+  UNUSED(unused_idx);
   Mir2Lir* cg = static_cast<Mir2Lir*>(cu->cg.get());
   if (direct_code != 0 && direct_method != 0) {
     switch (state) {

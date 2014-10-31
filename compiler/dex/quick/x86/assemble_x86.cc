@@ -1631,6 +1631,7 @@ void X86Mir2Lir::EmitUnimplemented(const X86EncodingMap* entry, LIR* lir) {
  * sequence or request that the trace be shortened and retried.
  */
 AssemblerStatus X86Mir2Lir::AssembleInstructions(CodeOffset start_addr) {
+  UNUSED(start_addr);
   LIR *lir;
   AssemblerStatus res = kSuccess;  // Assume success
 
