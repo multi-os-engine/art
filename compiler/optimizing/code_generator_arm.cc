@@ -763,6 +763,7 @@ void LocationsBuilderARM::VisitExit(HExit* exit) {
 }
 
 void InstructionCodeGeneratorARM::VisitExit(HExit* exit) {
+  UNUSED(exit);
   if (kIsDebugBuild) {
     __ Comment("Unreachable");
     __ bkpt(0);
@@ -928,6 +929,7 @@ void LocationsBuilderARM::VisitLoadLocal(HLoadLocal* load) {
 
 void InstructionCodeGeneratorARM::VisitLoadLocal(HLoadLocal* load) {
   // Nothing to do, this is driven by the code generator.
+  UNUSED(load);
 }
 
 void LocationsBuilderARM::VisitStoreLocal(HStoreLocal* store) {
@@ -955,6 +957,7 @@ void LocationsBuilderARM::VisitStoreLocal(HStoreLocal* store) {
 }
 
 void InstructionCodeGeneratorARM::VisitStoreLocal(HStoreLocal* store) {
+  UNUSED(store);
 }
 
 void LocationsBuilderARM::VisitIntConstant(HIntConstant* constant) {
@@ -965,6 +968,7 @@ void LocationsBuilderARM::VisitIntConstant(HIntConstant* constant) {
 
 void InstructionCodeGeneratorARM::VisitIntConstant(HIntConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderARM::VisitLongConstant(HLongConstant* constant) {
@@ -975,6 +979,7 @@ void LocationsBuilderARM::VisitLongConstant(HLongConstant* constant) {
 
 void InstructionCodeGeneratorARM::VisitLongConstant(HLongConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderARM::VisitFloatConstant(HFloatConstant* constant) {
@@ -985,6 +990,7 @@ void LocationsBuilderARM::VisitFloatConstant(HFloatConstant* constant) {
 
 void InstructionCodeGeneratorARM::VisitFloatConstant(HFloatConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderARM::VisitDoubleConstant(HDoubleConstant* constant) {
@@ -995,6 +1001,7 @@ void LocationsBuilderARM::VisitDoubleConstant(HDoubleConstant* constant) {
 
 void InstructionCodeGeneratorARM::VisitDoubleConstant(HDoubleConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderARM::VisitReturnVoid(HReturnVoid* ret) {
@@ -1002,6 +1009,7 @@ void LocationsBuilderARM::VisitReturnVoid(HReturnVoid* ret) {
 }
 
 void InstructionCodeGeneratorARM::VisitReturnVoid(HReturnVoid* ret) {
+  UNUSED(ret);
   codegen_->GenerateFrameExit();
 }
 
@@ -1012,6 +1020,7 @@ void LocationsBuilderARM::VisitReturn(HReturn* ret) {
 }
 
 void InstructionCodeGeneratorARM::VisitReturn(HReturn* ret) {
+  UNUSED(ret);
   codegen_->GenerateFrameExit();
 }
 
@@ -1477,6 +1486,7 @@ void LocationsBuilderARM::VisitParameterValue(HParameterValue* instruction) {
 
 void InstructionCodeGeneratorARM::VisitParameterValue(HParameterValue* instruction) {
   // Nothing to do, the parameter is already at its location.
+  UNUSED(instruction);
 }
 
 void LocationsBuilderARM::VisitNot(HNot* not_) {
@@ -1565,6 +1575,7 @@ void LocationsBuilderARM::VisitPhi(HPhi* instruction) {
 }
 
 void InstructionCodeGeneratorARM::VisitPhi(HPhi* instruction) {
+  UNUSED(instruction);
   LOG(FATAL) << "Unreachable";
 }
 
@@ -1967,9 +1978,11 @@ void LocationsBuilderARM::VisitTemporary(HTemporary* temp) {
 
 void InstructionCodeGeneratorARM::VisitTemporary(HTemporary* temp) {
   // Nothing to do, this is driven by the code generator.
+  UNUSED(temp);
 }
 
 void LocationsBuilderARM::VisitParallelMove(HParallelMove* instruction) {
+  UNUSED(instruction);
   LOG(FATAL) << "Unreachable";
 }
 

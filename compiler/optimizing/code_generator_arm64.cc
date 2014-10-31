@@ -555,6 +555,7 @@ enum UnimplementedInstructionBreakCode {
 
 #define DEFINE_UNIMPLEMENTED_INSTRUCTION_VISITORS(name)                               \
   void InstructionCodeGeneratorARM64::Visit##name(H##name* instr) {                   \
+    UNUSED(instr);                                                                    \
     __ Brk(UNIMPLEMENTED_INSTRUCTION_BREAK_CODE(name));                               \
   }                                                                                   \
   void LocationsBuilderARM64::Visit##name(H##name* instr) {                           \
@@ -710,6 +711,7 @@ void LocationsBuilderARM64::VisitExit(HExit* exit) {
 }
 
 void InstructionCodeGeneratorARM64::VisitExit(HExit* exit) {
+  UNUSED(exit);
   if (kIsDebugBuild) {
     down_cast<Arm64Assembler*>(GetAssembler())->Comment("Unreachable");
     __ Brk(0);    // TODO: Introduce special markers for such code locations.
@@ -876,6 +878,7 @@ void LocationsBuilderARM64::VisitIntConstant(HIntConstant* constant) {
 
 void InstructionCodeGeneratorARM64::VisitIntConstant(HIntConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderARM64::VisitInvokeStatic(HInvokeStatic* invoke) {
@@ -966,6 +969,7 @@ void LocationsBuilderARM64::VisitLoadLocal(HLoadLocal* load) {
 
 void InstructionCodeGeneratorARM64::VisitLoadLocal(HLoadLocal* load) {
   // Nothing to do, this is driven by the code generator.
+  UNUSED(load);
 }
 
 void LocationsBuilderARM64::VisitLocal(HLocal* local) {
@@ -983,6 +987,7 @@ void LocationsBuilderARM64::VisitLongConstant(HLongConstant* constant) {
 
 void InstructionCodeGeneratorARM64::VisitLongConstant(HLongConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderARM64::VisitMul(HMul* mul) {
@@ -1108,6 +1113,7 @@ void LocationsBuilderARM64::VisitParameterValue(HParameterValue* instruction) {
 
 void InstructionCodeGeneratorARM64::VisitParameterValue(HParameterValue* instruction) {
   // Nothing to do, the parameter is already at its location.
+  UNUSED(instruction);
 }
 
 void LocationsBuilderARM64::VisitPhi(HPhi* instruction) {
@@ -1119,6 +1125,7 @@ void LocationsBuilderARM64::VisitPhi(HPhi* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::VisitPhi(HPhi* instruction) {
+  UNUSED(instruction);
   LOG(FATAL) << "Unreachable";
 }
 
@@ -1163,6 +1170,7 @@ void LocationsBuilderARM64::VisitReturnVoid(HReturnVoid* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::VisitReturnVoid(HReturnVoid* instruction) {
+  UNUSED(instruction);
   codegen_->GenerateFrameExit();
   __ Br(lr);
 }
@@ -1190,6 +1198,7 @@ void LocationsBuilderARM64::VisitStoreLocal(HStoreLocal* store) {
 }
 
 void InstructionCodeGeneratorARM64::VisitStoreLocal(HStoreLocal* store) {
+  UNUSED(store);
 }
 
 void LocationsBuilderARM64::VisitSub(HSub* instruction) {
@@ -1241,6 +1250,7 @@ void LocationsBuilderARM64::VisitTemporary(HTemporary* temp) {
 
 void InstructionCodeGeneratorARM64::VisitTemporary(HTemporary* temp) {
   // Nothing to do, this is driven by the code generator.
+  UNUSED(temp);
 }
 
 }  // namespace arm64
