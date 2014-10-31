@@ -70,7 +70,8 @@ class LocalValueNumbering {
   uint16_t GetValueNumber(MIR* mir);
 
   // LocalValueNumbering should be allocated on the ArenaStack (or the native stack).
-  static void* operator new(size_t size, ScopedArenaAllocator* allocator) {
+  // TODO: make LocalValueNumbering an ArenaObject or Value Object.
+  static void* operator new(size_t size ATTRIBUTE_UNUSED, ScopedArenaAllocator* allocator) {
     return allocator->Alloc(sizeof(LocalValueNumbering), kArenaAllocMisc);
   }
 

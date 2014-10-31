@@ -1852,6 +1852,8 @@ void RosAlloc::Initialize() {
 }
 
 void RosAlloc::BytesAllocatedCallback(void* start, void* end, size_t used_bytes, void* arg) {
+  UNUSED(start);
+  UNUSED(end);
   if (used_bytes == 0) {
     return;
   }
@@ -1860,6 +1862,8 @@ void RosAlloc::BytesAllocatedCallback(void* start, void* end, size_t used_bytes,
 }
 
 void RosAlloc::ObjectsAllocatedCallback(void* start, void* end, size_t used_bytes, void* arg) {
+  UNUSED(start);
+  UNUSED(end);
   if (used_bytes == 0) {
     return;
   }

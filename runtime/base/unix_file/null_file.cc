@@ -34,6 +34,8 @@ int NullFile::Flush() {
 }
 
 int64_t NullFile::Read(char* buf, int64_t byte_count, int64_t offset) const {
+  UNUSED(buf);
+  UNUSED(byte_count);
   if (offset < 0) {
     return -EINVAL;
   }
@@ -52,6 +54,8 @@ int64_t NullFile::GetLength() const {
 }
 
 int64_t NullFile::Write(const char* buf, int64_t byte_count, int64_t offset) {
+  UNUSED(buf);
+  UNUSED(byte_count);
   if (offset < 0) {
     return -EINVAL;
   }

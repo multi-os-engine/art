@@ -140,11 +140,9 @@ static inline mirror::Object* AllocObjectFromCode(uint32_t type_idx,
 }
 
 // Given the context of a calling Method and a resolved class, create an instance.
-// TODO: Fix NO_THREAD_SAFETY_ANALYSIS when GCC is smarter.
 template <bool kInstrumented>
 ALWAYS_INLINE
 static inline mirror::Object* AllocObjectFromCodeResolved(mirror::Class* klass,
-                                                          mirror::ArtMethod* method,
                                                           Thread* self,
                                                           gc::AllocatorType allocator_type) {
   DCHECK(klass != nullptr);
@@ -167,7 +165,6 @@ static inline mirror::Object* AllocObjectFromCodeResolved(mirror::Class* klass,
 template <bool kInstrumented>
 ALWAYS_INLINE
 static inline mirror::Object* AllocObjectFromCodeInitialized(mirror::Class* klass,
-                                                             mirror::ArtMethod* method,
                                                              Thread* self,
                                                              gc::AllocatorType allocator_type) {
   DCHECK(klass != nullptr);
@@ -362,7 +359,7 @@ static inline mirror::ArtMethod* FindMethodFromCode(uint32_t method_idx,
                                                     mirror::Object** this_object,
                                                     mirror::ArtMethod** referrer, Thread* self) {
   ClassLinker* const class_linker = Runtime::Current()->GetClassLinker();
-  mirror::ArtMethod* resolved_method = class_linker->GetResolvedMethod(method_idx, *referrer, type);
+  mirror::ArtMethod* resolved_method = class_linker->GetResolvedMethod(method_idx, *referrer);
   if (resolved_method == nullptr) {
     StackHandleScope<1> hs(self);
     mirror::Object* null_this = nullptr;

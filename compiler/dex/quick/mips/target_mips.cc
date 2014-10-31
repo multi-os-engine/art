@@ -421,6 +421,7 @@ void MipsMir2Lir::FreeCallTemps() {
 }
 
 bool MipsMir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
+  UNUSED(barrier_kind);
 #if ANDROID_SMP != 0
   NewLIR1(kMipsSync, 0 /* Only stype currently supported */);
   return true;

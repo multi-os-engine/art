@@ -674,6 +674,7 @@ enum X86OpCode {
   kX86RepneScasw,       // repne scasw
   kX86Last
 };
+std::ostream& operator<<(std::ostream& os, const X86OpCode& rhs);
 
 /* Instruction assembly field_loc kind */
 enum X86EncodingKind {
