@@ -526,6 +526,7 @@ void LocationsBuilderX86_64::VisitExit(HExit* exit) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitExit(HExit* exit) {
+  UNUSED(exit);
   if (kIsDebugBuild) {
     __ Comment("Unreachable");
     __ int3();
@@ -614,6 +615,7 @@ void LocationsBuilderX86_64::VisitLoadLocal(HLoadLocal* local) {
 
 void InstructionCodeGeneratorX86_64::VisitLoadLocal(HLoadLocal* load) {
   // Nothing to do, this is driven by the code generator.
+  UNUSED(load);
 }
 
 void LocationsBuilderX86_64::VisitStoreLocal(HStoreLocal* store) {
@@ -641,6 +643,7 @@ void LocationsBuilderX86_64::VisitStoreLocal(HStoreLocal* store) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitStoreLocal(HStoreLocal* store) {
+  UNUSED(store);
 }
 
 void LocationsBuilderX86_64::VisitCondition(HCondition* comp) {
@@ -763,6 +766,7 @@ void LocationsBuilderX86_64::VisitIntConstant(HIntConstant* constant) {
 
 void InstructionCodeGeneratorX86_64::VisitIntConstant(HIntConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderX86_64::VisitLongConstant(HLongConstant* constant) {
@@ -773,6 +777,7 @@ void LocationsBuilderX86_64::VisitLongConstant(HLongConstant* constant) {
 
 void InstructionCodeGeneratorX86_64::VisitLongConstant(HLongConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderX86_64::VisitFloatConstant(HFloatConstant* constant) {
@@ -783,6 +788,7 @@ void LocationsBuilderX86_64::VisitFloatConstant(HFloatConstant* constant) {
 
 void InstructionCodeGeneratorX86_64::VisitFloatConstant(HFloatConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderX86_64::VisitDoubleConstant(HDoubleConstant* constant) {
@@ -793,6 +799,7 @@ void LocationsBuilderX86_64::VisitDoubleConstant(HDoubleConstant* constant) {
 
 void InstructionCodeGeneratorX86_64::VisitDoubleConstant(HDoubleConstant* constant) {
   // Will be generated at use site.
+  UNUSED(constant);
 }
 
 void LocationsBuilderX86_64::VisitReturnVoid(HReturnVoid* ret) {
@@ -800,6 +807,7 @@ void LocationsBuilderX86_64::VisitReturnVoid(HReturnVoid* ret) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitReturnVoid(HReturnVoid* ret) {
+  UNUSED(ret);
   codegen_->GenerateFrameExit();
   __ ret();
 }
@@ -1351,6 +1359,7 @@ void LocationsBuilderX86_64::VisitParameterValue(HParameterValue* instruction) {
 
 void InstructionCodeGeneratorX86_64::VisitParameterValue(HParameterValue* instruction) {
   // Nothing to do, the parameter is already at its location.
+  UNUSED(instruction);
 }
 
 void LocationsBuilderX86_64::VisitNot(HNot* not_) {
@@ -1393,6 +1402,7 @@ void LocationsBuilderX86_64::VisitPhi(HPhi* instruction) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitPhi(HPhi* instruction) {
+  UNUSED(instruction);
   LOG(FATAL) << "Unimplemented";
 }
 
@@ -1872,9 +1882,11 @@ void LocationsBuilderX86_64::VisitTemporary(HTemporary* temp) {
 
 void InstructionCodeGeneratorX86_64::VisitTemporary(HTemporary* temp) {
   // Nothing to do, this is driven by the code generator.
+  UNUSED(temp);
 }
 
 void LocationsBuilderX86_64::VisitParallelMove(HParallelMove* instruction) {
+  UNUSED(instruction);
   LOG(FATAL) << "Unimplemented";
 }
 

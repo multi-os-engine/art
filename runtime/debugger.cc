@@ -233,6 +233,7 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
   void MethodEntered(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
                      uint32_t dex_pc)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    UNUSED(dex_pc);
     if (method->IsNative()) {
       // TODO: post location events is a suspension point and native method entry stubs aren't.
       return;
@@ -254,6 +255,10 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
                     uint32_t dex_pc)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // We're not recorded to listen to this kind of event, so complain.
+    UNUSED(thread);
+    UNUSED(this_object);
+    UNUSED(method);
+    UNUSED(dex_pc);
     LOG(ERROR) << "Unexpected method unwind event in debugger " << PrettyMethod(method)
                << " " << dex_pc;
   }
@@ -267,12 +272,14 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
   void FieldRead(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
                  uint32_t dex_pc, mirror::ArtField* field)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    UNUSED(thread);
     Dbg::PostFieldAccessEvent(method, dex_pc, this_object, field);
   }
 
   void FieldWritten(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
                     uint32_t dex_pc, mirror::ArtField* field, const JValue& field_value)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    UNUSED(thread);
     Dbg::PostFieldModificationEvent(method, dex_pc, this_object, field, &field_value);
   }
 
@@ -280,6 +287,7 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
                        mirror::ArtMethod* catch_method, uint32_t catch_dex_pc,
                        mirror::Throwable* exception_object)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    UNUSED(thread);
     Dbg::PostException(throw_location, catch_method, catch_dex_pc, exception_object);
   }
 

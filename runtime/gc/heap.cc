@@ -264,14 +264,13 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   }
   // Attempt to create 2 mem maps at or after the requested begin.
   main_mem_map_1.reset(MapAnonymousPreferredAddress(kMemMapSpaceName[0], request_begin, capacity_,
-                                                    PROT_READ | PROT_WRITE, &error_str));
+                                                    &error_str));
   CHECK(main_mem_map_1.get() != nullptr) << error_str;
   if (support_homogeneous_space_compaction ||
       background_collector_type_ == kCollectorTypeSS ||
       foreground_collector_type_ == kCollectorTypeSS) {
     main_mem_map_2.reset(MapAnonymousPreferredAddress(kMemMapSpaceName[1], main_mem_map_1->End(),
-                                                      capacity_, PROT_READ | PROT_WRITE,
-                                                      &error_str));
+                                                      capacity_, &error_str));
     CHECK(main_mem_map_2.get() != nullptr) << error_str;
   }
   // Create the non moving space first so that bitmaps don't take up the address range.
@@ -434,8 +433,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   }
 }
 
-MemMap* Heap::MapAnonymousPreferredAddress(const char* name, uint8_t* request_begin, size_t capacity,
-                                           int prot_flags, std::string* out_error_str) {
+MemMap* Heap::MapAnonymousPreferredAddress(const char* name, uint8_t* request_begin,
+                                           size_t capacity, std::string* out_error_str) {
   while (true) {
     MemMap* map = MemMap::MapAnonymous(name, request_begin, capacity,
                                        PROT_READ | PROT_WRITE, true, out_error_str);
@@ -886,7 +885,7 @@ space::Space* Heap::FindSpaceFromObject(const mirror::Object* obj, bool fail_ok)
   if (result != NULL) {
     return result;
   }
-  return FindDiscontinuousSpaceFromObject(obj, true);
+  return FindDiscontinuousSpaceFromObject(obj, fail_ok);
 }
 
 space::ImageSpace* Heap::GetImageSpace() const {
@@ -1831,6 +1830,7 @@ class ZygoteCompactingCollector FINAL : public collector::SemiSpace {
   virtual bool ShouldSweepSpace(space::ContinuousSpace* space) const {
     // Don't sweep any spaces since we probably blasted the internal accounting of the free list
     // allocator.
+    UNUSED(space);
     return false;
   }
 
@@ -2237,6 +2237,7 @@ class VerifyReferenceVisitor {
 
   void operator()(mirror::Class* klass, mirror::Reference* ref) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    UNUSED(klass);
     if (verify_referent_) {
       VerifyReference(ref, ref->GetReferent(), mirror::Reference::ReferentOffset());
     }
@@ -2581,6 +2582,7 @@ bool Heap::VerifyMissingCardMarks() {
 }
 
 void Heap::SwapStacks(Thread* self) {
+  UNUSED(self);
   if (kUseThreadLocalAllocationStack) {
     live_stack_->AssertAllZero();
   }
@@ -2709,6 +2711,7 @@ void Heap::PreGcVerification(collector::GarbageCollector* gc) {
 }
 
 void Heap::PrePauseRosAllocVerification(collector::GarbageCollector* gc) {
+  UNUSED(gc);
   // TODO: Add a new runtime option for this?
   if (verify_pre_gc_rosalloc_) {
     RosAllocVerification(current_gc_iteration_.GetTimings(), "PreGcRosAllocVerification");

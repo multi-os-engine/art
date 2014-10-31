@@ -56,14 +56,17 @@ bool MipsMir2Lir::InexpensiveConstantInt(int32_t value) {
 }
 
 bool MipsMir2Lir::InexpensiveConstantFloat(int32_t value) {
+  UNUSED(value);
   return false;  // TUNING
 }
 
 bool MipsMir2Lir::InexpensiveConstantLong(int64_t value) {
+  UNUSED(value);
   return false;  // TUNING
 }
 
 bool MipsMir2Lir::InexpensiveConstantDouble(int64_t value) {
+  UNUSED(value);
   return false;  // TUNING
 }
 
@@ -320,25 +323,37 @@ LIR* MipsMir2Lir::OpRegReg(OpKind op, RegStorage r_dest_src1, RegStorage r_src2)
        return NewLIR3(kMipsAndi, r_dest_src1.GetReg(), r_src2.GetReg(), 0xFFFF);
     default:
       LOG(FATAL) << "Bad case in OpRegReg";
-      break;
+      UNREACHABLE();
   }
   return NewLIR2(opcode, r_dest_src1.GetReg(), r_src2.GetReg());
 }
 
 LIR* MipsMir2Lir::OpMovRegMem(RegStorage r_dest, RegStorage r_base, int offset,
                               MoveType move_type) {
+  UNUSED(r_dest);
+  UNUSED(r_base);
+  UNUSED(offset);
+  UNUSED(move_type);
   UNIMPLEMENTED(FATAL);
-  return nullptr;
+  UNREACHABLE();
 }
 
 LIR* MipsMir2Lir::OpMovMemReg(RegStorage r_base, int offset, RegStorage r_src, MoveType move_type) {
+  UNUSED(r_base);
+  UNUSED(offset);
+  UNUSED(r_src);
+  UNUSED(move_type);
   UNIMPLEMENTED(FATAL);
-  return nullptr;
+  UNREACHABLE();
 }
 
 LIR* MipsMir2Lir::OpCondRegReg(OpKind op, ConditionCode cc, RegStorage r_dest, RegStorage r_src) {
+  UNUSED(op);
+  UNUSED(cc);
+  UNUSED(r_dest);
+  UNUSED(r_src);
   LOG(FATAL) << "Unexpected use of OpCondRegReg for MIPS";
-  return NULL;
+  UNREACHABLE();
 }
 
 LIR* MipsMir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
@@ -681,16 +696,22 @@ LIR* MipsMir2Lir::StoreBaseDisp(RegStorage r_base, int displacement, RegStorage 
 }
 
 LIR* MipsMir2Lir::OpMem(OpKind op, RegStorage r_base, int disp) {
+  UNUSED(op);
+  UNUSED(r_base);
+  UNUSED(disp);
   LOG(FATAL) << "Unexpected use of OpMem for MIPS";
-  return NULL;
+  UNREACHABLE();
 }
 
 LIR* MipsMir2Lir::OpCondBranch(ConditionCode cc, LIR* target) {
+  UNUSED(cc);
+  UNUSED(target);
   LOG(FATAL) << "Unexpected use of OpCondBranch for MIPS";
-  return NULL;
+  UNREACHABLE();
 }
 
 LIR* MipsMir2Lir::InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) {
+  UNUSED(trampoline);  // The address of the trampoline is already loaded into r_tgt.
   return OpReg(op, r_tgt);
 }
 

@@ -245,6 +245,8 @@ static void GetSample(Thread* thread, void* arg) SHARED_LOCKS_REQUIRED(Locks::mu
 }
 
 static void ClearThreadStackTraceAndClockBase(Thread* thread, void* arg) {
+  UNUSED(thread);
+  UNUSED(arg);
   thread->SetTraceClockBase(0);
   std::vector<mirror::ArtMethod*>* stack_trace = thread->GetStackTraceSample();
   thread->SetStackTraceSample(NULL);
@@ -561,27 +563,44 @@ void Trace::FinishTracing() {
 
 void Trace::DexPcMoved(Thread* thread, mirror::Object* this_object,
                        mirror::ArtMethod* method, uint32_t new_dex_pc) {
+  UNUSED(thread);
+  UNUSED(this_object);
+  UNUSED(method);
+  UNUSED(new_dex_pc);
   // We're not recorded to listen to this kind of event, so complain.
   LOG(ERROR) << "Unexpected dex PC event in tracing " << PrettyMethod(method) << " " << new_dex_pc;
 }
 
-void Trace::FieldRead(Thread* /*thread*/, mirror::Object* this_object,
+void Trace::FieldRead(Thread* thread, mirror::Object* this_object,
                        mirror::ArtMethod* method, uint32_t dex_pc, mirror::ArtField* field)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  UNUSED(thread);
+  UNUSED(this_object);
+  UNUSED(method);
+  UNUSED(dex_pc);
+  UNUSED(field);
   // We're not recorded to listen to this kind of event, so complain.
   LOG(ERROR) << "Unexpected field read event in tracing " << PrettyMethod(method) << " " << dex_pc;
 }
 
-void Trace::FieldWritten(Thread* /*thread*/, mirror::Object* this_object,
+void Trace::FieldWritten(Thread* thread, mirror::Object* this_object,
                           mirror::ArtMethod* method, uint32_t dex_pc, mirror::ArtField* field,
                           const JValue& field_value)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  UNUSED(thread);
+  UNUSED(this_object);
+  UNUSED(method);
+  UNUSED(dex_pc);
+  UNUSED(field);
+  UNUSED(field_value);
   // We're not recorded to listen to this kind of event, so complain.
   LOG(ERROR) << "Unexpected field write event in tracing " << PrettyMethod(method) << " " << dex_pc;
 }
 
 void Trace::MethodEntered(Thread* thread, mirror::Object* this_object,
                           mirror::ArtMethod* method, uint32_t dex_pc) {
+  UNUSED(this_object);
+  UNUSED(dex_pc);
   uint32_t thread_clock_diff = 0;
   uint32_t wall_clock_diff = 0;
   ReadClocks(thread, &thread_clock_diff, &wall_clock_diff);
@@ -592,6 +611,8 @@ void Trace::MethodEntered(Thread* thread, mirror::Object* this_object,
 void Trace::MethodExited(Thread* thread, mirror::Object* this_object,
                          mirror::ArtMethod* method, uint32_t dex_pc,
                          const JValue& return_value) {
+  UNUSED(this_object);
+  UNUSED(dex_pc);
   UNUSED(return_value);
   uint32_t thread_clock_diff = 0;
   uint32_t wall_clock_diff = 0;
@@ -602,6 +623,8 @@ void Trace::MethodExited(Thread* thread, mirror::Object* this_object,
 
 void Trace::MethodUnwind(Thread* thread, mirror::Object* this_object,
                          mirror::ArtMethod* method, uint32_t dex_pc) {
+  UNUSED(this_object);
+  UNUSED(dex_pc);
   uint32_t thread_clock_diff = 0;
   uint32_t wall_clock_diff = 0;
   ReadClocks(thread, &thread_clock_diff, &wall_clock_diff);
@@ -613,6 +636,11 @@ void Trace::ExceptionCaught(Thread* thread, const ThrowLocation& throw_location,
                             mirror::ArtMethod* catch_method, uint32_t catch_dex_pc,
                             mirror::Throwable* exception_object)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  UNUSED(thread);
+  UNUSED(throw_location);
+  UNUSED(catch_method);
+  UNUSED(catch_dex_pc);
+  UNUSED(exception_object);
   LOG(ERROR) << "Unexpected exception caught event in tracing";
 }
 

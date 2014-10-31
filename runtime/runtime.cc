@@ -571,8 +571,7 @@ void Runtime::StartDaemonThreads() {
   VLOG(startup) << "Runtime::StartDaemonThreads exiting";
 }
 
-static bool OpenDexFilesFromImage(const std::vector<std::string>& dex_filenames,
-                                  const std::string& image_location,
+static bool OpenDexFilesFromImage(const std::string& image_location,
                                   std::vector<const DexFile*>& dex_files,
                                   size_t* failures) {
   std::string system_filename;
@@ -634,8 +633,7 @@ static size_t OpenDexFiles(const std::vector<std::string>& dex_filenames,
                            const std::string& image_location,
                            std::vector<const DexFile*>& dex_files) {
   size_t failure_count = 0;
-  if (!image_location.empty() && OpenDexFilesFromImage(dex_filenames, image_location, dex_files,
-                                                       &failure_count)) {
+  if (!image_location.empty() && OpenDexFilesFromImage(image_location, dex_files, &failure_count)) {
     return failure_count;
   }
   failure_count = 0;
@@ -823,7 +821,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     for (int i = 0; i < Runtime::kLastCalleeSaveType; i++) {
       Runtime::CalleeSaveType type = Runtime::CalleeSaveType(i);
       if (!HasCalleeSaveMethod(type)) {
-        SetCalleeSaveMethod(CreateCalleeSaveMethod(type), type);
+        SetCalleeSaveMethod(CreateCalleeSaveMethod(), type);
       }
     }
   } else {
@@ -1255,7 +1253,7 @@ mirror::ArtMethod* Runtime::CreateResolutionMethod() {
   return method.Get();
 }
 
-mirror::ArtMethod* Runtime::CreateCalleeSaveMethod(CalleeSaveType type) {
+mirror::ArtMethod* Runtime::CreateCalleeSaveMethod() {
   Thread* self = Thread::Current();
   Runtime* runtime = Runtime::Current();
   ClassLinker* class_linker = runtime->GetClassLinker();
