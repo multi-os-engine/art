@@ -29,7 +29,6 @@
      */
 .macro SETUP_SAVE_ALL_CALLEE_SAVE_FRAME rTemp1, rTemp2
     push {r4-r11, lr}                             @ 9 words (36 bytes) of callee saves.
-    .save {r4-r11, lr}
     .cfi_adjust_cfa_offset 36
     .cfi_rel_offset r4, 0
     .cfi_rel_offset r5, 4
@@ -41,10 +40,8 @@
     .cfi_rel_offset r11, 28
     .cfi_rel_offset lr, 32
     vpush {s16-s31}                               @ 16 words (64 bytes) of floats.
-    .pad #64
     .cfi_adjust_cfa_offset 64
     sub sp, #12                                   @ 3 words of space, bottom word will hold Method*
-    .pad #12
     .cfi_adjust_cfa_offset 12
     RUNTIME_CURRENT1 \rTemp1, \rTemp2             @ Load Runtime::Current into rTemp1.
     THIS_LOAD_REQUIRES_READ_BARRIER
@@ -64,7 +61,6 @@
      */
 .macro SETUP_REFS_ONLY_CALLEE_SAVE_FRAME rTemp1, rTemp2
     push {r5-r8, r10-r11, lr}                     @ 7 words of callee saves
-    .save {r5-r8, r10-r11, lr}
     .cfi_adjust_cfa_offset 28
     .cfi_rel_offset r5, 0
     .cfi_rel_offset r6, 4
@@ -74,7 +70,6 @@
     .cfi_rel_offset r11, 20
     .cfi_rel_offset lr, 24
     sub sp, #4                                    @ bottom word will hold Method*
-    .pad #4
     .cfi_adjust_cfa_offset 4
     RUNTIME_CURRENT2 \rTemp1, \rTemp2             @ Load Runtime::Current into rTemp1.
     THIS_LOAD_REQUIRES_READ_BARRIER
@@ -90,6 +85,7 @@
 
 .macro RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     add sp, #4               @ bottom word holds Method*
+    .cfi_adjust_cfa_offset -4
     pop {r5-r8, r10-r11, lr} @ 7 words of callee saves
     .cfi_restore r5
     .cfi_restore r6
@@ -97,7 +93,8 @@
     .cfi_restore r8
     .cfi_restore r10
     .cfi_restore r11
-    .cfi_adjust_cfa_offset -FRAME_SIZE_REFS_ONLY_CALLEE_SAVE
+    .cfi_restore lr
+    .cfi_adjust_cfa_offset -28
 .endm
 
 .macro RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
@@ -111,7 +108,6 @@
      */
 .macro SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_REGISTERS_ONLY
     push {r1-r3, r5-r8, r10-r11, lr}   @ 10 words of callee saves and args.
-    .save {r1-r3, r5-r8, r10-r11, lr}
     .cfi_adjust_cfa_offset 40
     .cfi_rel_offset r1, 0
     .cfi_rel_offset r2, 4
@@ -124,10 +120,8 @@
     .cfi_rel_offset r11, 32
     .cfi_rel_offset lr, 36
     vpush {s0-s15}                     @ 16 words of float args.
-    .pad #64
     .cfi_adjust_cfa_offset 64
     sub sp, #8                         @ 2 words of space, bottom word will hold Method*
-    .pad #8
     .cfi_adjust_cfa_offset 8
     // Ugly compile-time check, but we only have the preprocessor.
 #if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != 40 + 64 + 8)
@@ -166,6 +160,7 @@
     .cfi_restore r8
     .cfi_restore r10
     .cfi_restore r11
+    .cfi_restore lr
     .cfi_adjust_cfa_offset -40
 .endm
 
@@ -269,7 +264,6 @@ ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r3, r12  @ save callee saves in case of GC
     ldr    r3, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     str    r9, [sp, #-16]!               @ expand the frame and pass Thread::Current
-    .pad #16
     .cfi_adjust_cfa_offset 16
     bl     \entrypoint                   @ (field_idx, Object*, new_val, referrer, Thread*)
     add    sp, #16                       @ release out args
@@ -335,7 +329,6 @@ ENTRY \c_name
     mov    r3, r9                         @ pass Thread::Current
     mov    r12, sp
     str    r12, [sp, #-16]!               @ expand the frame and pass SP
-    .pad #16
     .cfi_adjust_cfa_offset 16
     bl     \cxx_name                      @ (method_idx, this, caller, Thread*, SP)
     add    sp, #16                        @ strip the extra frame
@@ -387,8 +380,6 @@ INVOKE_TRAMPOLINE art_quick_invoke_virtual_trampoline_with_access_check, artInvo
      */
 ENTRY art_quick_invoke_stub_internal
     push   {r4, r9, r11, lr}               @ spill regs
-    .save  {r4, r9, r11, lr}
-    .pad #16
     .cfi_adjust_cfa_offset 16
     .cfi_rel_offset r4, 0
     .cfi_rel_offset r9, 4
@@ -435,13 +426,7 @@ ENTRY art_quick_invoke_stub_internal
     strdeq r0, [r9]                        @ store r0/r1 into result pointer
     vstrne d0, [r9]                        @ store s0-s1/d0 into result pointer
 
-    pop    {r4, r9, r11, lr}               @ restore spill regs
-    .cfi_restore r4
-    .cfi_restore r9
-    .cfi_restore r11
-    .cfi_restore lr
-    .cfi_adjust_cfa_offset -16
-    bx     lr
+    pop    {r4, r9, r11, pc}               @ restore spill regs
 END art_quick_invoke_stub_internal
 
     /*
@@ -544,18 +529,15 @@ END art_quick_unlock_object
     .extern artThrowClassCastException
 ENTRY art_quick_check_cast
     push {r0-r1, lr}                    @ save arguments, link register and pad
-    .save {r0-r1, lr}
     .cfi_adjust_cfa_offset 12
     .cfi_rel_offset r0, 0
     .cfi_rel_offset r1, 4
     .cfi_rel_offset lr, 8
     sub sp, #4
-    .pad #4
     .cfi_adjust_cfa_offset 4
     bl artIsAssignableFromCode
     cbz    r0, .Lthrow_class_cast_exception
     add sp, #4
-    .cfi_adjust_cfa_offset -4
     pop {r0-r1, pc}
 .Lthrow_class_cast_exception:
     add sp, #4
@@ -563,6 +545,8 @@ ENTRY art_quick_check_cast
     pop {r0-r1, lr}
     .cfi_restore r0
     .cfi_restore r1
+    .cfi_restore lr
+    .cfi_adjust_cfa_offset -12
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r2, r3  // save all registers as basis for long jump context
     mov r2, r9                      @ pass Thread::Current
     b   artThrowClassCastException  @ (Class*, Class*, Thread*)
@@ -611,7 +595,6 @@ ENTRY art_quick_aput_obj
     blx lr
 .Lcheck_assignability:
     push {r0-r2, lr}             @ save arguments
-    .save {r0-r2, lr}
     .cfi_adjust_cfa_offset 16
     .cfi_rel_offset r0, 0
     .cfi_rel_offset r1, 4
@@ -635,11 +618,7 @@ ENTRY art_quick_aput_obj
     blx lr
 .Lthrow_array_store_exception:
     pop {r0-r2, lr}
-    .cfi_restore r0
-    .cfi_restore r1
-    .cfi_restore r2
-    .cfi_restore lr
-    .cfi_adjust_cfa_offset -16
+    // No need to repeat the restore cfi directives, the ones above apply here.
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r3, ip
     mov r1, r2
     mov r2, r9                     @ pass Thread::Current
@@ -762,7 +741,6 @@ ENTRY art_quick_set64_static
     mov    r2, r1                        @ pass other half of wide argument
     ldr    r1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     str    r9, [sp, #-16]!               @ expand the frame and pass Thread::Current
-    .pad #16
     .cfi_adjust_cfa_offset 16
     bl     artSet64StaticFromCode        @ (field_idx, referrer, new_val, Thread*)
     add    sp, #16                       @ release out args
@@ -787,10 +765,8 @@ ENTRY art_quick_set64_instance
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r12, lr  @ save callee saves in case of GC
     ldr    r12, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     str    r9, [sp, #-12]!               @ expand the frame and pass Thread::Current
-    .pad #12
     .cfi_adjust_cfa_offset 12
     str    r12, [sp, #-4]!               @ expand the frame and pass the referrer
-    .pad #4
     .cfi_adjust_cfa_offset 4
     bl     artSet64InstanceFromCode      @ (field_idx, Object*, new_val, Method* referrer, Thread*)
     add    sp, #16                       @ release out args
@@ -1004,8 +980,11 @@ ENTRY art_quick_generic_jni_trampoline
     bx lr      // ret
 
 .Lentry_error:
+    // Undo the adjustment from above since we only get here if the sp has
+    // not been modified.
+    .cfi_adjust_cfa_offset FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE-FRAME_SIZE_REFS_ONLY_CALLEE_SAVE
     mov sp, r10
-    .cfi_def_cfa_register sp
+    // The cfi_def_cfa_register sp from above applies here, so no need to repeat it.
     mov r9, r11
 .Lexception_in_native:
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
@@ -1056,12 +1035,10 @@ art_quick_instrumentation_exit:
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r2, r3  @ set up frame knowing r2 and r3 must be dead on exit
     mov   r12, sp        @ remember bottom of caller's frame
     push  {r0-r1}        @ save return value
-    .save {r0-r1}
     .cfi_adjust_cfa_offset 8
     .cfi_rel_offset r0, 0
     .cfi_rel_offset r1, 4
     sub   sp, #8         @ space for return value argument
-    .pad #8
     .cfi_adjust_cfa_offset 8
     strd r0, [sp]        @ r0/r1 -> [sp] for fpr_res
     mov   r2, r0         @ pass return value as gpr_res
@@ -1075,10 +1052,7 @@ art_quick_instrumentation_exit:
     mov   r2, r0         @ link register saved by instrumentation
     mov   lr, r1         @ r1 is holding link register if we're to bounce to deoptimize
     pop   {r0, r1}       @ restore return value
-    .cfi_restore r0
-    .cfi_restore r1
     add sp, #32          @ remove callee save frame
-    .cfi_adjust_cfa_offset -32
     bx    r2             @ return
 END art_quick_instrumentation_entry
 
@@ -1114,7 +1088,6 @@ END art_quick_deoptimize
     /* mul-long vAA, vBB, vCC */
 ENTRY art_quick_mul_long
     push    {r9 - r10}
-    .save {r9 - r10}
     .cfi_adjust_cfa_offset 8
     .cfi_rel_offset r9, 0
     .cfi_rel_offset r10, 4
@@ -1125,9 +1098,6 @@ ENTRY art_quick_mul_long
     mov     r0,r9
     mov     r1,r10
     pop     {r9 - r10}
-    .cfi_adjust_cfa_offset -8
-    .cfi_restore r9
-    .cfi_restore r10
     bx      lr
 END art_quick_mul_long
 
@@ -1207,7 +1177,6 @@ END art_quick_ushr_long
      */
 ENTRY art_quick_indexof
     push {r4, r10-r11, lr} @ 4 words of callee saves
-    .save {r4, r10-r11, lr}
     .cfi_adjust_cfa_offset 16
     .cfi_rel_offset r4, 0
     .cfi_rel_offset r10, 4
@@ -1324,7 +1293,6 @@ ENTRY art_quick_string_compareto
 1:                        @ Same strings, return.
 
     push {r4, r7-r12, lr} @ 8 words - keep alignment
-    .save {r4, r7-r12, lr}
     .cfi_adjust_cfa_offset 32
     .cfi_rel_offset r4, 0
     .cfi_rel_offset r7, 4
@@ -1463,9 +1431,7 @@ ENTRY art_quick_fmod
     bl    fmod
     vmov  d0, r0, r1
     add   sp, #4
-    .cfi_adjust_cfa_offset -4
     pop   {pc}
-    .cfi_adjust_cfa_offset -4
 END art_quick_fmod
 
     /* float fmodf(float a, float b) */
@@ -1480,9 +1446,7 @@ ENTRY art_quick_fmodf
     bl    fmodf
     vmov  s0, r0
     add   sp, #4
-    .cfi_adjust_cfa_offset -4
     pop   {pc}
-    .cfi_adjust_cfa_offset -4
 END art_quick_fmod
 
     /* int64_t art_d2l(double d) */
