@@ -234,7 +234,12 @@ fi
 
 if [ "$INTERPRETER" = "y" ]; then
     INT_OPTS="-Xint"
-    COMPILE_FLAGS="${COMPILE_FLAGS} --compiler-filter=interpret-only"
+    if [ "$VERIFY" = "y" ] ; then
+      COMPILE_FLAGS="${COMPILE_FLAGS} --compiler-filter=interpret-only"
+    else
+      COMPILE_FLAGS="${COMPILE_FLAGS} --compiler-filter=verify-none"
+      FLAGS="${FLAGS} -Xverify:none"
+    fi
 fi
 
 JNI_OPTS="-Xjnigreflimit:512 -Xcheck:jni"
