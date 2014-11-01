@@ -14,12 +14,21 @@
  * limitations under the License.
  */
 
-class MirandaClass2 extends MirandaAbstract {
-    public boolean inInterface() {
+/**
+ * Miranda testing.
+ */
+public abstract class MirandaAbstract implements MirandaInterface, MirandaInterface2
+{
+    protected MirandaAbstract() { }
+
+    //public abstract boolean inInterface();
+    //public abstract int inInterface2();
+
+    public boolean inAbstract() {
         return true;
     }
 
-    public int inInterface2() {
-        return 28;
+    public void callMiranda() {
+        System.out.println(inInterface() + " " + inInterface2());
     }
 }
