@@ -27,6 +27,9 @@ namespace art {
 
 class HConstant;
 class HInstruction;
+class Location;
+
+std::ostream& operator<<(std::ostream& os, const Location& location);
 
 /**
  * A Location is an abstraction over the potential location
@@ -369,7 +372,7 @@ class RegisterSet : public ValueObject {
     if (loc.IsRegister()) {
       core_registers_ &= ~(1 << loc.reg());
     } else {
-      DCHECK(loc.IsFpuRegister());
+      DCHECK(loc.IsFpuRegister()) << loc;
       floating_point_registers_ &= ~(1 << loc.reg());
     }
   }
@@ -525,8 +528,6 @@ class LocationSummary : public ArenaObject {
 
   DISALLOW_COPY_AND_ASSIGN(LocationSummary);
 };
-
-std::ostream& operator<<(std::ostream& os, const Location& location);
 
 }  // namespace art
 
