@@ -131,7 +131,7 @@ define create-core-oat-target-rules
   core_dex2oat_dependency := $(DEX2OAT_DEPENDENCY)
 
   ifeq ($(1),optimizing)
-    ifeq ($(3)TARGET_ARCH,arm64)
+    ifeq ($($(3)TARGET_ARCH),arm64)
       # TODO: Enable image generation on arm64 once the backend
       # is on par with other architectures.
       core_compile_options += --compiler-backend=Quick
@@ -196,7 +196,7 @@ $$(core_image_name): $$(TARGET_CORE_DEX_FILES) $$(core_dex2oat_dependency)
 	  --base=$$(LIBART_IMG_TARGET_BASE_ADDRESS) --instruction-set=$$($(3)TARGET_ARCH) \
 	  --instruction-set-features=$$($(3)TARGET_INSTRUCTION_SET_FEATURES) \
 	  --android-root=$$(PRODUCT_OUT)/system --include-patch-information \
-	  $$(PRIVATE_CORE_COMPILE_OPTIONS)
+	  $$(PRIVATE_CORE_COMPILE_OPTIONS) || rm $$(PRIVATE_CORE_OAT_NAME)
 
 $$(core_oat_name): $$(core_image_name)
 
