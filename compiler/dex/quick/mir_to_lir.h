@@ -168,10 +168,11 @@ struct LIR {
   struct {
     unsigned int alias_info:17;  // For Dalvik register disambiguation.
     bool is_nop:1;               // LIR is optimized away.
+    bool safepoint_follows:1;    // offset + size is a safepoint.
     unsigned int size:4;         // Note: size of encoded instruction is in bytes.
     bool use_def_invalid:1;      // If true, masks should not be used.
     unsigned int generation:1;   // Used to track visitation state during fixup pass.
-    unsigned int fixup:8;        // Fixup kind.
+    unsigned int fixup:7;        // Fixup kind.
   } flags;
   union {
     UseDefMasks m;               // Use & Def masks used during optimization.
@@ -460,6 +461,14 @@ class Mir2Lir : public Backend {
       bool first_in_pair;
     };
 
+    // Represents visible Dalvik state
+    ResourceMask GetVisibleStateMask() {
+      return visible_state_mask_;
+    }
+    void SetVisibleStateMask(ResourceMask visible_state_mask) {
+      visible_state_mask_ = visible_state_mask;
+    }
+
     //
     // Slow paths.  This object is used generate a sequence of code that is executed in the
     // slow path.  For example, resolving a string or class is slow as it will only be executed
@@ -634,7 +643,6 @@ class Mir2Lir : public Backend {
     virtual void Materialize();
     virtual CompiledMethod* GetCompiledMethod();
     void MarkSafepointPC(LIR* inst);
-    void MarkSafepointPCAfter(LIR* after);
     void SetupResourceMasks(LIR* lir);
     void SetMemRefType(LIR* lir, bool is_load, int mem_type);
     void AnnotateDalvikRegAccess(LIR* lir, int reg_id, bool is_load, bool is64bit);
@@ -1768,6 +1776,9 @@ class Mir2Lir : public Backend {
     // (i.e. 8 bytes on 32-bit arch, 16 bytes on 64-bit arch) and we use ResourceMaskCache
     // to deduplicate the masks.
     ResourceMaskCache mask_cache_;
+
+    // A use-def mask representing register and memory resources mapped to Dalvik state.
+    ResourceMask visible_state_mask_;
 
   protected:
     // ABI support

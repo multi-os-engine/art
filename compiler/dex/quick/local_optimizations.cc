@@ -471,9 +471,7 @@ void Mir2Lir::ApplyLoadHoisting(LIR* head_lir, LIR* tail_lir) {
         }
 
         // Don't look across a barrier label
-        if ((prev_lir->opcode == kPseudoTargetLabel) ||
-            (prev_lir->opcode == kPseudoSafepointPC) ||
-            (prev_lir->opcode == kPseudoBarrier)) {
+        if ((prev_lir->opcode == kPseudoTargetLabel) || (prev_lir->opcode == kPseudoBarrier)) {
           break;
         }
 

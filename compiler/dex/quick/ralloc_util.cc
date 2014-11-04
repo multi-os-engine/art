@@ -107,19 +107,35 @@ Mir2Lir::RegisterPool::RegisterPool(Mir2Lir* m2l, ArenaAllocator* arena,
     m2l_->MarkInUse(reg);
   }
 
+  // Set up visible state resource masks, starting with all bits set.
+  ResourceMask state_mask = ResourceMask::AllBits();
+  // Clear out the memory bits, and then add back vreg and heap.
+  state_mask.ClearBits(kEncodeMem);
+  state_mask.SetBit(ResourceMask::kDalvikReg);
+  state_mask.SetBit(ResourceMask::kHeapRef);
+  // Clear state bits with no Dalvik counterparts.
+  state_mask.ClearBits(ResourceMask::Bit(ResourceMask::kFPStatus));
+  state_mask.ClearBits(ResourceMask::Bit(ResourceMask::kCCode));
+
   // Mark temp regs - all others not in use can be used for promotion
   for (RegStorage reg : core_temps) {
     m2l_->MarkTemp(reg);
+    state_mask.ClearBits(m2l_->GetRegMaskCommon(reg));  // Remove temp from visible state.
   }
   for (RegStorage reg : core64_temps) {
     m2l_->MarkTemp(reg);
+    state_mask.ClearBits(m2l_->GetRegMaskCommon(reg));  // Remove temp from visible state.
   }
   for (RegStorage reg : sp_temps) {
     m2l_->MarkTemp(reg);
+    state_mask.ClearBits(m2l_->GetRegMaskCommon(reg));  // Remove temp from visible state.
   }
   for (RegStorage reg : dp_temps) {
     m2l_->MarkTemp(reg);
+    state_mask.ClearBits(m2l_->GetRegMaskCommon(reg));  // Remove temp from visible state.
   }
+
+  m2l_->SetVisibleStateMask(state_mask);
 
   // Add an entry for InvalidReg with zero'd mask.
   RegisterInfo* invalid_reg = new (arena) RegisterInfo(RegStorage::InvalidReg(), kEncodeNone);

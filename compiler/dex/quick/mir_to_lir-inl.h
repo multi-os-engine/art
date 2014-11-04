@@ -53,8 +53,7 @@ inline LIR* Mir2Lir::RawLIR(DexOffset dalvik_offset, int opcode, int op0,
   insn->operands[4] = op4;
   insn->target = target;
   SetupResourceMasks(insn);
-  if ((opcode == kPseudoTargetLabel) || (opcode == kPseudoSafepointPC) ||
-      (opcode == kPseudoExportedPC)) {
+  if ((opcode == kPseudoTargetLabel) || (opcode == kPseudoExportedPC)) {
     // Always make labels scheduling barriers
     DCHECK(!insn->flags.use_def_invalid);
     insn->u.m.use_mask = insn->u.m.def_mask = &kEncodeAll;
@@ -206,6 +205,7 @@ inline void Mir2Lir::SetupResourceMasks(LIR* lir) {
    * turn will trash everything.
    */
   if (flags & IS_BRANCH) {
+    // TODO: may be able to relax this in some situations.
     lir->u.m.def_mask = lir->u.m.use_mask = &kEncodeAll;
     return;
   }

@@ -82,23 +82,11 @@ bool Mir2Lir::IsInexpensiveConstant(RegLocation rl_src) {
 
 void Mir2Lir::MarkSafepointPC(LIR* inst) {
   DCHECK(!inst->flags.use_def_invalid);
-  inst->u.m.def_mask = &kEncodeAll;
-  LIR* safepoint_pc = NewLIR0(kPseudoSafepointPC);
-  DCHECK(safepoint_pc->u.m.def_mask->Equals(kEncodeAll));
-}
-
-void Mir2Lir::MarkSafepointPCAfter(LIR* after) {
-  DCHECK(!after->flags.use_def_invalid);
-  after->u.m.def_mask = &kEncodeAll;
-  // As NewLIR0 uses Append, we need to create the LIR by hand.
-  LIR* safepoint_pc = RawLIR(current_dalvik_offset_, kPseudoSafepointPC);
-  if (after->next == nullptr) {
-    DCHECK_EQ(after, last_lir_insn_);
-    AppendLIR(safepoint_pc);
-  } else {
-    InsertLIRAfter(after, safepoint_pc);
+  inst->u.m.def_mask = mask_cache_.GetMask(inst->u.m.use_mask->Union(GetVisibleStateMask()));
+  inst->flags.safepoint_follows = true;
+  if (inst->flags.fixup == kFixupNone) {
+    inst->flags.fixup = kFixupLabel;   // Needs fixup to track offset during assembly.
   }
-  DCHECK(safepoint_pc->u.m.def_mask->Equals(kEncodeAll));
 }
 
 /* Remove a LIR from the list. */
@@ -238,9 +226,6 @@ void Mir2Lir::DumpLIRInsn(LIR* lir, unsigned char* base_addr) {
       break;
     case kPseudoSuspendTarget:
       LOG(INFO) << "LS" << reinterpret_cast<void*>(lir) << ":";
-      break;
-    case kPseudoSafepointPC:
-      LOG(INFO) << "LsafepointPC_0x" << std::hex << lir->offset << "_" << lir->dalvik_offset << ":";
       break;
     case kPseudoExportedPC:
       LOG(INFO) << "LexportedPC_0x" << std::hex << lir->offset << "_" << lir->dalvik_offset << ":";
@@ -660,13 +645,14 @@ void Mir2Lir::CreateMappingTables() {
   uint32_t dex2pc_dalvik_offset = 0u;
   for (LIR* tgt_lir = first_lir_insn_; tgt_lir != nullptr; tgt_lir = NEXT_LIR(tgt_lir)) {
     pc2dex_src_entries++;
-    if (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC)) {
+    if (!tgt_lir->flags.is_nop && (tgt_lir->flags.safepoint_follows)) {
+      uint32_t safepoint_offset = tgt_lir->offset + tgt_lir->flags.size;
       pc2dex_entries += 1;
-      DCHECK(pc2dex_offset <= tgt_lir->offset);
-      pc2dex_data_size += UnsignedLeb128Size(tgt_lir->offset - pc2dex_offset);
+      DCHECK(pc2dex_offset <= safepoint_offset);
+      pc2dex_data_size += UnsignedLeb128Size(safepoint_offset - pc2dex_offset);
       pc2dex_data_size += SignedLeb128Size(static_cast<int32_t>(tgt_lir->dalvik_offset) -
                                            static_cast<int32_t>(pc2dex_dalvik_offset));
-      pc2dex_offset = tgt_lir->offset;
+      pc2dex_offset = safepoint_offset;
       pc2dex_dalvik_offset = tgt_lir->dalvik_offset;
     }
     if (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoExportedPC)) {
@@ -703,12 +689,13 @@ void Mir2Lir::CreateMappingTables() {
       src_mapping_table_.push_back(SrcMapElem({tgt_lir->offset,
               static_cast<int32_t>(tgt_lir->dalvik_offset)}));
     }
-    if (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC)) {
-      DCHECK(pc2dex_offset <= tgt_lir->offset);
-      write_pos = EncodeUnsignedLeb128(write_pos, tgt_lir->offset - pc2dex_offset);
+    if (!tgt_lir->flags.is_nop && tgt_lir->flags.safepoint_follows) {
+      uint32_t safepoint_offset = tgt_lir->offset + tgt_lir->flags.size;
+      DCHECK(pc2dex_offset <= safepoint_offset);
+      write_pos = EncodeUnsignedLeb128(write_pos, safepoint_offset - pc2dex_offset);
       write_pos = EncodeSignedLeb128(write_pos, static_cast<int32_t>(tgt_lir->dalvik_offset) -
                                      static_cast<int32_t>(pc2dex_dalvik_offset));
-      pc2dex_offset = tgt_lir->offset;
+      pc2dex_offset = safepoint_offset;
       pc2dex_dalvik_offset = tgt_lir->dalvik_offset;
     }
     if (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoExportedPC)) {
@@ -734,8 +721,8 @@ void Mir2Lir::CreateMappingTables() {
     auto it = table.PcToDexBegin();
     auto it2 = table.DexToPcBegin();
     for (LIR* tgt_lir = first_lir_insn_; tgt_lir != nullptr; tgt_lir = NEXT_LIR(tgt_lir)) {
-      if (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC)) {
-        CHECK_EQ(tgt_lir->offset, it.NativePcOffset());
+      if (!tgt_lir->flags.is_nop && tgt_lir->flags.safepoint_follows) {
+        CHECK_EQ(tgt_lir->offset + tgt_lir->flags.size, it.NativePcOffset());
         CHECK_EQ(tgt_lir->dalvik_offset, it.DexPc());
         ++it;
       }

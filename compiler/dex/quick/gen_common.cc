@@ -187,12 +187,13 @@ void Mir2Lir::MarkPossibleNullPointerException(int opt_flags) {
   }
 }
 
+
 void Mir2Lir::MarkPossibleNullPointerExceptionAfter(int opt_flags, LIR* after) {
   if (cu_->compiler_driver->GetCompilerOptions().GetImplicitNullChecks()) {
     if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
       return;
     }
-    MarkSafepointPCAfter(after);
+    MarkSafepointPC(after);
   }
 }
 
