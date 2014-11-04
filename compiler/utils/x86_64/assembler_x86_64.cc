@@ -1205,7 +1205,6 @@ void X86_64Assembler::cdq() {
 
 void X86_64Assembler::idivl(CpuRegister reg) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
-  EmitOptionalRex32(reg);
   EmitUint8(0xF7);
   EmitUint8(0xF8 | reg.LowBits());
 }
