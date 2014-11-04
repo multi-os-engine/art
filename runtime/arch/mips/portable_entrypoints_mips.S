@@ -122,9 +122,9 @@ ENTRY art_portable_invoke_stub
     jr    $ra
     sw    $v1, 4($t0)           # store the other half of the result
 1:
-    s.s   $f0, 0($t0)           # store floating point result
+    SDu($f0, $f1, 0, $t0, $t1)  # store floating point result
     jr    $ra
-    s.s   $f1, 4($t0)           # store other half of floating point result
+    nop
 END art_portable_invoke_stub
 
 UNIMPLEMENTED art_portable_resolution_trampoline

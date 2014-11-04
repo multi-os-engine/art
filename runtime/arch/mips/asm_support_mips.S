@@ -66,5 +66,48 @@
     END \name
 .endm
 
+#if defined(__mips_isa_rev) && __mips_isa_rev > 2
+  /* mips32r5 & mips32r6 have mthc1 op, and have 64-bit fp regs,
+     and in FPXX abi we avoid referring to odd-numbered fp regs */
+
+/* LDu: Load 64-bit float-point value to float reg feven,
+   from unaligned (mod-4-aligned) mem location disp(base) */
+#define LDu(feven,fodd,disp,base,temp) \
+  l.s feven, disp(base) ; \
+  lw  temp, disp+4(base) ; \
+  mthc1 temp, feven
+
+/* SDu: Store 64-bit float-point value from float reg feven,
+   to unaligned (mod-4-aligned) mem location disp(base) */
+#define SDu(feven,fodd,disp,base,temp) \
+  mfhc1 temp, feven ; \
+  s.s feven, disp(base) ; \
+  sw  temp, disp+4(base)
+
+/* MTD: Move double, from general regpair (reven,rodd)
+        to float regpair (feven,fodd) */
+#define MTD(reven,rodd,feven,fodd) \
+  mtc1  reven, feven ; \
+  mthc1 rodd, feven
+
+#else
+  /* mips32r1 has no mthc1 op;
+     mips32r1 and mips32r2 use FR=0 mode with 32-bit fp regs,
+     and always hold doubles as (feven, fodd) fp reg pair */
+
+#define LDu(feven,fodd,disp,base,temp) \
+  l.s feven, disp(base) ; \
+  l.s fodd,  disp+4(base)
+
+#define SDu(feven,fodd,disp,base,temp) \
+  s.s feven, disp(base) ; \
+  s.s fodd,  disp+4(base)
+
+#define MTD(reven,rodd,feven,fodd) \
+  mtc1  reven, feven ; \
+  mtc1  rodd, fodd
+
+#endif  /* mips_isa_rev */
+
 
 #endif  // ART_RUNTIME_ARCH_MIPS_ASM_SUPPORT_MIPS_S_
