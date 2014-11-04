@@ -214,6 +214,7 @@ size_t DlMallocSpace::FreeList(Thread* self, size_t num_ptrs, mirror::Object** p
 }
 
 // Callback from dlmalloc when it needs to increase the footprint
+extern "C" void* art_heap_morecore(void* mspace, intptr_t increment);
 extern "C" void* art_heap_morecore(void* mspace, intptr_t increment) {
   Heap* heap = Runtime::Current()->GetHeap();
   DlMallocSpace* dlmalloc_space = heap->GetDlMallocSpace();

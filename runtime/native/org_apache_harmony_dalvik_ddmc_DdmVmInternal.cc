@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "native_register_methods.h"
+
 #include "base/logging.h"
 #include "base/mutex.h"
 #include "debugger.h"

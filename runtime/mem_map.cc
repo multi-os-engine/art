@@ -28,7 +28,12 @@
 #endif
 
 #include "base/stringprintf.h"
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
 #include "ScopedFd.h"
+#pragma GCC diagnostic pop
+
 #include "thread-inl.h"
 #include "utils.h"
 
@@ -61,16 +66,16 @@ static std::ostream& operator<<(
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const MemMap::Maps& mem_maps) {
-  os << "MemMap:" << std::endl;
-  for (auto it = mem_maps.begin(); it != mem_maps.end(); ++it) {
-    void* base = it->first;
-    MemMap* map = it->second;
-    CHECK_EQ(base, map->BaseBegin());
-    os << *map << std::endl;
-  }
-  return os;
-}
+// static std::ostream& operator<<(std::ostream& os, const MemMap::Maps& mem_maps) {
+//   os << "MemMap:" << std::endl;
+//   for (auto it = mem_maps.begin(); it != mem_maps.end(); ++it) {
+//     void* base = it->first;
+//     MemMap* map = it->second;
+//     CHECK_EQ(base, map->BaseBegin());
+//     os << *map << std::endl;
+//   }
+//   return os;
+// }
 
 MemMap::Maps* MemMap::maps_ = nullptr;
 

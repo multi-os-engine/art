@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "native_register_methods.h"
+
 #include <stdlib.h>
 
 #include "debugger.h"

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "native_register_methods.h"
+
 #include "gc/heap.h"
 #include "gc/reference_processor.h"
 #include "jni_internal.h"

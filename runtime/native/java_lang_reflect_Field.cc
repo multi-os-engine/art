@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "native_register_methods.h"
+
 #include "class_linker.h"
 #include "class_linker-inl.h"
 #include "common_throws.h"

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "native_register_methods.h"
+
 #include "common_throws.h"
 #include "jni_internal.h"
 #include "mirror/string-inl.h"

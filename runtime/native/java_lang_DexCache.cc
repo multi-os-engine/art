@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "native_register_methods.h"
+
 #include "dex_file.h"
 #include "jni_internal.h"
 #include "mirror/dex_cache.h"
