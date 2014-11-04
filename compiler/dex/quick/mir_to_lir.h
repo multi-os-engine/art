@@ -241,8 +241,8 @@ class Mir2Lir : public Backend {
     };
 
     /*
-     * Data structure tracking the mapping detween a Dalvik value (32 or 64 bits)
-     * and native register storage.  The primary purpose is to reuse previuosly
+     * Data structure tracking the mapping between a Dalvik value (32 or 64 bits)
+     * and native register storage.  The primary purpose is to reuse previously
      * loaded values, if possible, and otherwise to keep the value in register
      * storage as long as possible.
      *
@@ -641,6 +641,18 @@ class Mir2Lir : public Backend {
     bool MethodIsTrueLeaf() { return call_targets_ == kNoCallTargets; }
 
     /**
+     * @brief Called to set the compilation mode.
+     * @details This function is called before the initialization of the register allocator to
+     *   choose the most appropriate #CompilationMode for the current method. Possible modes are
+     *   CompilationMode::kNormal for regular methods, CompilationMode::kSpecial for methods
+     *   recognized as "special" by #DefFileMethodInliner or CompilationMode::kLeaf for "true"
+     *   leaf methods (i.e. methods that are only allowed to call the suspend check or the stack
+     *   overflow handlers). The compilation mode will determine the behaviour of the register
+     *   allocator and possibly other parts of the compiler.
+     */
+    void ChooseCompilationMode();
+
+    /**
      * @brief Use to mark generation of LIR nodes that implicitly assume the method is non-leaf.
      * @details This can be used for debugging, to guarantee that methods that are predicted to
      *   be true-leaves really are true-leaves.
@@ -673,7 +685,7 @@ class Mir2Lir : public Backend {
     int ComputeFrameSize();
     virtual void Materialize();
     virtual CompiledMethod* GetCompiledMethod();
-    void MarkSafepointPC(LIR* inst);
+    void MarkSafepointPC(LIR* inst, bool leaf_safe = false);
     void MarkSafepointPCAfter(LIR* after);
     void SetupResourceMasks(LIR* lir);
     void SetMemRefType(LIR* lir, bool is_load, int mem_type);
@@ -815,13 +827,22 @@ class Mir2Lir : public Backend {
      */
     virtual RegLocation EvalLoc(RegLocation loc, int reg_class, bool update);
 
+    /**
+     * @brief Perform argument promotion for leaf methods.
+     */
+    virtual void DoLeafArgsPromotion() {
+      LOG(FATAL) << "DoLeafArgsPromotion is not implemented for this backend";
+    }
+
     void CountRefs(RefCounts* core_counts, RefCounts* fp_counts, size_t num_regs);
     void DumpCounts(const RefCounts* arr, int size, const char* msg);
     void DoPromotion();
     int VRegOffset(int v_reg);
     int SRegOffset(int s_reg);
     RegLocation GetReturnWide(RegisterClass reg_class);
+    RegLocation GetReturnNoClobberWide(RegisterClass reg_class);
     RegLocation GetReturn(RegisterClass reg_class);
+    RegLocation GetReturnNoClobber(RegisterClass reg_class);
     RegisterInfo* GetRegInfo(RegStorage reg);
 
     // Shared by all targets - implemented in gen_common.cc.
@@ -842,7 +863,7 @@ class Mir2Lir : public Backend {
     LIR* GenNullCheck(RegStorage reg);
     void MarkPossibleNullPointerException(int opt_flags);
     void MarkPossibleNullPointerExceptionAfter(int opt_flags, LIR* after);
-    void MarkPossibleStackOverflowException();
+    void MarkPossibleStackOverflowException(bool leaf_safe = false);
     void ForceImplicitNullCheck(RegStorage reg, int opt_flags);
     LIR* GenNullCheck(RegStorage m_reg, int opt_flags);
     LIR* GenExplicitNullCheck(RegStorage m_reg, int opt_flags);
@@ -1730,6 +1751,13 @@ class Mir2Lir : public Backend {
       kCheckNotFP
     };
 
+    enum class CompilationMode {  // private
+      kUnset,    // Not set, yet.
+      kSpecial,  // Compiling special method.
+      kLeaf,     // Compiling leaf method.
+      kNormal    // Compiling ordinary method (none of the above).
+    };
+
     /**
      * Check whether a reg storage seems well-formed, that is, if a reg storage is valid,
      * that it has the expected form for the flags.
@@ -1800,11 +1828,19 @@ class Mir2Lir : public Backend {
     std::vector<uint8_t> native_gc_map_;
     ArenaVector<LinkerPatch> patches_;
     CallTargets call_targets_;
+    CompilationMode compilation_mode_;
     int num_core_spills_;
     int num_fp_spills_;
     int frame_size_;
-    unsigned int core_spill_mask_;
-    unsigned int fp_spill_mask_;
+
+    // Core and Fp registers that the generated method spills-into/unspills-from its stack frame.
+    uint32_t core_spill_mask_;
+    uint32_t fp_spill_mask_;
+
+    // Core and Fp registers that generated methods are expected to preserve.
+    uint32_t core_callee_save_mask_;
+    uint32_t fp_callee_save_mask_;
+
     LIR* first_lir_insn_;
     LIR* last_lir_insn_;
 

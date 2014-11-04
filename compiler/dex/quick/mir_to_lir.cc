@@ -493,21 +493,33 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::RETURN_OBJECT:
       DCHECK(rl_src[0].ref);
       FALLTHROUGH_INTENDED;
-    case Instruction::RETURN:
+    case Instruction::RETURN: {
       if (!kLeafOptimization || !mir_graph_->MethodIsLeaf()) {
         GenSuspendTest(opt_flags);
       }
       DCHECK_EQ(LocToRegClass(rl_src[0]), ShortyToRegClass(cu_->shorty[0]));
-      StoreValue(GetReturn(LocToRegClass(rl_src[0])), rl_src[0]);
-      break;
 
-    case Instruction::RETURN_WIDE:
+      // If compiling a leaf method, do not clobber: the register may not be a temp.
+      // This does not matter, as we are going to return immediately.
+      RegLocation rl_ret = (UNLIKELY(compilation_mode_ == CompilationMode::kLeaf)) ?
+          GetReturnNoClobber(LocToRegClass(rl_src[0])) : GetReturn(LocToRegClass(rl_src[0]));
+      StoreValue(rl_ret, rl_src[0]);
+      break;
+    }
+
+    case Instruction::RETURN_WIDE: {
       if (!kLeafOptimization || !mir_graph_->MethodIsLeaf()) {
         GenSuspendTest(opt_flags);
       }
       DCHECK_EQ(LocToRegClass(rl_src[0]), ShortyToRegClass(cu_->shorty[0]));
-      StoreValueWide(GetReturnWide(LocToRegClass(rl_src[0])), rl_src[0]);
+      // If compiling a leaf method, do not clobber: the register may not be a temp.
+      // This does not matter, as we are going to return immediately.
+      RegLocation rl_ret = (UNLIKELY(compilation_mode_ == CompilationMode::kLeaf)) ?
+          GetReturnNoClobberWide(LocToRegClass(rl_src[0])) :
+          GetReturnWide(LocToRegClass(rl_src[0]));
+      StoreValueWide(rl_ret, rl_src[0]);
       break;
+    }
 
     case Instruction::MOVE_RESULT_WIDE:
       StoreValueWide(rl_dest, GetReturnWide(LocToRegClass(rl_dest)));

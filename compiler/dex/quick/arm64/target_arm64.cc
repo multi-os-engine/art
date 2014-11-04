@@ -27,6 +27,7 @@
 
 namespace art {
 
+static constexpr uint32_t arm64_core_callee_save_mask = UINT32_C(0x3ff00000);
 static constexpr RegStorage core_regs_arr[] =
     {rs_w0, rs_w1, rs_w2, rs_w3, rs_w4, rs_w5, rs_w6, rs_w7,
      rs_w8, rs_w9, rs_w10, rs_w11, rs_w12, rs_w13, rs_w14, rs_w15,
@@ -39,6 +40,7 @@ static constexpr RegStorage core64_regs_arr[] =
      rs_x16, rs_x17, rs_x18, rs_x19, rs_x20, rs_x21, rs_x22, rs_x23,
      rs_x24, rs_x25, rs_x26, rs_x27, rs_x28, rs_x29, rs_x30, rs_x31,
      rs_xzr};
+static constexpr uint32_t arm64_fp_callee_save_mask = UINT32_C(0x0000ff00);
 static constexpr RegStorage sp_regs_arr[] =
     {rs_f0, rs_f1, rs_f2, rs_f3, rs_f4, rs_f5, rs_f6, rs_f7,
      rs_f8, rs_f9, rs_f10, rs_f11, rs_f12, rs_f13, rs_f14, rs_f15,
@@ -55,22 +57,34 @@ static constexpr RegStorage reserved_regs_arr[] =
     {rs_wSUSPEND, rs_wSELF, rs_wsp, rs_wLR, rs_wzr};
 static constexpr RegStorage reserved64_regs_arr[] =
     {rs_xSUSPEND, rs_xSELF, rs_sp, rs_xLR, rs_xzr};
-static constexpr RegStorage core_temps_arr[] =
+// Temporary registers for non-leaf methods.
+static constexpr RegStorage nonleaf_core_temps_arr[] =
     {rs_w0, rs_w1, rs_w2, rs_w3, rs_w4, rs_w5, rs_w6, rs_w7,
      rs_w8, rs_w9, rs_w10, rs_w11, rs_w12, rs_w13, rs_w14, rs_w15, rs_w16,
      rs_w17};
-static constexpr RegStorage core64_temps_arr[] =
+static constexpr RegStorage nonleaf_core64_temps_arr[] =
     {rs_x0, rs_x1, rs_x2, rs_x3, rs_x4, rs_x5, rs_x6, rs_x7,
      rs_x8, rs_x9, rs_x10, rs_x11, rs_x12, rs_x13, rs_x14, rs_x15, rs_x16,
      rs_x17};
-static constexpr RegStorage sp_temps_arr[] =
+static constexpr RegStorage nonleaf_sp_temps_arr[] =
     {rs_f0, rs_f1, rs_f2, rs_f3, rs_f4, rs_f5, rs_f6, rs_f7,
      rs_f16, rs_f17, rs_f18, rs_f19, rs_f20, rs_f21, rs_f22, rs_f23,
      rs_f24, rs_f25, rs_f26, rs_f27, rs_f28, rs_f29, rs_f30, rs_f31};
-static constexpr RegStorage dp_temps_arr[] =
+static constexpr RegStorage nonleaf_dp_temps_arr[] =
     {rs_d0, rs_d1, rs_d2, rs_d3, rs_d4, rs_d5, rs_d6, rs_d7,
      rs_d16, rs_d17, rs_d18, rs_d19, rs_d20, rs_d21, rs_d22, rs_d23,
      rs_d24, rs_d25, rs_d26, rs_d27, rs_d28, rs_d29, rs_d30, rs_d31};
+// Temporary registers for leaf methods.
+// For leaf methods, we can safely use caller-save registers as promotion targets.
+// We keep 5 core registers and 5 fp registers for temps. This should be enough.
+static constexpr RegStorage leaf_core_temps_arr[] =
+    {rs_w12, rs_w13, rs_w14, rs_w15, rs_w16, rs_w17};
+static constexpr RegStorage leaf_core64_temps_arr[] =
+    {rs_x12, rs_x13, rs_x14, rs_x15, rs_x16, rs_x17};
+static constexpr RegStorage leaf_sp_temps_arr[] =
+    {rs_f27, rs_f28, rs_f29, rs_f30, rs_f31};
+static constexpr RegStorage leaf_dp_temps_arr[] =
+    {rs_d27, rs_d28, rs_d29, rs_d30, rs_d31};
 
 static constexpr ArrayRef<const RegStorage> core_regs(core_regs_arr);
 static constexpr ArrayRef<const RegStorage> core64_regs(core64_regs_arr);
@@ -78,10 +92,14 @@ static constexpr ArrayRef<const RegStorage> sp_regs(sp_regs_arr);
 static constexpr ArrayRef<const RegStorage> dp_regs(dp_regs_arr);
 static constexpr ArrayRef<const RegStorage> reserved_regs(reserved_regs_arr);
 static constexpr ArrayRef<const RegStorage> reserved64_regs(reserved64_regs_arr);
-static constexpr ArrayRef<const RegStorage> core_temps(core_temps_arr);
-static constexpr ArrayRef<const RegStorage> core64_temps(core64_temps_arr);
-static constexpr ArrayRef<const RegStorage> sp_temps(sp_temps_arr);
-static constexpr ArrayRef<const RegStorage> dp_temps(dp_temps_arr);
+static constexpr ArrayRef<const RegStorage> nonleaf_core_temps(nonleaf_core_temps_arr);
+static constexpr ArrayRef<const RegStorage> nonleaf_core64_temps(nonleaf_core64_temps_arr);
+static constexpr ArrayRef<const RegStorage> nonleaf_sp_temps(nonleaf_sp_temps_arr);
+static constexpr ArrayRef<const RegStorage> nonleaf_dp_temps(nonleaf_dp_temps_arr);
+static constexpr ArrayRef<const RegStorage> leaf_core_temps(leaf_core_temps_arr);
+static constexpr ArrayRef<const RegStorage> leaf_core64_temps(leaf_core64_temps_arr);
+static constexpr ArrayRef<const RegStorage> leaf_sp_temps(leaf_sp_temps_arr);
+static constexpr ArrayRef<const RegStorage> leaf_dp_temps(leaf_dp_temps_arr);
 
 RegLocation Arm64Mir2Lir::LocCReturn() {
   return a64_loc_c_return;
@@ -586,7 +604,14 @@ RegisterClass Arm64Mir2Lir::RegClassForFieldLoadStore(OpSize size, bool is_volat
 
 Arm64Mir2Lir::Arm64Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
     : Mir2Lir(cu, mir_graph, arena),
+      frame_allocated_(false),
       call_method_insns_(arena->Adapter()) {
+  call_method_insns_.reserve(100);
+
+  // Change the callee save masks to avoid spilling caller-save registers in leaf methods.
+  core_callee_save_mask_ = arm64_core_callee_save_mask;
+  fp_callee_save_mask_ = arm64_fp_callee_save_mask;
+
   // Sanity check - make sure encoding map lines up.
   for (int i = 0; i < kA64Last; i++) {
     DCHECK_EQ(UNWIDE(Arm64Mir2Lir::EncodingMap[i].opcode), i)
@@ -602,9 +627,21 @@ Mir2Lir* Arm64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph
 }
 
 void Arm64Mir2Lir::CompilerInitializeRegAlloc() {
-  reg_pool_.reset(new (arena_) RegisterPool(this, arena_, core_regs, core64_regs, sp_regs, dp_regs,
-                                            reserved_regs, reserved64_regs,
-                                            core_temps, core64_temps, sp_temps, dp_temps));
+  if (compilation_mode_ == CompilationMode::kLeaf) {
+    // For leaf methods, Caller-save registers can safely be used as promotion targets.
+    reg_pool_.reset(new (arena_) RegisterPool(this, arena_, core_regs, core64_regs,
+                                              sp_regs, dp_regs,
+                                              reserved_regs, reserved64_regs,
+                                              leaf_core_temps, leaf_core64_temps,
+                                              leaf_sp_temps, leaf_dp_temps));
+  } else {
+    CHECK(compilation_mode_ != CompilationMode::kUnset);
+    reg_pool_.reset(new (arena_) RegisterPool(this, arena_, core_regs, core64_regs,
+                                              sp_regs, dp_regs,
+                                              reserved_regs, reserved64_regs,
+                                              nonleaf_core_temps, nonleaf_core64_temps,
+                                              nonleaf_sp_temps, nonleaf_dp_temps));
+  }
 
   // Target-specific adjustments.
   // Alias single precision float registers to corresponding double registers.
@@ -901,6 +938,14 @@ RegStorage Arm64Mir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
 }
 
 
+void Arm64Mir2Lir::FlushIns(RegLocation* arg_locs, RegLocation rl_method) {
+  if (compilation_mode_ == CompilationMode::kLeaf) {
+    LeafFlushIns(arg_locs, rl_method);
+  } else {
+    NonLeafFlushIns(arg_locs, rl_method);
+  }
+}
+
 /*
  * If there are any ins passed in registers that have not been promoted
  * to a callee-save register, flush them to the frame.  Perform initial
@@ -909,7 +954,7 @@ RegStorage Arm64Mir2Lir::GetArgMappingToPhysicalReg(int arg_num) {
  * ArgLocs is an array of location records describing the incoming arguments
  * with one location record per word of argument.
  */
-void Arm64Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
+void Arm64Mir2Lir::NonLeafFlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
   int num_gpr_used = 1;
   int num_fpr_used = 0;
 
@@ -995,6 +1040,86 @@ void Arm64Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
     //      if (v_map->fp_location == kLocPhysReg) {
     //        LoadWordDisp(TargetReg(kSp), SRegOffset(start_vreg + i), RegStorage::Solo32(v_map->fp_reg));
     //      }
+  }
+}
+
+void Arm64Mir2Lir::DoLeafArgsPromotion() {
+  // Always promote the method register, which contains StackReference<mirror::ArtMethod>.
+  RegLocation* rl_method = &mir_graph_->reg_location_[mir_graph_->GetMethodSReg()];
+  RegStorage method_reg = TargetReg(kArg0, kRef);
+  RecordCorePromotion(method_reg, rl_method->s_reg_low);
+  rl_method->reg = method_reg;
+  rl_method->location = kLocPhysReg;
+  rl_method->home = true;
+
+  uint32_t num_in_vregs = mir_graph_->GetNumOfInVRs();
+  if (num_in_vregs == 0) {
+    return;
+  }
+
+  // Now promote the argument registers.
+  int num_gpr_used = 1;
+  int num_fpr_used = 0;
+  RegLocation* vreg_locs = &mir_graph_->reg_location_[0];
+  int start_vreg = mir_graph_->GetFirstInVR();
+  for (uint32_t i = 0U; i < num_in_vregs; i++) {
+    int vreg = start_vreg + i;
+    RegLocation* t_loc = &vreg_locs[vreg];
+    OpSize op_size;
+    RegStorage reg = GetArgPhysicalReg(t_loc, &num_gpr_used, &num_fpr_used, &op_size);
+    if (reg.Valid()) {
+      if (t_loc->fp) {
+        RecordFpPromotion(reg, t_loc->s_reg_low);
+      } else {
+        RecordCorePromotion(reg, t_loc->s_reg_low);
+      }
+      t_loc->reg = reg;
+      t_loc->location = kLocPhysReg;
+      t_loc->home = true;
+    }
+    if (t_loc->wide) {
+      // Increment i to skip the next one.
+      i++;
+    }
+  }
+}
+
+void Arm64Mir2Lir::LeafFlushIns(RegLocation* arg_locs, RegLocation rl_method) {
+  UNUSED(rl_method);
+
+  // Promote all arguments to the corresponding caller-save registers.
+  int num_gpr_used = 1;
+  int num_fpr_used = 0;
+
+  // No need to store the method reference to the stack frame: this is a true leaf.
+
+  if (mir_graph_->GetNumOfInVRs() == 0) {
+    return;
+  }
+
+  // Handle dalvik registers.
+  ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
+  int start_vreg = mir_graph_->GetFirstInVR();
+  for (uint32_t i = 0; i < mir_graph_->GetNumOfInVRs(); i++) {
+    RegLocation* t_loc = &arg_locs[i];
+    OpSize op_size;
+    RegStorage reg = GetArgPhysicalReg(t_loc, &num_gpr_used, &num_fpr_used, &op_size);
+
+    if (!reg.Valid()) {
+      // If arriving in frame & promoted.
+      if (t_loc->location == kLocPhysReg) {
+        if (t_loc->ref) {
+          LoadRefDisp(TargetPtrReg(kSp), SRegOffset(start_vreg + i), t_loc->reg, kNotVolatile);
+        } else {
+          LoadBaseDisp(TargetPtrReg(kSp), SRegOffset(start_vreg + i), t_loc->reg,
+                       t_loc->wide ? k64 : k32, kNotVolatile);
+        }
+      }
+    }
+    if (t_loc->wide) {
+      // Increment i to skip the next one.
+      i++;
+    }
   }
 }
 

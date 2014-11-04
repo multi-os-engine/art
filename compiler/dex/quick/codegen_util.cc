@@ -80,12 +80,14 @@ bool Mir2Lir::IsInexpensiveConstant(RegLocation rl_src) {
   return res;
 }
 
-void Mir2Lir::MarkSafepointPC(LIR* inst) {
+void Mir2Lir::MarkSafepointPC(LIR* inst, bool leaf_safe) {
   DCHECK(!inst->flags.use_def_invalid);
   inst->u.m.def_mask = &kEncodeAll;
   LIR* safepoint_pc = NewLIR0(kPseudoSafepointPC);
   DCHECK(safepoint_pc->u.m.def_mask->Equals(kEncodeAll));
-  CheckMethodCanCall();
+  if (!leaf_safe) {
+    CheckMethodCanCall();
+  }
 }
 
 void Mir2Lir::MarkSafepointPCAfter(LIR* after) {
@@ -1006,11 +1008,14 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       fp_vmap_table_(mir_graph->GetArena()->Adapter()),
       patches_(mir_graph->GetArena()->Adapter()),
       call_targets_(kUnknownCallTargets),
+      compilation_mode_(CompilationMode::kUnset),
       num_core_spills_(0),
       num_fp_spills_(0),
       frame_size_(0),
       core_spill_mask_(0),
       fp_spill_mask_(0),
+      core_callee_save_mask_(~0),
+      fp_callee_save_mask_(~0),
       first_lir_insn_(nullptr),
       last_lir_insn_(nullptr),
       slow_paths_(arena->Adapter(kArenaAllocSlowPaths)),
@@ -1030,32 +1035,38 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
 void Mir2Lir::Materialize() {
   cu_->NewTimingSplit("RegisterAllocation");
 
-  // Find out whether this is a leaf method or not.
-  if (mir_graph_->MethodIsLeaf()) {
-    call_targets_ = GetMethodCallTargets();
-  }
+  // We first choose what kind of compilation we are going to do: special, leaf, or normal.
+  ChooseCompilationMode();
 
-  CompilerInitializeRegAlloc();  // Needs to happen after SSA naming
+  // Now, we can initialize the register allocator. This needs to happen after SSA naming.
+  CompilerInitializeRegAlloc();
 
-  /* Allocate Registers using simple local allocation scheme */
+  // Allocate Registers using simple local allocation scheme.
   SimpleRegAlloc();
 
-  /* First try the custom light codegen for special cases. */
-  DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
-  bool special_worked = cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
-      ->GenSpecial(this, cu_->method_idx);
+  // First try the custom light codegen for special cases.
+  bool special_worked = false;
+  if (compilation_mode_ == CompilationMode::kSpecial) {
+    auto inliner_map = cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file);
+    DCHECK(inliner_map != nullptr);
+    special_worked = inliner_map->GenSpecial(this, cu_->method_idx);
+    if (!special_worked) {
+      // We try compiling again as a normal method.
+      compilation_mode_ = CompilationMode::kNormal;
+    }
+  }
 
-  /* Take normal path for converting MIR to LIR only if the special codegen did not succeed. */
-  if (special_worked == false) {
+  // Take normal path for converting MIR to LIR only if the special codegen did not succeed.
+  if (!special_worked) {
     MethodMIR2LIR();
   }
 
-  /* Method is not empty */
+  // Method is not empty.
   if (first_lir_insn_) {
-    // mark the targets of switch statement case labels
+    // mark the targets of switch statement case labels.
     ProcessSwitchTables();
 
-    /* Convert LIR into machine code. */
+    // Convert LIR into machine code.
     AssembleLIR();
 
     if ((cu_->enable_debug & (1 << kDebugCodegenDump)) != 0) {
@@ -1115,6 +1126,26 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
                          vmap_encoder.GetData(), native_gc_map_, cfi_info.get(),
                          ArrayRef<LinkerPatch>(patches_));
   return result;
+}
+
+void Mir2Lir::ChooseCompilationMode() {
+  CHECK(compilation_mode_ == CompilationMode::kUnset) << "Compilation mode is already set";
+
+  bool can_handle_leaf_mode = (cu_->instruction_set == kArm64);
+
+  // First try the custom light codegen for special cases.
+  auto inliner_map = cu_->compiler_driver->GetMethodInlinerMap();
+  DCHECK(inliner_map != nullptr);
+  if (inliner_map->GetMethodInliner(cu_->dex_file)->IsSpecial(cu_->method_idx)) {
+    compilation_mode_ = CompilationMode::kSpecial;
+  } else if (mir_graph_->MethodIsLeaf() && can_handle_leaf_mode) {
+    // Find out whether this is a leaf method or not and set the compilation mode accordingly.
+    call_targets_ = GetMethodCallTargets();
+    compilation_mode_ = ((call_targets_ == kNoCallTargets) ?
+                         CompilationMode::kLeaf : CompilationMode::kNormal);
+  } else {
+    compilation_mode_ = CompilationMode::kNormal;
+  }
 }
 
 CallTargets Mir2Lir::GetMethodCallTargets() {

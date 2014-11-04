@@ -251,16 +251,22 @@ int Mir2Lir::SRegToPMap(int s_reg) {
 
 // TODO: refactor following Alloc/Record routines - much commonality.
 void Mir2Lir::RecordCorePromotion(RegStorage reg, int s_reg) {
-  int p_map_idx = SRegToPMap(s_reg);
-  int v_reg = mir_graph_->SRegToVReg(s_reg);
   int reg_num = reg.GetRegNum();
   GetRegInfo(reg)->MarkInUse();
-  core_spill_mask_ |= (1 << reg_num);
-  // Include reg for later sort
-  core_vmap_table_.push_back(reg_num << VREG_NUM_WIDTH | (v_reg & ((1 << VREG_NUM_WIDTH) - 1)));
-  num_core_spills_++;
+  int p_map_idx = SRegToPMap(s_reg);
   promotion_map_[p_map_idx].core_location = kLocPhysReg;
   promotion_map_[p_map_idx].core_reg = reg_num;
+  if ((core_callee_save_mask_ & (UINT32_C(1) << reg_num)) == 0) {
+    // We are promoting a callee-save register. This means that we are dealing with a true-leaf
+    // method and should skip recording the promotion and updating the spill masks.
+    return;
+  }
+
+  core_spill_mask_ |= (1 << reg_num);
+  // Include reg for later sort
+  int v_reg = mir_graph_->SRegToVReg(s_reg);
+  core_vmap_table_.push_back(reg_num << VREG_NUM_WIDTH | (v_reg & ((1 << VREG_NUM_WIDTH) - 1)));
+  num_core_spills_++;
 }
 
 /* Reserve a callee-save register.  Return InvalidReg if none available */
@@ -284,16 +290,21 @@ RegStorage Mir2Lir::AllocPreservedCoreReg(int s_reg) {
 
 void Mir2Lir::RecordFpPromotion(RegStorage reg, int s_reg) {
   DCHECK_NE(cu_->instruction_set, kThumb2);
-  int p_map_idx = SRegToPMap(s_reg);
-  int v_reg = mir_graph_->SRegToVReg(s_reg);
   int reg_num = reg.GetRegNum();
   GetRegInfo(reg)->MarkInUse();
+  int p_map_idx = SRegToPMap(s_reg);
+  promotion_map_[p_map_idx].fp_location = kLocPhysReg;
+  promotion_map_[p_map_idx].fp_reg = reg.GetReg();
+  if ((fp_callee_save_mask_ & (UINT32_C(1) << reg_num)) == 0) {
+    // True-leaf: skip spilling register.
+    return;
+  }
+
+  int v_reg = mir_graph_->SRegToVReg(s_reg);
   fp_spill_mask_ |= (1 << reg_num);
   // Include reg for later sort
   fp_vmap_table_.push_back(reg_num << VREG_NUM_WIDTH | (v_reg & ((1 << VREG_NUM_WIDTH) - 1)));
   num_fp_spills_++;
-  promotion_map_[p_map_idx].fp_location = kLocPhysReg;
-  promotion_map_[p_map_idx].fp_reg = reg.GetReg();
 }
 
 // Reserve a callee-save floating point.
@@ -1194,6 +1205,11 @@ void Mir2Lir::DoPromotion() {
   // Allow target code to add any special registers
   AdjustSpillMask();
 
+  // For leaf methods, arguments can be promoted.
+  if (compilation_mode_ == CompilationMode::kLeaf) {
+    DoLeafArgsPromotion();
+  }
+
   /*
    * Simple register promotion. Just do a static count of the uses
    * of Dalvik registers.  Note that we examine the SSA names, but
@@ -1334,14 +1350,20 @@ int Mir2Lir::SRegOffset(int s_reg) {
   return VRegOffset(mir_graph_->SRegToVReg(s_reg));
 }
 
-/* Mark register usage state and return long retloc */
-RegLocation Mir2Lir::GetReturnWide(RegisterClass reg_class) {
+RegLocation Mir2Lir::GetReturnNoClobberWide(RegisterClass reg_class) {
   RegLocation res;
   switch (reg_class) {
     case kRefReg: LOG(FATAL); break;
     case kFPReg: res = LocCReturnDouble(); break;
     default: res = LocCReturnWide(); break;
   }
+  CheckRegLocation(res);
+  return res;
+}
+
+// Mark register usage state and return long retloc.
+RegLocation Mir2Lir::GetReturnWide(RegisterClass reg_class) {
+  RegLocation res = GetReturnNoClobberWide(reg_class);
   Clobber(res.reg);
   LockTemp(res.reg);
   MarkWide(res.reg);
@@ -1349,13 +1371,19 @@ RegLocation Mir2Lir::GetReturnWide(RegisterClass reg_class) {
   return res;
 }
 
-RegLocation Mir2Lir::GetReturn(RegisterClass reg_class) {
+RegLocation Mir2Lir::GetReturnNoClobber(RegisterClass reg_class) {
   RegLocation res;
   switch (reg_class) {
     case kRefReg: res = LocCReturnRef(); break;
     case kFPReg: res = LocCReturnFloat(); break;
     default: res = LocCReturn(); break;
   }
+  CheckRegLocation(res);
+  return res;
+}
+
+RegLocation Mir2Lir::GetReturn(RegisterClass reg_class) {
+  RegLocation res = GetReturnNoClobber(reg_class);
   Clobber(res.reg);
   if (cu_->instruction_set == kMips) {
     MarkInUse(res.reg);

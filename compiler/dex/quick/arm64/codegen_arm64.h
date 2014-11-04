@@ -187,9 +187,6 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
       OVERRIDE;
   void GenCmpLong(RegLocation rl_dest, RegLocation rl_src1, RegLocation rl_src2)  OVERRIDE;
   void GenDivZeroCheckWide(RegStorage reg) OVERRIDE;
-  void GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) OVERRIDE;
-  void GenExitSequence() OVERRIDE;
-  void GenSpecialExitSequence() OVERRIDE;
   void GenFusedFPCmpBranch(BasicBlock* bb, MIR* mir, bool gt_bias, bool is_double) OVERRIDE;
   void GenFusedLongCmpBranch(BasicBlock* bb, MIR* mir) OVERRIDE;
   void GenSelect(BasicBlock* bb, MIR* mir) OVERRIDE;
@@ -240,7 +237,26 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
   bool InexpensiveConstantLong(int64_t value) OVERRIDE;
   bool InexpensiveConstantDouble(int64_t value) OVERRIDE;
 
-  void FlushIns(RegLocation* ArgLocs, RegLocation rl_method) OVERRIDE;
+  /**
+   * @brief Return whether the creation of the stack frame can be avoided.
+   */
+  bool CanSkipStackFrameAllocation() {
+    return (compilation_mode_ == CompilationMode::kLeaf
+            && num_core_spills_ == 0
+            && num_fp_spills_ == 0
+            && mir_graph_->GetNumOfLocalCodeVRs() == 0
+            && mir_graph_->GetNumOfOutVRs() == 0
+            && mir_graph_->GetNumNonSpecialCompilerTemps() == 0);
+  }
+
+  void AllocateStackFrame(bool skip_overflow_check);
+  void GenEntrySequence(RegLocation* arg_locs, RegLocation rl_method) OVERRIDE;
+  void DoLeafArgsPromotion() OVERRIDE;
+  void GenExitSequence() OVERRIDE;
+  void GenSpecialExitSequence() OVERRIDE;
+  void NonLeafFlushIns(RegLocation* arg_locs, RegLocation rl_method);
+  void LeafFlushIns(RegLocation* arg_locs, RegLocation rl_method);
+  void FlushIns(RegLocation* arg_locs, RegLocation rl_method) OVERRIDE;
 
   int GenDalvikArgsNoRange(CallInfo* info, int call_state, LIR** pcrLabel,
                            NextCallInsn next_call_insn,
@@ -425,6 +441,7 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
   void GenDivRemLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,
                      RegLocation rl_src2, bool is_div, int flags);
 
+  bool frame_allocated_;
   InToRegStorageMapping in_to_reg_storage_mapping_;
   static const A64EncodingMap EncodingMap[kA64Last];
 

@@ -197,9 +197,9 @@ void Mir2Lir::MarkPossibleNullPointerExceptionAfter(int opt_flags, LIR* after) {
   }
 }
 
-void Mir2Lir::MarkPossibleStackOverflowException() {
+void Mir2Lir::MarkPossibleStackOverflowException(bool leaf_safe) {
   if (cu_->compiler_driver->GetCompilerOptions().GetImplicitStackOverflowChecks()) {
-    MarkSafepointPC(last_lir_insn_);
+    MarkSafepointPC(last_lir_insn_, leaf_safe);
   }
 }
 
@@ -603,28 +603,39 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, OpSize size) {
       // class is initialized.
       // TODO: remove initialized check now that we are initializing classes in the compiler driver.
       DCHECK_NE(field_info.StorageIndex(), DexFile::kDexNoIndex);
-      // May do runtime call so everything to home locations.
-      FlushAllRegs();
-      // Using fixed register to sync with possible call to runtime support.
-      RegStorage r_method = TargetReg(kArg1, kRef);
-      LockTemp(r_method);
+      bool has_unresolved_branch = (!field_info.IsClassInDexCache() &&
+                                    (mir->optimization_flags & MIR_CLASS_IS_IN_DEX_CACHE) == 0);
+      bool has_uninit_branch = (!field_info.IsClassInitialized() &&
+                                (mir->optimization_flags & MIR_CLASS_IS_INITIALIZED) == 0);
+      bool need_runtime_call = has_unresolved_branch || has_uninit_branch;
+
+      RegStorage r_method = RegStorage::InvalidReg();
+      if (need_runtime_call) {
+        // Will do runtime call so everything to home locations.
+        // Also use fixed registers to simplify call to runtime support.
+        FlushAllRegs();
+        r_base = TargetReg(kArg0, kRef);
+        r_method = TargetReg(kArg1, kRef);
+        LockTemp(r_base);
+        LockTemp(r_method);
+      } else {
+        r_base = AllocTempRef();
+        r_method = AllocTempRef();
+      }
+
       LoadCurrMethodDirect(r_method);
-      r_base = TargetReg(kArg0, kRef);
-      LockTemp(r_base);
       LoadRefDisp(r_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(), r_base,
                   kNotVolatile);
       int32_t offset_of_field = ObjArray::OffsetOfElement(field_info.StorageIndex()).Int32Value();
       LoadRefDisp(r_base, offset_of_field, r_base, kNotVolatile);
       // r_base now points at static storage (Class*) or NULL if the type is not yet resolved.
       LIR* unresolved_branch = nullptr;
-      if (!field_info.IsClassInDexCache() &&
-          (mir->optimization_flags & MIR_CLASS_IS_IN_DEX_CACHE) == 0) {
+      if (has_unresolved_branch) {
         // Check if r_base is NULL.
         unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, NULL);
       }
       LIR* uninit_branch = nullptr;
-      if (!field_info.IsClassInitialized() &&
-          (mir->optimization_flags & MIR_CLASS_IS_INITIALIZED) == 0) {
+      if (has_uninit_branch) {
         // Check if r_base is not yet initialized class.
         RegStorage r_tmp = TargetReg(kArg2, kNotWide);
         LockTemp(r_tmp);
@@ -633,14 +644,14 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, OpSize size) {
                                           mirror::Class::kStatusInitialized, nullptr, nullptr);
         FreeTemp(r_tmp);
       }
-      if (unresolved_branch != nullptr || uninit_branch != nullptr) {
+      if (need_runtime_call) {
         // The slow path is invoked if the r_base is NULL or the class pointed
         // to by it is not initialized.
         LIR* cont = NewLIR0(kPseudoTargetLabel);
         AddSlowPath(new (arena_) StaticFieldSlowPath(this, unresolved_branch, uninit_branch, cont,
                                                      field_info.StorageIndex(), r_base));
 
-        if (uninit_branch != nullptr) {
+        if (has_uninit_branch) {
           // Ensure load of status and store of value don't re-order.
           // TODO: Presumably the actual value store is control-dependent on the status load,
           // and will thus not be reordered in any case, since stores are never speculated.
@@ -719,28 +730,39 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest, OpSize size, Primitive::Typ
       // Medium path, static storage base in a different class which requires checks that the other
       // class is initialized
       DCHECK_NE(field_info.StorageIndex(), DexFile::kDexNoIndex);
-      // May do runtime call so everything to home locations.
-      FlushAllRegs();
-      // Using fixed register to sync with possible call to runtime support.
-      RegStorage r_method = TargetReg(kArg1, kRef);
-      LockTemp(r_method);
+      bool has_unresolved_branch = (!field_info.IsClassInDexCache() &&
+                                    (mir->optimization_flags & MIR_CLASS_IS_IN_DEX_CACHE) == 0);
+      bool has_uninit_branch = (!field_info.IsClassInitialized() &&
+                                (mir->optimization_flags & MIR_CLASS_IS_INITIALIZED) == 0);
+      bool need_runtime_call = has_unresolved_branch || has_uninit_branch;
+
+      RegStorage r_method = RegStorage::InvalidReg();
+      if (need_runtime_call) {
+        // Will do runtime call so everything to home locations.
+        // Also use fixed registers to simplify call to runtime support.
+        FlushAllRegs();
+        r_base = TargetReg(kArg0, kRef);
+        r_method = TargetReg(kArg1, kRef);
+        LockTemp(r_base);
+        LockTemp(r_method);
+      } else {
+        r_base = AllocTempRef();
+        r_method = AllocTempRef();
+      }
+
       LoadCurrMethodDirect(r_method);
-      r_base = TargetReg(kArg0, kRef);
-      LockTemp(r_base);
       LoadRefDisp(r_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(), r_base,
                   kNotVolatile);
       int32_t offset_of_field = ObjArray::OffsetOfElement(field_info.StorageIndex()).Int32Value();
       LoadRefDisp(r_base, offset_of_field, r_base, kNotVolatile);
       // r_base now points at static storage (Class*) or NULL if the type is not yet resolved.
       LIR* unresolved_branch = nullptr;
-      if (!field_info.IsClassInDexCache() &&
-          (mir->optimization_flags & MIR_CLASS_IS_IN_DEX_CACHE) == 0) {
+      if (has_unresolved_branch) {
         // Check if r_base is NULL.
         unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, NULL);
       }
       LIR* uninit_branch = nullptr;
-      if (!field_info.IsClassInitialized() &&
-          (mir->optimization_flags & MIR_CLASS_IS_INITIALIZED) == 0) {
+      if (has_uninit_branch) {
         // Check if r_base is not yet initialized class.
         RegStorage r_tmp = TargetReg(kArg2, kNotWide);
         LockTemp(r_tmp);
@@ -749,14 +771,14 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest, OpSize size, Primitive::Typ
                                           mirror::Class::kStatusInitialized, nullptr, nullptr);
         FreeTemp(r_tmp);
       }
-      if (unresolved_branch != nullptr || uninit_branch != nullptr) {
+      if (need_runtime_call) {
         // The slow path is invoked if the r_base is NULL or the class pointed
         // to by it is not initialized.
         LIR* cont = NewLIR0(kPseudoTargetLabel);
         AddSlowPath(new (arena_) StaticFieldSlowPath(this, unresolved_branch, uninit_branch, cont,
                                                      field_info.StorageIndex(), r_base));
 
-        if (uninit_branch != nullptr) {
+        if (has_uninit_branch) {
           // Ensure load of status and load of value don't re-order.
           GenMemBarrier(kLoadAny);
         }

@@ -263,38 +263,7 @@ void Arm64Mir2Lir::UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) {
   FreeTemp(reg_card_no);
 }
 
-void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
-  /*
-   * On entry, x0 to x7 are live.  Let the register allocation
-   * mechanism know so it doesn't try to use any of them when
-   * expanding the frame or flushing.
-   * Reserve x8 & x9 for temporaries.
-   */
-  LockTemp(rs_x0);
-  LockTemp(rs_x1);
-  LockTemp(rs_x2);
-  LockTemp(rs_x3);
-  LockTemp(rs_x4);
-  LockTemp(rs_x5);
-  LockTemp(rs_x6);
-  LockTemp(rs_x7);
-  LockTemp(rs_xIP0);
-  LockTemp(rs_xIP1);
-
-  /* TUNING:
-   * Use AllocTemp() and reuse LR if possible to give us the freedom on adjusting the number
-   * of temp registers.
-   */
-
-  /*
-   * We can safely skip the stack overflow check if we're
-   * a leaf *and* our frame size < fudge factor.
-   */
-  bool skip_overflow_check = mir_graph_->MethodIsLeaf() &&
-    !FrameNeedsStackCheck(frame_size_, kArm64);
-
-  NewLIR0(kPseudoMethodEntry);
-
+void Arm64Mir2Lir::AllocateStackFrame(bool do_stack_overflow_check) {
   const size_t kStackOverflowReservedUsableBytes = GetStackOverflowReservedBytes(kArm64);
   const bool large_frame = static_cast<size_t>(frame_size_) > kStackOverflowReservedUsableBytes;
   bool generate_explicit_stack_overflow_check = large_frame ||
@@ -303,10 +272,16 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
   const int spill_size = (spill_count * kArm64PointerSize + 15) & ~0xf;  // SP 16 byte alignment.
   const int frame_size_without_spills = frame_size_ - spill_size;
 
-  if (!skip_overflow_check) {
+  // Remember that we allocated the frame.
+  frame_allocated_ = true;
+
+  // Register used for explicit stack overflows.
+  RegStorage rs_sp_limit = AllocTempWide();
+
+  if (do_stack_overflow_check) {
     if (generate_explicit_stack_overflow_check) {
       // Load stack limit
-      LoadWordDisp(rs_xSELF, Thread::StackEndOffset<8>().Int32Value(), rs_xIP1);
+      LoadWordDisp(rs_xSELF, Thread::StackEndOffset<8>().Int32Value(), rs_sp_limit);
     } else {
       // Implicit stack overflow check.
       // Generate a load from [sp, #-framesize].  If this is in the stack
@@ -314,9 +289,11 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
 
       // TODO: If the frame size is small enough, is it possible to make this a pre-indexed load,
       //       so that we can avoid the following "sub sp" when spilling?
-      OpRegRegImm(kOpSub, rs_x8, rs_sp, GetStackOverflowReservedBytes(kArm64));
-      Load32Disp(rs_x8, 0, rs_wzr);
-      MarkPossibleStackOverflowException();
+      RegStorage rs_tmp = AllocTempWide();
+      OpRegRegImm(kOpSub, rs_tmp, rs_sp, GetStackOverflowReservedBytes(kArm64));
+      Load32Disp(rs_tmp, 0, rs_wzr);
+      FreeTemp(rs_tmp);
+      MarkPossibleStackOverflowException(/*leaf_safe*/true);
     }
   }
 
@@ -330,7 +307,7 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
     OpRegImm(kOpSub, rs_sp, frame_size_without_spills);
   }
 
-  if (!skip_overflow_check) {
+  if (do_stack_overflow_check) {
     if (generate_explicit_stack_overflow_check) {
       class StackOverflowSlowPath: public LIRSlowPath {
       public:
@@ -346,48 +323,85 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
           m2l_->OpRegImm(kOpAdd, rs_sp, sp_displace_);
           m2l_->ClobberCallerSave();
           ThreadOffset<8> func_offset = QUICK_ENTRYPOINT_OFFSET(8, pThrowStackOverflow);
-          m2l_->LockTemp(rs_xIP0);
-          m2l_->LoadWordDisp(rs_xSELF, func_offset.Int32Value(), rs_xIP0);
-          m2l_->NewLIR1(kA64Br1x, rs_xIP0.GetReg());
-          m2l_->FreeTemp(rs_xIP0);
+          RegStorage rs_tmp = m2l_->AllocTempWide();
+          m2l_->LoadWordDisp(rs_xSELF, func_offset.Int32Value(), rs_tmp);
+          m2l_->NewLIR1(kA64Br1x, rs_tmp.GetReg());
+          m2l_->FreeTemp(rs_tmp);
         }
 
       private:
         const size_t sp_displace_;
       };
 
-      LIR* branch = OpCmpBranch(kCondUlt, rs_sp, rs_xIP1, nullptr);
+      LIR* branch = OpCmpBranch(kCondUlt, rs_sp, rs_sp_limit, nullptr);
       AddSlowPath(new(arena_)StackOverflowSlowPath(this, branch, frame_size_));
     }
   }
 
-  FlushIns(ArgLocs, rl_method);
+  FreeTemp(rs_sp_limit);
+}
 
-  FreeTemp(rs_x0);
-  FreeTemp(rs_x1);
-  FreeTemp(rs_x2);
-  FreeTemp(rs_x3);
-  FreeTemp(rs_x4);
-  FreeTemp(rs_x5);
-  FreeTemp(rs_x6);
-  FreeTemp(rs_x7);
-  FreeTemp(rs_xIP0);
-  FreeTemp(rs_xIP1);
+void Arm64Mir2Lir::GenEntrySequence(RegLocation* arg_locs, RegLocation rl_method) {
+  // If our frame size is >= of a fudge factor, then we do a stack overflow check.
+  bool do_stack_overflow_check = FrameNeedsStackCheck(frame_size_, kArm64);
+  bool is_true_leaf = (compilation_mode_ == CompilationMode::kLeaf);
+
+  // Decide whether to allocate the frame. Frames are always allocated for non-leaf methods. Also,
+  // if the frame is not allocated, then we know that the stack overflow check must be skipped.
+  bool skip_frame_allocation = CanSkipStackFrameAllocation();
+  CHECK(!(skip_frame_allocation && do_stack_overflow_check));
+
+  if (!is_true_leaf) {
+    // On entry, x0 to x7 are live. Let the register allocation mechanism know so it doesn't try to
+    // use any of them when expanding the frame or flushing.
+    LockTemp(rs_x0);
+    LockTemp(rs_x1);
+    LockTemp(rs_x2);
+    LockTemp(rs_x3);
+    LockTemp(rs_x4);
+    LockTemp(rs_x5);
+    LockTemp(rs_x6);
+    LockTemp(rs_x7);
+
+    // Force a stack overflow check, unless we are a (DEX) leaf method.
+    if (!mir_graph_->MethodIsLeaf()) {
+      do_stack_overflow_check = true;
+    }
+  }
+
+  NewLIR0(kPseudoMethodEntry);
+
+  if (!skip_frame_allocation) {
+    AllocateStackFrame(do_stack_overflow_check);
+  }
+
+  if (is_true_leaf) {
+    LeafFlushIns(arg_locs, rl_method);
+  } else {
+    NonLeafFlushIns(arg_locs, rl_method);
+
+    FreeTemp(rs_x0);
+    FreeTemp(rs_x1);
+    FreeTemp(rs_x2);
+    FreeTemp(rs_x3);
+    FreeTemp(rs_x4);
+    FreeTemp(rs_x5);
+    FreeTemp(rs_x6);
+    FreeTemp(rs_x7);
+  }
 }
 
 void Arm64Mir2Lir::GenExitSequence() {
-  /*
-   * In the exit path, r0/r1 are live - make sure they aren't
-   * allocated by the register utilities as temps.
-   */
-  LockTemp(rs_x0);
-  LockTemp(rs_x1);
-
   NewLIR0(kPseudoMethodExit);
+  if (compilation_mode_ != CompilationMode::kLeaf) {
+    // In the exit path, x0/x1 are live - make sure they aren't allocated by the register
+    // utilities as temps.
+    LockTemp(rs_x0);
+  }
 
-  UnspillRegs(rs_sp, core_spill_mask_, fp_spill_mask_, frame_size_);
-
-  // Finally return.
+  if (frame_allocated_) {
+    UnspillRegs(rs_sp, core_spill_mask_, fp_spill_mask_, frame_size_);
+  }
   NewLIR0(kA64Ret);
 }
 
