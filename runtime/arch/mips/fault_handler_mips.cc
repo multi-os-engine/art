@@ -29,23 +29,23 @@
 
 namespace art {
 
-void FaultManager::HandleNestedSignal(int sig, siginfo_t* info, void* context) {
+void FaultManager::HandleNestedSignal(int /*sig*/, siginfo_t* /*info*/, void* /*context*/) {
 }
 
-void FaultManager::GetMethodAndReturnPcAndSp(siginfo_t* siginfo, void* context,
-                                             mirror::ArtMethod** out_method,
-                                             uintptr_t* out_return_pc, uintptr_t* out_sp) {
+void FaultManager::GetMethodAndReturnPcAndSp(siginfo_t* /*siginfo*/, void* /*context*/,
+                                             mirror::ArtMethod** /*out_method*/,
+                                             uintptr_t* /*out_return_pc*/, uintptr_t* /*out_sp*/) {
 }
 
-bool NullPointerHandler::Action(int sig, siginfo_t* info, void* context) {
+bool NullPointerHandler::Action(int /*sig*/, siginfo_t* /*info*/, void* /*context*/) {
   return false;
 }
 
-bool SuspensionHandler::Action(int sig, siginfo_t* info, void* context) {
+bool SuspensionHandler::Action(int /*sig*/, siginfo_t* /*info*/, void* /*context*/) {
   return false;
 }
 
-bool StackOverflowHandler::Action(int sig, siginfo_t* info, void* context) {
+bool StackOverflowHandler::Action(int /*sig*/, siginfo_t* /*info*/, void* /*context*/) {
   return false;
 }
 }       // namespace art
