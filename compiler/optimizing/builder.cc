@@ -529,6 +529,27 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
   return true;
 }
 
+void HGraphBuilder::BuildCheckedDiv(const Instruction& instruction,
+                                    uint32_t dex_offset,
+                                    Primitive::Type type,
+                                    bool second_is_lit) {
+  DCHECK(type == Primitive::kPrimInt);
+
+  HInstruction* first = LoadLocal(instruction.VRegB(), type);
+  HInstruction* second = second_is_lit
+      ? GetIntConstant(instruction.VRegC())
+      : LoadLocal(instruction.VRegC(), type);
+  if (!second->IsIntConstant() || (second->AsIntConstant()->GetValue() == 0)) {
+    second = new (arena_) HDivZeroCheck(second, dex_offset);
+    Temporaries temps(graph_, 1);
+    current_block_->AddInstruction(second);
+    temps.Add(current_block_->GetLastInstruction());
+  }
+
+  current_block_->AddInstruction(new (arena_) HDiv(type, first, second));
+  UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
+}
+
 void HGraphBuilder::BuildArrayAccess(const Instruction& instruction,
                                      uint32_t dex_offset,
                                      bool is_put,
@@ -888,6 +909,11 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       break;
     }
 
+    case Instruction::DIV_INT: {
+      BuildCheckedDiv(instruction, dex_offset, Primitive::kPrimInt, false);
+      break;
+    }
+
     case Instruction::DIV_FLOAT: {
       Binop_23x<HDiv>(instruction, Primitive::kPrimFloat);
       break;
@@ -953,6 +979,11 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       break;
     }
 
+    case Instruction::DIV_INT_2ADDR: {
+      BuildCheckedDiv(instruction, dex_offset, Primitive::kPrimInt, false);
+      break;
+    }
+
     case Instruction::DIV_FLOAT_2ADDR: {
       Binop_12x<HDiv>(instruction, Primitive::kPrimFloat);
       break;
@@ -990,6 +1021,12 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
 
     case Instruction::MUL_INT_LIT8: {
       Binop_22b<HMul>(instruction, false);
+      break;
+    }
+
+    case Instruction::DIV_INT_LIT16:
+    case Instruction::DIV_INT_LIT8: {
+      BuildCheckedDiv(instruction, dex_offset, Primitive::kPrimInt, true);
       break;
     }
 
