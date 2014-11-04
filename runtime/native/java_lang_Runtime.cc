@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "native_register_methods.h"
+
 #include <dlfcn.h>
 #include <limits.h>
 #include <unistd.h>

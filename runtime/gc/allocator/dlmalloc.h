@@ -28,7 +28,10 @@
 #define ONLY_MSPACES 1
 #define MALLOC_INSPECT_ALL 1
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wredundant-decls"
 #include "../../bionic/libc/upstream-dlmalloc/malloc.h"
+#pragma GCC diagnostic pop
 
 #ifdef HAVE_ANDROID_OS
 // Define dlmalloc routines from bionic that cannot be included directly because of redefining

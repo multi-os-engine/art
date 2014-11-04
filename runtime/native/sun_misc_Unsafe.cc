@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "native_register_methods.h"
+
 #include "gc/accounting/card_table-inl.h"
 #include "jni_internal.h"
 #include "mirror/array.h"
