@@ -121,6 +121,8 @@ void PreInitializeNativeBridge(std::string dir) {
     LOG(WARNING) << "Could not create mount namespace.";
   }
   android::PreInitializeNativeBridge(dir.c_str(), GetInstructionSetString(kRuntimeISA));
+#else
+  UNUSED(dir);
 #endif
 }
 
