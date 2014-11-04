@@ -1164,6 +1164,11 @@ void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix,
     }
     os << "\n";
   }
+#else
+  UNUSED(os);
+  UNUSED(tid);
+  UNUSED(prefix);
+  UNUSED(current_method);
 #endif
 }
 
