@@ -476,6 +476,7 @@ class HBasicBlock : public ArenaObject {
   M(Compare, BinaryOperation)                                           \
   M(Condition, BinaryOperation)                                         \
   M(Div, BinaryOperation)                                               \
+  M(DivZeroCheck, Instruction)                                          \
   M(DoubleConstant, Constant)                                           \
   M(Equal, Condition)                                                   \
   M(Exit, Instruction)                                                  \
@@ -1706,6 +1707,31 @@ class HDiv : public HBinaryOperation {
  private:
   DISALLOW_COPY_AND_ASSIGN(HDiv);
 };
+
+class HDivZeroCheck : public HExpression<1> {
+ public:
+  HDivZeroCheck(HInstruction* value, uint32_t dex_pc)
+      : HExpression(value->GetType(), SideEffects::None()), dex_pc_(dex_pc) {
+    SetRawInputAt(0, value);
+  }
+
+  virtual bool CanBeMoved() const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const { return true; }
+
+  virtual bool NeedsEnvironment() const { return true; }
+
+  virtual bool CanThrow() const { return true; }
+
+  uint32_t GetDexPc() const { return dex_pc_; }
+
+  DECLARE_INSTRUCTION(DivZeroCheck);
+
+ private:
+  const uint32_t dex_pc_;
+
+  DISALLOW_COPY_AND_ASSIGN(HDivZeroCheck);
+};
+
 
 // The value of a parameter in this method. Its location depends on
 // the calling convention.

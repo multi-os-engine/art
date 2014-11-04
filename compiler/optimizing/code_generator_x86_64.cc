@@ -90,6 +90,22 @@ class NullCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
   DISALLOW_COPY_AND_ASSIGN(NullCheckSlowPathX86_64);
 };
 
+class DivZeroCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
+ public:
+  explicit DivZeroCheckSlowPathX86_64(HDivZeroCheck* instruction) : instruction_(instruction) {}
+
+  virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    __ Bind(GetEntryLabel());
+    __ gs()->call(
+        Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pThrowDivZero), true));
+    codegen->RecordPcInfo(instruction_, instruction_->GetDexPc());
+  }
+
+ private:
+  HDivZeroCheck* const instruction_;
+  DISALLOW_COPY_AND_ASSIGN(DivZeroCheckSlowPathX86_64);
+};
+
 class StackOverflowCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
  public:
   StackOverflowCheckSlowPathX86_64() {}
@@ -1278,7 +1294,14 @@ void LocationsBuilderX86_64::VisitDiv(HDiv* div) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(div, LocationSummary::kNoCall);
   switch (div->GetResultType()) {
-    case Primitive::kPrimInt:
+    case Primitive::kPrimInt: {
+      locations->SetInAt(0, Location::RegisterLocation(RAX));
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      // Intel uses rdx:rax as the dividend
+      locations->AddTemp(Location::RegisterLocation(RDX));
+      break;
+    }
     case Primitive::kPrimLong: {
       LOG(FATAL) << "Not implemented div type" << div->GetResultType();
       break;
@@ -1303,7 +1326,33 @@ void InstructionCodeGeneratorX86_64::VisitDiv(HDiv* div) {
   DCHECK(first.Equals(locations->Out()));
 
   switch (div->GetResultType()) {
-    case Primitive::kPrimInt:
+    case Primitive::kPrimInt: {
+      CpuRegister rax = first.As<CpuRegister>();
+      CpuRegister rdx = locations->GetTemp(0).As<CpuRegister>();
+      DCHECK_EQ(RAX, rax.AsRegister());
+      DCHECK_EQ(RDX, rdx.AsRegister());
+
+      Label normal;
+      Label done;
+
+      // Handle 0x80000000/-1 or we will get an exception!
+      __ cmpl(first.As<CpuRegister>(), Immediate(0x80000000));
+      __ j(kNotEqual, &normal);
+      __ cmpl(second.As<CpuRegister>(), Immediate(-1));
+      __ j(kEqual, &done);  // eax already have the right value
+
+      __ Bind(&normal);
+
+      // edx:eax <- sign-extended of eax
+      __ cdq();
+      // eax = quotient, edx = remainder
+      __ idivl(second.As<CpuRegister>());
+
+     __ Bind(&done);
+
+      break;
+    }
+
     case Primitive::kPrimLong: {
       LOG(FATAL) << "Not implemented div type" << div->GetResultType();
       break;
@@ -1322,6 +1371,35 @@ void InstructionCodeGeneratorX86_64::VisitDiv(HDiv* div) {
     default:
       LOG(FATAL) << "Unexpected div type " << div->GetResultType();
   }
+}
+
+void LocationsBuilderX86_64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::Any());
+  if (instruction->HasUses()) {
+    locations->SetOut(Location::SameAsFirstInput());
+  }
+}
+
+void InstructionCodeGeneratorX86_64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
+  SlowPathCodeX86_64* slow_path = new (GetGraph()->GetArena()) DivZeroCheckSlowPathX86_64(instruction);
+  codegen_->AddSlowPath(slow_path);
+
+  LocationSummary* locations = instruction->GetLocations();
+  Location obj = locations->InAt(0);
+
+  if (obj.IsRegister()) {
+    __ cmpl(obj.As<CpuRegister>(), Immediate(0));
+  } else if (obj.IsStackSlot()) {
+    __ cmpl(Address(CpuRegister(RSP), obj.GetStackIndex()), Immediate(0));
+  } else {
+    DCHECK(obj.IsConstant()) << obj;
+    DCHECK_EQ(obj.GetConstant()->AsIntConstant()->GetValue(), 0);
+    __ jmp(slow_path->GetEntryLabel());
+    return;
+  }
+  __ j(kEqual, slow_path->GetEntryLabel());
 }
 
 void LocationsBuilderX86_64::VisitNewInstance(HNewInstance* instruction) {
