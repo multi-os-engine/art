@@ -24,6 +24,8 @@ GDB=""
 GDB_ARGS=""
 GDB_SERVER="gdbserver"
 HAVE_IMAGE="y"
+TIME_OUT="y"
+TIME_OUT_VALUE=5m
 HOST="n"
 INTERPRETER="n"
 INVOKE_WITH=""
@@ -99,10 +101,12 @@ while true; do
         shift
     elif [ "x$1" = "x--debug" ]; then
         DEBUGGER="y"
+        TIME_OUT="n"
         shift
     elif [ "x$1" = "x--gdb" ]; then
         USE_GDB="y"
         DEV_MODE="y"
+        TIME_OUT="n"
         shift
     elif [ "x$1" = "x--zygote" ]; then
         ZYGOTE="-Xzygote"
