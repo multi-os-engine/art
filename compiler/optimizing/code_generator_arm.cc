@@ -250,6 +250,49 @@ class LoadStringSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(LoadStringSlowPathARM);
 };
 
+class TypeCheckSlowPathARM : public SlowPathCodeARM {
+ public:
+  explicit TypeCheckSlowPathARM(HTypeCheck* instruction, Location object_class)
+      : instruction_(instruction),
+        object_class_(object_class) {}
+
+  virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    LocationSummary* locations = instruction_->GetLocations();
+    DCHECK(!locations->GetLiveRegisters()->ContainsCoreRegister(locations->Out().reg()));
+
+    CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
+    __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(locations);
+
+    // We're moving two locations to locations that could overlap, so we need a parallel
+    // move resolver.
+    InvokeRuntimeCallingConvention calling_convention;
+    MoveOperands move1(locations->InAt(1),
+                       Location::RegisterLocation(calling_convention.GetRegisterAt(0)),
+                       nullptr);
+    MoveOperands move2(object_class_,
+                       Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
+                       nullptr);
+    HParallelMove parallel_move(codegen->GetGraph()->GetArena());
+    parallel_move.AddMove(&move1);
+    parallel_move.AddMove(&move2);
+    arm_codegen->GetMoveResolver()->EmitNativeCode(&parallel_move);
+
+    arm_codegen->InvokeRuntime(
+        QUICK_ENTRY_POINT(pInstanceofNonTrivial), instruction_, instruction_->GetDexPc());
+    arm_codegen->Move32(locations->Out(), Location::RegisterLocation(R0));
+
+    codegen->RestoreLiveRegisters(locations);
+    __ b(GetExitLabel());
+  }
+
+ private:
+  HTypeCheck* const instruction_;
+  const Location object_class_;
+
+  DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathARM);
+};
+
 #undef __
 
 #undef __
@@ -2371,6 +2414,51 @@ void InstructionCodeGeneratorARM::VisitLoadString(HLoadString* load) {
   __ cmp(out, ShifterOperand(0));
   __ b(slow_path->GetEntryLabel(), EQ);
   __ Bind(slow_path->GetExitLabel());
+}
+
+void LocationsBuilderARM::VisitTypeCheck(HTypeCheck* instruction) {
+  LocationSummary::CallKind call_kind = instruction->IsClassFinal()
+      ? LocationSummary::kNoCall
+      : LocationSummary::kCallOnSlowPath;
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction, call_kind);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorARM::VisitTypeCheck(HTypeCheck* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  Register obj = locations->InAt(0).As<Register>();
+  Register cls = locations->InAt(1).As<Register>();
+  Register out = locations->Out().As<Register>();
+  uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
+  Label done, zero;
+  SlowPathCodeARM* slow_path = nullptr;
+
+  // TODO: avoid this check if we know obj is not null.
+  __ cmp(obj, ShifterOperand(0));
+  __ b(&zero, EQ);
+  __ LoadFromOffset(kLoadWord, out, obj, class_offset);
+  __ cmp(out, ShifterOperand(cls));
+  if (instruction->IsClassFinal()) {
+    __ b(&zero, NE);
+    __ LoadImmediate(out, 1);
+    __ b(&done);
+  } else {
+    DCHECK(locations->OnlyCallsOnSlowPath());
+    slow_path = new (GetGraph()->GetArena()) TypeCheckSlowPathARM(
+        instruction, Location::RegisterLocation(out));
+    codegen_->AddSlowPath(slow_path);
+    __ b(slow_path->GetEntryLabel(), NE);
+    __ LoadImmediate(out, 1);
+    __ b(&done);
+  }
+  __ Bind(&zero);
+  __ LoadImmediate(out, 0);
+  if (slow_path != nullptr) {
+    __ Bind(slow_path->GetExitLabel());
+  }
+  __ Bind(&done);
 }
 
 }  // namespace arm
