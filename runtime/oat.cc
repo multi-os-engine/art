@@ -15,15 +15,17 @@
  */
 
 #include "oat.h"
-#include "utils.h"
 
 #include <string.h>
 #include <zlib.h>
 
+#include "arch/instruction_set_features.h"
+#include "utils.h"
+
 namespace art {
 
 const uint8_t OatHeader::kOatMagic[] = { 'o', 'a', 't', '\n' };
-const uint8_t OatHeader::kOatVersion[] = { '0', '4', '5', '\0' };
+const uint8_t OatHeader::kOatVersion[] = { '0', '4', '6', '\0' };
 
 static size_t ComputeOatHeaderSize(const SafeMap<std::string, std::string>* variable_data) {
   size_t estimate = 0U;
