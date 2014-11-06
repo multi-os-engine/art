@@ -73,7 +73,6 @@ LIBART_COMMON_SRC_FILES := \
   hprof/hprof.cc \
   image.cc \
   indirect_reference_table.cc \
-  instruction_set.cc \
   instrumentation.cc \
   intern_table.cc \
   interpreter/interpreter.cc \
@@ -165,6 +164,7 @@ LIBART_COMMON_SRC_FILES := \
 
 LIBART_COMMON_SRC_FILES += \
   arch/context.cc \
+  arch/instruction_set.cc \
   arch/memcmp16.cc \
   arch/arm/registers_arm.cc \
   arch/arm64/registers_arm64.cc \
@@ -216,6 +216,7 @@ LIBART_TARGET_SRC_FILES := \
 LIBART_TARGET_SRC_FILES_arm := \
   arch/arm/context_arm.cc.arm \
   arch/arm/entrypoints_init_arm.cc \
+  arch/arm/instruction_set_features_arm.cc \
   arch/arm/instruction_set_features_arm.S \
   arch/arm/jni_entrypoints_arm.S \
   arch/arm/memcmp16_arm.S \
@@ -228,6 +229,7 @@ LIBART_TARGET_SRC_FILES_arm := \
 LIBART_TARGET_SRC_FILES_arm64 := \
   arch/arm64/context_arm64.cc \
   arch/arm64/entrypoints_init_arm64.cc \
+  arch/arm64/instruction_set_features_arm64.cc \
   arch/arm64/jni_entrypoints_arm64.S \
   arch/arm64/memcmp16_arm64.S \
   arch/arm64/portable_entrypoints_arm64.S \
@@ -239,6 +241,7 @@ LIBART_TARGET_SRC_FILES_arm64 := \
 LIBART_SRC_FILES_x86 := \
   arch/x86/context_x86.cc \
   arch/x86/entrypoints_init_x86.cc \
+  arch/x86/instruction_set_features_x86.cc \
   arch/x86/jni_entrypoints_x86.S \
   arch/x86/memcmp16_x86.S \
   arch/x86/portable_entrypoints_x86.S \
@@ -254,6 +257,7 @@ LIBART_TARGET_SRC_FILES_x86 := \
 LIBART_SRC_FILES_x86_64 := \
   arch/x86_64/context_x86_64.cc \
   arch/x86_64/entrypoints_init_x86_64.cc \
+  arch/x86_64/instruction_set_features_x86_64.cc \
   arch/x86_64/jni_entrypoints_x86_64.S \
   arch/x86_64/memcmp16_x86_64.S \
   arch/x86_64/portable_entrypoints_x86_64.S \
@@ -268,6 +272,7 @@ LIBART_TARGET_SRC_FILES_x86_64 := \
 LIBART_TARGET_SRC_FILES_mips := \
   arch/mips/context_mips.cc \
   arch/mips/entrypoints_init_mips.cc \
+  arch/mips/instruction_set_features_mips.cc \
   arch/mips/jni_entrypoints_mips.S \
   arch/mips/memcmp16_mips.S \
   arch/mips/portable_entrypoints_mips.S \
@@ -292,6 +297,7 @@ LIBART_HOST_SRC_FILES_64 := \
   $(LIBART_SRC_FILES_x86_64)
 
 LIBART_ENUM_OPERATOR_OUT_HEADER_FILES := \
+  arch/instruction_set.h \
   arch/x86_64/registers_x86_64.h \
   base/allocator.h \
   base/mutex.h \
@@ -306,7 +312,6 @@ LIBART_ENUM_OPERATOR_OUT_HEADER_FILES := \
   gc/heap.h \
   instrumentation.h \
   indirect_reference_table.h \
-  instruction_set.h \
   invoke_type.h \
   jdwp/jdwp.h \
   jdwp/jdwp_constants.h \

@@ -304,20 +304,22 @@ LIR* MipsMir2Lir::OpRegReg(OpKind op, RegStorage r_dest_src1, RegStorage r_src2)
     case kOpXor:
       return OpRegRegReg(op, r_dest_src1, r_dest_src1, r_src2);
     case kOp2Byte:
-#if __mips_isa_rev >= 2
-      res = NewLIR2(kMipsSeb, r_dest_src1.GetReg(), r_src2.GetReg());
-#else
-      res = OpRegRegImm(kOpLsl, r_dest_src1, r_src2, 24);
-      OpRegRegImm(kOpAsr, r_dest_src1, r_dest_src1, 24);
-#endif
+      if (cu_->GetInstructionSetFeatures()->AsMipsInstructionSetFeatures()
+          ->IsMipsIsaRevGreaterThanEqual2()) {
+        res = NewLIR2(kMipsSeb, r_dest_src1.GetReg(), r_src2.GetReg());
+      } else {
+        res = OpRegRegImm(kOpLsl, r_dest_src1, r_src2, 24);
+        OpRegRegImm(kOpAsr, r_dest_src1, r_dest_src1, 24);
+      }
       return res;
     case kOp2Short:
-#if __mips_isa_rev >= 2
-      res = NewLIR2(kMipsSeh, r_dest_src1.GetReg(), r_src2.GetReg());
-#else
-      res = OpRegRegImm(kOpLsl, r_dest_src1, r_src2, 16);
-      OpRegRegImm(kOpAsr, r_dest_src1, r_dest_src1, 16);
-#endif
+      if (cu_->GetInstructionSetFeatures()->AsMipsInstructionSetFeatures()
+          ->IsMipsIsaRevGreaterThanEqual2()) {
+        res = NewLIR2(kMipsSeh, r_dest_src1.GetReg(), r_src2.GetReg());
+      } else {
+        res = OpRegRegImm(kOpLsl, r_dest_src1, r_src2, 16);
+        OpRegRegImm(kOpAsr, r_dest_src1, r_dest_src1, 16);
+      }
       return res;
     case kOp2Char:
        return NewLIR3(kMipsAndi, r_dest_src1.GetReg(), r_src2.GetReg(), 0xFFFF);
