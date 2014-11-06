@@ -1828,10 +1828,18 @@ void InstructionCodeGeneratorX86::VisitInstanceFieldSet(HInstanceFieldSet* instr
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << field_type;
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      XmmRegister value = locations->InAt(1).As<XmmRegister>();
+      __ movss(Address(obj, offset), value);
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      XmmRegister value = locations->InAt(1).As<XmmRegister>();
+      __ movsd(Address(obj, offset), value);
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
@@ -1901,10 +1909,18 @@ void InstructionCodeGeneratorX86::VisitInstanceFieldGet(HInstanceFieldGet* instr
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << instruction->GetType();
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      XmmRegister out = locations->Out().As<XmmRegister>();
+      __ movss(out, Address(obj, offset));
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      XmmRegister out = locations->Out().As<XmmRegister>();
+      __ movsd(out, Address(obj, offset));
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
@@ -2492,10 +2508,18 @@ void InstructionCodeGeneratorX86::VisitStaticFieldGet(HStaticFieldGet* instructi
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << instruction->GetType();
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      XmmRegister out = locations->Out().As<XmmRegister>();
+      __ movss(out, Address(cls, offset));
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      XmmRegister out = locations->Out().As<XmmRegister>();
+      __ movsd(out, Address(cls, offset));
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
@@ -2567,10 +2591,18 @@ void InstructionCodeGeneratorX86::VisitStaticFieldSet(HStaticFieldSet* instructi
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << field_type;
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      XmmRegister value = locations->InAt(1).As<XmmRegister>();
+      __ movss(Address(cls, offset), value);
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      XmmRegister value = locations->InAt(1).As<XmmRegister>();
+      __ movsd(Address(cls, offset), value);
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();

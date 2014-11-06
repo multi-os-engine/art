@@ -1819,10 +1819,18 @@ void InstructionCodeGeneratorARM::VisitInstanceFieldSet(HInstanceFieldSet* instr
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << field_type;
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      SRegister value = locations->InAt(1).As<SRegister>();
+      __ StoreSToOffset(value, obj, offset);
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      DRegister value = FromLowSToD(locations->InAt(1).AsFpuRegisterPairLow<SRegister>());
+      __ StoreDToOffset(value, obj, offset);
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
@@ -1880,10 +1888,18 @@ void InstructionCodeGeneratorARM::VisitInstanceFieldGet(HInstanceFieldGet* instr
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << instruction->GetType();
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      SRegister out = locations->Out().As<SRegister>();
+      __ LoadSFromOffset(out, obj, offset);
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      DRegister out = FromLowSToD(locations->Out().AsFpuRegisterPairLow<SRegister>());
+      __ LoadDFromOffset(out, obj, offset);
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
@@ -2417,10 +2433,18 @@ void InstructionCodeGeneratorARM::VisitStaticFieldGet(HStaticFieldGet* instructi
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << instruction->GetType();
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      SRegister out = locations->Out().As<SRegister>();
+      __ LoadSFromOffset(out, cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      DRegister out = FromLowSToD(locations->Out().AsFpuRegisterPairLow<SRegister>());
+      __ LoadDFromOffset(out, cls, offset);
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
@@ -2479,10 +2503,18 @@ void InstructionCodeGeneratorARM::VisitStaticFieldSet(HStaticFieldSet* instructi
       break;
     }
 
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << field_type;
-      UNREACHABLE();
+    case Primitive::kPrimFloat: {
+      SRegister value = locations->InAt(1).As<SRegister>();
+      __ StoreSToOffset(value, cls, offset);
+      break;
+    }
+
+    case Primitive::kPrimDouble: {
+      DRegister value = FromLowSToD(locations->InAt(1).AsFpuRegisterPairLow<SRegister>());
+      __ StoreDToOffset(value, cls, offset);
+      break;
+    }
+
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
