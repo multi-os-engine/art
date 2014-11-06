@@ -321,7 +321,6 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   006-args \
   007-count10 \
   008-exceptions \
-  011-array-copy \
   013-math2 \
   016-intern \
   017-float \
@@ -409,7 +408,6 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   121-modifiers \
   121-simple-suspend-check \
   122-npe \
-  123-compiler-regressions-mt \
   124-missing-classes \
   125-gc-and-classloading \
   126-miranda-multidex \
@@ -426,13 +424,8 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   406-fields \
   407-arrays \
   409-materialized-condition \
-  410-floats \
   412-new-array \
-  413-regalloc-regression \
   414-static-fields \
-  415-optimizing-arith-neg \
-  416-optimizing-arith-not \
-  417-optimizing-arith-div \
   418-const-string \
   420-const-class \
   421-exceptions \
