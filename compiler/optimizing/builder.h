@@ -120,7 +120,9 @@ class HGraphBuilder : public ValueObject {
                       Primitive::Type input_type,
                       Primitive::Type result_type);
 
-  void BuildCheckedDiv(const Instruction& instruction,
+  void BuildCheckedDiv(int out_reg,
+                       int first_reg,
+                       int second_reg,
                        uint32_t dex_offset,
                        Primitive::Type type,
                        bool second_is_lit);
