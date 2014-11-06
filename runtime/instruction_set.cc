@@ -133,28 +133,13 @@ const InstructionSetFeatures* InstructionSetFeatures::FromVariant(InstructionSet
     case kThumb2:
       result = ArmInstructionSetFeatures::FromVariant(variant, error_msg);
       break;
-    default:
-      result = UnknownInstructionSetFeatures::Unknown(isa);
-      break;
-  }
-  CHECK_EQ(result == nullptr, error_msg->size() != 0);
-  return result;
-}
-
-const InstructionSetFeatures* InstructionSetFeatures::FromFeatureString(InstructionSet isa,
-                                                                        const std::string& feature_list,
-                                                                        std::string* error_msg) {
-  const InstructionSetFeatures* result;
-  switch (isa) {
-    case kArm:
-    case kThumb2:
-      result = ArmInstructionSetFeatures::FromFeatureString(feature_list, error_msg);
+    case kArm64:
+      result = Arm64InstructionSetFeatures::FromVariant(variant, error_msg);
       break;
     default:
       result = UnknownInstructionSetFeatures::Unknown(isa);
       break;
   }
-  // TODO: warn if feature_list doesn't agree with result's GetFeatureList().
   CHECK_EQ(result == nullptr, error_msg->size() != 0);
   return result;
 }
@@ -166,6 +151,9 @@ const InstructionSetFeatures* InstructionSetFeatures::FromBitmap(InstructionSet 
     case kArm:
     case kThumb2:
       result = ArmInstructionSetFeatures::FromBitmap(bitmap);
+      break;
+    case kArm64:
+      result = Arm64InstructionSetFeatures::FromBitmap(bitmap);
       break;
     default:
       result = UnknownInstructionSetFeatures::Unknown(isa);
@@ -182,6 +170,9 @@ const InstructionSetFeatures* InstructionSetFeatures::FromCppDefines() {
     case kThumb2:
       result = ArmInstructionSetFeatures::FromCppDefines();
       break;
+    case kArm64:
+      result = Arm64InstructionSetFeatures::FromCppDefines();
+      break;
     default:
       result = UnknownInstructionSetFeatures::Unknown(kRuntimeISA);
       break;
@@ -197,6 +188,9 @@ const InstructionSetFeatures* InstructionSetFeatures::FromCpuInfo() {
     case kThumb2:
       result = ArmInstructionSetFeatures::FromCpuInfo();
       break;
+    case kArm64:
+      result = Arm64InstructionSetFeatures::FromCpuInfo();
+      break;
     default:
       result = UnknownInstructionSetFeatures::Unknown(kRuntimeISA);
       break;
@@ -210,6 +204,9 @@ const InstructionSetFeatures* InstructionSetFeatures::FromHwcap() {
     case kArm:
     case kThumb2:
       result = ArmInstructionSetFeatures::FromHwcap();
+      break;
+    case kArm64:
+      result = Arm64InstructionSetFeatures::FromHwcap();
       break;
     default:
       result = UnknownInstructionSetFeatures::Unknown(kRuntimeISA);
@@ -225,6 +222,9 @@ const InstructionSetFeatures* InstructionSetFeatures::FromAssembly() {
     case kThumb2:
       result = ArmInstructionSetFeatures::FromAssembly();
       break;
+    case kArm64:
+      result = Arm64InstructionSetFeatures::FromAssembly();
+      break;
     default:
       result = UnknownInstructionSetFeatures::Unknown(kRuntimeISA);
       break;
@@ -237,35 +237,14 @@ const ArmInstructionSetFeatures* InstructionSetFeatures::AsArmInstructionSetFeat
   return down_cast<const ArmInstructionSetFeatures*>(this);
 }
 
+const Arm64InstructionSetFeatures* InstructionSetFeatures::AsArm64InstructionSetFeatures() const {
+  DCHECK_EQ(kArm64, GetInstructionSet());
+  return down_cast<const Arm64InstructionSetFeatures*>(this);
+}
+
 std::ostream& operator<<(std::ostream& os, const InstructionSetFeatures& rhs) {
   os << "ISA: " << rhs.GetInstructionSet() << " Feature string: " << rhs.GetFeatureString();
   return os;
-}
-
-const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromFeatureString(
-    const std::string& feature_list, std::string* error_msg) {
-  std::vector<std::string> features;
-  Split(feature_list, ',', &features);
-  bool has_lpae = false;
-  bool has_div = false;
-  for (auto i = features.begin(); i != features.end(); i++) {
-    std::string feature = Trim(*i);
-    if (feature == "default" || feature == "none") {
-      // Nothing to do.
-    } else if (feature == "div") {
-      has_div = true;
-    } else if (feature == "nodiv") {
-      has_div = false;
-    } else if (feature == "lpae") {
-      has_lpae = true;
-    } else if (feature == "nolpae") {
-      has_lpae = false;
-    } else {
-      *error_msg = StringPrintf("Unknown instruction set feature: '%s'", feature.c_str());
-      return nullptr;
-    }
-  }
-  return new ArmInstructionSetFeatures(has_lpae, has_div);
 }
 
 const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromVariant(
@@ -321,6 +300,7 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromVariant(
     // TODO: some of the architectures may not support all features required by ART and should be
     //       moved to unsupported_arm_variants[] above.
     static const char* arm_variants_without_known_features[] = {
+        "default",
         "arm7", "arm7m", "arm7d", "arm7dm", "arm7di", "arm7dmi", "arm70", "arm700", "arm700i",
         "arm710", "arm710c", "arm7100", "arm720", "arm7500", "arm7500fe", "arm7tdmi", "arm7tdmi-s",
         "arm710t", "arm720t", "arm740t",
@@ -475,6 +455,35 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromAssembly() {
   return new ArmInstructionSetFeatures(has_lpae, has_div);
 }
 
+const InstructionSetFeatures* ArmInstructionSetFeatures::AddFeaturesFromString(
+    const std::string& feature_list, std::string* error_msg) const {
+  std::vector<std::string> features;
+  Split(feature_list, ',', &features);
+  bool has_lpae = has_lpae_;
+  bool has_div = has_div_;
+  for (auto i = features.begin(); i != features.end(); i++) {
+    std::string feature = Trim(*i);
+    if (feature == "none") {
+      // Nothing to do.
+    } else if (feature == "default") {
+      // By default features are disabled.
+      has_lpae = false;
+      has_div = false;
+    } else if (feature == "div") {
+      has_div = true;
+    } else if (feature == "nodiv") {
+      has_div = false;
+    } else if (feature == "lpae") {
+      has_lpae = true;
+    } else if (feature == "nolpae") {
+      has_lpae = false;
+    } else {
+      *error_msg = StringPrintf("Unknown instruction set feature: '%s'", feature.c_str());
+      return nullptr;
+    }
+  }
+  return new ArmInstructionSetFeatures(has_lpae, has_div);
+}
 
 bool ArmInstructionSetFeatures::Equals(const InstructionSetFeatures* other) const {
   if (kArm != other->GetInstructionSet()) {
@@ -502,6 +511,77 @@ std::string ArmInstructionSetFeatures::GetFeatureString() const {
     // Strip leading comma.
     return result.substr(1, result.size());
   }
+}
+
+const Arm64InstructionSetFeatures* Arm64InstructionSetFeatures::FromVariant(
+    const std::string& variant ATTRIBUTE_UNUSED, std::string* error_msg ATTRIBUTE_UNUSED) {
+  bool is_a53 = true;  // Pessimistically assume all ARM64s are A53s.
+  return new Arm64InstructionSetFeatures(is_a53);
+}
+
+const Arm64InstructionSetFeatures* Arm64InstructionSetFeatures::FromBitmap(uint32_t bitmap) {
+  bool is_a53 = (bitmap & kA53Bitfield) != 0;
+  return new Arm64InstructionSetFeatures(is_a53);
+}
+
+const Arm64InstructionSetFeatures* Arm64InstructionSetFeatures::FromCppDefines() {
+  UNIMPLEMENTED(FATAL);
+  UNREACHABLE();
+}
+
+const Arm64InstructionSetFeatures* Arm64InstructionSetFeatures::FromCpuInfo() {
+  UNIMPLEMENTED(FATAL);
+  UNREACHABLE();
+}
+
+const Arm64InstructionSetFeatures* Arm64InstructionSetFeatures::FromHwcap() {
+  UNIMPLEMENTED(FATAL);
+  UNREACHABLE();
+}
+
+const Arm64InstructionSetFeatures* Arm64InstructionSetFeatures::FromAssembly() {
+  UNIMPLEMENTED(FATAL);
+  UNREACHABLE();
+}
+
+const InstructionSetFeatures* Arm64InstructionSetFeatures::AddFeaturesFromString(
+    const std::string& feature_list, std::string* error_msg) const {
+  std::vector<std::string> features;
+  Split(feature_list, ',', &features);
+  bool is_a53 = is_a53_;
+  for (auto i = features.begin(); i != features.end(); i++) {
+    std::string feature = Trim(*i);
+    if (feature == "none") {
+      // Nothing to do.
+    } else if (feature == "default") {
+      // By default we assume a53.
+      is_a53 = true;
+    } else if (feature == "a53") {
+      is_a53 = true;
+    } else if (feature == "noa53") {
+      is_a53 = false;
+    } else {
+      *error_msg = StringPrintf("Unknown instruction set feature: '%s'", feature.c_str());
+      return nullptr;
+    }
+  }
+  return new Arm64InstructionSetFeatures(is_a53);
+}
+
+bool Arm64InstructionSetFeatures::Equals(const InstructionSetFeatures* other) const {
+  if (kArm64 != other->GetInstructionSet()) {
+    return false;
+  }
+  const Arm64InstructionSetFeatures* other_as_arm = other->AsArm64InstructionSetFeatures();
+  return is_a53_ == other_as_arm->is_a53_;
+}
+
+uint32_t Arm64InstructionSetFeatures::AsBitmap() const {
+  return is_a53_ ? kA53Bitfield : 0;
+}
+
+std::string Arm64InstructionSetFeatures::GetFeatureString() const {
+  return is_a53_ ? "a53" : "none";
 }
 
 }  // namespace art

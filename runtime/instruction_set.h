@@ -179,6 +179,7 @@ static inline size_t GetBytesPerFprSpillLocation(InstructionSet isa) {
 size_t GetStackOverflowReservedBytes(InstructionSet isa);
 
 class ArmInstructionSetFeatures;
+class Arm64InstructionSetFeatures;
 
 // Abstraction used to describe features of a different instruction sets.
 class InstructionSetFeatures {
@@ -187,11 +188,6 @@ class InstructionSetFeatures {
   static const InstructionSetFeatures* FromVariant(InstructionSet isa,
                                                    const std::string& variant,
                                                    std::string* error_msg);
-
-  // Parse a string of the form "div,lpae" and create an InstructionSetFeatures.
-  static const InstructionSetFeatures* FromFeatureString(InstructionSet isa,
-                                                         const std::string& feature_list,
-                                                         std::string* error_msg);
 
   // Parse a bitmap for the given isa and create an InstructionSetFeatures.
   static const InstructionSetFeatures* FromBitmap(InstructionSet isa, uint32_t bitmap);
@@ -210,6 +206,11 @@ class InstructionSetFeatures {
   // InstructionSetFeatures. This works around kernel bugs in AT_HWCAP and /proc/cpuinfo.
   static const InstructionSetFeatures* FromAssembly();
 
+  // Parse a string of the form "div,lpae" adding these to a new InstructionSetFeatures.
+  virtual const InstructionSetFeatures* AddFeaturesFromString(const std::string& feature_list,
+                                                              std::string* error_msg) const
+      WARN_UNUSED = 0;
+
   // Are these features the same as the other given features?
   virtual bool Equals(const InstructionSetFeatures* other) const = 0;
 
@@ -224,6 +225,9 @@ class InstructionSetFeatures {
 
   // Down cast this ArmInstructionFeatures.
   const ArmInstructionSetFeatures* AsArmInstructionSetFeatures() const;
+
+  // Down cast this Arm64InstructionFeatures.
+  const Arm64InstructionSetFeatures* AsArm64InstructionSetFeatures() const;
 
   virtual ~InstructionSetFeatures() {}
 
@@ -242,10 +246,6 @@ class ArmInstructionSetFeatures FINAL : public InstructionSetFeatures {
   static const ArmInstructionSetFeatures* FromVariant(const std::string& variant,
                                                       std::string* error_msg);
 
-  // Parse a string of the form "div,lpae" and create an InstructionSetFeatures.
-  static const ArmInstructionSetFeatures* FromFeatureString(const std::string& feature_list,
-                                                            std::string* error_msg);
-
   // Parse a bitmap and create an InstructionSetFeatures.
   static const ArmInstructionSetFeatures* FromBitmap(uint32_t bitmap);
 
@@ -262,6 +262,10 @@ class ArmInstructionSetFeatures FINAL : public InstructionSetFeatures {
   // Use assembly tests of the current runtime (ie kRuntimeISA) to determine the
   // InstructionSetFeatures. This works around kernel bugs in AT_HWCAP and /proc/cpuinfo.
   static const ArmInstructionSetFeatures* FromAssembly();
+
+  // Parse a string of the form "div,lpae" adding these to a new InstructionSetFeatures.
+  const InstructionSetFeatures* AddFeaturesFromString(const std::string& feature_list,
+                                                      std::string* error_msg) const OVERRIDE;
 
   bool Equals(const InstructionSetFeatures* other) const OVERRIDE;
 
@@ -304,11 +308,84 @@ class ArmInstructionSetFeatures FINAL : public InstructionSetFeatures {
   DISALLOW_COPY_AND_ASSIGN(ArmInstructionSetFeatures);
 };
 
+// Instruction set features relevant to the ARM architecture.
+class Arm64InstructionSetFeatures FINAL : public InstructionSetFeatures {
+ public:
+  // Process a CPU variant string like "krait" or "cortex-a15" and create InstructionSetFeatures.
+  static const Arm64InstructionSetFeatures* FromVariant(const std::string& variant,
+                                                        std::string* error_msg);
+
+  // Parse a bitmap and create an InstructionSetFeatures.
+  static const Arm64InstructionSetFeatures* FromBitmap(uint32_t bitmap);
+
+  // Turn C pre-processor #defines into the equivalent instruction set features.
+  static const Arm64InstructionSetFeatures* FromCppDefines();
+
+  // Process /proc/cpuinfo and use kRuntimeISA to produce InstructionSetFeatures.
+  static const Arm64InstructionSetFeatures* FromCpuInfo();
+
+  // Process the auxiliary vector AT_HWCAP entry and use kRuntimeISA to produce
+  // InstructionSetFeatures.
+  static const Arm64InstructionSetFeatures* FromHwcap();
+
+  // Use assembly tests of the current runtime (ie kRuntimeISA) to determine the
+  // InstructionSetFeatures. This works around kernel bugs in AT_HWCAP and /proc/cpuinfo.
+  static const Arm64InstructionSetFeatures* FromAssembly();
+
+  // Parse a string of the form "a53" adding these to a new InstructionSetFeatures.
+  const InstructionSetFeatures* AddFeaturesFromString(const std::string& feature_list,
+                                                      std::string* error_msg) const OVERRIDE;
+
+  bool Equals(const InstructionSetFeatures* other) const OVERRIDE;
+
+  InstructionSet GetInstructionSet() const OVERRIDE {
+    return kArm;
+  }
+
+  uint32_t AsBitmap() const OVERRIDE;
+
+  // Return a string of the form "a53" or "none".
+  std::string GetFeatureString() const OVERRIDE;
+
+  // Generate code addressing Cortex-A53 erratum 835769?
+  bool IsA53() const {
+      return is_a53_;
+  }
+
+  virtual ~Arm64InstructionSetFeatures() {}
+
+ private:
+  explicit Arm64InstructionSetFeatures(bool is_a53)
+      : is_a53_(is_a53) {
+  }
+
+  // Bitmap positions for encoding features as a bitmap.
+  enum {
+    kA53Bitfield = 1,
+  };
+
+  const bool is_a53_;
+
+  DISALLOW_COPY_AND_ASSIGN(Arm64InstructionSetFeatures);
+};
+
 // A class used for instruction set features on ISAs that don't yet have any features defined.
 class UnknownInstructionSetFeatures FINAL : public InstructionSetFeatures {
  public:
   static const UnknownInstructionSetFeatures* Unknown(InstructionSet isa) {
     return new UnknownInstructionSetFeatures(isa);
+  }
+
+  const InstructionSetFeatures* AddFeaturesFromString(
+      const std::string& feature_list ATTRIBUTE_UNUSED,
+      std::string* error_msg ATTRIBUTE_UNUSED) const OVERRIDE {
+    if (feature_list == "default" || feature_list == "default") {
+      return new UnknownInstructionSetFeatures(isa_);
+    } else {
+      *error_msg = "Unknown features: ";
+      *error_msg += feature_list;
+      return nullptr;
+    }
   }
 
   bool Equals(const InstructionSetFeatures* other) const OVERRIDE {

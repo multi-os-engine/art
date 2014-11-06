@@ -849,12 +849,9 @@ static int dex2oat(int argc, char** argv) {
   int num_dex_methods_threshold = CompilerOptions::kDefaultNumDexMethodsThreshold;
   std::vector<std::string> verbose_methods;
 
-  // Initialize ISA and ISA features to default values.
+  // Initialize ISA and set ISA features to null.
   InstructionSet instruction_set = kRuntimeISA;
-  std::string error_msg;
-  std::unique_ptr<const InstructionSetFeatures> instruction_set_features(
-      InstructionSetFeatures::FromFeatureString(kNone, "default", &error_msg));
-  CHECK(instruction_set_features.get() != nullptr) << error_msg;
+  std::unique_ptr<const InstructionSetFeatures> instruction_set_features(nullptr);
 
   // Profile file to use
   std::string profile_file;
@@ -875,6 +872,8 @@ static int dex2oat(int argc, char** argv) {
   bool implicit_null_checks = false;
   bool implicit_so_checks = false;
   bool implicit_suspend_checks = false;
+
+  std::string error_msg;
 
   for (int i = 0; i < argc; i++) {
     const StringPiece option(argv[i]);
@@ -966,8 +965,13 @@ static int dex2oat(int argc, char** argv) {
       }
     } else if (option.starts_with("--instruction-set-features=")) {
       StringPiece str = option.substr(strlen("--instruction-set-features=")).data();
+      if (instruction_set_features.get() == nullptr) {
+        instruction_set_features.reset(
+            InstructionSetFeatures::FromVariant(instruction_set, "default", &error_msg));
+        CHECK(instruction_set_features.get() != nullptr) << error_msg;
+      }
       instruction_set_features.reset(
-          InstructionSetFeatures::FromFeatureString(instruction_set, str.as_string(), &error_msg));
+          instruction_set_features->AddFeaturesFromString(str.as_string(), &error_msg));
       if (instruction_set_features.get() == nullptr) {
         Usage("%s", error_msg.c_str());
       }
@@ -1179,7 +1183,7 @@ static int dex2oat(int argc, char** argv) {
   // instruction set.
   if (instruction_set_features->GetInstructionSet() == kNone) {
     instruction_set_features.reset(
-      InstructionSetFeatures::FromFeatureString(instruction_set, "default", &error_msg));
+      InstructionSetFeatures::FromVariant(instruction_set, "default", &error_msg));
   }
 
   if (compiler_filter_string == nullptr) {

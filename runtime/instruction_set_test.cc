@@ -64,7 +64,7 @@ TEST_F(InstructionSetTest, X86Features) {
 
   // Build features for a 32-bit x86 default processor.
   std::unique_ptr<const InstructionSetFeatures> x86_default_features(
-      InstructionSetFeatures::FromFeatureString(kX86, "default", &error_msg));
+      x86_features->AddFeaturesFromString("default", &error_msg));
   ASSERT_TRUE(x86_default_features.get() != nullptr) << error_msg;
   EXPECT_EQ(x86_default_features->GetInstructionSet(), kX86);
   EXPECT_TRUE(x86_default_features->Equals(x86_default_features.get()));
@@ -83,6 +83,18 @@ TEST_F(InstructionSetTest, X86Features) {
   EXPECT_FALSE(x86_64_features->Equals(x86_features.get()));
   EXPECT_FALSE(x86_64_features->Equals(x86_default_features.get()));
   EXPECT_TRUE(x86_features->Equals(x86_default_features.get()));
+}
+
+TEST_F(InstructionSetTest, Arm64Features) {
+  // Build features for an ARM64 processor.
+  std::string error_msg;
+  std::unique_ptr<const InstructionSetFeatures> arm64_features(
+      InstructionSetFeatures::FromVariant(kArm64, "default", &error_msg));
+  ASSERT_TRUE(arm64_features.get() != nullptr) << error_msg;
+  EXPECT_EQ(arm64_features->GetInstructionSet(), kArm64);
+  EXPECT_TRUE(arm64_features->Equals(arm64_features.get()));
+  EXPECT_STREQ("a53", arm64_features->GetFeatureString().c_str());
+  EXPECT_EQ(arm64_features->AsBitmap(), 1U);
 }
 
 TEST_F(InstructionSetTest, ArmFeaturesFromVariant) {
@@ -132,11 +144,15 @@ TEST_F(InstructionSetTest, ArmFeaturesFromVariant) {
   EXPECT_NE(error_msg.size(), 0U);
 }
 
-TEST_F(InstructionSetTest, ArmFeaturesFromString) {
-  // Build features for a 32-bit ARM with LPAE and div processor.
+TEST_F(InstructionSetTest, ArmAddFeaturesFromString) {
   std::string error_msg;
+  std::unique_ptr<const InstructionSetFeatures> base_features(
+      InstructionSetFeatures::FromVariant(kArm, "arm7", &error_msg));
+  ASSERT_TRUE(base_features.get() != nullptr) << error_msg;
+
+  // Build features for a 32-bit ARM with LPAE and div processor.
   std::unique_ptr<const InstructionSetFeatures> krait_features(
-      InstructionSetFeatures::FromFeatureString(kArm, "lpae,div", &error_msg));
+      base_features->AddFeaturesFromString("lpae,div", &error_msg));
   ASSERT_TRUE(krait_features.get() != nullptr) << error_msg;
 
   ASSERT_EQ(krait_features->GetInstructionSet(), kArm);
@@ -148,7 +164,7 @@ TEST_F(InstructionSetTest, ArmFeaturesFromString) {
 
   // Build features for a 32-bit ARM processor with LPAE and div flipped.
   std::unique_ptr<const InstructionSetFeatures> denver_features(
-      InstructionSetFeatures::FromFeatureString(kArm, "div,lpae", &error_msg));
+      base_features->AddFeaturesFromString("div,lpae", &error_msg));
   ASSERT_TRUE(denver_features.get() != nullptr) << error_msg;
 
   EXPECT_TRUE(denver_features->Equals(denver_features.get()));
@@ -161,7 +177,7 @@ TEST_F(InstructionSetTest, ArmFeaturesFromString) {
 
   // Build features for a 32-bit default ARM processor.
   std::unique_ptr<const InstructionSetFeatures> arm7_features(
-      InstructionSetFeatures::FromFeatureString(kArm, "default", &error_msg));
+      base_features->AddFeaturesFromString("default", &error_msg));
   ASSERT_TRUE(arm7_features.get() != nullptr) << error_msg;
 
   EXPECT_TRUE(arm7_features->Equals(arm7_features.get()));
