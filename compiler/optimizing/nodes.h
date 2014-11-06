@@ -516,6 +516,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   M(Sub, BinaryOperation)                                               \
   M(SuspendCheck, Instruction)                                          \
   M(Temporary, Instruction)                                             \
+  M(TypeCheck, Instruction)                                             \
   M(TypeConversion, Instruction)                                        \
 
 #define FOR_EACH_INSTRUCTION(M)                                         \
@@ -2250,6 +2251,45 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
 
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldSet);
 };
+
+class HTypeCheck : public HExpression<2> {
+ public:
+  explicit HTypeCheck(HInstruction* object,
+                      HLoadClass* constant,
+                      bool class_is_final,
+                      uint32_t dex_pc)
+      : HExpression(Primitive::kPrimBoolean, SideEffects::None()),
+        class_is_final_(class_is_final),
+        dex_pc_(dex_pc) {
+    SetRawInputAt(0, object);
+    SetRawInputAt(1, constant);
+  }
+
+  bool CanBeMoved() const OVERRIDE { return true; }
+
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    UNUSED(other);
+    return true;
+  }
+
+  bool NeedsEnvironment() const OVERRIDE {
+    // TODO: Can we debug when doing a runtime instanceof check?
+    return false;
+  }
+
+  uint32_t GetDexPc() const { return dex_pc_; }
+
+  bool IsClassFinal() const { return class_is_final_; }
+
+  DECLARE_INSTRUCTION(TypeCheck);
+
+ private:
+  const bool class_is_final_;
+  const uint32_t dex_pc_;
+
+  DISALLOW_COPY_AND_ASSIGN(HTypeCheck);
+};
+
 
 class MoveOperands : public ArenaObject<kArenaAllocMisc> {
  public:

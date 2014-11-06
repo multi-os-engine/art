@@ -342,6 +342,7 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   051-thread \
   052-verifier-fun \
   054-uncaught \
+  055-enum-performance \
   056-const-string-jumbo \
   061-out-of-memory \
   063-process-manager \
@@ -407,6 +408,7 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   418-const-string \
   419-long-parameter \
   420-const-class \
+  422-instanceof \
   422-type-conversion \
   700-LoadArgRegs \
   701-easy-div-rem \
