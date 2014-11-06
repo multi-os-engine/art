@@ -397,45 +397,6 @@ void CodeGeneratorARM64::Bind(HBasicBlock* block) {
   __ Bind(GetLabelOf(block));
 }
 
-void CodeGeneratorARM64::MoveHelper(Location destination,
-                                    Location source,
-                                    Primitive::Type type) {
-  if (source.Equals(destination)) {
-    return;
-  }
-  if (destination.IsRegister()) {
-    Register dst = RegisterFrom(destination, type);
-    if (source.IsStackSlot() || source.IsDoubleStackSlot()) {
-      DCHECK(dst.Is64Bits() || !source.IsDoubleStackSlot());
-      __ Ldr(dst, StackOperandFrom(source));
-    } else {
-      __ Mov(dst, OperandFrom(source, type));
-    }
-  } else if (destination.IsFpuRegister()) {
-    FPRegister dst = FPRegisterFrom(destination, type);
-    if (source.IsStackSlot() || source.IsDoubleStackSlot()) {
-      DCHECK(dst.Is64Bits() || !source.IsDoubleStackSlot());
-      __ Ldr(dst, StackOperandFrom(source));
-    } else if (source.IsFpuRegister()) {
-      __ Fmov(dst, FPRegisterFrom(source, type));
-    } else {
-      __ Fmov(dst, DoubleConstantFrom(source));
-    }
-  } else {
-    DCHECK(destination.IsStackSlot() || destination.IsDoubleStackSlot());
-    if (source.IsRegister()) {
-      __ Str(RegisterFrom(source, type), StackOperandFrom(destination));
-    } else if (source.IsFpuRegister()) {
-      __ Str(FPRegisterFrom(source, type), StackOperandFrom(destination));
-    } else {
-      UseScratchRegisterScope temps(assembler_.vixl_masm_);
-      Register temp = destination.IsDoubleStackSlot() ? temps.AcquireX() : temps.AcquireW();
-      __ Ldr(temp, StackOperandFrom(source));
-      __ Str(temp, StackOperandFrom(destination));
-    }
-  }
-}
-
 void CodeGeneratorARM64::Move(HInstruction* instruction,
                               Location location,
                               HInstruction* move_for) {
@@ -568,8 +529,97 @@ void CodeGeneratorARM64::DumpFloatingPointRegister(std::ostream& stream, int reg
   stream << Arm64ManagedRegister::FromDRegister(DRegister(reg));
 }
 
+void CodeGeneratorARM64::MoveHelper(Location destination,
+                                    Location source,
+                                    Primitive::Type type) {
+  if (source.Equals(destination)) {
+    return;
+  }
+  if (destination.IsRegister()) {
+    Register dst = RegisterFrom(destination, type);
+    if (source.IsStackSlot() || source.IsDoubleStackSlot()) {
+      DCHECK(dst.Is64Bits() || !source.IsDoubleStackSlot());
+      __ Ldr(dst, StackOperandFrom(source));
+    } else {
+      __ Mov(dst, OperandFrom(source, type));
+    }
+  } else if (destination.IsFpuRegister()) {
+    FPRegister dst = FPRegisterFrom(destination, type);
+    if (source.IsStackSlot() || source.IsDoubleStackSlot()) {
+      DCHECK(dst.Is64Bits() || !source.IsDoubleStackSlot());
+      __ Ldr(dst, StackOperandFrom(source));
+    } else if (source.IsFpuRegister()) {
+      __ Fmov(dst, FPRegisterFrom(source, type));
+    } else {
+      __ Fmov(dst, DoubleConstantFrom(source));
+    }
+  } else {
+    DCHECK(destination.IsStackSlot() || destination.IsDoubleStackSlot());
+    if (source.IsRegister()) {
+      __ Str(RegisterFrom(source, type), StackOperandFrom(destination));
+    } else if (source.IsFpuRegister()) {
+      __ Str(FPRegisterFrom(source, type), StackOperandFrom(destination));
+    } else {
+      UseScratchRegisterScope temps(assembler_.vixl_masm_);
+      Register temp = destination.IsDoubleStackSlot() ? temps.AcquireX() : temps.AcquireW();
+      __ Ldr(temp, StackOperandFrom(source));
+      __ Str(temp, StackOperandFrom(destination));
+    }
+  }
+}
+
+void CodeGeneratorARM64::Load(Primitive::Type type, vixl::Register dst, const vixl::MemOperand& src) {
+  switch (type) {
+    case Primitive::kPrimBoolean:
+      __ Ldrb(dst, src);
+      break;
+    case Primitive::kPrimByte:
+      __ Ldrsb(dst, src);
+      break;
+    case Primitive::kPrimShort:
+      __ Ldrsh(dst, src);
+      break;
+    case Primitive::kPrimChar:
+      __ Ldrh(dst, src);
+      break;
+    case Primitive::kPrimInt:
+    case Primitive::kPrimNot:
+    case Primitive::kPrimLong:
+      DCHECK(dst.Is64Bits() == (type == Primitive::kPrimLong));
+      __ Ldr(dst, src);
+      break;
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+    case Primitive::kPrimVoid:
+      LOG(FATAL) << "Unreachable type " << type;
+  }
+}
+
+void CodeGeneratorARM64::Store(Primitive::Type type, vixl::Register rt, const vixl::MemOperand& dst) {
+  switch (type) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+      __ Strb(rt, dst);
+      break;
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+      __ Strh(rt, dst);
+      break;
+    case Primitive::kPrimInt:
+    case Primitive::kPrimNot:
+    case Primitive::kPrimLong:
+      DCHECK(rt.Is64Bits() == (type == Primitive::kPrimLong));
+      __ Str(rt, dst);
+      break;
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+    case Primitive::kPrimVoid:
+      LOG(FATAL) << "Unreachable type " << type;
+  }
+}
+
 #undef __
-#define __ assembler_->vixl_masm_->
+#define __ GetAssembler()->vixl_masm_->
 
 InstructionCodeGeneratorARM64::InstructionCodeGeneratorARM64(HGraph* graph,
                                                              CodeGeneratorARM64* codegen)
@@ -578,16 +628,11 @@ InstructionCodeGeneratorARM64::InstructionCodeGeneratorARM64(HGraph* graph,
         codegen_(codegen) {}
 
 #define FOR_EACH_UNIMPLEMENTED_INSTRUCTION(M)              \
-  M(ArrayGet)                                              \
-  M(ArraySet)                                              \
   M(ClinitCheck)                                           \
-  M(Div)                                                   \
   M(DivZeroCheck)                                          \
   M(LoadClass)                                             \
   M(LoadException)                                         \
   M(LoadString)                                            \
-  M(Neg)                                                   \
-  M(NewArray)                                              \
   M(ParallelMove)                                          \
   M(StaticFieldGet)                                        \
   M(StaticFieldSet)                                        \
@@ -684,6 +729,55 @@ void InstructionCodeGeneratorARM64::VisitAdd(HAdd* instruction) {
   HandleAddSub(instruction);
 }
 
+static size_t ElementShiftSize(Primitive::Type type) {
+  switch (type) {
+    case Primitive::kPrimVoid:    return 0;
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:    return 0;
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:   return 1;
+    case Primitive::kPrimInt:
+    case Primitive::kPrimFloat:   return 2;
+    case Primitive::kPrimLong:
+    case Primitive::kPrimDouble:  return 3;
+    case Primitive::kPrimNot:     return kObjectReferenceSize;
+    default:
+      LOG(FATAL) << "Invalid type " << static_cast<int>(type);
+      return 0;
+  }
+}
+
+void LocationsBuilderARM64::VisitArrayGet(HArrayGet* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RegisterOrConstant(instruction->InputAt(1)));
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorARM64::VisitArrayGet(HArrayGet* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  Primitive::Type type = instruction->GetType();
+  Register obj = InputRegisterAt(instruction, 0);
+  Register out = OutputRegister(instruction);
+  Location index = locations->InAt(1);
+  size_t offset = mirror::Array::DataOffset(Primitive::ComponentSize(type)).Uint32Value();
+  MemOperand source(obj);
+  UseScratchRegisterScope temps(GetAssembler()->vixl_masm_);
+
+  if (index.IsConstant()) {
+    offset += Int64ConstantFrom(index) << ElementShiftSize(type);
+    source = MemOperand(obj, offset);
+  } else {
+    Register temp = temps.AcquireSameSizeAs(obj);
+    Register index_reg = RegisterFrom(index, Primitive::kPrimInt);
+    __ Add(temp, obj, Operand(index_reg, LSL, ElementShiftSize(type)));
+    source = MemOperand(temp, offset);
+  }
+
+  codegen_->Load(type, out, source);
+}
+
 void LocationsBuilderARM64::VisitArrayLength(HArrayLength* instruction) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
   locations->SetInAt(0, Location::RequiresRegister());
@@ -693,6 +787,54 @@ void LocationsBuilderARM64::VisitArrayLength(HArrayLength* instruction) {
 void InstructionCodeGeneratorARM64::VisitArrayLength(HArrayLength* instruction) {
   __ Ldr(OutputRegister(instruction),
          HeapOperand(InputRegisterAt(instruction, 0), mirror::Array::LengthOffset()));
+}
+
+void LocationsBuilderARM64::VisitArraySet(HArraySet* instruction) {
+  Primitive::Type value_type = instruction->GetComponentType();
+  bool is_object = value_type == Primitive::kPrimNot;
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(
+      instruction, is_object ? LocationSummary::kCall : LocationSummary::kNoCall);
+  if (is_object) {
+    InvokeRuntimeCallingConvention calling_convention;
+    locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
+    locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
+    locations->SetInAt(2, LocationFrom(calling_convention.GetRegisterAt(2)));
+  } else {
+    locations->SetInAt(0, Location::RequiresRegister());
+    locations->SetInAt(1, Location::RegisterOrConstant(instruction->InputAt(1)));
+    locations->SetInAt(2, Location::RequiresRegister());
+  }
+}
+
+void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
+  Primitive::Type value_type = instruction->GetComponentType();
+  if (value_type == Primitive::kPrimNot) {
+    __ Ldr(lr, MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pAputObject).Int32Value()));
+    __ Blr(lr);
+    codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
+    DCHECK(!codegen_->IsLeafMethod());
+
+  } else {
+    LocationSummary* locations = instruction->GetLocations();
+    Register obj = InputRegisterAt(instruction, 0);
+    Register value = InputRegisterAt(instruction, 2);
+    Location index = locations->InAt(1);
+    size_t offset = mirror::Array::DataOffset(Primitive::ComponentSize(value_type)).Uint32Value();
+    MemOperand destination(obj);
+    UseScratchRegisterScope temps(GetAssembler()->vixl_masm_);
+
+    if (index.IsConstant()) {
+      offset += Int64ConstantFrom(index) << ElementShiftSize(value_type);
+      destination = MemOperand(obj, offset);
+    } else {
+      Register temp = temps.AcquireSameSizeAs(obj);
+      Register index_reg = InputRegisterAt(instruction, 1);
+      __ Add(temp, obj, Operand(index_reg, LSL, ElementShiftSize(value_type)));
+      destination = MemOperand(temp, offset);
+    }
+
+    codegen_->Store(value_type, value, destination);
+  }
 }
 
 void LocationsBuilderARM64::VisitCompare(HCompare* instruction) {
@@ -761,6 +903,47 @@ void LocationsBuilderARM64::Visit##Name(H##Name* comp) { VisitCondition(comp); }
 void InstructionCodeGeneratorARM64::Visit##Name(H##Name* comp) { VisitCondition(comp); }
 FOR_EACH_CONDITION_INSTRUCTION(DEFINE_CONDITION_VISITORS)
 #undef FOR_EACH_CONDITION_INSTRUCTION
+
+void LocationsBuilderARM64::VisitDiv(HDiv* div) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(div, LocationSummary::kNoCall);
+  switch (div->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      break;
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected div type " << div->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM64::VisitDiv(HDiv* div) {
+  Primitive::Type type = div->GetResultType();
+  switch (type) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      __ Sdiv(OutputRegister(div), InputRegisterAt(div, 0), InputRegisterAt(div, 1));
+      break;
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      __ Fdiv(OutputFPRegister(div), InputFPRegisterAt(div, 0), InputFPRegisterAt(div, 1));
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected div type " << type;
+  }
+}
 
 void LocationsBuilderARM64::VisitDoubleConstant(HDoubleConstant* constant) {
   LocationSummary* locations =
@@ -862,44 +1045,9 @@ void LocationsBuilderARM64::VisitInstanceFieldGet(HInstanceFieldGet* instruction
 }
 
 void InstructionCodeGeneratorARM64::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
-  Primitive::Type res_type = instruction->GetType();
-  Register res = OutputRegister(instruction);
-  Register obj = InputRegisterAt(instruction, 0);
-  uint32_t offset = instruction->GetFieldOffset().Uint32Value();
-
-  switch (res_type) {
-    case Primitive::kPrimBoolean: {
-      __ Ldrb(res, MemOperand(obj, offset));
-      break;
-    }
-    case Primitive::kPrimByte: {
-      __ Ldrsb(res, MemOperand(obj, offset));
-      break;
-    }
-    case Primitive::kPrimShort: {
-      __ Ldrsh(res, MemOperand(obj, offset));
-      break;
-    }
-    case Primitive::kPrimChar: {
-      __ Ldrh(res, MemOperand(obj, offset));
-      break;
-    }
-    case Primitive::kPrimInt:
-    case Primitive::kPrimNot:
-    case Primitive::kPrimLong: {  // TODO: support volatile.
-      DCHECK(res.IsX() == (res_type == Primitive::kPrimLong));
-      __ Ldr(res, MemOperand(obj, offset));
-      break;
-    }
-
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register res_type " << res_type;
-      break;
-
-    case Primitive::kPrimVoid:
-      LOG(FATAL) << "Unreachable res_type " << res_type;
-  }
+  codegen_->Load(instruction->GetType(),
+                 OutputRegister(instruction),
+                 MemOperand(InputRegisterAt(instruction, 0), instruction->GetFieldOffset().Uint32Value()));
 }
 
 void LocationsBuilderARM64::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
@@ -909,43 +1057,12 @@ void LocationsBuilderARM64::VisitInstanceFieldSet(HInstanceFieldSet* instruction
 }
 
 void InstructionCodeGeneratorARM64::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
-  Register obj = InputRegisterAt(instruction, 0);
+  Primitive::Type field_type = instruction->GetFieldType();
   Register value = InputRegisterAt(instruction, 1);
-  Primitive::Type field_type = instruction->InputAt(1)->GetType();
-  uint32_t offset = instruction->GetFieldOffset().Uint32Value();
-
-  switch (field_type) {
-    case Primitive::kPrimBoolean:
-    case Primitive::kPrimByte: {
-      __ Strb(value, MemOperand(obj, offset));
-      break;
-    }
-
-    case Primitive::kPrimShort:
-    case Primitive::kPrimChar: {
-      __ Strh(value, MemOperand(obj, offset));
-      break;
-    }
-
-    case Primitive::kPrimInt:
-    case Primitive::kPrimNot:
-    case Primitive::kPrimLong: {
-      DCHECK(value.IsX() == (field_type == Primitive::kPrimLong));
-      __ Str(value, MemOperand(obj, offset));
-
-      if (field_type == Primitive::kPrimNot) {
-        codegen_->MarkGCCard(obj, value);
-      }
-      break;
-    }
-
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << field_type;
-      break;
-
-    case Primitive::kPrimVoid:
-      LOG(FATAL) << "Unreachable type " << field_type;
+  Register obj = InputRegisterAt(instruction, 0);
+  codegen_->Store(field_type, value, MemOperand(obj, instruction->GetFieldOffset().Uint32Value()));
+  if (field_type == Primitive::kPrimNot) {
+    codegen_->MarkGCCard(obj, value);
   }
 }
 
@@ -1106,6 +1223,69 @@ void InstructionCodeGeneratorARM64::VisitMul(HMul* mul) {
     default:
       LOG(FATAL) << "Unexpected mul type " << mul->GetResultType();
   }
+}
+
+void LocationsBuilderARM64::VisitNeg(HNeg* neg) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(neg, LocationSummary::kNoCall);
+  switch (neg->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RegisterOrConstant(neg->InputAt(0)));
+      locations->SetOut(Location::RequiresRegister());
+      break;
+    }
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      LOG(FATAL) << "Not yet implemented neg type " << neg->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected neg type " << neg->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM64::VisitNeg(HNeg* neg) {
+  switch (neg->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      __ Neg(OutputRegister(neg), InputOperandAt(neg, 0));
+      break;
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      LOG(FATAL) << "Not yet implemented neg type " << neg->GetResultType();
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected neg type " << neg->GetResultType();
+  }
+}
+
+void LocationsBuilderARM64::VisitNewArray(HNewArray* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(0)));
+  locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(1)));
+  locations->SetOut(LocationFrom(x0));
+  locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(2)));
+}
+
+void InstructionCodeGeneratorARM64::VisitNewArray(HNewArray* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  InvokeRuntimeCallingConvention calling_convention;
+  Register type_index = RegisterFrom(locations->GetTemp(0), Primitive::kPrimInt);
+  DCHECK(type_index.Is(w0));
+  Register current_method = RegisterFrom(locations->GetTemp(1), Primitive::kPrimNot);
+  DCHECK(current_method.Is(w1));
+  __ Ldr(current_method, MemOperand(sp, kCurrentMethodStackOffset));
+  __ Mov(type_index, instruction->GetTypeIndex());
+  __ Ldr(lr, MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pAllocArrayWithAccessCheck).Int32Value()));
+  __ Blr(lr);
+  codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
+  DCHECK(!codegen_->IsLeafMethod());
 }
 
 void LocationsBuilderARM64::VisitNewInstance(HNewInstance* instruction) {
