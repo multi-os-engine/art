@@ -481,9 +481,16 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
   } else if (!info->is_range) {
     // TUNING: interleave
     for (int i = 0; i < elems; i++) {
-      RegLocation rl_arg = LoadValue(info->args[i], kCoreReg);
-      Store32Disp(ref_reg,
-                  mirror::Array::DataOffset(component_size).Int32Value() + i * 4, rl_arg.reg);
+      RegLocation rl_arg;
+      if (info->args[i].ref) {
+        rl_arg = LoadValue(info->args[i], kRefReg);
+        StoreRefDisp(ref_reg,
+                    mirror::Array::DataOffset(component_size).Int32Value() + i * 4, rl_arg.reg, kNotVolatile);
+      } else {
+        rl_arg = LoadValue(info->args[i], kCoreReg);
+        Store32Disp(ref_reg,
+                    mirror::Array::DataOffset(component_size).Int32Value() + i * 4, rl_arg.reg);
+      }
       // If the LoadValue caused a temp to be allocated, free it
       if (IsTemp(rl_arg.reg)) {
         FreeTemp(rl_arg.reg);
