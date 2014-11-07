@@ -427,16 +427,13 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   407-arrays \
   409-materialized-condition \
   410-floats \
-  411-optimizing-arith \
   412-new-array \
   413-regalloc-regression \
-  414-optimizing-arith-sub \
   414-static-fields \
   415-optimizing-arith-neg \
   416-optimizing-arith-not \
   417-optimizing-arith-div \
   418-const-string \
-  419-long-parameter \
   420-const-class \
   421-exceptions \
   421-large-frame \
