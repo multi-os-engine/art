@@ -1165,39 +1165,17 @@ void Arm64Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
   } else {
     ForceImplicitNullCheck(rl_array.reg, opt_flags);
   }
-  if (rl_dest.wide || rl_dest.fp || constant_index) {
-    RegStorage reg_ptr;
-    if (constant_index) {
-      reg_ptr = rl_array.reg;  // NOTE: must not alter reg_ptr in constant case.
-    } else {
-      // No special indexed operation, lea + load w/ displacement
-      reg_ptr = AllocTempRef();
-      OpRegRegRegShift(kOpAdd, reg_ptr, rl_array.reg, As64BitReg(rl_index.reg),
-                       EncodeShift(kA64Lsl, scale));
-      FreeTemp(rl_index.reg);
-    }
+  if (constant_index) {
     rl_result = EvalLoc(rl_dest, reg_class, true);
 
     if (needs_range_check) {
-      if (constant_index) {
-        GenArrayBoundsCheck(mir_graph_->ConstantValue(rl_index), reg_len);
-      } else {
-        GenArrayBoundsCheck(rl_index.reg, reg_len);
-      }
+      GenArrayBoundsCheck(mir_graph_->ConstantValue(rl_index), reg_len);
       FreeTemp(reg_len);
     }
     if (rl_result.ref) {
-      LoadRefDisp(reg_ptr, data_offset, rl_result.reg, kNotVolatile);
+      LoadRefDisp(rl_array.reg, data_offset, rl_result.reg, kNotVolatile);
     } else {
-      LoadBaseDisp(reg_ptr, data_offset, rl_result.reg, size, kNotVolatile);
-    }
-    if (!constant_index) {
-      FreeTemp(reg_ptr);
-    }
-    if (rl_dest.wide) {
-      StoreValueWide(rl_dest, rl_result);
-    } else {
-      StoreValue(rl_dest, rl_result);
+      LoadBaseDisp(rl_array.reg, data_offset, rl_result.reg, size, kNotVolatile);
     }
   } else {
     // Offset base, then use indexed load
@@ -1211,11 +1189,15 @@ void Arm64Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
       FreeTemp(reg_len);
     }
     if (rl_result.ref) {
-      LoadRefIndexed(reg_ptr, As64BitReg(rl_index.reg), rl_result.reg, scale);
+      LoadRefIndexed(reg_ptr, rl_index.reg, rl_result.reg, scale);
     } else {
-      LoadBaseIndexed(reg_ptr, As64BitReg(rl_index.reg), rl_result.reg, scale, size);
+      LoadBaseIndexed(reg_ptr, rl_index.reg, rl_result.reg, scale, size);
     }
     FreeTemp(reg_ptr);
+  }
+  if (rl_dest.wide) {
+    StoreValueWide(rl_dest, rl_result);
+  } else {
     StoreValue(rl_dest, rl_result);
   }
 }
