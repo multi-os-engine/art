@@ -631,8 +631,12 @@ InstructionCodeGeneratorARM64::InstructionCodeGeneratorARM64(HGraph* graph,
         codegen_(codegen) {}
 
 #define FOR_EACH_UNIMPLEMENTED_INSTRUCTION(M)              \
+  M(ArrayGet)                                              \
+  M(ArraySet)                                              \
+  M(CheckCast)                                             \
   M(ClinitCheck)                                           \
   M(DivZeroCheck)                                          \
+  M(InstanceOf)                                            \
   M(InvokeInterface)                                       \
   M(LoadClass)                                             \
   M(LoadException)                                         \
@@ -641,7 +645,6 @@ InstructionCodeGeneratorARM64::InstructionCodeGeneratorARM64(HGraph* graph,
   M(StaticFieldGet)                                        \
   M(StaticFieldSet)                                        \
   M(Throw)                                                 \
-  M(TypeCheck)                                             \
   M(TypeConversion)                                        \
 
 #define UNIMPLEMENTED_INSTRUCTION_BREAK_CODE(name) name##UnimplementedInstructionBreakCode
