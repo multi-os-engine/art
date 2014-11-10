@@ -1333,6 +1333,26 @@ void LocationsBuilderARM::VisitTypeConversion(HTypeConversion* conversion) {
   Primitive::Type result_type = conversion->GetResultType();
   Primitive::Type input_type = conversion->GetInputType();
   switch (result_type) {
+    case Primitive::kPrimInt:
+      switch (input_type) {
+        case Primitive::kPrimLong:
+          // long-to-int conversion.
+          locations->SetInAt(0, Location::Any());
+          locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+          break;
+
+        case Primitive::kPrimFloat:
+        case Primitive::kPrimDouble:
+          LOG(FATAL) << "Type conversion from " << input_type
+                     << " to " << result_type << " not yet implemented";
+          break;
+
+        default:
+          LOG(FATAL) << "Unexpected type conversion from " << input_type
+                     << " to " << result_type;
+      }
+      break;
+
     case Primitive::kPrimLong:
       switch (input_type) {
         case Primitive::kPrimByte:
@@ -1356,7 +1376,6 @@ void LocationsBuilderARM::VisitTypeConversion(HTypeConversion* conversion) {
       }
       break;
 
-    case Primitive::kPrimInt:
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble:
       LOG(FATAL) << "Type conversion from " << input_type
@@ -1376,6 +1395,35 @@ void InstructionCodeGeneratorARM::VisitTypeConversion(HTypeConversion* conversio
   Primitive::Type result_type = conversion->GetResultType();
   Primitive::Type input_type = conversion->GetInputType();
   switch (result_type) {
+    case Primitive::kPrimInt:
+      switch (input_type) {
+        case Primitive::kPrimLong:
+          // long-to-int conversion.
+          DCHECK(out.IsRegister());
+          if (in.IsRegisterPair()) {
+            __ Mov(out.As<Register>(), in.AsRegisterPairLow<Register>());
+          } else if (in.IsDoubleStackSlot()) {
+            __ LoadFromOffset(kLoadWord, out.As<Register>(), SP, in.GetStackIndex());
+          } else {
+            DCHECK(in.IsConstant());
+            DCHECK(in.GetConstant()->IsLongConstant());
+            __ LoadImmediate(out.As<Register>(),
+                             in.GetConstant()->AsLongConstant()->GetValue());
+          }
+          break;
+
+        case Primitive::kPrimFloat:
+        case Primitive::kPrimDouble:
+          LOG(FATAL) << "Type conversion from " << input_type
+                     << " to " << result_type << " not yet implemented";
+          break;
+
+        default:
+          LOG(FATAL) << "Unexpected type conversion from " << input_type
+                     << " to " << result_type;
+      }
+      break;
+
     case Primitive::kPrimLong:
       switch (input_type) {
         case Primitive::kPrimByte:
@@ -1404,7 +1452,6 @@ void InstructionCodeGeneratorARM::VisitTypeConversion(HTypeConversion* conversio
       }
       break;
 
-    case Primitive::kPrimInt:
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble:
       LOG(FATAL) << "Type conversion from " << input_type
