@@ -176,11 +176,7 @@ static void UsageError(const char* fmt, ...) {
                 "|time):");
   UsageError("      select compiler filter.");
   UsageError("      Example: --compiler-filter=everything");
-#if ART_SMALL_MODE
-  UsageError("      Default: interpret-only");
-#else
   UsageError("      Default: speed");
-#endif
   UsageError("");
   UsageError("  --huge-method-max=<method-instruction-count>: the threshold size for a huge");
   UsageError("      method for compiler filter tuning.");
@@ -801,15 +797,8 @@ class Dex2Oat FINAL {
       if (instruction_set_ == kMips64) {
         // TODO: fix compiler for Mips64.
         compiler_filter_string = "interpret-only";
-      } else if (image_) {
-        compiler_filter_string = "speed";
       } else {
-        // TODO: Migrate SMALL mode to command line option.
-  #if ART_SMALL_MODE
-        compiler_filter_string = "interpret-only";
-  #else
         compiler_filter_string = "speed";
-  #endif
       }
     }
     CHECK(compiler_filter_string != nullptr);

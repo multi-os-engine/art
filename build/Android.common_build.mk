@@ -47,18 +47,6 @@ $(info Disabling ART_BUILD_HOST_DEBUG)
 endif
 
 #
-# Used to enable smart mode
-#
-ART_SMALL_MODE := false
-ifneq ($(wildcard art/SMALL_ART),)
-$(info Enabling ART_SMALL_MODE because of existence of art/SMALL_ART)
-ART_SMALL_MODE := true
-endif
-ifeq ($(WITH_ART_SMALL_MODE), true)
-ART_SMALL_MODE := true
-endif
-
-#
 # Used to enable SEA mode
 #
 ART_SEA_IR_MODE := false
@@ -217,10 +205,6 @@ art_cflags := \
 # Missing declarations: too many at the moment, as we use "extern" quite a bit.
 #  -Wmissing-declarations \
 
-
-ifeq ($(ART_SMALL_MODE),true)
-  art_cflags += -DART_SMALL_MODE=1
-endif
 
 ifeq ($(ART_SEA_IR_MODE),true)
   art_cflags += -DART_SEA_IR_MODE=1
