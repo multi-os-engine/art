@@ -639,4 +639,18 @@ TEST(CodegenTest, ReturnDivInt2Addr) {
   TestCode(data, true, 2);
 }
 
+#if defined(__aarch64__)
+TEST(CodegenTest, DISABLED_ReturnDivLong2Addr) {
+#else
+TEST(CodegenTest, ReturnDivLong2Addr) {
+#endif
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+    Instruction::CONST_4 | 6 << 12 | 0,
+    Instruction::CONST_4 | 3 << 12 | 1 << 8,
+    Instruction::DIV_LONG_2ADDR | 1 << 12,
+    Instruction::RETURN);
+
+  TestCode(data, true, 2);
+}
+
 }  // namespace art

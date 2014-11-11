@@ -41,7 +41,7 @@ static constexpr bool kExplicitStackOverflowCheck = false;
 static constexpr int kNumberOfPushedRegistersAtEntry = 1 + 2;  // LR, R6, R7
 static constexpr int kCurrentMethodStackOffset = 0;
 
-static constexpr Register kRuntimeParameterCoreRegisters[] = { R0, R1, R2 };
+static constexpr Register kRuntimeParameterCoreRegisters[] = { R0, R1, R2, R3 };
 static constexpr size_t kRuntimeParameterCoreRegistersLength =
     arraysize(kRuntimeParameterCoreRegisters);
 static constexpr SRegister kRuntimeParameterFpuRegisters[] = { };
@@ -852,6 +852,7 @@ void CodeGeneratorARM::InvokeRuntime(int32_t entry_point_offset,
       || instruction->IsBoundsCheck()
       || instruction->IsNullCheck()
       || instruction->IsDivZeroCheck()
+      || instruction->IsDiv()
       || !IsLeafMethod());
 }
 
@@ -1651,7 +1652,12 @@ void LocationsBuilderARM::VisitDiv(HDiv* div) {
       break;
     }
     case Primitive::kPrimLong: {
-      LOG(FATAL) << "Not implemented div type" << div->GetResultType();
+      InvokeRuntimeCallingConvention calling_convention;
+      locations->SetInAt(0, Location::RegisterPairLocation(
+          calling_convention.GetRegisterAt(0), calling_convention.GetRegisterAt(1)));
+      locations->SetInAt(1, Location::RegisterPairLocation(
+          calling_convention.GetRegisterAt(2), calling_convention.GetRegisterAt(3)));
+      locations->SetOut(Location::RegisterPairLocation(R0, R2));
       break;
     }
     case Primitive::kPrimFloat:
@@ -1680,7 +1686,19 @@ void InstructionCodeGeneratorARM::VisitDiv(HDiv* div) {
     }
 
     case Primitive::kPrimLong: {
-      LOG(FATAL) << "Not implemented div type" << div->GetResultType();
+      InvokeRuntimeCallingConvention calling_convention;
+      DCHECK_EQ(calling_convention.GetRegisterAt(0), first.AsRegisterPairLow<Register>());
+      DCHECK_EQ(calling_convention.GetRegisterAt(1), first.AsRegisterPairHigh<Register>());
+      DCHECK_EQ(calling_convention.GetRegisterAt(2), second.AsRegisterPairLow<Register>());
+      DCHECK_EQ(calling_convention.GetRegisterAt(3), second.AsRegisterPairHigh<Register>());
+      DCHECK_EQ(R0, out.AsRegisterPairLow<Register>());
+      DCHECK_EQ(R2, out.AsRegisterPairHigh<Register>());
+
+      codegen_->SaveLiveRegisters(div->GetLocations());
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pLdiv), div, div->GetDexPc());
+      codegen_->RecordPcInfo(div, div->GetDexPc());
+      codegen_->RestoreLiveRegisters(div->GetLocations());
+
       break;
     }
 
@@ -1704,7 +1722,7 @@ void InstructionCodeGeneratorARM::VisitDiv(HDiv* div) {
 void LocationsBuilderARM::VisitDivZeroCheck(HDivZeroCheck* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(0, Location::RegisterOrConstant(instruction->InputAt(0)));
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
@@ -1717,9 +1735,36 @@ void InstructionCodeGeneratorARM::VisitDivZeroCheck(HDivZeroCheck* instruction) 
   LocationSummary* locations = instruction->GetLocations();
   Location value = locations->InAt(0);
 
-  DCHECK(value.IsRegister()) << value;
-  __ cmp(value.As<Register>(), ShifterOperand(0));
-  __ b(slow_path->GetEntryLabel(), EQ);
+  switch (instruction->GetType()) {
+    case Primitive::kPrimInt: {
+      if (value.IsRegister()) {
+        __ cmp(value.As<Register>(), ShifterOperand(0));
+        __ b(slow_path->GetEntryLabel(), EQ);
+      } else {
+        DCHECK(value.IsConstant()) << value;
+        if (value.GetConstant()->AsIntConstant()->GetValue() == 0) {
+          __ b(slow_path->GetEntryLabel());
+        }
+      }
+      break;
+    }
+    case Primitive::kPrimLong: {
+      if (value.IsRegisterPair()) {
+        __ orrs(IP,
+                value.AsRegisterPairLow<Register>(),
+                ShifterOperand(value.AsRegisterPairHigh<Register>()));
+        __ b(slow_path->GetEntryLabel(), EQ);
+      } else {
+        DCHECK(value.IsConstant()) << value;
+        if (value.GetConstant()->AsLongConstant()->GetValue() == 0) {
+          __ b(slow_path->GetEntryLabel());
+        }
+      }
+      break;
+    default:
+      LOG(FATAL) << "Unexpected type for HDivZeroCheck " << instruction->GetType();
+    }
+  }
 }
 
 void LocationsBuilderARM::VisitNewInstance(HNewInstance* instruction) {
