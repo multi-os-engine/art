@@ -36,7 +36,7 @@ static constexpr bool kExplicitStackOverflowCheck = false;
 static constexpr int kNumberOfPushedRegistersAtEntry = 1;
 static constexpr int kCurrentMethodStackOffset = 0;
 
-static constexpr Register kRuntimeParameterCoreRegisters[] = { EAX, ECX, EDX };
+static constexpr Register kRuntimeParameterCoreRegisters[] = { EAX, ECX, EDX, EBX };
 static constexpr size_t kRuntimeParameterCoreRegistersLength =
     arraysize(kRuntimeParameterCoreRegisters);
 static constexpr XmmRegister kRuntimeParameterFpuRegisters[] = { };
@@ -559,7 +559,7 @@ void CodeGeneratorX86::Move32(Location destination, Location source) {
       __ movss(destination.As<XmmRegister>(), Address(ESP, source.GetStackIndex()));
     }
   } else {
-    DCHECK(destination.IsStackSlot());
+    DCHECK(destination.IsStackSlot()) << destination;
     if (source.IsRegister()) {
       __ movl(Address(ESP, destination.GetStackIndex()), source.As<Register>());
     } else if (source.IsFpuRegister()) {
@@ -620,7 +620,7 @@ void CodeGeneratorX86::Move64(Location destination, Location source) {
       LOG(FATAL) << "Unimplemented";
     }
   } else {
-    DCHECK(destination.IsDoubleStackSlot());
+    DCHECK(destination.IsDoubleStackSlot()) << destination;
     if (source.IsRegisterPair()) {
       __ movl(Address(ESP, destination.GetStackIndex()), source.AsRegisterPairLow<Register>());
       __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)),
@@ -658,7 +658,7 @@ void CodeGeneratorX86::Move(HInstruction* instruction, Location location, HInstr
     }
   } else if (instruction->IsLongConstant()) {
     int64_t value = instruction->AsLongConstant()->GetValue();
-    if (location.IsRegister()) {
+    if (location.IsRegisterPair()) {
       __ movl(location.AsRegisterPairLow<Register>(), Immediate(Low32Bits(value)));
       __ movl(location.AsRegisterPairHigh<Register>(), Immediate(High32Bits(value)));
     } else if (location.IsDoubleStackSlot()) {
@@ -1616,7 +1616,12 @@ void LocationsBuilderX86::VisitDiv(HDiv* div) {
       break;
     }
     case Primitive::kPrimLong: {
-      LOG(FATAL) << "Not implemented div type" << div->GetResultType();
+      InvokeRuntimeCallingConvention calling_convention;
+      locations->SetInAt(0, Location::RegisterPairLocation(
+          calling_convention.GetRegisterAt(0), calling_convention.GetRegisterAt(1)));
+      locations->SetInAt(1, Location::RegisterPairLocation(
+          calling_convention.GetRegisterAt(2), calling_convention.GetRegisterAt(3)));
+      locations->SetOut(Location::RegisterPairLocation(EAX, EDX));
       break;
     }
     case Primitive::kPrimFloat:
@@ -1634,12 +1639,13 @@ void LocationsBuilderX86::VisitDiv(HDiv* div) {
 
 void InstructionCodeGeneratorX86::VisitDiv(HDiv* div) {
   LocationSummary* locations = div->GetLocations();
+  Location out = locations->Out();
   Location first = locations->InAt(0);
   Location second = locations->InAt(1);
-  DCHECK(first.Equals(locations->Out()));
 
   switch (div->GetResultType()) {
     case Primitive::kPrimInt: {
+      DCHECK(first.Equals(out));
       Register first_reg = first.As<Register>();
       Register second_reg = second.As<Register>();
       DCHECK_EQ(EAX, first_reg);
@@ -1666,16 +1672,30 @@ void InstructionCodeGeneratorX86::VisitDiv(HDiv* div) {
     }
 
     case Primitive::kPrimLong: {
-      LOG(FATAL) << "Not implemented div type" << div->GetResultType();
+      InvokeRuntimeCallingConvention calling_convention;
+      DCHECK_EQ(calling_convention.GetRegisterAt(0), first.AsRegisterPairLow<Register>());
+      DCHECK_EQ(calling_convention.GetRegisterAt(1), first.AsRegisterPairHigh<Register>());
+      DCHECK_EQ(calling_convention.GetRegisterAt(2), second.AsRegisterPairLow<Register>());
+      DCHECK_EQ(calling_convention.GetRegisterAt(3), second.AsRegisterPairHigh<Register>());
+      DCHECK_EQ(EAX, out.AsRegisterPairLow<Register>());
+      DCHECK_EQ(EDX, out.AsRegisterPairHigh<Register>());
+
+      codegen_->SaveLiveRegisters(locations);
+      __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pLdiv)));
+      codegen_->RecordPcInfo(div, div->GetDexPc());
+      codegen_->RestoreLiveRegisters(locations);
+
       break;
     }
 
     case Primitive::kPrimFloat: {
+      DCHECK(first.Equals(out));
       __ divss(first.As<XmmRegister>(), second.As<XmmRegister>());
       break;
     }
 
     case Primitive::kPrimDouble: {
+      DCHECK(first.Equals(out));
       __ divsd(first.As<XmmRegister>(), second.As<XmmRegister>());
       break;
     }
@@ -1688,7 +1708,21 @@ void InstructionCodeGeneratorX86::VisitDiv(HDiv* div) {
 void LocationsBuilderX86::VisitDivZeroCheck(HDivZeroCheck* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  locations->SetInAt(0, Location::Any());
+  switch (instruction->GetType()) {
+    case Primitive::kPrimInt: {
+      locations->SetInAt(0, Location::Any());
+      break;
+    }
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RegisterOrConstant(instruction->InputAt(0)));
+      if (!instruction->IsConstant()) {
+        locations->AddTemp(Location::RequiresRegister());
+      }
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected div zero check type " << instruction->GetType();
+  }
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
@@ -1701,16 +1735,37 @@ void InstructionCodeGeneratorX86::VisitDivZeroCheck(HDivZeroCheck* instruction) 
   LocationSummary* locations = instruction->GetLocations();
   Location value = locations->InAt(0);
 
-  if (value.IsRegister()) {
-    __ testl(value.As<Register>(), value.As<Register>());
-  } else if (value.IsStackSlot()) {
-    __ cmpl(Address(ESP, value.GetStackIndex()), Immediate(0));
-  } else {
-    DCHECK(value.IsConstant()) << value;
-    if (value.GetConstant()->AsIntConstant()->GetValue() == 0) {
-    __ jmp(slow_path->GetEntryLabel());
+  switch (instruction->GetType()) {
+    case Primitive::kPrimInt: {
+      if (value.IsRegister()) {
+        __ testl(value.As<Register>(), value.As<Register>());
+      } else if (value.IsStackSlot()) {
+        __ cmpl(Address(ESP, value.GetStackIndex()), Immediate(0));
+      } else {
+        DCHECK(value.IsConstant()) << value;
+        if (value.GetConstant()->AsIntConstant()->GetValue() == 0) {
+        __ jmp(slow_path->GetEntryLabel());
+        }
+        return;
+      }
+      break;
     }
-    return;
+    case Primitive::kPrimLong: {
+      if (value.IsRegisterPair()) {
+        Register temp = locations->GetTemp(0).As<Register>();
+        __ movl(temp, value.AsRegisterPairLow<Register>());
+        __ orl(temp, value.AsRegisterPairHigh<Register>());
+      } else {
+        DCHECK(value.IsConstant()) << value;
+        if (value.GetConstant()->AsLongConstant()->GetValue() == 0) {
+        __ jmp(slow_path->GetEntryLabel());
+        }
+        return;
+      }
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected div zero check type" << instruction->GetType();
   }
   __ j(kEqual, slow_path->GetEntryLabel());
 }
