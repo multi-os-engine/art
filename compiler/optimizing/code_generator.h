@@ -165,6 +165,15 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
   // of the architecture.
   static size_t GetCacheOffset(uint32_t index);
 
+  static bool StoreNeedsWriteBarrier(Primitive::Type type, HInstruction* value) {
+    if (kIsDebugBuild) {
+      if (type == Primitive::kPrimNot && value->IsIntConstant()) {
+        CHECK(value->AsIntConstant()->GetValue() == 0);
+      }
+    }
+    return type == Primitive::kPrimNot && !value->IsIntConstant();
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
