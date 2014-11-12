@@ -62,10 +62,8 @@ bool MipsMir2Lir::GenSpecialCase(BasicBlock* bb, MIR* mir, const InlineMethod& s
  *
  */
 void MipsMir2Lir::GenLargeSparseSwitch(MIR* mir, DexOffset table_offset, RegLocation rl_src) {
-  const uint16_t* table = mir_graph_->GetTable(mir, table_offset);
-  if (cu_->verbose) {
-    DumpSparseSwitchTable(table);
-  }
+  const uint16_t* old_table = mir_graph_->GetTable(mir, table_offset);
+  const uint16_t* table = ConvertSparseSwitchTable(mir, old_table);
   // Add the table to the list - we'll process it later
   SwitchTable* tab_rec =
       static_cast<SwitchTable*>(arena_->Alloc(sizeof(SwitchTable), kArenaAllocData));
@@ -139,10 +137,8 @@ void MipsMir2Lir::GenLargeSparseSwitch(MIR* mir, DexOffset table_offset, RegLoca
  * done:
  */
 void MipsMir2Lir::GenLargePackedSwitch(MIR* mir, DexOffset table_offset, RegLocation rl_src) {
-  const uint16_t* table = mir_graph_->GetTable(mir, table_offset);
-  if (cu_->verbose) {
-    DumpPackedSwitchTable(table);
-  }
+  const uint16_t* old_table = mir_graph_->GetTable(mir, table_offset);
+  const uint16_t* table = ConvertPackedSwitchTable(mir, old_table);
   // Add the table to the list - we'll process it later
   SwitchTable* tab_rec =
       static_cast<SwitchTable*>(arena_->Alloc(sizeof(SwitchTable), kArenaAllocData));

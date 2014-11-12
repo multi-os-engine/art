@@ -46,10 +46,8 @@ namespace art {
  *   cbnz  r_idx, lp
  */
 void ArmMir2Lir::GenLargeSparseSwitch(MIR* mir, uint32_t table_offset, RegLocation rl_src) {
-  const uint16_t* table = mir_graph_->GetTable(mir, table_offset);
-  if (cu_->verbose) {
-    DumpSparseSwitchTable(table);
-  }
+  const uint16_t* old_table = mir_graph_->GetTable(mir, table_offset);
+  const uint16_t* table = ConvertSparseSwitchTable(mir, old_table);
   // Add the table to the list - we'll process it later
   SwitchTable *tab_rec =
       static_cast<SwitchTable*>(arena_->Alloc(sizeof(SwitchTable), kArenaAllocData));
@@ -94,10 +92,8 @@ void ArmMir2Lir::GenLargeSparseSwitch(MIR* mir, uint32_t table_offset, RegLocati
 
 
 void ArmMir2Lir::GenLargePackedSwitch(MIR* mir, uint32_t table_offset, RegLocation rl_src) {
-  const uint16_t* table = mir_graph_->GetTable(mir, table_offset);
-  if (cu_->verbose) {
-    DumpPackedSwitchTable(table);
-  }
+  const uint16_t* old_table = mir_graph_->GetTable(mir, table_offset);
+  const uint16_t* table = ConvertPackedSwitchTable(mir, old_table);
   // Add the table to the list - we'll process it later
   SwitchTable *tab_rec =
       static_cast<SwitchTable*>(arena_->Alloc(sizeof(SwitchTable),  kArenaAllocData));
