@@ -18,6 +18,12 @@
 // it does compile the method.
 public class Main {
 
+  public static void assertByteEquals(byte expected, byte result) {
+    if (expected != result) {
+      throw new Error("Expected: " + expected + ", found: " + result);
+    }
+  }
+
   public static void assertIntEquals(int expected, int result) {
     if (expected != result) {
       throw new Error("Expected: " + expected + ", found: " + result);
@@ -37,6 +43,9 @@ public class Main {
     charToLong();
 
     longToInt();
+
+    intToByte();
+    // TODO: Also add charToByte and shortToByte tests.
   }
 
   private static void byteToLong() {
@@ -88,6 +97,21 @@ public class Main {
     assertLongEquals(32768L, $opt$CharToLong((char)-32768));  // -(2^15)
   }
 
+  private static void intToByte() {
+    assertByteEquals((byte)1, $opt$IntToByte(1));
+    assertByteEquals((byte)0, $opt$IntToByte(0));
+    assertByteEquals((byte)-1, $opt$IntToByte(-1));
+    assertByteEquals((byte)51, $opt$IntToByte(51));
+    assertByteEquals((byte)-51, $opt$IntToByte(-51));
+    assertByteEquals((byte)127, $opt$IntToByte(127));  // 2^7 - 1
+    assertByteEquals((byte)-127, $opt$IntToByte(-127));  // -(2^7 - 1)
+    assertByteEquals((byte)-128, $opt$IntToByte(-128));  // -(2^7)
+    assertByteEquals((byte)-128, $opt$IntToByte(128));  // 2^7
+    assertByteEquals((byte)127, $opt$IntToByte(-129));  // -(2^7 + 1)
+    assertByteEquals((byte)-1, $opt$IntToByte(2147483647));  // 2^31 - 1
+    assertByteEquals((byte)0, $opt$IntToByte(-2147483648));  // -(2^31)
+  }
+
   private static void longToInt() {
     assertIntEquals(1, $opt$LongToInt(1L));
     assertIntEquals(0, $opt$LongToInt(0L));
@@ -124,4 +148,7 @@ public class Main {
   // These methods produce long-to-int Dex instructions.
   static int $opt$LongToInt(long a){ return (int)a; }
   static int $opt$LongLiteralToInt(){ return (int)42L; }
+
+  // This method produces an int-to-byte Dex instruction.
+  static byte $opt$IntToByte(int a){ return (byte)a; }
 }
