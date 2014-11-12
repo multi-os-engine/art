@@ -820,13 +820,15 @@ int Mir2Lir::AssignFillArrayDataOffset(CodeOffset offset) {
  * branch table during the assembly phase.  All resource flags
  * are set to prevent code motion.  KeyVal is just there for debugging.
  */
-LIR* Mir2Lir::InsertCaseLabel(DexOffset vaddr, int keyVal) {
-  LIR* boundary_lir = &block_label_list_[mir_graph_->FindBlock(vaddr)->id];
+LIR* Mir2Lir::InsertCaseLabel(uint32_t bbid, int keyVal) {
+  LIR* boundary_lir = &block_label_list_[bbid];
   LIR* res = boundary_lir;
   if (cu_->verbose) {
     // Only pay the expense if we're pretty-printing.
     LIR* new_label = static_cast<LIR*>(arena_->Alloc(sizeof(LIR), kArenaAllocLIR));
-    new_label->dalvik_offset = vaddr;
+    BasicBlock* bb = mir_graph_->GetBasicBlock(bbid);
+    DCHECK(bb != nullptr);
+    new_label->dalvik_offset = bb->start_offset;
     new_label->opcode = kPseudoCaseLabel;
     new_label->operands[0] = keyVal;
     new_label->flags.fixup = kFixupLabel;
@@ -838,25 +840,111 @@ LIR* Mir2Lir::InsertCaseLabel(DexOffset vaddr, int keyVal) {
   return res;
 }
 
+/*
+ * Convert and create a new packed switch table that stores
+ * basic block ids to targets[] by examining successor blocks.
+ * Note that the original packed switch table stores dex offsets to targets[].
+ */
+const uint16_t* Mir2Lir::ConvertPackedSwitchTable(MIR* mir, const uint16_t* table) {
+  /*
+   * The original packed switch data format:
+   *  ushort ident = 0x0100  magic value
+   *  ushort size            number of entries in the table
+   *  int first_key          first (and lowest) switch case value
+   *  int targets[size]      branch targets, relative to switch opcode
+   *
+   * Total size is (4+size*2) 16-bit code units.
+   *
+   * Note that the new packed switch data format is the same as the original
+   * format, except that targets[] are basic block ids.
+   *
+   */
+  BasicBlock* bb = mir_graph_->GetBasicBlock(mir->bb);
+  DCHECK(bb != nullptr);
+  // Get the number of entries.
+  int entries = table[1];
+  const int32_t* as_int32 = reinterpret_cast<const int32_t*>(&table[2]);
+  int32_t starting_key = as_int32[0];
+  // Create a new table.
+  int size = sizeof(uint16_t) * (4 + entries * 2);
+  uint16_t* new_table = reinterpret_cast<uint16_t*>(arena_->Alloc(size, kArenaAllocMisc));
+  // Copy ident, size, and first_key to the new table.
+  memcpy(new_table, table, sizeof(uint16_t) * 4);
+  // Get the new targets.
+  int32_t* new_targets = reinterpret_cast<int32_t*>(&new_table[4]);
+  // Find out targets for each entry.
+  int i = 0;
+  for (SuccessorBlockInfo* successor_block_info : bb->successor_blocks) {
+    DCHECK_EQ(starting_key + i, successor_block_info->key);
+    // Save target basic block id.
+    new_targets[i++] = successor_block_info->block;
+  }
+  DCHECK_EQ(i, entries);
+  return new_table;
+}
+
+/*
+ * Convert and create a new sparse switch table that stores
+ * basic block ids to targets[] by examining successor blocks.
+ * Note that the original sparse switch table stores dex offsets to targets[].
+ */
+const uint16_t* Mir2Lir::ConvertSparseSwitchTable(MIR* mir, const uint16_t* table) {
+  /*
+   * The original sparse switch data format:
+   *  ushort ident = 0x0200  magic value
+   *  ushort size            number of entries in the table; > 0
+   *  int keys[size]         keys, sorted low-to-high; 32-bit aligned
+   *  int targets[size]      branch targets, relative to switch opcode
+   *
+   * Total size is (2+size*4) 16-bit code units.
+   *
+   * Note that the new sparse switch data format is the same as the original
+   * format, except that targets[] are basic block ids.
+   *
+   */
+  BasicBlock* bb = mir_graph_->GetBasicBlock(mir->bb);
+  DCHECK(bb != nullptr);
+  // Get the number of entries.
+  int entries = table[1];
+  // Create a new table.
+  int size = sizeof(uint16_t) * (2 + entries * 4);
+  uint16_t* new_table = reinterpret_cast<uint16_t*>(arena_->Alloc(size, kArenaAllocMisc));
+  // Copy ident and size to the new table.
+  memcpy(new_table, table, sizeof(uint16_t) * 2);
+  // Get the new keys and targets.
+  int32_t* new_keys = reinterpret_cast<int32_t*>(&new_table[2]);
+  int32_t* new_targets = &new_keys[entries];
+  // Find out targets for each entry.
+  int i = 0;
+  for (SuccessorBlockInfo* successor_block_info : bb->successor_blocks) {
+    // Save key and target.
+    new_keys[i] = successor_block_info->key;
+    new_targets[i] = successor_block_info->block;
+    i++;
+  }
+  DCHECK_EQ(i, entries);
+  return new_table;
+}
+
 void Mir2Lir::MarkPackedCaseLabels(Mir2Lir::SwitchTable* tab_rec) {
   const uint16_t* table = tab_rec->table;
-  DexOffset base_vaddr = tab_rec->vaddr;
   const int32_t *targets = reinterpret_cast<const int32_t*>(&table[4]);
   int entries = table[1];
   int low_key = s4FromSwitchData(&table[2]);
   for (int i = 0; i < entries; i++) {
-    tab_rec->targets[i] = InsertCaseLabel(base_vaddr + targets[i], i + low_key);
+    // The value at targets[i] is a basic block id, instead of a dex offset.
+    tab_rec->targets[i] = InsertCaseLabel(targets[i], i + low_key);
   }
 }
 
 void Mir2Lir::MarkSparseCaseLabels(Mir2Lir::SwitchTable* tab_rec) {
   const uint16_t* table = tab_rec->table;
-  DexOffset base_vaddr = tab_rec->vaddr;
   int entries = table[1];
   const int32_t* keys = reinterpret_cast<const int32_t*>(&table[2]);
   const int32_t* targets = &keys[entries];
   for (int i = 0; i < entries; i++) {
-    tab_rec->targets[i] = InsertCaseLabel(base_vaddr + targets[i], keys[i]);
+    // The value at targets[i] is a basic block id, instead of a dex offset.
+    tab_rec->targets[i] = InsertCaseLabel(targets[i], keys[i]);
   }
 }
 
