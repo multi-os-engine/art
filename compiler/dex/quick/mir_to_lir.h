@@ -678,8 +678,8 @@ class Mir2Lir : public Backend {
     int AssignLiteralOffset(CodeOffset offset);
     int AssignSwitchTablesOffset(CodeOffset offset);
     int AssignFillArrayDataOffset(CodeOffset offset);
-    virtual LIR* InsertCaseLabel(DexOffset vaddr, int keyVal);
-    virtual void MarkPackedCaseLabels(Mir2Lir::SwitchTable* tab_rec);
+    LIR* InsertCaseLabel(uint32_t bbid, int keyVal);
+    void MarkPackedCaseLabels(Mir2Lir::SwitchTable* tab_rec);
     void MarkSparseCaseLabels(Mir2Lir::SwitchTable* tab_rec);
 
     // Handle bookkeeping to convert a wide RegLocation to a narrow RegLocation.  No code generated.
@@ -1362,6 +1362,8 @@ class Mir2Lir : public Backend {
     // Create code for switch statements. Will decide between short and long versions below.
     void GenPackedSwitch(MIR* mir, DexOffset table_offset, RegLocation rl_src);
     void GenSparseSwitch(MIR* mir, DexOffset table_offset, RegLocation rl_src);
+    const uint16_t* ConvertPackedSwitchTable(MIR* mir, const uint16_t* table);
+    const uint16_t* ConvertSparseSwitchTable(MIR* mir, const uint16_t* table);
 
     // Potentially backend-specific versions of switch instructions for shorter switch statements.
     // The default implementation will create a chained compare-and-branch.
