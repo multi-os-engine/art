@@ -202,7 +202,7 @@ extern "C" uint64_t artPortableToInterpreterBridge(mirror::ArtMethod* method, Th
     const DexFile::CodeItem* code_item = method->GetCodeItem();
     uint16_t num_regs = code_item->registers_size_;
     void* memory = alloca(ShadowFrame::ComputeSize(num_regs));
-    ShadowFrame* shadow_frame(ShadowFrame::Create(num_regs, NULL,  // No last shadow coming from quick.
+    ShadowFrame* shadow_frame(ShadowFrame::Create(num_regs, nullptr,  // No last shadow coming from quick.
                                                   method, 0, memory));
     size_t first_arg_reg = code_item->registers_size_ - code_item->ins_size_;
     BuildPortableShadowFrameVisitor shadow_frame_builder(mh, sp,
@@ -303,7 +303,7 @@ extern "C" uint64_t artPortableProxyInvokeHandler(mirror::ArtMethod* proxy_metho
 
   // Convert proxy method into expected interface method.
   mirror::ArtMethod* interface_method = proxy_method->FindOverriddenMethod();
-  DCHECK(interface_method != NULL);
+  DCHECK(interface_method != nullptr);
   DCHECK(!interface_method->IsProxyMethod()) << PrettyMethod(interface_method);
   jobject interface_method_jobj = soa.AddLocalReference<jobject>(interface_method);
 
@@ -374,7 +374,7 @@ extern "C" const void* artPortableResolutionTrampoline(mirror::ArtMethod* called
         is_range = true;
         break;
       default:
-        LOG(FATAL) << "Unexpected call into trampoline: " << instr->DumpString(NULL);
+        LOG(FATAL) << "Unexpected call into trampoline: " << instr->DumpString(nullptr);
         // Avoid used uninitialized warnings.
         invoke_type = kDirect;
         is_range = true;

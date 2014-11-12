@@ -1244,7 +1244,7 @@ enum {
 
 // Section types.
 enum : unsigned {
-  SHT_NULL          = 0,  // No associated section (inactive entry).
+  SHT_nullptr          = 0,  // No associated section (inactive entry).
   SHT_PROGBITS      = 1,  // Program-defined contents.
   SHT_SYMTAB        = 2,  // Symbol table.
   SHT_STRTAB        = 3,  // String table.
@@ -1575,7 +1575,7 @@ struct Elf64_Phdr {
 
 // Segment types.
 enum {
-  PT_NULL    = 0, // Unused segment.
+  PT_nullptr    = 0, // Unused segment.
   PT_LOAD    = 1, // Loadable segment.
   PT_DYNAMIC = 2, // Dynamic linking information.
   PT_INTERP  = 3, // Interpreter pathname.
@@ -1642,7 +1642,7 @@ struct Elf64_Dyn
 
 // Dynamic table entry tags.
 enum {
-  DT_NULL         = 0,        // Marks end of dynamic array.
+  DT_nullptr         = 0,        // Marks end of dynamic array.
   DT_NEEDED       = 1,        // String table offset of needed library.
   DT_PLTRELSZ     = 2,        // Size of relocation entries in PLT.
   DT_PLTGOT       = 3,        // Address associated with linkage table.

@@ -965,7 +965,7 @@ bool MIRGraph::FindLocalLiveIn(BasicBlock* bb) {
   MIR* mir;
   ArenaBitVector *use_v, *def_v, *live_in_v;
 
-  if (bb->data_flow_info == NULL) return false;
+  if (bb->data_flow_info == nullptr) return false;
 
   use_v = bb->data_flow_info->use_v =
       new (arena_) ArenaBitVector(arena_, GetNumOfCodeAndTempVRs(), false, kBitMapUse);
@@ -974,7 +974,7 @@ bool MIRGraph::FindLocalLiveIn(BasicBlock* bb) {
   live_in_v = bb->data_flow_info->live_in_v =
       new (arena_) ArenaBitVector(arena_, GetNumOfCodeAndTempVRs(), false, kBitMapLiveIn);
 
-  for (mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
     uint64_t df_attributes = GetDataFlowAttributes(mir);
     MIR::DecodedInstruction* d_insn = &mir->dalvikInsn;
 
@@ -1149,9 +1149,9 @@ void MIRGraph::DataFlowSSAFormatExtended(MIR* mir) {
 bool MIRGraph::DoSSAConversion(BasicBlock* bb) {
   MIR* mir;
 
-  if (bb->data_flow_info == NULL) return false;
+  if (bb->data_flow_info == nullptr) return false;
 
-  for (mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
     mir->ssa_rep =
         static_cast<struct SSARepresentation *>(arena_->Alloc(sizeof(SSARepresentation),
                                                               kArenaAllocDFInfo));
@@ -1350,8 +1350,8 @@ void MIRGraph::CountUses(class BasicBlock* bb) {
   // Each level of nesting adds *100 to count, up to 3 levels deep.
   uint32_t depth = std::min(3U, static_cast<uint32_t>(bb->nesting_depth));
   uint32_t weight = std::max(1U, depth * 100);
-  for (MIR* mir = bb->first_mir_insn; (mir != NULL); mir = mir->next) {
-    if (mir->ssa_rep == NULL) {
+  for (MIR* mir = bb->first_mir_insn; (mir != nullptr); mir = mir->next) {
+    if (mir->ssa_rep == nullptr) {
       continue;
     }
     for (int i = 0; i < mir->ssa_rep->num_uses; i++) {
@@ -1413,7 +1413,7 @@ bool MIRGraph::VerifyPredInfo(BasicBlock* bb) {
 void MIRGraph::VerifyDataflow() {
     /* Verify if all blocks are connected as claimed */
   AllNodesIterator iter(this);
-  for (BasicBlock* bb = iter.Next(); bb != NULL; bb = iter.Next()) {
+  for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
     VerifyPredInfo(bb);
   }
 }

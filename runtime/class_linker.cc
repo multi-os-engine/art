@@ -105,7 +105,7 @@ static void ThrowEarlierClassFailure(mirror::Class* c)
     self->SetException(ThrowLocation(), pre_allocated);
   } else {
     ThrowLocation throw_location = self->GetCurrentLocationForThrow();
-    if (c->GetVerifyErrorClass() != NULL) {
+    if (c->GetVerifyErrorClass() != nullptr) {
       // TODO: change the verifier to store an _instance_, with a useful detail message?
       std::string temp;
       self->ThrowNewException(throw_location, c->GetVerifyErrorClass()->GetDescriptor(&temp),
@@ -4107,6 +4107,8 @@ bool ClassLinker::InitializeClass(Thread* self, Handle<mirror::Class> klass,
   if (!CanWeInitializeClass(klass.Get(), can_init_statics, can_init_parents)) {
     return false;
   }
+
+  LOG(INFO) << "InitializeClass " << PrettyClass(klass.Get());
 
   self->AllowThreadSuspension();
   uint64_t t0;

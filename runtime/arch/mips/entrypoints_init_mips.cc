@@ -141,7 +141,7 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pL2f = art_l2f;
   qpoints->pD2iz = art_d2i;
   qpoints->pF2iz = art_f2i;
-  qpoints->pIdivmod = NULL;
+  qpoints->pIdivmod = nullptr;
   qpoints->pD2l = art_d2l;
   qpoints->pF2l = art_f2l;
   qpoints->pLdiv = artLdiv;

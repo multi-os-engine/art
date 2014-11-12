@@ -161,7 +161,7 @@ void VerifiedMethod::VerifyGcMap(verifier::MethodVerifier* method_verifier,
         }
       }
     } else {
-      DCHECK(reg_bitmap == NULL);
+      DCHECK(reg_bitmap == nullptr);
     }
   }
 }
@@ -235,20 +235,20 @@ void VerifiedMethod::GenerateDevirtMap(verifier::MethodVerifier* method_verifier
     }
     mirror::ArtMethod* abstract_method = method_verifier->GetDexCache()->GetResolvedMethod(
         is_range ? inst->VRegB_3rc() : inst->VRegB_35c());
-    if (abstract_method == NULL) {
+    if (abstract_method == nullptr) {
       // If the method is not found in the cache this means that it was never found
       // by ResolveMethodAndCheckAccess() called when verifying invoke_*.
       continue;
     }
     // Find the concrete method.
-    mirror::ArtMethod* concrete_method = NULL;
+    mirror::ArtMethod* concrete_method = nullptr;
     if (is_interface) {
       concrete_method = reg_type.GetClass()->FindVirtualMethodForInterface(abstract_method);
     }
     if (is_virtual) {
       concrete_method = reg_type.GetClass()->FindVirtualMethodForVirtual(abstract_method);
     }
-    if (concrete_method == NULL || concrete_method->IsAbstract()) {
+    if (concrete_method == nullptr || concrete_method->IsAbstract()) {
       // In cases where concrete_method is not found, or is abstract, continue to the next invoke.
       continue;
     }

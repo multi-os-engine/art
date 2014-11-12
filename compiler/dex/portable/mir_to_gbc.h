@@ -97,14 +97,14 @@ class MirConverter : public Backend {
         llvm_compilation_unit_(llvm_compilation_unit),
         llvm_info_(llvm_compilation_unit->GetQuickContext()),
         symbol_(llvm_compilation_unit->GetDexCompilationUnit()->GetSymbol()),
-        context_(NULL),
-        module_(NULL),
-        func_(NULL),
-        intrinsic_helper_(NULL),
-        irb_(NULL),
-        placeholder_bb_(NULL),
-        entry_bb_(NULL),
-        entry_target_bb_(NULL),
+        context_(nullptr),
+        module_(nullptr),
+        func_(nullptr),
+        intrinsic_helper_(nullptr),
+        irb_(nullptr),
+        placeholder_bb_(nullptr),
+        entry_bb_(nullptr),
+        entry_target_bb_(nullptr),
         llvm_values_(arena->Adapter()),
         temp_name_(0),
         current_dalvik_offset_(0) {
@@ -119,7 +119,7 @@ class MirConverter : public Backend {
     }
 
     CompiledMethod* GetCompiledMethod() {
-      return NULL;
+      return nullptr;
     }
 
   private:

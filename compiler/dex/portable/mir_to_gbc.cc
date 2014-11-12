@@ -80,7 +80,7 @@ void MirConverter::SetVregOnValue(::llvm::Value* val, int s_reg) {
 // Replace the placeholder value with the real definition
 void MirConverter::DefineValueOnly(::llvm::Value* val, int s_reg) {
   ::llvm::Value* placeholder = GetLLVMValue(s_reg);
-  if (placeholder == NULL) {
+  if (placeholder == nullptr) {
     // This can happen on instruction rewrite on verification failure
     LOG(WARNING) << "Null placeholder";
     return;
@@ -89,7 +89,7 @@ void MirConverter::DefineValueOnly(::llvm::Value* val, int s_reg) {
   val->takeName(placeholder);
   llvm_values_[s_reg] = val;
   ::llvm::Instruction* inst = ::llvm::dyn_cast< ::llvm::Instruction>(placeholder);
-  DCHECK(inst != NULL);
+  DCHECK(inst != nullptr);
   inst->eraseFromParent();
 }
 
@@ -99,7 +99,7 @@ void MirConverter::DefineValue(::llvm::Value* val, int s_reg) {
 }
 
 ::llvm::Type* MirConverter::LlvmTypeFromLocRec(RegLocation loc) {
-  ::llvm::Type* res = NULL;
+  ::llvm::Type* res = nullptr;
   if (loc.wide) {
     if (loc.fp)
         res = irb_->getDoubleTy();
@@ -119,11 +119,11 @@ void MirConverter::DefineValue(::llvm::Value* val, int s_reg) {
 }
 
 void MirConverter::InitIR() {
-  if (llvm_info_ == NULL) {
+  if (llvm_info_ == nullptr) {
     CompilerTls* tls = cu_->compiler_driver->GetTls();
-    CHECK(tls != NULL);
+    CHECK(tls != nullptr);
     llvm_info_ = static_cast<LLVMInfo*>(tls->GetLLVMInfo());
-    if (llvm_info_ == NULL) {
+    if (llvm_info_ == nullptr) {
       llvm_info_ = new LLVMInfo();
       tls->SetLLVMInfo(llvm_info_);
     }
@@ -136,7 +136,7 @@ void MirConverter::InitIR() {
 
 ::llvm::BasicBlock* MirConverter::FindCaseTarget(uint32_t vaddr) {
   BasicBlock* bb = mir_graph_->FindBlock(vaddr);
-  DCHECK(bb != NULL);
+  DCHECK(bb != nullptr);
   return GetLLVMBlock(bb->id);
 }
 
@@ -312,7 +312,7 @@ void MirConverter::EmitSuspendCheck() {
 
 ::llvm::Value* MirConverter::ConvertCompare(ConditionCode cc,
                                    ::llvm::Value* src1, ::llvm::Value* src2) {
-  ::llvm::Value* res = NULL;
+  ::llvm::Value* res = nullptr;
   DCHECK_EQ(src1->getType(), src2->getType());
   switch (cc) {
     case kCondEq: res = irb_->CreateICmpEQ(src1, src2); break;
@@ -385,7 +385,7 @@ void MirConverter::ConvertCompareZeroAndBranch(BasicBlock* bb,
 
 ::llvm::Value* MirConverter::GenArithOp(OpKind op, bool is_long,
                                ::llvm::Value* src1, ::llvm::Value* src2) {
-  ::llvm::Value* res = NULL;
+  ::llvm::Value* res = nullptr;
   switch (op) {
     case kOpAdd: res = irb_->CreateAdd(src1, src2); break;
     case kOpSub: res = irb_->CreateSub(src1, src2); break;
@@ -409,7 +409,7 @@ void MirConverter::ConvertFPArithOp(OpKind op, RegLocation rl_dest,
                              RegLocation rl_src1, RegLocation rl_src2) {
   ::llvm::Value* src1 = GetLLVMValue(rl_src1.orig_sreg);
   ::llvm::Value* src2 = GetLLVMValue(rl_src2.orig_sreg);
-  ::llvm::Value* res = NULL;
+  ::llvm::Value* res = nullptr;
   switch (op) {
     case kOpAdd: res = irb_->CreateFAdd(src1, src2); break;
     case kOpSub: res = irb_->CreateFSub(src1, src2); break;
@@ -1530,7 +1530,7 @@ void MirConverter::SetDexOffset(int32_t offset) {
 // Attach method info as metadata to special intrinsic
 void MirConverter::SetMethodInfo() {
   // We don't want dex offset on this
-  irb_->SetDexOffset(NULL);
+  irb_->SetDexOffset(nullptr);
   art::llvm::IntrinsicHelper::IntrinsicId id;
   id = art::llvm::IntrinsicHelper::MethodInfo;
   ::llvm::Function* intr = intrinsic_helper_->GetIntrinsicFunction(id);
@@ -1548,7 +1548,7 @@ void MirConverter::SetMethodInfo() {
 
 void MirConverter::HandlePhiNodes(BasicBlock* bb, ::llvm::BasicBlock* llvm_bb) {
   SetDexOffset(bb->start_offset);
-  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
     int opcode = mir->dalvikInsn.opcode;
     if (!IsPseudoMirOp(opcode)) {
       // Stop after first non-pseudo MIR op.
@@ -1585,8 +1585,8 @@ void MirConverter::HandlePhiNodes(BasicBlock* bb, ::llvm::BasicBlock* llvm_bb) {
       SafeMap<unsigned int, unsigned int>::iterator it;
       it = mir_graph_->block_id_map_.find(incoming[i]);
       DCHECK(it != mir_graph_->block_id_map_.end());
-      DCHECK(GetLLVMValue(loc.orig_sreg) != NULL);
-      DCHECK(GetLLVMBlock(it->second) != NULL);
+      DCHECK(GetLLVMValue(loc.orig_sreg) != nullptr);
+      DCHECK(GetLLVMBlock(it->second) != nullptr);
       phi->addIncoming(GetLLVMValue(loc.orig_sreg),
                        GetLLVMBlock(it->second));
     }
@@ -1603,7 +1603,7 @@ void MirConverter::ConvertExtendedMIR(BasicBlock* bb, MIR* mir,
       RegLocation rl_dest = mir_graph_->reg_location_[mir->ssa_rep->defs[0]];
       if (!rl_dest.high_word) {
         // Only consider low word of pairs.
-        DCHECK(GetLLVMValue(rl_dest.orig_sreg) != NULL);
+        DCHECK(GetLLVMValue(rl_dest.orig_sreg) != nullptr);
         ::llvm::Value* phi = GetLLVMValue(rl_dest.orig_sreg);
         if (1) SetVregOnValue(phi, rl_dest.orig_sreg);
       }
@@ -1645,7 +1645,7 @@ void MirConverter::ConvertExtendedMIR(BasicBlock* bb, MIR* mir,
 bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
   if (bb->block_type == kDead) return false;
   ::llvm::BasicBlock* llvm_bb = GetLLVMBlock(bb->id);
-  if (llvm_bb == NULL) {
+  if (llvm_bb == nullptr) {
     CHECK(bb->block_type == kExitBlock);
   } else {
     irb_->SetInsertPoint(llvm_bb);
@@ -1655,10 +1655,10 @@ bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
   if (cu_->verbose) {
     LOG(INFO) << "................................";
     LOG(INFO) << "Block id " << bb->id;
-    if (llvm_bb != NULL) {
+    if (llvm_bb != nullptr) {
       LOG(INFO) << "label " << llvm_bb->getName().str().c_str();
     } else {
-      LOG(INFO) << "llvm_bb is NULL";
+      LOG(INFO) << "llvm_bb is nullptr";
     }
   }
 
@@ -1719,7 +1719,7 @@ bool MirConverter::BlockBitcodeConversion(BasicBlock* bb) {
 
   HandlePhiNodes(bb, llvm_bb);
 
-  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
     SetDexOffset(mir->offset);
 
     int opcode = mir->dalvikInsn.opcode;
@@ -1826,7 +1826,7 @@ char RemapShorty(char shorty_type) {
 
 bool MirConverter::CreateFunction() {
   ::llvm::FunctionType* func_type = GetFunctionType();
-  if (func_type == NULL) {
+  if (func_type == nullptr) {
     return false;
   }
 
@@ -1853,7 +1853,7 @@ bool MirConverter::CreateFunction() {
 bool MirConverter::CreateLLVMBasicBlock(BasicBlock* bb) {
   // Skip the exit block
   if ((bb->block_type == kDead) ||(bb->block_type == kExitBlock)) {
-    id_to_block_map_.Put(bb->id, NULL);
+    id_to_block_map_.Put(bb->id, nullptr);
   } else {
     int offset = bb->start_offset;
     bool entry_block = (bb->block_type == kEntryBlock);
@@ -1889,7 +1889,7 @@ void MirConverter::MethodMIR2Bitcode() {
 
   // Create an LLVM basic block for each MIR block in dfs preorder
   PreOrderDfsIterator iter(mir_graph_);
-  for (BasicBlock* bb = iter.Next(); bb != NULL; bb = iter.Next()) {
+  for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
     CreateLLVMBasicBlock(bb);
   }
 
@@ -1921,7 +1921,7 @@ void MirConverter::MethodMIR2Bitcode() {
   }
 
   PreOrderDfsIterator iter2(mir_graph_);
-  for (BasicBlock* bb = iter2.Next(); bb != NULL; bb = iter2.Next()) {
+  for (BasicBlock* bb = iter2.Next(); bb != nullptr; bb = iter2.Next()) {
     BlockBitcodeConversion(bb);
   }
 
@@ -1941,9 +1941,9 @@ void MirConverter::MethodMIR2Bitcode() {
   for (::llvm::BasicBlock::iterator it = placeholder_bb_->begin(),
        it_end = placeholder_bb_->end(); it != it_end;) {
     ::llvm::Instruction* inst = ::llvm::dyn_cast< ::llvm::Instruction>(it++);
-    DCHECK(inst != NULL);
+    DCHECK(inst != nullptr);
     ::llvm::Value* val = ::llvm::dyn_cast< ::llvm::Value>(inst);
-    DCHECK(val != NULL);
+    DCHECK(val != nullptr);
     if (val->getNumUses() == 0) {
       inst->eraseFromParent();
     }

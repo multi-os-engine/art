@@ -100,7 +100,7 @@ static void VMDebug_startMethodTracingFd(JNIEnv* env, jclass, jstring javaTraceF
   }
 
   ScopedUtfChars traceFilename(env, javaTraceFilename);
-  if (traceFilename.c_str() == NULL) {
+  if (traceFilename.c_str() == nullptr) {
     return;
   }
   Trace::Start(traceFilename.c_str(), fd, bufferSize, flags, false, samplingEnabled, intervalUs);
@@ -110,7 +110,7 @@ static void VMDebug_startMethodTracingFilename(JNIEnv* env, jclass, jstring java
                                                jint bufferSize, jint flags,
                                                jboolean samplingEnabled, jint intervalUs) {
   ScopedUtfChars traceFilename(env, javaTraceFilename);
-  if (traceFilename.c_str() == NULL) {
+  if (traceFilename.c_str() == nullptr) {
     return;
   }
   Trace::Start(traceFilename.c_str(), -1, bufferSize, flags, false, samplingEnabled, intervalUs);
@@ -149,7 +149,7 @@ static jlong VMDebug_lastDebuggerActivity(JNIEnv*, jclass) {
 static void ThrowUnsupportedOperationException(JNIEnv* env) {
   ScopedObjectAccess soa(env);
   ThrowLocation throw_location = soa.Self()->GetCurrentLocationForThrow();
-  soa.Self()->ThrowNewException(throw_location, "Ljava/lang/UnsupportedOperationException;", NULL);
+  soa.Self()->ThrowNewException(throw_location, "Ljava/lang/UnsupportedOperationException;", nullptr);
 }
 
 static void VMDebug_startInstructionCounting(JNIEnv* env, jclass) {
@@ -193,15 +193,15 @@ static jlong VMDebug_threadCpuTimeNanos(JNIEnv*, jclass) {
  * error occurs during file handling.
  */
 static void VMDebug_dumpHprofData(JNIEnv* env, jclass, jstring javaFilename, jobject javaFd) {
-  // Only one of these may be NULL.
-  if (javaFilename == NULL && javaFd == NULL) {
+  // Only one of these may be nullptr.
+  if (javaFilename == nullptr && javaFd == nullptr) {
     ScopedObjectAccess soa(env);
-    ThrowNullPointerException(NULL, "fileName == null && fd == null");
+    ThrowNullPointerException(nullptr, "fileName == null && fd == null");
     return;
   }
 
   std::string filename;
-  if (javaFilename != NULL) {
+  if (javaFilename != nullptr) {
     ScopedUtfChars chars(env, javaFilename);
     if (env->ExceptionCheck()) {
       return;
@@ -212,7 +212,7 @@ static void VMDebug_dumpHprofData(JNIEnv* env, jclass, jstring javaFilename, job
   }
 
   int fd = -1;
-  if (javaFd != NULL) {
+  if (javaFd != nullptr) {
     fd = jniGetFDFromFileDescriptor(env, javaFd);
     if (fd < 0) {
       ScopedObjectAccess soa(env);
@@ -270,7 +270,7 @@ static jlong VMDebug_countInstancesOfClass(JNIEnv* env, jclass, jclass javaClass
 // as PSS, private/shared dirty/shared data are available via
 // /proc/<pid>/smaps.
 static void VMDebug_getHeapSpaceStats(JNIEnv* env, jclass, jlongArray data) {
-  jlong* arr = reinterpret_cast<jlong*>(env->GetPrimitiveArrayCritical(data, 0));
+  jlong* arr = reinterpret_cast<jlong*>(env->GetPrimitiveArrayCritical(data, nullptr));
   if (arr == nullptr || env->GetArrayLength(data) < 9) {
     return;
   }

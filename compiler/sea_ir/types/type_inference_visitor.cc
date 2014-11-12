@@ -49,7 +49,7 @@ void TypeInferenceVisitor::Visit(AddIntInstructionNode* instruction) {
   std::vector<const Type*> operand_types = GetOperandTypes(instruction);
   for (std::vector<const Type*>::const_iterator cit = operand_types.begin();
       cit != operand_types.end(); cit++) {
-    if (*cit != NULL) {
+    if (*cit != nullptr) {
       DCHECK((*cit)->IsInteger());
     }
   }
@@ -75,7 +75,7 @@ std::vector<const Type*> TypeInferenceVisitor::GetOperandTypes(
   for (std::vector<InstructionNode*>::const_iterator cit = sources.begin(); cit != sources.end();
       cit++) {
     const Type* source_type = type_data_->FindTypeOf((*cit)->Id());
-    if (source_type != NULL) {
+    if (source_type != nullptr) {
       types_to_merge.push_back(source_type);
     }
   }
@@ -83,7 +83,7 @@ std::vector<const Type*> TypeInferenceVisitor::GetOperandTypes(
 }
 
 const Type* TypeInferenceVisitor::MergeTypes(std::vector<const Type*>& types) const {
-  const Type* type = NULL;
+  const Type* type = nullptr;
   if (types.size() > 0) {
     type = *(types.begin());
     if (types.size() > 1) {
@@ -99,8 +99,8 @@ const Type* TypeInferenceVisitor::MergeTypes(std::vector<const Type*>& types) co
 }
 
 const Type* TypeInferenceVisitor::MergeTypes(const Type* t1, const Type* t2) const {
-  DCHECK(t2 != NULL);
-  DCHECK(t1 != NULL);
+  DCHECK(t2 != nullptr);
+  DCHECK(t1 != nullptr);
   art::ScopedObjectAccess soa(art::Thread::Current());
   const Type* result = &(t1->Merge(*t2, type_cache_));
   return result;

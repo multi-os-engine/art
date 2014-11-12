@@ -43,7 +43,7 @@ std::string CodeGenData::GetElf(art::InstructionSet instruction_set) {
   const ::llvm::Target* target =
     ::llvm::TargetRegistry::lookupTarget(target_triple, errmsg);
 
-  CHECK(target != NULL) << errmsg;
+  CHECK(target != nullptr) << errmsg;
 
   // Target options
   ::llvm::TargetOptions target_options;
@@ -59,7 +59,7 @@ std::string CodeGenData::GetElf(art::InstructionSet instruction_set) {
                                 ::llvm::Reloc::Static, ::llvm::CodeModel::Small,
                                 ::llvm::CodeGenOpt::Aggressive));
 
-  CHECK(target_machine.get() != NULL) << "Failed to create target machine";
+  CHECK(target_machine.get() != nullptr) << "Failed to create target machine";
 
   // Add target data
   const ::llvm::DataLayout* data_layout = target_machine->getDataLayout();
@@ -75,7 +75,7 @@ std::string CodeGenData::GetElf(art::InstructionSet instruction_set) {
   // Add optimization pass
   ::llvm::PassManagerBuilder pm_builder;
   // TODO: Use inliner after we can do IPO.
-  pm_builder.Inliner = NULL;
+  pm_builder.Inliner = nullptr;
   // pm_builder.Inliner = ::llvm::createFunctionInliningPass();
   // pm_builder.Inliner = ::llvm::createAlwaysInlinerPass();
   // pm_builder.Inliner = ::llvm::createPartialInliningPass();

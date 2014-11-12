@@ -33,7 +33,7 @@ GcRoot<Class> ArtField::java_lang_reflect_ArtField_;
 
 void ArtField::SetClass(Class* java_lang_reflect_ArtField) {
   CHECK(java_lang_reflect_ArtField_.IsNull());
-  CHECK(java_lang_reflect_ArtField != NULL);
+  CHECK(java_lang_reflect_ArtField != nullptr);
   java_lang_reflect_ArtField_ = GcRoot<Class>(java_lang_reflect_ArtField);
 }
 
@@ -74,7 +74,7 @@ ArtField* ArtField::FindInstanceFieldWithOffset(mirror::Class* klass, uint32_t f
     }
   }
   // We did not find field in the class: look into superclass.
-  if (klass->GetSuperClass() != NULL) {
+  if (klass->GetSuperClass() != nullptr) {
     return FindInstanceFieldWithOffset(klass->GetSuperClass(), field_offset);
   } else {
     return nullptr;

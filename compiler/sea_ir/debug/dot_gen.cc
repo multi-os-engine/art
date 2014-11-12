@@ -47,7 +47,7 @@ void DotGenerationVisitor::ToDotSSAEdges(InstructionNode* instruction) {
   for (std::map<int, InstructionNode*>::const_iterator
       def_it = definition_edges->begin();
       def_it != definition_edges->end(); def_it++) {
-    if (NULL != def_it->second) {
+    if (nullptr != def_it->second) {
       dot_text_ += def_it->second->StringId() + " -> ";
       dot_text_ += instruction->StringId() + "[color=gray,label=\"";
       dot_text_ += art::StringPrintf("vR = %d", def_it->first);
@@ -79,7 +79,7 @@ void DotGenerationVisitor::ToDotSSAEdges(PhiInstructionNode* instruction) {
   for (std::vector<InstructionNode*>::const_iterator
       def_it = definition_edges.begin();
       def_it != definition_edges.end(); def_it++) {
-    if (NULL != *def_it) {
+    if (nullptr != *def_it) {
       dot_text_ += (*def_it)->StringId() + " -> ";
       dot_text_ += instruction->StringId() + "[color=gray,label=\"";
       dot_text_ += art::StringPrintf("vR = %d", instruction->GetRegisterNumber());
@@ -119,7 +119,7 @@ void DotGenerationVisitor::Visit(Region* region) {
   dot_text_ += "\n// Region: \nsubgraph " + region->StringId();
   dot_text_ += " { label=\"region " + region->StringId() + "(rpo=";
   dot_text_ += art::StringPrintf("%d", region->GetRPO());
-  if (NULL != region->GetIDominator()) {
+  if (nullptr != region->GetIDominator()) {
     dot_text_ += " dom=" + region->GetIDominator()->StringId();
   }
   dot_text_ += ")\";\n";
@@ -139,7 +139,7 @@ void DotGenerationVisitor::Visit(Region* region) {
   std::vector<Region*>* successors =  region->GetSuccessors();
   for (std::vector<Region*>::const_iterator cit = successors->begin(); cit != successors->end();
       cit++) {
-    DCHECK(NULL != *cit) << "Null successor found for SeaNode" <<
+    DCHECK(nullptr != *cit) << "Null successor found for SeaNode" <<
         region->GetLastChild()->StringId() << ".";
     dot_text_ += region->GetLastChild()->StringId() + " -> " +
         (*cit)->GetLastChild()->StringId() +

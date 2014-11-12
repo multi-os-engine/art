@@ -23,8 +23,8 @@ namespace art {
 
 class ShadowFrameCopyVisitor : public StackVisitor {
  public:
-  explicit ShadowFrameCopyVisitor(Thread* self) : StackVisitor(self, NULL), prev_frame_(NULL),
-      top_frame_(NULL) {}
+  explicit ShadowFrameCopyVisitor(Thread* self) : StackVisitor(self, nullptr), prev_frame_(nullptr),
+      top_frame_(nullptr) {}
 
   bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (IsShadowFrame()) {
@@ -32,7 +32,7 @@ class ShadowFrameCopyVisitor : public StackVisitor {
       size_t num_regs = cur_frame->NumberOfVRegs();
       mirror::ArtMethod* method = cur_frame->GetMethod();
       uint32_t dex_pc = cur_frame->GetDexPC();
-      ShadowFrame* new_frame = ShadowFrame::Create(num_regs, NULL, method, dex_pc);
+      ShadowFrame* new_frame = ShadowFrame::Create(num_regs, nullptr, method, dex_pc);
 
       const uint8_t* gc_map = method->GetNativeGcMap();
       verifier::DexPcToReferenceMap dex_gc_map(gc_map);
@@ -45,7 +45,7 @@ class ShadowFrameCopyVisitor : public StackVisitor {
         }
       }
 
-      if (prev_frame_ != NULL) {
+      if (prev_frame_ != nullptr) {
         prev_frame_->SetLink(new_frame);
       } else {
         top_frame_ = new_frame;

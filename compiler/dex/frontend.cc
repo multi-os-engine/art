@@ -199,7 +199,7 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
   }
   cu.arena_stack.Reset();
 
-  CompiledMethod* result = NULL;
+  CompiledMethod* result = nullptr;
 
   if (cu.mir_graph->PuntToInterpreter()) {
     VLOG(compiler) << cu.instruction_set << ": Punted method to interpreter: "

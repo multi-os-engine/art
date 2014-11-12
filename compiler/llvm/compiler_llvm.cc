@@ -174,13 +174,13 @@ CompileNativeMethod(DexCompilationUnit* dex_compilation_unit) {
 
 static CompilerLLVM* ContextOf(art::CompilerDriver* driver) {
   void *compiler_context = driver->GetCompilerContext();
-  CHECK(compiler_context != NULL);
+  CHECK(compiler_context != nullptr);
   return reinterpret_cast<CompilerLLVM*>(compiler_context);
 }
 
 static CompilerLLVM* ContextOf(const art::CompilerDriver& driver) {
   void *compiler_context = driver.GetCompilerContext();
-  CHECK(compiler_context != NULL);
+  CHECK(compiler_context != nullptr);
   return reinterpret_cast<CompilerLLVM*>(compiler_context);
 }
 

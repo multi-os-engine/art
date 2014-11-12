@@ -408,10 +408,10 @@ class GBCExpanderPass : public llvm::FunctionPass {
                   art::CompilerDriver* driver, const art::DexCompilationUnit* dex_compilation_unit)
       : llvm::FunctionPass(ID), intrinsic_helper_(intrinsic_helper), irb_(irb),
         context_(irb.getContext()), rtb_(irb.Runtime()),
-        shadow_frame_(NULL), old_shadow_frame_(NULL),
+        shadow_frame_(nullptr), old_shadow_frame_(nullptr),
         driver_(driver),
         dex_compilation_unit_(dex_compilation_unit),
-        func_(NULL), current_bb_(NULL), basic_block_unwind_(NULL), changed_(false) {}
+        func_(nullptr), current_bb_(nullptr), basic_block_unwind_(nullptr), changed_(false) {}
 
   bool runOnFunction(llvm::Function& func);
 
@@ -428,24 +428,24 @@ bool GBCExpanderPass::runOnFunction(llvm::Function& func) {
   VLOG(compiler) << "GBC expansion on " << func.getName().str();
 
   // Runtime support or stub
-  if (dex_compilation_unit_ == NULL) {
+  if (dex_compilation_unit_ == nullptr) {
     return false;
   }
 
   // Setup rewrite context
-  shadow_frame_ = NULL;
-  old_shadow_frame_ = NULL;
+  shadow_frame_ = nullptr;
+  old_shadow_frame_ = nullptr;
   func_ = &func;
   changed_ = false;  // Assume unchanged
 
-  shadow_frame_vreg_addresses_.resize(dex_compilation_unit_->GetCodeItem()->registers_size_, NULL);
+  shadow_frame_vreg_addresses_.resize(dex_compilation_unit_->GetCodeItem()->registers_size_, nullptr);
   basic_blocks_.resize(dex_compilation_unit_->GetCodeItem()->insns_size_in_code_units_);
-  basic_block_landing_pads_.resize(dex_compilation_unit_->GetCodeItem()->tries_size_, NULL);
-  basic_block_unwind_ = NULL;
+  basic_block_landing_pads_.resize(dex_compilation_unit_->GetCodeItem()->tries_size_, nullptr);
+  basic_block_unwind_ = nullptr;
   for (llvm::Function::iterator bb_iter = func_->begin(), bb_end = func_->end();
        bb_iter != bb_end;
        ++bb_iter) {
-    if (bb_iter->begin()->getMetadata("DexOff") == NULL) {
+    if (bb_iter->begin()->getMetadata("DexOff") == nullptr) {
       continue;
     }
     uint32_t dex_pc = LV2UInt(bb_iter->begin()->getMetadata("DexOff")->getOperand(0));
@@ -540,7 +540,7 @@ void GBCExpanderPass::RewriteFunction() {
   // Iterate every used landing pad basic block
   for (size_t i = 0, ei = basic_block_landing_pads_.size(); i != ei; ++i) {
     llvm::BasicBlock* lbb = basic_block_landing_pads_[i];
-    if (lbb == NULL) {
+    if (lbb == nullptr) {
       continue;
     }
 
@@ -565,7 +565,7 @@ void GBCExpanderPass::RewriteFunction() {
           break;  // Meet non-phi instruction.  Done.
         }
 
-        if (handler_phi[phi] == NULL) {
+        if (handler_phi[phi] == nullptr) {
           handler_phi[phi] = llvm::PHINode::Create(phi->getType(), 1);
         }
 
@@ -826,7 +826,7 @@ llvm::Value* GBCExpanderPass::EmitInvoke(llvm::CallInst& call_inst) {
                                      LV2UInt(call_inst.getArgOperand(1)));
 
   // Load *this* actual parameter
-  llvm::Value* this_addr = (!is_static) ? call_inst.getArgOperand(3) : NULL;
+  llvm::Value* this_addr = (!is_static) ? call_inst.getArgOperand(3) : nullptr;
 
   // Compute invoke related information for compiler decision
   int vtable_idx = -1;
@@ -838,7 +838,7 @@ llvm::Value* GBCExpanderPass::EmitInvoke(llvm::CallInst& call_inst) {
                                                  &vtable_idx,
                                                  &direct_code, &direct_method);
   // Load the method object
-  llvm::Value* callee_method_object_addr = NULL;
+  llvm::Value* callee_method_object_addr = nullptr;
 
   if (!is_fast_path) {
     callee_method_object_addr =
@@ -912,7 +912,7 @@ llvm::Value* GBCExpanderPass::EmitInvoke(llvm::CallInst& call_inst) {
 
 bool GBCExpanderPass::EmitIntrinsic(llvm::CallInst& call_inst,
                                     llvm::Value** result) {
-  DCHECK(result != NULL);
+  DCHECK(result != nullptr);
 
   uint32_t callee_method_idx = LV2UInt(call_inst.getArgOperand(1));
   std::string callee_method_name(
@@ -927,7 +927,7 @@ bool GBCExpanderPass::EmitIntrinsic(llvm::CallInst& call_inst,
                                               true /* is_empty */);
   }
 
-  *result = NULL;
+  *result = nullptr;
   return false;
 }
 
@@ -1350,8 +1350,8 @@ void GBCExpanderPass::Expand_SetVReg(llvm::Value* entry_idx,
   DCHECK_LT(vreg_idx, dex_compilation_unit_->GetCodeItem()->registers_size_);
 
   llvm::Value* vreg_addr = shadow_frame_vreg_addresses_[vreg_idx];
-  if (UNLIKELY(vreg_addr == NULL)) {
-    DCHECK(shadow_frame_ != NULL);
+  if (UNLIKELY(vreg_addr == nullptr)) {
+    DCHECK(shadow_frame_ != nullptr);
 
     llvm::Value* gep_index[] = {
       irb_.getInt32(0),  // No pointer displacement
@@ -1380,7 +1380,7 @@ void GBCExpanderPass::Expand_SetVReg(llvm::Value* entry_idx,
 }
 
 void GBCExpanderPass::Expand_PopShadowFrame() {
-  if (old_shadow_frame_ == NULL) {
+  if (old_shadow_frame_ == nullptr) {
     return;
   }
   rtb_.EmitPopShadowFrame(irb_.CreateLoad(old_shadow_frame_, kTBAARegister));
@@ -1497,7 +1497,7 @@ llvm::Value* GBCExpanderPass::Expand_IntegerShift(llvm::Value* src1_value,
 
   default:
     LOG(FATAL) << "Unknown integer shift kind: " << kind;
-    return NULL;
+    return nullptr;
   }
 }
 
@@ -1518,7 +1518,7 @@ llvm::Value* GBCExpanderPass::SignOrZeroExtendCat1Types(llvm::Value* value, JTyp
       return value;  // Nothing to do.
     default:
       LOG(FATAL) << "Unknown java type: " << jty;
-      return NULL;
+      return nullptr;
   }
 }
 
@@ -1538,7 +1538,7 @@ llvm::Value* GBCExpanderPass::TruncateCat1Types(llvm::Value* value, JType jty) {
       return value;  // Nothing to do.
     default:
       LOG(FATAL) << "Unknown java type: " << jty;
-      return NULL;
+      return nullptr;
   }
 }
 
@@ -1920,7 +1920,7 @@ llvm::Value* GBCExpanderPass::Expand_HLSget(llvm::CallInst& call_inst,
   } else {
     DCHECK_GE(field_offset.Int32Value(), 0);
 
-    llvm::Value* static_storage_addr = NULL;
+    llvm::Value* static_storage_addr = nullptr;
 
     if (is_referrers_class) {
       // Fast path, static storage base is this method's class
@@ -2006,7 +2006,7 @@ void GBCExpanderPass::Expand_HLSput(llvm::CallInst& call_inst,
   } else {
     DCHECK_GE(field_offset.Int32Value(), 0);
 
-    llvm::Value* static_storage_addr = NULL;
+    llvm::Value* static_storage_addr = nullptr;
 
     if (is_referrers_class) {
       // Fast path, static storage base is this method's class
@@ -2317,7 +2317,7 @@ llvm::Value* GBCExpanderPass::Expand_HLInvoke(llvm::CallInst& call_inst) {
     EmitGuard_NullPointerException(dex_pc, this_addr, opt_flags);
   }
 
-  llvm::Value* result = NULL;
+  llvm::Value* result = nullptr;
   if (EmitIntrinsic(call_inst, &result)) {
     return result;
   }
@@ -2484,7 +2484,7 @@ EmitCallRuntimeForCalleeMethodObjectAddr(uint32_t callee_method_idx,
                                          llvm::Value* this_addr,
                                          uint32_t dex_pc,
                                          bool is_fast_path) {
-  llvm::Function* runtime_func = NULL;
+  llvm::Function* runtime_func = nullptr;
 
   switch (invoke_type) {
   case art::kStatic:
@@ -2514,7 +2514,7 @@ EmitCallRuntimeForCalleeMethodObjectAddr(uint32_t callee_method_idx,
 
   llvm::Value* callee_method_idx_value = irb_.getInt32(callee_method_idx);
 
-  if (this_addr == NULL) {
+  if (this_addr == nullptr) {
     DCHECK_EQ(invoke_type, art::kStatic);
     this_addr = irb_.getJNull();
   }
@@ -2543,7 +2543,7 @@ void GBCExpanderPass::EmitMarkGCCard(llvm::Value* value, llvm::Value* target_add
 }
 
 void GBCExpanderPass::EmitUpdateDexPC(uint32_t dex_pc) {
-  if (shadow_frame_ == NULL) {
+  if (shadow_frame_ == nullptr) {
     return;
   }
   irb_.StoreToObjectOffset(shadow_frame_,
@@ -2702,7 +2702,7 @@ CreateBasicBlockWithDexPC(uint32_t dex_pc, const char* postfix) {
 
 llvm::BasicBlock* GBCExpanderPass::GetBasicBlock(uint32_t dex_pc) {
   DCHECK(dex_pc < dex_compilation_unit_->GetCodeItem()->insns_size_in_code_units_);
-  CHECK(basic_blocks_[dex_pc] != NULL);
+  CHECK(basic_blocks_[dex_pc] != nullptr);
   return basic_blocks_[dex_pc];
 }
 
@@ -2735,7 +2735,7 @@ llvm::BasicBlock* GBCExpanderPass::GetLandingPadBasicBlock(uint32_t dex_pc) {
   int32_t ti_offset = GetTryItemOffset(dex_pc);
 
   if (ti_offset == -1) {
-    return NULL;  // No landing pad is available for this address.
+    return nullptr;  // No landing pad is available for this address.
   }
 
   // Check for the existing landing pad basic block
@@ -2797,7 +2797,7 @@ llvm::BasicBlock* GBCExpanderPass::GetLandingPadBasicBlock(uint32_t dex_pc) {
 
 llvm::BasicBlock* GBCExpanderPass::GetUnwindBasicBlock() {
   // Check the existing unwinding baisc block block
-  if (basic_block_unwind_ != NULL) {
+  if (basic_block_unwind_ != nullptr) {
     return basic_block_unwind_;
   }
 
@@ -2863,15 +2863,15 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
     }
     case IntrinsicHelper::CheckSuspend: {
       Expand_TestSuspend(call_inst);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::TestSuspend: {
       Expand_TestSuspend(call_inst);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::MarkGCCard: {
       Expand_MarkGCCard(call_inst);
-      return NULL;
+      return nullptr;
     }
 
     //==- Exception --------------------------------------------------------==//
@@ -2887,7 +2887,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(0));
 
       EmitGuard_ExceptionLandingPad(dex_pc);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::GetException: {
       return irb_.Runtime().EmitGetAndClearException();
@@ -2936,11 +2936,11 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
     //==- Lock -------------------------------------------------------------==//
     case IntrinsicHelper::LockObject: {
       Expand_LockObject(call_inst.getArgOperand(0));
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::UnlockObject: {
       Expand_UnlockObject(call_inst.getArgOperand(0));
-      return NULL;
+      return nullptr;
     }
 
     //==- Cast -------------------------------------------------------------==//
@@ -2949,7 +2949,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
     }
     case IntrinsicHelper::HLCheckCast: {
       Expand_HLCheckCast(call_inst);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::IsAssignable: {
       return ExpandToRuntime(IsAssignable, call_inst);
@@ -3035,63 +3035,63 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(1),
                       call_inst.getArgOperand(2),
                       kInt);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::ArrayPutWide: {
       Expand_ArrayPut(call_inst.getArgOperand(0),
                       call_inst.getArgOperand(1),
                       call_inst.getArgOperand(2),
                       kLong);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::ArrayPutObject: {
       Expand_ArrayPut(call_inst.getArgOperand(0),
                       call_inst.getArgOperand(1),
                       call_inst.getArgOperand(2),
                       kObject);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::ArrayPutBoolean: {
       Expand_ArrayPut(call_inst.getArgOperand(0),
                       call_inst.getArgOperand(1),
                       call_inst.getArgOperand(2),
                       kBoolean);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::ArrayPutByte: {
       Expand_ArrayPut(call_inst.getArgOperand(0),
                       call_inst.getArgOperand(1),
                       call_inst.getArgOperand(2),
                       kByte);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::ArrayPutChar: {
       Expand_ArrayPut(call_inst.getArgOperand(0),
                       call_inst.getArgOperand(1),
                       call_inst.getArgOperand(2),
                       kChar);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::ArrayPutShort: {
       Expand_ArrayPut(call_inst.getArgOperand(0),
                       call_inst.getArgOperand(1),
                       call_inst.getArgOperand(2),
                       kShort);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::CheckPutArrayElement: {
       return ExpandToRuntime(CheckPutArrayElement, call_inst);
     }
     case IntrinsicHelper::FilledNewArray: {
       Expand_FilledNewArray(call_inst);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::FillArrayData: {
       return ExpandToRuntime(FillArrayData, call_inst);
     }
     case IntrinsicHelper::HLFillArrayData: {
       Expand_HLFillArrayData(call_inst);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLFilledNewArray: {
       return Expand_HLFilledNewArray(call_inst);
@@ -3172,7 +3172,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kInt);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::InstanceFieldPutWideFast: {
       Expand_IPutFast(call_inst.getArgOperand(0),
@@ -3180,7 +3180,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kLong);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::InstanceFieldPutObjectFast: {
       Expand_IPutFast(call_inst.getArgOperand(0),
@@ -3188,7 +3188,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kObject);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::InstanceFieldPutBooleanFast: {
       Expand_IPutFast(call_inst.getArgOperand(0),
@@ -3196,7 +3196,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kBoolean);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::InstanceFieldPutByteFast: {
       Expand_IPutFast(call_inst.getArgOperand(0),
@@ -3204,7 +3204,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kByte);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::InstanceFieldPutCharFast: {
       Expand_IPutFast(call_inst.getArgOperand(0),
@@ -3212,7 +3212,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kChar);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::InstanceFieldPutShortFast: {
       Expand_IPutFast(call_inst.getArgOperand(0),
@@ -3220,7 +3220,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kShort);
-      return NULL;
+      return nullptr;
     }
 
     //==- Static Field -----------------------------------------------------==//
@@ -3298,7 +3298,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kInt);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::StaticFieldPutWideFast: {
       Expand_SPutFast(call_inst.getArgOperand(0),
@@ -3306,7 +3306,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kLong);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::StaticFieldPutObjectFast: {
       Expand_SPutFast(call_inst.getArgOperand(0),
@@ -3314,7 +3314,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kObject);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::StaticFieldPutBooleanFast: {
       Expand_SPutFast(call_inst.getArgOperand(0),
@@ -3322,7 +3322,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kBoolean);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::StaticFieldPutByteFast: {
       Expand_SPutFast(call_inst.getArgOperand(0),
@@ -3330,7 +3330,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kByte);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::StaticFieldPutCharFast: {
       Expand_SPutFast(call_inst.getArgOperand(0),
@@ -3338,7 +3338,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kChar);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::StaticFieldPutShortFast: {
       Expand_SPutFast(call_inst.getArgOperand(0),
@@ -3346,7 +3346,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
                       call_inst.getArgOperand(2),
                       call_inst.getArgOperand(3),
                       kShort);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::LoadDeclaringClassSSB: {
       return Expand_LoadDeclaringClassSSB(call_inst.getArgOperand(0));
@@ -3385,39 +3385,39 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
     }
     case IntrinsicHelper::HLArrayPut: {
       Expand_HLArrayPut(call_inst, kInt);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLArrayPutBoolean: {
       Expand_HLArrayPut(call_inst, kBoolean);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLArrayPutByte: {
       Expand_HLArrayPut(call_inst, kByte);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLArrayPutChar: {
       Expand_HLArrayPut(call_inst, kChar);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLArrayPutShort: {
       Expand_HLArrayPut(call_inst, kShort);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLArrayPutFloat: {
       Expand_HLArrayPut(call_inst, kFloat);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLArrayPutWide: {
       Expand_HLArrayPut(call_inst, kLong);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLArrayPutDouble: {
       Expand_HLArrayPut(call_inst, kDouble);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLArrayPutObject: {
       Expand_HLArrayPut(call_inst, kObject);
-      return NULL;
+      return nullptr;
     }
 
     //==- High-level Instance ----------------------------------------------==//
@@ -3450,39 +3450,39 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
     }
     case IntrinsicHelper::HLIPut: {
       Expand_HLIPut(call_inst, kInt);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLIPutBoolean: {
       Expand_HLIPut(call_inst, kBoolean);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLIPutByte: {
       Expand_HLIPut(call_inst, kByte);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLIPutChar: {
       Expand_HLIPut(call_inst, kChar);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLIPutShort: {
       Expand_HLIPut(call_inst, kShort);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLIPutFloat: {
       Expand_HLIPut(call_inst, kFloat);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLIPutWide: {
       Expand_HLIPut(call_inst, kLong);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLIPutDouble: {
       Expand_HLIPut(call_inst, kDouble);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLIPutObject: {
       Expand_HLIPut(call_inst, kObject);
-      return NULL;
+      return nullptr;
     }
 
     //==- High-level Invoke ------------------------------------------------==//
@@ -3590,68 +3590,68 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
     }
     case IntrinsicHelper::HLSput: {
       Expand_HLSput(call_inst, kInt);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLSputBoolean: {
       Expand_HLSput(call_inst, kBoolean);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLSputByte: {
       Expand_HLSput(call_inst, kByte);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLSputChar: {
       Expand_HLSput(call_inst, kChar);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLSputShort: {
       Expand_HLSput(call_inst, kShort);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLSputFloat: {
       Expand_HLSput(call_inst, kFloat);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLSputWide: {
       Expand_HLSput(call_inst, kLong);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLSputDouble: {
       Expand_HLSput(call_inst, kDouble);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::HLSputObject: {
       Expand_HLSput(call_inst, kObject);
-      return NULL;
+      return nullptr;
     }
 
     //==- High-level Monitor -----------------------------------------------==//
     case IntrinsicHelper::MonitorEnter: {
       Expand_MonitorEnter(call_inst);
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::MonitorExit: {
       Expand_MonitorExit(call_inst);
-      return NULL;
+      return nullptr;
     }
 
     //==- Shadow Frame -----------------------------------------------------==//
     case IntrinsicHelper::AllocaShadowFrame: {
       Expand_AllocaShadowFrame(call_inst.getArgOperand(0));
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::SetVReg: {
       Expand_SetVReg(call_inst.getArgOperand(0),
                      call_inst.getArgOperand(1));
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::PopShadowFrame: {
       Expand_PopShadowFrame();
-      return NULL;
+      return nullptr;
     }
     case IntrinsicHelper::UpdateDexPC: {
       Expand_UpdateDexPC(call_inst.getArgOperand(0));
-      return NULL;
+      return nullptr;
     }
 
     //==- Comparison -------------------------------------------------------==//
@@ -3694,7 +3694,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
     case IntrinsicHelper::MethodInfo: {
       // Nothing to be done, because MethodInfo carries optional hints that are
       // not needed by the portable path.
-      return NULL;
+      return nullptr;
     }
 
     //==- Copy -------------------------------------------------------------==//
@@ -3756,7 +3756,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
     case IntrinsicHelper::CatchTargets: {
       UpdatePhiInstruction(current_bb_, irb_.GetInsertBlock());
       llvm::SwitchInst* si = llvm::dyn_cast<llvm::SwitchInst>(call_inst.getNextNode());
-      CHECK(si != NULL);
+      CHECK(si != nullptr);
       irb_.CreateBr(si->getDefaultDest());
       si->eraseFromParent();
       return call_inst.getArgOperand(0);
@@ -3765,7 +3765,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
     //==- Constructor barrier-----------------------------------------------==//
     case IntrinsicHelper::ConstructorBarrier: {
       irb_.CreateMemoryBarrier(art::kStoreStore);
-      return NULL;
+      return nullptr;
     }
 
     //==- Unknown Cases ----------------------------------------------------==//
@@ -3778,7 +3778,7 @@ GBCExpanderPass::ExpandIntrinsic(IntrinsicHelper::IntrinsicId intr_id,
       break;
   }
   UNIMPLEMENTED(FATAL) << "Unexpected GBC intrinsic: " << static_cast<int>(intr_id);
-  return NULL;
+  return nullptr;
 }  // NOLINT(readability/fn_size)
 
 }  // anonymous namespace

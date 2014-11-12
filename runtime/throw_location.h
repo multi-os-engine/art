@@ -65,8 +65,8 @@ class PACKED(4) ThrowLocation {
   }
 
   void Clear() {
-    this_object_ = NULL;
-    method_ = NULL;
+    this_object_ = nullptr;
+    method_ = nullptr;
     dex_pc_ = -1;
   }
 

@@ -571,7 +571,7 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject javaM
     // Check that the receiver is non-null and an instance of the field's declaring class.
     receiver = soa.Decode<mirror::Object*>(javaReceiver);
     if (!VerifyObjectIsClass(receiver, declaring_class)) {
-      return NULL;
+      return nullptr;
     }
 
     // Find the actual implementation of the virtual method.
@@ -585,10 +585,10 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject javaM
   uint32_t classes_size = (classes == nullptr) ? 0 : classes->Size();
   uint32_t arg_count = (objects != nullptr) ? objects->GetLength() : 0;
   if (arg_count != classes_size) {
-    ThrowIllegalArgumentException(NULL,
+    ThrowIllegalArgumentException(nullptr,
                                   StringPrintf("Wrong number of arguments; expected %d, got %d",
                                                classes_size, arg_count).c_str());
-    return NULL;
+    return nullptr;
   }
 
   // If method is not set to be accessible, verify it can be accessed by the caller.
@@ -627,7 +627,7 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject javaM
     jmethodID mid = soa.Env()->GetMethodID(exception_class, "<init>", "(Ljava/lang/Throwable;)V");
     jobject exception_instance = soa.Env()->NewObject(exception_class, mid, th);
     soa.Env()->Throw(reinterpret_cast<jthrowable>(exception_instance));
-    return NULL;
+    return nullptr;
   }
 
   // Box if necessary and return.
@@ -636,13 +636,13 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject javaM
 }
 
 bool VerifyObjectIsClass(mirror::Object* o, mirror::Class* c) {
-  if (o == NULL) {
-    ThrowNullPointerException(NULL, "null receiver");
+  if (o == nullptr) {
+    ThrowNullPointerException(nullptr, "null receiver");
     return false;
   } else if (!o->InstanceOf(c)) {
     std::string expected_class_name(PrettyDescriptor(c));
     std::string actual_class_name(PrettyTypeOf(o));
-    ThrowIllegalArgumentException(NULL,
+    ThrowIllegalArgumentException(nullptr,
                                   StringPrintf("Expected receiver of type %s, but got %s",
                                                expected_class_name.c_str(),
                                                actual_class_name.c_str()).c_str());

@@ -89,10 +89,10 @@ void SeaGraph::ComputeIDominators() {
         continue;
       }
       // NewIDom = first (processed) predecessor of b.
-      Region* new_dom = NULL;
+      Region* new_dom = nullptr;
       std::vector<Region*>* preds = (*crt_it)->GetPredecessors();
-      DCHECK(NULL != preds);
-      Region* root_pred = NULL;
+      DCHECK(nullptr != preds);
+      Region* root_pred = nullptr;
       for (std::vector<Region*>::iterator pred_it = preds->begin();
           pred_it != preds->end(); ++pred_it) {
         if (processedNodes.end() != processedNodes.find((*pred_it))) {
@@ -105,14 +105,14 @@ void SeaGraph::ComputeIDominators() {
       // then NewIdom = Intersect(p, NewIdom)
       for (std::vector<Region*>::const_iterator pred_it = preds->begin();
           pred_it != preds->end(); ++pred_it) {
-        DCHECK(NULL != *pred_it);
+        DCHECK(nullptr != *pred_it);
         // if IDOMS[p] != UNDEFINED
-        if ((*pred_it != root_pred) && (*pred_it)->GetIDominator() != NULL) {
-          DCHECK(NULL != new_dom);
+        if ((*pred_it != root_pred) && (*pred_it)->GetIDominator() != nullptr) {
+          DCHECK(nullptr != new_dom);
           new_dom = SeaGraph::Intersect(*pred_it, new_dom);
         }
       }
-      DCHECK(NULL != *crt_it);
+      DCHECK(nullptr != *crt_it);
       if ((*crt_it)->GetIDominator() != new_dom) {
         (*crt_it)->SetIDominator(new_dom);
         changed = true;
@@ -136,14 +136,14 @@ Region* SeaGraph::Intersect(Region* i, Region* j) {
   Region* finger2 = j;
   while (finger1 != finger2) {
     while (finger1->GetRPO() > finger2->GetRPO()) {
-      DCHECK(NULL != finger1);
-      finger1 = finger1->GetIDominator();  // should have: finger1 != NULL
-      DCHECK(NULL != finger1);
+      DCHECK(nullptr != finger1);
+      finger1 = finger1->GetIDominator();  // should have: finger1 != nullptr
+      DCHECK(nullptr != finger1);
     }
     while (finger1->GetRPO() < finger2->GetRPO()) {
-      DCHECK(NULL != finger2);
-      finger2 = finger2->GetIDominator();  // should have: finger1 != NULL
-      DCHECK(NULL != finger2);
+      DCHECK(nullptr != finger2);
+      finger2 = finger2->GetIDominator();  // should have: finger1 != nullptr
+      DCHECK(nullptr != finger2);
     }
   }
   return finger1;  // finger1 should be equal to finger2 at this point.
@@ -229,8 +229,8 @@ void SeaGraph::BuildMethodSeaGraph(const art::DexFile::CodeItem* code_item,
   // Pass: Assign instructions to region nodes and
   //         assign branches their control flow successors.
   i = 0;
-  sea_ir::InstructionNode* last_node = NULL;
-  sea_ir::InstructionNode* node = NULL;
+  sea_ir::InstructionNode* last_node = nullptr;
+  sea_ir::InstructionNode* node = nullptr;
   while (i < size_in_code_units) {
     const art::Instruction* inst = art::Instruction::At(&code[i]);
     std::vector<InstructionNode*> sea_instructions_for_dalvik =
@@ -456,16 +456,16 @@ Region* SeaGraph::GetNewRegion() {
 }
 
 void SeaGraph::AddRegion(Region* r) {
-  DCHECK(r) << "Tried to add NULL region to SEA graph.";
+  DCHECK(r) << "Tried to add nullptr region to SEA graph.";
   regions_.push_back(r);
 }
 
 SeaGraph::SeaGraph(const art::DexFile& df)
     :ti_(new TypeInference()), class_def_idx_(0), method_idx_(0),  method_access_flags_(),
-     regions_(), parameters_(), dex_file_(df), code_item_(NULL) { }
+     regions_(), parameters_(), dex_file_(df), code_item_(nullptr) { }
 
 void Region::AddChild(sea_ir::InstructionNode* instruction) {
-  DCHECK(instruction) << "Tried to add NULL instruction to region node.";
+  DCHECK(instruction) << "Tried to add nullptr instruction to region node.";
   instructions_.push_back(instruction);
   instruction->SetRegion(this);
 }
@@ -474,7 +474,7 @@ SeaNode* Region::GetLastChild() const {
   if (instructions_.size() > 0) {
     return instructions_.back();
   }
-  return NULL;
+  return nullptr;
 }
 
 void Region::ComputeDownExposedDefs() {

@@ -39,7 +39,7 @@ inline uint32_t ArtField::ClassSize() {
 
 inline Class* ArtField::GetDeclaringClass() {
   Class* result = GetFieldObject<Class>(OFFSET_OF_OBJECT_MEMBER(ArtField, declaring_class_));
-  DCHECK(result != NULL);
+  DCHECK(result != nullptr);
   DCHECK(result->IsLoaded() || result->IsErroneous());
   return result;
 }
@@ -84,7 +84,7 @@ inline void ArtField::Set32(Object* object, uint32_t new_value) {
 }
 
 inline uint64_t ArtField::Get64(Object* object) {
-  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(object != nullptr) << PrettyField(this);
   DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
   if (UNLIKELY(IsVolatile())) {
     return object->GetField64Volatile(GetOffset());
@@ -94,7 +94,7 @@ inline uint64_t ArtField::Get64(Object* object) {
 
 template<bool kTransactionActive>
 inline void ArtField::Set64(Object* object, uint64_t new_value) {
-  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(object != nullptr) << PrettyField(this);
   DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
   if (UNLIKELY(IsVolatile())) {
     object->SetField64Volatile<kTransactionActive>(GetOffset(), new_value);
@@ -104,7 +104,7 @@ inline void ArtField::Set64(Object* object, uint64_t new_value) {
 }
 
 inline Object* ArtField::GetObj(Object* object) {
-  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(object != nullptr) << PrettyField(this);
   DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
   if (UNLIKELY(IsVolatile())) {
     return object->GetFieldObjectVolatile<Object>(GetOffset());
@@ -114,7 +114,7 @@ inline Object* ArtField::GetObj(Object* object) {
 
 template<bool kTransactionActive>
 inline void ArtField::SetObj(Object* object, Object* new_value) {
-  DCHECK(object != NULL) << PrettyField(this);
+  DCHECK(object != nullptr) << PrettyField(this);
   DCHECK(!IsStatic() || (object == GetDeclaringClass()) || !Runtime::Current()->IsStarted());
   if (UNLIKELY(IsVolatile())) {
     object->SetFieldObjectVolatile<kTransactionActive>(GetOffset(), new_value);

@@ -70,7 +70,7 @@ extern "C" mirror::Object* art_portable_jni_method_end_with_reference(jobject re
   // Process result.
   if (UNLIKELY(self->GetJniEnv()->check_jni)) {
     if (self->IsExceptionPending()) {
-      return NULL;
+      return nullptr;
     }
     CheckReferenceResult(o, self);
   }
@@ -89,7 +89,7 @@ extern "C" mirror::Object* art_portable_jni_method_end_with_reference_synchroniz
   // Process result.
   if (UNLIKELY(self->GetJniEnv()->check_jni)) {
     if (self->IsExceptionPending()) {
-      return NULL;
+      return nullptr;
     }
     CheckReferenceResult(o, self);
   }

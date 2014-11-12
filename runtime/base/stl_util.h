@@ -54,7 +54,7 @@ void STLDeleteContainerPointers(ForwardIterator begin,
 // hash_set, or any other STL container which defines sensible begin(), end(),
 // and clear() methods.
 //
-// If container is NULL, this function is a no-op.
+// If container is nullptr, this function is a no-op.
 //
 // As an alternative to calling STLDeleteElements() directly, consider
 // ElementDeleter (defined below), which ensures that your container's elements
@@ -68,7 +68,7 @@ void STLDeleteElements(T *container) {
 
 // Given an STL container consisting of (key, value) pairs, STLDeleteValues
 // deletes all the "value" components and clears the container.  Does nothing
-// in the case it's given a NULL pointer.
+// in the case it's given a nullptr pointer.
 template <class T>
 void STLDeleteValues(T *v) {
   if (!v) return;

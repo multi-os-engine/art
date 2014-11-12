@@ -47,20 +47,20 @@ static void Runtime_gc(JNIEnv*, jclass) {
 
 static jstring Runtime_nativeLoad(JNIEnv* env, jclass, jstring javaFilename, jobject javaLoader,
                                   jstring javaLdLibraryPath) {
-  // TODO: returns NULL on success or an error message describing the failure on failure. This
+  // TODO: returns nullptr on success or an error message describing the failure on failure. This
   // should be refactored in terms of suppressed exceptions.
   ScopedUtfChars filename(env, javaFilename);
-  if (filename.c_str() == NULL) {
-    return NULL;
+  if (filename.c_str() == nullptr) {
+    return nullptr;
   }
 
-  if (javaLdLibraryPath != NULL) {
+  if (javaLdLibraryPath != nullptr) {
     ScopedUtfChars ldLibraryPath(env, javaLdLibraryPath);
-    if (ldLibraryPath.c_str() == NULL) {
-      return NULL;
+    if (ldLibraryPath.c_str() == nullptr) {
+      return nullptr;
     }
     void* sym = dlsym(RTLD_DEFAULT, "android_update_LD_LIBRARY_PATH");
-    if (sym != NULL) {
+    if (sym != nullptr) {
       typedef void (*Fn)(const char*);
       Fn android_update_LD_LIBRARY_PATH = reinterpret_cast<Fn>(sym);
       (*android_update_LD_LIBRARY_PATH)(ldLibraryPath.c_str());

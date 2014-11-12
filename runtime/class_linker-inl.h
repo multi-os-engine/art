@@ -59,7 +59,7 @@ inline mirror::Class* ClassLinker::FindArrayClass(Thread* self, mirror::Class** 
 inline mirror::String* ClassLinker::ResolveString(uint32_t string_idx,
                                                   mirror::ArtMethod* referrer) {
   mirror::String* resolved_string = referrer->GetDexCacheStrings()->Get(string_idx);
-  if (UNLIKELY(resolved_string == NULL)) {
+  if (UNLIKELY(resolved_string == nullptr)) {
     mirror::Class* declaring_class = referrer->GetDeclaringClass();
     StackHandleScope<1> hs(Thread::Current());
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
@@ -92,7 +92,7 @@ inline mirror::Class* ClassLinker::ResolveType(uint16_t type_idx, mirror::ArtFie
   mirror::Class* declaring_class = referrer->GetDeclaringClass();
   mirror::DexCache* dex_cache_ptr = declaring_class->GetDexCache();
   mirror::Class* resolved_type = dex_cache_ptr->GetResolvedType(type_idx);
-  if (UNLIKELY(resolved_type == NULL)) {
+  if (UNLIKELY(resolved_type == nullptr)) {
     StackHandleScope<2> hs(Thread::Current());
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(dex_cache_ptr));
     Handle<mirror::ClassLoader> class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
@@ -142,7 +142,7 @@ inline mirror::ArtField* ClassLinker::ResolveField(uint32_t field_idx, mirror::A
                                                    bool is_static) {
   mirror::Class* declaring_class = referrer->GetDeclaringClass();
   mirror::ArtField* resolved_field = GetResolvedField(field_idx, declaring_class);
-  if (UNLIKELY(resolved_field == NULL)) {
+  if (UNLIKELY(resolved_field == nullptr)) {
     StackHandleScope<2> hs(Thread::Current());
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
     Handle<mirror::ClassLoader> class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
@@ -203,7 +203,7 @@ inline mirror::Class* ClassLinker::GetClassRoot(ClassRoot class_root)
   DCHECK(!class_roots_.IsNull());
   mirror::ObjectArray<mirror::Class>* class_roots = class_roots_.Read();
   mirror::Class* klass = class_roots->Get(class_root);
-  DCHECK(klass != NULL);
+  DCHECK(klass != nullptr);
   return klass;
 }
 

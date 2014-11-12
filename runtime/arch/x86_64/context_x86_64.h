@@ -79,7 +79,7 @@ class X86_64Context : public Context {
   void DoLongJump() OVERRIDE;
 
  private:
-  // Pointers to register locations. Values are initialized to NULL or the special registers below.
+  // Pointers to register locations. Values are initialized to nullptr or the special registers below.
   uintptr_t* gprs_[kNumberOfCpuRegisters];
   uint64_t* fprs_[kNumberOfFloatRegisters];
   // Hold values for rsp and rip if they are not located within a stack frame. RIP is somewhat

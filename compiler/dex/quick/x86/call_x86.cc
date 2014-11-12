@@ -109,7 +109,7 @@ void X86Mir2Lir::GenLargePackedSwitch(MIR* mir, DexOffset table_offset, RegLocat
   }
   // Bounds check - if < 0 or >= size continue following switch
   OpRegImm(kOpCmp, keyReg, size - 1);
-  LIR* branch_over = OpCondBranch(kCondHi, NULL);
+  LIR* branch_over = OpCondBranch(kCondHi, nullptr);
 
   // Load the displacement from the switch table
   RegStorage disp_reg = AllocTemp();
@@ -144,7 +144,7 @@ void X86Mir2Lir::MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) {
   DCHECK_EQ(val_reg.Is64Bit(), cu_->target64);
   RegStorage reg_card_base = AllocTempRef();
   RegStorage reg_card_no = AllocTempRef();
-  LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, NULL);
+  LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, nullptr);
   int ct_offset = cu_->target64 ?
       Thread::CardTableOffset<8>().Int32Value() :
       Thread::CardTableOffset<4>().Int32Value();

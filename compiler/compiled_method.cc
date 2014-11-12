@@ -124,7 +124,7 @@ const void* CompiledCode::CodePointer(const void* code_pointer,
     }
     default:
       LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
-      return NULL;
+      return nullptr;
   }
 }
 

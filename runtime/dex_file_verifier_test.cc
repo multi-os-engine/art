@@ -104,14 +104,14 @@ static inline uint8_t* DecodeBase64(const char* src, size_t* dst_size) {
 static const DexFile* OpenDexFileBase64(const char* base64, const char* location,
                                         std::string* error_msg) {
   // decode base64
-  CHECK(base64 != NULL);
+  CHECK(base64 != nullptr);
   size_t length;
   std::unique_ptr<uint8_t[]> dex_bytes(DecodeBase64(base64, &length));
-  CHECK(dex_bytes.get() != NULL);
+  CHECK(dex_bytes.get() != nullptr);
 
   // write to provided file
   std::unique_ptr<File> file(OS::CreateEmptyFile(location));
-  CHECK(file.get() != NULL);
+  CHECK(file.get() != nullptr);
   if (!file->WriteFully(dex_bytes.get(), length)) {
     PLOG(FATAL) << "Failed to write base64 as dex file";
   }
@@ -156,7 +156,7 @@ TEST_F(DexFileVerifierTest, GoodDex) {
 static void FixUpChecksum(uint8_t* dex_file) {
   DexFile::Header* header = reinterpret_cast<DexFile::Header*>(dex_file);
   uint32_t expected_size = header->file_size_;
-  uint32_t adler_checksum = adler32(0L, Z_NULL, 0);
+  uint32_t adler_checksum = adler32(0L, Z_nullptr, 0);
   const uint32_t non_sum = sizeof(DexFile::Header::magic_) + sizeof(DexFile::Header::checksum_);
   const uint8_t* non_sum_ptr = dex_file + non_sum;
   adler_checksum = adler32(adler_checksum, non_sum_ptr, expected_size - non_sum);
@@ -173,7 +173,7 @@ static const DexFile* FixChecksumAndOpen(uint8_t* bytes, size_t length, const ch
 
   // write to provided file
   std::unique_ptr<File> file(OS::CreateEmptyFile(location));
-  CHECK(file.get() != NULL);
+  CHECK(file.get() != nullptr);
   if (!file->WriteFully(bytes, length)) {
     PLOG(FATAL) << "Failed to write base64 as dex file";
   }
@@ -197,7 +197,7 @@ static bool ModifyAndLoad(const char* location, size_t offset, uint8_t new_val,
   // Decode base64.
   size_t length;
   std::unique_ptr<uint8_t[]> dex_bytes(DecodeBase64(kGoodTestDex, &length));
-  CHECK(dex_bytes.get() != NULL);
+  CHECK(dex_bytes.get() != nullptr);
 
   // Make modifications.
   dex_bytes.get()[offset] = new_val;

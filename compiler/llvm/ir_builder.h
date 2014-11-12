@@ -39,13 +39,13 @@ namespace llvm {
 
 class InserterWithDexOffset : public ::llvm::IRBuilderDefaultInserter<true> {
   public:
-    InserterWithDexOffset() : node_(NULL) {}
+    InserterWithDexOffset() : node_(nullptr) {}
 
     void InsertHelper(::llvm::Instruction *I, const ::llvm::Twine &Name,
                       ::llvm::BasicBlock *BB,
                       ::llvm::BasicBlock::iterator InsertPt) const {
       ::llvm::IRBuilderDefaultInserter<true>::InsertHelper(I, Name, BB, InsertPt);
-      if (node_ != NULL) {
+      if (node_ != nullptr) {
         I->setMetadata("DexOff", node_);
       }
     }
@@ -296,7 +296,7 @@ class IRBuilder : public LLVMIRBuilder {
   void SetRuntimeSupport(RuntimeSupportBuilder* runtime_support) {
     // Can only set once. We can't do this on constructor, because RuntimeSupportBuilder needs
     // IRBuilder.
-    if (runtime_support_ == NULL && runtime_support != NULL) {
+    if (runtime_support_ == nullptr && runtime_support != nullptr) {
       runtime_support_ = runtime_support;
     }
   }
@@ -427,7 +427,7 @@ class IRBuilder : public LLVMIRBuilder {
     switch (jty) {
     case kVoid:
       LOG(FATAL) << "Zero is not a value of void type";
-      return NULL;
+      return nullptr;
 
     case kBoolean:
       return getJBoolean(false);
@@ -458,7 +458,7 @@ class IRBuilder : public LLVMIRBuilder {
 
     default:
       LOG(FATAL) << "Unknown java type: " << jty;
-      return NULL;
+      return nullptr;
     }
   }
 

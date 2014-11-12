@@ -34,7 +34,7 @@ class ScopedHashtable {
   }
 
   // Lookups entry K starting from the current (topmost) scope
-  // and returns its value if found or NULL.
+  // and returns its value if found or nullptr.
   V Lookup(K k) const {
     for (typename std::list<std::map<K, V>>::const_iterator scopes_it = scopes.begin();
         scopes_it != scopes.end(); scopes_it++) {
@@ -43,7 +43,7 @@ class ScopedHashtable {
         return (*result_it).second;
       }
     }
-    return NULL;
+    return nullptr;
   }
 
   // Adds a new entry in the current (topmost) scope.

@@ -36,7 +36,7 @@ TEST_F(DexCacheTest, Open) {
   StackHandleScope<1> hs(soa.Self());
   Handle<DexCache> dex_cache(
       hs.NewHandle(class_linker_->AllocDexCache(soa.Self(), *java_lang_dex_file_)));
-  ASSERT_TRUE(dex_cache.Get() != NULL);
+  ASSERT_TRUE(dex_cache.Get() != nullptr);
 
   EXPECT_EQ(java_lang_dex_file_->NumStringIds(), dex_cache->NumStrings());
   EXPECT_EQ(java_lang_dex_file_->NumTypeIds(),   dex_cache->NumResolvedTypes());

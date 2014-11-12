@@ -547,7 +547,7 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
   const DexFile::CodeItem* code_item = method->GetCodeItem();
   const uint16_t num_ins = (is_range) ? inst->VRegA_3rc(inst_data) : inst->VRegA_35c(inst_data);
   uint16_t num_regs;
-  if (LIKELY(code_item != NULL)) {
+  if (LIKELY(code_item != nullptr)) {
     num_regs = code_item->registers_size_;
     DCHECK_EQ(num_ins, code_item->ins_size_);
   } else {
@@ -601,9 +601,9 @@ bool DoCall(ArtMethod* method, Thread* self, ShadowFrame& shadow_frame,
       switch (shorty[shorty_pos + 1]) {
         case 'L': {
           Object* o = shadow_frame.GetVRegReference(src_reg);
-          if (do_assignability_check && o != NULL) {
+          if (do_assignability_check && o != nullptr) {
             Class* arg_type = mh.GetClassFromTypeIdx(params->GetTypeItem(shorty_pos).type_idx_);
-            if (arg_type == NULL) {
+            if (arg_type == nullptr) {
               CHECK(self->IsExceptionPending());
               return false;
             }
@@ -694,7 +694,7 @@ bool DoFilledNewArray(const Instruction* inst, const ShadowFrame& shadow_frame,
   uint16_t type_idx = is_range ? inst->VRegB_3rc() : inst->VRegB_35c();
   Class* arrayClass = ResolveVerifyAndClinit(type_idx, shadow_frame.GetMethod(),
                                              self, false, do_access_check);
-  if (UNLIKELY(arrayClass == NULL)) {
+  if (UNLIKELY(arrayClass == nullptr)) {
     DCHECK(self->IsExceptionPending());
     return false;
   }
@@ -715,7 +715,7 @@ bool DoFilledNewArray(const Instruction* inst, const ShadowFrame& shadow_frame,
   Object* newArray = Array::Alloc<true>(self, arrayClass, length,
                                         arrayClass->GetComponentSizeShift(),
                                         Runtime::Current()->GetHeap()->GetCurrentAllocator());
-  if (UNLIKELY(newArray == NULL)) {
+  if (UNLIKELY(newArray == nullptr)) {
     DCHECK(self->IsExceptionPending());
     return false;
   }
@@ -845,35 +845,35 @@ static void UnstartedRuntimeInvoke(Thread* self, MethodHelper* mh,
   } else if (name == "java.lang.Object java.lang.Class.newInstance()") {
     Class* klass = shadow_frame->GetVRegReference(arg_offset)->AsClass();
     ArtMethod* c = klass->FindDeclaredDirectMethod("<init>", "()V");
-    CHECK(c != NULL);
+    CHECK(c != nullptr);
     StackHandleScope<1> hs(self);
     Handle<Object> obj(hs.NewHandle(klass->AllocObject(self)));
-    CHECK(obj.Get() != NULL);
-    EnterInterpreterFromInvoke(self, c, obj.Get(), NULL, NULL);
+    CHECK(obj.Get() != nullptr);
+    EnterInterpreterFromInvoke(self, c, obj.Get(), nullptr, nullptr);
     result->SetL(obj.Get());
   } else if (name == "java.lang.reflect.Field java.lang.Class.getDeclaredField(java.lang.String)") {
     // Special managed code cut-out to allow field lookup in a un-started runtime that'd fail
     // going the reflective Dex way.
     Class* klass = shadow_frame->GetVRegReference(arg_offset)->AsClass();
     String* name2 = shadow_frame->GetVRegReference(arg_offset + 1)->AsString();
-    ArtField* found = NULL;
+    ArtField* found = nullptr;
     ObjectArray<ArtField>* fields = klass->GetIFields();
-    for (int32_t i = 0; i < fields->GetLength() && found == NULL; ++i) {
+    for (int32_t i = 0; i < fields->GetLength() && found == nullptr; ++i) {
       ArtField* f = fields->Get(i);
       if (name2->Equals(f->GetName())) {
         found = f;
       }
     }
-    if (found == NULL) {
+    if (found == nullptr) {
       fields = klass->GetSFields();
-      for (int32_t i = 0; i < fields->GetLength() && found == NULL; ++i) {
+      for (int32_t i = 0; i < fields->GetLength() && found == nullptr; ++i) {
         ArtField* f = fields->Get(i);
         if (name2->Equals(f->GetName())) {
           found = f;
         }
       }
     }
-    CHECK(found != NULL)
+    CHECK(found != nullptr)
       << "Failed to find field in Class.getDeclaredField in un-started runtime. name="
       << name2->ToModifiedUtf8() << " class=" << PrettyDescriptor(klass);
     // TODO: getDeclaredField calls GetType once the field is found to ensure a
@@ -881,11 +881,11 @@ static void UnstartedRuntimeInvoke(Thread* self, MethodHelper* mh,
     Class* jlr_Field = self->DecodeJObject(WellKnownClasses::java_lang_reflect_Field)->AsClass();
     StackHandleScope<1> hs(self);
     Handle<Object> field(hs.NewHandle(jlr_Field->AllocNonMovableObject(self)));
-    CHECK(field.Get() != NULL);
+    CHECK(field.Get() != nullptr);
     ArtMethod* c = jlr_Field->FindDeclaredDirectMethod("<init>", "(Ljava/lang/reflect/ArtField;)V");
     uint32_t args[1];
     args[0] = StackReference<mirror::Object>::FromMirrorPtr(found).AsVRegValue();
-    EnterInterpreterFromInvoke(self, c, field.Get(), args, NULL);
+    EnterInterpreterFromInvoke(self, c, field.Get(), args, nullptr);
     result->SetL(field.Get());
   } else if (name == "int java.lang.Object.hashCode()") {
     Object* obj = shadow_frame->GetVRegReference(arg_offset);

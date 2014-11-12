@@ -78,7 +78,7 @@ template <typename Elf_Word, typename Elf_Sword, typename Elf_Dyn, typename Elf_
 class ElfDynamicBuilder FINAL : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> {
  public:
   void AddDynamicTag(Elf_Sword tag, Elf_Word d_un) {
-    if (tag == DT_NULL) {
+    if (tag == DT_nullptr) {
       return;
     }
     dynamics_.push_back({nullptr, tag, d_un});
@@ -86,7 +86,7 @@ class ElfDynamicBuilder FINAL : public ElfSectionBuilder<Elf_Word, Elf_Sword, El
 
   void AddDynamicTag(Elf_Sword tag, Elf_Word d_un,
                      const ElfSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>* section) {
-    if (tag == DT_NULL) {
+    if (tag == DT_nullptr) {
       return;
     }
     dynamics_.push_back({section, tag, d_un});
@@ -99,7 +99,7 @@ class ElfDynamicBuilder FINAL : public ElfSectionBuilder<Elf_Word, Elf_Sword, El
   ~ElfDynamicBuilder() {}
 
   Elf_Word GetSize() const {
-    // Add 1 for the DT_NULL, 1 for DT_STRSZ, and 1 for DT_SONAME. All of
+    // Add 1 for the DT_nullptr, 1 for DT_STRSZ, and 1 for DT_SONAME. All of
     // these must be added when we actually put the file together because
     // their values are very dependent on state.
     return dynamics_.size() + 3;
@@ -122,7 +122,7 @@ class ElfDynamicBuilder FINAL : public ElfSectionBuilder<Elf_Word, Elf_Sword, El
     }
     ret.push_back({DT_STRSZ, {strsz}});
     ret.push_back({DT_SONAME, {soname}});
-    ret.push_back({DT_NULL, {0}});
+    ret.push_back({DT_nullptr, {0}});
     return ret;
   }
 
@@ -359,7 +359,7 @@ class ElfSymtabBuilder FINAL : public ElfSectionBuilder<Elf_Word, Elf_Sword, Elf
   }
 
   Elf_Word GetSize() const {
-    // 1 is for the implicit NULL symbol.
+    // 1 is for the implicit nullptr symbol.
     return symbols_.size() + 1;
   }
 
@@ -552,7 +552,7 @@ class ElfBuilder FINAL {
       hash_builder_(".hash", SHT_HASH, SHF_ALLOC, &dynsym_builder_, 0, sizeof(Elf_Word),
                     sizeof(Elf_Word)),
       dynamic_builder_(".dynamic", &dynsym_builder_),
-      shstrtab_builder_(".shstrtab", SHT_STRTAB, 0, NULL, 0, 1, 1) {
+      shstrtab_builder_(".shstrtab", SHT_STRTAB, 0, nullptr, 0, 1, 1) {
     SetupEhdr();
     SetupDynamic();
     SetupRequiredSymbols();
@@ -615,7 +615,7 @@ class ElfBuilder FINAL {
     // | Elf_Dyn DT_SYMENT       |
     // | Elf_Dyn DT_STRTAB       |
     // | Elf_Dyn DT_STRSZ        |
-    // | Elf_Dyn DT_NULL         |
+    // | Elf_Dyn DT_nullptr         |
     // +-------------------------+  (Optional)
     // | .strtab                 |  (Optional)
     // | program symbol names    |  (Optional)
@@ -650,7 +650,7 @@ class ElfBuilder FINAL {
     // +-------------------------+  (Optional)
     // | .debug_str              |  (Optional)
     // +-------------------------+  (Optional)
-    // | Elf_Shdr NULL           |
+    // | Elf_Shdr nullptr           |
     // | Elf_Shdr .dynsym        |
     // | Elf_Shdr .dynstr        |
     // | Elf_Shdr .hash          |
@@ -724,7 +724,7 @@ class ElfBuilder FINAL {
 
     // Setup sym_undef
     memset(&null_hdr_, 0, sizeof(null_hdr_));
-    null_hdr_.sh_type = SHT_NULL;
+    null_hdr_.sh_type = SHT_nullptr;
     null_hdr_.sh_link = SHN_UNDEF;
     section_ptrs_.push_back(&null_hdr_);
 
@@ -1145,7 +1145,7 @@ class ElfBuilder FINAL {
   // DT_SYMTAB
   // DT_SYMENT
   //
-  // Some such as DT_SONAME, DT_STRSZ and DT_NULL will be put in later.
+  // Some such as DT_SONAME, DT_STRSZ and DT_nullptr will be put in later.
   void SetupDynamic() {
     dynamic_builder_.AddDynamicTag(DT_HASH, 0, &hash_builder_);
     dynamic_builder_.AddDynamicTag(DT_STRTAB, 0, dynsym_builder_.GetStrTab());

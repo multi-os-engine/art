@@ -1684,7 +1684,7 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
 void Mir2Lir::GenInvokeNoInline(CallInfo* info) {
   int call_state = 0;
   LIR* null_ck;
-  LIR** p_null_ck = NULL;
+  LIR** p_null_ck = nullptr;
   NextCallInsn next_call_insn;
   FlushAllRegs();  /* Everything to home location */
   // Explicit register usage

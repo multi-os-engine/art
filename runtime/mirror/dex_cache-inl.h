@@ -35,9 +35,9 @@ inline ArtMethod* DexCache::GetResolvedMethod(uint32_t method_idx)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   ArtMethod* method = GetResolvedMethods()->Get(method_idx);
   // Hide resolution trampoline methods from the caller
-  if (method != NULL && method->IsRuntimeMethod()) {
+  if (method != nullptr && method->IsRuntimeMethod()) {
     DCHECK(method == Runtime::Current()->GetResolutionMethod());
-    return NULL;
+    return nullptr;
   } else {
     return method;
   }

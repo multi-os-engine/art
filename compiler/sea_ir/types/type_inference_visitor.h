@@ -66,7 +66,7 @@ class TypeInferenceVisitor: public IRVisitor {
       crt_type_.clear();
       return single_type;
     }
-    return NULL;
+    return nullptr;
   }
 
  protected:

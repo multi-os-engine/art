@@ -29,7 +29,7 @@ namespace sea_ir {
 void CodeGenPrepassVisitor::Visit(PhiInstructionNode* phi) {
   Region* r = phi->GetRegion();
   const std::vector<Region*>* predecessors = r->GetPredecessors();
-  DCHECK(NULL != predecessors);
+  DCHECK(nullptr != predecessors);
   DCHECK_GT(predecessors->size(), 0u);
   llvm::PHINode *llvm_phi  = llvm_data_->builder_.CreatePHI(
       llvm::Type::getInt32Ty(*llvm_data_->context_), predecessors->size(), phi->StringId());
@@ -62,7 +62,7 @@ void CodeGenPrepassVisitor::Visit(SeaGraph* graph) {
   std::vector<SignatureNode*>* parameters = graph->GetParameterNodes();
   // TODO: It may be better to extract correct types from dex
   //       instead than from type inference.
-  DCHECK(parameters != NULL);
+  DCHECK(parameters != nullptr);
   std::vector<llvm::Type*> parameter_types;
   for (std::vector<SignatureNode*>::const_iterator param_iterator = parameters->begin();
       param_iterator!= parameters->end(); param_iterator++) {
@@ -116,32 +116,32 @@ void CodeGenVisitor::Visit(Region* region) {
 
 
 void CodeGenVisitor::Visit(InstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   DCHECK(0);  // This whole function is useful only during development.
 }
 
 void CodeGenVisitor::Visit(UnnamedConstInstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   std::cout << "1.Instruction: " << instr << std::endl;
   llvm_data_->AddValue(instruction,
       llvm::ConstantInt::get(*llvm_data_->context_, llvm::APInt(32, instruction->GetConstValue())));
 }
 
 void CodeGenVisitor::Visit(ConstInstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   std::cout << "1.Instruction: " << instr << std::endl;
   llvm_data_->AddValue(instruction,
       llvm::ConstantInt::get(*llvm_data_->context_, llvm::APInt(32, instruction->GetConstValue())));
 }
 void CodeGenVisitor::Visit(ReturnInstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   std::cout << "2.Instruction: " << instr << std::endl;
   DCHECK_GT(instruction->GetSSAProducers().size(), 0u);
   llvm::Value* return_value = llvm_data_->GetValue(instruction->GetSSAProducers().at(0));
   llvm_data_->builder_.CreateRet(return_value);
 }
 void CodeGenVisitor::Visit(IfNeInstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   std::cout << "3.Instruction: " << instr << std::endl;
   std::vector<InstructionNode*> ssa_uses = instruction->GetSSAProducers();
   DCHECK_GT(ssa_uses.size(), 1u);
@@ -151,7 +151,7 @@ void CodeGenVisitor::Visit(IfNeInstructionNode* instruction) {
   InstructionNode* use_r = ssa_uses.at(1);
   llvm::Value* right = llvm_data_->GetValue(use_r);
   llvm::Value* ifne = llvm_data_->builder_.CreateICmpNE(left, right, instruction->StringId());
-  DCHECK(instruction->GetRegion() != NULL);
+  DCHECK(instruction->GetRegion() != nullptr);
   std::vector<Region*>* successors = instruction->GetRegion()->GetSuccessors();
   DCHECK_GT(successors->size(), 0u);
   llvm::BasicBlock* then_block = llvm_data_->GetBlock(successors->at(0));
@@ -162,7 +162,7 @@ void CodeGenVisitor::Visit(IfNeInstructionNode* instruction) {
 
 /*
 void CodeGenVisitor::Visit(AddIntLitInstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   std::cout << "4.Instruction: " << instr << std::endl;
   std::vector<InstructionNode*> ssa_uses = instruction->GetSSAUses();
   InstructionNode* use_l = ssa_uses.at(0);
@@ -174,7 +174,7 @@ void CodeGenVisitor::Visit(AddIntLitInstructionNode* instruction) {
 }
 */
 void CodeGenVisitor::Visit(MoveResultInstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   std::cout << "5.Instruction: " << instr << std::endl;
   // TODO: Currently, this "mov" instruction is simulated by "res = return_register + 0".
   // This is inefficient, but should be optimized out by the coalescing phase of the reg alloc.
@@ -192,7 +192,7 @@ void CodeGenVisitor::Visit(MoveResultInstructionNode* instruction) {
   llvm_data_->AddValue(instruction, result);
 }
 void CodeGenVisitor::Visit(InvokeStaticInstructionNode* invoke) {
-  std::string instr = invoke->GetInstruction()->DumpString(NULL);
+  std::string instr = invoke->GetInstruction()->DumpString(nullptr);
   std::cout << "6.Instruction: " << instr << std::endl;
   // TODO: Build callee LLVM function name.
   std::string symbol = "dex_";
@@ -200,7 +200,7 @@ void CodeGenVisitor::Visit(InvokeStaticInstructionNode* invoke) {
   std::string function_name = "dex_int_00020Main_fibonacci_00028int_00029";
   llvm::Function *callee = llvm_data_->module_.getFunction(function_name);
   // TODO: Add proper checking of the matching between formal and actual signature.
-  DCHECK(NULL != callee);
+  DCHECK(nullptr != callee);
   std::vector<llvm::Value*> parameter_values;
   std::vector<InstructionNode*> parameter_sources = invoke->GetSSAProducers();
   // TODO: Replace first parameter with Method argument instead of 0.
@@ -208,7 +208,7 @@ void CodeGenVisitor::Visit(InvokeStaticInstructionNode* invoke) {
   for (std::vector<InstructionNode*>::const_iterator cit = parameter_sources.begin();
       cit != parameter_sources.end(); ++cit) {
     llvm::Value* parameter_value = llvm_data_->GetValue((*cit));
-    DCHECK(NULL != parameter_value);
+    DCHECK(nullptr != parameter_value);
     parameter_values.push_back(parameter_value);
   }
   llvm::Value* return_value = llvm_data_->builder_.CreateCall(callee,
@@ -216,7 +216,7 @@ void CodeGenVisitor::Visit(InvokeStaticInstructionNode* invoke) {
   llvm_data_->AddValue(invoke, return_value);
 }
 void CodeGenVisitor::Visit(AddIntInstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   std::cout << "7.Instruction: " << instr << std::endl;
   std::vector<InstructionNode*> ssa_uses = instruction->GetSSAProducers();
   DCHECK_GT(ssa_uses.size(), 1u);
@@ -228,7 +228,7 @@ void CodeGenVisitor::Visit(AddIntInstructionNode* instruction) {
   llvm_data_->AddValue(instruction, result);
 }
 void CodeGenVisitor::Visit(GotoInstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   std::cout << "8.Instruction: " << instr << std::endl;
   std::vector<sea_ir::Region*>* targets = instruction->GetRegion()->GetSuccessors();
   DCHECK_EQ(targets->size(), 1u);
@@ -236,7 +236,7 @@ void CodeGenVisitor::Visit(GotoInstructionNode* instruction) {
   llvm_data_->builder_.CreateBr(target_block);
 }
 void CodeGenVisitor::Visit(IfEqzInstructionNode* instruction) {
-  std::string instr = instruction->GetInstruction()->DumpString(NULL);
+  std::string instr = instruction->GetInstruction()->DumpString(nullptr);
   std::cout << "9. Instruction: " << instr << "; Id: " <<instruction << std::endl;
   std::vector<InstructionNode*> ssa_uses = instruction->GetSSAProducers();
   DCHECK_GT(ssa_uses.size(), 0u);
@@ -245,7 +245,7 @@ void CodeGenVisitor::Visit(IfEqzInstructionNode* instruction) {
   llvm::Value* ifeqz = llvm_data_->builder_.CreateICmpEQ(left,
       llvm::ConstantInt::get(*llvm_data_->context_, llvm::APInt::getNullValue(32)),
       instruction->StringId());
-  DCHECK(instruction->GetRegion() != NULL);
+  DCHECK(instruction->GetRegion() != nullptr);
   std::vector<Region*>* successors = instruction->GetRegion()->GetSuccessors();
   DCHECK_GT(successors->size(), 0u);
   llvm::BasicBlock* then_block = llvm_data_->GetBlock(successors->at(0));
@@ -257,7 +257,7 @@ void CodeGenPostpassVisitor::Visit(PhiInstructionNode* phi) {
   std::cout << "10. Instruction: Phi(" << phi->GetRegisterNumber() << ")" << std::endl;
   Region* r = phi->GetRegion();
   const std::vector<Region*>* predecessors = r->GetPredecessors();
-  DCHECK(NULL != predecessors);
+  DCHECK(nullptr != predecessors);
   DCHECK_GT(predecessors->size(), 0u);
   // Prepass (CodeGenPrepassVisitor) should create the phi function value.
   llvm::PHINode* llvm_phi = (llvm::PHINode*) llvm_data_->GetValue(phi);
@@ -267,7 +267,7 @@ void CodeGenPostpassVisitor::Visit(PhiInstructionNode* phi) {
     std::vector<InstructionNode*>* defining_instructions = phi->GetSSAUses(predecessor_pos++);
     DCHECK_EQ(defining_instructions->size(), 1u);
     InstructionNode* defining_instruction = defining_instructions->at(0);
-    DCHECK(NULL != defining_instruction);
+    DCHECK(nullptr != defining_instruction);
     Region* incoming_region = *cit;
     llvm::BasicBlock* incoming_basic_block = llvm_data_->GetBlock(incoming_region);
     llvm::Value* incoming_value = llvm_data_->GetValue(defining_instruction);

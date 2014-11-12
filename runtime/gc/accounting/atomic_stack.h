@@ -45,7 +45,7 @@ class AtomicStack {
 
   void Reset() {
     DCHECK(mem_map_.get() != nullptr);
-    DCHECK(begin_ != NULL);
+    DCHECK(begin_ != nullptr);
     front_index_.StoreRelaxed(0);
     back_index_.StoreRelaxed(0);
     debug_is_sorted_ = true;
@@ -210,11 +210,11 @@ class AtomicStack {
   // Size in number of elements.
   void Init() {
     std::string error_msg;
-    mem_map_.reset(MemMap::MapAnonymous(name_.c_str(), NULL, capacity_ * sizeof(T),
+    mem_map_.reset(MemMap::MapAnonymous(name_.c_str(), nullptr, capacity_ * sizeof(T),
                                         PROT_READ | PROT_WRITE, false, &error_msg));
-    CHECK(mem_map_.get() != NULL) << "couldn't allocate mark stack.\n" << error_msg;
+    CHECK(mem_map_.get() != nullptr) << "couldn't allocate mark stack.\n" << error_msg;
     uint8_t* addr = mem_map_->Begin();
-    CHECK(addr != NULL);
+    CHECK(addr != nullptr);
     debug_is_sorted_ = true;
     begin_ = reinterpret_cast<T*>(addr);
     Reset();

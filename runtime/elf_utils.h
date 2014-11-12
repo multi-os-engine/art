@@ -89,7 +89,7 @@ static inline bool IsDynamicSectionPointer(Elf32_Word d_tag, Elf32_Word e_machin
       return true;
     }
     // d_val or ignored values
-    case DT_NULL:
+    case DT_nullptr:
     case DT_NEEDED:
     case DT_PLTRELSZ:
     case DT_RELASZ:

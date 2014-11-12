@@ -197,9 +197,9 @@ void Object::CheckFieldAssignmentImpl(MemberOffset field_offset, Object* new_val
       !runtime->GetHeap()->IsObjectValidationEnabled() || !c->IsResolved()) {
     return;
   }
-  for (Class* cur = c; cur != NULL; cur = cur->GetSuperClass()) {
+  for (Class* cur = c; cur != nullptr; cur = cur->GetSuperClass()) {
     ObjectArray<ArtField>* fields = cur->GetIFields();
-    if (fields != NULL) {
+    if (fields != nullptr) {
       size_t num_ref_ifields = cur->NumReferenceInstanceFields();
       for (size_t i = 0; i < num_ref_ifields; ++i) {
         ArtField* field = fields->Get(i);
@@ -218,7 +218,7 @@ void Object::CheckFieldAssignmentImpl(MemberOffset field_offset, Object* new_val
   }
   if (IsClass()) {
     ObjectArray<ArtField>* fields = AsClass()->GetSFields();
-    if (fields != NULL) {
+    if (fields != nullptr) {
       size_t num_ref_sfields = AsClass()->NumReferenceStaticFields();
       for (size_t i = 0; i < num_ref_sfields; ++i) {
         ArtField* field = fields->Get(i);

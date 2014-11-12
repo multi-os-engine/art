@@ -543,7 +543,7 @@ class MIRGraph {
 
   /* Find existing block */
   BasicBlock* FindBlock(DexOffset code_offset) {
-    return FindBlock(code_offset, false, NULL);
+    return FindBlock(code_offset, false, nullptr);
   }
 
   const uint16_t* GetCurrentInsns() const {
@@ -595,7 +595,7 @@ class MIRGraph {
 
   BasicBlock* GetBasicBlock(unsigned int block_id) const {
     DCHECK_LT(block_id, block_list_.size());  // NOTE: NullBasicBlockId is 0.
-    return (block_id == NullBasicBlockId) ? NULL : block_list_[block_id];
+    return (block_id == NullBasicBlockId) ? nullptr : block_list_[block_id];
   }
 
   size_t GetBasicBlockListCount() const {

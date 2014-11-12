@@ -355,7 +355,7 @@ class HprofRecord {
         newAllocLen = alloc_length_ + nmore + nmore/2;
       }
       unsigned char* newBody = (unsigned char*)realloc(body_, newAllocLen);
-      if (newBody != NULL) {
+      if (newBody != nullptr) {
         body_ = newBody;
         alloc_length_ = newAllocLen;
       } else {
@@ -392,31 +392,31 @@ class Hprof {
         gc_scan_state_(0),
         current_heap_(HPROF_HEAP_DEFAULT),
         objects_in_segment_(0),
-        header_fp_(NULL),
-        header_data_ptr_(NULL),
+        header_fp_(nullptr),
+        header_data_ptr_(nullptr),
         header_data_size_(0),
-        body_fp_(NULL),
-        body_data_ptr_(NULL),
+        body_fp_(nullptr),
+        body_data_ptr_(nullptr),
         body_data_size_(0),
         next_string_id_(0x400000) {
     LOG(INFO) << "hprof: heap dump \"" << filename_ << "\" starting...";
 
     header_fp_ = open_memstream(&header_data_ptr_, &header_data_size_);
-    if (header_fp_ == NULL) {
+    if (header_fp_ == nullptr) {
       PLOG(FATAL) << "header open_memstream failed";
     }
 
     body_fp_ = open_memstream(&body_data_ptr_, &body_data_size_);
-    if (body_fp_ == NULL) {
+    if (body_fp_ == nullptr) {
       PLOG(FATAL) << "body open_memstream failed";
     }
   }
 
   ~Hprof() {
-    if (header_fp_ != NULL) {
+    if (header_fp_ != nullptr) {
       fclose(header_fp_);
     }
-    if (body_fp_ != NULL) {
+    if (body_fp_ != nullptr) {
       fclose(body_fp_);
     }
     free(header_data_ptr_);
@@ -506,8 +506,8 @@ class Hprof {
 
   static void VisitObjectCallback(mirror::Object* obj, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK(obj != NULL);
-    DCHECK(arg != NULL);
+    DCHECK(obj != nullptr);
+    DCHECK(arg != nullptr);
     reinterpret_cast<Hprof*>(arg)->DumpHeapObject(obj);
   }
 
@@ -559,7 +559,7 @@ class Hprof {
 
       // STRING format:
       // ID:  ID for this string
-      // U1*: UTF8 characters for string (NOT NULL terminated)
+      // U1*: UTF8 characters for string (NOT nullptr terminated)
       //      (the record format encodes the length)
       err = rec->AddU4(id);
       if (err != 0) {
@@ -645,7 +645,7 @@ class Hprof {
     // The current time, in milliseconds since 0:00 GMT, 1/1/70.
     timeval now;
     uint64_t nowMs;
-    if (gettimeofday(&now, NULL) < 0) {
+    if (gettimeofday(&now, nullptr) < 0) {
       nowMs = 0;
     } else {
       nowMs = (uint64_t)now.tv_sec * 1000 + now.tv_usec / 1000;
@@ -724,7 +724,7 @@ static HprofBasicType SignatureToBasicTypeAndSize(const char* sig, size_t* sizeO
   default: LOG(FATAL) << "UNREACHABLE"; UNREACHABLE();
   }
 
-  if (sizeOut != NULL) {
+  if (sizeOut != nullptr) {
     *sizeOut = size;
   }
 
@@ -747,7 +747,7 @@ static HprofBasicType PrimitiveToBasicTypeAndSize(Primitive::Type prim, size_t* 
   default: LOG(FATAL) << "UNREACHABLE"; UNREACHABLE();
   }
 
-  if (sizeOut != NULL) {
+  if (sizeOut != nullptr) {
     *sizeOut = size;
   }
 
@@ -889,8 +889,8 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
   }
 
   mirror::Class* c = obj->GetClass();
-  if (c == NULL) {
-    // This object will bother HprofReader, because it has a NULL
+  if (c == nullptr) {
+    // This object will bother HprofReader, because it has a nullptr
     // class, so just don't dump it. It could be
     // gDvm.unlinkedJavaLangClass or it could be an object just
     // allocated which hasn't been initialized yet.
@@ -969,7 +969,7 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
       rec->AddU2((uint16_t)iFieldCount);
       for (int i = 0; i < iFieldCount; ++i) {
         mirror::ArtField* f = thisClass->GetInstanceField(i);
-        HprofBasicType t = SignatureToBasicTypeAndSize(f->GetTypeDescriptor(), NULL);
+        HprofBasicType t = SignatureToBasicTypeAndSize(f->GetTypeDescriptor(), nullptr);
         rec->AddStringId(LookupStringId(f->GetName()));
         rec->AddU1(t);
       }
@@ -986,7 +986,7 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
         rec->AddU4(length);
         rec->AddClassId(LookupClassId(c));
 
-        // Dump the elements, which are always objects or NULL.
+        // Dump the elements, which are always objects or nullptr.
         rec->AddIdList(aobj->AsObjectArray<mirror::Object>());
       } else {
         size_t size;
@@ -1075,12 +1075,12 @@ void Hprof::VisitRoot(const mirror::Object* obj, uint32_t thread_id, RootType ty
     HPROF_ROOT_JNI_MONITOR,
   };
   CHECK_LT(type, sizeof(xlate) / sizeof(HprofHeapTag));
-  if (obj == NULL) {
+  if (obj == nullptr) {
     return;
   }
   gc_scan_state_ = xlate[type];
   gc_thread_serial_number_ = thread_id;
-  MarkRootObject(obj, 0);
+  MarkRootObject(obj, nullptr);
   gc_scan_state_ = 0;
   gc_thread_serial_number_ = 0;
 }
@@ -1090,7 +1090,7 @@ void Hprof::VisitRoot(const mirror::Object* obj, uint32_t thread_id, RootType ty
 // If "fd" is >= 0, the output will be written to that file descriptor.
 // Otherwise, "filename" is used to create an output file.
 void DumpHeap(const char* filename, int fd, bool direct_to_ddms) {
-  CHECK(filename != NULL);
+  CHECK(filename != nullptr);
 
   Runtime::Current()->GetThreadList()->SuspendAll();
   Hprof hprof(filename, fd, direct_to_ddms);

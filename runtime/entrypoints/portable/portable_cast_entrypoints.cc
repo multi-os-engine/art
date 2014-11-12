@@ -23,8 +23,8 @@ namespace art {
 extern "C" int32_t art_portable_is_assignable_from_code(mirror::Class* dest_type,
                                                         mirror::Class* src_type)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  DCHECK(dest_type != NULL);
-  DCHECK(src_type != NULL);
+  DCHECK(dest_type != nullptr);
+  DCHECK(src_type != nullptr);
   return dest_type->IsAssignableFrom(src_type) ? 1 : 0;
 }
 
@@ -41,12 +41,12 @@ extern "C" void art_portable_check_cast_from_code(mirror::Class* dest_type,
 extern "C" void art_portable_check_put_array_element_from_code(mirror::Object* element,
                                                                mirror::Object* array)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  if (element == NULL) {
+  if (element == nullptr) {
     return;
   }
-  DCHECK(array != NULL);
+  DCHECK(array != nullptr);
   mirror::Class* array_class = array->GetClass();
-  DCHECK(array_class != NULL);
+  DCHECK(array_class != nullptr);
   mirror::Class* component_type = array_class->GetComponentType();
   mirror::Class* element_class = element->GetClass();
   if (UNLIKELY(!component_type->IsAssignableFrom(element_class))) {

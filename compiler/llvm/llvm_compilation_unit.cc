@@ -97,8 +97,8 @@ CreateGBCExpanderPass(const IntrinsicHelper& intrinsic_helper, IRBuilder& irb,
 
 LlvmCompilationUnit::LlvmCompilationUnit(const CompilerLLVM* compiler_llvm, size_t cunit_id)
     : compiler_llvm_(compiler_llvm), cunit_id_(cunit_id) {
-  driver_ = NULL;
-  dex_compilation_unit_ = NULL;
+  driver_ = nullptr;
+  dex_compilation_unit_ = nullptr;
   llvm_info_.reset(new LLVMInfo());
   context_.reset(llvm_info_->GetLLVMContext());
   module_ = llvm_info_->GetLLVMModule();
@@ -132,7 +132,7 @@ LlvmCompilationUnit::LlvmCompilationUnit(const CompilerLLVM* compiler_llvm, size
 
 LlvmCompilationUnit::~LlvmCompilationUnit() {
   ::llvm::LLVMContext* llvm_context = context_.release();  // Managed by llvm_info_
-  CHECK(llvm_context != NULL);
+  CHECK(llvm_context != nullptr);
 }
 
 
@@ -206,7 +206,7 @@ bool LlvmCompilationUnit::MaterializeToRawOStream(::llvm::raw_ostream& out_strea
   const ::llvm::Target* target =
     ::llvm::TargetRegistry::lookupTarget(target_triple, errmsg);
 
-  CHECK(target != NULL) << errmsg;
+  CHECK(target != nullptr) << errmsg;
 
   // Target options
   ::llvm::TargetOptions target_options;
@@ -221,7 +221,7 @@ bool LlvmCompilationUnit::MaterializeToRawOStream(::llvm::raw_ostream& out_strea
                                 ::llvm::Reloc::Static, ::llvm::CodeModel::Small,
                                 ::llvm::CodeGenOpt::Aggressive));
 
-  CHECK(target_machine.get() != NULL) << "Failed to create target machine";
+  CHECK(target_machine.get() != nullptr) << "Failed to create target machine";
 
   // Add target data
   const ::llvm::DataLayout* data_layout = target_machine->getDataLayout();
@@ -270,7 +270,7 @@ bool LlvmCompilationUnit::MaterializeToRawOStream(::llvm::raw_ostream& out_strea
   // Add optimization pass
   ::llvm::PassManagerBuilder pm_builder;
   // TODO: Use inliner after we can do IPO.
-  pm_builder.Inliner = NULL;
+  pm_builder.Inliner = nullptr;
   // pm_builder.Inliner = ::llvm::createFunctionInliningPass();
   // pm_builder.Inliner = ::llvm::createAlwaysInlinerPass();
   // pm_builder.Inliner = ::llvm::createPartialInliningPass();

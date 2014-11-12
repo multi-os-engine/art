@@ -90,7 +90,7 @@ OatFile* OatFile::Open(const std::string& filename,
     // On host, dlopen is expected to fail when cross compiling, so fall back to OpenElfFile.
     // This won't work for portable runtime execution because it doesn't process relocations.
     std::unique_ptr<File> file(OS::OpenFileForReading(filename.c_str()));
-    if (file.get() == NULL) {
+    if (file.get() == nullptr) {
       *error_msg = StringPrintf("Failed to open oat filename for reading: %s", strerror(errno));
       return nullptr;
     }
@@ -144,39 +144,39 @@ OatFile* OatFile::OpenElfFile(File* file,
 }
 
 OatFile::OatFile(const std::string& location, bool is_executable)
-    : location_(location), begin_(NULL), end_(NULL), is_executable_(is_executable),
-      dlopen_handle_(NULL),
+    : location_(location), begin_(nullptr), end_(nullptr), is_executable_(is_executable),
+      dlopen_handle_(nullptr),
       secondary_lookup_lock_("OatFile secondary lookup lock", kOatFileSecondaryLookupLock) {
   CHECK(!location_.empty());
 }
 
 OatFile::~OatFile() {
   STLDeleteElements(&oat_dex_files_storage_);
-  if (dlopen_handle_ != NULL) {
+  if (dlopen_handle_ != nullptr) {
     dlclose(dlopen_handle_);
   }
 }
 
 bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
                      std::string* error_msg) {
-  char* absolute_path = realpath(elf_filename.c_str(), NULL);
-  if (absolute_path == NULL) {
+  char* absolute_path = realpath(elf_filename.c_str(), nullptr);
+  if (absolute_path == nullptr) {
     *error_msg = StringPrintf("Failed to find absolute path for '%s'", elf_filename.c_str());
     return false;
   }
   dlopen_handle_ = dlopen(absolute_path, RTLD_NOW);
   free(absolute_path);
-  if (dlopen_handle_ == NULL) {
+  if (dlopen_handle_ == nullptr) {
     *error_msg = StringPrintf("Failed to dlopen '%s': %s", elf_filename.c_str(), dlerror());
     return false;
   }
   begin_ = reinterpret_cast<uint8_t*>(dlsym(dlopen_handle_, "oatdata"));
-  if (begin_ == NULL) {
+  if (begin_ == nullptr) {
     *error_msg = StringPrintf("Failed to find oatdata symbol in '%s': %s", elf_filename.c_str(),
                               dlerror());
     return false;
   }
-  if (requested_base != NULL && begin_ != requested_base) {
+  if (requested_base != nullptr && begin_ != requested_base) {
     *error_msg = StringPrintf("Failed to find oatdata symbol at expected address: "
                               "oatdata=%p != expected=%p /proc/self/maps:\n",
                               begin_, requested_base);
@@ -184,7 +184,7 @@ bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
     return false;
   }
   end_ = reinterpret_cast<uint8_t*>(dlsym(dlopen_handle_, "oatlastword"));
-  if (end_ == NULL) {
+  if (end_ == nullptr) {
     *error_msg = StringPrintf("Failed to find oatlastword symbol in '%s': %s", elf_filename.c_str(),
                               dlerror());
     return false;
@@ -210,11 +210,11 @@ bool OatFile::ElfFileOpen(File* file, uint8_t* requested_base, uint8_t* oat_file
     return false;
   }
   begin_ = elf_file_->FindDynamicSymbolAddress("oatdata");
-  if (begin_ == NULL) {
+  if (begin_ == nullptr) {
     *error_msg = StringPrintf("Failed to find oatdata symbol in '%s'", file->GetPath().c_str());
     return false;
   }
-  if (requested_base != NULL && begin_ != requested_base) {
+  if (requested_base != nullptr && begin_ != requested_base) {
     *error_msg = StringPrintf("Failed to find oatdata symbol at expected address: "
                               "oatdata=%p != expected=%p /proc/self/maps:\n",
                               begin_, requested_base);
@@ -222,7 +222,7 @@ bool OatFile::ElfFileOpen(File* file, uint8_t* requested_base, uint8_t* oat_file
     return false;
   }
   end_ = elf_file_->FindDynamicSymbolAddress("oatlastword");
-  if (end_ == NULL) {
+  if (end_ == nullptr) {
     *error_msg = StringPrintf("Failed to find oatlastword symbol in '%s'", file->GetPath().c_str());
     return false;
   }
@@ -358,12 +358,12 @@ const OatHeader& OatFile::GetOatHeader() const {
 }
 
 const uint8_t* OatFile::Begin() const {
-  CHECK(begin_ != NULL);
+  CHECK(begin_ != nullptr);
   return begin_;
 }
 
 const uint8_t* OatFile::End() const {
-  CHECK(end_ != NULL);
+  CHECK(end_ != nullptr);
   return end_;
 }
 
@@ -420,7 +420,7 @@ const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
   if (warn_if_not_found) {
     std::string dex_canonical_location = DexFile::GetDexCanonicalLocation(dex_location);
     std::string checksum("<unspecified>");
-    if (dex_location_checksum != NULL) {
+    if (dex_location_checksum != nullptr) {
       checksum = StringPrintf("0x%08x", *dex_location_checksum);
     }
     LOG(WARNING) << "Failed to find OatDexFile for DexFile " << dex_location
@@ -436,7 +436,7 @@ const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
     }
   }
 
-  return NULL;
+  return nullptr;
 }
 
 OatFile::OatDexFile::OatDexFile(const OatFile* oat_file,
@@ -593,7 +593,7 @@ const OatFile::OatMethod OatFile::OatClass::GetOatMethod(uint32_t method_index) 
 }
 
 void OatFile::OatMethod::LinkMethod(mirror::ArtMethod* method) const {
-  CHECK(method != NULL);
+  CHECK(method != nullptr);
   method->SetEntryPointFromPortableCompiledCode(GetPortableCode());
   method->SetEntryPointFromQuickCompiledCode(GetQuickCode());
   method->SetNativeGcMap(GetNativeGcMap());  // Used by native methods in work around JNI mode.

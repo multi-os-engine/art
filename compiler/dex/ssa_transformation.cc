@@ -25,15 +25,15 @@ namespace art {
 
 void MIRGraph::ClearAllVisitedFlags() {
   AllNodesIterator iter(this);
-  for (BasicBlock* bb = iter.Next(); bb != NULL; bb = iter.Next()) {
+  for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
     bb->visited = false;
   }
 }
 
 BasicBlock* MIRGraph::NeedsVisit(BasicBlock* bb) {
-  if (bb != NULL) {
+  if (bb != nullptr) {
     if (bb->visited || bb->hidden) {
-      bb = NULL;
+      bb = nullptr;
     }
   }
   return bb;
@@ -41,13 +41,13 @@ BasicBlock* MIRGraph::NeedsVisit(BasicBlock* bb) {
 
 BasicBlock* MIRGraph::NextUnvisitedSuccessor(BasicBlock* bb) {
   BasicBlock* res = NeedsVisit(GetBasicBlock(bb->fall_through));
-  if (res == NULL) {
+  if (res == nullptr) {
     res = NeedsVisit(GetBasicBlock(bb->taken));
-    if (res == NULL) {
+    if (res == nullptr) {
       if (bb->successor_block_list_type != kNotUsed) {
         for (SuccessorBlockInfo* sbi : bb->successor_blocks) {
           res = NeedsVisit(GetBasicBlock(sbi->block));
-          if (res != NULL) {
+          if (res != nullptr) {
             break;
           }
         }
@@ -74,7 +74,7 @@ void MIRGraph::RecordDFSOrders(BasicBlock* block) {
   while (!succ.empty()) {
     BasicBlock* curr = succ.back();
     BasicBlock* next_successor = NextUnvisitedSuccessor(curr);
-    if (next_successor != NULL) {
+    if (next_successor != nullptr) {
       MarkPreOrder(next_successor);
       succ.push_back(next_successor);
       continue;
@@ -106,7 +106,7 @@ void MIRGraph::ComputeDFSOrders() {
   if (num_reachable_blocks_ != num_blocks_) {
     // Hide all unreachable blocks.
     AllNodesIterator iter(this);
-    for (BasicBlock* bb = iter.Next(); bb != NULL; bb = iter.Next()) {
+    for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
       if (!bb->visited) {
         bb->Hide(this);
       }
@@ -120,7 +120,7 @@ void MIRGraph::ComputeDFSOrders() {
  * register idx is defined in BasicBlock bb.
  */
 bool MIRGraph::FillDefBlockMatrix(BasicBlock* bb) {
-  if (bb->data_flow_info == NULL) {
+  if (bb->data_flow_info == nullptr) {
     return false;
   }
 
@@ -148,11 +148,11 @@ void MIRGraph::ComputeDefBlockMatrix() {
   }
 
   AllNodesIterator iter(this);
-  for (BasicBlock* bb = iter.Next(); bb != NULL; bb = iter.Next()) {
+  for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
     FindLocalLiveIn(bb);
   }
   AllNodesIterator iter2(this);
-  for (BasicBlock* bb = iter2.Next(); bb != NULL; bb = iter2.Next()) {
+  for (BasicBlock* bb = iter2.Next(); bb != nullptr; bb = iter2.Next()) {
     FillDefBlockMatrix(bb);
   }
 
@@ -252,7 +252,7 @@ bool MIRGraph::ComputeDominanceFrontier(BasicBlock* bb) {
 void MIRGraph::InitializeDominationInfo(BasicBlock* bb) {
   int num_total_blocks = GetBasicBlockListCount();
 
-  if (bb->dominators == NULL) {
+  if (bb->dominators == nullptr) {
     bb->dominators = new (arena_) ArenaBitVector(arena_, num_total_blocks,
                                                  true /* expandable */, kBitMapDominators);
     bb->i_dominated = new (arena_) ArenaBitVector(arena_, num_total_blocks,
@@ -362,7 +362,7 @@ void MIRGraph::ComputeDominators() {
 
   /* Initialize domination-related data structures */
   PreOrderDfsIterator iter(this);
-  for (BasicBlock* bb = iter.Next(); bb != NULL; bb = iter.Next()) {
+  for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
     InitializeDominationInfo(bb);
   }
 
@@ -382,7 +382,7 @@ void MIRGraph::ComputeDominators() {
   /* Compute the immediate dominators */
   RepeatingReversePostOrderDfsIterator iter2(this);
   bool change = false;
-  for (BasicBlock* bb = iter2.Next(false); bb != NULL; bb = iter2.Next(change)) {
+  for (BasicBlock* bb = iter2.Next(false); bb != nullptr; bb = iter2.Next(change)) {
     change = ComputeblockIDom(bb);
   }
 
@@ -393,19 +393,19 @@ void MIRGraph::ComputeDominators() {
   GetEntryBlock()->i_dom = 0;
 
   PreOrderDfsIterator iter3(this);
-  for (BasicBlock* bb = iter3.Next(); bb != NULL; bb = iter3.Next()) {
+  for (BasicBlock* bb = iter3.Next(); bb != nullptr; bb = iter3.Next()) {
     SetDominators(bb);
   }
 
   ReversePostOrderDfsIterator iter4(this);
-  for (BasicBlock* bb = iter4.Next(); bb != NULL; bb = iter4.Next()) {
+  for (BasicBlock* bb = iter4.Next(); bb != nullptr; bb = iter4.Next()) {
     ComputeBlockDominators(bb);
   }
 
   // Compute the dominance frontier for each block.
   ComputeDomPostOrderTraversal(GetEntryBlock());
   PostOrderDOMIterator iter5(this);
-  for (BasicBlock* bb = iter5.Next(); bb != NULL; bb = iter5.Next()) {
+  for (BasicBlock* bb = iter5.Next(); bb != nullptr; bb = iter5.Next()) {
     ComputeDominanceFrontier(bb);
   }
 }
@@ -438,7 +438,7 @@ bool MIRGraph::ComputeBlockLiveIns(BasicBlock* bb) {
   DCHECK_EQ(temp_bit_vector_size_, cu_->mir_graph.get()->GetNumOfCodeAndTempVRs());
   ArenaBitVector* temp_dalvik_register_v = temp_bit_vector_;
 
-  if (bb->data_flow_info == NULL) {
+  if (bb->data_flow_info == nullptr) {
     return false;
   }
   temp_dalvik_register_v->Copy(bb->data_flow_info->live_in_v);
@@ -476,7 +476,7 @@ void MIRGraph::InsertPhiNodes() {
 
   RepeatingPostOrderDfsIterator iter(this);
   bool change = false;
-  for (BasicBlock* bb = iter.Next(false); bb != NULL; bb = iter.Next(change)) {
+  for (BasicBlock* bb = iter.Next(false); bb != nullptr; bb = iter.Next(change)) {
     change = ComputeBlockLiveIns(bb);
   }
 
@@ -520,7 +520,7 @@ void MIRGraph::InsertPhiNodes() {
  */
 bool MIRGraph::InsertPhiNodeOperands(BasicBlock* bb) {
   /* Phi nodes are at the beginning of each block */
-  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
     if (mir->dalvikInsn.opcode != static_cast<Instruction::Code>(kMirOpPhi))
       return true;
     int ssa_reg = mir->ssa_rep->defs[0];

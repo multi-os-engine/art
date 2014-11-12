@@ -102,7 +102,7 @@ bool ImageWriter::Write(const std::string& image_filename,
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
 
   std::unique_ptr<File> oat_file(OS::OpenFileReadWrite(oat_filename.c_str()));
-  if (oat_file.get() == NULL) {
+  if (oat_file.get() == nullptr) {
     PLOG(ERROR) << "Failed to open oat file " << oat_filename << " for " << oat_location;
     return false;
   }
@@ -151,7 +151,7 @@ bool ImageWriter::Write(const std::string& image_filename,
 
   std::unique_ptr<File> image_file(OS::CreateEmptyFile(image_filename.c_str()));
   ImageHeader* image_header = reinterpret_cast<ImageHeader*>(image_->Begin());
-  if (image_file.get() == NULL) {
+  if (image_file.get() == nullptr) {
     LOG(ERROR) << "Failed to open image file " << image_filename;
     return false;
   }
@@ -236,7 +236,7 @@ size_t ImageWriter::GetImageOffset(mirror::Object* object) const {
 bool ImageWriter::AllocMemory() {
   size_t length = RoundUp(Runtime::Current()->GetHeap()->GetTotalMemory(), kPageSize);
   std::string error_msg;
-  image_.reset(MemMap::MapAnonymous("image writer image", NULL, length, PROT_READ | PROT_WRITE,
+  image_.reset(MemMap::MapAnonymous("image writer image", nullptr, length, PROT_READ | PROT_WRITE,
                                     false, &error_msg));
   if (UNLIKELY(image_.get() == nullptr)) {
     LOG(ERROR) << "Failed to allocate memory for image file generation: " << error_msg;
@@ -255,7 +255,7 @@ bool ImageWriter::AllocMemory() {
 
 void ImageWriter::ComputeLazyFieldsForImageClasses() {
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  class_linker->VisitClassesWithoutClassesLock(ComputeLazyFieldsForClassesVisitor, NULL);
+  class_linker->VisitClassesWithoutClassesLock(ComputeLazyFieldsForClassesVisitor, nullptr);
 }
 
 bool ImageWriter::ComputeLazyFieldsForClassesVisitor(Class* c, void* /*arg*/) {
@@ -286,7 +286,7 @@ void ImageWriter::ComputeEagerResolvedStringsCallback(Object* obj, void* arg ATT
     if (string_id != nullptr) {
       // This string occurs in this dex file, assign the dex cache entry.
       uint32_t string_idx = dex_file.GetIndexForStringId(*string_id);
-      if (dex_cache->GetResolvedString(string_idx) == NULL) {
+      if (dex_cache->GetResolvedString(string_idx) == nullptr) {
         dex_cache->SetResolvedString(string_idx, string);
       }
     }
@@ -309,7 +309,7 @@ struct NonImageClasses {
 };
 
 void ImageWriter::PruneNonImageClasses() {
-  if (compiler_driver_.GetImageClasses() == NULL) {
+  if (compiler_driver_.GetImageClasses() == nullptr) {
     return;
   }
   Runtime* runtime = Runtime::Current();
@@ -324,7 +324,7 @@ void ImageWriter::PruneNonImageClasses() {
 
   // Remove the undesired classes from the class roots.
   for (const std::string& it : non_image_classes) {
-    bool result = class_linker->RemoveClass(it.c_str(), NULL);
+    bool result = class_linker->RemoveClass(it.c_str(), nullptr);
     DCHECK(result);
   }
 
@@ -336,20 +336,20 @@ void ImageWriter::PruneNonImageClasses() {
     DexCache* dex_cache = class_linker->GetDexCache(idx);
     for (size_t i = 0; i < dex_cache->NumResolvedTypes(); i++) {
       Class* klass = dex_cache->GetResolvedType(i);
-      if (klass != NULL && !IsImageClass(klass)) {
-        dex_cache->SetResolvedType(i, NULL);
+      if (klass != nullptr && !IsImageClass(klass)) {
+        dex_cache->SetResolvedType(i, nullptr);
       }
     }
     for (size_t i = 0; i < dex_cache->NumResolvedMethods(); i++) {
       ArtMethod* method = dex_cache->GetResolvedMethod(i);
-      if (method != NULL && !IsImageClass(method->GetDeclaringClass())) {
+      if (method != nullptr && !IsImageClass(method->GetDeclaringClass())) {
         dex_cache->SetResolvedMethod(i, resolution_method);
       }
     }
     for (size_t i = 0; i < dex_cache->NumResolvedFields(); i++) {
       ArtField* field = dex_cache->GetResolvedField(i);
-      if (field != NULL && !IsImageClass(field->GetDeclaringClass())) {
-        dex_cache->SetResolvedField(i, NULL);
+      if (field != nullptr && !IsImageClass(field->GetDeclaringClass())) {
+        dex_cache->SetResolvedField(i, nullptr);
       }
     }
   }
@@ -388,14 +388,14 @@ void ImageWriter::CheckNonImageClassesRemovedCallback(Object* obj, void* arg) {
 
 void ImageWriter::DumpImageClasses() {
   const std::set<std::string>* image_classes = compiler_driver_.GetImageClasses();
-  CHECK(image_classes != NULL);
+  CHECK(image_classes != nullptr);
   for (const std::string& image_class : *image_classes) {
     LOG(INFO) << " " << image_class;
   }
 }
 
 void ImageWriter::CalculateObjectOffsets(Object* obj) {
-  DCHECK(obj != NULL);
+  DCHECK(obj != nullptr);
   // if it is a string, we want to intern it if its not interned.
   if (obj->GetClass()->IsStringClass()) {
     // we must be an interned string that was forward referenced and already assigned
@@ -467,7 +467,7 @@ ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
   image_roots->Set<false>(ImageHeader::kDexCaches, dex_caches.Get());
   image_roots->Set<false>(ImageHeader::kClassRoots, class_linker->GetClassRoots());
   for (int i = 0; i < ImageHeader::kImageRootsMax; i++) {
-    CHECK(image_roots->Get(i) != NULL);
+    CHECK(image_roots->Get(i) != nullptr);
   }
   return image_roots.Get();
 }

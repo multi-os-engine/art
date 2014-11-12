@@ -80,7 +80,7 @@ RosAlloc::RosAlloc(void* base, size_t capacity, size_t max_capacity,
   size_t num_of_pages = footprint_ / kPageSize;
   size_t max_num_of_pages = max_capacity_ / kPageSize;
   std::string error_msg;
-  page_map_mem_map_.reset(MemMap::MapAnonymous("rosalloc page map", NULL, RoundUp(max_num_of_pages, kPageSize),
+  page_map_mem_map_.reset(MemMap::MapAnonymous("rosalloc page map", nullptr, RoundUp(max_num_of_pages, kPageSize),
                                                PROT_READ | PROT_WRITE, false, &error_msg));
   CHECK(page_map_mem_map_.get() != nullptr) << "Couldn't allocate the page map : " << error_msg;
   page_map_ = page_map_mem_map_->Begin();
@@ -113,7 +113,7 @@ RosAlloc::~RosAlloc() {
 void* RosAlloc::AllocPages(Thread* self, size_t num_pages, uint8_t page_map_type) {
   lock_.AssertHeld(self);
   DCHECK(page_map_type == kPageMapRun || page_map_type == kPageMapLargeObject);
-  FreePageRun* res = NULL;
+  FreePageRun* res = nullptr;
   const size_t req_byte_size = num_pages * kPageSize;
   // Find the lowest address free page run that's large enough.
   for (auto it = free_page_runs_.begin(); it != free_page_runs_.end(); ) {
@@ -155,8 +155,8 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, uint8_t page_map_type
   }
 
   // Failed to allocate pages. Grow the footprint, if possible.
-  if (UNLIKELY(res == NULL && capacity_ > footprint_)) {
-    FreePageRun* last_free_page_run = NULL;
+  if (UNLIKELY(res == nullptr && capacity_ > footprint_)) {
+    FreePageRun* last_free_page_run = nullptr;
     size_t last_free_page_run_size;
     auto it = free_page_runs_.rbegin();
     if (it != free_page_runs_.rend() && (last_free_page_run = *it)->End(this) == base_ + footprint_) {
@@ -216,7 +216,7 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, uint8_t page_map_type
       DCHECK(it != free_page_runs_.rend());
       FreePageRun* fpr = *it;
       if (kIsDebugBuild && last_free_page_run_size > 0) {
-        DCHECK(last_free_page_run != NULL);
+        DCHECK(last_free_page_run != nullptr);
         DCHECK_EQ(last_free_page_run, fpr);
       }
       size_t fpr_byte_size = fpr->ByteSize(this);
@@ -247,7 +247,7 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, uint8_t page_map_type
       res = fpr;
     }
   }
-  if (LIKELY(res != NULL)) {
+  if (LIKELY(res != nullptr)) {
     // Update the page map.
     size_t page_map_idx = ToPageMapIndex(res);
     for (size_t i = 0; i < num_pages; i++) {
@@ -284,7 +284,7 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, uint8_t page_map_type
 
   // Fail.
   if (kTraceRosAlloc) {
-    LOG(INFO) << "RosAlloc::AllocPages() : NULL";
+    LOG(INFO) << "RosAlloc::AllocPages() : nullptr";
   }
   return nullptr;
 }
@@ -463,7 +463,7 @@ void* RosAlloc::AllocLargeObject(Thread* self, size_t size, size_t* bytes_alloca
   }
   if (UNLIKELY(r == nullptr)) {
     if (kTraceRosAlloc) {
-      LOG(INFO) << "RosAlloc::AllocLargeObject() : NULL";
+      LOG(INFO) << "RosAlloc::AllocLargeObject() : nullptr";
     }
     return nullptr;
   }
@@ -795,7 +795,7 @@ size_t RosAlloc::FreeFromRun(Thread* self, void* ptr, Run* run) {
     // already in the non-full run set (i.e., it was full) insert it
     // into the non-full run set.
     if (run != current_runs_[idx]) {
-      auto* full_runs = kIsDebugBuild ? &full_runs_[idx] : NULL;
+      auto* full_runs = kIsDebugBuild ? &full_runs_[idx] : nullptr;
       auto pos = non_full_runs->find(run);
       if (pos == non_full_runs->end()) {
         DCHECK(run_was_full);
@@ -1268,7 +1268,7 @@ size_t RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
       // Check if the run should be moved to non_full_runs_ or
       // free_page_runs_.
       auto* non_full_runs = &non_full_runs_[idx];
-      auto* full_runs = kIsDebugBuild ? &full_runs_[idx] : NULL;
+      auto* full_runs = kIsDebugBuild ? &full_runs_[idx] : nullptr;
       if (run->IsAllFree()) {
         // It has just become completely free. Free the pages of the
         // run.
@@ -1351,7 +1351,7 @@ std::string RosAlloc::DumpPageMap() {
   stream << "RosAlloc PageMap: " << std::endl;
   lock_.AssertHeld(Thread::Current());
   size_t end = page_map_size_;
-  FreePageRun* curr_fpr = NULL;
+  FreePageRun* curr_fpr = nullptr;
   size_t curr_fpr_size = 0;
   size_t remaining_curr_fpr_size = 0;
   size_t num_running_empty_pages = 0;
@@ -1366,7 +1366,7 @@ std::string RosAlloc::DumpPageMap() {
           // Encountered a fresh free page run.
           DCHECK_EQ(remaining_curr_fpr_size, static_cast<size_t>(0));
           DCHECK(fpr->IsFree());
-          DCHECK(curr_fpr == NULL);
+          DCHECK(curr_fpr == nullptr);
           DCHECK_EQ(curr_fpr_size, static_cast<size_t>(0));
           curr_fpr = fpr;
           curr_fpr_size = fpr->ByteSize(this);
@@ -1377,7 +1377,7 @@ std::string RosAlloc::DumpPageMap() {
                  << " remaining_fpr_size=" << remaining_curr_fpr_size << std::endl;
           if (remaining_curr_fpr_size == 0) {
             // Reset at the end of the current free page run.
-            curr_fpr = NULL;
+            curr_fpr = nullptr;
             curr_fpr_size = 0;
           }
           stream << "curr_fpr=0x" << std::hex << reinterpret_cast<intptr_t>(curr_fpr) << std::endl;
@@ -1385,7 +1385,7 @@ std::string RosAlloc::DumpPageMap() {
         } else {
           // Still part of the current free page run.
           DCHECK_NE(num_running_empty_pages, static_cast<size_t>(0));
-          DCHECK(curr_fpr != NULL && curr_fpr_size > 0 && remaining_curr_fpr_size > 0);
+          DCHECK(curr_fpr != nullptr && curr_fpr_size > 0 && remaining_curr_fpr_size > 0);
           DCHECK_EQ(remaining_curr_fpr_size % kPageSize, static_cast<size_t>(0));
           DCHECK_GE(remaining_curr_fpr_size, static_cast<size_t>(kPageSize));
           remaining_curr_fpr_size -= kPageSize;
@@ -1393,7 +1393,7 @@ std::string RosAlloc::DumpPageMap() {
                  << " remaining_fpr_size=" << remaining_curr_fpr_size << std::endl;
           if (remaining_curr_fpr_size == 0) {
             // Reset at the end of the current free page run.
-            curr_fpr = NULL;
+            curr_fpr = nullptr;
             curr_fpr_size = 0;
           }
         }
@@ -1539,7 +1539,7 @@ bool RosAlloc::Trim() {
 void RosAlloc::InspectAll(void (*handler)(void* start, void* end, size_t used_bytes, void* callback_arg),
                           void* arg) {
   // Note: no need to use this to release pages as we already do so in FreePages().
-  if (handler == NULL) {
+  if (handler == nullptr) {
     return;
   }
   MutexLock mu(Thread::Current(), lock_);

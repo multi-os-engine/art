@@ -41,7 +41,7 @@ class InstructionNode: public SeaNode {
   static std::vector<sea_ir::InstructionNode*> Create(const art::Instruction* in);
   // Returns the Dalvik instruction around which this InstructionNode is wrapped.
   const art::Instruction* GetInstruction() const {
-    DCHECK(NULL != instruction_) << "Tried to access NULL instruction in an InstructionNode.";
+    DCHECK(nullptr != instruction_) << "Tried to access nullptr instruction in an InstructionNode.";
     return instruction_;
   }
   // Returns the register that is defined by the current instruction, or NO_REGISTER otherwise.
@@ -56,7 +56,7 @@ class InstructionNode: public SeaNode {
   // essentially creating SSA form.
   void RenameToSSA(int reg_no, InstructionNode* definition) {
     definition_edges_.insert(std::pair<int, InstructionNode*>(reg_no, definition));
-    DCHECK(NULL != definition) << "SSA definition for register " << reg_no
+    DCHECK(nullptr != definition) << "SSA definition for register " << reg_no
         << " used in instruction " << Id() << " not found.";
     definition->AddSSAUse(this);
   }
@@ -85,7 +85,7 @@ class InstructionNode: public SeaNode {
   }
   // Set the region to which this instruction belongs.
   Region* GetRegion() {
-    DCHECK(NULL != region_);
+    DCHECK(nullptr != region_);
     return region_;
   }
   // Get the region to which this instruction belongs.
@@ -95,7 +95,7 @@ class InstructionNode: public SeaNode {
 
  protected:
   explicit InstructionNode(const art::Instruction* in):
-      SeaNode(), instruction_(in), used_in_(), de_def_(false), region_(NULL) { }
+      SeaNode(), instruction_(in), used_in_(), de_def_(false), region_(nullptr) { }
 
  protected:
   const art::Instruction* const instruction_;

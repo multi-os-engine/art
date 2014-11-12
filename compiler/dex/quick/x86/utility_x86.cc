@@ -573,7 +573,7 @@ LIR* X86Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
       } else if (base_of_code_ != nullptr) {
         // We will load the value from the literal area.
         LIR* data_target = ScanLiteralPoolWide(literal_list_, val_lo, val_hi);
-        if (data_target == NULL) {
+        if (data_target == nullptr) {
           data_target = AddWideData(&literal_list_, val_lo, val_hi);
         }
 
@@ -634,8 +634,8 @@ LIR* X86Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
 
 LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale,
                                      int displacement, RegStorage r_dest, OpSize size) {
-  LIR *load = NULL;
-  LIR *load2 = NULL;
+  LIR *load = nullptr;
+  LIR *load2 = nullptr;
   bool is_array = r_index.Valid();
   bool pair = r_dest.IsPair();
   bool is64bit = ((size == k64) || (size == kDouble));
@@ -783,8 +783,8 @@ LIR* X86Mir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_
 LIR* X86Mir2Lir::StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale,
                                       int displacement, RegStorage r_src, OpSize size,
                                       int opt_flags) {
-  LIR *store = NULL;
-  LIR *store2 = NULL;
+  LIR *store = nullptr;
+  LIR *store2 = nullptr;
   bool is_array = r_index.Valid();
   bool pair = r_src.IsPair();
   bool is64bit = (size == k64) || (size == kDouble);
@@ -954,7 +954,7 @@ void X86Mir2Lir::AnalyzeMIR() {
   // Walk the MIR looking for interesting items.
   PreOrderDfsIterator iter(mir_graph_);
   BasicBlock* curr_bb = iter.Next();
-  while (curr_bb != NULL) {
+  while (curr_bb != nullptr) {
     AnalyzeBB(curr_bb);
     curr_bb = iter.Next();
   }
@@ -974,7 +974,7 @@ void X86Mir2Lir::AnalyzeBB(BasicBlock* bb) {
     return;
   }
 
-  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+  for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
     int opcode = mir->dalvikInsn.opcode;
     if (MIR::DecodedInstruction::IsPseudoMirOp(opcode)) {
       AnalyzeExtendedMIR(opcode, bb, mir);

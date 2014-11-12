@@ -113,7 +113,7 @@ class ModUnionScanImageRootVisitor {
   void operator()(Object* root) const
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK(root != NULL);
+    DCHECK(root != nullptr);
     ModUnionUpdateObjectReferencesVisitor ref_visitor(callback_, arg_, from_space_,
                                                       contains_reference_to_other_space_);
     root->VisitReferences<kMovingClasses>(ref_visitor, VoidFunctor());

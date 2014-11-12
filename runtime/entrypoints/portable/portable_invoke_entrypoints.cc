@@ -26,12 +26,12 @@ mirror::ArtMethod* FindMethodHelper(uint32_t method_idx, mirror::Object* this_ob
                                     mirror::ArtMethod* caller_method, Thread* self) {
   mirror::ArtMethod* method = FindMethodFast(method_idx, this_object, caller_method,
                                              access_check, type);
-  if (UNLIKELY(method == NULL)) {
+  if (UNLIKELY(method == nullptr)) {
     // Note: This can cause thread suspension.
     self->AssertThreadSuspensionIsAllowable();
     method = FindMethodFromCode<type, access_check>(method_idx, &this_object, &caller_method,
                                                     self);
-    if (UNLIKELY(method == NULL)) {
+    if (UNLIKELY(method == nullptr)) {
       CHECK(self->IsExceptionPending());
       return 0;  // failure
     }
@@ -40,8 +40,8 @@ mirror::ArtMethod* FindMethodHelper(uint32_t method_idx, mirror::Object* this_ob
   const void* code = method->GetEntryPointFromPortableCompiledCode();
 
   // When we return, the caller will branch to this address, so it had better not be 0!
-  if (UNLIKELY(code == NULL)) {
-      LOG(FATAL) << "Code was NULL in method: " << PrettyMethod(method)
+  if (UNLIKELY(code == nullptr)) {
+      LOG(FATAL) << "Code was nullptr in method: " << PrettyMethod(method)
                  << " location: " << method->GetDexFile()->GetLocation();
   }
   return method;

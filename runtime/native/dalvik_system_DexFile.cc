@@ -64,7 +64,7 @@ namespace art {
 //
 //   NullableScopedUtfChars name(env, javaName);
 //   if (env->ExceptionCheck()) {
-//       return NULL;
+//       return nullptr;
 //   }
 //   // ... use name.c_str()
 //
@@ -72,7 +72,7 @@ namespace art {
 class NullableScopedUtfChars {
  public:
   NullableScopedUtfChars(JNIEnv* env, jstring s) : mEnv(env), mString(s) {
-    mUtfChars = (s != NULL) ? env->GetStringUTFChars(s, NULL) : NULL;
+    mUtfChars = (s != nullptr) ? env->GetStringUTFChars(s, nullptr) : nullptr;
   }
 
   ~NullableScopedUtfChars() {
@@ -106,7 +106,7 @@ class NullableScopedUtfChars {
 
 static jlong DexFile_openDexFileNative(JNIEnv* env, jclass, jstring javaSourceName, jstring javaOutputName, jint) {
   ScopedUtfChars sourceName(env, javaSourceName);
-  if (sourceName.c_str() == NULL) {
+  if (sourceName.c_str() == nullptr) {
     return 0;
   }
   NullableScopedUtfChars outputName(env, javaOutputName);
@@ -148,7 +148,7 @@ static std::vector<const DexFile*>* toDexFiles(jlong dex_file_address, JNIEnv* e
       static_cast<uintptr_t>(dex_file_address));
   if (UNLIKELY(dex_files == nullptr)) {
     ScopedObjectAccess soa(env);
-    ThrowNullPointerException(NULL, "dex_file == null");
+    ThrowNullPointerException(nullptr, "dex_file == null");
   }
   return dex_files;
 }
@@ -175,14 +175,14 @@ static void DexFile_closeDexFile(JNIEnv* env, jclass, jlong cookie) {
 static jclass DexFile_defineClassNative(JNIEnv* env, jclass, jstring javaName, jobject javaLoader,
                                         jlong cookie) {
   std::vector<const DexFile*>* dex_files = toDexFiles(cookie, env);
-  if (dex_files == NULL) {
+  if (dex_files == nullptr) {
     VLOG(class_linker) << "Failed to find dex_file";
-    return NULL;
+    return nullptr;
   }
   ScopedUtfChars class_name(env, javaName);
-  if (class_name.c_str() == NULL) {
+  if (class_name.c_str() == nullptr) {
     VLOG(class_linker) << "Failed to find class_name";
-    return NULL;
+    return nullptr;
   }
   const std::string descriptor(DotToDescriptor(class_name.c_str()));
   const size_t hash(ComputeModifiedUtf8Hash(descriptor.c_str()));
@@ -602,7 +602,7 @@ static jbyte DexFile_isDexOptNeededInternal(JNIEnv* env, jclass, jstring javaFil
                                 instruction_set.c_str(), defer);
 }
 
-// public API, NULL pkgname
+// public API, nullptr pkgname
 static jboolean DexFile_isDexOptNeeded(JNIEnv* env, jclass, jstring javaFilename) {
   const char* instruction_set = GetInstructionSetString(kRuntimeISA);
   ScopedUtfChars filename(env, javaFilename);

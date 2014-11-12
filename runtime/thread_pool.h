@@ -99,7 +99,7 @@ class ThreadPool {
   // get a task to run, blocks if there are no tasks left
   virtual Task* GetTask(Thread* self);
 
-  // Try to get a task, returning NULL if there is none available.
+  // Try to get a task, returning nullptr if there is none available.
   Task* TryGetTask(Thread* self);
   Task* TryGetTaskLocked() EXCLUSIVE_LOCKS_REQUIRED(task_queue_lock_);
 
@@ -153,7 +153,7 @@ class WorkStealingWorker : public ThreadPoolWorker {
   virtual ~WorkStealingWorker();
 
   bool IsRunningTask() const {
-    return task_ != NULL;
+    return task_ != nullptr;
   }
 
  protected:

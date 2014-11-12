@@ -85,7 +85,7 @@ LIR* ArmMir2Lir::LoadFPConstantValue(int r_dest, int value) {
     }
   }
   LIR* data_target = ScanLiteralPool(literal_list_, value, 0);
-  if (data_target == NULL) {
+  if (data_target == nullptr) {
     data_target = AddWordData(&literal_list_, value);
   }
   ScopedMemRefType mem_ref_type(this, ResourceMask::kLiteral);
@@ -364,7 +364,7 @@ LIR* ArmMir2Lir::OpRegRegShift(OpKind op, RegStorage r_dest_src1, RegStorage r_s
     return NewLIR4(opcode, r_dest_src1.GetReg(), r_dest_src1.GetReg(), r_src2.GetReg(), shift);
   } else {
     LOG(FATAL) << "Unexpected encoding operand count";
-    return NULL;
+    return nullptr;
   }
 }
 
@@ -642,7 +642,7 @@ LIR* ArmMir2Lir::OpRegImm(OpKind op, RegStorage r_dest_src1, int value) {
 }
 
 LIR* ArmMir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
-  LIR* res = NULL;
+  LIR* res = nullptr;
   int32_t val_lo = Low32Bits(value);
   int32_t val_hi = High32Bits(value);
   if (r_dest.IsFloat()) {
@@ -668,10 +668,10 @@ LIR* ArmMir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
       LoadConstantNoClobber(r_dest.GetHigh(), val_hi);
     }
   }
-  if (res == NULL) {
+  if (res == nullptr) {
     // No short form - load from the literal pool.
     LIR* data_target = ScanLiteralPoolWide(literal_list_, val_lo, val_hi);
-    if (data_target == NULL) {
+    if (data_target == nullptr) {
       data_target = AddWideData(&literal_list_, val_lo, val_hi);
     }
     ScopedMemRefType mem_ref_type(this, ResourceMask::kLiteral);
@@ -761,7 +761,7 @@ LIR* ArmMir2Lir::LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStora
 LIR* ArmMir2Lir::StoreBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_src,
                                   int scale, OpSize size) {
   bool all_low_regs = r_base.Low8() && r_index.Low8() && r_src.Low8();
-  LIR* store = NULL;
+  LIR* store = nullptr;
   ArmOpcode opcode = kThumbBkpt;
   bool thumb_form = (all_low_regs && (scale == 0));
   RegStorage reg_ptr;
@@ -856,7 +856,7 @@ LIR* ArmMir2Lir::LoadStoreUsingInsnWithOffsetImm8Shl2(ArmOpcode opcode, RegStora
  */
 LIR* ArmMir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStorage r_dest,
                                   OpSize size) {
-  LIR* load = NULL;
+  LIR* load = nullptr;
   ArmOpcode opcode = kThumbBkpt;
   bool short_form = false;
   bool thumb2Form = (displacement < 4092 && displacement >= 0);
@@ -998,7 +998,7 @@ LIR* ArmMir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_
 
 LIR* ArmMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegStorage r_src,
                                    OpSize size) {
-  LIR* store = NULL;
+  LIR* store = nullptr;
   ArmOpcode opcode = kThumbBkpt;
   bool short_form = false;
   bool thumb2Form = (displacement < 4092 && displacement >= 0);

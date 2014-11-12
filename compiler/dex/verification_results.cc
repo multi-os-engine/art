@@ -47,7 +47,7 @@ VerificationResults::~VerificationResults() {
 }
 
 bool VerificationResults::ProcessVerifiedMethod(verifier::MethodVerifier* method_verifier) {
-  DCHECK(method_verifier != NULL);
+  DCHECK(method_verifier != nullptr);
   MethodReference ref = method_verifier->GetMethodReference();
   bool compile = IsCandidateForCompilation(ref, method_verifier->GetAccessFlags());
   // TODO: Check also for virtual/interface invokes when DEX-to-DEX supports devirtualization.

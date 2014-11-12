@@ -642,7 +642,7 @@ extern "C" uint64_t artQuickProxyInvokeHandler(mirror::ArtMethod* proxy_method,
 
   // Convert proxy method into expected interface method.
   mirror::ArtMethod* interface_method = proxy_method->FindOverriddenMethod();
-  DCHECK(interface_method != NULL) << PrettyMethod(proxy_method);
+  DCHECK(interface_method != nullptr) << PrettyMethod(proxy_method);
   DCHECK(!interface_method->IsProxyMethod()) << PrettyMethod(interface_method);
   jobject interface_method_jobj = soa.AddLocalReference<jobject>(interface_method);
 
@@ -764,7 +764,7 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
         is_range = true;
         break;
       default:
-        LOG(FATAL) << "Unexpected call into trampoline: " << instr->DumpString(NULL);
+        LOG(FATAL) << "Unexpected call into trampoline: " << instr->DumpString(nullptr);
         // Avoid used uninitialized warnings.
         invoke_type = kDirect;
         is_range = false;
@@ -790,7 +790,7 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
         hs.NewHandleWrapper(virtual_or_interface ? &receiver : &dummy));
     called = linker->ResolveMethod(self, dex_method_idx, &caller, invoke_type);
   }
-  const void* code = NULL;
+  const void* code = nullptr;
   if (LIKELY(!self->IsExceptionPending())) {
     // Incompatible class change should have been handled in resolve method.
     CHECK(!called->CheckIncompatibleClassChange(invoke_type))
@@ -846,7 +846,7 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
       DCHECK(called_class->IsErroneous());
     }
   }
-  CHECK_EQ(code == NULL, self->IsExceptionPending());
+  CHECK_EQ(code == nullptr, self->IsExceptionPending());
   // Fixup any locally saved objects may have moved during a GC.
   visitor.FixupReferences();
   // Place called method in callee-save frame to be placed as first argument to quick method.
@@ -1787,7 +1787,7 @@ static TwoWordReturn artInvokeCommon(uint32_t method_idx, mirror::Object* this_o
       visitor.FixupReferences();
     }
 
-    if (UNLIKELY(method == NULL)) {
+    if (UNLIKELY(method == nullptr)) {
       CHECK(self->IsExceptionPending());
       return GetTwoWordFailureValue();  // Failure.
     }
@@ -1796,7 +1796,7 @@ static TwoWordReturn artInvokeCommon(uint32_t method_idx, mirror::Object* this_o
   const void* code = method->GetEntryPointFromQuickCompiledCode();
 
   // When we return, the caller will branch to this address, so it had better not be 0!
-  DCHECK(code != nullptr) << "Code was NULL in method: " << PrettyMethod(method)
+  DCHECK(code != nullptr) << "Code was nullptr in method: " << PrettyMethod(method)
                           << " location: "
                           << method->GetDexFile()->GetLocation();
 
@@ -1882,7 +1882,7 @@ extern "C" TwoWordReturn artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
   mirror::ArtMethod* method;
   if (LIKELY(interface_method->GetDexMethodIndex() != DexFile::kDexNoIndex)) {
     method = this_object->GetClass()->FindVirtualMethodForInterface(interface_method);
-    if (UNLIKELY(method == NULL)) {
+    if (UNLIKELY(method == nullptr)) {
       ThrowIncompatibleClassChangeErrorClassForInterfaceDispatch(interface_method, this_object,
                                                                  caller_method);
       return GetTwoWordFailureValue();  // Failure.
@@ -1902,7 +1902,7 @@ extern "C" TwoWordReturn artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
     Instruction::Code instr_code = instr->Opcode();
     CHECK(instr_code == Instruction::INVOKE_INTERFACE ||
           instr_code == Instruction::INVOKE_INTERFACE_RANGE)
-        << "Unexpected call into interface trampoline: " << instr->DumpString(NULL);
+        << "Unexpected call into interface trampoline: " << instr->DumpString(nullptr);
     uint32_t dex_method_idx;
     if (instr_code == Instruction::INVOKE_INTERFACE) {
       dex_method_idx = instr->VRegB_35c();
@@ -1934,7 +1934,7 @@ extern "C" TwoWordReturn artInvokeInterfaceTrampoline(mirror::ArtMethod* interfa
   const void* code = method->GetEntryPointFromQuickCompiledCode();
 
   // When we return, the caller will branch to this address, so it had better not be 0!
-  DCHECK(code != nullptr) << "Code was NULL in method: " << PrettyMethod(method)
+  DCHECK(code != nullptr) << "Code was nullptr in method: " << PrettyMethod(method)
                           << " location: " << method->GetDexFile()->GetLocation();
 
   return GetTwoWordSuccessValue(reinterpret_cast<uintptr_t>(code),

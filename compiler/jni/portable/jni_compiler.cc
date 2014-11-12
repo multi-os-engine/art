@@ -55,7 +55,7 @@ JniCompiler::JniCompiler(LlvmCompilationUnit* cunit,
     : cunit_(cunit), driver_(driver), module_(cunit_->GetModule()),
       context_(cunit_->GetLLVMContext()), irb_(*cunit_->GetIRBuilder()),
       dex_compilation_unit_(dex_compilation_unit),
-      func_(NULL), elf_func_idx_(0) {
+      func_(nullptr), elf_func_idx_(0) {
   // Check: Ensure that JNI compiler will only get "native" method
   CHECK(dex_compilation_unit->IsNative());
 }
@@ -149,7 +149,7 @@ CompiledMethod* JniCompiler::Compile() {
   ::llvm::Value* gep_index[] = {
     irb_.getInt32(0),  // No displacement for shadow frame pointer
     irb_.getInt32(1),  // handle scope
-    NULL,
+    nullptr,
   };
 
   size_t handle_scope_member_index = 0;
@@ -285,7 +285,7 @@ void JniCompiler::CreateFunction(const std::string& func_name) {
   CHECK_GE(shorty_size, 1u);
 
   // Get return type
-  ::llvm::Type* ret_type = NULL;
+  ::llvm::Type* ret_type = nullptr;
   switch (shorty[0]) {
     case 'V': ret_type =  irb_.getJVoidTy(); break;
     case 'Z':

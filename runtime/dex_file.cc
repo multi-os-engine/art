@@ -57,7 +57,7 @@ const uint8_t DexFile::kDexMagic[] = { 'd', 'e', 'x', '\n' };
 const uint8_t DexFile::kDexMagicVersion[] = { '0', '3', '5', '\0' };
 
 static int OpenAndReadMagic(const char* filename, uint32_t* magic, std::string* error_msg) {
-  CHECK(magic != NULL);
+  CHECK(magic != nullptr);
   ScopedFd fd(open(filename, O_RDONLY, 0));
   if (fd.get() == -1) {
     *error_msg = StringPrintf("Unable to open '%s' : %s", filename, strerror(errno));
@@ -77,7 +77,7 @@ static int OpenAndReadMagic(const char* filename, uint32_t* magic, std::string* 
 }
 
 bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string* error_msg) {
-  CHECK(checksum != NULL);
+  CHECK(checksum != nullptr);
   uint32_t magic;
 
   // Strip ":...", which is the location
@@ -99,12 +99,12 @@ bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string*
   }
   if (IsZipMagic(magic)) {
     std::unique_ptr<ZipArchive> zip_archive(ZipArchive::OpenFromFd(fd.release(), filename, error_msg));
-    if (zip_archive.get() == NULL) {
+    if (zip_archive.get() == nullptr) {
       *error_msg = StringPrintf("Failed to open zip archive '%s'", file_part);
       return false;
     }
     std::unique_ptr<ZipEntry> zip_entry(zip_archive->Find(zip_entry_name, error_msg));
-    if (zip_entry.get() == NULL) {
+    if (zip_entry.get() == nullptr) {
       *error_msg = StringPrintf("Zip archive '%s' doesn't contain %s (error msg: %s)", file_part,
                                 zip_entry_name, error_msg->c_str());
       return false;
@@ -114,7 +114,7 @@ bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string*
   }
   if (IsDexMagic(magic)) {
     std::unique_ptr<const DexFile> dex_file(DexFile::OpenFile(fd.release(), filename, false, error_msg));
-    if (dex_file.get() == NULL) {
+    if (dex_file.get() == nullptr) {
       return false;
     }
     *checksum = dex_file->GetHeader().checksum_;
@@ -150,7 +150,7 @@ bool DexFile::Open(const char* filename, const char* location, std::string* erro
 }
 
 int DexFile::GetPermissions() const {
-  if (mem_map_.get() == NULL) {
+  if (mem_map_.get() == nullptr) {
     return 0;
   } else {
     return mem_map_->GetProtect();
@@ -163,7 +163,7 @@ bool DexFile::IsReadOnly() const {
 
 bool DexFile::EnableWrite() const {
   CHECK(IsReadOnly());
-  if (mem_map_.get() == NULL) {
+  if (mem_map_.get() == nullptr) {
     return false;
   } else {
     return mem_map_->Protect(PROT_READ | PROT_WRITE);
@@ -172,7 +172,7 @@ bool DexFile::EnableWrite() const {
 
 bool DexFile::DisableWrite() const {
   CHECK(!IsReadOnly());
-  if (mem_map_.get() == NULL) {
+  if (mem_map_.get() == nullptr) {
     return false;
   } else {
     return mem_map_->Protect(PROT_READ);
@@ -256,12 +256,12 @@ const DexFile* DexFile::Open(const ZipArchive& zip_archive, const char* entry_na
                              ZipOpenErrorCode* error_code) {
   CHECK(!location.empty());
   std::unique_ptr<ZipEntry> zip_entry(zip_archive.Find(entry_name, error_msg));
-  if (zip_entry.get() == NULL) {
+  if (zip_entry.get() == nullptr) {
     *error_code = ZipOpenErrorCode::kEntryNotFound;
     return nullptr;
   }
   std::unique_ptr<MemMap> map(zip_entry->ExtractToMemMap(location.c_str(), entry_name, error_msg));
-  if (map.get() == NULL) {
+  if (map.get() == nullptr) {
     *error_msg = StringPrintf("Failed to extract '%s' from '%s': %s", entry_name, location.c_str(),
                               error_msg->c_str());
     *error_code = ZipOpenErrorCode::kExtractToMemoryError;
@@ -361,7 +361,7 @@ DexFile::DexFile(const uint8_t* base, size_t size,
       class_defs_(reinterpret_cast<const ClassDef*>(base + header_->class_defs_off_)),
       find_class_def_misses_(0),
       class_def_index_(nullptr) {
-  CHECK(begin_ != NULL) << GetLocation();
+  CHECK(begin_ != nullptr) << GetLocation();
   CHECK_GT(size_, 0U) << GetLocation();
 }
 
@@ -477,7 +477,7 @@ const DexFile::ClassDef* DexFile::FindClassDef(uint16_t type_idx) const {
       return &class_def;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 const DexFile::FieldId* DexFile::FindFieldId(const DexFile::TypeId& declaring_klass,
@@ -512,7 +512,7 @@ const DexFile::FieldId* DexFile::FindFieldId(const DexFile::TypeId& declaring_kl
       }
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 const DexFile::MethodId* DexFile::FindMethodId(const DexFile::TypeId& declaring_klass,
@@ -547,7 +547,7 @@ const DexFile::MethodId* DexFile::FindMethodId(const DexFile::TypeId& declaring_
       }
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 const DexFile::StringId* DexFile::FindStringId(const char* string) const {
@@ -566,7 +566,7 @@ const DexFile::StringId* DexFile::FindStringId(const char* string) const {
       return &str_id;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 const DexFile::StringId* DexFile::FindStringId(const uint16_t* string) const {
@@ -585,7 +585,7 @@ const DexFile::StringId* DexFile::FindStringId(const uint16_t* string) const {
       return &str_id;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 const DexFile::TypeId* DexFile::FindTypeId(uint32_t string_idx) const {
@@ -602,7 +602,7 @@ const DexFile::TypeId* DexFile::FindTypeId(uint32_t string_idx) const {
       return &type_id;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 const DexFile::ProtoId* DexFile::FindProtoId(uint16_t return_type_idx,
@@ -638,7 +638,7 @@ const DexFile::ProtoId* DexFile::FindProtoId(uint16_t return_type_idx,
       return &proto;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 // Given a signature place the type ids into the given vector
@@ -677,11 +677,11 @@ bool DexFile::CreateTypeList(const StringPiece& signature, uint16_t* return_type
     // TODO: avoid creating a std::string just to get a 0-terminated char array
     std::string descriptor(signature.data() + start_offset, offset - start_offset);
     const DexFile::StringId* string_id = FindStringId(descriptor.c_str());
-    if (string_id == NULL) {
+    if (string_id == nullptr) {
       return false;
     }
     const DexFile::TypeId* type_id = FindTypeId(GetIndexForStringId(*string_id));
-    if (type_id == NULL) {
+    if (type_id == nullptr) {
       return false;
     }
     uint16_t type_idx = GetIndexForTypeId(*type_id);
@@ -703,7 +703,7 @@ const Signature DexFile::CreateSignature(const StringPiece& signature) const {
     return Signature::NoSignature();
   }
   const ProtoId* proto_id = FindProtoId(return_type_idx, param_type_indices);
-  if (proto_id == NULL) {
+  if (proto_id == nullptr) {
     return Signature::NoSignature();
   }
   return Signature(this, *proto_id);
@@ -717,12 +717,12 @@ int32_t DexFile::GetLineNumFromPC(mirror::ArtMethod* method, uint32_t rel_pc) co
   }
 
   const CodeItem* code_item = GetCodeItem(method->GetCodeItemOffset());
-  DCHECK(code_item != NULL) << PrettyMethod(method) << " " << GetLocation();
+  DCHECK(code_item != nullptr) << PrettyMethod(method) << " " << GetLocation();
 
   // A method with no line number info should return -1
   LineNumFromPcContext context(rel_pc, -1);
   DecodeDebugInfo(code_item, method->IsStatic(), method->GetDexMethodIndex(), LineNumForPcCb,
-                  NULL, &context);
+                  nullptr, &context);
   return context.line_num_;
 }
 
@@ -766,14 +766,14 @@ void DexFile::DecodeDebugInfo0(const CodeItem* code_item, bool is_static, uint32
   uint32_t parameters_size = DecodeUnsignedLeb128(&stream);
   uint16_t arg_reg = code_item->registers_size_ - code_item->ins_size_;
   uint32_t address = 0;
-  bool need_locals = (local_cb != NULL);
+  bool need_locals = (local_cb != nullptr);
 
   if (!is_static) {
     if (need_locals) {
       const char* descriptor = GetMethodDeclaringClassDescriptor(GetMethodId(method_idx));
       local_in_reg[arg_reg].name_ = "this";
       local_in_reg[arg_reg].descriptor_ = descriptor;
-      local_in_reg[arg_reg].signature_ = NULL;
+      local_in_reg[arg_reg].signature_ = nullptr;
       local_in_reg[arg_reg].start_address_ = 0;
       local_in_reg[arg_reg].is_live_ = true;
     }
@@ -793,7 +793,7 @@ void DexFile::DecodeDebugInfo0(const CodeItem* code_item, bool is_static, uint32
       const char* name = StringDataByIdx(id);
       local_in_reg[arg_reg].name_ = name;
       local_in_reg[arg_reg].descriptor_ = descriptor;
-      local_in_reg[arg_reg].signature_ = NULL;
+      local_in_reg[arg_reg].signature_ = nullptr;
       local_in_reg[arg_reg].start_address_ = address;
       local_in_reg[arg_reg].is_live_ = true;
     }
@@ -885,7 +885,7 @@ void DexFile::DecodeDebugInfo0(const CodeItem* code_item, bool is_static, uint32
         }
 
         if (need_locals) {
-          if (local_in_reg[reg].name_ == NULL || local_in_reg[reg].descriptor_ == NULL) {
+          if (local_in_reg[reg].name_ == nullptr || local_in_reg[reg].descriptor_ == nullptr) {
             LOG(ERROR) << "invalid stream - no name or descriptor in " << GetLocation();
             return;
           }
@@ -910,7 +910,7 @@ void DexFile::DecodeDebugInfo0(const CodeItem* code_item, bool is_static, uint32
         address += adjopcode / DBG_LINE_RANGE;
         line += DBG_LINE_BASE + (adjopcode % DBG_LINE_RANGE);
 
-        if (position_cb != NULL) {
+        if (position_cb != nullptr) {
           if (position_cb(context, address, line)) {
             // early exit
             return;
@@ -927,10 +927,10 @@ void DexFile::DecodeDebugInfo(const CodeItem* code_item, bool is_static, uint32_
                               void* context) const {
   DCHECK(code_item != nullptr);
   const uint8_t* stream = GetDebugInfoStream(code_item);
-  std::unique_ptr<LocalInfo[]> local_in_reg(local_cb != NULL ?
+  std::unique_ptr<LocalInfo[]> local_in_reg(local_cb != nullptr ?
                                       new LocalInfo[code_item->registers_size_] :
-                                      NULL);
-  if (stream != NULL) {
+                                      nullptr);
+  if (stream != nullptr) {
     DecodeDebugInfo0(code_item, is_static, method_idx, position_cb, local_cb, context, stream, &local_in_reg[0]);
   }
   for (int reg = 0; reg < code_item->registers_size_; reg++) {
@@ -1041,7 +1041,7 @@ std::ostream& operator<<(std::ostream& os, const Signature& sig) {
 
 // Decodes the header section from the class data bytes.
 void ClassDataItemIterator::ReadClassDataHeader() {
-  CHECK(ptr_pos_ != NULL);
+  CHECK(ptr_pos_ != nullptr);
   header_.static_fields_size_ = DecodeUnsignedLeb128(&ptr_pos_);
   header_.instance_fields_size_ = DecodeUnsignedLeb128(&ptr_pos_);
   header_.direct_methods_size_ = DecodeUnsignedLeb128(&ptr_pos_);
@@ -1129,7 +1129,7 @@ EncodedStaticFieldValueIterator::EncodedStaticFieldValueIterator(const DexFile& 
   DCHECK(dex_cache != nullptr);
   DCHECK(class_loader != nullptr);
   ptr_ = dex_file.GetEncodedStaticFieldValuesArray(class_def);
-  if (ptr_ == NULL) {
+  if (ptr_ == nullptr) {
     array_size_ = 0;
   } else {
     array_size_ = DecodeUnsignedLeb128(&ptr_);
@@ -1189,7 +1189,7 @@ void EncodedStaticFieldValueIterator::Next() {
     UNIMPLEMENTED(FATAL) << ": type " << type_;
     UNREACHABLE();
   case kNull:
-    jval_.l = NULL;
+    jval_.l = nullptr;
     width = 0;
     break;
   default:
@@ -1210,7 +1210,7 @@ void EncodedStaticFieldValueIterator::ReadValueToField(Handle<mirror::ArtField> 
     case kLong:    field->SetLong<kTransactionActive>(field->GetDeclaringClass(), jval_.j); break;
     case kFloat:   field->SetFloat<kTransactionActive>(field->GetDeclaringClass(), jval_.f); break;
     case kDouble:  field->SetDouble<kTransactionActive>(field->GetDeclaringClass(), jval_.d); break;
-    case kNull:    field->SetObject<kTransactionActive>(field->GetDeclaringClass(), NULL); break;
+    case kNull:    field->SetObject<kTransactionActive>(field->GetDeclaringClass(), nullptr); break;
     case kString: {
       CHECK(!kMovingFields);
       mirror::String* resolved = linker_->ResolveString(dex_file_, jval_.i, *dex_cache_);
@@ -1267,7 +1267,7 @@ void CatchHandlerIterator::Init(const DexFile::CodeItem& code_item,
     Init(DexFile::GetCatchHandlerData(code_item, offset));
   } else {
     // Not found, initialize as empty
-    current_data_ = NULL;
+    current_data_ = nullptr;
     remaining_count_ = -1;
     catch_all_ = false;
     DCHECK(!HasNext());

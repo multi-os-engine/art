@@ -48,7 +48,7 @@ extern "C" void artInterpreterToCompiledCodeBridge(Thread* self, MethodHelper* m
       method = shadow_frame->GetMethod();
     }
   }
-  uint16_t arg_offset = (code_item == NULL) ? 0 : code_item->registers_size_ - code_item->ins_size_;
+  uint16_t arg_offset = (code_item == nullptr) ? 0 : code_item->registers_size_ - code_item->ins_size_;
   if (kUsePortableCompiler) {
     InvokeWithShadowFrame(self, shadow_frame, arg_offset, mh, result);
   } else {

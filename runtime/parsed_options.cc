@@ -251,11 +251,11 @@ bool ParsedOptions::ParseXGcOption(const std::string& option) {
 
 bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognized) {
   const char* boot_class_path_string = getenv("BOOTCLASSPATH");
-  if (boot_class_path_string != NULL) {
+  if (boot_class_path_string != nullptr) {
     boot_class_path_string_ = boot_class_path_string;
   }
   const char* class_path_string = getenv("CLASSPATH");
-  if (class_path_string != NULL) {
+  if (class_path_string != nullptr) {
     class_path_string_ = class_path_string;
   }
 
@@ -550,7 +550,7 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
     } else if (option == "vfprintf") {
       const void* hook = options[i].second;
       if (hook == nullptr) {
-        Usage("vfprintf argument was NULL");
+        Usage("vfprintf argument was nullptr");
         return false;
       }
       hook_vfprintf_ =
@@ -558,14 +558,14 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
     } else if (option == "exit") {
       const void* hook = options[i].second;
       if (hook == nullptr) {
-        Usage("exit argument was NULL");
+        Usage("exit argument was nullptr");
         return false;
       }
       hook_exit_ = reinterpret_cast<void(*)(jint)>(const_cast<void*>(hook));
     } else if (option == "abort") {
       const void* hook = options[i].second;
       if (hook == nullptr) {
-        Usage("abort was NULL\n");
+        Usage("abort was nullptr\n");
         return false;
       }
       hook_abort_ = reinterpret_cast<void(*)()>(const_cast<void*>(hook));

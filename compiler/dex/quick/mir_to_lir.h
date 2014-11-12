@@ -600,7 +600,7 @@ class Mir2Lir : public Backend {
     char* ArenaStrdup(const char* str) {
       size_t len = strlen(str) + 1;
       char* res = reinterpret_cast<char*>(arena_->Alloc(len, kArenaAllocMisc));
-      if (res != NULL) {
+      if (res != nullptr) {
         strncpy(res, str, len);
       }
       return res;
@@ -646,7 +646,7 @@ class Mir2Lir : public Backend {
     void DumpPromotionMap();
     void CodegenDump();
     LIR* RawLIR(DexOffset dalvik_offset, int opcode, int op0 = 0, int op1 = 0,
-                int op2 = 0, int op3 = 0, int op4 = 0, LIR* target = NULL);
+                int op2 = 0, int op3 = 0, int op4 = 0, LIR* target = nullptr);
     LIR* NewLIR0(int opcode);
     LIR* NewLIR1(int opcode, int dest);
     LIR* NewLIR2(int opcode, int dest, int src1);
@@ -1552,7 +1552,7 @@ class Mir2Lir : public Backend {
                                     RegLocation rl_src);
     /*
      * @brief Generate the eh_frame FDE information if possible.
-     * @returns pointer to vector containg FDE information, or NULL.
+     * @returns pointer to vector containg FDE information, or nullptr.
      */
     virtual std::vector<uint8_t>* ReturnFrameDescriptionEntry();
 

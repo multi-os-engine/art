@@ -44,7 +44,7 @@ class OatFile {
   // non-executable at the moment.
   static OatFile* OpenWithElfFile(ElfFile* elf_file, const std::string& location,
                                   std::string* error_msg);
-  // Open an oat file. Returns NULL on failure.  Requested base can
+  // Open an oat file. Returns nullptr on failure.  Requested base can
   // optionally be used to request where the file should be loaded.
   static OatFile* Open(const std::string& filename,
                        const std::string& location,
@@ -168,7 +168,7 @@ class OatFile {
     template<class T>
     T GetOatPointer(uint32_t offset) const {
       if (offset == 0) {
-        return NULL;
+        return nullptr;
       }
       return reinterpret_cast<T>(begin_ + offset);
     }

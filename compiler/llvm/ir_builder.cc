@@ -30,16 +30,16 @@ namespace llvm {
 
 IRBuilder::IRBuilder(::llvm::LLVMContext& context, ::llvm::Module& module,
                      IntrinsicHelper& intrinsic_helper)
-    : LLVMIRBuilder(context), module_(&module), mdb_(context), java_object_type_(NULL),
-      java_method_type_(NULL), java_thread_type_(NULL), intrinsic_helper_(intrinsic_helper) {
+    : LLVMIRBuilder(context), module_(&module), mdb_(context), java_object_type_(nullptr),
+      java_method_type_(nullptr), java_thread_type_(nullptr), intrinsic_helper_(intrinsic_helper) {
   // Get java object type from module
   ::llvm::Type* jobject_struct_type = module.getTypeByName("JavaObject");
-  CHECK(jobject_struct_type != NULL);
+  CHECK(jobject_struct_type != nullptr);
   java_object_type_ = jobject_struct_type->getPointerTo();
 
   // If type of Method is not explicitly defined in the module, use JavaObject*
   ::llvm::Type* type = module.getTypeByName("Method");
-  if (type != NULL) {
+  if (type != nullptr) {
     java_method_type_ = type->getPointerTo();
   } else {
     java_method_type_ = java_object_type_;
@@ -47,7 +47,7 @@ IRBuilder::IRBuilder(::llvm::LLVMContext& context, ::llvm::Module& module,
 
   // If type of Thread is not explicitly defined in the module, use JavaObject*
   type = module.getTypeByName("Thread");
-  if (type != NULL) {
+  if (type != nullptr) {
     java_thread_type_ = type->getPointerTo();
   } else {
     java_thread_type_ = java_object_type_;
@@ -59,9 +59,9 @@ IRBuilder::IRBuilder(::llvm::LLVMContext& context, ::llvm::Module& module,
 
   // Get Art shadow frame struct type from module
   art_frame_type_ = module.getTypeByName("ShadowFrame");
-  CHECK(art_frame_type_ != NULL);
+  CHECK(art_frame_type_ != nullptr);
 
-  runtime_support_ = NULL;
+  runtime_support_ = nullptr;
 }
 
 
@@ -103,7 +103,7 @@ IRBuilder::IRBuilder(::llvm::LLVMContext& context, ::llvm::Module& module,
 
   default:
     LOG(FATAL) << "Unknown java type: " << jty;
-    return NULL;
+    return nullptr;
   }
 }
 

@@ -167,7 +167,7 @@ LIR* Mir2Lir::GenNullCheck(RegStorage m_reg, int opt_flags) {
 /* Perform an explicit null-check on a register.  */
 LIR* Mir2Lir::GenExplicitNullCheck(RegStorage m_reg, int opt_flags) {
   if (!(cu_->disable_opt & (1 << kNullCheckElimination)) && (opt_flags & MIR_IGNORE_NULL_CHECK)) {
-    return NULL;
+    return nullptr;
   }
   return GenNullCheck(m_reg);
 }
@@ -583,12 +583,12 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, OpSize size) {
                   kNotVolatile);
       int32_t offset_of_field = ObjArray::OffsetOfElement(field_info.StorageIndex()).Int32Value();
       LoadRefDisp(r_base, offset_of_field, r_base, kNotVolatile);
-      // r_base now points at static storage (Class*) or NULL if the type is not yet resolved.
+      // r_base now points at static storage (Class*) or nullptr if the type is not yet resolved.
       LIR* unresolved_branch = nullptr;
       if (!field_info.IsClassInDexCache() &&
           (mir->optimization_flags & MIR_CLASS_IS_IN_DEX_CACHE) == 0) {
-        // Check if r_base is NULL.
-        unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, NULL);
+        // Check if r_base is nullptr.
+        unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, nullptr);
       }
       LIR* uninit_branch = nullptr;
       if (!field_info.IsClassInitialized() &&
@@ -602,7 +602,7 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, OpSize size) {
         FreeTemp(r_tmp);
       }
       if (unresolved_branch != nullptr || uninit_branch != nullptr) {
-        // The slow path is invoked if the r_base is NULL or the class pointed
+        // The slow path is invoked if the r_base is nullptr or the class pointed
         // to by it is not initialized.
         LIR* cont = NewLIR0(kPseudoTargetLabel);
         AddSlowPath(new (arena_) StaticFieldSlowPath(this, unresolved_branch, uninit_branch, cont,
@@ -698,12 +698,12 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest, OpSize size, Primitive::Typ
                   kNotVolatile);
       int32_t offset_of_field = ObjArray::OffsetOfElement(field_info.StorageIndex()).Int32Value();
       LoadRefDisp(r_base, offset_of_field, r_base, kNotVolatile);
-      // r_base now points at static storage (Class*) or NULL if the type is not yet resolved.
+      // r_base now points at static storage (Class*) or nullptr if the type is not yet resolved.
       LIR* unresolved_branch = nullptr;
       if (!field_info.IsClassInDexCache() &&
           (mir->optimization_flags & MIR_CLASS_IS_IN_DEX_CACHE) == 0) {
-        // Check if r_base is NULL.
-        unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, NULL);
+        // Check if r_base is nullptr.
+        unresolved_branch = OpCmpImmBranch(kCondEq, r_base, 0, nullptr);
       }
       LIR* uninit_branch = nullptr;
       if (!field_info.IsClassInitialized() &&
@@ -717,7 +717,7 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest, OpSize size, Primitive::Typ
         FreeTemp(r_tmp);
       }
       if (unresolved_branch != nullptr || uninit_branch != nullptr) {
-        // The slow path is invoked if the r_base is NULL or the class pointed
+        // The slow path is invoked if the r_base is nullptr or the class pointed
         // to by it is not initialized.
         LIR* cont = NewLIR0(kPseudoTargetLabel);
         AddSlowPath(new (arena_) StaticFieldSlowPath(this, unresolved_branch, uninit_branch, cont,
@@ -976,7 +976,7 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
         type_idx) || SLOW_TYPE_PATH) {
       // Slow path, at runtime test if type is null and if so initialize
       FlushAllRegs();
-      LIR* branch = OpCmpImmBranch(kCondEq, rl_result.reg, 0, NULL);
+      LIR* branch = OpCmpImmBranch(kCondEq, rl_result.reg, 0, nullptr);
       LIR* cont = NewLIR0(kPseudoTargetLabel);
 
       // Object to generate the slow path for class resolution.
@@ -1039,7 +1039,7 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
 
     // Might call out to helper, which will return resolved string in kRet0
     LoadRefDisp(TargetReg(kArg0, kRef), offset_of_string, TargetReg(kRet0, kRef), kNotVolatile);
-    LIR* fromfast = OpCmpImmBranch(kCondEq, TargetReg(kRet0, kRef), 0, NULL);
+    LIR* fromfast = OpCmpImmBranch(kCondEq, TargetReg(kRet0, kRef), 0, nullptr);
     LIR* cont = NewLIR0(kPseudoTargetLabel);
 
     {
@@ -1144,7 +1144,7 @@ void Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx, Re
     DCHECK(!IsSameReg(result_reg, object.reg));
   }
   LoadConstant(result_reg, 0);     // assume false
-  LIR* null_branchover = OpCmpImmBranch(kCondEq, object.reg, 0, NULL);
+  LIR* null_branchover = OpCmpImmBranch(kCondEq, object.reg, 0, nullptr);
 
   RegStorage check_class = AllocTypedTemp(false, kRefReg);
   RegStorage object_class = AllocTypedTemp(false, kRefReg);
@@ -1219,7 +1219,7 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
     int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
     LoadRefDisp(class_reg, offset_of_type, class_reg, kNotVolatile);
     if (!can_assume_type_is_in_dex_cache) {
-      LIR* slow_path_branch = OpCmpImmBranch(kCondEq, class_reg, 0, NULL);
+      LIR* slow_path_branch = OpCmpImmBranch(kCondEq, class_reg, 0, nullptr);
       LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);
 
       // Should load value here.
@@ -1257,7 +1257,7 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
     // On MIPS and x86_64 rArg0 != rl_result, place false in result if branch is taken.
     LoadConstant(rl_result.reg, 0);
   }
-  LIR* branch1 = OpCmpImmBranch(kCondEq, ref_reg, 0, NULL);
+  LIR* branch1 = OpCmpImmBranch(kCondEq, ref_reg, 0, nullptr);
 
   /* load object->klass_ */
   RegStorage ref_class_reg = TargetReg(kArg1, kRef);  // kArg1 will hold the Class* of ref.
@@ -1265,7 +1265,7 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
   LoadRefDisp(ref_reg, mirror::Object::ClassOffset().Int32Value(),
               ref_class_reg, kNotVolatile);
   /* kArg0 is ref, kArg1 is ref->klass_, kArg2 is class */
-  LIR* branchover = NULL;
+  LIR* branchover = nullptr;
   if (type_known_final) {
     // rl_result == ref == class.
     GenSelectConst32(ref_class_reg, class_reg, kCondEq, 1, 0, rl_result.reg,
@@ -1290,7 +1290,7 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
       if (!type_known_abstract) {
         /* Uses branchovers */
         LoadConstant(rl_result.reg, 1);     // assume true
-        branchover = OpCmpBranch(kCondEq, TargetReg(kArg1, kRef), TargetReg(kArg2, kRef), NULL);
+        branchover = OpCmpBranch(kCondEq, TargetReg(kArg1, kRef), TargetReg(kArg2, kRef), nullptr);
       }
 
       OpRegCopy(TargetReg(kArg0, kRef), class_reg);    // .ne case - arg0 <= class
@@ -1366,10 +1366,10 @@ void Mir2Lir::GenCheckCast(uint32_t insn_idx, uint32_t type_idx, RegLocation rl_
     LoadRefDisp(class_reg, offset_of_type, class_reg, kNotVolatile);
     if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file, type_idx)) {
       // Need to test presence of type in dex cache at runtime
-      LIR* hop_branch = OpCmpImmBranch(kCondEq, class_reg, 0, NULL);
+      LIR* hop_branch = OpCmpImmBranch(kCondEq, class_reg, 0, nullptr);
       LIR* cont = NewLIR0(kPseudoTargetLabel);
 
-      // Slow path to initialize the type.  Executed if the type is NULL.
+      // Slow path to initialize the type.  Executed if the type is nullptr.
       class SlowPath : public LIRSlowPath {
        public:
         SlowPath(Mir2Lir* m2l, LIR* fromfast, LIR* cont_in, const int type_idx_in,
@@ -2122,7 +2122,7 @@ void Mir2Lir::GenSuspendTest(int opt_flags) {
       return;
     }
     FlushAllRegs();
-    LIR* branch = OpTestSuspend(NULL);
+    LIR* branch = OpTestSuspend(nullptr);
     LIR* cont = NewLIR0(kPseudoTargetLabel);
     AddSlowPath(new (arena_) SuspendCheckSlowPath(this, branch, cont));
   } else {

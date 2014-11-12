@@ -26,12 +26,12 @@ TEST_F(TypeDataTest, Basics) {
   art::verifier::RegTypeCache type_cache(false);
   int first_instruction_id = 1;
   int second_instruction_id = 3;
-  EXPECT_TRUE(NULL == td.FindTypeOf(first_instruction_id));
+  EXPECT_TRUE(nullptr == td.FindTypeOf(first_instruction_id));
   const Type* int_type = &type_cache.Integer();
   const Type* byte_type = &type_cache.Byte();
   td.SetTypeOf(first_instruction_id, int_type);
   EXPECT_TRUE(int_type == td.FindTypeOf(first_instruction_id));
-  EXPECT_TRUE(NULL == td.FindTypeOf(second_instruction_id));
+  EXPECT_TRUE(nullptr == td.FindTypeOf(second_instruction_id));
   td.SetTypeOf(second_instruction_id, byte_type);
   EXPECT_TRUE(int_type == td.FindTypeOf(first_instruction_id));
   EXPECT_TRUE(byte_type == td.FindTypeOf(second_instruction_id));

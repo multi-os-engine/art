@@ -66,7 +66,7 @@ inline bool Array::CheckIsValidIndex(int32_t index) {
 static inline size_t ComputeArraySize(Thread* self, Class* array_class, int32_t component_count,
                                       size_t component_size_shift)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  DCHECK(array_class != NULL);
+  DCHECK(array_class != nullptr);
   DCHECK_GE(component_count, 0);
   DCHECK(array_class->IsArrayClass());
 

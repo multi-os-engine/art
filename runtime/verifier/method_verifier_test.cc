@@ -31,7 +31,7 @@ class MethodVerifierTest : public CommonRuntimeTest {
  protected:
   void VerifyClass(const std::string& descriptor)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    ASSERT_TRUE(descriptor != NULL);
+    ASSERT_TRUE(descriptor != nullptr);
     Thread* self = Thread::Current();
     mirror::Class* klass = class_linker_->FindSystemClass(self, descriptor.c_str());
 
@@ -43,7 +43,7 @@ class MethodVerifierTest : public CommonRuntimeTest {
 
   void VerifyDexFile(const DexFile* dex)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    ASSERT_TRUE(dex != NULL);
+    ASSERT_TRUE(dex != nullptr);
 
     // Verify all the classes defined in this file
     for (size_t i = 0; i < dex->NumClassDefs(); i++) {

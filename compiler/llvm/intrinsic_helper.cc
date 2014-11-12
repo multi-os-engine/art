@@ -84,7 +84,7 @@ static ::llvm::Type* GetLLVMTypeOfIntrinsicValType(IRBuilder& irb,
     case IntrinsicHelper::kVarArgTy:
     default: {
       LOG(FATAL) << "Invalid intrinsic type " << type << "to get LLVM type!";
-      return NULL;
+      return nullptr;
     }
   }
   // unreachable
@@ -148,7 +148,7 @@ IntrinsicHelper::IntrinsicHelper(::llvm::LLVMContext& context,
 
     intrinsic_funcs_[id] = fn;
 
-    DCHECK_NE(fn, static_cast< ::llvm::Function*>(NULL)) << "Intrinsic `"
+    DCHECK_NE(fn, static_cast< ::llvm::Function*>(nullptr)) << "Intrinsic `"
         << GetName(id) << "' was not defined!";
 
     // Add "noalias" and "nocapture" attribute to all arguments of pointer type

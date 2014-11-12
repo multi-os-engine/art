@@ -55,8 +55,8 @@ class ThrowLocation;
 struct DebugInvokeReq {
   DebugInvokeReq()
       : ready(false), invoke_needed(false),
-        receiver(NULL), thread(NULL), klass(NULL), method(NULL),
-        arg_count(0), arg_values(NULL), options(0), error(JDWP::ERR_NONE),
+        receiver(nullptr), thread(nullptr), klass(nullptr), method(nullptr),
+        arg_count(0), arg_values(nullptr), options(0), error(JDWP::ERR_NONE),
         result_tag(JDWP::JT_VOID), exception(0),
         lock("a DebugInvokeReq lock", kBreakpointInvokeLock),
         cond("a DebugInvokeReq condition variable", lock) {
@@ -74,7 +74,7 @@ struct DebugInvokeReq {
   mirror::Class* klass;
   mirror::ArtMethod* method;
   uint32_t arg_count;
-  uint64_t* arg_values;   /* will be NULL if arg_count_ == 0 */
+  uint64_t* arg_values;   /* will be nullptr if arg_count_ == 0 */
   uint32_t options;
 
   /* result */

@@ -609,7 +609,7 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
   }
 
   std::unique_ptr<File> file(OS::OpenFileForReading(image_filename));
-  if (file.get() == NULL) {
+  if (file.get() == nullptr) {
     *error_msg = StringPrintf("Failed to open '%s'", image_filename);
     return nullptr;
   }
@@ -630,7 +630,7 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
                                                  false,
                                                  image_filename,
                                                  error_msg));
-  if (map.get() == NULL) {
+  if (map.get() == nullptr) {
     DCHECK(!error_msg->empty());
     return nullptr;
   }
@@ -719,7 +719,7 @@ OatFile* ImageSpace::OpenOatFile(const char* image_path, std::string* error_msg)
   OatFile* oat_file = OatFile::Open(oat_filename, oat_filename, image_header.GetOatDataBegin(),
                                     image_header.GetOatFileBegin(),
                                     !Runtime::Current()->IsCompiler(), error_msg);
-  if (oat_file == NULL) {
+  if (oat_file == nullptr) {
     *error_msg = StringPrintf("Failed to open oat file '%s' referenced from image %s: %s",
                               oat_filename.c_str(), GetName(), error_msg->c_str());
     return nullptr;
@@ -744,7 +744,7 @@ OatFile* ImageSpace::OpenOatFile(const char* image_path, std::string* error_msg)
 }
 
 bool ImageSpace::ValidateOatFile(std::string* error_msg) const {
-  CHECK(oat_file_.get() != NULL);
+  CHECK(oat_file_.get() != nullptr);
   for (const OatFile::OatDexFile* oat_dex_file : oat_file_->GetOatDexFiles()) {
     const std::string& dex_file_location = oat_dex_file->GetDexFileLocation();
     uint32_t dex_file_location_checksum;
@@ -770,7 +770,7 @@ const OatFile* ImageSpace::GetOatFile() const {
 }
 
 OatFile* ImageSpace::ReleaseOatFile() {
-  CHECK(oat_file_.get() != NULL);
+  CHECK(oat_file_.get() != nullptr);
   return oat_file_.release();
 }
 

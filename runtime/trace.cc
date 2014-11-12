@@ -88,7 +88,7 @@ enum TraceAction {
 
 class BuildStackTraceVisitor : public StackVisitor {
  public:
-  explicit BuildStackTraceVisitor(Thread* thread) : StackVisitor(thread, NULL),
+  explicit BuildStackTraceVisitor(Thread* thread) : StackVisitor(thread, nullptr),
       method_trace_(Trace::AllocStackTrace()) {}
 
   bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -119,7 +119,7 @@ static const uint16_t kTraceRecordSizeDualClock   = 14;  // using v3 with two ti
 
 TraceClockSource Trace::default_clock_source_ = kDefaultTraceClockSource;
 
-Trace* volatile Trace::the_trace_ = NULL;
+Trace* volatile Trace::the_trace_ = nullptr;
 pthread_t Trace::sampling_pthread_ = 0U;
 std::unique_ptr<std::vector<mirror::ArtMethod*>> Trace::temp_stack_trace_;
 
@@ -139,7 +139,7 @@ static uint32_t EncodeTraceMethodAndAction(mirror::ArtMethod* method,
 }
 
 std::vector<mirror::ArtMethod*>* Trace::AllocStackTrace() {
-  if (temp_stack_trace_.get() != NULL) {
+  if (temp_stack_trace_.get() != nullptr) {
     return temp_stack_trace_.release();
   } else {
     return new std::vector<mirror::ArtMethod*>();
@@ -248,7 +248,7 @@ static void ClearThreadStackTraceAndClockBase(Thread* thread ATTRIBUTE_UNUSED,
                                               void* arg ATTRIBUTE_UNUSED) {
   thread->SetTraceClockBase(0);
   std::vector<mirror::ArtMethod*>* stack_trace = thread->GetStackTraceSample();
-  thread->SetStackTraceSample(NULL);
+  thread->SetStackTraceSample(nullptr);
   delete stack_trace;
 }
 
@@ -262,7 +262,7 @@ void Trace::CompareAndUpdateStackTrace(Thread* thread,
   uint32_t thread_clock_diff = 0;
   uint32_t wall_clock_diff = 0;
   ReadClocks(thread, &thread_clock_diff, &wall_clock_diff);
-  if (old_stack_trace == NULL) {
+  if (old_stack_trace == nullptr) {
     // If there's no previous stack trace sample for this thread, log an entry event for all
     // methods in the trace.
     for (std::vector<mirror::ArtMethod*>::reverse_iterator rit = stack_trace->rbegin();
@@ -310,7 +310,7 @@ void* Trace::RunSamplingThread(void* arg) {
     {
       MutexLock mu(self, *Locks::trace_lock_);
       the_trace = the_trace_;
-      if (the_trace == NULL) {
+      if (the_trace == nullptr) {
         break;
       }
     }
@@ -325,7 +325,7 @@ void* Trace::RunSamplingThread(void* arg) {
   }
 
   runtime->DetachCurrentThread();
-  return NULL;
+  return nullptr;
 }
 
 void Trace::Start(const char* trace_filename, int trace_fd, int buffer_size, int flags,
@@ -333,7 +333,7 @@ void Trace::Start(const char* trace_filename, int trace_fd, int buffer_size, int
   Thread* self = Thread::Current();
   {
     MutexLock mu(self, *Locks::trace_lock_);
-    if (the_trace_ != NULL) {
+    if (the_trace_ != nullptr) {
       LOG(ERROR) << "Trace already in progress, ignoring this request";
       return;
     }
@@ -356,7 +356,7 @@ void Trace::Start(const char* trace_filename, int trace_fd, int buffer_size, int
       trace_file.reset(new File(trace_fd, "tracefile"));
       trace_file->DisableAutoClose();
     }
-    if (trace_file.get() == NULL) {
+    if (trace_file.get() == nullptr) {
       PLOG(ERROR) << "Unable to open trace file '" << trace_filename << "'";
       ScopedObjectAccess soa(self);
       ThrowRuntimeException("Unable to open trace file '%s'", trace_filename);
@@ -374,13 +374,13 @@ void Trace::Start(const char* trace_filename, int trace_fd, int buffer_size, int
   // Create Trace object.
   {
     MutexLock mu(self, *Locks::trace_lock_);
-    if (the_trace_ != NULL) {
+    if (the_trace_ != nullptr) {
       LOG(ERROR) << "Trace already in progress, ignoring this request";
     } else {
       enable_stats = (flags && kTraceCountAllocs) != 0;
       the_trace_ = new Trace(trace_file.release(), buffer_size, flags, sampling_enabled);
       if (sampling_enabled) {
-        CHECK_PTHREAD_CALL(pthread_create, (&sampling_pthread_, NULL, &RunSamplingThread,
+        CHECK_PTHREAD_CALL(pthread_create, (&sampling_pthread_, nullptr, &RunSamplingThread,
                                             reinterpret_cast<void*>(interval_us)),
                                             "Sampling profiler thread");
       } else {
@@ -405,25 +405,25 @@ void Trace::Stop() {
   bool stop_alloc_counting = false;
   Runtime* runtime = Runtime::Current();
   runtime->GetThreadList()->SuspendAll();
-  Trace* the_trace = NULL;
+  Trace* the_trace = nullptr;
   pthread_t sampling_pthread = 0U;
   {
     MutexLock mu(Thread::Current(), *Locks::trace_lock_);
-    if (the_trace_ == NULL) {
+    if (the_trace_ == nullptr) {
       LOG(ERROR) << "Trace stop requested, but no trace currently running";
     } else {
       the_trace = the_trace_;
-      the_trace_ = NULL;
+      the_trace_ = nullptr;
       sampling_pthread = sampling_pthread_;
     }
   }
-  if (the_trace != NULL) {
+  if (the_trace != nullptr) {
     stop_alloc_counting = (the_trace->flags_ & kTraceCountAllocs) != 0;
     the_trace->FinishTracing();
 
     if (the_trace->sampling_enabled_) {
       MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
-      runtime->GetThreadList()->ForEach(ClearThreadStackTraceAndClockBase, NULL);
+      runtime->GetThreadList()->ForEach(ClearThreadStackTraceAndClockBase, nullptr);
     } else {
       runtime->GetInstrumentation()->DisableMethodTracing();
       runtime->GetInstrumentation()->RemoveListener(the_trace,
@@ -441,7 +441,7 @@ void Trace::Stop() {
   }
 
   if (sampling_pthread != 0U) {
-    CHECK_PTHREAD_CALL(pthread_join, (sampling_pthread, NULL), "sampling thread shutdown");
+    CHECK_PTHREAD_CALL(pthread_join, (sampling_pthread, nullptr), "sampling thread shutdown");
     sampling_pthread_ = 0U;
   }
 }
@@ -454,7 +454,7 @@ void Trace::Shutdown() {
 
 TracingMode Trace::GetMethodTracingMode() {
   MutexLock mu(Thread::Current(), *Locks::trace_lock_);
-  if (the_trace_ == NULL) {
+  if (the_trace_ == nullptr) {
     return kTracingInactive;
   } else if (the_trace_->sampling_enabled_) {
     return kSampleProfilingActive;
@@ -538,7 +538,7 @@ void Trace::FinishTracing() {
   os << StringPrintf("%cend\n", kTraceTokenChar);
 
   std::string header(os.str());
-  if (trace_file_.get() == NULL) {
+  if (trace_file_.get() == nullptr) {
     iovec iov[2];
     iov[0].iov_base = reinterpret_cast<void*>(const_cast<char*>(header.c_str()));
     iov[0].iov_len = header.length();

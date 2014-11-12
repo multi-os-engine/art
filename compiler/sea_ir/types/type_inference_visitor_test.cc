@@ -22,7 +22,7 @@ namespace sea_ir {
 
 class TestInstructionNode:public InstructionNode {
  public:
-  explicit TestInstructionNode(std::vector<InstructionNode*> prods): InstructionNode(NULL),
+  explicit TestInstructionNode(std::vector<InstructionNode*> prods): InstructionNode(nullptr),
       producers_(prods) { }
   std::vector<InstructionNode*> GetSSAProducers() {
     return producers_;
@@ -36,7 +36,7 @@ class TypeInferenceVisitorTest : public art::CommonCompilerTest {};
 TEST_F(TypeInferenceVisitorTest, MergeIntWithByte) {
   TypeData td;
   art::verifier::RegTypeCache type_cache(false);
-  TypeInferenceVisitor tiv(NULL, &td, &type_cache);
+  TypeInferenceVisitor tiv(nullptr, &td, &type_cache);
   const Type* int_type = &type_cache.Integer();
   const Type* byte_type = &type_cache.Byte();
   const Type* ib_type = tiv.MergeTypes(int_type, byte_type);
@@ -48,7 +48,7 @@ TEST_F(TypeInferenceVisitorTest, MergeIntWithByte) {
 TEST_F(TypeInferenceVisitorTest, MergeIntWithShort) {
   TypeData td;
   art::verifier::RegTypeCache type_cache(false);
-  TypeInferenceVisitor tiv(NULL, &td, &type_cache);
+  TypeInferenceVisitor tiv(nullptr, &td, &type_cache);
   const Type* int_type = &type_cache.Integer();
   const Type* short_type = &type_cache.Short();
   const Type* is_type = tiv.MergeTypes(int_type, short_type);
@@ -61,7 +61,7 @@ TEST_F(TypeInferenceVisitorTest, MergeMultipleInts) {
   int N = 10;  // Number of types to merge.
   TypeData td;
   art::verifier::RegTypeCache type_cache(false);
-  TypeInferenceVisitor tiv(NULL, &td, &type_cache);
+  TypeInferenceVisitor tiv(nullptr, &td, &type_cache);
   std::vector<const Type*> types;
   for (int i = 0; i < N; i++) {
     const Type* new_type = &type_cache.Integer();
@@ -75,7 +75,7 @@ TEST_F(TypeInferenceVisitorTest, MergeMultipleShorts) {
   int N = 10;  // Number of types to merge.
   TypeData td;
   art::verifier::RegTypeCache type_cache(false);
-  TypeInferenceVisitor tiv(NULL, &td, &type_cache);
+  TypeInferenceVisitor tiv(nullptr, &td, &type_cache);
   std::vector<const Type*> types;
   for (int i = 0; i < N; i++) {
     const Type* new_type = &type_cache.Short();
@@ -89,7 +89,7 @@ TEST_F(TypeInferenceVisitorTest, MergeMultipleIntsWithShorts) {
   int N = 10;  // Number of types to merge.
   TypeData td;
   art::verifier::RegTypeCache type_cache(false);
-  TypeInferenceVisitor tiv(NULL, &td, &type_cache);
+  TypeInferenceVisitor tiv(nullptr, &td, &type_cache);
   std::vector<const Type*> types;
   for (int i = 0; i < N; i++) {
     const Type* short_type = &type_cache.Short();
@@ -105,7 +105,7 @@ TEST_F(TypeInferenceVisitorTest, GetOperandTypes) {
   int N = 10;  // Number of types to merge.
   TypeData td;
   art::verifier::RegTypeCache type_cache(false);
-  TypeInferenceVisitor tiv(NULL, &td, &type_cache);
+  TypeInferenceVisitor tiv(nullptr, &td, &type_cache);
   std::vector<const Type*> types;
   std::vector<InstructionNode*> preds;
   for (int i = 0; i < N; i++) {

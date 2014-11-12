@@ -28,7 +28,7 @@ namespace art {
 bool ScopedFlock::Init(const char* filename, std::string* error_msg) {
   while (true) {
     file_.reset(OS::OpenFileWithFlags(filename, O_CREAT | O_RDWR));
-    if (file_.get() == NULL) {
+    if (file_.get() == nullptr) {
       *error_msg = StringPrintf("Failed to open file '%s': %s", filename, strerror(errno));
       return false;
     }
@@ -75,7 +75,7 @@ bool ScopedFlock::Init(File* file, std::string* error_msg) {
 }
 
 File* ScopedFlock::GetFile() {
-  CHECK(file_.get() != NULL);
+  CHECK(file_.get() != nullptr);
   return file_.get();
 }
 
@@ -86,7 +86,7 @@ bool ScopedFlock::HasFile() {
 ScopedFlock::ScopedFlock() { }
 
 ScopedFlock::~ScopedFlock() {
-  if (file_.get() != NULL) {
+  if (file_.get() != nullptr) {
     int flock_result = TEMP_FAILURE_RETRY(flock(file_->Fd(), LOCK_UN));
     CHECK_EQ(0, flock_result);
   }

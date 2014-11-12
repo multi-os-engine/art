@@ -44,9 +44,9 @@ static inline mirror::Class* CheckFilledNewArrayAlloc(uint32_t type_idx,
     return nullptr;  // Failure
   }
   mirror::Class* klass = referrer->GetDexCacheResolvedType<false>(type_idx);
-  if (UNLIKELY(klass == NULL)) {  // Not in dex cache so try to resolve
+  if (UNLIKELY(klass == nullptr)) {  // Not in dex cache so try to resolve
     klass = Runtime::Current()->GetClassLinker()->ResolveType(type_idx, referrer);
-    if (klass == NULL) {  // Error
+    if (klass == nullptr) {  // Error
       DCHECK(self->IsExceptionPending());
       return nullptr;  // Failure
     }
@@ -236,13 +236,13 @@ JValue InvokeProxyInvocationHandler(ScopedObjectAccessAlreadyRunnable& soa, cons
 
   // Build argument array possibly triggering GC.
   soa.Self()->AssertThreadSuspensionIsAllowable();
-  jobjectArray args_jobj = NULL;
+  jobjectArray args_jobj = nullptr;
   const JValue zero;
   int32_t target_sdk_version = Runtime::Current()->GetTargetSdkVersion();
   // Do not create empty arrays unless needed to maintain Dalvik bug compatibility.
   if (args.size() > 0 || (target_sdk_version > 0 && target_sdk_version <= 21)) {
-    args_jobj = soa.Env()->NewObjectArray(args.size(), WellKnownClasses::java_lang_Object, NULL);
-    if (args_jobj == NULL) {
+    args_jobj = soa.Env()->NewObjectArray(args.size(), WellKnownClasses::java_lang_Object, nullptr);
+    if (args_jobj == nullptr) {
       CHECK(soa.Self()->IsExceptionPending());
       return zero;
     }
@@ -254,7 +254,7 @@ JValue InvokeProxyInvocationHandler(ScopedObjectAccessAlreadyRunnable& soa, cons
         JValue jv;
         jv.SetJ(args.at(i).j);
         mirror::Object* val = BoxPrimitive(Primitive::GetType(shorty[i + 1]), jv);
-        if (val == NULL) {
+        if (val == nullptr) {
           CHECK(soa.Self()->IsExceptionPending());
           return zero;
         }
@@ -275,7 +275,7 @@ JValue InvokeProxyInvocationHandler(ScopedObjectAccessAlreadyRunnable& soa, cons
 
   // Unbox result and handle error conditions.
   if (LIKELY(!soa.Self()->IsExceptionPending())) {
-    if (shorty[0] == 'V' || (shorty[0] == 'L' && result == NULL)) {
+    if (shorty[0] == 'V' || (shorty[0] == 'L' && result == nullptr)) {
       // Do nothing.
       return zero;
     } else {
@@ -305,7 +305,7 @@ JValue InvokeProxyInvocationHandler(ScopedObjectAccessAlreadyRunnable& soa, cons
   } else {
     // In the case of checked exceptions that aren't declared, the exception must be wrapped by
     // a UndeclaredThrowableException.
-    mirror::Throwable* exception = soa.Self()->GetException(NULL);
+    mirror::Throwable* exception = soa.Self()->GetException(nullptr);
     if (exception->IsCheckedException()) {
       mirror::Object* rcvr = soa.Decode<mirror::Object*>(rcvr_jobj);
       mirror::Class* proxy_class = rcvr->GetClass();
@@ -334,7 +334,7 @@ JValue InvokeProxyInvocationHandler(ScopedObjectAccessAlreadyRunnable& soa, cons
         ThrowLocation throw_location(rcvr, proxy_method, -1);
         soa.Self()->ThrowNewWrappedException(throw_location,
                                              "Ljava/lang/reflect/UndeclaredThrowableException;",
-                                             NULL);
+                                             nullptr);
       }
     }
     return zero;

@@ -28,10 +28,10 @@ namespace llvm {
 ::llvm::MDNode* MDBuilder::GetTBAASpecialType(TBAASpecialType sty_id) {
   DCHECK_GE(sty_id, 0) << "Unknown TBAA special type: " << sty_id;
   DCHECK_LT(sty_id, MAX_TBAA_SPECIAL_TYPE) << "Unknown TBAA special type: " << sty_id;
-  DCHECK(tbaa_root_ != NULL);
+  DCHECK(tbaa_root_ != nullptr);
 
   ::llvm::MDNode*& spec_ty = tbaa_special_type_[sty_id];
-  if (spec_ty == NULL) {
+  if (spec_ty == nullptr) {
     switch (sty_id) {
     case kTBAARegister:
       spec_ty = createTBAANode("Register", tbaa_root_);
@@ -89,7 +89,7 @@ namespace llvm {
   }
 
   ::llvm::MDNode*& spec_ty = tbaa_memory_jtype_[sty_mapped_index][jty_id];
-  if (spec_ty != NULL) {
+  if (spec_ty != nullptr) {
     return spec_ty;
   }
 

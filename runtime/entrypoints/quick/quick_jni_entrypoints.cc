@@ -84,7 +84,7 @@ extern mirror::Object* JniMethodEndWithReference(jobject result, uint32_t saved_
   // Process result.
   if (UNLIKELY(self->GetJniEnv()->check_jni)) {
     if (self->IsExceptionPending()) {
-      return NULL;
+      return nullptr;
     }
     CheckReferenceResult(o, self);
   }
@@ -102,7 +102,7 @@ extern mirror::Object* JniMethodEndWithReferenceSynchronized(jobject result,
   // Process result.
   if (UNLIKELY(self->GetJniEnv()->check_jni)) {
     if (self->IsExceptionPending()) {
-      return NULL;
+      return nullptr;
     }
     CheckReferenceResult(o, self);
   }

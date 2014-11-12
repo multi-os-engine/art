@@ -256,7 +256,7 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
 
   if (compiler_driver_->GetCompilerOptions().GetIncludePatchInformation()) {
     ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> oat_patches(
-        ".oat_patches", SHT_OAT_PATCH, 0, NULL, 0, sizeof(uintptr_t), sizeof(uintptr_t));
+        ".oat_patches", SHT_OAT_PATCH, 0, nullptr, 0, sizeof(uintptr_t), sizeof(uintptr_t));
     const std::vector<uintptr_t>& locations = oat_writer->GetAbsolutePatchLocations();
     const uint8_t* begin = reinterpret_cast<const uint8_t*>(&locations[0]);
     const uint8_t* end = begin + locations.size() * sizeof(locations[0]);

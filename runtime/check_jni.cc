@@ -159,7 +159,7 @@ class ScopedCheck {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     mirror::Object* o = soa.Decode<mirror::Object*>(java_object);
     if (o == nullptr) {
-      AbortF("field operation on NULL object: %p", java_object);
+      AbortF("field operation on nullptr object: %p", java_object);
       return false;
     }
     if (!Runtime::Current()->GetHeap()->IsValidObjectAddress(o)) {
@@ -184,11 +184,11 @@ class ScopedCheck {
   }
 
   /*
-   * Verify that the pointer value is non-NULL.
+   * Verify that the pointer value is non-nullptr.
    */
   bool CheckNonNull(const void* ptr) {
     if (UNLIKELY(ptr == nullptr)) {
-      AbortF("non-nullable argument was NULL");
+      AbortF("non-nullable argument was nullptr");
       return false;
     }
     return true;
@@ -613,7 +613,7 @@ class ScopedCheck {
   };
 
   /*
-   * Verify that "jobj" is a valid non-NULL object reference, and points to
+   * Verify that "jobj" is a valid non-nullptr object reference, and points to
    * an instance of expectedClass.
    *
    * Because we're looking at an object on the GC heap, we have to switch
@@ -646,7 +646,7 @@ class ScopedCheck {
       if (null_ok) {
         return true;
       } else {
-        AbortF("%s received NULL %s", function_name_, what);
+        AbortF("%s received nullptr %s", function_name_, what);
         return false;
       }
     }
@@ -794,7 +794,7 @@ class ScopedCheck {
       case 's':  // jstring fall-through.
       case 't':  // jthrowable fall-through.
         if (arg.L == nullptr) {
-          *msg += "NULL";
+          *msg += "nullptr";
         } else {
           StringAppendF(msg, "%p", arg.L);
         }
@@ -803,7 +803,7 @@ class ScopedCheck {
         jclass jc = arg.c;
         mirror::Class* c = soa.Decode<mirror::Class*>(jc);
         if (c == nullptr) {
-          *msg += "NULL";
+          *msg += "nullptr";
         } else if (!Runtime::Current()->GetHeap()->IsValidObjectAddress(c)) {
           StringAppendF(msg, "INVALID POINTER:%p", jc);
         } else if (!c->IsClass()) {
@@ -894,7 +894,7 @@ class ScopedCheck {
         break;
       case 'p':  // void* ("pointer")
         if (arg.p == nullptr) {
-          *msg += "NULL";
+          *msg += "nullptr";
         } else {
           StringAppendF(msg, "(void*) %p", arg.p);
         }
@@ -914,7 +914,7 @@ class ScopedCheck {
       }
       case 'u':  // const char* (Modified UTF-8)
         if (arg.u == nullptr) {
-          *msg += "NULL";
+          *msg += "nullptr";
         } else {
           StringAppendF(msg, "\"%s\"", arg.u);
         }
@@ -946,14 +946,14 @@ class ScopedCheck {
     }
   }
   /*
-   * Verify that "array" is non-NULL and points to an Array object.
+   * Verify that "array" is non-nullptr and points to an Array object.
    *
    * Since we're dealing with objects, switch to "running" mode.
    */
   bool CheckArray(ScopedObjectAccess& soa, jarray java_array)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (UNLIKELY(java_array == nullptr)) {
-      AbortF("jarray was NULL");
+      AbortF("jarray was nullptr");
       return false;
     }
 
@@ -990,7 +990,7 @@ class ScopedCheck {
   mirror::ArtField* CheckFieldID(ScopedObjectAccess& soa, jfieldID fid)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (fid == nullptr) {
-      AbortF("jfieldID was NULL");
+      AbortF("jfieldID was nullptr");
       return nullptr;
     }
     mirror::ArtField* f = soa.DecodeField(fid);
@@ -1005,7 +1005,7 @@ class ScopedCheck {
   mirror::ArtMethod* CheckMethodID(ScopedObjectAccess& soa, jmethodID mid)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (mid == nullptr) {
-      AbortF("jmethodID was NULL");
+      AbortF("jmethodID was nullptr");
       return nullptr;
     }
     mirror::ArtMethod* m = soa.DecodeMethod(mid);
@@ -1080,7 +1080,7 @@ class ScopedCheck {
   bool CheckUtfString(const char* bytes, bool nullable) {
     if (bytes == nullptr) {
       if (!nullable) {
-        AbortF("non-nullable const char* was NULL");
+        AbortF("non-nullable const char* was nullptr");
         return false;
       }
       return true;
@@ -1169,6 +1169,9 @@ class ScopedCheck {
  * ===========================================================================
  */
 
+// Adler32 has Z_NULL for a null buffer. Assert that it's zero.
+static_assert(Z_NULL == 0, "Z_NULL not equal to zero");
+
 /* this gets tucked in at the start of the buffer; struct size must be even */
 class GuardedCopy {
  public:
@@ -1183,7 +1186,7 @@ class GuardedCopy {
     // If modification is not expected, grab a checksum.
     uLong adler = 0;
     if (!mod_okay) {
-      adler = adler32(adler32(0L, Z_NULL, 0), reinterpret_cast<const Bytef*>(original_buf), len);
+      adler = adler32(adler32(0L, nullptr, 0), reinterpret_cast<const Bytef*>(original_buf), len);
     }
 
     GuardedCopy* copy = new (new_buf) GuardedCopy(original_buf, len, adler);
@@ -1266,7 +1269,7 @@ class GuardedCopy {
    * Verify the guard area and, if "modOkay" is false, that the data itself
    * has not been altered.
    *
-   * The caller has already checked that "dataBuf" is non-NULL.
+   * The caller has already checked that "dataBuf" is non-nullptr.
    */
   static bool Check(const char* function_name, const void* embedded_buf, bool mod_okay) {
     const GuardedCopy* copy = FromEmbedded(embedded_buf);
@@ -1334,7 +1337,7 @@ class GuardedCopy {
     // told the client that we made a copy, there's no reason they can't alter the buffer.
     if (!mod_okay) {
       uLong computed_adler =
-          adler32(adler32(0L, Z_NULL, 0), BufferWithinRedZones(), original_length_);
+          adler32(adler32(0L, nullptr, 0), BufferWithinRedZones(), original_length_);
       if (computed_adler != adler_) {
         AbortF(function_name, "buffer modified (0x%08lx vs 0x%08lx) at address %p",
                computed_adler, adler_, this);

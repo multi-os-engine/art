@@ -75,7 +75,7 @@ class RuntimeSupportBuilder {
       return runtime_support_func_decls_[id];
     } else {
       LOG(ERROR) << "Unknown runtime function id: " << id;
-      return NULL;
+      return nullptr;
     }
   }
 

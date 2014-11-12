@@ -33,11 +33,11 @@ class ScopedHashtableTest : public testing::Test {};
 TEST_F(ScopedHashtableTest, Basics) {
   ScopedHashtable<int, Value*> sht;
   // Check table is empty when no scope is open.
-  EXPECT_TRUE(NULL == sht.Lookup(1));
+  EXPECT_TRUE(nullptr == sht.Lookup(1));
 
   // Check table is empty when scope open.
   sht.OpenScope();
-  EXPECT_TRUE(NULL == sht.Lookup(1));
+  EXPECT_TRUE(nullptr == sht.Lookup(1));
   // Check table is empty after closing scope.
   EXPECT_EQ(sht.CloseScope(), true);
   // Check closing scope on empty table is no-op.
@@ -62,7 +62,7 @@ TEST_F(ScopedHashtableTest, Basics) {
   // Check that scope removal works corectly.
   sht.CloseScope();
   EXPECT_EQ(sht.Lookup(1)->value_, 2);
-  EXPECT_TRUE(NULL == sht.Lookup(2));
+  EXPECT_TRUE(nullptr == sht.Lookup(2));
 }
 
 }  // namespace art

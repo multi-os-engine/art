@@ -487,7 +487,7 @@ void MarkSweep::VerifyRoot(const Object* root, size_t vreg, const StackVisitor* 
     space::LargeObjectSpace* large_object_space = GetHeap()->GetLargeObjectsSpace();
     if (large_object_space != nullptr && !large_object_space->Contains(root)) {
       LOG(ERROR) << "Found invalid root: " << root << " with type " << root_type;
-      if (visitor != NULL) {
+      if (visitor != nullptr) {
         LOG(ERROR) << visitor->DescribeLocation() << " in VReg: " << vreg;
       }
     }
@@ -567,7 +567,7 @@ class MarkStackTask : public Task {
         mark_stack_pos_(mark_stack_size) {
     // We may have to copy part of an existing mark stack when another mark stack overflows.
     if (mark_stack_size != 0) {
-      DCHECK(mark_stack != NULL);
+      DCHECK(mark_stack != nullptr);
       // TODO: Check performance?
       std::copy(mark_stack, mark_stack + mark_stack_size, mark_stack_);
     }
@@ -829,7 +829,7 @@ class RecursiveMarkTask : public MarkStackTask<false> {
  public:
   RecursiveMarkTask(ThreadPool* thread_pool, MarkSweep* mark_sweep,
                     accounting::ContinuousSpaceBitmap* bitmap, uintptr_t begin, uintptr_t end)
-      : MarkStackTask<false>(thread_pool, mark_sweep, 0, NULL), bitmap_(bitmap), begin_(begin),
+      : MarkStackTask<false>(thread_pool, mark_sweep, 0, nullptr), bitmap_(bitmap), begin_(begin),
         end_(end) {
   }
 
@@ -1215,11 +1215,11 @@ void MarkSweep::ProcessMarkStack(bool paused) {
     static const size_t kFifoSize = 4;
     BoundedFifoPowerOfTwo<Object*, kFifoSize> prefetch_fifo;
     for (;;) {
-      Object* obj = NULL;
+      Object* obj = nullptr;
       if (kUseMarkStackPrefetch) {
         while (!mark_stack_->IsEmpty() && prefetch_fifo.size() < kFifoSize) {
           Object* mark_stack_obj = mark_stack_->PopBack();
-          DCHECK(mark_stack_obj != NULL);
+          DCHECK(mark_stack_obj != nullptr);
           __builtin_prefetch(mark_stack_obj);
           prefetch_fifo.push_back(mark_stack_obj);
         }

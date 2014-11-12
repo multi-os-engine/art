@@ -25,17 +25,17 @@ namespace art {
 
 bool JobjectComparator::operator()(jobject jobj1, jobject jobj2) const {
   // Ensure null references and cleared jweaks appear at the end.
-  if (jobj1 == NULL) {
+  if (jobj1 == nullptr) {
     return true;
-  } else if (jobj2 == NULL) {
+  } else if (jobj2 == nullptr) {
     return false;
   }
   ScopedObjectAccess soa(Thread::Current());
   mirror::Object* obj1 = soa.Decode<mirror::Object*>(jobj1);
   mirror::Object* obj2 = soa.Decode<mirror::Object*>(jobj2);
-  if (obj1 == NULL) {
+  if (obj1 == nullptr) {
     return true;
-  } else if (obj2 == NULL) {
+  } else if (obj2 == nullptr) {
     return false;
   }
   // Sort by class...

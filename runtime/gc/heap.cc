@@ -360,7 +360,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   }
   // Allocate the card table.
   card_table_.reset(accounting::CardTable::Create(heap_begin, heap_capacity));
-  CHECK(card_table_.get() != NULL) << "Failed to create card table";
+  CHECK(card_table_.get() != nullptr) << "Failed to create card table";
   // Card cache for now since it makes it easier for us to update the references to the copying
   // spaces.
   accounting::ModUnionTable* mod_union_table =
@@ -865,7 +865,7 @@ space::ContinuousSpace* Heap::FindContinuousSpaceFromObject(const mirror::Object
   if (!fail_ok) {
     LOG(FATAL) << "object " << reinterpret_cast<const void*>(obj) << " not inside any spaces!";
   }
-  return NULL;
+  return nullptr;
 }
 
 space::DiscontinuousSpace* Heap::FindDiscontinuousSpaceFromObject(const mirror::Object* obj,
@@ -878,12 +878,12 @@ space::DiscontinuousSpace* Heap::FindDiscontinuousSpaceFromObject(const mirror::
   if (!fail_ok) {
     LOG(FATAL) << "object " << reinterpret_cast<const void*>(obj) << " not inside any spaces!";
   }
-  return NULL;
+  return nullptr;
 }
 
 space::Space* Heap::FindSpaceFromObject(const mirror::Object* obj, bool fail_ok) const {
   space::Space* result = FindContinuousSpaceFromObject(obj, true);
-  if (result != NULL) {
+  if (result != nullptr) {
     return result;
   }
   return FindDiscontinuousSpaceFromObject(obj, fail_ok);
@@ -895,7 +895,7 @@ space::ImageSpace* Heap::GetImageSpace() const {
       return space->AsImageSpace();
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 void Heap::ThrowOutOfMemoryError(Thread* self, size_t byte_count, AllocatorType allocator_type) {
@@ -2511,10 +2511,10 @@ class VerifyReferenceCardVisitor {
           // Print which field of the object is dead.
           if (!obj->IsObjectArray()) {
             mirror::Class* klass = is_static ? obj->AsClass() : obj->GetClass();
-            CHECK(klass != NULL);
+            CHECK(klass != nullptr);
             mirror::ObjectArray<mirror::ArtField>* fields = is_static ? klass->GetSFields()
                                                                       : klass->GetIFields();
-            CHECK(fields != NULL);
+            CHECK(fields != nullptr);
             for (int32_t i = 0; i < fields->GetLength(); ++i) {
               mirror::ArtField* cur = fields->Get(i);
               if (cur->GetOffset().Int32Value() == offset.Int32Value()) {
@@ -3175,7 +3175,7 @@ void Heap::AddModUnionTable(accounting::ModUnionTable* mod_union_table) {
 }
 
 void Heap::CheckPreconditionsForAllocObject(mirror::Class* c, size_t byte_count) {
-  CHECK(c == NULL || (c->IsClassClass() && byte_count >= sizeof(mirror::Class)) ||
+  CHECK(c == nullptr || (c->IsClassClass() && byte_count >= sizeof(mirror::Class)) ||
         (c->IsVariableSize() || c->GetObjectSize() == byte_count));
   CHECK_GE(byte_count, sizeof(mirror::Object));
 }

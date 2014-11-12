@@ -128,7 +128,7 @@ void Arm64Mir2Lir::GenLargePackedSwitch(MIR* mir, uint32_t table_offset, RegLoca
   }
   // Bounds check - if < 0 or >= size continue following switch
   OpRegImm(kOpCmp, key_reg, size - 1);
-  LIR* branch_over = OpCondBranch(kCondHi, NULL);
+  LIR* branch_over = OpCondBranch(kCondHi, nullptr);
 
   // Load the displacement from the switch table
   RegStorage disp_reg = AllocTemp();
@@ -168,16 +168,16 @@ void Arm64Mir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
   } else {
     // If the null-check fails its handled by the slow-path to reduce exception related meta-data.
     if (!cu_->compiler_driver->GetCompilerOptions().GetImplicitNullChecks()) {
-      null_check_branch = OpCmpImmBranch(kCondEq, rs_x0, 0, NULL);
+      null_check_branch = OpCmpImmBranch(kCondEq, rs_x0, 0, nullptr);
     }
   }
   Load32Disp(rs_xSELF, Thread::ThinLockIdOffset<8>().Int32Value(), rs_w1);
   OpRegRegImm(kOpAdd, rs_x2, rs_x0, mirror::Object::MonitorOffset().Int32Value());
   NewLIR2(kA64Ldxr2rX, rw3, rx2);
   MarkPossibleNullPointerException(opt_flags);
-  LIR* not_unlocked_branch = OpCmpImmBranch(kCondNe, rs_w3, 0, NULL);
+  LIR* not_unlocked_branch = OpCmpImmBranch(kCondNe, rs_w3, 0, nullptr);
   NewLIR3(kA64Stxr3wrX, rw3, rw1, rx2);
-  LIR* lock_success_branch = OpCmpImmBranch(kCondEq, rs_w3, 0, NULL);
+  LIR* lock_success_branch = OpCmpImmBranch(kCondEq, rs_w3, 0, nullptr);
 
   LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);
   not_unlocked_branch->target = slow_path_target;
@@ -216,16 +216,16 @@ void Arm64Mir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
   } else {
     // If the null-check fails its handled by the slow-path to reduce exception related meta-data.
     if (!cu_->compiler_driver->GetCompilerOptions().GetImplicitNullChecks()) {
-      null_check_branch = OpCmpImmBranch(kCondEq, rs_x0, 0, NULL);
+      null_check_branch = OpCmpImmBranch(kCondEq, rs_x0, 0, nullptr);
     }
   }
   Load32Disp(rs_xSELF, Thread::ThinLockIdOffset<8>().Int32Value(), rs_w1);
   Load32Disp(rs_x0, mirror::Object::MonitorOffset().Int32Value(), rs_w2);
   MarkPossibleNullPointerException(opt_flags);
-  LIR* slow_unlock_branch = OpCmpBranch(kCondNe, rs_w1, rs_w2, NULL);
+  LIR* slow_unlock_branch = OpCmpBranch(kCondNe, rs_w1, rs_w2, nullptr);
   GenMemBarrier(kAnyStore);
   Store32Disp(rs_x0, mirror::Object::MonitorOffset().Int32Value(), rs_wzr);
-  LIR* unlock_success_branch = OpUnconditionalBranch(NULL);
+  LIR* unlock_success_branch = OpUnconditionalBranch(nullptr);
 
   LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);
   slow_unlock_branch->target = slow_path_target;
@@ -257,7 +257,7 @@ void Arm64Mir2Lir::GenMoveException(RegLocation rl_dest) {
 void Arm64Mir2Lir::MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) {
   RegStorage reg_card_base = AllocTempWide();
   RegStorage reg_card_no = AllocTempWide();  // Needs to be wide as addr is ref=64b
-  LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, NULL);
+  LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, nullptr);
   LoadWordDisp(rs_xSELF, Thread::CardTableOffset<8>().Int32Value(), reg_card_base);
   OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
   // TODO(Arm64): generate "strb wB, [xB, wC, uxtw]" rather than "strb wB, [xB, xC]"?

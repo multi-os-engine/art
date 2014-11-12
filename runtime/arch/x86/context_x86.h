@@ -71,7 +71,7 @@ class X86Context : public Context {
 
  private:
   // Pointers to register locations, floating point registers are all caller save. Values are
-  // initialized to NULL or the special registers below.
+  // initialized to nullptr or the special registers below.
   uintptr_t* gprs_[kNumberOfCpuRegisters];
   // Hold values for esp and eip if they are not located within a stack frame. EIP is somewhat
   // special in that it cannot be encoded normally as a register operand to an instruction (except

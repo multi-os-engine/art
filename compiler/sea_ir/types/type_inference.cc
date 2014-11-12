@@ -41,7 +41,7 @@ FunctionTypeInfo::FunctionTypeInfo(const SeaGraph* graph, art::verifier::RegType
     method_access_flags_(graph->method_access_flags_) {
   const art::DexFile::MethodId& method_id = dex_file_->GetMethodId(dex_method_idx_);
   const char* descriptor = dex_file_->GetTypeDescriptor(dex_file_->GetTypeId(method_id.class_idx_));
-  declaring_class_ = &(type_cache_->FromDescriptor(NULL, descriptor, false));
+  declaring_class_ = &(type_cache_->FromDescriptor(nullptr, descriptor, false));
 }
 
 FunctionTypeInfo::FunctionTypeInfo(const SeaGraph* graph, InstructionNode* inst,
@@ -51,7 +51,7 @@ FunctionTypeInfo::FunctionTypeInfo(const SeaGraph* graph, InstructionNode* inst,
   // TODO: Test that GetDeclaredArgumentTypes() works correctly when using this constructor.
   const art::DexFile::MethodId& method_id = dex_file_->GetMethodId(dex_method_idx_);
   const char* descriptor = dex_file_->GetTypeDescriptor(dex_file_->GetTypeId(method_id.class_idx_));
-  declaring_class_ = &(type_cache_->FromDescriptor(NULL, descriptor, false));
+  declaring_class_ = &(type_cache_->FromDescriptor(nullptr, descriptor, false));
 }
 
 const Type* FunctionTypeInfo::GetReturnValueType() {
@@ -59,7 +59,7 @@ const Type* FunctionTypeInfo::GetReturnValueType() {
   uint32_t return_type_idx = dex_file_->GetProtoId(method_id.proto_idx_).return_type_idx_;
   const char* descriptor = dex_file_->StringByTypeIdx(return_type_idx);
   art::ScopedObjectAccess soa(art::Thread::Current());
-  const Type& return_type = type_cache_->FromDescriptor(NULL, descriptor, false);
+  const Type& return_type = type_cache_->FromDescriptor(nullptr, descriptor, false);
   return &return_type;
 }
 
@@ -92,7 +92,7 @@ std::vector<const Type*> FunctionTypeInfo::GetDeclaredArgumentTypes() {
 
   for (; iterator.HasNext(); iterator.Next()) {
     const char* descriptor = iterator.GetDescriptor();
-    if (descriptor == NULL) {
+    if (descriptor == nullptr) {
       LOG(FATAL) << "Error: Encountered null type descriptor for function argument.";
     }
     switch (descriptor[0]) {
@@ -103,7 +103,7 @@ std::vector<const Type*> FunctionTypeInfo::GetDeclaredArgumentTypes() {
         // it's effectively considered initialized the instant we reach here (in the sense that we
         // can return without doing anything or call virtual methods).
         {
-          const Type& reg_type = type_cache_->FromDescriptor(NULL, descriptor, false);
+          const Type& reg_type = type_cache_->FromDescriptor(nullptr, descriptor, false);
           argument_types.push_back(&reg_type);
         }
         break;

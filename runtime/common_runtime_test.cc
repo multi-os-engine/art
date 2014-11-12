@@ -71,7 +71,7 @@ ScratchFile::ScratchFile(const ScratchFile& other, const char* suffix) {
 }
 
 ScratchFile::ScratchFile(File* file) {
-  CHECK(file != NULL);
+  CHECK(file != nullptr);
   filename_ = file->GetPath();
   file_.reset(file);
 }

@@ -168,9 +168,9 @@ static uint32_t GetInstrumentationEventFor(JdwpEventKind eventKind) {
  * not be added to the list, and an appropriate error will be returned.
  */
 JdwpError JdwpState::RegisterEvent(JdwpEvent* pEvent) {
-  CHECK(pEvent != NULL);
-  CHECK(pEvent->prev == NULL);
-  CHECK(pEvent->next == NULL);
+  CHECK(pEvent != nullptr);
+  CHECK(pEvent->prev == nullptr);
+  CHECK(pEvent->next == nullptr);
 
   {
     /*
@@ -219,7 +219,7 @@ JdwpError JdwpState::RegisterEvent(JdwpEvent* pEvent) {
      * Add to list.
      */
     MutexLock mu(Thread::Current(), event_list_lock_);
-    if (event_list_ != NULL) {
+    if (event_list_ != nullptr) {
       pEvent->next = event_list_;
       event_list_->prev = pEvent;
     }
@@ -241,7 +241,7 @@ JdwpError JdwpState::RegisterEvent(JdwpEvent* pEvent) {
  * Grab the eventLock before calling here.
  */
 void JdwpState::UnregisterEvent(JdwpEvent* pEvent) {
-  if (pEvent->prev == NULL) {
+  if (pEvent->prev == nullptr) {
     /* head of the list */
     CHECK(event_list_ == pEvent);
 
@@ -250,11 +250,11 @@ void JdwpState::UnregisterEvent(JdwpEvent* pEvent) {
     pEvent->prev->next = pEvent->next;
   }
 
-  if (pEvent->next != NULL) {
+  if (pEvent->next != nullptr) {
     pEvent->next->prev = pEvent->prev;
-    pEvent->next = NULL;
+    pEvent->next = nullptr;
   }
-  pEvent->prev = NULL;
+  pEvent->prev = nullptr;
 
   {
     /*
@@ -299,7 +299,7 @@ void JdwpState::UnregisterEvent(JdwpEvent* pEvent) {
   }
 
   --event_list_size_;
-  CHECK(event_list_size_ != 0 || event_list_ == NULL);
+  CHECK(event_list_size_ != 0 || event_list_ == nullptr);
 }
 
 /*
@@ -339,7 +339,7 @@ void JdwpState::UnregisterAll() {
   MutexLock mu(Thread::Current(), event_list_lock_);
 
   JdwpEvent* pEvent = event_list_;
-  while (pEvent != NULL) {
+  while (pEvent != nullptr) {
     JdwpEvent* pNextEvent = pEvent->next;
 
     UnregisterEvent(pEvent);
@@ -347,7 +347,7 @@ void JdwpState::UnregisterAll() {
     pEvent = pNextEvent;
   }
 
-  event_list_ = NULL;
+  event_list_ = nullptr;
 }
 
 /*
@@ -368,13 +368,13 @@ JdwpEvent* EventAlloc(int numMods) {
  * Do not call this until the event has been removed from the list.
  */
 void EventFree(JdwpEvent* pEvent) {
-  if (pEvent == NULL) {
+  if (pEvent == nullptr) {
     return;
   }
 
   /* make sure it was removed from the list */
-  CHECK(pEvent->prev == NULL);
-  CHECK(pEvent->next == NULL);
+  CHECK(pEvent->prev == nullptr);
+  CHECK(pEvent->next == nullptr);
   /* want to check state->event_list_ != pEvent */
 
   /*
@@ -383,11 +383,11 @@ void EventFree(JdwpEvent* pEvent) {
   for (int i = 0; i < pEvent->modCount; i++) {
     if (pEvent->mods[i].modKind == MK_CLASS_MATCH) {
       free(pEvent->mods[i].classMatch.classPattern);
-      pEvent->mods[i].classMatch.classPattern = NULL;
+      pEvent->mods[i].classMatch.classPattern = nullptr;
     }
     if (pEvent->mods[i].modKind == MK_CLASS_EXCLUDE) {
       free(pEvent->mods[i].classExclude.classPattern);
-      pEvent->mods[i].classExclude.classPattern = NULL;
+      pEvent->mods[i].classExclude.classPattern = nullptr;
     }
   }
 
@@ -625,7 +625,7 @@ void JdwpState::SendRequestAndPossiblySuspend(ExpandBuf* pReq, JdwpSuspendPolicy
   Thread* self = Thread::Current();
   self->AssertThreadSuspensionIsAllowable();
   /* send request and possibly suspend ourselves */
-  if (pReq != NULL) {
+  if (pReq != nullptr) {
     JDWP::ObjectId thread_self_id = Dbg::GetThreadSelfId();
     self->TransitionFromRunnableToSuspended(kWaitingForDebuggerSend);
     if (suspend_policy != SP_NONE) {
@@ -866,7 +866,7 @@ bool JdwpState::PostLocationEvent(const EventLocation* pLoc, mirror::Object* thi
   }
 
   size_t match_count = 0;
-  ExpandBuf* pReq = NULL;
+  ExpandBuf* pReq = nullptr;
   JdwpSuspendPolicy suspend_policy = SP_NONE;
   JdwpEvent** match_list = nullptr;
   ObjectId thread_id = 0;
@@ -950,7 +950,7 @@ bool JdwpState::PostFieldEvent(const EventLocation* pLoc, mirror::ArtField* fiel
   }
 
   size_t match_count = 0;
-  ExpandBuf* pReq = NULL;
+  ExpandBuf* pReq = nullptr;
   JdwpSuspendPolicy suspend_policy = SP_NONE;
   JdwpEvent** match_list = nullptr;
   ObjectId thread_id = 0;
@@ -1048,7 +1048,7 @@ bool JdwpState::PostThreadChange(Thread* thread, bool start) {
   ModBasket basket;
   basket.thread = thread;
 
-  ExpandBuf* pReq = NULL;
+  ExpandBuf* pReq = nullptr;
   JdwpSuspendPolicy suspend_policy = SP_NONE;
   JdwpEvent** match_list = nullptr;
   size_t match_count = 0;
@@ -1149,7 +1149,7 @@ bool JdwpState::PostException(const EventLocation* pThrowLoc, mirror::Throwable*
   basket.thread = Thread::Current();
   basket.className = Dbg::GetClassName(basket.locationClass);
   basket.exceptionClass = exception_object->GetClass();
-  basket.caught = (pCatchLoc->method != 0);
+  basket.caught = (pCatchLoc->method != nullptr);
   basket.thisPtr = thisPtr;
 
   /* don't try to post an exception caused by the debugger */
@@ -1159,7 +1159,7 @@ bool JdwpState::PostException(const EventLocation* pThrowLoc, mirror::Throwable*
   }
 
   size_t match_count = 0;
-  ExpandBuf* pReq = NULL;
+  ExpandBuf* pReq = nullptr;
   JdwpSuspendPolicy suspend_policy = SP_NONE;
   JdwpEvent** match_list = nullptr;
   ObjectId thread_id = 0;
@@ -1243,7 +1243,7 @@ bool JdwpState::PostClassPrepare(mirror::Class* klass) {
     return false;
   }
 
-  ExpandBuf* pReq = NULL;
+  ExpandBuf* pReq = nullptr;
   JdwpSuspendPolicy suspend_policy = SP_NONE;
   JdwpEvent** match_list = nullptr;
   size_t match_count = 0;
@@ -1327,7 +1327,7 @@ void JdwpState::DdmSendChunkV(uint32_t type, const iovec* iov, int iov_count) {
   uint8_t header[kJDWPHeaderLen + 8];
   size_t dataLen = 0;
 
-  CHECK(iov != NULL);
+  CHECK(iov != nullptr);
   CHECK_GT(iov_count, 0);
   CHECK_LT(iov_count, 10);
 
@@ -1360,7 +1360,7 @@ void JdwpState::DdmSendChunkV(uint32_t type, const iovec* iov, int iov_count) {
   bool safe_to_release_mutator_lock_over_send = !Locks::mutator_lock_->IsExclusiveHeld(self);
   if (safe_to_release_mutator_lock_over_send) {
     for (size_t i = 0; i < kMutatorLock; ++i) {
-      if (self->GetHeldMutex(static_cast<LockLevel>(i)) != NULL) {
+      if (self->GetHeldMutex(static_cast<LockLevel>(i)) != nullptr) {
         safe_to_release_mutator_lock_over_send = false;
         break;
       }

@@ -40,7 +40,7 @@ ReferenceTable::~ReferenceTable() {
 }
 
 void ReferenceTable::Add(mirror::Object* obj) {
-  DCHECK(obj != NULL);
+  DCHECK(obj != nullptr);
   VerifyObject(obj);
   if (entries_.size() >= max_size_) {
     LOG(FATAL) << "ReferenceTable '" << name_ << "' "
@@ -79,9 +79,9 @@ struct ObjectComparator {
     mirror::Object* obj1 = root1.Read<kWithoutReadBarrier>();
     mirror::Object* obj2 = root2.Read<kWithoutReadBarrier>();
     // Ensure null references and cleared jweaks appear at the end.
-    if (obj1 == NULL) {
+    if (obj1 == nullptr) {
       return true;
-    } else if (obj2 == NULL) {
+    } else if (obj2 == nullptr) {
       return false;
     }
     Runtime* runtime = Runtime::Current();
@@ -116,8 +116,8 @@ struct ObjectComparator {
 static void DumpSummaryLine(std::ostream& os, mirror::Object* obj, size_t element_count,
                             int identical, int equiv)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  if (obj == NULL) {
-    os << "    NULL reference (count=" << equiv << ")\n";
+  if (obj == nullptr) {
+    os << "    nullptr reference (count=" << equiv << ")\n";
     return;
   }
   if (Runtime::Current()->IsClearedJniWeakGlobal(obj)) {
@@ -168,14 +168,14 @@ void ReferenceTable::Dump(std::ostream& os, Table& entries) {
   os << "  Last " << (count - first) << " entries (of " << count << "):\n";
   for (int idx = count - 1; idx >= first; --idx) {
     mirror::Object* ref = entries[idx].Read();
-    if (ref == NULL) {
+    if (ref == nullptr) {
       continue;
     }
     if (Runtime::Current()->IsClearedJniWeakGlobal(ref)) {
       os << StringPrintf("    %5d: cleared jweak\n", idx);
       continue;
     }
-    if (ref->GetClass() == NULL) {
+    if (ref->GetClass() == nullptr) {
       // should only be possible right after a plain dvmMalloc().
       size_t size = ref->SizeOf();
       os << StringPrintf("    %5d: %p (raw) (%zd bytes)\n", idx, ref, size);

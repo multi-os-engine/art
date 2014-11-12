@@ -52,7 +52,7 @@ class SignatureNode: public InstructionNode {
   // Creates a new signature node representing the initial definition of the
   // register @register_no which is the @signature_position-th argument to the method.
   explicit SignatureNode(unsigned int register_no, unsigned int signature_position):
-    InstructionNode(NULL), register_no_(register_no), position_(signature_position) { }
+    InstructionNode(nullptr), register_no_(register_no), position_(signature_position) { }
 
   int GetResultRegister() const {
     return register_no_;
@@ -80,7 +80,7 @@ class SignatureNode: public InstructionNode {
 class PhiInstructionNode: public InstructionNode {
  public:
   explicit PhiInstructionNode(int register_no):
-    InstructionNode(NULL), register_no_(register_no), definition_edges_() {}
+    InstructionNode(nullptr), register_no_(register_no), definition_edges_() {}
   // Returns the register on which this phi-function is used.
   int GetRegisterNumber() const {
     return register_no_;
@@ -92,12 +92,12 @@ class PhiInstructionNode: public InstructionNode {
   // the additional parameter specifying that @parameter_id is the incoming
   // edge for @definition, essentially creating SSA form.
   void RenameToSSA(int reg_no, InstructionNode* definition, unsigned int predecessor_id) {
-    DCHECK(NULL != definition) << "Tried to rename to SSA using a NULL definition for "
+    DCHECK(nullptr != definition) << "Tried to rename to SSA using a nullptr definition for "
         << StringId() << " register " << reg_no;
     if (definition_edges_.size() < predecessor_id+1) {
-      definition_edges_.resize(predecessor_id+1, NULL);
+      definition_edges_.resize(predecessor_id+1, nullptr);
     }
-    if (NULL == definition_edges_.at(predecessor_id)) {
+    if (nullptr == definition_edges_.at(predecessor_id)) {
       definition_edges_[predecessor_id] = new std::vector<InstructionNode*>();
     }
     definition_edges_[predecessor_id]->push_back(definition);
@@ -143,7 +143,7 @@ class Region : public SeaNode {
  public:
   explicit Region():
     SeaNode(), successors_(), predecessors_(), reaching_defs_size_(0),
-    rpo_number_(NOT_VISITED), idom_(NULL), idominated_set_(), df_(), phi_set_() {
+    rpo_number_(NOT_VISITED), idom_(nullptr), idominated_set_(), df_(), phi_set_() {
     string_id_ = "cluster_" + string_id_;
   }
   // Adds @instruction as an instruction node child in the current region.
@@ -219,12 +219,12 @@ class Region : public SeaNode {
   }
 
   void AddSuccessor(Region* successor) {
-    DCHECK(successor) << "Tried to add NULL successor to SEA node.";
+    DCHECK(successor) << "Tried to add nullptr successor to SEA node.";
     successors_.push_back(successor);
     return;
   }
   void AddPredecessor(Region* predecessor) {
-    DCHECK(predecessor) << "Tried to add NULL predecessor to SEA node.";
+    DCHECK(predecessor) << "Tried to add nullptr predecessor to SEA node.";
     predecessors_.push_back(predecessor);
   }
 

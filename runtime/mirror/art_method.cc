@@ -93,7 +93,7 @@ InvokeType ArtMethod::GetInvokeType() {
 
 void ArtMethod::SetClass(Class* java_lang_reflect_ArtMethod) {
   CHECK(java_lang_reflect_ArtMethod_.IsNull());
-  CHECK(java_lang_reflect_ArtMethod != NULL);
+  CHECK(java_lang_reflect_ArtMethod != nullptr);
   java_lang_reflect_ArtMethod_ = GcRoot<Class>(java_lang_reflect_ArtMethod);
 }
 
@@ -118,12 +118,12 @@ size_t ArtMethod::NumArgRegisters(const StringPiece& shorty) {
 
 ArtMethod* ArtMethod::FindOverriddenMethod() {
   if (IsStatic()) {
-    return NULL;
+    return nullptr;
   }
   Class* declaring_class = GetDeclaringClass();
   Class* super_class = declaring_class->GetSuperClass();
   uint16_t method_index = GetMethodIndex();
-  ArtMethod* result = NULL;
+  ArtMethod* result = nullptr;
   // Did this method override a super class method? If so load the result from the super class'
   // vtable
   if (super_class->HasVTable() && method_index < super_class->GetVTableLength()) {
@@ -139,7 +139,7 @@ ArtMethod* ArtMethod::FindOverriddenMethod() {
       MethodHelper mh(hs.NewHandle(this));
       MutableMethodHelper interface_mh(hs.NewHandle<mirror::ArtMethod>(nullptr));
       IfTable* iftable = GetDeclaringClass()->GetIfTable();
-      for (size_t i = 0; i < iftable->Count() && result == NULL; i++) {
+      for (size_t i = 0; i < iftable->Count() && result == nullptr; i++) {
         Class* interface = iftable->GetInterface(i);
         for (size_t j = 0; j < interface->NumVirtualMethods(); ++j) {
           interface_mh.ChangeMethod(interface->GetVirtualMethod(j));
@@ -420,7 +420,7 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
       }
     } else {
       LOG(INFO) << "Not invoking '" << PrettyMethod(this) << "' code=null";
-      if (result != NULL) {
+      if (result != nullptr) {
         result->SetJ(0);
       }
     }
@@ -479,7 +479,7 @@ QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo() {
 void ArtMethod::RegisterNative(const void* native_method, bool is_fast) {
   CHECK(IsNative()) << PrettyMethod(this);
   CHECK(!IsFastNative()) << PrettyMethod(this);
-  CHECK(native_method != NULL) << PrettyMethod(this);
+  CHECK(native_method != nullptr) << PrettyMethod(this);
   if (is_fast) {
     SetAccessFlags(GetAccessFlags() | kAccFastNative);
   }

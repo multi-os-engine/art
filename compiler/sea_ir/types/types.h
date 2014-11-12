@@ -40,7 +40,7 @@ class TypeData {
     if (type_map_.end() != result_it) {
       return result_it->second;
     }
-    return NULL;
+    return nullptr;
   }
 
   // Saves the fact that instruction @instruction_id produces a value of type @type.

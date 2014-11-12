@@ -141,7 +141,7 @@ void ElfWriterMclinker::Init() {
   mcld::InitializeAllDiagnostics();
 
   linker_config_.reset(new mcld::LinkerConfig(target_triple));
-  CHECK(linker_config_.get() != NULL);
+  CHECK(linker_config_.get() != nullptr);
   linker_config_->setCodeGenType(mcld::LinkerConfig::DynObj);
   linker_config_->options().setSOName(elf_file_->GetPath());
 
@@ -169,11 +169,11 @@ void ElfWriterMclinker::Init() {
   // Based on alone::Linker::config
   linker_script_.reset(new mcld::LinkerScript());
   module_.reset(new mcld::Module(linker_config_->options().soname(), *linker_script_.get()));
-  CHECK(module_.get() != NULL);
+  CHECK(module_.get() != nullptr);
   ir_builder_.reset(new mcld::IRBuilder(*module_.get(), *linker_config_.get()));
-  CHECK(ir_builder_.get() != NULL);
+  CHECK(ir_builder_.get() != nullptr);
   linker_.reset(new mcld::Linker());
-  CHECK(linker_.get() != NULL);
+  CHECK(linker_.get() != nullptr);
   linker_->emulate(*linker_script_.get(), *linker_config_.get());
 }
 
@@ -189,22 +189,22 @@ mcld::LDSection* ElfWriterMclinker::AddOatInput(OatWriter* oat_writer,
   oat_input_ = ir_builder_->CreateInput("oat contents",
                                         mcld::sys::fs::Path("oat contents path"),
                                         mcld::Input::Object);
-  CHECK(oat_input_ != NULL);
+  CHECK(oat_input_ != nullptr);
 
   // TODO: ownership of null_section?
   mcld::LDSection* null_section = ir_builder_->CreateELFHeader(*oat_input_,
                                                                "",
                                                                mcld::LDFileFormat::Null,
-                                                               SHT_NULL,
+                                                               SHT_nullptr,
                                                                0);
-  CHECK(null_section != NULL);
+  CHECK(null_section != nullptr);
 
   // TODO: we should split readonly data from readonly executable
   // code like .oat does.  We need to control section layout with
   // linker script like functionality to guarantee references
   // between sections maintain relative position which isn't
   // possible right now with the mclinker APIs.
-  CHECK(oat_code_start != NULL);
+  CHECK(oat_code_start != nullptr);
 
   // we need to ensure that oatdata is page aligned so when we
   // fixup the segment load addresses, they remain page aligned.
@@ -216,15 +216,15 @@ mcld::LDSection* ElfWriterMclinker::AddOatInput(OatWriter* oat_writer,
                                                                SHT_PROGBITS,
                                                                SHF_EXECINSTR | SHF_ALLOC,
                                                                alignment);
-  CHECK(text_section != NULL);
+  CHECK(text_section != nullptr);
 
   mcld::SectionData* text_sectiondata = ir_builder_->CreateSectionData(*text_section);
-  CHECK(text_sectiondata != NULL);
+  CHECK(text_sectiondata != nullptr);
 
   // TODO: why does IRBuilder::CreateRegion take a non-const pointer?
   mcld::Fragment* text_fragment = ir_builder_->CreateRegion(const_cast<char*>(oat_data_start),
                                                             oat_writer->GetSize());
-  CHECK(text_fragment != NULL);
+  CHECK(text_fragment != nullptr);
   ir_builder_->AppendFragment(*text_fragment, *text_sectiondata);
 
   ir_builder_->AddSymbol(*oat_input_,
@@ -259,7 +259,7 @@ mcld::LDSection* ElfWriterMclinker::AddOatInput(OatWriter* oat_writer,
 }
 
 void ElfWriterMclinker::AddMethodInputs(const std::vector<const DexFile*>& dex_files) {
-  DCHECK(oat_input_ != NULL);
+  DCHECK(oat_input_ != nullptr);
 
   DexMethodIterator it(dex_files);
   while (it.HasNext()) {
@@ -267,7 +267,7 @@ void ElfWriterMclinker::AddMethodInputs(const std::vector<const DexFile*>& dex_f
     uint32_t method_idx = it.GetMemberIndex();
     const CompiledMethod* compiled_method =
       compiler_driver_->GetCompiledMethod(MethodReference(&dex_file, method_idx));
-    if (compiled_method != NULL) {
+    if (compiled_method != nullptr) {
       AddCompiledCodeInput(*compiled_method);
     }
     it.Next();
@@ -292,7 +292,7 @@ void ElfWriterMclinker::AddCompiledCodeInput(const CompiledCode& compiled_code) 
   mcld::Input* code_input = ir_builder_->ReadInput(symbol,
                                                    const_cast<uint8_t*>(&(*code)[0]),
                                                    code->size());
-  CHECK(code_input != NULL);
+  CHECK(code_input != nullptr);
 }
 
 void ElfWriterMclinker::AddRuntimeInputs(const std::string& android_root, bool is_host) {
@@ -300,7 +300,7 @@ void ElfWriterMclinker::AddRuntimeInputs(const std::string& android_root, bool i
   libart_so += kIsDebugBuild ? "/lib/libartd.so" : "/lib/libart.so";
   // TODO: ownership of libart_so_input?
   mcld::Input* libart_so_input = ir_builder_->ReadInput(libart_so, libart_so);
-  CHECK(libart_so_input != NULL);
+  CHECK(libart_so_input != nullptr);
 
   std::string host_prebuilt_dir("prebuilts/gcc/linux-x86/host/i686-linux-glibc2.7-4.6");
 
@@ -315,7 +315,7 @@ void ElfWriterMclinker::AddRuntimeInputs(const std::string& android_root, bool i
   // TODO: ownership of compiler_runtime_lib_input?
   mcld::Input* compiler_runtime_lib_input = ir_builder_->ReadInput(compiler_runtime_lib,
                                                                    compiler_runtime_lib);
-  CHECK(compiler_runtime_lib_input != NULL);
+  CHECK(compiler_runtime_lib_input != nullptr);
 
   std::string libc_lib;
   if (is_host) {
@@ -327,7 +327,7 @@ void ElfWriterMclinker::AddRuntimeInputs(const std::string& android_root, bool i
   }
   // TODO: ownership of libc_lib_input?
   mcld::Input* libc_lib_input_input = ir_builder_->ReadInput(libc_lib, libc_lib);
-  CHECK(libc_lib_input_input != NULL);
+  CHECK(libc_lib_input_input != nullptr);
 
   std::string libm_lib;
   if (is_host) {
@@ -339,13 +339,13 @@ void ElfWriterMclinker::AddRuntimeInputs(const std::string& android_root, bool i
   }
   // TODO: ownership of libm_lib_input?
   mcld::Input* libm_lib_input_input = ir_builder_->ReadInput(libm_lib, libm_lib);
-  CHECK(libm_lib_input_input != NULL);
+  CHECK(libm_lib_input_input != nullptr);
 }
 
 void ElfWriterMclinker::FixupOatMethodOffsets(const std::vector<const DexFile*>& dex_files) {
   std::string error_msg;
   std::unique_ptr<ElfFile> elf_file(ElfFile::Open(elf_file_, true, false, &error_msg));
-  CHECK(elf_file.get() != NULL) << elf_file_->GetPath() << ": " << error_msg;
+  CHECK(elf_file.get() != nullptr) << elf_file_->GetPath() << ": " << error_msg;
 
   uint32_t oatdata_address = GetOatDataAddress(elf_file.get());
   DexMethodIterator it(dex_files);
@@ -353,7 +353,7 @@ void ElfWriterMclinker::FixupOatMethodOffsets(const std::vector<const DexFile*>&
     const DexFile& dex_file = it.GetDexFile();
     uint32_t method_idx = it.GetMemberIndex();
     InvokeType invoke_type = it.GetInvokeType();
-    mirror::ArtMethod* method = NULL;
+    mirror::ArtMethod* method = nullptr;
     if (compiler_driver_->IsImage()) {
       ClassLinker* linker = Runtime::Current()->GetClassLinker();
       // Unchecked as we hold mutator_lock_ on entry.
@@ -363,14 +363,14 @@ void ElfWriterMclinker::FixupOatMethodOffsets(const std::vector<const DexFile*>&
       method = linker->ResolveMethod(dex_file, method_idx, dex_cache,
                                      NullHandle<mirror::ClassLoader>(),
                                      NullHandle<mirror::ArtMethod>(), invoke_type);
-      CHECK(method != NULL);
+      CHECK(method != nullptr);
     }
     const CompiledMethod* compiled_method =
       compiler_driver_->GetCompiledMethod(MethodReference(&dex_file, method_idx));
-    if (compiled_method != NULL) {
+    if (compiled_method != nullptr) {
       uint32_t offset = FixupCompiledCodeOffset(*elf_file.get(), oatdata_address, *compiled_method);
       // Don't overwrite static method trampoline
-      if (method != NULL &&
+      if (method != nullptr &&
           (!method->IsStatic() ||
            method->IsConstructor() ||
            method->GetDeclaringClass()->IsInitialized())) {

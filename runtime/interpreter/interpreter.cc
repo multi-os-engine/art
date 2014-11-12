@@ -39,7 +39,7 @@ static void UnstartedRuntimeJni(Thread* self, ArtMethod* method,
     result->SetL(mirror::Array::Alloc<true, true>(self, array_class, length,
                                                   array_class->GetComponentSizeShift(), allocator));
   } else if (name == "java.lang.ClassLoader dalvik.system.VMStack.getCallingClassLoader()") {
-    result->SetL(NULL);
+    result->SetL(nullptr);
   } else if (name == "java.lang.Class dalvik.system.VMStack.getStackClass2()") {
     NthCallerVisitor visitor(self, 3);
     visitor.WalkStack();
@@ -65,7 +65,7 @@ static void UnstartedRuntimeJni(Thread* self, ArtMethod* method,
     receiver->NotifyAll(self);
   } else if (name == "int java.lang.String.compareTo(java.lang.String)") {
     String* rhs = reinterpret_cast<Object*>(args[0])->AsString();
-    CHECK(rhs != NULL);
+    CHECK(rhs != nullptr);
     result->SetI(receiver->AsString()->CompareTo(rhs));
   } else if (name == "java.lang.String java.lang.String.intern()") {
     result->SetL(receiver->AsString()->Intern());
@@ -410,7 +410,7 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
   const DexFile::CodeItem* code_item = method->GetCodeItem();
   uint16_t num_regs;
   uint16_t num_ins;
-  if (code_item != NULL) {
+  if (code_item != nullptr) {
     num_regs =  code_item->registers_size_;
     num_ins = code_item->ins_size_;
   } else if (method->IsAbstract()) {
@@ -433,7 +433,7 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
 
   size_t cur_reg = num_regs - num_ins;
   if (!method->IsStatic()) {
-    CHECK(receiver != NULL);
+    CHECK(receiver != nullptr);
     shadow_frame->SetVRegReference(cur_reg, receiver);
     ++cur_reg;
   }
@@ -475,7 +475,7 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
     StackHandleScope<1> hs(self);
     MethodHelper mh(hs.NewHandle(method));
     JValue r = Execute(self, mh, code_item, *shadow_frame, JValue());
-    if (result != NULL) {
+    if (result != nullptr) {
       *result = r;
     }
   } else {
@@ -497,7 +497,7 @@ void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame, JVa
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   JValue value;
   value.SetJ(ret_val->GetJ());  // Set value to last known result in case the shadow frame chain is empty.
-  while (shadow_frame != NULL) {
+  while (shadow_frame != nullptr) {
     self->SetTopOfShadowStack(shadow_frame);
     StackHandleScope<1> hs(self);
     MethodHelper mh(hs.NewHandle(shadow_frame->GetMethod()));

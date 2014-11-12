@@ -52,8 +52,8 @@ extern "C" void art_portable_throw_exception_from_code(mirror::Throwable* except
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   Thread* self = Thread::Current();
   ThrowLocation throw_location = self->GetCurrentLocationForThrow();
-  if (exception == NULL) {
-    ThrowNullPointerException(NULL, "throw with null exception");
+  if (exception == nullptr) {
+    ThrowNullPointerException(nullptr, "throw with null exception");
   } else {
     self->SetException(throw_location, exception);
   }
@@ -63,7 +63,7 @@ extern "C" void* art_portable_get_and_clear_exception(Thread* self)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   DCHECK(self->IsExceptionPending());
   // TODO: make this inline.
-  mirror::Throwable* exception = self->GetException(NULL);
+  mirror::Throwable* exception = self->GetException(nullptr);
   self->ClearException();
   return exception;
 }
@@ -99,7 +99,7 @@ extern "C" int32_t art_portable_find_catch_block_from_code(mirror::ArtMethod* cu
     // Does this catch exception type apply?
     mirror::Class* iter_exception_type =
         current_method->GetDexCacheResolvedType(iter_type_idx);
-    if (UNLIKELY(iter_exception_type == NULL)) {
+    if (UNLIKELY(iter_exception_type == nullptr)) {
       // TODO: check, the verifier (class linker?) should take care of resolving all exception
       //       classes early.
       LOG(WARNING) << "Unresolved exception class when finding catch block: "

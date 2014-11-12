@@ -86,7 +86,7 @@ extern "C" art::CompiledMethod*
   art::CompilerBackend* backend = compiler.GetCompilerBackend();
   return art::SeaIrCompileOneMethod(compiler, backend, code_item, method_access_flags, invoke_type,
                                class_def_idx, method_idx, class_loader, dex_file,
-                               NULL /* use thread llvm_info */);
+                               nullptr /* use thread llvm_info */);
 }
 #endif
 

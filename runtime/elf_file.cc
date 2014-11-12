@@ -1180,7 +1180,7 @@ Elf_Dyn* ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
       return dyn;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_Word,
@@ -1190,7 +1190,7 @@ Elf_Word ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
     Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
     ::FindDynamicValueByType(Elf_Sword type) const {
   Elf_Dyn* dyn = FindDynamicByType(type);
-  if (dyn == NULL) {
+  if (dyn == nullptr) {
     return 0;
   } else {
     return dyn->d_un.d_val;
@@ -1488,9 +1488,9 @@ bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
         dynsym_section_start_ = reinterpret_cast<Elf_Sym*>(d_ptr);
         break;
       }
-      case DT_NULL: {
+      case DT_nullptr: {
         if (GetDynamicNum() != i+1) {
-          *error_msg = StringPrintf("DT_NULL found after %d .dynamic entries, "
+          *error_msg = StringPrintf("DT_nullptr found after %d .dynamic entries, "
                                     "expected %d as implied by size of PT_DYNAMIC segment in %s",
                                     i + 1, GetDynamicNum(), file_->GetPath().c_str());
           return false;
@@ -2203,7 +2203,7 @@ bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
   CHECK_NE(0U, section_headers.size());
   CHECK_EQ(section_headers.size(), section_headers_original_indexes.size());
 
-  // section 0 is the NULL section, sections start at offset of first section
+  // section 0 is the nullptr section, sections start at offset of first section
   CHECK(GetSectionHeader(1) != nullptr);
   Elf_Off offset = GetSectionHeader(1)->sh_offset;
   for (size_t i = 1; i < section_headers.size(); i++) {
