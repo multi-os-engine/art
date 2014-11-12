@@ -104,7 +104,7 @@ ART_TARGET_CFLAGS :=
 ART_HOST_CLANG := false
 ifneq ($(WITHOUT_HOST_CLANG),true)
   # By default, host builds use clang for better warnings.
-  ART_HOST_CLANG := true
+  ART_HOST_CLANG := false
 endif
 
 # Clang on the target. Target builds use GCC by default.
