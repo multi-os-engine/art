@@ -208,6 +208,16 @@ void Arm32Assembler::udiv(Register rd, Register rn, Register rm, Condition cond)
 }
 
 
+void Arm32Assembler::sbfx(Register rd ATTRIBUTE_UNUSED,
+                          Register rn ATTRIBUTE_UNUSED,
+                          uint32_t lsb ATTRIBUTE_UNUSED,
+                          uint32_t width ATTRIBUTE_UNUSED,
+                          Condition cond ATTRIBUTE_UNUSED) {
+  // TODO: Implement it.
+  LOG(FATAL) << "Unimplemented";
+}
+
+
 void Arm32Assembler::ldr(Register rd, const Address& ad, Condition cond) {
   EmitMemOp(cond, true, false, rd, ad);
 }
