@@ -557,29 +557,46 @@ void Mir2Lir::InstallSwitchTables() {
       LOG(INFO) << "Switch table for offset 0x" << std::hex << bx_offset;
     }
     if (tab_rec->table[0] == Instruction::kSparseSwitchSignature) {
-      const int32_t* keys = reinterpret_cast<const int32_t*>(&(tab_rec->table[2]));
-      for (int elems = 0; elems < tab_rec->table[1]; elems++) {
-        int disp = tab_rec->targets[elems]->offset - bx_offset;
+      DCHECK(tab_rec->switch_mir != nullptr);
+      BasicBlock* bb = mir_graph_->GetBasicBlock(tab_rec->switch_mir->bb);
+      DCHECK(bb != nullptr);
+      int elems = 0;
+      for (SuccessorBlockInfo* successor_block_info : bb->successor_blocks) {
+        int key = successor_block_info->key;
+        int target = successor_block_info->block;
+        LIR* boundary_lir = &block_label_list_[target];
+        DCHECK(boundary_lir != nullptr);
+        int disp = boundary_lir->offset - bx_offset;
+        Push32(code_buffer_, key);
+        Push32(code_buffer_, disp);
         if (cu_->verbose) {
           LOG(INFO) << "  Case[" << elems << "] key: 0x"
-                    << std::hex << keys[elems] << ", disp: 0x"
+                    << std::hex << key << ", disp: 0x"
                     << std::hex << disp;
         }
-        Push32(code_buffer_, keys[elems]);
-        Push32(code_buffer_,
-          tab_rec->targets[elems]->offset - bx_offset);
+        elems++;
       }
+      DCHECK_EQ(elems, tab_rec->table[1]);
     } else {
       DCHECK_EQ(static_cast<int>(tab_rec->table[0]),
                 static_cast<int>(Instruction::kPackedSwitchSignature));
-      for (int elems = 0; elems < tab_rec->table[1]; elems++) {
-        int disp = tab_rec->targets[elems]->offset - bx_offset;
+      DCHECK(tab_rec->switch_mir != nullptr);
+      BasicBlock* bb = mir_graph_->GetBasicBlock(tab_rec->switch_mir->bb);
+      DCHECK(bb != nullptr);
+      int elems = 0;
+      for (SuccessorBlockInfo* successor_block_info : bb->successor_blocks) {
+        int target = successor_block_info->block;
+        LIR* boundary_lir = &block_label_list_[target];
+        DCHECK(boundary_lir != nullptr);
+        int disp = boundary_lir->offset - bx_offset;
+        Push32(code_buffer_, disp);
         if (cu_->verbose) {
           LOG(INFO) << "  Case[" << elems << "] disp: 0x"
                     << std::hex << disp;
         }
-        Push32(code_buffer_, tab_rec->targets[elems]->offset - bx_offset);
+        elems++;
       }
+      DCHECK_EQ(elems, tab_rec->table[1]);
     }
   }
 }
@@ -823,65 +840,6 @@ int Mir2Lir::AssignFillArrayDataOffset(CodeOffset offset) {
   return offset;
 }
 
-/*
- * Insert a kPseudoCaseLabel at the beginning of the Dalvik
- * offset vaddr if pretty-printing, otherise use the standard block
- * label.  The selected label will be used to fix up the case
- * branch table during the assembly phase.  All resource flags
- * are set to prevent code motion.  KeyVal is just there for debugging.
- */
-LIR* Mir2Lir::InsertCaseLabel(DexOffset vaddr, int keyVal) {
-  LIR* boundary_lir = &block_label_list_[mir_graph_->FindBlock(vaddr)->id];
-  LIR* res = boundary_lir;
-  if (cu_->verbose) {
-    // Only pay the expense if we're pretty-printing.
-    LIR* new_label = static_cast<LIR*>(arena_->Alloc(sizeof(LIR), kArenaAllocLIR));
-    new_label->dalvik_offset = vaddr;
-    new_label->opcode = kPseudoCaseLabel;
-    new_label->operands[0] = keyVal;
-    new_label->flags.fixup = kFixupLabel;
-    DCHECK(!new_label->flags.use_def_invalid);
-    new_label->u.m.def_mask = &kEncodeAll;
-    InsertLIRAfter(boundary_lir, new_label);
-    res = new_label;
-  }
-  return res;
-}
-
-void Mir2Lir::MarkPackedCaseLabels(Mir2Lir::SwitchTable* tab_rec) {
-  const uint16_t* table = tab_rec->table;
-  DexOffset base_vaddr = tab_rec->vaddr;
-  const int32_t *targets = reinterpret_cast<const int32_t*>(&table[4]);
-  int entries = table[1];
-  int low_key = s4FromSwitchData(&table[2]);
-  for (int i = 0; i < entries; i++) {
-    tab_rec->targets[i] = InsertCaseLabel(base_vaddr + targets[i], i + low_key);
-  }
-}
-
-void Mir2Lir::MarkSparseCaseLabels(Mir2Lir::SwitchTable* tab_rec) {
-  const uint16_t* table = tab_rec->table;
-  DexOffset base_vaddr = tab_rec->vaddr;
-  int entries = table[1];
-  const int32_t* keys = reinterpret_cast<const int32_t*>(&table[2]);
-  const int32_t* targets = &keys[entries];
-  for (int i = 0; i < entries; i++) {
-    tab_rec->targets[i] = InsertCaseLabel(base_vaddr + targets[i], keys[i]);
-  }
-}
-
-void Mir2Lir::ProcessSwitchTables() {
-  for (Mir2Lir::SwitchTable* tab_rec : switch_tables_) {
-    if (tab_rec->table[0] == Instruction::kPackedSwitchSignature) {
-      MarkPackedCaseLabels(tab_rec);
-    } else if (tab_rec->table[0] == Instruction::kSparseSwitchSignature) {
-      MarkSparseCaseLabels(tab_rec);
-    } else {
-      LOG(FATAL) << "Invalid switch table";
-    }
-  }
-}
-
 void Mir2Lir::DumpSparseSwitchTable(const uint16_t* table) {
   /*
    * Sparse switch data format:
@@ -1032,9 +990,6 @@ void Mir2Lir::Materialize() {
 
   /* Method is not empty */
   if (first_lir_insn_) {
-    // mark the targets of switch statement case labels
-    ProcessSwitchTables();
-
     /* Convert LIR into machine code. */
     AssembleLIR();
 
