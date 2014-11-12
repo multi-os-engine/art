@@ -208,6 +208,25 @@ void Arm32Assembler::udiv(Register rd, Register rn, Register rm, Condition cond)
 }
 
 
+void Arm32Assembler::sbfx(Register rd, Register rn, uint32_t lsb, uint32_t width, Condition cond) {
+  CHECK_NE(rd, kNoRegister);
+  CHECK_NE(rn, kNoRegister);
+  CHECK_NE(cond, kNoCondition);
+  CHECK(IsUint(5, lsb)) << lsb;
+  uint32_t widthminus1 = width - 1;
+  CHECK(IsUint(5, widthminus1)) << widthminus1;
+
+  int32_t encoding = (static_cast<int32_t>(cond) << kConditionShift) |
+      B26 | B25 | B24 | B23 | B21 |
+      (widthminus1 << 16) |
+      (static_cast<uint32_t>(rd) << 12) |
+      (lsb << 7) |
+      B6 | B4 |
+      static_cast<uint32_t>(rn);
+  Emit(encoding);
+}
+
+
 void Arm32Assembler::ldr(Register rd, const Address& ad, Condition cond) {
   EmitMemOp(cond, true, false, rd, ad);
 }
