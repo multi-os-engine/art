@@ -29,6 +29,12 @@
 namespace art {
 namespace x86_64 {
 
+/// Helper function to check whether the given value can be used through sign-extension.
+template <typename T>
+inline bool Is8BSignExtensionOf(const T value) {
+  return static_cast<int8_t>(value) == value;
+}
+
 // Encodes an immediate value for operands.
 //
 // Note: Immediates can be 64b on x86-64 for certain instructions, but are often restricted
@@ -328,17 +334,17 @@ class X86_64Assembler FINAL : public Assembler {
   void divsd(XmmRegister dst, XmmRegister src);
   void divsd(XmmRegister dst, const Address& src);
 
-  void cvtsi2ss(XmmRegister dst, CpuRegister src);
-  void cvtsi2sd(XmmRegister dst, CpuRegister src);
+  void cvtsi2ss(XmmRegister dst, CpuRegister src);  // Note: this is the r/m32 version.
+  void cvtsi2sd(XmmRegister dst, CpuRegister src);  // Note: this is the r/m32 version.
 
-  void cvtss2si(CpuRegister dst, XmmRegister src);
+  void cvtss2si(CpuRegister dst, XmmRegister src);  // Note: this is the r32 version.
   void cvtss2sd(XmmRegister dst, XmmRegister src);
 
-  void cvtsd2si(CpuRegister dst, XmmRegister src);
+  void cvtsd2si(CpuRegister dst, XmmRegister src);  // Note: this is the r32 version.
   void cvtsd2ss(XmmRegister dst, XmmRegister src);
 
-  void cvttss2si(CpuRegister dst, XmmRegister src);
-  void cvttsd2si(CpuRegister dst, XmmRegister src);
+  void cvttss2si(CpuRegister dst, XmmRegister src);  // Note: this is the r32 version.
+  void cvttsd2si(CpuRegister dst, XmmRegister src);  // Note: this is the r32 version.
 
   void cvtdq2pd(XmmRegister dst, XmmRegister src);
 
