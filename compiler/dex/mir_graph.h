@@ -542,8 +542,9 @@ class MIRGraph {
                     uint32_t method_idx, jobject class_loader, const DexFile& dex_file);
 
   /* Find existing block */
-  BasicBlock* FindBlock(DexOffset code_offset) {
-    return FindBlock(code_offset, false, NULL);
+  BasicBlock* FindBlock(ArenaVector<uint16_t>& dex_pc_to_block_map,
+                        DexOffset code_offset) {
+    return FindBlock(dex_pc_to_block_map, code_offset, false, nullptr);
   }
 
   const uint16_t* GetCurrentInsns() const {
@@ -1203,14 +1204,18 @@ class MIRGraph {
   bool ContentIsInsn(const uint16_t* code_ptr);
   BasicBlock* SplitBlock(DexOffset code_offset, BasicBlock* orig_block,
                          BasicBlock** immed_pred_block_p);
-  BasicBlock* FindBlock(DexOffset code_offset, bool create, BasicBlock** immed_pred_block_p);
-  void ProcessTryCatchBlocks();
+  BasicBlock* FindBlock(ArenaVector<uint16_t>& dex_pc_to_block_map,
+                        DexOffset code_offset, bool create, BasicBlock** immed_pred_block_p);
+  void ProcessTryCatchBlocks(ArenaVector<uint16_t>& dex_pc_to_block_map);
   bool IsBadMonitorExitCatch(NarrowDexOffset monitor_exit_offset, NarrowDexOffset catch_offset);
-  BasicBlock* ProcessCanBranch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
+  BasicBlock* ProcessCanBranch(ArenaVector<uint16_t>& dex_pc_to_block_map,
+                               BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
                                int flags, const uint16_t* code_ptr, const uint16_t* code_end);
-  BasicBlock* ProcessCanSwitch(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
+  BasicBlock* ProcessCanSwitch(ArenaVector<uint16_t>& dex_pc_to_block_map,
+                               BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
                                int flags);
-  BasicBlock* ProcessCanThrow(BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
+  BasicBlock* ProcessCanThrow(ArenaVector<uint16_t>& dex_pc_to_block_map,
+                              BasicBlock* cur_block, MIR* insn, DexOffset cur_offset, int width,
                               int flags, ArenaBitVector* try_block_addr, const uint16_t* code_ptr,
                               const uint16_t* code_end);
   int AddNewSReg(int v_reg);
@@ -1309,7 +1314,6 @@ class MIRGraph {
   BasicBlock* exit_block_;
   unsigned int num_blocks_;
   const DexFile::CodeItem* current_code_item_;
-  ArenaVector<uint16_t> dex_pc_to_block_map_;    // FindBlock lookup cache.
   ArenaVector<DexCompilationUnit*> m_units_;     // List of methods included in this graph
   typedef std::pair<int, int> MIRLocation;       // Insert point, (m_unit_ index, offset)
   ArenaVector<MIRLocation> method_stack_;        // Include stack

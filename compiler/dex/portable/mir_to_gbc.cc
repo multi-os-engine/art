@@ -134,14 +134,9 @@ void MirConverter::InitIR() {
   irb_ = llvm_info_->GetIRBuilder();
 }
 
-::llvm::BasicBlock* MirConverter::FindCaseTarget(uint32_t vaddr) {
-  BasicBlock* bb = mir_graph_->FindBlock(vaddr);
-  DCHECK(bb != NULL);
-  return GetLLVMBlock(bb->id);
-}
-
 void MirConverter::ConvertPackedSwitch(BasicBlock* bb, MIR* mir,
                                 int32_t table_offset, RegLocation rl_src) {
+  ArenaVector<SuccessorBlockInfo*>::const_iterator succ_bb_iter = bb->successor_blocks.cbegin();
   const Instruction::PackedSwitchPayload* payload =
       reinterpret_cast<const Instruction::PackedSwitchPayload*>(
       mir_graph_->GetTable(mir, table_offset));
@@ -152,9 +147,12 @@ void MirConverter::ConvertPackedSwitch(BasicBlock* bb, MIR* mir,
     irb_->CreateSwitch(value, GetLLVMBlock(bb->fall_through),
                              payload->case_count);
 
-  for (uint16_t i = 0; i < payload->case_count; ++i) {
+  for (uint16_t i = 0; i < payload->case_count; ++i, ++succ_bb_iter) {
+    SuccessorBlockInfo* successor_block_info = *succ_bb_iter;
+    DCHECK(successor_block_info != nullptr);
     ::llvm::BasicBlock* llvm_bb =
-        FindCaseTarget(current_dalvik_offset_ + payload->targets[i]);
+        GetLLVMBlock(successor_block_info->block);
+    DCHECK_EQ(successor_block_info->key, payload->first_key + i);
     sw->addCase(irb_->getInt32(payload->first_key + i), llvm_bb);
   }
   ::llvm::MDNode* switch_node =
@@ -166,6 +164,7 @@ void MirConverter::ConvertPackedSwitch(BasicBlock* bb, MIR* mir,
 
 void MirConverter::ConvertSparseSwitch(BasicBlock* bb, MIR* mir,
                                 int32_t table_offset, RegLocation rl_src) {
+  ArenaVector<SuccessorBlockInfo*>::const_iterator succ_bb_iter = bb->successor_blocks.cbegin();
   const Instruction::SparseSwitchPayload* payload =
       reinterpret_cast<const Instruction::SparseSwitchPayload*>(
       mir_graph_->GetTable(mir, table_offset));
@@ -179,10 +178,12 @@ void MirConverter::ConvertSparseSwitch(BasicBlock* bb, MIR* mir,
     irb_->CreateSwitch(value, GetLLVMBlock(bb->fall_through),
                              payload->case_count);
 
-  for (size_t i = 0; i < payload->case_count; ++i) {
+  for (size_t i = 0; i < payload->case_count; ++i, ++succ_bb_iter) {
+    SuccessorBlockInfo* successor_block_info = *succ_bb_iter;
+    DCHECK(successor_block_info != nullptr);
     ::llvm::BasicBlock* llvm_bb =
-        FindCaseTarget(current_dalvik_offset_ + targets[i]);
-    sw->addCase(irb_->getInt32(keys[i]), llvm_bb);
+        GetLLVMBlock(successor_block_info->block);
+    sw->addCase(irb_->getInt32(successor_block_info->key), llvm_bb);
   }
   ::llvm::MDNode* switch_node =
       ::llvm::MDNode::get(*context_, irb_->getInt32(table_offset));
