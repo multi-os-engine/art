@@ -304,9 +304,7 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   005-annotations \
   009-instanceof \
   010-instance \
-  012-math \
   023-many-interfaces \
-  037-inherit \
   044-proxy \
   045-reflect-array \
   046-reflect \
@@ -316,7 +314,6 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   068-classloader \
   069-field-type \
   071-dexfile \
-  083-compiler-regressions \
   106-exceptions2 \
   107-int-math2 \
   114-ParallelGC \
@@ -324,12 +321,9 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   407-arrays \
   412-new-array \
   422-instanceof \
-  422-type-conversion \
   424-checkcast \
   427-bounds \
-  428-optimizing-arith-rem \
   430-live-register-slow-path \
-  701-easy-div-rem \
   800-smali \
 
 ifneq (,$(filter optimizing,$(COMPILER_TYPES)))

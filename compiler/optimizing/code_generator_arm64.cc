@@ -38,7 +38,7 @@ namespace art {
 
 namespace arm64 {
 
-// TODO: clean-up some of the constant definitions.
+static constexpr bool kExplicitStackOverflowCheck = false;
 static constexpr size_t kHeapRefSize = sizeof(mirror::HeapReference<mirror::Object>);
 static constexpr int kCurrentMethodStackOffset = 0;
 
@@ -393,6 +393,20 @@ class NullCheckSlowPathARM64 : public SlowPathCodeARM64 {
   DISALLOW_COPY_AND_ASSIGN(NullCheckSlowPathARM64);
 };
 
+class StackOverflowCheckSlowPathARM64 : public SlowPathCodeARM64 {
+ public:
+  StackOverflowCheckSlowPathARM64() {}
+
+  virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
+    __ Bind(GetEntryLabel());
+    arm64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pThrowStackOverflow), nullptr, 0);
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(StackOverflowCheckSlowPathARM64);
+};
+
 class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
   explicit SuspendCheckSlowPathARM64(HSuspendCheck* instruction,
@@ -417,7 +431,6 @@ class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
     DCHECK(successor_ == nullptr);
     return &return_label_;
   }
-
 
  private:
   HSuspendCheck* const instruction_;
@@ -480,12 +493,23 @@ CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph)
 #define __ GetVIXLAssembler()->
 
 void CodeGeneratorARM64::GenerateFrameEntry() {
-  // TODO: Add proper support for the stack overflow check.
-  UseScratchRegisterScope temps(GetVIXLAssembler());
-  Register temp = temps.AcquireX();
-  __ Add(temp, sp, -static_cast<int32_t>(GetStackOverflowReservedBytes(kArm64)));
-  __ Ldr(temp, MemOperand(temp, 0));
-  RecordPcInfo(nullptr, 0);
+  bool do_overflow_check = FrameNeedsStackCheck(GetFrameSize(), kArm64) || !IsLeafMethod();
+  if (do_overflow_check) {
+    UseScratchRegisterScope temps(GetVIXLAssembler());
+    Register temp = temps.AcquireX();
+    if (kExplicitStackOverflowCheck) {
+      SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) StackOverflowCheckSlowPathARM64();
+      AddSlowPath(slow_path);
+
+      __ Ldr(temp, MemOperand(tr, Thread::StackEndOffset<kArm64WordSize>().Int32Value()));
+      __ Cmp(sp, temp);
+      __ B(lo, slow_path->GetEntryLabel());
+    } else {
+      __ Add(temp, sp, -static_cast<int32_t>(GetStackOverflowReservedBytes(kArm64)));
+      __ Ldr(wzr, MemOperand(temp, 0));
+      RecordPcInfo(nullptr, 0);
+    }
+  }
 
   CPURegList preserved_regs = GetFramePreservedRegisters();
   int frame_size = GetFrameSize();
@@ -588,7 +612,7 @@ Location CodeGeneratorARM64::GetStackLocation(HLoadLocal* load) const {
 void CodeGeneratorARM64::MarkGCCard(Register object, Register value) {
   UseScratchRegisterScope temps(GetVIXLAssembler());
   Register card = temps.AcquireX();
-  Register temp = temps.AcquireX();
+  Register temp = temps.AcquireW();     // Index within the CardTable - 32bit.
   vixl::Label done;
   __ Cbz(value, &done);
   __ Ldr(card, MemOperand(tr, Thread::CardTableOffset<kArm64WordSize>().Int32Value()));
@@ -606,6 +630,8 @@ void CodeGeneratorARM64::SetupBlockedRegisters() const {
   // sp is not part of the allocatable registers, so we don't need to block it.
   // TODO: Avoid blocking callee-saved registers, and instead preserve them
   // where necessary.
+  // TODO: We do not use a dedicated suspend counter. We only block xSuspend for
+  // safe interaction with Quick.
   CPURegList reserved_core_registers = vixl_reserved_core_registers;
   reserved_core_registers.Combine(runtime_reserved_core_registers);
   reserved_core_registers.Combine(quick_callee_saved_registers);
@@ -772,12 +798,14 @@ void CodeGeneratorARM64::InvokeRuntime(int32_t entry_point_offset,
                                        uint32_t dex_pc) {
   __ Ldr(lr, MemOperand(tr, entry_point_offset));
   __ Blr(lr);
-  RecordPcInfo(instruction, dex_pc);
-  DCHECK(instruction->IsSuspendCheck()
-      || instruction->IsBoundsCheck()
-      || instruction->IsNullCheck()
-      || instruction->IsDivZeroCheck()
-      || !IsLeafMethod());
+  if (instruction != nullptr) {
+    RecordPcInfo(instruction, dex_pc);
+    DCHECK(instruction->IsSuspendCheck()
+        || instruction->IsBoundsCheck()
+        || instruction->IsNullCheck()
+        || instruction->IsDivZeroCheck()
+        || !IsLeafMethod());
+    }
 }
 
 void InstructionCodeGeneratorARM64::GenerateClassInitializationCheck(SlowPathCodeARM64* slow_path,
@@ -788,9 +816,34 @@ void InstructionCodeGeneratorARM64::GenerateClassInitializationCheck(SlowPathCod
   __ Cmp(temp, mirror::Class::kStatusInitialized);
   __ B(lt, slow_path->GetEntryLabel());
   // Even if the initialized flag is set, we may be in a situation where caches are not synced
-  // properly. Therefore, we do a memory fence.
-  __ Dmb(InnerShareable, BarrierAll);
+  // properly. Therefore we need to ensure consistent memory ordering.
+  //
+  // Producer                                   Consumer
+  // ========                                   ========
+  //  init()                                    get_flag()
+  //  dmb_st()    // ST to ST ordering.         dmb_ld()      // LD to LD+ST ordering.
+  //  set_flag()                                ....
+  __ Dmb(InnerShareable, BarrierReads);
   __ Bind(slow_path->GetExitLabel());
+}
+
+void InstructionCodeGeneratorARM64::GenerateSuspendCheck(HSuspendCheck* instruction,
+                                                         HBasicBlock* successor) {
+  SuspendCheckSlowPathARM64* slow_path =
+    new (GetGraph()->GetArena()) SuspendCheckSlowPathARM64(instruction, successor);
+  codegen_->AddSlowPath(slow_path);
+  UseScratchRegisterScope temps(codegen_->GetVIXLAssembler());
+  Register temp = temps.AcquireW();
+
+  __ Ldrh(temp, MemOperand(tr, Thread::ThreadFlagsOffset<kArm64WordSize>().SizeValue()));
+  if (successor == nullptr) {
+    __ Cbnz(temp, slow_path->GetEntryLabel());
+    __ Bind(slow_path->GetReturnLabel());
+  } else {
+    __ Cbz(temp, codegen_->GetLabelOf(successor));
+    __ B(slow_path->GetEntryLabel());
+    // slow_path will return to GetLabelOf(successor).
+  }
 }
 
 InstructionCodeGeneratorARM64::InstructionCodeGeneratorARM64(HGraph* graph,
@@ -800,8 +853,7 @@ InstructionCodeGeneratorARM64::InstructionCodeGeneratorARM64(HGraph* graph,
         codegen_(codegen) {}
 
 #define FOR_EACH_UNIMPLEMENTED_INSTRUCTION(M)              \
-  M(ParallelMove)                                          \
-  M(Rem)
+  M(ParallelMove)
 
 #define UNIMPLEMENTED_INSTRUCTION_BREAK_CODE(name) name##UnimplementedInstructionBreakCode
 
@@ -1070,15 +1122,15 @@ void InstructionCodeGeneratorARM64::VisitCompare(HCompare* instruction) {
   DCHECK_EQ(in_type, Primitive::kPrimLong);
   switch (in_type) {
     case Primitive::kPrimLong: {
-      vixl::Label done;
       Register result = OutputRegister(instruction);
       Register left = InputRegisterAt(instruction, 0);
       Operand right = InputOperandAt(instruction, 1);
-      __ Subs(result.X(), left, right);
-      __ B(eq, &done);
-      __ Mov(result, 1);
-      __ Cneg(result, result, le);
-      __ Bind(&done);
+      //  0 if: left == right
+      //  1 if: left  > right
+      // -1 if: left  < right
+      __ Cmp(left, right);
+      __ Cset(result, ne);
+      __ Cneg(result, result, lt);
       break;
     }
     default:
@@ -1232,8 +1284,20 @@ void LocationsBuilderARM64::VisitGoto(HGoto* got) {
 
 void InstructionCodeGeneratorARM64::VisitGoto(HGoto* got) {
   HBasicBlock* successor = got->GetSuccessor();
-  // TODO: Support for suspend checks emission.
-  if (!codegen_->GoesToNextBlock(got->GetBlock(), successor)) {
+  DCHECK(!successor->IsExitBlock());
+  HBasicBlock* block = got->GetBlock();
+  HInstruction* previous = got->GetPrevious();
+  HLoopInformation* info = block->GetLoopInformation();
+
+  if (info != nullptr && info->IsBackEdge(block) && info->HasSuspendCheck()) {
+    codegen_->ClearSpillSlotsFromLoopPhisInStackMap(info->GetSuspendCheck());
+    GenerateSuspendCheck(info->GetSuspendCheck(), successor);
+    return;
+  }
+  if (block->IsEntryBlock() && (previous != nullptr) && previous->IsSuspendCheck()) {
+    GenerateSuspendCheck(previous->AsSuspendCheck(), nullptr);
+  }
+  if (!codegen_->GoesToNextBlock(block, successor)) {
     __ B(codegen_->GetLabelOf(successor));
   }
 }
@@ -1241,27 +1305,32 @@ void InstructionCodeGeneratorARM64::VisitGoto(HGoto* got) {
 void LocationsBuilderARM64::VisitIf(HIf* if_instr) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(if_instr);
   HInstruction* cond = if_instr->InputAt(0);
-  DCHECK(cond->IsCondition());
-  if (cond->AsCondition()->NeedsMaterialization()) {
+  if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
     locations->SetInAt(0, Location::RequiresRegister());
   }
 }
 
 void InstructionCodeGeneratorARM64::VisitIf(HIf* if_instr) {
   HInstruction* cond = if_instr->InputAt(0);
-  DCHECK(cond->IsCondition());
   HCondition* condition = cond->AsCondition();
   vixl::Label* true_target = codegen_->GetLabelOf(if_instr->IfTrueSuccessor());
   vixl::Label* false_target = codegen_->GetLabelOf(if_instr->IfFalseSuccessor());
 
-  // TODO: Support constant condition input in VisitIf.
-
-  if (condition->NeedsMaterialization()) {
+  if (cond->IsIntConstant()) {
+    int32_t cond_value = cond->AsIntConstant()->GetValue();
+    if (cond_value == 1) {
+      if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfTrueSuccessor())) {
+        __ B(true_target);
+      }
+      return;
+    } else {
+      DCHECK_EQ(cond_value, 0);
+    }
+  } else if (!cond->IsCondition() || condition->NeedsMaterialization()) {
     // The condition instruction has been materialized, compare the output to 0.
     Location cond_val = if_instr->GetLocations()->InAt(0);
     DCHECK(cond_val.IsRegister());
     __ Cbnz(InputRegisterAt(if_instr, 0), true_target);
-
   } else {
     // The condition instruction has not been materialized, use its inputs as
     // the comparison and its condition as the branch condition.
@@ -1279,7 +1348,6 @@ void InstructionCodeGeneratorARM64::VisitIf(HIf* if_instr) {
       __ B(arm64_cond, true_target);
     }
   }
-
   if (!codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor())) {
     __ B(false_target);
   }
@@ -1443,14 +1511,12 @@ void InstructionCodeGeneratorARM64::VisitInvokeStatic(HInvokeStatic* invoke) {
   // temp = method;
   codegen_->LoadCurrentMethod(temp);
   // temp = temp->dex_cache_resolved_methods_;
-  __ Ldr(temp, MemOperand(temp.X(),
-                          mirror::ArtMethod::DexCacheResolvedMethodsOffset().SizeValue()));
+  __ Ldr(temp, HeapOperand(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset()));
   // temp = temp[index_in_cache];
-  __ Ldr(temp, MemOperand(temp.X(), index_in_cache));
+  __ Ldr(temp, HeapOperand(temp, index_in_cache));
   // lr = temp->entry_point_from_quick_compiled_code_;
-  __ Ldr(lr, MemOperand(temp.X(),
-                        mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
-                            kArm64WordSize).SizeValue()));
+  __ Ldr(lr, HeapOperand(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                          kArm64WordSize)));
   // lr();
   __ Blr(lr);
 
@@ -1461,7 +1527,7 @@ void InstructionCodeGeneratorARM64::VisitInvokeStatic(HInvokeStatic* invoke) {
 void InstructionCodeGeneratorARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   LocationSummary* locations = invoke->GetLocations();
   Location receiver = locations->InAt(0);
-  Register temp = XRegisterFrom(invoke->GetLocations()->GetTemp(0));
+  Register temp = WRegisterFrom(invoke->GetLocations()->GetTemp(0));
   size_t method_offset = mirror::Class::EmbeddedVTableOffset().SizeValue() +
     invoke->GetVTableIndex() * sizeof(mirror::Class::VTableEntry);
   Offset class_offset = mirror::Object::ClassOffset();
@@ -1469,16 +1535,16 @@ void InstructionCodeGeneratorARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
 
   // temp = object->GetClass();
   if (receiver.IsStackSlot()) {
-    __ Ldr(temp.W(), MemOperand(sp, receiver.GetStackIndex()));
-    __ Ldr(temp.W(), MemOperand(temp, class_offset.SizeValue()));
+    __ Ldr(temp, MemOperand(sp, receiver.GetStackIndex()));
+    __ Ldr(temp, HeapOperand(temp, class_offset));
   } else {
     DCHECK(receiver.IsRegister());
-    __ Ldr(temp.W(), HeapOperandFrom(receiver, class_offset));
+    __ Ldr(temp, HeapOperandFrom(receiver, class_offset));
   }
   // temp = temp->GetMethodAt(method_offset);
-  __ Ldr(temp.W(), MemOperand(temp, method_offset));
+  __ Ldr(temp, HeapOperand(temp, method_offset));
   // lr = temp->GetEntryPoint();
-  __ Ldr(lr, MemOperand(temp, entry_point.SizeValue()));
+  __ Ldr(lr, HeapOperand(temp, entry_point.SizeValue()));
   // lr();
   __ Blr(lr);
   DCHECK(!codegen_->IsLeafMethod());
@@ -1503,7 +1569,7 @@ void InstructionCodeGeneratorARM64::VisitLoadClass(HLoadClass* cls) {
     DCHECK(cls->CanCallRuntime());
     codegen_->LoadCurrentMethod(out);
     __ Ldr(out, HeapOperand(out, mirror::ArtMethod::DexCacheResolvedTypesOffset()));
-    __ Ldr(out, MemOperand(out.X(), CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
+    __ Ldr(out, HeapOperand(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
 
     SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM64(
         cls, cls, cls->GetDexPc(), cls->MustGenerateClinitCheck());
@@ -1551,7 +1617,7 @@ void InstructionCodeGeneratorARM64::VisitLoadString(HLoadString* load) {
   Register out = OutputRegister(load);
   codegen_->LoadCurrentMethod(out);
   __ Ldr(out, HeapOperand(out, mirror::ArtMethod::DexCacheStringsOffset()));
-  __ Ldr(out, MemOperand(out.X(), CodeGenerator::GetCacheOffset(load->GetStringIndex())));
+  __ Ldr(out, HeapOperand(out, CodeGenerator::GetCacheOffset(load->GetStringIndex())));
   __ Cbz(out, slow_path->GetEntryLabel());
   __ Bind(slow_path->GetExitLabel());
 }
@@ -1793,6 +1859,43 @@ void InstructionCodeGeneratorARM64::VisitPhi(HPhi* instruction) {
   LOG(FATAL) << "Unreachable";
 }
 
+void LocationsBuilderARM64::VisitRem(HRem* rem) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(rem, LocationSummary::kNoCall);
+  switch (rem->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected rem type " << rem->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM64::VisitRem(HRem* rem) {
+  Primitive::Type type = rem->GetResultType();
+  switch (type) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      UseScratchRegisterScope temps(GetVIXLAssembler());
+      Register dividend = InputRegisterAt(rem, 0);
+      Register divisor = InputRegisterAt(rem, 1);
+      Register output = OutputRegister(rem);
+      Register temp = temps.AcquireSameSizeAs(output);
+
+      __ Sdiv(temp, dividend, divisor);
+      __ Msub(output, temp, divisor, dividend);
+      break;
+    }
+
+    default:
+      LOG(FATAL) << "Unexpected rem type " << type;
+  }
+}
+
 void LocationsBuilderARM64::VisitReturn(HReturn* instruction) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
   Primitive::Type return_type = instruction->InputAt(0)->GetType();
@@ -1888,14 +1991,17 @@ void LocationsBuilderARM64::VisitSuspendCheck(HSuspendCheck* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::VisitSuspendCheck(HSuspendCheck* instruction) {
-  // TODO: Improve support for suspend checks.
-  SuspendCheckSlowPathARM64* slow_path =
-      new (GetGraph()->GetArena()) SuspendCheckSlowPathARM64(instruction, nullptr);
-  codegen_->AddSlowPath(slow_path);
-
-  __ Subs(wSuspend, wSuspend, 1);
-  __ B(slow_path->GetEntryLabel(), le);
-  __ Bind(slow_path->GetReturnLabel());
+  HBasicBlock* block = instruction->GetBlock();
+  if (block->GetLoopInformation() != nullptr) {
+    DCHECK(block->GetLoopInformation()->GetSuspendCheck() == instruction);
+    // The back edge will generate the suspend check.
+    return;
+  }
+  if (block->IsEntryBlock() && instruction->GetNext()->IsGoto()) {
+    // The goto will generate the suspend check.
+    return;
+  }
+  GenerateSuspendCheck(instruction, nullptr);
 }
 
 void LocationsBuilderARM64::VisitTemporary(HTemporary* temp) {
@@ -1958,11 +2064,18 @@ void InstructionCodeGeneratorARM64::VisitTypeConversion(HTypeConversion* convers
     } else {
       __ Sbfx(OutputRegister(conversion), InputRegisterAt(conversion, 0), 0, min_size);
     }
-    return;
+  } else if (IsFPType(result_type) && IsIntegralType(input_type)) {
+    CHECK(input_type == Primitive::kPrimInt || input_type == Primitive::kPrimLong);
+    __ Scvtf(OutputFPRegister(conversion), InputRegisterAt(conversion, 0));
+  } else if (IsIntegralType(result_type) && IsFPType(input_type)) {
+    CHECK(result_type == Primitive::kPrimInt || result_type == Primitive::kPrimLong);
+    __ Fcvtzs(OutputRegister(conversion), InputFPRegisterAt(conversion, 0));
+  } else if (IsFPType(result_type) && IsFPType(input_type)) {
+    __ Fcvt(OutputFPRegister(conversion), InputFPRegisterAt(conversion, 0));
+  } else {
+    LOG(FATAL) << "Unexpected or unimplemented type conversion from " << input_type
+                << " to " << result_type;
   }
-
-  LOG(FATAL) << "Unexpected or unimplemented type conversion from " << input_type
-             << " to " << result_type;
 }
 
 void LocationsBuilderARM64::VisitXor(HXor* instruction) {
