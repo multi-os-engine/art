@@ -398,6 +398,12 @@ class AssemblerTest : public testing::Test {
     args.push_back("-o");
     args.push_back(to_file);
     args.push_back(from_file);
+    std::string cmd = Join(args, ' ');
+
+    args.clear();
+    args.push_back("/bin/sh");
+    args.push_back("-c");
+    args.push_back(cmd);
 
     return Exec(args, error_msg);
   }
