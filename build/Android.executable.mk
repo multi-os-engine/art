@@ -55,7 +55,7 @@ define build-art-executable
   LOCAL_CPP_EXTENSION := $(ART_CPP_EXTENSION)
   LOCAL_MODULE_TAGS := optional
   LOCAL_SRC_FILES := $$(art_source)
-  LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime $$(art_c_includes)
+  LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime art/cmdline $$(art_c_includes)
   LOCAL_SHARED_LIBRARIES += $$(art_shared_libraries)
   LOCAL_WHOLE_STATIC_LIBRARIES += libsigchain
 
@@ -94,12 +94,20 @@ define build-art-executable
   endif
 
   LOCAL_ADDITIONAL_DEPENDENCIES := art/build/Android.common_build.mk
+  LOCAL_ADDITIONAL_DEPENDENCIES += art/build/Android.common_utils.mk
   LOCAL_ADDITIONAL_DEPENDENCIES += art/build/Android.executable.mk
 
   ifeq ($$(art_target_or_host),target)
     LOCAL_MODULE_TARGET_ARCH := $(ART_SUPPORTED_ARCH)
   endif
   LOCAL_MULTILIB := $$(art_multilib)
+
+	# Set up a 32-bit/64-bit stem if we are building both binaries.
+	# In this case, the binary names will either end with '32' or '64' as their suffix.
+	ifeq ($$(art_multilib),both)
+		LOCAL_MODULE_STEM_32 := $$(LOCAL_MODULE)32
+		LOCAL_MODULE_STEM_64 := $$(LOCAL_MODULE)64
+	endif
 
   include external/libcxx/libcxx.mk
   ifeq ($$(art_target_or_host),target)
@@ -111,4 +119,53 @@ define build-art-executable
     ART_HOST_EXECUTABLES := $(ART_HOST_EXECUTABLES) $(HOST_OUT_EXECUTABLES)/$$(LOCAL_MODULE)
   endif
 
+endef
+
+#
+# Build many art executables from multiple variations (debug/ndebug, host/target, 32/64bit).
+# By default only either 32-bit or 64-bit is built (but not both -- see multilib arg).
+# All other variations are gated by ANDROID_BUILD_(TARGET|HOST)_[N]DEBUG.
+# The result must be eval-uated.
+#
+# $(1): executable name
+# $(2): source files
+# $(3): library dependencies (common); debug prefix is added on as necessary automatically.
+# $(4): library dependencies (target only)
+# $(5): library dependencies (host only)
+# $(6): extra include directories
+# $(7): multilib (default: empty), valid values: {,32,64,both})
+define build-art-multi-executable
+  $(foreach debug_flavor,ndebug debug,
+    $(foreach target_flavor,host target,
+      art-cmdline-binary-name := $(1)
+      art-cmdline-source-files := $(2)
+      art-cmdline-lib-dependencies := $(3)
+      art-cmdline-lib-dependencies-target := $(4)
+      art-cmdline-lib-dependencies-host := $(5)
+      art-cmdline-include-extra := $(6)
+      art-cmdline-multilib := $(7)
+
+      # Add either -host or -target specific lib dependencies to the lib dependencies.
+      art-cmdline-lib-dependencies += $$(art-cmdline-lib-dependencies-$(target_flavor))
+
+      # Replace libart- prefix with libartd- for debug flavor.
+      ifeq ($(debug_flavor),debug)
+        art-cmdline-lib-dependencies := $$(subst libart-,libartd-,$$(art-cmdline-lib-dependencies))
+      endif
+
+      # Build the env guard var name, e.g. ART_BUILD_HOST_NDEBUG.
+      art-cmdline-env-guard := $$(call art-string-to-uppercase,ART_BUILD_$(target_flavor)_$(debug_flavor))
+
+      # Build the art executable only if the corresponding env guard was set.
+      ifeq ($$($$(art-cmdline-env-guard)),true)
+        $$(eval $$(call build-art-executable,$$(art-cmdline-binary-name),$$(art-cmdline-source-files),$$(art-cmdline-lib-dependencies),$$(art-cmdline-include-extra),$(target_flavor),$(debug_flavor),$$(art-cmdline-multilib)))
+      endif
+
+      # Clear locals now they've served their purpose.
+      art-cmdline-binary-name :=
+      art-cmdline-source-files :=
+      art-cmdline-lib-dependencies :=
+      art-cmdline-include-extra :=
+    )
+  )
 endef

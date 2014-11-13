@@ -18,6 +18,7 @@ ifndef ANDROID_COMMON_BUILD_MK
 ANDROID_COMMON_BUILD_MK = true
 
 include art/build/Android.common.mk
+include art/build/Android.common_utils.mk
 
 # These can be overridden via the environment or by editing to
 # enable/disable certain build configuration.
