@@ -178,6 +178,22 @@ bool FdFile::IsOpened() const {
   return fd_ >= 0;
 }
 
+bool FdFile::ReadFully(void* buffer, size_t byte_count, size_t offset) {
+  char* ptr = static_cast<char*>(buffer);
+  while (byte_count > 0) {
+    ssize_t bytes_read = TEMP_FAILURE_RETRY(pread(fd_, ptr, byte_count, offset));
+    if (bytes_read <= 0) {
+      // 0: end of file
+      // -1: error
+      return false;
+    }
+    byte_count -= bytes_read;  // Reduce the number of remaining bytes.
+    ptr += bytes_read;  // Move the buffer forward.
+    offset += static_cast<size_t>(bytes_read);  // Move the offset forward.
+  }
+  return true;
+}
+
 bool FdFile::ReadFully(void* buffer, size_t byte_count) {
   char* ptr = static_cast<char*>(buffer);
   while (byte_count > 0) {
