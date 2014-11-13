@@ -61,6 +61,7 @@ public class Main {
         testCases.add(new TestCase("invoke-super abstract", "B18380491ConcreteClass", "foo",
             new Object[]{0}, new AbstractMethodError(), null));
         testCases.add(new TestCase("BadCaseInOpRegRegReg", "BadCaseInOpRegRegReg", "getInt", null, null, 2));
+        testCases.add(new TestCase("FloatIntConstPassing", "FloatIntConstPassing", "run", null, null, 2));
     }
 
     public void runTests() {
