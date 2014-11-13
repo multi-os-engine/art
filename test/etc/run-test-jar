@@ -33,6 +33,7 @@ MAIN=""
 OPTIMIZE="y"
 PATCHOAT=""
 PREBUILD="y"
+RUN_OATDUMP="n"
 QUIET="n"
 RELOCATE="y"
 SECONDARY_DEX=""
@@ -142,6 +143,9 @@ while true; do
     elif [ "x$1" = "x--android-root" ]; then
         shift
         ANDROID_ROOT="$1"
+        shift
+    elif [ "x$1" = "x--oatdump" ]; then
+        RUN_OATDUMP="y"
         shift
     elif [ "x$1" = "x--" ]; then
         shift
@@ -279,13 +283,14 @@ fi
 
 dex2oat_cmdline="true"
 mkdir_cmdline="mkdir -p ${DEX_LOCATION}/dalvik-cache/$ISA"
+OAT_FILE=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g")
 
 if [ "$PREBUILD" = "y" ]; then
   dex2oat_cmdline="$INVOKE_WITH $ANDROID_ROOT/bin/dex2oatd \
                       $COMPILE_FLAGS \
                       --boot-image=${BOOT_IMAGE} \
+                      --oat-file=${OAT_FILE} \
                       --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
-                      --oat-file=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g") \
                       --instruction-set=$ISA"
 fi
 
@@ -302,6 +307,11 @@ dalvikvm_cmdline="$INVOKE_WITH $GDB $ANDROID_ROOT/bin/$DALVIKVM \
                   $DEBUGGER_OPTS \
                   $DALVIKVM_BOOT_OPT \
                   -cp $DEX_LOCATION/$TEST_NAME.jar$SECONDARY_DEX $MAIN"
+
+oatdump_cmdline="true"
+if [ "$RUN_OATDUMP" = "y" ]; then
+  oatdump_cmdline="$ANDROID_ROOT/bin/oatdump --oat-file=${OAT_FILE}"
+fi
 
 
 if [ "$HOST" = "n" ]; then
@@ -337,7 +347,8 @@ if [ "$HOST" = "n" ]; then
              export LD_LIBRARY_PATH=$LD_LIBRARY_PATH && \
              $mkdir_cmdline && \
              $dex2oat_cmdline && \
-             $dalvikvm_cmdline"
+             $dalvikvm_cmdline && \
+             $oatdump_cmdline"
 
     cmdfile=$(tempfile -p "cmd-" -s "-$TEST_NAME")
     echo "$cmdline" > $cmdfile
@@ -400,4 +411,6 @@ else
         echo -e "\e[91mTEST TIMED OUT!\e[0m" >&2
       fi
     fi
+
+    $oatdump_cmdline
 fi
