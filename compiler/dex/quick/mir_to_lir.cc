@@ -53,16 +53,11 @@ RegisterClass Mir2Lir::LocToRegClass(RegLocation loc) {
   return res;
 }
 
-void Mir2Lir::LockArg(int in_position, bool wide) {
-  RegStorage reg_arg_low = GetArgMappingToPhysicalReg(in_position);
-  RegStorage reg_arg_high = wide ? GetArgMappingToPhysicalReg(in_position + 1) :
-      RegStorage::InvalidReg();
+void Mir2Lir::LockArg(int in_position, bool) {
+  RegStorage reg_arg = GetArgMappingToPhysicalReg(in_position);
 
-  if (reg_arg_low.Valid()) {
-    LockTemp(reg_arg_low);
-  }
-  if (reg_arg_high.Valid() && reg_arg_low.NotExactlyEquals(reg_arg_high)) {
-    LockTemp(reg_arg_high);
+  if (reg_arg.Valid()) {
+    LockTemp(reg_arg);
   }
 }
 
@@ -87,74 +82,30 @@ RegStorage Mir2Lir::LoadArg(int in_position, RegisterClass reg_class, bool wide)
     offset += sizeof(uint64_t);
   }
 
-  if (cu_->target64) {
-    RegStorage reg_arg = GetArgMappingToPhysicalReg(in_position);
-    if (!reg_arg.Valid()) {
-      RegStorage new_reg =
-          wide ?  AllocTypedTempWide(false, reg_class) : AllocTypedTemp(false, reg_class);
-      LoadBaseDisp(TargetPtrReg(kSp), offset, new_reg, wide ? k64 : k32, kNotVolatile);
-      return new_reg;
-    } else {
-      // Check if we need to copy the arg to a different reg_class.
-      if (!RegClassMatches(reg_class, reg_arg)) {
-        if (wide) {
-          RegStorage new_reg = AllocTypedTempWide(false, reg_class);
-          OpRegCopyWide(new_reg, reg_arg);
-          reg_arg = new_reg;
-        } else {
-          RegStorage new_reg = AllocTypedTemp(false, reg_class);
-          OpRegCopy(new_reg, reg_arg);
-          reg_arg = new_reg;
-        }
+  RegStorage reg_arg = GetArgMappingToPhysicalReg(in_position);
+
+  if (reg_arg.Valid() && wide && (reg_arg.GetWideKind() == kNotWide)) {
+    // For wide register we've got only half of it.
+    // Flush it to memory then.
+    StoreBaseDisp(TargetPtrReg(kSp), offset, reg_arg, k32, kNotVolatile);
+    reg_arg = RegStorage::InvalidReg();
+  }
+
+  if (!reg_arg.Valid()) {
+    reg_arg = wide ?  AllocTypedTempWide(false, reg_class) : AllocTypedTemp(false, reg_class);
+    LoadBaseDisp(TargetPtrReg(kSp), offset, reg_arg, wide ? k64 : k32, kNotVolatile);
+  } else {
+    // Check if we need to copy the arg to a different reg_class.
+    if (!RegClassMatches(reg_class, reg_arg)) {
+      if (wide) {
+        RegStorage new_reg = AllocTypedTempWide(false, reg_class);
+        OpRegCopyWide(new_reg, reg_arg);
+        reg_arg = new_reg;
+      } else {
+        RegStorage new_reg = AllocTypedTemp(false, reg_class);
+        OpRegCopy(new_reg, reg_arg);
+        reg_arg = new_reg;
       }
-    }
-    return reg_arg;
-  }
-
-  RegStorage reg_arg_low = GetArgMappingToPhysicalReg(in_position);
-  RegStorage reg_arg_high = wide ? GetArgMappingToPhysicalReg(in_position + 1) :
-      RegStorage::InvalidReg();
-
-  // If the VR is wide and there is no register for high part, we need to load it.
-  if (wide && !reg_arg_high.Valid()) {
-    // If the low part is not in a reg, we allocate a pair. Otherwise, we just load to high reg.
-    if (!reg_arg_low.Valid()) {
-      RegStorage new_regs = AllocTypedTempWide(false, reg_class);
-      LoadBaseDisp(TargetPtrReg(kSp), offset, new_regs, k64, kNotVolatile);
-      return new_regs;  // The reg_class is OK, we can return.
-    } else {
-      // Assume that no ABI allows splitting a wide fp reg between a narrow fp reg and memory,
-      // i.e. the low part is in a core reg. Load the second part in a core reg as well for now.
-      DCHECK(!reg_arg_low.IsFloat());
-      reg_arg_high = AllocTemp();
-      int offset_high = offset + sizeof(uint32_t);
-      Load32Disp(TargetPtrReg(kSp), offset_high, reg_arg_high);
-      // Continue below to check the reg_class.
-    }
-  }
-
-  // If the low part is not in a register yet, we need to load it.
-  if (!reg_arg_low.Valid()) {
-    // Assume that if the low part of a wide arg is passed in memory, so is the high part,
-    // thus we don't get here for wide args as it's handled above. Big-endian ABIs could
-    // conceivably break this assumption but Android supports only little-endian architectures.
-    DCHECK(!wide);
-    reg_arg_low = AllocTypedTemp(false, reg_class);
-    Load32Disp(TargetPtrReg(kSp), offset, reg_arg_low);
-    return reg_arg_low;  // The reg_class is OK, we can return.
-  }
-
-  RegStorage reg_arg = wide ? RegStorage::MakeRegPair(reg_arg_low, reg_arg_high) : reg_arg_low;
-  // Check if we need to copy the arg to a different reg_class.
-  if (!RegClassMatches(reg_class, reg_arg)) {
-    if (wide) {
-      RegStorage new_regs = AllocTypedTempWide(false, reg_class);
-      OpRegCopyWide(new_regs, reg_arg);
-      reg_arg = new_regs;
-    } else {
-      RegStorage new_reg = AllocTypedTemp(false, reg_class);
-      OpRegCopy(new_reg, reg_arg);
-      reg_arg = new_reg;
     }
   }
   return reg_arg;
@@ -162,6 +113,7 @@ RegStorage Mir2Lir::LoadArg(int in_position, RegisterClass reg_class, bool wide)
 
 // TODO: simpilfy when 32-bit targets go hard float.
 void Mir2Lir::LoadArgDirect(int in_position, RegLocation rl_dest) {
+  DCHECK_EQ(rl_dest.location, kLocPhysReg);
   ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
   int offset = StackVisitor::GetOutVROffset(in_position, cu_->instruction_set);
   if (cu_->instruction_set == kX86) {
@@ -1396,5 +1348,31 @@ size_t Mir2Lir::GetInstructionOffset(LIR* lir) {
   UNIMPLEMENTED(FATAL) << "Unsupported GetInstructionOffset()";
   UNREACHABLE();
 }
+
+void Mir2Lir::InToRegStorageMapping::Initialize(ShortyIterator* shorty, InToRegStorageMapper* mapper) {
+  DCHECK(mapper != nullptr);
+  DCHECK(shorty != nullptr);
+  max_mapped_in_ = -1;
+  is_there_stack_mapped_ = false;
+  while (shorty->Next()) {
+     RegStorage reg = mapper->GetNextReg(shorty->IsFP(), shorty->IsWide(), shorty->IsRef());
+     if (reg.Valid()) {
+       mapping_[count_] = reg;
+       max_mapped_in_ = count_;
+     } else {
+       is_there_stack_mapped_ = true;
+     }
+     count_ += shorty->IsWide() ? 2 : 1;
+  }
+  initialized_ = true;
+}
+
+RegStorage Mir2Lir::InToRegStorageMapping::Get(int in_position) {
+  DCHECK(IsInitialized());
+  DCHECK_LT(in_position, count_);
+  auto res = mapping_.find(in_position);
+  return res != mapping_.end() ? res->second : RegStorage::InvalidReg();
+}
+
 
 }  // namespace art

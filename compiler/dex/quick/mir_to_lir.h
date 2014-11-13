@@ -905,19 +905,14 @@ class Mir2Lir : public Backend {
     virtual LIR* GenCallInsn(const MirMethodLoweringInfo& method_info);
 
     virtual void FlushIns(RegLocation* ArgLocs, RegLocation rl_method);
-    virtual int GenDalvikArgsNoRange(CallInfo* info, int call_state, LIR** pcrLabel,
-                             NextCallInsn next_call_insn,
-                             const MethodReference& target_method,
-                             uint32_t vtable_idx,
-                             uintptr_t direct_code, uintptr_t direct_method, InvokeType type,
-                             bool skip_this);
-    virtual int GenDalvikArgsRange(CallInfo* info, int call_state, LIR** pcrLabel,
-                           NextCallInsn next_call_insn,
-                           const MethodReference& target_method,
-                           uint32_t vtable_idx,
-                           uintptr_t direct_code, uintptr_t direct_method, InvokeType type,
-                           bool skip_this);
-
+    virtual int GenDalvikArgs(CallInfo* info, int call_state, LIR** pcrLabel,
+                      NextCallInsn next_call_insn,
+                      const MethodReference& target_method,
+                      uint32_t vtable_idx,
+                      uintptr_t direct_code, uintptr_t direct_method, InvokeType type,
+                      bool skip_this);
+    virtual int GenDalvikArgsBulkCopy(CallInfo* info, int first, int count);
+    virtual void GenDalvikArgsFlushPromoted(CallInfo* info, int start);
     /**
      * @brief Used to determine the register location of destination.
      * @details This is needed during generation of inline intrinsics because it finds destination
@@ -958,12 +953,6 @@ class Mir2Lir : public Backend {
     bool GenInlinedUnsafeGet(CallInfo* info, bool is_long, bool is_volatile);
     bool GenInlinedUnsafePut(CallInfo* info, bool is_long, bool is_object,
                              bool is_volatile, bool is_ordered);
-    virtual int LoadArgRegs(CallInfo* info, int call_state,
-                    NextCallInsn next_call_insn,
-                    const MethodReference& target_method,
-                    uint32_t vtable_idx,
-                    uintptr_t direct_code, uintptr_t direct_method, InvokeType type,
-                    bool skip_this);
 
     // Shared by all targets - implemented in gen_loadstore.cc.
     RegLocation LoadCurrMethod();
@@ -1215,7 +1204,7 @@ class Mir2Lir : public Backend {
       }
     }
 
-    virtual RegStorage GetArgMappingToPhysicalReg(int arg_num) = 0;
+    RegStorage GetArgMappingToPhysicalReg(int arg_num);
     virtual RegLocation GetReturnAlt() = 0;
     virtual RegLocation GetReturnWideAlt() = 0;
     virtual RegLocation LocCReturn() = 0;
@@ -1766,6 +1755,50 @@ class Mir2Lir : public Backend {
     // (i.e. 8 bytes on 32-bit arch, 16 bytes on 64-bit arch) and we use ResourceMaskCache
     // to deduplicate the masks.
     ResourceMaskCache mask_cache_;
+
+  protected:
+    // ABI support
+    class ShortyIterator {
+      public:
+        ShortyIterator(const char* shorty, bool is_static);
+        bool Next();
+        bool IsFP() { DCHECK(*cur_); return *cur_ == 'F' || *cur_ == 'D'; }
+        bool IsWide() { DCHECK(*cur_); return *cur_ == 'J' || *cur_ == 'D'; }
+        bool IsRef() { DCHECK(*cur_); return *cur_ == 'L'; }
+        char GetType() { DCHECK(*cur_); return *cur_; }
+        ~ShortyIterator() {}
+      private:
+        const char* cur_;
+        std::string shorty_;
+    };
+
+    class InToRegStorageMapper {
+     public:
+      virtual RegStorage GetNextReg(bool is_double_or_float, bool is_wide, bool is_ref) = 0;
+      virtual ~InToRegStorageMapper() {}
+      virtual void Reset() = 0;
+    };
+
+    class InToRegStorageMapping {
+     public:
+      InToRegStorageMapping() : count_(0), max_mapped_in_(0), is_there_stack_mapped_(false),
+              initialized_(false) {}
+      void Initialize(ShortyIterator* shorty, InToRegStorageMapper* mapper);
+      int GetMaxMappedIn() { return max_mapped_in_; }
+      bool IsThereStackMapped() { return is_there_stack_mapped_; }
+      RegStorage Get(int in_position);
+      bool IsInitialized() { return initialized_; }
+     private:
+      std::map<int, RegStorage> mapping_;
+      int count_;
+      int max_mapped_in_;
+      bool is_there_stack_mapped_;
+      bool initialized_;
+    };
+
+  // Cached mapping of method input to reg storage according to ABI.
+  InToRegStorageMapping in_to_reg_storage_mapping_;
+  virtual InToRegStorageMapper* GetResetedInToRegStorageMapper() = 0;
 
   private:
     static bool SizeMatchesTypeForEntrypoint(OpSize size, Primitive::Type type);
