@@ -264,6 +264,29 @@ void Thumb2Assembler::udiv(Register rd, Register rn, Register rm, Condition cond
 }
 
 
+void Thumb2Assembler::sbfx(Register rd, Register rn, uint32_t lsb, uint32_t width, Condition cond) {
+  CheckCondition(cond);
+  CHECK_GE(lsb, 0U);
+  CHECK_LE(lsb, 31U);
+  CHECK_GE(width, 1U);
+  CHECK_LE(width, 32U - lsb);
+  uint32_t widthminus1 = width - 1;
+  uint32_t imm2 = lsb & (B1 | B0);  // Bits 0-1 of `lsb`.
+  uint32_t imm3 = lsb & (B4 | B3 | B2);  // Bits 2-4 of `lsb`.
+
+  uint32_t op = 20U /* 0b10100 */;
+  int32_t encoding = B31 | B30 | B29 | B28 | B25 |
+      op << 20 |
+      static_cast<uint32_t>(rn) << 16 |
+      imm3 << 12 |
+      static_cast<uint32_t>(rd) << 8 |
+      imm2 << 6 |
+      widthminus1;
+
+  Emit32(encoding);
+}
+
+
 void Thumb2Assembler::ldr(Register rd, const Address& ad, Condition cond) {
   EmitLoadStore(cond, true, false, false, false, rd, ad);
 }
