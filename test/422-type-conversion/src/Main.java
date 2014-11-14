@@ -24,6 +24,12 @@ public class Main {
     }
   }
 
+  public static void assertShortEquals(short expected, short result) {
+    if (expected != result) {
+      throw new Error("Expected: " + expected + ", found: " + result);
+    }
+  }
+
   public static void assertIntEquals(int expected, int result) {
     if (expected != result) {
       throw new Error("Expected: " + expected + ", found: " + result);
@@ -39,23 +45,32 @@ public class Main {
   public static void assertCharEquals(char expected, char result) {
     if (expected != result) {
       // Values are cast to int to display numeric values instead of
-      // (Unicode) characters.
+      // (UTF-16 encoded) characters.
       throw new Error("Expected: " + (int)expected + ", found: " + (int)result);
     }
   }
 
   public static void main(String[] args) {
+    // Generate, compile and check int-to-long Dex instructions.
     byteToLong();
     shortToLong();
     intToLong();
     charToLong();
 
+    // Generate, compile and check long-to-int Dex instructions.
     longToInt();
 
+    // Generate, compile and check int-to-byte Dex instructions.
     shortToByte();
     intToByte();
     charToByte();
 
+    // Generate, compile and check int-to-short Dex instructions.
+    byteToShort();
+    intToShort();
+    charToShort();
+
+    // Generate, compile and check int-to-char Dex instructions.
     byteToChar();
     shortToChar();
     intToChar();
@@ -186,6 +201,51 @@ public class Main {
     assertByteEquals((byte)127, $opt$CharToByte((char)-129));  // -(2^7 + 1)
   }
 
+  private static void byteToShort() {
+    assertShortEquals((short)1, $opt$ByteToShort((byte)1));
+    assertShortEquals((short)0, $opt$ByteToShort((byte)0));
+    assertShortEquals((short)-1, $opt$ByteToShort((byte)-1));
+    assertShortEquals((short)51, $opt$ByteToShort((byte)51));
+    assertShortEquals((short)-51, $opt$ByteToShort((byte)-51));
+    assertShortEquals((short)127, $opt$ByteToShort((byte)127));  // 2^7 - 1
+    assertShortEquals((short)-127, $opt$ByteToShort((byte)-127));  // -(2^7 - 1)
+    assertShortEquals((short)-128, $opt$ByteToShort((byte)-128));  // -(2^7)
+  }
+
+  private static void intToShort() {
+    assertShortEquals((short)1, $opt$IntToShort(1));
+    assertShortEquals((short)0, $opt$IntToShort(0));
+    assertShortEquals((short)-1, $opt$IntToShort(-1));
+    assertShortEquals((short)51, $opt$IntToShort(51));
+    assertShortEquals((short)-51, $opt$IntToShort(-51));
+    assertShortEquals((short)32767, $opt$IntToShort(32767));  // 2^15 - 1
+    assertShortEquals((short)-32767, $opt$IntToShort(-32767));  // -(2^15 - 1)
+    assertShortEquals((short)-32768, $opt$IntToShort(-32768));  // -(2^15)
+    assertShortEquals((short)-32768, $opt$IntToShort(32768));  // 2^15
+    assertShortEquals((short)32767, $opt$IntToShort(-32769));  // -(2^15 + 1)
+    assertShortEquals((short)-1, $opt$IntToShort(2147483647));  // 2^31 - 1
+    assertShortEquals((short)0, $opt$IntToShort(-2147483648));  // -(2^31)
+  }
+
+  private static void charToShort() {
+    assertShortEquals((short)1, $opt$CharToShort((char)1));
+    assertShortEquals((short)0, $opt$CharToShort((char)0));
+    assertShortEquals((short)51, $opt$CharToShort((char)51));
+    assertShortEquals((short)32767, $opt$CharToShort((char)32767));  // 2^15 - 1
+    assertShortEquals((short)-32768, $opt$CharToShort((char)32768));  // 2^15
+    assertShortEquals((short)-32767, $opt$CharToShort((char)32769));  // 2^15
+    assertShortEquals((short)-1, $opt$CharToShort((char)65535));  // 2^16 - 1
+
+    assertShortEquals((short)0, $opt$CharToShort('\u0000'));
+    assertShortEquals((short)-1, $opt$CharToShort('\uFFFF'));   // 2^16 - 1
+
+    assertShortEquals((short)-1, $opt$CharToShort((char)-1));
+    assertShortEquals((short)-51, $opt$CharToShort((char)-51));
+    assertShortEquals((short)-32767, $opt$CharToShort((char)-32767));  // -(2^15 - 1)
+    assertShortEquals((short)-32768, $opt$CharToShort((char)-32768));  // -(2^15)
+    assertShortEquals((short)32767, $opt$CharToShort((char)-32769));  // -(2^15 + 1)
+  }
+
   private static void byteToChar() {
     assertCharEquals((char)1, $opt$ByteToChar((byte)1));
     assertCharEquals((char)0, $opt$ByteToChar((byte)0));
@@ -241,6 +301,11 @@ public class Main {
   static byte $opt$ShortToByte(short a){ return (byte)a; }
   static byte $opt$IntToByte(int a){ return (byte)a; }
   static byte $opt$CharToByte(char a){ return (byte)a; }
+
+  // These methods produce int-to-short Dex instructions.
+  static short $opt$ByteToShort(byte a){ return (short)a; }
+  static short $opt$IntToShort(int a){ return (short)a; }
+  static short $opt$CharToShort(char a){ return (short)a; }
 
   // These methods produce int-to-char Dex instructions.
   static char $opt$ByteToChar(byte a){ return (char)a; }
