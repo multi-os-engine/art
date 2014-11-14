@@ -131,6 +131,8 @@ class GlobalValueNumberingTest : public testing::Test {
     { bb, opcode, 0u, 0u, 2, { src, src + 1 }, 2, { reg, reg + 1 } }
 #define DEF_PHI2(bb, reg, src1, src2) \
     { bb, static_cast<Instruction::Code>(kMirOpPhi), 0, 0u, 2u, { src1, src2 }, 1, { reg } }
+#define DEF_DIV_REM(bb, opcode, result, dividend, divisor) \
+    { bb, opcode, 0u, 0u, 2, { dividend, divisor }, 1, { result } }
 
   void DoPrepareIFields(const IFieldDef* defs, size_t count) {
     cu_.mir_graph->ifield_lowering_infos_.clear();
@@ -2211,6 +2213,39 @@ TEST_F(GlobalValueNumberingTest, NormalPathToCatchEntry) {
   std::swap(merge_block->taken, merge_block->fall_through);
   PrepareMIRs(mirs);
   PerformGVN();
+}
+
+TEST_F(GlobalValueNumberingTestDiamond, DivZeroCheckDiamond) {
+  static const MIRDef mirs[] = {
+      DEF_DIV_REM(3u, Instruction::DIV_INT, 1u, 10u, 11u),
+      DEF_DIV_REM(3u, Instruction::DIV_INT, 2u, 14u, 11u),
+      DEF_DIV_REM(3u, Instruction::DIV_INT, 3u, 10u, 13u),
+      DEF_DIV_REM(4u, Instruction::DIV_INT, 4u, 14u, 12u),
+      DEF_DIV_REM(5u, Instruction::DIV_INT, 5u, 14u, 11u),
+      DEF_DIV_REM(6u, Instruction::DIV_INT, 6u, 14u, 11u),
+      DEF_DIV_REM(6u, Instruction::DIV_INT, 7u, 10u, 13u),
+      DEF_DIV_REM(6u, Instruction::DIV_INT, 8u, 10u, 12u),
+  };
+
+  static const bool expected_ignore_div_zero_check[] = {
+      false,  // New divisor seen.
+      true,   // Eliminated since it has first divisor as first one.
+      false,  // New divisor seen.
+      false,  // New divisor seen.
+      true,   // Eliminated in dominating block.
+      true,   // Eliminated in dominating block.
+      true,   // Eliminated in dominating block.
+      false,  // Only eliminated on one path of diamond.
+  };
+
+  PrepareMIRs(mirs);
+  PerformGVN();
+  PerformGVNCodeModifications();
+  ASSERT_EQ(arraysize(expected_ignore_div_zero_check), mir_count_);
+  for (size_t i = 0u; i != mir_count_; ++i) {
+    int expected = expected_ignore_div_zero_check[i] ? MIR_IGNORE_DIV_ZERO_CHECK : 0u;
+    EXPECT_EQ(expected, mirs_[i].optimization_flags) << i;
+  }
 }
 
 }  // namespace art
