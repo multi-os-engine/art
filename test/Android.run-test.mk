@@ -458,6 +458,7 @@ TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
   423-invoke-interface \
   424-checkcast \
   426-monitor \
+  428-optimizing-arith-rem \
   700-LoadArgRegs \
   701-easy-div-rem \
   702-LargeBranchOffset \
