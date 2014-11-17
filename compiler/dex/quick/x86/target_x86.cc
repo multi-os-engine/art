@@ -594,7 +594,9 @@ bool X86Mir2Lir::ProvidesFullMemoryBarrier(X86OpCode opcode) {
 }
 
 bool X86Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
-#if ANDROID_SMP != 0
+  if (!cu_->GetInstructionSetFeatures()->IsSmp()) {
+    return false;
+  }
   // Start off with using the last LIR as the barrier. If it is not enough, then we will update it.
   LIR* mem_barrier = last_lir_insn_;
 
@@ -630,9 +632,6 @@ bool X86Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
     mem_barrier->u.m.def_mask = &kEncodeAll;
   }
   return ret;
-#else
-  return false;
-#endif
 }
 
 void X86Mir2Lir::CompilerInitializeRegAlloc() {
