@@ -979,7 +979,6 @@ LIR* Arm64Mir2Lir::OpDecAndBranch(ConditionCode c_code, RegStorage reg, LIR* tar
 }
 
 bool Arm64Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
-#if ANDROID_SMP != 0
   // Start off with using the last LIR as the barrier. If it is not enough, then we will generate one.
   LIR* barrier = last_lir_insn_;
 
@@ -1015,9 +1014,6 @@ bool Arm64Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
   DCHECK(!barrier->flags.use_def_invalid);
   barrier->u.m.def_mask = &kEncodeAll;
   return ret;
-#else
-  return false;
-#endif
 }
 
 void Arm64Mir2Lir::GenIntToLong(RegLocation rl_dest, RegLocation rl_src) {
