@@ -438,7 +438,7 @@ bool Runtime::Start() {
 
   started_ = true;
 
-  if (IsZygote()) {
+  if (!IsCompiler()) {
     ScopedObjectAccess soa(self);
     gc::space::ImageSpace* image_space = heap_->GetImageSpace();
     if (image_space != nullptr) {
