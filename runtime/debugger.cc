@@ -183,16 +183,19 @@ class AllocRecord {
 
 class Breakpoint {
  public:
-  Breakpoint(mirror::ArtMethod* method, uint32_t dex_pc, bool need_full_deoptimization)
+  Breakpoint(mirror::ArtMethod* method, uint32_t dex_pc, DeoptimizationRequest::Kind deoptimization_kind)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-    : method_(nullptr), dex_pc_(dex_pc), need_full_deoptimization_(need_full_deoptimization) {
+    : method_(nullptr), dex_pc_(dex_pc), deoptimization_kind_(deoptimization_kind) {
+    CHECK(deoptimization_kind_ == DeoptimizationRequest::kNothing ||
+          deoptimization_kind_ == DeoptimizationRequest::kSelectiveDeoptimization ||
+          deoptimization_kind_ == DeoptimizationRequest::kFullDeoptimization);
     ScopedObjectAccessUnchecked soa(Thread::Current());
     method_ = soa.EncodeMethod(method);
   }
 
   Breakpoint(const Breakpoint& other) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
     : method_(nullptr), dex_pc_(other.dex_pc_),
-      need_full_deoptimization_(other.need_full_deoptimization_) {
+      deoptimization_kind_(other.deoptimization_kind_) {
     ScopedObjectAccessUnchecked soa(Thread::Current());
     method_ = soa.EncodeMethod(other.Method());
   }
@@ -206,8 +209,8 @@ class Breakpoint {
     return dex_pc_;
   }
 
-  bool NeedFullDeoptimization() const {
-    return need_full_deoptimization_;
+  DeoptimizationRequest::Kind GetDeoptimizationKind() const {
+    return deoptimization_kind_;
   }
 
  private:
@@ -216,7 +219,7 @@ class Breakpoint {
   uint32_t dex_pc_;
 
   // Indicates whether breakpoint needs full deoptimization or selective deoptimization.
-  bool need_full_deoptimization_;
+  DeoptimizationRequest::Kind deoptimization_kind_;
 };
 
 static std::ostream& operator<<(std::ostream& os, const Breakpoint& rhs)
@@ -768,7 +771,9 @@ void Dbg::GoActive() {
   Thread* self = Thread::Current();
   ThreadState old_state = self->SetStateUnsafe(kRunnable);
   CHECK_NE(old_state, kRunnable);
-  runtime->GetInstrumentation()->EnableDeoptimization();
+  if (!runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
+    runtime->GetInstrumentation()->EnableDeoptimization();
+  }
   instrumentation_events_ = 0;
   gDebuggerActive = true;
   CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
@@ -806,7 +811,9 @@ void Dbg::Disconnected() {
                                                     instrumentation_events_);
       instrumentation_events_ = 0;
     }
-    runtime->GetInstrumentation()->DisableDeoptimization();
+    if (!runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
+      runtime->GetInstrumentation()->DisableDeoptimization();
+    }
     gDebuggerActive = false;
   }
   gRegistry->Clear();
@@ -3196,20 +3203,59 @@ static const Breakpoint* FindFirstBreakpointForMethod(mirror::ArtMethod* m)
 }
 
 // Sanity checks all existing breakpoints on the same method.
-static void SanityCheckExistingBreakpoints(mirror::ArtMethod* m, bool need_full_deoptimization)
+static void SanityCheckExistingBreakpoints(mirror::ArtMethod* m,
+                                           DeoptimizationRequest::Kind deoptimization_kind)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::breakpoint_lock_) {
+  // TODO we only need to look for breakpoints realted to the given method.
   for (const Breakpoint& breakpoint : gBreakpoints) {
-    CHECK_EQ(need_full_deoptimization, breakpoint.NeedFullDeoptimization());
+    if (breakpoint.Method() == m) {
+      CHECK_EQ(deoptimization_kind, breakpoint.GetDeoptimizationKind());
+    }
   }
-  if (need_full_deoptimization) {
+  if (deoptimization_kind == DeoptimizationRequest::kFullDeoptimization) {
     // We should have deoptimized everything but not "selectively" deoptimized this method.
     CHECK(Runtime::Current()->GetInstrumentation()->AreAllMethodsDeoptimized());
     CHECK(!Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
-  } else {
+  } else if (deoptimization_kind == DeoptimizationRequest::kSelectiveDeoptimization) {
     // We should have "selectively" deoptimized this method.
     // Note: while we have not deoptimized everything for this method, we may have done it for
     // another event.
     CHECK(Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
+  } else {
+    CHECK_EQ(deoptimization_kind, DeoptimizationRequest::kNothing);
+  }
+}
+
+static DeoptimizationRequest::Kind GetRequiredDeoptimizationKind(Thread* self,
+                                                                 mirror::ArtMethod* m)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  if (Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly()) {
+    // We already run in interpreter-only mode so we don't need to deoptimize anything.
+    return DeoptimizationRequest::kNothing;
+  }
+  const Breakpoint* existing_breakpoint;
+  {
+    ReaderMutexLock mu(self, *Locks::breakpoint_lock_);
+    existing_breakpoint = FindFirstBreakpointForMethod(m);
+  }
+  if (existing_breakpoint == nullptr) {
+    // There is no breakpoint on this method yet: we need to deoptimize. If this method may be
+    // inlined, we deoptimize everything; otherwise we deoptimize only this method.
+    // Note: IsMethodPossiblyInlined goes into the method verifier and may cause thread suspension.
+    // Therefore we must not hold any lock when we call it.
+    // TODO: we don't need to deoptimize this method if it's not compiled.
+    bool need_full_deoptimization = IsMethodPossiblyInlined(self, m);
+    return need_full_deoptimization ? DeoptimizationRequest::kFullDeoptimization :
+                                      DeoptimizationRequest::kSelectiveDeoptimization;
+  } else {
+    // There is at least one breakpoint for this method: we don't need to deoptimize.
+    // Let's check that all breakpoints are configured the same way for deoptimization.
+    DeoptimizationRequest::Kind deoptimization_kind = existing_breakpoint->GetDeoptimizationKind();
+    if (kIsDebugBuild) {
+      ReaderMutexLock mu(self, *Locks::breakpoint_lock_);
+      SanityCheckExistingBreakpoints(m, deoptimization_kind);
+    }
+    return DeoptimizationRequest::kNothing;
   }
 }
 
@@ -3220,40 +3266,18 @@ void Dbg::WatchLocation(const JDWP::JdwpLocation* location, DeoptimizationReques
   mirror::ArtMethod* m = FromMethodId(location->method_id);
   DCHECK(m != nullptr) << "No method for method id " << location->method_id;
 
-  const Breakpoint* existing_breakpoint;
-  {
-    ReaderMutexLock mu(self, *Locks::breakpoint_lock_);
-    existing_breakpoint = FindFirstBreakpointForMethod(m);
-  }
-  bool need_full_deoptimization;
-  if (existing_breakpoint == nullptr) {
-    // There is no breakpoint on this method yet: we need to deoptimize. If this method may be
-    // inlined, we deoptimize everything; otherwise we deoptimize only this method.
-    // Note: IsMethodPossiblyInlined goes into the method verifier and may cause thread suspension.
-    // Therefore we must not hold any lock when we call it.
-    need_full_deoptimization = IsMethodPossiblyInlined(self, m);
-    if (need_full_deoptimization) {
-      req->SetKind(DeoptimizationRequest::kFullDeoptimization);
-      req->SetMethod(nullptr);
-    } else {
-      req->SetKind(DeoptimizationRequest::kSelectiveDeoptimization);
-      req->SetMethod(m);
-    }
+  DeoptimizationRequest::Kind deoptimization_kind = GetRequiredDeoptimizationKind(self, m);
+  if (deoptimization_kind == DeoptimizationRequest::kSelectiveDeoptimization) {
+    req->SetMethod(m);
   } else {
-    // There is at least one breakpoint for this method: we don't need to deoptimize.
-    req->SetKind(DeoptimizationRequest::kNothing);
+    CHECK(deoptimization_kind == DeoptimizationRequest::kNothing ||
+          deoptimization_kind == DeoptimizationRequest::kFullDeoptimization);
     req->SetMethod(nullptr);
-
-    need_full_deoptimization = existing_breakpoint->NeedFullDeoptimization();
-    if (kIsDebugBuild) {
-      ReaderMutexLock mu(self, *Locks::breakpoint_lock_);
-      SanityCheckExistingBreakpoints(m, need_full_deoptimization);
-    }
   }
 
   {
     WriterMutexLock mu(self, *Locks::breakpoint_lock_);
-    gBreakpoints.push_back(Breakpoint(m, location->dex_pc, need_full_deoptimization));
+    gBreakpoints.push_back(Breakpoint(m, location->dex_pc, deoptimization_kind));
     VLOG(jdwp) << "Set breakpoint #" << (gBreakpoints.size() - 1) << ": "
                << gBreakpoints[gBreakpoints.size() - 1];
   }
@@ -3265,12 +3289,12 @@ void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location, DeoptimizationRequ
   WriterMutexLock mu(Thread::Current(), *Locks::breakpoint_lock_);
   mirror::ArtMethod* m = FromMethodId(location->method_id);
   DCHECK(m != nullptr) << "No method for method id " << location->method_id;
-  bool need_full_deoptimization = false;
+  DeoptimizationRequest::Kind deoptimization_kind = DeoptimizationRequest::kNothing;
   for (size_t i = 0, e = gBreakpoints.size(); i < e; ++i) {
     if (gBreakpoints[i].DexPc() == location->dex_pc && gBreakpoints[i].Method() == m) {
       VLOG(jdwp) << "Removed breakpoint #" << i << ": " << gBreakpoints[i];
-      need_full_deoptimization = gBreakpoints[i].NeedFullDeoptimization();
-      DCHECK_NE(need_full_deoptimization, Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
+      deoptimization_kind = gBreakpoints[i].GetDeoptimizationKind();
+      DCHECK_NE(deoptimization_kind, Runtime::Current()->GetInstrumentation()->IsDeoptimized(m));
       gBreakpoints.erase(gBreakpoints.begin() + i);
       break;
     }
@@ -3278,21 +3302,26 @@ void Dbg::UnwatchLocation(const JDWP::JdwpLocation* location, DeoptimizationRequ
   const Breakpoint* const existing_breakpoint = FindFirstBreakpointForMethod(m);
   if (existing_breakpoint == nullptr) {
     // There is no more breakpoint on this method: we need to undeoptimize.
-    if (need_full_deoptimization) {
+    if (deoptimization_kind == DeoptimizationRequest::kFullDeoptimization) {
       // This method required full deoptimization: we need to undeoptimize everything.
       req->SetKind(DeoptimizationRequest::kFullUndeoptimization);
       req->SetMethod(nullptr);
-    } else {
+    } else if (deoptimization_kind == DeoptimizationRequest::kSelectiveDeoptimization) {
       // This method required selective deoptimization: we need to undeoptimize only that method.
       req->SetKind(DeoptimizationRequest::kSelectiveUndeoptimization);
       req->SetMethod(m);
+    } else {
+      // This method had no need for deoptimization: do nothing.
+      CHECK_EQ(deoptimization_kind, DeoptimizationRequest::kNothing);
+      req->SetKind(DeoptimizationRequest::kNothing);
+      req->SetMethod(nullptr);
     }
   } else {
     // There is at least one breakpoint for this method: we don't need to undeoptimize.
     req->SetKind(DeoptimizationRequest::kNothing);
     req->SetMethod(nullptr);
     if (kIsDebugBuild) {
-      SanityCheckExistingBreakpoints(m, need_full_deoptimization);
+      SanityCheckExistingBreakpoints(m, deoptimization_kind);
     }
   }
 }

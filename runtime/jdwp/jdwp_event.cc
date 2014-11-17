@@ -125,6 +125,10 @@ struct ModBasket {
 };
 
 static bool NeedsFullDeoptimization(JdwpEventKind eventKind) {
+  if (Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly()) {
+    // We already run in interpreter-only mode so we don't need to deoptimize anything.
+    return false;
+  }
   switch (eventKind) {
       case EK_METHOD_ENTRY:
       case EK_METHOD_EXIT:
