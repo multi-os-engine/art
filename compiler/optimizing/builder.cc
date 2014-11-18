@@ -1141,6 +1141,36 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       break;
     }
 
+    case Instruction::SHL_INT: {
+      Binop_23x<HShl>(instruction, Primitive::kPrimInt);
+      break;
+    }
+
+    case Instruction::SHL_LONG: {
+      Binop_23x<HShl>(instruction, Primitive::kPrimLong);
+      break;
+    }
+
+    case Instruction::SHR_INT: {
+      Binop_23x<HShr>(instruction, Primitive::kPrimInt);
+      break;
+    }
+
+    case Instruction::SHR_LONG: {
+      Binop_23x<HShr>(instruction, Primitive::kPrimLong);
+      break;
+    }
+
+    case Instruction::USHR_INT: {
+      Binop_23x<HShr>(instruction, Primitive::kPrimInt);
+      break;
+    }
+
+    case Instruction::USHR_LONG: {
+      Binop_23x<HShr>(instruction, Primitive::kPrimLong);
+      break;
+    }
+
     case Instruction::OR_INT: {
       Binop_23x<HOr>(instruction, Primitive::kPrimInt);
       break;
@@ -1237,6 +1267,36 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
     case Instruction::REM_LONG_2ADDR: {
       BuildCheckedDivRem(instruction.VRegA(), instruction.VRegA(), instruction.VRegB(),
                          dex_pc, Primitive::kPrimLong, false, false);
+      break;
+    }
+
+    case Instruction::SHL_INT_2ADDR: {
+      Binop_12x<HShl>(instruction, Primitive::kPrimInt);
+      break;
+    }
+
+    case Instruction::SHL_LONG_2ADDR: {
+      Binop_12x<HShl>(instruction, Primitive::kPrimLong);
+      break;
+    }
+
+    case Instruction::SHR_INT_2ADDR: {
+      Binop_12x<HShr>(instruction, Primitive::kPrimInt);
+      break;
+    }
+
+    case Instruction::SHR_LONG_2ADDR: {
+      Binop_12x<HShr>(instruction, Primitive::kPrimLong);
+      break;
+    }
+
+    case Instruction::USHR_INT_2ADDR: {
+      Binop_12x<HUShr>(instruction, Primitive::kPrimInt);
+      break;
+    }
+
+    case Instruction::USHR_LONG_2ADDR: {
+      Binop_12x<HUShr>(instruction, Primitive::kPrimLong);
       break;
     }
 
@@ -1351,6 +1411,21 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
     case Instruction::REM_INT_LIT8: {
       BuildCheckedDivRem(instruction.VRegA(), instruction.VRegB(), instruction.VRegC(),
                          dex_pc, Primitive::kPrimInt, true, false);
+      break;
+    }
+
+    case Instruction::SHL_INT_LIT8: {
+      Binop_22b<HShl>(instruction, Primitive::kPrimInt);
+      break;
+    }
+
+    case Instruction::SHR_INT_LIT8: {
+      Binop_22b<HShr>(instruction, Primitive::kPrimInt);
+      break;
+    }
+
+    case Instruction::USHR_INT_LIT8: {
+      Binop_22b<HUShr>(instruction, Primitive::kPrimInt);
       break;
     }
 
