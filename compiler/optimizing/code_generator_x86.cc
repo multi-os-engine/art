@@ -2129,6 +2129,139 @@ void InstructionCodeGeneratorX86::VisitDivZeroCheck(HDivZeroCheck* instruction) 
   }
 }
 
+void LocationsBuilderX86::HandleShift(HBinaryOperation* op) {
+  DCHECK(op->IsShl() || op->IsShr() || op->IsUShr());
+
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(op, LocationSummary::kNoCall);
+
+  switch (op->GetResultType()) {
+    case Primitive::kPrimInt: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::ByteRegisterOrConstant(ECX, op->InputAt(1)));
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RegisterPairLocation(ECX, EBX));
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected op type " << op->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorX86::HandleShift(HBinaryOperation* op) {
+  DCHECK(op->IsShl() || op->IsShr() || op->IsUShr());
+
+  LocationSummary* locations = op->GetLocations();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  DCHECK(first.Equals(locations->Out()));
+
+  switch (op->GetResultType()) {
+    case Primitive::kPrimInt: {
+      Register first_reg = first.As<Register>();
+      if (second.IsRegister()) {
+        Register second_reg = second.As<Register>();
+        DCHECK_EQ(ECX, second_reg);
+        if (op->IsShl()) {
+          __ shll(first_reg, second_reg);
+        } else if (op->IsShr()) {
+          __ sarl(first_reg, second_reg);
+        } else {
+          __ shrl(first_reg, second_reg);
+        }
+      } else {
+        Immediate imm(second.GetConstant()->AsIntConstant()->GetValue());
+        if (op->IsShl()) {
+          __ shll(first_reg, imm);
+        } else if (op->IsShr()) {
+          __ sarl(first_reg, imm);
+        } else {
+          __ shrl(first_reg, imm);
+        }
+      }
+      break;
+    }
+    case Primitive::kPrimLong: {
+      DCHECK_EQ(ECX, second.AsRegisterPairLow<Register>());
+      if (op->IsShl()) {
+        GenerateShlLong(first, second);
+      } else if (op->IsShr()) {
+        GenerateShrLong(first, second);
+      } else {
+        GenerateUShrLong(first, second);
+      }
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected op type " << op->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorX86::GenerateShlLong(const Location& first, const Location& second) {
+  Label done;
+  __ shld(first.AsRegisterPairHigh<Register>(), first.AsRegisterPairLow<Register>());
+  __ shll(first.AsRegisterPairLow<Register>(), second.AsRegisterPairLow<Register>());
+  __ testl(second.AsRegisterPairLow<Register>(), Immediate(32));
+  __ j(kEqual, &done);
+  // if we're greater than 32 we need to move the entire low part to the high part.
+  __ movl(first.AsRegisterPairHigh<Register>(), first.AsRegisterPairLow<Register>());
+  __ movl(first.AsRegisterPairLow<Register>(), Immediate(0));
+  __ Bind(&done);
+}
+
+void InstructionCodeGeneratorX86::GenerateShrLong(const Location& first, const Location& second) {
+  Label done;
+  __ shrd(first.AsRegisterPairLow<Register>(), first.AsRegisterPairHigh<Register>());
+  __ sarl(first.AsRegisterPairHigh<Register>(), second.AsRegisterPairLow<Register>());
+  __ testl(second.AsRegisterPairLow<Register>(), Immediate(32));
+  __ j(kEqual, &done);
+  // if we're greater than 32 we need to move the entire low part to the high part.
+  __ movl(first.AsRegisterPairLow<Register>(), first.AsRegisterPairHigh<Register>());
+  __ sarl(first.AsRegisterPairHigh<Register>(), Immediate(31));
+  __ Bind(&done);
+}
+
+void InstructionCodeGeneratorX86::GenerateUShrLong(const Location& first, const Location& second) {
+  Label done;
+  __ shrd(first.AsRegisterPairLow<Register>(), first.AsRegisterPairHigh<Register>());
+  __ shrl(first.AsRegisterPairHigh<Register>(), second.AsRegisterPairLow<Register>());
+  __ testl(second.AsRegisterPairLow<Register>(), Immediate(32));
+  __ j(kEqual, &done);
+  // if we're greater than 32 we need to move the entire low part to the high part.
+  __ movl(first.AsRegisterPairLow<Register>(), first.AsRegisterPairHigh<Register>());
+  __ movl(first.AsRegisterPairHigh<Register>(), Immediate(0));
+  __ Bind(&done);
+}
+
+void LocationsBuilderX86::VisitShl(HShl* shl) {
+  HandleShift(shl);
+}
+
+void InstructionCodeGeneratorX86::VisitShl(HShl* shl) {
+  HandleShift(shl);
+}
+
+void LocationsBuilderX86::VisitShr(HShr* shr) {
+  HandleShift(shr);
+}
+
+void InstructionCodeGeneratorX86::VisitShr(HShr* shr) {
+  HandleShift(shr);
+}
+
+void LocationsBuilderX86::VisitUShr(HUShr* ushr) {
+  HandleShift(ushr);
+}
+
+void InstructionCodeGeneratorX86::VisitUShr(HUShr* ushr) {
+  HandleShift(ushr);
+}
+
 void LocationsBuilderX86::VisitNewInstance(HNewInstance* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
