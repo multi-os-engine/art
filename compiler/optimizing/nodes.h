@@ -521,9 +521,11 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   M(ParallelMove, Instruction)                                          \
   M(ParameterValue, Instruction)                                        \
   M(Phi, Instruction)                                                   \
-  M(Rem, BinaryOperation)                                             \
+  M(Rem, BinaryOperation)                                               \
   M(Return, Instruction)                                                \
   M(ReturnVoid, Instruction)                                            \
+  M(Shl, BinaryOperation)                                               \
+  M(Shr, BinaryOperation)                                               \
   M(StaticFieldGet, Instruction)                                        \
   M(StaticFieldSet, Instruction)                                        \
   M(StoreLocal, Instruction)                                            \
@@ -532,6 +534,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   M(Temporary, Instruction)                                             \
   M(Throw, Instruction)                                                 \
   M(TypeConversion, Instruction)                                        \
+  M(UShr, BinaryOperation)                                              \
   M(Xor, BinaryOperation)                                               \
 
 #define FOR_EACH_INSTRUCTION(M)                                         \
@@ -1829,6 +1832,60 @@ class HDivZeroCheck : public HExpression<1> {
   const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HDivZeroCheck);
+};
+
+class HShl : public HBinaryOperation {
+ public:
+  HShl(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x << y; }
+  int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x << y; }
+
+  DECLARE_INSTRUCTION(Shl);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HShl);
+};
+
+class HShr : public HBinaryOperation {
+ public:
+  HShr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x >> y; }
+  int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x >> y; }
+
+  DECLARE_INSTRUCTION(Shr);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HShr);
+};
+
+class HUShr : public HBinaryOperation {
+ public:
+  HUShr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HBinaryOperation(result_type, left, right) {}
+
+  int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE {
+    uint32_t ux = static_cast<uint32_t>(x);
+    uint32_t uy = static_cast<uint32_t>(y) & kMaxIntShiftValue;
+    return static_cast<int32_t>(ux >> uy);
+  }
+
+  int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE {
+    uint64_t ux = static_cast<uint64_t>(x);
+    uint64_t uy = static_cast<uint64_t>(y) & kMaxLongShiftValue;
+    return static_cast<int64_t>(ux >> uy);
+  }
+
+  DECLARE_INSTRUCTION(UShr);
+
+ private:
+  static constexpr uint8_t kMaxIntShiftValue = 0x1f;
+  static constexpr uint8_t kMaxLongShiftValue = 0x3f;
+
+  DISALLOW_COPY_AND_ASSIGN(HUShr);
 };
 
 class HAnd : public HBinaryOperation {

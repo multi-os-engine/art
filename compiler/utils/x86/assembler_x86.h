@@ -406,6 +406,7 @@ class X86Assembler FINAL : public Assembler {
   void sarl(Register reg, const Immediate& imm);
   void sarl(Register operand, Register shifter);
   void shld(Register dst, Register src);
+  void shrd(Register dst, Register src);
 
   void negl(Register reg);
   void notl(Register reg);
