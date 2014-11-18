@@ -83,6 +83,7 @@ define build-art-executable
       LOCAL_CFLAGS += $(ART_HOST_DEBUG_CFLAGS)
     else
       LOCAL_CFLAGS += $(ART_HOST_NON_DEBUG_CFLAGS)
+      LOCAL_CLANG_CFLAGS += $(ART_HOST_CLANG_NON_DEBUG_CFLAGS)
     endif
     LOCAL_LDLIBS += -lpthread -ldl
   endif

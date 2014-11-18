@@ -241,12 +241,18 @@ art_debug_cflags := \
 art_host_non_debug_cflags := $(art_non_debug_cflags)
 art_target_non_debug_cflags := $(art_non_debug_cflags)
 
+# Additional flags for Clang compiler.
+art_host_clang_non_debug_cflags :=
+art_target_clang_non_debug_cflags :=
+
 ifeq ($(HOST_OS),linux)
   # Larger frame-size for host clang builds today
   ifndef SANITIZE_HOST
     art_host_non_debug_cflags += -Wframe-larger-than=2600
   endif
   art_target_non_debug_cflags += -Wframe-larger-than=1728
+  # Allow larger frame-size for clang builds today.
+  art_target_clang_non_debug_cflags += -Wframe-larger-than=2400
 endif
 
 ifndef LIBART_IMG_HOST_BASE_ADDRESS
@@ -262,6 +268,8 @@ ART_TARGET_CFLAGS += $(art_cflags) -DART_TARGET -DART_BASE_ADDRESS=$(LIBART_IMG_
 
 ART_HOST_NON_DEBUG_CFLAGS := $(art_host_non_debug_cflags)
 ART_TARGET_NON_DEBUG_CFLAGS := $(art_target_non_debug_cflags)
+ART_HOST_CLANG_NON_DEBUG_CFLAGS := $(art_host_clang_non_debug_cflags)
+ART_TARGET_CLANG_NON_DEBUG_CFLAGS := $(art_target_clang_non_debug_cflags)
 ART_HOST_DEBUG_CFLAGS := $(art_debug_cflags)
 ART_TARGET_DEBUG_CFLAGS := $(art_debug_cflags)
 
@@ -304,6 +312,8 @@ art_debug_cflags :=
 art_non_debug_cflags :=
 art_host_non_debug_cflags :=
 art_target_non_debug_cflags :=
+art_host_clang_non_debug_cflags :=
+art_target_clang_non_debug_cflags :=
 art_default_gc_type :=
 art_default_gc_type_cflags :=
 
@@ -325,6 +335,7 @@ define set-target-local-cflags-vars
     LOCAL_CFLAGS += $(ART_TARGET_DEBUG_CFLAGS)
   else
     LOCAL_CFLAGS += $(ART_TARGET_NON_DEBUG_CFLAGS)
+    LOCAL_CLANG_CFLAGS += $(ART_TARGET_CLANG_NON_DEBUG_CFLAGS)
   endif
 
   # TODO: Also set when ART_TARGET_CLANG_$(arch)!=false and ART_TARGET_CLANG==true
