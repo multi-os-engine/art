@@ -176,6 +176,11 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
   // if it is.
 
   Thread* self = Thread::Current();
+  if (self == nullptr) {
+    // ART is not running, so just pass on to the next handler in the chain.
+    InvokeUserSignalHandler(sig, info, context);
+    return;
+  }
 
   // Now set up the nested signal handler.
 
