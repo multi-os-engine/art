@@ -294,12 +294,14 @@ void ArmMir2Lir::GenMoveException(RegLocation rl_dest) {
 void ArmMir2Lir::MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) {
   RegStorage reg_card_base = AllocTemp();
   RegStorage reg_card_no = AllocTemp();
-  LIR* branch_over = OpCmpImmBranch(kCondEq, val_reg, 0, NULL);
+  LIR* branch_over = val_reg.Valid() ? OpCmpImmBranch(kCondEq, val_reg, 0, nullptr) : nullptr;
   LoadWordDisp(rs_rARM_SELF, Thread::CardTableOffset<4>().Int32Value(), reg_card_base);
   OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
   StoreBaseIndexed(reg_card_base, reg_card_no, reg_card_base, 0, kUnsignedByte);
-  LIR* target = NewLIR0(kPseudoTargetLabel);
-  branch_over->target = target;
+  if (val_reg.Valid()) {
+    LIR* target = NewLIR0(kPseudoTargetLabel);
+    branch_over->target = target;
+  }
   FreeTemp(reg_card_base);
   FreeTemp(reg_card_no);
 }
