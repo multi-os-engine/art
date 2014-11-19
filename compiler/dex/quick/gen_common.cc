@@ -416,8 +416,10 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
   // share array alignment with ints (see comment at head of function)
   size_t component_size = sizeof(int32_t);
 
-  // Having a range of 0 is legal
-  if (info->is_range && (elems > 0)) {
+  if (elems == 0) {
+    DCHECK(info->is_range);  // Having a range of 0 is legal.
+  } else if (elems > 5) {
+    DCHECK(info->is_range);  // Non-range insn can't encode more than 5 elems.
     /*
      * Bit of ugliness here.  We're going generate a mem copy loop
      * on the register range, but it is possible that some regs
@@ -487,7 +489,24 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
       OpRegRegImm(kOpAdd, ref_reg, r_dst,
                   -mirror::Array::DataOffset(component_size).Int32Value());
     }
-  } else if (!info->is_range) {
+    FreeTemp(r_idx);
+    FreeTemp(r_dst);
+    FreeTemp(r_src);
+    if (info->args[0].ref) {
+      // MarkGCCard() unconditionally.
+      MarkGCCard(RegStorage::InvalidReg(), ref_reg);
+    }
+  } else {
+    DCHECK(0 < elems && elems <= 5);  // Usually but not necessarily non-range.
+    // Count non-null refs to determine what MarkGCCard() to emit below.
+    size_t non_null_refs = 0u;
+    if (info->args[0].ref) {
+      for (int i = 0; i < elems; i++) {
+        if (!mir_graph_->IsConstantNullRef(info->args[i])) {
+          ++non_null_refs;
+        }
+      }
+    }
     // TUNING: interleave
     for (int i = 0; i < elems; i++) {
       RegLocation rl_arg;
@@ -501,10 +520,17 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
         Store32Disp(ref_reg,
                     mirror::Array::DataOffset(component_size).Int32Value() + i * 4, rl_arg.reg);
       }
+      if (non_null_refs == 1u && !mir_graph_->IsConstantNullRef(info->args[i])) {
+        MarkGCCard(rl_arg.reg, ref_reg);
+      }
       // If the LoadValue caused a temp to be allocated, free it
       if (IsTemp(rl_arg.reg)) {
         FreeTemp(rl_arg.reg);
       }
+    }
+    if (non_null_refs > 1u) {
+      // MarkGCCard() unconditionally.
+      MarkGCCard(RegStorage::InvalidReg(), ref_reg);
     }
   }
   if (info->result.location != kLocInvalid) {

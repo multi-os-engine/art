@@ -1139,6 +1139,13 @@ class Mir2Lir : public Backend {
                                OpSize size, VolatileKind is_volatile) = 0;
     virtual LIR* StoreBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_src,
                                   int scale, OpSize size) = 0;
+
+    /**
+     * @brief Mark garbage collection card. Skip if the stored value (if provided) is null.
+     * @param val_reg if valid, the register holding the stored value to check against null;
+     *                if invalid, mark the card unconditionally.
+     * @param tgt_addr_reg the address of the object or array where the value was stored.
+     */
     virtual void MarkGCCard(RegStorage val_reg, RegStorage tgt_addr_reg) = 0;
 
     // Required for target - register utilities.
