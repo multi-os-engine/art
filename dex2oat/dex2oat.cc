@@ -1279,9 +1279,10 @@ class Dex2Oat FINAL {
 
     // Flush result to disk.
     {
+      std::unique_ptr<File> oat_file(oat_file_.release());
       TimingLogger::ScopedTiming t2("dex2oat Flush ELF", timings_);
-      if (oat_file_->FlushCloseOrErase() != 0) {
-        PLOG(ERROR) << "Failed to flush ELF file " << oat_file_->GetPath();
+      if (oat_file->FlushCloseOrErase() != 0) {
+        PLOG(ERROR) << "Failed to flush ELF file " << oat_file->GetPath();
         return false;
       }
     }
