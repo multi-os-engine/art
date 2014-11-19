@@ -41,6 +41,7 @@
 #include "mirror/object_array-inl.h"
 #include "mirror/string-inl.h"
 #include "mirror/throwable.h"
+#include "quick_argument_visitor.h"
 #include "quick/inline_method_analyser.h"
 #include "reflection.h"
 #include "safe_map.h"
@@ -2450,6 +2451,32 @@ void Dbg::SuspendSelf() {
   Runtime::Current()->GetThreadList()->SuspendSelfForDebugger();
 }
 
+// Specialization to access proxy method arguments. References live in JNI
+// local references. Upon destruction, we update reference locations
+// (register/stack) and delete JNI local references.
+class ProxyMethodArgumentVisitor FINAL : public BuildQuickArgumentVisitor {
+ public:
+  ProxyMethodArgumentVisitor(StackReference<mirror::ArtMethod>* sp, const char* shorty,
+                             uint32_t shorty_length, ScopedObjectAccessUnchecked* soa)
+    : BuildQuickArgumentVisitor(sp, false, shorty, shorty_length, soa, &method_arguments) {
+    CHECK(sp->AsMirrorPtr()->IsProxyMethod());
+  }
+
+  ~ProxyMethodArgumentVisitor() {
+    FixupReferences();
+  }
+
+  jvalue GetArgumentValue(size_t arg_index) {
+    DCHECK_LT(arg_index, method_arguments.size());
+    return method_arguments[arg_index];
+  }
+
+ private:
+  std::vector<jvalue> method_arguments;
+
+  DISALLOW_COPY_AND_ASSIGN(ProxyMethodArgumentVisitor);
+};
+
 struct GetThisVisitor : public StackVisitor {
   GetThisVisitor(Thread* thread, Context* context, JDWP::FrameId frame_id_in)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
@@ -2461,7 +2488,22 @@ struct GetThisVisitor : public StackVisitor {
     if (frame_id != GetFrameId()) {
       return true;  // continue
     } else {
-      this_object = GetThisObject();
+      if (GetMethod()->IsProxyMethod()) {
+        // Proxy methods have a different layout so we need special handling.
+        ScopedObjectAccessUnchecked soa(Thread::Current());
+        StackReference<mirror::ArtMethod>* current_method = GetCurrentQuickFrame();
+        CHECK(current_method != nullptr);
+        uint32_t shorty_length;
+        const char* shorty = current_method->AsMirrorPtr()->GetShorty(&shorty_length);
+        ProxyMethodArgumentVisitor visitor(current_method, shorty, shorty_length, &soa);
+        visitor.VisitArguments();
+        // First argument is 'this' object.
+        this_object = soa.Decode<mirror::Object*>(visitor.GetArgumentValue(0).l);
+        CHECK(this_object != nullptr);
+        CHECK(Runtime::Current()->GetHeap()->IsValidObjectAddress(this_object));
+      } else {
+        this_object = GetThisObject();
+      }
       return false;
     }
   }
