@@ -106,7 +106,7 @@ ParsedOptions::ParsedOptions()
     verify_(true),
     image_isa_(kRuntimeISA),
     use_homogeneous_space_compaction_for_oom_(true),  // Enable hspace compaction on OOM by default.
-    min_interval_homogeneous_space_compaction_by_oom_(MsToNs(100 * 1000))  // 100s.
+    min_interval_homogeneous_space_compaction_by_oom_(MsToNs(0 * 1000))  // 100s.
     {}
 
 ParsedOptions* ParsedOptions::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
