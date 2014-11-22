@@ -741,6 +741,14 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     GetInstrumentation()->ForceInterpretOnly();
   }
 
+  // Valgrind support does not correctly support compaction, yet. b/18481268
+  if (running_on_valgrind_) {
+    if (options->use_homogeneous_space_compaction_for_oom_) {
+      LOG(WARNING) << "No support for compaction when running under valgrind.";
+      options->use_homogeneous_space_compaction_for_oom_ = false;
+    }
+  }
+
   heap_ = new gc::Heap(options->heap_initial_size_,
                        options->heap_growth_limit_,
                        options->heap_min_free_,
@@ -785,7 +793,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     case kX86_64:
       implicit_null_checks_ = true;
       // Installing stack protection does not play well with valgrind.
-      implicit_so_checks_ = (RUNNING_ON_VALGRIND == 0);
+      implicit_so_checks_ = !running_on_valgrind_;
       break;
     default:
       // Keep the defaults.
