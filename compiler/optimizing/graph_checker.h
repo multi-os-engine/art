@@ -24,11 +24,11 @@
 namespace art {
 
 // A control-flow graph visitor performing various checks.
-class GraphChecker : public HGraphVisitor {
+class GraphChecker : public HGraphDelegateVisitor {
  public:
   GraphChecker(ArenaAllocator* allocator, HGraph* graph,
                const char* dump_prefix = "art::GraphChecker: ")
-    : HGraphVisitor(graph),
+    : HGraphDelegateVisitor(graph),
       allocator_(allocator),
       dump_prefix_(dump_prefix) {}
 
@@ -97,6 +97,7 @@ class SSAChecker : public GraphChecker {
   // Perform SSA form checks on instructions.
   virtual void VisitInstruction(HInstruction* instruction) OVERRIDE;
   virtual void VisitPhi(HPhi* phi) OVERRIDE;
+  virtual void VisitBinaryOperation(HBinaryOperation* op) OVERRIDE;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SSAChecker);
