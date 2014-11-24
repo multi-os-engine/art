@@ -79,7 +79,7 @@ void SsaLivenessAnalysis::LinearizeGraph() {
       DCHECK_EQ(1u, block->GetLoopInformation()->NumberOfBackEdges());
       number_of_forward_predecessors--;
     }
-    forward_predecessors.Put(block->GetBlockId(), number_of_foward_predecessors);
+    forward_predecessors.Put(block->GetBlockId(), number_of_forward_predecessors);
   }
 
   // (2): Following a worklist approach, first start with the entry block, and
