@@ -472,30 +472,46 @@ TEST(CodegenTest, NonMaterializedCondition) {
   RunCodeOptimized(graph, hook_before_codegen, true, 0);
 }
 
-#define MUL_TEST(TYPE, TEST_NAME)                     \
-  TEST(CodegenTest, Return ## TEST_NAME) {            \
-    const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(  \
-      Instruction::CONST_4 | 3 << 12 | 0,             \
-      Instruction::CONST_4 | 4 << 12 | 1 << 8,        \
-      Instruction::MUL_ ## TYPE, 1 << 8 | 0,          \
-      Instruction::RETURN);                           \
-                                                      \
-    TestCode(data, true, 12);                         \
-  }                                                   \
-                                                      \
-  TEST(CodegenTest, Return ## TEST_NAME ## 2addr) {   \
-    const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(  \
-      Instruction::CONST_4 | 3 << 12 | 0,             \
-      Instruction::CONST_4 | 4 << 12 | 1 << 8,        \
-      Instruction::MUL_ ## TYPE ## _2ADDR | 1 << 12,  \
-      Instruction::RETURN);                           \
-                                                      \
-    TestCode(data, true, 12);                         \
-  }
-
 #if !defined(__aarch64__)
-MUL_TEST(INT, MulInt);
-MUL_TEST(LONG, MulLong);
+TEST(CodegenTest, ReturnMulInt) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+      Instruction::CONST_4 | 3 << 12 | 0,
+      Instruction::CONST_4 | 4 << 12 | 1 << 8,
+      Instruction::MUL_INT, 1 << 8 | 0,
+      Instruction::RETURN);
+
+  TestCode(data, true, 12);
+}
+
+TEST(CodegenTest, ReturnMulInt2addr) {
+  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
+      Instruction::CONST_4 | 3 << 12 | 0,
+      Instruction::CONST_4 | 4 << 12 | 1 << 8,
+      Instruction::MUL_INT_2ADDR | 1 << 12,
+      Instruction::RETURN);
+
+  TestCode(data, true, 12);
+}
+
+TEST(CodegenTest, ReturnMulLong) {
+  const uint16_t data[] = FOUR_REGISTERS_CODE_ITEM(
+      Instruction::CONST_WIDE | 0 << 8, 3, 0, 0, 0,
+      Instruction::CONST_WIDE | 2 << 8, 4, 0, 0, 0,
+      Instruction::MUL_LONG, 2 << 8 | 0,
+      Instruction::RETURN_WIDE);
+
+  TestCodeLong(data, true, INT64_C(12));
+}
+
+TEST(CodegenTest, ReturnMulLong2addr) {
+  const uint16_t data[] = FOUR_REGISTERS_CODE_ITEM(
+      Instruction::CONST_WIDE | 0 << 8, 3, 0, 0, 0,
+      Instruction::CONST_WIDE | 2 << 8, 4, 0, 0, 0,
+      Instruction::MUL_LONG_2ADDR | 2 << 12,
+      Instruction::RETURN_WIDE);
+
+  TestCodeLong(data, true, INT64_C(12));
+}
 #endif
 
 TEST(CodegenTest, ReturnMulIntLit8) {
