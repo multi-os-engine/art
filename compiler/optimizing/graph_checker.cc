@@ -342,4 +342,39 @@ void SSAChecker::VisitPhi(HPhi* phi) {
   }
 }
 
+static Primitive::Type PrimitiveKind(Primitive::Type type) {
+  switch (type) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimInt:
+      return Primitive::kPrimInt;
+    default:
+      return type;
+  }
+}
+
+void SSAChecker::VisitBinaryOperation(HBinaryOperation* op) {
+  VisitInstruction(op);
+  if (op->IsCondition() || op->IsCompare()) return;
+  if (PrimitiveKind(op->InputAt(1)->GetType()) != PrimitiveKind(op->InputAt(0)->GetType())) {
+    std::stringstream error;
+    error << "Binary operation " << op->DebugName() << " " << op->GetId()
+          << " has inputs of different type: "
+          << op->InputAt(0)->GetType() << ", and " << op->InputAt(1)->GetType()
+          << ".";
+    errors_.push_back(error.str());
+  }
+
+  if (PrimitiveKind(op->GetType()) != PrimitiveKind(op->InputAt(1)->GetType())) {
+    std::stringstream error;
+    error << "Binary operation " << op->DebugName() << " " << op->GetId()
+          << " has a result type different than its input type: "
+          << op->GetType() << ", and " << op->InputAt(1)->GetType()
+          << ".";
+    errors_.push_back(error.str());
+  }
+}
+
 }  // namespace art
