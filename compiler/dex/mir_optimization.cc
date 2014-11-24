@@ -477,29 +477,26 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
             }
           }
           break;
-        case Instruction::GOTO:
-        case Instruction::GOTO_16:
-        case Instruction::GOTO_32:
-        case Instruction::IF_EQ:
-        case Instruction::IF_NE:
-        case Instruction::IF_LT:
-        case Instruction::IF_GE:
-        case Instruction::IF_GT:
-        case Instruction::IF_LE:
-        case Instruction::IF_EQZ:
-        case Instruction::IF_NEZ:
-        case Instruction::IF_LTZ:
-        case Instruction::IF_GEZ:
-        case Instruction::IF_GTZ:
-        case Instruction::IF_LEZ:
-          // If we've got a backwards branch to return, no need to suspend check.
-          if ((IsBackedge(bb, bb->taken) && GetBasicBlock(bb->taken)->dominates_return) ||
-              (IsBackedge(bb, bb->fall_through) &&
-                          GetBasicBlock(bb->fall_through)->dominates_return)) {
-            mir->optimization_flags |= MIR_IGNORE_SUSPEND_CHECK;
-            if (cu_->verbose) {
-              LOG(INFO) << "Suppressed suspend check on branch to return at 0x" << std::hex
-                        << mir->offset;
+        case Instruction::RETURN_VOID:
+        case Instruction::RETURN:
+        case Instruction::RETURN_WIDE:
+        case Instruction::RETURN_OBJECT:
+          if (bb->GetFirstNonPhiInsn() == mir) {
+            // This is a simple return BB. Eliminate suspend checks on branches to this BB.
+            for (BasicBlockId pred_id : bb->predecessors) {
+              BasicBlock* pred_bb = GetBasicBlock(pred_id);
+              DCHECK(pred_bb != nullptr);
+              MIR* last_pred_mir = pred_bb->last_mir_insn;
+              if (last_pred_mir != nullptr &&
+                  (IsInstructionIfCc(last_pred_mir->dalvikInsn.opcode) ||
+                   IsInstructionIfCcZ(last_pred_mir->dalvikInsn.opcode) ||
+                   IsInstructionGoto(last_pred_mir->dalvikInsn.opcode))) {
+                last_pred_mir->optimization_flags |= MIR_IGNORE_SUSPEND_CHECK;
+                if (cu_->verbose) {
+                  LOG(INFO) << "Suppressed suspend check on branch to return at 0x" << std::hex
+                            << last_pred_mir->offset;
+                }
+              }
             }
           }
           break;
