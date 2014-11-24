@@ -17,8 +17,8 @@
 # Remove prebuild from the flags, this test is for testing not having oat files.
 flags="${@/--prebuild/}"
 
-# Use the non-prebuild script.
-RUN="${RUN/push-and-run-prebuilt-test-jar/push-and-run-test-jar}"
+# Use the non-prebuild flag.
+flags="${flags} --no-prebuild"
 
 # Make sure we can run without an oat file,
 echo "Run -Xnodex2oat"
