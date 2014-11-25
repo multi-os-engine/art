@@ -24,6 +24,7 @@
 #include "mirror/object.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
+#include "quick_argument_visitor.h"
 #include "quick/quick_method_frame_info.h"
 #include "runtime.h"
 #include "thread.h"
@@ -125,6 +126,12 @@ mirror::Object* StackVisitor::GetThisObject() const {
     } else {
       return cur_shadow_frame_->GetVRegReference(0);
     }
+  } else if (m->IsProxyMethod()) {
+    if (cur_quick_frame_ != nullptr) {
+      return QuickArgumentVisitor::GetProxyThisObject(cur_quick_frame_)->AsMirrorPtr();
+    } else {
+      return cur_shadow_frame_->GetVRegReference(0);
+    }
   } else if (m->IsOptimized()) {
     // TODO: Implement, currently only used for exceptions when jdwp is enabled.
     UNIMPLEMENTED(WARNING)
@@ -133,7 +140,7 @@ mirror::Object* StackVisitor::GetThisObject() const {
   } else {
     const DexFile::CodeItem* code_item = m->GetCodeItem();
     if (code_item == nullptr) {
-      UNIMPLEMENTED(ERROR) << "Failed to determine this object of abstract or proxy method: "
+      UNIMPLEMENTED(ERROR) << "Failed to determine this object of abstract method: "
           << PrettyMethod(m);
       return nullptr;
     } else {
