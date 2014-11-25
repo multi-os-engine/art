@@ -24,6 +24,10 @@ ifeq ($(ART_USE_PORTABLE_COMPILER),true)
   ART_EXECUTABLES_CFLAGS += -DART_USE_PORTABLE_COMPILER=1
 endif
 
+ifeq ($(ART_USE_OPTIMIZING_COMPILER),true)
+  ART_EXECUTABLES_CFLAGS += -DART_USE_OPTIMIZING_COMPILER=1
+endif
+
 # $(1): executable ("d" will be appended for debug version)
 # $(2): source
 # $(3): extra shared libraries
