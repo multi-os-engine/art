@@ -78,9 +78,9 @@ void X86Assembler::pushl(const Address& address) {
 }
 
 
-void X86Assembler::pushl(const Immediate& imm) {
+void X86Assembler::pushl(const Immediate& imm, bool force32bit) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
-  if (imm.is_int8()) {
+  if (!force32bit && imm.is_int8()) {
     EmitUint8(0x6A);
     EmitUint8(imm.value() & 0xFF);
   } else {
@@ -1318,13 +1318,23 @@ void X86Assembler::AddImmediate(Register reg, const Immediate& imm) {
 }
 
 
+void X86Assembler::LoadLongConstant(XmmRegister dst, int64_t value) {
+  // TODO: Need to have a code constants table.
+
+  // Force the operand to have a 32-bit length, as pushl() may decide
+  // to push an 8-bit immediate on the stack if `value` fits in 8
+  // bits.
+  pushl(Immediate(High32Bits(value)), true);
+  pushl(Immediate(Low32Bits(value)), true);
+  movsd(dst, Address(ESP, 0));
+  addl(ESP, Immediate(2 * sizeof(int32_t)));
+}
+
+
 void X86Assembler::LoadDoubleConstant(XmmRegister dst, double value) {
   // TODO: Need to have a code constants table.
   int64_t constant = bit_cast<int64_t, double>(value);
-  pushl(Immediate(High32Bits(constant)));
-  pushl(Immediate(Low32Bits(constant)));
-  movsd(dst, Address(ESP, 0));
-  addl(ESP, Immediate(2 * sizeof(intptr_t)));
+  LoadLongConstant(dst, constant);
 }
 
 

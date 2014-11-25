@@ -1430,6 +1430,11 @@ void LocationsBuilderX86_64::VisitTypeConversion(HTypeConversion* conversion) {
           break;
 
         case Primitive::kPrimLong:
+          // Processing a Dex `long-to-double' instruction.
+          locations->SetInAt(0, Location::RequiresRegister());
+          locations->SetOut(Location::RequiresFpuRegister());
+          break;
+
         case Primitive::kPrimFloat:
           LOG(FATAL) << "Type conversion from " << input_type
                      << " to " << result_type << " not yet implemented";
@@ -1613,6 +1618,10 @@ void InstructionCodeGeneratorX86_64::VisitTypeConversion(HTypeConversion* conver
           break;
 
         case Primitive::kPrimLong:
+          // Processing a Dex `long-to-double' instruction.
+          __ cvtsi2sd(out.As<XmmRegister>(), in.As<CpuRegister>(), true);
+          break;
+
         case Primitive::kPrimFloat:
           LOG(FATAL) << "Type conversion from " << input_type
                      << " to " << result_type << " not yet implemented";
