@@ -1205,4 +1205,30 @@ int ArmMir2Lir::GenDalvikArgsRange(CallInfo* info, int call_state,
   return call_state;
 }
 
+void ArmMir2Lir::GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
+  UNUSED(bb);
+  DCHECK(MIR::DecodedInstruction::IsPseudoMirOp(mir->dalvikInsn.opcode));
+  RegLocation rl_src[3];
+  RegLocation rl_dest = mir_graph_->GetBadLoc();
+  rl_src[0] = rl_src[1] = rl_src[2] = mir_graph_->GetBadLoc();
+  switch (static_cast<ExtendedMIROpcode>(mir->dalvikInsn.opcode)) {
+    case kMirOpMaddInt:
+      rl_dest = mir_graph_->GetDest(mir);
+      rl_src[0] = mir_graph_->GetSrc(mir, 0);
+      rl_src[1] = mir_graph_->GetSrc(mir, 1);
+      rl_src[2]= mir_graph_->GetSrc(mir, 2);
+      GenMaddMsubInt(rl_dest, rl_src[0], rl_src[1], rl_src[2], false);
+      break;
+    case kMirOpMsubInt:
+      rl_dest = mir_graph_->GetDest(mir);
+      rl_src[0] = mir_graph_->GetSrc(mir, 0);
+      rl_src[1] = mir_graph_->GetSrc(mir, 1);
+      rl_src[2]= mir_graph_->GetSrc(mir, 2);
+      GenMaddMsubInt(rl_dest, rl_src[0], rl_src[1], rl_src[2], true);
+      break;
+    default:
+      LOG(FATAL) << "Unexpected opcode: " << mir->dalvikInsn.opcode;
+  }
+}
+
 }  // namespace art
