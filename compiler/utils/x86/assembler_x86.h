@@ -220,7 +220,7 @@ class X86Assembler FINAL : public Assembler {
 
   void pushl(Register reg);
   void pushl(const Address& address);
-  void pushl(const Immediate& imm);
+  void pushl(const Immediate& imm, bool force32bit = false);
 
   void popl(Register reg);
   void popl(const Address& address);
@@ -441,6 +441,7 @@ class X86Assembler FINAL : public Assembler {
 
   void AddImmediate(Register reg, const Immediate& imm);
 
+  void LoadLongConstant(XmmRegister dst, int64_t value);
   void LoadDoubleConstant(XmmRegister dst, double value);
 
   void DoubleNegate(XmmRegister d);

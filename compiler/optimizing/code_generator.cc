@@ -228,7 +228,8 @@ void CodeGenerator::AllocateRegistersLocally(HInstruction* instruction) const {
       DCHECK(!blocked_fpu_registers_[loc.reg()]);
       blocked_fpu_registers_[loc.reg()] = true;
     } else {
-      DCHECK_EQ(loc.GetPolicy(), Location::kRequiresRegister);
+      DCHECK(loc.GetPolicy() == Location::kRequiresRegister
+             || loc.GetPolicy() == Location::kRequiresFpuRegister);
     }
   }
 
@@ -259,10 +260,16 @@ void CodeGenerator::AllocateRegistersLocally(HInstruction* instruction) const {
   for (size_t i = 0, e = locations->GetTempCount(); i < e; ++i) {
     Location loc = locations->GetTemp(i);
     if (loc.IsUnallocated()) {
-      DCHECK_EQ(loc.GetPolicy(), Location::kRequiresRegister);
-      // TODO: Adjust handling of temps. We currently consider temps to use
-      // core registers. They may also use floating point registers at some point.
-      loc = AllocateFreeRegister(Primitive::kPrimInt);
+      DCHECK(loc.GetPolicy() == Location::kRequiresRegister
+             || loc.GetPolicy() == Location::kRequiresFpuRegister);
+      if (loc.GetPolicy() == Location::kRequiresRegister) {
+        // Allocate a core register (large enough to fit a 32-bit integer).
+        loc = AllocateFreeRegister(Primitive::kPrimInt);
+      } else {
+        DCHECK_EQ(loc.GetPolicy(), Location::kRequiresFpuRegister);
+        // Allocate a core register (large enough to fit a 64-bit double).
+        loc = AllocateFreeRegister(Primitive::kPrimDouble);
+      }
       locations->SetTempAt(i, loc);
     }
   }
