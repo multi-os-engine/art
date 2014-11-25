@@ -1363,8 +1363,14 @@ class HGreaterThanOrEqual : public HCondition {
 // Result is 0 if input0 == input1, 1 if input0 > input1, or -1 if input0 < input1.
 class HCompare : public HBinaryOperation {
  public:
-  HCompare(Primitive::Type type, HInstruction* first, HInstruction* second)
-      : HBinaryOperation(Primitive::kPrimInt, first, second) {
+  enum Bias {
+    kNoBias,
+    kGtBias,
+    kLtBias,
+  };
+
+  HCompare(Primitive::Type type, HInstruction* first, HInstruction* second, Bias bias)
+      : HBinaryOperation(Primitive::kPrimInt, first, second), bias_(bias) {
     DCHECK_EQ(type, first->GetType());
     DCHECK_EQ(type, second->GetType());
   }
@@ -1375,6 +1381,7 @@ class HCompare : public HBinaryOperation {
       x > y ? 1 :
       -1;
   }
+
   virtual int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE {
     return
       x == y ? 0 :
@@ -1382,9 +1389,13 @@ class HCompare : public HBinaryOperation {
       -1;
   }
 
+  bool IsGtBias() { return bias_ == kGtBias; }
+
   DECLARE_INSTRUCTION(Compare);
 
  private:
+  Bias bias_;
+
   DISALLOW_COPY_AND_ASSIGN(HCompare);
 };
 
