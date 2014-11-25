@@ -70,6 +70,10 @@ const char* MIRGraph::extended_mir_op_names_[kMirOpLast - kMirOpFirst] = {
   "MemBarrier",
   "PackedArrayGet",
   "PackedArrayPut",
+  "MaddInt",
+  "MsubInt",
+  "MaddLong",
+  "MsubLong",
 };
 
 MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
@@ -1386,6 +1390,25 @@ void MIRGraph::DisassembleExtendedInstr(const MIR* mir, std::string* decoded_mir
       }
       FillTypeSizeString(mir->dalvikInsn.arg[0], decoded_mir);
       break;
+    case kMirOpMaddInt:
+    case kMirOpMsubInt:
+    case kMirOpMaddLong:
+    case kMirOpMsubLong:
+      if (ssa_rep != nullptr) {
+        decoded_mir->append(" ");
+        decoded_mir->append(GetSSANameWithConst(ssa_rep->defs[0], false));
+        if (defs > 1) {
+          decoded_mir->append(", ");
+          decoded_mir->append(GetSSANameWithConst(ssa_rep->defs[1], false));
+        }
+        for (int i = 0; i < uses; i++) {
+          decoded_mir->append(", ");
+          decoded_mir->append(GetSSANameWithConst(ssa_rep->uses[i], false));
+        }
+      } else {
+        LOG(FATAL) << "Unexpected extended op to disassemble";
+      }
+      break;
     default:
       break;
   }
@@ -2497,6 +2520,11 @@ int MIR::DecodedInstruction::FlagsOf() const {
       return Instruction::kContinue | Instruction::kThrow;
     case kMirOpPackedArrayPut:
       return Instruction::kContinue | Instruction::kThrow;
+    case kMirOpMaddInt:
+    case kMirOpMsubInt:
+    case kMirOpMaddLong:
+    case kMirOpMsubLong:
+      return Instruction::kContinue;
     default:
       LOG(WARNING) << "ExtendedFlagsOf: Unhandled case: " << static_cast<int> (opcode);
       return 0;
