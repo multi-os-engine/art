@@ -207,6 +207,21 @@ class QuickArgumentVisitor {
 #endif
 
  public:
+  // Special handling for proxy methods where the 'this' object is the 1st argument of
+  // the method. Proxy methods have the same frame layout than the kRefAndArgs runtime
+  // method. Since 'this' is a reference, it is located in the 1st GPR.
+  static mirror::Object* GetProxyThisObject(StackReference<mirror::ArtMethod>* sp)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    CHECK(sp->AsMirrorPtr()->IsProxyMethod());
+    CHECK_EQ(kQuickCalleeSaveFrame_RefAndArgs_FrameSize, sp->AsMirrorPtr()->GetFrameSizeInBytes());
+    CHECK_GT(kNumQuickGprArgs, 0u);
+    constexpr uint32_t this_gpr_index = 0u;  // 'this' is in the 1st GPR.
+    size_t this_arg_offset = kQuickCalleeSaveFrame_RefAndArgs_Gpr1Offset +
+        GprIndexToGprOffset(this_gpr_index);
+    uint8_t* this_arg_address = reinterpret_cast<uint8_t*>(sp) + this_arg_offset;
+    return reinterpret_cast<StackReference<mirror::Object>*>(this_arg_address)->AsMirrorPtr();
+  }
+
   static mirror::ArtMethod* GetCallingMethod(StackReference<mirror::ArtMethod>* sp)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK(sp->AsMirrorPtr()->IsCalleeSaveMethod());
@@ -433,6 +448,13 @@ class QuickArgumentVisitor {
   // Does a 64bit parameter straddle the register and stack arguments?
   bool is_split_long_or_double_;
 };
+
+// Returns the 'this' object of a proxy method. This function is only used by StackVisitor. It
+// allows to use the QuickArgumentVisitor constants without moving all the code in its own module.
+extern "C" mirror::Object* artQuickGetProxyThisObject(StackReference<mirror::ArtMethod>* sp)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  return QuickArgumentVisitor::GetProxyThisObject(sp);
+}
 
 // Visits arguments on the stack placing them into the shadow frame.
 class BuildQuickShadowFrameVisitor FINAL : public QuickArgumentVisitor {
