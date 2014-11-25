@@ -234,7 +234,7 @@ art_non_debug_cflags := \
 
 # Cflags for debug ART and ART tools.
 art_debug_cflags := \
-  -O2 \
+  -O0 \
   -DDYNAMIC_ANNOTATIONS_ENABLED=1 \
   -UNDEBUG
 

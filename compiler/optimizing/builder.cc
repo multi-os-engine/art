@@ -68,6 +68,44 @@ class Temporaries : public ValueObject {
   size_t index_;
 };
 
+class SwitchTable : public ValueObject {
+ public:
+  explicit SwitchTable(const Instruction& instruction, uint32_t dex_pc) : instruction_(instruction),
+      dex_pc_(dex_pc) {
+    int32_t table_offset = instruction.VRegB_31t();
+    const uint16_t* table = reinterpret_cast<const uint16_t*>(&instruction) + table_offset;
+    CHECK_EQ(*table, 0x0100);
+    num_entries_ = table[1];
+    values_ = reinterpret_cast<const int32_t*>(&table[2]);
+  }
+
+  uint16_t GetNumEntries() {
+    return num_entries_;
+  }
+
+  const int32_t* operator[](uint16_t index) {
+    return values_ + index;
+  }
+
+  uint32_t GetDexPcForIndex(uint16_t index) {
+    return dex_pc_ +
+        (reinterpret_cast<const int16_t*>(values_ + index) -
+         reinterpret_cast<const int16_t*>(&instruction_));
+  }
+
+ private:
+  const Instruction& instruction_;
+  const uint32_t dex_pc_;
+
+  // This can't be const as it needs to be computed off of the given instruction, and complicated
+  // expressions in the initializer list seemed very ugly.
+  uint16_t num_entries_;
+
+  const int32_t* values_;
+
+  DISALLOW_COPY_AND_ASSIGN(SwitchTable);
+};
+
 void HGraphBuilder::InitializeLocals(uint16_t count) {
   graph_->SetNumberOfVRegs(count);
   locals_.SetSize(count);
@@ -243,7 +281,7 @@ void HGraphBuilder::ComputeBranchTargets(const uint16_t* code_ptr, const uint16_
 
   // Iterate over all instructions and find branching instructions. Create blocks for
   // the locations these instructions branch to.
-  size_t dex_pc = 0;
+  int32_t dex_pc = 0;
   while (code_ptr < code_end) {
     const Instruction& instruction = *Instruction::At(code_ptr);
     if (instruction.IsBranch()) {
@@ -258,6 +296,48 @@ void HGraphBuilder::ComputeBranchTargets(const uint16_t* code_ptr, const uint16_
       if ((code_ptr < code_end) && (FindBlockStartingAt(dex_pc) == nullptr)) {
         block = new (arena_) HBasicBlock(graph_, dex_pc);
         branch_targets_.Put(dex_pc, block);
+      }
+    } else if (instruction.IsSwitch()) {
+      if (instruction.Opcode() == Instruction::PACKED_SWITCH) {
+        SwitchTable table(instruction, dex_pc);
+
+        uint16_t num_entries = table.GetNumEntries();
+
+        // Entry @0: starting key.
+
+        // Don't expect a full 64K switch. Means we don't need an overflow check. In that case,
+        // we'll punt to the interpreter later.
+        if (num_entries < 65535) {
+          for (uint16_t i = 1; i <= num_entries; ++i) {
+            // The target of the case.
+            int32_t target = dex_pc + *table[i];
+            if (FindBlockStartingAt(target) == nullptr) {
+              block = new (arena_) HBasicBlock(graph_, target);
+              branch_targets_.Put(target, block);
+            }
+
+            // The next case gets its own block.
+            if (i < num_entries) {
+              block = new (arena_) HBasicBlock(graph_, target);
+              branch_targets_.Put(table.GetDexPcForIndex(i), block);
+            }
+          }
+
+          // Fall-through.
+          dex_pc += instruction.SizeInCodeUnits();
+          code_ptr += instruction.SizeInCodeUnits();
+          if ((code_ptr < code_end) && (FindBlockStartingAt(dex_pc) == nullptr)) {
+            block = new (arena_) HBasicBlock(graph_, dex_pc);
+            branch_targets_.Put(dex_pc, block);
+          }
+        } else {
+          dex_pc += instruction.SizeInCodeUnits();
+          code_ptr += instruction.SizeInCodeUnits();
+        }
+      } else {
+        // TODO: sparse switch.
+        dex_pc += instruction.SizeInCodeUnits();
+        code_ptr += instruction.SizeInCodeUnits();
       }
     } else {
       code_ptr += instruction.SizeInCodeUnits();
@@ -778,6 +858,61 @@ bool HGraphBuilder::BuildTypeCheck(const Instruction& instruction,
     DCHECK_EQ(instruction.Opcode(), Instruction::CHECK_CAST);
     current_block_->AddInstruction(
         new (arena_) HCheckCast(object, cls, type_known_final, dex_pc));
+  }
+  return true;
+}
+
+bool HGraphBuilder::BuildPackedSwitch(const Instruction& instruction, uint32_t dex_pc) {
+  SwitchTable table(instruction, dex_pc);
+
+  // Value to test against.
+  HInstruction* value = LoadLocal(instruction.VRegA(), Primitive::kPrimInt);
+
+  // Chained cmp-and-branch, starting from starting_key.
+  int32_t starting_key = *table[0];
+
+  uint16_t num_entries = table.GetNumEntries();
+  // On overflow condition just punt.
+  if (num_entries == 65535) {
+    return false;
+  }
+
+  for (uint16_t i = 1; i <= num_entries; i++) {
+    int32_t target_offset = *table[i];
+    PotentiallyAddSuspendCheck(target_offset, dex_pc);
+
+    // The current case's value.
+    HInstruction* this_case_value = GetIntConstant(starting_key + i);
+
+    // Compare value and this_case_value.
+    HEqual* comparison = new (arena_) HEqual(value, this_case_value);
+    current_block_->AddInstruction(comparison);
+    HInstruction* ifinst = new (arena_) HIf(comparison);
+    current_block_->AddInstruction(ifinst);
+
+    // Case hit, use the target offset to determine where to go.
+    HBasicBlock* case_target = FindBlockStartingAt(dex_pc + target_offset);
+    DCHECK(case_target != nullptr);
+    current_block_->AddSuccessor(case_target);
+
+    // Case miss, go to the next case (or end). We use the block stored with the table offset
+    // representing this case when there is a next case, the instruction's successor otherwise.
+    // TODO: Peel the last iteration to avoid conditional.
+    if (i < table.GetNumEntries()) {
+      HBasicBlock* next_case_target = FindBlockStartingAt(table.GetDexPcForIndex(i));
+      DCHECK(next_case_target != nullptr);
+      current_block_->AddSuccessor(next_case_target);
+
+      // Need to manually add the block, as there is no dex-pc transition for the cases.
+      graph_->AddBlock(next_case_target);
+
+      current_block_ = next_case_target;
+    } else {
+      HBasicBlock* default_target = FindBlockStartingAt(dex_pc + instruction.SizeInCodeUnits());
+      DCHECK(default_target != nullptr);
+      current_block_->AddSuccessor(default_target);
+      current_block_ = nullptr;
+    }
   }
   return true;
 }
@@ -1566,6 +1701,13 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
           LoadLocal(instruction.VRegA_11x(), Primitive::kPrimNot),
           HMonitorOperation::kExit,
           dex_pc));
+      break;
+    }
+
+    case Instruction::PACKED_SWITCH: {
+      if (!BuildPackedSwitch(instruction, dex_pc)) {
+        return false;
+      }
       break;
     }
 
