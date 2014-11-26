@@ -1043,6 +1043,10 @@ class MANAGED Class FINAL : public Object {
     DISALLOW_COPY_AND_ASSIGN(InitializeClassVisitor);
   };
 
+  bool IsImageClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetClassLoader() == nullptr;
+  }
+
  private:
   void SetVerifyErrorClass(Class* klass) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
