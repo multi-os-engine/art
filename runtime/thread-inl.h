@@ -69,7 +69,11 @@ inline ThreadState Thread::SetState(ThreadState new_state) {
   // Cannot use this code to change into Runnable as changing to Runnable should fail if
   // old_state_and_flags.suspend_request is true.
   DCHECK_NE(new_state, kRunnable);
-  DCHECK_EQ(this, Thread::Current());
+  if (kIsDebugBuild && this != Thread::Current()) {
+    std::string name;
+    GetThreadName(name);
+    CHECK_EQ(this, Thread::Current()) << "Thread \"" << name << "\" changing state to " << new_state;
+  }
   union StateAndFlags old_state_and_flags;
   old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
   tls32_.state_and_flags.as_struct.state = new_state;
