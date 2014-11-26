@@ -372,88 +372,63 @@ build-art-host:   $(HOST_OUT_EXECUTABLES)/art $(ART_HOST_DEPENDENCIES) $(HOST_CO
 build-art-target: $(TARGET_OUT_EXECUTABLES)/art $(ART_TARGET_DEPENDENCIES) $(TARGET_CORE_IMG_OUTS)
 
 ########################################################################
-# targets to switch back and forth from libdvm to libart
+# Targets to switch to a specifc ART configuration (compilation filter and non-debug/debug build)
 
-.PHONY: use-art
-use-art:
+# Define a rule to use a specific ART configuration.
+# $(1): rule name
+# $(2): property value for dex2oat compilation filter
+# $(3): property value for image-dex2oat compilation filter
+# $(4): libart.so or libartd.so
+define define-use-art-rule
+  change_configuration := false
+  # Trick to check both property parameters are empty.
+  ifneq (,$(2)$(3))
+    change_configuration := true
+  endif
+
+.PHONY: $(1)
+$(1):
 	adb root
 	adb wait-for-device shell stop
-	adb shell setprop persist.sys.dalvik.vm.lib.2 libart.so
-	adb shell start
-
-.PHONY: use-artd
-use-artd:
-	adb root
-	adb wait-for-device shell stop
-	adb shell setprop persist.sys.dalvik.vm.lib.2 libartd.so
-	adb shell start
-
-.PHONY: use-dalvik
-use-dalvik:
-	adb root
-	adb wait-for-device shell stop
-	adb shell setprop persist.sys.dalvik.vm.lib.2 libdvm.so
-	adb shell start
-
-.PHONY: use-art-full
-use-art-full:
-	adb root
-	adb wait-for-device shell stop
+ifeq ($$(change_configuration),true)
 	adb shell rm -rf $(ART_TARGET_DALVIK_CACHE_DIR)/*
-	adb shell setprop dalvik.vm.dex2oat-filter ""
-	adb shell setprop dalvik.vm.image-dex2oat-filter ""
-	adb shell setprop persist.sys.dalvik.vm.lib.2 libart.so
+	adb shell setprop dalvik.vm.dex2oat-filter $(2)
+	adb shell setprop dalvik.vm.image-dex2oat-filter $(3)
+endif
+	adb shell setprop persist.sys.dalvik.vm.lib.2 $(4)
 	adb shell start
 
-.PHONY: use-artd-full
-use-artd-full:
-	adb root
-	adb wait-for-device shell stop
-	adb shell rm -rf $(ART_TARGET_DALVIK_CACHE_DIR)/*
-	adb shell setprop dalvik.vm.dex2oat-filter ""
-	adb shell setprop dalvik.vm.image-dex2oat-filter ""
-	adb shell setprop persist.sys.dalvik.vm.lib.2 libartd.so
-	adb shell start
+  change_configuration :=
+endef  # define-use-art-rule
 
-.PHONY: use-art-smart
-use-art-smart:
-	adb root
-	adb wait-for-device shell stop
-	adb shell rm -rf $(ART_TARGET_DALVIK_CACHE_DIR)/*
-	adb shell setprop dalvik.vm.dex2oat-filter "interpret-only"
-	adb shell setprop dalvik.vm.image-dex2oat-filter ""
-	adb shell setprop persist.sys.dalvik.vm.lib.2 libart.so
-	adb shell start
+# Define non-debug and debug use-art* rules to use a specific ART configuration.
+# $(1): suffix for the rule name
+# $(2): property value for dex2oat compilation filter
+# $(3): property value for image-dex2oat compilation filter
+define define-use-art-rules
+  rule_suffix :=
+  ifneq (,$(1))
+    rule_suffix := -$(1)
+  endif
+  $$(eval $$(call define-use-art-rule,use-art$$(rule_suffix),$(2),$(3),libart.so))
+  $$(eval $$(call define-use-art-rule,use-artd$$(rule_suffix),$(2),$(3),libartd.so))
+  rule_suffix :=
+endef  # define-use-art-rules
 
-.PHONY: use-art-interpret-only
-use-art-interpret-only:
-	adb root
-	adb wait-for-device shell stop
-	adb shell rm -rf $(ART_TARGET_DALVIK_CACHE_DIR)/*
-	adb shell setprop dalvik.vm.dex2oat-filter "interpret-only"
-	adb shell setprop dalvik.vm.image-dex2oat-filter "interpret-only"
-	adb shell setprop persist.sys.dalvik.vm.lib.2 libart.so
-	adb shell start
+# Defines use-art and use-artd rules (only switch to non-debug/debug build)
+$(eval $(call define-use-art-rules,,,))
 
-.PHONY: use-artd-interpret-only
-use-artd-interpret-only:
-	adb root
-	adb wait-for-device shell stop
-	adb shell rm -rf $(ART_TARGET_DALVIK_CACHE_DIR)/*
-	adb shell setprop dalvik.vm.dex2oat-filter "interpret-only"
-	adb shell setprop dalvik.vm.image-dex2oat-filter "interpret-only"
-	adb shell setprop persist.sys.dalvik.vm.lib.2 libartd.so
-	adb shell start
+# Defines use-art-full and use-artd-full rules.
+$(eval $(call define-use-art-rules,full,"",""))
 
-.PHONY: use-art-verify-none
-use-art-verify-none:
-	adb root
-	adb wait-for-device shell stop
-	adb shell rm -rf $(ART_TARGET_DALVIK_CACHE_DIR)/*
-	adb shell setprop dalvik.vm.dex2oat-filter "verify-none"
-	adb shell setprop dalvik.vm.image-dex2oat-filter "verify-none"
-	adb shell setprop persist.sys.dalvik.vm.lib.2 libart.so
-	adb shell start
+# Defines use-art-smart and use-artd-smart rules.
+$(eval $(call define-use-art-rules,smart,"interpret-only",""))
+
+# Defines use-art-interpret-only and use-artd-interpret-only rules.
+$(eval $(call define-use-art-rules,interpret-only,"interpret-only","interpret-only"))
+
+# Defines use-art-verify-none and use-artd-verify-none rules.
+$(eval $(call define-use-art-rules,verify-none,"verify-none","verify-none"))
 
 ########################################################################
 
