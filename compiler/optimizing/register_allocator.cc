@@ -895,12 +895,22 @@ void RegisterAllocator::InsertParallelMoveAt(size_t position,
   if (source.Equals(destination)) return;
 
   HInstruction* at = liveness_.GetInstructionFromPosition(position / 2);
-  if (at == nullptr) {
-    // Block boundary, don't do anything the connection of split siblings will handle it.
-    return;
-  }
   HParallelMove* move;
-  if ((position & 1) == 1) {
+  if (at == nullptr) {
+    if ((position & 1) == 0) {
+      // Block boundary, don't do anything the connection of split siblings will handle it.
+      return;
+    } else {
+      // Move must happen before the first instruction of the block.
+      at = liveness_.GetInstructionFromPosition((position + 1) / 2);
+      move = at->AsParallelMove();
+      if (move == nullptr || move->GetLifetimePosition() < position) {
+        move = new (allocator_) HParallelMove(allocator_);
+        move->SetLifetimePosition(position);
+        at->GetBlock()->InsertInstructionBefore(move, at);
+      }
+    }
+  } else if ((position & 1) == 1) {
     // Move must happen after the instruction.
     DCHECK(!at->IsControlFlow());
     move = at->GetNext()->AsParallelMove();
@@ -1020,6 +1030,7 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
   }
   UsePosition* use = current->GetFirstUse();
 
+
   // Walk over all siblings, updating locations of use positions, and
   // connecting them when they are adjacent.
   do {
@@ -1107,12 +1118,10 @@ void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,
     return;
   }
 
+  // Intervals end at the lifetime end of a block. The decrement by one
+  // ensures the `Cover` call will return true.
   size_t from_position = from->GetLifetimeEnd() - 1;
-  // When an instruction dies at entry of another, and the latter is the beginning
-  // of a block, the register allocator ensures the former has a register
-  // at block->GetLifetimeStart() + 1. Since this is at a block boundary, it must
-  // must be handled in this method.
-  size_t to_position = to->GetLifetimeStart() + 1;
+  size_t to_position = to->GetLifetimeStart();
 
   LiveInterval* destination = nullptr;
   LiveInterval* source = nullptr;
