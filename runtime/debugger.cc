@@ -3237,6 +3237,28 @@ static void SanityCheckExistingBreakpoints(mirror::ArtMethod* m,
   }
 }
 
+// Returns true if the method can be called with its direct code pointer, false otherwise.
+// Currently only methods from the image can be called with direct code pointer, unless the
+// image has been compiled in PIC mode.
+static bool MayBeCalledWithDirectCodePointer(mirror::ArtMethod* m)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  // Non-image methods don't use direct code pointer.
+  if (m->GetDeclaringClass()->GetClassLoader() != nullptr) {
+    return false;
+  }
+
+  // If the image has been compiled using PIC mode, we don't use direct code pointer.
+  ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+  const DexFile& dex_file = m->GetDeclaringClass()->GetDexFile();
+  const OatFile::OatDexFile* oat_dex_file = class_linker->FindOpenedOatDexFileForDexFile(dex_file);
+  if (oat_dex_file == nullptr) {
+    // No oat file: the method has not been compiled.
+    return false;
+  }
+  const OatFile* oat_file = oat_dex_file->GetOatFile();
+  return oat_file != nullptr && !oat_file->IsPic();
+}
+
 static DeoptimizationRequest::Kind GetRequiredDeoptimizationKind(Thread* self,
                                                                  mirror::ArtMethod* m)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -3266,8 +3288,16 @@ static DeoptimizationRequest::Kind GetRequiredDeoptimizationKind(Thread* self,
       ClassLinker* const class_linker = Runtime::Current()->GetClassLinker();
       const bool is_compiled = class_linker->GetOatMethodQuickCodeFor(m) != nullptr;
       if (is_compiled) {
-        VLOG(jdwp) << "Need selective deoptimization for compiled method " << PrettyMethod(m);
-        return DeoptimizationRequest::kSelectiveDeoptimization;
+        // If the method may be called through its direct code pointer (without loading
+        // its updated entrypoint), we need full deoptimization to not miss the breakpoint.
+        if (MayBeCalledWithDirectCodePointer(m)) {
+          VLOG(jdwp) << "Need full deoptimization because of possible direct code call "
+                     << "into image for compiled method " << PrettyMethod(m);
+          return DeoptimizationRequest::kFullDeoptimization;
+        } else {
+          VLOG(jdwp) << "Need selective deoptimization for compiled method " << PrettyMethod(m);
+          return DeoptimizationRequest::kSelectiveDeoptimization;
+        }
       } else {
         // Method is not compiled: we don't need to deoptimize.
         VLOG(jdwp) << "No need for deoptimization for non-compiled method " << PrettyMethod(m);

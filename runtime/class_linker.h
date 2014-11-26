@@ -471,6 +471,10 @@ class ClassLinker {
       LOCKS_EXCLUDED(Locks::classlinker_classes_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  const OatFile::OatDexFile* FindOpenedOatDexFileForDexFile(const DexFile& dex_file)
+      LOCKS_EXCLUDED(dex_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
  private:
   const OatFile::OatMethod FindOatMethodFor(mirror::ArtMethod* method, bool* found)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -606,10 +610,6 @@ class ClassLinker {
     return dex_caches_.size();
   }
   mirror::DexCache* GetDexCache(size_t idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_, dex_lock_);
-
-  const OatFile::OatDexFile* FindOpenedOatDexFileForDexFile(const DexFile& dex_file)
-      LOCKS_EXCLUDED(dex_lock_)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Find an opened oat dex file that contains dex_location. If oat_location is not nullptr,
   // the file must have that location, else any oat location is accepted.
