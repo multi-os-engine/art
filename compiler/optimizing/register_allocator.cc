@@ -189,11 +189,29 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
       BlockRegister(temp, position, position + 1);
     } else {
       DCHECK(temp.IsUnallocated());
-      DCHECK(temp.GetPolicy() == Location::kRequiresRegister);
-      LiveInterval* interval = LiveInterval::MakeTempInterval(allocator_, Primitive::kPrimInt);
-      temp_intervals_.Add(interval);
-      interval->AddRange(position, position + 1);
-      unhandled_core_intervals_.Add(interval);
+      switch (temp.GetPolicy()) {
+        case Location::kRequiresRegister: {
+          LiveInterval* interval =
+              LiveInterval::MakeTempInterval(allocator_, Primitive::kPrimInt);
+          temp_intervals_.Add(interval);
+          interval->AddRange(position, position + 1);
+          unhandled_core_intervals_.Add(interval);
+          break;
+        }
+
+        case Location::kRequiresFpuRegister: {
+          LiveInterval* interval =
+              LiveInterval::MakeTempInterval(allocator_, Primitive::kPrimDouble);
+          temp_intervals_.Add(interval);
+          interval->AddRange(position, position + 1);
+          unhandled_fp_intervals_.Add(interval);
+          break;
+        }
+
+        default:
+          LOG(FATAL) << "Unexpected policy for temporary location "
+                     << temp.GetPolicy();
+      }
     }
   }
 
@@ -1250,7 +1268,8 @@ void RegisterAllocator::Resolve() {
       current = at;
     }
     LocationSummary* locations = at->GetLocations();
-    DCHECK(temp->GetType() == Primitive::kPrimInt);
+    DCHECK(temp->GetType() == Primitive::kPrimInt
+           || temp->GetType() == Primitive::kPrimDouble);
     locations->SetTempAt(
         temp_index++, Location::RegisterLocation(temp->GetRegister()));
   }
