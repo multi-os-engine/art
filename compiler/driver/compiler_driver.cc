@@ -1820,6 +1820,14 @@ static void InitializeClass(const ParallelCompilationManager* manager, size_t cl
               mirror::Throwable* exception = soa.Self()->GetException(&throw_location);
               VLOG(compiler) << "Initialization of " << descriptor << " aborted because of "
                   << exception->Dump();
+              std::ostream* file_log = manager->GetCompiler()->
+                  GetCompilerOptions().GetInitFailureOutput();
+              // A non-debug build creating a boot image (or otherwise initializing a class) is an
+              // indication for on-device compilation for a lower-end device. Avoid impact.
+              if (kIsDebugBuild && file_log != nullptr) {
+                *file_log << descriptor << "\n";
+                *file_log << exception->Dump() << "\n";
+              }
               soa.Self()->ClearException();
               transaction.Abort();
               CHECK_EQ(old_status, klass->GetStatus()) << "Previous class status not restored";
