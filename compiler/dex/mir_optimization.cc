@@ -539,28 +539,6 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
             }
           }
           break;
-        case Instruction::RETURN_VOID:
-        case Instruction::RETURN:
-        case Instruction::RETURN_WIDE:
-        case Instruction::RETURN_OBJECT:
-          if (bb->GetFirstNonPhiInsn() == mir) {
-            // This is a simple return BB. Eliminate suspend checks on predecessor back-edges.
-            for (BasicBlockId pred_id : bb->predecessors) {
-              BasicBlock* pred_bb = GetBasicBlock(pred_id);
-              DCHECK(pred_bb != nullptr);
-              if (IsBackedge(pred_bb, bb->id) && pred_bb->last_mir_insn != nullptr &&
-                  (IsInstructionIfCc(pred_bb->last_mir_insn->dalvikInsn.opcode) ||
-                   IsInstructionIfCcZ(pred_bb->last_mir_insn->dalvikInsn.opcode) ||
-                   IsInstructionGoto(pred_bb->last_mir_insn->dalvikInsn.opcode))) {
-                pred_bb->last_mir_insn->optimization_flags |= MIR_IGNORE_SUSPEND_CHECK;
-                if (cu_->verbose) {
-                  LOG(INFO) << "Suppressed suspend check on branch to return at 0x" << std::hex
-                            << pred_bb->last_mir_insn->offset;
-                }
-              }
-            }
-          }
-          break;
         default:
           break;
       }
@@ -589,12 +567,8 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
         if ((tk_ft == NULL) && (ft_tk == NULL) && (tk_tk == ft_ft) &&
             (Predecessors(tk) == 1) && (Predecessors(ft) == 1)) {
           /*
-           * Okay - we have the basic diamond shape.  At the very least, we can eliminate the
-           * suspend check on the taken-taken branch back to the join point.
+           * Okay - we have the basic diamond shape.
            */
-          if (SelectKind(tk->last_mir_insn) == kSelectGoto) {
-              tk->last_mir_insn->optimization_flags |= (MIR_IGNORE_SUSPEND_CHECK);
-          }
 
           // TODO: Add logic for LONG.
           // Are the block bodies something we can handle?
@@ -1635,6 +1609,73 @@ void MIRGraph::BasicBlockOptimization() {
   temp_.gvn.ifield_ids_ = nullptr;
   temp_.gvn.sfield_ids_ = nullptr;
   temp_scoped_alloc_.reset();
+}
+
+bool MIRGraph::EliminateSuspendChecksGate() {
+  if ((cu_->disable_opt & (1 << kSuspendCheckElimination)) != 0 ||  // Disabled.
+      GetMaxNestedLoops() == 0u ||   // Nothing to do.
+      GetMaxNestedLoops() >= 32u ||  // Only 32 bits in suspend_checks_in_loops_[.].
+                                     // Exclude 32 as well to keep bit shifts well-defined.
+      !HasInvokes()) {               // No invokes to actually eliminate any suspend checks.
+    return false;
+  }
+  if (cu_->compiler_driver != nullptr && cu_->compiler_driver->GetMethodInlinerMap() != nullptr) {
+    temp_.sce.inliner =
+        cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file);
+  }
+  suspend_checks_in_loops_ = static_cast<uint32_t*>(
+      arena_->Alloc(GetNumBlocks() * sizeof(*suspend_checks_in_loops_), kArenaAllocMisc));
+  return true;
+}
+
+bool MIRGraph::EliminateSuspendChecks(BasicBlock* bb) {
+  if (bb->block_type != kDalvikByteCode) {
+    return false;
+  }
+  DCHECK_EQ(GetTopologicalSortOrderLoopHeadStack()->size(), bb->nesting_depth);
+  if (bb->nesting_depth == 0u) {
+    // Out of loops.
+    DCHECK_EQ(suspend_checks_in_loops_[bb->id], 0u);  // The array was zero-initialized.
+    return false;
+  }
+  for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+    if (IsInstructionInvoke(mir->dalvikInsn.opcode) &&
+        (temp_.sce.inliner == nullptr ||
+         !temp_.sce.inliner->IsIntrinsic(mir->dalvikInsn.vB, nullptr))) {
+      // Non-intrinsic invoke, rely on a suspend point in the invoked method.
+      suspend_checks_in_loops_[bb->id] = (1u << bb->nesting_depth) - 1u;  // All loop heads.
+      return true;
+    }
+  }
+  // Intersect suspend checks from predecessors.
+  uint32_t suspend_checks_in_loops = static_cast<uint32_t>(-1);  // Start with all loop heads.
+  uint16_t bb_topo_idx = topological_order_indexes_[bb->id];
+  uint32_t pred_mask_union = 0u;
+  for (BasicBlockId pred_id : bb->predecessors) {
+    uint16_t pred_topo_idx = topological_order_indexes_[pred_id];
+    if (pred_topo_idx < bb_topo_idx) {
+      // Determine the loop depth of the predecessors relative to this block.
+      size_t pred_loop_depth = topological_order_loop_head_stack_.size();
+      while (pred_loop_depth != 0u &&
+          pred_topo_idx < topological_order_loop_head_stack_[pred_loop_depth - 1].first) {
+        --pred_loop_depth;
+      }
+      DCHECK_LE(pred_loop_depth, GetBasicBlock(pred_id)->nesting_depth);
+      uint32_t pred_mask = (1u << pred_loop_depth) - 1u;
+      // Intersect pred_mask bits in suspend_checks_in_loops with suspend_checks_in_loops_[pred_id].
+      uint32_t pred_loops_without_checks = pred_mask & ~suspend_checks_in_loops_[pred_id];
+      suspend_checks_in_loops = suspend_checks_in_loops & ~pred_loops_without_checks;
+      pred_mask_union |= pred_mask;
+    }
+  }
+  DCHECK_EQ(((1u << (IsLoopHead(bb->id) ? bb->nesting_depth - 1u: bb->nesting_depth)) - 1u),
+            pred_mask_union);
+  suspend_checks_in_loops_[bb->id] = suspend_checks_in_loops & pred_mask_union;
+  return true;
+}
+
+void MIRGraph::EliminateSuspendChecksEnd() {
+  temp_.sce.inliner = nullptr;
 }
 
 }  // namespace art

@@ -486,7 +486,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
         GenMemBarrier(kStoreStore);
       }
       if (!kLeafOptimization || !mir_graph_->MethodIsLeaf()) {
-        GenSuspendTest(opt_flags);
+        GenSuspendTest();
       }
       break;
 
@@ -495,7 +495,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
       FALLTHROUGH_INTENDED;
     case Instruction::RETURN:
       if (!kLeafOptimization || !mir_graph_->MethodIsLeaf()) {
-        GenSuspendTest(opt_flags);
+        GenSuspendTest();
       }
       DCHECK_EQ(LocToRegClass(rl_src[0]), ShortyToRegClass(cu_->shorty[0]));
       StoreValue(GetReturn(LocToRegClass(rl_src[0])), rl_src[0]);
@@ -503,7 +503,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
 
     case Instruction::RETURN_WIDE:
       if (!kLeafOptimization || !mir_graph_->MethodIsLeaf()) {
-        GenSuspendTest(opt_flags);
+        GenSuspendTest();
       }
       DCHECK_EQ(LocToRegClass(rl_src[0]), ShortyToRegClass(cu_->shorty[0]));
       StoreValueWide(GetReturnWide(LocToRegClass(rl_src[0])), rl_src[0]);
@@ -623,12 +623,8 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::GOTO:
     case Instruction::GOTO_16:
     case Instruction::GOTO_32:
-      if (mir_graph_->IsBackedge(bb, bb->taken) &&
-          (kLeafOptimization || !mir_graph_->HasSuspendTestBetween(bb, bb->taken))) {
-        GenSuspendTestAndBranch(opt_flags, &label_list[bb->taken]);
-      } else {
-        OpUnconditionalBranch(&label_list[bb->taken]);
-      }
+      DCHECK(!mir_graph_->IsSuspendCheckEdge(bb, bb->taken));
+      OpUnconditionalBranch(&label_list[bb->taken]);
       break;
 
     case Instruction::PACKED_SWITCH:
@@ -657,11 +653,6 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::IF_GT:
     case Instruction::IF_LE: {
       LIR* taken = &label_list[bb->taken];
-      if (mir_graph_->IsBackwardsBranch(bb) &&
-          (kLeafOptimization || !mir_graph_->HasSuspendTestBetween(bb, bb->taken) ||
-           !mir_graph_->HasSuspendTestBetween(bb, bb->fall_through))) {
-        GenSuspendTest(opt_flags);
-      }
       GenCompareAndBranch(opcode, rl_src[0], rl_src[1], taken);
       break;
     }
@@ -672,11 +663,6 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::IF_GTZ:
     case Instruction::IF_LEZ: {
       LIR* taken = &label_list[bb->taken];
-      if (mir_graph_->IsBackwardsBranch(bb) &&
-          (kLeafOptimization || !mir_graph_->HasSuspendTestBetween(bb, bb->taken) ||
-           !mir_graph_->HasSuspendTestBetween(bb, bb->fall_through))) {
-        GenSuspendTest(opt_flags);
-      }
       GenCompareZeroAndBranch(opcode, rl_src[0], taken);
       break;
     }
@@ -845,69 +831,37 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
 
     case Instruction::INVOKE_STATIC_RANGE:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kStatic, true));
-      if (!kLeafOptimization) {
-        // If the invocation is not inlined, we can assume there is already a
-        // suspend check at the return site
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
     case Instruction::INVOKE_STATIC:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kStatic, false));
-      if (!kLeafOptimization) {
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
 
     case Instruction::INVOKE_DIRECT:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kDirect, false));
-      if (!kLeafOptimization) {
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
     case Instruction::INVOKE_DIRECT_RANGE:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kDirect, true));
-      if (!kLeafOptimization) {
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
 
     case Instruction::INVOKE_VIRTUAL:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kVirtual, false));
-      if (!kLeafOptimization) {
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
     case Instruction::INVOKE_VIRTUAL_RANGE:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kVirtual, true));
-      if (!kLeafOptimization) {
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
 
     case Instruction::INVOKE_SUPER:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kSuper, false));
-      if (!kLeafOptimization) {
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
     case Instruction::INVOKE_SUPER_RANGE:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kSuper, true));
-      if (!kLeafOptimization) {
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
 
     case Instruction::INVOKE_INTERFACE:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kInterface, false));
-      if (!kLeafOptimization) {
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
     case Instruction::INVOKE_INTERFACE_RANGE:
       GenInvoke(mir_graph_->NewMemCallInfo(bb, mir, kInterface, true));
-      if (!kLeafOptimization) {
-        mir_graph_->AppendGenSuspendTestList(bb);
-      }
       break;
 
     case Instruction::NEG_INT:
@@ -1190,6 +1144,7 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
     GenExitSequence();
   }
 
+  bool suspend_check_emitted = false;
   for (mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
     ResetRegPool();
     if (cu_->disable_opt & (1 << kTrackLiveTemps)) {
@@ -1234,12 +1189,31 @@ bool Mir2Lir::MethodBlockCodeGen(BasicBlock* bb) {
       work_half->meta.throw_insn = mir;
     }
 
+    if (mir == bb->last_mir_insn &&
+        bb->taken != NullBasicBlockId && mir_graph_->IsSuspendCheckEdge(bb, bb->taken)) {
+      suspend_check_emitted = true;
+      if (IsInstructionGoto(mir->dalvikInsn.opcode)) {
+        GenSuspendTestAndBranch(&block_label_list_[bb->taken]);
+        continue;  // Don't emit a second GOTO.
+      } else {
+        DCHECK(bb->fall_through != NullBasicBlockId);
+        GenSuspendTest();
+        // Proceed with emitting the insn.
+      }
+    }
+
     if (MIR::DecodedInstruction::IsPseudoMirOp(opcode)) {
       HandleExtendedMethodMIR(bb, mir);
       continue;
     }
 
     CompileDalvikInstruction(mir, bb, block_label_list_);
+  }
+
+  if (!suspend_check_emitted && bb->fall_through != NullBasicBlockId &&
+      mir_graph_->IsSuspendCheckEdge(bb, bb->fall_through)) {
+    current_dalvik_offset_ = mir_graph_->GetBasicBlock(bb->fall_through)->start_offset;
+    GenSuspendTest();
   }
 
   if (head_lir) {
