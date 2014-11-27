@@ -1406,6 +1406,13 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
           break;
 
         case Primitive::kPrimLong:
+          // Processing a Dex `long-to-float' instruction.
+          locations->SetInAt(0, Location::RequiresRegister());
+          locations->SetOut(Location::RequiresFpuRegister());
+          locations->AddTemp(Location::RequiresFpuRegister());
+          locations->AddTemp(Location::RequiresFpuRegister());
+          break;
+
         case Primitive::kPrimDouble:
           LOG(FATAL) << "Type conversion from " << input_type
                      << " to " << result_type << " not yet implemented";
@@ -1593,7 +1600,45 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
           __ cvtsi2ss(out.As<XmmRegister>(), in.As<Register>());
           break;
 
-        case Primitive::kPrimLong:
+        case Primitive::kPrimLong: {
+          // Processing a Dex `long-to-float' instruction.
+          Register low = in.AsRegisterPairLow<Register>();
+          Register high = in.AsRegisterPairHigh<Register>();
+          XmmRegister result = out.As<XmmRegister>();
+          XmmRegister temp = locations->GetTemp(0).As<XmmRegister>();
+          XmmRegister constant = locations->GetTemp(1).As<XmmRegister>();
+
+          // Binary encoding of 2^32 for type double.
+          const int64_t c1 = INT64_C(0x41F0000000000000);
+          // Binary encoding of 2^31 for type double.
+          const int64_t c2 = INT64_C(0x41E0000000000000);
+
+          // Operations use doubles for precision reasons (each 32-bit
+          // half of a long fits in the 53-bit mantissa of a double,
+          // but not in the 24-bit mantissa of a float).  This is
+          // especially important for the low bits.  The result is
+          // eventually converted to float.
+
+          // low = low - 2^31 (to prevent bit 31 of `low` to be
+          // interpreted as a sign bit)
+          __ subl(low, Immediate(0x80000000));
+          // temp = int-to-double(high)
+          __ cvtsi2sd(temp, high);
+          // temp = temp * 2^32
+          __ LoadLongConstant(constant, c1);
+          __ mulsd(temp, constant);
+          // result = int-to-double(low)
+          __ cvtsi2sd(result, low);
+          // result = result + 2^31 (restore the original value of `low`)
+          __ LoadLongConstant(constant, c2);
+          __ addsd(result, constant);
+          // result = result + temp
+          __ addsd(result, temp);
+          // result = double-to-float(result)
+          __ cvtsd2ss(result,result);
+          break;
+        }
+
         case Primitive::kPrimDouble:
           LOG(FATAL) << "Type conversion from " << input_type
                      << " to " << result_type << " not yet implemented";
