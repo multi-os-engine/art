@@ -127,7 +127,7 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       ifield_lowering_infos_(arena->Adapter(kArenaAllocLoweringInfo)),
       sfield_lowering_infos_(arena->Adapter(kArenaAllocLoweringInfo)),
       method_lowering_infos_(arena->Adapter(kArenaAllocLoweringInfo)),
-      gen_suspend_test_list_(arena->Adapter()) {
+      suspend_checks_in_loops_(nullptr) {
   memset(&temp_, 0, sizeof(temp_));
   use_counts_.reserve(256);
   raw_use_counts_.reserve(256);
@@ -914,14 +914,13 @@ void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suff
                 bb->first_mir_insn ? " | " : " ");
         for (mir = bb->first_mir_insn; mir; mir = mir->next) {
             int opcode = mir->dalvikInsn.opcode;
-            fprintf(file, "    {%04x %s %s %s %s %s %s %s %s %s\\l}%s\\\n", mir->offset,
+            fprintf(file, "    {%04x %s %s %s %s %s %s %s %s\\l}%s\\\n", mir->offset,
                       mir->ssa_rep ? GetDalvikDisassembly(mir) :
                       !MIR::DecodedInstruction::IsPseudoMirOp(opcode) ?
                         Instruction::Name(mir->dalvikInsn.opcode) :
                         extended_mir_op_names_[opcode - kMirOpFirst],
                       (mir->optimization_flags & MIR_IGNORE_RANGE_CHECK) != 0 ? " no_rangecheck" : " ",
                       (mir->optimization_flags & MIR_IGNORE_NULL_CHECK) != 0 ? " no_nullcheck" : " ",
-                      (mir->optimization_flags & MIR_IGNORE_SUSPEND_CHECK) != 0 ? " no_suspendcheck" : " ",
                       (mir->optimization_flags & MIR_STORE_NON_TEMPORAL) != 0 ? " non_temporal" : " ",
                       (mir->optimization_flags & MIR_CALLEE) != 0 ? " inlined" : " ",
                       (mir->optimization_flags & MIR_CLASS_IS_INITIALIZED) != 0 ? " cl_inited" : " ",
@@ -1979,24 +1978,6 @@ bool BasicBlock::IsExceptionBlock() const {
   if (block_type == kExceptionHandling) {
     return true;
   }
-  return false;
-}
-
-bool MIRGraph::HasSuspendTestBetween(BasicBlock* source, BasicBlockId target_id) {
-  BasicBlock* target = GetBasicBlock(target_id);
-
-  if (source == nullptr || target == nullptr)
-    return false;
-
-  int idx;
-  for (idx = gen_suspend_test_list_.size() - 1; idx >= 0; idx--) {
-    BasicBlock* bb = gen_suspend_test_list_[idx];
-    if (bb == source)
-      return true;  // The block has been inserted by a suspend check before.
-    if (source->dominators->IsBitSet(bb->id) && bb->dominators->IsBitSet(target_id))
-      return true;
-  }
-
   return false;
 }
 

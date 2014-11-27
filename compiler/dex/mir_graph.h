@@ -34,6 +34,7 @@
 
 namespace art {
 
+class DexFileMethodInliner;
 class GlobalValueNumbering;
 
 enum DataFlowAttributePos {
@@ -731,6 +732,10 @@ class MIRGraph {
     return max_nested_loops_;
   }
 
+  bool IsLoopHead(BasicBlockId bb_id) {
+    return topological_order_loop_ends_[topological_order_indexes_[bb_id]] != 0u;
+  }
+
   bool IsConst(int32_t s_reg) const {
     return is_constant_v_->IsBitSet(s_reg);
   }
@@ -970,12 +975,21 @@ class MIRGraph {
   }
 
   bool IsBackedge(BasicBlock* branch_bb, BasicBlockId target_bb_id) {
-    return ((target_bb_id != NullBasicBlockId) &&
-            (GetBasicBlock(target_bb_id)->start_offset <= branch_bb->start_offset));
+    DCHECK_LT(target_bb_id, topological_order_indexes_.size());
+    DCHECK_LT(branch_bb->id, topological_order_indexes_.size());
+    return topological_order_indexes_[target_bb_id] <= topological_order_indexes_[branch_bb->id];
   }
 
-  bool IsBackwardsBranch(BasicBlock* branch_bb) {
-    return IsBackedge(branch_bb, branch_bb->taken) || IsBackedge(branch_bb, branch_bb->fall_through);
+  bool IsSuspendCheckEdge(BasicBlock* branch_bb, BasicBlockId target_bb_id) {
+    if (!IsBackedge(branch_bb, target_bb_id)) {
+      return false;
+    }
+    if (suspend_checks_in_loops_ == nullptr) {
+      // We didn't run suspend check elimination.
+      return true;
+    }
+    CHECK_EQ(branch_bb->nesting_depth, GetBasicBlock(target_bb_id)->nesting_depth);
+    return (suspend_checks_in_loops_[branch_bb->id] & (1u << branch_bb->nesting_depth)) == 0;
   }
 
   void CountBranch(DexOffset target_offset) {
@@ -1055,6 +1069,9 @@ class MIRGraph {
   bool ApplyGlobalValueNumberingGate();
   bool ApplyGlobalValueNumbering(BasicBlock* bb);
   void ApplyGlobalValueNumberingEnd();
+  bool EliminateSuspendChecksGate();
+  bool EliminateSuspendChecks(BasicBlock* bb);
+  void EliminateSuspendChecksEnd();
 
   uint16_t GetGvnIFieldId(MIR* mir) const {
     DCHECK(IsInstructionIGetOrIPut(mir->dalvikInsn.opcode));
@@ -1165,7 +1182,7 @@ class MIRGraph {
    * @brief Count the uses in the BasicBlock
    * @param bb the BasicBlock
    */
-  void CountUses(class BasicBlock* bb);
+  void CountUses(BasicBlock* bb);
 
   static uint64_t GetDataFlowAttributes(Instruction::Code opcode);
   static uint64_t GetDataFlowAttributes(MIR* mir);
@@ -1208,20 +1225,6 @@ class MIRGraph {
 
   void HandleSSADef(int* defs, int dalvik_reg, int reg_index);
   bool InferTypeAndSize(BasicBlock* bb, MIR* mir, bool changed);
-
-  // Used for removing redudant suspend tests
-  void AppendGenSuspendTestList(BasicBlock* bb) {
-    if (gen_suspend_test_list_.size() == 0 ||
-        gen_suspend_test_list_.back() != bb) {
-      gen_suspend_test_list_.push_back(bb);
-    }
-  }
-
-  /* This is used to check if there is already a method call dominating the
-   * source basic block of a backedge and being dominated by the target basic
-   * block of the backedge.
-   */
-  bool HasSuspendTestBetween(BasicBlock* source, BasicBlockId target_id);
 
  protected:
   int FindCommonParent(int block1, int block2);
@@ -1338,6 +1341,10 @@ class MIRGraph {
       uint16_t* ifield_ids_;  // Part of GVN/LVN but cached here for LVN to avoid recalculation.
       uint16_t* sfield_ids_;  // Ditto.
     } gvn;
+    // Suspend check elimination.
+    struct {
+      DexFileMethodInliner* inliner;
+    } sce;
   } temp_;
   static const int kInvalidEntry = -1;
   ArenaVector<BasicBlock*> block_list_;
@@ -1373,8 +1380,15 @@ class MIRGraph {
   ArenaVector<MirIFieldLoweringInfo> ifield_lowering_infos_;
   ArenaVector<MirSFieldLoweringInfo> sfield_lowering_infos_;
   ArenaVector<MirMethodLoweringInfo> method_lowering_infos_;
+
+  // In the suspend check elimination pass we determine for each basic block and enclosing
+  // loop whether there's guaranteed to be a suspend check on the path from the loop head
+  // to this block. If so, we can eliminate the back-edge suspend check.
+  // The bb->id is index into suspend_checks_in_loops_ and the loop head's depth is bit index
+  // in a suspend_checks_in_loops_[bb->id].
+  uint32_t* suspend_checks_in_loops_;
+
   static const uint64_t oat_data_flow_attributes_[kMirOpLast];
-  ArenaVector<BasicBlock*> gen_suspend_test_list_;  // List of blocks containing suspend tests
 
   friend class MirOptimizationTest;
   friend class ClassInitCheckEliminationTest;
