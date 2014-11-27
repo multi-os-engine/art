@@ -2156,19 +2156,16 @@ class SuspendCheckSlowPath : public Mir2Lir::LIRSlowPath {
 };
 
 /* Check if we need to check for pending suspend request */
-void Mir2Lir::GenSuspendTest(int opt_flags) {
+void Mir2Lir::GenSuspendTest() {
+  if (NO_SUSPEND) {
+    return;
+  }
   if (!cu_->compiler_driver->GetCompilerOptions().GetImplicitSuspendChecks()) {
-    if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
-      return;
-    }
     FlushAllRegs();
     LIR* branch = OpTestSuspend(NULL);
     LIR* cont = NewLIR0(kPseudoTargetLabel);
     AddSlowPath(new (arena_) SuspendCheckSlowPath(this, branch, cont));
   } else {
-    if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
-      return;
-    }
     FlushAllRegs();     // TODO: needed?
     LIR* inst = CheckSuspendUsingLoad();
     MarkSafepointPC(inst);
@@ -2176,12 +2173,12 @@ void Mir2Lir::GenSuspendTest(int opt_flags) {
 }
 
 /* Check if we need to check for pending suspend request */
-void Mir2Lir::GenSuspendTestAndBranch(int opt_flags, LIR* target) {
+void Mir2Lir::GenSuspendTestAndBranch(LIR* target) {
+  if (NO_SUSPEND) {
+    OpUnconditionalBranch(target);
+    return;
+  }
   if (!cu_->compiler_driver->GetCompilerOptions().GetImplicitSuspendChecks()) {
-    if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
-      OpUnconditionalBranch(target);
-      return;
-    }
     OpTestSuspend(target);
     FlushAllRegs();
     LIR* branch = OpUnconditionalBranch(nullptr);
@@ -2189,10 +2186,6 @@ void Mir2Lir::GenSuspendTestAndBranch(int opt_flags, LIR* target) {
   } else {
     // For the implicit suspend check, just perform the trigger
     // load and branch to the target.
-    if (NO_SUSPEND || (opt_flags & MIR_IGNORE_SUSPEND_CHECK)) {
-      OpUnconditionalBranch(target);
-      return;
-    }
     FlushAllRegs();
     LIR* inst = CheckSuspendUsingLoad();
     MarkSafepointPC(inst);
