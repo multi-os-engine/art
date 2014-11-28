@@ -1078,50 +1078,38 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       break;
     }
 
-    case Instruction::INT_TO_LONG: {
-      Conversion_12x(instruction, Primitive::kPrimInt, Primitive::kPrimLong);
-      break;
+#define PRIMITIVE_BYTE Primitive::kPrimByte
+#define PRIMITIVE_SHORT Primitive::kPrimShort
+#define PRIMITIVE_INT Primitive::kPrimInt
+#define PRIMITIVE_CHAR Primitive::kPrimChar
+#define PRIMITIVE_LONG Primitive::kPrimLong
+#define PRIMITIVE_FLOAT Primitive::kPrimFloat
+#define PRIMITIVE_DOUBLE Primitive::kPrimDouble
+#define CONVERSION_XX(src_type, dst_type)                                      \
+    case Instruction:: src_type##_TO_##dst_type: {                             \
+      Conversion_12x(instruction, PRIMITIVE_##src_type, PRIMITIVE_##dst_type); \
+      break;                                                                   \
     }
 
-    case Instruction::INT_TO_FLOAT: {
-      Conversion_12x(instruction, Primitive::kPrimInt, Primitive::kPrimFloat);
-      break;
-    }
+    CONVERSION_XX(INT, LONG);
+    CONVERSION_XX(INT, FLOAT);
+    CONVERSION_XX(INT, DOUBLE);
+    CONVERSION_XX(LONG, INT);
+    CONVERSION_XX(LONG, FLOAT);
+    CONVERSION_XX(LONG, DOUBLE);
+    CONVERSION_XX(FLOAT, INT);
+    CONVERSION_XX(INT, BYTE);
+    CONVERSION_XX(INT, CHAR);
+    CONVERSION_XX(INT, SHORT);
 
-    case Instruction::INT_TO_DOUBLE: {
-      Conversion_12x(instruction, Primitive::kPrimInt, Primitive::kPrimDouble);
-      break;
-    }
-
-    case Instruction::LONG_TO_INT: {
-      Conversion_12x(instruction, Primitive::kPrimLong, Primitive::kPrimInt);
-      break;
-    }
-
-    case Instruction::LONG_TO_FLOAT: {
-      Conversion_12x(instruction, Primitive::kPrimLong, Primitive::kPrimFloat);
-      break;
-    }
-
-    case Instruction::LONG_TO_DOUBLE: {
-      Conversion_12x(instruction, Primitive::kPrimLong, Primitive::kPrimDouble);
-      break;
-    }
-
-    case Instruction::INT_TO_BYTE: {
-      Conversion_12x(instruction, Primitive::kPrimInt, Primitive::kPrimByte);
-      break;
-    }
-
-    case Instruction::INT_TO_SHORT: {
-      Conversion_12x(instruction, Primitive::kPrimInt, Primitive::kPrimShort);
-      break;
-    }
-
-    case Instruction::INT_TO_CHAR: {
-      Conversion_12x(instruction, Primitive::kPrimInt, Primitive::kPrimChar);
-      break;
-    }
+#undef CONVERSION_XX
+#undef PRIMITIVE_DOUBLE
+#undef PRIMITIVE_FLOAT
+#undef PRIMITIVE_LONG
+#undef PRIMITIVE_CHAR
+#undef PRIMITIVE_INT
+#undef PRIMITIVE_SHORT
+#undef PRIMITIVE_BYTE
 
     case Instruction::ADD_INT: {
       Binop_23x<HAdd>(instruction, Primitive::kPrimInt);
