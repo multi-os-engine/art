@@ -71,6 +71,7 @@ define build-libart-disassembler
       LOCAL_CFLAGS += $(ART_HOST_NON_DEBUG_CFLAGS)
     endif
   endif
+  LOCAL_CLANG_CFLAGS += -Wframe-larger-than=2500
 
   LOCAL_SHARED_LIBRARIES += liblog
   ifeq ($$(art_ndebug_or_debug),debug)
