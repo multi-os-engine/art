@@ -17,6 +17,8 @@
 #ifndef ART_COMPILER_OPTIMIZING_PRETTY_PRINTER_H_
 #define ART_COMPILER_OPTIMIZING_PRETTY_PRINTER_H_
 
+#include <inttypes.h>
+
 #include "base/stringprintf.h"
 #include "nodes.h"
 
@@ -51,6 +53,12 @@ class HPrettyPrinter : public HGraphVisitor {
         PrintInt(it.Current()->GetId());
       }
       PrintString(")");
+    } else if (HIntConstant *intConst = instruction->AsIntConstant()) {
+      PrintString(" ");
+      PrintInt(intConst->GetValue());
+    } else if (HLongConstant *longConst = instruction->AsLongConstant()) {
+      PrintString(" ");
+      PrintLong(longConst->GetValue());
     }
     if (instruction->HasUses()) {
       PrintString(" [");
@@ -89,12 +97,16 @@ class HPrettyPrinter : public HGraphVisitor {
       }
       PrintInt(successors.Peek()->GetBlockId());
     }
+    if (block->IsLoopHeader()) {
+      PrintString(", loop_header");
+    }
     PrintNewLine();
     HGraphVisitor::VisitBasicBlock(block);
   }
 
   virtual void PrintNewLine() = 0;
   virtual void PrintInt(int value) = 0;
+  virtual void PrintLong(int64_t value) = 0;
   virtual void PrintString(const char* value) = 0;
 
  private:
@@ -108,6 +120,10 @@ class StringPrettyPrinter : public HPrettyPrinter {
 
   virtual void PrintInt(int value) {
     str_ += StringPrintf("%d", value);
+  }
+
+  virtual void PrintLong(int64_t value) {
+    str_ += StringPrintf("%" PRId64, value);
   }
 
   virtual void PrintString(const char* value) {
