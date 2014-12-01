@@ -167,7 +167,7 @@ void HGraph::VisitBlockForDominatorTree(HBasicBlock* block,
   }
 }
 
-void HGraph::TransformToSSA() {
+void HGraph::TransformToSsa() {
   DCHECK(!reverse_post_order_.IsEmpty());
   SsaBuilder ssa_builder(this);
   ssa_builder.BuildSsa();
@@ -680,6 +680,77 @@ std::ostream& operator<<(std::ostream& os, const HInstruction::InstructionKind& 
   }
 #undef DECLARE_CASE
   return os;
+}
+
+void HInstruction::MoveBefore(HInstruction* cursor) {
+  next_->previous_ = previous_;
+  if (previous_ != nullptr) {
+    previous_->next_ = next_;
+  }
+  if (block_->instructions_.first_instruction_ == this) {
+    block_->instructions_.first_instruction_ = next_;
+  }
+
+
+  previous_ = cursor->GetPrevious();
+  if (previous_ != nullptr) {
+    previous_->next_ = this;
+  }
+  next_ = cursor;
+  cursor->previous_ = this;
+  block_ = cursor->GetBlock();
+}
+
+void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
+  DCHECK_EQ(GetBlocks().Size(), 3u);
+
+  int parameter_index = 0;
+  for (HInstructionIterator it(entry_block_->GetInstructions()); !it.Done(); it.Advance()) {
+    HInstruction* current = it.Current();
+    if (current->IsConstant()) {
+      current->MoveBefore(outer_graph->GetEntryBlock()->GetLastInstruction());
+    } else if (current->IsParameterValue()) {
+      current->ReplaceWith(invoke->InputAt(parameter_index++));
+    } else {
+      DCHECK(current->IsGoto() || current->IsSuspendCheck());
+      entry_block_->RemoveInstruction(current);
+    }
+  }
+
+  HBasicBlock* body = GetBlocks().Get(1);
+  DCHECK(!body->IsExitBlock());
+  HInstruction* last = body->GetLastInstruction();
+  HInstruction* first = body->GetFirstInstruction();
+
+  if (!first->IsControlFlow()) {
+    HInstruction* antelast = last->previous_;
+
+    last->previous_ = first->previous_;
+    if (first->previous_ != nullptr) {
+      first->previous_->next_ = last;
+      if (body->instructions_.first_instruction_ == first) {
+        body->instructions_.first_instruction_ = last;
+      }
+    }
+
+    antelast->next_ = invoke->GetNext();
+    antelast->next_->previous_ = antelast;
+    first->previous_ = invoke;
+    invoke->next_ = first;
+
+    HInstruction* current = antelast;
+    while (current != invoke) {
+      current->SetBlock(invoke->GetBlock());
+      current = current->GetPrevious();
+    }
+  }
+
+  if (last->IsReturn()) {
+    invoke->ReplaceWith(last->InputAt(0));
+    body->RemoveInstruction(last);
+  } else {
+    DCHECK(last->IsReturnVoid());
+  }
 }
 
 }  // namespace art

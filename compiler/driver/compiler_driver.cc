@@ -1405,8 +1405,7 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
   if (resolved_method != nullptr) {
     *vtable_idx = GetResolvedMethodVTableIndex(resolved_method, orig_invoke_type);
 
-    if (enable_devirtualization) {
-      DCHECK(mUnit->GetVerifiedMethod() != nullptr);
+    if (enable_devirtualization && mUnit->GetVerifiedMethod() != nullptr) {
       const MethodReference* devirt_target = mUnit->GetVerifiedMethod()->GetDevirtTarget(dex_pc);
 
       stats_flags = IsFastInvoke(
