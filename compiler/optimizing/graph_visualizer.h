@@ -32,46 +32,38 @@ static const char* kLivenessPassName = "liveness";
 static const char* kRegisterAllocatorPassName = "register";
 
 /**
- * If enabled, emits compilation information suitable for the c1visualizer tool
- * and IRHydra.
- * Currently only works if the compiler is single threaded.
+ * This class outputs the HGraph in the following formats:
+ *  - PrettyPrint:
+ *      Uses StringPrettyPrinter to dump the HGraph both before and after passes onto LOG(INFO).
+ *      This format allows for easy regex matching suitable for writing pass tests.
+ *  - C1visualizer:
+ *      Dumps HGraph on a specified output stream in a format compatible with C1visualizer.
+ *      It only dumps the graph after the individual passes.
+ * If the method name contains the contents of the 'method_filter' argument, it will not be dumped
+ * by the visualizer.
+ *
+ * Note: Currently only works if the compiler is single threaded.
  */
-class HGraphVisualizer : public ValueObject {
+class HGraphVisualizer {
  public:
-  /**
-   * If output is not null, and the method name of the dex compilation
-   * unit contains `string_filter`, the compilation information will be
-   * emitted.
-   */
-  HGraphVisualizer(std::ostream* output,
-                   HGraph* graph,
-                   const char* string_filter,
+  HGraphVisualizer(HGraph* graph,
+                   bool enable_prettyprint,
+                   bool enable_c1visualizer,
+                   std::ostream* c1_output,
+                   const char* method_filter,
                    const CodeGenerator& codegen,
                    const DexCompilationUnit& cu);
 
-  /**
-   * Version of `HGraphVisualizer` for unit testing, that is when a
-   * `DexCompilationUnit` is not available.
-   */
-  HGraphVisualizer(std::ostream* output,
-                   HGraph* graph,
-                   const CodeGenerator& codegen,
-                   const char* name);
-
-  /**
-   * If this visualizer is enabled, emit the compilation information
-   * in `output_`.
-   */
-  void DumpGraph(const char* pass_name) const;
+  ~HGraphVisualizer();
+  void DumpGraph(const char* pass_name, bool is_after_pass = true) const;
 
  private:
-  std::ostream* const output_;
   HGraph* const graph_;
+  std::string method_name_;
   const CodeGenerator& codegen_;
-
-  // Is true when `output_` is not null, and the compiled method's name
-  // contains the string_filter given in the constructor.
-  bool is_enabled_;
+  bool is_enabled_prettyprint_;
+  bool is_enabled_c1visualizer_;
+  std::ostream* c1_output_;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphVisualizer);
 };

@@ -73,7 +73,7 @@ static bool kIsVisualizerEnabled = false;
 
 /**
  * Filter to apply to the visualizer. Methods whose name contain that filter will
- * be in the file.
+ * be dumped.
  */
 static const char* kStringFilter = "";
 
@@ -125,7 +125,7 @@ class OptimizingCompiler FINAL : public Compiler {
   mutable AtomicInteger unoptimized_compiled_methods_;
   mutable AtomicInteger optimized_compiled_methods_;
 
-  std::unique_ptr<std::ostream> visualizer_output_;
+  std::unique_ptr<std::ostream> c1visualizer_output_;
 
   DISALLOW_COPY_AND_ASSIGN(OptimizingCompiler);
 };
@@ -140,7 +140,7 @@ OptimizingCompiler::OptimizingCompiler(CompilerDriver* driver)
       unoptimized_compiled_methods_(0),
       optimized_compiled_methods_(0) {
   if (kIsVisualizerEnabled) {
-    visualizer_output_.reset(new std::ofstream("art.cfg"));
+    c1visualizer_output_.reset(new std::ofstream("art.cfg"));
   }
 }
 
@@ -215,9 +215,10 @@ static void RunOptimizations(HGraph* graph, const HGraphVisualizer& visualizer) 
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
     HOptimization* optimization = optimizations[i];
+    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/false);
     optimization->Run();
-    visualizer.DumpGraph(optimization->GetPassName());
     optimization->Check();
+    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/true);
   }
 }
 
@@ -290,8 +291,10 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     return nullptr;
   }
 
-  HGraphVisualizer visualizer(
-      visualizer_output_.get(), graph, kStringFilter, *codegen, dex_compilation_unit);
+  HGraphVisualizer visualizer(graph, GetCompilerDriver()->GetDumpPasses(), kIsVisualizerEnabled,
+                              c1visualizer_output_.get(), kStringFilter, *codegen,
+                              dex_compilation_unit);
+
   visualizer.DumpGraph("builder");
 
   CodeVectorAllocator allocator;
