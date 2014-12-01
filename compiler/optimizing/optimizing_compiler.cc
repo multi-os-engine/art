@@ -76,6 +76,12 @@ static bool kIsVisualizerEnabled = false;
  */
 static const char* kStringFilter = "";
 
+/**
+ * String constants to be printed in the header of a graph dump.
+ */
+static const char* kPassAttribute_Before = "before";
+static const char* kPassAttribute_After = "after";
+
 class OptimizingCompiler FINAL : public Compiler {
  public:
   explicit OptimizingCompiler(CompilerDriver* driver);
@@ -212,8 +218,9 @@ static void RunOptimizations(HGraph* graph, const HGraphVisualizer& visualizer) 
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
     HOptimization* optimization = optimizations[i];
+    visualizer.DumpGraph(optimization->GetPassName(), kPassAttribute_Before);
     optimization->Run();
-    visualizer.DumpGraph(optimization->GetPassName());
+    visualizer.DumpGraph(optimization->GetPassName(), kPassAttribute_After);
     optimization->Check();
   }
 }
@@ -287,9 +294,16 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     return nullptr;
   }
 
-  HGraphVisualizer visualizer(
-      visualizer_output_.get(), graph, kStringFilter, *codegen, dex_compilation_unit);
-  visualizer.DumpGraph("builder");
+  std::unique_ptr<HGraphVisualizer> visualizer;
+  if (GetCompilerDriver()->GetDumpPasses())
+    visualizer.reset(new HGraphTestVisualizer(graph, dex_compilation_unit));
+  else if (kIsVisualizerEnabled)
+    visualizer.reset(new HGraphC1Visualizer(graph, *visualizer_output_.get(), kStringFilter,
+                                            *codegen, dex_compilation_unit));
+  else  // Dummy visualizer
+    visualizer.reset(new HGraphVisualizer(graph, dex_compilation_unit));
+
+  visualizer->DumpGraph("builder");
 
   CodeVectorAllocator allocator;
 
@@ -298,21 +312,21 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
       && RegisterAllocator::CanAllocateRegistersFor(*graph, instruction_set)) {
     VLOG(compiler) << "Optimizing " << PrettyMethod(method_idx, dex_file);
     optimized_compiled_methods_++;
-    if (!TryBuildingSsa(graph, dex_compilation_unit, visualizer)) {
+    if (!TryBuildingSsa(graph, dex_compilation_unit, *visualizer)) {
       // We could not transform the graph to SSA, bailout.
       return nullptr;
     }
-    RunOptimizations(graph, visualizer);
+    RunOptimizations(graph, *visualizer);
 
     PrepareForRegisterAllocation(graph).Run();
     SsaLivenessAnalysis liveness(*graph, codegen);
     liveness.Analyze();
-    visualizer.DumpGraph(kLivenessPassName);
+    visualizer->DumpGraph(kLivenessPassName);
 
     RegisterAllocator register_allocator(graph->GetArena(), codegen, liveness);
     register_allocator.AllocateRegisters();
 
-    visualizer.DumpGraph(kRegisterAllocatorPassName);
+    visualizer->DumpGraph(kRegisterAllocatorPassName);
     codegen->CompileOptimized(&allocator);
 
     std::vector<uint8_t> mapping_table;

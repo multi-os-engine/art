@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <inttypes.h>
+
 #include "base/stringprintf.h"
 #include "builder.h"
 #include "dex_file.h"
@@ -34,6 +36,10 @@ class SsaPrettyPrinter : public HPrettyPrinter {
 
   virtual void PrintInt(int value) {
     str_ += StringPrintf("%d", value);
+  }
+
+  virtual void PrintLong(int64_t value) {
+    str_ += StringPrintf("%" PRId64, value);
   }
 
   virtual void PrintString(const char* value) {
