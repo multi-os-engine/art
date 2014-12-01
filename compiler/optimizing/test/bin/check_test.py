@@ -48,7 +48,7 @@ class TestMatchLine(unittest.TestCase):
     def match(self, string, pattern):
         checkLine = check.CheckLine(pattern)
         inputStream = io.StringIO(string)
-        return check.MatchLine(inputStream, checkLine)
+        return checkLine.firstMatch(inputStream)
 
     def test_SingleInputLine(self):
         self.assertEqual(1, self.match("foo bar", "foo bar"))

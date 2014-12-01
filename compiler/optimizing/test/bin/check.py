@@ -16,6 +16,21 @@ class CheckLine:
         if len(self.pattern) == 0:
             raise Exception("Empty check line regex pattern")
 
+    # Returns a pattern that should be matched against an input line.
+    def getMatchRegex(self):
+        return self.pattern
+
+    # Reads from the input stream until it finds a line matching the given check
+    # line. Returns the number of lines read or -1 if EOF was reached.
+    def firstMatch(self, inputStream):
+        linesRead = 0
+        for line in inputStream:
+            linesRead += 1
+            match = re.search(self.getMatchRegex(), line)
+            if match is not None:
+                return linesRead
+        return -1
+
 
 # This class parses the check file and holds the list of check lines.
 class CheckFile:
@@ -54,28 +69,6 @@ class CheckFile:
         self.checkLines.extend(extraCheckLines)
 
 
-# Reads from the input stream until it finds a line matching the given check
-# line. Returns the number of lines read or -1 if EOF was reached.
-def MatchLine(inputStream, checkLine):
-    linesRead = 0
-    for line in inputStream:
-        linesRead += 1
-        match = re.search(checkLine.pattern, line)
-        if match is not None:
-            return linesRead
-    return -1
-
-
-# Reads from the input stream and attempts to match all the given check lines.
-# Returns None if successful and the first unmatched check line otherwise.
-def MatchFiles(inputStream, checkFile):
-    for checkLine in checkFile.checkLines:
-        res = MatchLine(inputStream, checkLine)
-        if res == -1:
-            return checkLine
-    return None
-
-
 def ParseArguments(cl=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("check_file")
@@ -90,15 +83,16 @@ def ParseArguments(cl=None):
 if __name__ == "__main__":
     args = ParseArguments()
     checkFile = CheckFile(args)
-    inputStream = sys.stdin if (args.input_file == "-") \
-                  else open(args.input_file, "r")
 
-    res = MatchFiles(inputStream, checkFile)
-    inputStream.close()
-
-    if res is None:
-        print("SUCCESS")
+    if (args.input_file == "-"):
+        inputStream = sys.stdin
     else:
-        print(("Could not match check line " + str(res.lineNumber) + ": " +
-               res.content))
-        sys.exit(1)
+        inputStream = open(args.input_file, "r")
+
+    for checkLine in checkFile.checkLines:
+        if checkLine.firstMatch(inputStream) == -1:
+            print("ERROR: Could not match check line " + \
+                  str(checkLine.lineNumber) + ": " + checkLine.content, 
+                  file=sys.stderr)
+            sys.exit(1)
+
