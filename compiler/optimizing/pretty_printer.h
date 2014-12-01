@@ -17,6 +17,8 @@
 #ifndef ART_COMPILER_OPTIMIZING_PRETTY_PRINTER_H_
 #define ART_COMPILER_OPTIMIZING_PRETTY_PRINTER_H_
 
+#include <cinttypes>
+
 #include "base/stringprintf.h"
 #include "nodes.h"
 
@@ -24,7 +26,8 @@ namespace art {
 
 class HPrettyPrinter : public HGraphVisitor {
  public:
-  explicit HPrettyPrinter(HGraph* graph) : HGraphVisitor(graph) { }
+  explicit HPrettyPrinter(HGraph* graph, bool print_const_values = false)
+    : HGraphVisitor(graph), print_const_values_(print_const_values) { }
 
   void PrintPreInstruction(HInstruction* instruction) {
     PrintString("  ");
@@ -51,6 +54,14 @@ class HPrettyPrinter : public HGraphVisitor {
         PrintInt(it.Current()->GetId());
       }
       PrintString(")");
+    } else if (print_const_values_) {
+      if (HIntConstant* intConst = instruction->AsIntConstant()) {
+        PrintString(" ");
+        PrintInt(intConst->GetValue());
+      } else if (HLongConstant* longConst = instruction->AsLongConstant()) {
+        PrintString(" ");
+        PrintLong(longConst->GetValue());
+      }
     }
     if (instruction->HasUses()) {
       PrintString(" [");
@@ -89,25 +100,35 @@ class HPrettyPrinter : public HGraphVisitor {
       }
       PrintInt(successors.Peek()->GetBlockId());
     }
+    if (block->IsLoopHeader()) {
+      PrintString(", loop_header");
+    }
     PrintNewLine();
     HGraphVisitor::VisitBasicBlock(block);
   }
 
   virtual void PrintNewLine() = 0;
   virtual void PrintInt(int value) = 0;
+  virtual void PrintLong(int64_t value) = 0;
   virtual void PrintString(const char* value) = 0;
 
  private:
+  bool print_const_values_;
+
   DISALLOW_COPY_AND_ASSIGN(HPrettyPrinter);
 };
 
 class StringPrettyPrinter : public HPrettyPrinter {
  public:
-  explicit StringPrettyPrinter(HGraph* graph)
-      : HPrettyPrinter(graph), str_(""), current_block_(nullptr) { }
+  explicit StringPrettyPrinter(HGraph* graph, bool print_const_values = false)
+      : HPrettyPrinter(graph, print_const_values), str_(""), current_block_(nullptr) { }
 
   virtual void PrintInt(int value) {
     str_ += StringPrintf("%d", value);
+  }
+
+  virtual void PrintLong(int64_t value) {
+    str_ += StringPrintf("%" PRId64, value);
   }
 
   virtual void PrintString(const char* value) {

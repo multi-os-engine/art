@@ -210,12 +210,15 @@ static void RunOptimizations(HGraph* graph, const HGraphVisualizer& visualizer) 
     &opt7
   };
 
+  const char* prevPassName = nullptr;
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
     HOptimization* optimization = optimizations[i];
+    visualizer.DumpGraph(prevPassName, optimization->GetPassName());
     optimization->Run();
-    visualizer.DumpGraph(optimization->GetPassName());
     optimization->Check();
+    prevPassName = optimization->GetPassName();
   }
+  visualizer.DumpGraph(prevPassName);
 }
 
 static bool TryBuildingSsa(HGraph* graph,
@@ -287,9 +290,18 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     return nullptr;
   }
 
-  HGraphVisualizer visualizer(
-      visualizer_output_.get(), graph, kStringFilter, *codegen, dex_compilation_unit);
-  visualizer.DumpGraph("builder");
+  std::unique_ptr<HGraphVisualizer> visualizer;
+  if (GetCompilerDriver()->GetDumpPasses()) {
+    visualizer.reset(new HGraphLogVisualizer(graph, dex_compilation_unit));
+  } else if (kIsVisualizerEnabled) {
+    visualizer.reset(new HGraphC1Visualizer(graph, *visualizer_output_.get(), kStringFilter,
+                                            *codegen, dex_compilation_unit));
+  } else {
+    // A dummy visualizer so we don't need NULL checks everywhere
+    visualizer.reset(new HGraphVisualizer(graph, dex_compilation_unit));
+  }
+
+  visualizer->DumpGraph("builder");
 
   CodeVectorAllocator allocator;
 
@@ -298,21 +310,21 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
       && RegisterAllocator::CanAllocateRegistersFor(*graph, instruction_set)) {
     VLOG(compiler) << "Optimizing " << PrettyMethod(method_idx, dex_file);
     optimized_compiled_methods_++;
-    if (!TryBuildingSsa(graph, dex_compilation_unit, visualizer)) {
+    if (!TryBuildingSsa(graph, dex_compilation_unit, *visualizer)) {
       // We could not transform the graph to SSA, bailout.
       return nullptr;
     }
-    RunOptimizations(graph, visualizer);
+    RunOptimizations(graph, *visualizer);
 
     PrepareForRegisterAllocation(graph).Run();
     SsaLivenessAnalysis liveness(*graph, codegen);
     liveness.Analyze();
-    visualizer.DumpGraph(kLivenessPassName);
+    visualizer->DumpGraph(kLivenessPassName);
 
     RegisterAllocator register_allocator(graph->GetArena(), codegen, liveness);
     register_allocator.AllocateRegisters();
 
-    visualizer.DumpGraph(kRegisterAllocatorPassName);
+    visualizer->DumpGraph(kRegisterAllocatorPassName);
     codegen->CompileOptimized(&allocator);
 
     std::vector<uint8_t> mapping_table;
