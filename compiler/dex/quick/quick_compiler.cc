@@ -40,7 +40,7 @@ class QuickCompiler : public Compiler {
  public:
   explicit QuickCompiler(CompilerDriver* driver) : Compiler(driver, 100) {}
 
-  void Init() const OVERRIDE;
+  void Init() OVERRIDE;
 
   void UnInit() const OVERRIDE;
 
@@ -573,7 +573,7 @@ void QuickCompiler::InitCompilationUnit(CompilationUnit& cu) const {
   cu.disable_opt |= kDisabledOptimizationsPerISA[cu.instruction_set];
 }
 
-void QuickCompiler::Init() const {
+void QuickCompiler::Init() {
   CHECK(GetCompilerDriver()->GetCompilerContext() == nullptr);
 }
 

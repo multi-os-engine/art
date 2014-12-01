@@ -49,7 +49,7 @@ class Compiler {
 
   static Compiler* Create(CompilerDriver* driver, Kind kind);
 
-  virtual void Init() const = 0;
+  virtual void Init() = 0;
 
   virtual void UnInit() const = 0;
 
