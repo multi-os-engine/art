@@ -36,44 +36,53 @@ static const char* kRegisterAllocatorPassName = "register";
  * and IRHydra.
  * Currently only works if the compiler is single threaded.
  */
-class HGraphVisualizer : public ValueObject {
+class HGraphDump {
  public:
   /**
    * If output is not null, and the method name of the dex compilation
    * unit contains `string_filter`, the compilation information will be
    * emitted.
    */
-  HGraphVisualizer(std::ostream* output,
-                   HGraph* graph,
-                   const char* string_filter,
-                   const CodeGenerator& codegen,
-                   const DexCompilationUnit& cu);
+  HGraphDump(HGraph* graph, const DexCompilationUnit& cu);
 
-  /**
-   * Version of `HGraphVisualizer` for unit testing, that is when a
-   * `DexCompilationUnit` is not available.
-   */
-  HGraphVisualizer(std::ostream* output,
-                   HGraph* graph,
-                   const CodeGenerator& codegen,
-                   const char* name);
+  virtual ~HGraphDump() { }
 
   /**
    * If this visualizer is enabled, emit the compilation information
    * in `output_`.
    */
-  void DumpGraph(const char* pass_name) const;
+  virtual void DumpGraph(const char* name, const char* attr = nullptr) const;
+
+ protected:
+  HGraph* const graph_;
+  std::string method_name_;
 
  private:
-  std::ostream* const output_;
-  HGraph* const graph_;
+  DISALLOW_COPY_AND_ASSIGN(HGraphDump);
+};
+
+class HGraphC1visualizerDump : public HGraphDump {
+ public:
+  HGraphC1visualizerDump(HGraph* graph,
+                         std::ostream& output,
+                         const char* method_filter,
+                         const CodeGenerator& codegen,
+                         const DexCompilationUnit& cu);
+
+  virtual void DumpGraph(const char* pass_name, const char* pass_attr) const;
+
+ private:
+  std::ostream& output_;
   const CodeGenerator& codegen_;
-
-  // Is true when `output_` is not null, and the compiled method's name
-  // contains the string_filter given in the constructor.
   bool is_enabled_;
+};
 
-  DISALLOW_COPY_AND_ASSIGN(HGraphVisualizer);
+class HGraphTestDump : public HGraphDump {
+ public:
+  HGraphTestDump(HGraph* graph, const DexCompilationUnit& cu);
+  virtual ~HGraphTestDump();
+
+  virtual void DumpGraph(const char* pass_name, const char* pass_attr) const;
 };
 
 }  // namespace art
