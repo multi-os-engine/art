@@ -91,6 +91,12 @@ class CommonRuntimeTest : public testing::Test {
 
   virtual void TearDown();
 
+  // Called before the runtime is created.
+  virtual void PreRuntimeCreate() {}
+
+  // Called after the runtime is created.
+  virtual void PostRuntimeCreate() {}
+
   // Gets the path of the libcore dex file.
   std::string GetLibCoreDexFileName();
 
@@ -98,6 +104,8 @@ class CommonRuntimeTest : public testing::Test {
   std::string GetDexFileName(const std::string& jar_prefix);
 
   std::string GetTestAndroidRoot();
+
+  std::string GetTestDexFileName(const char* name);
 
   std::vector<const DexFile*> OpenTestDexFiles(const char* name)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

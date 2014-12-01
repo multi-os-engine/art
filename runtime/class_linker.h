@@ -313,32 +313,17 @@ class ClassLinker {
       LOCKS_EXCLUDED(dex_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Generate an oat file from a dex file
-  bool GenerateOatFile(const char* dex_filename,
-                       int oat_fd,
-                       const char* oat_cache_filename,
-                       std::string* error_msg)
-      LOCKS_EXCLUDED(Locks::mutator_lock_);
-
-  // Find or create the oat file holding dex_location. Then load all corresponding dex files
-  // (if multidex) into the given vector.
+  // Find or create the oat file holding dex_location. Then load all
+  // corresponding dex files into the given vector (there may be more than one
+  // dex file loaded in the case of multidex).
+  // Returns true if dex files were successfully loaded, including the case
+  // where an oat file could not be generated, but the original, unquickened
+  // dex files could be loaded.
+  //
+  // The caller is responsible for freeing the dex_files. The dex_files will
+  // remain valid as long as the ClassLinker object is valid.
   bool OpenDexFilesFromOat(const char* dex_location, const char* oat_location,
-                           std::vector<std::string>* error_msgs,
-                           std::vector<const DexFile*>* dex_files)
-      LOCKS_EXCLUDED(dex_lock_, Locks::mutator_lock_);
-
-  // Returns true if the given oat file has the same image checksum as the image it is paired with.
-  static bool VerifyOatImageChecksum(const OatFile* oat_file, const InstructionSet instruction_set);
-  // Returns true if the oat file checksums match with the image and the offsets are such that it
-  // could be loaded with it.
-  static bool VerifyOatChecksums(const OatFile* oat_file, const InstructionSet instruction_set,
-                                 std::string* error_msg);
-  // Returns true if oat file contains the dex file with the given location and checksum.
-  static bool VerifyOatAndDexFileChecksums(const OatFile* oat_file,
-                                           const char* dex_location,
-                                           uint32_t dex_location_checksum,
-                                           InstructionSet instruction_set,
-                                           std::string* error_msg);
+                           std::vector<const DexFile*>* dex_files);
 
   // Allocate an instance of a java.lang.Object.
   mirror::Object* AllocObject(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -612,72 +597,8 @@ class ClassLinker {
                                                   const uint32_t* dex_location_checksum)
       LOCKS_EXCLUDED(dex_lock_);
 
-  // Will open the oat file directly without relocating, even if we could/should do relocation.
-  const OatFile* FindOatFileFromOatLocation(const std::string& oat_location,
-                                            std::string* error_msg)
-      LOCKS_EXCLUDED(dex_lock_);
-
   const OatFile* FindOpenedOatFileFromOatLocation(const std::string& oat_location)
       LOCKS_EXCLUDED(dex_lock_);
-
-  const OatFile* OpenOatFileFromDexLocation(const std::string& dex_location,
-                                            InstructionSet isa,
-                                            bool* already_opened,
-                                            bool* obsolete_file_cleanup_failed,
-                                            std::vector<std::string>* error_msg)
-      LOCKS_EXCLUDED(dex_lock_, Locks::mutator_lock_);
-
-  const OatFile* GetInterpretedOnlyOat(const std::string& oat_path,
-                                       InstructionSet isa,
-                                       std::string* error_msg);
-
-  const OatFile* PatchAndRetrieveOat(const std::string& input, const std::string& output,
-                                     const std::string& image_location, InstructionSet isa,
-                                     std::string* error_msg)
-      LOCKS_EXCLUDED(Locks::mutator_lock_);
-
-  bool CheckOatFile(const Runtime* runtime, const OatFile* oat_file, InstructionSet isa,
-                    bool* checksum_verified, std::string* error_msg);
-
-  // Note: will not register the oat file.
-  const OatFile* FindOatFileInOatLocationForDexFile(const char* dex_location,
-                                                    uint32_t dex_location_checksum,
-                                                    const char* oat_location,
-                                                    std::string* error_msg)
-      LOCKS_EXCLUDED(dex_lock_);
-
-  // Creates the oat file from the dex_location to the oat_location. Needs a file descriptor for
-  // the file to be written, which is assumed to be under a lock.
-  const OatFile* CreateOatFileForDexLocation(const char* dex_location,
-                                             int fd, const char* oat_location,
-                                             std::vector<std::string>* error_msgs)
-      LOCKS_EXCLUDED(dex_lock_, Locks::mutator_lock_);
-
-  // Finds an OatFile that contains a DexFile for the given a DexFile location.
-  //
-  // Note 1: this will not check open oat files, which are assumed to be stale when this is run.
-  // Note 2: Does not register the oat file. It is the caller's job to register if the file is to
-  //         be kept.
-  const OatFile* FindOatFileContainingDexFileFromDexLocation(const char* dex_location,
-                                                             const uint32_t* dex_location_checksum,
-                                                             InstructionSet isa,
-                                                             std::vector<std::string>* error_msgs,
-                                                             bool* obsolete_file_cleanup_failed)
-      LOCKS_EXCLUDED(dex_lock_, Locks::mutator_lock_);
-
-  // Verifies:
-  //  - that the oat file contains the dex file (with a matching checksum, which may be null if the
-  // file was pre-opted)
-  //  - the checksums of the oat file (against the image space)
-  //  - the checksum of the dex file against dex_location_checksum
-  //  - that the dex file can be opened
-  // Returns true iff all verification succeed.
-  //
-  // The dex_location is the dex location as stored in the oat file header.
-  // (see DexFile::GetDexCanonicalLocation for a description of location conventions)
-  bool VerifyOatWithDexFile(const OatFile* oat_file, const char* dex_location,
-                            const uint32_t* dex_location_checksum,
-                            std::string* error_msg);
 
   mirror::ArtMethod* CreateProxyConstructor(Thread* self, Handle<mirror::Class> klass,
                                             mirror::Class* proxy_class)
