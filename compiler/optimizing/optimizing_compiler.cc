@@ -67,13 +67,8 @@ class CodeVectorAllocator FINAL : public CodeAllocator {
 };
 
 /**
- * If set to true, generates a file suitable for the c1visualizer tool and IRHydra.
- */
-static bool kIsVisualizerEnabled = false;
-
-/**
  * Filter to apply to the visualizer. Methods whose name contain that filter will
- * be in the file.
+ * be dumped.
  */
 static const char* kStringFilter = "";
 
@@ -113,7 +108,7 @@ class OptimizingCompiler FINAL : public Compiler {
 
   void InitCompilationUnit(CompilationUnit& cu ATTRIBUTE_UNUSED) const OVERRIDE {}
 
-  void Init() const OVERRIDE {}
+  void Init() OVERRIDE;
 
   void UnInit() const OVERRIDE {}
 
@@ -138,8 +133,14 @@ OptimizingCompiler::OptimizingCompiler(CompilerDriver* driver)
           driver->GetCompilerOptions().GetCompilerFilter() != CompilerOptions::kTime),
       total_compiled_methods_(0),
       unoptimized_compiled_methods_(0),
-      optimized_compiled_methods_(0) {
-  if (kIsVisualizerEnabled) {
+      optimized_compiled_methods_(0) {}
+
+void OptimizingCompiler::Init() {
+  // Enable C1visualizer output. Must be done in Init() because the compiler
+  // driver is not fully initialized when passed to the compiler's constructor.
+  CompilerDriver* driver = GetCompilerDriver();
+  if (driver->GetDumpPasses()) {
+    CHECK(driver->GetThreadCount() == 1);
     visualizer_output_.reset(new std::ofstream("art.cfg"));
   }
 }
@@ -215,8 +216,9 @@ static void RunOptimizations(HGraph* graph, const HGraphVisualizer& visualizer) 
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
     HOptimization* optimization = optimizations[i];
+    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/false);
     optimization->Run();
-    visualizer.DumpGraph(optimization->GetPassName());
+    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/true);
     optimization->Check();
   }
 }
@@ -301,8 +303,11 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     return nullptr;
   }
 
-  HGraphVisualizer visualizer(
-      visualizer_output_.get(), graph, kStringFilter, *codegen, dex_compilation_unit);
+  HGraphVisualizer visualizer(visualizer_output_.get(),
+                              graph,
+                              kStringFilter,
+                              *codegen,
+                              dex_compilation_unit);
   visualizer.DumpGraph("builder");
 
   CodeVectorAllocator allocator;
