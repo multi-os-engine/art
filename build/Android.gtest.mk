@@ -52,6 +52,7 @@ ART_GTEST_dex_file_test_DEX_DEPS := GetMethodSignature Main Nested
 ART_GTEST_exception_test_DEX_DEPS := ExceptionHandle
 ART_GTEST_jni_compiler_test_DEX_DEPS := MyClassNatives
 ART_GTEST_jni_internal_test_DEX_DEPS := AllFields StaticLeafMethods
+ART_GTEST_oat_file_manager_test_DEX_DEPS := Main Nested
 ART_GTEST_object_test_DEX_DEPS := ProtoCompare ProtoCompare2 StaticsFromCode XandY
 ART_GTEST_proxy_test_DEX_DEPS := Interfaces
 ART_GTEST_reflection_test_DEX_DEPS := Main NonStaticLeafMethods StaticLeafMethods
@@ -61,6 +62,9 @@ ART_GTEST_transaction_test_DEX_DEPS := Transaction
 # The elf writer test has dependencies on core.oat.
 ART_GTEST_elf_writer_test_HOST_DEPS := $(HOST_CORE_IMAGE_default_no-pic_64) $(HOST_CORE_IMAGE_default_no-pic_32)
 ART_GTEST_elf_writer_test_TARGET_DEPS := $(TARGET_CORE_IMAGE_default_no-pic_64) $(TARGET_CORE_IMAGE_default_no-pic_32)
+
+ART_GTEST_oat_file_manager_test_HOST_DEPS := $(HOST_CORE_IMAGE_default_no-pic_64) $(HOST_CORE_IMAGE_default_no-pic_32)
+ART_GTEST_oat_file_manager_test_TARGET_DEPS := $(TARGET_CORE_IMAGE_default_no-pic_64) $(TARGET_CORE_IMAGE_default_no-pic_32) # $(ART_TEST_TARGET_GTEST_Main_ODEX)
 
 # TODO: document why this is needed.
 ART_GTEST_proxy_test_HOST_DEPS := $(HOST_CORE_IMAGE_default_no-pic_64) $(HOST_CORE_IMAGE_default_no-pic_32)
@@ -123,6 +127,7 @@ RUNTIME_GTEST_COMMON_SRC_FILES := \
   runtime/mirror/object_test.cc \
   runtime/monitor_pool_test.cc \
   runtime/monitor_test.cc \
+  runtime/oat_file_manager_test.cc \
   runtime/parsed_options_test.cc \
   runtime/reference_table_test.cc \
   runtime/thread_pool_test.cc \
@@ -529,6 +534,7 @@ ART_GTEST_elf_writer_test_HOST_DEPS :=
 ART_GTEST_elf_writer_test_TARGET_DEPS :=
 ART_GTEST_jni_compiler_test_DEX_DEPS :=
 ART_GTEST_jni_internal_test_DEX_DEPS :=
+ART_GTEST_oat_file_manager_test_DEX_DEPS :=
 ART_GTEST_object_test_DEX_DEPS :=
 ART_GTEST_proxy_test_DEX_DEPS :=
 ART_GTEST_reflection_test_DEX_DEPS :=

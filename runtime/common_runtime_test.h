@@ -99,6 +99,8 @@ class CommonRuntimeTest : public testing::Test {
 
   std::string GetTestAndroidRoot();
 
+  std::string GetTestDexFileName(const char* name);
+
   std::vector<const DexFile*> OpenTestDexFiles(const char* name)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

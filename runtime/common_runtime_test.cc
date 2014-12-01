@@ -312,7 +312,7 @@ std::string CommonRuntimeTest::GetTestAndroidRoot() {
 #define ART_TARGET_NATIVETEST_DIR_STRING ""
 #endif
 
-std::vector<const DexFile*> CommonRuntimeTest::OpenTestDexFiles(const char* name) {
+std::string CommonRuntimeTest::GetTestDexFileName(const char* name) {
   CHECK(name != nullptr);
   std::string filename;
   if (IsHost()) {
@@ -324,6 +324,11 @@ std::vector<const DexFile*> CommonRuntimeTest::OpenTestDexFiles(const char* name
   filename += "art-gtest-";
   filename += name;
   filename += ".jar";
+  return filename;
+}
+
+std::vector<const DexFile*> CommonRuntimeTest::OpenTestDexFiles(const char* name) {
+  std::string filename = GetTestDexFileName(name);
   std::string error_msg;
   std::vector<const DexFile*> dex_files;
   bool success = DexFile::Open(filename.c_str(), filename.c_str(), &error_msg, &dex_files);
