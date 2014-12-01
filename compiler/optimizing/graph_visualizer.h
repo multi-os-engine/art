@@ -32,48 +32,55 @@ static const char* kLivenessPassName = "liveness";
 static const char* kRegisterAllocatorPassName = "register";
 
 /**
- * If enabled, emits compilation information suitable for the c1visualizer tool
- * and IRHydra.
+ * The parent class for utility classes which output the HGraph. The default
+ * implementation does nothing.
  * Currently only works if the compiler is single threaded.
  */
-class HGraphVisualizer : public ValueObject {
+class HGraphDump {
  public:
-  /**
-   * If output is not null, and the method name of the dex compilation
-   * unit contains `string_filter`, the compilation information will be
-   * emitted.
-   */
-  HGraphVisualizer(std::ostream* output,
-                   HGraph* graph,
-                   const char* string_filter,
-                   const CodeGenerator& codegen,
-                   const DexCompilationUnit& cu);
+  HGraphDump(HGraph* graph, const DexCompilationUnit& cu);
+  virtual ~HGraphDump() { }
+  virtual void DumpGraph(const char* name, const char* attr = nullptr) const;
 
-  /**
-   * Version of `HGraphVisualizer` for unit testing, that is when a
-   * `DexCompilationUnit` is not available.
-   */
-  HGraphVisualizer(std::ostream* output,
-                   HGraph* graph,
-                   const CodeGenerator& codegen,
-                   const char* name);
-
-  /**
-   * If this visualizer is enabled, emit the compilation information
-   * in `output_`.
-   */
-  void DumpGraph(const char* pass_name) const;
+ protected:
+  HGraph* const graph_;
+  std::string method_name_;
 
  private:
-  std::ostream* const output_;
-  HGraph* const graph_;
+  DISALLOW_COPY_AND_ASSIGN(HGraphDump);
+};
+
+/**
+ * Implementation of HGraphDump which outputs the graph in the C1visualizer
+ * format. The 'method_filter' argument can be used to dump only methods
+ * whose name contains the given string.
+ */
+class HGraphC1visualizerDump : public HGraphDump {
+ public:
+  HGraphC1visualizerDump(HGraph* graph,
+                         std::ostream& output,
+                         const char* method_filter,
+                         const CodeGenerator& codegen,
+                         const DexCompilationUnit& cu);
+  virtual void DumpGraph(const char* pass_name, const char* pass_attr) const;
+
+ private:
+  std::ostream& output_;
   const CodeGenerator& codegen_;
-
-  // Is true when `output_` is not null, and the compiled method's name
-  // contains the string_filter given in the constructor.
   bool is_enabled_;
+};
 
-  DISALLOW_COPY_AND_ASSIGN(HGraphVisualizer);
+/**
+ * Implementation of HGraphDump which dumps the graph using the HPrettyPrinter
+ * class. It is intended to be used for testing purposes as it allows for easy
+ * regex matching of the actual graph against the expected outcome.
+ * The graph is dumped on LOG(INFO).
+ */
+class HGraphTestDump : public HGraphDump {
+ public:
+  HGraphTestDump(HGraph* graph, const DexCompilationUnit& cu);
+  virtual ~HGraphTestDump();
+  virtual void DumpGraph(const char* pass_name, const char* pass_attr) const;
 };
 
 }  // namespace art

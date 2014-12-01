@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "graph_visualizer.h"
-
+#include <optimizing/graph_visualizer.h>
 #include "code_generator.h"
 #include "driver/dex_compilation_unit.h"
 #include "nodes.h"
+#include "pretty_printer.h"
 #include "ssa_liveness_analysis.h"
 
 namespace art {
@@ -26,12 +26,12 @@ namespace art {
 /**
  * HGraph visitor to generate a file suitable for the c1visualizer tool and IRHydra.
  */
-class HGraphVisualizerPrinter : public HGraphVisitor {
+class HGraphC1visualizerPrinter : public HGraphVisitor {
  public:
-  HGraphVisualizerPrinter(HGraph* graph,
-                          std::ostream& output,
-                          const char* pass_name,
-                          const CodeGenerator& codegen)
+  HGraphC1visualizerPrinter(HGraph* graph,
+                            std::ostream& output,
+                            const char* pass_name,
+                            const CodeGenerator& codegen)
       : HGraphVisitor(graph),
         output_(output),
         pass_name_(pass_name),
@@ -263,56 +263,73 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
   const CodeGenerator& codegen_;
   size_t indent_;
 
-  DISALLOW_COPY_AND_ASSIGN(HGraphVisualizerPrinter);
+  DISALLOW_COPY_AND_ASSIGN(HGraphC1visualizerPrinter);
 };
 
-HGraphVisualizer::HGraphVisualizer(std::ostream* output,
-                                   HGraph* graph,
-                                   const char* string_filter,
-                                   const CodeGenerator& codegen,
-                                   const DexCompilationUnit& cu)
-    : output_(output), graph_(graph), codegen_(codegen), is_enabled_(false) {
-  if (output == nullptr) {
-    return;
-  }
-  std::string pretty_name = PrettyMethod(cu.GetDexMethodIndex(), *cu.GetDexFile());
-  if (pretty_name.find(string_filter) == std::string::npos) {
-    return;
-  }
-
-  is_enabled_ = true;
-  HGraphVisualizerPrinter printer(graph, *output_, "", codegen_);
-  printer.StartTag("compilation");
-  printer.PrintProperty("name", pretty_name.c_str());
-  printer.PrintProperty("method", pretty_name.c_str());
-  printer.PrintTime("date");
-  printer.EndTag("compilation");
+HGraphDump::HGraphDump(HGraph* graph, const DexCompilationUnit& cu)
+    : graph_(graph) {
+  method_name_ = PrettyMethod(cu.GetDexMethodIndex(), *cu.GetDexFile(), false);
 }
 
-HGraphVisualizer::HGraphVisualizer(std::ostream* output,
-                                   HGraph* graph,
-                                   const CodeGenerator& codegen,
-                                   const char* name)
-    : output_(output), graph_(graph), codegen_(codegen), is_enabled_(false) {
-  if (output == nullptr) {
-    return;
-  }
-
-  is_enabled_ = true;
-  HGraphVisualizerPrinter printer(graph, *output_, "", codegen_);
-  printer.StartTag("compilation");
-  printer.PrintProperty("name", name);
-  printer.PrintProperty("method", name);
-  printer.PrintTime("date");
-  printer.EndTag("compilation");
+void HGraphDump::DumpGraph(const char* pass_name ATTRIBUTE_UNUSED,
+                           const char* pass_attr ATTRIBUTE_UNUSED) const {
 }
 
-void HGraphVisualizer::DumpGraph(const char* pass_name) const {
-  if (!is_enabled_) {
-    return;
+HGraphC1visualizerDump::HGraphC1visualizerDump(HGraph* graph,
+                                               std::ostream& output,
+                                               const char* method_filter,
+                                               const CodeGenerator& codegen,
+                                               const DexCompilationUnit& cu)
+    : HGraphDump(graph, cu), output_(output), codegen_(codegen) {
+  is_enabled_ = method_name_.find(method_filter) != std::string::npos;
+  if (is_enabled_) {
+    HGraphC1visualizerPrinter printer(graph_, output_, "", codegen_);
+    printer.StartTag("compilation");
+    printer.PrintProperty("name", method_name_.c_str());
+    printer.PrintProperty("method", method_name_.c_str());
+    printer.PrintTime("date");
+    printer.EndTag("compilation");
   }
-  HGraphVisualizerPrinter printer(graph_, *output_, pass_name, codegen_);
-  printer.Run();
+}
+
+void HGraphC1visualizerDump::DumpGraph(const char* pass_name,
+                                       const char* pass_attr ATTRIBUTE_UNUSED)
+                                       const {
+  if (is_enabled_) {
+    HGraphC1visualizerPrinter printer(graph_, output_, pass_name, codegen_);
+    printer.Run();
+  }
+}
+
+HGraphTestDump::HGraphTestDump(HGraph* graph,
+                               const DexCompilationUnit& cu)
+    : HGraphDump(graph, cu) {
+  LOG(INFO) << "------------------------------------";
+  LOG(INFO) << "BEGIN_METHOD " << method_name_;
+}
+
+HGraphTestDump::~HGraphTestDump() {
+  LOG(INFO) << "END_METHOD " << method_name_;
+  LOG(INFO) << "------------------------------------";
+  LOG(INFO) << std::endl;
+}
+
+void HGraphTestDump::DumpGraph(const char* pass_name,
+                               const char* pass_attr) const {
+  if (pass_attr)
+    LOG(INFO) << "BEGIN_GRAPH_DUMP " << pass_name << " [" << pass_attr << "]";
+  else
+    LOG(INFO) << "BEGIN_GRAPH_DUMP " << pass_name;
+
+  StringPrettyPrinter printer(graph_);
+  printer.VisitInsertionOrder();
+  LOG(INFO) << printer.str();
+
+  if (pass_attr)
+    LOG(INFO) << "END_GRAPH_DUMP " << pass_name << " [" << pass_attr << "]";
+  else
+    LOG(INFO) << "END_GRAPH_DUMP " << pass_name;
+  LOG(INFO) << std::endl;
 }
 
 }  // namespace art
