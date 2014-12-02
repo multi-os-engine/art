@@ -173,6 +173,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   void VisitBlockForBackEdges(HBasicBlock* block,
                               ArenaBitVector* visited,
                               ArenaBitVector* visiting);
+  void RemoveInstructionsAsUsersFromDeadBlocks(const ArenaBitVector& visited) const;
   void RemoveDeadBlocks(const ArenaBitVector& visited) const;
 
   ArenaAllocator* const arena_;
@@ -400,6 +401,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
 
   void AddInstruction(HInstruction* instruction);
   void RemoveInstruction(HInstruction* instruction);
+  void RemoveInstructionAsUser(HInstruction* instruction);
   void InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor);
   // Replace instruction `initial` with `replacement` within this block.
   void ReplaceAndRemoveInstructionWith(HInstruction* initial,
@@ -407,6 +409,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   void AddPhi(HPhi* phi);
   void InsertPhiAfter(HPhi* instruction, HPhi* cursor);
   void RemovePhi(HPhi* phi);
+  void RemovePhiAsUser(HPhi* phi);
 
   bool IsLoopHeader() const {
     return (loop_information_ != nullptr) && (loop_information_->GetHeader() == this);

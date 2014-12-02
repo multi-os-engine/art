@@ -1,0 +1,3 @@
+Exercise a method containing a `try' statement with several
+instructions with a `finally' clause but without any `catch' block,
+enclosed in a loop.
