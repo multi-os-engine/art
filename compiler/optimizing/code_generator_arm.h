@@ -207,8 +207,12 @@ class CodeGeneratorARM : public CodeGenerator {
   // Load current method into `reg`.
   void LoadCurrentMethod(Register reg);
 
-  // Generate code to invoke a runtime entry point.
-  void InvokeRuntime(int32_t offset, HInstruction* instruction, uint32_t dex_pc);
+  // Generate code to invoke a runtime entry point.  If `actually_record_pc`
+  // is set to false, don't actually record PC information.
+  void InvokeRuntime(int32_t offset,
+                     HInstruction* instruction,
+                     uint32_t dex_pc,
+                     bool actually_record_pc = true);
 
   // Emit a write barrier.
   void MarkGCCard(Register temp, Register card, Register object, Register value);

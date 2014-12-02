@@ -44,8 +44,9 @@ static constexpr int kCurrentMethodStackOffset = 0;
 static constexpr Register kRuntimeParameterCoreRegisters[] = { R0, R1, R2, R3 };
 static constexpr size_t kRuntimeParameterCoreRegistersLength =
     arraysize(kRuntimeParameterCoreRegisters);
-static constexpr SRegister kRuntimeParameterFpuRegisters[] = { };
-static constexpr size_t kRuntimeParameterFpuRegistersLength = 0;
+static constexpr SRegister kRuntimeParameterFpuRegisters[] = { S0 };
+static constexpr size_t kRuntimeParameterFpuRegistersLength =
+    arraysize(kRuntimeParameterFpuRegisters);
 
 class InvokeRuntimeCallingConvention : public CallingConvention<Register, SRegister> {
  public:
@@ -866,10 +867,11 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
 
 void CodeGeneratorARM::InvokeRuntime(int32_t entry_point_offset,
                                      HInstruction* instruction,
-                                     uint32_t dex_pc) {
+                                     uint32_t dex_pc,
+                                     bool actually_record_pc) {
   __ LoadFromOffset(kLoadWord, LR, TR, entry_point_offset);
   __ blx(LR);
-  RecordPcInfo(instruction, dex_pc);
+  RecordPcInfo(instruction, dex_pc, actually_record_pc);
   DCHECK(instruction->IsSuspendCheck()
       || instruction->IsBoundsCheck()
       || instruction->IsNullCheck()
@@ -1434,7 +1436,15 @@ void LocationsBuilderARM::VisitTypeConversion(HTypeConversion* conversion) {
           locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
           break;
 
-        case Primitive::kPrimFloat:
+        case Primitive::kPrimFloat: {
+          // Processing a Dex `float-to-long' instruction.
+          InvokeRuntimeCallingConvention calling_convention;
+          locations->SetInAt(0, Location::FpuRegisterLocation(
+              calling_convention.GetFpuRegisterAt(0)));
+          locations->SetOut(Location::RegisterPairLocation(R0, R1));
+          break;
+        }
+
         case Primitive::kPrimDouble:
           LOG(FATAL) << "Type conversion from " << input_type << " to "
                      << result_type << " not yet implemented";
@@ -1623,6 +1633,14 @@ void InstructionCodeGeneratorARM::VisitTypeConversion(HTypeConversion* conversio
           break;
 
         case Primitive::kPrimFloat:
+          // Processing a Dex `float-to-long' instruction.
+          // This call does not actually record PC information.
+          codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pF2l),
+                                  conversion,
+                                  conversion->GetDexPc(),
+                                  false);
+          break;
+
         case Primitive::kPrimDouble:
           LOG(FATAL) << "Type conversion from " << input_type << " to "
                      << result_type << " not yet implemented";

@@ -136,7 +136,8 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
     UNREACHABLE();
   }
 
-  void RecordPcInfo(HInstruction* instruction, uint32_t dex_pc);
+  // If `actually_record` is set to false, don't actually record PC information.
+  void RecordPcInfo(HInstruction* instruction, uint32_t dex_pc, bool actually_record = true);
 
   void AddSlowPath(SlowPathCode* slow_path) {
     slow_paths_.Add(slow_path);

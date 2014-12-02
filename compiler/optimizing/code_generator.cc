@@ -498,7 +498,11 @@ void CodeGenerator::BuildStackMaps(std::vector<uint8_t>* data) {
   stack_map_stream_.FillIn(region);
 }
 
-void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
+void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc, bool actually_record) {
+  if (!actually_record) {
+    return;
+  }
+
   // Collect PC infos for the mapping table.
   struct PcInfo pc_info;
   pc_info.dex_pc = dex_pc;

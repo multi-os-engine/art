@@ -1401,7 +1401,15 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
           locations->SetOut(Location::RegisterPairLocation(EAX, EDX));
           break;
 
-        case Primitive::kPrimFloat:
+        case Primitive::kPrimFloat: {
+          // Processing a Dex `float-to-long' instruction.
+          InvokeRuntimeCallingConvention calling_convention;
+          locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
+          // The runtime helper puts the result in EAX, EDX.
+          locations->SetOut(Location::RegisterPairLocation(EAX, EDX));
+          break;
+        }
+
         case Primitive::kPrimDouble:
           LOG(FATAL) << "Type conversion from " << input_type << " to "
                      << result_type << " not yet implemented";
@@ -1615,6 +1623,12 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
           break;
 
         case Primitive::kPrimFloat:
+          // Processing a Dex `float-to-long' instruction.
+          __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pF2l)));
+          // This call does not actually record PC information.
+          codegen_->RecordPcInfo(conversion, conversion->GetDexPc(), false);
+          break;
+
         case Primitive::kPrimDouble:
           LOG(FATAL) << "Type conversion from " << input_type << " to "
                      << result_type << " not yet implemented";
