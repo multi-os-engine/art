@@ -37,11 +37,13 @@ void HGraph::RemoveDeadBlocks(const ArenaBitVector& visited) const {
       for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
         block->GetSuccessors().Get(j)->RemovePredecessor(block);
       }
+      // Process the instructions of this block in reverse order to
+      // remove users before their uses.
+      for (HBackwardInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
+        block->RemoveInstruction(it.Current());
+      }
       for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
         block->RemovePhi(it.Current()->AsPhi());
-      }
-      for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
-        block->RemoveInstruction(it.Current());
       }
     }
   }
