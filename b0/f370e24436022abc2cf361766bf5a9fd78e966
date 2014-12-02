@@ -1,0 +1,7 @@
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Code-Review+2: Ian Rogers <irogers@google.com>
+Submitted-by: Andreas Gampe <agampe@google.com>
+Submitted-at: Tue, 02 Dec 2014 22:16:51 +0000
+Reviewed-on: https://android-review.googlesource.com/109085
+Project: platform/art
+Branch: refs/heads/master
