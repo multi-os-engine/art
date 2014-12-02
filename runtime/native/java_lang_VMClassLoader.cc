@@ -26,6 +26,26 @@
 
 namespace art {
 
+// A class so we can be friends with ClassLinker.
+class VMClassLoader {
+ public:
+  static mirror::Class* LookupClass(ClassLinker* cl, Thread* self, const char* descriptor,
+                                    size_t hash, mirror::ClassLoader* class_loader)
+      LOCKS_EXCLUDED(Locks::classlinker_classes_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return cl->LookupClass(self, descriptor, hash, class_loader);
+  }
+
+  static mirror::Class* FindClassInPathClassLoader(ClassLinker* cl,
+                                                   ScopedObjectAccessAlreadyRunnable& soa,
+                                                   Thread* self, const char* descriptor,
+                                                   size_t hash,
+                                                   Handle<mirror::ClassLoader> class_loader)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return cl->FindClassInPathClassLoader(soa, self, descriptor, hash, class_loader);
+  }
+};
+
 static jclass VMClassLoader_findLoadedClass(JNIEnv* env, jclass, jobject javaLoader,
                                             jstring javaName) {
   ScopedFastNativeObjectAccess soa(env);
@@ -37,15 +57,16 @@ static jclass VMClassLoader_findLoadedClass(JNIEnv* env, jclass, jobject javaLoa
   ClassLinker* cl = Runtime::Current()->GetClassLinker();
   std::string descriptor(DotToDescriptor(name.c_str()));
   const size_t descriptor_hash = ComputeModifiedUtf8Hash(descriptor.c_str());
-  mirror::Class* c = cl->LookupClass(soa.Self(), descriptor.c_str(), descriptor_hash, loader);
+  mirror::Class* c = VMClassLoader::LookupClass(cl, soa.Self(), descriptor.c_str(), descriptor_hash,
+                                                loader);
   if (c != nullptr && c->IsResolved()) {
     return soa.AddLocalReference<jclass>(c);
   }
   if (loader != nullptr) {
     // Try the common case.
     StackHandleScope<1> hs(soa.Self());
-    c = cl->FindClassInPathClassLoader(soa, soa.Self(), descriptor.c_str(), descriptor_hash,
-                                       hs.NewHandle(loader));
+    c = VMClassLoader::FindClassInPathClassLoader(cl, soa, soa.Self(), descriptor.c_str(),
+                                                  descriptor_hash, hs.NewHandle(loader));
     if (c != nullptr) {
       return soa.AddLocalReference<jclass>(c);
     }

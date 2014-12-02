@@ -2011,8 +2011,7 @@ mirror::Class* ClassLinker::EnsureResolved(Thread* self, const char* descriptor,
     }
     CHECK(h_class->IsRetired());
     // Get the updated class from class table.
-    klass = LookupClass(self, descriptor, ComputeModifiedUtf8Hash(descriptor),
-                        h_class.Get()->GetClassLoader());
+    klass = LookupClass(self, descriptor, h_class.Get()->GetClassLoader());
   }
 
   // Wait for the class if it has not already been linked.

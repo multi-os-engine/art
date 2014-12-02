@@ -148,8 +148,7 @@ mirror::Class* RegTypeCache::ResolveClass(const char* descriptor, mirror::ClassL
   if (can_load_classes_) {
     klass = class_linker->FindClass(self, descriptor, class_loader);
   } else {
-    klass = class_linker->LookupClass(self, descriptor, ComputeModifiedUtf8Hash(descriptor),
-                                      loader);
+    klass = class_linker->LookupClass(self, descriptor, loader);
     if (klass != nullptr && !klass->IsLoaded()) {
       // We found the class but without it being loaded its not safe for use.
       klass = nullptr;

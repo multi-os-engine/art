@@ -117,13 +117,6 @@ class ClassLinker {
                            Handle<mirror::ClassLoader> class_loader)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Find a class in the path class loader, loading it if necessary without using JNI. Hash
-  // function is supposed to be ComputeModifiedUtf8Hash(descriptor).
-  mirror::Class* FindClassInPathClassLoader(ScopedObjectAccessAlreadyRunnable& soa,
-                                            Thread* self, const char* descriptor, size_t hash,
-                                            Handle<mirror::ClassLoader> class_loader)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   // Finds a class by its descriptor using the "system" class loader, ie by searching the
   // boot_class_path_.
   mirror::Class* FindSystemClass(Thread* self, const char* descriptor)
@@ -146,10 +139,12 @@ class ClassLinker {
 
   // Finds a class by its descriptor, returning NULL if it isn't wasn't loaded
   // by the given 'class_loader'.
-  mirror::Class* LookupClass(Thread* self, const char* descriptor, size_t hash,
+  mirror::Class* LookupClass(Thread* self, const char* descriptor,
                              mirror::ClassLoader* class_loader)
       LOCKS_EXCLUDED(Locks::classlinker_classes_lock_)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return LookupClass(self, descriptor, ComputeModifiedUtf8Hash(descriptor), class_loader);
+  }
 
   // Finds all the classes with the given descriptor, regardless of ClassLoader.
   void LookupClasses(const char* descriptor, std::vector<mirror::Class*>& classes)
@@ -514,6 +509,20 @@ class ClassLinker {
   uint32_t SizeOfClassWithoutEmbeddedTables(const DexFile& dex_file,
                                             const DexFile::ClassDef& dex_class_def);
 
+  // Find a class in the path class loader, loading it if necessary without using JNI. Hash
+  // function is supposed to be ComputeModifiedUtf8Hash(descriptor).
+  mirror::Class* FindClassInPathClassLoader(ScopedObjectAccessAlreadyRunnable& soa,
+                                            Thread* self, const char* descriptor, size_t hash,
+                                            Handle<mirror::ClassLoader> class_loader)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Finds a class by its descriptor, returning NULL if it isn't wasn't loaded
+  // by the given 'class_loader'. Uses the provided hash for the descriptor.
+  mirror::Class* LookupClass(Thread* self, const char* descriptor, size_t hash,
+                             mirror::ClassLoader* class_loader)
+      LOCKS_EXCLUDED(Locks::classlinker_classes_lock_)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   void LoadClass(Thread* self, const DexFile& dex_file, const DexFile::ClassDef& dex_class_def,
                  Handle<mirror::Class> klass, mirror::ClassLoader* class_loader)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -811,6 +820,7 @@ class ClassLinker {
   friend class ImageWriter;  // for GetClassRoots
   friend class ImageDumper;  // for FindOpenedOatFileFromOatLocation
   friend class ElfPatcher;  // for FindOpenedOatFileForDexFile & FindOpenedOatFileFromOatLocation
+  friend class VMClassLoader;  // for LookupClass and FindClassInPathClassLoader.
   friend class JniCompilerTest;  // for GetRuntimeQuickGenericJniStub
   friend class NoDex2OatTest;  // for FindOpenedOatFileForDexFile
   friend class NoPatchoatTest;  // for FindOpenedOatFileForDexFile
