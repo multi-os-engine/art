@@ -1,0 +1,5 @@
+Tests that new-instance on interfaces and abstract classes throws
+InstantiationError.
+
+This also verifies that we don't remove dead (code) new-instances which may
+throw.
