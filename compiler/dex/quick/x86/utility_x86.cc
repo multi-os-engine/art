@@ -570,32 +570,36 @@ LIR* X86Mir2Lir::LoadConstantWide(RegStorage r_dest, int64_t value) {
     if (is_fp) {
       DCHECK(r_dest.IsDouble());
       if (value == 0) {
-        return NewLIR2(kX86XorpsRR, low_reg_val, low_reg_val);
-      } else if (base_of_code_ != nullptr) {
+        return NewLIR2(kX86XorpdRR, low_reg_val, low_reg_val);
+      } else if (base_of_code_ != nullptr || cu_->target64) {
         // We will load the value from the literal area.
         LIR* data_target = ScanLiteralPoolWide(literal_list_, val_lo, val_hi);
         if (data_target == NULL) {
           data_target = AddWideData(&literal_list_, val_lo, val_hi);
         }
 
-        // Address the start of the method
-        RegLocation rl_method = mir_graph_->GetRegLocation(base_of_code_->s_reg_low);
-        if (rl_method.wide) {
-          rl_method = LoadValueWide(rl_method, kCoreReg);
-        } else {
-          rl_method = LoadValue(rl_method, kCoreReg);
-        }
-
         // Load the proper value from the literal area.
-        // We don't know the proper offset for the value, so pick one that will force
-        // 4 byte offset.  We will fix this up in the assembler later to have the right
-        // value.
+        // We don't know the proper offset for the value, so pick one that
+        // will force 4 byte offset.  We will fix this up in the assembler
+        // later to have the right value.
         ScopedMemRefType mem_ref_type(this, ResourceMask::kLiteral);
-        res = LoadBaseDisp(rl_method.reg, 256 /* bogus */, RegStorage::FloatSolo64(low_reg_val),
-                           kDouble, kNotVolatile);
+        if (cu_->target64) {
+          res = NewLIR3(kX86MovsdRM, low_reg_val, kRIPReg, 256 /* bogus */);
+        } else {
+          // Address the start of the method.
+          RegLocation rl_method = mir_graph_->GetRegLocation(base_of_code_->s_reg_low);
+          if (rl_method.wide) {
+            rl_method = LoadValueWide(rl_method, kCoreReg);
+          } else {
+            rl_method = LoadValue(rl_method, kCoreReg);
+          }
+
+          res = LoadBaseDisp(rl_method.reg, 256 /* bogus */, RegStorage::FloatSolo64(low_reg_val),
+                             kDouble, kNotVolatile);
+          store_method_addr_used_ = true;
+        }
         res->target = data_target;
         res->flags.fixup = kFixupLoad;
-        store_method_addr_used_ = true;
       } else {
         if (r_dest.IsPair()) {
           if (val_lo == 0) {
@@ -960,12 +964,14 @@ void X86Mir2Lir::AnalyzeMIR() {
     curr_bb = iter.Next();
   }
 
-  // Did we need a pointer to the method code?
-  if (store_method_addr_) {
-    base_of_code_ = mir_graph_->GetNewCompilerTemp(kCompilerTempBackend, cu_->target64 == true);
+  // Did we need a pointer to the method code?  Not in 64 bit mode.
+  base_of_code_ = nullptr;
+  if (cu_->target64) {
+    // Not needed in 64 bit mode due to RIP addressing mode.
+    store_method_addr_ = false;
+  } else if (store_method_addr_) {
+    base_of_code_ = mir_graph_->GetNewCompilerTemp(kCompilerTempBackend, false);
     DCHECK(base_of_code_ != nullptr);
-  } else {
-    base_of_code_ = nullptr;
   }
 }
 
