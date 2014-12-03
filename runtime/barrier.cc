@@ -75,7 +75,14 @@ void Barrier::SetCountLocked(Thread* self, int count) {
 }
 
 Barrier::~Barrier() {
-  CHECK(!count_) << "Attempted to destroy barrier with non zero count";
+  if (gAborting == 0) {
+    CHECK_EQ(count_, 0) << "Attempted to destroy barrier with non zero count";
+  } else {
+    // Avoid a recursive abort.
+    if (count_ != 0) {
+      LOG(ERROR) << "Attempted to destroy barrier with non zero count";
+    }
+  }
 }
 
 }  // namespace art
