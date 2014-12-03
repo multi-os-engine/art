@@ -145,26 +145,26 @@ COMPILER_GTEST_COMMON_SRC_FILES := \
   compiler/image_test.cc \
   compiler/jni/jni_compiler_test.cc \
   compiler/oat_test.cc \
-  compiler/optimizing/bounds_check_elimination_test.cc \
-  compiler/optimizing/codegen_test.cc \
-  compiler/optimizing/dead_code_elimination_test.cc \
-  compiler/optimizing/constant_folding_test.cc \
-  compiler/optimizing/dominator_test.cc \
-  compiler/optimizing/find_loops_test.cc \
-  compiler/optimizing/graph_checker_test.cc \
-  compiler/optimizing/graph_test.cc \
-  compiler/optimizing/gvn_test.cc \
-  compiler/optimizing/linearize_test.cc \
-  compiler/optimizing/liveness_test.cc \
-  compiler/optimizing/live_interval_test.cc \
-  compiler/optimizing/live_ranges_test.cc \
-  compiler/optimizing/nodes_test.cc \
-  compiler/optimizing/parallel_move_test.cc \
-  compiler/optimizing/pretty_printer_test.cc \
-  compiler/optimizing/register_allocator_test.cc \
-  compiler/optimizing/ssa_test.cc \
-  compiler/optimizing/stack_map_test.cc \
-  compiler/optimizing/suspend_check_test.cc \
+  compiler/optimizing/tests/bounds_check_elimination_test.cc \
+  compiler/optimizing/tests/codegen_test.cc \
+  compiler/optimizing/tests/dead_code_elimination_test.cc \
+  compiler/optimizing/tests/constant_folding_test.cc \
+  compiler/optimizing/tests/dominator_test.cc \
+  compiler/optimizing/tests/find_loops_test.cc \
+  compiler/optimizing/tests/graph_checker_test.cc \
+  compiler/optimizing/tests/graph_test.cc \
+  compiler/optimizing/tests/gvn_test.cc \
+  compiler/optimizing/tests/linearize_test.cc \
+  compiler/optimizing/tests/liveness_test.cc \
+  compiler/optimizing/tests/live_interval_test.cc \
+  compiler/optimizing/tests/live_ranges_test.cc \
+  compiler/optimizing/tests/nodes_test.cc \
+  compiler/optimizing/tests/parallel_move_test.cc \
+  compiler/optimizing/tests/pretty_printer_test.cc \
+  compiler/optimizing/tests/register_allocator_test.cc \
+  compiler/optimizing/tests/ssa_test.cc \
+  compiler/optimizing/tests/stack_map_test.cc \
+  compiler/optimizing/tests/suspend_check_test.cc \
   compiler/output_stream_test.cc \
   compiler/utils/arena_allocator_test.cc \
   compiler/utils/dedupe_set_test.cc \
@@ -197,7 +197,7 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_CPP_EXTENSION := cc
 LOCAL_CFLAGS := $(ART_TARGET_CFLAGS)
 LOCAL_SRC_FILES := runtime/common_runtime_test.cc compiler/common_compiler_test.cc
-LOCAL_C_INCLUDES := $(ART_C_INCLUDES) art/runtime art/compiler
+LOCAL_C_INCLUDES := $(ART_C_INCLUDES) art/runtime art/compiler art/compiler/optimizing
 LOCAL_SHARED_LIBRARIES := libartd libartd-compiler libdl
 LOCAL_STATIC_LIBRARIES += libgtest
 LOCAL_CLANG := $(ART_TARGET_CLANG)
@@ -212,7 +212,7 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_CPP_EXTENSION := cc
 LOCAL_CFLAGS := $(ART_HOST_CFLAGS)
 LOCAL_SRC_FILES := runtime/common_runtime_test.cc compiler/common_compiler_test.cc
-LOCAL_C_INCLUDES := $(ART_C_INCLUDES) art/runtime art/compiler
+LOCAL_C_INCLUDES := $(ART_C_INCLUDES) art/runtime art/compiler art/compiler/optimizing
 LOCAL_SHARED_LIBRARIES := libartd libartd-compiler
 LOCAL_STATIC_LIBRARIES := libgtest_host
 LOCAL_LDLIBS += -ldl -lpthread
@@ -433,11 +433,11 @@ endef  # define-art-gtest
 
 ifeq ($(ART_BUILD_TARGET),true)
   $(foreach file,$(RUNTIME_GTEST_TARGET_SRC_FILES), $(eval $(call define-art-gtest,target,$(file),,)))
-  $(foreach file,$(COMPILER_GTEST_TARGET_SRC_FILES), $(eval $(call define-art-gtest,target,$(file),art/compiler,libartd-compiler)))
+  $(foreach file,$(COMPILER_GTEST_TARGET_SRC_FILES), $(eval $(call define-art-gtest,target,$(file),art/compiler art/compiler/optimizing,libartd-compiler)))
 endif
 ifeq ($(ART_BUILD_HOST),true)
   $(foreach file,$(RUNTIME_GTEST_HOST_SRC_FILES), $(eval $(call define-art-gtest,host,$(file),,)))
-  $(foreach file,$(COMPILER_GTEST_HOST_SRC_FILES), $(eval $(call define-art-gtest,host,$(file),art/compiler,libartd-compiler)))
+  $(foreach file,$(COMPILER_GTEST_HOST_SRC_FILES), $(eval $(call define-art-gtest,host,$(file),art/compiler art/compiler/optimizing,libartd-compiler)))
 endif
 
 # Used outside the art project to get a list of the current tests

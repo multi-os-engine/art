@@ -16,12 +16,11 @@
 
 #include <functional>
 
-#include "code_generator_x86.h"
-#include "constant_folding.h"
+#include "constant_propagation.h"
 #include "dead_code_elimination.h"
+#include "pretty_printer.h"
 #include "graph_checker.h"
 #include "optimizing_unit_test.h"
-#include "pretty_printer.h"
 
 #include "gtest/gtest.h"
 
@@ -29,100 +28,44 @@ namespace art {
 
 static void TestCode(const uint16_t* data,
                      const std::string& expected_before,
-                     const std::string& expected_after_cf,
+                     const std::string& expected_after_cp,
                      const std::string& expected_after_dce,
-                     std::function<void(HGraph*)> check_after_cf,
+                     std::function<void(HGraph*)> check_after_cp,
                      Primitive::Type return_type = Primitive::kPrimInt) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = CreateCFG(&allocator, data, return_type);
   ASSERT_NE(graph, nullptr);
 
-  graph->TryBuildingSsa();
+  graph->BuildDominatorTree();
+  graph->TransformToSSA();
 
   StringPrettyPrinter printer_before(graph);
   printer_before.VisitInsertionOrder();
   std::string actual_before = printer_before.str();
   ASSERT_EQ(expected_before, actual_before);
 
-  x86::CodeGeneratorX86 codegen(graph);
-  HConstantFolding(graph).Run();
-  SSAChecker ssa_checker(&allocator, graph);
-  ssa_checker.Run();
-  ASSERT_TRUE(ssa_checker.IsValid());
+  ConstantPropagation(graph).Run();
 
-  StringPrettyPrinter printer_after_cf(graph);
-  printer_after_cf.VisitInsertionOrder();
-  std::string actual_after_cf = printer_after_cf.str();
-  ASSERT_EQ(expected_after_cf, actual_after_cf);
+  StringPrettyPrinter printer_after_cp(graph);
+  printer_after_cp.VisitInsertionOrder();
+  std::string actual_after_cp = printer_after_cp.str();
+  ASSERT_EQ(expected_after_cp, actual_after_cp);
 
-  check_after_cf(graph);
+  check_after_cp(graph);
 
-  HDeadCodeElimination(graph).Run();
-  ssa_checker.Run();
-  ASSERT_TRUE(ssa_checker.IsValid());
+  DeadCodeElimination(graph).Run();
 
   StringPrettyPrinter printer_after_dce(graph);
   printer_after_dce.VisitInsertionOrder();
   std::string actual_after_dce = printer_after_dce.str();
   ASSERT_EQ(expected_after_dce, actual_after_dce);
+
+  SSAChecker ssa_checker(&allocator, graph);
+  ssa_checker.VisitInsertionOrder();
+  ASSERT_TRUE(ssa_checker.IsValid());
 }
 
-
-/**
- * Tiny three-register program exercising int constant folding on negation.
- *
- *                              16-bit
- *                              offset
- *                              ------
- *     v0 <- 1                  0.      const/4 v0, #+1
- *     v1 <- -v0                1.      neg-int v0, v1
- *     return v1                2.      return v1
- */
-TEST(ConstantFolding, IntConstantFoldingNegation) {
-  const uint16_t data[] = TWO_REGISTERS_CODE_ITEM(
-    Instruction::CONST_4 | 0 << 8 | 1 << 12,
-    Instruction::NEG_INT | 1 << 8 | 0 << 12,
-    Instruction::RETURN | 1 << 8);
-
-  std::string expected_before =
-      "BasicBlock 0, succ: 1\n"
-      "  2: IntConstant [5]\n"
-      "  10: SuspendCheck\n"
-      "  11: Goto 1\n"
-      "BasicBlock 1, pred: 0, succ: 2\n"
-      "  5: Neg(2) [8]\n"
-      "  8: Return(5)\n"
-      "BasicBlock 2, pred: 1\n"
-      "  9: Exit\n";
-
-  // Expected difference after constant folding.
-  diff_t expected_cf_diff = {
-    { "  2: IntConstant [5]\n", "  2: IntConstant\n" },
-    { "  5: Neg(2) [8]\n",      "  12: IntConstant [8]\n" },
-    { "  8: Return(5)\n",       "  8: Return(12)\n" }
-  };
-  std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
-
-  // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
-    HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
-    ASSERT_TRUE(inst->IsIntConstant());
-    ASSERT_EQ(inst->AsIntConstant()->GetValue(), -1);
-  };
-
-  // Expected difference after dead code elimination.
-  diff_t expected_dce_diff = {
-    { "  2: IntConstant\n", removed },
-  };
-  std::string expected_after_dce = Patch(expected_after_cf, expected_dce_diff);
-
-  TestCode(data,
-           expected_before,
-           expected_after_cf,
-           expected_after_dce,
-           check_after_cf);
-}
 
 /**
  * Tiny three-register program exercising int constant folding on addition.
@@ -135,7 +78,7 @@ TEST(ConstantFolding, IntConstantFoldingNegation) {
  *     v2 <- v0 + v1            2.      add-int v2, v0, v1
  *     return v2                4.      return v2
  */
-TEST(ConstantFolding, IntConstantFoldingOnAddition1) {
+TEST(ConstantPropagation, IntConstantFoldingOnAddition1) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 1 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -154,17 +97,17 @@ TEST(ConstantFolding, IntConstantFoldingOnAddition1) {
     "BasicBlock 2, pred: 1\n"
     "  13: Exit\n";
 
-  // Expected difference after constant folding.
-  diff_t expected_cf_diff = {
+  // Expected difference after constant propagation.
+  diff_t expected_cp_diff = {
     { "  3: IntConstant [9]\n", "  3: IntConstant\n" },
     { "  5: IntConstant [9]\n", "  5: IntConstant\n" },
     { "  9: Add(3, 5) [12]\n",  "  16: IntConstant [12]\n" },
     { "  12: Return(9)\n",      "  12: Return(16)\n" }
   };
-  std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
+  std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  auto check_after_cp = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
     ASSERT_TRUE(inst->IsIntConstant());
     ASSERT_EQ(inst->AsIntConstant()->GetValue(), 3);
@@ -175,13 +118,13 @@ TEST(ConstantFolding, IntConstantFoldingOnAddition1) {
     { "  3: IntConstant\n", removed },
     { "  5: IntConstant\n", removed }
   };
-  std::string expected_after_dce = Patch(expected_after_cf, expected_dce_diff);
+  std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
   TestCode(data,
            expected_before,
-           expected_after_cf,
+           expected_after_cp,
            expected_after_dce,
-           check_after_cf);
+           check_after_cp);
 }
 
 /**
@@ -199,7 +142,7 @@ TEST(ConstantFolding, IntConstantFoldingOnAddition1) {
  *     v2 <- v0 + v1            6.      add-int v2, v0, v1
  *     return v2                8.      return v2
  */
-TEST(ConstantFolding, IntConstantFoldingOnAddition2) {
+TEST(ConstantPropagation, IntConstantFoldingOnAddition2) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 1 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -226,8 +169,8 @@ TEST(ConstantFolding, IntConstantFoldingOnAddition2) {
     "BasicBlock 2, pred: 1\n"
     "  25: Exit\n";
 
-  // Expected difference after constant folding.
-  diff_t expected_cf_diff = {
+  // Expected difference after constant propagation.
+  diff_t expected_cp_diff = {
     { "  3: IntConstant [9]\n",   "  3: IntConstant\n" },
     { "  5: IntConstant [9]\n",   "  5: IntConstant\n" },
     { "  11: IntConstant [17]\n", "  11: IntConstant\n" },
@@ -237,10 +180,10 @@ TEST(ConstantFolding, IntConstantFoldingOnAddition2) {
     { "  21: Add(9, 17) [24]\n",  "  30: IntConstant [24]\n" },
     { "  24: Return(21)\n",       "  24: Return(30)\n" }
   };
-  std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
+  std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
   // Check the values of the computed constants.
-  auto check_after_cf = [](HGraph* graph) {
+  auto check_after_cp = [](HGraph* graph) {
     HInstruction* inst1 = graph->GetBlock(1)->GetFirstInstruction();
     ASSERT_TRUE(inst1->IsIntConstant());
     ASSERT_EQ(inst1->AsIntConstant()->GetValue(), 3);
@@ -261,13 +204,13 @@ TEST(ConstantFolding, IntConstantFoldingOnAddition2) {
     { "  28: IntConstant\n", removed },
     { "  29: IntConstant\n", removed }
   };
-  std::string expected_after_dce = Patch(expected_after_cf, expected_dce_diff);
+  std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
   TestCode(data,
            expected_before,
-           expected_after_cf,
+           expected_after_cp,
            expected_after_dce,
-           check_after_cf);
+           check_after_cp);
 }
 
 /**
@@ -281,7 +224,7 @@ TEST(ConstantFolding, IntConstantFoldingOnAddition2) {
  *     v2 <- v0 - v1            2.      sub-int v2, v0, v1
  *     return v2                4.      return v2
  */
-TEST(ConstantFolding, IntConstantFoldingOnSubtraction) {
+TEST(ConstantPropagation, IntConstantFoldingOnSubtraction) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 3 << 12,
     Instruction::CONST_4 | 1 << 8 | 2 << 12,
@@ -300,17 +243,17 @@ TEST(ConstantFolding, IntConstantFoldingOnSubtraction) {
     "BasicBlock 2, pred: 1\n"
     "  13: Exit\n";
 
-  // Expected difference after constant folding.
-  diff_t expected_cf_diff = {
+  // Expected difference after constant propagation.
+  diff_t expected_cp_diff = {
     { "  3: IntConstant [9]\n", "  3: IntConstant\n" },
     { "  5: IntConstant [9]\n", "  5: IntConstant\n" },
     { "  9: Sub(3, 5) [12]\n",  "  16: IntConstant [12]\n" },
     { "  12: Return(9)\n",      "  12: Return(16)\n" }
   };
-  std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
+  std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  auto check_after_cp = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
     ASSERT_TRUE(inst->IsIntConstant());
     ASSERT_EQ(inst->AsIntConstant()->GetValue(), 1);
@@ -321,14 +264,17 @@ TEST(ConstantFolding, IntConstantFoldingOnSubtraction) {
     { "  3: IntConstant\n", removed },
     { "  5: IntConstant\n", removed }
   };
-  std::string expected_after_dce = Patch(expected_after_cf, expected_dce_diff);
+  std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
   TestCode(data,
            expected_before,
-           expected_after_cf,
+           expected_after_cp,
            expected_after_dce,
-           check_after_cf);
+           check_after_cp);
 }
+
+#define SIX_REGISTERS_CODE_ITEM(...)                                     \
+    { 6, 0, 0, 0, 0, 0, NUM_INSTRUCTIONS(__VA_ARGS__), 0, __VA_ARGS__ }
 
 /**
  * Tiny three-register-pair program exercising long constant folding
@@ -343,7 +289,7 @@ TEST(ConstantFolding, IntConstantFoldingOnSubtraction) {
  *       (v0, v1) + (v1, v2)    4.      add-long v4, v0, v2
  *     return (v4, v5)          6.      return-wide v4
  */
-TEST(ConstantFolding, LongConstantFoldingOnAddition) {
+TEST(ConstantPropagation, LongConstantFoldingOnAddition) {
   const uint16_t data[] = SIX_REGISTERS_CODE_ITEM(
     Instruction::CONST_WIDE_16 | 0 << 8, 1,
     Instruction::CONST_WIDE_16 | 2 << 8, 2,
@@ -362,17 +308,17 @@ TEST(ConstantFolding, LongConstantFoldingOnAddition) {
     "BasicBlock 2, pred: 1\n"
     "  16: Exit\n";
 
-  // Expected difference after constant folding.
-  diff_t expected_cf_diff = {
+  // Expected difference after constant propagation.
+  diff_t expected_cp_diff = {
     { "  6: LongConstant [12]\n", "  6: LongConstant\n" },
     { "  8: LongConstant [12]\n", "  8: LongConstant\n" },
     { "  12: Add(6, 8) [15]\n",   "  19: LongConstant [15]\n" },
     { "  15: Return(12)\n",       "  15: Return(19)\n" }
   };
-  std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
+  std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  auto check_after_cp = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
     ASSERT_TRUE(inst->IsLongConstant());
     ASSERT_EQ(inst->AsLongConstant()->GetValue(), 3);
@@ -383,13 +329,13 @@ TEST(ConstantFolding, LongConstantFoldingOnAddition) {
     { "  6: LongConstant\n", removed },
     { "  8: LongConstant\n", removed }
   };
-  std::string expected_after_dce = Patch(expected_after_cf, expected_dce_diff);
+  std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
   TestCode(data,
            expected_before,
-           expected_after_cf,
+           expected_after_cp,
            expected_after_dce,
-           check_after_cf,
+           check_after_cp,
            Primitive::kPrimLong);
 }
 
@@ -406,7 +352,7 @@ TEST(ConstantFolding, LongConstantFoldingOnAddition) {
  *       (v0, v1) - (v1, v2)    4.      sub-long v4, v0, v2
  *     return (v4, v5)          6.      return-wide v4
  */
-TEST(ConstantFolding, LongConstantFoldingOnSubtraction) {
+TEST(ConstantPropagation, LongConstantFoldingOnSubtraction) {
   const uint16_t data[] = SIX_REGISTERS_CODE_ITEM(
     Instruction::CONST_WIDE_16 | 0 << 8, 3,
     Instruction::CONST_WIDE_16 | 2 << 8, 2,
@@ -425,17 +371,17 @@ TEST(ConstantFolding, LongConstantFoldingOnSubtraction) {
     "BasicBlock 2, pred: 1\n"
     "  16: Exit\n";
 
-  // Expected difference after constant folding.
-  diff_t expected_cf_diff = {
+  // Expected difference after constant propagation.
+  diff_t expected_cp_diff = {
     { "  6: LongConstant [12]\n", "  6: LongConstant\n" },
     { "  8: LongConstant [12]\n", "  8: LongConstant\n" },
     { "  12: Sub(6, 8) [15]\n",   "  19: LongConstant [15]\n" },
     { "  15: Return(12)\n",       "  15: Return(19)\n" }
   };
-  std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
+  std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  auto check_after_cp = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
     ASSERT_TRUE(inst->IsLongConstant());
     ASSERT_EQ(inst->AsLongConstant()->GetValue(), 1);
@@ -446,13 +392,13 @@ TEST(ConstantFolding, LongConstantFoldingOnSubtraction) {
     { "  6: LongConstant\n", removed },
     { "  8: LongConstant\n", removed }
   };
-  std::string expected_after_dce = Patch(expected_after_cf, expected_dce_diff);
+  std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
   TestCode(data,
            expected_before,
-           expected_after_cf,
+           expected_after_cp,
            expected_after_dce,
-           check_after_cf,
+           check_after_cp,
            Primitive::kPrimLong);
 }
 
@@ -478,7 +424,7 @@ TEST(ConstantFolding, LongConstantFoldingOnSubtraction) {
  * L3: v2 <- v1 + 4             11.     add-int/lit16 v2, v1, #+4
  *     return v2                13.     return v2
  */
-TEST(ConstantFolding, IntConstantFoldingAndJumps) {
+TEST(ConstantPropagation, IntConstantFoldingAndJumps) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 0 << 8 | 0 << 12,
     Instruction::CONST_4 | 1 << 8 | 1 << 12,
@@ -516,8 +462,8 @@ TEST(ConstantFolding, IntConstantFoldingAndJumps) {
     "BasicBlock 5, pred: 4\n"
     "  29: Exit\n";
 
-  // Expected difference after constant folding.
-  diff_t expected_cf_diff = {
+  // Expected difference after constant propagation.
+  diff_t expected_cp_diff = {
     { "  3: IntConstant [9]\n",   "  3: IntConstant\n" },
     { "  5: IntConstant [9]\n",   "  5: IntConstant []\n" },
     { "  13: IntConstant [14]\n", "  13: IntConstant\n" },
@@ -529,10 +475,10 @@ TEST(ConstantFolding, IntConstantFoldingAndJumps) {
     { "  25: Add(14, 24) [28]\n", "  35: IntConstant [28]\n" },
     { "  28: Return(25)\n",       "  28: Return(35)\n"}
   };
-  std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
+  std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
   // Check the values of the computed constants.
-  auto check_after_cf = [](HGraph* graph) {
+  auto check_after_cp = [](HGraph* graph) {
     HInstruction* inst1 = graph->GetBlock(1)->GetFirstInstruction();
     ASSERT_TRUE(inst1->IsIntConstant());
     ASSERT_EQ(inst1->AsIntConstant()->GetValue(), 1);
@@ -555,13 +501,13 @@ TEST(ConstantFolding, IntConstantFoldingAndJumps) {
     { "  24: IntConstant\n",    removed },
     { "  34: IntConstant\n",    removed },
   };
-  std::string expected_after_dce = Patch(expected_after_cf, expected_dce_diff);
+  std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
   TestCode(data,
            expected_before,
-           expected_after_cf,
+           expected_after_cp,
            expected_after_dce,
-           check_after_cf);
+           check_after_cp);
 }
 
 
@@ -578,7 +524,7 @@ TEST(ConstantFolding, IntConstantFoldingAndJumps) {
  * L1: v2 <- v0 + v1            5.      add-int v2, v0, v1
  *     return-void              7.      return
  */
-TEST(ConstantFolding, ConstantCondition) {
+TEST(ConstantPropagation, ConstantCondition) {
   const uint16_t data[] = THREE_REGISTERS_CODE_ITEM(
     Instruction::CONST_4 | 1 << 8 | 1 << 12,
     Instruction::CONST_4 | 0 << 8 | 0 << 12,
@@ -607,17 +553,17 @@ TEST(ConstantFolding, ConstantCondition) {
     "BasicBlock 5, pred: 1, succ: 3\n"
     "  21: Goto 3\n";
 
-  // Expected difference after constant folding.
-  diff_t expected_cf_diff = {
+  // Expected difference after constant propagation.
+  diff_t expected_cp_diff = {
     { "  3: IntConstant [15, 22, 8]\n",      "  3: IntConstant [15, 22]\n" },
     { "  5: IntConstant [22, 8]\n",          "  5: IntConstant [22]\n" },
     { "  8: GreaterThanOrEqual(3, 5) [9]\n", "  23: IntConstant [9]\n" },
     { "  9: If(8)\n",                        "  9: If(23)\n" }
   };
-  std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
+  std::string expected_after_cp = Patch(expected_before, expected_cp_diff);
 
   // Check the values of the computed constants.
-  auto check_after_cf = [](HGraph* graph) {
+  auto check_after_cp = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlock(1)->GetFirstInstruction();
     ASSERT_TRUE(inst->IsIntConstant());
     ASSERT_EQ(inst->AsIntConstant()->GetValue(), 1);
@@ -629,13 +575,13 @@ TEST(ConstantFolding, ConstantCondition) {
     { "  22: Phi(3, 5) [15]\n",      "  22: Phi(3, 5)\n" },
     { "  15: Add(22, 3)\n",          removed }
   };
-  std::string expected_after_dce = Patch(expected_after_cf, expected_dce_diff);
+  std::string expected_after_dce = Patch(expected_after_cp, expected_dce_diff);
 
   TestCode(data,
            expected_before,
-           expected_after_cf,
+           expected_after_cp,
            expected_after_dce,
-           check_after_cf);
+           check_after_cp);
 }
 
 }  // namespace art
