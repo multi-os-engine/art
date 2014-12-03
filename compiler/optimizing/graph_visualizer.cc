@@ -20,8 +20,11 @@
 #include "driver/dex_compilation_unit.h"
 #include "nodes.h"
 #include "ssa_liveness_analysis.h"
+#include "thread-inl.h"
 
 namespace art {
+
+Mutex HGraphVisualizer::dump_mutex("graph visualizer finalizer mutex");
 
 /**
  * HGraph visitor to generate a file suitable for the c1visualizer tool and IRHydra.
@@ -120,47 +123,69 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     output_<< std::endl;
   }
 
-  void DumpLocation(Location location) {
+  void DumpLocation(Location location, std::ostream& output) {
     if (location.IsRegister()) {
-      codegen_.DumpCoreRegister(output_, location.reg());
+      codegen_.DumpCoreRegister(output, location.reg());
     } else if (location.IsFpuRegister()) {
-      codegen_.DumpFloatingPointRegister(output_, location.reg());
+      codegen_.DumpFloatingPointRegister(output, location.reg());
     } else if (location.IsConstant()) {
-      output_ << "constant";
+      output << "constant";
       HConstant* constant = location.GetConstant();
       if (constant->IsIntConstant()) {
-        output_ << " " << constant->AsIntConstant()->GetValue();
+        output << " " << constant->AsIntConstant()->GetValue();
       } else if (constant->IsLongConstant()) {
-        output_ << " " << constant->AsLongConstant()->GetValue();
+        output << " " << constant->AsLongConstant()->GetValue();
       }
     } else if (location.IsInvalid()) {
-      output_ << "invalid";
+      output << "invalid";
     } else if (location.IsStackSlot()) {
-      output_ << location.GetStackIndex() << "(sp)";
+      output << location.GetStackIndex() << "(sp)";
     } else {
       DCHECK(location.IsDoubleStackSlot());
-      output_ << "2x" << location.GetStackIndex() << "(sp)";
+      output << "2x" << location.GetStackIndex() << "(sp)";
     }
   }
 
-  void VisitParallelMove(HParallelMove* instruction) {
-    output_ << instruction->DebugName();
-    output_ << " (";
+  void VisitParallelMove(HParallelMove* instruction) OVERRIDE {
+    std::ostringstream tmp;
+    tmp << " (";
     for (size_t i = 0, e = instruction->NumMoves(); i < e; ++i) {
       MoveOperands* move = instruction->MoveOperandsAt(i);
-      DumpLocation(move->GetSource());
-      output_ << " -> ";
-      DumpLocation(move->GetDestination());
+      DumpLocation(move->GetSource(), tmp);
+      tmp << " -> ";
+      DumpLocation(move->GetDestination(), tmp);
       if (i + 1 != e) {
-        output_ << ", ";
+        tmp << ", ";
       }
     }
-    output_ << ")";
-    output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
+    tmp << ")";
+    PrintInstruction(instruction, std::move(tmp.str()));
   }
 
-  void VisitInstruction(HInstruction* instruction) {
+  void VisitIntConstant(HIntConstant* constant) OVERRIDE {
+    PrintInstruction(constant, StringPrintf(" (value: %d)", constant->GetValue()));
+  }
+
+  void VisitLongConstant(HLongConstant* constant) OVERRIDE {
+    PrintInstruction(constant, StringPrintf(" (value: %" PRId64 ")", constant->GetValue()));
+  }
+
+  void VisitFloatConstant(HFloatConstant* constant) OVERRIDE {
+    PrintInstruction(constant, StringPrintf(" (value: %f)", constant->GetValue()));
+  }
+
+  void VisitDoubleConstant(HDoubleConstant* constant) OVERRIDE {
+    PrintInstruction(constant, StringPrintf(" (value: %f)", constant->GetValue()));
+  }
+
+  void VisitInstruction(HInstruction* instruction) OVERRIDE {
+    // Just have no additional string.
+    PrintInstruction(instruction, "");
+  }
+
+  void PrintInstruction(HInstruction* instruction, const std::string&& additional) {
     output_ << instruction->DebugName();
+    output_ << additional;
     if (instruction->InputCount() > 0) {
       output_ << " [ ";
       for (HInputIterator inputs(instruction); !inputs.Done(); inputs.Advance()) {
@@ -181,13 +206,13 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       if (locations != nullptr) {
         output_ << " ( ";
         for (size_t i = 0; i < instruction->InputCount(); ++i) {
-          DumpLocation(locations->InAt(i));
+          DumpLocation(locations->InAt(i), output_);
           output_ << " ";
         }
         output_ << ")";
         if (locations->Out().IsValid()) {
           output_ << " -> ";
-          DumpLocation(locations->Out());
+          DumpLocation(locations->Out(), output_);
         }
       }
       output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
@@ -214,7 +239,7 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     EndTag("cfg");
   }
 
-  void VisitBasicBlock(HBasicBlock* block) {
+  void VisitBasicBlock(HBasicBlock* block) OVERRIDE {
     StartTag("block");
     PrintProperty("name", "B", block->GetBlockId());
     if (block->GetLifetimeStart() != kNoLifetime) {
@@ -281,7 +306,7 @@ HGraphVisualizer::HGraphVisualizer(std::ostream* output,
   }
 
   is_enabled_ = true;
-  HGraphVisualizerPrinter printer(graph, *output_, "", codegen_);
+  HGraphVisualizerPrinter printer(graph, oss_, "", codegen_);
   printer.StartTag("compilation");
   printer.PrintProperty("name", pretty_name.c_str());
   printer.PrintProperty("method", pretty_name.c_str());
@@ -299,7 +324,7 @@ HGraphVisualizer::HGraphVisualizer(std::ostream* output,
   }
 
   is_enabled_ = true;
-  HGraphVisualizerPrinter printer(graph, *output_, "", codegen_);
+  HGraphVisualizerPrinter printer(graph, oss_, "", codegen_);
   printer.StartTag("compilation");
   printer.PrintProperty("name", name);
   printer.PrintProperty("method", name);
@@ -307,12 +332,21 @@ HGraphVisualizer::HGraphVisualizer(std::ostream* output,
   printer.EndTag("compilation");
 }
 
-void HGraphVisualizer::DumpGraph(const char* pass_name) const {
+void HGraphVisualizer::DumpGraph(const char* pass_name) {
   if (!is_enabled_) {
     return;
   }
-  HGraphVisualizerPrinter printer(graph_, *output_, pass_name, codegen_);
+  HGraphVisualizerPrinter printer(graph_, oss_, pass_name, codegen_);
   printer.Run();
+}
+
+void HGraphVisualizer::Finalize() const {
+  if (!is_enabled_) {
+    return;
+  }
+
+  MutexLock mu(Thread::Current(), dump_mutex);
+  *output_ << oss_.str();
 }
 
 }  // namespace art
