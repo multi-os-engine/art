@@ -57,12 +57,13 @@ namespace interpreter {
   } while (false)
 
 template<bool do_access_check, bool transaction_active>
-JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
-                         ShadowFrame& shadow_frame, JValue result_register) {
+static JValue SpecializedExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
+                                           ShadowFrame& shadow_frame, JValue result_register)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   bool do_assignability_check = do_access_check;
   if (UNLIKELY(!shadow_frame.HasReferenceArray())) {
     LOG(FATAL) << "Invalid shadow frame for interpreter use";
-    return JValue();
+    UNREACHABLE();
   }
   self->VerifyStack();
 
@@ -2145,19 +2146,28 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
   }
 }  // NOLINT(readability/fn_size)
 
-// Explicit definitions of ExecuteSwitchImpl.
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR
-JValue ExecuteSwitchImpl<true, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                      ShadowFrame& shadow_frame, JValue result_register);
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR
-JValue ExecuteSwitchImpl<false, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                       ShadowFrame& shadow_frame, JValue result_register);
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteSwitchImpl<true, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                     ShadowFrame& shadow_frame, JValue result_register);
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteSwitchImpl<false, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                      ShadowFrame& shadow_frame, JValue result_register);
+JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
+                         ShadowFrame& shadow_frame, JValue result_register) {
+  bool transaction_active = Runtime::Current()->IsActiveTransaction();
+  bool do_access_checks = !shadow_frame.GetMethod()->IsPreverified();
+  if (do_access_checks) {
+    if (UNLIKELY(transaction_active)) {
+      return SpecializedExecuteSwitchImpl<true, true>(self, code_item, shadow_frame,
+                                                      result_register);
+    } else {
+      return SpecializedExecuteSwitchImpl<true, false>(self, code_item, shadow_frame,
+                                                       result_register);
+    }
+  } else {
+    if (UNLIKELY(transaction_active)) {
+      return SpecializedExecuteSwitchImpl<false, true>(self, code_item, shadow_frame,
+                                                       result_register);
+    } else {
+      return SpecializedExecuteSwitchImpl<false, false>(self, code_item, shadow_frame,
+                                                        result_register);
+    }
+  }
+}
 
 }  // namespace interpreter
 }  // namespace art

@@ -20,50 +20,58 @@
 namespace art {
 namespace interpreter {
 
-// In the following macros, we expect the following local variables exist:
-// - "self": the current Thread*.
-// - "inst" : the current Instruction*.
-// - "inst_data" : the current instruction's first 16 bits.
-// - "dex_pc": the current pc.
-// - "shadow_frame": the current shadow frame.
-// - "currentHandlersTable": the current table of pointer to each instruction handler.
-
 // Advance to the next instruction and updates interpreter state.
-#define ADVANCE(_offset)                                                    \
-  do {                                                                      \
-    int32_t disp = static_cast<int32_t>(_offset);                           \
-    inst = inst->RelativeAt(disp);                                          \
-    dex_pc = static_cast<uint32_t>(static_cast<int32_t>(dex_pc) + disp);    \
-    shadow_frame.SetDexPC(dex_pc);                                          \
-    TraceExecution(shadow_frame, inst, dex_pc);                             \
-    inst_data = inst->Fetch16(0);                                           \
-    goto *currentHandlersTable[inst->Opcode(inst_data)];                    \
-  } while (false)
+// @param disp: the number of code units (2 bytes) to the next instruction.
+// @param shadow_frame: the current shadow frame.
+// @param inst: (in/out) the current instruction.
+// @param dex_pc: (in/out) the current pc.
+// @param inst_data: (in/out) the full 16-bits of instruction.
+// @returns the opcode of the new instruction.
+static ALWAYS_INLINE inline Instruction::Code DoAdvance(int32_t disp,
+                                                        ShadowFrame& shadow_frame,
+                                                        const Instruction** inst,
+                                                        uint32_t* dex_pc,
+                                                        uint16_t* inst_data)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  *inst = (*inst)->RelativeAt(disp);
+  *dex_pc = static_cast<uint32_t>(static_cast<int32_t>(*dex_pc) + disp);
+  shadow_frame.SetDexPC(*dex_pc);
+  TraceExecution(shadow_frame, *inst, *dex_pc);
+  *inst_data = (*inst)->Fetch16(0);
+  return (*inst)->Opcode(*inst_data);
+}
 
-#define HANDLE_PENDING_EXCEPTION() goto exception_pending_label
-
-#define POSSIBLY_HANDLE_PENDING_EXCEPTION(_is_exception_pending, _offset)   \
-  do {                                                                      \
-    if (UNLIKELY(_is_exception_pending)) {                                  \
-      HANDLE_PENDING_EXCEPTION();                                           \
-    } else {                                                                \
-      ADVANCE(_offset);                                                     \
-    }                                                                       \
-  } while (false)
-
-#define UPDATE_HANDLER_TABLE() \
-  currentHandlersTable = handlersTable[Runtime::Current()->GetInstrumentation()->GetInterpreterHandlerTable()]
-
-#define UNREACHABLE_CODE_CHECK()                \
-  do {                                          \
-    if (kIsDebugBuild) {                        \
-      LOG(FATAL) << "We should not be here !";  \
-      UNREACHABLE();                            \
-    }                                           \
-  } while (false)
-
-#define HANDLE_INSTRUCTION_START(opcode) op_##opcode:  // NOLINT(whitespace/labels)
-#define HANDLE_INSTRUCTION_END() UNREACHABLE_CODE_CHECK()
+// Do the pre-amble for an instruction running with instrumentation::kAlternativeHandlerTable.
+// @param code: the current opcode.
+// @param instrumentation: the runtime's instrumentation.
+// @param self: the current Thread*.
+// @param shadow_frame: the current shadow frame.
+// @param code_item: the dex code.
+// @param dex_pc: the current pc.
+// @param notified_method_entry_event: (in/out) has a method entry event been generated?
+static inline void DoAltPreamble(Instruction::Code code,
+                                 const instrumentation::Instrumentation* instrumentation,
+                                 Thread* self,
+                                 const ShadowFrame& shadow_frame,
+                                 const DexFile::CodeItem* code_item,
+                                 uint32_t dex_pc,
+                                 bool* notified_method_entry_event)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  if (code != Instruction::RETURN_VOID &&
+      code != Instruction::RETURN_VOID_BARRIER &&
+      code != Instruction::RETURN &&
+      code != Instruction::RETURN_WIDE &&
+      code != Instruction::RETURN_OBJECT) {
+    if (LIKELY(!*notified_method_entry_event)) {
+      if (UNLIKELY(instrumentation->HasDexPcListeners())) {
+        Object* this_object = shadow_frame.GetThisObject(code_item->ins_size_);
+        instrumentation->DexPcMovedEvent(self, this_object, shadow_frame.GetMethod(), dex_pc);
+      }
+    } else {
+      *notified_method_entry_event = false;
+    }
+  }
+}
 
 /**
  * Interpreter based on computed goto tables.
@@ -111,8 +119,27 @@ namespace interpreter {
  *
  */
 template<bool do_access_check, bool transaction_active>
-JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowFrame& shadow_frame,
-                       JValue result_register) {
+static JValue SpecializedExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item,
+                                         ShadowFrame& shadow_frame, JValue result_register)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+#define ADVANCE(_offset) \
+  goto *currentHandlersTable[DoAdvance(_offset, shadow_frame, &inst, &dex_pc, &inst_data)];
+
+#define HANDLE_PENDING_EXCEPTION() goto exception_pending_label
+
+#define POSSIBLY_HANDLE_PENDING_EXCEPTION(_is_exception_pending, _offset) \
+  if (UNLIKELY(_is_exception_pending)) {                                  \
+    HANDLE_PENDING_EXCEPTION();                                           \
+  } else {                                                                \
+    ADVANCE(_offset);                                                     \
+  }
+
+#define UPDATE_HANDLER_TABLE() \
+  currentHandlersTable = handlersTable[instrumentation->GetInterpreterHandlerTable()];
+
+#define HANDLE_INSTRUCTION_START(opcode) op_##opcode:  // NOLINT(whitespace/labels)
+#define HANDLE_INSTRUCTION_END() UNREACHABLE()
+
   // Define handler tables:
   // - The main handler table contains execution handlers for each instruction.
   // - The alternative handler table contains prelude handlers which check for thread suspend and
@@ -135,21 +162,23 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     }
   };
 
-  const bool do_assignability_check = do_access_check;
-  if (UNLIKELY(!shadow_frame.HasReferenceArray())) {
-    LOG(FATAL) << "Invalid shadow frame for interpreter use";
-    return JValue();
-  }
-  self->VerifyStack();
-
+  constexpr bool do_assignability_check = do_access_check;
   uint32_t dex_pc = shadow_frame.GetDexPC();
   const Instruction* inst = Instruction::At(code_item->insns_ + dex_pc);
   uint16_t inst_data;
   const void* const* currentHandlersTable;
   bool notified_method_entry_event = false;
+  Runtime* const runtime = Runtime::Current();
+  const instrumentation::Instrumentation* const instrumentation = runtime->GetInstrumentation();
+
+  if (UNLIKELY(!shadow_frame.HasReferenceArray())) {
+    LOG(FATAL) << "Invalid shadow frame for interpreter use";
+    UNREACHABLE();
+  }
+  self->VerifyStack();
+
   UPDATE_HANDLER_TABLE();
   if (LIKELY(dex_pc == 0)) {  // We are entering the method as opposed to deoptimizing..
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodEntryListeners())) {
       instrumentation->MethodEnterEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                         shadow_frame.GetMethod(), 0);
@@ -159,7 +188,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   // Jump to first instruction.
   ADVANCE(0);
-  UNREACHABLE_CODE_CHECK();
+  UNREACHABLE();
 
   HANDLE_INSTRUCTION_START(NOP)
     ADVANCE(1);
@@ -251,7 +280,6 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
       QuasiAtomic::ThreadFenceForConstructor();
     }
     self->AllowThreadSuspension();
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodExitListeners())) {
       instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                        shadow_frame.GetMethod(), dex_pc,
@@ -268,7 +296,6 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     QuasiAtomic::ThreadFenceForConstructor();
     JValue result;
     self->AllowThreadSuspension();
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodExitListeners())) {
       instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                        shadow_frame.GetMethod(), dex_pc,
@@ -286,7 +313,6 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     result.SetJ(0);
     result.SetI(shadow_frame.GetVReg(inst->VRegA_11x(inst_data)));
     self->AllowThreadSuspension();
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodExitListeners())) {
       instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                        shadow_frame.GetMethod(), dex_pc,
@@ -303,7 +329,6 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     JValue result;
     result.SetJ(shadow_frame.GetVRegLong(inst->VRegA_11x(inst_data)));
     self->AllowThreadSuspension();
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodExitListeners())) {
       instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                        shadow_frame.GetMethod(), dex_pc,
@@ -340,7 +365,6 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
       }
     }
     result.SetL(obj_result);
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodExitListeners())) {
       instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                        shadow_frame.GetMethod(), dex_pc,
@@ -519,7 +543,6 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(NEW_INSTANCE) {
-    Runtime* runtime = Runtime::Current();
     Object* obj = AllocObjectFromCode<do_access_check, true>(
         inst->VRegB_21c(), shadow_frame.GetMethod(), self,
         runtime->GetHeap()->GetCurrentAllocator());
@@ -544,7 +567,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     int32_t length = shadow_frame.GetVReg(inst->VRegB_22c(inst_data));
     Object* obj = AllocArrayFromCode<do_access_check, true>(
         inst->VRegC_22c(), shadow_frame.GetMethod(), length, self,
-        Runtime::Current()->GetHeap()->GetCurrentAllocator());
+        runtime->GetHeap()->GetCurrentAllocator());
     if (UNLIKELY(obj == NULL)) {
       HANDLE_PENDING_EXCEPTION();
     } else {
@@ -2384,7 +2407,6 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
       self->CheckSuspend();
       UPDATE_HANDLER_TABLE();
     }
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     uint32_t found_dex_pc = FindNextInstructionFollowingException(self, shadow_frame, dex_pc,
                                                                   instrumentation);
     if (found_dex_pc == DexFile::kDexNoIndex) {
@@ -2401,46 +2423,49 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 // Note: we do not use the kReturn instruction flag here (to test the instruction is a return). The
 // compiler seems to not evaluate "(Instruction::FlagsOf(Instruction::code) & kReturn) != 0" to
 // a constant condition that would remove the "if" statement so the test is free.
-#define INSTRUMENTATION_INSTRUCTION_HANDLER(o, code, n, f, r, i, a, v)                            \
-  alt_op_##code: {                                                                                \
-    if (Instruction::code != Instruction::RETURN_VOID &&                                          \
-        Instruction::code != Instruction::RETURN_VOID_BARRIER &&                                  \
-        Instruction::code != Instruction::RETURN &&                                               \
-        Instruction::code != Instruction::RETURN_WIDE &&                                          \
-        Instruction::code != Instruction::RETURN_OBJECT) {                                        \
-      if (LIKELY(!notified_method_entry_event)) {                                                 \
-        Runtime* runtime = Runtime::Current();                                                    \
-        const instrumentation::Instrumentation* instrumentation = runtime->GetInstrumentation();  \
-        if (UNLIKELY(instrumentation->HasDexPcListeners())) {                                     \
-          Object* this_object = shadow_frame.GetThisObject(code_item->ins_size_);                 \
-          instrumentation->DexPcMovedEvent(self, this_object, shadow_frame.GetMethod(), dex_pc);  \
-        }                                                                                         \
-      } else {                                                                                    \
-        notified_method_entry_event = false;                                                      \
-      }                                                                                           \
-    }                                                                                             \
-    UPDATE_HANDLER_TABLE();                                                                       \
-    goto *handlersTable[instrumentation::kMainHandlerTable][Instruction::code];                   \
+#define INSTRUMENTATION_INSTRUCTION_HANDLER(o, code, n, f, r, i, a, v)                       \
+  alt_op_##code: {                                                                           \
+    DoAltPreamble(Instruction::code, instrumentation, self, shadow_frame, code_item, dex_pc, \
+                  &notified_method_entry_event);                                             \
+    UPDATE_HANDLER_TABLE();                                                                  \
+    goto op_##code;                                                                          \
+    UNREACHABLE();                                                                           \
   }
 #include "dex_instruction_list.h"
       DEX_INSTRUCTION_LIST(INSTRUMENTATION_INSTRUCTION_HANDLER)
 #undef DEX_INSTRUCTION_LIST
 #undef INSTRUMENTATION_INSTRUCTION_HANDLER
+
+#undef ADVANCE
+#undef HANDLE_PENDING_EXCEPTION
+#undef POSSIBLY_HANDLE_PENDING_EXCEPTION
+#undef UPDATE_HANDLER_TABLE
+#undef HANDLE_INSTRUCTION_START
+#undef HANDLE_INSTRUCTION_END
 }  // NOLINT(readability/fn_size)
 
-// Explicit definitions of ExecuteGotoImpl.
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR
-JValue ExecuteGotoImpl<true, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR
-JValue ExecuteGotoImpl<false, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                     ShadowFrame& shadow_frame, JValue result_register);
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteGotoImpl<true, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                   ShadowFrame& shadow_frame, JValue result_register);
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteGotoImpl<false, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
+JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item,
+                       ShadowFrame& shadow_frame, JValue result_register) {
+  bool transaction_active = Runtime::Current()->IsActiveTransaction();
+  bool do_access_checks = !shadow_frame.GetMethod()->IsPreverified();
+  if (do_access_checks) {
+    if (UNLIKELY(transaction_active)) {
+      return SpecializedExecuteGotoImpl<true, true>(self, code_item, shadow_frame,
+                                                    result_register);
+    } else {
+      return SpecializedExecuteGotoImpl<true, false>(self, code_item, shadow_frame,
+                                                     result_register);
+    }
+  } else {
+    if (UNLIKELY(transaction_active)) {
+      return SpecializedExecuteGotoImpl<false, true>(self, code_item, shadow_frame,
+                                                     result_register);
+    } else {
+      return SpecializedExecuteGotoImpl<false, false>(self, code_item, shadow_frame,
+                                                      result_register);
+    }
+  }
+}
 
 }  // namespace interpreter
 }  // namespace art
