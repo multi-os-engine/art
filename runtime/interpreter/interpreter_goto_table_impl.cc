@@ -54,13 +54,7 @@ namespace interpreter {
 #define UPDATE_HANDLER_TABLE() \
   currentHandlersTable = handlersTable[Runtime::Current()->GetInstrumentation()->GetInterpreterHandlerTable()]
 
-#define UNREACHABLE_CODE_CHECK()                \
-  do {                                          \
-    if (kIsDebugBuild) {                        \
-      LOG(FATAL) << "We should not be here !";  \
-      UNREACHABLE();                            \
-    }                                           \
-  } while (false)
+#define UNREACHABLE_CODE_CHECK() UNREACHABLE()
 
 #define HANDLE_INSTRUCTION_START(opcode) op_##opcode:  // NOLINT(whitespace/labels)
 #define HANDLE_INSTRUCTION_END() UNREACHABLE_CODE_CHECK()
@@ -111,8 +105,9 @@ namespace interpreter {
  *
  */
 template<bool do_access_check, bool transaction_active>
-JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowFrame& shadow_frame,
-                       JValue result_register) {
+static JValue SpecializedExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item,
+                                         ShadowFrame& shadow_frame, JValue result_register)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   // Define handler tables:
   // - The main handler table contains execution handlers for each instruction.
   // - The alternative handler table contains prelude handlers which check for thread suspend and
@@ -138,7 +133,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   const bool do_assignability_check = do_access_check;
   if (UNLIKELY(!shadow_frame.HasReferenceArray())) {
     LOG(FATAL) << "Invalid shadow frame for interpreter use";
-    return JValue();
+    UNREACHABLE();
   }
   self->VerifyStack();
 
@@ -2420,7 +2415,8 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
       }                                                                                           \
     }                                                                                             \
     UPDATE_HANDLER_TABLE();                                                                       \
-    goto *handlersTable[instrumentation::kMainHandlerTable][Instruction::code];                   \
+    goto op_##code;                                                                               \
+    UNREACHABLE_CODE_CHECK();                                                                     \
   }
 #include "dex_instruction_list.h"
       DEX_INSTRUCTION_LIST(INSTRUMENTATION_INSTRUCTION_HANDLER)
@@ -2428,19 +2424,28 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 #undef INSTRUMENTATION_INSTRUCTION_HANDLER
 }  // NOLINT(readability/fn_size)
 
-// Explicit definitions of ExecuteGotoImpl.
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR
-JValue ExecuteGotoImpl<true, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR
-JValue ExecuteGotoImpl<false, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                     ShadowFrame& shadow_frame, JValue result_register);
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteGotoImpl<true, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                   ShadowFrame& shadow_frame, JValue result_register);
-template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteGotoImpl<false, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
+JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item,
+                       ShadowFrame& shadow_frame, JValue result_register) {
+  bool transaction_active = Runtime::Current()->IsActiveTransaction();
+  bool do_access_checks = !shadow_frame.GetMethod()->IsPreverified();
+  if (do_access_checks) {
+    if (UNLIKELY(transaction_active)) {
+      return SpecializedExecuteGotoImpl<true, true>(self, code_item, shadow_frame,
+                                                    result_register);
+    } else {
+      return SpecializedExecuteGotoImpl<true, false>(self, code_item, shadow_frame,
+                                                     result_register);
+    }
+  } else {
+    if (UNLIKELY(transaction_active)) {
+      return SpecializedExecuteGotoImpl<false, true>(self, code_item, shadow_frame,
+                                                     result_register);
+    } else {
+      return SpecializedExecuteGotoImpl<false, false>(self, code_item, shadow_frame,
+                                                      result_register);
+    }
+  }
+}
 
 }  // namespace interpreter
 }  // namespace art
