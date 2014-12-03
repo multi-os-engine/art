@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_GRAPH_VISUALIZER_H_
 
 #include <ostream>
+#include <sstream>
 
 #include "base/value_object.h"
 
@@ -58,14 +59,24 @@ class HGraphVisualizer : public ValueObject {
                    const CodeGenerator& codegen,
                    const char* name);
 
+  ~HGraphVisualizer() {
+    Finalize();
+  }
+
   /**
    * If this visualizer is enabled, emit the compilation information
    * in `output_`.
    */
   void DumpGraph(const char* pass_name) const;
 
+  /**
+   * Write the output to the given stream.
+   */
+  void Finalize() const;
+
  private:
   std::ostream* const output_;
+  mutable std::ostringstream oss_;
   HGraph* const graph_;
   const CodeGenerator& codegen_;
 
