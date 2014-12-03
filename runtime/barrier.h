@@ -44,6 +44,9 @@ class Barrier {
   // true if time out occurred.
   bool Increment(Thread* self, int delta, uint32_t timeout_ms) LOCKS_EXCLUDED(lock_);
 
+  // Increment the count by delta, wait until count becomes zero
+  void IncrementEnsure(Thread* self, int delta);
+
  private:
   void SetCountLocked(Thread* self, int count) EXCLUSIVE_LOCKS_REQUIRED(lock_);
 

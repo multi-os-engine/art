@@ -1003,7 +1003,7 @@ void MarkSweep::MarkRootsCheckpoint(Thread* self,
   Locks::mutator_lock_->SharedUnlock(self);
   {
     ScopedThreadStateChange tsc(self, kWaitingForCheckPointsToRun);
-    gc_barrier_->Increment(self, barrier_count);
+    gc_barrier_->IncrementEnsure(self, barrier_count);
   }
   Locks::mutator_lock_->SharedLock(self);
   Locks::heap_bitmap_lock_->ExclusiveLock(self);

@@ -67,6 +67,19 @@ bool Barrier::Increment(Thread* self, int delta, uint32_t timeout_ms) {
   return timed_out;
 }
 
+void Barrier::IncrementEnsure(Thread* self, int delta) {
+  MutexLock mu(self, lock_);
+  SetCountLocked(self, count_ + delta);
+
+  // Wait until count becomes zero
+  // ConditionVariable::Wait could return by EINTR(futex),
+  // not the Broadcast of condition variable.
+  // For that we need to ensure condition variable as zero.
+  while (count_ != 0) {
+    condition_.Wait(self);
+  }
+}
+
 void Barrier::SetCountLocked(Thread* self, int count) {
   count_ = count;
   if (count == 0) {
