@@ -549,6 +549,10 @@ class MANAGED ArtMethod FINAL : public Object {
 
   const char* GetShorty(uint32_t* out_length) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Counts the number of references in the parameter list of the corresponding method.
+  // Note: Thus does _not_ include "this" for non-static methods.
+  uint32_t GetNumberOfReferenceArgsWithoutReceiver() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   const Signature GetSignature() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   ALWAYS_INLINE const char* GetName() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

@@ -346,6 +346,18 @@ inline const char* ArtMethod::GetShorty(uint32_t* out_length) {
   return dex_file->GetMethodShorty(dex_file->GetMethodId(method->GetDexMethodIndex()), out_length);
 }
 
+inline uint32_t ArtMethod::GetNumberOfReferenceArgsWithoutReceiver() {
+  uint32_t shorty_len;
+  const char* shorty = GetShorty(&shorty_len);
+  uint32_t refs = 0;
+  for (uint32_t i = 1; i < shorty_len ; ++i) {
+    if (shorty[i] == 'L') {
+      refs++;
+    }
+  }
+  return refs;
+}
+
 inline const Signature ArtMethod::GetSignature() {
   mirror::ArtMethod* method = GetInterfaceMethodIfProxy();
   uint32_t dex_method_idx = method->GetDexMethodIndex();

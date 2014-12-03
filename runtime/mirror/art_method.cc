@@ -29,7 +29,6 @@
 #include "interpreter/interpreter.h"
 #include "jni_internal.h"
 #include "mapping_table.h"
-#include "method_helper.h"
 #include "object_array-inl.h"
 #include "object_array.h"
 #include "object-inl.h"
@@ -511,8 +510,7 @@ QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo() {
     // Generic JNI frame.
     DCHECK(IsNative());
     StackHandleScope<1> hs(Thread::Current());
-    uint32_t handle_refs =
-        MethodHelper(hs.NewHandle(this)).GetNumberOfReferenceArgsWithoutReceiver() + 1;
+    uint32_t handle_refs = GetNumberOfReferenceArgsWithoutReceiver() + 1;
     size_t scope_size = HandleScope::SizeOf(handle_refs);
     QuickMethodFrameInfo callee_info = runtime->GetCalleeSaveMethodFrameInfo(Runtime::kRefsAndArgs);
 
