@@ -52,7 +52,7 @@ void Barrier::Increment(Thread* self, int delta) {
   // Pass function is called by the last thread, the count will
   // be decremented to zero and a Broadcast will be made on the
   // condition variable, thus waking this up.
-  if (count_ != 0) {
+  while (count_ != 0) {
     condition_.Wait(self);
   }
 }
@@ -62,7 +62,8 @@ bool Barrier::Increment(Thread* self, int delta, uint32_t timeout_ms) {
   SetCountLocked(self, count_ + delta);
   bool timed_out = false;
   if (count_ != 0) {
-    timed_out = condition_.TimedWait(self, timeout_ms, 0);
+    timed_out = condition_.TimedWait(self, timeout_ms, 0 /* nsec */);
+    /* TODO: This can time out early due to a spurious wakeup. */
   }
   return timed_out;
 }
