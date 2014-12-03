@@ -70,22 +70,6 @@ struct AllMutexData {
 };
 static struct AllMutexData gAllMutexData[kAllMutexDataSize];
 
-#if ART_USE_FUTEXES
-static bool ComputeRelativeTimeSpec(timespec* result_ts, const timespec& lhs, const timespec& rhs) {
-  const int32_t one_sec = 1000 * 1000 * 1000;  // one second in nanoseconds.
-  result_ts->tv_sec = lhs.tv_sec - rhs.tv_sec;
-  result_ts->tv_nsec = lhs.tv_nsec - rhs.tv_nsec;
-  if (result_ts->tv_nsec < 0) {
-    result_ts->tv_sec--;
-    result_ts->tv_nsec += one_sec;
-  } else if (result_ts->tv_nsec > one_sec) {
-    result_ts->tv_sec++;
-    result_ts->tv_nsec -= one_sec;
-  }
-  return result_ts->tv_sec < 0;
-}
-#endif
-
 class ScopedAllMutexesLock FINAL {
  public:
   explicit ScopedAllMutexesLock(const BaseMutex* mutex) : mutex_(mutex) {
