@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_OPTIMIZING_OPTIMIZING_UNIT_TEST_H_
-#define ART_COMPILER_OPTIMIZING_OPTIMIZING_UNIT_TEST_H_
+#ifndef ART_COMPILER_OPTIMIZING_TESTS_OPTIMIZING_UNIT_TEST_H_
+#define ART_COMPILER_OPTIMIZING_TESTS_OPTIMIZING_UNIT_TEST_H_
 
 #include "nodes.h"
 #include "builder.h"
@@ -103,4 +103,4 @@ inline bool IsRemoved(HInstruction* instruction) {
 
 }  // namespace art
 
-#endif  // ART_COMPILER_OPTIMIZING_OPTIMIZING_UNIT_TEST_H_
+#endif  // ART_COMPILER_OPTIMIZING_TESTS_OPTIMIZING_UNIT_TEST_H_
