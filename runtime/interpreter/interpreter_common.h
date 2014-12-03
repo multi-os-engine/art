@@ -68,13 +68,13 @@ namespace interpreter {
 
 // External references to both interpreter implementations.
 
-template<bool do_access_check, bool transaction_active>
-extern JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
-                                ShadowFrame& shadow_frame, JValue result_register);
+JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
+                         ShadowFrame& shadow_frame, JValue result_register)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR;
 
-template<bool do_access_check, bool transaction_active>
-extern JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item,
-                              ShadowFrame& shadow_frame, JValue result_register);
+JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item,
+                       ShadowFrame& shadow_frame, JValue result_register)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR;
 
 void ThrowNullPointerExceptionFromInterpreter(const ShadowFrame& shadow_frame)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

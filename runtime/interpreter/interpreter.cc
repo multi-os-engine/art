@@ -321,30 +321,7 @@ static std::ostream& operator<<(std::ostream& os, const InterpreterImplKind& rhs
   return os;
 }
 
-#if !defined(__clang__)
 static constexpr InterpreterImplKind kInterpreterImplKind = kComputedGotoImplKind;
-#else
-// Clang 3.4 fails to build the goto interpreter implementation.
-static constexpr InterpreterImplKind kInterpreterImplKind = kSwitchImpl;
-template<bool do_access_check, bool transaction_active>
-JValue ExecuteGotoImpl(Thread*, const DexFile::CodeItem*, ShadowFrame&, JValue) {
-  LOG(FATAL) << "UNREACHABLE";
-  UNREACHABLE();
-}
-// Explicit definitions of ExecuteGotoImpl.
-template<> SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteGotoImpl<true, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
-template<> SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteGotoImpl<false, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                     ShadowFrame& shadow_frame, JValue result_register);
-template<> SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteGotoImpl<true, true>(Thread* self,  const DexFile::CodeItem* code_item,
-                                   ShadowFrame& shadow_frame, JValue result_register);
-template<> SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-JValue ExecuteGotoImpl<false, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
-#endif
 
 static JValue Execute(Thread* self, const DexFile::CodeItem* code_item, ShadowFrame& shadow_frame,
                       JValue result_register)
@@ -354,41 +331,14 @@ static inline JValue Execute(Thread* self, const DexFile::CodeItem* code_item,
                              ShadowFrame& shadow_frame, JValue result_register) {
   DCHECK(!shadow_frame.GetMethod()->IsAbstract());
   DCHECK(!shadow_frame.GetMethod()->IsNative());
-  shadow_frame.GetMethod()->GetDeclaringClass()->AssertInitializedOrInitializingInThread(self);
-
-  bool transaction_active = Runtime::Current()->IsActiveTransaction();
-  if (LIKELY(shadow_frame.GetMethod()->IsPreverified())) {
-    // Enter the "without access check" interpreter.
-    if (kInterpreterImplKind == kSwitchImpl) {
-      if (transaction_active) {
-        return ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register);
-      } else {
-        return ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register);
-      }
-    } else {
-      DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
-      if (transaction_active) {
-        return ExecuteGotoImpl<false, true>(self, code_item, shadow_frame, result_register);
-      } else {
-        return ExecuteGotoImpl<false, false>(self, code_item, shadow_frame, result_register);
-      }
-    }
+  if (kIsDebugBuild) {
+    shadow_frame.GetMethod()->GetDeclaringClass()->AssertInitializedOrInitializingInThread(self);
+  }
+  if (kInterpreterImplKind == kSwitchImpl) {
+    return ExecuteSwitchImpl(self, code_item, shadow_frame, result_register);
   } else {
-    // Enter the "with access check" interpreter.
-    if (kInterpreterImplKind == kSwitchImpl) {
-      if (transaction_active) {
-        return ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register);
-      } else {
-        return ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register);
-      }
-    } else {
-      DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
-      if (transaction_active) {
-        return ExecuteGotoImpl<true, true>(self, code_item, shadow_frame, result_register);
-      } else {
-        return ExecuteGotoImpl<true, false>(self, code_item, shadow_frame, result_register);
-      }
-    }
+    DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
+    return ExecuteGotoImpl(self, code_item, shadow_frame, result_register);
   }
 }
 
