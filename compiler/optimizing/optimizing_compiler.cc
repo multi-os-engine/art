@@ -19,6 +19,7 @@
 #include <fstream>
 #include <stdint.h>
 
+#include "base/mutex.h"
 #include "builder.h"
 #include "code_generator.h"
 #include "compiler.h"
@@ -126,6 +127,8 @@ class OptimizingCompiler FINAL : public Compiler {
 
   std::unique_ptr<std::ostream> visualizer_output_;
 
+  mutable Mutex dump_mutex_;  // To synchronize visualizer writing.
+
   DISALLOW_COPY_AND_ASSIGN(OptimizingCompiler);
 };
 
@@ -137,7 +140,8 @@ OptimizingCompiler::OptimizingCompiler(CompilerDriver* driver)
           driver->GetCompilerOptions().GetCompilerFilter() != CompilerOptions::kTime),
       total_compiled_methods_(0),
       unoptimized_compiled_methods_(0),
-      optimized_compiled_methods_(0) {
+      optimized_compiled_methods_(0),
+      dump_mutex_("dump lock") {
   if (kIsVisualizerEnabled) {
     visualizer_output_.reset(new std::ofstream("art.cfg"));
   }
@@ -191,7 +195,7 @@ static bool CanOptimize(const DexFile::CodeItem& code_item) {
   return code_item.tries_size_ == 0;
 }
 
-static void RunOptimizations(HGraph* graph, const HGraphVisualizer& visualizer) {
+static void RunOptimizations(HGraph* graph, HGraphVisualizer& visualizer) {
   HDeadCodeElimination opt1(graph);
   HConstantFolding opt2(graph);
   SsaRedundantPhiElimination opt3(graph);
@@ -220,7 +224,7 @@ static void RunOptimizations(HGraph* graph, const HGraphVisualizer& visualizer) 
 
 static bool TryBuildingSsa(HGraph* graph,
                            const DexCompilationUnit& dex_compilation_unit,
-                           const HGraphVisualizer& visualizer) {
+                           HGraphVisualizer& visualizer) {
   graph->BuildDominatorTree();
   graph->TransformToSSA();
 
@@ -288,7 +292,8 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
   }
 
   HGraphVisualizer visualizer(
-      visualizer_output_.get(), graph, kStringFilter, *codegen, dex_compilation_unit);
+      visualizer_output_.get(), graph, kStringFilter, *codegen, dex_compilation_unit,
+      dump_mutex_);
   visualizer.DumpGraph("builder");
 
   CodeVectorAllocator allocator;

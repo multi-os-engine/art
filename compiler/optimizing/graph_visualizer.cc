@@ -20,6 +20,7 @@
 #include "driver/dex_compilation_unit.h"
 #include "nodes.h"
 #include "ssa_liveness_analysis.h"
+#include "thread-inl.h"
 
 namespace art {
 
@@ -143,8 +144,7 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     }
   }
 
-  void VisitParallelMove(HParallelMove* instruction) {
-    output_ << instruction->DebugName();
+  void VisitParallelMove(HParallelMove* instruction) OVERRIDE {
     output_ << " (";
     for (size_t i = 0, e = instruction->NumMoves(); i < e; ++i) {
       MoveOperands* move = instruction->MoveOperandsAt(i);
@@ -156,11 +156,27 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       }
     }
     output_ << ")";
-    output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
   }
 
-  void VisitInstruction(HInstruction* instruction) {
+  void VisitIntConstant(HIntConstant* constant) OVERRIDE {
+    output_ << " (value: " << constant->GetValue() << ")";
+  }
+
+  void VisitLongConstant(HLongConstant* constant) OVERRIDE {
+    output_ << " (value: " << constant->GetValue() << ")";
+  }
+
+  void VisitFloatConstant(HFloatConstant* constant) OVERRIDE {
+    output_ << " (value: " << constant->GetValue() << ")";
+  }
+
+  void VisitDoubleConstant(HDoubleConstant* constant) OVERRIDE {
+    output_ << " (value: " << constant->GetValue() << ")";
+  }
+
+  void PrintInstruction(HInstruction* instruction) {
     output_ << instruction->DebugName();
+    instruction->Accept(this);
     if (instruction->InputCount() > 0) {
       output_ << " [ ";
       for (HInputIterator inputs(instruction); !inputs.Done(); inputs.Advance()) {
@@ -202,7 +218,7 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       int bci = 0;
       output_ << bci << " " << instruction->NumberOfUses()
               << " " << GetTypeId(instruction->GetType()) << instruction->GetId() << " ";
-      instruction->Accept(this);
+      PrintInstruction(instruction);
       output_ << kEndInstructionMarker << std::endl;
     }
   }
@@ -214,7 +230,7 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     EndTag("cfg");
   }
 
-  void VisitBasicBlock(HBasicBlock* block) {
+  void VisitBasicBlock(HBasicBlock* block) OVERRIDE {
     StartTag("block");
     PrintProperty("name", "B", block->GetBlockId());
     if (block->GetLifetimeStart() != kNoLifetime) {
@@ -270,8 +286,10 @@ HGraphVisualizer::HGraphVisualizer(std::ostream* output,
                                    HGraph* graph,
                                    const char* string_filter,
                                    const CodeGenerator& codegen,
-                                   const DexCompilationUnit& cu)
-    : output_(output), graph_(graph), codegen_(codegen), is_enabled_(false) {
+                                   const DexCompilationUnit& cu,
+                                   Mutex& dump_mutex)
+    : output_(output), graph_(graph), codegen_(codegen), is_enabled_(false),
+      dump_mutex_(dump_mutex) {
   if (output == nullptr) {
     return;
   }
@@ -281,7 +299,7 @@ HGraphVisualizer::HGraphVisualizer(std::ostream* output,
   }
 
   is_enabled_ = true;
-  HGraphVisualizerPrinter printer(graph, *output_, "", codegen_);
+  HGraphVisualizerPrinter printer(graph, oss_, "", codegen_);
   printer.StartTag("compilation");
   printer.PrintProperty("name", pretty_name.c_str());
   printer.PrintProperty("method", pretty_name.c_str());
@@ -292,14 +310,16 @@ HGraphVisualizer::HGraphVisualizer(std::ostream* output,
 HGraphVisualizer::HGraphVisualizer(std::ostream* output,
                                    HGraph* graph,
                                    const CodeGenerator& codegen,
-                                   const char* name)
-    : output_(output), graph_(graph), codegen_(codegen), is_enabled_(false) {
+                                   const char* name,
+                                   Mutex& dump_mutex)
+    : output_(output), graph_(graph), codegen_(codegen), is_enabled_(false),
+      dump_mutex_(dump_mutex) {
   if (output == nullptr) {
     return;
   }
 
   is_enabled_ = true;
-  HGraphVisualizerPrinter printer(graph, *output_, "", codegen_);
+  HGraphVisualizerPrinter printer(graph, oss_, "", codegen_);
   printer.StartTag("compilation");
   printer.PrintProperty("name", name);
   printer.PrintProperty("method", name);
@@ -307,12 +327,21 @@ HGraphVisualizer::HGraphVisualizer(std::ostream* output,
   printer.EndTag("compilation");
 }
 
-void HGraphVisualizer::DumpGraph(const char* pass_name) const {
+void HGraphVisualizer::DumpGraph(const char* pass_name) {
   if (!is_enabled_) {
     return;
   }
-  HGraphVisualizerPrinter printer(graph_, *output_, pass_name, codegen_);
+  HGraphVisualizerPrinter printer(graph_, oss_, pass_name, codegen_);
   printer.Run();
+}
+
+void HGraphVisualizer::Finalize() const {
+  if (!is_enabled_) {
+    return;
+  }
+
+  MutexLock mu(Thread::Current(), dump_mutex_);
+  *output_ << oss_.str();
 }
 
 }  // namespace art
