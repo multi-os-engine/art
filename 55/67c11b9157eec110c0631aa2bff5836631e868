@@ -1,0 +1,7 @@
+Code-Review+2: Hiroshi Yamauchi <yamauchi@google.com>
+Verified+1: Hans Boehm <hboehm@google.com>
+Submitted-by: Hans Boehm <hboehm@google.com>
+Submitted-at: Thu, 04 Dec 2014 19:57:01 +0000
+Reviewed-on: https://android-review.googlesource.com/117210
+Project: platform/art
+Branch: refs/heads/master
