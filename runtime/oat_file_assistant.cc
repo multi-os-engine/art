@@ -142,22 +142,27 @@ bool OatFileAssistant::Lock(std::string* error_msg) {
   return true;
 }
 
-OatFileAssistant::Status OatFileAssistant::GetStatus() {
+OatFileAssistant::DexOptStatus OatFileAssistant::GetStatus() {
   // TODO: If the profiling code is ever restored, it's worth considering
   // whether we should check to see if the profile is out of date here.
 
   if (OdexFileIsOutOfDate()) {
     // The DEX file is not pre-compiled.
-    // TODO: What if the oat file is not out of date? Could we relocate it
-    // from itself?
-    return OatFileIsUpToDate() ? kUpToDate : kOutOfDate;
+    // If the oat file is not out of date. We relocate it from itself.
+    if (OatFileIsUpToDate()) {
+      return kUpToDate;
+    }
+    if (OatFileIsOutOfDate()) {
+      return kDexoptNeeded;
+    }
+    return kSelfPatchoatNeeded;
   } else {
     // The DEX file is pre-compiled. If the oat file isn't up to date, we can
     // patch the pre-compiled version rather than recompiling.
     if (OatFileIsUpToDate() || OdexFileIsUpToDate()) {
       return kUpToDate;
     } else {
-      return kNeedsRelocation;
+      return kPatchoatNeeded;
     }
   }
 }
@@ -165,8 +170,9 @@ OatFileAssistant::Status OatFileAssistant::GetStatus() {
 bool OatFileAssistant::MakeUpToDate(std::string* error_msg) {
   switch (GetStatus()) {
     case kUpToDate: return true;
-    case kNeedsRelocation: return RelocateOatFile(error_msg);
-    case kOutOfDate: return GenerateOatFile(error_msg);
+    case kPatchoatNeeded: return RelocateOatFile(error_msg);
+    case kSelfPatchoatNeeded: return SelfRelocateOatFile(error_msg);
+    case kDexoptNeeded: return GenerateOatFile(error_msg);
   }
   UNREACHABLE();
 }
@@ -269,14 +275,14 @@ bool OatFileAssistant::OdexFileExists() {
   return GetOdexFile() != nullptr;
 }
 
-OatFileAssistant::Status OatFileAssistant::OdexFileStatus() {
+OatFileAssistant::OatStatus OatFileAssistant::OdexFileStatus() {
   if (OdexFileIsOutOfDate()) {
-    return kOutOfDate;
+    return kOatOutOfDate;
   }
   if (OdexFileIsUpToDate()) {
-    return kUpToDate;
+    return kOatUpToDate;
   }
-  return kNeedsRelocation;
+  return kOatNeedsPatchoat;
 }
 
 bool OatFileAssistant::OdexFileIsOutOfDate() {
@@ -293,7 +299,7 @@ bool OatFileAssistant::OdexFileIsOutOfDate() {
 }
 
 bool OatFileAssistant::OdexFileNeedsRelocation() {
-  return OdexFileStatus() == kNeedsRelocation;
+  return OdexFileStatus() == kOatNeedsPatchoat;
 }
 
 bool OatFileAssistant::OdexFileIsUpToDate() {
@@ -338,14 +344,14 @@ bool OatFileAssistant::OatFileExists() {
   return GetOatFile() != nullptr;
 }
 
-OatFileAssistant::Status OatFileAssistant::OatFileStatus() {
+OatFileAssistant::OatStatus OatFileAssistant::OatFileStatus() {
   if (OatFileIsOutOfDate()) {
-    return kOutOfDate;
+    return kOatOutOfDate;
   }
   if (OatFileIsUpToDate()) {
-    return kUpToDate;
+    return kOatUpToDate;
   }
-  return kNeedsRelocation;
+  return kOatNeedsPatchoat;
 }
 
 bool OatFileAssistant::OatFileIsOutOfDate() {
@@ -361,8 +367,8 @@ bool OatFileAssistant::OatFileIsOutOfDate() {
   return cached_oat_file_is_out_of_date_;
 }
 
-bool OatFileAssistant::OatFileNeedsRelocation() {
-  return OatFileStatus() == kNeedsRelocation;
+bool OatFileAssistant::OatFileNeedsPatchoat() {
+  return OatFileStatus() == kOatNeedsPatchoat;
 }
 
 bool OatFileAssistant::OatFileIsUpToDate() {
@@ -378,17 +384,17 @@ bool OatFileAssistant::OatFileIsUpToDate() {
   return cached_oat_file_is_up_to_date_;
 }
 
-OatFileAssistant::Status OatFileAssistant::GivenOatFileStatus(const OatFile& file) {
+OatFileAssistant::OatStatus OatFileAssistant::GivenOatFileStatus(const OatFile& file) {
   // TODO: This could cause GivenOatFileIsOutOfDate to be called twice, which
   // is more work than we need to do. If performance becomes a concern, and
   // this method is actually called, this should be fixed.
   if (GivenOatFileIsOutOfDate(file)) {
-    return kOutOfDate;
+    return kOatOutOfDate;
   }
   if (GivenOatFileIsUpToDate(file)) {
-    return kUpToDate;
+    return kOatUpToDate;
   }
-  return kNeedsRelocation;
+  return kOatNeedsPatchoat;
 }
 
 bool OatFileAssistant::GivenOatFileIsOutOfDate(const OatFile& file) {
@@ -450,8 +456,8 @@ bool OatFileAssistant::GivenOatFileIsOutOfDate(const OatFile& file) {
   return false;
 }
 
-bool OatFileAssistant::GivenOatFileNeedsRelocation(const OatFile& file) {
-  return GivenOatFileStatus(file) == kNeedsRelocation;
+bool OatFileAssistant::GivenOatFileNeedsPatchoat(const OatFile& file) {
+  return GivenOatFileStatus(file) == kOatNeedsPatchoat;
 }
 
 bool OatFileAssistant::GivenOatFileIsUpToDate(const OatFile& file) {
@@ -590,6 +596,51 @@ void OatFileAssistant::CopyProfileFile() {
       << " to " << profile_name << ". My uid:gid is " << getuid()
       << ":" << getgid();
   }
+}
+
+bool OatFileAssistant::SelfRelocateOatFile(std::string* error_msg) {
+  CHECK(error_msg != nullptr);
+
+  if (OatFileName() == nullptr) {
+    *error_msg = "Patching of oat file for dex location "
+      + std::string(dex_location_)
+      + " not attempted because the oat file name could not be determined.";
+    return false;
+  }
+  const std::string& oat_file_name = *OatFileName();
+
+  const ImageInfo* image_info = GetImageInfo();
+  Runtime* runtime = Runtime::Current();
+  if (image_info == nullptr) {
+    *error_msg = "Patching of oat file " + oat_file_name
+      + " not attempted because no image location was found.";
+    return false;
+  }
+
+  if (!runtime->IsDex2OatEnabled()) {
+    *error_msg = "Patching of oat file " + oat_file_name
+      + " not attempted because dex2oat is disabled";
+    return false;
+  }
+
+  std::vector<std::string> argv;
+  argv.push_back(runtime->GetPatchoatExecutable());
+  argv.push_back("--instruction-set=" + std::string(GetInstructionSetString(isa_)));
+  argv.push_back("--input-oat-file=" + oat_file_name);
+  argv.push_back("--output-oat-file=" + oat_file_name);
+  argv.push_back("--patched-image-location=" + image_info->location);
+
+  std::string command_line(Join(argv, ' '));
+  if (!Exec(argv, error_msg)) {
+    // Manually delete the file. This ensures there is no garbage left over if
+    // the process unexpectedly died.
+    TEMP_FAILURE_RETRY(unlink(oat_file_name.c_str()));
+    return false;
+  }
+
+  // Mark that the oat file has changed and we should try to reload.
+  ClearOatFileCache();
+  return true;
 }
 
 bool OatFileAssistant::RelocateOatFile(std::string* error_msg) {
