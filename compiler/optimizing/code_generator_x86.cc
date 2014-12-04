@@ -39,8 +39,9 @@ static constexpr int kCurrentMethodStackOffset = 0;
 static constexpr Register kRuntimeParameterCoreRegisters[] = { EAX, ECX, EDX, EBX };
 static constexpr size_t kRuntimeParameterCoreRegistersLength =
     arraysize(kRuntimeParameterCoreRegisters);
-static constexpr XmmRegister kRuntimeParameterFpuRegisters[] = { };
-static constexpr size_t kRuntimeParameterFpuRegistersLength = 0;
+static constexpr XmmRegister kRuntimeParameterFpuRegisters[] = { XMM0 };
+static constexpr size_t kRuntimeParameterFpuRegistersLength =
+    arraysize(kRuntimeParameterFpuRegisters);
 
 // Marker for places that can be updated once we don't follow the quick ABI.
 static constexpr bool kFollowsQuickABI = true;
@@ -1411,7 +1412,8 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
         case Primitive::kPrimFloat: {
           // Processing a Dex `float-to-long' instruction.
           InvokeRuntimeCallingConvention calling_convention;
-          locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
+          locations->SetInAt(0, Location::RegisterLocation(
+              calling_convention.GetFpuRegisterAt(0)));
           // The runtime helper puts the result in EAX, EDX.
           locations->SetOut(Location::RegisterPairLocation(EAX, EDX));
           break;
