@@ -43,20 +43,43 @@ namespace art {
 // be restored and tested, or removed.
 class OatFileAssistant {
  public:
-  enum Status {
-    // kOutOfDate - An oat file is said to be out of date if the file does not
-    // exist, or is out of date with respect to the dex file or boot image.
-    kOutOfDate,
+  enum DexOptStatus {
+    // kUpToDate - DexOpt file is said to be up to date if the oat file is not
+    // out of date and has been properly relocated for the purposes of ASLR.
+    // Matches Java: dalvik.system.DexFile.UP_TO_DATE = 0
+    kUpToDate,
 
-    // kNeedsRelocation - An oat file is said to need relocation if the code
+    // kNeedsRelocation - DexOpt need relocation if an odex file is up to date,
+    // but the oat file is out of date or does not exist.
+    // Matches Java: dalvik.system.DexFile.PATCHOAT_NEEDED = 1
+    kPatchoatNeeded,
+
+    // kOutOfDate - DexOpt is said to be out of date if the odex does not
+    // exist, and the oat does not exist or is out of date with respect
+    // to the dex file or boot image.
+    // Matches Java: dalvik.system.DexFile.DEXOPT_NEEDED = 2
+    kDexoptNeeded,
+
+    // kNeedsSelfRelocation - DexOpt need self relocation if an odex file
+    // does not exist, but the oat file status is kOatNeedsPatchoat.
+    // Matches Java: dalvik.system.DexFile.SELF_PATCHOAT_NEEDED = 3
+    kSelfPatchoatNeeded,
+  };
+
+  enum OatStatus {
+    // kOatOutOfDate - An oat file is said to be out of date if the file does not
+    // exist, or is out of date with respect to the dex file or boot image.
+    kOatOutOfDate,
+
+    // kOatNeedsPatchoat - An oat file is said to need relocation if the code
     // is up to date, but not yet properly relocated for address space layout
     // randomization (ASLR). In this case, the oat file is neither "out of
     // date" nor "up to date".
-    kNeedsRelocation,
+    kOatNeedsPatchoat,
 
-    // kUpToDate - An oat file is said to be up to date if it is not out of
+    // kOatUpToDate - An oat file is said to be up to date if it is not out of
     // date and has been properly relocated for the purposes of ASLR.
-    kUpToDate,
+    kOatUpToDate,
   };
 
   // Constructs an OatFileAssistant object to assist the oat file
@@ -122,7 +145,7 @@ class OatFileAssistant {
   bool Lock(std::string* error_msg);
 
   // Returns the overall compilation status for the given dex location.
-  Status GetStatus();
+  DexOptStatus GetStatus();
 
   // Attempts to generate or relocate the oat file as needed to make it up to
   // date.
@@ -163,7 +186,7 @@ class OatFileAssistant {
   //    determined.
   const std::string* OdexFileName();
   bool OdexFileExists();
-  Status OdexFileStatus();
+  OatStatus OdexFileStatus();
   bool OdexFileIsOutOfDate();
   bool OdexFileNeedsRelocation();
   bool OdexFileIsUpToDate();
@@ -181,16 +204,16 @@ class OatFileAssistant {
   //    determined.
   const std::string* OatFileName();
   bool OatFileExists();
-  Status OatFileStatus();
+  OatStatus OatFileStatus();
   bool OatFileIsOutOfDate();
-  bool OatFileNeedsRelocation();
+  bool OatFileNeedsPatchoat();
   bool OatFileIsUpToDate();
 
   // These methods return the status for a given opened oat file with respect
   // to the dex location.
-  Status GivenOatFileStatus(const OatFile& file);
+  OatStatus GivenOatFileStatus(const OatFile& file);
   bool GivenOatFileIsOutOfDate(const OatFile& file);
-  bool GivenOatFileNeedsRelocation(const OatFile& file);
+  bool GivenOatFileNeedsPatchoat(const OatFile& file);
   bool GivenOatFileIsUpToDate(const OatFile& file);
 
   // Returns true if there is an accessible profile associated with the dex
@@ -214,6 +237,16 @@ class OatFileAssistant {
 
   // Copy the current profile to the old profile location.
   void CopyProfileFile();
+
+  // Generates the oat file by relocation from the existing oat file.
+  // This does not check the current status before attempting to relocate the
+  // oat file.
+  // Returns true on success.
+  // This will fail if dex2oat is not enabled in the current runtime.
+  //
+  // If there is a failure, the value of error_msg will be set to a string
+  // describing why there was failure. error_msg must not be nullptr.
+  bool SelfRelocateOatFile(std::string* error_msg);
 
   // Generates the oat file by relocation from the odex file.
   // This does not check the current status before attempting to relocate the
