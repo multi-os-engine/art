@@ -280,9 +280,9 @@ TEST_F(OatFileAssistantTest, DexNoOat) {
   EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.OdexFileStatus());
   EXPECT_FALSE(oat_file_assistant.OatFileExists());
   EXPECT_TRUE(oat_file_assistant.OatFileIsOutOfDate());
-  EXPECT_FALSE(oat_file_assistant.OatFileNeedsRelocation());
+  EXPECT_FALSE(oat_file_assistant.OatFileNeedsPatchoat());
   EXPECT_FALSE(oat_file_assistant.OatFileIsUpToDate());
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.OatFileStatus());
+  EXPECT_EQ(OatFileAssistant::kOatOutOfDate, oat_file_assistant.OatFileStatus());
 }
 
 // Case: We have no DEX file and no OAT file.
@@ -313,9 +313,9 @@ TEST_F(OatFileAssistantTest, OatUpToDate) {
   EXPECT_FALSE(oat_file_assistant.OdexFileIsUpToDate());
   EXPECT_TRUE(oat_file_assistant.OatFileExists());
   EXPECT_FALSE(oat_file_assistant.OatFileIsOutOfDate());
-  EXPECT_FALSE(oat_file_assistant.OatFileNeedsRelocation());
+  EXPECT_FALSE(oat_file_assistant.OatFileNeedsPatchoat());
   EXPECT_TRUE(oat_file_assistant.OatFileIsUpToDate());
-  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.OatFileStatus());
+  EXPECT_EQ(OatFileAssistant::kOatUpToDate, oat_file_assistant.OatFileStatus());
 }
 
 // Case: We have a MultiDEX file and up-to-date OAT file for it.
@@ -477,10 +477,62 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexOat) {
   EXPECT_FALSE(oat_file_assistant.OdexFileIsUpToDate());
   EXPECT_TRUE(oat_file_assistant.OatFileExists());
   EXPECT_FALSE(oat_file_assistant.OatFileIsOutOfDate());
-  EXPECT_FALSE(oat_file_assistant.OatFileNeedsRelocation());
+  EXPECT_FALSE(oat_file_assistant.OatFileNeedsPatchoat());
   EXPECT_TRUE(oat_file_assistant.OatFileIsUpToDate());
 
   // Verify we can load the dex files from it.
+  std::unique_ptr<OatFile> oat_file = oat_file_assistant.GetBestOatFile();
+  ASSERT_TRUE(oat_file.get() != nullptr);
+  EXPECT_TRUE(oat_file->IsExecutable());
+  std::vector<std::unique_ptr<const DexFile>> dex_files;
+  dex_files = oat_file_assistant.LoadDexFiles(*oat_file, dex_location.c_str());
+  EXPECT_EQ(1u, dex_files.size());
+}
+
+// Case: We have a DEX file, no ODEX file and an OAT file, where
+// OAT files is not OutOfDate but have patch delta of 0.
+// Expect: It shouldn't crash.
+TEST_F(OatFileAssistantTest, NoOdexOatNeedsPatchoat) {
+  std::string dex_location = GetScratchDir() + "/NoOdexOatNeedsPatchoat.jar";
+  std::string oat_location = GetISADir() + "/NoOdexOatNeedsPatchoat.oat";
+
+  // Create the dex and odex files
+  Copy(GetDexSrc1(), dex_location);
+  GenerateOdexForTest(dex_location, oat_location);
+
+  // Verify things don't go bad.
+  OatFileAssistant oat_file_assistant(dex_location.c_str(),
+      oat_location.c_str(), kRuntimeISA, true);
+
+  EXPECT_EQ(OatFileAssistant::kNeedsRelocation, oat_file_assistant.GetStatus());
+
+  EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
+  EXPECT_FALSE(oat_file_assistant.OdexFileExists());
+  EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
+  EXPECT_FALSE(oat_file_assistant.OdexFileNeedsRelocation());
+  EXPECT_FALSE(oat_file_assistant.OdexFileIsUpToDate());
+  EXPECT_TRUE(oat_file_assistant.OatFileExists());
+  EXPECT_TRUE(oat_file_assistant.OatFileNeedsPatchoat());
+  EXPECT_FALSE(oat_file_assistant.OatFileIsOutOfDate());
+  EXPECT_FALSE(oat_file_assistant.OatFileIsUpToDate());
+
+  // Make the oat file up to date.
+  std::string error_msg;
+  ASSERT_TRUE(oat_file_assistant.MakeUpToDate(&error_msg)) << error_msg;
+
+  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetStatus());
+
+  EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
+  EXPECT_FALSE(oat_file_assistant.OdexFileExists());
+  EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
+  EXPECT_FALSE(oat_file_assistant.OdexFileNeedsRelocation());
+  EXPECT_FALSE(oat_file_assistant.OdexFileIsUpToDate());
+  EXPECT_TRUE(oat_file_assistant.OatFileExists());
+  EXPECT_FALSE(oat_file_assistant.OatFileIsOutOfDate());
+  EXPECT_FALSE(oat_file_assistant.OatFileNeedsPatchoat());
+  EXPECT_TRUE(oat_file_assistant.OatFileIsUpToDate());
+
+  // Things aren't relocated, so it should fall back to interpreted.
   std::unique_ptr<OatFile> oat_file = oat_file_assistant.GetBestOatFile();
   ASSERT_TRUE(oat_file.get() != nullptr);
   EXPECT_TRUE(oat_file->IsExecutable());

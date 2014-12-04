@@ -299,10 +299,12 @@ static jobjectArray DexFile_getClassNameList(JNIEnv* env, jclass, jobject cookie
 
 // Java: dalvik.system.DexFile.UP_TO_DATE
 static const jbyte kUpToDate = 0;
-// Java: dalvik.system.DexFile.DEXOPT_NEEDED
-static const jbyte kPatchoatNeeded = 1;
 // Java: dalvik.system.DexFile.PATCHOAT_NEEDED
+static const jbyte kPatchoatNeeded = 1;
+// Java: dalvik.system.DexFile.DEXOPT_NEEDED
 static const jbyte kDexoptNeeded = 2;
+// Java: dalvik.system.DexFile.SELF_PATCHOAT_NEEDED
+static const jbyte kSelfPatchoatNeeded = 3;
 
 static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
     const char* pkgname, const char* instruction_set, const jboolean defer) {
@@ -353,10 +355,15 @@ static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
     }
   }
 
-  OatFileAssistant::Status status = oat_file_assistant.GetStatus();
+  OatFileAssistant::DexOptStatus status = oat_file_assistant.GetStatus();
   switch (status) {
     case OatFileAssistant::kUpToDate: return kUpToDate;
-    case OatFileAssistant::kNeedsRelocation: return kPatchoatNeeded;
+    case OatFileAssistant::kNeedsRelocation:
+      if (oat_file_assistant.OatFileStatus() == OatFileAssistant::kOatNeedsPatchoat) {
+        return kSelfPatchoatNeeded;
+      } else {
+        return kPatchoatNeeded;
+      }
     case OatFileAssistant::kOutOfDate: return kDexoptNeeded;
   }
   UNREACHABLE();
