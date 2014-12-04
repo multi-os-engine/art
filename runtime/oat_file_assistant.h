@@ -54,6 +54,12 @@ class OatFileAssistant {
     // date" nor "up to date".
     kNeedsRelocation,
 
+    // kNeedsSelfRelocation - An oat file is said to need self relocation if
+    // the code is up to date, but not yet properly relocated for address space
+    // layout randomization (ASLR). In this case, the oat file is neither
+    // "out of date" nor "up to date" but already copied in the dalvik-cache.
+    kNeedsSelfRelocation,
+
     // kUpToDate - An oat file is said to be up to date if it is not out of
     // date and has been properly relocated for the purposes of ASLR.
     kUpToDate,

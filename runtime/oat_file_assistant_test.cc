@@ -507,7 +507,7 @@ TEST_F(OatFileAssistantTest, OdexOatOverlap) {
   OatFileAssistant oat_file_assistant(dex_location.c_str(),
       oat_location.c_str(), kRuntimeISA, true);
 
-  EXPECT_EQ(OatFileAssistant::kNeedsRelocation, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kNeedsSelfRelocation, oat_file_assistant.GetStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());

@@ -299,10 +299,12 @@ static jobjectArray DexFile_getClassNameList(JNIEnv* env, jclass, jobject cookie
 
 // Java: dalvik.system.DexFile.UP_TO_DATE
 static const jbyte kUpToDate = 0;
-// Java: dalvik.system.DexFile.DEXOPT_NEEDED
-static const jbyte kPatchoatNeeded = 1;
 // Java: dalvik.system.DexFile.PATCHOAT_NEEDED
+static const jbyte kPatchoatNeeded = 1;
+// Java: dalvik.system.DexFile.DEXOPT_NEEDED
 static const jbyte kDexoptNeeded = 2;
+// Java: dalvik.system.DexFile.SELF_PATCHOAT_NEEDED
+static const jbyte kSelfPatchoatNeeded = 3;
 
 static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
     const char* pkgname, const char* instruction_set, const jboolean defer) {
@@ -357,6 +359,7 @@ static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
   switch (status) {
     case OatFileAssistant::kUpToDate: return kUpToDate;
     case OatFileAssistant::kNeedsRelocation: return kPatchoatNeeded;
+    case OatFileAssistant::kNeedsSelfRelocation: return kSelfPatchoatNeeded;
     case OatFileAssistant::kOutOfDate: return kDexoptNeeded;
   }
   UNREACHABLE();

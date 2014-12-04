@@ -148,9 +148,14 @@ OatFileAssistant::Status OatFileAssistant::GetStatus() {
 
   if (OdexFileIsOutOfDate()) {
     // The DEX file is not pre-compiled.
-    // TODO: What if the oat file is not out of date? Could we relocate it
-    // from itself?
-    return OatFileIsUpToDate() ? kUpToDate : kOutOfDate;
+    // If the oat file is not out of date. We relocate it from itself.
+    if (OatFileIsUpToDate()) {
+      return kUpToDate;
+    }
+    if (OatFileIsOutOfDate()) {
+      return kOutOfDate;
+    }
+    return kNeedsSelfRelocation;
   } else {
     // The DEX file is pre-compiled. If the oat file isn't up to date, we can
     // patch the pre-compiled version rather than recompiling.
@@ -166,6 +171,7 @@ bool OatFileAssistant::MakeUpToDate(std::string* error_msg) {
   switch (GetStatus()) {
     case kUpToDate: return true;
     case kNeedsRelocation: return RelocateOatFile(error_msg);
+    case kNeedsSelfRelocation: return RelocateOatFile(error_msg);
     case kOutOfDate: return GenerateOatFile(error_msg);
   }
   UNREACHABLE();
