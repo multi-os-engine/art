@@ -1484,8 +1484,9 @@ void LocationsBuilderARM::VisitTypeConversion(HTypeConversion* conversion) {
           break;
 
         case Primitive::kPrimDouble:
-          LOG(FATAL) << "Type conversion from " << input_type
-                     << " to " << result_type << " not yet implemented";
+          // Processing a Dex `double-to-float' instruction.
+          locations->SetInAt(0, Location::RequiresFpuRegister());
+          locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
           break;
 
         default:
@@ -1515,8 +1516,9 @@ void LocationsBuilderARM::VisitTypeConversion(HTypeConversion* conversion) {
           break;
 
         case Primitive::kPrimFloat:
-          LOG(FATAL) << "Type conversion from " << input_type
-                     << " to " << result_type << " not yet implemented";
+          // Processing a Dex `float-to-double' instruction.
+          locations->SetInAt(0, Location::RequiresFpuRegister());
+          locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
           break;
 
         default:
@@ -1704,8 +1706,9 @@ void InstructionCodeGeneratorARM::VisitTypeConversion(HTypeConversion* conversio
         }
 
         case Primitive::kPrimDouble:
-          LOG(FATAL) << "Type conversion from " << input_type
-                     << " to " << result_type << " not yet implemented";
+          // Processing a Dex `double-to-float' instruction.
+          __ vcvtsd(out.AsFpuRegister<SRegister>(),
+                    FromLowSToD(in.AsFpuRegisterPairLow<SRegister>()));
           break;
 
         default:
@@ -1760,8 +1763,9 @@ void InstructionCodeGeneratorARM::VisitTypeConversion(HTypeConversion* conversio
         }
 
         case Primitive::kPrimFloat:
-          LOG(FATAL) << "Type conversion from " << input_type
-                     << " to " << result_type << " not yet implemented";
+          // Processing a Dex `float-to-double' instruction.
+          __ vcvtds(FromLowSToD(out.AsFpuRegisterPairLow<SRegister>()),
+                    in.AsFpuRegister<SRegister>());
           break;
 
         default:
