@@ -15,6 +15,7 @@
  */
 
 #include "dead_code_elimination.h"
+#include "iterators.h"
 
 #include "base/bit_vector-inl.h"
 

@@ -23,6 +23,7 @@
 #include "driver/compiler_driver-inl.h"
 #include "driver/dex_compilation_unit.h"
 #include "instruction_simplifier.h"
+#include "iterators.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/class_loader.h"
 #include "mirror/dex_cache.h"

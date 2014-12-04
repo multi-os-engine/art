@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "iterators.h"
 #include "register_allocator.h"
 
 #include <sstream>

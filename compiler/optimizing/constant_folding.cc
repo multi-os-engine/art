@@ -15,6 +15,7 @@
  */
 
 #include "constant_folding.h"
+#include "iterators.h"
 
 namespace art {
 

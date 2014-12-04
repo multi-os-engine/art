@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "iterators.h"
 #include "nodes.h"
 #include "ssa_builder.h"
 #include "utils/growable_array.h"

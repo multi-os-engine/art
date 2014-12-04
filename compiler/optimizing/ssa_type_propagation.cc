@@ -17,6 +17,7 @@
 #include "ssa_builder.h"
 #include "ssa_type_propagation.h"
 
+#include "iterators.h"
 #include "nodes.h"
 
 namespace art {

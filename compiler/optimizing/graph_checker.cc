@@ -15,6 +15,7 @@
  */
 
 #include "graph_checker.h"
+#include "iterators.h"
 
 #include <string>
 #include <map>

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "iterators.h"
 #include "ssa_liveness_analysis.h"
 
 #include "base/bit_vector-inl.h"

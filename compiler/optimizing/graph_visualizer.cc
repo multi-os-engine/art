@@ -15,6 +15,7 @@
  */
 
 #include "graph_visualizer.h"
+#include "iterators.h"
 
 #include "code_generator.h"
 #include "nodes.h"

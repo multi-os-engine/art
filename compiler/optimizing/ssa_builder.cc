@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "iterators.h"
 #include "ssa_builder.h"
 
 #include "nodes.h"

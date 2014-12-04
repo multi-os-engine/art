@@ -15,6 +15,7 @@
  */
 
 #include "gvn.h"
+#include "iterators.h"
 
 namespace art {
 

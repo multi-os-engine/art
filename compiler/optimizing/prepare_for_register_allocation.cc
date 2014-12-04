@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "iterators.h"
 #include "prepare_for_register_allocation.h"
 
 namespace art {

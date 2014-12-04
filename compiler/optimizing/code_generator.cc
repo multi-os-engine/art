@@ -24,6 +24,7 @@
 #include "dex/verified_method.h"
 #include "driver/dex_compilation_unit.h"
 #include "gc_map_builder.h"
+#include "iterators.h"
 #include "leb128.h"
 #include "mapping_table.h"
 #include "mirror/array-inl.h"

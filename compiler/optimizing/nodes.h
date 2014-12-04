@@ -870,29 +870,6 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
 };
 std::ostream& operator<<(std::ostream& os, const HInstruction::InstructionKind& rhs);
 
-template<typename T>
-class HUseIterator : public ValueObject {
- public:
-  explicit HUseIterator(HUseListNode<T>* uses) : current_(uses) {}
-
-  bool Done() const { return current_ == nullptr; }
-
-  void Advance() {
-    DCHECK(!Done());
-    current_ = current_->GetTail();
-  }
-
-  HUseListNode<T>* Current() const {
-    DCHECK(!Done());
-    return current_;
-  }
-
- private:
-  HUseListNode<T>* current_;
-
-  friend class HValue;
-};
-
 // A HEnvironment object contains the values of virtual registers at a given location.
 class HEnvironment : public ArenaObject<kArenaAllocMisc> {
  public:
@@ -931,63 +908,6 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
   GrowableArray<HInstruction*> vregs_;
 
   DISALLOW_COPY_AND_ASSIGN(HEnvironment);
-};
-
-class HInputIterator : public ValueObject {
- public:
-  explicit HInputIterator(HInstruction* instruction) : instruction_(instruction), index_(0) {}
-
-  bool Done() const { return index_ == instruction_->InputCount(); }
-  HInstruction* Current() const { return instruction_->InputAt(index_); }
-  void Advance() { index_++; }
-
- private:
-  HInstruction* instruction_;
-  size_t index_;
-
-  DISALLOW_COPY_AND_ASSIGN(HInputIterator);
-};
-
-class HInstructionIterator : public ValueObject {
- public:
-  explicit HInstructionIterator(const HInstructionList& instructions)
-      : instruction_(instructions.first_instruction_) {
-    next_ = Done() ? nullptr : instruction_->GetNext();
-  }
-
-  bool Done() const { return instruction_ == nullptr; }
-  HInstruction* Current() const { return instruction_; }
-  void Advance() {
-    instruction_ = next_;
-    next_ = Done() ? nullptr : instruction_->GetNext();
-  }
-
- private:
-  HInstruction* instruction_;
-  HInstruction* next_;
-
-  DISALLOW_COPY_AND_ASSIGN(HInstructionIterator);
-};
-
-class HBackwardInstructionIterator : public ValueObject {
- public:
-  explicit HBackwardInstructionIterator(const HInstructionList& instructions)
-      : instruction_(instructions.last_instruction_) {
-    next_ = Done() ? nullptr : instruction_->GetPrevious();
-  }
-
-  bool Done() const { return instruction_ == nullptr; }
-  HInstruction* Current() const { return instruction_; }
-  void Advance() {
-    instruction_ = next_;
-    next_ = Done() ? nullptr : instruction_->GetPrevious();
-  }
-
- private:
-  HInstruction* instruction_;
-  HInstruction* next_;
-
-  DISALLOW_COPY_AND_ASSIGN(HBackwardInstructionIterator);
 };
 
 // An embedded container with N elements of type T.  Used (with partial
@@ -2828,53 +2748,6 @@ class HGraphDelegateVisitor : public HGraphVisitor {
  private:
   DISALLOW_COPY_AND_ASSIGN(HGraphDelegateVisitor);
 };
-
-class HInsertionOrderIterator : public ValueObject {
- public:
-  explicit HInsertionOrderIterator(const HGraph& graph) : graph_(graph), index_(0) {}
-
-  bool Done() const { return index_ == graph_.GetBlocks().Size(); }
-  HBasicBlock* Current() const { return graph_.GetBlocks().Get(index_); }
-  void Advance() { ++index_; }
-
- private:
-  const HGraph& graph_;
-  size_t index_;
-
-  DISALLOW_COPY_AND_ASSIGN(HInsertionOrderIterator);
-};
-
-class HReversePostOrderIterator : public ValueObject {
- public:
-  explicit HReversePostOrderIterator(const HGraph& graph) : graph_(graph), index_(0) {}
-
-  bool Done() const { return index_ == graph_.GetReversePostOrder().Size(); }
-  HBasicBlock* Current() const { return graph_.GetReversePostOrder().Get(index_); }
-  void Advance() { ++index_; }
-
- private:
-  const HGraph& graph_;
-  size_t index_;
-
-  DISALLOW_COPY_AND_ASSIGN(HReversePostOrderIterator);
-};
-
-class HPostOrderIterator : public ValueObject {
- public:
-  explicit HPostOrderIterator(const HGraph& graph)
-      : graph_(graph), index_(graph_.GetReversePostOrder().Size()) {}
-
-  bool Done() const { return index_ == 0; }
-  HBasicBlock* Current() const { return graph_.GetReversePostOrder().Get(index_ - 1); }
-  void Advance() { --index_; }
-
- private:
-  const HGraph& graph_;
-  size_t index_;
-
-  DISALLOW_COPY_AND_ASSIGN(HPostOrderIterator);
-};
-
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_NODES_H_

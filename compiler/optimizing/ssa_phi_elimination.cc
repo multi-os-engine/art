@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "iterators.h"
 #include "ssa_phi_elimination.h"
 
 namespace art {
