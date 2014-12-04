@@ -71,6 +71,17 @@ static int32_t ChooseRelocationOffsetDelta(int32_t min_delta, int32_t max_delta)
   return r;
 }
 
+static bool IsCachePreloaded(const InstructionSet isa) {
+  const std::string isa_subdir = GetDalvikCacheOrDie(GetInstructionSetString(isa), false);
+  const std::string preload_marker = isa_subdir + "/.preloaded";
+
+  if (OS::FileExists(preload_marker.c_str())) {
+    return true;
+  }
+
+  return false;
+}
+
 // We are relocating or generating the core image. We should get rid of everything. It is all
 // out-of-date. We also don't really care if this fails since it is just a convenience.
 // Adapted from prune_dex_cache(const char* subdir) in frameworks/native/cmds/installd/commands.c
@@ -282,9 +293,11 @@ static bool ReadSpecificImageHeader(const char* filename, ImageHeader* image_hea
 static bool RelocateImage(const char* image_location, const char* dest_filename,
                                InstructionSet isa, std::string* error_msg) {
   // We should clean up so we are more likely to have room for the image.
-  if (Runtime::Current()->IsZygote()) {
-    LOG(INFO) << "Pruning dalvik-cache since we are relocating an image and will need to recompile";
-    PruneDalvikCache(isa);
+  if (!IsCachePreloaded(isa)) {
+    if (Runtime::Current()->IsZygote()) {
+        LOG(INFO) << "Pruning dalvik-cache since we are relocating an image and will need to recompile";
+        PruneDalvikCache(isa);
+    }
   }
 
   std::string patchoat(Runtime::Current()->GetPatchoatExecutable());
