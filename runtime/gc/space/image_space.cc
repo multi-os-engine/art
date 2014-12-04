@@ -70,6 +70,18 @@ static int32_t ChooseRelocationOffsetDelta(int32_t min_delta, int32_t max_delta)
   return r;
 }
 
+static bool IsCachePreloaded(const InstructionSet isa) {
+  const std::string isa_subdir = GetDalvikCacheOrDie(GetInstructionSetString(isa), false);
+  const std::string preload_marker = isa_subdir + "/.preloaded";
+
+  if (OS::FileExists(preload_marker.c_str())) {
+    LOG(WARNING) << "Preloaded data detected. Do not erase dalvik cache";
+    return true;
+  }
+
+  return false;
+}
+
 // We are relocating or generating the core image. We should get rid of everything. It is all
 // out-of-date. We also don't really care if this fails since it is just a convenience.
 // Adapted from prune_dex_cache(const char* subdir) in frameworks/native/cmds/installd/commands.c
@@ -78,10 +90,12 @@ static void RealPruneDalvikCache(const std::string& cache_dir_path);
 
 static void PruneDalvikCache(InstructionSet isa) {
   CHECK_NE(isa, kNone);
-  // Prune the base /data/dalvik-cache.
-  RealPruneDalvikCache(GetDalvikCacheOrDie(".", false));
-  // Prune /data/dalvik-cache/<isa>.
-  RealPruneDalvikCache(GetDalvikCacheOrDie(GetInstructionSetString(isa), false));
+  if (!IsCachePreloaded(isa)) {
+    // Prune the base /data/dalvik-cache.
+    RealPruneDalvikCache(GetDalvikCacheOrDie(".", false));
+    // Prune /data/dalvik-cache/<isa>.
+    RealPruneDalvikCache(GetDalvikCacheOrDie(GetInstructionSetString(isa), false));
+  }
 }
 
 static void RealPruneDalvikCache(const std::string& cache_dir_path) {
