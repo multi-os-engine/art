@@ -281,11 +281,13 @@ static bool ReadSpecificImageHeader(const char* filename, ImageHeader* image_hea
 // Relocate the image at image_location to dest_filename and relocate it by a random amount.
 static bool RelocateImage(const char* image_location, const char* dest_filename,
                                InstructionSet isa, std::string* error_msg) {
+#ifndef PREOPT_IN_DATA
   // We should clean up so we are more likely to have room for the image.
   if (Runtime::Current()->IsZygote()) {
     LOG(INFO) << "Pruning dalvik-cache since we are relocating an image and will need to recompile";
     PruneDalvikCache(isa);
   }
+#endif
 
   std::string patchoat(Runtime::Current()->GetPatchoatExecutable());
 

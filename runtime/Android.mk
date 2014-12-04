@@ -359,6 +359,10 @@ ifeq ($(2ND_DEX2OAT_TARGET_ARCH),arm)
   endif
 endif
 
+ifneq ($(DEX_PREOPT_IN_DATA_LIST),)
+  LIBART_CFLAGS += -DPREOPT_IN_DATA
+endif
+
 # $(1): target or host
 # $(2): ndebug or debug
 define build-libart
