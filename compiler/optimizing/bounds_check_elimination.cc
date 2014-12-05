@@ -32,10 +32,45 @@ class ValueBound : public ValueObject {
     if (instruction == nullptr) {
       return ValueBound(nullptr, constant);
     }
-    if (instruction->IsIntConstant()) {
-      return ValueBound(nullptr, instruction->AsIntConstant()->GetValue() + constant);
+    bool found;
+    ValueBound bound1 = DetectValueBoundFromValue(instruction, &found);
+    if (found) {
+      bool overflow_or_underflow;
+      ValueBound bound2 = bound1.Add(constant, &overflow_or_underflow);
+      if (!overflow_or_underflow) {
+        return bound2;
+      }
     }
+    // Just keep it in (instruction + constant) format. At least it's an
+    // accurate representation.
     return ValueBound(instruction, constant);
+  }
+
+  // Try to detect useful value bound format from an instruction, e.g.
+  // a constant or array length related value.
+  static ValueBound DetectValueBoundFromValue(HInstruction* instruction, bool* found) {
+    DCHECK(instruction != nullptr);
+    *found = true;
+    if (instruction->IsIntConstant()) {
+      return ValueBound(nullptr, instruction->AsIntConstant()->GetValue());
+    }
+
+    if (instruction->IsArrayLength()) {
+      return ValueBound(instruction, 0);
+    }
+    // Try to detect (array.length + c) format.
+    if (instruction->IsAdd()) {
+      HAdd* add = instruction->AsAdd();
+      HInstruction* left = add->GetLeft();
+      HInstruction* right = add->GetRight();
+      if (left->IsArrayLength() && right->IsIntConstant()) {
+        return ValueBound(left, right->AsIntConstant()->GetValue());
+      }
+    }
+
+    // No useful bound detected.
+    *found = false;
+    return ValueBound::Max();
   }
 
   HInstruction* GetInstruction() const { return instruction_; }
@@ -140,7 +175,7 @@ class ValueBound : public ValueObject {
   // overflows/underflows, then we can't accurately represent it. For correctness,
   // just return Max/Min() depending on whether the returned ValueBound is used for
   // lower/upper bound.
-  ValueBound Add(int c, bool for_lower_bound, bool* overflow_or_underflow) const {
+  ValueBound Add(int c, bool* overflow_or_underflow) const {
     *overflow_or_underflow = false;
     if (c == 0) {
       return *this;
@@ -151,7 +186,7 @@ class ValueBound : public ValueObject {
       if (constant_ > INT_MAX - c) {
         // Constant part overflows.
         *overflow_or_underflow = true;
-        return for_lower_bound ? Min() : Max();
+        return Max();
       } else {
         new_constant = constant_ + c;
       }
@@ -159,7 +194,7 @@ class ValueBound : public ValueObject {
       if (constant_ < INT_MIN - c) {
         // Constant part underflows.
         *overflow_or_underflow = true;
-        return for_lower_bound ? Min() : Max();
+        return Max();
       } else {
         new_constant = constant_ + c;
       }
@@ -231,12 +266,12 @@ class ValueRange : public ArenaObject<kArenaAllocMisc> {
   // return the full integer range.
   ValueRange* Add(int constant) const {
     bool overflow_or_underflow;
-    ValueBound lower = lower_.Add(constant, true, &overflow_or_underflow);
+    ValueBound lower = lower_.Add(constant, &overflow_or_underflow);
     if (overflow_or_underflow) {
       // We can't accurately represent the bounds anymore.
       return FullIntRange();
     }
-    ValueBound upper = upper_.Add(constant, false, &overflow_or_underflow);
+    ValueBound upper = upper_.Add(constant, &overflow_or_underflow);
     if (overflow_or_underflow) {
       // We can't accurately represent the bounds anymore.
       return FullIntRange();
@@ -414,30 +449,6 @@ class BCEVisitor : public HGraphVisitor {
     return nullptr;
   }
 
-  // Try to detect useful value bound format from an instruction, e.g.
-  // a constant or array length related value.
-  ValueBound DetectValueBoundFromValue(HInstruction* instruction) {
-    if (instruction->IsIntConstant()) {
-      return ValueBound::Create(nullptr, instruction->AsIntConstant()->GetValue());
-    }
-
-    if (instruction->IsArrayLength()) {
-      return ValueBound::Create(instruction, 0);
-    }
-    // Try to detect (array.length + c) format.
-    if (instruction->IsAdd()) {
-      HAdd* add = instruction->AsAdd();
-      HInstruction* left = add->GetLeft();
-      HInstruction* right = add->GetRight();
-      if (left->IsArrayLength() && right->IsIntConstant()) {
-        return ValueBound::Create(left, right->AsIntConstant()->GetValue());
-      }
-    }
-
-    // No useful bound detected.
-    return ValueBound::Max();
-  }
-
   // Narrow the value range of 'instruction' at the end of 'basic_block' with 'range',
   // and push the narrowed value range to 'successor'.
   void ApplyRangeFromComparison(HInstruction* instruction, HBasicBlock* basic_block,
@@ -462,9 +473,8 @@ class BCEVisitor : public HGraphVisitor {
     // There should be no critical edge at this point.
     DCHECK_EQ(false_successor->GetPredecessors().Size(), 1u);
 
-    ValueBound bound = DetectValueBoundFromValue(right);
-    bool found = !bound.Equals(ValueBound::Max());
-
+    bool found;
+    ValueBound bound = ValueBound::DetectValueBoundFromValue(right, &found);
     ValueBound lower = bound;
     ValueBound upper = bound;
     if (!found) {
@@ -484,9 +494,10 @@ class BCEVisitor : public HGraphVisitor {
     if (cond == kCondLT || cond == kCondLE) {
       if (!upper.Equals(ValueBound::Max())) {
         int compensation = (cond == kCondLT) ? -1 : 0;  // upper bound is inclusive
-        ValueBound new_upper = upper.Add(compensation, false, &overflow_or_underflow);
-        // overflow_or_underflow is ignored here since we already use ValueBound::Min()
-        // for lower bound.
+        ValueBound new_upper = upper.Add(compensation, &overflow_or_underflow);
+        if (overflow_or_underflow) {
+          new_upper = ValueBound::Max();
+        }
         ValueRange* new_range = new (GetGraph()->GetArena())
             ValueRange(GetGraph()->GetArena(), ValueBound::Min(), new_upper);
         ApplyRangeFromComparison(left, block, true_successor, new_range);
@@ -495,9 +506,10 @@ class BCEVisitor : public HGraphVisitor {
       // array.length as a lower bound isn't considered useful.
       if (!lower.Equals(ValueBound::Min()) && !lower.IsRelativeToArrayLength()) {
         int compensation = (cond == kCondLE) ? 1 : 0;  // lower bound is inclusive
-        ValueBound new_lower = lower.Add(compensation, true, &overflow_or_underflow);
-        // overflow_or_underflow is ignored here since we already use ValueBound::Max()
-        // for upper bound.
+        ValueBound new_lower = lower.Add(compensation, &overflow_or_underflow);
+        if (overflow_or_underflow) {
+          new_lower = ValueBound::Min();
+        }
         ValueRange* new_range = new (GetGraph()->GetArena())
             ValueRange(GetGraph()->GetArena(), new_lower, ValueBound::Max());
         ApplyRangeFromComparison(left, block, false_successor, new_range);
@@ -506,9 +518,10 @@ class BCEVisitor : public HGraphVisitor {
       // array.length as a lower bound isn't considered useful.
       if (!lower.Equals(ValueBound::Min()) && !lower.IsRelativeToArrayLength()) {
         int compensation = (cond == kCondGT) ? 1 : 0;  // lower bound is inclusive
-        ValueBound new_lower = lower.Add(compensation, true, &overflow_or_underflow);
-        // overflow_or_underflow is ignored here since we already use ValueBound::Max()
-        // for upper bound.
+        ValueBound new_lower = lower.Add(compensation, &overflow_or_underflow);
+        if (overflow_or_underflow) {
+          new_lower = ValueBound::Min();
+        }
         ValueRange* new_range = new (GetGraph()->GetArena())
             ValueRange(GetGraph()->GetArena(), new_lower, ValueBound::Max());
         ApplyRangeFromComparison(left, block, true_successor, new_range);
@@ -516,9 +529,10 @@ class BCEVisitor : public HGraphVisitor {
 
       if (!upper.Equals(ValueBound::Max())) {
         int compensation = (cond == kCondGE) ? -1 : 0;  // upper bound is inclusive
-        ValueBound new_upper = upper.Add(compensation, false, &overflow_or_underflow);
-        // overflow_or_underflow is ignored here since we already use ValueBound::Min()
-        // for lower bound.
+        ValueBound new_upper = upper.Add(compensation, &overflow_or_underflow);
+        if (overflow_or_underflow) {
+          new_upper = ValueBound::Max();
+        }
         ValueRange* new_range = new (GetGraph()->GetArena())
             ValueRange(GetGraph()->GetArena(), ValueBound::Min(), new_upper);
         ApplyRangeFromComparison(left, block, false_successor, new_range);
