@@ -954,56 +954,57 @@ LIR* X86Mir2Lir::OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, RegS
 void X86Mir2Lir::AnalyzeMIR() {
   // Assume we don't need a pointer to the base of the code.
   cu_->NewTimingSplit("X86 MIR Analysis");
-  store_method_addr_ = false;
+  DCHECK_EQ(store_method_addr_, false);
+  DCHECK(base_of_code_ == nullptr);
 
-  // Walk the MIR looking for interesting items.
-  PreOrderDfsIterator iter(mir_graph_);
-  BasicBlock* curr_bb = iter.Next();
-  while (curr_bb != NULL) {
-    AnalyzeBB(curr_bb);
-    curr_bb = iter.Next();
-  }
-
-  // Did we need a pointer to the method code?  Not in 64 bit mode.
-  base_of_code_ = nullptr;
-
-  // store_method_addr_ must be false for x86_64, since RIP addressing is used.
-  CHECK(!(cu_->target64 && store_method_addr_));
-  if (store_method_addr_) {
-    base_of_code_ = mir_graph_->GetNewCompilerTemp(kCompilerTempBackend, false);
-    DCHECK(base_of_code_ != nullptr);
-  }
-}
-
-void X86Mir2Lir::AnalyzeBB(BasicBlock* bb) {
-  if (bb->block_type == kDead) {
-    // Ignore dead blocks
-    return;
-  }
-
-  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
-    int opcode = mir->dalvikInsn.opcode;
-    if (MIR::DecodedInstruction::IsPseudoMirOp(opcode)) {
-      AnalyzeExtendedMIR(opcode, bb, mir);
-    } else {
-      AnalyzeMIR(opcode, bb, mir);
+  // Walk the MIRs looking for any that require a base of code ptr. Not required on x86-64 due to
+  // RIP addressing.
+  if (!cu_->target64 || kIsDebugBuild) {
+    PreOrderDfsIterator iter(mir_graph_);
+    BasicBlock* curr_bb = iter.Next();
+    while (curr_bb != NULL) {
+      if (AnalyzeBB(curr_bb)) {
+        store_method_addr_ = true;
+        break;
+      }
+      curr_bb = iter.Next();
+    }
+    if (store_method_addr_) {
+      DCHECK(!cu_->target64);
+      base_of_code_ = mir_graph_->GetNewCompilerTemp(kCompilerTempBackend, false);
+      DCHECK(base_of_code_ != nullptr);
     }
   }
 }
 
+bool X86Mir2Lir::AnalyzeBB(BasicBlock* bb) const {
+  // Ignore dead blocks.
+  if (bb->block_type != kDead) {
+    for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
+      int opcode = mir->dalvikInsn.opcode;
+      if (MIR::DecodedInstruction::IsPseudoMirOp(opcode)) {
+        if (AnalyzeExtendedMIR(opcode, bb, mir)) {
+          return true;
+        }
+      } else {
+        if (AnalyzeMIR(opcode, bb, mir)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
-void X86Mir2Lir::AnalyzeExtendedMIR(int opcode, BasicBlock* bb, MIR* mir) {
+
+bool X86Mir2Lir::AnalyzeExtendedMIR(int opcode, BasicBlock* bb, MIR* mir) const {
   switch (opcode) {
     // Instructions referencing doubles.
     case kMirOpFusedCmplDouble:
     case kMirOpFusedCmpgDouble:
-      AnalyzeFPInstruction(opcode, bb, mir);
-      break;
+      return AnalyzeFPInstruction(opcode, bb, mir);
     case kMirOpConstVector:
-      if (!cu_->target64) {
-        store_method_addr_ = true;
-      }
-      break;
+      return !cu_->target64;
     case kMirOpPackedMultiply:
     case kMirOpPackedShiftLeft:
     case kMirOpPackedSignedShiftRight:
@@ -1011,22 +1012,19 @@ void X86Mir2Lir::AnalyzeExtendedMIR(int opcode, BasicBlock* bb, MIR* mir) {
       if (!cu_->target64) {
         // Byte emulation requires constants from the literal pool.
         OpSize opsize = static_cast<OpSize>(mir->dalvikInsn.vC >> 16);
-        if (opsize == kSignedByte || opsize == kUnsignedByte) {
-          store_method_addr_ = true;
-        }
+        return (opsize == kSignedByte) || (opsize == kUnsignedByte);
       }
-      break;
+      return false;
     default:
       // Ignore the rest.
-      break;
+      return false;
   }
 }
 
-void X86Mir2Lir::AnalyzeMIR(int opcode, BasicBlock* bb, MIR* mir) {
+bool X86Mir2Lir::AnalyzeMIR(int opcode, BasicBlock* bb, MIR* mir) const {
   // Looking for
   // - Do we need a pointer to the code (used for packed switches and double lits)?
   // 64 bit uses RIP addressing instead.
-
   switch (opcode) {
     // Instructions referencing doubles.
     case Instruction::CMPL_DOUBLE:
@@ -1042,34 +1040,33 @@ void X86Mir2Lir::AnalyzeMIR(int opcode, BasicBlock* bb, MIR* mir) {
     case Instruction::MUL_DOUBLE_2ADDR:
     case Instruction::DIV_DOUBLE_2ADDR:
     case Instruction::REM_DOUBLE_2ADDR:
-      AnalyzeFPInstruction(opcode, bb, mir);
-      break;
+      return AnalyzeFPInstruction(opcode, bb, mir);
 
     // Packed switches and array fills need a pointer to the base of the method.
     case Instruction::FILL_ARRAY_DATA:
     case Instruction::PACKED_SWITCH:
-      if (!cu_->target64) {
-        store_method_addr_ = true;
-      }
-      break;
+      return !cu_->target64;
+
     case Instruction::INVOKE_STATIC:
     case Instruction::INVOKE_STATIC_RANGE:
-      AnalyzeInvokeStatic(opcode, bb, mir);
-      break;
+      return AnalyzeInvokeStatic(opcode, bb, mir);
+
     default:
       // Other instructions are not interesting yet.
-      break;
+      return false;
   }
 }
 
-void X86Mir2Lir::AnalyzeFPInstruction(int opcode, BasicBlock* bb, MIR* mir) {
+bool X86Mir2Lir::AnalyzeFPInstruction(int opcode, BasicBlock* bb, MIR* mir) const {
   UNUSED(bb);
   // Look at all the uses, and see if they are double constants.
   uint64_t attrs = MIRGraph::GetDataFlowAttributes(static_cast<Instruction::Code>(opcode));
   int next_sreg = 0;
   if (attrs & DF_UA) {
     if (attrs & DF_A_WIDE) {
-      AnalyzeDoubleUse(mir_graph_->GetSrcWide(mir, next_sreg));
+      if (AnalyzeDoubleUse(mir_graph_->GetSrcWide(mir, next_sreg))) {
+        return true;
+      }
       next_sreg += 2;
     } else {
       next_sreg++;
@@ -1077,7 +1074,9 @@ void X86Mir2Lir::AnalyzeFPInstruction(int opcode, BasicBlock* bb, MIR* mir) {
   }
   if (attrs & DF_UB) {
     if (attrs & DF_B_WIDE) {
-      AnalyzeDoubleUse(mir_graph_->GetSrcWide(mir, next_sreg));
+      if (AnalyzeDoubleUse(mir_graph_->GetSrcWide(mir, next_sreg))) {
+        return true;
+      }
       next_sreg += 2;
     } else {
       next_sreg++;
@@ -1085,16 +1084,17 @@ void X86Mir2Lir::AnalyzeFPInstruction(int opcode, BasicBlock* bb, MIR* mir) {
   }
   if (attrs & DF_UC) {
     if (attrs & DF_C_WIDE) {
-      AnalyzeDoubleUse(mir_graph_->GetSrcWide(mir, next_sreg));
+      if (AnalyzeDoubleUse(mir_graph_->GetSrcWide(mir, next_sreg))) {
+        return true;
+      }
     }
   }
+  return false;
 }
 
-void X86Mir2Lir::AnalyzeDoubleUse(RegLocation use) {
+bool X86Mir2Lir::AnalyzeDoubleUse(RegLocation use) const {
   // If this is a double literal, we will want it in the literal pool on 32b platforms.
-  if (use.is_const && !cu_->target64) {
-    store_method_addr_ = true;
-  }
+  return use.is_const && !cu_->target64;
 }
 
 RegLocation X86Mir2Lir::UpdateLocTyped(RegLocation loc) {
@@ -1125,12 +1125,12 @@ RegLocation X86Mir2Lir::UpdateLocWideTyped(RegLocation loc) {
   return loc;
 }
 
-void X86Mir2Lir::AnalyzeInvokeStatic(int opcode, BasicBlock* bb, MIR* mir) {
+bool X86Mir2Lir::AnalyzeInvokeStatic(int opcode, BasicBlock* bb, MIR* mir) const {
   UNUSED(opcode, bb);
 
   // 64 bit RIP addressing doesn't need store_method_addr_ set.
   if (cu_->target64) {
-    return;
+    return false;
   }
 
   uint32_t index = mir->dalvikInsn.vB;
@@ -1138,16 +1138,8 @@ void X86Mir2Lir::AnalyzeInvokeStatic(int opcode, BasicBlock* bb, MIR* mir) {
   DexFileMethodInliner* method_inliner =
     cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file);
   InlineMethod method;
-  if (method_inliner->IsIntrinsic(index, &method)) {
-    switch (method.opcode) {
-      case kIntrinsicAbsDouble:
-      case kIntrinsicMinMaxDouble:
-        store_method_addr_ = true;
-        break;
-      default:
-        break;
-    }
-  }
+  return method_inliner->IsIntrinsic(index, &method) &&
+    ((method.opcode == kIntrinsicAbsDouble) || (method.opcode == kIntrinsicMinMaxDouble));
 }
 
 LIR* X86Mir2Lir::InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) {

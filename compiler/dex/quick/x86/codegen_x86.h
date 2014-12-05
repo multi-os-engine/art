@@ -900,46 +900,52 @@ class X86Mir2Lir : public Mir2Lir {
   /*
    * @brief Analyze one basic block.
    * @param bb Basic block to analyze.
+   * @returns true if requires a pointer to code.
    */
-  void AnalyzeBB(BasicBlock* bb);
+  bool AnalyzeBB(BasicBlock* bb) const;
 
   /*
    * @brief Analyze one extended MIR instruction
    * @param opcode MIR instruction opcode.
    * @param bb Basic block containing instruction.
    * @param mir Extended instruction to analyze.
+   * @returns true if requires a pointer to code.
    */
-  void AnalyzeExtendedMIR(int opcode, BasicBlock* bb, MIR* mir);
+  bool AnalyzeExtendedMIR(int opcode, BasicBlock* bb, MIR* mir) const;
 
   /*
    * @brief Analyze one MIR instruction
    * @param opcode MIR instruction opcode.
    * @param bb Basic block containing instruction.
    * @param mir Instruction to analyze.
+   * @returns true if requires a pointer to code.
    */
-  virtual void AnalyzeMIR(int opcode, BasicBlock* bb, MIR* mir);
+  virtual bool AnalyzeMIR(int opcode, BasicBlock* bb, MIR* mir) const;
 
   /*
    * @brief Analyze one MIR float/double instruction
    * @param opcode MIR instruction opcode.
    * @param bb Basic block containing instruction.
    * @param mir Instruction to analyze.
+   * @returns true if requires a pointer to code.
    */
-  virtual void AnalyzeFPInstruction(int opcode, BasicBlock* bb, MIR* mir);
+  virtual bool AnalyzeFPInstruction(int opcode, BasicBlock* bb, MIR* mir) const;
 
   /*
    * @brief Analyze one use of a double operand.
    * @param rl_use Double RegLocation for the operand.
+   * @returns true if requires a pointer to code.
    */
-  void AnalyzeDoubleUse(RegLocation rl_use);
+  bool AnalyzeDoubleUse(RegLocation rl_use) const;
 
   /*
    * @brief Analyze one invoke-static MIR instruction
    * @param opcode MIR instruction opcode.
    * @param bb Basic block containing instruction.
    * @param mir Instruction to analyze.
+   * @returns true if requires a pointer to code.
    */
-  void AnalyzeInvokeStatic(int opcode, BasicBlock* bb, MIR* mir);
+  bool AnalyzeInvokeStatic(int opcode, BasicBlock* bb, MIR* mir) const;
 
   // Information derived from analysis of MIR
 
