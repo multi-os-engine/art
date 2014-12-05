@@ -1601,20 +1601,21 @@ const OatFile* ClassLinker::FindOatFileFromOatLocation(const std::string& oat_lo
                        error_msg);
 }
 
-static void InitFromImageInterpretOnlyCallback(mirror::Object* obj, void* arg)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+void ClassLinker::InitFromImageInterpretOnlyCallback(mirror::Object* obj, void* arg) {
   ClassLinker* class_linker = reinterpret_cast<ClassLinker*>(arg);
-
   DCHECK(obj != nullptr);
   DCHECK(class_linker != nullptr);
+  size_t pointer_size = class_linker->image_pointer_size_;
 
   if (obj->IsArtMethod()) {
     mirror::ArtMethod* method = obj->AsArtMethod();
     if (!method->IsNative()) {
-      method->SetEntryPointFromInterpreter(artInterpreterToInterpreterBridge);
+      method->SetEntryPointFromInterpreterPtrSize(artInterpreterToInterpreterBridge, pointer_size);
       if (method != Runtime::Current()->GetResolutionMethod()) {
-        method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
-        method->SetEntryPointFromPortableCompiledCode(GetPortableToInterpreterBridge());
+        method->SetEntryPointFromQuickCompiledCodePtrSize(GetQuickToInterpreterBridge(),
+                                                          pointer_size);
+        method->SetEntryPointFromPortableCompiledCodePtrSize(GetPortableToInterpreterBridge(),
+                                                             pointer_size);
       }
     }
   }
