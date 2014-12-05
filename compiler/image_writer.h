@@ -18,6 +18,7 @@
 #define ART_COMPILER_IMAGE_WRITER_H_
 
 #include <stdint.h>
+#include <valgrind.h>
 
 #include <cstddef>
 #include <memory>
@@ -56,7 +57,11 @@ class ImageWriter FINAL {
     CHECK_NE(image_begin, 0U);
   }
 
-  ~ImageWriter() {}
+  ~ImageWriter() {
+    if (RUNNING_ON_VALGRIND != 0) {
+      FreeStringDataArray();
+    }
+  }
 
   bool PrepareImageAddressSpace();
 
@@ -254,6 +259,9 @@ class ImageWriter FINAL {
   // Calculate the sum total of the bin slot sizes in [0, up_to). Defaults to all bins.
   size_t GetBinSizeSum(Bin up_to = kBinSize) const;
 
+  // Release the string_data_array_.
+  void FreeStringDataArray();
+
   const CompilerDriver& compiler_driver_;
 
   // Beginning target image address for the output image.
@@ -305,6 +313,8 @@ class ImageWriter FINAL {
   // Bin slot tracking for dirty object packing
   size_t bin_slot_sizes_[kBinSize];  // Number of bytes in a bin
   size_t bin_slot_count_[kBinSize];  // Number of objects in a bin
+
+  void* string_data_array_;  // The backing for the interned strings.
 
   friend class FixupVisitor;
   friend class FixupClassVisitor;
