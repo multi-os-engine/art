@@ -419,7 +419,7 @@ ENTRY art_quick_invoke_stub_internal
     ldm    ip, {r1-r3}                     @ copy r1 - r3
 
 #ifdef ARM_R4_SUSPEND_FLAG
-    mov    r4, #SUSPEND_CHECK_INTERVAL     @ reset r4 to suspend check interval
+    ldr    r4, =SUSPEND_CHECK_INTERVAL     @ reset r4 to suspend check interval
 #endif
 
     ldr    ip, [r0, #MIRROR_ART_METHOD_QUICK_CODE_OFFSET_32]  @ get pointer to the code
@@ -854,7 +854,7 @@ GENERATE_ALL_ALLOC_ENTRYPOINTS
 ENTRY art_quick_test_suspend
 #ifdef ARM_R4_SUSPEND_FLAG
     ldrh   r0, [rSELF, #THREAD_FLAGS_OFFSET]
-    mov    rSUSPEND, #SUSPEND_CHECK_INTERVAL  @ reset rSUSPEND to SUSPEND_CHECK_INTERVAL
+    ldr    rSUSPEND, =SUSPEND_CHECK_INTERVAL  @ reset r4 to suspend check interval
     cbnz   r0, 1f                             @ check Thread::Current()->suspend_count_ == 0
     bx     lr                                 @ return if suspend_count_ == 0
 1:

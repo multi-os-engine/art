@@ -40,7 +40,7 @@ ENTRY art_portable_invoke_stub
     .cfi_def_cfa_register r11
     @.movsp r11
     mov    r9, r3                          @ move managed thread pointer into r9
-    mov    r4, #SUSPEND_CHECK_INTERVAL     @ reset r4 to suspend check interval
+    ldr    r4, =SUSPEND_CHECK_INTERVAL     @ reset r4 to suspend check interval
     add    r5, r2, #16                     @ create space for method pointer in frame
     and    r5, #0xFFFFFFF0                 @ align frame size to 16 bytes
     sub    sp, r5                          @ reserve stack space for argument array
