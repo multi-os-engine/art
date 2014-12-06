@@ -48,8 +48,8 @@
     stp d12, d13, [sp, #40]
     stp d14, d15, [sp, #56]
 
-    // Reserved registers
-    stp xSELF, xSUSPEND, [sp, #72]
+    // Reserved register, first callee-save.
+    stp xSELF, x19, [sp, #72]
     .cfi_rel_offset x18, 72
     .cfi_rel_offset x19, 80
 
@@ -99,38 +99,39 @@
     THIS_LOAD_REQUIRES_READ_BARRIER
     ldr xIP0, [xIP0, RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET ]
 
-    sub sp, sp, #96
-    .cfi_adjust_cfa_offset 96
+    sub sp, sp, #112               // 112 for 13 * 8 and alignment.
+    .cfi_adjust_cfa_offset 112
 
     // Ugly compile-time check, but we only have the preprocessor.
-#if (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE != 96)
+#if (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE != 112)
 #error "REFS_ONLY_CALLEE_SAVE_FRAME(ARM64) size not as expected."
 #endif
 
     // Callee-saves
-    stp x20, x21,  [sp, #8]
-    .cfi_rel_offset x20, 8
-    .cfi_rel_offset x21, 16
+    stp x19, x20,  [sp, #8]
+    .cfi_rel_offset x19, 8
+    .cfi_rel_offset x20, 16
 
-    stp x22, x23, [sp, #24]
-    .cfi_rel_offset x22, 24
-    .cfi_rel_offset x23, 32
+    stp x21, x22, [sp, #24]
+    .cfi_rel_offset x21, 24
+    .cfi_rel_offset x22, 32
 
-    stp x24, x25, [sp, #40]
-    .cfi_rel_offset x24, 40
-    .cfi_rel_offset x25, 48
+    stp x23, x24, [sp, #40]
+    .cfi_rel_offset x23, 40
+    .cfi_rel_offset x24, 48
 
-    stp x26, x27, [sp, #56]
-    .cfi_rel_offset x26, 56
-    .cfi_rel_offset x27, 64
+    stp x25, x26, [sp, #56]
+    .cfi_rel_offset x25, 56
+    .cfi_rel_offset x26, 64
 
-    stp x28, x29, [sp, #72]
-    .cfi_rel_offset x28, 72
-    .cfi_rel_offset x29, 80
+    stp x27, x28, [sp, #72]
+    .cfi_rel_offset x27, 72
+    .cfi_rel_offset x28, 80
 
     // LR
-    str xLR, [sp, #88]
-    .cfi_rel_offset x30, 88
+    stp x29, xLR, [sp, #88]
+    .cfi_rel_offset x29, 88
+    .cfi_rel_offset x30, 96
 
     // Save xSELF to xETR.
     mov xETR, xSELF
@@ -148,32 +149,38 @@
     mov xSELF, xETR
 
     // Callee-saves
-    ldp x20, x21,  [sp, #8]
+    ldp x19, x20,  [sp, #8]
+    .cfi_restore x19
     .cfi_restore x20
+
+    ldp x21, x22, [sp, #24]
     .cfi_restore x21
-
-    ldp x22, x23, [sp, #24]
     .cfi_restore x22
+
+    ldp x23, x24, [sp, #40]
     .cfi_restore x23
-
-    ldp x24, x25, [sp, #40]
     .cfi_restore x24
+
+    ldp x25, x26, [sp, #56]
     .cfi_restore x25
-
-    ldp x26, x27, [sp, #56]
     .cfi_restore x26
-    .cfi_restore x27
 
-    ldp x28, x29, [sp, #72]
+    ldp x27, x28, [sp, #72]
+    .cfi_restore x27
     .cfi_restore x28
-    .cfi_restore x29
 
     // LR
-    ldr xLR, [sp, #88]
+    ldp x29, xLR, [sp, #88]
+    .cfi_restore x29
     .cfi_restore x30
 
-    add sp, sp, #96
-    .cfi_adjust_cfa_offset -96
+    add sp, sp, #112
+    .cfi_adjust_cfa_offset -112
+
+    // Ugly compile-time check, but we only have the preprocessor.
+#if (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE != 112)
+#error "REFS_ONLY_CALLEE_SAVE_FRAME(ARM64) size not as expected."
+#endif
 .endm
 
 .macro POP_REFS_ONLY_CALLEE_SAVE_FRAME
@@ -183,8 +190,13 @@
     ldr xETR, [sp, #16]
     .cfi_restore x21
 
-    add sp, sp, #96
-    .cfi_adjust_cfa_offset -96
+    add sp, sp, #112
+    .cfi_adjust_cfa_offset -112
+
+    // Ugly compile-time check, but we only have the preprocessor.
+#if (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE != 112)
+#error "REFS_ONLY_CALLEE_SAVE_FRAME(ARM64) size not as expected."
+#endif
 .endm
 
 .macro RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
@@ -194,57 +206,62 @@
 
 
 .macro SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_INTERNAL
-    sub sp, sp, #224
-    .cfi_adjust_cfa_offset 224
+    #define BASE 8
+
+    sub sp, sp, # BASE + 13*16 + 8
+    .cfi_adjust_cfa_offset BASE + 13*16 + 8
 
     // Ugly compile-time check, but we only have the preprocessor.
-#if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != 224)
+#if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != BASE + 13*16 + 8)
 #error "REFS_AND_ARGS_CALLEE_SAVE_FRAME(ARM64) size not as expected."
 #endif
 
     // FP args
-    stp d0, d1, [sp, #16]
-    stp d2, d3, [sp, #32]
-    stp d4, d5, [sp, #48]
-    stp d6, d7, [sp, #64]
+    stp d0, d1, [sp, # BASE ]
+    stp d2, d3, [sp, # BASE + 16 ]
+    stp d4, d5, [sp, # BASE + 2*16 ]
+    stp d6, d7, [sp, # BASE + 3*16 ]
 
-    // args and x20(callee-save)
-    stp x1,  x2, [sp, #80]
-    .cfi_rel_offset x1, 80
-    .cfi_rel_offset x2, 88
+    // args and x19(callee-save)
+    stp x1,  x2, [sp, # BASE + 4*16 ]
+    .cfi_rel_offset x1, 72
+    .cfi_rel_offset x2, 80
 
-    stp x3,  x4, [sp, #96]
-    .cfi_rel_offset x3, 96
-    .cfi_rel_offset x4, 104
+    stp x3,  x4, [sp, # BASE + 5*16 ]
+    .cfi_rel_offset x3, 88
+    .cfi_rel_offset x4, 96
 
-    stp x5,  x6, [sp, #112]
-    .cfi_rel_offset x5, 112
-    .cfi_rel_offset x6, 120
+    stp x5,  x6, [sp, # BASE + 6*16 ]
+    .cfi_rel_offset x5, 104
+    .cfi_rel_offset x6, 112
 
-    stp x7, x20, [sp, #128]
-    .cfi_rel_offset x7, 128
-    .cfi_rel_offset x20, 136
+    stp x7, x19, [sp, # BASE + 7*16 ]
+    .cfi_rel_offset x7, 120
+    .cfi_rel_offset x19, 128
 
     // Callee-saves.
-    stp x21, x22, [sp, #144]
+    stp x20, x21, [sp, # BASE + 8*16 ]
+    .cfi_rel_offset x20, 136
     .cfi_rel_offset x21, 144
+
+    stp x22, x23, [sp, # BASE + 9*16 ]
     .cfi_rel_offset x22, 152
-
-    stp x23, x24, [sp, #160]
     .cfi_rel_offset x23, 160
+
+    stp x24, x25, [sp, # BASE + 10*16 ]
     .cfi_rel_offset x24, 168
-
-    stp x25, x26, [sp, #176]
     .cfi_rel_offset x25, 176
+
+    stp x26, x27, [sp, # BASE + 11*16 ]
     .cfi_rel_offset x26, 184
-
-    stp x27, x28, [sp, #192]
     .cfi_rel_offset x27, 192
-    .cfi_rel_offset x28, 200
 
-    // x29(callee-save) and LR
-    stp x29, xLR, [sp, #208]
+    stp x28, x29, [sp, # BASE + 12*16 ]
+    .cfi_rel_offset x28, 200
     .cfi_rel_offset x29, 208
+
+    // LR
+    str xLR, [sp, # BASE + 13*16 ]
     .cfi_rel_offset x30, 216
 
     // Save xSELF to xETR.
@@ -289,53 +306,61 @@
     // Restore xSELF.
     mov xSELF, xETR
 
+    #define BASE 8
     // FP args
-    ldp d0, d1, [sp, #16]
-    ldp d2, d3, [sp, #32]
-    ldp d4, d5, [sp, #48]
-    ldp d6, d7, [sp, #64]
+    ldp d0, d1, [sp, # BASE ]
+    ldp d2, d3, [sp, # BASE + 16 ]
+    ldp d4, d5, [sp, # BASE + 2*16 ]
+    ldp d6, d7, [sp, # BASE + 3*16 ]
 
     // args and x20(callee-save)
-    ldp x1,  x2, [sp, #80]
+    ldp x1,  x2, [sp, # BASE + 4*16 ]
     .cfi_restore x1
     .cfi_restore x2
 
-    ldp x3,  x4, [sp, #96]
+    ldp x3,  x4, [sp, # BASE + 5*16 ]
     .cfi_restore x3
     .cfi_restore x4
 
-    ldp x5,  x6, [sp, #112]
+    ldp x5,  x6, [sp, # BASE + 6*16 ]
     .cfi_restore x5
     .cfi_restore x6
 
-    ldp x7, x20, [sp, #128]
+    ldp x7, x19, [sp, # BASE + 7*16 ]
     .cfi_restore x7
-    .cfi_restore x20
+    .cfi_restore x19
 
     // Callee-saves.
-    ldp x21, x22, [sp, #144]
+    ldp x20, x21, [sp, # BASE + 8*16 ]
+    .cfi_restore x20
     .cfi_restore x21
+
+    ldp x22, x23, [sp, # BASE + 9*16 ]
     .cfi_restore x22
-
-    ldp x23, x24, [sp, #160]
     .cfi_restore x23
+
+    ldp x24, x25, [sp, # BASE + 10*16 ]
     .cfi_restore x24
-
-    ldp x25, x26, [sp, #176]
     .cfi_restore x25
-    .cfi_restore x26
 
-    ldp x27, x28, [sp, #192]
+    ldp x26, x27, [sp, # BASE + 11*16 ]
+    .cfi_restore x26
     .cfi_restore x27
+
+    ldp x28, x29, [sp, # BASE + 12*16 ]
     .cfi_restore x28
+    .cfi_restore x29
 
     // x29(callee-save) and LR
-    ldp x29, xLR, [sp, #208]
-    .cfi_restore x29
+    ldr xLR, [sp, # BASE + 13*16 ]
     .cfi_restore x30
 
-    add sp, sp, #224
-    .cfi_adjust_cfa_offset -224
+    add sp, sp, # BASE + 13*16 + 8
+    .cfi_adjust_cfa_offset -BASE - 13*16 - 8
+    // Ugly compile-time check, but we only have the preprocessor.
+#if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != BASE + 13*16 + 8)
+#error "REFS_AND_ARGS_CALLEE_SAVE_FRAME(ARM64) size not as expected."
+#endif
 .endm
 
 .macro RETURN_IF_RESULT_IS_ZERO
@@ -499,7 +524,7 @@ INVOKE_TRAMPOLINE art_quick_invoke_virtual_trampoline_with_access_check, artInvo
 
 .macro INVOKE_STUB_CREATE_FRAME
 
-SAVE_SIZE=6*8   // x4, x5, xSUSPEND, SP, LR & FP saved.
+SAVE_SIZE=5*8   // x4, x5, SP, LR & FP saved.
 SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
 
 
@@ -515,9 +540,8 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
     .cfi_def_cfa_register x10              // before this.
     .cfi_adjust_cfa_offset SAVE_SIZE
 
-    stp x9, xSUSPEND, [x10, #32]           // Save old stack pointer and xSUSPEND
+    str x9, [x10, #32]                     // Save old stack pointer.
     .cfi_rel_offset sp, 32
-    .cfi_rel_offset x19, 40
 
     stp x4, x5, [x10, #16]                 // Save result and shorty addresses.
     .cfi_rel_offset x4, 16
@@ -530,7 +554,6 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
     mov xFP, x10                           // Use xFP now, as it's callee-saved.
     .cfi_def_cfa_register x29
     mov xSELF, x3                          // Move thread pointer into SELF register.
-    mov wSUSPEND, #SUSPEND_CHECK_INTERVAL  // reset wSUSPEND to suspend check interval
 
     // Copy arguments into stack frame.
     // Use simple copy routine for now.
@@ -596,8 +619,7 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+STACK_REFERENCE_SIZE
     str x0, [x4]
 
 .Lexit_art_quick_invoke_stub\@:
-    ldp x2, xSUSPEND, [xFP, #32]   // Restore stack pointer and xSUSPEND.
-    .cfi_restore x19
+    ldr x2, [xFP, #32]     // Restore stack pointer.
     mov sp, x2
     .cfi_restore sp
 
@@ -1318,7 +1340,6 @@ GENERATE_ALL_ALLOC_ENTRYPOINTS
     .extern artTestSuspendFromCode
 ENTRY art_quick_test_suspend
     ldrh   w0, [xSELF, #THREAD_FLAGS_OFFSET]  // get xSELF->state_and_flags.as_struct.flags
-    mov    wSUSPEND, #SUSPEND_CHECK_INTERVAL  // reset wSUSPEND to SUSPEND_CHECK_INTERVAL
     cbnz   w0, .Lneed_suspend                 // check flags == 0
     ret                                       // return if flags == 0
 .Lneed_suspend:

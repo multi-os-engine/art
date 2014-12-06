@@ -18,6 +18,8 @@
 
 #include "asm_support_arm64.h"
 #include "base/logging.h"
+#include "base/macros.h"
+#include "quick_method_frame_info_arm64.h"
 
 namespace art {
 
@@ -31,5 +33,23 @@ void Thread::InitCpu() {
 void Thread::CleanupCpu() {
   // Do nothing.
 }
+
+// Misuse this file to statically check the assembly routine sizes against the C-level sizes.
+
+namespace {
+
+static_assert(FRAME_SIZE_SAVE_ALL_CALLEE_SAVE == arm64::Arm64CalleeSaveFrameSize(Runtime::kSaveAll),
+              "Unexpected size for save-all runtime method frame size");
+
+static_assert(FRAME_SIZE_REFS_ONLY_CALLEE_SAVE ==
+                  arm64::Arm64CalleeSaveFrameSize(Runtime::kRefsOnly),
+              "Unexpected size for refs-ony runtime method frame size");
+
+static_assert(FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE ==
+                  arm64::Arm64CalleeSaveFrameSize(Runtime::kRefsAndArgs),
+              "Unexpected size " STRINGIFY(FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE) " for refs-and-args runtime method frame size");
+
+}  // namespace
+
 
 }  // namespace art
