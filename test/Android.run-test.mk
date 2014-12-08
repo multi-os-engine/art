@@ -297,32 +297,7 @@ endif
 TEST_ART_BROKEN_DEFAULT_RUN_TESTS :=
 
 # Known broken tests for the arm64 optimizing compiler backend.
-TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS := \
-  003-omnibus-opcodes \
-  004-ReferenceMap \
-  005-annotations \
-  009-instanceof \
-  010-instance \
-  023-many-interfaces \
-  044-proxy \
-  045-reflect-array \
-  046-reflect \
-  047-returns \
-  062-character-encodings \
-  063-process-manager \
-  068-classloader \
-  069-field-type \
-  071-dexfile \
-  106-exceptions2 \
-  107-int-math2 \
-  201-built-in-exception-detail-messages \
-  407-arrays \
-  412-new-array \
-  422-instanceof \
-  424-checkcast \
-  427-bounds \
-  430-live-register-slow-path \
-  800-smali \
+TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS :=
 
 ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
   ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUILD_TYPES), \
