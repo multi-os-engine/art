@@ -453,12 +453,7 @@ void CodeGeneratorX86_64::SetupBlockedRegisters() const {
   blocked_core_registers_[TMP] = true;
 
   // TODO: We currently don't use Quick's callee saved registers.
-  blocked_core_registers_[RBX] = true;
   blocked_core_registers_[RBP] = true;
-  blocked_core_registers_[R12] = true;
-  blocked_core_registers_[R13] = true;
-  blocked_core_registers_[R14] = true;
-  blocked_core_registers_[R15] = true;
 
   blocked_fpu_registers_[XMM12] = true;
   blocked_fpu_registers_[XMM13] = true;
@@ -2210,7 +2205,7 @@ void InstructionCodeGeneratorX86_64::HandleShift(HBinaryOperation* op) {
           __ shrl(first_reg, second_reg);
         }
       } else {
-        Immediate imm(second.GetConstant()->AsIntConstant()->GetValue());
+        Immediate imm(second.GetConstant()->AsIntConstant()->GetValue() & kMaxIntShiftValue);
         if (op->IsShl()) {
           __ shll(first_reg, imm);
         } else if (op->IsShr()) {
@@ -2232,7 +2227,7 @@ void InstructionCodeGeneratorX86_64::HandleShift(HBinaryOperation* op) {
           __ shrq(first_reg, second_reg);
         }
       } else {
-        Immediate imm(second.GetConstant()->AsIntConstant()->GetValue());
+        Immediate imm(second.GetConstant()->AsIntConstant()->GetValue() & kMaxLongShiftValue);
         if (op->IsShl()) {
           __ shlq(first_reg, imm);
         } else if (op->IsShr()) {

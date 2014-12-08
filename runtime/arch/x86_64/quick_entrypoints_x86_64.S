@@ -487,14 +487,19 @@ DEFINE_FUNCTION art_quick_invoke_stub
     PUSH rbp                      // Save rbp.
     PUSH r8                       // Save r8/result*.
     PUSH r9                       // Save r9/shorty*.
+    PUSH rbx                       // Save r9/shorty*.
+    PUSH r12                       // Save r9/shorty*.
+    PUSH r13                       // Save r9/shorty*.
+    PUSH r14                       // Save r9/shorty*.
+    PUSH r15                       // Save r9/shorty*.
     movq %rsp, %rbp               // Copy value of stack pointer into base pointer.
     CFI_DEF_CFA_REGISTER(rbp)
 
     movl %edx, %r10d
-    addl LITERAL(60), %edx        // Reserve space for return addr, StackReference<method>, rbp,
+    addl LITERAL(100), %edx        // Reserve space for return addr, StackReference<method>, rbp,
                                   // r8 and r9 in frame.
     andl LITERAL(0xFFFFFFF0), %edx    // Align frame size to 16 bytes.
-    subl LITERAL(32), %edx        // Remove space for return address, rbp, r8 and r9.
+    subl LITERAL(72), %edx        // Remove space for return address, rbp, r8 and r9.
     subq %rdx, %rsp               // Reserve stack space for argument array.
 
 #if (STACK_REFERENCE_SIZE != 4)
@@ -521,6 +526,11 @@ DEFINE_FUNCTION art_quick_invoke_stub
     call *MIRROR_ART_METHOD_QUICK_CODE_OFFSET_64(%rdi) // Call the method.
     movq %rbp, %rsp               // Restore stack pointer.
     CFI_DEF_CFA_REGISTER(rsp)
+    POP r15                        // Pop r9 - shorty*.
+    POP r14                        // Pop r9 - shorty*.
+    POP r13                        // Pop r9 - shorty*.
+    POP r12                        // Pop r9 - shorty*.
+    POP rbx                        // Pop r9 - shorty*.
     POP r9                        // Pop r9 - shorty*.
     POP r8                        // Pop r8 - result*.
     POP rbp                       // Pop rbp
@@ -571,14 +581,19 @@ DEFINE_FUNCTION art_quick_invoke_static_stub
     PUSH rbp                      // Save rbp.
     PUSH r8                       // Save r8/result*.
     PUSH r9                       // Save r9/shorty*.
+    PUSH rbx                       // Save r9/shorty*.
+    PUSH r12                       // Save r9/shorty*.
+    PUSH r13                       // Save r9/shorty*.
+    PUSH r14                       // Save r9/shorty*.
+    PUSH r15                       // Save r9/shorty*.
     movq %rsp, %rbp               // Copy value of stack pointer into base pointer.
     CFI_DEF_CFA_REGISTER(rbp)
 
     movl %edx, %r10d
-    addl LITERAL(60), %edx        // Reserve space for return addr, StackReference<method>, rbp,
+    addl LITERAL(100), %edx        // Reserve space for return addr, StackReference<method>, rbp,
                                   // r8 and r9 in frame.
     andl LITERAL(0xFFFFFFF0), %edx    // Align frame size to 16 bytes.
-    subl LITERAL(32), %edx        // Remove space for return address, rbp, r8 and r9.
+    subl LITERAL(72), %edx        // Remove space for return address, rbp, r8 and r9.
     subq %rdx, %rsp               // Reserve stack space for argument array.
 
 #if (STACK_REFERENCE_SIZE != 4)
@@ -604,6 +619,11 @@ DEFINE_FUNCTION art_quick_invoke_static_stub
     call *MIRROR_ART_METHOD_QUICK_CODE_OFFSET_64(%rdi) // Call the method.
     movq %rbp, %rsp               // Restore stack pointer.
     CFI_DEF_CFA_REGISTER(rsp)
+    POP r15                        // Pop r9 - shorty*.
+    POP r14                        // Pop r9 - shorty*.
+    POP r13                        // Pop r9 - shorty*.
+    POP r12                        // Pop r9 - shorty*.
+    POP rbx                        // Pop r9 - shorty*.
     POP r9                        // Pop r9 - shorty*.
     POP r8                        // Pop r8 - result*.
     POP rbp                       // Pop rbp
