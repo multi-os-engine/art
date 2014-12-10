@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 public class Main {
@@ -36,6 +37,8 @@ public class Main {
     } else if (!hasImage && isBootClassPathOnDisk) {
       throw new Error("Image with dex2oat enabled runs without an image file");
     }
+
+    testB18485243();
   }
 
   static {
@@ -66,5 +69,23 @@ public class Main {
     public static boolean isBootClassPathOnDisk(String instructionSet) throws Exception {
       return (boolean) isBootClassPathOnDiskMethod.invoke(null, instructionSet);
     }
+  }
+
+  private static void testB18485243() throws Exception {
+      Class<?> k = Class.forName("B18485243");
+      System.out.println(k);
+      Object o = k.newInstance();
+      System.out.println(o);
+      Method m = k.getDeclaredMethod("run");
+      System.out.println(m);
+      try {
+          m.invoke(o);
+      } catch (InvocationTargetException e) {
+          Throwable actual = e.getTargetException();
+          System.out.println(actual);
+          if (!(actual instanceof IncompatibleClassChangeError)) {
+              throw new AssertionError("Expected IncompatibleClassChangeError", actual);
+          }
+      }
   }
 }
