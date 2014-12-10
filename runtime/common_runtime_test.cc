@@ -98,7 +98,8 @@ void ScratchFile::Unlink() {
 }
 
 CommonRuntimeTest::CommonRuntimeTest() {}
-CommonRuntimeTest::~CommonRuntimeTest() {}
+CommonRuntimeTest::~CommonRuntimeTest() {
+}
 
 void CommonRuntimeTest::SetUpAndroidRoot() {
   if (IsHost()) {
