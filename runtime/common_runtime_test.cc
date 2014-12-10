@@ -98,7 +98,11 @@ void ScratchFile::Unlink() {
 }
 
 CommonRuntimeTest::CommonRuntimeTest() {}
-CommonRuntimeTest::~CommonRuntimeTest() {}
+CommonRuntimeTest::~CommonRuntimeTest() {
+  // Delete runtime before compiler callbacks incase verification is run during shutdown.
+  runtime_.reset();
+  callbacks_.reset();
+}
 
 void CommonRuntimeTest::SetUpAndroidRoot() {
   if (IsHost()) {
