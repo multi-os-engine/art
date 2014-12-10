@@ -129,6 +129,19 @@ void Mir2Lir::NopLIR(LIR* lir) {
   }
 }
 
+/*
+ * Get the LIR which emits the instruction preceding the given LIR.
+ * Returns nullptr, if the given LIR is the first emitting insn.
+ */
+LIR* Mir2Lir::GetPrevEmittingLIR(LIR* lir) {
+  DCHECK(lir != nullptr);
+  LIR* prev_lir = lir->prev;
+  while ((prev_lir != nullptr) && !prev_lir->flags.is_nop && IsPseudoLirOp(prev_lir->opcode)) {
+    prev_lir = prev_lir->prev;
+  }
+  return prev_lir;
+}
+
 void Mir2Lir::SetMemRefType(LIR* lir, bool is_load, int mem_type) {
   DCHECK(GetTargetInstFlags(lir->opcode) & (IS_LOAD | IS_STORE));
   DCHECK(!lir->flags.use_def_invalid);

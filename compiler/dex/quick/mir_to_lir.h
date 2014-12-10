@@ -665,6 +665,7 @@ class Mir2Lir : public Backend {
     void DumpPackedSwitchTable(const uint16_t* table);
     void MarkBoundary(DexOffset offset, const char* inst_str);
     void NopLIR(LIR* lir);
+    LIR* GetPrevEmittingLIR(LIR* lir);
     void UnlinkLIR(LIR* lir);
     bool IsInexpensiveConstant(RegLocation rl_src);
     ConditionCode FlipComparisonOrder(ConditionCode before);

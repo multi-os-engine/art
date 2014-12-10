@@ -1002,7 +1002,11 @@ void Arm64Mir2Lir::AssembleLIR() {
               ->NeedFixCortexA53_835769()) {
             // Check that this is a 64-bit multiply-accumulate.
             if (IS_WIDE(lir->opcode)) {
-              uint64_t prev_insn_flags = EncodingMap[UNWIDE(lir->prev->opcode)].flags;
+              LIR* prev_insn = GetPrevEmittingLIR(lir);
+              if (prev_insn == nullptr) {
+                break;
+              }
+              uint64_t prev_insn_flags = EncodingMap[UNWIDE(prev_insn->opcode)].flags;
               // Check that the instruction preceding the multiply-accumulate is a load or store.
               if ((prev_insn_flags & IS_LOAD) != 0 || (prev_insn_flags & IS_STORE) != 0) {
                 // insert a NOP between the load/store and the multiply-accumulate.
