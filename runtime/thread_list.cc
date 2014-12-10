@@ -148,16 +148,18 @@ class DumpCheckpoint FINAL : public Closure {
     // Note thread and self may not be equal if thread was already suspended at the point of the
     // request.
     Thread* self = Thread::Current();
-    std::ostringstream local_os;
-    {
-      ScopedObjectAccess soa(self);
-      thread->Dump(local_os);
-    }
-    local_os << "\n";
-    {
-      // Use the logging lock to ensure serialization when writing to the common ostream.
-      MutexLock mu(self, *Locks::logging_lock_);
-      *os_ << local_os.str();
+    if (self != nullptr) {
+      std::ostringstream local_os;
+      {
+        ScopedObjectAccess soa(self);
+        thread->Dump(local_os);
+      }
+      local_os << "\n";
+      {
+        // Use the logging lock to ensure serialization when writing to the common ostream.
+        MutexLock mu(self, *Locks::logging_lock_);
+        *os_ << local_os.str();
+      }
     }
     barrier_.Pass(self);
   }
