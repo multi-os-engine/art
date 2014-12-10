@@ -85,12 +85,17 @@ class VerifiedMethod {
   void GenerateDevirtMap(verifier::MethodVerifier* method_verifier)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Generate dequickening map into dequicken_map_.
+  void GenerateDeQuickenMap(verifier::MethodVerifier* method_verifier)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Generate safe case set into safe_cast_set_.
   void GenerateSafeCastSet(verifier::MethodVerifier* method_verifier)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   std::vector<uint8_t> dex_gc_map_;
   DevirtualizationMap devirt_map_;
+  DevirtualizationMap dequicken_map_;
   SafeCastSet safe_cast_set_;
 };
 
