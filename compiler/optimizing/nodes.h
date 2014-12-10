@@ -2111,16 +2111,20 @@ class HInstanceFieldGet : public HExpression<1> {
  public:
   HInstanceFieldGet(HInstruction* value,
                     Primitive::Type field_type,
-                    MemberOffset field_offset)
+                    MemberOffset field_offset,
+                    bool is_volatile)
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type) {
+        field_info_(field_offset, field_type),
+        is_volatile_(is_volatile) {
     SetRawInputAt(0, value);
   }
 
-  virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const {
-    size_t other_offset = other->AsInstanceFieldGet()->GetFieldOffset().SizeValue();
-    return other_offset == GetFieldOffset().SizeValue();
+  bool CanBeMoved() const OVERRIDE { return true; }
+
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    HInstanceFieldGet* other_get = other->AsInstanceFieldGet();
+    return (GetFieldOffset().SizeValue() == other_get->GetFieldOffset().SizeValue())
+        && (is_volatile_ == other_get->is_volatile_);
   }
 
   virtual size_t ComputeHashCode() const {
@@ -2130,10 +2134,13 @@ class HInstanceFieldGet : public HExpression<1> {
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
 
+  bool IsVolatile() const { return is_volatile_; }
+
   DECLARE_INSTRUCTION(InstanceFieldGet);
 
  private:
   const FieldInfo field_info_;
+  const bool is_volatile_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldGet);
 };
@@ -2143,11 +2150,19 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
   HInstanceFieldSet(HInstruction* object,
                     HInstruction* value,
                     Primitive::Type field_type,
-                    MemberOffset field_offset)
+                    MemberOffset field_offset,
+                    bool is_volatile)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type) {
+        field_info_(field_offset, field_type),
+        is_volatile_(is_volatile) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, value);
+  }
+
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    HInstanceFieldSet* other_set = other->AsInstanceFieldSet();
+    return (GetFieldOffset().SizeValue() == other_set->GetFieldOffset().SizeValue())
+        && (is_volatile_ == other_set->is_volatile_);
   }
 
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
@@ -2155,10 +2170,13 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 
   HInstruction* GetValue() const { return InputAt(1); }
 
+  bool IsVolatile() const { return is_volatile_; }
+
   DECLARE_INSTRUCTION(InstanceFieldSet);
 
  private:
   const FieldInfo field_info_;
+  const bool is_volatile_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldSet);
 };
@@ -2464,16 +2482,20 @@ class HStaticFieldGet : public HExpression<1> {
  public:
   HStaticFieldGet(HInstruction* cls,
                   Primitive::Type field_type,
-                  MemberOffset field_offset)
+                  MemberOffset field_offset,
+                  bool is_volatile)
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type) {
+        field_info_(field_offset, field_type),
+        is_volatile_(is_volatile) {
     SetRawInputAt(0, cls);
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
+
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    size_t other_offset = other->AsStaticFieldGet()->GetFieldOffset().SizeValue();
-    return other_offset == GetFieldOffset().SizeValue();
+    HStaticFieldGet* other_get = other->AsStaticFieldGet();
+    return (GetFieldOffset().SizeValue() == other_get->GetFieldOffset().SizeValue())
+        && (is_volatile_ == other_get->is_volatile_);
   }
 
   size_t ComputeHashCode() const OVERRIDE {
@@ -2483,10 +2505,13 @@ class HStaticFieldGet : public HExpression<1> {
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
 
+  bool IsVolatile() const { return is_volatile_; }
+
   DECLARE_INSTRUCTION(StaticFieldGet);
 
  private:
   const FieldInfo field_info_;
+  const bool is_volatile_;
 
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldGet);
 };
@@ -2496,11 +2521,19 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
   HStaticFieldSet(HInstruction* cls,
                   HInstruction* value,
                   Primitive::Type field_type,
-                  MemberOffset field_offset)
+                  MemberOffset field_offset,
+                  bool is_volatile)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type) {
+        field_info_(field_offset, field_type),
+        is_volatile_(is_volatile) {
     SetRawInputAt(0, cls);
     SetRawInputAt(1, value);
+  }
+
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    HStaticFieldSet* other_set = other->AsStaticFieldSet();
+    return (GetFieldOffset().SizeValue() == other_set->GetFieldOffset().SizeValue())
+        && (is_volatile_ == other_set->is_volatile_);
   }
 
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
@@ -2508,10 +2541,13 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
 
   HInstruction* GetValue() const { return InputAt(1); }
 
+  bool IsVolatile() const { return is_volatile_; }
+
   DECLARE_INSTRUCTION(StaticFieldSet);
 
  private:
   const FieldInfo field_info_;
+  const bool is_volatile_;
 
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldSet);
 };
@@ -2639,20 +2675,23 @@ class HMonitorOperation : public HTemplateInstruction<1> {
   bool NeedsEnvironment() const OVERRIDE { return true; }
   bool CanThrow() const OVERRIDE { return true; }
 
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    return kind_ == other->AsMonitorOperation()->kind_;
+  }
+
   uint32_t GetDexPc() const { return dex_pc_; }
 
   bool IsEnter() const { return kind_ == kEnter; }
 
   DECLARE_INSTRUCTION(MonitorOperation);
 
- protected:
+ private:
   const OperationKind kind_;
   const uint32_t dex_pc_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HMonitorOperation);
 };
-
 
 class MoveOperands : public ArenaObject<kArenaAllocMisc> {
  public:

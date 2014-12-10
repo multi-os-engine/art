@@ -2556,6 +2556,26 @@ void InstructionCodeGeneratorARM::VisitPhi(HPhi* instruction) {
   LOG(FATAL) << "Unreachable";
 }
 
+void InstructionCodeGeneratorARM::GenerateMemoryBarrier(MemBarrierKind kind) {
+  // TODO (ported from quick): revisit Arm barrier kinds
+  DmbOptions flavour = DmbOptions::ISH;  // quiet warnings
+  switch (kind) {
+    case MemBarrierKind::kAnyStore:
+    case MemBarrierKind::kLoadAny:
+    case MemBarrierKind::kAnyAny: {
+      flavour = DmbOptions::ISH;
+      break;
+    }
+    case MemBarrierKind::kStoreStore: {
+      flavour = DmbOptions::ISHST;
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected memory barier " << kind;  // includes MemBarrierKind::kNTStoreStore
+  }
+  __ dmb(flavour);
+}
+
 void LocationsBuilderARM::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
@@ -2575,6 +2595,10 @@ void InstructionCodeGeneratorARM::VisitInstanceFieldSet(HInstanceFieldSet* instr
   Register obj = locations->InAt(0).AsRegister<Register>();
   uint32_t offset = instruction->GetFieldOffset().Uint32Value();
   Primitive::Type field_type = instruction->GetFieldType();
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kAnyStore);
+  }
 
   switch (field_type) {
     case Primitive::kPrimBoolean:
@@ -2624,6 +2648,10 @@ void InstructionCodeGeneratorARM::VisitInstanceFieldSet(HInstanceFieldSet* instr
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
+  }
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
   }
 }
 
@@ -2693,6 +2721,10 @@ void InstructionCodeGeneratorARM::VisitInstanceFieldGet(HInstanceFieldGet* instr
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
+  }
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kLoadAny);
   }
 }
 
@@ -3273,6 +3305,10 @@ void InstructionCodeGeneratorARM::VisitStaticFieldGet(HStaticFieldGet* instructi
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
   }
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kLoadAny);
+  }
 }
 
 void LocationsBuilderARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
@@ -3294,6 +3330,10 @@ void InstructionCodeGeneratorARM::VisitStaticFieldSet(HStaticFieldSet* instructi
   Register cls = locations->InAt(0).AsRegister<Register>();
   uint32_t offset = instruction->GetFieldOffset().Uint32Value();
   Primitive::Type field_type = instruction->GetFieldType();
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kAnyStore);
+  }
 
   switch (field_type) {
     case Primitive::kPrimBoolean:
@@ -3343,6 +3383,10 @@ void InstructionCodeGeneratorARM::VisitStaticFieldSet(HStaticFieldSet* instructi
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
+  }
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
   }
 }
 

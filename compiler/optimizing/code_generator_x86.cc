@@ -2656,6 +2656,28 @@ void InstructionCodeGeneratorX86::VisitPhi(HPhi* instruction) {
   LOG(FATAL) << "Unreachable";
 }
 
+void InstructionCodeGeneratorX86::GenerateMemoryBarrier(MemBarrierKind kind) {
+  /*
+   * According to the JSR-133 Cookbook, for x86 only StoreLoad/AnyAny barriers need memory fence.
+   * All other barriers (LoadAny, AnyStore, StoreStore) are nops due to the x86 memory model.
+   * For those cases, all we need to ensure is that there is a scheduling barrier in place.
+   */
+  switch (kind) {
+    case MemBarrierKind::kAnyAny: {
+      __ mfence();
+      break;
+    }
+    case MemBarrierKind::kAnyStore:
+    case MemBarrierKind::kLoadAny:
+    case MemBarrierKind::kStoreStore: {
+      // nop
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected memory barier " << kind;  // includes MemBarrierKind::kNTStoreStore
+  }
+}
+
 void LocationsBuilderX86::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
@@ -2687,6 +2709,10 @@ void InstructionCodeGeneratorX86::VisitInstanceFieldSet(HInstanceFieldSet* instr
   Register obj = locations->InAt(0).AsRegister<Register>();
   uint32_t offset = instruction->GetFieldOffset().Uint32Value();
   Primitive::Type field_type = instruction->GetFieldType();
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kAnyStore);
+  }
 
   switch (field_type) {
     case Primitive::kPrimBoolean:
@@ -2738,6 +2764,10 @@ void InstructionCodeGeneratorX86::VisitInstanceFieldSet(HInstanceFieldSet* instr
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
+  }
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
   }
 }
 
@@ -2819,6 +2849,10 @@ void InstructionCodeGeneratorX86::VisitInstanceFieldGet(HInstanceFieldGet* instr
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
+  }
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kLoadAny);
   }
 }
 
@@ -3450,6 +3484,10 @@ void InstructionCodeGeneratorX86::VisitStaticFieldGet(HStaticFieldGet* instructi
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
   }
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kLoadAny);
+  }
 }
 
 void LocationsBuilderX86::VisitStaticFieldSet(HStaticFieldSet* instruction) {
@@ -3482,6 +3520,10 @@ void InstructionCodeGeneratorX86::VisitStaticFieldSet(HStaticFieldSet* instructi
   Register cls = locations->InAt(0).AsRegister<Register>();
   uint32_t offset = instruction->GetFieldOffset().Uint32Value();
   Primitive::Type field_type = instruction->GetFieldType();
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kAnyStore);
+  }
 
   switch (field_type) {
     case Primitive::kPrimBoolean:
@@ -3533,6 +3575,10 @@ void InstructionCodeGeneratorX86::VisitStaticFieldSet(HStaticFieldSet* instructi
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
+  }
+
+  if (instruction->IsVolatile()) {
+    GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
   }
 }
 

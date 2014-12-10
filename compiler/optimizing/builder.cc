@@ -670,13 +670,15 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
     MaybeRecordStat(MethodCompilationStat::kNotCompiledUnresolvedField);
     return false;
   }
+
+#if defined(__aarch64__)
   if (resolved_field->IsVolatile()) {
     MaybeRecordStat(MethodCompilationStat::kNotCompiledVolatile);
     return false;
   }
+#endif
 
   Primitive::Type field_type = resolved_field->GetTypeAsPrimitiveType();
-
   HInstruction* object = LoadLocal(obj_reg, Primitive::kPrimNot);
   current_block_->AddInstruction(new (arena_) HNullCheck(object, dex_pc));
   if (is_put) {
@@ -689,12 +691,14 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
         null_check,
         value,
         field_type,
-        resolved_field->GetOffset()));
+        resolved_field->GetOffset(),
+        resolved_field->IsVolatile()));
   } else {
     current_block_->AddInstruction(new (arena_) HInstanceFieldGet(
         current_block_->GetLastInstruction(),
         field_type,
-        resolved_field->GetOffset()));
+        resolved_field->GetOffset(),
+        resolved_field->IsVolatile()));
 
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
@@ -730,10 +734,12 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
     return false;
   }
 
+#if defined(__aarch64__)
   if (is_volatile) {
     MaybeRecordStat(MethodCompilationStat::kNotCompiledVolatile);
     return false;
   }
+#endif
 
   HLoadClass* constant = new (arena_) HLoadClass(
       storage_index, is_referrers_class, dex_pc);
@@ -752,9 +758,10 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
     HInstruction* value = LoadLocal(source_or_dest_reg, field_type);
     DCHECK_EQ(value->GetType(), field_type);
     current_block_->AddInstruction(
-        new (arena_) HStaticFieldSet(cls, value, field_type, field_offset));
+        new (arena_) HStaticFieldSet(cls, value, field_type, field_offset, is_volatile));
   } else {
-    current_block_->AddInstruction(new (arena_) HStaticFieldGet(cls, field_type, field_offset));
+    current_block_->AddInstruction(new (arena_) HStaticFieldGet(
+        cls, field_type, field_offset, is_volatile));
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
   return true;
