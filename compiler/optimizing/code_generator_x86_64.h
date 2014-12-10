@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_X86_64_H_
 
 #include "code_generator.h"
+#include "dex/compiler_enums.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
 #include "utils/x86_64/assembler_x86_64.h"
@@ -138,6 +139,7 @@ class InstructionCodeGeneratorX86_64 : public HGraphVisitor {
   void HandleBitwiseOperation(HBinaryOperation* operation);
   void GenerateDivRemIntegral(HBinaryOperation* instruction);
   void HandleShift(HBinaryOperation* operation);
+  void GenerateMemoryBarrier(MemBarrierKind kind);
 
   X86_64Assembler* const assembler_;
   CodeGeneratorX86_64* const codegen_;

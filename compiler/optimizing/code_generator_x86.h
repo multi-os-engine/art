@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_X86_H_
 
 #include "code_generator.h"
+#include "dex/compiler_enums.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
 #include "utils/x86/assembler_x86.h"
@@ -137,6 +138,7 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   void GenerateShlLong(const Location& loc, Register shifter);
   void GenerateShrLong(const Location& loc, Register shifter);
   void GenerateUShrLong(const Location& loc, Register shifter);
+  void GenerateMemoryBarrier(MemBarrierKind kind);
 
   X86Assembler* const assembler_;
   CodeGeneratorX86* const codegen_;

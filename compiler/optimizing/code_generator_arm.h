@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_ARM_H_
 
 #include "code_generator.h"
+#include "dex/compiler_enums.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
 #include "utils/arm/assembler_thumb2.h"
@@ -138,6 +139,7 @@ class InstructionCodeGeneratorARM : public HGraphVisitor {
   void GenerateClassInitializationCheck(SlowPathCodeARM* slow_path, Register class_reg);
   void HandleBitwiseOperation(HBinaryOperation* operation);
   void HandleShift(HBinaryOperation* operation);
+  void GenerateMemoryBarrier(MemBarrierKind kind);
 
   ArmAssembler* const assembler_;
   CodeGeneratorARM* const codegen_;
