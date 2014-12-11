@@ -43,8 +43,7 @@ class Compiler {
  public:
   enum Kind {
     kQuick,
-    kOptimizing,
-    kPortable
+    kOptimizing
   };
 
   static Compiler* Create(CompilerDriver* driver, Kind kind);
@@ -64,14 +63,6 @@ class Compiler {
                                   jobject class_loader,
                                   const DexFile& dex_file) const = 0;
 
-  static CompiledMethod* TryCompileWithSeaIR(const art::DexFile::CodeItem* code_item,
-                                             uint32_t access_flags,
-                                             art::InvokeType invoke_type,
-                                             uint16_t class_def_idx,
-                                             uint32_t method_idx,
-                                             jobject class_loader,
-                                             const art::DexFile& dex_file);
-
   virtual CompiledMethod* JniCompile(uint32_t access_flags,
                                      uint32_t method_idx,
                                      const DexFile& dex_file) const = 0;
@@ -90,10 +81,6 @@ class Compiler {
 
   uint64_t GetMaximumCompilationTimeBeforeWarning() const {
     return maximum_compilation_time_before_warning_;
-  }
-
-  virtual bool IsPortable() const {
-    return false;
   }
 
   void SetBitcodeFileName(const CompilerDriver& driver, const std::string& filename) {
