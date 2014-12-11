@@ -671,12 +671,10 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
     return false;
   }
 
-#if defined(__aarch64__)
   if (resolved_field->IsVolatile()) {
     MaybeRecordStat(MethodCompilationStat::kNotCompiledVolatile);
     return false;
   }
-#endif
 
   Primitive::Type field_type = resolved_field->GetTypeAsPrimitiveType();
 
@@ -728,12 +726,10 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
     return false;
   }
 
-#if defined(__aarch64__)
   if (resolved_field->IsVolatile()) {
     MaybeRecordStat(MethodCompilationStat::kNotCompiledVolatile);
     return false;
   }
-#endif
 
   Handle<mirror::Class> referrer_class(hs.NewHandle(compiler_driver_->ResolveCompilingMethodsClass(
       soa, dex_cache, class_loader, outer_compilation_unit_)));
