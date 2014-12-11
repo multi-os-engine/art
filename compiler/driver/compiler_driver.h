@@ -66,8 +66,6 @@ enum EntryPointCallingConvention {
   kInterpreterAbi,
   // ABI of calls to a method's native code, only used for native methods.
   kJniAbi,
-  // ABI of calls to a method's portable code entry point.
-  kPortableAbi,
   // ABI of calls to a method's quick code entry point.
   kQuickAbi
 };
@@ -152,12 +150,6 @@ class CompilerDriver {
   const std::vector<uint8_t>* CreateInterpreterToCompiledCodeBridge() const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   const std::vector<uint8_t>* CreateJniDlsymLookup() const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  const std::vector<uint8_t>* CreatePortableImtConflictTrampoline() const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  const std::vector<uint8_t>* CreatePortableResolutionTrampoline() const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  const std::vector<uint8_t>* CreatePortableToInterpreterBridge() const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   const std::vector<uint8_t>* CreateQuickGenericJniTrampoline() const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

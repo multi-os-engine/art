@@ -467,18 +467,6 @@ const std::vector<uint8_t>* CompilerDriver::CreateJniDlsymLookup() const {
   CREATE_TRAMPOLINE(JNI, kJniAbi, pDlsymLookup)
 }
 
-const std::vector<uint8_t>* CompilerDriver::CreatePortableImtConflictTrampoline() const {
-  CREATE_TRAMPOLINE(PORTABLE, kPortableAbi, pPortableImtConflictTrampoline)
-}
-
-const std::vector<uint8_t>* CompilerDriver::CreatePortableResolutionTrampoline() const {
-  CREATE_TRAMPOLINE(PORTABLE, kPortableAbi, pPortableResolutionTrampoline)
-}
-
-const std::vector<uint8_t>* CompilerDriver::CreatePortableToInterpreterBridge() const {
-  CREATE_TRAMPOLINE(PORTABLE, kPortableAbi, pPortableToInterpreterBridge)
-}
-
 const std::vector<uint8_t>* CompilerDriver::CreateQuickGenericJniTrampoline() const {
   CREATE_TRAMPOLINE(QUICK, kQuickAbi, pQuickGenericJniTrampoline)
 }
@@ -1283,18 +1271,11 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
   // TODO This is somewhat hacky. We should refactor all of this invoke codepath.
   const bool force_relocations = (compiling_boot ||
                                   GetCompilerOptions().GetIncludePatchInformation());
-  if (compiler_->IsPortable()) {
-    if (sharp_type != kStatic && sharp_type != kDirect) {
-      return;
-    }
-    use_dex_cache = true;
-  } else {
-    if (sharp_type != kStatic && sharp_type != kDirect) {
-      return;
-    }
-    // TODO: support patching on all architectures.
-    use_dex_cache = use_dex_cache || (force_relocations && !support_boot_image_fixup_);
+  if (sharp_type != kStatic && sharp_type != kDirect) {
+    return;
   }
+  // TODO: support patching on all architectures.
+  use_dex_cache = use_dex_cache || (force_relocations && !support_boot_image_fixup_);
   bool method_code_in_boot = (method->GetDeclaringClass()->GetClassLoader() == nullptr);
   if (!use_dex_cache) {
     if (!method_code_in_boot) {
