@@ -591,6 +591,8 @@ void ParallelMoveResolverARM64::SpillScratch(int reg) {
 }
 
 void CodeGeneratorARM64::GenerateFrameEntry() {
+  __ Bind(&frame_entry_label_);
+
   bool do_overflow_check = FrameNeedsStackCheck(GetFrameSize(), kArm64) || !IsLeafMethod();
   if (do_overflow_check) {
     UseScratchRegisterScope temps(GetVIXLAssembler());
@@ -1979,15 +1981,19 @@ void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDir
 
   // temp = method;
   codegen_->LoadCurrentMethod(temp);
-  // temp = temp->dex_cache_resolved_methods_;
-  __ Ldr(temp, HeapOperand(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset()));
-  // temp = temp[index_in_cache];
-  __ Ldr(temp, HeapOperand(temp, index_in_cache));
-  // lr = temp->entry_point_from_quick_compiled_code_;
-  __ Ldr(lr, HeapOperand(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
-                          kArm64WordSize)));
-  // lr();
-  __ Blr(lr);
+  if (!invoke->IsRecursive()) {
+    // temp = temp->dex_cache_resolved_methods_;
+    __ Ldr(temp, HeapOperand(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset()));
+    // temp = temp[index_in_cache];
+    __ Ldr(temp, HeapOperand(temp, index_in_cache));
+    // lr = temp->entry_point_from_quick_compiled_code_;
+    __ Ldr(lr, HeapOperand(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                            kArm64WordSize)));
+    // lr();
+    __ Blr(lr);
+  } else {
+    __ Bl(codegen_->GetFrameEntryLabel());
+  }
 
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   DCHECK(!codegen_->IsLeafMethod());
