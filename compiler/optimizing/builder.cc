@@ -611,9 +611,12 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
     // Sharpening to kDirect only works if we compile PIC.
     DCHECK((optimized_invoke_type == invoke_type) || (optimized_invoke_type != kDirect)
            || compiler_driver_->GetCompilerOptions().GetCompilePic());
+    bool is_recursive =
+        (target_method.dex_method_index == dex_compilation_unit_->GetDexMethodIndex());
     // Treat invoke-direct like static calls for now.
     invoke = new (arena_) HInvokeStatic(
-        arena_, number_of_arguments, return_type, dex_pc, target_method.dex_method_index);
+        arena_, number_of_arguments, return_type, dex_pc, target_method.dex_method_index,
+        is_recursive);
   }
 
   size_t start_index = 0;

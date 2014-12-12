@@ -1601,16 +1601,19 @@ class HInvokeStatic : public HInvoke {
                 uint32_t number_of_arguments,
                 Primitive::Type return_type,
                 uint32_t dex_pc,
-                uint32_t index_in_dex_cache)
+                uint32_t index_in_dex_cache,
+                bool is_recursive)
       : HInvoke(arena, number_of_arguments, return_type, dex_pc),
-        index_in_dex_cache_(index_in_dex_cache) {}
+        index_in_dex_cache_(index_in_dex_cache), is_recursive_(is_recursive) {}
 
   uint32_t GetIndexInDexCache() const { return index_in_dex_cache_; }
+  bool GetIsRecursive() const { return is_recursive_; }
 
   DECLARE_INSTRUCTION(InvokeStatic);
 
  private:
   const uint32_t index_in_dex_cache_;
+  const bool is_recursive_;
 
   DISALLOW_COPY_AND_ASSIGN(HInvokeStatic);
 };
