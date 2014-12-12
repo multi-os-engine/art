@@ -119,7 +119,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
            bool verify_pre_gc_heap, bool verify_pre_sweeping_heap, bool verify_post_gc_heap,
            bool verify_pre_gc_rosalloc, bool verify_pre_sweeping_rosalloc,
            bool verify_post_gc_rosalloc, bool use_homogeneous_space_compaction_for_oom,
-           uint64_t min_interval_homogeneous_space_compaction_by_oom)
+           uint64_t min_interval_homogeneous_space_compaction_by_oom,
+           unsigned int concurrent_gc_cycle_start)
     : non_moving_space_(nullptr),
       rosalloc_space_(nullptr),
       dlmalloc_space_(nullptr),
@@ -134,6 +135,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       heap_trim_request_pending_(false),
       parallel_gc_threads_(parallel_gc_threads),
       conc_gc_threads_(conc_gc_threads),
+      concurrent_gc_cycle_start_(concurrent_gc_cycle_start),
       low_memory_mode_(low_memory_mode),
       long_pause_log_threshold_(long_pause_log_threshold),
       long_gc_log_threshold_(long_gc_log_threshold),
@@ -172,9 +174,12 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
        * verification is enabled, we limit the size of allocation stacks to speed up their
        * searching.
        */
+      // Having the default allocation stack size be at least 2MB avoids kGcCauseForAlloc
+      // with new concurrent GC scheduling heuristic that sets the concurrent start bytes to
+      // be at least a third of the growth_limit.
       max_allocation_stack_size_(kGCALotMode ? kGcAlotAllocationStackSize
           : (kVerifyObjectSupport > kVerifyObjectModeFast) ? kVerifyObjectAllocationStackSize :
-          kDefaultAllocationStackSize),
+                                 std::max(kDefaultAllocationStackSize, 2*MB)),
       current_allocator_(kAllocatorTypeDlMalloc),
       current_non_moving_allocator_(kAllocatorTypeNonMoving),
       bump_pointer_space_(nullptr),
@@ -2974,6 +2979,7 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran) {
   if (!ignore_max_footprint_) {
     SetIdealFootprint(target_size);
     if (IsGcConcurrent()) {
+      size_t comp_concurrent_start_bytes = 0;
       // Calculate when to perform the next ConcurrentGC.
       // Calculate the estimated GC duration.
       const double gc_duration_seconds = NsToMs(current_gc_iteration_.GetDurationNs()) / 1000.0;
@@ -2992,8 +2998,24 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran) {
       // Start a concurrent GC when we get close to the estimated remaining bytes. When the
       // allocation rate is very high, remaining_bytes could tell us that we should start a GC
       // right away.
-      concurrent_start_bytes_ = std::max(max_allowed_footprint_ - remaining_bytes,
-                                         static_cast<size_t>(bytes_allocated));
+      comp_concurrent_start_bytes = std::max(max_allowed_footprint_ - remaining_bytes,
+                                             static_cast<size_t>(bytes_allocated));
+      // Activate the new heuristic that defers triggering background concurrent GC
+      // until active heap is at least at a third of the growth_limit, when concurrent_gc_cycle_start_ == 0
+      // (also the default). Revert to the old heuristic when this switch is set to any non-zero value.
+      // The onus will be on anyone creating another heuristic, to extend the behavior to ensure the
+      // appropriate algorithm is invoked, as the case may be, and any user input error conditions
+      // are handled gracefully by the runtime. The way this is coded right now, the runtime code is
+      // error-safe and fail-safe when it comes to the values of the concurrent_gc_cycle_start_ switch
+      // (i.e. the ConcurrentGCCycleStart system property):
+      // Default and 0: The new heuristics
+      // Any other positive number: Old heuristics
+      // In other words, all values are handled correctly and gracefully and there is a correct default behavior.
+      if (concurrent_gc_cycle_start_ == 0) {
+        concurrent_start_bytes_ = std::max(comp_concurrent_start_bytes, growth_limit_/3);
+      } else {
+        concurrent_start_bytes_ = comp_concurrent_start_bytes;
+      }
     }
   }
 }

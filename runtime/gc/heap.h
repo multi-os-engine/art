@@ -162,6 +162,10 @@ class Heap {
   // Create a heap with the requested sizes. The possible empty
   // image_file_names names specify Spaces to load based on
   // ImageWriter output.
+  // Please note change in signature with addition of concurrent_gc_cycle_start
+  // default argument. This defaults to 0 and activates the new ART GC ergonomics improvement patch
+  // that implements a heuristic that defers triggering background concurrent GC
+  // until the active heap is at least at a third of the growth_limit.
   explicit Heap(size_t initial_size, size_t growth_limit, size_t min_free,
                 size_t max_free, double target_utilization,
                 double foreground_heap_growth_multiplier, size_t capacity,
@@ -176,7 +180,8 @@ class Heap {
                 bool verify_pre_gc_heap, bool verify_pre_sweeping_heap, bool verify_post_gc_heap,
                 bool verify_pre_gc_rosalloc, bool verify_pre_sweeping_rosalloc,
                 bool verify_post_gc_rosalloc, bool use_homogeneous_space_compaction,
-                uint64_t min_interval_homogeneous_space_compaction_by_oom);
+                uint64_t min_interval_homogeneous_space_compaction_by_oom,
+                unsigned int concurrent_gc_cycle_start=0);
 
   ~Heap();
 
@@ -844,6 +849,11 @@ class Heap {
 
   // How many GC threads we may use for unpaused parts of garbage collection.
   const size_t conc_gc_threads_;
+
+  // Switches between new/old background concurrent GC triggering heuristics.
+  // Corresponds to ConcurrentGCCycleStart system property added for new ART GC ergonomics
+  // improvement patch.
+  const unsigned int concurrent_gc_cycle_start_;
 
   // Boolean for if we are in low memory mode.
   const bool low_memory_mode_;

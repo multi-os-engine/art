@@ -79,6 +79,13 @@ class ParsedOptions {
   double foreground_heap_growth_multiplier_;
   unsigned int parallel_gc_threads_;
   unsigned int conc_gc_threads_;
+  // Used in conjunction with new background concurrent GC triggering heuristics.
+  // This is a switch variable that is assigned the value of the new "-XX:ConcurrentGCCycleStart="
+  // system property. ConcurrentGCCycleStart can take unsigned integer values, with the default being 0.
+  // When set to 0, the new heuristic will be activated: this allows the active heap to grow to a third
+  // of the growth_limit before triggering concurrent background GC.
+  // For all other non-zero values, the old heuristic will be activated.
+  unsigned int concurrent_gc_cycle_start_;
   gc::CollectorType collector_type_;
   gc::CollectorType background_collector_type_;
   size_t stack_size_;

@@ -71,6 +71,7 @@ ParsedOptions::ParsedOptions()
     foreground_heap_growth_multiplier_(gc::Heap::kDefaultHeapGrowthMultiplier),
     parallel_gc_threads_(1),
     conc_gc_threads_(0),                            // Only the main GC thread, no workers.
+    concurrent_gc_cycle_start_(0),
     collector_type_(                                // The default GC type is set in makefiles.
 #if ART_DEFAULT_GC_TYPE_IS_CMS
         gc::kCollectorTypeCMS),
@@ -376,6 +377,10 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
       }
     } else if (StartsWith(option, "-XX:ConcGCThreads=")) {
       if (!ParseUnsignedInteger(option, '=', &conc_gc_threads_)) {
+        return false;
+      }
+    } else if (StartsWith(option, "-XX:ConcurrentGCCycleStart=")) {
+      if (!ParseUnsignedInteger(option, '=', &concurrent_gc_cycle_start_)) {
         return false;
       }
     } else if (StartsWith(option, "-Xss")) {
