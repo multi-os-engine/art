@@ -797,6 +797,7 @@ void MarkSweep::ScanGrayObjects(bool paused, uint8_t minimum_age) {
     thread_pool->StartWorkers(self);
     thread_pool->Wait(self, true, true);
     thread_pool->StopWorkers(self);
+    thread_pool->SetMaxActiveWorkers(thread_pool->GetThreadCount());
   } else {
     for (const auto& space : GetHeap()->GetContinuousSpaces()) {
       if (space->GetMarkBitmap() != nullptr) {
@@ -896,6 +897,7 @@ void MarkSweep::RecursiveMark() {
           thread_pool->StartWorkers(self);
           thread_pool->Wait(self, true, true);
           thread_pool->StopWorkers(self);
+          thread_pool->SetMaxActiveWorkers(thread_pool->GetThreadCount());
         } else {
           // This function does not handle heap end increasing, so we must use the space end.
           uintptr_t begin = reinterpret_cast<uintptr_t>(space->Begin());
@@ -1197,6 +1199,7 @@ void MarkSweep::ProcessMarkStackParallel(size_t thread_count) {
   thread_pool->StartWorkers(self);
   thread_pool->Wait(self, true, true);
   thread_pool->StopWorkers(self);
+  thread_pool->SetMaxActiveWorkers(thread_pool->GetThreadCount());
   mark_stack_->Reset();
   CHECK_EQ(work_chunks_created_.LoadSequentiallyConsistent(),
            work_chunks_deleted_.LoadSequentiallyConsistent())

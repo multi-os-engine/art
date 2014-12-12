@@ -611,6 +611,9 @@ class Heap {
     return zygote_space_ != nullptr;
   }
 
+  void RequestConcurrentGC(Thread* self)
+      LOCKS_EXCLUDED(Locks::runtime_shutdown_lock_);
+
  private:
   // Compact source space to target space.
   void Compact(space::ContinuousMemMapAllocSpace* target_space,
@@ -706,8 +709,6 @@ class Heap {
   void RequestHeapTrim() LOCKS_EXCLUDED(Locks::runtime_shutdown_lock_);
   void RequestConcurrentGCAndSaveObject(Thread* self, mirror::Object** obj)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void RequestConcurrentGC(Thread* self)
-      LOCKS_EXCLUDED(Locks::runtime_shutdown_lock_);
   bool IsGCRequestPending() const;
 
   // Sometimes CollectGarbageInternal decides to run a different Gc than you requested. Returns

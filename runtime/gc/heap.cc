@@ -699,6 +699,7 @@ void Heap::UpdateProcessState(ProcessState process_state) {
 }
 
 void Heap::CreateThreadPool() {
+  // Need at least one thread for concurrent GC reuqests.
   const size_t num_threads = std::max(parallel_gc_threads_, conc_gc_threads_);
   if (num_threads != 0) {
     thread_pool_.reset(new ThreadPool("Heap thread pool", num_threads));
@@ -3025,10 +3026,34 @@ void Heap::AddFinalizerReference(Thread* self, mirror::Object** object) {
   *object = soa.Decode<mirror::Object*>(arg.get());
 }
 
+class ConcurrentGCRequestTask : public Task {
+ public:
+  virtual void Finalize() {
+    delete this;
+  }
+
+  // Scans all of the objects
+  virtual void Run(Thread* self) OVERRIDE {
+    if (Locks::mutator_lock_->IsExclusiveHeld(self)) {
+      // If we are the GC, and paused, then we can't request a concurrent GC since it will
+      // deadlock.
+      return;
+    }
+    ScopedObjectAccess soa(self);
+    Runtime::Current()->GetHeap()->RequestConcurrentGC(self);
+  }
+};
+
 void Heap::RequestConcurrentGCAndSaveObject(Thread* self, mirror::Object** obj) {
   StackHandleScope<1> hs(self);
   HandleWrapper<mirror::Object> wrapper(hs.NewHandleWrapper(obj));
-  RequestConcurrentGC(self);
+  // Careful, this can deadlock the GC if the GC uses Thread:Wait without do_work = true
+  // since there may be a task which is blocked on the mutator lock.
+  if (thread_pool_.get() != nullptr) {
+    // Sometimes null like dex2oat.
+    thread_pool_->AddTask(self, new ConcurrentGCRequestTask());
+    thread_pool_->StartWorkers(self);
+  }
 }
 
 void Heap::RequestConcurrentGC(Thread* self) {
