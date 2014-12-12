@@ -1,0 +1,10 @@
+Code-Review+1: Pavel N Vyssotski <pavel.n.vyssotski@intel.com>
+Code-Review+1: Mark P Mendell <mark.p.mendell@intel.com>
+Code-Review+1: Serguei Katkov <serguei.i.katkov@intel.com>
+Code-Review+2: Sebastien Hertz <shertz@google.com>
+Verified+1: Sebastien Hertz <shertz@google.com>
+Submitted-by: Sebastien Hertz <shertz@google.com>
+Submitted-at: Fri, 12 Dec 2014 16:20:32 +0000
+Reviewed-on: https://android-review.googlesource.com/118211
+Project: platform/art
+Branch: refs/heads/master
