@@ -361,10 +361,12 @@ void CodeGeneratorX86_64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invo
 
   // temp = method;
   LoadCurrentMethod(temp);
-  // temp = temp->dex_cache_resolved_methods_;
-  __ movl(temp, Address(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().SizeValue()));
-  // temp = temp[index_in_cache]
-  __ movl(temp, Address(temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex())));
+  if (!invoke->IsRecursive()) {
+    // temp = temp->dex_cache_resolved_methods_;
+    __ movl(temp, Address(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().SizeValue()));
+    // temp = temp[index_in_cache]
+    __ movl(temp, Address(temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex())));
+  }
   // (temp + offset_of_quick_compiled_code)()
   __ call(Address(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kX86_64WordSize).SizeValue()));

@@ -1185,16 +1185,18 @@ void InstructionCodeGeneratorARM::VisitInvokeStaticOrDirect(HInvokeStaticOrDirec
 
   // temp = method;
   codegen_->LoadCurrentMethod(temp);
-  // temp = temp->dex_cache_resolved_methods_;
-  __ LoadFromOffset(
-      kLoadWord, temp, temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
-  // temp = temp[index_in_cache]
-  __ LoadFromOffset(
-      kLoadWord, temp, temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex()));
+  if (!invoke->IsRecursive()) {
+    // temp = temp->dex_cache_resolved_methods_;
+    __ LoadFromOffset(
+        kLoadWord, temp, temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
+    // temp = temp[index_in_cache]
+    __ LoadFromOffset(
+        kLoadWord, temp, temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex()));
+  }
   // LR = temp[offset_of_quick_compiled_code]
   __ LoadFromOffset(kLoadWord, LR, temp,
-                     mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
-                         kArmWordSize).Int32Value());
+                    mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                           kArmWordSize).Int32Value());
   // LR()
   __ blx(LR);
 
