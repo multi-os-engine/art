@@ -3037,11 +3037,15 @@ void Heap::RequestConcurrentGCAndSaveObject(Thread* self, mirror::Object** obj) 
 void Heap::RequestConcurrentGC(Thread* self) {
   // Make sure that we can do a concurrent GC.
   Runtime* runtime = Runtime::Current();
-  if (runtime == nullptr || !runtime->IsFinishedStarting() || runtime->IsShuttingDown(self) ||
-      self->IsHandlingStackOverflow()) {
+  if (runtime == nullptr || runtime->IsShuttingDown(self) || self->IsHandlingStackOverflow()) {
     return;
   }
-  NotifyConcurrentGCRequest(self);
+  if (runtime->IsFinishedStarting()) {
+    NotifyConcurrentGCRequest(self);
+  } else {
+    // If we don't have a started runtime (i.e. dex2oat) then do the GC in the allocating thread.
+    CollectGarbageInternal(collector::kGcTypeFull, kGcCauseForAlloc, false);
+  }
 }
 
 void Heap::ConcurrentGC(Thread* self) {
