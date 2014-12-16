@@ -792,6 +792,21 @@ void Arm32Assembler::ldrex(Register rt, Register rn, Condition cond) {
   Emit(encoding);
 }
 
+void Arm32Assembler::ldrexd(Register rt, Register rt2, Register rn, Condition cond) {
+  CHECK_NE(rn, kNoRegister);
+  CHECK_NE(rt, kNoRegister);
+  CHECK_NE(rt2, kNoRegister);
+  CHECK_EQ(static_cast<uint32_t>(rt) + 1, static_cast<uint32_t>(rt2));
+  CHECK_NE(cond, kNoCondition);
+
+  int32_t encoding =
+      (static_cast<uint32_t>(cond) << kConditionShift) |
+      B24 | B23 | B21 | B20 |
+      static_cast<uint32_t>(rn) << 16 |
+      static_cast<uint32_t>(rt) << 12 |
+      B11 | B10 | B9 | B8 | B7 | B4 | B3 | B2 | B1 | B0;
+  Emit(encoding);
+}
 
 void Arm32Assembler::strex(Register rd,
                            Register rt,
@@ -808,6 +823,24 @@ void Arm32Assembler::strex(Register rd,
                      (static_cast<int32_t>(rd) << kStrExRdShift) |
                      B11 | B10 | B9 | B8 | B7 | B4 |
                      (static_cast<int32_t>(rt) << kStrExRtShift);
+  Emit(encoding);
+}
+
+void Arm32Assembler::strexd(Register rd, Register rt, Register rt2, Register rn, Condition cond) {
+  CHECK_NE(rd, kNoRegister);
+  CHECK_NE(rn, kNoRegister);
+  CHECK_NE(rt, kNoRegister);
+  CHECK_NE(rt2, kNoRegister);
+  CHECK_EQ(static_cast<uint32_t>(rt) + 1, static_cast<uint32_t>(rt2));
+  CHECK_NE(cond, kNoCondition);
+
+  int32_t encoding =
+      (static_cast<uint32_t>(cond) << kConditionShift) |
+      B24 | B23 | B21 |
+      static_cast<uint32_t>(rn) << 16 |
+      static_cast<uint32_t>(rd) << 12 |
+      B11 | B10 | B9 | B8 | B7 | B4 |
+      static_cast<uint32_t>(rt);
   Emit(encoding);
 }
 

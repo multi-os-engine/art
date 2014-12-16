@@ -801,10 +801,10 @@ class AssemblerTest : public testing::Test {
   }
 
   // Remove temporary files.
-  void Clean(const NativeAssemblerResult* res) {
-    std::remove((res->base_name + ".S").c_str());
-    std::remove((res->base_name + ".o").c_str());
-    std::remove((res->base_name + ".o.dump").c_str());
+  void Clean(const NativeAssemblerResult* /*res*/) {
+    // std::remove((res->base_name + ".S").c_str());
+    // std::remove((res->base_name + ".o").c_str());
+    // std::remove((res->base_name + ".o.dump").c_str());
   }
 
   // Check whether file exists. Is used for commands, so strips off any parameters: anything after
