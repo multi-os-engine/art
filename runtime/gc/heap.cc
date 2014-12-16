@@ -3156,7 +3156,11 @@ void Heap::ClearConcurrentGCRequest() {
 void Heap::RequestConcurrentGC(Thread* self) {
   if (CanAddHeapTask(self) &&
       concurrent_gc_pending_.CompareExchangeStrongSequentiallyConsistent(false, true)) {
-    task_processor_->AddTask(self, new ConcurrentGCTask(NanoTime()));  // Start straight away.
+    if (Runtime::Current()->IsFinishedStarting()) {
+      task_processor_->AddTask(self, new ConcurrentGCTask(NanoTime()));  // Start straight away.
+    } else {
+      CollectGarbageInternal(collector::kGcTypeFull, kGcCauseForAlloc, false);
+    }
   }
 }
 
