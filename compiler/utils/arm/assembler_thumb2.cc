@@ -719,12 +719,12 @@ bool Thumb2Assembler::Is32BitDataProcessing(Condition cond ATTRIBUTE_UNUSED,
          uint32_t imm = so.GetImmediate();
          // If the immediates are out of range use 32 bit.
          if (rd == SP && rn == SP) {
-           if (imm > (1 << 9)) {    // 9 bit immediate.
-             return true;
+           if (imm < (1 << 9)) {    // 9 bit immediate.
+             return false;
            }
          } else if (opcode == ADD && rd != SP && rn == SP) {   // 10 bit immediate.
-           if (imm > (1 << 10)) {
-             return true;
+           if (imm < (1 << 10)) {
+             return false;
            }
          } else if (opcode == SUB && rd != SP && rn == SP) {
            // SUB rd, SP, #imm is always 32 bit.
