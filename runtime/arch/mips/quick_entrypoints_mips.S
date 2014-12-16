@@ -717,6 +717,7 @@ END art_quick_aput_obj
      */
     .extern artInitializeStaticStorageFromCode
 ENTRY art_quick_initialize_static_storage
+    lw      $a1, 0($sp)                         # pass referrer's Method*
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME           # save callee saves in case of GC
     # artInitializeStaticStorageFromCode(uint32_t type_idx, Method* referrer, Thread*)
     jal     artInitializeStaticStorageFromCode
@@ -729,6 +730,7 @@ END art_quick_initialize_static_storage
      */
     .extern artInitializeTypeFromCode
 ENTRY art_quick_initialize_type
+    lw      $a1, 0($sp)                        # pass referrer's Method*
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME          # save callee saves in case of GC
     # artInitializeTypeFromCode(uint32_t type_idx, Method* referrer, Thread*)
     jal     artInitializeTypeFromCode
@@ -742,6 +744,7 @@ END art_quick_initialize_type
      */
     .extern artInitializeTypeAndVerifyAccessFromCode
 ENTRY art_quick_initialize_type_and_verify_access
+    lw      $a1, 0($sp)                        # pass referrer's Method*
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME          # save callee saves in case of GC
     # artInitializeTypeFromCode(uint32_t type_idx, Method* referrer, Thread*)
     jal     artInitializeTypeAndVerifyAccessFromCode
@@ -1041,6 +1044,7 @@ END art_quick_set_obj_instance
      */
     .extern artResolveStringFromCode
 ENTRY art_quick_resolve_string
+    lw      $a1, 0($sp)               # pass referrer's Method*
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME # save callee saves in case of GC
     # artResolveStringFromCode(Method* referrer, uint32_t string_idx, Thread*)
     jal     artResolveStringFromCode
@@ -1050,9 +1054,10 @@ END art_quick_resolve_string
 
 
 // Macro to facilitate adding new allocation entrypoints.
-.macro TWO_ARG_DOWNCALL name, entrypoint, return
+.macro ONE_ARG_REF_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
+    lw      $a1, 0($sp)               # pass referrer's Method*
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME # save callee saves in case of GC
     jal     \entrypoint
     move    $a2, rSELF                # pass Thread::Current
@@ -1060,9 +1065,10 @@ ENTRY \name
 END \name
 .endm
 
-.macro THREE_ARG_DOWNCALL name, entrypoint, return
+.macro TWO_ARG_REF_DOWNCALL name, entrypoint, return
     .extern \entrypoint
 ENTRY \name
+    lw      $a2, 0($sp)               # pass referrer's Method*
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME # save callee saves in case of GC
     jal     \entrypoint
     move    $a3, rSELF                # pass Thread::Current
