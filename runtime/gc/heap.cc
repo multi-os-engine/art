@@ -2992,6 +2992,9 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran) {
         // another GC nearly straight away.
         remaining_bytes = kMinConcurrentRemainingBytes;
       }
+      if (!Runtime::Current()->IsFinishedStarting()) {
+        remaining_bytes = 0;
+      }
       DCHECK_LE(remaining_bytes, max_allowed_footprint_);
       DCHECK_LE(max_allowed_footprint_, GetMaxMemory());
       // Start a concurrent GC when we get close to the estimated remaining bytes. When the
@@ -3038,11 +3041,15 @@ void Heap::RequestConcurrentGCAndSaveObject(Thread* self, mirror::Object** obj) 
 void Heap::RequestConcurrentGC(Thread* self) {
   // Make sure that we can do a concurrent GC.
   Runtime* runtime = Runtime::Current();
-  if (runtime == nullptr || !runtime->IsFinishedStarting() || runtime->IsShuttingDown(self) ||
-      self->IsHandlingStackOverflow()) {
+  if (runtime == nullptr || runtime->IsShuttingDown(self) || self->IsHandlingStackOverflow()) {
     return;
   }
-  NotifyConcurrentGCRequest(self);
+  if (runtime->IsFinishedStarting()) {
+    NotifyConcurrentGCRequest(self);
+  } else {
+    // If we don't have a started runtime (i.e. dex2oat) then do the GC in the allocating thread.
+    CollectGarbageInternal(collector::kGcTypeFull, kGcCauseForAlloc, false);
+  }
 }
 
 void Heap::ConcurrentGC(Thread* self) {

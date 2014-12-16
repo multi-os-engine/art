@@ -510,7 +510,7 @@ template<VerifyObjectFlags kVerifyFlags>
 inline uint32_t Class::GetAccessFlags() {
   // Check class is loaded/retired or this is java.lang.String that has a
   // circularity issue during loading the names of its members
-  DCHECK(IsIdxLoaded<kVerifyFlags>() || IsRetired<kVerifyFlags>() ||
+  DCHECK(IsNotReady<kVerifyFlags>() || IsIdxLoaded<kVerifyFlags>() || IsRetired<kVerifyFlags>() ||
          IsErroneous<static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis)>() ||
          this == String::GetJavaLangString() ||
          this == ArtField::GetJavaLangReflectArtField() ||

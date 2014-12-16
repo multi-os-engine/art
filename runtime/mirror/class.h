@@ -158,6 +158,12 @@ class MANAGED Class FINAL : public Object {
     return GetStatus<kVerifyFlags>() == kStatusError;
   }
 
+  // Returns true if the class is not ready.
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
+  bool IsNotReady() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetStatus<kVerifyFlags>() >= kStatusNotReady;
+  }
+
   // Returns true if the class has been loaded.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsIdxLoaded() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
