@@ -1004,15 +1004,18 @@ TEST_F(StubTest, AllocObject) {
       hs.NewHandle(class_linker_->FindSystemClass(soa.Self(), "Ljava/lang/Object;")));
 
   // Play with it...
+  LOG(INFO) << "Before 1st";
 
   EXPECT_FALSE(self->IsExceptionPending());
   {
     // Use an arbitrary method from c to use as referrer
-    size_t result = Invoke3(static_cast<size_t>(c->GetDexTypeIndex()),    // type_idx
-                            reinterpret_cast<size_t>(c->GetVirtualMethod(0)),  // arbitrary
-                            0U,
-                            StubTest::GetEntrypoint(self, kQuickAllocObject),
-                            self);
+    size_t result = Invoke3WithReferrer(
+        static_cast<size_t>(c->GetDexTypeIndex()),  // type_idx
+        0U,
+        0U,
+        StubTest::GetEntrypoint(self, kQuickAllocObject),
+        self,
+        c->GetVirtualMethod(0));  // arbitrary
 
     EXPECT_FALSE(self->IsExceptionPending());
     EXPECT_NE(reinterpret_cast<size_t>(nullptr), result);
@@ -1021,10 +1024,14 @@ TEST_F(StubTest, AllocObject) {
     VerifyObject(obj);
   }
 
+  LOG(INFO) << "Before 2nd";
+
   {
     // We can use nullptr in the second argument as we do not need a method here (not used in
     // resolved/initialized cases)
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr), 0U,
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()),
+                            0U,
+                            0U,
                             StubTest::GetEntrypoint(self, kQuickAllocObjectResolved),
                             self);
 
@@ -1035,10 +1042,14 @@ TEST_F(StubTest, AllocObject) {
     VerifyObject(obj);
   }
 
+  LOG(INFO) << "Before 3rd";
+
   {
     // We can use nullptr in the second argument as we do not need a method here (not used in
     // resolved/initialized cases)
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr), 0U,
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()),
+                            0U,
+                            0U,
                             StubTest::GetEntrypoint(self, kQuickAllocObjectInitialized),
                             self);
 
@@ -1048,6 +1059,8 @@ TEST_F(StubTest, AllocObject) {
     EXPECT_EQ(c.Get(), obj->GetClass());
     VerifyObject(obj);
   }
+
+  LOG(INFO) << "Before 4th";
 
   // Failure tests.
 
@@ -1094,7 +1107,9 @@ TEST_F(StubTest, AllocObject) {
     }
     self->ClearException();
 
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr), 0U,
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()),
+                            0U,
+                            0U,
                             StubTest::GetEntrypoint(self, kQuickAllocObjectInitialized),
                             self);
     EXPECT_TRUE(self->IsExceptionPending());
@@ -1138,11 +1153,13 @@ TEST_F(StubTest, AllocObjectArray) {
 
   if ((false)) {
     // Use an arbitrary method from c to use as referrer
-    size_t result = Invoke3(static_cast<size_t>(c->GetDexTypeIndex()),    // type_idx
-                            reinterpret_cast<size_t>(c_obj->GetVirtualMethod(0)),  // arbitrary
-                            10U,
-                            StubTest::GetEntrypoint(self, kQuickAllocArray),
-                            self);
+    size_t result = Invoke3WithReferrer(
+        static_cast<size_t>(c->GetDexTypeIndex()),    // type_idx
+        10U,
+        0U,
+        StubTest::GetEntrypoint(self, kQuickAllocArray),
+        self,
+        c_obj->GetVirtualMethod(0));  // arbitrary
 
     EXPECT_FALSE(self->IsExceptionPending());
     EXPECT_NE(reinterpret_cast<size_t>(nullptr), result);
@@ -1155,7 +1172,9 @@ TEST_F(StubTest, AllocObjectArray) {
   {
     // We can use nullptr in the second argument as we do not need a method here (not used in
     // resolved/initialized cases)
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr), 10U,
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()),
+                            10U,
+                            0U,
                             StubTest::GetEntrypoint(self, kQuickAllocArrayResolved),
                             self);
     EXPECT_FALSE(self->IsExceptionPending()) << PrettyTypeOf(self->GetException(nullptr));
@@ -1173,8 +1192,9 @@ TEST_F(StubTest, AllocObjectArray) {
 
   // Out-of-memory.
   {
-    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()), reinterpret_cast<size_t>(nullptr),
+    size_t result = Invoke3(reinterpret_cast<size_t>(c.Get()),
                             GB,  // that should fail...
+                            0U,
                             StubTest::GetEntrypoint(self, kQuickAllocArrayResolved),
                             self);
 

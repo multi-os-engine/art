@@ -204,13 +204,13 @@ void Mir2Lir::CallRuntimeHelperRegMethod(QuickEntrypointEnum trampoline, RegStor
 void Mir2Lir::CallRuntimeHelperRegMethodRegLocation(QuickEntrypointEnum trampoline, RegStorage arg0,
                                                     RegLocation arg2, bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(trampoline);
-  DCHECK(!IsSameReg(TargetReg(kArg1, arg0.GetWideKind()), arg0));
+  DCHECK(!IsSameReg(TargetReg(kArg2, arg0.GetWideKind()), arg0));
   RegStorage r_tmp = TargetReg(kArg0, arg0.GetWideKind());
   if (r_tmp.NotExactlyEquals(arg0)) {
     OpRegCopy(r_tmp, arg0);
   }
-  LoadCurrMethodDirect(TargetReg(kArg1, kRef));
-  LoadValueDirectFixed(arg2, TargetReg(kArg2, arg2));
+  LoadCurrMethodDirect(TargetReg(kArg2, kRef));
+  LoadValueDirectFixed(arg2, TargetReg(kArg1, arg2));
   ClobberCallerSave();
   CallHelper(r_tgt, trampoline, safepoint_pc);
 }
@@ -309,8 +309,8 @@ void Mir2Lir::CallRuntimeHelperRegRegImm(QuickEntrypointEnum trampoline, RegStor
 void Mir2Lir::CallRuntimeHelperImmMethodRegLocation(QuickEntrypointEnum trampoline, int arg0,
                                                     RegLocation arg2, bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(trampoline);
-  LoadValueDirectFixed(arg2, TargetReg(kArg2, arg2));
-  LoadCurrMethodDirect(TargetReg(kArg1, kRef));
+  LoadValueDirectFixed(arg2, TargetReg(kArg1, arg2));
+  LoadCurrMethodDirect(TargetReg(kArg2, kRef));
   LoadConstant(TargetReg(kArg0, kNotWide), arg0);
   ClobberCallerSave();
   CallHelper(r_tgt, trampoline, safepoint_pc);
@@ -319,8 +319,8 @@ void Mir2Lir::CallRuntimeHelperImmMethodRegLocation(QuickEntrypointEnum trampoli
 void Mir2Lir::CallRuntimeHelperImmMethodImm(QuickEntrypointEnum trampoline, int arg0, int arg2,
                                             bool safepoint_pc) {
   RegStorage r_tgt = CallHelperSetup(trampoline);
-  LoadCurrMethodDirect(TargetReg(kArg1, kRef));
-  LoadConstant(TargetReg(kArg2, kNotWide), arg2);
+  LoadCurrMethodDirect(TargetReg(kArg2, kRef));
+  LoadConstant(TargetReg(kArg1, kNotWide), arg2);
   LoadConstant(TargetReg(kArg0, kNotWide), arg0);
   ClobberCallerSave();
   CallHelper(r_tgt, trampoline, safepoint_pc);

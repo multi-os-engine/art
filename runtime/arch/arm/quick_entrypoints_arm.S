@@ -641,6 +641,7 @@ END art_quick_aput_obj
     .extern artInitializeStaticStorageFromCode
 ENTRY art_quick_initialize_static_storage
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r2, r3    @ save callee saves in case of GC
+    ldr    r1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     mov    r2, r9                              @ pass Thread::Current
     @ artInitializeStaticStorageFromCode(uint32_t type_idx, Method* referrer, Thread*)
     bl     artInitializeStaticStorageFromCode
@@ -655,6 +656,7 @@ END art_quick_initialize_static_storage
     .extern artInitializeTypeFromCode
 ENTRY art_quick_initialize_type
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r2, r3    @ save callee saves in case of GC
+    ldr    r1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     mov    r2, r9                              @ pass Thread::Current
     @ artInitializeTypeFromCode(uint32_t type_idx, Method* referrer, Thread*)
     bl     artInitializeTypeFromCode
@@ -670,6 +672,7 @@ END art_quick_initialize_type
     .extern artInitializeTypeAndVerifyAccessFromCode
 ENTRY art_quick_initialize_type_and_verify_access
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r2, r3    @ save callee saves in case of GC
+    ldr    r1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     mov    r2, r9                              @ pass Thread::Current
     @ artInitializeTypeAndVerifyAccessFromCode(uint32_t type_idx, Method* referrer, Thread*)
     bl     artInitializeTypeAndVerifyAccessFromCode
@@ -792,40 +795,14 @@ END art_quick_set64_instance
     .extern artResolveStringFromCode
 ENTRY art_quick_resolve_string
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r2, r3  @ save callee saves in case of GC
+    ldr    r1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     mov    r2, r9                     @ pass Thread::Current
-    @ artResolveStringFromCode(Method* referrer, uint32_t string_idx, Thread*)
+    @ artResolveStringFromCode(uint32_t string_idx, Method* referrer, Thread*)
     bl     artResolveStringFromCode
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     RETURN_IF_RESULT_IS_NON_ZERO
     DELIVER_PENDING_EXCEPTION
 END art_quick_resolve_string
-
-// Macro to facilitate adding new allocation entrypoints.
-.macro TWO_ARG_DOWNCALL name, entrypoint, return
-    .extern \entrypoint
-ENTRY \name
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r2, r3  @ save callee saves in case of GC
-    mov    r2, r9                     @ pass Thread::Current
-    bl     \entrypoint     @ (uint32_t type_idx, Method* method, Thread*)
-    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
-    \return
-    DELIVER_PENDING_EXCEPTION
-END \name
-.endm
-
-// Macro to facilitate adding new array allocation entrypoints.
-.macro THREE_ARG_DOWNCALL name, entrypoint, return
-    .extern \entrypoint
-ENTRY \name
-    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r3, r12  @ save callee saves in case of GC
-    mov    r3, r9                     @ pass Thread::Current
-    @ (uint32_t type_idx, Method* method, int32_t component_count, Thread*)
-    bl     \entrypoint
-    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
-    \return
-    DELIVER_PENDING_EXCEPTION
-END \name
-.endm
 
 // Generate the allocation entrypoints for each allocator.
 GENERATE_ALL_ALLOC_ENTRYPOINTS

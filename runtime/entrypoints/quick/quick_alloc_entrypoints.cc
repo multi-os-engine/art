@@ -114,28 +114,28 @@ extern "C" mirror::Object* artAllocObjectFromCodeWithAccessCheck##suffix##suffix
   return AllocObjectFromCode<true, instrumented_bool>(type_idx, method, self, allocator_type); \
 } \
 extern "C" mirror::Array* artAllocArrayFromCode##suffix##suffix2( \
-    uint32_t type_idx, mirror::ArtMethod* method, int32_t component_count, Thread* self) \
+    uint32_t type_idx, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   return AllocArrayFromCode<false, instrumented_bool>(type_idx, method, component_count, self, \
                                                       allocator_type); \
 } \
 extern "C" mirror::Array* artAllocArrayFromCodeResolved##suffix##suffix2( \
-    mirror::Class* klass, mirror::ArtMethod* method, int32_t component_count, Thread* self) \
+    mirror::Class* klass, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   return AllocArrayFromCodeResolved<false, instrumented_bool>(klass, method, component_count, self, \
                                                               allocator_type); \
 } \
 extern "C" mirror::Array* artAllocArrayFromCodeWithAccessCheck##suffix##suffix2( \
-    uint32_t type_idx, mirror::ArtMethod* method, int32_t component_count, Thread* self) \
+    uint32_t type_idx, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   return AllocArrayFromCode<true, instrumented_bool>(type_idx, method, component_count, self, \
                                                      allocator_type); \
 } \
 extern "C" mirror::Array* artCheckAndAllocArrayFromCode##suffix##suffix2( \
-    uint32_t type_idx, mirror::ArtMethod* method, int32_t component_count, Thread* self) \
+    uint32_t type_idx, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   if (!instrumented_bool) { \
@@ -145,7 +145,7 @@ extern "C" mirror::Array* artCheckAndAllocArrayFromCode##suffix##suffix2( \
   } \
 } \
 extern "C" mirror::Array* artCheckAndAllocArrayFromCodeWithAccessCheck##suffix##suffix2( \
-    uint32_t type_idx, mirror::ArtMethod* method, int32_t component_count, Thread* self) \
+    uint32_t type_idx, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   if (!instrumented_bool) { \

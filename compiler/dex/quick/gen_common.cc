@@ -1098,7 +1098,7 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
 
         void Compile() {
           GenerateTargetLabel();
-          m2l_->CallRuntimeHelperRegImm(kQuickResolveString, r_method_, string_idx_, true);
+          m2l_->CallRuntimeHelperImmReg(kQuickResolveString, string_idx_, r_method_, true);
           m2l_->OpUnconditionalBranch(cont_);
         }
 
