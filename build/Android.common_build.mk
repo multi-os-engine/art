@@ -225,7 +225,8 @@ ifeq ($(HOST_OS),linux)
   ifndef SANITIZE_HOST
     art_host_non_debug_cflags += -Wframe-larger-than=2700
   endif
-  art_target_non_debug_cflags += -Wframe-larger-than=1728
+  # art::OptimizingCompiler::Compile uses 1824 bytes on arm64, 1864 on x86_64.
+  art_target_non_debug_cflags += -Wframe-larger-than=1864
 endif
 
 ifndef LIBART_IMG_HOST_BASE_ADDRESS
