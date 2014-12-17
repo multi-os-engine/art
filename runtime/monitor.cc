@@ -16,6 +16,9 @@
 
 #include "monitor.h"
 
+#define ATRACE_TAG ATRACE_TAG_DALVIK
+
+#include <cutils/trace.h>
 #include <vector>
 
 #include "base/mutex.h"
@@ -248,6 +251,9 @@ void Monitor::Lock(Thread* self) {
     ++num_waiters_;
     monitor_lock_.Unlock(self);  // Let go of locks in order.
     self->SetMonitorEnterObject(GetObject());
+    // TODO: Improve this message by printing the thread which owns the monitor. This is hard to do
+    // safely since this thread could exit when we try to print it's name.
+    ATRACE_BEGIN("Contended on monitor");
     {
       ScopedThreadStateChange tsc(self, kBlocked);  // Change to blocked and give up mutator_lock_.
       MutexLock mu2(self, monitor_lock_);  // Reacquire monitor_lock_ without mutator_lock_ for Wait.
@@ -277,6 +283,7 @@ void Monitor::Lock(Thread* self) {
         }
       }
     }
+    ATRACE_END();
     self->SetMonitorEnterObject(nullptr);
     monitor_lock_.Lock(self);  // Reacquire locks in order.
     --num_waiters_;
