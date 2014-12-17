@@ -2950,6 +2950,11 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       const Instruction* ret_inst = Instruction::At(code_item_->insns_ + next_insn_idx);
       Instruction::Code opcode = ret_inst->Opcode();
       if ((opcode == Instruction::RETURN_VOID) || (opcode == Instruction::RETURN_VOID_BARRIER)) {
+        if (IsConstructor()) {
+          // Before we mark all regs as conflicts, check that we don't have an
+          // uninitialized this.
+          work_line_->CheckConstructorReturn(this);
+        }
         work_line_->MarkAllRegistersAsConflicts(this);
       } else {
         if (opcode == Instruction::RETURN_WIDE) {
@@ -4105,6 +4110,11 @@ bool MethodVerifier::UpdateRegisters(uint32_t next_insn, RegisterLine* merge_lin
       const Instruction* ret_inst = Instruction::At(code_item_->insns_ + next_insn);
       Instruction::Code opcode = ret_inst->Opcode();
       if ((opcode == Instruction::RETURN_VOID) || (opcode == Instruction::RETURN_VOID_BARRIER)) {
+        if (IsConstructor()) {
+          // Before we mark all regs as conflicts, check that we don't have an
+          // uninitialized this.
+          target_line->CheckConstructorReturn(this);
+        }
         target_line->MarkAllRegistersAsConflicts(this);
       } else {
         target_line->CopyFromLine(merge_line);
