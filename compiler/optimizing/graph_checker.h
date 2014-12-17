@@ -20,6 +20,7 @@
 #include "nodes.h"
 
 #include <ostream>
+#include <set>
 
 namespace art {
 
@@ -64,6 +65,7 @@ class GraphChecker : public HGraphDelegateVisitor {
   HBasicBlock* current_block_ = nullptr;
   // Errors encountered while checking the graph.
   std::vector<std::string> errors_;
+  std::set<int> seen_ids_;
 
  private:
   // String displayed before dumped errors.
