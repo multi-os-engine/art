@@ -755,8 +755,9 @@ class Heap {
 
   // Given the current contents of the alloc space, increase the allowed heap footprint to match
   // the target utilization ratio.  This should only be called immediately after a full garbage
-  // collection.
-  void GrowForUtilization(collector::GarbageCollector* collector_ran);
+  // collection. gc_start_size is used to measure bytes / second for the period which the GC was
+  // run.
+  void GrowForUtilization(collector::GarbageCollector* collector_ran, uint64_t gc_start_size = 0);
 
   size_t GetPercentFree();
 
@@ -970,12 +971,6 @@ class Heap {
 
   // Parallel GC data structures.
   std::unique_ptr<ThreadPool> thread_pool_;
-
-  // The nanosecond time at which the last GC ended.
-  uint64_t last_gc_time_ns_;
-
-  // How many bytes were allocated at the end of the last GC.
-  uint64_t last_gc_size_;
 
   // Estimated allocation rate (bytes / second). Computed between the time of the last GC cycle
   // and the start of the current one.

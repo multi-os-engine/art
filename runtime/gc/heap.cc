@@ -167,8 +167,6 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       verify_pre_gc_rosalloc_(verify_pre_gc_rosalloc),
       verify_pre_sweeping_rosalloc_(verify_pre_sweeping_rosalloc),
       verify_post_gc_rosalloc_(verify_post_gc_rosalloc),
-      last_gc_time_ns_(NanoTime()),
-      allocation_rate_(0),
       /* For GC a lot mode, we limit the allocations stacks to be kGcAlotInterval allocations. This
        * causes a lot of GC since we do a GC for alloc whenever the stack is full. When heap
        * verification is enabled, we limit the size of allocation stacks to speed up their
@@ -413,7 +411,6 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   gc_request_lock_ = new Mutex("GC request lock");
   gc_request_cond_.reset(new ConditionVariable("GC request condition variable", *gc_request_lock_));
   heap_trim_request_lock_ = new Mutex("Heap trim request lock");
-  last_gc_size_ = GetBytesAllocated();
   if (ignore_max_footprint_) {
     SetIdealFootprint(std::numeric_limits<size_t>::max());
     concurrent_start_bytes_ = std::numeric_limits<size_t>::max();
@@ -2154,16 +2151,9 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
     ++runtime->GetStats()->gc_for_alloc_count;
     ++self->GetStats()->gc_for_alloc_count;
   }
-  uint64_t gc_start_time_ns = NanoTime();
   uint64_t gc_start_size = GetBytesAllocated();
-  // Approximate allocation rate in bytes / second.
-  uint64_t ms_delta = NsToMs(gc_start_time_ns - last_gc_time_ns_);
-  // Back to back GCs can cause 0 ms of wait time in between GC invocations.
-  if (LIKELY(ms_delta != 0)) {
-    allocation_rate_ = ((gc_start_size - last_gc_size_) * 1000) / ms_delta;
-    ATRACE_INT("Allocation rate KB/s", allocation_rate_ / KB);
-    VLOG(heap) << "Allocation rate: " << PrettySize(allocation_rate_) << "/s";
-  }
+  // Approximate heap size.
+  ATRACE_INT("Heap size in KB", gc_start_size / KB);
 
   DCHECK_LT(gc_type, collector::kGcTypeMax);
   DCHECK_NE(gc_type, collector::kGcTypeNone);
@@ -2220,7 +2210,7 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
   // Enqueue cleared references.
   reference_processor_.EnqueueClearedReferences(self);
   // Grow the heap so that we know when to perform the next GC.
-  GrowForUtilization(collector);
+  GrowForUtilization(collector, gc_start_size);
   const size_t duration = GetCurrentGcIteration()->GetDurationNs();
   const std::vector<uint64_t>& pause_times = GetCurrentGcIteration()->GetPauseTimes();
   // Print the GC if it is an explicit GC (e.g. Runtime.gc()) or a slow GC
@@ -2930,25 +2920,23 @@ double Heap::HeapGrowthMultiplier() const {
   return foreground_heap_growth_multiplier_;
 }
 
-void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran) {
+void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran, uint64_t gc_start_size) {
   // We know what our utilization is at this moment.
   // This doesn't actually resize any memory. It just lets the heap grow more when necessary.
   const uint64_t bytes_allocated = GetBytesAllocated();
-  last_gc_size_ = bytes_allocated;
-  last_gc_time_ns_ = NanoTime();
   uint64_t target_size;
   collector::GcType gc_type = collector_ran->GetGcType();
+  const double multiplier = HeapGrowthMultiplier();  // Use the multiplier to grow more for
+  // foreground.
+  const uint64_t adjusted_min_free = static_cast<uint64_t>(min_free_ * multiplier);
+  const uint64_t adjusted_max_free = static_cast<uint64_t>(max_free_ * multiplier);
   if (gc_type != collector::kGcTypeSticky) {
     // Grow the heap for non sticky GC.
-    const float multiplier = HeapGrowthMultiplier();  // Use the multiplier to grow more for
-    // foreground.
-    intptr_t delta = bytes_allocated / GetTargetHeapUtilization() - bytes_allocated;
+    ssize_t delta = bytes_allocated / GetTargetHeapUtilization() - bytes_allocated;
     CHECK_GE(delta, 0);
     target_size = bytes_allocated + delta * multiplier;
-    target_size = std::min(target_size,
-                           bytes_allocated + static_cast<uint64_t>(max_free_ * multiplier));
-    target_size = std::max(target_size,
-                           bytes_allocated + static_cast<uint64_t>(min_free_ * multiplier));
+    target_size = std::min(target_size, bytes_allocated + adjusted_max_free);
+    target_size = std::max(target_size, bytes_allocated + adjusted_min_free);
     native_need_to_run_finalization_ = true;
     next_gc_type_ = collector::kGcTypeSticky;
   } else {
@@ -2970,8 +2958,8 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran) {
       next_gc_type_ = non_sticky_gc_type;
     }
     // If we have freed enough memory, shrink the heap back down.
-    if (bytes_allocated + max_free_ < max_allowed_footprint_) {
-      target_size = bytes_allocated + max_free_;
+    if (bytes_allocated + adjusted_max_free < max_allowed_footprint_) {
+      target_size = bytes_allocated + adjusted_max_free;
     } else {
       target_size = std::max(bytes_allocated, static_cast<uint64_t>(max_allowed_footprint_));
     }
@@ -2979,11 +2967,17 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran) {
   if (!ignore_max_footprint_) {
     SetIdealFootprint(target_size);
     if (IsGcConcurrent()) {
+      const uint64_t freed_bytes = current_gc_iteration_.GetFreedBytes() +
+          current_gc_iteration_.GetFreedLargeObjectBytes();
+      // Bytes allocated will shrink by freed_bytes after the GC runs, so if we want to figure out
+      // how many bytes were allocated during the GC we need to add freed_bytes back on.
+      CHECK_GE(bytes_allocated + freed_bytes, gc_start_size);
+      const uint64_t bytes_allocated_during_gc = bytes_allocated + freed_bytes - gc_start_size;
       // Calculate when to perform the next ConcurrentGC.
       // Calculate the estimated GC duration.
       const double gc_duration_seconds = NsToMs(current_gc_iteration_.GetDurationNs()) / 1000.0;
       // Estimate how many remaining bytes we will have when we need to start the next GC.
-      size_t remaining_bytes = allocation_rate_ * gc_duration_seconds;
+      size_t remaining_bytes = bytes_allocated_during_gc * gc_duration_seconds;
       remaining_bytes = std::min(remaining_bytes, kMaxConcurrentRemainingBytes);
       remaining_bytes = std::max(remaining_bytes, kMinConcurrentRemainingBytes);
       if (UNLIKELY(remaining_bytes > max_allowed_footprint_)) {
@@ -3062,6 +3056,13 @@ void Heap::ConcurrentGC(Thread* self) {
           break;
         }
       }
+    }
+    {
+      // Clear the concurrent GC request since our GC just finished and we don't want to start
+      // another one right away if we get another request before the concurrent GC could start.
+      ScopedThreadStateChange tsc(self, kBlocked);
+      MutexLock mu(self, *gc_request_lock_);
+      gc_request_pending_ = false;
     }
   }
 }
