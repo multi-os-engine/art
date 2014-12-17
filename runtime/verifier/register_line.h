@@ -47,6 +47,8 @@ enum TypeCategory {
   kTypeCategoryRef = 3,         // object reference
 };
 
+constexpr size_t kInvalidVreg = 0xFFFFU;
+
 // During verification, we associate one of these with every "interesting" instruction. We track
 // the status of all registers, and (if the method has any monitor-enter instructions) maintain a
 // stack of entered monitors (identified by code unit offset).
@@ -156,6 +158,18 @@ class RegisterLine {
    * somehow didn't get initialized.
    */
   bool CheckConstructorReturn(MethodVerifier* verifier) const;
+
+  /*
+   * Check if an UninitializedThis at the specified location has been overwritten before
+   * being correctly initialized.
+   */
+  bool WasUninitializedThisOverwritten(MethodVerifier* verifier, size_t this_loc,
+                                       bool was_invoke_direct) const;
+
+  /*
+   * Get the first location of an UninitializedThis type, or return kInvalidVreg if there are none.
+   */
+  size_t GetUninitializedThisLoc(MethodVerifier* verifier) const;
 
   // Compare two register lines. Returns 0 if they match.
   // Using this for a sort is unwise, since the value can change based on machine endianness.

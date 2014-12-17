@@ -625,6 +625,8 @@ class MethodVerifier {
   bool UpdateRegisters(uint32_t next_insn, RegisterLine* merge_line, bool update_merge_line)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  void SafelyMarkAllRegistersAsConflicts(RegisterLine* reg_line);
+
   // Is the method being verified a constructor?
   bool IsConstructor() const {
     return (method_access_flags_ & kAccConstructor) != 0;
