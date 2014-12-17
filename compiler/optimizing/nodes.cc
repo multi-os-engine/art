@@ -713,6 +713,9 @@ void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
     HInstruction* current = it.Current();
     if (current->IsConstant()) {
       current->InsertBefore(outer_graph->GetEntryBlock()->GetLastInstruction());
+      // The callee graph has set an id for this instruction that may clash with ones
+      // from outer graph. Assign it a new id that is specific for the containing graph.
+      current->SetId(outer_graph->GetNextInstructionId());
     } else if (current->IsParameterValue()) {
       current->ReplaceWith(invoke->InputAt(parameter_index++));
     } else {
@@ -728,6 +731,9 @@ void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
   HInstruction* last = body->GetLastInstruction();
   HInstruction* first = body->GetFirstInstruction();
 
+  // Ideally we want the instructions using "Add" in BasicBlock. However, since that
+  // has a larger overhead since it treats each instruction independently, we follow
+  // approach below.
   if (first != last) {
     HInstruction* antelast = last->GetPrevious();
 
@@ -744,15 +750,21 @@ void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
     first->previous_ = invoke;
     invoke->next_ = first;
 
-    // Update the block pointer of all instructions.
+    // Update the block pointer of all instructions and also assign a new id so
+    // that it does not clash with any of the existing ones.
     for (HInstruction* current = antelast; current != invoke; current = current->GetPrevious()) {
       current->SetBlock(invoke->GetBlock());
+      current->SetId(outer_graph->GetNextInstructionId());
     }
   }
 
   // Finally, replace the invoke with the return value of the inlined graph.
+  // Since invokes are decomposed from their null check, it is okay to completely
+  // eliminate the invoke.
   if (last->IsReturn()) {
+    HBasicBlock* invoke_block = invoke->GetBlock();
     invoke->ReplaceWith(last->InputAt(0));
+    invoke_block->RemoveInstruction(invoke);
     body->RemoveInstruction(last);
   } else {
     DCHECK(last->IsReturnVoid());
