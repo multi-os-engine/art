@@ -299,7 +299,7 @@
     DELIVER_PENDING_EXCEPTION
 .endm
 
-.macro RETURN_IF_RESULT_IS_NON_ZERO
+.macro RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     beqz   $v0, 1f                       # success?
     nop
@@ -706,7 +706,7 @@ ENTRY art_quick_initialize_static_storage
     # artInitializeStaticStorageFromCode(uint32_t type_idx, Method* referrer, Thread*)
     jal     artInitializeStaticStorageFromCode
     move    $a2, rSELF                          # pass Thread::Current
-    RETURN_IF_RESULT_IS_NON_ZERO
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 END art_quick_initialize_static_storage
 
     /*
@@ -718,7 +718,7 @@ ENTRY art_quick_initialize_type
     # artInitializeTypeFromCode(uint32_t type_idx, Method* referrer, Thread*)
     jal     artInitializeTypeFromCode
     move    $a2, rSELF                         # pass Thread::Current
-    RETURN_IF_RESULT_IS_NON_ZERO
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 END art_quick_initialize_type
 
     /*
@@ -731,7 +731,7 @@ ENTRY art_quick_initialize_type_and_verify_access
     # artInitializeTypeFromCode(uint32_t type_idx, Method* referrer, Thread*)
     jal     artInitializeTypeAndVerifyAccessFromCode
     move    $a2, rSELF                         # pass Thread::Current
-    RETURN_IF_RESULT_IS_NON_ZERO
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 END art_quick_initialize_type_and_verify_access
     /*
      * Called by managed code to resolve a static field and load a boolean primitive value.
@@ -1030,7 +1030,7 @@ ENTRY art_quick_resolve_string
     # artResolveStringFromCode(Method* referrer, uint32_t string_idx, Thread*)
     jal     artResolveStringFromCode
     move    $a2, rSELF                # pass Thread::Current
-    RETURN_IF_RESULT_IS_NON_ZERO
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 END art_quick_resolve_string
 
 
