@@ -360,7 +360,7 @@ CompilerDriver::CompilerDriver(const CompilerOptions* compiler_options,
       dump_passes_(dump_passes),
       timings_logger_(timer),
       compiler_context_(nullptr),
-      support_boot_image_fixup_(instruction_set != kMips),
+      support_boot_image_fixup_(instruction_set != kMips && instruction_set != kMips64),
       dedupe_code_("dedupe code"),
       dedupe_src_mapping_table_("dedupe source mapping table"),
       dedupe_mapping_table_("dedupe mapping table"),
@@ -2092,6 +2092,7 @@ static bool InstructionSetHasGenericJniStub(InstructionSet isa) {
     case kArm64:
     case kThumb2:
     case kMips:
+    case kMips64:
     case kX86:
     case kX86_64: return true;
     default: return false;
