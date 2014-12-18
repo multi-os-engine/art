@@ -86,6 +86,7 @@ endif
 ART_TARGET_CLANG_arm :=
 ART_TARGET_CLANG_arm64 :=
 ART_TARGET_CLANG_mips :=
+ART_TARGET_CLANG_mips64 :=
 ART_TARGET_CLANG_x86 :=
 ART_TARGET_CLANG_x86_64 :=
 
@@ -101,6 +102,7 @@ ART_TARGET_CLANG_CFLAGS :=
 ART_TARGET_CLANG_CFLAGS_arm :=
 ART_TARGET_CLANG_CFLAGS_arm64 :=
 ART_TARGET_CLANG_CFLAGS_mips :=
+ART_TARGET_CLANG_CFLAGS_mips64 :=
 ART_TARGET_CLANG_CFLAGS_x86 :=
 ART_TARGET_CLANG_CFLAGS_x86_64 :=
 
@@ -186,6 +188,10 @@ art_cflags := \
 #  -Wmissing-declarations \
 
 
+## Temp hack to get mips32r6 and mips64r6 into interpreter mode.
+ifneq ($(filter %r6,$(TARGET_ARCH_VARIANT)),)
+  art_cflags += -DMIPS_R6=1
+endif
 
 ifdef ART_IMT_SIZE
   art_cflags += -DIMT_SIZE=$(ART_IMT_SIZE)
