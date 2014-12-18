@@ -19,6 +19,7 @@
 
 #include "lock_word.h"
 #include "monitor_pool.h"
+#include "thread_list.h"
 
 namespace art {
 
@@ -27,9 +28,29 @@ inline uint32_t LockWord::ThinLockOwner() const {
   return (value_ >> kThinLockOwnerShift) & kThinLockOwnerMask;
 }
 
+inline uint32_t LockWord::BiasLockOwner() const {
+  DCHECK_EQ(GetState(), kBiasLocked);
+  return (value_ >> kBiasLockOwnerShift) & kBiasLockOwnerMask;
+}
+
 inline uint32_t LockWord::ThinLockCount() const {
   DCHECK_EQ(GetState(), kThinLocked);
   return (value_ >> kThinLockCountShift) & kThinLockCountMask;
+}
+
+inline uint32_t LockWord::BiasLockCount() const {
+  DCHECK_EQ(GetState(), kBiasLocked);
+  return (value_ >> kBiasLockCountShift) & kBiasLockCountMask;
+}
+
+inline bool LockWord::IsThinLockUnlocked() const {
+  DCHECK_EQ(GetState(), kThinLocked);
+  return ThinLockOwner() == ThreadList::kInvalidThreadId;
+}
+
+inline bool LockWord::IsBiasLockUnlocked() const {
+  DCHECK_EQ(GetState(), kBiasLocked);
+  return BiasLockCount() == 0;
 }
 
 inline Monitor* LockWord::FatLockMonitor() const {

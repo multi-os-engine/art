@@ -584,7 +584,7 @@ TEST_F(StubTest, Memcpy) {
 
 TEST_F(StubTest, LockObject) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
-  static constexpr size_t kThinLockLoops = 100;
+  static constexpr size_t kBiasLockLoops = 100;
 
   Thread* self = Thread::Current();
 
@@ -605,18 +605,18 @@ TEST_F(StubTest, LockObject) {
 
   LockWord lock_after = obj->GetLockWord(false);
   LockWord::LockState new_state = lock_after.GetState();
-  EXPECT_EQ(LockWord::LockState::kThinLocked, new_state);
-  EXPECT_EQ(lock_after.ThinLockCount(), 0U);  // Thin lock starts count at zero
+  EXPECT_EQ(LockWord::LockState::kBiasLocked, new_state);
+  EXPECT_EQ(lock_after.BiasLockCount(), 1U);  // Biased lock starts count at 1
 
-  for (size_t i = 1; i < kThinLockLoops; ++i) {
+  for (size_t i = 1; i < kBiasLockLoops; ++i) {
     Invoke3(reinterpret_cast<size_t>(obj.Get()), 0U, 0U, art_quick_lock_object, self);
 
     // Check we're at lock count i
 
     LockWord l_inc = obj->GetLockWord(false);
     LockWord::LockState l_inc_state = l_inc.GetState();
-    EXPECT_EQ(LockWord::LockState::kThinLocked, l_inc_state);
-    EXPECT_EQ(l_inc.ThinLockCount(), i);
+    EXPECT_EQ(LockWord::LockState::kBiasLocked, l_inc_state);
+    EXPECT_EQ(l_inc.BiasLockCount(), i + 1);
   }
 
   // Force a fat lock by running identity hashcode to fill up lock word.
@@ -657,7 +657,7 @@ class RandGen {
 // NO_THREAD_SAFETY_ANALYSIS as we do not want to grab exclusive mutator lock for MonitorInfo.
 static void TestUnlockObject(StubTest* test) NO_THREAD_SAFETY_ANALYSIS {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
-  static constexpr size_t kThinLockLoops = 100;
+  static constexpr size_t kBiasLockLoops = 100;
 
   Thread* self = Thread::Current();
 
@@ -687,13 +687,13 @@ static void TestUnlockObject(StubTest* test) NO_THREAD_SAFETY_ANALYSIS {
 
   LockWord lock_after2 = obj->GetLockWord(false);
   LockWord::LockState new_state2 = lock_after2.GetState();
-  EXPECT_EQ(LockWord::LockState::kThinLocked, new_state2);
+  EXPECT_EQ(LockWord::LockState::kBiasLocked, new_state2);
 
   test->Invoke3(reinterpret_cast<size_t>(obj.Get()), 0U, 0U, art_quick_unlock_object, self);
 
   LockWord lock_after3 = obj->GetLockWord(false);
   LockWord::LockState new_state3 = lock_after3.GetState();
-  EXPECT_EQ(LockWord::LockState::kUnlocked, new_state3);
+  EXPECT_EQ(LockWord::LockState::kBiasLocked, new_state3);
 
   // Stress test:
   // Keep a number of objects and their locks in flight. Randomly lock or unlock one of them in
@@ -735,7 +735,7 @@ static void TestUnlockObject(StubTest* test) NO_THREAD_SAFETY_ANALYSIS {
       bool take_lock;  // Whether to lock or unlock in this step.
       if (counts[index] == 0) {
         take_lock = true;
-      } else if (counts[index] == kThinLockLoops) {
+      } else if (counts[index] == kBiasLockLoops) {
         take_lock = false;
       } else {
         // Randomly.
@@ -764,10 +764,10 @@ static void TestUnlockObject(StubTest* test) NO_THREAD_SAFETY_ANALYSIS {
         EXPECT_EQ(counts[index], info.entry_count_) << index;
       } else {
         if (counts[index] > 0) {
-          EXPECT_EQ(LockWord::LockState::kThinLocked, iter_state);
-          EXPECT_EQ(counts[index] - 1, lock_iter.ThinLockCount());
+          EXPECT_EQ(LockWord::LockState::kBiasLocked, iter_state);
+          EXPECT_EQ(counts[index], lock_iter.BiasLockCount());
         } else {
-          EXPECT_EQ(LockWord::LockState::kUnlocked, iter_state);
+          EXPECT_EQ(LockWord::LockState::kBiasLocked, iter_state);
         }
       }
     }
@@ -786,7 +786,7 @@ static void TestUnlockObject(StubTest* test) NO_THREAD_SAFETY_ANALYSIS {
 
     LockWord lock_after4 = objects[index]->GetLockWord(false);
     LockWord::LockState new_state4 = lock_after4.GetState();
-    EXPECT_TRUE(LockWord::LockState::kUnlocked == new_state4
+    EXPECT_TRUE(LockWord::LockState::kBiasLocked == new_state4
                 || LockWord::LockState::kFatLocked == new_state4);
   }
 
