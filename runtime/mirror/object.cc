@@ -150,40 +150,51 @@ int32_t Object::IdentityHashCode() const {
   mirror::Object* current_this = const_cast<mirror::Object*>(this);
   while (true) {
     LockWord lw = current_this->GetLockWord(false);
-    switch (lw.GetState()) {
-      case LockWord::kUnlocked: {
-        // Try to compare and swap in a new hash, if we succeed we will return the hash on the next
-        // loop iteration.
-        LockWord hash_word(LockWord::FromHashCode(GenerateIdentityHashCode()));
-        DCHECK_EQ(hash_word.GetState(), LockWord::kHashCode);
-        if (const_cast<Object*>(this)->CasLockWordWeakRelaxed(lw, hash_word)) {
-          return hash_word.GetHashCode();
+    LockWord::LockState state = lw.GetState();
+    if (state == LockWord::kUnlocked ||
+        (state == LockWord::kThinLocked && lw.IsThinLockUnlocked())) {
+      // Try to compare and swap in a new hash, if we succeed we will return the hash on the next
+      // loop iteration.
+      LockWord hash_word(LockWord::FromHashCode(GenerateIdentityHashCode()));
+      DCHECK_EQ(hash_word.GetState(), LockWord::kHashCode);
+      if (const_cast<Object*>(this)->CasLockWordWeakRelaxed(lw, hash_word)) {
+        return hash_word.GetHashCode();
+      }
+    } else if (state == LockWord::kBiasLocked && lw.IsBiasLockUnlocked()) {
+      // Try to revoke the biased lock to a thin lock.
+      Thread* self = Thread::Current();
+      StackHandleScope<1> hs(self);
+      Handle<mirror::Object> h_this(hs.NewHandle(current_this));
+      Monitor::TryRevokeBiasedLock(self, h_this, lw);
+      // A GC may have occurred when we switched to kBlocked.
+      current_this = h_this.Get();
+    } else {
+      switch (state) {
+        case LockWord::kBiasLocked:
+        case LockWord::kThinLocked: {
+          // Inflate the biased/thin lock to a monitor and stick the hash code inside of
+          // the monitor. May fail spuriously.
+          Thread* self = Thread::Current();
+          StackHandleScope<1> hs(self);
+          Handle<mirror::Object> h_this(hs.NewHandle(current_this));
+          Monitor::InflateBiasOrThinLocked(self, h_this, lw, GenerateIdentityHashCode());
+          // A GC may have occurred when we switched to kBlocked.
+          current_this = h_this.Get();
+          break;
         }
-        break;
-      }
-      case LockWord::kThinLocked: {
-        // Inflate the thin lock to a monitor and stick the hash code inside of the monitor. May
-        // fail spuriously.
-        Thread* self = Thread::Current();
-        StackHandleScope<1> hs(self);
-        Handle<mirror::Object> h_this(hs.NewHandle(current_this));
-        Monitor::InflateThinLocked(self, h_this, lw, GenerateIdentityHashCode());
-        // A GC may have occurred when we switched to kBlocked.
-        current_this = h_this.Get();
-        break;
-      }
-      case LockWord::kFatLocked: {
-        // Already inflated, return the has stored in the monitor.
-        Monitor* monitor = lw.FatLockMonitor();
-        DCHECK(monitor != nullptr);
-        return monitor->GetHashCode();
-      }
-      case LockWord::kHashCode: {
-        return lw.GetHashCode();
-      }
-      default: {
-        LOG(FATAL) << "Invalid state during hashcode " << lw.GetState();
-        break;
+        case LockWord::kFatLocked: {
+          // Already inflated, return the has stored in the monitor.
+          Monitor* monitor = lw.FatLockMonitor();
+          DCHECK(monitor != nullptr);
+          return monitor->GetHashCode();
+        }
+        case LockWord::kHashCode: {
+          return lw.GetHashCode();
+        }
+        default: {
+          LOG(FATAL) << "Invalid state during hashcode " << lw.GetState();
+          break;
+        }
       }
     }
   }

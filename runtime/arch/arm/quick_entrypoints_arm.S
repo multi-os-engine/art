@@ -464,8 +464,9 @@ ENTRY art_quick_lock_object
 .Lretry_lock:
     ldr    r2, [r9, #THREAD_ID_OFFSET]
     ldrex  r1, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
-    cbnz   r1, .Lnot_unlocked         @ already thin locked
+    cbnz   r1, .Lnot_unlocked         @ already bias locked
     @ unlocked case - r2 holds thread id with count of 0
+    add    r2, r2, #65536             @ set lock count to 1.
     strex  r3, r2, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
     cbnz   r3, .Lstrex_fail           @ store failed, retry
     dmb    ish                        @ full (LoadLoad|LoadStore) memory barrier
@@ -473,14 +474,14 @@ ENTRY art_quick_lock_object
 .Lstrex_fail:
     b .Lretry_lock                    @ unlikely forward branch, need to reload and recheck r1/r2
 .Lnot_unlocked:
-    lsr    r3, r1, 30
-    cbnz   r3, .Lslow_lock            @ if either of the top two bits are set, go slow path
+    lsr    r3, r1, 29
+    cbnz   r3, .Lslow_lock            @ if any of the top three bits are set, go slow path
     eor    r2, r1, r2                 @ lock_word.ThreadId() ^ self->ThreadId()
     uxth   r2, r2                     @ zero top 16 bits
     cbnz   r2, .Lslow_lock            @ lock word and self thread id's match -> recursive lock
                                       @ else contention, go to slow path
     add    r2, r1, #65536             @ increment count in lock word placing in r2 for storing
-    lsr    r1, r2, 30                 @ if either of the top two bits are set, we overflowed.
+    lsr    r1, r2, 29                 @ if any of the top three bits are set, we overflowed.
     cbnz   r1, .Lslow_lock            @ if we overflow the count go slow path
     str    r2, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET] @ no need for strex as we hold the lock
     bx lr
@@ -501,19 +502,16 @@ END art_quick_lock_object
 ENTRY art_quick_unlock_object
     cbz    r0, .Lslow_unlock
     ldr    r1, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
-    lsr    r2, r1, 30
-    cbnz   r2, .Lslow_unlock          @ if either of the top two bits are set, go slow path
+    lsr    r2, r1, 29
+    cbnz   r2, .Lslow_unlock          @ if any of the top three bits are set, go slow path
     ldr    r2, [r9, #THREAD_ID_OFFSET]
     eor    r3, r1, r2                 @ lock_word.ThreadId() ^ self->ThreadId()
     uxth   r3, r3                     @ zero top 16 bits
     cbnz   r3, .Lslow_unlock          @ do lock word and self thread id's match?
     cmp    r1, #65536
-    bpl    .Lrecursive_thin_unlock
-    @ transition to unlocked, r3 holds 0
-    dmb    ish                        @ full (LoadStore|StoreStore) memory barrier
-    str    r3, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
-    bx     lr
-.Lrecursive_thin_unlock:
+    bpl    .Lrecursive_bias_unlock
+    b      .Lslow_unlock              @ go slow path if lock count is 0.
+.Lrecursive_bias_unlock:
     sub    r1, r1, #65536
     str    r1, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
     bx     lr

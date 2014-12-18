@@ -608,25 +608,26 @@ DEFINE_FUNCTION art_quick_lock_object
     jz   .Lslow_lock
 .Lretry_lock:
     movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax), %ecx  // ecx := lock word
-    test LITERAL(0xC0000000), %ecx        // test the 2 high bits.
-    jne  .Lslow_lock                      // slow path if either of the two high bits are set.
+    test LITERAL(0xE0000000), %ecx        // test the 3 high bits.
+    jne  .Lslow_lock                      // slow path if any of the three high bits are set.
     movl %fs:THREAD_ID_OFFSET, %edx       // edx := thread id
     test %ecx, %ecx
-    jnz  .Lalready_thin                   // lock word contains a thin lock
+    jnz  .Lalready_bias                   // lock word contains a bias lock
     // unlocked case - %edx holds thread id with count of 0
     movl %eax, %ecx                       // remember object in case of retry
     xor  %eax, %eax                       // eax == 0 for comparison with lock word in cmpxchg
+    addl LITERAL(65536), %edx             // change the lock count into 1
     lock cmpxchg  %edx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%ecx)
     jnz  .Lcmpxchg_fail                   // cmpxchg failed retry
     ret
 .Lcmpxchg_fail:
     movl  %ecx, %eax                      // restore eax
     jmp  .Lretry_lock
-.Lalready_thin:
+.Lalready_bias:
     cmpw %cx, %dx                         // do we hold the lock already?
     jne  .Lslow_lock
     addl LITERAL(65536), %ecx             // increment recursion count
-    test LITERAL(0xC0000000), %ecx        // overflowed if either of top two bits are set
+    test LITERAL(0xE0000000), %ecx        // overflowed if any of top three bits are set
     jne  .Lslow_lock                      // count overflowed so go slow
     // update lockword, cmpxchg not necessary as we hold lock
     movl %ecx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax)
@@ -651,15 +652,12 @@ DEFINE_FUNCTION art_quick_unlock_object
     jz   .Lslow_unlock
     movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax), %ecx  // ecx := lock word
     movl %fs:THREAD_ID_OFFSET, %edx       // edx := thread id
-    test LITERAL(0xC0000000), %ecx
+    test LITERAL(0xE0000000), %ecx
     jnz  .Lslow_unlock                    // lock word contains a monitor
     cmpw %cx, %dx                         // does the thread id match?
     jne  .Lslow_unlock
     cmpl LITERAL(65536), %ecx
-    jae  .Lrecursive_thin_unlock
-    movl LITERAL(0), MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax)
-    ret
-.Lrecursive_thin_unlock:
+    jl   .Lslow_unlock
     subl LITERAL(65536), %ecx
     mov  %ecx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax)
     ret
