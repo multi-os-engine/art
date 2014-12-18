@@ -100,12 +100,12 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
   }
   cu.target64 = Is64BitInstructionSet(cu.instruction_set);
   cu.compiler = compiler;
-  // TODO: Mips64 is not yet implemented.
   CHECK((cu.instruction_set == kThumb2) ||
         (cu.instruction_set == kArm64) ||
         (cu.instruction_set == kX86) ||
         (cu.instruction_set == kX86_64) ||
-        (cu.instruction_set == kMips));
+        (cu.instruction_set == kMips) ||
+        (cu.instruction_set == kMips64));
 
   // TODO: set this from command line
   cu.compiler_flip_match = false;
