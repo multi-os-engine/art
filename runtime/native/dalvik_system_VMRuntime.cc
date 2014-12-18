@@ -34,6 +34,7 @@
 #include "gc/heap.h"
 #include "gc/space/dlmalloc_space.h"
 #include "gc/space/image_space.h"
+#include "gc/task_processor.h"
 #include "intern_table.h"
 #include "jni_internal.h"
 #include "mirror/art_method-inl.h"
@@ -213,19 +214,28 @@ static void VMRuntime_updateProcessState(JNIEnv*, jobject, jint process_state) {
   runtime->UpdateProfilerState(process_state);
 }
 
-static void VMRuntime_trimHeap(JNIEnv*, jobject) {
-  Runtime::Current()->GetHeap()->DoPendingTransitionOrTrim();
+static void VMRuntime_trimHeap(JNIEnv* env, jobject) {
+  Runtime::Current()->GetHeap()->Trim(ThreadForEnv(env));
 }
 
 static void VMRuntime_concurrentGC(JNIEnv* env, jobject) {
   Runtime::Current()->GetHeap()->ConcurrentGC(ThreadForEnv(env));
 }
 
-static void VMRuntime_requestConcurrentGC(JNIEnv* env, jobject) {
-  Runtime::Current()->GetHeap()->NotifyConcurrentGCRequest(ThreadForEnv(env));
+static void VMRuntime_requestHeapTrim(JNIEnv* env, jobject) {
+  Runtime::Current()->GetHeap()->RequestTrim(ThreadForEnv(env));
 }
-static void VMRuntime_waitForConcurrentGCRequest(JNIEnv* env, jobject) {
-  Runtime::Current()->GetHeap()->WaitForConcurrentGCRequest(ThreadForEnv(env));
+
+static void VMRuntime_requestConcurrentGC(JNIEnv* env, jobject) {
+  Runtime::Current()->GetHeap()->RequestConcurrentGC(ThreadForEnv(env));
+}
+
+static void VMRuntime_interruptHeapTaskProcessor(JNIEnv* env, jobject) {
+  Runtime::Current()->GetHeap()->GetTaskProcessor()->Interrupt(ThreadForEnv(env));
+}
+
+static void VMRuntime_runHeapTasks(JNIEnv* env, jobject) {
+  Runtime::Current()->GetHeap()->GetTaskProcessor()->RunTasksUntilInterrupted(ThreadForEnv(env));
 }
 
 typedef std::map<std::string, mirror::String*> StringTable;
@@ -566,10 +576,9 @@ static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(VMRuntime, classPath, "()Ljava/lang/String;"),
   NATIVE_METHOD(VMRuntime, clearGrowthLimit, "()V"),
   NATIVE_METHOD(VMRuntime, concurrentGC, "()V"),
-  NATIVE_METHOD(VMRuntime, requestConcurrentGC, "()V"),
-  NATIVE_METHOD(VMRuntime, waitForConcurrentGCRequest, "()V"),
   NATIVE_METHOD(VMRuntime, disableJitCompilation, "()V"),
   NATIVE_METHOD(VMRuntime, getTargetHeapUtilization, "()F"),
+  NATIVE_METHOD(VMRuntime, interruptHeapTaskProcessor, "()V"),
   NATIVE_METHOD(VMRuntime, isDebuggerActive, "!()Z"),
   NATIVE_METHOD(VMRuntime, nativeSetTargetHeapUtilization, "(F)V"),
   NATIVE_METHOD(VMRuntime, newNonMovableArray, "!(Ljava/lang/Class;I)Ljava/lang/Object;"),
@@ -578,6 +587,9 @@ static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(VMRuntime, setTargetSdkVersionNative, "(I)V"),
   NATIVE_METHOD(VMRuntime, registerNativeAllocation, "(I)V"),
   NATIVE_METHOD(VMRuntime, registerNativeFree, "(I)V"),
+  NATIVE_METHOD(VMRuntime, requestConcurrentGC, "()V"),
+  NATIVE_METHOD(VMRuntime, requestHeapTrim, "()V"),
+  NATIVE_METHOD(VMRuntime, runHeapTasks, "()V"),
   NATIVE_METHOD(VMRuntime, updateProcessState, "(I)V"),
   NATIVE_METHOD(VMRuntime, startJitCompilation, "()V"),
   NATIVE_METHOD(VMRuntime, trimHeap, "()V"),
