@@ -123,11 +123,14 @@ class Monitor {
   }
 
   // Inflate the lock on obj. May fail to inflate for spurious reasons, always re-check.
-  static void InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWord lock_word,
-                                uint32_t hash_code) NO_THREAD_SAFETY_ANALYSIS;
+  static void InflateBiasOrThinLocked(Thread* self, Handle<mirror::Object> obj, LockWord lock_word,
+                                      uint32_t hash_code) NO_THREAD_SAFETY_ANALYSIS;
 
   static bool Deflate(Thread* self, mirror::Object* obj)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static void RevokeBiasLocked(Thread* self, Handle<mirror::Object> obj, LockWord lock_word)
+      NO_THREAD_SAFETY_ANALYSIS;
 
  private:
   explicit Monitor(Thread* self, Thread* owner, mirror::Object* obj, int32_t hash_code)
