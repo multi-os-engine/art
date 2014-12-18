@@ -20,23 +20,23 @@
 // All quick entrypoints. Format is name, return type, argument types.
 
 #define QUICK_ENTRYPOINT_LIST(V) \
-  V(AllocArray, void*, uint32_t, void*, int32_t) \
-  V(AllocArrayResolved, void*, void*, void*, int32_t) \
-  V(AllocArrayWithAccessCheck, void*, uint32_t, void*, int32_t) \
-  V(AllocObject, void*, uint32_t, void*) \
-  V(AllocObjectResolved, void*, void*, void*) \
-  V(AllocObjectInitialized, void*, void*, void*) \
-  V(AllocObjectWithAccessCheck, void*, uint32_t, void*) \
-  V(CheckAndAllocArray, void*, uint32_t, void*, int32_t) \
-  V(CheckAndAllocArrayWithAccessCheck, void*, uint32_t, void*, int32_t) \
+  V(AllocArray, void*, uint32_t, int32_t, mirror::ArtMethod*) \
+  V(AllocArrayResolved, void*, mirror::Class*, int32_t, mirror::ArtMethod*) \
+  V(AllocArrayWithAccessCheck, void*, uint32_t, int32_t, mirror::ArtMethod*) \
+  V(AllocObject, void*, uint32_t, mirror::ArtMethod*) \
+  V(AllocObjectResolved, void*, mirror::Class*, mirror::ArtMethod*) \
+  V(AllocObjectInitialized, void*, mirror::Class*, mirror::ArtMethod*) \
+  V(AllocObjectWithAccessCheck, void*, uint32_t, mirror::ArtMethod*) \
+  V(CheckAndAllocArray, void*, uint32_t, int32_t, mirror::ArtMethod*) \
+  V(CheckAndAllocArrayWithAccessCheck, void*, uint32_t, int32_t, mirror::ArtMethod*) \
 \
   V(InstanceofNonTrivial, uint32_t, const mirror::Class*, const mirror::Class*) \
   V(CheckCast, void , void*, void*) \
 \
-  V(InitializeStaticStorage, void*, uint32_t, void*) \
-  V(InitializeTypeAndVerifyAccess, void*, uint32_t, void*) \
-  V(InitializeType, void*, uint32_t, void*) \
-  V(ResolveString, void*, void*, uint32_t) \
+  V(InitializeStaticStorage, void*, uint32_t, mirror::ArtMethod*) \
+  V(InitializeTypeAndVerifyAccess, void*, uint32_t, mirror::ArtMethod*) \
+  V(InitializeType, void*, uint32_t, mirror::ArtMethod*) \
+  V(ResolveString, void*, uint32_t, mirror::ArtMethod*) \
 \
   V(Set8Instance, int, uint32_t, void*, int8_t) \
   V(Set8Static, int, uint32_t, int8_t) \

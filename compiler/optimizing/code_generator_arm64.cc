@@ -386,8 +386,8 @@ class LoadStringSlowPathARM64 : public SlowPathCodeARM64 {
     codegen->SaveLiveRegisters(locations);
 
     InvokeRuntimeCallingConvention calling_convention;
-    arm64_codegen->LoadCurrentMethod(calling_convention.GetRegisterAt(0).W());
-    __ Mov(calling_convention.GetRegisterAt(1).W(), instruction_->GetStringIndex());
+    arm64_codegen->LoadCurrentMethod(calling_convention.GetRegisterAt(1).W());
+    __ Mov(calling_convention.GetRegisterAt(0).W(), instruction_->GetStringIndex());
     arm64_codegen->InvokeRuntime(
         QUICK_ENTRY_POINT(pResolveString), instruction_, instruction_->GetDexPc());
     Primitive::Type type = instruction_->GetType();
@@ -2044,9 +2044,9 @@ void LocationsBuilderARM64::VisitNewArray(HNewArray* instruction) {
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
   InvokeRuntimeCallingConvention calling_convention;
   locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(0)));
-  locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(1)));
+  locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(2)));
   locations->SetOut(LocationFrom(x0));
-  locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(2)));
+  locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(1)));
 }
 
 void InstructionCodeGeneratorARM64::VisitNewArray(HNewArray* instruction) {
@@ -2055,7 +2055,7 @@ void InstructionCodeGeneratorARM64::VisitNewArray(HNewArray* instruction) {
   Register type_index = RegisterFrom(locations->GetTemp(0), Primitive::kPrimInt);
   DCHECK(type_index.Is(w0));
   Register current_method = RegisterFrom(locations->GetTemp(1), Primitive::kPrimNot);
-  DCHECK(current_method.Is(w1));
+  DCHECK(current_method.Is(w2));
   codegen_->LoadCurrentMethod(current_method);
   __ Mov(type_index, instruction->GetTypeIndex());
   codegen_->InvokeRuntime(

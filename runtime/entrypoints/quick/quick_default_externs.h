@@ -19,16 +19,18 @@
 
 #include <cstdint>
 
+#include "mirror/art_method.h"
+
 // These are extern declarations of assembly stubs with common names.
 
 // Cast entrypoints.
 extern "C" void art_quick_check_cast(void*, void*);
 
 // DexCache entrypoints.
-extern "C" void* art_quick_initialize_static_storage(uint32_t, void*);
-extern "C" void* art_quick_initialize_type(uint32_t, void*);
-extern "C" void* art_quick_initialize_type_and_verify_access(uint32_t, void*);
-extern "C" void* art_quick_resolve_string(void*, uint32_t);
+extern "C" void* art_quick_initialize_static_storage(uint32_t, art::mirror::ArtMethod*);
+extern "C" void* art_quick_initialize_type(uint32_t, art::mirror::ArtMethod*);
+extern "C" void* art_quick_initialize_type_and_verify_access(uint32_t, art::mirror::ArtMethod*);
+extern "C" void* art_quick_resolve_string(uint32_t, art::mirror::ArtMethod*);
 
 // Field entrypoints.
 extern "C" int art_quick_set8_instance(uint32_t, void*, int8_t);
