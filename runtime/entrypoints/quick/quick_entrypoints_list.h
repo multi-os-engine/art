@@ -20,15 +20,15 @@
 // All quick entrypoints. Format is name, return type, argument types.
 
 #define QUICK_ENTRYPOINT_LIST(V) \
-  V(AllocArray, void*, uint32_t, void*, int32_t) \
-  V(AllocArrayResolved, void*, void*, void*, int32_t) \
-  V(AllocArrayWithAccessCheck, void*, uint32_t, void*, int32_t) \
+  V(AllocArray, void*, uint32_t, int32_t, void*) \
+  V(AllocArrayResolved, void*, void*, int32_t, void*) \
+  V(AllocArrayWithAccessCheck, void*, uint32_t, int32_t, void*) \
   V(AllocObject, void*, uint32_t, void*) \
   V(AllocObjectResolved, void*, void*, void*) \
   V(AllocObjectInitialized, void*, void*, void*) \
   V(AllocObjectWithAccessCheck, void*, uint32_t, void*) \
-  V(CheckAndAllocArray, void*, uint32_t, void*, int32_t) \
-  V(CheckAndAllocArrayWithAccessCheck, void*, uint32_t, void*, int32_t) \
+  V(CheckAndAllocArray, void*, uint32_t, int32_t, void*) \
+  V(CheckAndAllocArrayWithAccessCheck, void*, uint32_t, int32_t, void*) \
 \
   V(InstanceofNonTrivial, uint32_t, const mirror::Class*, const mirror::Class*) \
   V(CheckCast, void , void*, void*) \
