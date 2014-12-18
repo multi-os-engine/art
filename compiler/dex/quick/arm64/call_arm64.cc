@@ -149,12 +149,12 @@ void Arm64Mir2Lir::GenLargePackedSwitch(MIR* mir, uint32_t table_offset, RegLoca
 }
 
 /*
- * Handle unlocked -> thin locked transition inline or else call out to quick entrypoint. For more
+ * Handle unlocked -> bias locked transition inline or else call out to quick entrypoint. For more
  * details see monitor.cc.
  */
 void Arm64Mir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
   // x0/w0 = object
-  // w1    = thin lock thread id
+  // w1    = biased lock thread id
   // x2    = address of lock word
   // w3    = lock word / store failure
   // TUNING: How much performance we get when we inline this?
@@ -176,6 +176,8 @@ void Arm64Mir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
   NewLIR2(kA64Ldxr2rX, rw3, rx2);
   MarkPossibleNullPointerException(opt_flags);
   LIR* not_unlocked_branch = OpCmpImmBranch(kCondNe, rs_w3, 0, NULL);
+  // Set the lock count to 1 for biased lock.
+  OpRegImm(kOpAdd, rs_w1, 1 << 16);
   NewLIR3(kA64Stxr3wrX, rw3, rw1, rx2);
   LIR* lock_success_branch = OpCmpImmBranch(kCondEq, rs_w3, 0, NULL);
 
@@ -222,9 +224,9 @@ void Arm64Mir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
   Load32Disp(rs_xSELF, Thread::ThinLockIdOffset<8>().Int32Value(), rs_w1);
   Load32Disp(rs_x0, mirror::Object::MonitorOffset().Int32Value(), rs_w2);
   MarkPossibleNullPointerException(opt_flags);
+  OpRegImm(kOpSub, rs_w2, 1 << 16);
   LIR* slow_unlock_branch = OpCmpBranch(kCondNe, rs_w1, rs_w2, NULL);
-  GenMemBarrier(kAnyStore);
-  Store32Disp(rs_x0, mirror::Object::MonitorOffset().Int32Value(), rs_wzr);
+  Store32Disp(rs_x0, mirror::Object::MonitorOffset().Int32Value(), rs_w1);
   LIR* unlock_success_branch = OpUnconditionalBranch(NULL);
 
   LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);

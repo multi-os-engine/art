@@ -140,7 +140,7 @@ void ArmMir2Lir::GenLargePackedSwitch(MIR* mir, uint32_t table_offset, RegLocati
 }
 
 /*
- * Handle unlocked -> thin locked transition inline or else call out to quick entrypoint. For more
+ * Handle unlocked -> bias locked transition inline or else call out to quick entrypoint. For more
  * details see monitor.cc.
  */
 void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
@@ -164,6 +164,8 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
         mirror::Object::MonitorOffset().Int32Value() >> 2);
     MarkPossibleNullPointerException(opt_flags);
     LIR* not_unlocked_branch = OpCmpImmBranch(kCondNe, rs_r1, 0, NULL);
+    // Set lock count to 1 for biased lock.
+    OpRegImm(kOpAdd, rs_r2, 1 << 16);
     NewLIR4(kThumb2Strex, rs_r1.GetReg(), rs_r2.GetReg(), rs_r0.GetReg(),
         mirror::Object::MonitorOffset().Int32Value() >> 2);
     LIR* lock_success_branch = OpCmpImmBranch(kCondEq, rs_r1, 0, NULL);
@@ -191,6 +193,8 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
     NewLIR3(kThumb2Ldrex, rs_r1.GetReg(), rs_r0.GetReg(),
         mirror::Object::MonitorOffset().Int32Value() >> 2);
     MarkPossibleNullPointerException(opt_flags);
+    // Set lock count to 1 for biased lock.
+    OpRegImm(kOpAdd, rs_r2, 1 << 16);
     OpRegImm(kOpCmp, rs_r1, 0);
     LIR* it = OpIT(kCondEq, "");
     NewLIR4(kThumb2Strex/*eq*/, rs_r1.GetReg(), rs_r2.GetReg(), rs_r0.GetReg(),
@@ -210,7 +214,7 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
 }
 
 /*
- * Handle thin locked -> unlocked transition inline or else call out to quick entrypoint. For more
+ * Handle bias locked -> unlocked transition inline or else call out to quick entrypoint. For more
  * details see monitor.cc. Note the code below doesn't use ldrex/strex as the code holds the lock
  * and can only give away ownership if its suspended.
  */
@@ -232,10 +236,9 @@ void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
     }
     Load32Disp(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r1);
     MarkPossibleNullPointerException(opt_flags);
-    LoadConstantNoClobber(rs_r3, 0);
+    OpRegImm(kOpSub, rs_r1, 1 << 16);
     LIR* slow_unlock_branch = OpCmpBranch(kCondNe, rs_r1, rs_r2, NULL);
-    GenMemBarrier(kAnyStore);
-    Store32Disp(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r3);
+    Store32Disp(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r2);
     LIR* unlock_success_branch = OpUnconditionalBranch(NULL);
 
     LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);
@@ -258,15 +261,12 @@ void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
     Load32Disp(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r1);  // Get lock
     MarkPossibleNullPointerException(opt_flags);
     Load32Disp(rs_rARM_SELF, Thread::ThinLockIdOffset<4>().Int32Value(), rs_r2);
-    LoadConstantNoClobber(rs_r3, 0);
+    OpRegImm(kOpSub, rs_r1, 1 << 16);
     // Is lock unheld on lock or held by us (==thread_id) on unlock?
     OpRegReg(kOpCmp, rs_r1, rs_r2);
 
     LIR* it = OpIT(kCondEq, "EE");
-    if (GenMemBarrier(kAnyStore)) {
-      UpdateIT(it, "TEE");
-    }
-    Store32Disp/*eq*/(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r3);
+    Store32Disp/*eq*/(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r2);
     // Go expensive route - UnlockObjectFromCode(obj);
     LoadWordDisp/*ne*/(rs_rARM_SELF, QUICK_ENTRYPOINT_OFFSET(4, pUnlockObject).Int32Value(),
                        rs_rARM_LR);

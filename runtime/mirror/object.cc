@@ -161,15 +161,44 @@ int32_t Object::IdentityHashCode() const {
         }
         break;
       }
+      case LockWord::kBiasLocked: {
+        if (lw.IsBiasLockUnlocked()) {
+          // Try to revoke the biased lock to a thin lock.
+          Thread* self = Thread::Current();
+          StackHandleScope<1> hs(self);
+          Handle<mirror::Object> h_this(hs.NewHandle(current_this));
+          Monitor::TryRevokeBiasedLock(self, h_this, lw);
+          // A GC may have occurred when we switched to kBlocked.
+          current_this = h_this.Get();
+        } else {
+          // Inflate the biased/thin lock to a monitor and stick the hash code inside of
+          // the monitor. May fail spuriously.
+          Thread* self = Thread::Current();
+          StackHandleScope<1> hs(self);
+          Handle<mirror::Object> h_this(hs.NewHandle(current_this));
+          Monitor::InflateBiasOrThinLocked(self, h_this, lw, GenerateIdentityHashCode());
+          // A GC may have occurred when we switched to kBlocked.
+          current_this = h_this.Get();
+        }
+        break;
+      }
       case LockWord::kThinLocked: {
-        // Inflate the thin lock to a monitor and stick the hash code inside of the monitor. May
-        // fail spuriously.
-        Thread* self = Thread::Current();
-        StackHandleScope<1> hs(self);
-        Handle<mirror::Object> h_this(hs.NewHandle(current_this));
-        Monitor::InflateThinLocked(self, h_this, lw, GenerateIdentityHashCode());
-        // A GC may have occurred when we switched to kBlocked.
-        current_this = h_this.Get();
+        if (lw.IsThinLockUnlocked()) {
+          LockWord hash_word(LockWord::FromHashCode(GenerateIdentityHashCode()));
+          DCHECK_EQ(hash_word.GetState(), LockWord::kHashCode);
+          if (const_cast<Object*>(this)->CasLockWordWeakRelaxed(lw, hash_word)) {
+            return hash_word.GetHashCode();
+          }
+        } else {
+          // Inflate the biased/thin lock to a monitor and stick the hash code inside of
+          // the monitor. May fail spuriously.
+          Thread* self = Thread::Current();
+          StackHandleScope<1> hs(self);
+          Handle<mirror::Object> h_this(hs.NewHandle(current_this));
+          Monitor::InflateBiasOrThinLocked(self, h_this, lw, GenerateIdentityHashCode());
+          // A GC may have occurred when we switched to kBlocked.
+          current_this = h_this.Get();
+        }
         break;
       }
       case LockWord::kFatLocked: {
