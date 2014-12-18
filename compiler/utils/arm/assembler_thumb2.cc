@@ -1019,7 +1019,7 @@ void Thumb2Assembler::Emit16BitAddSub(Condition cond ATTRIBUTE_UNUSED,
   uint8_t rn_shift = 3;
   uint8_t immediate_shift = 0;
   bool use_immediate = false;
-  uint8_t immediate = 0;
+  uint32_t immediate = 0;  // Should be at most 9 bits but keep the full immediate for CHECKs.
   uint8_t thumb_opcode;;
 
   if (so.IsImmediate()) {
