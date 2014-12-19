@@ -889,8 +889,16 @@ void MIRGraph::DumpCFG(const char* dir_prefix, bool all_blocks, const char *suff
                       GetBasicBlock(GetEntryBlock()->fall_through)->start_offset,
                       suffix == nullptr ? "" : suffix,
                       cnt.LoadRelaxed());
+  // The path can easily surpass FS limits because of parameters etc. Do a very primitive check
+  // here: 255 is a magic constant. It's the filename length limit of ext2/3/4/ntfs. So we'll cut
+  // off things for a valid path (if there are path components), but it's better than not writing
+  // at all.
+  if (fname.size() > 255) {
+    fname = fname.substr(0, 250) + ".dot";
+  }
   file = fopen(fname.c_str(), "w");
   if (file == NULL) {
+    PLOG(ERROR) << "Could not open " << fname << " for DumpCFG.";
     return;
   }
   fprintf(file, "digraph G {\n");
