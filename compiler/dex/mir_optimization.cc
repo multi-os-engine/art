@@ -485,9 +485,11 @@ bool MIRGraph::BasicBlockOpt(BasicBlock* bb) {
             mir->ssa_rep->num_uses = 0;
             BasicBlock* successor_to_unlink = GetBasicBlock(edge_to_kill);
             successor_to_unlink->ErasePredecessor(bb->id);
-            if (successor_to_unlink->predecessors.empty()) {
-              successor_to_unlink->KillUnreachable(this);
-            }
+            // We have changed the graph structure.
+            dfs_orders_up_to_date_ = false;
+            domination_up_to_date_ = false;
+            topological_order_up_to_date_ = false;
+            // Keep MIR SSA rep, the worst that can happen is a Phi with just 1 input.
           }
           break;
         case Instruction::CMPL_FLOAT:
@@ -863,9 +865,6 @@ void MIRGraph::CombineBlocks(class BasicBlock* bb) {
           BasicBlock* succ_bb = GetBasicBlock(succ_info->block);
           DCHECK(succ_bb->catch_entry);
           succ_bb->ErasePredecessor(bb->id);
-          if (succ_bb->predecessors.empty()) {
-            succ_bb->KillUnreachable(this);
-          }
         }
       }
     }
