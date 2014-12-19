@@ -83,9 +83,15 @@ ART_TARGET_CLANG := $(USE_CLANG_PLATFORM_BUILD)
 else
 ART_TARGET_CLANG := false
 endif
+# Clang generated mips assembly code for array.cc cannot be compiled by gas.
+# However, clang assembler cannot compile inlined assembly code in
+# valgrind_malloc_space-inl.h:192:5: error: used $at without ".set noat"
+ifeq ($(TARGET_ARCH),mips)
+ART_TARGET_CLANG := false
+endif
 ART_TARGET_CLANG_arm :=
 ART_TARGET_CLANG_arm64 :=
-ART_TARGET_CLANG_mips :=
+ART_TARGET_CLANG_mips := false
 ART_TARGET_CLANG_x86 :=
 ART_TARGET_CLANG_x86_64 :=
 
