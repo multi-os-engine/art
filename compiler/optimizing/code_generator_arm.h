@@ -159,7 +159,8 @@ class InstructionCodeGeneratorARM : public HGraphVisitor {
 
 class CodeGeneratorARM : public CodeGenerator {
  public:
-  explicit CodeGeneratorARM(HGraph* graph);
+  explicit CodeGeneratorARM(HGraph* graph,
+                            const ArmInstructionSetFeatures* isa_features);
   virtual ~CodeGeneratorARM() {}
 
   void GenerateFrameEntry() OVERRIDE;
@@ -233,6 +234,10 @@ class CodeGeneratorARM : public CodeGenerator {
     block_labels_.SetSize(GetGraph()->GetBlocks().Size());
   }
 
+  const ArmInstructionSetFeatures* GetInstructionSetFeatures() const {
+    return isa_features_;
+  }
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
@@ -240,6 +245,7 @@ class CodeGeneratorARM : public CodeGenerator {
   InstructionCodeGeneratorARM instruction_visitor_;
   ParallelMoveResolverARM move_resolver_;
   Thumb2Assembler assembler_;
+  const ArmInstructionSetFeatures* isa_features_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorARM);
 };
