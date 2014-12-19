@@ -16,6 +16,7 @@
 
 #include "code_generator_arm.h"
 
+#include "arch/arm/instruction_set_features_arm.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/accounting/card_table.h"
 #include "mirror/array-inl.h"
@@ -372,13 +373,15 @@ size_t CodeGeneratorARM::RestoreCoreRegister(size_t stack_index, uint32_t reg_id
   return kArmWordSize;
 }
 
-CodeGeneratorARM::CodeGeneratorARM(HGraph* graph)
+CodeGeneratorARM::CodeGeneratorARM(HGraph* graph,
+                                   const ArmInstructionSetFeatures* isa_features)
     : CodeGenerator(graph, kNumberOfCoreRegisters, kNumberOfSRegisters, kNumberOfRegisterPairs),
       block_labels_(graph->GetArena(), 0),
       location_builder_(graph, this),
       instruction_visitor_(graph, this),
       move_resolver_(graph->GetArena(), this),
-      assembler_(true) {}
+      assembler_(true),
+      isa_features_(isa_features) {}
 
 size_t CodeGeneratorARM::FrameEntrySpillSize() const {
   return kNumberOfPushedRegistersAtEntry * kArmWordSize;
@@ -2615,16 +2618,17 @@ void LocationsBuilderARM::HandleFieldSet(HInstruction* instruction, const FieldI
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
 
-  bool is_volatile = field_info.IsVolatile();
+
   Primitive::Type field_type = field_info.GetFieldType();
   bool is_wide = field_type == Primitive::kPrimLong || field_type == Primitive::kPrimDouble;
-
+  bool generate_volatile = field_info.IsVolatile() && is_wide
+      && !codegen_->GetInstructionSetFeatures()->HasAtomicLdrdAndStrd();
   // Temporary registers for the write barrier.
   // TODO: consider renaming StoreNeedsWriteBarrier to StoreNeedsGCMark.
   if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
     locations->AddTemp(Location::RequiresRegister());
     locations->AddTemp(Location::RequiresRegister());
-  } else if (is_volatile && is_wide) {
+  } else if (generate_volatile) {
     // Arm encoding have some additional constraints for ldrexd/strexd:
     // - registers need to be consecutive
     // - the first register should be even but not R14.
@@ -2650,11 +2654,13 @@ void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
   Register base = locations->InAt(0).AsRegister<Register>();
   Location value = locations->InAt(1);
 
-  bool is_volatile = field_info.IsVolatile();
+  bool generate_volatile = field_info.IsVolatile()
+      && !codegen_->GetInstructionSetFeatures()->HasAtomicLdrdAndStrd();
+
   Primitive::Type field_type = field_info.GetFieldType();
   uint32_t offset = field_info.GetFieldOffset().Uint32Value();
 
-  if (is_volatile) {
+  if (generate_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kAnyStore);
   }
 
@@ -2684,10 +2690,7 @@ void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
     }
 
     case Primitive::kPrimLong: {
-      if (is_volatile) {
-        // TODO: We could use ldrd and strd that are atomic with Large Physical Address Extension
-        // support. This info is stored in the compiler driver (HasAtomicLdrdAndStrd) and we should
-        // pass it around to be able to optimize.
+      if (generate_volatile) {
         GenerateWideAtomicStore(base, offset,
                                 value.AsRegisterPairLow<Register>(),
                                 value.AsRegisterPairHigh<Register>(),
@@ -2706,7 +2709,7 @@ void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
 
     case Primitive::kPrimDouble: {
       DRegister value_reg = FromLowSToD(value.AsFpuRegisterPairLow<SRegister>());
-      if (is_volatile) {
+      if (generate_volatile) {
         Register value_reg_lo = locations->GetTemp(0).AsRegister<Register>();
         Register value_reg_hi = locations->GetTemp(1).AsRegister<Register>();
 
@@ -2728,7 +2731,7 @@ void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
       UNREACHABLE();
   }
 
-  if (is_volatile) {
+  if (generate_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
   }
 }
