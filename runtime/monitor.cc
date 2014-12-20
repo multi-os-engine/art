@@ -454,12 +454,11 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   uintptr_t saved_dex_pc = locking_dex_pc_;
   locking_dex_pc_ = 0;
 
-  /*
-   * Update thread state. If the GC wakes up, it'll ignore us, knowing
-   * that we won't touch any references in this state, and we'll check
-   * our suspend mode before we transition out.
-   */
-  self->TransitionFromRunnableToSuspended(why);
+  // Update thread state. If the GC wakes up, it'll ignore us, knowing that we won't touch any
+  // references in this state, and we'll check our suspend mode before we transition out.
+  // Don't run checkpoints since these may go to runnable and back and cause deadlocks since we
+  // are holding the monitor lock.
+  self->TransitionFromRunnableToSuspended<false>(why);
 
   bool was_interrupted = false;
   {

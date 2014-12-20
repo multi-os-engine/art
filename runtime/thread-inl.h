@@ -106,6 +106,7 @@ inline void Thread::AssertThreadSuspensionIsAllowable(bool check_locks) const {
   }
 }
 
+template<bool kRunCheckpoints>
 inline void Thread::TransitionFromRunnableToSuspended(ThreadState new_state) {
   AssertThreadSuspensionIsAllowable();
   DCHECK_NE(new_state, kRunnable);
@@ -116,12 +117,14 @@ inline void Thread::TransitionFromRunnableToSuspended(ThreadState new_state) {
   union StateAndFlags new_state_and_flags;
   while (true) {
     old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
-    if (UNLIKELY((old_state_and_flags.as_struct.flags & kCheckpointRequest) != 0)) {
-      RunCheckpointFunction();
-      continue;
+    if (kRunCheckpoints) {
+      if (UNLIKELY((old_state_and_flags.as_struct.flags & kCheckpointRequest) != 0)) {
+        RunCheckpointFunction();
+        continue;
+      }
+      // Change the state but keep the current flags (kCheckpointRequest is clear).
+      DCHECK_EQ((old_state_and_flags.as_struct.flags & kCheckpointRequest), 0);
     }
-    // Change the state but keep the current flags (kCheckpointRequest is clear).
-    DCHECK_EQ((old_state_and_flags.as_struct.flags & kCheckpointRequest), 0);
     new_state_and_flags.as_struct.flags = old_state_and_flags.as_struct.flags;
     new_state_and_flags.as_struct.state = new_state;
 
