@@ -932,6 +932,7 @@ struct StackDumpVisitor : public StackVisitor {
         os << StringPrintf("<@addr=0x%" PRIxPTR "> (a %s)", reinterpret_cast<intptr_t>(o),
                            PrettyTypeOf(o).c_str());
       } else {
+        Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
         os << StringPrintf("<0x%08x> (a %s)", o->IdentityHashCode(), PrettyTypeOf(o).c_str());
       }
     }
