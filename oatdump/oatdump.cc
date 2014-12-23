@@ -2055,13 +2055,13 @@ static int DumpOatWithRuntime(Runtime* runtime, OatFile* oat_file, OatDumperOpti
   ScopedObjectAccess soa(self);
   ClassLinker* class_linker = runtime->GetClassLinker();
   class_linker->RegisterOatFile(oat_file);
-  std::vector<const DexFile*> dex_files;
+  DexFileUniquePtrs dex_files;
   for (const OatFile::OatDexFile* odf : oat_file->GetOatDexFiles()) {
     std::string error_msg;
-    const DexFile* dex_file = odf->OpenDexFile(&error_msg);
+    DexFileUniquePtr dex_file = odf->OpenDexFile(&error_msg);
     CHECK(dex_file != nullptr) << error_msg;
     class_linker->RegisterDexFile(*dex_file);
-    dex_files.push_back(dex_file);
+    dex_files.push_back(std::move(dex_file));
   }
 
   // Need a class loader.
@@ -2070,7 +2070,8 @@ static int DumpOatWithRuntime(Runtime* runtime, OatFile* oat_file, OatDumperOpti
       soa.Env()->AllocObject(WellKnownClasses::dalvik_system_PathClassLoader));
   jobject class_loader = soa.Env()->NewGlobalRef(class_loader_local.get());
   // Fake that we're a compiler.
-  runtime->SetCompileTimeClassPath(class_loader, dex_files);
+  DexFilePtrs class_path = DexFileUniquePtrsGet(dex_files);
+  runtime->SetCompileTimeClassPath(class_loader, class_path);
 
   // Use the class loader while dumping.
   StackHandleScope<1> scope(self);
