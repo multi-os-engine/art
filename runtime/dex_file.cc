@@ -125,7 +125,7 @@ bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string*
 }
 
 bool DexFile::Open(const char* filename, const char* location, std::string* error_msg,
-                   std::vector<const DexFile*>* dex_files) {
+                   DexFileUniquePtrs* dex_files) {
   uint32_t magic;
   ScopedFd fd(OpenAndReadMagic(filename, &magic, error_msg));
   if (fd.get() == -1) {
@@ -139,7 +139,7 @@ bool DexFile::Open(const char* filename, const char* location, std::string* erro
     std::unique_ptr<const DexFile> dex_file(DexFile::OpenFile(fd.release(), location, true,
                                                               error_msg));
     if (dex_file.get() != nullptr) {
-      dex_files->push_back(dex_file.release());
+      dex_files->push_back(std::move(dex_file));
       return true;
     } else {
       return false;
@@ -179,8 +179,8 @@ bool DexFile::DisableWrite() const {
   }
 }
 
-const DexFile* DexFile::OpenFile(int fd, const char* location, bool verify,
-                                 std::string* error_msg) {
+DexFileUniquePtr DexFile::OpenFile(int fd, const char* location, bool verify,
+                                   std::string* error_msg) {
   CHECK(location != nullptr);
   std::unique_ptr<MemMap> map;
   {
@@ -224,13 +224,13 @@ const DexFile* DexFile::OpenFile(int fd, const char* location, bool verify,
     return nullptr;
   }
 
-  return dex_file.release();
+  return dex_file;
 }
 
 const char* DexFile::kClassesDex = "classes.dex";
 
 bool DexFile::OpenZip(int fd, const std::string& location, std::string* error_msg,
-                      std::vector<const  DexFile*>* dex_files) {
+                      DexFileUniquePtrs* dex_files) {
   std::unique_ptr<ZipArchive> zip_archive(ZipArchive::OpenFromFd(fd, location.c_str(), error_msg));
   if (zip_archive.get() == nullptr) {
     DCHECK(!error_msg->empty());
@@ -239,10 +239,10 @@ bool DexFile::OpenZip(int fd, const std::string& location, std::string* error_ms
   return DexFile::OpenFromZip(*zip_archive, location, error_msg, dex_files);
 }
 
-const DexFile* DexFile::OpenMemory(const std::string& location,
-                                   uint32_t location_checksum,
-                                   MemMap* mem_map,
-                                   std::string* error_msg) {
+DexFileUniquePtr DexFile::OpenMemory(const std::string& location,
+                                     uint32_t location_checksum,
+                                     MemMap* mem_map,
+                                     std::string* error_msg) {
   return OpenMemory(mem_map->Begin(),
                     mem_map->Size(),
                     location,
@@ -251,9 +251,9 @@ const DexFile* DexFile::OpenMemory(const std::string& location,
                     error_msg);
 }
 
-const DexFile* DexFile::Open(const ZipArchive& zip_archive, const char* entry_name,
-                             const std::string& location, std::string* error_msg,
-                             ZipOpenErrorCode* error_code) {
+DexFileUniquePtr DexFile::Open(const ZipArchive& zip_archive, const char* entry_name,
+                               const std::string& location, std::string* error_msg,
+                               ZipOpenErrorCode* error_code) {
   CHECK(!location.empty());
   std::unique_ptr<ZipEntry> zip_entry(zip_archive.Find(entry_name, error_msg));
   if (zip_entry.get() == NULL) {
@@ -287,11 +287,11 @@ const DexFile* DexFile::Open(const ZipArchive& zip_archive, const char* entry_na
     return nullptr;
   }
   *error_code = ZipOpenErrorCode::kNoError;
-  return dex_file.release();
+  return dex_file;
 }
 
 bool DexFile::OpenFromZip(const ZipArchive& zip_archive, const std::string& location,
-                          std::string* error_msg, std::vector<const DexFile*>* dex_files) {
+                          std::string* error_msg, DexFileUniquePtrs* dex_files) {
   ZipOpenErrorCode error_code;
   std::unique_ptr<const DexFile> dex_file(Open(zip_archive, kClassesDex, location, error_msg,
                                                &error_code));
@@ -299,7 +299,7 @@ bool DexFile::OpenFromZip(const ZipArchive& zip_archive, const std::string& loca
     return false;
   } else {
     // Had at least classes.dex.
-    dex_files->push_back(dex_file.release());
+    dex_files->push_back(std::move(dex_file));
 
     // Now try some more.
     size_t i = 2;
@@ -318,7 +318,7 @@ bool DexFile::OpenFromZip(const ZipArchive& zip_archive, const std::string& loca
         }
         break;
       } else {
-        dex_files->push_back(next_dex_file.release());
+        dex_files->push_back(std::move(next_dex_file));
       }
 
       i++;
@@ -329,18 +329,17 @@ bool DexFile::OpenFromZip(const ZipArchive& zip_archive, const std::string& loca
 }
 
 
-const DexFile* DexFile::OpenMemory(const uint8_t* base,
-                                   size_t size,
-                                   const std::string& location,
-                                   uint32_t location_checksum,
-                                   MemMap* mem_map, std::string* error_msg) {
+DexFileUniquePtr DexFile::OpenMemory(const uint8_t* base,
+                                     size_t size,
+                                     const std::string& location,
+                                     uint32_t location_checksum,
+                                     MemMap* mem_map, std::string* error_msg) {
   CHECK_ALIGNED(base, 4);  // various dex file structures must be word aligned
   std::unique_ptr<DexFile> dex_file(new DexFile(base, size, location, location_checksum, mem_map));
   if (!dex_file->Init(error_msg)) {
-    return nullptr;
-  } else {
-    return dex_file.release();
+    dex_file.reset();
   }
+  return DexFileUniquePtr(dex_file.release());
 }
 
 DexFile::DexFile(const uint8_t* base, size_t size,
@@ -988,6 +987,16 @@ std::ostream& operator<<(std::ostream& os, const DexFile& dex_file) {
                      dex_file.Begin(), dex_file.Begin() + dex_file.Size());
   return os;
 }
+
+DexFilePtrs DexFileUniquePtrsGet(const DexFileUniquePtrs& dex_files_unique) {
+  DexFilePtrs dex_files;
+  for (DexFileUniquePtrs::const_iterator iter = dex_files_unique.begin();
+      iter != dex_files_unique.end(); iter++) {
+    dex_files.push_back(iter->get());
+  }
+  return dex_files;
+}
+
 
 std::string Signature::ToString() const {
   if (dex_file_ == nullptr) {

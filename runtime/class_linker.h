@@ -105,7 +105,7 @@ class ClassLinker {
   ~ClassLinker();
 
   // Initialize class linker by bootstraping from dex files.
-  void InitWithoutImage(const std::vector<const DexFile*>& boot_class_path)
+  void InitWithoutImage(DexFileUniquePtrs boot_class_path)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Initialize class linker from one or more images.
@@ -324,7 +324,7 @@ class ClassLinker {
   // (if multidex) into the given vector.
   bool OpenDexFilesFromOat(const char* dex_location, const char* oat_location,
                            std::vector<std::string>* error_msgs,
-                           std::vector<const DexFile*>* dex_files)
+                           DexFileUniquePtrs* dex_files)
       LOCKS_EXCLUDED(dex_lock_, Locks::mutator_lock_);
 
   // Returns true if the given oat file has the same image checksum as the image it is paired with.
@@ -721,7 +721,8 @@ class ClassLinker {
   // Return the quick generic JNI stub for testing.
   const void* GetRuntimeQuickGenericJniStub() const;
 
-  std::vector<const DexFile*> boot_class_path_;
+  DexFilePtrs boot_class_path_;
+  DexFileUniquePtrs opened_dex_files_;
 
   mutable ReaderWriterMutex dex_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   std::vector<size_t> new_dex_cache_roots_ GUARDED_BY(dex_lock_);
