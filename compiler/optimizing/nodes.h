@@ -1653,15 +1653,19 @@ class HInvokeVirtual : public HInvoke {
                  uint32_t number_of_arguments,
                  Primitive::Type return_type,
                  uint32_t dex_pc,
+                 uint32_t method_idx,
                  uint32_t vtable_index)
       : HInvoke(arena, number_of_arguments, return_type, dex_pc),
+        method_index_(method_idx),
         vtable_index_(vtable_index) {}
 
+  uint32_t GetMethodIndex() const { return method_index_; }
   uint32_t GetVTableIndex() const { return vtable_index_; }
 
   DECLARE_INSTRUCTION(InvokeVirtual);
 
  private:
+  const uint32_t method_index_;
   const uint32_t vtable_index_;
 
   DISALLOW_COPY_AND_ASSIGN(HInvokeVirtual);

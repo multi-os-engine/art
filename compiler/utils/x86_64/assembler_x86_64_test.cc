@@ -330,7 +330,6 @@ std::string shlq_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
     assembler->shlq(*reg, shifter);
     str << "shlq %cl, %" << assembler_test->GetRegisterName(*reg) << "\n";
   }
-  printf("%s\n", str.str().c_str());
 
   return str.str();
 }
@@ -682,6 +681,22 @@ TEST_F(AssemblerX86_64Test, Xorps) {
 
 TEST_F(AssemblerX86_64Test, Xorpd) {
   DriverStr(RepeatFF(&x86_64::X86_64Assembler::xorpd, "xorpd %{reg2}, %{reg1}"), "xorpd");
+}
+
+TEST_F(AssemblerX86_64Test, Andps) {
+  DriverStr(RepeatFF(&x86_64::X86_64Assembler::andps, "andps %{reg2}, %{reg1}"), "andps");
+}
+
+TEST_F(AssemblerX86_64Test, Andpd) {
+  DriverStr(RepeatFF(&x86_64::X86_64Assembler::andpd, "andpd %{reg2}, %{reg1}"), "andpd");
+}
+
+TEST_F(AssemblerX86_64Test, Orps) {
+  DriverStr(RepeatFF(&x86_64::X86_64Assembler::orps, "orps %{reg2}, %{reg1}"), "orps");
+}
+
+TEST_F(AssemblerX86_64Test, Orpd) {
+  DriverStr(RepeatFF(&x86_64::X86_64Assembler::orpd, "orpd %{reg2}, %{reg1}"), "orpd");
 }
 
 // X87
