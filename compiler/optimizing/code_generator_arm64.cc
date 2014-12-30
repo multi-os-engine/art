@@ -16,6 +16,7 @@
 
 #include "code_generator_arm64.h"
 
+#include "driver/dex_compilation_unit.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/accounting/card_table.h"
 #include "mirror/array-inl.h"
@@ -543,8 +544,9 @@ Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type
   return next_location;
 }
 
-CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph)
-    : CodeGenerator(graph,
+CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
+                                       DexFileMethodInliner* const dex_file_method_inliner)
+    : CodeGenerator(graph, dex_file_method_inliner,
                     kNumberOfAllocatableRegisters,
                     kNumberOfAllocatableFPRegisters,
                     kNumberOfAllocatableRegisterPairs),

@@ -39,7 +39,7 @@ static void TestCode(const uint16_t* data,
   std::string actual_before = printer_before.str();
   ASSERT_EQ(actual_before, expected_before);
 
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   HDeadCodeElimination(graph).Run();
   SSAChecker ssa_checker(&allocator, graph);
   ssa_checker.Run();
