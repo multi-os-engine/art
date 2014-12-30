@@ -36,6 +36,8 @@ static constexpr FloatRegister kParameterFloatRegisters[] =
 static constexpr size_t kParameterCoreRegistersLength = arraysize(kParameterCoreRegisters);
 static constexpr size_t kParameterFloatRegistersLength = arraysize(kParameterFloatRegisters);
 
+static constexpr bool kCoalescedImplicitNullCheck = false;
+
 class InvokeDexCallingConvention : public CallingConvention<Register, FloatRegister> {
  public:
   InvokeDexCallingConvention() : CallingConvention(
@@ -67,7 +69,20 @@ class InvokeDexCallingConventionVisitor {
 };
 
 class CodeGeneratorX86_64;
-class SlowPathCodeX86_64;
+
+class SlowPathCodeX86_64 : public SlowPathCode {
+ public:
+  SlowPathCodeX86_64() : entry_label_(), exit_label_() {}
+
+  Label* GetEntryLabel() { return &entry_label_; }
+  Label* GetExitLabel() { return &exit_label_; }
+
+ private:
+  Label entry_label_;
+  Label exit_label_;
+
+  DISALLOW_COPY_AND_ASSIGN(SlowPathCodeX86_64);
+};
 
 class ParallelMoveResolverX86_64 : public ParallelMoveResolver {
  public:
@@ -217,6 +232,8 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   void Initialize() OVERRIDE {
     block_labels_.SetSize(GetGraph()->GetBlocks().Size());
   }
+
+  void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, CpuRegister temp);
 
  private:
   // Labels for each block that will be compiled.
