@@ -369,19 +369,26 @@ void X86_64Assembler::movsxd(CpuRegister dst, const Address& src) {
 
 
 void X86_64Assembler::movd(XmmRegister dst, CpuRegister src) {
+  movd(dst, src, true);
+}
+
+void X86_64Assembler::movd(CpuRegister dst, XmmRegister src) {
+  movd(dst, src, true);
+}
+
+void X86_64Assembler::movd(XmmRegister dst, CpuRegister src, bool is64bit) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitUint8(0x66);
-  EmitRex64(dst, src);
+  EmitOptionalRex(false, is64bit, dst.NeedsRex(), false, src.NeedsRex());
   EmitUint8(0x0F);
   EmitUint8(0x6E);
   EmitOperand(dst.LowBits(), Operand(src));
 }
 
-
-void X86_64Assembler::movd(CpuRegister dst, XmmRegister src) {
+void X86_64Assembler::movd(CpuRegister dst, XmmRegister src, bool is64bit) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitUint8(0x66);
-  EmitRex64(src, dst);
+  EmitOptionalRex(false, is64bit, src.NeedsRex(), false, dst.NeedsRex());
   EmitUint8(0x0F);
   EmitUint8(0x7E);
   EmitOperand(src.LowBits(), Operand(dst));
@@ -826,6 +833,39 @@ void X86_64Assembler::andpd(XmmRegister dst, const Address& src) {
   EmitOperand(dst.LowBits(), src);
 }
 
+void X86_64Assembler::andpd(XmmRegister dst, XmmRegister src) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitUint8(0x66);
+  EmitOptionalRex32(dst, src);
+  EmitUint8(0x0F);
+  EmitUint8(0x54);
+  EmitXmmRegisterOperand(dst.LowBits(), src);
+}
+
+void X86_64Assembler::andps(XmmRegister dst, XmmRegister src) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitOptionalRex32(dst, src);
+  EmitUint8(0x0F);
+  EmitUint8(0x54);
+  EmitXmmRegisterOperand(dst.LowBits(), src);
+}
+
+void X86_64Assembler::orpd(XmmRegister dst, XmmRegister src) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitUint8(0x66);
+  EmitOptionalRex32(dst, src);
+  EmitUint8(0x0F);
+  EmitUint8(0x56);
+  EmitXmmRegisterOperand(dst.LowBits(), src);
+}
+
+void X86_64Assembler::orps(XmmRegister dst, XmmRegister src) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitOptionalRex32(dst, src);
+  EmitUint8(0x0F);
+  EmitUint8(0x56);
+  EmitXmmRegisterOperand(dst.LowBits(), src);
+}
 
 void X86_64Assembler::fldl(const Address& src) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);

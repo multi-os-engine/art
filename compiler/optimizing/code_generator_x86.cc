@@ -16,6 +16,7 @@
 
 #include "code_generator_x86.h"
 
+#include "driver/dex_compilation_unit.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/accounting/card_table.h"
 #include "mirror/array-inl.h"
@@ -373,8 +374,10 @@ size_t CodeGeneratorX86::RestoreCoreRegister(size_t stack_index, uint32_t reg_id
   return kX86WordSize;
 }
 
-CodeGeneratorX86::CodeGeneratorX86(HGraph* graph)
-    : CodeGenerator(graph, kNumberOfCpuRegisters, kNumberOfXmmRegisters, kNumberOfRegisterPairs),
+CodeGeneratorX86::CodeGeneratorX86(HGraph* graph,
+                                   DexFileMethodInliner* const dex_file_method_inliner)
+    : CodeGenerator(graph, dex_file_method_inliner, kNumberOfCpuRegisters, kNumberOfXmmRegisters,
+                    kNumberOfRegisterPairs),
       block_labels_(graph->GetArena(), 0),
       location_builder_(graph, this),
       instruction_visitor_(graph, this),
