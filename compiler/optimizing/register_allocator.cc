@@ -1097,10 +1097,12 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
         locations->SetEnvironmentAt(use->GetInputIndex(), source);
       } else {
         Location expected_location = locations->InAt(use->GetInputIndex());
-        if (expected_location.IsUnallocated()) {
-          locations->SetInAt(use->GetInputIndex(), source);
-        } else if (!expected_location.IsConstant()) {
-          AddInputMoveFor(use->GetUser(), source, expected_location);
+        if (expected_location.IsValid()) {
+          if (expected_location.IsUnallocated()) {
+            locations->SetInAt(use->GetInputIndex(), source);
+          } else if (!expected_location.IsConstant()) {
+            AddInputMoveFor(use->GetUser(), source, expected_location);
+          }
         }
       }
       use = use->GetNext();
