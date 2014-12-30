@@ -19,10 +19,12 @@
 
 #include "arch/instruction_set.h"
 #include "base/bit_field.h"
+#include "dex/quick/dex_file_method_inliner.h"
 #include "globals.h"
 #include "locations.h"
 #include "memory_region.h"
 #include "nodes.h"
+#include "quick/inline_method_analyser.h"
 #include "stack_map_stream.h"
 
 namespace art {
@@ -76,6 +78,66 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
   DISALLOW_COPY_AND_ASSIGN(SlowPathCode);
 };
 
+class IntrinsicVisitor : public ValueObject {
+ public:
+  bool Dispatch(DexFileMethodInliner* const inliner, HInvoke* invoke) {
+    if (inliner == nullptr) {
+      return false;
+    }
+
+    if (invoke->IsInvokeStaticOrDirect()) {
+      return Dispatch(inliner, invoke->AsInvokeStaticOrDirect());
+    } else if (invoke->IsInvokeVirtual()) {
+      return Dispatch(inliner, invoke->AsInvokeVirtual());
+    }
+    return false;
+  }
+
+  bool Dispatch(DexFileMethodInliner* const inliner, HInvokeStaticOrDirect* invoke) {
+    if (inliner == nullptr) {
+      return false;
+    }
+
+    InlineMethod method;
+    if (inliner->IsIntrinsic(invoke->GetIndexInDexCache(), &method)) {
+      switch (method.opcode) {
+        case kIntrinsicAbsDouble:
+          return VisitMathAbsDouble(invoke);
+        default:
+          break;
+      }
+    }
+
+    return false;
+  }
+
+  bool Dispatch(DexFileMethodInliner* const inliner, HInvokeVirtual* invoke) {
+    if (inliner == nullptr) {
+      return false;
+    }
+
+    InlineMethod method;
+    if (inliner->IsIntrinsic(invoke->GetVTableIndex(), &method)) {
+      switch (method.opcode) {
+        default:
+          break;
+      }
+    }
+
+    return false;
+  }
+
+  virtual bool VisitMathAbsDouble(HInvokeStaticOrDirect* invoke) = 0;
+
+  virtual ~IntrinsicVisitor() {}
+
+ protected:
+  IntrinsicVisitor() {}
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(IntrinsicVisitor);
+};
+
 class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
  public:
   // Compiles the graph to executable instructions. Returns whether the compilation
@@ -84,9 +146,11 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
   void CompileOptimized(CodeAllocator* allocator);
   static CodeGenerator* Create(ArenaAllocator* allocator,
                                HGraph* graph,
+                               DexFileMethodInliner* const dex_compilation_unit,
                                InstructionSet instruction_set);
 
   HGraph* GetGraph() const { return graph_; }
+  DexFileMethodInliner* GetDexFileMethodInliner() const { return dex_file_method_inliner_; }
 
   bool GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) const;
 
@@ -193,6 +257,7 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
 
  protected:
   CodeGenerator(HGraph* graph,
+                DexFileMethodInliner* const dex_file_method_inliner,
                 size_t number_of_core_registers,
                 size_t number_of_fpu_registers,
                 size_t number_of_register_pairs)
@@ -206,6 +271,7 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
         number_of_fpu_registers_(number_of_fpu_registers),
         number_of_register_pairs_(number_of_register_pairs),
         graph_(graph),
+        dex_file_method_inliner_(dex_file_method_inliner),
         pc_infos_(graph->GetArena(), 32),
         slow_paths_(graph->GetArena(), 8),
         is_leaf_(true),
@@ -245,6 +311,7 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
   size_t GetStackOffsetOfSavedRegister(size_t index);
 
   HGraph* const graph_;
+  DexFileMethodInliner* const dex_file_method_inliner_;
 
   GrowableArray<PcInfo> pc_infos_;
   GrowableArray<SlowPathCode*> slow_paths_;

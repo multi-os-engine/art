@@ -25,6 +25,7 @@
 #include "compiler.h"
 #include "constant_folding.h"
 #include "dead_code_elimination.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "driver/compiler_driver.h"
 #include "driver/dex_compilation_unit.h"
 #include "elf_writer_quick.h"
@@ -289,7 +290,9 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     return nullptr;
   }
 
-  CodeGenerator* codegen = CodeGenerator::Create(&arena, graph, instruction_set);
+  CodeGenerator* codegen = CodeGenerator::Create(
+      &arena, graph, GetCompilerDriver()->GetMethodInlinerMap()->GetMethodInliner(&dex_file),
+      instruction_set);
   if (codegen == nullptr) {
     CHECK(!shouldCompile) << "Could not find code generator for optimizing compiler";
     compilation_stats_.RecordStat(MethodCompilationStat::kNotCompiledNoCodegen);
