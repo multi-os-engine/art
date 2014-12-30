@@ -18,6 +18,8 @@
 
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/accounting/card_table.h"
+#include "intrinsics.h"
+#include "intrinsics_x86_64.h"
 #include "mirror/array-inl.h"
 #include "mirror/art_method.h"
 #include "mirror/class.h"
@@ -60,20 +62,6 @@ class InvokeRuntimeCallingConvention : public CallingConvention<Register, FloatR
 };
 
 #define __ reinterpret_cast<X86_64Assembler*>(codegen->GetAssembler())->
-
-class SlowPathCodeX86_64 : public SlowPathCode {
- public:
-  SlowPathCodeX86_64() : entry_label_(), exit_label_() {}
-
-  Label* GetEntryLabel() { return &entry_label_; }
-  Label* GetExitLabel() { return &exit_label_; }
-
- private:
-  Label entry_label_;
-  Label exit_label_;
-
-  DISALLOW_COPY_AND_ASSIGN(SlowPathCodeX86_64);
-};
 
 class NullCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
  public:
@@ -1123,10 +1111,21 @@ Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type
 }
 
 void LocationsBuilderX86_64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
+  IntrinsicLocationsBuilderX86_64 intrinsic(GetGraph()->GetArena());
+  if (intrinsic.Dispatch(invoke)) {
+    return;
+  }
   HandleInvoke(invoke);
 }
 
 void InstructionCodeGeneratorX86_64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
+  IntrinsicCodeGeneratorX86_64 intrinsic(codegen_);
+  if (intrinsic.Dispatch(invoke)) {
+    return;
+  }
+  // TODO: Make sure that if the intrinsic locations builder succeeded, then the code generator
+  //       also succeeded. Else we're in an undefined state wrt registers...
+
   CpuRegister temp = invoke->GetLocations()->GetTemp(0).AsRegister<CpuRegister>();
   // TODO: Implement all kinds of calls:
   // 1) boot -> boot
@@ -1182,10 +1181,20 @@ void LocationsBuilderX86_64::HandleInvoke(HInvoke* invoke) {
 }
 
 void LocationsBuilderX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+  IntrinsicCodeGeneratorX86_64 intrinsic(codegen_);
+  if (intrinsic.Dispatch(invoke)) {
+    return;
+  }
+
   HandleInvoke(invoke);
 }
 
 void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+  IntrinsicCodeGeneratorX86_64 intrinsic(codegen_);
+  if (intrinsic.Dispatch(invoke)) {
+    return;
+  }
+
   CpuRegister temp = invoke->GetLocations()->GetTemp(0).AsRegister<CpuRegister>();
   size_t method_offset = mirror::Class::EmbeddedVTableOffset().SizeValue() +
           invoke->GetVTableIndex() * sizeof(mirror::Class::VTableEntry);
