@@ -24,6 +24,9 @@
 #include "utils/x86_64/assembler_x86_64.h"
 
 namespace art {
+
+class DexFileMethodInliner;
+
 namespace x86_64 {
 
 // Use a local definition to prevent copying mistakes.
@@ -107,7 +110,6 @@ class LocationsBuilderX86_64 : public HGraphVisitor {
 #undef DECLARE_VISIT_INSTRUCTION
 
  private:
-  void HandleInvoke(HInvoke* invoke);
   void HandleBitwiseOperation(HBinaryOperation* operation);
   void HandleShift(HBinaryOperation* operation);
   void HandleFieldSet(HInstruction* instruction, const FieldInfo& field_info);
@@ -153,7 +155,7 @@ class InstructionCodeGeneratorX86_64 : public HGraphVisitor {
 
 class CodeGeneratorX86_64 : public CodeGenerator {
  public:
-  explicit CodeGeneratorX86_64(HGraph* graph);
+  explicit CodeGeneratorX86_64(HGraph* graph, DexFileMethodInliner* const dex_file_method_inliner);
   virtual ~CodeGeneratorX86_64() {}
 
   void GenerateFrameEntry() OVERRIDE;

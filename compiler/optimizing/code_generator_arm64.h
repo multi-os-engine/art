@@ -26,6 +26,9 @@
 #include "arch/arm64/quick_method_frame_info_arm64.h"
 
 namespace art {
+
+class DexFileMethodInliner;
+
 namespace arm64 {
 
 class CodeGeneratorARM64;
@@ -162,7 +165,7 @@ class ParallelMoveResolverARM64 : public ParallelMoveResolver {
 
 class CodeGeneratorARM64 : public CodeGenerator {
  public:
-  explicit CodeGeneratorARM64(HGraph* graph);
+  explicit CodeGeneratorARM64(HGraph* graph, DexFileMethodInliner* const dex_file_method_inliner);
   virtual ~CodeGeneratorARM64() {}
 
   void GenerateFrameEntry() OVERRIDE;
