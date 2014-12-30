@@ -51,7 +51,7 @@ static void TestCode(const uint16_t* data, const char* expected) {
   graph->TryBuildingSsa();
   // `Inline` conditions into ifs.
   PrepareForRegisterAllocation(graph).Run();
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
 
