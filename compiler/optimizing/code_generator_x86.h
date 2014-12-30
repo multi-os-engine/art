@@ -24,6 +24,9 @@
 #include "utils/x86/assembler_x86.h"
 
 namespace art {
+
+class DexFileMethodInliner;
+
 namespace x86 {
 
 // Use a local definition to prevent copying mistakes.
@@ -152,7 +155,7 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
 
 class CodeGeneratorX86 : public CodeGenerator {
  public:
-  explicit CodeGeneratorX86(HGraph* graph);
+  explicit CodeGeneratorX86(HGraph* graph, DexFileMethodInliner* const dex_file_method_inliner);
   virtual ~CodeGeneratorX86() {}
 
   void GenerateFrameEntry() OVERRIDE;

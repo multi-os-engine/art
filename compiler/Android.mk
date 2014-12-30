@@ -98,6 +98,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/gvn.cc \
 	optimizing/inliner.cc \
 	optimizing/instruction_simplifier.cc \
+	optimizing/intrinsics.cc \
 	optimizing/locations.cc \
 	optimizing/nodes.cc \
 	optimizing/optimization.cc \
