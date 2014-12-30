@@ -25,6 +25,7 @@
 #include "compiler.h"
 #include "constant_folding.h"
 #include "dead_code_elimination.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "driver/compiler_driver.h"
 #include "driver/dex_compilation_unit.h"
 #include "elf_writer_quick.h"
@@ -32,6 +33,7 @@
 #include "gvn.h"
 #include "inliner.h"
 #include "instruction_simplifier.h"
+#include "intrinsics.h"
 #include "jni/quick/jni_compiler.h"
 #include "mirror/art_method-inl.h"
 #include "nodes.h"
@@ -187,7 +189,7 @@ static bool CanOptimize(const DexFile::CodeItem& code_item) {
 
 static void RunOptimizations(HGraph* graph,
                              CompilerDriver* driver,
-                             OptimizingCompilerStats* stats,
+                             OptimizingCompilerStats* stats ATTRIBUTE_UNUSED,
                              const DexCompilationUnit& dex_compilation_unit,
                              const HGraphVisualizer& visualizer) {
   SsaRedundantPhiElimination redundant_phi(graph);
@@ -202,9 +204,12 @@ static void RunOptimizations(HGraph* graph,
   BoundsCheckElimination bce(graph);
   InstructionSimplifier simplify2(graph);
 
+  IntrinsicsRecognizer intrinsics(graph, dex_compilation_unit.GetDexFile(), driver);
+
   HOptimization* optimizations[] = {
     &redundant_phi,
     &dead_phi,
+    &intrinsics,
     &dce,
     &fold,
     &simplify1,
@@ -289,7 +294,9 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     return nullptr;
   }
 
-  CodeGenerator* codegen = CodeGenerator::Create(&arena, graph, instruction_set);
+  CodeGenerator* codegen = CodeGenerator::Create(
+      &arena, graph, GetCompilerDriver()->GetMethodInlinerMap()->GetMethodInliner(&dex_file),
+      instruction_set);
   if (codegen == nullptr) {
     CHECK(!shouldCompile) << "Could not find code generator for optimizing compiler";
     compilation_stats_.RecordStat(MethodCompilationStat::kNotCompiledNoCodegen);

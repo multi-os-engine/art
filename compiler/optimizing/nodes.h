@@ -1580,6 +1580,18 @@ class HLongConstant : public HConstant {
   DISALLOW_COPY_AND_ASSIGN(HLongConstant);
 };
 
+enum class Intrinsics {
+#define OPTIMIZING_INTRINSICS(Name) k ## Name,
+#include "intrinsics_list.h"
+  kNone,
+  STATIC_INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
+  VIRTUAL_INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
+#undef STATIC_INTRINSICS_LIST
+#undef VIRTUAL_INTRINSICS_LIST
+#undef OPTIMIZING_INTRINSICS
+};
+std::ostream& operator<<(std::ostream& os, const Intrinsics& intrinsic);
+
 class HInvoke : public HInstruction {
  public:
   HInvoke(ArenaAllocator* arena,
@@ -1589,7 +1601,8 @@ class HInvoke : public HInstruction {
     : HInstruction(SideEffects::All()),
       inputs_(arena, number_of_arguments),
       return_type_(return_type),
-      dex_pc_(dex_pc) {
+      dex_pc_(dex_pc),
+      intrinsic_(Intrinsics::kNone) {
     inputs_.SetSize(number_of_arguments);
   }
 
@@ -1612,12 +1625,21 @@ class HInvoke : public HInstruction {
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
+  Intrinsics GetIntrinsic() {
+    return intrinsic_;
+  }
+
+  void SetIntrinsic(Intrinsics intrinsic) {
+    intrinsic_ = intrinsic;
+  }
+
   DECLARE_INSTRUCTION(Invoke);
 
  protected:
   GrowableArray<HInstruction*> inputs_;
   const Primitive::Type return_type_;
   const uint32_t dex_pc_;
+  Intrinsics intrinsic_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HInvoke);
@@ -1653,15 +1675,19 @@ class HInvokeVirtual : public HInvoke {
                  uint32_t number_of_arguments,
                  Primitive::Type return_type,
                  uint32_t dex_pc,
+                 uint32_t method_idx,
                  uint32_t vtable_index)
       : HInvoke(arena, number_of_arguments, return_type, dex_pc),
+        method_index_(method_idx),
         vtable_index_(vtable_index) {}
 
+  uint32_t GetMethodIndex() const { return method_index_; }
   uint32_t GetVTableIndex() const { return vtable_index_; }
 
   DECLARE_INSTRUCTION(InvokeVirtual);
 
  private:
+  const uint32_t method_index_;
   const uint32_t vtable_index_;
 
   DISALLOW_COPY_AND_ASSIGN(HInvokeVirtual);

@@ -44,7 +44,7 @@ static void TestCode(const uint16_t* data, const int* expected_order, size_t num
 
   graph->TryBuildingSsa();
 
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
 
