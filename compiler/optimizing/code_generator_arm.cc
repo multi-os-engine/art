@@ -1196,7 +1196,7 @@ void InstructionCodeGeneratorARM::VisitInvokeStaticOrDirect(HInvokeStaticOrDirec
       kLoadWord, temp, temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
   // temp = temp[index_in_cache]
   __ LoadFromOffset(
-      kLoadWord, temp, temp, CodeGenerator::GetCacheOffset(invoke->GetIndexInDexCache()));
+      kLoadWord, temp, temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex()));
   // LR = temp[offset_of_quick_compiled_code]
   __ LoadFromOffset(kLoadWord, LR, temp,
                      mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
