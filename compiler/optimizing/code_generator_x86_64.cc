@@ -16,6 +16,7 @@
 
 #include "code_generator_x86_64.h"
 
+#include "driver/dex_compilation_unit.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/accounting/card_table.h"
 #include "mirror/array-inl.h"
@@ -375,6 +376,118 @@ inline Condition X86_64Condition(IfCondition cond) {
   return kEqual;
 }
 
+static void HandleInvoke(HInvoke* invoke, ArenaAllocator* arena) {
+  LocationSummary* locations = new (arena) LocationSummary(invoke, LocationSummary::kCall);
+  locations->AddTemp(Location::RegisterLocation(RDI));
+
+  InvokeDexCallingConventionVisitor calling_convention_visitor;
+  for (size_t i = 0; i < invoke->InputCount(); i++) {
+    HInstruction* input = invoke->InputAt(i);
+    locations->SetInAt(i, calling_convention_visitor.GetNextLocation(input->GetType()));
+  }
+
+  switch (invoke->GetType()) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimChar:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimInt:
+    case Primitive::kPrimNot:
+    case Primitive::kPrimLong:
+      locations->SetOut(Location::RegisterLocation(RAX));
+      break;
+
+    case Primitive::kPrimVoid:
+      break;
+
+    case Primitive::kPrimDouble:
+    case Primitive::kPrimFloat:
+      locations->SetOut(Location::FpuRegisterLocation(XMM0));
+      break;
+  }
+}
+
+class IntrinsicLocationsBuilderX86_64 : public IntrinsicVisitor {
+ public:
+  explicit IntrinsicLocationsBuilderX86_64(ArenaAllocator* arena) : arena_(arena) {}
+
+  bool VisitMathAbsDouble(HInvokeStaticOrDirect* invoke) OVERRIDE;
+  bool VisitMathAbsFloat(HInvokeStaticOrDirect* invoke) OVERRIDE;
+
+ private:
+  ArenaAllocator* arena_ ATTRIBUTE_UNUSED;
+};
+
+class IntrinsicCodeGeneratorX86_64 : public IntrinsicVisitor {
+ public:
+  explicit IntrinsicCodeGeneratorX86_64(X86_64Assembler* assembler)
+      : assembler_(assembler) {}
+
+  bool VisitMathAbsDouble(HInvokeStaticOrDirect* invoke) OVERRIDE;
+  bool VisitMathAbsFloat(HInvokeStaticOrDirect* invoke) OVERRIDE;
+
+ private:
+  X86_64Assembler* assembler_;
+};
+
+// TODO: Consider Quick's way of doing Double abs through integer operations, as the immediate we
+//       need is 64b.
+
+bool IntrinsicLocationsBuilderX86_64::VisitMathAbsDouble(HInvokeStaticOrDirect* invoke) {
+  // TODO: Any way to accept both register and memory here?
+  LocationSummary* locations = new (arena_) LocationSummary(invoke, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresFpuRegister());
+  locations->SetOut(Location::SameAsFirstInput());
+  locations->AddTemp(Location::RequiresRegister());     // Immediate constant.
+  locations->AddTemp(Location::RequiresFpuRegister());  // FP version of above.
+  return true;
+}
+
+static bool MathAbsFP(LocationSummary* locations, bool sixtyfourbit, X86_64Assembler* assembler) {
+  Location input = locations->InAt(0);
+  Location output = locations->Out();
+  DCHECK(input.IsFpuRegister());
+  DCHECK(output.IsFpuRegister());
+  Location cpu_temp_location = locations->GetTemp(0);
+  DCHECK(cpu_temp_location.IsRegister());
+  CpuRegister cpu_temp = locations->GetTemp(0).AsRegister<CpuRegister>();
+  Location xmm_temp_location = locations->GetTemp(1);
+  DCHECK(xmm_temp_location.IsFpuRegister());
+  XmmRegister xmm_temp = locations->GetTemp(1).AsFpuRegister<XmmRegister>();
+
+  DCHECK(input.Equals(output));
+  if (sixtyfourbit) {
+    assembler->movq(cpu_temp, Immediate(INT64_C(0x7FFFFFFFFFFFFFFF)));
+    assembler->movd(xmm_temp, cpu_temp);
+    assembler->andpd(output.AsFpuRegister<XmmRegister>(), xmm_temp);
+  } else {
+    assembler->movl(cpu_temp, Immediate(INT64_C(0x7FFFFFFF)));
+    assembler->movd(xmm_temp, cpu_temp);
+    assembler->andps(output.AsFpuRegister<XmmRegister>(), xmm_temp);
+  }
+
+  return true;
+}
+
+bool IntrinsicCodeGeneratorX86_64::VisitMathAbsDouble(HInvokeStaticOrDirect* invoke) {
+  return MathAbsFP(invoke->GetLocations(), true, assembler_);
+}
+
+bool IntrinsicLocationsBuilderX86_64::VisitMathAbsFloat(HInvokeStaticOrDirect* invoke) {
+  // TODO: Any way to accept both register and memory here?
+  LocationSummary* locations = new (arena_) LocationSummary(invoke, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresFpuRegister());
+  locations->SetOut(Location::SameAsFirstInput());
+  locations->AddTemp(Location::RequiresRegister());     // Immediate constant.
+  locations->AddTemp(Location::RequiresFpuRegister());  // FP version of above.
+  return true;
+}
+
+bool IntrinsicCodeGeneratorX86_64::VisitMathAbsFloat(HInvokeStaticOrDirect* invoke) {
+  return MathAbsFP(invoke->GetLocations(), false, assembler_);
+}
+
+
 void CodeGeneratorX86_64::DumpCoreRegister(std::ostream& stream, int reg) const {
   stream << X86_64ManagedRegister::FromCpuRegister(Register(reg));
 }
@@ -403,8 +516,10 @@ size_t CodeGeneratorX86_64::RestoreFloatingPointRegister(size_t stack_index, uin
   return kX86_64WordSize;
 }
 
-CodeGeneratorX86_64::CodeGeneratorX86_64(HGraph* graph)
-      : CodeGenerator(graph, kNumberOfCpuRegisters, kNumberOfFloatRegisters, 0),
+CodeGeneratorX86_64::CodeGeneratorX86_64(HGraph* graph,
+                                         DexFileMethodInliner* const dex_file_method_inliner)
+      : CodeGenerator(graph, dex_file_method_inliner, kNumberOfCpuRegisters,
+                      kNumberOfFloatRegisters, 0),
         block_labels_(graph->GetArena(), 0),
         location_builder_(graph, this),
         instruction_visitor_(graph, this),
@@ -1123,10 +1238,22 @@ Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type
 }
 
 void LocationsBuilderX86_64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
-  HandleInvoke(invoke);
+  IntrinsicLocationsBuilderX86_64 intrinsic(GetGraph()->GetArena());
+  if (intrinsic.Dispatch(codegen_->GetDexFileMethodInliner(), invoke)) {
+    return;
+  }
+  HandleInvoke(invoke, GetGraph()->GetArena());
 }
 
 void InstructionCodeGeneratorX86_64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
+  IntrinsicCodeGeneratorX86_64 intrinsic(
+      reinterpret_cast<X86_64Assembler*>(codegen_->GetAssembler()));
+  if (intrinsic.Dispatch(codegen_->GetDexFileMethodInliner(), invoke)) {
+    return;
+  }
+  // TODO: Make sure that if the intrinsic locations builder succeeded, then the code generator
+  //       also succeeded. Else we're in an undefined state wrt registers...
+
   CpuRegister temp = invoke->GetLocations()->GetTemp(0).AsRegister<CpuRegister>();
   // TODO: Implement all kinds of calls:
   // 1) boot -> boot
@@ -1149,40 +1276,8 @@ void InstructionCodeGeneratorX86_64::VisitInvokeStaticOrDirect(HInvokeStaticOrDi
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
 }
 
-void LocationsBuilderX86_64::HandleInvoke(HInvoke* invoke) {
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(invoke, LocationSummary::kCall);
-  locations->AddTemp(Location::RegisterLocation(RDI));
-
-  InvokeDexCallingConventionVisitor calling_convention_visitor;
-  for (size_t i = 0; i < invoke->InputCount(); i++) {
-    HInstruction* input = invoke->InputAt(i);
-    locations->SetInAt(i, calling_convention_visitor.GetNextLocation(input->GetType()));
-  }
-
-  switch (invoke->GetType()) {
-    case Primitive::kPrimBoolean:
-    case Primitive::kPrimByte:
-    case Primitive::kPrimChar:
-    case Primitive::kPrimShort:
-    case Primitive::kPrimInt:
-    case Primitive::kPrimNot:
-    case Primitive::kPrimLong:
-      locations->SetOut(Location::RegisterLocation(RAX));
-      break;
-
-    case Primitive::kPrimVoid:
-      break;
-
-    case Primitive::kPrimDouble:
-    case Primitive::kPrimFloat:
-      locations->SetOut(Location::FpuRegisterLocation(XMM0));
-      break;
-  }
-}
-
 void LocationsBuilderX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
-  HandleInvoke(invoke);
+  HandleInvoke(invoke, GetGraph()->GetArena());
 }
 
 void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
@@ -1210,7 +1305,7 @@ void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) 
 }
 
 void LocationsBuilderX86_64::VisitInvokeInterface(HInvokeInterface* invoke) {
-  HandleInvoke(invoke);
+  HandleInvoke(invoke, GetGraph()->GetArena());
   // Add the hidden argument.
   invoke->GetLocations()->AddTemp(Location::RegisterLocation(RAX));
 }

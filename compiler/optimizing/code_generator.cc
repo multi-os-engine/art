@@ -327,22 +327,23 @@ bool CodeGenerator::GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) con
 
 CodeGenerator* CodeGenerator::Create(ArenaAllocator* allocator,
                                      HGraph* graph,
+                                     DexFileMethodInliner* const dex_file_method_inliner,
                                      InstructionSet instruction_set) {
   switch (instruction_set) {
     case kArm:
     case kThumb2: {
-      return new (allocator) arm::CodeGeneratorARM(graph);
+      return new (allocator) arm::CodeGeneratorARM(graph, dex_file_method_inliner);
     }
     case kArm64: {
-      return new (allocator) arm64::CodeGeneratorARM64(graph);
+      return new (allocator) arm64::CodeGeneratorARM64(graph, dex_file_method_inliner);
     }
     case kMips:
       return nullptr;
     case kX86: {
-      return new (allocator) x86::CodeGeneratorX86(graph);
+      return new (allocator) x86::CodeGeneratorX86(graph, dex_file_method_inliner);
     }
     case kX86_64: {
-      return new (allocator) x86_64::CodeGeneratorX86_64(graph);
+      return new (allocator) x86_64::CodeGeneratorX86_64(graph, dex_file_method_inliner);
     }
     default:
       return nullptr;
