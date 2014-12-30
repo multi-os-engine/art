@@ -79,7 +79,7 @@ template <typename Expected>
 static void RunCodeBaseline(HGraph* graph, bool has_result, Expected expected) {
   InternalCodeAllocator allocator;
 
-  x86::CodeGeneratorX86 codegenX86(graph);
+  x86::CodeGeneratorX86 codegenX86(graph, nullptr);
   // We avoid doing a stack overflow check that requires the runtime being setup,
   // by making sure the compiler knows the methods we are running are leaf methods.
   codegenX86.CompileBaseline(&allocator, true);
@@ -87,19 +87,19 @@ static void RunCodeBaseline(HGraph* graph, bool has_result, Expected expected) {
     Run(allocator, codegenX86, has_result, expected);
   }
 
-  arm::CodeGeneratorARM codegenARM(graph);
+  arm::CodeGeneratorARM codegenARM(graph, nullptr);
   codegenARM.CompileBaseline(&allocator, true);
   if (kRuntimeISA == kArm || kRuntimeISA == kThumb2) {
     Run(allocator, codegenARM, has_result, expected);
   }
 
-  x86_64::CodeGeneratorX86_64 codegenX86_64(graph);
+  x86_64::CodeGeneratorX86_64 codegenX86_64(graph, nullptr);
   codegenX86_64.CompileBaseline(&allocator, true);
   if (kRuntimeISA == kX86_64) {
     Run(allocator, codegenX86_64, has_result, expected);
   }
 
-  arm64::CodeGeneratorARM64 codegenARM64(graph);
+  arm64::CodeGeneratorARM64 codegenARM64(graph, nullptr);
   codegenARM64.CompileBaseline(&allocator, true);
   if (kRuntimeISA == kArm64) {
     Run(allocator, codegenARM64, has_result, expected);
@@ -130,16 +130,16 @@ static void RunCodeOptimized(HGraph* graph,
                              bool has_result,
                              Expected expected) {
   if (kRuntimeISA == kArm || kRuntimeISA == kThumb2) {
-    arm::CodeGeneratorARM codegenARM(graph);
+    arm::CodeGeneratorARM codegenARM(graph, nullptr);
     RunCodeOptimized(&codegenARM, graph, hook_before_codegen, has_result, expected);
   } else if (kRuntimeISA == kArm64) {
-    arm64::CodeGeneratorARM64 codegenARM64(graph);
+    arm64::CodeGeneratorARM64 codegenARM64(graph, nullptr);
     RunCodeOptimized(&codegenARM64, graph, hook_before_codegen, has_result, expected);
   } else if (kRuntimeISA == kX86) {
-    x86::CodeGeneratorX86 codegenX86(graph);
+    x86::CodeGeneratorX86 codegenX86(graph, nullptr);
     RunCodeOptimized(&codegenX86, graph, hook_before_codegen, has_result, expected);
   } else if (kRuntimeISA == kX86_64) {
-    x86_64::CodeGeneratorX86_64 codegenX86_64(graph);
+    x86_64::CodeGeneratorX86_64 codegenX86_64(graph, nullptr);
     RunCodeOptimized(&codegenX86_64, graph, hook_before_codegen, has_result, expected);
   }
 }
