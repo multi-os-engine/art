@@ -127,6 +127,11 @@ public class Main {
     Assert.assertEquals(' ', testStr.charAt(10));
     Assert.assertEquals('e', testStr.charAt(testStr.length()-1));
 
+    test_String_charAtExc();
+  }
+  
+  private static void test_String_charAtExc() {
+    String testStr = "Now is the time";
     try {
       testStr.charAt(-1);
       Assert.fail();

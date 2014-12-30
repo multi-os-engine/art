@@ -63,7 +63,7 @@ TEST(LiveRangesTest, CFG1) {
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
 
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
 
@@ -109,7 +109,7 @@ TEST(LiveRangesTest, CFG2) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
 
@@ -158,7 +158,7 @@ TEST(LiveRangesTest, CFG3) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
 
@@ -235,7 +235,7 @@ TEST(LiveRangesTest, Loop1) {
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
   RemoveSuspendChecks(graph);
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
 
@@ -313,7 +313,7 @@ TEST(LiveRangesTest, Loop2) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
 
@@ -389,7 +389,7 @@ TEST(LiveRangesTest, CFG4) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildGraph(data, &allocator);
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
 

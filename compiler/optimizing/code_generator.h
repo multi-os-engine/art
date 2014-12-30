@@ -43,6 +43,7 @@ static int64_t constexpr kPrimLongMax = 0x7fffffffffffffff;
 class Assembler;
 class CodeGenerator;
 class DexCompilationUnit;
+class DexFileMethodInliner;
 class ParallelMoveResolver;
 class SrcMapElem;
 template <class Alloc>
@@ -84,9 +85,11 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
   void CompileOptimized(CodeAllocator* allocator);
   static CodeGenerator* Create(ArenaAllocator* allocator,
                                HGraph* graph,
+                               DexFileMethodInliner* const dex_compilation_unit,
                                InstructionSet instruction_set);
 
   HGraph* GetGraph() const { return graph_; }
+  DexFileMethodInliner* GetDexFileMethodInliner() const { return dex_file_method_inliner_; }
 
   bool GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) const;
 
@@ -193,6 +196,7 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
 
  protected:
   CodeGenerator(HGraph* graph,
+                DexFileMethodInliner* const dex_file_method_inliner,
                 size_t number_of_core_registers,
                 size_t number_of_fpu_registers,
                 size_t number_of_register_pairs)
@@ -206,6 +210,7 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
         number_of_fpu_registers_(number_of_fpu_registers),
         number_of_register_pairs_(number_of_register_pairs),
         graph_(graph),
+        dex_file_method_inliner_(dex_file_method_inliner),
         pc_infos_(graph->GetArena(), 32),
         slow_paths_(graph->GetArena(), 8),
         is_leaf_(true),
@@ -245,6 +250,7 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
   size_t GetStackOffsetOfSavedRegister(size_t index);
 
   HGraph* const graph_;
+  DexFileMethodInliner* const dex_file_method_inliner_;
 
   GrowableArray<PcInfo> pc_infos_;
   GrowableArray<SlowPathCode*> slow_paths_;

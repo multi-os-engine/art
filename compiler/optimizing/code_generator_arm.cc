@@ -16,6 +16,7 @@
 
 #include "code_generator_arm.h"
 
+#include "driver/dex_compilation_unit.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/accounting/card_table.h"
 #include "mirror/array-inl.h"
@@ -372,8 +373,10 @@ size_t CodeGeneratorARM::RestoreCoreRegister(size_t stack_index, uint32_t reg_id
   return kArmWordSize;
 }
 
-CodeGeneratorARM::CodeGeneratorARM(HGraph* graph)
-    : CodeGenerator(graph, kNumberOfCoreRegisters, kNumberOfSRegisters, kNumberOfRegisterPairs),
+CodeGeneratorARM::CodeGeneratorARM(HGraph* graph,
+                                   DexFileMethodInliner* const dex_file_method_inliner)
+    : CodeGenerator(graph, dex_file_method_inliner, kNumberOfCoreRegisters, kNumberOfSRegisters,
+                    kNumberOfRegisterPairs),
       block_labels_(graph->GetArena(), 0),
       location_builder_(graph, this),
       instruction_visitor_(graph, this),
