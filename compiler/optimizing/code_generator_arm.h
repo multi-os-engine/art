@@ -24,6 +24,9 @@
 #include "utils/arm/assembler_thumb2.h"
 
 namespace art {
+
+class DexFileMethodInliner;
+
 namespace arm {
 
 class CodeGeneratorARM;
@@ -159,7 +162,7 @@ class InstructionCodeGeneratorARM : public HGraphVisitor {
 
 class CodeGeneratorARM : public CodeGenerator {
  public:
-  explicit CodeGeneratorARM(HGraph* graph);
+  explicit CodeGeneratorARM(HGraph* graph, DexFileMethodInliner* const dex_file_method_inliner);
   virtual ~CodeGeneratorARM() {}
 
   void GenerateFrameEntry() OVERRIDE;

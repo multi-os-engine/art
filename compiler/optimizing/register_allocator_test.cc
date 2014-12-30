@@ -40,7 +40,7 @@ static bool Check(const uint16_t* data) {
   const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
   HGraph* graph = builder.BuildGraph(*item);
   graph->TryBuildingSsa();
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
   RegisterAllocator register_allocator(&allocator, &codegen, liveness);
@@ -56,7 +56,7 @@ TEST(RegisterAllocatorTest, ValidateIntervals) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = new (&allocator) HGraph(&allocator);
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   GrowableArray<LiveInterval*> intervals(&allocator, 0);
 
   // Test with two intervals of the same range.
@@ -295,7 +295,7 @@ TEST(RegisterAllocatorTest, Loop3) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildSSAGraph(data, &allocator);
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
   RegisterAllocator register_allocator(&allocator, &codegen, liveness);
@@ -327,7 +327,7 @@ TEST(RegisterAllocatorTest, FirstRegisterUse) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildSSAGraph(data, &allocator);
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
 
@@ -380,7 +380,7 @@ TEST(RegisterAllocatorTest, DeadPhi) {
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildSSAGraph(data, &allocator);
   SsaDeadPhiElimination(graph).Run();
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
   RegisterAllocator register_allocator(&allocator, &codegen, liveness);
@@ -402,7 +402,7 @@ TEST(RegisterAllocatorTest, FreeUntil) {
   ArenaAllocator allocator(&pool);
   HGraph* graph = BuildSSAGraph(data, &allocator);
   SsaDeadPhiElimination(graph).Run();
-  x86::CodeGeneratorX86 codegen(graph);
+  x86::CodeGeneratorX86 codegen(graph, nullptr);
   SsaLivenessAnalysis liveness(*graph, &codegen);
   liveness.Analyze();
   RegisterAllocator register_allocator(&allocator, &codegen, liveness);
@@ -504,7 +504,7 @@ TEST(RegisterAllocatorTest, PhiHint) {
 
   {
     HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
-    x86::CodeGeneratorX86 codegen(graph);
+    x86::CodeGeneratorX86 codegen(graph, nullptr);
     SsaLivenessAnalysis liveness(*graph, &codegen);
     liveness.Analyze();
 
@@ -519,7 +519,7 @@ TEST(RegisterAllocatorTest, PhiHint) {
 
   {
     HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
-    x86::CodeGeneratorX86 codegen(graph);
+    x86::CodeGeneratorX86 codegen(graph, nullptr);
     SsaLivenessAnalysis liveness(*graph, &codegen);
     liveness.Analyze();
 
@@ -536,7 +536,7 @@ TEST(RegisterAllocatorTest, PhiHint) {
 
   {
     HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
-    x86::CodeGeneratorX86 codegen(graph);
+    x86::CodeGeneratorX86 codegen(graph, nullptr);
     SsaLivenessAnalysis liveness(*graph, &codegen);
     liveness.Analyze();
 
@@ -553,7 +553,7 @@ TEST(RegisterAllocatorTest, PhiHint) {
 
   {
     HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
-    x86::CodeGeneratorX86 codegen(graph);
+    x86::CodeGeneratorX86 codegen(graph, nullptr);
     SsaLivenessAnalysis liveness(*graph, &codegen);
     liveness.Analyze();
 
@@ -603,7 +603,7 @@ TEST(RegisterAllocatorTest, ExpectedInRegisterHint) {
 
   {
     HGraph* graph = BuildFieldReturn(&allocator, &field, &ret);
-    x86::CodeGeneratorX86 codegen(graph);
+    x86::CodeGeneratorX86 codegen(graph, nullptr);
     SsaLivenessAnalysis liveness(*graph, &codegen);
     liveness.Analyze();
 
@@ -616,7 +616,7 @@ TEST(RegisterAllocatorTest, ExpectedInRegisterHint) {
 
   {
     HGraph* graph = BuildFieldReturn(&allocator, &field, &ret);
-    x86::CodeGeneratorX86 codegen(graph);
+    x86::CodeGeneratorX86 codegen(graph, nullptr);
     SsaLivenessAnalysis liveness(*graph, &codegen);
     liveness.Analyze();
 
@@ -665,7 +665,7 @@ TEST(RegisterAllocatorTest, SameAsFirstInputHint) {
 
   {
     HGraph* graph = BuildTwoAdds(&allocator, &first_add, &second_add);
-    x86::CodeGeneratorX86 codegen(graph);
+    x86::CodeGeneratorX86 codegen(graph, nullptr);
     SsaLivenessAnalysis liveness(*graph, &codegen);
     liveness.Analyze();
 
@@ -679,7 +679,7 @@ TEST(RegisterAllocatorTest, SameAsFirstInputHint) {
 
   {
     HGraph* graph = BuildTwoAdds(&allocator, &first_add, &second_add);
-    x86::CodeGeneratorX86 codegen(graph);
+    x86::CodeGeneratorX86 codegen(graph, nullptr);
     SsaLivenessAnalysis liveness(*graph, &codegen);
     liveness.Analyze();
 
@@ -726,7 +726,7 @@ TEST(RegisterAllocatorTest, ExpectedExactInRegisterAndSameOutputHint) {
 
   {
     HGraph* graph = BuildDiv(&allocator, &div);
-    x86::CodeGeneratorX86 codegen(graph);
+    x86::CodeGeneratorX86 codegen(graph, nullptr);
     SsaLivenessAnalysis liveness(*graph, &codegen);
     liveness.Analyze();
 
