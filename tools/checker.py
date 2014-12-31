@@ -59,12 +59,16 @@
 # only valid within the scope of the defining group. Within a group they cannot
 # be redefined or used undefined.
 #
+# Any occurrences of '##' inside a regular expression will be replaced with a
+# pattern that matches any positive integer. This is a syntactic sugar which is
+# meant to alleviate matching against numerical identifiers.
+#
 # Example:
 #   The following assertions can be placed in a Java source file:
 #
 #   // CHECK-START: int MyClass.MyMethod() constant_folding (after)
-#   // CHECK:         [[ID:i[0-9]+]] IntConstant {{11|22}}
-#   // CHECK:                        Return [ [[ID]] ]
+#   // CHECK:         [[ID:i##]] IntConstant {{11|22}}
+#   // CHECK:                    Return [ [[ID]] ]
 #
 #   The engine will attempt to match the check lines against the output of the
 #   group named on the first line. Together they verify that the CFG after
@@ -99,9 +103,29 @@ class CheckElement(CommonEqualityMixin):
     """Supported language constructs."""
     Text, Pattern, VarRef, VarDef = range(4)
 
+  rStartOptional = r"("
+  rEndOptional = r")?"
+
+  rName = r"([a-zA-Z][a-zA-Z0-9]*)"
+  rRegex = r"(.+?)"
+  rPatternStartSym = r"(\{\{)"
+  rPatternEndSym = r"(\}\})"
+  rVariableStartSym = r"(\[\[)"
+  rVariableEndSym = r"(\]\])"
+  rVariableSeparator = r"(:)"
+
+  regexPattern = rPatternStartSym + rRegex + rPatternEndSym
+  regexVariable = rVariableStartSym + \
+                    rName + \
+                    (rStartOptional + rVariableSeparator + rRegex + rEndOptional) + \
+                  rVariableEndSym
+
   def __init__(self, variant, name, pattern):
     self.variant = variant
     self.name = name
+    # Syntactic sugar for easy ID matching
+    if pattern:
+      pattern = pattern.replace(r"##", r"([0-9]+)")
     self.pattern = pattern
 
   @staticmethod
@@ -110,21 +134,20 @@ class CheckElement(CommonEqualityMixin):
 
   @staticmethod
   def parsePattern(patternElem):
-    return CheckElement(CheckElement.Variant.Pattern, None, patternElem[2:len(patternElem)-2])
+    return CheckElement(CheckElement.Variant.Pattern, None, patternElem[2:-2])
 
   @staticmethod
   def parseVariable(varElem):
     colonPos = varElem.find(":")
     if colonPos == -1:
       # Variable reference
-      name = varElem[2:len(varElem)-2]
+      name = varElem[2:-2]
       return CheckElement(CheckElement.Variant.VarRef, name, None)
     else:
       # Variable definition
       name = varElem[2:colonPos]
-      body = varElem[colonPos+1:len(varElem)-2]
+      body = varElem[colonPos+1:-2]
       return CheckElement(CheckElement.Variant.VarDef, name, body)
-
 
 class CheckLine(CommonEqualityMixin):
   """Representation of a single assertion in the check file formed of one or
@@ -155,24 +178,6 @@ class CheckLine(CommonEqualityMixin):
     starts = map(lambda m: len(string) if m is None else m.start(), matches)
     return min(starts)
 
-  # Returns the regex for finding a regex pattern in the check line.
-  def __getPatternRegex(self):
-    rStartSym = "\{\{"
-    rEndSym = "\}\}"
-    rBody = ".+?"
-    return rStartSym + rBody + rEndSym
-
-  # Returns the regex for finding a variable use in the check line.
-  def __getVariableRegex(self):
-    rStartSym = "\[\["
-    rEndSym = "\]\]"
-    rStartOptional = "("
-    rEndOptional = ")?"
-    rName = "[a-zA-Z][a-zA-Z0-9]*"
-    rSeparator = ":"
-    rBody = ".+?"
-    return rStartSym + rName + rStartOptional + rSeparator + rBody + rEndOptional + rEndSym
-
   # This method parses the content of a check line stripped of the initial
   # comment symbol and the CHECK keyword.
   def __parse(self, line):
@@ -180,9 +185,9 @@ class CheckLine(CommonEqualityMixin):
     # Loop as long as there is something to parse.
     while line:
       # Search for the nearest occurrence of the special markers.
-      matchWhitespace = re.search("\s+", line)
-      matchPattern = re.search(self.__getPatternRegex(), line)
-      matchVariable = re.search(self.__getVariableRegex(), line)
+      matchWhitespace = re.search(r"\s+", line)
+      matchPattern = re.search(CheckElement.regexPattern, line)
+      matchVariable = re.search(CheckElement.regexVariable, line)
 
       # If one of the above was identified at the current position, extract them
       # from the line, parse them and add to the list of line parts.
@@ -191,7 +196,7 @@ class CheckLine(CommonEqualityMixin):
         # a whitespace, we add a regex pattern for an arbitrary non-zero number
         # of whitespaces.
         line = line[matchWhitespace.end():]
-        lineParts.append(CheckElement.parsePattern("{{\s+}}"))
+        lineParts.append(CheckElement.parsePattern(r"{{\s+}}"))
       elif self.__isMatchAtStart(matchPattern):
         pattern = line[0:matchPattern.end()]
         line = line[matchPattern.end():]
@@ -442,16 +447,16 @@ class CheckFile(FileSplitMixin):
   # followed by the CHECK keyword, given attribute and a colon at the very
   # beginning of the line. Whitespaces are ignored.
   def _extractLine(self, prefix, line):
-    ignoreWhitespace = "\s*"
-    commentSymbols = ["//", "#"]
-    prefixRegex = ignoreWhitespace + \
-                  "(" + "|".join(commentSymbols) + ")" + \
-                  ignoreWhitespace + \
-                  prefix + ":"
+    rIgnoreWhitespace = r"\s*"
+    rCommentSymbols = [r"//", r"#"]
+    rPrefix = rIgnoreWhitespace + \
+              r"(" + r"|".join(rCommentSymbols) + r")" + \
+              rIgnoreWhitespace + \
+              prefix + r":"
 
     # The 'match' function succeeds only if the pattern is matched at the
     # beginning of the line.
-    match = re.match(prefixRegex, line)
+    match = re.match(rPrefix, line)
     if match is not None:
       return line[match.end():].strip()
     else:
