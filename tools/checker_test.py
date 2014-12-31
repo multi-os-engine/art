@@ -448,4 +448,5 @@ class TestCheckFile_Parse(unittest.TestCase):
                                                          ("def", CheckVariant.DAG) ])) ])
 
 if __name__ == '__main__':
+  checker.IsCheckerTest = True
   unittest.main()
