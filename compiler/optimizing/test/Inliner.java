@@ -32,7 +32,7 @@ public class Inliner {
   // CHECK-START: int Inliner.InlineParameter(int) inliner (before)
   // CHECK-DAG:     [[Param:i[0-9]+]]  ParameterValue
   // CHECK-DAG:     [[Result:i[0-9]+]] InvokeStaticOrDirect [ [[Param]] ]
-  // CHECK-DAG:                        Return [ [[Result]] ]
+  // CHECK-DAG:                        Return: [ [[Result]] ]
 
   // CHECK-START: int Inliner.InlineParameter(int) inliner (after)
   // CHECK-DAG:     [[Param:i[0-9]+]]  ParameterValue
