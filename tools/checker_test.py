@@ -65,7 +65,7 @@ class TestCheckLine_Parse(unittest.TestCase):
     self.assertEqual(expected, self.__getRegex(self.__tryParse(string)))
 
   def __tryParseNot(self, string):
-    return checker.CheckLine(string, checker.CheckLine.Variant.UnorderedNot)
+    return checker.CheckLine(string, checker.CheckLine.Variant.Not)
 
   def __parsesPattern(self, string, pattern):
     line = self.__tryParse(string)
@@ -448,4 +448,5 @@ class TestCheckFile_Parse(unittest.TestCase):
                                                          ("def", CheckVariant.DAG) ])) ])
 
 if __name__ == '__main__':
+  checker.IsCheckerTest = True
   unittest.main()
