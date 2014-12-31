@@ -1,12 +1,12 @@
 public class Inliner {
 
   // CHECK-START: void Inliner.InlineVoid() inliner (before)
-  // CHECK-DAG:     [[Const42:i[0-9]+]] IntConstant 42
-  // CHECK-DAG:                         InvokeStaticOrDirect
-  // CHECK-DAG:                         InvokeStaticOrDirect [ [[Const42]] ]
+  // CHECK-DAG:     [[Const42:i##]] IntConstant 42
+  // CHECK-DAG:                     InvokeStaticOrDirect
+  // CHECK-DAG:                     InvokeStaticOrDirect [ [[Const42]] ]
 
   // CHECK-START: void Inliner.InlineVoid() inliner (after)
-  // CHECK-NOT:                         InvokeStaticOrDirect
+  // CHECK-NOT:                     InvokeStaticOrDirect
 
   public static void InlineVoid() {
     returnVoid();
@@ -14,119 +14,119 @@ public class Inliner {
   }
 
   // CHECK-START: int Inliner.InlineParameter(int) inliner (before)
-  // CHECK-DAG:     [[Param:i[0-9]+]]  ParameterValue
-  // CHECK-DAG:     [[Result:i[0-9]+]] InvokeStaticOrDirect [ [[Param]] ]
-  // CHECK-DAG:                        Return [ [[Result]] ]
+  // CHECK-DAG:     [[Param:i##]]  ParameterValue
+  // CHECK-DAG:     [[Result:i##]] InvokeStaticOrDirect [ [[Param]] ]
+  // CHECK-DAG:                    Return [ [[Result]] ]
 
   // CHECK-START: int Inliner.InlineParameter(int) inliner (after)
-  // CHECK-DAG:     [[Param:i[0-9]+]]  ParameterValue
-  // CHECK-DAG:                        Return [ [[Param]] ]
+  // CHECK-DAG:     [[Param:i##]]  ParameterValue
+  // CHECK-DAG:                    Return [ [[Param]] ]
 
   public static int InlineParameter(int a) {
     return returnParameter(a);
   }
 
   // CHECK-START: long Inliner.InlineWideParameter(long) inliner (before)
-  // CHECK-DAG:     [[Param:j[0-9]+]]  ParameterValue
-  // CHECK-DAG:     [[Result:j[0-9]+]] InvokeStaticOrDirect [ [[Param]] ]
-  // CHECK-DAG:                        Return [ [[Result]] ]
+  // CHECK-DAG:     [[Param:j##]]  ParameterValue
+  // CHECK-DAG:     [[Result:j##]] InvokeStaticOrDirect [ [[Param]] ]
+  // CHECK-DAG:                    Return [ [[Result]] ]
 
   // CHECK-START: long Inliner.InlineWideParameter(long) inliner (after)
-  // CHECK-DAG:     [[Param:j[0-9]+]]  ParameterValue
-  // CHECK-DAG:                        Return [ [[Param]] ]
+  // CHECK-DAG:     [[Param:j##]]  ParameterValue
+  // CHECK-DAG:                    Return [ [[Param]] ]
 
   public static long InlineWideParameter(long a) {
     return returnWideParameter(a);
   }
 
   // CHECK-START: java.lang.Object Inliner.InlineReferenceParameter(java.lang.Object) inliner (before)
-  // CHECK-DAG:     [[Param:l[0-9]+]]  ParameterValue
-  // CHECK-DAG:     [[Result:l[0-9]+]] InvokeStaticOrDirect [ [[Param]] ]
-  // CHECK-DAG:                        Return [ [[Result]] ]
+  // CHECK-DAG:     [[Param:l##]]  ParameterValue
+  // CHECK-DAG:     [[Result:l##]] InvokeStaticOrDirect [ [[Param]] ]
+  // CHECK-DAG:                    Return [ [[Result]] ]
 
   // CHECK-START: java.lang.Object Inliner.InlineReferenceParameter(java.lang.Object) inliner (after)
-  // CHECK-DAG:     [[Param:l[0-9]+]]  ParameterValue
-  // CHECK-DAG:                        Return [ [[Param]] ]
+  // CHECK-DAG:     [[Param:l##]]  ParameterValue
+  // CHECK-DAG:                    Return [ [[Param]] ]
 
   public static Object InlineReferenceParameter(Object o) {
     return returnReferenceParameter(o);
   }
 
   // CHECK-START: int Inliner.InlineInt() inliner (before)
-  // CHECK-DAG:     [[Result:i[0-9]+]] InvokeStaticOrDirect
-  // CHECK-DAG:                        Return [ [[Result]] ]
+  // CHECK-DAG:     [[Result:i##]] InvokeStaticOrDirect
+  // CHECK-DAG:                    Return [ [[Result]] ]
 
   // CHECK-START: int Inliner.InlineInt() inliner (after)
-  // CHECK-DAG:     [[Const4:i[0-9]+]] IntConstant 4
-  // CHECK-DAG:                        Return [ [[Const4]] ]
+  // CHECK-DAG:     [[Const4:i##]] IntConstant 4
+  // CHECK-DAG:                    Return [ [[Const4]] ]
 
   public static int InlineInt() {
     return returnInt();
   }
 
   // CHECK-START: long Inliner.InlineWide() inliner (before)
-  // CHECK-DAG:     [[Result:j[0-9]+]] InvokeStaticOrDirect
-  // CHECK-DAG:                        Return [ [[Result]] ]
+  // CHECK-DAG:     [[Result:j##]] InvokeStaticOrDirect
+  // CHECK-DAG:                    Return [ [[Result]] ]
 
   // CHECK-START: long Inliner.InlineWide() inliner (after)
-  // CHECK-DAG:     [[Const8:j[0-9]+]] LongConstant 8
-  // CHECK-DAG:                        Return [ [[Const8]] ]
+  // CHECK-DAG:     [[Const8:j##]] LongConstant 8
+  // CHECK-DAG:                    Return [ [[Const8]] ]
 
   public static long InlineWide() {
     return returnWide();
   }
 
   // CHECK-START: int Inliner.InlineAdd() inliner (before)
-  // CHECK-DAG:     [[Const3:i[0-9]+]] IntConstant 3
-  // CHECK-DAG:     [[Const5:i[0-9]+]] IntConstant 5
-  // CHECK-DAG:     [[Result:i[0-9]+]] InvokeStaticOrDirect
-  // CHECK-DAG:                        Return [ [[Result]] ]
+  // CHECK-DAG:     [[Const3:i##]] IntConstant 3
+  // CHECK-DAG:     [[Const5:i##]] IntConstant 5
+  // CHECK-DAG:     [[Result:i##]] InvokeStaticOrDirect
+  // CHECK-DAG:                    Return [ [[Result]] ]
 
   // CHECK-START: int Inliner.InlineAdd() inliner (after)
-  // CHECK-DAG:     [[Const3:i[0-9]+]] IntConstant 3
-  // CHECK-DAG:     [[Const5:i[0-9]+]] IntConstant 5
-  // CHECK-DAG:     [[Add:i[0-9]+]]    Add [ [[Const3]] [[Const5]] ]
-  // CHECK-DAG:                        Return [ [[Add]] ]
+  // CHECK-DAG:     [[Const3:i##]] IntConstant 3
+  // CHECK-DAG:     [[Const5:i##]] IntConstant 5
+  // CHECK-DAG:     [[Add:i##]]    Add [ [[Const3]] [[Const5]] ]
+  // CHECK-DAG:                    Return [ [[Add]] ]
 
   public static int InlineAdd() {
     return returnAdd(3, 5);
   }
 
   // CHECK-START: int Inliner.InlineFieldAccess() inliner (before)
-  // CHECK-DAG:     [[After:i[0-9]+]]  InvokeStaticOrDirect
-  // CHECK-DAG:                        Return [ [[After]] ]
+  // CHECK-DAG:     [[After:i##]]  InvokeStaticOrDirect
+  // CHECK-DAG:                    Return [ [[After]] ]
 
   // CHECK-START: int Inliner.InlineFieldAccess() inliner (after)
-  // CHECK-DAG:     [[Const1:i[0-9]+]] IntConstant 1
-  // CHECK-DAG:     [[Before:i[0-9]+]] StaticFieldGet
-  // CHECK-DAG:     [[After:i[0-9]+]]  Add [ [[Before]] [[Const1]] ]
-  // CHECK-DAG:                        StaticFieldSet [ {{l[0-9]+}} [[After]] ]
-  // CHECK-DAG:                        Return [ [[After]] ]
+  // CHECK-DAG:     [[Const1:i##]] IntConstant 1
+  // CHECK-DAG:     [[Before:i##]] StaticFieldGet
+  // CHECK-DAG:     [[After:i##]]  Add [ [[Before]] [[Const1]] ]
+  // CHECK-DAG:                    StaticFieldSet [ {{l##}} [[After]] ]
+  // CHECK-DAG:                    Return [ [[After]] ]
 
   // CHECK-START: int Inliner.InlineFieldAccess() inliner (after)
-  // CHECK-NOT:                        InvokeStaticOrDirect
+  // CHECK-NOT:                    InvokeStaticOrDirect
 
   public static int InlineFieldAccess() {
     return incCounter();
   }
 
   // CHECK-START: int Inliner.InlineWithControlFlow(boolean) inliner (before)
-  // CHECK-DAG:     [[Const1:i[0-9]+]] IntConstant 1
-  // CHECK-DAG:     [[Const3:i[0-9]+]] IntConstant 3
-  // CHECK-DAG:     [[Const5:i[0-9]+]] IntConstant 5
-  // CHECK-DAG:     [[Add:i[0-9]+]]    InvokeStaticOrDirect [ [[Const1]] [[Const3]] ]
-  // CHECK-DAG:     [[Sub:i[0-9]+]]    InvokeStaticOrDirect [ [[Const5]] [[Const3]] ]
-  // CHECK-DAG:     [[Phi:i[0-9]+]]    Phi [ [[Add]] [[Sub]] ]
-  // CHECK-DAG:                        Return [ [[Phi]] ]
+  // CHECK-DAG:     [[Const1:i##]] IntConstant 1
+  // CHECK-DAG:     [[Const3:i##]] IntConstant 3
+  // CHECK-DAG:     [[Const5:i##]] IntConstant 5
+  // CHECK-DAG:     [[Add:i##]]    InvokeStaticOrDirect [ [[Const1]] [[Const3]] ]
+  // CHECK-DAG:     [[Sub:i##]]    InvokeStaticOrDirect [ [[Const5]] [[Const3]] ]
+  // CHECK-DAG:     [[Phi:i##]]    Phi [ [[Add]] [[Sub]] ]
+  // CHECK-DAG:                    Return [ [[Phi]] ]
 
   // CHECK-START: int Inliner.InlineWithControlFlow(boolean) inliner (after)
-  // CHECK-DAG:     [[Const1:i[0-9]+]] IntConstant 1
-  // CHECK-DAG:     [[Const3:i[0-9]+]] IntConstant 3
-  // CHECK-DAG:     [[Const5:i[0-9]+]] IntConstant 5
-  // CHECK-DAG:     [[Add:i[0-9]+]]    Add [ [[Const1]] [[Const3]] ]
-  // CHECK-DAG:     [[Sub:i[0-9]+]]    Sub [ [[Const5]] [[Const3]] ]
-  // CHECK-DAG:     [[Phi:i[0-9]+]]    Phi [ [[Add]] [[Sub]] ]
-  // CHECK-DAG:                        Return [ [[Phi]] ]
+  // CHECK-DAG:     [[Const1:i##]] IntConstant 1
+  // CHECK-DAG:     [[Const3:i##]] IntConstant 3
+  // CHECK-DAG:     [[Const5:i##]] IntConstant 5
+  // CHECK-DAG:     [[Add:i##]]    Add [ [[Const1]] [[Const3]] ]
+  // CHECK-DAG:     [[Sub:i##]]    Sub [ [[Const5]] [[Const3]] ]
+  // CHECK-DAG:     [[Phi:i##]]    Phi [ [[Add]] [[Sub]] ]
+  // CHECK-DAG:                    Return [ [[Phi]] ]
 
   public static int InlineWithControlFlow(boolean cond) {
     int x, const1, const3, const5;

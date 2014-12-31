@@ -139,6 +139,11 @@ class TestCheckLine_Parse(unittest.TestCase):
     self.__parsesPattern("{{a[b]c}}", "a[b]c")
     self.__parsesPattern("{{(a{bc})}}", "(a{bc})")
 
+  def test_PatternIdSugar(self):
+    self.__parsesPattern("{{ab##c}}", "ab([0-9]+)c")
+    self.__parsesPattern("{{a##b##c}}", "a([0-9]+)b([0-9]+)c")
+    self.__parsesPattern("{{(ab#)#c}}", "(ab#)#c")
+
   def test_ValidRef(self):
     self.__parsesVarRef("[[ABC]]", "ABC")
     self.__parsesVarRef("[[A1BC2]]", "A1BC2")
@@ -148,6 +153,11 @@ class TestCheckLine_Parse(unittest.TestCase):
     self.__parsesVarDef("[[ABC:ab:c]]", "ABC", "ab:c")
     self.__parsesVarDef("[[ABC:a[b]c]]", "ABC", "a[b]c")
     self.__parsesVarDef("[[ABC:(a[bc])]]", "ABC", "(a[bc])")
+
+  def test_VarDefIdSugar(self):
+    self.__parsesVarDef("[[ABC:ab##c]]", "ABC", "ab([0-9]+)c")
+    self.__parsesVarDef("[[ABC:a##b##c]]", "ABC", "a([0-9]+)b([0-9]+)c")
+    self.__parsesVarDef("[[ABC:(ab#)#c]]", "ABC", "(ab#)#c")
 
   def test_Empty(self):
     self.__doesNotParse("{{}}", checker.CheckElement.Variant.Pattern)
