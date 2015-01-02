@@ -34,7 +34,6 @@ namespace art {
 
 ParsedOptions::ParsedOptions()
     :
-    boot_class_path_(nullptr),
     check_jni_(kIsDebugBuild),                      // -Xcheck:jni is off by default for regular
                                                     // builds but on by default in debug builds.
     force_copy_(false),
@@ -288,6 +287,8 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
     } else if (StartsWith(option, "-Xbootclasspath:")) {
       boot_class_path_string_ = option.substr(strlen("-Xbootclasspath:")).data();
       LOG(INFO) << "setting boot class path to " << boot_class_path_string_;
+    } else if (StartsWith(option, "-Xbootclasspath-locations:")) {
+      boot_class_path_locations_string_ = option.substr(strlen("-Xbootclasspath-locations:")).data();
     } else if (option == "-classpath" || option == "-cp") {
       // TODO: support -Djava.class.path
       i++;
@@ -297,9 +298,6 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
       }
       const StringPiece& value = options[i].first;
       class_path_string_ = value.data();
-    } else if (option == "bootclasspath") {
-      boot_class_path_
-          = reinterpret_cast<const std::vector<const DexFile*>*>(options[i].second);
     } else if (StartsWith(option, "-Ximage:")) {
       if (!ParseStringAfterChar(option, ':', &image_)) {
         return false;
@@ -718,6 +716,24 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
   size_t core_jar_pos = boot_class_path_string_.find(core_jar);
   if (core_jar_pos != std::string::npos) {
     boot_class_path_string_.replace(core_jar_pos, core_jar.size(), core_libart_jar);
+  }
+
+  if (!boot_class_path_locations_string_.empty()) {
+    std::vector<std::string> files;
+    Split(boot_class_path_string_, ':', &files);
+
+    std::vector<std::string> locations;
+    Split(boot_class_path_locations_string_, ':', &locations);
+
+    if (files.size() != locations.size()) {
+      Usage("The number of boot class path files does not match"
+          " the number of boot class path locations given\n"
+          "  boot class path files     (%i): %s\n"
+          "  boot class path locations (%i): %s\n",
+          files.size(), boot_class_path_string_.c_str(),
+          locations.size(), boot_class_path_locations_string_.c_str());
+      return false;
+    }
   }
 
   if (compiler_callbacks_ == nullptr && image_.empty()) {
