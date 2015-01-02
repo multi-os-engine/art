@@ -21,6 +21,7 @@
 #include "driver/compiler_driver.h"
 #include "driver/dex_compilation_unit.h"
 #include "global_value_numbering.h"
+#include "gvn_dead_code_elimination.h"
 #include "local_value_numbering.h"
 #include "mir_field_info.h"
 #include "quick/dex_file_method_inliner.h"
@@ -1338,9 +1339,9 @@ bool MIRGraph::ApplyGlobalValueNumberingGate() {
 
   DCHECK(temp_scoped_alloc_ == nullptr);
   temp_scoped_alloc_.reset(ScopedArenaAllocator::Create(&cu_->arena_stack));
-  temp_.gvn.ifield_ids_ =
+  temp_.gvn.ifield_ids =
       GlobalValueNumbering::PrepareGvnFieldIds(temp_scoped_alloc_.get(), ifield_lowering_infos_);
-  temp_.gvn.sfield_ids_ =
+  temp_.gvn.sfield_ids =
       GlobalValueNumbering::PrepareGvnFieldIds(temp_scoped_alloc_.get(), sfield_lowering_infos_);
   DCHECK(temp_.gvn.gvn == nullptr);
   temp_.gvn.gvn = new (temp_scoped_alloc_.get()) GlobalValueNumbering(
@@ -1364,8 +1365,8 @@ void MIRGraph::ApplyGlobalValueNumberingEnd() {
   // Perform modifications.
   DCHECK(temp_.gvn.gvn != nullptr);
   if (temp_.gvn.gvn->Good()) {
+    temp_.gvn.gvn->StartPostProcessing();
     if (max_nested_loops_ != 0u) {
-      temp_.gvn.gvn->StartPostProcessing();
       TopologicalSortIterator iter(this);
       for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
         ScopedArenaAllocator allocator(&cu_->arena_stack);  // Reclaim memory after each LVN.
@@ -1381,14 +1382,69 @@ void MIRGraph::ApplyGlobalValueNumberingEnd() {
     }
     // GVN was successful, running the LVN would be useless.
     cu_->disable_opt |= (1u << kLocalValueNumbering);
+#if 0
+    // TODO: (DEBUGGING) Remove this. BEGIN
+    if (PrettyMethod(cu_->method_idx, *cu_->dex_file) !=
+        "long com.android.okhttp.okio.Buffer.indexOfElement(com.android.okhttp.okio.ByteString, long)"
+        /* "void com.android.launcher3.PagedView.onMeasure(int, int)" */
+        /* "int org.javia.arity.CompiledFunction.execWithoutCheck(org.javia.arity.EvalContext, int)" */
+        /* "java.lang.String javax.net.ssl.DistinguishedNameParser.nextAT()" */) {
+      cu_->disable_opt |= (1u << kGvnDeadCodeElimination);
+    }
+    // TODO: Remove this. (DEBUGGING) END
+#endif
   } else {
     LOG(WARNING) << "GVN failed for " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+    cu_->disable_opt |= (1u << kGvnDeadCodeElimination);
   }
 
+  if ((cu_->disable_opt & (1 << kGvnDeadCodeElimination)) != 0) {
+    EliminateDeadCodeEnd();
+  }  // else preserve GVN data for CSE.
+}
+
+bool MIRGraph::EliminateDeadCodeGate() {
+  if ((cu_->disable_opt & (1 << kGvnDeadCodeElimination)) != 0) {
+    return false;
+  }
+  DCHECK(temp_scoped_alloc_ != nullptr);
+  temp_.gvn.dce = new (temp_scoped_alloc_.get()) GvnDeadCodeElimination(temp_.gvn.gvn,
+                                                                        temp_scoped_alloc_.get());
+  // DumpMIRGraph();
+  return true;
+}
+
+bool MIRGraph::EliminateDeadCode(BasicBlock* bb) {
+  DCHECK(temp_scoped_alloc_ != nullptr);
+  DCHECK(temp_.gvn.gvn != nullptr);
+  if (bb->block_type != kDalvikByteCode) {
+    return false;
+  }
+  DCHECK(temp_.gvn.dce != nullptr);
+  temp_.gvn.dce->Apply(bb);
+  return false;  // No need to repeat.
+}
+
+void MIRGraph::EliminateDeadCodeEnd() {
+  DCHECK_EQ(temp_.gvn.dce != nullptr, (cu_->disable_opt & (1 << kGvnDeadCodeElimination)) == 0);
+  if (temp_.gvn.dce != nullptr) {
+    if (temp_.gvn.dce->RecalculateSsaRep()) {
+      mir_ssa_rep_up_to_date_ = false;
+    }
+    delete temp_.gvn.dce;
+    temp_.gvn.dce = nullptr;
+  }
+#if 0
+  if ((cu_->disable_opt & (1 << kGvnDeadCodeElimination)) == 0) {
+    // DumpMIRGraph();
+    LOG(ERROR) << "DEBUG: DELIBERATE FAILURE";
+    exit(EXIT_FAILURE);
+  }
+#endif
   delete temp_.gvn.gvn;
   temp_.gvn.gvn = nullptr;
-  temp_.gvn.ifield_ids_ = nullptr;
-  temp_.gvn.sfield_ids_ = nullptr;
+  temp_.gvn.ifield_ids = nullptr;
+  temp_.gvn.sfield_ids = nullptr;
   DCHECK(temp_scoped_alloc_ != nullptr);
   temp_scoped_alloc_.reset();
 }
@@ -1558,9 +1614,9 @@ bool MIRGraph::BuildExtendedBBList(class BasicBlock* bb) {
 void MIRGraph::BasicBlockOptimizationStart() {
   if ((cu_->disable_opt & (1 << kLocalValueNumbering)) == 0) {
     temp_scoped_alloc_.reset(ScopedArenaAllocator::Create(&cu_->arena_stack));
-    temp_.gvn.ifield_ids_ =
+    temp_.gvn.ifield_ids =
         GlobalValueNumbering::PrepareGvnFieldIds(temp_scoped_alloc_.get(), ifield_lowering_infos_);
-    temp_.gvn.sfield_ids_ =
+    temp_.gvn.sfield_ids =
         GlobalValueNumbering::PrepareGvnFieldIds(temp_scoped_alloc_.get(), sfield_lowering_infos_);
   }
 }
@@ -1586,8 +1642,8 @@ void MIRGraph::BasicBlockOptimization() {
 
 void MIRGraph::BasicBlockOptimizationEnd() {
   // Clean up after LVN.
-  temp_.gvn.ifield_ids_ = nullptr;
-  temp_.gvn.sfield_ids_ = nullptr;
+  temp_.gvn.ifield_ids = nullptr;
+  temp_.gvn.sfield_ids = nullptr;
   temp_scoped_alloc_.reset();
 }
 
@@ -1690,7 +1746,7 @@ void MIRGraph::EliminateSuspendChecksEnd() {
   temp_.sce.inliner = nullptr;
 }
 
-bool MIRGraph::CanThrow(MIR* mir) {
+bool MIRGraph::CanThrow(MIR* mir) const {
   if ((mir->dalvikInsn.FlagsOf() & Instruction::kThrow) == 0) {
     return false;
   }
@@ -1724,7 +1780,6 @@ bool MIRGraph::CanThrow(MIR* mir) {
     // Non-throwing only if range check has been eliminated.
     return ((opt_flags & MIR_IGNORE_RANGE_CHECK) == 0);
   } else if (mir->dalvikInsn.opcode == Instruction::ARRAY_LENGTH ||
-      mir->dalvikInsn.opcode == Instruction::FILL_ARRAY_DATA ||
       static_cast<int>(mir->dalvikInsn.opcode) == kMirOpNullCheck) {
     // No more checks for these (null check was processed above).
     return false;
@@ -1894,6 +1949,12 @@ void MIRGraph::MultiplyAddOpt(BasicBlock* bb) {
       ssa_mul_map.Put(mir->ssa_rep->defs[0], mir);
     }
   }
+}
+
+void VMarkoBkpt() __attribute__((noinline));
+void VMarkoBkpt() {
+  LOG(ERROR) << "VMarkoBkpt()";
+  // reinterpret_cast<volatile int*>(0)[0] = 0;
 }
 
 }  // namespace art
