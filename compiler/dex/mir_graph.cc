@@ -1686,6 +1686,51 @@ void MIRGraph::DumpMIRGraph() {
       LOG(INFO) << "  Fallthrough : block " << bb->fall_through
                 << " (0x" << std::hex << GetBasicBlock(bb->fall_through)->start_offset << ")";
     }
+    if (bb->successor_block_list_type != kNotUsed) {
+      std::ostringstream oss;
+      oss << "{ ";
+      const char* s = "";
+      for (SuccessorBlockInfo* succ_info : bb->successor_blocks) {
+        if (succ_info->block != NullBasicBlockId) {
+          oss << s << succ_info->block;
+          s = ", ";
+        }
+      }
+      oss << " }";
+      LOG(INFO) << "  Successors: " << oss.str();
+    }
+    {
+      std::ostringstream oss;
+      oss << "{ ";
+      const char* s = "";
+      for (BasicBlockId id : bb->predecessors) {
+        oss << s << id;
+        s = ", ";
+      }
+      oss << " }";
+      LOG(INFO) << "  Predecessors: " << oss.str();
+    }
+    for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
+      int opcode = mir->dalvikInsn.opcode;
+      std::ostringstream oss;
+      oss << "  mir @" << std::hex << mir->offset << ": " << std::dec
+          << (MIR::DecodedInstruction::IsPseudoMirOp(mir->dalvikInsn.opcode)
+              ? extended_mir_op_names_[opcode - kMirOpFirst]
+              : Instruction::Name(mir->dalvikInsn.opcode));
+      if (mir->ssa_rep != nullptr) {
+        for (uint16_t i = 0u; i != mir->ssa_rep->num_uses; ++i) {
+          oss << " u:" << mir->ssa_rep->uses[i];
+        }
+        for (uint16_t i = 0u; i != mir->ssa_rep->num_defs; ++i) {
+          oss << " d:" << mir->ssa_rep->defs[i];
+        }
+      }
+      LOG(INFO) << oss.str();
+    }
+  }
+  LOG(INFO) << "sreg->vreg map:";
+  for (int sreg = 0, num = GetNumSSARegs(); sreg != num; ++sreg) {
+    LOG(INFO) << "  " << sreg << " -> " << SRegToVReg(sreg);
   }
 }
 

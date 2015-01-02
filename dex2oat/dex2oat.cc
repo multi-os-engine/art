@@ -73,6 +73,22 @@
 
 namespace art {
 
+extern pthread_mutex_t vmarko_mutex;
+extern uint32_t vmarko_killed;
+extern uint32_t vmarko_killed_move_rename_dest;
+extern uint32_t vmarko_killed_simple;
+extern uint32_t vmarko_killed_unused;
+extern uint32_t vmarko_killed_move_rename_src;
+extern uint32_t vmarko_killed_complex;
+
+void VMarkoDump() {
+  pthread_mutex_lock(&vmarko_mutex);
+  LOG(INFO) << "VMarko DCE: killed = " << vmarko_killed << " (" << vmarko_killed_move_rename_dest
+      << ", " << vmarko_killed_simple << ", " << vmarko_killed_unused << ", "
+      << vmarko_killed_move_rename_src << ", " << vmarko_killed_complex << ")";
+  pthread_mutex_unlock(&vmarko_mutex);
+}
+
 static int original_argc;
 static char** original_argv;
 
@@ -1767,6 +1783,7 @@ static int CompileImage(Dex2Oat& dex2oat) {
   }
 
   dex2oat.DumpTiming();
+  VMarkoDump();
   return EXIT_SUCCESS;
 }
 
