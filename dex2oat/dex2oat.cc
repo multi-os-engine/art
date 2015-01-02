@@ -956,15 +956,14 @@ class Dex2Oat FINAL {
   bool Setup() {
     TimingLogger::ScopedTiming t("dex2oat Setup", timings_);
     RuntimeOptions runtime_options;
-    std::vector<const DexFile*> boot_class_path;
     art::MemMap::Init();  // For ZipEntry::ExtractToMemMap.
     if (boot_image_option_.empty()) {
-      size_t failure_count = OpenDexFiles(dex_filenames_, dex_locations_, boot_class_path);
-      if (failure_count > 0) {
-        LOG(ERROR) << "Failed to open some dex files: " << failure_count;
-        return false;
-      }
-      runtime_options.push_back(std::make_pair("bootclasspath", &boot_class_path));
+      std::string boot_class_path = "-Xbootclasspath:";
+      boot_class_path += Join(dex_filenames_, ':');
+      runtime_options.push_back(std::make_pair(boot_class_path.c_str(), nullptr));
+      std::string boot_class_path_locations = "-Xbootclasspathlocations:";
+      boot_class_path_locations += Join(dex_locations_, ':');
+      runtime_options.push_back(std::make_pair(boot_class_path_locations.c_str(), nullptr));
     } else {
       runtime_options.push_back(std::make_pair(boot_image_option_.c_str(), nullptr));
     }

@@ -190,11 +190,7 @@ void CommonRuntimeTest::SetUp() {
   int mkdir_result = mkdir(dalvik_cache_.c_str(), 0700);
   ASSERT_EQ(mkdir_result, 0);
 
-  MemMap::Init();  // For LoadExpectSingleDexFile
-
   std::string error_msg;
-  java_lang_dex_file_ = LoadExpectSingleDexFile(GetLibCoreDexFileName().c_str());
-  boot_class_path_.push_back(java_lang_dex_file_);
 
   std::string min_heap_string(StringPrintf("-Xms%zdm", gc::Heap::kDefaultInitialSize / MB));
   std::string max_heap_string(StringPrintf("-Xmx%zdm", gc::Heap::kDefaultMaximumSize / MB));
@@ -202,7 +198,8 @@ void CommonRuntimeTest::SetUp() {
   callbacks_.reset(new NoopCompilerCallbacks());
 
   RuntimeOptions options;
-  options.push_back(std::make_pair("bootclasspath", &boot_class_path_));
+  std::string boot_class_path_string = "-Xbootclasspath:" + GetLibCoreDexFileName();
+  options.push_back(std::make_pair(boot_class_path_string.c_str(), nullptr));
   options.push_back(std::make_pair("-Xcheck:jni", nullptr));
   options.push_back(std::make_pair(min_heap_string.c_str(), nullptr));
   options.push_back(std::make_pair(max_heap_string.c_str(), nullptr));
@@ -228,6 +225,11 @@ void CommonRuntimeTest::SetUp() {
   // pool is created by the runtime.
   runtime_->GetHeap()->CreateThreadPool();
   runtime_->GetHeap()->VerifyHeap();  // Check for heap corruption before the test
+
+  // Get the boot class path from the runtime so it can be used in tests.
+  boot_class_path_ = class_linker_->GetBootClassPath();
+  ASSERT_FALSE(boot_class_path_.empty());
+  java_lang_dex_file_ = boot_class_path_[0];
 }
 
 void CommonRuntimeTest::ClearDirectory(const char* dirpath) {
