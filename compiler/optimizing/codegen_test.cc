@@ -133,7 +133,9 @@ static void RunCodeOptimized(HGraph* graph,
                              bool has_result,
                              Expected expected) {
   if (kRuntimeISA == kArm || kRuntimeISA == kThumb2) {
-    arm::CodeGeneratorARM codegenARM(graph, ArmInstructionSetFeatures::FromCppDefines());
+    std::unique_ptr<const ArmInstructionSetFeatures> features(
+        ArmInstructionSetFeatures::FromCppDefines());
+    arm::CodeGeneratorARM codegenARM(graph, features.get());
     RunCodeOptimized(&codegenARM, graph, hook_before_codegen, has_result, expected);
   } else if (kRuntimeISA == kArm64) {
     arm64::CodeGeneratorARM64 codegenARM64(graph);

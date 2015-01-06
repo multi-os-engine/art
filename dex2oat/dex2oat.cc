@@ -572,23 +572,23 @@ class Dex2Oat FINAL {
         }
       } else if (option.starts_with("--instruction-set-variant=")) {
         StringPiece str = option.substr(strlen("--instruction-set-variant=")).data();
-        instruction_set_features_.reset(
-            InstructionSetFeatures::FromVariant(instruction_set_, str.as_string(), &error_msg));
+        instruction_set_features_ =
+            InstructionSetFeatures::FromVariant(instruction_set_, str.as_string(), &error_msg);
         if (instruction_set_features_.get() == nullptr) {
           Usage("%s", error_msg.c_str());
         }
       } else if (option.starts_with("--instruction-set-features=")) {
         StringPiece str = option.substr(strlen("--instruction-set-features=")).data();
         if (instruction_set_features_.get() == nullptr) {
-          instruction_set_features_.reset(
-              InstructionSetFeatures::FromVariant(instruction_set_, "default", &error_msg));
+          instruction_set_features_ =
+              InstructionSetFeatures::FromVariant(instruction_set_, "default", &error_msg);
           if (instruction_set_features_.get() == nullptr) {
             Usage("Problem initializing default instruction set features variant: %s",
                   error_msg.c_str());
           }
         }
-        instruction_set_features_.reset(
-            instruction_set_features_->AddFeaturesFromString(str.as_string(), &error_msg));
+        instruction_set_features_ =
+            instruction_set_features_->AddFeaturesFromString(str.as_string(), &error_msg);
         if (instruction_set_features_.get() == nullptr) {
           Usage("Error parsing '%s': %s", option.data(), error_msg.c_str());
         }
@@ -832,8 +832,8 @@ class Dex2Oat FINAL {
     // If no instruction set feature was given, use the default one for the target
     // instruction set.
     if (instruction_set_features_.get() == nullptr) {
-      instruction_set_features_.reset(
-          InstructionSetFeatures::FromVariant(instruction_set_, "default", &error_msg));
+      instruction_set_features_ =
+          InstructionSetFeatures::FromVariant(instruction_set_, "default", &error_msg);
       if (instruction_set_features_.get() == nullptr) {
         Usage("Problem initializing default instruction set features variant: %s",
               error_msg.c_str());
