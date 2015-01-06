@@ -962,6 +962,7 @@ mirror::Object* Monitor::GetContendedMonitor(Thread* thread) {
 
 void Monitor::VisitLocks(StackVisitor* stack_visitor, void (*callback)(mirror::Object*, void*),
                          void* callback_context, bool abort_on_failure) {
+  Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
   mirror::ArtMethod* m = stack_visitor->GetMethod();
   CHECK(m != NULL);
 
@@ -1001,14 +1002,9 @@ void Monitor::VisitLocks(StackVisitor* stack_visitor, void (*callback)(mirror::O
   // the locks held in this stack frame.
   std::vector<uint32_t> monitor_enter_dex_pcs;
   verifier::MethodVerifier::FindLocksAtDexPc(m, dex_pc, &monitor_enter_dex_pcs);
-  if (monitor_enter_dex_pcs.empty()) {
-    return;
-  }
-
-  for (size_t i = 0; i < monitor_enter_dex_pcs.size(); ++i) {
+  for (uint32_t monitor_dex_pc : monitor_enter_dex_pcs) {
     // The verifier works in terms of the dex pcs of the monitor-enter instructions.
     // We want the registers used by those instructions (so we can read the values out of them).
-    uint32_t monitor_dex_pc = monitor_enter_dex_pcs[i];
     uint16_t monitor_enter_instruction = code_item->insns_[monitor_dex_pc];
 
     // Quick sanity check.
@@ -1018,8 +1014,8 @@ void Monitor::VisitLocks(StackVisitor* stack_visitor, void (*callback)(mirror::O
     }
 
     uint16_t monitor_register = ((monitor_enter_instruction >> 8) & 0xff);
-    mirror::Object* o = reinterpret_cast<mirror::Object*>(stack_visitor->GetVReg(m, monitor_register,
-                                                                                 kReferenceVReg));
+    mirror::Object* o = reinterpret_cast<mirror::Object*>(
+        stack_visitor->GetVReg(m, monitor_register, kReferenceVReg));
     callback(o, callback_context);
   }
 }
