@@ -49,7 +49,7 @@ static constexpr const char* x86_variants_with_popcnt[] = {
     "silvermont",
 };
 
-const X86InstructionSetFeatures* X86InstructionSetFeatures::FromVariant(
+X86FeaturesUniquePtr X86InstructionSetFeatures::FromVariant(
     const std::string& variant, std::string* error_msg ATTRIBUTE_UNUSED,
     bool x86_64) {
   bool smp = true;  // Conservative default.
@@ -76,16 +76,25 @@ const X86InstructionSetFeatures* X86InstructionSetFeatures::FromVariant(
   }
 
   if (x86_64) {
-    return new X86_64InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2, has_AVX,
-                                            has_AVX2, has_POPCNT);
+    return X86FeaturesUniquePtr(new X86_64InstructionSetFeatures(smp,
+                                                                 has_SSSE3,
+                                                                 has_SSE4_1,
+                                                                 has_SSE4_2,
+                                                                 has_AVX,
+                                                                 has_AVX2,
+                                                                 has_POPCNT));
   } else {
-    return new X86InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2, has_AVX,
-                                            has_AVX2, has_POPCNT);
+    return X86FeaturesUniquePtr(new X86InstructionSetFeatures(smp,
+                                                              has_SSSE3,
+                                                              has_SSE4_1,
+                                                              has_SSE4_2,
+                                                              has_AVX,
+                                                              has_AVX2,
+                                                              has_POPCNT));
   }
 }
 
-const X86InstructionSetFeatures* X86InstructionSetFeatures::FromBitmap(uint32_t bitmap,
-                                                                       bool x86_64) {
+X86FeaturesUniquePtr X86InstructionSetFeatures::FromBitmap(uint32_t bitmap, bool x86_64) {
   bool smp = (bitmap & kSmpBitfield) != 0;
   bool has_SSSE3 = (bitmap & kSsse3Bitfield) != 0;
   bool has_SSE4_1 = (bitmap & kSse4_1Bitfield) != 0;
@@ -94,15 +103,25 @@ const X86InstructionSetFeatures* X86InstructionSetFeatures::FromBitmap(uint32_t 
   bool has_AVX2 = (bitmap & kAvxBitfield) != 0;
   bool has_POPCNT = (bitmap & kPopCntBitfield) != 0;
   if (x86_64) {
-    return new X86_64InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2,
-                                            has_AVX, has_AVX2, has_POPCNT);
+    return X86FeaturesUniquePtr(new X86_64InstructionSetFeatures(smp,
+                                                                 has_SSSE3,
+                                                                 has_SSE4_1,
+                                                                 has_SSE4_2,
+                                                                 has_AVX,
+                                                                 has_AVX2,
+                                                                 has_POPCNT));
   } else {
-    return new X86InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2,
-                                         has_AVX, has_AVX2, has_POPCNT);
+    return X86FeaturesUniquePtr(new X86InstructionSetFeatures(smp,
+                                                              has_SSSE3,
+                                                              has_SSE4_1,
+                                                              has_SSE4_2,
+                                                              has_AVX,
+                                                              has_AVX2,
+                                                              has_POPCNT));
   }
 }
 
-const X86InstructionSetFeatures* X86InstructionSetFeatures::FromCppDefines(bool x86_64) {
+X86FeaturesUniquePtr X86InstructionSetFeatures::FromCppDefines(bool x86_64) {
   const bool smp = true;
 
 #ifndef __SSSE3__
@@ -142,15 +161,25 @@ const X86InstructionSetFeatures* X86InstructionSetFeatures::FromCppDefines(bool 
 #endif
 
   if (x86_64) {
-    return new X86_64InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2, has_AVX,
-                                            has_AVX2, has_POPCNT);
+    return X86FeaturesUniquePtr( new X86_64InstructionSetFeatures(smp,
+                                                                  has_SSSE3,
+                                                                  has_SSE4_1,
+                                                                  has_SSE4_2,
+                                                                  has_AVX,
+                                                                  has_AVX2,
+                                                                  has_POPCNT));
   } else {
-    return new X86InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2, has_AVX,
-                                         has_AVX2, has_POPCNT);
+    return X86FeaturesUniquePtr(new X86InstructionSetFeatures(smp,
+                                                              has_SSSE3,
+                                                              has_SSE4_1,
+                                                              has_SSE4_2,
+                                                              has_AVX,
+                                                              has_AVX2,
+                                                              has_POPCNT));
   }
 }
 
-const X86InstructionSetFeatures* X86InstructionSetFeatures::FromCpuInfo(bool x86_64) {
+X86FeaturesUniquePtr X86InstructionSetFeatures::FromCpuInfo(bool x86_64) {
   // Look in /proc/cpuinfo for features we need.  Only use this when we can guarantee that
   // the kernel puts the appropriate feature flags in here.  Sometimes it doesn't.
   bool smp = false;
@@ -199,20 +228,30 @@ const X86InstructionSetFeatures* X86InstructionSetFeatures::FromCpuInfo(bool x86
     LOG(ERROR) << "Failed to open /proc/cpuinfo";
   }
   if (x86_64) {
-    return new X86_64InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2, has_AVX,
-                                            has_AVX2, has_POPCNT);
+    return X86FeaturesUniquePtr(new X86_64InstructionSetFeatures(smp,
+                                                                 has_SSSE3,
+                                                                 has_SSE4_1,
+                                                                 has_SSE4_2,
+                                                                 has_AVX,
+                                                                 has_AVX2,
+                                                                 has_POPCNT));
   } else {
-    return new X86InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2, has_AVX,
-                                         has_AVX2, has_POPCNT);
+    return X86FeaturesUniquePtr(new X86InstructionSetFeatures(smp,
+                                                              has_SSSE3,
+                                                              has_SSE4_1,
+                                                              has_SSE4_2,
+                                                              has_AVX,
+                                                              has_AVX2,
+                                                              has_POPCNT));
   }
 }
 
-const X86InstructionSetFeatures* X86InstructionSetFeatures::FromHwcap(bool x86_64) {
+X86FeaturesUniquePtr X86InstructionSetFeatures::FromHwcap(bool x86_64) {
   UNIMPLEMENTED(WARNING);
   return FromCppDefines(x86_64);
 }
 
-const X86InstructionSetFeatures* X86InstructionSetFeatures::FromAssembly(bool x86_64) {
+X86FeaturesUniquePtr X86InstructionSetFeatures::FromAssembly(bool x86_64) {
   UNIMPLEMENTED(WARNING);
   return FromCppDefines(x86_64);
 }
@@ -281,7 +320,7 @@ std::string X86InstructionSetFeatures::GetFeatureString() const {
   return result;
 }
 
-const InstructionSetFeatures* X86InstructionSetFeatures::AddFeaturesFromSplitString(
+std::unique_ptr<const InstructionSetFeatures> X86InstructionSetFeatures::AddFeaturesFromSplitString(
     const bool smp, const std::vector<std::string>& features, bool x86_64,
     std::string* error_msg) const {
   bool has_SSSE3 = has_SSSE3_;
@@ -322,11 +361,23 @@ const InstructionSetFeatures* X86InstructionSetFeatures::AddFeaturesFromSplitStr
     }
   }
   if (x86_64) {
-    return new X86_64InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2, has_AVX,
-                                            has_AVX2, has_POPCNT);
+    return std::unique_ptr<const InstructionSetFeatures>(
+        new X86_64InstructionSetFeatures(smp,
+                                         has_SSSE3,
+                                         has_SSE4_1,
+                                         has_SSE4_2,
+                                         has_AVX,
+                                         has_AVX2,
+                                         has_POPCNT));
   } else {
-    return new X86InstructionSetFeatures(smp, has_SSSE3, has_SSE4_1, has_SSE4_2, has_AVX,
-                                         has_AVX2, has_POPCNT);
+    return std::unique_ptr<const InstructionSetFeatures>(
+        new X86InstructionSetFeatures(smp,
+                                      has_SSSE3,
+                                      has_SSE4_1,
+                                      has_SSE4_2,
+                                      has_AVX,
+                                      has_AVX2,
+                                      has_POPCNT));
   }
 }
 
