@@ -25,37 +25,45 @@ namespace art {
 class X86_64InstructionSetFeatures FINAL : public X86InstructionSetFeatures {
  public:
   // Process a CPU variant string like "atom" or "nehalem" and create InstructionSetFeatures.
-  static const X86_64InstructionSetFeatures* FromVariant(const std::string& variant,
-                                                         std::string* error_msg) {
-    return X86InstructionSetFeatures::FromVariant(variant, error_msg, true)
-        ->AsX86_64InstructionSetFeatures();
+  static std::unique_ptr<const X86_64InstructionSetFeatures> FromVariant(const std::string& variant,
+                                                                         std::string* error_msg) {
+    return std::unique_ptr<const X86_64InstructionSetFeatures>(
+        X86InstructionSetFeatures::FromVariant(variant, error_msg, true).release()
+        ->AsX86_64InstructionSetFeatures());
   }
 
   // Parse a bitmap and create an InstructionSetFeatures.
-  static const X86_64InstructionSetFeatures* FromBitmap(uint32_t bitmap) {
-    return X86InstructionSetFeatures::FromBitmap(bitmap, true)->AsX86_64InstructionSetFeatures();
+  static std::unique_ptr<const X86_64InstructionSetFeatures> FromBitmap(uint32_t bitmap) {
+    return std::unique_ptr<const X86_64InstructionSetFeatures>(
+        X86InstructionSetFeatures::FromBitmap(bitmap, true).release()
+        ->AsX86_64InstructionSetFeatures());
   }
 
   // Turn C pre-processor #defines into the equivalent instruction set features.
-  static const X86_64InstructionSetFeatures* FromCppDefines() {
-    return X86InstructionSetFeatures::FromCppDefines(true)->AsX86_64InstructionSetFeatures();
+  static std::unique_ptr<const X86_64InstructionSetFeatures> FromCppDefines() {
+    return std::unique_ptr<const X86_64InstructionSetFeatures>(
+        X86InstructionSetFeatures::FromCppDefines(true).release()
+        ->AsX86_64InstructionSetFeatures());
   }
 
   // Process /proc/cpuinfo and use kRuntimeISA to produce InstructionSetFeatures.
-  static const X86_64InstructionSetFeatures* FromCpuInfo() {
-    return X86InstructionSetFeatures::FromCpuInfo(true)->AsX86_64InstructionSetFeatures();
+  static std::unique_ptr<const X86_64InstructionSetFeatures> FromCpuInfo() {
+    return std::unique_ptr<const X86_64InstructionSetFeatures>(
+        X86InstructionSetFeatures::FromCpuInfo(true).release()->AsX86_64InstructionSetFeatures());
   }
 
   // Process the auxiliary vector AT_HWCAP entry and use kRuntimeISA to produce
   // InstructionSetFeatures.
-  static const X86_64InstructionSetFeatures* FromHwcap() {
-    return X86InstructionSetFeatures::FromHwcap(true)->AsX86_64InstructionSetFeatures();
+  static std::unique_ptr<const X86_64InstructionSetFeatures> FromHwcap() {
+    return std::unique_ptr<const X86_64InstructionSetFeatures>(
+        X86InstructionSetFeatures::FromHwcap(true).release()->AsX86_64InstructionSetFeatures());
   }
 
   // Use assembly tests of the current runtime (ie kRuntimeISA) to determine the
   // InstructionSetFeatures. This works around kernel bugs in AT_HWCAP and /proc/cpuinfo.
-  static const X86_64InstructionSetFeatures* FromAssembly() {
-    return X86InstructionSetFeatures::FromAssembly(true)->AsX86_64InstructionSetFeatures();
+  static std::unique_ptr<const X86_64InstructionSetFeatures> FromAssembly() {
+    return std::unique_ptr<const X86_64InstructionSetFeatures>(
+        X86InstructionSetFeatures::FromAssembly(true).release()->AsX86_64InstructionSetFeatures());
   }
 
   InstructionSet GetInstructionSet() const OVERRIDE {
@@ -66,7 +74,7 @@ class X86_64InstructionSetFeatures FINAL : public X86InstructionSetFeatures {
 
  protected:
   // Parse a string of the form "ssse3" adding these to a new InstructionSetFeatures.
-  const InstructionSetFeatures*
+  std::unique_ptr<const InstructionSetFeatures>
       AddFeaturesFromSplitString(const bool smp, const std::vector<std::string>& features,
                                  std::string* error_msg) const OVERRIDE {
     return X86InstructionSetFeatures::AddFeaturesFromSplitString(smp, features, true, error_msg);

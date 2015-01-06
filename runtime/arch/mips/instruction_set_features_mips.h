@@ -25,25 +25,25 @@ namespace art {
 class MipsInstructionSetFeatures FINAL : public InstructionSetFeatures {
  public:
   // Process a CPU variant string like "r4000" and create InstructionSetFeatures.
-  static const MipsInstructionSetFeatures* FromVariant(const std::string& variant,
-                                                        std::string* error_msg);
+  static std::unique_ptr<const MipsInstructionSetFeatures> FromVariant(const std::string& variant,
+                                                                       std::string* error_msg);
 
   // Parse a bitmap and create an InstructionSetFeatures.
-  static const MipsInstructionSetFeatures* FromBitmap(uint32_t bitmap);
+  static std::unique_ptr<const MipsInstructionSetFeatures> FromBitmap(uint32_t bitmap);
 
   // Turn C pre-processor #defines into the equivalent instruction set features.
-  static const MipsInstructionSetFeatures* FromCppDefines();
+  static std::unique_ptr<const MipsInstructionSetFeatures> FromCppDefines();
 
   // Process /proc/cpuinfo and use kRuntimeISA to produce InstructionSetFeatures.
-  static const MipsInstructionSetFeatures* FromCpuInfo();
+  static std::unique_ptr<const MipsInstructionSetFeatures> FromCpuInfo();
 
   // Process the auxiliary vector AT_HWCAP entry and use kRuntimeISA to produce
   // InstructionSetFeatures.
-  static const MipsInstructionSetFeatures* FromHwcap();
+  static std::unique_ptr<const MipsInstructionSetFeatures> FromHwcap();
 
   // Use assembly tests of the current runtime (ie kRuntimeISA) to determine the
   // InstructionSetFeatures. This works around kernel bugs in AT_HWCAP and /proc/cpuinfo.
-  static const MipsInstructionSetFeatures* FromAssembly();
+  static std::unique_ptr<const MipsInstructionSetFeatures> FromAssembly();
 
   bool Equals(const InstructionSetFeatures* other) const OVERRIDE;
 
@@ -71,7 +71,7 @@ class MipsInstructionSetFeatures FINAL : public InstructionSetFeatures {
 
  protected:
   // Parse a vector of the form "fpu32", "mips2" adding these to a new MipsInstructionSetFeatures.
-  virtual const InstructionSetFeatures*
+  std::unique_ptr<const InstructionSetFeatures>
       AddFeaturesFromSplitString(const bool smp, const std::vector<std::string>& features,
                                  std::string* error_msg) const OVERRIDE;
 

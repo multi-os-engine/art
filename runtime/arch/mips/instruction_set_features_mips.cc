@@ -24,7 +24,7 @@
 
 namespace art {
 
-const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromVariant(
+std::unique_ptr<const MipsInstructionSetFeatures> MipsInstructionSetFeatures::FromVariant(
     const std::string& variant ATTRIBUTE_UNUSED, std::string* error_msg ATTRIBUTE_UNUSED) {
   if (variant != "default") {
     std::ostringstream os;
@@ -33,17 +33,20 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromVariant(
   bool smp = true;  // Conservative default.
   bool fpu_32bit = true;
   bool mips_isa_gte2 = true;
-  return new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2);
+  return std::unique_ptr<const MipsInstructionSetFeatures>(
+      new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2));
 }
 
-const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromBitmap(uint32_t bitmap) {
+std::unique_ptr<const MipsInstructionSetFeatures> MipsInstructionSetFeatures::FromBitmap(
+    uint32_t bitmap) {
   bool smp = (bitmap & kSmpBitfield) != 0;
   bool fpu_32bit = (bitmap & kFpu32Bitfield) != 0;
   bool mips_isa_gte2 = (bitmap & kIsaRevGte2Bitfield) != 0;
-  return new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2);
+  return std::unique_ptr<const MipsInstructionSetFeatures>(
+      new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2));
 }
 
-const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCppDefines() {
+std::unique_ptr<const MipsInstructionSetFeatures> MipsInstructionSetFeatures::FromCppDefines() {
   const bool smp = true;
 
   // TODO: here we assume the FPU is always 32-bit.
@@ -55,10 +58,11 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCppDefines() {
   const bool mips_isa_gte2 = false;
 #endif
 
-  return new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2);
+  return std::unique_ptr<const MipsInstructionSetFeatures>(
+      new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2));
 }
 
-const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCpuInfo() {
+std::unique_ptr<const MipsInstructionSetFeatures> MipsInstructionSetFeatures::FromCpuInfo() {
   // Look in /proc/cpuinfo for features we need.  Only use this when we can guarantee that
   // the kernel puts the appropriate feature flags in here.  Sometimes it doesn't.
   bool smp = false;
@@ -89,15 +93,16 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCpuInfo() {
   } else {
     LOG(ERROR) << "Failed to open /proc/cpuinfo";
   }
-  return new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2);
+  return std::unique_ptr<const MipsInstructionSetFeatures>(
+      new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2));
 }
 
-const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromHwcap() {
+std::unique_ptr<const MipsInstructionSetFeatures> MipsInstructionSetFeatures::FromHwcap() {
   UNIMPLEMENTED(WARNING);
   return FromCppDefines();
 }
 
-const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromAssembly() {
+std::unique_ptr<const MipsInstructionSetFeatures> MipsInstructionSetFeatures::FromAssembly() {
   UNIMPLEMENTED(WARNING);
   return FromCppDefines();
 }
@@ -138,7 +143,8 @@ std::string MipsInstructionSetFeatures::GetFeatureString() const {
   return result;
 }
 
-const InstructionSetFeatures* MipsInstructionSetFeatures::AddFeaturesFromSplitString(
+std::unique_ptr<const InstructionSetFeatures>
+MipsInstructionSetFeatures::AddFeaturesFromSplitString(
     const bool smp, const std::vector<std::string>& features, std::string* error_msg) const {
   bool fpu_32bit = fpu_32bit_;
   bool mips_isa_gte2 = mips_isa_gte2_;
@@ -157,7 +163,8 @@ const InstructionSetFeatures* MipsInstructionSetFeatures::AddFeaturesFromSplitSt
       return nullptr;
     }
   }
-  return new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2);
+  return std::unique_ptr<const InstructionSetFeatures>(
+      new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2));
 }
 
 }  // namespace art

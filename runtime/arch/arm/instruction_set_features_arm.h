@@ -17,6 +17,8 @@
 #ifndef ART_RUNTIME_ARCH_ARM_INSTRUCTION_SET_FEATURES_ARM_H_
 #define ART_RUNTIME_ARCH_ARM_INSTRUCTION_SET_FEATURES_ARM_H_
 
+#include <memory>
+
 #include "arch/instruction_set_features.h"
 
 namespace art {
@@ -25,25 +27,25 @@ namespace art {
 class ArmInstructionSetFeatures FINAL : public InstructionSetFeatures {
  public:
   // Process a CPU variant string like "krait" or "cortex-a15" and create InstructionSetFeatures.
-  static const ArmInstructionSetFeatures* FromVariant(const std::string& variant,
-                                                      std::string* error_msg);
+  static std::unique_ptr<const ArmInstructionSetFeatures> FromVariant(const std::string& variant,
+                                                                      std::string* error_msg);
 
   // Parse a bitmap and create an InstructionSetFeatures.
-  static const ArmInstructionSetFeatures* FromBitmap(uint32_t bitmap);
+  static std::unique_ptr<const ArmInstructionSetFeatures> FromBitmap(uint32_t bitmap);
 
   // Turn C pre-processor #defines into the equivalent instruction set features.
-  static const ArmInstructionSetFeatures* FromCppDefines();
+  static std::unique_ptr<const ArmInstructionSetFeatures> FromCppDefines();
 
   // Process /proc/cpuinfo and use kRuntimeISA to produce InstructionSetFeatures.
-  static const ArmInstructionSetFeatures* FromCpuInfo();
+  static std::unique_ptr<const ArmInstructionSetFeatures> FromCpuInfo();
 
   // Process the auxiliary vector AT_HWCAP entry and use kRuntimeISA to produce
   // InstructionSetFeatures.
-  static const ArmInstructionSetFeatures* FromHwcap();
+  static std::unique_ptr<const ArmInstructionSetFeatures> FromHwcap();
 
   // Use assembly tests of the current runtime (ie kRuntimeISA) to determine the
   // InstructionSetFeatures. This works around kernel bugs in AT_HWCAP and /proc/cpuinfo.
-  static const ArmInstructionSetFeatures* FromAssembly();
+  static std::unique_ptr<const ArmInstructionSetFeatures> FromAssembly();
 
   bool Equals(const InstructionSetFeatures* other) const OVERRIDE;
 
@@ -71,7 +73,7 @@ class ArmInstructionSetFeatures FINAL : public InstructionSetFeatures {
 
  protected:
   // Parse a vector of the form "div", "lpae" adding these to a new ArmInstructionSetFeatures.
-  const InstructionSetFeatures*
+  std::unique_ptr<const InstructionSetFeatures>
       AddFeaturesFromSplitString(const bool smp, const std::vector<std::string>& features,
                                  std::string* error_msg) const OVERRIDE;
 
