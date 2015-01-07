@@ -147,7 +147,13 @@ else
   ART_HOST_CFLAGS += $(art_gcc_cflags)
 endif
 ifeq ($(ART_TARGET_CLANG),true)
-  ART_TARGET_CFLAGS += $(art_clang_cflags)
+  # TODO: if we ever want to support GCC/Clang mix for multi-target products, this needs to be
+  #       split up.
+  ifneq ($(ART_TARGET_CLANG_$(TARGET_ARCH)),false)
+    ART_TARGET_CFLAGS += $(art_clang_cflags)
+  else
+    ART_TARGET_CFLAGS += $(art_gcc_cflags)
+  endif
 else
   ART_TARGET_CFLAGS += $(art_gcc_cflags)
 endif
