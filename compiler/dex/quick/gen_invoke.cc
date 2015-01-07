@@ -1015,7 +1015,7 @@ bool Mir2Lir::GenInlinedCharAt(CallInfo* info) {
 
 // Generates an inlined String.is_empty or String.length.
 bool Mir2Lir::GenInlinedStringIsEmptyOrLength(CallInfo* info, bool is_empty) {
-  if (cu_->instruction_set == kMips) {
+  if (cu_->instruction_set == kMips || cu_->instruction_set == kMips64) {
     // TODO - add Mips implementation
     return false;
   }
@@ -1047,7 +1047,7 @@ bool Mir2Lir::GenInlinedStringIsEmptyOrLength(CallInfo* info, bool is_empty) {
 }
 
 bool Mir2Lir::GenInlinedReverseBytes(CallInfo* info, OpSize size) {
-  if (cu_->instruction_set == kMips) {
+  if (cu_->instruction_set == kMips || cu_->instruction_set == kMips64) {
     // TODO - add Mips implementation.
     return false;
   }
@@ -1182,7 +1182,7 @@ bool Mir2Lir::GenInlinedRound(CallInfo* info, bool is_double) {
 }
 
 bool Mir2Lir::GenInlinedFloatCvt(CallInfo* info) {
-  if (cu_->instruction_set == kMips) {
+  if (cu_->instruction_set == kMips || cu_->instruction_set == kMips64) {
     // TODO - add Mips implementation
     return false;
   }
@@ -1197,7 +1197,7 @@ bool Mir2Lir::GenInlinedFloatCvt(CallInfo* info) {
 }
 
 bool Mir2Lir::GenInlinedDoubleCvt(CallInfo* info) {
-  if (cu_->instruction_set == kMips) {
+  if (cu_->instruction_set == kMips || cu_->instruction_set == kMips64) {
     // TODO - add Mips implementation
     return false;
   }
@@ -1268,7 +1268,7 @@ bool Mir2Lir::GenInlinedIndexOf(CallInfo* info, bool zero_based) {
 
 /* Fast string.compareTo(Ljava/lang/string;)I. */
 bool Mir2Lir::GenInlinedStringCompareTo(CallInfo* info) {
-  if (cu_->instruction_set == kMips) {
+  if (cu_->instruction_set == kMips || cu_->instruction_set == kMips64) {
     // TODO - add Mips implementation
     return false;
   }
@@ -1323,7 +1323,7 @@ bool Mir2Lir::GenInlinedCurrentThread(CallInfo* info) {
 
 bool Mir2Lir::GenInlinedUnsafeGet(CallInfo* info,
                                   bool is_long, bool is_volatile) {
-  if (cu_->instruction_set == kMips) {
+  if (cu_->instruction_set == kMips || cu_->instruction_set == kMips64) {
     // TODO - add Mips implementation
     return false;
   }
@@ -1368,7 +1368,7 @@ bool Mir2Lir::GenInlinedUnsafeGet(CallInfo* info,
 
 bool Mir2Lir::GenInlinedUnsafePut(CallInfo* info, bool is_long,
                                   bool is_object, bool is_volatile, bool is_ordered) {
-  if (cu_->instruction_set == kMips) {
+  if (cu_->instruction_set == kMips || cu_->instruction_set == kMips64) {
     // TODO - add Mips implementation
     return false;
   }

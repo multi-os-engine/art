@@ -43,6 +43,7 @@
 #include "dex/quick/arm/backend_arm.h"
 #include "dex/quick/arm64/backend_arm64.h"
 #include "dex/quick/mips/backend_mips.h"
+#include "dex/quick/mips64/backend_mips64.h"
 #include "dex/quick/x86/backend_x86.h"
 
 namespace art {
@@ -658,12 +659,12 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
   }
   CompilationUnit cu(driver->GetArenaPool(), instruction_set, driver, class_linker);
 
-  // TODO: Mips64 is not yet implemented.
   CHECK((cu.instruction_set == kThumb2) ||
         (cu.instruction_set == kArm64) ||
         (cu.instruction_set == kX86) ||
         (cu.instruction_set == kX86_64) ||
-        (cu.instruction_set == kMips));
+        (cu.instruction_set == kMips) ||
+        (cu.instruction_set == kMips64));
 
   // TODO: set this from command line
   constexpr bool compiler_flip_match = false;
@@ -831,6 +832,9 @@ Mir2Lir* QuickCompiler::GetCodeGenerator(CompilationUnit* cu, void* compilation_
       break;
     case kMips:
       mir_to_lir = MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+      break;
+    case kMips64:
+      mir_to_lir = Mips64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
       break;
     case kX86:
       // Fall-through.
