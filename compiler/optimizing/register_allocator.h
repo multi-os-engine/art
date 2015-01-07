@@ -129,6 +129,11 @@ class RegisterAllocator {
   void DumpInterval(std::ostream& stream, LiveInterval* interval) const;
   void DumpAllIntervals(std::ostream& stream) const;
 
+  // Add a `MoveOperands` instance to `move`. Special case pair locations to work
+  // on single registers.
+  void AddMove(
+      HParallelMove* move, Location source, Location destination, HInstruction* instruction) const;
+
   ArenaAllocator* const allocator_;
   CodeGenerator* const codegen_;
   const SsaLivenessAnalysis& liveness_;
