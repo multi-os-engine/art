@@ -40,7 +40,7 @@
 #               later than lines matched against any preceeding in-order checks.
 #               In other words, the order of output lines does not matter
 #               between consecutive DAG checks.
-#  - CHECK-NOT: Must not match any output line which appear in the output group
+#  - CHECK-NOT: Must not match any output line which appears in the output group
 #               later than lines matched against any preceeding checks and
 #               earlier than lines matched against any subsequent checks.
 #               Surrounding non-negative checks (or boundaries of the group)
@@ -353,7 +353,7 @@ class CheckGroup(CommonEqualityMixin):
 
     # Return new variable state and the output lines which lie outside the
     # match locations of this independent group.
-    preceedingLines = outputLines[:min(matchedLines)-1]
+    preceedingLines = outputLines[:min(matchedLines) - 1]
     remainingLines = outputLines[max(matchedLines):]
     return preceedingLines, remainingLines, varState
 
@@ -457,6 +457,11 @@ class CheckFile(FileSplitMixin):
     else:
       return None
 
+  # This function is invoked by the FileSplitMixin parser on each line of the
+  # check file and returns a 2-tuple which instructs the parser how the line
+  # should be handled. If the line should be included in the current check
+  # group, it is returned in the first tuple value. If the line starts a new
+  # check group, the name of the group is returned in the second tuple value.
   def _processLine(self, line, lineNo):
     # Lines beginning with 'CHECK-START' start a new check group.
     startLine = self._extractLine(self.prefix + "-START", line)
@@ -484,6 +489,8 @@ class CheckFile(FileSplitMixin):
   def _exceptionLineOutsideGroup(self, line, lineNo):
     raise Exception("Check file line lies outside a group (line " + str(lineNo) + ")")
 
+  # Invoked by the FileSplitMixin parser to construct a check group from the
+  # processed check lines.
   def _processGroup(self, name, lines):
     checkLines = list(map(lambda line: CheckLine(line[0], line[1]), lines))
     return CheckGroup(name, checkLines)
@@ -528,6 +535,11 @@ class OutputFile(FileSplitMixin):
     self.state = OutputFile.ParsingState.OutsideBlock
     self.groups = self._parseStream(outputStream)
 
+  # This function is invoked by the FileSplitMixin parser on each line of the
+  # output file and returns a 2-tuple which instructs the parser how the line
+  # should be handled. If the line should be included in the current group,
+  # it is returned in the first tuple value. If the line starts a new
+  # check group, the name of the group is returned in the second tuple value.
   def _processLine(self, line, lineNo):
     if self.state == OutputFile.ParsingState.StartingCfgBlock:
       # Previous line started a new 'cfg' block which means that this one must
@@ -570,6 +582,8 @@ class OutputFile(FileSplitMixin):
       else:
         raise Exception("Output line lies outside a group (line " + str(lineNo) + ")")
 
+  # Invoked by the FileSplitMixin parser to construct an output group from the
+  # processed output lines.
   def _processGroup(self, name, lines):
     return OutputGroup(name, lines)
 
