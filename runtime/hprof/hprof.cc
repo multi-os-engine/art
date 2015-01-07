@@ -392,10 +392,10 @@ class Hprof {
         gc_scan_state_(0),
         current_heap_(HPROF_HEAP_DEFAULT),
         objects_in_segment_(0),
-        header_fp_(NULL),
-        header_data_ptr_(NULL),
+        header_fp_(nullptr),
+        header_data_ptr_(nullptr),
         header_data_size_(0),
-        body_fp_(NULL),
+        body_fp_(nullptr),
         body_data_ptr_(NULL),
         body_data_size_(0),
         next_string_id_(0x400000) {
@@ -423,21 +423,17 @@ class Hprof {
     free(body_data_ptr_);
   }
 
-  void Dump()
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_)
+  void Dump() EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_)
       LOCKS_EXCLUDED(Locks::heap_bitmap_lock_) {
-    // Walk the roots and the heap.
-    current_record_.StartNewRecord(body_fp_, HPROF_TAG_HEAP_DUMP_SEGMENT, HPROF_TIME);
-    Runtime::Current()->VisitRoots(RootVisitor, this);
+    header_written_ = false;
+
+    Runtime* runtime = Runtime::Current();
+    // Calculate header first, and dump it if possible.
     Thread* self = Thread::Current();
     {
       ReaderMutexLock mu(self, *Locks::heap_bitmap_lock_);
-      Runtime::Current()->GetHeap()->VisitObjects(VisitObjectCallback, this);
+      runtime->GetHeap()->VisitObjects(VisitHeaderObjectCallback, this);
     }
-    current_record_.StartNewRecord(body_fp_, HPROF_TAG_HEAP_DUMP_END, HPROF_TIME);
-    current_record_.Flush();
-    fflush(body_fp_);
-
     // Write the header.
     WriteFixedHeader();
     // Write the string and class tables, and any stack traces, to the header.
@@ -447,16 +443,42 @@ class Hprof {
     WriteStackTraces();
     current_record_.Flush();
     fflush(header_fp_);
-
-    bool okay = true;
+    LOG(INFO) << "Header size=" << header_data_size_ << " body size=" << body_data_size_;
     if (direct_to_ddms_) {
-      // Send the data off to DDMS.
-      iovec iov[2];
+      // Send header if possible.
+      iovec iov[1];
       iov[0].iov_base = header_data_ptr_;
       iov[0].iov_len = header_data_size_;
-      iov[1].iov_base = body_data_ptr_;
-      iov[1].iov_len = body_data_size_;
-      Dbg::DdmSendChunkV(CHUNK_TYPE("HPDS"), iov, 2);
+      Dbg::DdmSendChunkV(CHUNK_TYPE("HPDS"), iov, 1);  // SEND THE DATA OFF TO DDMS.
+      header_written_ = true;
+    }
+
+    // Write out the body.
+    // Walk the roots and the heap.
+    current_record_.StartNewRecord(body_fp_, HPROF_TAG_HEAP_DUMP_SEGMENT, HPROF_TIME);
+    runtime->VisitRoots(RootVisitor, this);
+    {
+      ReaderMutexLock mu(self, *Locks::heap_bitmap_lock_);
+      runtime->GetHeap()->VisitObjects(VisitObjectCallback, this);
+    }
+    current_record_.StartNewRecord(body_fp_, HPROF_TAG_HEAP_DUMP_END, HPROF_TIME);
+    current_record_.Flush();
+    fflush(body_fp_);
+
+    bool okay = true;
+    LOG(INFO) << "Header size=" << header_data_size_ << " body size=" << body_data_size_;
+    if (direct_to_ddms_) {
+      size_t count = 0;
+      // Send the data off to DDMS.
+      iovec iov[2];
+      if (!header_written_) {  // Don't write header if we did it earlier.
+        iov[count].iov_base = header_data_ptr_;
+        iov[count++].iov_len = header_data_size_;
+        header_written_ = true;
+      }
+      iov[count].iov_base = body_data_ptr_;
+      iov[count++].iov_len = body_data_size_;
+      Dbg::DdmSendChunkV(CHUNK_TYPE("HPDS"), iov, count);
     } else {
       // Where exactly are we writing to?
       int out_fd;
@@ -476,8 +498,11 @@ class Hprof {
       }
 
       std::unique_ptr<File> file(new File(out_fd, filename_, true));
-      okay = file->WriteFully(header_data_ptr_, header_data_size_) &&
-             file->WriteFully(body_data_ptr_, body_data_size_);
+      if (!header_written_) {
+        okay = okay && file->WriteFully(header_data_ptr_, header_data_size_);
+        header_written_ = true;
+      }
+      okay = okay && file->WriteFully(body_data_ptr_, body_data_size_);
       if (okay) {
         okay = file->FlushCloseOrErase() == 0;
       } else {
@@ -498,6 +523,7 @@ class Hprof {
           << PrettySize(header_data_size_ + body_data_size_ + 1023)
           << ") in " << PrettyDuration(duration);
     }
+    CHECK(header_written_);
   }
 
  private:
@@ -511,15 +537,23 @@ class Hprof {
 
   static void VisitObjectCallback(mirror::Object* obj, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK(obj != NULL);
-    DCHECK(arg != NULL);
+    DCHECK(obj != nullptr);
+    DCHECK(arg != nullptr);
     reinterpret_cast<Hprof*>(arg)->DumpHeapObject(obj);
+  }
+
+  static void VisitHeaderObjectCallback(mirror::Object* obj, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK(obj != nullptr);
+    DCHECK(arg != nullptr);
+    reinterpret_cast<Hprof*>(arg)->VisitHeaderObject(obj);
   }
 
   void VisitRoot(const mirror::Object* obj, uint32_t thread_id, RootType type)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  int DumpHeapObject(mirror::Object* obj) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void DumpHeapObject(mirror::Object* obj) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void VisitHeaderObject(mirror::Object* obj) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void Finish() {
   }
@@ -590,45 +624,53 @@ class Hprof {
 
   int MarkRootObject(const mirror::Object* obj, jobject jniObj);
 
-  HprofClassObjectId LookupClassId(mirror::Class* c) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  // If existing is true then the id must already exist.
+  HprofClassObjectId LookupClassId(mirror::Class* c, bool existing = true)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (c == nullptr) {
       // c is the superclass of java.lang.Object or a primitive.
       return 0;
     }
 
-    {
-      auto result = classes_.insert(c);
-      const mirror::Class* present = *result.first;
-      CHECK_EQ(present, c);
+    auto result = classes_.insert(c);
+    // result.second is false if the element was already in the set.
+    if (existing) {
+      CHECK(result.second == false) << "expected already existing ID for class " << c;
     }
+    const mirror::Class* present = *result.first;
+    CHECK_EQ(present, c);
 
     // Make sure that we've assigned a string ID for this class' name
-    LookupClassNameId(c);
+    LookupClassNameId(c, existing);
 
-    HprofClassObjectId result = PointerToLowMemUInt32(c);
-    return result;
+    return PointerToLowMemUInt32(c);
   }
 
-  HprofStringId LookupStringId(mirror::String* string) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return LookupStringId(string->ToModifiedUtf8());
+  // If existing is true then it must already exist as an id. Used to prevent errors by missing/
+  // some strings when we are processing the header.
+  HprofStringId LookupStringId(mirror::String* string,
+                               bool existing = true) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return LookupStringId(string->ToModifiedUtf8(), existing);
   }
 
-  HprofStringId LookupStringId(const char* string) {
-    return LookupStringId(std::string(string));
+  HprofStringId LookupStringId(const char* string, bool existing = true) {
+    return LookupStringId(std::string(string), existing);
   }
 
-  HprofStringId LookupStringId(const std::string& string) {
+  HprofStringId LookupStringId(const std::string& string, bool existing = true) {
     auto it = strings_.find(string);
     if (it != strings_.end()) {
       return it->second;
     }
+    CHECK(!existing) << "expected existing string " << string;
     HprofStringId id = next_string_id_++;
     strings_.Put(string, id);
     return id;
   }
 
-  HprofStringId LookupClassNameId(mirror::Class* c) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return LookupStringId(PrettyDescriptor(c));
+  HprofStringId LookupClassNameId(mirror::Class* c, bool existing = true)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return LookupStringId(PrettyDescriptor(c), existing);
   }
 
   void WriteFixedHeader() {
@@ -649,12 +691,8 @@ class Hprof {
 
     // The current time, in milliseconds since 0:00 GMT, 1/1/70.
     timeval now;
-    uint64_t nowMs;
-    if (gettimeofday(&now, NULL) < 0) {
-      nowMs = 0;
-    } else {
-      nowMs = (uint64_t)now.tv_sec * 1000 + now.tv_usec / 1000;
-    }
+    uint64_t nowMs = gettimeofday(&now, nullptr) < 0 ? 0U :
+        static_cast<uint64_t>(now.tv_sec) * 1000 + now.tv_usec / 1000;
 
     // U4: high word of the 64-bit time.
     U4_TO_BUF_BE(buf, 0, (uint32_t)(nowMs >> 32));
@@ -692,6 +730,7 @@ class Hprof {
   FILE* header_fp_;
   char* header_data_ptr_;
   size_t header_data_size_;
+  bool header_written_;
 
   FILE* body_fp_;
   char* body_data_ptr_;
@@ -850,7 +889,33 @@ static int StackTraceSerialNumber(const mirror::Object* /*obj*/) {
   return HPROF_NULL_STACK_TRACE;
 }
 
-int Hprof::DumpHeapObject(mirror::Object* obj) {
+void Hprof::VisitHeaderObject(mirror::Object* obj) {
+  LookupStringId("app", false);
+  LookupStringId("zygote", false);
+  LookupStringId("image", false);
+  LookupStringId("<ILLEGAL>", false);
+  LookupStringId(STATIC_OVERHEAD_NAME, false);
+  if (obj->IsClass()) {
+    mirror::Class* klass = obj->AsClass();
+    const size_t num_static_fields = klass->NumStaticFields();
+    LookupClassId(klass, false);
+    // Static fields
+    for (size_t i = 0; i < num_static_fields; ++i) {
+      mirror::ArtField* f = klass->GetStaticField(i);
+      CHECK(f != nullptr);
+      LookupStringId(f->GetName(), false);
+    }
+    // Instance fields for this class (no superclass fields)
+    const size_t num_instance_fields = klass->IsObjectClass() ? 0 : klass->NumInstanceFields();
+    for (size_t i = 0; i < num_instance_fields; ++i) {
+      mirror::ArtField* f = klass->GetInstanceField(i);
+      CHECK(f != nullptr);
+      LookupStringId(f->GetName(), false);
+    }
+  }
+}
+
+void Hprof::DumpHeapObject(mirror::Object* obj) {
   HprofRecord* rec = &current_record_;
   gc::space::ContinuousSpace* space =
       Runtime::Current()->GetHeap()->FindContinuousSpaceFromObject(obj, true);
@@ -894,7 +959,7 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
   }
 
   mirror::Class* c = obj->GetClass();
-  if (c == NULL) {
+  if (c == nullptr) {
     // This object will bother HprofReader, because it has a NULL
     // class, so just don't dump it. It could be
     // gDvm.unlinkedJavaLangClass or it could be an object just
@@ -1058,7 +1123,6 @@ int Hprof::DumpHeapObject(mirror::Object* obj) {
   }
 
   ++objects_in_segment_;
-  return 0;
 }
 
 void Hprof::VisitRoot(const mirror::Object* obj, uint32_t thread_id, RootType type) {
