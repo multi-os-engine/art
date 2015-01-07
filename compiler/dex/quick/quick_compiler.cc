@@ -43,6 +43,7 @@
 #include "dex/quick/arm/backend_arm.h"
 #include "dex/quick/arm64/backend_arm64.h"
 #include "dex/quick/mips/backend_mips.h"
+#include "dex/quick/mips64/backend_mips64.h"
 #include "dex/quick/x86/backend_x86.h"
 
 namespace art {
@@ -831,6 +832,9 @@ Mir2Lir* QuickCompiler::GetCodeGenerator(CompilationUnit* cu, void* compilation_
       break;
     case kMips:
       mir_to_lir = MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+      break;
+    case kMips64:
+      mir_to_lir = Mips64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
       break;
     case kX86:
       // Fall-through.
