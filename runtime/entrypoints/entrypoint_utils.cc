@@ -189,7 +189,8 @@ void ThrowStackOverflowError(Thread* self) {
         self->SetException(throw_location,
             reinterpret_cast<mirror::Throwable*>(self->DecodeJObject(exc.get())));
       } else {
-        error_msg = "Could not create stack trace.";
+        self->SetException(self->GetCurrentLocationForThrow(),
+                           reinterpret_cast<mirror::Throwable*>(self->DecodeJObject(exc.get())));
       }
     } else {
       // Could not allocate a string object.
