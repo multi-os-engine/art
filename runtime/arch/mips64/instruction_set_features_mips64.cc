@@ -26,15 +26,16 @@ namespace art {
 
 const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromVariant(
     const std::string& variant ATTRIBUTE_UNUSED, std::string* error_msg ATTRIBUTE_UNUSED) {
-  // TODO: r6 variant.
-  if (variant != "default") {
+
+  if (variant != "mips64r6") {
     std::ostringstream os;
     LOG(WARNING) << "Unexpected CPU variant for Mips64 using defaults: " << variant;
   }
+
   bool smp = true;  // Conservative default.
   bool fpu_32bit = false;
   bool mips64_isa_gte2 = true;
-  bool r6 = false;
+  bool r6 = true;
   return new Mips64InstructionSetFeatures(smp, fpu_32bit, mips64_isa_gte2, r6);
 }
 
@@ -52,14 +53,11 @@ const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromCppDefines
   // TODO: here we assume the FPU is always 64-bit.
   const bool fpu_32bit = false;
 
-#if __mips_isa_rev >= 2
+  // TODO: here we assume all MIPS64 processors are R6.
   const bool mips64_isa_gte2 = true;
-#else
-  const bool mips64_isa_gte2 = false;
-#endif
 
   // TODO: Are there CPP defines?
-  const bool r6 = false;
+  const bool r6 = true;
 
   return new Mips64InstructionSetFeatures(smp, fpu_32bit, mips64_isa_gte2, r6);
 }
@@ -70,16 +68,12 @@ const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromCpuInfo() 
   bool smp = false;
 
   // TODO: here we assume the FPU is always 64-bit.
-  const bool fpu_32bit = true;
+  const bool fpu_32bit = false;
 
-  // TODO: here we assume all MIPS64 processors are >= v2.
-#if __mips_isa_rev >= 2
+  // TODO: here we assume all MIPS64 processors are R6.
   const bool mips64_isa_gte2 = true;
-#else
-  const bool mips64_isa_gte2 = false;
-#endif
 
-  const bool r6 = false;
+  const bool r6 = true;
 
   std::ifstream in("/proc/cpuinfo");
   if (!in.fail()) {
