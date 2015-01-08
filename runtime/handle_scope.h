@@ -22,6 +22,7 @@
 #include "handle.h"
 #include "stack.h"
 #include "utils.h"
+#include "verify_object.h"
 
 namespace art {
 namespace mirror {
@@ -193,6 +194,7 @@ class PACKED(4) StackHandleScope FINAL : public HandleScope {
   ALWAYS_INLINE void SetReference(size_t i, mirror::Object* object)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK_LT(i, kNumReferences);
+    VerifyObject(object);
     GetReferences()[i].Assign(object);
   }
 

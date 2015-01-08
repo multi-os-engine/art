@@ -21,6 +21,7 @@
 #include "handle_scope-inl.h"
 #include "mirror/string.h"
 #include "scoped_thread_state_change.h"
+#include "verify_object-inl.h"
 
 namespace art {
 
