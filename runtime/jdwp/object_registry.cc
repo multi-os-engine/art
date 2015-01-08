@@ -20,6 +20,7 @@
 #include "jni_internal.h"
 #include "mirror/class.h"
 #include "scoped_thread_state_change.h"
+#include "verify_object-inl.h"
 
 namespace art {
 
