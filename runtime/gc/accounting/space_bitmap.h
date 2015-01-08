@@ -160,6 +160,11 @@ class SpaceBitmap {
     return IndexToOffset<uint64_t>(Size() / sizeof(intptr_t));
   }
 
+  void SetHeapSize(size_t bytes) {
+    bitmap_size_ = OffsetToIndex(bytes) * sizeof(intptr_t);
+    CHECK_EQ(HeapSize(), bytes);
+  }
+
   uintptr_t HeapBegin() const {
     return heap_begin_;
   }

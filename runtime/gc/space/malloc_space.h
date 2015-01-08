@@ -110,6 +110,10 @@ class MallocSpace : public ContinuousMemMapAllocSpace {
     return GetMemMap()->Size();
   }
 
+  // Change the non growth limit capacity by shrinking or expanding the map. Currently, only
+  // shrinking is supported.
+  void SetNonGrowthLimitCapacity(size_t new_capacity);
+
   void Dump(std::ostream& os) const;
 
   void SetGrowthLimit(size_t growth_limit);

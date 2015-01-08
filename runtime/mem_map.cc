@@ -665,6 +665,18 @@ void MemMap::Shutdown() {
   maps_ = nullptr;
 }
 
+void MemMap::SetSize(size_t new_size) {
+  if (new_size == base_size_) {
+    return;
+  }
+  CHECK_EQ(base_size_, size_) << "Unsupported";
+  CHECK_LE(new_size, base_size_);
+  CHECK_EQ(munmap(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(BaseBegin()) + new_size),
+                  base_size_ - new_size), 0) << new_size << " " << base_size_;
+  base_size_ = new_size;
+  size_ = new_size;
+}
+
 std::ostream& operator<<(std::ostream& os, const MemMap& mem_map) {
   os << StringPrintf("[MemMap: %p-%p prot=0x%x %s]",
                      mem_map.BaseBegin(), mem_map.BaseEnd(), mem_map.GetProtect(),
