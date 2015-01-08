@@ -25,6 +25,15 @@
 #include <unistd.h>
 #include <memory>
 
+#if !defined(HAVE_ANDROID_OS) && __linux__
+// #define ART_USE_GLIBC_BACKTRACE 1
+// static constexpr int kBacktraceSize = 128;
+#endif
+
+#ifdef ART_USE_GLIBC_BACKTRACE
+#include <execinfo.h>
+#endif
+
 #include "base/stl_util.h"
 #include "base/unix_file/fd_file.h"
 #include "dex_file-inl.h"
@@ -1118,7 +1127,25 @@ std::string GetSchedulerGroupName(pid_t tid) {
 }
 
 void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix,
-    mirror::ArtMethod* current_method) {
+    mirror::ArtMethod* current_method, void* ucontext_ptr) {
+#if defined(ART_USE_GLIBC_BACKTRACE)
+  UNUSED(tid, current_method);
+  // Note: we can only dump the stack of the active thread this way.
+  void* buf[kBacktraceSize];
+  int count = backtrace(buf, kBacktraceSize);
+  if (count <= 0) {
+    os << prefix << "(Could not get backtrace.)";
+    return;
+  }
+  // TODO: This is breaking parsing as outlined below.
+  char** symbols = backtrace_symbols(buf, count);
+  if (symbols != nullptr) {
+    for (int i = 0; i < count; ++i) {
+      os << prefix << symbols[i] << "\n";
+    }
+    free(symbols);
+  }
+#else
 #if __linux__
   // b/18119146
   if (RUNNING_ON_VALGRIND != 0) {
@@ -1134,7 +1161,7 @@ void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix,
 #endif
 
   std::unique_ptr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid));
-  if (!backtrace->Unwind(0)) {
+  if (!backtrace->Unwind(0, reinterpret_cast<ucontext*>(ucontext_ptr))) {
     os << prefix << "(backtrace::Unwind failed for thread " << tid << ")\n";
     return;
   } else if (backtrace->NumFrames() == 0) {
@@ -1178,6 +1205,7 @@ void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix,
   }
 #else
   UNUSED(os, tid, prefix, current_method);
+#endif
 #endif
 }
 

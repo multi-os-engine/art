@@ -35,9 +35,13 @@ namespace art {
 static constexpr bool kDumpHeapObjectOnSigsevg = false;
 
 struct Backtrace {
+ public:
+  explicit Backtrace(void* context) : context_(context) {}
   void Dump(std::ostream& os) const {
-    DumpNativeStack(os, GetTid(), "\t");
+    DumpNativeStack(os, GetTid(), "\t", nullptr, context_);
   }
+ private:
+  void* context_;
 };
 
 struct OsInfo {
@@ -298,7 +302,7 @@ void HandleUnexpectedSignal(int signal_number, siginfo_t* info, void* raw_contex
   pid_t tid = GetTid();
   std::string thread_name(GetThreadName(tid));
   UContext thread_context(raw_context);
-  Backtrace thread_backtrace;
+  Backtrace thread_backtrace(raw_context);
 
   LOG(INTERNAL_FATAL) << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n"
                       << StringPrintf("Fatal signal %d (%s), code %d (%s)",
