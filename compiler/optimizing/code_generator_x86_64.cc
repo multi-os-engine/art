@@ -81,6 +81,7 @@ class NullCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
 
   virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
     __ gs()->call(
         Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pThrowNullPointer), true));
     codegen->RecordPcInfo(instruction_, instruction_->GetDexPc());
@@ -97,6 +98,7 @@ class DivZeroCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
 
   virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
     __ gs()->call(
         Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pThrowDivZero), true));
     codegen->RecordPcInfo(instruction_, instruction_->GetDexPc());
@@ -198,6 +200,7 @@ class BoundsCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
 
   virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
     // We're moving two locations to locations that could overlap, so we need a parallel
     // move resolver.
     InvokeRuntimeCallingConvention calling_convention;
@@ -2133,7 +2136,7 @@ void InstructionCodeGeneratorX86_64::VisitRem(HRem* rem) {
 
 void LocationsBuilderX86_64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
   locations->SetInAt(0, Location::Any());
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
@@ -2599,7 +2602,7 @@ void InstructionCodeGeneratorX86_64::VisitStaticFieldSet(HStaticFieldSet* instru
 
 void LocationsBuilderX86_64::VisitNullCheck(HNullCheck* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
   locations->SetInAt(0, Location::Any());
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
@@ -2947,7 +2950,7 @@ void InstructionCodeGeneratorX86_64::VisitArrayLength(HArrayLength* instruction)
 
 void LocationsBuilderX86_64::VisitBoundsCheck(HBoundsCheck* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
   if (instruction->HasUses()) {

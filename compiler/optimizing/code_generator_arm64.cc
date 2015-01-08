@@ -291,6 +291,7 @@ class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
     __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
     // We're moving two locations to locations that could overlap, so we need a parallel
     // move resolver.
     InvokeRuntimeCallingConvention calling_convention;
@@ -317,6 +318,7 @@ class DivZeroCheckSlowPathARM64 : public SlowPathCodeARM64 {
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
     __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
     arm64_codegen->InvokeRuntime(
         QUICK_ENTRY_POINT(pThrowDivZero), instruction_, instruction_->GetDexPc());
     CheckEntrypointTypes<kQuickThrowDivZero, void, void>();
@@ -423,6 +425,7 @@ class NullCheckSlowPathARM64 : public SlowPathCodeARM64 {
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
     __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
     arm64_codegen->InvokeRuntime(
         QUICK_ENTRY_POINT(pThrowNullPointer), instruction_, instruction_->GetDexPc());
     CheckEntrypointTypes<kQuickThrowNullPointer, void, void>();
@@ -1458,7 +1461,7 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
 
 void LocationsBuilderARM64::VisitBoundsCheck(HBoundsCheck* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
   if (instruction->HasUses()) {
@@ -1661,7 +1664,7 @@ void InstructionCodeGeneratorARM64::VisitDiv(HDiv* div) {
 
 void LocationsBuilderARM64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
   locations->SetInAt(0, Location::RegisterOrConstant(instruction->InputAt(0)));
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
@@ -2284,7 +2287,7 @@ void InstructionCodeGeneratorARM64::VisitNot(HNot* instruction) {
 
 void LocationsBuilderARM64::VisitNullCheck(HNullCheck* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
   locations->SetInAt(0, Location::RequiresRegister());
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
