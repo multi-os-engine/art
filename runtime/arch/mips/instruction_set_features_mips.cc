@@ -26,15 +26,21 @@ namespace art {
 
 const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromVariant(
     const std::string& variant ATTRIBUTE_UNUSED, std::string* error_msg ATTRIBUTE_UNUSED) {
-  // TODO: r6 variants.
-  if (variant != "default") {
-    std::ostringstream os;
-    LOG(WARNING) << "Unexpected CPU variant for Mips using defaults: " << variant;
-  }
   bool smp = true;  // Conservative default.
   bool fpu_32bit = true;
-  bool mips_isa_gte2 = true;
+  bool mips_isa_gte2 = false ;
   bool r6 = false;
+
+  // Override defaults based on variant string.
+  if (strncmp(variant.c_str(), "mips32r", 7) == 0) {
+      if (variant.c_str()[7] >= '6') {
+          fpu_32bit = false;
+          r6 = true;
+      } else if (variant.c_str()[7] >= '2') {
+          mips_isa_gte2 = true;
+      }
+  }
+
   return new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2, r6);
 }
 
@@ -47,19 +53,20 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromBitmap(uint32_
 }
 
 const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCppDefines() {
+  // Assume conservative defaults.
   const bool smp = true;
+  bool fpu_32bit = true;
+  bool mips_isa_gte2 = false;
+  bool r6 = false;
 
-  // TODO: here we assume the FPU is always 32-bit.
-  const bool fpu_32bit = true;
-
+  // Override defaults based on compiler flags.
 #if __mips_isa_rev >= 2
-  const bool mips_isa_gte2 = true;
-#else
-  const bool mips_isa_gte2 = false;
+  mips_isa_gte2 = true;
+#if __mips_isa_rev >= 6
+  r6 = true;
+  fpu_32bit = false;
 #endif
-
-  // TODO: Are there CPP defines?
-  const bool r6 = false;
+#endif
 
   return new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2, r6);
 }
@@ -67,19 +74,20 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCppDefines() {
 const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCpuInfo() {
   // Look in /proc/cpuinfo for features we need.  Only use this when we can guarantee that
   // the kernel puts the appropriate feature flags in here.  Sometimes it doesn't.
+  // Assume conservative defaults.
   bool smp = false;
+  bool fpu_32bit = true;
+  bool mips_isa_gte2 = false;
+  bool r6 = false;
 
-  // TODO: here we assume the FPU is always 32-bit.
-  const bool fpu_32bit = true;
-
-  // TODO: here we assume all MIPS processors are >= v2.
+  // Override defaults based on compiler flags.
 #if __mips_isa_rev >= 2
-  const bool mips_isa_gte2 = true;
-#else
-  const bool mips_isa_gte2 = false;
+  mips_isa_gte2 = true;
+#if __mips_isa_rev >= 6
+  r6 = true;
+  fpu_32bit = false;
 #endif
-
-  const bool r6 = false;
+#endif
 
   std::ifstream in("/proc/cpuinfo");
   if (!in.fail()) {
