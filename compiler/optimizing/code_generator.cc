@@ -328,23 +328,26 @@ bool CodeGenerator::GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) con
 CodeGenerator* CodeGenerator::Create(ArenaAllocator* allocator,
                                      HGraph* graph,
                                      InstructionSet instruction_set,
-                                     const InstructionSetFeatures& isa_features) {
+                                     const InstructionSetFeatures& isa_features,
+                                     const CompilerOptions& compiler_options) {
   switch (instruction_set) {
     case kArm:
     case kThumb2: {
-      return new (allocator) arm::CodeGeneratorARM(graph,
-          isa_features.AsArmInstructionSetFeatures());
+      return new (allocator) arm::CodeGeneratorARM(
+          graph,
+          *isa_features.AsArmInstructionSetFeatures(),
+          compiler_options);
     }
     case kArm64: {
-      return new (allocator) arm64::CodeGeneratorARM64(graph);
+      return new (allocator) arm64::CodeGeneratorARM64(graph, compiler_options);
     }
     case kMips:
       return nullptr;
     case kX86: {
-      return new (allocator) x86::CodeGeneratorX86(graph);
+      return new (allocator) x86::CodeGeneratorX86(graph, compiler_options);
     }
     case kX86_64: {
-      return new (allocator) x86_64::CodeGeneratorX86_64(graph);
+      return new (allocator) x86_64::CodeGeneratorX86_64(graph, compiler_options);
     }
     default:
       return nullptr;
