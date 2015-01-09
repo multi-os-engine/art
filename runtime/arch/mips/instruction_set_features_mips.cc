@@ -49,7 +49,7 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCppDefines() {
   // TODO: here we assume the FPU is always 32-bit.
   const bool fpu_32bit = true;
 
-#if __mips_isa_rev >= 2
+#if defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
   const bool mips_isa_gte2 = true;
 #else
   const bool mips_isa_gte2 = false;
@@ -67,7 +67,7 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCpuInfo() {
   const bool fpu_32bit = true;
 
   // TODO: here we assume all MIPS processors are >= v2.
-#if __mips_isa_rev >= 2
+#if defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
   const bool mips_isa_gte2 = true;
 #else
   const bool mips_isa_gte2 = false;

@@ -66,7 +66,7 @@
     END \name
 .endm
 
-#if defined(__mips_isa_rev) && __mips_isa_rev > 2
+#if defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
   /* mips32r5 & mips32r6 have mthc1 op, and have 64-bit fp regs,
      and in FPXX abi we avoid referring to odd-numbered fp regs */
 
