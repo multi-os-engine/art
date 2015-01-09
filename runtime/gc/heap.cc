@@ -49,6 +49,7 @@
 #include "gc/space/dlmalloc_space-inl.h"
 #include "gc/space/image_space.h"
 #include "gc/space/large_object_space.h"
+#include "gc/space/region_space.h"
 #include "gc/space/rosalloc_space-inl.h"
 #include "gc/space/space-inl.h"
 #include "gc/space/zygote_space.h"
@@ -176,6 +177,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       current_non_moving_allocator_(kAllocatorTypeNonMoving),
       bump_pointer_space_(nullptr),
       temp_space_(nullptr),
+      region_space_(nullptr),
       min_free_(min_free),
       max_free_(max_free),
       target_utilization_(target_utilization),
@@ -211,6 +213,12 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   mark_bitmap_.reset(new accounting::HeapBitmap(this));
   // Requested begin for the alloc space, to follow the mapped image and oat files
   uint8_t* requested_alloc_space_begin = nullptr;
+  if (foreground_collector_type_ == kCollectorTypeCC) {
+    // Need to use a low address so that we can allocate a contiguous
+    // 2 * Xmx space when there's no image (dex2oat for target).
+    CHECK_GE(300 * MB, non_moving_space_capacity);
+    requested_alloc_space_begin = reinterpret_cast<uint8_t*>(300 * MB) - non_moving_space_capacity;
+  }
   if (!image_file_name.empty()) {
     std::string error_msg;
     space::ImageSpace* image_space = space::ImageSpace::Create(image_file_name.c_str(),
@@ -241,8 +249,9 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
                                      +-main alloc space2 / bump space 2 (capacity_)+-
                                      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
   */
-  // We don't have hspace compaction enabled with GSS.
-  if (foreground_collector_type_ == kCollectorTypeGSS) {
+  // We don't have hspace compaction enabled with GSS or CC.
+  if (foreground_collector_type_ == kCollectorTypeGSS ||
+      foreground_collector_type_ == kCollectorTypeCC) {
     use_homogeneous_space_compaction_for_oom_ = false;
   }
   bool support_homogeneous_space_compaction =
@@ -280,10 +289,12 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     // Try to reserve virtual memory at a lower address if we have a separate non moving space.
     request_begin = reinterpret_cast<uint8_t*>(300 * MB);
   }
-  // Attempt to create 2 mem maps at or after the requested begin.
-  main_mem_map_1.reset(MapAnonymousPreferredAddress(kMemMapSpaceName[0], request_begin, capacity_,
-                                                    &error_str));
-  CHECK(main_mem_map_1.get() != nullptr) << error_str;
+  if (foreground_collector_type_ != kCollectorTypeCC) {
+    // Attempt to create 2 mem maps at or after the requested begin.
+    main_mem_map_1.reset(MapAnonymousPreferredAddress(kMemMapSpaceName[0], request_begin, capacity_,
+                                                      &error_str));
+    CHECK(main_mem_map_1.get() != nullptr) << error_str;
+  }
   if (support_homogeneous_space_compaction ||
       background_collector_type_ == kCollectorTypeSS ||
       foreground_collector_type_ == kCollectorTypeSS) {
@@ -305,7 +316,10 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     AddSpace(non_moving_space_);
   }
   // Create other spaces based on whether or not we have a moving GC.
-  if (IsMovingGc(foreground_collector_type_) && foreground_collector_type_ != kCollectorTypeGSS) {
+  if (foreground_collector_type_ == kCollectorTypeCC) {
+    region_space_ = space::RegionSpace::Create("Region space", capacity_ * 2, request_begin);
+    AddSpace(region_space_);
+  } else if (IsMovingGc(foreground_collector_type_) && foreground_collector_type_ != kCollectorTypeGSS) {
     // Create bump pointer spaces.
     // We only to create the bump pointer if the foreground collector is a compacting GC.
     // TODO: Place bump-pointer spaces somewhere to minimize size of card table.
@@ -379,6 +393,12 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   // Allocate the card table.
   card_table_.reset(accounting::CardTable::Create(heap_begin, heap_capacity));
   CHECK(card_table_.get() != NULL) << "Failed to create card table";
+
+  if (foreground_collector_type_ == kCollectorTypeCC && kUseTableLookupReadBarrier) {
+    rb_table_.reset(new accounting::ReadBarrierTable());
+    DCHECK(rb_table_->IsAllCleared());
+  }
+
   // Card cache for now since it makes it easier for us to update the references to the copying
   // spaces.
   accounting::ModUnionTable* mod_union_table =
@@ -710,6 +730,9 @@ void Heap::VisitObjects(ObjectCallback callback, void* arg) {
     // Visit objects in bump pointer space.
     bump_pointer_space_->Walk(callback, arg);
   }
+  if (region_space_ != nullptr) {
+    region_space_->Walk(callback, arg);
+  }
   // TODO: Switch to standard begin and end to use ranged a based loop.
   for (mirror::Object** it = allocation_stack_->Begin(), **end = allocation_stack_->End();
       it < end; ++it) {
@@ -932,6 +955,9 @@ void Heap::ThrowOutOfMemoryError(Thread* self, size_t byte_count, AllocatorType 
     } else if (allocator_type == kAllocatorTypeBumpPointer ||
                allocator_type == kAllocatorTypeTLAB) {
       space = bump_pointer_space_;
+    } else if (allocator_type == kAllocatorTypeRegion ||
+               allocator_type == kAllocatorTypeRegionTLAB) {
+      space = region_space_;
     }
     if (space != nullptr) {
       space->LogFragmentationAllocFailure(oss, byte_count);
@@ -1038,6 +1064,9 @@ void Heap::TrimSpaces(Thread* self) {
   if (bump_pointer_space_ != nullptr) {
     total_alloc_space_allocated -= bump_pointer_space_->Size();
   }
+  if (region_space_ != nullptr) {
+    total_alloc_space_allocated -= region_space_->GetBytesAllocated();
+  }
   const float managed_utilization = static_cast<float>(total_alloc_space_allocated) /
       static_cast<float>(total_alloc_space_size);
   uint64_t gc_heap_end_ns = NanoTime();
@@ -1109,6 +1138,9 @@ bool Heap::IsLiveObjectLocked(mirror::Object* obj, bool search_allocation_stack,
     // If we are in the allocated region of the temp space, then we are probably live (e.g. during
     // a GC). When a GC isn't running End() - Begin() is 0 which means no objects are contained.
     return temp_space_->Contains(obj);
+  }
+  if (region_space_ != nullptr && region_space_->HasAddress(obj)) {
+    return true;
   }
   space::ContinuousSpace* c_space = FindContinuousSpaceFromObject(obj, true);
   space::DiscontinuousSpace* d_space = nullptr;
@@ -1767,7 +1799,15 @@ void Heap::ChangeCollector(CollectorType collector_type) {
     collector_type_ = collector_type;
     gc_plan_.clear();
     switch (collector_type_) {
-      case kCollectorTypeCC:  // Fall-through.
+      case kCollectorTypeCC: {
+        gc_plan_.push_back(collector::kGcTypeFull);
+        if (use_tlab_) {
+          ChangeAllocator(kAllocatorTypeRegionTLAB);
+        } else {
+          ChangeAllocator(kAllocatorTypeRegion);
+        }
+        break;
+      }
       case kCollectorTypeMC:  // Fall-through.
       case kCollectorTypeSS:  // Fall-through.
       case kCollectorTypeGSS: {
@@ -1950,7 +1990,11 @@ void Heap::PreZygoteFork() {
     // Compact the bump pointer space to a new zygote bump pointer space.
     bool reset_main_space = false;
     if (IsMovingGc(collector_type_)) {
-      zygote_collector.SetFromSpace(bump_pointer_space_);
+      if (collector_type_ == kCollectorTypeCC) {
+        zygote_collector.SetFromSpace(region_space_);
+      } else {
+        zygote_collector.SetFromSpace(bump_pointer_space_);
+      }
     } else {
       CHECK(main_space_ != nullptr);
       // Copy from the main space.
@@ -1971,7 +2015,11 @@ void Heap::PreZygoteFork() {
       delete old_main_space;
       AddSpace(main_space_);
     } else {
-      bump_pointer_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
+      if (collector_type_ == kCollectorTypeCC) {
+        region_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
+      } else {
+        bump_pointer_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
+      }
     }
     if (temp_space_ != nullptr) {
       CHECK(temp_space_->IsEmpty());
@@ -2139,7 +2187,9 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
   // TODO: Clean this up.
   if (compacting_gc) {
     DCHECK(current_allocator_ == kAllocatorTypeBumpPointer ||
-           current_allocator_ == kAllocatorTypeTLAB);
+           current_allocator_ == kAllocatorTypeTLAB ||
+           current_allocator_ == kAllocatorTypeRegion ||
+           current_allocator_ == kAllocatorTypeRegionTLAB);
     switch (collector_type_) {
       case kCollectorTypeSS:
         // Fall-through.
@@ -2150,6 +2200,7 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
         collector = semi_space_collector_;
         break;
       case kCollectorTypeCC:
+        concurrent_copying_collector_->SetRegionSpace(region_space_);
         collector = concurrent_copying_collector_;
         break;
       case kCollectorTypeMC:
@@ -2159,7 +2210,7 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
       default:
         LOG(FATAL) << "Invalid collector type " << static_cast<size_t>(collector_type_);
     }
-    if (collector != mark_compact_collector_) {
+    if (collector != mark_compact_collector_ && collector != concurrent_copying_collector_) {
       temp_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
       CHECK(temp_space_->IsEmpty());
     }
@@ -2618,7 +2669,7 @@ void Heap::SwapStacks(Thread* self) {
 
 void Heap::RevokeAllThreadLocalAllocationStacks(Thread* self) {
   // This must be called only during the pause.
-  CHECK(Locks::mutator_lock_->IsExclusiveHeld(self));
+  DCHECK(Locks::mutator_lock_->IsExclusiveHeld(self));
   MutexLock mu(self, *Locks::runtime_shutdown_lock_);
   MutexLock mu2(self, *Locks::thread_list_lock_);
   std::list<Thread*> thread_list = Runtime::Current()->GetThreadList()->GetList();
@@ -3143,6 +3194,9 @@ void Heap::RevokeThreadLocalBuffers(Thread* thread) {
   if (bump_pointer_space_ != nullptr) {
     bump_pointer_space_->RevokeThreadLocalBuffers(thread);
   }
+  if (region_space_ != nullptr) {
+    region_space_->RevokeThreadLocalBuffers(thread);
+  }
 }
 
 void Heap::RevokeRosAllocThreadLocalBuffers(Thread* thread) {
@@ -3157,6 +3211,9 @@ void Heap::RevokeAllThreadLocalBuffers() {
   }
   if (bump_pointer_space_ != nullptr) {
     bump_pointer_space_->RevokeAllThreadLocalBuffers();
+  }
+  if (region_space_ != nullptr) {
+    region_space_->RevokeAllThreadLocalBuffers();
   }
 }
 

@@ -479,7 +479,7 @@ inline void ArtMethod::CheckObjectSizeEqualsMirrorSize() {
 #ifdef ART_METHOD_HAS_PADDING_FIELD_ON_64_BIT
   this_size += sizeof(void*) - sizeof(uint32_t);
 #endif
-  DCHECK_EQ(GetClass()->GetObjectSize(), this_size);
+  DCHECK_EQ(GetClass()->GetObjectSize(), this_size) << GetClass()->GetObjectSize() << " vs " << this_size;
 }
 
 }  // namespace mirror

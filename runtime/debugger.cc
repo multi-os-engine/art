@@ -4480,6 +4480,11 @@ void Dbg::DdmSendHeapSegments(bool native) {
         context.SetChunkOverhead(0);
         space->AsBumpPointerSpace()->Walk(BumpPointerSpaceCallback, &context);
         HeapChunkContext::HeapChunkJavaCallback(nullptr, nullptr, 0, &context);
+      } else if (space->IsRegionSpace()) {
+        ReaderMutexLock mu(self, *Locks::heap_bitmap_lock_);
+        context.SetChunkOverhead(0);
+        space->AsRegionSpace()->Walk(BumpPointerSpaceCallback, &context);
+        HeapChunkContext::HeapChunkJavaCallback(nullptr, nullptr, 0, &context);
       } else {
         UNIMPLEMENTED(WARNING) << "Not counting objects in space " << *space;
       }

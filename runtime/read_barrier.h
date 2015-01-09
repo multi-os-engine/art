@@ -19,6 +19,7 @@
 
 #include "base/mutex.h"
 #include "base/macros.h"
+#include "jni.h"
 #include "offsets.h"
 #include "read_barrier_c.h"
 
@@ -26,7 +27,10 @@
 // which needs to be a C header file for asm_support.h.
 
 namespace art {
+
 namespace mirror {
+  class ArtField;
+  class ArtMethod;
   class Object;
   template<typename MirrorType> class HeapReference;
 }  // namespace mirror
@@ -35,16 +39,32 @@ class ReadBarrier {
  public:
   // It's up to the implementation whether the given field gets
   // updated whereas the return value must be an updated reference.
-  template <typename MirrorType, ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
+  template <typename MirrorType, ReadBarrierOption kReadBarrierOption = kWithReadBarrier,
+            bool kMaybeDuringStartup = false>
   ALWAYS_INLINE static MirrorType* Barrier(
       mirror::Object* obj, MemberOffset offset, mirror::HeapReference<MirrorType>* ref_addr)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // It's up to the implementation whether the given root gets updated
   // whereas the return value must be an updated reference.
-  template <typename MirrorType, ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
+  template <typename MirrorType, ReadBarrierOption kReadBarrierOption = kWithReadBarrier,
+            bool kMaybeDuringStartup = false>
   ALWAYS_INLINE static MirrorType* BarrierForRoot(MirrorType** root)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static bool IsDuringStartup();
+
+  // Without the holder object.
+  static void AssertToSpaceInvariant(mirror::Object* ref)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    AssertToSpaceInvariant(nullptr, MemberOffset(0), ref);
+  }
+  // With the holder object.
+  static void AssertToSpaceInvariant(mirror::Object* obj, MemberOffset offset,
+                                     mirror::Object* ref)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  static mirror::Object* Mark(mirror::Object* obj) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 };
 
 }  // namespace art
