@@ -15,6 +15,8 @@
  */
 
 #include "nodes.h"
+
+#include "mirror/array-inl.h"
 #include "ssa_builder.h"
 #include "utils/growable_array.h"
 
@@ -456,6 +458,22 @@ static void RemoveFromUseList(T* user,
   }
 }
 
+HInstruction* HInstruction::GetNextDisregardingMoves() const {
+  HInstruction* next = GetNext();
+  while (next != nullptr && next->IsParallelMove()) {
+    next = next->GetNext();
+  }
+  return next;
+}
+
+HInstruction* HInstruction::GetPreviousDisregardingMoves() const {
+  HInstruction* previous = GetPrevious();
+  while (previous != nullptr && previous->IsParallelMove()) {
+    previous = previous->GetPrevious();
+  }
+  return previous;
+}
+
 void HInstruction::RemoveUser(HInstruction* user, size_t input_index) {
   RemoveFromUseList(user, input_index, &uses_);
 }
@@ -649,11 +667,7 @@ HConstant* HBinaryOperation::TryStaticEvaluation() const {
 }
 
 bool HCondition::IsBeforeWhenDisregardMoves(HIf* if_) const {
-  HInstruction* previous = if_->GetPrevious();
-  while (previous != nullptr && previous->IsParallelMove()) {
-    previous = previous->GetPrevious();
-  }
-  return previous == this;
+  return this == if_->GetPreviousDisregardingMoves();
 }
 
 bool HInstruction::Equals(HInstruction* other) const {
