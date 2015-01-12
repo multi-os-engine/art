@@ -686,13 +686,15 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
         value,
         field_type,
         resolved_field->GetOffset(),
-        resolved_field->IsVolatile()));
+        resolved_field->IsVolatile(),
+        dex_pc));
   } else {
     current_block_->AddInstruction(new (arena_) HInstanceFieldGet(
         current_block_->GetLastInstruction(),
         field_type,
         resolved_field->GetOffset(),
-        resolved_field->IsVolatile()));
+        resolved_field->IsVolatile(),
+        dex_pc));
 
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
@@ -755,11 +757,11 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
     DCHECK_EQ(value->GetType(), field_type);
     current_block_->AddInstruction(
         new (arena_) HStaticFieldSet(cls, value, field_type, resolved_field->GetOffset(),
-            resolved_field->IsVolatile()));
+            resolved_field->IsVolatile(), dex_pc));
   } else {
     current_block_->AddInstruction(
         new (arena_) HStaticFieldGet(cls, field_type, resolved_field->GetOffset(),
-            resolved_field->IsVolatile()));
+            resolved_field->IsVolatile(), dex_pc));
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
   return true;
@@ -819,7 +821,7 @@ void HGraphBuilder::BuildArrayAccess(const Instruction& instruction,
   current_block_->AddInstruction(object);
   temps.Add(object);
 
-  HInstruction* length = new (arena_) HArrayLength(object);
+  HInstruction* length = new (arena_) HArrayLength(object, dex_pc);
   current_block_->AddInstruction(length);
   temps.Add(length);
   HInstruction* index = LoadLocal(index_reg, Primitive::kPrimInt);
@@ -832,7 +834,7 @@ void HGraphBuilder::BuildArrayAccess(const Instruction& instruction,
     current_block_->AddInstruction(new (arena_) HArraySet(
         object, index, value, anticipated_type, dex_pc));
   } else {
-    current_block_->AddInstruction(new (arena_) HArrayGet(object, index, anticipated_type));
+    current_block_->AddInstruction(new (arena_) HArrayGet(object, index, anticipated_type, dex_pc));
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
 }
@@ -888,7 +890,7 @@ void HGraphBuilder::BuildFillArrayData(const Instruction& instruction, uint32_t 
   current_block_->AddInstruction(null_check);
   temps.Add(null_check);
 
-  HInstruction* length = new (arena_) HArrayLength(null_check);
+  HInstruction* length = new (arena_) HArrayLength(null_check, dex_pc);
   current_block_->AddInstruction(length);
 
   int32_t payload_offset = instruction.VRegB_31t() + dex_pc;
@@ -1917,7 +1919,7 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       // instruction.
       object = new (arena_) HNullCheck(object, dex_pc);
       current_block_->AddInstruction(object);
-      current_block_->AddInstruction(new (arena_) HArrayLength(object));
+      current_block_->AddInstruction(new (arena_) HArrayLength(object, dex_pc));
       UpdateLocal(instruction.VRegA_12x(), current_block_->GetLastInstruction());
       break;
     }
