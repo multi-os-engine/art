@@ -1580,6 +1580,38 @@ class HLongConstant : public HConstant {
   DISALLOW_COPY_AND_ASSIGN(HLongConstant);
 };
 
+class HNullCheck : public HExpression<1> {
+ public:
+  HNullCheck(HInstruction* value, uint32_t dex_pc)
+      : HExpression(value->GetType(), SideEffects::None()),
+        dex_pc_(dex_pc), is_needed_(true) {
+    SetRawInputAt(0, value);
+  }
+
+  virtual bool CanBeMoved() const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return true;
+  }
+
+  virtual bool NeedsEnvironment() const { return true; }
+
+  virtual bool CanThrow() const { return true; }
+
+  uint32_t GetDexPc() const { return dex_pc_; }
+
+  bool IsNeeded() const { return is_needed_; }
+  void SetNeeded(bool is_needed) { is_needed_ = is_needed; }
+
+  DECLARE_INSTRUCTION(NullCheck);
+
+ private:
+  const uint32_t dex_pc_;
+  bool is_needed_;
+
+  DISALLOW_COPY_AND_ASSIGN(HNullCheck);
+};
+
 class HInvoke : public HInstruction {
  public:
   HInvoke(ArenaAllocator* arena,
@@ -1589,7 +1621,8 @@ class HInvoke : public HInstruction {
     : HInstruction(SideEffects::All()),
       inputs_(arena, number_of_arguments),
       return_type_(return_type),
-      dex_pc_(dex_pc) {
+      dex_pc_(dex_pc),
+      needs_implicit_nc_(true) {
     inputs_.SetSize(number_of_arguments);
   }
 
@@ -1605,6 +1638,9 @@ class HInvoke : public HInstruction {
   }
 
   virtual void SetRawInputAt(size_t index, HInstruction* input) {
+    if (input->IsNullCheck()) {
+      null_check_ = input->AsNullCheck();
+    }
     inputs_.Put(index, input);
   }
 
@@ -1612,12 +1648,18 @@ class HInvoke : public HInstruction {
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
+  HNullCheck* GetNullCheck() { return null_check_; }
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
+
   DECLARE_INSTRUCTION(Invoke);
 
  protected:
   GrowableArray<HInstruction*> inputs_;
   const Primitive::Type return_type_;
   const uint32_t dex_pc_;
+  bool needs_implicit_nc_;
+  HNullCheck* null_check_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HInvoke);
@@ -2099,33 +2141,6 @@ class HPhi : public HInstruction {
   DISALLOW_COPY_AND_ASSIGN(HPhi);
 };
 
-class HNullCheck : public HExpression<1> {
- public:
-  HNullCheck(HInstruction* value, uint32_t dex_pc)
-      : HExpression(value->GetType(), SideEffects::None()), dex_pc_(dex_pc) {
-    SetRawInputAt(0, value);
-  }
-
-  virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const {
-    UNUSED(other);
-    return true;
-  }
-
-  virtual bool NeedsEnvironment() const { return true; }
-
-  virtual bool CanThrow() const { return true; }
-
-  uint32_t GetDexPc() const { return dex_pc_; }
-
-  DECLARE_INSTRUCTION(NullCheck);
-
- private:
-  const uint32_t dex_pc_;
-
-  DISALLOW_COPY_AND_ASSIGN(HNullCheck);
-};
-
 class FieldInfo : public ValueObject {
  public:
   FieldInfo(MemberOffset field_offset, Primitive::Type field_type, bool is_volatile)
@@ -2148,7 +2163,8 @@ class HInstanceFieldGet : public HExpression<1> {
                     MemberOffset field_offset,
                     bool is_volatile)
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile),
+        needs_implicit_nc_(true) {
     SetRawInputAt(0, value);
   }
 
@@ -2168,10 +2184,27 @@ class HInstanceFieldGet : public HExpression<1> {
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
 
+  bool NeedsEnvironment() const OVERRIDE { return true; }
+  bool CanThrow() const OVERRIDE { return true; }
+
+  HNullCheck* GetNullCheck() { return null_check_; }
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
+
   DECLARE_INSTRUCTION(InstanceFieldGet);
+
+ protected:
+  void SetRawInputAt(size_t index, HInstruction* input) OVERRIDE {
+    if (input->IsNullCheck()) {
+      null_check_ = input->AsNullCheck();
+    }
+    HExpression::SetRawInputAt(index, input);
+  }
 
  private:
   const FieldInfo field_info_;
+  bool needs_implicit_nc_;
+  HNullCheck* null_check_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldGet);
 };
@@ -2184,7 +2217,8 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     MemberOffset field_offset,
                     bool is_volatile)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile),
+        needs_implicit_nc_(true) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, value);
   }
@@ -2196,10 +2230,27 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 
   HInstruction* GetValue() const { return InputAt(1); }
 
+  bool NeedsEnvironment() const OVERRIDE { return true; }
+  bool CanThrow() const OVERRIDE { return true; }
+
+  HNullCheck* GetNullCheck() { return null_check_; }
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
+
   DECLARE_INSTRUCTION(InstanceFieldSet);
+
+ protected:
+  void SetRawInputAt(size_t index, HInstruction* input) OVERRIDE {
+    if (input->IsNullCheck()) {
+      null_check_ = input->AsNullCheck();
+    }
+    HTemplateInstruction::SetRawInputAt(index, input);
+  }
 
  private:
   const FieldInfo field_info_;
+  bool needs_implicit_nc_;
+  HNullCheck* null_check_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldSet);
 };
@@ -2207,7 +2258,7 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 class HArrayGet : public HExpression<2> {
  public:
   HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type)
-      : HExpression(type, SideEffects::DependsOnSomething()) {
+      : HExpression(type, SideEffects::DependsOnSomething()), needs_implicit_nc_(true) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -2222,9 +2273,27 @@ class HArrayGet : public HExpression<2> {
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }
 
+  bool NeedsEnvironment() const OVERRIDE { return true; }
+  bool CanThrow() const OVERRIDE { return true; }
+
+  HNullCheck* GetNullCheck() { return null_check_; }
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
+
   DECLARE_INSTRUCTION(ArrayGet);
 
+ protected:
+  void SetRawInputAt(size_t index, HInstruction* input) OVERRIDE {
+    if (input->IsNullCheck()) {
+      null_check_ = input->AsNullCheck();
+    }
+    HExpression::SetRawInputAt(index, input);
+  }
+
  private:
+  bool needs_implicit_nc_;
+  HNullCheck* null_check_;
+
   DISALLOW_COPY_AND_ASSIGN(HArrayGet);
 };
 
@@ -2238,23 +2307,17 @@ class HArraySet : public HTemplateInstruction<3> {
       : HTemplateInstruction(SideEffects::ChangesSomething()),
         dex_pc_(dex_pc),
         expected_component_type_(expected_component_type),
-        needs_type_check_(value->GetType() == Primitive::kPrimNot) {
+        needs_type_check_(value->GetType() == Primitive::kPrimNot),
+        needs_implicit_nc_(true) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
     SetRawInputAt(2, value);
   }
 
-  bool NeedsEnvironment() const {
-    // We currently always call a runtime method to catch array store
-    // exceptions.
-    return needs_type_check_;
-  }
-
+  bool NeedsTypeCheck() const { return needs_type_check_; }
   void ClearNeedsTypeCheck() {
     needs_type_check_ = false;
   }
-
-  bool NeedsTypeCheck() const { return needs_type_check_; }
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
@@ -2273,12 +2336,29 @@ class HArraySet : public HTemplateInstruction<3> {
         : expected_component_type_;
   }
 
+  bool NeedsEnvironment() const OVERRIDE { return true; }
+  bool CanThrow() const OVERRIDE { return true; }
+
+  HNullCheck* GetNullCheck() { return null_check_; }
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
+
   DECLARE_INSTRUCTION(ArraySet);
+
+ protected:
+  void SetRawInputAt(size_t index, HInstruction* input) OVERRIDE {
+    if (input->IsNullCheck()) {
+      null_check_ = input->AsNullCheck();
+    }
+    HTemplateInstruction::SetRawInputAt(index, input);
+  }
 
  private:
   const uint32_t dex_pc_;
   const Primitive::Type expected_component_type_;
   bool needs_type_check_;
+  bool needs_implicit_nc_;
+  HNullCheck* null_check_;
 
   DISALLOW_COPY_AND_ASSIGN(HArraySet);
 };
@@ -2286,21 +2366,39 @@ class HArraySet : public HTemplateInstruction<3> {
 class HArrayLength : public HExpression<1> {
  public:
   explicit HArrayLength(HInstruction* array)
-      : HExpression(Primitive::kPrimInt, SideEffects::None()) {
+      : HExpression(Primitive::kPrimInt, SideEffects::None()),
+        needs_implicit_nc_(true) {
     // Note that arrays do not change length, so the instruction does not
     // depend on any write.
     SetRawInputAt(0, array);
   }
 
-  virtual bool CanBeMoved() const { return true; }
-  virtual bool InstructionDataEquals(HInstruction* other) const {
-    UNUSED(other);
+  bool CanBeMoved() const OVERRIDE { return true; }
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
 
+  bool NeedsEnvironment() const OVERRIDE { return true; }
+  bool CanThrow() const OVERRIDE { return true; }
+
+  HNullCheck* GetNullCheck() { return null_check_; }
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
+
   DECLARE_INSTRUCTION(ArrayLength);
 
+ protected:
+  void SetRawInputAt(size_t index, HInstruction* input) OVERRIDE {
+    if (input->IsNullCheck()) {
+      null_check_ = input->AsNullCheck();
+    }
+    HExpression::SetRawInputAt(index, input);
+  }
+
  private:
+  bool needs_implicit_nc_;
+  HNullCheck* null_check_;
+
   DISALLOW_COPY_AND_ASSIGN(HArrayLength);
 };
 

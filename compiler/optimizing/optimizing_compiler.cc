@@ -30,6 +30,7 @@
 #include "elf_writer_quick.h"
 #include "graph_visualizer.h"
 #include "gvn.h"
+#include "implicit_null_check_elimination.h"
 #include "inliner.h"
 #include "instruction_simplifier.h"
 #include "jni/quick/jni_compiler.h"
@@ -213,6 +214,7 @@ static void RunOptimizations(HGraph* graph,
   GVNOptimization gvn(graph);
   BoundsCheckElimination bce(graph);
   InstructionSimplifier simplify2(graph);
+  ImplicitNullCheckElimination ince(graph);
 
   HOptimization* optimizations[] = {
     &redundant_phi,
@@ -223,7 +225,8 @@ static void RunOptimizations(HGraph* graph,
     &inliner,
     &gvn,
     &bce,
-    &simplify2
+    &simplify2,
+    &ince
   };
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
