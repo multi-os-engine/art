@@ -622,7 +622,7 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   Temporaries temps(graph_);
   if (is_instance_call) {
     HInstruction* arg = LoadLocal(is_range ? register_index : args[0], Primitive::kPrimNot);
-    HNullCheck* null_check = new (arena_) HNullCheck(arg, dex_pc);
+    HNullCheck* null_check = new (arena_) HNullCheck(arg, dex_pc, optimized_invoke_type == kDirect);
     current_block_->AddInstruction(null_check);
     temps.Add(null_check);
     invoke->SetArgumentAt(0, null_check);
@@ -674,7 +674,7 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
   Primitive::Type field_type = resolved_field->GetTypeAsPrimitiveType();
 
   HInstruction* object = LoadLocal(obj_reg, Primitive::kPrimNot);
-  current_block_->AddInstruction(new (arena_) HNullCheck(object, dex_pc));
+  current_block_->AddInstruction(new (arena_) HNullCheck(object, dex_pc, false));
   if (is_put) {
     Temporaries temps(graph_);
     HInstruction* null_check = current_block_->GetLastInstruction();
@@ -686,13 +686,15 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
         value,
         field_type,
         resolved_field->GetOffset(),
-        resolved_field->IsVolatile()));
+        resolved_field->IsVolatile(),
+        dex_pc));
   } else {
     current_block_->AddInstruction(new (arena_) HInstanceFieldGet(
         current_block_->GetLastInstruction(),
         field_type,
         resolved_field->GetOffset(),
-        resolved_field->IsVolatile()));
+        resolved_field->IsVolatile(),
+        dex_pc));
 
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
@@ -755,11 +757,11 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
     DCHECK_EQ(value->GetType(), field_type);
     current_block_->AddInstruction(
         new (arena_) HStaticFieldSet(cls, value, field_type, resolved_field->GetOffset(),
-            resolved_field->IsVolatile()));
+            resolved_field->IsVolatile(), dex_pc));
   } else {
     current_block_->AddInstruction(
         new (arena_) HStaticFieldGet(cls, field_type, resolved_field->GetOffset(),
-            resolved_field->IsVolatile()));
+            resolved_field->IsVolatile(), dex_pc));
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
   return true;
@@ -815,11 +817,11 @@ void HGraphBuilder::BuildArrayAccess(const Instruction& instruction,
   Temporaries temps(graph_);
 
   HInstruction* object = LoadLocal(array_reg, Primitive::kPrimNot);
-  object = new (arena_) HNullCheck(object, dex_pc);
+  object = new (arena_) HNullCheck(object, dex_pc, false);
   current_block_->AddInstruction(object);
   temps.Add(object);
 
-  HInstruction* length = new (arena_) HArrayLength(object);
+  HInstruction* length = new (arena_) HArrayLength(object, dex_pc);
   current_block_->AddInstruction(length);
   temps.Add(length);
   HInstruction* index = LoadLocal(index_reg, Primitive::kPrimInt);
@@ -884,11 +886,11 @@ void HGraphBuilder::BuildFillArrayData(HInstruction* object,
 void HGraphBuilder::BuildFillArrayData(const Instruction& instruction, uint32_t dex_pc) {
   Temporaries temps(graph_);
   HInstruction* array = LoadLocal(instruction.VRegA_31t(), Primitive::kPrimNot);
-  HNullCheck* null_check = new (arena_) HNullCheck(array, dex_pc);
+  HNullCheck* null_check = new (arena_) HNullCheck(array, dex_pc, false);
   current_block_->AddInstruction(null_check);
   temps.Add(null_check);
 
-  HInstruction* length = new (arena_) HArrayLength(null_check);
+  HInstruction* length = new (arena_) HArrayLength(null_check, dex_pc);
   current_block_->AddInstruction(length);
 
   int32_t payload_offset = instruction.VRegB_31t() + dex_pc;
@@ -1915,9 +1917,9 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       HInstruction* object = LoadLocal(instruction.VRegB_12x(), Primitive::kPrimNot);
       // No need for a temporary for the null check, it is the only input of the following
       // instruction.
-      object = new (arena_) HNullCheck(object, dex_pc);
+      object = new (arena_) HNullCheck(object, dex_pc, false);
       current_block_->AddInstruction(object);
-      current_block_->AddInstruction(new (arena_) HArrayLength(object));
+      current_block_->AddInstruction(new (arena_) HArrayLength(object, dex_pc));
       UpdateLocal(instruction.VRegA_12x(), current_block_->GetLastInstruction());
       break;
     }

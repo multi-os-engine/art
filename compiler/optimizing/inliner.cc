@@ -44,6 +44,14 @@ void HInliner::Run() {
          instr_it.Advance()) {
       HInvokeStaticOrDirect* current = instr_it.Current()->AsInvokeStaticOrDirect();
       if (current != nullptr) {
+        if (kIsDebugBuild) {
+          std::string callee_name =
+                PrettyMethod(current->GetIndexInDexCache(), *outer_compilation_unit_.GetDexFile());
+          bool should_not_inline = callee_name.find("$no_inline$") != std::string::npos;
+          if (should_not_inline) {
+            continue;
+          }
+        }
         if (!TryInline(current, current->GetIndexInDexCache(), current->GetInvokeType())) {
           if (kIsDebugBuild) {
             std::string callee_name =
