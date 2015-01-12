@@ -1,0 +1,1 @@
+More tests for NullPointerExceptions to complement 122-npe

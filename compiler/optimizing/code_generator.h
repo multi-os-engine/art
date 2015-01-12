@@ -149,6 +149,7 @@ class CodeGenerator : public ArenaObject<kArenaAllocMisc> {
   }
 
   void RecordPcInfo(HInstruction* instruction, uint32_t dex_pc);
+  void MaybeRecordImplicitNullCheck(HInstruction* instruction, uint32_t dex_pc);
 
   void AddSlowPath(SlowPathCode* slow_path) {
     slow_paths_.Add(slow_path);

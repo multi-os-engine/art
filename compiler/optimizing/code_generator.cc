@@ -629,6 +629,12 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
   }
 }
 
+void CodeGenerator::MaybeRecordImplicitNullCheck(HInstruction* instruction, uint32_t dex_pc) {
+  if (compiler_options_.GetImplicitNullChecks()) {
+    RecordPcInfo(instruction, dex_pc);
+  }
+}
+
 void CodeGenerator::SaveLiveRegisters(LocationSummary* locations) {
   RegisterSet* register_set = locations->GetLiveRegisters();
   size_t stack_offset = first_register_slot_in_slow_path_;

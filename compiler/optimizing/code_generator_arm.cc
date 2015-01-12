@@ -1245,6 +1245,7 @@ void InstructionCodeGeneratorARM::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   } else {
     __ LoadFromOffset(kLoadWord, temp, receiver.AsRegister<Register>(), class_offset);
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
   // temp = temp->GetMethodAt(method_offset);
   uint32_t entry_point = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kArmWordSize).Int32Value();
@@ -1283,6 +1284,7 @@ void InstructionCodeGeneratorARM::VisitInvokeInterface(HInvokeInterface* invoke)
   } else {
     __ LoadFromOffset(kLoadWord, temp, receiver.AsRegister<Register>(), class_offset);
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
   // temp = temp->GetImtEntryAt(method_offset);
   uint32_t entry_point = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kArmWordSize).Int32Value();
@@ -2597,7 +2599,9 @@ void InstructionCodeGeneratorARM::GenerateWideAtomicStore(Register addr,
                                                           Register value_lo,
                                                           Register value_hi,
                                                           Register temp1,
-                                                          Register temp2) {
+                                                          Register temp2,
+                                                          HInstruction* instruction,
+                                                          uint32_t dex_pc) {
   Label fail;
   if (offset != 0) {
     __ LoadImmediate(temp1, offset);
@@ -2607,12 +2611,15 @@ void InstructionCodeGeneratorARM::GenerateWideAtomicStore(Register addr,
   // We need a load followed by store. (The address used in a STREX instruction must
   // be the same as the address in the most recently executed LDREX instruction.)
   __ ldrexd(temp1, temp2, addr);
+  // TODO: file Quick bug (it records the safepoint after the store)
+  codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
   __ strexd(temp1, value_lo, value_hi, addr);
   __ cmp(temp1, ShifterOperand(0));
   __ b(&fail, NE);
 }
 
-void LocationsBuilderARM::HandleFieldSet(HInstruction* instruction, const FieldInfo& field_info) {
+void LocationsBuilderARM::HandleFieldSet(HInstruction* instruction,
+                                         const FieldInfo& field_info) {
   DCHECK(instruction->IsInstanceFieldSet() || instruction->IsStaticFieldSet());
 
   LocationSummary* locations =
@@ -2650,7 +2657,8 @@ void LocationsBuilderARM::HandleFieldSet(HInstruction* instruction, const FieldI
 }
 
 void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
-                                                 const FieldInfo& field_info) {
+                                                 const FieldInfo& field_info,
+                                                 uint32_t dex_pc) {
   DCHECK(instruction->IsInstanceFieldSet() || instruction->IsStaticFieldSet());
 
   LocationSummary* locations = instruction->GetLocations();
@@ -2681,13 +2689,7 @@ void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
 
     case Primitive::kPrimInt:
     case Primitive::kPrimNot: {
-      Register value_reg = value.AsRegister<Register>();
-      __ StoreToOffset(kStoreWord, value_reg, base, offset);
-      if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
-        Register temp = locations->GetTemp(0).AsRegister<Register>();
-        Register card = locations->GetTemp(1).AsRegister<Register>();
-        codegen_->MarkGCCard(temp, card, base, value_reg);
-      }
+      __ StoreToOffset(kStoreWord, value.AsRegister<Register>(), base, offset);
       break;
     }
 
@@ -2697,7 +2699,9 @@ void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
                                 value.AsRegisterPairLow<Register>(),
                                 value.AsRegisterPairHigh<Register>(),
                                 locations->GetTemp(0).AsRegister<Register>(),
-                                locations->GetTemp(1).AsRegister<Register>());
+                                locations->GetTemp(1).AsRegister<Register>(),
+                                instruction,
+                                dex_pc);
       } else {
         __ StoreToOffset(kStoreWordPair, value.AsRegisterPairLow<Register>(), base, offset);
       }
@@ -2721,7 +2725,9 @@ void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
                                 value_reg_lo,
                                 value_reg_hi,
                                 locations->GetTemp(2).AsRegister<Register>(),
-                                locations->GetTemp(3).AsRegister<Register>());
+                                locations->GetTemp(3).AsRegister<Register>(),
+                                instruction,
+                                dex_pc);
       } else {
         __ StoreDToOffset(value_reg, base, offset);
       }
@@ -2731,6 +2737,17 @@ void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
+  }
+
+  if (!is_volatile ||
+      (field_type != Primitive::kPrimFloat && field_type != Primitive::kPrimDouble)) {
+    codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
+  }
+
+  if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
+    Register temp = locations->GetTemp(0).AsRegister<Register>();
+    Register card = locations->GetTemp(1).AsRegister<Register>();
+    codegen_->MarkGCCard(temp, card, base, value.AsRegister<Register>());
   }
 
   if (is_volatile) {
@@ -2761,7 +2778,8 @@ void LocationsBuilderARM::HandleFieldGet(HInstruction* instruction, const FieldI
 }
 
 void InstructionCodeGeneratorARM::HandleFieldGet(HInstruction* instruction,
-                                                 const FieldInfo& field_info) {
+                                                 const FieldInfo& field_info,
+                                                 uint32_t dex_pc) {
   DCHECK(instruction->IsInstanceFieldGet() || instruction->IsStaticFieldGet());
 
   LocationSummary* locations = instruction->GetLocations();
@@ -2833,6 +2851,8 @@ void InstructionCodeGeneratorARM::HandleFieldGet(HInstruction* instruction,
       UNREACHABLE();
   }
 
+  codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
+
   if (is_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kLoadAny);
   }
@@ -2843,7 +2863,7 @@ void LocationsBuilderARM::VisitInstanceFieldSet(HInstanceFieldSet* instruction) 
 }
 
 void InstructionCodeGeneratorARM::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
-  HandleFieldSet(instruction, instruction->GetFieldInfo());
+  HandleFieldSet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderARM::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
@@ -2851,7 +2871,7 @@ void LocationsBuilderARM::VisitInstanceFieldGet(HInstanceFieldGet* instruction) 
 }
 
 void InstructionCodeGeneratorARM::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
-  HandleFieldGet(instruction, instruction->GetFieldInfo());
+  HandleFieldGet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderARM::VisitStaticFieldGet(HStaticFieldGet* instruction) {
@@ -2859,7 +2879,7 @@ void LocationsBuilderARM::VisitStaticFieldGet(HStaticFieldGet* instruction) {
 }
 
 void InstructionCodeGeneratorARM::VisitStaticFieldGet(HStaticFieldGet* instruction) {
-  HandleFieldGet(instruction, instruction->GetFieldInfo());
+  HandleFieldGet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
@@ -2867,22 +2887,25 @@ void LocationsBuilderARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
 }
 
 void InstructionCodeGeneratorARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
-  HandleFieldSet(instruction, instruction->GetFieldInfo());
+  HandleFieldSet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderARM::VisitNullCheck(HNullCheck* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  Location loc = codegen_->GetCompilerOptions().GetImplicitNullChecks()
-      ? Location::RequiresRegister()
-      : Location::RegisterOrConstant(instruction->InputAt(0));
-  locations->SetInAt(0, loc);
+  locations->SetInAt(0, Location::RequiresRegister());
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
 }
 
 void InstructionCodeGeneratorARM::GenerateImplicitNullCheck(HNullCheck* instruction) {
+  // Usually we get the SEGFAULT at the actual invoke site and there's no need to generate anything
+  // at NullCheck nodes. However, there are cases when we need to force a check to ensure a SEGFAULT
+  // (e.g. when getting the invoke address from the dex cache for invoke-direct).
+  if (!instruction->ForceCheck()) {
+    return;
+  }
   Location obj = instruction->GetLocations()->InAt(0);
   __ LoadFromOffset(kLoadWord, IP, obj.AsRegister<Register>(), 0);
   codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
@@ -2895,14 +2918,8 @@ void InstructionCodeGeneratorARM::GenerateExplicitNullCheck(HNullCheck* instruct
   LocationSummary* locations = instruction->GetLocations();
   Location obj = locations->InAt(0);
 
-  if (obj.IsRegister()) {
-    __ cmp(obj.AsRegister<Register>(), ShifterOperand(0));
-    __ b(slow_path->GetEntryLabel(), EQ);
-  } else {
-    DCHECK(obj.IsConstant()) << obj;
-    DCHECK_EQ(obj.GetConstant()->AsIntConstant()->GetValue(), 0);
-    __ b(slow_path->GetEntryLabel());
-  }
+  __ cmp(obj.AsRegister<Register>(), ShifterOperand(0));
+  __ b(slow_path->GetEntryLabel(), EQ);
 }
 
 void InstructionCodeGeneratorARM::VisitNullCheck(HNullCheck* instruction) {
@@ -3156,6 +3173,7 @@ void InstructionCodeGeneratorARM::VisitArrayLength(HArrayLength* instruction) {
   Register obj = locations->InAt(0).AsRegister<Register>();
   Register out = locations->Out().AsRegister<Register>();
   __ LoadFromOffset(kLoadWord, out, obj, offset);
+  codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
 }
 
 void LocationsBuilderARM::VisitBoundsCheck(HBoundsCheck* instruction) {

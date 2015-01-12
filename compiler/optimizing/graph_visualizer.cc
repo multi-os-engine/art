@@ -157,6 +157,14 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
   }
 
+  void VisitNullCheck(HNullCheck *instruction) OVERRIDE {
+    output_ << " " << (instruction->ForceCheck() ? "(force)" : "(not_forced)");
+  }
+
+  void VisitInvokeStaticOrDirect(HInvokeStaticOrDirect *instruction) OVERRIDE {
+    output_ << " (" << instruction->GetInvokeType() << ")";
+  }
+
   void VisitIntConstant(HIntConstant *instruction) OVERRIDE {
     output_ << " " << instruction->GetValue();
   }

@@ -1411,6 +1411,7 @@ void LocationsBuilderARM64::VisitArrayLength(HArrayLength* instruction) {
 void InstructionCodeGeneratorARM64::VisitArrayLength(HArrayLength* instruction) {
   __ Ldr(OutputRegister(instruction),
          HeapOperand(InputRegisterAt(instruction, 0), mirror::Array::LengthOffset()));
+  codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
 }
 
 void LocationsBuilderARM64::VisitArraySet(HArraySet* instruction) {
@@ -1818,13 +1819,16 @@ void InstructionCodeGeneratorARM64::VisitInstanceFieldGet(HInstanceFieldGet* ins
   if (instruction->IsVolatile()) {
     if (kUseAcquireRelease) {
       codegen_->LoadAcquire(instruction->GetType(), OutputCPURegister(instruction), field);
+      codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());  //// TODO ????
     } else {
       codegen_->Load(instruction->GetType(), OutputCPURegister(instruction), field);
+      codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
       // For IRIW sequential consistency kLoadAny is not sufficient.
       GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
     }
   } else {
     codegen_->Load(instruction->GetType(), OutputCPURegister(instruction), field);
+    codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
   }
 }
 
@@ -1844,13 +1848,16 @@ void InstructionCodeGeneratorARM64::VisitInstanceFieldSet(HInstanceFieldSet* ins
   if (instruction->IsVolatile()) {
     if (kUseAcquireRelease) {
       codegen_->StoreRelease(field_type, value, HeapOperand(obj, offset));
+      codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
     } else {
       GenerateMemoryBarrier(MemBarrierKind::kAnyStore);
       codegen_->Store(field_type, value, HeapOperand(obj, offset));
+      codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
       GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
     }
   } else {
     codegen_->Store(field_type, value, HeapOperand(obj, offset));
+    codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
   }
 
   if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
@@ -1954,6 +1961,7 @@ void InstructionCodeGeneratorARM64::VisitInvokeInterface(HInvokeInterface* invok
   } else {
     __ Ldr(temp, HeapOperandFrom(receiver, class_offset));
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
   // temp = temp->GetImtEntryAt(method_offset);
   __ Ldr(temp, HeapOperand(temp, method_offset));
   // lr = temp->GetEntryPoint();
@@ -2019,6 +2027,7 @@ void InstructionCodeGeneratorARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
     DCHECK(receiver.IsRegister());
     __ Ldr(temp, HeapOperandFrom(receiver, class_offset));
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
   // temp = temp->GetMethodAt(method_offset);
   __ Ldr(temp, HeapOperand(temp, method_offset));
   // lr = temp->GetEntryPoint();
@@ -2294,6 +2303,12 @@ void LocationsBuilderARM64::VisitNullCheck(HNullCheck* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::GenerateImplicitNullCheck(HNullCheck* instruction) {
+  // Usually we get the SEGFAULT at the actual invoke site and there's no need to generate anything
+  // at NullCheck nodes. However, there are cases when we need to force a check to ensure a SEGFAULT
+  // (e.g. when getting the invoke address from the dex cache for invoke-direct).
+  if (!instruction->ForceCheck()) {
+    return;
+  }
   Location obj = instruction->GetLocations()->InAt(0);
   UseScratchRegisterScope temps(GetVIXLAssembler());
   Register temp = temps.AcquireW();

@@ -1199,6 +1199,7 @@ void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) 
   } else {
     __ movl(temp, Address(receiver.AsRegister<CpuRegister>(), class_offset));
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
   // temp = temp->GetMethodAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
@@ -1235,6 +1236,7 @@ void InstructionCodeGeneratorX86_64::VisitInvokeInterface(HInvokeInterface* invo
   } else {
     __ movl(temp, Address(receiver.AsRegister<CpuRegister>(), class_offset));
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
   // temp = temp->GetImtEntryAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
@@ -2421,7 +2423,8 @@ void LocationsBuilderX86_64::HandleFieldGet(HInstruction* instruction) {
 }
 
 void InstructionCodeGeneratorX86_64::HandleFieldGet(HInstruction* instruction,
-                                                    const FieldInfo& field_info) {
+                                                    const FieldInfo& field_info,
+                                                    uint32_t dex_pc) {
   DCHECK(instruction->IsInstanceFieldGet() || instruction->IsStaticFieldGet());
 
   LocationSummary* locations = instruction->GetLocations();
@@ -2478,6 +2481,8 @@ void InstructionCodeGeneratorX86_64::HandleFieldGet(HInstruction* instruction,
       UNREACHABLE();
   }
 
+  codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
+
   if (is_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kLoadAny);
   }
@@ -2502,7 +2507,8 @@ void LocationsBuilderX86_64::HandleFieldSet(HInstruction* instruction,
 }
 
 void InstructionCodeGeneratorX86_64::HandleFieldSet(HInstruction* instruction,
-                                                    const FieldInfo& field_info) {
+                                                    const FieldInfo& field_info,
+                                                    uint32_t dex_pc) {
   DCHECK(instruction->IsInstanceFieldSet() || instruction->IsStaticFieldSet());
 
   LocationSummary* locations = instruction->GetLocations();
@@ -2532,11 +2538,6 @@ void InstructionCodeGeneratorX86_64::HandleFieldSet(HInstruction* instruction,
     case Primitive::kPrimInt:
     case Primitive::kPrimNot: {
       __ movl(Address(base, offset), value.AsRegister<CpuRegister>());
-      if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
-        CpuRegister temp = locations->GetTemp(0).AsRegister<CpuRegister>();
-        CpuRegister card = locations->GetTemp(1).AsRegister<CpuRegister>();
-        codegen_->MarkGCCard(temp, card, base, value.AsRegister<CpuRegister>());
-      }
       break;
     }
 
@@ -2560,6 +2561,14 @@ void InstructionCodeGeneratorX86_64::HandleFieldSet(HInstruction* instruction,
       UNREACHABLE();
   }
 
+  codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
+
+  if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
+    CpuRegister temp = locations->GetTemp(0).AsRegister<CpuRegister>();
+    CpuRegister card = locations->GetTemp(1).AsRegister<CpuRegister>();
+    codegen_->MarkGCCard(temp, card, base, value.AsRegister<CpuRegister>());
+  }
+
   if (is_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
   }
@@ -2570,7 +2579,7 @@ void LocationsBuilderX86_64::VisitInstanceFieldSet(HInstanceFieldSet* instructio
 }
 
 void InstructionCodeGeneratorX86_64::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
-  HandleFieldSet(instruction, instruction->GetFieldInfo());
+  HandleFieldSet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderX86_64::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
@@ -2578,7 +2587,7 @@ void LocationsBuilderX86_64::VisitInstanceFieldGet(HInstanceFieldGet* instructio
 }
 
 void InstructionCodeGeneratorX86_64::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
-  HandleFieldGet(instruction, instruction->GetFieldInfo());
+  HandleFieldGet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderX86_64::VisitStaticFieldGet(HStaticFieldGet* instruction) {
@@ -2586,7 +2595,7 @@ void LocationsBuilderX86_64::VisitStaticFieldGet(HStaticFieldGet* instruction) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitStaticFieldGet(HStaticFieldGet* instruction) {
-  HandleFieldGet(instruction, instruction->GetFieldInfo());
+  HandleFieldGet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderX86_64::VisitStaticFieldSet(HStaticFieldSet* instruction) {
@@ -2594,7 +2603,7 @@ void LocationsBuilderX86_64::VisitStaticFieldSet(HStaticFieldSet* instruction) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitStaticFieldSet(HStaticFieldSet* instruction) {
-  HandleFieldSet(instruction, instruction->GetFieldInfo());
+  HandleFieldSet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderX86_64::VisitNullCheck(HNullCheck* instruction) {
@@ -2610,6 +2619,13 @@ void LocationsBuilderX86_64::VisitNullCheck(HNullCheck* instruction) {
 }
 
 void InstructionCodeGeneratorX86_64::GenerateImplicitNullCheck(HNullCheck* instruction) {
+  // Usually we get the SEGFAULT at the actual invoke site and there's no need to generate anything
+  // at NullCheck nodes. However, there are cases when we need to force a check to ensure a SEGFAULT
+  // (e.g. when getting the invoke address from the dex cache for invoke-direct).
+  if (!instruction->ForceCheck()) {
+    return;
+  }
+
   LocationSummary* locations = instruction->GetLocations();
   Location obj = locations->InAt(0);
 
@@ -2962,6 +2978,7 @@ void InstructionCodeGeneratorX86_64::VisitArrayLength(HArrayLength* instruction)
   CpuRegister obj = locations->InAt(0).AsRegister<CpuRegister>();
   CpuRegister out = locations->Out().AsRegister<CpuRegister>();
   __ movl(out, Address(obj, offset));
+  codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
 }
 
 void LocationsBuilderX86_64::VisitBoundsCheck(HBoundsCheck* instruction) {
