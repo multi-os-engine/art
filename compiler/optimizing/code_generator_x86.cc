@@ -1196,9 +1196,11 @@ void InstructionCodeGeneratorX86::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   // temp = object->GetClass();
   if (receiver.IsStackSlot()) {
     __ movl(temp, Address(ESP, receiver.GetStackIndex()));
+    codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
     __ movl(temp, Address(temp, class_offset));
   } else {
     __ movl(temp, Address(receiver.AsRegister<Register>(), class_offset));
+    codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
   }
   // temp = temp->GetMethodAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
@@ -1232,9 +1234,11 @@ void InstructionCodeGeneratorX86::VisitInvokeInterface(HInvokeInterface* invoke)
   // temp = object->GetClass();
   if (receiver.IsStackSlot()) {
     __ movl(temp, Address(ESP, receiver.GetStackIndex()));
+    codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
     __ movl(temp, Address(temp, class_offset));
   } else {
     __ movl(temp, Address(receiver.AsRegister<Register>(), class_offset));
+    codegen_->MaybeRecordImplicitNullCheck(invoke, invoke->GetDexPc());
   }
   // temp = temp->GetImtEntryAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
@@ -2709,7 +2713,8 @@ void LocationsBuilderX86::HandleFieldGet(HInstruction* instruction, const FieldI
 }
 
 void InstructionCodeGeneratorX86::HandleFieldGet(HInstruction* instruction,
-                                                 const FieldInfo& field_info) {
+                                                 const FieldInfo& field_info,
+                                                 uint32_t dex_pc) {
   DCHECK(instruction->IsInstanceFieldGet() || instruction->IsStaticFieldGet());
 
   LocationSummary* locations = instruction->GetLocations();
@@ -2750,11 +2755,13 @@ void InstructionCodeGeneratorX86::HandleFieldGet(HInstruction* instruction,
       if (is_volatile) {
         XmmRegister temp = locations->GetTemp(0).AsFpuRegister<XmmRegister>();
         __ movsd(temp, Address(base, offset));
+        codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
         __ movd(out.AsRegisterPairLow<Register>(), temp);
         __ psrlq(temp, Immediate(32));
         __ movd(out.AsRegisterPairHigh<Register>(), temp);
       } else {
         __ movl(out.AsRegisterPairLow<Register>(), Address(base, offset));
+        codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
         __ movl(out.AsRegisterPairHigh<Register>(), Address(base, kX86WordSize + offset));
       }
       break;
@@ -2773,6 +2780,10 @@ void InstructionCodeGeneratorX86::HandleFieldGet(HInstruction* instruction,
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
+  }
+
+  if (field_type != Primitive::kPrimLong) {
+    codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
   }
 
   if (is_volatile) {
@@ -2816,7 +2827,8 @@ void LocationsBuilderX86::HandleFieldSet(HInstruction* instruction, const FieldI
 }
 
 void InstructionCodeGeneratorX86::HandleFieldSet(HInstruction* instruction,
-                                                 const FieldInfo& field_info) {
+                                                 const FieldInfo& field_info,
+                                                 uint32_t dex_pc) {
   DCHECK(instruction->IsInstanceFieldSet() || instruction->IsStaticFieldSet());
 
   LocationSummary* locations = instruction->GetLocations();
@@ -2846,12 +2858,6 @@ void InstructionCodeGeneratorX86::HandleFieldSet(HInstruction* instruction,
     case Primitive::kPrimInt:
     case Primitive::kPrimNot: {
       __ movl(Address(base, offset), value.AsRegister<Register>());
-
-      if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
-        Register temp = locations->GetTemp(0).AsRegister<Register>();
-        Register card = locations->GetTemp(1).AsRegister<Register>();
-        codegen_->MarkGCCard(temp, card, base, value.AsRegister<Register>());
-      }
       break;
     }
 
@@ -2863,8 +2869,10 @@ void InstructionCodeGeneratorX86::HandleFieldSet(HInstruction* instruction,
         __ movd(temp2, value.AsRegisterPairHigh<Register>());
         __ punpckldq(temp1, temp2);
         __ movsd(Address(base, offset), temp1);
+        codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
       } else {
         __ movl(Address(base, offset), value.AsRegisterPairLow<Register>());
+        codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
         __ movl(Address(base, kX86WordSize + offset), value.AsRegisterPairHigh<Register>());
       }
       break;
@@ -2885,6 +2893,16 @@ void InstructionCodeGeneratorX86::HandleFieldSet(HInstruction* instruction,
       UNREACHABLE();
   }
 
+  if (field_type != Primitive::kPrimLong) {
+    codegen_->MaybeRecordImplicitNullCheck(instruction, dex_pc);
+  }
+
+  if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
+    Register temp = locations->GetTemp(0).AsRegister<Register>();
+    Register card = locations->GetTemp(1).AsRegister<Register>();
+    codegen_->MarkGCCard(temp, card, base, value.AsRegister<Register>());
+  }
+
   if (is_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
   }
@@ -2895,7 +2913,7 @@ void LocationsBuilderX86::VisitStaticFieldGet(HStaticFieldGet* instruction) {
 }
 
 void InstructionCodeGeneratorX86::VisitStaticFieldGet(HStaticFieldGet* instruction) {
-  HandleFieldGet(instruction, instruction->GetFieldInfo());
+  HandleFieldGet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderX86::VisitStaticFieldSet(HStaticFieldSet* instruction) {
@@ -2903,7 +2921,7 @@ void LocationsBuilderX86::VisitStaticFieldSet(HStaticFieldSet* instruction) {
 }
 
 void InstructionCodeGeneratorX86::VisitStaticFieldSet(HStaticFieldSet* instruction) {
-  HandleFieldSet(instruction, instruction->GetFieldInfo());
+  HandleFieldSet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderX86::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
@@ -2911,7 +2929,7 @@ void LocationsBuilderX86::VisitInstanceFieldSet(HInstanceFieldSet* instruction) 
 }
 
 void InstructionCodeGeneratorX86::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
-  HandleFieldSet(instruction, instruction->GetFieldInfo());
+  HandleFieldSet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderX86::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
@@ -2919,7 +2937,7 @@ void LocationsBuilderX86::VisitInstanceFieldGet(HInstanceFieldGet* instruction) 
 }
 
 void InstructionCodeGeneratorX86::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
-  HandleFieldGet(instruction, instruction->GetFieldInfo());
+  HandleFieldGet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
 void LocationsBuilderX86::VisitNullCheck(HNullCheck* instruction) {
@@ -2935,6 +2953,10 @@ void LocationsBuilderX86::VisitNullCheck(HNullCheck* instruction) {
 }
 
 void InstructionCodeGeneratorX86::GenerateImplicitNullCheck(HNullCheck* instruction) {
+  // TODO: this check will go away after we have NullCheckElimination.
+  if (!instruction->ForceCheck()) {
+    return;
+  }
   LocationSummary* locations = instruction->GetLocations();
   Location obj = locations->InAt(0);
   __ testl(EAX, Address(obj.AsRegister<Register>(), 0));
@@ -2982,7 +3004,8 @@ void InstructionCodeGeneratorX86::VisitArrayGet(HArrayGet* instruction) {
   Register obj = locations->InAt(0).AsRegister<Register>();
   Location index = locations->InAt(1);
 
-  switch (instruction->GetType()) {
+  Primitive::Type type = instruction->GetType();
+  switch (type) {
     case Primitive::kPrimBoolean: {
       uint32_t data_offset = mirror::Array::DataOffset(sizeof(uint8_t)).Uint32Value();
       Register out = locations->Out().AsRegister<Register>();
@@ -3050,10 +3073,12 @@ void InstructionCodeGeneratorX86::VisitArrayGet(HArrayGet* instruction) {
       if (index.IsConstant()) {
         size_t offset = (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_8) + data_offset;
         __ movl(out.AsRegisterPairLow<Register>(), Address(obj, offset));
+        codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
         __ movl(out.AsRegisterPairHigh<Register>(), Address(obj, offset + kX86WordSize));
       } else {
         __ movl(out.AsRegisterPairLow<Register>(),
                 Address(obj, index.AsRegister<Register>(), TIMES_8, data_offset));
+        codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
         __ movl(out.AsRegisterPairHigh<Register>(),
                 Address(obj, index.AsRegister<Register>(), TIMES_8, data_offset + kX86WordSize));
       }
@@ -3062,11 +3087,15 @@ void InstructionCodeGeneratorX86::VisitArrayGet(HArrayGet* instruction) {
 
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble:
-      LOG(FATAL) << "Unimplemented register type " << instruction->GetType();
+      LOG(FATAL) << "Unimplemented register type " << type;
       UNREACHABLE();
     case Primitive::kPrimVoid:
-      LOG(FATAL) << "Unreachable type " << instruction->GetType();
+      LOG(FATAL) << "Unreachable type " << type;
       UNREACHABLE();
+  }
+
+  if (type != Primitive::kPrimLong) {
+    codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
   }
 }
 
@@ -3144,6 +3173,7 @@ void InstructionCodeGeneratorX86::VisitArraySet(HArraySet* instruction) {
                   Immediate(value.GetConstant()->AsIntConstant()->GetValue()));
         }
       }
+      codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
       break;
     }
 
@@ -3167,6 +3197,7 @@ void InstructionCodeGeneratorX86::VisitArraySet(HArraySet* instruction) {
                   Immediate(value.GetConstant()->AsIntConstant()->GetValue()));
         }
       }
+      codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
       break;
     }
 
@@ -3195,6 +3226,7 @@ void InstructionCodeGeneratorX86::VisitArraySet(HArraySet* instruction) {
                     Immediate(value.GetConstant()->AsIntConstant()->GetValue()));
           }
         }
+        codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
 
         if (needs_write_barrier) {
           Register temp = locations->GetTemp(0).AsRegister<Register>();
@@ -3216,17 +3248,20 @@ void InstructionCodeGeneratorX86::VisitArraySet(HArraySet* instruction) {
         size_t offset = (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_8) + data_offset;
         if (value.IsRegisterPair()) {
           __ movl(Address(obj, offset), value.AsRegisterPairLow<Register>());
+          codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
           __ movl(Address(obj, offset + kX86WordSize), value.AsRegisterPairHigh<Register>());
         } else {
           DCHECK(value.IsConstant());
           int64_t val = value.GetConstant()->AsLongConstant()->GetValue();
           __ movl(Address(obj, offset), Immediate(Low32Bits(val)));
+          codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
           __ movl(Address(obj, offset + kX86WordSize), Immediate(High32Bits(val)));
         }
       } else {
         if (value.IsRegisterPair()) {
           __ movl(Address(obj, index.AsRegister<Register>(), TIMES_8, data_offset),
                   value.AsRegisterPairLow<Register>());
+          codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
           __ movl(Address(obj, index.AsRegister<Register>(), TIMES_8, data_offset + kX86WordSize),
                   value.AsRegisterPairHigh<Register>());
         } else {
@@ -3234,6 +3269,7 @@ void InstructionCodeGeneratorX86::VisitArraySet(HArraySet* instruction) {
           int64_t val = value.GetConstant()->AsLongConstant()->GetValue();
           __ movl(Address(obj, index.AsRegister<Register>(), TIMES_8, data_offset),
                   Immediate(Low32Bits(val)));
+          codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
           __ movl(Address(obj, index.AsRegister<Register>(), TIMES_8, data_offset + kX86WordSize),
                   Immediate(High32Bits(val)));
         }
@@ -3264,6 +3300,7 @@ void InstructionCodeGeneratorX86::VisitArrayLength(HArrayLength* instruction) {
   Register obj = locations->InAt(0).AsRegister<Register>();
   Register out = locations->Out().AsRegister<Register>();
   __ movl(out, Address(obj, offset));
+  codegen_->MaybeRecordImplicitNullCheck(instruction, instruction->GetDexPc());
 }
 
 void LocationsBuilderX86::VisitBoundsCheck(HBoundsCheck* instruction) {

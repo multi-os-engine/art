@@ -163,7 +163,40 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
   }
 
-  void VisitIntConstant(HIntConstant* instruction) OVERRIDE {
+  void VisitNullCheck(HNullCheck *instruction) OVERRIDE {
+    output_ << " " << (instruction->ForceCheck() ? "(forced)" : "(not_forced)");
+  }
+
+  void VisitInvokeStaticOrDirect(HInvokeStaticOrDirect *instruction) OVERRIDE {
+    output_ << " (" << instruction->GetInvokeType()
+        << (instruction->NeedsImplicitNullCheck() ? ", needs_nc)" : ")");
+  }
+
+  void VisitInvokeVirtual(HInvokeVirtual* instruction) OVERRIDE {
+    output_ << (instruction->NeedsImplicitNullCheck() ? "(needs_nc)" : "");
+  }
+
+  void VisitInvokeInterface(HInvokeInterface* instruction) OVERRIDE {
+    output_ << (instruction->NeedsImplicitNullCheck() ? "(needs_nc)" : "");
+  }
+
+  void VisitInstanceFieldSet(HInstanceFieldSet* instruction) OVERRIDE {
+    output_ << (instruction->NeedsImplicitNullCheck() ? "(needs_nc)" : "");
+  }
+
+  void VisitInstanceFieldGet(HInstanceFieldGet* instruction) OVERRIDE {
+    output_ << (instruction->NeedsImplicitNullCheck() ? "(needs_nc)" : "");
+  }
+
+  void VisitArraySet(HArraySet* instruction) OVERRIDE {
+    output_ << (instruction->NeedsImplicitNullCheck() ? "(needs_nc)" : "");
+  }
+
+  void VisitArrayGet(HArrayGet* instruction) OVERRIDE {
+    output_ << (instruction->NeedsImplicitNullCheck() ? "(needs_nc)" : "");
+  }
+
+  void VisitIntConstant(HIntConstant *instruction) OVERRIDE {
     output_ << " " << instruction->GetValue();
   }
 
