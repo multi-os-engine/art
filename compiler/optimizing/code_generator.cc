@@ -635,6 +635,39 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
   }
 }
 
+void CodeGenerator::MaybeRecordImplicitNullCheck(HInstruction* instr) {
+  // If we are from a static path don't record the pc as we can't throw NPE.
+  // NB: having the checks here makes the code much less verbose in the arch
+  // specific code generators.
+  if (instr->IsStaticFieldSet() || instr->IsStaticFieldGet()) {
+    return;
+  }
+
+  if (compiler_options_.GetImplicitNullChecks()) {
+  #define ExtractCheck(Type)                     \
+    if (instr->Is ## Type()) {                 \
+      H ## Type* i = instr->As ## Type();      \
+      null_check = i->GetNullCheck();          \
+      needs_nc = i->NeedsImplicitNullCheck();  \
+    }
+
+    HNullCheck* null_check = nullptr;
+    bool needs_nc = false;
+
+    ExtractCheck(Invoke)
+    ExtractCheck(InstanceFieldSet)
+    ExtractCheck(ArrayLength)
+    ExtractCheck(ArrayGet)
+    ExtractCheck(ArraySet)
+
+    if (null_check != nullptr && needs_nc) {
+      RecordPcInfo(instr, null_check->GetDexPc());
+    }
+
+#undef ExtractCheck
+  }
+}
+
 void CodeGenerator::SaveLiveRegisters(LocationSummary* locations) {
   RegisterSet* register_set = locations->GetLiveRegisters();
   size_t stack_offset = first_register_slot_in_slow_path_;

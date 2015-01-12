@@ -998,11 +998,12 @@ void CodeGeneratorARM64::Load(Primitive::Type type,
   }
 }
 
-void CodeGeneratorARM64::LoadAcquire(Primitive::Type type,
+void CodeGeneratorARM64::LoadAcquire(HInstruction* instruction,
                                      CPURegister dst,
                                      const MemOperand& src) {
   UseScratchRegisterScope temps(GetVIXLAssembler());
   Register temp_base = temps.AcquireX();
+  Primitive::Type type = instruction->GetType();
 
   DCHECK(!src.IsRegisterOffset());
   DCHECK(!src.IsPreIndex());
@@ -1014,16 +1015,20 @@ void CodeGeneratorARM64::LoadAcquire(Primitive::Type type,
   switch (type) {
     case Primitive::kPrimBoolean:
       __ Ldarb(Register(dst), base);
+      MaybeRecordImplicitNullCheck(instruction);
       break;
     case Primitive::kPrimByte:
       __ Ldarb(Register(dst), base);
+      MaybeRecordImplicitNullCheck(instruction);
       __ Sbfx(Register(dst), Register(dst), 0, Primitive::ComponentSize(type) * kBitsPerByte);
       break;
     case Primitive::kPrimChar:
       __ Ldarh(Register(dst), base);
+      MaybeRecordImplicitNullCheck(instruction);
       break;
     case Primitive::kPrimShort:
       __ Ldarh(Register(dst), base);
+      MaybeRecordImplicitNullCheck(instruction);
       __ Sbfx(Register(dst), Register(dst), 0, Primitive::ComponentSize(type) * kBitsPerByte);
       break;
     case Primitive::kPrimInt:
@@ -1031,6 +1036,7 @@ void CodeGeneratorARM64::LoadAcquire(Primitive::Type type,
     case Primitive::kPrimLong:
       DCHECK_EQ(dst.Is64Bits(), Is64BitType(type));
       __ Ldar(Register(dst), base);
+      MaybeRecordImplicitNullCheck(instruction);
       break;
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble: {
@@ -1039,6 +1045,7 @@ void CodeGeneratorARM64::LoadAcquire(Primitive::Type type,
 
       Register temp = dst.Is64Bits() ? temps.AcquireX() : temps.AcquireW();
       __ Ldar(temp, base);
+      MaybeRecordImplicitNullCheck(instruction);
       __ Fmov(FPRegister(dst), temp);
       break;
     }
@@ -1400,6 +1407,7 @@ void InstructionCodeGeneratorARM64::VisitArrayGet(HArrayGet* instruction) {
   }
 
   codegen_->Load(type, OutputCPURegister(instruction), source);
+  codegen_->MaybeRecordImplicitNullCheck(instruction);
 }
 
 void LocationsBuilderARM64::VisitArrayLength(HArrayLength* instruction) {
@@ -1411,6 +1419,7 @@ void LocationsBuilderARM64::VisitArrayLength(HArrayLength* instruction) {
 void InstructionCodeGeneratorARM64::VisitArrayLength(HArrayLength* instruction) {
   __ Ldr(OutputRegister(instruction),
          HeapOperand(InputRegisterAt(instruction, 0), mirror::Array::LengthOffset()));
+  codegen_->MaybeRecordImplicitNullCheck(instruction);
 }
 
 void LocationsBuilderARM64::VisitArraySet(HArraySet* instruction) {
@@ -1455,6 +1464,7 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
     }
 
     codegen_->Store(value_type, value, destination);
+    codegen_->MaybeRecordImplicitNullCheck(instruction);
   }
 }
 
@@ -1817,14 +1827,17 @@ void InstructionCodeGeneratorARM64::VisitInstanceFieldGet(HInstanceFieldGet* ins
 
   if (instruction->IsVolatile()) {
     if (kUseAcquireRelease) {
-      codegen_->LoadAcquire(instruction->GetType(), OutputCPURegister(instruction), field);
+      // NB: LoadAcquire will record the pc info if needed.
+      codegen_->LoadAcquire(instruction, OutputCPURegister(instruction), field);
     } else {
       codegen_->Load(instruction->GetType(), OutputCPURegister(instruction), field);
+      codegen_->MaybeRecordImplicitNullCheck(instruction);
       // For IRIW sequential consistency kLoadAny is not sufficient.
       GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
     }
   } else {
     codegen_->Load(instruction->GetType(), OutputCPURegister(instruction), field);
+    codegen_->MaybeRecordImplicitNullCheck(instruction);
   }
 }
 
@@ -1844,13 +1857,16 @@ void InstructionCodeGeneratorARM64::VisitInstanceFieldSet(HInstanceFieldSet* ins
   if (instruction->IsVolatile()) {
     if (kUseAcquireRelease) {
       codegen_->StoreRelease(field_type, value, HeapOperand(obj, offset));
+      codegen_->MaybeRecordImplicitNullCheck(instruction);
     } else {
       GenerateMemoryBarrier(MemBarrierKind::kAnyStore);
       codegen_->Store(field_type, value, HeapOperand(obj, offset));
+      codegen_->MaybeRecordImplicitNullCheck(instruction);
       GenerateMemoryBarrier(MemBarrierKind::kAnyAny);
     }
   } else {
     codegen_->Store(field_type, value, HeapOperand(obj, offset));
+    codegen_->MaybeRecordImplicitNullCheck(instruction);
   }
 
   if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
@@ -1954,6 +1970,7 @@ void InstructionCodeGeneratorARM64::VisitInvokeInterface(HInvokeInterface* invok
   } else {
     __ Ldr(temp, HeapOperandFrom(receiver, class_offset));
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke);
   // temp = temp->GetImtEntryAt(method_offset);
   __ Ldr(temp, HeapOperand(temp, method_offset));
   // lr = temp->GetEntryPoint();
@@ -2019,6 +2036,7 @@ void InstructionCodeGeneratorARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
     DCHECK(receiver.IsRegister());
     __ Ldr(temp, HeapOperandFrom(receiver, class_offset));
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke);
   // temp = temp->GetMethodAt(method_offset);
   __ Ldr(temp, HeapOperand(temp, method_offset));
   // lr = temp->GetEntryPoint();
@@ -2294,6 +2312,10 @@ void LocationsBuilderARM64::VisitNullCheck(HNullCheck* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::GenerateImplicitNullCheck(HNullCheck* instruction) {
+  // TODO: this check will go away after we have NullCheckElimination.
+  if (!instruction->IsNeeded()) {
+    return;
+  }
   Location obj = instruction->GetLocations()->InAt(0);
 
   __ Ldr(wzr, HeapOperandFrom(obj, Offset(0)));
@@ -2306,13 +2328,8 @@ void InstructionCodeGeneratorARM64::GenerateExplicitNullCheck(HNullCheck* instru
 
   LocationSummary* locations = instruction->GetLocations();
   Location obj = locations->InAt(0);
-  if (obj.IsRegister()) {
-    __ Cbz(RegisterFrom(obj, instruction->InputAt(0)->GetType()), slow_path->GetEntryLabel());
-  } else {
-    DCHECK(obj.IsConstant()) << obj;
-    DCHECK_EQ(obj.GetConstant()->AsIntConstant()->GetValue(), 0);
-    __ B(slow_path->GetEntryLabel());
-  }
+
+  __ Cbz(RegisterFrom(obj, instruction->InputAt(0)->GetType()), slow_path->GetEntryLabel());
 }
 
 void InstructionCodeGeneratorARM64::VisitNullCheck(HNullCheck* instruction) {
@@ -2513,7 +2530,8 @@ void InstructionCodeGeneratorARM64::VisitStaticFieldGet(HStaticFieldGet* instruc
 
   if (instruction->IsVolatile()) {
     if (kUseAcquireRelease) {
-      codegen_->LoadAcquire(instruction->GetType(), OutputCPURegister(instruction), field);
+      // NB: LoadAcquire will record the pc info if needed.
+      codegen_->LoadAcquire(instruction, OutputCPURegister(instruction), field);
     } else {
       codegen_->Load(instruction->GetType(), OutputCPURegister(instruction), field);
       // For IRIW sequential consistency kLoadAny is not sufficient.
