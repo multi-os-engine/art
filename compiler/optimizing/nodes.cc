@@ -15,6 +15,8 @@
  */
 
 #include "nodes.h"
+
+#include "mirror/array-inl.h"
 #include "ssa_builder.h"
 #include "utils/growable_array.h"
 
@@ -456,6 +458,22 @@ static void RemoveFromUseList(T* user,
   }
 }
 
+HInstruction* HInstruction::GetNextDisregardingMoves() const {
+  HInstruction* next = GetNext();
+  while (next != nullptr && next->IsParallelMove()) {
+    next = next->GetNext();
+  }
+  return next;
+}
+
+HInstruction* HInstruction::GetPreviousDisregardingMoves() const {
+  HInstruction* previous = GetPrevious();
+  while (previous != nullptr && previous->IsParallelMove()) {
+    previous = previous->GetPrevious();
+  }
+  return previous;
+}
+
 void HInstruction::RemoveUser(HInstruction* user, size_t input_index) {
   RemoveFromUseList(user, input_index, &uses_);
 }
@@ -649,11 +667,33 @@ HConstant* HBinaryOperation::TryStaticEvaluation() const {
 }
 
 bool HCondition::IsBeforeWhenDisregardMoves(HIf* if_) const {
-  HInstruction* previous = if_->GetPrevious();
-  while (previous != nullptr && previous->IsParallelMove()) {
-    previous = previous->GetPrevious();
-  }
-  return previous == this;
+  return this == if_->GetPreviousDisregardingMoves();
+}
+
+static bool CanArrayDoImplicitNullCheck(Primitive::Type type, Location index) {
+  // TODO: Uncomment this when we add optimizations that can enable/test this code path.
+  // Currently, we always have an ArrayLength or a NullCheck which will generate the
+  // null check before the access.
+  UNUSED(type);
+  UNUSED(index);
+
+  // It's safe to do an implicit only if we know that the address will fall in the first page.
+  // if (index.IsConstant()) {
+  //   int index_value = index.GetConstant()->AsIntConstant()->GetValue();
+  //   int size = Primitive::ComponentSize(type);
+  //   uint32_t data_offset = mirror::Array::DataOffset(size).Uint32Value();
+  //   size_t offset = index_value * size + data_offset;
+  //   return offset < kPageSize;
+  // }
+  return false;
+}
+
+bool HArrayGet::CanDoImplicitNullCheck() const {
+  return CanArrayDoImplicitNullCheck(GetType(), GetLocations()->InAt(1));
+}
+
+bool HArraySet::CanDoImplicitNullCheck() const {
+  return CanArrayDoImplicitNullCheck(GetComponentType(), GetLocations()->InAt(1));
 }
 
 bool HInstruction::Equals(HInstruction* other) const {
