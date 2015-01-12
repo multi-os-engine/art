@@ -1222,6 +1222,7 @@ void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) 
   } else {
     __ movl(temp, Address(receiver.AsRegister<CpuRegister>(), class_offset));
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke);
   // temp = temp->GetMethodAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
@@ -1258,6 +1259,7 @@ void InstructionCodeGeneratorX86_64::VisitInvokeInterface(HInvokeInterface* invo
   } else {
     __ movl(temp, Address(receiver.AsRegister<CpuRegister>(), class_offset));
   }
+  codegen_->MaybeRecordImplicitNullCheck(invoke);
   // temp = temp->GetImtEntryAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
@@ -2501,6 +2503,8 @@ void InstructionCodeGeneratorX86_64::HandleFieldGet(HInstruction* instruction,
       UNREACHABLE();
   }
 
+  codegen_->MaybeRecordImplicitNullCheck(instruction);
+
   if (is_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kLoadAny);
   }
@@ -2555,11 +2559,6 @@ void InstructionCodeGeneratorX86_64::HandleFieldSet(HInstruction* instruction,
     case Primitive::kPrimInt:
     case Primitive::kPrimNot: {
       __ movl(Address(base, offset), value.AsRegister<CpuRegister>());
-      if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
-        CpuRegister temp = locations->GetTemp(0).AsRegister<CpuRegister>();
-        CpuRegister card = locations->GetTemp(1).AsRegister<CpuRegister>();
-        codegen_->MarkGCCard(temp, card, base, value.AsRegister<CpuRegister>());
-      }
       break;
     }
 
@@ -2581,6 +2580,14 @@ void InstructionCodeGeneratorX86_64::HandleFieldSet(HInstruction* instruction,
     case Primitive::kPrimVoid:
       LOG(FATAL) << "Unreachable type " << field_type;
       UNREACHABLE();
+  }
+
+  codegen_->MaybeRecordImplicitNullCheck(instruction);
+
+  if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
+    CpuRegister temp = locations->GetTemp(0).AsRegister<CpuRegister>();
+    CpuRegister card = locations->GetTemp(1).AsRegister<CpuRegister>();
+    codegen_->MarkGCCard(temp, card, base, value.AsRegister<CpuRegister>());
   }
 
   if (is_volatile) {
@@ -2633,6 +2640,9 @@ void LocationsBuilderX86_64::VisitNullCheck(HNullCheck* instruction) {
 }
 
 void InstructionCodeGeneratorX86_64::GenerateImplicitNullCheck(HNullCheck* instruction) {
+  if (!codegen_->ShouldGenerateImplicitNullCheck(instruction)) {
+    return;
+  }
   LocationSummary* locations = instruction->GetLocations();
   Location obj = locations->InAt(0);
 
@@ -2785,6 +2795,7 @@ void InstructionCodeGeneratorX86_64::VisitArrayGet(HArrayGet* instruction) {
       LOG(FATAL) << "Unreachable type " << instruction->GetType();
       UNREACHABLE();
   }
+  codegen_->MaybeRecordImplicitNullCheck(instruction);
 }
 
 void LocationsBuilderX86_64::VisitArraySet(HArraySet* instruction) {
@@ -2853,6 +2864,7 @@ void InstructionCodeGeneratorX86_64::VisitArraySet(HArraySet* instruction) {
                   Immediate(value.GetConstant()->AsIntConstant()->GetValue()));
         }
       }
+      codegen_->MaybeRecordImplicitNullCheck(instruction);
       break;
     }
 
@@ -2879,6 +2891,7 @@ void InstructionCodeGeneratorX86_64::VisitArraySet(HArraySet* instruction) {
                   Immediate(value.GetConstant()->AsIntConstant()->GetValue()));
         }
       }
+      codegen_->MaybeRecordImplicitNullCheck(instruction);
       break;
     }
 
@@ -2907,7 +2920,7 @@ void InstructionCodeGeneratorX86_64::VisitArraySet(HArraySet* instruction) {
                     Immediate(value.GetConstant()->AsIntConstant()->GetValue()));
           }
         }
-
+        codegen_->MaybeRecordImplicitNullCheck(instruction);
         if (needs_write_barrier) {
           DCHECK_EQ(value_type, Primitive::kPrimNot);
           CpuRegister temp = locations->GetTemp(0).AsRegister<CpuRegister>();
@@ -2935,6 +2948,7 @@ void InstructionCodeGeneratorX86_64::VisitArraySet(HArraySet* instruction) {
         __ movq(Address(obj, index.AsRegister<CpuRegister>(), TIMES_8, data_offset),
                 value.AsRegister<CpuRegister>());
       }
+      codegen_->MaybeRecordImplicitNullCheck(instruction);
       break;
     }
 
@@ -2949,6 +2963,7 @@ void InstructionCodeGeneratorX86_64::VisitArraySet(HArraySet* instruction) {
         __ movss(Address(obj, index.AsRegister<CpuRegister>(), TIMES_4, data_offset),
                 value.AsFpuRegister<XmmRegister>());
       }
+      codegen_->MaybeRecordImplicitNullCheck(instruction);
       break;
     }
 
@@ -2963,6 +2978,7 @@ void InstructionCodeGeneratorX86_64::VisitArraySet(HArraySet* instruction) {
         __ movsd(Address(obj, index.AsRegister<CpuRegister>(), TIMES_8, data_offset),
                 value.AsFpuRegister<XmmRegister>());
       }
+      codegen_->MaybeRecordImplicitNullCheck(instruction);
       break;
     }
 
@@ -2985,6 +3001,7 @@ void InstructionCodeGeneratorX86_64::VisitArrayLength(HArrayLength* instruction)
   CpuRegister obj = locations->InAt(0).AsRegister<CpuRegister>();
   CpuRegister out = locations->Out().AsRegister<CpuRegister>();
   __ movl(out, Address(obj, offset));
+  codegen_->MaybeRecordImplicitNullCheck(instruction);
 }
 
 void LocationsBuilderX86_64::VisitBoundsCheck(HBoundsCheck* instruction) {
