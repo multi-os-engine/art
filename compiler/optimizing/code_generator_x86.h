@@ -142,8 +142,8 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   void GenerateShrLong(const Location& loc, Register shifter);
   void GenerateUShrLong(const Location& loc, Register shifter);
   void GenerateMemoryBarrier(MemBarrierKind kind);
-  void HandleFieldSet(HInstruction* instruction, const FieldInfo& field_info);
-  void HandleFieldGet(HInstruction* instruction, const FieldInfo& field_info);
+  void HandleFieldSet(HInstruction* instruction, const FieldInfo& field_info, uint32_t dex_pc);
+  void HandleFieldGet(HInstruction* instruction, const FieldInfo& field_info, uint32_t dex_pc);
 
   void GenerateImplicitNullCheck(HNullCheck* instruction);
   void GenerateExplicitNullCheck(HNullCheck* instruction);
