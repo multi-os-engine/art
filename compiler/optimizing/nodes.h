@@ -1589,7 +1589,8 @@ class HInvoke : public HInstruction {
     : HInstruction(SideEffects::All()),
       inputs_(arena, number_of_arguments),
       return_type_(return_type),
-      dex_pc_(dex_pc) {
+      dex_pc_(dex_pc),
+      needs_implicit_nc_(true) {
     inputs_.SetSize(number_of_arguments);
   }
 
@@ -1612,12 +1613,16 @@ class HInvoke : public HInstruction {
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
+
   DECLARE_INSTRUCTION(Invoke);
 
  protected:
   GrowableArray<HInstruction*> inputs_;
   const Primitive::Type return_type_;
   const uint32_t dex_pc_;
+  bool needs_implicit_nc_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HInvoke);
@@ -2102,7 +2107,8 @@ class HPhi : public HInstruction {
 class HNullCheck : public HExpression<1> {
  public:
   HNullCheck(HInstruction* value, uint32_t dex_pc)
-      : HExpression(value->GetType(), SideEffects::None()), dex_pc_(dex_pc) {
+      : HExpression(value->GetType(), SideEffects::None()),
+        dex_pc_(dex_pc), is_needed_(true) {
     SetRawInputAt(0, value);
   }
 
@@ -2118,10 +2124,14 @@ class HNullCheck : public HExpression<1> {
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
+  bool IsNeeded() const { return is_needed_; }
+  void NotNeeded() { is_needed_ = false; }
+
   DECLARE_INSTRUCTION(NullCheck);
 
  private:
   const uint32_t dex_pc_;
+  bool is_needed_;
 
   DISALLOW_COPY_AND_ASSIGN(HNullCheck);
 };
@@ -2146,9 +2156,12 @@ class HInstanceFieldGet : public HExpression<1> {
   HInstanceFieldGet(HInstruction* value,
                     Primitive::Type field_type,
                     MemberOffset field_offset,
-                    bool is_volatile)
+                    bool is_volatile,
+                    uint32_t dex_pc)
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile),
+        dex_pc_(dex_pc),
+        needs_implicit_nc_(true) {
     SetRawInputAt(0, value);
   }
 
@@ -2167,11 +2180,17 @@ class HInstanceFieldGet : public HExpression<1> {
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
+  uint32_t GetDexPc() const { return dex_pc_; }
+
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
 
   DECLARE_INSTRUCTION(InstanceFieldGet);
 
  private:
   const FieldInfo field_info_;
+  const uint32_t dex_pc_;
+  bool needs_implicit_nc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldGet);
 };
@@ -2182,9 +2201,12 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     HInstruction* value,
                     Primitive::Type field_type,
                     MemberOffset field_offset,
-                    bool is_volatile)
+                    bool is_volatile,
+                    uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile),
+        dex_pc_(dex_pc),
+        needs_implicit_nc_(true) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, value);
   }
@@ -2193,21 +2215,28 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
+  uint32_t GetDexPc() const { return dex_pc_; }
 
   HInstruction* GetValue() const { return InputAt(1); }
+
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
 
   DECLARE_INSTRUCTION(InstanceFieldSet);
 
  private:
   const FieldInfo field_info_;
+  const uint32_t dex_pc_;
+  bool needs_implicit_nc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldSet);
 };
 
 class HArrayGet : public HExpression<2> {
  public:
-  HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type)
-      : HExpression(type, SideEffects::DependsOnSomething()) {
+  HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type, uint32_t dex_pc)
+      : HExpression(type, SideEffects::DependsOnSomething()), dex_pc_(dex_pc),
+        needs_implicit_nc_(true) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -2222,9 +2251,17 @@ class HArrayGet : public HExpression<2> {
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }
 
+  uint32_t GetDexPc() const { return dex_pc_; }
+
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
+
   DECLARE_INSTRUCTION(ArrayGet);
 
  private:
+  const uint32_t dex_pc_;
+  bool needs_implicit_nc_;
+
   DISALLOW_COPY_AND_ASSIGN(HArrayGet);
 };
 
@@ -2238,7 +2275,8 @@ class HArraySet : public HTemplateInstruction<3> {
       : HTemplateInstruction(SideEffects::ChangesSomething()),
         dex_pc_(dex_pc),
         expected_component_type_(expected_component_type),
-        needs_type_check_(value->GetType() == Primitive::kPrimNot) {
+        needs_type_check_(value->GetType() == Primitive::kPrimNot),
+        needs_implicit_nc_(true) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
     SetRawInputAt(2, value);
@@ -2273,20 +2311,25 @@ class HArraySet : public HTemplateInstruction<3> {
         : expected_component_type_;
   }
 
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
+
   DECLARE_INSTRUCTION(ArraySet);
 
  private:
   const uint32_t dex_pc_;
   const Primitive::Type expected_component_type_;
   bool needs_type_check_;
+  bool needs_implicit_nc_;
 
   DISALLOW_COPY_AND_ASSIGN(HArraySet);
 };
 
 class HArrayLength : public HExpression<1> {
  public:
-  explicit HArrayLength(HInstruction* array)
-      : HExpression(Primitive::kPrimInt, SideEffects::None()) {
+  explicit HArrayLength(HInstruction* array, uint32_t dex_pc)
+      : HExpression(Primitive::kPrimInt, SideEffects::None()), dex_pc_(dex_pc),
+        needs_implicit_nc_(true) {
     // Note that arrays do not change length, so the instruction does not
     // depend on any write.
     SetRawInputAt(0, array);
@@ -2297,10 +2340,17 @@ class HArrayLength : public HExpression<1> {
     UNUSED(other);
     return true;
   }
+  uint32_t GetDexPc() const { return dex_pc_; }
+
+  void RemoveImplicitNullCheckNeed() { needs_implicit_nc_ = false; }
+  bool NeedsImplicitNullCheck() const { return needs_implicit_nc_; }
 
   DECLARE_INSTRUCTION(ArrayLength);
 
  private:
+  const uint32_t dex_pc_;
+  bool needs_implicit_nc_;
+
   DISALLOW_COPY_AND_ASSIGN(HArrayLength);
 };
 
@@ -2506,9 +2556,10 @@ class HStaticFieldGet : public HExpression<1> {
   HStaticFieldGet(HInstruction* cls,
                   Primitive::Type field_type,
                   MemberOffset field_offset,
-                  bool is_volatile)
+                  bool is_volatile,
+                  uint32_t dex_pc)
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile), dex_pc_(dex_pc) {
     SetRawInputAt(0, cls);
   }
 
@@ -2528,11 +2579,13 @@ class HStaticFieldGet : public HExpression<1> {
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
+  uint32_t GetDexPc() const { return dex_pc_; }
 
   DECLARE_INSTRUCTION(StaticFieldGet);
 
  private:
   const FieldInfo field_info_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldGet);
 };
@@ -2543,9 +2596,10 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                   HInstruction* value,
                   Primitive::Type field_type,
                   MemberOffset field_offset,
-                  bool is_volatile)
+                  bool is_volatile,
+                  uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile), dex_pc_(dex_pc) {
     SetRawInputAt(0, cls);
     SetRawInputAt(1, value);
   }
@@ -2554,6 +2608,7 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
+  uint32_t GetDexPc() const { return dex_pc_; }
 
   HInstruction* GetValue() const { return InputAt(1); }
 
@@ -2561,6 +2616,7 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
 
  private:
   const FieldInfo field_info_;
+  uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldSet);
 };
