@@ -865,6 +865,16 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     if (kIsDebugBuild) {
       GetHeap()->GetImageSpace()->VerifyImageAllocations();
     }
+    if (boot_class_path_string_.empty()) {
+      // The bootclasspath is not explicitly specified: construct it from the loaded dex files.
+      const std::vector<const DexFile*>& boot_class_path = GetClassLinker()->GetBootClassPath();
+      for (size_t i = 0, e = boot_class_path.size(); i < e; ++i) {
+        if (i != 0) {
+          boot_class_path_string_.append(":");
+        }
+        boot_class_path_string_.append(boot_class_path[i]->GetLocation());
+      }
+    }
   } else {
     std::vector<std::string> dex_filenames;
     Split(boot_class_path_string_, ':', &dex_filenames);
