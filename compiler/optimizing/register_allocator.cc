@@ -56,7 +56,7 @@ RegisterAllocator::RegisterAllocator(ArenaAllocator* allocator,
         blocked_core_registers_(codegen->GetBlockedCoreRegisters()),
         blocked_fp_registers_(codegen->GetBlockedFloatingPointRegisters()),
         reserved_out_slots_(0),
-        maximum_number_of_live_registers_(0) {
+        maximum_live_register_spill_size_(0) {
   codegen->SetupBlockedRegisters();
   physical_core_register_intervals_.SetSize(codegen->GetNumberOfCoreRegisters());
   physical_fp_register_intervals_.SetSize(codegen->GetNumberOfFloatingPointRegisters());
@@ -185,8 +185,8 @@ void RegisterAllocator::AllocateRegistersInternal() {
   }
   LinearScan();
 
-  size_t saved_maximum_number_of_live_registers = maximum_number_of_live_registers_;
-  maximum_number_of_live_registers_ = 0;
+  size_t saved_maximum_live_register_spill_size = maximum_live_register_spill_size_;
+  maximum_live_register_spill_size_ = 0;
 
   inactive_.Reset();
   active_.Reset();
@@ -207,7 +207,7 @@ void RegisterAllocator::AllocateRegistersInternal() {
     }
   }
   LinearScan();
-  maximum_number_of_live_registers_ += saved_maximum_number_of_live_registers;
+  maximum_live_register_spill_size_ += saved_maximum_live_register_spill_size;
 }
 
 void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
@@ -602,8 +602,18 @@ void RegisterAllocator::LinearScan() {
     if (current->IsSlowPathSafepoint()) {
       // Synthesized interval to record the maximum number of live registers
       // at safepoints. No need to allocate a register for it.
-      maximum_number_of_live_registers_ =
-          std::max(maximum_number_of_live_registers_, active_.Size());
+      size_t active_size = 0;
+      for (size_t i = 0, e = active_.Size(); i < e; ++i) {
+        LiveInterval* active = active_.Get(i);
+        Primitive::Type t = active->GetType();
+        if (t == Primitive::kPrimDouble || t == Primitive::kPrimLong) {
+          active_size += 8;
+        } else {
+          active_size += 4;
+        }
+      }
+      maximum_live_register_spill_size_ =
+          std::max(maximum_live_register_spill_size_, active_size);
       DCHECK(unhandled_->IsEmpty() || unhandled_->Peek()->GetStart() > current->GetStart());
       continue;
     }
@@ -1255,8 +1265,6 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
       switch (source.GetKind()) {
         case Location::kRegister: {
           locations->AddLiveRegister(source);
-          DCHECK_LE(locations->GetNumberOfLiveRegisters(), maximum_number_of_live_registers_);
-
           if (current->GetType() == Primitive::kPrimNot) {
             locations->SetRegisterBit(source.reg());
           }
@@ -1349,7 +1357,7 @@ void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,
 
 void RegisterAllocator::Resolve() {
   codegen_->ComputeFrameSize(
-      spill_slots_.Size(), maximum_number_of_live_registers_, reserved_out_slots_);
+      spill_slots_.Size(), maximum_live_register_spill_size_, reserved_out_slots_);
 
   // Adjust the Out Location of instructions.
   // TODO: Use pointers of Location inside LiveInterval to avoid doing another iteration.

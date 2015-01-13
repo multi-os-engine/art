@@ -190,8 +190,8 @@ class RegisterAllocator {
   // Slots reserved for out arguments.
   size_t reserved_out_slots_;
 
-  // The maximum live registers at safepoints.
-  size_t maximum_number_of_live_registers_;
+  // The maximum number of bytes needed to save live registers.
+  size_t maximum_live_register_spill_size_;
 
   ART_FRIEND_TEST(RegisterAllocatorTest, FreeUntil);
 
