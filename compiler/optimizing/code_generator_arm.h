@@ -172,6 +172,11 @@ class CodeGeneratorARM : public CodeGenerator {
   size_t RestoreFloatingPointRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
 
   size_t GetWordSize() const OVERRIDE {
+    // Allocated in S registers, which are word sized.
+    return kArmWordSize;
+  }
+
+  size_t GetFloatingPointSpillSlotSize() const OVERRIDE {
     return kArmWordSize;
   }
 
