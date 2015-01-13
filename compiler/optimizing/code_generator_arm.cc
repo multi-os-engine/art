@@ -590,9 +590,14 @@ Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type
       gp_index_ += 2;
       stack_index_ += 2;
       if (index + 1 < calling_convention.GetNumberOfRegisters()) {
-        ArmManagedRegister pair = ArmManagedRegister::FromRegisterPair(
-            calling_convention.GetRegisterPairAt(index));
-        return Location::RegisterPairLocation(pair.AsRegisterPairLow(), pair.AsRegisterPairHigh());
+        if ((calling_convention.GetRegisterAt(index) & 1) == 1) {
+          gp_index_++;
+          index++;
+        }
+      }
+      if (index + 1 < calling_convention.GetNumberOfRegisters()) {
+        return Location::RegisterPairLocation(calling_convention.GetRegisterAt(index),
+                                              calling_convention.GetRegisterAt(index + 1)); 
       } else {
         return Location::DoubleStackSlot(calling_convention.GetStackOffsetOf(stack_index));
       }

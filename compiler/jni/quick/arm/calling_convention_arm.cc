@@ -168,6 +168,13 @@ const ManagedRegisterEntrySpills& ArmManagedRuntimeCallingConvention::EntrySpill
         } else {
           // FIXME: Pointer this returns as both reference and long.
           if (IsCurrentParamALong() && !IsCurrentParamAReference()) {  // Long.
+            if (gpr_index < arraysize(kHFCoreArgumentRegisters) - 1) {
+              // Register pairs must start at even register number.
+              if ((kHFCoreArgumentRegisters[gpr_index] & 1) == 1) {
+                gpr_index++;
+              }
+            }
+
             // If it spans register and memory, we must use the value in memory.
             if (gpr_index < arraysize(kHFCoreArgumentRegisters) - 1) {
               entry_spills_.push_back(

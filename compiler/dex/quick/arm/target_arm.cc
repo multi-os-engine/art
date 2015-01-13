@@ -929,6 +929,9 @@ RegStorage ArmMir2Lir::InToRegStorageArmMapper::GetNextReg(ShortyArg arg) {
     }
   } else {
     if (cur_core_reg_ < coreArgMappingToPhysicalRegSize) {
+      if (!kArm32QuickCodeUseSoftFloat && arg.IsWide() && cur_core_reg_ == 0) {
+        cur_core_reg_++;
+      }
       result = coreArgMappingToPhysicalReg[cur_core_reg_++];
       if (arg.IsWide() && cur_core_reg_ < coreArgMappingToPhysicalRegSize) {
         result = RegStorage::MakeRegPair(result, coreArgMappingToPhysicalReg[cur_core_reg_++]);
