@@ -163,6 +163,20 @@ public class Main {
     check(npe, thisLine += 7);
 
     try {
+      useLong(((Value) null).volatileLongField);
+    } catch (NullPointerException e) {
+      npe = e;
+    }
+    check(npe, thisLine += 7);
+
+    try {
+      ((Value) null).volatileLongField = 1L;
+    } catch (NullPointerException e) {
+      npe = e;
+    }
+    check(npe, thisLine += 7);
+
+    try {
       ((Value) null).byteField = 42;
     } catch (NullPointerException e) {
       npe = e;
@@ -477,11 +491,13 @@ public class Main {
   static class Value {
     Object objectField;
     int intField;
-    float floatField; long longField;
+    float floatField;
+    long longField;
     double doubleField;
     byte byteField;
     boolean booleanField;
     char charField;
     short shortField;
+    volatile long volatileLongField;
   }
 }
