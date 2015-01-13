@@ -183,8 +183,6 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   void Move(HInstruction* instruction, Location location, HInstruction* move_for) OVERRIDE;
   size_t SaveCoreRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
   size_t RestoreCoreRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
-  size_t SaveFloatingPointRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
-  size_t RestoreFloatingPointRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
 
   size_t GetWordSize() const OVERRIDE {
     return kX86_64WordSize;
