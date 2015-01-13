@@ -191,6 +191,10 @@ class CodeGeneratorARM64 : public CodeGenerator {
     return kArm64WordSize;
   }
 
+  size_t GetFloatingPointSpillSlotSize() const OVERRIDE {
+    return kArm64WordSize;
+  }
+
   uintptr_t GetAddressOf(HBasicBlock* block) const OVERRIDE {
     vixl::Label* block_entry_label = GetLabelOf(block);
     DCHECK(block_entry_label->IsBound());
