@@ -35,8 +35,8 @@ class SlowPathCodeX86;
 static constexpr Register kParameterCoreRegisters[] = { ECX, EDX, EBX };
 static constexpr RegisterPair kParameterCorePairRegisters[] = { ECX_EDX, EDX_EBX };
 static constexpr size_t kParameterCoreRegistersLength = arraysize(kParameterCoreRegisters);
-static constexpr XmmRegister kParameterFpuRegisters[] = { };
-static constexpr size_t kParameterFpuRegistersLength = 0;
+static constexpr XmmRegister kParameterFpuRegisters[] = { XMM0, XMM1, XMM2, XMM3 };
+static constexpr size_t kParameterFpuRegistersLength = arraysize(kParameterFpuRegisters);
 
 class InvokeDexCallingConvention : public CallingConvention<Register, XmmRegister> {
  public:
@@ -57,13 +57,18 @@ class InvokeDexCallingConvention : public CallingConvention<Register, XmmRegiste
 
 class InvokeDexCallingConventionVisitor {
  public:
-  InvokeDexCallingConventionVisitor() : gp_index_(0) {}
+  InvokeDexCallingConventionVisitor() : gp_index_(0), fp_index_(0), stack_index_(0) {}
 
   Location GetNextLocation(Primitive::Type type);
 
  private:
   InvokeDexCallingConvention calling_convention;
+  // The current index for cpu registers.
   uint32_t gp_index_;
+  // The current index for fpu registers.
+  uint32_t fp_index_;
+  // The current stack index.
+  uint32_t stack_index_;
 
   DISALLOW_COPY_AND_ASSIGN(InvokeDexCallingConventionVisitor);
 };
@@ -83,7 +88,9 @@ class ParallelMoveResolverX86 : public ParallelMoveResolver {
  private:
   void Exchange(Register reg, int mem);
   void Exchange(int mem1, int mem2);
-  void MoveMemoryToMemory(int dst, int src);
+  void Exchange32(XmmRegister reg, int mem);
+  void MoveMemoryToMemory32(int dst, int src);
+  void MoveMemoryToMemory64(int dst, int src);
 
   CodeGeneratorX86* const codegen_;
 
@@ -161,6 +168,8 @@ class CodeGeneratorX86 : public CodeGenerator {
   void Move(HInstruction* instruction, Location location, HInstruction* move_for) OVERRIDE;
   size_t SaveCoreRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
   size_t RestoreCoreRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
+  size_t SaveFloatingPointRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
+  size_t RestoreFloatingPointRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
 
   size_t GetWordSize() const OVERRIDE {
     return kX86WordSize;
