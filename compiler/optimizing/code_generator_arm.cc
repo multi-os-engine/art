@@ -590,9 +590,17 @@ Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type
       gp_index_ += 2;
       stack_index_ += 2;
       if (index + 1 < calling_convention.GetNumberOfRegisters()) {
-        ArmManagedRegister pair = ArmManagedRegister::FromRegisterPair(
-            calling_convention.GetRegisterPairAt(index));
-        return Location::RegisterPairLocation(pair.AsRegisterPairLow(), pair.AsRegisterPairHigh());
+        if (calling_convention.GetRegisterAt(index) == R1) {
+          // Skip R1, and use R2_R3 instead.
+          gp_index_++;
+          index++;
+        }
+      }
+      if (index + 1 < calling_convention.GetNumberOfRegisters()) {
+        DCHECK_EQ(calling_convention.GetRegisterAt(index) + 1,
+                  calling_convention.GetRegisterAt(index + 1)); 
+        return Location::RegisterPairLocation(calling_convention.GetRegisterAt(index),
+                                              calling_convention.GetRegisterAt(index + 1)); 
       } else {
         return Location::DoubleStackSlot(calling_convention.GetStackOffsetOf(stack_index));
       }
@@ -615,6 +623,9 @@ Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type
       uint32_t stack_index = stack_index_;
       stack_index_ += 2;
       if (double_index_ + 1 < calling_convention.GetNumberOfFpuRegisters()) {
+        DCHECK_EQ(calling_convention.GetFpuRegisterAt(index) + 1,
+                  calling_convention.GetFpuRegisterAt(index + 1)); 
+        DCHECK_EQ(calling_convention.GetFpuRegisterAt(index) & 1, 0);
         uint32_t index = double_index_;
         double_index_ += 2;
         return Location::FpuRegisterPairLocation(
