@@ -37,7 +37,8 @@ QUIET="n"
 RELOCATE="y"
 SECONDARY_DEX=""
 TIME_OUT="y"
-TIME_OUT_VALUE=5m
+# Value in minutes.
+TIME_OUT_VALUE=5
 USE_GDB="n"
 USE_JVM="n"
 VERIFY="y"
@@ -377,7 +378,10 @@ else
 
     if [ "$TIME_OUT" = "y" ]; then
       # Add timeout command if time out is desired.
-      cmdline="timeout $TIME_OUT_VALUE $cmdline"
+      # Note: the outer timeout only works if the inner timeout is given in minutes. Else the
+      #       summand needs to be changed.
+      TIME_PLUS_ONE=$(($TIME_OUT_VALUE + 1))
+      cmdline="timeout ${TIME_PLUS_ONE}m timeout -s SIGRTMIN+2 ${TIME_OUT_VALUE}m $cmdline"
     fi
 
     if [ "$DEV_MODE" = "y" ]; then
