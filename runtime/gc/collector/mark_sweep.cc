@@ -255,7 +255,15 @@ void MarkSweep::MarkingPhase() {
   BindBitmaps();
   FindDefaultSpaceBitmap();
   // Process dirty cards and add dirty cards to mod union tables.
-  heap_->ProcessCards(GetTimings(), false);
+  // For partial and full GCs, reset the dirty cards between two consecutive GC cycles
+  // to zero. Previously these dirty cards are processed from dirty to dirty - 1 here
+  // and finally to zero in PreCleanCards phase. The current approach is to decrease
+  // twice atomic operations of processing dirty cards to once.
+  GcType gcType = GetGcType();
+  if(gcType == kGcTypePartial || gcType == kGcTypeFull)
+    heap_->ProcessCards(GetTimings(), false, true);
+  else
+    heap_->ProcessCards(GetTimings(), false);
   WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
   MarkRoots(self);
   MarkReachableObjects();

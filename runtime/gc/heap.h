@@ -103,6 +103,14 @@ class AgeCardVisitor {
   }
 };
 
+class ResetVisitor {
+ public:
+  uint8_t operator()(uint8_t card) const {
+    UNUSED(card);
+    return 0;
+  }
+};
+
 enum HomogeneousSpaceCompactResult {
   // Success.
   kSuccess,
@@ -778,7 +786,7 @@ class Heap {
   void SwapStacks(Thread* self);
 
   // Clear cards and update the mod union table.
-  void ProcessCards(TimingLogger* timings, bool use_rem_sets);
+  void ProcessCards(TimingLogger* timings, bool use_rem_sets, bool reset = false);
 
   // Push an object onto the allocation stack.
   void PushOnAllocationStack(Thread* self, mirror::Object** obj)
