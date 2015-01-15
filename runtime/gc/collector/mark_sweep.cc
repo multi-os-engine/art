@@ -217,7 +217,7 @@ void MarkSweep::PreCleanCards() {
     Thread* self = Thread::Current();
     CHECK(!Locks::mutator_lock_->IsExclusiveHeld(self));
     // Process dirty cards and add dirty cards to mod union tables, also ages cards.
-    heap_->ProcessCards(GetTimings(), false);
+    heap_->ProcessCards(GetTimings(), false, false);
     // The checkpoint root marking is required to avoid a race condition which occurs if the
     // following happens during a reference write:
     // 1. mutator dirties the card (write barrier)
@@ -255,7 +255,12 @@ void MarkSweep::MarkingPhase() {
   BindBitmaps();
   FindDefaultSpaceBitmap();
   // Process dirty cards and add dirty cards to mod union tables.
-  heap_->ProcessCards(GetTimings(), false);
+  // For partial and full GCs, reset the dirty cards between two consecutive GC cycles
+  // to zero. Previously these dirty cards are processed from dirty to dirty - 1 here
+  // and finally to zero in PreCleanCards phase. The current approach is to decrease
+  // twice atomic operations of processing dirty cards to once.
+  // If the GC type is non sticky, then we just reset the cards instead of ageing them.
+  heap_->ProcessCards(GetTimings(), false, GetGcType() != kGcTypeSticky);
   WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
   MarkRoots(self);
   MarkReachableObjects();

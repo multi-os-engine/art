@@ -2662,7 +2662,7 @@ accounting::RememberedSet* Heap::FindRememberedSetFromSpace(space::Space* space)
   return it->second;
 }
 
-void Heap::ProcessCards(TimingLogger* timings, bool use_rem_sets) {
+void Heap::ProcessCards(TimingLogger* timings, bool use_rem_sets, bool reset) {
   TimingLogger::ScopedTiming t(__FUNCTION__, timings);
   // Clear cards and keep track of cards cleared in the mod-union table.
   for (const auto& space : continuous_spaces_) {
@@ -2687,8 +2687,12 @@ void Heap::ProcessCards(TimingLogger* timings, bool use_rem_sets) {
       // The races are we either end up with: Aged card, unaged card. Since we have the checkpoint
       // roots and then we scan / update mod union tables after. We will always scan either card.
       // If we end up with the non aged card, we scan it it in the pause.
-      card_table_->ModifyCardsAtomic(space->Begin(), space->End(), AgeCardVisitor(),
-                                     VoidFunctor());
+      if (reset) {
+        card_table_->ClearCardRange(space->Begin(), space->End(, accounting::CardTable::kCardSize));
+      } else {
+        card_table_->ModifyCardsAtomic(space->Begin(), space->End(), AgeCardVisitor(),
+                                       VoidFunctor());
+      }
     }
   }
 }
