@@ -44,6 +44,7 @@ struct LogVerbosity {
   bool jdwp;
   bool jni;
   bool monitor;
+  bool oat_file_manager;  // Enabled with "-verbose:oat-file-manager".
   bool profiler;
   bool signals;
   bool startup;
