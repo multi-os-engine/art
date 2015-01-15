@@ -108,7 +108,7 @@ class QuickArgumentVisitor {
   static size_t GprIndexToGprOffset(uint32_t gpr_index) {
     return gpr_index * GetBytesPerGprSpillLocation(kRuntimeISA);
   }
-#elif defined(__mips__)
+#elif defined(__mips__) && !defined(__LP64__)
   // The callee save frame is pointed to by SP.
   // | argN       |  |
   // | ...        |  |
@@ -131,6 +131,51 @@ class QuickArgumentVisitor {
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset = 0;  // Offset of first FPR arg.
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Gpr1Offset = 4;  // Offset of first GPR arg.
   static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_LrOffset = 60;  // Offset of return address.
+  static size_t GprIndexToGprOffset(uint32_t gpr_index) {
+    return gpr_index * GetBytesPerGprSpillLocation(kRuntimeISA);
+  }
+#elif defined(__mips__) && defined(__LP64__)
+  // The callee save frame is pointed to by SP.
+  // | argN       |  |
+  // | ...        |  |
+  // | arg4       |  |
+  // | arg3 spill |  |  Caller's frame
+  // | arg2 spill |  |
+  // | arg1 spill |  |
+  // | Method*    | ---
+  // | RA         |
+  // | ...        |    callee saves
+  // | F7         |    f_arg7
+  // | F6         |    f_arg6
+  // | F5         |    f_arg5
+  // | F6         |    f_arg6
+  // | F5         |    f_arg5
+  // | F4         |    f_arg4
+  // | F3         |    f_arg3
+  // | F2         |    f_arg2
+  // | F1         |    f_arg1
+  // | F0         |    f_arg0
+  // | A7         |    arg7
+  // | A6         |    arg6
+  // | A5         |    arg5
+  // | A4         |    arg4
+  // | A3         |    arg3
+  // | A2         |    arg2
+  // | A1         |    arg1
+  // |            |    padding
+  // | A0/Method* |  <- sp
+  // NOTE: for Mip64, when A0 is skipped, F0 is also skipped.
+  static constexpr bool kQuickSoftFloatAbi = true;  // This is a soft float ABI.
+  static constexpr bool kQuickDoubleRegAlignedFloatBackFilled = false;
+  // These values are set to zeros because GPR and FPR register
+  // assignments for Mips64 are interleaved, which the current VisitArguments()
+  // function does not support.
+  static constexpr size_t kNumQuickGprArgs = 0;  // 7 arguments passed in GPRs.
+  static constexpr size_t kNumQuickFprArgs = 0;  // 7 arguments passed in FPRs.
+
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Fpr1Offset = 24;  // Offset of first FPR arg (F1).
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_Gpr1Offset = 80;  // Offset of first GPR arg (A1).
+  static constexpr size_t kQuickCalleeSaveFrame_RefAndArgs_LrOffset = 200;  // Offset of return address.
   static size_t GprIndexToGprOffset(uint32_t gpr_index) {
     return gpr_index * GetBytesPerGprSpillLocation(kRuntimeISA);
   }
@@ -285,7 +330,7 @@ class QuickArgumentVisitor {
         return stack_args_ + (stack_index_ * kBytesStackArgLocation);
       }
     }
-    if (gpr_index_ < kNumQuickGprArgs) {
+    if (static_cast<int32_t>(gpr_index_) < static_cast<int32_t>(kNumQuickGprArgs)) {
       return gpr_args_ + GprIndexToGprOffset(gpr_index_);
     }
     return stack_args_ + (stack_index_ * kBytesStackArgLocation);
@@ -345,7 +390,7 @@ class QuickArgumentVisitor {
           is_split_long_or_double_ = false;
           Visit();
           stack_index_++;
-          if (gpr_index_ < kNumQuickGprArgs) {
+          if (static_cast<int32_t>(gpr_index_) < static_cast<int32_t>(kNumQuickGprArgs)) {
             gpr_index_++;
           }
           break;
@@ -354,7 +399,7 @@ class QuickArgumentVisitor {
           Visit();
           stack_index_++;
           if (kQuickSoftFloatAbi) {
-            if (gpr_index_ < kNumQuickGprArgs) {
+            if (static_cast<int32_t>(gpr_index_) < static_cast<int32_t>(kNumQuickGprArgs)) {
               gpr_index_++;
             }
           } else {
@@ -389,10 +434,10 @@ class QuickArgumentVisitor {
               CHECK_EQ(kBytesStackArgLocation, 8U);
               stack_index_++;
             }
-            if (gpr_index_ < kNumQuickGprArgs) {
+            if (static_cast<int32_t>(gpr_index_) < static_cast<int32_t>(kNumQuickGprArgs)) {
               gpr_index_++;
               if (GetBytesPerGprSpillLocation(kRuntimeISA) == 4) {
-                if (gpr_index_ < kNumQuickGprArgs) {
+                if (static_cast<int32_t>(gpr_index_) < static_cast<int32_t>(kNumQuickGprArgs)) {
                   gpr_index_++;
                 }
               }
@@ -939,7 +984,8 @@ template<class T> class BuildNativeCallFrameStateMachine {
   static constexpr size_t kRegistersNeededForLong = 2;
   static constexpr size_t kRegistersNeededForDouble = 2;
   static constexpr bool kMultiRegistersAligned = true;
-  static constexpr bool kMultiRegistersWidened = false;
+  static constexpr bool kMultiFPRegistersWidened = false;
+  static constexpr bool kMultiGPRegistersWidened = false;
   static constexpr bool kAlignLongOnStack = true;
   static constexpr bool kAlignDoubleOnStack = true;
 #elif defined(__aarch64__)
@@ -950,10 +996,11 @@ template<class T> class BuildNativeCallFrameStateMachine {
   static constexpr size_t kRegistersNeededForLong = 1;
   static constexpr size_t kRegistersNeededForDouble = 1;
   static constexpr bool kMultiRegistersAligned = false;
-  static constexpr bool kMultiRegistersWidened = false;
+  static constexpr bool kMultiFPRegistersWidened = false;
+  static constexpr bool kMultiGPRegistersWidened = false;
   static constexpr bool kAlignLongOnStack = false;
   static constexpr bool kAlignDoubleOnStack = false;
-#elif defined(__mips__)
+#elif defined(__mips__) && !defined(__LP64__)
   static constexpr bool kNativeSoftFloatAbi = true;  // This is a hard float ABI.
   static constexpr size_t kNumNativeGprArgs = 4;  // 4 arguments passed in GPRs.
   static constexpr size_t kNumNativeFprArgs = 0;  // 0 arguments passed in FPRs.
@@ -961,9 +1008,23 @@ template<class T> class BuildNativeCallFrameStateMachine {
   static constexpr size_t kRegistersNeededForLong = 2;
   static constexpr size_t kRegistersNeededForDouble = 2;
   static constexpr bool kMultiRegistersAligned = true;
-  static constexpr bool kMultiRegistersWidened = true;
+  static constexpr bool kMultiFPRegistersWidened = true;
+  static constexpr bool kMultiGPRegistersWidened = false;
   static constexpr bool kAlignLongOnStack = true;
   static constexpr bool kAlignDoubleOnStack = true;
+#elif defined(__mips__) && defined(__LP64__)
+  // Let the code prepare GPRs only and we will load the FPRs with same data.
+  static constexpr bool kNativeSoftFloatAbi = true;
+  static constexpr size_t kNumNativeGprArgs = 8;
+  static constexpr size_t kNumNativeFprArgs = 0;
+
+  static constexpr size_t kRegistersNeededForLong = 1;
+  static constexpr size_t kRegistersNeededForDouble = 1;
+  static constexpr bool kMultiRegistersAligned = false;
+  static constexpr bool kMultiFPRegistersWidened = false;
+  static constexpr bool kMultiGPRegistersWidened = true;
+  static constexpr bool kAlignLongOnStack = false;
+  static constexpr bool kAlignDoubleOnStack = false;
 #elif defined(__i386__)
   // TODO: Check these!
   static constexpr bool kNativeSoftFloatAbi = false;  // Not using int registers for fp
@@ -973,7 +1034,8 @@ template<class T> class BuildNativeCallFrameStateMachine {
   static constexpr size_t kRegistersNeededForLong = 2;
   static constexpr size_t kRegistersNeededForDouble = 2;
   static constexpr bool kMultiRegistersAligned = false;  // x86 not using regs, anyways
-  static constexpr bool kMultiRegistersWidened = false;
+  static constexpr bool kMultiFPRegistersWidened = false;
+  static constexpr bool kMultiGPRegistersWidened = false;
   static constexpr bool kAlignLongOnStack = false;
   static constexpr bool kAlignDoubleOnStack = false;
 #elif defined(__x86_64__)
@@ -984,7 +1046,8 @@ template<class T> class BuildNativeCallFrameStateMachine {
   static constexpr size_t kRegistersNeededForLong = 1;
   static constexpr size_t kRegistersNeededForDouble = 1;
   static constexpr bool kMultiRegistersAligned = false;
-  static constexpr bool kMultiRegistersWidened = false;
+  static constexpr bool kMultiFPRegistersWidened = false;
+  static constexpr bool kMultiGPRegistersWidened = false;
   static constexpr bool kAlignLongOnStack = false;
   static constexpr bool kAlignDoubleOnStack = false;
 #else
@@ -1043,10 +1106,20 @@ template<class T> class BuildNativeCallFrameStateMachine {
   void AdvanceInt(uint32_t val) {
     if (HaveIntGpr()) {
       gpr_index_--;
-      PushGpr(val);
+      if (kMultiGPRegistersWidened) {
+        DCHECK_EQ(sizeof(uintptr_t), sizeof(int64_t));
+        PushGpr(static_cast<int64_t>(bit_cast<uint32_t, int32_t>(val)));
+      } else {
+        PushGpr(val);
+      }
     } else {
       stack_entries_++;
-      PushStack(val);
+      if (kMultiGPRegistersWidened) {
+        DCHECK_EQ(sizeof(uintptr_t), sizeof(int64_t));
+        PushStack(static_cast<int64_t>(bit_cast<uint32_t, int32_t>(val)));
+      } else {
+        PushStack(val);
+      }
       gpr_index_ = 0;
     }
   }
@@ -1108,7 +1181,7 @@ template<class T> class BuildNativeCallFrameStateMachine {
       if (HaveFloatFpr()) {
         fpr_index_--;
         if (kRegistersNeededForDouble == 1) {
-          if (kMultiRegistersWidened) {
+          if (kMultiFPRegistersWidened) {
             PushFpr8(bit_cast<double, uint64_t>(val));
           } else {
             // No widening, just use the bits.
@@ -1119,7 +1192,7 @@ template<class T> class BuildNativeCallFrameStateMachine {
         }
       } else {
         stack_entries_++;
-        if (kRegistersNeededForDouble == 1 && kMultiRegistersWidened) {
+        if (kRegistersNeededForDouble == 1 && kMultiFPRegistersWidened) {
           // Need to widen before storing: Note the "double" in the template instantiation.
           // Note: We need to jump through those hoops to make the compiler happy.
           DCHECK_EQ(sizeof(uintptr_t), sizeof(uint64_t));
