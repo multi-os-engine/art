@@ -572,6 +572,18 @@ void CodeGeneratorX86_64::Move(Location destination, Location source) {
     } else if (source.IsStackSlot()) {
       __ movss(destination.AsFpuRegister<XmmRegister>(),
               Address(CpuRegister(RSP), source.GetStackIndex()));
+    } else if (source.IsConstant()) {
+      HConstant* constant = source.GetConstant();
+      if (constant->IsFloatConstant()) {
+        Immediate imm(bit_cast<float, int32_t>(constant->AsFloatConstant()->GetValue()));
+        __ movl(CpuRegister(TMP), imm);
+        __ movd(destination.AsFpuRegister<XmmRegister>(), CpuRegister(TMP));
+      } else {
+        DCHECK(constant->IsDoubleConstant()) << constant->DebugName();
+        Immediate imm(bit_cast<double, int64_t>(constant->AsDoubleConstant()->GetValue()));
+        __ movq(CpuRegister(TMP), imm);
+        __ movd(destination.AsFpuRegister<XmmRegister>(), CpuRegister(TMP));
+      }
     } else {
       DCHECK(source.IsDoubleStackSlot());
       __ movsd(destination.AsFpuRegister<XmmRegister>(),
@@ -584,6 +596,16 @@ void CodeGeneratorX86_64::Move(Location destination, Location source) {
     } else if (source.IsFpuRegister()) {
       __ movss(Address(CpuRegister(RSP), destination.GetStackIndex()),
                source.AsFpuRegister<XmmRegister>());
+    } else if (source.IsConstant()) {
+      HConstant* constant = source.GetConstant();
+      if (constant->IsIntConstant()) {
+        Immediate imm(constant->AsIntConstant()->GetValue());
+        __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), imm);
+      } else {
+        DCHECK(constant->IsFloatConstant());
+        Immediate imm(bit_cast<float, int32_t>(constant->AsFloatConstant()->GetValue()));
+        __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), imm);
+      }
     } else {
       DCHECK(source.IsStackSlot());
       __ movl(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
@@ -597,6 +619,17 @@ void CodeGeneratorX86_64::Move(Location destination, Location source) {
     } else if (source.IsFpuRegister()) {
       __ movsd(Address(CpuRegister(RSP), destination.GetStackIndex()),
                source.AsFpuRegister<XmmRegister>());
+    } else if (source.IsConstant()) {
+      HConstant* constant = source.GetConstant();
+      int64_t value = constant->AsLongConstant()->GetValue();
+      if (constant->IsDoubleConstant()) {
+        value = bit_cast<double, int64_t>(constant->AsDoubleConstant()->GetValue());
+      } else {
+        DCHECK(constant->IsLongConstant());
+        value = constant->AsLongConstant()->GetValue();
+      }
+      __ movq(CpuRegister(TMP), Immediate(value));
+      __ movq(Address(CpuRegister(RSP), destination.GetStackIndex()), CpuRegister(TMP));
     } else {
       DCHECK(source.IsDoubleStackSlot());
       __ movq(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
@@ -630,8 +663,10 @@ void CodeGeneratorX86_64::Move(HInstruction* instruction,
       if (location.IsRegister()) {
         __ movq(location.AsRegister<CpuRegister>(), Immediate(value));
       } else if (location.IsDoubleStackSlot()) {
-        __ movq(CpuRegister(TMP), Immediate(value));
-        __ movq(Address(CpuRegister(RSP), location.GetStackIndex()), CpuRegister(TMP));
+        __ movl(Address(CpuRegister(RSP), location.GetStackIndex()),
+                Immediate(static_cast<int32_t>(value)));
+        __ movl(Address(CpuRegister(RSP), location.GetStackIndex() + 4),
+                Immediate(static_cast<int32_t>(value >> 32)));
       } else {
         DCHECK(location.IsConstant());
         DCHECK_EQ(location.GetConstant(), const_to_move);
@@ -2001,6 +2036,88 @@ void InstructionCodeGeneratorX86_64::VisitMul(HMul* mul) {
   }
 }
 
+void InstructionCodeGeneratorX86_64::GenerateRemFP(HRem *rem) {
+  bool is_float = rem->GetResultType() == Primitive::kPrimFloat;
+  size_t elem_size = is_float ? 4 : 8;
+  LocationSummary* locations = rem->GetLocations();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  Location out = locations->Out();
+
+  typedef void (X86_64Assembler::*mem_to_fp_fcn)(XmmRegister dst, const Address& src);
+  mem_to_fp_fcn mem_to_fp =
+    is_float ? static_cast<mem_to_fp_fcn>(&X86_64Assembler::movss)
+             : static_cast<mem_to_fp_fcn>(&X86_64Assembler::movsd);
+
+  typedef void (X86_64Assembler::* fp_to_mem_fcn)(const Address& dst, XmmRegister src);
+  fp_to_mem_fcn fp_to_mem =
+    is_float ? static_cast<fp_to_mem_fcn>(&X86_64Assembler::movss)
+             : static_cast<fp_to_mem_fcn>(&X86_64Assembler::movsd);
+
+  void (X86_64Assembler::* stack_load)(const Address& src) =
+    is_float ? &X86_64Assembler::flds : &X86_64Assembler::fldl;
+
+  void (X86_64Assembler::* stack_store)(const Address& src) =
+    is_float ? &X86_64Assembler::fsts : &X86_64Assembler::fstl;
+
+  // Create stack space for 2 elements.
+  __ subq(CpuRegister(RSP), Immediate(2 * elem_size));
+
+  X86_64Assembler *as = reinterpret_cast<X86_64Assembler*>(codegen_->GetAssembler());
+
+  // Load the values to the FP stack in reverse order, using temporaries if needed.
+  if (second.IsFpuRegister()) {
+    (as->*fp_to_mem)(Address(CpuRegister(RSP), elem_size), second.AsFpuRegister<XmmRegister>());
+    (as->*stack_load)(Address(CpuRegister(RSP), elem_size));
+  } else if (second.IsConstant()) {
+    codegen_->Move(is_float ? Location::StackSlot(elem_size) : Location::DoubleStackSlot(elem_size),
+         second);
+    (as->*stack_load)(Address(CpuRegister(RSP), elem_size));
+  } else {
+    DCHECK(is_float ? second.IsStackSlot() : second.IsDoubleStackSlot()) << second;
+    // Load right from memory.
+    (as->*stack_load)(Address(CpuRegister(RSP), second.GetStackIndex() + 2 * elem_size));
+  }
+
+  if (first.IsFpuRegister()) {
+    (as->*fp_to_mem)(Address(CpuRegister(RSP), 0), first.AsFpuRegister<XmmRegister>());
+    (as->*stack_load)(Address(CpuRegister(RSP), 0));
+  } else if (first.IsConstant()) {
+    codegen_->Move(is_float ? Location::StackSlot(0) : Location::DoubleStackSlot(0), first);
+    (as->*stack_load)(Address(CpuRegister(RSP), 0));
+  } else {
+    DCHECK(is_float ? first.IsStackSlot() : first.IsDoubleStackSlot()) << second;
+    // Load right from memory.
+    (as->*stack_load)(Address(CpuRegister(RSP), first.GetStackIndex() + 2 * elem_size));
+  }
+
+  // Loop doing FPREM until we stabilize.
+  Label retry;
+  __ Bind(&retry);
+  __ fprem();
+
+  // Move FP status to AX.
+  __ fstsw();
+
+  // And see if 0x400 is off.
+  __ andl(CpuRegister(RAX), Immediate(0x400));
+  __ j(kNotEqual, &retry);
+
+  // We have settled on the final value.  Retrieve it into an XMM register.
+  DCHECK(out.IsFpuRegister()) << out;
+  // Store FP TOS to real stack.
+  (as->*stack_store)(Address(CpuRegister(RSP), 0));
+
+  // Pop the 2 items from the FP stack.
+  __ fucompp();
+
+  // Load the value from the stack into an XMM register.
+  (as->*mem_to_fp)(out.AsFpuRegister<XmmRegister>(), Address(CpuRegister(RSP), 0));
+
+  // And remove the temporary stack space we allocated.
+  __ addq(CpuRegister(RSP), Immediate(2 * elem_size));
+}
+
 void InstructionCodeGeneratorX86_64::GenerateDivRemIntegral(HBinaryOperation* instruction) {
   DCHECK(instruction->IsDiv() || instruction->IsRem());
   Primitive::Type type = instruction->GetResultType();
@@ -2100,11 +2217,8 @@ void InstructionCodeGeneratorX86_64::VisitDiv(HDiv* div) {
 
 void LocationsBuilderX86_64::VisitRem(HRem* rem) {
   Primitive::Type type = rem->GetResultType();
-  LocationSummary::CallKind call_kind =
-      (type == Primitive::kPrimInt) || (type == Primitive::kPrimLong)
-      ? LocationSummary::kNoCall
-      : LocationSummary::kCall;
-  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(rem, call_kind);
+  LocationSummary* locations =
+    new (GetGraph()->GetArena()) LocationSummary(rem, LocationSummary::kNoCall);
 
   switch (type) {
     case Primitive::kPrimInt:
@@ -2118,11 +2232,10 @@ void LocationsBuilderX86_64::VisitRem(HRem* rem) {
 
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble: {
-      InvokeRuntimeCallingConvention calling_convention;
-      locations->SetInAt(0, Location::FpuRegisterLocation(calling_convention.GetFpuRegisterAt(0)));
-      locations->SetInAt(1, Location::FpuRegisterLocation(calling_convention.GetFpuRegisterAt(1)));
-      // The runtime helper puts the result in XMM0.
-      locations->SetOut(Location::FpuRegisterLocation(XMM0));
+      locations->SetInAt(0, Location::Any());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::RequiresFpuRegister());
+      locations->AddTemp(Location::RegisterLocation(RAX));
       break;
     }
 
@@ -2139,14 +2252,9 @@ void InstructionCodeGeneratorX86_64::VisitRem(HRem* rem) {
       GenerateDivRemIntegral(rem);
       break;
     }
-    case Primitive::kPrimFloat: {
-      __ gs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pFmodf), true));
-      codegen_->RecordPcInfo(rem, rem->GetDexPc());
-      break;
-    }
+    case Primitive::kPrimFloat:
     case Primitive::kPrimDouble: {
-      __ gs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pFmod), true));
-      codegen_->RecordPcInfo(rem, rem->GetDexPc());
+      GenerateRemFP(rem);
       break;
     }
     default:
