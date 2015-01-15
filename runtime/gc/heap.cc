@@ -2662,9 +2662,11 @@ accounting::RememberedSet* Heap::FindRememberedSetFromSpace(space::Space* space)
   return it->second;
 }
 
-void Heap::ProcessCards(TimingLogger* timings, bool use_rem_sets) {
+void Heap::ProcessCards(TimingLogger* timings, bool use_rem_sets, bool reset) {
   TimingLogger::ScopedTiming t(__FUNCTION__, timings);
   // Clear cards and keep track of cards cleared in the mod-union table.
+  bool is_mark_sweep_collector = collector_type_ == kCollectorTypeMS ||
+                                 collector_type_ == kCollectorTypeCMS;
   for (const auto& space : continuous_spaces_) {
     accounting::ModUnionTable* table = FindModUnionTableFromSpace(space);
     accounting::RememberedSet* rem_set = FindRememberedSetFromSpace(space);
@@ -2678,17 +2680,21 @@ void Heap::ProcessCards(TimingLogger* timings, bool use_rem_sets) {
           << static_cast<int>(collector_type_);
       TimingLogger::ScopedTiming t2("AllocSpaceRemSetClearCards", timings);
       rem_set->ClearCards();
-    } else if (space->GetType() != space::kSpaceTypeBumpPointerSpace) {
+    } else if (is_mark_sweep_collector) {
       TimingLogger::ScopedTiming t2("AllocSpaceClearCards", timings);
-      // No mod union table for the AllocSpace. Age the cards so that the GC knows that these cards
-      // were dirty before the GC started.
-      // TODO: Need to use atomic for the case where aged(cleaning thread) -> dirty(other thread)
-      // -> clean(cleaning thread).
-      // The races are we either end up with: Aged card, unaged card. Since we have the checkpoint
-      // roots and then we scan / update mod union tables after. We will always scan either card.
-      // If we end up with the non aged card, we scan it it in the pause.
-      card_table_->ModifyCardsAtomic(space->Begin(), space->End(), AgeCardVisitor(),
-                                     VoidFunctor());
+      if (reset) {
+        card_table_->ClearCardRange(space->Begin(), space->End());
+      } else {
+        // No mod union table for the AllocSpace. Age the cards so that the GC knows that these
+        // cards were dirty before the GC started.
+        // TODO: Need to use atomic for the case where aged(cleaning thread) -> dirty(other thread)
+        // -> clean(cleaning thread).
+        // The races are we either end up with: Aged card, unaged card. Since we have the
+        // checkpoint roots and then we scan / update mod union tables after. We will always
+        // scan either card. If we end up with the non aged card, we scan it it in the pause.
+        card_table_->ModifyCardsAtomic(space->Begin(), space->End(), AgeCardVisitor(),
+                                       VoidFunctor());
+      }
     }
   }
 }

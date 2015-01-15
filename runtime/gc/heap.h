@@ -777,8 +777,9 @@ class Heap {
   // Swap the allocation stack with the live stack.
   void SwapStacks(Thread* self);
 
-  // Clear cards and update the mod union table.
-  void ProcessCards(TimingLogger* timings, bool use_rem_sets);
+  // Clear cards and update the mod union table. If reset is true then we clear cards instead of
+  // ageing them.
+  void ProcessCards(TimingLogger* timings, bool use_rem_sets, bool reset);
 
   // Push an object onto the allocation stack.
   void PushOnAllocationStack(Thread* self, mirror::Object** obj)
