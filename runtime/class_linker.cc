@@ -2343,6 +2343,7 @@ mirror::Class* ClassLinker::DefineClass(Thread* self, const char* descriptor, si
     return nullptr;
   }
   CHECK(klass->IsLoaded());
+
   // Link the class (if necessary)
   CHECK(!klass->IsResolved());
   // TODO: Use fast jobjects?
@@ -2361,6 +2362,12 @@ mirror::Class* ClassLinker::DefineClass(Thread* self, const char* descriptor, si
   CHECK(new_class->IsResolved()) << descriptor;
 
   Handle<mirror::Class> new_class_h(hs.NewHandle(new_class));
+
+  // If instrumentation updated entrypoints while we were loading this class,
+  // it has been skipped. We need to update entrypoints now, otherwise we
+  // will not execute with the right entrypoints. In the case of debugging,
+  // we would miss events if we do not force the use of interpreter.
+  Runtime::Current()->GetInstrumentation()->InstallStubsForClass(new_class_h.Get());
 
   /*
    * We send CLASS_PREPARE events to the debugger from here.  The
