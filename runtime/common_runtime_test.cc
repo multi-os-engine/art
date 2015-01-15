@@ -20,6 +20,7 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <ScopedLocalRef.h>
+#include <stdlib.h>
 
 #include "../../external/icu/icu4c/source/common/unicode/uvernum.h"
 #include "base/macros.h"
@@ -43,6 +44,7 @@
 #include "well_known_classes.h"
 
 int main(int argc, char **argv) {
+  setenv("ANDROID_LOG_TAGS", "*:e", 1);  // Suppress log messages < ERROR.
   art::InitLogging(argv);
   LOG(::art::INFO) << "Running main() from common_runtime_test.cc...";
   testing::InitGoogleTest(&argc, argv);
