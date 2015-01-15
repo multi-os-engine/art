@@ -2075,6 +2075,81 @@ void InstructionCodeGeneratorX86::VisitMul(HMul* mul) {
   }
 }
 
+void InstructionCodeGeneratorX86::GenerateRemFP(HRem *rem) {
+  bool is_float = rem->GetResultType() == Primitive::kPrimFloat;
+  size_t elem_size = is_float ? 4 : 8;
+  LocationSummary* locations = rem->GetLocations();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  Location out = locations->Out();
+
+  typedef void (X86Assembler::*mem_to_fp_fcn)(XmmRegister dst, const Address& src);
+  mem_to_fp_fcn mem_to_fp =
+    is_float ? static_cast<mem_to_fp_fcn>(&X86Assembler::movss)
+             : static_cast<mem_to_fp_fcn>(&X86Assembler::movsd);
+
+  typedef void (X86Assembler::* fp_to_mem_fcn)(const Address& dst, XmmRegister src);
+  fp_to_mem_fcn fp_to_mem =
+    is_float ? static_cast<fp_to_mem_fcn>(&X86Assembler::movss)
+             : static_cast<fp_to_mem_fcn>(&X86Assembler::movsd);
+
+  void (X86Assembler::* stack_load)(const Address& src) =
+    is_float ? &X86Assembler::flds : &X86Assembler::fldl;
+
+  void (X86Assembler::* stack_store)(const Address& src) =
+    is_float ? &X86Assembler::fsts : &X86Assembler::fstl;
+
+  // Create stack space for 2 elements.
+  __ subl(ESP, Immediate(2 * elem_size));
+
+  X86Assembler *as = reinterpret_cast<X86Assembler*>(codegen_->GetAssembler());
+
+  // Load the values to the FP stack in reverse order, using temporaries if needed.
+  if (second.IsFpuRegister()) {
+    (as->*fp_to_mem)(Address(ESP, elem_size), second.AsFpuRegister<XmmRegister>());
+    (as->*stack_load)(Address(ESP, elem_size));
+  } else {
+    DCHECK(is_float ? second.IsStackSlot() : second.IsDoubleStackSlot()) << second;
+    // Load right from memory.
+    (as->*stack_load)(Address(ESP, second.GetStackIndex() + 2 * elem_size));
+  }
+
+  if (first.IsFpuRegister()) {
+    (as->*fp_to_mem)(Address(ESP, 0), first.AsFpuRegister<XmmRegister>());
+    (as->*stack_load)(Address(ESP, 0));
+  } else {
+    DCHECK(is_float ? first.IsStackSlot() : first.IsDoubleStackSlot()) << second;
+    // Load right from memory.
+    (as->*stack_load)(Address(ESP, first.GetStackIndex() + 2 * elem_size));
+  }
+
+  // Loop doing FPREM until we stabilize.
+  Label retry;
+  __ Bind(&retry);
+  __ fprem();
+
+  // Move FP status to AX.
+  __ fstsw();
+
+  // And see if 0x400 is off.
+  __ andl(EAX, Immediate(0x400));
+  __ j(kNotEqual, &retry);
+
+  // We have settled on the final value.  Retrieve it into an XMM register.
+  DCHECK(out.IsFpuRegister()) << out;
+  // Store FP TOS to real stack.
+  (as->*stack_store)(Address(ESP, 0));
+
+  // Pop the 2 items from the FP stack.
+  __ fucompp();
+
+  // Load the value from the stack into an XMM register.
+  (as->*mem_to_fp)(out.AsFpuRegister<XmmRegister>(), Address(ESP, 0));
+
+  // And remove the temporary stack space we allocated.
+  __ addl(ESP, Immediate(2 * elem_size));
+}
+
 void InstructionCodeGeneratorX86::GenerateDivRemIntegral(HBinaryOperation* instruction) {
   DCHECK(instruction->IsDiv() || instruction->IsRem());
 
@@ -2208,10 +2283,8 @@ void InstructionCodeGeneratorX86::VisitDiv(HDiv* div) {
 
 void LocationsBuilderX86::VisitRem(HRem* rem) {
   Primitive::Type type = rem->GetResultType();
-  LocationSummary::CallKind call_kind = type == Primitive::kPrimInt
-      ? LocationSummary::kNoCall
-      : LocationSummary::kCall;
-  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(rem, call_kind);
+  LocationSummary* locations =
+    new (GetGraph()->GetArena()) LocationSummary(rem, LocationSummary::kNoCall);
 
   switch (type) {
     case Primitive::kPrimInt: {
@@ -2230,24 +2303,12 @@ void LocationsBuilderX86::VisitRem(HRem* rem) {
       locations->SetOut(Location::RegisterPairLocation(EAX, EDX));
       break;
     }
+    case Primitive::kPrimDouble:
     case Primitive::kPrimFloat: {
-      InvokeRuntimeCallingConvention calling_convention;
-      // x86 floating-point parameters are passed through core registers (EAX, ECX).
-      locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
-      locations->SetInAt(1, Location::RegisterLocation(calling_convention.GetRegisterAt(1)));
-      // The runtime helper puts the result in XMM0.
-      locations->SetOut(Location::FpuRegisterLocation(XMM0));
-      break;
-    }
-    case Primitive::kPrimDouble: {
-      InvokeRuntimeCallingConvention calling_convention;
-      // x86 floating-point parameters are passed through core registers (EAX_ECX, EDX_EBX).
-      locations->SetInAt(0, Location::RegisterPairLocation(
-          calling_convention.GetRegisterAt(0), calling_convention.GetRegisterAt(1)));
-      locations->SetInAt(1, Location::RegisterPairLocation(
-          calling_convention.GetRegisterAt(2), calling_convention.GetRegisterAt(3)));
-      // The runtime helper puts the result in XMM0.
-      locations->SetOut(Location::FpuRegisterLocation(XMM0));
+      locations->SetInAt(0, Location::Any());
+      locations->SetInAt(1, Location::Any());
+      locations->SetOut(Location::RequiresFpuRegister());
+      locations->AddTemp(Location::RegisterLocation(EAX));
       break;
     }
 
@@ -2264,14 +2325,9 @@ void InstructionCodeGeneratorX86::VisitRem(HRem* rem) {
       GenerateDivRemIntegral(rem);
       break;
     }
-    case Primitive::kPrimFloat: {
-      __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pFmodf)));
-      codegen_->RecordPcInfo(rem, rem->GetDexPc());
-      break;
-    }
+    case Primitive::kPrimFloat:
     case Primitive::kPrimDouble: {
-      __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pFmod)));
-      codegen_->RecordPcInfo(rem, rem->GetDexPc());
+      GenerateRemFP(rem);
       break;
     }
     default:
