@@ -104,7 +104,7 @@ class CardTable {
   template <typename Visitor>
   size_t Scan(SpaceBitmap<kObjectAlignment>* bitmap, uint8_t* scan_begin, uint8_t* scan_end,
               const Visitor& visitor,
-              const uint8_t minimum_age = kCardDirty) const
+              const uint8_t minimum_age = kCardDirty, bool clear = false) const
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

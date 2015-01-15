@@ -694,12 +694,12 @@ class CardScanTask : public MarkStackTask<false> {
   CardScanTask(ThreadPool* thread_pool, MarkSweep* mark_sweep,
                accounting::ContinuousSpaceBitmap* bitmap,
                uint8_t* begin, uint8_t* end, uint8_t minimum_age, size_t mark_stack_size,
-               Object** mark_stack_obj)
+               Object** mark_stack_obj, bool clear)
       : MarkStackTask<false>(thread_pool, mark_sweep, mark_stack_size, mark_stack_obj),
         bitmap_(bitmap),
         begin_(begin),
         end_(end),
-        minimum_age_(minimum_age) {
+        minimum_age_(minimum_age), clear_(clear) {
   }
 
  protected:
@@ -707,6 +707,7 @@ class CardScanTask : public MarkStackTask<false> {
   uint8_t* const begin_;
   uint8_t* const end_;
   const uint8_t minimum_age_;
+  bool clear_;
 
   virtual void Finalize() {
     delete this;
@@ -715,7 +716,7 @@ class CardScanTask : public MarkStackTask<false> {
   virtual void Run(Thread* self) NO_THREAD_SAFETY_ANALYSIS {
     ScanObjectParallelVisitor visitor(this);
     accounting::CardTable* card_table = mark_sweep_->GetHeap()->GetCardTable();
-    size_t cards_scanned = card_table->Scan(bitmap_, begin_, end_, visitor, minimum_age_);
+    size_t cards_scanned = card_table->Scan(bitmap_, begin_, end_, visitor, minimum_age_, clear_);
     VLOG(heap) << "Parallel scanning cards " << reinterpret_cast<void*>(begin_) << " - "
         << reinterpret_cast<void*>(end_) << " = " << cards_scanned;
     // Finish by emptying our local mark stack.
@@ -754,9 +755,17 @@ void MarkSweep::ScanGrayObjects(bool paused, uint8_t minimum_age) {
     DCHECK_NE(mark_stack_tasks, 0U);
     const size_t mark_stack_delta = std::min(CardScanTask::kMaxSize / 2,
                                              mark_stack_size / mark_stack_tasks + 1);
+    // In pause phase, the dirty scards are scanned in parallel. We clear the dirty cards as well
+    // to avoid accumulating them to increase card scanning load in the following GC cycles.
+    bool clear = true;
     for (const auto& space : GetHeap()->GetContinuousSpaces()) {
       if (space->GetMarkBitmap() == nullptr) {
         continue;
+      }
+      // Keep dirty cards of image space and zygote space in order to track all the references
+      // to the alloc spaces.
+      if(space->IsZygoteSpace() || space->IsImageSpace()) {
+        clear = false;
       }
       uint8_t* card_begin = space->Begin();
       uint8_t* card_end = space->End();
@@ -784,7 +793,7 @@ void MarkSweep::ScanGrayObjects(bool paused, uint8_t minimum_age) {
         // Add the new task to the thread pool.
         auto* task = new CardScanTask(thread_pool, this, space->GetMarkBitmap(), card_begin,
                                       card_begin + card_increment, minimum_age,
-                                      mark_stack_increment, mark_stack_end);
+                                      mark_stack_increment, mark_stack_end, clear);
         thread_pool->AddTask(self, task);
         card_begin += card_increment;
       }
