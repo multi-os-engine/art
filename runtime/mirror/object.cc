@@ -141,8 +141,8 @@ uint32_t Object::GenerateIdentityHashCode() {
   do {
     expected_value = seed.LoadRelaxed();
     new_value = expected_value * 1103515245 + 12345;
-  } while ((expected_value & LockWord::kHashMask) == 0 ||
-      !seed.CompareExchangeWeakRelaxed(expected_value, new_value));
+  } while (!seed.CompareExchangeWeakRelaxed(expected_value, new_value) ||
+      (expected_value & LockWord::kHashMask) == 0);
   return expected_value & LockWord::kHashMask;
 }
 
