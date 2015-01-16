@@ -19,6 +19,8 @@
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
+#include "intrinsics.h"
+#include "intrinsics_arm64.h"
 #include "mirror/array-inl.h"
 #include "mirror/art_method.h"
 #include "mirror/class.h"
@@ -39,9 +41,6 @@ namespace art {
 
 namespace arm64 {
 
-// TODO: Tune the use of Load-Acquire, Store-Release vs Data Memory Barriers.
-// For now we prefer the use of load-acquire, store-release over explicit memory barriers.
-static constexpr bool kUseAcquireRelease = true;
 static constexpr bool kExplicitStackOverflowCheck = false;
 static constexpr size_t kHeapRefSize = sizeof(mirror::HeapReference<mirror::Object>);
 static constexpr int kCurrentMethodStackOffset = 0;
@@ -202,6 +201,22 @@ Location LocationFrom(const FPRegister& fpreg) {
   return Location::FpuRegisterLocation(fpreg.code());
 }
 
+Operand OperandFromMemOperand(const MemOperand& mem_op) {
+  if (mem_op.IsImmediateOffset()) {
+    return Operand(mem_op.offset());
+  } else {
+    DCHECK(mem_op.IsRegisterOffset());
+    if (mem_op.extend() != NO_EXTEND) {
+      return Operand(mem_op.regoffset(), mem_op.extend(), mem_op.shift_amount());
+    } else if (mem_op.shift() != NO_SHIFT) {
+      return Operand(mem_op.regoffset(), mem_op.shift(), mem_op.shift_amount());
+    } else {
+      LOG(FATAL) << "Should not reach here";
+      UNREACHABLE();
+    }
+  }
+}
+
 }  // namespace
 
 inline Condition ARM64Condition(IfCondition cond) {
@@ -263,20 +278,6 @@ Location InvokeRuntimeCallingConvention::GetReturnLocation(Primitive::Type retur
 
 #define __ down_cast<CodeGeneratorARM64*>(codegen)->GetVIXLAssembler()->
 #define QUICK_ENTRY_POINT(x) QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, x).Int32Value()
-
-class SlowPathCodeARM64 : public SlowPathCode {
- public:
-  SlowPathCodeARM64() : entry_label_(), exit_label_() {}
-
-  vixl::Label* GetEntryLabel() { return &entry_label_; }
-  vixl::Label* GetExitLabel() { return &exit_label_; }
-
- private:
-  vixl::Label entry_label_;
-  vixl::Label exit_label_;
-
-  DISALLOW_COPY_AND_ASSIGN(SlowPathCodeARM64);
-};
 
 class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
@@ -1002,12 +1003,11 @@ void CodeGeneratorARM64::LoadAcquire(Primitive::Type type,
   UseScratchRegisterScope temps(GetVIXLAssembler());
   Register temp_base = temps.AcquireX();
 
-  DCHECK(!src.IsRegisterOffset());
   DCHECK(!src.IsPreIndex());
   DCHECK(!src.IsPostIndex());
 
   // TODO(vixl): Let the MacroAssembler handle MemOperand.
-  __ Add(temp_base, src.base(), src.offset());
+  __ Add(temp_base, src.base(), OperandFromMemOperand(src));
   MemOperand base = MemOperand(temp_base);
   switch (type) {
     case Primitive::kPrimBoolean:
@@ -1076,12 +1076,12 @@ void CodeGeneratorARM64::StoreRelease(Primitive::Type type,
   UseScratchRegisterScope temps(GetVIXLAssembler());
   Register temp_base = temps.AcquireX();
 
-  DCHECK(!dst.IsRegisterOffset());
   DCHECK(!dst.IsPreIndex());
   DCHECK(!dst.IsPostIndex());
 
   // TODO(vixl): Let the MacroAssembler handle this.
-  __ Add(temp_base, dst.base(), dst.offset());
+  Operand op = OperandFromMemOperand(dst);
+  __ Add(temp_base, dst.base(), op);
   MemOperand base = MemOperand(temp_base);
   switch (type) {
     case Primitive::kPrimBoolean:
@@ -1963,19 +1963,37 @@ void InstructionCodeGeneratorARM64::VisitInvokeInterface(HInvokeInterface* invok
 }
 
 void LocationsBuilderARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+  IntrinsicLocationsBuilderARM64 intrinsic(GetGraph()->GetArena());
+  if (intrinsic.TryDispatch(invoke)) {
+    return;
+  }
+
   HandleInvoke(invoke);
 }
 
 void LocationsBuilderARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
+  IntrinsicLocationsBuilderARM64 intrinsic(GetGraph()->GetArena());
+  if (intrinsic.TryDispatch(invoke)) {
+    return;
+  }
+
   HandleInvoke(invoke);
 }
 
-void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
-  Register temp = WRegisterFrom(invoke->GetLocations()->GetTemp(0));
+static bool TryGenerateIntrinsicCode(HInvoke* invoke, CodeGeneratorARM64* codegen) {
+  if (invoke->GetLocations()->Intrinsified()) {
+    IntrinsicCodeGeneratorARM64 intrinsic(codegen);
+    intrinsic.Dispatch(invoke);
+    return true;
+  }
+  return false;
+}
+
+void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Register temp) {
   // Make sure that ArtMethod* is passed in W0 as per the calling convention
   DCHECK(temp.Is(w0));
   size_t index_in_cache = mirror::Array::DataOffset(kHeapRefSize).SizeValue() +
-    invoke->GetDexMethodIndex() * kHeapRefSize;
+      invoke->GetDexMethodIndex() * kHeapRefSize;
 
   // TODO: Implement all kinds of calls:
   // 1) boot -> boot
@@ -1985,22 +2003,35 @@ void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDir
   // Currently we implement the app -> app logic, which looks up in the resolve cache.
 
   // temp = method;
-  codegen_->LoadCurrentMethod(temp);
+  LoadCurrentMethod(temp);
   // temp = temp->dex_cache_resolved_methods_;
   __ Ldr(temp, HeapOperand(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset()));
   // temp = temp[index_in_cache];
   __ Ldr(temp, HeapOperand(temp, index_in_cache));
   // lr = temp->entry_point_from_quick_compiled_code_;
   __ Ldr(lr, HeapOperand(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
-                          kArm64WordSize)));
+      kArm64WordSize)));
   // lr();
   __ Blr(lr);
 
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
-  DCHECK(!codegen_->IsLeafMethod());
+  RecordPcInfo(invoke, invoke->GetDexPc());
+  DCHECK(!IsLeafMethod());
+}
+
+void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
+  if (TryGenerateIntrinsicCode(invoke, codegen_)) {
+    return;
+  }
+
+  Register temp = WRegisterFrom(invoke->GetLocations()->GetTemp(0));
+  codegen_->GenerateStaticOrDirectCall(invoke, temp);
 }
 
 void InstructionCodeGeneratorARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+  if (TryGenerateIntrinsicCode(invoke, codegen_)) {
+    return;
+  }
+
   LocationSummary* locations = invoke->GetLocations();
   Location receiver = locations->InAt(0);
   Register temp = WRegisterFrom(invoke->GetLocations()->GetTemp(0));
