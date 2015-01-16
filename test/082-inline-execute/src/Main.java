@@ -85,6 +85,9 @@ public class Main {
 
     // 2. Result should not be null.
     Assert.assertNotNull(Thread.currentThread());
+
+    // Actually try to do something.
+    Thread.currentThread().yield();
   }
 
   public static void test_String_length() {
@@ -161,11 +164,20 @@ public class Main {
       Assert.fail();
     } catch (StringIndexOutOfBoundsException expected) {
     }
+    try {
+        test_String_charAtExc4(null);
+        Assert.fail();
+    } catch (NullPointerException expected) {
+    }
   }
 
   private static void test_String_charAtExc3() {
     String testStr = "Now is the time";
     Assert.assertEquals('N', testStr.charAt(-1));
+  }
+
+  private static void test_String_charAtExc4(String s) {
+    Assert.assertEquals('N', s.charAt(1));
   }
 
   static int start;

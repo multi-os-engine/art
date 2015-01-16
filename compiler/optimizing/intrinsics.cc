@@ -217,6 +217,8 @@ static Intrinsics GetIntrinsic(InlineMethod method) {
           return is_volatile ? Intrinsics::kUnsafeGetVolatile : Intrinsics::kUnsafeGet;
         case Primitive::Type::kPrimLong:
           return is_volatile ? Intrinsics::kUnsafeGetLongVolatile : Intrinsics::kUnsafeGetLong;
+        case Primitive::Type::kPrimNot:
+          return is_volatile ? Intrinsics::kUnsafeGetObjectVolatile : Intrinsics::kUnsafeGetObject;
         default:
           LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
           UNREACHABLE();

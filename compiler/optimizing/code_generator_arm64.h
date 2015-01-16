@@ -32,6 +32,10 @@ namespace arm64 {
 class CodeGeneratorARM64;
 class SlowPathCodeARM64;
 
+// TODO: Tune the use of Load-Acquire, Store-Release vs Data Memory Barriers.
+// For now we prefer the use of load-acquire, store-release over explicit memory barriers.
+static constexpr bool kUseAcquireRelease = true;
+
 // Use a local definition to prevent copying mistakes.
 static constexpr size_t kArm64WordSize = kArm64PointerSize;
 

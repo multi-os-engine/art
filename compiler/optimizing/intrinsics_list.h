@@ -69,6 +69,8 @@
   V(UnsafeCASObject, kDirect) \
   V(UnsafeGet, kDirect) \
   V(UnsafeGetVolatile, kDirect) \
+  V(UnsafeGetObject, kDirect) \
+  V(UnsafeGetObjectVolatile, kDirect) \
   V(UnsafeGetLong, kDirect) \
   V(UnsafeGetLongVolatile, kDirect) \
   V(UnsafePut, kDirect) \
