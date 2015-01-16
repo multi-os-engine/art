@@ -157,6 +157,11 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     }
   }
 
+  if (UNLIKELY(self->IsExceptionPending())) {
+    // During deoptimization, we may continue the execution of the method with a pending exception.
+    HANDLE_PENDING_EXCEPTION();
+  }
+
   // Jump to first instruction.
   ADVANCE(0);
   UNREACHABLE_CODE_CHECK();
@@ -236,6 +241,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(MOVE_EXCEPTION) {
     Throwable* exception = self->GetException(nullptr);
+    DCHECK(exception != nullptr) << "No pending exception on MOVE_EXCEPTION instruction";
     shadow_frame.SetVRegReference(inst->VRegA_11x(inst_data), exception);
     self->ClearException();
     ADVANCE(1);
