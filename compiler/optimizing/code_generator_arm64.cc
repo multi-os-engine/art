@@ -19,6 +19,8 @@
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
+#include "intrinsics.h"
+#include "intrinsics_arm64.h"
 #include "mirror/array-inl.h"
 #include "mirror/art_method.h"
 #include "mirror/class.h"
@@ -1963,14 +1965,37 @@ void InstructionCodeGeneratorARM64::VisitInvokeInterface(HInvokeInterface* invok
 }
 
 void LocationsBuilderARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+  IntrinsicLocationsBuilderARM64 intrinsic(GetGraph()->GetArena());
+  if (intrinsic.TryDispatch(invoke)) {
+    return;
+  }
+
   HandleInvoke(invoke);
 }
 
 void LocationsBuilderARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
+  IntrinsicLocationsBuilderARM64 intrinsic(GetGraph()->GetArena());
+  if (intrinsic.TryDispatch(invoke)) {
+    return;
+  }
+
   HandleInvoke(invoke);
 }
 
+static bool TryGenerateIntrinsicCode(HInvoke* invoke, CodeGeneratorARM64* codegen) {
+  if (invoke->GetLocations()->Intrinsified()) {
+    IntrinsicCodeGeneratorARM64 intrinsic(codegen);
+    intrinsic.Dispatch(invoke);
+    return true;
+  }
+  return false;
+}
+
 void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
+  if (TryGenerateIntrinsicCode(invoke, codegen_)) {
+    return;
+  }
+
   Register temp = WRegisterFrom(invoke->GetLocations()->GetTemp(0));
   // Make sure that ArtMethod* is passed in W0 as per the calling convention
   DCHECK(temp.Is(w0));
@@ -2001,6 +2026,10 @@ void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDir
 }
 
 void InstructionCodeGeneratorARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
+  if (TryGenerateIntrinsicCode(invoke, codegen_)) {
+    return;
+  }
+
   LocationSummary* locations = invoke->GetLocations();
   Location receiver = locations->InAt(0);
   Register temp = WRegisterFrom(invoke->GetLocations()->GetTemp(0));
