@@ -367,7 +367,7 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
                         GetCompilerDriver(),
                         &compilation_stats_);
 
-  VLOG(compiler) << "Building " << PrettyMethod(method_idx, dex_file);
+  LOG(INFO) << "Building " << PrettyMethod(method_idx, dex_file);
   HGraph* graph = builder.BuildGraph(*code_item);
   if (graph == nullptr) {
     CHECK(!shouldCompile) << "Could not build graph in optimizing compiler";
