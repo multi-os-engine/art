@@ -85,6 +85,9 @@ public class Main {
 
     // 2. Result should not be null.
     Assert.assertNotNull(Thread.currentThread());
+
+    // Actually try to do something.
+    Thread.currentThread().yield();
   }
 
   public static void test_String_length() {
