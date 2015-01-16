@@ -252,8 +252,17 @@ void ImageWriter::SetImageBinSlot(mirror::Object* object, BinSlot bin_slot) {
       LOG(FATAL) << "Fat locked object " << object << " found during object copy";
       break;
     }
-    case LockWord::kThinLocked: {
-      LOG(FATAL) << "Thin locked object " << object << " found during object copy";
+    case LockWord::kBiasLocked: {
+      if (!lw.IsBiasLockUnlocked()) {
+        LOG(FATAL) << "Bias locked object " << object << "found during object copy";
+      }
+      break;
+    }
+    case LockWord::kThinLockBiasable:
+    case LockWord::kThinLockNotBiasable: {
+      if (!lw.IsThinLockUnlocked()) {
+        LOG(FATAL) << "Thin locked object " << object << " found during object copy";
+      }
       break;
     }
     case LockWord::kUnlocked:

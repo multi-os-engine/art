@@ -117,6 +117,7 @@ RUNTIME_GTEST_COMMON_SRC_FILES := \
   runtime/gc/space/large_object_space_test.cc \
   runtime/gc/task_processor_test.cc \
   runtime/gtest_test.cc \
+  runtime/biased_lock_test.cc \
   runtime/handle_scope_test.cc \
   runtime/indenter_test.cc \
   runtime/indirect_reference_table_test.cc \

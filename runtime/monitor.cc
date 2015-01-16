@@ -143,9 +143,20 @@ bool Monitor::Install(Thread* self) {
   // Propagate the lock state.
   LockWord lw(GetObject()->GetLockWord(false));
   switch (lw.GetState()) {
-    case LockWord::kThinLocked: {
+    case LockWord::kBiasLocked: {
+      CHECK_EQ(owner_->GetThreadId(), lw.BiasLockOwner());
+      lock_count_ = lw.BiasLockCount() - 1;
+      CHECK_GE(lock_count_, 0);
+      break;
+    }
+    case LockWord::kThinLockBiasable: {
       CHECK_EQ(owner_->GetThreadId(), lw.ThinLockOwner());
-      lock_count_ = lw.ThinLockCount();
+      lock_count_ = lw.ThinLockBiasableCount() - 1;
+      break;
+    }
+    case LockWord::kThinLockNotBiasable: {
+      CHECK_EQ(owner_->GetThreadId(), lw.ThinLockOwner());
+      lock_count_ = lw.ThinLockNotBiasableCount() - 1;
       break;
     }
     case LockWord::kHashCode: {
@@ -345,12 +356,16 @@ void Monitor::FailedUnlock(mirror::Object* o, Thread* expected_owner, Thread* fo
                                          PrettyTypeOf(o).c_str(),
                                          expected_owner_string.c_str());
     } else {
-      // Race: the original read found an owner but now there is none
-      ThrowIllegalMonitorStateExceptionF("unlock of monitor owned by '%s' on object of type '%s'"
-                                         " (where now the monitor appears unowned) on thread '%s'",
-                                         found_owner_string.c_str(),
-                                         PrettyTypeOf(o).c_str(),
-                                         expected_owner_string.c_str());
+        // Race: the original read found an owner but now there is none
+        ThrowIllegalMonitorStateExceptionF(found_owner != expected_owner
+                                           ? "unlock of monitor owned by '%s' on object of type"
+                                             "'%s' (where now the monitor appears unowned) on"
+                                             "thread '%s'"
+                                           : "unlock of monitor owned by '%s' on object of type"
+                                             "'%s' on thread '%s' when the monitor is not locked",
+                                           found_owner_string.c_str(),
+                                           PrettyTypeOf(o).c_str(),
+                                           expected_owner_string.c_str());
     }
   } else {
     if (found_owner == NULL) {
@@ -606,11 +621,11 @@ bool Monitor::Deflate(Thread* self, mirror::Object* obj) {
         return false;
       }
       // Can't deflate if our lock count is too high.
-      if (monitor->lock_count_ > LockWord::kThinLockMaxCount) {
+      if (monitor->lock_count_ > LockWord::kThinLockNotBiasableMaxCount) {
         return false;
       }
       // Deflate to a thin lock.
-      obj->SetLockWord(LockWord::FromThinLockId(owner->GetThreadId(), monitor->lock_count_), false);
+      obj->SetLockWord(LockWord::FromThinLockNotBiasableId(owner->GetThreadId(), monitor->lock_count_ + 1), false);
       VLOG(monitor) << "Deflated " << obj << " to thin lock " << owner->GetTid() << " / "
           << monitor->lock_count_;
     } else if (monitor->HasHashCode()) {
@@ -649,10 +664,13 @@ void Monitor::Inflate(Thread* self, Thread* owner, mirror::Object* obj, int32_t 
   }
 }
 
-void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWord lock_word,
-                                uint32_t hash_code) {
-  DCHECK_EQ(lock_word.GetState(), LockWord::kThinLocked);
-  uint32_t owner_thread_id = lock_word.ThinLockOwner();
+void Monitor::InflateBiasOrThinLocked(Thread* self, Handle<mirror::Object> obj, LockWord lock_word,
+                                      uint32_t hash_code) {
+  DCHECK(lock_word.GetState() == LockWord::kBiasLocked ||
+         lock_word.GetState() == LockWord::kThinLockBiasable ||
+         lock_word.GetState() == LockWord::kThinLockNotBiasable);
+  uint32_t owner_thread_id = (lock_word.GetState() == LockWord::kBiasLocked) ?
+                             lock_word.BiasLockOwner() : lock_word.ThinLockOwner();
   if (owner_thread_id == self->GetThreadId()) {
     // We own the monitor, we can easily inflate it.
     Inflate(self, self, obj.Get(), hash_code);
@@ -669,8 +687,15 @@ void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWo
     if (owner != nullptr) {
       // We succeeded in suspending the thread, check the lock's status didn't change.
       lock_word = obj->GetLockWord(true);
-      if (lock_word.GetState() == LockWord::kThinLocked &&
-          lock_word.ThinLockOwner() == owner_thread_id) {
+      if ((lock_word.GetState() == LockWord::kBiasLocked &&
+           lock_word.BiasLockOwner() == owner_thread_id &&
+           lock_word.BiasLockCount() > 0) ||
+          (lock_word.GetState() == LockWord::kThinLockBiasable &&
+           lock_word.ThinLockOwner() == owner_thread_id &&
+           lock_word.ThinLockBiasableCount() > 0) ||
+          (lock_word.GetState() == LockWord::kThinLockNotBiasable &&
+           lock_word.ThinLockOwner() == owner_thread_id &&
+           lock_word.ThinLockNotBiasableCount() > 0))  {
         // Go ahead and inflate the lock.
         Inflate(self, owner, obj.Get(), hash_code);
       }
@@ -692,6 +717,55 @@ static mirror::Object* FakeUnlock(mirror::Object* obj)
   return obj;
 }
 
+// Try to revoke biased lock to thin lock or unlocked. May fail spuriously.
+void Monitor::TryRevokeBiasLocked(Thread* self, Handle<mirror::Object> obj, LockWord lock_word) {
+  DCHECK_EQ(lock_word.GetState(), LockWord::kBiasLocked);
+  uint32_t owner_thread_id = lock_word.BiasLockOwner();
+  uint32_t thread_id = self->GetThreadId();
+  if (owner_thread_id == thread_id) {
+    // We own the biased lock, we can easily revoke it.
+    uint32_t lock_count = lock_word.BiasLockCount();
+    if (lock_count > 0) {
+      LockWord thin_locked(LockWord::FromThinLockNotBiasableId(owner_thread_id, lock_count));
+      obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked);
+    } else {
+      LockWord thin_locked(LockWord::FromThinLockNotBiasableId(ThreadList::kInvalidThreadId, 0));
+      obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked);
+    }
+  } else {
+    ThreadList* thread_list = Runtime::Current()->GetThreadList();
+    // Suspend the owner, inflate. First change to blocked and give up mutator_lock_.
+    self->SetMonitorEnterObject(obj.Get());
+    bool timed_out;
+    Thread* owner;
+    {
+      ScopedThreadStateChange tsc(self, kBlocked);
+      // Take suspend thread lock to avoid races with threads trying to suspend this one.
+      owner = thread_list->SuspendThreadByThreadId(owner_thread_id, false, &timed_out);
+    }
+    if (owner != nullptr) {
+      // We succeeded in suspending the thread, check the lock's status didn't change.
+      lock_word = obj->GetLockWord(true);
+      if (lock_word.GetState() == LockWord::kBiasLocked) {
+        uint32_t lock_count = lock_word.BiasLockCount();
+        if (lock_count > 0) {
+          LockWord thin_locked(LockWord::FromThinLockNotBiasableId(owner_thread_id, lock_count));
+          obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked);
+        } else {
+          LockWord thin_locked(LockWord::FromThinLockNotBiasableId(ThreadList::kInvalidThreadId, 0));
+          obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked);
+        }
+      }
+      thread_list->Resume(owner, false);
+    } else {
+      if (!timed_out) {
+        obj->CasLockWordWeakSequentiallyConsistent(lock_word, LockWord());
+      }
+    }
+    self->SetMonitorEnterObject(nullptr);
+  }
+}
+
 mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj) {
   DCHECK(self != NULL);
   DCHECK(obj != NULL);
@@ -704,42 +778,141 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj) {
     LockWord lock_word = h_obj->GetLockWord(true);
     switch (lock_word.GetState()) {
       case LockWord::kUnlocked: {
-        LockWord thin_locked(LockWord::FromThinLockId(thread_id, 0));
+        LockWord thin_locked(LockWord::FromThinLockBiasableId(thread_id, 0, 1));
         if (h_obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked)) {
-          // CasLockWord enforces more than the acquire ordering we need here.
           return h_obj.Get();  // Success!
         }
         continue;  // Go again.
       }
-      case LockWord::kThinLocked: {
-        uint32_t owner_thread_id = lock_word.ThinLockOwner();
+      case LockWord::kBiasLocked: {
+        uint32_t owner_thread_id = lock_word.BiasLockOwner();
         if (owner_thread_id == thread_id) {
           // We own the lock, increase the recursion count.
-          uint32_t new_count = lock_word.ThinLockCount() + 1;
-          if (LIKELY(new_count <= LockWord::kThinLockMaxCount)) {
-            LockWord thin_locked(LockWord::FromThinLockId(thread_id, new_count));
-            h_obj->SetLockWord(thin_locked, true);
+          uint32_t new_count = lock_word.BiasLockCount() + 1;
+          if (LIKELY(new_count <= LockWord::kBiasLockMaxCount)) {
+            LockWord bias_locked(LockWord::FromBiasLockId(thread_id, new_count));
+            h_obj->SetLockWord(bias_locked, false);
             return h_obj.Get();  // Success!
           } else {
             // We'd overflow the recursion count, so inflate the monitor.
-            InflateThinLocked(self, h_obj, lock_word, 0);
+            InflateBiasOrThinLocked(self, h_obj, lock_word, 0);
           }
         } else {
           // Contention.
-          contention_count++;
-          Runtime* runtime = Runtime::Current();
-          if (contention_count <= runtime->GetMaxSpinsBeforeThinkLockInflation()) {
-            // TODO: Consider switching the thread state to kBlocked when we are yielding.
-            // Use sched_yield instead of NanoSleep since NanoSleep can wait much longer than the
-            // parameter you pass in. This can cause thread suspension to take excessively long
-            // and make long pauses. See b/16307460.
-            sched_yield();
-          } else {
-            contention_count = 0;
-            InflateThinLocked(self, h_obj, lock_word, 0);
-          }
+          TryRevokeBiasLocked(self, h_obj, lock_word);
         }
         continue;  // Start from the beginning.
+      }
+      case LockWord::kThinLockBiasable: {
+        if (lock_word.IsThinLockUnlocked()) {
+          uint32_t owner_thread_id = lock_word.ThinLockOwner();
+          if (owner_thread_id == thread_id) {
+            // if the profiling counter has not reached the threadhold, increase the counter;
+            // otherwise, change the lock from thin lock biasable into biased lock
+            uint32_t new_profCount = lock_word.ThinLockBiasableProfCount() + 1;
+            if (LIKELY(new_profCount <= LockWord::kThinLockBiasableMaxProfCount)) {
+              LockWord thin_locked(LockWord::FromThinLockBiasableId(thread_id, new_profCount, 1));
+              if (h_obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked)) {
+              // CasLockWord enforces more than the acquire ordering we need here.
+                return h_obj.Get();  // Success!
+              }
+            } else {
+              LockWord bias_locked(LockWord::FromBiasLockId(thread_id, 1));
+              if (h_obj->CasLockWordWeakSequentiallyConsistent(lock_word, bias_locked)) {
+              // CasLockWord enforces more than the acquire ordering we need here.
+                return h_obj.Get();  // Success!
+              }
+            }
+          } else {
+          // The object has been locked by two threads, change into
+            LockWord thin_locked(LockWord::FromThinLockNotBiasableId(thread_id, 1));
+            if (h_obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked)) {
+              // CasLockWord enforces more than the acquire ordering we need here.
+              return h_obj.Get();  // Success!
+            }
+          }
+          continue;  // Go again.
+        } else {
+          uint32_t owner_thread_id = lock_word.ThinLockOwner();
+          if (owner_thread_id == thread_id) {
+            // We own the lock, and passed the profiling test, change the lock word into biased lock
+            uint32_t new_count = lock_word.ThinLockBiasableCount() + 1;
+            uint32_t prof_count = lock_word.ThinLockBiasableProfCount();
+            if (LIKELY(new_count <= LockWord::kThinLockBiasableMaxCount)) {
+              LockWord thin_locked(LockWord::FromThinLockBiasableId(thread_id, prof_count, new_count));
+              h_obj->SetLockWord(thin_locked, false);
+              return h_obj.Get();  // Success!
+            } else {
+              // We'd overflow the recursion count in thin lock biasable. However, the biased lock should have
+              // a larger recursion counter; change the lock work into biased lock state.
+              if (LIKELY(new_count <= LockWord::kBiasLockMaxCount)) {
+                LockWord bias_locked(LockWord::FromBiasLockId(thread_id, new_count));
+                h_obj->SetLockWord(bias_locked, false);
+                return h_obj.Get();  // Success!
+              } else {
+                // In case someone sets the profiling count into 0, the biased lock has the same recursion
+                // count with the thin lock biasable.
+                InflateBiasOrThinLocked(self, h_obj, lock_word, 0);
+              }
+            }
+          } else {
+            // Contention.
+            contention_count++;
+            Runtime* runtime = Runtime::Current();
+            if (contention_count <= runtime->GetMaxSpinsBeforeThinkLockInflation()) {
+              // TODO: Consider switching the thread state to kBlocked when we are yielding.
+              // Use sched_yield instead of NanoSleep since NanoSleep can wait much longer than the
+              // parameter you pass in. This can cause thread suspension to take excessively long
+              // and make long pauses. See b/16307460.
+              sched_yield();
+            } else {
+              contention_count = 0;
+              InflateBiasOrThinLocked(self, h_obj, lock_word, 0);
+            }
+          }
+          continue;  // Start from the beginning.
+        }
+      }
+      case LockWord::kThinLockNotBiasable: {
+        if (lock_word.IsThinLockUnlocked()) {
+          // uint32_t owner_thread_id = lock_word.ThinLockOwner();
+          LockWord thin_locked(LockWord::FromThinLockNotBiasableId(thread_id, 1));
+          if (h_obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked)) {
+            // CasLockWord enforces more than the acquire ordering we need here.
+            return h_obj.Get();  // Success!
+          }
+          continue;  // Go again.
+        } else {
+          uint32_t owner_thread_id = lock_word.ThinLockOwner();
+          if (owner_thread_id == thread_id) {
+            // We own the lock, and passed the profiling test, change the lock word into biased lock
+            uint32_t new_count = lock_word.ThinLockNotBiasableCount() + 1;
+            if (LIKELY(new_count <= LockWord::kThinLockNotBiasableMaxCount)) {
+              LockWord thin_locked(LockWord::FromThinLockNotBiasableId(thread_id, new_count));
+              h_obj->SetLockWord(thin_locked, false);
+              return h_obj.Get();  // Success!
+            } else {
+              // We'd overflow the recursion count, so inflate the monitor.
+              // never be here!
+              InflateBiasOrThinLocked(self, h_obj, lock_word, 0);
+            }
+          } else {
+            // Contention.
+            contention_count++;
+            Runtime* runtime = Runtime::Current();
+            if (contention_count <= runtime->GetMaxSpinsBeforeThinkLockInflation()) {
+              // TODO: Consider switching the thread state to kBlocked when we are yielding.
+              // Use sched_yield instead of NanoSleep since NanoSleep can wait much longer than the
+              // parameter you pass in. This can cause thread suspension to take excessively long
+              // and make long pauses. See b/16307460.
+              sched_yield();
+            } else {
+              contention_count = 0;
+              InflateBiasOrThinLocked(self, h_obj, lock_word, 0);
+            }
+          }
+          continue;  // Start from the beginning.
+        }
       }
       case LockWord::kFatLocked: {
         Monitor* mon = lock_word.FatLockMonitor();
@@ -762,16 +935,38 @@ bool Monitor::MonitorExit(Thread* self, mirror::Object* obj) {
   DCHECK(self != NULL);
   DCHECK(obj != NULL);
   obj = FakeUnlock(obj);
-  LockWord lock_word = obj->GetLockWord(true);
   StackHandleScope<1> hs(self);
   Handle<mirror::Object> h_obj(hs.NewHandle(obj));
+  LockWord lock_word = obj->GetLockWord(true);
   switch (lock_word.GetState()) {
     case LockWord::kHashCode:
       // Fall-through.
     case LockWord::kUnlocked:
       FailedUnlock(h_obj.Get(), self, nullptr, nullptr);
       return false;  // Failure.
-    case LockWord::kThinLocked: {
+    case LockWord::kBiasLocked : {
+      uint32_t thread_id = self->GetThreadId();
+      uint32_t owner_thread_id = lock_word.BiasLockOwner();
+      if (owner_thread_id != thread_id) {
+        // TODO: there's a race here with the owner dying while we unlock.
+        Thread* owner =
+          Runtime::Current()->GetThreadList()->FindThreadByThreadId(lock_word.BiasLockOwner());
+        FailedUnlock(h_obj.Get(), self, owner, nullptr);
+        return false;  // Failure.
+      } else {
+        // We own the lock, decrease the recursion count.
+        if (lock_word.BiasLockCount() > 0) {
+          uint32_t new_count = lock_word.BiasLockCount() - 1;
+          LockWord bias_locked(LockWord::FromBiasLockId(thread_id, new_count));
+          h_obj->SetLockWord(bias_locked, false);
+        } else {
+          FailedUnlock(h_obj.Get(), self, self, nullptr);
+          return false;  // Failure.
+        }
+        return true;  // Success!
+      }
+    }
+    case LockWord::kThinLockBiasable: {
       uint32_t thread_id = self->GetThreadId();
       uint32_t owner_thread_id = lock_word.ThinLockOwner();
       if (owner_thread_id != thread_id) {
@@ -782,12 +977,36 @@ bool Monitor::MonitorExit(Thread* self, mirror::Object* obj) {
         return false;  // Failure.
       } else {
         // We own the lock, decrease the recursion count.
-        if (lock_word.ThinLockCount() != 0) {
-          uint32_t new_count = lock_word.ThinLockCount() - 1;
-          LockWord thin_locked(LockWord::FromThinLockId(thread_id, new_count));
-          h_obj->SetLockWord(thin_locked, true);
+        if (lock_word.ThinLockBiasableCount() > 0) {
+          uint32_t new_count = lock_word.ThinLockBiasableCount() - 1;
+          uint32_t prof_count = lock_word.ThinLockBiasableProfCount();
+          LockWord thin_locked(LockWord::FromThinLockBiasableId(thread_id, prof_count, new_count));
+          h_obj->SetLockWord(thin_locked, false);
         } else {
-          h_obj->SetLockWord(LockWord(), true);
+          FailedUnlock(h_obj.Get(), self, self, nullptr);
+          return false;  // Failure.
+        }
+        return true;  // Success!
+      }
+    }
+    case LockWord::kThinLockNotBiasable: {
+      uint32_t thread_id = self->GetThreadId();
+      uint32_t owner_thread_id = lock_word.ThinLockOwner();
+      if (owner_thread_id != thread_id) {
+        // TODO: there's a race here with the owner dying while we unlock.
+        Thread* owner =
+            Runtime::Current()->GetThreadList()->FindThreadByThreadId(lock_word.ThinLockOwner());
+        FailedUnlock(h_obj.Get(), self, owner, nullptr);
+        return false;  // Failure.
+      } else {
+        // We own the lock, decrease the recursion count.
+        if (lock_word.ThinLockNotBiasableCount() > 0) {
+          uint32_t new_count = lock_word.ThinLockNotBiasableCount() - 1;
+          LockWord thin_locked(LockWord::FromThinLockNotBiasableId(thread_id, new_count));
+          h_obj->SetLockWord(thin_locked, false);
+        } else {
+          FailedUnlock(h_obj.Get(), self, self, nullptr);
+          return false;  // Failure.
         }
         return true;  // Success!
       }
@@ -809,13 +1028,31 @@ void Monitor::Wait(Thread* self, mirror::Object *obj, int64_t ms, int32_t ns,
   DCHECK(obj != nullptr);
   LockWord lock_word = obj->GetLockWord(true);
   while (lock_word.GetState() != LockWord::kFatLocked) {
+    lock_word = obj->GetLockWord(true);
     switch (lock_word.GetState()) {
       case LockWord::kHashCode:
         // Fall-through.
       case LockWord::kUnlocked:
         ThrowIllegalMonitorStateExceptionF("object not locked by thread before wait()");
         return;  // Failure.
-      case LockWord::kThinLocked: {
+      case LockWord::kBiasLocked: {
+        uint32_t thread_id = self->GetThreadId();
+        uint32_t owner_thread_id = lock_word.BiasLockOwner();
+        if (owner_thread_id != thread_id) {
+          ThrowIllegalMonitorStateExceptionF("object not locked by thread before wait()");
+          return;  // Failure.
+        } else {
+          if (lock_word.IsBiasLockUnlocked()) {
+            ThrowIllegalMonitorStateExceptionF("object not locked by thread before wait()");
+          } else {
+            Inflate(self, self, obj, 0);
+            lock_word = obj->GetLockWord(true);
+          }
+        }
+        break;
+      }
+      case LockWord::kThinLockBiasable:
+      case LockWord::kThinLockNotBiasable: {
         uint32_t thread_id = self->GetThreadId();
         uint32_t owner_thread_id = lock_word.ThinLockOwner();
         if (owner_thread_id != thread_id) {
@@ -824,8 +1061,12 @@ void Monitor::Wait(Thread* self, mirror::Object *obj, int64_t ms, int32_t ns,
         } else {
           // We own the lock, inflate to enqueue ourself on the Monitor. May fail spuriously so
           // re-load.
-          Inflate(self, self, obj, 0);
-          lock_word = obj->GetLockWord(true);
+          if (lock_word.IsThinLockUnlocked()) {
+            ThrowIllegalMonitorStateExceptionF("object not locked by thread before wait()");
+          } else {
+            Inflate(self, self, obj, 0);
+            lock_word = obj->GetLockWord(true);
+          }
         }
         break;
       }
@@ -850,15 +1091,37 @@ void Monitor::DoNotify(Thread* self, mirror::Object* obj, bool notify_all) {
     case LockWord::kUnlocked:
       ThrowIllegalMonitorStateExceptionF("object not locked by thread before notify()");
       return;  // Failure.
-    case LockWord::kThinLocked: {
+    case LockWord::kBiasLocked: {
+      uint32_t thread_id = self->GetThreadId();
+      uint32_t owner_thread_id = lock_word.BiasLockOwner();
+      if (owner_thread_id != thread_id) {
+        ThrowIllegalMonitorStateExceptionF("object not locked by thread before notify()");
+        return;  // Failure.
+      } else {
+        if (lock_word.IsBiasLockUnlocked()) {
+          ThrowIllegalMonitorStateExceptionF("Object not locked by thread before notify()");
+          return;  // Failure.
+        } else {
+           // We own the lock but there's no Monitor and therefore no waiters.
+           return;  // Success.
+        }
+      }
+    }
+    case LockWord::kThinLockBiasable:
+    case LockWord::kThinLockNotBiasable: {
       uint32_t thread_id = self->GetThreadId();
       uint32_t owner_thread_id = lock_word.ThinLockOwner();
       if (owner_thread_id != thread_id) {
         ThrowIllegalMonitorStateExceptionF("object not locked by thread before notify()");
         return;  // Failure.
       } else {
-        // We own the lock but there's no Monitor and therefore no waiters.
-        return;  // Success.
+        if (lock_word.IsThinLockUnlocked()) {
+          ThrowIllegalMonitorStateExceptionF("Object not locked by thread before notify()");
+          return;  // Failure.
+        } else {
+           // We own the lock but there's no Monitor and therefore no waiters.
+           return;  // Success.
+        }
       }
     }
     case LockWord::kFatLocked: {
@@ -885,7 +1148,10 @@ uint32_t Monitor::GetLockOwnerThreadId(mirror::Object* obj) {
       // Fall-through.
     case LockWord::kUnlocked:
       return ThreadList::kInvalidThreadId;
-    case LockWord::kThinLocked:
+    case LockWord::kBiasLocked:
+      return lock_word.BiasLockOwner();
+    case LockWord::kThinLockBiasable:
+    case LockWord::kThinLockNotBiasable:
       return lock_word.ThinLockOwner();
     case LockWord::kFatLocked: {
       Monitor* mon = lock_word.FatLockMonitor();
@@ -924,7 +1190,8 @@ void Monitor::DescribeWait(std::ostream& os, const Thread* thread) {
     if (pretty_object == nullptr) {
       os << wait_message << "an unknown object";
     } else {
-      if ((pretty_object->GetLockWord(true).GetState() == LockWord::kThinLocked) &&
+      LockWord::LockState ls = pretty_object->GetLockWord(true).GetState();
+      if (((ls == LockWord::kThinLockBiasable) || (ls == LockWord::kThinLockNotBiasable)) &&
           Locks::mutator_lock_->IsExclusiveHeld(Thread::Current())) {
         // Getting the identity hashcode here would result in lock inflation and suspension of the
         // current thread, which isn't safe if this is the only runnable thread.
@@ -1029,9 +1296,17 @@ bool Monitor::IsValidLockWord(LockWord lock_word) {
     case LockWord::kUnlocked:
       // Nothing to check.
       return true;
-    case LockWord::kThinLocked:
+    case LockWord::kBiasLocked:
       // Basic sanity check of owner.
-      return lock_word.ThinLockOwner() != ThreadList::kInvalidThreadId;
+      return lock_word.BiasLockOwner() != ThreadList::kInvalidThreadId;
+    case LockWord::kThinLockBiasable:
+      // Basic sanity check of owner.
+      return (lock_word.ThinLockOwner() != ThreadList::kInvalidThreadId) ||
+             (lock_word.IsThinLockUnlocked() && lock_word.ThinLockBiasableCount() == 0);
+    case LockWord::kThinLockNotBiasable:
+      // Basic sanity check of owner.
+      return (lock_word.ThinLockOwner() != ThreadList::kInvalidThreadId) ||
+             (lock_word.IsThinLockUnlocked() && lock_word.ThinLockNotBiasableCount() == 0);
     case LockWord::kFatLocked: {
       // Check the  monitor appears in the monitor list.
       Monitor* mon = lock_word.FatLockMonitor();
@@ -1173,15 +1448,25 @@ MonitorInfo::MonitorInfo(mirror::Object* obj) : owner_(NULL), entry_count_(0) {
       // Fall-through.
     case LockWord::kHashCode:
       break;
-    case LockWord::kThinLocked:
+    case LockWord::kBiasLocked:
+      owner_ = Runtime::Current()->GetThreadList()->FindThreadByThreadId(lock_word.BiasLockOwner());
+      entry_count_ = lock_word.BiasLockCount();
+      // Bias locks have no waiters.
+      break;
+    case LockWord::kThinLockBiasable:
       owner_ = Runtime::Current()->GetThreadList()->FindThreadByThreadId(lock_word.ThinLockOwner());
-      entry_count_ = 1 + lock_word.ThinLockCount();
+      entry_count_ = lock_word.ThinLockBiasableCount();
+      // Thin locks have no waiters.
+      break;
+    case LockWord::kThinLockNotBiasable:
+      owner_ = Runtime::Current()->GetThreadList()->FindThreadByThreadId(lock_word.ThinLockOwner());
+      entry_count_ = lock_word.ThinLockNotBiasableCount();
       // Thin locks have no waiters.
       break;
     case LockWord::kFatLocked: {
       Monitor* mon = lock_word.FatLockMonitor();
       owner_ = mon->owner_;
-      entry_count_ = 1 + mon->lock_count_;
+      entry_count_ = mon->lock_count_;
       for (Thread* waiter = mon->wait_set_; waiter != NULL; waiter = waiter->GetWaitNext()) {
         waiters_.push_back(waiter);
       }

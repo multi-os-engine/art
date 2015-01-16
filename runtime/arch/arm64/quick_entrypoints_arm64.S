@@ -997,19 +997,11 @@ END art_quick_do_long_jump
 ENTRY art_quick_lock_object
     cbz    w0, .Lslow_lock
     add    x4, x0, #MIRROR_OBJECT_LOCK_WORD_OFFSET  // exclusive load/store has no immediate anymore
-.Lretry_lock:
     ldr    w2, [xSELF, #THREAD_ID_OFFSET] // TODO: Can the thread ID really change during the loop?
     ldxr   w1, [x4]
-    cbnz   w1, .Lnot_unlocked         // already thin locked
-    stxr   w3, w2, [x4]
-    cbnz   w3, .Lstrex_fail           // store failed, retry
-    dmb    ishld                      // full (LoadLoad|LoadStore) memory barrier
-    ret
-.Lstrex_fail:
-    b .Lretry_lock                    // unlikely forward branch, need to reload and recheck r1/r2
-.Lnot_unlocked:
-    lsr    w3, w1, 30
-    cbnz   w3, .Lslow_lock            // if either of the top two bits are set, go slow path
+    lsr    w3, w1, 29                 // w3 stores the top three bits of the lock word
+    cmp    w3, #1
+    bne    .Lslow_lock                // if the top three bits are not 001 go slow path
     eor    w2, w1, w2                 // lock_word.ThreadId() ^ self->ThreadId()
     uxth   w2, w2                     // zero top 16 bits
     cbnz   w2, .Lslow_lock            // lock word and self thread id's match -> recursive lock
@@ -1037,20 +1029,20 @@ END art_quick_lock_object
 ENTRY art_quick_unlock_object
     cbz    x0, .Lslow_unlock
     ldr    w1, [x0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
-    lsr    w2, w1, 30
-    cbnz   w2, .Lslow_unlock          // if either of the top two bits are set, go slow path
+    lsr    w2, w1, 29
+    cmp    w2, #1
+    bne    .Lslow_unlock              // if the top three bits are not 001, go slow path
     ldr    w2, [xSELF, #THREAD_ID_OFFSET]
     eor    w3, w1, w2                 // lock_word.ThreadId() ^ self->ThreadId()
     uxth   w3, w3                     // zero top 16 bits
     cbnz   w3, .Lslow_unlock          // do lock word and self thread id's match?
-    cmp    w1, #65536
-    bpl    .Lrecursive_thin_unlock
-    // transition to unlocked, w3 holds 0
-    dmb    ish                        // full (LoadStore|StoreStore) memory barrier
-    str    w3, [x0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
-    ret
-.Lrecursive_thin_unlock:
-    sub    w1, w1, #65536
+    mov    w3, w1
+    mov    w2, #0x1F000000
+    orr    w2, w2, #0x00FF0000        // store the lock count mask #0x1FFF0000 into w2
+    and    w3, w3, w2                 // store the lock count into w3
+    cmp    w3, #0
+    beq    .Lslow_unlock              // if the lock count is 0, go slow path
+    sub    w1, w1, #65536             // decrement count in lock word placing in w1 for storing
     str    w1, [x0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
     ret
 .Lslow_unlock:

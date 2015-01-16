@@ -461,20 +461,11 @@ TWO_ARG_REF_DOWNCALL art_quick_handle_fill_data, artHandleFillArrayDataFromCode,
     .extern artLockObjectFromCode
 ENTRY art_quick_lock_object
     cbz    r0, .Lslow_lock
-.Lretry_lock:
     ldr    r2, [r9, #THREAD_ID_OFFSET]
     ldrex  r1, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
-    cbnz   r1, .Lnot_unlocked         @ already thin locked
-    @ unlocked case - r2 holds thread id with count of 0
-    strex  r3, r2, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
-    cbnz   r3, .Lstrex_fail           @ store failed, retry
-    dmb    ish                        @ full (LoadLoad|LoadStore) memory barrier
-    bx lr
-.Lstrex_fail:
-    b .Lretry_lock                    @ unlikely forward branch, need to reload and recheck r1/r2
-.Lnot_unlocked:
-    lsr    r3, r1, 30
-    cbnz   r3, .Lslow_lock            @ if either of the top two bits are set, go slow path
+    lsr    r3, r1, 29                 @ r3 stores the top three bits of the lock word
+    cmp    r3, #1
+    bne    .Lslow_lock                @ if the top three bits are not 001, go slow path
     eor    r2, r1, r2                 @ lock_word.ThreadId() ^ self->ThreadId()
     uxth   r2, r2                     @ zero top 16 bits
     cbnz   r2, .Lslow_lock            @ lock word and self thread id's match -> recursive lock
@@ -501,20 +492,20 @@ END art_quick_lock_object
 ENTRY art_quick_unlock_object
     cbz    r0, .Lslow_unlock
     ldr    r1, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
-    lsr    r2, r1, 30
-    cbnz   r2, .Lslow_unlock          @ if either of the top two bits are set, go slow path
+    lsr    r2, r1, 29
+    cmp    r2, #1
+    bne    .Lslow_unlock              @ if the top three bits are not 001, go slow path
     ldr    r2, [r9, #THREAD_ID_OFFSET]
     eor    r3, r1, r2                 @ lock_word.ThreadId() ^ self->ThreadId()
     uxth   r3, r3                     @ zero top 16 bits
     cbnz   r3, .Lslow_unlock          @ do lock word and self thread id's match?
-    cmp    r1, #65536
-    bpl    .Lrecursive_thin_unlock
-    @ transition to unlocked, r3 holds 0
-    dmb    ish                        @ full (LoadStore|StoreStore) memory barrier
-    str    r3, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
-    bx     lr
-.Lrecursive_thin_unlock:
-    sub    r1, r1, #65536
+    mov    r3, r1
+    mov    r2, #0x1F000000
+    orr    r2, #0x00FF0000            @ store the lock count mask #0x1FFF0000 into r2
+    and    r3, r2                     @ store the lock count into r3
+    cmp    r3, #0
+    beq    .Lslow_unlock              @ if the lock count is 0, go slow path
+    sub    r1, r1, #65536             @ decrement count in lock word placing in r1 for storing
     str    r1, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
     bx     lr
 .Lslow_unlock:

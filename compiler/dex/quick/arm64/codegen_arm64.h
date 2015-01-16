@@ -184,8 +184,6 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
                         RegisterClass dest_reg_class) OVERRIDE;
 
   bool GenMemBarrier(MemBarrierKind barrier_kind) OVERRIDE;
-  void GenMonitorEnter(int opt_flags, RegLocation rl_src) OVERRIDE;
-  void GenMonitorExit(int opt_flags, RegLocation rl_src) OVERRIDE;
   void GenMoveException(RegLocation rl_dest) OVERRIDE;
   void GenMultiplyByTwoBitMultiplier(RegLocation rl_src, RegLocation rl_result, int lit,
                                      int first_bit, int second_bit) OVERRIDE;

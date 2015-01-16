@@ -913,19 +913,12 @@ TWO_ARG_REF_DOWNCALL art_quick_handle_fill_data, artHandleFillArrayDataFromCode,
 DEFINE_FUNCTION art_quick_lock_object
     testl %edi, %edi                      // Null check object/rdi.
     jz   .Lslow_lock
-.Lretry_lock:
     movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi), %ecx  // ecx := lock word.
-    test LITERAL(0xC0000000), %ecx        // Test the 2 high bits.
+    movl %ecx, %edx
+    shrl LITERAL(29), %edx
+    cmp  LITERAL(0x1), %edx               // whether the 3 high bits are 001 (in biased state)?
     jne  .Lslow_lock                      // Slow path if either of the two high bits are set.
     movl %gs:THREAD_ID_OFFSET, %edx       // edx := thread id
-    test %ecx, %ecx
-    jnz  .Lalready_thin                   // Lock word contains a thin lock.
-    // unlocked case - %edx holds thread id with count of 0
-    xor  %eax, %eax                       // eax == 0 for comparison with lock word in cmpxchg
-    lock cmpxchg  %edx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi)
-    jnz  .Lretry_lock                     // cmpxchg failed retry
-    ret
-.Lalready_thin:
     cmpw %cx, %dx                         // do we hold the lock already?
     jne  .Lslow_lock
     addl LITERAL(65536), %ecx             // increment recursion count
@@ -946,16 +939,17 @@ DEFINE_FUNCTION art_quick_unlock_object
     testl %edi, %edi                      // null check object/edi
     jz   .Lslow_unlock
     movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi), %ecx  // ecx := lock word
+    movl %ecx, %edx
+    shrl LITERAL(29), %edx
+    cmp  LITERAL(0x1), %edx               // whether the 3 high bits are 001 (in biased state)?
+    jne  .Lslow_unlock                    // not in the biased state
     movl %gs:THREAD_ID_OFFSET, %edx       // edx := thread id
-    test LITERAL(0xC0000000), %ecx
-    jnz  .Lslow_unlock                    // lock word contains a monitor
     cmpw %cx, %dx                         // does the thread id match?
     jne  .Lslow_unlock
-    cmpl LITERAL(65536), %ecx
-    jae  .Lrecursive_thin_unlock
-    movl LITERAL(0), MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi)
-    ret
-.Lrecursive_thin_unlock:
+    movl %ecx, %edx
+    and  LITERAL(0x1FFF0000), %edx        // lock count in edx
+    testl %edx, %edx
+    jz   .Lslow_unlock                    // if the lock count is 0, go slow path
     subl LITERAL(65536), %ecx
     mov  %ecx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi)
     ret

@@ -925,7 +925,9 @@ struct StackDumpVisitor : public StackVisitor {
     if (o == nullptr) {
       os << "an unknown object";
     } else {
-      if ((o->GetLockWord(false).GetState() == LockWord::kThinLocked) &&
+      LockWord::LockState ls = o->GetLockWord(false).GetState();
+      if ((ls == LockWord::kBiasLocked || ls == LockWord::kThinLockBiasable ||
+           ls == LockWord::kThinLockNotBiasable) &&
           Locks::mutator_lock_->IsExclusiveHeld(Thread::Current())) {
         // Getting the identity hashcode here would result in lock inflation and suspension of the
         // current thread, which isn't safe if this is the only runnable thread.
@@ -2049,7 +2051,20 @@ bool Thread::HoldsLock(mirror::Object* object) const {
   if (object == nullptr) {
     return false;
   }
-  return object->GetLockOwnerThreadId() == GetThreadId();
+
+  LockWord::LockState ls = object->GetLockWord(true).GetState();
+  if (ls == LockWord::kBiasLocked) {
+    return object->GetLockOwnerThreadId() == GetThreadId() && !object->GetLockWord(true).IsBiasLockUnlocked();
+  } else if (ls == LockWord::kThinLockBiasable || ls == LockWord::kThinLockNotBiasable) {
+    return object->GetLockOwnerThreadId() == GetThreadId() && !object->GetLockWord(true).IsThinLockUnlocked();
+  } else if (ls == LockWord::kFatLocked) {
+    return object->GetLockOwnerThreadId() == GetThreadId();
+  } else if (ls == LockWord::kUnlocked || ls == LockWord::kHashCode) {
+    return false;
+  } else {
+    LOG(FATAL) << "Unreachable";
+    return false;
+  }
 }
 
 // RootVisitor parameters are: (const Object* obj, size_t vreg, const StackVisitor* visitor).

@@ -19,17 +19,52 @@
 
 #include "lock_word.h"
 #include "monitor_pool.h"
+#include "thread_list.h"
 
 namespace art {
 
 inline uint32_t LockWord::ThinLockOwner() const {
-  DCHECK_EQ(GetState(), kThinLocked);
+  DCHECK(GetState() == kThinLockBiasable || GetState() == kThinLockNotBiasable);
   return (value_ >> kThinLockOwnerShift) & kThinLockOwnerMask;
 }
 
-inline uint32_t LockWord::ThinLockCount() const {
-  DCHECK_EQ(GetState(), kThinLocked);
-  return (value_ >> kThinLockCountShift) & kThinLockCountMask;
+inline uint32_t LockWord::BiasLockOwner() const {
+  DCHECK_EQ(GetState(), kBiasLocked);
+  return (value_ >> kBiasLockOwnerShift) & kBiasLockOwnerMask;
+}
+
+inline uint32_t LockWord::ThinLockBiasableCount() const {
+  DCHECK_EQ(GetState(), kThinLockBiasable);
+  return (value_ >> kThinLockBiasableCountShift) & kThinLockBiasableCountMask;
+}
+
+inline uint32_t LockWord::ThinLockBiasableProfCount() const {
+  DCHECK_EQ(GetState(), kThinLockBiasable);
+  return (value_ >> kThinLockBiasableProfShift) & kThinLockBiasableProfMask;
+}
+
+inline uint32_t LockWord::ThinLockNotBiasableCount() const {
+  DCHECK_EQ(GetState(), kThinLockNotBiasable);
+  return (value_ >> kThinLockNotBiasableCountShift) & kThinLockNotBiasableCountMask;
+}
+
+inline uint32_t LockWord::BiasLockCount() const {
+  DCHECK_EQ(GetState(), kBiasLocked);
+  return (value_ >> kBiasLockCountShift) & kBiasLockCountMask;
+}
+
+inline bool LockWord::IsThinLockUnlocked() const {
+  DCHECK(GetState() == kThinLockBiasable || GetState() == kThinLockNotBiasable);
+  if (GetState() == kThinLockBiasable) {
+    return ThinLockBiasableCount() == 0;
+  } else {
+    return ThinLockNotBiasableCount() == 0;
+  }
+}
+
+inline bool LockWord::IsBiasLockUnlocked() const {
+  DCHECK_EQ(GetState(), kBiasLocked);
+  return BiasLockCount() == 0;
 }
 
 inline Monitor* LockWord::FatLockMonitor() const {

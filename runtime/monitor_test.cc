@@ -116,13 +116,13 @@ class CreateTask : public Task {
 
       monitor_test_->thread_ = self;        // Pass the Thread.
       monitor_test_->object_.Get()->MonitorEnter(self);     // Lock the object. This should transition
-      LockWord lock_after = monitor_test_->object_.Get()->GetLockWord(false);     // it to thinLocked.
+      LockWord lock_after = monitor_test_->object_.Get()->GetLockWord(false);   // it to thin lock biasable.
       LockWord::LockState new_state = lock_after.GetState();
 
       // Cannot use ASSERT only, as analysis thinks we'll keep holding the mutex.
-      if (LockWord::LockState::kThinLocked != new_state) {
+      if (LockWord::LockState::kThinLockBiasable != new_state) {
         monitor_test_->object_.Get()->MonitorExit(self);         // To appease analysis.
-        ASSERT_EQ(LockWord::LockState::kThinLocked, new_state);  // To fail the test.
+        ASSERT_EQ(LockWord::LockState::kThinLockBiasable, new_state);  // To fail the test.
         return;
       }
 
