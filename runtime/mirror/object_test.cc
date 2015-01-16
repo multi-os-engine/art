@@ -731,5 +731,11 @@ TEST_F(ObjectTest, FindStaticField) {
   // TODO: test that interfaces trump superclasses.
 }
 
+TEST_F(ObjectTest, IdentityHashCode) {
+  mirror::Object::SetHashCodeSeed(0);
+  int32_t hash_code = mirror::Object::GenerateIdentityHashCode();
+  EXPECT_NE(hash_code, 0);
+}
+
 }  // namespace mirror
 }  // namespace art
