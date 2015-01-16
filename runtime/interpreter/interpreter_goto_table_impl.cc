@@ -149,12 +149,18 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   bool notified_method_entry_event = false;
   UPDATE_HANDLER_TABLE();
   if (LIKELY(dex_pc == 0)) {  // We are entering the method as opposed to deoptimizing..
+    if (kIsDebugBuild) {
+      self->AssertNoPendingException();
+    }
     instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodEntryListeners())) {
       instrumentation->MethodEnterEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                         shadow_frame.GetMethod(), 0);
       notified_method_entry_event = true;
     }
+  } else if (UNLIKELY(self->IsExceptionPending())) {
+    // During deoptimization, we may continue the execution of the method with a pending exception.
+    HANDLE_PENDING_EXCEPTION();
   }
 
   // Jump to first instruction.
@@ -236,6 +242,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(MOVE_EXCEPTION) {
     Throwable* exception = self->GetException(nullptr);
+    DCHECK(exception != nullptr) << "No pending exception on MOVE_EXCEPTION instruction";
     shadow_frame.SetVRegReference(inst->VRegA_11x(inst_data), exception);
     self->ClearException();
     ADVANCE(1);

@@ -68,17 +68,26 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
 
   uint32_t dex_pc = shadow_frame.GetDexPC();
   bool notified_method_entry_event = false;
-  const instrumentation::Instrumentation* const instrumentation = Runtime::Current()->GetInstrumentation();
+  const uint16_t* const insns = code_item->insns_;
+  const Instruction* inst = Instruction::At(insns + dex_pc);
+  uint16_t inst_data;
+
+  const instrumentation::Instrumentation* const instrumentation =
+      Runtime::Current()->GetInstrumentation();
   if (LIKELY(dex_pc == 0)) {  // We are entering the method as opposed to deoptimizing..
+    if (kIsDebugBuild) {
+      self->AssertNoPendingException();
+    }
     if (UNLIKELY(instrumentation->HasMethodEntryListeners())) {
       instrumentation->MethodEnterEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                         shadow_frame.GetMethod(), 0);
       notified_method_entry_event = true;
     }
+  } else if (UNLIKELY(self->IsExceptionPending())) {
+    // During deoptimization, we may continue the execution of the method with a pending exception.
+    HANDLE_PENDING_EXCEPTION();
   }
-  const uint16_t* const insns = code_item->insns_;
-  const Instruction* inst = Instruction::At(insns + dex_pc);
-  uint16_t inst_data;
+
   while (true) {
     dex_pc = inst->GetDexPc(insns);
     shadow_frame.SetDexPC(dex_pc);
@@ -161,6 +170,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
       case Instruction::MOVE_EXCEPTION: {
         PREAMBLE();
         Throwable* exception = self->GetException(nullptr);
+        DCHECK(exception != nullptr) << "No pending exception on MOVE_EXCEPTION instruction";
         shadow_frame.SetVRegReference(inst->VRegA_11x(inst_data), exception);
         self->ClearException();
         inst = inst->Next_1xx();
