@@ -123,19 +123,22 @@ public class Main {
   // so we need to separate out the tests that are expected to throw exception
 
   public static void test_String_charAt() {
-    String testStr = "Now is the time";
+    String testStr = "Now is the time to test some stuff";
 
-    Assert.assertEquals('N', testStr.charAt(0));
-    Assert.assertEquals('o', testStr.charAt(1));
-    Assert.assertEquals(' ', testStr.charAt(10));
-    Assert.assertEquals('e', testStr.charAt(testStr.length()-1));
+    test_String_charAt(testStr, 'N', 'o', ' ', 'f');
+    test_String_charAt(testStr.substring(3,15), ' ', 'i', 'm', 'e');
+  }
+  public static void test_String_charAt(String testStr, char a, char b, char c, char d) {
+    Assert.assertEquals(a, testStr.charAt(0));
+    Assert.assertEquals(b, testStr.charAt(1));
+    Assert.assertEquals(c, testStr.charAt(10));
+    Assert.assertEquals(d, testStr.charAt(testStr.length()-1));
 
-    test_String_charAtExc();
-    test_String_charAtExc2();
+    test_String_charAtExc(testStr);
+    test_String_charAtExc2(testStr);
   }
 
-  private static void test_String_charAtExc() {
-    String testStr = "Now is the time";
+  private static void test_String_charAtExc(String testStr) {
     try {
       testStr.charAt(-1);
       Assert.fail();
@@ -155,17 +158,25 @@ public class Main {
     }
   }
 
-  private static void test_String_charAtExc2() {
+  private static void test_String_charAtExc2(String testStr) {
     try {
-      test_String_charAtExc3();
+      test_String_charAtExc3(testStr);
+      Assert.fail();
+    } catch (StringIndexOutOfBoundsException expected) {
+    }
+    try {
+      test_String_charAtExc4(testStr);
       Assert.fail();
     } catch (StringIndexOutOfBoundsException expected) {
     }
   }
 
-  private static void test_String_charAtExc3() {
-    String testStr = "Now is the time";
+  private static void test_String_charAtExc3(String testStr) {
     Assert.assertEquals('N', testStr.charAt(-1));
+  }
+
+  private static void test_String_charAtExc4(String testStr) {
+    Assert.assertEquals('N', testStr.charAt(100));
   }
 
   static int start;
