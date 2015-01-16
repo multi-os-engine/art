@@ -117,20 +117,6 @@ TEST(ParallelMoveTest, Swap) {
     resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
     ASSERT_STREQ("(1 -> 2) (1 <-> 0)", resolver.GetMessage().c_str());
   }
-
-  {
-    TestParallelMoveResolver resolver(&allocator);
-    static constexpr size_t moves[][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 1}};
-    resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
-    ASSERT_STREQ("(4 <-> 1) (3 <-> 4) (2 <-> 3) (0 -> 1)", resolver.GetMessage().c_str());
-  }
-
-  {
-    TestParallelMoveResolver resolver(&allocator);
-    static constexpr size_t moves[][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 1}, {5, 4}};
-    resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
-    ASSERT_STREQ("(4 <-> 1) (3 <-> 4) (2 <-> 3) (0 -> 1) (5 -> 4)", resolver.GetMessage().c_str());
-  }
 }
 
 TEST(ParallelMoveTest, ConstantLast) {
