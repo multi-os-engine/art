@@ -895,14 +895,14 @@ class Mir2Lir : public Backend {
                                                             bool safepoint_pc);
     void GenInvoke(CallInfo* info);
     void GenInvokeNoInline(CallInfo* info);
-    virtual NextCallInsn GetNextSDCallInsn();
+    virtual NextCallInsn GetNextSDCallInsn() = 0;
 
     /*
      * @brief Generate the actual call insn based on the method info.
      * @param method_info the lowering info for the method call.
      * @returns Call instruction
      */
-    virtual LIR* GenCallInsn(const MirMethodLoweringInfo& method_info);
+    virtual LIR* GenCallInsn(const MirMethodLoweringInfo& method_info) = 0;
 
     virtual void FlushIns(RegLocation* ArgLocs, RegLocation rl_method);
     virtual int GenDalvikArgs(CallInfo* info, int call_state, LIR** pcrLabel,
@@ -961,10 +961,6 @@ class Mir2Lir : public Backend {
     // Natural word size.
     virtual LIR* LoadWordDisp(RegStorage r_base, int displacement, RegStorage r_dest) {
       return LoadBaseDisp(r_base, displacement, r_dest, kWord, kNotVolatile);
-    }
-    // Load 8 bits, regardless of target.
-    virtual LIR* Load8Disp(RegStorage r_base, int displacement, RegStorage r_dest) {
-      return LoadBaseDisp(r_base, displacement, r_dest, kSignedByte, kNotVolatile);
     }
     // Load 32 bits, regardless of target.
     virtual LIR* Load32Disp(RegStorage r_base, int displacement, RegStorage r_dest)  {
