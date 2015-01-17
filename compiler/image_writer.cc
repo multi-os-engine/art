@@ -501,19 +501,14 @@ void ImageWriter::ProcessStrings() {
   size_t total_strings = 0;
   gc::Heap* heap = Runtime::Current()->GetHeap();
   ClassLinker* cl = Runtime::Current()->GetClassLinker();
-  {
-    ReaderMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
-    heap->VisitObjects(CountStringsCallback, &total_strings);  // Count the strings.
-  }
+  // Count the strings.
+  heap->VisitObjects(CountStringsCallback, &total_strings);
   Thread* self = Thread::Current();
   StackHandleScope<1> hs(self);
   auto strings = hs.NewHandle(cl->AllocStringArray(self, total_strings));
   StringCollector string_collector(strings, 0U);
-  {
-    ReaderMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
-    // Read strings into the array.
-    heap->VisitObjects(StringCollector::Callback, &string_collector);
-  }
+  // Read strings into the array.
+  heap->VisitObjects(StringCollector::Callback, &string_collector);
   // Some strings could have gotten freed if AllocStringArray caused a GC.
   CHECK_LE(string_collector.GetIndex(), total_strings);
   total_strings = string_collector.GetIndex();
@@ -595,7 +590,6 @@ void ImageWriter::ComputeEagerResolvedStringsCallback(Object* obj, void* arg ATT
 }
 
 void ImageWriter::ComputeEagerResolvedStrings() {
-  ReaderMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
   Runtime::Current()->GetHeap()->VisitObjects(ComputeEagerResolvedStringsCallback, this);
 }
 
@@ -668,7 +662,6 @@ bool ImageWriter::NonImageClassesVisitor(Class* klass, void* arg) {
 void ImageWriter::CheckNonImageClassesRemoved() {
   if (compiler_driver_.GetImageClasses() != nullptr) {
     gc::Heap* heap = Runtime::Current()->GetHeap();
-    ReaderMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
     heap->VisitObjects(CheckNonImageClassesRemovedCallback, this);
   }
 }
@@ -870,7 +863,6 @@ void ImageWriter::CalculateNewObjectOffsets() {
   image_end_ += RoundUp(sizeof(ImageHeader), kObjectAlignment);  // 64-bit-alignment
 
   {
-    WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
     // TODO: Image spaces only?
     DCHECK_LT(image_end_, image_->Size());
     image_objects_offset_begin_ = image_end_;
@@ -920,7 +912,6 @@ void ImageWriter::CopyAndFixupObjects() {
   // TODO: heap validation can't handle this fix up pass
   heap->DisableObjectValidation();
   // TODO: Image spaces only?
-  WriterMutexLock mu(ants.Self(), *Locks::heap_bitmap_lock_);
   heap->VisitObjects(CopyAndFixupObjectsCallback, this);
   // Fix up the object previously had hash codes.
   for (const std::pair<mirror::Object*, uint32_t>& hash_pair : saved_hashes_) {
