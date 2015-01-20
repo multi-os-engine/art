@@ -162,7 +162,7 @@ class PassDriverME: public PassDriver<PassDriverType> {
       const PassME* me_pass = down_cast<const PassME*>(pass);
       if (me_pass->HasOptions()) {
         LOG(INFO) << "Pass options for \"" << me_pass->GetName() << "\" are:";
-        SafeMap<const std::string, int> overridden_settings;
+        SafeMap<const std::string, const OptionContent> overridden_settings;
         FillOverriddenPassSettings(me_pass->GetName(), overridden_settings);
         me_pass->PrintPassOptions(overridden_settings);
       }
@@ -201,7 +201,7 @@ class PassDriverME: public PassDriver<PassDriverType> {
    * @param pass_name The pass name for which to fill settings.
    * @param settings_to_fill Fills the options to contain the mapping of name of option to the new configuration.
    */
-  static void FillOverriddenPassSettings(const char* pass_name, SafeMap<const std::string, int>& settings_to_fill) {
+  static void FillOverriddenPassSettings(const char* pass_name, SafeMap<const std::string, const OptionContent>& settings_to_fill) {
     const std::string& settings = PassDriver<PassDriverType>::overridden_pass_options_list_;
     const size_t settings_len = settings.size();
 
@@ -277,12 +277,22 @@ class PassDriverME: public PassDriver<PassDriverType> {
       // Get the actual setting itself. Strtol is being used to convert because it is
       // exception safe. If the input is not sane, it will set a setting of 0.
       std::string setting_string = settings.substr(setting_pos, next_configuration_separator - setting_pos);
-      int setting = std::strtol(setting_string.c_str(), 0, 0);
 
       std::string setting_name = settings.substr(setting_name_pos, setting_pos - setting_name_pos - 1);
 
-      settings_to_fill.Put(setting_name, setting);
+      // We attempt to convert the option value to integer.
+      char* end_ptr = nullptr;
+      const char* setting_ptr = setting_string.c_str();
+      DCHECK(setting_ptr != nullptr);  // Paranoid: setting_ptr must be a valid pointer.
+      int64_t int_value = strtoll(setting_ptr, &end_ptr, 10);
+      DCHECK(end_ptr != nullptr);  // Paranoid: end_ptr must be set by the strtoll call.
 
+      // If strtoll call succeeded, the option is now considered as integer.
+      if (*setting_ptr != '\0' && end_ptr != setting_ptr && *end_ptr == '\0') {
+        settings_to_fill.Put(setting_name, OptionContent(int_value));
+      } else {
+        settings_to_fill.Put(setting_name, OptionContent(setting_string.c_str()));
+      }
       search_pos = next_configuration_separator;
     } while (true);
   }
