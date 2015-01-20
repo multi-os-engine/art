@@ -40,6 +40,122 @@ typedef uint32_t DexOffset;          // Dex offset in code units.
 typedef uint16_t NarrowDexOffset;    // For use in structs, Dex offsets range from 0 .. 0xffff.
 typedef uint32_t CodeOffset;         // Native code offset in bytes.
 
+#define OPTIONSTRING_MAX_LENGTH 2048
+
+/**
+ * Structure abstracting pass option values, which can be of type string or integer.
+ */
+struct OptionContent {
+  OptionContent(const OptionContent& option) :
+    type(option.type), container(option.container, option.type) {}
+
+  explicit OptionContent(const char* value) :
+    type(STRING), container(value) {}
+
+  explicit OptionContent(int value) :
+    type(INTEGER), container(value) {}
+
+  explicit OptionContent(int64_t value) :
+    type(INTEGER), container(value) {}
+
+  ~OptionContent() {
+    if (type == STRING) {
+      container.StringDelete();
+    }
+  }
+
+  /**
+   * Allows for a transparent display of the option content.
+   */
+  friend std::ostream& operator<<(std::ostream& out, const OptionContent& option) {
+    if (option.type == STRING) {
+      out << option.container.s;
+    } else {
+      out << option.container.i;
+    }
+
+    return out;
+  }
+
+  inline const char* GetString() const {
+    return container.s;
+  }
+
+  inline int64_t GetInteger() const {
+    return container.i;
+  }
+
+  /**
+   * @brief Used to compare a string option value to a given @p value.
+   * @details Will return whether the internal string option is equal to
+   * the parameter @p value.
+   * @param value The string to compare to.
+   * @return Returns whether the internal string option is equal to the
+   * parameter @p value.
+  */
+  inline bool Equals(const char* value) const {
+    DCHECK(value != nullptr);
+    CHECK(type == STRING);
+    return !strncmp(container.s, value, OPTIONSTRING_MAX_LENGTH);
+  }
+
+  /**
+   * @brief Used to compare an integer option value to a given @p value.
+   * @details Will return whether the internal integer option is equal to
+   * the parameter @p value.
+   * @param value The integer to compare to.
+   * @return Returns whether the internal integer option is equal to the
+   * parameter @p value.
+  */
+  inline bool Equals(int64_t value) const {
+    CHECK(type == INTEGER);
+    return container.i == value;
+  }
+
+  /**
+   * Describes the type of parameters allowed as option values.
+   */
+  enum OptionType {
+    STRING = 0,
+    INTEGER
+  };
+
+  OptionType type;
+
+ private:
+  /**
+   * Union containing the option value of either type.
+   */
+  union OptionContainer {
+    explicit OptionContainer(const OptionContainer& c, OptionType t) {
+      if (t == STRING) {
+        DCHECK(c.s != nullptr);
+        s = strndup(c.s, OPTIONSTRING_MAX_LENGTH);
+      } else {
+        i = c.i;
+      }
+    }
+
+    explicit OptionContainer(const char* value) {
+      DCHECK(value != nullptr);
+      s = strndup(value, OPTIONSTRING_MAX_LENGTH);
+    }
+
+    explicit OptionContainer(const int64_t& value) : i(value) {}
+    ~OptionContainer() {}
+
+    void StringDelete() {
+      if (s != nullptr) {
+        free(s);
+      }
+    }
+
+    char* s;
+    int64_t i;
+  } container;
+};
+
+
 struct CompilationUnit {
   explicit CompilationUnit(ArenaPool* pool);
   ~CompilationUnit();
@@ -93,7 +209,7 @@ struct CompilationUnit {
    * default settings have been changed. The key is simply the option string without
    * the pass name.
    */
-  SafeMap<const std::string, int> overridden_pass_options;
+  SafeMap<const std::string, const OptionContent> overridden_pass_options;
 };
 
 }  // namespace art
