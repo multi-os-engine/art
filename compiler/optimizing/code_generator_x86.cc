@@ -430,7 +430,7 @@ Location CodeGeneratorX86::AllocateFreeRegister(Primitive::Type type) const {
   return Location();
 }
 
-void CodeGeneratorX86::SetupBlockedRegisters() const {
+void CodeGeneratorX86::SetupBlockedRegisters(bool is_baseline ATTRIBUTE_UNUSED) const {
   // Don't allocate the dalvik style register pair passing.
   blocked_register_pairs_[ECX_EDX] = true;
 
