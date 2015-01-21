@@ -728,7 +728,7 @@ void CodeGeneratorARM64::MarkGCCard(Register object, Register value) {
   __ Bind(&done);
 }
 
-void CodeGeneratorARM64::SetupBlockedRegisters() const {
+void CodeGeneratorARM64::SetupBlockedRegisters(bool baseline ATTRIBUTE_UNUSED) const {
   // Block reserved registers:
   //   ip0 (VIXL temporary)
   //   ip1 (VIXL temporary)
