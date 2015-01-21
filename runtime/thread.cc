@@ -2151,6 +2151,15 @@ class ReferenceMapVisitor : public StackVisitor {
             }
           }
         }
+        uint32_t register_mask = map.GetRegisterMask();
+        for (size_t i = 0; i < BitSizeOf<uint32_t>(); ++i) {
+          if (register_mask & (1 << i)) {
+            mirror::Object** ref_addr = reinterpret_cast<mirror::Object**>(GetGPRAddress(i));
+            if (*ref_addr != nullptr) {
+              visitor_(ref_addr, -1, this);
+            }
+          }
+        }
       } else {
         const uint8_t* native_gc_map = m->GetNativeGcMap(sizeof(void*));
         CHECK(native_gc_map != nullptr) << PrettyMethod(m);

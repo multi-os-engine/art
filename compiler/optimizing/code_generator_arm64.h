@@ -214,7 +214,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
 
   // Register allocation.
 
-  void SetupBlockedRegisters() const OVERRIDE;
+  void SetupBlockedRegisters(bool baseline) const OVERRIDE;
   // AllocateFreeRegister() is only used when allocating registers locally
   // during CompileBaseline().
   Location AllocateFreeRegister(Primitive::Type type) const OVERRIDE;
