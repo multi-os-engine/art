@@ -37,50 +37,56 @@ class ArmContext : public Context {
   void FillCalleeSaves(const StackVisitor& fr) OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetSP(uintptr_t new_sp) OVERRIDE {
-    bool success = SetGPR(SP, new_sp);
-    CHECK(success) << "Failed to set SP register";
+    SetGPR(SP, new_sp);
   }
 
   void SetPC(uintptr_t new_pc) OVERRIDE {
-    bool success = SetGPR(PC, new_pc);
-    CHECK(success) << "Failed to set PC register";
+    SetGPR(PC, new_pc);
+  }
+
+  bool IsAccessibleGPR(uint32_t reg) OVERRIDE {
+    AssertIsValidGPR(reg);
+    return gprs_[reg] != nullptr;
   }
 
   uintptr_t* GetGPRAddress(uint32_t reg) OVERRIDE {
-    DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
+    AssertIsValidGPR(reg);
     return gprs_[reg];
   }
 
-  bool GetGPR(uint32_t reg, uintptr_t* val) OVERRIDE {
-    DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
-    if (gprs_[reg] == nullptr) {
-      return false;
-    } else {
-      DCHECK(val != nullptr);
-      *val = *gprs_[reg];
-      return true;
-    }
+  uintptr_t GetGPR(uint32_t reg) OVERRIDE {
+    AssertIsValidGPR(reg);
+    DCHECK(IsAccessibleGPR(reg));
+    return *gprs_[reg];
   }
 
-  bool SetGPR(uint32_t reg, uintptr_t value) OVERRIDE;
+  void SetGPR(uint32_t reg, uintptr_t value) OVERRIDE;
 
-  bool GetFPR(uint32_t reg, uintptr_t* val) OVERRIDE {
-    DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfSRegisters));
-    if (fprs_[reg] == nullptr) {
-      return false;
-    } else {
-      DCHECK(val != nullptr);
-      *val = *fprs_[reg];
-      return true;
-    }
+  bool IsAccessibleFPR(uint32_t reg) OVERRIDE {
+    AssertIsValidFPR(reg);
+    return fprs_[reg] != nullptr;
   }
 
-  bool SetFPR(uint32_t reg, uintptr_t value) OVERRIDE;
+  uintptr_t GetFPR(uint32_t reg) OVERRIDE {
+    AssertIsValidFPR(reg);
+    DCHECK(IsAccessibleFPR(reg));
+    return *fprs_[reg];
+  }
+
+  void SetFPR(uint32_t reg, uintptr_t value) OVERRIDE;
 
   void SmashCallerSaves() OVERRIDE;
   void DoLongJump() OVERRIDE;
 
  private:
+  static void AssertIsValidGPR(uint32_t reg) {
+    DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
+  }
+
+  static void AssertIsValidFPR(uint32_t reg) {
+    DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfSRegisters));
+  }
+
   // Pointers to register locations, initialized to NULL or the specific registers below.
   uintptr_t* gprs_[kNumberOfCoreRegisters];
   uint32_t* fprs_[kNumberOfSRegisters];
