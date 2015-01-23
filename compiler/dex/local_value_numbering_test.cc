@@ -202,7 +202,7 @@ class LocalValueNumberingTest : public testing::Test {
 
   LocalValueNumberingTest()
       : pool_(),
-        cu_(&pool_),
+        cu_(&pool_, kNone),
         mir_count_(0u),
         mirs_(nullptr),
         ssa_reps_(),

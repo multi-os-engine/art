@@ -148,7 +148,7 @@ class TopologicalSortOrderTest : public testing::Test {
 
   TopologicalSortOrderTest()
       : pool_(),
-        cu_(&pool_) {
+        cu_(&pool_, kNone) {
     cu_.mir_graph.reset(new MIRGraph(&cu_, &cu_.arena));
   }
 
