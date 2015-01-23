@@ -19,6 +19,8 @@
 #include <fstream>
 #include <stdint.h>
 
+#include "base/dumpable.h"
+#include "base/timing_logger.h"
 #include "bounds_check_elimination.h"
 #include "builder.h"
 #include "code_generator.h"
@@ -76,6 +78,68 @@ class CodeVectorAllocator FINAL : public CodeAllocator {
  */
 static const char* kStringFilter = "";
 
+class PassInfoPrinter : public ValueObject {
+ public:
+  PassInfoPrinter(bool graph_visualizer_enabled,
+                  bool timing_logger_enabled,
+                  const std::string& method_name,
+                  HGraph* graph,
+                  std::ostream* visualizer_output,
+                  const CodeGenerator& codegen)
+     : method_name_(method_name),
+       is_graph_visualizer_enabled_(graph_visualizer_enabled),
+       graph_visualizer_(visualizer_output, graph, codegen, method_name.c_str()),
+       is_timing_logger_enabled_(timing_logger_enabled),
+       timing_logger_running_(false),
+       timing_logger_(method_name.c_str(), true, true) {
+    if (strstr(method_name_.c_str(), kStringFilter) == nullptr) {
+      is_graph_visualizer_enabled_ = is_timing_logger_enabled_ = false;
+    }
+  }
+
+  void BeforePass(const char* pass_name, bool run_visualizer, bool run_timings) {
+    if (is_graph_visualizer_enabled_ && run_visualizer) {
+      graph_visualizer_.DumpGraph(pass_name, false);
+    }
+    if (is_timing_logger_enabled_ && run_timings) {
+      DCHECK(!timing_logger_running_);
+      timing_logger_.StartTiming(pass_name);
+      timing_logger_running_ = true;
+    }
+  }
+
+  void AfterPass(const char* pass_name, bool run_visualizer, bool run_timings) {
+    if (is_graph_visualizer_enabled_ && run_visualizer) {
+      graph_visualizer_.DumpGraph(pass_name, true);
+    }
+    if (timing_logger_running_ && run_timings) {
+      DCHECK(is_timing_logger_enabled_);
+      timing_logger_.EndTiming();
+      timing_logger_running_ = false;
+    }
+  }
+
+  ~PassInfoPrinter() {
+    if (is_timing_logger_enabled_) {
+      DCHECK(!timing_logger_running_);
+      LOG(INFO) << "TIMINGS " << method_name_;
+      LOG(INFO) << Dumpable<TimingLogger>(timing_logger_);
+    }
+  }
+
+ private:
+  const std::string& method_name_;
+
+  bool is_graph_visualizer_enabled_;
+  HGraphVisualizer graph_visualizer_;
+
+  bool is_timing_logger_enabled_;
+  bool timing_logger_running_;
+  TimingLogger timing_logger_;
+
+  DISALLOW_COPY_AND_ASSIGN(PassInfoPrinter);
+};
+
 class OptimizingCompiler FINAL : public Compiler {
  public:
   explicit OptimizingCompiler(CompilerDriver* driver);
@@ -126,7 +190,7 @@ class OptimizingCompiler FINAL : public Compiler {
                                    CodeGenerator* codegen,
                                    CompilerDriver* driver,
                                    const DexCompilationUnit& dex_compilation_unit,
-                                   const HGraphVisualizer& visualizer) const;
+                                   PassInfoPrinter* pass_info) const;
 
   // Just compile without doing optimizations.
   CompiledMethod* CompileBaseline(CodeGenerator* codegen,
@@ -205,7 +269,7 @@ static void RunOptimizations(HGraph* graph,
                              CompilerDriver* driver,
                              OptimizingCompilerStats* stats,
                              const DexCompilationUnit& dex_compilation_unit,
-                             const HGraphVisualizer& visualizer) {
+                             PassInfoPrinter* pass_info) {
   SsaRedundantPhiElimination redundant_phi(graph);
   SsaDeadPhiElimination dead_phi(graph);
   HDeadCodeElimination dce(graph);
@@ -239,9 +303,10 @@ static void RunOptimizations(HGraph* graph,
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
     HOptimization* optimization = optimizations[i];
-    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/false);
+    const char* pass_name = optimization->GetPassName();
+    pass_info->BeforePass(pass_name, true, true);
     optimization->Run();
-    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/true);
+    pass_info->AfterPass(pass_name, true, true);
     optimization->Check();
   }
 }
@@ -262,18 +327,20 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
                                                      CodeGenerator* codegen,
                                                      CompilerDriver* compiler_driver,
                                                      const DexCompilationUnit& dex_compilation_unit,
-                                                     const HGraphVisualizer& visualizer) const {
+                                                     PassInfoPrinter* pass_info) const {
   RunOptimizations(
-      graph, compiler_driver, &compilation_stats_, dex_compilation_unit, visualizer);
+      graph, compiler_driver, &compilation_stats_, dex_compilation_unit, pass_info);
 
+  pass_info->BeforePass(kLivenessPassName, false, true);
   PrepareForRegisterAllocation(graph).Run();
   SsaLivenessAnalysis liveness(*graph, codegen);
   liveness.Analyze();
-  visualizer.DumpGraph(kLivenessPassName);
+  pass_info->AfterPass(kLivenessPassName, true, true);
 
+  pass_info->BeforePass(kRegisterAllocatorPassName, false, true);
   RegisterAllocator register_allocator(graph->GetArena(), codegen, liveness);
   register_allocator.AllocateRegisters();
-  visualizer.DumpGraph(kRegisterAllocatorPassName);
+  pass_info->AfterPass(kRegisterAllocatorPassName, true, true);
 
   CodeVectorAllocator allocator;
   codegen->CompileOptimized(&allocator);
@@ -391,23 +458,36 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     return nullptr;
   }
 
-  HGraphVisualizer visualizer(
-      visualizer_output_.get(), graph, kStringFilter, *codegen.get(), method_name.c_str());
-  visualizer.DumpGraph("builder");
+  PassInfoPrinter pass_info(!GetCompilerDriver()->GetDumpCfgFileName().empty(),
+                            GetCompilerDriver()->GetDumpPasses(),
+                            method_name,
+                            graph,
+                            visualizer_output_.get(),
+                            *codegen.get());
+  pass_info.AfterPass(kBuilderPassName, true, false);
 
   bool can_optimize = CanOptimize(*code_item);
   bool can_allocate_registers = RegisterAllocator::CanAllocateRegistersFor(*graph, instruction_set);
   CompiledMethod* result = nullptr;
   if (run_optimizations_ && can_optimize && can_allocate_registers) {
     VLOG(compiler) << "Optimizing " << PrettyMethod(method_idx, dex_file);
-    if (!graph->TryBuildingSsa()) {
+
+    pass_info.BeforePass(kSsaBuilderPassName, true, true);
+    bool ssa_built = graph->TryBuildingSsa();
+    pass_info.AfterPass(kSsaBuilderPassName, true, true);
+
+    if (!ssa_built) {
       LOG(INFO) << "Skipping compilation of "
                 << PrettyMethod(method_idx, dex_file)
                 << ": it contains a non natural loop";
       // We could not transform the graph to SSA, bailout.
       compilation_stats_.RecordStat(MethodCompilationStat::kNotCompiledCannotBuildSSA);
     } else {
-      result = CompileOptimized(graph, codegen.get(), compiler_driver, dex_compilation_unit, visualizer);
+      result = CompileOptimized(graph,
+                                codegen.get(),
+                                compiler_driver,
+                                dex_compilation_unit,
+                                &pass_info);
     }
   } else if (shouldOptimize && RegisterAllocator::Supports(instruction_set)) {
     LOG(FATAL) << "Could not allocate registers in optimizing compiler";
