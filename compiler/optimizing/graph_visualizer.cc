@@ -310,18 +310,13 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
 
 HGraphVisualizer::HGraphVisualizer(std::ostream* output,
                                    HGraph* graph,
-                                   const char* string_filter,
                                    const CodeGenerator& codegen,
                                    const char* method_name)
-  : output_(output), graph_(graph), codegen_(codegen), is_enabled_(false) {
+  : output_(output), graph_(graph), codegen_(codegen) {
   if (output == nullptr) {
     return;
   }
-  if (strstr(method_name, string_filter) == nullptr) {
-    return;
-  }
 
-  is_enabled_ = true;
   HGraphVisualizerPrinter printer(graph_, *output_, "", true, codegen_);
   printer.StartTag("compilation");
   printer.PrintProperty("name", method_name);
@@ -331,10 +326,9 @@ HGraphVisualizer::HGraphVisualizer(std::ostream* output,
 }
 
 void HGraphVisualizer::DumpGraph(const char* pass_name, bool is_after_pass) const {
-  if (is_enabled_) {
-    HGraphVisualizerPrinter printer(graph_, *output_, pass_name, is_after_pass, codegen_);
-    printer.Run();
-  }
+  DCHECK(output_ != nullptr);
+  HGraphVisualizerPrinter printer(graph_, *output_, pass_name, is_after_pass, codegen_);
+  printer.Run();
 }
 
 }  // namespace art
