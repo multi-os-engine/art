@@ -45,6 +45,7 @@
 #include "compiler_callbacks.h"
 #include "dex_file-inl.h"
 #include "dex/pass_driver_me_opts.h"
+#include "dex/pass_driver_me_post_opt.h"
 #include "dex/verification_results.h"
 #include "dex/quick_compiler_callbacks.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
@@ -686,22 +687,27 @@ class Dex2Oat FINAL {
         ParseDouble(option.data(), '=', 0.0, 100.0, &top_k_profile_threshold);
       } else if (option == "--print-pass-names") {
         PassDriverMEOpts::PrintPassNames();
+        PassDriverMEPostOpt::PrintPassNames();
       } else if (option.starts_with("--disable-passes=")) {
         std::string disable_passes = option.substr(strlen("--disable-passes=")).data();
         PassDriverMEOpts::CreateDefaultPassList(disable_passes);
+        PassDriverMEPostOpt::CreateDefaultPassList(disable_passes);
       } else if (option.starts_with("--print-passes=")) {
         std::string print_passes = option.substr(strlen("--print-passes=")).data();
         PassDriverMEOpts::SetPrintPassList(print_passes);
+        PassDriverMEPostOpt::SetPrintPassList(print_passes);
       } else if (option == "--print-all-passes") {
         PassDriverMEOpts::SetPrintAllPasses();
       } else if (option.starts_with("--dump-cfg-passes=")) {
         std::string dump_passes_string = option.substr(strlen("--dump-cfg-passes=")).data();
         PassDriverMEOpts::SetDumpPassList(dump_passes_string);
+        PassDriverMEPostOpt::SetDumpPassList(dump_passes_string);
       } else if (option == "--print-pass-options") {
         print_pass_options = true;
       } else if (option.starts_with("--pass-options=")) {
         std::string options = option.substr(strlen("--pass-options=")).data();
         PassDriverMEOpts::SetOverriddenPassOptions(options);
+        PassDriverMEPostOpt::SetOverriddenPassOptions(options);
       } else if (option == "--include-patch-information") {
         include_patch_information = true;
       } else if (option == "--no-include-patch-information") {
@@ -926,6 +932,7 @@ class Dex2Oat FINAL {
 
     if (print_pass_options) {
       PassDriverMEOpts::PrintPassOptions();
+      PassDriverMEPostOpt::PrintPassOptions();
     }
 
     compiler_options_.reset(new CompilerOptions(compiler_filter,
