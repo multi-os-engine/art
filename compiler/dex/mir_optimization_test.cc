@@ -326,7 +326,7 @@ class MirOptimizationTest : public testing::Test {
 
   MirOptimizationTest()
       : pool_(),
-        cu_(&pool_),
+        cu_(&pool_, kNone),
         mir_count_(0u),
         mirs_(nullptr),
         code_item_(nullptr) {

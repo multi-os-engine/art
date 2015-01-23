@@ -23,7 +23,7 @@
 
 namespace art {
 
-CompilationUnit::CompilationUnit(ArenaPool* pool)
+CompilationUnit::CompilationUnit(ArenaPool* pool, InstructionSet isa)
   : compiler_driver(nullptr),
     class_linker(nullptr),
     dex_file(nullptr),
@@ -37,7 +37,7 @@ CompilationUnit::CompilationUnit(ArenaPool* pool)
     enable_debug(0),
     verbose(false),
     compiler(nullptr),
-    instruction_set(kNone),
+    instruction_set(isa),
     target64(false),
     compiler_flip_match(false),
     arena(pool),

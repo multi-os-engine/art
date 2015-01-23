@@ -41,7 +41,7 @@ typedef uint16_t NarrowDexOffset;    // For use in structs, Dex offsets range fr
 typedef uint32_t CodeOffset;         // Native code offset in bytes.
 
 struct CompilationUnit {
-  explicit CompilationUnit(ArenaPool* pool);
+  CompilationUnit(ArenaPool* pool, InstructionSet isa);
   ~CompilationUnit();
 
   void StartTimingSplit(const char* label);
@@ -65,7 +65,7 @@ struct CompilationUnit {
   uint32_t enable_debug;               // debugControlVector flags.
   bool verbose;
   const Compiler* compiler;
-  InstructionSet instruction_set;
+  const InstructionSet instruction_set;
   bool target64;
 
   const InstructionSetFeatures* GetInstructionSetFeatures() {

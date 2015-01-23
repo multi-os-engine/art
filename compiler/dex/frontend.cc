@@ -90,14 +90,14 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
   DCHECK(driver.GetCompilerOptions().IsCompilationEnabled());
 
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  CompilationUnit cu(driver.GetArenaPool());
+  InstructionSet instruction_set = driver.GetInstructionSet();
+  if (instruction_set == kArm) {
+    instruction_set = kThumb2;
+  }
+  CompilationUnit cu(driver.GetArenaPool(), instruction_set);
 
   cu.compiler_driver = &driver;
   cu.class_linker = class_linker;
-  cu.instruction_set = driver.GetInstructionSet();
-  if (cu.instruction_set == kArm) {
-    cu.instruction_set = kThumb2;
-  }
   cu.target64 = Is64BitInstructionSet(cu.instruction_set);
   cu.compiler = compiler;
   // TODO: Mips64 is not yet implemented.
