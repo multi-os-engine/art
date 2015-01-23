@@ -16,6 +16,7 @@
 
 #include "register_allocator.h"
 
+#include <iostream>
 #include <sstream>
 
 #include "base/bit_vector-inl.h"
@@ -671,6 +672,14 @@ bool RegisterAllocator::TryAllocateFreeReg(LiveInterval* current) {
       // Thanks to SSA, a non-split interval starting in a hole of an
       // inactive interval should never intersect with that inactive interval.
       // Only if it's not fixed though, because fixed intervals don't come from SSA.
+      if (inactive->FirstIntersectionWith(current) != kNoLifetime) {
+        fprintf(stderr, "%d\n", inactive->GetParent()->GetDefinedBy()->GetSsaIndex());
+        fprintf(stderr, "%d\n", current->GetParent()->GetDefinedBy()->GetSsaIndex());
+        DumpInterval(std::cerr, current);
+        DumpInterval(std::cerr, inactive);
+        DumpInterval(std::cerr, inactive->GetParent());
+        DumpAllIntervals(std::cerr);
+      }
       DCHECK_EQ(inactive->FirstIntersectionWith(current), kNoLifetime);
       continue;
     }
