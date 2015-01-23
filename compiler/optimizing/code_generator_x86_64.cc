@@ -403,24 +403,16 @@ size_t CodeGeneratorX86_64::RestoreFloatingPointRegister(size_t stack_index, uin
   return kX86_64WordSize;
 }
 
-static uint32_t ComputeCalleeSaveMask(const int* registers, size_t length) {
-  uint32_t mask = 0;
-  for (size_t i = 0, e = length; i < e; ++i) {
-    mask |= (1 << registers[i]);
-  }
-  return mask;
-}
-
 static constexpr int kNumberOfCpuRegisterPairs = 0;
 CodeGeneratorX86_64::CodeGeneratorX86_64(HGraph* graph, const CompilerOptions& compiler_options)
       : CodeGenerator(graph,
                       kNumberOfCpuRegisters,
                       kNumberOfFloatRegisters,
                       kNumberOfCpuRegisterPairs,
-                      ComputeCalleeSaveMask(reinterpret_cast<const int*>(kCoreCalleeSaves),
-                                            arraysize(kCoreCalleeSaves)),
-                      ComputeCalleeSaveMask(reinterpret_cast<const int*>(kFpuCalleeSaves),
-                                            arraysize(kFpuCalleeSaves)),
+                      ComputeRegisterMask(reinterpret_cast<const int*>(kCoreCalleeSaves),
+                                          arraysize(kCoreCalleeSaves)),
+                      ComputeRegisterMask(reinterpret_cast<const int*>(kFpuCalleeSaves),
+                                          arraysize(kFpuCalleeSaves)),
                       compiler_options),
         block_labels_(graph->GetArena(), 0),
         location_builder_(graph, this),
