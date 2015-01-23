@@ -16,6 +16,8 @@
 
 #include "codegen_mips.h"
 
+#include "base/logging.h"
+#include "dex/compiler_ir.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "mips_lir.h"
 
