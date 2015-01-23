@@ -40,8 +40,9 @@ static void RemoveAsUser(HInstruction* instruction) {
   if (environment != nullptr) {
     for (size_t i = 0, e = environment->Size(); i < e; ++i) {
       HInstruction* vreg = environment->GetInstructionAt(i);
-      if (vreg != nullptr) {
-        vreg->RemoveEnvironmentUser(environment, i);
+      HUseListNode<HEnvironment>* vreg_envuse = environment->GetInstructionEnvUseAt(i);
+      if (vreg != nullptr && vreg_envuse != nullptr) {
+        vreg->RemoveEnvironmentUser(vreg_envuse);
       }
     }
   }
@@ -425,8 +426,8 @@ static void Remove(HInstructionList* instruction_list,
                    HBasicBlock* block,
                    HInstruction* instruction) {
   DCHECK_EQ(block, instruction->GetBlock());
-  DCHECK(instruction->GetUses() == nullptr);
-  DCHECK(instruction->GetEnvUses() == nullptr);
+  DCHECK(instruction->GetUses().IsEmpty());
+  DCHECK(instruction->GetEnvUses().IsEmpty());
   instruction->SetBlock(nullptr);
   instruction_list->RemoveInstruction(instruction);
 
@@ -441,22 +442,25 @@ void HBasicBlock::RemovePhi(HPhi* phi) {
   Remove(&phis_, this, phi);
 }
 
-template <typename T>
-static void RemoveFromUseList(T* user,
-                              size_t input_index,
-                              HUseListNode<T>** list) {
-  HUseListNode<T>* previous = nullptr;
-  HUseListNode<T>* current = *list;
-  while (current != nullptr) {
-    if (current->GetUser() == user && current->GetIndex() == input_index) {
-      if (previous == nullptr) {
-        *list = current->GetTail();
-      } else {
-        previous->SetTail(current->GetTail());
-      }
+void HEnvironment::Populate(const GrowableArray<HInstruction*>& env) {
+  for (size_t i = 0; i < env.Size(); i++) {
+    HInstruction* instruction = env.Get(i);
+    vregs_.Put(i, instruction);
+    if (instruction != nullptr) {
+      instruction->AddEnvUseAt(this, i);
     }
-    previous = current;
-    current = current->GetTail();
+  }
+}
+
+template <typename T>
+static void RemoveFromUseList(T* user, size_t input_index, HUseList<T>& list) {
+  HUseListNode<T>* current;
+  for (HUseIterator<HInstruction> use_it(list); !use_it.Done();) {
+    current = use_it.Current();
+    use_it.Advance();
+    if (current->GetUser() == user && current->GetIndex() == input_index) {
+      list.Remove(current);
+    }
   }
 }
 
@@ -477,11 +481,11 @@ HInstruction* HInstruction::GetPreviousDisregardingMoves() const {
 }
 
 void HInstruction::RemoveUser(HInstruction* user, size_t input_index) {
-  RemoveFromUseList(user, input_index, &uses_);
+  RemoveFromUseList(user, input_index, uses_);
 }
 
-void HInstruction::RemoveEnvironmentUser(HEnvironment* user, size_t input_index) {
-  RemoveFromUseList(user, input_index, &env_uses_);
+void HInstruction::RemoveEnvironmentUser(HUseListNode<HEnvironment>* use) {
+  env_uses_.Remove(use);
 }
 
 void HInstructionList::AddInstruction(HInstruction* instruction) {
@@ -589,8 +593,8 @@ void HInstruction::ReplaceWith(HInstruction* other) {
     other->AddEnvUseAt(user, input_index);
   }
 
-  uses_ = nullptr;
-  env_uses_ = nullptr;
+  uses_.Clear();
+  env_uses_.Clear();
 }
 
 void HInstruction::ReplaceInput(HInstruction* replacement, size_t index) {
