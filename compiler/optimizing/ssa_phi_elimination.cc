@@ -78,8 +78,8 @@ void SsaDeadPhiElimination::Run() {
             HUseListNode<HEnvironment>* user_node = use_it.Current();
             HEnvironment* user = user_node->GetUser();
             user->SetRawEnvAt(user_node->GetIndex(), nullptr);
-            current->RemoveEnvironmentUser(user, user_node->GetIndex());
           }
+          current->GetEnvUses().Clear();
         }
         block->RemovePhi(current->AsPhi());
       }
