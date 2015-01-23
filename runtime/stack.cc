@@ -348,19 +348,28 @@ bool StackVisitor::SetVRegPair(mirror::ArtMethod* m, uint16_t vreg, uint64_t new
       bool target64 = Is64BitInstructionSet(kRuntimeISA);
       // Deal with 32 or 64-bit wide registers in a way that builds on all targets.
       if (target64) {
+        // We need to handle the low and high bits separately in case the DEX
+        // register pair is promoted to a single 64-bit register. Otherwise, the
+        // 64-bit register will contain the old low 32-bits and the new 32-bits.
         uintptr_t old_reg_val_lo = GetRegister(reg_lo, is_float);
-        uintptr_t old_reg_val_hi = GetRegister(reg_hi, is_float);
         uint64_t new_vreg_portion_lo = static_cast<uint64_t>(new_value_lo);
-        uint64_t new_vreg_portion_hi = static_cast<uint64_t>(new_value_hi) << 32;
         uint64_t old_reg_val_lo_as_wide = static_cast<uint64_t>(old_reg_val_lo);
-        uint64_t old_reg_val_hi_as_wide = static_cast<uint64_t>(old_reg_val_hi);
         uint64_t mask_lo = static_cast<uint64_t>(0xffffffff) << 32;
-        uint64_t mask_hi = 0xffffffff;
         new_value_lo = static_cast<uintptr_t>((old_reg_val_lo_as_wide & mask_lo) | new_vreg_portion_lo);
+        SetRegister(reg_lo, new_value_lo, is_float);
+
+        // If reg_hi is the same register than reg_lo, the loaded value will
+        // contain the new value's low bits we just set above.
+        uintptr_t old_reg_val_hi = GetRegister(reg_hi, is_float);
+        uint64_t new_vreg_portion_hi = static_cast<uint64_t>(new_value_hi) << 32;
+        uint64_t old_reg_val_hi_as_wide = static_cast<uint64_t>(old_reg_val_hi);
+        uint64_t mask_hi = 0xffffffff;
         new_value_hi = static_cast<uintptr_t>((old_reg_val_hi_as_wide & mask_hi) | new_vreg_portion_hi);
+        SetRegister(reg_hi, new_value_hi, is_float);
+      } else {
+        SetRegister(reg_lo, new_value_lo, is_float);
+        SetRegister(reg_hi, new_value_hi, is_float);
       }
-      SetRegister(reg_lo, new_value_lo, is_float);
-      SetRegister(reg_hi, new_value_hi, is_float);
       return true;
     } else {
       const DexFile::CodeItem* code_item = m->GetCodeItem();
