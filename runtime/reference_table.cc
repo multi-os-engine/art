@@ -76,6 +76,8 @@ struct ObjectComparator {
     // TODO: enable analysis when analysis can work with the STL.
       NO_THREAD_SAFETY_ANALYSIS {
     Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
+    // These GC roots are already forwarded in ReferenceTable::Dump. We sort by class since there
+    // isn't any suspend points which can happen during the sorting process.
     mirror::Object* obj1 = root1.Read<kWithoutReadBarrier>();
     mirror::Object* obj2 = root2.Read<kWithoutReadBarrier>();
     DCHECK(obj1 != nullptr);
@@ -85,7 +87,7 @@ struct ObjectComparator {
     DCHECK(!runtime->IsClearedJniWeakGlobal(obj2));
     // Sort by class...
     if (obj1->GetClass() != obj2->GetClass()) {
-      return obj1->GetClass()->IdentityHashCode() < obj2->GetClass()->IdentityHashCode();
+      return obj1->GetClass() < obj2->GetClass();
     }
     // ...then by size...
     const size_t size1 = obj1->SizeOf();
@@ -94,7 +96,7 @@ struct ObjectComparator {
       return size1 < size2;
     }
     // ...and finally by identity hash code.
-    return obj1->IdentityHashCode() < obj2->IdentityHashCode();
+    return obj1 < obj2;
   }
 };
 
