@@ -76,14 +76,14 @@ void ArmManagedRegister::Print(std::ostream& os) const {
   if (!IsValidManagedRegister()) {
     os << "No Register";
   } else if (IsCoreRegister()) {
-    os << "Core: " << static_cast<int>(AsCoreRegister());
+    os << "R" << static_cast<int>(AsCoreRegister());
   } else if (IsRegisterPair()) {
-    os << "Pair: " << static_cast<int>(AsRegisterPairLow()) << ", "
-       << static_cast<int>(AsRegisterPairHigh());
+    os << "(R" << static_cast<int>(AsRegisterPairLow()) << ", R"
+       << static_cast<int>(AsRegisterPairHigh()) << ")";
   } else if (IsSRegister()) {
-    os << "SRegister: " << static_cast<int>(AsSRegister());
+    os << "S" << static_cast<int>(AsSRegister());
   } else if (IsDRegister()) {
-    os << "DRegister: " << static_cast<int>(AsDRegister());
+    os << "D" << static_cast<int>(AsDRegister());
   } else {
     os << "??: " << RegId();
   }

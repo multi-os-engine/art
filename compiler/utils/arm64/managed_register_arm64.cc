@@ -87,13 +87,13 @@ void Arm64ManagedRegister::Print(std::ostream& os) const {
   if (!IsValidManagedRegister()) {
     os << "No Register";
   } else if (IsXRegister()) {
-    os << "XCore: " << static_cast<int>(AsXRegister());
+    os << "X" << static_cast<int>(AsXRegister());
   } else if (IsWRegister()) {
-    os << "WCore: " << static_cast<int>(AsWRegister());
+    os << "W" << static_cast<int>(AsWRegister());
   } else if (IsDRegister()) {
-    os << "DRegister: " << static_cast<int>(AsDRegister());
+    os << "D" << static_cast<int>(AsDRegister());
   } else if (IsSRegister()) {
-    os << "SRegister: " << static_cast<int>(AsSRegister());
+    os << "S" << static_cast<int>(AsSRegister());
   } else {
     os << "??: " << RegId();
   }

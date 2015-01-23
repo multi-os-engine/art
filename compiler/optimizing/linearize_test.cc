@@ -38,12 +38,14 @@ namespace art {
 static void TestCode(const uint16_t* data, const int* expected_order, size_t number_of_blocks) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
-  HGraphBuilder builder(&allocator);
+  HGraph* graph = new (&allocator) HGraph(&allocator);
+  HGraphBuilder builder(graph);
   const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
-  HGraph* graph = builder.BuildGraph(*item);
-  ASSERT_NE(graph, nullptr);
+  bool graph_built = builder.BuildGraph(*item);
+  ASSERT_TRUE(graph_built);
 
-  graph->TryBuildingSsa();
+  bool ssa_built = graph->TryBuildingSsa();
+  ASSERT_TRUE(ssa_built);
 
   x86::CodeGeneratorX86 codegen(graph, CompilerOptions());
   SsaLivenessAnalysis liveness(*graph, &codegen);
