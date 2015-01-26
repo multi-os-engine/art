@@ -3048,6 +3048,38 @@ class HPostOrderIterator : public ValueObject {
   DISALLOW_COPY_AND_ASSIGN(HPostOrderIterator);
 };
 
+class HBlocksInLoopIterator : public ValueObject {
+ public:
+  explicit HBlocksInLoopIterator(const HLoopInformation& info)
+      : blocks_in_loop_(info.GetBlocks()),
+        blocks_(info.GetHeader()->GetGraph()->GetBlocks()),
+        index_(0) {
+    for (size_t e = blocks_.Size(); index_ < e; ++index_) {
+      if (blocks_in_loop_.IsBitSet(index_)) {
+        break;
+      }
+    }
+  }
+
+  bool Done() const { return index_ == blocks_.Size(); }
+  HBasicBlock* Current() const { return blocks_.Get(index_); }
+  void Advance() {
+    ++index_;
+    for (size_t e = blocks_.Size(); index_ < e; ++index_) {
+      if (blocks_in_loop_.IsBitSet(index_)) {
+        break;
+      }
+    }
+  }
+
+ private:
+  const BitVector& blocks_in_loop_;
+  const GrowableArray<HBasicBlock*>& blocks_;
+  size_t index_;
+
+  DISALLOW_COPY_AND_ASSIGN(HBlocksInLoopIterator);
+};
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_NODES_H_
