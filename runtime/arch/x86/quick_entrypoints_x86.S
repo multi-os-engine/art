@@ -425,7 +425,7 @@ DEFINE_FUNCTION art_quick_invoke_stub
     LOOP_OVER_SHORTY_LOADING_XMMS xmm2, .Lxmm_setup_finished
     LOOP_OVER_SHORTY_LOADING_XMMS xmm3, .Lxmm_setup_finished
     .balign 16
-.Lxmm_setup_finished:
+SYMBOL(.Lxmm_setup_finished):
     PUSH ebp                      // save ebp
     PUSH ebx                      // save ebx
     PUSH esi                      // save esi
@@ -519,7 +519,7 @@ DEFINE_FUNCTION art_quick_invoke_static_stub
     LOOP_OVER_SHORTY_LOADING_XMMS xmm2, .Lxmm_setup_finished2
     LOOP_OVER_SHORTY_LOADING_XMMS xmm3, .Lxmm_setup_finished2
     .balign 16
-.Lxmm_setup_finished2:
+SYMBOL(.Lxmm_setup_finished2):
     PUSH ebp                      // save ebp
     PUSH ebx                      // save ebx
     PUSH esi                      // save esi
