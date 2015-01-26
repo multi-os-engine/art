@@ -447,7 +447,9 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
   endif
 
   LOCAL_C_INCLUDES += $$(ART_C_INCLUDES)
+  LOCAL_C_INCLUDES += art/cmdline
   LOCAL_C_INCLUDES += art/sigchainlib
+  LOCAL_C_INCLUDES += art
 
   LOCAL_SHARED_LIBRARIES := libnativehelper libnativebridge libsigchain
   include external/libcxx/libcxx.mk

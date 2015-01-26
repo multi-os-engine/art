@@ -29,7 +29,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
-#include <memory>
+#include <memory_representation.h>
 #include <vector>
 #include <fcntl.h>
 
