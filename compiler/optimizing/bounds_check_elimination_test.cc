@@ -19,6 +19,7 @@
 #include "gvn.h"
 #include "nodes.h"
 #include "optimizing_unit_test.h"
+#include "side_effects_analysis.h"
 #include "utils/arena_allocator.h"
 
 #include "gtest/gtest.h"
