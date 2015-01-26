@@ -457,7 +457,7 @@ DEFINE_FUNCTION art_quick_invoke_stub
     // Enumerate the possible cases for loading GPRS.
     // edx (and maybe ebx):
     SKIP_OVER_FLOATS .Lgpr_setup_finished
-    cmpb MACRO_LITERAL(74), %al   // if (al == 'J') goto FOUND_LONG
+    cmpb LITERAL(74), %al         // if (al == 'J') goto FOUND_LONG
     je .LfirstLong
     // Must be an integer value.
     movl (%edi), %edx
@@ -549,7 +549,7 @@ DEFINE_FUNCTION art_quick_invoke_static_stub
     // Enumerate the possible cases for loading GPRS.
     // ecx (and maybe edx)
     SKIP_OVER_FLOATS .Lgpr_setup_finished2
-    cmpb MACRO_LITERAL(74), %al   // if (al == 'J') goto FOUND_LONG
+    cmpb LITERAL(74), %al         // if (al == 'J') goto FOUND_LONG
     je .LfirstLong2
     // Must be an integer value.  Load into ECX.
     movl (%edi), %ecx
@@ -557,7 +557,7 @@ DEFINE_FUNCTION art_quick_invoke_static_stub
 
     // Now check edx (and maybe ebx).
     SKIP_OVER_FLOATS .Lgpr_setup_finished2
-    cmpb MACRO_LITERAL(74), %al   // if (al == 'J') goto FOUND_LONG
+    cmpb LITERAL(74), %al         // if (al == 'J') goto FOUND_LONG
     je .LSecondLong2
     // Must be an integer.  Load into EDX.
     movl (%edi), %edx
