@@ -110,6 +110,34 @@ static constexpr size_t kVerifyObjectAllocationStackSize = 16 * KB /
 static constexpr size_t kDefaultAllocationStackSize = 8 * MB /
     sizeof(mirror::HeapReference<mirror::Object>);
 
+#if 0
+
+// Provide storage for Heap static constexpr fields
+// If true, measure the total allocation time.
+static constexpr bool Heap::kMeasureAllocationTime;
+static constexpr size_t Heap::kDefaultStartingSize;
+static constexpr size_t Heap::kDefaultInitialSize;
+static constexpr size_t Heap::kDefaultMaximumSize;
+static constexpr size_t Heap::kDefaultNonMovingSpaceCapacity;
+static constexpr size_t Heap::kDefaultMaxFree;
+static constexpr size_t Heap::kDefaultMinFree;
+static constexpr size_t Heap::kDefaultLongPauseLogThreshold;
+static constexpr size_t Heap::kDefaultLongGCLogThreshold;
+static constexpr size_t Heap::kDefaultTLABSize;
+static constexpr double Heap::kDefaultTargetUtilization;
+static constexpr double Heap::kDefaultHeapGrowthMultiplier;
+// Primitive arrays larger than this size are put in the large object space.
+static constexpr size_t Heap::kDefaultLargeObjectThreshold;
+// Whether or not we use the free list large object space. Only use it if USE_ART_LOW_4G_ALLOCATOR
+// since this means that we have to use the slow msync loop in MemMap::MapAnonymous.
+static constexpr space::LargeObjectSpaceType Heap::kDefaultLargeObjectSpaceType;
+static constexpr size_t Heap::kTimeAdjust;
+// How often we allow heap trimming to happen (nanoseconds).
+static constexpr uint64_t Heap::kHeapTrimWait;
+// How long we wait after a transition request to perform a collector transition (nanoseconds).
+static constexpr uint64_t Heap::kCollectorTransitionWait;
+#endif
+
 Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max_free,
            double target_utilization, double foreground_heap_growth_multiplier,
            size_t capacity, size_t non_moving_space_capacity, const std::string& image_file_name,
@@ -364,11 +392,11 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
   CHECK(non_moving_space_ != nullptr);
   CHECK(!non_moving_space_->CanMoveObjects());
   // Allocate the large object space.
-  if (large_object_space_type == space::kLargeObjectSpaceTypeFreeList) {
+  if (large_object_space_type == space::LargeObjectSpaceType::kFreeList) {
     large_object_space_ = space::FreeListSpace::Create("free list large object space", nullptr,
                                                        capacity_);
     CHECK(large_object_space_ != nullptr) << "Failed to create large object space";
-  } else if (large_object_space_type == space::kLargeObjectSpaceTypeMap) {
+  } else if (large_object_space_type == space::LargeObjectSpaceType::kMap) {
     large_object_space_ = space::LargeObjectMapSpace::Create("mem map large object space");
     CHECK(large_object_space_ != nullptr) << "Failed to create large object space";
   } else {
