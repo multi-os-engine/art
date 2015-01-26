@@ -37,6 +37,7 @@
 #include "jni/quick/jni_compiler.h"
 #include "mirror/art_method-inl.h"
 #include "nodes.h"
+#include "null_check_elimination.h"
 #include "prepare_for_register_allocation.h"
 #include "register_allocator.h"
 #include "ssa_builder.h"
@@ -220,6 +221,8 @@ static void RunOptimizations(HGraph* graph,
 
   IntrinsicsRecognizer intrinsics(graph, dex_compilation_unit.GetDexFile(), driver);
 
+  NullCheckElimination nce(graph);
+
   HOptimization* optimizations[] = {
     &redundant_phi,
     &dead_phi,
@@ -231,7 +234,8 @@ static void RunOptimizations(HGraph* graph,
     &fold2,
     &gvn,
     &bce,
-    &simplify2
+    &simplify2,
+    &nce
   };
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {

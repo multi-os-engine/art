@@ -102,6 +102,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/intrinsics_x86_64.cc \
 	optimizing/locations.cc \
 	optimizing/nodes.cc \
+	optimizing/null_check_elimination.cc \
 	optimizing/optimization.cc \
 	optimizing/optimizing_compiler.cc \
 	optimizing/parallel_move_resolver.cc \
