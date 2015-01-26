@@ -895,8 +895,8 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   void ReplaceWith(HInstruction* instruction);
   void ReplaceInput(HInstruction* replacement, size_t index);
 
-  // Insert `this` instruction in `cursor`'s graph, just before `cursor`.
-  void InsertBefore(HInstruction* cursor);
+  // Move `this` instruction before `cursor`.
+  void MoveBefore(HInstruction* cursor);
 
 #define INSTRUCTION_TYPE_CHECK(type, super)                                    \
   bool Is##type() const { return (As##type() != nullptr); }                    \
@@ -3037,6 +3037,39 @@ class HPostOrderIterator : public ValueObject {
   size_t index_;
 
   DISALLOW_COPY_AND_ASSIGN(HPostOrderIterator);
+};
+
+// Iterator over the blocks that art part of the loop. Includes blocks part
+// of an inner loop. The order in which the blocks are iterated is on their
+// block id.
+class HBlocksInLoopIterator : public ValueObject {
+ public:
+  explicit HBlocksInLoopIterator(const HLoopInformation& info)
+      : blocks_in_loop_(info.GetBlocks()),
+        blocks_(info.GetHeader()->GetGraph()->GetBlocks()),
+        index_(0) {
+    if (!blocks_in_loop_.IsBitSet(index_)) {
+      Advance();
+    }
+  }
+
+  bool Done() const { return index_ == blocks_.Size(); }
+  HBasicBlock* Current() const { return blocks_.Get(index_); }
+  void Advance() {
+    ++index_;
+    for (size_t e = blocks_.Size(); index_ < e; ++index_) {
+      if (blocks_in_loop_.IsBitSet(index_)) {
+        break;
+      }
+    }
+  }
+
+ private:
+  const BitVector& blocks_in_loop_;
+  const GrowableArray<HBasicBlock*>& blocks_;
+  size_t index_;
+
+  DISALLOW_COPY_AND_ASSIGN(HBlocksInLoopIterator);
 };
 
 }  // namespace art
