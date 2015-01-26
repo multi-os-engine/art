@@ -42,6 +42,7 @@
 #include "ssa_builder.h"
 #include "ssa_phi_elimination.h"
 #include "ssa_liveness_analysis.h"
+#include "type_analysis.h"
 #include "utils/arena_allocator.h"
 
 namespace art {
@@ -200,6 +201,18 @@ static bool CanOptimize(const DexFile::CodeItem& code_item) {
   return code_item.tries_size_ == 0;
 }
 
+static void RunOptimizations(HOptimization* optimizations[],
+                             size_t length,
+                             const HGraphVisualizer& visualizer) {
+  for (size_t i = 0; i < length; ++i) {
+    HOptimization* optimization = optimizations[i];
+    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/false);
+    optimization->Run();
+    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/true);
+    optimization->Check();
+  }
+}
+
 static void RunOptimizations(HGraph* graph,
                              CompilerDriver* driver,
                              OptimizingCompilerStats* stats,
@@ -216,7 +229,6 @@ static void RunOptimizations(HGraph* graph,
   HConstantFolding fold2(graph);
   GVNOptimization gvn(graph);
   BoundsCheckElimination bce(graph);
-  InstructionSimplifier simplify2(graph);
 
   IntrinsicsRecognizer intrinsics(graph, dex_compilation_unit.GetDexFile(), driver);
 
@@ -230,17 +242,21 @@ static void RunOptimizations(HGraph* graph,
     &inliner,
     &fold2,
     &gvn,
-    &bce,
+    &bce
+  };
+
+  RunOptimizations(optimizations, arraysize(optimizations), visualizer);
+
+  TypeAnalysis typeAnalysis(graph);
+  typeAnalysis.Run();
+
+  InstructionSimplifier simplify2(graph, "instruction_simplifier_after_types");
+
+  HOptimization* optimizations_after_types[] = {
     &simplify2
   };
 
-  for (size_t i = 0; i < arraysize(optimizations); ++i) {
-    HOptimization* optimization = optimizations[i];
-    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/false);
-    optimization->Run();
-    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/true);
-    optimization->Check();
-  }
+  RunOptimizations(optimizations_after_types, arraysize(optimizations_after_types), visualizer);
 }
 
 // The stack map we generate must be 4-byte aligned on ARM. Since existing

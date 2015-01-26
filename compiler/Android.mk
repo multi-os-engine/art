@@ -111,6 +111,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/ssa_liveness_analysis.cc \
 	optimizing/ssa_phi_elimination.cc \
 	optimizing/ssa_type_propagation.cc \
+	optimizing/type_analysis.cc \
 	trampolines/trampoline_compiler.cc \
 	utils/arena_allocator.cc \
 	utils/arena_bit_vector.cc \
