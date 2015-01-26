@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 The Android Open Source Project
+ * Copyright (C) 2015 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,36 +14,40 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_OPTIMIZING_SSA_TYPE_PROPAGATION_H_
-#define ART_COMPILER_OPTIMIZING_SSA_TYPE_PROPAGATION_H_
+#ifndef ART_COMPILER_OPTIMIZING_REFERENCE_TYPE_PROPAGATION_H_
+#define ART_COMPILER_OPTIMIZING_REFERENCE_TYPE_PROPAGATION_H_
 
 #include "nodes.h"
+#include "optimization.h"
 
 namespace art {
 
-// Compute and propagate types of phis in the graph.
-class SsaTypePropagation : public ValueObject {
+/**
+ * Propagates reference types to instructions.
+ * TODO: Currently only nullability is computed.
+ */
+class ReferenceTypePropagation : public HOptimization {
  public:
-  explicit SsaTypePropagation(HGraph* graph)
-      : graph_(graph), worklist_(graph->GetArena(), kDefaultWorklistSize) {}
+  explicit ReferenceTypePropagation(HGraph* graph)
+    : HOptimization(graph, true, "reference_type_propagation"),
+      worklist_(graph->GetArena(), kDefaultWorklistSize) {}
 
-  void Run();
+  void Run() OVERRIDE;
 
  private:
   void VisitBasicBlock(HBasicBlock* block);
   void ProcessWorklist();
   void AddToWorklist(HPhi* phi);
   void AddDependentInstructionsToWorklist(HPhi* phi);
-  bool UpdateType(HPhi* phi);
+  bool UpdateNullability(HPhi* phi);
 
-  HGraph* const graph_;
   GrowableArray<HPhi*> worklist_;
 
   static constexpr size_t kDefaultWorklistSize = 8;
 
-  DISALLOW_COPY_AND_ASSIGN(SsaTypePropagation);
+  DISALLOW_COPY_AND_ASSIGN(ReferenceTypePropagation);
 };
 
 }  // namespace art
 
-#endif  // ART_COMPILER_OPTIMIZING_SSA_TYPE_PROPAGATION_H_
+#endif  // ART_COMPILER_OPTIMIZING_REFERENCE_TYPE_PROPAGATION_H_
