@@ -152,8 +152,8 @@ class X86Mir2Lir : public Mir2Lir {
   void LockCallTemps() OVERRIDE;
 
   void CompilerInitializeRegAlloc() OVERRIDE;
-  int VectorRegisterSize() OVERRIDE;
-  int NumReservableVectorRegisters(bool long_or_fp) OVERRIDE;
+  virtual int VectorRegisterSize();
+  virtual int NumReservableVectorRegisters(bool long_or_fp);
 
   // Required for target - miscellaneous.
   void AssembleLIR() OVERRIDE;

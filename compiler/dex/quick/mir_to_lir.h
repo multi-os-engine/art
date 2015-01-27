@@ -23,7 +23,6 @@
 #include "dex/dex_types.h"
 #include "dex/reg_location.h"
 #include "dex/reg_storage.h"
-#include "dex/backend.h"
 #include "dex/quick/resource_mask.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "invoke_type.h"
@@ -201,7 +200,7 @@ struct LIR {
 // Mask to denote sreg as the start of a 64-bit item.  Must not interfere with low 16 bits.
 #define STARTING_WIDE_SREG 0x10000
 
-class Mir2Lir : public Backend {
+class Mir2Lir {
   public:
     static constexpr bool kFailOnSizeError = true && kIsDebugBuild;
     static constexpr bool kReportSizeError = true && kIsDebugBuild;
@@ -1687,6 +1686,7 @@ class Mir2Lir : public Backend {
     LIR* first_fixup_;                         // Doubly-linked list of LIR nodes requiring fixups.
 
   protected:
+    ArenaAllocator* const arena_;
     CompilationUnit* const cu_;
     MIRGraph* const mir_graph_;
     ArenaVector<SwitchTable*> switch_tables_;
