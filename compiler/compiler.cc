@@ -17,11 +17,12 @@
 #include "compiler.h"
 
 #include "base/logging.h"
-#include "dex/quick/quick_compiler.h"
 #include "driver/compiler_driver.h"
-#include "optimizing/optimizing_compiler.h"
 
 namespace art {
+
+Compiler* CreateOptimizingCompiler(CompilerDriver* driver);
+Compiler* CreateQuickCompiler(CompilerDriver* driver);
 
 Compiler* Compiler::Create(CompilerDriver* driver, Compiler::Kind kind) {
   switch (kind) {
