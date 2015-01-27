@@ -40,6 +40,9 @@ class CustomDisassembler FINAL : public vixl::Disassembler {
   // Improve the disassembly of literal load instructions.
   virtual void VisitLoadLiteral(const vixl::Instruction* instr) OVERRIDE;
 
+  // Improve the disassembly of thread offset.
+  virtual void VisitLoadStoreUnsignedOffset(const vixl::Instruction* instr) OVERRIDE;
+
  private:
   // Indicate if the disassembler should read data loaded from literal pools.
   // This should only be enabled if reading the target of literal loads is safe.
