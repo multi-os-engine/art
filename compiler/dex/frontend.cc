@@ -31,6 +31,7 @@
 #include "base/timing_logger.h"
 #include "driver/compiler_options.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
+#include "dex/quick/quick_compiler.h"
 
 namespace art {
 
@@ -169,8 +170,10 @@ static CompiledMethod* CompileMethod(CompilerDriver& driver,
     return nullptr;
   }
 
+  auto* quick_compiler = down_cast<QuickCompiler*>(cu.compiler_driver->GetCompiler());
+  DCHECK(quick_compiler != nullptr);
   /* Create the pass driver and launch it */
-  PassDriverMEOpts pass_driver(&cu);
+  PassDriverMEOpts pass_driver(quick_compiler->GetPreOptPassManager(), &cu);
   pass_driver.Launch();
 
   /* For non-leaf methods check if we should skip compilation when the profiler is enabled. */

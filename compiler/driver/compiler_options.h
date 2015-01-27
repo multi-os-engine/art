@@ -26,6 +26,8 @@
 
 namespace art {
 
+class PassManagerOptions;
+
 class CompilerOptions FINAL {
  public:
   enum CompilerFilter {
@@ -87,6 +89,7 @@ class CompilerOptions FINAL {
                   bool implicit_suspend_checks,
                   bool compile_pic,
                   const std::vector<std::string>* verbose_methods,
+                  PassManagerOptions* pass_manager_options,
                   std::ostream* init_failure_output
                   ) :  // NOLINT(whitespace/parens)
     compiler_filter_(compiler_filter),
@@ -104,8 +107,10 @@ class CompilerOptions FINAL {
     implicit_suspend_checks_(implicit_suspend_checks),
     compile_pic_(compile_pic),
     verbose_methods_(verbose_methods),
+    pass_manager_options_(pass_manager_options),
     init_failure_output_(init_failure_output) {
   }
+  virtual ~CompilerOptions();
 
   CompilerFilter GetCompilerFilter() const {
     return compiler_filter_;
@@ -210,6 +215,10 @@ class CompilerOptions FINAL {
     return init_failure_output_;
   }
 
+  const PassManagerOptions* GetPassManagerOptions() const {
+    return pass_manager_options_;
+  }
+
  private:
   CompilerFilter compiler_filter_;
   const size_t huge_method_threshold_;
@@ -229,6 +238,8 @@ class CompilerOptions FINAL {
 
   // Vector of methods to have verbose output enabled for.
   const std::vector<std::string>* const verbose_methods_;
+
+  PassManagerOptions* pass_manager_options_;
 
   // Log initialization of initialization failures to this stream if not null.
   std::ostream* const init_failure_output_;

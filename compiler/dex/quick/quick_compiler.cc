@@ -22,6 +22,9 @@
 #include "dex_file-inl.h"
 #include "dex/frontend.h"
 #include "dex/mir_graph.h"
+#include "dex/pass_driver_me_opts.h"
+#include "dex/pass_driver_me_post_opt.h"
+#include "dex/pass_manager.h"
 #include "dex/quick/mir_to_lir.h"
 #include "driver/compiler_driver.h"
 #include "elf_writer_quick.h"
@@ -36,48 +39,6 @@
 #include "dex/quick/x86/backend_x86.h"
 
 namespace art {
-
-class QuickCompiler : public Compiler {
- public:
-  explicit QuickCompiler(CompilerDriver* driver) : Compiler(driver, 100) {}
-
-  void Init() OVERRIDE;
-
-  void UnInit() const OVERRIDE;
-
-  bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file, CompilationUnit* cu) const
-      OVERRIDE;
-
-  CompiledMethod* Compile(const DexFile::CodeItem* code_item,
-                          uint32_t access_flags,
-                          InvokeType invoke_type,
-                          uint16_t class_def_idx,
-                          uint32_t method_idx,
-                          jobject class_loader,
-                          const DexFile& dex_file) const OVERRIDE;
-
-  CompiledMethod* JniCompile(uint32_t access_flags,
-                             uint32_t method_idx,
-                             const DexFile& dex_file) const OVERRIDE;
-
-  uintptr_t GetEntryPointOf(mirror::ArtMethod* method) const OVERRIDE
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  bool WriteElf(art::File* file,
-                OatWriter* oat_writer,
-                const std::vector<const art::DexFile*>& dex_files,
-                const std::string& android_root,
-                bool is_host) const
-    OVERRIDE
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  Backend* GetCodeGenerator(CompilationUnit* cu, void* compilation_unit) const OVERRIDE;
-
-  void InitCompilationUnit(CompilationUnit& cu) const OVERRIDE;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(QuickCompiler);
-};
 
 static_assert(0U == static_cast<size_t>(kNone),   "kNone not 0");
 static_assert(1U == static_cast<size_t>(kArm),    "kArm not 1");
@@ -647,8 +608,23 @@ Backend* QuickCompiler::GetCodeGenerator(CompilationUnit* cu, void* compilation_
   return mir_to_lir;
 }
 
+QuickCompiler::QuickCompiler(CompilerDriver* driver) : Compiler(driver, 100) {
+  const auto& compiler_options = driver->GetCompilerOptions();
+  auto* pass_manager_options = compiler_options.GetPassManagerOptions();
+  pre_opt_pass_manager_.reset(new PassManager(*pass_manager_options));
+  CHECK(pre_opt_pass_manager_.get() != nullptr);
+  PassDriverMEOpts::SetupPasses(pre_opt_pass_manager_.get());
+  pre_opt_pass_manager_->CreateDefaultPassList();
+  post_opt_pass_manager_.reset(new PassManager(*pass_manager_options));
+  CHECK(post_opt_pass_manager_.get() != nullptr);
+  PassDriverMEPostOpt::SetupPasses(post_opt_pass_manager_.get());
+  post_opt_pass_manager_->CreateDefaultPassList();
+}
 
-Compiler* CreateQuickCompiler(CompilerDriver* driver) {
+QuickCompiler::~QuickCompiler() {
+}
+
+Compiler* QuickCompiler::Create(CompilerDriver* driver) {
   return new QuickCompiler(driver);
 }
 
