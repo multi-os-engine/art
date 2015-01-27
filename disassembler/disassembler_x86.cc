@@ -190,7 +190,8 @@ std::string DisassemblerX86::DumpAddress(uint8_t mod, uint8_t rm, uint8_t rex64,
         address << " + ";
       }
     }
-    if (index != 4) {
+    const bool rex_x = (rex64 & 0x42) != 0;  // rex_x means r12 instead of rsp, which is allowed.
+    if (index != 4 || rex_x) {
       DumpIndexReg(address, rex64, index);
       if (scale != 0) {
         address << StringPrintf(" * %d", 1 << scale);
