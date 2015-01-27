@@ -26,7 +26,7 @@ namespace art {
 Compiler* Compiler::Create(CompilerDriver* driver, Compiler::Kind kind) {
   switch (kind) {
     case kQuick:
-      return CreateQuickCompiler(driver);
+      return QuickCompiler::Create(driver);
 
     case kOptimizing:
       return CreateOptimizingCompiler(driver);
