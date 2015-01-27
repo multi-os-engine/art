@@ -30,6 +30,10 @@
 #include "dex_instruction-inl.h"
 #include "driver/compiler_driver.h"
 #include "driver/dex_compilation_unit.h"
+#include "dex/global_value_numbering.h"
+#include "dex/quick/dex_file_to_method_inliner_map.h"
+#include "dex/quick/dex_file_method_inliner.h"
+#include "dex/quick/quick_compiler.h"
 #include "leb128.h"
 #include "pass_driver_me_post_opt.h"
 #include "stack.h"
@@ -2432,7 +2436,10 @@ BasicBlock* MIRGraph::CreateNewBB(BBType block_type) {
 }
 
 void MIRGraph::CalculateBasicBlockInformation() {
-  PassDriverMEPostOpt driver(cu_);
+  auto* quick_compiler = down_cast<QuickCompiler*>(cu_->compiler_driver->GetCompiler());
+  DCHECK(quick_compiler != nullptr);
+  /* Create the pass driver and launch it */
+  PassDriverMEPostOpt driver(quick_compiler->GetPreOptPassManager(), cu_);
   driver.Launch();
 }
 
