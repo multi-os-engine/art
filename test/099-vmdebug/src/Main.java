@@ -34,7 +34,12 @@ public class Main {
             tempFile = File.createTempFile("test", ".trace");
         } catch (IOException e) {
             System.setProperty("java.io.tmpdir", "/sdcard");
-            tempFile = File.createTempFile("test", ".trace");
+            try {
+                tempFile = File.createTempFile("test", ".trace");
+            } catch (IOException e2) {
+                System.setProperty("java.io.tmpdir", "/data/local/tmp");
+                tempFile = File.createTempFile("test", ".trace");
+            }
         }
         tempFile.deleteOnExit();
         String tempFileName = tempFile.getPath();
