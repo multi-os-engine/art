@@ -301,6 +301,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   LiveInterval* GetParent() const { return parent_; }
 
   LiveRange* GetFirstRange() const { return first_range_; }
+  LiveRange* GetLastRange() const { return last_range_; }
 
   int GetRegister() const { return register_; }
   void SetRegister(int reg) { register_ = reg; }
@@ -401,6 +402,23 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
 
   size_t FirstRegisterUse() const {
     return FirstRegisterUseAfter(GetStart());
+  }
+
+  size_t FirstUseAfter(size_t position) const {
+    if (is_temp_) {
+      return position == GetStart() ? position : kNoLifetime;
+    }
+
+    UsePosition* use = first_use_;
+    size_t end = GetEnd();
+    while (use != nullptr && use->GetPosition() <= end) {
+      size_t use_position = use->GetPosition();
+      if (use_position > position) {
+        return use_position;
+      }
+      use = use->GetNext();
+    }
+    return kNoLifetime;
   }
 
   UsePosition* GetFirstUse() const {
@@ -511,6 +529,13 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   }
 
   LiveInterval* GetNextSibling() const { return next_sibling_; }
+  LiveInterval* GetLastSibling() {
+    LiveInterval* result = this;
+    while (result->next_sibling_ != nullptr) {
+      result = result->next_sibling_;
+    }
+    return result;
+  }
 
   // Returns the first register hint that is at least free before
   // the value contained in `free_until`. If none is found, returns
@@ -592,6 +617,35 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     if (first_use_ != nullptr) {
       high_or_low_interval_->first_use_ = first_use_->Dup(allocator_);
     }
+  }
+
+  // Returns whether an interval, when it is non-split, can and does
+  // use the same register of one of its input.
+  bool CanAndDoesUseInputRegister() const {
+    if (defined_by_ != nullptr && !IsSplit()) {
+      LocationSummary* locations = defined_by_->GetLocations();
+      if (locations->OutputOverlapsWithInputs()) {
+        return false;
+      }
+      for (HInputIterator it(defined_by_); !it.Done(); it.Advance()) {
+        LiveInterval* interval = it.Current()->GetLiveInterval();
+
+        // Find the interval that covers `defined_by`_.
+        while (!interval->Covers(defined_by_->GetLifetimePosition())) {
+          interval = interval->GetNextSibling();
+        }
+        // If it is live after `defined_by_`, we cannot reuse the register.
+        if (interval->Covers(defined_by_->GetLifetimePosition() + 1)) {
+          return false;
+        }
+
+        // Check if both intervals have the same register.
+        if (interval->GetType() == GetType() && GetRegister() == interval->GetRegister()) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
  private:
