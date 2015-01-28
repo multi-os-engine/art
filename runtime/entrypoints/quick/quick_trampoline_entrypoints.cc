@@ -808,6 +808,7 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
   // Compute details about the called method (avoid GCs)
   ClassLinker* linker = Runtime::Current()->GetClassLinker();
   mirror::ArtMethod* caller = QuickArgumentVisitor::GetCallingMethod(sp);
+
   InvokeType invoke_type;
   MethodReference called_method(nullptr, 0);
   const bool called_method_known_on_entry = !called->IsRuntimeMethod();
@@ -929,6 +930,16 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
       if ((update_dex_cache_method_index != DexFile::kDexNoIndex) &&
           (caller->GetDexCacheResolvedMethod(update_dex_cache_method_index) != called)) {
         caller->SetDexCacheResolvedMethod(update_dex_cache_method_index, called);
+      }
+    } else if (invoke_type == kStatic) {
+      auto dex_method_idx = called->GetDexMethodIndex();
+      // For static invokes, we may dispatch to the static method in the superclass but resolve
+      // using the subclass. To prevent getting slow paths on each invoke, we force set the
+      // resolved method for the super class dex method index if we are in the same dex file.
+      // b/19175856
+      if (called->GetDexFile() == called_method.dex_file &&
+          called_method.dex_method_index != dex_method_idx) {
+        called->GetDexCache()->SetResolvedMethod(dex_method_idx, called);
       }
     }
     // Ensure that the called method's class is initialized.
