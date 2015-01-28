@@ -15,6 +15,7 @@
  */
 
 #include <functional>
+#include <type_traits>
 
 #include "arch/instruction_set.h"
 #include "arch/arm/instruction_set_features_arm.h"
@@ -84,19 +85,65 @@ class InternalCodeAllocator : public CodeAllocator {
   DISALLOW_COPY_AND_ASSIGN(InternalCodeAllocator);
 };
 
+static uint32_t Run32(uint32_t (*fptr)()) {
+#ifdef __i386__
+  uint32_t result;
+  __asm__ __volatile__(
+          "push %%ebx\n\t"            // Save native-ABI callee-saves
+          "call *%%eax\n\t"           // Call the code
+          "pop %%ebx\n\t"             // Restore native-ABI callee-saves
+          : "=a" (result)
+            // Use the result from eax
+          : "a"(fptr)
+            // This places code into eax.
+          : "memory");
+  return result;
+#else
+  return fptr();
+#endif
+}
+
+static uint64_t Run64(uint64_t (*fptr)()) {
+#ifdef __i386__
+  uint64_t result;
+  __asm__ __volatile__(
+          "push %%ebx\n\t"            // Save native-ABI callee-saves
+          "call *%%eax\n\t"           // Call the code
+          "pop %%ebx\n\t"             // Restore native-ABI callee-saves
+          : "=A" (result)
+            // Use the result from eax
+          : "a"(fptr)
+            // This places code into eax.
+          : "memory");
+  return result;
+#else
+  return fptr();
+#endif
+}
+
 template <typename Expected>
 static void Run(const InternalCodeAllocator& allocator,
                 const CodeGenerator& codegen,
                 bool has_result,
                 Expected expected) {
-  typedef Expected (*fptr)();
   CommonCompilerTest::MakeExecutable(allocator.GetMemory(), allocator.GetSize());
-  fptr f = reinterpret_cast<fptr>(allocator.GetMemory());
+  uint8_t* f = allocator.GetMemory();
+  DCHECK_EQ(kRuntimeISA, codegen.GetInstructionSet());
   if (codegen.GetInstructionSet() == kThumb2) {
     // For thumb we need the bottom bit set.
-    f = reinterpret_cast<fptr>(reinterpret_cast<uintptr_t>(f) + 1);
+    f = reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(f) | 0x1);
   }
-  Expected result = f();
+
+  static_assert(IsPowerOfTwo(sizeof(Expected)) && sizeof(Expected) <= 8, "Unsupported type");
+  static_assert(!std::is_floating_point<Expected>::value, "Floating point unsupported");
+  Expected result;
+  if (sizeof(Expected) == 8) {
+    typedef uint64_t (*fptr)();
+    result = static_cast<Expected>(Run64(reinterpret_cast<fptr>(f)));
+  } else {
+    typedef uint32_t (*fptr)();
+    result = static_cast<Expected>(Run32(reinterpret_cast<fptr>(f)));
+  }
   if (has_result) {
     ASSERT_EQ(result, expected);
   }
