@@ -21,6 +21,31 @@
 
 namespace art {
 
+class HArm64AddLsl : public HExpression<2> {
+ public:
+  HArm64AddLsl(HAdd* instr, HInstruction* left, HShl* shl, int shift)
+      : HExpression(instr->GetType(), instr->GetSideEffects()),
+        shift_amount_(shift) {
+    SetRawInputAt(0, left);
+    SetRawInputAt(1, shl->InputAt(0));
+  }
+
+  virtual bool CanBeMoved() const { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other_instr) const {
+    HArm64AddLsl* other = other_instr->AsArm64AddLsl();
+    return shift_amount_ == other->shift_amount_;
+  }
+
+  int shift_amount() const { return shift_amount_; }
+
+  DECLARE_INSTRUCTION(Arm64AddLsl);
+
+ private:
+  int shift_amount_;
+
+  DISALLOW_COPY_AND_ASSIGN(HArm64AddLsl);
+};
+
 class HArm64ArrayAccessAddress : public HExpression<2> {
  public:
   explicit HArm64ArrayAccessAddress(HArrayGet* array_get)

@@ -1203,6 +1203,20 @@ void InstructionCodeGeneratorARM64::VisitAnd(HAnd* instruction) {
   HandleBinaryOp(instruction);
 }
 
+void LocationsBuilderARM64::VisitArm64AddLsl(HArm64AddLsl* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorARM64::VisitArm64AddLsl(HArm64AddLsl* instruction) {
+  __ Add(OutputRegister(instruction),
+         InputRegisterAt(instruction, 0),
+         Operand(InputRegisterAt(instruction, 1), LSL, instruction->shift_amount()));
+}
+
 void LocationsBuilderARM64::VisitArm64ArrayAccessAddress(HArm64ArrayAccessAddress* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
