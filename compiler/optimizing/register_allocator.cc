@@ -488,7 +488,7 @@ bool RegisterAllocator::ValidateIntervals(const GrowableArray<LiveInterval*>& in
       if (current->HasRegister()) {
         BitVector* liveness_of_register = liveness_of_values.Get(current->GetRegister());
         for (size_t j = it.CurrentRange()->GetStart(); j < it.CurrentRange()->GetEnd(); ++j) {
-          if (liveness_of_register->IsBitSet(j)) {
+          if (liveness_of_register->IsBitSet(j) && current->CanAndDoesUseInputRegister()) {
             if (log_fatal_on_failure) {
               std::ostringstream message;
               message << "Register conflict at " << j << " ";
@@ -658,6 +658,39 @@ bool RegisterAllocator::TryAllocateFreeReg(LiveInterval* current) {
     LiveInterval* interval = active_.Get(i);
     DCHECK(interval->HasRegister());
     free_until[interval->GetRegister()] = 0;
+  }
+
+  // Non-split intervals may re-use the registers used by their inputs,
+  // based on their location summary.
+  HInstruction* defined_by = current->GetDefinedBy();
+  if (defined_by != nullptr && !current->IsSplit()) {
+    LocationSummary* locations = defined_by->GetLocations();
+    if (!locations->OutputOverlapsWithInputs() && locations->Out().IsUnallocated()) {
+      for (HInputIterator it(defined_by); !it.Done(); it.Advance()) {
+        // Take the last interval of the input. It is the location of that interval
+        // that will be used at `defined_by`.
+        LiveInterval* interval = it.Current()->GetLiveInterval()->GetLastSibling();
+        if (interval->HasRegister() && interval->GetType() == current->GetType()) {
+          // The input must be live until the end of `defined_by`, to comply to
+          // the linear scan algorithm. So we use `defined_by`'s end lifetime
+          // position to check whether the input is dead or is inactive after
+          // `defined_by`.
+          DCHECK(interval->Covers(defined_by->GetLifetimePosition()));
+          size_t position = defined_by->GetLifetimePosition() + 1;
+          // Note that the same instruction may occur multiple times in the input list,
+          // so `free_until` may have changed already.
+          if (interval->IsDeadAt(position)) {
+            // Set the register to be free. Note that inactive intervals might later
+            // update this.
+            free_until[interval->GetRegister()] = kMaxLifetimePosition;
+          } else if (!interval->Covers(position)) {
+            // The interval becomes inactive at `defined_by`. We make its register
+            // available only util the next use strictly after `defined_by`.
+            free_until[interval->GetRegister()] = interval->FirstUseAfter(position);
+          }
+        }
+      }
+    }
   }
 
   // For each inactive interval, set its register to be free until
