@@ -927,41 +927,69 @@ void Thumb2Assembler::Emit16BitDataProcessing(Condition cond,
     if (so.IsImmediate()) {
       use_immediate = true;
       immediate = so.GetImmediate();
+    } else {
+      // Adjust rn and rd: only two registers will be emitted.
+      switch (opcode) {
+        case AND:
+        case ORR:
+        case EOR:
+        case RSB:
+        case ADC:
+        case SBC:
+        case BIC: {
+          if (rn == rd) {
+            rn = so.GetRegister();
+          } else {
+            CHECK_EQ(rd, so.GetRegister());
+          }
+          break;
+        }
+        case CMP:
+        case CMN: {
+          CHECK_EQ(rd, 0);
+          rd = rn;
+          rn = so.GetRegister();
+          break;
+        }
+        case MVN: {
+          CHECK_EQ(rn, 0);
+          rn = so.GetRegister();
+          break;
+        }
+        default:
+          break;
+      }
     }
 
     switch (opcode) {
       case AND: thumb_opcode = 0U /* 0b0000 */; break;
+      case ORR: thumb_opcode = 12U /* 0b1100 */; break;
       case EOR: thumb_opcode = 1U /* 0b0001 */; break;
-      case SUB: break;
       case RSB: thumb_opcode = 9U /* 0b1001 */; break;
-      case ADD: break;
       case ADC: thumb_opcode = 5U /* 0b0101 */; break;
       case SBC: thumb_opcode = 6U /* 0b0110 */; break;
-      case RSC: break;
-      case TST: thumb_opcode = 8U /* 0b1000 */; rn = so.GetRegister(); break;
-      case TEQ: break;
-      case CMP:
+      case BIC: thumb_opcode = 14U /* 0b1110 */; break;
+      case TST: thumb_opcode = 8U /* 0b1000 */; CHECK(!use_immediate); break;
+      case MVN: thumb_opcode = 15U /* 0b1111 */; CHECK(!use_immediate); break;
+      case CMP: {
         if (use_immediate) {
           // T2 encoding.
-           dp_opcode = 0;
-           opcode_shift = 11;
-           thumb_opcode = 5U /* 0b101 */;
-           rd_shift = 8;
-           rn_shift = 8;
+          dp_opcode = 0;
+          opcode_shift = 11;
+          thumb_opcode = 5U /* 0b101 */;
+          rd_shift = 8;
+          rn_shift = 8;
         } else {
           thumb_opcode = 10U /* 0b1010 */;
-          rd = rn;
-          rn = so.GetRegister();
         }
 
         break;
+      }
       case CMN: {
+        CHECK(!use_immediate);
         thumb_opcode = 11U /* 0b1011 */;
-        rd = rn;
-        rn = so.GetRegister();
         break;
       }
-      case ORR: thumb_opcode = 12U /* 0b1100 */; break;
       case MOV:
         dp_opcode = 0;
         if (use_immediate) {
@@ -984,9 +1012,11 @@ void Thumb2Assembler::Emit16BitDataProcessing(Condition cond,
           }
         }
         break;
-      case BIC: thumb_opcode = 14U /* 0b1110 */; break;
-      case MVN: thumb_opcode = 15U /* 0b1111 */; rn = so.GetRegister(); break;
+
+      case TEQ:
+      case RSC:
       default:
+        LOG(FATAL) << "Invalid thumb1 opcode " << opcode;
         break;
     }
   }

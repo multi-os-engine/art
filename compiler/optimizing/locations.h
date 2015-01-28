@@ -482,16 +482,17 @@ class LocationSummary : public ArenaObject<kArenaAllocMisc> {
   }
 
   void SetOut(Location location, Location::OutputOverlap overlaps = Location::kOutputOverlap) {
-    DCHECK(output_.IsUnallocated() || output_.IsInvalid());
+    DCHECK(output_.IsInvalid());
     output_overlaps_ = overlaps;
     output_ = location;
   }
 
   void UpdateOut(Location location) {
-    // The only reason for updating an output is for parameters where
-    // we only know the exact stack slot after doing full register
-    // allocation.
-    DCHECK(output_.IsStackSlot() || output_.IsDoubleStackSlot());
+    // There are two reasons for updating an output:
+    // 1) Parameters, where we only know the exact stack slot after
+    //    doing full register allocation.
+    // 2) Unallocated location.
+    DCHECK(output_.IsStackSlot() || output_.IsDoubleStackSlot() || output_.IsUnallocated());
     output_ = location;
   }
 
