@@ -15,6 +15,7 @@
  */
 
 #include <functional>
+#include <type_traits>
 
 #include "arch/instruction_set.h"
 #include "arch/arm/instruction_set_features_arm.h"
@@ -84,19 +85,273 @@ class InternalCodeAllocator : public CodeAllocator {
   DISALLOW_COPY_AND_ASSIGN(InternalCodeAllocator);
 };
 
+// Run a piece of code. As this is a transition from native to managed, we will have to save and
+// restore callee-save registers. As inline-assembly constraints are hard to satisfy apparently,
+// do it by hand.
+
+static uint32_t Run32(uint32_t (*fptr)()) {
+#ifdef __i386__
+  uint32_t result;
+  __asm__ __volatile__(
+      "push %%ebx\n\t"
+      "push %%edi\n\t"
+      "push %%esi\n\t"
+      "push %%ebp\n\t"
+      "push %%ecx\n\t"                // Caller-save...
+      "push %%edx\n\t"                // Caller-save...
+      "call *%%eax\n\t"               // Call the code
+      "pop %%edx\n\t"
+      "pop %%ecx\n\t"
+      "pop %%ebp\n\t"
+      "pop %%esi\n\t"
+      "pop %%edi\n\t"
+      "pop %%ebx"
+      : "=a" (result) // Use the result from eax
+      : "a"(fptr) // This places code into eax.
+      : "memory");
+  return result;
+#elif defined(__x86_64__)
+  uint32_t result;
+  __asm__ __volatile__(
+      "push %%rbx\n\t"
+      "push %%rdi\n\t"
+      "push %%rsi\n\t"
+      "push %%rbp\n\t"
+      "push %%rcx\n\t"
+      "push %%rdx\n\t"
+      "push %%r8\n\t"
+      "push %%r9\n\t"
+      "push %%r10\n\t"
+      "push %%r11\n\t"
+      "push %%r12\n\t"
+      "push %%r13\n\t"
+      "push %%r14\n\t"
+      "push %%r15\n\t"                // 14 * 8B => no padding for 16B alignment necessary
+      "call *%%rax\n\t"               // Call the code
+      "pop %%r15\n\t"
+      "pop %%r14\n\t"
+      "pop %%r13\n\t"
+      "pop %%r12\n\t"
+      "pop %%r11\n\t"
+      "pop %%r10\n\t"
+      "pop %%r9\n\t"
+      "pop %%r8\n\t"
+      "pop %%rdx\n\t"
+      "pop %%rcx\n\t"
+      "pop %%rbp\n\t"
+      "pop %%rsi\n\t"
+      "pop %%rdi\n\t"
+      "pop %%rbx"
+      : "=a" (result) // Use the result from eax
+      : "a"(fptr) // This places code into rax.
+      : "memory");
+  return result;
+#elif defined(__arm__)
+  uint32_t result;
+  __asm__ __volatile__(
+      "push {r0-r12, lr}\n\t"         // Save state, 14*4B = 56B, need 8B padding.
+      "sub sp, sp, #8\n\t"
+      "blx %[code]\n\t"
+      "add sp, sp, #8\n\t"
+      "mov lr, r0\n\t"
+      "pop {r0-r12}\n\t"
+      "mov %[result], lr\n\t"
+      "pop {lr}\n\t"                  // Really, really hope lr is not out
+      : [result] "=r" (result)
+      : [code] "r" (fptr)
+      : "memory");
+  return result;
+#elif defined(__aarch64__)
+  uint32_t result;
+  __asm__ __volatile__(
+      "str x30, [sp, #-16]!\n\t"
+      "stp x28, x29, [sp, #-16]!\n\t"
+      "stp x26, x27, [sp, #-16]!\n\t"
+      "stp x24, x25, [sp, #-16]!\n\t"
+      "stp x22, x23, [sp, #-16]!\n\t"
+      "stp x20, x21, [sp, #-16]!\n\t"
+      "stp x18, x19, [sp, #-16]!\n\t"
+      "stp x16, x17, [sp, #-16]!\n\t"
+      "stp x14, x15, [sp, #-16]!\n\t"
+      "stp x12, x13, [sp, #-16]!\n\t"
+      "stp x10, x11, [sp, #-16]!\n\t"
+      "stp x8, x9, [sp, #-16]!\n\t"
+      "stp x6, x7, [sp, #-16]!\n\t"
+      "stp x4, x5, [sp, #-16]!\n\t"
+      "stp x2, x3, [sp, #-16]!\n\t"
+      "stp x0, x1, [sp, #-16]!\n\t"
+      "blr %[code]\n\t"
+      "mov x30, x0\n\t"
+      "ldp x0, x1, [sp], #16\n\t"
+      "ldp x2, x3, [sp], #16\n\t"
+      "ldp x4, x5, [sp], #16\n\t"
+      "ldp x6, x7, [sp], #16\n\t"
+      "ldp x8, x9, [sp], #16\n\t"
+      "ldp x10, x11, [sp], #16\n\t"
+      "ldp x12, x13, [sp], #16\n\t"
+      "ldp x14, x15, [sp], #16\n\t"
+      "ldp x16, x17, [sp], #16\n\t"
+      "ldp x18, x19, [sp], #16\n\t"
+      "ldp x20, x21, [sp], #16\n\t"
+      "ldp x22, x23, [sp], #16\n\t"
+      "ldp x24, x25, [sp], #16\n\t"
+      "ldp x26, x27, [sp], #16\n\t"
+      "ldp x28, x29, [sp], #16\n\t"
+      "mov %[result], x30\n\t"
+      "ldr x30, [sp], #16\n\t"        // Really, really hope lr is not out
+      : [result] "=r" (result)
+      : [code] "r" (fptr)
+      : "memory");
+  return result;
+#else
+  return fptr();
+#endif
+}
+
+static uint64_t Run64(uint64_t (*fptr)()) {
+#ifdef __i386__
+  uint64_t result;
+  __asm__ __volatile__(
+      "push %%ebx\n\t"
+      "push %%edi\n\t"
+      "push %%esi\n\t"
+      "push %%ebp\n\t"
+      "push %%ecx\n\t"                // Caller-save...
+      "call *%%eax\n\t"               // Call the code
+      "pop %%ecx\n\t"
+      "pop %%ebp\n\t"
+      "pop %%esi\n\t"
+      "pop %%edi\n\t"
+      "pop %%ebx"
+      : "=A" (result) // Use the result from eax:edx
+      : "a"(fptr) // This places code into eax.
+      : "memory");
+  return result;
+#elif defined(__x86_64__)
+  uint64_t result;
+  __asm__ __volatile__(
+      "push %%rbx\n\t"
+      "push %%rdi\n\t"
+      "push %%rsi\n\t"
+      "push %%rbp\n\t"
+      "push %%rcx\n\t"
+      "push %%rdx\n\t"
+      "push %%r8\n\t"
+      "push %%r9\n\t"
+      "push %%r10\n\t"
+      "push %%r11\n\t"
+      "push %%r12\n\t"
+      "push %%r13\n\t"
+      "push %%r14\n\t"
+      "push %%r15\n\t"                // 14 * 8B => no padding for 16B alignment necessary
+      "call *%%rax\n\t"               // Call the code
+      "pop %%r15\n\t"
+      "pop %%r14\n\t"
+      "pop %%r13\n\t"
+      "pop %%r12\n\t"
+      "pop %%r11\n\t"
+      "pop %%r10\n\t"
+      "pop %%r9\n\t"
+      "pop %%r8\n\t"
+      "pop %%rdx\n\t"
+      "pop %%rcx\n\t"
+      "pop %%rbp\n\t"
+      "pop %%rsi\n\t"
+      "pop %%rdi\n\t"
+      "pop %%rbx"
+      : "=a" (result) // Use the result from eax
+      : "a"(fptr) // This places code into rax.
+      : "memory");
+  return result;
+#elif defined(__arm__)
+  uint32_t result1;
+  uint32_t result2;
+  __asm__ __volatile__(
+      "push {r0-r12, lr}\n\t"         // Save state, 14*4B = 56B, need 8B padding.
+      "sub sp, sp, #8\n\t"
+      "blx %[code]\n\t"
+      "add sp, sp, #8\n\t"
+      "mov r12, r0\n\t"
+      "mov lr, r1\n\t"
+      "pop {r0-r11}\n\t"
+      "mov %[result1], r12\n\t"
+      "mov %[result2], lr\n\t"
+      "pop {r12, lr}\n\t"             // Really, really hope r12 & lr are not out
+      : [result1] "=r" (result1), [result2] "=r" (result2)
+      : [code] "r" (fptr)
+      : "memory");
+  return static_cast<uint64_t>(result1) | (static_cast<uint64_t>(result2) << 32);
+#elif defined(__aarch64__)
+  uint64_t result;
+  __asm__ __volatile__(
+      "str x30, [sp, #-16]!\n\t"
+      "stp x28, x29, [sp, #-16]!\n\t"
+      "stp x26, x27, [sp, #-16]!\n\t"
+      "stp x24, x25, [sp, #-16]!\n\t"
+      "stp x22, x23, [sp, #-16]!\n\t"
+      "stp x20, x21, [sp, #-16]!\n\t"
+      "stp x18, x19, [sp, #-16]!\n\t"
+      "stp x16, x17, [sp, #-16]!\n\t"
+      "stp x14, x15, [sp, #-16]!\n\t"
+      "stp x12, x13, [sp, #-16]!\n\t"
+      "stp x10, x11, [sp, #-16]!\n\t"
+      "stp x8, x9, [sp, #-16]!\n\t"
+      "stp x6, x7, [sp, #-16]!\n\t"
+      "stp x4, x5, [sp, #-16]!\n\t"
+      "stp x2, x3, [sp, #-16]!\n\t"
+      "stp x0, x1, [sp, #-16]!\n\t"
+      "blr %[code]\n\t"
+      "mov x30, x0\n\t"
+      "ldp x0, x1, [sp], #16\n\t"
+      "ldp x2, x3, [sp], #16\n\t"
+      "ldp x4, x5, [sp], #16\n\t"
+      "ldp x6, x7, [sp], #16\n\t"
+      "ldp x8, x9, [sp], #16\n\t"
+      "ldp x10, x11, [sp], #16\n\t"
+      "ldp x12, x13, [sp], #16\n\t"
+      "ldp x14, x15, [sp], #16\n\t"
+      "ldp x16, x17, [sp], #16\n\t"
+      "ldp x18, x19, [sp], #16\n\t"
+      "ldp x20, x21, [sp], #16\n\t"
+      "ldp x22, x23, [sp], #16\n\t"
+      "ldp x24, x25, [sp], #16\n\t"
+      "ldp x26, x27, [sp], #16\n\t"
+      "ldp x28, x29, [sp], #16\n\t"
+      "mov %[result], x30\n\t"
+      "ldr x30, [sp], #16\n\t"        // Really, really hope lr is not out
+      : [result] "=r" (result)
+      : [code] "r" (fptr)
+      : "memory");
+  return result;
+#else
+  return fptr();
+#endif
+}
+
 template <typename Expected>
 static void Run(const InternalCodeAllocator& allocator,
                 const CodeGenerator& codegen,
                 bool has_result,
                 Expected expected) {
-  typedef Expected (*fptr)();
   CommonCompilerTest::MakeExecutable(allocator.GetMemory(), allocator.GetSize());
-  fptr f = reinterpret_cast<fptr>(allocator.GetMemory());
+  uint8_t* f = allocator.GetMemory();
+  DCHECK(kRuntimeISA == codegen.GetInstructionSet() ||
+         (kRuntimeISA == kArm && codegen.GetInstructionSet() == kThumb2));
   if (codegen.GetInstructionSet() == kThumb2) {
     // For thumb we need the bottom bit set.
-    f = reinterpret_cast<fptr>(reinterpret_cast<uintptr_t>(f) + 1);
+    f = reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(f) | 0x1);
   }
-  Expected result = f();
+
+  static_assert(IsPowerOfTwo(sizeof(Expected)) && sizeof(Expected) <= 8, "Unsupported type");
+  static_assert(!std::is_floating_point<Expected>::value, "Floating point unsupported");
+  Expected result;
+  if (sizeof(Expected) == 8) {
+    typedef uint64_t (*fptr)();
+    result = static_cast<Expected>(Run64(reinterpret_cast<fptr>(f)));
+  } else {
+    typedef uint32_t (*fptr)();
+    result = static_cast<Expected>(Run32(reinterpret_cast<fptr>(f)));
+  }
   if (has_result) {
     ASSERT_EQ(result, expected);
   }
