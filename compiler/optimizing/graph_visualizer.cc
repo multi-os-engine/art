@@ -183,6 +183,21 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     output_ << " " << instruction->GetValue();
   }
 
+  void VisitArm64ArithWithOp(HArm64ArithWithOp* instruction) {
+    output_ << "(" << instruction->instr_kind() << "+"
+        << HArm64ArithWithOp::OpKindDesc(instruction->op_kind());
+    if (HArm64ArithWithOp::IsShiftOp(instruction->op_kind())) {
+      output_ << " " << instruction->shift_amount();
+    }
+    output_ << ") ";
+  }
+
+  void VisitArm64BitfieldMove(HArm64BitfieldMove* instruction) {
+    output_ << "(" << instruction->BitfieldMoveTypeDesc(instruction->bitfield_move_type());
+    output_ << " immr = " << instruction->immr();
+    output_ << " imms = " << instruction->imms() << ")";
+  }
+
   void PrintInstruction(HInstruction* instruction) {
     output_ << instruction->DebugName();
     instruction->Accept(this);

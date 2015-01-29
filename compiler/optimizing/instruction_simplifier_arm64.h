@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_OPTIMIZING_INSTRUCTION_LOWERING_ARM64_H_
-#define ART_COMPILER_OPTIMIZING_INSTRUCTION_LOWERING_ARM64_H_
+#ifndef ART_COMPILER_OPTIMIZING_INSTRUCTION_SIMPLIFIER_ARM64_H_
+#define ART_COMPILER_OPTIMIZING_INSTRUCTION_SIMPLIFIER_ARM64_H_
 
 #include "nodes.h"
 #include "optimization.h"
@@ -23,22 +23,22 @@
 namespace art {
 namespace arm64 {
 
-class InstructionLoweringArm64 : public HGraphVisitor {
+class InstructionSimplifierArm64 : public HGraphVisitor {
  public:
-  explicit InstructionLoweringArm64(HGraph* graph) : HGraphVisitor(graph) {}
+  explicit InstructionSimplifierArm64(HGraph* graph) : HGraphVisitor(graph) {}
 
  private:
-  void TryExtractArrayAccessAddress(HInstruction* array_access);
+  void TryMergeInputIntoOperand(HBinaryOperation* instruction);
+  bool TryFitIntoOperand(HInstruction* instr, HInstruction* left, HInstruction* op);
 
-  void VisitArrayGet(HArrayGet* instruction) OVERRIDE;
-  void VisitArraySet(HArraySet* instruction) OVERRIDE;
-  void VisitShl(HShl* instruction) OVERRIDE;
-  void VisitShr(HShr* instruction) OVERRIDE;
-  void VisitUShr(HUShr* instruction) OVERRIDE;
-  void VisitTypeConversion(HTypeConversion* instruction) OVERRIDE;
+  void VisitAdd(HAdd* instruction) OVERRIDE;
+  void VisitAnd(HAnd* instruction) OVERRIDE;
+  void VisitOr(HOr* instruction) OVERRIDE;
+  void VisitSub(HSub* instruction) OVERRIDE;
+  void VisitXor(HXor* instruction) OVERRIDE;
 };
 
 }  // namespace arm64
 }  // namespace art
 
-#endif  // ART_COMPILER_OPTIMIZING_INSTRUCTION_LOWERING_ARM64_H_
+#endif  // ART_COMPILER_OPTIMIZING_INSTRUCTION_SIMPLIFIER_ARM64_H_

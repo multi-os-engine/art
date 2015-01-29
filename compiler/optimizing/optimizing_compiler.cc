@@ -34,6 +34,7 @@
 #include "inliner.h"
 #include "instruction_lowering_arch.h"
 #include "instruction_simplifier.h"
+#include "instruction_simplifier_arch.h"
 #include "intrinsics.h"
 #include "jni/quick/jni_compiler.h"
 #include "mirror/art_method-inl.h"
@@ -250,10 +251,14 @@ static void RunOptimizations(HGraph* graph,
   if (instruction_set == kArm64) {
     // ARM64 provides additional architecture-specific optimisation passes.
     InstructionLoweringArch arch_lowering(graph, instruction_set);
-    GVNOptimization gvn2(graph);
+    SideEffectsAnalysis side_effects_2(graph);
+    GVNOptimization gvn_2(graph, side_effects_2);
+    InstructionSimplifierArch arch_simplifier(graph, instruction_set);
     HOptimization* arm64_optimizations[] = {
       &arch_lowering,
-      &gvn2
+      &side_effects_2,
+      &gvn_2,
+      &arch_simplifier
     };
     RunOptimizationPasses(arm64_optimizations, arraysize(arm64_optimizations), visualizer);
   }
