@@ -569,7 +569,9 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                          \
-  M(Arm64ArrayAccessAddress, Instruction)
+  M(Arm64ArithWithOp, Instruction)                                      \
+  M(Arm64ArrayAccessAddress, Instruction)                               \
+  M(Arm64BitfieldMove, Instruction)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)
 

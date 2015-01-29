@@ -101,11 +101,14 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/instruction_lowering_arch.cc \
 	optimizing/instruction_lowering_arm64.cc \
 	optimizing/instruction_simplifier.cc \
+	optimizing/instruction_simplifier_arch.cc \
+	optimizing/instruction_simplifier_arm64.cc \
 	optimizing/intrinsics.cc \
 	optimizing/intrinsics_x86_64.cc \
 	optimizing/intrinsics_arm64.cc \
 	optimizing/locations.cc \
 	optimizing/nodes.cc \
+	optimizing/nodes_arm64.cc \
 	optimizing/optimization.cc \
 	optimizing/optimizing_compiler.cc \
 	optimizing/parallel_move_resolver.cc \

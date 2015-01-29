@@ -66,5 +66,48 @@ void InstructionLoweringArm64::VisitArraySet(HArraySet* instruction) {
   TryExtractArrayAccessAddress(instruction);
 }
 
+void InstructionLoweringArm64::VisitShl(HShl* instruction) {
+  if (instruction->InputAt(1)->IsConstant()) {
+    HBasicBlock* block = instruction->GetBlock();
+    ArenaAllocator* arena = GetGraph()->GetArena();
+    block->ReplaceAndRemoveInstructionWith(instruction, new (arena) HArm64BitfieldMove(instruction));
+  }
+}
+
+void InstructionLoweringArm64::VisitShr(HShr* instruction) {
+  if (instruction->InputAt(1)->IsConstant()) {
+    HBasicBlock* block = instruction->GetBlock();
+    ArenaAllocator* arena = GetGraph()->GetArena();
+    block->ReplaceAndRemoveInstructionWith(instruction, new (arena) HArm64BitfieldMove(instruction));
+  }
+}
+
+void InstructionLoweringArm64::VisitUShr(HUShr* instruction) {
+  if (instruction->InputAt(1)->IsConstant()) {
+    HBasicBlock* block = instruction->GetBlock();
+    ArenaAllocator* arena = GetGraph()->GetArena();
+    block->ReplaceAndRemoveInstructionWith(instruction, new (arena) HArm64BitfieldMove(instruction));
+  }
+}
+
+void InstructionLoweringArm64::VisitTypeConversion(HTypeConversion* instruction) {
+  Primitive::Type result_type = instruction->GetResultType();
+  Primitive::Type input_type = instruction->GetInputType();
+
+  DCHECK_NE(input_type, result_type);
+
+  if (Primitive::IsIntegralType(result_type) && Primitive::IsIntegralType(input_type)) {
+    if (result_type == Primitive::kPrimInt && input_type == Primitive::kPrimLong) {
+      // We don't actually need a bitfield operation here.
+      return;
+    }
+    // Lower to a bitfield operation to enable further optimisations.
+    HBasicBlock* block = instruction->GetBlock();
+    ArenaAllocator* arena = GetGraph()->GetArena();
+    block->ReplaceAndRemoveInstructionWith(instruction,
+                                           new (arena) HArm64BitfieldMove(instruction));
+  }
+}
+
 }  // namespace arm64
 }  // namespace art

@@ -1,0 +1,2 @@
+Tests for merged arithmetic and shift operations available on some
+architectures.

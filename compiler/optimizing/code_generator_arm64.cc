@@ -66,6 +66,31 @@ using helpers::XRegisterFrom;
 static constexpr size_t kHeapRefSize = sizeof(mirror::HeapReference<mirror::Object>);
 static constexpr int kCurrentMethodStackOffset = 0;
 
+vixl::Shift ShiftFromOpKind(HArm64ArithWithOp::OpKind op_kind) {
+  switch (op_kind) {
+    case HArm64ArithWithOp::kASR: return vixl::ASR;
+    case HArm64ArithWithOp::kLSL: return vixl::LSL;
+    case HArm64ArithWithOp::kLSR: return vixl::LSR;
+    default:
+      LOG(FATAL) << "Unexpected op kind.";
+      return NO_SHIFT;
+  }
+}
+
+vixl::Extend ExtendFromOpKind(HArm64ArithWithOp::OpKind op_kind) {
+  switch (op_kind) {
+    case HArm64ArithWithOp::kUXTB: return vixl::UXTB;
+    case HArm64ArithWithOp::kUXTH: return vixl::UXTH;
+    case HArm64ArithWithOp::kUXTW: return vixl::UXTW;
+    case HArm64ArithWithOp::kSXTB: return vixl::SXTB;
+    case HArm64ArithWithOp::kSXTH: return vixl::SXTH;
+    case HArm64ArithWithOp::kSXTW: return vixl::SXTW;
+    default:
+      LOG(FATAL) << "Unexpected op kind.";
+      return NO_EXTEND;
+  }
+}
+
 inline Condition ARM64Condition(IfCondition cond) {
   switch (cond) {
     case kCondEQ: return eq;
@@ -1203,6 +1228,58 @@ void InstructionCodeGeneratorARM64::VisitAnd(HAnd* instruction) {
   HandleBinaryOp(instruction);
 }
 
+void LocationsBuilderARM64::VisitArm64ArithWithOp(HArm64ArithWithOp* instruction) {
+  Primitive::Type type = instruction->GetType();
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM64::VisitArm64ArithWithOp(HArm64ArithWithOp* instruction) {
+  Primitive::Type type = instruction->GetType();
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+  Register rd = OutputRegister(instruction);
+  Register rn = InputRegisterAt(instruction, 0);
+  Register rm = InputRegisterAt(instruction, 1);
+  int64_t shift_amount = (type == Primitive::kPrimInt)
+    ? static_cast<uint32_t>(instruction->shift_amount() & kMaxIntShiftValue)
+    : static_cast<uint32_t>(instruction->shift_amount() & kMaxLongShiftValue);
+
+  Operand operand(0);
+
+  HArm64ArithWithOp::OpKind op_kind = instruction->op_kind();
+  if (rm.Is64Bits() && rd.Is32Bits()) {
+    rm = rm.W();
+  }
+  if (HArm64ArithWithOp::IsExtensionOp(op_kind)) {
+    operand = Operand(rm, ExtendFromOpKind(op_kind));
+  } else {
+    operand = Operand(rm, ShiftFromOpKind(op_kind), shift_amount);
+  }
+
+  switch (instruction->instr_kind()) {
+    case HInstruction::kAdd:
+      __ Add(rd, rn, operand);
+      break;
+    case HInstruction::kAnd:
+      __ And(rd, rn, operand);
+      break;
+    case HInstruction::kOr:
+      __ Orr(rd, rn, operand);
+      break;
+    case HInstruction::kSub:
+      __ Sub(rd, rn, operand);
+      break;
+    case HInstruction::kXor:
+      __ Eor(rd, rn, operand);
+      break;
+    default:
+      LOG(FATAL) << "Unexpected operation kind.";
+  }
+}
+
 void LocationsBuilderARM64::VisitArm64ArrayAccessAddress(HArm64ArrayAccessAddress* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
@@ -1225,6 +1302,44 @@ void InstructionCodeGeneratorARM64::VisitArm64ArrayAccessAddress(
   __ Add(OutputRegister(instruction),
          InputRegisterAt(instruction, 0),
          Operand(InputRegisterAt(instruction, 1), LSL, shift_size));
+}
+
+void LocationsBuilderARM64::VisitArm64BitfieldMove(HArm64BitfieldMove* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM64::VisitArm64BitfieldMove(HArm64BitfieldMove* instruction) {
+  // TODO(vixl): Use the MacroAssembler Sbfm, Bfm, Ubfm functions once they are
+  // available.
+  EmissionCheckScope scope(GetVIXLAssembler(), kInstructionSize);
+
+  Register rn = InputRegisterAt(instruction, 0);
+  Register rd = OutputRegister(instruction);
+  int immr = instruction->immr();
+  int imms = instruction->imms();
+  // The size of the registers must be coherent for VIXL.
+  if (rn.Is64Bits()) {
+    rd = rd.X();
+  }
+  if (rd.Is64Bits()) {
+    rn = rn.X();
+  }
+  switch (instruction->bitfield_move_type()) {
+    case HArm64BitfieldMove::kSBFM:
+      __ sbfm(rd, rn, immr, imms);
+      break;
+    case HArm64BitfieldMove::kBFM:
+      __ bfm(rd, rn, immr, imms);
+      break;
+    case HArm64BitfieldMove::kUBFM:
+      __ ubfm(rd, rn, immr, imms);
+      break;
+    default:
+      LOG(FATAL) << "Unexpected bitfield move type.";
+  }
 }
 
 void LocationsBuilderARM64::VisitArrayGet(HArrayGet* instruction) {
@@ -2532,6 +2647,11 @@ void InstructionCodeGeneratorARM64::VisitTypeConversion(HTypeConversion* convers
     } else if ((result_type == Primitive::kPrimChar) ||
                ((input_type == Primitive::kPrimChar) && (result_size > input_size))) {
       __ Ubfx(output, output.IsX() ? source.X() : source.W(), 0, min_size * kBitsPerByte);
+    } else if (result_type == Primitive::kPrimInt && input_type == Primitive::kPrimLong) {
+      // 'int' values are used directly as W registers, discarding the top
+      // bits. So we don't need to sign-extend, and can just perform a move.
+      // It is safe to optimised the move away if both registers are the same.
+      __ Mov(output.W(), source.W(), kDiscardForSameWReg);
     } else {
       __ Sbfx(output, output.IsX() ? source.X() : source.W(), 0, min_size * kBitsPerByte);
     }
