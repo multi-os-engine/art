@@ -568,7 +568,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)
 
-#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
+#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                          \
+  M(Arm64ArrayAccessAddress, Instruction)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)
 
@@ -2456,6 +2457,8 @@ class HBoundsCheck : public HExpression<2> {
   virtual bool NeedsEnvironment() const { return true; }
 
   virtual bool CanThrow() const { return true; }
+
+  HInstruction* GetIndex() const { return InputAt(0); }
 
   uint32_t GetDexPc() const { return dex_pc_; }
 

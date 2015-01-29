@@ -85,8 +85,8 @@ LIBART_COMPILER_SRC_FILES := \
 	jni/quick/x86_64/calling_convention_x86_64.cc \
 	jni/quick/calling_convention.cc \
 	jni/quick/jni_compiler.cc \
-	optimizing/builder.cc \
 	optimizing/bounds_check_elimination.cc \
+	optimizing/builder.cc \
 	optimizing/code_generator.cc \
 	optimizing/code_generator_arm.cc \
 	optimizing/code_generator_arm64.cc \
@@ -98,6 +98,8 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/graph_visualizer.cc \
 	optimizing/gvn.cc \
 	optimizing/inliner.cc \
+	optimizing/instruction_lowering_arch.cc \
+	optimizing/instruction_lowering_arm64.cc \
 	optimizing/instruction_simplifier.cc \
 	optimizing/intrinsics.cc \
 	optimizing/intrinsics_x86_64.cc \
