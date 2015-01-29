@@ -26,6 +26,100 @@ void HGraph::AddBlock(HBasicBlock* block) {
   blocks_.Add(block);
 }
 
+void HGraph::UnlinkBlock(HBasicBlock* block) {
+  for (size_t i = 0, e = block->GetPredecessors().Size(); i < e; ++i) {
+    block->GetPredecessors().Get(i)->RemoveSuccessor(block);
+  }
+  for (size_t i = 0, e = block->GetSuccessors().Size(); i < e; ++i) {
+    block->GetSuccessors().Get(i)->RemovePredecessor(block);
+  }
+  block->predecessors_.Reset();
+  block->successors_.Reset();
+  DCHECK_EQ(block->GetDominatedBlocks().Size(), 0u);
+  block->SetDominator(nullptr);
+
+  // Leave only an HExit instruction in the block.
+  DCHECK(block->GetLastInstruction()->IsControlFlow());
+  for (HInstruction* instr = block->GetFirstInstruction();
+       instr != nullptr;
+       instr = instr->next_) {
+    instr->SetBlock(nullptr);
+  }
+  block->instructions_.first_instruction_ = nullptr;
+  block->instructions_.last_instruction_ = nullptr;
+  block->AddInstruction(new (block->GetGraph()->GetArena()) HExit());
+
+  HLoopInformation* loop_info = block->loop_information_;
+  if (loop_info != nullptr) {
+    loop_info->RemoveBlock(*block);
+    block->loop_information_ = nullptr;
+
+    HBasicBlock* pre_header = loop_info->GetPreHeader();
+    while (pre_header != nullptr && pre_header->IsInLoop()) {
+      loop_info = pre_header->GetLoopInformation();
+      if (!loop_info->Contains(*block)) {
+        break;
+      }
+      loop_info->RemoveBlock(*block);
+      pre_header = loop_info->GetPreHeader();
+    }
+  }
+}
+
+void HGraph::MergeBlocks(HBasicBlock* block1, HBasicBlock* block2) {
+  DCHECK((block1->GetSuccessors().Size() == 1) && (block1->GetSuccessors().Get(0) == block2));
+  DCHECK((block2->GetPredecessors().Size() == 1) && (block2->GetPredecessors().Get(0) == block1));
+
+  // Update predecessors and successors for impacted blocks.
+  block1->successors_.Reset();
+  for (size_t i = 0, e = block2->GetSuccessors().Size(); i < e; ++i) {
+    HBasicBlock* successor = block2->GetSuccessors().Get(i);
+    size_t index = successor->GetPredecessorIndexOf(block2);
+    successor->predecessors_.Put(index, block1);
+    block1->successors_.Add(successor);
+  }
+  for (size_t i = 0, e = block2->GetDominatedBlocks().Size(); i < e; ++i) {
+    block2->GetDominatedBlocks().Get(i)->SetDominator(block1);
+  }
+  block2->predecessors_.Reset();
+  block2->successors_.Reset();
+  block2->dominated_blocks_.Reset();
+  // If block2 is a back-edge of a loop, we need to update the loop information.
+  if (block2->IsInLoop()) {
+    HLoopInformation* loop_info = block2->GetLoopInformation();
+    if (loop_info->IsBackEdge(block2)) {
+      loop_info->RemoveBackEdge(block2);
+      loop_info->AddBackEdge(block1);
+    }
+  }
+
+  // Mark all instructions from block2 as belonging to block1.
+  HInstruction* instr = block2->GetFirstInstruction();
+  while (instr != nullptr) {
+    instr->SetBlock(block1);
+    instr = instr->next_;
+  }
+
+  // Delete the control-flow instruction at the end of block1.
+  HInstruction* block1_last = block1->GetLastInstruction();
+  DCHECK(block1_last->IsControlFlow());
+  block1->RemoveInstruction(block1_last);
+
+  // Move the instructions from block2 into block1.
+  block1_last = block1->GetLastInstruction();
+  DCHECK(!block1_last->IsControlFlow());
+  HInstruction* block2_first = block2->GetFirstInstruction();
+  block1_last->next_ = block2_first;
+  block2_first->previous_ = block1_last;
+  block1->instructions_.last_instruction_ = block2->GetLastInstruction();
+
+  // Discard block2.
+  block2->instructions_.first_instruction_ = nullptr;
+  block2->instructions_.last_instruction_ = nullptr;
+  block2->AddInstruction(new (block2->GetGraph()->GetArena()) HExit());
+  UnlinkBlock(block2);
+}
+
 void HGraph::FindBackEdges(ArenaBitVector* visited) {
   ArenaBitVector visiting(arena_, blocks_.Size(), false);
   VisitBlockForBackEdges(entry_block_, visited, &visiting);
@@ -334,6 +428,11 @@ bool HLoopInformation::Contains(const HBasicBlock& block) const {
 
 bool HLoopInformation::IsIn(const HLoopInformation& other) const {
   return other.blocks_.IsBitSet(header_->GetBlockId());
+}
+
+void HLoopInformation::RemoveBlock(const HBasicBlock& block) {
+  DCHECK(Contains(block));
+  blocks_.ClearBit(block.GetBlockId());
 }
 
 bool HBasicBlock::Dominates(HBasicBlock* other) const {

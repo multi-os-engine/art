@@ -243,6 +243,71 @@ class HArm64BitfieldMove : public HExpression<1> {
   DISALLOW_COPY_AND_ASSIGN(HArm64BitfieldMove);
 };
 
+class HArm64ConditionalSelect : public HTemplateInstruction<5> {
+ public:
+  HArm64ConditionalSelect(HIf* instr_if, HPhi* phi)
+      : HTemplateInstruction<5>(SideEffects::None()),
+        input_condition_(nullptr),
+        type_(phi->GetType()) {
+    size_t true_predecessor_index =
+        (phi->GetBlock()->GetPredecessors().Get(0) == instr_if->IfTrueSuccessor()) ? 0 : 1;
+    SetRawInputAt(kInputConditionIndex, instr_if->InputAt(0));
+    SetRawInputAt(kInputTrueResIndex, phi->InputAt(true_predecessor_index));
+    SetRawInputAt(kInputFalseResIndex, phi->InputAt(true_predecessor_index ^ 1));
+  }
+
+  virtual size_t InputCount() const {
+    return ((input_condition_ != nullptr) && !input_condition_->NeedsMaterialization()) ? 5 : 3;
+  }
+
+  virtual void SetRawInputAt(size_t i, HInstruction* instruction) {
+    if (i == kInputConditionIndex) {
+      if (instruction->IsCondition()) {
+        // This instruction can handle a non-materialized condition. To be able
+        // to correctly evaluate the condition in that situation, it must
+        // maintain the inputs of the condition live. At this point we do not
+        // know yet whether the condition requires materialisation so, we take
+        // its inputs as input here anyway. The LocationsBuilder will know if
+        // the condition must be materialised and set the constraints
+        // appropriately for inputs.
+        input_condition_ = instruction->AsCondition();
+        HTemplateInstruction::SetRawInputAt(kInputCondLeftIndex, input_condition_->InputAt(0));
+        HTemplateInstruction::SetRawInputAt(kInputCondRightIndex, input_condition_->InputAt(1));
+      } else {
+        input_condition_ = nullptr;
+        HTemplateInstruction::SetRawInputAt(kInputCondLeftIndex, nullptr);
+        HTemplateInstruction::SetRawInputAt(kInputCondRightIndex, nullptr);
+      }
+    }
+    HTemplateInstruction::SetRawInputAt(i, instruction);
+  }
+
+  HInstruction* GetCondition() const { return InputAt(kInputConditionIndex); }
+  HInstruction* GetCondInputRight() const { return InputAt(kInputCondRightIndex); }
+
+  virtual Primitive::Type GetType() const { return type_; }
+
+  bool CanBeMoved() const OVERRIDE { return true; }
+  virtual bool InstructionDataEquals(HInstruction* other) const {
+    UNUSED(other);
+    return true;
+  }
+
+  static constexpr int kInputConditionIndex = 0;
+  static constexpr int kInputTrueResIndex = 1;
+  static constexpr int kInputFalseResIndex = 2;
+  static constexpr int kInputCondLeftIndex = 3;
+  static constexpr int kInputCondRightIndex = 4;
+
+  DECLARE_INSTRUCTION(Arm64ConditionalSelect);
+
+ private:
+  HCondition* input_condition_;
+  Primitive::Type type_;
+
+  DISALLOW_COPY_AND_ASSIGN(HArm64ConditionalSelect);
+};
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_NODES_ARM64_H_
