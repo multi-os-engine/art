@@ -502,7 +502,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   DISALLOW_COPY_AND_ASSIGN(HBasicBlock);
 };
 
-#define FOR_EACH_CONCRETE_INSTRUCTION(M)                                \
+#define FOR_EACH_CONCRETE_INSTRUCTION_COMMON(M)                         \
   M(Add, BinaryOperation)                                               \
   M(And, BinaryOperation)                                               \
   M(ArrayGet, Instruction)                                              \
@@ -565,6 +565,21 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   M(TypeConversion, Instruction)                                        \
   M(UShr, BinaryOperation)                                              \
   M(Xor, BinaryOperation)                                               \
+
+#define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)
+
+#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
+
+#define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)
+
+#define FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
+
+#define FOR_EACH_CONCRETE_INSTRUCTION(M)                                \
+  FOR_EACH_CONCRETE_INSTRUCTION_COMMON(M)                               \
+  FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                                  \
+  FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                                \
+  FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
 #define FOR_EACH_INSTRUCTION(M)                                         \
   FOR_EACH_CONCRETE_INSTRUCTION(M)                                      \

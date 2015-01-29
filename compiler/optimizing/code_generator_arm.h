@@ -98,9 +98,14 @@ class LocationsBuilderARM : public HGraphVisitor {
 #define DECLARE_VISIT_INSTRUCTION(name, super)     \
   void Visit##name(H##name* instr);
 
-  FOR_EACH_CONCRETE_INSTRUCTION(DECLARE_VISIT_INSTRUCTION)
+  FOR_EACH_CONCRETE_INSTRUCTION_COMMON(DECLARE_VISIT_INSTRUCTION)
+  FOR_EACH_CONCRETE_INSTRUCTION_ARM(DECLARE_VISIT_INSTRUCTION)
 
 #undef DECLARE_VISIT_INSTRUCTION
+
+  void VisitInstruction(HInstruction* instruction) {
+    LOG(FATAL) << "Unreachable instruction " << instruction->DebugName();
+  }
 
  private:
   void HandleInvoke(HInvoke* invoke);
@@ -122,9 +127,14 @@ class InstructionCodeGeneratorARM : public HGraphVisitor {
 #define DECLARE_VISIT_INSTRUCTION(name, super)     \
   void Visit##name(H##name* instr);
 
-  FOR_EACH_CONCRETE_INSTRUCTION(DECLARE_VISIT_INSTRUCTION)
+  FOR_EACH_CONCRETE_INSTRUCTION_COMMON(DECLARE_VISIT_INSTRUCTION)
+  FOR_EACH_CONCRETE_INSTRUCTION_ARM(DECLARE_VISIT_INSTRUCTION)
 
 #undef DECLARE_VISIT_INSTRUCTION
+
+  void VisitInstruction(HInstruction* instruction) {
+    LOG(FATAL) << "Unreachable instruction " << instruction->DebugName();
+  }
 
   ArmAssembler* GetAssembler() const { return assembler_; }
 
