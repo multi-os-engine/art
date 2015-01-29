@@ -32,6 +32,7 @@
 #include "graph_visualizer.h"
 #include "gvn.h"
 #include "inliner.h"
+#include "instruction_lowering_arch.h"
 #include "instruction_simplifier.h"
 #include "intrinsics.h"
 #include "jni/quick/jni_compiler.h"
@@ -196,6 +197,18 @@ static bool CanOptimize(const DexFile::CodeItem& code_item) {
   return code_item.tries_size_ == 0;
 }
 
+static void RunOptimizationPasses(HOptimization* optimizations[],
+                                  size_t n_optimizations,
+                                  const HGraphVisualizer& visualizer) {
+  for (size_t i = 0; i < n_optimizations; ++i) {
+    HOptimization* optimization = optimizations[i];
+    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/false);
+    optimization->Run();
+    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/true);
+    optimization->Check();
+  }
+}
+
 static void RunOptimizations(HGraph* graph,
                              CompilerDriver* driver,
                              OptimizingCompilerStats* stats,
@@ -231,13 +244,20 @@ static void RunOptimizations(HGraph* graph,
     &bce,
     &simplify2
   };
+  RunOptimizationPasses(optimizations, arraysize(optimizations), visualizer);
 
-  for (size_t i = 0; i < arraysize(optimizations); ++i) {
-    HOptimization* optimization = optimizations[i];
-    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/false);
-    optimization->Run();
-    visualizer.DumpGraph(optimization->GetPassName(), /*is_after=*/true);
-    optimization->Check();
+  InstructionSet instruction_set = driver->GetInstructionSet();
+  if (instruction_set == kArm64) {
+    // ARM64 provides additional architecture-specific optimisation passes.
+    InstructionLoweringArch arch_lowering(graph, instruction_set);
+    SideEffectsAnalysis side_effects_2(graph);
+    GVNOptimization gvn_2(graph, side_effects_2);
+    HOptimization* arm64_optimizations[] = {
+      &arch_lowering,
+      &side_effects_2,
+      &gvn_2
+    };
+    RunOptimizationPasses(arm64_optimizations, arraysize(arm64_optimizations), visualizer);
   }
 }
 
