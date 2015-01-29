@@ -28,11 +28,13 @@ class InstructionSimplifierArm64 : public HGraphVisitor {
   explicit InstructionSimplifierArm64(HGraph* graph) : HGraphVisitor(graph) {}
 
  private:
+  void ReplacePhiWithCsel(HIf* instr_if, HPhi* phi);
   void TryMergeInputIntoOperand(HBinaryOperation* instruction);
   bool TryFitIntoOperand(HInstruction* instr, HInstruction* left, HInstruction* op);
 
   void VisitAdd(HAdd* instruction) OVERRIDE;
   void VisitAnd(HAnd* instruction) OVERRIDE;
+  void VisitIf(HIf* instruction) OVERRIDE;
   void VisitOr(HOr* instruction) OVERRIDE;
   void VisitSub(HSub* instruction) OVERRIDE;
   void VisitXor(HXor* instruction) OVERRIDE;

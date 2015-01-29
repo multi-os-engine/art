@@ -96,6 +96,81 @@ void InstructionSimplifierArm64::VisitAnd(HAnd* instr) {
   TryMergeInputIntoOperand(instr);
 }
 
+static bool MaybeSuitableForCsel(HBasicBlock* block) {
+  if (!block->HasOnlyOneSuccessor() || !block->HasOnlyOnePredecessor()) {
+    return false;
+  }
+  // We want the block to only have one HGoto instruction.
+  HInstruction* last = block->GetLastInstruction();
+  if (last != block->GetFirstInstruction()) {
+    return false;
+  }
+  return last->IsGoto();
+}
+
+void InstructionSimplifierArm64::ReplacePhiWithCsel(HIf* instr_if, HPhi* phi) {
+  HArm64ConditionalSelect* csel =
+      new (GetGraph()->GetArena()) HArm64ConditionalSelect(instr_if, phi);
+  // Insert the new instruction and use it instead of the phi.
+  instr_if->GetBlock()->InsertInstructionBefore(csel, instr_if);
+  phi->ReplaceWith(csel);
+  phi->GetBlock()->RemovePhi(phi);
+}
+
+void InstructionSimplifierArm64::VisitIf(HIf* instr) {
+  HBasicBlock* true_block = instr->IfTrueSuccessor();
+  HBasicBlock* false_block = instr->IfFalseSuccessor();
+
+  if ((true_block == nullptr || !MaybeSuitableForCsel(true_block)) ||
+      (false_block == nullptr || !MaybeSuitableForCsel(false_block))) {
+    return;
+  }
+  HBasicBlock* true_block_successor = true_block->GetSuccessors().Get(0);
+  HBasicBlock* false_block_successor = false_block->GetSuccessors().Get(0);
+  if (true_block_successor != false_block_successor) {
+    return;
+  }
+
+  HBasicBlock* successor = true_block_successor;
+  if (successor->GetPredecessors().Size() != 2) {
+    return;
+  }
+
+  // We simplify if-then-else block structures using a up to a certain number of
+  // phis.
+  // TODO: For now we settle on handling only one phi. More phis mean multiple
+  // uses for the HIf's condition; this forces the HIf's condition to be
+  // materialized, and the code generated is bad. The code generated in that
+  // situation could be optimized.  We need to find out if we should handle more
+  // phis. If we decide to only handle one, the code below can be simplified.
+  const HInstructionList& phis = successor->GetPhis();
+  int n_phis = 0;
+  static constexpr int kMaxNumberOfPhisHandled = 1;
+  for (HInstructionIterator inst_it(phis); !inst_it.Done(); inst_it.Advance()) {
+    if (n_phis > kMaxNumberOfPhisHandled) {
+      return;
+    }
+    n_phis++;
+  }
+
+  // Translate each phi to a conditional select.
+  for (HInstructionIterator inst_it(phis); !inst_it.Done(); inst_it.Advance()) {
+    ReplacePhiWithCsel(instr, inst_it.Current()->AsPhi());
+  }
+
+  // Clean-up the block structure.
+  // The 'then' and 'else' blocks are discarded, and the 'if' and 'successor'
+  // blocks are merged.
+  HGraph* graph = GetGraph();
+  graph->UnlinkBlock(true_block);
+  graph->UnlinkBlock(false_block);
+  HBasicBlock* if_block = instr->GetBlock();
+  if_block->RemoveInstruction(instr);
+  if_block->AddSuccessor(successor);
+  if_block->AddInstruction(new (GetGraph()->GetArena()) HGoto());
+  graph->MergeBlocks(if_block, successor);
+}
+
 void InstructionSimplifierArm64::VisitOr(HOr* instr) {
   TryMergeInputIntoOperand(instr);
 }

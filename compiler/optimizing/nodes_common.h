@@ -111,6 +111,16 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   void SetExitBlock(HBasicBlock* block) { exit_block_ = block; }
 
   void AddBlock(HBasicBlock* block);
+  // Unlink the block from the graph.
+  // The block is removed from its predecessors' list of successors and its
+  // successors' list of predecessors. The block is left with only one
+  // instruction marking it as unreachable.
+  void UnlinkBlock(HBasicBlock* block);
+  // Merge block2 into block1. Block1 must be the only predecessor of block2,
+  // and block2 must be the only successor of block1.
+  // The control-flow instruction at the end of block1 is deleted, the
+  // instructions from block2 are moved into block1, and we stop using block2.
+  void MergeBlocks(HBasicBlock* block1, HBasicBlock* block2);
 
   // Try building the SSA form of this graph, with dominance computation and loop
   // recognition. Returns whether it was successful in doing all these steps.
@@ -285,6 +295,9 @@ class HLoopInformation : public ArenaObject<kArenaAllocMisc> {
   // Note that `other` *must* be populated before entering this function.
   bool IsIn(const HLoopInformation& other) const;
 
+  // Remove the specified block from the list of blocks in the loop.
+  void RemoveBlock(const HBasicBlock& block);
+
   const ArenaBitVector& GetBlocks() const { return blocks_; }
 
  private:
@@ -375,12 +388,25 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     block->predecessors_.Add(this);
   }
 
+  void RemoveSuccessor(HBasicBlock* block) {
+    successors_.Delete(block);
+  }
+
   void ReplaceSuccessor(HBasicBlock* existing, HBasicBlock* new_block) {
     size_t successor_index = GetSuccessorIndexOf(existing);
     DCHECK_NE(successor_index, static_cast<size_t>(-1));
     existing->RemovePredecessor(this);
     new_block->predecessors_.Add(this);
     successors_.Put(successor_index, new_block);
+  }
+
+  bool HasOnlyOneSuccessor() const {
+    return GetSuccessors().Size() == 1;
+  }
+
+  void AddPredecessor(HBasicBlock* block) {
+    predecessors_.Add(block);
+    block->successors_.Add(this);
   }
 
   void RemovePredecessor(HBasicBlock* block) {
@@ -391,9 +417,16 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     predecessors_.Reset();
   }
 
-  void AddPredecessor(HBasicBlock* block) {
-    predecessors_.Add(block);
-    block->successors_.Add(this);
+  void ReplacePredecessor(HBasicBlock* existing, HBasicBlock* new_block) {
+    size_t predecessor_index = GetPredecessorIndexOf(existing);
+    DCHECK_NE(predecessor_index, static_cast<size_t>(-1));
+    existing->RemoveSuccessor(this);
+    new_block->successors_.Add(this);
+    predecessors_.Put(predecessor_index, new_block);
+  }
+
+  bool HasOnlyOnePredecessor() const {
+    return GetPredecessors().Size() == 1;
   }
 
   void SwapPredecessors() {
@@ -571,7 +604,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                          \
   M(Arm64ArithWithOp, Instruction)                                      \
   M(Arm64ArrayAccessAddress, Instruction)                               \
-  M(Arm64BitfieldMove, Instruction)
+  M(Arm64BitfieldMove, Instruction)                                     \
+  M(Arm64ConditionalSelect, Instruction)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)
 
@@ -923,6 +957,8 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
 
   FOR_EACH_INSTRUCTION(INSTRUCTION_TYPE_CHECK)
 #undef INSTRUCTION_TYPE_CHECK
+
+  bool CanHandleNonMaterializedCondition() { return IsIf() || IsArm64ConditionalSelect(); }
 
   // Returns whether the instruction can be moved within the graph.
   virtual bool CanBeMoved() const { return false; }

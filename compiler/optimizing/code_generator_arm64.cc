@@ -1342,6 +1342,80 @@ void InstructionCodeGeneratorARM64::VisitArm64BitfieldMove(HArm64BitfieldMove* i
   }
 }
 
+void LocationsBuilderARM64::VisitArm64ConditionalSelect(HArm64ConditionalSelect* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  HInstruction* cond = instruction->InputAt(HArm64ConditionalSelect::kInputConditionIndex);
+  if (cond->IsCondition() && !cond->AsCondition()->NeedsMaterialization()) {
+    locations->SetInAt(HArm64ConditionalSelect::kInputCondLeftIndex, Location::RequiresRegister());
+    locations->SetInAt(HArm64ConditionalSelect::kInputCondRightIndex,
+                       Location::RegisterOrConstant(instruction->GetCondInputRight()));
+  } else {
+    locations->SetInAt(HArm64ConditionalSelect::kInputConditionIndex, Location::RequiresRegister());
+  }
+  if (Primitive::IsFloatingPointType(instruction->GetType())) {
+    locations->SetInAt(HArm64ConditionalSelect::kInputTrueResIndex,
+                       Location::RequiresFpuRegister());
+    locations->SetInAt(HArm64ConditionalSelect::kInputFalseResIndex,
+                       Location::RequiresFpuRegister());
+    locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
+  } else {
+    locations->SetInAt(HArm64ConditionalSelect::kInputTrueResIndex, Location::RequiresRegister());
+    locations->SetInAt(HArm64ConditionalSelect::kInputFalseResIndex, Location::RequiresRegister());
+    locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  }
+}
+
+void InstructionCodeGeneratorARM64::VisitArm64ConditionalSelect(HArm64ConditionalSelect* instr) {
+  bool is_fp = Primitive::IsFloatingPointType(instr->GetType());
+  HInstruction* cond = instr->GetCondition();
+
+  Register out;
+  Register res_if_true;
+  Register res_if_false;
+  FPRegister fp_out;
+  FPRegister fp_res_if_true;
+  FPRegister fp_res_if_false;
+
+  if (is_fp) {
+    fp_out = OutputFPRegister(instr);
+    fp_res_if_true = InputFPRegisterAt(instr, HArm64ConditionalSelect::kInputTrueResIndex);
+    fp_res_if_false = InputFPRegisterAt(instr, HArm64ConditionalSelect::kInputFalseResIndex);
+  } else {
+    out = OutputRegister(instr);
+    res_if_true = InputRegisterAt(instr, HArm64ConditionalSelect::kInputTrueResIndex);
+    res_if_false = InputRegisterAt(instr, HArm64ConditionalSelect::kInputFalseResIndex);
+  }
+
+  if (cond->IsIntConstant()) {
+    int32_t cond_value = cond->AsIntConstant()->GetValue();
+    DCHECK(cond_value == 1 || cond_value == 0);
+    if (is_fp) {
+      __ Fmov(fp_out, (cond_value == 1) ? fp_res_if_true : fp_res_if_false);
+    } else {
+      __ Mov(out, (cond_value == 1) ? res_if_true : res_if_false);
+    }
+  } else {
+    Condition csel_true_res_condition;
+    if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
+      // The condition instruction has been materialized.
+      __ Cmp(InputRegisterAt(instr, HArm64ConditionalSelect::kInputConditionIndex), 0);
+      csel_true_res_condition = ne;
+    } else {
+      // The condition instruction has not been materialized. Use its inputs for
+      // the comparison and its condition as the csel condition.
+      __ Cmp(InputRegisterAt(instr, HArm64ConditionalSelect::kInputCondLeftIndex),
+             InputOperandAt(instr, HArm64ConditionalSelect::kInputCondRightIndex));
+      csel_true_res_condition = ARM64Condition(cond->AsCondition()->GetCondition());
+    }
+    if (is_fp) {
+      __ Fcsel(fp_out, fp_res_if_true, fp_res_if_false, csel_true_res_condition);
+    } else {
+      __ Csel(out, res_if_true, res_if_false, csel_true_res_condition);
+    }
+  }
+}
+
 void LocationsBuilderARM64::VisitArrayGet(HArrayGet* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
