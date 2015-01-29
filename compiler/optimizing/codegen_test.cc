@@ -40,7 +40,9 @@
 namespace art {
 
 // Provide our own codegen, that ensures the C calling conventions
-// are preserved. Currently, ART and C do not match as R4 is caller-save
+// are preserved.
+
+// Arm32: Currently, ART and C do not match as R4 is caller-save
 // in ART, and callee-save in C. Alternatively, we could use or write
 // the stub that saves and restores all registers, but it is easier
 // to just overwrite the code generator.
@@ -61,6 +63,24 @@ class TestCodeGeneratorARM : public arm::CodeGeneratorARM {
     blocked_core_registers_[7] = false;
     // Makes pair R6-R7 available.
     blocked_register_pairs_[6 >> 1] = false;
+  }
+};
+
+// x86: Currently, ART and C do not match as all of ebx, esi, edi and ebp are callee-saved in C.
+//      Note: ebp, esi & edi are already blocked, but just to be sure for future compatibility
+//            block them anyways.
+class TestCodeGeneratorX86 : public x86::CodeGeneratorX86 {
+ public:
+  TestCodeGeneratorX86(HGraph* graph,
+                       const CompilerOptions& compiler_options)
+      : x86::CodeGeneratorX86(graph, compiler_options) {
+  }
+
+  void SetupBlockedRegisters(bool is_baseline) const OVERRIDE {
+    x86::CodeGeneratorX86::SetupBlockedRegisters(is_baseline);
+    blocked_core_registers_[x86::EBX] = true;
+
+    UpdateBlockedPairRegisters();
   }
 };
 
@@ -107,7 +127,7 @@ static void RunCodeBaseline(HGraph* graph, bool has_result, Expected expected) {
   InternalCodeAllocator allocator;
 
   CompilerOptions compiler_options;
-  x86::CodeGeneratorX86 codegenX86(graph, compiler_options);
+  TestCodeGeneratorX86 codegenX86(graph, compiler_options);
   // We avoid doing a stack overflow check that requires the runtime being setup,
   // by making sure the compiler knows the methods we are running are leaf methods.
   codegenX86.CompileBaseline(&allocator, true);
@@ -169,7 +189,7 @@ static void RunCodeOptimized(HGraph* graph,
     arm64::CodeGeneratorARM64 codegenARM64(graph, compiler_options);
     RunCodeOptimized(&codegenARM64, graph, hook_before_codegen, has_result, expected);
   } else if (kRuntimeISA == kX86) {
-    x86::CodeGeneratorX86 codegenX86(graph, compiler_options);
+    TestCodeGeneratorX86 codegenX86(graph, compiler_options);
     RunCodeOptimized(&codegenX86, graph, hook_before_codegen, has_result, expected);
   } else if (kRuntimeISA == kX86_64) {
     x86_64::CodeGeneratorX86_64 codegenX86_64(graph, compiler_options);
