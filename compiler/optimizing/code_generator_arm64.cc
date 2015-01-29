@@ -1203,6 +1203,30 @@ void InstructionCodeGeneratorARM64::VisitAnd(HAnd* instruction) {
   HandleBinaryOp(instruction);
 }
 
+void LocationsBuilderARM64::VisitArm64ArrayAccessAddress(HArm64ArrayAccessAddress* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresRegister());
+  if (kIsDebugBuild) {
+    // We do not extract the array address computation when the index is
+    // constant, and we do not expect phases after the architecture lowering to
+    // reveal a constant index.
+    HInstruction* index = instruction->GetIndex();
+    DCHECK(!index->IsConstant() &&
+           !(index->IsBoundsCheck() && index->AsBoundsCheck()->GetIndex()->IsConstant()));
+  }
+  locations->SetInAt(1, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorARM64::VisitArm64ArrayAccessAddress(
+    HArm64ArrayAccessAddress* instruction) {
+  size_t shift_size = Primitive::ComponentSizeShift(instruction->GetComponentType());
+  __ Add(OutputRegister(instruction),
+         InputRegisterAt(instruction, 0),
+         Operand(InputRegisterAt(instruction, 1), LSL, shift_size));
+}
+
 void LocationsBuilderARM64::VisitArrayGet(HArrayGet* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
