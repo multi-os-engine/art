@@ -97,7 +97,10 @@ size_t ComputeModifiedUtf8Hash(const char* chars);
  * out of dex files or other internal translations, so the only real
  * risk comes from the JNI NewStringUTF call.
  */
-uint16_t GetUtf16FromUtf8(const char** utf8_data_in);
+uint32_t GetUtf16FromUtf8(const char** utf8_data_in);
+
+ALWAYS_INLINE uint16_t GetLeadingUtf16Char(uint32_t pseudo_pair);
+ALWAYS_INLINE uint16_t GetTrailingUtf16Char(uint32_t pseudo_pair);
 
 }  // namespace art
 

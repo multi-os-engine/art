@@ -67,7 +67,7 @@ class ObjectTest : public CommonRuntimeTest {
     ASSERT_TRUE(string->Equals(utf8_in) || (expected_utf16_length == 1 && strlen(utf8_in) == 0));
     ASSERT_TRUE(string->Equals(StringPiece(utf8_in)) || (expected_utf16_length == 1 && strlen(utf8_in) == 0));
     for (int32_t i = 0; i < expected_utf16_length; i++) {
-      EXPECT_EQ(utf16_expected[i], string->CharAt(i));
+      EXPECT_EQ(utf16_expected[i], string->UncheckedCharAt(i));
     }
     EXPECT_EQ(expected_hash, string->GetHashCode());
   }
