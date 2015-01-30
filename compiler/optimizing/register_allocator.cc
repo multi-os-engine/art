@@ -290,6 +290,12 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
     }
   }
 
+  if (instruction->IsReturn()) {
+    // Try to propagate the return location.
+    LocationSummary* return_locations = instruction->InputAt(0)->GetLocations();
+    return_locations->TryUpdateOut(locations->InAt(0));
+  }
+
   for (size_t i = 0; i < instruction->InputCount(); ++i) {
     Location input = locations->InAt(i);
     if (input.IsRegister() || input.IsFpuRegister()) {

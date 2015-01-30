@@ -325,6 +325,16 @@ class Location : public ValueObject {
     return GetKind() == kUnallocated;
   }
 
+  bool IsPolicyRequiresRegister() const {
+    DCHECK(IsUnallocated());
+    return GetPolicy() == kRequiresRegister;
+  }
+
+  bool IsPolicyRequiresFpuRegister() const {
+    DCHECK(IsUnallocated());
+    return GetPolicy() == kRequiresFpuRegister;
+  }
+
   static Location UnallocatedLocation(Policy policy) {
     return Location(kUnallocated, PolicyField::Encode(policy));
   }
@@ -493,6 +503,15 @@ class LocationSummary : public ArenaObject<kArenaAllocMisc> {
     // allocation.
     DCHECK(output_.IsStackSlot() || output_.IsDoubleStackSlot());
     output_ = location;
+  }
+
+  void TryUpdateOut(Location location) {
+    // Update the location only if it IsUnallocated and it matches the register type.
+    if (output_.IsUnallocated()
+        && ((output_.IsPolicyRequiresRegister() && location.IsRegister())
+        || (output_.IsPolicyRequiresFpuRegister() && location.IsFpuRegister()))) {
+        output_ = location;
+    }
   }
 
   void AddTemp(Location location) {
