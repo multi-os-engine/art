@@ -35,24 +35,33 @@
 namespace art {
 
 static constexpr int kMaxInlineCodeUnits = 100;
-static constexpr int kMaxInlineNumberOfBlocks = 3;
+static constexpr int kDepthLimit = 5;
 
 void HInliner::Run() {
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
-    for (HInstructionIterator instr_it(it.Current()->GetInstructions());
-         !instr_it.Done();
-         instr_it.Advance()) {
-      HInvokeStaticOrDirect* current = instr_it.Current()->AsInvokeStaticOrDirect();
-      if (current != nullptr) {
-        if (!TryInline(current, current->GetDexMethodIndex(), current->GetInvokeType())) {
+  const GrowableArray<HBasicBlock*>& blocks = graph_->GetReversePostOrder();
+  for (size_t i = 0; i < blocks.Size(); ++i) {
+    HBasicBlock* block = blocks.Get(i);
+    HInstruction* previous = nullptr;
+    for (HInstruction* instruction = block->GetFirstInstruction(); instruction != nullptr;) {
+      HInvokeStaticOrDirect* call = instruction->AsInvokeStaticOrDirect();
+      if (call != nullptr) {
+        // Record previous to also scan the inlined instructions.
+        previous = call->GetPrevious();
+        if (TryInline(call, call->GetDexMethodIndex(), call->GetInvokeType())) {
+          // We successfully inline, go back to the previous instruction, taking the first
+          // instruction of the block if there was no previous.
+          instruction = (previous == nullptr) ? block->GetFirstInstruction() : previous;
+          continue;
+        } else {
           if (kIsDebugBuild) {
             std::string callee_name =
-                PrettyMethod(current->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
+                PrettyMethod(call->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
             bool should_inline = callee_name.find("$inline$") != std::string::npos;
             CHECK(!should_inline) << "Could not inline " << callee_name;
           }
         }
       }
+      instruction = instruction->GetNext();
     }
   }
 }
@@ -137,13 +146,6 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
     return false;
   }
 
-  if (callee_graph->GetBlocks().Size() > kMaxInlineNumberOfBlocks) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
-                   << " has too many blocks to be inlined: "
-                   << callee_graph->GetBlocks().Size();
-    return false;
-  }
-
   if (!RegisterAllocator::CanAllocateRegistersFor(*callee_graph,
                                                   compiler_driver_->GetInstructionSet())) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
@@ -155,36 +157,6 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
     VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
                    << " could not be transformed to SSA";
     return false;
-  }
-
-  HReversePostOrderIterator it(*callee_graph);
-  it.Advance();  // Past the entry block to avoid seeing the suspend check.
-  for (; !it.Done(); it.Advance()) {
-    HBasicBlock* block = it.Current();
-    if (block->IsLoopHeader()) {
-      VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
-                     << " could not be inlined because it contains a loop";
-      return false;
-    }
-
-    for (HInstructionIterator instr_it(block->GetInstructions());
-         !instr_it.Done();
-         instr_it.Advance()) {
-      HInstruction* current = instr_it.Current();
-      if (current->CanThrow()) {
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
-                       << " could not be inlined because " << current->DebugName()
-                       << " can throw";
-        return false;
-      }
-
-      if (current->NeedsEnvironment()) {
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
-                       << " could not be inlined because " << current->DebugName()
-                       << " needs an environment";
-        return false;
-      }
-    }
   }
 
   // Run simple optimizations on the graph.
@@ -205,6 +177,46 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
     HOptimization* optimization = optimizations[i];
     optimization->Run();
+  }
+
+  if (depth_ + 1 < kDepthLimit) {
+    HInliner inliner(
+        callee_graph, outer_compilation_unit_, compiler_driver_, outer_stats_, depth_ + 1);
+    inliner.Run();
+  }
+
+  HReversePostOrderIterator it(*callee_graph);
+  it.Advance();  // Past the entry block, it does not contain instructions that prevent inlining.
+  for (; !it.Done(); it.Advance()) {
+    HBasicBlock* block = it.Current();
+    if (block->IsLoopHeader()) {
+      VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
+                     << " could not be inlined because it contains a loop";
+      return false;
+    }
+
+    for (HInstructionIterator instr_it(block->GetInstructions());
+         !instr_it.Done();
+         instr_it.Advance()) {
+      HInstruction* current = instr_it.Current();
+      if (current->IsSuspendCheck()) {
+        continue;
+      }
+
+      if (current->CanThrow()) {
+        VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
+                       << " could not be inlined because " << current->DebugName()
+                       << " can throw";
+        return false;
+      }
+
+      if (current->NeedsEnvironment()) {
+        VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
+                       << " could not be inlined because " << current->DebugName()
+                       << " needs an environment";
+        return false;
+      }
+    }
   }
 
   callee_graph->InlineInto(graph_, invoke_instruction);
