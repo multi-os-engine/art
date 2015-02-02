@@ -324,8 +324,7 @@ size_t ThreadList::RunCheckpoint(Closure* checkpoint_function) {
     Thread::resume_cond_->Broadcast(self);
   }
 
-  // Add one for self.
-  return count + suspended_count_modified_threads.size() + 1;
+  return count;
 }
 
 // Request that a checkpoint function be run on all active (non-suspended)
