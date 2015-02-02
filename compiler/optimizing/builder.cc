@@ -1073,11 +1073,23 @@ void HGraphBuilder::BuildSwitchCaseHelper(const Instruction& instruction, size_t
 }
 
 void HGraphBuilder::PotentiallyAddSuspendCheck(int32_t target_offset, uint32_t dex_pc) {
-  if (target_offset <= 0) {
-    // Unconditionnally add a suspend check to backward branches. We can remove
-    // them after we recognize loops in the graph.
-    current_block_->AddInstruction(new (arena_) HSuspendCheck(dex_pc));
+  if (target_offset >= 0) {
+    return;
   }
+
+  // Return blocks tend to be placed at the beginning of the DEX file. If this
+  // is an edge to such block, we can save time by not adding a clearly
+  // redundant suspend check.
+  HBasicBlock* target = FindBlockStartingAt(dex_pc + target_offset);
+  DCHECK(target != nullptr);
+  DCHECK(target->GetLastInstruction() != nullptr);
+  if (target->GetLastInstruction()->IsReturn()) {
+    return;
+  }
+
+  // Add a suspend check to backward branches which may potentially loop. We can
+  // remove them after we recognize loops in the graph.
+  current_block_->AddInstruction(new (arena_) HSuspendCheck(dex_pc));
 }
 
 bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32_t dex_pc) {
