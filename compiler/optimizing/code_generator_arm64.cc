@@ -763,16 +763,17 @@ void CodeGeneratorARM64::SwapLocations(Location loc1, Location loc2) {
     __ Fmov(r2, r1);
     __ Fmov(r1, tmp);
   } else if (is_slot1 != is_slot2) {
-    MemOperand mem = StackOperandFrom(is_slot1 ? loc1 : loc2);
+    Location mem_loc = is_slot1 ? loc1 : loc2;
     Location reg_loc = is_slot1 ? loc2 : loc1;
     CPURegister reg, tmp;
     if (reg_loc.IsFpuRegister()) {
-      reg = DRegisterFrom(reg_loc);
-      tmp = temps.AcquireD();
+      reg = mem_loc.IsStackSlot() ? SRegisterFrom(reg_loc) : DRegisterFrom(reg_loc);
+      tmp = mem_loc.IsStackSlot() ? temps.AcquireS() : temps.AcquireD();
     } else {
-      reg = XRegisterFrom(reg_loc);
-      tmp = temps.AcquireX();
+      reg = mem_loc.IsStackSlot() ? WRegisterFrom(reg_loc) : XRegisterFrom(reg_loc);
+      tmp = mem_loc.IsStackSlot() ? temps.AcquireW() : temps.AcquireX();
     }
+    MemOperand mem = StackOperandFrom(mem_loc);
     __ Ldr(tmp, mem);
     __ Str(reg, mem);
     if (reg_loc.IsFpuRegister()) {
