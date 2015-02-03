@@ -25,8 +25,8 @@
 namespace art {
 namespace arm {
 
-bool Thumb2Assembler::ShifterOperandCanHold(Register rd,
-                                            Register rn,
+bool Thumb2Assembler::ShifterOperandCanHold(Register rd ATTRIBUTE_UNUSED,
+                                            Register rn ATTRIBUTE_UNUSED,
                                             Opcode opcode,
                                             uint32_t immediate,
                                             ShifterOperand* shifter_op) {
@@ -37,13 +37,6 @@ bool Thumb2Assembler::ShifterOperandCanHold(Register rd,
   switch (opcode) {
     case ADD:
     case SUB:
-      if (rn == SP) {
-        if (rd == SP) {
-          return immediate < (1 << 9);    // 9 bits allowed.
-        } else {
-          return immediate < (1 << 12);   // 12 bits.
-        }
-      }
       if (immediate < (1 << 12)) {    // Less than (or equal to) 12 bits can always be done.
         return true;
       }
