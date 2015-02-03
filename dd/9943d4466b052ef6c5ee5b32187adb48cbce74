@@ -1,0 +1,8 @@
+Code-Review+1: Haitao Feng <haitao.feng@intel.com>
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Code-Review+2: Hiroshi Yamauchi <yamauchi@google.com>
+Submitted-by: Hiroshi Yamauchi <yamauchi@google.com>
+Submitted-at: Tue, 03 Feb 2015 23:39:13 +0000
+Reviewed-on: https://android-review.googlesource.com/127950
+Project: platform/art
+Branch: refs/heads/master
