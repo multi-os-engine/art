@@ -39,9 +39,15 @@ bool Thumb2Assembler::ShifterOperandCanHold(Register rd,
     case SUB:
       if (rn == SP) {
         if (rd == SP) {
-          return immediate < (1 << 9);    // 9 bits allowed.
+          if (immediate < (1 << 9)) {
+            // 9 bits allowed.
+            return true;
+          }
         } else {
-          return immediate < (1 << 12);   // 12 bits.
+          if (immediate < (1 << 12)) {
+            // 12 bits.
+            return true;
+          }
         }
       }
       if (immediate < (1 << 12)) {    // Less than (or equal to) 12 bits can always be done.
