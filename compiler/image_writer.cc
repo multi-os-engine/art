@@ -931,7 +931,8 @@ void ImageWriter::CopyAndFixupObjectsCallback(Object* obj, void* arg) {
   if (obj->IsArtMethod()) {
     // Size without pointer fields since we don't want to overrun the buffer if target art method
     // is 32 bits but source is 64 bits.
-    n = mirror::ArtMethod::SizeWithoutPointerFields(sizeof(void*));
+    size_t size = GetInstructionSetPointerSize(image_writer->compiler_driver_.GetInstructionSet());
+    n = mirror::ArtMethod::SizeWithoutPointerFields(size);
   } else {
     n = obj->SizeOf();
   }
@@ -1031,7 +1032,10 @@ const uint8_t* ImageWriter::GetQuickCode(mirror::ArtMethod* method, bool* quick_
   // trampoline.
 
   // Quick entrypoint:
-  const uint8_t* quick_code = GetOatAddress(method->GetQuickOatCodeOffset());
+  size_t pointer_size = GetInstructionSetPointerSize(compiler_driver_.GetInstructionSet());
+  uint32_t quick_oat_code_offset = PointerToLowMemUInt32(
+      method->GetEntryPointFromQuickCompiledCodePtrSize(pointer_size));
+  const uint8_t* quick_code = GetOatAddress(quick_oat_code_offset);
   *quick_is_interpreted = false;
   if (quick_code != nullptr &&
       (!method->IsStatic() || method->IsConstructor() || method->GetDeclaringClass()->IsInitialized())) {
@@ -1082,11 +1086,13 @@ void ImageWriter::FixupMethod(ArtMethod* orig, ArtMethod* copy) {
   // locations.
   // Copy all of the fields from the runtime methods to the target methods first since we did a
   // bytewise copy earlier.
-  copy->SetEntryPointFromInterpreterPtrSize<kVerifyNone>(orig->GetEntryPointFromInterpreter(),
-                                                         target_ptr_size_);
-  copy->SetEntryPointFromJniPtrSize<kVerifyNone>(orig->GetEntryPointFromJni(), target_ptr_size_);
+  size_t pointer_size = GetInstructionSetPointerSize(compiler_driver_.GetInstructionSet());
+  copy->SetEntryPointFromInterpreterPtrSize<kVerifyNone>(
+      orig->GetEntryPointFromInterpreterPtrSize(pointer_size), target_ptr_size_);
+  copy->SetEntryPointFromJniPtrSize<kVerifyNone>(orig->GetEntryPointFromJniPtrSize(pointer_size),
+                                                 target_ptr_size_);
   copy->SetEntryPointFromQuickCompiledCodePtrSize<kVerifyNone>(
-      orig->GetEntryPointFromQuickCompiledCode(), target_ptr_size_);
+      orig->GetEntryPointFromQuickCompiledCodePtrSize(pointer_size), target_ptr_size_);
 
   // The resolution method has a special trampoline to call.
   Runtime* runtime = Runtime::Current();

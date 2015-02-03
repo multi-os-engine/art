@@ -932,7 +932,9 @@ class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {
       std::string dump = exc->Dump();
       LOG(FATAL) << dump;
     }
-    method->SetQuickOatCodeOffset(offsets.code_offset_);
+    size_t size = GetInstructionSetPointerSize(writer_->compiler_driver_->GetInstructionSet());
+    method->SetEntryPointFromQuickCompiledCodePtrSize(reinterpret_cast<void*>(offsets.code_offset_),
+                                                      size);
 
     return true;
   }
