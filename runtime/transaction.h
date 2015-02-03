@@ -42,6 +42,9 @@ class Transaction FINAL {
   Transaction();
   ~Transaction();
 
+  bool IsAborted() LOCKS_EXCLUDED(log_lock_);
+  void Abort() LOCKS_EXCLUDED(log_lock_);
+
   // Record object field changes.
   void RecordWriteFieldBoolean(mirror::Object* obj, MemberOffset field_offset, uint8_t value,
                                bool is_volatile)
@@ -85,7 +88,7 @@ class Transaction FINAL {
       LOCKS_EXCLUDED(log_lock_);
 
   // Abort transaction by undoing all recorded changes.
-  void Abort()
+  void Rollback()
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       LOCKS_EXCLUDED(log_lock_);
 
@@ -210,6 +213,7 @@ class Transaction FINAL {
   std::map<mirror::Object*, ObjectLog> object_logs_ GUARDED_BY(log_lock_);
   std::map<mirror::Array*, ArrayLog> array_logs_  GUARDED_BY(log_lock_);
   std::list<InternStringLog> intern_string_logs_ GUARDED_BY(log_lock_);
+  bool aborted_ GUARDED_BY(log_lock_);
 
   DISALLOW_COPY_AND_ASSIGN(Transaction);
 };

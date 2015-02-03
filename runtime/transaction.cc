@@ -30,7 +30,8 @@ namespace art {
 // TODO: remove (only used for debugging purpose).
 static constexpr bool kEnableTransactionStats = false;
 
-Transaction::Transaction() : log_lock_("transaction log lock", kTransactionLogLock) {
+Transaction::Transaction()
+  : log_lock_("transaction log lock", kTransactionLogLock), aborted_(false) {
   CHECK(Runtime::Current()->IsCompiler());
 }
 
@@ -55,6 +56,16 @@ Transaction::~Transaction() {
               << ", array_values_count=" << array_values_count
               << ", string_count=" << string_count;
   }
+}
+
+bool Transaction::IsAborted() {
+  MutexLock mu(Thread::Current(), log_lock_);
+  return aborted_;
+}
+
+void Transaction::Abort() {
+  MutexLock mu(Thread::Current(), log_lock_);
+  aborted_ = true;
 }
 
 void Transaction::RecordWriteFieldBoolean(mirror::Object* obj, MemberOffset field_offset,
@@ -150,7 +161,7 @@ void Transaction::LogInternedString(const InternStringLog& log) {
   intern_string_logs_.push_front(log);
 }
 
-void Transaction::Abort() {
+void Transaction::Rollback() {
   CHECK(!Runtime::Current()->IsActiveTransaction());
   Thread* self = Thread::Current();
   self->AssertNoPendingException();

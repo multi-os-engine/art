@@ -546,6 +546,8 @@ static inline void AssignRegister(ShadowFrame* new_shadow_frame, const ShadowFra
 
 void AbortTransaction(Thread* self, const char* fmt, ...) {
   CHECK(Runtime::Current()->IsActiveTransaction());
+  // TODO add abort message containing the reason of the abort.
+  Runtime::Current()->AbortTransaction();
   // Throw an exception so we can abort the transaction and undo every change.
   va_list args;
   va_start(args, fmt);

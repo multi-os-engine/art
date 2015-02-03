@@ -41,7 +41,7 @@ TEST_F(TransactionTest, Object_class) {
   Runtime::Current()->ExitTransactionMode();
 
   // Aborting transaction must not clear the Object::class field.
-  transaction.Abort();
+  transaction.Rollback();
   EXPECT_EQ(h_obj->GetClass(), h_klass.Get());
 }
 
@@ -67,7 +67,7 @@ TEST_F(TransactionTest, Object_monitor) {
   Runtime::Current()->ExitTransactionMode();
 
   // Aborting transaction must not clear the Object::class field.
-  transaction.Abort();
+  transaction.Rollback();
   uint32_t aborted_lock_word = h_obj->GetLockWord(false).GetValue();
   EXPECT_NE(old_lock_word, new_lock_word);
   EXPECT_EQ(aborted_lock_word, new_lock_word);
@@ -96,7 +96,7 @@ TEST_F(TransactionTest, Array_length) {
   Runtime::Current()->ExitTransactionMode();
 
   // Aborting transaction must not clear the Object::class field.
-  transaction.Abort();
+  transaction.Rollback();
   EXPECT_EQ(h_obj->GetLength(), kArraySize);
 }
 
@@ -181,7 +181,7 @@ TEST_F(TransactionTest, StaticFieldsTest) {
   doubleField->SetDouble<true>(h_klass.Get(), 1.0);
   objectField->SetObject<true>(h_klass.Get(), h_obj.Get());
   Runtime::Current()->ExitTransactionMode();
-  transaction.Abort();
+  transaction.Rollback();
 
   // Check values have properly been restored to their original (default) value.
   EXPECT_EQ(booleanField->GetBoolean(h_klass.Get()), false);
@@ -280,7 +280,7 @@ TEST_F(TransactionTest, InstanceFieldsTest) {
   doubleField->SetDouble<true>(h_instance.Get(), 1.0);
   objectField->SetObject<true>(h_instance.Get(), h_obj.Get());
   Runtime::Current()->ExitTransactionMode();
-  transaction.Abort();
+  transaction.Rollback();
 
   // Check values have properly been restored to their original (default) value.
   EXPECT_EQ(booleanField->GetBoolean(h_instance.Get()), false);
@@ -395,7 +395,7 @@ TEST_F(TransactionTest, StaticArrayFieldsTest) {
   doubleArray->SetWithoutChecks<true>(0, 1.0);
   objectArray->SetWithoutChecks<true>(0, h_obj.Get());
   Runtime::Current()->ExitTransactionMode();
-  transaction.Abort();
+  transaction.Rollback();
 
   // Check values have properly been restored to their original (default) value.
   EXPECT_EQ(booleanArray->GetWithoutChecks(0), false);

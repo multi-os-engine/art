@@ -455,6 +455,8 @@ class Runtime {
   }
   void EnterTransactionMode(Transaction* transaction);
   void ExitTransactionMode();
+  bool IsTransactionAborted() const;
+  void AbortTransaction();
   void RecordWriteFieldBoolean(mirror::Object* obj, MemberOffset field_offset, uint8_t value,
                                bool is_volatile) const;
   void RecordWriteFieldByte(mirror::Object* obj, MemberOffset field_offset, int8_t value,

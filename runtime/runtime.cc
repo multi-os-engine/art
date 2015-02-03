@@ -1443,6 +1443,22 @@ void Runtime::ExitTransactionMode() {
   preinitialization_transaction_ = nullptr;
 }
 
+
+bool Runtime::IsTransactionAborted() const {
+  if (!IsActiveTransaction()) {
+    return false;
+  } else {
+    DCHECK(IsCompiler());
+    return preinitialization_transaction_->IsAborted();
+  }
+}
+
+void Runtime::AbortTransaction() {
+  DCHECK(IsCompiler());
+  DCHECK(IsActiveTransaction());
+  preinitialization_transaction_->Abort();
+}
+
 void Runtime::RecordWriteFieldBoolean(mirror::Object* obj, MemberOffset field_offset,
                                       uint8_t value, bool is_volatile) const {
   DCHECK(IsCompiler());

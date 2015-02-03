@@ -4220,6 +4220,14 @@ bool ClassLinker::InitializeClass(Thread* self, Handle<mirror::Class> klass,
       WrapExceptionInInitializer(klass);
       klass->SetStatus(mirror::Class::kStatusError, self);
       success = false;
+    } else if (Runtime::Current()->IsTransactionAborted()) {
+      // The exception thrown when the transaction aborted has been caught and cleared
+      // so we need to throw it again now.
+      // TODO add abort message to the exception message.
+      self->ThrowNewException(self->GetCurrentLocationForThrow(), "Ljava/lang/InternalError;",
+                              "Aborted transaction");
+      klass->SetStatus(mirror::Class::kStatusError, self);
+      success = false;
     } else {
       RuntimeStats* global_stats = Runtime::Current()->GetStats();
       RuntimeStats* thread_stats = self->GetStats();
