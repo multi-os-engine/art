@@ -233,22 +233,13 @@ static void UnsafeLogFatalForThreadSuspendAllTimeout() {
 #endif
 
 // Unlike suspending all threads where we can wait to acquire the mutator_lock_, suspending an
-// individual thread requires polling. delay_us is the requested sleep and total_delay_us
-// accumulates the total time spent sleeping for timeouts. The first sleep is just a yield,
-// subsequently sleeps increase delay_us from 1ms to 500ms by doubling.
-static void ThreadSuspendSleep(useconds_t* delay_us, useconds_t* total_delay_us) {
-  useconds_t new_delay_us = (*delay_us) * 2;
-  CHECK_GE(new_delay_us, *delay_us);
-  if (new_delay_us < 500000) {  // Don't allow sleeping to be more than 0.5s.
-    *delay_us = new_delay_us;
-  }
-  if (*delay_us == 0) {
+// individual thread requires polling. delay_us is the requested sleep wait. If delay_us is 0 then
+// we use sched_yield instead of calling usleep.
+static void ThreadSuspendSleep(useconds_t delay_us) {
+  if (delay_us == 0) {
     sched_yield();
-    // Default to 1 milliseconds (note that this gets multiplied by 2 before the first sleep).
-    *delay_us = 500;
   } else {
-    usleep(*delay_us);
-    *total_delay_us += *delay_us;
+    usleep(delay_us);
   }
 }
 
@@ -297,16 +288,24 @@ size_t ThreadList::RunCheckpoint(Closure* checkpoint_function) {
   // Run the checkpoint on the suspended threads.
   for (const auto& thread : suspended_count_modified_threads) {
     if (!thread->IsSuspended()) {
-      // Wait until the thread is suspended.
-      useconds_t total_delay_us = 0;
+      if (ATRACE_ENABLED()) {
+        std::ostringstream oss;
+        thread->ShortDump(oss);
+        ATRACE_BEGIN((std::string("Waiting for suspension of thread ") + oss.str()).c_str());
+      }
+      // Busy wait until the thread is suspended.
+      const uint64_t start_time = NanoTime();
       do {
-        useconds_t delay_us = 100;
-        ThreadSuspendSleep(&delay_us, &total_delay_us);
+        // Use 0 since we want to yield to prevent blocking for an unpredictable amount of time.
+        ThreadSuspendSleep(0);
       } while (!thread->IsSuspended());
+      const uint64_t total_delay = NanoTime() - start_time;
       // Shouldn't need to wait for longer than 1000 microseconds.
-      constexpr useconds_t kLongWaitThresholdUS = 1000;
-      if (UNLIKELY(total_delay_us > kLongWaitThresholdUS)) {
-        LOG(WARNING) << "Waited " << total_delay_us << " us for thread suspend!";
+      constexpr uint64_t kLongWaitThreshold = MsToNs(1);
+      ATRACE_END();
+      if (UNLIKELY(total_delay > kLongWaitThreshold)) {
+        LOG(WARNING) << "Long wait " << PrettyDuration(total_delay) << " for "
+            << *thread << " suspension!";
       }
     }
     // We know for sure that the thread is suspended at this point.
@@ -609,11 +608,10 @@ static void ThreadSuspendByPeerWarning(Thread* self, LogSeverity severity, const
 
 Thread* ThreadList::SuspendThreadByPeer(jobject peer, bool request_suspension,
                                         bool debug_suspension, bool* timed_out) {
-  static const useconds_t kTimeoutUs = 30 * 1000000;  // 30s.
-  useconds_t total_delay_us = 0;
-  useconds_t delay_us = 0;
+  static constexpr uint64_t kTimeout = MsToNs(30 * 1000);  // 30s.
+  static const uint64_t start_time = NanoTime();
   *timed_out = false;
-  Thread* self = Thread::Current();
+  Thread* const self = Thread::Current();
   Thread* suspended_thread = nullptr;
   VLOG(threads) << "SuspendThreadByPeer starting";
   while (true) {
@@ -680,7 +678,8 @@ Thread* ThreadList::SuspendThreadByPeer(jobject peer, bool request_suspension,
           }
           return thread;
         }
-        if (total_delay_us >= kTimeoutUs) {
+        const uint64_t total_delay = NanoTime() - start_time;
+        if (total_delay >= kTimeout) {
           ThreadSuspendByPeerWarning(self, FATAL, "Thread suspension timed out", peer);
           if (suspended_thread != nullptr) {
             CHECK_EQ(suspended_thread, thread);
@@ -692,8 +691,8 @@ Thread* ThreadList::SuspendThreadByPeer(jobject peer, bool request_suspension,
       }
       // Release locks and come out of runnable state.
     }
-    VLOG(threads) << "SuspendThreadByPeer sleeping to allow thread chance to suspend";
-    ThreadSuspendSleep(&delay_us, &total_delay_us);
+    VLOG(threads) << "SuspendThreadByPeer waiting to allow thread chance to suspend";
+    ThreadSuspendSleep(0);
   }
 }
 
@@ -704,12 +703,11 @@ static void ThreadSuspendByThreadIdWarning(LogSeverity severity, const char* mes
 
 Thread* ThreadList::SuspendThreadByThreadId(uint32_t thread_id, bool debug_suspension,
                                             bool* timed_out) {
-  static const useconds_t kTimeoutUs = 30 * 1000000;  // 30s.
-  useconds_t total_delay_us = 0;
-  useconds_t delay_us = 0;
+  static constexpr uint64_t kTimeout = MsToNs(30 * 1000);  // 30s.
+  static const uint64_t start_time = NanoTime();
   *timed_out = false;
   Thread* suspended_thread = nullptr;
-  Thread* self = Thread::Current();
+  Thread* const self = Thread::Current();
   CHECK_NE(thread_id, kInvalidThreadId);
   VLOG(threads) << "SuspendThreadByThreadId starting";
   while (true) {
@@ -771,7 +769,8 @@ Thread* ThreadList::SuspendThreadByThreadId(uint32_t thread_id, bool debug_suspe
           VLOG(threads) << "SuspendThreadByThreadId thread suspended: " << *thread;
           return thread;
         }
-        if (total_delay_us >= kTimeoutUs) {
+        const uint64_t total_delay = NanoTime() - start_time;
+        if (total_delay >= kTimeout) {
           ThreadSuspendByThreadIdWarning(WARNING, "Thread suspension timed out", thread_id);
           if (suspended_thread != nullptr) {
             thread->ModifySuspendCount(soa.Self(), -1, debug_suspension);
@@ -782,8 +781,8 @@ Thread* ThreadList::SuspendThreadByThreadId(uint32_t thread_id, bool debug_suspe
       }
       // Release locks and come out of runnable state.
     }
-    VLOG(threads) << "SuspendThreadByThreadId sleeping to allow thread chance to suspend";
-    ThreadSuspendSleep(&delay_us, &total_delay_us);
+    VLOG(threads) << "SuspendThreadByThreadId waiting to allow thread chance to suspend";
+    ThreadSuspendSleep(0);
   }
 }
 
