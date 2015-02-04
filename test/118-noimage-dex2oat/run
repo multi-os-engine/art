@@ -17,14 +17,14 @@
 # Force relocation otherwise we will just use the already created core.oat/art pair.
 flags="${@/--no-relocate/--relocate}"
 
-# Use the non-prebuild script.
-RUN="${RUN/push-and-run-prebuilt-test-jar/push-and-run-test-jar}"
+# Remove prebuild from the flags, this test is for testing not having oat files. As prebuild is
+# default, add no-prebuild.
+flags="${flags/--prebuild/}"
+flags="${flags} --no-prebuild"
 
-if [ $(basename $RUN) == 'host-run-test-jar' ]; then
+if [[ $@ == *--host* ]]; then
     framework="${ANDROID_HOST_OUT}/framework"
     bpath_suffix="-hostdex"
-    # Remove prebuild from the flags, this test is for testing not having oat files.
-    flags="${flags/--prebuild/}"
 else
     framework="/system/framework"
     bpath_suffix=""
