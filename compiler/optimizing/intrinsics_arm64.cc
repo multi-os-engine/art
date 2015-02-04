@@ -224,7 +224,7 @@ static void CreateIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke) {
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
 }
 
 static void GenReverseBytes(LocationSummary* locations,
@@ -305,7 +305,7 @@ static void CreateFPToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresFpuRegister());
-  locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
+  locations->SetOut(Location::RequiresFpuRegister(), Location::kOutputOverlap);
 }
 
 static void MathAbsFP(LocationSummary* locations, bool is64bit, vixl::MacroAssembler* masm) {
@@ -339,7 +339,7 @@ static void CreateIntToInt(ArenaAllocator* arena, HInvoke* invoke) {
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
 }
 
 static void GenAbsInteger(LocationSummary* locations,
@@ -395,7 +395,7 @@ static void CreateFPFPToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresFpuRegister());
   locations->SetInAt(1, Location::RequiresFpuRegister());
-  locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
+  locations->SetOut(Location::RequiresFpuRegister(), Location::kOutputOverlap);
 }
 
 void IntrinsicLocationsBuilderARM64::VisitMathMinDoubleDouble(HInvoke* invoke) {
@@ -452,7 +452,7 @@ static void CreateIntIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke) {
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
 }
 
 void IntrinsicLocationsBuilderARM64::VisitMathMinIntInt(HInvoke* invoke) {
@@ -704,7 +704,7 @@ static void CreateIntIntIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke
   locations->SetInAt(0, Location::NoLocation());        // Unused receiver.
   locations->SetInAt(1, Location::RequiresRegister());
   locations->SetInAt(2, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
 }
 
 void IntrinsicLocationsBuilderARM64::VisitUnsafeGet(HInvoke* invoke) {
@@ -853,7 +853,7 @@ static void CreateIntIntIntIntIntToInt(ArenaAllocator* arena, HInvoke* invoke) {
   locations->SetInAt(3, Location::RequiresRegister());
   locations->SetInAt(4, Location::RequiresRegister());
 
-  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
 }
 
 static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGeneratorARM64* codegen) {
@@ -930,7 +930,10 @@ void IntrinsicLocationsBuilderARM64::VisitStringCharAt(HInvoke* invoke) {
                                                             kIntrinsified);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  // In case we need to go in the slow path, we can't have the output be the same
+  // as the input: the current liveness analysis considers the input to be live
+  // at the point of the call.
+  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringCharAt(HInvoke* invoke) {
