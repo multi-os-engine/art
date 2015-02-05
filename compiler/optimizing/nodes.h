@@ -704,6 +704,7 @@ class HUseList : public ValueObject {
   }
 
   void Remove(HUseListNode<T>* node) {
+    DCHECK(node != nullptr);
     if (node->prev_ != nullptr) {
       node->prev_->next_ = node->next_;
     }
@@ -813,6 +814,27 @@ class SideEffects : public ValueObject {
   size_t flags_;
 };
 
+template <typename T>
+class HUseRecord {
+ public:
+  HUseRecord() : instruction_(nullptr), use_node_(nullptr) {}
+  HUseRecord(HInstruction* instruction) : instruction_(instruction), use_node_(nullptr) {}
+
+  HUseRecord(const HUseRecord<T>& old_record, HUseListNode<T>* use_node)
+    : instruction_(old_record.instruction_), use_node_(use_node) {
+    DCHECK(instruction_ != nullptr);
+    DCHECK(use_node_ != nullptr);
+    DCHECK(old_record.use_node_ == nullptr);
+  }
+
+  HInstruction* GetInstruction() const { return instruction_; }
+  HUseListNode<T>* GetUseNode() const { return use_node_; }
+
+ private:
+  HInstruction* instruction_;
+  HUseListNode<T>* use_node_;
+};
+
 // A HEnvironment object contains the values of virtual registers at a given location.
 class HEnvironment : public ArenaObject<kArenaAllocMisc> {
  public:
@@ -820,46 +842,35 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
      : vregs_(arena, number_of_vregs) {
     vregs_.SetSize(number_of_vregs);
     for (size_t i = 0; i < number_of_vregs; i++) {
-      vregs_.Put(i, VRegInfo(nullptr, nullptr));
+      vregs_.Put(i, HUseRecord<HEnvironment*>());
     }
   }
 
   void CopyFrom(HEnvironment* env);
 
   void SetRawEnvAt(size_t index, HInstruction* instruction) {
-    vregs_.Put(index, VRegInfo(instruction, nullptr));
+    vregs_.Put(index, HUseRecord<HEnvironment*>(instruction));
   }
 
   // Record instructions' use entries of this environment for constant-time removal.
   void RecordEnvUse(HUseListNode<HEnvironment*>* env_use) {
     DCHECK(env_use->GetUser() == this);
     size_t index = env_use->GetIndex();
-    VRegInfo info = vregs_.Get(index);
-    DCHECK(info.vreg_ != nullptr);
-    DCHECK(info.node_ == nullptr);
-    vregs_.Put(index, VRegInfo(info.vreg_, env_use));
+    vregs_.Put(index, HUseRecord<HEnvironment*>(vregs_.Get(index), env_use));
   }
 
   HInstruction* GetInstructionAt(size_t index) const {
-    return vregs_.Get(index).vreg_;
+    return vregs_.Get(index).GetInstruction();
   }
 
   HUseListNode<HEnvironment*>* GetInstructionEnvUseAt(size_t index) const {
-    return vregs_.Get(index).node_;
+    return vregs_.Get(index).GetUseNode();
   }
 
   size_t Size() const { return vregs_.Size(); }
 
  private:
-  struct VRegInfo {
-    HInstruction* vreg_;
-    HUseListNode<HEnvironment*>* node_;
-
-    VRegInfo(HInstruction* instruction, HUseListNode<HEnvironment*>* env_use)
-        : vreg_(instruction), node_(env_use) {}
-  };
-
-  GrowableArray<VRegInfo> vregs_;
+  GrowableArray<HUseRecord<HEnvironment*> > vregs_;
 
   DISALLOW_COPY_AND_ASSIGN(HEnvironment);
 };
@@ -899,13 +910,23 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   bool IsLoopHeaderPhi() { return IsPhi() && block_->IsLoopHeader(); }
 
   virtual size_t InputCount() const = 0;
-  virtual HInstruction* InputAt(size_t i) const = 0;
+  HInstruction* InputAt(size_t i) const { return InputRecordAt(i).GetInstruction(); }
+  HUseListNode<HInstruction*>* InputUseAt(size_t i) const { return InputRecordAt(i).GetUseNode(); }
 
   virtual void Accept(HGraphVisitor* visitor) = 0;
   virtual const char* DebugName() const = 0;
 
   virtual Primitive::Type GetType() const { return Primitive::kPrimVoid; }
-  virtual void SetRawInputAt(size_t index, HInstruction* input) = 0;
+  void SetRawInputAt(size_t index, HInstruction* input) {
+    SetRawInputRecordAt(index, HUseRecord<HInstruction*>(input));
+  }
+  void RecordUse(HUseListNode<HInstruction*>* use) {
+    DCHECK(use->GetUser() == this);
+    size_t index = use->GetIndex();
+    HUseRecord<HInstruction*> old_record = InputRecordAt(index);
+    HUseRecord<HInstruction*> new_record = HUseRecord<HInstruction*>(old_record, use);
+    SetRawInputRecordAt(index, new_record);
+  }
 
   virtual bool NeedsEnvironment() const { return false; }
   virtual bool IsControlFlow() const { return false; }
@@ -919,7 +940,9 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   virtual bool CanDoImplicitNullCheck() const { return false; }
 
   void AddUseAt(HInstruction* user, size_t index) {
-    uses_.AddUse(user, index, GetBlock()->GetGraph()->GetArena());
+    HUseListNode<HInstruction*>* use =
+        uses_.AddUse(user, index, GetBlock()->GetGraph()->GetArena());
+    user->RecordUse(use);
   }
 
   void AddEnvUseAt(HEnvironment* user, size_t index) {
@@ -929,8 +952,8 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
     user->RecordEnvUse(env_use);
   }
 
-  void RemoveUser(HInstruction* user, size_t index);
-  void RemoveEnvironmentUser(HUseListNode<HEnvironment*>* use);
+  void RemoveUser(HUseListNode<HInstruction*>* use_node);
+  void RemoveEnvironmentUser(HUseListNode<HEnvironment*>* use_node);
 
   const HUseList<HInstruction*>& GetUses() { return uses_; }
   const HUseList<HEnvironment*>& GetEnvUses() { return env_uses_; }
@@ -1014,6 +1037,10 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   LiveInterval* GetLiveInterval() const { return live_interval_; }
   void SetLiveInterval(LiveInterval* interval) { live_interval_ = interval; }
   bool HasLiveInterval() const { return live_interval_ != nullptr; }
+
+ protected:
+  virtual HUseRecord<HInstruction*> InputRecordAt(size_t i) const = 0;
+  virtual void SetRawInputRecordAt(size_t index, HUseRecord<HInstruction*> input) = 0;
 
  private:
   HInstruction* previous_;
@@ -1170,15 +1197,16 @@ class HTemplateInstruction: public HInstruction {
   virtual ~HTemplateInstruction() {}
 
   virtual size_t InputCount() const { return N; }
-  virtual HInstruction* InputAt(size_t i) const { return inputs_[i]; }
 
  protected:
-  virtual void SetRawInputAt(size_t i, HInstruction* instruction) {
-    inputs_[i] = instruction;
+  virtual HUseRecord<HInstruction*> InputRecordAt(size_t i) const { return inputs_[i]; }
+
+  virtual void SetRawInputRecordAt(size_t i, HUseRecord<HInstruction*> input) {
+    inputs_[i] = input;
   }
 
  private:
-  EmbeddedArray<HInstruction*, N> inputs_;
+  EmbeddedArray<HUseRecord<HInstruction*>, N> inputs_;
 
   friend class SsaBuilder;
 };
@@ -1718,7 +1746,6 @@ std::ostream& operator<<(std::ostream& os, const Intrinsics& intrinsic);
 class HInvoke : public HInstruction {
  public:
   virtual size_t InputCount() const { return inputs_.Size(); }
-  virtual HInstruction* InputAt(size_t i) const { return inputs_.Get(i); }
 
   // Runtime needs to walk the stack, so Dex -> Dex calls need to
   // know their environment.
@@ -1726,10 +1753,6 @@ class HInvoke : public HInstruction {
 
   void SetArgumentAt(size_t index, HInstruction* argument) {
     SetRawInputAt(index, argument);
-  }
-
-  virtual void SetRawInputAt(size_t index, HInstruction* input) {
-    inputs_.Put(index, input);
   }
 
   virtual Primitive::Type GetType() const { return return_type_; }
@@ -1763,7 +1786,12 @@ class HInvoke : public HInstruction {
     inputs_.SetSize(number_of_arguments);
   }
 
-  GrowableArray<HInstruction*> inputs_;
+  virtual HUseRecord<HInstruction*> InputRecordAt(size_t i) const { return inputs_.Get(i); }
+  virtual void SetRawInputRecordAt(size_t index, HUseRecord<HInstruction*> input) {
+    inputs_.Put(index, input);
+  }
+
+  GrowableArray<HUseRecord<HInstruction*> > inputs_;
   const Primitive::Type return_type_;
   const uint32_t dex_pc_;
   const uint32_t dex_method_index_;
@@ -2259,11 +2287,6 @@ class HPhi : public HInstruction {
   }
 
   size_t InputCount() const OVERRIDE { return inputs_.Size(); }
-  HInstruction* InputAt(size_t i) const OVERRIDE { return inputs_.Get(i); }
-
-  void SetRawInputAt(size_t index, HInstruction* input) OVERRIDE {
-    inputs_.Put(index, input);
-  }
 
   void AddInput(HInstruction* input);
 
@@ -2282,8 +2305,15 @@ class HPhi : public HInstruction {
 
   DECLARE_INSTRUCTION(Phi);
 
+ protected:
+  HUseRecord<HInstruction*> InputRecordAt(size_t i) const OVERRIDE { return inputs_.Get(i); }
+
+  void SetRawInputRecordAt(size_t index, HUseRecord<HInstruction*> input) OVERRIDE {
+    inputs_.Put(index, input);
+  }
+
  private:
-  GrowableArray<HInstruction*> inputs_;
+  GrowableArray<HUseRecord<HInstruction*> > inputs_;
   const uint32_t reg_number_;
   Primitive::Type type_;
   bool is_live_;
