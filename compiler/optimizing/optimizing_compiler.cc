@@ -90,42 +90,43 @@ class PassInfoPrinter : public ValueObject {
                   bool visualizer_enabled)
       : method_name_(method_name),
         timing_logger_enabled_(timing_logger_enabled),
-        timing_logger_running_(false),
         timing_logger_(method_name, true, true),
         visualizer_enabled_(visualizer_enabled),
-        visualizer_(visualizer_output, graph, codegen, method_name_) {
+        visualizer_(visualizer_output, graph, codegen, method_name_),
+        active_pass_name_(nullptr) {
     if (strstr(method_name, kStringFilter) == nullptr) {
       timing_logger_enabled_ = visualizer_enabled_ = false;
     }
   }
 
-  void BeforePass(const char* pass_name) {
+  void StartPass(const char* pass_name) {
+    DCHECK(active_pass_name_ == nullptr);
+    active_pass_name_ = pass_name;
+
     // Dump graph first, then start timer.
     if (visualizer_enabled_) {
-      visualizer_.DumpGraph(pass_name, /* is_after_pass */ false);
+      visualizer_.DumpGraph(active_pass_name_, /* is_after_pass */ false);
     }
     if (timing_logger_enabled_) {
-      DCHECK(!timing_logger_running_);
-      timing_logger_running_ = true;
-      timing_logger_.StartTiming(pass_name);
+      timing_logger_.StartTiming(active_pass_name_);
     }
   }
 
-  void AfterPass(const char* pass_name) {
+  void EndPass() {
     // Pause timer first, then dump graph.
+    DCHECK(active_pass_name_ != nullptr);
     if (timing_logger_enabled_) {
-      DCHECK(timing_logger_running_);
       timing_logger_.EndTiming();
-      timing_logger_running_ = false;
     }
     if (visualizer_enabled_) {
-      visualizer_.DumpGraph(pass_name, /* is_after_pass */ true);
+      visualizer_.DumpGraph(active_pass_name_, /* is_after_pass */ true);
     }
+    active_pass_name_ = nullptr;
   }
 
   ~PassInfoPrinter() {
+    DCHECK(active_pass_name_ == nullptr);
     if (timing_logger_enabled_) {
-      DCHECK(!timing_logger_running_);
       LOG(INFO) << "TIMINGS " << method_name_;
       LOG(INFO) << Dumpable<TimingLogger>(timing_logger_);
     }
@@ -135,11 +136,12 @@ class PassInfoPrinter : public ValueObject {
   const char* method_name_;
 
   bool timing_logger_enabled_;
-  bool timing_logger_running_;
   TimingLogger timing_logger_;
 
   bool visualizer_enabled_;
   HGraphVisualizer visualizer_;
+
+  const char* active_pass_name_;
 
   DISALLOW_COPY_AND_ASSIGN(PassInfoPrinter);
 };
@@ -269,9 +271,9 @@ static void RunOptimizations(HOptimization* optimizations[],
                              PassInfoPrinter* pass_info) {
   for (size_t i = 0; i < length; ++i) {
     HOptimization* optimization = optimizations[i];
-    pass_info->BeforePass(optimization->GetPassName());
+    pass_info->StartPass(optimization->GetPassName());
     optimization->Run();
-    pass_info->AfterPass(optimization->GetPassName());
+    pass_info->EndPass();
     optimization->Check();
   }
 }
@@ -339,16 +341,16 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   RunOptimizations(
       graph, compiler_driver, &compilation_stats_, dex_compilation_unit, pass_info);
 
-  pass_info->BeforePass(kLivenessPassName);
+  pass_info->StartPass(kLivenessPassName);
   PrepareForRegisterAllocation(graph).Run();
   SsaLivenessAnalysis liveness(*graph, codegen);
   liveness.Analyze();
-  pass_info->AfterPass(kLivenessPassName);
+  pass_info->EndPass();
 
-  pass_info->BeforePass(kRegisterAllocatorPassName);
+  pass_info->StartPass(kRegisterAllocatorPassName);
   RegisterAllocator register_allocator(graph->GetArena(), codegen, liveness);
   register_allocator.AllocateRegisters();
-  pass_info->AfterPass(kRegisterAllocatorPassName);
+  pass_info->EndPass();
 
   CodeVectorAllocator allocator;
   codegen->CompileOptimized(&allocator);
@@ -469,26 +471,28 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
 
   VLOG(compiler) << "Building " << method_name;
 
-  pass_info.BeforePass(kBuilderPassName);
+  pass_info.StartPass(kBuilderPassName);
   if (!builder.BuildGraph(*code_item)) {
+    pass_info.EndPass();
     CHECK(!shouldCompile) << "Could not build graph in optimizing compiler";
     return nullptr;
   }
-  pass_info.AfterPass(kBuilderPassName);
+  pass_info.EndPass();
 
   bool can_optimize = CanOptimize(*code_item);
   bool can_allocate_registers = RegisterAllocator::CanAllocateRegistersFor(*graph, instruction_set);
   if (run_optimizations_ && can_optimize && can_allocate_registers) {
     VLOG(compiler) << "Optimizing " << method_name;
 
-    pass_info.BeforePass(kSsaBuilderPassName);
+    pass_info.StartPass(kSsaBuilderPassName);
     if (!graph->TryBuildingSsa()) {
       // We could not transform the graph to SSA, bailout.
+      pass_info.EndPass();
       LOG(INFO) << "Skipping compilation of " << method_name << ": it contains a non natural loop";
       compilation_stats_.RecordStat(MethodCompilationStat::kNotCompiledCannotBuildSSA);
       return nullptr;
     }
-    pass_info.AfterPass(kSsaBuilderPassName);
+    pass_info.EndPass();
 
     return CompileOptimized(graph,
                             codegen.get(),
