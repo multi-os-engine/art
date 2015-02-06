@@ -30,7 +30,6 @@
 namespace art {
 
 static size_t constexpr kVRegSize = 4;
-static size_t constexpr kUninitializedFrameSize = 0;
 
 // Binary encoding of 2^32 for type double.
 static int64_t constexpr k2Pow32EncodingForDouble = INT64_C(0x41F0000000000000);
@@ -196,6 +195,15 @@ class CodeGenerator {
 
   void MarkNotLeaf() {
     is_leaf_ = false;
+    requires_current_method_ = true;
+  }
+
+  void SetRequiresCurrentMethod() {
+    requires_current_method_ = true;
+  }
+
+  bool RequiresCurrentMethod() const {
+    return requires_current_method_;
   }
 
   // Clears the spill slots taken by loop phis in the `LocationSummary` of the
@@ -236,7 +244,7 @@ class CodeGenerator {
                 uint32_t core_callee_save_mask,
                 uint32_t fpu_callee_save_mask,
                 const CompilerOptions& compiler_options)
-      : frame_size_(kUninitializedFrameSize),
+      : frame_size_(0),
         core_spill_mask_(0),
         fpu_spill_mask_(0),
         first_register_slot_in_slow_path_(0),
@@ -255,6 +263,7 @@ class CodeGenerator {
         block_order_(nullptr),
         current_block_index_(0),
         is_leaf_(true),
+        requires_current_method_(false),
         stack_map_stream_(graph->GetArena()) {}
 
   // Register allocation logic.
@@ -273,7 +282,6 @@ class CodeGenerator {
   // Returns the location of the first spilled entry for floating point registers,
   // relative to the stack pointer.
   uint32_t GetFpuSpillStart() const {
-    DCHECK_NE(frame_size_, kUninitializedFrameSize);
     return GetFrameSize() - FrameEntrySpillSize();
   }
 
@@ -287,6 +295,17 @@ class CodeGenerator {
 
   uint32_t FrameEntrySpillSize() const {
     return GetFpuSpillSize() + GetCoreSpillSize();
+  }
+
+  bool HasAllocatedCalleeSaveRegisters() const {
+    // We check the core registers against 1 because it always comprises the return PC.
+    return (POPCOUNT(allocated_registers_.GetCoreRegisters() & core_callee_save_mask_) != 1)
+      || (POPCOUNT(allocated_registers_.GetFloatingPointRegisters() & fpu_callee_save_mask_) != 0);
+  }
+
+  bool CallPushesPC() const {
+    InstructionSet instruction_set = GetInstructionSet();
+    return instruction_set == kX86 || instruction_set == kX86_64;
   }
 
   // Frame size required for this method.
@@ -328,7 +347,11 @@ class CodeGenerator {
   // we are generating code for.
   size_t current_block_index_;
 
+  // Whether the method is a leaf method.
   bool is_leaf_;
+
+  // Whether an instruction in the graph accesses the current method.
+  bool requires_current_method_;
 
   StackMapStream stack_map_stream_;
 

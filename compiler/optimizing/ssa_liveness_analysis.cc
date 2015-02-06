@@ -142,11 +142,19 @@ void SsaLivenessAnalysis::NumberInstructions() {
       HInstruction* current = inst_it.Current();
       current->Accept(codegen_->GetLocationBuilder());
       LocationSummary* locations = current->GetLocations();
-      if (locations != nullptr && locations->Out().IsValid()) {
-        instructions_from_ssa_index_.Add(current);
-        current->SetSsaIndex(ssa_index++);
-        current->SetLiveInterval(
-            LiveInterval::MakeInterval(graph_.GetArena(), current->GetType(), current));
+      if (locations != nullptr) {
+        if (locations->Out().IsValid()) {
+          instructions_from_ssa_index_.Add(current);
+          current->SetSsaIndex(ssa_index++);
+          current->SetLiveInterval(
+              LiveInterval::MakeInterval(graph_.GetArena(), current->GetType(), current));
+        }
+        if (!current->IsSuspendCheckEntry() && locations->CanCall()) {
+          codegen_->MarkNotLeaf();
+        }
+      }
+      if (!current->IsSuspendCheckEntry() && current->NeedsCurrentMethod()) {
+        codegen_->SetRequiresCurrentMethod();
       }
       instructions_from_lifetime_position_.Add(current);
       current->SetLifetimePosition(lifetime_position);
