@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">AndroidGCTest</string>
+    <string name="action_settings">Setting</string>
+    <string name="button_desc">Start</string>
+
+    <string name="total_size_desc">Total object size(MB)</string>
+    <string name="total_size_default">100</string>
+
+    <string name="bucket_size_desc">Bucket size(MB)</string>
+    <string name="bucket_size_default">1</string>
+
+    <string name="los_threshold_desc">Large Object Size(KB)</string>
+    <string name="los_threshold_default">12</string>
+
+    <string name="fragment_desc">Placeholder Degree (1 - 10)</string>
+    <string name="fragment_default">6</string>
+
+    <string name="object_size_16_desc">16byte</string>
+    <string name="object_size_32_desc">32byte</string>
+    <string name="object_size_64_desc">64byte</string>
+    <string name="object_size_128_desc">128byte</string>
+    <string name="object_size_256_desc">256byte</string>
+    <string name="object_size_512_desc">512byte</string>
+    <string name="object_size_los_desc">Large Object</string>
+    <string name="object_size_smaollobject_desc">Small Object</string>
+
+    <string name="object_size_dist_desc">Object Size Distribution</string>
+    <string name="size_dist_16_default">0.0436</string>
+    <string name="size_dist_32_default">0.5465</string>
+    <string name="size_dist_64_default">0.2103</string>
+    <string name="size_dist_128_default">0.1499</string>
+    <string name="size_dist_256_default">0.0275</string>
+    <string name="size_dist_512_default">0.0125</string>
+    <string name="size_dist_los_default">0.0097</string>
+
+    <string name="los_dist_desc">Large Object Element Type Distribution</string>
+    <string name="los_dist_byte_desc">Byte Array</string>
+    <string name="los_dist_char_desc">Char Array</string>
+    <string name="los_dist_int_desc">Int Array</string>
+    <string name="los_dist_long_desc">Long Array</string>
+    <string name="los_dist_byte_default">0.90</string>
+    <string name="los_dist_char_default">0.07</string>
+    <string name="los_dist_int_default">0.02</string>
+    <string name="los_dist_long_default">0.01</string>
+
+    <string name="lifetime_desc">Object Lifetime (long lived ratio, die immediately ratio,...)</string>    
+    <string name="lifetime_16_default">0.0865,0.5404,0.2887,0.0865</string>
+    <string name="lifetime_32_default">0.0469,0.7724,0.1460,0.0346</string>
+    <string name="lifetime_64_default">0.1154,0.5982,0.1880,0.0984</string>
+    <string name="lifetime_128_default">0.0662,0.7851,0.1077,0.0411</string>
+    <string name="lifetime_256_default">0.0520,0.8778,0.0503,0.0198</string>
+    <string name="lifetime_512_default">0.1628,0.7137,0.0821,0.0414</string>
+    <string name="lifetime_los_default">0.0923,0.7117,0.1769,0.0192</string>
+    <string name="lifetime_smallobject_default">0.0883,0.7146,0.1438,0.0533</string>
+
+    <string name="single_thread_desc">Run in single thread?</string>
+    <string name="thread_num_desc">Thread # (0 means setting #thread as #CPU)</string>
+    <string name="thread_num_default">0</string>
+
+    <string name="exe_time_default">100</string>
+    <string name="exe_time_desc">set the iteration times of stress test phase, iterating 100 times takes ~160s on Nexus 5/ART</string>
+    <!-- <string name="los_threads_desc">Allocate large object in all threads?</string> -->
+    
+    <string name="complete_time_desc">Complete Time</string>
+    <string name="heap_desc">Heap Footprint</string>
+    <string name="gc_desc">Gc Pause Time</string>
+    <string name="runtime_desc">Device: </string>
+    <string name="execution_time_desc">Execution time:</string>
+    <string name="show_result_button_desc">Show result details</string>
+    <string name="set_profile_button_desc">Setting</string>
+    <string name="start_button_desc">Start</string>
+    <string name="setting_confirm_button_desc">Confirm changes</string>
+    <string name="profile_list_dest">Select a profile</string>
+    <string name="workload_status_desc">Click &quot;Setting&quot; to config profile, click &quot;Start&quot; to run workload</string>
+    <string name="outofmemory_desc">OutOfMemory! Please config profile or Java Runtime and run again.</string>
+
+    <string name="vm_type">vm type</string>
+</resources>
