@@ -1,0 +1,43 @@
+= AndroidGCTest-java RunRules
+AndroidGCTest support two Run mode: GUI and command line.
+
+== GUI RunRules
+1. Install
+adb install AndroidGCTest.apk
+
+2. Start benchmarking
+* After launching AndroidGCTest user can see the right of the screen is a testing profile list, left are two buttons "Setting" and "Start".
+* To start AndroidGCTest, Select a testing profile in the profile list and click "Start" button to start bench marking.A progress bar will appear, with "AndroidGCTest is running" shown, with "start" button disappears on screen until benchmarking completes.
+* The testing profile defines how workload allocates objects, i.e. object size, object count, object lifetime etc. Right now only one "default" file is supported. It is abstracted from the common characterizations of many real-world android applications.
+
+3. Get result
+When benchmarking finishes the result is shown below the progress bar, the result is also write to logcat and a text file /sdcard/AndroidGCTest-result.txt.
+
+4. Change testing profile
+* User can modify testing profile manually by click "Setting" button. A configuration panel will be shown for user to change profile. The configurable items are:
+  ** First row of configuration view is a selected list for profiles, there is only "default" option now. It is a default profile for the parameters used in the benchmarking, the default profile is got from charactering several market applications. In the future we can add more profile for specific applications or scenarios.
+  ** Second row defines the total object size allocated in one iteration by all threads, 100M byte by default, that means when running with multi-thread mode with is 4 threads, each thread will allocate 25M bytes object in one iteration in stress test phase.
+  ** Third row defines the size of binary trees built once, default is 1M byte.
+  ** 4th row is object size distribution, the total sum should be 100%.
+  ** 5th row defines object lifetime of each type of object size. Here an object lifetime is defined as the number of bucket data (1M byte by default) allocated between its creation and deletion.
+     *** The first item in lifetime data is the long live object ratio
+     *** second item is object ratio died immediately after creation
+     *** third is the object ration died in second period (after allocating another 1M byte objects), item K is object ration died in K+1 period (after allocating KM byte objects). Items are split by comma. Each line should have same items.
+     *** The checkbox is used to switch between two thread modes, checked means switching to single thread mode, by default AndroidGCTest runs in multi-thread mode.
+
+== Command line RunRules
+Run steps:
+1. Install
+* Put AndroidGCTest.jar to /sdcard/ before running the benchmark.
+  adb push AndoidGCTest.jar /sdcard/AndroidGCTest.jar
+
+2. Configure
+* Command line version accepts an xml file as configuration. An xml file is released with AndroidGCTest.jar as the example of configuration.
+
+3. Start Benchmarking
+* Dalvikvm [VM configuration] -cp /sdcard/AndroidGCTest.jar com.intel.crtl.androidgctest.AndroidGCTestMain [benchmark configuration]
+* [VM configuration] includes runtime (ART or Dalvik).
+* [benchmark configuration] is the profile file name and profile name used in this run of AndroidGCTest, for example "/sdcard/profile.xml" default
+
+4. Get result
+The result is written to command line directly.
