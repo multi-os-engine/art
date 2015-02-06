@@ -990,4 +990,54 @@ void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
   invoke->GetBlock()->RemoveInstruction(invoke);
 }
 
+bool HConstant::IsMinusOne() const {
+  switch (GetKind()) {
+    case kIntConstant:
+      return AsIntConstant()->GetValue() == -1;
+    case kLongConstant:
+      return AsLongConstant()->GetValue() == -1;
+    case kFloatConstant:
+      return bit_cast<uint32_t>(AsFloatConstant()->GetValue()) == bit_cast<uint32_t>((-1.0f));
+    case kDoubleConstant:
+      return bit_cast<uint64_t>(AsDoubleConstant()->GetValue()) == bit_cast<uint64_t>(-1.0);
+    default:
+      LOG(FATAL) << "Unexpected kind of constant " << GetKind();
+      return false;
+  }
+}
+
+bool HConstant::IsZero() const {
+  switch (GetKind()) {
+    case kIntConstant: return AsIntConstant()->GetValue() == 0;
+    case kLongConstant: return AsLongConstant()->GetValue() == 0;
+    case kFloatConstant: return AsFloatConstant()->GetValue() == 0.0f;
+    case kDoubleConstant: return AsDoubleConstant()->GetValue() == 0.0;
+    default:
+      LOG(FATAL) << "Unexpected kind of constant " << GetKind();
+      return false;
+  }
+}
+
+bool HConstant::IsOne() const {
+  switch (GetKind()) {
+    case kIntConstant:
+      return AsIntConstant()->GetValue() == 1;
+    case kLongConstant:
+      return AsLongConstant()->GetValue() == 1;
+    case kFloatConstant:
+      return bit_cast<uint32_t>(AsFloatConstant()->GetValue()) == bit_cast<uint32_t>(1.0f);
+    case kDoubleConstant:
+      return bit_cast<uint64_t>(AsDoubleConstant()->GetValue()) == bit_cast<uint64_t>(1.0);
+    default:
+      LOG(FATAL) << "Unexpected kind of constant " << GetKind();
+      return false;
+  }
+}
+
+bool HConstant::IsAllOnes() const {
+  DCHECK(IsIntConstant() || IsLongConstant());
+  int64_t val = IsIntConstant() ? AsIntConstant()->GetValue() : AsLongConstant()->GetValue();
+  return val == -1;
+}
+
 }  // namespace art
