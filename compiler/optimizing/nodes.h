@@ -1015,6 +1015,12 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   void SetLiveInterval(LiveInterval* interval) { live_interval_ = interval; }
   bool HasLiveInterval() const { return live_interval_ != nullptr; }
 
+  bool IsSuspendCheckEntry() const { return IsSuspendCheck() && GetBlock()->IsEntryBlock(); }
+
+  bool NeedsCurrentMethod() const {
+    return NeedsEnvironment() || IsLoadClass() || IsLoadString();
+  }
+
  private:
   HInstruction* previous_;
   HInstruction* next_;

@@ -454,8 +454,10 @@ void CodeGeneratorARM64::GenerateFrameEntry() {
   }
 
   int frame_size = GetFrameSize();
-  __ Str(kArtMethodRegister, MemOperand(sp, -frame_size, PreIndex));
-  __ PokeCPURegList(GetFramePreservedRegisters(), frame_size - FrameEntrySpillSize());
+  if (frame_size != 0) {
+    __ Str(kArtMethodRegister, MemOperand(sp, -frame_size, PreIndex));
+    __ PokeCPURegList(GetFramePreservedRegisters(), frame_size - FrameEntrySpillSize());
+  }
 
   // Stack layout:
   // sp[frame_size - 8]        : lr.
@@ -467,8 +469,10 @@ void CodeGeneratorARM64::GenerateFrameEntry() {
 
 void CodeGeneratorARM64::GenerateFrameExit() {
   int frame_size = GetFrameSize();
-  __ PeekCPURegList(GetFramePreservedRegisters(), frame_size - FrameEntrySpillSize());
-  __ Drop(frame_size);
+  if (frame_size != 0) {
+    __ PeekCPURegList(GetFramePreservedRegisters(), frame_size - FrameEntrySpillSize());
+    __ Drop(frame_size);
+  }
 }
 
 void CodeGeneratorARM64::Bind(HBasicBlock* block) {

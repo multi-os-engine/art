@@ -470,12 +470,16 @@ void CodeGeneratorX86::GenerateFrameEntry() {
     RecordPcInfo(nullptr, 0);
   }
 
-  __ subl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
-  __ movl(Address(ESP, kCurrentMethodStackOffset), EAX);
+  if (GetFrameSize() != 0) {
+    __ subl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+    __ movl(Address(ESP, kCurrentMethodStackOffset), EAX);
+  }
 }
 
 void CodeGeneratorX86::GenerateFrameExit() {
-  __ addl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+  if (GetFrameSize() != 0) {
+    __ addl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+  }
 }
 
 void CodeGeneratorX86::Bind(HBasicBlock* block) {
