@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<profile id="0" name="default">
+    <item name="total_size">100</item>
+    <item name="bucket_size">1</item>
+    <item name="los_threshold">12</item>
+    <float-array name="size_dist" count="7">
+        <value>0.0436</value>
+        <value>0.5465</value>
+        <value>0.2103</value>
+        <value>0.1499</value>
+        <value>0.0275</value>
+        <value>0.0125</value>
+        <value>0.0097</value>
+    </float-array>
+    <float-array-2d name="lifetime" count="7">
+        <float-array name="16b" count="4">
+         <value>0.0865</value>
+         <value>0.5404</value>
+         <value>0.2887</value>
+         <value>0.0865</value>
+        </float-array>
+        <float-array name="32b" count="4">
+         <value>0.0469</value>
+         <value>0.7724</value>
+         <value>0.1460</value>
+         <value>0.0346</value>
+        </float-array>
+        <float-array name="64b" count="4">
+         <value>0.1154</value>
+         <value>0.5982</value>
+         <value>0.1880</value>
+         <value>0.0984</value>
+        </float-array>
+        <float-array name="128b" count="4">
+         <value>0.0662</value>
+         <value>0.7851</value>
+         <value>0.1077</value>
+         <value>0.0411</value>
+        </float-array>
+        <float-array name="256b" count="4">
+         <value>0.0520</value>
+         <value>0.8778</value>
+         <value>0.0503</value>
+         <value>0.0198</value>
+        </float-array>
+        <float-array name="512b" count="4">
+         <value>0.1628</value>
+         <value>0.7137</value>
+         <value>0.0821</value>
+         <value>0.0414</value>
+        </float-array>
+        <float-array name="los" count="4">
+         <value>0.0923</value>
+         <value>0.7117</value>
+         <value>0.1769</value>
+         <value>0.0192</value>
+        </float-array>
+    </float-array-2d>
+    <float-array name="los_element_dist" count="4">
+        <value>0.90</value>
+        <value>0.07</value>
+        <value>0.02</value>
+        <value>0.01</value>
+    </float-array>
+    <item name="thread-mode">0</item>
+    <item name="thread-num">0</item>
+    <item name="iteration-times">100</item>
+</profile>
