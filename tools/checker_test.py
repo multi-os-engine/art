@@ -247,6 +247,23 @@ class TestCheckLine_Match(unittest.TestCase):
     self.__matchSingle("[[X:..]]foo[[X]]", ".*foo.*")
     self.__notMatchSingle("[[X:..]]foo[[X]]", ".*fooAAAA")
 
+  def test_List(self):
+    self.__matchSingle("[ X Y Z ]", "[ X Y Z ]")
+    self.__matchSingle("list:[ X Y Z ]", "list:[ X Y Z ]")
+
+    self.__matchSingle("[ X Y Z ]", "[ A X B Y C Z D ]")
+    self.__matchSingle("list:[ X Y Z ]", "list:[ A X B Y C Z D ]")
+
+    self.__notMatchSingle("[ X Y Z ]", "[ X Y ] [ Z ]")
+    self.__notMatchSingle("list:[ X Y Z ]", "list:[ X Y ] [ Z ]")
+
+    self.__notMatchSingle("[ X Y Z ]", "list:[ X Y Z ]")
+    self.__notMatchSingle("list:[ X Y Z ]", "[ X Y Z ]")
+
+    with self.assertRaises(CheckerException):
+      self.__matchSingle("[ X [ Y Z ]", "[ X [ Y Z ]")
+    with self.assertRaises(CheckerException):
+      self.__matchSingle("[ X Y ] Z ]", "[ X Y ] Z ]")
 
 CheckVariant = checker.CheckLine.Variant
 

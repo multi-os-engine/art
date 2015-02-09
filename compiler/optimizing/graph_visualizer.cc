@@ -165,7 +165,7 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       }
     }
     output_ << ")";
-    output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
+    output_ << " liveness:" << instruction->GetLifetimePosition();
   }
 
   void VisitIntConstant(HIntConstant* instruction) OVERRIDE {
@@ -187,6 +187,7 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
   void PrintInstruction(HInstruction* instruction) {
     output_ << instruction->DebugName();
     instruction->Accept(this);
+
     if (instruction->InputCount() > 0) {
       output_ << " [ ";
       for (HInputIterator inputs(instruction); !inputs.Done(); inputs.Advance()) {
@@ -194,33 +195,46 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       }
       output_ << "]";
     }
+
     if (instruction->HasEnvironment()) {
       HEnvironment* env = instruction->GetEnvironment();
-      output_ << " (env: [ ";
+      output_ << " env:[ ";
       for (size_t i = 0, e = env->Size(); i < e; ++i) {
         HInstruction* insn = env->GetInstructionAt(i);
         if (insn != nullptr) {
           output_ << GetTypeId(insn->GetType()) << insn->GetId() << " ";
         } else {
-          output_ << " _ ";
+          output_ << "_ ";
         }
       }
-      output_ << "])";
+      output_ << "]";
     }
-    if (pass_name_ == kLivenessPassName
-        && is_after_pass_
-        && instruction->GetLifetimePosition() != kNoLifetime) {
-      output_ << " (liveness: " << instruction->GetLifetimePosition();
-      if (instruction->HasLiveInterval()) {
-        output_ << " ";
-        const LiveInterval& interval = *instruction->GetLiveInterval();
-        interval.Dump(output_);
+
+    if (pass_name_ == kLoopInvariantCodeMotionPassName) {
+      output_ << " loop_header:";
+      HLoopInformation* info = instruction->GetBlock()->GetLoopInformation();
+      if (info == nullptr) {
+        output_ << "null";
+      } else {
+        output_ << "B" << info->GetHeader()->GetBlockId();
       }
-      output_ << ")";
-    } else if (pass_name_ == kRegisterAllocatorPassName && is_after_pass_) {
+    }
+
+    if (pass_name_ == kLivenessPassName && is_after_pass_) {
+      if (instruction->GetLifetimePosition() != kNoLifetime) {
+        output_ << " liveness:" << instruction->GetLifetimePosition();
+        if (instruction->HasLiveInterval()) {
+          output_ << " ";
+          const LiveInterval& interval = *instruction->GetLiveInterval();
+          interval.Dump(output_);
+        }
+      }
+    }
+
+    if (pass_name_ == kRegisterAllocatorPassName && is_after_pass_) {
       LocationSummary* locations = instruction->GetLocations();
       if (locations != nullptr) {
-        output_ << " ( ";
+        output_ << " liveness:" << instruction->GetLifetimePosition() << " ( ";
         for (size_t i = 0; i < instruction->InputCount(); ++i) {
           DumpLocation(locations->InAt(i));
           output_ << " ";
@@ -230,15 +244,6 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
           output_ << " -> ";
           DumpLocation(locations->Out());
         }
-      }
-      output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
-    } else if (pass_name_ == kLoopInvariantCodeMotionPassName) {
-      output_ << " ( loop_header:";
-      HLoopInformation* info = instruction->GetBlock()->GetLoopInformation();
-      if (info == nullptr) {
-        output_ << "null )";
-      } else {
-        output_ << "B" << info->GetHeader()->GetBlockId() << " )";
       }
     }
   }
@@ -258,7 +263,7 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       output_ << bci << " " << num_uses << " "
               << GetTypeId(instruction->GetType()) << instruction->GetId() << " ";
       PrintInstruction(instruction);
-      output_ << kEndInstructionMarker << std::endl;
+      output_ << " " << kEndInstructionMarker << std::endl;
     }
   }
 

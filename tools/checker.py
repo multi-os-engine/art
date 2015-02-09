@@ -46,8 +46,15 @@
 #               Surrounding non-negative checks (or boundaries of the group)
 #               therefore create a scope within which the assertion is verified.
 #
-# Check-line patterns are treated as plain text rather than regular expressions
-# but are whitespace agnostic.
+# A check line is comprised of multiple check patterns which must match the
+# output in the given order. Content of check lines is treated as plain text by
+# default but there are some special characters described below.
+#
+# Unless patterns are separated by whitespace, their matches must stricly follow
+# one another in the output. Whitespace therefore allows to skip over arbitary
+# amount of output: 'foo bar' will match 'foo xyz bar'. On the other hand, it
+# also forces the next pattern to match output prepended with a whitespace:
+# hence 'foo bar' wil not match 'foobar' or 'foo xbar'.
 #
 # Actual regex patterns can be inserted enclosed in '{{' and '}}' brackets. If
 # curly brackets need to be used inside the body of the regex, they need to be
@@ -59,16 +66,21 @@
 # only valid within the scope of the defining group. Within a group they cannot
 # be redefined or used undefined.
 #
+# Checker also recognizes '[' and ']' patterns as the start and end of a list.
+# This limits the scope of matching within a line. The enclosed check patterns
+# must all be matched before the end marker is encountered in the output. Check
+# line 'x=[ foo bar ]' will therefore not match output 'x=[ foo ] y=[ bar ]'.
+#
 # Example:
 #   The following assertions can be placed in a Java source file:
 #
 #   // CHECK-START: int MyClass.MyMethod() constant_folding (after)
-#   // CHECK:         [[ID:i[0-9]+]] IntConstant {{11|22}}
-#   // CHECK:                        Return [ [[ID]] ]
+#   // CHECK:         [[ID:i\d+]] IntConstant 1{{2|3}}
+#   // CHECK:                     Return [ [[ID]] ]
 #
 #   The engine will attempt to match the check lines against the output of the
 #   group named on the first line. Together they verify that the CFG after
-#   constant folding returns an integer constant with value either 11 or 22.
+#   constant folding returns an integer constant with value either 12 or 13.
 #
 
 from __future__ import print_function
@@ -304,6 +316,9 @@ class CheckLine(CommonEqualityMixin):
   def __isSeparated(self, outputLine, matchStart):
     return (matchStart == 0) or (outputLine[matchStart - 1:matchStart].isspace())
 
+  def __hasListEnd(self, output):
+    return re.search(r"\s\]\s", output) != None
+
   # Attempts to match the check line against a line from the output file with
   # the given initial variable values. It returns the new variable state if
   # successful and None otherwise.
@@ -314,6 +329,7 @@ class CheckLine(CommonEqualityMixin):
 
     matchStart = 0
     isAfterSeparator = True
+    isInList = False
 
     # Now try to parse all of the parts of the check line in the right order.
     # Variable values are updated on-the-fly, meaning that a variable can
@@ -332,12 +348,18 @@ class CheckLine(CommonEqualityMixin):
         matchEnd = matchStart + match.end()
         matchStart += match.start()
 
+        # If we're searching through a list, make sure the match appeared before
+        # the end marker. If not, the entire list (and line) cannot be matched.
+        if isInList and self.__hasListEnd(outputLine[:matchStart]):
+          return None
+
         # Check if this is a valid match if we expect a whitespace separator
-        # before the matched text. Otherwise loop and look for another match.
+        # before the matched text.
         if not isAfterSeparator or self.__isSeparated(outputLine, matchStart):
           break
-        else:
-          matchStart += 1
+
+        # Loop and look for another match.
+        matchStart += 1
 
       if part.variant == CheckElement.Variant.VarDef:
         if part.name in varState:
@@ -347,6 +369,17 @@ class CheckLine(CommonEqualityMixin):
 
       matchStart = matchEnd
       isAfterSeparator = False
+
+      # Does this line part start/end a list search?
+      if part.variant == CheckElement.Variant.Text:
+        if part.pattern.endswith(r"\["):
+          if isInList:
+            Logger.fail("Nested lists are not supported")
+          isInList = True
+        elif part.pattern == r"\]":
+          if not isInList:
+            Logger.fail("Unexpected end-of-list marker")
+          isInList = False
 
     # All parts were successfully matched. Return the new variable state.
     return varState

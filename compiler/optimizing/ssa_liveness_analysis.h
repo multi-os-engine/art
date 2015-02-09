@@ -517,14 +517,14 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   }
 
   void Dump(std::ostream& stream) const {
-    stream << "ranges: { ";
+    stream << " ranges:[ ";
     LiveRange* current = first_range_;
     while (current != nullptr) {
       current->Dump(stream);
       stream << " ";
       current = current->GetNext();
     }
-    stream << "}, uses: { ";
+    stream << "] uses:[ ";
     UsePosition* use = first_use_;
     if (use != nullptr) {
       do {
@@ -532,10 +532,11 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         stream << " ";
       } while ((use = use->GetNext()) != nullptr);
     }
-    stream << "}";
-    stream << " is_fixed: " << is_fixed_ << ", is_split: " << IsSplit();
-    stream << " is_high: " << IsHighInterval();
-    stream << " is_low: " << IsLowInterval();
+    stream << "]";
+    stream << " is_fixed:" << is_fixed_;
+    stream << " is_split:" << IsSplit();
+    stream << " is_high:" << IsHighInterval();
+    stream << " is_low:" << IsLowInterval();
   }
 
   LiveInterval* GetNextSibling() const { return next_sibling_; }
