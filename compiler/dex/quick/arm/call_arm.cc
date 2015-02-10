@@ -168,7 +168,11 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
     NewLIR3(kThumb2Ldrex, rs_r1.GetReg(), rs_r0.GetReg(),
         mirror::Object::MonitorOffset().Int32Value() >> 2);
     MarkPossibleNullPointerException(opt_flags);
-    LIR* not_unlocked_branch = OpCmpImmBranch(kCondNe, rs_r1, 0, NULL);
+    // Zero out the read barrier bits.
+    OpRegRegImm(kOpAnd, rs_r3, rs_r1, LockWord::kReadBarrierStateMaskShiftedToggled);
+    LIR* not_unlocked_branch = OpCmpImmBranch(kCondNe, rs_r3, 0, NULL);
+    // r1 is zero except for the rb bits here. Copy the read barrier bits into r2.
+    OpRegRegReg(kOpOr, rs_r2, rs_r2, rs_r1);
     NewLIR4(kThumb2Strex, rs_r1.GetReg(), rs_r2.GetReg(), rs_r0.GetReg(),
         mirror::Object::MonitorOffset().Int32Value() >> 2);
     LIR* lock_success_branch = OpCmpImmBranch(kCondEq, rs_r1, 0, NULL);
@@ -196,7 +200,14 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
     NewLIR3(kThumb2Ldrex, rs_r1.GetReg(), rs_r0.GetReg(),
         mirror::Object::MonitorOffset().Int32Value() >> 2);
     MarkPossibleNullPointerException(opt_flags);
-    OpRegImm(kOpCmp, rs_r1, 0);
+    // Zero out the read barrier bits.
+    OpRegRegImm(kOpAnd, rs_r3, rs_r1, LockWord::kReadBarrierStateMaskShiftedToggled);
+    // r1 will be zero except for the rb bits if the following
+    // cmp-and-branch branches to eq where r2 will be used. Copy the
+    // read barrier bits into r2.
+    OpRegRegReg(kOpOr, rs_r2, rs_r2, rs_r1);
+    OpRegImm(kOpCmp, rs_r3, 0);
+
     LIR* it = OpIT(kCondEq, "");
     NewLIR4(kThumb2Strex/*eq*/, rs_r1.GetReg(), rs_r2.GetReg(), rs_r0.GetReg(),
         mirror::Object::MonitorOffset().Int32Value() >> 2);
@@ -235,13 +246,18 @@ void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
         null_check_branch = OpCmpImmBranch(kCondEq, rs_r0, 0, NULL);
       }
     }
-    Load32Disp(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r1);
+    NewLIR3(kThumb2Ldrex, rs_r1.GetReg(), rs_r0.GetReg(),
+        mirror::Object::MonitorOffset().Int32Value() >> 2);
     MarkPossibleNullPointerException(opt_flags);
-    LoadConstantNoClobber(rs_r3, 0);
-    LIR* slow_unlock_branch = OpCmpBranch(kCondNe, rs_r1, rs_r2, NULL);
+    // Zero out the read barrier bits.
+    OpRegRegImm(kOpAnd, rs_r3, rs_r1, LockWord::kReadBarrierStateMaskShiftedToggled);
+    // Zero out except the read barrier bits.
+    OpRegRegImm(kOpAnd, rs_r1, rs_r1, LockWord::kReadBarrierStateMaskShifted);
+    LIR* slow_unlock_branch = OpCmpBranch(kCondNe, rs_r3, rs_r2, NULL);
     GenMemBarrier(kAnyStore);
-    Store32Disp(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r3);
-    LIR* unlock_success_branch = OpUnconditionalBranch(NULL);
+    NewLIR4(kThumb2Strex, rs_r2.GetReg(), rs_r1.GetReg(), rs_r0.GetReg(),
+        mirror::Object::MonitorOffset().Int32Value() >> 2);
+    LIR* unlock_success_branch = OpCmpImmBranch(kCondEq, rs_r2, 0, NULL);
 
     LIR* slow_path_target = NewLIR0(kPseudoTargetLabel);
     slow_unlock_branch->target = slow_path_target;
@@ -260,24 +276,35 @@ void ArmMir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
   } else {
     // Explicit null-check as slow-path is entered using an IT.
     GenNullCheck(rs_r0, opt_flags);
-    Load32Disp(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r1);  // Get lock
+    NewLIR3(kThumb2Ldrex, rs_r1.GetReg(), rs_r0.GetReg(),
+        mirror::Object::MonitorOffset().Int32Value() >> 2);
     MarkPossibleNullPointerException(opt_flags);
     Load32Disp(rs_rARM_SELF, Thread::ThinLockIdOffset<4>().Int32Value(), rs_r2);
-    LoadConstantNoClobber(rs_r3, 0);
+    // Zero out the read barrier bits.
+    OpRegRegImm(kOpAnd, rs_r3, rs_r1, LockWord::kReadBarrierStateMaskShiftedToggled);
+    // Zero out except the read barrier bits.
+    OpRegRegImm(kOpAnd, rs_r1, rs_r1, LockWord::kReadBarrierStateMaskShifted);
     // Is lock unheld on lock or held by us (==thread_id) on unlock?
-    OpRegReg(kOpCmp, rs_r1, rs_r2);
-
-    LIR* it = OpIT(kCondEq, "EE");
+    OpRegReg(kOpCmp, rs_r3, rs_r2);
+    LIR* it = OpIT(kCondEq, "");
     if (GenMemBarrier(kAnyStore)) {
-      UpdateIT(it, "TEE");
+      UpdateIT(it, "T");
     }
-    Store32Disp/*eq*/(rs_r0, mirror::Object::MonitorOffset().Int32Value(), rs_r3);
+    NewLIR4/*eq*/(kThumb2Strex, rs_r2.GetReg(), rs_r1.GetReg(), rs_r0.GetReg(),
+        mirror::Object::MonitorOffset().Int32Value() >> 2);
+    OpEndIT(it);
+    // Since we know r2 wasn't zero before the above it instruction,
+    // if r2 is zero here, we know r3 was equal to r2 and the strex
+    // suceeded (we're done). Otherwise (either r3 wasn't equal to r2
+    // or the strex failed), call the entrypoint.
+    OpRegImm(kOpCmp, rs_r2, 0);
+    LIR* it2 = OpIT(kCondNe, "T");
     // Go expensive route - UnlockObjectFromCode(obj);
     LoadWordDisp/*ne*/(rs_rARM_SELF, QUICK_ENTRYPOINT_OFFSET(4, pUnlockObject).Int32Value(),
                        rs_rARM_LR);
     ClobberCallerSave();
     LIR* call_inst = OpReg(kOpBlx/*ne*/, rs_rARM_LR);
-    OpEndIT(it);
+    OpEndIT(it2);
     MarkSafepointPC(call_inst);
   }
 }

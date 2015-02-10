@@ -57,20 +57,20 @@ TEST_F(TransactionTest, Object_monitor) {
 
   // Lock object's monitor outside the transaction.
   h_obj->MonitorEnter(soa.Self());
-  uint32_t old_lock_word = h_obj->GetLockWord(false).GetValue();
+  LockWord old_lock_word = h_obj->GetLockWord(false);
 
   Transaction transaction;
   Runtime::Current()->EnterTransactionMode(&transaction);
   // Unlock object's monitor inside the transaction.
   h_obj->MonitorExit(soa.Self());
-  uint32_t new_lock_word = h_obj->GetLockWord(false).GetValue();
+  LockWord new_lock_word = h_obj->GetLockWord(false);
   Runtime::Current()->ExitTransactionMode();
 
   // Aborting transaction must not clear the Object::class field.
   transaction.Abort();
-  uint32_t aborted_lock_word = h_obj->GetLockWord(false).GetValue();
-  EXPECT_NE(old_lock_word, new_lock_word);
-  EXPECT_EQ(aborted_lock_word, new_lock_word);
+  LockWord aborted_lock_word = h_obj->GetLockWord(false);
+  EXPECT_FALSE(LockWord::Equal<false>(old_lock_word, new_lock_word));
+  EXPECT_TRUE(LockWord::Equal<false>(aborted_lock_word, new_lock_word));
 }
 
 TEST_F(TransactionTest, Array_length) {
