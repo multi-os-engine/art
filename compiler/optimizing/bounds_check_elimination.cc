@@ -32,14 +32,7 @@ class ValueBound : public ValueObject {
     if (instruction != nullptr && instruction->IsIntConstant()) {
       // Normalize ValueBound with constant instruction.
       int32_t instr_const = instruction->AsIntConstant()->GetValue();
-      if (constant >= 0 && (instr_const <= INT_MAX - constant)) {
-        // No overflow.
-        instruction_ = nullptr;
-        constant_ = instr_const + constant;
-        return;
-      }
-      if (constant < 0 && (instr_const >= INT_MIN - constant)) {
-        // No underflow.
+      if (!overflow_or_underflow_from_add(instr_const, constant)) {
         instruction_ = nullptr;
         constant_ = instr_const + constant;
         return;
@@ -47,6 +40,22 @@ class ValueBound : public ValueObject {
     }
     instruction_ = instruction;
     constant_ = constant;
+  }
+
+  // Return whether (left + right) overflows or underflows.
+  static bool overflow_or_underflow_from_add(int32_t left, int32_t right) {
+    if (right == 0) {
+      return false;
+    }
+    if ((right > 0) && (left <= INT_MAX - right)) {
+      // No overflow.
+      return false;
+    }
+    if ((right < 0) && (left >= INT_MIN - right)) {
+      // No underflow.
+      return false;
+    }
+    return true;
   }
 
   static bool IsAddOrSubAConstant(HInstruction* instruction,
@@ -465,8 +474,21 @@ class BCEVisitor : public HGraphVisitor {
   void ApplyRangeFromComparison(HInstruction* instruction, HBasicBlock* basic_block,
                   HBasicBlock* successor, ValueRange* range) {
     ValueRange* existing_range = LookupValueRange(instruction, basic_block);
-    ValueRange* narrowed_range = (existing_range == nullptr) ?
-        range : existing_range->Narrow(range);
+    if (existing_range == nullptr) {
+      if (range != nullptr) {
+        GetValueRangeMap(successor)->Overwrite(instruction->GetId(), range);
+      }
+      return;
+    }
+    if (existing_range->IsMonotonicValueRange()) {
+      DCHECK(instruction->IsLoopHeaderPhi());
+      // Make sure the comparison is in the loop header so each increment is
+      // checked with a comparison.
+      if (instruction->GetBlock() != basic_block) {
+        return;
+      }
+    }
+    ValueRange* narrowed_range = existing_range->Narrow(range);
     if (narrowed_range != nullptr) {
       GetValueRangeMap(successor)->Overwrite(instruction->GetId(), narrowed_range);
     }
@@ -705,6 +727,11 @@ class BCEVisitor : public HGraphVisitor {
     // Here we are interested in the typical triangular case of nested loops,
     // such as the inner loop 'for (int j=0; j<array.length-i; j++)' where i
     // is the index for outer loop. In this case, we know j is bounded by array.length-1.
+    HInstruction* left_of_left;
+    int32_t right_const = 0;
+    if (ValueBound::IsAddOrSubAConstant(left, &left_of_left, &right_const)) {
+      left = left_of_left;
+    }
     if (left->IsArrayLength()) {
       HInstruction* array_length = left->AsArrayLength();
       ValueRange* right_range = LookupValueRange(right, sub->GetBlock());
@@ -715,17 +742,55 @@ class BCEVisitor : public HGraphVisitor {
           HInstruction* upper_inst = upper.GetInstruction();
           // Make sure it's the same array.
           if (ValueBound::Equal(array_length, upper_inst)) {
-            // (array.length - v) where v is in [c1, array.length + c2]
-            // gets [-c2, array.length - c1] as its value range.
-            ValueRange* range = new (GetGraph()->GetArena()) ValueRange(
-                GetGraph()->GetArena(),
-                ValueBound(nullptr, - upper.GetConstant()),
-                ValueBound(array_length, - lower.GetConstant()));
-            GetValueRangeMap(sub->GetBlock())->Overwrite(sub->GetId(), range);
+            int32_t c0 = right_const;
+            int32_t c1 = lower.GetConstant();
+            int32_t c2 = upper.GetConstant();
+            // (array.length + c0 - v) where v is in [c1, array.length + c2]
+            // gets [c0 - c2, array.length + c0 - c1] as its value range.
+            if (!ValueBound::overflow_or_underflow_from_add(c0, -c2) &&
+                !ValueBound::overflow_or_underflow_from_add(c0, -c1)) {
+              if ((c0 - c1) <= 0) {
+                // array.length + (c0 - c1) won't overflow/underflow.
+                ValueRange* range = new (GetGraph()->GetArena()) ValueRange(
+                    GetGraph()->GetArena(),
+                    ValueBound(nullptr, right_const - upper.GetConstant()),
+                    ValueBound(array_length, right_const - lower.GetConstant()));
+                GetValueRangeMap(sub->GetBlock())->Overwrite(sub->GetId(), range);
+              }
+            }
           }
         }
       }
     }
+  }
+
+  void FindAndHandleArrayLengthDiv(HBinaryOperation* instruction) {
+    HInstruction* left = instruction->GetLeft();
+    HInstruction* right = instruction->GetRight();
+    if (left->IsArrayLength() && right->IsIntConstant()) {
+      int32_t c = right->AsIntConstant()->GetValue();
+      if (c > 0) {
+        // array_length / c, array_length >> c, array_length >>> c
+        // all generate a value in [0, array_length].
+        ValueRange* range = new (GetGraph()->GetArena()) ValueRange(
+            GetGraph()->GetArena(),
+            ValueBound(nullptr, 0),
+            ValueBound(left, 0));
+        GetValueRangeMap(instruction->GetBlock())->Overwrite(instruction->GetId(), range);
+      }
+    }
+  }
+
+  void VisitDiv(HDiv* div) {
+    FindAndHandleArrayLengthDiv(div);
+  }
+
+  void VisitShr(HShr* shr) {
+    FindAndHandleArrayLengthDiv(shr);
+  }
+
+  void VisitUShr(HUShr* ushr) {
+    FindAndHandleArrayLengthDiv(ushr);
   }
 
   void VisitNewArray(HNewArray* new_array) {
