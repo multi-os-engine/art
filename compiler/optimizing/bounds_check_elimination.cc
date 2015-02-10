@@ -465,8 +465,21 @@ class BCEVisitor : public HGraphVisitor {
   void ApplyRangeFromComparison(HInstruction* instruction, HBasicBlock* basic_block,
                   HBasicBlock* successor, ValueRange* range) {
     ValueRange* existing_range = LookupValueRange(instruction, basic_block);
-    ValueRange* narrowed_range = (existing_range == nullptr) ?
-        range : existing_range->Narrow(range);
+    if (existing_range == nullptr) {
+      if (range != nullptr) {
+        GetValueRangeMap(successor)->Overwrite(instruction->GetId(), range);
+      }
+      return;
+    }
+    if (existing_range->IsMonotonicValueRange()) {
+      DCHECK(instruction->IsLoopHeaderPhi());
+      // Make sure the comparison is in the loop header so each increment is
+      // checked with a comparison.
+      if (instruction->GetBlock() != basic_block) {
+        return;
+      }
+    }
+    ValueRange* narrowed_range = existing_range->Narrow(range);
     if (narrowed_range != nullptr) {
       GetValueRangeMap(successor)->Overwrite(instruction->GetId(), narrowed_range);
     }
@@ -705,6 +718,11 @@ class BCEVisitor : public HGraphVisitor {
     // Here we are interested in the typical triangular case of nested loops,
     // such as the inner loop 'for (int j=0; j<array.length-i; j++)' where i
     // is the index for outer loop. In this case, we know j is bounded by array.length-1.
+    HInstruction* left_of_left;
+    int32_t right_const = 0;
+    if (ValueBound::IsAddOrSubAConstant(left, &left_of_left, &right_const)) {
+      left = left_of_left;
+    }
     if (left->IsArrayLength()) {
       HInstruction* array_length = left->AsArrayLength();
       ValueRange* right_range = LookupValueRange(right, sub->GetBlock());
@@ -715,17 +733,49 @@ class BCEVisitor : public HGraphVisitor {
           HInstruction* upper_inst = upper.GetInstruction();
           // Make sure it's the same array.
           if (ValueBound::Equal(array_length, upper_inst)) {
-            // (array.length - v) where v is in [c1, array.length + c2]
-            // gets [-c2, array.length - c1] as its value range.
-            ValueRange* range = new (GetGraph()->GetArena()) ValueRange(
-                GetGraph()->GetArena(),
-                ValueBound(nullptr, - upper.GetConstant()),
-                ValueBound(array_length, - lower.GetConstant()));
-            GetValueRangeMap(sub->GetBlock())->Overwrite(sub->GetId(), range);
+            // (array.length + c0 - v) where v is in [c1, array.length + c2]
+            // gets [c0 - c2, array.length + c0 - c1] as its value range.
+            if ((right_const - lower.GetConstant()) <= 0) {
+              // (array.length + (right_const - lower.GetConstant())) won't overflow.
+              ValueRange* range = new (GetGraph()->GetArena()) ValueRange(
+                  GetGraph()->GetArena(),
+                  ValueBound(nullptr, right_const - upper.GetConstant()),
+                  ValueBound(array_length, right_const - lower.GetConstant()));
+              GetValueRangeMap(sub->GetBlock())->Overwrite(sub->GetId(), range);
+            }
           }
         }
       }
     }
+  }
+
+  void FindAndHandleArrayLengthDiv(HBinaryOperation* instruction) {
+    HInstruction* left = instruction->GetLeft();
+    HInstruction* right = instruction->GetRight();
+    if (left->IsArrayLength() && right->IsIntConstant()) {
+      int32_t c = right->AsIntConstant()->GetValue();
+      if (c > 0) {
+        // array_length / c, array_length >> c, array_length >>> c
+        // all generate a value in [0, array_length].
+        ValueRange* range = new (GetGraph()->GetArena()) ValueRange(
+            GetGraph()->GetArena(),
+            ValueBound(nullptr, 0),
+            ValueBound(left, 0));
+        GetValueRangeMap(instruction->GetBlock())->Overwrite(instruction->GetId(), range);
+      }
+    }
+  }
+
+  void VisitDiv(HDiv* div) {
+    FindAndHandleArrayLengthDiv(div);
+  }
+
+  void VisitShr(HShr* shr) {
+    FindAndHandleArrayLengthDiv(shr);
+  }
+
+  void VisitUShr(HUShr* ushr) {
+    FindAndHandleArrayLengthDiv(ushr);
   }
 
   void VisitNewArray(HNewArray* new_array) {
