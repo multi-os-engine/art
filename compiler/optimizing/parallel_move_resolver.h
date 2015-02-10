@@ -83,7 +83,11 @@ class ParallelMoveResolver : public ValueObject {
 
   // Perform the move at the moves_ index in question (possibly requiring
   // other moves to satisfy dependencies).
-  void PerformMove(size_t index);
+  //
+  // Return whehter another move in the dependency cycle needs to swap. This
+  // is to handle pair swaps, where we want the pair to swap first to avoid
+  // building pairs that are unexpected by the code generator.
+  MoveOperands* PerformMove(size_t index);
 
   DISALLOW_COPY_AND_ASSIGN(ParallelMoveResolver);
 };
