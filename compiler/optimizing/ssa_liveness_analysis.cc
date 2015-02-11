@@ -312,6 +312,7 @@ bool SsaLivenessAnalysis::UpdateLiveIn(const HBasicBlock& block) {
 }
 
 int LiveInterval::FindFirstRegisterHint(size_t* free_until) const {
+  DCHECK(!IsHighInterval());
   if (GetParent() == this && defined_by_ != nullptr) {
     // This is the first interval for the instruction. Try to find
     // a register based on its definition.
@@ -333,8 +334,11 @@ int LiveInterval::FindFirstRegisterHint(size_t* free_until) const {
       if (user->IsPhi()) {
         // If the phi has a register, try to use the same.
         Location phi_location = user->GetLiveInterval()->ToLocation();
-        if (SameRegisterKind(phi_location) && free_until[phi_location.reg()] >= use_position) {
-          return phi_location.reg();
+        if (SameRegisterKind(phi_location)) {
+          int reg = IsLowInterval() ? phi_location.low() : phi_location.reg();
+          if (free_until[reg] >= use_position) {
+            return reg;
+          }
         }
         const GrowableArray<HBasicBlock*>& predecessors = user->GetBlock()->GetPredecessors();
         // If the instruction dies at the phi assignment, we can try having the
@@ -347,8 +351,11 @@ int LiveInterval::FindFirstRegisterHint(size_t* free_until) const {
             HInstruction* input = user->InputAt(i);
             Location location = input->GetLiveInterval()->GetLocationAt(
                 predecessors.Get(i)->GetLifetimeEnd() - 1);
-            if (location.IsRegister() && free_until[location.reg()] >= use_position) {
-              return location.reg();
+            if (location.IsRegister() || location.IsFpuRegister() || location.IsPair()) {
+              int reg = IsLowInterval() ? location.low() : location.reg();
+              if (free_until[reg] >= use_position) {
+                return reg;
+              }
             }
           }
         }
@@ -359,8 +366,11 @@ int LiveInterval::FindFirstRegisterHint(size_t* free_until) const {
         // We use the user's lifetime position - 1 (and not `use_position`) because the
         // register is blocked at the beginning of the user.
         size_t position = user->GetLifetimePosition() - 1;
-        if (SameRegisterKind(expected) && free_until[expected.reg()] >= position) {
-          return expected.reg();
+        if (SameRegisterKind(expected)) {
+          int reg = IsLowInterval() ? expected.low() : expected.reg();
+          if (free_until[reg] >= position) {
+            return reg;
+          }
         }
       }
     }
@@ -383,7 +393,7 @@ int LiveInterval::FindHintAtDefinition() const {
         // be reused.
         Location input_location = input_interval.ToLocation();
         if (SameRegisterKind(input_location)) {
-          return input_location.reg();
+          return IsLowInterval() ? input_location.low() : input_location.reg();
         }
       }
     }
@@ -399,7 +409,7 @@ int LiveInterval::FindHintAtDefinition() const {
         // be reused.
         Location location = input_interval.ToLocation();
         if (SameRegisterKind(location)) {
-          return location.reg();
+          return IsLowInterval() ? location.low() : location.reg();
         }
       }
     }
@@ -409,8 +419,8 @@ int LiveInterval::FindHintAtDefinition() const {
 
 bool LiveInterval::SameRegisterKind(Location other) const {
   return IsFloatingPoint()
-      ? other.IsFpuRegister()
-      : other.IsRegister();
+      ? other.IsFpuRegister() || other.IsFpuRegisterPair()
+      : other.IsRegister() || other.IsRegisterPair();
 }
 
 bool LiveInterval::NeedsTwoSpillSlots() const {
