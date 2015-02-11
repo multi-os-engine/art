@@ -208,6 +208,16 @@ void MarkSweep::PausePhase() {
   // Enable the reference processing slow path, needs to be done with mutators paused since there
   // is no lock in the GetReferent fast path.
   GetHeap()->GetReferenceProcessor()->EnableSlowPath();
+  const GcType gc_type = GetGcType();
+  if (gc_type == kGcTypePartial || gc_type == kGcTypeFull) {
+    space::LargeObjectSpace* large_space = heap_->GetLargeObjectsSpace();
+    if (large_space->IsLargeObjectMapSpace()) {
+      mem_maps_live_ = large_space->AsLargeObjectMapSpace()->GetMemMaps();
+    }
+    allocator::RosAlloc* rosalloc = GetHeap()->GetRosAllocSpace()->GetRosAlloc();
+    DCHECK(rosalloc != nullptr);
+    rosalloc->SetPageMapSizeSnapshot();
+  }
 }
 
 void MarkSweep::PreCleanCards() {
@@ -1142,10 +1152,19 @@ void MarkSweep::Sweep(bool swap_bitmaps) {
       space::ContinuousMemMapAllocSpace* alloc_space = space->AsContinuousMemMapAllocSpace();
       TimingLogger::ScopedTiming split(
           alloc_space->IsZygoteSpace() ? "SweepZygoteSpace" : "SweepMallocSpace", GetTimings());
-      RecordFree(alloc_space->Sweep(swap_bitmaps));
+      if (space->IsRosAllocSpace()) {
+        RecordFree(space->AsRosAllocSpace()->GetRosAlloc()->SweepRosSpace(swap_bitmaps));
+      } else {
+        RecordFree(alloc_space->Sweep(swap_bitmaps));
+      }
     }
   }
-  SweepLargeObjects(swap_bitmaps);
+  space::LargeObjectSpace* large_space = heap_->GetLargeObjectsSpace();
+  if (large_space->IsLargeObjectMapSpace()) {
+    SweepLargeObjectMapSpace(swap_bitmaps);
+  } else {
+    SweepLargeObjects(swap_bitmaps);
+  }
 }
 
 void MarkSweep::SweepLargeObjects(bool swap_bitmaps) {
@@ -1154,6 +1173,41 @@ void MarkSweep::SweepLargeObjects(bool swap_bitmaps) {
     TimingLogger::ScopedTiming split(__FUNCTION__, GetTimings());
     RecordFreeLOS(los->Sweep(swap_bitmaps));
   }
+}
+
+/* LargeObjectMapSpace is using mem_maps_ to track all the large objects
+ * For partial and full GC, record the existing mem_maps_ for efficient sweep.
+ * large objects are randomly distributed in LOS in most cases.
+ * Thus it's usally more efficient to traverse the total objects than walk the whole bitmap from scratch.
+ * In this case, no need live bitmap of large object space
+ * The recording of mem_maps is minor overhead (below 1ms) for the pause of partial and full GCs
+*/
+void MarkSweep::SweepLargeObjectMapSpace(bool swap_bitmaps) {
+  Thread* self = Thread::Current();
+  ObjectBytePair freed_los;
+  // Handle the large object space.
+  space::LargeObjectSpace* large_object_space = GetHeap()->GetLargeObjectsSpace();
+  accounting::LargeObjectBitmap* large_live_objects = large_object_space->GetLiveBitmap();
+  accounting::LargeObjectBitmap* large_mark_objects = large_object_space->GetMarkBitmap();
+  if (swap_bitmaps) {
+    std::swap(large_live_objects, large_mark_objects);
+  }
+  for (auto it = mem_maps_live_.begin(); it != mem_maps_live_.end(); ++it) {
+    Object* obj = it->first;
+    // Handle large objects.
+    if (obj == nullptr) {
+      continue;
+    }
+    if (!large_mark_objects->Test(obj)) {
+      ++freed_los.objects;
+      freed_los.bytes += large_object_space->Free(self, obj);
+      if (!swap_bitmaps) {
+          large_live_objects->Clear(obj);
+      }
+    }
+  }
+  RecordFreeLOS(freed_los);
+  mem_maps_live_.clear();
 }
 
 // Process the "referent" field in a java.lang.ref.Reference.  If the referent has not yet been

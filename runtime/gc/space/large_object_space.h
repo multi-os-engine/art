@@ -37,6 +37,7 @@ enum class LargeObjectSpaceType {
   kFreeList,
 };
 
+class LargeObjectMapSpace;
 // Abstraction implemented by all large object spaces.
 class LargeObjectSpace : public DiscontinuousSpace, public AllocSpace {
  public:
@@ -71,6 +72,14 @@ class LargeObjectSpace : public DiscontinuousSpace, public AllocSpace {
   }
   AllocSpace* AsAllocSpace() OVERRIDE {
     return this;
+  }
+  virtual bool IsLargeObjectMapSpace() const {
+    return false;
+  }
+
+  virtual LargeObjectMapSpace* AsLargeObjectMapSpace() {
+    LOG(FATAL) << "Unreachable";
+    return nullptr;
   }
   collector::ObjectBytePair Sweep(bool swap_bitmaps);
   virtual bool CanMoveObjects() const OVERRIDE {
@@ -129,6 +138,17 @@ class LargeObjectMapSpace : public LargeObjectSpace {
   void Walk(DlMallocSpace::WalkCallback, void* arg) OVERRIDE LOCKS_EXCLUDED(lock_);
   // TODO: disabling thread safety analysis as this may be called when we already hold lock_.
   bool Contains(const mirror::Object* obj) const NO_THREAD_SAFETY_ANALYSIS;
+  typedef SafeMap<mirror::Object*, MemMap*, std::less<mirror::Object*>,
+      TrackingAllocator<std::pair<mirror::Object*, MemMap*>, kAllocatorTagLOSMaps>> MemMaps;
+  MemMaps GetMemMaps() LOCKS_EXCLUDED(lock_);
+
+  bool IsLargeObjectMapSpace() const OVERRIDE {
+    return true;
+  }
+
+  LargeObjectMapSpace* AsLargeObjectMapSpace() OVERRIDE {
+    return this;
+  }
 
  protected:
   explicit LargeObjectMapSpace(const std::string& name);
@@ -138,8 +158,6 @@ class LargeObjectMapSpace : public LargeObjectSpace {
   mutable Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   std::vector<mirror::Object*, TrackingAllocator<mirror::Object*, kAllocatorTagLOS>> large_objects_
       GUARDED_BY(lock_);
-  typedef SafeMap<mirror::Object*, MemMap*, std::less<mirror::Object*>,
-      TrackingAllocator<std::pair<mirror::Object*, MemMap*>, kAllocatorTagLOSMaps>> MemMaps;
   MemMaps mem_maps_ GUARDED_BY(lock_);
 };
 

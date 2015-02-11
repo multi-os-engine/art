@@ -138,6 +138,12 @@ mirror::Object* LargeObjectMapSpace::Alloc(Thread* self, size_t num_bytes,
   return obj;
 }
 
+SafeMap<mirror::Object*, MemMap*, std::less<mirror::Object*>,
+TrackingAllocator<std::pair<mirror::Object*, MemMap*>, kAllocatorTagLOSMaps>> LargeObjectMapSpace::GetMemMaps() {
+  MutexLock mu(Thread::Current(), lock_);
+  return mem_maps_;
+}
+
 size_t LargeObjectMapSpace::Free(Thread* self, mirror::Object* ptr) {
   MutexLock mu(self, lock_);
   MemMaps::iterator found = mem_maps_.find(ptr);

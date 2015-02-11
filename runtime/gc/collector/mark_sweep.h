@@ -29,6 +29,7 @@
 #include "immune_region.h"
 #include "object_callbacks.h"
 #include "offsets.h"
+#include "safe_map.h"
 
 namespace art {
 
@@ -141,6 +142,7 @@ class MarkSweep : public GarbageCollector {
 
   // Sweeps unmarked objects to complete the garbage collection.
   void SweepLargeObjects(bool swap_bitmaps) EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
+  void SweepLargeObjectMapSpace(bool swap_bitmaps) EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
 
   // Sweep only pointers within an array. WARNING: Trashes objects.
   void SweepArray(accounting::ObjectStack* allocation_stack_, bool swap_bitmaps)
@@ -214,6 +216,9 @@ class MarkSweep : public GarbageCollector {
       SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
  protected:
+  typedef SafeMap<mirror::Object*, MemMap*, std::less<mirror::Object*>,
+      TrackingAllocator<std::pair<mirror::Object*, MemMap*>, kAllocatorTagLOSMaps>> MemMaps;
+  MemMaps mem_maps_live_;
   // Returns true if the object has its bit set in the mark bitmap.
   bool IsMarked(const mirror::Object* object) const
       SHARED_LOCKS_REQUIRED(Locks::heap_bitmap_lock_);
