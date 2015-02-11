@@ -44,7 +44,9 @@ LIR* Mir2Lir::LoadConstant(RegStorage r_dest, int value) {
 void Mir2Lir::Workaround7250540(RegLocation rl_dest, RegStorage zero_reg) {
   if (rl_dest.fp) {
     int pmap_index = SRegToPMap(rl_dest.s_reg_low);
-    if (promotion_map_[pmap_index].fp_location == kLocPhysReg) {
+    const bool is_fp_promoted = promotion_map_[pmap_index].fp_location == kLocPhysReg;
+    const bool is_core_promoted = promotion_map_[pmap_index].core_location == kLocPhysReg;
+    if (is_fp_promoted || is_core_promoted) {
       // Now, determine if this vreg is ever used as a reference.  If not, we're done.
       bool used_as_reference = false;
       int base_vreg = mir_graph_->SRegToVReg(rl_dest.s_reg_low);
@@ -61,13 +63,15 @@ void Mir2Lir::Workaround7250540(RegLocation rl_dest, RegStorage zero_reg) {
         temp_reg = AllocTemp();
         LoadConstant(temp_reg, 0);
       }
-      if (promotion_map_[pmap_index].core_location == kLocPhysReg) {
+      if (is_core_promoted) {
         // Promoted - just copy in a zero
         OpRegCopy(RegStorage::Solo32(promotion_map_[pmap_index].core_reg), temp_reg);
       } else {
-        // Lives in the frame, need to store.
-        ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
-        StoreBaseDisp(TargetPtrReg(kSp), SRegOffset(rl_dest.s_reg_low), temp_reg, k32, kNotVolatile);
+        if (is_fp_promoted) {
+          // Lives in the frame, need to store.
+          ScopedMemRefType mem_ref_type(this, ResourceMask::kDalvikReg);
+          StoreBaseDisp(TargetPtrReg(kSp), SRegOffset(rl_dest.s_reg_low), temp_reg, k32, kNotVolatile);
+        }
       }
       if (!zero_reg.Valid()) {
         FreeTemp(temp_reg);
