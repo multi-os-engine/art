@@ -43,8 +43,10 @@ extern uint32_t JniMethodStartSynchronized(jobject to_lock, Thread* self) {
 
 // TODO: NO_THREAD_SAFETY_ANALYSIS due to different control paths depending on fast JNI.
 static void GoToRunnable(Thread* self) NO_THREAD_SAFETY_ANALYSIS {
-  mirror::ArtMethod* native_method = self->GetManagedStack()->GetTopQuickFrame()->AsMirrorPtr();
-  bool is_fast = native_method->IsFastNative();
+  auto* const managed_stack = self->GetManagedStack();
+  auto* const top_quick_frame = managed_stack->GetTopQuickFrame();
+  mirror::ArtMethod* const native_method = top_quick_frame->AsMirrorPtr();
+  const bool is_fast = native_method->IsFastNative();
   if (!is_fast) {
     self->TransitionFromSuspendedToRunnable();
   } else if (UNLIKELY(self->TestAllFlags())) {
