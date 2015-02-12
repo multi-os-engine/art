@@ -18,8 +18,11 @@
 #define ART_COMPILER_OPTIMIZING_NODES_H_
 
 #include "entrypoints/quick/quick_entrypoints_enum.h"
+#include "handle.h"
+#include "handle_scope.h"
 #include "invoke_type.h"
 #include "locations.h"
+#include "mirror/class.h"
 #include "offsets.h"
 #include "primitive.h"
 #include "utils/arena_object.h"
@@ -864,6 +867,36 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
   DISALLOW_COPY_AND_ASSIGN(HEnvironment);
 };
 
+class ReferenceTypeInfo : ValueObject {
+ public:
+  ReferenceTypeInfo() : is_known_(false), is_precise_(true), is_top_(false) {}
+  explicit ReferenceTypeInfo(Handle<mirror::Class> type_handle) :
+      type_handle_(type_handle), is_known_(true), is_precise_(true), is_top_(false) {}
+
+  bool IsPrecise() const { return is_precise_; }
+  bool IsTop() const { return is_top_; }
+  bool IsKnown() const { return is_known_; }
+  Handle<mirror::Class> GetTypeHandle() const { return type_handle_; }
+
+  void Top() {
+    is_top_ = true;
+    is_precise_ = false;
+    is_known_ = true;
+    type_handle_ = Handle<mirror::Class>();
+  }
+  void Imprecise() { is_precise_ = true; }
+  void SetTypeHandle(Handle<mirror::Class> type_handle) {
+    type_handle_ = type_handle;
+    is_known_ = true;
+  }
+
+ private:
+  Handle<mirror::Class> type_handle_;
+  bool is_known_;
+  bool is_precise_;
+  bool is_top_;
+};
+
 class HInstruction : public ArenaObject<kArenaAllocMisc> {
  public:
   explicit HInstruction(SideEffects side_effects)
@@ -917,6 +950,12 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   virtual bool CanBeNull() const { return true; }
 
   virtual bool CanDoImplicitNullCheck() const { return false; }
+
+  void SetReferenceTypeInfo(ReferenceTypeInfo reference_type_info) {
+    reference_type_info_ = reference_type_info;
+  }
+
+  ReferenceTypeInfo GetReferenceTypeInfo() const { return reference_type_info_; }
 
   void AddUseAt(HInstruction* user, size_t index) {
     uses_.AddUse(user, index, GetBlock()->GetGraph()->GetArena());
@@ -1061,6 +1100,8 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   size_t lifetime_position_;
 
   const SideEffects side_effects_;
+
+  ReferenceTypeInfo reference_type_info_;
 
   friend class HBasicBlock;
   friend class HGraph;

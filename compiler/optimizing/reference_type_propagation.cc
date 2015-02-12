@@ -16,11 +16,31 @@
 
 #include "reference_type_propagation.h"
 
+#include "class_linker.h"
+#include "mirror/class-inl.h"
+#include "mirror/dex_cache.h"
+#include "scoped_thread_state_change.h"
+
 namespace art {
 
 // TODO: Only do the analysis on reference types. We currently have to handle
 // the `null` constant, that is represented as a `HIntConstant` and therefore
 // has the Primitive::kPrimInt type.
+
+// TODO: handle:
+//  public Main ifNullTest(int count, Main a) {
+//    Main m = new Main();
+//    if (a == null) {
+//      a = m;
+//    }
+//    return a.g();
+//  }
+//  public Main ifNotNullTest(Main a) {
+//    if (a != null) {
+//      return a.g();
+//    }
+//    return new Main();
+//  }
 
 void ReferenceTypePropagation::Run() {
   // Compute null status for instructions.
@@ -47,8 +67,87 @@ bool ReferenceTypePropagation::UpdateNullability(HPhi* phi) {
   return existing_can_be_null != new_can_be_null;
 }
 
+bool ReferenceTypePropagation::UpdateReferenceTypeInfo(HPhi* phi)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  ReferenceTypeInfo existing_rti = phi->GetReferenceTypeInfo();
+  if (existing_rti.IsTop()) {
+    return false;
+  }
+
+  ReferenceTypeInfo new_rti = existing_rti;
+
+  for (size_t i = 1; i < phi->InputCount(); i++) {
+    ReferenceTypeInfo input_rti = phi->InputAt(i)->GetReferenceTypeInfo();
+
+    if (!new_rti.IsKnown()) {
+      new_rti = input_rti;
+      continue;
+    }
+    if (!input_rti.IsKnown()) {
+      continue;  // Keep the existing type
+    }
+
+    if (input_rti.IsTop()) {
+      new_rti.Top();
+      break;
+    }
+
+    if (!input_rti.IsPrecise()) {
+      new_rti.Imprecise();
+    }
+
+    mirror::Class* phi_class = new_rti.GetTypeHandle().Get();
+    mirror::Class* input_class = input_rti.GetTypeHandle().Get();
+    DCHECK(phi_class != nullptr);
+    DCHECK(input_class != nullptr);
+    if (phi_class == input_class) {
+      // nothing todo for the class
+    } else if (input_class->IsAssignableFrom(phi_class)) {
+      new_rti.SetTypeHandle(input_rti.GetTypeHandle());
+      new_rti.Imprecise();
+    } else if (phi_class->IsAssignableFrom(input_class)) {
+      new_rti.Imprecise();
+    } else {
+      new_rti.Top();
+      break;
+    }
+  }
+  phi->SetReferenceTypeInfo(new_rti);
+
+  bool has_changed = new_rti.IsKnown() != existing_rti.IsKnown()
+    || new_rti.IsTop() != existing_rti.IsTop()
+    || new_rti.IsPrecise() != new_rti.IsPrecise()
+    || (new_rti.IsKnown() && !new_rti.IsTop()
+        && (new_rti.GetTypeHandle().Get() != existing_rti.GetTypeHandle().Get()));
+  return has_changed;
+}
+
+void ReferenceTypePropagation::SetInstructionType(HInstruction* instr, uint16_t type_index) {
+  ScopedObjectAccess soa(Thread::Current());
+  mirror::DexCache* dex_cache = dex_compilation_unit_.GetClassLinker()->FindDexCache(dex_file_);
+  // Get type from dex cache assuming it was populated by the verifier.
+  mirror::Class* resolved_class = dex_cache->GetResolvedType(type_index);
+  if (resolved_class != nullptr) {
+    MutableHandle<mirror::Class> handle = handles_->NewHandle(resolved_class);
+    instr->SetReferenceTypeInfo(ReferenceTypeInfo(handle));
+  }
+}
+void ReferenceTypePropagation::VisitNewInstance(HNewInstance* instr) {
+  SetInstructionType(instr, instr->GetTypeIndex());
+}
+
+void ReferenceTypePropagation::VisitLoadClass(HLoadClass* instr) {
+  SetInstructionType(instr, instr->GetTypeIndex());
+}
 
 void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
+  for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
+    if (it.Current()->IsNewInstance()) {
+      VisitNewInstance(it.Current()->AsNewInstance());
+    } else if (it.Current()->IsLoadClass()) {
+      VisitLoadClass(it.Current()->AsLoadClass());
+    }
+  }
   if (block->IsLoopHeader()) {
     for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
       // Set the initial type for the phi. Use the non back edge input for reaching
@@ -56,6 +155,7 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
       HPhi* phi = it.Current()->AsPhi();
       AddToWorklist(phi);
       phi->SetCanBeNull(phi->InputAt(0)->CanBeNull());
+      phi->SetReferenceTypeInfo(phi->InputAt(0)->GetReferenceTypeInfo());
     }
   } else {
     for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
@@ -65,14 +165,17 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
       // non-loop phi and will be visited later in the visit, or are loop-phis,
       // and they are already in the work list.
       UpdateNullability(it.Current()->AsPhi());
+      ScopedObjectAccess soa(Thread::Current());
+      UpdateReferenceTypeInfo(it.Current()->AsPhi());
     }
   }
 }
 
 void ReferenceTypePropagation::ProcessWorklist() {
+  ScopedObjectAccess soa(Thread::Current());
   while (!worklist_.IsEmpty()) {
     HPhi* instruction = worklist_.Pop();
-    if (UpdateNullability(instruction)) {
+    if (UpdateNullability(instruction) || UpdateReferenceTypeInfo(instruction)) {
       AddDependentInstructionsToWorklist(instruction);
     }
   }
