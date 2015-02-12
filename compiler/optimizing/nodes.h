@@ -18,8 +18,11 @@
 #define ART_COMPILER_OPTIMIZING_NODES_H_
 
 #include "entrypoints/quick/quick_entrypoints_enum.h"
+#include "handle.h"
+#include "handle_scope.h"
 #include "invoke_type.h"
 #include "locations.h"
+#include "mirror/class.h"
 #include "offsets.h"
 #include "primitive.h"
 #include "utils/arena_object.h"
@@ -864,6 +867,97 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
   DISALLOW_COPY_AND_ASSIGN(HEnvironment);
 };
 
+class ReferenceTypeInfo : ValueObject {
+ public:
+  ReferenceTypeInfo() : is_known_(false), is_exact_(true), is_top_(false) {}
+  explicit ReferenceTypeInfo(Handle<mirror::Class> type_handle) :
+      type_handle_(type_handle), is_known_(true), is_exact_(true), is_top_(false) {}
+
+  bool IsExact() const { return is_exact_; }
+  bool IsTop() const { return is_top_; }
+  bool IsKnown() const { return is_known_; }
+
+  Handle<mirror::Class> GetTypeHandle() const { return type_handle_; }
+
+  void SetTop() {
+    is_top_ = true;
+    is_exact_ = false;
+    is_known_ = true;
+    type_handle_ = Handle<mirror::Class>();
+  }
+  void SetInexact() { is_exact_ = false; }
+  void SetTypeHandle(Handle<mirror::Class> type_handle) {
+    type_handle_ = type_handle;
+    is_known_ = true;
+  }
+
+  bool IsSupertypeOf(ReferenceTypeInfo rti) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (IsTop()) {
+      // Top (equivalent for java.lang.Object) is supertype of anything.
+      return true;
+    }
+    if (!IsKnown() || !rti.IsKnown()) {
+      // Can't decide when the types are not known.
+      return false;
+    }
+    if (GetTypeHandle()->IsObjectClass()) {
+      // java.lang.Object is a supertype of anything.
+      return true;
+    }
+    if (rti.IsTop()) {
+      // If we get here `this` is not Top() so it can't be a supertype.
+      return false;
+    }
+    return GetTypeHandle()->IsAssignableFrom(rti.GetTypeHandle().Get());
+  }
+
+  // Returns true if the type information are equivalent, i.e. they provide the
+  // same amount of details about the types. Note that it does not mean that the
+  // instructions have the same type (e.g. if neither types are known the RTIs
+  // are equivalent).
+  bool IsEquivalent(ReferenceTypeInfo rti) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (!IsKnown() && !rti.IsKnown()) {
+      // `Unknown`s are equivalent.
+      return true;
+    }
+    if (IsKnown() ^ rti.IsKnown()) {
+      // If only one is unknown then they are different.
+      return false;
+    }
+
+    if (IsExact() != rti.IsExact()) {
+      return false;
+    }
+
+    bool top_or_object = IsTop() || GetTypeHandle()->IsObjectClass();
+    bool rti_top_or_object = rti.IsTop() || rti.GetTypeHandle()->IsObjectClass();
+    if (top_or_object && rti_top_or_object) {
+      // `Top`s and `java.lang.Object`s are equivalent
+      return true;
+    }
+    if (top_or_object ^ rti_top_or_object) {
+      // If only one is top or object than they are not equivalent.
+      return false;
+    }
+
+    // Finally check the types.
+    return GetTypeHandle().Get() == rti.GetTypeHandle().Get();
+  }
+
+ private:
+  // The class of the object.
+  Handle<mirror::Class> type_handle_;
+  // Whether or not we have any information about this type.
+  bool is_known_;
+  // Whether or not the type is exact (not a subclass/superclass)
+  bool is_exact_;
+  // When true it means that the object type should be java.lang.Object.
+  // We don't have access to the corresponding mirror object every time so this
+  // flag acts as a substitute. When true the TypeHandle will reference a null
+  // pointer.
+  bool is_top_;
+};
+
 class HInstruction : public ArenaObject<kArenaAllocMisc> {
  public:
   explicit HInstruction(SideEffects side_effects)
@@ -917,6 +1011,12 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   virtual bool CanBeNull() const { return true; }
 
   virtual bool CanDoImplicitNullCheck() const { return false; }
+
+  void SetReferenceTypeInfo(ReferenceTypeInfo reference_type_info) {
+    reference_type_info_ = reference_type_info;
+  }
+
+  ReferenceTypeInfo GetReferenceTypeInfo() const { return reference_type_info_; }
 
   void AddUseAt(HInstruction* user, size_t index) {
     uses_.AddUse(user, index, GetBlock()->GetGraph()->GetArena());
@@ -1061,6 +1161,9 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   size_t lifetime_position_;
 
   const SideEffects side_effects_;
+
+  // TODO: for primitive types this should be marked as invalid.
+  ReferenceTypeInfo reference_type_info_;
 
   friend class HBasicBlock;
   friend class HGraph;
@@ -2658,6 +2761,14 @@ class HLoadClass : public HExpression<0> {
     return !is_referrers_class_;
   }
 
+  ReferenceTypeInfo GetLoadedClassRTI() {
+    return loaded_class_rti_;
+  }
+
+  void SetLoadedClassRTI(ReferenceTypeInfo rti) {
+    loaded_class_rti_ = rti;
+  }
+
   DECLARE_INSTRUCTION(LoadClass);
 
  private:
@@ -2667,6 +2778,8 @@ class HLoadClass : public HExpression<0> {
   // Whether this instruction must generate the initialization check.
   // Used for code generation.
   bool generate_clinit_check_;
+
+  ReferenceTypeInfo loaded_class_rti_;
 
   DISALLOW_COPY_AND_ASSIGN(HLoadClass);
 };
