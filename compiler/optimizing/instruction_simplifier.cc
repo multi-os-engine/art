@@ -16,11 +16,17 @@
 
 #include "instruction_simplifier.h"
 
+#include "mirror/class-inl.h"
+#include "scoped_thread_state_change.h"
+
 namespace art {
 
 class InstructionSimplifierVisitor : public HGraphVisitor {
  public:
-  explicit InstructionSimplifierVisitor(HGraph* graph) : HGraphVisitor(graph) {}
+  explicit InstructionSimplifierVisitor(HGraph* graph, OptimizingCompilerStats* stats,
+                                        bool apply_type_optimizations)
+      : HGraphVisitor(graph), stats_(stats),
+        apply_type_optimizations_(apply_type_optimizations) {}
 
  private:
   void VisitSuspendCheck(HSuspendCheck* check) OVERRIDE;
@@ -29,18 +35,43 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitTypeConversion(HTypeConversion* instruction) OVERRIDE;
   void VisitNullCheck(HNullCheck* instruction) OVERRIDE;
   void VisitArrayLength(HArrayLength* instruction) OVERRIDE;
+  void VisitCheckCast(HCheckCast* instruction) OVERRIDE;
+
+  OptimizingCompilerStats* stats_;
+  bool apply_type_optimizations_;
 };
 
 void InstructionSimplifier::Run() {
-  InstructionSimplifierVisitor visitor(graph_);
+  InstructionSimplifierVisitor visitor(graph_, stats_, apply_type_optimizations_);
   visitor.VisitInsertionOrder();
 }
 
 void InstructionSimplifierVisitor::VisitNullCheck(HNullCheck* null_check) {
+  if (!apply_type_optimizations_) {
+    return;
+  }
   HInstruction* obj = null_check->InputAt(0);
   if (!obj->CanBeNull()) {
     null_check->ReplaceWith(obj);
     null_check->GetBlock()->RemoveInstruction(null_check);
+    if (stats_ != nullptr) {
+      stats_->RecordStat(MethodCompilationStat::kRemovedNullCheck);
+    }
+  }
+}
+
+void InstructionSimplifierVisitor::VisitCheckCast(HCheckCast* check_cast) {
+  if (!apply_type_optimizations_) {
+    return;
+  }
+  ReferenceTypeInfo obj_rti = check_cast->InputAt(0)->GetReferenceTypeInfo();
+  ReferenceTypeInfo class_rti = check_cast->InputAt(1)->AsLoadClass()->GetLoadedClassRTI();
+  ScopedObjectAccess soa(Thread::Current());
+  if (class_rti.IsSupertypeOf(obj_rti)) {
+    check_cast->GetBlock()->RemoveInstruction(check_cast);
+    if (stats_ != nullptr) {
+      stats_->RecordStat(MethodCompilationStat::kRemovedCheckedCast);
+    }
   }
 }
 
