@@ -19,6 +19,7 @@
 
 #include "nodes.h"
 #include "optimization.h"
+#include "optimizing_compiler_stats.h"
 
 namespace art {
 
@@ -27,10 +28,15 @@ namespace art {
  */
 class InstructionSimplifier : public HOptimization {
  public:
-  explicit InstructionSimplifier(HGraph* graph, const char* name = "instruction_simplifier")
-    : HOptimization(graph, true, name) {}
+  explicit InstructionSimplifier(HGraph* graph,
+                                 OptimizingCompilerStats* stats,
+                                 const char* name = "instruction_simplifier")
+    : HOptimization(graph, true, name), stats_(stats) {}
 
   void Run() OVERRIDE;
+
+ private:
+  OptimizingCompilerStats* stats_;
 };
 
 }  // namespace art

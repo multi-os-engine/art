@@ -159,7 +159,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
   SsaDeadPhiElimination dead_phi(callee_graph);
   HDeadCodeElimination dce(callee_graph);
   HConstantFolding fold(callee_graph);
-  InstructionSimplifier simplify(callee_graph);
+  InstructionSimplifier simplify(callee_graph, outer_stats_);
 
   HOptimization* optimizations[] = {
     &redundant_phi,
