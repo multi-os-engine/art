@@ -533,13 +533,8 @@ static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
   std::string cache_filename;  // was cache_location
   bool have_cache_filename = false;
   if (dalvik_cache_exists) {
-    std::string error_msg;
-    have_cache_filename = GetDalvikCacheFilename(filename, cache_dir.c_str(), &cache_filename,
-                                                 &error_msg);
-    if (!have_cache_filename && kVerboseLogging) {
-      LOG(INFO) << "DexFile_isDexOptNeededInternal failed to find cache file for dex file " << filename
-                << ": " << error_msg;
-    }
+    have_cache_filename = true;
+    cache_filename = GetDalvikCacheFilename(filename, cache_dir.c_str());
   }
 
   bool should_relocate_if_possible = Runtime::Current()->ShouldRelocate();

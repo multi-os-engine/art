@@ -489,14 +489,9 @@ std::string GetDalvikCacheOrDie(const char* subdir, bool create_if_absent = true
 void GetDalvikCache(const char* subdir, bool create_if_absent, std::string* dalvik_cache,
                     bool* have_android_data, bool* dalvik_cache_exists, bool* is_global_cache);
 
-// Returns the absolute dalvik-cache path for a DexFile or OatFile. The path returned will be
-// rooted at cache_location.
-bool GetDalvikCacheFilename(const char* file_location, const char* cache_location,
-                            std::string* filename, std::string* error_msg);
-// Returns the absolute dalvik-cache path for a DexFile or OatFile, or
-// dies trying. The path returned will be rooted at cache_location.
-std::string GetDalvikCacheFilenameOrDie(const char* file_location,
-                                        const char* cache_location);
+// Returns the absolute dalvik-cache path for a DexFile or OatFile.
+// The path returned will be rooted at cache_location.
+std::string GetDalvikCacheFilename(const char* file_location, const char* cache_location);
 
 // Returns the system location for an image
 std::string GetSystemImageFilename(const char* location, InstructionSet isa);

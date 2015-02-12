@@ -1396,29 +1396,18 @@ std::string GetDalvikCacheOrDie(const char* subdir, const bool create_if_absent)
   return dalvik_cache;
 }
 
-bool GetDalvikCacheFilename(const char* location, const char* cache_location,
-                            std::string* filename, std::string* error_msg) {
-  if (location[0] != '/') {
-    *error_msg = StringPrintf("Expected path in location to be absolute: %s", location);
-    return false;
+std::string GetDalvikCacheFilename(const char* location, const char* cache_location) {
+  // Skip leading slash, if any.
+  if (location[0] == '/') {
+    location++;
   }
-  std::string cache_file(&location[1]);  // skip leading slash
+  std::string cache_file(location);
   if (!EndsWith(location, ".dex") && !EndsWith(location, ".art") && !EndsWith(location, ".oat")) {
     cache_file += "/";
     cache_file += DexFile::kClassesDex;
   }
   std::replace(cache_file.begin(), cache_file.end(), '/', '@');
-  *filename = StringPrintf("%s/%s", cache_location, cache_file.c_str());
-  return true;
-}
-
-std::string GetDalvikCacheFilenameOrDie(const char* location, const char* cache_location) {
-  std::string ret;
-  std::string error_msg;
-  if (!GetDalvikCacheFilename(location, cache_location, &ret, &error_msg)) {
-    LOG(FATAL) << error_msg;
-  }
-  return ret;
+  return StringPrintf("%s/%s", cache_location, cache_file.c_str());
 }
 
 static void InsertIsaDirectory(const InstructionSet isa, std::string* filename) {

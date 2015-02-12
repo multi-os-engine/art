@@ -226,11 +226,7 @@ bool ImageSpace::FindImageFilename(const char* image_location,
     //
     // image_location = /system/framework/boot.art
     // *image_filename = /data/dalvik-cache/<image_isa>/boot.art
-    std::string error_msg;
-    if (!GetDalvikCacheFilename(image_location, dalvik_cache.c_str(), cache_filename, &error_msg)) {
-      LOG(WARNING) << error_msg;
-      return *has_system;
-    }
+    *cache_filename = GetDalvikCacheFilename(image_location, dalvik_cache.c_str());
     *has_cache = OS::FileExists(cache_filename->c_str());
   }
   return *has_system || *has_cache;

@@ -63,11 +63,8 @@ static bool LocationToFilename(const std::string& location, InstructionSet isa,
     //
     // image_location = /system/framework/boot.art
     // *image_filename = /data/dalvik-cache/<image_isa>/boot.art
-    std::string error_msg;
-    if (GetDalvikCacheFilename(location.c_str(), dalvik_cache.c_str(),
-                               &cache_filename, &error_msg)) {
-      has_cache = true;
-    }
+    cache_filename = GetDalvikCacheFilename(location.c_str(), dalvik_cache.c_str());
+    has_cache = true;
   }
   if (has_system) {
     *filename = system_filename;

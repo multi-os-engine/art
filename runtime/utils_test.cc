@@ -352,18 +352,18 @@ TEST_F(UtilsTest, EndsWith) {
   EXPECT_FALSE(EndsWith("oo", "foo"));
 }
 
-TEST_F(UtilsTest, GetDalvikCacheFilenameOrDie) {
+TEST_F(UtilsTest, GetDalvikCacheFilename) {
   EXPECT_STREQ("/foo/system@app@Foo.apk@classes.dex",
-               GetDalvikCacheFilenameOrDie("/system/app/Foo.apk", "/foo").c_str());
+               GetDalvikCacheFilename("/system/app/Foo.apk", "/foo").c_str());
 
   EXPECT_STREQ("/foo/data@app@foo-1.apk@classes.dex",
-               GetDalvikCacheFilenameOrDie("/data/app/foo-1.apk", "/foo").c_str());
+               GetDalvikCacheFilename("/data/app/foo-1.apk", "/foo").c_str());
   EXPECT_STREQ("/foo/system@framework@core.jar@classes.dex",
-               GetDalvikCacheFilenameOrDie("/system/framework/core.jar", "/foo").c_str());
+               GetDalvikCacheFilename("/system/framework/core.jar", "/foo").c_str());
   EXPECT_STREQ("/foo/system@framework@boot.art",
-               GetDalvikCacheFilenameOrDie("/system/framework/boot.art", "/foo").c_str());
+               GetDalvikCacheFilename("/system/framework/boot.art", "/foo").c_str());
   EXPECT_STREQ("/foo/system@framework@boot.oat",
-               GetDalvikCacheFilenameOrDie("/system/framework/boot.oat", "/foo").c_str());
+               GetDalvikCacheFilename("/system/framework/boot.oat", "/foo").c_str());
 }
 
 TEST_F(UtilsTest, GetSystemImageFilename) {
