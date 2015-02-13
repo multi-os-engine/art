@@ -1,0 +1,6 @@
+Test for how we save and restore float registers on slow paths.
+
+Note that this test is very sensitive on the number of callee-save
+floating-point registers, available registers, and why we go into
+slow paths. We currently assume that loading a string for the first
+time will lead to a slow path.

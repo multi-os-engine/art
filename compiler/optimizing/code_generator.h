@@ -184,8 +184,8 @@ class CodeGenerator {
   void BuildNativeGCMap(
       std::vector<uint8_t>* vector, const DexCompilationUnit& dex_compilation_unit) const;
   void BuildStackMaps(std::vector<uint8_t>* vector);
-  void SaveLiveRegisters(LocationSummary* locations);
-  void RestoreLiveRegisters(LocationSummary* locations);
+  virtual void SaveLiveRegisters(LocationSummary* locations);
+  virtual void RestoreLiveRegisters(LocationSummary* locations);
 
   bool IsLeafMethod() const {
     return is_leaf_;

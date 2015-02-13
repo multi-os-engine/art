@@ -191,6 +191,8 @@ class CodeGeneratorARM : public CodeGenerator {
   size_t RestoreCoreRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
   size_t SaveFloatingPointRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
   size_t RestoreFloatingPointRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
+  void SaveLiveRegisters(LocationSummary* locations) OVERRIDE;
+  void RestoreLiveRegisters(LocationSummary* locations) OVERRIDE;
 
   size_t GetWordSize() const OVERRIDE {
     return kArmWordSize;
@@ -274,6 +276,8 @@ class CodeGeneratorARM : public CodeGenerator {
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Register temp);
 
  private:
+  void HandleLiveRegisters(LocationSummary* locations, bool restore);
+
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
   Label frame_entry_label_;

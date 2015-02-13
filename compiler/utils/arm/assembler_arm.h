@@ -264,6 +264,7 @@ enum {
   W   = 1 << 21,  // writeback base register (or leave unchanged)
   A   = 1 << 21,  // accumulate in multiply instruction (or not)
   B   = 1 << 22,  // unsigned byte (or word)
+  D   = 1 << 22,  // high/lo bit of start of s/d register range
   N   = 1 << 22,  // long (or short)
   U   = 1 << 23,  // positive (or negative) offset/index
   P   = 1 << 24,  // offset/pre-indexed addressing (or post-indexed addressing)
@@ -426,6 +427,11 @@ class ArmAssembler : public Assembler {
                    RegList regs, Condition cond = AL) = 0;
   virtual void stm(BlockAddressMode am, Register base,
                    RegList regs, Condition cond = AL) = 0;
+  virtual void vldms(BlockAddressMode am, Register base,
+                     SRegister first, SRegister last, Condition cond = AL) = 0;
+  virtual void vstms(BlockAddressMode am, Register base,
+                     SRegister first, SRegister last, Condition cond = AL) = 0;
+
 
   virtual void ldrex(Register rd, Register rn, Condition cond = AL) = 0;
   virtual void strex(Register rd, Register rt, Register rn, Condition cond = AL) = 0;

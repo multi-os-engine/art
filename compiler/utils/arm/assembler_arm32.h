@@ -120,6 +120,16 @@ class Arm32Assembler FINAL : public ArmAssembler {
            RegList regs, Condition cond = AL) OVERRIDE;
   void stm(BlockAddressMode am, Register base,
            RegList regs, Condition cond = AL) OVERRIDE;
+  void vldms(BlockAddressMode /* am */, Register /* base */,
+             SRegister /* first */, SRegister /* last */, Condition cond = AL) OVERRIDE {
+    UNUSED(cond);
+    LOG(FATAL) << "Unimplemented";
+  }
+  void vstms(BlockAddressMode /* am */, Register /* base */,
+             SRegister /* first */, SRegister /* last */, Condition cond = AL) OVERRIDE {
+    UNUSED(cond);
+    LOG(FATAL) << "Unimplemented";
+  }
 
   void ldrex(Register rd, Register rn, Condition cond = AL) OVERRIDE;
   void strex(Register rd, Register rt, Register rn, Condition cond = AL) OVERRIDE;

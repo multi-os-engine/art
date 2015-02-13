@@ -142,6 +142,10 @@ class Thumb2Assembler FINAL : public ArmAssembler {
            RegList regs, Condition cond = AL) OVERRIDE;
   void stm(BlockAddressMode am, Register base,
            RegList regs, Condition cond = AL) OVERRIDE;
+  void vldms(BlockAddressMode am, Register base,
+             SRegister first, SRegister last, Condition cond = AL) OVERRIDE;
+  void vstms(BlockAddressMode am, Register base,
+             SRegister first, SRegister last, Condition cond = AL) OVERRIDE;
 
   void ldrex(Register rd, Register rn, Condition cond = AL) OVERRIDE;
   void strex(Register rd, Register rt, Register rn, Condition cond = AL) OVERRIDE;
@@ -389,6 +393,13 @@ class Thumb2Assembler FINAL : public ArmAssembler {
                       bool load,
                       Register base,
                       RegList regs);
+
+  void EmitMultiVSMemOp(Condition cond,
+                        BlockAddressMode am,
+                        bool load,
+                        Register base,
+                        SRegister start,
+                        uint32_t count);
 
   void EmitMulOp(Condition cond,
                  int32_t opcode,
