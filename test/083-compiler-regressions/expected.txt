@@ -42,3 +42,4 @@ atomicLong passes
 LiveFlags passes trip 3
 LiveFlags passes trip 1
 minDoubleWith3ConstsTest passes
+registerConflictTest passes
