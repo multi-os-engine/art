@@ -1863,8 +1863,22 @@ void LocationsBuilderX86_64::VisitAdd(HAdd* add) {
 
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RequiresRegister());
-      locations->SetInAt(1, Location::RequiresRegister());
-      locations->SetOut(Location::SameAsFirstInput());
+      // We can use a leaq or addq if the constant can fit in an immediate.
+      HInstruction* rhs = add->InputAt(1);
+      bool is_int32_constant = false;
+      if (rhs->IsLongConstant()) {
+        int64_t value = rhs->AsLongConstant()->GetValue();
+        if (static_cast<int32_t>(value) == value) {
+          is_int32_constant = true;
+        }
+      }
+      if (is_int32_constant) {
+        locations->SetInAt(1, Location::RegisterOrConstant(rhs));
+        locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      } else {
+        locations->SetInAt(1, Location::RequiresRegister());
+        locations->SetOut(Location::SameAsFirstInput());
+      }
       break;
     }
 
@@ -1912,7 +1926,25 @@ void InstructionCodeGeneratorX86_64::VisitAdd(HAdd* add) {
     }
 
     case Primitive::kPrimLong: {
-      __ addq(first.AsRegister<CpuRegister>(), second.AsRegister<CpuRegister>());
+      if (second.IsRegister()) {
+        if (out.AsRegister<Register>() == first.AsRegister<Register>()) {
+          __ addq(out.AsRegister<CpuRegister>(), second.AsRegister<CpuRegister>());
+        } else {
+          __ leaq(out.AsRegister<CpuRegister>(), Address(
+              first.AsRegister<CpuRegister>(), second.AsRegister<CpuRegister>(), TIMES_1, 0));
+        }
+      } else {
+        DCHECK(second.IsConstant());
+        int64_t value = second.GetConstant()->AsLongConstant()->GetValue();
+        int32_t int32_value = Low32Bits(value);
+        DCHECK_EQ(int32_value, value);
+        if (out.AsRegister<Register>() == first.AsRegister<Register>()) {
+          __ addq(out.AsRegister<CpuRegister>(), Immediate(int32_value));
+        } else {
+          __ leaq(out.AsRegister<CpuRegister>(), Address(
+              first.AsRegister<CpuRegister>(), int32_value));
+        }
+      }
       break;
     }
 
