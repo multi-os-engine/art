@@ -48,6 +48,15 @@ class GrowableArray : public ArenaObject<kArenaAllocGrowableArray> {
       }
     }
 
+    explicit GrowableArray(const GrowableArray<T>& to_clone)
+      : arena_(to_clone.arena_),
+        num_allocated_(to_clone.num_allocated_),
+        num_used_(to_clone.num_used_) {
+      size_t elem_size = sizeof(T) * num_allocated_;
+      elem_list_ = static_cast<T*>(arena_->Alloc(elem_size,
+                                                 kArenaAllocGrowableArray));
+      memcpy(elem_list_, to_clone.elem_list_, elem_size);
+    }
 
     // Expand the list size to at least new length.
     void Resize(size_t new_length) {

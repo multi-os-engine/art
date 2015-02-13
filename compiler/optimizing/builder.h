@@ -23,6 +23,7 @@
 #include "driver/dex_compilation_unit.h"
 #include "optimizing_compiler_stats.h"
 #include "primitive.h"
+#include "utils/arena_containers.h"
 #include "utils/arena_object.h"
 #include "utils/growable_array.h"
 #include "nodes.h"
@@ -47,8 +48,9 @@ class HGraphBuilder : public ValueObject {
         exit_block_(nullptr),
         current_block_(nullptr),
         graph_(graph),
-        constant0_(nullptr),
-        constant1_(nullptr),
+        constant_cache_(ArenaSafeMap<int32_t, HIntConstant*>::key_compare(),
+                        ArenaAllocatorAdapter<std::pair<int32_t, HIntConstant*> >(
+                            graph->GetArena(), kArenaAllocSTL)),
         dex_file_(dex_file),
         dex_compilation_unit_(dex_compilation_unit),
         compiler_driver_(driver),
@@ -67,8 +69,9 @@ class HGraphBuilder : public ValueObject {
         exit_block_(nullptr),
         current_block_(nullptr),
         graph_(graph),
-        constant0_(nullptr),
-        constant1_(nullptr),
+        constant_cache_(ArenaSafeMap<int32_t, HIntConstant*>::key_compare(),
+                        ArenaAllocatorAdapter<std::pair<int32_t, HIntConstant*> >(
+                            graph->GetArena(), kArenaAllocSTL)),
         dex_file_(nullptr),
         dex_compilation_unit_(nullptr),
         compiler_driver_(nullptr),
@@ -251,8 +254,8 @@ class HGraphBuilder : public ValueObject {
   HBasicBlock* current_block_;
   HGraph* const graph_;
 
-  HIntConstant* constant0_;
-  HIntConstant* constant1_;
+  // Cached instances of HIntConstant for repeating literals.
+  ArenaSafeMap<int32_t, HIntConstant*> constant_cache_;
 
   // The dex file where the method being compiled is.
   const DexFile* const dex_file_;

@@ -53,31 +53,42 @@ class ValueSetNode : public ArenaObject<kArenaAllocMisc> {
 class ValueSet : public ArenaObject<kArenaAllocMisc> {
  public:
   explicit ValueSet(ArenaAllocator* allocator)
-      : allocator_(allocator), number_of_entries_(0), collisions_(nullptr) {
-    for (size_t i = 0; i < kDefaultNumberOfEntries; ++i) {
-      table_[i] = nullptr;
-    }
+      : ValueSet(allocator, kDefaultNumberOfEntries) {}
+
+  ValueSet(ArenaAllocator* allocator, size_t initial_size)
+    : allocator_(allocator),
+      number_of_entries_(0),
+      collisions_(nullptr),
+      table_(allocator, NearestPowerOf2(initial_size), nullptr) {
+    hash_code_mask_ = table_.Size() - 1;
   }
 
   // Adds an instruction in the set.
   void Add(HInstruction* instruction) {
     DCHECK(Lookup(instruction) == nullptr);
     size_t hash_code = instruction->ComputeHashCode();
-    size_t index = hash_code % kDefaultNumberOfEntries;
-    if (table_[index] == nullptr) {
-      table_[index] = instruction;
+    size_t index = hash_code & hash_code_mask_;
+    if (table_.Get(index) == nullptr) {
+      table_.Put(index, instruction);
     } else {
       collisions_ = new (allocator_) ValueSetNode(instruction, hash_code, collisions_);
     }
     ++number_of_entries_;
+
+    if (LoadTooHigh()) {
+      GrowAndRehash();
+      DCHECK(!LoadTooHigh());
+    }
   }
 
   // If in the set, returns an equivalent instruction to the given instruction. Returns
   // null otherwise.
   HInstruction* Lookup(HInstruction* instruction) const {
+    DCHECK(instruction != nullptr);
+
     size_t hash_code = instruction->ComputeHashCode();
-    size_t index = hash_code % kDefaultNumberOfEntries;
-    HInstruction* existing = table_[index];
+    size_t index = hash_code & hash_code_mask_;
+    HInstruction* existing = table_.Get(index);
     if (existing != nullptr && existing->Equals(instruction)) {
       return existing;
     }
@@ -95,19 +106,19 @@ class ValueSet : public ArenaObject<kArenaAllocMisc> {
 
   // Returns whether `instruction` is in the set.
   HInstruction* IdentityLookup(HInstruction* instruction) const {
+    DCHECK(instruction != nullptr);
+
     size_t hash_code = instruction->ComputeHashCode();
-    size_t index = hash_code % kDefaultNumberOfEntries;
-    HInstruction* existing = table_[index];
-    if (existing != nullptr && existing == instruction) {
+    size_t index = hash_code & hash_code_mask_;
+    HInstruction* existing = table_.Get(index);
+    if (existing == instruction) {
       return existing;
     }
 
     for (ValueSetNode* node = collisions_; node != nullptr; node = node->GetNext()) {
-      if (node->GetHashCode() == hash_code) {
-        existing = node->GetInstruction();
-        if (existing == instruction) {
-          return existing;
-        }
+      existing = node->GetInstruction();
+      if (existing == instruction) {
+        return existing;
       }
     }
     return nullptr;
@@ -115,10 +126,10 @@ class ValueSet : public ArenaObject<kArenaAllocMisc> {
 
   // Removes all instructions in the set that are affected by the given side effects.
   void Kill(SideEffects side_effects) {
-    for (size_t i = 0; i < kDefaultNumberOfEntries; ++i) {
-      HInstruction* instruction = table_[i];
+    for (size_t i = 0; i < table_.Size(); ++i) {
+      HInstruction* instruction = table_.Get(i);
       if (instruction != nullptr && instruction->GetSideEffects().DependsOn(side_effects)) {
-        table_[i] = nullptr;
+        table_.Put(i, nullptr);
         --number_of_entries_;
       }
     }
@@ -142,42 +153,29 @@ class ValueSet : public ArenaObject<kArenaAllocMisc> {
 
   // Returns a copy of this set.
   ValueSet* Copy() const {
-    ValueSet* copy = new (allocator_) ValueSet(allocator_);
-
-    for (size_t i = 0; i < kDefaultNumberOfEntries; ++i) {
-      copy->table_[i] = table_[i];
-    }
-
-    // Note that the order will be inverted in the copy. This is fine, as the order is not
-    // relevant for a ValueSet.
-    for (ValueSetNode* node = collisions_; node != nullptr; node = node->GetNext()) {
-      copy->collisions_ = new (allocator_) ValueSetNode(
-          node->GetInstruction(), node->GetHashCode(), copy->collisions_);
-    }
-
-    copy->number_of_entries_ = number_of_entries_;
-    return copy;
+    return new (allocator_) ValueSet(this);
   }
 
   void Clear() {
     number_of_entries_ = 0;
     collisions_ = nullptr;
-    for (size_t i = 0; i < kDefaultNumberOfEntries; ++i) {
-      table_[i] = nullptr;
+    for (size_t i = 0; i < table_.Size(); ++i) {
+      table_.Put(i, nullptr);
     }
   }
 
   // Update this `ValueSet` by intersecting with instructions in `other`.
-  void IntersectionWith(ValueSet* other) {
+  void IntersectionWith(const ValueSet* other) {
     if (IsEmpty()) {
       return;
     } else if (other->IsEmpty()) {
       Clear();
     } else {
-      for (size_t i = 0; i < kDefaultNumberOfEntries; ++i) {
-        if (table_[i] != nullptr && other->IdentityLookup(table_[i]) == nullptr) {
+      for (size_t i = 0; i < table_.Size(); ++i) {
+        HInstruction* instruction = table_.Get(i);
+        if (instruction != nullptr && other->IdentityLookup(instruction) == nullptr) {
           --number_of_entries_;
-          table_[i] = nullptr;
+          table_.Put(i, nullptr);
         }
       }
       for (ValueSetNode* current = collisions_, *previous = nullptr;
@@ -201,6 +199,80 @@ class ValueSet : public ArenaObject<kArenaAllocMisc> {
   size_t GetNumberOfEntries() const { return number_of_entries_; }
 
  private:
+  // Private copy constructor. It passes a pointer to avoid colliding with
+  // the standard copy constructor deleted below.
+  explicit ValueSet(const ValueSet* to_clone)
+    : allocator_(to_clone->allocator_),
+      number_of_entries_(to_clone->number_of_entries_),
+      hash_code_mask_(to_clone->hash_code_mask_),
+      collisions_(nullptr),
+      table_(to_clone->table_) {
+    // Note that the order will be inverted in the copy. This is fine, as the order is not
+    // relevant for a ValueSet.
+    for (ValueSetNode* node = to_clone->collisions_; node != nullptr; node = node->GetNext()) {
+      collisions_ = new (allocator_) ValueSetNode(
+          node->GetInstruction(), node->GetHashCode(), collisions_);
+    }
+  }
+
+  bool LoadTooHigh() {
+    // Load factor threshold (ratio of entries over buckets) is 0.75
+    return number_of_entries_ * 4 > 3 * table_.Size();
+  }
+
+  size_t NearestPowerOf2(size_t x) {
+    if ((x != 0) && !(x & (x - 1))) {
+      // x is a power of two already
+      return x;
+    } else {
+      size_t pow2 = 1;
+      while (pow2 < x) {
+        pow2 <<= 1;
+      }
+      return pow2;
+    }
+  }
+
+  void GrowAndRehash() {
+    size_t old_size = table_.Size();
+    size_t new_size = old_size << 1;
+    DCHECK_LT(old_size, new_size);
+
+    table_.SetSize(new_size);
+    hash_code_mask_ = new_size - 1;
+    for (size_t i = old_size; i < new_size; ++i) {
+      table_.Put(i, nullptr);
+    }
+
+    for (size_t old_index = 0; old_index < old_size; ++old_index) {
+      HInstruction* instruction = table_.Get(old_index);
+      if (instruction == nullptr) continue;
+      size_t hash_code = instruction->ComputeHashCode();
+      size_t new_index = hash_code & hash_code_mask_;
+      if (old_index != new_index) {
+        table_.Put(old_index, nullptr);
+        table_.Put(new_index, instruction);
+      }
+    }
+
+    ValueSetNode* next;
+    ValueSetNode* node = collisions_;
+    collisions_ = nullptr;
+    while (node != nullptr) {
+      next = node->GetNext();
+      HInstruction* instruction = node->GetInstruction();
+      size_t hash_code = node->GetHashCode();
+      size_t new_index = hash_code & hash_code_mask_;
+      if (table_.Get(new_index) == nullptr) {
+        table_.Put(new_index, instruction);
+      } else {
+        node->SetNext(collisions_);
+        collisions_ = node;
+      }
+      node = next;
+    }
+  }
+
   static constexpr size_t kDefaultNumberOfEntries = 8;
 
   ArenaAllocator* const allocator_;
@@ -208,11 +280,14 @@ class ValueSet : public ArenaObject<kArenaAllocMisc> {
   // The number of entries in the set.
   size_t number_of_entries_;
 
+  // Bitmask for converting a hash code into a table index.
+  size_t hash_code_mask_;
+
   // The internal implementation of the set. It uses a combination of a hash code based
-  // fixed-size list, and a linked list to handle hash code collisions.
-  // TODO: Tune the fixed size list original size, and support growing it.
+  // growable list, and a linked list to handle hash code collisions.
+  // TODO: Tune the initial size.
   ValueSetNode* collisions_;
-  HInstruction* table_[kDefaultNumberOfEntries];
+  GrowableArray<HInstruction*> table_;
 
   DISALLOW_COPY_AND_ASSIGN(ValueSet);
 };
@@ -270,7 +345,7 @@ void GlobalValueNumberer::VisitBasicBlock(HBasicBlock* block) {
     set = new (allocator_) ValueSet(allocator_);
   } else {
     HBasicBlock* dominator = block->GetDominator();
-    set = sets_.Get(dominator->GetBlockId())->Copy();
+    set = sets_.Get(dominator->GetBlockId());
     if (dominator->GetSuccessors().Size() != 1 || dominator->GetSuccessors().Get(0) != block) {
       // We have to copy if the dominator has other successors, or `block` is not a successor
       // of the dominator.
