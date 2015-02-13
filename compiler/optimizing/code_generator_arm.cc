@@ -333,6 +333,87 @@ inline Condition ARMOppositeCondition(IfCondition cond) {
   return EQ;        // Unreachable.
 }
 
+void CodeGeneratorARM::SaveLiveRegisters(LocationSummary* locations) {
+  HandleLiveRegisters(locations, /* restore */ false);
+}
+
+void CodeGeneratorARM::RestoreLiveRegisters(LocationSummary* locations) {
+  HandleLiveRegisters(locations, /* restore */ true);
+}
+
+void CodeGeneratorARM::HandleLiveRegisters(LocationSummary* locations, bool restore) {
+  RegisterSet* register_set = locations->GetLiveRegisters();
+  size_t register_mask = 0;
+  size_t stack_offset = first_register_slot_in_slow_path_;
+  for (size_t i = 0, e = GetNumberOfCoreRegisters(); i < e; ++i) {
+    if (!IsCoreCalleeSaveRegister(i)) {
+      if (register_set->ContainsCoreRegister(i)) {
+        // If the register holds an object, update the stack mask.
+        if (locations->RegisterContainsObject(i)) {
+          locations->SetStackBit(stack_offset / kVRegSize);
+        }
+        register_mask |= (1 << i);
+        stack_offset += kArmWordSize;
+      }
+    }
+  }
+
+  stack_offset = first_register_slot_in_slow_path_;
+  if (register_mask != 0) {
+    if (IsPowerOfTwo(register_mask)) {
+      if (restore) {
+        __ LoadFromOffset(kLoadWord, static_cast<Register>(CTZ(register_mask)), SP, stack_offset);
+      } else {
+        __ StoreToOffset(kStoreWord, static_cast<Register>(CTZ(register_mask)), SP, stack_offset);
+      }
+    } else {
+      __ add(IP, SP, ShifterOperand(stack_offset));
+      if (restore) {
+        __ ldm(IA_W, IP, register_mask);
+      } else {
+        __ stm(IA_W, IP, register_mask);
+      }
+    }
+    stack_offset += POPCOUNT(register_mask) * kArmWordSize;
+  }
+
+  size_t min = 0;
+  size_t max = 0;
+  size_t count = 0;
+  for (size_t i = 0, e = GetNumberOfFloatingPointRegisters(); i < e; ++i) {
+    if (!IsFloatingPointCalleeSaveRegister(i)) {
+      if (register_set->ContainsFloatingPointRegister(i)) {
+        if (count == 0) {
+          min = i;
+        }
+        count++;
+        max = i;
+      }
+    }
+  }
+  if (count != 0) {
+    if (count == 1) {
+      if (restore) {
+        __ LoadSFromOffset(static_cast<SRegister>(min), SP, stack_offset);
+      } else {
+        __ StoreSToOffset(static_cast<SRegister>(min), SP, stack_offset);
+      }
+    } else if (count == 2 && ((min % 2) == 0) && (min + 1 == max)) {
+      if (restore) {
+        __ LoadDFromOffset(FromLowSToD(static_cast<SRegister>(min)), SP, stack_offset);
+      } else {
+        __ StoreDToOffset(FromLowSToD(static_cast<SRegister>(min)), SP, stack_offset);
+      }
+    } else {
+      if (restore) {
+        __ vldms(IA, IP, static_cast<SRegister>(min), static_cast<SRegister>(min + count));
+      } else {
+        __ vstms(IA, IP, static_cast<SRegister>(min), static_cast<SRegister>(min + count));
+      }
+    }
+  }
+}
+
 void CodeGeneratorARM::DumpCoreRegister(std::ostream& stream, int reg) const {
   stream << ArmManagedRegister::FromCoreRegister(Register(reg));
 }

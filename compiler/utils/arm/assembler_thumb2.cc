@@ -2216,6 +2216,44 @@ void Thumb2Assembler::PopList(RegList regs, Condition cond) {
   ldm(IA_W, SP, regs, cond);
 }
 
+void Thumb2Assembler::EmitMultiVSMemOp(Condition cond,
+                                       BlockAddressMode am,
+                                       bool load,
+                                       Register base,
+                                       SRegister start,
+                                       uint32_t count) {
+  CHECK_NE(base, kNoRegister);
+  CHECK_NE(cond, kNoCondition);
+  CHECK_NE(start, kNoSRegister);
+  CHECK_LE(static_cast<SRegister>(start + count), kNumberOfSRegisters);
+
+  int32_t encoding = (static_cast<int32_t>(cond) << kConditionShift) |
+                     B27 | B26 | B11 | B9 |
+                     am |
+                     (load ? L : 0) |
+                     (static_cast<int32_t>(base) << kRnShift) |
+                     ((static_cast<int32_t>(start) & 0x1) ? D : 0) |
+                     ((static_cast<int32_t>(start) >> 1) << 12) |
+                     count;
+  Emit32(encoding);
+}
+
+
+void Thumb2Assembler::vldms(BlockAddressMode am, Register base,
+                            SRegister first, SRegister last, Condition cond) {
+  CHECK((am == IA) || (am == IA_W) || (am == DB_W));
+  CHECK(last > first);
+  EmitMultiVSMemOp(cond, am, true, base, first, last - first + 1);
+}
+
+
+void Thumb2Assembler::vstms(BlockAddressMode am, Register base,
+                            SRegister first, SRegister last, Condition cond) {
+  CHECK((am == IA) || (am == IA_W) || (am == DB_W));
+  CHECK(last > first);
+  EmitMultiVSMemOp(cond, am, false, base, first, last - first + 1);
+}
+
 
 void Thumb2Assembler::Mov(Register rd, Register rm, Condition cond) {
   if (cond != AL || rd != rm) {

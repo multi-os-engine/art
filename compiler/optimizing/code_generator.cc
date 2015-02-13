@@ -141,6 +141,14 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
     DCHECK_EQ(maximum_number_of_live_fp_registers, 0u);
     SetFrameSize(CallPushesPC() ? GetWordSize() : 0);
   } else {
+    if (maximum_number_of_live_fp_registers > 1) {
+      // On ARM, we are going to use ldm/stm, which take a range of registers.
+      // For simplicity, we just reserve space for all S registers. Ideally,
+      // we could compute the range at each safe point.
+      if (GetInstructionSet() == kArm || GetInstructionSet() == kThumb2) {
+        maximum_number_of_live_fp_registers = GetNumberOfFloatingPointRegisters();
+      }
+    }
     SetFrameSize(RoundUp(
         number_of_spill_slots * kVRegSize
         + number_of_out_slots * kVRegSize
