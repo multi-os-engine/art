@@ -1172,7 +1172,7 @@ void EncodedStaticFieldValueIterator::Next() {
     break;
   case kChar:
     jval_.i = ReadUnsignedInt(ptr_, value_arg, false);
-    CHECK(IsUint(16, jval_.i));
+    CHECK(IsUint<16>(jval_.i));
     break;
   case kInt:
     jval_.i = ReadSignedInt(ptr_, value_arg);
