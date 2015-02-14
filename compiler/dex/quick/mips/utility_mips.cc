@@ -56,7 +56,7 @@ LIR* MipsMir2Lir::OpFpRegCopy(RegStorage r_dest, RegStorage r_src) {
 }
 
 bool MipsMir2Lir::InexpensiveConstantInt(int32_t value) {
-  return ((value == 0) || IsUint(16, value) || ((value < 0) && (value >= -32768)));
+  return ((value == 0) || IsUint<16>(value) || ((value < 0) && (value >= -32768)));
 }
 
 bool MipsMir2Lir::InexpensiveConstantFloat(int32_t value) {
