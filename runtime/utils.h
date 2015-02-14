@@ -115,32 +115,35 @@ static inline bool IsInt(int N, intptr_t value) {
   return (-limit <= value) && (value < limit);
 }
 
-static inline bool IsInt32(int N, int32_t value) {
-  CHECK_LT(0, N);
-  CHECK_LT(static_cast<size_t>(N), 8 * sizeof(int32_t));
-  int32_t limit = static_cast<int32_t>(1) << (N - 1);
-  return (-limit <= value) && (value < limit);
+template <typename T>
+static constexpr T GetIntLimit(size_t bits) {
+  return static_cast<T>(1) << (bits - 1);
 }
 
-static inline bool IsInt64(int N, int64_t value) {
-  CHECK_LT(0, N);
-  CHECK_LT(static_cast<size_t>(N), 8 * sizeof(int64_t));
-  int64_t limit = static_cast<int64_t>(1) << (N - 1);
-  return (-limit <= value) && (value < limit);
+template <size_t kBits>
+static constexpr bool IsInt32(int32_t value) {
+  static_assert(kBits > 0, "kBits cannot be zero.");
+  static_assert(kBits < kBitsPerByte * sizeof(int32_t), "kBits must be smaller than max.");
+  return (-GetIntLimit<int32_t>(kBits) <= value) && (value < GetIntLimit<int32_t>(kBits));
 }
 
-static inline bool IsUint(int N, intptr_t value) {
-  CHECK_LT(0, N);
-  CHECK_LT(N, kBitsPerIntPtrT);
-  intptr_t limit = static_cast<intptr_t>(1) << N;
-  return (0 <= value) && (value < limit);
+template <size_t kBits>
+static constexpr bool IsInt64(int64_t value) {
+  static_assert(kBits > 0, "kBits cannot be zero.");
+  static_assert(kBits < kBitsPerByte * sizeof(int64_t), "kBits must be smaller than max.");
+  return (-GetIntLimit<int64_t>(kBits) <= value) && (value < GetIntLimit<int64_t>(kBits));
 }
 
-static inline bool IsAbsoluteUint(int N, intptr_t value) {
-  CHECK_LT(0, N);
-  CHECK_LT(N, kBitsPerIntPtrT);
-  if (value < 0) value = -value;
-  return IsUint(N, value);
+template <size_t kBits>
+static constexpr bool IsUint(intptr_t value) {
+  static_assert(kBits > 0, "kBits cannot be zero.");
+  static_assert(kBits <= kBitsPerByte * sizeof(intptr_t), "kBits must be <= max.");
+  return (0 <= value) && (static_cast<uintptr_t>(value) <= GetIntLimit<uintptr_t>(kBits + 1) - 1);
+}
+
+template <size_t kBits>
+static constexpr bool IsAbsoluteUint(intptr_t value) {
+  return value < 0 ? IsUint<kBits>(-value) : IsUint<kBits>(value);
 }
 
 static inline uint16_t Low16Bits(uint32_t value) {
