@@ -3706,5 +3706,15 @@ void InstructionCodeGeneratorX86_64::HandleBitwiseOperation(HBinaryOperation* in
   }
 }
 
+void LocationsBuilderX86_64::VisitBoundType(HBoundType* instruction) {
+  instruction->SetLocations(nullptr);
+}
+
+void InstructionCodeGeneratorX86_64::VisitBoundType(HBoundType* instruction) {
+  // Nothing to do, this is driven by the code generator.
+  UNUSED(instruction);
+  LOG(FATAL) << "Unreachable";
+}
+
 }  // namespace x86_64
 }  // namespace art

@@ -3803,5 +3803,15 @@ void CodeGeneratorARM::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
   DCHECK(!IsLeafMethod());
 }
 
+void LocationsBuilderARM::VisitBoundType(HBoundType* instruction) {
+  instruction->SetLocations(nullptr);
+}
+
+void InstructionCodeGeneratorARM::VisitBoundType(HBoundType* instruction) {
+  // Nothing to do, this is driven by the code generator.
+  UNUSED(instruction);
+  LOG(FATAL) << "Unreachable";
+}
+
 }  // namespace arm
 }  // namespace art
