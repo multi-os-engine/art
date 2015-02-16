@@ -62,11 +62,28 @@ TEST(StackMapTest, Test1) {
   ASSERT_TRUE(SameBits(stack_mask, sp_mask));
 
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
-  DexRegisterMap dex_registers = code_info.GetDexRegisterMapOf(stack_map, 2);
-  ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
-  ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
-  ASSERT_EQ(0, dex_registers.GetValue(0));
-  ASSERT_EQ(-2, dex_registers.GetValue(1));
+  switch (dex_register_map_encoding) {
+    case kDexRegisterLocationList: {
+      DexRegisterMap dex_registers = code_info.GetDexRegisterMapOf(stack_map, 2);
+      ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
+      ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
+      ASSERT_EQ(0, dex_registers.GetValue(0));
+      ASSERT_EQ(-2, dex_registers.GetValue(1));
+      break;
+    }
+
+    case kDexRegisterLocationDictionary: {
+      DexRegisterDictionary dictionary = code_info.GetDexRegisterDictionary();
+      DexRegisterTable table = code_info.GetDexRegisterTableOf(stack_map, 2);
+      DexRegisterTable::EntryIndex index0 = table.GetEntryIndex(0);
+      DexRegisterTable::EntryIndex index1 = table.GetEntryIndex(1);
+      ASSERT_EQ(DexRegisterMap::kInStack, dictionary.GetLocationKind(index0));
+      ASSERT_EQ(DexRegisterMap::kConstant, dictionary.GetLocationKind(index1));
+      ASSERT_EQ(0, dictionary.GetValue(index0));
+      ASSERT_EQ(-2, dictionary.GetValue(index1));
+      break;
+    }
+  }
 }
 
 TEST(StackMapTest, Test2) {
@@ -109,11 +126,28 @@ TEST(StackMapTest, Test2) {
   ASSERT_TRUE(SameBits(stack_mask, sp_mask1));
 
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
-  DexRegisterMap dex_registers = code_info.GetDexRegisterMapOf(stack_map, 2);
-  ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
-  ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
-  ASSERT_EQ(0, dex_registers.GetValue(0));
-  ASSERT_EQ(-2, dex_registers.GetValue(1));
+  switch (dex_register_map_encoding) {
+    case kDexRegisterLocationList: {
+      DexRegisterMap dex_registers = code_info.GetDexRegisterMapOf(stack_map, 2);
+      ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
+      ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
+      ASSERT_EQ(0, dex_registers.GetValue(0));
+      ASSERT_EQ(-2, dex_registers.GetValue(1));
+      break;
+    }
+
+    case kDexRegisterLocationDictionary: {
+      DexRegisterDictionary dictionary = code_info.GetDexRegisterDictionary();
+      DexRegisterTable table = code_info.GetDexRegisterTableOf(stack_map, 2);
+      DexRegisterTable::EntryIndex index0 = table.GetEntryIndex(0);
+      DexRegisterTable::EntryIndex index1 = table.GetEntryIndex(1);
+      ASSERT_EQ(DexRegisterMap::kInStack, dictionary.GetLocationKind(index0));
+      ASSERT_EQ(DexRegisterMap::kConstant, dictionary.GetLocationKind(index1));
+      ASSERT_EQ(0, dictionary.GetValue(index0));
+      ASSERT_EQ(-2, dictionary.GetValue(index1));
+      break;
+    }
+  }
 
   InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map);
   ASSERT_EQ(2u, inline_info.GetDepth());
