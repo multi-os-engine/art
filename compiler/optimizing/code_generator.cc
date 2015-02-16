@@ -338,10 +338,31 @@ void CodeGenerator::AllocateLocations(HInstruction* instruction) {
   }
 }
 
+static bool IsSingleGoto(HBasicBlock* block) {
+  // TODO: Remove the null check b/19084197.
+  return (block->GetFirstInstruction() != nullptr)
+      && (block->GetFirstInstruction() == block->GetLastInstruction())
+      && block->GetLastInstruction()->IsGoto();
+}
+
 bool CodeGenerator::GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) const {
   DCHECK_EQ(block_order_->Get(current_block_index_), current);
-  return (current_block_index_ < block_order_->Size() - 1)
-      && (block_order_->Get(current_block_index_ + 1) == next);
+  if (current_block_index_ >= block_order_->Size()) return false;
+
+  size_t index = current_block_index_ + 1;
+  HBasicBlock* next_block = block_order_->Get(index);
+
+  // Simple case: the next block is the next one to be emitted.
+  if (next_block == next) return true;
+
+  // Look at the next blocks that will be emitted, and check whether they will
+  // also go to the next block.
+  while (IsSingleGoto(next_block) && index < block_order_->Size()) {
+    if (next_block->GetSuccessors().Get(0) != block_order_->Get(++index)) return false;
+    next_block = block_order_->Get(index);
+    if (next_block == next) return true;
+  }
+  return false;
 }
 
 CodeGenerator* CodeGenerator::Create(HGraph* graph,
