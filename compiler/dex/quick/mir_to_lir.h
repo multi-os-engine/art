@@ -515,6 +515,9 @@ class Mir2Lir {
       LIR* const cont_;
     };
 
+    class SuspendCheckSlowPath;
+    class SpecialSuspendCheckSlowPath;
+
     // Helper class for changing mem_ref_type_ until the end of current scope. See mem_ref_type_.
     class ScopedMemRefType {
      public:
@@ -1570,6 +1573,16 @@ class Mir2Lir {
     virtual void GenSpecialExitSequence() = 0;
 
     /**
+     * @brief Used to generate stack frame for suspend path of special methods.
+     */
+    virtual void GenSpecialEntryForSuspend() = 0;
+
+    /**
+     * @brief Used to pop the stack frame for suspend path of special methods.
+     */
+    virtual void GenSpecialExitForSuspend() = 0;
+
+    /**
      * @brief Used to generate code for special methods that are known to be
      * small enough to work in frameless mode.
      * @param bb The basic block of the first MIR.
@@ -1587,12 +1600,17 @@ class Mir2Lir {
     }
 
     /**
+     * @brief Retrieve the register class of an argument.
+     * @param in_position The argument number whose register class to retrieve.
+     */
+    RegisterClass RegClassForArg(int in_position);
+
+    /**
      * @brief Used to lock register if argument at in_position was passed that way.
      * @details Does nothing if the argument is passed via stack.
      * @param in_position The argument number whose register to lock.
-     * @param wide Whether the argument is wide.
      */
-    void LockArg(int in_position, bool wide = false);
+    void LockArg(int in_position);
 
     /**
      * @brief Used to load VR argument to a physical register.
@@ -1610,6 +1628,25 @@ class Mir2Lir {
      * @param rl_dest The register location where to place argument.
      */
     void LoadArgDirect(int in_position, RegLocation rl_dest);
+
+    /**
+     * @brief Used to spill register if argument at in_position was passed that way.
+     * @details Does nothing if the argument is passed via stack.
+     * @param in_position The argument number whose register to spill.
+     */
+    void SpillArg(int in_position, OpSize size);
+
+    /**
+     * @brief Used to unspill register if argument at in_position was passed that way.
+     * @details Does nothing if the argument is passed via stack.
+     * @param in_position The argument number whose register to spill.
+     */
+    void UnspillArg(int in_position, OpSize size);
+
+    /**
+     * @brief Generate suspend test in a special method.
+     */
+    SpecialSuspendCheckSlowPath* GenSpecialSuspendTest();
 
     /**
      * @brief Used to generate LIR for special getter method.

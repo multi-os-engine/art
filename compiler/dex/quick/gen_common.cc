@@ -2158,7 +2158,7 @@ void Mir2Lir::GenConversionCall(QuickEntrypointEnum trampoline, RegLocation rl_d
   }
 }
 
-class SuspendCheckSlowPath : public Mir2Lir::LIRSlowPath {
+class Mir2Lir::SuspendCheckSlowPath : public Mir2Lir::LIRSlowPath {
  public:
   SuspendCheckSlowPath(Mir2Lir* m2l, LIR* branch, LIR* cont)
       : LIRSlowPath(m2l, m2l->GetCurrentDexPc(), branch, cont) {

@@ -22,7 +22,104 @@
 #include "primitive.h"
 #include "thread-inl.h"
 
+// TODO: Part of a hack below. Rewrite.
+#include "driver/dex_compilation_unit.h"
+#include "verifier/dex_gc_map.h"
+
 namespace art {
+
+class Mir2Lir::SpecialSuspendCheckSlowPath : public Mir2Lir::LIRSlowPath {
+ public:
+  SpecialSuspendCheckSlowPath(Mir2Lir* m2l, LIR* branch, LIR* cont)
+      : LIRSlowPath(m2l, m2l->GetCurrentDexPc(), branch, cont),
+        num_used_args_(0u) {
+  }
+
+  void PreserveArg(int in_position, OpSize size) {
+    // Avoid duplicates.
+    for (size_t i = 0; i != num_used_args_; ++i) {
+      if (used_args_[i] == in_position) {
+        DCHECK_EQ(used_args_size_[i], size);
+        return;
+      }
+    }
+    DCHECK_LT(num_used_args_, kMaxArgsToPreserve);
+    used_args_[num_used_args_] = in_position;
+    used_args_size_[num_used_args_] = size;
+    ++num_used_args_;
+  }
+
+  void Compile() OVERRIDE {
+    m2l_->ResetRegPool();
+    m2l_->ResetDefTracking();
+    GenerateTargetLabel(kPseudoSuspendTarget);
+
+    // If "this" isn't explicitly preserved, store it anyway but don't reload to a register
+    // after the suspend call.
+    bool store_this = (m2l_->cu_->access_flags & kAccStatic) == 0 &&
+        std::find(used_args_, used_args_ + num_used_args_, 0) == used_args_ + num_used_args_;
+
+    // Lock all used regs first before doing anything that may require any temps.
+    if (store_this) {
+      m2l_->LockArg(0);
+    }
+    for (size_t i = 0; i != num_used_args_; ++i) {
+      m2l_->LockArg(used_args_[i]);
+    }
+
+    // Generate frame.
+    m2l_->GenSpecialEntryForSuspend();
+
+    // Spill used regs.
+    if (store_this) {
+      m2l_->SpillArg(0, kReference);
+    }
+    for (size_t i = 0; i != num_used_args_; ++i) {
+      m2l_->SpillArg(used_args_[i], used_args_size_[i]);
+    }
+
+    // Do the actual suspend call to runtime.
+    m2l_->CallRuntimeHelper(kQuickTestSuspend, true);
+
+    // Unspill used regs. (Don't unspill "this" if not actually used.)
+    for (size_t i = 0; i != num_used_args_; ++i) {
+      m2l_->UnspillArg(used_args_[i], used_args_size_[i]);
+    }
+
+    // Pop the frame.
+    m2l_->GenSpecialExitForSuspend();
+
+    // Branch to the continue label.
+    DCHECK(cont_ != nullptr);
+    m2l_->OpUnconditionalBranch(cont_);
+
+    // TODO: HACK: Rewrite.
+    const std::vector<uint8_t>& gc_map_raw =
+        m2l_->mir_graph_->GetCurrentDexCompilationUnit()->GetVerifiedMethod()->GetDexGcMap();
+    verifier::DexPcToReferenceMap dex_gc_map(&(gc_map_raw)[0]);
+    DCHECK_EQ(gc_map_raw.size(), dex_gc_map.RawSize());
+    const uint8_t* references = dex_gc_map.FindBitMap(0, false);
+    CHECK(references != nullptr) << PrettyMethod(m2l_->cu_->method_idx, *m2l_->cu_->dex_file);
+    uint8_t* refs = const_cast<uint8_t*>(references);
+    std::fill_n(refs, dex_gc_map.RegWidth(), 0);
+    if (store_this) {
+      size_t v_reg = m2l_->mir_graph_->GetNumOfLocalCodeVRs();
+      refs[v_reg / 8] |= (1u << (v_reg & 7));
+    }
+    for (size_t i = 0; i != num_used_args_; ++i) {
+      if (used_args_size_[i] == kReference) {
+        size_t v_reg = m2l_->mir_graph_->GetNumOfLocalCodeVRs() + used_args_[i];
+        refs[v_reg / 8] |= (1u << (v_reg & 7));
+      }
+    }
+  }
+
+ private:
+  static constexpr size_t kMaxArgsToPreserve = 2u;
+  size_t num_used_args_;
+  int used_args_[kMaxArgsToPreserve];
+  OpSize used_args_size_[kMaxArgsToPreserve];
+};
 
 RegisterClass Mir2Lir::ShortyToRegClass(char shorty_type) {
   RegisterClass res;
@@ -54,7 +151,27 @@ RegisterClass Mir2Lir::LocToRegClass(RegLocation loc) {
   return res;
 }
 
-void Mir2Lir::LockArg(int in_position, bool) {
+RegisterClass Mir2Lir::RegClassForArg(int in_position) {
+  int i = 0;
+  if ((cu_->access_flags & kAccStatic) == 0) {
+    if (in_position == 0) {
+      return kRefReg;
+    }
+    ++i;
+  }
+  const char* shorty = cu_->shorty + 1;  // Skip return type.
+  for (; i != in_position; ++i) {
+    DCHECK_NE(*shorty, 0);
+    if (*shorty == 'D' || *shorty == 'J') {
+      ++i;
+      DCHECK_NE(i, in_position);
+    }
+    ++shorty;
+  }
+  return ShortyToRegClass(*shorty);
+}
+
+void Mir2Lir::LockArg(int in_position) {
   RegStorage reg_arg = GetArgMappingToPhysicalReg(in_position);
 
   if (reg_arg.Valid()) {
@@ -153,6 +270,38 @@ void Mir2Lir::LoadArgDirect(int in_position, RegLocation rl_dest) {
   }
 }
 
+void Mir2Lir::SpillArg(int in_position, OpSize size) {
+  RegStorage reg_arg = GetArgMappingToPhysicalReg(in_position);
+
+  if (reg_arg.Valid()) {
+    int offset = frame_size_ + StackVisitor::GetOutVROffset(in_position, cu_->instruction_set);
+    size = IsRef(size) ? kReference : (IsWide(size) && reg_arg.GetWideKind() == kWide) ? k64 : k32;
+    StoreBaseDisp(TargetPtrReg(kSp), offset, reg_arg, size, kNotVolatile);
+  }
+}
+
+void Mir2Lir::UnspillArg(int in_position, OpSize size) {
+  RegStorage reg_arg = GetArgMappingToPhysicalReg(in_position);
+
+  if (reg_arg.Valid()) {
+    int offset = frame_size_ + StackVisitor::GetOutVROffset(in_position, cu_->instruction_set);
+    size = IsRef(size) ? kReference : (IsWide(size) && reg_arg.GetWideKind() == kWide) ? k64 : k32;
+    LoadBaseDisp(TargetPtrReg(kSp), offset, reg_arg, size, kNotVolatile);
+  }
+}
+
+Mir2Lir::SpecialSuspendCheckSlowPath* Mir2Lir::GenSpecialSuspendTest() {
+  RegStorage method_arg = TargetPtrReg(kArg0);
+  LockTemp(method_arg);
+  LIR* branch = OpTestSuspend(nullptr);
+  FreeTemp(method_arg);
+  LIR* cont = NewLIR0(kPseudoTargetLabel);
+  SpecialSuspendCheckSlowPath* slow_path =
+      new (arena_) SpecialSuspendCheckSlowPath(this, branch, cont);
+  AddSlowPath(slow_path);
+  return slow_path;
+}
+
 bool Mir2Lir::GenSpecialIGet(MIR* mir, const InlineMethod& special) {
   // FastInstance() already checked by DexFileMethodInliner.
   const InlineIGetIPutData& data = special.d.ifield_data;
@@ -161,13 +310,17 @@ bool Mir2Lir::GenSpecialIGet(MIR* mir, const InlineMethod& special) {
     return false;
   }
 
-  OpSize size = k32;
+  RegisterClass ret_reg_class = ShortyToRegClass(cu_->shorty[0]);
+  OpSize size;
   switch (data.op_variant) {
-    case InlineMethodAnalyser::IGetVariant(Instruction::IGET_OBJECT):
-      size = kReference;
+    case InlineMethodAnalyser::IGetVariant(Instruction::IGET):
+      size = (ret_reg_class == kFPReg) ? kSingle : k32;
       break;
     case InlineMethodAnalyser::IGetVariant(Instruction::IGET_WIDE):
-      size = k64;
+      size = (ret_reg_class == kFPReg) ? kDouble : k64;
+      break;
+    case InlineMethodAnalyser::IGetVariant(Instruction::IGET_OBJECT):
+      size = kReference;
       break;
     case InlineMethodAnalyser::IGetVariant(Instruction::IGET_SHORT):
       size = kSignedHalf;
@@ -181,14 +334,20 @@ bool Mir2Lir::GenSpecialIGet(MIR* mir, const InlineMethod& special) {
     case InlineMethodAnalyser::IGetVariant(Instruction::IGET_BOOLEAN):
       size = kUnsignedByte;
       break;
+    default:
+      LOG(FATAL) << "Unknown variant: " << data.op_variant;
+      UNREACHABLE();
   }
 
   // Point of no return - no aborts after this
-  GenPrintLabel(mir);
+  if (!kLeafOptimization) {
+    auto* slow_path = GenSpecialSuspendTest();
+    slow_path->PreserveArg(data.object_arg, kReference);
+  }
   LockArg(data.object_arg);
+  GenPrintLabel(mir);
   RegStorage reg_obj = LoadArg(data.object_arg, kRefReg);
   RegisterClass reg_class = RegClassForFieldLoadStore(size, data.is_volatile);
-  RegisterClass ret_reg_class = ShortyToRegClass(cu_->shorty[0]);
   RegLocation rl_dest = IsWide(size) ? GetReturnWide(ret_reg_class) : GetReturn(ret_reg_class);
   RegStorage r_result = rl_dest.reg;
   if (!RegClassMatches(reg_class, r_result)) {
@@ -223,13 +382,16 @@ bool Mir2Lir::GenSpecialIPut(MIR* mir, const InlineMethod& special) {
     return false;
   }
 
-  OpSize size = k32;
+  OpSize size;
   switch (data.op_variant) {
-    case InlineMethodAnalyser::IPutVariant(Instruction::IPUT_OBJECT):
-      size = kReference;
+    case InlineMethodAnalyser::IPutVariant(Instruction::IPUT):
+      size = (RegClassForArg(data.src_arg) == kFPReg) ? kSingle : k32;
       break;
     case InlineMethodAnalyser::IPutVariant(Instruction::IPUT_WIDE):
-      size = k64;
+      size = (RegClassForArg(data.src_arg) == kFPReg) ? kDouble : k64;
+      break;
+    case InlineMethodAnalyser::IPutVariant(Instruction::IPUT_OBJECT):
+      size = kReference;
       break;
     case InlineMethodAnalyser::IPutVariant(Instruction::IPUT_SHORT):
       size = kSignedHalf;
@@ -243,12 +405,20 @@ bool Mir2Lir::GenSpecialIPut(MIR* mir, const InlineMethod& special) {
     case InlineMethodAnalyser::IPutVariant(Instruction::IPUT_BOOLEAN):
       size = kUnsignedByte;
       break;
+    default:
+      LOG(FATAL) << "Unknown variant: " << data.op_variant;
+      UNREACHABLE();
   }
 
   // Point of no return - no aborts after this
-  GenPrintLabel(mir);
+  if (!kLeafOptimization) {
+    auto* slow_path = GenSpecialSuspendTest();
+    slow_path->PreserveArg(data.object_arg, kReference);
+    slow_path->PreserveArg(data.src_arg, size);
+  }
   LockArg(data.object_arg);
-  LockArg(data.src_arg, IsWide(size));
+  LockArg(data.src_arg);
+  GenPrintLabel(mir);
   RegStorage reg_obj = LoadArg(data.object_arg, kRefReg);
   RegisterClass reg_class = RegClassForFieldLoadStore(size, data.is_volatile);
   RegStorage reg_src = LoadArg(data.src_arg, reg_class, IsWide(size));
@@ -269,8 +439,12 @@ bool Mir2Lir::GenSpecialIdentity(MIR* mir, const InlineMethod& special) {
   bool wide = (data.is_wide != 0u);
 
   // Point of no return - no aborts after this
+  if (!kLeafOptimization) {
+    auto* slow_path = GenSpecialSuspendTest();
+    slow_path->PreserveArg(data.arg, data.is_object ? kReference : data.is_wide ? k64 : k32);
+  }
+  LockArg(data.arg);
   GenPrintLabel(mir);
-  LockArg(data.arg, wide);
   RegisterClass reg_class = ShortyToRegClass(cu_->shorty[0]);
   RegLocation rl_dest = wide ? GetReturnWide(reg_class) : GetReturn(reg_class);
   LoadArgDirect(data.arg, rl_dest);
@@ -290,10 +464,16 @@ bool Mir2Lir::GenSpecialCase(BasicBlock* bb, MIR* mir, const InlineMethod& speci
     case kInlineOpNop:
       successful = true;
       DCHECK_EQ(mir->dalvikInsn.opcode, Instruction::RETURN_VOID);
+      if (!kLeafOptimization) {
+        GenSpecialSuspendTest();
+      }
       return_mir = mir;
       break;
     case kInlineOpNonWideConst: {
       successful = true;
+      if (!kLeafOptimization) {
+        GenSpecialSuspendTest();
+      }
       RegLocation rl_dest = GetReturn(ShortyToRegClass(cu_->shorty[0]));
       GenPrintLabel(mir);
       LoadConstant(rl_dest.reg, static_cast<int>(special.d.data));
@@ -333,13 +513,17 @@ bool Mir2Lir::GenSpecialCase(BasicBlock* bb, MIR* mir, const InlineMethod& speci
     }
     GenSpecialExitSequence();
 
-    core_spill_mask_ = 0;
-    num_core_spills_ = 0;
-    fp_spill_mask_ = 0;
-    num_fp_spills_ = 0;
-    frame_size_ = 0;
-    core_vmap_table_.clear();
-    fp_vmap_table_.clear();
+    if (!kLeafOptimization) {
+      HandleSlowPaths();
+    } else {
+      core_spill_mask_ = 0;
+      num_core_spills_ = 0;
+      fp_spill_mask_ = 0;
+      num_fp_spills_ = 0;
+      frame_size_ = 0;
+      core_vmap_table_.clear();
+      fp_vmap_table_.clear();
+    }
   }
 
   return successful;
