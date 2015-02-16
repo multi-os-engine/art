@@ -29,6 +29,8 @@
 #include "utils/arena_bit_vector.h"
 #include "utils/growable_array.h"
 
+#include <map>
+
 namespace art {
 
 class HBasicBlock;
@@ -361,7 +363,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   }
 
   void AddBackEdge(HBasicBlock* back_edge) {
-    if (loop_information_ == nullptr) {
+  if (loop_information_ == nullptr) {
       loop_information_ = new (graph_->GetArena()) HLoopInformation(this, graph_);
     }
     DCHECK_EQ(loop_information_->GetHeader(), this);
@@ -869,24 +871,25 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
 
 class ReferenceTypeInfo : ValueObject {
  public:
+  typedef Handle<mirror::Class> TypeHandle;
+
   ReferenceTypeInfo() : is_known_(false), is_exact_(true), is_top_(false) {}
-  explicit ReferenceTypeInfo(Handle<mirror::Class> type_handle) :
+  explicit ReferenceTypeInfo(TypeHandle type_handle) :
       type_handle_(type_handle), is_known_(true), is_exact_(true), is_top_(false) {}
 
   bool IsExact() const { return is_exact_; }
   bool IsTop() const { return is_top_; }
   bool IsKnown() const { return is_known_; }
-
-  Handle<mirror::Class> GetTypeHandle() const { return type_handle_; }
+  TypeHandle GetTypeHandle() const { return type_handle_; }
 
   void SetTop() {
     is_top_ = true;
     is_exact_ = false;
     is_known_ = true;
-    type_handle_ = Handle<mirror::Class>();
+    type_handle_ = TypeHandle();
   }
   void SetInexact() { is_exact_ = false; }
-  void SetTypeHandle(Handle<mirror::Class> type_handle) {
+  void SetTypeHandle(TypeHandle type_handle) {
     type_handle_ = type_handle;
     is_known_ = true;
   }
@@ -946,7 +949,7 @@ class ReferenceTypeInfo : ValueObject {
 
  private:
   // The class of the object.
-  Handle<mirror::Class> type_handle_;
+  TypeHandle type_handle_;
   // Whether or not we have any information about this type.
   bool is_known_;
   // Whether or not the type is exact (not a subclass/superclass)
@@ -1013,10 +1016,23 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   virtual bool CanDoImplicitNullCheck() const { return false; }
 
   void SetReferenceTypeInfo(ReferenceTypeInfo reference_type_info) {
-    reference_type_info_ = reference_type_info;
+    reference_type_info_[GetBlock()->GetBlockId()] = reference_type_info;
   }
 
-  ReferenceTypeInfo GetReferenceTypeInfo() const { return reference_type_info_; }
+  void SetReferenceTypeInfo(int block_id, ReferenceTypeInfo reference_type_info) {
+    reference_type_info_[block_id] = reference_type_info;
+  }
+
+  ReferenceTypeInfo GetReferenceTypeInfo() {
+    return reference_type_info_[GetBlock()->GetBlockId()];
+  }
+
+  ReferenceTypeInfo GetReferenceTypeInfo(int block_id) {
+    if (reference_type_info_.find(block_id) != reference_type_info_.end()) {
+      return reference_type_info_[block_id];
+    }
+    return reference_type_info_[GetBlock()->GetBlockId()];
+  }
 
   void AddUseAt(HInstruction* user, size_t index) {
     uses_.AddUse(user, index, GetBlock()->GetGraph()->GetArena());
@@ -1162,8 +1178,7 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
 
   const SideEffects side_effects_;
 
-  // TODO: for primitive types this should be marked as invalid.
-  ReferenceTypeInfo reference_type_info_;
+  std::map<int, ReferenceTypeInfo> reference_type_info_;
 
   friend class HBasicBlock;
   friend class HGraph;

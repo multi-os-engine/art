@@ -21,6 +21,8 @@
 #include "handle_scope-inl.h"
 #include "nodes.h"
 #include "optimization.h"
+#include "optimizing_compiler_stats.h"
+#include "utils/arena_containers.h"
 
 namespace art {
 
@@ -32,12 +34,18 @@ class ReferenceTypePropagation : public HOptimization {
   ReferenceTypePropagation(HGraph* graph,
                            const DexFile& dex_file,
                            const DexCompilationUnit& dex_compilation_unit,
-                           StackHandleScopeCollection* handles)
+                           StackHandleScopeCollection* handles,
+                           OptimizingCompilerStats* stats)
     : HOptimization(graph, true, "reference_type_propagation"),
       dex_file_(dex_file),
       dex_compilation_unit_(dex_compilation_unit),
       handles_(handles),
-      worklist_(graph->GetArena(), kDefaultWorklistSize) {}
+      stats_(stats),
+      worklist_(graph->GetArena(), kDefaultWorklistSize),
+      type_info_map_(std::less<int>(), graph->GetArena()->Adapter()),
+      load_class_map_(std::less<int>(), graph->GetArena()->Adapter()) {}
+
+  ~ReferenceTypePropagation();
 
   void Run() OVERRIDE;
 
@@ -49,13 +57,29 @@ class ReferenceTypePropagation : public HOptimization {
   void AddToWorklist(HPhi* phi);
   void AddDependentInstructionsToWorklist(HPhi* phi);
   bool UpdateNullability(HPhi* phi);
-  bool UpdateReferenceTypeInfo(HPhi* phi);
+  bool UpdateReferenceTypeInfo(HPhi* phi) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  bool UpdateReferenceTypeInfo(HPhi* phi, int block_id) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void TestForAndProcessInstanceOfSuccesor(HBasicBlock* block);
+
+  void SetReferenceTypeInfo(HInstruction* instr, int block_id, ReferenceTypeInfo rti);
+  ReferenceTypeInfo GetReferenceTypeInfo(HInstruction* instr, int block_id);
+
+  void MergeTypes(ReferenceTypeInfo& new_rti,
+                  const ReferenceTypeInfo& input_rti) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   const DexFile& dex_file_;
   const DexCompilationUnit& dex_compilation_unit_;
   StackHandleScopeCollection* handles_;
 
+  OptimizingCompilerStats* stats_;
+
   GrowableArray<HPhi*> worklist_;
+
+  // instruction id -> block id -> reference type info
+  ArenaSafeMap<int, ArenaSafeMap<int, ReferenceTypeInfo>*> type_info_map_;
+  // HLoadClass instruction id -> reference type info
+  ArenaSafeMap<int, ReferenceTypeInfo> load_class_map_;
 
   static constexpr size_t kDefaultWorklistSize = 8;
 

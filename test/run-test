@@ -646,7 +646,7 @@ fi
     fi
 
 ) 1>&2
-
+cp "$tmp_dir/$cfg_output" /ssda/dev/android/art/art/out.cfg
 # Clean up test files.
 if [ "$always_clean" = "yes" -o "$good" = "yes" ]; then
     cd "$oldwd"
