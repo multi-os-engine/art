@@ -311,12 +311,14 @@ class OatDumperOptions {
                    bool dump_vmap,
                    bool disassemble_code,
                    bool absolute_addresses,
+                   bool stat,
                    const char* method_filter)
     : dump_raw_mapping_table_(dump_raw_mapping_table),
       dump_raw_gc_map_(dump_raw_gc_map),
       dump_vmap_(dump_vmap),
       disassemble_code_(disassemble_code),
       absolute_addresses_(absolute_addresses),
+      stat_(stat),
       method_filter_(method_filter),
       class_loader_(nullptr) {}
 
@@ -325,8 +327,18 @@ class OatDumperOptions {
   const bool dump_vmap_;
   const bool disassemble_code_;
   const bool absolute_addresses_;
+  const bool stat_;
   const char* const method_filter_;
   Handle<mirror::ClassLoader>* class_loader_;
+};
+
+class OatStatistics {
+ public:
+  // Oat file size, in bytes.
+  size_t oat_file_size = 0;
+  // Total size of CodeInfo elements emitted by the optimizing
+  // compiler, in bytes.
+  size_t overall_code_info_size = 0;
 };
 
 class OatDumper {
@@ -339,7 +351,8 @@ class OatDumper {
       disassembler_(Disassembler::Create(instruction_set_,
                                          new DisassemblerOptions(options_->absolute_addresses_,
                                                                  oat_file.Begin(),
-                                                                 true /* can_read_litals_ */))) {
+                                                                 true /* can_read_litals_ */))),
+    statistics_(options_->stat_ ? new OatStatistics() : nullptr) {
     CHECK(options_->class_loader_ != nullptr);
     AddAllOffsets();
   }
@@ -436,6 +449,9 @@ class OatDumper {
 
     os << "SIZE:\n";
     os << oat_file_.Size() << "\n\n";
+    if (statistics_ != nullptr) {
+      statistics_->oat_file_size = oat_file_.Size();
+    }
 
     os << std::flush;
 
@@ -842,6 +858,7 @@ class OatDumper {
         }
       }
     }
+    DumpStatistics(*indent1_os);
     os << std::flush;
     return success;
   }
@@ -893,6 +910,9 @@ class OatDumper {
   // Display a CodeInfo object emitted by the optimizing compiler.
   void DumpCodeInfo(std::ostream& os, const CodeInfo& code_info) {
     uint32_t code_info_size = code_info.GetOverallSize();
+    if (statistics_ != nullptr) {
+      statistics_->overall_code_info_size += code_info_size;
+    }
     size_t number_of_stack_maps = code_info.GetNumberOfStackMaps();
     os << "  Optimized CodeInfo (size=" << code_info_size
        << " number_of_stack_maps=" << number_of_stack_maps << ")\n";
@@ -1228,12 +1248,21 @@ class OatDumper {
     }
   }
 
+  void DumpStatistics(std::ostream& os) {
+    if (statistics_ != nullptr) {
+      os << "STATISTICS:\n"
+         << "  oat_file_size:" << statistics_->oat_file_size << '\n'
+         << "  overall_code_info_size:" << statistics_->overall_code_info_size << '\n';
+    }
+  }
+
   const OatFile& oat_file_;
   const std::vector<const OatFile::OatDexFile*> oat_dex_files_;
   const OatDumperOptions* options_;
   InstructionSet instruction_set_;
   std::set<uintptr_t> offsets_;
   Disassembler* disassembler_;
+  std::unique_ptr<OatStatistics> statistics_;
 };
 
 class ImageDumper {
@@ -2122,6 +2151,8 @@ struct OatdumpArgs : public CmdlineArgs {
       symbolize_ = true;
     } else if (option.starts_with("--method-filter=")) {
       method_filter_ = option.substr(strlen("--method-filter=")).data();
+    } else if (option.starts_with("--stat")) {
+      stat_ = true;
     } else {
       return kParseUnknownArgument;
     }
@@ -2186,6 +2217,8 @@ struct OatdumpArgs : public CmdlineArgs {
         "\n"
         "  --method-filter=<method name>: only dumps methods that contain the filter.\n"
         "      Example: --method-filter=foo\n"
+        "\n"
+        "  --stat enables oat file statistics in the output.\n"
         "\n";
 
     return usage;
@@ -2201,6 +2234,7 @@ struct OatdumpArgs : public CmdlineArgs {
   bool dump_vmap_ = true;
   bool disassemble_code_ = true;
   bool symbolize_ = false;
+  bool stat_ = false;
 };
 
 struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
@@ -2216,6 +2250,7 @@ struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
         args_->dump_vmap_,
         args_->disassemble_code_,
         absolute_addresses,
+        args_->stat_,
         args_->method_filter_));
 
     return (args_->boot_image_location_ != nullptr || args_->image_location_ != nullptr) &&
