@@ -140,6 +140,37 @@ public class Main {
     ((SubclassC)s).g();
   }
 
+  // CHECK-START: void Main.testInstanceOf(java.lang.Object) instruction_simplifier_after_types (before)
+  // CHECK:         CheckCast
+  // CHECK:         CheckCast
+
+  // CHECK-START: void Main.testInstanceOf(java.lang.Object) instruction_simplifier_after_types (after)
+  // CHECK-NOT:     CheckCast
+  public void testInstanceOf(Object o) {
+    if (o instanceof SubclassC) {
+      ((SubclassC)o).g();
+    }
+    if (o instanceof SubclassB) {
+      ((SubclassB)o).g();
+    }
+  }
+
+  // CHECK-START: void Main.testInstanceOfNested(java.lang.Object) instruction_simplifier_after_types (before)
+  // CHECK:         CheckCast
+  // CHECK:         CheckCast
+
+  // CHECK-START: void Main.testInstanceOfNested(java.lang.Object) instruction_simplifier_after_types (after)
+  // CHECK-NOT:     CheckCast
+  public void testInstanceOfNested(Object o) {
+    if (o instanceof SubclassC) {
+      if (o instanceof SubclassB) {
+        ((SubclassB)o).g();
+      } else {
+        ((SubclassC)o).g();
+      }
+    }
+  }
+
   public static void main(String[] args) {
   }
 }

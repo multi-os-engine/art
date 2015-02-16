@@ -53,7 +53,8 @@ void InstructionSimplifierVisitor::VisitNullCheck(HNullCheck* null_check) {
 }
 
 void InstructionSimplifierVisitor::VisitCheckCast(HCheckCast* check_cast) {
-  ReferenceTypeInfo obj_rti = check_cast->InputAt(0)->GetReferenceTypeInfo();
+  int block_id = check_cast->GetBlock()->GetBlockId();
+  ReferenceTypeInfo obj_rti = check_cast->InputAt(0)->GetReferenceTypeInfo(block_id);
   ReferenceTypeInfo class_rti = check_cast->InputAt(1)->AsLoadClass()->GetLoadedClassRTI();
   // class_rti cannot be Top() as we never merge its type.
   DCHECK(!class_rti.IsTop());

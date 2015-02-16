@@ -49,7 +49,13 @@ class ReferenceTypePropagation : public HOptimization {
   void AddToWorklist(HPhi* phi);
   void AddDependentInstructionsToWorklist(HPhi* phi);
   bool UpdateNullability(HPhi* phi);
-  bool UpdateReferenceTypeInfo(HPhi* phi);
+  bool UpdateReferenceTypeInfo(HPhi* phi) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  bool UpdateReferenceTypeInfo(HPhi* phi, int block_id) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void TestForAndProcessInstanceOfSuccesor(HBasicBlock* block);
+
+  void MergeTypes(ReferenceTypeInfo& new_rti,
+                  const ReferenceTypeInfo& input_rti) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   const DexFile& dex_file_;
   const DexCompilationUnit& dex_compilation_unit_;
