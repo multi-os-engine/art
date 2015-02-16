@@ -580,12 +580,11 @@ class StackVisitor {
    *     |       .                       |
    *     | OUT[0]                        |
    *     | StackReference<ArtMethod>     |  ... (reg == num_total_code_regs == special_temp_value) <<== sp, 16-byte aligned
-   *     +===============================+
+   *     +===============================+      (except for leaf methods in the optimizing compiler)
    */
   static int GetVRegOffset(const DexFile::CodeItem* code_item,
                            uint32_t core_spills, uint32_t fp_spills,
                            size_t frame_size, int reg, InstructionSet isa) {
-    DCHECK_EQ(frame_size & (kStackAlignment - 1), 0U);
     DCHECK_NE(reg, -1);
     int spill_size = POPCOUNT(core_spills) * GetBytesPerGprSpillLocation(isa)
         + POPCOUNT(fp_spills) * GetBytesPerFprSpillLocation(isa)
