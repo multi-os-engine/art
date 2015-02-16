@@ -340,6 +340,10 @@ class CodeGenerator {
   size_t GetStackOffsetOfSavedRegister(size_t index);
   void CompileInternal(CodeAllocator* allocator, bool is_baseline);
 
+  // Returns whether the block at `index` in `block_order_` will lead to
+  // a zero branch when jumping to `to`.
+  bool IsBranchZero(size_t index, HBasicBlock* to) const;
+
   HGraph* const graph_;
   const CompilerOptions& compiler_options_;
 

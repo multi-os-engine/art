@@ -338,10 +338,32 @@ void CodeGenerator::AllocateLocations(HInstruction* instruction) {
   }
 }
 
+static bool IsSingleGoto(HBasicBlock* block) {
+  // TODO: Remove the null check b/19084197.
+  return (block->GetFirstInstruction() != nullptr)
+      && (block->GetFirstInstruction() == block->GetLastInstruction())
+      && block->GetLastInstruction()->IsGoto();
+}
+
+bool CodeGenerator::IsBranchZero(size_t index, HBasicBlock* to) const {
+  DCHECK_LT(index, block_order_->Size();
+  HBasicBlock* block = block_order_->Get(index);
+  size_t next_block_index = index;
+  // Loop over all following blocks until `to`. If any block does not
+  // lead to a branch zero, we stop the loop.
+  do {
+    ++next_block_index;
+    DCHECK_LT(next_block_index, block_order_->Size();
+    block = block_order_->Get(next_block_index);
+    if (block == to) return true;
+    if (!IsSingleGoto(block)) return false;
+  } while (IsBranchZero(next_block_index, block->GetSuccessors().Get(0)));
+  return false;
+}
+
 bool CodeGenerator::GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) const {
   DCHECK_EQ(block_order_->Get(current_block_index_), current);
-  return (current_block_index_ < block_order_->Size() - 1)
-      && (block_order_->Get(current_block_index_ + 1) == next);
+  return IsBranchZero(current_block_index_, next);
 }
 
 CodeGenerator* CodeGenerator::Create(HGraph* graph,
