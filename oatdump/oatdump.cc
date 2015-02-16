@@ -922,27 +922,90 @@ class OatDumper {
     os << "  Optimized CodeInfo (size=" << code_info_size
        << ", number_of_dex_registers=" << number_of_dex_registers
        << ", number_of_stack_maps=" << number_of_stack_maps << ")\n";
-    for (size_t i = 0; i < number_of_stack_maps; ++i) {
-      StackMap stack_map = code_info.GetStackMapAt(i);
+
+    auto dump_register_mapping = [&](size_t dex_register_num,
+                                     DexRegisterMap::LocationKind kind,
+                                     int32_t value,
+                                     const std::string& prefix = "v",
+                                     const std::string& suffix = "") {
+      os << "      " << prefix << dex_register_num << ": "
+         << DexRegisterMap::PrettyDescriptor(kind) << " (" << value << ")"
+         << suffix << '\n';
+    };
+
+    if (dex_register_map_encoding == kDexRegisterLocationDictionary) {
+      // Display the Dex register dictionary.
+      size_t number_of_dictionary_entries =
+          code_info.GetNumberOfDexRegisterDictionaryEntries();
+      os << "  DexRegisterDictionary (number_of_dictionary_entries="
+         << number_of_dictionary_entries << ")\n";
+      DexRegisterDictionary dex_register_dictionary =
+          code_info.GetDexRegisterDictionary();
+      for (size_t i = 0; i < number_of_dictionary_entries; ++i) {
+        dump_register_mapping(i,
+                              dex_register_dictionary.GetLocationKind(i),
+                              dex_register_dictionary.GetValue(i),
+                              "entry ");
+      }
+    }
+
+    // Display stack maps along with Dex register maps.
+
+    auto dump_stack_map_header = [&](size_t stack_map_num) {
+      StackMap stack_map = code_info.GetStackMapAt(stack_map_num);
       // TODO: Display stack_mask value.
-      os << "    StackMap " << i
+      os << "    StackMap " << stack_map_num
          << std::hex
          << " (dex_pc=0x" << stack_map.GetDexPc()
          << ", native_pc_offset=0x" << stack_map.GetNativePcOffset()
          << ", register_mask=0x" << stack_map.GetRegisterMask()
          << std::dec
          << ")\n";
-      if (stack_map.HasDexRegisterMap()) {
-        DexRegisterMap dex_register_map =
-            code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-        for (size_t j = 0; j < number_of_dex_registers; ++j) {
-          os << "      v" << j << ": "
-             << DexRegisterMap::PrettyDescriptor(dex_register_map.GetLocationKind(j))
-             << " (" << dex_register_map.GetValue(j) << ")\n";
+    };
+
+    switch (dex_register_map_encoding) {
+      case kDexRegisterLocationList: {
+        for (size_t i = 0; i < number_of_stack_maps; ++i) {
+          StackMap stack_map = code_info.GetStackMapAt(i);
+          dump_stack_map_header(i);
+          if (stack_map.HasDexRegisterMap()) {
+            DexRegisterMap dex_register_map =
+                code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+            for (size_t j = 0; j < number_of_dex_registers; ++j) {
+              dump_register_mapping(j,
+                                    dex_register_map.GetLocationKind(j),
+                                    dex_register_map.GetValue(j));
+            }
+          }
         }
+        break;
       }
-      // TODO: Display more information from code_info.
-    }
+
+      case kDexRegisterLocationDictionary: {
+        DexRegisterDictionary dex_register_dictionary =
+            code_info.GetDexRegisterDictionary();
+        for (size_t i = 0; i < number_of_stack_maps; ++i) {
+          StackMap stack_map = code_info.GetStackMapAt(i);
+          dump_stack_map_header(i);
+          if (stack_map.HasDexRegisterMap()) {
+            DexRegisterTable dex_register_table =
+                code_info.GetDexRegisterTableOf(stack_map, number_of_dex_registers);
+            for (size_t j = 0; j < number_of_dex_registers; ++j) {
+              DexRegisterTable::EntryIndex entry_index =
+                  dex_register_table.GetEntryIndex(j);
+              dump_register_mapping(
+                  j,
+                  dex_register_dictionary.GetLocationKind(entry_index),
+                  dex_register_dictionary.GetValue(entry_index),
+                  "v",
+                  "\t[entry " + std::to_string(static_cast<int>(entry_index)) + "]");
+            }
+          }
+        }
+        break;
+      }
+    };
+    // TODO: Display more information from code_info.
   }
 
   // Display a vmap table.
