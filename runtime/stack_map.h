@@ -58,6 +58,8 @@ class InlineInfo {
   }
 
  private:
+  // TODO: Instead of plain types such as "uint8_t", introduce
+  // typedefs (and document the memory layout of InlineInfo).
   static constexpr int kDepthOffset = 0;
   static constexpr int kFixedSize = kDepthOffset + sizeof(uint8_t);
 
@@ -67,6 +69,23 @@ class InlineInfo {
   friend class StackMap;
   friend class StackMapStream;
 };
+
+
+// Strategies used to encode Dex register maps in stack maps.
+enum DexRegisterMapEncoding {
+  // The initial encoding, where a Dex register map is encoded as a
+  // list of [location_kind, register_value] pairs.
+  kDexRegisterLocationList,
+
+  // Encoding based on a dictionary of unique [location_kind, register_value]
+  // pairs per method.
+  kDexRegisterLocationDictionary
+};
+
+// The chosen strategy to encode Dex register maps in stack maps.
+static constexpr DexRegisterMapEncoding dex_register_map_encoding =
+    kDexRegisterLocationDictionary;
+
 
 /**
  * Information on dex register values for a specific PC. The information is
@@ -130,13 +149,51 @@ class DexRegisterMap {
     return sizeof(LocationKind) + sizeof(int32_t);
   }
 
- private:
   static constexpr int kFixedSize = 0;
 
+ private:
   MemoryRegion region_;
+};
 
-  friend class CodeInfo;
-  friend class StackMapStream;
+// Store unique Dex register locations ([location_kind, register_value]
+// pairs) used in a method.
+//
+// We reuse the DexRegisterMap container to implement DexRegisterDictionary.
+typedef DexRegisterMap DexRegisterDictionary;
+
+// Map a stack maps's Dex register to a location entry in a
+// DexRegisterDictionary.
+class DexRegisterTable {
+ public:
+  explicit DexRegisterTable(MemoryRegion region) : region_(region) {}
+
+  // The type used to refer to indices of a DexRegisterDictionary and
+  // stored in a DexRegisterMap.  We currently use 8-bit indices for
+  // space effiency, but might need to use larger (16- or 32-bit)
+  // values for methods containing more than 256 unique Dex locations.
+  typedef uint8_t EntryIndex;
+
+  static size_t SingleEntrySize() {
+    return sizeof(EntryIndex);
+  }
+
+  // Get the index of the entry in the Dex register dictionary
+  // corresponding to `register_index`.
+  EntryIndex GetEntryIndex(uint16_t register_index) const {
+    return region_.Load<EntryIndex>(kFixedSize + register_index * SingleEntrySize());
+  }
+
+  // Set the index of the entry for the Dex register dictionary
+  // corresponding to `register_index` to `entry_index`.
+  void SetEntryIndex(uint16_t register_index, EntryIndex entry_index) const {
+    region_.Store<EntryIndex>(kFixedSize + register_index * SingleEntrySize(),
+                              entry_index);
+  }
+
+  static constexpr int kFixedSize = 0;
+
+ private:
+  MemoryRegion region_;
 };
 
 /**
@@ -170,7 +227,7 @@ class StackMap {
   }
 
   void SetNativePcOffset(uint32_t native_pc_offset) {
-    return region_.Store<uint32_t>(kNativePcOffsetOffset, native_pc_offset);
+    region_.Store<uint32_t>(kNativePcOffsetOffset, native_pc_offset);
   }
 
   uint32_t GetDexRegisterMapOffset() const {
@@ -178,7 +235,7 @@ class StackMap {
   }
 
   void SetDexRegisterMapOffset(uint32_t offset) {
-    return region_.Store<uint32_t>(kDexRegisterMapOffsetOffset, offset);
+    region_.Store<uint32_t>(kDexRegisterMapOffsetOffset, offset);
   }
 
   uint32_t GetInlineDescriptorOffset() const {
@@ -186,7 +243,7 @@ class StackMap {
   }
 
   void SetInlineDescriptorOffset(uint32_t offset) {
-    return region_.Store<uint32_t>(kInlineDescriptorOffsetOffset, offset);
+    region_.Store<uint32_t>(kInlineDescriptorOffsetOffset, offset);
   }
 
   uint32_t GetRegisterMask() const {
@@ -221,9 +278,9 @@ class StackMap {
        && region_.size() == other.region_.size();
   }
 
-  static size_t ComputeAlignedStackMapSize(size_t stack_mask_size) {
+  static size_t ComputeAlignedStackMapSize(size_t stack_map_size) {
     // On ARM, the stack maps must be 4-byte aligned.
-    return RoundUp(StackMap::kFixedSize + stack_mask_size, 4);
+    return RoundUp(StackMap::kFixedSize + stack_map_size, 4);
   }
 
   // Special (invalid) offset for the DexRegisterMapOffset field meaning
@@ -235,6 +292,8 @@ class StackMap {
   static constexpr uint32_t kNoInlineInfo = -1;
 
  private:
+  // TODO: Instead of plain types such as "uint32_t", introduce
+  // typedefs (and document the memory layout of StackMap).
   static constexpr int kDexPcOffset = 0;
   static constexpr int kNativePcOffsetOffset = kDexPcOffset + sizeof(uint32_t);
   static constexpr int kDexRegisterMapOffsetOffset = kNativePcOffsetOffset + sizeof(uint32_t);
@@ -267,6 +326,21 @@ class CodeInfo {
     region_ = MemoryRegion(const_cast<void*>(data), size);
   }
 
+  uint32_t GetDexRegisterDictionaryOffset() const {
+    // The Dex register dictionary starts just after the fixed-size
+    // part of the CodeItem object.
+    return kFixedSize;
+  }
+
+  // Only meaningful when the encoding based on a dictionary of unique
+  // [location_kind, register_value] pairs per method is used.
+  DexRegisterDictionary GetDexRegisterDictionary() const {
+    DCHECK(dex_register_map_encoding == kDexRegisterLocationDictionary);
+    return DexRegisterDictionary(region_.Subregion(
+        GetDexRegisterDictionaryOffset(),
+        GetDexRegisterDictionarySize()));
+  }
+
   StackMap GetStackMapAt(size_t i) const {
     size_t size = StackMapSize();
     return StackMap(GetStackMaps().Subregion(i * size, size));
@@ -278,6 +352,28 @@ class CodeInfo {
 
   void SetOverallSize(uint32_t size) {
     region_.Store<uint32_t>(kOverallSizeOffset, size);
+  }
+
+  // Only meaningful when the encoding based on a dictionary of unique
+  // [location_kind, register_value] pairs per method is used.
+  uint32_t GetNumberOfDexRegisterDictionaryEntries() const {
+    DCHECK(dex_register_map_encoding == kDexRegisterLocationDictionary);
+    return region_.Load<uint32_t>(kNumberOfDexRegisterDictionaryEntriesOffset);
+  }
+
+  // Only meaningful when the encoding based on a dictionary of unique
+  // [location_kind, register_value] pairs per method is used.
+  void SetNumberOfDexRegisterDictionaryEntries(uint32_t num_entries) {
+    DCHECK(dex_register_map_encoding == kDexRegisterLocationDictionary);
+    region_.Store<uint32_t>(kNumberOfDexRegisterDictionaryEntriesOffset, num_entries);
+  }
+
+  // Only meaningful when the encoding based on a dictionary of unique
+  // [location_kind, register_value] pairs per method is used.
+  uint32_t GetDexRegisterDictionarySize() const {
+    DCHECK(dex_register_map_encoding == kDexRegisterLocationDictionary);
+    return DexRegisterDictionary::kFixedSize
+        + GetNumberOfDexRegisterDictionaryEntries() * DexRegisterDictionary::SingleEntrySize();
   }
 
   uint32_t GetStackMaskSize() const {
@@ -300,11 +396,37 @@ class CodeInfo {
     return StackMap::ComputeAlignedStackMapSize(GetStackMaskSize());
   }
 
+  uint32_t GetStackMapsOffset() const {
+    switch (dex_register_map_encoding) {
+      case kDexRegisterLocationList:
+        return kFixedSize;
+
+      case kDexRegisterLocationDictionary:
+        return kFixedSize + GetDexRegisterDictionarySize();
+    }
+  }
+
+  // Only meaningful when the encoding based on a list of
+  // [location_kind, register_value] pairs is used.
   DexRegisterMap GetDexRegisterMapOf(StackMap stack_map, uint32_t number_of_dex_registers) const {
+    DCHECK(dex_register_map_encoding == kDexRegisterLocationList);
     DCHECK(stack_map.HasDexRegisterMap());
     uint32_t offset = stack_map.GetDexRegisterMapOffset();
     return DexRegisterMap(region_.Subregion(offset,
         DexRegisterMap::kFixedSize + number_of_dex_registers * DexRegisterMap::SingleEntrySize()));
+  }
+
+  // Only meaningful when the encoding based on a dictionary of unique
+  // [location_kind, register_value] pairs per method is used.
+  DexRegisterTable GetDexRegisterTableOf(StackMap stack_map,
+                                         uint32_t number_of_dex_registers) const {
+    DCHECK(dex_register_map_encoding == kDexRegisterLocationDictionary);
+    DCHECK(stack_map.HasDexRegisterMap());
+    // Dex register tables are located at the same position as Dex
+    // register maps.
+    uint32_t offset = stack_map.GetDexRegisterMapOffset();
+    return DexRegisterTable(region_.Subregion(offset,
+        DexRegisterTable::kFixedSize + number_of_dex_registers * DexRegisterTable::SingleEntrySize()));
   }
 
   InlineInfo GetInlineInfoOf(StackMap stack_map) const {
@@ -339,15 +461,25 @@ class CodeInfo {
   }
 
  private:
+  // TODO: Instead of plain types such as "uint32_t", introduce
+  // typedefs (and document the memory layout of CodeInfo).
   static constexpr int kOverallSizeOffset = 0;
-  static constexpr int kNumberOfStackMapsOffset = kOverallSizeOffset + sizeof(uint32_t);
+  // The NumberofDexRegisterDictionaryEntries field is present only when the
+  // location dictionary encoding is used.
+  static constexpr int kNumberOfDexRegisterDictionaryEntriesOffset =
+                  kOverallSizeOffset
+                  + (dex_register_map_encoding == kDexRegisterLocationDictionary
+                     ? sizeof(uint32_t)
+                     : 0u);
+  static constexpr int kNumberOfStackMapsOffset = kNumberOfDexRegisterDictionaryEntriesOffset + sizeof(uint32_t);
   static constexpr int kStackMaskSizeOffset = kNumberOfStackMapsOffset + sizeof(uint32_t);
   static constexpr int kFixedSize = kStackMaskSizeOffset + sizeof(uint32_t);
 
   MemoryRegion GetStackMaps() const {
     return region_.size() == 0
         ? MemoryRegion()
-        : region_.Subregion(kFixedSize, StackMapSize() * GetNumberOfStackMaps());
+        : region_.Subregion(GetStackMapsOffset(),
+                            StackMapSize() * GetNumberOfStackMaps());
   }
 
   MemoryRegion region_;
