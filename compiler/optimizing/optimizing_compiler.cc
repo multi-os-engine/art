@@ -311,7 +311,7 @@ static void RunOptimizations(HGraph* graph,
   GVNOptimization gvn(graph, side_effects);
   LICM licm(graph, side_effects);
   BoundsCheckElimination bce(graph);
-  ReferenceTypePropagation type_propagation(graph, dex_file, dex_compilation_unit, handles);
+  ReferenceTypePropagation type_propagation(graph, dex_file, dex_compilation_unit, handles, stats);
   InstructionSimplifier simplify2(graph, stats, true, "instruction_simplifier_after_types");
 
   IntrinsicsRecognizer intrinsics(graph, dex_compilation_unit.GetDexFile(), driver);
