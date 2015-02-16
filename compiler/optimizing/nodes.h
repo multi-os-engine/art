@@ -577,6 +577,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   M(ArrayLength, Instruction)                                           \
   M(ArraySet, Instruction)                                              \
   M(BoundsCheck, Instruction)                                           \
+  M(BoundType, Instruction)                                             \
   M(CheckCast, Instruction)                                             \
   M(ClinitCheck, Instruction)                                           \
   M(Compare, BinaryOperation)                                           \
@@ -869,6 +870,8 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
 
 class ReferenceTypeInfo : ValueObject {
  public:
+  typedef Handle<mirror::Class> TypeHandle;
+
   ReferenceTypeInfo() : is_exact_(false), is_top_(true) {}
   ReferenceTypeInfo(Handle<mirror::Class> type_handle, bool is_exact) {
     SetTypeHandle(type_handle, is_exact);
@@ -882,11 +885,10 @@ class ReferenceTypeInfo : ValueObject {
   void SetTop() {
     is_top_ = true;
     is_exact_ = false;
-    type_handle_ = Handle<mirror::Class>();
+    type_handle_ = TypeHandle();
   }
 
   void SetInexact() { is_exact_ = false; }
-
   void SetTypeHandle(Handle<mirror::Class> type_handle, bool is_exact)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     type_handle_ = type_handle;
@@ -897,7 +899,7 @@ class ReferenceTypeInfo : ValueObject {
     }
   }
 
-  bool IsSupertypeOf(ReferenceTypeInfo rti) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  bool IsSupertypeOf(ReferenceTypeInfo rti) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (IsTop()) {
       // Top (equivalent for java.lang.Object) is supertype of anything.
       return true;
@@ -931,8 +933,9 @@ class ReferenceTypeInfo : ValueObject {
 
  private:
   // The class of the object.
-  Handle<mirror::Class> type_handle_;
+  TypeHandle type_handle_;
   // Whether or not the type is exact or a superclass of the actual type.
+  // Whether or not we have any information about this type.
   bool is_exact_;
   // A true value here means that the object type should be java.lang.Object.
   // We don't have access to the corresponding mirror object every time so this
@@ -2966,6 +2969,24 @@ class HInstanceOf : public HExpression<2> {
   const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceOf);
+};
+
+class HBoundType : public HTemplateInstruction<1> {
+ public:
+  HBoundType(HInstruction* input, ReferenceTypeInfo top_type)
+      : HTemplateInstruction(SideEffects::None()),
+        top_type_(top_type) {
+    SetRawInputAt(0, input);
+  }
+
+  const ReferenceTypeInfo& GetTopType() const { return top_type_; }
+
+  DECLARE_INSTRUCTION(BoundType);
+
+ private:
+  const ReferenceTypeInfo top_type_;
+
+  DISALLOW_COPY_AND_ASSIGN(HBoundType);
 };
 
 class HCheckCast : public HTemplateInstruction<2> {
