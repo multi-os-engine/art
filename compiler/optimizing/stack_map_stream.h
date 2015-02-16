@@ -162,6 +162,7 @@ class StackMapStream : public ValueObject {
       stack_map.SetDexPc(entry.dex_pc);
       stack_map.SetNativePcOffset(entry.native_pc_offset);
       stack_map.SetRegisterMask(entry.register_mask);
+      stack_map.SetNumberOfDexRegister(entry.num_dex_registers);
       if (entry.sp_mask != nullptr) {
         stack_map.SetStackMask(*entry.sp_mask);
       }
