@@ -21,6 +21,7 @@
 #include "handle_scope-inl.h"
 #include "nodes.h"
 #include "optimization.h"
+#include "optimizing_compiler_stats.h"
 
 namespace art {
 
@@ -32,12 +33,14 @@ class ReferenceTypePropagation : public HOptimization {
   ReferenceTypePropagation(HGraph* graph,
                            const DexFile& dex_file,
                            const DexCompilationUnit& dex_compilation_unit,
-                           StackHandleScopeCollection* handles)
+                           StackHandleScopeCollection* handles,
+                           OptimizingCompilerStats* stats)
     : HOptimization(graph, true, "reference_type_propagation"),
       dex_file_(dex_file),
       dex_compilation_unit_(dex_compilation_unit),
       handles_(handles),
-      worklist_(graph->GetArena(), kDefaultWorklistSize) {}
+      stats_(stats),
+      worklist_(graph->GetArena(), kDefaultWorklistSize) { UNUSED(stats_); }
 
   void Run() OVERRIDE;
 
@@ -51,9 +54,16 @@ class ReferenceTypePropagation : public HOptimization {
   bool UpdateNullability(HPhi* phi);
   bool UpdateReferenceTypeInfo(HPhi* phi);
 
+  void TestForAndProcessInstanceOfSuccesor(HBasicBlock* block);
+
+  void MergeTypes(ReferenceTypeInfo& new_rti,
+                  const ReferenceTypeInfo& input_rti) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   const DexFile& dex_file_;
   const DexCompilationUnit& dex_compilation_unit_;
   StackHandleScopeCollection* handles_;
+
+  OptimizingCompilerStats* stats_;
 
   GrowableArray<HPhi*> worklist_;
 
