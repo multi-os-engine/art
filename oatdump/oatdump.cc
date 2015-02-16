@@ -921,10 +921,12 @@ class OatDumper {
           os << "\n\tlocals:";
         }
 
+        bool is_optimized = oat_method.GetGcMap() == nullptr;
         uint32_t offset = StackVisitor::GetVRegOffset(code_item, oat_method.GetCoreSpillMask(),
                                                       oat_method.GetFpSpillMask(),
                                                       oat_method.GetFrameSizeInBytes(), reg,
-                                                      GetInstructionSet());
+                                                      GetInstructionSet(),
+                                                      is_optimized);
         os << " v" << reg << "[sp + #" << offset << "]";
       }
 
