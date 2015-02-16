@@ -234,6 +234,7 @@ class CodeGeneratorX86 : public CodeGenerator {
   void LoadCurrentMethod(Register reg);
 
   Label* GetLabelOf(HBasicBlock* block) const {
+    block = FirstNonEmptyBlock(block);
     return block_labels_.GetRawStorage() + block->GetBlockId();
   }
 

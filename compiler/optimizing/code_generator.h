@@ -91,6 +91,8 @@ class CodeGenerator {
 
   HGraph* GetGraph() const { return graph_; }
 
+  HBasicBlock* GetNextBlockToEmit() const;
+  HBasicBlock* FirstNonEmptyBlock(HBasicBlock* block) const;
   bool GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) const;
 
   size_t GetStackSlotOfParameter(HParameterValue* parameter) const {

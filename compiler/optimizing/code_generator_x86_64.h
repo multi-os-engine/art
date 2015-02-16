@@ -232,6 +232,7 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   void LoadCurrentMethod(CpuRegister reg);
 
   Label* GetLabelOf(HBasicBlock* block) const {
+    block = FirstNonEmptyBlock(block);
     return block_labels_.GetRawStorage() + block->GetBlockId();
   }
 

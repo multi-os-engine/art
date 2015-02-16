@@ -214,6 +214,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
   void Bind(HBasicBlock* block) OVERRIDE;
 
   vixl::Label* GetLabelOf(HBasicBlock* block) const {
+    block = FirstNonEmptyBlock(block);
     return block_labels_ + block->GetBlockId();
   }
 

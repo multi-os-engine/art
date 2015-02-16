@@ -252,6 +252,7 @@ class CodeGeneratorARM : public CodeGenerator {
   void MarkGCCard(Register temp, Register card, Register object, Register value);
 
   Label* GetLabelOf(HBasicBlock* block) const {
+    block = FirstNonEmptyBlock(block);
     return block_labels_.GetRawStorage() + block->GetBlockId();
   }
 
