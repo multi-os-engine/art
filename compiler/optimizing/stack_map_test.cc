@@ -51,6 +51,14 @@ TEST(StackMapTest, Test1) {
   ASSERT_EQ(0u, code_info.GetStackMaskSize());
   ASSERT_EQ(1u, code_info.GetNumberOfStackMaps());
 
+  if (dex_register_map_encoding == kDexRegisterLocationDictionary) {
+    uint32_t number_of_dictionary_entries =
+        code_info.GetNumberOfDexRegisterDictionaryEntries();
+    ASSERT_EQ(2u, number_of_dictionary_entries);
+    DexRegisterDictionary dictionary = code_info.GetDexRegisterDictionary();
+    ASSERT_EQ(10u, dictionary.Size(number_of_dictionary_entries));
+  }
+
   StackMap stack_map = code_info.GetStackMapAt(0);
   ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForDexPc(0)));
   ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForNativePcOffset(64)));
@@ -62,13 +70,32 @@ TEST(StackMapTest, Test1) {
   ASSERT_TRUE(SameBits(stack_mask, sp_mask));
 
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
-  DexRegisterMap dex_registers =
-      code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  ASSERT_EQ(10u, dex_registers.Size(number_of_dex_registers));
-  ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
-  ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
-  ASSERT_EQ(0, dex_registers.GetValue(0));
-  ASSERT_EQ(-2, dex_registers.GetValue(1));
+  switch (dex_register_map_encoding) {
+    case kDexRegisterLocationList: {
+      DexRegisterMap dex_registers =
+          code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+      ASSERT_EQ(10u, dex_registers.Size(number_of_dex_registers));
+      ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
+      ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
+      ASSERT_EQ(0, dex_registers.GetValue(0));
+      ASSERT_EQ(-2, dex_registers.GetValue(1));
+      break;
+    }
+
+    case kDexRegisterLocationDictionary: {
+      DexRegisterDictionary dictionary = code_info.GetDexRegisterDictionary();
+      DexRegisterTable dex_registers =
+          code_info.GetDexRegisterTableOf(stack_map, number_of_dex_registers);
+      ASSERT_EQ(2u, dex_registers.Size(number_of_dex_registers));
+      DexRegisterTable::EntryIndex index0 = dex_registers.GetEntryIndex(0);
+      DexRegisterTable::EntryIndex index1 = dex_registers.GetEntryIndex(1);
+      ASSERT_EQ(DexRegisterMap::kInStack, dictionary.GetLocationKind(index0));
+      ASSERT_EQ(DexRegisterMap::kConstant, dictionary.GetLocationKind(index1));
+      ASSERT_EQ(0, dictionary.GetValue(index0));
+      ASSERT_EQ(-2, dictionary.GetValue(index1));
+      break;
+    }
+  }
 
   ASSERT_FALSE(stack_map.HasInlineInfo());
 }
@@ -104,6 +131,14 @@ TEST(StackMapTest, Test2) {
   ASSERT_EQ(1u, code_info.GetStackMaskSize());
   ASSERT_EQ(2u, code_info.GetNumberOfStackMaps());
 
+  if (dex_register_map_encoding == kDexRegisterLocationDictionary) {
+    uint32_t number_of_dictionary_entries =
+        code_info.GetNumberOfDexRegisterDictionaryEntries();
+    ASSERT_EQ(4u, number_of_dictionary_entries);
+    DexRegisterDictionary dictionary = code_info.GetDexRegisterDictionary();
+    ASSERT_EQ(20u, dictionary.Size(number_of_dictionary_entries));
+  }
+
   // First stack map.
   StackMap stack_map = code_info.GetStackMapAt(0);
   ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForDexPc(0)));
@@ -116,13 +151,32 @@ TEST(StackMapTest, Test2) {
   ASSERT_TRUE(SameBits(stack_mask, sp_mask1));
 
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
-  DexRegisterMap dex_registers =
-      code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  ASSERT_EQ(10u, dex_registers.Size(number_of_dex_registers));
-  ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
-  ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
-  ASSERT_EQ(0, dex_registers.GetValue(0));
-  ASSERT_EQ(-2, dex_registers.GetValue(1));
+  switch (dex_register_map_encoding) {
+    case kDexRegisterLocationList: {
+      DexRegisterMap dex_registers =
+          code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+      ASSERT_EQ(10u, dex_registers.Size(number_of_dex_registers));
+      ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
+      ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
+      ASSERT_EQ(0, dex_registers.GetValue(0));
+      ASSERT_EQ(-2, dex_registers.GetValue(1));
+      break;
+    }
+
+    case kDexRegisterLocationDictionary: {
+      DexRegisterDictionary dictionary = code_info.GetDexRegisterDictionary();
+      DexRegisterTable dex_registers =
+          code_info.GetDexRegisterTableOf(stack_map, number_of_dex_registers);
+      ASSERT_EQ(2u, dex_registers.Size(number_of_dex_registers));
+      DexRegisterTable::EntryIndex index0 = dex_registers.GetEntryIndex(0);
+      DexRegisterTable::EntryIndex index1 = dex_registers.GetEntryIndex(1);
+      ASSERT_EQ(DexRegisterMap::kInStack, dictionary.GetLocationKind(index0));
+      ASSERT_EQ(DexRegisterMap::kConstant, dictionary.GetLocationKind(index1));
+      ASSERT_EQ(0, dictionary.GetValue(index0));
+      ASSERT_EQ(-2, dictionary.GetValue(index1));
+      break;
+    }
+  }
 
   ASSERT_TRUE(stack_map.HasInlineInfo());
   InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map);
@@ -142,13 +196,32 @@ TEST(StackMapTest, Test2) {
   ASSERT_TRUE(SameBits(stack_mask, sp_mask2));
 
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
-  dex_registers =
-      code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  ASSERT_EQ(10u, dex_registers.Size(number_of_dex_registers));
-  ASSERT_EQ(DexRegisterMap::kInRegister, dex_registers.GetLocationKind(0));
-  ASSERT_EQ(DexRegisterMap::kInFpuRegister, dex_registers.GetLocationKind(1));
-  ASSERT_EQ(18, dex_registers.GetValue(0));
-  ASSERT_EQ(3, dex_registers.GetValue(1));
+  switch (dex_register_map_encoding) {
+    case kDexRegisterLocationList: {
+      DexRegisterMap dex_registers =
+          code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+      ASSERT_EQ(10u, dex_registers.Size(number_of_dex_registers));
+      ASSERT_EQ(DexRegisterMap::kInRegister, dex_registers.GetLocationKind(0));
+      ASSERT_EQ(DexRegisterMap::kInFpuRegister, dex_registers.GetLocationKind(1));
+      ASSERT_EQ(18, dex_registers.GetValue(0));
+      ASSERT_EQ(3, dex_registers.GetValue(1));
+      break;
+    }
+
+    case kDexRegisterLocationDictionary: {
+      DexRegisterDictionary dictionary = code_info.GetDexRegisterDictionary();
+      DexRegisterTable dex_registers =
+          code_info.GetDexRegisterTableOf(stack_map, number_of_dex_registers);
+      ASSERT_EQ(2u, dex_registers.Size(number_of_dex_registers));
+      DexRegisterTable::EntryIndex index0 = dex_registers.GetEntryIndex(0);
+      DexRegisterTable::EntryIndex index1 = dex_registers.GetEntryIndex(1);
+      ASSERT_EQ(DexRegisterMap::kInRegister, dictionary.GetLocationKind(index0));
+      ASSERT_EQ(DexRegisterMap::kInFpuRegister, dictionary.GetLocationKind(index1));
+      ASSERT_EQ(18, dictionary.GetValue(index0));
+      ASSERT_EQ(3, dictionary.GetValue(index1));
+      break;
+    }
+  }
 
   ASSERT_FALSE(stack_map.HasInlineInfo());
 }
