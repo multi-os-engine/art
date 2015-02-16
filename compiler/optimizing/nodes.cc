@@ -17,6 +17,7 @@
 #include "nodes.h"
 
 #include "ssa_builder.h"
+#include "scoped_thread_state_change.h"
 #include "utils/growable_array.h"
 #include "scoped_thread_state_change.h"
 

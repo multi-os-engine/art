@@ -35,7 +35,7 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitTypeConversion(HTypeConversion* instruction) OVERRIDE;
   void VisitNullCheck(HNullCheck* instruction) OVERRIDE;
   void VisitArrayLength(HArrayLength* instruction) OVERRIDE;
-  void VisitCheckCast(HCheckCast* instruction) OVERRIDE;
+  void VisitCheckCast(HCheckCast* check_cast) OVERRIDE;
 
   OptimizingCompilerStats* stats_;
   bool apply_type_optimizations_;

@@ -2563,6 +2563,16 @@ void InstructionCodeGeneratorARM64::VisitXor(HXor* instruction) {
   HandleBinaryOp(instruction);
 }
 
+void LocationsBuilderARM64::VisitBoundType(HBoundType* instruction) {
+  instruction->SetLocations(nullptr);
+}
+
+void InstructionCodeGeneratorARM64::VisitBoundType(HBoundType* instruction) {
+  // Nothing to do, this is driven by the code generator.
+  UNUSED(instruction);
+  LOG(FATAL) << "Unreachable";
+}
+
 #undef __
 #undef QUICK_ENTRY_POINT
 
