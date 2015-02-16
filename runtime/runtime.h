@@ -519,6 +519,10 @@ class Runtime {
     return target_sdk_version_;
   }
 
+  uint32_t GetZygoteMaxFailedBoots() const {
+    return zygote_max_failed_boots_;
+  }
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -687,6 +691,11 @@ class Runtime {
 
   // JDWP options for debugging.
   const JDWP::JdwpOptions* jdwp_options_;
+
+  // The maximum number of failed boots we allow before pruning the dalvik cache
+  // and trying again. This option is only inspected when we're running as a
+  // zygote.
+  int32_t zygote_max_failed_boots_;
 
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };

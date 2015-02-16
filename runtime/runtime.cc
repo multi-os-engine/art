@@ -174,7 +174,8 @@ Runtime::Runtime()
       implicit_so_checks_(false),
       implicit_suspend_checks_(false),
       is_native_bridge_loaded_(false),
-      jdwp_options_(nullptr) {
+      jdwp_options_(nullptr),
+      zygote_max_failed_boots_(0) {
   CheckAsmSupportOffsetsAndSizes();
 }
 
@@ -770,6 +771,8 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   if (runtime_options.GetOrDefault(Opt::Interpret)) {
     GetInstrumentation()->ForceInterpretOnly();
   }
+
+  zygote_max_failed_boots_ = runtime_options.GetOrDefault(Opt::ZygoteMaxFailedBoots);
 
   XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
   heap_ = new gc::Heap(runtime_options.GetOrDefault(Opt::MemoryInitialSize),
