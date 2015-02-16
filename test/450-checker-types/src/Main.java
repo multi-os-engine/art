@@ -50,40 +50,40 @@ class SubclassB extends Super {
 
 public class Main {
 
-  // CHECK-START: void Main.testSimpleRemove() instruction_simplifier_after_types (before)
+  // CHECK-START: void Main.testSimpleRemove() reference_type_propagation (before)
   // CHECK:         CheckCast
 
-  // CHECK-START: void Main.testSimpleRemove() instruction_simplifier_after_types (after)
+  // CHECK-START: void Main.testSimpleRemove() reference_type_propagation (after)
   // CHECK-NOT:     CheckCast
   public void testSimpleRemove() {
     Super s = new SubclassA();
     ((SubclassA)s).g();
   }
 
-  // CHECK-START: void Main.testSimpleKeep(Super) instruction_simplifier_after_types (before)
+  // CHECK-START: void Main.testSimpleKeep(Super) reference_type_propagation (before)
   // CHECK:         CheckCast
 
-  // CHECK-START: void Main.testSimpleKeep(Super) instruction_simplifier_after_types (after)
+  // CHECK-START: void Main.testSimpleKeep(Super) reference_type_propagation (after)
   // CHECK:         CheckCast
   public void testSimpleKeep(Super s) {
     ((SubclassA)s).f();
   }
 
 
-  // CHECK-START: java.lang.String Main.testClassRemove() instruction_simplifier_after_types (before)
+  // CHECK-START: java.lang.String Main.testClassRemove() reference_type_propagation (before)
   // CHECK:         CheckCast
 
-  // CHECK-START: java.lang.String Main.testClassRemove() instruction_simplifier_after_types (after)
+  // CHECK-START: java.lang.String Main.testClassRemove() reference_type_propagation (after)
   // CHECK-NOT:     CheckCast
   public String testClassRemove() {
     Object s = SubclassA.class;
     return ((Class)s).getName();
   }
 
-  // CHECK-START: void Main.testIfRemove(int) instruction_simplifier_after_types (before)
+  // CHECK-START: void Main.testIfRemove(int) reference_type_propagation (before)
   // CHECK:         CheckCast
 
-  // CHECK-START: void Main.testIfRemove(int) instruction_simplifier_after_types (after)
+  // CHECK-START: void Main.testIfRemove(int) reference_type_propagation (after)
   // CHECK-NOT:     CheckCast
   public void testIfRemove(int x) {
     Super s;
@@ -95,10 +95,10 @@ public class Main {
     ((SubclassA)s).g();
   }
 
-  // CHECK-START: void Main.testIfKeep(int) instruction_simplifier_after_types (before)
+  // CHECK-START: void Main.testIfKeep(int) reference_type_propagation (before)
   // CHECK:         CheckCast
 
-  // CHECK-START: void Main.testIfKeep(int) instruction_simplifier_after_types (after)
+  // CHECK-START: void Main.testIfKeep(int) reference_type_propagation (after)
   // CHECK:         CheckCast
   public void testIfKeep(int x) {
     Super s;
@@ -110,10 +110,10 @@ public class Main {
     ((SubclassA)s).g();
   }
 
-  // CHECK-START: void Main.testForRemove(int) instruction_simplifier_after_types (before)
+  // CHECK-START: void Main.testForRemove(int) reference_type_propagation (before)
   // CHECK:         CheckCast
 
-  // CHECK-START: void Main.testForRemove(int) instruction_simplifier_after_types (after)
+  // CHECK-START: void Main.testForRemove(int) reference_type_propagation (after)
   // CHECK-NOT:     CheckCast
   public void testForRemove(int x) {
     Super s = new SubclassA();
@@ -125,10 +125,10 @@ public class Main {
     ((SubclassA)s).g();
   }
 
-  // CHECK-START: void Main.testForKeep(int) instruction_simplifier_after_types (before)
+  // CHECK-START: void Main.testForKeep(int) reference_type_propagation (before)
   // CHECK:         CheckCast
 
-  // CHECK-START: void Main.testForKeep(int) instruction_simplifier_after_types (after)
+  // CHECK-START: void Main.testForKeep(int) reference_type_propagation (after)
   // CHECK:         CheckCast
   public void testForKeep(int x) {
     Super s = new SubclassA();
@@ -138,6 +138,37 @@ public class Main {
       }
     }
     ((SubclassC)s).g();
+  }
+
+  // CHECK-START: void Main.testInstanceOf(java.lang.Object) reference_type_propagation (before)
+  // CHECK:         CheckCast
+  // CHECK:         CheckCast
+
+  // CHECK-START: void Main.testInstanceOf(java.lang.Object) reference_type_propagation (after)
+  // CHECK-NOT:     CheckCast
+  public void testInstanceOf(Object o) {
+    if (o instanceof SubclassC) {
+      ((SubclassC)o).g();
+    }
+    if (o instanceof SubclassB) {
+      ((SubclassB)o).g();
+    }
+  }
+
+  // CHECK-START: void Main.testInstanceOfNested(java.lang.Object) reference_type_propagation (before)
+  // CHECK:         CheckCast
+  // CHECK:         CheckCast
+
+  // CHECK-START: void Main.testInstanceOfNested(java.lang.Object) reference_type_propagation (after)
+  // CHECK-NOT:     CheckCast
+  public void testInstanceOfNested(Object o) {
+    if (o instanceof SubclassC) {
+      if (o instanceof SubclassB) {
+        ((SubclassB)o).g();
+      } else {
+        ((SubclassC)o).g();
+      }
+    }
   }
 
   public static void main(String[] args) {
