@@ -77,7 +77,7 @@ class TestParallelMoveResolver : public ParallelMoveResolver {
 static HParallelMove* BuildParallelMove(ArenaAllocator* allocator,
                                         const size_t operands[][2],
                                         size_t number_of_moves) {
-  HParallelMove* moves = new (allocator) HParallelMove(allocator);
+  HParallelMove* moves = new (allocator) HParallelMove(allocator, false);
   for (size_t i = 0; i < number_of_moves; ++i) {
     moves->AddMove(
         Location::RegisterLocation(operands[i][0]),
@@ -136,7 +136,7 @@ TEST(ParallelMoveTest, ConstantLast) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   TestParallelMoveResolver resolver(&allocator);
-  HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+  HParallelMove* moves = new (&allocator) HParallelMove(&allocator, false);
   moves->AddMove(
       Location::ConstantLocation(new (&allocator) HIntConstant(0)),
       Location::RegisterLocation(0),
@@ -155,7 +155,7 @@ TEST(ParallelMoveTest, Pairs) {
 
   {
     TestParallelMoveResolver resolver(&allocator);
-    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, false);
     moves->AddMove(
         Location::RegisterLocation(2),
         Location::RegisterLocation(4),
@@ -170,7 +170,7 @@ TEST(ParallelMoveTest, Pairs) {
 
   {
     TestParallelMoveResolver resolver(&allocator);
-    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, false);
     moves->AddMove(
         Location::RegisterPairLocation(0, 1),
         Location::RegisterPairLocation(2, 3),
@@ -185,7 +185,7 @@ TEST(ParallelMoveTest, Pairs) {
 
   {
     TestParallelMoveResolver resolver(&allocator);
-    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, false);
     moves->AddMove(
         Location::RegisterPairLocation(0, 1),
         Location::RegisterPairLocation(2, 3),
@@ -199,7 +199,7 @@ TEST(ParallelMoveTest, Pairs) {
   }
   {
     TestParallelMoveResolver resolver(&allocator);
-    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, false);
     moves->AddMove(
         Location::RegisterLocation(2),
         Location::RegisterLocation(7),
@@ -217,7 +217,7 @@ TEST(ParallelMoveTest, Pairs) {
   }
   {
     TestParallelMoveResolver resolver(&allocator);
-    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, false);
     moves->AddMove(
         Location::RegisterLocation(2),
         Location::RegisterLocation(7),
@@ -235,7 +235,7 @@ TEST(ParallelMoveTest, Pairs) {
   }
   {
     TestParallelMoveResolver resolver(&allocator);
-    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, false);
     moves->AddMove(
         Location::RegisterPairLocation(0, 1),
         Location::RegisterPairLocation(2, 3),
@@ -253,7 +253,7 @@ TEST(ParallelMoveTest, Pairs) {
   }
   {
     TestParallelMoveResolver resolver(&allocator);
-    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, false);
     moves->AddMove(
         Location::RegisterPairLocation(0, 1),
         Location::RegisterPairLocation(2, 3),
@@ -267,7 +267,7 @@ TEST(ParallelMoveTest, Pairs) {
   }
   {
     TestParallelMoveResolver resolver(&allocator);
-    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, false);
     moves->AddMove(
         Location::RegisterPairLocation(2, 3),
         Location::RegisterPairLocation(0, 1),
@@ -281,4 +281,135 @@ TEST(ParallelMoveTest, Pairs) {
   }
 }
 
+TEST(ParallelMoveTest, SplitPairs) {
+  ArenaPool pool;
+  ArenaAllocator allocator(&pool);
+
+  {
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, true);
+    moves->AddMove(
+        Location::RegisterLocation(2),
+        Location::RegisterLocation(4),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(2 -> 4) (0 -> 2) (1 -> 3)", resolver.GetMessage().c_str());
+  }
+
+  {
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, true);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(2),
+        Location::RegisterLocation(4),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(2 -> 4) (0 -> 2) (1 -> 3)", resolver.GetMessage().c_str());
+  }
+
+  {
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, true);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(2),
+        Location::RegisterLocation(0),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(2 <-> 0) (1 -> 3)", resolver.GetMessage().c_str());
+  }
+  {
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, true);
+    moves->AddMove(
+        Location::RegisterLocation(2),
+        Location::RegisterLocation(7),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(7),
+        Location::RegisterLocation(1),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(1 -> 3) (7 -> 1) (2 -> 7) (0 -> 2)", resolver.GetMessage().c_str());
+  }
+  {
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, true);
+    moves->AddMove(
+        Location::RegisterLocation(2),
+        Location::RegisterLocation(7),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(7),
+        Location::RegisterLocation(1),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(1 -> 3) (7 -> 1) (2 -> 7) (0 -> 2)", resolver.GetMessage().c_str());
+  }
+  {
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, true);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(2),
+        Location::RegisterLocation(7),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(7),
+        Location::RegisterLocation(1),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(1 -> 3) (7 -> 1) (2 -> 7) (0 -> 2)", resolver.GetMessage().c_str());
+  }
+  {
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, true);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterPairLocation(2, 3),
+        Location::RegisterPairLocation(0, 1),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(2 <-> 0) (3 <-> 1)", resolver.GetMessage().c_str());
+  }
+  {
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator, true);
+    moves->AddMove(
+        Location::RegisterPairLocation(2, 3),
+        Location::RegisterPairLocation(0, 1),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(0 <-> 2) (1 <-> 3)", resolver.GetMessage().c_str());
+  }
+}
 }  // namespace art

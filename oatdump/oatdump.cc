@@ -1051,14 +1051,26 @@ class OatDumper {
        << ", number_of_stack_maps=" << number_of_stack_maps << ")\n";
     for (size_t i = 0; i < number_of_stack_maps; ++i) {
       StackMap stack_map = code_info.GetStackMapAt(i);
-      // TODO: Display stack_mask value.
       os << "    StackMap " << i
          << std::hex
          << " (dex_pc=0x" << stack_map.GetDexPc()
          << ", native_pc_offset=0x" << stack_map.GetNativePcOffset()
          << ", register_mask=0x" << stack_map.GetRegisterMask()
          << std::dec
-         << ")\n";
+         << ')';
+      // Display stack_mask value.
+      MemoryRegion mask = stack_map.GetStackMask();
+      bool first = true;
+      for (size_t j = 0; j < mask.size_in_bits(); ++j) {
+        if (mask.LoadBit(j)) {
+          if (first) {
+            first = false;
+            os << " Stack indicies: ";
+          }
+          os << j << ' ';
+        }
+      }
+      os << '\n';
       if (stack_map.HasDexRegisterMap()) {
         DexRegisterMap dex_register_map =
             code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);

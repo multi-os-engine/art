@@ -216,11 +216,17 @@ class Location : public ValueObject {
         : Location::FpuRegisterLocation(low());
   }
 
+  // Can also handle constants.
+  Location ToLow(ArenaAllocator* arena) const;
+
   Location ToHigh() const {
     return IsRegisterPair()
         ? Location::RegisterLocation(high())
         : Location::FpuRegisterLocation(high());
   }
+
+  // Can also handle constants.
+  Location ToHigh(ArenaAllocator* arena) const;
 
   static uintptr_t EncodeStackIndex(intptr_t stack_index) {
     DCHECK(-kStackIndexBias <= stack_index);

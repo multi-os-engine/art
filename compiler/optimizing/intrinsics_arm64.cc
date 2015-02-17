@@ -95,7 +95,7 @@ static void MoveArguments(HInvoke* invoke, ArenaAllocator* arena, CodeGeneratorA
 
   // We're moving potentially two or more locations to locations that could overlap, so we need
   // a parallel move resolver.
-  HParallelMove parallel_move(arena);
+  HParallelMove parallel_move(arena, false);
 
   for (size_t i = 0; i < invoke->InputCount(); i++) {
     HInstruction* input = invoke->InputAt(i);
