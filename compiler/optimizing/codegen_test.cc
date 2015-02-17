@@ -145,7 +145,7 @@ static void RunCodeOptimized(CodeGenerator* codegen,
   SsaLivenessAnalysis liveness(*graph, codegen);
   liveness.Analyze();
 
-  RegisterAllocator register_allocator(graph->GetArena(), codegen, liveness);
+  RegisterAllocator register_allocator(graph, graph->GetArena(), codegen, liveness);
   register_allocator.AllocateRegisters();
   hook_before_codegen(graph);
 
@@ -499,7 +499,7 @@ TEST(CodegenTest, NonMaterializedCondition) {
 
   auto hook_before_codegen = [](HGraph* graph_in) {
     HBasicBlock* block = graph_in->GetEntryBlock()->GetSuccessors().Get(0);
-    HParallelMove* move = new (graph_in->GetArena()) HParallelMove(graph_in->GetArena());
+    HParallelMove* move = new (graph_in->GetArena()) HParallelMove(graph_in->GetArena(), false);
     block->InsertInstructionBefore(move, block->GetLastInstruction());
   };
 
@@ -587,7 +587,7 @@ TEST(CodegenTest, MaterializedCondition1) {
 
     auto hook_before_codegen = [](HGraph* graph_in) {
       HBasicBlock* block = graph_in->GetEntryBlock()->GetSuccessors().Get(0);
-      HParallelMove* move = new (graph_in->GetArena()) HParallelMove(graph_in->GetArena());
+      HParallelMove* move = new (graph_in->GetArena()) HParallelMove(graph_in->GetArena(), false);
       block->InsertInstructionBefore(move, block->GetLastInstruction());
     };
 
@@ -657,7 +657,7 @@ TEST(CodegenTest, MaterializedCondition2) {
 
     auto hook_before_codegen = [](HGraph* graph_in) {
       HBasicBlock* block = graph_in->GetEntryBlock()->GetSuccessors().Get(0);
-      HParallelMove* move = new (graph_in->GetArena()) HParallelMove(graph_in->GetArena());
+      HParallelMove* move = new (graph_in->GetArena()) HParallelMove(graph_in->GetArena(), false);
       block->InsertInstructionBefore(move, block->GetLastInstruction());
     };
 

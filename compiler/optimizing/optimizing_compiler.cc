@@ -273,7 +273,18 @@ static bool IsInstructionSetSupported(InstructionSet instruction_set) {
       || instruction_set == kX86_64;
 }
 
+static int count;
+static int max = -1;
 static bool CanOptimize(const DexFile::CodeItem& code_item) {
+  if (max == -1) {
+    char *p = getenv("OMAX");
+    max = p ? atoi(p) : 100000000;
+  }
+
+  if (++count > max) {
+    return false;
+  }
+
   // TODO: We currently cannot optimize methods with try/catch.
   return code_item.tries_size_ == 0;
 }
@@ -366,7 +377,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   }
   {
     PassInfo pass_info(kRegisterAllocatorPassName, pass_info_printer);
-    RegisterAllocator(graph->GetArena(), codegen, liveness).AllocateRegisters();
+    RegisterAllocator(graph, graph->GetArena(), codegen, liveness).AllocateRegisters();
   }
 
   CodeVectorAllocator allocator;
