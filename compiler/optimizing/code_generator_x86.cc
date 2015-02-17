@@ -37,6 +37,7 @@ static constexpr int kCurrentMethodStackOffset = 0;
 static constexpr Register kRuntimeParameterCoreRegisters[] = { EAX, ECX, EDX, EBX };
 static constexpr size_t kRuntimeParameterCoreRegistersLength =
     arraysize(kRuntimeParameterCoreRegisters);
+static constexpr Register kCoreCalleeSaves[] = { EBP, ESI, EDI };
 static constexpr XmmRegister kRuntimeParameterFpuRegisters[] = { XMM0, XMM1, XMM2, XMM3 };
 static constexpr size_t kRuntimeParameterFpuRegistersLength =
     arraysize(kRuntimeParameterFpuRegisters);
@@ -371,8 +372,15 @@ size_t CodeGeneratorX86::RestoreFloatingPointRegister(size_t stack_index, uint32
 }
 
 CodeGeneratorX86::CodeGeneratorX86(HGraph* graph, const CompilerOptions& compiler_options)
-    : CodeGenerator(graph, kNumberOfCpuRegisters, kNumberOfXmmRegisters,
-                    kNumberOfRegisterPairs, (1 << kFakeReturnRegister), 0, compiler_options),
+    : CodeGenerator(graph,
+                    kNumberOfCpuRegisters,
+                    kNumberOfXmmRegisters,
+                    kNumberOfRegisterPairs,
+                    ComputeRegisterMask(reinterpret_cast<const int*>(kCoreCalleeSaves),
+                                        arraysize(kCoreCalleeSaves))
+                        | (1 << kFakeReturnRegister),
+                        0,
+                        compiler_options),
       block_labels_(graph->GetArena(), 0),
       location_builder_(graph, this),
       instruction_visitor_(graph, this),
@@ -427,18 +435,19 @@ Location CodeGeneratorX86::AllocateFreeRegister(Primitive::Type type) const {
   return Location();
 }
 
-void CodeGeneratorX86::SetupBlockedRegisters(bool is_baseline ATTRIBUTE_UNUSED) const {
+void CodeGeneratorX86::SetupBlockedRegisters(bool is_baseline) const {
   // Don't allocate the dalvik style register pair passing.
   blocked_register_pairs_[ECX_EDX] = true;
 
   // Stack register is always reserved.
   blocked_core_registers_[ESP] = true;
 
-  // TODO: We currently don't use Quick's callee saved registers.
   DCHECK(kFollowsQuickABI);
-  blocked_core_registers_[EBP] = true;
-  blocked_core_registers_[ESI] = true;
-  blocked_core_registers_[EDI] = true;
+  if (is_baseline) {
+    blocked_core_registers_[EBP] = true;
+    blocked_core_registers_[ESI] = true;
+    blocked_core_registers_[EDI] = true;
+  }
 
   UpdateBlockedPairRegisters();
 }
@@ -470,15 +479,33 @@ void CodeGeneratorX86::GenerateFrameEntry() {
     RecordPcInfo(nullptr, 0);
   }
 
-  if (!HasEmptyFrame()) {
-    __ subl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
-    __ movl(Address(ESP, kCurrentMethodStackOffset), EAX);
+  if (HasEmptyFrame()) {
+    return;
   }
+
+  for (int i = arraysize(kCoreCalleeSaves) - 1; i >= 0; --i) {
+    Register reg = kCoreCalleeSaves[i];
+    if (allocated_registers_.ContainsCoreRegister(reg)) {
+      __ pushl(reg);
+    }
+  }
+
+  __ subl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+  __ movl(Address(ESP, kCurrentMethodStackOffset), EAX);
 }
 
 void CodeGeneratorX86::GenerateFrameExit() {
-  if (!HasEmptyFrame()) {
-    __ addl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+  if (HasEmptyFrame()) {
+    return;
+  }
+
+  __ addl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+
+  for (size_t i = 0; i < arraysize(kCoreCalleeSaves); ++i) {
+    Register reg = kCoreCalleeSaves[i];
+    if (allocated_registers_.ContainsCoreRegister(reg)) {
+      __ popl(reg);
+    }
   }
 }
 
@@ -649,8 +676,22 @@ void CodeGeneratorX86::Move64(Location destination, Location source) {
               source.AsRegisterPairHigh<Register>());
     } else if (source.IsFpuRegister()) {
       __ movsd(Address(ESP, destination.GetStackIndex()), source.AsFpuRegister<XmmRegister>());
+    } else if (source.IsConstant()) {
+      HConstant* constant = source.GetConstant();
+      int64_t val;
+      if (constant->IsLongConstant()) {
+        val = constant->AsLongConstant()->GetValue();
+      } else {
+        DCHECK(constant->IsDoubleConstant());
+        val = bit_cast<double, int64_t>(constant->AsDoubleConstant()->GetValue());
+      }
+      int32_t val_low = Low32Bits(val);
+      int32_t val_high = High32Bits(val);
+      __ movl(Address(ESP, destination.GetStackIndex()), Immediate(val_low));
+      __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)),
+              Immediate(val_high));
     } else {
-      DCHECK(source.IsDoubleStackSlot());
+      DCHECK(source.IsDoubleStackSlot()) << source;
       EmitParallelMoves(
           Location::StackSlot(source.GetStackIndex()),
           Location::StackSlot(destination.GetStackIndex()),
@@ -907,7 +948,8 @@ void LocationsBuilderX86::VisitCondition(HCondition* comp) {
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::Any());
   if (comp->NeedsMaterialization()) {
-    locations->SetOut(Location::RequiresRegister());
+    // We need a byte register.  Needs to be EDX for baseline.
+    locations->SetOut(Location::RegisterLocation(EDX));
   }
 }
 
@@ -1222,7 +1264,7 @@ void InstructionCodeGeneratorX86::VisitInvokeInterface(HInvokeInterface* invoke)
 
   // Set the hidden argument.
   __ movl(temp, Immediate(invoke->GetDexMethodIndex()));
-  __ movd(invoke->GetLocations()->GetTemp(1).AsFpuRegister<XmmRegister>(), temp);
+  __ movd(locations->GetTemp(1).AsFpuRegister<XmmRegister>(), temp);
 
   // temp = object->GetClass();
   if (receiver.IsStackSlot()) {
@@ -1347,6 +1389,13 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
           // Processing a Dex `int-to-byte' instruction.
           locations->SetInAt(0, Location::Any());
           locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+          if (!conversion->InputAt(0)->IsConstant()) {
+            // Reserve ECX in case we end up in a non byte-addressable register.
+            // Using: Location::ByteRegisterOrConstant(ECX, conversion->InputAt(0)))
+            // causes a RA validation failure while building core-optimizing.oat
+            // because the ECX range conflicts with an ECX parameter to an invoke.
+            locations->AddTemp(Location::RegisterLocation(ECX));
+          }
           break;
 
         default:
@@ -1406,8 +1455,15 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
         case Primitive::kPrimInt:
         case Primitive::kPrimChar:
           // Processing a Dex `int-to-long' instruction.
+#if 0
+          // This causes problems with LSRA
           locations->SetInAt(0, Location::RegisterLocation(EAX));
           locations->SetOut(Location::RegisterPairLocation(EAX, EDX));
+#else
+          // TODO: Replace this with above code.
+          locations->SetInAt(0, Location::Any());
+          locations->SetOut(Location::RequiresRegister());
+#endif
           break;
 
         case Primitive::kPrimFloat:
@@ -1527,7 +1583,15 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
         case Primitive::kPrimChar:
           // Processing a Dex `int-to-byte' instruction.
           if (in.IsRegister()) {
-            __ movsxb(out.AsRegister<Register>(), in.AsRegister<ByteRegister>());
+            // Is the register byte addressable?
+            if (in.AsRegister<Register>() <= EDX) {
+              __ movsxb(out.AsRegister<Register>(), in.AsRegister<ByteRegister>());
+            } else {
+              // Use the ECX temporary we reserved.
+              Location temp = locations->GetTemp(0);
+              __ movl(temp.AsRegister<Register>(), in.AsRegister<Register>());
+              __ movsxb(out.AsRegister<Register>(), temp.AsRegister<ByteRegister>());
+            }
           } else if (in.IsStackSlot()) {
             __ movsxb(out.AsRegister<Register>(), Address(ESP, in.GetStackIndex()));
           } else {
@@ -1643,12 +1707,33 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
         case Primitive::kPrimByte:
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
-        case Primitive::kPrimChar:
+        case Primitive::kPrimChar: {
           // Processing a Dex `int-to-long' instruction.
+#if 0
           DCHECK_EQ(out.AsRegisterPairLow<Register>(), EAX);
           DCHECK_EQ(out.AsRegisterPairHigh<Register>(), EDX);
           DCHECK_EQ(in.AsRegister<Register>(), EAX);
           __ cdq();
+#else
+          // TODO: Replace this with above code.
+          Register low = out.AsRegisterPairLow<Register>();
+          Register high = out.AsRegisterPairHigh<Register>();
+          if (in.IsRegister()) {
+            __ movl(high, in.AsRegister<Register>());
+            __ movl(low, in.AsRegister<Register>());
+            __ sarl(high, Immediate(31));
+          } else if (in.IsStackSlot()) {
+            __ movl(low, Address(ESP, in.GetStackIndex()));
+            __ movl(high, low);
+            __ sarl(high, Immediate(31));
+          } else {
+            DCHECK(in.GetConstant()->IsIntConstant());
+            int32_t value = in.GetConstant()->AsIntConstant()->GetValue();
+            __ movl(low, Immediate(value));
+            __ movl(high, Immediate(value < 0 ? -1 : 0));
+          }
+#endif
+          }
           break;
 
         case Primitive::kPrimFloat:
@@ -1865,6 +1950,13 @@ void InstructionCodeGeneratorX86::VisitAdd(HAdd* add) {
       if (second.IsRegisterPair()) {
         __ addl(first.AsRegisterPairLow<Register>(), second.AsRegisterPairLow<Register>());
         __ adcl(first.AsRegisterPairHigh<Register>(), second.AsRegisterPairHigh<Register>());
+      } else if (second.IsConstant()) {
+        DCHECK(second.GetConstant()->IsLongConstant());
+        int64_t val = second.GetConstant()->AsLongConstant()->GetValue();
+        int32_t val_low = Low32Bits(val);
+        int32_t val_high = High32Bits(val);
+        __ addl(first.AsRegisterPairLow<Register>(), Immediate(val_low));
+        __ adcl(first.AsRegisterPairHigh<Register>(), Immediate(val_high));
       } else {
         __ addl(first.AsRegisterPairLow<Register>(), Address(ESP, second.GetStackIndex()));
         __ adcl(first.AsRegisterPairHigh<Register>(),
@@ -1938,6 +2030,13 @@ void InstructionCodeGeneratorX86::VisitSub(HSub* sub) {
       if (second.IsRegisterPair()) {
         __ subl(first.AsRegisterPairLow<Register>(), second.AsRegisterPairLow<Register>());
         __ sbbl(first.AsRegisterPairHigh<Register>(), second.AsRegisterPairHigh<Register>());
+      } else if (second.IsConstant()) {
+        DCHECK(second.GetConstant()->IsLongConstant());
+        int64_t val = second.GetConstant()->AsLongConstant()->GetValue();
+        int32_t val_low = Low32Bits(val);
+        int32_t val_high = High32Bits(val);
+        __ subl(first.AsRegisterPairLow<Register>(), Immediate(val_low));
+        __ sbbl(first.AsRegisterPairHigh<Register>(), Immediate(val_high));
       } else {
         __ subl(first.AsRegisterPairLow<Register>(), Address(ESP, second.GetStackIndex()));
         __ sbbl(first.AsRegisterPairHigh<Register>(),
@@ -2019,39 +2118,98 @@ void InstructionCodeGeneratorX86::VisitMul(HMul* mul) {
     }
 
     case Primitive::kPrimLong: {
-      DCHECK(second.IsDoubleStackSlot());
-
       Register in1_hi = first.AsRegisterPairHigh<Register>();
       Register in1_lo = first.AsRegisterPairLow<Register>();
-      Address in2_hi(ESP, second.GetHighStackIndex(kX86WordSize));
-      Address in2_lo(ESP, second.GetStackIndex());
       Register eax = locations->GetTemp(0).AsRegister<Register>();
       Register edx = locations->GetTemp(1).AsRegister<Register>();
 
       DCHECK_EQ(EAX, eax);
       DCHECK_EQ(EDX, edx);
 
-      // input: in1 - 64 bits, in2 - 64 bits
-      // output: in1
-      // formula: in1.hi : in1.lo = (in1.lo * in2.hi + in1.hi * in2.lo)* 2^32 + in1.lo * in2.lo
-      // parts: in1.hi = in1.lo * in2.hi + in1.hi * in2.lo + (in1.lo * in2.lo)[63:32]
-      // parts: in1.lo = (in1.lo * in2.lo)[31:0]
+      if (second.IsConstant()) {
+        DCHECK(second.GetConstant()->IsLongConstant());
 
-      __ movl(eax, in2_hi);
-      // eax <- in1.lo * in2.hi
-      __ imull(eax, in1_lo);
-      // in1.hi <- in1.hi * in2.lo
-      __ imull(in1_hi, in2_lo);
-      // in1.hi <- in1.lo * in2.hi + in1.hi * in2.lo
-      __ addl(in1_hi, eax);
-      // move in1_lo to eax to prepare for double precision
-      __ movl(eax, in1_lo);
-      // edx:eax <- in1.lo * in2.lo
-      __ mull(in2_lo);
-      // in1.hi <- in2.hi * in1.lo +  in2.lo * in1.hi + (in1.lo * in2.lo)[63:32]
-      __ addl(in1_hi, edx);
-      // in1.lo <- (in1.lo * in2.lo)[31:0];
-      __ movl(in1_lo, eax);
+        int64_t value = second.GetConstant()->AsLongConstant()->GetValue();
+        int32_t low_value = Low32Bits(value);
+        int32_t high_value = High32Bits(value);
+        Immediate low(low_value);
+        Immediate high(high_value);
+
+        // Generate basic code for now.
+        // TODO: better constant multiplication.
+
+        // input: in1 - 64 bits, in2 - constant value.
+        // output: in1
+        // formula: in1.hi : in1.lo = (in1.lo * in2.hi + in1.hi * in2.lo)* 2^32 + in1.lo * in2.lo
+        // parts: in1.hi = in1.lo * in2.hi + in1.hi * in2.lo + (in1.lo * in2.lo)[63:32]
+        // parts: in1.lo = (in1.lo * in2.lo)[31:0]
+
+        __ movl(eax, high);
+        // eax <- in1.lo * in2.hi
+        __ imull(eax, in1_lo);
+        // in1.hi <- in1.hi * in2.lo
+        __ imull(in1_hi, low);
+        // in1.hi <- in1.lo * in2.hi + in1.hi * in2.lo
+        __ addl(in1_hi, eax);
+        // move in2_lo to eax to prepare for double precision
+        __ movl(eax, low);
+        // edx:eax <- in1.lo * in2.lo
+        __ mull(in1_lo);
+        // in1.hi <- in2.hi * in1.lo +  in2.lo * in1.hi + (in1.lo * in2.lo)[63:32]
+        __ addl(in1_hi, edx);
+        // in1.lo <- (in1.lo * in2.lo)[31:0];
+        __ movl(in1_lo, eax);
+      } else if (second.IsRegisterPair()) {
+        Register in2_hi = second.AsRegisterPairHigh<Register>();
+        Register in2_lo = second.AsRegisterPairLow<Register>();
+
+        // input: in1 - 64 bits, in2 - 64 bits
+        // output: in1
+        // formula: in1.hi : in1.lo = (in1.lo * in2.hi + in1.hi * in2.lo)* 2^32 + in1.lo * in2.lo
+        // parts: in1.hi = in1.lo * in2.hi + in1.hi * in2.lo + (in1.lo * in2.lo)[63:32]
+        // parts: in1.lo = (in1.lo * in2.lo)[31:0]
+
+        __ movl(eax, in2_hi);
+        // eax <- in1.lo * in2.hi
+        __ imull(eax, in1_lo);
+        // in1.hi <- in1.hi * in2.lo
+        __ imull(in1_hi, in2_lo);
+        // in1.hi <- in1.lo * in2.hi + in1.hi * in2.lo
+        __ addl(in1_hi, eax);
+        // move in1_lo to eax to prepare for double precision
+        __ movl(eax, in1_lo);
+        // edx:eax <- in1.lo * in2.lo
+        __ mull(in2_lo);
+        // in1.hi <- in2.hi * in1.lo +  in2.lo * in1.hi + (in1.lo * in2.lo)[63:32]
+        __ addl(in1_hi, edx);
+        // in1.lo <- (in1.lo * in2.lo)[31:0];
+        __ movl(in1_lo, eax);
+      } else {
+        Address in2_hi(ESP, second.GetHighStackIndex(kX86WordSize));
+        Address in2_lo(ESP, second.GetStackIndex());
+
+        // input: in1 - 64 bits, in2 - 64 bits
+        // output: in1
+        // formula: in1.hi : in1.lo = (in1.lo * in2.hi + in1.hi * in2.lo)* 2^32 + in1.lo * in2.lo
+        // parts: in1.hi = in1.lo * in2.hi + in1.hi * in2.lo + (in1.lo * in2.lo)[63:32]
+        // parts: in1.lo = (in1.lo * in2.lo)[31:0]
+
+        __ movl(eax, in2_hi);
+        // eax <- in1.lo * in2.hi
+        __ imull(eax, in1_lo);
+        // in1.hi <- in1.hi * in2.lo
+        __ imull(in1_hi, in2_lo);
+        // in1.hi <- in1.lo * in2.hi + in1.hi * in2.lo
+        __ addl(in1_hi, eax);
+        // move in1_lo to eax to prepare for double precision
+        __ movl(eax, in1_lo);
+        // edx:eax <- in1.lo * in2.lo
+        __ mull(in2_lo);
+        // in1.hi <- in2.hi * in1.lo +  in2.lo * in1.hi + (in1.lo * in2.lo)[63:32]
+        __ addl(in1_hi, edx);
+        // in1.lo <- (in1.lo * in2.lo)[31:0];
+        __ movl(in1_lo, eax);
+      }
 
       break;
     }
@@ -2200,7 +2358,6 @@ void InstructionCodeGeneratorX86::GenerateDivRemIntegral(HBinaryOperation* instr
           ? instruction->AsDiv()->GetDexPc()
           : instruction->AsRem()->GetDexPc();
       codegen_->RecordPcInfo(instruction, dex_pc);
-
       break;
     }
 
@@ -2219,7 +2376,7 @@ void LocationsBuilderX86::VisitDiv(HDiv* div) {
     case Primitive::kPrimInt: {
       locations->SetInAt(0, Location::RegisterLocation(EAX));
       locations->SetInAt(1, Location::RequiresRegister());
-      locations->SetOut(Location::SameAsFirstInput());
+      locations->SetOut(Location::RegisterLocation(EAX));
       // Intel uses edx:eax as the dividend.
       locations->AddTemp(Location::RegisterLocation(EDX));
       break;
@@ -2642,23 +2799,48 @@ void InstructionCodeGeneratorX86::VisitCompare(HCompare* compare) {
   Location left = locations->InAt(0);
   Location right = locations->InAt(1);
 
+  int32_t val_low = 0;
+  int32_t val_high = 0;
+  bool right_is_const = false;
+
+  if (right.IsConstant()) {
+    DCHECK(right.GetConstant()->IsLongConstant());
+    right_is_const = true;
+    int64_t val = right.GetConstant()->AsLongConstant()->GetValue();
+    val_low = Low32Bits(val);
+    val_high = High32Bits(val);
+  }
   Label less, greater, done;
   switch (compare->InputAt(0)->GetType()) {
     case Primitive::kPrimLong: {
+      Register left_low = left.AsRegisterPairLow<Register>();
+      Register left_high = left.AsRegisterPairHigh<Register>();
+
       if (right.IsRegisterPair()) {
-        __ cmpl(left.AsRegisterPairHigh<Register>(), right.AsRegisterPairHigh<Register>());
+        __ cmpl(left_high, right.AsRegisterPairHigh<Register>());
+      } else if (right_is_const) {
+        if (val_high == 0) {
+          __ testl(left_high, left_high);
+        } else {
+          __ cmpl(left_high, Immediate(val_high));
+        }
       } else {
         DCHECK(right.IsDoubleStackSlot());
-        __ cmpl(left.AsRegisterPairHigh<Register>(),
-                Address(ESP, right.GetHighStackIndex(kX86WordSize)));
+        __ cmpl(left_high, Address(ESP, right.GetHighStackIndex(kX86WordSize)));
       }
       __ j(kLess, &less);  // Signed compare.
       __ j(kGreater, &greater);  // Signed compare.
       if (right.IsRegisterPair()) {
-        __ cmpl(left.AsRegisterPairLow<Register>(), right.AsRegisterPairLow<Register>());
+        __ cmpl(left_low, right.AsRegisterPairLow<Register>());
+      } else if (right_is_const) {
+        if (val_low == 0) {
+          __ testl(left_low, left_low);
+        } else {
+          __ cmpl(left_low, Immediate(val_low));
+        }
       } else {
         DCHECK(right.IsDoubleStackSlot());
-        __ cmpl(left.AsRegisterPairLow<Register>(), Address(ESP, right.GetStackIndex()));
+        __ cmpl(left_low, Address(ESP, right.GetStackIndex()));
       }
       break;
     }
@@ -2800,9 +2982,19 @@ void InstructionCodeGeneratorX86::HandleFieldGet(HInstruction* instruction,
         __ psrlq(temp, Immediate(32));
         __ movd(out.AsRegisterPairHigh<Register>(), temp);
       } else {
-        __ movl(out.AsRegisterPairLow<Register>(), Address(base, offset));
-        codegen_->MaybeRecordImplicitNullCheck(instruction);
-        __ movl(out.AsRegisterPairHigh<Register>(), Address(base, kX86WordSize + offset));
+        Register low = out.AsRegisterPairLow<Register>();
+        Register high = out.AsRegisterPairHigh<Register>();
+        if (low == base) {
+          // Have to move high part first, so as not to overwrite the base.
+          DCHECK_NE(high, base);
+          __ movl(high, Address(base, kX86WordSize + offset));
+          codegen_->MaybeRecordImplicitNullCheck(instruction);
+          __ movl(low, Address(base, offset));
+        } else {
+          __ movl(low, Address(base, offset));
+          codegen_->MaybeRecordImplicitNullCheck(instruction);
+          __ movl(high, Address(base, kX86WordSize + offset));
+        }
       }
       break;
     }
@@ -3111,17 +3303,62 @@ void InstructionCodeGeneratorX86::VisitArrayGet(HArrayGet* instruction) {
     case Primitive::kPrimLong: {
       uint32_t data_offset = mirror::Array::DataOffset(sizeof(int64_t)).Uint32Value();
       Location out = locations->Out();
+      Register low = out.AsRegisterPairLow<Register>();
+      Register high = out.AsRegisterPairHigh<Register>();
       if (index.IsConstant()) {
         size_t offset = (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_8) + data_offset;
-        __ movl(out.AsRegisterPairLow<Register>(), Address(obj, offset));
-        codegen_->MaybeRecordImplicitNullCheck(instruction);
-        __ movl(out.AsRegisterPairHigh<Register>(), Address(obj, offset + kX86WordSize));
+        if (low == obj) {
+          // Have to move high part first, so as not to overwrite obj.
+          DCHECK_NE(high, obj);
+          __ movl(high, Address(obj, kX86WordSize + offset));
+          codegen_->MaybeRecordImplicitNullCheck(instruction);
+          __ movl(low, Address(obj, offset));
+        } else {
+          __ movl(low, Address(obj, offset));
+          codegen_->MaybeRecordImplicitNullCheck(instruction);
+          __ movl(high, Address(obj, kX86WordSize + offset));
+        }
       } else {
-        __ movl(out.AsRegisterPairLow<Register>(),
-                Address(obj, index.AsRegister<Register>(), TIMES_8, data_offset));
-        codegen_->MaybeRecordImplicitNullCheck(instruction);
-        __ movl(out.AsRegisterPairHigh<Register>(),
-                Address(obj, index.AsRegister<Register>(), TIMES_8, data_offset + kX86WordSize));
+        Register index_reg = index.AsRegister<Register>();
+        if (low == obj) {
+          if (high == index_reg) {
+            // We have to ensure we don't clobber either one.
+            DCHECK_NE(low, high);
+            // Compute the scaled address, freeing up the index register.
+            __ leal(high, Address(obj, index_reg, TIMES_8, data_offset));
+            // Now move safely.
+            __ movl(low, Address(high,  0));
+            codegen_->MaybeRecordImplicitNullCheck(instruction);
+            __ movl(high, Address(high, kX86WordSize));
+          } else {
+            // Have to move high part first, so as not to overwrite obj.
+            DCHECK_NE(high, obj);
+            __ movl(high, Address(obj, index_reg, TIMES_8, data_offset + kX86WordSize));
+            codegen_->MaybeRecordImplicitNullCheck(instruction);
+            __ movl(low, Address(obj, index_reg, TIMES_8, data_offset));
+          }
+        } else if (low == index_reg) {
+          // Not safe to load into low first.
+          if (high == obj) {
+            // We have to ensure we don't clobber either one.
+            DCHECK_NE(low, high);
+            // Compute the scaled address, freeing up the index register.
+            __ leal(low, Address(obj, index_reg, TIMES_8, data_offset));
+            // Now move safely.
+            __ movl(high, Address(low, kX86WordSize));
+            codegen_->MaybeRecordImplicitNullCheck(instruction);
+            __ movl(low, Address(low,  0));
+          } else {
+            // Have to move high part first, so as not to overwrite index.
+            __ movl(high, Address(obj, index_reg, TIMES_8, data_offset + kX86WordSize));
+            codegen_->MaybeRecordImplicitNullCheck(instruction);
+            __ movl(low, Address(obj, index_reg, TIMES_8, data_offset));
+          }
+        } else {
+          __ movl(low, Address(obj,  index_reg, TIMES_8, data_offset));
+          codegen_->MaybeRecordImplicitNullCheck(instruction);
+          __ movl(high, Address(obj, index_reg, TIMES_8, data_offset + kX86WordSize));
+        }
       }
       break;
     }
@@ -3536,8 +3773,7 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
         DCHECK(destination.IsStackSlot()) << destination;
         __ movl(Address(ESP, destination.GetStackIndex()), Immediate(value));
       }
-    } else {
-      DCHECK(constant->IsFloatConstant());
+    } else if (constant->IsFloatConstant()) {
       float value = constant->AsFloatConstant()->GetValue();
       Immediate imm(bit_cast<float, int32_t>(value));
       if (destination.IsFpuRegister()) {
@@ -3549,6 +3785,39 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
       } else {
         DCHECK(destination.IsStackSlot()) << destination;
         __ movl(Address(ESP, destination.GetStackIndex()), imm);
+      }
+    } else if (constant->IsLongConstant()) {
+      int64_t value = constant->AsLongConstant()->GetValue();
+      int32_t low_value = Low32Bits(value);
+      int32_t high_value = High32Bits(value);
+      Immediate low(low_value);
+      Immediate high(high_value);
+      DCHECK(destination.IsDoubleStackSlot()) << destination;
+      __ movl(Address(ESP, destination.GetStackIndex()), low);
+      __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)), high);
+    } else {
+      DCHECK(constant->IsDoubleConstant());
+      double dbl_value = constant->AsDoubleConstant()->GetValue();
+      int64_t value = bit_cast<double, int64_t>(dbl_value);
+      int32_t low_value = Low32Bits(value);
+      int32_t high_value = High32Bits(value);
+      Immediate low(low_value);
+      Immediate high(high_value);
+      if (destination.IsFpuRegister()) {
+        XmmRegister dest = destination.AsFpuRegister<XmmRegister>();
+        if (value == 0) {
+          // Easy handling of 0.0.
+          __ xorpd(dest, dest);
+        } else {
+          __ pushl(high);
+          __ pushl(low);
+          __ movsd(dest, Address(ESP, 0));
+          __ addl(ESP, Immediate(8));
+        }
+      } else {
+        DCHECK(destination.IsDoubleStackSlot()) << destination;
+        __ movl(Address(ESP, destination.GetStackIndex()), low);
+        __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)), high);
       }
     }
   } else {
@@ -3615,8 +3884,35 @@ void ParallelMoveResolverX86::EmitSwap(size_t index) {
     __ xorpd(destination.AsFpuRegister<XmmRegister>(), source.AsFpuRegister<XmmRegister>());
   } else if (source.IsFpuRegister() && destination.IsStackSlot()) {
     Exchange32(source.AsFpuRegister<XmmRegister>(), destination.GetStackIndex());
+  } else if (source.IsFpuRegister() && destination.IsDoubleStackSlot()) {
+    // Take advantage of the 16 bytes in the XMM register.
+    XmmRegister reg = source.AsFpuRegister<XmmRegister>();
+    Address stack(ESP, destination.GetStackIndex());
+    // Load the double into the high doubleword.
+    __ movhpd(reg, stack);
+
+    // Store the low double into the destination.
+    __ movsd(reg, stack);
+
+    // Move the high double to the low double.
+    __ psrldq(reg, Immediate(8));
   } else if (destination.IsFpuRegister() && source.IsStackSlot()) {
     Exchange32(destination.AsFpuRegister<XmmRegister>(), source.GetStackIndex());
+  } else if (destination.IsFpuRegister() && source.IsDoubleStackSlot()) {
+    // Take advantage of the 16 bytes in the XMM register.
+    XmmRegister reg = destination.AsFpuRegister<XmmRegister>();
+    Address stack(ESP, source.GetStackIndex());
+    // Load the double into the high doubleword.
+    __ movhpd(reg, stack);
+
+    // Store the low double into the destination.
+    __ movsd(reg, stack);
+
+    // Move the high double to the low double.
+    __ psrldq(reg, Immediate(8));
+  } else if (destination.IsDoubleStackSlot() && source.IsDoubleStackSlot()) {
+    Exchange(destination.GetStackIndex(), source.GetStackIndex());
+    Exchange(destination.GetHighStackIndex(kX86WordSize), source.GetHighStackIndex(kX86WordSize));
   } else {
     LOG(FATAL) << "Unimplemented: source: " << source << ", destination: " << destination;
   }
@@ -3918,7 +4214,44 @@ void InstructionCodeGeneratorX86::HandleBitwiseOperation(HBinaryOperation* instr
         __ xorl(first.AsRegisterPairLow<Register>(), second.AsRegisterPairLow<Register>());
         __ xorl(first.AsRegisterPairHigh<Register>(), second.AsRegisterPairHigh<Register>());
       }
+    } else if (second.IsConstant()) {
+      DCHECK(second.GetConstant()->IsLongConstant());
+      int64_t value = second.GetConstant()->AsLongConstant()->GetValue();
+      int32_t low_value = Low32Bits(value);
+      int32_t high_value = High32Bits(value);
+      Immediate low(low_value);
+      Immediate high(high_value);
+      Register first_low = first.AsRegisterPairLow<Register>();
+      Register first_high = first.AsRegisterPairHigh<Register>();
+      if (instruction->IsAnd()) {
+        if (low_value == 0) {
+          __ xorl(first_low, first_low);
+        } else if (low_value != -1) {
+          __ andl(first_low, low);
+        }
+        if (high_value == 0) {
+          __ xorl(first_high, first_high);
+        } else if (high_value != -1) {
+          __ andl(first_high, high);
+        }
+      } else if (instruction->IsOr()) {
+        if (low_value != 0) {
+          __ orl(first_low, low);
+        }
+        if (high_value != 0) {
+          __ orl(first_high, high);
+        }
+      } else {
+        DCHECK(instruction->IsXor());
+        if (low_value != -1) {
+          __ xorl(first_low, low);
+        }
+        if (high_value != -1) {
+          __ xorl(first_high, high);
+        }
+      }
     } else {
+      DCHECK(second.IsDoubleStackSlot()) << second;
       if (instruction->IsAnd()) {
         __ andl(first.AsRegisterPairLow<Register>(), Address(ESP, second.GetStackIndex()));
         __ andl(first.AsRegisterPairHigh<Register>(),

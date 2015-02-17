@@ -3268,26 +3268,12 @@ static constexpr size_t kDefaultNumberOfMoves = 4;
 
 class HParallelMove : public HTemplateInstruction<0> {
  public:
-  explicit HParallelMove(ArenaAllocator* arena)
-      : HTemplateInstruction(SideEffects::None()), moves_(arena, kDefaultNumberOfMoves) {}
+  HParallelMove(ArenaAllocator* arena, bool split_wide_moves)
+      : HTemplateInstruction(SideEffects::None()),
+        moves_(arena, kDefaultNumberOfMoves),
+        split_wide_moves_arena_(split_wide_moves ? arena : nullptr) {}
 
-  void AddMove(Location source, Location destination, HInstruction* instruction) {
-    DCHECK(source.IsValid());
-    DCHECK(destination.IsValid());
-    if (kIsDebugBuild) {
-      if (instruction != nullptr) {
-        for (size_t i = 0, e = moves_.Size(); i < e; ++i) {
-          DCHECK_NE(moves_.Get(i).GetInstruction(), instruction)
-            << "Doing parallel moves for the same instruction.";
-        }
-      }
-      for (size_t i = 0, e = moves_.Size(); i < e; ++i) {
-        DCHECK(!destination.Equals(moves_.Get(i).GetDestination()))
-            << "Same destination for two moves in a parallel move.";
-      }
-    }
-    moves_.Add(MoveOperands(source, destination, instruction));
-  }
+  void AddMove(Location source, Location destination, HInstruction* instruction);
 
   MoveOperands* MoveOperandsAt(size_t index) const {
     return moves_.GetRawStorage() + index;
@@ -3299,6 +3285,9 @@ class HParallelMove : public HTemplateInstruction<0> {
 
  private:
   GrowableArray<MoveOperands> moves_;
+
+  // Arena to allocate IntConstants if splitting wide moves.
+  ArenaAllocator* split_wide_moves_arena_;
 
   DISALLOW_COPY_AND_ASSIGN(HParallelMove);
 };

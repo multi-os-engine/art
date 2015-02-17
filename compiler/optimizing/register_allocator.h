@@ -37,7 +37,8 @@ class SsaLivenessAnalysis;
  */
 class RegisterAllocator {
  public:
-  RegisterAllocator(ArenaAllocator* allocator,
+  RegisterAllocator(HGraph *graph,
+                    ArenaAllocator* allocator,
                     CodeGenerator* codegen,
                     const SsaLivenessAnalysis& analysis);
 
@@ -91,7 +92,7 @@ class RegisterAllocator {
   void Resolve();
 
   // Add `interval` in the given sorted list.
-  static void AddSorted(GrowableArray<LiveInterval*>* array, LiveInterval* interval);
+  void AddSorted(GrowableArray<LiveInterval*>* array, LiveInterval* interval);
 
   // Split `interval` at the position `at`. The new interval starts at `at`.
   LiveInterval* Split(LiveInterval* interval, size_t at);
@@ -140,6 +141,10 @@ class RegisterAllocator {
   // Returns whether it was successful at finding such an interval.
   bool TrySplitNonPairIntervalAt(size_t position, size_t first_register_use, size_t* next_use);
 
+  void DebugDump(const char *name = nullptr, HInstruction *instruction = nullptr,
+                 LiveInterval *current = nullptr);
+
+  HGraph* const graph_;
   ArenaAllocator* const allocator_;
   CodeGenerator* const codegen_;
   const SsaLivenessAnalysis& liveness_;
@@ -191,6 +196,9 @@ class RegisterAllocator {
   // True if processing core registers. False if processing floating
   // point registers.
   bool processing_core_registers_;
+
+  // Do ParallelMoves need to split wide moves?
+  bool split_wide_parallel_moves_;
 
   // Number of registers for the current register kind (core or floating point).
   size_t number_of_registers_;
