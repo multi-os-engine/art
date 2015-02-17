@@ -139,7 +139,8 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
       && !RequiresCurrentMethod()) {
     DCHECK_EQ(maximum_number_of_live_core_registers, 0u);
     DCHECK_EQ(maximum_number_of_live_fp_registers, 0u);
-    SetFrameSize(CallPushesPC() ? GetWordSize() : 0);
+    SetFrameSize(RoundUp(CallPushesPC() ? GetWordSize() : 0,
+                         kStackAlignment));
   } else {
     SetFrameSize(RoundUp(
         number_of_spill_slots * kVRegSize

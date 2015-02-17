@@ -311,7 +311,8 @@ class CodeGenerator {
   }
 
   bool HasEmptyFrame() const {
-    return GetFrameSize() == (CallPushesPC() ? GetWordSize() : 0);
+    return GetFrameSize() == (RoundUp(CallPushesPC() ? GetWordSize() : 0,
+                                      kStackAlignment));
   }
 
   // Frame size required for this method.
