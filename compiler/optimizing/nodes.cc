@@ -992,4 +992,70 @@ std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
   return os;
 }
 
+void HParallelMove::AddMove(Location source, Location destination, HInstruction* instruction) {
+  DCHECK(source.IsValid());
+  DCHECK(destination.IsValid());
+  if (kIsDebugBuild) {
+    if (instruction != nullptr) {
+      for (size_t i = 0, e = moves_.Size(); i < e; ++i) {
+        // We may be doing eager spilling as well as moving the source to
+        // the proper register destination.
+        const MoveOperands& move = moves_.Get(i);
+        HInstruction* move_insn = move.GetInstruction();
+        if (move_insn == instruction) {
+          Location move_source = move.GetSource();
+          DCHECK(source.Equals(move_source)) << source << ' ' << move_source;
+          Location move_dest = move.GetDestination();
+          DCHECK(source.IsRegisterKind() &&
+                 (move_dest.IsStackSlot() || move_dest.IsDoubleStackSlot()));
+        }
+      }
+    }
+    for (size_t i = 0, e = moves_.Size(); i < e; ++i) {
+      DCHECK(!destination.Equals(moves_.Get(i).GetDestination()))
+          << "Same destination for two moves in a parallel move.";
+    }
+  }
+
+  // Do we need to split wide moves into low/high moves because the ABI
+  // doesn't fit the even/even+1 register pair model?
+  if (split_wide_moves_arena_ == nullptr) {
+    moves_.Add(MoveOperands(source, destination, instruction));
+    return;
+  }
+
+  // Split up pairs now, so avoid problems with X86 non-even/odd pairs.
+  ArenaAllocator* arena = split_wide_moves_arena_;
+  switch (source.GetKind()) {
+    case Location::kRegisterPair:
+    case Location::kFpuRegisterPair:
+      moves_.Add(MoveOperands(source.ToLow(arena), destination.ToLow(arena), instruction));
+      moves_.Add(MoveOperands(source.ToHigh(arena), destination.ToHigh(arena), instruction));
+      break;
+
+      break;
+    default:
+      switch (destination.GetKind()) {
+        case Location::kDoubleStackSlot:
+          if (!source.IsConstant() && !source.IsDoubleStackSlot()) {
+            // An assigment of a constant may conflict with a assignment to a pair.
+            // We don't need to split anything not matched above.
+            moves_.Add(MoveOperands(source, destination, instruction));
+            return;
+          }
+          FALLTHROUGH_INTENDED;
+
+        case Location::kRegisterPair:
+        case Location::kFpuRegisterPair:
+          moves_.Add(MoveOperands(source.ToLow(arena), destination.ToLow(arena), instruction));
+          moves_.Add(MoveOperands(source.ToHigh(arena), destination.ToHigh(arena), instruction));
+          break;
+        default:
+          // Non-wide move.
+          moves_.Add(MoveOperands(source, destination, instruction));
+          break;
+      }
+  }
+}
+
 }  // namespace art

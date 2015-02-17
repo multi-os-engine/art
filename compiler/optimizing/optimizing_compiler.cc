@@ -366,7 +366,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   }
   {
     PassInfo pass_info(kRegisterAllocatorPassName, pass_info_printer);
-    RegisterAllocator(graph->GetArena(), codegen, liveness).AllocateRegisters();
+    RegisterAllocator(graph, graph->GetArena(), codegen, liveness).AllocateRegisters();
   }
 
   CodeVectorAllocator allocator;
