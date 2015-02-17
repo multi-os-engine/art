@@ -271,6 +271,12 @@ class CodeGenerator {
     }
   }
 
+  // Does the code generator need wide pairs to be split?
+  // Note: X86 has non-even/even+1 register pairs due to ABI.
+  virtual bool WideParallelMovesShouldBeSplit() const {
+    return false;
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
