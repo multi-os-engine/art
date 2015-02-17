@@ -149,8 +149,10 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       codegen_.DumpCoreRegister(output_, location.low());
       output_ << " and ";
       codegen_.DumpCoreRegister(output_, location.high());
+    } else if (location.IsUnallocated()) {
+      output_ << "<Unallocated>";
     } else {
-      DCHECK(location.IsDoubleStackSlot());
+      DCHECK(location.IsDoubleStackSlot()) << location;
       output_ << "2x" << location.GetStackIndex() << "(sp)";
     }
   }
