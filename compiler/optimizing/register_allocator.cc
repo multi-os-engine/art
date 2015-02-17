@@ -75,19 +75,11 @@ bool RegisterAllocator::CanAllocateRegistersFor(const HGraph& graph,
   if (instruction_set == kArm64
       || instruction_set == kX86_64
       || instruction_set == kArm
+      || instruction_set == kX86
       || instruction_set == kThumb2) {
     return true;
   }
-  for (size_t i = 0, e = graph.GetBlocks().Size(); i < e; ++i) {
-    for (HInstructionIterator it(graph.GetBlocks().Get(i)->GetInstructions());
-         !it.Done();
-         it.Advance()) {
-      HInstruction* current = it.Current();
-      if (instruction_set == kX86 && current->GetType() == Primitive::kPrimLong) {
-        return false;
-      }
-    }
-  }
+  UNUSED(graph);
   return true;
 }
 

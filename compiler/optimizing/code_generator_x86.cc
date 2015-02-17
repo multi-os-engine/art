@@ -3494,6 +3494,9 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
   } else if (source.IsDoubleStackSlot()) {
     if (destination.IsFpuRegister()) {
       __ movsd(destination.AsFpuRegister<XmmRegister>(), Address(ESP, source.GetStackIndex()));
+    } else if (destination.IsRegisterPair()) {
+      __ movl(destination.AsRegisterPairLow<Register>(), Address(ESP, source.GetStackIndex()));
+      __ movl(destination.AsRegisterPairHigh<Register>(), Address(ESP, source.GetHighStackIndex(kX86WordSize)));
     } else {
       DCHECK(destination.IsDoubleStackSlot()) << destination;
       MoveMemoryToMemory64(destination.GetStackIndex(), source.GetStackIndex());
@@ -3522,6 +3525,15 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
         DCHECK(destination.IsStackSlot()) << destination;
         __ movl(Address(ESP, destination.GetStackIndex()), imm);
       }
+    }
+  } else if (source.IsRegisterPair()) {
+    if (destination.IsRegisterPair()) {
+      __ movl(destination.AsRegisterPairLow<Register>(), source.AsRegisterPairLow<Register>());
+      __ movl(destination.AsRegisterPairHigh<Register>(), source.AsRegisterPairHigh<Register>());
+    } else {
+      DCHECK(destination.IsDoubleStackSlot()) << destination;
+      __ movl(Address(ESP, destination.GetStackIndex()), source.AsRegisterPairLow<Register>());
+      __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)), source.AsRegisterPairHigh<Register>());
     }
   } else {
     LOG(FATAL) << "Unimplemented move: " << destination << " <- " << source;
