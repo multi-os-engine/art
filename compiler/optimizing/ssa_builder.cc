@@ -199,7 +199,8 @@ static HPhi* GetFloatOrDoubleEquivalentOfPhi(HPhi* phi, Primitive::Type type) {
     for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
       // Copy the inputs. Note that the graph may not be correctly typed by doing this copy,
       // but the type propagation phase will fix it.
-      new_phi->SetRawInputAt(i, phi->InputAt(i));
+      HInstruction* input = phi->InputAt(i);
+      new_phi->SetRawInputAt(i, input);
     }
     phi->GetBlock()->InsertPhiAfter(new_phi, phi);
     return new_phi;

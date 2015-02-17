@@ -67,9 +67,8 @@ void SsaDeadPhiElimination::Run() {
             HInstruction* user = user_node->GetUser();
             DCHECK(user->IsLoopHeaderPhi()) << user->GetId();
             DCHECK(user->AsPhi()->IsDead()) << user->GetId();
-            // Just put itself as an input. The phi will be removed in this loop anyway.
-            user->SetRawInputAt(user_node->GetIndex(), user);
-            current->RemoveUser(user, user_node->GetIndex());
+            user->SetRawInputAt(user_node->GetIndex(), nullptr);
+            current->RemoveUser(user_node);
           }
         }
         if (current->HasEnvironmentUses()) {
