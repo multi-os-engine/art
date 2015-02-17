@@ -236,6 +236,13 @@ class CodeGenerator {
 
   void AllocateLocations(HInstruction* instruction);
 
+  // Tells whether the stack frame of the compiled method is
+  // considered "empty", that is either actually having a size of zero,
+  // or just containing the saved return address register.
+  bool HasEmptyFrame() const {
+    return GetFrameSize() == (CallPushesPC() ? GetWordSize() : 0);
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
@@ -308,10 +315,6 @@ class CodeGenerator {
   bool CallPushesPC() const {
     InstructionSet instruction_set = GetInstructionSet();
     return instruction_set == kX86 || instruction_set == kX86_64;
-  }
-
-  bool HasEmptyFrame() const {
-    return GetFrameSize() == (CallPushesPC() ? GetWordSize() : 0);
   }
 
   // Frame size required for this method.
