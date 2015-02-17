@@ -72,29 +72,58 @@ static void UpdateSourceOf(MoveOperands* move, Location updated_location, Locati
     DCHECK(updated_location.Equals(source));
     move->SetSource(new_source);
   } else if (new_source.IsStackSlot()
-             || new_source.IsDoubleStackSlot()
-             || source.IsStackSlot()
              || source.IsDoubleStackSlot()) {
-    // Stack slots never take part of a pair/non-pair swap.
-    DCHECK(updated_location.Equals(source));
+    DCHECK(updated_location.Equals(source)) << "source: " << source
+                                            << " updated loc: " << updated_location
+                                            << " new source:" << new_source;
     move->SetSource(new_source);
   } else if (source.IsRegister()) {
-    DCHECK(new_source.IsRegisterPair()) << new_source;
-    DCHECK(updated_location.IsRegisterPair()) << updated_location;
-    if (updated_location.low() == source.reg()) {
-      move->SetSource(Location::RegisterLocation(new_source.low()));
+    if (new_source.IsRegisterPair()) {
+      DCHECK(updated_location.IsRegisterPair()) << updated_location;
+      if (updated_location.low() == source.reg()) {
+        move->SetSource(Location::RegisterLocation(new_source.low()));
+      } else {
+        DCHECK_EQ(updated_location.high(), source.reg());
+        move->SetSource(Location::RegisterLocation(new_source.high()));
+      }
     } else {
-      DCHECK_EQ(updated_location.high(), source.reg());
-      move->SetSource(Location::RegisterLocation(new_source.high()));
+      DCHECK(new_source.IsDoubleStackSlot()) << new_source;
+      DCHECK(updated_location.IsRegisterPair()) << updated_location;
+      if (updated_location.low() == source.reg()) {
+        // Now on the stack
+        move->SetSource(Location::StackSlot(new_source.GetStackIndex()));
+      } else {
+        DCHECK_EQ(updated_location.high(), source.reg());
+        // TODO: remove need for hardcoding 4!
+        move->SetSource(Location::StackSlot(new_source.GetHighStackIndex(4)));
+      }
+    }
+  } else if (source.IsStackSlot()) {
+    if (updated_location.Equals(source)) {
+      move->SetSource(new_source);
+    } else {
+      DCHECK(new_source.IsRegisterPair()) << new_source;
+      DCHECK(updated_location.IsDoubleStackSlot()) << updated_location;
+      if (updated_location.GetStackIndex() == source.GetStackIndex()) {
+        move->SetSource(Location::RegisterLocation(new_source.low()));
+      } else {
+        // TODO: remove need for hardcoding 4!
+        DCHECK_EQ(updated_location.GetHighStackIndex(4), source.GetStackIndex());
+        move->SetSource(Location::RegisterLocation(new_source.high()));
+      }
     }
   } else if (source.IsFpuRegister()) {
-    DCHECK(new_source.IsFpuRegisterPair()) << new_source;
-    DCHECK(updated_location.IsFpuRegisterPair()) << updated_location;
-    if (updated_location.low() == source.reg()) {
-      move->SetSource(Location::FpuRegisterLocation(new_source.low()));
+    if (updated_location.Equals(source)) {
+      move->SetSource(new_source);
     } else {
-      DCHECK_EQ(updated_location.high(), source.reg());
-      move->SetSource(Location::FpuRegisterLocation(new_source.high()));
+      DCHECK(new_source.IsFpuRegisterPair()) << new_source;
+      DCHECK(updated_location.IsFpuRegisterPair()) << updated_location;
+      if (updated_location.low() == source.reg()) {
+        move->SetSource(Location::FpuRegisterLocation(new_source.low()));
+      } else {
+        DCHECK_EQ(updated_location.high(), source.reg());
+        move->SetSource(Location::FpuRegisterLocation(new_source.high()));
+      }
     }
   }
 }
