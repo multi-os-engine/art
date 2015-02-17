@@ -62,6 +62,56 @@ Location Location::ByteRegisterOrConstant(int reg, HInstruction* instruction) {
       : Location::RegisterLocation(reg);
 }
 
+Location Location::ToLow(ArenaAllocator *arena) const {
+  if (IsRegisterPair()) {
+    return Location::RegisterLocation(low());
+  }
+  if (IsFpuRegisterPair()) {
+    return Location::FpuRegisterLocation(low());
+  }
+  if (IsConstant()) {
+    // Have to generate a new IntConstant.
+    HConstant* constant = GetConstant();
+    int64_t val;
+    if (constant->IsLongConstant()) {
+      val = constant->AsLongConstant()->GetValue();
+    } else {
+      DCHECK(constant->IsDoubleConstant());
+      val = bit_cast<double, int64_t>(constant->AsDoubleConstant()->GetValue());
+    }
+    HIntConstant* low_const = new (arena) HIntConstant(Low32Bits(val));
+    return Location::ConstantLocation(low_const);
+  }
+  DCHECK(IsDoubleStackSlot()) << *this;
+  return Location::StackSlot(GetStackIndex());
+}
+
+Location Location::ToHigh(ArenaAllocator *arena) const {
+  if (IsRegisterPair()) {
+    return Location::RegisterLocation(high());
+  }
+  if (IsFpuRegisterPair()) {
+    return Location::FpuRegisterLocation(high());
+  }
+  if (IsConstant()) {
+    // Have to generate a new IntConstant.
+    HConstant* constant = GetConstant();
+    int64_t val;
+    if (constant->IsLongConstant()) {
+      val = constant->AsLongConstant()->GetValue();
+    } else {
+      DCHECK(constant->IsDoubleConstant());
+      val = bit_cast<double, int64_t>(constant->AsDoubleConstant()->GetValue());
+    }
+    HIntConstant* high_const = new (arena) HIntConstant(High32Bits(val));
+    return Location::ConstantLocation(high_const);
+  }
+  DCHECK(IsDoubleStackSlot()) << *this;
+  // Generate the high word of the double stack slot.
+  // TODO: remove hardcoded 4.
+  return Location::StackSlot(GetHighStackIndex(4));
+}
+
 std::ostream& operator<<(std::ostream& os, const Location& location) {
   os << location.DebugString();
   if (location.IsRegister() || location.IsFpuRegister()) {

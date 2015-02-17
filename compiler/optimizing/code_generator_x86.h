@@ -223,6 +223,10 @@ class CodeGeneratorX86 : public CodeGenerator {
     return InstructionSet::kX86;
   }
 
+  bool WideParallelMovesShouldBeSplit() const OVERRIDE {
+    return true;
+  }
+
   // Helper method to move a 32bits value between two locations.
   void Move32(Location destination, Location source);
   // Helper method to move a 64bits value between two locations.

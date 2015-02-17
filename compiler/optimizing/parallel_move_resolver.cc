@@ -96,6 +96,9 @@ static void UpdateSourceOf(MoveOperands* move, Location updated_location, Locati
       DCHECK_EQ(updated_location.high(), source.reg());
       move->SetSource(Location::FpuRegisterLocation(new_source.high()));
     }
+  } else  {
+    DCHECK(false) << "source: " << source << " updated loc: " << updated_location
+                  << " new source:" << new_source;
   }
 }
 
