@@ -266,6 +266,11 @@ void CodeGenerator::AllocateRegistersLocally(HInstruction* instruction) const {
     } else if (loc.IsFpuRegister()) {
       DCHECK(!blocked_fpu_registers_[loc.reg()]);
       blocked_fpu_registers_[loc.reg()] = true;
+    } else if (loc.IsRegisterPair()) {
+      DCHECK(!blocked_core_registers_[loc.low()]);
+      blocked_core_registers_[loc.low()] = true;
+      DCHECK(!blocked_core_registers_[loc.high()]);
+      blocked_core_registers_[loc.high()] = true;
     } else {
       DCHECK(loc.GetPolicy() == Location::kRequiresRegister
              || loc.GetPolicy() == Location::kRequiresFpuRegister);
@@ -808,7 +813,8 @@ void CodeGenerator::ClearSpillSlotsFromLoopPhisInStackMap(HSuspendCheck* suspend
 }
 
 void CodeGenerator::EmitParallelMoves(Location from1, Location to1, Location from2, Location to2) {
-  HParallelMove parallel_move(GetGraph()->GetArena());
+  HParallelMove parallel_move(GetGraph()->GetArena(),
+                              WideParallelMovesShouldBeSplit());
   parallel_move.AddMove(from1, to1, nullptr);
   parallel_move.AddMove(from2, to2, nullptr);
   GetMoveResolver()->EmitNativeCode(&parallel_move);
