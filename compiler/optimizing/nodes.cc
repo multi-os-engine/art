@@ -33,17 +33,20 @@ void HGraph::FindBackEdges(ArenaBitVector* visited) {
 
 static void RemoveAsUser(HInstruction* instruction) {
   for (size_t i = 0; i < instruction->InputCount(); i++) {
-    instruction->InputAt(i)->RemoveUser(instruction, i);
+    HInstruction* input = instruction->InputAt(i);
+    if (input != nullptr) {
+      input->RemoveUser(instruction->InputUseAt(i));
+      instruction->SetRawInputAt(i, nullptr);
+    }
   }
 
   HEnvironment* environment = instruction->GetEnvironment();
   if (environment != nullptr) {
     for (size_t i = 0, e = environment->Size(); i < e; ++i) {
-      HUseListNode<HEnvironment*>* vreg_env_use = environment->GetInstructionEnvUseAt(i);
-      if (vreg_env_use != nullptr) {
-        HInstruction* vreg = environment->GetInstructionAt(i);
-        DCHECK(vreg != nullptr);
-        vreg->RemoveEnvironmentUser(vreg_env_use);
+      HInstruction* vreg = environment->GetInstructionAt(i);
+      if (vreg != nullptr) {
+        vreg->RemoveEnvironmentUser(environment->GetInstructionEnvUseAt(i));
+        environment->SetRawEnvAt(i, nullptr);
       }
     }
   }
@@ -457,17 +460,6 @@ void HEnvironment::CopyFrom(HEnvironment* env) {
   }
 }
 
-template <typename T>
-static void RemoveFromUseList(T user, size_t input_index, HUseList<T>* list) {
-  HUseListNode<T>* current;
-  for (HUseIterator<HInstruction*> use_it(*list); !use_it.Done(); use_it.Advance()) {
-    current = use_it.Current();
-    if (current->GetUser() == user && current->GetIndex() == input_index) {
-      list->Remove(current);
-    }
-  }
-}
-
 HInstruction* HInstruction::GetNextDisregardingMoves() const {
   HInstruction* next = GetNext();
   while (next != nullptr && next->IsParallelMove()) {
@@ -484,12 +476,12 @@ HInstruction* HInstruction::GetPreviousDisregardingMoves() const {
   return previous;
 }
 
-void HInstruction::RemoveUser(HInstruction* user, size_t input_index) {
-  RemoveFromUseList(user, input_index, &uses_);
+void HInstruction::RemoveUser(HUseListNode<HInstruction*>* use_node) {
+  uses_.Remove(use_node);
 }
 
-void HInstruction::RemoveEnvironmentUser(HUseListNode<HEnvironment*>* use) {
-  env_uses_.Remove(use);
+void HInstruction::RemoveEnvironmentUser(HUseListNode<HEnvironment*>* use_node) {
+  env_uses_.Remove(use_node);
 }
 
 void HInstructionList::AddInstruction(HInstruction* instruction) {
@@ -602,7 +594,8 @@ void HInstruction::ReplaceWith(HInstruction* other) {
 }
 
 void HInstruction::ReplaceInput(HInstruction* replacement, size_t index) {
-  InputAt(index)->RemoveUser(this, index);
+  HUseListNode<HInstruction*>* input_use = InputUseAt(index);
+  InputAt(index)->RemoveUser(input_use);
   SetRawInputAt(index, replacement);
   replacement->AddUseAt(this, index);
 }
@@ -613,7 +606,7 @@ size_t HInstruction::EnvironmentSize() const {
 
 void HPhi::AddInput(HInstruction* input) {
   DCHECK(input->GetBlock() != nullptr);
-  inputs_.Add(input);
+  inputs_.Add(HUserRecord<HInstruction*>(input));
   input->AddUseAt(this, inputs_.Size() - 1);
 }
 
