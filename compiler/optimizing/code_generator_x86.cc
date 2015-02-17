@@ -37,6 +37,7 @@ static constexpr int kCurrentMethodStackOffset = 0;
 static constexpr Register kRuntimeParameterCoreRegisters[] = { EAX, ECX, EDX, EBX };
 static constexpr size_t kRuntimeParameterCoreRegistersLength =
     arraysize(kRuntimeParameterCoreRegisters);
+static constexpr Register kCoreCalleeSaves[] = { EBP, ESI, EDI };
 static constexpr XmmRegister kRuntimeParameterFpuRegisters[] = { XMM0, XMM1, XMM2, XMM3 };
 static constexpr size_t kRuntimeParameterFpuRegistersLength =
     arraysize(kRuntimeParameterFpuRegisters);
@@ -371,8 +372,15 @@ size_t CodeGeneratorX86::RestoreFloatingPointRegister(size_t stack_index, uint32
 }
 
 CodeGeneratorX86::CodeGeneratorX86(HGraph* graph, const CompilerOptions& compiler_options)
-    : CodeGenerator(graph, kNumberOfCpuRegisters, kNumberOfXmmRegisters,
-                    kNumberOfRegisterPairs, (1 << kFakeReturnRegister), 0, compiler_options),
+    : CodeGenerator(graph,
+                    kNumberOfCpuRegisters,
+                    kNumberOfXmmRegisters,
+                    kNumberOfRegisterPairs,
+                    ComputeRegisterMask(reinterpret_cast<const int*>(kCoreCalleeSaves),
+                                        arraysize(kCoreCalleeSaves))
+                        | (1 << kFakeReturnRegister),
+                        0,
+                        compiler_options),
       block_labels_(graph->GetArena(), 0),
       location_builder_(graph, this),
       instruction_visitor_(graph, this),
@@ -434,11 +442,12 @@ void CodeGeneratorX86::SetupBlockedRegisters(bool is_baseline ATTRIBUTE_UNUSED) 
   // Stack register is always reserved.
   blocked_core_registers_[ESP] = true;
 
-  // TODO: We currently don't use Quick's callee saved registers.
   DCHECK(kFollowsQuickABI);
-  blocked_core_registers_[EBP] = true;
-  blocked_core_registers_[ESI] = true;
-  blocked_core_registers_[EDI] = true;
+  if (is_baseline) {
+    blocked_core_registers_[EBP] = true;
+    blocked_core_registers_[ESI] = true;
+    blocked_core_registers_[EDI] = true;
+  }
 
   UpdateBlockedPairRegisters();
 }
@@ -470,15 +479,33 @@ void CodeGeneratorX86::GenerateFrameEntry() {
     RecordPcInfo(nullptr, 0);
   }
 
-  if (!HasEmptyFrame()) {
-    __ subl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
-    __ movl(Address(ESP, kCurrentMethodStackOffset), EAX);
+  if (HasEmptyFrame()) {
+    return;
   }
+
+  for (int i = arraysize(kCoreCalleeSaves) - 1; i >= 0; --i) {
+    Register reg = kCoreCalleeSaves[i];
+    if (allocated_registers_.ContainsCoreRegister(reg)) {
+      __ pushl(reg);
+    }
+  }
+
+  __ subl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+  __ movl(Address(ESP, kCurrentMethodStackOffset), EAX);
 }
 
 void CodeGeneratorX86::GenerateFrameExit() {
-  if (!HasEmptyFrame()) {
-    __ addl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+  if (HasEmptyFrame()) {
+    return;
+  }
+
+  __ addl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+
+  for (size_t i = 0; i < arraysize(kCoreCalleeSaves); ++i) {
+    Register reg = kCoreCalleeSaves[i];
+    if (allocated_registers_.ContainsCoreRegister(reg)) {
+      __ popl(reg);
+    }
   }
 }
 
@@ -3494,6 +3521,9 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
   } else if (source.IsDoubleStackSlot()) {
     if (destination.IsFpuRegister()) {
       __ movsd(destination.AsFpuRegister<XmmRegister>(), Address(ESP, source.GetStackIndex()));
+    } else if (destination.IsRegisterPair()) {
+      __ movl(destination.AsRegisterPairLow<Register>(), Address(ESP, source.GetStackIndex()));
+      __ movl(destination.AsRegisterPairHigh<Register>(), Address(ESP, source.GetHighStackIndex(kX86WordSize)));
     } else {
       DCHECK(destination.IsDoubleStackSlot()) << destination;
       MoveMemoryToMemory64(destination.GetStackIndex(), source.GetStackIndex());
@@ -3508,8 +3538,7 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
         DCHECK(destination.IsStackSlot()) << destination;
         __ movl(Address(ESP, destination.GetStackIndex()), imm);
       }
-    } else {
-      DCHECK(constant->IsFloatConstant());
+    } else if (constant->IsFloatConstant()) {
       float value = constant->AsFloatConstant()->GetValue();
       Immediate imm(bit_cast<float, int32_t>(value));
       if (destination.IsFpuRegister()) {
@@ -3522,6 +3551,73 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
         DCHECK(destination.IsStackSlot()) << destination;
         __ movl(Address(ESP, destination.GetStackIndex()), imm);
       }
+    } else if (constant->IsLongConstant()) {
+      int64_t value = constant->AsLongConstant()->GetValue();
+      int32_t low_value = Low32Bits(value);
+      int32_t high_value = High32Bits(value);
+      Immediate low(low_value);
+      Immediate high(high_value);
+      if (destination.IsRegisterPair()) {
+        if (low_value == 0) {
+          __ xorl(destination.AsRegisterPairLow<Register>(), destination.AsRegisterPairLow<Register>());
+        } else {
+          __ movl(destination.AsRegisterPairLow<Register>(), low);
+        }
+        if (high_value == 0) {
+          __ xorl(destination.AsRegisterPairHigh<Register>(), destination.AsRegisterPairHigh<Register>());
+        } else {
+          __ movl(destination.AsRegisterPairHigh<Register>(), high);
+        }
+      } else {
+        DCHECK(destination.IsDoubleStackSlot()) << destination;
+        __ movl(Address(ESP, destination.GetStackIndex()), low);
+        __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)), high);
+      }
+    } else {
+      DCHECK(constant->IsDoubleConstant());
+      double dbl_value = constant->AsDoubleConstant()->GetValue();
+      int64_t value = bit_cast<double, int64_t>(dbl_value);
+      int32_t low_value = Low32Bits(value);
+      int32_t high_value = High32Bits(value);
+      Immediate low(low_value);
+      Immediate high(high_value);
+      if (destination.IsFpuRegister()) {
+        XmmRegister dest = destination.AsFpuRegister<XmmRegister>();
+        if (value == 0) {
+          // Easy handling of 0.0.
+          __ xorpd(dest, dest);
+        } else {
+          ScratchRegisterScope ensure_scratch(
+              this, kNoRegister, EAX, codegen_->GetNumberOfCoreRegisters());
+          Register temp = static_cast<Register>(ensure_scratch.GetRegister());
+          // Use a temporary core register to load the low and then high parts of the double.
+          // Handle 0 low/high as special cases.
+          if (low_value == 0) {
+            __ xorpd(dest, dest);
+          } else {
+            __ movl(temp, low);
+            __ movd(dest, temp);
+          }
+          __ psrlq(dest, Immediate(32));
+          if (high_value != 0) {
+            __ movl(temp, high);
+            __ movd(dest, temp);
+          }
+        }
+      } else {
+        DCHECK(destination.IsDoubleStackSlot()) << destination;
+        __ movl(Address(ESP, destination.GetStackIndex()), low);
+        __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)), high);
+      }
+    }
+  } else if (source.IsRegisterPair()) {
+    if (destination.IsRegisterPair()) {
+      __ movl(destination.AsRegisterPairLow<Register>(), source.AsRegisterPairLow<Register>());
+      __ movl(destination.AsRegisterPairHigh<Register>(), source.AsRegisterPairHigh<Register>());
+    } else {
+      DCHECK(destination.IsDoubleStackSlot()) << destination;
+      __ movl(Address(ESP, destination.GetStackIndex()), source.AsRegisterPairLow<Register>());
+      __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)), source.AsRegisterPairHigh<Register>());
     }
   } else {
     LOG(FATAL) << "Unimplemented move: " << destination << " <- " << source;
