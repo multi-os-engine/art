@@ -779,8 +779,10 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
 
   if (locations != nullptr && locations->Out().IsConstant()) {
     HConstant* const_to_move = locations->Out().GetConstant();
-    if (const_to_move->IsIntConstant()) {
-      int32_t value = const_to_move->AsIntConstant()->GetValue();
+    if (const_to_move->IsIntConstant() || const_to_move->IsNullConstant()) {
+      int32_t value = const_to_move->IsNullConstant()
+          ? 0
+          : const_to_move->AsIntConstant()->GetValue();
       if (location.IsRegister()) {
         __ LoadImmediate(location.AsRegister<Register>(), value);
       } else {
@@ -947,8 +949,8 @@ void InstructionCodeGeneratorARM::VisitIf(HIf* if_instr) {
         __ cmp(left, ShifterOperand(locations->InAt(1).AsRegister<Register>()));
       } else {
         DCHECK(locations->InAt(1).IsConstant());
-        int32_t value =
-            locations->InAt(1).GetConstant()->AsIntConstant()->GetValue();
+        HConstant* constant = locations->InAt(1).GetConstant();
+        int32_t value = constant->IsNullConstant() ? 0 : constant->AsIntConstant()->GetValue();
         ShifterOperand operand;
         if (GetAssembler()->ShifterOperandCanHold(R0, left, CMP, value, &operand)) {
           __ cmp(left, operand);
@@ -1105,6 +1107,17 @@ void LocationsBuilderARM::VisitIntConstant(HIntConstant* constant) {
 }
 
 void InstructionCodeGeneratorARM::VisitIntConstant(HIntConstant* constant) {
+  // Will be generated at use site.
+  UNUSED(constant);
+}
+
+void LocationsBuilderARM::VisitNullConstant(HNullConstant* constant) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(constant, LocationSummary::kNoCall);
+  locations->SetOut(Location::ConstantLocation(constant));
+}
+
+void InstructionCodeGeneratorARM::VisitNullConstant(HNullConstant* constant) {
   // Will be generated at use site.
   UNUSED(constant);
 }
@@ -3400,8 +3413,8 @@ void ParallelMoveResolverARM::EmitMove(size_t index) {
   } else {
     DCHECK(source.IsConstant()) << source;
     HInstruction* constant = source.GetConstant();
-    if (constant->IsIntConstant()) {
-      int32_t value = constant->AsIntConstant()->GetValue();
+    if (constant->IsIntConstant() || constant->IsNullConstant()) {
+      int32_t value = constant->IsNullConstant() ? 0 : constant->AsIntConstant()->GetValue();
       if (destination.IsRegister()) {
         __ LoadImmediate(destination.AsRegister<Register>(), value);
       } else {
