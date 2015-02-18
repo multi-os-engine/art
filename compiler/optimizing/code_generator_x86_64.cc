@@ -610,6 +610,8 @@ void CodeGeneratorX86_64::Move(Location destination, Location source) {
       int32_t value;
       if (constant->IsFloatConstant()) {
         value = bit_cast<float, int32_t>(constant->AsFloatConstant()->GetValue());
+      } else if (constant->IsNullConstant()) {
+        value = 0;
       } else {
         DCHECK(constant->IsIntConstant());
         value = constant->AsIntConstant()->GetValue();
@@ -657,8 +659,10 @@ void CodeGeneratorX86_64::Move(HInstruction* instruction,
 
   if (locations != nullptr && locations->Out().IsConstant()) {
     HConstant* const_to_move = locations->Out().GetConstant();
-    if (const_to_move->IsIntConstant()) {
-      Immediate imm(const_to_move->AsIntConstant()->GetValue());
+    if (const_to_move->IsIntConstant() || const_to_move->IsNullConstant()) {
+      Immediate imm(const_to_move->IsNullConstant()
+          ? 0
+          : const_to_move->AsIntConstant()->GetValue());
       if (location.IsRegister()) {
         __ movl(location.AsRegister<CpuRegister>(), imm);
       } else if (location.IsStackSlot()) {
@@ -814,7 +818,9 @@ void InstructionCodeGeneratorX86_64::VisitIf(HIf* if_instr) {
       if (rhs.IsRegister()) {
         __ cmpl(lhs.AsRegister<CpuRegister>(), rhs.AsRegister<CpuRegister>());
       } else if (rhs.IsConstant()) {
-        int32_t constant = rhs.GetConstant()->AsIntConstant()->GetValue();
+        int32_t constant = rhs.GetConstant()->IsNullConstant()
+            ? 0
+            : rhs.GetConstant()->AsIntConstant()->GetValue();
         if (constant == 0) {
           __ testl(lhs.AsRegister<CpuRegister>(), lhs.AsRegister<CpuRegister>());
         } else {
@@ -1030,6 +1036,17 @@ void LocationsBuilderX86_64::VisitIntConstant(HIntConstant* constant) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitIntConstant(HIntConstant* constant) {
+  // Will be generated at use site.
+  UNUSED(constant);
+}
+
+void LocationsBuilderX86_64::VisitNullConstant(HNullConstant* constant) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(constant, LocationSummary::kNoCall);
+  locations->SetOut(Location::ConstantLocation(constant));
+}
+
+void InstructionCodeGeneratorX86_64::VisitNullConstant(HNullConstant* constant) {
   // Will be generated at use site.
   UNUSED(constant);
 }
@@ -3263,8 +3280,8 @@ void ParallelMoveResolverX86_64::EmitMove(size_t index) {
     }
   } else if (source.IsConstant()) {
     HConstant* constant = source.GetConstant();
-    if (constant->IsIntConstant()) {
-      int32_t value = constant->AsIntConstant()->GetValue();
+    if (constant->IsIntConstant() || constant->IsNullConstant()) {
+      int32_t value = constant->IsNullConstant() ? 0 : constant->AsIntConstant()->GetValue();
       if (destination.IsRegister()) {
         if (value == 0) {
           __ xorl(destination.AsRegister<CpuRegister>(), destination.AsRegister<CpuRegister>());
