@@ -236,6 +236,32 @@ class CodeGenerator {
 
   void AllocateLocations(HInstruction* instruction);
 
+  static int32_t GetInt32ValueOf(HConstant* constant) {
+    if (constant->IsIntConstant()) {
+      return constant->AsIntConstant()->GetValue();
+    } else if (constant->IsNullConstant()) {
+      return 0;
+    } else {
+      DCHECK(constant->IsFloatConstant());
+      return bit_cast<float, int32_t>(constant->AsFloatConstant()->GetValue());
+    }
+  }
+
+  static int64_t GetInt64ValueOf(HConstant* constant) {
+    if (constant->IsIntConstant()) {
+      return constant->AsIntConstant()->GetValue();
+    } else if (constant->IsNullConstant()) {
+      return 0;
+    } else if (constant->IsFloatConstant()) {
+      return bit_cast<float, int32_t>(constant->AsFloatConstant()->GetValue());
+    } else if (constant->IsLongConstant()) {
+      return constant->AsLongConstant()->GetValue();
+    } else {
+      DCHECK(constant->IsDoubleConstant());
+      return bit_cast<double, int64_t>(constant->AsDoubleConstant()->GetValue());
+    }
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
