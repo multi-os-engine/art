@@ -65,11 +65,11 @@ inline uint32_t ArtMethod::GetAccessFlags() {
 
 inline uint16_t ArtMethod::GetMethodIndex() {
   DCHECK(GetDeclaringClass()->IsResolved() || GetDeclaringClass()->IsErroneous());
-  return GetField32(OFFSET_OF_OBJECT_MEMBER(ArtMethod, method_index_));
+  return static_cast<uint16_t>(GetField32(OFFSET_OF_OBJECT_MEMBER(ArtMethod, method_index_)));
 }
 
 inline uint16_t ArtMethod::GetMethodIndexDuringLinking() {
-  return GetField32(OFFSET_OF_OBJECT_MEMBER(ArtMethod, method_index_));
+  return static_cast<uint16_t>(GetField32(OFFSET_OF_OBJECT_MEMBER(ArtMethod, method_index_)));
 }
 
 inline uint32_t ArtMethod::GetDexMethodIndex() {

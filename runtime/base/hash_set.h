@@ -363,7 +363,7 @@ class HashSet {
     // Resize based on the minimum load factor.
     Resize(min_index);
     // When we hit elements_until_expand_, we are at the max load factor and must expand again.
-    elements_until_expand_ = NumBuckets() * max_load_factor_;
+    elements_until_expand_ = static_cast<size_t>(NumBuckets() * max_load_factor_);
   }
   // Expand / shrink the table to the new specified size.
   void Resize(size_t new_size) {

@@ -728,7 +728,8 @@ bool PatchOat::PatchTextSection(ElfFileImpl* oat_file) {
   auto oat_text_sec = oat_file->FindSectionByName(".text");
   CHECK(oat_text_sec != nullptr);
   uint8_t* to_patch = oat_file->Begin() + oat_text_sec->sh_offset;
-  uintptr_t to_patch_end = reinterpret_cast<uintptr_t>(to_patch) + oat_text_sec->sh_size;
+  uintptr_t to_patch_end = reinterpret_cast<uintptr_t>(to_patch) +
+      static_cast<uintptr_t>(oat_text_sec->sh_size);
 
   for (; patches < patches_end; patches++) {
     CHECK_LT(*patches, oat_text_sec->sh_size) << "Bad Patch";

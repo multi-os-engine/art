@@ -89,7 +89,7 @@ bool FdFile::Open(const std::string& path, int flags) {
 
 bool FdFile::Open(const std::string& path, int flags, mode_t mode) {
   CHECK_EQ(fd_, -1) << path;
-  fd_ = TEMP_FAILURE_RETRY(open(path.c_str(), flags, mode));
+  fd_ = static_cast<int>(TEMP_FAILURE_RETRY(open(path.c_str(), flags, mode)));
   if (fd_ == -1) {
     return false;
   }
@@ -107,7 +107,7 @@ bool FdFile::Open(const std::string& path, int flags, mode_t mode) {
 }
 
 int FdFile::Close() {
-  int result = TEMP_FAILURE_RETRY(close(fd_));
+  int result = static_cast<int>(TEMP_FAILURE_RETRY(close(fd_)));
 
   // Test here, so the file is closed and not leaked.
   if (kCheckSafeUsage) {
@@ -127,9 +127,9 @@ int FdFile::Close() {
 
 int FdFile::Flush() {
 #ifdef __linux__
-  int rc = TEMP_FAILURE_RETRY(fdatasync(fd_));
+  int rc = static_cast<int>(TEMP_FAILURE_RETRY(fdatasync(fd_)));
 #else
-  int rc = TEMP_FAILURE_RETRY(fsync(fd_));
+  int rc = static_cast<int>(TEMP_FAILURE_RETRY(fsync(fd_)));
 #endif
   moveUp(GuardState::kFlushed, "Flushing closed file.");
   return (rc == -1) ? -errno : rc;
@@ -137,18 +137,18 @@ int FdFile::Flush() {
 
 int64_t FdFile::Read(char* buf, int64_t byte_count, int64_t offset) const {
 #ifdef __linux__
-  int rc = TEMP_FAILURE_RETRY(pread64(fd_, buf, byte_count, offset));
+  int rc = static_cast<int>(TEMP_FAILURE_RETRY(pread64(fd_, buf, byte_count, offset)));
 #else
-  int rc = TEMP_FAILURE_RETRY(pread(fd_, buf, byte_count, offset));
+  int rc = static_cast<int>(TEMP_FAILURE_RETRY(pread(fd_, buf, byte_count, offset)));
 #endif
   return (rc == -1) ? -errno : rc;
 }
 
 int FdFile::SetLength(int64_t new_length) {
 #ifdef __linux__
-  int rc = TEMP_FAILURE_RETRY(ftruncate64(fd_, new_length));
+  int rc = static_cast<int>(TEMP_FAILURE_RETRY(ftruncate64(fd_, new_length)));
 #else
-  int rc = TEMP_FAILURE_RETRY(ftruncate(fd_, new_length));
+  int rc = static_cast<int>(TEMP_FAILURE_RETRY(ftruncate(fd_, new_length)));
 #endif
   moveTo(GuardState::kBase, GuardState::kClosed, "Truncating closed file.");
   return (rc == -1) ? -errno : rc;
@@ -156,15 +156,15 @@ int FdFile::SetLength(int64_t new_length) {
 
 int64_t FdFile::GetLength() const {
   struct stat s;
-  int rc = TEMP_FAILURE_RETRY(fstat(fd_, &s));
+  int rc = static_cast<int>(TEMP_FAILURE_RETRY(fstat(fd_, &s)));
   return (rc == -1) ? -errno : s.st_size;
 }
 
 int64_t FdFile::Write(const char* buf, int64_t byte_count, int64_t offset) {
 #ifdef __linux__
-  int rc = TEMP_FAILURE_RETRY(pwrite64(fd_, buf, byte_count, offset));
+  int rc = static_cast<int>(TEMP_FAILURE_RETRY(pwrite64(fd_, buf, byte_count, offset)));
 #else
-  int rc = TEMP_FAILURE_RETRY(pwrite(fd_, buf, byte_count, offset));
+  int rc = static_cast<int>(TEMP_FAILURE_RETRY(pwrite(fd_, buf, byte_count, offset)));
 #endif
   moveTo(GuardState::kBase, GuardState::kClosed, "Writing into closed file.");
   return (rc == -1) ? -errno : rc;
@@ -229,13 +229,13 @@ void FdFile::Erase() {
 }
 
 int FdFile::FlushCloseOrErase() {
-  int flush_result = TEMP_FAILURE_RETRY(Flush());
+  int flush_result = static_cast<int>(TEMP_FAILURE_RETRY(Flush()));
   if (flush_result != 0) {
     LOG(::art::ERROR) << "CloseOrErase failed while flushing a file.";
     Erase();
     return flush_result;
   }
-  int close_result = TEMP_FAILURE_RETRY(Close());
+  int close_result = static_cast<int>(TEMP_FAILURE_RETRY(Close()));
   if (close_result != 0) {
     LOG(::art::ERROR) << "CloseOrErase failed while closing a file.";
     Erase();
@@ -245,11 +245,11 @@ int FdFile::FlushCloseOrErase() {
 }
 
 int FdFile::FlushClose() {
-  int flush_result = TEMP_FAILURE_RETRY(Flush());
+  int flush_result = static_cast<int>(TEMP_FAILURE_RETRY(Flush()));
   if (flush_result != 0) {
     LOG(::art::ERROR) << "FlushClose failed while flushing a file.";
   }
-  int close_result = TEMP_FAILURE_RETRY(Close());
+  int close_result = static_cast<int>(TEMP_FAILURE_RETRY(Close()));
   if (close_result != 0) {
     LOG(::art::ERROR) << "FlushClose failed while closing a file.";
   }

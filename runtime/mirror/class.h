@@ -938,7 +938,7 @@ class MANAGED Class FINAL : public Object {
   }
 
   uint16_t GetDexClassDefIndex() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_));
+    return static_cast<uint16_t>(GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_)));
   }
 
   void SetDexClassDefIndex(uint16_t class_def_idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -947,7 +947,7 @@ class MANAGED Class FINAL : public Object {
   }
 
   uint16_t GetDexTypeIndex() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_));
+    return static_cast<uint16_t>(GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_)));
   }
 
   void SetDexTypeIndex(uint16_t type_idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {

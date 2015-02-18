@@ -100,7 +100,7 @@ class PACKED(4) HandleScope {
     return reinterpret_cast<StackReference<mirror::Object>*>(address);
   }
 
-  explicit HandleScope(size_t number_of_references) :
+  explicit HandleScope(uint32_t number_of_references) :
       link_(nullptr), number_of_references_(number_of_references) {
   }
 

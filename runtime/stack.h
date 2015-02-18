@@ -448,7 +448,7 @@ class StackVisitor {
 
   size_t GetNativePcOffset() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  uintptr_t* CalleeSaveAddress(int num, size_t frame_size) const
+  uintptr_t* CalleeSaveAddress(size_t num, size_t frame_size) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // Callee saves are held at the top of the frame
     DCHECK(GetMethod() != nullptr);
@@ -523,7 +523,7 @@ class StackVisitor {
                         const DexFile::CodeItem* code_item,
                         uint32_t core_spills, uint32_t fp_spills, size_t frame_size,
                         uint16_t vreg) const {
-    int offset = GetVRegOffset(code_item, core_spills, fp_spills, frame_size, vreg, kRuntimeISA);
+    size_t offset = GetVRegOffset(code_item, core_spills, fp_spills, frame_size, vreg, kRuntimeISA);
     DCHECK_EQ(cur_quick_frame, GetCurrentQuickFrame());
     uint8_t* vreg_addr = reinterpret_cast<uint8_t*>(cur_quick_frame) + offset;
     return reinterpret_cast<uint32_t*>(vreg_addr);
@@ -582,30 +582,31 @@ class StackVisitor {
    *     | StackReference<ArtMethod>     |  ... (reg == num_total_code_regs == special_temp_value) <<== sp, 16-byte aligned
    *     +===============================+
    */
-  static int GetVRegOffset(const DexFile::CodeItem* code_item,
+  static size_t GetVRegOffset(const DexFile::CodeItem* code_item,
                            uint32_t core_spills, uint32_t fp_spills,
-                           size_t frame_size, int reg, InstructionSet isa) {
+                           size_t frame_size, size_t reg, InstructionSet isa) {
     DCHECK_EQ(frame_size & (kStackAlignment - 1), 0U);
     DCHECK_NE(reg, -1);
-    int spill_size = POPCOUNT(core_spills) * GetBytesPerGprSpillLocation(isa)
+    size_t spill_size = POPCOUNT(core_spills) * GetBytesPerGprSpillLocation(isa)
         + POPCOUNT(fp_spills) * GetBytesPerFprSpillLocation(isa)
         + sizeof(uint32_t);  // Filler.
-    int num_regs = code_item->registers_size_ - code_item->ins_size_;
-    int temp_threshold = code_item->registers_size_;
-    const int max_num_special_temps = 1;
+    uint16_t num_regs = code_item->registers_size_ - code_item->ins_size_;
+    uint16_t temp_threshold = code_item->registers_size_;
+    constexpr size_t kMaxNumSpecialTemps = 1;
     if (reg == temp_threshold) {
       // The current method pointer corresponds to special location on stack.
       return 0;
-    } else if (reg >= temp_threshold + max_num_special_temps) {
+    } else if (reg >= temp_threshold + kMaxNumSpecialTemps) {
       /*
        * Special temporaries may have custom locations and the logic above deals with that.
        * However, non-special temporaries are placed relative to the outs.
        */
-      int temps_start = sizeof(StackReference<mirror::ArtMethod>) + code_item->outs_size_ * sizeof(uint32_t);
-      int relative_offset = (reg - (temp_threshold + max_num_special_temps)) * sizeof(uint32_t);
+      size_t temps_start = sizeof(StackReference<mirror::ArtMethod>) +
+          code_item->outs_size_ * sizeof(uint32_t);
+      size_t relative_offset = (reg - (temp_threshold + kMaxNumSpecialTemps)) * sizeof(uint32_t);
       return temps_start + relative_offset;
-    }  else if (reg < num_regs) {
-      int locals_start = frame_size - spill_size - num_regs * sizeof(uint32_t);
+    } else if (reg < num_regs) {
+      size_t locals_start = frame_size - spill_size - num_regs * sizeof(uint32_t);
       return locals_start + (reg * sizeof(uint32_t));
     } else {
       // Handle ins.

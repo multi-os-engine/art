@@ -106,7 +106,8 @@ inline mirror::Class* ClassLinker::ResolveType(uint16_t type_idx, mirror::ArtFie
 
 inline mirror::ArtMethod* ClassLinker::GetResolvedMethod(uint32_t method_idx,
                                                          mirror::ArtMethod* referrer) {
-  mirror::ArtMethod* resolved_method = referrer->GetDexCacheResolvedMethod(method_idx);
+  mirror::ArtMethod* resolved_method = referrer->GetDexCacheResolvedMethod(
+      static_cast<uint16_t>(method_idx));
   if (resolved_method == nullptr || resolved_method->IsRuntimeMethod()) {
     return nullptr;
   }
@@ -166,25 +167,26 @@ inline mirror::ObjectArray<T>* ClassLinker::AllocObjectArray(Thread* self, size_
 
 inline mirror::ObjectArray<mirror::Class>* ClassLinker::AllocClassArray(Thread* self,
                                                                         size_t length) {
-  return mirror::ObjectArray<mirror::Class>::Alloc(self, GetClassRoot(kClassArrayClass), length);
+  return mirror::ObjectArray<mirror::Class>::Alloc(self, GetClassRoot(kClassArrayClass),
+                                                   static_cast<int32_t>(length));
 }
 
 inline mirror::ObjectArray<mirror::String>* ClassLinker::AllocStringArray(Thread* self,
                                                                           size_t length) {
   return mirror::ObjectArray<mirror::String>::Alloc(self, GetClassRoot(kJavaLangStringArrayClass),
-                                                    length);
+                                                    static_cast<int32_t>(length));
 }
 
 inline mirror::ObjectArray<mirror::ArtMethod>* ClassLinker::AllocArtMethodArray(Thread* self,
                                                                                 size_t length) {
   return mirror::ObjectArray<mirror::ArtMethod>::Alloc(self,
-      GetClassRoot(kJavaLangReflectArtMethodArrayClass), length);
+      GetClassRoot(kJavaLangReflectArtMethodArrayClass), static_cast<int32_t>(length));
 }
 
 inline mirror::IfTable* ClassLinker::AllocIfTable(Thread* self, size_t ifcount) {
   return down_cast<mirror::IfTable*>(
       mirror::IfTable::Alloc(self, GetClassRoot(kObjectArrayClass),
-                             ifcount * mirror::IfTable::kMax));
+                             static_cast<int32_t>(ifcount * mirror::IfTable::kMax)));
 }
 
 inline mirror::ObjectArray<mirror::ArtField>* ClassLinker::AllocArtFieldArray(Thread* self,
@@ -194,7 +196,7 @@ inline mirror::ObjectArray<mirror::ArtField>* ClassLinker::AllocArtFieldArray(Th
   // so that we can do Object::VisitReferences in the case where the fields don't fit in the
   // reference offsets word.
   return mirror::ObjectArray<mirror::ArtField>::Alloc(
-      self, GetClassRoot(kJavaLangReflectArtFieldArrayClass), length,
+      self, GetClassRoot(kJavaLangReflectArtFieldArrayClass), static_cast<int32_t>(length),
       kMoveFieldArrays ? heap->GetCurrentAllocator() : heap->GetCurrentNonMovingAllocator());
 }
 

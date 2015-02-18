@@ -194,7 +194,7 @@ class Instruction {
 
   // Returns a pointer to the next instruction in the stream.
   const Instruction* Next() const {
-    return RelativeAt(SizeInCodeUnits());
+    return RelativeAt(static_cast<int32_t>(SizeInCodeUnits()));
   }
 
   // Returns a pointer to the instruction after this 1xx instruction in the stream.
@@ -412,7 +412,7 @@ class Instruction {
   void SetVRegA_10x(uint8_t val) {
     DCHECK(FormatOf(Opcode()) == k10x);
     uint16_t* insns = reinterpret_cast<uint16_t*>(this);
-    insns[0] = (val << 8) | (insns[0] & 0x00ff);
+    insns[0] = static_cast<uint16_t>((val << 8) | (insns[0] & 0x00ff));
   }
 
   void SetVRegB_3rc(uint16_t val) {
@@ -516,7 +516,7 @@ class Instruction {
 
   // Get the dex PC of this instruction as a offset in code units from the beginning of insns.
   uint32_t GetDexPc(const uint16_t* insns) const {
-    return (reinterpret_cast<const uint16_t*>(this) - insns);
+    return static_cast<uint32_t>(reinterpret_cast<const uint16_t*>(this) - insns);
   }
 
   // Dump decoded version of instruction

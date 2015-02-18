@@ -187,7 +187,7 @@ class StackMap {
   void SetStackMask(const BitVector& sp_map) {
     MemoryRegion region = GetStackMask();
     for (size_t i = 0; i < region.size_in_bits(); i++) {
-      region.StoreBit(i, sp_map.IsBitSet(i));
+      region.StoreBit(i, sp_map.IsBitSet(static_cast<uint32_t>(i)));
     }
   }
 

@@ -370,7 +370,7 @@ class ScopedCheck {
         if (has_method_) {
           std::string methodName(PrettyMethod(traceMethod, false));
           LOG(INFO) << "JNI: " << methodName << " -> " << function_name_ << "(" << msg << ")";
-          indent_ = methodName.size() + 1;
+          indent_ = static_cast<int>(methodName.size() + 1);
         } else {
           LOG(INFO) << "JNI: -> " << function_name_ << "(" << msg << ")";
           indent_ = 0;
@@ -421,7 +421,7 @@ class ScopedCheck {
           mirror::ArtMethod* traceMethod = self->GetCurrentMethod(nullptr);
           std::string methodName(PrettyMethod(traceMethod, false));
           LOG(INFO) << "JNI: " << methodName << " -> " << function_name_ << "(" << msg << ")";
-          indent_ = methodName.size() + 1;
+          indent_ = static_cast<int>(methodName.size() + 1);
         } else {
           LOG(INFO) << "JNI: -> " << function_name_ << "(" << msg << ")";
           indent_ = 0;
@@ -1198,7 +1198,8 @@ class GuardedCopy {
     // If modification is not expected, grab a checksum.
     uLong adler = 0;
     if (!mod_okay) {
-      adler = adler32(adler32(0L, Z_NULL, 0), reinterpret_cast<const Bytef*>(original_buf), len);
+      adler = adler32(adler32(0L, Z_NULL, 0), reinterpret_cast<const Bytef*>(original_buf),
+                      static_cast<unsigned int>(len));
     }
 
     GuardedCopy* copy = new (new_buf) GuardedCopy(original_buf, len, adler);
@@ -1349,7 +1350,8 @@ class GuardedCopy {
     // told the client that we made a copy, there's no reason they can't alter the buffer.
     if (!mod_okay) {
       uLong computed_adler =
-          adler32(adler32(0L, Z_NULL, 0), BufferWithinRedZones(), original_length_);
+          adler32(adler32(0L, Z_NULL, 0), BufferWithinRedZones(),
+                  static_cast<unsigned int>(original_length_));
       if (computed_adler != adler_) {
         AbortF(function_name, "buffer modified (0x%08lx vs 0x%08lx) at address %p",
                computed_adler, adler_, this);

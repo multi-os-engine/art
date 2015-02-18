@@ -35,20 +35,17 @@ bool ScopedFlock::Init(const char* filename, std::string* error_msg) {
       *error_msg = StringPrintf("Failed to open file '%s': %s", filename, strerror(errno));
       return false;
     }
-    int flock_result = TEMP_FAILURE_RETRY(flock(file_->Fd(), LOCK_EX));
-    if (flock_result != 0) {
+    if (TEMP_FAILURE_RETRY(flock(file_->Fd(), LOCK_EX)) != 0) {
       *error_msg = StringPrintf("Failed to lock file '%s': %s", filename, strerror(errno));
       return false;
     }
     struct stat fstat_stat;
-    int fstat_result = TEMP_FAILURE_RETRY(fstat(file_->Fd(), &fstat_stat));
-    if (fstat_result != 0) {
+    if (TEMP_FAILURE_RETRY(fstat(file_->Fd(), &fstat_stat)) != 0) {
       *error_msg = StringPrintf("Failed to fstat file '%s': %s", filename, strerror(errno));
       return false;
     }
     struct stat stat_stat;
-    int stat_result = TEMP_FAILURE_RETRY(stat(filename, &stat_stat));
-    if (stat_result != 0) {
+    if (TEMP_FAILURE_RETRY(stat(filename, &stat_stat)) != 0) {
       PLOG(WARNING) << "Failed to stat, will retry: " << filename;
       // ENOENT can happen if someone racing with us unlinks the file we created so just retry.
       continue;
@@ -90,7 +87,7 @@ ScopedFlock::ScopedFlock() { }
 
 ScopedFlock::~ScopedFlock() {
   if (file_.get() != NULL) {
-    int flock_result = TEMP_FAILURE_RETRY(flock(file_->Fd(), LOCK_UN));
+    int flock_result = static_cast<int>(TEMP_FAILURE_RETRY(flock(file_->Fd(), LOCK_UN)));
     CHECK_EQ(0, flock_result);
     if (file_->FlushCloseOrErase() != 0) {
       PLOG(WARNING) << "Could not close scoped file lock file.";

@@ -257,10 +257,10 @@ static constexpr int CTZ(T x) {
 }
 
 template<typename T>
-static constexpr int POPCOUNT(T x) {
+static constexpr size_t POPCOUNT(T x) {
   return (sizeof(T) == sizeof(uint32_t))
-      ? __builtin_popcount(x)
-      : __builtin_popcountll(x);
+      ? static_cast<size_t>(__builtin_popcount(x))
+      : static_cast<size_t>(__builtin_popcountll(x));
 }
 
 static inline uint32_t PointerToLowMemUInt32(const void* p) {

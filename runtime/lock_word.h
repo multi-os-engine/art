@@ -94,7 +94,8 @@ class LockWord {
 
   static LockWord FromForwardingAddress(size_t target) {
     DCHECK(IsAligned < 1 << kStateSize>(target));
-    return LockWord((target >> kStateSize) | (kStateForwardingAddress << kStateShift));
+    return LockWord(static_cast<uint32_t>(target >> kStateSize) |
+                    (kStateForwardingAddress << kStateShift));
   }
 
   static LockWord FromHashCode(uint32_t hash_code) {

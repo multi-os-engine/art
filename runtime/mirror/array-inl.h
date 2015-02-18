@@ -136,7 +136,7 @@ class SetLengthToUsableSizeVisitor {
     // Avoid AsArray as object is not yet in live bitmap or allocation stack.
     Array* array = down_cast<Array*>(obj);
     // DCHECK(array->IsArrayInstance());
-    int32_t length = (usable_size - header_size_) >> component_size_shift_;
+    int32_t length = static_cast<int32_t>((usable_size - header_size_) >> component_size_shift_);
     DCHECK_GE(length, minimum_length_);
     uint8_t* old_end = reinterpret_cast<uint8_t*>(array->GetRawData(1U << component_size_shift_,
                                                                     minimum_length_));

@@ -417,7 +417,7 @@ class DexFile {
     if (pos == nullptr) {
       return location;
     } else {
-      return std::string(location, pos - location);
+      return std::string(location, static_cast<size_t>(pos - location));
     }
   }
 
@@ -465,7 +465,7 @@ class DexFile {
   uint32_t GetIndexForStringId(const StringId& string_id) const {
     CHECK_GE(&string_id, string_ids_) << GetLocation();
     CHECK_LT(&string_id, string_ids_ + header_->string_ids_size_) << GetLocation();
-    return &string_id - string_ids_;
+    return static_cast<uint32_t>(&string_id - string_ids_);
   }
 
   int32_t GetStringLength(const StringId& string_id) const;
@@ -516,7 +516,7 @@ class DexFile {
   uint16_t GetIndexForTypeId(const TypeId& type_id) const {
     CHECK_GE(&type_id, type_ids_) << GetLocation();
     CHECK_LT(&type_id, type_ids_ + header_->type_ids_size_) << GetLocation();
-    size_t result = &type_id - type_ids_;
+    size_t result = static_cast<size_t>(&type_id - type_ids_);
     DCHECK_LT(result, 65536U) << GetLocation();
     return static_cast<uint16_t>(result);
   }
@@ -555,7 +555,7 @@ class DexFile {
   uint32_t GetIndexForFieldId(const FieldId& field_id) const {
     CHECK_GE(&field_id, field_ids_) << GetLocation();
     CHECK_LT(&field_id, field_ids_ + header_->field_ids_size_) << GetLocation();
-    return &field_id - field_ids_;
+    return static_cast<uint32_t>(&field_id - field_ids_);
   }
 
   // Looks up a field by its declaring class, name and type
@@ -595,7 +595,7 @@ class DexFile {
   uint32_t GetIndexForMethodId(const MethodId& method_id) const {
     CHECK_GE(&method_id, method_ids_) << GetLocation();
     CHECK_LT(&method_id, method_ids_ + header_->method_ids_size_) << GetLocation();
-    return &method_id - method_ids_;
+    return static_cast<uint32_t>(&method_id - method_ids_);
   }
 
   // Looks up a method by its declaring class, name and proto_id
@@ -645,7 +645,7 @@ class DexFile {
   uint16_t GetIndexForClassDef(const ClassDef& class_def) const {
     CHECK_GE(&class_def, class_defs_) << GetLocation();
     CHECK_LT(&class_def, class_defs_ + header_->class_defs_size_) << GetLocation();
-    return &class_def - class_defs_;
+    return static_cast<uint16_t>(&class_def - class_defs_);
   }
 
   // Returns the class descriptor string of a class definition.
@@ -707,7 +707,7 @@ class DexFile {
   uint16_t GetIndexForProtoId(const ProtoId& proto_id) const {
     CHECK_GE(&proto_id, proto_ids_) << GetLocation();
     CHECK_LT(&proto_id, proto_ids_ + header_->proto_ids_size_) << GetLocation();
-    return &proto_id - proto_ids_;
+    return static_cast<uint16_t>(&proto_id - proto_ids_);
   }
 
   // Looks up a proto id for a given return type and signature type list
@@ -715,7 +715,8 @@ class DexFile {
                              const uint16_t* signature_type_idxs, uint32_t signature_length) const;
   const ProtoId* FindProtoId(uint16_t return_type_idx,
                              const std::vector<uint16_t>& signature_type_idxs) const {
-    return FindProtoId(return_type_idx, &signature_type_idxs[0], signature_type_idxs.size());
+    return FindProtoId(return_type_idx, &signature_type_idxs[0],
+                       static_cast<uint32_t>(signature_type_idxs.size()));
   }
 
   // Given a signature place the type ids into the given vector, returns true on success
@@ -831,7 +832,7 @@ class DexFile {
   void InvokeLocalCbIfLive(void* context, int reg, uint32_t end_address,
                            LocalInfo* local_in_reg, DexDebugNewLocalCb local_cb) const {
     if (local_cb != NULL && local_in_reg[reg].is_live_) {
-      local_cb(context, reg, local_in_reg[reg].start_address_, end_address,
+      local_cb(context, static_cast<uint16_t>(reg), local_in_reg[reg].start_address_, end_address,
           local_in_reg[reg].name_, local_in_reg[reg].descriptor_,
           local_in_reg[reg].signature_ != NULL ? local_in_reg[reg].signature_ : "");
     }

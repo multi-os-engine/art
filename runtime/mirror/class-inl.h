@@ -390,7 +390,7 @@ inline int32_t Class::GetIfTableCount() {
   if (iftable == NULL) {
     return 0;
   }
-  return iftable->Count();
+  return static_cast<int32_t>(iftable->Count());
 }
 
 inline void Class::SetIfTable(IfTable* new_iftable) {

@@ -258,7 +258,7 @@ inline int32_t Instruction::VRegB() const {
     case k32x: return VRegB_32x();
     case k35c: return VRegB_35c();
     case k3rc: return VRegB_3rc();
-    case k51l: return VRegB_51l();
+    case k51l: return static_cast<int32_t>(VRegB_51l());
     default:
       LOG(FATAL) << "Tried to access vB of instruction " << Name() << " which has no B operand.";
       exit(EXIT_FAILURE);

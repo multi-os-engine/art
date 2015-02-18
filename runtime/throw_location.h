@@ -68,7 +68,7 @@ class PACKED(4) ThrowLocation {
   void Clear() {
     this_object_ = NULL;
     method_ = NULL;
-    dex_pc_ = -1;
+    dex_pc_ = static_cast<uint32_t>(-1);
   }
 
   std::string Dump() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

@@ -78,7 +78,7 @@ StringPiece::size_type StringPiece::rfind(const StringPiece& s, size_type pos) c
 
 StringPiece::size_type StringPiece::rfind(char c, size_type pos) const {
   if (length_ == 0) return npos;
-  for (int i = std::min(pos, static_cast<size_type>(length_ - 1));
+  for (int i = static_cast<int>(std::min(pos, static_cast<size_type>(length_ - 1)));
        i >= 0; --i) {
     if (ptr_[i] == c) {
       return i;

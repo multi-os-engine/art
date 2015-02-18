@@ -101,7 +101,7 @@ class MemoryRegion FINAL : public ValueObject {
   // containing the bit, and sets bit_mask to the bit within that byte.
   uint8_t* ComputeBitPointer(uintptr_t bit_offset, uint8_t* bit_mask) const {
     uintptr_t bit_remainder = (bit_offset & (kBitsPerByte - 1));
-    *bit_mask = (1U << bit_remainder);
+    *bit_mask = static_cast<uint8_t>(1U << bit_remainder);
     uintptr_t byte_offset = (bit_offset >> kBitsPerByteLog2);
     return ComputeInternalPointer<uint8_t>(byte_offset);
   }

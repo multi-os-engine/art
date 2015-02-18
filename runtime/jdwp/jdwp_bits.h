@@ -60,7 +60,7 @@ static inline void Append8BE(std::vector<uint8_t>& bytes, uint64_t value) {
 }
 
 static inline void AppendUtf16BE(std::vector<uint8_t>& bytes, const uint16_t* chars, size_t char_count) {
-  Append4BE(bytes, char_count);
+  Append4BE(bytes, static_cast<uint32_t>(char_count));
   for (size_t i = 0; i < char_count; ++i) {
     Append2BE(bytes, chars[i]);
   }

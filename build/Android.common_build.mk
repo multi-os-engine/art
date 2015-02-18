@@ -191,6 +191,8 @@ art_cflags := \
   -Wunreachable-code \
   -Wredundant-decls \
   -Wshadow \
+  -Wconversion \
+  -Wno-sign-conversion \
   -fvisibility=protected \
   $(art_default_gc_type_cflags)
 

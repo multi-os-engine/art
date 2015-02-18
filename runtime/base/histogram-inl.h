@@ -172,13 +172,16 @@ inline void Histogram<Value>::PrintConfidenceIntervals(std::ostream &os, double 
   DCHECK_LT(interval, 1.0);
   const double per_0 = (1.0 - interval) / 2.0;
   const double per_1 = per_0 + interval;
-  const TimeUnit unit = GetAppropriateTimeUnit(Mean() * kAdjust);
-  os << Name() << ":\tSum: " << PrettyDuration(Sum() * kAdjust) << " "
-     << (interval * 100) << "% C.I. " << FormatDuration(Percentile(per_0, data) * kAdjust, unit,
-                                                        kFractionalDigits)
-     << "-" << FormatDuration(Percentile(per_1, data) * kAdjust, unit, kFractionalDigits) << " "
-     << "Avg: " << FormatDuration(Mean() * kAdjust, unit, kFractionalDigits) << " Max: "
-     << FormatDuration(Max() * kAdjust, unit, kFractionalDigits) << "\n";
+  const TimeUnit unit = GetAppropriateTimeUnit(static_cast<uint64_t>(Mean() * kAdjust));
+  os << Name() << ":\tSum: " << PrettyDuration(static_cast<uint64_t>(Sum() * kAdjust)) << " "
+     << (interval * 100) << "% C.I. "
+     << FormatDuration(static_cast<uint64_t>(Percentile(per_0, data) * kAdjust), unit,
+                       kFractionalDigits)
+     << "-" << FormatDuration(static_cast<uint64_t>(Percentile(per_1, data) * kAdjust), unit,
+                              kFractionalDigits) << " "
+     << "Avg: " << FormatDuration(static_cast<uint64_t>(Mean() * kAdjust), unit, kFractionalDigits)
+     << " Max: " << FormatDuration(static_cast<uint64_t>(Max() * kAdjust), unit, kFractionalDigits)
+     << "\n";
 }
 
 template <class Value>

@@ -100,12 +100,12 @@ int32_t ComputeUtf16Hash(const uint16_t* chars, size_t char_count) {
   return static_cast<int32_t>(hash);
 }
 
-size_t ComputeModifiedUtf8Hash(const char* chars) {
+uint32_t ComputeModifiedUtf8Hash(const char* chars) {
   size_t hash = 0;
   while (*chars != '\0') {
     hash = hash * 31 + *chars++;
   }
-  return static_cast<int32_t>(hash);
+  return static_cast<uint32_t>(hash);
 }
 
 int CompareModifiedUtf8ToUtf16AsCodePointValues(const char* utf8, const uint16_t* utf16,

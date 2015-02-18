@@ -72,7 +72,7 @@ bool Barrier::Increment(Thread* self, int delta, uint32_t timeout_ms) {
       int64_t time_left = abs_timeout - now;
       if (time_left <= 0) return true;
       timeout_ns = time_left % (1000*1000);
-      timeout_ms = time_left / (1000*1000);
+      timeout_ms = static_cast<uint32_t>(time_left / (1000*1000));
     }
   }
   return timed_out;
