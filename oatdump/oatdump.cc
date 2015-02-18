@@ -339,7 +339,7 @@ class OatDumper {
       disassembler_(Disassembler::Create(instruction_set_,
                                          new DisassemblerOptions(options_->absolute_addresses_,
                                                                  oat_file.Begin(),
-                                                                 true /* can_read_litals_ */))) {
+                                                                 true /* can_read_literals_ */))) {
     CHECK(options_->class_loader_ != nullptr);
     AddAllOffsets();
   }
@@ -446,6 +446,7 @@ class OatDumper {
         success = false;
       }
     }
+    DumpSizeStatistics(os);
     os << std::flush;
     return success;
   }
@@ -899,6 +900,7 @@ class OatDumper {
                     const DexFile::CodeItem& code_item) {
     uint16_t number_of_dex_registers = code_item.registers_size_;
     uint32_t code_info_size = code_info.GetOverallSize();
+    overall_code_info_size += code_info_size;
     size_t number_of_stack_maps = code_info.GetNumberOfStackMaps();
     os << "  Optimized CodeInfo (size=" << code_info_size
        << ", number_of_dex_registers=" << number_of_dex_registers
@@ -1235,12 +1237,22 @@ class OatDumper {
     }
   }
 
+  void DumpSizeStatistics(std::ostream& os) {
+    os << "SIZE STATISTICS:\n"
+       << "  oat_file_size: " << oat_file_.Size() << '\n'
+       << "  overall_code_info_size: " << overall_code_info_size << '\n';
+  }
+
   const OatFile& oat_file_;
   const std::vector<const OatFile::OatDexFile*> oat_dex_files_;
   const OatDumperOptions* options_;
   InstructionSet instruction_set_;
   std::set<uintptr_t> offsets_;
   Disassembler* disassembler_;
+
+  // Total size of CodeInfo elements emitted by the optimizing
+  // compiler, in bytes.
+  size_t overall_code_info_size = 0;
 };
 
 class ImageDumper {
