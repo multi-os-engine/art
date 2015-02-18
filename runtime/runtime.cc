@@ -50,6 +50,7 @@
 #include "arch/x86_64/registers_x86_64.h"
 #include "asm_support.h"
 #include "atomic.h"
+#include "base/arena_allocator.h"
 #include "base/dumpable.h"
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"

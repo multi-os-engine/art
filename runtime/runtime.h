@@ -60,6 +60,7 @@ namespace mirror {
 namespace verifier {
   class MethodVerifier;
 }  // namespace verifier
+class ArenaPool;
 class ClassLinker;
 class Closure;
 class DexFile;
