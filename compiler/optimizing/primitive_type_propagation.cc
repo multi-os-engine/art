@@ -49,13 +49,17 @@ bool PrimitiveTypePropagation::UpdateType(HPhi* phi) {
   }
   phi->SetType(new_type);
 
-  if (new_type == Primitive::kPrimDouble || new_type == Primitive::kPrimFloat) {
+  if (new_type == Primitive::kPrimDouble
+      || new_type == Primitive::kPrimFloat
+      || new_type == Primitive::kPrimNot) {
     // If the phi is of floating point type, we need to update its inputs to that
     // type. For inputs that are phis, we need to recompute their types.
     for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
       HInstruction* input = phi->InputAt(i);
       if (input->GetType() != new_type) {
-        HInstruction* equivalent = SsaBuilder::GetFloatOrDoubleEquivalent(phi, input, new_type);
+        HInstruction* equivalent = (new_type == Primitive::kPrimNot)
+            ? SsaBuilder::GetReferenceTypeEquivalent(phi, input)
+            : SsaBuilder::GetFloatOrDoubleEquivalent(phi, input, new_type);
         phi->ReplaceInput(equivalent, i);
         if (equivalent->IsPhi()) {
           AddToWorklist(equivalent->AsPhi());
@@ -84,6 +88,7 @@ void PrimitiveTypePropagation::VisitBasicBlock(HBasicBlock* block) {
       // We merge with the existing type, that has been set by the SSA builder.
       DCHECK(phi_type == Primitive::kPrimVoid
           || phi_type == Primitive::kPrimFloat
+          || phi_type == Primitive::kPrimNot
           || phi_type == Primitive::kPrimDouble);
       phi->SetType(MergeTypes(phi->InputAt(0)->GetType(), phi->GetType()));
       AddToWorklist(phi);

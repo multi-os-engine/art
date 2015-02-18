@@ -185,15 +185,17 @@ static HDoubleConstant* GetDoubleEquivalent(HLongConstant* constant) {
 
 /**
  * Because of Dex format, we might end up having the same phi being
- * used for non floating point operations and floating point operations. Because
- * we want the graph to be correctly typed (and thereafter avoid moves between
+ * used for non floating point operations and floating point / reference operations.
+ * Because we want the graph to be correctly typed (and thereafter avoid moves between
  * floating point registers and core registers), we need to create a copy of the
- * phi with a floating point type.
+ * phi with a floating point / reference type.
  */
-static HPhi* GetFloatOrDoubleEquivalentOfPhi(HPhi* phi, Primitive::Type type) {
+static HPhi* GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive::Type type) {
   // We place the floating point phi next to this phi.
   HInstruction* next = phi->GetNext();
-  if (next == nullptr || (next->AsPhi()->GetRegNumber() != phi->GetRegNumber())) {
+  if (next == nullptr
+      || (next->AsPhi()->GetRegNumber() != phi->GetRegNumber())
+      || (next->AsPhi()->GetType() != type)) {
     ArenaAllocator* allocator = phi->GetBlock()->GetGraph()->GetArena();
     HPhi* new_phi = new (allocator) HPhi(allocator, phi->GetRegNumber(), phi->InputCount(), type);
     for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
@@ -223,7 +225,7 @@ HInstruction* SsaBuilder::GetFloatOrDoubleEquivalent(HInstruction* user,
   } else if (value->IsIntConstant()) {
     return GetFloatEquivalent(value->AsIntConstant());
   } else if (value->IsPhi()) {
-    return GetFloatOrDoubleEquivalentOfPhi(value->AsPhi(), type);
+    return GetFloatDoubleOrReferenceEquivalentOfPhi(value->AsPhi(), type);
   } else {
     // For other instructions, we assume the verifier has checked that the dex format is correctly
     // typed and the value in a dex register will not be used for both floating point and
@@ -234,12 +236,26 @@ HInstruction* SsaBuilder::GetFloatOrDoubleEquivalent(HInstruction* user,
   }
 }
 
+HInstruction* SsaBuilder::GetReferenceTypeEquivalent(HInstruction* user ATTRIBUTE_UNUSED,
+                                                     HInstruction* value) {
+  if (value->IsIntConstant()) {
+    DCHECK_EQ(value->AsIntConstant()->GetValue(), 0);
+    return value->GetBlock()->GetGraph()->GetNullConstant();
+  } else {
+    DCHECK(value->IsPhi());
+    return GetFloatDoubleOrReferenceEquivalentOfPhi(value->AsPhi(), Primitive::kPrimNot);
+  }
+}
+
 void SsaBuilder::VisitLoadLocal(HLoadLocal* load) {
   HInstruction* value = current_locals_->GetInstructionAt(load->GetLocal()->GetRegNumber());
-  if (load->GetType() != value->GetType()
-      && (load->GetType() == Primitive::kPrimFloat || load->GetType() == Primitive::kPrimDouble)) {
-    // If the operation requests a specific type, we make sure its input is of that type.
-    value = GetFloatOrDoubleEquivalent(load, value, load->GetType());
+  // If the operation requests a specific type, we make sure its input is of that type.
+  if (load->GetType() != value->GetType()) {
+    if (load->GetType() == Primitive::kPrimFloat || load->GetType() == Primitive::kPrimDouble) {
+      value = GetFloatOrDoubleEquivalent(load, value, load->GetType());
+    } else if (load->GetType() == Primitive::kPrimNot) {
+      value = GetReferenceTypeEquivalent(load, value);
+    }
   }
   load->ReplaceWith(value);
   load->GetBlock()->RemoveInstruction(load);
