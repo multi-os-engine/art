@@ -15,6 +15,7 @@
  */
 
 #include <stdint.h>
+#include <valgrind.h>
 
 #include "callee_save_frame.h"
 #include "common_runtime_test.h"
@@ -25,6 +26,12 @@ namespace art {
 
 class QuickTrampolineEntrypointsTest : public CommonRuntimeTest {
  protected:
+  void SetUpRuntimeOptions(RuntimeOptions *options) OVERRIDE {
+    if (RUNNING_ON_VALGRIND > 0) {
+      options->push_back(std::make_pair("imageinstructionset", "x86_64"));
+    }
+  }
+
   static mirror::ArtMethod* CreateCalleeSaveMethod(InstructionSet isa,
                                                    Runtime::CalleeSaveType type)
       NO_THREAD_SAFETY_ANALYSIS {

@@ -15,6 +15,7 @@
  */
 
 #include <stdint.h>
+#include <valgrind.h>
 
 #include "common_runtime_test.h"
 #include "mirror/art_method-inl.h"
@@ -24,6 +25,12 @@ namespace art {
 
 class ArchTest : public CommonRuntimeTest {
  protected:
+  void SetUpRuntimeOptions(RuntimeOptions *options) OVERRIDE {
+    if (RUNNING_ON_VALGRIND > 0) {
+      options->push_back(std::make_pair("imageinstructionset", "x86_64"));
+    }
+  }
+
   static void CheckFrameSize(InstructionSet isa, Runtime::CalleeSaveType type, uint32_t save_size)
       NO_THREAD_SAFETY_ANALYSIS {
     Runtime* r = Runtime::Current();
