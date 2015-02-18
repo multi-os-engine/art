@@ -692,6 +692,19 @@ bool HInstruction::Equals(HInstruction* other) const {
   if (GetType() != other->GetType()) return false;
   if (InputCount() != other->InputCount()) return false;
 
+  if (IsBinaryOperation() && AsBinaryOperation()->IsCommutative()) {
+    DCHECK(InputCount() == 2);
+    if (((InputAt(0) == other->InputAt(0)) &&
+         (InputAt(1) == other->InputAt(1))) ||
+        ((InputAt(0) == other->InputAt(1)) &&
+         (InputAt(1) == other->InputAt(0)))) {
+      DCHECK((ComputeHashCode() == other->ComputeHashCode()) ||
+             (ComputeHashCode() == other->ComputeCommutedHashCode()));
+      return true;
+    }
+    return false;
+  }
+
   for (size_t i = 0, e = InputCount(); i < e; ++i) {
     if (InputAt(i) != other->InputAt(i)) return false;
   }

@@ -1007,6 +1007,19 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
     return result;
   }
 
+  // For commutative operations.
+  virtual size_t ComputeCommutedHashCode() const {
+    DCHECK(InputCount() == 2);
+    size_t result = GetKind();
+    result = (result * 31) + InputAt(1)->GetId();
+    result = (result * 31) + InputAt(0)->GetId();
+    return result;
+  }
+
+  virtual HInstruction* Identity() {
+    return this;
+  }
+
   SideEffects GetSideEffects() const { return side_effects_; }
 
   size_t GetLifetimePosition() const { return lifetime_position_; }
@@ -1341,7 +1354,7 @@ class HBinaryOperation : public HExpression<2> {
   HInstruction* GetRight() const { return InputAt(1); }
   Primitive::Type GetResultType() const { return GetType(); }
 
-  virtual bool IsCommutative() { return false; }
+  virtual bool IsCommutative() const { return false; }
 
   virtual bool CanBeMoved() const { return true; }
   virtual bool InstructionDataEquals(HInstruction* other) const {
@@ -1370,8 +1383,6 @@ class HCondition : public HBinaryOperation {
       : HBinaryOperation(Primitive::kPrimBoolean, first, second),
         needs_materialization_(true) {}
 
-  virtual bool IsCommutative() { return true; }
-
   bool NeedsMaterialization() const { return needs_materialization_; }
   void ClearNeedsMaterialization() { needs_materialization_ = false; }
 
@@ -1397,6 +1408,8 @@ class HEqual : public HCondition {
   HEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
 
+  virtual bool IsCommutative() const OVERRIDE { return true; }
+
   virtual int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE {
     return x == y ? 1 : 0;
   }
@@ -1418,6 +1431,8 @@ class HNotEqual : public HCondition {
  public:
   HNotEqual(HInstruction* first, HInstruction* second)
       : HCondition(first, second) {}
+
+  virtual bool IsCommutative() const OVERRIDE { return true; }
 
   virtual int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE {
     return x != y ? 1 : 0;
@@ -1954,13 +1969,25 @@ class HAdd : public HBinaryOperation {
   HAdd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  virtual bool IsCommutative() { return true; }
+  virtual bool IsCommutative() const OVERRIDE { return true; }
 
   virtual int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE {
     return x + y;
   }
   virtual int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE {
     return x + y;
+  }
+
+  virtual HInstruction* Identity() OVERRIDE {
+    HInstruction* left = InputAt(0);
+    HInstruction* right = InputAt(1);
+    if (right->IsIntConstant() && (right->AsIntConstant()->GetValue() == 0)) {
+      return left;
+    }
+    if (left->IsIntConstant() && (left->AsIntConstant()->GetValue() == 0)) {
+      return right;
+    }
+    return this;
   }
 
   DECLARE_INSTRUCTION(Add);
@@ -1981,6 +2008,15 @@ class HSub : public HBinaryOperation {
     return x - y;
   }
 
+  virtual HInstruction* Identity() OVERRIDE {
+    HInstruction* right = InputAt(1);
+    if (right->IsIntConstant() && (right->AsIntConstant()->GetValue() == 0)) {
+      HInstruction* left = InputAt(0);
+      return left;
+    }
+    return this;
+  }
+
   DECLARE_INSTRUCTION(Sub);
 
  private:
@@ -1992,10 +2028,22 @@ class HMul : public HBinaryOperation {
   HMul(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  virtual bool IsCommutative() { return true; }
+  virtual bool IsCommutative() const OVERRIDE { return true; }
 
   virtual int32_t Evaluate(int32_t x, int32_t y) const { return x * y; }
   virtual int64_t Evaluate(int64_t x, int64_t y) const { return x * y; }
+
+  virtual HInstruction* Identity() OVERRIDE {
+    HInstruction* left = InputAt(0);
+    HInstruction* right = InputAt(1);
+    if (right->IsIntConstant() && (right->AsIntConstant()->GetValue() == 1)) {
+      return left;
+    }
+    if (left->IsIntConstant() && (left->AsIntConstant()->GetValue() == 1)) {
+      return right;
+    }
+    return this;
+  }
 
   DECLARE_INSTRUCTION(Mul);
 
@@ -2019,6 +2067,15 @@ class HDiv : public HBinaryOperation {
     DCHECK_NE(y, 0);
     // Special case -1 to avoid getting a SIGFPE on x86(_64).
     return (y == -1) ? -x : x / y;
+  }
+
+  virtual HInstruction* Identity() OVERRIDE {
+    HInstruction* right = InputAt(1);
+    if (right->IsIntConstant() && (right->AsIntConstant()->GetValue() == 1)) {
+      HInstruction* left = InputAt(0);
+      return left;
+    }
+    return this;
   }
 
   uint32_t GetDexPc() const { return dex_pc_; }
@@ -2141,10 +2198,23 @@ class HAnd : public HBinaryOperation {
   HAnd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  bool IsCommutative() OVERRIDE { return true; }
+  bool IsCommutative() const OVERRIDE { return true; }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x & y; }
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x & y; }
+
+  virtual HInstruction* Identity() OVERRIDE {
+    HInstruction* left = InputAt(0);
+    HInstruction* right = InputAt(1);
+    const int32_t all_ones = 0xffffffff;
+    if (right->IsIntConstant() && (right->AsIntConstant()->GetValue() == all_ones)) {
+      return left;
+    }
+    if (left->IsIntConstant() && (left->AsIntConstant()->GetValue() == all_ones)) {
+      return right;
+    }
+    return this;
+  }
 
   DECLARE_INSTRUCTION(And);
 
@@ -2157,10 +2227,22 @@ class HOr : public HBinaryOperation {
   HOr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  bool IsCommutative() OVERRIDE { return true; }
+  bool IsCommutative() const OVERRIDE { return true; }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x | y; }
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x | y; }
+
+  virtual HInstruction* Identity() OVERRIDE {
+    HInstruction* left = InputAt(0);
+    HInstruction* right = InputAt(1);
+    if (right->IsIntConstant() && (right->AsIntConstant()->GetValue() == 0)) {
+      return left;
+    }
+    if (left->IsIntConstant() && (left->AsIntConstant()->GetValue() == 0)) {
+      return right;
+    }
+    return this;
+  }
 
   DECLARE_INSTRUCTION(Or);
 
@@ -2173,10 +2255,22 @@ class HXor : public HBinaryOperation {
   HXor(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  bool IsCommutative() OVERRIDE { return true; }
+  bool IsCommutative() const OVERRIDE { return true; }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x ^ y; }
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x ^ y; }
+
+  virtual HInstruction* Identity() OVERRIDE {
+    HInstruction* left = InputAt(0);
+    HInstruction* right = InputAt(1);
+    if (right->IsIntConstant() && (right->AsIntConstant()->GetValue() == 0)) {
+      return left;
+    }
+    if (left->IsIntConstant() && (left->AsIntConstant()->GetValue() == 0)) {
+      return right;
+    }
+    return this;
+  }
 
   DECLARE_INSTRUCTION(Xor);
 

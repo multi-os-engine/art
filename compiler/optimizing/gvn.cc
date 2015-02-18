@@ -74,8 +74,7 @@ class ValueSet : public ArenaObject<kArenaAllocMisc> {
 
   // If in the set, returns an equivalent instruction to the given instruction. Returns
   // null otherwise.
-  HInstruction* Lookup(HInstruction* instruction) const {
-    size_t hash_code = instruction->ComputeHashCode();
+  HInstruction* Lookup(HInstruction* instruction, size_t hash_code) const {
     size_t index = hash_code % kDefaultNumberOfEntries;
     HInstruction* existing = table_[index];
     if (existing != nullptr && existing->Equals(instruction)) {
@@ -88,6 +87,25 @@ class ValueSet : public ArenaObject<kArenaAllocMisc> {
         if (existing->Equals(instruction)) {
           return existing;
         }
+      }
+    }
+    return nullptr;
+  }
+
+  // If in the set, returns an equivalent instruction to the given instruction. Returns
+  // null otherwise.
+  HInstruction* Lookup(HInstruction* instruction) const {
+    size_t hash_code = instruction->ComputeHashCode();
+    HInstruction* existing = Lookup(instruction, hash_code);
+    if (existing != nullptr) {
+      return existing;
+    }
+    if (instruction->IsBinaryOperation() &&
+        instruction->AsBinaryOperation()->IsCommutative()) {
+      hash_code = instruction->ComputeCommutedHashCode();
+      existing = Lookup(instruction, hash_code);
+      if (existing != nullptr) {
+        return existing;
       }
     }
     return nullptr;
@@ -299,7 +317,13 @@ void GlobalValueNumberer::VisitBasicBlock(HBasicBlock* block) {
     // Save the next instruction in case `current` is removed from the graph.
     HInstruction* next = current->GetNext();
     if (current->CanBeMoved()) {
-      HInstruction* existing = set->Lookup(current);
+      HInstruction* existing = nullptr;
+      HInstruction* identity = current->Identity();
+      if (identity != current) {
+        existing = identity;
+      } else {
+        existing = set->Lookup(current);
+      }
       if (existing != nullptr) {
         current->ReplaceWith(existing);
         current->GetBlock()->RemoveInstruction(current);
