@@ -309,12 +309,14 @@ class OatDumperOptions {
   OatDumperOptions(bool dump_raw_mapping_table,
                    bool dump_raw_gc_map,
                    bool dump_vmap,
+                   bool dump_size_statistics,
                    bool disassemble_code,
                    bool absolute_addresses,
                    const char* method_filter)
     : dump_raw_mapping_table_(dump_raw_mapping_table),
       dump_raw_gc_map_(dump_raw_gc_map),
       dump_vmap_(dump_vmap),
+      dump_size_statistics_(dump_size_statistics),
       disassemble_code_(disassemble_code),
       absolute_addresses_(absolute_addresses),
       method_filter_(method_filter),
@@ -323,10 +325,20 @@ class OatDumperOptions {
   const bool dump_raw_mapping_table_;
   const bool dump_raw_gc_map_;
   const bool dump_vmap_;
+  const bool dump_size_statistics_;
   const bool disassemble_code_;
   const bool absolute_addresses_;
   const char* const method_filter_;
   Handle<mirror::ClassLoader>* class_loader_;
+};
+
+class OatSizeStatistics {
+ public:
+  // Oat file size, in bytes.
+  size_t oat_file_size = 0;
+  // Total size of CodeInfo elements emitted by the optimizing
+  // compiler, in bytes.
+  size_t overall_code_info_size = 0;
 };
 
 class OatDumper {
@@ -339,7 +351,10 @@ class OatDumper {
       disassembler_(Disassembler::Create(instruction_set_,
                                          new DisassemblerOptions(options_->absolute_addresses_,
                                                                  oat_file.Begin(),
-                                                                 true /* can_read_litals_ */))) {
+                                                                 true /* can_read_litals_ */))),
+    oat_size_statistics_(options_->dump_size_statistics_
+                         ? new OatSizeStatistics()
+                         : nullptr) {
     CHECK(options_->class_loader_ != nullptr);
     AddAllOffsets();
   }
@@ -436,6 +451,9 @@ class OatDumper {
 
     os << "SIZE:\n";
     os << oat_file_.Size() << "\n\n";
+    if (oat_size_statistics_ != nullptr) {
+      oat_size_statistics_->oat_file_size = oat_file_.Size();
+    }
 
     os << std::flush;
 
@@ -842,6 +860,7 @@ class OatDumper {
         }
       }
     }
+    DumpStatistics(*indent1_os);
     os << std::flush;
     return success;
   }
@@ -898,6 +917,9 @@ class OatDumper {
                     const DexFile::CodeItem* code_item) {
     uint16_t number_of_dex_registers = code_item->registers_size_;
     uint32_t code_info_size = code_info.GetOverallSize();
+    if (oat_size_statistics_ != nullptr) {
+      oat_size_statistics_->overall_code_info_size += code_info_size;
+    }
     size_t number_of_stack_maps = code_info.GetNumberOfStackMaps();
     os << "  Optimized CodeInfo (size=" << code_info_size
        << ", number_of_dex_registers=" << number_of_dex_registers
@@ -1234,12 +1256,21 @@ class OatDumper {
     }
   }
 
+  void DumpStatistics(std::ostream& os) {
+    if (oat_size_statistics_ != nullptr) {
+      os << "SIZE STATISTICS:\n"
+         << "  oat_file_size:" << oat_size_statistics_->oat_file_size << '\n'
+         << "  overall_code_info_size:" << oat_size_statistics_->overall_code_info_size << '\n';
+    }
+  }
+
   const OatFile& oat_file_;
   const std::vector<const OatFile::OatDexFile*> oat_dex_files_;
   const OatDumperOptions* options_;
   InstructionSet instruction_set_;
   std::set<uintptr_t> offsets_;
   Disassembler* disassembler_;
+  std::unique_ptr<OatSizeStatistics> oat_size_statistics_;
 };
 
 class ImageDumper {
@@ -2121,6 +2152,8 @@ struct OatdumpArgs : public CmdlineArgs {
       dump_raw_gc_map_ = true;
     } else if (option == "--no-dump:vmap") {
       dump_vmap_ = false;
+    } else if (option.starts_with("--dump:oat_size_statistics")) {
+      dump_size_statistics_ = true;
     } else if (option == "--no-disassemble") {
       disassemble_code_ = false;
     } else if (option.starts_with("--symbolize=")) {
@@ -2187,6 +2220,9 @@ struct OatdumpArgs : public CmdlineArgs {
         "  --no-dump:vmap may be used to disable vmap dumping.\n"
         "      Example: --no-dump:vmap\n"
         "\n"
+        "  --dump:oat_size_statistics enables dumping of oat file size statistics.\n"
+        "      Example: --dump:oat_size_statistics\n"
+        "\n"
         "  --no-disassemble may be used to disable disassembly.\n"
         "      Example: --no-disassemble\n"
         "\n"
@@ -2205,6 +2241,7 @@ struct OatdumpArgs : public CmdlineArgs {
   bool dump_raw_mapping_table_ = false;
   bool dump_raw_gc_map_ = false;
   bool dump_vmap_ = true;
+  bool dump_size_statistics_ = false;
   bool disassemble_code_ = true;
   bool symbolize_ = false;
 };
@@ -2220,6 +2257,7 @@ struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
         args_->dump_raw_mapping_table_,
         args_->dump_raw_gc_map_,
         args_->dump_vmap_,
+        args_->dump_size_statistics_,
         args_->disassemble_code_,
         absolute_addresses,
         args_->method_filter_));
