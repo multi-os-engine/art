@@ -50,6 +50,7 @@
 #include "arch/x86_64/registers_x86_64.h"
 #include "asm_support.h"
 #include "atomic.h"
+#include "base/arena_allocator.h"
 #include "base/dumpable.h"
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
@@ -765,6 +766,8 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   if (runtime_options.GetOrDefault(Opt::Interpret)) {
     GetInstrumentation()->ForceInterpretOnly();
   }
+
+  arena_pool_.reset(new ArenaPool);
 
   XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
   heap_ = new gc::Heap(runtime_options.GetOrDefault(Opt::MemoryInitialSize),

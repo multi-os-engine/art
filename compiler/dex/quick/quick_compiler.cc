@@ -617,7 +617,7 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
   if (instruction_set == kArm) {
     instruction_set = kThumb2;
   }
-  CompilationUnit cu(driver->GetArenaPool(), instruction_set, driver, class_linker);
+  CompilationUnit cu(Runtime::Current()->GetArenaPool(), instruction_set, driver, class_linker);
 
   // TODO: Mips64 is not yet implemented.
   CHECK((cu.instruction_set == kThumb2) ||

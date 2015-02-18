@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "arch/instruction_set.h"
+#include "base/arena_allocator.h"
 #include "base/mutex.h"
 #include "base/timing_logger.h"
 #include "class_reference.h"
@@ -38,7 +39,6 @@
 #include "runtime.h"
 #include "safe_map.h"
 #include "thread_pool.h"
-#include "utils/arena_allocator.h"
 #include "utils/dedupe_set.h"
 #include "utils/swap_space.h"
 #include "utils.h"
@@ -334,12 +334,6 @@ class CompilerDriver {
     support_boot_image_fixup_ = support_boot_image_fixup;
   }
 
-  ArenaPool* GetArenaPool() {
-    return &arena_pool_;
-  }
-  const ArenaPool* GetArenaPool() const {
-    return &arena_pool_;
-  }
   SwapAllocator<void>& GetSwapSpaceAllocator() {
     return *swap_space_allocator_.get();
   }
@@ -563,9 +557,6 @@ class CompilerDriver {
   DexToDexCompilerFn dex_to_dex_compiler_;
 
   void* compiler_context_;
-
-  // Arena pool used by the compiler.
-  ArenaPool arena_pool_;
 
   bool support_boot_image_fixup_;
 

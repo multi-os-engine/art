@@ -60,6 +60,7 @@ namespace mirror {
 namespace verifier {
   class MethodVerifier;
 }  // namespace verifier
+class ArenaPool;
 class ClassLinker;
 class Closure;
 class DexFile;
@@ -516,6 +517,13 @@ class Runtime {
     return target_sdk_version_;
   }
 
+  ArenaPool* GetArenaPool() {
+    return arena_pool_.get();
+  }
+  const ArenaPool* GetArenaPool() const {
+    return arena_pool_.get();
+  }
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -609,6 +617,9 @@ class Runtime {
 
   // Waited upon until no threads are being born.
   std::unique_ptr<ConditionVariable> shutdown_cond_ GUARDED_BY(Locks::runtime_shutdown_lock_);
+
+  // Arena pool, currently only used by the compiler.
+  std::unique_ptr<ArenaPool> arena_pool_;
 
   // Set when runtime shutdown is past the point that new threads may attach.
   bool shutting_down_ GUARDED_BY(Locks::runtime_shutdown_lock_);
