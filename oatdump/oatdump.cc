@@ -64,6 +64,41 @@
 
 namespace art {
 
+// A naive class to compute statistics over a set of values.
+// `T` is type of the values, while `S` and `A` are respectively the
+// sum and average types, defaulting to `T`.
+template <typename T, typename S = T, typename A = T>
+class Statistics {
+ public:
+  // Take into account `value` and update the statistics.
+  void Insert(T value) {
+    ++num_;
+    sum_ += value;
+    min_ = std::min(min_, value);
+    max_ = std::max(max_, value);
+  }
+
+  // Return the number of values.
+  T num() const { return num_; }
+  // Return the sum of the values.
+  S sum() const { return sum_; };
+  // Return the minimum value.
+  T min() const { return min_; }
+  // Return the maximum value.
+  T max() const { return max_; }
+  // Return the average value.
+  A avg() const { return static_cast<A>(sum_) / num_; }
+
+ private:
+  static constexpr T default_min_value = std::numeric_limits<T>::max();
+  static constexpr T default_max_value = std::numeric_limits<T>::min();
+
+  T num_ = 0;
+  T sum_ = 0;
+  T min_ = default_min_value;
+  T max_ = default_max_value;
+};
+
 const char* image_roots_descriptions_[] = {
   "kResolutionMethod",
   "kImtConflictMethod",
@@ -339,7 +374,7 @@ class OatDumper {
       disassembler_(Disassembler::Create(instruction_set_,
                                          new DisassemblerOptions(options_->absolute_addresses_,
                                                                  oat_file.Begin(),
-                                                                 true /* can_read_litals_ */))) {
+                                                                 true /* can_read_literals_ */))) {
     CHECK(options_->class_loader_ != nullptr);
     AddAllOffsets();
   }
@@ -446,6 +481,7 @@ class OatDumper {
         success = false;
       }
     }
+    DumpSizeStatistics(os);
     os << std::flush;
     return success;
   }
@@ -919,22 +955,35 @@ class OatDumper {
   void DumpCodeInfo(std::ostream& os,
                     const CodeInfo& code_info,
                     const DexFile::CodeItem& code_item) {
-    uint16_t number_of_dex_registers = code_item.registers_size_;
+    size_t number_of_dex_registers = code_item.registers_size_;
+    number_of_dex_registers_per_optimized_method_stats.Insert(
+        number_of_dex_registers);
+
     uint32_t code_info_size = code_info.GetOverallSize();
+    overall_code_info_size_in_bytes += code_info_size;
+    overall_stack_maps_size_in_bytes += code_info.StackMapSize();
+
     size_t number_of_stack_maps = code_info.GetNumberOfStackMaps();
-    os << "  Optimized CodeInfo (size=" << code_info_size
+    os << "  Optimized CodeInfo (size_in_bytes=" << code_info_size
        << ", number_of_dex_registers=" << number_of_dex_registers
        << ", number_of_stack_maps=" << number_of_stack_maps << ")\n";
 
     if (dex_register_map_encoding == kDexRegisterLocationDictionary) {
-      // Display the Dex register dictionary.
-      size_t number_of_dictionary_entries =
+      size_t dex_register_dictionary_size_in_bytes =
+          code_info.GetDexRegisterDictionarySize();
+      size_t dex_register_dictionary_number_of_entries =
           code_info.GetNumberOfDexRegisterDictionaryEntries();
-      os << "  DexRegisterDictionary (number_of_dictionary_entries="
-         << number_of_dictionary_entries << ")\n";
+      // Compute statistics about Dex register dictionaries.
+      dex_register_dictionary_size_in_bytes_stats.Insert(
+          dex_register_dictionary_size_in_bytes);
+      dex_register_dictionary_number_of_entries_stats.Insert(
+          dex_register_dictionary_number_of_entries);
+      // Display the Dex register dictionary.
+      os << "  DexRegisterDictionary (size_in_bytes=" << dex_register_dictionary_size_in_bytes
+         << ", number_of_entries=" << dex_register_dictionary_number_of_entries << ")\n";
       DexRegisterDictionary dex_register_dictionary =
           code_info.GetDexRegisterDictionary();
-      for (size_t i = 0; i < number_of_dictionary_entries; ++i) {
+      for (size_t i = 0; i < dex_register_dictionary_number_of_entries; ++i) {
         DumpRegisterMapping(os,
                             i,
                             dex_register_dictionary.GetLocationKind(i),
@@ -957,18 +1006,25 @@ class OatDumper {
          << ")\n";
     };
 
+    // Number of Dex register map/table entries for this method.
+    size_t number_of_dex_register_locations = 0;
+
     switch (dex_register_map_encoding) {
       case kDexRegisterLocationList: {
         for (size_t i = 0; i < number_of_stack_maps; ++i) {
           StackMap stack_map = code_info.GetStackMapAt(i);
           dump_stack_map_header(i);
           if (stack_map.HasDexRegisterMap()) {
+            number_of_dex_register_locations += number_of_dex_registers;
             DexRegisterMap dex_register_map =
                 code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+            overall_dex_register_maps_size_in_bytes +=
+                dex_register_map.Size(number_of_dex_registers);
             for (size_t j = 0; j < number_of_dex_registers; ++j) {
               DexRegisterMap::LocationKind kind =
                   dex_register_map.GetLocationKind(j);
               int32_t value = dex_register_map.GetValue(j);
+              ++number_of_dex_register_locations_per_kind[kind];
               DumpRegisterMapping(os, j, kind, value);
             }
           }
@@ -983,14 +1039,18 @@ class OatDumper {
           StackMap stack_map = code_info.GetStackMapAt(i);
           dump_stack_map_header(i);
           if (stack_map.HasDexRegisterMap()) {
+            number_of_dex_register_locations += number_of_dex_registers;
             DexRegisterTable dex_register_table =
                 code_info.GetDexRegisterTableOf(stack_map, number_of_dex_registers);
+            overall_dex_register_maps_size_in_bytes +=
+                dex_register_table.Size(number_of_dex_registers);
             for (size_t j = 0; j < number_of_dex_registers; ++j) {
               DexRegisterTable::EntryIndex entry_index =
                   dex_register_table.GetEntryIndex(j);
               DexRegisterDictionary::LocationKind kind =
                   dex_register_dictionary.GetLocationKind(entry_index);
               int32_t value = dex_register_dictionary.GetValue(entry_index);
+              ++number_of_dex_register_locations_per_kind[kind];
               DumpRegisterMapping(
                   os, j, kind, value, "v",
                   "\t[entry " + std::to_string(static_cast<int>(entry_index)) + "]");
@@ -1005,13 +1065,17 @@ class OatDumper {
           StackMap stack_map = code_info.GetStackMapAt(i);
           dump_stack_map_header(i);
           if (stack_map.HasDexRegisterMap()) {
+            number_of_dex_register_locations += number_of_dex_registers;
             DexRegisterCompressedMap dex_register_compressed_map =
                 code_info.GetDexRegisterCompressedMapOf(stack_map, number_of_dex_registers);
+            overall_dex_register_maps_size_in_bytes +=
+                dex_register_compressed_map.Size(number_of_dex_registers);
             for (size_t j = 0; j < number_of_dex_registers; ++j) {
               std::pair<DexRegisterCompressedMap::LocationKind, int32_t> location =
                   dex_register_compressed_map.GetLocationKindAndValue(j);
               DexRegisterCompressedMap::LocationKind kind = location.first;
               int32_t value = location.second;
+              ++number_of_dex_register_compressed_locations_per_kind[kind];
               DumpRegisterCompressedMapping(os, j, kind, value);
             }
           }
@@ -1019,6 +1083,10 @@ class OatDumper {
         break;
       }
     };
+
+    number_of_dex_register_locations_per_optimized_method_stats.Insert(
+        number_of_dex_register_locations);
+
     // TODO: Display more information from code_info.
   }
 
@@ -1331,12 +1399,117 @@ class OatDumper {
     }
   }
 
+#define DUMP_OAT_SIZE_STATISTICS(value)         \
+    os << ("  " #value ": ") << (value) << '\n'
+
+  void DumpSizeStatistics(std::ostream& os) {
+    os << "SIZE STATISTICS:\n";
+    size_t oat_file_size = oat_file_.Size();
+    DUMP_OAT_SIZE_STATISTICS(oat_file_size);
+    DUMP_OAT_SIZE_STATISTICS(overall_code_info_size_in_bytes);
+    if (dex_register_map_encoding == kDexRegisterLocationDictionary) {
+      size_t overall_dex_register_dictionary_size_in_bytes =
+          dex_register_dictionary_size_in_bytes_stats.sum();
+      DUMP_OAT_SIZE_STATISTICS(overall_dex_register_dictionary_size_in_bytes);
+    }
+    DUMP_OAT_SIZE_STATISTICS(overall_stack_maps_size_in_bytes);
+    DUMP_OAT_SIZE_STATISTICS(overall_dex_register_maps_size_in_bytes);
+
+    // Number of methods compiled with the optimizing compiler.
+    size_t number_of_optimized_methods =
+        number_of_dex_register_locations_per_optimized_method_stats.num();
+    DUMP_OAT_SIZE_STATISTICS(number_of_optimized_methods);
+
+    DUMP_OAT_SIZE_STATISTICS(number_of_dex_registers_per_optimized_method_stats.sum());
+    DUMP_OAT_SIZE_STATISTICS(number_of_dex_registers_per_optimized_method_stats.min());
+    DUMP_OAT_SIZE_STATISTICS(number_of_dex_registers_per_optimized_method_stats.avg());
+    DUMP_OAT_SIZE_STATISTICS(number_of_dex_registers_per_optimized_method_stats.max());
+
+    DUMP_OAT_SIZE_STATISTICS(number_of_dex_register_locations_per_optimized_method_stats.sum());
+    DUMP_OAT_SIZE_STATISTICS(number_of_dex_register_locations_per_optimized_method_stats.min());
+    DUMP_OAT_SIZE_STATISTICS(number_of_dex_register_locations_per_optimized_method_stats.avg());
+    DUMP_OAT_SIZE_STATISTICS(number_of_dex_register_locations_per_optimized_method_stats.max());
+
+    // TODO: Factor redundant code.
+    size_t overall_number_of_dex_register_locations =
+        number_of_dex_register_locations_per_optimized_method_stats.sum();
+    switch (dex_register_map_encoding) {
+      case kDexRegisterLocationList:
+      case kDexRegisterLocationDictionary:
+        os << "  number_of_dex_register_locations_per_kind:\n";
+        for (size_t i = 0; i <= DexRegisterMap::kLastLocationKind; ++i) {
+          size_t n = number_of_dex_register_locations_per_kind[i];
+          auto kind = static_cast<DexRegisterMap::LocationKind>(i);
+          os << "    " << DexRegisterMap::PrettyDescriptor(kind) << ": " << n
+             << " (" << n * 100 / overall_number_of_dex_register_locations << "%)\n";
+        }
+        break;
+
+      case kDexRegisterCompressedLocationList:
+        os << "  number_of_dex_register_compressed_locations_per_kind:\n";
+        for (size_t i = 0; i <= DexRegisterCompressedMap::kLastLocationKind; ++i) {
+          size_t n = number_of_dex_register_compressed_locations_per_kind[i];
+          auto kind = static_cast<DexRegisterCompressedMap::LocationKind>(i);
+          os << "    " << DexRegisterCompressedMap::PrettyDescriptor(kind) << ": " << n
+             << " (" << n * 100 / overall_number_of_dex_register_locations << "%)\n";
+        }
+        break;
+    }
+
+    if (dex_register_map_encoding == kDexRegisterLocationDictionary) {
+      DUMP_OAT_SIZE_STATISTICS(number_of_dex_register_dictionaries);
+      if (number_of_dex_register_dictionaries > 0) {
+
+        DUMP_OAT_SIZE_STATISTICS(dex_register_dictionary_size_in_bytes_stats.min());
+        DUMP_OAT_SIZE_STATISTICS(dex_register_dictionary_size_in_bytes_stats.avg());
+        DUMP_OAT_SIZE_STATISTICS(dex_register_dictionary_size_in_bytes_stats.max());
+
+        DUMP_OAT_SIZE_STATISTICS(dex_register_dictionary_number_of_entries_stats.min());
+        DUMP_OAT_SIZE_STATISTICS(dex_register_dictionary_number_of_entries_stats.avg());
+        DUMP_OAT_SIZE_STATISTICS(dex_register_dictionary_number_of_entries_stats.max());
+      }
+    }
+  }
+
   const OatFile& oat_file_;
   const std::vector<const OatFile::OatDexFile*> oat_dex_files_;
   const OatDumperOptions* options_;
   InstructionSet instruction_set_;
   std::set<uintptr_t> offsets_;
   Disassembler* disassembler_;
+
+  // Value used to initialize a minimum size.
+  static constexpr size_t default_min_size = std::numeric_limits<size_t>::max();
+  // Value used to initialize a maximum size.
+  static constexpr size_t default_max_size = std::numeric_limits<size_t>::min();
+
+  // Total size of CodeInfo elements emitted by the optimizing
+  // compiler, in bytes.
+  size_t overall_code_info_size_in_bytes = 0;
+  // Total size of StackMap elements emitted by the optimizing
+  // compiler, in bytes.
+  size_t overall_stack_maps_size_in_bytes = 0;
+  // Total size of DexRegisterMaps/DexRegisterTable elements emitted
+  // by the optimizing compiler, in bytes.
+  size_t overall_dex_register_maps_size_in_bytes = 0;
+
+  // Statistics about the number of Dex registers per optimized method.
+  Statistics<size_t> number_of_dex_registers_per_optimized_method_stats;
+  // Statistics about the number of Dex register locations per optimized method.
+  Statistics<size_t> number_of_dex_register_locations_per_optimized_method_stats;
+  // Number of Dex register locations per kind.
+  size_t number_of_dex_register_locations_per_kind[DexRegisterMap::kLastLocationKind + 1] =
+      { 0, 0, 0, 0, 0 };
+  // Number of Dex register compressed locations per kind.
+  size_t number_of_dex_register_compressed_locations_per_kind[DexRegisterCompressedMap::kLastLocationKind + 1] =
+      { 0, 0, 0, 0, 0, 0, 0 };
+
+  // Number of Dex register dictionaries.
+  size_t number_of_dex_register_dictionaries = 0;
+  // Statistics about the size of Dex register dictionaries, in bytes.
+  Statistics<size_t> dex_register_dictionary_size_in_bytes_stats;
+  // Statistics about the number of entries in Dex register dictionaries.
+  Statistics<size_t> dex_register_dictionary_number_of_entries_stats;
 };
 
 class ImageDumper {
