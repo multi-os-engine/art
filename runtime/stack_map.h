@@ -118,7 +118,8 @@ class DexRegisterMap {
     kInStack,
     kInRegister,
     kInFpuRegister,
-    kConstant
+    kConstant,
+    kLastLocationKind = kConstant
   };
   static_assert(
       sizeof(art::DexRegisterMap::LocationKind) == 1u,
