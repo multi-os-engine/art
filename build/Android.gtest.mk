@@ -314,11 +314,20 @@ $$(gtest_rule): $$(gtest_exe) $$(ART_GTEST_$(1)_HOST_DEPS) $(foreach file,$(ART_
   ART_TEST_HOST_GTEST_RULES += $$(gtest_rule)
   ART_TEST_HOST_GTEST_$(1)_RULES += $$(gtest_rule)
 
+  art_valgrind_dependencies := \
+    $(HOST_OUT_EXECUTABLES)/valgrind \
+    $(HOST_OUT)/lib64/valgrind/memcheck-amd64-linux \
+    $(HOST_OUT)/lib64/valgrind/memcheck-x86-linux \
+    $(HOST_OUT)/lib64/valgrind/default.supp \
+    $(HOST_OUT)/lib64/valgrind/vgpreload_core-amd64-linux.so \
+    $(HOST_OUT)/lib64/valgrind/vgpreload_core-x86-linux.so \
+    $(HOST_OUT)/lib64/valgrind/vgpreload_memcheck-amd64-linux.so \
+    $(HOST_OUT)/lib64/valgrind/vgpreload_memcheck-x86-linux.so
 .PHONY: valgrind-$$(gtest_rule)
-valgrind-$$(gtest_rule): $$(gtest_exe) $$(ART_GTEST_$(1)_HOST_DEPS) $(foreach file,$(ART_GTEST_$(1)_DEX_DEPS),$(ART_TEST_HOST_GTEST_$(file)_DEX)) $$(gtest_deps)
+valgrind-$$(gtest_rule): $$(gtest_exe) $$(ART_GTEST_$(1)_HOST_DEPS) $(foreach file,$(ART_GTEST_$(1)_DEX_DEPS),$(ART_TEST_HOST_GTEST_$(file)_DEX)) $$(gtest_deps) $$(art_valgrind_dependencies)
 	$(hide) $$(call ART_TEST_SKIP,$$@) && \
-	  valgrind --leak-check=full --error-exitcode=1 $$< && $$(call ART_TEST_PASSED,$$@) \
-	    || $$(call ART_TEST_FAILED,$$@)
+	  $(HOST_OUT_EXECUTABLES)/valgrind --leak-check=full --error-exitcode=1 $$< && \
+	    $$(call ART_TEST_PASSED,$$@) || $$(call ART_TEST_FAILED,$$@)
 
   ART_TEST_HOST_VALGRIND_GTEST$$($(2)ART_PHONY_TEST_HOST_SUFFIX)_RULES += valgrind-$$(gtest_rule)
   ART_TEST_HOST_VALGRIND_GTEST_RULES += valgrind-$$(gtest_rule)
@@ -329,6 +338,7 @@ valgrind-$$(gtest_rule): $$(gtest_exe) $$(ART_GTEST_$(1)_HOST_DEPS) $(foreach fi
   gtest_rule :=
   gtest_exe :=
   gtest_deps :=
+  art_valgrind_dependencies :=
 endef  # define-art-gtest-rule-host
 
 # Define the rules to build and run host and target gtests.
