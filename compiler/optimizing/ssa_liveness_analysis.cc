@@ -327,60 +327,58 @@ int LiveInterval::FindFirstRegisterHint(size_t* free_until) const {
     }
   }
 
-  UsePosition* use = first_use_;
-  size_t start = GetStart();
   size_t end = GetEnd();
-  while (use != nullptr && use->GetPosition() <= end) {
-    size_t use_position = use->GetPosition();
-    if (use_position >= start && !use->GetIsEnvironment()) {
-      HInstruction* user = use->GetUser();
-      size_t input_index = use->GetInputIndex();
-      if (user->IsPhi()) {
-        // If the phi has a register, try to use the same.
-        Location phi_location = user->GetLiveInterval()->ToLocation();
-        if (phi_location.IsRegisterKind()) {
-          DCHECK(SameRegisterKind(phi_location));
-          int reg = RegisterOrLowRegister(phi_location);
-          if (free_until[reg] >= use_position) {
-            return reg;
-          }
+  for (UseIterator it(*this); !it.Done(); it.Advance()) {
+    UsePosition use = it.Current();
+    if (use.GetIsEnvironment()) continue;
+    HInstruction* user = use.GetUser();
+    size_t use_position = use.GetPosition();
+    size_t input_index = use.GetInputIndex();
+
+    if (user->IsPhi()) {
+      // If the phi has a register, try to use the same.
+      Location phi_location = user->GetLiveInterval()->ToLocation();
+      if (phi_location.IsRegisterKind()) {
+        DCHECK(SameRegisterKind(phi_location));
+        int reg = RegisterOrLowRegister(phi_location);
+        if (free_until[reg] >= use_position) {
+          return reg;
         }
-        const GrowableArray<HBasicBlock*>& predecessors = user->GetBlock()->GetPredecessors();
-        // If the instruction dies at the phi assignment, we can try having the
-        // same register.
-        if (end == predecessors.Get(input_index)->GetLifetimeEnd()) {
-          for (size_t i = 0, e = user->InputCount(); i < e; ++i) {
-            if (i == input_index) {
-              continue;
-            }
-            HInstruction* input = user->InputAt(i);
-            Location location = input->GetLiveInterval()->GetLocationAt(
-                predecessors.Get(i)->GetLifetimeEnd() - 1);
-            if (location.IsRegisterKind()) {
-              int reg = RegisterOrLowRegister(location);
-              if (free_until[reg] >= use_position) {
-                return reg;
-              }
-            }
+      }
+      const GrowableArray<HBasicBlock*>& predecessors = user->GetBlock()->GetPredecessors();
+      // If the instruction dies at the phi assignment, we can try having the
+      // same register.
+      if (end == predecessors.Get(input_index)->GetLifetimeEnd()) {
+        for (size_t i = 0, e = user->InputCount(); i < e; ++i) {
+          if (i == input_index) {
+            continue;
           }
-        }
-      } else {
-        // If the instruction is expected in a register, try to use it.
-        LocationSummary* locations = user->GetLocations();
-        Location expected = locations->InAt(use->GetInputIndex());
-        // We use the user's lifetime position - 1 (and not `use_position`) because the
-        // register is blocked at the beginning of the user.
-        size_t position = user->GetLifetimePosition() - 1;
-        if (expected.IsRegisterKind()) {
-          DCHECK(SameRegisterKind(expected));
-          int reg = RegisterOrLowRegister(expected);
-          if (free_until[reg] >= position) {
-            return reg;
+          HInstruction* input = user->InputAt(i);
+          Location location = input->GetLiveInterval()->GetLocationAt(
+              predecessors.Get(i)->GetLifetimeEnd() - 1);
+          if (location.IsRegisterKind()) {
+            int reg = RegisterOrLowRegister(location);
+            if (free_until[reg] >= use_position) {
+              return reg;
+            }
           }
         }
       }
+    } else {
+      // If the instruction is expected in a register, try to use it.
+      LocationSummary* locations = user->GetLocations();
+      Location expected = locations->InAt(input_index);
+      // We use the user's lifetime position - 1 (and not `use_position`) because the
+      // register is blocked at the beginning of the user.
+      size_t position = user->GetLifetimePosition() - 1;
+      if (expected.IsRegisterKind()) {
+        DCHECK(SameRegisterKind(expected));
+        int reg = RegisterOrLowRegister(expected);
+        if (free_until[reg] >= position) {
+          return reg;
+        }
+      }
     }
-    use = use->GetNext();
   }
 
   return kNoRegister;

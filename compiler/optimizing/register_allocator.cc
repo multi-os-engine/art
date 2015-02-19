@@ -1356,7 +1356,6 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
                         ? Location::DoubleStackSlot(interval->GetParent()->GetSpillSlot())
                         : Location::StackSlot(interval->GetParent()->GetSpillSlot()));
   }
-  UsePosition* use = current->GetFirstUse();
 
   // Walk over all siblings, updating locations of use positions, and
   // connecting them when they are adjacent.
@@ -1365,26 +1364,26 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
 
     // Walk over all uses covered by this interval, and update the location
     // information.
-    while (use != nullptr && use->GetPosition() <= current->GetEnd()) {
-      LocationSummary* locations = use->GetUser()->GetLocations();
-      if (use->GetIsEnvironment()) {
-        locations->SetEnvironmentAt(use->GetInputIndex(), source);
+    for (LiveInterval::UseIterator it(*current); !it.Done(); it.Advance()) {
+      UsePosition use = it.Current();
+      LocationSummary* locations = use.GetUser()->GetLocations();
+      if (use.GetIsEnvironment()) {
+        locations->SetEnvironmentAt(use.GetInputIndex(), source);
       } else {
-        Location expected_location = locations->InAt(use->GetInputIndex());
+        Location expected_location = locations->InAt(use.GetInputIndex());
         // The expected (actual) location may be invalid in case the input is unused. Currently
         // this only happens for intrinsics.
         if (expected_location.IsValid()) {
           if (expected_location.IsUnallocated()) {
-            locations->SetInAt(use->GetInputIndex(), source);
+            locations->SetInAt(use.GetInputIndex(), source);
           } else if (!expected_location.IsConstant()) {
-            AddInputMoveFor(use->GetUser(), source, expected_location);
+            AddInputMoveFor(use.GetUser(), source, expected_location);
           }
         } else {
-          DCHECK(use->GetUser()->IsInvoke());
-          DCHECK(use->GetUser()->AsInvoke()->GetIntrinsic() != Intrinsics::kNone);
+          DCHECK(use.GetUser()->IsInvoke());
+          DCHECK(use.GetUser()->AsInvoke()->GetIntrinsic() != Intrinsics::kNone);
         }
       }
-      use = use->GetNext();
     }
 
     // If the next interval starts just after this one, and has a register,
@@ -1452,7 +1451,6 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
     }
     current = next_sibling;
   } while (current != nullptr);
-  DCHECK(use == nullptr);
 }
 
 void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,

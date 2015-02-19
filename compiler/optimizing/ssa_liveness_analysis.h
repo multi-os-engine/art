@@ -100,28 +100,22 @@ class LiveRange FINAL : public ArenaObject<kArenaAllocMisc> {
 /**
  * A use position represents a live interval use at a given position.
  */
-class UsePosition : public ArenaObject<kArenaAllocMisc> {
+class UsePosition : public ValueObject {
  public:
   UsePosition(HInstruction* user,
               size_t input_index,
               bool is_environment,
-              size_t position,
-              UsePosition* next)
+              size_t position)
       : user_(user),
         input_index_(input_index),
         is_environment_(is_environment),
-        position_(position),
-        next_(next) {
+        position_(position) {
     DCHECK(user->IsPhi()
         || (GetPosition() == user->GetLifetimePosition() + 1)
         || (GetPosition() == user->GetLifetimePosition()));
-    DCHECK(next_ == nullptr || next->GetPosition() >= GetPosition());
   }
 
   size_t GetPosition() const { return position_; }
-
-  UsePosition* GetNext() const { return next_; }
-  void SetNext(UsePosition* next) { next_ = next; }
 
   HInstruction* GetUser() const { return user_; }
 
@@ -133,20 +127,11 @@ class UsePosition : public ArenaObject<kArenaAllocMisc> {
     stream << position_;
   }
 
-  UsePosition* Dup(ArenaAllocator* allocator) const {
-    return new (allocator) UsePosition(
-        user_, input_index_, is_environment_, position_,
-        next_ == nullptr ? nullptr : next_->Dup(allocator));
-  }
-
  private:
-  HInstruction* const user_;
-  const size_t input_index_;
-  const bool is_environment_;
-  const size_t position_;
-  UsePosition* next_;
-
-  DISALLOW_COPY_AND_ASSIGN(UsePosition);
+  HInstruction* user_;
+  size_t input_index_;
+  bool is_environment_;
+  size_t position_;
 };
 
 /**
@@ -197,23 +182,27 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     DCHECK(position == instruction->GetLifetimePosition()
            || position == instruction->GetLifetimePosition() + 1);
 
-    if ((first_use_ != nullptr)
-        && (first_use_->GetUser() == instruction)
-        && (first_use_->GetPosition() < position)) {
-      // The user uses the instruction multiple times, and one use dies before the other.
-      // We update the use list so that the latter is first.
-      UsePosition* cursor = first_use_;
-      while ((cursor->GetNext() != nullptr) && (cursor->GetNext()->GetPosition() < position)) {
-        cursor = cursor->GetNext();
+    if (!uses_.IsEmpty()) {
+      UsePosition first_use = uses_.Peek();
+      if ((first_use.GetUser() == instruction) && (first_use.GetPosition() < position)) {
+        // The user uses the instruction multiple times, and one use dies before the other.
+        // We update the use list so that the latter is first.
+        DCHECK(first_use.GetPosition() + 1 == position);
+        UseIterator it(*this);
+        for (; !it.Done(); it.Advance()) {
+          if (it.Current().GetPosition() >= position) {
+            break;
+          }
+        }
+        size_t insert_at = it.Done() ? 0 : it.CurrentIndex() + 1;
+        UsePosition use = UsePosition(instruction, input_index, is_environment, position);
+        DCHECK(CanInsertUseAt(insert_at, use));
+        uses_.InsertAt(insert_at, use);
+        if (first_range_->GetEnd() == first_use.GetPosition()) {
+          first_range_->end_ = position;
+        }
+        return;
       }
-      DCHECK(first_use_->GetPosition() + 1 == position);
-      UsePosition* new_use = new (allocator_) UsePosition(
-          instruction, input_index, is_environment, position, cursor->GetNext());
-      cursor->SetNext(new_use);
-      if (first_range_->GetEnd() == first_use_->GetPosition()) {
-        first_range_->end_ = position;
-      }
-      return;
     }
 
     size_t start_block_position = instruction->GetBlock()->GetLifetimeStart();
@@ -237,14 +226,16 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       // and the check line 205 would succeed.
       first_range_ = new (allocator_) LiveRange(start_block_position, position, first_range_);
     }
-    first_use_ = new (allocator_) UsePosition(
-        instruction, input_index, is_environment, position, first_use_);
+    UsePosition use = UsePosition(instruction, input_index, is_environment, position);
+    DCHECK(CanInsertUseAt(uses_.Size(), use));
+    uses_.Add(use);
   }
 
   void AddPhiUse(HInstruction* instruction, size_t input_index, HBasicBlock* block) {
     DCHECK(instruction->IsPhi());
-    first_use_ = new (allocator_) UsePosition(
-        instruction, input_index, false, block->GetLifetimeEnd(), first_use_);
+    UsePosition use = UsePosition(instruction, input_index, false, block->GetLifetimeEnd());
+    DCHECK(CanInsertUseAt(uses_.Size(), use));
+    uses_.Add(use);
   }
 
   void AddRange(size_t start, size_t end) {
@@ -393,19 +384,17 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       }
     }
 
-    UsePosition* use = first_use_;
-    size_t end = GetEnd();
-    while (use != nullptr && use->GetPosition() <= end) {
-      size_t use_position = use->GetPosition();
-      if (use_position > position && !use->GetIsEnvironment()) {
-        Location location = use->GetUser()->GetLocations()->InAt(use->GetInputIndex());
+    for (UseIterator it(*this); !it.Done(); it.Advance()) {
+      UsePosition use = it.Current();
+      size_t use_position = use.GetPosition();
+      if (use_position > position && !use.GetIsEnvironment()) {
+        Location location = use.GetUser()->GetLocations()->InAt(use.GetInputIndex());
         if (location.IsUnallocated()
             && (location.GetPolicy() == Location::kRequiresRegister
                 || location.GetPolicy() == Location::kRequiresFpuRegister)) {
           return use_position;
         }
       }
-      use = use->GetNext();
     }
     return kNoLifetime;
   }
@@ -419,20 +408,12 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       return position == GetStart() ? position : kNoLifetime;
     }
 
-    UsePosition* use = first_use_;
-    size_t end = GetEnd();
-    while (use != nullptr && use->GetPosition() <= end) {
-      size_t use_position = use->GetPosition();
-      if (use_position > position) {
-        return use_position;
-      }
-      use = use->GetNext();
+    size_t use_index = FindFirstUseAfter(position);
+    if (use_index != kUseNotFound) {
+      return uses_.Get(use_index).GetPosition();
+    } else {
+      return kNoLifetime;
     }
-    return kNoLifetime;
-  }
-
-  UsePosition* GetFirstUse() const {
-    return first_use_;
   }
 
   Primitive::Type GetType() const {
@@ -465,7 +446,17 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     next_sibling_ = new_interval;
     new_interval->parent_ = parent_;
 
-    new_interval->first_use_ = first_use_;
+    size_t uses_split_index = FindFirstUseAfter(position);
+    if (uses_split_index != kUseNotFound) {
+      size_t new_uses = uses_split_index + 1;
+      size_t old_uses = uses_.Size() - new_uses;
+      new_interval->uses_.Add(uses_, 0, new_uses);
+      for (size_t i = 0; i < old_uses; ++i) {
+        uses_.Put(i, uses_.Get(new_uses + i));
+      }
+      uses_.SetSize(old_uses);
+    }
+
     LiveRange* current = first_range_;
     LiveRange* previous = nullptr;
     // Iterate over the ranges, and either find a range that covers this position, or
@@ -525,12 +516,9 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       current = current->GetNext();
     }
     stream << "}, uses: { ";
-    UsePosition* use = first_use_;
-    if (use != nullptr) {
-      do {
-        use->Dump(stream);
-        stream << " ";
-      } while ((use = use->GetNext()) != nullptr);
+    for (UseIterator it(*this); !it.Done(); it.Advance()) {
+      it.Current().Dump(stream);
+      stream << " ";
     }
     stream << "}";
     stream << " is_fixed: " << is_fixed_ << ", is_split: " << IsSplit();
@@ -627,9 +615,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       high_or_low_interval_->first_range_ = first_range_->Dup(allocator_);
       high_or_low_interval_->last_range_ = first_range_->GetLastRange();
     }
-    if (first_use_ != nullptr) {
-      high_or_low_interval_->first_use_ = first_use_->Dup(allocator_);
-    }
+    high_or_low_interval_->uses_.AddAll(uses_);
   }
 
   // Returns whether an interval, when it is non-split, is using
@@ -686,6 +672,25 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     UNREACHABLE();
   }
 
+  class UseIterator : public ValueObject {
+   public:
+    explicit UseIterator(const LiveInterval& interval)
+      : current_index_(interval.uses_.Size() - 1), uses_(interval.uses_) {}
+
+    UsePosition Current() { return uses_.Get(current_index_); }
+    size_t CurrentIndex() { return current_index_; }
+    void Advance() {
+      size_t old_position = Current().GetPosition();
+      --current_index_;
+      if (!Done()) DCHECK_GE(Current().GetPosition(), old_position);
+    }
+    bool Done() { return current_index_ >= uses_.Size(); }
+
+   private:
+    size_t current_index_;
+    const GrowableArray<UsePosition>& uses_;
+  };
+
  private:
   LiveInterval(ArenaAllocator* allocator,
                Primitive::Type type,
@@ -698,7 +703,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       : allocator_(allocator),
         first_range_(nullptr),
         last_range_(nullptr),
-        first_use_(nullptr),
+        uses_(allocator, 0),
         type_(type),
         next_sibling_(nullptr),
         parent_(this),
@@ -711,6 +716,50 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         high_or_low_interval_(nullptr),
         defined_by_(defined_by) {}
 
+  bool CanInsertUseAt(size_t insert_at, const UsePosition& use) const {
+    return (insert_at <= uses_.Size()) &&
+           ((insert_at == 0) ||
+            (uses_.Get(insert_at - 1).GetPosition() >= use.GetPosition())) &&
+           ((insert_at == uses_.Size()) ||
+            (uses_.Get(insert_at).GetPosition() <= use.GetPosition()));
+  }
+
+  // Return the next element's index or (size_t)(-1) if no use after
+  // 'position' can be found.
+  size_t FindFirstUseAfter(size_t position) const {
+    size_t min = 0;
+    size_t max = uses_.Size() - 1;
+    size_t mid;
+
+    if (uses_.IsEmpty() || uses_.Get(min).GetPosition() <= position) {
+      return kUseNotFound;
+    } else if (uses_.Get(max).GetPosition() > position) {
+      return max;
+    }
+
+    while (min < max) {
+      mid = (min + max) >> 1;
+      DCHECK_LT(mid, max) << "Interval must be reduced at each iteration";
+      if (uses_.Get(mid).GetPosition() > position) {
+        min = mid + 1;
+      } else {
+        max = mid;
+      }
+    }
+    DCHECK(uses_.Get(min).GetPosition() <= position);
+    DCHECK(uses_.Get(min - 1).GetPosition() > position);
+    return min - 1;
+  }
+
+//  size_t FindFirstUseAfter(size_t position) const {
+//    for (UseIterator it(*this); !it.Done(); it.Advance()) {
+//      if (it.Current().GetPosition() > position) {
+//        return it.CurrentIndex();
+//      }
+//    }
+//    return kNoUseFound;
+//  }
+
   ArenaAllocator* const allocator_;
 
   // Ranges of this interval. We need a quick access to the last range to test
@@ -719,7 +768,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   LiveRange* last_range_;
 
   // Uses of this interval. Note that this linked list is shared amongst siblings.
-  UsePosition* first_use_;
+  GrowableArray<UsePosition> uses_;
 
   // The instruction type this interval corresponds to.
   const Primitive::Type type_;
@@ -757,6 +806,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
 
   static constexpr int kNoRegister = -1;
   static constexpr int kNoSpillSlot = -1;
+  static constexpr size_t kUseNotFound = static_cast<size_t>(-1);
 
   ART_FRIEND_TEST(RegisterAllocatorTest, SpillInactive);
 
