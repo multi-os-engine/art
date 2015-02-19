@@ -46,7 +46,6 @@ class GrowableArray : public ArenaObject<kArenaAllocGrowableArray> {
       }
     }
 
-
     // Expand the list size to at least new length.
     void Resize(size_t new_length) {
       if (new_length <= num_allocated_) return;
@@ -86,6 +85,17 @@ class GrowableArray : public ArenaObject<kArenaAllocGrowableArray> {
 
     void Add(T elem) {
       Insert(elem);
+    }
+
+    void Add(const GrowableArray<T>& array, size_t start, size_t count) {
+      DCHECK_LE(start + count, array.num_used_);
+      size_t old_num_used = num_used_;
+      SetSize(old_num_used + count);
+      memcpy(elem_list_ + old_num_used, array.elem_list_ + start, sizeof(T) * count);
+    }
+
+    void AddAll(const GrowableArray<T>& array) {
+      Add(array, 0, array.num_used_);
     }
 
     T Get(size_t index) const {
