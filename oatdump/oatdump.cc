@@ -2143,6 +2143,9 @@ struct OatdumpArgs : public CmdlineArgs {
         "\n"
         "  --method-filter=<method name>: only dumps methods that contain the filter.\n"
         "      Example: --method-filter=foo\n"
+        "\n"
+        "  --symbolize=<file.oat>: output a copy of file.oat with elf symbols included.\n"
+        "      Example: --symbolize=/system/framework/boot.oat\n"
         "\n";
 
     return usage;
