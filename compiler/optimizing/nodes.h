@@ -1341,7 +1341,7 @@ class HBinaryOperation : public HExpression<2> {
   HInstruction* GetRight() const { return InputAt(1); }
   Primitive::Type GetResultType() const { return GetType(); }
 
-  virtual bool IsCommutative() { return false; }
+  virtual bool IsCommutative() const { return false; }
 
   virtual bool CanBeMoved() const { return true; }
   virtual bool InstructionDataEquals(HInstruction* other) const {
@@ -1358,6 +1358,31 @@ class HBinaryOperation : public HExpression<2> {
   virtual int32_t Evaluate(int32_t x, int32_t y) const = 0;
   virtual int64_t Evaluate(int64_t x, int64_t y) const = 0;
 
+  // Returns an input that can legally be used as the right input and is
+  // constant, or nullptr.
+  HConstant* GetConstantRight() const {
+    if (GetRight()->IsConstant()) {
+      return GetRight()->AsConstant();
+    } else if (IsCommutative() && GetLeft()->IsConstant()) {
+      return GetLeft()->AsConstant();
+    } else {
+      return nullptr;
+    }
+  }
+
+  // If `GetConstantRight()` returns one of the input, this returns the other
+  // one. Otherwise it returns nullptr.
+  HInstruction* GetLeastConstantLeft() const {
+    HInstruction* most_constant_right = reinterpret_cast<HInstruction*>(GetConstantRight());
+    if (most_constant_right == nullptr) {
+      return nullptr;
+    } else if (most_constant_right == GetLeft()) {
+      return GetRight();
+    } else {
+      return GetLeft();
+    }
+  }
+
   DECLARE_INSTRUCTION(BinaryOperation);
 
  private:
@@ -1370,7 +1395,7 @@ class HCondition : public HBinaryOperation {
       : HBinaryOperation(Primitive::kPrimBoolean, first, second),
         needs_materialization_(true) {}
 
-  virtual bool IsCommutative() { return true; }
+  virtual bool IsCommutative() const OVERRIDE { return true; }
 
   bool NeedsMaterialization() const { return needs_materialization_; }
   void ClearNeedsMaterialization() { needs_materialization_ = false; }
@@ -1626,6 +1651,10 @@ class HConstant : public HExpression<0> {
   explicit HConstant(Primitive::Type type) : HExpression(type, SideEffects::None()) {}
 
   virtual bool CanBeMoved() const { return true; }
+
+  bool IsMinusOne() const;
+  bool IsZero() const;
+  bool IsOne() const;
 
   DECLARE_INSTRUCTION(Constant);
 
@@ -1954,7 +1983,7 @@ class HAdd : public HBinaryOperation {
   HAdd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  virtual bool IsCommutative() { return true; }
+  virtual bool IsCommutative() const OVERRIDE { return true; }
 
   virtual int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE {
     return x + y;
@@ -1992,7 +2021,7 @@ class HMul : public HBinaryOperation {
   HMul(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  virtual bool IsCommutative() { return true; }
+  virtual bool IsCommutative() const OVERRIDE { return true; }
 
   virtual int32_t Evaluate(int32_t x, int32_t y) const { return x * y; }
   virtual int64_t Evaluate(int64_t x, int64_t y) const { return x * y; }
@@ -2141,7 +2170,7 @@ class HAnd : public HBinaryOperation {
   HAnd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  bool IsCommutative() OVERRIDE { return true; }
+  bool IsCommutative() const OVERRIDE { return true; }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x & y; }
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x & y; }
@@ -2157,7 +2186,7 @@ class HOr : public HBinaryOperation {
   HOr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  bool IsCommutative() OVERRIDE { return true; }
+  bool IsCommutative() const OVERRIDE { return true; }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x | y; }
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x | y; }
@@ -2173,7 +2202,7 @@ class HXor : public HBinaryOperation {
   HXor(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  bool IsCommutative() OVERRIDE { return true; }
+  bool IsCommutative() const OVERRIDE { return true; }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x ^ y; }
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x ^ y; }
