@@ -802,6 +802,7 @@ class SsaLivenessAnalysis : public ValueObject {
         linear_order_(graph.GetArena(), graph.GetBlocks().Size()),
         block_infos_(graph.GetArena(), graph.GetBlocks().Size()),
         instructions_from_ssa_index_(graph.GetArena(), 0),
+        call_positions_(graph.GetArena(), 0),
         instructions_from_lifetime_position_(graph.GetArena(), 0),
         number_of_ssa_values_(0) {
     block_infos_.SetSize(graph.GetBlocks().Size());
@@ -837,6 +838,10 @@ class SsaLivenessAnalysis : public ValueObject {
     // A temporary shares the same lifetime start as the instruction that requires it.
     DCHECK(temp->IsTemp());
     return GetInstructionFromPosition(temp->GetStart() / 2);
+  }
+
+  const GrowableArray<size_t>& GetCallPositions() const {
+    return call_positions_;
   }
 
   size_t GetMaxLifetimePosition() const {
@@ -885,6 +890,9 @@ class SsaLivenessAnalysis : public ValueObject {
 
   // Temporary array used when computing live_in, live_out, and kill sets.
   GrowableArray<HInstruction*> instructions_from_ssa_index_;
+
+  // Lifetime position of calls - used by the register allocator.
+  GrowableArray<size_t> call_positions_;
 
   // Temporary array used when inserting moves in the graph.
   GrowableArray<HInstruction*> instructions_from_lifetime_position_;

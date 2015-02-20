@@ -134,11 +134,22 @@ class RegisterAllocator {
   void DumpInterval(std::ostream& stream, LiveInterval* interval) const;
   void DumpAllIntervals(std::ostream& stream) const;
   int FindAvailableRegisterPair(size_t* next_use, size_t starting_at) const;
-  int FindAvailableRegister(size_t* next_use) const;
+  int FindAvailableRegister(size_t* next_use, LiveInterval* interval) const;
 
   // Try splitting an active non-pair interval at the given `position`.
   // Returns whether it was successful at finding such an interval.
   bool TrySplitNonPairIntervalAt(size_t position, size_t first_register_use, size_t* next_use);
+
+  bool IsCalleeSavedRegister(int reg) const;
+
+  enum CallerCalleePreference {
+    kAnyRegister,
+    kCallerSavedRegister,    // Saved in the caller frame.
+    kCalleeSavedRegister     // Saved in the callee frame.
+  };
+
+  bool IsCallerCalleePreference(int reg, CallerCalleePreference reg_type) const;
+  CallerCalleePreference GetCallerCalleePreference(LiveInterval* interval) const;
 
   ArenaAllocator* const allocator_;
   CodeGenerator* const codegen_;
