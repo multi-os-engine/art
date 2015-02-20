@@ -303,7 +303,7 @@ ART_VALGRIND_DEPENDENCIES := \
   $(HOST_OUT)/lib64/valgrind/vgpreload_core-x86-linux.so \
   $(HOST_OUT)/lib64/valgrind/vgpreload_memcheck-amd64-linux.so \
   $(HOST_OUT)/lib64/valgrind/vgpreload_memcheck-x86-linux.so
-
+$(warning $(ART_VALGRIND_DEPENDENCIES))
 # Define make rules for a host gtests.
 # $(1): gtest name - the name of the test we're building such as leb128_test.
 # $(2): 2ND_ or undefined - used to differentiate between the primary and secondary architecture.
@@ -328,6 +328,7 @@ $$(gtest_rule): $$(gtest_exe) $$(ART_GTEST_$(1)_HOST_DEPS) $(foreach file,$(ART_
 .PHONY: valgrind-$$(gtest_rule)
 valgrind-$$(gtest_rule): $$(gtest_exe) $$(ART_GTEST_$(1)_HOST_DEPS) $(foreach file,$(ART_GTEST_$(1)_DEX_DEPS),$(ART_TEST_HOST_GTEST_$(file)_DEX)) $$(gtest_deps) $(ART_VALGRIND_DEPENDENCIES)
 	$(hide) $$(call ART_TEST_SKIP,$$@) && \
+	  VALGRIND_LIB=$(HOST_OUT)/lib64/valgrind \
 	  $(HOST_OUT_EXECUTABLES)/valgrind --leak-check=full --error-exitcode=1 $$< && \
 	    $$(call ART_TEST_PASSED,$$@) || $$(call ART_TEST_FAILED,$$@)
 
