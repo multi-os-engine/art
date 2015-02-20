@@ -1932,9 +1932,10 @@ void RosAlloc::Verify() {
           }
           mirror::Object* obj = reinterpret_cast<mirror::Object*>(start);
           size_t obj_size = obj->SizeOf();
-          CHECK_GT(obj_size +
-                   (running_on_valgrind_ ? 2 * ::art::gc::space::kDefaultValgrindRedZoneBytes : 0),
-                   kLargeSizeThreshold)
+          if (running_on_valgrind_) {
+            obj_size += 2 * ::art::gc::space::kDefaultValgrindRedZoneBytes;
+          }
+          CHECK_GT(obj_size, kLargeSizeThreshold)
               << "A rosalloc large object size must be > " << kLargeSizeThreshold;
           CHECK_EQ(num_pages, RoundUp(obj_size, kPageSize) / kPageSize)
               << "A rosalloc large object size " << obj_size
