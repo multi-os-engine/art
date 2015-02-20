@@ -687,8 +687,10 @@ static void FreeIfNotCoverAt(LiveInterval* interval, size_t position, size_t* fr
   }
 }
 
-// Find a free register. If multiple are found, pick the register that
-// is free the longest.
+// Find a free register. Pick a register of the preferred type (caller/callee saved)
+// that is available at least for the whole lifetime of the current interval,
+// otherwise if no register of the preferred type is found just pick the register
+// that is available the longest.
 bool RegisterAllocator::TryAllocateFreeReg(LiveInterval* current) {
   size_t* free_until = registers_array_;
 
@@ -775,7 +777,7 @@ bool RegisterAllocator::TryAllocateFreeReg(LiveInterval* current) {
     } else if (current->IsLowInterval()) {
       reg = FindAvailableRegisterPair(free_until, current->GetStart());
     } else {
-      reg = FindAvailableRegister(free_until);
+      reg = FindAvailableRegister(free_until, current);
     }
   }
 
@@ -839,14 +841,86 @@ int RegisterAllocator::FindAvailableRegisterPair(size_t* next_use, size_t starti
   return reg;
 }
 
-int RegisterAllocator::FindAvailableRegister(size_t* next_use) const {
+// Returns the preferred register type for a lifetime interval as follows:
+//  * the interval does not overlap with any calls ==> Caller saved register;
+//  * the interval does overlap with one or multiple calls ==> Callee saved register.
+RegisterAllocator::CallerCalleePreference RegisterAllocator::GetCallerCalleePreference(LiveInterval* interval) const {
+  DCHECK(!interval->IsFixed() && !interval->HasSpillSlot());
+
+  const GrowableArray<size_t>& call_positions = liveness_.GetCallPositions();
+
+  // Note: This algorithm only works if the call positions are sorted in an
+  // ascending order, since we do a linear search for calls that overlap with
+  // the current interval lifetime.
+  if (kIsDebugBuild) {
+    size_t previous_call_position = 0;
+    for (size_t i = 0; i < call_positions.Size(); ++i) {
+      DCHECK(previous_call_position <= call_positions.Get(i));
+      previous_call_position = call_positions.Get(i);
+    }
+  }
+
+  CallerCalleePreference reg_pref = CallerCalleePreference::kCallerSavedRegister;
+  for (size_t i = 0; i < call_positions.Size(); ++i) {
+    size_t current_call_position = call_positions.Get(i);
+
+    if (current_call_position < interval->GetStart()) {
+      //    [--------]
+      //  ^
+      continue;
+    } else if (current_call_position >= interval->GetEnd()) {
+      //    [--------]
+      //               ^
+      break;
+    } else if (current_call_position > interval->GetStart()
+               && current_call_position <= interval->GetEnd()) {
+      //    [--------]
+      //        ^
+      reg_pref = CallerCalleePreference::kCalleeSavedRegister;
+      break;
+    }
+  }
+
+  return reg_pref;
+}
+
+bool RegisterAllocator::IsCalleeSavedRegister(int reg) const {
+  return processing_core_registers_ ? codegen_->IsCoreCalleeSaveRegister(reg)
+                                    : codegen_->IsFloatingPointCalleeSaveRegister(reg);
+}
+
+bool RegisterAllocator::IsCallerCalleePreference(int reg, CallerCalleePreference reg_pref) const {
+  if (reg_pref == kAnyRegister) {
+    return true;
+  }
+  return (reg_pref == kCalleeSavedRegister) ? IsCalleeSavedRegister(reg)
+                                            : !IsCalleeSavedRegister(reg);
+}
+
+// Return the register that is available the longest. First, check which type of
+// register is preferred for the current interval (callee/caller saved) and if any
+// is available, at least until the end of the current lifetime interval, return it.
+int RegisterAllocator::FindAvailableRegister(size_t* next_use, LiveInterval* interval) const {
+  DCHECK(!interval->IsLowInterval() || !interval->IsHighInterval());
+  CallerCalleePreference reg_pref = GetCallerCalleePreference(interval);
   int reg = kNoRegister;
-  // Pick the register that is used the last.
+  bool found_reg_pref = false;
+
   for (size_t i = 0; i < number_of_registers_; ++i) {
     if (IsBlocked(i)) continue;
-    if (reg == kNoRegister || next_use[i] > next_use[reg]) {
+    if (reg == kNoRegister) reg = i;
+
+    if (IsCallerCalleePreference(i, reg_pref) && (interval->GetEnd() < next_use[i])) {
+      if (!found_reg_pref) {
+        found_reg_pref = true;
+        reg = i;
+      } else if (next_use[i] > next_use[reg]) {
+        reg = i;
+      }
+      // Exit early if we find a preferred register available for the max lifetime.
+      if (next_use[reg] == kMaxLifetimePosition) break;
+    } else if (!found_reg_pref && (next_use[i] > next_use[reg])) {
       reg = i;
-      if (next_use[i] == kMaxLifetimePosition) break;
     }
   }
   return reg;
@@ -971,7 +1045,7 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
       || (first_use >= next_use[GetHighForLowRegister(reg)]);
   } else {
     DCHECK(!current->IsHighInterval());
-    reg = FindAvailableRegister(next_use);
+    reg = FindAvailableRegister(next_use, current);
     should_spill = (first_use >= next_use[reg]);
   }
 

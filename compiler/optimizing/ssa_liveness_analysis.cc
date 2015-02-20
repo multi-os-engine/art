@@ -149,6 +149,12 @@ void SsaLivenessAnalysis::NumberInstructions() {
       }
       instructions_from_lifetime_position_.Add(current);
       current->SetLifetimePosition(lifetime_position);
+
+      // Record call positions for real calls, i.e. not slow path calls. This
+      // information will be used by the register allocator.
+      if (locations != nullptr && locations->WillCall()) {
+        call_positions_.Add(lifetime_position);
+      }
       lifetime_position += 2;
     }
 
