@@ -25,6 +25,36 @@
 
 namespace art {
 
+/* Returns true if trampoline contains direct reference to
+   native implementation. */
+static bool IsDirectTrampoline(QuickEntrypointEnum trampoline) {
+    return trampoline == kQuickInstanceofNonTrivial
+    || trampoline == kQuickA64Load
+    || trampoline == kQuickA64Store
+    || trampoline == kQuickFmod
+    || trampoline == kQuickFmodf
+    || trampoline == kQuickMemcpy
+    || trampoline == kQuickL2d
+    || trampoline == kQuickL2f
+    || trampoline == kQuickD2iz
+    || trampoline == kQuickF2iz
+    || trampoline == kQuickD2l
+    || trampoline == kQuickF2l
+    || trampoline == kQuickLdiv
+    || trampoline == kQuickLmod
+    || trampoline == kQuickLmul
+    || trampoline == kQuickJniMethodStart
+    || trampoline == kQuickJniMethodStartSynchronized
+    || trampoline == kQuickJniMethodEnd
+    || trampoline == kQuickJniMethodEndSynchronized
+    || trampoline == kQuickJniMethodEndWithReference
+    || trampoline == kQuickJniMethodEndWithReferenceSynchronized
+    || trampoline == kQuickCmpgDouble
+    || trampoline == kQuickCmpgFloat
+    || trampoline == kQuickCmplDouble
+    || trampoline == kQuickCmplFloat;
+}
+
 /* This file contains codegen for the MIPS32 ISA. */
 LIR* MipsMir2Lir::OpFpRegCopy(RegStorage r_dest, RegStorage r_src) {
   int opcode;
@@ -708,7 +738,14 @@ LIR* MipsMir2Lir::OpCondBranch(ConditionCode cc, LIR* target) {
 }
 
 LIR* MipsMir2Lir::InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) {
-  UNUSED(trampoline);  // The address of the trampoline is already loaded into r_tgt.
+  if (IsDirectTrampoline(trampoline)) {
+    // Allocate stack space for argument registers.
+    OpRegImm(kOpSub, rs_rSP, 16);
+    LIR* retVal = OpReg(op, r_tgt);
+    OpRegImm(kOpAdd, rs_rSP, 16);
+    return retVal;
+  }
+
   return OpReg(op, r_tgt);
 }
 
