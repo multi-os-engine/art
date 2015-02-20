@@ -27,8 +27,10 @@ namespace art {
  */
 class InstructionSimplifier : public HOptimization {
  public:
-  explicit InstructionSimplifier(HGraph* graph, const char* name = "instruction_simplifier")
+  explicit InstructionSimplifier(HGraph* graph, const char* name = kInstructionSimplifierPassName)
     : HOptimization(graph, true, name) {}
+
+  static constexpr const char* kInstructionSimplifierPassName = "instruction_simplifier";
 
   void Run() OVERRIDE;
 };

@@ -29,10 +29,12 @@ namespace art {
 class ReferenceTypePropagation : public HOptimization {
  public:
   explicit ReferenceTypePropagation(HGraph* graph)
-    : HOptimization(graph, true, "reference_type_propagation"),
+    : HOptimization(graph, true, kReferenceTypePropagationPassName),
       worklist_(graph->GetArena(), kDefaultWorklistSize) {}
 
   void Run() OVERRIDE;
+
+  static constexpr const char* kReferenceTypePropagationPassName = "reference_type_propagation";
 
  private:
   void VisitBasicBlock(HBasicBlock* block);
