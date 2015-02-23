@@ -60,22 +60,10 @@ ART_JIT := true
 endif
 
 #
-# Used to enable smart mode
-#
-ART_SMALL_MODE := false
-ifneq ($(wildcard art/SMALL_ART),)
-$(info Enabling ART_SMALL_MODE because of existence of art/SMALL_ART)
-ART_SMALL_MODE := true
-endif
-ifeq ($(WITH_ART_SMALL_MODE), true)
-ART_SMALL_MODE := true
-endif
-
-#
 # Used to change the default GC. Valid values are CMS, SS, GSS. The default is CMS.
 #
-ART_DEFAULT_GC_TYPE ?= CMS
-art_default_gc_type_cflags := -DART_DEFAULT_GC_TYPE_IS_$(ART_DEFAULT_GC_TYPE)
+art_default_gc_type ?= CMS
+art_default_gc_type_cflags := -DART_DEFAULT_GC_TYPE_IS_$(art_default_gc_type)
 
 ART_HOST_CFLAGS :=
 ART_TARGET_CFLAGS :=
@@ -203,7 +191,6 @@ art_cflags := \
   -Wunreachable-code \
   -Wredundant-decls \
   -Wshadow \
-  -Wunused \
   -fvisibility=protected \
   $(art_default_gc_type_cflags)
 
@@ -217,10 +204,6 @@ ifdef ART_IMT_SIZE
 else
   # Default is 64
   art_cflags += -DIMT_SIZE=64
-endif
-
-ifeq ($(ART_SMALL_MODE),true)
-  art_cflags += -DART_SMALL_MODE=1
 endif
 
 ifeq ($(ART_USE_OPTIMIZING_COMPILER),true)
