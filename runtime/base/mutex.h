@@ -486,6 +486,7 @@ class SCOPED_LOCKABLE WriterMutexLock {
 class Locks {
  public:
   static void Init();
+  static void Free();  // Frees mutexes if we're running under Valgrind.
 
   // Guards allocation entrypoint instrumenting.
   static Mutex* instrument_entrypoints_lock_;
