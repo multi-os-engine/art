@@ -48,18 +48,6 @@ $(info Disabling ART_BUILD_HOST_DEBUG)
 endif
 
 #
-# Used to enable smart mode
-#
-ART_SMALL_MODE := false
-ifneq ($(wildcard art/SMALL_ART),)
-$(info Enabling ART_SMALL_MODE because of existence of art/SMALL_ART)
-ART_SMALL_MODE := true
-endif
-ifeq ($(WITH_ART_SMALL_MODE), true)
-ART_SMALL_MODE := true
-endif
-
-#
 # Used to change the default GC. Valid values are CMS, SS, GSS. The default is CMS.
 #
 art_default_gc_type ?= CMS
@@ -204,10 +192,6 @@ ifdef ART_IMT_SIZE
 else
   # Default is 64
   art_cflags += -DIMT_SIZE=64
-endif
-
-ifeq ($(ART_SMALL_MODE),true)
-  art_cflags += -DART_SMALL_MODE=1
 endif
 
 ifeq ($(ART_USE_OPTIMIZING_COMPILER),true)
