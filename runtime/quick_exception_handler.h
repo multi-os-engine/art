@@ -48,7 +48,7 @@ class QuickExceptionHandler {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void DeoptimizeStack() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void UpdateInstrumentationStack() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void DoLongJump() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  [[noreturn]] void DoLongJump() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetHandlerQuickFrame(StackReference<mirror::ArtMethod>* handler_quick_frame) {
     handler_quick_frame_ = handler_quick_frame;

@@ -78,7 +78,7 @@ class Context {
   virtual void SmashCallerSaves() = 0;
 
   // Switches execution of the executing context to this context
-  virtual void DoLongJump() = 0;
+  [[noreturn]] virtual void DoLongJump() = 0;
 
  protected:
   enum {
