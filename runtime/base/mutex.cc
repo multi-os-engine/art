@@ -61,6 +61,8 @@ Mutex* Locks::thread_suspend_count_lock_ = nullptr;
 Mutex* Locks::trace_lock_ = nullptr;
 Mutex* Locks::unexpected_signal_lock_ = nullptr;
 
+static int gLockInits = 0;
+
 struct AllMutexData {
   // A guard for all_mutexes_ that's not a mutex (Mutexes must CAS to acquire and busy wait).
   Atomic<const BaseMutex*> all_mutexes_guard;
@@ -916,6 +918,10 @@ bool ConditionVariable::TimedWait(Thread* self, int64_t ms, int32_t ns) {
 }
 
 void Locks::Init() {
+  gLockInits++;
+  if (gLockInits <= 0) {
+    gLockInits = 1;
+  }
   if (logging_lock_ != nullptr) {
     // Already initialized.
     if (kRuntimeISA == kX86 || kRuntimeISA == kX86_64) {
@@ -1066,5 +1072,43 @@ void Locks::Init() {
   }
 }
 
+void Locks::Free() {
+  gLockInits--;
+  // Note: Cannot use Runtime::RunningOnValgrind, as this is called on shutdown and instance_ might
+  //       be null already.
+  if (logging_lock_ != nullptr && gLockInits <= 0 && RUNNING_ON_VALGRIND > 0) {
+    delete instrument_entrypoints_lock_;
+    delete mutator_lock_;
+    delete heap_bitmap_lock_;
+    delete trace_lock_;
+    delete runtime_shutdown_lock_;
+    delete profiler_lock_;
+    delete deoptimization_lock_;
+    delete alloc_tracker_lock_;
+    delete thread_list_lock_;
+    delete jni_libraries_lock_;
+    delete breakpoint_lock_;
+    delete classlinker_classes_lock_;
+    delete allocated_monitor_ids_lock_;
+    delete allocated_thread_ids_lock_;
+
+    if (kRuntimeISA == kX86 || kRuntimeISA == kX86_64) {
+      delete modify_ldt_lock_;
+    }
+
+    delete intern_table_lock_;
+    delete reference_processor_lock_;
+    delete reference_queue_cleared_references_lock_;
+    delete reference_queue_weak_references_lock_;
+    delete reference_queue_finalizer_references_lock_;
+    delete reference_queue_phantom_references_lock_;
+    delete reference_queue_soft_references_lock_;
+    delete abort_lock_;
+    delete thread_suspend_count_lock_;
+    delete unexpected_signal_lock_;
+    delete mem_maps_lock_;
+    delete logging_lock_;
+  }
+}
 
 }  // namespace art
