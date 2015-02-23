@@ -1012,10 +1012,14 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   virtual bool CanDoImplicitNullCheck() const { return false; }
 
   void SetReferenceTypeInfo(ReferenceTypeInfo reference_type_info) {
+    DCHECK_EQ(GetType(), Primitive::kPrimNot);
     reference_type_info_ = reference_type_info;
   }
 
-  ReferenceTypeInfo GetReferenceTypeInfo() const { return reference_type_info_; }
+  ReferenceTypeInfo GetReferenceTypeInfo() const {
+    DCHECK_EQ(GetType(), Primitive::kPrimNot);
+    return reference_type_info_;
+  }
 
   void AddUseAt(HInstruction* user, size_t index) {
     uses_.AddUse(user, index, GetBlock()->GetGraph()->GetArena());
@@ -3010,6 +3014,7 @@ class HBoundType : public HExpression<1> {
   HBoundType(HInstruction* input, ReferenceTypeInfo bound_type)
       : HExpression(Primitive::kPrimNot, SideEffects::None()),
         bound_type_(bound_type) {
+    DCHECK_EQ(input->GetType(), Primitive::kPrimNot);
     SetRawInputAt(0, input);
   }
 
