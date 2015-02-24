@@ -43,7 +43,17 @@ function writeFileMethod(name) {
     printf("}\n") > fileName;
 }'
 
+
+# The test relies on dx output so keep building with jqvqc+dx for now (see b/19467889)
 mkdir classes
 ${JAVAC} -d classes `find src -name '*.java'`
 ${DX} -JXmx1024m --dex --no-optimize classes
 
+# Here is what the script should look like:
+#if [ "${USE_JACK}" = "yes" ]; then
+#  ${JACK} -cp ${JACK_CLASSPATH} --output-dex . src
+#else
+#  mkdir classes
+#  ${JAVAC} -d classes `find src -name '*.java'`
+#  ${DX} -JXmx1024m --dex --no-optimize classes
+#fi

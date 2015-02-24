@@ -20,4 +20,17 @@ set -e
 # Write out the source file.
 cpp -P src/Main.java.in src/Main.java
 
+
 ./default-build
+
+# TODO: remove if it is no longer necessary
+#if [ "${USE_JACK}" = "yes" ]; then
+#  ${JACK} -cp ${JACK_CLASSPATH} --output-dex . src
+#else
+#  mkdir classes
+#  ${JAVAC} -d classes src/*.java
+#
+#  ${DX} --debug --dex --output=classes.dex classes
+#fi
+#
+#zip $TEST_NAME.jar classes.dex

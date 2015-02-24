@@ -102,6 +102,11 @@ have_image="yes"
 image_suffix=""
 pic_image_suffix=""
 android_root="/system"
+use_jack="yes"
+
+if [ "${ANDROID_COMPILE_WITH_JACK}" = "true" ]; then
+  use_jack="yes"
+fi
 
 while true; do
     if [ "x$1" = "x--host" ]; then
@@ -114,6 +119,7 @@ while true; do
         runtime="jvm"
         prebuild_mode="no"
         NEED_DEX="false"
+        use_jack="no"
         run_args="${run_args} --jvm"
         shift
     elif [ "x$1" = "x-O" ]; then
@@ -235,6 +241,12 @@ while true; do
     elif [ "x$1" = "x--build-only" ]; then
         build_only="yes"
         shift
+    elif [ "x$1" = "x--build-with-javac-dx" ]; then
+        use_jack="no"
+        shift
+    elif [ "x$1" = "x--build-with-jack" ]; then
+        use_jack="yes"
+        shift
     elif [ "x$1" = "x--output-path" ]; then
         shift
         tmp_dir=$1
@@ -281,6 +293,17 @@ while true; do
         break
     fi
 done
+
+# Can we test presence of JACK instead?
+export USE_JACK=${use_jack}
+
+# Indicates to the build script whether it needs to build with Jack.
+if [ "${USE_JACK}" = "yes" ]; then
+  # TODO avoid ${ANDROID_BUILD_TOP}
+  export JACK="java -jar ${ANDROID_BUILD_TOP}/prebuilts/sdk/tools/jack.jar"
+  export JILL="java -jar ${ANDROID_BUILD_TOP}/prebuilts/sdk/tools/jill.jar"
+  export JACK_CLASSPATH=${ANDROID_BUILD_TOP}/out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/classes.jack
+fi
 
 # tmp_dir may be relative, resolve.
 #

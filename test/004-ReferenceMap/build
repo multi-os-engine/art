@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (C) 2012 The Android Open Source Project
+# Copyright (C) 2015 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,21 +17,10 @@
 # Stop if something fails.
 set -e
 
-# At least required for classes generated with jasmin.
+# The test relies on DEX file produced by javac+dx so keep building with them for now
+# (see b/19467889)
 mkdir classes
-
-if [ "${USE_JACK}" = "yes" ]; then
-  ${JACK} -cp ${JACK_CLASSPATH} --output-jack src.jack src
-
-  ${JASMIN} -d classes src/*.j
-  ${JILL} classes --output jasmin.jack
-
-  # We set jack.import.type.policy=keep-first to consider class definitions from jasmin first.
-  ${JACK} -cp ${JACK_CLASSPATH} --import jasmin.jack --import src.jack -D jack.import.type.policy=keep-first --output-dex .
-else
-  ${JAVAC} -d classes src/*.java
-  ${JASMIN} -d classes src/*.j
-
-  ${DX} --debug --dex --dump-to=classes.lst --output=classes.dex classes
-fi
+${JAVAC} -d classes `find src -name '*.java'`
+${DX} -JXmx256m --debug --dex --dump-to=classes.lst --output=classes.dex \
+  --dump-width=1000 ${DX_FLAGS} classes
 zip $TEST_NAME.jar classes.dex
