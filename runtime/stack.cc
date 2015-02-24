@@ -137,7 +137,7 @@ mirror::Object* StackVisitor::GetThisObject() const {
   } else if (m->IsOptimized(GetInstructionSetPointerSize(
       Runtime::Current()->GetInstructionSet()))) {
     // TODO: Implement, currently only used for exceptions when jdwp is enabled.
-    UNIMPLEMENTED(WARNING)
+    VLOG(compiler)
         << "StackVisitor::GetThisObject is unimplemented with the optimizing compiler";
     return nullptr;
   } else {
