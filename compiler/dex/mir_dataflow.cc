@@ -123,7 +123,7 @@ const uint64_t MIRGraph::oat_data_flow_attributes_[kMirOpLast] = {
   DF_UA | DF_NULL_CHK_A | DF_REF_A,
 
   // 1F CHK_CAST vAA, type@BBBB
-  DF_UA | DF_REF_A | DF_UMS,
+  DF_UA | DF_REF_A | DF_CHK_CAST | DF_UMS,
 
   // 20 INSTANCE_OF vA, vB, type@CCCC
   DF_DA | DF_UB | DF_CORE_A | DF_REF_B | DF_UMS,

@@ -25,6 +25,7 @@
 #include "gvn_dead_code_elimination.h"
 #include "local_value_numbering.h"
 #include "mir_field_info.h"
+#include "type_inference.h"
 #include "quick/dex_file_method_inliner.h"
 #include "quick/dex_file_to_method_inliner_map.h"
 #include "stack.h"
@@ -1100,23 +1101,26 @@ void MIRGraph::EliminateNullChecksEnd() {
   }
 }
 
+void MIRGraph::InferTypesStart() {
+  DCHECK(temp_scoped_alloc_ != nullptr);
+  temp_.ssa.ti = new (temp_scoped_alloc_.get()) TypeInference(this, temp_scoped_alloc_.get());
+}
+
 /*
  * Perform type and size inference for a basic block.
  */
 bool MIRGraph::InferTypes(BasicBlock* bb) {
   if (bb->data_flow_info == nullptr) return false;
 
-  bool infer_changed = false;
-  for (MIR* mir = bb->first_mir_insn; mir != NULL; mir = mir->next) {
-    if (mir->ssa_rep == NULL) {
-        continue;
-    }
+  DCHECK(temp_.ssa.ti != nullptr);
+  return temp_.ssa.ti->Apply(bb);
+}
 
-    // Propagate type info.
-    infer_changed = InferTypeAndSize(bb, mir, infer_changed);
-  }
-
-  return infer_changed;
+void MIRGraph::InferTypesEnd() {
+  DCHECK(temp_.ssa.ti != nullptr);
+  temp_.ssa.ti->Finish();
+  delete temp_.ssa.ti;
+  temp_.ssa.ti = nullptr;
 }
 
 bool MIRGraph::EliminateClassInitChecksGate() {
