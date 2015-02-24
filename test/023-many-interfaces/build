@@ -21,8 +21,4 @@ set -e
 gcc -Wall -Werror -o iface-gen iface-gen.c
 ./iface-gen
 
-mkdir classes
-${JAVAC} -d classes src/*.java
-
-${DX} --debug --dex --dump-to=classes.lst --output=classes.dex classes
-zip $TEST_NAME.jar classes.dex
+./default-build
