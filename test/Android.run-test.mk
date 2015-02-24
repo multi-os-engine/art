@@ -34,6 +34,7 @@ TEST_ART_RUN_TEST_BUILD_RULES :=
 
 # Helper to create individual build targets for tests. Must be called with $(eval).
 # $(1): the test number
+# TODO add Jack support
 define define-build-art-run-test
   dmart_target := $(art_run_tests_dir)/art-run-tests/$(1)/touch
 $$(dmart_target): $(DX) $(HOST_OUT_EXECUTABLES)/jasmin $(HOST_OUT_EXECUTABLES)/smali $(HOST_OUT_EXECUTABLES)/dexmerger
@@ -571,6 +572,16 @@ define define-test-art-run-test
   prereq_rule :=
   test_groups :=
   uc_host_or_target :=
+  ifeq ($(ANDROID_COMPILE_WITH_JACK),true)
+    run_test_options += --build-with-jack
+    run_test_options += --jack-jar $(abspath $(JACK_JAR))
+    run_test_options += --jill-jar $(abspath $(JILL_JAR))
+    ifeq ($(1),host)
+      run_test_options += --jack-classpath $(subst $(space),:,$(strip $(HOST_CORE_JACK_FILES)))
+    else
+      run_test_options += --jack-classpath $(subst $(space),:,$(strip $(TARGET_CORE_JACK_FILES)))
+    endif
+  endif
   ifeq ($(ART_TEST_RUN_TEST_ALWAYS_CLEAN),true)
     run_test_options += --always-clean
   endif

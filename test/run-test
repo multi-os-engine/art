@@ -102,6 +102,10 @@ have_image="yes"
 image_suffix=""
 pic_image_suffix=""
 android_root="/system"
+use_jack="no"
+jack_jar=""
+jill_jar=""
+jack_classpath=""
 
 while true; do
     if [ "x$1" = "x--host" ]; then
@@ -114,6 +118,7 @@ while true; do
         runtime="jvm"
         prebuild_mode="no"
         NEED_DEX="false"
+        use_jack="no"
         run_args="${run_args} --jvm"
         shift
     elif [ "x$1" = "x-O" ]; then
@@ -234,6 +239,39 @@ while true; do
         shift
     elif [ "x$1" = "x--build-only" ]; then
         build_only="yes"
+        shift
+    elif [ "x$1" = "x--build-with-javac-dx" ]; then
+        use_jack="no"
+        shift
+    elif [ "x$1" = "x--build-with-jack" ]; then
+        use_jack="yes"
+        shift
+    elif [ "x$1" = "x--jack-jar" ]; then
+        shift
+        jack_jar="$1"
+        if [ "x$jack_jar" = "x" ]; then
+            echo "$0 missing argument to --jack-jar" 1>&2
+            usage="yes"
+            break
+        fi
+        shift
+    elif [ "x$1" = "x--jill-jar" ]; then
+        shift
+        jill_jar="$1"
+        if [ "x$jill_jar" = "x" ]; then
+            echo "$0 missing argument to --jill-jar" 1>&2
+            usage="yes"
+            break
+        fi
+        shift
+    elif [ "x$1" = "x--jack-classpath" ]; then
+        shift
+        jack_classpath="$1"
+        if [ "x$jack_classpath" = "x" ]; then
+            echo "$0 missing argument to --jack-classpath" 1>&2
+            usage="yes"
+            break
+        fi
         shift
     elif [ "x$1" = "x--output-path" ]; then
         shift
@@ -422,6 +460,26 @@ if [ "$usage" = "no" ]; then
     shift
 fi
 
+# Indicates to the build script whether it needs to build with Jack.
+export USE_JACK=${use_jack}
+if [ "${USE_JACK}" = "yes" ]; then
+  if [ "x$jack_jar" = "x" ]; then
+    echo "missing --jack-jar option" 1>&2
+    exit 1
+  fi
+  if [ "x$jill_jar" = "x" ]; then
+     echo "missing --jill-jar option" 1>&2
+     exit 1
+  fi
+  if [ "x$jack_classpath" = "x" ]; then
+    echo "missing --jack-classpath option" 1>&2
+    exit 1
+  fi
+  export JACK="java -jar ${jack_jar}"
+  export JILL="java -jar ${jill_jar}"
+  export JACK_CLASSPATH=${jack_classpath}
+fi
+
 if [ "$usage" = "yes" ]; then
     prog=`basename $prog`
     (
@@ -442,6 +500,11 @@ if [ "$usage" = "yes" ]; then
         echo "    --debuggable          Whether to compile Java code for a debugger."
         echo "    --gdb                 Run under gdb; incompatible with some tests."
         echo "    --build-only          Build test files only (off by default)."
+        echo "    --build-with-javac-dx Build test files with javac and dx (on by default)."
+        echo "    --build-with-jack     Build test files with jack and jill (off by default)."
+        echo "    --jack-jar            Pass the path to jack.jar (only when building with jack)"
+        echo "    --jill-jar            Pass the path to jill.jar (only when building with jack)"
+        echo "    --jack-classpath      Pass the classpath for jack (only when building with jack)"
         echo "    --interpreter         Enable interpreter only mode (off by default)."
         echo "    --jit                 Enable jit (off by default)."
         echo "    --optimizing          Enable optimizing compiler (default)."
