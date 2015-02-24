@@ -1378,7 +1378,9 @@ void Mir2Lir::CheckRegStorageImpl(RegStorage rs, WidenessCheck wide, RefCheck re
     if (ref == RefCheck::kCheckRef) {
       if (cu_->target64 && !rs.Is64Bit()) {
         if (fail) {
-          CHECK(false) << "Reg storage not 64b for ref.";
+          CHECK(false) << "Reg storage not 64b for ref."
+              << PrettyMethod(cu_->method_idx, *cu_->dex_file) << " @0x" << std::hex
+              << current_dalvik_offset_;
         } else if (report) {
           LOG(WARNING) << "Reg storage not 64b for ref.";
         }
