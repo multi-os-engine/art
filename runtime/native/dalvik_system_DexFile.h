@@ -23,6 +23,8 @@ namespace art {
 
 void register_dalvik_system_DexFile(JNIEnv* env);
 
+void dalvik_system_DexFile_FreeVectors();  // Cleanup for valgrind.
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_NATIVE_DALVIK_SYSTEM_DEXFILE_H_

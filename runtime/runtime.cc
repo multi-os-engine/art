@@ -250,6 +250,7 @@ Runtime::~Runtime() {
   // TODO: acquire a static mutex on Runtime to avoid racing.
   CHECK(instance_ == nullptr || instance_ == this);
   instance_ = nullptr;
+  dalvik_system_DexFile_FreeVectors();  // Clean up if we run under valgrind.
 }
 
 struct AbortState {

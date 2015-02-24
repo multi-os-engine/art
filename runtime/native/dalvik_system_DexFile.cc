@@ -58,6 +58,10 @@
 
 namespace art {
 
+// When running under Valgrind, the arrays stored in the DexFile Java object will look like leaks
+// when dalvikvm shuts down. Store pointers so we can free them.
+static std::set<const std::vector<std::unique_ptr<const DexFile>>*> valgrind_links;
+
 // A smart pointer that provides read-only access to a Java string's UTF chars.
 // Unlike libcore's NullableScopedUtfChars, this will *not* throw NullPointerException if
 // passed a null jstring. The correct idiom is:
@@ -125,6 +129,9 @@ static jlong DexFile_openDexFileNative(JNIEnv* env, jclass, jstring javaSourceNa
   if (success || !dex_files->empty()) {
     // In the case of non-success, we have not found or could not generate the oat file.
     // But we may still have found a dex file that we can use.
+    if (Runtime::Current()->RunningOnValgrind()) {
+      valgrind_links.insert(dex_files.get());
+    }
     return static_cast<jlong>(reinterpret_cast<uintptr_t>(dex_files.release()));
   } else {
     // The vector should be empty after a failed loading attempt.
@@ -174,6 +181,9 @@ static void DexFile_closeDexFile(JNIEnv* env, jclass, jlong cookie) {
     if (Runtime::Current()->GetClassLinker()->IsDexFileRegistered(*dex_file)) {
       dex_file.release();
     }
+  }
+  if (Runtime::Current()->RunningOnValgrind()) {
+    valgrind_links.erase(dex_files.get());
   }
 }
 
@@ -630,6 +640,12 @@ static JNINativeMethod gMethods[] = {
 
 void register_dalvik_system_DexFile(JNIEnv* env) {
   REGISTER_NATIVE_METHODS("dalvik/system/DexFile");
+}
+
+void dalvik_system_DexFile_FreeVectors() {
+  if (RUNNING_ON_VALGRIND > 0) {
+    STLDeleteElements(&valgrind_links);
+  }
 }
 
 }  // namespace art
