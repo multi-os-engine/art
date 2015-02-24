@@ -151,6 +151,57 @@ bool ReadFileToString(const std::string& file_name, std::string* result) {
   }
 }
 
+bool PrintFileToLog(const std::string& file_name, LogSeverity level) {
+  std::unique_ptr<File> file(new File);
+  if (!file->Open(file_name, O_RDONLY)) {
+    return false;
+  }
+
+  constexpr size_t kBufSize = 256;  // Small buffer. Avoid stack overflow and stack size warnings.
+  char buf[kBufSize + 1];           // +1 for terminator.
+  size_t filled_to = 0;
+  while (true) {
+    DCHECK_LT(filled_to, kBufSize);
+    int64_t n = TEMP_FAILURE_RETRY(read(file->Fd(), &buf[filled_to], kBufSize - filled_to));
+    if (n == -1) {
+      return false;
+    }
+    if (n == 0) {
+      return true;
+    }
+    // Scan for '\n'.
+    size_t i = filled_to;
+    bool found_newline = false;
+    for (; i < filled_to + n; ++i) {
+      if (buf[i] == '\n') {
+        // Found a line break, that's something to print now.
+        buf[i] = 0;
+        LOG(level) << buf;
+        // Copy the rest to the front.
+        if (i + 1 < filled_to + n) {
+          memmove(&buf[0], &buf[i + 1], filled_to + n - i - 1);
+          filled_to = filled_to + n - i - 1;
+        } else {
+          filled_to = 0;
+        }
+        found_newline = true;
+        break;
+      }
+    }
+    if (found_newline) {
+      continue;
+    } else {
+      filled_to += n;
+      // Check if we must flush now.
+      if (filled_to == kBufSize) {
+        buf[kBufSize] = 0;
+        LOG(level) << buf;
+        filled_to = 0;
+      }
+    }
+  }
+}
+
 std::string GetIsoDate() {
   time_t now = time(NULL);
   tm tmbuf;
