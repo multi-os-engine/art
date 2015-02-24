@@ -46,6 +46,7 @@ export JAVAC="javac -g"
 export RUN="${progdir}/etc/run-test-jar"
 export DEX_LOCATION=/data/run-test/${test_dir}
 export NEED_DEX="true"
+export USE_JACK="false"
 
 # If dx was not set by the environment variable, assume it is in the path.
 if [ -z "$DX" ]; then
@@ -67,6 +68,17 @@ if [ -z "$DXMERGER" ]; then
   export DXMERGER="dexmerger"
 fi
 
+# If jack was not set by the environment variable, assume it is in the SDK prebuilt tools.
+if [ -z "$JACK" ]; then
+  # TODO fix jar path
+  export JACK="java -jar prebuilts/sdk/tools/jack.jar"
+fi
+
+# If jill was not set by the environment variable, assume it is in the SDK prebuilt tools.
+if [ -z "$JILL" ]; then
+  # TODO fix jar path
+  export JILL="java -jar prebuilts/sdk/tools/jill.jar"
+fi
 
 info="info.txt"
 build="build"
@@ -114,6 +126,7 @@ while true; do
         runtime="jvm"
         prebuild_mode="no"
         NEED_DEX="false"
+        USE_JACK="false"
         run_args="${run_args} --jvm"
         shift
     elif [ "x$1" = "x-O" ]; then
@@ -234,6 +247,12 @@ while true; do
         shift
     elif [ "x$1" = "x--build-only" ]; then
         build_only="yes"
+        shift
+    elif [ "x$1" = "x--build-with-javac-dx" ]; then
+        USE_JACK="false"
+        shift
+    elif [ "x$1" = "x--build-with-jack" ]; then
+        USE_JACK="true"
         shift
     elif [ "x$1" = "x--output-path" ]; then
         shift
@@ -442,6 +461,11 @@ if [ "$usage" = "yes" ]; then
         echo "    --debuggable          Whether to compile Java code for a debugger."
         echo "    --gdb                 Run under gdb; incompatible with some tests."
         echo "    --build-only          Build test files only (off by default)."
+        echo "    --build-with-javac-dx Build test files with javac and dx (on by default)."
+        echo "    --build-with-jack     Build test files with jack and jill (off by default)."
+        echo "    --jack-jar            Pass the path to jack.jar (only when building with jack)"
+        echo "    --jill-jar            Pass the path to jill.jar (only when building with jack)"
+        echo "    --jack-classpath      Pass the classpath for jack (only when building with jack)"
         echo "    --interpreter         Enable interpreter only mode (off by default)."
         echo "    --jit                 Enable jit (off by default)."
         echo "    --optimizing          Enable optimizing compiler (default)."

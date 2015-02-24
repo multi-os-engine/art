@@ -33,10 +33,19 @@ art_run_tests_dir := $(call intermediates-dir-for,PACKAGING,art-run-tests)/DATA
 TEST_ART_RUN_TEST_BUILD_RULES :=
 
 # Dependencies for actually running a run-test.
-TEST_ART_RUN_TEST_DEPENDENCIES := $(DX) $(HOST_OUT_EXECUTABLES)/jasmin $(HOST_OUT_EXECUTABLES)/smali $(HOST_OUT_EXECUTABLES)/dexmerger
+TEST_ART_RUN_TEST_DEPENDENCIES := \
+  $(DX) \
+  $(HOST_OUT_EXECUTABLES)/jasmin \
+  $(HOST_OUT_EXECUTABLES)/smali \
+  $(HOST_OUT_EXECUTABLES)/dexmerger
+
+ifeq ($(ANDROID_COMPILE_WITH_JACK),true)
+  TEST_ART_RUN_TEST_DEPENDENCIES += $(JACK_JAR) $(JILL_JAR)
+endif
 
 # Helper to create individual build targets for tests. Must be called with $(eval).
 # $(1): the test number
+# TODO add Jack classpath
 define define-build-art-run-test
   dmart_target := $(art_run_tests_dir)/art-run-tests/$(1)/touch
 $$(dmart_target): $(TEST_ART_RUN_TEST_DEPENDENCIES)
@@ -44,6 +53,8 @@ $$(dmart_target): $(TEST_ART_RUN_TEST_DEPENDENCIES)
 	$(hide) DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) \
 	  SMALI=$(abspath $(HOST_OUT_EXECUTABLES)/smali) \
 	  DXMERGER=$(abspath $(HOST_OUT_EXECUTABLES)/dexmerger) \
+	  JACK="java -jar $(abspath $(JACK_JAR))" \
+	  JILL="java -jar $(abspath $(JILL_JAR))" \
 	  $(LOCAL_PATH)/run-test --build-only --output-path $$(abspath $$(dir $$@)) $(1)
 	$(hide) touch $$@
 
@@ -551,6 +562,10 @@ define define-test-art-run-test
   prereq_rule :=
   test_groups :=
   uc_host_or_target :=
+  jack_classpath :=
+  ifeq ($(ANDROID_COMPILE_WITH_JACK),true)
+    run_test_options += --build-with-jack
+  endif
   ifeq ($(ART_TEST_RUN_TEST_ALWAYS_CLEAN),true)
     run_test_options += --always-clean
   endif
@@ -559,11 +574,13 @@ define define-test-art-run-test
     test_groups := ART_RUN_TEST_HOST_RULES
     run_test_options += --host
     prereq_rule := $(ART_TEST_HOST_RUN_TEST_DEPENDENCIES)
+    jack_classpath := $(subst $(space),:,$(strip $(HOST_CORE_JACK_FILES)))
   else
     ifeq ($(1),target)
       uc_host_or_target := TARGET
       test_groups := ART_RUN_TEST_TARGET_RULES
       prereq_rule := test-art-target-sync
+      jack_classpath := $(subst $(space),:,$(strip $(TARGET_CORE_JACK_FILES)))
     else
       $$(error found $(1) expected $(TARGET_TYPES))
     endif
@@ -752,12 +769,16 @@ define define-test-art-run-test
     run_test_options := --android-root $(ART_TEST_ANDROID_ROOT) $$(run_test_options)
   endif
 $$(run_test_rule_name): PRIVATE_RUN_TEST_OPTIONS := $$(run_test_options)
+$$(run_test_rule_name): PRIVATE_JACK_CLASSPATH := $$(jack_classpath)
 .PHONY: $$(run_test_rule_name)
-$$(run_test_rule_name): $(DX) $(HOST_OUT_EXECUTABLES)/jasmin $(HOST_OUT_EXECUTABLES)/smali $(HOST_OUT_EXECUTABLES)/dexmerger $(HOST_OUT_EXECUTABLES)/hprof-conv $$(prereq_rule)
+$$(run_test_rule_name): $(TEST_ART_RUN_TEST_DEPENDENCIES) $(HOST_OUT_EXECUTABLES)/hprof-conv $$(prereq_rule)
 	$(hide) $$(call ART_TEST_SKIP,$$@) && \
-	  DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) \
+	  DX=$(abspath $(DX)) \
+	    JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) \
 	    SMALI=$(abspath $(HOST_OUT_EXECUTABLES)/smali) \
 	    DXMERGER=$(abspath $(HOST_OUT_EXECUTABLES)/dexmerger) \
+	    JACK="java -jar $(abspath $(JACK_JAR)) -cp $$(PRIVATE_JACK_CLASSPATH)" \
+	    JILL="java -jar $(abspath $(JILL_JAR))" \
 	    art/test/run-test $$(PRIVATE_RUN_TEST_OPTIONS) $(12) \
 	      && $$(call ART_TEST_PASSED,$$@) || $$(call ART_TEST_FAILED,$$@)
 	$$(hide) (echo $(MAKECMDGOALS) | grep -q $$@ && \
@@ -772,6 +793,7 @@ $$(run_test_rule_name): $(DX) $(HOST_OUT_EXECUTABLES)/jasmin $(HOST_OUT_EXECUTAB
   run_test_options :=
   run_test_rule_name :=
   prereq_rule :=
+  jack_classpath :=
 endef  # define-test-art-run-test
 
 $(foreach target, $(TARGET_TYPES), \

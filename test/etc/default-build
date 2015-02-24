@@ -38,16 +38,43 @@ if [ -e classes.dex ]; then
   exit 0
 fi
 
-mkdir classes
-${JAVAC} -implicit:none -classpath src-multidex -d classes `find src -name '*.java'`
+if [ ${USE_JACK} = "true" ]; then
+  # Compile Java source files from src directory.
+  # TODO remove echo (for debugging only)
+  echo "####### BUILD WITH JACK ########"
+  # Compile src directory
+  echo "${JACK} -g --output-jack src.jack src"
+  ${JACK} -g --output-jack src.jack src
+  imported_jack_files="--import src.jack"
 
-if [ -d src2 ]; then
-  ${JAVAC} -d classes `find src2 -name '*.java'`
-fi
+  # Compile src2 directory if it exists
+  if [ -d src2 ]; then
+    ${JACK} -g --output-jack src2.jack src2
+    imported_jack_files="--import src2.jack ${imported_jack_files}"
+  fi
 
-if [ ${NEED_DEX} = "true" ]; then
-  ${DX} -JXmx256m --debug --dex --dump-to=classes.lst --output=classes.dex \
-    --dump-width=1000 ${DX_FLAGS} classes
+  # Compile jack files into a DEX file. We set jack.import.type.policy=keep-first to consider
+  # class definitions from src2 first.
+  ${JACK} ${imported_jack_files} -g -D jack.import.type.policy=keep-first --output-dex .
+
+  if [ -d src-multidex ]; then
+    echo "Missing Jack support for src-multidex directory"
+    exit 1
+  fi
+else
+  # TODO remove echo (for debugging only)
+  echo "####### BUILD WITH JAVAC+DX ########"
+  mkdir classes
+  ${JAVAC} -implicit:none -classpath src-multidex -d classes `find src -name '*.java'`
+
+  if [ -d src2 ]; then
+    ${JAVAC} -d classes `find src2 -name '*.java'`
+  fi
+
+  if [ ${NEED_DEX} = "true" ]; then
+    ${DX} -JXmx256m --debug --dex --dump-to=classes.lst --output=classes.dex \
+      --dump-width=1000 ${DX_FLAGS} classes
+  fi
 fi
 
 if [ -d smali ]; then
@@ -57,18 +84,28 @@ if [ -d smali ]; then
 fi
 
 if [ -d src-ex ]; then
-  mkdir classes-ex
-  ${JAVAC} -d classes-ex -cp classes `find src-ex -name '*.java'`
-  if [ ${NEED_DEX} = "true" ]; then
-    ${DX} -JXmx256m --debug --dex --dump-to=classes-ex.lst --output=classes-ex.dex \
-      --dump-width=1000 ${DX_FLAGS} classes-ex
+  if [ ${USE_JACK} = "true" ]; then
+      # Rename previous "classes.dex" so it is not overwritten.
+      mv classes.dex classes-1.dex
+      #TODO find another way to append src.jack to the jack classpath
+      ${JACK}:src.jack --output-dex . src-ex
+      zip $TEST_NAME-ex.jar classes.dex
+      # Restore previous "classes.dex" so it can be zipped.
+      mv classes-1.dex classes.dex
+  else
+    mkdir classes-ex
+    ${JAVAC} -d classes-ex -cp classes `find src-ex -name '*.java'`
+    if [ ${NEED_DEX} = "true" ]; then
+      ${DX} -JXmx256m --debug --dex --dump-to=classes-ex.lst --output=classes-ex.dex \
+        --dump-width=1000 ${DX_FLAGS} classes-ex
 
-    # quick shuffle so that the stored name is "classes.dex"
-    mv classes.dex classes-1.dex
-    mv classes-ex.dex classes.dex
-    zip $TEST_NAME-ex.jar classes.dex
-    mv classes.dex classes-ex.dex
-    mv classes-1.dex classes.dex
+      # quick shuffle so that the stored name is "classes.dex"
+      mv classes.dex classes-1.dex
+      mv classes-ex.dex classes.dex
+      zip $TEST_NAME-ex.jar classes.dex
+      mv classes.dex classes-ex.dex
+      mv classes-1.dex classes.dex
+    fi
   fi
 fi
 
