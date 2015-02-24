@@ -21,3 +21,15 @@ set -e
 cpp -P src/Main.java.in src/Main.java
 
 ./default-build
+
+# TODO: remove if it is no longer necessary
+#if [ ${USE_JACK} = "true" ]; then
+#  ${JACK} --output-dex . src
+#else
+#  mkdir classes
+#  ${JAVAC} -d classes src/*.java
+#
+#  ${DX} --debug --dex --output=classes.dex classes
+#fi
+#
+#zip $TEST_NAME.jar classes.dex
