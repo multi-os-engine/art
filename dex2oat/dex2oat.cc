@@ -871,10 +871,6 @@ class Dex2Oat FINAL {
         // For R6, only interpreter mode is working.
         // TODO: fix compiler for Mips32r6.
         compiler_filter_string = "interpret-only";
-      } else if (instruction_set_ == kMips64) {
-        // For Mips64, can only compile in interpreter mode.
-        // TODO: fix compiler for Mips64.
-        compiler_filter_string = "interpret-only";
       } else if (image_) {
         compiler_filter_string = "speed";
       } else {
