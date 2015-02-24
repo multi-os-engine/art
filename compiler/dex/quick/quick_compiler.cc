@@ -45,6 +45,7 @@
 #include "dex/quick/arm/backend_arm.h"
 #include "dex/quick/arm64/backend_arm64.h"
 #include "dex/quick/mips/backend_mips.h"
+#include "dex/quick/mips64/backend_mips64.h"
 #include "dex/quick/x86/backend_x86.h"
 
 namespace art {
@@ -87,7 +88,8 @@ static constexpr uint32_t kDisabledOptimizationsPerISA[] = {
     (1 << kPromoteCompilerTemps) |
     0,
     // 7 = kMips64.
-    ~0U
+    (1 << kBBOpt) |
+    0
 };
 static_assert(sizeof(kDisabledOptimizationsPerISA) == 8 * sizeof(uint32_t),
               "kDisabledOpts unexpected");
@@ -119,7 +121,7 @@ static const char* kSupportedTypes[] = {
     // 6 = kMips.
     nullptr,
     // 7 = kMips64.
-    ""
+    nullptr
 };
 static_assert(sizeof(kSupportedTypes) == 8 * sizeof(char*), "kSupportedTypes unexpected");
 
@@ -430,7 +432,7 @@ static const int* kUnsupportedOpcodes[] = {
     // 6 = kMips.
     nullptr,
     // 7 = kMips64.
-    kAllOpcodes
+    nullptr
 };
 static_assert(sizeof(kUnsupportedOpcodes) == 8 * sizeof(int*), "kUnsupportedOpcodes unexpected");
 
@@ -451,7 +453,7 @@ static const size_t kUnsupportedOpcodesSize[] = {
     // 6 = kMips.
     0,
     // 7 = kMips64.
-    arraysize(kAllOpcodes),
+    0
 };
 static_assert(sizeof(kUnsupportedOpcodesSize) == 8 * sizeof(size_t),
               "kUnsupportedOpcodesSize unexpected");
@@ -624,12 +626,12 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
   }
   CompilationUnit cu(driver->GetArenaPool(), instruction_set, driver, class_linker);
 
-  // TODO: Mips64 is not yet implemented.
   CHECK((cu.instruction_set == kThumb2) ||
         (cu.instruction_set == kArm64) ||
         (cu.instruction_set == kX86) ||
         (cu.instruction_set == kX86_64) ||
-        (cu.instruction_set == kMips));
+        (cu.instruction_set == kMips) ||
+        (cu.instruction_set == kMips64));
 
   // TODO: set this from command line
   constexpr bool compiler_flip_match = false;
@@ -797,6 +799,9 @@ Mir2Lir* QuickCompiler::GetCodeGenerator(CompilationUnit* cu, void* compilation_
       break;
     case kMips:
       mir_to_lir = MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+      break;
+    case kMips64:
+      mir_to_lir = Mips64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
       break;
     case kX86:
       // Fall-through.
