@@ -299,6 +299,11 @@ void GlobalValueNumberer::VisitBasicBlock(HBasicBlock* block) {
     // Save the next instruction in case `current` is removed from the graph.
     HInstruction* next = current->GetNext();
     if (current->CanBeMoved()) {
+      if (current->IsBinaryOperation() && current->AsBinaryOperation()->IsCommutative()) {
+        // For commutative ops, (x op y) will be treated the same as (y op x)
+        // after fixed ordering.
+        current->AsBinaryOperation()->OrderInputs();
+      }
       HInstruction* existing = set->Lookup(current);
       if (existing != nullptr) {
         current->ReplaceWith(existing);
