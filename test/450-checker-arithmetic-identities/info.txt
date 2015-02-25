@@ -1,0 +1,1 @@
+Tests arithmetic identities optimisations in the optimizing compiler.
