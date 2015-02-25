@@ -52,17 +52,7 @@ OatFile* OatFile::OpenWithElfFile(ElfFile* elf_file,
   CHECK(has_section);
   oat_file->begin_ = elf_file->Begin() + offset;
   oat_file->end_ = elf_file->Begin() + size + offset;
-  return oat_file->Setup(error_msg) ? oat_file.release() : nullptr;
-}
-
-OatFile* OatFile::OpenMemory(std::vector<uint8_t>& oat_contents,
-                             const std::string& location,
-                             std::string* error_msg) {
-  CHECK(!oat_contents.empty()) << location;
-  CheckLocation(location);
-  std::unique_ptr<OatFile> oat_file(new OatFile(location, false));
-  oat_file->begin_ = &oat_contents[0];
-  oat_file->end_ = &oat_contents[oat_contents.size()];
+  // Ignore the optional .bss section when opening non-executable.
   return oat_file->Setup(error_msg) ? oat_file.release() : nullptr;
 }
 
@@ -138,8 +128,8 @@ OatFile* OatFile::OpenElfFile(File* file,
 }
 
 OatFile::OatFile(const std::string& location, bool is_executable)
-    : location_(location), begin_(NULL), end_(NULL), is_executable_(is_executable),
-      dlopen_handle_(NULL),
+    : location_(location), begin_(NULL), end_(NULL), bss_begin_(nullptr), bss_end_(nullptr),
+      is_executable_(is_executable), dlopen_handle_(NULL),
       secondary_lookup_lock_("OatFile secondary lookup lock", kOatFileSecondaryLookupLock) {
   CHECK(!location_.empty());
 }
@@ -185,6 +175,23 @@ bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
   }
   // Readjust to be non-inclusive upper bound.
   end_ += sizeof(uint32_t);
+
+  bss_begin_ = reinterpret_cast<uint8_t*>(dlsym(dlopen_handle_, "oatbss"));
+  if (bss_begin_ == nullptr) {
+    // No .bss section. Clear dlerror().
+    bss_end_ = nullptr;
+    dlerror();
+  } else {
+    bss_end_ = reinterpret_cast<uint8_t*>(dlsym(dlopen_handle_, "oatbsslastword"));
+    if (bss_end_ == nullptr) {
+      *error_msg = StringPrintf("Failed to find oatbasslastword symbol in '%s': %s",
+                                elf_filename.c_str(), dlerror());
+      return false;
+    }
+    // Readjust to be non-inclusive upper bound.
+    bss_end_ += sizeof(uint32_t);
+  }
+
   return Setup(error_msg);
 }
 
@@ -222,6 +229,23 @@ bool OatFile::ElfFileOpen(File* file, uint8_t* requested_base, uint8_t* oat_file
   }
   // Readjust to be non-inclusive upper bound.
   end_ += sizeof(uint32_t);
+
+  bss_begin_ = elf_file_->FindDynamicSymbolAddress("oatbss");
+  if (bss_begin_ == nullptr) {
+    // No .bss section. Clear dlerror().
+    bss_end_ = nullptr;
+    dlerror();
+  } else {
+    bss_end_ = elf_file_->FindDynamicSymbolAddress("oatbsslastword");
+    if (bss_end_ == nullptr) {
+      *error_msg = StringPrintf("Failed to find oatbasslastword symbol in '%s'",
+                                file->GetPath().c_str());
+      return false;
+    }
+    // Readjust to be non-inclusive upper bound.
+    bss_end_ += sizeof(uint32_t);
+  }
+
   return Setup(error_msg);
 }
 
@@ -361,6 +385,14 @@ const uint8_t* OatFile::Begin() const {
 const uint8_t* OatFile::End() const {
   CHECK(end_ != NULL);
   return end_;
+}
+
+const uint8_t* OatFile::BssBegin() const {
+  return bss_begin_;
+}
+
+const uint8_t* OatFile::BssEnd() const {
+  return bss_end_;
 }
 
 const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
