@@ -1500,7 +1500,7 @@ class HBinaryOperation : public HExpression<2> {
   HInstruction* GetRight() const { return InputAt(1); }
   Primitive::Type GetResultType() const { return GetType(); }
 
-  virtual bool IsCommutative() { return false; }
+  virtual bool IsCommutative() const { return false; }
 
   virtual bool CanBeMoved() const { return true; }
   virtual bool InstructionDataEquals(HInstruction* other) const {
@@ -1517,6 +1517,14 @@ class HBinaryOperation : public HExpression<2> {
   virtual int32_t Evaluate(int32_t x, int32_t y) const = 0;
   virtual int64_t Evaluate(int64_t x, int64_t y) const = 0;
 
+  // Returns an input that can legally be used as the right input and is
+  // constant, or nullptr.
+  HConstant* GetConstantRight() const;
+
+  // If `GetConstantRight()` returns one of the input, this returns the other
+  // one. Otherwise it returns nullptr.
+  HInstruction* GetLeastConstantLeft() const;
+
   DECLARE_INSTRUCTION(BinaryOperation);
 
  private:
@@ -1529,7 +1537,7 @@ class HCondition : public HBinaryOperation {
       : HBinaryOperation(Primitive::kPrimBoolean, first, second),
         needs_materialization_(true) {}
 
-  virtual bool IsCommutative() { return true; }
+  virtual bool IsCommutative() const OVERRIDE { return true; }
 
   bool NeedsMaterialization() const { return needs_materialization_; }
   void ClearNeedsMaterialization() { needs_materialization_ = false; }
@@ -1786,6 +1794,10 @@ class HConstant : public HExpression<0> {
 
   virtual bool CanBeMoved() const { return true; }
 
+  virtual bool IsMinusOne() const { return false; }
+  virtual bool IsZero() const { return false; }
+  virtual bool IsOne() const { return false; }
+
   DECLARE_INSTRUCTION(Constant);
 
  private:
@@ -1804,6 +1816,16 @@ class HFloatConstant : public HConstant {
   }
 
   virtual size_t ComputeHashCode() const { return static_cast<size_t>(GetValue()); }
+
+  bool IsMinusOne() const OVERRIDE {
+    return bit_cast<uint32_t>(AsFloatConstant()->GetValue()) == bit_cast<uint32_t>((-1.0f));
+  }
+  bool IsZero() const OVERRIDE {
+    return AsFloatConstant()->GetValue() == 0.0f;
+  }
+  bool IsOne() const OVERRIDE {
+    return bit_cast<uint32_t>(AsFloatConstant()->GetValue()) == bit_cast<uint32_t>(1.0f);
+  }
 
   DECLARE_INSTRUCTION(FloatConstant);
 
@@ -1825,6 +1847,16 @@ class HDoubleConstant : public HConstant {
   }
 
   virtual size_t ComputeHashCode() const { return static_cast<size_t>(GetValue()); }
+
+  bool IsMinusOne() const OVERRIDE {
+    return bit_cast<uint64_t>(AsDoubleConstant()->GetValue()) == bit_cast<uint64_t>((-1.0));
+  }
+  bool IsZero() const OVERRIDE {
+    return AsDoubleConstant()->GetValue() == 0.0;
+  }
+  bool IsOne() const OVERRIDE {
+    return bit_cast<uint64_t>(AsDoubleConstant()->GetValue()) == bit_cast<uint64_t>(1.0);
+  }
 
   DECLARE_INSTRUCTION(DoubleConstant);
 
@@ -1871,6 +1903,10 @@ class HIntConstant : public HConstant {
   // method is an workaround until we fix the above.
   bool ActAsNullConstant() const OVERRIDE { return value_ == 0; }
 
+  bool IsMinusOne() const OVERRIDE { return GetValue() == -1; }
+  bool IsZero() const OVERRIDE { return GetValue() == 0; }
+  bool IsOne() const OVERRIDE { return GetValue() == 1; }
+
   DECLARE_INSTRUCTION(IntConstant);
 
  private:
@@ -1890,6 +1926,10 @@ class HLongConstant : public HConstant {
   }
 
   virtual size_t ComputeHashCode() const { return static_cast<size_t>(GetValue()); }
+
+  bool IsMinusOne() const OVERRIDE { return GetValue() == -1; }
+  bool IsZero() const OVERRIDE { return GetValue() == 0; }
+  bool IsOne() const OVERRIDE { return GetValue() == 1; }
 
   DECLARE_INSTRUCTION(LongConstant);
 
@@ -2136,7 +2176,7 @@ class HAdd : public HBinaryOperation {
   HAdd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  virtual bool IsCommutative() { return true; }
+  virtual bool IsCommutative() const OVERRIDE { return true; }
 
   virtual int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE {
     return x + y;
@@ -2174,7 +2214,7 @@ class HMul : public HBinaryOperation {
   HMul(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  virtual bool IsCommutative() { return true; }
+  virtual bool IsCommutative() const OVERRIDE { return true; }
 
   virtual int32_t Evaluate(int32_t x, int32_t y) const { return x * y; }
   virtual int64_t Evaluate(int64_t x, int64_t y) const { return x * y; }
@@ -2323,7 +2363,7 @@ class HAnd : public HBinaryOperation {
   HAnd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  bool IsCommutative() OVERRIDE { return true; }
+  bool IsCommutative() const OVERRIDE { return true; }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x & y; }
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x & y; }
@@ -2339,7 +2379,7 @@ class HOr : public HBinaryOperation {
   HOr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  bool IsCommutative() OVERRIDE { return true; }
+  bool IsCommutative() const OVERRIDE { return true; }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x | y; }
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x | y; }
@@ -2355,7 +2395,7 @@ class HXor : public HBinaryOperation {
   HXor(Primitive::Type result_type, HInstruction* left, HInstruction* right)
       : HBinaryOperation(result_type, left, right) {}
 
-  bool IsCommutative() OVERRIDE { return true; }
+  bool IsCommutative() const OVERRIDE { return true; }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE { return x ^ y; }
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE { return x ^ y; }
@@ -3394,6 +3434,12 @@ class HBlocksInLoopIterator : public ValueObject {
 
   DISALLOW_COPY_AND_ASSIGN(HBlocksInLoopIterator);
 };
+
+inline int64_t Int64FromConstant(HConstant* constant) {
+  DCHECK(constant->IsIntConstant() || constant->IsLongConstant());
+  return constant->IsIntConstant() ? constant->AsIntConstant()->GetValue()
+                                   : constant->AsLongConstant()->GetValue();
+}
 
 }  // namespace art
 

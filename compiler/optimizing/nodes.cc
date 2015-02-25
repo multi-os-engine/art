@@ -673,6 +673,29 @@ HConstant* HBinaryOperation::TryStaticEvaluation() const {
   return nullptr;
 }
 
+HConstant* HBinaryOperation::GetConstantRight() const {
+  if (GetRight()->IsConstant()) {
+    return GetRight()->AsConstant();
+  } else if (IsCommutative() && GetLeft()->IsConstant()) {
+    return GetLeft()->AsConstant();
+  } else {
+    return nullptr;
+  }
+}
+
+// If `GetConstantRight()` returns one of the input, this returns the other
+// one. Otherwise it returns nullptr.
+HInstruction* HBinaryOperation::GetLeastConstantLeft() const {
+  HInstruction* most_constant_right = GetConstantRight();
+  if (most_constant_right == nullptr) {
+    return nullptr;
+  } else if (most_constant_right == GetLeft()) {
+    return GetRight();
+  } else {
+    return GetLeft();
+  }
+}
+
 bool HCondition::IsBeforeWhenDisregardMoves(HIf* if_) const {
   return this == if_->GetPreviousDisregardingMoves();
 }
