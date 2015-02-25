@@ -862,7 +862,8 @@ void ThreadList::SuspendAllForDebugger() {
 }
 
 void ThreadList::SuspendSelfForDebugger() {
-  Thread* self = Thread::Current();
+  Thread* const self = Thread::Current();
+  self->SetReadyForDebugInvoke(true);
 
   // The debugger thread must not suspend itself due to debugger activity!
   Thread* debug_thread = Dbg::GetDebugThread();
@@ -883,16 +884,7 @@ void ThreadList::SuspendSelfForDebugger() {
   VLOG(threads) << *self << " self-suspending (debugger)";
 
   // Tell JDWP we've completed invocation and are ready to suspend.
-  DebugInvokeReq* pReq = self->GetInvokeReq();
-  DCHECK(pReq != NULL);
-  if (pReq->invoke_needed) {
-    // Clear this before signaling.
-    pReq->Clear();
-
-    VLOG(jdwp) << "invoke complete, signaling";
-    MutexLock mu(self, pReq->lock);
-    pReq->cond.Signal(self);
-  }
+  Dbg::FinishInvoke(self);
 
   // Tell JDWP that we've completed suspension. The JDWP thread can't
   // tell us to resume before we're fully asleep because we hold the
@@ -918,6 +910,7 @@ void ThreadList::SuspendSelfForDebugger() {
     CHECK_EQ(self->GetSuspendCount(), 0);
   }
 
+  self->SetReadyForDebugInvoke(false);
   VLOG(threads) << *self << " self-reviving (debugger)";
 }
 

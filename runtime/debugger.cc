@@ -364,7 +364,6 @@ void DebugInvokeReq::VisitRoots(RootCallback* callback, void* arg, const RootInf
 }
 
 void DebugInvokeReq::Clear() {
-  invoke_needed = false;
   receiver = nullptr;
   thread = nullptr;
   klass = nullptr;
@@ -3508,7 +3507,7 @@ JDWP::JdwpError Dbg::InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId objec
   ThreadList* thread_list = Runtime::Current()->GetThreadList();
 
   Thread* targetThread = nullptr;
-  DebugInvokeReq* req = nullptr;
+  std::unique_ptr<DebugInvokeReq> req;
   Thread* self = Thread::Current();
   {
     ScopedObjectAccessUnchecked soa(self);
@@ -3519,8 +3518,13 @@ JDWP::JdwpError Dbg::InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId objec
       LOG(ERROR) << "InvokeMethod request for invalid thread id " << thread_id;
       return error;
     }
-    req = targetThread->GetInvokeReq();
-    if (!req->ready) {
+    if (targetThread->GetInvokeReq() != nullptr) {
+      // Thread is already invoking a method on behalf of the debugger.
+      LOG(ERROR) << "InvokeMethod request for thread already invoking a method: " << *targetThread;
+      return JDWP::ERR_ALREADY_INVOKING;
+    }
+    if (!targetThread->IsReadyForDebugInvoke()) {
+      // Thread is not suspended by an event so it cannot invoke a method.
       LOG(ERROR) << "InvokeMethod request for thread not stopped by event: " << *targetThread;
       return JDWP::ERR_INVALID_THREAD;
     }
@@ -3558,7 +3562,6 @@ JDWP::JdwpError Dbg::InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId objec
     if (error != JDWP::ERR_NONE) {
       return JDWP::ERR_INVALID_OBJECT;
     }
-    // TODO: check that 'thread' is actually a java.lang.Thread!
 
     mirror::Class* c = DecodeClass(class_id, &error);
     if (c == nullptr) {
@@ -3616,14 +3619,18 @@ JDWP::JdwpError Dbg::InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId objec
       }
     }
 
+    // Allocates a DebugInvokeReq.
+    req.reset(new DebugInvokeReq(options, arg_values, arg_count));
+    CHECK(req.get() != nullptr) << "Failed to allocate DebugInvokeReq";
     req->receiver = receiver;
     req->thread = thread;
     req->klass = c;
     req->method = m;
-    req->arg_count = arg_count;
-    req->arg_values = arg_values;
-    req->options = options;
-    req->invoke_needed = true;
+
+    // Attach the DebugInvokeReq to the target thread so it executes the method when
+    // it is resumed. Once the invocation completes, it will detach it and signal us
+    // before suspending itself.
+    targetThread->AttachDebugInvokeReq(req.get());
   }
 
   // The fact that we've released the thread list lock is a bit risky --- if the thread goes
@@ -3657,7 +3664,7 @@ JDWP::JdwpError Dbg::InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId objec
       gJdwpState->ReleaseJdwpTokenForCommand();
 
       // Wait for the request to finish executing.
-      while (req->invoke_needed) {
+      while (targetThread->GetInvokeReq() != nullptr) {
         req->cond.Wait(self);
       }
     }
@@ -3704,7 +3711,7 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
 
   // We can be called while an exception is pending. We need
   // to preserve that across the method invocation.
-  StackHandleScope<4> hs(soa.Self());
+  StackHandleScope<5> hs(soa.Self());
   auto old_throw_this_object = hs.NewHandle<mirror::Object>(nullptr);
   auto old_throw_method = hs.NewHandle<mirror::ArtMethod>(nullptr);
   auto old_exception = hs.NewHandle<mirror::Throwable>(nullptr);
@@ -3740,12 +3747,12 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
   pReq->result_value = InvokeWithJValues(soa, pReq->receiver, soa.EncodeMethod(m.Get()),
                                          reinterpret_cast<jvalue*>(pReq->arg_values));
 
-  mirror::Throwable* exception = soa.Self()->GetException(nullptr);
+  Handle<mirror::Throwable> exception = hs.NewHandle(soa.Self()->GetException(nullptr));
   soa.Self()->ClearException();
-  pReq->exception = gRegistry->Add(exception);
+  pReq->exception = gRegistry->Add(exception.Get());
   pReq->result_tag = BasicTagFromDescriptor(m.Get()->GetShorty());
   if (pReq->exception != 0) {
-    VLOG(jdwp) << "  JDWP invocation returning with exception=" << exception
+    VLOG(jdwp) << "  JDWP invocation returning with exception=" << exception.Get()
         << " " << exception->Dump();
     pReq->result_value.SetJ(0);
   } else if (pReq->result_tag == JDWP::JT_OBJECT) {
@@ -3765,6 +3772,7 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
      * We can't use the "tracked allocation" mechanism here because
      * the object is going to be handed off to a different thread.
      */
+    // TODO not valid for ART: object can move!!!
     gRegistry->Add(pReq->result_value.GetL());
   }
 
@@ -3773,6 +3781,21 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
                                          old_throw_dex_pc);
     soa.Self()->SetException(gc_safe_throw_location, old_exception.Get());
     soa.Self()->SetExceptionReportedToInstrumentation(old_exception_report_flag);
+  }
+}
+
+void Dbg::FinishInvoke(Thread* self) {
+  DebugInvokeReq* const pReq = self->GetInvokeReq();
+  if (pReq != nullptr) {
+    // Clear this before signaling.
+    pReq->Clear();
+
+    // Detach DebugInvokeReq from the thread.
+    self->DetachDebugInvokeReq();
+
+    VLOG(jdwp) << "invoke complete, signaling";
+    MutexLock mu(self, pReq->lock);
+    pReq->cond.Signal(self);
   }
 }
 

@@ -54,29 +54,22 @@ class ThrowLocation;
  * Invoke-during-breakpoint support.
  */
 struct DebugInvokeReq {
-  DebugInvokeReq()
-      : ready(false), invoke_needed(false),
-        receiver(NULL), thread(NULL), klass(NULL), method(NULL),
-        arg_count(0), arg_values(NULL), options(0), error(JDWP::ERR_NONE),
-        result_tag(JDWP::JT_VOID), exception(0),
+  DebugInvokeReq(uint32_t invoke_options, uint64_t* args, uint32_t args_count)
+      : receiver(nullptr), thread(nullptr), klass(nullptr), method(nullptr),
+        arg_count(args_count), arg_values(args), options(invoke_options),
+        error(JDWP::ERR_NONE), result_tag(JDWP::JT_VOID), exception(0),
         lock("a DebugInvokeReq lock", kBreakpointInvokeLock),
         cond("a DebugInvokeReq condition variable", lock) {
   }
-
-  /* boolean; only set when we're in the tail end of an event handler */
-  bool ready;
-
-  /* boolean; set if the JDWP thread wants this thread to do work */
-  bool invoke_needed;
 
   /* request */
   mirror::Object* receiver;      /* not used for ClassType.InvokeMethod */
   mirror::Object* thread;
   mirror::Class* klass;
   mirror::ArtMethod* method;
-  uint32_t arg_count;
-  uint64_t* arg_values;   /* will be NULL if arg_count_ == 0 */
-  uint32_t options;
+  const uint32_t arg_count;
+  uint64_t* const arg_values;   /* will be NULL if arg_count_ == 0 */
+  const uint32_t options;
 
   /* result */
   JDWP::JdwpError error;
@@ -582,6 +575,8 @@ class Dbg {
       LOCKS_EXCLUDED(Locks::thread_list_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Invoke support for commands ClassType.InvokeMethod, ClassType.NewInstance and
+  // ObjectReference.InvokeMethod.
   static JDWP::JdwpError InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId object_id,
                                       JDWP::RefTypeId class_id, JDWP::MethodId method_id,
                                       uint32_t arg_count, uint64_t* arg_values,
@@ -591,7 +586,10 @@ class Dbg {
       LOCKS_EXCLUDED(Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   static void ExecuteMethod(DebugInvokeReq* pReq);
+
+  static void FinishInvoke(Thread* self);
 
   /*
    * DDM support.
