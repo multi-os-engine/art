@@ -658,90 +658,6 @@ void Runtime::StartDaemonThreads() {
   VLOG(startup) << "Runtime::StartDaemonThreads exiting";
 }
 
-static bool OpenDexFilesFromImage(const std::string& image_location,
-                                  std::vector<std::unique_ptr<const DexFile>>* dex_files,
-                                  size_t* failures) {
-  DCHECK(dex_files != nullptr) << "OpenDexFilesFromImage: out-param is NULL";
-  std::string system_filename;
-  bool has_system = false;
-  std::string cache_filename_unused;
-  bool dalvik_cache_exists_unused;
-  bool has_cache_unused;
-  bool is_global_cache_unused;
-  bool found_image = gc::space::ImageSpace::FindImageFilename(image_location.c_str(),
-                                                              kRuntimeISA,
-                                                              &system_filename,
-                                                              &has_system,
-                                                              &cache_filename_unused,
-                                                              &dalvik_cache_exists_unused,
-                                                              &has_cache_unused,
-                                                              &is_global_cache_unused);
-  *failures = 0;
-  if (!found_image || !has_system) {
-    return false;
-  }
-  std::string error_msg;
-  // We are falling back to non-executable use of the oat file because patching failed, presumably
-  // due to lack of space.
-  std::string oat_filename = ImageHeader::GetOatLocationFromImageLocation(system_filename.c_str());
-  std::string oat_location = ImageHeader::GetOatLocationFromImageLocation(image_location.c_str());
-  std::unique_ptr<File> file(OS::OpenFileForReading(oat_filename.c_str()));
-  if (file.get() == nullptr) {
-    return false;
-  }
-  std::unique_ptr<ElfFile> elf_file(ElfFile::Open(file.release(), false, false, &error_msg));
-  if (elf_file.get() == nullptr) {
-    return false;
-  }
-  std::unique_ptr<OatFile> oat_file(OatFile::OpenWithElfFile(elf_file.release(), oat_location,
-                                                             &error_msg));
-  if (oat_file.get() == nullptr) {
-    LOG(INFO) << "Unable to use '" << oat_filename << "' because " << error_msg;
-    return false;
-  }
-
-  for (const OatFile::OatDexFile* oat_dex_file : oat_file->GetOatDexFiles()) {
-    if (oat_dex_file == nullptr) {
-      *failures += 1;
-      continue;
-    }
-    std::unique_ptr<const DexFile> dex_file = oat_dex_file->OpenDexFile(&error_msg);
-    if (dex_file.get() == nullptr) {
-      *failures += 1;
-    } else {
-      dex_files->push_back(std::move(dex_file));
-    }
-  }
-  Runtime::Current()->GetClassLinker()->RegisterOatFile(oat_file.release());
-  return true;
-}
-
-
-static size_t OpenDexFiles(const std::vector<std::string>& dex_filenames,
-                           const std::vector<std::string>& dex_locations,
-                           const std::string& image_location,
-                           std::vector<std::unique_ptr<const DexFile>>* dex_files) {
-  DCHECK(dex_files != nullptr) << "OpenDexFiles: out-param is NULL";
-  size_t failure_count = 0;
-  if (!image_location.empty() && OpenDexFilesFromImage(image_location, dex_files, &failure_count)) {
-    return failure_count;
-  }
-  failure_count = 0;
-  for (size_t i = 0; i < dex_filenames.size(); i++) {
-    const char* dex_filename = dex_filenames[i].c_str();
-    const char* dex_location = dex_locations[i].c_str();
-    std::string error_msg;
-    if (!OS::FileExists(dex_filename)) {
-      LOG(WARNING) << "Skipping non-existent dex file '" << dex_filename << "'";
-      continue;
-    }
-    if (!DexFile::Open(dex_filename, dex_location, &error_msg, dex_files)) {
-      LOG(WARNING) << "Failed to open .dex from file '" << dex_filename << "': " << error_msg;
-      ++failure_count;
-    }
-  }
-  return failure_count;
-}
 
 bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) {
   CHECK_EQ(sysconf(_SC_PAGE_SIZE), kPageSize);
@@ -952,13 +868,9 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
       CHECK_EQ(dex_filenames.size(), dex_locations.size());
     }
 
-    std::vector<std::unique_ptr<const DexFile>> boot_class_path;
-    OpenDexFiles(dex_filenames,
-                 dex_locations,
-                 runtime_options.GetOrDefault(Opt::Image),
-                 &boot_class_path);
     instruction_set_ = runtime_options.GetOrDefault(Opt::ImageInstructionSet);
-    class_linker_->InitWithoutImage(std::move(boot_class_path));
+    std::string image_location = runtime_options.GetOrDefault(Opt::Image);
+    class_linker_->InitWithoutImage(dex_filenames, dex_locations, image_location);
 
     // TODO: Should we move the following to InitWithoutImage?
     SetInstructionSet(instruction_set_);
