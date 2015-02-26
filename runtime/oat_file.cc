@@ -327,14 +327,22 @@ bool OatFile::Setup(std::string* error_msg) {
       return false;
     }
 
+    size_t dex_file_size = reinterpret_cast<const DexFile::Header*>(dex_file_pointer)->file_size_;
+    std::unique_ptr<const DexFile> dex_file(
+        DexFile::Open(dex_file_pointer, dex_file_size, dex_file_location, dex_file_checksum,
+                      this, error_msg));
+    if (dex_file == nullptr) {
+      *error_msg = StringPrintf("In oat file '%s' failed to open DexFile #%zd: %s",
+                                GetLocation().c_str(), i, error_msg->c_str());
+      return false;
+    }
+
     std::string canonical_location = DexFile::GetDexCanonicalLocation(dex_file_location.c_str());
 
     // Create the OatDexFile and add it to the owning container.
     OatDexFile* oat_dex_file = new OatDexFile(this,
-                                              dex_file_location,
+                                              std::move(dex_file),
                                               canonical_location,
-                                              dex_file_checksum,
-                                              dex_file_pointer,
                                               methods_offsets_pointer);
     oat_dex_files_storage_.push_back(oat_dex_file);
 
@@ -436,28 +444,15 @@ const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
 }
 
 OatFile::OatDexFile::OatDexFile(const OatFile* oat_file,
-                                const std::string& dex_file_location,
+                                std::unique_ptr<const DexFile>&& dex_file,
                                 const std::string& canonical_dex_file_location,
-                                uint32_t dex_file_location_checksum,
-                                const uint8_t* dex_file_pointer,
                                 const uint32_t* oat_class_offsets_pointer)
     : oat_file_(oat_file),
-      dex_file_location_(dex_file_location),
+      dex_file_(std::move(dex_file)),
       canonical_dex_file_location_(canonical_dex_file_location),
-      dex_file_location_checksum_(dex_file_location_checksum),
-      dex_file_pointer_(dex_file_pointer),
       oat_class_offsets_pointer_(oat_class_offsets_pointer) {}
 
 OatFile::OatDexFile::~OatDexFile() {}
-
-size_t OatFile::OatDexFile::FileSize() const {
-  return reinterpret_cast<const DexFile::Header*>(dex_file_pointer_)->file_size_;
-}
-
-std::unique_ptr<const DexFile> OatFile::OatDexFile::OpenDexFile(std::string* error_msg) const {
-  return DexFile::Open(dex_file_pointer_, FileSize(), dex_file_location_,
-                       dex_file_location_checksum_, GetOatFile(), error_msg);
-}
 
 uint32_t OatFile::OatDexFile::GetOatClassOffset(uint16_t class_def_index) const {
   return oat_class_offsets_pointer_[class_def_index];
