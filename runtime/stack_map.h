@@ -130,6 +130,13 @@ class DexRegisterMap {
     return sizeof(LocationKind) + sizeof(int32_t);
   }
 
+  // This method requires the number of dex registers to be passed as
+  // argument, as this value is not stored in the Dex register map
+  // itself (nor in the corresponding stack map).
+  size_t Size(size_t number_of_dex_registers) const {
+    return kFixedSize + number_of_dex_registers * SingleEntrySize();
+  }
+
  private:
   static constexpr int kFixedSize = 0;
 
