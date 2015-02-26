@@ -489,12 +489,12 @@ uint32_t FindNextInstructionFollowingException(Thread* self,
   ThrowLocation throw_location;
   StackHandleScope<3> hs(self);
   Handle<mirror::Throwable> exception(hs.NewHandle(self->GetException(&throw_location)));
-  if (!self->IsExceptionReportedToInstrumentation() && instrumentation->HasExceptionCaughtListeners()) {
+  if (instrumentation->HasExceptionCaughtListeners()
+      && self->IsExceptionThrownByCurrentMethod(exception.Get())) {
     CatchLocationFinder clf(self, &exception);
     clf.WalkStack(false);
     instrumentation->ExceptionCaughtEvent(self, throw_location, clf.GetCatchMethod(),
                                           clf.GetCatchDexPc(), exception.Get());
-    self->SetExceptionReportedToInstrumentation(true);
   }
   bool clear_exception = false;
   uint32_t found_dex_pc;
@@ -508,10 +508,8 @@ uint32_t FindNextInstructionFollowingException(Thread* self,
     instrumentation->MethodUnwindEvent(self, shadow_frame.GetThisObject(),
                                        shadow_frame.GetMethod(), dex_pc);
   } else {
-    if (self->IsExceptionReportedToInstrumentation()) {
-      instrumentation->MethodUnwindEvent(self, shadow_frame.GetThisObject(),
-                                         shadow_frame.GetMethod(), dex_pc);
-    }
+    instrumentation->MethodUnwindEvent(self, shadow_frame.GetThisObject(),
+                                       shadow_frame.GetMethod(), dex_pc);
     if (clear_exception) {
       self->ClearException();
     }
