@@ -34,6 +34,7 @@
 #include "compiler_callbacks.h"
 #include "debugger.h"
 #include "dex_file-inl.h"
+#include "elf_file.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
 #include "gc_root-inl.h"
 #include "gc/accounting/card_table-inl.h"
@@ -247,7 +248,83 @@ ClassLinker::ClassLinker(InternTable* intern_table)
   memset(find_array_class_cache_, 0, kFindArrayCacheSize * sizeof(mirror::Class*));
 }
 
-void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> boot_class_path) {
+static bool OpenDexFilesFromImage(const std::string& image_location,
+                                  std::vector<const DexFile*>* dex_files) {
+  DCHECK(dex_files != nullptr) << "OpenDexFilesFromImage: out-param is NULL";
+  std::string system_filename;
+  bool has_system = false;
+  std::string cache_filename_unused;
+  bool dalvik_cache_exists_unused;
+  bool has_cache_unused;
+  bool is_global_cache_unused;
+  bool found_image = gc::space::ImageSpace::FindImageFilename(image_location.c_str(),
+                                                              kRuntimeISA,
+                                                              &system_filename,
+                                                              &has_system,
+                                                              &cache_filename_unused,
+                                                              &dalvik_cache_exists_unused,
+                                                              &has_cache_unused,
+                                                              &is_global_cache_unused);
+  if (!found_image || !has_system) {
+    return false;
+  }
+  std::string error_msg;
+  // We are falling back to non-executable use of the oat file because patching failed, presumably
+  // due to lack of space.
+  std::string oat_filename = ImageHeader::GetOatLocationFromImageLocation(system_filename.c_str());
+  std::string oat_location = ImageHeader::GetOatLocationFromImageLocation(image_location.c_str());
+  std::unique_ptr<File> file(OS::OpenFileForReading(oat_filename.c_str()));
+  if (file.get() == nullptr) {
+    return false;
+  }
+  std::unique_ptr<ElfFile> elf_file(ElfFile::Open(file.release(), false, false, &error_msg));
+  if (elf_file.get() == nullptr) {
+    return false;
+  }
+  std::unique_ptr<OatFile> oat_file(OatFile::OpenWithElfFile(elf_file.release(), oat_location,
+                                                             &error_msg));
+  if (oat_file.get() == nullptr) {
+    LOG(INFO) << "Unable to use '" << oat_filename << "' because " << error_msg;
+    return false;
+  }
+
+  for (const OatFile::OatDexFile* oat_dex_file : oat_file->GetOatDexFiles()) {
+    DCHECK(oat_dex_file != nullptr);
+    const DexFile* dex_file = oat_dex_file->GetDexFile();
+    DCHECK(dex_file != nullptr) << oat_dex_file->GetDexFileLocation();
+    dex_files->push_back(dex_file);
+  }
+  Runtime::Current()->GetClassLinker()->RegisterOatFile(oat_file.release());
+  return true;
+}
+
+void ClassLinker::InitWithoutImage(const std::vector<std::string>& dex_filenames,
+                                   const std::vector<std::string>& dex_locations,
+                                   const std::string& image_location) {
+  std::vector<const DexFile*> boot_class_path;
+  if (image_location.empty() || !OpenDexFilesFromImage(image_location, &boot_class_path)) {
+    CHECK(opened_dex_files_.empty());
+    size_t failure_count = 0u;
+    for (size_t i = 0; i < dex_filenames.size(); i++) {
+      const char* dex_filename = dex_filenames[i].c_str();
+      const char* dex_location = dex_locations[i].c_str();
+      std::string error_msg;
+      if (!OS::FileExists(dex_filename)) {
+        LOG(WARNING) << "Skipping non-existent dex file '" << dex_filename << "'";
+        continue;
+      }
+      if (!DexFile::Open(dex_filename, dex_location, &error_msg, &opened_dex_files_)) {
+        LOG(WARNING) << "Failed to open .dex from file '" << dex_filename << "': " << error_msg;
+        ++failure_count;
+      }
+    }
+    // TODO: Should we continue if failure_count != 0?
+    boot_class_path.reserve(opened_dex_files_.size());
+    for (auto& dex_file : opened_dex_files_) {
+      boot_class_path.push_back(dex_file.get());
+    }
+  }
+
   VLOG(startup) << "ClassLinker::Init";
   CHECK(!Runtime::Current()->GetHeap()->HasImageSpace()) << "Runtime has image. We should use it.";
 
@@ -408,9 +485,8 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   // these roots.
   CHECK_NE(0U, boot_class_path.size());
   for (auto& dex_file : boot_class_path) {
-    CHECK(dex_file.get() != nullptr);
+    CHECK(dex_file != nullptr);
     AppendToBootClassPath(self, *dex_file);
-    opened_dex_files_.push_back(std::move(dex_file));
   }
 
   // now we can use FindSystemClass
@@ -797,7 +873,7 @@ static bool LoadMultiDexFilesFromOatFile(const OatFile* oat_file,
                                          const uint32_t* dex_location_checksum,
                                          bool generated,
                                          std::vector<std::string>* error_msgs,
-                                         std::vector<std::unique_ptr<const DexFile>>* dex_files) {
+                                         std::vector<const DexFile*>* dex_files) {
   if (oat_file == nullptr) {
     return false;
   }
@@ -844,13 +920,9 @@ static bool LoadMultiDexFilesFromOatFile(const OatFile* oat_file,
     }
 
     if (success) {
-      std::unique_ptr<const DexFile> dex_file = oat_dex_file->OpenDexFile(&error_msg);
-      if (dex_file.get() == nullptr) {
-        success = false;
-        error_msgs->push_back(error_msg);
-      } else {
-        dex_files->push_back(std::move(dex_file));
-      }
+      const DexFile* dex_file = oat_dex_file->GetDexFile();
+      DCHECK(dex_file != nullptr);
+      dex_files->push_back(dex_file);
     }
 
     // When we generated the file, we expect success, or something is terribly wrong.
@@ -878,7 +950,7 @@ static bool LoadMultiDexFilesFromOatFile(const OatFile* oat_file,
 // multidex ahead of time.
 bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_location,
                                       std::vector<std::string>* error_msgs,
-                                      std::vector<std::unique_ptr<const DexFile>>* dex_files) {
+                                      std::vector<const DexFile*>* dex_files) {
   // 1) Check whether we have an open oat file.
   // This requires a dex checksum, use the "primary" one.
   uint32_t dex_location_checksum;
@@ -1012,8 +1084,17 @@ bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_
     // dex2oat was disabled or crashed. Add the dex file in the list of dex_files to make progress.
     if (Runtime::Current()->IsDexFileFallbackEnabled()) {
       std::string error_msg;
-      if (!DexFile::Open(dex_location, dex_location, &error_msg, dex_files)) {
+      std::vector<std::unique_ptr<const DexFile>> owned_dex_files;
+      if (!DexFile::Open(dex_location, dex_location, &error_msg, &owned_dex_files)) {
         error_msgs->push_back(error_msg);
+      } else {
+        // Move the owned dex files to the non-owning list.
+        // The list must be passed to ReleaseDexFiles() to properly delete them.
+        DCHECK(dex_files->empty());
+        dex_files->reserve(owned_dex_files.size());
+        for (auto& dex_file : owned_dex_files) {
+          dex_files->push_back(dex_file.release());
+        }
       }
     } else {
       error_msgs->push_back("Fallback mode disabled, skipping dex files.");
@@ -1030,6 +1111,24 @@ bool ClassLinker::OpenDexFilesFromOat(const char* dex_location, const char* oat_
     return true;
   } else {
     return false;
+  }
+}
+
+void ClassLinker::ReleaseDexFiles(const std::vector<const DexFile*>& dex_files) {
+  for (const DexFile* dex_file : dex_files) {
+    // The Runtime currently never unloads classes, which means any registered
+    // dex files must be kept around forever in case they are used. We
+    // accomplish this here by explicitly leaking those dex files that are
+    // registered.
+    //
+    // TODO: The Runtime should support unloading of classes and freeing of the
+    // dex files for those unloaded classes rather than leaking dex files here.
+    // Oat files should also be deleted when they are no longer needed.
+
+    // Delete only unregistered dex files not owned by an OatFile.
+    if (dex_file->GetOatFile() == nullptr && !IsDexFileRegistered(*dex_file)) {
+      delete dex_file;
+    }
   }
 }
 
@@ -1089,12 +1188,8 @@ const OatFile* ClassLinker::FindOatFileInOatLocationForDexFile(const char* dex_l
                               actual_dex_checksum);
     return nullptr;
   }
-  std::unique_ptr<const DexFile> dex_file(oat_dex_file->OpenDexFile(error_msg));
-  if (dex_file.get() != nullptr) {
-    return oat_file.release();
-  } else {
-    return nullptr;
-  }
+  DCHECK(oat_dex_file->GetDexFile() != nullptr) << oat_dex_file->GetDexFileLocation();
+  return oat_file.release();
 }
 
 const OatFile* ClassLinker::CreateOatFileForDexLocation(const char* dex_location,
@@ -1220,7 +1315,6 @@ bool ClassLinker::VerifyOatWithDexFile(const OatFile* oat_file,
                                        std::string* error_msg) {
   CHECK(oat_file != nullptr);
   CHECK(dex_location != nullptr);
-  std::unique_ptr<const DexFile> dex_file;
   if (dex_location_checksum == nullptr) {
     // If no classes.dex found in dex_location, it has been stripped or is corrupt, assume oat is
     // up-to-date. This is the common case in user builds for jar's and apk's in the /system
@@ -1232,17 +1326,17 @@ bool ClassLinker::VerifyOatWithDexFile(const OatFile* oat_file,
                                 error_msg->c_str());
       return false;
     }
-    dex_file = oat_dex_file->OpenDexFile(error_msg);
+    DCHECK(oat_dex_file->GetDexFile() != nullptr);
   } else {
     bool verified = VerifyOatAndDexFileChecksums(oat_file, dex_location, *dex_location_checksum,
                                                  kRuntimeISA, error_msg);
     if (!verified) {
       return false;
     }
-    dex_file = oat_file->GetOatDexFile(dex_location,
-                                       dex_location_checksum)->OpenDexFile(error_msg);
+    DCHECK(oat_file->GetOatDexFile(dex_location, dex_location_checksum) != nullptr);
+    DCHECK(oat_file->GetOatDexFile(dex_location, dex_location_checksum)->GetDexFile() != nullptr);
   }
-  return dex_file.get() != nullptr;
+  return true;
 }
 
 const OatFile* ClassLinker::FindOatFileContainingDexFileFromDexLocation(
@@ -1678,23 +1772,17 @@ void ClassLinker::InitFromImage() {
   for (int32_t i = 0; i < dex_caches->GetLength(); i++) {
     StackHandleScope<1> hs2(self);
     Handle<mirror::DexCache> dex_cache(hs2.NewHandle(dex_caches->Get(i)));
-    const std::string& dex_file_location(dex_cache->GetLocation()->ToModifiedUtf8());
+    const std::string dex_file_location = dex_cache->GetLocation()->ToModifiedUtf8();
     const OatFile::OatDexFile* oat_dex_file = oat_file.GetOatDexFile(dex_file_location.c_str(),
                                                                      nullptr);
     CHECK(oat_dex_file != nullptr) << oat_file.GetLocation() << " " << dex_file_location;
     std::string error_msg;
-    std::unique_ptr<const DexFile> dex_file = oat_dex_file->OpenDexFile(&error_msg);
-    if (dex_file.get() == nullptr) {
-      LOG(FATAL) << "Failed to open dex file " << dex_file_location
-                 << " from within oat file " << oat_file.GetLocation()
-                 << " error '" << error_msg << "'";
-      UNREACHABLE();
-    }
+    const DexFile* dex_file = oat_dex_file->GetDexFile();
+    DCHECK(dex_file != nullptr) << oat_dex_file->GetDexFileLocation();
 
     CHECK_EQ(dex_file->GetLocationChecksum(), oat_dex_file->GetDexFileLocationChecksum());
 
-    AppendToBootClassPath(*dex_file.get(), dex_cache);
-    opened_dex_files_.push_back(std::move(dex_file));
+    AppendToBootClassPath(*dex_file, dex_cache);
   }
 
   // Set classes on AbstractMethod early so that IsMethod tests can be performed during the live

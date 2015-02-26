@@ -209,19 +209,17 @@ class OatFile {
 
   class OatDexFile {
    public:
-    // Opens the DexFile referred to by this OatDexFile from within the containing OatFile.
-    std::unique_ptr<const DexFile> OpenDexFile(std::string* error_msg) const;
-
     const OatFile* GetOatFile() const {
       return oat_file_;
     }
 
-    // Returns the size of the DexFile refered to by this OatDexFile.
-    size_t FileSize() const;
+    const DexFile* GetDexFile() const {
+      return dex_file_.get();
+    }
 
     // Returns original path of DexFile that was the source of this OatDexFile.
     const std::string& GetDexFileLocation() const {
-      return dex_file_location_;
+      return dex_file_->GetLocation();
     }
 
     // Returns the canonical location of DexFile that was the source of this OatDexFile.
@@ -231,7 +229,7 @@ class OatFile {
 
     // Returns checksum of original DexFile that was the source of this OatDexFile;
     uint32_t GetDexFileLocationChecksum() const {
-      return dex_file_location_checksum_;
+      return dex_file_->GetLocationChecksum();
     }
 
     // Returns the OatClass for the class specified by the given DexFile class_def_index.
@@ -244,17 +242,13 @@ class OatFile {
 
    private:
     OatDexFile(const OatFile* oat_file,
-               const std::string& dex_file_location,
+               std::unique_ptr<const DexFile>&& dex_file,
                const std::string& canonical_dex_file_location,
-               uint32_t dex_file_checksum,
-               const uint8_t* dex_file_pointer,
                const uint32_t* oat_class_offsets_pointer);
 
     const OatFile* const oat_file_;
-    const std::string dex_file_location_;
+    const std::unique_ptr<const DexFile> dex_file_;
     const std::string canonical_dex_file_location_;
-    const uint32_t dex_file_location_checksum_;
-    const uint8_t* const dex_file_pointer_;
     const uint32_t* const oat_class_offsets_pointer_;
 
     friend class OatFile;
