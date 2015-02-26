@@ -151,8 +151,9 @@ void QuickExceptionHandler::FindCatch(const ThrowLocation& throw_location,
   }
   // The debugger may suspend this thread and walk its stack. Let's do this before popping
   // instrumentation frames.
-  if (!is_exception_reported) {
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+  instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+  if (instrumentation->HasExceptionCaughtListeners()
+      && self_->IsExceptionThrownByCurrentMethod(exception)) {
     instrumentation->ExceptionCaughtEvent(self_, throw_location, handler_method_, handler_dex_pc_,
                                           exception_ref.Get());
       // We're not catching this exception but let's remind we already reported the exception above

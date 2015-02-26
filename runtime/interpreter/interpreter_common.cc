@@ -489,7 +489,8 @@ uint32_t FindNextInstructionFollowingException(Thread* self,
   ThrowLocation throw_location;
   StackHandleScope<3> hs(self);
   Handle<mirror::Throwable> exception(hs.NewHandle(self->GetException(&throw_location)));
-  if (!self->IsExceptionReportedToInstrumentation() && instrumentation->HasExceptionCaughtListeners()) {
+  if (instrumentation->HasExceptionCaughtListeners()
+      && self->IsExceptionThrownByCurrentMethod(exception.Get())) {
     CatchLocationFinder clf(self, &exception);
     clf.WalkStack(false);
     instrumentation->ExceptionCaughtEvent(self, throw_location, clf.GetCatchMethod(),

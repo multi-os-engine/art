@@ -20,7 +20,8 @@ if [ ! -d libcore ]; then
 fi
 
 # Jar containing all the tests.
-test_jar=out/target/common/obj/JAVA_LIBRARIES/core-tests_intermediates/javalib.jar
+#test_jar=out/target/common/obj/JAVA_LIBRARIES/core-tests_intermediates/javalib.jar
+test_jar=out/host/linux-x86/framework/apache-harmony-jdwp-tests-hostdex.jar
 
 if [ ! -f $test_jar ]; then
   echo "Before running, you must build core-tests and vogar: make core-tests vogar vogar.jar"
@@ -59,4 +60,5 @@ working_packages=("libcore.icu"
 # Run the tests using vogar.
 echo "Running tests for the following test packages:"
 echo ${working_packages[@]} | tr " " "\n"
-vogar $@ --expectations art/tools/libcore_failures.txt --classpath $test_jar ${working_packages[@]}
+vogar $@ --timeout 10 --test-only --expectations art/tools/libcore_failures.txt --vm-arg -Djpda.settings.verbose=true --vm-arg -Djpda.settings.syncPort=34016 --vm-arg -Djpda.settings.debuggeeJavaPath=out/host/linux-x86/bin/art --classpath $test_jar org.apache.harmony.jpda.tests.jdwp.MultiSession.EnableCollectionTest#testEnableCollection001
+#org.apache.harmony.jpda.tests
