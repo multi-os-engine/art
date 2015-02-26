@@ -69,6 +69,22 @@ bool Throwable::IsCheckedException() {
   return !InstanceOf(WellKnownClasses::ToClass(WellKnownClasses::java_lang_RuntimeException));
 }
 
+int32_t Throwable::GetStackDepthDiscardTopNatives() {
+  Object* stack_state = GetStackState();
+  if (stack_state == nullptr || !stack_state->IsObjectArray()) return -1;
+  ObjectArray<Object>* method_trace = down_cast<ObjectArray<Object>*>(stack_state);
+  int32_t depth = method_trace->GetLength() - 1;
+  for (int32_t i = 0, e = depth; i < e; ++i) {
+    mirror::ArtMethod* method = down_cast<ArtMethod*>(method_trace->Get(i));
+    if (method->IsNative()) {
+      depth--;
+    } else {
+      break;
+    }
+  }
+  return depth;
+}
+
 std::string Throwable::Dump() {
   std::string result(PrettyTypeOf(this));
   result += ": ";
