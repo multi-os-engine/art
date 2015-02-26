@@ -69,6 +69,15 @@ bool Throwable::IsCheckedException() {
   return !InstanceOf(WellKnownClasses::ToClass(WellKnownClasses::java_lang_RuntimeException));
 }
 
+mirror::ArtMethod* Throwable::GetThrowingMethod() {
+  Object* stack_state = GetStackState();
+  if (stack_state == nullptr || !stack_state->IsObjectArray()) return nullptr;
+  ObjectArray<Object>* method_trace = down_cast<ObjectArray<Object>*>(stack_state);
+  int32_t depth = method_trace->GetLength() - 1;
+  if (depth == 0) return nullptr;
+  return down_cast<ArtMethod*>(method_trace->Get(0));
+}
+
 std::string Throwable::Dump() {
   std::string result(PrettyTypeOf(this));
   result += ": ";

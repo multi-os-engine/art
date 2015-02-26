@@ -1626,6 +1626,10 @@ template jobject Thread::CreateInternalStackTrace<false>(
 template jobject Thread::CreateInternalStackTrace<true>(
     const ScopedObjectAccessAlreadyRunnable& soa) const;
 
+bool Thread::IsExceptionThrownByCurrentMethod(mirror::Throwable* exception) const {
+  return GetCurrentMethod(nullptr, false) == exception->GetThrowingMethod(); 
+}
+
 jobjectArray Thread::InternalStackTraceToStackTraceElementArray(
     const ScopedObjectAccessAlreadyRunnable& soa, jobject internal, jobjectArray output_array,
     int* stack_depth) {

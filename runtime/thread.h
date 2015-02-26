@@ -338,6 +338,9 @@ class Thread {
   void AssertNoPendingException() const;
   void AssertNoPendingExceptionForNewException(const char* msg) const;
 
+  bool IsExceptionThrownByCurrentMethod(mirror::Throwable* exception) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   void SetException(const ThrowLocation& throw_location, mirror::Throwable* new_exception)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     CHECK(new_exception != NULL);
