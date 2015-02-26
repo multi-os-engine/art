@@ -105,7 +105,9 @@ class ClassLinker {
   ~ClassLinker();
 
   // Initialize class linker by bootstraping from dex files.
-  void InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> boot_class_path)
+  void InitWithoutImage(const std::vector<std::string>& dex_filenames,
+                        const std::vector<std::string>& dex_locations,
+                        const std::string& image_location)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Initialize class linker from one or more images.
@@ -324,8 +326,12 @@ class ClassLinker {
   // (if multidex) into the given vector.
   bool OpenDexFilesFromOat(const char* dex_location, const char* oat_location,
                            std::vector<std::string>* error_msgs,
-                           std::vector<std::unique_ptr<const DexFile>>* dex_files)
+                           std::vector<const DexFile*>* dex_files)
       LOCKS_EXCLUDED(dex_lock_, Locks::mutator_lock_);
+
+  // Release dex files retrieved by OpenDexFilesFromOat().
+  void ReleaseDexFiles(const std::vector<const DexFile*>& dex_files)
+      LOCKS_EXCLUDED(dex_lock_) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Returns true if the given oat file has the same image checksum as the image it is paired with.
   static bool VerifyOatImageChecksum(const OatFile* oat_file, const InstructionSet instruction_set);
