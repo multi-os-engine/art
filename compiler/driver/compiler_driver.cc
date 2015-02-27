@@ -1299,6 +1299,14 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
   if (sharp_type != kStatic && sharp_type != kDirect) {
     return;
   }
+  if (runtime->UseJit()) {
+    // If we are the JIT, then don't allow sharpening to the interpreter bridge.
+    if (runtime->GetClassLinker()->IsQuickToInterpreterBridge(
+        reinterpret_cast<const void*>(static_cast<uintptr_t>(
+            compiler_->GetEntryPointOf(method))))) {
+      return;
+    }
+  }
   // TODO: support patching on all architectures.
   use_dex_cache = use_dex_cache || (force_relocations && !support_boot_image_fixup_);
   mirror::Class* declaring_class = method->GetDeclaringClass();
