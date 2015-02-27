@@ -17,6 +17,8 @@
 #ifndef ART_RUNTIME_TRACE_H_
 #define ART_RUNTIME_TRACE_H_
 
+#include <bitset>
+#include <map>
 #include <memory>
 #include <ostream>
 #include <set>
@@ -35,9 +37,13 @@ namespace art {
 namespace mirror {
   class ArtField;
   class ArtMethod;
+  class DexCache;
 }  // namespace mirror
 
 class Thread;
+
+using DexIndexBitSet = std::bitset<65536>;
+using ThreadIDBitSet = std::bitset<65536>;
 
 enum TracingMode {
   kTracingInactive,
@@ -54,12 +60,19 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
   static void SetDefaultClockSource(TraceClockSource clock_source);
 
   static void Start(const char* trace_filename, int trace_fd, int buffer_size, int flags,
-                    bool direct_to_ddms, bool sampling_enabled, int interval_us)
+                    bool direct_to_ddms, bool sampling_enabled, int interval_us,
+                    bool streaming_mode)
       LOCKS_EXCLUDED(Locks::mutator_lock_,
                      Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_,
                      Locks::trace_lock_);
+  static void Pause();
+  static void Resume();
   static void Stop()
+        LOCKS_EXCLUDED(Locks::mutator_lock_,
+                       Locks::thread_list_lock_,
+                       Locks::trace_lock_);
+  static void Abort()
       LOCKS_EXCLUDED(Locks::mutator_lock_,
                      Locks::thread_list_lock_,
                      Locks::trace_lock_);
@@ -107,11 +120,16 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
   static void StoreExitingThreadInfo(Thread* thread);
 
  private:
-  explicit Trace(File* trace_file, int buffer_size, int flags, bool sampling_enabled);
+  // Constructor for non-streaming mode.
+  Trace(File* trace_file, int buffer_size, int flags, bool sampling_enabled);
+
+  // Constructor for streaming mode, takes trace file name.
+  Trace(File* trace_file, const char* trace_file_name, int flags, bool sampling_enabled);
 
   // The sampling interval in microseconds is passed as an argument.
   static void* RunSamplingThread(void* arg) LOCKS_EXCLUDED(Locks::trace_lock_);
 
+  static void StopTracing(bool finish_tracing, bool flush_file);
   void FinishTracing() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void ReadClocks(Thread* thread, uint32_t* thread_clock_diff, uint32_t* wall_clock_diff);
@@ -169,6 +187,15 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
 
   // Map of thread ids and names that have already exited.
   SafeMap<pid_t, std::string> exited_threads_;
+
+  int interval_us_;
+
+  // Streaming mode.
+  bool streaming_mode_;
+  std::string streaming_file_name_;
+  std::unique_ptr<Mutex> streaming_lock_;
+  std::map<mirror::DexCache*, DexIndexBitSet*> seen_methods_;
+  std::unique_ptr<ThreadIDBitSet> seen_threads_;
 
   DISALLOW_COPY_AND_ASSIGN(Trace);
 };

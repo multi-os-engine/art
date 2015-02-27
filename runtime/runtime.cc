@@ -543,6 +543,35 @@ bool Runtime::Start() {
     StartProfiler(profile_output_filename_.c_str());
   }
 
+  if (method_trace_) {
+    ScopedThreadStateChange tsc(self, kWaitingForMethodTracingStart);
+    std::string trace_file;
+    if (is_zygote_) {
+      std::string profiles_dir = GetDalvikCache("profiles", true);
+      if (profiles_dir != "") {
+        if (Is64BitInstructionSet(kRuntimeISA)) {
+          trace_file = profiles_dir + "/zygote64.trace.bin";
+        } else {
+          trace_file = profiles_dir + "/zygote.trace.bin";
+        }
+      } else {
+        LOG(WARNING) << "Could not find profiles directory, no tracing.";
+      }
+    } else {
+      trace_file = method_trace_file_;
+    }
+    if (trace_file != "") {
+      Trace::Start(trace_file.c_str(),
+                   -1,
+                   static_cast<int>(method_trace_file_size_),
+                   0,
+                   false,
+                   true,
+                   25000,
+                   true);
+    }
+  }
+
   return true;
 }
 
@@ -1006,17 +1035,6 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   // TODO: move this to just be an Trace::Start argument
   Trace::SetDefaultClockSource(runtime_options.GetOrDefault(Opt::ProfileClock));
-
-  if (method_trace_) {
-    ScopedThreadStateChange tsc(self, kWaitingForMethodTracingStart);
-    Trace::Start(method_trace_file_.c_str(),
-                 -1,
-                 static_cast<int>(method_trace_file_size_),
-                 0,
-                 false,
-                 false,
-                 0);
-  }
 
   // Pre-allocate an OutOfMemoryError for the double-OOME case.
   self->ThrowNewException("Ljava/lang/OutOfMemoryError;",

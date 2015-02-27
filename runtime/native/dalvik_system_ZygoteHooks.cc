@@ -18,13 +18,17 @@
 
 #include <stdlib.h>
 
+#include <cutils/process_name.h>
+
 #include "arch/instruction_set.h"
 #include "debugger.h"
 #include "java_vm_ext.h"
 #include "jni_internal.h"
 #include "JNIHelp.h"
+#include "scoped_thread_state_change.h"
 #include "ScopedUtfChars.h"
 #include "thread-inl.h"
+#include "trace.h"
 
 #if defined(__linux__)
 #include <sys/prctl.h>
@@ -121,16 +125,57 @@ static jlong ZygoteHooks_nativePreFork(JNIEnv* env, jclass) {
 
   runtime->PreZygoteFork();
 
+  Trace::Pause();
+
   // Grab thread before fork potentially makes Thread::pthread_key_self_ unusable.
   return reinterpret_cast<jlong>(ThreadForEnv(env));
 }
 
 static void ZygoteHooks_nativePostForkChild(JNIEnv* env, jclass, jlong token, jint debug_flags,
                                             jstring instruction_set) {
+  LOG(ERROR) << "nativePostForkChild called";
   Thread* thread = reinterpret_cast<Thread*>(token);
   // Our system thread ID, etc, has changed so reset Thread state.
   thread->InitAfterFork();
   EnableDebugFeatures(debug_flags);
+
+  // Update tracing.
+  if (Trace::GetMethodTracingMode() != TracingMode::kTracingInactive) {
+    LOG(ERROR) << "Tracing was active.";
+
+    // Just drop it.
+    Trace::Abort();
+    LOG(ERROR) << "Aborted zygote trace.";
+
+    const char* proc_name_cutils = get_process_name();
+    std::string proc_name;
+    if (proc_name_cutils != nullptr) {
+      proc_name = proc_name_cutils;
+    }
+    if (proc_name_cutils == nullptr || proc_name == "zygote" || proc_name == "zygote64") {
+      // Either no process name, or the name hasn't been changed, yet. Just use pid.
+      pid_t pid = getpid();
+      proc_name = StringPrintf("%u", static_cast<uint32_t>(pid));
+    }
+    LOG(ERROR) << "Proc name is " << proc_name;
+
+    std::string profiles_dir(GetDalvikCache("profiles", false /* create_if_absent */));
+    LOG(ERROR) << "Profiles dir: " << profiles_dir;
+    if (profiles_dir != "") {
+      std::string trace_file = StringPrintf("%s/%s.trace.bin", profiles_dir.c_str(),
+                                            proc_name.c_str());
+      Trace::Start(trace_file.c_str(), -1, -1, 0, false, false, 0, true);
+      LOG(ERROR) << "Starting new trace to " << trace_file;
+      if (thread->IsExceptionPending()) {
+        LOG(ERROR) << "Failed to start tracing!";
+        ScopedObjectAccess soa(env);
+        thread->ClearException();
+      }
+    } else {
+      LOG(ERROR) << "Profiles dir is empty?!?!";
+    }
+  }
+  LOG(ERROR) << "Finished tracing block.";
 
   if (instruction_set != nullptr) {
     ScopedUtfChars isa_string(env, instruction_set);
