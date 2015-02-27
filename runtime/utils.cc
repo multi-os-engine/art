@@ -1440,6 +1440,33 @@ void GetDalvikCache(const char* subdir, const bool create_if_absent, std::string
   }
 }
 
+std::string GetDalvikCache(const char* subdir, const bool create_if_absent) {
+  CHECK(subdir != nullptr);
+  const char* android_data = GetAndroidData();
+  const std::string dalvik_cache_root(StringPrintf("%s/dalvik-cache/", android_data));
+  const std::string dalvik_cache = dalvik_cache_root + subdir;
+  if (!OS::DirectoryExists(dalvik_cache.c_str())) {
+    if (!create_if_absent) {
+      return "";
+    }
+    // Don't create the system's /data/dalvik-cache/... because it needs special permissions.
+    if (strcmp(android_data, "/data") == 0) {
+      return "";
+    }
+
+    int result = mkdir(dalvik_cache_root.c_str(), 0700);
+    if (result != 0 && errno != EEXIST) {
+      return "";
+    }
+
+    result = mkdir(dalvik_cache.c_str(), 0700);
+    if (result != 0) {
+      return "";
+    }
+  }
+  return dalvik_cache;
+}
+
 std::string GetDalvikCacheOrDie(const char* subdir, const bool create_if_absent) {
   CHECK(subdir != nullptr);
   const char* android_data = GetAndroidData();
@@ -1451,16 +1478,16 @@ std::string GetDalvikCacheOrDie(const char* subdir, const bool create_if_absent)
       int result = mkdir(dalvik_cache_root.c_str(), 0700);
       if (result != 0 && errno != EEXIST) {
         PLOG(FATAL) << "Failed to create dalvik-cache directory " << dalvik_cache_root;
-        return "";
+        UNREACHABLE();
       }
       result = mkdir(dalvik_cache.c_str(), 0700);
       if (result != 0) {
         PLOG(FATAL) << "Failed to create dalvik-cache directory " << dalvik_cache;
-        return "";
+        UNREACHABLE();
       }
     } else {
       LOG(FATAL) << "Failed to find dalvik-cache directory " << dalvik_cache;
-      return "";
+      UNREACHABLE();
     }
   }
   return dalvik_cache;
