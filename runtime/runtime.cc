@@ -544,6 +544,17 @@ bool Runtime::Start() {
     StartProfiler(profile_output_filename_.c_str());
   }
 
+  if (method_trace_ && method_trace_file_ != "") {
+    ScopedThreadStateChange tsc(self, kWaitingForMethodTracingStart);
+    Trace::Start(method_trace_file_.c_str(),
+                 -1,
+                 static_cast<int>(method_trace_file_size_),
+                 0,
+                 Trace::TraceOutputMode::kStreaming,
+                 Trace::TraceMode::kMethodTracing,
+                 0);
+  }
+
   return true;
 }
 
@@ -1006,17 +1017,6 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   // TODO: move this to just be an Trace::Start argument
   Trace::SetDefaultClockSource(runtime_options.GetOrDefault(Opt::ProfileClock));
-
-  if (method_trace_) {
-    ScopedThreadStateChange tsc(self, kWaitingForMethodTracingStart);
-    Trace::Start(method_trace_file_.c_str(),
-                 -1,
-                 static_cast<int>(method_trace_file_size_),
-                 0,
-                 Trace::TraceOutputMode::kFile,
-                 Trace::TraceMode::kMethodTracing,
-                 0);
-  }
 
   // Pre-allocate an OutOfMemoryError for the double-OOME case.
   self->ThrowNewException("Ljava/lang/OutOfMemoryError;",
