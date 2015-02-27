@@ -17,6 +17,8 @@
 #ifndef ART_RUNTIME_TRACE_H_
 #define ART_RUNTIME_TRACE_H_
 
+#include <bitset>
+#include <map>
 #include <memory>
 #include <ostream>
 #include <set>
@@ -34,10 +36,14 @@ namespace art {
 
 namespace mirror {
   class ArtMethod;
+  class DexCache;
 }  // namespace mirror
 
 class ArtField;
 class Thread;
+
+using DexIndexBitSet = std::bitset<65536>;
+using ThreadIDBitSet = std::bitset<65536>;
 
 enum TracingMode {
   kTracingInactive,
@@ -53,7 +59,8 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
 
   enum class TraceOutputMode {
     kFile,
-    kDDMS
+    kDDMS,
+    kStreaming
   };
 
   enum class TraceMode {
@@ -69,7 +76,16 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
                      Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_,
                      Locks::trace_lock_);
+  static void Pause() LOCKS_EXCLUDED(Locks::trace_lock_, Locks::thread_list_lock_);
+  static void Resume() LOCKS_EXCLUDED(Locks::trace_lock_);
+
+  // Stop tracing. This will finish the trace and write it to file/send it via DDMS.
   static void Stop()
+        LOCKS_EXCLUDED(Locks::mutator_lock_,
+                       Locks::thread_list_lock_,
+                       Locks::trace_lock_);
+  // Abort tracing. This will just stop tracing and *not* write/send the collected data.
+  static void Abort()
       LOCKS_EXCLUDED(Locks::mutator_lock_,
                      Locks::thread_list_lock_,
                      Locks::trace_lock_);
@@ -116,19 +132,25 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
   // Save id and name of a thread before it exits.
   static void StoreExitingThreadInfo(Thread* thread);
 
+  static TraceOutputMode GetOutputMode() LOCKS_EXCLUDED(Locks::trace_lock_);
+  static TraceMode GetMode() LOCKS_EXCLUDED(Locks::trace_lock_);
+
  private:
-  explicit Trace(File* trace_file, int buffer_size, int flags, TraceMode trace_mode);
+  Trace(File* trace_file, const char* trace_name, int buffer_size, int flags,
+        TraceOutputMode output_mode, TraceMode trace_mode);
 
   // The sampling interval in microseconds is passed as an argument.
   static void* RunSamplingThread(void* arg) LOCKS_EXCLUDED(Locks::trace_lock_);
 
+  static void StopTracing(bool finish_tracing, bool flush_file);
   void FinishTracing() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void ReadClocks(Thread* thread, uint32_t* thread_clock_diff, uint32_t* wall_clock_diff);
 
   void LogMethodTraceEvent(Thread* thread, mirror::ArtMethod* method,
                            instrumentation::Instrumentation::InstrumentationEvent event,
-                           uint32_t thread_clock_diff, uint32_t wall_clock_diff);
+                           uint32_t thread_clock_diff, uint32_t wall_clock_diff)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Methods to output traced methods and threads.
   void GetVisitedMethods(size_t end_offset, std::set<mirror::ArtMethod*>* visited_methods);
@@ -157,7 +179,10 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
   // Flags enabling extra tracing of things such as alloc counts.
   const int flags_;
 
-  // True if traceview should sample instead of instrumenting method entry/exit.
+  // The kind of output for this tracing.
+  const TraceOutputMode trace_output_mode_;
+
+  // The tracing method.
   const TraceMode trace_mode_;
 
   const TraceClockSource clock_source_;
@@ -179,6 +204,14 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
 
   // Map of thread ids and names that have already exited.
   SafeMap<pid_t, std::string> exited_threads_;
+
+  int interval_us_;
+
+  // Streaming mode.
+  std::string streaming_file_name_;
+  std::unique_ptr<Mutex> streaming_lock_;
+  std::map<mirror::DexCache*, DexIndexBitSet*> seen_methods_;
+  std::unique_ptr<ThreadIDBitSet> seen_threads_;
 
   DISALLOW_COPY_AND_ASSIGN(Trace);
 };
