@@ -64,8 +64,8 @@ TEST(StackMapTest, Test1) {
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
   DexRegisterMap dex_registers =
       code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  ASSERT_EQ(16u, dex_registers.Size());
-  ASSERT_EQ(16u, dex_registers.ComputeSize(number_of_dex_registers));
+  ASSERT_EQ(10u, dex_registers.Size());
+  ASSERT_EQ(10u, dex_registers.ComputeSize(number_of_dex_registers));
   ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
   ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
   ASSERT_EQ(0, dex_registers.GetValue(0));
@@ -119,8 +119,8 @@ TEST(StackMapTest, Test2) {
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
   DexRegisterMap dex_registers =
       code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  ASSERT_EQ(16u, dex_registers.Size());
-  ASSERT_EQ(16u, dex_registers.ComputeSize(number_of_dex_registers));
+  ASSERT_EQ(10u, dex_registers.Size());
+  ASSERT_EQ(10u, dex_registers.ComputeSize(number_of_dex_registers));
   ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
   ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
   ASSERT_EQ(0, dex_registers.GetValue(0));
@@ -146,8 +146,8 @@ TEST(StackMapTest, Test2) {
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
   dex_registers =
       code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  ASSERT_EQ(16u, dex_registers.Size());
-  ASSERT_EQ(16u, dex_registers.ComputeSize(number_of_dex_registers));
+  ASSERT_EQ(10u, dex_registers.Size());
+  ASSERT_EQ(10u, dex_registers.ComputeSize(number_of_dex_registers));
   ASSERT_EQ(DexRegisterMap::kInRegister, dex_registers.GetLocationKind(0));
   ASSERT_EQ(DexRegisterMap::kInFpuRegister, dex_registers.GetLocationKind(1));
   ASSERT_EQ(18, dex_registers.GetValue(0));

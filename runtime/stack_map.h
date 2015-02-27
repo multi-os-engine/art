@@ -84,13 +84,16 @@ class DexRegisterMap {
  public:
   explicit DexRegisterMap(MemoryRegion region) : region_(region) {}
 
-  enum LocationKind {
+  enum LocationKind : uint8_t {
     kNone,
     kInStack,
     kInRegister,
     kInFpuRegister,
     kConstant
   };
+  static_assert(
+      sizeof(art::DexRegisterMap::LocationKind) == 1u,
+      "art::DexRegisterMap::LocationKind has a size different from one byte.");
 
   static const char* PrettyDescriptor(LocationKind kind) {
     switch (kind) {
