@@ -107,6 +107,13 @@ ZipArchive* ZipArchive::OpenFromFd(int fd, const char* filename, std::string* er
   DCHECK(filename != nullptr);
   DCHECK_GT(fd, 0);
 
+  // Make sure we're at the start of fd.
+  if (lseek(fd, 0, SEEK_SET) != 0) {
+    *error_msg = StringPrintf("Failed to seek to beginning of file '%s' : %s", filename,
+                              strerror(errno));
+    return nullptr;
+  }
+
   ZipArchiveHandle handle;
   const int32_t error = OpenArchiveFd(fd, filename, &handle);
   if (error) {

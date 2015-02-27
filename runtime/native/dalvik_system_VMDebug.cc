@@ -79,7 +79,7 @@ static void VMDebug_resetAllocCount(JNIEnv*, jclass, jint kinds) {
 
 static void VMDebug_startMethodTracingDdmsImpl(JNIEnv*, jclass, jint bufferSize, jint flags,
                                                jboolean samplingEnabled, jint intervalUs) {
-  Trace::Start("[DDMS]", -1, bufferSize, flags, true, samplingEnabled, intervalUs);
+  Trace::Start("[DDMS]", -1, bufferSize, flags, true, samplingEnabled, intervalUs, false);
 }
 
 static void VMDebug_startMethodTracingFd(JNIEnv* env, jclass, jstring javaTraceFilename,
@@ -102,7 +102,8 @@ static void VMDebug_startMethodTracingFd(JNIEnv* env, jclass, jstring javaTraceF
   if (traceFilename.c_str() == NULL) {
     return;
   }
-  Trace::Start(traceFilename.c_str(), fd, bufferSize, flags, false, samplingEnabled, intervalUs);
+  Trace::Start(traceFilename.c_str(), fd, bufferSize, flags, false, samplingEnabled, intervalUs,
+               false);
 }
 
 static void VMDebug_startMethodTracingFilename(JNIEnv* env, jclass, jstring javaTraceFilename,
@@ -112,7 +113,8 @@ static void VMDebug_startMethodTracingFilename(JNIEnv* env, jclass, jstring java
   if (traceFilename.c_str() == NULL) {
     return;
   }
-  Trace::Start(traceFilename.c_str(), -1, bufferSize, flags, false, samplingEnabled, intervalUs);
+  Trace::Start(traceFilename.c_str(), -1, bufferSize, flags, false, samplingEnabled, intervalUs,
+               false);
 }
 
 static jint VMDebug_getMethodTracingMode(JNIEnv*, jclass) {
