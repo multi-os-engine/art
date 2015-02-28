@@ -476,13 +476,21 @@ enum MipsOpCode {
   kMipsFldc1,  // ldc1 t,o(b) [110101] b[25..21] t[20..16] o[15..0].
   kMipsFswc1,  // swc1 t,o(b) [111001] b[25..21] t[20..16] o[15..0].
   kMipsFsdc1,  // sdc1 t,o(b) [111101] b[25..21] t[20..16] o[15..0].
-  kMipsMfc1,  // mfc1 t,s [01000100000] t[20..16] s[15..11] [00000000000].
-  kMipsMtc1,  // mtc1 t,s [01000100100] t[20..16] s[15..11] [00000000000].
+  kMipsMfc1,   // mfc1 t,s [01000100000] t[20..16] s[15..11] [00000000000].
+  kMipsMtc1,   // mtc1 t,s [01000100100] t[20..16] s[15..11] [00000000000].
+  kMipsMfhc1,  // mfhc1 t,s [01000100011] t[20..16] s[15..11] [00000000000].
+  kMipsMthc1,  // mthc1 t,s [01000100111] t[20..16] s[15..11] [00000000000].
   kMipsDelta,  // Psuedo for ori t, s, <label>-<label>.
   kMipsDeltaHi,  // Pseudo for lui t, high16(<label>-<label>).
   kMipsDeltaLo,  // Pseudo for ori t, s, low16(<label>-<label>).
   kMipsCurrPC,  // jal to .+8 to materialize pc.
   kMipsSync,    // sync kind [000000] [0000000000000000] s[10..6] [001111].
+
+  // The following are mips32r6 instructions.
+  kMipsR6Div,   // div d,s,t [000000] s[25..21] t[20..16] d[15..11] [00010011010].
+  kMipsR6Mod,   // mod d,s,t [000000] s[25..21] t[20..16] d[15..11] [00011011010].
+  kMipsR6Mul,   // mul d,s,t [000000] s[25..21] t[20..16] d[15..11] [00010011000].
+
   kMipsUndefined,  // undefined [011001xxxxxxxxxxxxxxxx].
   kMipsLast
 };
