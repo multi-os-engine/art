@@ -1398,7 +1398,7 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
     }
   } else {
     bool method_in_image = heap->FindSpaceFromObject(method, false)->IsImageSpace();
-    if (method_in_image || compiling_boot) {
+    if (method_in_image || compiling_boot || runtime->UseJit()) {
       // We know we must be able to get to the method in the image, so use that pointer.
       CHECK(!method->IsAbstract());
       *type = sharp_type;
