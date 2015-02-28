@@ -182,7 +182,11 @@ LIR* MipsMir2Lir::OpRegRegReg(OpKind op, RegStorage r_dest, RegStorage r_src1, R
       opcode = kMipsAnd;
       break;
     case kOpMul:
-      opcode = kMipsMul;
+      if (isaIsR6_) {
+          opcode = kMipsR6Mul;
+      } else {
+          opcode = kMipsMul;
+      }
       break;
     case kOpOr:
       opcode = kMipsOr;
@@ -271,7 +275,11 @@ LIR* MipsMir2Lir::OpRegRegImm(OpKind op, RegStorage r_dest, RegStorage r_src1, i
       break;
     case kOpMul:
       short_form = false;
-      opcode = kMipsMul;
+      if (isaIsR6_) {
+          opcode = kMipsR6Mul;
+      } else {
+          opcode = kMipsMul;
+      }
       break;
     default:
       LOG(FATAL) << "Bad case in OpRegRegImm";

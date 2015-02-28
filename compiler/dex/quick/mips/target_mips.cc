@@ -610,7 +610,9 @@ RegisterClass MipsMir2Lir::RegClassForFieldLoadStore(OpSize size, bool is_volati
 }
 
 MipsMir2Lir::MipsMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
-    : Mir2Lir(cu, mir_graph, arena), in_to_reg_storage_mips_mapper_(this) {
+    : Mir2Lir(cu, mir_graph, arena), in_to_reg_storage_mips_mapper_(this),
+      isaIsR6_(cu->compiler_driver->GetInstructionSetFeatures()
+                 ->AsMipsInstructionSetFeatures()->IsR6()) {
   for (int i = 0; i < kMipsLast; i++) {
     DCHECK_EQ(MipsMir2Lir::EncodingMap[i].opcode, i)
         << "Encoding order for " << MipsMir2Lir::EncodingMap[i].name
