@@ -232,6 +232,9 @@ class MipsMir2Lir FINAL : public Mir2Lir {
       return false;
     }
 
+    // True if isa is rev R6.
+    const bool isaIsR6_;
+
   private:
     void GenNegLong(RegLocation rl_dest, RegLocation rl_src);
     void GenAddLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,

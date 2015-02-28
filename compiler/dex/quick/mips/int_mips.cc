@@ -18,11 +18,13 @@
 
 #include "codegen_mips.h"
 
+#include "arch/mips/instruction_set_features_mips.h"
 #include "base/logging.h"
 #include "dex/mir_graph.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "dex/reg_storage_eq.h"
 #include "entrypoints/quick/quick_entrypoints.h"
+#include "driver/compiler_driver.h"
 #include "mips_lir.h"
 #include "mirror/array-inl.h"
 
@@ -243,12 +245,21 @@ void MipsMir2Lir::GenFusedLongCmpBranch(BasicBlock* bb, MIR* mir) {
 
 RegLocation MipsMir2Lir::GenDivRem(RegLocation rl_dest, RegStorage reg1, RegStorage reg2,
                                    bool is_div) {
-  NewLIR2(kMipsDiv, reg1.GetReg(), reg2.GetReg());
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  if (is_div) {
-    NewLIR1(kMipsMflo, rl_result.reg.GetReg());
+
+  if (isaIsR6_) {
+      if (is_div) {
+        NewLIR3(kMipsR6Div, rl_result.reg.GetReg(), reg1.GetReg(), reg2.GetReg());
+      } else {
+        NewLIR3(kMipsR6Mod, rl_result.reg.GetReg(), reg1.GetReg(), reg2.GetReg());
+      }
   } else {
-    NewLIR1(kMipsMfhi, rl_result.reg.GetReg());
+      NewLIR2(kMipsDiv, reg1.GetReg(), reg2.GetReg());
+      if (is_div) {
+        NewLIR1(kMipsMflo, rl_result.reg.GetReg());
+      } else {
+        NewLIR1(kMipsMfhi, rl_result.reg.GetReg());
+      }
   }
   return rl_result;
 }
@@ -257,12 +268,20 @@ RegLocation MipsMir2Lir::GenDivRemLit(RegLocation rl_dest, RegStorage reg1, int 
                                       bool is_div) {
   RegStorage t_reg = AllocTemp();
   NewLIR3(kMipsAddiu, t_reg.GetReg(), rZERO, lit);
-  NewLIR2(kMipsDiv, reg1.GetReg(), t_reg.GetReg());
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
-  if (is_div) {
-    NewLIR1(kMipsMflo, rl_result.reg.GetReg());
+  if (isaIsR6_) {
+      if (is_div) {
+        NewLIR3(kMipsR6Div, rl_result.reg.GetReg(), reg1.GetReg(), t_reg.GetReg());
+      } else {
+        NewLIR3(kMipsR6Mod, rl_result.reg.GetReg(), reg1.GetReg(), t_reg.GetReg());
+      }
   } else {
-    NewLIR1(kMipsMfhi, rl_result.reg.GetReg());
+      NewLIR2(kMipsDiv, reg1.GetReg(), t_reg.GetReg());
+      if (is_div) {
+        NewLIR1(kMipsMflo, rl_result.reg.GetReg());
+      } else {
+        NewLIR1(kMipsMfhi, rl_result.reg.GetReg());
+      }
   }
   FreeTemp(t_reg);
   return rl_result;
