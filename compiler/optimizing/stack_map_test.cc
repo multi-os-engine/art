@@ -95,6 +95,22 @@ TEST(StackMapTest, Test1) {
       ASSERT_EQ(-2, dictionary.GetValue(index1));
       break;
     }
+
+    case kDexRegisterCompressedLocationList: {
+      DexRegisterCompressedMap dex_registers =
+          code_info.GetDexRegisterCompressedMapOf(stack_map,
+                                                  number_of_dex_registers);
+      ASSERT_EQ(6u, dex_registers.Size(number_of_dex_registers));
+      std::pair<DexRegisterCompressedMap::LocationKind, int32_t> location0 =
+          dex_registers.GetLocationKindAndValue(0);
+      std::pair<DexRegisterCompressedMap::LocationKind, int32_t> location1 =
+          dex_registers.GetLocationKindAndValue(1);
+      ASSERT_EQ(DexRegisterCompressedMap::kInStack, location0.first);
+      ASSERT_EQ(DexRegisterCompressedMap::kConstantLong, location1.first);
+      ASSERT_EQ(0, location0.second);
+      ASSERT_EQ(-2, location1.second);
+      break;
+    }
   }
 
   ASSERT_FALSE(stack_map.HasInlineInfo());
@@ -176,6 +192,22 @@ TEST(StackMapTest, Test2) {
       ASSERT_EQ(-2, dictionary.GetValue(index1));
       break;
     }
+
+    case kDexRegisterCompressedLocationList: {
+      DexRegisterCompressedMap dex_registers =
+          code_info.GetDexRegisterCompressedMapOf(stack_map,
+                                                  number_of_dex_registers);
+      ASSERT_EQ(6u, dex_registers.Size(number_of_dex_registers));
+      std::pair<DexRegisterCompressedMap::LocationKind, int32_t> location0 =
+          dex_registers.GetLocationKindAndValue(0);
+      std::pair<DexRegisterCompressedMap::LocationKind, int32_t> location1 =
+          dex_registers.GetLocationKindAndValue(1);
+      ASSERT_EQ(DexRegisterCompressedMap::kInStack, location0.first);
+      ASSERT_EQ(DexRegisterCompressedMap::kConstantLong, location1.first);
+      ASSERT_EQ(0, location0.second);
+      ASSERT_EQ(-2, location1.second);
+      break;
+    }
   }
 
   ASSERT_TRUE(stack_map.HasInlineInfo());
@@ -219,6 +251,28 @@ TEST(StackMapTest, Test2) {
       ASSERT_EQ(DexRegisterMap::kInFpuRegister, dictionary.GetLocationKind(index1));
       ASSERT_EQ(18, dictionary.GetValue(index0));
       ASSERT_EQ(3, dictionary.GetValue(index1));
+      break;
+    }
+
+    case kDexRegisterCompressedLocationList: {
+      DexRegisterCompressedMap dex_registers =
+          code_info.GetDexRegisterCompressedMapOf(stack_map,
+                                                  number_of_dex_registers);
+      ASSERT_EQ(2u, dex_registers.Size(number_of_dex_registers));
+      // Check the pair accessor.
+      std::pair<DexRegisterCompressedMap::LocationKind, int32_t> location0 =
+          dex_registers.GetLocationKindAndValue(0);
+      std::pair<DexRegisterCompressedMap::LocationKind, int32_t> location1 =
+          dex_registers.GetLocationKindAndValue(1);
+      ASSERT_EQ(DexRegisterCompressedMap::kInRegister, location0.first);
+      ASSERT_EQ(DexRegisterCompressedMap::kInFpuRegister, location1.first);
+      ASSERT_EQ(18, location0.second);
+      ASSERT_EQ(3, location1.second);
+      // Also check the single accessors.
+      ASSERT_EQ(DexRegisterCompressedMap::kInRegister, dex_registers.GetLocationKind(0));
+      ASSERT_EQ(DexRegisterCompressedMap::kInFpuRegister, dex_registers.GetLocationKind(1));
+      ASSERT_EQ(18, dex_registers.GetValue(0));
+      ASSERT_EQ(3, dex_registers.GetValue(1));
       break;
     }
   }

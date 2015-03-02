@@ -121,6 +121,7 @@ class StackMapStream : public ValueObject {
 
     switch (dex_register_map_encoding) {
       case kDexRegisterLocationList:
+      case kDexRegisterCompressedLocationList:
         return common_size;
 
       case kDexRegisterLocationDictionary:
@@ -135,12 +136,92 @@ class StackMapStream : public ValueObject {
   size_t ComputeDexRegisterDictionarySize() const {
     switch (dex_register_map_encoding) {
       case kDexRegisterLocationList:
+      case kDexRegisterCompressedLocationList:
         return 0u;
 
       case kDexRegisterLocationDictionary:
         return DexRegisterDictionary::kFixedSize
             + dex_register_dictionary_.Size() * DexRegisterDictionary::SingleEntrySize();
     }
+  }
+
+  // Compute the compressed location kind of a Dex register entry,
+  // suitable for use with an art::DexRegisterCompressedMap.
+  static DexRegisterCompressedMap::LocationKind
+  ComputeCompressedMapLocationKind(const DexRegisterEntry& entry) {
+    DCHECK(dex_register_map_encoding == kDexRegisterCompressedLocationList);
+    switch (entry.kind) {
+      case DexRegisterMap::kNone:
+        DCHECK_EQ(entry.value, 0);
+        return DexRegisterCompressedMap::kNone;
+
+      case DexRegisterMap::kInRegister:
+        DCHECK(0 <= entry.value && entry.value < 32) << entry.value;
+        return DexRegisterCompressedMap::kInRegister;
+
+      case DexRegisterMap::kInFpuRegister:
+        DCHECK(0 <= entry.value && entry.value < 32) << entry.value;
+        return DexRegisterCompressedMap::kInFpuRegister;
+
+      case DexRegisterMap::kInStack:
+        return IsUint<DexRegisterCompressedMap::kValueBits>(entry.value)
+            ? DexRegisterCompressedMap::kInStack
+            : DexRegisterCompressedMap::kInStackLong;
+
+      case DexRegisterMap::kConstant:
+        return IsUint<DexRegisterCompressedMap::kValueBits>(entry.value)
+            ? DexRegisterCompressedMap::kConstant
+            : DexRegisterCompressedMap::kConstantLong;
+
+      default:
+        LOG(FATAL) << "Unexpected location kind " << static_cast<unsigned>(entry.kind);
+        return DexRegisterCompressedMap::kNone;
+    }
+  }
+
+  // Can `entry` use a compressed location (for a later use in a
+  // art::DexRegisterCompressedMap)?
+  static bool IsCompressibleEntry(const DexRegisterEntry& entry) {
+    DCHECK(dex_register_map_encoding == kDexRegisterCompressedLocationList);
+    switch (entry.kind) {
+      case DexRegisterMap::kNone:
+      case DexRegisterMap::kInRegister:
+      case DexRegisterMap::kInFpuRegister:
+        return true;
+
+      case DexRegisterMap::kInStack:
+      case DexRegisterMap::kConstant:
+        return IsUint<DexRegisterCompressedMap::kValueBits>(entry.value);
+
+      default:
+        LOG(FATAL) << "Unexpected location kind " << static_cast<unsigned>(entry.kind);
+        return false;
+    }
+  }
+
+  // Compute the size of entry as a potentially compressed location.
+  static size_t ComputeEntrySizeAsCompressedLocation(const DexRegisterEntry& entry) {
+    DCHECK(dex_register_map_encoding == kDexRegisterCompressedLocationList);
+    if (IsCompressibleEntry(entry)) {
+      return DexRegisterCompressedMap::SingleShortEntrySize();
+    } else {
+      return DexRegisterCompressedMap::SingleLongEntrySize();
+    }
+  }
+
+  size_t ComputeDexRegisterCompressedMapSize(const StackMapEntry& entry) const {
+    DCHECK(dex_register_map_encoding == kDexRegisterCompressedLocationList);
+    size_t size = DexRegisterCompressedMap::kFixedSize;
+    for (size_t j = 0; j < entry.num_dex_registers; ++j) {
+      // TODO: Do not use a dictionary when the encoding does not
+      // require one.
+      DexRegisterMapIndex entry_index =
+          dex_register_maps_.Get(entry.dex_register_maps_start_index + j);
+      DexRegisterEntry register_entry =
+          dex_register_dictionary_.Get(entry_index);
+      size += ComputeEntrySizeAsCompressedLocation(register_entry);
+    }
+    return size;
   }
 
   // TODO: Rename as ComputeDexRegisterMapsSize? (plural)
@@ -155,6 +236,20 @@ class StackMapStream : public ValueObject {
         return stack_maps_.Size() * DexRegisterTable::kFixedSize
             // For each dex register entry.
             + dex_register_maps_.Size() * DexRegisterTable::SingleEntrySize();
+
+      case kDexRegisterCompressedLocationList: {
+        size_t size = stack_maps_.Size() * DexRegisterMap::kFixedSize;
+        // The size of each register location depends on the type of
+        // the entry.
+        for (size_t i = 0, e = dex_register_maps_.Size(); i < e; ++i) {
+          // TODO: Do not use a dictionary when the encoding does not
+          // require one.
+          DexRegisterMapIndex index = dex_register_maps_.Get(i);
+          DexRegisterEntry entry = dex_register_dictionary_.Get(index);
+          size += ComputeEntrySizeAsCompressedLocation(entry);
+        }
+        return size;
+      }
     };
   }
 
@@ -274,6 +369,38 @@ class StackMapStream : public ValueObject {
                   dex_register_maps_.Get(entry.dex_register_maps_start_index + j);
               dex_register_table.SetEntryIndex(j, entry_index);
             }
+            break;
+          }
+
+          case kDexRegisterCompressedLocationList: {
+            // Set the Dex register compressed map.
+            MemoryRegion register_region =
+                dex_register_maps_region.Subregion(
+                    next_dex_register_map_offset,
+                    ComputeDexRegisterCompressedMapSize(entry));
+            next_dex_register_map_offset += register_region.size();
+            DexRegisterCompressedMap dex_register_compressed_map(register_region);
+            stack_map.SetDexRegisterMapOffset(register_region.start() - memory_start);
+
+            // Offset in `dex_register_compressed_map` where to store
+            // the next register entry.
+            size_t offset = DexRegisterCompressedMap::kFixedSize;
+            for (size_t j = 0; j < entry.num_dex_registers; ++j) {
+              // TODO: Do not use a dictionary when the encoding does
+              // not require one.
+              DexRegisterMapIndex entry_index =
+                  dex_register_maps_.Get(entry.dex_register_maps_start_index + j);
+              DexRegisterEntry register_entry =
+                  dex_register_dictionary_.Get(entry_index);
+              DexRegisterCompressedMap::LocationKind compressed_map_kind =
+                  ComputeCompressedMapLocationKind(register_entry);
+              dex_register_compressed_map.SetRegisterInfo(offset,
+                                                          compressed_map_kind,
+                                                          register_entry.value);
+              offset += ComputeEntrySizeAsCompressedLocation(register_entry);
+            }
+            // Ensure we reached the end of the Dex registers region.
+            DCHECK_EQ(offset, register_region.size());
             break;
           }
         }

@@ -902,6 +902,17 @@ class OatDumper {
     os << "      " << prefix << dex_register_num << ": "
     << DexRegisterMap::PrettyDescriptor(kind) << " (" << value << ")"
     << suffix << '\n';
+  }
+
+  void DumpRegisterCompressedMapping(std::ostream& os,
+                                     size_t dex_register_num,
+                                     DexRegisterCompressedMap::LocationKind kind,
+                                     int32_t value,
+                                     const std::string& prefix = "v",
+                                     const std::string& suffix = "") {
+    os << "      " << prefix << dex_register_num << ": "
+       << DexRegisterCompressedMap::PrettyDescriptor(kind) << " (" << value << ")"
+       << suffix << '\n';
   };
 
   // Display a CodeInfo object emitted by the optimizing compiler.
@@ -983,6 +994,25 @@ class OatDumper {
               DumpRegisterMapping(
                   os, j, kind, value, "v",
                   "\t[entry " + std::to_string(static_cast<int>(entry_index)) + "]");
+            }
+          }
+        }
+        break;
+      }
+
+      case kDexRegisterCompressedLocationList: {
+        for (size_t i = 0; i < number_of_stack_maps; ++i) {
+          StackMap stack_map = code_info.GetStackMapAt(i);
+          dump_stack_map_header(i);
+          if (stack_map.HasDexRegisterMap()) {
+            DexRegisterCompressedMap dex_register_compressed_map =
+                code_info.GetDexRegisterCompressedMapOf(stack_map, number_of_dex_registers);
+            for (size_t j = 0; j < number_of_dex_registers; ++j) {
+              std::pair<DexRegisterCompressedMap::LocationKind, int32_t> location =
+                  dex_register_compressed_map.GetLocationKindAndValue(j);
+              DexRegisterCompressedMap::LocationKind kind = location.first;
+              int32_t value = location.second;
+              DumpRegisterCompressedMapping(os, j, kind, value);
             }
           }
         }
