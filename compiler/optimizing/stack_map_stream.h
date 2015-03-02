@@ -164,7 +164,8 @@ class StackMapStream : public ValueObject {
         return DexRegisterCompressedMap::kInFpuRegister;
 
       case DexRegisterMap::kInStack:
-        return IsUint<DexRegisterCompressedMap::kValueBits>(entry.value)
+        DCHECK_EQ(entry.value % kFrameSlotSize, 0);
+        return IsUint<DexRegisterCompressedMap::kValueBits>(entry.value / kFrameSlotSize)
             ? DexRegisterCompressedMap::kInStack
             : DexRegisterCompressedMap::kInStackLong;
 
