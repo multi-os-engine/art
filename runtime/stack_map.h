@@ -23,6 +23,11 @@
 
 namespace art {
 
+// Size of a frame slot, in bytes.  This constant is a signed value,
+// to please the compiler in arithmetic operations involving int32_t
+// (signed) values.
+static ssize_t constexpr kFrameSlotSize = 4;
+
 /**
  * Classes in the following file are wrapper on stack map information backed
  * by a MemoryRegion. As such they read and write to the region, they don't have
@@ -272,6 +277,16 @@ class DexRegisterCompressedMap {
   void SetRegisterInfo(size_t entry, LocationKind kind, int32_t value) {
     if (IsShortLocationKind(kind)) {
       // Short location.  Compress the kind and the value as a single byte.
+      if (kind == kInStack) {
+        // Instead of storing stack offsets expressed in bytes for
+        // short stack locations, store slot offsets.  A stack offset
+        // is a multiple of 4 (kFrameSlotSize).  This means that by
+        // dividing it by 4, we can fit values from the [0, 128[
+        // interval in a short stack location, and not just values
+        // from the [0, 32[ interval.
+        DCHECK_EQ(value % kFrameSlotSize, 0);
+        value /= kFrameSlotSize;
+      }
       DCHECK(IsUint<kValueBits>(value)) << value;
       region_.Store<CompressedShortLocation>(entry,
                                              CompressShortLocation(kind, value));
@@ -319,7 +334,12 @@ class DexRegisterCompressedMap {
     LocationKind kind = static_cast<LocationKind>(first_byte.kind);
     if (IsShortLocationKind(kind)) {
       // Short location.  Extract the value from the remaining 5 bits.
-      return first_byte.value;
+      int32_t value = first_byte.value;
+      if (kind == kInStack) {
+        // Convert the stack slot offset to a byte offset value.
+        value *= kFrameSlotSize;
+      }
+      return value;
     } else {
       // Long location.   Read the four next bytes to get the value.
       return region_.Load<int32_t>(entry + sizeof(LocationKind));
@@ -338,6 +358,10 @@ class DexRegisterCompressedMap {
     if (IsShortLocationKind(kind)) {
       // Short location.  Extract the value from the remaining 5 bits.
       int32_t value = first_byte.value;
+      if (kind == kInStack) {
+        // Convert the stack slot offset to a byte offset value.
+        value *= kFrameSlotSize;
+      }
       return { kind, value };
     } else {
       // Long location.   Read the four next bytes to get the value.
