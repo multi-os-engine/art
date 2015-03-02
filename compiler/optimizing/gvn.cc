@@ -295,6 +295,12 @@ void GlobalValueNumberer::VisitBasicBlock(HBasicBlock* block) {
 
   HInstruction* current = block->GetFirstInstruction();
   while (current != nullptr) {
+    // Piggyback on this pass to detect whether there is any array accesses.
+    // BCE will be a no-op if there is none.
+    if (current->IsArrayGet() || current->IsArraySet()) {
+      graph_->SetHasArrayAccesses(true);
+    }
+
     set->Kill(current->GetSideEffects());
     // Save the next instruction in case `current` is removed from the graph.
     HInstruction* next = current->GetNext();
