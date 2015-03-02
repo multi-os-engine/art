@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define ATRACE_TAG ATRACE_TAG_BOOT
+
 #include "runtime.h"
 
 // sys/mount.h has to come before linux/fs.h due to redefinition of MS_RDONLY, MS_BIND, etc
@@ -22,6 +24,7 @@
 #include <linux/fs.h>
 #endif
 
+#include <cutils/trace.h>
 #include <signal.h>
 #include <sys/syscall.h>
 #include <valgrind.h>
@@ -478,8 +481,12 @@ bool Runtime::Start() {
     ScopedObjectAccess soa(self);
     gc::space::ImageSpace* image_space = heap_->GetImageSpace();
     if (image_space != nullptr) {
+      ATRACE_BEGIN("AddImageStringsToTable");
       GetInternTable()->AddImageStringsToTable(image_space);
+      ATRACE_END();
+      ATRACE_BEGIN("MoveImageClassesToClassTable");
       GetClassLinker()->MoveImageClassesToClassTable();
+      ATRACE_END();
     }
   }
 
@@ -498,7 +505,9 @@ bool Runtime::Start() {
 
   // InitNativeMethods needs to be after started_ so that the classes
   // it touches will have methods linked to the oat file if necessary.
+  ATRACE_BEGIN("InitNativeMethods");
   InitNativeMethods();
+  ATRACE_END();
 
   // Initialize well known thread group values that may be accessed threads while attaching.
   InitThreadGroups(self);
@@ -519,7 +528,9 @@ bool Runtime::Start() {
                       GetInstructionSetString(kRuntimeISA));
   }
 
+  ATRACE_BEGIN("StartDaemonThreads");
   StartDaemonThreads();
+  ATRACE_END();
 
   {
     ScopedObjectAccess soa(self);
@@ -799,6 +810,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   zygote_max_failed_boots_ = runtime_options.GetOrDefault(Opt::ZygoteMaxFailedBoots);
 
   XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
+  ATRACE_BEGIN("CreateHeap");
   heap_ = new gc::Heap(runtime_options.GetOrDefault(Opt::MemoryInitialSize),
                        runtime_options.GetOrDefault(Opt::HeapGrowthLimit),
                        runtime_options.GetOrDefault(Opt::HeapMinFree),
@@ -828,6 +840,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
                        xgc_option.verify_post_gc_rosalloc_,
                        runtime_options.GetOrDefault(Opt::EnableHSpaceCompactForOOM),
                        runtime_options.GetOrDefault(Opt::HSpaceCompactForOOMMinIntervalsMs));
+  ATRACE_END();
 
   if (heap_->GetImageSpace() == nullptr && !allow_dex_file_fallback_) {
     LOG(ERROR) << "Dex file fallback disabled, cannot continue without image.";
@@ -924,7 +937,9 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   CHECK_GE(GetHeap()->GetContinuousSpaces().size(), 1U);
   class_linker_ = new ClassLinker(intern_table_);
   if (GetHeap()->HasImageSpace()) {
+    ATRACE_BEGIN("InitFromImage");
     class_linker_->InitFromImage();
+    ATRACE_END();
     if (kIsDebugBuild) {
       GetHeap()->GetImageSpace()->VerifyImageAllocations();
     }
