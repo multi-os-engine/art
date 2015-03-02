@@ -79,13 +79,17 @@ enum DexRegisterMapEncoding {
 
   // Encoding based on a dictionary of unique [location_kind, register_value]
   // pairs per method.
-  kDexRegisterLocationDictionary
+  kDexRegisterLocationDictionary,
+
+  // List-based encoding (similar to kDexRegisterLocationList) with
+  // compressed location information.
+  kDexRegisterCompressedLocationList
 };
 
 // The chosen strategy to encode Dex register maps in stack maps.
 // TODO: Rename as kDexRegisterMapEncoding, as it is a constant.
 static constexpr DexRegisterMapEncoding dex_register_map_encoding =
-    kDexRegisterLocationDictionary;
+    kDexRegisterCompressedLocationList;
 
 
 /**
@@ -160,6 +164,203 @@ class DexRegisterMap {
   static constexpr int kFixedSize = 0;
 
  private:
+  MemoryRegion region_;
+};
+
+class DexRegisterCompressedMap {
+ public:
+  explicit DexRegisterCompressedMap(MemoryRegion region) : region_(region) {}
+
+  enum LocationKind : uint8_t {
+    // Short location kinds, for entries fitting on one byte (3 bits
+    // for the kind, 5 bits for the value).
+    kNone = 0,           // 0b000
+    kInStack = 1,        // 0b001
+    kInRegister = 2,     // 0b010
+    kInFpuRegister = 3,  // 0b011
+    kConstant = 4,       // 0b100
+
+    // Long location kinds, requiring a 5-byte encoding (1 byte for
+    // the kind, 4 bytes for the value).
+    kInStackLong = 5,    // 0b101
+    kConstantLong = 6,   // 0b110
+
+    kLastLocationKind = kConstantLong
+  };
+  static_assert(
+      sizeof(art::DexRegisterCompressedMap::LocationKind) == 1u,
+      "art::DexRegisterCompressedMap::LocationKind has a size different from one byte.");
+
+  static const char* PrettyDescriptor(LocationKind kind) {
+    switch (kind) {
+      case kNone:
+        return "none";
+      case kInStack:
+        return "in stack";
+      case kInRegister:
+        return "in register";
+      case kInFpuRegister:
+        return "in fpu register";
+      case kConstant:
+        return "as constant";
+      case kInStackLong:
+        return "in stack (long offset)";
+      case kConstantLong:
+        return "as constant (long value)";
+
+      default:
+        LOG(FATAL) << "Unexpected location kind " << static_cast<unsigned>(kind);
+        return nullptr;
+    }
+  }
+
+  // Width of the kind "field" in a compressed short location, in bits.
+  static const size_t kKindBits = 3;
+  // Width of the value "field" in a compressed short location, in bits.
+  static const size_t kValueBits = 5;
+
+  // Compressed short location, fitting on a byte.
+  // TODO: Replace this bitfield with an uint8_t for portability reasons.
+  struct CompressedShortLocation {
+    unsigned kind : kKindBits;
+    unsigned value : kValueBits;
+  } __attribute__ ((__packed__));;
+
+  static_assert(
+      sizeof(art::DexRegisterCompressedMap::CompressedShortLocation) == 1,
+      "art::DexRegisterCompressedMap::CompressedShortLocation"
+      " has a size different from one byte");
+
+  static CompressedShortLocation CompressShortLocation(LocationKind kind,
+                                                       int32_t value) {
+    DCHECK(IsUint<kKindBits>(static_cast<unsigned>(kind))) << static_cast<unsigned>(kind);
+    DCHECK(IsUint<kValueBits>(value)) << value;
+    return { kind, static_cast<unsigned>(value) };
+  }
+
+  static bool IsShortLocationKind(LocationKind kind) {
+    switch (kind) {
+      case kNone:
+      case kInStack:
+      case kInRegister:
+      case kInFpuRegister:
+      case kConstant:
+        return true;
+
+      case kInStackLong:
+      case kConstantLong:
+        return false;
+
+      default:
+        LOG(FATAL) << "Unexpected location kind " << static_cast<unsigned>(kind);
+        return false;
+    }
+  }
+
+  // TODO: Rename variable names `entry` to something else (maybe
+  // `position` or `offset`) as it does not have the exact same
+  // meaning as in DexRegisterMap? Rename FindEntry() as well.
+
+  void SetRegisterInfo(size_t entry, LocationKind kind, int32_t value) {
+    if (IsShortLocationKind(kind)) {
+      // Short location.  Compress the kind and the value as a single byte.
+      DCHECK(IsUint<kValueBits>(value)) << value;
+      region_.Store<CompressedShortLocation>(entry,
+                                             CompressShortLocation(kind, value));
+    } else {
+      // Long location.  Write the location on one byte and the value
+      // on 4 bytes.
+      DCHECK(!IsUint<kValueBits>(value)) << value;
+      region_.Store<LocationKind>(entry, kind);
+      region_.Store<int32_t>(entry + sizeof(LocationKind), value);
+    }
+  }
+
+  // Find the entry number `register_index`.
+  size_t FindEntry(uint16_t register_index) const {
+    size_t entry = kFixedSize;
+    // Skip the first `register_index - 1` entries.
+    for (uint16_t i = 0; i < register_index; ++i) {
+      // Read the first next byte and inspect its first 3 bits to decide
+      // whether it is a short or a long location.
+      LocationKind kind = ExtractKind(entry);
+      if (IsShortLocationKind(kind)) {
+        // Short location.  Skip the current byte.
+        entry += SingleShortEntrySize();
+      } else {
+        // Long location.  Skip the 5 next bytes.
+        entry += SingleLongEntrySize();
+      }
+    }
+    return entry;
+  }
+
+  LocationKind GetLocationKind(uint16_t register_index) const {
+    size_t entry = FindEntry(register_index);
+    // Read the first byte and inspect its first 3 bits to get the location.
+    return ExtractKind(entry);
+  }
+
+  int32_t GetValue(uint16_t register_index) const {
+    size_t entry = FindEntry(register_index);
+    // Read the first byte and inspect the first 3 bits to decide
+    // whether it is a short or a long location.
+    CompressedShortLocation first_byte =
+        region_.Load<CompressedShortLocation>(entry);
+    DCHECK(first_byte.kind <= kLastLocationKind);
+    LocationKind kind = static_cast<LocationKind>(first_byte.kind);
+    if (IsShortLocationKind(kind)) {
+      // Short location.  Extract the value from the remaining 5 bits.
+      return first_byte.value;
+    } else {
+      // Long location.   Read the four next bytes to get the value.
+      return region_.Load<int32_t>(entry + sizeof(LocationKind));
+    }
+  }
+
+  // Note that using this method is faster than calling GetLocationKind
+  // and then GetValue, as we only scan the Dex register map once.
+  std::pair<LocationKind, int32_t> GetLocationKindAndValue(uint16_t register_index) {
+    size_t entry = FindEntry(register_index);
+    // Read the first byte and inspect its first 3 bits to get the location.
+    CompressedShortLocation first_byte =
+        region_.Load<CompressedShortLocation>(entry);
+    DCHECK(first_byte.kind <= kLastLocationKind);
+    LocationKind kind = static_cast<LocationKind>(first_byte.kind);
+    if (IsShortLocationKind(kind)) {
+      // Short location.  Extract the value from the remaining 5 bits.
+      int32_t value = first_byte.value;
+      return { kind, value };
+    } else {
+      // Long location.   Read the four next bytes to get the value.
+      return { kind, region_.Load<int32_t>(entry + sizeof(LocationKind)) };
+    }
+  }
+
+  static size_t SingleShortEntrySize() {
+    return sizeof(CompressedShortLocation);
+  }
+
+  static size_t SingleLongEntrySize() {
+    return sizeof(LocationKind) + sizeof(int32_t);
+  }
+
+  size_t Size() const {
+    return region_.size();
+  }
+
+  static constexpr int kFixedSize = 0;
+
+ private:
+  // Extract a location kind from the byte at position `entry`.
+  LocationKind ExtractKind(size_t entry) const {
+    CompressedShortLocation first_byte =
+        region_.Load<CompressedShortLocation>(entry);
+    DCHECK(first_byte.kind <= kLastLocationKind);
+    LocationKind kind = static_cast<LocationKind>(first_byte.kind);
+    return kind;
+  }
+
   MemoryRegion region_;
 };
 
@@ -422,6 +623,7 @@ class CodeInfo {
   uint32_t GetStackMapsOffset() const {
     switch (dex_register_map_encoding) {
       case kDexRegisterLocationList:
+      case kDexRegisterCompressedLocationList:
         return kFixedSize;
 
       case kDexRegisterLocationDictionary:
@@ -453,6 +655,18 @@ class CodeInfo {
     return DexRegisterTable(region_.Subregion(offset,
         DexRegisterTable::kFixedSize
         + number_of_dex_registers * DexRegisterTable::SingleEntrySize()));
+  }
+
+  // Only meaningful when the encoding based on a compressed list of
+  // [location_kind, register_value] pairs is used.
+  DexRegisterCompressedMap GetDexRegisterCompressedMapOf(StackMap stack_map,
+                                                         uint32_t number_of_dex_registers) const {
+    DCHECK(dex_register_map_encoding == kDexRegisterCompressedLocationList);
+    DCHECK(stack_map.HasDexRegisterMap());
+    uint32_t offset = stack_map.GetDexRegisterMapOffset();
+    return DexRegisterCompressedMap(region_.Subregion(
+        offset,
+        ComputeDexRegisterCompressedMapSize(offset, number_of_dex_registers)));
   }
 
   InlineInfo GetInlineInfoOf(StackMap stack_map) const {
@@ -506,6 +720,36 @@ class CodeInfo {
         ? MemoryRegion()
         : region_.Subregion(GetStackMapsOffset(),
                             StackMapSize() * GetNumberOfStackMaps());
+  }
+
+  // Compute the size of a Dex register compressed map starting at offset
+  // `origin` in `region_` and containing `number_of_dex_registers` locations.
+  size_t ComputeDexRegisterCompressedMapSize(uint32_t origin,
+                                             uint32_t number_of_dex_registers) const {
+    DCHECK(dex_register_map_encoding == kDexRegisterCompressedLocationList);
+    // TODO: Ideally, we would like to use art::DexRegisterCompressedMap::Size
+    // or art::DexRegisterCompressedMap::FindEntry, but the
+    // DexRegisterCompressedMap is not yet built.  Try to factor common code.
+    size_t offset = origin + DexRegisterCompressedMap::kFixedSize;
+    // Skip the first `number_of_dex_registers - 1` entries.
+    for (uint16_t i = 0; i < number_of_dex_registers; ++i) {
+      // Read the first next byte and inspect its first 3 bits to decide
+      // whether it is a short or a long location.
+      DexRegisterCompressedMap::CompressedShortLocation first_byte =
+          region_.Load<DexRegisterCompressedMap::CompressedShortLocation>(offset);
+      DCHECK(first_byte.kind <= DexRegisterCompressedMap::kLastLocationKind);
+      DexRegisterCompressedMap::LocationKind kind =
+          static_cast<DexRegisterCompressedMap::LocationKind>(first_byte.kind);
+      if (DexRegisterCompressedMap::IsShortLocationKind(kind)) {
+        // Short location.  Skip the current byte.
+        offset += DexRegisterCompressedMap::SingleShortEntrySize();
+      } else {
+        // Long location.  Skip the 5 next bytes.
+        offset += DexRegisterCompressedMap::SingleLongEntrySize();
+      }
+    }
+    size_t size = offset - origin;
+    return size;
   }
 
   MemoryRegion region_;
