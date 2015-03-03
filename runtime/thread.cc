@@ -1234,13 +1234,20 @@ void Thread::Destroy() {
     }
   }
 
+  ScopedObjectAccess soa(self);
   if (tlsPtr_.opeer != nullptr) {
-    ScopedObjectAccess soa(self);
     // We may need to call user-supplied managed code, do this before final clean-up.
     HandleUncaughtExceptions(soa);
     RemoveFromThreadGroup(soa);
 
-    // this.nativePeer = 0;
+    Dbg::PostThreadDeath(self);
+  }
+  Runtime::Current()->GetHeap()->RevokeThreadLocalBuffers(this);
+}
+
+void Thread::ClearNativePeer() {
+  ScopedObjectAccess soa(Thread::Current());
+  if (tlsPtr_.opeer != nullptr) {
     if (Runtime::Current()->IsActiveTransaction()) {
       soa.DecodeField(WellKnownClasses::java_lang_Thread_nativePeer)
           ->SetLong<true>(tlsPtr_.opeer, 0);
@@ -1248,25 +1255,18 @@ void Thread::Destroy() {
       soa.DecodeField(WellKnownClasses::java_lang_Thread_nativePeer)
           ->SetLong<false>(tlsPtr_.opeer, 0);
     }
-    Dbg::PostThreadDeath(self);
-
     // Thread.join() is implemented as an Object.wait() on the Thread.lock object. Signal anyone
     // who is waiting.
     mirror::Object* lock =
         soa.DecodeField(WellKnownClasses::java_lang_Thread_lock)->GetObject(tlsPtr_.opeer);
     // (This conditional is only needed for tests, where Thread.lock won't have been set.)
     if (lock != nullptr) {
-      StackHandleScope<1> hs(self);
+      StackHandleScope<1> hs(soa.Self());
       Handle<mirror::Object> h_obj(hs.NewHandle(lock));
-      ObjectLock<mirror::Object> locker(self, h_obj);
+      ObjectLock<mirror::Object> locker(soa.Self(), h_obj);
       locker.NotifyAll();
     }
     tlsPtr_.opeer = nullptr;
-  }
-
-  {
-    ScopedObjectAccess soa(self);
-    Runtime::Current()->GetHeap()->RevokeThreadLocalBuffers(this);
   }
 }
 
