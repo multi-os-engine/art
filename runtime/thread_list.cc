@@ -51,8 +51,7 @@ static constexpr useconds_t kThreadSuspendMaxYieldUs = 3000;
 static constexpr useconds_t kThreadSuspendMaxSleepUs = 5000;
 
 ThreadList::ThreadList()
-    : suspend_all_count_(0), debug_suspend_all_count_(0),
-      thread_exit_cond_("thread exit condition variable", *Locks::thread_list_lock_),
+    : suspend_all_count_(0), debug_suspend_all_count_(0), unregistering_count_(0),
       suspend_all_historam_("suspend all histogram", 16, 64) {
   CHECK(Monitor::IsValidLockWord(LockWord::FromThinLockId(kMaxThreadId, 1)));
 }
@@ -66,11 +65,15 @@ ThreadList::~ThreadList() {
     Thread* self = Thread::Current();
     MutexLock mu(self, *Locks::thread_list_lock_);
     contains = Contains(self);
+    // Wait for threads to finish unregistering so that there isn't anybody that will access
+    // deleted data. This is required for daemon threads.
+    while (unregistering_count_ != 0) {
+      Locks::thread_exit_cond_->Wait(self);
+    }
   }
   if (contains) {
     Runtime::Current()->DetachCurrentThread();
   }
-
   WaitForOtherNonDaemonThreadsToExit();
   // TODO: there's an unaddressed race here where a thread may attach during shutdown, see
   //       Thread::Init.
@@ -1020,7 +1023,7 @@ void ThreadList::WaitForOtherNonDaemonThreadsToExit() {
     }
     if (!all_threads_are_daemons) {
       // Wait for another thread to exit before re-checking.
-      thread_exit_cond_.Wait(self);
+      Locks::thread_exit_cond_->Wait(self);
     }
   } while (!all_threads_are_daemons);
 }
@@ -1092,6 +1095,11 @@ void ThreadList::Unregister(Thread* self) {
 
   VLOG(threads) << "ThreadList::Unregister() " << *self;
 
+  {
+    MutexLock mu(self, *Locks::thread_list_lock_);
+    ++unregistering_count_;
+  }
+
   // Any time-consuming destruction, plus anything that can call back into managed code or
   // suspend and so on, must happen at this point, and not in ~Thread.
   self->Destroy();
@@ -1100,34 +1108,29 @@ void ThreadList::Unregister(Thread* self) {
   Trace::StoreExitingThreadInfo(self);
 
   uint32_t thin_lock_id = self->GetThreadId();
-  while (self != nullptr) {
+  while (true) {
     // Remove and delete the Thread* while holding the thread_list_lock_ and
     // thread_suspend_count_lock_ so that the unregistering thread cannot be suspended.
     // Note: deliberately not using MutexLock that could hold a stale self pointer.
-    Locks::thread_list_lock_->ExclusiveLock(self);
-    bool removed = true;
+    MutexLock mu(self, *Locks::thread_list_lock_);
     if (!Contains(self)) {
       std::string thread_name;
       self->GetThreadName(thread_name);
       std::ostringstream os;
       DumpNativeStack(os, GetTid(), "  native: ", nullptr);
       LOG(ERROR) << "Request to unregister unattached thread " << thread_name << "\n" << os.str();
+      break;
     } else {
-      Locks::thread_suspend_count_lock_->ExclusiveLock(self);
+      MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
       if (!self->IsSuspended()) {
         list_.remove(self);
-      } else {
-        // We failed to remove the thread due to a suspend request, loop and try again.
-        removed = false;
+        break;
       }
-      Locks::thread_suspend_count_lock_->ExclusiveUnlock(self);
     }
-    Locks::thread_list_lock_->ExclusiveUnlock(self);
-    if (removed) {
-      delete self;
-      self = nullptr;
-    }
+    // We failed to remove the thread due to a suspend request, loop and try again.
   }
+  delete self;
+
   // Release the thread ID after the thread is finished and deleted to avoid cases where we can
   // temporarily have multiple threads with the same thread id. When this occurs, it causes
   // problems in FindThreadByThreadId / SuspendThreadByThreadId.
@@ -1138,8 +1141,9 @@ void ThreadList::Unregister(Thread* self) {
   CHECK_PTHREAD_CALL(pthread_setspecific, (Thread::pthread_key_self_, NULL), "detach self");
 
   // Signal that a thread just detached.
-  MutexLock mu(NULL, *Locks::thread_list_lock_);
-  thread_exit_cond_.Signal(NULL);
+  MutexLock mu(nullptr, *Locks::thread_list_lock_);
+  --unregistering_count_;
+  Locks::thread_exit_cond_->Broadcast(nullptr);
 }
 
 void ThreadList::ForEach(void (*callback)(Thread*, void*), void* context) {
