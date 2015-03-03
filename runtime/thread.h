@@ -877,6 +877,7 @@ class Thread {
   ~Thread() LOCKS_EXCLUDED(Locks::mutator_lock_,
                            Locks::thread_suspend_count_lock_);
   void Destroy();
+  void ClearNativePeer();
 
   void CreatePeer(const char* name, bool as_daemon, jobject thread_group);
 

@@ -151,6 +151,8 @@ class ThreadList {
   uint32_t AllocThreadId(Thread* self);
   void ReleaseThreadId(Thread* self, uint32_t id) LOCKS_EXCLUDED(Locks::allocated_thread_ids_lock_);
 
+  void RemoveFromList(Thread* self);
+
   bool Contains(Thread* thread) EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_list_lock_);
   bool Contains(pid_t tid) EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_list_lock_);
 
@@ -176,9 +178,6 @@ class ThreadList {
   // Ongoing suspend all requests, used to ensure threads added to list_ respect SuspendAll.
   int suspend_all_count_ GUARDED_BY(Locks::thread_suspend_count_lock_);
   int debug_suspend_all_count_ GUARDED_BY(Locks::thread_suspend_count_lock_);
-
-  // Signaled when threads terminate. Used to determine when all non-daemons have terminated.
-  ConditionVariable thread_exit_cond_ GUARDED_BY(Locks::thread_list_lock_);
 
   // Thread suspend time histogram. Only modified when all the threads are suspended, so guarding
   // by mutator lock ensures no thread can read when another thread is modifying it.
