@@ -130,6 +130,17 @@ class DexRegisterMap {
     return sizeof(LocationKind) + sizeof(int32_t);
   }
 
+  size_t Size() const {
+    return region_.size();
+  }
+
+  // For testing purpose only.
+  size_t ComputeSize(size_t number_of_dex_registers) const {
+    size_t size = kFixedSize + number_of_dex_registers * SingleEntrySize();
+    DCHECK_EQ(size, Size());
+    return size;
+  }
+
  private:
   static constexpr int kFixedSize = 0;
 
