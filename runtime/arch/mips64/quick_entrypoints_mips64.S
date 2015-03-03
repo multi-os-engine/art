@@ -859,9 +859,10 @@ ENTRY art_quick_generic_jni_trampoline
     dmtc1   $v0, $f0               # place return value to FP return value
 
 1:
-    move    $sp, $s8               # tear down the alloca
 2:
-    RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
+    ld      $sp, THREAD_TOP_QUICK_FRAME_OFFSET(rSELF)
+    jal 3f
+3:
     DELIVER_PENDING_EXCEPTION
 END art_quick_generic_jni_trampoline
 

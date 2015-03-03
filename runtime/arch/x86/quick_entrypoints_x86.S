@@ -1371,14 +1371,15 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
     call SYMBOL(artQuickGenericJniEndTrampoline)
 
-    // Tear down the alloca.
-    movl %ebp, %esp
-    CFI_DEF_CFA_REGISTER(esp)
-
     // Pending exceptions possible.
     mov %fs:THREAD_EXCEPTION_OFFSET, %ebx
     testl %ebx, %ebx
     jnz .Lexception_in_native
+
+    // Tear down the alloca.
+    movl %ebp, %esp
+    CFI_DEF_CFA_REGISTER(esp)
+
 
     // Tear down the callee-save frame.
     // Remove space for FPR args and EAX
@@ -1398,10 +1399,10 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     punpckldq %xmm1, %xmm0
     ret
 .Lentry_error:
-    movl %ebp, %esp
-    CFI_DEF_CFA_REGISTER(esp)
 .Lexception_in_native:
-    RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
+    movl %fs:THREAD_TOP_QUICK_FRAME_OFFSET, %esp
+    call .Lexception_call
+.Lexception_call:
     DELIVER_PENDING_EXCEPTION
 END_FUNCTION art_quick_generic_jni_trampoline
 
