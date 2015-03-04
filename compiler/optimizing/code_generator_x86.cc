@@ -37,6 +37,7 @@ static constexpr int kCurrentMethodStackOffset = 0;
 static constexpr Register kRuntimeParameterCoreRegisters[] = { EAX, ECX, EDX, EBX };
 static constexpr size_t kRuntimeParameterCoreRegistersLength =
     arraysize(kRuntimeParameterCoreRegisters);
+static constexpr Register kCoreCalleeSaves[] = { EBP, ESI, EDI };
 static constexpr XmmRegister kRuntimeParameterFpuRegisters[] = { XMM0, XMM1, XMM2, XMM3 };
 static constexpr size_t kRuntimeParameterFpuRegistersLength =
     arraysize(kRuntimeParameterFpuRegisters);
@@ -371,8 +372,15 @@ size_t CodeGeneratorX86::RestoreFloatingPointRegister(size_t stack_index, uint32
 }
 
 CodeGeneratorX86::CodeGeneratorX86(HGraph* graph, const CompilerOptions& compiler_options)
-    : CodeGenerator(graph, kNumberOfCpuRegisters, kNumberOfXmmRegisters,
-                    kNumberOfRegisterPairs, (1 << kFakeReturnRegister), 0, compiler_options),
+    : CodeGenerator(graph,
+                    kNumberOfCpuRegisters,
+                    kNumberOfXmmRegisters,
+                    kNumberOfRegisterPairs,
+                    ComputeRegisterMask(reinterpret_cast<const int*>(kCoreCalleeSaves),
+                                        arraysize(kCoreCalleeSaves))
+                        | (1 << kFakeReturnRegister),
+                        0,
+                        compiler_options),
       block_labels_(graph->GetArena(), 0),
       location_builder_(graph, this),
       instruction_visitor_(graph, this),
@@ -427,18 +435,19 @@ Location CodeGeneratorX86::AllocateFreeRegister(Primitive::Type type) const {
   return Location();
 }
 
-void CodeGeneratorX86::SetupBlockedRegisters(bool is_baseline ATTRIBUTE_UNUSED) const {
+void CodeGeneratorX86::SetupBlockedRegisters(bool is_baseline) const {
   // Don't allocate the dalvik style register pair passing.
   blocked_register_pairs_[ECX_EDX] = true;
 
   // Stack register is always reserved.
   blocked_core_registers_[ESP] = true;
 
-  // TODO: We currently don't use Quick's callee saved registers.
   DCHECK(kFollowsQuickABI);
-  blocked_core_registers_[EBP] = true;
-  blocked_core_registers_[ESI] = true;
-  blocked_core_registers_[EDI] = true;
+  if (is_baseline) {
+    blocked_core_registers_[EBP] = true;
+    blocked_core_registers_[ESI] = true;
+    blocked_core_registers_[EDI] = true;
+  }
 
   UpdateBlockedPairRegisters();
 }
@@ -470,15 +479,33 @@ void CodeGeneratorX86::GenerateFrameEntry() {
     RecordPcInfo(nullptr, 0);
   }
 
-  if (!HasEmptyFrame()) {
-    __ subl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
-    __ movl(Address(ESP, kCurrentMethodStackOffset), EAX);
+  if (HasEmptyFrame()) {
+    return;
   }
+
+  for (int i = arraysize(kCoreCalleeSaves) - 1; i >= 0; --i) {
+    Register reg = kCoreCalleeSaves[i];
+    if (allocated_registers_.ContainsCoreRegister(reg)) {
+      __ pushl(reg);
+    }
+  }
+
+  __ subl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+  __ movl(Address(ESP, kCurrentMethodStackOffset), EAX);
 }
 
 void CodeGeneratorX86::GenerateFrameExit() {
-  if (!HasEmptyFrame()) {
-    __ addl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+  if (HasEmptyFrame()) {
+    return;
+  }
+
+  __ addl(ESP, Immediate(GetFrameSize() - FrameEntrySpillSize()));
+
+  for (size_t i = 0; i < arraysize(kCoreCalleeSaves); ++i) {
+    Register reg = kCoreCalleeSaves[i];
+    if (allocated_registers_.ContainsCoreRegister(reg)) {
+      __ popl(reg);
+    }
   }
 }
 
@@ -907,7 +934,8 @@ void LocationsBuilderX86::VisitCondition(HCondition* comp) {
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::Any());
   if (comp->NeedsMaterialization()) {
-    locations->SetOut(Location::RequiresRegister());
+    // We need a byte register.  Needs to be EDX for baseline.
+    locations->SetOut(Location::RegisterLocation(EDX));
   }
 }
 
@@ -1347,6 +1375,13 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
           // Processing a Dex `int-to-byte' instruction.
           locations->SetInAt(0, Location::Any());
           locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+          if (!conversion->InputAt(0)->IsConstant()) {
+            // Reserve ECX in case we end up in a non byte-addressable register.
+            // Using: Location::ByteRegisterOrConstant(ECX, conversion->InputAt(0)))
+            // causes a RA validation failure while building core-optimizing.oat
+            // because the ECX range conflicts with an ECX parameter to an invoke.
+            locations->AddTemp(Location::RegisterLocation(ECX));
+          }
           break;
 
         default:
@@ -1527,7 +1562,15 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
         case Primitive::kPrimChar:
           // Processing a Dex `int-to-byte' instruction.
           if (in.IsRegister()) {
-            __ movsxb(out.AsRegister<Register>(), in.AsRegister<ByteRegister>());
+            // Is the register byte addressable?
+            if (in.AsRegister<Register>() <= EDX) {
+              __ movsxb(out.AsRegister<Register>(), in.AsRegister<ByteRegister>());
+            } else {
+              // Use the ECX temporary we reserved.
+              Location temp = locations->GetTemp(0);
+              __ movl(temp.AsRegister<Register>(), in.AsRegister<Register>());
+              __ movsxb(out.AsRegister<Register>(), temp.AsRegister<ByteRegister>());
+            }
           } else if (in.IsStackSlot()) {
             __ movsxb(out.AsRegister<Register>(), Address(ESP, in.GetStackIndex()));
           } else {
