@@ -32,6 +32,7 @@
 #include "class_linker.h"
 #include "dex_file-inl.h"
 #include "dex_file_verifier.h"
+#include "jit/jit.h"
 #include "globals.h"
 #include "leb128.h"
 #include "mirror/art_field-inl.h"
@@ -372,6 +373,15 @@ DexFile::DexFile(const uint8_t* base, size_t size,
       oat_file_(oat_file) {
   CHECK(begin_ != NULL) << GetLocation();
   CHECK_GT(size_, 0U) << GetLocation();
+  if (jit::Jit::kInstrumentationInDexFile && Runtime::Current()->UseJit()) {
+    CreateJitSampleArray();
+  }
+}
+
+void DexFile::CreateJitSampleArray() {
+  if (jit_samples_.get() == nullptr) {
+    jit_samples_.reset(new uint16_t[NumMethodIds()]());
+  }
 }
 
 DexFile::~DexFile() {

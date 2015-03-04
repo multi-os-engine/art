@@ -24,6 +24,8 @@
 namespace art {
 namespace jit {
 
+static constexpr size_t kNumJitCompilerThreads = 1;
+
 class JitCompileTask : public Task {
  public:
   explicit JitCompileTask(mirror::ArtMethod* method, JitInstrumentationCache* cache)
@@ -51,10 +53,14 @@ class JitCompileTask : public Task {
 
 JitInstrumentationCache::JitInstrumentationCache(size_t hot_method_threshold)
     : lock_("jit instrumentation lock"), hot_method_threshold_(hot_method_threshold) {
+  Locks::mutator_lock_->AssertExclusiveHeld(Thread::Current());
+  if (Jit::kInstrumentationInDexFile) {
+    Runtime::Current()->GetClassLinker()->AddJitInstrumentationToDexFiles();
+  }
 }
 
 void JitInstrumentationCache::CreateThreadPool() {
-  thread_pool_.reset(new ThreadPool("Jit thread pool", 1));
+  thread_pool_.reset(new ThreadPool("Jit thread pool", kNumJitCompilerThreads));
 }
 
 void JitInstrumentationCache::DeleteThreadPool() {
@@ -62,12 +68,14 @@ void JitInstrumentationCache::DeleteThreadPool() {
 }
 
 void JitInstrumentationCache::SignalCompiled(Thread* self, mirror::ArtMethod* method) {
-  ScopedObjectAccessUnchecked soa(self);
-  jmethodID method_id = soa.EncodeMethod(method);
-  MutexLock mu(self, lock_);
-  auto it = samples_.find(method_id);
-  if (it != samples_.end()) {
-    samples_.erase(it);
+  if (!Jit::kInstrumentationInDexFile) {
+    ScopedObjectAccessUnchecked soa(self);
+    jmethodID method_id = soa.EncodeMethod(method);
+    MutexLock mu(self, lock_);
+    auto it = samples_.find(method_id);
+    if (it != samples_.end()) {
+      samples_.erase(it);
+    }
   }
 }
 
@@ -82,15 +90,24 @@ void JitInstrumentationCache::AddSamples(Thread* self, mirror::ArtMethod* method
   jmethodID method_id = soa.EncodeMethod(method);
   bool is_hot = false;
   {
-    MutexLock mu(self, lock_);
     size_t sample_count = 0;
-    auto it = samples_.find(method_id);
-    if (it != samples_.end()) {
-      it->second += count;
-      sample_count = it->second;
+    if (Jit::kInstrumentationInDexFile) {
+      auto* dex_file = method->GetDexFile();
+      auto dex_method_index = method->GetDexMethodIndex();
+      auto* samples = dex_file->GetJitSamples();
+      sample_count = samples[dex_method_index];
+      sample_count += sample_count < 0xFEFF;
+      samples[dex_method_index] = static_cast<uint16_t>(sample_count);
     } else {
-      sample_count = count;
-      samples_.insert(std::make_pair(method_id, count));
+      MutexLock mu(self, lock_);
+      auto it = samples_.find(method_id);
+      if (it != samples_.end()) {
+        it->second += count;
+        sample_count = it->second;
+      } else {
+        sample_count = count;
+        samples_.insert(std::make_pair(method_id, count));
+      }
     }
     // If we have enough samples, mark as hot and request Jit compilation.
     if (sample_count >= hot_method_threshold_ && sample_count - count < hot_method_threshold_) {

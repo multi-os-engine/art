@@ -897,6 +897,12 @@ class DexFile {
     return oat_file_;
   }
 
+  // Create the JIT sample array, each method ID has one slot.
+  void CreateJitSampleArray();
+  uint16_t* GetJitSamples() const {
+    return jit_samples_.get();
+  }
+
  private:
   // Opens a .dex file
   static std::unique_ptr<const DexFile> OpenFile(int fd, const char* location,
@@ -997,6 +1003,9 @@ class DexFile {
 
   // Number of misses finding a class def from a descriptor.
   mutable Atomic<uint32_t> find_class_def_misses_;
+
+  // JIT instrumentation, one uint16_t per method id. Only allocated if the JIT is enabled.
+  std::unique_ptr<uint16_t[]> jit_samples_;
 
   struct UTF16EmptyFn {
     void MakeEmpty(std::pair<const char*, const ClassDef*>& pair) const {

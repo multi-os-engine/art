@@ -42,6 +42,7 @@ class JitOptions;
 
 class Jit {
  public:
+  static constexpr bool kInstrumentationInDexFile = true;
   static constexpr bool kStressMode = kIsDebugBuild;
   static constexpr size_t kDefaultCompileThreshold = kStressMode ? 1 : 1000;
 

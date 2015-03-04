@@ -56,7 +56,7 @@ class JitInstrumentationCache {
 
  private:
   Mutex lock_;
-  std::unordered_map<jmethodID, size_t> samples_;
+  std::unordered_map<jmethodID, size_t> samples_ GUARDED_BY(lock_);
   size_t hot_method_threshold_;
   std::unique_ptr<ThreadPool> thread_pool_;
 };

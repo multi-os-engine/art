@@ -462,6 +462,11 @@ class ClassLinker {
   bool MayBeCalledWithDirectCodePointer(mirror::ArtMethod* m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Allocate the method sample array for JIT. This is stored in the dex file for optimization
+  // purposes.
+  void AddJitInstrumentationToDexFiles() LOCKS_EXCLUDED(dex_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
+
  private:
   static void InitFromImageInterpretOnlyCallback(mirror::Object* obj, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

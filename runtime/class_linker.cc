@@ -599,6 +599,13 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   VLOG(startup) << "ClassLinker::InitFromCompiler exiting";
 }
 
+void ClassLinker::AddJitInstrumentationToDexFiles() {
+  ReaderMutexLock mu(Thread::Current(), dex_lock_);
+  for (auto& dex_cache : dex_caches_) {
+    const_cast<DexFile*>(dex_cache.Read()->GetDexFile())->CreateJitSampleArray();
+  }
+}
+
 void ClassLinker::FinishInit(Thread* self) {
   VLOG(startup) << "ClassLinker::FinishInit entering";
 
