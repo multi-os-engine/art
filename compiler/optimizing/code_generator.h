@@ -378,6 +378,8 @@ class CodeGenerator {
   void InitLocationsBaseline(HInstruction* instruction);
   size_t GetStackOffsetOfSavedRegister(size_t index);
   void CompileInternal(CodeAllocator* allocator, bool is_baseline);
+  void BlockIfInRegister(Location location, bool is_out) const;
+  
 
   HGraph* const graph_;
   const CompilerOptions& compiler_options_;
