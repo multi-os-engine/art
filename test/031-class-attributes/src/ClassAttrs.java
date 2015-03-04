@@ -9,6 +9,9 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class ClassAttrs {
     ClassAttrs() {
@@ -323,19 +326,25 @@ public class ClassAttrs {
      * Convert an array of Type into a string.  Start with an array count.
      */
     private static String stringifyTypeArray(Type[] types) {
+        List<String> typeStringList = new ArrayList<String>();
+        for (Type t : types) {
+          typeStringList.add(t.toString());
+        }
+        Collections.sort(typeStringList);
+
         StringBuilder stb = new StringBuilder();
         boolean first = true;
 
         stb.append("[" + types.length + "]");
 
-        for (Type t: types) {
+        for (String typeString : typeStringList) {
             if (first) {
                 stb.append(" ");
                 first = false;
             } else {
                 stb.append(", ");
             }
-            stb.append(t.toString());
+            stb.append(typeString);
         }
 
         return stb.toString();
