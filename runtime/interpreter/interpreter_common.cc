@@ -912,7 +912,7 @@ static void UnstartedRuntimeInvoke(Thread* self,  const DexFile::CodeItem* code_
   } else if (name == "java.lang.Class java.lang.Void.lookupType()") {
     result->SetL(Runtime::Current()->GetClassLinker()->FindPrimitiveClass('V'));
   } else if (name == "java.lang.Object java.lang.Class.newInstance()") {
-    StackHandleScope<2> hs(self);
+    StackHandleScope<3> hs(self);  // Class, constructor, object.
     Class* klass = shadow_frame->GetVRegReference(arg_offset)->AsClass();
     Handle<Class> h_klass(hs.NewHandle(klass));
     // There are two situations in which we'll abort this run.
@@ -923,10 +923,11 @@ static void UnstartedRuntimeInvoke(Thread* self,  const DexFile::CodeItem* code_
     if (Runtime::Current()->GetClassLinker()->EnsureInitialized(self, h_klass, true, true)) {
       ArtMethod* c = h_klass->FindDeclaredDirectMethod("<init>", "()V");
       if (c != nullptr) {
-        Handle<Object> obj(hs.NewHandle(klass->AllocObject(self)));
-        CHECK(obj.Get() != nullptr);  // We don't expect OOM at compile-time.
-        EnterInterpreterFromInvoke(self, c, obj.Get(), nullptr, nullptr);
-        result->SetL(obj.Get());
+        Handle<ArtMethod> h_cons(hs.NewHandle(c));
+        Handle<Object> h_obj(hs.NewHandle(klass->AllocObject(self)));
+        CHECK(h_obj.Get() != nullptr);  // We don't expect OOM at compile-time.
+        EnterInterpreterFromInvoke(self, h_cons.Get(), h_obj.Get(), nullptr, nullptr);
+        result->SetL(h_obj.Get());
         ok = true;
       } else {
         self->ThrowNewExceptionF(self->GetCurrentLocationForThrow(), "Ljava/lang/InternalError;",
@@ -965,8 +966,8 @@ static void UnstartedRuntimeInvoke(Thread* self,  const DexFile::CodeItem* code_
       }
     }
     CHECK(found != NULL)
-      << "Failed to find field in Class.getDeclaredField in un-started runtime. name="
-      << name2->ToModifiedUtf8() << " class=" << PrettyDescriptor(klass);
+        << "Failed to find field in Class.getDeclaredField in un-started runtime. name="
+        << name2->ToModifiedUtf8() << " class=" << PrettyDescriptor(klass);
     // TODO: getDeclaredField calls GetType once the field is found to ensure a
     //       NoClassDefFoundError is thrown if the field's type cannot be resolved.
     Class* jlr_Field = self->DecodeJObject(WellKnownClasses::java_lang_reflect_Field)->AsClass();
@@ -1049,20 +1050,24 @@ static void UnstartedRuntimeInvoke(Thread* self,  const DexFile::CodeItem* code_
           // Allocate new object.
           mirror::Class* real_to_string_class =
               shadow_frame->GetLink()->GetMethod()->GetDeclaringClass();
-          mirror::Object* real_to_string_obj = real_to_string_class->AllocObject(self);
+          StackHandleScope<1> hs(self);
+          Handle<Class> h_real_to_string_class(hs.NewHandle(real_to_string_class));
+          mirror::Object* real_to_string_obj = h_real_to_string_class->AllocObject(self);
           if (real_to_string_obj != nullptr) {
             mirror::ArtMethod* init_method =
-                real_to_string_class->FindDirectMethod("<init>", "()V");
+                h_real_to_string_class->FindDirectMethod("<init>", "()V");
             if (init_method == nullptr) {
-              real_to_string_class->DumpClass(LOG(FATAL), mirror::Class::kDumpClassFullDetail);
-            }
-            JValue invoke_result;
-            // One arg, this.
-            uint32_t args = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(real_to_string_obj));
-            init_method->Invoke(self, &args, 4, &invoke_result, init_method->GetShorty());
-            if (!self->IsExceptionPending()) {
-              result->SetL(real_to_string_obj);
-              ok = true;
+              h_real_to_string_class->DumpClass(LOG(FATAL), mirror::Class::kDumpClassFullDetail);
+            } else {
+              JValue invoke_result;
+              // One arg, this.
+              uint32_t args =
+                  static_cast<uint32_t>(reinterpret_cast<uintptr_t>(real_to_string_obj));
+              init_method->Invoke(self, &args, 4, &invoke_result, init_method->GetShorty());
+              if (!self->IsExceptionPending()) {
+                result->SetL(real_to_string_obj);
+                ok = true;
+              }
             }
           }
 
