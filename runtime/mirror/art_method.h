@@ -561,8 +561,6 @@ class MANAGED ArtMethod FINAL : public Object {
   // Access flags; low 16 bits are defined by spec.
   uint32_t access_flags_;
 
-  /* Dex file fields. The defining dex file is available via declaring_class_->dex_cache_ */
-
   // Offset to the CodeItem.
   uint32_t dex_code_item_offset_;
 
@@ -578,6 +576,7 @@ class MANAGED ArtMethod FINAL : public Object {
 
   // Fake padding field gets inserted here.
 
+  /* Dex file fields. The defining dex file is available via declaring_class_->dex_cache_ */
   // Must be the last fields in the method.
   struct PACKED(4) PtrSizedFields {
     // Method dispatch from the interpreter invokes this pointer which may cause a bridge into

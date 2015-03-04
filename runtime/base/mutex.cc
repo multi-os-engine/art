@@ -1070,6 +1070,7 @@ void Locks::Init() {
 }
 
 void Locks::InitConditions() {
+  // Different function than Init to avoid putting NO_THREAD_SAFETY_ANALYSIS there.
   thread_exit_cond_ = new ConditionVariable("thread exit condition variable", *thread_list_lock_);
 }
 

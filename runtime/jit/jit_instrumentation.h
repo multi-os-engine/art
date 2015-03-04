@@ -47,7 +47,7 @@ namespace jit {
 class JitInstrumentationCache {
  public:
   explicit JitInstrumentationCache(size_t hot_method_threshold);
-  void AddSamples(Thread* self, mirror::ArtMethod* method, size_t samples)
+  void AddSample(Thread* self, mirror::ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void SignalCompiled(Thread* self, mirror::ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -56,8 +56,14 @@ class JitInstrumentationCache {
 
  private:
   Mutex lock_;
-  std::unordered_map<jmethodID, size_t> samples_;
+  std::unordered_map<jmethodID, size_t> samples_ GUARDED_BY(lock_);
+  size_t increment_counter_;
+  size_t increment_frequency_;
+  // The goal is to request compilation of a method when it's number of samples goes past hot
+  // method threshold.
   size_t hot_method_threshold_;
+  // Adjusted hot method threshold is the hot method threshold divided by increment frequency.
+  size_t adjusted_hot_method_threshold_;
   std::unique_ptr<ThreadPool> thread_pool_;
 };
 
@@ -68,7 +74,7 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
   virtual void MethodEntered(Thread* thread, mirror::Object* /*this_object*/,
                              mirror::ArtMethod* method, uint32_t /*dex_pc*/)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    instrumentation_cache_->AddSamples(thread, method, 1);
+    instrumentation_cache_->AddSample(thread, method);
   }
   virtual void MethodExited(Thread* /*thread*/, mirror::Object* /*this_object*/,
                             mirror::ArtMethod* /*method*/, uint32_t /*dex_pc*/,
@@ -94,7 +100,7 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
   virtual void BackwardBranch(Thread* thread, mirror::ArtMethod* method, int32_t dex_pc_offset)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     CHECK_LE(dex_pc_offset, 0);
-    instrumentation_cache_->AddSamples(thread, method, 1);
+    instrumentation_cache_->AddSample(thread, method);
   }
 
  private:
