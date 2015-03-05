@@ -272,18 +272,35 @@ class Location : public ValueObject {
     return value_ == other.value_;
   }
 
-  bool Contains(Location other) const {
-    if (Equals(other)) {
-      return true;
-    } else if (IsFpuRegisterPair() && other.IsFpuRegister()) {
-      return other.reg() == low() || other.reg() == high();
-    } else if (IsRegisterPair() && other.IsRegister()) {
-      return other.reg() == low() || other.reg() == high();
-    } else if (IsDoubleStackSlot() && other.IsStackSlot()) {
-      return (GetStackIndex() == other.GetStackIndex())
-          || (GetStackIndex() + 4 == other.GetStackIndex());
+  // Return true if two location overlap with each other.
+  bool OverlapWith(Location other) const {
+    if ((IsStackSlot() || IsDoubleStackSlot())
+        && (other.IsStackSlot() || other.IsDoubleStackSlot())) {
+      // Both are memory on stack.
+      int this_bytes = IsStackSlot() ? 4 : 8;
+      int other_bytes = other.IsStackSlot() ? 4 : 8;
+      int index_diff = other.GetStackIndex() - GetStackIndex();
+      // --------+-------------+------------+--------
+      //    ...  |             | this_bytes |  ...
+      // --------+-------------+------------+--------
+      //    ...  | other_bytes |            |  ...
+      // --------+-------------+------------+--------
+      return (-other_bytes < index_diff) && (index_diff < this_bytes);
+    } else if ( ((IsRegister() || IsRegisterPair())
+            && (other.IsRegister() || other.IsRegisterPair()))
+        || ((IsFpuRegister() || IsFpuRegisterPair())
+            && (other.IsFpuRegister() || other.IsFpuRegisterPair())) ) {
+      // Both are core registers or float point registers.
+      int this_low = IsPair() ? low() : reg();
+      // -1 is an invalid register number, used to indicate that it won't overlap with others.
+      int this_high = IsPair() ? high() : -1;
+      int other_low = other.IsPair() ? other.low() : other.reg();
+      // -2 is an invalid register number, used to indicate that it won't overlap with others.
+      int other_high = other.IsPair() ? other.high() : -2;
+      return this_low == other_low || this_low == other_high
+          || this_high == other_low || this_high == other_high;
     }
-    return false;
+    return Equals(other);
   }
 
   const char* DebugString() const {
