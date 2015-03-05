@@ -130,6 +130,10 @@ class DexRegisterMap {
     return sizeof(LocationKind) + sizeof(int32_t);
   }
 
+  size_t Size() const {
+    return region_.size();
+  }
+
  private:
   static constexpr int kFixedSize = 0;
 
@@ -137,6 +141,9 @@ class DexRegisterMap {
 
   friend class CodeInfo;
   friend class StackMapStream;
+
+  // From compiler/optimizing/stack_map_test.cc.
+  friend size_t ComputeDexRegisterMapSize(size_t number_of_dex_registers);
 };
 
 /**
