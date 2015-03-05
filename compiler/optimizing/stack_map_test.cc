@@ -37,7 +37,10 @@ TEST(StackMapTest, Test1) {
   StackMapStream stream(&arena);
 
   ArenaBitVector sp_mask(&arena, 0, false);
-  stream.AddStackMapEntry(0, 64, 0x3, &sp_mask, 2, 0);
+  ArenaBitVector live_registers_mask(&arena, 0, true);
+  live_registers_mask.SetBit(0);
+  live_registers_mask.SetBit(1);
+  stream.AddStackMapEntry(0, 64, 0x3, &sp_mask, 2, 0, &live_registers_mask);
   stream.AddDexRegisterEntry(DexRegisterMap::kInStack, 0);
   stream.AddDexRegisterEntry(DexRegisterMap::kConstant, -2);
 
@@ -77,7 +80,10 @@ TEST(StackMapTest, Test2) {
   ArenaBitVector sp_mask1(&arena, 0, true);
   sp_mask1.SetBit(2);
   sp_mask1.SetBit(4);
-  stream.AddStackMapEntry(0, 64, 0x3, &sp_mask1, 2, 2);
+  ArenaBitVector live_registers_mask1(&arena, 0, true);
+  live_registers_mask1.SetBit(0);
+  live_registers_mask1.SetBit(1);
+  stream.AddStackMapEntry(0, 64, 0x3, &sp_mask1, 2, 2, &live_registers_mask1);
   stream.AddDexRegisterEntry(DexRegisterMap::kInStack, 0);
   stream.AddDexRegisterEntry(DexRegisterMap::kConstant, -2);
   stream.AddInlineInfoEntry(42);
@@ -86,7 +92,9 @@ TEST(StackMapTest, Test2) {
   ArenaBitVector sp_mask2(&arena, 0, true);
   sp_mask2.SetBit(3);
   sp_mask1.SetBit(8);
-  stream.AddStackMapEntry(1, 128, 0xFF, &sp_mask2, 1, 0);
+  ArenaBitVector live_registers_mask2(&arena, 0, true);
+  live_registers_mask2.SetBit(0);
+  stream.AddStackMapEntry(1, 128, 0xFF, &sp_mask2, 1, 0, &live_registers_mask2);
   stream.AddDexRegisterEntry(DexRegisterMap::kInRegister, 0);
 
   size_t size = stream.ComputeNeededSize();
@@ -131,6 +139,32 @@ TEST(StackMapTest, Test2) {
   ASSERT_TRUE(SameBits(stack_mask, sp_mask2));
 
   ASSERT_FALSE(stack_map.HasInlineInfo());
+}
+
+TEST(StackMapTest, TestNonLiveDexRegiter) {
+  ArenaPool pool;
+  ArenaAllocator arena(&pool);
+  StackMapStream stream(&arena);
+
+  ArenaBitVector sp_mask(&arena, 0, false);
+  ArenaBitVector live_registers_mask(&arena, 0, true);
+  live_registers_mask.SetBit(1);
+  stream.AddStackMapEntry(0, 64, 0x3, &sp_mask, 2, 0, &live_registers_mask);
+  stream.AddDexRegisterEntry(DexRegisterMap::kConstant, -2);
+
+  size_t size = stream.ComputeNeededSize();
+  void* memory = arena.Alloc(size, kArenaAllocMisc);
+  MemoryRegion region(memory, size);
+  stream.FillIn(region);
+
+  CodeInfo code_info(region);
+  StackMap stack_map = code_info.GetStackMapAt(0);
+  ASSERT_TRUE(stack_map.HasDexRegisterMap());
+  DexRegisterMap dex_registers = code_info.GetDexRegisterMapOf(stack_map, 2);
+  ASSERT_EQ(DexRegisterMap::kNone, dex_registers.GetLocationKind(0));
+  ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
+  ASSERT_EQ(0, dex_registers.GetValue(0));
+  ASSERT_EQ(-2, dex_registers.GetValue(1));
 }
 
 }  // namespace art
