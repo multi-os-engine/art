@@ -208,8 +208,14 @@ void MipsMir2Lir::GenCmpFP(Instruction::Code opcode, RegLocation rl_dest,
   FlushAllRegs();
   LockCallTemps();
   if (wide) {
-    RegStorage r_tmp1(RegStorage::k64BitPair, rMIPS_FARG0, rMIPS_FARG1);
-    RegStorage r_tmp2(RegStorage::k64BitPair, rMIPS_FARG2, rMIPS_FARG3);
+    RegStorage r_tmp1, r_tmp2;
+    if (fpuIs32Bit_) {
+      r_tmp1 = RegStorage(RegStorage::k64BitPair, rMIPS_FARG0, rMIPS_FARG1);
+      r_tmp2 = RegStorage(RegStorage::k64BitPair, rMIPS_FARG2, rMIPS_FARG3);
+    } else {
+      r_tmp1 = RegStorage(RegStorage::k64BitSolo, rMIPS_FARG0);
+      r_tmp2 = RegStorage(RegStorage::k64BitSolo, rMIPS_FARG2);
+    }
     LoadValueDirectWideFixed(rl_src1, r_tmp1);
     LoadValueDirectWideFixed(rl_src2, r_tmp2);
   } else {
