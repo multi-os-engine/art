@@ -82,7 +82,45 @@ class InlineInfo {
  */
 class DexRegisterMap {
  public:
-  explicit DexRegisterMap(MemoryRegion region) : region_(region) {}
+  // Creates a DexRegisterMap backed by the given region. The region will be updated with
+  // register information.
+  static DexRegisterMap Create(MemoryRegion region,
+                               uint16_t number_of_dex_registers,
+                               const BitVector& live_dex_registers_mask) {
+    DCHECK_EQ(region.size(),
+              ComputeNeededSize(number_of_dex_registers, live_dex_registers_mask));
+    MemoryRegion mask_region =
+        GetLiveDexRegisterMask(region, kLiveDexRegisterMaskOffset, number_of_dex_registers);
+    for (uint16_t i = 0; i < number_of_dex_registers; i++) {
+      mask_region.StoreBit(i, live_dex_registers_mask.IsBitSet(i));
+    }
+    DexRegisterMap map(region, number_of_dex_registers);
+    return map;
+  }
+
+  // Loads a DexRegisterMap from the given region. This expects the region to be already populated
+  // with information about dex registers.
+  static DexRegisterMap Load(MemoryRegion region, size_t offset, uint16_t number_of_dex_registers) {
+    MemoryRegion live_dex_registers_region_ =
+        GetLiveDexRegisterMask(region, offset, number_of_dex_registers);
+    uint16_t live_count = 0;
+    for (uint16_t i = 0; i < number_of_dex_registers; i++) {
+      live_count += live_dex_registers_region_.LoadBit(i) ? 1 : 0;
+    }
+    size_t size = GetLiveDexRegisterMaskSize(number_of_dex_registers)
+        + live_count * SingleEntrySize();
+    return DexRegisterMap(region.Subregion(offset, size), number_of_dex_registers);
+  }
+
+  static size_t ComputeNeededSize(uint16_t number_of_dex_registers,
+                                  const BitVector& live_dex_registers_mask) {
+    uint16_t live_count = 0;
+    for (uint16_t i = 0; i < number_of_dex_registers; i++) {
+      live_count += live_dex_registers_mask.IsBitSet(i) ? 1 : 0;
+    }
+    return GetLiveDexRegisterMaskSize(number_of_dex_registers)
+        + live_count * SingleEntrySize();
+  }
 
   enum LocationKind {
     kNone,
@@ -110,19 +148,20 @@ class DexRegisterMap {
   }
 
   LocationKind GetLocationKind(uint16_t register_index) const {
-    return region_.Load<LocationKind>(
-        kFixedSize + register_index * SingleEntrySize());
-  }
-
-  void SetRegisterInfo(uint16_t register_index, LocationKind kind, int32_t value) {
-    size_t entry = kFixedSize + register_index * SingleEntrySize();
-    region_.Store<LocationKind>(entry, kind);
-    region_.Store<int32_t>(entry + sizeof(LocationKind), value);
+    int32_t map_index = GetMapIndex(register_index);
+    if (map_index == kNoIndex) {
+      return kNone;
+    }
+    return region_.Load<LocationKind>(GetRegInfoOffset() + map_index * SingleEntrySize());
   }
 
   int32_t GetValue(uint16_t register_index) const {
+    int32_t map_index = GetMapIndex(register_index);
+    if (map_index == kNoIndex) {
+      return 0;
+    }
     return region_.Load<int32_t>(
-        kFixedSize + sizeof(LocationKind) + register_index * SingleEntrySize());
+        GetRegInfoOffset() + sizeof(LocationKind) + map_index * SingleEntrySize());
   }
 
   int32_t GetStackOffsetInBytes(uint16_t register_index) const {
@@ -142,17 +181,56 @@ class DexRegisterMap {
     return GetValue(register_index);
   }
 
+  void SetRegisterInfo(uint16_t map_index, LocationKind kind, int32_t value) {
+    size_t offset = GetRegInfoOffset() + map_index * SingleEntrySize();
+    region_.Store<LocationKind>(offset, kind);
+    region_.Store<int32_t>(offset + sizeof(LocationKind), value);
+  }
+
+ private:
+  DexRegisterMap(MemoryRegion region, uint16_t number_of_dex_registers)
+      : region_(region), number_of_dex_registers_(number_of_dex_registers) {}
+
+  size_t GetRegInfoOffset() const {
+    return GetLiveDexRegisterMaskSize(number_of_dex_registers_);
+  }
+
+  // TODO: Consider offering an iterator to make things more efficient.
+  int32_t GetMapIndex(uint16_t reg) const {
+    MemoryRegion live_dex_registers_region_ =
+        GetLiveDexRegisterMask(region_, kLiveDexRegisterMaskOffset, number_of_dex_registers_);
+    if (!live_dex_registers_region_.LoadBit(reg)) {
+      return kNoIndex;
+    }
+    int32_t map_idx = 0;
+    for (size_t i = 0; i < reg; i++) {
+      if (live_dex_registers_region_.LoadBit(i)) {
+        map_idx++;
+      }
+    }
+    return map_idx;
+  }
+
   static size_t SingleEntrySize() {
     return sizeof(LocationKind) + sizeof(int32_t);
   }
 
- private:
-  static constexpr int kFixedSize = 0;
+  static size_t GetLiveDexRegisterMaskSize(uint16_t number_of_dex_registers) {
+    return RoundUp(number_of_dex_registers, kBitsPerByte) / kBitsPerByte;
+  }
+
+  static MemoryRegion GetLiveDexRegisterMask(MemoryRegion region,
+                                             size_t offset,
+                                             uint16_t number_of_dex_registers) {
+    return region.Subregion(offset,
+                            GetLiveDexRegisterMaskSize(number_of_dex_registers));
+  }
 
   MemoryRegion region_;
+  const uint16_t number_of_dex_registers_;
 
-  friend class CodeInfo;
-  friend class StackMapStream;
+  static constexpr size_t kLiveDexRegisterMaskOffset = 0;
+  static constexpr int32_t kNoIndex = -1;
 };
 
 /**
@@ -319,8 +397,7 @@ class CodeInfo {
   DexRegisterMap GetDexRegisterMapOf(StackMap stack_map, uint32_t number_of_dex_registers) const {
     DCHECK(stack_map.HasDexRegisterMap());
     uint32_t offset = stack_map.GetDexRegisterMapOffset();
-    return DexRegisterMap(region_.Subregion(offset,
-        DexRegisterMap::kFixedSize + number_of_dex_registers * DexRegisterMap::SingleEntrySize()));
+    return DexRegisterMap::Load(region_, offset, number_of_dex_registers);
   }
 
   InlineInfo GetInlineInfoOf(StackMap stack_map) const {
