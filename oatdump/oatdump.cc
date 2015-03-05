@@ -1063,9 +1063,12 @@ class OatDumper {
         DexRegisterMap dex_register_map =
             code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
         for (size_t j = 0; j < number_of_dex_registers; ++j) {
-          os << "      v" << j << ": "
-             << DexRegisterMap::PrettyDescriptor(dex_register_map.GetLocationKind(j))
-             << " (" << dex_register_map.GetValue(j) << ")\n";
+          DexRegisterMap::LocationKind location_kind = dex_register_map.GetLocationKind(j);
+          if (location_kind != DexRegisterMap::LocationKind::kNone) {
+            os << "      v" << j << ": "
+               << DexRegisterMap::PrettyDescriptor(location_kind)
+               << " (" << dex_register_map.GetValue(j) << ")\n";
+          }
         }
       }
       // TODO: Display more information from code_info.
