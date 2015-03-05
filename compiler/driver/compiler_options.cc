@@ -38,7 +38,8 @@ CompilerOptions::CompilerOptions()
       compile_pic_(false),
       verbose_methods_(nullptr),
       pass_manager_options_(new PassManagerOptions),
-      init_failure_output_(nullptr) {
+      init_failure_output_(nullptr),
+      track_class_init_(false) {
 }
 
 CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
@@ -58,6 +59,7 @@ CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
                                  bool compile_pic,
                                  const std::vector<std::string>* verbose_methods,
                                  PassManagerOptions* pass_manager_options,
+                                 bool track_class_init,
                                  std::ostream* init_failure_output
                                  ) :  // NOLINT(whitespace/parens)
     compiler_filter_(compiler_filter),
@@ -77,7 +79,8 @@ CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
     compile_pic_(compile_pic),
     verbose_methods_(verbose_methods),
     pass_manager_options_(pass_manager_options),
-    init_failure_output_(init_failure_output) {
+    init_failure_output_(init_failure_output),
+    track_class_init_(track_class_init) {
 }
 
 }  // namespace art

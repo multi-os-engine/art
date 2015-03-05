@@ -437,6 +437,10 @@ class CompilerDriver {
   // Get memory usage during compilation.
   std::string GetMemoryUsageString(bool extended) const;
 
+  std::set<std::string>* GetInitializedClasses() {
+    return initialized_classes_.get();
+  }
+
  private:
   // These flags are internal to CompilerDriver for collecting INVOKE resolution statistics.
   // The only external contract is that unresolved method has flags 0 and resolved non-0.
@@ -569,6 +573,9 @@ class CompilerDriver {
   // the image. Note if image_classes_ is nullptr, all classes are
   // included in the image.
   std::unique_ptr<std::set<std::string>> image_classes_;
+
+  // A set of initialized classes. Used to track who initializes what.
+  std::unique_ptr<std::set<std::string>> initialized_classes_;
 
   // If image_ is true, specifies the classes that will be compiled in
   // the image. Note if classes_to_compile_ is nullptr, all classes are
