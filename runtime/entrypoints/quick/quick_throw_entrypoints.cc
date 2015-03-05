@@ -41,12 +41,11 @@ extern "C" void artDeliverExceptionFromCode(mirror::Throwable* exception, Thread
    * exception_ in thread and delivering the exception.
    */
   ScopedQuickEntrypointChecks sqec(self);
-  ThrowLocation throw_location = self->GetCurrentLocationForThrow();
   if (exception == nullptr) {
-    self->ThrowNewException(throw_location, "Ljava/lang/NullPointerException;",
+    self->ThrowNewException(ThrowLocation(), "Ljava/lang/NullPointerException;",
                             "throw with null exception");
   } else {
-    self->SetException(throw_location, exception);
+    self->SetException(exception);
   }
   self->QuickDeliverException();
 }
