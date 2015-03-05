@@ -492,6 +492,7 @@ class Dex2Oat FINAL {
     bool include_debug_symbols = kIsDebugBuild;
     bool watch_dog_enabled = true;
     bool generate_gdb_information = kIsDebugBuild;
+    bool track_class_init = false;
 
     PassManagerOptions pass_manager_options;
 
@@ -732,6 +733,8 @@ class Dex2Oat FINAL {
         if (swap_fd_ < 0) {
           Usage("--swap-fd passed a negative value %d", swap_fd_);
         }
+      } else if (option == "--track-class-init") {
+        track_class_init = true;
       } else {
         Usage("Unknown argument %s", option.data());
       }
@@ -941,6 +944,7 @@ class Dex2Oat FINAL {
                                                     nullptr :
                                                     &verbose_methods_,
                                                 new PassManagerOptions(pass_manager_options),
+                                                track_class_init,
                                                 init_failure_output_.get()));
 
     // Done with usage checks, enable watchdog if requested

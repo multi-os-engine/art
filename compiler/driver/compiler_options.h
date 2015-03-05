@@ -70,6 +70,7 @@ class CompilerOptions FINAL {
                   bool compile_pic,
                   const std::vector<std::string>* verbose_methods,
                   PassManagerOptions* pass_manager_options,
+                  bool track_class_init,
                   std::ostream* init_failure_output);
 
   CompilerFilter GetCompilerFilter() const {
@@ -183,6 +184,10 @@ class CompilerOptions FINAL {
     return pass_manager_options_.get();
   }
 
+  bool TrackClassInit() const {
+    return track_class_init_;
+  }
+
  private:
   CompilerFilter compiler_filter_;
   const size_t huge_method_threshold_;
@@ -208,6 +213,7 @@ class CompilerOptions FINAL {
 
   // Log initialization of initialization failures to this stream if not null.
   std::ostream* const init_failure_output_;
+  const bool track_class_init_;
 
   DISALLOW_COPY_AND_ASSIGN(CompilerOptions);
 };

@@ -392,6 +392,10 @@ CompilerDriver::CompilerDriver(const CompilerOptions* compiler_options,
       LOG(INFO) << "Failed to load profile file " << profile_file;
     }
   }
+
+  if (image_ && compiler_options->TrackClassInit()) {
+    initialized_classes_.reset(new std::set<std::string>());
+  }
 }
 
 SwapVector<uint8_t>* CompilerDriver::DeduplicateCode(const ArrayRef<const uint8_t>& code) {
@@ -1910,6 +1914,25 @@ void CompilerDriver::SetVerifiedDexFile(jobject class_loader, const DexFile& dex
   context.ForAll(0, dex_file.NumClassDefs(), SetVerifiedClass, thread_count_);
 }
 
+struct InitializedTracker {
+  const std::set<std::string>& already_initialized;
+  std::set<std::string>* newly_initialized;
+};
+
+static bool AddInitializedClassesToSet(mirror::Class* klass, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  if (klass->IsInitialized()) {
+    std::string temp;
+    const char* name = klass->GetDescriptor(&temp);
+    InitializedTracker* tracker = reinterpret_cast<InitializedTracker*>(arg);
+    std::string name_string(name);
+    if (tracker->already_initialized.find(name_string) == tracker->already_initialized.end()) {
+      tracker->newly_initialized->insert(name_string);
+    }
+  }
+  return true;
+}
+
 static void InitializeClass(const ParallelCompilationManager* manager, size_t class_def_index)
     LOCKS_EXCLUDED(Locks::mutator_lock_) {
   ATRACE_CALL();
@@ -1992,7 +2015,23 @@ static void InitializeClass(const ParallelCompilationManager* manager, size_t cl
         }
         soa.Self()->AssertNoPendingException();
       }
+
+      // Retrieve initialized-classes list if we're tracking it.
+      std::set<std::string>* init_classes = manager->GetCompiler()->GetInitializedClasses();
+      if (init_classes != nullptr) {
+        std::set<std::string> tmp_set;
+        InitializedTracker tracker {*init_classes, &tmp_set};
+        manager->GetClassLinker()->VisitClasses(AddInitializedClassesToSet, &tracker);
+        if (!tmp_set.empty()) {
+          LOG(INFO) << "Classes initialized by " << descriptor << ":";
+          for (auto& s : tmp_set) {
+            LOG(INFO) << " " << s;
+          }
+          init_classes->insert(tmp_set.begin(), tmp_set.end());
+        }
+      }
     }
+
     // Record the final class status if necessary.
     ClassReference ref(manager->GetDexFile(), class_def_index);
     manager->GetCompiler()->RecordClassStatus(ref, klass->GetStatus());
