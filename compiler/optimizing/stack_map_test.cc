@@ -36,6 +36,11 @@ size_t ComputeDexRegisterMapSize(size_t number_of_dex_registers) {
       + number_of_dex_registers * DexRegisterMap::SingleEntrySize();
 }
 
+size_t ComputeDexRegisterCompressedMapSize(const DexRegisterCompressedMap& dex_registers,
+                                           size_t number_of_dex_registers) {
+  return dex_registers.FindLocationOffset(number_of_dex_registers);
+}
+
 TEST(StackMapTest, Test1) {
   ArenaPool pool;
   ArenaAllocator arena(&pool);
@@ -44,8 +49,8 @@ TEST(StackMapTest, Test1) {
   ArenaBitVector sp_mask(&arena, 0, false);
   size_t number_of_dex_registers = 2;
   stream.AddStackMapEntry(0, 64, 0x3, &sp_mask, number_of_dex_registers, 0);
-  stream.AddDexRegisterEntry(DexRegisterMap::kInStack, 0);
-  stream.AddDexRegisterEntry(DexRegisterMap::kConstant, -2);
+  stream.AddDexRegisterEntry(LocationKind::kInStack, 0);
+  stream.AddDexRegisterEntry(LocationKind::kConstant, -2);
 
   size_t size = stream.ComputeNeededSize();
   void* memory = arena.Alloc(size, kArenaAllocMisc);
@@ -67,14 +72,34 @@ TEST(StackMapTest, Test1) {
   ASSERT_TRUE(SameBits(stack_mask, sp_mask));
 
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
-  DexRegisterMap dex_registers =
-      code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  ASSERT_EQ(16u, dex_registers.Size());
-  ASSERT_EQ(16u, ComputeDexRegisterMapSize(number_of_dex_registers));
-  ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
-  ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
-  ASSERT_EQ(0, dex_registers.GetValue(0));
-  ASSERT_EQ(-2, dex_registers.GetValue(1));
+  switch (kDexRegisterMapEncoding) {
+    case kDexRegisterLocationList: {
+      DexRegisterMap dex_registers =
+          code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+      ASSERT_EQ(16u, dex_registers.Size());
+      ASSERT_EQ(16u, ComputeDexRegisterMapSize(number_of_dex_registers));
+      ASSERT_EQ(LocationKind::kInStack, dex_registers.GetLocationKind(0));
+      ASSERT_EQ(LocationKind::kConstant, dex_registers.GetLocationKind(1));
+      ASSERT_EQ(0, dex_registers.GetValue(0));
+      ASSERT_EQ(-2, dex_registers.GetValue(1));
+      break;
+    }
+
+    case kDexRegisterCompressedLocationList: {
+      DexRegisterCompressedMap dex_registers =
+          code_info.GetDexRegisterCompressedMapOf(stack_map,
+                                                  number_of_dex_registers);
+      ASSERT_EQ(6u, dex_registers.Size());
+      ASSERT_EQ(6u, ComputeDexRegisterCompressedMapSize(dex_registers, number_of_dex_registers));
+      DexRegisterLocation location0 = dex_registers.GetLocationKindAndValue(0);
+      DexRegisterLocation location1 = dex_registers.GetLocationKindAndValue(1);
+      ASSERT_EQ(LocationKind::kInStack, location0.kind);
+      ASSERT_EQ(LocationKind::kConstantBigValue, location1.kind);
+      ASSERT_EQ(0, location0.value);
+      ASSERT_EQ(-2, location1.value);
+      break;
+    }
+  }
 
   ASSERT_FALSE(stack_map.HasInlineInfo());
 }
@@ -89,8 +114,8 @@ TEST(StackMapTest, Test2) {
   sp_mask1.SetBit(4);
   size_t number_of_dex_registers = 2;
   stream.AddStackMapEntry(0, 64, 0x3, &sp_mask1, number_of_dex_registers, 2);
-  stream.AddDexRegisterEntry(DexRegisterMap::kInStack, 0);
-  stream.AddDexRegisterEntry(DexRegisterMap::kConstant, -2);
+  stream.AddDexRegisterEntry(LocationKind::kInStack, 0);
+  stream.AddDexRegisterEntry(LocationKind::kConstant, -2);
   stream.AddInlineInfoEntry(42);
   stream.AddInlineInfoEntry(82);
 
@@ -98,8 +123,8 @@ TEST(StackMapTest, Test2) {
   sp_mask2.SetBit(3);
   sp_mask1.SetBit(8);
   stream.AddStackMapEntry(1, 128, 0xFF, &sp_mask2, number_of_dex_registers, 0);
-  stream.AddDexRegisterEntry(DexRegisterMap::kInRegister, 18);
-  stream.AddDexRegisterEntry(DexRegisterMap::kInFpuRegister, 3);
+  stream.AddDexRegisterEntry(LocationKind::kInRegister, 18);
+  stream.AddDexRegisterEntry(LocationKind::kInFpuRegister, 3);
 
   size_t size = stream.ComputeNeededSize();
   void* memory = arena.Alloc(size, kArenaAllocMisc);
@@ -122,14 +147,34 @@ TEST(StackMapTest, Test2) {
   ASSERT_TRUE(SameBits(stack_mask, sp_mask1));
 
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
-  DexRegisterMap dex_registers =
-      code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  ASSERT_EQ(16u, dex_registers.Size());
-  ASSERT_EQ(16u, ComputeDexRegisterMapSize(number_of_dex_registers));
-  ASSERT_EQ(DexRegisterMap::kInStack, dex_registers.GetLocationKind(0));
-  ASSERT_EQ(DexRegisterMap::kConstant, dex_registers.GetLocationKind(1));
-  ASSERT_EQ(0, dex_registers.GetValue(0));
-  ASSERT_EQ(-2, dex_registers.GetValue(1));
+  switch (kDexRegisterMapEncoding) {
+    case kDexRegisterLocationList: {
+      DexRegisterMap dex_registers =
+          code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+      ASSERT_EQ(16u, dex_registers.Size());
+      ASSERT_EQ(16u, ComputeDexRegisterMapSize(number_of_dex_registers));
+      ASSERT_EQ(LocationKind::kInStack, dex_registers.GetLocationKind(0));
+      ASSERT_EQ(LocationKind::kConstant, dex_registers.GetLocationKind(1));
+      ASSERT_EQ(0, dex_registers.GetValue(0));
+      ASSERT_EQ(-2, dex_registers.GetValue(1));
+      break;
+    }
+
+    case kDexRegisterCompressedLocationList: {
+      DexRegisterCompressedMap dex_registers =
+          code_info.GetDexRegisterCompressedMapOf(stack_map,
+                                                  number_of_dex_registers);
+      ASSERT_EQ(6u, dex_registers.Size());
+      ASSERT_EQ(6u, ComputeDexRegisterCompressedMapSize(dex_registers, number_of_dex_registers));
+      DexRegisterLocation location0 = dex_registers.GetLocationKindAndValue(0);
+      DexRegisterLocation location1 = dex_registers.GetLocationKindAndValue(1);
+      ASSERT_EQ(LocationKind::kInStack, location0.kind);
+      ASSERT_EQ(LocationKind::kConstantBigValue, location1.kind);
+      ASSERT_EQ(0, location0.value);
+      ASSERT_EQ(-2, location1.value);
+      break;
+    }
+  }
 
   ASSERT_TRUE(stack_map.HasInlineInfo());
   InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map);
@@ -149,14 +194,34 @@ TEST(StackMapTest, Test2) {
   ASSERT_TRUE(SameBits(stack_mask, sp_mask2));
 
   ASSERT_TRUE(stack_map.HasDexRegisterMap());
-  dex_registers =
-      code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  ASSERT_EQ(16u, dex_registers.Size());
-  ASSERT_EQ(16u, ComputeDexRegisterMapSize(number_of_dex_registers));
-  ASSERT_EQ(DexRegisterMap::kInRegister, dex_registers.GetLocationKind(0));
-  ASSERT_EQ(DexRegisterMap::kInFpuRegister, dex_registers.GetLocationKind(1));
-  ASSERT_EQ(18, dex_registers.GetValue(0));
-  ASSERT_EQ(3, dex_registers.GetValue(1));
+  switch (kDexRegisterMapEncoding) {
+    case kDexRegisterLocationList: {
+      DexRegisterMap dex_registers =
+          code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+      ASSERT_EQ(16u, dex_registers.Size());
+      ASSERT_EQ(16u, ComputeDexRegisterMapSize(number_of_dex_registers));
+      ASSERT_EQ(LocationKind::kInRegister, dex_registers.GetLocationKind(0));
+      ASSERT_EQ(LocationKind::kInFpuRegister, dex_registers.GetLocationKind(1));
+      ASSERT_EQ(18, dex_registers.GetValue(0));
+      ASSERT_EQ(3, dex_registers.GetValue(1));
+      break;
+    }
+
+    case kDexRegisterCompressedLocationList: {
+      DexRegisterCompressedMap dex_registers =
+          code_info.GetDexRegisterCompressedMapOf(stack_map,
+                                                  number_of_dex_registers);
+      ASSERT_EQ(2u, dex_registers.Size());
+      ASSERT_EQ(2u, ComputeDexRegisterCompressedMapSize(dex_registers, number_of_dex_registers));
+      DexRegisterLocation location0 = dex_registers.GetLocationKindAndValue(0);
+      DexRegisterLocation location1 = dex_registers.GetLocationKindAndValue(1);
+      ASSERT_EQ(LocationKind::kInRegister, location0.kind);
+      ASSERT_EQ(LocationKind::kInFpuRegister, location1.kind);
+      ASSERT_EQ(18, location0.value);
+      ASSERT_EQ(3, location1.value);
+      break;
+    }
+  }
 
   ASSERT_FALSE(stack_map.HasInlineInfo());
 }
