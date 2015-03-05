@@ -84,13 +84,21 @@ class DexRegisterMap {
  public:
   explicit DexRegisterMap(MemoryRegion region) : region_(region) {}
 
-  enum LocationKind {
+  // TODO: For performance reasons, try to preserve a 4-byte alignment
+  // by storing the (4-byte wide) values first, then the (1-byte wide)
+  // location kinds in the aggregated Dex register maps -- instead of
+  // the current interleaved layout (a succession of 1-byte + 4-byte
+  // pairs).
+  enum LocationKind : uint8_t {
     kNone,
     kInStack,
     kInRegister,
     kInFpuRegister,
     kConstant
   };
+  static_assert(
+      sizeof(art::DexRegisterMap::LocationKind) == 1u,
+      "art::DexRegisterMap::LocationKind has a size different from one byte.");
 
   static const char* PrettyDescriptor(LocationKind kind) {
     switch (kind) {
