@@ -926,6 +926,23 @@ class OatDumper {
        << ", number_of_dex_registers=" << number_of_dex_registers
        << ", number_of_stack_maps=" << number_of_stack_maps << ")\n";
 
+    if (dex_register_map_encoding == kDexRegisterLocationDictionary) {
+      // Display the Dex register dictionary.
+      size_t number_of_dictionary_entries =
+          code_info.GetNumberOfDexRegisterDictionaryEntries();
+      os << "  DexRegisterDictionary (number_of_dictionary_entries="
+         << number_of_dictionary_entries << ")\n";
+      DexRegisterDictionary dex_register_dictionary =
+          code_info.GetDexRegisterDictionary();
+      for (size_t i = 0; i < number_of_dictionary_entries; ++i) {
+        DumpRegisterMapping(os,
+                            i,
+                            dex_register_dictionary.GetLocationKind(i),
+                            dex_register_dictionary.GetValue(i),
+                            "entry ");
+      }
+    }
+
     // Display stack maps along with Dex register maps.
 
     auto dump_stack_map_header = [&](size_t stack_map_num) {
@@ -955,9 +972,33 @@ class OatDumper {
               DumpRegisterMapping(os, j, kind, value);
             }
           }
-         }
+        }
         break;
-       }
+      }
+
+      case kDexRegisterLocationDictionary: {
+        DexRegisterDictionary dex_register_dictionary =
+            code_info.GetDexRegisterDictionary();
+        for (size_t i = 0; i < number_of_stack_maps; ++i) {
+          StackMap stack_map = code_info.GetStackMapAt(i);
+          dump_stack_map_header(i);
+          if (stack_map.HasDexRegisterMap()) {
+            DexRegisterTable dex_register_table =
+                code_info.GetDexRegisterTableOf(stack_map, number_of_dex_registers);
+            for (size_t j = 0; j < number_of_dex_registers; ++j) {
+              DexRegisterTable::EntryIndex entry_index =
+                  dex_register_table.GetEntryIndex(j);
+              DexRegisterDictionary::LocationKind kind =
+                  dex_register_dictionary.GetLocationKind(entry_index);
+              int32_t value = dex_register_dictionary.GetValue(entry_index);
+              DumpRegisterMapping(
+                  os, j, kind, value, "v",
+                  "\t[entry " + std::to_string(static_cast<int>(entry_index)) + "]");
+            }
+          }
+        }
+        break;
+      }
 
       case kDexRegisterCompressedLocationList: {
         for (size_t i = 0; i < number_of_stack_maps; ++i) {
