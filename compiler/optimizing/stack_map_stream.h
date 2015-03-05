@@ -34,6 +34,8 @@ class StackMapStream : public ValueObject {
   explicit StackMapStream(ArenaAllocator* allocator)
       : stack_maps_(allocator, 10),
         dex_register_maps_(allocator, 10 * 4),
+        dex_register_dictionary_(allocator, 4),
+        dex_register_tables_(allocator, 10 * 4),
         inline_infos_(allocator, 2),
         stack_mask_max_(-1),
         number_of_stack_maps_with_inline_info_(0) {}
@@ -59,6 +61,10 @@ class StackMapStream : public ValueObject {
   struct DexRegisterEntry {
     DexRegisterMap::LocationKind kind;
     int32_t value;
+
+    bool operator==(const DexRegisterEntry& other_entry) {
+      return kind == other_entry.kind && value == other_entry.value;
+    }
   };
 
   struct InlineInfoEntry {
@@ -78,7 +84,15 @@ class StackMapStream : public ValueObject {
     entry.sp_mask = sp_mask;
     entry.num_dex_registers = num_dex_registers;
     entry.inlining_depth = inlining_depth;
-    entry.dex_register_maps_start_index = dex_register_maps_.Size();
+    switch (dex_register_map_encoding) {
+      case kDexRegisterLocationList:
+      case kDexRegisterCompressedLocationList:
+        entry.dex_register_maps_start_index = dex_register_maps_.Size();
+        break;
+      case kDexRegisterLocationDictionary:
+        entry.dex_register_maps_start_index = dex_register_tables_.Size();
+        break;
+    }
     entry.inline_infos_start_index = inline_infos_.Size();
     stack_maps_.Add(entry);
 
@@ -94,7 +108,21 @@ class StackMapStream : public ValueObject {
     DexRegisterEntry entry;
     entry.kind = kind;
     entry.value = value;
-    dex_register_maps_.Add(entry);
+    switch (dex_register_map_encoding) {
+      case kDexRegisterLocationList:
+      case kDexRegisterCompressedLocationList:
+        dex_register_maps_.Add(entry);
+        break;
+
+      case kDexRegisterLocationDictionary: {
+        // Look for Dex register `entry` in the dictionary, insert it
+        // if it doesn't exist yet, and get the index of `entry`.
+        size_t index = dex_register_dictionary_.AddUnique(entry);
+        DCHECK_LE(index, std::numeric_limits<DexRegisterMapIndex>::max());
+        dex_register_tables_.Add(index);
+        break;
+      }
+    }
   }
 
   void AddInlineInfoEntry(uint32_t method_index) {
@@ -114,11 +142,26 @@ class StackMapStream : public ValueObject {
       case kDexRegisterLocationList:
       case kDexRegisterCompressedLocationList:
         return common_size;
+
+      case kDexRegisterLocationDictionary:
+        return common_size + ComputeDexRegisterDictionarySize();
     }
   }
 
   size_t ComputeStackMapSize() const {
     return stack_maps_.Size() * StackMap::ComputeAlignedStackMapSize(stack_mask_max_);
+  }
+
+  size_t ComputeDexRegisterDictionarySize() const {
+    switch (dex_register_map_encoding) {
+      case kDexRegisterLocationList:
+      case kDexRegisterCompressedLocationList:
+        return 0u;
+
+      case kDexRegisterLocationDictionary:
+        return DexRegisterDictionary::kFixedSize
+            + dex_register_dictionary_.Size() * DexRegisterDictionary::SingleEntrySize();
+    }
   }
 
   // Compute the compressed location kind of a Dex register entry,
@@ -190,6 +233,11 @@ class StackMapStream : public ValueObject {
             // For each dex register entry.
             + dex_register_maps_.Size() * DexRegisterMap::SingleEntrySize();
 
+      case kDexRegisterLocationDictionary:
+        return stack_maps_.Size() * DexRegisterTable::kFixedSize
+            // For each dex register entry.
+            + dex_register_tables_.Size() * DexRegisterTable::SingleEntrySize();
+
       case kDexRegisterCompressedLocationList: {
         size_t size = stack_maps_.Size() * DexRegisterMap::kFixedSize;
         // The size of each register location depends on the type of
@@ -209,8 +257,21 @@ class StackMapStream : public ValueObject {
       + (number_of_stack_maps_with_inline_info_ * InlineInfo::kFixedSize);
   }
 
+  size_t ComputeDexRegisterDictionaryStart() const {
+    return CodeInfo::kFixedSize;
+  }
+
+  size_t ComputeStackMapsStart() const {
+    size_t dictionary_size = ComputeDexRegisterDictionarySize();
+    if (kIsDebugBuild
+        && dex_register_map_encoding != kDexRegisterLocationDictionary) {
+      DCHECK_EQ(dictionary_size, 0u);
+    }
+    return ComputeDexRegisterDictionaryStart() + dictionary_size;
+  }
+
   size_t ComputeDexRegisterMapStart() const {
-    return CodeInfo::kFixedSize + ComputeStackMapSize();
+    return ComputeStackMapsStart() + ComputeStackMapSize();
   }
 
   size_t ComputeInlineInfoStart() const {
@@ -218,6 +279,20 @@ class StackMapStream : public ValueObject {
   }
 
   void FillIn(MemoryRegion region) {
+    if (kIsDebugBuild) {
+    switch (dex_register_map_encoding) {
+      case kDexRegisterLocationList:
+      case kDexRegisterCompressedLocationList:
+        DCHECK(dex_register_dictionary_.IsEmpty());
+        DCHECK(dex_register_tables_.IsEmpty());
+        break;
+
+      case kDexRegisterLocationDictionary:
+        DCHECK(dex_register_maps_.IsEmpty());
+        break;
+      }
+    }
+
     CodeInfo code_info(region);
     code_info.SetOverallSize(region.size());
 
@@ -234,6 +309,19 @@ class StackMapStream : public ValueObject {
 
     code_info.SetNumberOfStackMaps(stack_maps_.Size());
     code_info.SetStackMaskSize(stack_mask_size);
+
+    if (dex_register_map_encoding == kDexRegisterLocationDictionary) {
+      // Set the Dex register dictionary.
+      code_info.SetNumberOfDexRegisterDictionaryEntries(dex_register_dictionary_.Size());
+      MemoryRegion dex_register_dictionary_region = region.Subregion(
+          ComputeDexRegisterDictionaryStart(),
+          ComputeDexRegisterDictionarySize());
+      DexRegisterDictionary dex_register_dictionary(dex_register_dictionary_region);
+      for (size_t i = 0, e = dex_register_dictionary_.Size(); i < e; ++i) {
+        DexRegisterEntry register_entry = dex_register_dictionary_.Get(i);
+        dex_register_dictionary.SetRegisterInfo(i, register_entry.kind, register_entry.value);
+      }
+    }
 
     uintptr_t next_dex_register_map_offset = 0;
     uintptr_t next_inline_info_offset = 0;
@@ -267,6 +355,27 @@ class StackMapStream : public ValueObject {
               DexRegisterEntry register_entry =
                   dex_register_maps_.Get(entry.dex_register_maps_start_index + j);
               dex_register_map.SetRegisterInfo(j, register_entry.kind, register_entry.value);
+            }
+            break;
+          }
+
+          case kDexRegisterLocationDictionary: {
+            // Set the Dex register table.
+            MemoryRegion register_region =
+                dex_register_maps_region.Subregion(
+                    next_dex_register_map_offset,
+                    // TODO: Encapsulate this computation in a method.
+                    DexRegisterTable::kFixedSize
+                    + entry.num_dex_registers * sizeof(DexRegisterTable::EntryIndex));
+            next_dex_register_map_offset += register_region.size();
+            DexRegisterTable dex_register_table(register_region);
+
+            stack_map.SetDexRegisterMapOffset(register_region.start() - memory_start);
+
+            for (size_t j = 0; j < entry.num_dex_registers; ++j) {
+              DexRegisterMapIndex entry_index =
+                  dex_register_tables_.Get(entry.dex_register_maps_start_index + j);
+              dex_register_table.SetEntryIndex(j, entry_index);
             }
             break;
           }
@@ -326,7 +435,23 @@ class StackMapStream : public ValueObject {
 
  private:
   GrowableArray<StackMapEntry> stack_maps_;
+
+  // Data structure for Dex register locations used when the encoding is
+  // list-based.
   GrowableArray<DexRegisterEntry> dex_register_maps_;
+
+  // Data structures for Dex register locations used when the encoding is
+  // dictionary-based.
+  //
+  // The type of Dex register dictionary indices, based on the indices
+  // used to reference entries in DexRegisterTable objects.
+  typedef DexRegisterTable::EntryIndex DexRegisterMapIndex;
+  // A dictionary of unique [location_kind, register_value] pairs (per method).
+  GrowableArray<DexRegisterEntry> dex_register_dictionary_;
+  // A set of concatenated maps of Dex register locations indices to
+  // `dex_register_dictionary_`.
+  GrowableArray<DexRegisterMapIndex> dex_register_tables_;
+
   GrowableArray<InlineInfoEntry> inline_infos_;
   int stack_mask_max_;
   size_t number_of_stack_maps_with_inline_info_;
