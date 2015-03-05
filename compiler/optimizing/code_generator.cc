@@ -586,7 +586,7 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
 
   if (instruction == nullptr) {
     // For stack overflow checks.
-    stack_map_stream_.AddStackMapEntry(dex_pc, pc_info.native_pc, 0, 0, 0, 0);
+    stack_map_stream_.AddStackMapEntry(dex_pc, pc_info.native_pc, 0, 0, 0, 0, 0);
     return;
   }
 
@@ -607,15 +607,23 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
   }
   // The register mask must be a subset of callee-save registers.
   DCHECK_EQ(register_mask & core_callee_save_mask_, register_mask);
+
+  ArenaAllocator* arena = instruction->GetBlock()->GetGraph()->GetArena();
+  BitVector* live_dex_regs_mask = new (arena) ArenaBitVector(arena, 0, true);
+  for (size_t i = 0; i < environment_size; ++i) {
+    if (environment->GetInstructionAt(i) != nullptr) {
+      live_dex_regs_mask->SetBit(i);
+    }
+  }
+
   stack_map_stream_.AddStackMapEntry(
       dex_pc, pc_info.native_pc, register_mask,
-      locations->GetStackMask(), environment_size, inlining_depth);
+      locations->GetStackMask(), environment_size, inlining_depth, live_dex_regs_mask);
 
   // Walk over the environment, and record the location of dex registers.
   for (size_t i = 0; i < environment_size; ++i) {
     HInstruction* current = environment->GetInstructionAt(i);
     if (current == nullptr) {
-      stack_map_stream_.AddDexRegisterEntry(DexRegisterMap::kNone, 0);
       continue;
     }
 
