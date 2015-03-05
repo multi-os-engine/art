@@ -18,13 +18,11 @@
 
 #include "codegen_mips.h"
 
-#include "arch/mips/instruction_set_features_mips.h"
 #include "base/logging.h"
 #include "dex/mir_graph.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "dex/reg_storage_eq.h"
 #include "entrypoints/quick/quick_entrypoints.h"
-#include "driver/compiler_driver.h"
 #include "mips_lir.h"
 #include "mirror/array-inl.h"
 
@@ -196,17 +194,33 @@ void MipsMir2Lir::OpRegCopyWide(RegStorage r_dest, RegStorage r_src) {
     bool src_fp = r_src.IsFloat();
     if (dest_fp) {
       if (src_fp) {
+        // Here if both src and dest are 64bit fp registers
         OpRegCopy(r_dest, r_src);
       } else {
-        /* note the operands are swapped for the mtc1 instr */
-        NewLIR2(kMipsMtc1, r_src.GetLowReg(), r_dest.GetLowReg());
-        NewLIR2(kMipsMtc1, r_src.GetHighReg(), r_dest.GetHighReg());
+        // note the operands are swapped for the mtc1 and mthc1 instr.
+        // Here if dest is fp reg and src is core reg.
+        if (fpuIs32Bit_) {
+            NewLIR2(kMipsMtc1, r_src.GetLowReg(), r_dest.GetLowReg());
+            NewLIR2(kMipsMtc1, r_src.GetHighReg(), r_dest.GetHighReg());
+        } else {
+            r_dest = Fp64ToSolo32(r_dest);
+            NewLIR2(kMipsMtc1, r_src.GetLowReg(), r_dest.GetReg());
+            NewLIR2(kMipsMthc1, r_src.GetHighReg(), r_dest.GetReg());
+        }
       }
     } else {
       if (src_fp) {
-        NewLIR2(kMipsMfc1, r_dest.GetLowReg(), r_src.GetLowReg());
-        NewLIR2(kMipsMfc1, r_dest.GetHighReg(), r_src.GetHighReg());
+        // Here if dest is core reg and src is fp reg.
+        if (fpuIs32Bit_) {
+            NewLIR2(kMipsMfc1, r_dest.GetLowReg(), r_src.GetLowReg());
+            NewLIR2(kMipsMfc1, r_dest.GetHighReg(), r_src.GetHighReg());
+        } else {
+            r_src = Fp64ToSolo32(r_src);
+            NewLIR2(kMipsMfc1, r_dest.GetLowReg(), r_src.GetReg());
+            NewLIR2(kMipsMfhc1, r_dest.GetHighReg(), r_src.GetReg());
+        }
       } else {
+        // Here if both src and dest are 64bit core registers
         // Handle overlap
         if (r_src.GetHighReg() == r_dest.GetLowReg()) {
           OpRegCopy(r_dest.GetHigh(), r_src.GetHigh());

@@ -236,22 +236,22 @@ enum MipsNativeRegisterPool {  // private marker to avoid generate-operator-out.
 #endif
   // Double precision registers where the FPU is in 64-bit mode.
   rD0_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  0,
-  rD1_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  1,
-  rD2_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  2,
-  rD3_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  3,
-  rD4_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  4,
-  rD5_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  5,
-  rD6_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  6,
-  rD7_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  7,
+  rD1_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  2,
+  rD2_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  4,
+  rD3_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  6,
+  rD4_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  8,
+  rD5_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 10,
+  rD6_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 12,
+  rD7_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 14,
 #if 0  // TODO: expand resource mask to enable use of all MIPS fp registers.
-  rD8_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  8,
-  rD9_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint |  9,
-  rD10_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 10,
-  rD11_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 11,
-  rD12_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 12,
-  rD13_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 13,
-  rD14_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 14,
-  rD15_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 15,
+  rD8_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 16,
+  rD9_fr1  = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 18,
+  rD10_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 20,
+  rD11_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 22,
+  rD12_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 24,
+  rD13_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 26,
+  rD14_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 28,
+  rD15_fr1 = RegStorage::k64BitSolo | RegStorage::kFloatingPoint | 30,
 #endif
 };
 
@@ -368,10 +368,12 @@ const RegLocation mips_loc_c_return_wide
 const RegLocation mips_loc_c_return_float
     {kLocPhysReg, 0, 0, 0, 1, 0, 0, 0, 1,
      RegStorage(RegStorage::k32BitSolo, rF0), INVALID_SREG, INVALID_SREG};
-// FIXME: move MIPS to k64Bitsolo for doubles
-const RegLocation mips_loc_c_return_double
+const RegLocation mips_loc_c_return_double_fr0
     {kLocPhysReg, 1, 0, 0, 1, 0, 0, 0, 1,
      RegStorage(RegStorage::k64BitPair, rF0, rF1), INVALID_SREG, INVALID_SREG};
+const RegLocation mips_loc_c_return_double_fr1
+    {kLocPhysReg, 1, 0, 0, 1, 0, 0, 0, 1,
+     RegStorage(RegStorage::k64BitSolo, rF0), INVALID_SREG, INVALID_SREG};
 
 enum MipsShiftEncodings {
   kMipsLsl = 0x0,
