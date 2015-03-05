@@ -1434,6 +1434,8 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
              || safepoints_.Get(safepoint_index - 1)->GetLifetimePosition() >= position);
 
       if (current->IsDeadAt(position)) {
+        // Next sibling might cover this safepoint.
+        ++safepoint_index;
         break;
       } else if (!current->Covers(position)) {
         continue;
