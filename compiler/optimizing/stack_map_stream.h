@@ -54,6 +54,7 @@ class StackMapStream : public ValueObject {
     uint8_t inlining_depth;
     size_t dex_register_maps_start_index;
     size_t inline_infos_start_index;
+    BitVector* live_dex_registers_mask;
   };
 
   struct DexRegisterEntry {
@@ -70,7 +71,8 @@ class StackMapStream : public ValueObject {
                         uint32_t register_mask,
                         BitVector* sp_mask,
                         uint32_t num_dex_registers,
-                        uint8_t inlining_depth) {
+                        uint8_t inlining_depth,
+                        BitVector* live_dex_registers_mask) {
     StackMapEntry entry;
     entry.dex_pc = dex_pc;
     entry.native_pc_offset = native_pc_offset;
@@ -80,6 +82,7 @@ class StackMapStream : public ValueObject {
     entry.inlining_depth = inlining_depth;
     entry.dex_register_maps_start_index = dex_register_maps_.Size();
     entry.inline_infos_start_index = inline_infos_.Size();
+    entry.live_dex_registers_mask = live_dex_registers_mask;
     stack_maps_.Add(entry);
 
     if (sp_mask != nullptr) {
@@ -115,10 +118,12 @@ class StackMapStream : public ValueObject {
   }
 
   size_t ComputeDexRegisterMapSize() const {
-    // We currently encode all dex register information per stack map.
-    return stack_maps_.Size() * DexRegisterMap::kFixedSize
-      // For each dex register entry.
-      + (dex_register_maps_.Size() * DexRegisterMap::SingleEntrySize());
+    size_t total = 0;
+    for (size_t i = 0, e = stack_maps_.Size(); i < e; ++i) {
+      StackMapEntry entry = stack_maps_.Get(i);
+      total += DexRegisterMap::ComputeNeededSize(entry.num_dex_registers, *entry.live_dex_registers_mask);
+    }
+    return total;
   }
 
   size_t ComputeInlineInfoSize() const {
@@ -170,16 +175,24 @@ class StackMapStream : public ValueObject {
         // Set the register map.
         MemoryRegion register_region = dex_register_maps_region.Subregion(
             next_dex_register_map_offset,
-            DexRegisterMap::kFixedSize
-            + entry.num_dex_registers * DexRegisterMap::SingleEntrySize());
+            DexRegisterMap::ComputeNeededSize(entry.num_dex_registers, *entry.live_dex_registers_mask));
         next_dex_register_map_offset += register_region.size();
-        DexRegisterMap dex_register_map(register_region);
+        DexRegisterMap dex_register_map =
+            DexRegisterMap::Create(register_region,
+                                   entry.num_dex_registers,
+                                   *entry.live_dex_registers_mask);
         stack_map.SetDexRegisterMapOffset(register_region.start() - memory_start);
 
-        for (size_t j = 0; j < entry.num_dex_registers; ++j) {
+        for (size_t register_idx = 0, map_idx = 0;
+             register_idx < entry.num_dex_registers;
+             ++register_idx) {
+          if (!entry.live_dex_registers_mask->IsBitSet(register_idx)) {
+            continue;
+          }
           DexRegisterEntry register_entry =
-              dex_register_maps_.Get(j + entry.dex_register_maps_start_index);
-          dex_register_map.SetRegisterInfo(j, register_entry.kind, register_entry.value);
+              dex_register_maps_.Get(map_idx + entry.dex_register_maps_start_index);
+          dex_register_map.SetRegisterInfo(map_idx, register_entry.kind, register_entry.value);
+          map_idx++;
         }
       } else {
         stack_map.SetDexRegisterMapOffset(StackMap::kNoDexRegisterMap);
