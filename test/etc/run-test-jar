@@ -299,6 +299,11 @@ if [ "$HOST" = "n" ]; then
     echo "Unable to determine architecture"
     exit 1
   fi
+  VARIANT=$(adb shell getprop | grep "dalvik.vm.isa.$ISA.variant"|sed 's/.*: //;s/[[]//;s/[]].//')
+  if [ x"$VARIANT" = "x" ]; then
+    echo "Unable to determine architecture variant"
+    exit 1
+  fi
 fi
 
 dex2oat_cmdline="true"
@@ -310,6 +315,7 @@ if [ "$PREBUILD" = "y" ]; then
                       --boot-image=${BOOT_IMAGE} \
                       --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
                       --oat-file=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g") \
+                      --instruction-set-variant=$VARIANT \
                       --instruction-set=$ISA"
 fi
 
