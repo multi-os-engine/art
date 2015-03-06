@@ -2177,7 +2177,6 @@ void CompilerDriver::CompileMethod(Thread* self, const DexFile::CodeItem* code_i
   CompiledMethod* compiled_method = nullptr;
   uint64_t start_ns = kTimeCompileMethod ? NanoTime() : 0;
   MethodReference method_ref(&dex_file, method_idx);
-
   if ((access_flags & kAccNative) != 0) {
     // Are we interpreting only and have support for generic JNI down calls?
     if (!compiler_options_->IsCompilationEnabled() &&

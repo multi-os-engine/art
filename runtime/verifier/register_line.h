@@ -190,7 +190,7 @@ class RegisterLine {
    * versions. We just need to make sure vA is >= 1 and then return vC.
    */
   const RegType& GetInvocationThis(MethodVerifier* verifier, const Instruction* inst,
-                                   bool is_range)
+                                   bool is_range, bool allow_failure = false)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   /*
