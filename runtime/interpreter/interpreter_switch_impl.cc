@@ -35,6 +35,9 @@ namespace interpreter {
       /* Structured locking is to be enforced for abnormal termination, too. */                 \
       shadow_frame.GetLockCountData().                                                          \
           CheckAllMonitorsReleasedOrThrow<do_assignability_check>(self);                        \
+      if (interpret_one_instruction) {                                                                        \
+        shadow_frame.SetDexPC(DexFile::kDexNoIndex);                                            \
+      }                                                                                         \
       return JValue(); /* Handled in caller. */                                                 \
     } else {                                                                                    \
       int32_t displacement = static_cast<int32_t>(found_dex_pc) - static_cast<int32_t>(dex_pc); \
@@ -78,13 +81,12 @@ static bool IsExperimentalInstructionEnabled(const Instruction *inst) {
 
 template<bool do_access_check, bool transaction_active>
 JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
-                         ShadowFrame& shadow_frame, JValue result_register) {
+                         ShadowFrame& shadow_frame, JValue* result_register, bool interpret_one_instruction) {
   constexpr bool do_assignability_check = do_access_check;
   if (UNLIKELY(!shadow_frame.HasReferenceArray())) {
     LOG(FATAL) << "Invalid shadow frame for interpreter use";
     return JValue();
   }
-  self->VerifyStack();
 
   uint32_t dex_pc = shadow_frame.GetDexPC();
   const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
@@ -106,9 +108,13 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
   std::unique_ptr<lambda::ClosureBuilder> lambda_closure_builder;
   size_t lambda_captured_variable_index = 0;
   while (true) {
-    dex_pc = inst->GetDexPc(insns);
-    shadow_frame.SetDexPC(dex_pc);
-    TraceExecution(shadow_frame, inst, dex_pc);
+    if (!interpret_one_instruction) {
+      // Redundant for single-step mode.
+      dex_pc = inst->GetDexPc(insns);
+      shadow_frame.SetDexPC(dex_pc);
+      // Not valid in single-step mode.
+      TraceExecution(shadow_frame, inst, dex_pc);
+    }
     inst_data = inst->Fetch16(0);
     switch (inst->Opcode(inst_data)) {
       case Instruction::NOP:
@@ -171,17 +177,17 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         break;
       case Instruction::MOVE_RESULT:
         PREAMBLE();
-        shadow_frame.SetVReg(inst->VRegA_11x(inst_data), result_register.GetI());
+        shadow_frame.SetVReg(inst->VRegA_11x(inst_data), result_register->GetI());
         inst = inst->Next_1xx();
         break;
       case Instruction::MOVE_RESULT_WIDE:
         PREAMBLE();
-        shadow_frame.SetVRegLong(inst->VRegA_11x(inst_data), result_register.GetJ());
+        shadow_frame.SetVRegLong(inst->VRegA_11x(inst_data), result_register->GetJ());
         inst = inst->Next_1xx();
         break;
       case Instruction::MOVE_RESULT_OBJECT:
         PREAMBLE();
-        shadow_frame.SetVRegReference(inst->VRegA_11x(inst_data), result_register.GetL());
+        shadow_frame.SetVRegReference(inst->VRegA_11x(inst_data), result_register->GetL());
         inst = inst->Next_1xx();
         break;
       case Instruction::MOVE_EXCEPTION: {
@@ -203,6 +209,9 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
                                            shadow_frame.GetMethod(), inst->GetDexPc(insns),
                                            result);
         }
+        if (interpret_one_instruction) {
+          shadow_frame.SetDexPC(DexFile::kDexNoIndex);
+        }
         return result;
       }
       case Instruction::RETURN_VOID: {
@@ -215,6 +224,9 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                            shadow_frame.GetMethod(), inst->GetDexPc(insns),
                                            result);
+        }
+        if (interpret_one_instruction) {
+          shadow_frame.SetDexPC(DexFile::kDexNoIndex);
         }
         return result;
       }
@@ -230,6 +242,9 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
                                            shadow_frame.GetMethod(), inst->GetDexPc(insns),
                                            result);
         }
+        if (interpret_one_instruction) {
+          shadow_frame.SetDexPC(DexFile::kDexNoIndex);
+        }
         return result;
       }
       case Instruction::RETURN_WIDE: {
@@ -242,6 +257,9 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                            shadow_frame.GetMethod(), inst->GetDexPc(insns),
                                            result);
+        }
+        if (interpret_one_instruction) {
+          shadow_frame.SetDexPC(DexFile::kDexNoIndex);
         }
         return result;
       }
@@ -277,6 +295,9 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                            shadow_frame.GetMethod(), inst->GetDexPc(insns),
                                            result);
+        }
+        if (interpret_one_instruction) {
+          shadow_frame.SetDexPC(DexFile::kDexNoIndex);
         }
         return result;
       }
@@ -497,7 +518,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         PREAMBLE();
         bool success =
             DoFilledNewArray<false, do_access_check, transaction_active>(inst, shadow_frame, self,
-                                                                         &result_register);
+                                                                         result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
@@ -505,7 +526,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         PREAMBLE();
         bool success =
             DoFilledNewArray<true, do_access_check, transaction_active>(inst, shadow_frame,
-                                                                        self, &result_register);
+                                                                        self, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
@@ -1412,84 +1433,84 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
       case Instruction::INVOKE_VIRTUAL: {
         PREAMBLE();
         bool success = DoInvoke<kVirtual, false, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_VIRTUAL_RANGE: {
         PREAMBLE();
         bool success = DoInvoke<kVirtual, true, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_SUPER: {
         PREAMBLE();
         bool success = DoInvoke<kSuper, false, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_SUPER_RANGE: {
         PREAMBLE();
         bool success = DoInvoke<kSuper, true, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_DIRECT: {
         PREAMBLE();
         bool success = DoInvoke<kDirect, false, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_DIRECT_RANGE: {
         PREAMBLE();
         bool success = DoInvoke<kDirect, true, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_INTERFACE: {
         PREAMBLE();
         bool success = DoInvoke<kInterface, false, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_INTERFACE_RANGE: {
         PREAMBLE();
         bool success = DoInvoke<kInterface, true, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_STATIC: {
         PREAMBLE();
         bool success = DoInvoke<kStatic, false, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_STATIC_RANGE: {
         PREAMBLE();
         bool success = DoInvoke<kStatic, true, do_access_check>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_VIRTUAL_QUICK: {
         PREAMBLE();
         bool success = DoInvokeVirtualQuick<false>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
       case Instruction::INVOKE_VIRTUAL_RANGE_QUICK: {
         PREAMBLE();
         bool success = DoInvokeVirtualQuick<true>(
-            self, shadow_frame, inst, inst_data, &result_register);
+            self, shadow_frame, inst, inst_data, result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_3xx);
         break;
       }
@@ -2276,7 +2297,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
 
         PREAMBLE();
         bool success = DoInvokeLambda<do_access_check>(self, shadow_frame, inst, inst_data,
-                                                       &result_register);
+                                                       result_register);
         POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
         break;
       }
@@ -2370,22 +2391,31 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
       case Instruction::UNUSED_7A:
         UnexpectedOpcode(inst, shadow_frame);
     }
+    if (interpret_one_instruction) {
+      // Record where we stopped.
+      shadow_frame.SetDexPC(inst->GetDexPc(insns));
+      return JValue();
+    }
   }
 }  // NOLINT(readability/fn_size)
 
 // Explicit definitions of ExecuteSwitchImpl.
 template SHARED_REQUIRES(Locks::mutator_lock_) HOT_ATTR
 JValue ExecuteSwitchImpl<true, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                      ShadowFrame& shadow_frame, JValue result_register);
+                                      ShadowFrame& shadow_frame, JValue* result_register,
+                                      bool interpret_one_instruction);
 template SHARED_REQUIRES(Locks::mutator_lock_) HOT_ATTR
 JValue ExecuteSwitchImpl<false, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                       ShadowFrame& shadow_frame, JValue result_register);
+                                       ShadowFrame& shadow_frame, JValue* result_register,
+                                       bool interpret_one_instruction);
 template SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteSwitchImpl<true, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                     ShadowFrame& shadow_frame, JValue result_register);
+                                     ShadowFrame& shadow_frame, JValue* result_register,
+                                     bool interpret_one_instruction);
 template SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteSwitchImpl<false, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                      ShadowFrame& shadow_frame, JValue result_register);
+                                      ShadowFrame& shadow_frame, JValue* result_register,
+                                      bool interpret_one_instruction);
 
 }  // namespace interpreter
 }  // namespace art
