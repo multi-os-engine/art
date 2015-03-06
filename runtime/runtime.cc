@@ -135,6 +135,7 @@
 #include "utils.h"
 #include "verifier/method_verifier.h"
 #include "well_known_classes.h"
+#include "interpreter/mterp/mterp.h"
 
 namespace art {
 
@@ -212,6 +213,7 @@ Runtime::Runtime()
       safe_mode_(false) {
   CheckAsmSupportOffsetsAndSizes();
   std::fill(callee_save_methods_, callee_save_methods_ + arraysize(callee_save_methods_), 0u);
+  interpreter::MterpCheckAsmConstants();
 }
 
 Runtime::~Runtime() {

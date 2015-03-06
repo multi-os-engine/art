@@ -143,7 +143,7 @@ namespace interpreter {
  */
 template<bool do_access_check, bool transaction_active>
 JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowFrame& shadow_frame,
-                       JValue result_register) {
+                       JValue* result_register) {
   // Define handler tables:
   // - The main handler table contains execution handlers for each instruction.
   // - The alternative handler table contains prelude handlers which check for thread suspend and
@@ -255,17 +255,17 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(MOVE_RESULT)
-    shadow_frame.SetVReg(inst->VRegA_11x(inst_data), result_register.GetI());
+    shadow_frame.SetVReg(inst->VRegA_11x(inst_data), result_register->GetI());
     ADVANCE(1);
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(MOVE_RESULT_WIDE)
-    shadow_frame.SetVRegLong(inst->VRegA_11x(inst_data), result_register.GetJ());
+    shadow_frame.SetVRegLong(inst->VRegA_11x(inst_data), result_register->GetJ());
     ADVANCE(1);
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(MOVE_RESULT_OBJECT)
-    shadow_frame.SetVRegReference(inst->VRegA_11x(inst_data), result_register.GetL());
+    shadow_frame.SetVRegReference(inst->VRegA_11x(inst_data), result_register->GetL());
     ADVANCE(1);
   HANDLE_INSTRUCTION_END();
 
@@ -588,7 +588,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_START(FILLED_NEW_ARRAY) {
     bool success =
         DoFilledNewArray<false, do_access_check, transaction_active>(inst, shadow_frame,
-                                                                     self, &result_register);
+                                                                     self, result_register);
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
   HANDLE_INSTRUCTION_END();
@@ -596,7 +596,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_START(FILLED_NEW_ARRAY_RANGE) {
     bool success =
         DoFilledNewArray<true, do_access_check, transaction_active>(inst, shadow_frame,
-                                                                    self, &result_register);
+                                                                    self, result_register);
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
   HANDLE_INSTRUCTION_END();
@@ -1546,7 +1546,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_VIRTUAL) {
     bool success = DoInvoke<kVirtual, false, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1554,7 +1554,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_VIRTUAL_RANGE) {
     bool success = DoInvoke<kVirtual, true, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1562,7 +1562,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_SUPER) {
     bool success = DoInvoke<kSuper, false, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1570,7 +1570,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_SUPER_RANGE) {
     bool success = DoInvoke<kSuper, true, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1578,7 +1578,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_DIRECT) {
     bool success = DoInvoke<kDirect, false, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1586,7 +1586,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_DIRECT_RANGE) {
     bool success = DoInvoke<kDirect, true, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1594,7 +1594,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_INTERFACE) {
     bool success = DoInvoke<kInterface, false, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1602,7 +1602,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_INTERFACE_RANGE) {
     bool success = DoInvoke<kInterface, true, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1610,7 +1610,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_STATIC) {
     bool success = DoInvoke<kStatic, false, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1618,7 +1618,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_STATIC_RANGE) {
     bool success = DoInvoke<kStatic, true, do_access_check>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1626,7 +1626,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_VIRTUAL_QUICK) {
     bool success = DoInvokeVirtualQuick<false>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1634,7 +1634,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_INSTRUCTION_START(INVOKE_VIRTUAL_RANGE_QUICK) {
     bool success = DoInvokeVirtualQuick<true>(
-        self, shadow_frame, inst, inst_data, &result_register);
+        self, shadow_frame, inst, inst_data, result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 3);
   }
@@ -1642,7 +1642,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 
   HANDLE_EXPERIMENTAL_INSTRUCTION_START(INVOKE_LAMBDA) {
     bool success = DoInvokeLambda<do_access_check>(self, shadow_frame, inst, inst_data,
-                                                   &result_register);
+                                                   result_register);
     UPDATE_HANDLER_TABLE();
     POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 2);
   }
@@ -2590,16 +2590,16 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 // Explicit definitions of ExecuteGotoImpl.
 template SHARED_REQUIRES(Locks::mutator_lock_) HOT_ATTR
 JValue ExecuteGotoImpl<true, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
+                                    ShadowFrame& shadow_frame, JValue* result_register);
 template SHARED_REQUIRES(Locks::mutator_lock_) HOT_ATTR
 JValue ExecuteGotoImpl<false, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                     ShadowFrame& shadow_frame, JValue result_register);
+                                     ShadowFrame& shadow_frame, JValue* result_register);
 template SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteGotoImpl<true, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                   ShadowFrame& shadow_frame, JValue result_register);
+                                   ShadowFrame& shadow_frame, JValue* result_register);
 template SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteGotoImpl<false, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
+                                    ShadowFrame& shadow_frame, JValue* result_register);
 
 }  // namespace interpreter
 }  // namespace art
