@@ -223,19 +223,30 @@ static void InterpreterJni(Thread* self, ArtMethod* method, const StringPiece& s
 }
 
 enum InterpreterImplKind {
-  kSwitchImpl,            // Switch-based interpreter implementation.
-  kComputedGotoImplKind   // Computed-goto-based interpreter implementation.
+  kSwitchImplKind,        // Switch-based interpreter implementation.
+  kComputedGotoImplKind,  // Computed-goto-based interpreter implementation.
+  kMterpImplKind          // Assembly interpreter
 };
 static std::ostream& operator<<(std::ostream& os, const InterpreterImplKind& rhs) {
-  os << ((rhs == kSwitchImpl) ? "Switch-based interpreter" : "Computed-goto-based interpreter");
+  os << ((rhs == kSwitchImplKind) ? "Switch-based interpreter" :
+         (rhs == kComputedGotoImplKind) ? "Computed-goto-based interpreter" : "Asm interpreter");
   return os;
 }
 
 #if !defined(__clang__)
+#if defined(__arm__)
+// TODO: remove when all targets implemented.
+static constexpr InterpreterImplKind kInterpreterImplKind = kMterpImplKind;
+#else
 static constexpr InterpreterImplKind kInterpreterImplKind = kComputedGotoImplKind;
+#endif
 #else
 // Clang 3.4 fails to build the goto interpreter implementation.
-static constexpr InterpreterImplKind kInterpreterImplKind = kSwitchImpl;
+#if defined(__arm__)
+static constexpr InterpreterImplKind kInterpreterImplKind = kMterpImplKind;
+#else
+static constexpr InterpreterImplKind kInterpreterImplKind = kSwitchImplKind;
+#endif
 template<bool do_access_check, bool transaction_active>
 JValue ExecuteGotoImpl(Thread*, const DexFile::CodeItem*, ShadowFrame&, JValue) {
   LOG(FATAL) << "UNREACHABLE";
@@ -244,36 +255,70 @@ JValue ExecuteGotoImpl(Thread*, const DexFile::CodeItem*, ShadowFrame&, JValue) 
 // Explicit definitions of ExecuteGotoImpl.
 template<> SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteGotoImpl<true, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
+                                    ShadowFrame& shadow_frame, JValue* result_register);
 template<> SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteGotoImpl<false, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                     ShadowFrame& shadow_frame, JValue result_register);
+                                     ShadowFrame& shadow_frame, JValue* result_register);
 template<> SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteGotoImpl<true, true>(Thread* self,  const DexFile::CodeItem* code_item,
-                                   ShadowFrame& shadow_frame, JValue result_register);
+                                   ShadowFrame& shadow_frame, JValue* result_register);
 template<> SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteGotoImpl<false, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                    ShadowFrame& shadow_frame, JValue result_register);
+                                    ShadowFrame& shadow_frame, JValue* result_register);
 #endif
 
 static JValue Execute(Thread* self, const DexFile::CodeItem* code_item, ShadowFrame& shadow_frame,
-                      JValue result_register)
+                      JValue* result_register)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
 static inline JValue Execute(Thread* self, const DexFile::CodeItem* code_item,
-                             ShadowFrame& shadow_frame, JValue result_register) {
-  DCHECK(shadow_frame.GetMethod()->IsInvokable());
+                             ShadowFrame& shadow_frame, JValue* result_register) {
+  DCHECK(!shadow_frame.GetMethod()->IsAbstract());
   DCHECK(!shadow_frame.GetMethod()->IsNative());
   shadow_frame.GetMethod()->GetDeclaringClass()->AssertInitializedOrInitializingInThread(self);
 
   bool transaction_active = Runtime::Current()->IsActiveTransaction();
   if (LIKELY(shadow_frame.GetMethod()->IsPreverified())) {
     // Enter the "without access check" interpreter.
-    if (kInterpreterImplKind == kSwitchImpl) {
+    if (kInterpreterImplKind == kMterpImplKind) {
       if (transaction_active) {
-        return ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register);
+        // No Mterp variant - just use the switch interpreter.
+        return ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register,
+                                              false);
       } else {
-        return ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register);
+        const instrumentation::Instrumentation* const instrumentation =
+            Runtime::Current()->GetInstrumentation();
+        while (true) {
+          if (instrumentation->IsActive()) {
+            // TODO: allow JIT profiling instrumentation.  Now, just punt on all instrumentation.
+#if !defined(__clang__)
+            return ExecuteGotoImpl<false, false>(self, code_item, shadow_frame, result_register);
+#else
+            return ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
+                                                   false);
+#endif
+          }
+          bool returned = ExecuteMterpImpl(self, code_item, &shadow_frame, result_register);
+          if (returned) {
+            return *result_register;
+          } else {
+            // Mterp didn't like that instruction.  Single-step it with the reference interpreter.
+            JValue res = ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame,
+                                                               result_register, true);
+            if (shadow_frame.GetDexPC() == DexFile::kDexNoIndex) {
+              // Single-stepped a return or an exception not handled locally.  Return to caller.
+              return res;
+            }
+          }
+        }
+      }
+    } else if (kInterpreterImplKind == kSwitchImplKind) {
+      if (transaction_active) {
+        return ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register,
+                                              false);
+      } else {
+        return ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
+                                               false);
       }
     } else {
       DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
@@ -285,11 +330,22 @@ static inline JValue Execute(Thread* self, const DexFile::CodeItem* code_item,
     }
   } else {
     // Enter the "with access check" interpreter.
-    if (kInterpreterImplKind == kSwitchImpl) {
+    if (kInterpreterImplKind == kMterpImplKind) {
+      // No access check variants for Mterp.  Just use the switch version.
       if (transaction_active) {
-        return ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register);
+        return ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register,
+                                             false);
       } else {
-        return ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register);
+        return ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register,
+                                              false);
+      }
+    } else if (kInterpreterImplKind == kSwitchImplKind) {
+      if (transaction_active) {
+        return ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register,
+                                             false);
+      } else {
+        return ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register,
+                                              false);
       }
     } else {
       DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
@@ -378,7 +434,8 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
     }
   }
   if (LIKELY(!method->IsNative())) {
-    JValue r = Execute(self, code_item, *shadow_frame, JValue());
+    JValue value;
+    JValue r = Execute(self, code_item, *shadow_frame, &value);
     if (result != nullptr) {
       *result = r;
     }
@@ -435,7 +492,7 @@ void EnterInterpreterFromDeoptimize(Thread* self,
     }
     if (new_dex_pc != DexFile::kDexNoIndex) {
       shadow_frame->SetDexPC(new_dex_pc);
-      value = Execute(self, code_item, *shadow_frame, value);
+      value = Execute(self, code_item, *shadow_frame, &value);
     }
     ShadowFrame* old_frame = shadow_frame;
     shadow_frame = shadow_frame->GetLink();
@@ -456,7 +513,8 @@ JValue EnterInterpreterFromEntryPoint(Thread* self, const DexFile::CodeItem* cod
     return JValue();
   }
 
-  return Execute(self, code_item, *shadow_frame, JValue());
+  JValue value;
+  return Execute(self, code_item, *shadow_frame, &value);
 }
 
 void ArtInterpreterToInterpreterBridge(Thread* self, const DexFile::CodeItem* code_item,
@@ -487,7 +545,8 @@ void ArtInterpreterToInterpreterBridge(Thread* self, const DexFile::CodeItem* co
   }
 
   if (LIKELY(!shadow_frame->GetMethod()->IsNative())) {
-    result->SetJ(Execute(self, code_item, *shadow_frame, JValue()).GetJ());
+    JValue value;
+    result->SetJ(Execute(self, code_item, *shadow_frame, &value).GetJ());
   } else {
     // We don't expect to be asked to interpret native code (which is entered via a JNI compiler
     // generated stub) except during testing and image writing.
