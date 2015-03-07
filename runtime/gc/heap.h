@@ -631,9 +631,7 @@ class Heap {
     return zygote_space_ != nullptr;
   }
 
-  collector::ConcurrentCopying* ConcurrentCopyingCollector() {
-    return concurrent_copying_collector_;
-  }
+  collector::ConcurrentCopying* ConcurrentCopyingCollector();
 
   CollectorType CurrentCollectorType() {
     return collector_type_;
@@ -796,8 +794,10 @@ class Heap {
   // bytes allocated and the target utilization ratio.
   void UpdateMaxNativeFootprint();
 
-  // Find a collector based on GC type.
-  collector::GarbageCollector* FindCollectorByGcType(collector::GcType gc_type);
+  // Find or create a collector based on type.
+  collector::GarbageCollector* FindOrCreateCollector(
+      Thread* self, CollectorType type, collector::GcType gc_type = collector::kGcTypeFull)
+      LOCKS_EXCLUDED(Locks::garbage_collectors_lock_);
 
   // Create a new alloc space and compact default alloc space to it.
   HomogeneousSpaceCompactResult PerformHomogeneousSpaceCompact();
@@ -1099,10 +1099,8 @@ class Heap {
   // Compacting GC disable count, prevents compacting GC from running iff > 0.
   size_t disable_moving_gc_count_ GUARDED_BY(gc_complete_lock_);
 
-  std::vector<collector::GarbageCollector*> garbage_collectors_;
-  collector::SemiSpace* semi_space_collector_;
-  collector::MarkCompact* mark_compact_collector_;
-  collector::ConcurrentCopying* concurrent_copying_collector_;
+  std::vector<collector::GarbageCollector*> garbage_collectors_
+      GUARDED_BY(Locks::garbage_collectors_lock_);
 
   const bool running_on_valgrind_;
   const bool use_tlab_;

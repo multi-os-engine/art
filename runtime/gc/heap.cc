@@ -435,35 +435,6 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
     concurrent_start_bytes_ = std::numeric_limits<size_t>::max();
   }
   CHECK_NE(max_allowed_footprint_, 0U);
-  // Create our garbage collectors.
-  for (size_t i = 0; i < 2; ++i) {
-    const bool concurrent = i != 0;
-    if ((MayUseCollector(kCollectorTypeCMS) && concurrent) ||
-        (MayUseCollector(kCollectorTypeMS) && !concurrent)) {
-      garbage_collectors_.push_back(new collector::MarkSweep(this, concurrent));
-      garbage_collectors_.push_back(new collector::PartialMarkSweep(this, concurrent));
-      garbage_collectors_.push_back(new collector::StickyMarkSweep(this, concurrent));
-    }
-  }
-  if (kMovingCollector) {
-    if (MayUseCollector(kCollectorTypeSS) || MayUseCollector(kCollectorTypeGSS) ||
-        MayUseCollector(kCollectorTypeHomogeneousSpaceCompact) ||
-        use_homogeneous_space_compaction_for_oom_) {
-      // TODO: Clean this up.
-      const bool generational = foreground_collector_type_ == kCollectorTypeGSS;
-      semi_space_collector_ = new collector::SemiSpace(this, generational,
-                                                       generational ? "generational" : "");
-      garbage_collectors_.push_back(semi_space_collector_);
-    }
-    if (MayUseCollector(kCollectorTypeCC)) {
-      concurrent_copying_collector_ = new collector::ConcurrentCopying(this);
-      garbage_collectors_.push_back(concurrent_copying_collector_);
-    }
-    if (MayUseCollector(kCollectorTypeMC)) {
-      mark_compact_collector_ = new collector::MarkCompact(this);
-      garbage_collectors_.push_back(mark_compact_collector_);
-    }
-  }
   if (GetImageSpace() != nullptr && non_moving_space_ != nullptr &&
       (is_zygote || separate_non_moving_space || foreground_collector_type_ == kCollectorTypeGSS)) {
     // Check that there's no gap between the image space and the non moving space so that the
@@ -914,11 +885,15 @@ void Heap::DumpGcPerformanceInfo(std::ostream& os) {
   uint64_t total_duration = 0;
   // Dump cumulative loggers for each GC type.
   uint64_t total_paused_time = 0;
-  for (auto& collector : garbage_collectors_) {
-    total_duration += collector->GetCumulativeTimings().GetTotalNs();
-    total_paused_time += collector->GetTotalPausedTimeNs();
-    collector->DumpPerformanceInfo(os);
-    collector->ResetMeasurements();
+  std::vector<collector::GarbageCollector*> garbage_collectors;
+  {
+    MutexLock mu(Thread::Current(), *Locks::garbage_collectors_lock_);
+    for (auto& collector : garbage_collectors_) {
+      total_duration += collector->GetCumulativeTimings().GetTotalNs();
+      total_paused_time += collector->GetTotalPausedTimeNs();
+      collector->DumpPerformanceInfo(os);
+      collector->ResetMeasurements();
+    }
   }
   uint64_t allocation_time =
       static_cast<uint64_t>(total_allocation_time_.LoadRelaxed()) * kTimeAdjust;
@@ -1710,7 +1685,7 @@ HomogeneousSpaceCompactResult Heap::PerformHomogeneousSpaceCompact() {
   tl->ResumeAll();
   // Finish GC.
   reference_processor_.EnqueueClearedReferences(self);
-  GrowForUtilization(semi_space_collector_);
+  GrowForUtilization(collector);
   LogGC(kGcCauseHomogeneousSpaceCompact, collector);
   FinishGC(self, collector::kGcTypeFull);
   return HomogeneousSpaceCompactResult::kSuccess;
@@ -1844,7 +1819,7 @@ void Heap::TransitionCollector(CollectorType collector_type) {
   // Can't call into java code with all threads suspended.
   reference_processor_.EnqueueClearedReferences(self);
   uint64_t duration = NanoTime() - start_time;
-  GrowForUtilization(semi_space_collector_);
+  GrowForUtilization(FindOrCreateCollector(self, kCollectorTypeSS));
   DCHECK(collector != nullptr);
   LogGC(kGcCauseCollectorTransition, collector);
   FinishGC(self, collector::kGcTypeFull);
@@ -2049,7 +2024,7 @@ void Heap::PreZygoteFork() {
   const bool same_space = non_moving_space_ == main_space_;
   if (kCompactZygote) {
     // Can't compact if the non moving space is the same as the main space.
-    DCHECK(semi_space_collector_ != nullptr);
+    CHECK_NE(GetPrimaryFreeListSpace(), GetNonMovingSpace());
     // Temporarily disable rosalloc verification because the zygote
     // compaction will mess up the rosalloc internal metadata.
     ScopedDisableRosAllocVerification disable_rosalloc_verif(this);
@@ -2190,20 +2165,23 @@ void Heap::SwapSemiSpaces() {
 collector::GarbageCollector* Heap::Compact(space::ContinuousMemMapAllocSpace* target_space,
                                            space::ContinuousMemMapAllocSpace* source_space,
                                            GcCause gc_cause) {
-  CHECK(kMovingCollector);
   if (target_space != source_space) {
+    auto* semi_space_collector = down_cast<collector::SemiSpace*>(
+        FindOrCreateCollector(Thread::Current(), kCollectorTypeSS));
     // Don't swap spaces since this isn't a typical semi space collection.
-    semi_space_collector_->SetSwapSemiSpaces(false);
-    semi_space_collector_->SetFromSpace(source_space);
-    semi_space_collector_->SetToSpace(target_space);
-    semi_space_collector_->Run(gc_cause, false);
-    return semi_space_collector_;
+    semi_space_collector->SetSwapSemiSpaces(false);
+    semi_space_collector->SetFromSpace(source_space);
+    semi_space_collector->SetToSpace(target_space);
+    semi_space_collector->Run(gc_cause, false);
+    return semi_space_collector;
   } else {
+    auto* mark_compact_collector = down_cast<collector::MarkCompact*>(
+        FindOrCreateCollector(Thread::Current(), kCollectorTypeMC));
     CHECK(target_space->IsBumpPointerSpace())
         << "In-place compaction is only supported for bump pointer spaces";
-    mark_compact_collector_->SetSpace(target_space->AsBumpPointerSpace());
-    mark_compact_collector_->Run(kGcCauseCollectorTransition, false);
-    return mark_compact_collector_;
+    mark_compact_collector->SetSpace(target_space->AsBumpPointerSpace());
+    mark_compact_collector->Run(kGcCauseCollectorTransition, false);
+    return mark_compact_collector;
   }
 }
 
@@ -2258,43 +2236,44 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCaus
   DCHECK_LT(gc_type, collector::kGcTypeMax);
   DCHECK_NE(gc_type, collector::kGcTypeNone);
 
-  collector::GarbageCollector* collector = nullptr;
-  // TODO: Clean this up.
+  collector::GarbageCollector* const collector =
+      FindOrCreateCollector(self, collector_type_, gc_type);
   if (compacting_gc) {
     DCHECK(current_allocator_ == kAllocatorTypeBumpPointer ||
            current_allocator_ == kAllocatorTypeTLAB ||
            current_allocator_ == kAllocatorTypeRegion ||
-           current_allocator_ == kAllocatorTypeRegionTLAB);
+           current_allocator_ == kAllocatorTypeRegionTLAB) << current_allocator_;
     switch (collector_type_) {
       case kCollectorTypeSS:
-        // Fall-through.
-      case kCollectorTypeGSS:
-        semi_space_collector_->SetFromSpace(bump_pointer_space_);
-        semi_space_collector_->SetToSpace(temp_space_);
-        semi_space_collector_->SetSwapSemiSpaces(true);
-        collector = semi_space_collector_;
+        FALLTHROUGH_INTENDED;
+      case kCollectorTypeGSS: {
+        auto* semi_space_collector = down_cast<collector::SemiSpace*>(collector);
+        semi_space_collector->SetFromSpace(bump_pointer_space_);
+        semi_space_collector->SetToSpace(temp_space_);
+        semi_space_collector->SetSwapSemiSpaces(true);
         break;
-      case kCollectorTypeCC:
-        concurrent_copying_collector_->SetRegionSpace(region_space_);
-        collector = concurrent_copying_collector_;
+      } case kCollectorTypeCC: {
+        auto* const concurrent_copying_collector =
+            down_cast<collector::ConcurrentCopying*>(collector);
+        concurrent_copying_collector->SetRegionSpace(region_space_);
         break;
-      case kCollectorTypeMC:
-        mark_compact_collector_->SetSpace(bump_pointer_space_);
-        collector = mark_compact_collector_;
+      } case kCollectorTypeMC: {
+        auto* const mark_compact_collector = down_cast<collector::MarkCompact*>(collector);
+        mark_compact_collector->SetSpace(bump_pointer_space_);
         break;
+      }
       default:
-        LOG(FATAL) << "Invalid collector type " << static_cast<size_t>(collector_type_);
+        LOG(FATAL) << "Invalid moving collector type " << static_cast<size_t>(collector_type_);
     }
-    if (collector != mark_compact_collector_ && collector != concurrent_copying_collector_) {
+    if (collector_type_ != kCollectorTypeMC && collector_type_ != kCollectorTypeCC) {
       temp_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
       CHECK(temp_space_->IsEmpty());
     }
     gc_type = collector::kGcTypeFull;  // TODO: Not hard code this in.
-  } else if (current_allocator_ == kAllocatorTypeRosAlloc ||
-      current_allocator_ == kAllocatorTypeDlMalloc) {
-    collector = FindCollectorByGcType(gc_type);
   } else {
-    LOG(FATAL) << "Invalid current allocator " << current_allocator_;
+    CHECK(current_allocator_ == kAllocatorTypeRosAlloc ||
+          current_allocator_ == kAllocatorTypeDlMalloc)
+        << current_allocator_;
   }
   if (IsGcConcurrent()) {
     // Disable concurrent GC check so that we don't have spammy JNI requests.
@@ -3017,14 +2996,65 @@ void Heap::UpdateMaxNativeFootprint() {
   native_footprint_gc_watermark_ = std::min(growth_limit_, target_size);
 }
 
-collector::GarbageCollector* Heap::FindCollectorByGcType(collector::GcType gc_type) {
+collector::ConcurrentCopying* Heap::ConcurrentCopyingCollector() {
+  // Down cast needs the complete type.
+  return down_cast<collector::ConcurrentCopying*>(
+      FindOrCreateCollector(Thread::Current(), kCollectorTypeCC));
+}
+
+collector::GarbageCollector* Heap::FindOrCreateCollector(
+    Thread* self, CollectorType type, collector::GcType gc_type) {
+  MutexLock mu(self, *Locks::garbage_collectors_lock_);
   for (const auto& collector : garbage_collectors_) {
     if (collector->GetCollectorType() == collector_type_ &&
         collector->GetGcType() == gc_type) {
       return collector;
     }
   }
-  return nullptr;
+  collector::GarbageCollector* new_collector = nullptr;
+  switch (type) {
+    case kCollectorTypeCMS:
+    case kCollectorTypeMS: {
+      const bool concurrent = type == kCollectorTypeCMS;
+      switch (gc_type) {
+        case collector::kGcTypeFull:
+          new_collector = new collector::MarkSweep(this, concurrent);
+          break;
+        case collector::kGcTypePartial:
+          new_collector = new collector::PartialMarkSweep(this, concurrent);
+          break;
+        case collector::kGcTypeSticky:
+          new_collector = new collector::StickyMarkSweep(this, concurrent);
+          break;
+        default:
+          LOG(FATAL) << gc_type;
+      }
+      break;
+    }
+    // Other collectors ignore gc_type.
+    case kCollectorTypeSS:
+    case kCollectorTypeGSS: {
+      CHECK(kMovingCollector);
+      const bool generational = type == kCollectorTypeGSS;
+      new_collector = new collector::SemiSpace(
+          this, generational, generational ? "generational" : "");
+      break;
+    }
+    case kCollectorTypeCC:
+      CHECK(kMovingCollector);
+      new_collector = new collector::ConcurrentCopying(this);
+      break;
+    case kCollectorTypeMC:
+      CHECK(kMovingCollector);
+      new_collector = new collector::MarkCompact(this);
+      break;
+    default:
+      LOG(FATAL) << "Invalid collector type " << type << " gc type " << gc_type;
+  }
+  // Make sure will find it next time.
+  CHECK_EQ(new_collector->GetGcType(), gc_type);
+  garbage_collectors_.push_back(new_collector);
+  return new_collector;
 }
 
 double Heap::HeapGrowthMultiplier() const {
@@ -3059,7 +3089,8 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran,
     collector::GcType non_sticky_gc_type =
         HasZygoteSpace() ? collector::kGcTypePartial : collector::kGcTypeFull;
     // Find what the next non sticky collector will be.
-    collector::GarbageCollector* non_sticky_collector = FindCollectorByGcType(non_sticky_gc_type);
+    collector::GarbageCollector* non_sticky_collector =
+        FindOrCreateCollector(Thread::Current(), collector_type_, non_sticky_gc_type);
     // If the throughput of the current sticky GC >= throughput of the non sticky collector, then
     // do another sticky collection next.
     // We also check that the bytes allocated aren't over the footprint limit in order to prevent a
