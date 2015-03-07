@@ -80,8 +80,8 @@ enum LockLevel {
   kInternTableLock,
   kOatFileSecondaryLookupLock,
   kDefaultMutexLevel,
+  kGarbageCollectorsLock,
   kMarkSweepLargeObjectLock,
-  kPinTableLock,
   kJdwpObjectRegistryLock,
   kModifyLdtLock,
   kAllocatedThreadIdsLock,
@@ -587,9 +587,12 @@ class Locks {
   // Guards lists of classes within the class linker.
   static ReaderWriterMutex* classlinker_classes_lock_ ACQUIRED_AFTER(breakpoint_lock_);
 
+  // Guards the garbage collectors array.
+  static Mutex* garbage_collectors_lock_ ACQUIRED_AFTER(breakpoint_lock_);
+
   // When declaring any Mutex add DEFAULT_MUTEX_ACQUIRED_AFTER to use annotalysis to check the code
   // doesn't try to hold a higher level Mutex.
-  #define DEFAULT_MUTEX_ACQUIRED_AFTER ACQUIRED_AFTER(Locks::classlinker_classes_lock_)
+  #define DEFAULT_MUTEX_ACQUIRED_AFTER ACQUIRED_AFTER(Locks::garbage_collectors_lock_)
 
   static Mutex* allocated_monitor_ids_lock_ ACQUIRED_AFTER(classlinker_classes_lock_);
 

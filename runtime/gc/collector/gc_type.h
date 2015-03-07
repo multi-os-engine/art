@@ -34,6 +34,8 @@ enum GcType {
   kGcTypePartial,
   // Full GC that marks and frees in both the application and Zygote heap.
   kGcTypeFull,
+  // Any GC type.
+  kGcTypeAny,
   // Number of different GC types.
   kGcTypeMax,
 };
