@@ -377,6 +377,15 @@ inline void Heap::CheckConcurrentGC(Thread* self, size_t new_num_bytes_allocated
   }
 }
 
+inline collector::ConcurrentCopying* Heap::ConcurrentCopyingCollector() {
+  if (concurrent_copying_collector_ == nullptr) {
+  // Down cast needs the complete type.
+    concurrent_copying_collector_ = down_cast<collector::ConcurrentCopying*>(
+        FindOrCreateCollector(Thread::Current(), kCollectorTypeCC));
+  }
+  return concurrent_copying_collector_;
+}
+
 }  // namespace gc
 }  // namespace art
 
