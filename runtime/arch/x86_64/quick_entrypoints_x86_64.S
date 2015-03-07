@@ -1564,13 +1564,14 @@ END_FUNCTION art_quick_instrumentation_exit
      */
 DEFINE_FUNCTION art_quick_deoptimize
     pushq %rsi                     // Fake that we were called. Use hidden arg.
+.globl SYMBOL(art_quick_deoptimize_from_compiled_slow_path)
+SYMBOL(art_quick_deoptimize_from_compiled_slow_path):
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
                                    // Stack should be aligned now.
     movq %gs:THREAD_SELF_OFFSET, %rdi         // Pass Thread.
     call SYMBOL(artDeoptimize) // artDeoptimize(Thread*)
     int3                           // Unreachable.
 END_FUNCTION art_quick_deoptimize
-
 
     /*
      * String's compareTo.

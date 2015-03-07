@@ -108,7 +108,27 @@ public class Main {
   }
 
 
-  // CHECK-START: void Main.constantIndexing(int[]) BCE (before)
+  // CHECK-START: void Main.constantIndexing1(int[]) BCE (before)
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
+
+  // CHECK-START: void Main.constantIndexing1(int[]) BCE (after)
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArraySet
+
+  static void constantIndexing1(int[] array) {
+    array[5] = 1;
+    array[4] = 1;
+  }
+
+
+  // CHECK-START: void Main.constantIndexing2(int[]) BCE (before)
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
   // CHECK: BoundsCheck
   // CHECK: ArraySet
   // CHECK: BoundsCheck
@@ -116,18 +136,91 @@ public class Main {
   // CHECK: BoundsCheck
   // CHECK: ArraySet
 
-  // CHECK-START: void Main.constantIndexing(int[]) BCE (after)
-  // CHECK: BoundsCheck
+  // CHECK-START: void Main.constantIndexing2(int[]) BCE (after)
+  // CHECK: LessThan
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK-NOT: BoundsCheck
   // CHECK: ArraySet
   // CHECK-NOT: BoundsCheck
   // CHECK: ArraySet
   // CHECK: BoundsCheck
   // CHECK: ArraySet
 
-  static void constantIndexing(int[] array) {
-    array[5] = 1;
+  static void constantIndexing2(int[] array) {
+    array[1] = 1;
+    array[2] = 1;
+    array[3] = 1;
     array[4] = 1;
-    array[6] = 1;
+    array[-1] = 1;
+  }
+
+
+  // CHECK-START: int[] Main.constantIndexing3(int[], int[], boolean) BCE (before)
+  // CHECK: BoundsCheck
+  // CHECK: ArrayGet
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK: BoundsCheck
+  // CHECK: ArrayGet
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK: BoundsCheck
+  // CHECK: ArrayGet
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK: BoundsCheck
+  // CHECK: ArrayGet
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
+
+  // CHECK-START: int[] Main.constantIndexing3(int[], int[], boolean) BCE (after)
+  // CHECK: LessThan
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArrayGet
+  // CHECK: LessThan
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArrayGet
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArrayGet
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArraySet
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArrayGet
+  // CHECK-NOT: BoundsCheck
+  // CHECK: ArraySet
+
+  static int[] constantIndexing3(int[] array1, int[] array2, boolean copy) {
+    if (!copy) {
+      return array1;
+    }
+    array2[0] = array1[0];
+    array2[1] = array1[1];
+    array2[2] = array1[2];
+    array2[3] = array1[3];
+    return array2;
+  }
+
+
+  // CHECK-START: void Main.constantIndexing4(int[]) BCE (before)
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
+
+  // CHECK-START: void Main.constantIndexing4(int[]) BCE (after)
+  // CHECK-NOT: LessThan
+  // CHECK: BoundsCheck
+  // CHECK: ArraySet
+
+  // There is only one array access. It's not beneficial
+  // to create a compare with deoptimization instruction.
+  static void constantIndexing4(int[] array) {
+    array[0] = 1;
   }
 
 
@@ -479,6 +572,21 @@ public class Main {
   }
 
 
+  static int foo() {
+    try {
+      // This will cause AIOOBE.
+      constantIndexing2(new int[3]);
+    } catch (ArrayIndexOutOfBoundsException e) {
+      return 99;
+    }
+    return 0;
+  }
+
+
+  // Make sure this method is compiled with optimizing.
+  // CHECK-START: void Main.main(java.lang.String[]) register (after)
+  // CHECK: ParallelMove
+
   public static void main(String[] args) {
     sieve(20);
 
@@ -507,5 +615,10 @@ public class Main {
     if (!isPyramid(array)) {
       System.out.println("pyramid3 failed!");
     }
+
+    // Make sure this value is kept after deoptimization.
+    int i = 1;
+    System.out.println(foo() + i);
   }
+
 }
