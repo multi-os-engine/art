@@ -304,6 +304,33 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathARM);
 };
 
+class DeoptimizationSlowPathARM : public SlowPathCodeARM {
+ public:
+  explicit DeoptimizationSlowPathARM(HInstruction* instruction)
+    : instruction_(instruction) {}
+
+  virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
+    uint32_t dex_pc = 0;
+    if (instruction_->IsCondition()) {
+      HCondition* condition = instruction_->AsCondition();
+      DCHECK(condition->HasDeoptimizationFallback());
+      dex_pc = condition->GetDexPc();
+    } else {
+      LOG(FATAL) << "Unexpected deoptimization point";
+    }
+    CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
+    arm_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pDeoptimize), instruction_, dex_pc);
+    // No need to restore live registers since the call won't return here.
+    codegen->ResetLiveRegStackOffsets();
+  }
+
+ private:
+  HInstruction* const instruction_;
+  DISALLOW_COPY_AND_ASSIGN(DeoptimizationSlowPathARM);
+};
+
 #undef __
 
 #undef __
@@ -970,8 +997,10 @@ void InstructionCodeGeneratorARM::VisitIf(HIf* if_instr) {
 
 
 void LocationsBuilderARM::VisitCondition(HCondition* comp) {
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(comp, LocationSummary::kNoCall);
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(
+      comp,
+      comp->HasDeoptimizationFallback() ? LocationSummary::kCallOnSlowPath
+                                        : LocationSummary::kNoCall);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RegisterOrConstant(comp->InputAt(1)));
   if (comp->NeedsMaterialization()) {
@@ -980,7 +1009,9 @@ void LocationsBuilderARM::VisitCondition(HCondition* comp) {
 }
 
 void InstructionCodeGeneratorARM::VisitCondition(HCondition* comp) {
-  if (!comp->NeedsMaterialization()) return;
+  if (!comp->NeedsMaterialization() && !comp->HasDeoptimizationFallback()) {
+    return;
+  }
   LocationSummary* locations = comp->GetLocations();
   Register left = locations->InAt(0).AsRegister<Register>();
 
@@ -998,11 +1029,18 @@ void InstructionCodeGeneratorARM::VisitCondition(HCondition* comp) {
       __ cmp(left, ShifterOperand(temp));
     }
   }
-  __ it(ARMCondition(comp->GetCondition()), kItElse);
-  __ mov(locations->Out().AsRegister<Register>(), ShifterOperand(1),
-         ARMCondition(comp->GetCondition()));
-  __ mov(locations->Out().AsRegister<Register>(), ShifterOperand(0),
-         ARMOppositeCondition(comp->GetCondition()));
+  if (comp->HasDeoptimizationFallback()) {
+    SlowPathCodeARM* slow_path = new (GetGraph()->GetArena())
+        DeoptimizationSlowPathARM(comp);
+    codegen_->AddSlowPath(slow_path);
+    __ b(slow_path->GetEntryLabel(), ARMCondition(comp->GetCondition()));
+  } else {
+    __ it(ARMCondition(comp->GetCondition()), kItElse);
+    __ mov(locations->Out().AsRegister<Register>(), ShifterOperand(1),
+           ARMCondition(comp->GetCondition()));
+    __ mov(locations->Out().AsRegister<Register>(), ShifterOperand(0),
+           ARMOppositeCondition(comp->GetCondition()));
+  }
 }
 
 void LocationsBuilderARM::VisitEqual(HEqual* comp) {

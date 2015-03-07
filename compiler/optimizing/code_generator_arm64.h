@@ -282,6 +282,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
     for (int i = 0; i < length; ++i) {
       new(block_labels_ + i) vixl::Label();
     }
+    ResetLiveRegStackOffsets();
   }
 
   void Finalize(CodeAllocator* allocator) OVERRIDE;

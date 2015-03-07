@@ -79,6 +79,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
 
 class CodeGenerator {
  public:
+  enum { kInvalidStackOffset = -1 };
+
   // Compiles the graph to executable instructions. Returns whether the compilation
   // succeeded.
   void CompileBaseline(CodeAllocator* allocator, bool is_leaf = false);
@@ -184,6 +186,7 @@ class CodeGenerator {
   void BuildStackMaps(std::vector<uint8_t>* vector);
   void SaveLiveRegisters(LocationSummary* locations);
   void RestoreLiveRegisters(LocationSummary* locations);
+  void ResetLiveRegStackOffsets();
 
   bool IsLeafMethod() const {
     return is_leaf_;
@@ -396,6 +399,11 @@ class CodeGenerator {
   bool requires_current_method_;
 
   StackMapStream stack_map_stream_;
+
+  // Used to keep the stack offsets of live registers when
+  // they are saved to stack.
+  int live_core_reg_stack_offsets_[sizeof(uint32_t) * 8];
+  int live_fp_reg_stack_offsets_[sizeof(uint32_t) * 8];
 
   DISALLOW_COPY_AND_ASSIGN(CodeGenerator);
 };

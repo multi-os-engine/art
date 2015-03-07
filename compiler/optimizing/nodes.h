@@ -1590,12 +1590,20 @@ class HBinaryOperation : public HExpression<2> {
 
 class HCondition : public HBinaryOperation {
  public:
-  HCondition(HInstruction* first, HInstruction* second)
+  HCondition(HInstruction* first,
+             HInstruction* second,
+             bool has_deoptimization_fallback = false,
+             uint32_t dex_pc = 0)
       : HBinaryOperation(Primitive::kPrimBoolean, first, second),
-        needs_materialization_(true) {}
+        needs_materialization_(true),
+        has_deoptimization_fallback_(has_deoptimization_fallback),
+        dex_pc_(dex_pc) {}
 
   bool NeedsMaterialization() const { return needs_materialization_; }
   void ClearNeedsMaterialization() { needs_materialization_ = false; }
+
+  bool HasDeoptimizationFallback() const { return has_deoptimization_fallback_; }
+  uint32_t GetDexPc() { return dex_pc_; }
 
   // For code generation purposes, returns whether this instruction is just before
   // `if_`, and disregard moves in between.
@@ -1609,6 +1617,9 @@ class HCondition : public HBinaryOperation {
   // For register allocation purposes, returns whether this instruction needs to be
   // materialized (that is, not just be in the processor flags).
   bool needs_materialization_;
+
+  bool has_deoptimization_fallback_;
+  uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HCondition);
 };
@@ -1664,8 +1675,11 @@ class HNotEqual : public HCondition {
 
 class HLessThan : public HCondition {
  public:
-  HLessThan(HInstruction* first, HInstruction* second)
-      : HCondition(first, second) {}
+  HLessThan(HInstruction* first,
+            HInstruction* second,
+            bool has_deoptimization_fallback = false,
+            uint32_t dex_pc = 0)
+      : HCondition(first, second, has_deoptimization_fallback, dex_pc) {}
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE {
     return x < y ? 1 : 0;
@@ -1673,6 +1687,8 @@ class HLessThan : public HCondition {
   int64_t Evaluate(int64_t x, int64_t y) const OVERRIDE {
     return x < y ? 1 : 0;
   }
+
+  bool CanThrow() const OVERRIDE { return HasDeoptimizationFallback(); }
 
   DECLARE_INSTRUCTION(LessThan);
 

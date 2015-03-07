@@ -664,10 +664,18 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
       }
 
       case Location::kRegister : {
+        DexRegisterLocation::Kind kind = DexRegisterLocation::Kind::kInRegister;
         int id = location.reg();
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister, id);
+        int value = id;
+        int stack_offset = live_core_reg_stack_offsets_[id];
+        if (stack_offset != kInvalidStackOffset) {
+          kind = DexRegisterLocation::Kind::kInStack;
+          value = stack_offset;
+        }
+        stack_map_stream_.AddDexRegisterEntry(kind, value);
         if (current->GetType() == Primitive::kPrimLong) {
-          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister, id);
+          value = (stack_offset == kInvalidStackOffset) ? id : (stack_offset + kVRegSize);
+          stack_map_stream_.AddDexRegisterEntry(kind, value);
           ++i;
           DCHECK_LT(i, environment_size);
         }
@@ -675,10 +683,18 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
       }
 
       case Location::kFpuRegister : {
+        DexRegisterLocation::Kind kind = DexRegisterLocation::Kind::kInFpuRegister;
         int id = location.reg();
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister, id);
+        int value = id;
+        int stack_offset = live_fp_reg_stack_offsets_[id];
+        if (stack_offset != kInvalidStackOffset) {
+          kind = DexRegisterLocation::Kind::kInStack;
+          value = stack_offset;
+        }
+        stack_map_stream_.AddDexRegisterEntry(kind, value);
         if (current->GetType() == Primitive::kPrimDouble) {
-          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister, id);
+          value = (stack_offset == kInvalidStackOffset) ? id : (stack_offset + kVRegSize);
+          stack_map_stream_.AddDexRegisterEntry(kind, value);
           ++i;
           DCHECK_LT(i, environment_size);
         }
@@ -686,20 +702,34 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
       }
 
       case Location::kFpuRegisterPair : {
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister,
-                                              location.low());
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister,
-                                              location.high());
+        DexRegisterLocation::Kind kind = DexRegisterLocation::Kind::kInFpuRegister;
+        int low = location.low();
+        int high = location.high();
+        int stack_offset = live_fp_reg_stack_offsets_[location.low()];
+        if (stack_offset != kInvalidStackOffset) {
+          kind = DexRegisterLocation::Kind::kInStack;
+          low = stack_offset;
+          high = stack_offset + kVRegSize;
+        }
+        stack_map_stream_.AddDexRegisterEntry(kind, low);
+        stack_map_stream_.AddDexRegisterEntry(kind, high);
         ++i;
         DCHECK_LT(i, environment_size);
         break;
       }
 
       case Location::kRegisterPair : {
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister,
-                                              location.low());
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister,
-                                              location.high());
+        DexRegisterLocation::Kind kind = DexRegisterLocation::Kind::kInRegister;
+        int low = location.low();
+        int high = location.high();
+        int stack_offset = live_core_reg_stack_offsets_[location.low()];
+        if (stack_offset != kInvalidStackOffset) {
+          kind = DexRegisterLocation::Kind::kInStack;
+          low = stack_offset;
+          high = stack_offset + kVRegSize;
+        }
+        stack_map_stream_.AddDexRegisterEntry(kind, low);
+        stack_map_stream_.AddDexRegisterEntry(kind, high);
         ++i;
         DCHECK_LT(i, environment_size);
         break;
@@ -756,6 +786,7 @@ void CodeGenerator::SaveLiveRegisters(LocationSummary* locations) {
           locations->SetStackBit(stack_offset / kVRegSize);
         }
         DCHECK_LT(stack_offset, GetFrameSize() - FrameEntrySpillSize());
+        live_core_reg_stack_offsets_[i] = stack_offset;
         stack_offset += SaveCoreRegister(stack_offset, i);
       }
     }
@@ -765,6 +796,7 @@ void CodeGenerator::SaveLiveRegisters(LocationSummary* locations) {
     if (!IsFloatingPointCalleeSaveRegister(i)) {
       if (register_set->ContainsFloatingPointRegister(i)) {
         DCHECK_LT(stack_offset, GetFrameSize() - FrameEntrySpillSize());
+        live_fp_reg_stack_offsets_[i] = stack_offset;
         stack_offset += SaveFloatingPointRegister(stack_offset, i);
       }
     }
@@ -779,6 +811,7 @@ void CodeGenerator::RestoreLiveRegisters(LocationSummary* locations) {
       if (register_set->ContainsCoreRegister(i)) {
         DCHECK_LT(stack_offset, GetFrameSize() - FrameEntrySpillSize());
         stack_offset += RestoreCoreRegister(stack_offset, i);
+        live_core_reg_stack_offsets_[i] = kInvalidStackOffset;
       }
     }
   }
@@ -788,8 +821,19 @@ void CodeGenerator::RestoreLiveRegisters(LocationSummary* locations) {
       if (register_set->ContainsFloatingPointRegister(i)) {
         DCHECK_LT(stack_offset, GetFrameSize() - FrameEntrySpillSize());
         stack_offset += RestoreFloatingPointRegister(stack_offset, i);
+        live_fp_reg_stack_offsets_[i] = kInvalidStackOffset;
       }
     }
+  }
+}
+
+void CodeGenerator::ResetLiveRegStackOffsets() {
+  for (size_t i = 0, e = GetNumberOfCoreRegisters(); i < e; ++i) {
+    live_core_reg_stack_offsets_[i] = kInvalidStackOffset;
+  }
+
+  for (size_t i = 0, e = GetNumberOfFloatingPointRegisters(); i < e; ++i) {
+    live_fp_reg_stack_offsets_[i] = kInvalidStackOffset;
   }
 }
 

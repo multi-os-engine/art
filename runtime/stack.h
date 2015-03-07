@@ -490,9 +490,7 @@ class StackVisitor {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     uint32_t val;
     bool success = GetVReg(m, vreg, kind, &val);
-    CHECK(success) << "Failed to read v" << vreg << " of kind " << kind << " in method "
-                   << PrettyMethod(m);
-    return val;
+    return success ? val : 0;
   }
 
   bool GetVRegPair(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind_lo, VRegKind kind_hi,
@@ -503,10 +501,7 @@ class StackVisitor {
                        VRegKind kind_hi) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     uint64_t val;
     bool success = GetVRegPair(m, vreg, kind_lo, kind_hi, &val);
-    CHECK(success) << "Failed to read vreg pair " << vreg
-                   << " of kind [" << kind_lo << "," << kind_hi << "] in method "
-                   << PrettyMethod(m);
-    return val;
+    return success ? val : 0;
   }
 
   bool SetVReg(mirror::ArtMethod* m, uint16_t vreg, uint32_t new_value, VRegKind kind)

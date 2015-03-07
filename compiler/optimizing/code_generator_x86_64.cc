@@ -331,6 +331,34 @@ class TypeCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
   DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathX86_64);
 };
 
+class DeoptimizationSlowPathX86_64 : public SlowPathCodeX86_64 {
+ public:
+  explicit DeoptimizationSlowPathX86_64(HInstruction* instruction)
+      : instruction_(instruction) {}
+
+  virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
+    __ gs()->call(
+        Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pDeoptimize), true));
+    uint32_t dex_pc = 0;
+    if (instruction_->IsCondition()) {
+      HCondition* condition = instruction_->AsCondition();
+      DCHECK(condition->HasDeoptimizationFallback());
+      dex_pc = condition->GetDexPc();
+    } else {
+      LOG(FATAL) << "Unexpected deoptimization point";
+    }
+    codegen->RecordPcInfo(instruction_, dex_pc);
+    // No need to restore live registers since the call won't return here.
+    codegen->ResetLiveRegStackOffsets();
+  }
+
+ private:
+  HInstruction* const instruction_;
+  DISALLOW_COPY_AND_ASSIGN(DeoptimizationSlowPathX86_64);
+};
+
 #undef __
 #define __ reinterpret_cast<X86_64Assembler*>(GetAssembler())->
 
@@ -874,8 +902,10 @@ void InstructionCodeGeneratorX86_64::VisitStoreLocal(HStoreLocal* store) {
 }
 
 void LocationsBuilderX86_64::VisitCondition(HCondition* comp) {
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(comp, LocationSummary::kNoCall);
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(
+      comp,
+      comp->HasDeoptimizationFallback() ? LocationSummary::kCallOnSlowPath
+                                        : LocationSummary::kNoCall);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::Any());
   if (comp->NeedsMaterialization()) {
@@ -884,7 +914,7 @@ void LocationsBuilderX86_64::VisitCondition(HCondition* comp) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitCondition(HCondition* comp) {
-  if (comp->NeedsMaterialization()) {
+  if (comp->NeedsMaterialization() || comp->HasDeoptimizationFallback()) {
     LocationSummary* locations = comp->GetLocations();
     CpuRegister reg = locations->Out().AsRegister<CpuRegister>();
     // Clear register: setcc only sets the low byte.
@@ -903,7 +933,14 @@ void InstructionCodeGeneratorX86_64::VisitCondition(HCondition* comp) {
     } else {
       __ cmpl(lhs.AsRegister<CpuRegister>(), Address(CpuRegister(RSP), rhs.GetStackIndex()));
     }
-    __ setcc(X86_64Condition(comp->GetCondition()), reg);
+    if (comp->HasDeoptimizationFallback()) {
+      SlowPathCodeX86_64* slow_path = new (GetGraph()->GetArena())
+          DeoptimizationSlowPathX86_64(comp);
+      codegen_->AddSlowPath(slow_path);
+      __ j(X86_64Condition(comp->GetCondition()), slow_path->GetEntryLabel());
+    } else {
+      __ setcc(X86_64Condition(comp->GetCondition()), reg);
+    }
   }
 }
 

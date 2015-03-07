@@ -1552,6 +1552,16 @@ DEFINE_FUNCTION art_quick_deoptimize
     int3                          // Unreachable.
 END_FUNCTION art_quick_deoptimize
 
+DEFINE_FUNCTION art_quick_deoptimize_from_compiled_slow_path
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx
+    subl LITERAL(12), %esp        // Align stack.
+    CFI_ADJUST_CFA_OFFSET(12)
+    pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
+    CFI_ADJUST_CFA_OFFSET(4)
+    call SYMBOL(artDeoptimize)    // artDeoptimize(Thread*)
+    int3                          // Unreachable.
+END_FUNCTION art_quick_deoptimize
+
     /*
      * String's compareTo.
      *

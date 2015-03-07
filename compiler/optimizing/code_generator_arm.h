@@ -257,6 +257,7 @@ class CodeGeneratorARM : public CodeGenerator {
 
   void Initialize() OVERRIDE {
     block_labels_.SetSize(GetGraph()->GetBlocks().Size());
+    ResetLiveRegStackOffsets();
   }
 
   const ArmInstructionSetFeatures& GetInstructionSetFeatures() const {

@@ -373,6 +373,33 @@ class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
   DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathARM64);
 };
 
+class DeoptimizationSlowPathARM64 : public SlowPathCodeARM64 {
+ public:
+  explicit DeoptimizationSlowPathARM64(HInstruction* instruction)
+    : instruction_(instruction) {}
+
+  virtual void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    __ Bind(GetEntryLabel());
+    codegen->SaveLiveRegisters(instruction_->GetLocations());
+    uint32_t dex_pc = 0;
+    if (instruction_->IsCondition()) {
+      HCondition* condition = instruction_->AsCondition();
+      DCHECK(condition->HasDeoptimizationFallback());
+      dex_pc = condition->GetDexPc();
+    } else {
+      LOG(FATAL) << "Unexpected deoptimization point";
+    }
+    CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
+    arm64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pDeoptimize), instruction_, dex_pc);
+    // No need to restore live registers since the call won't return here.
+    codegen->ResetLiveRegStackOffsets();
+  }
+
+ private:
+  HInstruction* const instruction_;
+  DISALLOW_COPY_AND_ASSIGN(DeoptimizationSlowPathARM64);
+};
+
 #undef __
 
 Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type) {
@@ -1463,7 +1490,10 @@ void InstructionCodeGeneratorARM64::VisitCompare(HCompare* compare) {
 }
 
 void LocationsBuilderARM64::VisitCondition(HCondition* instruction) {
-  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(
+      instruction,
+      instruction->HasDeoptimizationFallback() ? LocationSummary::kCallOnSlowPath
+                                               : LocationSummary::kNoCall);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RegisterOrConstant(instruction->InputAt(1)));
   if (instruction->NeedsMaterialization()) {
@@ -1472,7 +1502,7 @@ void LocationsBuilderARM64::VisitCondition(HCondition* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::VisitCondition(HCondition* instruction) {
-  if (!instruction->NeedsMaterialization()) {
+  if (!instruction->NeedsMaterialization() && !instruction->HasDeoptimizationFallback()) {
     return;
   }
 
@@ -1483,7 +1513,14 @@ void InstructionCodeGeneratorARM64::VisitCondition(HCondition* instruction) {
   Condition cond = ARM64Condition(instruction->GetCondition());
 
   __ Cmp(lhs, rhs);
-  __ Cset(res, cond);
+  if (instruction->HasDeoptimizationFallback()) {
+    SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena())
+        DeoptimizationSlowPathARM64(instruction);
+    codegen_->AddSlowPath(slow_path);
+    __ B(ARM64Condition(instruction->GetCondition()), slow_path->GetEntryLabel());
+  } else {
+    __ Cset(res, cond);
+  }
 }
 
 #define FOR_EACH_CONDITION_INSTRUCTION(M)                                                \
