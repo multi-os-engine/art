@@ -19,6 +19,8 @@
 #include "nodes.h"
 #include "ssa_builder.h"
 
+#include <iostream>
+
 namespace art {
 
 static Primitive::Type MergeTypes(Primitive::Type existing, Primitive::Type new_type) {
@@ -33,7 +35,7 @@ static Primitive::Type MergeTypes(Primitive::Type existing, Primitive::Type new_
       // to merge with a void type, we should use the existing one.
       return new_type == Primitive::kPrimVoid
           ? existing
-          : new_type;
+          : HPhi::ToPhiType(new_type);
   }
 }
 
