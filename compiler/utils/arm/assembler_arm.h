@@ -342,6 +342,7 @@ extern const char* kConditionNames[];
 //
 class ArmAssembler : public Assembler {
  public:
+  ArmAssembler() {}
   virtual ~ArmAssembler() {}
 
   // Is this assembler for the thumb instruction set?

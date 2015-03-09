@@ -1441,6 +1441,14 @@ static uint32_t GenPairWise(uint32_t reg_mask, int* reg1, int* reg2) {
   return reg_mask;
 }
 
+static inline dwarf::Reg DwarfCoreReg(int num) {
+  return dwarf::Reg::Arm64Core(num);
+}
+
+static inline dwarf::Reg DwarfFpReg(int num) {
+  return dwarf::Reg::Arm64Fp(num);
+}
+
 static void SpillCoreRegs(Arm64Mir2Lir* m2l, RegStorage base, int offset, uint32_t reg_mask) {
   int reg1 = -1, reg2 = -1;
   const int reg_log2_size = 3;
@@ -1449,9 +1457,12 @@ static void SpillCoreRegs(Arm64Mir2Lir* m2l, RegStorage base, int offset, uint32
     reg_mask = GenPairWise(reg_mask, & reg1, & reg2);
     if (UNLIKELY(reg2 < 0)) {
       m2l->NewLIR3(WIDE(kA64Str3rXD), RegStorage::Solo64(reg1).GetReg(), base.GetReg(), offset);
+      m2l->cfi().RelOffset(DwarfCoreReg(reg1), offset << reg_log2_size);
     } else {
       m2l->NewLIR4(WIDE(kA64Stp4rrXD), RegStorage::Solo64(reg2).GetReg(),
                    RegStorage::Solo64(reg1).GetReg(), base.GetReg(), offset);
+      m2l->cfi().RelOffset(DwarfCoreReg(reg2), offset << reg_log2_size);
+      m2l->cfi().RelOffset(DwarfCoreReg(reg1), (offset + 1) << reg_log2_size);
     }
   }
 }
@@ -1466,9 +1477,12 @@ static void SpillFPRegs(Arm64Mir2Lir* m2l, RegStorage base, int offset, uint32_t
     if (UNLIKELY(reg2 < 0)) {
       m2l->NewLIR3(WIDE(kA64Str3fXD), RegStorage::FloatSolo64(reg1).GetReg(), base.GetReg(),
                    offset);
+      m2l->cfi().RelOffset(DwarfFpReg(reg1), offset << reg_log2_size);
     } else {
       m2l->NewLIR4(WIDE(kA64Stp4ffXD), RegStorage::FloatSolo64(reg2).GetReg(),
                    RegStorage::FloatSolo64(reg1).GetReg(), base.GetReg(), offset);
+      m2l->cfi().RelOffset(DwarfFpReg(reg2), offset << reg_log2_size);
+      m2l->cfi().RelOffset(DwarfFpReg(reg1), (offset + 1) << reg_log2_size);
     }
   }
 }
@@ -1476,6 +1490,7 @@ static void SpillFPRegs(Arm64Mir2Lir* m2l, RegStorage base, int offset, uint32_t
 static int SpillRegsPreSub(Arm64Mir2Lir* m2l, uint32_t core_reg_mask, uint32_t fp_reg_mask,
                            int frame_size) {
   m2l->OpRegRegImm(kOpSub, rs_sp, rs_sp, frame_size);
+  m2l->cfi().AdjustCFAOffset(frame_size);
 
   int core_count = POPCOUNT(core_reg_mask);
 
@@ -1535,11 +1550,15 @@ static int SpillRegsPreIndexed(Arm64Mir2Lir* m2l, RegStorage base, uint32_t core
                      RegStorage::FloatSolo64(reg1).GetReg(),
                      RegStorage::FloatSolo64(reg1).GetReg(),
                      base.GetReg(), -all_offset);
+        m2l->cfi().AdjustCFAOffset(all_offset * kArm64PointerSize);
+        m2l->cfi().RelOffset(DwarfFpReg(reg1), kArm64PointerSize);
       } else {
         m2l->NewLIR4(WIDE(kA64StpPre4ffXD),
                      RegStorage::FloatSolo64(reg1).GetReg(),
                      RegStorage::FloatSolo64(reg1).GetReg(),
                      base.GetReg(), -all_offset);
+        m2l->cfi().AdjustCFAOffset(all_offset * kArm64PointerSize);
+        m2l->cfi().RelOffset(DwarfFpReg(reg1), 0);
         cur_offset = 0;  // That core reg needs to go into the upper half.
       }
     } else {
@@ -1547,10 +1566,15 @@ static int SpillRegsPreIndexed(Arm64Mir2Lir* m2l, RegStorage base, uint32_t core
         fp_reg_mask = GenPairWise(fp_reg_mask, &reg1, &reg2);
         m2l->NewLIR4(WIDE(kA64StpPre4ffXD), RegStorage::FloatSolo64(reg2).GetReg(),
                      RegStorage::FloatSolo64(reg1).GetReg(), base.GetReg(), -all_offset);
+        m2l->cfi().AdjustCFAOffset(all_offset * kArm64PointerSize);
+        m2l->cfi().RelOffset(DwarfFpReg(reg2), 0);
+        m2l->cfi().RelOffset(DwarfFpReg(reg1), kArm64PointerSize);
       } else {
         fp_reg_mask = ExtractReg(fp_reg_mask, &reg1);
         m2l->NewLIR4(WIDE(kA64StpPre4ffXD), rs_d0.GetReg(), RegStorage::FloatSolo64(reg1).GetReg(),
                      base.GetReg(), -all_offset);
+        m2l->cfi().AdjustCFAOffset(all_offset * kArm64PointerSize);
+        m2l->cfi().RelOffset(DwarfFpReg(reg1), kArm64PointerSize);
       }
     }
   } else {
@@ -1563,12 +1587,19 @@ static int SpillRegsPreIndexed(Arm64Mir2Lir* m2l, RegStorage base, uint32_t core
       core_reg_mask = ExtractReg(core_reg_mask, &reg1);
       m2l->NewLIR4(WIDE(kA64StpPre4rrXD), rs_xzr.GetReg(),
                    RegStorage::Solo64(reg1).GetReg(), base.GetReg(), -all_offset);
+      m2l->cfi().AdjustCFAOffset(all_offset * kArm64PointerSize);
+      m2l->cfi().RelOffset(DwarfCoreReg(reg1), kArm64PointerSize);
     } else {
       core_reg_mask = GenPairWise(core_reg_mask, &reg1, &reg2);
       m2l->NewLIR4(WIDE(kA64StpPre4rrXD), RegStorage::Solo64(reg2).GetReg(),
                    RegStorage::Solo64(reg1).GetReg(), base.GetReg(), -all_offset);
+      m2l->cfi().AdjustCFAOffset(all_offset * kArm64PointerSize);
+      m2l->cfi().RelOffset(DwarfCoreReg(reg2), 0);
+      m2l->cfi().RelOffset(DwarfCoreReg(reg1), kArm64PointerSize);
     }
   }
+  DCHECK_EQ(m2l->cfi().current_cfa_offset(),
+            static_cast<int>(all_offset * kArm64PointerSize));
 
   if (fp_count != 0) {
     for (; fp_reg_mask != 0;) {
@@ -1577,10 +1608,13 @@ static int SpillRegsPreIndexed(Arm64Mir2Lir* m2l, RegStorage base, uint32_t core
       if (UNLIKELY(reg2 < 0)) {
         m2l->NewLIR3(WIDE(kA64Str3fXD), RegStorage::FloatSolo64(reg1).GetReg(), base.GetReg(),
                      cur_offset);
+        m2l->cfi().RelOffset(DwarfFpReg(reg1), cur_offset * kArm64PointerSize);
         // Do not increment offset here, as the second half will be filled by a core reg.
       } else {
         m2l->NewLIR4(WIDE(kA64Stp4ffXD), RegStorage::FloatSolo64(reg2).GetReg(),
                      RegStorage::FloatSolo64(reg1).GetReg(), base.GetReg(), cur_offset);
+        m2l->cfi().RelOffset(DwarfFpReg(reg2), cur_offset * kArm64PointerSize);
+        m2l->cfi().RelOffset(DwarfFpReg(reg1), (cur_offset + 1) * kArm64PointerSize);
         cur_offset += 2;
       }
     }
@@ -1593,6 +1627,7 @@ static int SpillRegsPreIndexed(Arm64Mir2Lir* m2l, RegStorage base, uint32_t core
       core_reg_mask = ExtractReg(core_reg_mask, &reg1);
       m2l->NewLIR3(WIDE(kA64Str3rXD), RegStorage::Solo64(reg1).GetReg(), base.GetReg(),
                    cur_offset + 1);
+      m2l->cfi().RelOffset(DwarfCoreReg(reg1), (cur_offset + 1) * kArm64PointerSize);
       cur_offset += 2;  // Half-slot filled now.
     }
   }
@@ -1603,6 +1638,8 @@ static int SpillRegsPreIndexed(Arm64Mir2Lir* m2l, RegStorage base, uint32_t core
     core_reg_mask = GenPairWise(core_reg_mask, &reg1, &reg2);
     m2l->NewLIR4(WIDE(kA64Stp4rrXD), RegStorage::Solo64(reg2).GetReg(),
                  RegStorage::Solo64(reg1).GetReg(), base.GetReg(), cur_offset);
+    m2l->cfi().RelOffset(DwarfCoreReg(reg2), cur_offset * kArm64PointerSize);
+    m2l->cfi().RelOffset(DwarfCoreReg(reg1), (cur_offset + 1) * kArm64PointerSize);
   }
 
   DCHECK_EQ(cur_offset, all_offset);
@@ -1633,10 +1670,13 @@ static void UnSpillCoreRegs(Arm64Mir2Lir* m2l, RegStorage base, int offset, uint
     reg_mask = GenPairWise(reg_mask, & reg1, & reg2);
     if (UNLIKELY(reg2 < 0)) {
       m2l->NewLIR3(WIDE(kA64Ldr3rXD), RegStorage::Solo64(reg1).GetReg(), base.GetReg(), offset);
+      m2l->cfi().Restore(DwarfCoreReg(reg1));
     } else {
       DCHECK_LE(offset, 63);
       m2l->NewLIR4(WIDE(kA64Ldp4rrXD), RegStorage::Solo64(reg2).GetReg(),
                    RegStorage::Solo64(reg1).GetReg(), base.GetReg(), offset);
+      m2l->cfi().Restore(DwarfCoreReg(reg2));
+      m2l->cfi().Restore(DwarfCoreReg(reg1));
     }
   }
 }
@@ -1650,9 +1690,12 @@ static void UnSpillFPRegs(Arm64Mir2Lir* m2l, RegStorage base, int offset, uint32
     if (UNLIKELY(reg2 < 0)) {
       m2l->NewLIR3(WIDE(kA64Ldr3fXD), RegStorage::FloatSolo64(reg1).GetReg(), base.GetReg(),
                    offset);
+      m2l->cfi().Restore(DwarfFpReg(reg1));
     } else {
       m2l->NewLIR4(WIDE(kA64Ldp4ffXD), RegStorage::FloatSolo64(reg2).GetReg(),
                    RegStorage::FloatSolo64(reg1).GetReg(), base.GetReg(), offset);
+      m2l->cfi().Restore(DwarfFpReg(reg2));
+      m2l->cfi().Restore(DwarfFpReg(reg1));
     }
   }
 }
@@ -1694,6 +1737,7 @@ void Arm64Mir2Lir::UnspillRegs(RegStorage base, uint32_t core_reg_mask, uint32_t
     early_drop = RoundDown(early_drop, 16);
 
     OpRegImm64(kOpAdd, rs_sp, early_drop);
+    cfi_.AdjustCFAOffset(-early_drop);
   }
 
   // Unspill.
@@ -1707,7 +1751,9 @@ void Arm64Mir2Lir::UnspillRegs(RegStorage base, uint32_t core_reg_mask, uint32_t
   }
 
   // Drop the (rest of) the frame.
-  OpRegImm64(kOpAdd, rs_sp, frame_size - early_drop);
+  int adjust = frame_size - early_drop;
+  OpRegImm64(kOpAdd, rs_sp, adjust);
+  cfi_.AdjustCFAOffset(-adjust);
 }
 
 bool Arm64Mir2Lir::GenInlinedReverseBits(CallInfo* info, OpSize size) {

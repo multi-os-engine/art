@@ -19,6 +19,7 @@
 
 #include "base/logging.h"
 #include "constants_arm64.h"
+#include "dwarf/register.h"
 #include "utils/managed_register.h"
 
 namespace art {
@@ -210,6 +211,14 @@ class Arm64ManagedRegister : public ManagedRegister {
     return reg;
   }
 };
+
+static inline dwarf::Reg DWARFReg(XRegister reg) {
+  return dwarf::Reg::Arm64Core(static_cast<int>(reg));
+}
+
+static inline dwarf::Reg DWARFReg(DRegister reg) {
+  return dwarf::Reg::Arm64Fp(static_cast<int>(reg));
+}
 
 std::ostream& operator<<(std::ostream& os, const Arm64ManagedRegister& reg);
 

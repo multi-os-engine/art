@@ -93,7 +93,6 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
 
   // Assembler that holds generated instructions
   std::unique_ptr<Assembler> jni_asm(Assembler::Create(instruction_set));
-  jni_asm->InitializeFrameDescriptionEntry();
 
   // Offsets into data structures
   // TODO: if cross compiling these offsets are for the host not the target
@@ -105,6 +104,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   const size_t frame_size(main_jni_conv->FrameSize());
   const std::vector<ManagedRegister>& callee_save_regs = main_jni_conv->CalleeSaveRegisters();
   __ BuildFrame(frame_size, mr_conv->MethodRegister(), callee_save_regs, mr_conv->EntrySpills());
+  DCHECK_EQ(jni_asm->cfi().current_cfa_offset(), static_cast<int>(frame_size));
 
   // 2. Set up the HandleScope
   mr_conv->ResetIterator(FrameOffset(frame_size));
@@ -424,7 +424,9 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
 
   // 16. Remove activation - need to restore callee save registers since the GC may have changed
   //     them.
+  DCHECK_EQ(jni_asm->cfi().current_cfa_offset(), static_cast<int>(frame_size));
   __ RemoveFrame(frame_size, callee_save_regs);
+  DCHECK_EQ(jni_asm->cfi().current_cfa_offset(), static_cast<int>(frame_size));
 
   // 17. Finalize code generation
   __ EmitSlowPaths();
@@ -432,19 +434,14 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   std::vector<uint8_t> managed_code(cs);
   MemoryRegion code(&managed_code[0], managed_code.size());
   __ FinalizeInstructions(code);
-  jni_asm->FinalizeFrameDescriptionEntry();
-  std::vector<uint8_t>* fde(jni_asm->GetFrameDescriptionEntry());
-  ArrayRef<const uint8_t> cfi_ref;
-  if (fde != nullptr) {
-    cfi_ref = ArrayRef<const uint8_t>(*fde);
-  }
+
   return CompiledMethod::SwapAllocCompiledMethodCFI(driver,
                                                     instruction_set,
                                                     ArrayRef<const uint8_t>(managed_code),
                                                     frame_size,
                                                     main_jni_conv->CoreSpillMask(),
                                                     main_jni_conv->FpSpillMask(),
-                                                    cfi_ref);
+                                                    ArrayRef<const uint8_t>(*jni_asm->cfi().data()));
 }
 
 // Copy a single parameter from the managed to the JNI calling convention
