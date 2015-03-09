@@ -29,6 +29,7 @@
 #include "dex/quick/resource_mask.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "invoke_type.h"
+#include "lazy_debug_frame_opcode_writer.h"
 #include "leb128.h"
 #include "safe_map.h"
 #include "utils/array_ref.h"
@@ -1488,6 +1489,12 @@ class Mir2Lir {
       return 0;
     }
 
+    /**
+     * @brief Buffer of DWARF's Call Frame Information opcodes.
+     * @details It is used by debuggers and other tools to unwind the call stack.
+     */
+    dwarf::LazyDebugFrameOpCodeWriter& cfi() { return cfi_; }
+
   protected:
     Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
 
@@ -1553,11 +1560,6 @@ class Mir2Lir {
                                     bool can_assume_type_is_in_dex_cache,
                                     uint32_t type_idx, RegLocation rl_dest,
                                     RegLocation rl_src);
-    /*
-     * @brief Generate the eh_frame FDE information if possible.
-     * @returns pointer to vector containg FDE information, or NULL.
-     */
-    virtual std::vector<uint8_t>* ReturnFrameDescriptionEntry();
 
     /**
      * @brief Used to insert marker that can be used to associate MIR with LIR.
@@ -1798,6 +1800,8 @@ class Mir2Lir {
     // (i.e. 8 bytes on 32-bit arch, 16 bytes on 64-bit arch) and we use ResourceMaskCache
     // to deduplicate the masks.
     ResourceMaskCache mask_cache_;
+
+    dwarf::LazyDebugFrameOpCodeWriter cfi_;
 
   protected:
     // ABI support

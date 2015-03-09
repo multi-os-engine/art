@@ -808,7 +808,7 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
         }
 
         const uint32_t quick_code_start = quick_code_offset -
-            writer_->oat_header_->GetExecutableOffset();
+            writer_->oat_header_->GetExecutableOffset() - thumb_offset;
         const DexFile::CodeItem *code_item = it.GetMethodCodeItem();
         writer_->method_info_.push_back(DebugInfo(name,
               dex_file_->GetSourceFile(dex_file_->GetClassDef(class_def_index_)),

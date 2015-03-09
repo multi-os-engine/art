@@ -379,6 +379,8 @@ constexpr size_t kFramePointerSize = 4;
 void ArmAssembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
                               const std::vector<ManagedRegister>& callee_save_regs,
                               const ManagedRegisterEntrySpills& entry_spills) {
+  CHECK_EQ(buffer_.Size(), 0U);  // Nothing emitted yet
+  CHECK_EQ(cfi_.current_cfa_offset(), 0);  // empty stack
   CHECK_ALIGNED(frame_size, kStackAlignment);
   CHECK_EQ(R0, method_reg.AsArm().AsCoreRegister());
 
@@ -399,15 +401,29 @@ void ArmAssembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
     }
   }
   PushList(push_list);
+  cfi_.AdjustCFAOffset(buffer_.Size(), pushed_values * kFramePointerSize);
+  int spill_offset = 0;
+  for (size_t i = 0; i < callee_save_regs.size(); i++) {
+    if (callee_save_regs.at(i).AsArm().IsCoreRegister()) {
+      arm::ArmManagedRegister reg = callee_save_regs.at(i).AsArm();
+      cfi_.RelOffset(buffer_.Size(), reg.DWARFRegId(), spill_offset);
+      spill_offset += kFramePointerSize;
+    }
+  }
+  arm::ArmManagedRegister reg_lr = arm::ArmManagedRegister::FromCoreRegister(LR);
+  cfi_.RelOffset(buffer_.Size(), reg_lr.DWARFRegId(), spill_offset);
   if (max_s != -1) {
-    pushed_values += 1 + max_s - min_s;
-    vpushs(static_cast<SRegister>(min_s), 1 + max_s - min_s);
+    int pushed_floats = 1 + max_s - min_s;
+    pushed_values += pushed_floats;
+    vpushs(static_cast<SRegister>(min_s), pushed_floats);
+    cfi_.AdjustCFAOffset(buffer_.Size(), pushed_floats * kFramePointerSize);
+    // TODO: cfi for floats.
   }
 
   // Increase frame to required size.
   CHECK_GT(frame_size, pushed_values * kFramePointerSize);  // Must at least have space for Method*.
   size_t adjust = frame_size - (pushed_values * kFramePointerSize);
-  IncreaseFrameSize(adjust);
+  IncreaseFrameSize(adjust);  // handles CFI as well.
 
   // Write out Method*.
   StoreToOffset(kStoreWord, R0, SP, 0);
@@ -422,6 +438,7 @@ void ArmAssembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
       offset += spill.getSize();
     } else if (reg.IsCoreRegister()) {
       StoreToOffset(kStoreWord, reg.AsCoreRegister(), SP, offset);
+      cfi_.RelOffset(buffer_.Size(), reg.DWARFRegId(), offset);
       offset += 4;
     } else if (reg.IsSRegister()) {
       StoreSToOffset(reg.AsSRegister(), SP, offset);
@@ -431,10 +448,13 @@ void ArmAssembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
       offset += 8;
     }
   }
+  // TODO: Missing CFI for floating point registers.
+  CHECK_EQ(static_cast<size_t>(cfi_.current_cfa_offset()), frame_size);
 }
 
 void ArmAssembler::RemoveFrame(size_t frame_size,
                               const std::vector<ManagedRegister>& callee_save_regs) {
+  CHECK_EQ(static_cast<size_t>(cfi_.current_cfa_offset()), frame_size);
   CHECK_ALIGNED(frame_size, kStackAlignment);
   // Compute callee saves to pop and PC.
   RegList pop_list = 1 << PC;
@@ -460,7 +480,7 @@ void ArmAssembler::RemoveFrame(size_t frame_size,
   // Decrease frame to start of callee saves.
   CHECK_GT(frame_size, pop_values * kFramePointerSize);
   size_t adjust = frame_size - (pop_values * kFramePointerSize);
-  DecreaseFrameSize(adjust);
+  DecreaseFrameSize(adjust);  // handles CFI as well.
 
   if (max_s != -1) {
     vpops(static_cast<SRegister>(min_s), 1 + max_s - min_s);
@@ -468,14 +488,20 @@ void ArmAssembler::RemoveFrame(size_t frame_size,
 
   // Pop callee saves and PC.
   PopList(pop_list);
+
+  // Restore state for slow-path code following the epilog.
+  // (the registers are still in the correct state)
+  cfi_.DefCFAOffset(buffer_.Size(), frame_size);
 }
 
 void ArmAssembler::IncreaseFrameSize(size_t adjust) {
   AddConstant(SP, -adjust);
+  cfi_.AdjustCFAOffset(buffer_.Size(), adjust);
 }
 
 void ArmAssembler::DecreaseFrameSize(size_t adjust) {
   AddConstant(SP, adjust);
+  cfi_.AdjustCFAOffset(buffer_.Size(), -adjust);
 }
 
 void ArmAssembler::Store(FrameOffset dest, ManagedRegister msrc, size_t size) {
