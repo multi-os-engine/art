@@ -1070,6 +1070,9 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       mask_cache_(arena),
       safepoints_(arena->Adapter()),
       dex_cache_arrays_layout_(cu->compiler_driver->GetDexCacheArraysLayout(cu->dex_file)),
+      cfi_(&last_lir_insn_,
+           cu->compiler_driver->GetCompilerOptions().GetGenerateGDBInformation(),
+           arena),
       in_to_reg_storage_mapping_(arena) {
   switch_tables_.reserve(4);
   fill_array_data_.reserve(4);
@@ -1154,14 +1157,6 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
     return lhs.LiteralOffset() < rhs.LiteralOffset();
   });
 
-  std::unique_ptr<std::vector<uint8_t>> cfi_info(
-      cu_->compiler_driver->GetCompilerOptions().GetGenerateGDBInformation() ?
-          ReturnFrameDescriptionEntry() :
-          nullptr);
-  ArrayRef<const uint8_t> cfi_ref;
-  if (cfi_info.get() != nullptr) {
-    cfi_ref = ArrayRef<const uint8_t>(*cfi_info);
-  }
   return CompiledMethod::SwapAllocCompiledMethod(
       cu_->compiler_driver, cu_->instruction_set,
       ArrayRef<const uint8_t>(code_buffer_),
@@ -1170,7 +1165,7 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
       ArrayRef<const uint8_t>(encoded_mapping_table_),
       ArrayRef<const uint8_t>(vmap_encoder.GetData()),
       ArrayRef<const uint8_t>(native_gc_map_),
-      cfi_ref,
+      ArrayRef<const uint8_t>(*cfi_.Patch()),
       ArrayRef<LinkerPatch>(patches_));
 }
 
@@ -1330,11 +1325,6 @@ void Mir2Lir::OpPcRelDexCacheArrayLoad(const DexFile* dex_file ATTRIBUTE_UNUSED,
                                        RegStorage r_dest ATTRIBUTE_UNUSED) {
   LOG(FATAL) << "No generic implementation.";
   UNREACHABLE();
-}
-
-std::vector<uint8_t>* Mir2Lir::ReturnFrameDescriptionEntry() {
-  // Default case is to do nothing.
-  return nullptr;
 }
 
 RegLocation Mir2Lir::NarrowRegLoc(RegLocation loc) {
