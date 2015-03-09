@@ -148,6 +148,10 @@ void X86Mir2Lir::UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) {
   FreeTemp(reg_card_no);
 }
 
+static inline dwarf::Reg DwarfCoreReg(bool is_x86_64, int num) {
+  return is_x86_64 ? dwarf::Reg::X86_64Core(num) : dwarf::Reg::X86Core(num);
+}
+
 void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   /*
    * On entry, rX86_ARG0, rX86_ARG1, rX86_ARG2 are live.  Let the register
@@ -182,10 +186,10 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   }
 
   /* Build frame, return address already on stack */
-  stack_decrement_ = OpRegImm(kOpSub, rs_rSP, frame_size_ -
-                              GetInstructionSetPointerSize(cu_->instruction_set));
+  cfi_.set_current_cfa_offset(GetInstructionSetPointerSize(cu_->instruction_set));
+  OpRegImm(kOpSub, rs_rSP, frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set));
+  cfi_.DefCFAOffset(frame_size_);
 
-  NewLIR0(kPseudoMethodEntry);
   /* Spill core callee saves */
   SpillCoreRegs();
   SpillFPRegs();
@@ -201,10 +205,12 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
         GenerateTargetLabel(kPseudoThrowTarget);
         const RegStorage local_rs_rSP = cu_->target64 ? rs_rX86_SP_64 : rs_rX86_SP_32;
         m2l_->OpRegImm(kOpAdd, local_rs_rSP, sp_displace_);
+        m2l_->cfi().AdjustCFAOffset(-sp_displace_);
         m2l_->ClobberCallerSave();
         // Assumes codegen and target are in thumb2 mode.
         m2l_->CallHelper(RegStorage::InvalidReg(), kQuickThrowStackOverflow,
                          false /* MarkSafepointPC */, false /* UseLink */);
+        m2l_->cfi().AdjustCFAOffset(sp_displace_);
       }
 
      private:
@@ -251,6 +257,7 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
 }
 
 void X86Mir2Lir::GenExitSequence() {
+  cfi_.RememberState();
   /*
    * In the exit path, rX86_RET0/rX86_RET1 are live - make sure they aren't
    * allocated by the register utilities as temps.
@@ -258,14 +265,18 @@ void X86Mir2Lir::GenExitSequence() {
   LockTemp(rs_rX86_RET0);
   LockTemp(rs_rX86_RET1);
 
-  NewLIR0(kPseudoMethodExit);
   UnSpillCoreRegs();
   UnSpillFPRegs();
   /* Remove frame except for return address */
   const RegStorage rs_rSP = cu_->target64 ? rs_rX86_SP_64 : rs_rX86_SP_32;
-  stack_increment_ = OpRegImm(kOpAdd, rs_rSP,
-                              frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set));
+  int adjust = frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set);
+  OpRegImm(kOpAdd, rs_rSP, adjust);
+  cfi_.AdjustCFAOffset(-adjust);
+  // There is only the return PC on the stack now.
   NewLIR0(kX86Ret);
+  // The CFI should be restored for any code that follows the exit block.
+  cfi_.RestoreState();
+  cfi_.DefCFAOffset(frame_size_);
 }
 
 void X86Mir2Lir::GenSpecialExitSequence() {
@@ -276,6 +287,8 @@ void X86Mir2Lir::GenSpecialEntryForSuspend() {
   // Keep 16-byte stack alignment, there's already the return address, so
   //   - for 32-bit push EAX, i.e. ArtMethod*, ESI, EDI,
   //   - for 64-bit push RAX, i.e. ArtMethod*.
+  const int kRegSize = cu_->target64 ? 8 : 4;
+  cfi_.set_current_cfa_offset(kRegSize);  // Return address.
   if (!cu_->target64) {
     DCHECK(!IsTemp(rs_rSI));
     DCHECK(!IsTemp(rs_rDI));
@@ -293,17 +306,29 @@ void X86Mir2Lir::GenSpecialEntryForSuspend() {
   fp_vmap_table_.clear();
   if (!cu_->target64) {
     NewLIR1(kX86Push32R, rs_rDI.GetReg());
+    cfi_.AdjustCFAOffset(kRegSize);
+    cfi_.RelOffset(DwarfCoreReg(cu_->target64, rs_rDI.GetRegNum()), 0);
     NewLIR1(kX86Push32R, rs_rSI.GetReg());
+    cfi_.AdjustCFAOffset(kRegSize);
+    cfi_.RelOffset(DwarfCoreReg(cu_->target64, rs_rSI.GetRegNum()), 0);
   }
   NewLIR1(kX86Push32R, TargetReg(kArg0, kRef).GetReg());  // ArtMethod*
+  cfi_.AdjustCFAOffset(kRegSize);
+  // Do not generate CFI for scratch register.
 }
 
 void X86Mir2Lir::GenSpecialExitForSuspend() {
+  const int kRegSize = cu_->target64 ? 8 : 4;
   // Pop the frame. (ArtMethod* no longer needed but restore it anyway.)
   NewLIR1(kX86Pop32R, TargetReg(kArg0, kRef).GetReg());  // ArtMethod*
+  cfi_.AdjustCFAOffset(-kRegSize);
   if (!cu_->target64) {
     NewLIR1(kX86Pop32R, rs_rSI.GetReg());
+    cfi_.AdjustCFAOffset(-kRegSize);
+    cfi_.Restore(DwarfCoreReg(cu_->target64, rs_rSI.GetRegNum()));
     NewLIR1(kX86Pop32R, rs_rDI.GetReg());
+    cfi_.AdjustCFAOffset(-kRegSize);
+    cfi_.Restore(DwarfCoreReg(cu_->target64, rs_rDI.GetRegNum()));
   }
 }
 

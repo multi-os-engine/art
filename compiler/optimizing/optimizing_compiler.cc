@@ -48,6 +48,7 @@
 #include "ssa_builder.h"
 #include "ssa_phi_elimination.h"
 #include "ssa_liveness_analysis.h"
+#include "utils/assembler.h"
 #include "reference_type_propagation.h"
 
 namespace art {
@@ -435,7 +436,7 @@ CompiledMethod* OptimizingCompiler::CompileBaseline(
       AlignVectorSize(mapping_table),
       AlignVectorSize(vmap_table),
       AlignVectorSize(gc_map),
-      ArrayRef<const uint8_t>());
+      ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()));
 }
 
 CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_item,

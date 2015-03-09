@@ -82,6 +82,7 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
   HGraphVisitor* instruction_visitor = GetInstructionVisitor();
   DCHECK_EQ(current_block_index_, 0u);
   GenerateFrameEntry();
+  DCHECK_EQ(GetAssembler()->cfi().current_cfa_offset(), static_cast<int>(frame_size_));
   for (size_t e = block_order_->Size(); current_block_index_ < e; ++current_block_index_) {
     HBasicBlock* block = block_order_->Get(current_block_index_);
     // Don't generate code for an empty block. Its predecessors will branch to its successor

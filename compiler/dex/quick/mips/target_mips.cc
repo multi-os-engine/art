@@ -577,6 +577,10 @@ LIR* MipsMir2Lir::GenAtomic64Store(RegStorage r_base, int displacement, RegStora
   return OpReg(kOpBlx, r_tgt);
 }
 
+static inline dwarf::Reg DwarfCoreReg(int num) {
+  return dwarf::Reg::MipsCore(num);
+}
+
 void MipsMir2Lir::SpillCoreRegs() {
   if (num_core_spills_ == 0) {
     return;
@@ -584,10 +588,12 @@ void MipsMir2Lir::SpillCoreRegs() {
   uint32_t mask = core_spill_mask_;
   int offset = num_core_spills_ * 4;
   OpRegImm(kOpSub, rs_rSP, offset);
-  for (int reg = 0; mask; mask >>= 1, reg++) {
-    if (mask & 0x1) {
+  cfi_.AdjustCFAOffset(offset);
+  for (int reg = 0; mask != 0u; mask >>= 1, reg++) {
+    if ((mask & 0x1) != 0u) {
       offset -= 4;
       Store32Disp(rs_rMIPS_SP, offset, RegStorage::Solo32(reg));
+      cfi_.RelOffset(DwarfCoreReg(reg), offset);
     }
   }
 }
@@ -598,13 +604,15 @@ void MipsMir2Lir::UnSpillCoreRegs() {
   }
   uint32_t mask = core_spill_mask_;
   int offset = frame_size_;
-  for (int reg = 0; mask; mask >>= 1, reg++) {
-    if (mask & 0x1) {
+  for (int reg = 0; mask != 0u; mask >>= 1, reg++) {
+    if ((mask & 0x1) != 0u) {
       offset -= 4;
       Load32Disp(rs_rMIPS_SP, offset, RegStorage::Solo32(reg));
+      cfi_.Restore(DwarfCoreReg(reg));
     }
   }
   OpRegImm(kOpAdd, rs_rSP, frame_size_);
+  cfi_.AdjustCFAOffset(-frame_size_);
 }
 
 bool MipsMir2Lir::IsUnconditionalBranch(LIR* lir) {
