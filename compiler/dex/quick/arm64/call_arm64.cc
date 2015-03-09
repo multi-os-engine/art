@@ -281,6 +281,8 @@ void Arm64Mir2Lir::UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) {
 }
 
 void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
+  DCHECK_EQ(cfi_.current_cfa_offset(), 0);  // empty stack.
+
   /*
    * On entry, x0 to x7 are live.  Let the register allocation
    * mechanism know so it doesn't try to use any of them when
@@ -309,8 +311,6 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
    */
   bool skip_overflow_check = mir_graph_->MethodIsLeaf() &&
     !FrameNeedsStackCheck(frame_size_, kArm64);
-
-  NewLIR0(kPseudoMethodEntry);
 
   const size_t kStackOverflowReservedUsableBytes = GetStackOverflowReservedBytes(kArm64);
   const bool large_frame = static_cast<size_t>(frame_size_) > kStackOverflowReservedUsableBytes;
@@ -345,6 +345,7 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
 
   if (spilled_already != frame_size_) {
     OpRegImm(kOpSub, rs_sp, frame_size_without_spills);
+    cfi_.AdjustCFAOffset(frame_size_without_spills);
   }
 
   if (!skip_overflow_check) {
@@ -361,12 +362,14 @@ void Arm64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method)
           GenerateTargetLabel(kPseudoThrowTarget);
           // Unwinds stack.
           m2l_->OpRegImm(kOpAdd, rs_sp, sp_displace_);
+          m2l_->cfi().AdjustCFAOffset(-sp_displace_);
           m2l_->ClobberCallerSave();
           ThreadOffset<8> func_offset = QUICK_ENTRYPOINT_OFFSET(8, pThrowStackOverflow);
           m2l_->LockTemp(rs_xIP0);
           m2l_->LoadWordDisp(rs_xSELF, func_offset.Int32Value(), rs_xIP0);
           m2l_->NewLIR1(kA64Br1x, rs_xIP0.GetReg());
           m2l_->FreeTemp(rs_xIP0);
+          m2l_->cfi().AdjustCFAOffset(sp_displace_);
         }
 
       private:
@@ -399,9 +402,6 @@ void Arm64Mir2Lir::GenExitSequence() {
    */
   LockTemp(rs_x0);
   LockTemp(rs_x1);
-
-  NewLIR0(kPseudoMethodExit);
-
   UnspillRegs(rs_sp, core_spill_mask_, fp_spill_mask_, frame_size_);
 
   // Finally return.

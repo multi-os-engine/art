@@ -84,6 +84,12 @@ const int kNumberOfAllocIds =
 // There is a one-to-one mapping between ManagedRegister and register id.
 class ArmManagedRegister : public ManagedRegister {
  public:
+  int DWARFRegId() const {
+    CHECK(IsCoreRegister());
+    // There is 1:1 mapping.
+    return static_cast<int>(id_);
+  }
+
   Register AsCoreRegister() const {
     CHECK(IsCoreRegister());
     return static_cast<Register>(id_);

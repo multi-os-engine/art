@@ -182,10 +182,10 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   }
 
   /* Build frame, return address already on stack */
-  stack_decrement_ = OpRegImm(kOpSub, rs_rSP, frame_size_ -
-                              GetInstructionSetPointerSize(cu_->instruction_set));
+  cfi_.set_current_cfa_offset(GetInstructionSetPointerSize(cu_->instruction_set));
+  OpRegImm(kOpSub, rs_rSP, frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set));
+  cfi_.DefCFAOffset(frame_size_);
 
-  NewLIR0(kPseudoMethodEntry);
   /* Spill core callee saves */
   SpillCoreRegs();
   SpillFPRegs();
@@ -201,10 +201,12 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
         GenerateTargetLabel(kPseudoThrowTarget);
         const RegStorage local_rs_rSP = cu_->target64 ? rs_rX86_SP_64 : rs_rX86_SP_32;
         m2l_->OpRegImm(kOpAdd, local_rs_rSP, sp_displace_);
+        m2l_->cfi().AdjustCFAOffset(-sp_displace_);
         m2l_->ClobberCallerSave();
         // Assumes codegen and target are in thumb2 mode.
         m2l_->CallHelper(RegStorage::InvalidReg(), kQuickThrowStackOverflow,
                          false /* MarkSafepointPC */, false /* UseLink */);
+        m2l_->cfi().AdjustCFAOffset(sp_displace_);
       }
 
      private:
@@ -258,13 +260,15 @@ void X86Mir2Lir::GenExitSequence() {
   LockTemp(rs_rX86_RET0);
   LockTemp(rs_rX86_RET1);
 
-  NewLIR0(kPseudoMethodExit);
   UnSpillCoreRegs();
   UnSpillFPRegs();
   /* Remove frame except for return address */
   const RegStorage rs_rSP = cu_->target64 ? rs_rX86_SP_64 : rs_rX86_SP_32;
-  stack_increment_ = OpRegImm(kOpAdd, rs_rSP,
-                              frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set));
+  int adjust = frame_size_ - GetInstructionSetPointerSize(cu_->instruction_set);
+  OpRegImm(kOpAdd, rs_rSP, adjust);
+  cfi_.AdjustCFAOffset(-adjust);
+  // There is only the return PC on the stack now.
+  DCHECK_EQ((size_t)cfi_.current_cfa_offset(), GetInstructionSetPointerSize(cu_->instruction_set));
   NewLIR0(kX86Ret);
 }
 

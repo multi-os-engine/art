@@ -353,7 +353,21 @@ void ArmMir2Lir::UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) {
   FreeTemp(reg_card_no);
 }
 
+static inline int DwarfCoreReg(int art_core_reg_num) {
+  // Core registers have 1:1 mapping.
+  DCHECK_LT(art_core_reg_num, 16);
+  return art_core_reg_num;
+}
+
+static inline int DwarfFpReg(int arg_fp_reg_num) {
+  // Legacy VFP-v2 mapping, but it is simpler to use.
+  DCHECK_LT(arg_fp_reg_num, 32);
+  return arg_fp_reg_num + 64;
+}
+
 void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
+  DCHECK_EQ(cfi_.current_cfa_offset(), 0);  // empty stack.
+  const int kRegSize = 4;
   int spill_count = num_core_spills_ + num_fp_spills_;
   /*
    * On entry, r0, r1, r2 & r3 are live.  Let the register allocation
@@ -371,7 +385,6 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
    * a leaf *and* our frame size < fudge factor.
    */
   bool skip_overflow_check = mir_graph_->MethodIsLeaf() && !FrameNeedsStackCheck(frame_size_, kArm);
-  NewLIR0(kPseudoMethodEntry);
   const size_t kStackOverflowReservedUsableBytes = GetStackOverflowReservedBytes(kArm);
   bool large_frame = (static_cast<size_t>(frame_size_) > kStackOverflowReservedUsableBytes);
   bool generate_explicit_stack_overflow_check = large_frame ||
@@ -402,28 +415,40 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
     }
   }
   /* Spill core callee saves */
-  if (core_spill_mask_ == 0u) {
-    // Nothing to spill.
-  } else if ((core_spill_mask_ & ~(0xffu | (1u << rs_rARM_LR.GetRegNum()))) == 0u) {
-    // Spilling only low regs and/or LR, use 16-bit PUSH.
-    constexpr int lr_bit_shift = rs_rARM_LR.GetRegNum() - 8;
-    NewLIR1(kThumbPush,
-            (core_spill_mask_ & ~(1u << rs_rARM_LR.GetRegNum())) |
-            ((core_spill_mask_ & (1u << rs_rARM_LR.GetRegNum())) >> lr_bit_shift));
-  } else if (IsPowerOfTwo(core_spill_mask_)) {
-    // kThumb2Push cannot be used to spill a single register.
-    NewLIR1(kThumb2Push1, CTZ(core_spill_mask_));
-  } else {
-    NewLIR1(kThumb2Push, core_spill_mask_);
+  if (core_spill_mask_ != 0u) {
+    if ((core_spill_mask_ & ~(0xffu | (1u << rs_rARM_LR.GetRegNum()))) == 0u) {
+      // Spilling only low regs and/or LR, use 16-bit PUSH.
+      constexpr int lr_bit_shift = rs_rARM_LR.GetRegNum() - 8;
+      NewLIR1(kThumbPush,
+              (core_spill_mask_ & ~(1u << rs_rARM_LR.GetRegNum())) |
+              ((core_spill_mask_ & (1u << rs_rARM_LR.GetRegNum())) >> lr_bit_shift));
+    } else if (IsPowerOfTwo(core_spill_mask_)) {
+      // kThumb2Push cannot be used to spill a single register.
+      NewLIR1(kThumb2Push1, CTZ(core_spill_mask_));
+    } else {
+      NewLIR1(kThumb2Push, core_spill_mask_);
+    }
+    cfi_.AdjustCFAOffset(num_core_spills_ * kRegSize);
+    for (int reg = 0, offset = 0; (core_spill_mask_ >> reg) != 0; reg++) {
+      if (((core_spill_mask_ >> reg) & 1) != 0) {
+        cfi_.RelOffset(DwarfCoreReg(reg), offset);
+        offset += kRegSize;
+      }
+    }
   }
   /* Need to spill any FP regs? */
-  if (num_fp_spills_) {
+  if (num_fp_spills_ > 0) {
     /*
      * NOTE: fp spills are a little different from core spills in that
      * they are pushed as a contiguous block.  When promoting from
      * the fp set, we must allocate all singles from s16..highest-promoted
      */
     NewLIR1(kThumb2VPushCS, num_fp_spills_);
+    cfi_.AdjustCFAOffset(num_fp_spills_ * kRegSize);
+    for (int reg = ARM_FP_CALLEE_SAVE_BASE, offset = 0; reg < ARM_FP_CALLEE_SAVE_BASE + num_fp_spills_; reg++) {
+      cfi_.RelOffset(DwarfFpReg(reg), offset);
+      offset += kRegSize;
+    }
   }
 
   const int spill_size = spill_count * 4;
@@ -444,12 +469,14 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
             m2l_->LoadWordDisp(rs_rARM_SP, sp_displace_ - 4, rs_rARM_LR);
           }
           m2l_->OpRegImm(kOpAdd, rs_rARM_SP, sp_displace_);
+          m2l_->cfi().AdjustCFAOffset(-sp_displace_);
           m2l_->ClobberCallerSave();
           ThreadOffset<4> func_offset = QUICK_ENTRYPOINT_OFFSET(4, pThrowStackOverflow);
           // Load the entrypoint directly into the pc instead of doing a load + branch. Assumes
           // codegen and target are in thumb2 mode.
           // NOTE: native pointer.
           m2l_->LoadWordDisp(rs_rARM_SELF, func_offset.Int32Value(), rs_rARM_PC);
+          m2l_->cfi().AdjustCFAOffset(sp_displace_);
         }
 
        private:
@@ -464,6 +491,7 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
         // Need to restore LR since we used it as a temp.
         AddSlowPath(new(arena_)StackOverflowSlowPath(this, branch, true, spill_size));
         OpRegCopy(rs_rARM_SP, rs_rARM_LR);     // Establish stack
+        cfi_.AdjustCFAOffset(frame_size_without_spills);
       } else {
         /*
          * If the frame is small enough we are guaranteed to have enough space that remains to
@@ -474,6 +502,7 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
         MarkTemp(rs_rARM_LR);
         FreeTemp(rs_rARM_LR);
         OpRegRegImm(kOpSub, rs_rARM_SP, rs_rARM_SP, frame_size_without_spills);
+        cfi_.AdjustCFAOffset(frame_size_without_spills);
         Clobber(rs_rARM_LR);
         UnmarkTemp(rs_rARM_LR);
         LIR* branch = OpCmpBranch(kCondUlt, rs_rARM_SP, rs_r12, nullptr);
@@ -483,9 +512,11 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
       // Implicit stack overflow check has already been done.  Just make room on the
       // stack for the frame now.
       OpRegImm(kOpSub, rs_rARM_SP, frame_size_without_spills);
+      cfi_.AdjustCFAOffset(frame_size_without_spills);
     }
   } else {
     OpRegImm(kOpSub, rs_rARM_SP, frame_size_without_spills);
+    cfi_.AdjustCFAOffset(frame_size_without_spills);
   }
 
   FlushIns(ArgLocs, rl_method);
@@ -498,7 +529,9 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
 }
 
 void ArmMir2Lir::GenExitSequence() {
+  const int kRegSize = 4;
   int spill_count = num_core_spills_ + num_fp_spills_;
+
   /*
    * In the exit path, r0/r1 are live - make sure they aren't
    * allocated by the register utilities as temps.
@@ -506,32 +539,47 @@ void ArmMir2Lir::GenExitSequence() {
   LockTemp(rs_r0);
   LockTemp(rs_r1);
 
-  NewLIR0(kPseudoMethodExit);
-  OpRegImm(kOpAdd, rs_rARM_SP, frame_size_ - (spill_count * 4));
+  int adjust = frame_size_ - (spill_count * kRegSize);
+  OpRegImm(kOpAdd, rs_rARM_SP, adjust);
+  cfi_.AdjustCFAOffset(-adjust);
   /* Need to restore any FP callee saves? */
   if (num_fp_spills_) {
     NewLIR1(kThumb2VPopCS, num_fp_spills_);
+    cfi_.AdjustCFAOffset(-num_fp_spills_ * kRegSize);
+    for (int reg = ARM_FP_CALLEE_SAVE_BASE; reg < ARM_FP_CALLEE_SAVE_BASE + num_fp_spills_; reg++) {
+      cfi_.Restore(DwarfFpReg(reg));
+    }
   }
-  if ((core_spill_mask_ & (1 << rs_rARM_LR.GetRegNum())) != 0) {
-    /* Unspill rARM_LR to rARM_PC */
+  bool unspill_LR_to_PC = (core_spill_mask_ & (1 << rs_rARM_LR.GetRegNum())) != 0;
+  if (unspill_LR_to_PC) {
     core_spill_mask_ &= ~(1 << rs_rARM_LR.GetRegNum());
     core_spill_mask_ |= (1 << rs_rARM_PC.GetRegNum());
   }
-  if (core_spill_mask_ == 0u) {
-    // Nothing to unspill.
-  } else if ((core_spill_mask_ & ~(0xffu | (1u << rs_rARM_PC.GetRegNum()))) == 0u) {
-    // Unspilling only low regs and/or PC, use 16-bit POP.
-    constexpr int pc_bit_shift = rs_rARM_PC.GetRegNum() - 8;
-    NewLIR1(kThumbPop,
-            (core_spill_mask_ & ~(1u << rs_rARM_PC.GetRegNum())) |
-            ((core_spill_mask_ & (1u << rs_rARM_PC.GetRegNum())) >> pc_bit_shift));
-  } else if (IsPowerOfTwo(core_spill_mask_)) {
-    // kThumb2Pop cannot be used to unspill a single register.
-    NewLIR1(kThumb2Pop1, CTZ(core_spill_mask_));
-  } else {
-    NewLIR1(kThumb2Pop, core_spill_mask_);
+  if (core_spill_mask_ != 0u) {
+    if ((core_spill_mask_ & ~(0xffu | (1u << rs_rARM_PC.GetRegNum()))) == 0u) {
+      // Unspilling only low regs and/or PC, use 16-bit POP.
+      constexpr int pc_bit_shift = rs_rARM_PC.GetRegNum() - 8;
+      NewLIR1(kThumbPop,
+              (core_spill_mask_ & ~(1u << rs_rARM_PC.GetRegNum())) |
+              ((core_spill_mask_ & (1u << rs_rARM_PC.GetRegNum())) >> pc_bit_shift));
+    } else if (IsPowerOfTwo(core_spill_mask_)) {
+      // kThumb2Pop cannot be used to unspill a single register.
+      NewLIR1(kThumb2Pop1, CTZ(core_spill_mask_));
+    } else {
+      NewLIR1(kThumb2Pop, core_spill_mask_);
+    }
+    // If we pop to PC, there is no further epilogue code.
+    if (!unspill_LR_to_PC) {
+      cfi_.AdjustCFAOffset(-num_core_spills_ * kRegSize);
+      for (int reg = 0; (core_spill_mask_ >> reg) != 0; reg++) {
+        if (((core_spill_mask_ >> reg) & 1) != 0) {
+          cfi_.Restore(DwarfCoreReg(reg));
+        }
+      }
+      DCHECK_EQ(cfi_.current_cfa_offset(), 0);  // empty stack.
+    }
   }
-  if ((core_spill_mask_ & (1 << rs_rARM_PC.GetRegNum())) == 0) {
+  if (!unspill_LR_to_PC) {
     /* We didn't pop to rARM_PC, so must do a bv rARM_LR */
     NewLIR1(kThumbBx, rs_rARM_LR.GetReg());
   }

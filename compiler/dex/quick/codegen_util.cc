@@ -197,12 +197,17 @@ void Mir2Lir::DumpLIRInsn(LIR* lir, unsigned char* base_addr) {
 
   /* Handle pseudo-ops individually, and all regular insns as a group */
   switch (lir->opcode) {
-    case kPseudoMethodEntry:
-      LOG(INFO) << "-------- method entry "
-                << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+    case kPseudoPrologueBegin:
+      LOG(INFO) << "-------- PrologueBegin";
       break;
-    case kPseudoMethodExit:
-      LOG(INFO) << "-------- Method_Exit";
+    case kPseudoPrologueEnd:
+      LOG(INFO) << "-------- PrologueEnd";
+      break;
+    case kPseudoEpilogueBegin:
+      LOG(INFO) << "-------- EpilogueBegin";
+      break;
+    case kPseudoEpilogueEnd:
+      LOG(INFO) << "-------- EpilogueEnd";
       break;
     case kPseudoBarrier:
       LOG(INFO) << "-------- BARRIER";
@@ -261,8 +266,9 @@ void Mir2Lir::DumpLIRInsn(LIR* lir, unsigned char* base_addr) {
                                                lir, base_addr));
         std::string op_operands(BuildInsnString(GetTargetInstFmt(lir->opcode),
                                                     lir, base_addr));
-        LOG(INFO) << StringPrintf("%5p: %-9s%s%s",
+        LOG(INFO) << StringPrintf("%5p|0x%02x: %-9s%s%s",
                                   base_addr + offset,
+                                  lir->dalvik_offset,
                                   op_name.c_str(), op_operands.c_str(),
                                   lir->flags.is_nop ? "(nop)" : "");
       }
@@ -710,14 +716,17 @@ void Mir2Lir::CreateMappingTables() {
   DCHECK_EQ(static_cast<size_t>(write_pos - &encoded_mapping_table_[0]), hdr_data_size);
   uint8_t* write_pos2 = write_pos + pc2dex_data_size;
 
+  bool is_in_prologue_or_epilogue = false;
   pc2dex_offset = 0u;
   pc2dex_dalvik_offset = 0u;
   dex2pc_offset = 0u;
   dex2pc_dalvik_offset = 0u;
   for (LIR* tgt_lir = first_lir_insn_; tgt_lir != nullptr; tgt_lir = NEXT_LIR(tgt_lir)) {
-    if (generate_src_map && !tgt_lir->flags.is_nop) {
-      src_mapping_table_.push_back(SrcMapElem({tgt_lir->offset,
-              static_cast<int32_t>(tgt_lir->dalvik_offset)}));
+    if (generate_src_map && !tgt_lir->flags.is_nop && tgt_lir->opcode >= 0) {
+      if (!is_in_prologue_or_epilogue) {
+        src_mapping_table_.push_back(SrcMapElem({tgt_lir->offset,
+                static_cast<int32_t>(tgt_lir->dalvik_offset)}));
+      }
     }
     if (!tgt_lir->flags.is_nop && (tgt_lir->opcode == kPseudoSafepointPC)) {
       DCHECK(pc2dex_offset <= tgt_lir->offset);
@@ -734,6 +743,12 @@ void Mir2Lir::CreateMappingTables() {
                                       static_cast<int32_t>(dex2pc_dalvik_offset));
       dex2pc_offset = tgt_lir->offset;
       dex2pc_dalvik_offset = tgt_lir->dalvik_offset;
+    }
+    if (tgt_lir->opcode == kPseudoPrologueBegin || tgt_lir->opcode == kPseudoEpilogueBegin) {
+      is_in_prologue_or_epilogue = true;
+    }
+    if (tgt_lir->opcode == kPseudoPrologueEnd || tgt_lir->opcode == kPseudoEpilogueEnd) {
+      is_in_prologue_or_epilogue = false;
     }
   }
   DCHECK_EQ(static_cast<size_t>(write_pos - &encoded_mapping_table_[0]),
@@ -984,6 +999,9 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       slow_paths_(arena->Adapter(kArenaAllocSlowPaths)),
       mem_ref_type_(ResourceMask::kHeapRef),
       mask_cache_(arena),
+      cfi_(&last_lir_insn_,
+           cu->compiler_driver->GetCompilerOptions().GetGenerateGDBInformation(),
+           arena),
       in_to_reg_storage_mapping_(arena) {
   switch_tables_.reserve(4);
   fill_array_data_.reserve(4);
@@ -1068,12 +1086,9 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
     return lhs.LiteralOffset() < rhs.LiteralOffset();
   });
 
-  std::unique_ptr<std::vector<uint8_t>> cfi_info(
-      cu_->compiler_driver->GetCompilerOptions().GetGenerateGDBInformation() ?
-          ReturnFrameDescriptionEntry() :
-          nullptr);
+  const ArenaVector<uint8_t>* cfi_info = cfi_.Patch();
   ArrayRef<const uint8_t> cfi_ref;
-  if (cfi_info.get() != nullptr) {
+  if (cfi_info != nullptr) {
     cfi_ref = ArrayRef<const uint8_t>(*cfi_info);
   }
   return CompiledMethod::SwapAllocCompiledMethod(
@@ -1236,11 +1251,6 @@ void Mir2Lir::LoadClassType(const DexFile& dex_file, uint32_t type_idx,
   // Loads a Class pointer, which is a reference as it lives in the heap.
   LIR* load_pc_rel = OpPcRelLoad(TargetReg(symbolic_reg, kRef), data_target);
   AppendLIR(load_pc_rel);
-}
-
-std::vector<uint8_t>* Mir2Lir::ReturnFrameDescriptionEntry() {
-  // Default case is to do nothing.
-  return nullptr;
 }
 
 RegLocation Mir2Lir::NarrowRegLoc(RegLocation loc) {

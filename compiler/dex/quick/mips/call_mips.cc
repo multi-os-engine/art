@@ -230,6 +230,7 @@ void MipsMir2Lir::UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) {
 }
 
 void MipsMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
+  DCHECK_EQ(cfi_.current_cfa_offset(), 0);
   int spill_count = num_core_spills_ + num_fp_spills_;
   /*
    * On entry, rMIPS_ARG0, rMIPS_ARG1, rMIPS_ARG2 & rMIPS_ARG3 are live.  Let the register
@@ -247,7 +248,6 @@ void MipsMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) 
    * a leaf *and* our frame size < fudge factor.
    */
   bool skip_overflow_check = mir_graph_->MethodIsLeaf() && !FrameNeedsStackCheck(frame_size_, kMips);
-  NewLIR0(kPseudoMethodEntry);
   RegStorage check_reg = AllocTemp();
   RegStorage new_sp = AllocTemp();
   if (!skip_overflow_check) {
@@ -272,10 +272,12 @@ void MipsMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) 
         // LR is offset 0 since we push in reverse order.
         m2l_->Load32Disp(rs_rMIPS_SP, 0, rs_rRA);
         m2l_->OpRegImm(kOpAdd, rs_rMIPS_SP, sp_displace_);
+        m2l_->cfi().AdjustCFAOffset(-sp_displace_);
         m2l_->ClobberCallerSave();
         RegStorage r_tgt = m2l_->CallHelperSetup(kQuickThrowStackOverflow);  // Doesn't clobber LR.
         m2l_->CallHelper(r_tgt, kQuickThrowStackOverflow, false /* MarkSafepointPC */,
                          false /* UseLink */);
+        m2l_->cfi().AdjustCFAOffset(sp_displace_);
       }
 
      private:
@@ -286,8 +288,10 @@ void MipsMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) 
     AddSlowPath(new(arena_)StackOverflowSlowPath(this, branch, spill_count * 4));
     // TODO: avoid copy for small frame sizes.
     OpRegCopy(rs_rMIPS_SP, new_sp);     // Establish stack
+    cfi_.AdjustCFAOffset(frame_sub);
   } else {
     OpRegImm(kOpSub, rs_rMIPS_SP, frame_sub);
+    cfi_.AdjustCFAOffset(frame_sub);
   }
 
   FlushIns(ArgLocs, rl_method);
@@ -305,8 +309,6 @@ void MipsMir2Lir::GenExitSequence() {
    */
   LockTemp(rs_rMIPS_RET0);
   LockTemp(rs_rMIPS_RET1);
-
-  NewLIR0(kPseudoMethodExit);
   UnSpillCoreRegs();
   OpReg(kOpBx, rs_rRA);
 }
