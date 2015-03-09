@@ -18,6 +18,7 @@
 #define ART_COMPILER_UTILS_MIPS64_MANAGED_REGISTER_MIPS64_H_
 
 #include "constants_mips64.h"
+#include "dwarf/register.h"
 #include "utils/managed_register.h"
 
 namespace art {
@@ -105,6 +106,10 @@ class Mips64ManagedRegister : public ManagedRegister {
     return reg;
   }
 };
+
+static inline dwarf::Reg DWARFReg(GpuRegister reg) {
+  return dwarf::Reg::Mips64Core(static_cast<int>(reg));
+}
 
 std::ostream& operator<<(std::ostream& os, const Mips64ManagedRegister& reg);
 
