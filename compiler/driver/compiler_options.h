@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "base/macros.h"
+#include "dex/pass_manager.h"
 #include "globals.h"
 
 namespace art {
@@ -150,6 +151,10 @@ class CompilerOptions FINAL {
     return include_debug_symbols_;
   }
 
+  void SetIncludeDebugSymbols(bool value) {
+    include_debug_symbols_ = value;
+  }
+
   bool GetImplicitNullChecks() const {
     return implicit_null_checks_;
   }
@@ -164,6 +169,10 @@ class CompilerOptions FINAL {
 
   bool GetGenerateGDBInformation() const {
     return generate_gdb_information_;
+  }
+
+  void SetGenerateGDBInformation(bool value) {
+    generate_gdb_information_ = value;
   }
 
   bool GetIncludePatchInformation() const {
@@ -207,12 +216,12 @@ class CompilerOptions FINAL {
   const size_t small_method_threshold_;
   const size_t tiny_method_threshold_;
   const size_t num_dex_methods_threshold_;
-  const bool generate_gdb_information_;
+  bool generate_gdb_information_;
   const bool include_patch_information_;
   // When using a profile file only the top K% of the profiled samples will be compiled.
   const double top_k_profile_threshold_;
   const bool debuggable_;
-  const bool include_debug_symbols_;
+  bool include_debug_symbols_;
   const bool implicit_null_checks_;
   const bool implicit_so_checks_;
   const bool implicit_suspend_checks_;
