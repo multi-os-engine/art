@@ -1956,10 +1956,12 @@ static void InitializeClass(const ParallelCompilationManager* manager, size_t cl
         manager->GetClassLinker()->EnsureInitialized(soa.Self(), klass, false, true);
         if (!klass->IsInitialized()) {
           // We need to initialize static fields, we only do this for image classes that aren't
-          // marked with the $NoPreloadHolder (which implies this should not be initialized early).
+          // marked with the $No(Image)PreloadHolder (which implies this should not be initialized
+          // early).
           bool can_init_static_fields = manager->GetCompiler()->IsImage() &&
               manager->GetCompiler()->IsImageClass(descriptor) &&
-              !StringPiece(descriptor).ends_with("$NoPreloadHolder;");
+              !StringPiece(descriptor).ends_with("$NoPreloadHolder;") &&
+              !StringPiece(descriptor).ends_with("$NoImagePreloadHolder;");
           if (can_init_static_fields) {
             VLOG(compiler) << "Initializing: " << descriptor;
             // TODO multithreading support. We should ensure the current compilation thread has
