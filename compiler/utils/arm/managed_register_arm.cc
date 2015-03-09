@@ -71,7 +71,6 @@ int ArmManagedRegister::AllocIdHigh() const {
   return AllocIdLow() + 1;
 }
 
-
 void ArmManagedRegister::Print(std::ostream& os) const {
   if (!IsValidManagedRegister()) {
     os << "No Register";

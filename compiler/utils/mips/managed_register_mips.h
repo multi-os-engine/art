@@ -18,6 +18,7 @@
 #define ART_COMPILER_UTILS_MIPS_MANAGED_REGISTER_MIPS_H_
 
 #include "constants_mips.h"
+#include "dwarf/register.h"
 #include "utils/managed_register.h"
 
 namespace art {
@@ -212,6 +213,10 @@ class MipsManagedRegister : public ManagedRegister {
     return reg;
   }
 };
+
+static inline dwarf::Reg DWARFReg(Register reg) {
+  return dwarf::Reg::MipsCore(static_cast<int>(reg));
+}
 
 std::ostream& operator<<(std::ostream& os, const MipsManagedRegister& reg);
 

@@ -29,6 +29,7 @@
 #include "offsets.h"
 #include "x86/constants_x86.h"
 #include "x86_64/constants_x86_64.h"
+#include "dwarf/debug_frame_opcode_writer.h"
 
 namespace art {
 
@@ -354,8 +355,25 @@ class AssemblerBuffer {
   friend class AssemblerFixup;
 };
 
-class Assembler {
+// The purpose of this class is to ensure that we do not have to explicitely
+// call the AdvancePC method (which is good for convenience and correctness).
+class DebugFrameOpCodeWriterForAssembler FINAL
+    : public dwarf::DebugFrameOpCodeWriter<> {
  public:
+  // This method is called the by the opcode writers.
+  virtual void ImplicitlyAdvancePC() FINAL;
+
+  explicit DebugFrameOpCodeWriterForAssembler(Assembler* buffer)
+      : dwarf::DebugFrameOpCodeWriter<>(),
+        assembler_(buffer) {
+  }
+
+ private:
+  Assembler* assembler_;
+};
+
+class Assembler {
+  public:
   static Assembler* Create(InstructionSet instruction_set);
 
   // Emit slow paths queued during assembly
@@ -504,18 +522,20 @@ class Assembler {
   // and branch to a ExceptionSlowPath if it is.
   virtual void ExceptionPoll(ManagedRegister scratch, size_t stack_adjust) = 0;
 
-  virtual void InitializeFrameDescriptionEntry() {}
-  virtual void FinalizeFrameDescriptionEntry() {}
-  // Give a vector containing FDE data, or null if not used. Note: the assembler must take care
-  // of handling the lifecycle.
-  virtual std::vector<uint8_t>* GetFrameDescriptionEntry() { return nullptr; }
-
   virtual ~Assembler() {}
 
+  /**
+   * @brief Buffer of DWARF's Call Frame Information opcodes.
+   * @details It is used by debuggers and other tools to unwind the call stack.
+   */
+  DebugFrameOpCodeWriterForAssembler& cfi() { return cfi_; }
+
  protected:
-  Assembler() : buffer_() {}
+  Assembler() : buffer_(), cfi_(this) {}
 
   AssemblerBuffer buffer_;
+
+  DebugFrameOpCodeWriterForAssembler cfi_;
 };
 
 }  // namespace art

@@ -569,6 +569,10 @@ LIR* Mips64Mir2Lir::GenAtomic64Store(RegStorage r_base, int displacement, RegSto
   return OpReg(kOpBlx, r_tgt);
 }
 
+static inline dwarf::Reg DwarfCoreReg(int num) {
+  return dwarf::Reg::Mips64Core(num);
+}
+
 void Mips64Mir2Lir::SpillCoreRegs() {
   if (num_core_spills_ == 0) {
     return;
@@ -577,9 +581,11 @@ void Mips64Mir2Lir::SpillCoreRegs() {
   // Start saving from offset 0 so that ra ends up on the top of the frame.
   int offset = 0;
   OpRegImm(kOpSub, rs_rSPd, num_core_spills_ * 8);
+  cfi_.AdjustCFAOffset(num_core_spills_ * 8);
   for (int reg = 0; mask; mask >>= 1, reg++) {
     if (mask & 0x1) {
       StoreWordDisp(rs_rMIPS64_SP, offset, RegStorage::Solo64(reg));
+      cfi_.RelOffset(DwarfCoreReg(reg), offset);
       offset += 8;
     }
   }
@@ -594,10 +600,12 @@ void Mips64Mir2Lir::UnSpillCoreRegs() {
   for (int reg = 0; mask; mask >>= 1, reg++) {
     if (mask & 0x1) {
       LoadWordDisp(rs_rMIPS64_SP, offset, RegStorage::Solo64(reg));
+      cfi_.Restore(DwarfCoreReg(reg));
       offset += 8;
     }
   }
   OpRegImm(kOpAdd, rs_rSPd, frame_size_);
+  cfi_.AdjustCFAOffset(-frame_size_);
 }
 
 bool Mips64Mir2Lir::IsUnconditionalBranch(LIR* lir) {

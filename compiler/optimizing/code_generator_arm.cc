@@ -528,12 +528,19 @@ void CodeGeneratorARM::GenerateFrameEntry() {
 
   // PC is in the list of callee-save to mimic Quick, but we need to push
   // LR at entry instead.
-  __ PushList((core_spill_mask_ & (~(1 << PC))) | 1 << LR);
+  uint32_t push_mask = (core_spill_mask_ & (~(1 << PC))) | 1 << LR;
+  __ PushList(push_mask);
+  __ cfi().AdjustCFAOffset(kArmWordSize * POPCOUNT(push_mask));
+  __ cfi().RelOffsets(DWARFReg(Register(0)), 0, push_mask, kArmWordSize);
   if (fpu_spill_mask_ != 0) {
     SRegister start_register = SRegister(LeastSignificantBit(fpu_spill_mask_));
     __ vpushs(start_register, POPCOUNT(fpu_spill_mask_));
+    __ cfi().AdjustCFAOffset(kArmWordSize * POPCOUNT(fpu_spill_mask_));
+    __ cfi().RelOffsets(DWARFReg(SRegister(0)), 0, fpu_spill_mask_, kArmWordSize);
   }
-  __ AddConstant(SP, -(GetFrameSize() - FrameEntrySpillSize()));
+  int adjust = GetFrameSize() - FrameEntrySpillSize();
+  __ AddConstant(SP, -adjust);
+  __ cfi().AdjustCFAOffset(adjust);
   __ StoreToOffset(kStoreWord, R0, SP, 0);
 }
 
@@ -542,10 +549,13 @@ void CodeGeneratorARM::GenerateFrameExit() {
     __ bx(LR);
     return;
   }
-  __ AddConstant(SP, GetFrameSize() - FrameEntrySpillSize());
+  int adjust = GetFrameSize() - FrameEntrySpillSize();
+  __ AddConstant(SP, adjust);
+  __ cfi().AdjustCFAOffset(-adjust);
   if (fpu_spill_mask_ != 0) {
     SRegister start_register = SRegister(LeastSignificantBit(fpu_spill_mask_));
     __ vpops(start_register, POPCOUNT(fpu_spill_mask_));
+    __ cfi().Restores(DWARFReg(SRegister(0)), fpu_spill_mask_);
   }
   __ PopList(core_spill_mask_);
 }
@@ -1159,7 +1169,10 @@ void LocationsBuilderARM::VisitReturnVoid(HReturnVoid* ret) {
 
 void InstructionCodeGeneratorARM::VisitReturnVoid(HReturnVoid* ret) {
   UNUSED(ret);
+  __ cfi().RememberState();
   codegen_->GenerateFrameExit();
+  __ cfi().RestoreState();
+  __ cfi().DefCFAOffset(codegen_->GetFrameSize());
 }
 
 void LocationsBuilderARM::VisitReturn(HReturn* ret) {
@@ -1170,7 +1183,10 @@ void LocationsBuilderARM::VisitReturn(HReturn* ret) {
 
 void InstructionCodeGeneratorARM::VisitReturn(HReturn* ret) {
   UNUSED(ret);
+  __ cfi().RememberState();
   codegen_->GenerateFrameExit();
+  __ cfi().RestoreState();
+  __ cfi().DefCFAOffset(codegen_->GetFrameSize());
 }
 
 void LocationsBuilderARM::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {

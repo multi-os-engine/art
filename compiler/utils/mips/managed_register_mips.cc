@@ -72,7 +72,6 @@ int MipsManagedRegister::AllocIdHigh() const {
   return AllocIdLow() + 1;
 }
 
-
 void MipsManagedRegister::Print(std::ostream& os) const {
   if (!IsValidManagedRegister()) {
     os << "No Register";
