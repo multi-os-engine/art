@@ -230,6 +230,7 @@ void Mips64Mir2Lir::UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) {
 }
 
 void Mips64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
+  DCHECK_EQ(cfi_.current_cfa_offset(), 0);
   int spill_count = num_core_spills_ + num_fp_spills_;
   /*
    * On entry, rMIPS64_ARG0, rMIPS64_ARG1, rMIPS64_ARG2, rMIPS64_ARG3,
@@ -252,7 +253,6 @@ void Mips64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method
    */
   bool skip_overflow_check = mir_graph_->MethodIsLeaf() && !FrameNeedsStackCheck(frame_size_,
                                                                                  kMips64);
-  NewLIR0(kPseudoMethodEntry);
   RegStorage check_reg = AllocTempWide();
   RegStorage new_sp = AllocTempWide();
   if (!skip_overflow_check) {
@@ -277,10 +277,12 @@ void Mips64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method
         // Load RA from the top of the frame.
         m2l_->LoadWordDisp(rs_rMIPS64_SP, sp_displace_ - 8, rs_rRAd);
         m2l_->OpRegImm(kOpAdd, rs_rMIPS64_SP, sp_displace_);
+        m2l_->cfi().AdjustCFAOffset(-sp_displace_);
         m2l_->ClobberCallerSave();
         RegStorage r_tgt = m2l_->CallHelperSetup(kQuickThrowStackOverflow);  // Doesn't clobber LR.
         m2l_->CallHelper(r_tgt, kQuickThrowStackOverflow, false /* MarkSafepointPC */,
                          false /* UseLink */);
+        m2l_->cfi().AdjustCFAOffset(sp_displace_);
       }
 
      private:
@@ -291,8 +293,10 @@ void Mips64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method
     AddSlowPath(new(arena_)StackOverflowSlowPath(this, branch, spill_count * 8));
     // TODO: avoid copy for small frame sizes.
     OpRegCopy(rs_rMIPS64_SP, new_sp);  // Establish stack.
+    cfi_.AdjustCFAOffset(frame_sub);
   } else {
     OpRegImm(kOpSub, rs_rMIPS64_SP, frame_sub);
+    cfi_.AdjustCFAOffset(frame_sub);
   }
 
   FlushIns(ArgLocs, rl_method);
@@ -305,9 +309,12 @@ void Mips64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method
   FreeTemp(rs_rMIPS64_ARG5);
   FreeTemp(rs_rMIPS64_ARG6);
   FreeTemp(rs_rMIPS64_ARG7);
+
+  DCHECK_EQ(cfi_.current_cfa_offset(), frame_size_);
 }
 
 void Mips64Mir2Lir::GenExitSequence() {
+  DCHECK_EQ(cfi_.current_cfa_offset(), frame_size_);
   /*
    * In the exit path, rMIPS64_RET0/rMIPS64_RET1 are live - make sure they aren't
    * allocated by the register utilities as temps.
@@ -315,9 +322,11 @@ void Mips64Mir2Lir::GenExitSequence() {
   LockTemp(rs_rMIPS64_RET0);
   LockTemp(rs_rMIPS64_RET1);
 
-  NewLIR0(kPseudoMethodExit);
+  cfi_.RememberState();
   UnSpillCoreRegs();
   OpReg(kOpBx, rs_rRAd);
+  cfi_.RestoreState();
+  cfi_.DefCFAOffset(frame_size_);
 }
 
 void Mips64Mir2Lir::GenSpecialExitSequence() {

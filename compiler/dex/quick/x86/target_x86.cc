@@ -32,7 +32,6 @@
 #include "mirror/string.h"
 #include "oat.h"
 #include "x86_lir.h"
-#include "utils/dwarf_cfi.h"
 
 namespace art {
 
@@ -725,6 +724,8 @@ int X86Mir2Lir::NumReservableVectorRegisters(bool long_or_fp) {
   return long_or_fp ? num_vector_temps - 2 : num_vector_temps - 1;
 }
 
+static bool ARTRegIDToDWARFRegID(bool is_x86_64, int art_reg_id, int* dwarf_reg_id);
+
 void X86Mir2Lir::SpillCoreRegs() {
   if (num_core_spills_ == 0) {
     return;
@@ -737,9 +738,12 @@ void X86Mir2Lir::SpillCoreRegs() {
   const RegStorage rs_rSP = cu_->target64 ? rs_rX86_SP_64 : rs_rX86_SP_32;
   for (int reg = 0; mask; mask >>= 1, reg++) {
     if (mask & 0x1) {
-      StoreBaseDisp(rs_rSP, offset,
-                    cu_->target64 ? RegStorage::Solo64(reg) :  RegStorage::Solo32(reg),
-                   size, kNotVolatile);
+      RegStorage r_src = cu_->target64 ? RegStorage::Solo64(reg) :  RegStorage::Solo32(reg);
+      StoreBaseDisp(rs_rSP, offset, r_src, size, kNotVolatile);
+      int dwarf_reg_id;
+      if (ARTRegIDToDWARFRegID(cu_->target64, reg, &dwarf_reg_id)) {
+        cfi_.RelOffset(dwarf_reg_id, offset);
+      }
       offset += GetInstructionSetPointerSize(cu_->instruction_set);
     }
   }
@@ -758,6 +762,10 @@ void X86Mir2Lir::UnSpillCoreRegs() {
     if (mask & 0x1) {
       LoadBaseDisp(rs_rSP, offset, cu_->target64 ? RegStorage::Solo64(reg) :  RegStorage::Solo32(reg),
                    size, kNotVolatile);
+      int dwarf_reg_id;
+      if (ARTRegIDToDWARFRegID(cu_->target64, reg, &dwarf_reg_id)) {
+        cfi_.Restore(dwarf_reg_id);
+      }
       offset += GetInstructionSetPointerSize(cu_->instruction_set);
     }
   }
@@ -767,6 +775,7 @@ void X86Mir2Lir::SpillFPRegs() {
   if (num_fp_spills_ == 0) {
     return;
   }
+  // TODO: CFI
   uint32_t mask = fp_spill_mask_;
   int offset = frame_size_ -
       (GetInstructionSetPointerSize(cu_->instruction_set) * (num_fp_spills_ + num_core_spills_));
@@ -782,6 +791,7 @@ void X86Mir2Lir::UnSpillFPRegs() {
   if (num_fp_spills_ == 0) {
     return;
   }
+  // TODO: CFI
   uint32_t mask = fp_spill_mask_;
   int offset = frame_size_ -
       (GetInstructionSetPointerSize(cu_->instruction_set) * (num_fp_spills_ + num_core_spills_));
@@ -829,7 +839,6 @@ X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator*
       method_address_insns_(arena->Adapter()),
       class_type_address_insns_(arena->Adapter()),
       call_method_insns_(arena->Adapter()),
-      stack_decrement_(nullptr), stack_increment_(nullptr),
       const_vectors_(nullptr) {
   method_address_insns_.reserve(100);
   class_type_address_insns_.reserve(100);
@@ -1435,78 +1444,6 @@ static bool ARTRegIDToDWARFRegID(bool is_x86_64, int art_reg_id, int* dwarf_reg_
     default: return false;  // Should not get here
     }
   }
-}
-
-std::vector<uint8_t>* X86Mir2Lir::ReturnFrameDescriptionEntry() {
-  std::vector<uint8_t>* cfi_info = new std::vector<uint8_t>;
-
-  // Generate the FDE for the method.
-  DCHECK_NE(data_offset_, 0U);
-
-  WriteFDEHeader(cfi_info, cu_->target64);
-  WriteFDEAddressRange(cfi_info, data_offset_, cu_->target64);
-
-  // The instructions in the FDE.
-  if (stack_decrement_ != nullptr) {
-    // Advance LOC to just past the stack decrement.
-    uint32_t pc = NEXT_LIR(stack_decrement_)->offset;
-    DW_CFA_advance_loc(cfi_info, pc);
-
-    // Now update the offset to the call frame: DW_CFA_def_cfa_offset frame_size.
-    DW_CFA_def_cfa_offset(cfi_info, frame_size_);
-
-    // Handle register spills
-    const uint32_t kSpillInstLen = (cu_->target64) ? 5 : 4;
-    const int kDataAlignmentFactor = (cu_->target64) ? -8 : -4;
-    uint32_t mask = core_spill_mask_ & ~(1 << rs_rRET.GetRegNum());
-    int offset = -(GetInstructionSetPointerSize(cu_->instruction_set) * num_core_spills_);
-    for (int reg = 0; mask; mask >>= 1, reg++) {
-      if (mask & 0x1) {
-        pc += kSpillInstLen;
-
-        // Advance LOC to pass this instruction
-        DW_CFA_advance_loc(cfi_info, kSpillInstLen);
-
-        int dwarf_reg_id;
-        if (ARTRegIDToDWARFRegID(cu_->target64, reg, &dwarf_reg_id)) {
-          // DW_CFA_offset_extended_sf reg offset
-          DW_CFA_offset_extended_sf(cfi_info, dwarf_reg_id, offset / kDataAlignmentFactor);
-        }
-
-        offset += GetInstructionSetPointerSize(cu_->instruction_set);
-      }
-    }
-
-    // We continue with that stack until the epilogue.
-    if (stack_increment_ != nullptr) {
-      uint32_t new_pc = NEXT_LIR(stack_increment_)->offset;
-      DW_CFA_advance_loc(cfi_info, new_pc - pc);
-
-      // We probably have code snippets after the epilogue, so save the
-      // current state: DW_CFA_remember_state.
-      DW_CFA_remember_state(cfi_info);
-
-      // We have now popped the stack: DW_CFA_def_cfa_offset 4/8.
-      // There is only the return PC on the stack now.
-      DW_CFA_def_cfa_offset(cfi_info, GetInstructionSetPointerSize(cu_->instruction_set));
-
-      // Everything after that is the same as before the epilogue.
-      // Stack bump was followed by RET instruction.
-      LIR *post_ret_insn = NEXT_LIR(NEXT_LIR(stack_increment_));
-      if (post_ret_insn != nullptr) {
-        pc = new_pc;
-        new_pc = post_ret_insn->offset;
-        DW_CFA_advance_loc(cfi_info, new_pc - pc);
-        // Restore the state: DW_CFA_restore_state.
-        DW_CFA_restore_state(cfi_info);
-      }
-    }
-  }
-
-  PadCFI(cfi_info);
-  WriteCFILength(cfi_info, cu_->target64);
-
-  return cfi_info;
 }
 
 void X86Mir2Lir::GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir) {

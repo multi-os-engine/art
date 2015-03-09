@@ -99,14 +99,16 @@ std::ostream& operator<<(std::ostream& os, const BBType& code);
 
 // Shared pseudo opcodes - must be < 0.
 enum LIRPseudoOpcode {
+  kPseudoPrologueBegin = -20,
+  kPseudoPrologueEnd = -19,
+  kPseudoEpilogueBegin = -18,
+  kPseudoEpilogueEnd = -17,
   kPseudoExportedPC = -16,
   kPseudoSafepointPC = -15,
   kPseudoIntrinsicRetry = -14,
   kPseudoSuspendTarget = -13,
   kPseudoThrowTarget = -12,
   kPseudoCaseLabel = -11,
-  kPseudoMethodEntry = -10,
-  kPseudoMethodExit = -9,
   kPseudoBarrier = -8,
   kPseudoEntryBlock = -7,
   kPseudoExitBlock = -6,

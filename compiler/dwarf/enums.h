@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef ART_RUNTIME_DWARF_H_
-#define ART_RUNTIME_DWARF_H_
+#ifndef ART_COMPILER_DWARF_ENUMS_H_
+#define ART_COMPILER_DWARF_ENUMS_H_
+
+#include <cstdint>
 
 namespace art {
+namespace dwarf {
 
 // Based on the Dwarf 4 specification at dwarfstd.com and issues marked
 // for inclusion in Dwarf 5 on same. Values not specified in the Dwarf 4
@@ -657,6 +660,7 @@ enum CallFrameInstruction : uint8_t {
   DW_CFA_hi_user = 0x3f
 };
 
+}  // namespace dwarf
 }  // namespace art
 
-#endif  // ART_RUNTIME_DWARF_H_
+#endif  // ART_COMPILER_DWARF_ENUMS_H_

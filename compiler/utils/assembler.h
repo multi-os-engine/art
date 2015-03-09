@@ -29,6 +29,7 @@
 #include "offsets.h"
 #include "x86/constants_x86.h"
 #include "x86_64/constants_x86_64.h"
+#include "dwarf/debug_frame_opcode_writer.h"
 
 namespace art {
 
@@ -504,18 +505,18 @@ class Assembler {
   // and branch to a ExceptionSlowPath if it is.
   virtual void ExceptionPoll(ManagedRegister scratch, size_t stack_adjust) = 0;
 
-  virtual void InitializeFrameDescriptionEntry() {}
-  virtual void FinalizeFrameDescriptionEntry() {}
-  // Give a vector containing FDE data, or null if not used. Note: the assembler must take care
-  // of handling the lifecycle.
-  virtual std::vector<uint8_t>* GetFrameDescriptionEntry() { return nullptr; }
-
   virtual ~Assembler() {}
 
+  const std::vector<uint8_t>& GetCfiData() const { return *cfi_.data(); }
+
  protected:
-  Assembler() : buffer_() {}
+  Assembler() : buffer_(), cfi_() {}
 
   AssemblerBuffer buffer_;
+
+  // Buffer for DWARF's Call Frame Information opcodes.
+  // They are used by debuggers and other tools to unwind the call stack.
+  dwarf::DebugFrameOpCodeWriter cfi_;
 };
 
 }  // namespace art
