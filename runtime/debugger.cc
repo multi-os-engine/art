@@ -47,7 +47,6 @@
 #include "ScopedPrimitiveArray.h"
 #include "handle_scope-inl.h"
 #include "thread_list.h"
-#include "throw_location.h"
 #include "utf.h"
 #include "verifier/method_verifier-inl.h"
 #include "well_known_classes.h"
@@ -3796,7 +3795,6 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
   StackHandleScope<2> hs(soa.Self());
   auto old_exception = hs.NewHandle<mirror::Throwable>(nullptr);
   {
-    ThrowLocation old_throw_location;
     mirror::Throwable* old_exception_obj = soa.Self()->GetException();
     old_exception.Assign(old_exception_obj);
     soa.Self()->ClearException();
