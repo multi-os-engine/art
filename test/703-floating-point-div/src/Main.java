@@ -53,7 +53,7 @@ public class Main {
 
         expectEquals(Double.doubleToRawLongBits(dPi/d8), 0xc90fdaa22168cL);
         expectEquals(Double.doubleToRawLongBits(dPi/d9), 0x7ff0000000000000L);
-        expectEquals(Double.doubleToRawLongBits(dPi/d0), 0x7ff8000000000000L);
+        expectEquals(Double.doubleToLongBits(dPi/d0), 0x7ff8000000000000L);
     }
 
     public static void divFloatTest() {
@@ -78,7 +78,7 @@ public class Main {
 
         expectEquals(Float.floatToRawIntBits(fPi/f8), 0x6487ee);
         expectEquals(Float.floatToRawIntBits(fPi/f9), 0x7f800000);
-        expectEquals(Float.floatToRawIntBits(fPi/f0), 0x7fc00000);
+        expectEquals(Float.floatToIntBits(fPi/f0), 0x7fc00000);
     }
 
     public static void main(String[] args) {
