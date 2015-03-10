@@ -324,6 +324,7 @@ LIBART_ENUM_OPERATOR_OUT_HEADER_FILES := \
   quick/inline_method_analyser.h \
   runtime.h \
   stack.h \
+  stack_map.h \
   thread.h \
   thread_state.h \
   verifier/method_verifier.h

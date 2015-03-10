@@ -42,7 +42,7 @@ def ProcessFile(filename):
   is_enum_private = False
   is_enum_class = False
   line_number = 0
-  
+
 
   namespaces = []
   enclosing_classes = []
@@ -55,7 +55,7 @@ def ProcessFile(filename):
       m = _ENUM_START_RE.search(raw_line)
       if m:
         # Yes, so add an empty entry to _ENUMS for this enum.
-        
+
         # Except when it's private
         if m.group(3) is not None:
           is_enum_private = True
