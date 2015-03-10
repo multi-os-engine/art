@@ -66,31 +66,62 @@ class CheckReferenceMapVisitor : public StackVisitor {
     mirror::ArtMethod* m = GetMethod();
     CodeInfo code_info = m->GetOptimizedCodeInfo();
     StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset);
-    DexRegisterMap dex_register_map = code_info.GetDexRegisterMapOf(stack_map, m->GetCodeItem()->registers_size_);
+    switch (kDexRegisterMapEncoding) {
+      case kDexRegisterLocationList: {
+        DexRegisterMap dex_register_map =
+            code_info.GetDexRegisterMapOf(stack_map, m->GetCodeItem()->registers_size_);
+        CheckDexRegisterLocations(registers,
+                                  number_of_references,
+                                  stack_map,
+                                  dex_register_map);
+        break;
+      }
+      case kDexRegisterCompressedLocationList: {
+        DexRegisterCompressedMap dex_register_compressed_map =
+            code_info.GetDexRegisterCompressedMapOf(stack_map, m->GetCodeItem()->registers_size_);
+        CheckDexRegisterLocations(registers,
+                                  number_of_references,
+                                  stack_map,
+                                  dex_register_compressed_map);
+        break;
+      }
+    }
+  }
+
+  template <typename DexRegisterMapType>
+  void CheckDexRegisterLocations(int* registers,
+                                 int number_of_references,
+                                 const StackMap& stack_map,
+                                 const DexRegisterMapType& dex_register_map)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    mirror::ArtMethod* m = GetMethod();
     MemoryRegion stack_mask = stack_map.GetStackMask();
     uint32_t register_mask = stack_map.GetRegisterMask();
     for (int i = 0; i < number_of_references; ++i) {
       int reg = registers[i];
       CHECK(reg < m->GetCodeItem()->registers_size_);
-      DexRegisterMap::LocationKind location = dex_register_map.GetLocationKind(reg);
-      switch (location) {
-        case DexRegisterMap::kNone:
+      DexRegisterLocation location = dex_register_map.GetLocationKindAndValue(reg);
+      switch (location.kind) {
+        case DexRegisterLocation::Kind::kNone:
           // Not set, should not be a reference.
           CHECK(false);
           break;
-        case DexRegisterMap::kInStack:
-          CHECK(stack_mask.LoadBit(dex_register_map.GetValue(reg) >> 2));
+        case DexRegisterLocation::Kind::kInStack:
+          CHECK(stack_mask.LoadBit(location.value >> 2));
           break;
-        case DexRegisterMap::kInRegister:
-          CHECK_NE(register_mask & (1 << dex_register_map.GetValue(reg)), 0u);
+        case DexRegisterLocation::Kind::kInRegister:
+          CHECK_NE(register_mask & (1 << location.value), 0u);
           break;
-        case DexRegisterMap::kInFpuRegister:
+        case DexRegisterLocation::Kind::kInFpuRegister:
           // In Fpu register, should not be a reference.
           CHECK(false);
           break;
-        case DexRegisterMap::kConstant:
-          CHECK_EQ(dex_register_map.GetValue(reg), 0);
+        case DexRegisterLocation::Kind::kConstant:
+          CHECK_EQ(location.value, 0);
           break;
+        default:
+          LOG(ERROR) << "Unexpected location kind"
+                     << DexRegisterLocation::PrettyDescriptor(location.kind);
       }
     }
   }
