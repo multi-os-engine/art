@@ -921,6 +921,10 @@ void Thumb2Assembler::Emit16BitDataProcessing(Condition cond,
       use_immediate = true;
       immediate = so.GetImmediate();
     } else {
+      if (so.IsRegister() && so.IsShift()
+          && so.GetSecondRegister() != kNoRegister) {
+        LOG(FATAL) << "No register-shifted register instruction available in thumb";
+      }
       // Adjust rn and rd: only two registers will be emitted.
       switch (opcode) {
         case AND:
