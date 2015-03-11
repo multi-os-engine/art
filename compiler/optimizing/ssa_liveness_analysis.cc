@@ -234,7 +234,7 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
         HEnvironment* environment = current->GetEnvironment();
         for (size_t i = 0, e = environment->Size(); i < e; ++i) {
           HInstruction* instruction = environment->GetInstructionAt(i);
-          if (instruction != nullptr) {
+          if (ShouldBeLiveForEnvironment(instruction)) {
             DCHECK(instruction->HasSsaIndex());
             live_in->SetBit(instruction->GetSsaIndex());
             instruction->GetLiveInterval()->AddUse(current, i, true);
