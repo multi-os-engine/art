@@ -2311,12 +2311,10 @@ void LocationsBuilderARM::HandleShift(HBinaryOperation* op) {
       break;
     }
     case Primitive::kPrimLong: {
-      InvokeRuntimeCallingConvention calling_convention;
-      locations->SetInAt(0, Location::RegisterPairLocation(
-          calling_convention.GetRegisterAt(0), calling_convention.GetRegisterAt(1)));
-      locations->SetInAt(1, Location::RegisterLocation(calling_convention.GetRegisterAt(2)));
-      // The runtime helper puts the output in R0,R1.
-      locations->SetOut(Location::RegisterPairLocation(R0, R1));
+      locations->SetInAt(0, Location::RegisterPairLocation(R0, R1));
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->AddTemp(Location::RequiresRegister());
+      locations->SetOut(Location::SameAsFirstInput());
       break;
     }
     default:
@@ -2364,24 +2362,61 @@ void InstructionCodeGeneratorARM::HandleShift(HBinaryOperation* op) {
       break;
     }
     case Primitive::kPrimLong: {
-      // TODO: Inline the assembly instead of calling the runtime.
-      InvokeRuntimeCallingConvention calling_convention;
-      DCHECK_EQ(calling_convention.GetRegisterAt(0), first.AsRegisterPairLow<Register>());
-      DCHECK_EQ(calling_convention.GetRegisterAt(1), first.AsRegisterPairHigh<Register>());
-      DCHECK_EQ(calling_convention.GetRegisterAt(2), second.AsRegister<Register>());
-      DCHECK_EQ(R0, out.AsRegisterPairLow<Register>());
-      DCHECK_EQ(R1, out.AsRegisterPairHigh<Register>());
-
-      int32_t entry_point_offset;
-      if (op->IsShl()) {
-        entry_point_offset = QUICK_ENTRY_POINT(pShlLong);
-      } else if (op->IsShr()) {
-        entry_point_offset = QUICK_ENTRY_POINT(pShrLong);
+      Register o_h = out.AsRegisterPairHigh<Register>();
+      Register o_l = out.AsRegisterPairLow<Register>();
+      Register high = first.AsRegisterPairHigh<Register>();
+      Register low = first.AsRegisterPairLow<Register>();
+      Register temp = locations->GetTemp(0).AsRegister<Register>();
+      if (second.IsRegister()) {
+        Register second_reg = second.AsRegister<Register>();
+        DCHECK_EQ(InstructionSet::kThumb2, codegen_->GetInstructionSet());
+        if (op->IsShl()) {
+          /*
+           * Shift the high part
+           * Shift the low part and `or` what overflew on the high part
+           * If the shift is > 32 bits, override the high part
+           * Shift the low part
+           */
+          __ and_(second_reg, second_reg, ShifterOperand(63));
+          __ Lsl(high, high, second_reg);
+          __ rsb(temp, second_reg, ShifterOperand(32));
+          __ Lsr(temp, low, temp);
+          __ orr(o_h, high, ShifterOperand(temp));
+          __ subs(IP, second_reg, ShifterOperand(32));
+          __ it(PL);
+          __ Lsl(o_h, low, IP, false, PL);
+          __ Lsl(o_l, low, second_reg);
+        } else if (op->IsShr()) {
+          /*
+           * Shift the low part
+           * Shift the high part and `or` what underflew on the low part
+           * If the shift is > 32 bits, override the low part
+           * Shift the high part
+           */
+          __ and_(second_reg, second_reg, ShifterOperand(63));
+          __ Lsr(low, low, second_reg);
+          __ rsb(temp, second_reg, ShifterOperand(32));
+          __ Lsl(temp, high, temp);
+          __ orr(o_l, low, ShifterOperand(temp));
+          __ subs(temp, second_reg, ShifterOperand(32));
+          __ it(PL);
+          __ Asr(o_l, high, temp, false, PL);
+          __ Asr(o_h, high, second_reg);
+        } else {
+          // same as Shr except we use `Lsr`s and not `Asr`s
+          __ and_(second_reg, second_reg, ShifterOperand(63));
+          __ Lsr(low, low, second_reg);
+          __ rsb(temp, second_reg, ShifterOperand(32));
+          __ Lsl(temp, high, temp);
+          __ orr(o_l, low, ShifterOperand(temp));
+          __ subs(IP, second_reg, ShifterOperand(32));
+          __ it(PL);
+          __ Lsr(o_l, high, IP, false, PL);
+          __ Lsr(o_h, high, second_reg);
+        }
       } else {
-        entry_point_offset = QUICK_ENTRY_POINT(pUshrLong);
+          LOG(FATAL) << "SHL for constant not implemented yet" << type;
       }
-      __ LoadFromOffset(kLoadWord, LR, TR, entry_point_offset);
-      __ blx(LR);
       break;
     }
     default:
