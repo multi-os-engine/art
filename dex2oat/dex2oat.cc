@@ -493,6 +493,7 @@ class Dex2Oat FINAL {
     bool watch_dog_enabled = true;
     bool generate_gdb_information = kIsDebugBuild;
     bool abort_on_hard_verifier_error = false;
+    bool requested_specific_compiler = false;
 
     PassManagerOptions pass_manager_options;
 
@@ -602,6 +603,7 @@ class Dex2Oat FINAL {
           Usage("Error parsing '%s': %s", option.data(), error_msg.c_str());
         }
       } else if (option.starts_with("--compiler-backend=")) {
+        requested_specific_compiler = true;
         StringPiece backend_str = option.substr(strlen("--compiler-backend=")).data();
         if (backend_str == "Quick") {
           compiler_kind_ = Compiler::kQuick;
@@ -611,6 +613,7 @@ class Dex2Oat FINAL {
           Usage("Unknown compiler backend: %s", backend_str.data());
         }
       } else if (option.starts_with("--compiler-filter=")) {
+        requested_specific_compiler = true;
         compiler_filter_string = option.substr(strlen("--compiler-filter=")).data();
       } else if (option == "--compile-pic") {
         compile_pic = true;
@@ -738,6 +741,12 @@ class Dex2Oat FINAL {
       } else {
         Usage("Unknown argument %s", option.data());
       }
+    }
+
+    if (!requested_specific_compiler) {
+      // If no specific compiler is requested, the current behavior is
+      // to compile the boot image with Quick, and the rest with Optimizing.
+      compiler_kind_ = image_ ? Compiler::kQuick : Compiler::kOptimizing;
     }
 
     if (compiler_kind_ == Compiler::kOptimizing) {
