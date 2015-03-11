@@ -24,9 +24,13 @@ namespace art {
 class InstructionSimplifierVisitor : public HGraphVisitor {
  public:
   InstructionSimplifierVisitor(HGraph* graph, OptimizingCompilerStats* stats)
-      : HGraphVisitor(graph), stats_(stats) {}
+      : HGraphVisitor(graph), stats_(stats), revisit_current_(false) {}
+
+  bool revisit_current() const { return revisit_current_; }
+  void SetRevisitCurrent(bool revisit) { revisit_current_ = revisit; }
 
  private:
+  bool TryMoveNegOnInputsAfterBinop(HBinaryOperation* binop);
   void VisitShift(HBinaryOperation* shift);
 
   void VisitSuspendCheck(HSuspendCheck* check) OVERRIDE;
@@ -40,6 +44,8 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitAnd(HAnd* instruction) OVERRIDE;
   void VisitDiv(HDiv* instruction) OVERRIDE;
   void VisitMul(HMul* instruction) OVERRIDE;
+  void VisitNeg(HNeg* instruction) OVERRIDE;
+  void VisitNot(HNot* instruction) OVERRIDE;
   void VisitOr(HOr* instruction) OVERRIDE;
   void VisitShl(HShl* instruction) OVERRIDE;
   void VisitShr(HShr* instruction) OVERRIDE;
@@ -48,11 +54,24 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitXor(HXor* instruction) OVERRIDE;
 
   OptimizingCompilerStats* stats_;
+  bool revisit_current_;
 };
 
 void InstructionSimplifier::Run() {
   InstructionSimplifierVisitor visitor(graph_, stats_);
-  visitor.VisitInsertionOrder();
+  for (HReversePostOrderIterator it(*graph_); !it.Done();) {
+    // The simplification of an instruction to another instruction may yield
+    // possibilities for other simplifications. So although we perform a reverse
+    // post order visit, we sometimes need to revisit an instruction index.
+    visitor.VisitBasicBlock(it.Current());
+    if (visitor.revisit_current()) {
+      // New simplifications may be applicable to the instruction at the
+      // current index, so don't advance the iterator.
+      visitor.SetRevisitCurrent(false);
+    } else {
+      it.Advance();
+    }
+  }
 }
 
 namespace {
@@ -62,6 +81,38 @@ bool AreAllBitsSet(HConstant* constant) {
 }
 
 }  // namespace
+
+// Returns true if the code was simplified to use only one negation operation
+// after the binary operation instead of one on each of the inputs.
+bool InstructionSimplifierVisitor::TryMoveNegOnInputsAfterBinop(HBinaryOperation* binop) {
+  DCHECK(binop->IsAdd() || binop->IsSub());
+  DCHECK(binop->GetLeft()->IsNeg() && binop->GetRight()->IsNeg());
+  HNeg* left_neg = binop->GetLeft()->AsNeg();
+  HNeg* right_neg = binop->GetRight()->AsNeg();
+  if (!left_neg->GetUses().HasOnlyOneUse() || left_neg->HasEnvironmentUses() ||
+      !right_neg->GetUses().HasOnlyOneUse() || right_neg->HasEnvironmentUses()) {
+    return false;
+  }
+  // Replace code looking like
+  //    NEG tmp1, a
+  //    NEG tmp2, b
+  //    ADD dst, tmp1, tmp2
+  // with
+  //    ADD tmp, a, b
+  //    NEG dst, tmp
+  binop->ReplaceInput(left_neg->GetInput(), 0);
+  binop->ReplaceInput(right_neg->GetInput(), 1);
+  left_neg->GetBlock()->RemoveInstruction(left_neg);
+  right_neg->GetBlock()->RemoveInstruction(right_neg);
+  HNeg* neg = new (GetGraph()->GetArena()) HNeg(binop->GetType(), binop);
+  binop->GetBlock()->InsertInstructionBefore(neg, binop->GetNext());
+  // This also replaces the input of `neg` by `neg`, which is of course not what
+  // we want, so we manually fix the input.
+  binop->ReplaceWith(neg);
+  neg->ReplaceInput(binop, 0);
+  SetRevisitCurrent(true);
+  return true;
+}
 
 void InstructionSimplifierVisitor::VisitShift(HBinaryOperation* instruction) {
   DCHECK(instruction->IsShl() || instruction->IsShr() || instruction->IsUShr());
@@ -182,6 +233,38 @@ void InstructionSimplifierVisitor::VisitAdd(HAdd* instruction) {
     //    src
     instruction->ReplaceWith(input_other);
     instruction->GetBlock()->RemoveInstruction(instruction);
+    return;
+  }
+
+  HInstruction* left = instruction->GetLeft();
+  HInstruction* right = instruction->GetRight();
+  HNeg* left_neg = left->AsNeg();
+  HNeg* right_neg = right->AsNeg();
+  bool left_is_neg = left->IsNeg();
+  bool right_is_neg = right->IsNeg();
+
+  if (left_is_neg && right_is_neg) {
+    if (TryMoveNegOnInputsAfterBinop(instruction)) {
+      return;
+    }
+  }
+
+  HNeg* neg = left_is_neg ? left_neg : right_neg;
+  if ((left_is_neg ^ right_is_neg) && !neg->HasEnvironmentUses() && neg->GetUses().HasOnlyOneUse()) {
+    // Replace code looking like
+    //    NEG tmp, b
+    //    ADD dst, a, tmp
+    // with
+    //    SUB dst, a, b
+    // We do not perform the optimisation if the input negation has environment
+    // uses or multiple non-environment uses as it could lead to worse code. In
+    // particular, we do not want the live range of `b` to be extended if we are
+    // not sure the initial 'NEG' instruction can be removed.
+    HInstruction* other = left_is_neg ? right : left;
+    HSub* sub = new(GetGraph()->GetArena()) HSub(instruction->GetType(), other, neg->GetInput());
+    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, sub);
+    SetRevisitCurrent(true);
+    neg->GetBlock()->RemoveInstruction(neg);
   }
 }
 
@@ -235,6 +318,7 @@ void InstructionSimplifierVisitor::VisitDiv(HDiv* instruction) {
     //    NEG dst, src
     instruction->GetBlock()->ReplaceAndRemoveInstructionWith(
         instruction, (new (GetGraph()->GetArena()) HNeg(type, input_other)));
+    SetRevisitCurrent(true);
   }
 }
 
@@ -267,6 +351,7 @@ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
     //    NEG dst, src
     HNeg* neg = new (allocator) HNeg(type, input_other);
     block->ReplaceAndRemoveInstructionWith(instruction, neg);
+    SetRevisitCurrent(true);
     return;
   }
 
@@ -280,6 +365,7 @@ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
     // The 'int' and 'long' cases are handled below.
     block->ReplaceAndRemoveInstructionWith(instruction,
                                            new (allocator) HAdd(type, input_other, input_other));
+    SetRevisitCurrent(true);
     return;
   }
 
@@ -296,6 +382,69 @@ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
       block->InsertInstructionBefore(shift, instruction);
       HShl* shl = new(allocator) HShl(type, input_other, shift);
       block->ReplaceAndRemoveInstructionWith(instruction, shl);
+      SetRevisitCurrent(true);
+    }
+  }
+}
+
+void InstructionSimplifierVisitor::VisitNeg(HNeg* instruction) {
+  HInstruction* input = instruction->GetInput();
+  if (input->IsNeg()) {
+    // Replace code looking like
+    //    NEG tmp, src
+    //    NEG dst, tmp
+    // with
+    //    src
+    HNeg* previous_neg = input->AsNeg();
+    instruction->ReplaceWith(previous_neg->GetInput());
+    instruction->GetBlock()->RemoveInstruction(instruction);
+    // We perform the optimisation even if the input negation has environment
+    // uses since it allows removing the current instruction. But we only delete
+    // the input negation only if it is does not have any uses left.
+    if (!previous_neg->HasUses()) {
+      previous_neg->GetBlock()->RemoveInstruction(previous_neg);
+    }
+    return;
+  }
+
+  if (input->IsSub() && !input->HasEnvironmentUses() && input->GetUses().HasOnlyOneUse()) {
+    // Replace code looking like
+    //    SUB tmp, a, b
+    //    NEG dst, tmp
+    // with
+    //    SUB dst, b, a
+    // We do not perform the optimisation if the input subtraction has
+    // environment uses or multiple non-environment uses as it could lead to
+    // worse code. In particular, we do not want the live ranges of `a` and `b`
+    // to be extended if we are not sure the initial 'SUB' instruction can be
+    // removed.
+    HSub* sub = input->AsSub();
+    HInstruction* left = sub->GetRight();
+    HInstruction* right = sub->GetLeft();
+    HSub* new_sub = new (GetGraph()->GetArena()) HSub(instruction->GetType(), left, right);
+    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, new_sub);
+    if (!sub->HasUses()) {
+      sub->GetBlock()->RemoveInstruction(sub);
+    }
+  }
+}
+
+void InstructionSimplifierVisitor::VisitNot(HNot* instruction) {
+  HInstruction* input = instruction->GetInput();
+  if (input->IsNot()) {
+    // Replace code looking like
+    //    NOT tmp, src
+    //    NOT dst, tmp
+    // with
+    //    src
+    // We perform the optimisation even if the input negation has environment
+    // uses since it allows removing the current instruction. But we only delete
+    // the input negation only if it is does not have any uses left.
+    HNot* previous_not = input->AsNot();
+    instruction->ReplaceWith(previous_not->GetInput());
+    instruction->GetBlock()->RemoveInstruction(instruction);
+    if (!previous_not->HasUses()) {
+      previous_not->GetBlock()->RemoveInstruction(previous_not);
     }
   }
 }
@@ -336,6 +485,7 @@ void InstructionSimplifierVisitor::VisitShr(HShr* instruction) {
 }
 
 void InstructionSimplifierVisitor::VisitSub(HSub* instruction) {
+  Primitive::Type type = instruction->GetType();
   HConstant* input_cst = instruction->GetConstantRight();
   HInstruction* input_other = instruction->GetLeastConstantLeft();
 
@@ -349,7 +499,6 @@ void InstructionSimplifierVisitor::VisitSub(HSub* instruction) {
     return;
   }
 
-  Primitive::Type type = instruction->GetType();
   if (!Primitive::IsIntegralType(type)) {
     return;
   }
@@ -357,9 +506,10 @@ void InstructionSimplifierVisitor::VisitSub(HSub* instruction) {
   HBasicBlock* block = instruction->GetBlock();
   ArenaAllocator* allocator = GetGraph()->GetArena();
 
-  if (instruction->GetLeft()->IsConstant()) {
-    int64_t left = Int64FromConstant(instruction->GetLeft()->AsConstant());
-    if (left == 0) {
+  HInstruction* left = instruction->GetLeft();
+  HInstruction* right = instruction->GetRight();
+  if (left->IsConstant()) {
+    if (Int64FromConstant(left->AsConstant()) == 0) {
       // Replace code looking like
       //    SUB dst, 0, src
       // with
@@ -367,9 +517,50 @@ void InstructionSimplifierVisitor::VisitSub(HSub* instruction) {
       // Note that we cannot optimise `0.0 - x` to `-x` for floating-point. When
       // `x` is `0.0`, the former expression yields `0.0`, while the later
       // yields `-0.0`.
-      HNeg* neg = new (allocator) HNeg(type, instruction->GetRight());
+      HNeg* neg = new (allocator) HNeg(type, right);
       block->ReplaceAndRemoveInstructionWith(instruction, neg);
+      SetRevisitCurrent(true);
+      return;
     }
+  }
+
+  if (left->IsNeg() && right->IsNeg()) {
+    if (TryMoveNegOnInputsAfterBinop(instruction)) {
+      return;
+    }
+  }
+
+  if (right->IsNeg() && !right->HasEnvironmentUses() && right->GetUses().HasOnlyOneUse()) {
+    // Replace code looking like
+    //    NEG tmp, b
+    //    SUB dst, a, tmp
+    // with
+    //    ADD dst, a, b
+    HAdd* add = new(GetGraph()->GetArena()) HAdd(type, left, right->AsNeg()->GetInput());
+    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, add);
+    SetRevisitCurrent(true);
+    right->GetBlock()->RemoveInstruction(right);
+    return;
+  }
+
+  if (left->IsNeg() && !left->HasEnvironmentUses() && left->GetUses().HasOnlyOneUse()) {
+    // Replace code looking like
+    //    NEG tmp, a
+    //    SUB dst, tmp, b
+    // with
+    //    ADD tmp, a, b
+    //    NEG dst, tmp
+    // The second version is not intrinsically better, but enables more
+    // transformations.
+
+    HAdd* add = new(GetGraph()->GetArena()) HAdd(type, left->AsNeg()->GetInput(), right);
+    instruction->GetBlock()->InsertInstructionBefore(add, instruction);
+    HNeg* neg = new (GetGraph()->GetArena()) HNeg(instruction->GetType(), add);
+    instruction->GetBlock()->InsertInstructionBefore(neg, instruction);
+    instruction->ReplaceWith(neg);
+    instruction->GetBlock()->RemoveInstruction(instruction);
+    SetRevisitCurrent(true);
+    left->GetBlock()->RemoveInstruction(left);
   }
 }
 
@@ -398,6 +589,7 @@ void InstructionSimplifierVisitor::VisitXor(HXor* instruction) {
     //    NOT dst, src
     HNot* bitwise_not = new (GetGraph()->GetArena()) HNot(instruction->GetType(), input_other);
     instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, bitwise_not);
+    SetRevisitCurrent(true);
     return;
   }
 }
