@@ -25,7 +25,7 @@ public interface RawDexObject {
   /**
    * Populate information for this DEX data from the file.
    * @param file Input file, should already be "seeked" to the correct position.
-   * @throws IOException If there's a problem writing to the file.
+   * @throws IOException If there's a problem reading from the file.
    */
   public void read(DexRandomAccessFile file) throws IOException;
 

@@ -31,7 +31,7 @@ public class EncodedMethod implements RawDexObject {
     accessFlags = file.readUleb128();
     codeOff = file.getOffsetTracker().getNewOffset(file.readUleb128());
     if (isNative()) {
-      Log.errorAndQuit("Sorry, DEX files with native methods are not supported yet.");
+      throw new IOException("Sorry, DEX files with native methods are not supported yet.");
     }
   }
 

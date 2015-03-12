@@ -36,6 +36,9 @@ prog="${progdir}"/`basename "${prog}"`
 run_args=""
 usage="no"
 sequental="no"
+fuzz="no"
+fuzz_backends="--quick"
+fuzz_nbr="1000"
 
 while true; do
     if [ "x$1" = "x--host" ]; then
@@ -52,6 +55,11 @@ while true; do
         shift
     elif [ "x$1" = "x--interpreter" ]; then
         run_args="${run_args} --interpreter"
+        fuzz_backends="${fuzz_backends} --interpreter"
+        shift
+    elif [ "x$1" = "x--optimizing" ]; then
+        run_args="${run_args} --optimizing"
+        fuzz_backends="${fuzz_backends} --optimizing"
         shift
     elif [ "x$1" = "x--jit" ]; then
         run_args="${run_args} --jit"
@@ -112,6 +120,15 @@ while true; do
         shift;
     elif [ "x$1" = "x--always-clean" ]; then
         run_args="${run_args} --always-clean"
+        shift
+    elif [ "x$1" = "x--fuzz" ]; then
+        fuzz="yes"
+        run_args="${run_args} --build-only"
+        shift
+    elif [ "x$1" = "x--fuzz-repeat" ]; then
+        shift
+        fuzz_nbr=$1
+        shift
     elif expr "x$1" : "x--" >/dev/null 2>&1; then
         echo "unknown $0 option: $1" 1>&2
         usage="yes"
@@ -120,6 +137,11 @@ while true; do
         break
     fi
 done
+
+if [ "$fuzz" = "yes" ] && [ "$(echo $fuzz_backends | wc)" -lt 2 ]; then
+    echo "You must provide at least one backend: --optimizing or --interpreter" 1>&2
+    exit false
+fi
 
 if [ "$usage" = "yes" ]; then
     prog=`basename $prog`
@@ -135,6 +157,7 @@ if [ "$usage" = "yes" ]; then
         echo "    --no-patchoat --no-dex2oat"
         echo "  Specific Runtime Options:"
         echo "    --seq                Run tests one-by-one, avoiding failures caused by busy CPU"
+        echo "    --fuzz-repeat N      Run the fuzzer N times"
     ) 1>&2
     exit 1
 fi
@@ -181,6 +204,30 @@ else
       let succeeded_count+=1
     fi
   done
+
+  if [ "$fuzz" = "yes" ]; then
+    if [ -z "$TMPDIR" ]; then
+      tmp_dir="/tmp/$USER/"
+    else
+      tmp_dir="${TMPDIR}/$USER/"
+    fi
+
+    mkdir $tmp_dir/fuzzing
+    for pid in ${test_pids[@]}; do
+      mv $tmp_dir/test-$pid/classes.dex $tmp_dir/fuzzing/$pid.dex
+    done
+
+    seeds=$(echo $tmp_dir/**/classes.dex | sed 's/ /,/g')
+    dexfuzz \
+        --inputs=${tmp_dir}/fuzzing \
+        --execute \
+        --repeat=$fuzz_nbr \
+        --dump-output \
+        --x86 \
+        ${fuzz_backends}
+    exit $?
+  fi
+
 fi
 
 echo "succeeded tests: $succeeded_count"
