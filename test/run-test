@@ -525,15 +525,22 @@ if [[ "$TEST_NAME" =~ ^[0-9]+-checker- ]]; then
   # if Checker is not invoked and the test only runs the program.
   build_args="${build_args} --dx-option --no-optimize"
 
-  if [ "$runtime" = "art" -a "$image_suffix" = "-optimizing" -a "$target_mode" = "no" -a "$debuggable" = "no" ]; then
+  if [ "$runtime" = "art" -a "$image_suffix" = "-optimizing" -a "$debuggable" = "no" ]; then
     run_checker="yes"
-    run_args="${run_args} -Xcompiler-option --dump-cfg=$tmp_dir/$cfg_output \
+    if [ "$target_mode" = "no" ]; then
+      cfg_output_dir="$tmp_dir"
+    else
+      cfg_output_dir="$DEX_LOCATION"
+    fi
+    run_args="${run_args} -Xcompiler-option --dump-cfg=$cfg_output_dir/$cfg_output \
                           -Xcompiler-option -j1"
+
   fi
 fi
 
-# To cause tests to fail fast, limit the file sizes created by dx, dex2oat and ART output to 2MB.
-file_size_limit=2048
+# To cause tests to fail fast, limit the file sizes created by dx, dex2oat, ART
+# output, and '.cfg' output to 4MB.
+file_size_limit=4096
 if echo "$test_dir" | grep 089; then
   file_size_limit=5120
 elif echo "$test_dir" | grep 083; then
@@ -553,6 +560,9 @@ if [ "$dev_mode" = "yes" ]; then
     if [ "$build_exit" = '0' ]; then
         echo "${test_dir}: running..." 1>&2
         "./${run}" $run_args "$@" 2>&1
+        if [ "$run_checker" = "yes" -a "$target_mode" = "yes" ]; then
+          adb pull $cfg_output_dir/$cfg_output &> /dev/null
+        fi
         run_exit="$?"
 
         if [ "$run_exit" = "0" ]; then
@@ -576,6 +586,9 @@ elif [ "$update_mode" = "yes" ]; then
         echo "${test_dir}: running..." 1>&2
         "./${run}" $run_args "$@" >"$output" 2>&1
         if [ "$run_checker" = "yes" ]; then
+          if [ "$target_mode" = "yes" ]; then
+            adb pull $cfg_output_dir/$cfg_output &> /dev/null
+          fi
           "$checker" -q "$cfg_output" "$tmp_dir" >> "$output" 2>&1
         fi
         sed -e 's/[[:cntrl:]]$//g' < "$output" >"${td_expected}"
@@ -611,6 +624,9 @@ else
             echo "run exit status: $run_exit" 1>&2
             good_run="no"
         elif [ "$run_checker" = "yes" ]; then
+            if [ "$target_mode" = "yes" ]; then
+              adb pull $cfg_output_dir/$cfg_output &> /dev/null
+            fi
             "$checker" -q "$cfg_output" "$tmp_dir" >> "$output" 2>&1
             checker_exit="$?"
             if [ "$checker_exit" != "0" ]; then
