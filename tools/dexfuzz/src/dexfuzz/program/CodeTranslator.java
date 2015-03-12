@@ -113,14 +113,14 @@ public class CodeTranslator {
         int targetLoc = mInsn.location + (int) containsTarget.getTarget(mInsn.insn);
         ((MInsnWithData)mInsn).dataTarget = insnLocationMap.get(targetLoc);
         if (((MInsnWithData)mInsn).dataTarget == null) {
-          Log.errorAndQuit("Bad offset calculation in data-target insn");
+          throw new IllegalArgumentException("Bad offset calculation in data-target insn");
         }
       } else if (mInsn instanceof MBranchInsn) {
         ContainsTarget containsTarget = (ContainsTarget) mInsn.insn.info.format;
         int targetLoc = mInsn.location + (int) containsTarget.getTarget(mInsn.insn);
         ((MBranchInsn)mInsn).target = insnLocationMap.get(targetLoc);
         if (((MBranchInsn)mInsn).target == null) {
-          Log.errorAndQuit("Bad offset calculation in branch insn");
+          throw new IllegalArgumentException("Bad offset calculation in branch insn");
         }
       }
     }
@@ -157,7 +157,7 @@ public class CodeTranslator {
         }
       }
       if (mInsn.location != loc) {
-        Log.errorAndQuit(String.format("%s does not have expected location 0x%x",
+        throw new IllegalArgumentException(String.format("%s does not have expected location 0x%x",
             mInsn, loc));
       }
       mInsn.locationUpdated = false;
@@ -247,7 +247,7 @@ public class CodeTranslator {
   }
 
   private void readTryBlocks(CodeItem codeItem, MutatableCode mutatableCode,
-      Map<Integer,MInsn> insnLocationMap) {
+      Map<Integer,MInsn> insnLocationMap) throws IllegalArgumentException {
     mutatableCode.mutatableTries = new LinkedList<MTryBlock>();
 
     Map<Short,Integer> offsetIndexMap = createTryHandlerOffsetToIndexMap(codeItem);
@@ -264,12 +264,12 @@ public class CodeTranslator {
 
       // Sanity checks.
       if (mTryBlock.startInsn == null) {
-        Log.errorAndQuit(String.format(
+        throw new IllegalArgumentException(String.format(
             "Couldn't find a mutatable insn at start offset 0x%x",
             startLocation));
       }
       if (mTryBlock.endInsn == null) {
-        Log.errorAndQuit(String.format(
+        throw new IllegalArgumentException(String.format(
             "Couldn't find a mutatable insn at end offset 0x%x",
             endLocation));
       }
@@ -284,9 +284,9 @@ public class CodeTranslator {
             insnLocationMap.get(encodedCatchHandler.catchAllAddr);
         // Sanity check.
         if (mTryBlock.catchAllHandler == null) {
-          Log.errorAndQuit(
+          throw new IllegalArgumentException(String.format(
               String.format("Couldn't find a mutatable insn at catch-all offset 0x%x",
-                  encodedCatchHandler.catchAllAddr));
+                  encodedCatchHandler.catchAllAddr)));
         }
       }
       // Do we have explicitly-typed handlers? This will remain empty if not.
@@ -298,7 +298,7 @@ public class CodeTranslator {
         MInsn handlerInsn = insnLocationMap.get(handler.addr);
         // Sanity check.
         if (handlerInsn == null) {
-          Log.errorAndQuit(String.format(
+          throw new IllegalArgumentException(String.format(
               "Couldn't find a mutatable instruction at handler offset 0x%x",
               handler.addr));
         }
@@ -386,7 +386,7 @@ public class CodeTranslator {
     int dataLocation = switchInsn.location + (int) containsTarget.getTarget(switchInsn.insn);
     switchInsn.dataTarget = insnLocationMap.get(dataLocation);
     if (switchInsn.dataTarget == null) {
-      Log.errorAndQuit("Bad offset calculation for data target in switch insn");
+      throw new IllegalArgumentException("Bad offset calculation for data target in switch insn");
     }
 
     // Now read the data.
@@ -436,7 +436,7 @@ public class CodeTranslator {
       MInsn targetInsn = insnLocationMap.get(targetLocation);
       switchInsn.targets.add(targetInsn);
       if (targetInsn == null) {
-        Log.errorAndQuit("Bad offset calculation for target in switch insn");
+        throw new IllegalArgumentException("Bad offset calculation for target in switch insn");
       }
     }
   }
