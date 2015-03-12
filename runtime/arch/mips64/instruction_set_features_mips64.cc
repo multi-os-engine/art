@@ -26,30 +26,32 @@ namespace art {
 
 const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromVariant(
     const std::string& variant, std::string* error_msg ATTRIBUTE_UNUSED) {
-  // TODO: r6 variant.
-  if (variant != "default") {
-    std::ostringstream os;
+  if ((variant != "mips64r6") && (variant != "default")) {
     LOG(WARNING) << "Unexpected CPU variant for Mips64 using defaults: " << variant;
   }
   bool smp = true;  // Conservative default.
-  return new Mips64InstructionSetFeatures(smp);
+  bool r6 = true;
+  return new Mips64InstructionSetFeatures(smp, r6);
 }
 
 const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromBitmap(uint32_t bitmap) {
   bool smp = (bitmap & kSmpBitfield) != 0;
-  return new Mips64InstructionSetFeatures(smp);
+  bool r6 = (bitmap & kR6Bitfield) != 0;
+  return new Mips64InstructionSetFeatures(smp, r6);
 }
 
 const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromCppDefines() {
   const bool smp = true;
+  bool r6 = true;
 
-  return new Mips64InstructionSetFeatures(smp);
+  return new Mips64InstructionSetFeatures(smp, r6);
 }
 
 const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromCpuInfo() {
   // Look in /proc/cpuinfo for features we need.  Only use this when we can guarantee that
   // the kernel puts the appropriate feature flags in here.  Sometimes it doesn't.
   bool smp = false;
+  bool r6 = true;
 
   std::ifstream in("/proc/cpuinfo");
   if (!in.fail()) {
@@ -67,7 +69,7 @@ const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromCpuInfo() 
   } else {
     LOG(ERROR) << "Failed to open /proc/cpuinfo";
   }
-  return new Mips64InstructionSetFeatures(smp);
+  return new Mips64InstructionSetFeatures(smp, r6);
 }
 
 const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromHwcap() {
@@ -84,11 +86,15 @@ bool Mips64InstructionSetFeatures::Equals(const InstructionSetFeatures* other) c
   if (kMips64 != other->GetInstructionSet()) {
     return false;
   }
-  return (IsSmp() == other->IsSmp());
+  const Mips64InstructionSetFeatures* other_as_mips64 = other->AsMips64InstructionSetFeatures();
+
+  return (IsSmp() == other->IsSmp()) &&
+      (r6_ == other_as_mips64->r6_);
 }
 
 uint32_t Mips64InstructionSetFeatures::AsBitmap() const {
-  return (IsSmp() ? kSmpBitfield : 0);
+  return (IsSmp() ? kSmpBitfield : 0) |
+      (r6_ ? kR6Bitfield : 0);
 }
 
 std::string Mips64InstructionSetFeatures::GetFeatureString() const {
@@ -98,19 +104,27 @@ std::string Mips64InstructionSetFeatures::GetFeatureString() const {
   } else {
     result += "-smp";
   }
+  if (r6_) {
+    result += ",r6";
+  }  // Suppress non-r6.
   return result;
 }
 
 const InstructionSetFeatures* Mips64InstructionSetFeatures::AddFeaturesFromSplitString(
     const bool smp, const std::vector<std::string>& features, std::string* error_msg) const {
-  auto i = features.begin();
-  if (i != features.end()) {
-    // We don't have any features.
+  bool r6 = r6_;
+  for (auto i = features.begin(); i != features.end(); i++) {
     std::string feature = Trim(*i);
-    *error_msg = StringPrintf("Unknown instruction set feature: '%s'", feature.c_str());
-    return nullptr;
+    if (feature == "r6") {
+      r6 = true;
+    } else if (feature == "-r6") {
+      r6 = false;
+    } else {
+      *error_msg = StringPrintf("Unknown instruction set feature: '%s'", feature.c_str());
+      return nullptr;
+    }
   }
-  return new Mips64InstructionSetFeatures(smp);
+  return new Mips64InstructionSetFeatures(smp, r6);
 }
 
 }  // namespace art

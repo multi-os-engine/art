@@ -55,6 +55,10 @@ class Mips64InstructionSetFeatures FINAL : public InstructionSetFeatures {
 
   std::string GetFeatureString() const OVERRIDE;
 
+  bool IsR6() const {
+    return r6_;
+  }
+
   virtual ~Mips64InstructionSetFeatures() {}
 
  protected:
@@ -64,13 +68,16 @@ class Mips64InstructionSetFeatures FINAL : public InstructionSetFeatures {
                                  std::string* error_msg) const OVERRIDE;
 
  private:
-  explicit Mips64InstructionSetFeatures(bool smp) : InstructionSetFeatures(smp) {
+  explicit Mips64InstructionSetFeatures(bool smp, bool r6) : InstructionSetFeatures(smp), r6_(r6) {
   }
 
   // Bitmap positions for encoding features as a bitmap.
   enum {
     kSmpBitfield = 1,
+    kR6Bitfield = 2,
   };
+
+  const bool r6_;
 
   DISALLOW_COPY_AND_ASSIGN(Mips64InstructionSetFeatures);
 };
