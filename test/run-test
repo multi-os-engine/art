@@ -101,6 +101,7 @@ have_image="yes"
 image_suffix=""
 pic_image_suffix=""
 android_root="/system"
+fuzz="no"
 
 while true; do
     if [ "x$1" = "x--host" ]; then
@@ -264,6 +265,9 @@ while true; do
         shift
     elif [ "x$1" = "x--trace" ]; then
         trace="true"
+        shift
+    elif [ "x$1" = "x--fuzz" ]; then
+        fuzz="yes"
         shift
     elif [ "x$1" = "x--always-clean" ]; then
         always_clean="yes"
@@ -619,6 +623,23 @@ else
             fi
         else
             good_run="yes"
+        fi
+
+        if [ "$fuzz" = "yes" ]; then
+            echo Fuzzing...
+            dexfuzz \
+                --input=${tmp_dir}/classes.dex \
+                --execute \
+                --dump-output \
+                --x86 \
+                --interpreter \
+                --optimizing \
+                --quick
+          if $?; then
+              good_run="yes"
+          else
+              good_run="no"
+          fi
         fi
     else
         good_build="no"
