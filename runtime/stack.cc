@@ -143,7 +143,11 @@ mirror::Object* StackVisitor::GetThisObject() const {
       return nullptr;
     } else {
       uint16_t reg = code_item->registers_size_ - code_item->ins_size_;
-      return reinterpret_cast<mirror::Object*>(GetVReg(m, reg, kReferenceVReg));
+      uint32_t value = 0;
+      bool success = GetVReg(m, reg, kReferenceVReg, &value);
+      // We currently always guarantee the `this` object is live throughout the method.
+      CHECK(success) << "Failed to read the this object in " << PrettyMethod(m);
+      return reinterpret_cast<mirror::Object*>(value);
     }
   }
 }
@@ -187,8 +191,8 @@ bool StackVisitor::GetVRegFromQuickCode(mirror::ArtMethod* m, uint16_t vreg, VRe
     const DexFile::CodeItem* code_item = m->GetCodeItem();
     DCHECK(code_item != nullptr) << PrettyMethod(m);  // Can't be NULL or how would we compile
                                                       // its instructions?
-    *val = *GetVRegAddr(cur_quick_frame_, code_item, frame_info.CoreSpillMask(),
-                        frame_info.FpSpillMask(), frame_info.FrameSizeInBytes(), vreg);
+    *val = *GetVRegAddrFromQuickCode(cur_quick_frame_, code_item, frame_info.CoreSpillMask(),
+                                     frame_info.FpSpillMask(), frame_info.FrameSizeInBytes(), vreg);
     return true;
   }
 }
@@ -294,8 +298,9 @@ bool StackVisitor::GetVRegPairFromQuickCode(mirror::ArtMethod* m, uint16_t vreg,
     const DexFile::CodeItem* code_item = m->GetCodeItem();
     DCHECK(code_item != nullptr) << PrettyMethod(m);  // Can't be NULL or how would we compile
                                                       // its instructions?
-    uint32_t* addr = GetVRegAddr(cur_quick_frame_, code_item, frame_info.CoreSpillMask(),
-                                 frame_info.FpSpillMask(), frame_info.FrameSizeInBytes(), vreg);
+    uint32_t* addr = GetVRegAddrFromQuickCode(
+        cur_quick_frame_, code_item, frame_info.CoreSpillMask(),
+        frame_info.FpSpillMask(), frame_info.FrameSizeInBytes(), vreg);
     *val = *reinterpret_cast<uint64_t*>(addr);
     return true;
   }
@@ -368,8 +373,9 @@ bool StackVisitor::SetVRegFromQuickCode(mirror::ArtMethod* m, uint16_t vreg, uin
     const DexFile::CodeItem* code_item = m->GetCodeItem();
     DCHECK(code_item != nullptr) << PrettyMethod(m);  // Can't be NULL or how would we compile
                                                       // its instructions?
-    uint32_t* addr = GetVRegAddr(cur_quick_frame_, code_item, frame_info.CoreSpillMask(),
-                                 frame_info.FpSpillMask(), frame_info.FrameSizeInBytes(), vreg);
+    uint32_t* addr = GetVRegAddrFromQuickCode(
+        cur_quick_frame_, code_item, frame_info.CoreSpillMask(),
+        frame_info.FpSpillMask(), frame_info.FrameSizeInBytes(), vreg);
     *addr = new_value;
     return true;
   }
@@ -497,8 +503,9 @@ bool StackVisitor::SetVRegPairFromQuickCode(mirror::ArtMethod* m, uint16_t vreg,
     const DexFile::CodeItem* code_item = m->GetCodeItem();
     DCHECK(code_item != nullptr) << PrettyMethod(m);  // Can't be NULL or how would we compile
                                                       // its instructions?
-    uint32_t* addr = GetVRegAddr(cur_quick_frame_, code_item, frame_info.CoreSpillMask(),
-                                 frame_info.FpSpillMask(), frame_info.FrameSizeInBytes(), vreg);
+    uint32_t* addr = GetVRegAddrFromQuickCode(
+        cur_quick_frame_, code_item, frame_info.CoreSpillMask(),
+        frame_info.FpSpillMask(), frame_info.FrameSizeInBytes(), vreg);
     *reinterpret_cast<uint64_t*>(addr) = new_value;
     return true;
   }
