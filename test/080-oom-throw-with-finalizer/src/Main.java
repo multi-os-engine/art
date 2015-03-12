@@ -55,15 +55,39 @@ public class Main {
         return sawOome;
     }
 
+    static void printlnWithRetryOnOom(char[][] holder, String s) {
+        while (true) {
+            try {
+                // println can allocate memory and cause OOME.
+                System.out.println(s);
+                return;  // Return if it succeeded.
+            } catch (OutOfMemoryError e) {
+                // Got OOME while printing. Try to retry after reducing the live set by one.
+                boolean will_retry = false;
+                for (int i = 0; i < holder.length; ++i) {
+                    if (holder[i] != null) {
+                        will_retry = true;
+                        holder[i] = null;
+                        break;
+                    }
+                }
+                if (!will_retry) {
+                    // holder does not have any more non-null elements. Give up.
+                    System.exit(1);
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) {
         // Keep holder alive to make instance OOM happen faster.
         holder = new char[128 * 1024][];
         if (!triggerArrayOOM(holder)) {
-            System.out.println("NEW_ARRAY did not throw OOME");
+            printlnWithRetryOnOom(holder, "NEW_ARRAY did not throw OOME");
         }
 
         if (!triggerInstanceFinalizerOOM()) {
-            System.out.println("NEW_INSTANCE (finalize) did not throw OOME");
+            printlnWithRetryOnOom(holder, "NEW_INSTANCE (finalize) did not throw OOME");
         }
 
         System.runFinalization();
