@@ -345,6 +345,29 @@ endif
 
 TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS :=
 
+# ARM64-specific tests.
+TEST_ART_OPTIMIZING_ARM64_ONLY_RUN_TESTS := \
+  459-checker-arm64-caller-callee \
+
+# These tests should only be run for arm64. So always remove the 32bit variant
+# of the test, and remove the 64bit variant if we are not running on arm64.
+ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
+  ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUILD_TYPES), \
+      optimizing,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+      $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES),$(TEST_ART_OPTIMIZING_ARM64_ONLY_RUN_TESTS),32)
+endif
+ifneq ($(TARGET_ARCH),arm64)
+  ifneq ($(TARGET_ARCH_VARIANT),arm64)
+    ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
+      ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUILD_TYPES), \
+          optimizing,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+          $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES),$(TEST_ART_OPTIMIZING_ARM64_ONLY_RUN_TESTS),64)
+    endif
+  endif
+endif
+
+TEST_ART_OPTIMIZING_ARM64_ONLY_RUN_TESTS :=
+
 # Known broken tests for the optimizing compiler.
 TEST_ART_BROKEN_OPTIMIZING_RUN_TESTS :=
 TEST_ART_BROKEN_OPTIMIZING_RUN_TESTS += 099-vmdebug # b/18098594
