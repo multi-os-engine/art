@@ -250,7 +250,7 @@ const InstructionSetFeatures* InstructionSetFeatures::AddFeaturesFromString(
     }
     first = true;
   }
-  DCHECK_EQ(use_default, features.empty());
+  DCHECK(!use_default || features.empty());
   return AddFeaturesFromSplitString(smp, features, error_msg);
 }
 
