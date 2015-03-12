@@ -41,6 +41,10 @@ public class FuzzerMultipleExecute extends FuzzerMultiple {
     for (iterations = 0; iterations < Options.repeat; iterations++) {
       listener.handleIterationStarted(iterations);
       Program program = fuzz();
+
+      if (program == null)
+        continue;
+
       if (safeToExecute()) {
         execute(program);
       }

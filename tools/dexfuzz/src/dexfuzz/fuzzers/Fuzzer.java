@@ -207,7 +207,7 @@ public abstract class Fuzzer {
     String inputFile = getNextInputFilename();
     Program program = loadProgram(inputFile, null);
     if (program == null) {
-      Log.errorAndQuit("Problem loading seed file.");
+      return null;
     }
     // Mutate the program.
     if (!Options.skipMutation) {
@@ -414,8 +414,8 @@ public abstract class Fuzzer {
       timerProgGen.stop();
     } catch (FileNotFoundException e) {
       Log.errorAndQuit("Couldn't open a file called " + inputName);
-    } catch (IOException e) {
-      Log.errorAndQuit("IOException when trying to load a DEX test file!");
+    } catch (Exception e) {
+      Log.error("Exception when trying to load a DEX test file: " + e.getMessage());
     }
     return program;
   }

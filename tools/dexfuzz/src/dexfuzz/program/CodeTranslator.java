@@ -247,7 +247,7 @@ public class CodeTranslator {
   }
 
   private void readTryBlocks(CodeItem codeItem, MutatableCode mutatableCode,
-      Map<Integer,MInsn> insnLocationMap) {
+      Map<Integer,MInsn> insnLocationMap) throws IllegalArgumentException {
     mutatableCode.mutatableTries = new LinkedList<MTryBlock>();
 
     Map<Short,Integer> offsetIndexMap = createTryHandlerOffsetToIndexMap(codeItem);
@@ -269,7 +269,7 @@ public class CodeTranslator {
             startLocation));
       }
       if (mTryBlock.endInsn == null) {
-        Log.errorAndQuit(String.format(
+        throw new IllegalArgumentException(String.format(
             "Couldn't find a mutatable insn at end offset 0x%x",
             endLocation));
       }

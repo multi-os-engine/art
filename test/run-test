@@ -101,6 +101,8 @@ have_image="yes"
 image_suffix=""
 pic_image_suffix=""
 android_root="/system"
+fuzz="no"
+fuzz_backends=""
 
 while true; do
     if [ "x$1" = "x--host" ]; then
@@ -195,6 +197,7 @@ while true; do
     elif [ "x$1" = "x--interpreter" ]; then
         run_args="${run_args} --interpreter"
         image_suffix="-interpreter"
+        fuzz_backends="${fuzz_backends} --interpreter"
         shift
     elif [ "x$1" = "x--jit" ]; then
         run_args="${run_args} --jit"
@@ -203,9 +206,11 @@ while true; do
     elif [ "x$1" = "x--optimizing" ]; then
         run_args="${run_args} -Xcompiler-option --compiler-backend=Optimizing"
         image_suffix="-optimizing"
+        fuzz_backends="${fuzz_backends} --optimizing"
         shift
     elif [ "x$1" = "x--quick" ]; then
         run_args="${run_args} -Xcompiler-option --compiler-backend=Quick"
+        fuzz_backends="${fuzz_backends} --quick"
         shift
     elif [ "x$1" = "x--no-verify" ]; then
         run_args="${run_args} --no-verify"
@@ -265,6 +270,9 @@ while true; do
     elif [ "x$1" = "x--trace" ]; then
         trace="true"
         shift
+    elif [ "x$1" = "x--fuzz" ]; then
+        fuzz="yes"
+        shift
     elif [ "x$1" = "x--always-clean" ]; then
         always_clean="yes"
         shift
@@ -279,6 +287,20 @@ while true; do
         break
     fi
 done
+
+# if we want to fuzz, we want to make sure there is no conflicting flag
+if [ "$fuzz" = "yes" ]; then
+    allowed="x--fuzz|x--interpreter|x--quick|x--optimizing|x--host"
+    for arg in $args; do
+        if ! echo x$arg | grep -E "$allowed" >/dev/null 2>&1; then
+            if ! ls "$arg" >/dev/null 2>&1; then
+                echo Wrong option $arg
+                usage="yes"
+                break
+            fi
+        fi
+    done
+fi
 
 # tmp_dir may be relative, resolve.
 #
@@ -469,6 +491,8 @@ if [ "$usage" = "yes" ]; then
         echo "    --always-clean        Delete the test files even if the test fails."
         echo "    --android-root [path] The path on target for the android root. (/system by default)."
         echo "    --dex2oat-swap        Use a dex2oat swap file."
+        echo "    --fuzz                Use the said test with the dexfuzzer.  Need to specify at least"
+        echo "                          two backends. All others options are disabled."
     ) 1>&2
     exit 1
 fi
@@ -596,14 +620,23 @@ elif [ "$build_only" = "yes" ]; then
         fi
     fi
     # Clean up extraneous files that are not used by tests.
-    find $tmp_dir -mindepth 1  ! -regex ".*/\(.*jar\|$output\|$expected\)" | xargs rm -rf
+    find $tmp_dir -mindepth 1  ! -regex ".*dex\|.*/\(.*jar\|$output\|$expected\)" | xargs rm -rf
     exit 0
 else
     "./${build}" $build_args >"$build_output" 2>&1
     build_exit="$?"
     if [ "$build_exit" = '0' ]; then
         echo "${test_dir}: running..." 1>&2
-        "./${run}" $run_args "$@" >"$output" 2>&1
+        if [ "$fuzz" = "yes" ]; then
+            dexfuzz \
+                --input=${tmp_dir}/classes.dex \
+                --execute \
+                --dump-output \
+                --x86 \
+                ${fuzz_backends}
+        else
+            "./${run}" $run_args "$@" >"$output" 2>&1
+        fi
         run_exit="$?"
         if [ "$run_exit" != "0" ]; then
             echo "run exit status: $run_exit" 1>&2
@@ -620,6 +653,7 @@ else
         else
             good_run="yes"
         fi
+
     else
         good_build="no"
         cp "$build_output" "$output"
