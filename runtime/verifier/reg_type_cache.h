@@ -172,6 +172,7 @@ class RegTypeCache {
   static uint16_t primitive_count_;
 
   // The actual storage for the RegTypes.
+  Mutex entries_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   std::vector<const RegType*> entries_;
 
   // Whether or not we're allowed to load classes.
