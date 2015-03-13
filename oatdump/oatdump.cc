@@ -1085,8 +1085,11 @@ class OatDumper {
         DexRegisterMap dex_register_map =
             code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
         for (size_t j = 0; j < number_of_dex_registers; ++j) {
-          DexRegisterLocation location = dex_register_map.GetLocationKindAndValue(j);
-          DumpRegisterMapping(os, j, location.GetInternalKind(), location.GetValue());
+          if (dex_register_map.IsDexRegisterLive(j)) {
+            DexRegisterLocation location =
+                dex_register_map.GetLocationKindAndValue(j, number_of_dex_registers);
+            DumpRegisterMapping(os, j, location.GetInternalKind(), location.GetValue());
+          }
         }
       }
     }
