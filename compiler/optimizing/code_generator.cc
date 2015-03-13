@@ -547,7 +547,9 @@ void CodeGenerator::BuildStackMaps(std::vector<uint8_t>* data) {
   stack_map_stream_.FillIn(region);
 }
 
-void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
+void CodeGenerator::RecordPcInfo(HInstruction* instruction,
+                                 uint32_t dex_pc,
+                                 SlowPathCode* slow_path) {
   if (instruction != nullptr) {
     // The code generated for some type conversions may call the
     // runtime, thus normally requiring a subsequent call to this
@@ -665,41 +667,84 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction, uint32_t dex_pc) {
 
       case Location::kRegister : {
         int id = location.reg();
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister, id);
-        if (current->GetType() == Primitive::kPrimLong) {
+
+        if (slow_path != nullptr && slow_path->IsCoreRegisterSaved(id)) {
+          uint32_t offset = slow_path->GetStackOffsetOfCoreRegister(id);
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInStack, offset);
+          if (current->GetType() == Primitive::kPrimLong) {
+            stack_map_stream_.AddDexRegisterEntry(
+                DexRegisterLocation::Kind::kInStack, offset + kVRegSize);
+            ++i;
+            DCHECK_LT(i, environment_size);
+          }
+        } else {
           stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister, id);
-          ++i;
-          DCHECK_LT(i, environment_size);
+          if (current->GetType() == Primitive::kPrimLong) {
+            stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister, id);
+            ++i;
+            DCHECK_LT(i, environment_size);
+          }
         }
         break;
       }
 
       case Location::kFpuRegister : {
         int id = location.reg();
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister, id);
-        if (current->GetType() == Primitive::kPrimDouble) {
+        if (slow_path != nullptr && slow_path->IsFpuRegisterSaved(id)) {
+          uint32_t offset = slow_path->GetStackOffsetOfFpuRegister(id);
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInStack, offset);
+          if (current->GetType() == Primitive::kPrimDouble) {
+            stack_map_stream_.AddDexRegisterEntry(
+                DexRegisterLocation::Kind::kInStack, offset + kVRegSize);
+            ++i;
+            DCHECK_LT(i, environment_size);
+          }
+        } else {
           stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister, id);
-          ++i;
-          DCHECK_LT(i, environment_size);
+          if (current->GetType() == Primitive::kPrimDouble) {
+            stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister, id);
+            ++i;
+            DCHECK_LT(i, environment_size);
+          }
         }
         break;
       }
 
       case Location::kFpuRegisterPair : {
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister,
-                                              location.low());
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister,
-                                              location.high());
+        int low = location.low();
+        int high = location.high();
+        if (slow_path != nullptr && slow_path->IsFpuRegisterSaved(low)) {
+          uint32_t offset = slow_path->GetStackOffsetOfFpuRegister(low);
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInStack, offset);
+        } else {
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister, low);
+        }
+        if (slow_path != nullptr && slow_path->IsFpuRegisterSaved(high)) {
+          uint32_t offset = slow_path->GetStackOffsetOfFpuRegister(high);
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInStack, offset);
+        } else {
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInFpuRegister, high);
+        }
         ++i;
         DCHECK_LT(i, environment_size);
         break;
       }
 
       case Location::kRegisterPair : {
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister,
-                                              location.low());
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister,
-                                              location.high());
+        int low = location.low();
+        int high = location.high();
+        if (slow_path != nullptr && slow_path->IsCoreRegisterSaved(low)) {
+          uint32_t offset = slow_path->GetStackOffsetOfCoreRegister(low);
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInStack, offset);
+        } else {
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister, low);
+        }
+        if (slow_path != nullptr && slow_path->IsCoreRegisterSaved(high)) {
+          uint32_t offset = slow_path->GetStackOffsetOfCoreRegister(high);
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInStack, offset);
+        } else {
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kInRegister, high);
+        }
         ++i;
         DCHECK_LT(i, environment_size);
         break;
@@ -777,7 +822,7 @@ void CodeGenerator::EmitParallelMoves(Location from1, Location to1, Location fro
 }
 
 void SlowPathCode::RecordPcInfo(CodeGenerator* codegen, HInstruction* instruction, uint32_t dex_pc) {
-  codegen->RecordPcInfo(instruction, dex_pc);
+  codegen->RecordPcInfo(instruction, dex_pc, this);
 }
 
 void SlowPathCode::SaveLiveRegisters(CodeGenerator* codegen, LocationSummary* locations) {
@@ -791,6 +836,8 @@ void SlowPathCode::SaveLiveRegisters(CodeGenerator* codegen, LocationSummary* lo
           locations->SetStackBit(stack_offset / kVRegSize);
         }
         DCHECK_LT(stack_offset, codegen->GetFrameSize() - codegen->FrameEntrySpillSize());
+        DCHECK_LT(i, kMaximumNumberOfExpectedRegisters);
+        saved_core_stack_offsets_[i] = stack_offset;
         stack_offset += codegen->SaveCoreRegister(stack_offset, i);
       }
     }
@@ -800,6 +847,8 @@ void SlowPathCode::SaveLiveRegisters(CodeGenerator* codegen, LocationSummary* lo
     if (!codegen->IsFloatingPointCalleeSaveRegister(i)) {
       if (register_set->ContainsFloatingPointRegister(i)) {
         DCHECK_LT(stack_offset, codegen->GetFrameSize() - codegen->FrameEntrySpillSize());
+        DCHECK_LT(i, kMaximumNumberOfExpectedRegisters);
+        saved_fpu_stack_offsets_[i] = stack_offset;
         stack_offset += codegen->SaveFloatingPointRegister(stack_offset, i);
       }
     }
