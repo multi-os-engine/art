@@ -606,8 +606,14 @@ class CodeInfo {
     region_.Store<uint32_t>(kNumberOfStackMapsOffset, number_of_stack_maps);
   }
 
+  // Get the size of one stack map of this CodeInfo object, in bytes.
   size_t StackMapSize() const {
     return StackMap::ComputeAlignedStackMapSize(GetStackMaskSize());
+  }
+
+  // Get the size all the stack maps of this CodeInfo object, in bytes.
+  size_t StackMapsSize() const {
+    return StackMapSize() * GetNumberOfStackMaps();
   }
 
   uint32_t GetStackMapsOffset() const {
@@ -663,7 +669,7 @@ class CodeInfo {
   MemoryRegion GetStackMaps() const {
     return region_.size() == 0
         ? MemoryRegion()
-        : region_.Subregion(kFixedSize, StackMapSize() * GetNumberOfStackMaps());
+        : region_.Subregion(kFixedSize, StackMapsSize());
   }
 
   // Compute the size of a Dex register map starting at offset `origin` in
