@@ -32,6 +32,9 @@ namespace art {
 namespace jit {
 
 JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& options) {
+#ifdef __LP64__
+  return nullptr;
+#else
   if (!options.GetOrDefault(RuntimeArgumentMap::UseJIT)) {
     return nullptr;
   }
@@ -43,6 +46,7 @@ JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& opt
   jit_options->dump_info_on_shutdown_ =
       options.Exists(RuntimeArgumentMap::DumpJITInfoOnShutdown);
   return jit_options;
+#endif
 }
 
 void Jit::DumpInfo(std::ostream& os) {
