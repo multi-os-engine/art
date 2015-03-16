@@ -1443,6 +1443,13 @@ void LocationsBuilderARM::VisitTypeConversion(HTypeConversion* conversion) {
           locations->AddTemp(Location::RequiresFpuRegister());
           break;
 
+        case Primitive::kPrimBoolean: {
+          // Internal conversion from boolean to int.
+          locations->SetInAt(0, Location::Any());
+          locations->SetOut(Location::SameAsFirstInput());
+          break;
+        }
+
         default:
           LOG(FATAL) << "Unexpected type conversion from " << input_type
                      << " to " << result_type;
@@ -1643,6 +1650,11 @@ void InstructionCodeGeneratorARM::VisitTypeConversion(HTypeConversion* conversio
           __ vmovd(temp_d, FromLowSToD(in.AsFpuRegisterPairLow<SRegister>()));
           __ vcvtid(temp_s, temp_d);
           __ vmovrs(out.AsRegister<Register>(), temp_s);
+          break;
+        }
+
+        case Primitive::kPrimBoolean: {
+          // Internal conversion from boolean to int. No code needed.
           break;
         }
 
