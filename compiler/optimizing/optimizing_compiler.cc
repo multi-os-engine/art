@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <optimizing/boolean_simplifier.h>
 #include "optimizing_compiler.h"
 
 #include <fstream>
@@ -313,6 +314,7 @@ static void RunOptimizations(HGraph* graph,
   HDeadCodeElimination dce(graph);
   HConstantFolding fold1(graph);
   InstructionSimplifier simplify1(graph, stats);
+  HBooleanSimplifier boolean_not(graph);
 
   HInliner inliner(graph, dex_compilation_unit, driver, stats);
 
@@ -331,6 +333,9 @@ static void RunOptimizations(HGraph* graph,
     &dce,
     &fold1,
     &simplify1,
+    // BooleanSimplifier depends on the InstructionSimplifier removing redundant
+    // suspend checks to recognize empty blocks.
+    &boolean_not,
     &inliner,
     &fold2,
     &side_effects,
