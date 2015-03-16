@@ -44,10 +44,13 @@ class OatFileAssistantTest : public CommonRuntimeTest {
     scratch_dir_ = android_data_ + "/OatFileAssistantTest";
     ASSERT_EQ(0, mkdir(scratch_dir_.c_str(), 0700));
 
-    // Create a subdirectory in scratch for the current isa.
-    // This is the location that will be used for odex files in the tests.
-    isa_dir_ = scratch_dir_ + "/" + GetInstructionSetString(kRuntimeISA);
-    ASSERT_EQ(0, mkdir(isa_dir_.c_str(), 0700));
+    // Create a subdirectory in scratch for odex files.
+    odex_oat_dir_ = scratch_dir_ + "/oat";
+    ASSERT_EQ(0, mkdir(odex_oat_dir_.c_str(), 0700));
+
+    odex_dir_ = odex_oat_dir_ + "/" + std::string(GetInstructionSetString(kRuntimeISA));
+    ASSERT_EQ(0, mkdir(odex_dir_.c_str(), 0700));
+
 
     // Verify the environment is as we expect
     uint32_t checksum;
@@ -90,8 +93,11 @@ class OatFileAssistantTest : public CommonRuntimeTest {
   }
 
   virtual void TearDown() {
-    ClearDirectory(isa_dir_.c_str());
-    ASSERT_EQ(0, rmdir(isa_dir_.c_str()));
+    ClearDirectory(odex_dir_.c_str());
+    ASSERT_EQ(0, rmdir(odex_dir_.c_str()));
+
+    ClearDirectory(odex_oat_dir_.c_str());
+    ASSERT_EQ(0, rmdir(odex_oat_dir_.c_str()));
 
     ClearDirectory(scratch_dir_.c_str());
     ASSERT_EQ(0, rmdir(scratch_dir_.c_str()));
@@ -153,10 +159,10 @@ class OatFileAssistantTest : public CommonRuntimeTest {
     return scratch_dir_;
   }
 
-  // ISA directory is the subdirectory in the scratch directory where odex
+  // Odex directory is the subdirectory in the scratch directory where odex
   // files should be located.
-  std::string GetISADir() {
-    return isa_dir_;
+  std::string GetOdexDir() {
+    return odex_dir_;
   }
 
   // Generate an odex file for the purposes of test.
@@ -239,7 +245,8 @@ class OatFileAssistantTest : public CommonRuntimeTest {
   }
 
   std::string scratch_dir_;
-  std::string isa_dir_;
+  std::string odex_oat_dir_;
+  std::string odex_dir_;
   std::vector<std::unique_ptr<MemMap>> image_reservation_;
 };
 
@@ -360,7 +367,7 @@ TEST_F(OatFileAssistantTest, OatOutOfDate) {
 // Expect: The oat file status is kNeedsRelocation.
 TEST_F(OatFileAssistantTest, DexOdexNoOat) {
   std::string dex_location = GetScratchDir() + "/DexOdexNoOat.jar";
-  std::string odex_location = GetISADir() + "/DexOdexNoOat.odex";
+  std::string odex_location = GetOdexDir() + "/DexOdexNoOat.odex";
 
   // Create the dex and odex files
   Copy(GetDexSrc1(), dex_location);
@@ -386,7 +393,7 @@ TEST_F(OatFileAssistantTest, DexOdexNoOat) {
 // Expect: The oat file status is kNeedsRelocation.
 TEST_F(OatFileAssistantTest, StrippedDexOdexNoOat) {
   std::string dex_location = GetScratchDir() + "/StrippedDexOdexNoOat.jar";
-  std::string odex_location = GetISADir() + "/StrippedDexOdexNoOat.odex";
+  std::string odex_location = GetOdexDir() + "/StrippedDexOdexNoOat.odex";
 
   // Create the dex and odex files
   Copy(GetDexSrc1(), dex_location);
@@ -435,7 +442,7 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexNoOat) {
 // Expect: The oat file status is kNeedsRelocation.
 TEST_F(OatFileAssistantTest, StrippedDexOdexOat) {
   std::string dex_location = GetScratchDir() + "/StrippedDexOdexOat.jar";
-  std::string odex_location = GetISADir() + "/StrippedDexOdexOat.odex";
+  std::string odex_location = GetOdexDir() + "/StrippedDexOdexOat.odex";
 
   // Create the oat file from a different dex file so it looks out of date.
   Copy(GetDexSrc2(), dex_location);
@@ -492,8 +499,8 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexOat) {
 // Expect: It shouldn't crash.
 TEST_F(OatFileAssistantTest, OdexOatOverlap) {
   std::string dex_location = GetScratchDir() + "/OdexOatOverlap.jar";
-  std::string odex_location = GetISADir() + "/OdexOatOverlap.odex";
-  std::string oat_location = GetISADir() + "/OdexOatOverlap.oat";
+  std::string odex_location = GetOdexDir() + "/OdexOatOverlap.odex";
+  std::string oat_location = GetOdexDir() + "/OdexOatOverlap.oat";
 
   // Create the dex and odex files
   Copy(GetDexSrc1(), dex_location);
@@ -530,7 +537,7 @@ TEST_F(OatFileAssistantTest, OdexOatOverlap) {
 // Expect: The oat file status is kUpToDate, because PIC needs no relocation.
 TEST_F(OatFileAssistantTest, DexPicOdexNoOat) {
   std::string dex_location = GetScratchDir() + "/DexPicOdexNoOat.jar";
-  std::string odex_location = GetISADir() + "/DexPicOdexNoOat.odex";
+  std::string odex_location = GetOdexDir() + "/DexPicOdexNoOat.odex";
 
   // Create the dex and odex files
   Copy(GetDexSrc1(), dex_location);
@@ -770,7 +777,7 @@ class RaceGenerateTask : public Task {
 // avoid using up the virtual memory address space.
 TEST_F(OatFileAssistantTest, RaceToGenerate) {
   std::string dex_location = GetScratchDir() + "/RaceToGenerate.jar";
-  std::string oat_location = GetISADir() + "/RaceToGenerate.oat";
+  std::string oat_location = GetOdexDir() + "/RaceToGenerate.oat";
 
   // We use the lib core dex file, because it's large, and hopefully should
   // take a while to generate.
@@ -800,7 +807,7 @@ TEST_F(OatFileAssistantTest, RaceToGenerate) {
 // Expect: We should load the odex file non-executable.
 TEST_F(OatFileAssistantNoDex2OatTest, LoadDexOdexNoOat) {
   std::string dex_location = GetScratchDir() + "/LoadDexOdexNoOat.jar";
-  std::string odex_location = GetISADir() + "/LoadDexOdexNoOat.odex";
+  std::string odex_location = GetOdexDir() + "/LoadDexOdexNoOat.odex";
 
   // Create the dex and odex files
   Copy(GetDexSrc1(), dex_location);
@@ -822,7 +829,7 @@ TEST_F(OatFileAssistantNoDex2OatTest, LoadDexOdexNoOat) {
 // Expect: We should load the odex file non-executable.
 TEST_F(OatFileAssistantNoDex2OatTest, LoadMultiDexOdexNoOat) {
   std::string dex_location = GetScratchDir() + "/LoadMultiDexOdexNoOat.jar";
-  std::string odex_location = GetISADir() + "/LoadMultiDexOdexNoOat.odex";
+  std::string odex_location = GetOdexDir() + "/LoadMultiDexOdexNoOat.odex";
 
   // Create the dex and odex files
   Copy(GetMultiDexSrc1(), dex_location);
@@ -845,11 +852,11 @@ TEST(OatFileAssistantUtilsTest, DexFilenameToOdexFilename) {
 
   EXPECT_TRUE(OatFileAssistant::DexFilenameToOdexFilename(
         "/foo/bar/baz.jar", kArm, &odex_file, &error_msg)) << error_msg;
-  EXPECT_EQ("/foo/bar/arm/baz.odex", odex_file);
+  EXPECT_EQ("/foo/bar/oat/arm/baz.odex", odex_file);
 
   EXPECT_TRUE(OatFileAssistant::DexFilenameToOdexFilename(
         "/foo/bar/baz.funnyext", kArm, &odex_file, &error_msg)) << error_msg;
-  EXPECT_EQ("/foo/bar/arm/baz.odex", odex_file);
+  EXPECT_EQ("/foo/bar/oat/arm/baz.odex", odex_file);
 
   EXPECT_FALSE(OatFileAssistant::DexFilenameToOdexFilename(
         "nopath.jar", kArm, &odex_file, &error_msg));
