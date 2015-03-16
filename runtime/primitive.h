@@ -154,6 +154,7 @@ class Primitive {
 
   static bool IsIntegralType(Type type) {
     switch (type) {
+      case kPrimBoolean:
       case kPrimByte:
       case kPrimChar:
       case kPrimShort:

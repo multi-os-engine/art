@@ -1373,6 +1373,8 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
   switch (result_type) {
     case Primitive::kPrimByte:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
         case Primitive::kPrimChar:
@@ -1391,6 +1393,8 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
 
     case Primitive::kPrimShort:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimInt:
         case Primitive::kPrimChar:
@@ -1435,6 +1439,8 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
 
     case Primitive::kPrimLong:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
@@ -1464,6 +1470,8 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
 
     case Primitive::kPrimChar:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
@@ -1480,6 +1488,8 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
 
     case Primitive::kPrimFloat:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
@@ -1511,6 +1521,8 @@ void LocationsBuilderX86::VisitTypeConversion(HTypeConversion* conversion) {
 
     case Primitive::kPrimDouble:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
@@ -1556,6 +1568,8 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
   switch (result_type) {
     case Primitive::kPrimByte:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
         case Primitive::kPrimChar:
@@ -1577,6 +1591,8 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
 
     case Primitive::kPrimShort:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimInt:
         case Primitive::kPrimChar:
@@ -1672,6 +1688,8 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
 
     case Primitive::kPrimLong:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
@@ -1703,6 +1721,8 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
 
     case Primitive::kPrimChar:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
@@ -1726,6 +1746,8 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
 
     case Primitive::kPrimFloat:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
@@ -1783,6 +1805,8 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
 
     case Primitive::kPrimDouble:
       switch (input_type) {
+        case Primitive::kPrimBoolean:
+          // Original input was transformed to boolean.
         case Primitive::kPrimByte:
         case Primitive::kPrimShort:
         case Primitive::kPrimInt:
