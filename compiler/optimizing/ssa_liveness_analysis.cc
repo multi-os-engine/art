@@ -73,6 +73,8 @@ void SsaLivenessAnalysis::LinearizeGraph() {
   forward_predecessors.SetSize(graph_.GetBlocks().Size());
   for (size_t i = 0, e = graph_.GetBlocks().Size(); i < e; ++i) {
     HBasicBlock* block = graph_.GetBlocks().Get(i);
+    if (block == nullptr) continue;
+
     size_t number_of_forward_predecessors = block->GetPredecessors().Size();
     if (block->IsLoopHeader()) {
       // We rely on having simplified the CFG.
