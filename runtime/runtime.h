@@ -541,6 +541,7 @@ class Runtime {
   }
 
   void CreateJit();
+  void CreateJitAndInstrumentation();
 
   ArenaPool* GetArenaPool() {
     return arena_pool_.get();

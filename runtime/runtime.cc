@@ -611,11 +611,9 @@ void Runtime::DidForkFromZygote(JNIEnv* env, NativeBridgeAction action, const ch
 
   // Create the thread pools.
   heap_->CreateThreadPool();
-  if (jit_options_.get() != nullptr && jit_.get() == nullptr) {
+  if (jit_.get() == nullptr && jit_options_->UseJIT()) {
     // Create the JIT if the flag is set and we haven't already create it (happens for run-tests).
-    CreateJit();
-    jit_->CreateInstrumentationCache(jit_options_->GetCompileThreshold());
-    jit_->CreateThreadPool();
+    CreateJitAndInstrumentation();
   }
 
   StartSignalCatcher();
@@ -843,20 +841,22 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     Dbg::ConfigureJdwp(runtime_options.GetOrDefault(Opt::JdwpOptions));
   }
 
+  jit_options_.reset(jit::JitOptions::CreateFromRuntimeArguments(runtime_options));
+  bool use_jit = jit_options_->UseJIT();
   if (!IsAotCompiler()) {
     // If we are already the compiler at this point, we must be dex2oat. Don't create the jit in
     // this case.
     // If runtime_options doesn't have UseJIT set to true then CreateFromRuntimeArguments returns
     // nullptr and we don't create the jit.
-    jit_options_.reset(jit::JitOptions::CreateFromRuntimeArguments(runtime_options));
+    use_jit = false;
   }
-  if (!IsZygote() && jit_options_.get() != nullptr) {
+  if (!IsZygote() && use_jit) {
     CreateJit();
   }
 
   // Use MemMap arena pool for jit, malloc otherwise. Malloc arenas are faster to allocate but
   // can't be trimmed as easily.
-  const bool use_malloc = jit_options_.get() == nullptr;
+  const bool use_malloc = !use_jit;
   arena_pool_.reset(new ArenaPool(use_malloc));
 
   BlockSignals();
@@ -1660,8 +1660,13 @@ void Runtime::UpdateProfilerState(int state) {
   VLOG(profiler) << "Profiler state updated to " << state;
 }
 
+void Runtime::CreateJitAndInstrumentation() {
+  CreateJit();
+  jit_->CreateInstrumentationCache(jit_options_->GetCompileThreshold());
+  jit_->CreateThreadPool();
+}
+
 void Runtime::CreateJit() {
-  CHECK(jit_options_.get() != nullptr);
   std::string error_msg;
   jit_.reset(jit::Jit::Create(jit_options_.get(), &error_msg));
   if (jit_.get() != nullptr) {
