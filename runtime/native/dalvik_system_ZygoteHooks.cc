@@ -59,10 +59,11 @@ static void EnableDebugFeatures(uint32_t debug_flags) {
     DEBUG_ENABLE_ASSERT             = 1 << 2,
     DEBUG_ENABLE_SAFEMODE           = 1 << 3,
     DEBUG_ENABLE_JNI_LOGGING        = 1 << 4,
+    DEBUG_ENABLE_JIT                = 1 << 5,
   };
 
+  Runtime* const runtime = Runtime::Current();
   if ((debug_flags & DEBUG_ENABLE_CHECKJNI) != 0) {
-    Runtime* runtime = Runtime::Current();
     JavaVMExt* vm = runtime->GetJavaVM();
     if (!vm->IsCheckJniEnabled()) {
       LOG(INFO) << "Late-enabling -Xcheck:jni";
@@ -88,9 +89,17 @@ static void EnableDebugFeatures(uint32_t debug_flags) {
 
   if ((debug_flags & DEBUG_ENABLE_SAFEMODE) != 0) {
     // Ensure that any (secondary) oat files will be interpreted.
-    Runtime* runtime = Runtime::Current();
     runtime->AddCompilerOption("--compiler-filter=interpret-only");
     debug_flags &= ~DEBUG_ENABLE_SAFEMODE;
+  }
+
+  if ((debug_flags & DEBUG_ENABLE_JIT) != 0) {
+    if (runtime->GetJit() == nullptr) {
+      runtime->CreateJit();
+    } else {
+      LOG(INFO) << "Not late-enabling JIT (already on)";
+    }
+    debug_flags &= ~DEBUG_ENABLE_JIT;
   }
 
   // This is for backwards compatibility with Dalvik.
