@@ -540,6 +540,7 @@ class Runtime {
     return zygote_max_failed_boots_;
   }
 
+  // Create the JIT and instrumentation and code cache.
   void CreateJit();
 
   ArenaPool* GetArenaPool() {
