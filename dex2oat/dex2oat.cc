@@ -112,6 +112,11 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("  --dex-file=<dex-file>: specifies a .dex file to compile.");
   UsageError("      Example: --dex-file=/system/framework/core.jar");
   UsageError("");
+  UsageError("  --dex-location=<dex-location>: specifies an alternative dex location to");
+  UsageError("      encode in the oat file for the corresponding --dex-file argument.");
+  UsageError("      Example: --dex-file=/home/build/out/system/framework/foo.apk");
+  UsageError("               --dex-location=/system/framework/foo.apk");
+  UsageError("");
   UsageError("  --zip-fd=<file-descriptor>: specifies a file descriptor of a zip file");
   UsageError("      containing a classes.dex file to compile.");
   UsageError("      Example: --zip-fd=5");
