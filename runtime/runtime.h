@@ -540,7 +540,11 @@ class Runtime {
     return zygote_max_failed_boots_;
   }
 
+  // Create just the JIT, but not the instrumentation or code cache.
   void CreateJit();
+
+  // Create the JIT and instrumentation and code cache.
+  void CreateJitAndInstrumentation();
 
   ArenaPool* GetArenaPool() {
     return arena_pool_.get();

@@ -99,7 +99,7 @@ static void EnableDebugFeatures(uint32_t debug_flags) {
       LOG(INFO) << "Not enabling JIT due to VM safe mode";
     } else {
       if (runtime->GetJit() == nullptr) {
-        runtime->CreateJit();
+        runtime->CreateJitAndInstrumentation();
       } else {
         LOG(INFO) << "Not late-enabling JIT (already on)";
       }
