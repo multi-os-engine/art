@@ -246,12 +246,8 @@ class CodeGenerator {
   void EmitParallelMoves(Location from1, Location to1, Location from2, Location to2);
 
   static bool StoreNeedsWriteBarrier(Primitive::Type type, HInstruction* value) {
-    if (kIsDebugBuild) {
-      if (type == Primitive::kPrimNot && value->IsIntConstant()) {
-        CHECK_EQ(value->AsIntConstant()->GetValue(), 0);
-      }
-    }
-    return type == Primitive::kPrimNot && !value->IsIntConstant();
+    DCHECK(!value->IsIntConstant());
+    return type == Primitive::kPrimNot && !value->IsNullConstant();
   }
 
   void AddAllocatedRegister(Location location) {
