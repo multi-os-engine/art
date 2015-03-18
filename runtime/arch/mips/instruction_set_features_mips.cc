@@ -32,6 +32,18 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromVariant(
   bool mips_isa_gte2 = false;
   bool r6 = false;
 
+  // Override defaults based on compiler flags.
+  // This is needed when running ART test where the variant is not defined.
+#if defined(_MIPS_ARCH_MIPS32R2) || defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
+  mips_isa_gte2 = true;
+#if defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
+  fpu_32bit = false;
+#endif
+#if defined(_MIPS_ARCH_MIPS32R6)
+  r6 = true;
+#endif
+#endif
+
   // Override defaults based on variant string.
   // Only care if it is R1, R2 or R6 and we assume all CPUs will have a FP unit.
   constexpr const char* kMips32Prefix = "mips32r";
@@ -72,13 +84,14 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCppDefines() {
   bool r6 = false;
 
   // Override defaults based on compiler flags.
-#if (_MIPS_ARCH_MIPS32R2) || defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
+#if defined(_MIPS_ARCH_MIPS32R2) || defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
   mips_isa_gte2 = true;
+#if defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
+  fpu_32bit = false;
 #endif
-
 #if defined(_MIPS_ARCH_MIPS32R6)
   r6 = true;
-  fpu_32bit = false;
+#endif
 #endif
 
   return new MipsInstructionSetFeatures(smp, fpu_32bit, mips_isa_gte2, r6);
@@ -94,13 +107,14 @@ const MipsInstructionSetFeatures* MipsInstructionSetFeatures::FromCpuInfo() {
   bool r6 = false;
 
   // Override defaults based on compiler flags.
-#if (_MIPS_ARCH_MIPS32R2) || defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
+#if defined(_MIPS_ARCH_MIPS32R2) || defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
   mips_isa_gte2 = true;
+#if defined(_MIPS_ARCH_MIPS32R5) || defined(_MIPS_ARCH_MIPS32R6)
+  fpu_32bit = false;
 #endif
-
 #if defined(_MIPS_ARCH_MIPS32R6)
   r6 = true;
-  fpu_32bit = false;
+#endif
 #endif
 
   std::ifstream in("/proc/cpuinfo");
