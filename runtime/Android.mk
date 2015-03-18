@@ -150,6 +150,7 @@ LIBART_COMMON_SRC_FILES := \
   runtime_options.cc \
   signal_catcher.cc \
   stack.cc \
+  stack_map.cc \
   thread.cc \
   thread_list.cc \
   thread_pool.cc \
