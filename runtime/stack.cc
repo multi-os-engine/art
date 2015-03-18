@@ -203,24 +203,26 @@ bool StackVisitor::GetVRegFromOptimizedCode(mirror::ArtMethod* m, uint16_t vreg,
                                                     // its instructions?
   DCHECK_LT(vreg, code_item->registers_size_);
   uint16_t number_of_dex_registers = code_item->registers_size_;
+  DexRegisterDictionary dex_register_dictionary = code_info.GetDexRegisterDictionary();
   DexRegisterMap dex_register_map =
       code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
-  DexRegisterLocation::Kind location_kind =
-      dex_register_map.GetLocationKind(vreg, number_of_dex_registers);
+  size_t dictionary_entry_index = dex_register_map.GetDictionaryEntryIndex(
+      vreg, number_of_dex_registers, code_info.GetNumberOfDexRegisterDictionaryEntries());
+  DexRegisterLocation::Kind location_kind = dex_register_dictionary.GetLocationKind(dictionary_entry_index);
   switch (location_kind) {
     case DexRegisterLocation::Kind::kInStack: {
-      const int32_t offset = dex_register_map.GetStackOffsetInBytes(vreg, number_of_dex_registers);
+      const int32_t offset = dex_register_dictionary.GetStackOffsetInBytes(dictionary_entry_index);
       const uint8_t* addr = reinterpret_cast<const uint8_t*>(cur_quick_frame_) + offset;
       *val = *reinterpret_cast<const uint32_t*>(addr);
       return true;
     }
     case DexRegisterLocation::Kind::kInRegister:
     case DexRegisterLocation::Kind::kInFpuRegister: {
-      uint32_t reg = dex_register_map.GetMachineRegister(vreg, number_of_dex_registers);
+      uint32_t reg = dex_register_dictionary.GetMachineRegister(dictionary_entry_index);
       return GetRegisterIfAccessible(reg, kind, val);
     }
     case DexRegisterLocation::Kind::kConstant:
-      *val = dex_register_map.GetConstant(vreg, number_of_dex_registers);
+      *val = dex_register_dictionary.GetConstant(dictionary_entry_index);
       return true;
     case DexRegisterLocation::Kind::kNone:
       return false;
@@ -228,7 +230,7 @@ bool StackVisitor::GetVRegFromOptimizedCode(mirror::ArtMethod* m, uint16_t vreg,
       LOG(FATAL)
           << "Unexpected location kind"
           << DexRegisterLocation::PrettyDescriptor(
-                dex_register_map.GetLocationInternalKind(vreg, number_of_dex_registers));
+                dex_register_dictionary.GetLocationInternalKind(dictionary_entry_index));
       UNREACHABLE();
   }
 }
@@ -393,21 +395,24 @@ bool StackVisitor::SetVRegFromOptimizedCode(mirror::ArtMethod* m, uint16_t vreg,
                                                     // its instructions?
   uint16_t number_of_dex_registers = code_item->registers_size_;
   DCHECK_LT(vreg, number_of_dex_registers);
+  DexRegisterDictionary dex_register_dictionary = code_info.GetDexRegisterDictionary();
   DexRegisterMap dex_register_map =
       code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+  size_t dictionary_entry_index = dex_register_map.GetDictionaryEntryIndex(
+      vreg, number_of_dex_registers, code_info.GetNumberOfDexRegisterDictionaryEntries());
   DexRegisterLocation::Kind location_kind =
-      dex_register_map.GetLocationKind(vreg, number_of_dex_registers);
+      dex_register_dictionary.GetLocationKind(dictionary_entry_index);
   uint32_t dex_pc = m->ToDexPc(cur_quick_frame_pc_, false);
   switch (location_kind) {
     case DexRegisterLocation::Kind::kInStack: {
-      const int32_t offset = dex_register_map.GetStackOffsetInBytes(vreg, number_of_dex_registers);
+      const int32_t offset = dex_register_dictionary.GetStackOffsetInBytes(dictionary_entry_index);
       uint8_t* addr = reinterpret_cast<uint8_t*>(cur_quick_frame_) + offset;
       *reinterpret_cast<uint32_t*>(addr) = new_value;
       return true;
     }
     case DexRegisterLocation::Kind::kInRegister:
     case DexRegisterLocation::Kind::kInFpuRegister: {
-      uint32_t reg = dex_register_map.GetMachineRegister(vreg, number_of_dex_registers);
+      uint32_t reg = dex_register_dictionary.GetMachineRegister(dictionary_entry_index);
       return SetRegisterIfAccessible(reg, new_value, kind);
     }
     case DexRegisterLocation::Kind::kConstant:

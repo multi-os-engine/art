@@ -67,6 +67,8 @@ class CheckReferenceMapVisitor : public StackVisitor {
     CodeInfo code_info = m->GetOptimizedCodeInfo();
     StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset);
     uint16_t number_of_dex_registers = m->GetCodeItem()->registers_size_;
+    DexRegisterDictionary dex_register_dictionary = code_info.GetDexRegisterDictionary();
+    size_t number_of_dictionary_entries = code_info.GetNumberOfDexRegisterDictionaryEntries();
     DexRegisterMap dex_register_map =
         code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
     MemoryRegion stack_mask = stack_map.GetStackMask();
@@ -74,8 +76,10 @@ class CheckReferenceMapVisitor : public StackVisitor {
     for (int i = 0; i < number_of_references; ++i) {
       int reg = registers[i];
       CHECK(reg < m->GetCodeItem()->registers_size_);
+      size_t dictionary_entry_index = dex_register_map.GetDictionaryEntryIndex(
+          reg, number_of_dex_registers, number_of_dictionary_entries);
       DexRegisterLocation location =
-          dex_register_map.GetLocationKindAndValue(reg, number_of_dex_registers);
+          dex_register_dictionary.GetLocationKindAndValue(dictionary_entry_index);
       switch (location.GetKind()) {
         case DexRegisterLocation::Kind::kNone:
           // Not set, should not be a reference.

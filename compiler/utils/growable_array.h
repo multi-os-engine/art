@@ -88,6 +88,34 @@ class GrowableArray : public ArenaObject<kArenaAllocGrowableArray> {
       Insert(elem);
     }
 
+    // If `elem` is present as least once in the array, return the
+    // index of its first occurrence.  Otherwise, append `elem` to the
+    // array and return the index of this newly added element.
+    //
+    // This method has a linear time complexity.
+    size_t AddUnique(T elem) {
+      size_t index = Find(elem);
+      if (index != kInvalidIndex) {
+        return index;
+      } else {
+        Add(elem);
+        return num_used_ - 1;
+      }
+    }
+
+    // If `elem` is present as least once in the array, return the
+    // index of its first occurrence.  Otherwise, return kInvalidIndex;
+    //
+    // This method has a linear time complexity.
+    size_t Find(T elem) {
+      for (size_t i = 0; i < num_used_; i++) {
+        if (elem_list_[i] == elem) {
+          return i;
+        }
+      }
+      return kInvalidIndex;
+    }
+
     T Get(size_t index) const {
       DCHECK_LT(index, num_used_);
       return elem_list_[index];
@@ -153,6 +181,9 @@ class GrowableArray : public ArenaObject<kArenaAllocGrowableArray> {
     }
 
     T* GetRawStorage() const { return elem_list_; }
+
+    // A constant representing an invalid index.
+    static constexpr size_t kInvalidIndex = std::numeric_limits<size_t>::max();
 
   private:
     ArenaAllocator* const arena_;
