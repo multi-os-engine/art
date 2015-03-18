@@ -118,6 +118,12 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
     return false;
   }
 
+  if (resolved_method->ShouldNotInline()) {
+    VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
+                   << " was already flagged as non inlineable";
+    return false;
+  }
+
   DexCompilationUnit dex_compilation_unit(
     nullptr,
     outer_compilation_unit_.GetClassLoader(),
@@ -143,6 +149,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
   if (!builder.BuildGraph(*code_item)) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
                    << " could not be built, so cannot be inlined";
+    resolved_method->SetShouldNotInline();
     return false;
   }
 
@@ -150,12 +157,14 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
                                                   compiler_driver_->GetInstructionSet())) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
                    << " cannot be inlined because of the register allocator";
+    resolved_method->SetShouldNotInline();
     return false;
   }
 
   if (!callee_graph->TryBuildingSsa()) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
                    << " could not be transformed to SSA";
+    resolved_method->SetShouldNotInline();
     return false;
   }
 
@@ -188,6 +197,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
     if (block->IsLoopHeader()) {
       VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
                      << " could not be inlined because it contains a loop";
+      resolved_method->SetShouldNotInline();
       return false;
     }
 
@@ -203,6 +213,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
         VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
                        << " could not be inlined because " << current->DebugName()
                        << " can throw";
+        resolved_method->SetShouldNotInline();
         return false;
       }
 
@@ -210,6 +221,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
         VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
                        << " could not be inlined because " << current->DebugName()
                        << " needs an environment";
+        resolved_method->SetShouldNotInline();
         return false;
       }
     }
