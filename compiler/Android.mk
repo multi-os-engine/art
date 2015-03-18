@@ -124,6 +124,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/ssa_builder.cc \
 	optimizing/ssa_liveness_analysis.cc \
 	optimizing/ssa_phi_elimination.cc \
+	optimizing/stack_map_stream.cc \
 	optimizing/primitive_type_propagation.cc \
 	optimizing/reference_type_propagation.cc \
 	trampolines/trampoline_compiler.cc \
