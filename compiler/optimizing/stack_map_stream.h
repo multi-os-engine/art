@@ -17,7 +17,8 @@
 #ifndef ART_COMPILER_OPTIMIZING_STACK_MAP_STREAM_H_
 #define ART_COMPILER_OPTIMIZING_STACK_MAP_STREAM_H_
 
-#include "base/bit_vector.h"
+#include "base/arena_containers.h"
+#include "base/bit_vector-inl.h"
 #include "base/value_object.h"
 #include "memory_region.h"
 #include "nodes.h"
@@ -38,7 +39,9 @@ class StackMapStream : public ValueObject {
         dex_register_locations_(allocator, 10 * 4),
         inline_infos_(allocator, 2),
         stack_mask_max_(-1),
-        number_of_stack_maps_with_inline_info_(0) {}
+        number_of_stack_maps_with_inline_info_(0),
+        dex_map_hashes_cache_(allocator, 10),
+        dex_map_hash_to_stack_map_indeces_(std::less<uint32_t>(), allocator->Adapter()) {}
 
   // Compute bytes needed to encode a mask with the given maximum element.
   static uint32_t StackMaskEncodingSize(int max_element) {
@@ -139,7 +142,10 @@ class StackMapStream : public ValueObject {
   size_t ComputeDexRegisterMapsSize() const {
     size_t size = 0;
     for (size_t i = 0; i < stack_maps_.Size(); ++i) {
-      size += ComputeDexRegisterMapSize(stack_maps_.Get(i));
+      if (FindEntryWithTheSameDexMap(i) == kNoSameDexMapFound) {
+        // Entries with the same dex map will have the same offset.
+        size += ComputeDexRegisterMapSize(stack_maps_.Get(i));
+      }
     }
     return size;
   }
@@ -192,37 +198,46 @@ class StackMapStream : public ValueObject {
         stack_map.SetStackMask(*entry.sp_mask);
       }
 
-      if (entry.num_dex_registers != 0) {
-        // Set the Dex register map.
-        MemoryRegion register_region =
-            dex_register_locations_region.Subregion(
-                next_dex_register_map_offset,
-                ComputeDexRegisterMapSize(entry));
-        next_dex_register_map_offset += register_region.size();
-        DexRegisterMap dex_register_map(register_region);
-        stack_map.SetDexRegisterMapOffset(register_region.start() - memory_start);
-
-        // Offset in `dex_register_map` where to store the next register entry.
-        size_t offset = DexRegisterMap::kFixedSize;
-        dex_register_map.SetLiveBitMask(offset,
-                                        entry.num_dex_registers,
-                                        *entry.live_dex_registers_mask);
-        offset += DexRegisterMap::LiveBitMaskSize(entry.num_dex_registers);
-        for (size_t dex_register_number = 0, index_in_dex_register_locations = 0;
-             dex_register_number < entry.num_dex_registers;
-             ++dex_register_number) {
-          if (entry.live_dex_registers_mask->IsBitSet(dex_register_number)) {
-            DexRegisterLocation dex_register_location = dex_register_locations_.Get(
-                entry.dex_register_locations_start_index + index_in_dex_register_locations);
-            dex_register_map.SetRegisterInfo(offset, dex_register_location);
-            offset += DexRegisterMap::EntrySize(dex_register_location);
-            ++index_in_dex_register_locations;
-          }
-        }
-        // Ensure we reached the end of the Dex registers region.
-        DCHECK_EQ(offset, register_region.size());
-      } else {
+      if (entry.num_dex_registers == 0) {
+        // No dex map available.
         stack_map.SetDexRegisterMapOffset(StackMap::kNoDexRegisterMap);
+      } else {
+        // Search for an entry with the same dex map.
+        size_t entry_with_same_map = FindEntryWithTheSameDexMap(i);
+        if (entry_with_same_map != kNoSameDexMapFound) {
+          // If we have a hit reuse the offset.
+          stack_map.SetDexRegisterMapOffset(
+            code_info.GetStackMapAt(entry_with_same_map).GetDexRegisterMapOffset());
+        } else {
+          // If we have a completely new dex map add it to the stack map.
+          MemoryRegion register_region =
+              dex_register_locations_region.Subregion(
+                  next_dex_register_map_offset,
+                  ComputeDexRegisterMapSize(entry));
+          next_dex_register_map_offset += register_region.size();
+          DexRegisterMap dex_register_map(register_region);
+          stack_map.SetDexRegisterMapOffset(register_region.start() - memory_start);
+
+          // Offset in `dex_register_map` where to store the next register entry.
+          size_t offset = DexRegisterMap::kFixedSize;
+          dex_register_map.SetLiveBitMask(offset,
+                                          entry.num_dex_registers,
+                                          *entry.live_dex_registers_mask);
+          offset += DexRegisterMap::LiveBitMaskSize(entry.num_dex_registers);
+          for (size_t dex_register_number = 0, index_in_dex_register_locations = 0;
+               dex_register_number < entry.num_dex_registers;
+               ++dex_register_number) {
+            if (entry.live_dex_registers_mask->IsBitSet(dex_register_number)) {
+              DexRegisterLocation dex_register_location = dex_register_locations_.Get(
+                  entry.dex_register_locations_start_index + index_in_dex_register_locations);
+              dex_register_map.SetRegisterInfo(offset, dex_register_location);
+              offset += DexRegisterMap::EntrySize(dex_register_location);
+              ++index_in_dex_register_locations;
+            }
+          }
+          // Ensure we reached the end of the Dex registers region.
+          DCHECK_EQ(offset, register_region.size());
+        }
       }
 
       // Set the inlining info.
@@ -257,12 +272,98 @@ class StackMapStream : public ValueObject {
   }
 
  private:
+  // Returns the index of an entry with the same dex register map
+  // or kNoSameDexMapFound if no such entry exists.
+  size_t FindEntryWithTheSameDexMap(size_t entry_index) const {
+    StackMapEntry entry = stack_maps_.Get(entry_index);
+    uint32_t hash = 0;
+    if (dex_map_hashes_cache_.Size() < entry_index + 1) {
+      // NB: This function is always called on incremented entry_idices so it's safe
+      // to use add on the dex_maps_hash.
+      DCHECK_EQ(dex_map_hashes_cache_.Size(), entry_index);
+      hash = HashDexMapForEntry(entry);
+      dex_map_hashes_cache_.Add(hash);
+      auto entries_it = dex_map_hash_to_stack_map_indeces_.find(hash);
+      if (entries_it == dex_map_hash_to_stack_map_indeces_.end()) {
+        GrowableArray<uint32_t> stack_map_indices(allocator_, 1);
+        stack_map_indices.Add(entry_index);
+        dex_map_hash_to_stack_map_indeces_.Put(hash, stack_map_indices);
+      } else {
+        entries_it->second.Add(entry_index);
+      }
+    } else {
+      hash = dex_map_hashes_cache_.Get(entry_index);
+    }
+    auto entries_it = dex_map_hash_to_stack_map_indeces_.find(hash);
+    // It's a higher chance to find the same dex map in an adjacent entry.
+    for (size_t i = 0; i < entries_it->second.Size(); i++) {
+      size_t test_entry_index = entries_it->second.Get(i);
+      if ((test_entry_index != entry_index)
+          && HaveTheSameDexMaps(stack_maps_.Get(test_entry_index), entry)) {
+        return test_entry_index;
+      }
+    }
+    return kNoSameDexMapFound;
+  }
+
+  uint32_t HashDexMapForEntry(const StackMapEntry& entry) const {
+    if (entry.live_dex_registers_mask == nullptr) {
+      return 0;
+    }
+    uint32_t hash = 0;
+    for (uint32_t i = 0; i < entry.num_dex_registers; i++) {
+      if (entry.live_dex_registers_mask->IsBitSet(i)) {
+        hash += 1 << i;
+      }
+    }
+    return hash * entry.num_dex_registers;
+  }
+
+  bool HaveTheSameDexMaps(const StackMapEntry& a, const StackMapEntry& b) const {
+    if (a.live_dex_registers_mask == nullptr && b.live_dex_registers_mask == nullptr) {
+      return true;
+    }
+    if (a.live_dex_registers_mask == nullptr || b.live_dex_registers_mask == nullptr) {
+      return false;
+    }
+    if (a.num_dex_registers != b.num_dex_registers) {
+      return false;
+    }
+
+    int index_in_dex_register_locations = 0;
+    for (uint32_t i = 0; i < a.num_dex_registers; i++) {
+      if (a.live_dex_registers_mask->IsBitSet(i) != b.live_dex_registers_mask->IsBitSet(i)) {
+        return false;
+      }
+      if (a.live_dex_registers_mask->IsBitSet(i)) {
+        DexRegisterLocation a_loc = dex_register_locations_.Get(
+            a.dex_register_locations_start_index + index_in_dex_register_locations);
+        DexRegisterLocation b_loc = dex_register_locations_.Get(
+            b.dex_register_locations_start_index + index_in_dex_register_locations);
+        if (!(a_loc == b_loc)) {
+          return false;
+        }
+        ++index_in_dex_register_locations;
+      }
+    }
+    return true;
+  }
+
   ArenaAllocator* allocator_;
   GrowableArray<StackMapEntry> stack_maps_;
   GrowableArray<DexRegisterLocation> dex_register_locations_;
   GrowableArray<InlineInfoEntry> inline_infos_;
   int stack_mask_max_;
   size_t number_of_stack_maps_with_inline_info_;
+
+  // Cache for hash of the dex maps. The index in the array is the stack map index in stack_maps_.
+  mutable GrowableArray<uint32_t> dex_map_hashes_cache_;
+  // Maps dex map hashes to stack map indices.
+  // TODO: a hash map might performed better here.
+  mutable ArenaSafeMap<uint32_t, GrowableArray<uint32_t>> dex_map_hash_to_stack_map_indeces_;
+
+
+  static constexpr uint32_t kNoSameDexMapFound = -1;
 
   ART_FRIEND_TEST(StackMapTest, Test1);
   ART_FRIEND_TEST(StackMapTest, Test2);
