@@ -1077,7 +1077,19 @@ class OatDumper {
        << ", number_of_dex_registers=" << number_of_dex_registers
        << ", number_of_stack_maps=" << number_of_stack_maps << ")\n";
 
-    // Display stack maps along with Dex register maps.
+    // Display the Dex register dictionary.
+    size_t number_of_dictionary_entries =
+        code_info.GetNumberOfDexRegisterDictionaryEntries();
+    size_t dictionary_size_in_bytes = code_info.GetDexRegisterDictionarySize();
+    os << "  DexRegisterDictionary (number_of_entries=" << number_of_dictionary_entries
+       << ", size_in_bytes=" << dictionary_size_in_bytes << ")\n";
+    DexRegisterDictionary dex_register_dictionary = code_info.GetDexRegisterDictionary();
+    for (size_t i = 0; i < number_of_dictionary_entries; ++i) {
+      DexRegisterLocation location = dex_register_dictionary.GetLocationKindAndValue(i);
+      DumpRegisterMapping(os, i, location.GetKind(), location.GetValue(), "entry ");
+    }
+
+    // Display stack maps along with (live) Dex register maps.
     for (size_t i = 0; i < number_of_stack_maps; ++i) {
       StackMap stack_map = code_info.GetStackMapAt(i);
       DumpStackMapHeader(os, code_info, i);
@@ -1087,9 +1099,13 @@ class OatDumper {
         // TODO: Display the bit mask of live Dex registers.
         for (size_t j = 0; j < number_of_dex_registers; ++j) {
           if (dex_register_map.IsDexRegisterLive(j)) {
+            size_t dictionary_entry_index = dex_register_map.GetDictionaryEntryIndex(
+                j, number_of_dex_registers, number_of_dictionary_entries);
             DexRegisterLocation location =
-                dex_register_map.GetLocationKindAndValue(j, number_of_dex_registers);
-            DumpRegisterMapping(os, j, location.GetInternalKind(), location.GetValue());
+                dex_register_dictionary.GetLocationKindAndValue(dictionary_entry_index);
+            DumpRegisterMapping(
+                os, j, location.GetInternalKind(), location.GetValue(), "v",
+                "\t[entry " + std::to_string(static_cast<int>(dictionary_entry_index)) + "]");
           }
         }
       }
