@@ -85,11 +85,9 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
     return false;
   }
 
+  bool can_use_dex_cache = true;
   if (resolved_method->GetDexFile()->GetLocation().compare(outer_dex_file.GetLocation()) != 0) {
-    VLOG(compiler) << "Did not inline "
-                   << PrettyMethod(method_index, outer_dex_file)
-                   << " because it is in a different dex file";
-    return false;
+    can_use_dex_cache = false;
   }
 
   const DexFile::CodeItem* code_item = resolved_method->GetCodeItem();
@@ -122,10 +120,10 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
     nullptr,
     outer_compilation_unit_.GetClassLoader(),
     outer_compilation_unit_.GetClassLinker(),
-    outer_dex_file,
+    *resolved_method->GetDexFile(),
     code_item,
     resolved_method->GetDeclaringClass()->GetDexClassDefIndex(),
-    method_index,
+    resolved_method->GetDexMethodIndex(),
     resolved_method->GetAccessFlags(),
     nullptr);
 
@@ -136,7 +134,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
   HGraphBuilder builder(callee_graph,
                         &dex_compilation_unit,
                         &outer_compilation_unit_,
-                        &outer_dex_file,
+                        resolved_method->GetDexFile(),
                         compiler_driver_,
                         &inline_stats);
 
@@ -177,7 +175,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
 
   if (depth_ + 1 < kDepthLimit) {
     HInliner inliner(
-        callee_graph, outer_compilation_unit_, compiler_driver_, stats_, depth_ + 1);
+        callee_graph, dex_compilation_unit, compiler_driver_, stats_, depth_ + 1);
     inliner.Run();
   }
 
@@ -210,6 +208,13 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
         VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
                        << " could not be inlined because " << current->DebugName()
                        << " needs an environment";
+        return false;
+      }
+
+      if (!can_use_dex_cache && current->NeedsDexCache()) {
+        VLOG(compiler) << "Method " << PrettyMethod(method_index, outer_dex_file)
+                       << " could not be inlined because " << current->DebugName()
+                       << " it is in a different dex file and requires access to the dex cache";
         return false;
       }
     }
