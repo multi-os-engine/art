@@ -17,7 +17,7 @@
 #ifndef ART_COMPILER_OPTIMIZING_STACK_MAP_STREAM_H_
 #define ART_COMPILER_OPTIMIZING_STACK_MAP_STREAM_H_
 
-#include "base/bit_vector.h"
+#include "base/bit_vector-inl.h"
 #include "base/value_object.h"
 #include "memory_region.h"
 #include "nodes.h"
@@ -139,7 +139,10 @@ class StackMapStream : public ValueObject {
   size_t ComputeDexRegisterMapsSize() const {
     size_t size = 0;
     for (size_t i = 0; i < stack_maps_.Size(); ++i) {
-      size += ComputeDexRegisterMapSize(stack_maps_.Get(i));
+      if (FindEntryWithTheSameDexMap(i) == kNoSameDexMapFound) {
+        // Entries with the same dex map will have the same offset.
+        size += ComputeDexRegisterMapSize(stack_maps_.Get(i));
+      }
     }
     return size;
   }
@@ -192,37 +195,46 @@ class StackMapStream : public ValueObject {
         stack_map.SetStackMask(*entry.sp_mask);
       }
 
-      if (entry.num_dex_registers != 0) {
-        // Set the Dex register map.
-        MemoryRegion register_region =
-            dex_register_locations_region.Subregion(
-                next_dex_register_map_offset,
-                ComputeDexRegisterMapSize(entry));
-        next_dex_register_map_offset += register_region.size();
-        DexRegisterMap dex_register_map(register_region);
-        stack_map.SetDexRegisterMapOffset(register_region.start() - memory_start);
-
-        // Offset in `dex_register_map` where to store the next register entry.
-        size_t offset = DexRegisterMap::kFixedSize;
-        dex_register_map.SetLiveBitMask(offset,
-                                        entry.num_dex_registers,
-                                        *entry.live_dex_registers_mask);
-        offset += DexRegisterMap::LiveBitMaskSize(entry.num_dex_registers);
-        for (size_t dex_register_number = 0, index_in_dex_register_locations = 0;
-             dex_register_number < entry.num_dex_registers;
-             ++dex_register_number) {
-          if (entry.live_dex_registers_mask->IsBitSet(dex_register_number)) {
-            DexRegisterLocation dex_register_location = dex_register_locations_.Get(
-                entry.dex_register_locations_start_index + index_in_dex_register_locations);
-            dex_register_map.SetRegisterInfo(offset, dex_register_location);
-            offset += DexRegisterMap::EntrySize(dex_register_location);
-            ++index_in_dex_register_locations;
-          }
-        }
-        // Ensure we reached the end of the Dex registers region.
-        DCHECK_EQ(offset, register_region.size());
-      } else {
+      if (entry.num_dex_registers == 0) {
+        // No dex map available.
         stack_map.SetDexRegisterMapOffset(StackMap::kNoDexRegisterMap);
+      } else {
+        // Search for an entry with the same dex map.
+        size_t entry_with_same_map = FindEntryWithTheSameDexMap(i);
+        if (entry_with_same_map != kNoSameDexMapFound) {
+          // If we have a hit reuse the offset.
+          stack_map.SetDexRegisterMapOffset(
+            code_info.GetStackMapAt(entry_with_same_map).GetDexRegisterMapOffset());
+        } else {
+          // If we have a completely new dex map add it to the stack map.
+          MemoryRegion register_region =
+              dex_register_locations_region.Subregion(
+                  next_dex_register_map_offset,
+                  ComputeDexRegisterMapSize(entry));
+          next_dex_register_map_offset += register_region.size();
+          DexRegisterMap dex_register_map(register_region);
+          stack_map.SetDexRegisterMapOffset(register_region.start() - memory_start);
+
+          // Offset in `dex_register_map` where to store the next register entry.
+          size_t offset = DexRegisterMap::kFixedSize;
+          dex_register_map.SetLiveBitMask(offset,
+                                          entry.num_dex_registers,
+                                          *entry.live_dex_registers_mask);
+          offset += DexRegisterMap::LiveBitMaskSize(entry.num_dex_registers);
+          for (size_t dex_register_number = 0, index_in_dex_register_locations = 0;
+               dex_register_number < entry.num_dex_registers;
+               ++dex_register_number) {
+            if (entry.live_dex_registers_mask->IsBitSet(dex_register_number)) {
+              DexRegisterLocation dex_register_location = dex_register_locations_.Get(
+                  entry.dex_register_locations_start_index + index_in_dex_register_locations);
+              dex_register_map.SetRegisterInfo(offset, dex_register_location);
+              offset += DexRegisterMap::EntrySize(dex_register_location);
+              ++index_in_dex_register_locations;
+            }
+          }
+          // Ensure we reached the end of the Dex registers region.
+          DCHECK_EQ(offset, register_region.size());
+        }
       }
 
       // Set the inlining info.
@@ -256,6 +268,53 @@ class StackMapStream : public ValueObject {
     }
   }
 
+
+  // Returns the index of an entry with the same dex register map
+  // or kNoSameDexMapFound if no such entry exists.
+  size_t FindEntryWithTheSameDexMap(size_t entry_index) const {
+    if (entry_index == 0) {
+      return kNoSameDexMapFound;
+    }
+    StackMapEntry entry = stack_maps_.Get(entry_index);
+    // It's a higher chance to find the same dex map in an adjacent entry.
+    for (size_t i = entry_index - 1; i != 0 ; i--) {
+      if (HaveTheSameDexMaps(stack_maps_.Get(i), entry)) {
+        return i;
+      }
+    }
+    return kNoSameDexMapFound;
+  }
+
+  bool HaveTheSameDexMaps(const StackMapEntry& a, const StackMapEntry& b) const {
+    if (a.live_dex_registers_mask == nullptr && b.live_dex_registers_mask == nullptr) {
+      return true;
+    }
+    if (a.live_dex_registers_mask == nullptr || b.live_dex_registers_mask == nullptr) {
+      return false;
+    }
+    if (a.num_dex_registers != b.num_dex_registers) {
+      return false;
+    }
+
+    int index_in_dex_register_locations = 0;
+    for (uint32_t i = 0; i < a.num_dex_registers; i++) {
+      if (a.live_dex_registers_mask->IsBitSet(i) != b.live_dex_registers_mask->IsBitSet(i)) {
+        return false;
+      }
+      if (a.live_dex_registers_mask->IsBitSet(i)) {
+        DexRegisterLocation a_loc = dex_register_locations_.Get(
+            a.dex_register_locations_start_index + index_in_dex_register_locations);
+        DexRegisterLocation b_loc = dex_register_locations_.Get(
+            b.dex_register_locations_start_index + index_in_dex_register_locations);
+        if (!a_loc.Equal(b_loc)) {
+          return false;
+        }
+        ++index_in_dex_register_locations;
+      }
+    }
+    return true;
+  }
+
  private:
   ArenaAllocator* allocator_;
   GrowableArray<StackMapEntry> stack_maps_;
@@ -263,6 +322,8 @@ class StackMapStream : public ValueObject {
   GrowableArray<InlineInfoEntry> inline_infos_;
   int stack_mask_max_;
   size_t number_of_stack_maps_with_inline_info_;
+
+  static constexpr uint32_t kNoSameDexMapFound = -1;
 
   ART_FRIEND_TEST(StackMapTest, Test1);
   ART_FRIEND_TEST(StackMapTest, Test2);
