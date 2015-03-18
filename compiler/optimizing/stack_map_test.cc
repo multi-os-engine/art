@@ -231,4 +231,54 @@ TEST(StackMapTest, DexRegisterMapOffsetOverflow) {
   ASSERT_EQ(stack_map.GetDexRegisterMapOffset(code_info), StackMap::kNoDexRegisterMapSmallEncoding);
 }
 
+TEST(StackMapTest, TestShareDexRegisterMap) {
+  ArenaPool pool;
+  ArenaAllocator arena(&pool);
+  StackMapStream stream(&arena);
+
+  ArenaBitVector sp_mask(&arena, 0, false);
+  uint32_t number_of_dex_registers = 2;
+  // First stack map.
+  stream.AddStackMapEntry(0, 64, 0x3, &sp_mask, number_of_dex_registers, 0);
+  stream.AddDexRegisterEntry(0, DexRegisterLocation::Kind::kInRegister, 0);
+  stream.AddDexRegisterEntry(1, DexRegisterLocation::Kind::kConstant, -2);
+  // Second stack map, which should share the same dex register map.
+  stream.AddStackMapEntry(0, 64, 0x3, &sp_mask, number_of_dex_registers, 0);
+  stream.AddDexRegisterEntry(0, DexRegisterLocation::Kind::kInRegister, 0);
+  stream.AddDexRegisterEntry(1, DexRegisterLocation::Kind::kConstant, -2);
+  // Third stack map (doesn't share the dex register map).
+  stream.AddStackMapEntry(0, 64, 0x3, &sp_mask, number_of_dex_registers, 0);
+  stream.AddDexRegisterEntry(0, DexRegisterLocation::Kind::kInRegister, 2);
+  stream.AddDexRegisterEntry(1, DexRegisterLocation::Kind::kConstant, -2);
+
+  size_t size = stream.ComputeNeededSize();
+  void* memory = arena.Alloc(size, kArenaAllocMisc);
+  MemoryRegion region(memory, size);
+  stream.FillIn(region);
+
+  CodeInfo code_info(region);
+  // Verify first stack map.
+  {
+    StackMap stack_map = code_info.GetStackMapAt(0);
+    DexRegisterMap dex_registers = code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+    ASSERT_EQ(0, dex_registers.GetMachineRegister(0, number_of_dex_registers));
+    ASSERT_EQ(-2, dex_registers.GetConstant(1, number_of_dex_registers));
+  }
+
+  // Verify second stack map.
+  {
+    StackMap stack_map = code_info.GetStackMapAt(1);
+    DexRegisterMap dex_registers = code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+    ASSERT_EQ(0, dex_registers.GetMachineRegister(0, number_of_dex_registers));
+    ASSERT_EQ(-2, dex_registers.GetConstant(1, number_of_dex_registers));
+  }
+  // Verify third stack map.
+  {
+    StackMap stack_map = code_info.GetStackMapAt(2);
+    DexRegisterMap dex_registers = code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+    ASSERT_EQ(2, dex_registers.GetMachineRegister(0, number_of_dex_registers));
+    ASSERT_EQ(-2, dex_registers.GetConstant(1, number_of_dex_registers));
+  }
+}
+
 }  // namespace art
