@@ -185,6 +185,7 @@ enum LinkerPatchType {
   kLinkerPatchCall,
   kLinkerPatchCallRelative,  // NOTE: Actual patching is instruction_set-dependent.
   kLinkerPatchType,
+  kLinkerPatchDexCacheArray,  // NOTE: Actual patching is instruction_set-dependent.
 };
 
 class LinkerPatch {
@@ -216,6 +217,12 @@ class LinkerPatch {
     return LinkerPatch(literal_offset, kLinkerPatchType, target_type_idx, target_dex_file);
   }
 
+  static LinkerPatch DexCacheArrayPatch(size_t literal_offset,
+                                        const DexFile* target_dex_file,
+                                        uint32_t element_offset) {
+    return LinkerPatch(literal_offset, kLinkerPatchDexCacheArray, element_offset, target_dex_file);
+  }
+
   LinkerPatch(const LinkerPatch& other) = default;
   LinkerPatch& operator=(const LinkerPatch& other) = default;
 
@@ -225,6 +232,10 @@ class LinkerPatch {
 
   LinkerPatchType Type() const {
     return patch_type_;
+  }
+
+  bool IsPcRelative() const {
+    return Type() == kLinkerPatchCallRelative || Type() == kLinkerPatchDexCacheArray;
   }
 
   MethodReference TargetMethod() const {
@@ -240,6 +251,16 @@ class LinkerPatch {
 
   uint32_t TargetTypeIndex() const {
     DCHECK(patch_type_ == kLinkerPatchType);
+    return target_idx_;
+  }
+
+  const DexFile* TargetDexCacheDexFile() const {
+    DCHECK(patch_type_ == kLinkerPatchDexCacheArray);
+    return target_dex_file_;
+  }
+
+  uint32_t TargetDexCacheArrayOffset() const {
+    DCHECK(patch_type_ == kLinkerPatchDexCacheArray);
     return target_idx_;
   }
 
