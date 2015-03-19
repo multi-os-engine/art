@@ -605,12 +605,21 @@ void CompilerDriver::PreCompile(jobject class_loader, const std::vector<const De
   LoadImageClasses(timings);
   VLOG(compiler) << "LoadImageClasses: " << GetMemoryUsageString(false);
 
-  Resolve(class_loader, dex_files, thread_pool, timings);
-  VLOG(compiler) << "Resolve: " << GetMemoryUsageString(false);
+  const bool verification_enabled = compiler_options_->IsVerificationEnabled();
+  const bool never_verify = compiler_options_->NeverVerify();
 
-  if (!compiler_options_->IsVerificationEnabled()) {
+  // We need to resolve for never_verify since it needs to run dex to dex to add the RETURN_VOIDs.
+  if (never_verify || verification_enabled) {
+    Resolve(class_loader, dex_files, thread_pool, timings);
+    VLOG(compiler) << "Resolve: " << GetMemoryUsageString(false);
+  }
+
+  if (never_verify) {
     VLOG(compiler) << "Verify none mode specified, skipping verification.";
     SetVerified(class_loader, dex_files, thread_pool, timings);
+  }
+
+  if (!verification_enabled) {
     return;
   }
 

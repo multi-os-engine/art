@@ -32,7 +32,8 @@ class CompilerOptions FINAL {
  public:
   enum CompilerFilter {
     kVerifyNone,          // Skip verification and compile nothing except JNI stubs.
-    kInterpretOnly,       // Compile nothing except JNI stubs.
+    kInterpretOnly,       // Verify but compile nothing except JNI stubs.
+    kVerifyRuntime,       // Compile nothing except JNI stubs but verify only at runtime.
     kSpace,               // Maximize space savings.
     kBalanced,            // Try to get the best performance return on compilation investment.
     kSpeed,               // Maximize runtime performance.
@@ -82,12 +83,18 @@ class CompilerOptions FINAL {
   }
 
   bool IsCompilationEnabled() const {
-    return ((compiler_filter_ != CompilerOptions::kVerifyNone) &&
-            (compiler_filter_ != CompilerOptions::kInterpretOnly));
+    return compiler_filter_ != CompilerOptions::kVerifyNone &&
+        compiler_filter_ != CompilerOptions::kInterpretOnly &&
+        compiler_filter_ != CompilerOptions::kVerifyRuntime;
   }
 
   bool IsVerificationEnabled() const {
-    return (compiler_filter_ != CompilerOptions::kVerifyNone);
+    return compiler_filter_ != CompilerOptions::kVerifyNone &&
+        compiler_filter_ != CompilerOptions::kVerifyRuntime;
+  }
+
+  bool NeverVerify() const {
+    return compiler_filter_ == CompilerOptions::kVerifyNone;
   }
 
   size_t GetHugeMethodThreshold() const {
