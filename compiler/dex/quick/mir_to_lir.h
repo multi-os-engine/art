@@ -32,6 +32,7 @@
 #include "leb128.h"
 #include "safe_map.h"
 #include "utils/array_ref.h"
+#include "utils/dex_cache_arrays_layout.h"
 #include "utils/stack_checks.h"
 
 namespace art {
@@ -1093,6 +1094,17 @@ class Mir2Lir {
     virtual void LoadClassType(const DexFile& dex_file, uint32_t type_idx,
                                SpecialTargetRegister symbolic_reg);
 
+    // TODO: Support PC-relative dex cache array loads on all platforms and
+    // replace CanUseOpPcRelDexCacheArrayLoad() with dex_cache_arrays_layout_.Valid().
+    virtual bool CanUseOpPcRelDexCacheArrayLoad() const;
+
+    /*
+     * @brief Load an element of one of the dex cache arrays.
+     * @param offset the offset of the element in the fixed dex cache arrays' layout.
+     * @param r_dest the register where to load the element.
+     */
+    virtual void OpPcRelDexCacheArrayLoad(int offset, RegStorage r_dest);
+
     // Routines that work for the generic case, but may be overriden by target.
     /*
      * @brief Compare memory to immediate, and branch if condition true.
@@ -1817,6 +1829,9 @@ class Mir2Lir {
 
     // Record the MIR that generated a given safepoint (nullptr for prologue safepoints).
     ArenaVector<std::pair<LIR*, MIR*>> safepoints_;
+
+    // The layout of the cu_->dex_file's dex cache arrays for PC-relative addressing.
+    const DexCacheArraysLayout dex_cache_arrays_layout_;
 
   protected:
     // ABI support

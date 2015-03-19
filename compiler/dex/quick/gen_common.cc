@@ -24,12 +24,14 @@
 #include "dex/mir_graph.h"
 #include "dex/quick/arm/arm_lir.h"
 #include "driver/compiler_driver.h"
+#include "driver/compiler_options.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "mirror/array.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_reference.h"
 #include "utils.h"
+#include "utils/dex_cache_arrays_layout-inl.h"
 #include "verifier/method_verifier.h"
 
 namespace art {
@@ -1092,26 +1094,31 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
     FlushAllRegs();
     LockCallTemps();  // Using explicit registers
 
-    // If the Method* is already in a register, we can save a copy.
-    RegLocation rl_method = mir_graph_->GetMethodLoc();
-    RegStorage r_method;
-    if (rl_method.location == kLocPhysReg) {
-      // A temp would conflict with register use below.
-      DCHECK(!IsTemp(rl_method.reg));
-      r_method = rl_method.reg;
-    } else {
-      r_method = TargetReg(kArg2, kRef);
-      LoadCurrMethodDirect(r_method);
-    }
-    // Method to declaring class.
-    LoadRefDisp(r_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value(),
-                TargetReg(kArg0, kRef), kNotVolatile);
-    // Declaring class to dex cache strings.
-    LoadRefDisp(TargetReg(kArg0, kRef), mirror::Class::DexCacheStringsOffset().Int32Value(),
-                TargetReg(kArg0, kRef), kNotVolatile);
-
     // Might call out to helper, which will return resolved string in kRet0
-    LoadRefDisp(TargetReg(kArg0, kRef), offset_of_string, TargetReg(kRet0, kRef), kNotVolatile);
+    RegStorage ret0 = TargetReg(kRet0, kRef);
+    RegStorage r_method;
+    if (CanUseOpPcRelDexCacheArrayLoad()) {
+      OpPcRelDexCacheArrayLoad(dex_cache_arrays_layout_.StringOffset(string_idx), ret0);
+    } else {
+      // If the Method* is already in a register, we can save a copy.
+      RegLocation rl_method = mir_graph_->GetMethodLoc();
+      if (rl_method.location == kLocPhysReg) {
+        // A temp would conflict with register use below.
+        DCHECK(!IsTemp(rl_method.reg));
+        r_method = rl_method.reg;
+      } else {
+        r_method = TargetReg(kArg1, kRef);
+        LoadCurrMethodDirect(r_method);
+      }
+      // Method to declaring class.
+      LoadRefDisp(r_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value(),
+                  TargetReg(kArg0, kRef), kNotVolatile);
+      // Declaring class to dex cache strings.
+      LoadRefDisp(TargetReg(kArg0, kRef), mirror::Class::DexCacheStringsOffset().Int32Value(),
+                  TargetReg(kArg0, kRef), kNotVolatile);
+
+      LoadRefDisp(TargetReg(kArg0, kRef), offset_of_string, ret0, kNotVolatile);
+    }
     LIR* fromfast = OpCmpImmBranch(kCondEq, TargetReg(kRet0, kRef), 0, NULL);
     LIR* cont = NewLIR0(kPseudoTargetLabel);
 
@@ -1127,13 +1134,17 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
 
         void Compile() {
           GenerateTargetLabel();
-          m2l_->CallRuntimeHelperImmReg(kQuickResolveString, string_idx_, r_method_, true);
+          if (r_method_.Valid()) {
+            m2l_->CallRuntimeHelperImmReg(kQuickResolveString, string_idx_, r_method_, true);
+          } else {
+            m2l_->CallRuntimeHelperImmMethod(kQuickResolveString, string_idx_, true);
+          }
           m2l_->OpUnconditionalBranch(cont_);
         }
 
        private:
-         const RegStorage r_method_;
-         const int32_t string_idx_;
+        const RegStorage r_method_;
+        const int32_t string_idx_;
       };
 
       AddSlowPath(new (arena_) SlowPath(this, fromfast, cont, r_method, string_idx));
@@ -1142,14 +1153,18 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
     GenBarrier();
     StoreValue(rl_dest, GetReturn(kRefReg));
   } else {
-    RegLocation rl_method = LoadCurrMethod();
-    RegStorage res_reg = AllocTempRef();
     RegLocation rl_result = EvalLoc(rl_dest, kRefReg, true);
-    LoadRefDisp(rl_method.reg, mirror::ArtMethod::DeclaringClassOffset().Int32Value(), res_reg,
-                kNotVolatile);
-    LoadRefDisp(res_reg, mirror::Class::DexCacheStringsOffset().Int32Value(), res_reg,
-                kNotVolatile);
-    LoadRefDisp(res_reg, offset_of_string, rl_result.reg, kNotVolatile);
+    if (CanUseOpPcRelDexCacheArrayLoad()) {
+      OpPcRelDexCacheArrayLoad(dex_cache_arrays_layout_.StringOffset(string_idx), rl_result.reg);
+    } else {
+      RegLocation rl_method = LoadCurrMethod();
+      RegStorage res_reg = AllocTempRef();
+      LoadRefDisp(rl_method.reg, mirror::ArtMethod::DeclaringClassOffset().Int32Value(), res_reg,
+                  kNotVolatile);
+      LoadRefDisp(res_reg, mirror::Class::DexCacheStringsOffset().Int32Value(), res_reg,
+                  kNotVolatile);
+      LoadRefDisp(res_reg, offset_of_string, rl_result.reg, kNotVolatile);
+    }
     StoreValue(rl_dest, rl_result);
   }
 }
