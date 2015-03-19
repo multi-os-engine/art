@@ -944,6 +944,16 @@ LIR* Arm64Mir2Lir::OpPcRelLoad(RegStorage reg, LIR* target) {
   return lir;
 }
 
+LIR* Arm64Mir2Lir::OpPcRelDexCacheLoad(const DexFile* dex_cache, int offset, RegStorage r_dest) {
+  LIR* adrp = NewLIR2(kA64Adrp2xd, r_dest.GetReg(), 0);
+  adrp->operands[2] = offset;
+  adrp->operands[3] = WrapPointer(const_cast<DexFile*>(dex_cache));
+  AppendLIR(adrp);
+  dex_cache_access_insns_.push_back(adrp);
+  LoadRefDisp(r_dest, 0, r_dest, kNotVolatile);
+  return adrp;
+}
+
 LIR* Arm64Mir2Lir::OpVldm(RegStorage r_base, int count) {
   UNUSED(r_base, count);
   LOG(FATAL) << "Unexpected use of OpVldm for Arm64";

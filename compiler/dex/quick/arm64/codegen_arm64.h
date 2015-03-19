@@ -78,6 +78,8 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
   /// @copydoc Mir2Lir::UnconditionallyMarkGCCard(RegStorage)
   void UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) OVERRIDE;
 
+  LIR* OpPcRelDexCacheLoad(const DexFile* dex_cache, int offset, RegStorage r_dest) OVERRIDE;
+
   LIR* OpCmpMemImmBranch(ConditionCode cond, RegStorage temp_reg, RegStorage base_reg,
                          int offset, int check_value, LIR* target, LIR** compare) OVERRIDE;
 
@@ -396,6 +398,7 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
   static const A64EncodingMap EncodingMap[kA64Last];
 
   ArenaVector<LIR*> call_method_insns_;
+  ArenaVector<LIR*> dex_cache_access_insns_;
 
   int GenDalvikArgsBulkCopy(CallInfo* info, int first, int count) OVERRIDE;
 };

@@ -1089,6 +1089,14 @@ class Mir2Lir {
     virtual void LoadClassType(const DexFile& dex_file, uint32_t type_idx,
                                SpecialTargetRegister symbolic_reg);
 
+    /*
+     * @brief Load an element of one of the dex cache arrays.
+     * @param dex_file the dex file for which the dex cache element should be loaded.
+     * @param offset the offset of the element in the fixed dex cache arrays' layout.
+     * @param r_dest the register where to load the element.
+     */
+    virtual LIR* OpPcRelDexCacheLoad(const DexFile* dex_cache, int offset, RegStorage r_dest);
+
     // Routines that work for the generic case, but may be overriden by target.
     /*
      * @brief Compare memory to immediate, and branch if condition true.
