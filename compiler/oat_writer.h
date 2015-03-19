@@ -325,14 +325,14 @@ class OatWriter {
   uint32_t size_oat_class_method_bitmaps_;
   uint32_t size_oat_class_method_offsets_;
 
-  class RelativeCallPatcher;
-  class NoRelativeCallPatcher;
-  class X86RelativeCallPatcher;
-  class ArmBaseRelativeCallPatcher;
-  class Thumb2RelativeCallPatcher;
-  class Arm64RelativeCallPatcher;
+  class RelativePatcher;
+  class NoRelativePatcher;
+  class X86RelativePatcher;
+  class ArmBaseRelativePatcher;
+  class Thumb2RelativePatcher;
+  class Arm64RelativePatcher;
 
-  std::unique_ptr<RelativeCallPatcher> relative_call_patcher_;
+  std::unique_ptr<RelativePatcher> relative_patcher_;
 
   // The locations of absolute patches relative to the start of the executable section.
   std::vector<uintptr_t> absolute_patch_locations_;
