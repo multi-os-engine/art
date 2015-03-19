@@ -23,6 +23,7 @@
 #include "dex/mir_graph.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "driver/compiler_driver.h"
+#include "driver/compiler_options.h"
 #include "gc/accounting/card_table.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "mirror/art_method.h"

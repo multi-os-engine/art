@@ -26,11 +26,8 @@
 #include "base/mutex.h"
 #include "base/timing_logger.h"
 #include "class_reference.h"
-#include "compiled_method.h"
 #include "compiler.h"
 #include "dex_file.h"
-#include "dex/verified_method.h"
-#include "driver/compiler_options.h"
 #include "invoke_type.h"
 #include "method_reference.h"
 #include "mirror/class.h"  // For mirror::Class::Status.
@@ -39,6 +36,7 @@
 #include "runtime.h"
 #include "safe_map.h"
 #include "thread_pool.h"
+#include "utils/array_ref.h"
 #include "utils/dedupe_set.h"
 #include "utils/swap_space.h"
 #include "utils.h"
@@ -54,6 +52,7 @@ class MethodVerifier;
 }  // namespace verifier
 
 class CompiledClass;
+class CompiledMethod;
 class CompilerOptions;
 class DexCompilationUnit;
 class DexFileToMethodInlinerMap;
@@ -62,6 +61,9 @@ class InstructionSetFeatures;
 class OatWriter;
 class ParallelCompilationManager;
 class ScopedObjectAccess;
+template <class Allocator> class SrcMap;
+class SrcMapElem;
+using SwapSrcMap = SrcMap<SwapAllocator<SrcMapElem>>;
 template<class T> class Handle;
 class TimingLogger;
 class VerificationResults;
