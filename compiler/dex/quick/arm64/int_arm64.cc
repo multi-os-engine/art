@@ -943,6 +943,23 @@ void Arm64Mir2Lir::OpPcRelLoad(RegStorage reg, LIR* target) {
   lir->target = target;
 }
 
+bool Arm64Mir2Lir::CanUseOpPcRelDexCacheArrayLoad() const {
+  return dex_cache_arrays_layout_.Valid();
+}
+
+void Arm64Mir2Lir::OpPcRelDexCacheArrayLoad(const DexFile* dex_file, int offset,
+                                            RegStorage r_dest) {
+  LIR* adrp = NewLIR2(kA64Adrp2xd, r_dest.GetReg(), 0);
+  adrp->operands[2] = WrapPointer(dex_file);
+  adrp->operands[3] = offset;
+  adrp->operands[4] = WrapPointer(adrp);
+  dex_cache_access_insns_.push_back(adrp);
+  LIR* ldr = LoadBaseDisp(r_dest, 0, r_dest, kReference, kNotVolatile);
+  ldr->operands[4] = adrp->operands[4];
+  ldr->flags.fixup = kFixupLabel;
+  dex_cache_access_insns_.push_back(ldr);
+}
+
 LIR* Arm64Mir2Lir::OpVldm(RegStorage r_base, int count) {
   UNUSED(r_base, count);
   LOG(FATAL) << "Unexpected use of OpVldm for Arm64";
