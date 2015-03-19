@@ -31,6 +31,7 @@
 #include "base/timing_logger.h"
 #include "class_linker.h"
 #include "compiled_class.h"
+#include "compiled_method.h"
 #include "compiler.h"
 #include "compiler_driver-inl.h"
 #include "dex_compilation_unit.h"
@@ -2246,7 +2247,7 @@ void CompilerDriver::CompileMethod(Thread* self, const DexFile::CodeItem* code_i
     // Count non-relative linker patches.
     size_t non_relative_linker_patch_count = 0u;
     for (const LinkerPatch& patch : compiled_method->GetPatches()) {
-      if (patch.Type() != kLinkerPatchCallRelative) {
+      if (!patch.IsPcRelative()) {
         ++non_relative_linker_patch_count;
       }
     }

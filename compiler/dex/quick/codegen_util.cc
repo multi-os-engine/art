@@ -1294,6 +1294,13 @@ void Mir2Lir::LoadClassType(const DexFile& dex_file, uint32_t type_idx,
   OpPcRelLoad(TargetReg(symbolic_reg, kRef), data_target);
 }
 
+void Mir2Lir::OpPcRelDexCacheLoad(const DexFile* dex_cache ATTRIBUTE_UNUSED,
+                                  int offset ATTRIBUTE_UNUSED,
+                                  RegStorage r_dest ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "No generic implementation.";
+  UNREACHABLE();
+}
+
 std::vector<uint8_t>* Mir2Lir::ReturnFrameDescriptionEntry() {
   // Default case is to do nothing.
   return nullptr;
