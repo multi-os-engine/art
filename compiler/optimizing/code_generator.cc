@@ -34,6 +34,8 @@
 #include "verifier/dex_gc_map.h"
 #include "vmap_table.h"
 
+#include <iostream>
+
 namespace art {
 
 size_t CodeGenerator::GetCacheOffset(uint32_t index) {
