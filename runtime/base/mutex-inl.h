@@ -126,10 +126,29 @@ inline void ReaderWriterMutex::SharedLock(Thread* self) {
 #if ART_USE_FUTEXES
   bool done = false;
   do {
-    int32_t cur_state = state_.LoadRelaxed();
-    if (LIKELY(cur_state >= 0)) {
-      // Add as an extra reader.
-      done = state_.CompareExchangeWeakAcquire(cur_state, cur_state + 1);
+    rw_mutex_futex_state_type cur_state = state_.LoadRelaxed();
+    if (cur_state != 0xFFFF) {
+      // Were we trying to lock this recently, there are available bytes and there is TLS?
+      if (((last_read_locker_ != self) &&
+           (cur_state & ~(UINT64_C(0xFFFF)) != UINT64_C(0x0101010101010000))
+           ) || (self == nullptr)) {
+        // No. Add as an extra reader and impose load/store ordering appropriate for lock
+        // acquisition.
+        DCHECK_NE((cur_state & 0xFFFF) + 1, 0xFFFF);
+        done =  state_.CompareExchangeWeakAcquire(cur_state, cur_state + 1);
+      } else {
+        // Yes. Try to use a byte to encode the reader.
+        rw_mutex_futex_state_type bytes = cur_state >> 16;
+        uint32_t bit_pos = 16;
+        while ((bytes & 0xFF) != 0) {
+          bytes >>= 8;
+          bit_pos += 8;
+        }
+        done =  state_.CompareExchangeWeakAcquire(cur_state, cur_state | (1 << bit_pos));
+        if (done) {
+          self->SetReaderWriterLockLockedByte(level_, (bit_pos - 16) / 8);
+        }
+      }
     } else {
       HandleSharedLockContention(self, cur_state);
     }
@@ -150,24 +169,32 @@ inline void ReaderWriterMutex::SharedUnlock(Thread* self) {
 #if ART_USE_FUTEXES
   bool done = false;
   do {
-    int32_t cur_state = state_.LoadRelaxed();
-    if (LIKELY(cur_state > 0)) {
+    rw_mutex_futex_state_type cur_state = state_.LoadRelaxed();
+    rw_mutex_futex_state_type new_state;
+    DCHECK_NE(cur_state & 0xFFFF, 0xFFFF);
+    uint32_t locked_byte = self->GetReaderWriterLockLockedByte(level_);
+    if (self == nullptr || locked_byte == 0) {
       // Reduce state by 1 and impose lock release load/store ordering.
       // Note, the relaxed loads below musn't reorder before the CompareExchange.
       // TODO: the ordering here is non-trivial as state is split across 3 fields, fix by placing
       // a status bit into the state on contention.
-      done = state_.CompareExchangeWeakSequentiallyConsistent(cur_state, cur_state - 1);
-      if (done && (cur_state - 1) == 0) {  // Weak CAS may fail spuriously.
-        if (num_pending_writers_.LoadRelaxed() > 0 ||
-            num_pending_readers_.LoadRelaxed() > 0) {
-          // Wake any exclusive waiters as there are now no readers.
-          futex(state_.Address(), FUTEX_WAKE, -1, NULL, NULL, 0);
-        }
-      }
+      new_state = cur_state - 1;
+      done = state_.CompareExchangeWeakSequentiallyConsistent(cur_state, new_state);
     } else {
-      LOG(FATAL) << "Unexpected state_:" << cur_state << " for " << name_;
+      Atomic<uint8_t>* state_as_bytes = &state_;
+      // Clear reader byte with a ordering requirements matching the CAS above.
+      state_as_bytes[locked_byte + 2].StoreSequentiallyConsistent(0);
+      new_state = cur_state & ~(UINT64_C(0xFF) << ((locked_byte + 2) * 8));
+      done = true;
+    }
+    if (done && new_state == 0) {  // Weak CAS may fail spuriously.
+      if (num_pending_writers_.LoadRelaxed() > 0 || num_pending_readers_.LoadRelaxed() > 0) {
+        // Wake any exclusive waiters as there are now no readers.
+        futex(state_.Address(), FUTEX_WAKE, -1, NULL, NULL, 0);
+      }
     }
   } while (!done);
+
 #else
   CHECK_MUTEX_CALL(pthread_rwlock_unlock, (&rwlock_));
 #endif
@@ -183,10 +210,6 @@ inline bool Mutex::IsExclusiveHeld(const Thread* self) const {
     }
   }
   return result;
-}
-
-inline uint64_t Mutex::GetExclusiveOwnerTid() const {
-  return exclusive_owner_;
 }
 
 inline bool ReaderWriterMutex::IsExclusiveHeld(const Thread* self) const {
@@ -206,7 +229,7 @@ inline uint64_t ReaderWriterMutex::GetExclusiveOwnerTid() const {
   int32_t state = state_.LoadRelaxed();
   if (state == 0) {
     return 0;  // No owner.
-  } else if (state > 0) {
+  } else if (state != 0xFFFF) {
     return -1;  // Shared.
   } else {
     return exclusive_owner_;

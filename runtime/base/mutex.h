@@ -240,7 +240,9 @@ class LOCKABLE Mutex : public BaseMutex {
 
   // Id associated with exclusive owner. No memory ordering semantics if called from a thread other
   // than the owner.
-  uint64_t GetExclusiveOwnerTid() const;
+  uint64_t GetExclusiveOwnerTid() const {
+    return exclusive_owner_;
+  }
 
   // Returns how many times this Mutex has been locked, it is better to use AssertHeld/NotHeld.
   unsigned int GetDepth() const {
@@ -253,14 +255,13 @@ class LOCKABLE Mutex : public BaseMutex {
 #if ART_USE_FUTEXES
   // 0 is unheld, 1 is held.
   AtomicInteger state_;
-  // Exclusive owner.
-  volatile uint64_t exclusive_owner_;
   // Number of waiting contenders.
   AtomicInteger num_contenders_;
 #else
   pthread_mutex_t mutex_;
-  volatile uint64_t exclusive_owner_;  // Guarded by mutex_.
 #endif
+  // Exclusive owner.
+  volatile uint64_t exclusive_owner_;  // Guarded by mutex_ with pthreads.
   const bool recursive_;  // Can the lock be recursively held?
   unsigned int recursion_count_;
   friend class ConditionVariable;
@@ -364,21 +365,32 @@ class LOCKABLE ReaderWriterMutex : public BaseMutex {
 
  private:
 #if ART_USE_FUTEXES
-  // Out-of-inline path for handling contention for a SharedLock.
-  void HandleSharedLockContention(Thread* self, int32_t cur_state);
+  // The type of the state field, assuming that CAS operations for this type exist on the underlying
+  // architecture.
+  // TODO: for MIPS32 there are no 64-bit CAS operations and so this needs to be 32-bit there.
+  typedef uint64_t rw_mutex_futex_state_type;
 
-  // -1 implies held exclusive, +ve shared held by state_ many owners.
-  AtomicInteger state_;
-  // Exclusive owner. Modification guarded by this mutex.
-  volatile uint64_t exclusive_owner_;
+  // Out-of-inline path for handling contention for a SharedLock.
+  void HandleSharedLockContention(Thread* self, rw_mutex_futex_state_type cur_state);
+
+  // We encode the state of the lock in the low 16 bits:
+  // bits[15:0] - 0 => unlocked, >0 num readers less those in the byte fields, 0xFFFF exclusive locked.
+  // After that we encode readers using individual bytes so that they may be cleared with a byte store.
+  // bits[16:24] - 0 => unlocked, 1 a reader is present.
+  // repeat for bytes 24 through 63.
+  Atomic<rw_mutex_futex_state_type> state_;
   // Number of contenders waiting for a reader share.
   AtomicInteger num_pending_readers_;
   // Number of contenders waiting to be the writer.
   AtomicInteger num_pending_writers_;
+  // A cache of the last read locker, used to detect frequent reacquisitions of the lock by a
+  // thread.
+  Thread* last_read_locker_;
 #else
   pthread_rwlock_t rwlock_;
-  volatile uint64_t exclusive_owner_;  // Guarded by rwlock_.
 #endif
+  // Exclusive owner. Modification guarded by this mutex.
+  volatile uint64_t exclusive_owner_;
   DISALLOW_COPY_AND_ASSIGN(ReaderWriterMutex);
 };
 
