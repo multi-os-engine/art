@@ -31,12 +31,17 @@ PassManager::~PassManager() {
 void PassManager::CreateDefaultPassList() {
   default_pass_list_.clear();
   // Add each pass which isn't disabled into default_pass_list_.
+  std::string disabled_passes;
   for (const auto* pass : passes_) {
     if (options_.GetDisablePassList().find(pass->GetName()) != std::string::npos) {
-      LOG(INFO) << "Skipping disabled pass " << pass->GetName();
+      disabled_passes += (disabled_passes.empty() ? "" : ",");
+      disabled_passes += pass->GetName();
     } else {
       default_pass_list_.push_back(pass);
     }
+  }
+  if (!disabled_passes.empty()) {
+    LOG(INFO) << "Skipping disabled passes " << disabled_passes;
   }
 }
 
