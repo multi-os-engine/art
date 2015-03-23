@@ -296,6 +296,81 @@ HNullConstant* HGraph::GetNullConstant() {
   return cached_null_constant_;
 }
 
+HConstant* HGraph::CreateNewConstant(Primitive::Type type, int64_t value) {
+  DCHECK((type == Primitive::Type::kPrimInt && IsInt<32>(value))
+         || type == Primitive::Type::kPrimLong);
+
+  HConstant* constant;
+  if (type == Primitive::kPrimInt) {
+    constant = new (arena_) HIntConstant(value);
+  } else {
+    constant = new (arena_) HLongConstant(value);
+  }
+
+  HInstruction* last_instruction = entry_block_->GetLastInstruction();
+  if (last_instruction == nullptr || !last_instruction->IsControlFlow()) {
+    // Called from the graph builder. Insert at the entry block end.
+    entry_block_->AddInstruction(constant);
+  } else {
+    // Insert before the control-flow instruction at the entry block end.
+    entry_block_->InsertInstructionBefore(constant, last_instruction);
+  }
+
+  return constant;
+}
+
+HConstant* HGraph::GetConstant(Primitive::Type type, int64_t value) {
+  DCHECK((type == Primitive::Type::kPrimInt && IsInt<32>(value))
+         || type == Primitive::Type::kPrimLong);
+
+  if (type == Primitive::Type::kPrimInt) {
+    if (value == 0) {
+      return GetIntConstant0();
+    } else if (value == 1) {
+      return GetIntConstant1();
+    }
+  }
+
+  // Try to find an existing constant instruction with the same value.
+  for (HInstructionIterator it(entry_block_->instructions_); !it.Done(); it.Advance()) {
+    HInstruction* instruction = it.Current();
+    if (type == Primitive::kPrimInt
+        && instruction->IsIntConstant()
+        && instruction->AsIntConstant()->GetValue() == static_cast<int32_t>(value)) {
+      return instruction->AsConstant();
+    } else if (type == Primitive::kPrimLong
+               && instruction->IsLongConstant()
+               && instruction->AsLongConstant()->GetValue() == value) {
+      return instruction->AsConstant();
+    }
+  }
+
+  // Not found, create a new constant.
+  return CreateNewConstant(type, value);
+}
+
+HIntConstant* HGraph::GetIntConstant(int32_t val) {
+  return GetConstant(Primitive::Type::kPrimInt, val)->AsIntConstant();
+}
+
+HIntConstant* HGraph::GetIntConstant0() {
+  if (cached_constant0_ == nullptr) {
+    cached_constant0_ = CreateNewConstant(Primitive::Type::kPrimInt, 0)->AsIntConstant();
+  }
+  return cached_constant0_;
+}
+
+HIntConstant* HGraph::GetIntConstant1() {
+  if (cached_constant1_ == nullptr) {
+    cached_constant1_ = CreateNewConstant(Primitive::Type::kPrimInt, 1)->AsIntConstant();
+  }
+  return cached_constant1_;
+}
+
+HLongConstant* HGraph::GetLongConstant(int64_t val) {
+  return GetConstant(Primitive::Type::kPrimLong, val)->AsLongConstant();
+}
+
 void HLoopInformation::Add(HBasicBlock* block) {
   blocks_.SetBit(block->GetBlockId());
 }
@@ -698,16 +773,6 @@ HInstruction* HBinaryOperation::GetLeastConstantLeft() const {
 
 bool HCondition::IsBeforeWhenDisregardMoves(HIf* if_) const {
   return this == if_->GetPreviousDisregardingMoves();
-}
-
-HConstant* HConstant::NewConstant(ArenaAllocator* allocator, Primitive::Type type, int64_t val) {
-  if (type == Primitive::kPrimInt) {
-    DCHECK(IsInt<32>(val));
-    return new (allocator) HIntConstant(val);
-  } else {
-    DCHECK_EQ(type, Primitive::kPrimLong);
-    return new (allocator) HLongConstant(val);
-  }
 }
 
 bool HInstruction::Equals(HInstruction* other) const {

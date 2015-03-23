@@ -34,10 +34,11 @@ namespace art {
 class GraphChecker;
 class HBasicBlock;
 class HEnvironment;
+class HGraphVisitor;
 class HInstruction;
 class HIntConstant;
 class HInvoke;
-class HGraphVisitor;
+class HLongConstant;
 class HNullConstant;
 class HPhi;
 class HSuspendCheck;
@@ -115,7 +116,10 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         temporaries_vreg_slots_(0),
         has_array_accesses_(false),
         debuggable_(debuggable),
-        current_instruction_id_(start_instruction_id) {}
+        current_instruction_id_(start_instruction_id),
+        cached_null_constant_(nullptr),
+        cached_constant0_(nullptr),
+        cached_constant1_(nullptr) {}
 
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
@@ -218,6 +222,12 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   HNullConstant* GetNullConstant();
 
+  HConstant* GetConstant(Primitive::Type type, int64_t val);
+  HIntConstant* GetIntConstant(int32_t val);
+  HIntConstant* GetIntConstant0();
+  HIntConstant* GetIntConstant1();
+  HLongConstant* GetLongConstant(int64_t val);
+
  private:
   HBasicBlock* FindCommonDominator(HBasicBlock* first, HBasicBlock* second) const;
   void VisitBlockForDominatorTree(HBasicBlock* block,
@@ -229,6 +239,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
                               ArenaBitVector* visiting);
   void RemoveInstructionsAsUsersFromDeadBlocks(const ArenaBitVector& visited) const;
   void RemoveDeadBlocks(const ArenaBitVector& visited) const;
+
+  HConstant* CreateNewConstant(Primitive::Type type, int64_t val);
 
   ArenaAllocator* const arena_;
 
@@ -266,6 +278,10 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   // Cached null constant that might be created when building SSA form.
   HNullConstant* cached_null_constant_;
+
+  // Cached common integer constants for faster lookup.
+  HIntConstant* cached_constant0_;
+  HIntConstant* cached_constant1_;
 
   ART_FRIEND_TEST(GraphTest, IfSuccessorSimpleJoinBlock1);
   DISALLOW_COPY_AND_ASSIGN(HGraph);
@@ -1857,8 +1873,6 @@ class HConstant : public HExpression<0> {
   virtual bool IsMinusOne() const { return false; }
   virtual bool IsZero() const { return false; }
   virtual bool IsOne() const { return false; }
-
-  static HConstant* NewConstant(ArenaAllocator* allocator, Primitive::Type type, int64_t val);
 
   DECLARE_INSTRUCTION(Constant);
 

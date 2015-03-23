@@ -173,9 +173,9 @@ void InstructionWithAbsorbingInputSimplifier::VisitRem(HRem* instruction) {
     //    REM dst, src, src
     // with
     //    CONSTANT 0
-    ArenaAllocator* allocator = GetGraph()->GetArena();
-    block->ReplaceAndRemoveInstructionWith(instruction,
-                                           HConstant::NewConstant(allocator, type, 0));
+    HConstant* zero_constant = GetGraph()->GetConstant(type, 0);
+    instruction->ReplaceWith(zero_constant);
+    block->RemoveInstruction(instruction);
   }
 }
 
@@ -195,7 +195,6 @@ void InstructionWithAbsorbingInputSimplifier::VisitSub(HSub* instruction) {
   }
 
   HBasicBlock* block = instruction->GetBlock();
-  ArenaAllocator* allocator = GetGraph()->GetArena();
 
   // We assume that GVN has run before, so we only perform a pointer
   // comparison.  If for some reason the values are equal but the pointers are
@@ -208,8 +207,9 @@ void InstructionWithAbsorbingInputSimplifier::VisitSub(HSub* instruction) {
     //    CONSTANT 0
     // Note that we cannot optimise `x - x` to `0` for floating-point. It does
     // not work when `x` is an infinity.
-    block->ReplaceAndRemoveInstructionWith(instruction,
-                                           HConstant::NewConstant(allocator, type, 0));
+    HConstant* zero_constant = GetGraph()->GetConstant(type, 0);
+    instruction->ReplaceWith(zero_constant);
+    block->RemoveInstruction(instruction);
   }
 }
 
@@ -225,10 +225,9 @@ void InstructionWithAbsorbingInputSimplifier::VisitXor(HXor* instruction) {
     //    CONSTANT 0
     Primitive::Type type = instruction->GetType();
     HBasicBlock* block = instruction->GetBlock();
-    ArenaAllocator* allocator = GetGraph()->GetArena();
-
-    block->ReplaceAndRemoveInstructionWith(instruction,
-                                           HConstant::NewConstant(allocator, type, 0));
+    HConstant* zero_constant = GetGraph()->GetConstant(type, 0);
+    instruction->ReplaceWith(zero_constant);
+    block->RemoveInstruction(instruction);
   }
 }
 
