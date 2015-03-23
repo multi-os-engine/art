@@ -1420,6 +1420,32 @@ bool MethodVerifier::SetTypesFromSignature() {
   return result;
 }
 
+static bool HasErroneousArrayComponent(mirror::Class* klass)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  DCHECK(klass != nullptr);
+  if (klass->IsArrayClass()) {
+    mirror::Class* component = klass->GetComponentType();
+    DCHECK(component != nullptr);
+    if (component->IsArrayClass()) {
+      return HasErroneousArrayComponent(component);
+    } else {
+      return component->IsErroneous();
+    }
+  }
+  return false;
+}
+
+static size_t ArrayDepth(mirror::Class* klass)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  DCHECK(klass != nullptr);
+  size_t depth = 0;
+  while (klass->IsArrayClass()) {
+    depth++;
+    klass = klass->GetComponentType();
+  }
+  return depth;
+}
+
 bool MethodVerifier::CodeFlowVerifyMethod() {
   const uint16_t* insns = code_item_->insns_;
   const uint32_t insns_size = code_item_->insns_size_in_code_units_;
@@ -1752,8 +1778,26 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
               Fail(VERIFY_ERROR_NO_CLASS) << " can't resolve returned type '" << return_type
                   << "' or '" << reg_type << "'";
             } else {
-              Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "returning '" << reg_type
-                  << "', but expected from declaration '" << return_type << "'";
+              bool soft_error = false;
+              // Check whether arrays are involved. They will show a valid class status, even
+              // though their components are erroneous.
+              if (reg_type.IsReferenceTypes()) {
+                if (HasErroneousArrayComponent(reg_type.GetClass()) ||
+                    HasErroneousArrayComponent(return_type.GetClass())) {
+                  // Only valid if both are arrays and have the same depth. Otherwise it's a hard
+                  // mismatch.
+                  if (ArrayDepth(reg_type.GetClass()) == ArrayDepth(return_type.GetClass())) {
+                    soft_error = true;
+                    Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "array with erroneous component type: "
+                        << reg_type << " vs " << return_type;
+                  }
+                }
+              }
+
+              if (!soft_error) {
+                Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "returning '" << reg_type
+                    << "', but expected from declaration '" << return_type << "'";
+              }
             }
           }
         }
