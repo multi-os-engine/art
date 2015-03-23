@@ -1420,6 +1420,43 @@ bool MethodVerifier::SetTypesFromSignature() {
   return result;
 }
 
+static bool CanAssignArray(const RegType& type1, const RegType& type2, RegTypeCache& reg_types,
+                           Handle<mirror::ClassLoader> class_loader, bool* soft_error)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  if (!type1.IsArrayTypes() || !type2.IsArrayTypes()) {
+    *soft_error = false;
+    return false;
+  }
+
+  const RegType& cmp1 = reg_types.GetComponentType(type1, class_loader.Get());
+  const RegType& cmp2 = reg_types.GetComponentType(type2, class_loader.Get());
+
+  if (cmp1.IsAssignableFrom(cmp2)) {
+    return true;
+  }
+  if (cmp1.IsUnresolvedTypes()) {
+    if (cmp2.IsIntegralTypes() || cmp2.IsFloatTypes() || cmp2.IsArrayTypes()) {
+      *soft_error = false;
+      return false;
+    }
+    *soft_error = true;
+    return false;
+  }
+  if (cmp2.IsUnresolvedTypes()) {
+    if (cmp1.IsIntegralTypes() || cmp1.IsFloatTypes() || cmp1.IsArrayTypes()) {
+      *soft_error = false;
+      return false;
+    }
+    *soft_error = true;
+    return false;
+  }
+  if (!cmp1.IsArrayTypes() || !cmp2.IsArrayTypes()) {
+    *soft_error = false;
+    return false;
+  }
+  return CanAssignArray(cmp1, cmp2, reg_types, class_loader, soft_error);
+}
+
 bool MethodVerifier::CodeFlowVerifyMethod() {
   const uint16_t* insns = code_item_->insns_;
   const uint32_t insns_size = code_item_->insns_size_in_code_units_;
@@ -1752,8 +1789,21 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
               Fail(VERIFY_ERROR_NO_CLASS) << " can't resolve returned type '" << return_type
                   << "' or '" << reg_type << "'";
             } else {
-              Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "returning '" << reg_type
-                  << "', but expected from declaration '" << return_type << "'";
+              bool soft_error = false;
+              // Check whether arrays are involved. They will show a valid class status, even
+              // though their components are erroneous.
+              if (reg_type.IsArrayTypes() && return_type.IsArrayTypes()) {
+                CanAssignArray(return_type, reg_type, reg_types_, class_loader_, &soft_error);
+                if (soft_error) {
+                  Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "array with erroneous component type: "
+                        << reg_type << " vs " << return_type;
+                }
+              }
+
+              if (!soft_error) {
+                Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "returning '" << reg_type
+                    << "', but expected from declaration '" << return_type << "'";
+              }
             }
           }
         }
