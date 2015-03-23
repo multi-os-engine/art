@@ -582,14 +582,16 @@ class Mir2Lir {
      * TUNING: If use of these utilities becomes more common on 32-bit builds, it
      * may be worth conditionally-compiling a set of identity functions here.
      */
-    uint32_t WrapPointer(void* pointer) {
+    template <typename T>
+    uint32_t WrapPointer(const T* pointer) {
       uint32_t res = pointer_storage_.size();
       pointer_storage_.push_back(pointer);
       return res;
     }
 
-    void* UnwrapPointer(size_t index) {
-      return pointer_storage_[index];
+    template <typename T>
+    const T* UnwrapPointer(size_t index) {
+      return reinterpret_cast<const T*>(pointer_storage_[index]);
     }
 
     // strdup(), but allocates from the arena.
@@ -1745,7 +1747,7 @@ class Mir2Lir {
     ArenaVector<FillArrayData*> fill_array_data_;
     ArenaVector<RegisterInfo*> tempreg_info_;
     ArenaVector<RegisterInfo*> reginfo_map_;
-    ArenaVector<void*> pointer_storage_;
+    ArenaVector<const void*> pointer_storage_;
     CodeOffset current_code_offset_;    // Working byte offset of machine instructons.
     CodeOffset data_offset_;            // starting offset of literal pool.
     size_t total_size_;                   // header + code size.

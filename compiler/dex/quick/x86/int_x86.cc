@@ -1353,8 +1353,7 @@ LIR* X86Mir2Lir::OpPcRelLoad(RegStorage reg, LIR* target) {
   // 4 byte offset.  We will fix this up in the assembler later to have the right
   // value.
   ScopedMemRefType mem_ref_type(this, ResourceMask::kLiteral);
-  LIR *res = RawLIR(current_dalvik_offset_, kX86Mov32RM, reg.GetReg(), reg.GetReg(), 256,
-                    0, 0, target);
+  LIR* res = NewLIR3(kX86Mov32RM, reg.GetReg(), reg.GetReg(), 256);
   res->target = target;
   res->flags.fixup = kFixupLoad;
   return res;
