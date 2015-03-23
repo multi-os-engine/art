@@ -109,6 +109,9 @@ NO_RETURN static void Usage(const char* fmt, ...) {
 
   UsageError("Usage: dex2oat [options]...");
   UsageError("");
+  UsageError("  -j<number>: specifies the number of threads used for compilation. Default is the number of detected hardware threads available on the host system.");
+  UsageError("      Example: -j12");
+  UsageError("");
   UsageError("  --dex-file=<dex-file>: specifies a .dex, .jar, or .apk file to compile.");
   UsageError("      Example: --dex-file=/system/framework/core.jar");
   UsageError("");
