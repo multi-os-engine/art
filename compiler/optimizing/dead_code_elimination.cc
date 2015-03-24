@@ -38,6 +38,7 @@ void HDeadCodeElimination::Run() {
       if (!inst->HasSideEffects()
           && !inst->CanThrow()
           && !inst->IsSuspendCheck()
+          && !inst->IsBoundType()
           && !inst->HasUses()) {
         block->RemoveInstruction(inst);
       }
