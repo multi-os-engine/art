@@ -107,7 +107,7 @@ class MANAGED PrimitiveArray : public Array {
   static PrimitiveArray<T>* Alloc(Thread* self, size_t length)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  const T* GetData() const ALWAYS_INLINE  SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  const T* GetData() const ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return reinterpret_cast<const T*>(GetRawData(sizeof(T), 0));
   }
 
