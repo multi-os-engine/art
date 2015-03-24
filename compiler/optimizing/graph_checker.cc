@@ -476,4 +476,15 @@ void SSAChecker::VisitBinaryOperation(HBinaryOperation* op) {
   }
 }
 
+void SSAChecker::VisitConstant(HConstant* instruction) {
+  HBasicBlock* block = instruction->GetBlock();
+  if (!block->IsEntryBlock()) {
+    AddError(StringPrintf(
+        "%s %d is not in the entry block but in block %d.",
+        instruction->DebugName(),
+        instruction->GetId(),
+        block->GetBlockId()));
+  }
+}
+
 }  // namespace art
