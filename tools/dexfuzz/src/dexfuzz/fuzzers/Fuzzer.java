@@ -241,27 +241,22 @@ public abstract class Fuzzer {
 
     String programName = getNextOutputFilename();
     boolean verified = true;
-    if (!Options.skipHostVerify) {
+
+    if (!Options.skipHostVerify && !Options.local) {
       verified = goldenExecutor.verifyOnHost(programName);
-    }
-    if (verified) {
-      boolean skipAnalysis = false;
-      boolean uploadedToTarget = false;
-      if (!Options.skipHostVerify) {
+      if (verified) {
         listener.handleSuccessfulHostVerification();
       }
+    }
+
+    if (verified) {
+      boolean skipAnalysis = false;
+
       for (Executor executor : executors) {
         executor.reset();
-        if (!uploadedToTarget) {
-          executor.uploadToTarget(programName);
-        } else {
-          uploadedToTarget = true;
-        }
-        if (executor.needsCleanCodeCache()) {
-          executor.deleteGeneratedOatFile(programName);
-        }
+        executor.prepareProgramForExecution(programName);
         executor.execute(programName);
-        if (!executor.verifyOnTarget()) {
+        if (!executor.didTargetVerify()) {
           listener.handleFailedTargetVerification();
           skipAnalysis = true;
           break;
@@ -275,6 +270,8 @@ public abstract class Fuzzer {
         analyseResults(program, programName);
       }
     }
+
+    goldenExecutor.finishedWithProgramOnDevice();
     mutatedSuccessfully = false;
     savedSuccessfully = false;
   }
