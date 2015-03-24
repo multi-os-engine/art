@@ -75,10 +75,10 @@ static HInstruction* GetOppositeCondition(HInstruction* cond) {
   } else if (cond->IsIntConstant()) {
     int32_t value = cond->AsIntConstant()->GetValue();
     if (value == 0) {
-      return graph->GetIntConstant1();
+      return graph->GetIntConstant(1);
     } else {
       DCHECK_EQ(value, 1);
-      return graph->GetIntConstant0();
+      return graph->GetIntConstant(0);
     }
   }
 
