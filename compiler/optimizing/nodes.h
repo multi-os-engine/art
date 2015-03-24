@@ -33,11 +33,14 @@ namespace art {
 
 class GraphChecker;
 class HBasicBlock;
+class HDoubleConstant;
 class HEnvironment;
+class HFloatConstant;
+class HGraphVisitor;
 class HInstruction;
 class HIntConstant;
 class HInvoke;
-class HGraphVisitor;
+class HLongConstant;
 class HNullConstant;
 class HPhi;
 class HSuspendCheck;
@@ -115,7 +118,10 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         temporaries_vreg_slots_(0),
         has_array_accesses_(false),
         debuggable_(debuggable),
-        current_instruction_id_(start_instruction_id) {}
+        current_instruction_id_(start_instruction_id),
+        cached_null_constant_(nullptr),
+        cached_int_constant0_(nullptr),
+        cached_int_constant1_(nullptr) {}
 
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
@@ -128,7 +134,6 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   void SetExitBlock(HBasicBlock* block) { exit_block_ = block; }
 
   void AddBlock(HBasicBlock* block);
-  void AddConstant(HConstant* instruction);
 
   // Try building the SSA form of this graph, with dominance computation and loop
   // recognition. Returns whether it was successful in doing all these steps.
@@ -220,8 +225,9 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   bool IsDebuggable() const { return debuggable_; }
 
   HNullConstant* GetNullConstant();
-  HIntConstant* GetIntConstant0();
-  HIntConstant* GetIntConstant1();
+  HIntConstant* GetIntConstant(int32_t value);
+  HLongConstant* GetLongConstant(int64_t value);
+  HConstant* GetConstant(Primitive::Type type, int64_t value);
 
  private:
   HBasicBlock* FindCommonDominator(HBasicBlock* first, HBasicBlock* second) const;
@@ -234,6 +240,10 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
                               ArenaBitVector* visiting);
   void RemoveInstructionsAsUsersFromDeadBlocks(const ArenaBitVector& visited) const;
   void RemoveDeadBlocks(const ArenaBitVector& visited) const;
+
+  void AddConstant(HConstant* instruction);
+  template <typename Functor>
+  HConstant* FindConstant(Functor condition);
 
   ArenaAllocator* const arena_;
 
@@ -1880,8 +1890,6 @@ class HConstant : public HExpression<0> {
   virtual bool IsZero() const { return false; }
   virtual bool IsOne() const { return false; }
 
-  static HConstant* NewConstant(ArenaAllocator* allocator, Primitive::Type type, int64_t val);
-
   DECLARE_INSTRUCTION(Constant);
 
  private:
@@ -1952,8 +1960,6 @@ class HDoubleConstant : public HConstant {
 
 class HNullConstant : public HConstant {
  public:
-  HNullConstant() : HConstant(Primitive::kPrimNot) {}
-
   bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
@@ -1965,6 +1971,10 @@ class HNullConstant : public HConstant {
   DECLARE_INSTRUCTION(NullConstant);
 
  private:
+  HNullConstant() : HConstant(Primitive::kPrimNot) {}
+
+  friend class HGraph;
+
   DISALLOW_COPY_AND_ASSIGN(HNullConstant);
 };
 
@@ -1972,8 +1982,6 @@ class HNullConstant : public HConstant {
 // synthesized (for example with the if-eqz instruction).
 class HIntConstant : public HConstant {
  public:
-  explicit HIntConstant(int32_t value) : HConstant(Primitive::kPrimInt), value_(value) {}
-
   int32_t GetValue() const { return value_; }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
@@ -1994,15 +2002,19 @@ class HIntConstant : public HConstant {
   DECLARE_INSTRUCTION(IntConstant);
 
  private:
+  explicit HIntConstant(int32_t value) : HConstant(Primitive::kPrimInt), value_(value) {}
+
   const int32_t value_;
+
+  friend class HGraph;
+  ART_FRIEND_TEST(GraphTest, InsertInstructionBefore);
+  ART_FRIEND_TEST(ParallelMoveTest, ConstantLast);
 
   DISALLOW_COPY_AND_ASSIGN(HIntConstant);
 };
 
 class HLongConstant : public HConstant {
  public:
-  explicit HLongConstant(int64_t value) : HConstant(Primitive::kPrimLong), value_(value) {}
-
   int64_t GetValue() const { return value_; }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
@@ -2018,7 +2030,11 @@ class HLongConstant : public HConstant {
   DECLARE_INSTRUCTION(LongConstant);
 
  private:
+  explicit HLongConstant(int64_t value) : HConstant(Primitive::kPrimLong), value_(value) {}
+
   const int64_t value_;
+
+  friend class HGraph;
 
   DISALLOW_COPY_AND_ASSIGN(HLongConstant);
 };

@@ -58,7 +58,8 @@ void HConstantFolding::Run() {
         HConstant* constant =
             inst->AsBinaryOperation()->TryStaticEvaluation();
         if (constant != nullptr) {
-          inst->GetBlock()->ReplaceAndRemoveInstructionWith(inst, constant);
+          inst->ReplaceWith(constant);
+          inst->GetBlock()->RemoveInstruction(inst);
         } else {
           inst->Accept(&simplifier);
         }
@@ -68,7 +69,8 @@ void HConstantFolding::Run() {
         HConstant* constant =
             inst->AsUnaryOperation()->TryStaticEvaluation();
         if (constant != nullptr) {
-          inst->GetBlock()->ReplaceAndRemoveInstructionWith(inst, constant);
+          inst->ReplaceWith(constant);
+          inst->GetBlock()->RemoveInstruction(inst);
         }
       } else if (inst->IsDivZeroCheck()) {
         // We can safely remove the check if the input is a non-null constant.
@@ -173,9 +175,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitRem(HRem* instruction) {
     //    REM dst, src, src
     // with
     //    CONSTANT 0
-    ArenaAllocator* allocator = GetGraph()->GetArena();
-    block->ReplaceAndRemoveInstructionWith(instruction,
-                                           HConstant::NewConstant(allocator, type, 0));
+    block->ReplaceAndRemoveInstructionWith(instruction, GetGraph()->GetConstant(type, 0));
   }
 }
 
@@ -195,7 +195,6 @@ void InstructionWithAbsorbingInputSimplifier::VisitSub(HSub* instruction) {
   }
 
   HBasicBlock* block = instruction->GetBlock();
-  ArenaAllocator* allocator = GetGraph()->GetArena();
 
   // We assume that GVN has run before, so we only perform a pointer
   // comparison.  If for some reason the values are equal but the pointers are
@@ -208,8 +207,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitSub(HSub* instruction) {
     //    CONSTANT 0
     // Note that we cannot optimise `x - x` to `0` for floating-point. It does
     // not work when `x` is an infinity.
-    block->ReplaceAndRemoveInstructionWith(instruction,
-                                           HConstant::NewConstant(allocator, type, 0));
+    block->ReplaceAndRemoveInstructionWith(instruction, GetGraph()->GetConstant(type, 0));
   }
 }
 
@@ -225,10 +223,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitXor(HXor* instruction) {
     //    CONSTANT 0
     Primitive::Type type = instruction->GetType();
     HBasicBlock* block = instruction->GetBlock();
-    ArenaAllocator* allocator = GetGraph()->GetArena();
-
-    block->ReplaceAndRemoveInstructionWith(instruction,
-                                           HConstant::NewConstant(allocator, type, 0));
+    block->ReplaceAndRemoveInstructionWith(instruction, GetGraph()->GetConstant(type, 0));
   }
 }
 
