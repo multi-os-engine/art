@@ -47,10 +47,6 @@ class MANAGED ArtField FINAL : public Object {
     return sizeof(ArtField);
   }
 
-  ALWAYS_INLINE static ArtField* FromReflectedField(const ScopedObjectAccessAlreadyRunnable& soa,
-                                                    jobject jlr_field)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   Class* GetDeclaringClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetDeclaringClass(Class *new_declaring_class) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -154,6 +150,9 @@ class MANAGED ArtField FINAL : public Object {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   const char* GetName() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Resolves / returns the name from the dex cache.
+  String* GetStringName(Thread* self, bool resolve) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   const char* GetTypeDescriptor() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

@@ -34,7 +34,7 @@ namespace art {
 namespace mirror {
 
 inline uint32_t ArtField::ClassSize() {
-  uint32_t vtable_entries = Object::kVTableLength + 6;
+  uint32_t vtable_entries = Object::kVTableLength;
   return Class::ComputeClassSize(true, vtable_entries, 0, 0, 0, 0, 0);
 }
 
@@ -318,12 +318,19 @@ inline const DexFile* ArtField::GetDexFile() SHARED_LOCKS_REQUIRED(Locks::mutato
   return GetDexCache()->GetDexFile();
 }
 
-inline ArtField* ArtField::FromReflectedField(const ScopedObjectAccessAlreadyRunnable& soa,
-                                              jobject jlr_field) {
-  mirror::ArtField* f = soa.DecodeField(WellKnownClasses::java_lang_reflect_Field_artField);
-  mirror::ArtField* field = f->GetObject(soa.Decode<mirror::Object*>(jlr_field))->AsArtField();
-  DCHECK(field != nullptr);
-  return field;
+inline String* ArtField::GetStringName(Thread* self, bool resolve) {
+  auto dex_field_index = GetDexFieldIndex();
+  CHECK_NE(dex_field_index, DexFile::kDexNoIndex);
+  auto* dex_cache = GetDexCache();
+  const auto* dex_file = dex_cache->GetDexFile();
+  const auto& field_id = dex_file->GetFieldId(dex_field_index);
+  auto* name = dex_cache->GetResolvedString(field_id.name_idx_);
+  if (resolve && name == nullptr) {
+    StackHandleScope<1> hs(self);
+    name = Runtime::Current()->GetClassLinker()->ResolveString(
+        *dex_file, field_id.name_idx_, hs.NewHandle(dex_cache));
+  }
+  return name;
 }
 
 }  // namespace mirror
