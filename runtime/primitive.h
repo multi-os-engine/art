@@ -21,6 +21,7 @@
 
 #include "base/logging.h"
 #include "base/macros.h"
+#include "globals.h"
 
 namespace art {
 
@@ -114,6 +115,24 @@ class Primitive {
       case kPrimLong:
       case kPrimDouble:  return 8;
       case kPrimNot:     return kObjectReferenceSize;
+      default:
+        LOG(FATAL) << "Invalid type " << static_cast<int>(type);
+        return 0;
+    }
+  }
+
+  static size_t NumberOfRepresentedBits(Type type) {
+    switch (type) {
+      case kPrimVoid:    return 0;
+      case kPrimBoolean: return 1;
+      case kPrimByte:    return 8;
+      case kPrimChar:
+      case kPrimShort:   return 16;
+      case kPrimInt:
+      case kPrimFloat:   return 32;
+      case kPrimLong:
+      case kPrimDouble:  return 64;
+      case kPrimNot:     return kObjectReferenceSize * kBitsPerByte;
       default:
         LOG(FATAL) << "Invalid type " << static_cast<int>(type);
         return 0;
