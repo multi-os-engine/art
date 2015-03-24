@@ -189,6 +189,7 @@ static void UnstartedClassNewInstance(
   }
 }
 
+/*
 static void UnstartedClassGetDeclaredField(
     Thread* self, ShadowFrame* shadow_frame, JValue* result, size_t arg_offset)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -233,6 +234,7 @@ static void UnstartedClassGetDeclaredField(
   EnterInterpreterFromInvoke(self, c, field.Get(), args, nullptr);
   result->SetL(field.Get());
 }
+*/
 
 static void UnstartedVmClassLoaderFindLoadedClass(
     Thread* self, ShadowFrame* shadow_frame, JValue* result, size_t arg_offset)
@@ -894,8 +896,8 @@ static void UnstartedRuntimeInitializeInvokeHandlers() {
           &UnstartedVoidLookupType },
       { "java.lang.Object java.lang.Class.newInstance()",
           &UnstartedClassNewInstance },
-      { "java.lang.reflect.Field java.lang.Class.getDeclaredField(java.lang.String)",
-          &UnstartedClassGetDeclaredField },
+      // { "java.lang.reflect.Field java.lang.Class.getDeclaredField(java.lang.String)",
+      //    &UnstartedClassGetDeclaredField },
       { "int java.lang.Object.hashCode()",
           &UnstartedObjectHashCode },
       { "java.lang.String java.lang.reflect.ArtMethod.getMethodName(java.lang.reflect.ArtMethod)",

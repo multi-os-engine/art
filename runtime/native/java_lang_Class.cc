@@ -20,13 +20,18 @@
 #include "dex_file-inl.h"
 #include "jni_internal.h"
 #include "nth_caller_visitor.h"
+#include "mirror/art_field-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
+#include "mirror/field.h"
 #include "mirror/object-inl.h"
+#include "mirror/object_array-inl.h"
+#include "mirror/string-inl.h"
 #include "scoped_thread_state_change.h"
 #include "scoped_fast_native_object_access.h"
 #include "ScopedLocalRef.h"
 #include "ScopedUtfChars.h"
+#include "utf.h"
 #include "well_known_classes.h"
 
 namespace art {
@@ -97,10 +102,121 @@ static jobjectArray Class_getProxyInterfaces(JNIEnv* env, jobject javaThis) {
   return soa.AddLocalReference<jobjectArray>(c->GetInterfaces()->Clone(soa.Self()));
 }
 
+static jobjectArray Class_getDeclaredFieldsUnchecked(JNIEnv* env, jobject javaThis,
+                                                     jboolean publicOnly) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Class* c = DecodeClass(soa, javaThis);
+  StackHandleScope<3> hs(soa.Self());
+  auto h_ifields = hs.NewHandle(c->GetIFields());
+  auto h_sfields = hs.NewHandle(c->GetSFields());
+  const int32_t num_ifields = h_ifields.Get() != nullptr ? h_ifields->GetLength() : 0;
+  const int32_t num_sfields = h_sfields.Get() != nullptr ? h_sfields->GetLength() : 0;
+  int32_t array_size = num_ifields + num_sfields;
+  if (publicOnly != JNI_FALSE) {
+    // Lets go subtract all the non public fields.
+    for (int32_t i = 0; i < num_ifields; ++i) {
+      if (!h_ifields->GetWithoutChecks(i)->IsPublic()) {
+        --array_size;
+      }
+    }
+    for (int32_t i = 0; i < num_sfields; ++i) {
+      if (!h_sfields->GetWithoutChecks(i)->IsPublic()) {
+        --array_size;
+      }
+    }
+  }
+  int32_t array_idx = 0;
+  auto object_array = hs.NewHandle(
+      mirror::ObjectArray<mirror::Field>::Alloc(soa.Self(), mirror::Field::ArrayClass(),
+                                                array_size));
+  if (object_array.Get() == nullptr) {
+    return nullptr;
+  }
+  // Lets go subtract all the non public fields.
+  for (int32_t i = 0; i < num_ifields; ++i) {
+    auto* art_field = h_ifields->GetWithoutChecks(i);
+    if (publicOnly == JNI_FALSE || art_field->IsPublic()) {
+      auto* field = mirror::Field::CreateFromArtField(art_field);
+      if (field == nullptr) {
+        return nullptr;
+      }
+      object_array->SetWithoutChecks<false>(array_idx++, field);
+    }
+  }
+  for (int32_t i = 0; i < num_sfields; ++i) {
+    auto* art_field = h_sfields->GetWithoutChecks(i);
+    if (publicOnly == JNI_FALSE || art_field->IsPublic()) {
+      auto* field = mirror::Field::CreateFromArtField(art_field);
+      if (field == nullptr) {
+        return nullptr;
+      }
+      object_array->SetWithoutChecks<false>(array_idx++, field);
+    }
+  }
+  CHECK_EQ(array_idx, array_size);
+  // mirror::Field::GetArrayClass()->
+  // Allocate and fill the return array.
+  return soa.AddLocalReference<jobjectArray>(object_array.Get());
+}
+
+// Performs a binary search through an array of fields, TODO: Is this fast enough if we don't use
+// the dex cache for lookups? I think CompareModifiedUtf8ToUtf16AsCodePointValues should be fairly
+// fast.
+static inline mirror::ArtField* FindFieldByName(
+    mirror::String* name, mirror::ObjectArray<mirror::ArtField>* fields)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  const auto* data = name->GetCharArray()->GetData() + name->GetOffset();
+  const size_t length = name->GetLength();
+  uint32_t low = 0;
+  uint32_t high = fields->GetLength();
+  while (low < high) {
+    auto mid = (low + high) / 2;
+    mirror::ArtField* const field = fields->GetWithoutChecks(mid);
+    int result = CompareModifiedUtf8ToUtf16AsCodePointValues(field->GetName(), data, length);
+    if (result < 0) {
+      low = mid + 1;
+    } else if (result > 0) {
+      high = mid;
+    } else {
+      return field;
+    }
+  }
+  if (kIsDebugBuild) {
+    for (int32_t i = 0; i < fields->GetLength(); ++i) {
+      CHECK_NE(fields->GetWithoutChecks(i)->GetName(), name->ToModifiedUtf8());
+    }
+  }
+  return nullptr;
+}
+
+static jobject Class_getDeclaredFieldInternal(JNIEnv* env, jobject javaThis, jstring name) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Class* c = DecodeClass(soa, javaThis);
+  mirror::String* name_string = soa.Decode<mirror::String*>(name);
+  auto* instance_fields = c->GetIFields();
+  mirror::ArtField* art_field;
+  if (instance_fields != nullptr) {
+    art_field = FindFieldByName(name_string, instance_fields);
+    if (art_field != nullptr) {
+      return soa.AddLocalReference<jobject>(mirror::Field::CreateFromArtField(art_field));
+    }
+  }
+  auto* static_fields = c->GetSFields();
+  if (static_fields != nullptr) {
+    art_field = FindFieldByName(name_string, static_fields);
+    if (art_field != nullptr) {
+      return soa.AddLocalReference<jobject>(mirror::Field::CreateFromArtField(art_field));
+    }
+  }
+  return nullptr;
+}
+
 static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(Class, classForName, "!(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"),
   NATIVE_METHOD(Class, getNameNative, "!()Ljava/lang/String;"),
   NATIVE_METHOD(Class, getProxyInterfaces, "!()[Ljava/lang/Class;"),
+  NATIVE_METHOD(Class, getDeclaredFieldsUnchecked, "!(Z)[Ljava/lang/reflect/Field;"),
+  NATIVE_METHOD(Class, getDeclaredFieldInternal, "!(Ljava/lang/String;)Ljava/lang/reflect/Field;"),
 };
 
 void register_java_lang_Class(JNIEnv* env) {

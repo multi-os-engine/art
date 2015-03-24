@@ -56,6 +56,7 @@
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
 #include "mirror/dex_cache-inl.h"
+#include "mirror/field.h"
 #include "mirror/iftable-inl.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
@@ -313,7 +314,7 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   java_lang_String->SetObjectSize(mirror::String::InstanceSize());
   mirror::Class::SetStatus(java_lang_String, mirror::Class::kStatusResolved, self);
 
-  // Setup Reference.
+  // Setup java.lang.ref.Reference.
   Handle<mirror::Class> java_lang_ref_Reference(hs.NewHandle(
       AllocClass(self, java_lang_Class.Get(), mirror::Reference::ClassSize())));
   mirror::Reference::SetClass(java_lang_ref_Reference.Get());
@@ -321,7 +322,7 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   mirror::Class::SetStatus(java_lang_ref_Reference, mirror::Class::kStatusResolved, self);
 
   // Create storage for root classes, save away our work so far (requires descriptors).
-  class_roots_ = GcRoot<mirror::ObjectArray<mirror::Class> >(
+  class_roots_ = GcRoot<mirror::ObjectArray<mirror::Class>>(
       mirror::ObjectArray<mirror::Class>::Alloc(self, object_array_class.Get(),
                                                 kClassRootsMax));
   CHECK(!class_roots_.IsNull());
@@ -530,6 +531,19 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   // Create java.lang.reflect.Proxy root.
   mirror::Class* java_lang_reflect_Proxy = FindSystemClass(self, "Ljava/lang/reflect/Proxy;");
   SetClassRoot(kJavaLangReflectProxy, java_lang_reflect_Proxy);
+
+  // Create java.lang.reflect.Field.class root.
+  mirror::Class* java_lang_reflect_Field = FindSystemClass(self, "Ljava/lang/reflect/Field;");
+  CHECK(java_lang_reflect_Field != nullptr);
+  SetClassRoot(kJavaLangReflectField, java_lang_reflect_Field);
+  mirror::Field::SetClass(java_lang_reflect_Field);
+
+  // Create java.lang.reflect.Field array root.
+  mirror::Class* java_lang_reflect_Field_array =
+      FindSystemClass(self, "[Ljava/lang/reflect/Field;");
+  CHECK(java_lang_reflect_Field_array != nullptr);
+  SetClassRoot(kJavaLangReflectFieldArrayClass, java_lang_reflect_Field_array);
+  mirror::Field::SetArrayClass(java_lang_reflect_Field_array);
 
   // java.lang.ref classes need to be specially flagged, but otherwise are normal classes
   // finish initializing Reference class
@@ -846,6 +860,8 @@ void ClassLinker::InitFromImage() {
   // Special case of setting up the String class early so that we can test arbitrary objects
   // as being Strings or not
   mirror::String::SetClass(GetClassRoot(kJavaLangString));
+  mirror::Field::SetClass(GetClassRoot(kJavaLangReflectField));
+  mirror::Field::SetArrayClass(GetClassRoot(kJavaLangReflectFieldArrayClass));
 
   CHECK_EQ(oat_file.GetOatHeader().GetDexFileCount(),
            static_cast<uint32_t>(dex_caches->GetLength()));
@@ -1088,6 +1104,8 @@ ClassLinker::~ClassLinker() {
   mirror::Reference::ResetClass();
   mirror::ArtField::ResetClass();
   mirror::ArtMethod::ResetClass();
+  mirror::Field::ResetClass();
+  mirror::Field::ResetArrayClass();
   mirror::BooleanArray::ResetArrayClass();
   mirror::ByteArray::ResetArrayClass();
   mirror::CharArray::ResetArrayClass();
@@ -5213,10 +5231,12 @@ const char* ClassLinker::GetClassRootDescriptor(ClassRoot class_root) {
     "Ljava/lang/ref/Reference;",
     "Ljava/lang/reflect/ArtField;",
     "Ljava/lang/reflect/ArtMethod;",
+    "Ljava/lang/reflect/Field;",
     "Ljava/lang/reflect/Proxy;",
     "[Ljava/lang/String;",
     "[Ljava/lang/reflect/ArtField;",
     "[Ljava/lang/reflect/ArtMethod;",
+    "[Ljava/lang/reflect/Field;",
     "Ljava/lang/ClassLoader;",
     "Ljava/lang/Throwable;",
     "Ljava/lang/ClassNotFoundException;",

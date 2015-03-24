@@ -318,14 +318,6 @@ inline const DexFile* ArtField::GetDexFile() SHARED_LOCKS_REQUIRED(Locks::mutato
   return GetDexCache()->GetDexFile();
 }
 
-inline ArtField* ArtField::FromReflectedField(const ScopedObjectAccessAlreadyRunnable& soa,
-                                              jobject jlr_field) {
-  mirror::ArtField* f = soa.DecodeField(WellKnownClasses::java_lang_reflect_Field_artField);
-  mirror::ArtField* field = f->GetObject(soa.Decode<mirror::Object*>(jlr_field))->AsArtField();
-  DCHECK(field != nullptr);
-  return field;
-}
-
 }  // namespace mirror
 }  // namespace art
 
