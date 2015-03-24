@@ -1077,7 +1077,19 @@ class OatDumper {
        << ", number_of_dex_registers=" << number_of_dex_registers
        << ", number_of_stack_maps=" << number_of_stack_maps << ")\n";
 
-    // Display stack maps along with Dex register maps.
+    // Display the Dex register location set.
+    size_t number_of_location_set_entries =
+        code_info.GetNumberOfDexRegisterLocationSetEntries();
+    size_t location_set_size_in_bytes = code_info.GetDexRegisterLocationSetSize();
+    os << "  DexRegisterLocationSet (number_of_entries=" << number_of_location_set_entries
+       << ", size_in_bytes=" << location_set_size_in_bytes << ")\n";
+    DexRegisterLocationSet dex_register_location_set = code_info.GetDexRegisterLocationSet();
+    for (size_t i = 0; i < number_of_location_set_entries; ++i) {
+      DexRegisterLocation location = dex_register_location_set.GetDexRegisterLocation(i);
+      DumpRegisterMapping(os, i, location.GetKind(), location.GetValue(), "entry ");
+    }
+
+    // Display stack maps along with (live) Dex register maps.
     for (size_t i = 0; i < number_of_stack_maps; ++i) {
       StackMap stack_map = code_info.GetStackMapAt(i);
       DumpStackMapHeader(os, code_info, i);
@@ -1087,9 +1099,13 @@ class OatDumper {
         // TODO: Display the bit mask of live Dex registers.
         for (size_t j = 0; j < number_of_dex_registers; ++j) {
           if (dex_register_map.IsDexRegisterLive(j)) {
+            size_t location_set_entry_index = dex_register_map.GetLocationSetEntryIndex(
+                j, number_of_dex_registers, number_of_location_set_entries);
             DexRegisterLocation location =
-                dex_register_map.GetLocationKindAndValue(j, number_of_dex_registers);
-            DumpRegisterMapping(os, j, location.GetInternalKind(), location.GetValue());
+                dex_register_map.GetDexRegisterLocation(j, number_of_dex_registers, code_info);
+            DumpRegisterMapping(
+                os, j, location.GetInternalKind(), location.GetValue(), "v",
+                "\t[entry " + std::to_string(static_cast<int>(location_set_entry_index)) + "]");
           }
         }
       }
