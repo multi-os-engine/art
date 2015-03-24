@@ -297,13 +297,6 @@ static jobjectArray DexFile_getClassNameList(JNIEnv* env, jclass, jobject cookie
   return result;
 }
 
-// Java: dalvik.system.DexFile.UP_TO_DATE
-static const jbyte kUpToDate = 0;
-// Java: dalvik.system.DexFile.DEXOPT_NEEDED
-static const jbyte kPatchoatNeeded = 1;
-// Java: dalvik.system.DexFile.PATCHOAT_NEEDED
-static const jbyte kDexoptNeeded = 2;
-
 static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
     const char* pkgname, const char* instruction_set, const jboolean defer) {
 
@@ -312,7 +305,7 @@ static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
     ScopedLocalRef<jclass> fnfe(env, env->FindClass("java/io/FileNotFoundException"));
     const char* message = (filename == nullptr) ? "<empty file name>" : filename;
     env->ThrowNew(fnfe.get(), message);
-    return kUpToDate;
+    return OatFileAssistant::kUpToDate;
   }
 
   const InstructionSet target_instruction_set = GetInstructionSetFromString(instruction_set);
@@ -330,7 +323,7 @@ static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
 
   // Always treat elements of the bootclasspath as up-to-date.
   if (oat_file_assistant.IsInBootClassPath()) {
-    return kUpToDate;
+    return OatFileAssistant::kUpToDate;
   }
 
   // TODO: Checking the profile should probably be done in the GetStatus()
@@ -343,7 +336,7 @@ static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
         if (!defer) {
           oat_file_assistant.CopyProfileFile();
         }
-        return kDexoptNeeded;
+        return OatFileAssistant::kDexoptNeeded;
       } else if (oat_file_assistant.ProfileExists()
           && !oat_file_assistant.OldProfileExists()) {
         if (!defer) {
@@ -353,13 +346,7 @@ static jbyte IsDexOptNeededInternal(JNIEnv* env, const char* filename,
     }
   }
 
-  OatFileAssistant::Status status = oat_file_assistant.GetStatus();
-  switch (status) {
-    case OatFileAssistant::kUpToDate: return kUpToDate;
-    case OatFileAssistant::kNeedsRelocation: return kPatchoatNeeded;
-    case OatFileAssistant::kOutOfDate: return kDexoptNeeded;
-  }
-  UNREACHABLE();
+  return oat_file_assistant.GetDexOptStatus();
 }
 
 static jbyte DexFile_isDexOptNeededInternal(JNIEnv* env, jclass, jstring javaFilename,
@@ -384,10 +371,10 @@ static jbyte DexFile_isDexOptNeededInternal(JNIEnv* env, jclass, jstring javaFil
 static jboolean DexFile_isDexOptNeeded(JNIEnv* env, jclass, jstring javaFilename) {
   const char* instruction_set = GetInstructionSetString(kRuntimeISA);
   ScopedUtfChars filename(env, javaFilename);
-  return kUpToDate != IsDexOptNeededInternal(env, filename.c_str(), nullptr /* pkgname */,
-                                             instruction_set, false /* defer */);
+  jbyte status = IsDexOptNeededInternal(env, filename.c_str(), nullptr /* pkgname */,
+                                        instruction_set, false /* defer */);
+  return status != OatFileAssistant::kUpToDate;
 }
-
 
 static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(DexFile, closeDexFile, "(Ljava/lang/Object;)V"),

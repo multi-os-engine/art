@@ -261,42 +261,42 @@ static void GenerateOatForTest(const char* dex_location) {
 }
 
 // Case: We have a DEX file, but no OAT file for it.
-// Expect: The oat file status is kOutOfDate.
+// Expect: The status is kDexoptNeeded.
 TEST_F(OatFileAssistantTest, DexNoOat) {
   std::string dex_location = GetScratchDir() + "/DexNoOat.jar";
   Copy(GetDexSrc1(), dex_location);
 
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
 
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kDexoptNeeded, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
   EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
   EXPECT_FALSE(oat_file_assistant.OdexFileNeedsRelocation());
   EXPECT_FALSE(oat_file_assistant.OdexFileIsUpToDate());
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.OdexFileStatus());
+  EXPECT_EQ(OatFileAssistant::kOatOutOfDate, oat_file_assistant.OdexFileStatus());
   EXPECT_FALSE(oat_file_assistant.OatFileExists());
   EXPECT_TRUE(oat_file_assistant.OatFileIsOutOfDate());
   EXPECT_FALSE(oat_file_assistant.OatFileNeedsRelocation());
   EXPECT_FALSE(oat_file_assistant.OatFileIsUpToDate());
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.OatFileStatus());
+  EXPECT_EQ(OatFileAssistant::kOatOutOfDate, oat_file_assistant.OatFileStatus());
 }
 
 // Case: We have no DEX file and no OAT file.
-// Expect: Status is out of date. Loading should fail, but not crash.
+// Expect: Status is kDexoptNeeded. Loading should fail, but not crash.
 TEST_F(OatFileAssistantTest, NoDexNoOat) {
   std::string dex_location = GetScratchDir() + "/NoDexNoOat.jar";
 
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
 
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kDexoptNeeded, oat_file_assistant.GetDexOptStatus());
   std::unique_ptr<OatFile> oat_file = oat_file_assistant.GetBestOatFile();
   EXPECT_EQ(nullptr, oat_file.get());
 }
 
 // Case: We have a DEX file and up-to-date OAT file for it.
-// Expect: The oat file status is kUpToDate.
+// Expect: The status is kUpToDate.
 TEST_F(OatFileAssistantTest, OatUpToDate) {
   std::string dex_location = GetScratchDir() + "/OatUpToDate.jar";
   Copy(GetDexSrc1(), dex_location);
@@ -304,7 +304,7 @@ TEST_F(OatFileAssistantTest, OatUpToDate) {
 
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
 
-  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetDexOptStatus());
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
   EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
@@ -313,28 +313,30 @@ TEST_F(OatFileAssistantTest, OatUpToDate) {
   EXPECT_FALSE(oat_file_assistant.OatFileIsOutOfDate());
   EXPECT_FALSE(oat_file_assistant.OatFileNeedsRelocation());
   EXPECT_TRUE(oat_file_assistant.OatFileIsUpToDate());
-  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.OatFileStatus());
+  EXPECT_EQ(OatFileAssistant::kOatUpToDate, oat_file_assistant.OatFileStatus());
 }
 
 // Case: We have a MultiDEX file and up-to-date OAT file for it.
-// Expect: The oat file status is kUpToDate.
+// Expect: The status is kUpToDate and we load all dex files.
 TEST_F(OatFileAssistantTest, MultiDexOatUpToDate) {
   std::string dex_location = GetScratchDir() + "/MultiDexOatUpToDate.jar";
   Copy(GetMultiDexSrc1(), dex_location);
   GenerateOatForTest(dex_location.c_str());
 
+  OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
+  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetDexOptStatus());
+
   // Verify we can load both dex files.
-  OatFileAssistant executable_oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
-  std::unique_ptr<OatFile> oat_file = executable_oat_file_assistant.GetBestOatFile();
+  std::unique_ptr<OatFile> oat_file = oat_file_assistant.GetBestOatFile();
   ASSERT_TRUE(oat_file.get() != nullptr);
   EXPECT_TRUE(oat_file->IsExecutable());
   std::vector<std::unique_ptr<const DexFile>> dex_files;
-  dex_files = executable_oat_file_assistant.LoadDexFiles(*oat_file, dex_location.c_str());
+  dex_files = oat_file_assistant.LoadDexFiles(*oat_file, dex_location.c_str());
   EXPECT_EQ(2u, dex_files.size());
 }
 
-// Case: We have a DEX file and out of date OAT file.
-// Expect: The oat file status is kOutOfDate.
+// Case: We have a DEX file and out-of-date OAT file.
+// Expect: The status is kDexoptNeeded.
 TEST_F(OatFileAssistantTest, OatOutOfDate) {
   std::string dex_location = GetScratchDir() + "/OatOutOfDate.jar";
 
@@ -345,7 +347,7 @@ TEST_F(OatFileAssistantTest, OatOutOfDate) {
   Copy(GetDexSrc2(), dex_location);
 
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kDexoptNeeded, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
@@ -357,7 +359,7 @@ TEST_F(OatFileAssistantTest, OatOutOfDate) {
 }
 
 // Case: We have a DEX file and an ODEX file, but no OAT file.
-// Expect: The oat file status is kNeedsRelocation.
+// Expect: The status is kPatchoatNeeded.
 TEST_F(OatFileAssistantTest, DexOdexNoOat) {
   std::string dex_location = GetScratchDir() + "/DexOdexNoOat.jar";
   std::string odex_location = GetISADir() + "/DexOdexNoOat.odex";
@@ -369,21 +371,21 @@ TEST_F(OatFileAssistantTest, DexOdexNoOat) {
   // Verify the status.
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
 
-  EXPECT_EQ(OatFileAssistant::kNeedsRelocation, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kPatchoatNeeded, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
   EXPECT_FALSE(oat_file_assistant.OdexFileIsOutOfDate());
   EXPECT_FALSE(oat_file_assistant.OdexFileIsUpToDate());
   EXPECT_TRUE(oat_file_assistant.OdexFileNeedsRelocation());
-  EXPECT_EQ(OatFileAssistant::kNeedsRelocation, oat_file_assistant.OdexFileNeedsRelocation());
+  EXPECT_EQ(OatFileAssistant::kPatchoatNeeded, oat_file_assistant.OdexFileNeedsRelocation());
   EXPECT_FALSE(oat_file_assistant.OatFileExists());
   EXPECT_TRUE(oat_file_assistant.OatFileIsOutOfDate());
   EXPECT_FALSE(oat_file_assistant.OatFileIsUpToDate());
 }
 
 // Case: We have a stripped DEX file and an ODEX file, but no OAT file.
-// Expect: The oat file status is kNeedsRelocation.
+// Expect: The status is kPatchoatNeeded
 TEST_F(OatFileAssistantTest, StrippedDexOdexNoOat) {
   std::string dex_location = GetScratchDir() + "/StrippedDexOdexNoOat.jar";
   std::string odex_location = GetISADir() + "/StrippedDexOdexNoOat.odex";
@@ -398,7 +400,7 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexNoOat) {
   // Verify the status.
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
 
-  EXPECT_EQ(OatFileAssistant::kNeedsRelocation, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kPatchoatNeeded, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -412,7 +414,7 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexNoOat) {
   std::string error_msg;
   ASSERT_TRUE(oat_file_assistant.MakeUpToDate(&error_msg)) << error_msg;
 
-  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -431,8 +433,8 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexNoOat) {
   EXPECT_EQ(1u, dex_files.size());
 }
 
-// Case: We have a stripped DEX file, an ODEX file, and an out of date OAT file.
-// Expect: The oat file status is kNeedsRelocation.
+// Case: We have a stripped DEX file, an ODEX file, and an out-of-date OAT file.
+// Expect: The status is kPatchoatNeeded.
 TEST_F(OatFileAssistantTest, StrippedDexOdexOat) {
   std::string dex_location = GetScratchDir() + "/StrippedDexOdexOat.jar";
   std::string odex_location = GetISADir() + "/StrippedDexOdexOat.odex";
@@ -451,7 +453,7 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexOat) {
   // Verify the status.
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
 
-  EXPECT_EQ(OatFileAssistant::kNeedsRelocation, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kPatchoatNeeded, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -466,7 +468,7 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexOat) {
   std::string error_msg;
   ASSERT_TRUE(oat_file_assistant.MakeUpToDate(&error_msg)) << error_msg;
 
-  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -487,9 +489,59 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexOat) {
   EXPECT_EQ(1u, dex_files.size());
 }
 
+// Case: We have a DEX file, no ODEX file and an OAT file that needs
+// relocation.
+// Expect: The status is kSelfPatchoatNeeded.
+TEST_F(OatFileAssistantTest, SelfRelocation) {
+  std::string dex_location = GetScratchDir() + "/SelfRelocation.jar";
+  std::string oat_location = GetISADir() + "/SelfRelocation.oat";
+
+  // Create the dex and odex files
+  Copy(GetDexSrc1(), dex_location);
+  GenerateOdexForTest(dex_location, oat_location);
+
+  OatFileAssistant oat_file_assistant(dex_location.c_str(),
+      oat_location.c_str(), kRuntimeISA, true);
+
+  EXPECT_EQ(OatFileAssistant::kSelfPatchoatNeeded, oat_file_assistant.GetDexOptStatus());
+
+  EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
+  EXPECT_FALSE(oat_file_assistant.OdexFileExists());
+  EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
+  EXPECT_FALSE(oat_file_assistant.OdexFileNeedsRelocation());
+  EXPECT_FALSE(oat_file_assistant.OdexFileIsUpToDate());
+  EXPECT_TRUE(oat_file_assistant.OatFileExists());
+  EXPECT_TRUE(oat_file_assistant.OatFileNeedsRelocation());
+  EXPECT_FALSE(oat_file_assistant.OatFileIsOutOfDate());
+  EXPECT_FALSE(oat_file_assistant.OatFileIsUpToDate());
+
+  // Make the oat file up to date.
+  std::string error_msg;
+  ASSERT_TRUE(oat_file_assistant.MakeUpToDate(&error_msg)) << error_msg;
+
+  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetDexOptStatus());
+
+  EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
+  EXPECT_FALSE(oat_file_assistant.OdexFileExists());
+  EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
+  EXPECT_FALSE(oat_file_assistant.OdexFileNeedsRelocation());
+  EXPECT_FALSE(oat_file_assistant.OdexFileIsUpToDate());
+  EXPECT_TRUE(oat_file_assistant.OatFileExists());
+  EXPECT_FALSE(oat_file_assistant.OatFileIsOutOfDate());
+  EXPECT_FALSE(oat_file_assistant.OatFileNeedsRelocation());
+  EXPECT_TRUE(oat_file_assistant.OatFileIsUpToDate());
+
+  std::unique_ptr<OatFile> oat_file = oat_file_assistant.GetBestOatFile();
+  ASSERT_TRUE(oat_file.get() != nullptr);
+  EXPECT_TRUE(oat_file->IsExecutable());
+  std::vector<std::unique_ptr<const DexFile>> dex_files;
+  dex_files = oat_file_assistant.LoadDexFiles(*oat_file, dex_location.c_str());
+  EXPECT_EQ(1u, dex_files.size());
+}
+
 // Case: We have a DEX file, an ODEX file and an OAT file, where the ODEX and
 // OAT files both have patch delta of 0.
-// Expect: It shouldn't crash.
+// Expect: It shouldn't crash, and status is kPatchoatNeeded.
 TEST_F(OatFileAssistantTest, OdexOatOverlap) {
   std::string dex_location = GetScratchDir() + "/OdexOatOverlap.jar";
   std::string odex_location = GetISADir() + "/OdexOatOverlap.odex";
@@ -507,7 +559,7 @@ TEST_F(OatFileAssistantTest, OdexOatOverlap) {
   OatFileAssistant oat_file_assistant(dex_location.c_str(),
       oat_location.c_str(), kRuntimeISA, true);
 
-  EXPECT_EQ(OatFileAssistant::kNeedsRelocation, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kPatchoatNeeded, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -527,7 +579,7 @@ TEST_F(OatFileAssistantTest, OdexOatOverlap) {
 }
 
 // Case: We have a DEX file and a PIC ODEX file, but no OAT file.
-// Expect: The oat file status is kUpToDate, because PIC needs no relocation.
+// Expect: The status is kUpToDate, because PIC needs no relocation.
 TEST_F(OatFileAssistantTest, DexPicOdexNoOat) {
   std::string dex_location = GetScratchDir() + "/DexPicOdexNoOat.jar";
   std::string odex_location = GetISADir() + "/DexPicOdexNoOat.odex";
@@ -539,7 +591,7 @@ TEST_F(OatFileAssistantTest, DexPicOdexNoOat) {
   // Verify the status.
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
 
-  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kUpToDate, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -624,7 +676,7 @@ TEST_F(OatFileAssistantTest, NonExsistentDexLocation) {
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kDexoptNeeded, oat_file_assistant.GetDexOptStatus());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
   EXPECT_FALSE(oat_file_assistant.OatFileExists());
   EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
@@ -683,7 +735,7 @@ TEST_F(OatFileAssistantTest, NonAbsoluteDexLocation) {
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kDexoptNeeded, oat_file_assistant.GetDexOptStatus());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
   EXPECT_FALSE(oat_file_assistant.OatFileExists());
   EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
@@ -700,7 +752,7 @@ TEST_F(OatFileAssistantTest, ShortDexLocation) {
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kDexoptNeeded, oat_file_assistant.GetDexOptStatus());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
   EXPECT_FALSE(oat_file_assistant.OatFileExists());
   EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
@@ -714,14 +766,14 @@ TEST_F(OatFileAssistantTest, ShortDexLocation) {
 }
 
 // Case: Non-standard extension for dex file.
-// Expect: The oat file status is kOutOfDate.
+// Expect: The status is kDexoptNeeded.
 TEST_F(OatFileAssistantTest, LongDexExtension) {
   std::string dex_location = GetScratchDir() + "/LongDexExtension.jarx";
   Copy(GetDexSrc1(), dex_location);
 
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
 
-  EXPECT_EQ(OatFileAssistant::kOutOfDate, oat_file_assistant.GetStatus());
+  EXPECT_EQ(OatFileAssistant::kDexoptNeeded, oat_file_assistant.GetDexOptStatus());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
