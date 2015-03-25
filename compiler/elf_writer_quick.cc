@@ -333,6 +333,10 @@ class LineTableGenerator FINAL : public Leb128Encoder {
     }
   }
 
+  size_t GetLine() {
+    return current_line_;
+  }
+
   void SetFile(unsigned file_index) {
     if (current_file_index_ != file_index) {
       current_file_index_ = file_index;
@@ -638,11 +642,17 @@ static void FillInCFIInformation(OatWriter* oat_writer,
 
       GetLineInfoForJava(dbg.dbgstream_, dbg.compiled_method_->GetSrcMappingTable(),
                          &pc2java_map, dbg.low_pc_);
-      pc2java_map.DeltaFormat({dbg.low_pc_, 1}, dbg.high_pc_);
+      pc2java_map.DeltaFormat({dbg.low_pc_,
+                               static_cast<int32_t>(line_table_generator.GetLine())},
+                              dbg.high_pc_);
       if (!pc2java_map.empty()) {
         line_table_generator.SetFile(file_index);
         line_table_generator.SetAddr(dbg.low_pc_ + text_section_offset);
-        line_table_generator.SetLine(1);
+        if (pc2java_map[0].from_ != 0) {
+          // Generate a separate entry for method prolog.
+          line_table_generator.PutDelta(0, pc2java_map[0].to_);
+          pc2java_map[0].to_ = 0;
+        }
         for (auto& src_map_elem : pc2java_map) {
           line_table_generator.PutDelta(src_map_elem.from_, src_map_elem.to_);
         }
