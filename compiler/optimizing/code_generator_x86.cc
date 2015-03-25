@@ -2268,6 +2268,10 @@ void InstructionCodeGeneratorX86::GenerateDivRemIntegral(HBinaryOperation* instr
 
   switch (instruction->GetResultType()) {
     case Primitive::kPrimInt: {
+      // TODO: implement div/rem with constant using
+      // H.S.Warren's Hacker's Delight Chapter 10 and
+      // T,Grablund, P.L.Montogomery's Division by invariant integers using multiplication.
+      // (see Quick)
       Register second_reg = second.AsRegister<Register>();
       DCHECK_EQ(EAX, first.AsRegister<Register>());
       DCHECK_EQ(is_div ? EAX : EDX, out.AsRegister<Register>());

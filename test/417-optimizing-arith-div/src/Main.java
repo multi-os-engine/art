@@ -110,7 +110,11 @@ public class Main {
   }
 
   private static void divInt() {
-    expectEquals(2, $opt$DivConst(6));
+    expectEquals(2, $opt$DivByConst3(6));
+    expectEquals(1, $opt$DivByConst4(6));
+    expectEquals(-1, $opt$DivByConstX4(-6));
+    expectEquals(-1, $opt$DivByConst4(-6));
+    expectEquals(-1, $opt$DivByConstMinus4(6));
     expectEquals(2, $opt$Div(6, 3));
     expectEquals(6, $opt$Div(6, 1));
     expectEquals(-2, $opt$Div(6, -3));
@@ -133,7 +137,9 @@ public class Main {
   }
 
   private static void divLong() {
-    expectEquals(2L, $opt$DivConst(6L));
+    expectEquals(2L, $opt$DivByConst3(6L));
+    expectEquals(1L, $opt$DivByConst4(6L));
+    expectEquals(-1L, $opt$DivByConstMinus4(6L));
     expectEquals(2L, $opt$Div(6L, 3L));
     expectEquals(6L, $opt$Div(6L, 1L));
     expectEquals(-2L, $opt$Div(6L, -3L));
@@ -228,13 +234,34 @@ public class Main {
   }
 
   // Division by literals != 0 should not generate checks.
-  static int $opt$DivConst(int a) {
+  static int $opt$DivByConst4(int a) {
+    return a / 4;
+  }
+
+  static int $opt$DivByConstX4(int a) {
+    return a >> 2;
+  }
+
+  static int $opt$DivByConstMinus4(int a) {
+    return a / (-4);
+  }
+
+  static int $opt$DivByConst3(int a) {
     return a / 3;
   }
 
-  static long $opt$DivConst(long a) {
+  static long $opt$DivByConst4(long a) {
+    return a / 4L;
+  }
+
+  static long $opt$DivByConstMinus4(long a) {
+    return a / (-4L);
+  }
+
+  static long $opt$DivByConst3(long a) {
     return a / 3L;
   }
+
 
   static long $opt$Div(long a, long b) {
     return a / b;

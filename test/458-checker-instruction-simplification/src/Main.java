@@ -277,6 +277,83 @@ public class Main {
     return arg ^ -1;
   }
 
+
+  // CHECK-START: long Main.DivPowerOfTwo128(long) instruction_simplifier (before)
+  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
+  // CHECK-DAG:     [[Const128:j\d+]]  LongConstant 128
+  // CHECK-DAG:     [[Div:j\d+]]       Div [ [[Arg]] [[Const128]] ]
+  // CHECK-DAG:                        Return [ [[Div]] ]
+
+  // CHECK-START: long Main.DivPowerOfTwo128(long) instruction_simplifier (after)
+  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
+  // CHECK-DAG:     [[Const7:i\d+]]    IntConstant 7
+  // CHECK-DAG:     [[Shr:j\d+]]       Shr [ [[Arg]] [[Const7]] ]
+  // CHECK-NOT:                        Div
+  // CHECK-DAG:                        Return [ [[Shr]] ]
+
+  public static long DivPowerOfTwo128(long arg) {
+    return arg / 128;
+  }
+
+  // CHECK-START: long Main.DivPowerOfTwo128Negative(long) instruction_simplifier (before)
+  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
+  // CHECK-DAG:     [[ConstMinus128:j\d+]] LongConstant -128
+  // CHECK-DAG:     [[Div:j\d+]]       Div [ [[Arg]] [[ConstMinus128]] ]
+  // CHECK-DAG:                        Return [ [[Div]] ]
+
+  // CHECK-START: long Main.DivPowerOfTwo128Negative(long) instruction_simplifier (after)
+  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
+  // CHECK-DAG:     [[Const7:i\d+]]    IntConstant 7
+  // CHECK-DAG:     [[Shr:j\d+]]       Shr [ [[Arg]] [[Const7]] ]
+  // CHECK-DAG:     [[Neg:j\d+]]       Neg [ [[Shr]] ]
+  // CHECK-NOT:                        Div
+  // CHECK-DAG:                        Return [ [[Neg]] ]
+
+  public static long DivPowerOfTwo128Negative(long arg) {
+    return arg / (-128);
+  }
+
+  // CHECK-START: long Main.RemPowerOfTwo128(long) instruction_simplifier (before)
+  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
+  // CHECK-DAG:     [[Const128:j\d+]]  LongConstant 128
+  // CHECK-DAG:     [[Rem:j\d+]]       Rem [ [[Arg]] [[Const128]] ]
+  // CHECK-DAG:                        Return [ [[Rem]] ]
+
+  // CHECK-START: long Main.RemPowerOfTwo128(long) instruction_simplifier (after)
+  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
+  // CHECK-DAG:     [[Const128:j\d+]]  LongConstant 128
+  // CHECK-DAG:     [[Const7:i\d+]]    IntConstant 7
+  // CHECK-DAG:     [[Shr:j\d+]]       Shr [ [[Arg]] [[Const7]] ]
+  // CHECK-DAG:     [[Mul:j\d+]]       Mul [ [[Shr]] [[Const128]] ]
+  // CHECK-DAG:     [[Sub:j\d+]]       Sub [ [[Arg]] [[Mul]] ]
+  // CHECK-NOT:                        Div
+  // CHECK-DAG:                        Return [ [[Sub]] ]
+
+  public static long RemPowerOfTwo128(long arg) {
+    return arg % 128;
+  }
+
+  // CHECK-START: long Main.RemPowerOfTwo128Negative(long) instruction_simplifier (before)
+  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
+  // CHECK-DAG:     [[ConstMinus128:j\d+]]  LongConstant -128
+  // CHECK-DAG:     [[Rem:j\d+]]       Rem [ [[Arg]] [[ConstMinus128]] ]
+  // CHECK-DAG:                        Return [ [[Rem]] ]
+
+  // CHECK-START: long Main.RemPowerOfTwo128Negative(long) instruction_simplifier (after)
+  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
+  // CHECK-DAG:     [[ConstMinus128:j\d+]]  LongConstant -128
+  // CHECK-DAG:     [[Const7:i\d+]]    IntConstant 7
+  // CHECK-DAG:     [[Shr:j\d+]]       Shr [ [[Arg]] [[Const7]] ]
+  // CHECK-DAG:     [[Neg:j\d+]]       Neg [ [[Shr]] ]
+  // CHECK-DAG:     [[Mul:j\d+]]       Mul [ [[Neg]] [[ConstMinus128]] ]
+  // CHECK-DAG:     [[Sub:j\d+]]       Sub [ [[Arg]] [[Mul]] ]
+  // CHECK-NOT:                        Div
+  // CHECK-DAG:                        Return [ [[Sub]] ]
+
+  public static long RemPowerOfTwo128Negative(long arg) {
+    return arg % (-128);
+  }
+
   public static void main(String[] args) {
     int arg = 123456;
 

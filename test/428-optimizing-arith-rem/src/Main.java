@@ -22,7 +22,9 @@ public class Main {
   }
 
   private static void remInt() {
-    expectEquals(2, $opt$RemConst(6));
+    expectEquals(2, $opt$RemByConst4(6));
+    expectEquals(2, $opt$RemByConstMinus4(6));
+    expectEquals(1, $opt$RemByConst5(6));
     expectEquals(2, $opt$Rem(6, 4));
     expectEquals(2, $opt$Rem(6, -4));
     expectEquals(0, $opt$Rem(6, 3));
@@ -57,7 +59,9 @@ public class Main {
   }
 
   private static void remLong() {
-    expectEquals(2L, $opt$RemConst(6L));
+    expectEquals(2L, $opt$RemByConst4(6L));
+    expectEquals(2L, $opt$RemByConstMinus4(6L));
+    expectEquals(1L, $opt$RemByConst4(5L));
     expectEquals(2L, $opt$Rem(6L, 4L));
     expectEquals(2L, $opt$Rem(6L, -4L));
     expectEquals(0L, $opt$Rem(6L, 3L));
@@ -100,12 +104,28 @@ public class Main {
   }
 
   // Modulo by literals != 0 should not generate checks.
-  static int $opt$RemConst(int a) {
+  static int $opt$RemByConst4(int a) {
     return a % 4;
   }
 
-  static long $opt$RemConst(long a) {
+  static int $opt$RemByConstMinus4(int a) {
+    return a % (-4);
+  }
+
+  static int $opt$RemByConst5(int a) {
+    return a % 5;
+  }
+
+  static long $opt$RemByConst4(long a) {
     return a % 4L;
+  }
+
+  static long $opt$RemByConstMinus4(long a) {
+    return a % (-4L);
+  }
+
+  static long $opt$RemByConst5(long a) {
+    return a % 5L;
   }
 
   static long $opt$Rem(long a, long b) {

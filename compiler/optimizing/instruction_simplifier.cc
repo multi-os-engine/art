@@ -39,6 +39,7 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitAdd(HAdd* instruction) OVERRIDE;
   void VisitAnd(HAnd* instruction) OVERRIDE;
   void VisitDiv(HDiv* instruction) OVERRIDE;
+  void VisitRem(HRem* instruction) OVERRIDE;
   void VisitMul(HMul* instruction) OVERRIDE;
   void VisitOr(HOr* instruction) OVERRIDE;
   void VisitShl(HShl* instruction) OVERRIDE;
@@ -213,28 +214,101 @@ void InstructionSimplifierVisitor::VisitAnd(HAnd* instruction) {
 }
 
 void InstructionSimplifierVisitor::VisitDiv(HDiv* instruction) {
-  HConstant* input_cst = instruction->GetConstantRight();
-  HInstruction* input_other = instruction->GetLeastConstantLeft();
-  Primitive::Type type = instruction->GetType();
+  HConstant* cst_divisor = instruction->GetConstantRight();
+  if (cst_divisor == nullptr) {
+    return;
+  }
 
-  if ((input_cst != nullptr) && input_cst->IsOne()) {
+  HInstruction* input_other = instruction->GetLeastConstantLeft();
+  HBasicBlock* block = instruction->GetBlock();
+
+  if (cst_divisor->IsOne()) {
     // Replace code looking like
     //    DIV dst, src, 1
     // with
     //    src
     instruction->ReplaceWith(input_other);
-    instruction->GetBlock()->RemoveInstruction(instruction);
+    block->RemoveInstruction(instruction);
     return;
   }
 
-  if ((input_cst != nullptr) && input_cst->IsMinusOne() &&
+  ArenaAllocator* arena = GetGraph()->GetArena();
+  Primitive::Type type = instruction->GetType();
+
+  if (cst_divisor->IsMinusOne() &&
       (Primitive::IsFloatingPointType(type) || Primitive::IsIntOrLongType(type))) {
     // Replace code looking like
     //    DIV dst, src, -1
     // with
     //    NEG dst, src
-    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(
-        instruction, (new (GetGraph()->GetArena()) HNeg(type, input_other)));
+    block->ReplaceAndRemoveInstructionWith(instruction, (new (arena) HNeg(type, input_other)));
+    return;
+  }
+
+  if (Primitive::IsIntOrLongType(type)) {
+    // Replace code looking like
+    //    DIV dst, src, 2^n
+    // with
+    //    SHR dst, src, n
+    int64_t value = cst_divisor->IsIntConstant()
+        ? cst_divisor->AsIntConstant()->GetValue()
+        : cst_divisor->AsLongConstant()->GetValue();
+    int64_t abs_value = std::abs(value);
+    if (abs_value != 0 && IsPowerOfTwo(abs_value)) {
+      int shift_value = WhichPowerOf2(abs_value);
+      HIntConstant* shift_cst = new (arena) HIntConstant(shift_value);
+      // TODO: ensure that we don't add duplicate constants
+      GetGraph()->AddConstant(shift_cst);
+      HInstruction* quotient = new (arena) HShr(type, input_other, shift_cst);
+      if (value < 0) {
+        block->InsertInstructionBefore(quotient, instruction);
+        quotient = new (arena) HNeg(type, quotient);
+      }
+      block->ReplaceAndRemoveInstructionWith(instruction, quotient);
+      if (cst_divisor->GetUses().IsEmpty() && cst_divisor->GetEnvUses().IsEmpty()) {
+        cst_divisor->GetBlock()->RemoveInstruction(cst_divisor);
+      }
+    }
+  }
+}
+
+void InstructionSimplifierVisitor::VisitRem(HRem* instruction) {
+  HConstant* cst_divisor = instruction->GetConstantRight();
+  if (cst_divisor == nullptr) {
+    return;
+  }
+
+  HInstruction* divident = instruction->GetLeastConstantLeft();
+  Primitive::Type type = instruction->GetType();
+  HBasicBlock* block = instruction->GetBlock();
+  ArenaAllocator* arena = GetGraph()->GetArena();
+
+  if (Primitive::IsIntOrLongType(type)) {
+    // Replace code looking like
+    //    REM dst, src, 2^n
+    // with
+    //    SHR dst, src, n
+    //    MUL dst, dst, 2^n
+    //    SUB dst, src, dst
+    int64_t value = cst_divisor->IsIntConstant()
+        ? cst_divisor->AsIntConstant()->GetValue()
+        : cst_divisor->AsLongConstant()->GetValue();
+    int64_t abs_value = std::abs(value);
+    if (abs_value != 0 && IsPowerOfTwo(abs_value)) {
+      int shift_value = WhichPowerOf2(abs_value);
+      HIntConstant* shift_cst = new (arena) HIntConstant(shift_value);
+      GetGraph()->AddConstant(shift_cst);
+      HInstruction* quotient = new (arena) HShr(type, divident, shift_cst);
+      block->InsertInstructionBefore(quotient, instruction);
+      if (value < 0) {
+        quotient = new (arena) HNeg(type, quotient);
+        block->InsertInstructionBefore(quotient, instruction);
+      }
+      HMul* mul = new (arena) HMul(type, quotient, cst_divisor);
+      block->InsertInstructionBefore(mul, instruction);
+      HSub* sub = new (arena) HSub(type, divident, mul);
+      block->ReplaceAndRemoveInstructionWith(instruction, sub);
+    }
   }
 }
 
