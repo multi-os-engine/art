@@ -319,6 +319,7 @@ class Location : public ValueObject {
   enum Policy {
     kAny,
     kRequiresRegister,
+    kRequiresRegisterPair,
     kRequiresFpuRegister,
     kSameAsFirstInput,
   };
@@ -338,6 +339,10 @@ class Location : public ValueObject {
 
   static Location RequiresRegister() {
     return UnallocatedLocation(kRequiresRegister);
+  }
+
+  static Location RequiresRegisterPair() {
+    return UnallocatedLocation(kRequiresRegisterPair);
   }
 
   static Location RequiresFpuRegister() {

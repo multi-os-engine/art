@@ -218,6 +218,20 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
           break;
         }
 
+        case Location::kRequiresRegisterPair: {
+          DCHECK(codegen_->NeedsTwoRegisters(Primitive::kPrimLong));
+          LiveInterval* interval =
+              LiveInterval::MakeTempInterval(allocator_, Primitive::kPrimLong);
+          temp_intervals_.Add(interval);
+          interval->AddRange(position, position + 1);
+          interval->AddHighInterval(true);
+          LiveInterval* high = interval->GetHighInterval();
+          temp_intervals_.Add(high);
+          unhandled_core_intervals_.Add(high);
+          unhandled_core_intervals_.Add(interval);
+          break;
+        }
+
         case Location::kRequiresFpuRegister: {
           LiveInterval* interval =
               LiveInterval::MakeTempInterval(allocator_, Primitive::kPrimDouble);
@@ -1713,6 +1727,17 @@ void RegisterAllocator::Resolve() {
       case Primitive::kPrimInt:
         locations->SetTempAt(
             temp_index++, Location::RegisterLocation(temp->GetRegister()));
+        break;
+
+      case Primitive::kPrimLong:
+        if (codegen_->NeedsTwoRegisters(Primitive::kPrimLong)) {
+          Location location = Location::RegisterPairLocation(
+              temp->GetRegister(), temp->GetHighInterval()->GetRegister());
+          locations->SetTempAt(temp_index++, location);
+        } else {
+          locations->SetTempAt(
+              temp_index++, Location::RegisterLocation(temp->GetRegister()));
+        }
         break;
 
       case Primitive::kPrimDouble:

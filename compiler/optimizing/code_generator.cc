@@ -297,6 +297,11 @@ void CodeGenerator::AllocateRegistersLocally(HInstruction* instruction) const {
           loc = AllocateFreeRegister(Primitive::kPrimDouble);
           break;
 
+        case Location::kRequiresRegisterPair:
+          // Assume that this is a core register pair.
+          loc = AllocateFreeRegister(Primitive::kPrimLong);
+          break;
+
         default:
           LOG(FATAL) << "Unexpected policy for temporary location "
                      << loc.GetPolicy();
@@ -314,6 +319,9 @@ void CodeGenerator::AllocateRegistersLocally(HInstruction* instruction) const {
       case Location::kSameAsFirstInput:
         result_location = locations->InAt(0);
         break;
+      default:
+        LOG(FATAL) << "Unexpected policy for temporary location "
+                   << result_location.GetPolicy();
     }
     locations->UpdateOut(result_location);
   }
