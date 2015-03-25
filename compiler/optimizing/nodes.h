@@ -602,6 +602,9 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   bool IsCatchBlock() const { return is_catch_block_; }
   void SetIsCatchBlock() { is_catch_block_ = true; }
 
+  bool EndsWithIf();
+  bool HasSinglePhi();
+
  private:
   HGraph* graph_;
   GrowableArray<HBasicBlock*> predecessors_;
