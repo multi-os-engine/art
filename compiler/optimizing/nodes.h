@@ -602,6 +602,9 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   bool IsCatchBlock() const { return is_catch_block_; }
   void SetIsCatchBlock() { is_catch_block_ = true; }
 
+  bool EndsWithIf() const;
+  bool HasSinglePhi() const;
+
  private:
   HGraph* graph_;
   GrowableArray<HBasicBlock*> predecessors_;
@@ -622,6 +625,30 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   friend class HInstruction;
 
   DISALLOW_COPY_AND_ASSIGN(HBasicBlock);
+};
+
+// Iterates over the LoopInformation of all loops which contain 'block'.
+class HLoopInformationIterator : public ValueObject {
+ public:
+  explicit HLoopInformationIterator(const HBasicBlock& block)
+      : current_(block.GetLoopInformation()) {}
+
+  bool Done() const { return current_ == nullptr; }
+
+  void Advance() {
+    DCHECK(!Done());
+    current_ = current_->GetHeader()->GetDominator()->GetLoopInformation();
+  }
+
+  HLoopInformation* Current() const {
+    DCHECK(!Done());
+    return current_;
+  }
+
+ private:
+  HLoopInformation* current_;
+
+  DISALLOW_COPY_AND_ASSIGN(HLoopInformationIterator);
 };
 
 #define FOR_EACH_CONCRETE_INSTRUCTION(M)                                \
