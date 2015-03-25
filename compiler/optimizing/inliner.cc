@@ -71,6 +71,11 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
   const DexFile& caller_dex_file = *caller_compilation_unit_.GetDexFile();
   VLOG(compiler) << "Try inlining " << PrettyMethod(method_index, caller_dex_file);
 
+  if (invoke_instruction->GetIntrinsic() != Intrinsics::kNone) {
+    VLOG(compiler) << "Method is an intrinsic " << PrettyMethod(method_index, caller_dex_file);
+    return false;
+  }
+
   StackHandleScope<3> hs(soa.Self());
   Handle<mirror::DexCache> dex_cache(
       hs.NewHandle(caller_compilation_unit_.GetClassLinker()->FindDexCache(caller_dex_file)));
