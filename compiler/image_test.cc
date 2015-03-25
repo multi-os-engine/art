@@ -194,15 +194,15 @@ TEST_F(ImageTest, WriteRead) {
 
 TEST_F(ImageTest, ImageHeaderIsValid) {
     uint32_t image_begin = ART_BASE_ADDRESS;
-    uint32_t image_size_ = 16 * KB;
+    uint32_t image_size_ = 3 * kPageSize;
     uint32_t image_bitmap_offset = 0;
     uint32_t image_bitmap_size = 0;
     uint32_t image_roots = ART_BASE_ADDRESS + (1 * KB);
     uint32_t oat_checksum = 0;
-    uint32_t oat_file_begin = ART_BASE_ADDRESS + (4 * KB);  // page aligned
-    uint32_t oat_data_begin = ART_BASE_ADDRESS + (8 * KB);  // page aligned
-    uint32_t oat_data_end = ART_BASE_ADDRESS + (9 * KB);
-    uint32_t oat_file_end = ART_BASE_ADDRESS + (10 * KB);
+    uint32_t oat_file_begin = ART_BASE_ADDRESS + (kPageSize);  // page aligned
+    uint32_t oat_data_begin = ART_BASE_ADDRESS + (2 * kPageSize);  // page aligned
+    uint32_t oat_data_end = oat_data_begin + (1 * KB);
+    uint32_t oat_file_end = oat_data_begin + (2 * KB);
     ImageHeader image_header(image_begin,
                              image_size_,
                              image_bitmap_offset,

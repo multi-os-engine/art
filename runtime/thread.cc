@@ -236,7 +236,7 @@ static size_t FixStackSize(size_t stack_size) {
   }
 
   // Some systems require the stack size to be a multiple of the system page size, so round up.
-  stack_size = RoundUp(stack_size, kPageSize);
+  stack_size = RoundUp(stack_size, kNativePageSize);
 
   return stack_size;
 }
@@ -259,7 +259,7 @@ void Thread::InstallImplicitProtection() {
   uint8_t* pregion = tlsPtr_.stack_begin - kStackOverflowProtectedSize;
   uint8_t* stack_himem = tlsPtr_.stack_end;
   uint8_t* stack_top = reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(&stack_himem) &
-      ~(kPageSize - 1));    // Page containing current top of stack.
+      ~(kNativePageSize - 1));    // Page containing current top of stack.
 
   // First remove the protection on the protected region as will want to read and
   // write it.  This may fail (on the first attempt when the stack is not mapped)
@@ -272,7 +272,7 @@ void Thread::InstallImplicitProtection() {
   // a segv.
 
   // Read every page from the high address to the low.
-  for (uint8_t* p = stack_top; p >= pregion; p -= kPageSize) {
+  for (uint8_t* p = stack_top; p >= pregion; p -= kNativePageSize) {
     dont_optimize_this = *p;
   }
 
@@ -285,7 +285,7 @@ void Thread::InstallImplicitProtection() {
 
   // Tell the kernel that we won't be needing these pages any more.
   // NB. madvise will probably write zeroes into the memory (on linux it does).
-  uint32_t unwanted_size = stack_top - pregion - kPageSize;
+  uint32_t unwanted_size = stack_top - pregion - kNativePageSize;
   madvise(pregion, unwanted_size, MADV_DONTNEED);
 }
 

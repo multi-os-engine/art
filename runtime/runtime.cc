@@ -740,7 +740,7 @@ static size_t OpenDexFiles(const std::vector<std::string>& dex_filenames,
 }
 
 bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) {
-  CHECK_EQ(sysconf(_SC_PAGE_SIZE), kPageSize);
+  CHECK_EQ(sysconf(_SC_PAGE_SIZE), static_cast<int>(kNativePageSize));
 
   MemMap::Init();
 

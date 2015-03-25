@@ -107,8 +107,8 @@ void CommonCompilerTest::MakeExecutable(const void* code_start, size_t code_leng
   CHECK(code_start != nullptr);
   CHECK_NE(code_length, 0U);
   uintptr_t data = reinterpret_cast<uintptr_t>(code_start);
-  uintptr_t base = RoundDown(data, kPageSize);
-  uintptr_t limit = RoundUp(data + code_length, kPageSize);
+  uintptr_t base = RoundDown(data, kNativePageSize);
+  uintptr_t limit = RoundUp(data + code_length, kNativePageSize);
   uintptr_t len = limit - base;
   int result = mprotect(reinterpret_cast<void*>(base), len, PROT_READ | PROT_WRITE | PROT_EXEC);
   CHECK_EQ(result, 0);

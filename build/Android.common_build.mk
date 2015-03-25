@@ -249,6 +249,10 @@ ifeq ($(HOST_OS),linux)
   endif
 endif
 
+ifneq ($(ARCH_MIPS_PAGE_SHIFT),)
+art_cflags += -DART_PAGE_SHIFT_TARGET=$(ARCH_MIPS_PAGE_SHIFT)
+endif
+
 ifndef LIBART_IMG_HOST_BASE_ADDRESS
   $(error LIBART_IMG_HOST_BASE_ADDRESS unset)
 endif

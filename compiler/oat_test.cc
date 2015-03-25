@@ -106,7 +106,7 @@ TEST_F(OatTest, WriteRead) {
   key_value_store.Put(OatHeader::kImageLocationKey, "lue.art");
   OatWriter oat_writer(class_linker->GetBootClassPath(),
                        42U,
-                       4096U,
+                       static_cast<unsigned int>(kPageSize),
                        0,
                        compiler_driver_.get(),
                        nullptr,
@@ -129,7 +129,7 @@ TEST_F(OatTest, WriteRead) {
   ASSERT_TRUE(oat_header.IsValid());
   ASSERT_EQ(1U, oat_header.GetDexFileCount());  // core
   ASSERT_EQ(42U, oat_header.GetImageFileLocationOatChecksum());
-  ASSERT_EQ(4096U, oat_header.GetImageFileLocationOatDataBegin());
+  ASSERT_EQ(static_cast<unsigned int>(kPageSize), oat_header.GetImageFileLocationOatDataBegin());
   ASSERT_EQ("lue.art", std::string(oat_header.GetStoreValueByKey(OatHeader::kImageLocationKey)));
 
   ASSERT_TRUE(java_lang_dex_file_ != nullptr);

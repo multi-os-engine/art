@@ -1512,12 +1512,12 @@ bool RosAlloc::Trim() {
     DCHECK_GE(page_map_size_, new_num_of_pages);
     // Zero out the tail of the page map.
     uint8_t* zero_begin = const_cast<uint8_t*>(page_map_) + new_num_of_pages;
-    uint8_t* madvise_begin = AlignUp(zero_begin, kPageSize);
+    uint8_t* madvise_begin = AlignUp(zero_begin, kNativePageSize);
     DCHECK_LE(madvise_begin, page_map_mem_map_->End());
     size_t madvise_size = page_map_mem_map_->End() - madvise_begin;
     if (madvise_size > 0) {
-      DCHECK_ALIGNED(madvise_begin, kPageSize);
-      DCHECK_EQ(RoundUp(madvise_size, kPageSize), madvise_size);
+      DCHECK_ALIGNED(madvise_begin, kNativePageSize);
+      DCHECK_EQ(RoundUp(madvise_size, kNativePageSize), madvise_size);
       if (!kMadviseZeroes) {
         memset(madvise_begin, 0, madvise_size);
       }
@@ -2184,8 +2184,8 @@ size_t RosAlloc::ReleasePages() {
 }
 
 size_t RosAlloc::ReleasePageRange(uint8_t* start, uint8_t* end) {
-  DCHECK_ALIGNED(start, kPageSize);
-  DCHECK_ALIGNED(end, kPageSize);
+  DCHECK_ALIGNED(start, kNativePageSize);
+  DCHECK_ALIGNED(end, kNativePageSize);
   DCHECK_LT(start, end);
   if (kIsDebugBuild) {
     // In the debug build, the first page of a free page run

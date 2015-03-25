@@ -268,7 +268,7 @@ void SpaceBitmap<kAlignment>::InOrderWalk(ObjectCallback* callback, void* arg) {
 }
 
 template class SpaceBitmap<kObjectAlignment>;
-template class SpaceBitmap<kPageSize>;
+template class SpaceBitmap<kLargeObjectAlignment>;
 
 }  // namespace accounting
 }  // namespace gc

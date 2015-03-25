@@ -508,10 +508,10 @@ MemMap* MemMap::RemapAtEnd(uint8_t* new_end, const char* tail_name, int tail_pro
   DCHECK_GE(new_end, Begin());
   DCHECK_LE(new_end, End());
   DCHECK_LE(begin_ + size_, reinterpret_cast<uint8_t*>(base_begin_) + base_size_);
-  DCHECK(IsAligned<kPageSize>(begin_));
-  DCHECK(IsAligned<kPageSize>(base_begin_));
-  DCHECK(IsAligned<kPageSize>(reinterpret_cast<uint8_t*>(base_begin_) + base_size_));
-  DCHECK(IsAligned<kPageSize>(new_end));
+  DCHECK(IsAligned<kNativePageSize>(begin_));
+  DCHECK(IsAligned<kNativePageSize>(base_begin_));
+  DCHECK(IsAligned<kNativePageSize>(reinterpret_cast<uint8_t*>(base_begin_) + base_size_));
+  DCHECK(IsAligned<kNativePageSize>(new_end));
   uint8_t* old_end = begin_ + size_;
   uint8_t* old_base_end = reinterpret_cast<uint8_t*>(base_begin_) + base_size_;
   uint8_t* new_base_end = new_end;
@@ -526,7 +526,7 @@ MemMap* MemMap::RemapAtEnd(uint8_t* new_end, const char* tail_name, int tail_pro
   uint8_t* tail_base_begin = new_base_end;
   size_t tail_base_size = old_base_end - new_base_end;
   DCHECK_EQ(tail_base_begin + tail_base_size, old_base_end);
-  DCHECK(IsAligned<kPageSize>(tail_base_size));
+  DCHECK(IsAligned<kNativePageSize>(tail_base_size));
 
 #ifdef USE_ASHMEM
   // android_os_Debug.cpp read_mapinfo assumes all ashmem regions associated with the VM are

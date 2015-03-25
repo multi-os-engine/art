@@ -38,11 +38,25 @@ static constexpr size_t kStackAlignment = 16;
 
 // System page size. We check this against sysconf(_SC_PAGE_SIZE) at runtime, but use a simple
 // compile-time constant so the compiler can generate better code.
-static constexpr int kPageSize = 4096;
+#define PAGE_SHIFT_4K 12
+
+// Page size of the target machine
+#ifdef ART_PAGE_SHIFT_TARGET
+static constexpr int kPageSize = (1 << ART_PAGE_SHIFT_TARGET);
+#else
+static constexpr int kPageSize = (1 << PAGE_SHIFT_4K);
+#endif
+
+// Page size during execution (either on host or on target)
+#ifdef ART_TARGET
+static constexpr size_t kNativePageSize = kPageSize;
+#else
+static constexpr size_t kNativePageSize = (1 << PAGE_SHIFT_4K);
+#endif
 
 // Required object alignment
 static constexpr size_t kObjectAlignment = 8;
-static constexpr size_t kLargeObjectAlignment = kPageSize;
+static constexpr size_t kLargeObjectAlignment = kNativePageSize;
 
 // Whether or not this is a debug build. Useful in conditionals where NDEBUG isn't.
 #if defined(NDEBUG)
