@@ -235,6 +235,7 @@ class HGraphBuilder : public ValueObject {
   // starting at that entry is the first instruction of a new block.
   GrowableArray<HBasicBlock*> branch_targets_;
 
+  HCurrentMethod* current_method_;
   GrowableArray<HLocal*> locals_;
 
   HBasicBlock* entry_block_;

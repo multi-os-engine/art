@@ -243,7 +243,9 @@ class CodeGeneratorX86_64 : public CodeGenerator {
     return false;
   }
 
-  void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, CpuRegister temp);
+  void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
+                                  CpuRegister current_method,
+                                  CpuRegister temp);
 
  private:
   // Labels for each block that will be compiled.

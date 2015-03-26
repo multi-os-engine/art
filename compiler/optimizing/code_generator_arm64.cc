@@ -1815,8 +1815,14 @@ void LocationsBuilderARM64::HandleInvoke(HInvoke* invoke) {
       new (GetGraph()->GetArena()) LocationSummary(invoke, LocationSummary::kCall);
   locations->AddTemp(LocationFrom(x0));
 
+  size_t argument_count = invoke->InputCount();
+  if (invoke->IsInvokeStaticOrDirect()) {
+    // The last input of HInvokeStaticOrDirect is current method.
+    locations->SetInAt(--argument_count, Location::RequiresRegister());
+  }
+
   InvokeDexCallingConventionVisitor calling_convention_visitor;
-  for (size_t i = 0; i < invoke->InputCount(); i++) {
+  for (size_t i = 0; i < argument_count; i++) {
     HInstruction* input = invoke->InputAt(i);
     locations->SetInAt(i, calling_convention_visitor.GetNextLocation(input->GetType()));
   }
@@ -1876,6 +1882,9 @@ void LocationsBuilderARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
 void LocationsBuilderARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
   IntrinsicLocationsBuilderARM64 intrinsic(GetGraph()->GetArena());
   if (intrinsic.TryDispatch(invoke)) {
+    // The last input of HInvokeStaticOrDirect is current method. And we only build the locations
+    // for arguments in the intrinsic helper.
+    invoke->GetLocations()->SetInAt(invoke->InputCount() - 1, Location::RequiresRegister());
     return;
   }
 
@@ -1891,7 +1900,9 @@ static bool TryGenerateIntrinsicCode(HInvoke* invoke, CodeGeneratorARM64* codege
   return false;
 }
 
-void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Register temp) {
+void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
+                                                    Register current_method,
+                                                    Register temp) {
   // Make sure that ArtMethod* is passed in kArtMethodRegister as per the calling convention.
   DCHECK(temp.Is(kArtMethodRegister));
   size_t index_in_cache = mirror::Array::DataOffset(kHeapRefSize).SizeValue() +
@@ -1904,11 +1915,9 @@ void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invok
   //
   // Currently we implement the app -> app logic, which looks up in the resolve cache.
 
-  // temp = method;
-  LoadCurrentMethod(temp);
   if (!invoke->IsRecursive()) {
-    // temp = temp->dex_cache_resolved_methods_;
-    __ Ldr(temp, HeapOperand(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset()));
+    // temp = current_method->dex_cache_resolved_methods_;
+    __ Ldr(temp, HeapOperand(current_method, mirror::ArtMethod::DexCacheResolvedMethodsOffset()));
     // temp = temp[index_in_cache];
     __ Ldr(temp, HeapOperand(temp, index_in_cache));
     // lr = temp->entry_point_from_quick_compiled_code_;
@@ -1917,6 +1926,7 @@ void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invok
     // lr();
     __ Blr(lr);
   } else {
+    __ Mov(temp, current_method);
     __ Bl(&frame_entry_label_);
   }
 
@@ -1929,7 +1939,8 @@ void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDir
   }
 
   Register temp = WRegisterFrom(invoke->GetLocations()->GetTemp(0));
-  codegen_->GenerateStaticOrDirectCall(invoke, temp);
+  Register current_method = WRegisterFrom(invoke->GetLocations()->InAt(invoke->InputCount() - 1));
+  codegen_->GenerateStaticOrDirectCall(invoke, current_method, temp);
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
 }
 
@@ -2288,6 +2299,16 @@ void LocationsBuilderARM64::VisitParameterValue(HParameterValue* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::VisitParameterValue(HParameterValue* instruction) {
+  // Nothing to do, the parameter is already at its location.
+  UNUSED(instruction);
+}
+
+void LocationsBuilderARM64::VisitCurrentMethod(HCurrentMethod* instruction) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  locations->SetOut(LocationFrom(kArtMethodRegister));
+}
+
+void InstructionCodeGeneratorARM64::VisitCurrentMethod(HCurrentMethod* instruction) {
   // Nothing to do, the parameter is already at its location.
   UNUSED(instruction);
 }

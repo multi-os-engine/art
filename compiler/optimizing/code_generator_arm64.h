@@ -311,7 +311,9 @@ class CodeGeneratorARM64 : public CodeGenerator {
     return false;
   }
 
-  void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, vixl::Register temp);
+  void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
+                                  vixl::Register current_method,
+                                  vixl::Register temp);
 
  private:
   // Labels for each block that will be compiled.
