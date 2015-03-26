@@ -3129,6 +3129,10 @@ static bool IsMethodPossiblyInlined(Thread* self, mirror::ArtMethod* m)
     // should never be null. We could just check we never encounter this case.
     return false;
   }
+  if (Runtime::Current()->UseJit()) {
+    // JIT can have direct code pointers from any method to any other method.
+    return true;
+  }
   // Note: method verifier may cause thread suspension.
   self->AssertThreadSuspensionIsAllowable();
   StackHandleScope<3> hs(self);
