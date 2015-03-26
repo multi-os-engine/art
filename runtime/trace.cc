@@ -534,6 +534,7 @@ void Trace::FinishTracing() {
   os << StringPrintf("num-method-calls=%zd\n", num_records);
   os << StringPrintf("clock-call-overhead-nsec=%d\n", clock_overhead_ns_);
   os << StringPrintf("vm=art\n");
+  os << StringPrintf("pid=%d\n", getpid());
   if ((flags_ & kTraceCountAllocs) != 0) {
     os << StringPrintf("alloc-count=%d\n", Runtime::Current()->GetStat(KIND_ALLOCATED_OBJECTS));
     os << StringPrintf("alloc-size=%d\n", Runtime::Current()->GetStat(KIND_ALLOCATED_BYTES));
