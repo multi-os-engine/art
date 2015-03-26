@@ -360,7 +360,9 @@ TEST_F(ObjectTest, StaticFieldFromCode) {
   // pretend we are trying to access 'Static.s0' from StaticsFromCode.<clinit>
   ScopedObjectAccess soa(Thread::Current());
   jobject class_loader = LoadDex("StaticsFromCode");
-  const DexFile* dex_file = Runtime::Current()->GetCompileTimeClassPath(class_loader)[0];
+  std::vector<const DexFile*> dex_files(GetDexFiles(class_loader));
+  DCHECK(!dex_files.empty());
+  const DexFile* dex_file = dex_files[0];
   CHECK(dex_file != NULL);
 
   StackHandleScope<2> hs(soa.Self());

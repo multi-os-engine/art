@@ -1053,7 +1053,9 @@ class Dex2Oat FINAL {
     }
 
     verification_results_.reset(new VerificationResults(compiler_options_.get()));
-    callbacks_.reset(new QuickCompilerCallbacks(verification_results_.get(), &method_inliner_map_));
+    callbacks_.reset(new QuickCompilerCallbacks(verification_results_.get(),
+                                                &method_inliner_map_,
+                                                image_));
     runtime_options.push_back(std::make_pair("compilercallbacks", callbacks_.get()));
     runtime_options.push_back(
         std::make_pair("imageinstructionset", GetInstructionSetString(instruction_set_)));
@@ -1212,6 +1214,96 @@ class Dex2Oat FINAL {
     return true;
   }
 
+  jobject CreateClassLoader(Thread* self, ClassLinker* class_linker,
+                            std::vector<const DexFile*>& dex_files) {
+    ScopedObjectAccess soa(self);
+
+    // Register the dex files.
+    for (const DexFile* dex_file : dex_files) {
+      class_linker->RegisterDexFile(*dex_file);
+    }
+
+    // For now, create a libcore-level DexFile for each ART DexFile. This "explodes" multidex.
+    StackHandleScope<10> hs(self);
+
+    Handle<mirror::ArtField> h_dex_elements_field =
+        hs.NewHandle(soa.DecodeField(WellKnownClasses::dalvik_system_DexPathList_dexElements));
+
+    mirror::Class* dex_elements_class = h_dex_elements_field->GetType(true);
+    DCHECK(dex_elements_class != nullptr);
+    DCHECK(dex_elements_class->IsArrayClass());
+    Handle<mirror::ObjectArray<mirror::Object>> h_dex_elements =
+        hs.NewHandle(reinterpret_cast<mirror::ObjectArray<mirror::Object>*>(
+            mirror::Array::Alloc<false>(self, dex_elements_class, dex_files.size(),
+                                        dex_elements_class->GetComponentSizeShift(),
+                                        Runtime::Current()->GetHeap()->GetCurrentAllocator())));
+    Handle<mirror::Class> h_dex_element_class =
+        hs.NewHandle(dex_elements_class->GetComponentType());
+
+    Handle<mirror::ArtField> h_element_file_field =
+        hs.NewHandle(
+            soa.DecodeField(WellKnownClasses::dalvik_system_DexPathList__Element_dexFile));
+    DCHECK_EQ(h_dex_element_class.Get(), h_element_file_field->GetDeclaringClass());
+
+    Handle<mirror::ArtField> h_cookie_field =
+        hs.NewHandle(soa.DecodeField(WellKnownClasses::dalvik_system_DexFile_cookie));
+    DCHECK_EQ(h_cookie_field->GetDeclaringClass(), h_element_file_field->GetType(false));
+
+    // Fill the elements array.
+    int32_t index = 0;
+    for (const DexFile* dex_file : dex_files) {
+      StackHandleScope<3> hs2(self);
+
+      Handle<mirror::LongArray> h_long_array = hs2.NewHandle(mirror::LongArray::Alloc(self, 1));
+      DCHECK(h_long_array.Get() != nullptr);
+      h_long_array->Set(0, reinterpret_cast<intptr_t>(dex_file));
+
+      Handle<mirror::Object> h_dex_file = hs2.NewHandle(
+          h_cookie_field->GetDeclaringClass()->AllocObject(self));
+      DCHECK(h_dex_file.Get() != nullptr);
+      h_cookie_field->SetObject<false>(h_dex_file.Get(), h_long_array.Get());
+
+      Handle<mirror::Object> h_element = hs2.NewHandle(h_dex_element_class->AllocObject(self));
+      DCHECK(h_element.Get() != nullptr);
+      h_element_file_field->SetObject<false>(h_element.Get(), h_dex_file.Get());
+
+      h_dex_elements->Set(index, h_element.Get());
+      index++;
+    }
+    DCHECK_EQ(index, h_dex_elements->GetLength());
+
+    // Create DexPathList.
+    Handle<mirror::Object> h_dex_path_list = hs.NewHandle(
+        h_dex_elements_field->GetDeclaringClass()->AllocObject(self));
+    DCHECK(h_dex_path_list.Get() != nullptr);
+    // Set elements.
+    h_dex_elements_field->SetObject<false>(h_dex_path_list.Get(), h_dex_elements.Get());
+
+    // Create PathClassLoader.
+    Handle<mirror::ArtField> h_path_list_field = hs.NewHandle(
+        soa.DecodeField(WellKnownClasses::dalvik_system_PathClassLoader_pathList));
+    DCHECK(h_path_list_field.Get() != nullptr);
+    Handle<mirror::Object> h_path_class_loader = hs.NewHandle(
+        h_path_list_field->GetDeclaringClass()->AllocObject(self));
+    DCHECK(h_path_class_loader.Get() != nullptr);
+    // Set DexPathList.
+    h_path_list_field->SetObject<false>(h_path_class_loader.Get(), h_dex_path_list.Get());
+
+    // Make a pretend boot-classpath.
+    // TODO: Should we scan the image?
+    Handle<mirror::ArtField> h_parent_field = hs.NewHandle(
+        mirror::Class::FindField(self, hs.NewHandle(h_path_class_loader->GetClass()), "parent",
+                                 "Ljava/lang/ClassLoader;"));
+    DCHECK(h_parent_field.Get() != nullptr);
+    mirror::Object* boot_cl =
+        soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_BootClassLoader)->AllocObject(self);
+    h_parent_field->SetObject<false>(h_path_class_loader.Get(), boot_cl);
+
+    // Make it a global ref and return.
+    jobject local_ref = soa.AddLocalReference<jobject>(h_path_class_loader.Get());
+    return soa.Env()->NewGlobalRef(local_ref);
+  }
+
   // Create and invoke the compiler driver. This will compile all the dex files.
   void Compile() {
     TimingLogger::ScopedTiming t("dex2oat Compile", timings_);
@@ -1224,19 +1316,16 @@ class Dex2Oat FINAL {
       ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
       OpenClassPathFiles(runtime_->GetClassPathString(), dex_files_, &class_path_files_);
       ScopedObjectAccess soa(self);
-      std::vector<const DexFile*> class_path_files(dex_files_);
+
+      // Classpath: first the class-path given.
+      std::vector<const DexFile*> class_path_files;
       for (auto& class_path_file : class_path_files_) {
         class_path_files.push_back(class_path_file.get());
       }
+      // Then the dex files we'll compile. Thus we'll resolve the class-path first.
+      class_path_files.insert(class_path_files.end(), dex_files_.begin(), dex_files_.end());
 
-      for (size_t i = 0; i < class_path_files.size(); i++) {
-        class_linker->RegisterDexFile(*class_path_files[i]);
-      }
-      soa.Env()->AllocObject(WellKnownClasses::dalvik_system_PathClassLoader);
-      ScopedLocalRef<jobject> class_loader_local(soa.Env(),
-          soa.Env()->AllocObject(WellKnownClasses::dalvik_system_PathClassLoader));
-      class_loader = soa.Env()->NewGlobalRef(class_loader_local.get());
-      Runtime::Current()->SetCompileTimeClassPath(class_loader, class_path_files);
+      class_loader = class_linker->CreatePathClassLoader(self, class_path_files);
     }
 
     driver_.reset(new CompilerDriver(compiler_options_.get(),
