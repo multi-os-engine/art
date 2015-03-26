@@ -133,6 +133,12 @@ class CommonRuntimeTest : public testing::Test {
   const DexFile* java_lang_dex_file_;
   std::vector<const DexFile*> boot_class_path_;
 
+  // Get the dex files from a PathClassLoader.
+  std::vector<const DexFile*> GetDexFiles(jobject jclass_loader);
+
+  // Get the first dex file from a PathClassLoader. Will abort if it is null.
+  const DexFile* GetFirstDexFile(jobject jclass_loader);
+
  private:
   static std::string GetCoreFileLocation(const char* suffix);
 

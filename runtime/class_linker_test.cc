@@ -985,11 +985,10 @@ TEST_F(ClassLinkerTest, ResolveVerifyAndClinit) {
 
   ScopedObjectAccess soa(Thread::Current());
   jobject jclass_loader = LoadDex("StaticsFromCode");
+  const DexFile* dex_file = GetFirstDexFile(jclass_loader);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::ClassLoader> class_loader(
       hs.NewHandle(soa.Decode<mirror::ClassLoader*>(jclass_loader)));
-  const DexFile* dex_file = Runtime::Current()->GetCompileTimeClassPath(jclass_loader)[0];
-  CHECK(dex_file != nullptr);
   mirror::Class* klass = class_linker_->FindClass(soa.Self(), "LStaticsFromCode;", class_loader);
   mirror::ArtMethod* clinit = klass->FindClassInitializer();
   mirror::ArtMethod* getS0 = klass->FindDirectMethod("getS0", "()Ljava/lang/Object;");
