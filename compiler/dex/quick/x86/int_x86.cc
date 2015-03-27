@@ -1358,6 +1358,19 @@ void X86Mir2Lir::OpPcRelLoad(RegStorage reg, LIR* target) {
   res->flags.fixup = kFixupLoad;
 }
 
+bool X86Mir2Lir::CanUseOpPcRelDexCacheArrayLoad() const {
+  return cu_->target64;
+}
+
+void X86Mir2Lir::OpPcRelDexCacheArrayLoad(const DexFile* dex_file, int offset,
+                                          RegStorage r_dest) {
+  DCHECK(cu_->target64);
+  LIR* mov = NewLIR3(kX86Mov32RM, r_dest.GetReg(), kRIPReg, 256);
+  mov->flags.fixup = kFixupLabel;
+  mov->operands[3] = WrapPointer(dex_file);
+  dex_cache_access_insns_.push_back(mov);
+}
+
 LIR* X86Mir2Lir::OpVldm(RegStorage r_base, int count) {
   UNUSED(r_base, count);
   LOG(FATAL) << "Unexpected use of OpVldm for x86";
