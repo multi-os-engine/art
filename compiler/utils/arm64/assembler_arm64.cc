@@ -638,73 +638,42 @@ void Arm64Assembler::EmitExceptionPoll(Arm64Exception *exception) {
   ___ Brk();
 }
 
-constexpr size_t kFramePointerSize = 8;
-constexpr unsigned int kJniRefSpillRegsSize = 11 + 8;
-
 void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
-                        const std::vector<ManagedRegister>& callee_save_regs,
-                        const ManagedRegisterEntrySpills& entry_spills) {
-  CHECK_ALIGNED(frame_size, kStackAlignment);
-  CHECK(X0 == method_reg.AsArm64().AsXRegister());
+                                const std::vector<ManagedRegister>& callee_save_regs,
+                                const ManagedRegisterEntrySpills& entry_spills) {
+  // Setup VIXL CPURegList for callee-saves.
+  CPURegList core_reg_list(CPURegister::kRegister, kXRegSize, 0);
+  CPURegList fp_reg_list(CPURegister::kFPRegister, kDRegSize, 0);
+  for (size_t i = 0; i < callee_save_regs.size(); ++i) {
+    Arm64ManagedRegister reg = callee_save_regs[i].AsArm64();
+    if (reg.IsXRegister()) {
+      core_reg_list.Combine(reg_x(reg.AsXRegister()).code());
+    } else {
+      DCHECK(reg.IsDRegister());
+      fp_reg_list.Combine(reg_d(reg.AsDRegister()).code());
+    }
+  }
+  size_t core_reg_size = core_reg_list.TotalSizeInBytes();
+  size_t fp_reg_size = fp_reg_list.TotalSizeInBytes();
 
-  // TODO: *create APCS FP - end of FP chain;
-  //       *add support for saving a different set of callee regs.
-  // For now we check that the size of callee regs vector is 11 core registers and 8 fp registers.
-  CHECK_EQ(callee_save_regs.size(), kJniRefSpillRegsSize);
-  // Increase frame to required size - must be at least space to push StackReference<Method>.
-  CHECK_GT(frame_size, kJniRefSpillRegsSize * kFramePointerSize);
+  // Increase frame to required size.
+  DCHECK_ALIGNED(frame_size, kStackAlignment);
+  DCHECK_GE(frame_size, core_reg_size + fp_reg_size + sizeof(StackReference<mirror::ArtMethod>));
   IncreaseFrameSize(frame_size);
 
-  // TODO: Ugly hard code...
-  // Should generate these according to the spill mask automatically.
-  // TUNING: Use stp.
-  // Note: Must match Arm64JniCallingConvention::CoreSpillMask().
-  size_t reg_offset = frame_size;
-  reg_offset -= 8;
-  StoreToOffset(LR, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X29, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X28, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X27, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X26, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X25, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X24, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X23, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X22, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X21, SP, reg_offset);
-  reg_offset -= 8;
-  StoreToOffset(X20, SP, reg_offset);
+  // Save callee-saves.
+  ___ PokeCPURegList(core_reg_list, frame_size - core_reg_size);
+  ___ PokeCPURegList(fp_reg_list, frame_size - core_reg_size - fp_reg_size);
 
-  reg_offset -= 8;
-  StoreDToOffset(D15, SP, reg_offset);
-  reg_offset -= 8;
-  StoreDToOffset(D14, SP, reg_offset);
-  reg_offset -= 8;
-  StoreDToOffset(D13, SP, reg_offset);
-  reg_offset -= 8;
-  StoreDToOffset(D12, SP, reg_offset);
-  reg_offset -= 8;
-  StoreDToOffset(D11, SP, reg_offset);
-  reg_offset -= 8;
-  StoreDToOffset(D10, SP, reg_offset);
-  reg_offset -= 8;
-  StoreDToOffset(D9, SP, reg_offset);
-  reg_offset -= 8;
-  StoreDToOffset(D8, SP, reg_offset);
-
+  // Note: This is specific to JNI method frame.
   // Move TR(Caller saved) to ETR(Callee saved). The original (ETR)X21 has been saved on stack.
   // This way we make sure that TR is not trashed by native code.
+  DCHECK(!core_reg_list.IncludesAliasOf(reg_x(TR)));
+  DCHECK(core_reg_list.IncludesAliasOf(reg_x(ETR)));
   ___ Mov(reg_x(ETR), reg_x(TR));
 
   // Write StackReference<Method>.
+  DCHECK(X0 == method_reg.AsArm64().AsXRegister());
   DCHECK_EQ(4U, sizeof(StackReference<mirror::ArtMethod>));
   StoreWToOffset(StoreOperandType::kStoreWord, W0, SP, 0);
 
@@ -732,61 +701,38 @@ void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
   }
 }
 
-void Arm64Assembler::RemoveFrame(size_t frame_size, const std::vector<ManagedRegister>& callee_save_regs) {
-  CHECK_ALIGNED(frame_size, kStackAlignment);
+void Arm64Assembler::RemoveFrame(size_t frame_size,
+                                 const std::vector<ManagedRegister>& callee_save_regs) {
+  // Setup VIXL CPURegList for callee-saves.
+  CPURegList core_reg_list(CPURegister::kRegister, kXRegSize, 0);
+  CPURegList fp_reg_list(CPURegister::kFPRegister, kDRegSize, 0);
+  for (size_t i = 0; i < callee_save_regs.size(); ++i) {
+    Arm64ManagedRegister reg = callee_save_regs[i].AsArm64();
+    if (reg.IsXRegister()) {
+      core_reg_list.Combine(reg_x(reg.AsXRegister()).code());
+    } else {
+      DCHECK(reg.IsDRegister());
+      fp_reg_list.Combine(reg_d(reg.AsDRegister()).code());
+    }
+  }
+  size_t core_reg_size = core_reg_list.TotalSizeInBytes();
+  size_t fp_reg_size = fp_reg_list.TotalSizeInBytes();
 
-  // For now we only check that the size of the frame is greater than the spill size.
-  CHECK_EQ(callee_save_regs.size(), kJniRefSpillRegsSize);
-  CHECK_GT(frame_size, kJniRefSpillRegsSize * kFramePointerSize);
+  // For now we only check that the size of the frame is larger enough to hold spills and method
+  // reference.
+  DCHECK_ALIGNED(frame_size, kStackAlignment);
+  DCHECK_GE(frame_size, core_reg_size + fp_reg_size + sizeof(StackReference<mirror::ArtMethod>));
 
+  // Note: This is specific to JNI method frame.
   // We move ETR(aapcs64 callee saved) back to TR(aapcs64 caller saved) which might have
   // been trashed in the native call. The original ETR(X21) is restored from stack.
+  DCHECK(!core_reg_list.IncludesAliasOf(reg_x(TR)));
+  DCHECK(core_reg_list.IncludesAliasOf(reg_x(ETR)));
   ___ Mov(reg_x(TR), reg_x(ETR));
 
-  // TODO: Ugly hard code...
-  // Should generate these according to the spill mask automatically.
-  // TUNING: Use ldp.
-  // Note: Must match Arm64JniCallingConvention::CoreSpillMask().
-  size_t reg_offset = frame_size;
-  reg_offset -= 8;
-  LoadFromOffset(LR, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X29, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X28, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X27, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X26, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X25, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X24, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X23, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X22, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X21, SP, reg_offset);
-  reg_offset -= 8;
-  LoadFromOffset(X20, SP, reg_offset);
-
-  reg_offset -= 8;
-  LoadDFromOffset(D15, SP, reg_offset);
-  reg_offset -= 8;
-  LoadDFromOffset(D14, SP, reg_offset);
-  reg_offset -= 8;
-  LoadDFromOffset(D13, SP, reg_offset);
-  reg_offset -= 8;
-  LoadDFromOffset(D12, SP, reg_offset);
-  reg_offset -= 8;
-  LoadDFromOffset(D11, SP, reg_offset);
-  reg_offset -= 8;
-  LoadDFromOffset(D10, SP, reg_offset);
-  reg_offset -= 8;
-  LoadDFromOffset(D9, SP, reg_offset);
-  reg_offset -= 8;
-  LoadDFromOffset(D8, SP, reg_offset);
+  // Restore callee-saves.
+  ___ PeekCPURegList(core_reg_list, frame_size - core_reg_size);
+  ___ PeekCPURegList(fp_reg_list, frame_size - core_reg_size - fp_reg_size);
 
   // Decrease frame size to start of callee saved regs.
   DecreaseFrameSize(frame_size);
