@@ -1411,7 +1411,10 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
     while (use != nullptr && use->GetPosition() <= current->GetEnd()) {
       LocationSummary* locations = use->GetUser()->GetLocations();
       if (use->GetIsEnvironment()) {
-        locations->SetEnvironmentAt(use->GetInputIndex(), source);
+        // Check if the use covers this interval. It might be in an inactive range.
+        if (current->Covers(use->GetPosition())) {
+          locations->SetEnvironmentAt(use->GetInputIndex(), source);
+        }
       } else {
         Location expected_location = locations->InAt(use->GetInputIndex());
         // The expected (actual) location may be invalid in case the input is unused. Currently
@@ -1503,7 +1506,15 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
     }
     current = next_sibling;
   } while (current != nullptr);
-  DCHECK(use == nullptr);
+
+  if (kIsDebugBuild) {
+    // Following uses can only be environment uses. The location for
+    // these environments will be none.
+    while (use != nullptr) {
+      DCHECK(use->GetIsEnvironment());
+      use = use->GetNext();
+    }
+  } 
 }
 
 void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,
