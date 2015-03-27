@@ -104,6 +104,9 @@ class X86Mir2Lir : public Mir2Lir {
   /// @copydoc Mir2Lir::UnconditionallyMarkGCCard(RegStorage)
   void UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) OVERRIDE;
 
+  bool CanUseOpPcRelDexCacheArrayLoad() const OVERRIDE;
+  void OpPcRelDexCacheArrayLoad(const DexFile* dex_file, int offset, RegStorage r_dest) OVERRIDE;
+
   void GenImplicitNullCheck(RegStorage reg, int opt_flags) OVERRIDE;
 
   // Required for target - register utilities.
@@ -951,6 +954,9 @@ class X86Mir2Lir : public Mir2Lir {
 
   // Instructions needing patching with PC relative code addresses.
   ArenaVector<LIR*> call_method_insns_;
+
+  // Instructions needing patching with PC relative code addresses.
+  ArenaVector<LIR*> dex_cache_access_insns_;
 
   // Prologue decrement of stack pointer.
   LIR* stack_decrement_;
