@@ -97,9 +97,13 @@ class Operand : public ValueObject {
         && (reg.NeedsRex() == ((rex_ & 1) != 0));  // REX.000B bits match.
   }
 
+  AssemblerFixup* GetFixup() const {
+    return fixup_;
+  }
+
  protected:
   // Operand can be sub classed (e.g: Address).
-  Operand() : rex_(0), length_(0) { }
+  Operand() : rex_(0), length_(0), fixup_(nullptr) { }
 
   void SetModRM(uint8_t mod_in, CpuRegister rm_in) {
     CHECK_EQ(mod_in & ~3, 0);
@@ -136,12 +140,19 @@ class Operand : public ValueObject {
     length_ += disp_size;
   }
 
+  void SetFixup(AssemblerFixup* fixup) {
+    fixup_ = fixup;
+  }
+
  private:
   uint8_t rex_;
   uint8_t length_;
   uint8_t encoding_[6];
+  AssemblerFixup* fixup_;
 
-  explicit Operand(CpuRegister reg) : rex_(0), length_(0) { SetModRM(3, reg); }
+  explicit Operand(CpuRegister reg) : rex_(0), length_(0), fixup_(nullptr) {
+    SetModRM(3, reg);
+  }
 
   // Get the operand encoding byte at the given index.
   uint8_t encoding_at(int index_in) const {
@@ -232,6 +243,15 @@ class Address : public Operand {
     return result;
   }
 
+  // An RIP relative address that will be fixed up later.
+  static Address RIP(AssemblerFixup* fixup) {
+    Address result;
+    result.SetModRM(0, CpuRegister(RBP));
+    result.SetDisp32(0);
+    result.SetFixup(fixup);
+    return result;
+  }
+
   // If no_rip is true then the Absolute address isn't RIP relative.
   static Address Absolute(ThreadOffset<8> addr, bool no_rip = false) {
     return Absolute(addr.Int32Value(), no_rip);
@@ -239,6 +259,32 @@ class Address : public Operand {
 
  private:
   Address() {}
+};
+
+
+/**
+ * Class to handle constant area values.
+ */
+class ConstantArea {
+  public:
+    ConstantArea() {}
+
+    int AddDouble(double v);
+    int AddFloat(float v);
+    int AddInt32(int32_t v);
+    int AddInt64(int64_t v);
+
+    int GetSize() const {
+      return buffer_.size() * elem_size_;
+    }
+
+    const std::vector<int32_t>& GetBuffer() const {
+      return buffer_;
+    }
+
+  private:
+    static constexpr size_t elem_size_ = sizeof(int32_t);
+    std::vector<int32_t> buffer_;
 };
 
 
@@ -666,6 +712,13 @@ class X86_64Assembler FINAL : public Assembler {
     return &cfi_info_;
   }
 
+  int AddDouble(double v) { return constant_area_.AddDouble(v); }
+  int AddFloat(float v)   { return constant_area_.AddFloat(v); }
+  int AddInt32(int32_t v) { return constant_area_.AddInt32(v); }
+  int AddInt64(int64_t v) { return constant_area_.AddInt64(v); }
+  void AddConstantArea();
+  bool ConstantAreaEmpty() const { return constant_area_.GetSize() == 0; }
+
  private:
   void EmitUint8(uint8_t value);
   void EmitInt32(int32_t value);
@@ -713,6 +766,7 @@ class X86_64Assembler FINAL : public Assembler {
 
   std::vector<uint8_t> cfi_info_;
   uint32_t cfi_cfa_offset_, cfi_pc_;
+  ConstantArea constant_area_;
 
   DISALLOW_COPY_AND_ASSIGN(X86_64Assembler);
 };
