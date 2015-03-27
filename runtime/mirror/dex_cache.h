@@ -50,7 +50,7 @@ class MANAGED DexCache FINAL : public Object {
             ObjectArray<String>* strings,
             ObjectArray<Class>* types,
             ObjectArray<ArtMethod>* methods,
-            ObjectArray<ArtField>* fields)
+            Array* fields)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void Fixup(ArtMethod* trampoline) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -116,23 +116,22 @@ class MANAGED DexCache FINAL : public Object {
     GetResolvedMethods()->Set(method_idx, resolved);
   }
 
-  ArtField* GetResolvedField(uint32_t field_idx) ALWAYS_INLINE
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    ArtField* field = GetResolvedFields()->Get(field_idx);
-    if (UNLIKELY(field == nullptr || field->GetDeclaringClass()->IsErroneous())) {
-      return nullptr;
-    } else {
-      return field;
-    }
-  }
+  // Pointer sized variant, used for patching.
+  uint64_t GetResolvedFieldPtrSize(uint32_t idx, size_t ptr_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void SetResolvedField(uint32_t field_idx, ArtField* resolved) ALWAYS_INLINE
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    GetResolvedFields()->Set(field_idx, resolved);
+  ArtField* GetResolvedField(uint32_t idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Pointer sized variant, used for patching.
+  void SetResolvedFieldPtrSize(uint32_t idx, uint64_t field_ptr, size_t ptr_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void SetResolvedField(uint32_t idx, ArtField* field) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SetResolvedFieldPtrSize(idx, reinterpret_cast<uint64_t>(field), sizeof(void*));
   }
 
   ObjectArray<String>* GetStrings() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject< ObjectArray<String>>(StringsOffset());
+    return GetFieldObject<ObjectArray<String>>(StringsOffset());
   }
 
   ObjectArray<Class>* GetResolvedTypes() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -145,9 +144,8 @@ class MANAGED DexCache FINAL : public Object {
     return GetFieldObject< ObjectArray<ArtMethod>>(ResolvedMethodsOffset());
   }
 
-  ObjectArray<ArtField>* GetResolvedFields() ALWAYS_INLINE
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<ObjectArray<ArtField>>(ResolvedFieldsOffset());
+  Array* GetResolvedFields() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetFieldObject<Array>(ResolvedFieldsOffset());
   }
 
   const DexFile* GetDexFile() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -162,7 +160,8 @@ class MANAGED DexCache FINAL : public Object {
  private:
   HeapReference<Object> dex_;
   HeapReference<String> location_;
-  HeapReference<ObjectArray<ArtField>> resolved_fields_;
+  // Either an int array or long array (64 bit).
+  HeapReference<Object> resolved_fields_;
   HeapReference<ObjectArray<ArtMethod>> resolved_methods_;
   HeapReference<ObjectArray<Class>> resolved_types_;
   HeapReference<ObjectArray<String>> strings_;

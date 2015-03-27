@@ -42,6 +42,7 @@ namespace art {
 
 class ArenaPool;
 class CompilerCallbacks;
+class LinearAlloc;
 
 namespace gc {
   class Heap;
@@ -549,6 +550,9 @@ class Runtime {
   const ArenaPool* GetArenaPool() const {
     return arena_pool_.get();
   }
+  LinearAlloc* GetLinearAlloc() {
+    return linear_alloc_.get();
+  }
 
   jit::JitOptions* GetJITOptions() {
     return jit_options_.get();
@@ -618,6 +622,9 @@ class Runtime {
   gc::Heap* heap_;
 
   std::unique_ptr<ArenaPool> arena_pool_;
+
+  // Shared linear alloc for now.
+  std::unique_ptr<LinearAlloc> linear_alloc_;
 
   // The number of spins that are done before thread suspension is used to forcibly inflate.
   size_t max_spins_before_thin_lock_inflation_;

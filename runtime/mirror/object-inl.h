@@ -225,18 +225,6 @@ inline bool Object::IsArrayInstance() {
 }
 
 template<VerifyObjectFlags kVerifyFlags, ReadBarrierOption kReadBarrierOption>
-inline bool Object::IsArtField() {
-  return GetClass<kVerifyFlags, kReadBarrierOption>()->
-      template IsArtFieldClass<kReadBarrierOption>();
-}
-
-template<VerifyObjectFlags kVerifyFlags>
-inline ArtField* Object::AsArtField() {
-  DCHECK(IsArtField<kVerifyFlags>());
-  return down_cast<ArtField*>(this);
-}
-
-template<VerifyObjectFlags kVerifyFlags, ReadBarrierOption kReadBarrierOption>
 inline bool Object::IsArtMethod() {
   return GetClass<kVerifyFlags, kReadBarrierOption>()->
       template IsArtMethodClass<kReadBarrierOption>();
@@ -403,7 +391,6 @@ inline size_t Object::SizeOf() {
   }
   DCHECK_GE(result, sizeof(Object))
       << " class=" << PrettyTypeOf(GetClass<kNewFlags, kReadBarrierOption>());
-  DCHECK(!(IsArtField<kNewFlags, kReadBarrierOption>()) || result == sizeof(ArtField));
   return result;
 }
 

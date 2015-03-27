@@ -157,7 +157,7 @@ void Arena::Reset() {
 }
 
 ArenaPool::ArenaPool(bool use_malloc)
-    : use_malloc_(use_malloc), lock_("Arena pool lock"), free_arenas_(nullptr) {
+    : use_malloc_(use_malloc), lock_("Arena pool lock", kArenaPoolLock), free_arenas_(nullptr) {
   if (!use_malloc) {
     MemMap::Init();
   }
@@ -227,6 +227,17 @@ void ArenaPool::FreeArenaChain(Arena* first) {
 
 size_t ArenaAllocator::BytesAllocated() const {
   return ArenaAllocatorStats::BytesAllocated();
+}
+
+size_t ArenaAllocator::BytesUsed() const {
+  size_t total = ptr_ - begin_;
+  if (arena_head_ != nullptr) {
+    for (Arena* cur_arena = arena_head_->next_; cur_arena != nullptr;
+         cur_arena = cur_arena->next_) {
+     total += cur_arena->GetBytesAllocated();
+    }
+  }
+  return total;
 }
 
 ArenaAllocator::ArenaAllocator(ArenaPool* pool)

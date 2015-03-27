@@ -27,9 +27,8 @@ namespace art {
 namespace mirror {
 
 template <bool kTransactionActive>
-inline mirror::Field* Field::CreateFromArtField(Thread* self, mirror::ArtField* field,
+inline mirror::Field* Field::CreateFromArtField(Thread* self, ArtField* field,
                                                 bool force_resolve) {
-  CHECK(!kMovingFields);
   // Try to resolve type before allocating since this is a thread suspension point.
   mirror::Class* type = field->GetType<true>();
 
