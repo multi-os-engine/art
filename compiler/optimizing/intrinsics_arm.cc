@@ -847,6 +847,39 @@ void IntrinsicCodeGeneratorARM::VisitStringCharAt(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
+void IntrinsicLocationsBuilderARM::VisitStringCompareTo(HInvoke* invoke) {
+  // The inputs plus one temp.
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCall,
+                                                            kIntrinsified);
+  InvokeRuntimeCallingConvention calling_convention;  
+  locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
+  locations->SetInAt(1, Location::RegisterLocation(calling_convention.GetRegisterAt(1)));
+  locations->SetOut(Location::RegisterLocation(R0));
+  // Also ask for a temp to do the implicit null check.
+  locations->AddTemp(Location::RegisterLocation(calling_convention.GetRegisterAt(2)));
+}
+
+void IntrinsicCodeGeneratorARM::VisitStringCompareTo(HInvoke* invoke) {
+  ArmAssembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  __ ldr(locations->GetTemp(0).AsRegister<Register>(),
+         Address(locations->InAt(0).AsRegister<Register>(), 0));
+  codegen_->MaybeRecordImplicitNullCheck(invoke);
+
+  Register argument = locations->InAt(1).AsRegister<Register>();
+  __ cmp(argument, ShifterOperand(0));
+  SlowPathCodeARM* slow_path = new (GetAllocator()) IntrinsicSlowPathARM(invoke);
+  codegen_->AddSlowPath(slow_path);
+  __ b(slow_path->GetEntryLabel(), EQ);
+
+  __ LoadFromOffset(
+      kLoadWord, LR, TR, QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pStringCompareTo).Int32Value());
+  __ blx(LR);
+  __ Bind(slow_path->GetExitLabel());
+}
+
 // Unimplemented intrinsics.
 
 #define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
@@ -873,7 +906,6 @@ UNIMPLEMENTED_INTRINSIC(MathRoundDouble)   // Could be done by changing rounding
 UNIMPLEMENTED_INTRINSIC(MathRoundFloat)    // Could be done by changing rounding mode, maybe?
 UNIMPLEMENTED_INTRINSIC(UnsafeCASLong)     // High register pressure.
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
-UNIMPLEMENTED_INTRINSIC(StringCompareTo)
 UNIMPLEMENTED_INTRINSIC(StringIsEmpty)  // Might not want to do these two anyways, inlining should
 UNIMPLEMENTED_INTRINSIC(StringLength)   // be good enough here.
 UNIMPLEMENTED_INTRINSIC(StringIndexOf)
