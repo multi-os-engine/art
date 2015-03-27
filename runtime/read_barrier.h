@@ -29,7 +29,6 @@
 namespace art {
 
 namespace mirror {
-  class ArtField;
   class ArtMethod;
   class Object;
   template<typename MirrorType> class HeapReference;

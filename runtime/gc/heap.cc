@@ -23,6 +23,7 @@
 #include <memory>
 #include <vector>
 
+#include "art_field-inl.h"
 #include "base/allocator.h"
 #include "base/dumpable.h"
 #include "base/histogram-inl.h"
@@ -58,7 +59,6 @@
 #include "heap-inl.h"
 #include "image.h"
 #include "intern_table.h"
-#include "mirror/art_field-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/object.h"
 #include "mirror/object-inl.h"
@@ -2690,12 +2690,12 @@ class VerifyReferenceCardVisitor {
           // Print which field of the object is dead.
           if (!obj->IsObjectArray()) {
             mirror::Class* klass = is_static ? obj->AsClass() : obj->GetClass();
-            CHECK(klass != NULL);
-            mirror::ObjectArray<mirror::ArtField>* fields = is_static ? klass->GetSFields()
-                                                                      : klass->GetIFields();
-            CHECK(fields != NULL);
-            for (int32_t i = 0; i < fields->GetLength(); ++i) {
-              mirror::ArtField* cur = fields->Get(i);
+            CHECK(klass != nullptr);
+            auto* fields = is_static ? klass->GetSFields() : klass->GetIFields();
+            CHECK(fields != nullptr);
+            auto num_fields = is_static ? klass->NumStaticFields() : klass->NumInstanceFields();
+            for (size_t i = 0; i < num_fields; ++i) {
+              ArtField* cur = &fields[i];
               if (cur->GetOffset().Int32Value() == offset.Int32Value()) {
                 LOG(ERROR) << (is_static ? "Static " : "") << "field in the live stack is "
                           << PrettyField(cur);

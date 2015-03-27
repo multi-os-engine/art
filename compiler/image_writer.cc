@@ -21,6 +21,7 @@
 #include <memory>
 #include <vector>
 
+#include "art_field-inl.h"
 #include "base/logging.h"
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
@@ -40,7 +41,6 @@
 #include "image.h"
 #include "intern_table.h"
 #include "lock_word.h"
-#include "mirror/art_field-inl.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
@@ -57,7 +57,6 @@
 
 #include <numeric>
 
-using ::art::mirror::ArtField;
 using ::art::mirror::ArtMethod;
 using ::art::mirror::Class;
 using ::art::mirror::DexCache;
@@ -428,7 +427,11 @@ ImageWriter::BinSlot ImageWriter::GetImageBinSlot(mirror::Object* object) const 
 }
 
 bool ImageWriter::AllocMemory() {
-  size_t length = RoundUp(Runtime::Current()->GetHeap()->GetTotalMemory(), kPageSize);
+  auto* runtime = Runtime::Current();
+  size_t length = runtime->GetHeap()->GetTotalMemory();
+  // Add linear alloc usage since we need to have room for the ArtFields.
+  length += runtime->GetLinearAlloc()->GetUsedMemory();
+  length = RoundUp(length);
   std::string error_msg;
   image_.reset(MemMap::MapAnonymous("image writer image", nullptr, length, PROT_READ | PROT_WRITE,
                                     false, false, &error_msg));
@@ -749,7 +752,7 @@ ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
   // caches. We check that the number of dex caches does not change.
   size_t dex_cache_count;
   {
-    ReaderMutexLock mu(Thread::Current(), *class_linker->DexLock());
+    ReaderMutexLock mu(self, *class_linker->DexLock());
     dex_cache_count = class_linker->GetDexCacheCount();
   }
   Handle<ObjectArray<Object>> dex_caches(
@@ -757,7 +760,7 @@ ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
                                               dex_cache_count)));
   CHECK(dex_caches.Get() != nullptr) << "Failed to allocate a dex cache array.";
   {
-    ReaderMutexLock mu(Thread::Current(), *class_linker->DexLock());
+    ReaderMutexLock mu(self, *class_linker->DexLock());
     CHECK_EQ(dex_cache_count, class_linker->GetDexCacheCount())
         << "The number of dex caches changed.";
     for (size_t i = 0; i < dex_cache_count; ++i) {
@@ -824,15 +827,28 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
     WalkInstanceFields(h_obj.Get(), klass.Get());
     // Walk static fields of a Class.
     if (h_obj->IsClass()) {
-      size_t num_static_fields = klass->NumReferenceStaticFields();
+      size_t num_refernece_static_fields = klass->NumReferenceStaticFields();
       MemberOffset field_offset = klass->GetFirstReferenceStaticFieldOffset();
-      for (size_t i = 0; i < num_static_fields; ++i) {
+      for (size_t i = 0; i < num_refernece_static_fields; ++i) {
         mirror::Object* value = h_obj->GetFieldObject<mirror::Object>(field_offset);
         if (value != nullptr) {
           WalkFieldsInOrder(value);
         }
         field_offset = MemberOffset(field_offset.Uint32Value() +
                                     sizeof(mirror::HeapReference<mirror::Object>));
+      }
+
+      // Visit and assign offsets for fields.
+      auto* fields[2] = { klass->GetStaticFields(), klass->GetInstanceFields() };
+      auto num_fields[2] = { klass->NumStaticFields(), klass->NumInstanceFields() };
+      for (size_t i = 0; i < 2; ++i) {
+        for (size_t j = 0; j < num_fields[i]; ++j) {
+          auto* field = fields[i] + j;
+          auto it = art_field_reloc_.find(field);
+          CHECK(it != art_field_reloc_.end()) << "Field already assigned " << PrettyField(field);
+          art_field_reloc_.insert(std::make_pair(field, art_field_offset_));
+          art_field_offset_ += sizeof(ArtField);
+        }
       }
     } else if (h_obj->IsObjectArray()) {
       // Walk elements of an object array.
@@ -884,7 +900,6 @@ void ImageWriter::CalculateNewObjectOffsets() {
   // know where image_roots is going to end up
   image_end_ += RoundUp(sizeof(ImageHeader), kObjectAlignment);  // 64-bit-alignment
 
-  // TODO: Image spaces only?
   DCHECK_LT(image_end_, image_->Size());
   image_objects_offset_begin_ = image_end_;
   // Clear any pre-existing monitors which may have been in the monitor words, assign bin slots.

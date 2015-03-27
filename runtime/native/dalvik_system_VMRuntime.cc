@@ -306,7 +306,7 @@ static void PreloadDexCachesResolveType(Thread* self, mirror::DexCache* dex_cach
 static void PreloadDexCachesResolveField(Handle<mirror::DexCache> dex_cache, uint32_t field_idx,
                                          bool is_static)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::ArtField* field = dex_cache->GetResolvedField(field_idx);
+  ArtField* field = dex_cache->GetResolvedField(field_idx);
   if (field != NULL) {
     return;
   }
@@ -430,7 +430,7 @@ static void PreloadDexCachesStatsFilled(DexCacheStats* filled)
       }
     }
     for (size_t j = 0; j < dex_cache->NumResolvedFields(); j++) {
-      mirror::ArtField* field = dex_cache->GetResolvedField(j);
+      ArtField* field = dex_cache->GetResolvedField(j);
       if (field != NULL) {
         filled->num_fields++;
       }

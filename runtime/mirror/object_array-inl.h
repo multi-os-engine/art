@@ -22,7 +22,6 @@
 #include "array-inl.h"
 #include "base/stringprintf.h"
 #include "gc/heap.h"
-#include "mirror/art_field.h"
 #include "mirror/class.h"
 #include "runtime.h"
 #include "handle_scope-inl.h"

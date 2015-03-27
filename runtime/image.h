@@ -40,6 +40,8 @@ class PACKED(4) ImageHeader {
               uint32_t oat_data_begin,
               uint32_t oat_data_end,
               uint32_t oat_file_end,
+              uint32_t art_fields_offset,
+              uint32_t art_field_count,
               bool compile_pic_);
 
   bool IsValid() const;
@@ -161,6 +163,12 @@ class PACKED(4) ImageHeader {
   // End of oat file address range. will be after oat_data_end_ for
   // .so files. Used for positioning a following alloc spaces.
   uint32_t oat_file_end_;
+
+  // ArtField array offset.
+  uint32_t art_fields_offset_;
+
+  // ArtField count.
+  uint32_t art_field_count_;
 
   // The total delta that this image has been patched.
   int32_t patch_delta_;

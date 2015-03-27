@@ -160,7 +160,7 @@ void ThrowIllegalAccessErrorMethod(mirror::Class* referrer, mirror::ArtMethod* a
   ThrowException("Ljava/lang/IllegalAccessError;", referrer, msg.str().c_str());
 }
 
-void ThrowIllegalAccessErrorField(mirror::Class* referrer, mirror::ArtField* accessed) {
+void ThrowIllegalAccessErrorField(mirror::Class* referrer, ArtField* accessed) {
   std::ostringstream msg;
   msg << "Field '" << PrettyField(accessed, false) << "' is inaccessible to class '"
       << PrettyDescriptor(referrer) << "'";
@@ -168,7 +168,7 @@ void ThrowIllegalAccessErrorField(mirror::Class* referrer, mirror::ArtField* acc
 }
 
 void ThrowIllegalAccessErrorFinalField(mirror::ArtMethod* referrer,
-                                       mirror::ArtField* accessed) {
+                                       ArtField* accessed) {
   std::ostringstream msg;
   msg << "Final field '" << PrettyField(accessed, false) << "' cannot be written to by method '"
       << PrettyMethod(referrer) << "'";
@@ -226,7 +226,7 @@ void ThrowIncompatibleClassChangeErrorClassForInterfaceDispatch(mirror::ArtMetho
                  msg.str().c_str());
 }
 
-void ThrowIncompatibleClassChangeErrorField(mirror::ArtField* resolved_field, bool is_static,
+void ThrowIncompatibleClassChangeErrorField(ArtField* resolved_field, bool is_static,
                                             mirror::ArtMethod* referrer) {
   std::ostringstream msg;
   msg << "Expected '" << PrettyField(resolved_field) << "' to be a "
@@ -314,7 +314,7 @@ void ThrowNoSuchMethodError(uint32_t method_idx) {
 
 // NullPointerException
 
-void ThrowNullPointerExceptionForFieldAccess(mirror::ArtField* field, bool is_read) {
+void ThrowNullPointerExceptionForFieldAccess(ArtField* field, bool is_read) {
   std::ostringstream msg;
   msg << "Attempt to " << (is_read ? "read from" : "write to")
       << " field '" << PrettyField(field, true) << "' on a null object reference";
@@ -394,7 +394,7 @@ void ThrowNullPointerExceptionFromDexPC() {
     case Instruction::IGET_BYTE:
     case Instruction::IGET_CHAR:
     case Instruction::IGET_SHORT: {
-      mirror::ArtField* field =
+      ArtField* field =
           Runtime::Current()->GetClassLinker()->ResolveField(instr->VRegC_22c(), method, false);
       ThrowNullPointerExceptionForFieldAccess(field, true /* read */);
       break;
@@ -408,7 +408,7 @@ void ThrowNullPointerExceptionFromDexPC() {
     case Instruction::IGET_OBJECT_QUICK: {
       // Since we replaced the field index, we ask the verifier to tell us which
       // field is accessed at this location.
-      mirror::ArtField* field =
+      ArtField* field =
           verifier::MethodVerifier::FindAccessedFieldAtDexPc(method, throw_dex_pc);
       if (field != NULL) {
         // NPE with precise message.
@@ -426,7 +426,7 @@ void ThrowNullPointerExceptionFromDexPC() {
     case Instruction::IPUT_BYTE:
     case Instruction::IPUT_CHAR:
     case Instruction::IPUT_SHORT: {
-      mirror::ArtField* field =
+      ArtField* field =
           Runtime::Current()->GetClassLinker()->ResolveField(instr->VRegC_22c(), method, false);
       ThrowNullPointerExceptionForFieldAccess(field, false /* write */);
       break;
@@ -440,7 +440,7 @@ void ThrowNullPointerExceptionFromDexPC() {
     case Instruction::IPUT_OBJECT_QUICK: {
       // Since we replaced the field index, we ask the verifier to tell us which
       // field is accessed at this location.
-      mirror::ArtField* field =
+      ArtField* field =
           verifier::MethodVerifier::FindAccessedFieldAtDexPc(method, throw_dex_pc);
       if (field != NULL) {
         // NPE with precise message.

@@ -19,6 +19,7 @@
 
 #include "dex_cache.h"
 
+#include "art_field-inl.h"
 #include "base/logging.h"
 #include "mirror/class.h"
 #include "runtime.h"
@@ -35,18 +36,25 @@ inline ArtMethod* DexCache::GetResolvedMethod(uint32_t method_idx)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   ArtMethod* method = GetResolvedMethods()->Get(method_idx);
   // Hide resolution trampoline methods from the caller
-  if (method != NULL && method->IsRuntimeMethod()) {
-    DCHECK(method == Runtime::Current()->GetResolutionMethod());
-    return NULL;
-  } else {
-    return method;
+  if (method != nullptr && method->IsRuntimeMethod()) {
+    DCHECK_EQ(method, Runtime::Current()->GetResolutionMethod());
+    return nullptr;
   }
+  return method;
 }
 
 inline void DexCache::SetResolvedType(uint32_t type_idx, Class* resolved) {
   // TODO default transaction support.
   DCHECK(resolved == nullptr || !resolved->IsErroneous());
   GetResolvedTypes()->Set(type_idx, resolved);
+}
+
+inline ArtField* DexCache::GetResolvedField(uint32_t field_idx) {
+  ArtField* field = GetResolvedFields()[field_idx];
+  if (UNLIKELY(field == nullptr || field->GetDeclaringClass()->IsErroneous())) {
+    return nullptr;
+  }
+  return field;
 }
 
 }  // namespace mirror

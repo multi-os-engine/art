@@ -52,7 +52,7 @@ class ImageWriter FINAL {
         quick_imt_conflict_trampoline_offset_(0), quick_resolution_trampoline_offset_(0),
         quick_to_interpreter_bridge_offset_(0), compile_pic_(compile_pic),
         target_ptr_size_(InstructionSetPointerSize(compiler_driver_.GetInstructionSet())),
-        bin_slot_sizes_(), bin_slot_count_() {
+        bin_slot_sizes_(), bin_slot_count_(), art_field_offset_(0) {
     CHECK_NE(image_begin, 0U);
   }
 
@@ -310,6 +310,15 @@ class ImageWriter FINAL {
   // Bin slot tracking for dirty object packing
   size_t bin_slot_sizes_[kBinSize];  // Number of bytes in a bin
   size_t bin_slot_count_[kBinSize];  // Number of objects in a bin
+
+  // ArtField relocating map, ArtFields are allocated as array of structs but we want to have one
+  // entry per art field for convenience.
+  // ArtFields are placed right after the end of the image objects (aka sum of bin_slot_sizes_).
+  std::unordered_map<ArtField*, uintptr_t> art_field_reloc_;
+
+  // Current offset into the ArtField "bin".
+  uint64_t art_field_offset_;
+
 
   void* string_data_array_;  // The backing for the interned strings.
 
