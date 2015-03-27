@@ -218,6 +218,7 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   Location AllocateFreeRegister(Primitive::Type type) const OVERRIDE;
   void DumpCoreRegister(std::ostream& stream, int reg) const OVERRIDE;
   void DumpFloatingPointRegister(std::ostream& stream, int reg) const OVERRIDE;
+  void Finalize(CodeAllocator* allocator) OVERRIDE;
 
   InstructionSet GetInstructionSet() const OVERRIDE {
     return InstructionSet::kX86_64;
@@ -245,6 +246,15 @@ class CodeGeneratorX86_64 : public CodeGenerator {
 
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, CpuRegister temp);
 
+  int ConstantAreaStart() const {
+    return constant_area_start_;
+  }
+
+  Address LiteralDouble(double v);
+  Address LiteralFloat(float v);
+  Address LiteralInt32(int32_t v);
+  Address LiteralInt64(int64_t v);
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
@@ -253,6 +263,7 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   InstructionCodeGeneratorX86_64 instruction_visitor_;
   ParallelMoveResolverX86_64 move_resolver_;
   X86_64Assembler assembler_;
+  int constant_area_start_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorX86_64);
 };
