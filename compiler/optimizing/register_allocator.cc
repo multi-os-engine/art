@@ -851,6 +851,29 @@ bool RegisterAllocator::TrySplitNonPairOrUnalignedPairIntervalAt(size_t position
   return false;
 }
 
+bool RegisterAllocator::PotentiallyRemoveOtherHalf(LiveInterval* interval,
+                                                   GrowableArray<LiveInterval*>* intervals) {
+  if (interval->IsLowInterval() || interval->IsHighInterval()) {
+    LiveInterval* other_half = interval->IsLowInterval()
+        ? interval->GetHighInterval()
+        : interval->GetLowInterval();
+
+    // We also need to remove the other half from the list of inactives.
+    bool found = false;
+    for (size_t j = 0; j < intervals->Size(); ++j) {
+      if (intervals->Get(j) == other_half) {
+        found = true;
+        intervals->DeleteAt(j);
+        handled_.Add(other_half);
+        break;
+      }
+    }
+    DCHECK(found);
+    return true;
+  }
+  return false;
+}
+
 // Find the register that is used the last, and spill the interval
 // that holds it. If the first use of `current` is after that register
 // we spill `current` instead.
@@ -978,29 +1001,13 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
         if (split != active) {
           handled_.Add(active);
         }
+        PotentiallyRemoveOtherHalf(active, &active_);
         AddSorted(unhandled_, split);
-
-        if (active->IsLowInterval() || active->IsHighInterval()) {
-          LiveInterval* other_half = active->IsLowInterval()
-              ? active->GetHighInterval()
-              : active->GetLowInterval();
-          // We also need to remove the other half from the list of actives.
-          bool found = false;
-          for (size_t j = 0; j < active_.Size(); ++j) {
-            if (active_.Get(j) == other_half) {
-              found = true;
-              active_.DeleteAt(j);
-              handled_.Add(other_half);
-              break;
-            }
-          }
-          DCHECK(found);
-        }
         break;
       }
     }
 
-    for (size_t i = 0, e = inactive_.Size(); i < e; ++i) {
+    for (size_t i = 0; i < inactive_.Size(); ++i) {
       LiveInterval* inactive = inactive_.Get(i);
       if (inactive->GetRegister() == reg) {
         if (!current->IsSplit() && !inactive->IsFixed()) {
@@ -1025,28 +1032,11 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
             DCHECK_NE(split, inactive);
             inactive_.DeleteAt(i);
             --i;
-            --e;
+            if (PotentiallyRemoveOtherHalf(inactive, &inactive_)) {
+              --i;
+            }
             handled_.Add(inactive);
             AddSorted(unhandled_, split);
-
-            if (inactive->IsLowInterval() || inactive->IsHighInterval()) {
-              LiveInterval* other_half = inactive->IsLowInterval()
-                  ? inactive->GetHighInterval()
-                  : inactive->GetLowInterval();
-
-              // We also need to remove the other half from the list of inactives.
-              bool found = false;
-              for (size_t j = 0; j < inactive_.Size(); ++j) {
-                if (inactive_.Get(j) == other_half) {
-                  found = true;
-                  inactive_.DeleteAt(j);
-                  --e;
-                  handled_.Add(other_half);
-                  break;
-                }
-              }
-              DCHECK(found);
-            }
           }
         }
       }
