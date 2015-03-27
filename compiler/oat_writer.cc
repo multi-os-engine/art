@@ -104,9 +104,9 @@ class OatWriter::NoRelativePatcher FINAL : public RelativePatcher {
   DISALLOW_COPY_AND_ASSIGN(NoRelativePatcher);
 };
 
-class OatWriter::X86RelativePatcher FINAL : public RelativePatcher {
+class OatWriter::X86BaseRelativePatcher : public RelativePatcher {
  public:
-  X86RelativePatcher() { }
+  X86BaseRelativePatcher() { }
 
   uint32_t ReserveSpace(uint32_t offset,
                         const CompiledMethod* compiled_method ATTRIBUTE_UNUSED) OVERRIDE {
@@ -128,19 +128,42 @@ class OatWriter::X86RelativePatcher FINAL : public RelativePatcher {
     reinterpret_cast<unaligned_int32_t*>(&(*code)[literal_offset])[0] = displacement;
   }
 
+ private:
+  // PC displacement from patch location; x86 PC for relative calls points to the next
+  // instruction and the patch location is 4 bytes earlier.
+  static constexpr int32_t kPcDisplacement = 4;
+
+  DISALLOW_COPY_AND_ASSIGN(X86BaseRelativePatcher);
+};
+
+class OatWriter::X86RelativePatcher FINAL : public X86BaseRelativePatcher {
+ public:
+  X86RelativePatcher() { }
+
   virtual void PatchDexCacheReference(std::vector<uint8_t>* code ATTRIBUTE_UNUSED,
                                       const LinkerPatch& patch ATTRIBUTE_UNUSED,
                                       uint32_t patch_offset ATTRIBUTE_UNUSED,
                                       uint32_t target_offset ATTRIBUTE_UNUSED) {
     LOG(FATAL) << "Unexpected relative dex cache array patch.";
   }
+};
 
- private:
-  // PC displacement from patch location; x86 PC for relative calls points to the next
-  // instruction and the patch location is 4 bytes earlier.
-  static constexpr int32_t kPcDisplacement = 4;
+class OatWriter::X86_64RelativePatcher FINAL : public X86BaseRelativePatcher {
+ public:
+  X86_64RelativePatcher() { }
 
-  DISALLOW_COPY_AND_ASSIGN(X86RelativePatcher);
+  virtual void PatchDexCacheReference(std::vector<uint8_t>* code ATTRIBUTE_UNUSED,
+                                      const LinkerPatch& patch ATTRIBUTE_UNUSED,
+                                      uint32_t patch_offset ATTRIBUTE_UNUSED,
+                                      uint32_t target_offset ATTRIBUTE_UNUSED) {
+    // The patch_offset points to the offset data, i.e. the last 4 bytes of the insn.
+    // The address is calculated from the RIP of the next instruction.
+    uint32_t next_insn_rip = patch_offset + 4u;
+    uint32_t displacement = target_offset - next_insn_rip;
+
+    typedef __attribute__((__aligned__(1))) int32_t unaligned_int32_t;
+    reinterpret_cast<unaligned_int32_t*>(&(*code)[patch.LiteralOffset()])[0] = displacement;
+  }
 };
 
 class OatWriter::ArmBaseRelativePatcher : public RelativePatcher {
@@ -525,8 +548,10 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
 
   switch (compiler_driver_->GetInstructionSet()) {
     case kX86:
-    case kX86_64:
       relative_patcher_.reset(new X86RelativePatcher);
+      break;
+    case kX86_64:
+      relative_patcher_.reset(new X86_64RelativePatcher);
       break;
     case kArm:
       // Fall through: we generate Thumb2 code for "arm".
