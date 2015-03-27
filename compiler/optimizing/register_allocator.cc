@@ -1517,7 +1517,15 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
     }
     current = next_sibling;
   } while (current != nullptr);
-  DCHECK(use == nullptr);
+
+  if (kIsDebugBuild) {
+    // Following uses can only be environment uses. The location for
+    // these environments will be none.
+    while (use != nullptr) {
+      DCHECK(use->GetIsEnvironment());
+      use = use->GetNext();
+    }
+  } 
 }
 
 void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,
