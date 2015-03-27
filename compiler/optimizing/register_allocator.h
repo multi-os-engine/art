@@ -144,6 +144,9 @@ class RegisterAllocator {
                                                 size_t first_register_use,
                                                 size_t* next_use);
 
+  // If `interval` has another half, remove it from the list of `intervals`.
+  bool PotentiallyRemoveOtherHalf(LiveInterval* interval, GrowableArray<LiveInterval*>* intervals);
+
   ArenaAllocator* const allocator_;
   CodeGenerator* const codegen_;
   const SsaLivenessAnalysis& liveness_;
