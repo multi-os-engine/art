@@ -97,9 +97,13 @@ class Operand : public ValueObject {
         && (reg.NeedsRex() == ((rex_ & 1) != 0));  // REX.000B bits match.
   }
 
+  AssemblerFixup* GetFixup() const {
+    return fixup_;
+  }
+
  protected:
   // Operand can be sub classed (e.g: Address).
-  Operand() : rex_(0), length_(0) { }
+  Operand() : rex_(0), length_(0), fixup_(nullptr) { }
 
   void SetModRM(uint8_t mod_in, CpuRegister rm_in) {
     CHECK_EQ(mod_in & ~3, 0);
@@ -136,12 +140,19 @@ class Operand : public ValueObject {
     length_ += disp_size;
   }
 
+  void SetFixup(AssemblerFixup* fixup) {
+    fixup_ = fixup;
+  }
+
  private:
   uint8_t rex_;
   uint8_t length_;
   uint8_t encoding_[6];
+  AssemblerFixup* fixup_;
 
-  explicit Operand(CpuRegister reg) : rex_(0), length_(0) { SetModRM(3, reg); }
+  explicit Operand(CpuRegister reg) : rex_(0), length_(0), fixup_(nullptr) {
+    SetModRM(3, reg);
+  }
 
   // Get the operand encoding byte at the given index.
   uint8_t encoding_at(int index_in) const {
@@ -229,6 +240,15 @@ class Address : public Operand {
       result.SetModRM(0, CpuRegister(RBP));
       result.SetDisp32(addr);
     }
+    return result;
+  }
+
+  // An RIP relative address that will be fixed up later.
+  static Address RIP(AssemblerFixup* fixup) {
+    Address result;
+    result.SetModRM(0, CpuRegister(RBP));
+    result.SetDisp32(0);
+    result.SetFixup(fixup);
     return result;
   }
 
@@ -665,6 +685,8 @@ class X86_64Assembler FINAL : public Assembler {
   std::vector<uint8_t>* GetFrameDescriptionEntry() OVERRIDE {
     return &cfi_info_;
   }
+
+  void AddConstantArea(const std::vector<int32_t>& area);
 
  private:
   void EmitUint8(uint8_t value);

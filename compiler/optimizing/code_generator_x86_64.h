@@ -133,6 +133,31 @@ class LocationsBuilderX86_64 : public HGraphVisitor {
   DISALLOW_COPY_AND_ASSIGN(LocationsBuilderX86_64);
 };
 
+/**
+ * Class to handle the constant area values.
+ */
+class ConstantArea {
+  public:
+    ConstantArea() {}
+
+    int AddDouble(double v);
+    int AddFloat(float v);
+    int AddInt32(int32_t v);
+    int AddInt64(int64_t v);
+
+    int GetSize() const {
+      return buffer_.size() * elem_size_;
+    }
+
+    const std::vector<int32_t>& GetBuffer() const {
+      return buffer_;
+    }
+
+  private:
+    static constexpr size_t elem_size_ = sizeof(int32_t);
+    std::vector<int32_t> buffer_;
+};
+
 class InstructionCodeGeneratorX86_64 : public HGraphVisitor {
  public:
   InstructionCodeGeneratorX86_64(HGraph* graph, CodeGeneratorX86_64* codegen);
@@ -218,6 +243,7 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   Location AllocateFreeRegister(Primitive::Type type) const OVERRIDE;
   void DumpCoreRegister(std::ostream& stream, int reg) const OVERRIDE;
   void DumpFloatingPointRegister(std::ostream& stream, int reg) const OVERRIDE;
+  void Finalize(CodeAllocator* allocator) OVERRIDE;
 
   InstructionSet GetInstructionSet() const OVERRIDE {
     return InstructionSet::kX86_64;
@@ -245,6 +271,15 @@ class CodeGeneratorX86_64 : public CodeGenerator {
 
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, CpuRegister temp);
 
+  int ConstantAreaStart() const {
+    return constant_area_start_;
+  }
+
+  Address LiteralDouble(double v);
+  Address LiteralFloat(float v);
+  Address LiteralInt32(int32_t v);
+  Address LiteralInt64(int64_t v);
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
@@ -253,6 +288,8 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   InstructionCodeGeneratorX86_64 instruction_visitor_;
   ParallelMoveResolverX86_64 move_resolver_;
   X86_64Assembler assembler_;
+  ConstantArea constant_area_;
+  int constant_area_start_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorX86_64);
 };

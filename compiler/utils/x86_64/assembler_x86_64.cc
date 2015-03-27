@@ -1933,6 +1933,10 @@ void X86_64Assembler::EmitOperand(uint8_t reg_or_opcode, const Operand& operand)
   for (int i = 1; i < length; i++) {
     EmitUint8(operand.encoding_[i]);
   }
+  AssemblerFixup* fixup = operand.GetFixup();
+  if (fixup) {
+    EmitFixup(fixup);
+  }
 }
 
 
@@ -2694,6 +2698,13 @@ void X86_64ExceptionSlowPath::Emit(Assembler *sasm) {
   // this call should never return
   __ int3();
 #undef __
+}
+
+void X86_64Assembler::AddConstantArea(const std::vector<int32_t>& area) {
+  for (size_t i = 0, u = area.size(); i < u; i++) {
+    AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+    EmitInt32(area[i]);
+  }
 }
 
 }  // namespace x86_64
