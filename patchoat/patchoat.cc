@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "art_field-inl.h"
 #include "base/dumpable.h"
 #include "base/scoped_flock.h"
 #include "base/stringpiece.h"
@@ -34,7 +35,6 @@
 #include "elf_file_impl.h"
 #include "gc/space/image_space.h"
 #include "image.h"
-#include "mirror/art_field-inl.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/object-inl.h"
 #include "mirror/reference.h"
@@ -421,6 +421,38 @@ bool PatchOat::PatchImage() {
   // These are the roots from the original file.
   mirror::Object* img_roots = image_header->GetImageRoots();
   image_header->RelocateImage(delta_);
+
+  // Patch and update ArtFields.
+  const size_t art_field_size = image_header->GetArtFieldsSize();
+  const size_t art_field_offset = image_header->GetArtFieldsOffset();
+  for (size_t pos = 0; pos < art_field_size; pos += sizeof(ArtField)) {
+    auto* field = reinterpret_cast<ArtField*>(image_->Begin() + art_field_offset + pos);
+    field->SetDeclaringClass(down_cast<mirror::Class*>(
+        RelocatedCopyOf(field->GetDeclaringClass())));
+  }
+  // Patch dex file int/long arrays which point to ArtFields.
+  auto* dex_caches = image_header->GetImageRoots()->Get(ImageHeader::kDexCaches)->
+      AsObjectArray<mirror::DexCache>();
+  for (size_t i = 0, count = dex_caches->GetLength(); i < count; ++i) {
+    auto* dex_cache = dex_caches->GetWithoutChecks(i);
+    auto* fields = dex_cache->GetResolvedFields();
+    CHECK(fields != nullptr);
+    CHECK(!fields->IsObjectArray());
+    CHECK(fields->IsArrayInstance());
+    auto* component_type = fields->GetClass()->GetComponentType();
+    if (component_type->IsPrimitiveInt()) {
+      mirror::IntArray* arr = fields->AsIntArray();
+      for (size_t j = 0, count2 = arr->GetLength(); j < count2; ++j) {
+        arr->SetWithoutChecks<false>(j, arr->GetWithoutChecks(j) + static_cast<int32_t>(delta_));
+      }
+    } else {
+      CHECK(component_type->IsPrimitiveLong());
+      mirror::LongArray* arr = fields->AsLongArray();
+      for (size_t j = 0, count2 = arr->GetLength(); j < count2; ++j) {
+        arr->SetWithoutChecks<false>(j, arr->GetWithoutChecks(j) + static_cast<int64_t>(delta_));
+      }
+    }
+  }
 
   VisitObject(img_roots);
   if (!image_header->IsValid()) {
@@ -1298,5 +1330,6 @@ static int patchoat(int argc, char **argv) {
 }  // namespace art
 
 int main(int argc, char **argv) {
+  LOG(art::FATAL) << "FAIL";
   return art::patchoat(argc, argv);
 }

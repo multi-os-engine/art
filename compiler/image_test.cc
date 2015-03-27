@@ -213,6 +213,8 @@ TEST_F(ImageTest, ImageHeaderIsValid) {
                              oat_data_begin,
                              oat_data_end,
                              oat_file_end,
+                             0u,
+                             0u,
                              /*compile_pic*/false);
     ASSERT_TRUE(image_header.IsValid());
 
