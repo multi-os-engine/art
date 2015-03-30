@@ -144,6 +144,9 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   void GenerateClassInitializationCheck(SlowPathCodeX86* slow_path, Register class_reg);
   void HandleBitwiseOperation(HBinaryOperation* instruction);
   void GenerateDivRemIntegral(HBinaryOperation* instruction);
+  void DivRemOneOrMinusOne(HBinaryOperation* instruction);
+  void DivByPowerOfTwo(HBinaryOperation* instruction);
+  void CalculateMagicAndShift(int64_t divisor, int64_t& magic, int& shift, bool is_long);
   void GenerateRemFP(HRem *rem);
   void HandleShift(HBinaryOperation* instruction);
   void GenerateShlLong(const Location& loc, Register shifter);
