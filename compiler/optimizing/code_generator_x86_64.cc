@@ -332,6 +332,7 @@ inline Condition X86_64Condition(IfCondition cond) {
 }
 
 void CodeGeneratorX86_64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
+                                                     CpuRegister current_method,
                                                      CpuRegister temp) {
   // All registers are assumed to be correctly set up.
 
@@ -342,17 +343,17 @@ void CodeGeneratorX86_64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invo
   //
   // Currently we implement the app -> app logic, which looks up in the resolve cache.
 
-  // temp = method;
-  LoadCurrentMethod(temp);
   if (!invoke->IsRecursive()) {
-    // temp = temp->dex_cache_resolved_methods_;
-    __ movl(temp, Address(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().SizeValue()));
+    // temp = current_method->dex_cache_resolved_methods_;
+    __ movl(temp, Address(
+        current_method, mirror::ArtMethod::DexCacheResolvedMethodsOffset().SizeValue()));
     // temp = temp[index_in_cache]
     __ movl(temp, Address(temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex())));
     // (temp + offset_of_quick_compiled_code)()
     __ call(Address(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
         kX86_64WordSize).SizeValue()));
   } else {
+    __ movl(temp, current_method);
     __ call(&frame_entry_label_);
   }
 
@@ -1182,6 +1183,9 @@ Location InvokeDexCallingConventionVisitor::GetNextLocation(Primitive::Type type
 void LocationsBuilderX86_64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
   IntrinsicLocationsBuilderX86_64 intrinsic(GetGraph()->GetArena());
   if (intrinsic.TryDispatch(invoke)) {
+    // The last input of HInvokeStaticOrDirect is current method. And we only build the locations
+    // for arguments in the intrinsic helper.
+    invoke->GetLocations()->SetInAt(invoke->InputCount() - 1, Location::RequiresRegister());
     return;
   }
 
@@ -1204,6 +1208,7 @@ void InstructionCodeGeneratorX86_64::VisitInvokeStaticOrDirect(HInvokeStaticOrDi
 
   codegen_->GenerateStaticOrDirectCall(
       invoke,
+      invoke->GetLocations()->InAt(invoke->InputCount() - 1).AsRegister<CpuRegister>(),
       invoke->GetLocations()->GetTemp(0).AsRegister<CpuRegister>());
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
 }
@@ -1213,8 +1218,14 @@ void LocationsBuilderX86_64::HandleInvoke(HInvoke* invoke) {
       new (GetGraph()->GetArena()) LocationSummary(invoke, LocationSummary::kCall);
   locations->AddTemp(Location::RegisterLocation(RDI));
 
+  size_t argument_count = invoke->InputCount();
+  if (invoke->IsInvokeStaticOrDirect()) {
+    // The last input of HInvokeStaticOrDirect is current method.
+    locations->SetInAt(--argument_count, Location::RequiresRegister());
+  }
+
   InvokeDexCallingConventionVisitor calling_convention_visitor;
-  for (size_t i = 0; i < invoke->InputCount(); i++) {
+  for (size_t i = 0; i < argument_count; i++) {
     HInstruction* input = invoke->InputAt(i);
     locations->SetInAt(i, calling_convention_visitor.GetNextLocation(input->GetType()));
   }
@@ -2560,6 +2571,18 @@ void InstructionCodeGeneratorX86_64::VisitParameterValue(HParameterValue* instru
   // Nothing to do, the parameter is already at its location.
   UNUSED(instruction);
 }
+
+void LocationsBuilderX86_64::VisitCurrentMethod(HCurrentMethod* instruction) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  // Current method reference is passed as RDI per calling convention.
+  locations->SetOut(Location::RegisterLocation(RDI));
+}
+
+void InstructionCodeGeneratorX86_64::VisitCurrentMethod(HCurrentMethod* instruction) {
+  // Nothing to do, the method reference is already at its location.
+  UNUSED(instruction);
+}
+
 
 void LocationsBuilderX86_64::VisitNot(HNot* not_) {
   LocationSummary* locations =

@@ -109,7 +109,13 @@ static void MoveArguments(HInvoke* invoke, ArenaAllocator* arena, CodeGeneratorX
   // a parallel move resolver.
   HParallelMove parallel_move(arena);
 
-  for (size_t i = 0; i < invoke->InputCount(); i++) {
+  size_t argument_count = invoke->InputCount();
+  if (invoke->IsInvokeStaticOrDirect()) {
+    // The last input of HInvokeStaticOrDirect is current method.
+    --argument_count;
+  }
+
+  for (size_t i = 0; i < argument_count; i++) {
     HInstruction* input = invoke->InputAt(i);
     Location cc_loc = calling_convention_visitor.GetNextLocation(input->GetType());
     Location actual_loc = locations->InAt(i);
@@ -139,7 +145,9 @@ class IntrinsicSlowPathX86_64 : public SlowPathCodeX86_64 {
     MoveArguments(invoke_, codegen->GetGraph()->GetArena(), codegen);
 
     if (invoke_->IsInvokeStaticOrDirect()) {
-      codegen->GenerateStaticOrDirectCall(invoke_->AsInvokeStaticOrDirect(), CpuRegister(RDI));
+      codegen->GenerateStaticOrDirectCall(invoke_->AsInvokeStaticOrDirect(),
+          invoke_->GetLocations()->InAt(invoke_->InputCount() - 1).AsRegister<CpuRegister>(),
+          CpuRegister(RDI));
       RecordPcInfo(codegen, invoke_, invoke_->GetDexPc());
     } else {
       UNIMPLEMENTED(FATAL) << "Non-direct intrinsic slow-path not yet implemented";

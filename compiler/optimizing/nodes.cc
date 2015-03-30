@@ -965,13 +965,13 @@ static void MakeRoomFor(GrowableArray<HBasicBlock*>* blocks,
 
 void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
   // Walk over the entry block and:
-  // - Move constants from the entry block to the outer_graph's entry block,
+  // - Move constants and current method from the entry block to the outer_graph's entry block.
   // - Replace HParameterValue instructions with their real value.
   // - Remove suspend checks, that hold an environment.
   int parameter_index = 0;
   for (HInstructionIterator it(entry_block_->GetInstructions()); !it.Done(); it.Advance()) {
     HInstruction* current = it.Current();
-    if (current->IsConstant()) {
+    if (current->IsConstant() || current->IsCurrentMethod()) {
       current->MoveBefore(outer_graph->GetEntryBlock()->GetLastInstruction());
     } else if (current->IsParameterValue()) {
       current->ReplaceWith(invoke->InputAt(parameter_index++));

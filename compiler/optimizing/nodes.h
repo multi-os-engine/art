@@ -682,6 +682,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(ClinitCheck, Instruction)                                           \
   M(Compare, BinaryOperation)                                           \
   M(Condition, BinaryOperation)                                         \
+  M(CurrentMethod, Instruction)                                         \
   M(Div, BinaryOperation)                                               \
   M(DivZeroCheck, Instruction)                                          \
   M(DoubleConstant, Constant)                                           \
@@ -2102,7 +2103,7 @@ class HInvoke : public HInstruction {
   // know their environment.
   bool NeedsEnvironment() const OVERRIDE { return true; }
 
-  void SetArgumentAt(size_t index, HInstruction* argument) {
+  virtual void SetArgumentAt(size_t index, HInstruction* argument) {
     SetRawInputAt(index, argument);
   }
 
@@ -2162,7 +2163,7 @@ class HInvokeStaticOrDirect : public HInvoke {
                         bool is_recursive,
                         InvokeType original_invoke_type,
                         InvokeType invoke_type)
-      : HInvoke(arena, number_of_arguments, return_type, dex_pc, dex_method_index),
+      : HInvoke(arena, number_of_arguments + 1, return_type, dex_pc, dex_method_index),
         original_invoke_type_(original_invoke_type),
         invoke_type_(invoke_type),
         is_recursive_(is_recursive) {}
@@ -2174,6 +2175,16 @@ class HInvokeStaticOrDirect : public HInvoke {
   }
 
   InvokeType GetOriginalInvokeType() const { return original_invoke_type_; }
+
+  void SetArgumentAt(size_t index, HInstruction* argument) OVERRIDE {
+    DCHECK_LT(index, InputCount() - 1);
+    SetRawInputAt(index, argument);
+  }
+
+  void SetCurrentMethod(HInstruction* current_method) {
+    SetRawInputAt(InputCount() - 1, current_method);
+  }
+
   InvokeType GetInvokeType() const { return invoke_type_; }
   bool IsRecursive() const { return is_recursive_; }
   bool NeedsDexCache() const OVERRIDE { return !IsRecursive(); }
@@ -2554,6 +2565,23 @@ class HXor : public HBinaryOperation {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HXor);
+};
+
+// FIXME: Revisit the comment.
+// The value of current method. It can be load from certain register in the entry
+// block or *sp after the frame has been built.
+class HCurrentMethod : public HExpression<0> {
+ public:
+  HCurrentMethod() : HExpression(Primitive::kPrimNot, SideEffects::None()) {}
+
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
+    return true;
+  }
+
+  DECLARE_INSTRUCTION(CurrentMethod);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HCurrentMethod);
 };
 
 // The value of a parameter in this method. Its location depends on

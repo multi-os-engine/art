@@ -1157,6 +1157,9 @@ void LocationsBuilderARM::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invok
   IntrinsicLocationsBuilderARM intrinsic(GetGraph()->GetArena(),
                                          codegen_->GetInstructionSetFeatures());
   if (intrinsic.TryDispatch(invoke)) {
+    // The last input of HInvokeStaticOrDirect is current method. And we only build the locations
+    // for arguments in the intrinsic helper.
+    invoke->GetLocations()->SetInAt(invoke->InputCount() - 1, Location::RequiresRegister());
     return;
   }
 
@@ -1182,9 +1185,9 @@ void InstructionCodeGeneratorARM::VisitInvokeStaticOrDirect(HInvokeStaticOrDirec
     return;
   }
 
-  Register temp = invoke->GetLocations()->GetTemp(0).AsRegister<Register>();
-
-  codegen_->GenerateStaticOrDirectCall(invoke, temp);
+  codegen_->GenerateStaticOrDirectCall(invoke,
+      invoke->GetLocations()->InAt(invoke->InputCount() - 1).AsRegister<Register>(),
+      invoke->GetLocations()->GetTemp(0).AsRegister<Register>());
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
 }
 
@@ -1193,8 +1196,14 @@ void LocationsBuilderARM::HandleInvoke(HInvoke* invoke) {
       new (GetGraph()->GetArena()) LocationSummary(invoke, LocationSummary::kCall);
   locations->AddTemp(Location::RegisterLocation(R0));
 
+  size_t argument_count = invoke->InputCount();
+  if (invoke->IsInvokeStaticOrDirect()) {
+    // The last input of HInvokeStaticOrDirect is current method.
+    locations->SetInAt(--argument_count, Location::RequiresRegister());
+  }
+
   InvokeDexCallingConventionVisitor calling_convention_visitor;
-  for (size_t i = 0; i < invoke->InputCount(); i++) {
+  for (size_t i = 0; i < argument_count; i++) {
     HInstruction* input = invoke->InputAt(i);
     locations->SetInAt(i, calling_convention_visitor.GetNextLocation(input->GetType()));
   }
@@ -2504,6 +2513,16 @@ void LocationsBuilderARM::VisitParameterValue(HParameterValue* instruction) {
 
 void InstructionCodeGeneratorARM::VisitParameterValue(HParameterValue* instruction) {
   // Nothing to do, the parameter is already at its location.
+  UNUSED(instruction);
+}
+
+void LocationsBuilderARM::VisitCurrentMethod(HCurrentMethod* instruction) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  locations->SetOut(Location::RegisterLocation(kArtMethodRegister));
+}
+
+void InstructionCodeGeneratorARM::VisitCurrentMethod(HCurrentMethod* instruction) {
+  // Nothing to do, the method reference is already at its location.
   UNUSED(instruction);
 }
 
@@ -3874,7 +3893,9 @@ void InstructionCodeGeneratorARM::HandleBitwiseOperation(HBinaryOperation* instr
   }
 }
 
-void CodeGeneratorARM::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Register temp) {
+void CodeGeneratorARM::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
+                                                  Register current_method,
+                                                  Register temp) {
   DCHECK_EQ(temp, kArtMethodRegister);
 
   // TODO: Implement all kinds of calls:
@@ -3884,12 +3905,11 @@ void CodeGeneratorARM::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
   //
   // Currently we implement the app -> app logic, which looks up in the resolve cache.
 
-  // temp = method;
-  LoadCurrentMethod(temp);
   if (!invoke->IsRecursive()) {
-    // temp = temp->dex_cache_resolved_methods_;
+    // temp = current_method->dex_cache_resolved_methods_;
     __ LoadFromOffset(
-        kLoadWord, temp, temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
+        kLoadWord, temp, current_method,
+        mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
     // temp = temp[index_in_cache]
     __ LoadFromOffset(
         kLoadWord, temp, temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex()));
@@ -3900,6 +3920,7 @@ void CodeGeneratorARM::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
     // LR()
     __ blx(LR);
   } else {
+    __ Mov(temp, current_method);
     __ bl(GetFrameEntryLabel());
   }
 

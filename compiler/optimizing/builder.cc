@@ -34,17 +34,30 @@
 
 namespace art {
 
+constexpr static size_t kMaxLocalTemporaries = 3;
+
 /**
  * Helper class to add HTemporary instructions. This class is used when
  * converting a DEX instruction to multiple HInstruction, and where those
- * instructions do not die at the following instruction, but instead spans
- * multiple instructions.
+ * instructions need to stay live until the last HInstruction.
  */
 class Temporaries : public ValueObject {
  public:
-  explicit Temporaries(HGraph* graph) : graph_(graph), index_(0) {}
+  explicit Temporaries(HGraph* graph) : graph_(graph) {
+    index_ = std::max(kMaxLocalTemporaries, graph_->GetTemporariesVRegSlots());
+  }
+  virtual ~Temporaries() {}
 
-  void Add(HInstruction* instruction) {
+  virtual void Add(HInstruction* instruction) {
+    // Baseline compiler uses GC map. But only dalvik VRegs are recorded in the GC map. So we do not
+    // allow temporaries to hold references which live across safe points, except current method.
+    DCHECK(instruction->IsCurrentMethod() || instruction->GetType() != Primitive::kPrimNot);
+
+    AddInternal(instruction);
+  }
+
+ protected:
+  void AddInternal(HInstruction* instruction) {
     HInstruction* temp = new (graph_->GetArena()) HTemporary(index_);
     instruction->GetBlock()->AddInstruction(temp);
 
@@ -61,12 +74,29 @@ class Temporaries : public ValueObject {
 
     graph_->UpdateTemporariesVRegSlots(index_);
   }
+  // Current index in the temporary stack, updated by `Add`.
+  size_t index_;
 
  private:
   HGraph* const graph_;
+};
 
-  // Current index in the temporary stack, updated by `Add`.
-  size_t index_;
+/**
+ * Helper class to add HTemporary instructions. This class is used when
+ * converting a DEX instruction to multiple HInstruction, and where those
+ * instructions do not die at the following instruction, but instead spans
+ * multiple instructions.
+ */
+class LocalTemporaries : public Temporaries {
+ public:
+  explicit LocalTemporaries(HGraph* graph) : Temporaries(graph) {
+    index_ = 0;
+  }
+
+  void Add(HInstruction* instruction) OVERRIDE {
+    AddInternal(instruction);
+    DCHECK_LE(index_, kMaxLocalTemporaries);
+  }
 };
 
 class SwitchTable : public ValueObject {
@@ -185,6 +215,12 @@ void HGraphBuilder::InitializeParameters(uint16_t number_of_parameters) {
       parameter_index++;
     }
   }
+
+  // Add the implicit current art method reference.
+  current_method_ = new (arena_) HCurrentMethod();
+  entry_block_->AddInstruction(current_method_);
+  Temporaries temps(graph_);
+  temps.Add(current_method_);
 }
 
 template<typename T>
@@ -618,13 +654,15 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
     bool is_recursive =
         (target_method.dex_method_index == dex_compilation_unit_->GetDexMethodIndex());
     DCHECK(!is_recursive || (target_method.dex_file == dex_compilation_unit_->GetDexFile()));
-    invoke = new (arena_) HInvokeStaticOrDirect(
+    HInvokeStaticOrDirect* invoke_static_or_direct = new (arena_) HInvokeStaticOrDirect(
         arena_, number_of_arguments, return_type, dex_pc, target_method.dex_method_index,
         is_recursive, invoke_type, optimized_invoke_type);
+    invoke_static_or_direct->SetCurrentMethod(current_method_);
+    invoke = invoke_static_or_direct;
   }
 
   size_t start_index = 0;
-  Temporaries temps(graph_);
+  LocalTemporaries temps(graph_);
   if (is_instance_call) {
     HInstruction* arg = LoadLocal(is_range ? register_index : args[0], Primitive::kPrimNot);
     HNullCheck* null_check = new (arena_) HNullCheck(arg, dex_pc);
@@ -681,7 +719,7 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
   HInstruction* object = LoadLocal(obj_reg, Primitive::kPrimNot);
   current_block_->AddInstruction(new (arena_) HNullCheck(object, dex_pc));
   if (is_put) {
-    Temporaries temps(graph_);
+    LocalTemporaries temps(graph_);
     HInstruction* null_check = current_block_->GetLastInstruction();
     // We need one temporary for the null check.
     temps.Add(null_check);
@@ -795,7 +833,7 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
   Primitive::Type field_type = resolved_field->GetTypeAsPrimitiveType();
   if (is_put) {
     // We need to keep the class alive before loading the value.
-    Temporaries temps(graph_);
+    LocalTemporaries temps(graph_);
     temps.Add(cls);
     HInstruction* value = LoadLocal(source_or_dest_reg, field_type);
     DCHECK_EQ(value->GetType(), field_type);
@@ -836,7 +874,7 @@ void HGraphBuilder::BuildCheckedDivRem(uint16_t out_vreg,
       || (type == Primitive::kPrimInt && second->AsIntConstant()->GetValue() == 0)
       || (type == Primitive::kPrimLong && second->AsLongConstant()->GetValue() == 0)) {
     second = new (arena_) HDivZeroCheck(second, dex_pc);
-    Temporaries temps(graph_);
+    LocalTemporaries temps(graph_);
     current_block_->AddInstruction(second);
     temps.Add(current_block_->GetLastInstruction());
   }
@@ -858,7 +896,7 @@ void HGraphBuilder::BuildArrayAccess(const Instruction& instruction,
   uint8_t index_reg = instruction.VRegC_23x();
 
   // We need one temporary for the null check, one for the index, and one for the length.
-  Temporaries temps(graph_);
+  LocalTemporaries temps(graph_);
 
   HInstruction* object = LoadLocal(array_reg, Primitive::kPrimNot);
   object = new (arena_) HNullCheck(object, dex_pc);
@@ -906,7 +944,7 @@ void HGraphBuilder::BuildFilledNewArray(uint32_t dex_pc,
   bool is_reference_array = (primitive == 'L') || (primitive == '[');
   Primitive::Type type = is_reference_array ? Primitive::kPrimNot : Primitive::kPrimInt;
 
-  Temporaries temps(graph_);
+  LocalTemporaries temps(graph_);
   temps.Add(object);
   for (size_t i = 0; i < number_of_vreg_arguments; ++i) {
     HInstruction* value = LoadLocal(is_range ? register_index + i : args[i], type);
@@ -932,7 +970,7 @@ void HGraphBuilder::BuildFillArrayData(HInstruction* object,
 }
 
 void HGraphBuilder::BuildFillArrayData(const Instruction& instruction, uint32_t dex_pc) {
-  Temporaries temps(graph_);
+  LocalTemporaries temps(graph_);
   HInstruction* array = LoadLocal(instruction.VRegA_31t(), Primitive::kPrimNot);
   HNullCheck* null_check = new (arena_) HNullCheck(array, dex_pc);
   current_block_->AddInstruction(null_check);
@@ -1021,7 +1059,7 @@ bool HGraphBuilder::BuildTypeCheck(const Instruction& instruction,
       type_index, IsOutermostCompilingClass(type_index), dex_pc);
   current_block_->AddInstruction(cls);
   // The class needs a temporary before being used by the type check.
-  Temporaries temps(graph_);
+  LocalTemporaries temps(graph_);
   temps.Add(cls);
   if (instruction.Opcode() == Instruction::INSTANCE_OF) {
     current_block_->AddInstruction(
