@@ -252,7 +252,6 @@ void Mips64Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method
    */
   bool skip_overflow_check = mir_graph_->MethodIsLeaf() && !FrameNeedsStackCheck(frame_size_,
                                                                                  kMips64);
-  NewLIR0(kPseudoMethodEntry);
   RegStorage check_reg = AllocTempWide();
   RegStorage new_sp = AllocTempWide();
   if (!skip_overflow_check) {
@@ -314,8 +313,6 @@ void Mips64Mir2Lir::GenExitSequence() {
    */
   LockTemp(rs_rMIPS64_RET0);
   LockTemp(rs_rMIPS64_RET1);
-
-  NewLIR0(kPseudoMethodExit);
   UnSpillCoreRegs();
   OpReg(kOpBx, rs_rRAd);
 }
