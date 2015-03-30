@@ -228,7 +228,7 @@ TEST(StackMapTest, DexRegisterMapOffsetOverflow) {
   StackMap stack_map = code_info.GetStackMapAt(1);
   ASSERT_TRUE(stack_map.HasDexRegisterMap(code_info));
   ASSERT_NE(stack_map.GetDexRegisterMapOffset(code_info), StackMap::kNoDexRegisterMap);
-  ASSERT_EQ(stack_map.GetDexRegisterMapOffset(code_info), StackMap::kNoDexRegisterMapSmallEncoding);
+  ASSERT_EQ(stack_map.GetDexRegisterMapOffset(code_info), 0xFFu);
 }
 
 TEST(StackMapTest, TestShareDexRegisterMap) {
