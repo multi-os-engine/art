@@ -28,6 +28,9 @@
 
 namespace art {
 
+// Word alignment required on ARM, in bytes.
+static constexpr size_t kWordAlignment = 4;
+
 // Memory regions are useful for accessing memory with bounds check in
 // debug mode. They can be safely passed by value and do not assume ownership
 // of the region.
@@ -50,15 +53,17 @@ class MemoryRegion FINAL : public ValueObject {
   // Load value of type `T` at `offset`.  The memory address corresponding
   // to `offset` should be word-aligned.
   template<typename T> T Load(uintptr_t offset) const {
-    // TODO: DCHECK that the address is word-aligned.
-    return *ComputeInternalPointer<T>(offset);
+    T* address = ComputeInternalPointer<T>(offset);
+    CHECK(IsAligned<kWordAlignment>(address));
+    return *address;
   }
 
   // Store `value` (of type `T`) at `offset`.  The memory address
   // corresponding to `offset` should be word-aligned.
   template<typename T> void Store(uintptr_t offset, T value) const {
-    // TODO: DCHECK that the address is word-aligned.
-    *ComputeInternalPointer<T>(offset) = value;
+    T* address = ComputeInternalPointer<T>(offset);
+    CHECK(IsAligned<kWordAlignment>(address));
+    *address = value;
   }
 
   // Load value of type `T` at `offset`.  The memory address corresponding
