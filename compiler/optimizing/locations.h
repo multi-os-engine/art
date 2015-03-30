@@ -291,9 +291,29 @@ class Location : public ValueObject {
       return other.reg() == low() || other.reg() == high();
     } else if (IsDoubleStackSlot() && other.IsStackSlot()) {
       return (GetStackIndex() == other.GetStackIndex())
-          || (GetStackIndex() + 4 == other.GetStackIndex());
+          // FIXME: word size is hard coded to 4 bytes. This is fine, since we only use
+          // GetHighStackIndex() on 32bit architectures.
+          || (GetHighStackIndex(4) == other.GetStackIndex());
     }
     return false;
+  }
+
+  bool OverlapsWith(Location other) const {
+    // Only check the overlapping case that can happen with our register allocation algorithm.
+    bool overlap = Contains(other) || other.Contains(*this);
+    if (kIsDebugBuild && !overlap) {
+      // Note: These are also overlapping cases. But we are not able to handle them in
+      // ParallelMoveResolverWithSwap. Make sure that we do not meet such case with our compiler.
+      if (IsPair() && other.IsPair()) {
+        DCHECK(!Contains(other.ToLow()));
+        DCHECK(!Contains(other.ToHigh()));
+      } else if (IsDoubleStackSlot() && other.IsDoubleStackSlot()) {
+        DCHECK(!Contains(StackSlot(other.GetStackIndex())));
+        // FIXME: word size is hard coded to 4 bytes.
+        DCHECK(!Contains(StackSlot(other.GetHighStackIndex(4))));
+      }
+    }
+    return overlap;
   }
 
   const char* DebugString() const {
