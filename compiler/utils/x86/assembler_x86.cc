@@ -1195,7 +1195,6 @@ void X86Assembler::imull(const Address& address) {
   EmitOperand(5, address);
 }
 
-
 void X86Assembler::mull(Register reg) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitUint8(0xF7);
