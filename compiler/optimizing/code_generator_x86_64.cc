@@ -16,6 +16,7 @@
 
 #include "code_generator_x86_64.h"
 
+#include "code_generator_utils.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/accounting/card_table.h"
 #include "intrinsics.h"
@@ -2203,6 +2204,231 @@ void InstructionCodeGeneratorX86_64::GenerateRemFP(HRem *rem) {
   __ addq(CpuRegister(RSP), Immediate(2 * elem_size));
 }
 
+void InstructionCodeGeneratorX86_64::DivRemOneOrMinusOne(HBinaryOperation* instruction) {
+  DCHECK(instruction->IsDiv() || instruction->IsRem());
+
+  LocationSummary* locations = instruction->GetLocations();
+  Location out = locations->Out();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  DCHECK(second.IsConstant());
+
+  CpuRegister output_register = out.AsRegister<CpuRegister>();
+  CpuRegister input_register = first.AsRegister<CpuRegister>();
+  int64_t imm;
+  if (second.GetConstant()->AsLongConstant()) {
+    imm = second.GetConstant()->AsLongConstant()->GetValue();
+  } else {
+    imm = second.GetConstant()->AsIntConstant()->GetValue();
+  }
+
+  DCHECK(imm == 1 || imm == -1);
+
+  switch (instruction->GetResultType()) {
+    case Primitive::kPrimInt: {
+      if (instruction->IsRem()) {
+        __ xorl(output_register, output_register);
+      } else {
+        __ movl(output_register, input_register);
+        if (imm == -1) {
+          __ negl(output_register);
+        }
+      }
+      break;
+    }
+
+    case Primitive::kPrimLong: {
+      if (instruction->IsRem()) {
+        __ xorq(output_register, output_register);
+      } else {
+        __ movq(output_register, input_register);
+        if (imm == -1) {
+          __ negq(output_register);
+        }
+      }
+      break;
+    }
+
+    default:
+      LOG(FATAL) << "Unreachable";
+  }
+}
+
+void InstructionCodeGeneratorX86_64::DivByPowerOfTwo(HBinaryOperation* instruction) {
+  DCHECK(instruction->IsDiv());
+
+  LocationSummary* locations = instruction->GetLocations();
+  Location out = locations->Out();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+
+  CpuRegister o = out.AsRegister<CpuRegister>();
+  CpuRegister i1 = first.AsRegister<CpuRegister>();
+  int64_t imm;
+  if (second.GetConstant()->AsLongConstant()) {
+    imm = second.GetConstant()->AsLongConstant()->GetValue();
+  } else {
+    imm = second.GetConstant()->AsIntConstant()->GetValue();
+  }
+
+  CHECK(instruction->IsDiv() && IsPowerOfTwo(std::abs(imm)));
+  CHECK(instruction->IsDiv());
+
+  CpuRegister num = locations->GetTemp(0).AsRegister<CpuRegister>();
+  Label no_div;
+  Label done;
+
+  if (instruction->GetResultType() == Primitive::kPrimInt) {
+    __ leal(num, Address(i1, std::abs(imm) - 1));
+    __ testl(i1, i1);
+    __ cmov(kGreaterEqual, num, i1);
+    int shift = CTZ(imm);
+    __ sarl(num, Immediate(shift));
+
+    if (imm < 0) {
+      __ negl(num);
+    }
+
+    __ movl(o, num);
+  } else {
+    CHECK_EQ(instruction->GetResultType(), Primitive::kPrimLong);
+    CpuRegister o_rdx = locations->GetTemp(0).AsRegister<CpuRegister>();
+
+    __ movq(o_rdx, Immediate(std::abs(imm) - 1));
+    __ addq(o_rdx, i1);
+    __ testq(i1, i1);
+    __ cmov(kGreaterEqual, o_rdx, i1);
+    int shift = CTZ(imm);
+    __ sarq(o_rdx, Immediate(shift));
+
+    if (imm < 0) {
+      __ negq(o_rdx);
+    }
+
+    __ movq(o, o_rdx);
+  }
+}
+
+void InstructionCodeGeneratorX86_64::GenerateDivRemWithAnyConstant(HBinaryOperation* instruction) {
+  DCHECK(instruction->IsDiv() || instruction->IsRem());
+
+  LocationSummary* locations = instruction->GetLocations();
+  Location out = locations->Out();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+
+  CpuRegister num = instruction->IsDiv() ? locations->GetTemp(1).AsRegister<CpuRegister>()
+      : locations->GetTemp(0).AsRegister<CpuRegister>();
+  CpuRegister o_eax = first.AsRegister<CpuRegister>();
+  CpuRegister o_edx = instruction->IsDiv() ? locations->GetTemp(0).AsRegister<CpuRegister>()
+      : out.AsRegister<CpuRegister>();
+  CpuRegister res = instruction->IsDiv() ? o_eax : o_edx;
+
+  DCHECK_EQ(o_eax.AsRegister(), RAX);
+  DCHECK_EQ(o_edx.AsRegister(), RDX);
+
+  int64_t magic;
+  int shift;
+
+  if (instruction->GetResultType() == Primitive::kPrimInt) {
+    int imm = second.GetConstant()->AsIntConstant()->GetValue();
+
+    CalculateMagicAndShiftForDivRem(imm, magic, shift, false /* is_long */);
+
+    __ movl(num, o_eax);
+
+    Label no_div;
+    Label end;
+    __ testl(o_eax, o_eax);
+    __ j(kNotEqual, &no_div);
+
+    __ xorl(res, res);
+    __ jmp(&end);
+
+    __ Bind(&no_div);
+
+    __ movl(o_eax, Immediate(magic));
+    __ imull(num);
+
+    if (imm > 0 && magic < 0) {
+      __ addl(o_edx, num);
+    } else if (imm < 0 && magic > 0) {
+      __ subl(o_edx, num);
+    }
+
+    if (shift != 0) {
+      __ sarl(o_edx, Immediate(shift));
+    }
+
+    __ movl(o_eax, o_edx);
+    __ shrl(o_edx, Immediate(31));
+    __ addl(o_edx, o_eax);
+
+    if (instruction->IsRem()) {
+      __ movl(o_eax, num);
+      __ imull(o_edx, Immediate(imm));
+      __ subl(o_eax, o_edx);
+      __ movl(o_edx, o_eax);
+    } else {
+      __ movl(o_eax, o_edx);
+    }
+    __ Bind(&end);
+  } else {
+    int64_t imm = second.GetConstant()->AsLongConstant()->GetValue();
+
+    DCHECK_EQ(instruction->GetResultType(), Primitive::kPrimLong);
+
+    CpuRegister o_rax = o_eax;
+    CpuRegister o_rdx = o_edx;
+
+    CalculateMagicAndShiftForDivRem(imm, magic, shift, true /* is_long */);
+
+    // save the numerator
+    __ movq(num, o_rax);
+
+    // RAX = magic
+    __ movq(o_rax, Immediate(magic));
+
+    // RDX:RAX = magic * numerator
+    __ imulq(num);
+
+    if (imm > 0 && magic < 0) {
+      // RDX += numerator
+      __ addq(o_rdx, num);
+    } else if (imm < 0 && magic > 0) {
+      // RDX -= numerator
+      __ subq(o_rdx, num);
+    }
+
+    // do we need to shift ?
+    if (shift != 0) {
+      __ sarq(o_rdx, Immediate(shift));
+    }
+
+    // RDX += 1 if RDX < 0
+    __ movq(o_rax, o_rdx);
+    __ shrq(o_rdx, Immediate(63));
+    __ addq(o_rdx, o_rax);
+
+    if (instruction->IsRem()) {
+      __ movq(o_rax, num);
+
+      if (imm > std::numeric_limits<int32_t>::max() ||
+          imm < std::numeric_limits<int32_t>::min()) {
+        __ movq(num, Immediate(imm));
+        __ imulq(o_rdx, num);
+      } else {
+        __ imulq(o_rdx, Immediate(static_cast<int>(imm)));
+      }
+
+      __ subq(o_rax, o_rdx);
+      __ movq(o_rdx, o_rax);
+    } else {
+      __ movq(o_rax, o_rdx);
+    }
+  }
+}
+
 void InstructionCodeGeneratorX86_64::GenerateDivRemIntegral(HBinaryOperation* instruction) {
   DCHECK(instruction->IsDiv() || instruction->IsRem());
   Primitive::Type type = instruction->GetResultType();
@@ -2211,37 +2437,58 @@ void InstructionCodeGeneratorX86_64::GenerateDivRemIntegral(HBinaryOperation* in
   bool is_div = instruction->IsDiv();
   LocationSummary* locations = instruction->GetLocations();
 
-  CpuRegister out_reg = locations->Out().AsRegister<CpuRegister>();
-  CpuRegister second_reg = locations->InAt(1).AsRegister<CpuRegister>();
+  CpuRegister out = locations->Out().AsRegister<CpuRegister>();
+  // Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
 
   DCHECK_EQ(RAX, locations->InAt(0).AsRegister<CpuRegister>().AsRegister());
-  DCHECK_EQ(is_div ? RAX : RDX, out_reg.AsRegister());
+  DCHECK_EQ(is_div ? RAX : RDX, out.AsRegister());
 
-  SlowPathCodeX86_64* slow_path =
-      new (GetGraph()->GetArena()) DivRemMinusOneSlowPathX86_64(
-          out_reg.AsRegister(), type, is_div);
-  codegen_->AddSlowPath(slow_path);
+  if (second.IsConstant()) {
+    int64_t imm;
+    if (second.GetConstant()->AsLongConstant()) {
+      imm = second.GetConstant()->AsLongConstant()->GetValue();
+    } else {
+      imm = second.GetConstant()->AsIntConstant()->GetValue();
+    }
 
-  // 0x80000000(00000000)/-1 triggers an arithmetic exception!
-  // Dividing by -1 is actually negation and -0x800000000(00000000) = 0x80000000(00000000)
-  // so it's safe to just use negl instead of more complex comparisons.
-  if (type == Primitive::kPrimInt) {
-    __ cmpl(second_reg, Immediate(-1));
-    __ j(kEqual, slow_path->GetEntryLabel());
-    // edx:eax <- sign-extended of eax
-    __ cdq();
-    // eax = quotient, edx = remainder
-    __ idivl(second_reg);
+    if (imm == 0) {
+      // do not generate anything
+    } else if (imm == 1 || imm == -1) {
+      DivRemOneOrMinusOne(instruction);
+    } else if (instruction->IsDiv() && IsPowerOfTwo(std::abs(imm))) {
+      DivByPowerOfTwo(instruction);
+    } else {
+      DCHECK(imm <= -2 || imm >= 2);
+      GenerateDivRemWithAnyConstant(instruction);
+    }
   } else {
-    __ cmpq(second_reg, Immediate(-1));
-    __ j(kEqual, slow_path->GetEntryLabel());
-    // rdx:rax <- sign-extended of rax
-    __ cqo();
-    // rax = quotient, rdx = remainder
-    __ idivq(second_reg);
-  }
+    SlowPathCodeX86_64* slow_path =
+        new (GetGraph()->GetArena()) DivRemMinusOneSlowPathX86_64(
+            out.AsRegister(), type, is_div);
+    codegen_->AddSlowPath(slow_path);
 
-  __ Bind(slow_path->GetExitLabel());
+    CpuRegister second_reg = second.AsRegister<CpuRegister>();
+    // 0x80000000(00000000)/-1 triggers an arithmetic exception!
+    // Dividing by -1 is actually negation and -0x800000000(00000000) = 0x80000000(00000000)
+    // so it's safe to just use negl instead of more complex comparisons.
+    if (type == Primitive::kPrimInt) {
+      __ cmpl(second_reg, Immediate(-1));
+      __ j(kEqual, slow_path->GetEntryLabel());
+      // edx:eax <- sign-extended of eax
+      __ cdq();
+      // eax = quotient, edx = remainder
+      __ idivl(second_reg);
+    } else {
+      __ cmpq(second_reg, Immediate(-1));
+      __ j(kEqual, slow_path->GetEntryLabel());
+      // rdx:rax <- sign-extended of rax
+      __ cqo();
+      // rax = quotient, rdx = remainder
+      __ idivq(second_reg);
+    }
+    __ Bind(slow_path->GetExitLabel());
+  }
 }
 
 void LocationsBuilderX86_64::VisitDiv(HDiv* div) {
@@ -2251,10 +2498,14 @@ void LocationsBuilderX86_64::VisitDiv(HDiv* div) {
     case Primitive::kPrimInt:
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RegisterLocation(RAX));
-      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RegisterOrConstant(div->InputAt(1)));
       locations->SetOut(Location::SameAsFirstInput());
       // Intel uses edx:eax as the dividend.
       locations->AddTemp(Location::RegisterLocation(RDX));
+      // need a temp to save the numerator while using eax and edx
+      if (div->InputAt(1)->IsConstant()) {
+        locations->AddTemp(Location::RequiresRegister());
+      }
       break;
     }
 
@@ -2309,9 +2560,13 @@ void LocationsBuilderX86_64::VisitRem(HRem* rem) {
     case Primitive::kPrimInt:
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RegisterLocation(RAX));
-      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RegisterOrConstant(rem->InputAt(1)));
       // Intel uses rdx:rax as the dividend and puts the remainder in rdx
       locations->SetOut(Location::RegisterLocation(RDX));
+      // need a temp to save the numerator while using eax and edx
+      if (rem->InputAt(1)->IsConstant()) {
+        locations->AddTemp(Location::RequiresRegister());
+      }
       break;
     }
 
