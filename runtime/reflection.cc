@@ -798,7 +798,7 @@ bool VerifyAccess(Thread* self, mirror::Object* obj, mirror::Class* declaring_cl
   if ((access_flags & kAccPublic) != 0) {
     return true;
   }
-  NthCallerVisitor visitor(self, 2);
+  NthCallerVisitor visitor(self, 1);
   visitor.WalkStack();
   if (UNLIKELY(visitor.caller == nullptr)) {
     // The caller is an attached native thread.
