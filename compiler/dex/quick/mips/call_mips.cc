@@ -247,7 +247,6 @@ void MipsMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) 
    * a leaf *and* our frame size < fudge factor.
    */
   bool skip_overflow_check = mir_graph_->MethodIsLeaf() && !FrameNeedsStackCheck(frame_size_, kMips);
-  NewLIR0(kPseudoMethodEntry);
   RegStorage check_reg = AllocTemp();
   RegStorage new_sp = AllocTemp();
   if (!skip_overflow_check) {
@@ -305,8 +304,6 @@ void MipsMir2Lir::GenExitSequence() {
    */
   LockTemp(rs_rMIPS_RET0);
   LockTemp(rs_rMIPS_RET1);
-
-  NewLIR0(kPseudoMethodExit);
   UnSpillCoreRegs();
   OpReg(kOpBx, rs_rRA);
 }
