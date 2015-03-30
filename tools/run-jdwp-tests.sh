@@ -46,7 +46,7 @@ vm_command="--vm-command=$art"
 
 while true; do
   if [[ "$1" == "--mode=host" ]]; then
-    art="art"
+    art="bash out/host/linux-x86/bin/art"
     # We force generation of a new image to avoid build-time and run-time classpath differences.
     image="-Ximage:/system/non/existent"
     # We do not need a device directory on host.
