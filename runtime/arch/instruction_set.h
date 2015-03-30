@@ -82,6 +82,9 @@ InstructionSet GetInstructionSetFromString(const char* instruction_set);
 
 InstructionSet GetInstructionSetFromELF(uint16_t e_machine, uint32_t e_flags);
 
+// We cannot add the `constexpr' qualifier to this function as it
+// contains multiple `return' statements, which is not permitted in a
+// C++11 `constexpr' function.
 static inline size_t GetInstructionSetPointerSize(InstructionSet isa) {
   switch (isa) {
     case kArm:

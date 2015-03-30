@@ -28,6 +28,18 @@
 
 namespace art {
 
+// A C++11-compliant `constexpr' reimplementation of art::GetInstructionSetPointerSize.
+// Return 0 if `isa` is not valid.
+static constexpr size_t GetInstructionSetWordSize(InstructionSet isa) {
+  return (isa == kArm || isa == kThumb2) ? kArmPointerSize :
+      isa == kArm64 ? kArm64PointerSize :
+      isa == kX86 ? kX86PointerSize :
+      isa == kX86_64 ? kX86_64PointerSize :
+      isa == kMips ? kMipsPointerSize :
+      isa == kMips64 ? kMips64PointerSize :
+      0;
+}
+
 // Memory regions are useful for accessing memory with bounds check in
 // debug mode. They can be safely passed by value and do not assume ownership
 // of the region.
@@ -48,17 +60,20 @@ class MemoryRegion FINAL : public ValueObject {
   uint8_t* end() const { return start() + size_; }
 
   // Load value of type `T` at `offset`.  The memory address corresponding
-  // to `offset` should be word-aligned.
+  // to `offset` should be word-aligned (on ARM, this is a requirement).
   template<typename T> T Load(uintptr_t offset) const {
-    // TODO: DCHECK that the address is word-aligned.
-    return *ComputeInternalPointer<T>(offset);
+    T* address = ComputeInternalPointer<T>(offset);
+    CHECK(IsAligned<kWordAlignment>(address));
+    return *address;
   }
 
   // Store `value` (of type `T`) at `offset`.  The memory address
-  // corresponding to `offset` should be word-aligned.
+  // corresponding to `offset` should be word-aligned (on ARM, this is
+  // a requirement).
   template<typename T> void Store(uintptr_t offset, T value) const {
-    // TODO: DCHECK that the address is word-aligned.
-    *ComputeInternalPointer<T>(offset) = value;
+    T* address = ComputeInternalPointer<T>(offset);
+    CHECK(IsAligned<kWordAlignment>(address));
+    *address = value;
   }
 
   // Load value of type `T` at `offset`.  The memory address corresponding
@@ -140,6 +155,12 @@ class MemoryRegion FINAL : public ValueObject {
     uintptr_t byte_offset = (bit_offset >> kBitsPerByteLog2);
     return ComputeInternalPointer<uint8_t>(byte_offset);
   }
+
+  // Word alignment in bytes.  Note that we cannot use
+  // art::GetInstructionSetPointerSize(kRuntimeISA) to define
+  // kWordAlignment, as that function is not `constexpr'.
+  static constexpr size_t kWordAlignment = GetInstructionSetWordSize(kRuntimeISA);
+  static_assert(kWordAlignment != 0, "Invalid word-alignment value");
 
   void* pointer_;
   size_t size_;
