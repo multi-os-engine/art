@@ -23,6 +23,46 @@ namespace art {
 constexpr size_t DexRegisterLocationCatalog::kNoLocationEntryIndex;
 constexpr uint32_t StackMap::kNoDexRegisterMap;
 constexpr uint32_t StackMap::kNoInlineInfo;
+constexpr uint32_t StackMap::kNoCatchInfo;
+
+uint32_t CatchInfo::GetNativePcOffset(const CodeInfo& info ATTRIBUTE_UNUSED,
+                                      uint16_t type_idx ATTRIBUTE_UNUSED) const {
+  // TODO This is a stub which needs implementation.
+  return 0u;
+}
+
+void CatchInfo::SetNativePcOffset(const CodeInfo& info ATTRIBUTE_UNUSED,
+                                  uint16_t type_idx ATTRIBUTE_UNUSED,
+                                  uint32_t native_pc_offset ATTRIBUTE_UNUSED) {
+  // TODO This is a stub which needs implementation.
+}
+
+uint32_t CatchInfo::GetDexPc(const CodeInfo& info ATTRIBUTE_UNUSED,
+                             uint16_t type_idx ATTRIBUTE_UNUSED) {
+  // TODO This is a stub which needs implementation.
+  return 0xFFFFFFFF;
+}
+
+void CatchInfo::SetDexPc(const CodeInfo& info ATTRIBUTE_UNUSED,
+                         uint16_t type_idx ATTRIBUTE_UNUSED,
+                         uint32_t dex_pc ATTRIBUTE_UNUSED) {
+  // TODO This is a stub which needs implementation.
+}
+
+bool CatchInfo::ClearsException(uint16_t type_idx ATTRIBUTE_UNUSED) {
+  // TODO This is a stub which needs implementation.
+  return true;
+}
+
+uint16_t CatchInfo::GetNumberOfCatches() {
+  // TODO This is a stub which needs implementation.
+  return num_catches_;
+}
+
+uint16_t CatchInfo::GetTypeIndexCaught(uint16_t catch_idx ATTRIBUTE_UNUSED) {
+  // TODO This is a stub which needs implementation.
+  return 0xFFFF;
+}
 
 DexRegisterLocation::Kind DexRegisterMap::GetLocationInternalKind(uint16_t dex_register_number,
                                                                   uint16_t number_of_dex_registers,
@@ -196,6 +236,11 @@ size_t StackMap::ComputeStackMapSize(size_t stack_mask_size,
 
 MemoryRegion StackMap::GetStackMask(const CodeInfo& info) const {
   return region_.Subregion(info.ComputeStackMapStackMaskOffset(), info.GetStackMaskSize());
+}
+
+bool StackMap::HasCatchInfo(const CodeInfo& info ATTRIBUTE_UNUSED) const {
+  // TODO This is a stub which needs implementation.
+  return false;
 }
 
 static void DumpRegisterMapping(std::ostream& os,

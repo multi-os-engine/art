@@ -42,6 +42,7 @@ LIBART_COMMON_SRC_FILES := \
   dex_file_verifier.cc \
   dex_instruction.cc \
   elf_file.cc \
+  exception_handler.cc \
   gc/allocator/dlmalloc.cc \
   gc/allocator/rosalloc.cc \
   gc/accounting/bitmap.cc \

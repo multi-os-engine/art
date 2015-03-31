@@ -80,6 +80,38 @@ class InlineInfo {
   friend class StackMapStream;
 };
 
+/**
+ * Catch information for a specific PC - captures all types caught at this point.
+ * Note, the interface is not yet appropriate for catches brought from inlined code.
+ * TODO All interface methods include stubs and are not yet usable.
+ */
+class CatchInfo {
+ public:
+  explicit CatchInfo(MemoryRegion region) : region_(region), num_catches_(0) {}
+
+  uint32_t GetNativePcOffset(const CodeInfo& info, uint16_t type_idx) const;
+
+  void SetNativePcOffset(const CodeInfo& info, uint16_t type_idx, uint32_t native_pc_offset);
+
+  uint32_t GetDexPc(const CodeInfo& info, uint16_t type_idx);
+
+  void SetDexPc(const CodeInfo& info, uint16_t type_idx, uint32_t dex_pc);
+
+  bool ClearsException(uint16_t type_idx);
+
+  uint16_t GetNumberOfCatches();
+
+  uint16_t GetTypeIndexCaught(uint16_t catch_idx);
+
+ private:
+  MemoryRegion region_;
+  uint16_t num_catches_;
+
+  friend class CodeInfo;
+  friend class StackMap;
+  friend class StackMapStream;
+};
+
 // Dex register location container used by DexRegisterMap and StackMapStream.
 class DexRegisterLocation {
  public:
@@ -671,6 +703,7 @@ class DexRegisterMap {
  * - Knowing which registers hold objects,
  * - Knowing the inlining information,
  * - Knowing the values of dex registers.
+ * - Knowing the catch information
  *
  * The information is of the form:
  * [dex_pc, native_pc_offset, dex_register_map_offset, inlining_info_offset, register_mask,
@@ -720,6 +753,8 @@ class StackMap {
     return GetInlineDescriptorOffset(info) != kNoInlineInfo;
   }
 
+  bool HasCatchInfo(const CodeInfo& info) const;
+
   bool Equals(const StackMap& other) const {
     return region_.pointer() == other.region_.pointer()
        && region_.size() == other.region_.size();
@@ -739,6 +774,10 @@ class StackMap {
   // Special (invalid) offset for the InlineDescriptorOffset field meaning
   // that there is no inline info for this stack map.
   static constexpr uint32_t kNoInlineInfo = -1;
+
+  // Special (invalid) offset for the CatchDescriptorOffset field meaning
+  // that there is no catch info for this stack map.
+  static constexpr uint32_t kNoCatchInfo = -1;
 
  private:
   static size_t ComputeStackMapSizeInternal(size_t stack_mask_size,
@@ -966,6 +1005,12 @@ class CodeInfo {
     uint8_t depth = region_.LoadUnaligned<uint8_t>(offset);
     return InlineInfo(region_.Subregion(offset,
         InlineInfo::kFixedSize + depth * InlineInfo::SingleEntrySize()));
+  }
+
+  CatchInfo GetCatchInfoOf(StackMap stack_map) const {
+    DCHECK(stack_map.HasInlineInfo(*this));
+    // TODO This is wrong because the catch info is not yet encoded in the region.
+    return CatchInfo(region_);
   }
 
   StackMap GetStackMapForDexPc(uint32_t dex_pc) const {

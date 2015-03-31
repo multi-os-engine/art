@@ -20,6 +20,7 @@
 #include "dex_instruction.h"
 #include "entrypoints/entrypoint_utils.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
+#include "exception_handler.h"
 #include "handle_scope-inl.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
@@ -39,80 +40,6 @@ QuickExceptionHandler::QuickExceptionHandler(Thread* self, bool is_deoptimizatio
     handler_quick_frame_(nullptr), handler_quick_frame_pc_(0), handler_method_(nullptr),
     handler_dex_pc_(0), clear_exception_(false), handler_frame_depth_(kInvalidFrameDepth) {
 }
-
-// Finds catch handler or prepares for deoptimization.
-class CatchBlockStackVisitor FINAL : public StackVisitor {
- public:
-  CatchBlockStackVisitor(Thread* self, Context* context, Handle<mirror::Throwable>* exception,
-                         QuickExceptionHandler* exception_handler)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : StackVisitor(self, context), self_(self), exception_(exception),
-        exception_handler_(exception_handler) {
-  }
-
-  bool VisitFrame() OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::ArtMethod* method = GetMethod();
-    exception_handler_->SetHandlerFrameDepth(GetFrameDepth());
-    if (method == nullptr) {
-      // This is the upcall, we remember the frame and last pc so that we may long jump to them.
-      exception_handler_->SetHandlerQuickFramePc(GetCurrentQuickFramePc());
-      exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
-      uint32_t next_dex_pc;
-      mirror::ArtMethod* next_art_method;
-      bool has_next = GetNextMethodAndDexPc(&next_art_method, &next_dex_pc);
-      // Report the method that did the down call as the handler.
-      exception_handler_->SetHandlerDexPc(next_dex_pc);
-      exception_handler_->SetHandlerMethod(next_art_method);
-      if (!has_next) {
-        // No next method? Check exception handler is set up for the unhandled exception handler
-        // case.
-        DCHECK_EQ(0U, exception_handler_->GetHandlerDexPc());
-        DCHECK(nullptr == exception_handler_->GetHandlerMethod());
-      }
-      return false;  // End stack walk.
-    }
-    if (method->IsRuntimeMethod()) {
-      // Ignore callee save method.
-      DCHECK(method->IsCalleeSaveMethod());
-      return true;
-    }
-    StackHandleScope<1> hs(self_);
-    return HandleTryItems(hs.NewHandle(method));
-  }
-
- private:
-  bool HandleTryItems(Handle<mirror::ArtMethod> method)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    uint32_t dex_pc = DexFile::kDexNoIndex;
-    if (!method->IsNative()) {
-      dex_pc = GetDexPc();
-    }
-    if (dex_pc != DexFile::kDexNoIndex) {
-      bool clear_exception = false;
-      StackHandleScope<1> hs(Thread::Current());
-      Handle<mirror::Class> to_find(hs.NewHandle((*exception_)->GetClass()));
-      uint32_t found_dex_pc = mirror::ArtMethod::FindCatchBlock(method, to_find, dex_pc,
-                                                                &clear_exception);
-      exception_handler_->SetClearException(clear_exception);
-      if (found_dex_pc != DexFile::kDexNoIndex) {
-        exception_handler_->SetHandlerMethod(method.Get());
-        exception_handler_->SetHandlerDexPc(found_dex_pc);
-        exception_handler_->SetHandlerQuickFramePc(method->ToNativeQuickPc(found_dex_pc));
-        exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
-        return false;  // End stack walk.
-      }
-    }
-    return true;  // Continue stack walk.
-  }
-
-  Thread* const self_;
-  // The exception we're looking for the catch block of.
-  Handle<mirror::Throwable>* exception_;
-  // The quick exception handler we're visiting for.
-  QuickExceptionHandler* const exception_handler_;
-
-  DISALLOW_COPY_AND_ASSIGN(CatchBlockStackVisitor);
-};
 
 void QuickExceptionHandler::FindCatch(mirror::Throwable* exception) {
   DCHECK(!is_deoptimization_);
