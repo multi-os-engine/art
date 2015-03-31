@@ -33,6 +33,7 @@
 #include "mem_map.h"
 #include "thread.h"
 #include "utils.h"
+#include "gc/collector/garbage_collector.h"
 
 namespace art {
 namespace gc {
@@ -477,14 +478,17 @@ class RosAlloc {
   // The table that indicates what pages are currently used for.
   volatile uint8_t* page_map_;  // No GUARDED_BY(lock_) for kReadPageMapEntryWithoutLockInBulkFree.
   size_t page_map_size_;
+  size_t cur_page_map_size_snapshot_;
   size_t max_page_map_size_;
   std::unique_ptr<MemMap> page_map_mem_map_;
 
   // The table that indicates the size of free page runs. These sizes
   // are stored here to avoid storing in the free page header and
   // release backing pages.
-  std::vector<size_t, TrackingAllocator<size_t, kAllocatorTagRosAlloc>> free_page_run_size_map_
-      GUARDED_BY(lock_);
+  // SweepRosSpace is using below table to bypass free pages
+  // No need lock_ for SweepRosSpace, because it's OK to bypass fewer pages if
+  // this table is modified by new allocation during sweep.
+  std::vector<size_t, TrackingAllocator<size_t, kAllocatorTagRosAlloc>> free_page_run_size_map_;
   // The global lock. Used to guard the page map, the free page set,
   // and the footprint.
   Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
@@ -571,6 +575,8 @@ class RosAlloc {
       LOCKS_EXCLUDED(lock_);
   size_t Free(Thread* self, void* ptr)
       LOCKS_EXCLUDED(bulk_free_lock_);
+  collector::ObjectBytePair SweepRosSpace(bool swap_bitmaps);
+  void SetPageMapSizeSnapshot();
   size_t BulkFree(Thread* self, void** ptrs, size_t num_ptrs)
       LOCKS_EXCLUDED(bulk_free_lock_);
 

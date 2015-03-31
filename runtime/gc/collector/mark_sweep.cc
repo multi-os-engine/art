@@ -208,6 +208,12 @@ void MarkSweep::PausePhase() {
   // Enable the reference processing slow path, needs to be done with mutators paused since there
   // is no lock in the GetReferent fast path.
   GetHeap()->GetReferenceProcessor()->EnableSlowPath();
+  const GcType gc_type = GetGcType();
+  if (gc_type == kGcTypePartial || gc_type == kGcTypeFull) {
+    allocator::RosAlloc* rosalloc = GetHeap()->GetRosAllocSpace()->GetRosAlloc();
+    DCHECK(rosalloc != nullptr);
+    rosalloc->SetPageMapSizeSnapshot();
+  }
 }
 
 void MarkSweep::PreCleanCards() {
@@ -1143,7 +1149,11 @@ void MarkSweep::Sweep(bool swap_bitmaps) {
       space::ContinuousMemMapAllocSpace* alloc_space = space->AsContinuousMemMapAllocSpace();
       TimingLogger::ScopedTiming split(
           alloc_space->IsZygoteSpace() ? "SweepZygoteSpace" : "SweepMallocSpace", GetTimings());
-      RecordFree(alloc_space->Sweep(swap_bitmaps));
+      if (space->IsRosAllocSpace()) {
+        RecordFree(space->AsRosAllocSpace()->GetRosAlloc()->SweepRosSpace(swap_bitmaps));
+      } else {
+        RecordFree(alloc_space->Sweep(swap_bitmaps));
+      }
     }
   }
   SweepLargeObjects(swap_bitmaps);
