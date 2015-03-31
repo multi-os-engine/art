@@ -37,9 +37,186 @@ class ElfFile;
 class MemMap;
 class OatMethodOffsets;
 class OatHeader;
+class OatFile;
+
+class OatMethod {
+ public:
+  void LinkMethod(mirror::ArtMethod* method) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  uint32_t GetCodeOffset() const {
+    return code_offset_;
+  }
+
+  const void* GetQuickCode() const {
+    return GetOatPointer<const void*>(code_offset_);
+  }
+
+  // Returns size of quick code.
+  uint32_t GetQuickCodeSize() const;
+  uint32_t GetQuickCodeSizeOffset() const;
+
+  // Returns OatQuickMethodHeader for debugging. Most callers should
+  // use more specific methods such as GetQuickCodeSize.
+  const OatQuickMethodHeader* GetOatQuickMethodHeader() const;
+  uint32_t GetOatQuickMethodHeaderOffset() const;
+
+  size_t GetFrameSizeInBytes() const;
+  uint32_t GetCoreSpillMask() const;
+  uint32_t GetFpSpillMask() const;
+
+  const uint8_t* GetMappingTable() const;
+  uint32_t GetMappingTableOffset() const;
+  uint32_t GetMappingTableOffsetOffset() const;
+
+  const uint8_t* GetVmapTable() const;
+  uint32_t GetVmapTableOffset() const;
+  uint32_t GetVmapTableOffsetOffset() const;
+
+  const uint8_t* GetGcMap() const;
+  uint32_t GetGcMapOffset() const;
+  uint32_t GetGcMapOffsetOffset() const;
+
+  // Create an OatMethod with offsets relative to the given base address
+  OatMethod(const uint8_t* base, const uint32_t code_offset)
+      : begin_(base), code_offset_(code_offset) {
+  }
+  ~OatMethod() {}
+
+  // A representation of an invalid OatMethod, used when an OatMethod or OatClass can't be found.
+  // See ClassLinker::FindOatMethodFor.
+  static const OatMethod Invalid() {
+    return OatMethod(nullptr, -1);
+  }
+
+ private:
+  template<class T>
+  T GetOatPointer(uint32_t offset) const {
+    if (offset == 0) {
+      return NULL;
+    }
+    return reinterpret_cast<T>(begin_ + offset);
+  }
+
+  const uint8_t* begin_;
+  uint32_t code_offset_;
+
+  friend class OatClass;
+};
+
+class OatClass {
+ public:
+  mirror::Class::Status GetStatus() const {
+    return status_;
+  }
+
+  OatClassType GetType() const {
+    return type_;
+  }
+
+  // Get the OatMethod entry based on its index into the class
+  // defintion. Direct methods come first, followed by virtual
+  // methods. Note that runtime created methods such as miranda
+  // methods are not included.
+  const OatMethod GetOatMethod(uint32_t method_index) const;
+
+  // Return a pointer to the OatMethodOffsets for the requested
+  // method_index, or nullptr if none is present. Note that most
+  // callers should use GetOatMethod.
+  const OatMethodOffsets* GetOatMethodOffsets(uint32_t method_index) const;
+
+  // Return the offset from the start of the OatFile to the
+  // OatMethodOffsets for the requested method_index, or 0 if none
+  // is present. Note that most callers should use GetOatMethod.
+  uint32_t GetOatMethodOffsetsOffset(uint32_t method_index) const;
+
+  // A representation of an invalid OatClass, used when an OatClass can't be found.
+  // See ClassLinker::FindOatClass.
+  static OatClass Invalid() {
+    return OatClass(nullptr, mirror::Class::kStatusError, kOatClassNoneCompiled, 0, nullptr,
+                    nullptr);
+  }
+
+ private:
+  OatClass(const OatFile* oat_file,
+           mirror::Class::Status status,
+           OatClassType type,
+           uint32_t bitmap_size,
+           const uint32_t* bitmap_pointer,
+           const OatMethodOffsets* methods_pointer);
+
+  const OatFile* const oat_file_;
+
+  const mirror::Class::Status status_;
+
+  const OatClassType type_;
+
+  const uint32_t* const bitmap_;
+
+  const OatMethodOffsets* const methods_pointer_;
+
+  friend class OatDexFile;
+};
+
+class OatDexFile {
+ public:
+  // Opens the DexFile referred to by this OatDexFile from within the containing OatFile.
+  std::unique_ptr<const DexFile> OpenDexFile(std::string* error_msg) const;
+
+  const OatFile* GetOatFile() const {
+    return oat_file_;
+  }
+
+  // Returns the size of the DexFile refered to by this OatDexFile.
+  size_t FileSize() const;
+
+  // Returns original path of DexFile that was the source of this OatDexFile.
+  const std::string& GetDexFileLocation() const {
+    return dex_file_location_;
+  }
+
+  // Returns the canonical location of DexFile that was the source of this OatDexFile.
+  const std::string& GetCanonicalDexFileLocation() const {
+    return canonical_dex_file_location_;
+  }
+
+  // Returns checksum of original DexFile that was the source of this OatDexFile;
+  uint32_t GetDexFileLocationChecksum() const {
+    return dex_file_location_checksum_;
+  }
+
+  // Returns the OatClass for the class specified by the given DexFile class_def_index.
+  OatClass GetOatClass(uint16_t class_def_index) const;
+
+  // Returns the offset to the OatClass information. Most callers should use GetOatClass.
+  uint32_t GetOatClassOffset(uint16_t class_def_index) const;
+
+  ~OatDexFile();
+
+ private:
+  OatDexFile(const OatFile* oat_file,
+             const std::string& dex_file_location,
+             const std::string& canonical_dex_file_location,
+             uint32_t dex_file_checksum,
+             const uint8_t* dex_file_pointer,
+             const uint32_t* oat_class_offsets_pointer);
+
+  const OatFile* const oat_file_;
+  const std::string dex_file_location_;
+  const std::string canonical_dex_file_location_;
+  const uint32_t dex_file_location_checksum_;
+  const uint8_t* const dex_file_pointer_;
+  const uint32_t* const oat_class_offsets_pointer_;
+
+  friend class OatFile;
+  DISALLOW_COPY_AND_ASSIGN(OatDexFile);
+};
 
 class OatFile {
  public:
+  typedef art::OatClass OatClass;
+  typedef art::OatDexFile OatDexFile;
+  typedef art::OatMethod OatMethod;
+
   // Opens an oat file contained within the given elf file. This is always opened as
   // non-executable at the moment.
   static OatFile* OpenWithElfFile(ElfFile* elf_file, const std::string& location,
@@ -89,180 +266,6 @@ class OatFile {
   }
 
   const OatHeader& GetOatHeader() const;
-
-  class OatDexFile;
-
-  class OatMethod {
-   public:
-    void LinkMethod(mirror::ArtMethod* method) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-    uint32_t GetCodeOffset() const {
-      return code_offset_;
-    }
-
-    const void* GetQuickCode() const {
-      return GetOatPointer<const void*>(code_offset_);
-    }
-
-    // Returns size of quick code.
-    uint32_t GetQuickCodeSize() const;
-    uint32_t GetQuickCodeSizeOffset() const;
-
-    // Returns OatQuickMethodHeader for debugging. Most callers should
-    // use more specific methods such as GetQuickCodeSize.
-    const OatQuickMethodHeader* GetOatQuickMethodHeader() const;
-    uint32_t GetOatQuickMethodHeaderOffset() const;
-
-    size_t GetFrameSizeInBytes() const;
-    uint32_t GetCoreSpillMask() const;
-    uint32_t GetFpSpillMask() const;
-
-    const uint8_t* GetMappingTable() const;
-    uint32_t GetMappingTableOffset() const;
-    uint32_t GetMappingTableOffsetOffset() const;
-
-    const uint8_t* GetVmapTable() const;
-    uint32_t GetVmapTableOffset() const;
-    uint32_t GetVmapTableOffsetOffset() const;
-
-    const uint8_t* GetGcMap() const;
-    uint32_t GetGcMapOffset() const;
-    uint32_t GetGcMapOffsetOffset() const;
-
-    // Create an OatMethod with offsets relative to the given base address
-    OatMethod(const uint8_t* base, const uint32_t code_offset)
-        : begin_(base), code_offset_(code_offset) {
-    }
-    ~OatMethod() {}
-
-    // A representation of an invalid OatMethod, used when an OatMethod or OatClass can't be found.
-    // See ClassLinker::FindOatMethodFor.
-    static const OatMethod Invalid() {
-      return OatMethod(nullptr, -1);
-    }
-
-   private:
-    template<class T>
-    T GetOatPointer(uint32_t offset) const {
-      if (offset == 0) {
-        return NULL;
-      }
-      return reinterpret_cast<T>(begin_ + offset);
-    }
-
-    const uint8_t* begin_;
-    uint32_t code_offset_;
-
-    friend class OatClass;
-  };
-
-  class OatClass {
-   public:
-    mirror::Class::Status GetStatus() const {
-      return status_;
-    }
-
-    OatClassType GetType() const {
-      return type_;
-    }
-
-    // Get the OatMethod entry based on its index into the class
-    // defintion. Direct methods come first, followed by virtual
-    // methods. Note that runtime created methods such as miranda
-    // methods are not included.
-    const OatMethod GetOatMethod(uint32_t method_index) const;
-
-    // Return a pointer to the OatMethodOffsets for the requested
-    // method_index, or nullptr if none is present. Note that most
-    // callers should use GetOatMethod.
-    const OatMethodOffsets* GetOatMethodOffsets(uint32_t method_index) const;
-
-    // Return the offset from the start of the OatFile to the
-    // OatMethodOffsets for the requested method_index, or 0 if none
-    // is present. Note that most callers should use GetOatMethod.
-    uint32_t GetOatMethodOffsetsOffset(uint32_t method_index) const;
-
-    // A representation of an invalid OatClass, used when an OatClass can't be found.
-    // See ClassLinker::FindOatClass.
-    static OatClass Invalid() {
-      return OatClass(nullptr, mirror::Class::kStatusError, kOatClassNoneCompiled, 0, nullptr,
-                      nullptr);
-    }
-
-   private:
-    OatClass(const OatFile* oat_file,
-             mirror::Class::Status status,
-             OatClassType type,
-             uint32_t bitmap_size,
-             const uint32_t* bitmap_pointer,
-             const OatMethodOffsets* methods_pointer);
-
-    const OatFile* const oat_file_;
-
-    const mirror::Class::Status status_;
-
-    const OatClassType type_;
-
-    const uint32_t* const bitmap_;
-
-    const OatMethodOffsets* const methods_pointer_;
-
-    friend class OatDexFile;
-  };
-
-  class OatDexFile {
-   public:
-    // Opens the DexFile referred to by this OatDexFile from within the containing OatFile.
-    std::unique_ptr<const DexFile> OpenDexFile(std::string* error_msg) const;
-
-    const OatFile* GetOatFile() const {
-      return oat_file_;
-    }
-
-    // Returns the size of the DexFile refered to by this OatDexFile.
-    size_t FileSize() const;
-
-    // Returns original path of DexFile that was the source of this OatDexFile.
-    const std::string& GetDexFileLocation() const {
-      return dex_file_location_;
-    }
-
-    // Returns the canonical location of DexFile that was the source of this OatDexFile.
-    const std::string& GetCanonicalDexFileLocation() const {
-      return canonical_dex_file_location_;
-    }
-
-    // Returns checksum of original DexFile that was the source of this OatDexFile;
-    uint32_t GetDexFileLocationChecksum() const {
-      return dex_file_location_checksum_;
-    }
-
-    // Returns the OatClass for the class specified by the given DexFile class_def_index.
-    OatClass GetOatClass(uint16_t class_def_index) const;
-
-    // Returns the offset to the OatClass information. Most callers should use GetOatClass.
-    uint32_t GetOatClassOffset(uint16_t class_def_index) const;
-
-    ~OatDexFile();
-
-   private:
-    OatDexFile(const OatFile* oat_file,
-               const std::string& dex_file_location,
-               const std::string& canonical_dex_file_location,
-               uint32_t dex_file_checksum,
-               const uint8_t* dex_file_pointer,
-               const uint32_t* oat_class_offsets_pointer);
-
-    const OatFile* const oat_file_;
-    const std::string dex_file_location_;
-    const std::string canonical_dex_file_location_;
-    const uint32_t dex_file_location_checksum_;
-    const uint8_t* const dex_file_pointer_;
-    const uint32_t* const oat_class_offsets_pointer_;
-
-    friend class OatFile;
-    DISALLOW_COPY_AND_ASSIGN(OatDexFile);
-  };
 
   const OatDexFile* GetOatDexFile(const char* dex_location,
                                   const uint32_t* const dex_location_checksum,
@@ -381,8 +384,8 @@ class OatFile {
   // elements. std::list<> and std::deque<> satisfy this requirement, std::vector<> doesn't.
   mutable std::list<std::string> string_cache_ GUARDED_BY(secondary_lookup_lock_);
 
-  friend class OatClass;
-  friend class OatDexFile;
+  friend class art::OatClass;
+  friend class art::OatDexFile;
   friend class OatDumper;  // For GetBase and GetLimit
   DISALLOW_COPY_AND_ASSIGN(OatFile);
 };
