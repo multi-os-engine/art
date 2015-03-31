@@ -70,6 +70,10 @@ static HInstruction* GetOppositeCondition(HInstruction* cond) {
       DCHECK(int_const->IsOne());
       return graph->GetIntConstant(0);
     }
+  } else {
+    // In general use a boolean NOT unary with cond as input.
+    DCHECK_EQ(cond->GetType(), Primitive::kPrimBoolean);
+    return new (allocator) HNot(Primitive::kPrimInt, cond);
   }
 
   LOG(FATAL) << "Instruction " << cond->DebugName() << " used as a condition";
