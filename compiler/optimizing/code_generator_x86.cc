@@ -3691,11 +3691,9 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
           // Easy handling of 0.0.
           __ xorps(dest, dest);
         } else {
-          ScratchRegisterScope ensure_scratch(
-              this, kNoRegister, EAX, codegen_->GetNumberOfCoreRegisters());
-          Register temp = static_cast<Register>(ensure_scratch.GetRegister());
-          __ movl(temp, Immediate(value));
-          __ movd(dest, temp);
+          __ pushl(Immediate(value));
+          __ movss(dest, Address(ESP, 0));
+          __ addl(ESP, Immediate(4));
         }
       } else {
         DCHECK(destination.IsStackSlot()) << destination;
@@ -3744,17 +3742,6 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
   }
 }
 
-void ParallelMoveResolverX86::Exchange(Register reg, int mem) {
-  Register suggested_scratch = reg == EAX ? EBX : EAX;
-  ScratchRegisterScope ensure_scratch(
-      this, reg, suggested_scratch, codegen_->GetNumberOfCoreRegisters());
-
-  int stack_offset = ensure_scratch.IsSpilled() ? kX86WordSize : 0;
-  __ movl(static_cast<Register>(ensure_scratch.GetRegister()), Address(ESP, mem + stack_offset));
-  __ movl(Address(ESP, mem + stack_offset), reg);
-  __ movl(reg, static_cast<Register>(ensure_scratch.GetRegister()));
-}
-
 void ParallelMoveResolverX86::Exchange32(XmmRegister reg, int mem) {
   ScratchRegisterScope ensure_scratch(
       this, kNoRegister, EAX, codegen_->GetNumberOfCoreRegisters());
@@ -3766,20 +3753,49 @@ void ParallelMoveResolverX86::Exchange32(XmmRegister reg, int mem) {
   __ movd(reg, temp_reg);
 }
 
-void ParallelMoveResolverX86::Exchange(int mem1, int mem2) {
-  ScratchRegisterScope ensure_scratch1(
+void ParallelMoveResolverX86::Exchange32(int mem1, int mem2) {
+  ScratchRegisterScope ensure_scratch(
       this, kNoRegister, EAX, codegen_->GetNumberOfCoreRegisters());
+  Register scratch = static_cast<Register>(ensure_scratch.GetRegister());
+  int stack_offset = ensure_scratch.IsSpilled() ? kX86WordSize : 0;
 
-  Register suggested_scratch = ensure_scratch1.GetRegister() == EAX ? EBX : EAX;
-  ScratchRegisterScope ensure_scratch2(
-      this, ensure_scratch1.GetRegister(), suggested_scratch, codegen_->GetNumberOfCoreRegisters());
+  // Load M1 into scratch.
+  __ movl(scratch, Address(ESP, mem1 + stack_offset));
 
-  int stack_offset = ensure_scratch1.IsSpilled() ? kX86WordSize : 0;
-  stack_offset += ensure_scratch2.IsSpilled() ? kX86WordSize : 0;
-  __ movl(static_cast<Register>(ensure_scratch1.GetRegister()), Address(ESP, mem1 + stack_offset));
-  __ movl(static_cast<Register>(ensure_scratch2.GetRegister()), Address(ESP, mem2 + stack_offset));
-  __ movl(Address(ESP, mem2 + stack_offset), static_cast<Register>(ensure_scratch1.GetRegister()));
-  __ movl(Address(ESP, mem1 + stack_offset), static_cast<Register>(ensure_scratch2.GetRegister()));
+  // Now put M1 value into M2 while loading scratch with M2 old value.
+  __ xchgl(scratch, Address(ESP, mem2 + stack_offset));
+
+  // Finish off by storing M2 value into M1.
+  __ movl(Address(ESP, mem1 + stack_offset), scratch);
+}
+
+void ParallelMoveResolverX86::Exchange64(int mem1, int mem2) {
+  ScratchRegisterScope ensure_scratch(
+      this, kNoRegister, EAX, codegen_->GetNumberOfCoreRegisters());
+  Register scratch = static_cast<Register>(ensure_scratch.GetRegister());
+  int stack_offset = ensure_scratch.IsSpilled() ? kX86WordSize : 0;
+
+  // Load M1 into scratch.
+  __ movl(scratch, Address(ESP, mem1 + stack_offset));
+
+  // Now put M1 value into M2 while loading scratch with M2 old value.
+  __ xchgl(scratch, Address(ESP, mem2 + stack_offset));
+
+  // Finish off by storing M2 value into M1.
+  __ movl(Address(ESP, mem1 + stack_offset), scratch);
+
+  // Same again, for high word.
+  mem1 += kX86WordSize;
+  mem2 += kX86WordSize;
+
+  // Load M1 into scratch.
+  __ movl(scratch, Address(ESP, mem1 + stack_offset));
+
+  // Now put M1 value into M2 while loading scratch with M2 old value.
+  __ xchgl(scratch, Address(ESP, mem2 + stack_offset));
+
+  // Finish off by storing M2 value into M1.
+  __ movl(Address(ESP, mem1 + stack_offset), scratch);
 }
 
 void ParallelMoveResolverX86::EmitSwap(size_t index) {
@@ -3790,17 +3806,25 @@ void ParallelMoveResolverX86::EmitSwap(size_t index) {
   if (source.IsRegister() && destination.IsRegister()) {
     __ xchgl(destination.AsRegister<Register>(), source.AsRegister<Register>());
   } else if (source.IsRegister() && destination.IsStackSlot()) {
-    Exchange(source.AsRegister<Register>(), destination.GetStackIndex());
+    __ xchgl(source.AsRegister<Register>(), Address(ESP, destination.GetStackIndex()));
   } else if (source.IsStackSlot() && destination.IsRegister()) {
-    Exchange(destination.AsRegister<Register>(), source.GetStackIndex());
+    __ xchgl(destination.AsRegister<Register>(), Address(ESP, source.GetStackIndex()));
   } else if (source.IsStackSlot() && destination.IsStackSlot()) {
-    Exchange(destination.GetStackIndex(), source.GetStackIndex());
+    Exchange32(destination.GetStackIndex(), source.GetStackIndex());
   } else if (source.IsFpuRegister() && destination.IsFpuRegister()) {
-    // Use XOR Swap algorithm to avoid a temporary.
-    DCHECK_NE(source.reg(), destination.reg());
-    __ xorpd(destination.AsFpuRegister<XmmRegister>(), source.AsFpuRegister<XmmRegister>());
-    __ xorpd(source.AsFpuRegister<XmmRegister>(), destination.AsFpuRegister<XmmRegister>());
-    __ xorpd(destination.AsFpuRegister<XmmRegister>(), source.AsFpuRegister<XmmRegister>());
+    // Use the high 8 bytes as a temporary.
+    XmmRegister reg1 = source.AsFpuRegister<XmmRegister>();
+    XmmRegister reg2 = destination.AsFpuRegister<XmmRegister>();
+    DCHECK_NE(reg1, reg2);
+
+    // Move value in reg2 into high double in reg1.
+    __ movlhps(reg1, reg2);
+
+    // Copy reg1 to reg2.
+    __ movaps(reg2, reg1);
+
+    // Move old reg2 value from high double to low double.
+    __ movhlps(reg1, reg2);
   } else if (source.IsFpuRegister() && destination.IsStackSlot()) {
     Exchange32(source.AsFpuRegister<XmmRegister>(), destination.GetStackIndex());
   } else if (destination.IsFpuRegister() && source.IsStackSlot()) {
@@ -3830,8 +3854,7 @@ void ParallelMoveResolverX86::EmitSwap(size_t index) {
     // Move the high double to the low double.
     __ psrldq(reg, Immediate(8));
   } else if (destination.IsDoubleStackSlot() && source.IsDoubleStackSlot()) {
-    Exchange(destination.GetStackIndex(), source.GetStackIndex());
-    Exchange(destination.GetHighStackIndex(kX86WordSize), source.GetHighStackIndex(kX86WordSize));
+    Exchange64(destination.GetStackIndex(), source.GetStackIndex());
   } else {
     LOG(FATAL) << "Unimplemented: source: " << source << ", destination: " << destination;
   }

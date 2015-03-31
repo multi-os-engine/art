@@ -1030,6 +1030,14 @@ void X86_64Assembler::xchgl(CpuRegister dst, CpuRegister src) {
 }
 
 
+void X86_64Assembler::xchgl(CpuRegister reg, const Address& address) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitOptionalRex32(reg, address);
+  EmitUint8(0x87);
+  EmitOperand(reg.LowBits(), address);
+}
+
+
 void X86_64Assembler::xchgq(CpuRegister dst, CpuRegister src) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   // There is a short version for rax.
@@ -1055,9 +1063,9 @@ void X86_64Assembler::xchgq(CpuRegister dst, CpuRegister src) {
 }
 
 
-void X86_64Assembler::xchgl(CpuRegister reg, const Address& address) {
+void X86_64Assembler::xchgq(CpuRegister reg, const Address& address) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
-  EmitOptionalRex32(reg, address);
+  EmitRex64(reg, address);
   EmitUint8(0x87);
   EmitOperand(reg.LowBits(), address);
 }

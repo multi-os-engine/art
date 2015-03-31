@@ -475,6 +475,22 @@ void X86Assembler::movhpd(const Address& dst, XmmRegister src) {
 }
 
 
+void X86Assembler::movhlps(XmmRegister dst, XmmRegister src) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitUint8(0x0F);
+  EmitUint8(0x12);
+  EmitXmmRegisterOperand(dst, src);
+}
+
+
+void X86Assembler::movlhps(XmmRegister dst, XmmRegister src) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitUint8(0x0F);
+  EmitUint8(0x16);
+  EmitXmmRegisterOperand(dst, src);
+}
+
+
 void X86Assembler::psrldq(XmmRegister reg, const Immediate& shift_count) {
   DCHECK(shift_count.is_uint8());
 

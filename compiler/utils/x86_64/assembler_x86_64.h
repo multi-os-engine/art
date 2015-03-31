@@ -396,8 +396,9 @@ class X86_64Assembler FINAL : public Assembler {
   void fprem();
 
   void xchgl(CpuRegister dst, CpuRegister src);
-  void xchgq(CpuRegister dst, CpuRegister src);
   void xchgl(CpuRegister reg, const Address& address);
+  void xchgq(CpuRegister dst, CpuRegister src);
+  void xchgq(CpuRegister reg, const Address& address);
 
   void cmpw(const Address& address, const Immediate& imm);
 

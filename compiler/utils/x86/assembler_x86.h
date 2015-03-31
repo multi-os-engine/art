@@ -282,6 +282,9 @@ class X86Assembler FINAL : public Assembler {
   void movhpd(XmmRegister dst, const Address& src);
   void movhpd(const Address& dst, XmmRegister src);
 
+  void movhlps(XmmRegister dst, XmmRegister src);
+  void movlhps(XmmRegister dst, XmmRegister src);
+
   void psrldq(XmmRegister reg, const Immediate& shift_count);
 
   void addsd(XmmRegister dst, XmmRegister src);

@@ -3404,41 +3404,33 @@ void ParallelMoveResolverX86_64::EmitMove(size_t index) {
 }
 
 void ParallelMoveResolverX86_64::Exchange32(CpuRegister reg, int mem) {
-  __ movl(CpuRegister(TMP), Address(CpuRegister(RSP), mem));
-  __ movl(Address(CpuRegister(RSP), mem), reg);
-  __ movl(reg, CpuRegister(TMP));
+  __ xchgl(reg, Address(CpuRegister(RSP), mem));
 }
 
 void ParallelMoveResolverX86_64::Exchange32(int mem1, int mem2) {
-  ScratchRegisterScope ensure_scratch(
-      this, TMP, RAX, codegen_->GetNumberOfCoreRegisters());
+  // Load M1 into TMP.
+  __ movl(CpuRegister(TMP), Address(CpuRegister(RSP), mem1));
 
-  int stack_offset = ensure_scratch.IsSpilled() ? kX86_64WordSize : 0;
-  __ movl(CpuRegister(TMP), Address(CpuRegister(RSP), mem1 + stack_offset));
-  __ movl(CpuRegister(ensure_scratch.GetRegister()),
-          Address(CpuRegister(RSP), mem2 + stack_offset));
-  __ movl(Address(CpuRegister(RSP), mem2 + stack_offset), CpuRegister(TMP));
-  __ movl(Address(CpuRegister(RSP), mem1 + stack_offset),
-          CpuRegister(ensure_scratch.GetRegister()));
+  // Store M1 into M2, while loading TMP with M2 old value.
+  __ xchgl(CpuRegister(TMP), Address(CpuRegister(RSP), mem2));
+
+  // Store M2 old value into M1.
+  __ movl(Address(CpuRegister(RSP), mem1), CpuRegister(TMP));
 }
 
 void ParallelMoveResolverX86_64::Exchange64(CpuRegister reg, int mem) {
-  __ movq(CpuRegister(TMP), Address(CpuRegister(RSP), mem));
-  __ movq(Address(CpuRegister(RSP), mem), reg);
-  __ movq(reg, CpuRegister(TMP));
+  __ xchgq(reg, Address(CpuRegister(RSP), mem));
 }
 
 void ParallelMoveResolverX86_64::Exchange64(int mem1, int mem2) {
-  ScratchRegisterScope ensure_scratch(
-      this, TMP, RAX, codegen_->GetNumberOfCoreRegisters());
+  // Load M1 into TMP.
+  __ movq(CpuRegister(TMP), Address(CpuRegister(RSP), mem1));
 
-  int stack_offset = ensure_scratch.IsSpilled() ? kX86_64WordSize : 0;
-  __ movq(CpuRegister(TMP), Address(CpuRegister(RSP), mem1 + stack_offset));
-  __ movq(CpuRegister(ensure_scratch.GetRegister()),
-          Address(CpuRegister(RSP), mem2 + stack_offset));
-  __ movq(Address(CpuRegister(RSP), mem2 + stack_offset), CpuRegister(TMP));
-  __ movq(Address(CpuRegister(RSP), mem1 + stack_offset),
-          CpuRegister(ensure_scratch.GetRegister()));
+  // Store M1 into M2, while loading TMP with M2 old value.
+  __ xchgq(CpuRegister(TMP), Address(CpuRegister(RSP), mem2));
+
+  // Store M2 old value into M1.
+  __ movq(Address(CpuRegister(RSP), mem1), CpuRegister(TMP));
 }
 
 void ParallelMoveResolverX86_64::Exchange32(XmmRegister reg, int mem) {

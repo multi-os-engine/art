@@ -106,8 +106,8 @@ class ParallelMoveResolverX86 : public ParallelMoveResolver {
   X86Assembler* GetAssembler() const;
 
  private:
-  void Exchange(Register reg, int mem);
-  void Exchange(int mem1, int mem2);
+  void Exchange32(int mem1, int mem2);
+  void Exchange64(int mem1, int mem2);
   void Exchange32(XmmRegister reg, int mem);
   void MoveMemoryToMemory32(int dst, int src);
   void MoveMemoryToMemory64(int dst, int src);
