@@ -18,6 +18,7 @@
 
 #include <map>
 #include <string>
+#include <sstream>
 
 #include "base/bit_vector-inl.h"
 #include "base/stringprintf.h"
@@ -192,6 +193,22 @@ void SSAChecker::VisitBasicBlock(HBasicBlock* block) {
                               block->GetBlockId(),
                               successor->GetBlockId()));
       }
+    }
+  }
+
+  // Check Phi uniqueness (no two Phis with the same type refer the same register)
+  dex_registers_with_phis_.ClearAllBits();
+  for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
+    HPhi* phi = it.Current()->AsPhi();
+    int reg = phi->GetRegNumber();
+    int reg_type_index = reg * Primitive::Type::kLastType + phi->GetType();
+    if (dex_registers_with_phis_.IsBitSet(reg_type_index)) {
+      std::stringstream type_str;
+      type_str << phi->GetType();
+      AddError(StringPrintf("Duplicate phi (%d) found for VReg %d with type: %s",
+          phi->GetId(), reg, type_str.str().c_str()));
+    } else {
+      dex_registers_with_phis_.SetBit(reg_type_index);
     }
   }
 
