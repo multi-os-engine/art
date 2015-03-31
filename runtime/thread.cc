@@ -2298,8 +2298,8 @@ void Thread::VisitRoots(RootCallback* visitor, void* arg) {
       mapper.VisitShadowFrame(shadow_frame);
     }
   }
-  if (tlsPtr_.method_verifier != nullptr) {
-    tlsPtr_.method_verifier->VisitRoots(visitor, arg, RootInfo(kRootNativeStack, thread_id));
+  for (auto* verifier = tlsPtr_.method_verifier; verifier != nullptr; verifier = verifier->link_) {
+    verifier->VisitRoots(visitor, arg, RootInfo(kRootNativeStack, thread_id));
   }
   // Visit roots on this thread's stack
   Context* context = GetLongJumpContext();
@@ -2422,14 +2422,14 @@ void Thread::ClearDebugInvokeReq() {
   tlsPtr_.debug_invoke_req = nullptr;
 }
 
-void Thread::SetVerifier(verifier::MethodVerifier* verifier) {
-  CHECK(tlsPtr_.method_verifier == nullptr);
+void Thread::PushVerifier(verifier::MethodVerifier* verifier) {
+  verifier->link_ = tlsPtr_.method_verifier;
   tlsPtr_.method_verifier = verifier;
 }
 
-void Thread::ClearVerifier(verifier::MethodVerifier* verifier) {
+void Thread::PopVerifier(verifier::MethodVerifier* verifier) {
   CHECK_EQ(tlsPtr_.method_verifier, verifier);
-  tlsPtr_.method_verifier = nullptr;
+  tlsPtr_.method_verifier = verifier->link_;
 }
 
 }  // namespace art
