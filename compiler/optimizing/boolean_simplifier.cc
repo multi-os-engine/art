@@ -61,6 +61,8 @@ static HInstruction* GetOppositeCondition(HInstruction* cond) {
       return new (allocator) HLessThanOrEqual(lhs, rhs);
     } else if (cond->IsGreaterThanOrEqual()) {
       return new (allocator) HLessThan(lhs, rhs);
+    } else {
+      LOG(WARNING) << "Unknown condition " << cond->DebugName();
     }
   } else if (cond->IsIntConstant()) {
     HIntConstant* int_const = cond->AsIntConstant();
@@ -72,8 +74,8 @@ static HInstruction* GetOppositeCondition(HInstruction* cond) {
     }
   }
 
-  // TODO: b/19992954
-  return nullptr;
+  // General case, e.g. when 'cond' is a field value. Negate with 'cond==0'.
+  return new (allocator) HEqual(cond, graph->GetIntConstant(0));
 }
 
 void HBooleanSimplifier::Run() {
@@ -105,10 +107,6 @@ void HBooleanSimplifier::Run() {
     HInstruction* replacement;
     if (NegatesCondition(true_value, false_value)) {
       replacement = GetOppositeCondition(if_condition);
-      if (replacement == nullptr) {
-        // Something we could not handle.
-        continue;
-      }
       if (replacement->GetBlock() == nullptr) {
         block->InsertInstructionBefore(replacement, if_instruction);
       }
