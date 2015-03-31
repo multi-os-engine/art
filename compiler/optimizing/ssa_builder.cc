@@ -17,8 +17,11 @@
 #include "ssa_builder.h"
 
 #include "nodes.h"
+#include "pretty_printer.h"
 #include "primitive_type_propagation.h"
 #include "ssa_phi_elimination.h"
+
+#include <iostream>
 
 namespace art {
 
@@ -168,6 +171,64 @@ void DeadPhiHandling::Run() {
   ProcessWorklist();
 }
 
+class HandleEqualityWithNullConstant : public ValueObject {
+ public:
+  explicit HandleEqualityWithNullConstant(HGraph* graph)
+      : graph_(graph)  {}
+
+  void Run();
+
+ private:
+  HGraph* const graph_;
+};
+
+void HandleEqualityWithNullConstant::Run() {
+  // The order doesn't matter here.
+  for (HReversePostOrderIterator itb(*graph_); !itb.Done(); itb.Advance()) {
+    for (HInstructionIterator it(itb.Current()->GetInstructions()); !it.Done(); it.Advance()) {
+      HInstruction* equality_instr = it.Current();
+      if (!equality_instr->IsEqual() && !equality_instr->IsNotEqual()) {
+        continue;
+      }
+      HInstruction* left = equality_instr->InputAt(0);
+      HInstruction* right = equality_instr->InputAt(1);
+      HPhi* phi = nullptr;
+      HInstruction* null_instr = nullptr;
+
+      if (left->IsPhi() && (left->GetType() == Primitive::kPrimNot)
+          && (right->IsNullConstant() || right->IsIntConstant())) {
+        phi = left->AsPhi();
+        null_instr = right;
+      } else if (right->IsPhi() && (right->GetType() == Primitive::kPrimNot)
+           && (left->IsNullConstant() || left->IsIntConstant())) {
+        phi = right->AsPhi();
+        null_instr = left;
+      } else {
+        continue;
+      }
+
+      if (null_instr->IsIntConstant()) {
+        DCHECK_EQ(0, null_instr->AsIntConstant()->GetValue());
+        equality_instr->ReplaceInput(graph_->GetNullConstant(), null_instr == right ? 1 : 0);
+      }
+
+      HInstruction* next = phi->GetNext();
+      while (next != nullptr
+          && next->IsPhi()
+          && next->AsPhi()->GetRegNumber() == phi->GetRegNumber()
+          && next->GetType() != Primitive::kPrimNot) {
+        next = next->GetNext();
+      }
+      if (next != nullptr
+          && next->IsPhi()
+          && next->AsPhi()->GetRegNumber() == phi->GetRegNumber()
+          && next->GetType() == Primitive::kPrimNot) {
+        phi->ReplaceWith(next);
+      }
+    }
+  }
+}
+
 static bool IsPhiEquivalentOf(HInstruction* instruction, HPhi* phi) {
   return instruction != nullptr
       && instruction->IsPhi()
@@ -209,11 +270,18 @@ void SsaBuilder::BuildSsa() {
   PrimitiveTypePropagation type_propagation(GetGraph());
   type_propagation.Run();
 
-  // 5) Mark dead phis again. Steph 4) may have introduced new phis.
+  // 5) Because of equality comparisons against null constants we may and up
+  // with the duplicates phis (same type) for the same dex registers. This pass
+  // leave just one of the phi alive (by changing the use sites). The actual
+  // removal will be don in the DeadPhiElimination pass.
+  HandleEqualityWithNullConstant same_phi_elimination(GetGraph());
+  same_phi_elimination.Run();
+
+  // 6) Mark dead phis again. Steph 4) may have introduced new phis.
   SsaDeadPhiElimination dead_phis(GetGraph());
   dead_phis.MarkDeadPhis();
 
-  // 6) Now that the graph is correclty typed, we can get rid of redundant phis.
+  // 7) Now that the graph is correctly typed, we can get rid of redundant phis.
   // Note that we cannot do this phase before type propagation, otherwise
   // we could get rid of phi equivalents, whose presence is a requirement for the
   // type propagation phase. Note that this is to satisfy statement (a) of the
@@ -221,7 +289,7 @@ void SsaBuilder::BuildSsa() {
   SsaRedundantPhiElimination redundant_phi(GetGraph());
   redundant_phi.Run();
 
-  // 7) Make sure environments use the right phi "equivalent": a phi marked dead
+  // 8) Make sure environments use the right phi "equivalent": a phi marked dead
   // can have a phi equivalent that is not dead. We must therefore update
   // all environment uses of the dead phi to use its equivalent. Note that there
   // can be multiple phis for the same Dex register that are live (for example
@@ -248,7 +316,7 @@ void SsaBuilder::BuildSsa() {
     }
   }
 
-  // 8) Deal with phis to guarantee liveness of phis in case of a debuggable
+  // 9) Deal with phis to guarantee liveness of phis in case of a debuggable
   // application. This is for satisfying statement (c) of the SsaBuilder
   // (see ssa_builder.h).
   if (GetGraph()->IsDebuggable()) {
@@ -256,7 +324,7 @@ void SsaBuilder::BuildSsa() {
     dead_phi_handler.Run();
   }
 
-  // 9) Now that the right phis are used for the environments, and we
+  // 10) Now that the right phis are used for the environments, and we
   // have potentially revive dead phis in case of a debuggable application,
   // we can eliminate phis we do not need. Regardless of the debuggable status,
   // this phase is necessary for statement (b) of the SsaBuilder (see ssa_builder.h),
@@ -264,7 +332,7 @@ void SsaBuilder::BuildSsa() {
   // input types.
   dead_phis.EliminateDeadPhis();
 
-  // 10) Clear locals.
+  // 11) Clear locals.
   for (HInstructionIterator it(GetGraph()->GetEntryBlock()->GetInstructions());
        !it.Done();
        it.Advance()) {

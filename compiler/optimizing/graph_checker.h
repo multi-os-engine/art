@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_GRAPH_CHECKER_H_
 
 #include "nodes.h"
+#include "utils/arena_bit_vector.h"
 
 #include <ostream>
 
@@ -85,8 +86,13 @@ class SSAChecker : public GraphChecker {
  public:
   typedef GraphChecker super_type;
 
+  // TODO: There's no need to pass a separate allocator as we could get it from the graph.
   SSAChecker(ArenaAllocator* allocator, HGraph* graph)
-    : GraphChecker(allocator, graph, "art::SSAChecker: ") {}
+    : GraphChecker(allocator, graph, "art::SSAChecker: "),
+      dex_registers_with_phis_(allocator,
+                               graph->GetNumberOfVRegs() * (Primitive::Type::kLastType + 1),
+                               false) {
+  }
 
   // Check the whole graph (in reverse post-order).
   void Run() OVERRIDE {
@@ -109,6 +115,12 @@ class SSAChecker : public GraphChecker {
   void VisitIf(HIf* instruction) OVERRIDE;
 
  private:
+  // Cache to be used in a block visitor scope. It avoids creating a fresh bit
+  // vector for each block. Each register gets assigned 1 bit for each primitive
+  // type in the natural order. If the type bit is set for a given dex register
+  // then that register has a corresponding Phi with that type.
+  ArenaBitVector dex_registers_with_phis_;
+
   DISALLOW_COPY_AND_ASSIGN(SSAChecker);
 };
 

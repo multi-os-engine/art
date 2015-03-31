@@ -57,6 +57,7 @@ class Primitive {
     kPrimFloat,
     kPrimDouble,
     kPrimVoid,
+    kNumTypes
   };
 
   static Type GetType(char type) {
