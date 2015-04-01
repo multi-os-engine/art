@@ -45,12 +45,14 @@
 #include "mirror/art_method-inl.h"
 #include "nodes.h"
 #include "prepare_for_register_allocation.h"
+#include "reference_type_propagation.h"
 #include "register_allocator.h"
 #include "side_effects_analysis.h"
 #include "ssa_builder.h"
 #include "ssa_phi_elimination.h"
 #include "ssa_liveness_analysis.h"
-#include "reference_type_propagation.h"
+#include "dex/verified_method.h"
+#include "dex/verification_results.h"
 
 namespace art {
 
@@ -228,6 +230,8 @@ class OptimizingCompiler FINAL : public Compiler {
   CompiledMethod* CompileBaseline(CodeGenerator* codegen,
                                   CompilerDriver* driver,
                                   const DexCompilationUnit& dex_compilation_unit) const;
+
+  bool HasVerificationFailures(uint32_t method_idx, const DexFile& dex_file) const;
 
   mutable OptimizingCompilerStats compilation_stats_;
 
@@ -573,20 +577,39 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   }
 }
 
+bool OptimizingCompiler::HasVerificationFailures(uint32_t method_idx,
+                                                 const DexFile& dex_file) const {
+  MethodReference method_ref(&dex_file, method_idx);
+  const VerifiedMethod* verified_method =
+      GetCompilerDriver()->GetVerificationResults()->GetVerifiedMethod(method_ref);
+  return (verified_method == nullptr) || verified_method->HasVerificationFailures();
+}
+
 CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
                                             uint32_t access_flags,
                                             InvokeType invoke_type,
                                             uint16_t class_def_idx,
                                             uint32_t method_idx,
-                                            jobject class_loader,
+                                            jobject jclass_loader,
                                             const DexFile& dex_file) const {
-  CompiledMethod* method = TryCompile(code_item, access_flags, invoke_type, class_def_idx,
-                                      method_idx, class_loader, dex_file);
+  CompiledMethod* method = nullptr;
+  if (!GetCompilerDriver()->GetCompilerOptions().VerifyAtRuntime()
+      && !HasVerificationFailures(method_idx, dex_file)) {
+     method = TryCompile(code_item, access_flags, invoke_type, class_def_idx,
+                         method_idx, jclass_loader, dex_file);
+  } else {
+    if (GetCompilerDriver()->GetCompilerOptions().VerifyAtRuntime()) {
+      compilation_stats_.RecordStat(MethodCompilationStat::kNotCompiledVerifyAtRuntime);
+    } else {
+      compilation_stats_.RecordStat(MethodCompilationStat::kNotCompiledClassNotVerified);
+    }
+  }
+
   if (method != nullptr) {
     return method;
   }
   method = delegate_->Compile(code_item, access_flags, invoke_type, class_def_idx, method_idx,
-                              class_loader, dex_file);
+                              jclass_loader, dex_file);
 
   if (method != nullptr) {
     compilation_stats_.RecordStat(MethodCompilationStat::kCompiledQuick);

@@ -31,6 +31,8 @@
 #include "ssa_phi_elimination.h"
 #include "scoped_thread_state_change.h"
 #include "thread.h"
+#include "dex/verified_method.h"
+#include "dex/verification_results.h"
 
 namespace art {
 
@@ -143,6 +145,15 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
   ScopedObjectAccess soa(Thread::Current());
   const DexFile::CodeItem* code_item = resolved_method->GetCodeItem();
   const DexFile& caller_dex_file = *caller_compilation_unit_.GetDexFile();
+
+  MethodReference method_ref(resolved_method->GetDexFile(), method_index);
+  const VerifiedMethod* verified_method =
+      compiler_driver_->GetVerificationResults()->GetVerifiedMethod(method_ref);
+  if ((verified_method == nullptr) || verified_method->HasVerificationFailures()) {
+    VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
+                   << " has verification failures, so cannot be inlined";
+    return false;
+  }
 
   DexCompilationUnit dex_compilation_unit(
     nullptr,
