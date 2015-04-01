@@ -56,6 +56,7 @@ LiveInterval* BuildInterval(const size_t ranges[][2],
     interval->AddRange(ranges[i - 1][0], ranges[i - 1][1]);
   }
   interval->SetRegister(reg);
+  interval->StartNewScan();
   return interval;
 }
 
