@@ -39,7 +39,7 @@ if [ -z "$TMPDIR" ]; then
 else
   tmp_dir="${TMPDIR}/$USER/${test_dir}"
 fi
-checker="${progdir}/../tools/checker.py"
+czecher="${progdir}/../tools/czecher.py"
 
 export JAVA="java"
 export JAVAC="javac -g"
@@ -517,16 +517,16 @@ chmod 755 "$check_cmd"
 
 export TEST_NAME=`basename ${test_dir}`
 
-# Tests named '<number>-checker-*' will also have their CFGs verified with
-# Checker when compiled with Optimizing on host.
-if [[ "$TEST_NAME" =~ ^[0-9]+-checker- ]]; then
-  # Build Checker DEX files without dx's optimizations so the input to dex2oat
+# Tests named '<number>-czecher-*' will also have their CFGs verified with
+# czecher when compiled with Optimizing on host.
+if [[ "$TEST_NAME" =~ ^[0-9]+-czecher- ]]; then
+  # Build czecher DEX files without dx's optimizations so the input to dex2oat
   # better resembles the Java source. We always build the DEX the same way, even
-  # if Checker is not invoked and the test only runs the program.
+  # if czecher is not invoked and the test only runs the program.
   build_args="${build_args} --dx-option --no-optimize"
 
   if [ "$runtime" = "art" -a "$image_suffix" = "-optimizing" -a "$target_mode" = "no" -a "$debuggable" = "no" ]; then
-    run_checker="yes"
+    run_czecher="yes"
     run_args="${run_args} -Xcompiler-option --dump-cfg=$tmp_dir/$cfg_output \
                           -Xcompiler-option -j1"
   fi
@@ -556,13 +556,13 @@ if [ "$dev_mode" = "yes" ]; then
         run_exit="$?"
 
         if [ "$run_exit" = "0" ]; then
-            if [ "$run_checker" = "yes" ]; then
-                "$checker" "$cfg_output" "$tmp_dir" 2>&1
-                checker_exit="$?"
-                if [ "$checker_exit" = "0" ]; then
+            if [ "$run_czecher" = "yes" ]; then
+                "$czecher" "$cfg_output" "$tmp_dir" 2>&1
+                czecher_exit="$?"
+                if [ "$czecher_exit" = "0" ]; then
                     good="yes"
                 fi
-                echo "checker exit status: $checker_exit" 1>&2
+                echo "czecher exit status: $czecher_exit" 1>&2
             else
                 good="yes"
             fi
@@ -575,8 +575,8 @@ elif [ "$update_mode" = "yes" ]; then
     if [ "$build_exit" = '0' ]; then
         echo "${test_dir}: running..." 1>&2
         "./${run}" $run_args "$@" >"$output" 2>&1
-        if [ "$run_checker" = "yes" ]; then
-          "$checker" -q "$cfg_output" "$tmp_dir" >> "$output" 2>&1
+        if [ "$run_czecher" = "yes" ]; then
+          "$czecher" -q "$cfg_output" "$tmp_dir" >> "$output" 2>&1
         fi
         sed -e 's/[[:cntrl:]]$//g' < "$output" >"${td_expected}"
         good="yes"
@@ -610,11 +610,11 @@ else
         if [ "$run_exit" != "0" ]; then
             echo "run exit status: $run_exit" 1>&2
             good_run="no"
-        elif [ "$run_checker" = "yes" ]; then
-            "$checker" -q "$cfg_output" "$tmp_dir" >> "$output" 2>&1
-            checker_exit="$?"
-            if [ "$checker_exit" != "0" ]; then
-                echo "checker exit status: $checker_exit" 1>&2
+        elif [ "$run_czecher" = "yes" ]; then
+            "$czecher" -q "$cfg_output" "$tmp_dir" >> "$output" 2>&1
+            czecher_exit="$?"
+            if [ "$czecher_exit" != "0" ]; then
+                echo "czecher exit status: $czecher_exit" 1>&2
                 good_run="no"
             else
                 good_run="yes"

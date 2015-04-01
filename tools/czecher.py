@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-# Checker is a testing tool which compiles a given test file and compares the
+# Czecher is a testing tool which compiles a given test file and compares the
 # state of the control-flow graph before and after each optimization pass
 # against a set of assertions specified alongside the tests.
 #

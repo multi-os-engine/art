@@ -15,21 +15,21 @@
 # limitations under the License.
 
 # This is a test file which exercises all feautres supported by the domain-
-# specific markup language implemented by Checker.
+# specific markup language implemented by Czecher.
 
-import checker
+import czecher
 import io
 import unittest
 
-# The parent type of exception expected to be thrown by Checker during tests.
+# The parent type of exception expected to be thrown by Czecher during tests.
 # It must be specific enough to not cover exceptions thrown due to actual flaws
-# in Checker.
-CheckerException = SystemExit
+# in Czecher.
+CzecherException = SystemExit
 
 
 class TestCheckFile_PrefixExtraction(unittest.TestCase):
   def __tryParse(self, string):
-    checkFile = checker.CheckFile(None, [])
+    checkFile = czecher.CheckFile(None, [])
     return checkFile._extractLine("CHECK", string)
 
   def test_InvalidFormat(self):
@@ -61,7 +61,7 @@ class TestCheckFile_PrefixExtraction(unittest.TestCase):
 
 class TestCheckLine_Parse(unittest.TestCase):
   def __getPartPattern(self, linePart):
-    if linePart.variant == checker.CheckElement.Variant.Separator:
+    if linePart.variant == czecher.CheckElement.Variant.Separator:
       return "\s+"
     else:
       return linePart.pattern
@@ -70,30 +70,30 @@ class TestCheckLine_Parse(unittest.TestCase):
     return "".join(map(lambda x: "(" + self.__getPartPattern(x) + ")", checkLine.lineParts))
 
   def __tryParse(self, string):
-    return checker.CheckLine(string)
+    return czecher.CheckLine(string)
 
   def __parsesTo(self, string, expected):
     self.assertEqual(expected, self.__getRegex(self.__tryParse(string)))
 
   def __tryParseNot(self, string):
-    return checker.CheckLine(string, checker.CheckLine.Variant.Not)
+    return czecher.CheckLine(string, czecher.CheckLine.Variant.Not)
 
   def __parsesPattern(self, string, pattern):
     line = self.__tryParse(string)
     self.assertEqual(1, len(line.lineParts))
-    self.assertEqual(checker.CheckElement.Variant.Pattern, line.lineParts[0].variant)
+    self.assertEqual(czecher.CheckElement.Variant.Pattern, line.lineParts[0].variant)
     self.assertEqual(pattern, line.lineParts[0].pattern)
 
   def __parsesVarRef(self, string, name):
     line = self.__tryParse(string)
     self.assertEqual(1, len(line.lineParts))
-    self.assertEqual(checker.CheckElement.Variant.VarRef, line.lineParts[0].variant)
+    self.assertEqual(czecher.CheckElement.Variant.VarRef, line.lineParts[0].variant)
     self.assertEqual(name, line.lineParts[0].name)
 
   def __parsesVarDef(self, string, name, body):
     line = self.__tryParse(string)
     self.assertEqual(1, len(line.lineParts))
-    self.assertEqual(checker.CheckElement.Variant.VarDef, line.lineParts[0].variant)
+    self.assertEqual(czecher.CheckElement.Variant.VarDef, line.lineParts[0].variant)
     self.assertEqual(name, line.lineParts[0].name)
     self.assertEqual(body, line.lineParts[0].pattern)
 
@@ -161,35 +161,35 @@ class TestCheckLine_Parse(unittest.TestCase):
     self.__parsesVarDef("[[ABC:(a[bc])]]", "ABC", "(a[bc])")
 
   def test_Empty(self):
-    self.__doesNotParse("{{}}", checker.CheckElement.Variant.Pattern)
-    self.__doesNotParse("[[]]", checker.CheckElement.Variant.VarRef)
-    self.__doesNotParse("[[:]]", checker.CheckElement.Variant.VarDef)
+    self.__doesNotParse("{{}}", czecher.CheckElement.Variant.Pattern)
+    self.__doesNotParse("[[]]", czecher.CheckElement.Variant.VarRef)
+    self.__doesNotParse("[[:]]", czecher.CheckElement.Variant.VarDef)
 
   def test_InvalidVarName(self):
-    self.__doesNotParse("[[0ABC]]", checker.CheckElement.Variant.VarRef)
-    self.__doesNotParse("[[AB=C]]", checker.CheckElement.Variant.VarRef)
-    self.__doesNotParse("[[ABC=]]", checker.CheckElement.Variant.VarRef)
-    self.__doesNotParse("[[0ABC:abc]]", checker.CheckElement.Variant.VarDef)
-    self.__doesNotParse("[[AB=C:abc]]", checker.CheckElement.Variant.VarDef)
-    self.__doesNotParse("[[ABC=:abc]]", checker.CheckElement.Variant.VarDef)
+    self.__doesNotParse("[[0ABC]]", czecher.CheckElement.Variant.VarRef)
+    self.__doesNotParse("[[AB=C]]", czecher.CheckElement.Variant.VarRef)
+    self.__doesNotParse("[[ABC=]]", czecher.CheckElement.Variant.VarRef)
+    self.__doesNotParse("[[0ABC:abc]]", czecher.CheckElement.Variant.VarDef)
+    self.__doesNotParse("[[AB=C:abc]]", czecher.CheckElement.Variant.VarDef)
+    self.__doesNotParse("[[ABC=:abc]]", czecher.CheckElement.Variant.VarDef)
 
   def test_BodyMatchNotGreedy(self):
     self.__parsesTo("{{abc}}{{def}}", "(abc)(def)")
     self.__parsesTo("[[ABC:abc]][[DEF:def]]", "(abc)(def)")
 
   def test_NoVarDefsInNotChecks(self):
-    with self.assertRaises(CheckerException):
+    with self.assertRaises(CzecherException):
       self.__tryParseNot("[[ABC:abc]]")
 
 class TestCheckLine_Match(unittest.TestCase):
   def __matchSingle(self, checkString, outputString, varState={}):
-    checkLine = checker.CheckLine(checkString)
+    checkLine = czecher.CheckLine(checkString)
     newVarState = checkLine.match(outputString, varState)
     self.assertIsNotNone(newVarState)
     return newVarState
 
   def __notMatchSingle(self, checkString, outputString, varState={}):
-    checkLine = checker.CheckLine(checkString)
+    checkLine = czecher.CheckLine(checkString)
     self.assertIsNone(checkLine.match(outputString, varState))
 
   def test_TextAndWhitespace(self):
@@ -217,7 +217,7 @@ class TestCheckLine_Match(unittest.TestCase):
     self.__matchSingle("foo[[X]]bar", "fooBbar", {"X": "B"})
     self.__notMatchSingle("foo[[X]]bar", "foobar", {"X": "A"})
     self.__notMatchSingle("foo[[X]]bar", "foo bar", {"X": "A"})
-    with self.assertRaises(CheckerException):
+    with self.assertRaises(CzecherException):
       self.__matchSingle("foo[[X]]bar", "foobar", {})
 
   def test_VariableDefinition(self):
@@ -235,7 +235,7 @@ class TestCheckLine_Match(unittest.TestCase):
     self.__notMatchSingle("foo[[X:A|B]]bar[[X]]baz", "fooAbarBbaz")
 
   def test_NoVariableRedefinition(self):
-    with self.assertRaises(CheckerException):
+    with self.assertRaises(CzecherException):
       self.__matchSingle("[[X:...]][[X]][[X:...]][[X]]", "foofoobarbar")
 
   def test_EnvNotChangedOnPartialMatch(self):
@@ -248,13 +248,13 @@ class TestCheckLine_Match(unittest.TestCase):
     self.__notMatchSingle("[[X:..]]foo[[X]]", ".*fooAAAA")
 
 
-CheckVariant = checker.CheckLine.Variant
+CheckVariant = czecher.CheckLine.Variant
 
 def prepareSingleCheck(line):
   if isinstance(line, str):
-    return checker.CheckLine(line)
+    return czecher.CheckLine(line)
   else:
-    return checker.CheckLine(line[0], line[1])
+    return czecher.CheckLine(line[0], line[1])
 
 def prepareChecks(lines):
   if isinstance(lines, str):
@@ -264,12 +264,12 @@ def prepareChecks(lines):
 
 class TestCheckGroup_Match(unittest.TestCase):
   def __matchMulti(self, checkLines, outputString):
-    checkGroup = checker.CheckGroup("MyGroup", prepareChecks(checkLines))
-    outputGroup = checker.OutputGroup("MyGroup", outputString.splitlines())
+    checkGroup = czecher.CheckGroup("MyGroup", prepareChecks(checkLines))
+    outputGroup = czecher.OutputGroup("MyGroup", outputString.splitlines())
     return checkGroup.match(outputGroup)
 
   def __notMatchMulti(self, checkString, outputString):
-    with self.assertRaises(CheckerException):
+    with self.assertRaises(CzecherException):
       self.__matchMulti(checkString, outputString)
 
   def test_TextAndPattern(self):
@@ -371,7 +371,7 @@ class TestOutputFile_Parse(unittest.TestCase):
     if isinstance(string, str):
       string = unicode(string)
     outputStream = io.StringIO(string)
-    return self.assertEqual(checker.OutputFile(outputStream).groups, expected)
+    return self.assertEqual(czecher.OutputFile(outputStream).groups, expected)
 
   def test_NoInput(self):
     self.__parsesTo(None, [])
@@ -386,7 +386,7 @@ class TestOutputFile_Parse(unittest.TestCase):
                          foo
                          bar
                        end_cfg""",
-                    [ checker.OutputGroup("MyMethod pass1", [ "foo", "bar" ]) ])
+                    [ czecher.OutputGroup("MyMethod pass1", [ "foo", "bar" ]) ])
 
   def test_MultipleGroups(self):
     self.__parsesTo("""begin_compilation
@@ -404,8 +404,8 @@ class TestOutputFile_Parse(unittest.TestCase):
                          abc
                          def
                        end_cfg""",
-                    [ checker.OutputGroup("MyMethod1 pass1", [ "foo", "bar" ]),
-                      checker.OutputGroup("MyMethod1 pass2", [ "abc", "def" ]) ])
+                    [ czecher.OutputGroup("MyMethod1 pass1", [ "foo", "bar" ]),
+                      czecher.OutputGroup("MyMethod1 pass2", [ "abc", "def" ]) ])
 
     self.__parsesTo("""begin_compilation
                          name "xyz1"
@@ -427,15 +427,15 @@ class TestOutputFile_Parse(unittest.TestCase):
                          abc
                          def
                        end_cfg""",
-                    [ checker.OutputGroup("MyMethod1 pass1", [ "foo", "bar" ]),
-                      checker.OutputGroup("MyMethod2 pass2", [ "abc", "def" ]) ])
+                    [ czecher.OutputGroup("MyMethod1 pass1", [ "foo", "bar" ]),
+                      czecher.OutputGroup("MyMethod2 pass2", [ "abc", "def" ]) ])
 
 class TestCheckFile_Parse(unittest.TestCase):
   def __parsesTo(self, string, expected):
     if isinstance(string, str):
       string = unicode(string)
     checkStream = io.StringIO(string)
-    return self.assertEqual(checker.CheckFile("CHECK", checkStream).groups, expected)
+    return self.assertEqual(czecher.CheckFile("CHECK", checkStream).groups, expected)
 
   def test_NoInput(self):
     self.__parsesTo(None, [])
@@ -445,7 +445,7 @@ class TestCheckFile_Parse(unittest.TestCase):
     self.__parsesTo("""// CHECK-START: Example Group
                        // CHECK:  foo
                        // CHECK:    bar""",
-                    [ checker.CheckGroup("Example Group", prepareChecks([ "foo", "bar" ])) ])
+                    [ czecher.CheckGroup("Example Group", prepareChecks([ "foo", "bar" ])) ])
 
   def test_MultipleGroups(self):
     self.__parsesTo("""// CHECK-START: Example Group1
@@ -454,8 +454,8 @@ class TestCheckFile_Parse(unittest.TestCase):
                        // CHECK-START: Example Group2
                        // CHECK: abc
                        // CHECK: def""",
-                    [ checker.CheckGroup("Example Group1", prepareChecks([ "foo", "bar" ])),
-                      checker.CheckGroup("Example Group2", prepareChecks([ "abc", "def" ])) ])
+                    [ czecher.CheckGroup("Example Group1", prepareChecks([ "foo", "bar" ])),
+                      czecher.CheckGroup("Example Group2", prepareChecks([ "abc", "def" ])) ])
 
   def test_CheckVariants(self):
     self.__parsesTo("""// CHECK-START: Example Group
@@ -463,12 +463,12 @@ class TestCheckFile_Parse(unittest.TestCase):
                        // CHECK-NOT: bar
                        // CHECK-DAG: abc
                        // CHECK-DAG: def""",
-                    [ checker.CheckGroup("Example Group",
+                    [ czecher.CheckGroup("Example Group",
                                          prepareChecks([ ("foo", CheckVariant.InOrder),
                                                          ("bar", CheckVariant.Not),
                                                          ("abc", CheckVariant.DAG),
                                                          ("def", CheckVariant.DAG) ])) ])
 
 if __name__ == '__main__':
-  checker.Logger.Verbosity = checker.Logger.Level.NoOutput
+  czecher.Logger.Verbosity = czecher.Logger.Level.NoOutput
   unittest.main()
