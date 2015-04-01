@@ -481,6 +481,12 @@ void Instrumentation::RemoveListener(InstrumentationListener* listener, uint32_t
       have_method_unwind_listeners_ = !method_unwind_listeners_.empty();
     }
   }
+  if ((events & kBackwardBranch) != 0) {
+    if (have_backward_branch_listeners_) {
+      backward_branch_listeners_.remove(listener);
+      have_backward_branch_listeners_ = !backward_branch_listeners_.empty();
+    }
+  }
   if ((events & kDexPcMoved) != 0) {
     if (have_dex_pc_listeners_) {
       std::list<InstrumentationListener*>* modified =
@@ -833,6 +839,9 @@ void Instrumentation::DisableDeoptimization() {
 
 // Indicates if instrumentation should notify method enter/exit events to the listeners.
 bool Instrumentation::ShouldNotifyMethodEnterExitEvents() const {
+  if (!HasMethodEntryListeners() && !HasMethodExitListeners()) {
+    return false;
+  }
   return !deoptimization_enabled_ && !interpreter_stubs_installed_;
 }
 
@@ -912,11 +921,9 @@ void Instrumentation::MethodUnwindEvent(Thread* thread, mirror::Object* this_obj
 void Instrumentation::DexPcMovedEventImpl(Thread* thread, mirror::Object* this_object,
                                           mirror::ArtMethod* method,
                                           uint32_t dex_pc) const {
-  if (HasDexPcListeners()) {
-    std::shared_ptr<std::list<InstrumentationListener*>> original(dex_pc_listeners_);
-    for (InstrumentationListener* listener : *original.get()) {
-      listener->DexPcMoved(thread, this_object, method, dex_pc);
-    }
+  std::shared_ptr<std::list<InstrumentationListener*>> original(dex_pc_listeners_);
+  for (InstrumentationListener* listener : *original.get()) {
+    listener->DexPcMoved(thread, this_object, method, dex_pc);
   }
 }
 
@@ -930,22 +937,18 @@ void Instrumentation::BackwardBranchImpl(Thread* thread, mirror::ArtMethod* meth
 void Instrumentation::FieldReadEventImpl(Thread* thread, mirror::Object* this_object,
                                          mirror::ArtMethod* method, uint32_t dex_pc,
                                          mirror::ArtField* field) const {
-  if (HasFieldReadListeners()) {
-    std::shared_ptr<std::list<InstrumentationListener*>> original(field_read_listeners_);
-    for (InstrumentationListener* listener : *original.get()) {
-      listener->FieldRead(thread, this_object, method, dex_pc, field);
-    }
+  std::shared_ptr<std::list<InstrumentationListener*>> original(field_read_listeners_);
+  for (InstrumentationListener* listener : *original.get()) {
+    listener->FieldRead(thread, this_object, method, dex_pc, field);
   }
 }
 
 void Instrumentation::FieldWriteEventImpl(Thread* thread, mirror::Object* this_object,
                                          mirror::ArtMethod* method, uint32_t dex_pc,
                                          mirror::ArtField* field, const JValue& field_value) const {
-  if (HasFieldWriteListeners()) {
-    std::shared_ptr<std::list<InstrumentationListener*>> original(field_write_listeners_);
-    for (InstrumentationListener* listener : *original.get()) {
-      listener->FieldWritten(thread, this_object, method, dex_pc, field, field_value);
-    }
+  std::shared_ptr<std::list<InstrumentationListener*>> original(field_write_listeners_);
+  for (InstrumentationListener* listener : *original.get()) {
+    listener->FieldWritten(thread, this_object, method, dex_pc, field, field_value);
   }
 }
 
