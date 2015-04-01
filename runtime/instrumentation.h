@@ -27,6 +27,7 @@
 #include "base/mutex.h"
 #include "gc_root.h"
 #include "object_callbacks.h"
+#include "safe_map.h"
 
 namespace art {
 namespace mirror {
@@ -112,6 +113,12 @@ class Instrumentation {
     kFieldWritten = 0x20,
     kExceptionCaught = 0x40,
     kBackwardBranch = 0x80,
+  };
+
+  enum class InstrumentationLevel {
+    kInstrumentNothing,
+    kInstrumentWithInstrumentationStubs,
+    kInstrumentWithInterpreter
   };
 
   Instrumentation();
@@ -228,6 +235,10 @@ class Instrumentation {
 
   bool HasMethodExitListeners() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return have_method_exit_listeners_;
+  }
+
+  bool HasMethodUnwindListeners() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return have_method_unwind_listeners_;
   }
 
   bool HasDexPcListeners() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -349,8 +360,10 @@ class Instrumentation {
       LOCKS_EXCLUDED(deoptimized_methods_lock_);
 
  private:
+  InstrumentationLevel GetCurrentInstrumentationLevel() const;
+
   // Does the job of installing or removing instrumentation code within methods.
-  void ConfigureStubs(bool require_entry_exit_stubs, bool require_interpreter)
+  void ConfigureStubs(const std::string& key, InstrumentationLevel desired_instrumentation_level)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_)
       LOCKS_EXCLUDED(Locks::thread_list_lock_, Locks::classlinker_classes_lock_,
                      deoptimized_methods_lock_);
@@ -446,6 +459,8 @@ class Instrumentation {
   // Do we have any backward branch listeners? Short-cut to avoid taking the instrumentation_lock_.
   bool have_backward_branch_listeners_ GUARDED_BY(Locks::mutator_lock_);
 
+  SafeMap<std::string, InstrumentationLevel> requested_instrumentation_levels_ GUARDED_BY(Locks::mutator_lock_);
+
   // The event listeners, written to with the mutator_lock_ exclusively held.
   std::list<InstrumentationListener*> method_entry_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> method_exit_listeners_ GUARDED_BY(Locks::mutator_lock_);
@@ -475,9 +490,12 @@ class Instrumentation {
   size_t quick_alloc_entry_points_instrumentation_counter_
       GUARDED_BY(Locks::instrument_entrypoints_lock_);
 
+  friend class InstrumentationTest;  // For ConfigureStubs and InstrumentationLevel.
+
   DISALLOW_COPY_AND_ASSIGN(Instrumentation);
 };
 std::ostream& operator<<(std::ostream& os, const Instrumentation::InstrumentationEvent& rhs);
+std::ostream& operator<<(std::ostream& os, const Instrumentation::InstrumentationLevel& rhs);
 
 // An element in the instrumentation side stack maintained in art::Thread.
 struct InstrumentationStackFrame {
