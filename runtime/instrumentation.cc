@@ -69,7 +69,7 @@ Instrumentation::Instrumentation()
       have_method_entry_listeners_(false), have_method_exit_listeners_(false),
       have_method_unwind_listeners_(false), have_dex_pc_listeners_(false),
       have_field_read_listeners_(false), have_field_write_listeners_(false),
-      have_exception_caught_listeners_(false),
+      have_exception_caught_listeners_(false), have_backward_branch_listeners_(false),
       deoptimized_methods_lock_("deoptimized methods lock"),
       deoptimization_enabled_(false),
       interpreter_handler_table_(kMainHandlerTable),
@@ -481,6 +481,12 @@ void Instrumentation::RemoveListener(InstrumentationListener* listener, uint32_t
       have_method_unwind_listeners_ = !method_unwind_listeners_.empty();
     }
   }
+  if ((events & kBackwardBranch) != 0) {
+    if (have_backward_branch_listeners_) {
+      backward_branch_listeners_.remove(listener);
+      have_backward_branch_listeners_ = !backward_branch_listeners_.empty();
+    }
+  }
   if ((events & kDexPcMoved) != 0) {
     if (have_dex_pc_listeners_) {
       std::list<InstrumentationListener*>* modified =
@@ -540,25 +546,50 @@ void Instrumentation::RemoveListener(InstrumentationListener* listener, uint32_t
   UpdateInterpreterHandlerTable();
 }
 
-void Instrumentation::ConfigureStubs(bool require_entry_exit_stubs, bool require_interpreter) {
-  interpret_only_ = require_interpreter || forced_interpret_only_;
-  // Compute what level of instrumentation is required and compare to current.
-  int desired_level, current_level;
-  if (require_interpreter) {
-    desired_level = 2;
-  } else if (require_entry_exit_stubs) {
-    desired_level = 1;
-  } else {
-    desired_level = 0;
-  }
+Instrumentation::InstrumentationLevel Instrumentation::GetCurrentInstrumentationLevel() const {
   if (interpreter_stubs_installed_) {
-    current_level = 2;
+    return InstrumentationLevel::kInstrumentWithInterpreter;
   } else if (entry_exit_stubs_installed_) {
-    current_level = 1;
+    return InstrumentationLevel::kInstrumentWithInstrumentationStubs;
   } else {
-    current_level = 0;
+    return InstrumentationLevel::kInstrumentNothing;
   }
-  if (desired_level == current_level) {
+}
+static constexpr bool kDebugConfigureStubs = true;
+
+void Instrumentation::ConfigureStubs(const std::string& key,
+                                     InstrumentationLevel desired_level) {
+  if (kDebugConfigureStubs) {
+    LOG(INFO) << key << " is requesting level " << desired_level;
+  }
+
+  // Store the instrumentation level for this key or remove it.
+  if (desired_level == InstrumentationLevel::kInstrumentNothing) {
+    LOG(INFO) << "Removing key " << key;
+    requested_instrumentation_levels_.erase(key);
+  } else {
+    LOG(INFO) << "Updating key " << key << " with " << desired_level;
+    requested_instrumentation_levels_.Overwrite(key, desired_level);
+  }
+
+  // Comply with the highest requested instrumentation level.
+  InstrumentationLevel requested_level = InstrumentationLevel::kInstrumentNothing;
+  for (const auto& v : requested_instrumentation_levels_) {
+    LOG(INFO) << "Found " << v.first << " requires level " << v.second;
+    requested_level = std::max(requested_level, v.second);
+  }
+
+  interpret_only_ = (requested_level == InstrumentationLevel::kInstrumentWithInterpreter) ||
+                    forced_interpret_only_;
+
+  // Do we need to do something
+  InstrumentationLevel current_level = GetCurrentInstrumentationLevel();
+
+  if (kDebugConfigureStubs) {
+    LOG(INFO) << "Required instrumentation level is " << requested_level;
+    LOG(INFO) << "Current instrumentation level is " << requested_level;
+  }
+  if (requested_level == current_level) {
     // We're already set.
     return;
   }
@@ -566,12 +597,14 @@ void Instrumentation::ConfigureStubs(bool require_entry_exit_stubs, bool require
   Runtime* runtime = Runtime::Current();
   Locks::mutator_lock_->AssertExclusiveHeld(self);
   Locks::thread_list_lock_->AssertNotHeld(self);
-  if (desired_level > 0) {
-    if (require_interpreter) {
+  if (requested_level > InstrumentationLevel::kInstrumentNothing) {
+    if (requested_level == InstrumentationLevel::kInstrumentWithInterpreter) {
       interpreter_stubs_installed_ = true;
+      entry_exit_stubs_installed_ = false;
     } else {
-      CHECK(require_entry_exit_stubs);
+      CHECK_EQ(requested_level, InstrumentationLevel::kInstrumentWithInstrumentationStubs);
       entry_exit_stubs_installed_ = true;
+      interpreter_stubs_installed_ = false;
     }
     runtime->GetClassLinker()->VisitClasses(InstallStubsClassVisitor, this);
     instrumentation_stubs_installed_ = true;
@@ -833,26 +866,38 @@ void Instrumentation::DisableDeoptimization() {
 
 // Indicates if instrumentation should notify method enter/exit events to the listeners.
 bool Instrumentation::ShouldNotifyMethodEnterExitEvents() const {
+  if (!HasMethodEntryListeners() && !HasMethodExitListeners()) {
+    return false;
+  }
   return !deoptimization_enabled_ && !interpreter_stubs_installed_;
 }
 
+// TODO move that to actual callers.
+static const std::string kDebuggerKey("Dbg");
+static const std::string kTracingKey("Tracer");
+
 void Instrumentation::DeoptimizeEverything() {
   CHECK(!interpreter_stubs_installed_);
-  ConfigureStubs(false, true);
+  ConfigureStubs(kDebuggerKey, InstrumentationLevel::kInstrumentWithInterpreter);
 }
 
 void Instrumentation::UndeoptimizeEverything() {
   CHECK(interpreter_stubs_installed_);
-  ConfigureStubs(false, false);
+  ConfigureStubs(kDebuggerKey, InstrumentationLevel::kInstrumentNothing);
 }
 
 void Instrumentation::EnableMethodTracing() {
-  bool require_interpreter = kDeoptimizeForAccurateMethodEntryExitListeners;
-  ConfigureStubs(!require_interpreter, require_interpreter);
+  InstrumentationLevel level;
+  if (kDeoptimizeForAccurateMethodEntryExitListeners) {
+    level = InstrumentationLevel::kInstrumentWithInterpreter;
+  } else {
+    level = InstrumentationLevel::kInstrumentWithInstrumentationStubs;
+  }
+  ConfigureStubs(kTracingKey, level);
 }
 
 void Instrumentation::DisableMethodTracing() {
-  ConfigureStubs(false, false);
+  ConfigureStubs(kTracingKey, InstrumentationLevel::kInstrumentNothing);
 }
 
 const void* Instrumentation::GetQuickCodeFor(mirror::ArtMethod* method, size_t pointer_size) const {
@@ -902,7 +947,7 @@ void Instrumentation::MethodExitEventImpl(Thread* thread, mirror::Object* this_o
 void Instrumentation::MethodUnwindEvent(Thread* thread, mirror::Object* this_object,
                                         mirror::ArtMethod* method,
                                         uint32_t dex_pc) const {
-  if (have_method_unwind_listeners_) {
+  if (HasMethodUnwindListeners()) {
     for (InstrumentationListener* listener : method_unwind_listeners_) {
       listener->MethodUnwind(thread, this_object, method, dex_pc);
     }
@@ -912,11 +957,9 @@ void Instrumentation::MethodUnwindEvent(Thread* thread, mirror::Object* this_obj
 void Instrumentation::DexPcMovedEventImpl(Thread* thread, mirror::Object* this_object,
                                           mirror::ArtMethod* method,
                                           uint32_t dex_pc) const {
-  if (HasDexPcListeners()) {
-    std::shared_ptr<std::list<InstrumentationListener*>> original(dex_pc_listeners_);
-    for (InstrumentationListener* listener : *original.get()) {
-      listener->DexPcMoved(thread, this_object, method, dex_pc);
-    }
+  std::shared_ptr<std::list<InstrumentationListener*>> original(dex_pc_listeners_);
+  for (InstrumentationListener* listener : *original.get()) {
+    listener->DexPcMoved(thread, this_object, method, dex_pc);
   }
 }
 
@@ -930,22 +973,18 @@ void Instrumentation::BackwardBranchImpl(Thread* thread, mirror::ArtMethod* meth
 void Instrumentation::FieldReadEventImpl(Thread* thread, mirror::Object* this_object,
                                          mirror::ArtMethod* method, uint32_t dex_pc,
                                          mirror::ArtField* field) const {
-  if (HasFieldReadListeners()) {
-    std::shared_ptr<std::list<InstrumentationListener*>> original(field_read_listeners_);
-    for (InstrumentationListener* listener : *original.get()) {
-      listener->FieldRead(thread, this_object, method, dex_pc, field);
-    }
+  std::shared_ptr<std::list<InstrumentationListener*>> original(field_read_listeners_);
+  for (InstrumentationListener* listener : *original.get()) {
+    listener->FieldRead(thread, this_object, method, dex_pc, field);
   }
 }
 
 void Instrumentation::FieldWriteEventImpl(Thread* thread, mirror::Object* this_object,
                                          mirror::ArtMethod* method, uint32_t dex_pc,
                                          mirror::ArtField* field, const JValue& field_value) const {
-  if (HasFieldWriteListeners()) {
-    std::shared_ptr<std::list<InstrumentationListener*>> original(field_write_listeners_);
-    for (InstrumentationListener* listener : *original.get()) {
-      listener->FieldWritten(thread, this_object, method, dex_pc, field, field_value);
-    }
+  std::shared_ptr<std::list<InstrumentationListener*>> original(field_write_listeners_);
+  for (InstrumentationListener* listener : *original.get()) {
+    listener->FieldWritten(thread, this_object, method, dex_pc, field, field_value);
   }
 }
 
