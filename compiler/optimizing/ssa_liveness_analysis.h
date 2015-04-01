@@ -19,6 +19,7 @@
 
 #include "nodes.h"
 #include <iostream>
+#include <sstream>
 
 namespace art {
 
@@ -339,21 +340,35 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   bool HasRegister() const { return register_ != kNoRegister; }
 
   bool IsDeadAt(size_t position) const {
-    return last_range_->GetEnd() <= position;
+    return GetEnd() <= position;
   }
 
+  bool IsDefinedAt(size_t position) const {
+    return GetStart() <= position && !IsDeadAt(position);
+  }
+
+  template<bool cached = false>
   bool Covers(size_t position) {
-    return !IsDeadAt(position) && FindRangeAt(position) != nullptr;
+    LiveRange* candidate = FindRangeAtOrAfter<cached>(position);
+    DCHECK(candidate == nullptr || position < candidate->GetEnd());
+    return candidate != nullptr && candidate->GetStart() <= position;
   }
 
   /**
    * Returns the first intersection of this interval with `other`.
+   * Note: When 'other' is the currently inspected interval of linear scan
+   * and 'cached' is set, the search will benefit from internal caching.
    */
-  size_t FirstIntersectionWith(LiveInterval* other) const {
+  template<bool cached = false>
+  size_t FirstIntersectionWith(LiveInterval* other) {
+    LiveRange* other_range = other->first_range_;
+    LiveRange* my_range = FindRangeAtOrAfter<cached>(other_range->GetStart());
+    if (my_range == nullptr) {
+      return kNoLifetime;
+    }
+
     // Advance both intervals and find the first matching range start in
     // this interval.
-    LiveRange* my_range = first_range_;
-    LiveRange* other_range = other->first_range_;
     do {
       if (my_range->IsBefore(*other_range)) {
         my_range = my_range->GetNext();
@@ -482,7 +497,6 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     new_interval->parent_ = parent_;
 
     new_interval->first_use_ = first_use_;
-    last_visited_range_ = nullptr;
     LiveRange* current = first_range_;
     LiveRange* previous = nullptr;
     // Iterate over the ranges, and either find a range that covers this position, or
@@ -502,7 +516,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         last_range_ = previous;
         previous->next_ = nullptr;
         new_interval->first_range_ = current;
-        return new_interval;
+        break;
       } else {
         // This range covers position. We create a new last_range_ for this interval
         // that covers last_range_->Start() and position. We also shorten the current
@@ -517,12 +531,14 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         }
         new_interval->first_range_ = current;
         current->start_ = position;
-        return new_interval;
+        break;
       }
     } while (current != nullptr);
+    DCHECK(current != nullptr);
 
-    LOG(FATAL) << "Unreachable";
-    return nullptr;
+    this->ResetCache();
+    new_interval->ResetCache();
+    return new_interval;
   }
 
   bool StartsBeforeOrAt(LiveInterval* other) const {
@@ -589,7 +605,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   Location GetLocationAt(size_t position);
 
   // Finds the interval that covers `position`.
-  const LiveInterval& GetIntervalAt(size_t position);
+  LiveInterval* GetSiblingAt(size_t position);
 
   // Returns whether `other` and `this` share the same kind of register.
   bool SameRegisterKind(Location other) const;
@@ -703,6 +719,38 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     UNREACHABLE();
   }
 
+  // Reset search cache to the beginning of the interval. This function should be
+  // called on each LiveInterval prior to starting a pass over liveness positions.
+  void ResetCache() {
+    range_search_cache_ = first_range_;
+    if (kIsDebugBuild) {
+      cache_position_ = GetStart();
+    }
+  }
+
+  // Update search cache. This function should be called every time linear scan
+  // advances to next LiveInterval.
+  void AdvanceCache(size_t position) {
+    if (IsFixed()) {
+      // Linear scan inserts fixed interval into 'inactive' before their starting
+      // point which means they could advance out of order. They have just one
+      // range anyway so never advance cache.
+      return;
+    }
+
+    // Ensure interval has started by this point and that it has been reset.
+    DCHECK(range_search_cache_ != nullptr);
+    DCHECK_GE(position, GetStart());
+    DCHECK_GE(position, cache_position_);
+
+    // Find a LiveRange covering 'position' or the one after that. That will be
+    // the starting point of every search.
+    range_search_cache_ = FindRangeAtOrAfter</*cached=*/ true>(position);
+    if (kIsDebugBuild) {
+      cache_position_ = position;
+    }
+  }
+
  private:
   LiveInterval(ArenaAllocator* allocator,
                Primitive::Type type,
@@ -715,7 +763,8 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       : allocator_(allocator),
         first_range_(nullptr),
         last_range_(nullptr),
-        last_visited_range_(nullptr),
+        cache_position_(0),
+        range_search_cache_(nullptr),
         first_use_(nullptr),
         type_(type),
         next_sibling_(nullptr),
@@ -729,39 +778,22 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         high_or_low_interval_(nullptr),
         defined_by_(defined_by) {}
 
-  // Returns a LiveRange covering the given position or nullptr if no such range
-  // exists in the interval.
-  // This is a linear search optimized for multiple queries in a non-decreasing
-  // position order typical for linear scan register allocation.
-  LiveRange* FindRangeAt(size_t position) {
-    // Make sure operations on the interval didn't leave us with a cached result
-    // from a sibling.
-    if (kIsDebugBuild) {
-      if (last_visited_range_ != nullptr) {
-        DCHECK_GE(last_visited_range_->GetStart(), GetStart());
-        DCHECK_LE(last_visited_range_->GetEnd(), GetEnd());
-      }
+  // Searches for a LiveRange that either covers the given position or is the
+  // first next LiveRange. Nullptr is returned if no such LiveRange exists.
+  // If 'cached' is set, 'range_search_cache_' will be used as a starting point.
+  template<bool cached>
+  ALWAYS_INLINE LiveRange* FindRangeAtOrAfter(size_t position) {
+    if (kIsDebugBuild && cached) {
+      DCHECK(range_search_cache_ != nullptr);
+      DCHECK_GE(range_search_cache_->GetStart(), GetStart());
+      DCHECK_LE(range_search_cache_->GetEnd(), GetEnd());
     }
 
-    // If this method was called earlier on a lower position, use that result as
-    // a starting point to save time. However, linear scan performs 3 scans:
-    // integers, floats, and resolution. Instead of resetting at the beginning
-    // of a scan, we do it here.
-    LiveRange* current;
-    if (last_visited_range_ != nullptr && position >= last_visited_range_->GetStart()) {
-      current = last_visited_range_;
-    } else {
-      current = first_range_;
-    }
-    while (current != nullptr && current->GetEnd() <= position) {
-      current = current->GetNext();
-    }
-    last_visited_range_ = current;
-    if (current != nullptr && position >= current->GetStart()) {
-      return current;
-    } else {
-      return nullptr;
-    }
+    LiveRange* range;
+    for (range = cached ? range_search_cache_ : first_range_;
+         range != nullptr && range->GetEnd() <= position;
+         range = range->GetNext()) {}
+    return range;
   }
 
   ArenaAllocator* const allocator_;
@@ -771,9 +803,12 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   LiveRange* first_range_;
   LiveRange* last_range_;
 
-  // Last visited range. This is a range search optimization leveraging the fact
-  // that the register allocator does a linear scan through the intervals.
-  LiveRange* last_visited_range_;
+  // Search result cache to optimize linear scan. When scan is at position 'p',
+  // the cache should contain a range either covering or directly preceding 'p'.
+  // It is used as the starting point of range search. 'cache_position_' is used
+  // for debugging purposes to ensure cache is updates in ascending order.
+  size_t cache_position_;
+  LiveRange* range_search_cache_;
 
   // Uses of this interval. Note that this linked list is shared amongst siblings.
   UsePosition* first_use_;
