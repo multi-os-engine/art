@@ -232,6 +232,7 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
             live_in->SetBit(instruction->GetSsaIndex());
           }
           if (instruction != nullptr) {
+            DCHECK(instruction->GetLiveInterval() != nullptr);
             instruction->GetLiveInterval()->AddUse(
                 current, i, /* is_environment */ true, should_be_live);
           }
@@ -402,11 +403,11 @@ int LiveInterval::FindHintAtDefinition() const {
     for (size_t i = 0, e = defined_by_->InputCount(); i < e; ++i) {
       HInstruction* input = defined_by_->InputAt(i);
       size_t end = predecessors.Get(i)->GetLifetimeEnd();
-      const LiveInterval& input_interval = input->GetLiveInterval()->GetIntervalAt(end - 1);
-      if (input_interval.GetEnd() == end) {
+      LiveInterval* input_interval = input->GetLiveInterval()->GetSiblingAt(end - 1);
+      if (input_interval->GetEnd() == end) {
         // If the input dies at the end of the predecessor, we know its register can
         // be reused.
-        Location input_location = input_interval.ToLocation();
+        Location input_location = input_interval->ToLocation();
         if (input_location.IsRegisterKind()) {
           DCHECK(SameRegisterKind(input_location));
           return RegisterOrLowRegister(input_location);
@@ -418,12 +419,12 @@ int LiveInterval::FindHintAtDefinition() const {
     Location out = locations->Out();
     if (out.IsUnallocated() && out.GetPolicy() == Location::kSameAsFirstInput) {
       // Try to use the same register as the first input.
-      const LiveInterval& input_interval =
-          GetDefinedBy()->InputAt(0)->GetLiveInterval()->GetIntervalAt(GetStart() - 1);
-      if (input_interval.GetEnd() == GetStart()) {
+      LiveInterval* input_interval =
+          GetDefinedBy()->InputAt(0)->GetLiveInterval()->GetSiblingAt(GetStart() - 1);
+      if (input_interval->GetEnd() == GetStart()) {
         // If the input dies at the start of this instruction, we know its register can
         // be reused.
-        Location location = input_interval.ToLocation();
+        Location location = input_interval->ToLocation();
         if (location.IsRegisterKind()) {
           DCHECK(SameRegisterKind(location));
           return RegisterOrLowRegister(location);
@@ -487,16 +488,17 @@ Location LiveInterval::ToLocation() const {
 }
 
 Location LiveInterval::GetLocationAt(size_t position) {
-  return GetIntervalAt(position).ToLocation();
+  return GetSiblingAt(position)->ToLocation();
 }
 
-const LiveInterval& LiveInterval::GetIntervalAt(size_t position) {
+LiveInterval* LiveInterval::GetSiblingAt(size_t position) {
   LiveInterval* current = this;
-  while (!current->Covers(position)) {
+  while (!current->IsDefinedAt(position)) {
     current = current->GetNextSibling();
     DCHECK(current != nullptr);
   }
-  return *current;
+  DCHECK(current->Covers(position));
+  return current;
 }
 
 }  // namespace art
