@@ -547,8 +547,21 @@ void RegisterAllocator::DumpAllIntervals(std::ostream& stream) const {
   }
 }
 
+static void ResetIntervalCaches(const GrowableArray<LiveInterval*>& intervals) {
+  for (size_t i = 0, e = intervals.Size(); i < e; ++i) {
+    intervals.Get(i)->ResetCache();
+  }
+}
+
 // By the book implementation of a linear scan register allocator.
 void RegisterAllocator::LinearScan() {
+  // Reset search caches of all involved intervals - unallocated in 'unhandled_'
+  // and fixed in 'inactive_'. This is part of a performance optimization.
+  // See LiveInterval::ResetCache for details.
+  DCHECK(active_.IsEmpty());
+  ResetIntervalCaches(inactive_);
+  ResetIntervalCaches(*unhandled_);
+
   while (!unhandled_->IsEmpty()) {
     // (1) Remove interval with the lowest start position from unhandled.
     LiveInterval* current = unhandled_->Pop();
@@ -571,10 +584,13 @@ void RegisterAllocator::LinearScan() {
         active_.Delete(interval);
         --i;
         handled_.Add(interval);
-      } else if (!interval->Covers(position)) {
-        active_.Delete(interval);
-        --i;
-        inactive_.Add(interval);
+      } else {
+        interval->AdvanceCache(position);
+        if (!interval->Covers(position, /*use_cache=*/ true)) {
+          active_.Delete(interval);
+          --i;
+          inactive_.Add(interval);
+        }
       }
     }
 
@@ -588,11 +604,14 @@ void RegisterAllocator::LinearScan() {
         --i;
         --inactive_intervals_to_handle;
         handled_.Add(interval);
-      } else if (interval->Covers(position)) {
-        inactive_.Delete(interval);
-        --i;
-        --inactive_intervals_to_handle;
-        active_.Add(interval);
+      } else {
+        interval->AdvanceCache(position);
+        if (interval->Covers(position, /*use_cache=*/ true)) {
+          inactive_.Delete(interval);
+          --i;
+          --inactive_intervals_to_handle;
+          active_.Add(interval);
+        }
       }
     }
 
@@ -651,7 +670,7 @@ static void FreeIfNotCoverAt(LiveInterval* interval, size_t position, size_t* fr
       DCHECK(interval->GetHighInterval()->IsDeadAt(position));
       free_until[interval->GetHighInterval()->GetRegister()] = kMaxLifetimePosition;
     }
-  } else if (!interval->Covers(position)) {
+  } else if (!interval->Covers(position, /*use_cache=*/ true)) {
     // The interval becomes inactive at `defined_by`. We make its register
     // available only until the next use strictly after `defined_by`.
     free_until[interval->GetRegister()] = interval->FirstUseAfter(position);
@@ -725,7 +744,7 @@ bool RegisterAllocator::TryAllocateFreeReg(LiveInterval* current) {
       // Already used by some active interval. No need to intersect.
       continue;
     }
-    size_t next_intersection = inactive->FirstIntersectionWith(current);
+    size_t next_intersection = inactive->FirstIntersectionWith(current, /*use_cache=*/ true);
     if (next_intersection != kNoLifetime) {
       free_until[inactive->GetRegister()] =
           std::min(free_until[inactive->GetRegister()], next_intersection);
@@ -914,7 +933,7 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
       continue;
     }
     DCHECK(inactive->HasRegister());
-    size_t next_intersection = inactive->FirstIntersectionWith(current);
+    size_t next_intersection = inactive->FirstIntersectionWith(current, /*use_cache=*/ true);
     if (next_intersection != kNoLifetime) {
       if (inactive->IsFixed()) {
         next_use[inactive->GetRegister()] =
@@ -1012,7 +1031,7 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
           DCHECK_EQ(inactive->FirstIntersectionWith(current), kNoLifetime);
           continue;
         }
-        size_t next_intersection = inactive->FirstIntersectionWith(current);
+        size_t next_intersection = inactive->FirstIntersectionWith(current, /*use_cache=*/ true);
         if (next_intersection != kNoLifetime) {
           if (inactive->IsFixed()) {
             LiveInterval* split = Split(current, next_intersection);
@@ -1404,6 +1423,7 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
   // Walk over all siblings, updating locations of use positions, and
   // connecting them when they are adjacent.
   do {
+    current->ResetCache();
     Location source = current->ToLocation();
 
     // Walk over all uses covered by this interval, and update the location
@@ -1463,7 +1483,11 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
 
       if (current->IsDeadAt(position)) {
         break;
-      } else if (!current->Covers(position)) {
+      } else if (!current->IsDefinedAt(position)) {
+        continue;
+      }
+      current->AdvanceCache(position);
+      if (!current->Covers(position, /*use_cache=*/ true)) {
         continue;
       } else if (interval->GetStart() == position) {
         // The safepoint is for this instruction, so the location of the instruction
@@ -1532,36 +1556,15 @@ void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,
     return;
   }
 
-  // Intervals end at the lifetime end of a block. The decrement by one
-  // ensures the `Cover` call will return true.
-  size_t from_position = from->GetLifetimeEnd() - 1;
-  size_t to_position = to->GetLifetimeStart();
-
-  LiveInterval* destination = nullptr;
-  LiveInterval* source = nullptr;
-
-  LiveInterval* current = interval;
-
-  // Check the intervals that cover `from` and `to`.
-  while ((current != nullptr) && (source == nullptr || destination == nullptr)) {
-    if (current->Covers(from_position)) {
-      DCHECK(source == nullptr);
-      source = current;
-    }
-    if (current->Covers(to_position)) {
-      DCHECK(destination == nullptr);
-      destination = current;
-    }
-
-    current = current->GetNextSibling();
-  }
-
+  // Find the intervals that cover `from` and `to`.
+  const LiveInterval* destination = interval->GetSiblingAt(to->GetLifetimeStart());
+  const LiveInterval* source = interval->GetSiblingAt(from->GetLifetimeEnd() - 1);
   if (destination == source) {
     // Interval was not split.
     return;
   }
-
-  DCHECK(destination != nullptr && source != nullptr);
+  DCHECK(source != nullptr);
+  DCHECK(destination != nullptr);
 
   if (!destination->HasRegister()) {
     // Values are eagerly spilled. Spill slot already contains appropriate value.
